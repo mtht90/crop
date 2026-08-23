@@ -100,7 +100,7 @@ public class SneakGrowListener implements Listener {
 
         if (settings.effectsEnabled()) {
             block.getWorld().spawnParticle(
-                    Particle.HAPPY_VILLAGER,
+                    Particle.COMPOSTER,
                     block.getLocation().add(0.5, 0.5, 0.5),
                     2, 0.2, 0.2, 0.2, 0
             );
