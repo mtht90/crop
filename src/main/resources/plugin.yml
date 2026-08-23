@@ -1,0 +1,21 @@
+name: CropSneakGrowth
+version: '1.0.0'
+main: com.nakao.cropsneakgrowth.CropSneakGrowthPlugin
+api-version: '1.20'
+author: Nakao
+description: 作物の隣でしゃがみを繰り返すと成長が早まるプラグイン
+
+commands:
+  cropsneakgrowth:
+    description: CropSneakGrowth の管理コマンド
+    aliases: [csg]
+    permission: cropsneakgrowth.admin
+    usage: "/<command> reload"
+
+permissions:
+  cropsneakgrowth.use:
+    description: しゃがみ成長ブーストを利用できる
+    default: true
+  cropsneakgrowth.admin:
+    description: 設定のリロードなど管理操作を行える
+    default: op
