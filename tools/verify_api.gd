@@ -17,6 +17,9 @@ const CLASSES_TO_CHECK: PackedStringArray = [
 	"FastNoiseLite",
 	"SpringArm3D",
 	"Camera3D",
+	"PhysicsRayQueryParameters3D",
+	"PhysicsDirectSpaceState3D",
+	"Curve2D",
 ]
 
 

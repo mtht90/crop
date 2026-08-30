@@ -28,6 +28,8 @@ var _y_initialized: bool = false
 var _landing_dip_offset_meters: float = 0.0
 var _landing_dip_elapsed_seconds: float = 0.0
 var _landing_dip_active: bool = false
+var _recoil_accumulated: Vector2 = Vector2.ZERO
+var _time_since_recoil_kick_seconds: float = 999.0
 
 
 func _ready() -> void:
@@ -36,6 +38,8 @@ func _ready() -> void:
 	_shake_noise.frequency = SHAKE_NOISE_FREQUENCY
 	var movement_component: MovementComponent = %MovementComponent
 	movement_component.landed.connect(_on_movement_landed)
+	var weapon_component: WeaponComponent = %WeaponComponent
+	weapon_component.recoil_applied.connect(_on_weapon_recoil_applied)
 
 
 func _input(event: InputEvent) -> void:
@@ -54,6 +58,7 @@ func _process(delta: float) -> void:
 	_update_ads_fov(delta)
 	_update_landing_dip(delta)
 	_update_camera_shake(delta)
+	_update_recoil_recovery(delta)
 
 
 func add_trauma(amount: float) -> void:
@@ -98,6 +103,28 @@ func _update_landing_dip(delta: float) -> void:
 	if recovery_ratio >= 1.0:
 		_landing_dip_active = false
 		_camera.position.y = 0.0
+
+
+func _on_weapon_recoil_applied(offset: Vector2) -> void:
+	_yaw -= offset.x
+	_pitch -= offset.y
+	_recoil_accumulated += offset
+	_time_since_recoil_kick_seconds = 0.0
+
+
+## 射撃停止から recoil_recovery_delay_seconds 経過後、蓄積したリコイル量を
+## 指数減衰で元の照準へ戻す（第4.4章）。
+func _update_recoil_recovery(delta: float) -> void:
+	_time_since_recoil_kick_seconds += delta
+	if _time_since_recoil_kick_seconds < TUNING.recoil_recovery_delay_seconds:
+		return
+	if _recoil_accumulated.length() <= 0.0001:
+		return
+	var recovery_weight: float = 1.0 - exp(-delta / maxf(TUNING.step_smoothing_seconds, 0.001))
+	var recovered_amount: Vector2 = _recoil_accumulated * recovery_weight
+	_yaw += recovered_amount.x
+	_pitch += recovered_amount.y
+	_recoil_accumulated -= recovered_amount
 
 
 func _update_camera_shake(delta: float) -> void:

@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="UltimateChargeConfig" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/gameplay/hero/ultimate_charge_config.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+charge_per_damage_dealt = 0.5
+charge_per_damage_taken = 0.25
+charge_per_second = 0.5

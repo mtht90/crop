@@ -67,6 +67,6 @@ godot --headless --script tools/verify_api.gd
 - [x] Phase 0 — 環境検証と基盤
 - [x] Phase 1 — AAA級アーキテクチャ基盤
 - [x] Phase 2 — 操作感とアニメーション（移動/カメラ/入力は実装、実アセット未導入は既知の負債）
-- [ ] Phase 3 — 射撃・スキル・ゲームフィール
+- [x] Phase 3 — 射撃・スキル・ゲームフィール（戦闘ロジックは実装、HUD/VFX/SFXはPhase 5前に別途対応が必要）
 - [ ] Phase 4 — ネットワーク同期
 - [ ] Phase 5 — ゲームルール・ビジュアル・ポリッシュ

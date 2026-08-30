@@ -3,6 +3,7 @@ class_name HealthComponent extends Node
 ## _ready() の実行順序（子が親より先に走る）に依存した暗黙の初期化を避ける。
 
 signal health_changed(current_health: float, max_health: float)
+signal damage_taken(damage_info: DamageInfo)
 signal died(killer_hero_id: int)
 
 var max_health: float = 0.0
@@ -21,6 +22,7 @@ func apply_damage(damage_info: DamageInfo) -> void:
 		return
 	_current_health = maxf(0.0, _current_health - damage_info.amount)
 	health_changed.emit(_current_health, max_health)
+	damage_taken.emit(damage_info)
 	if _current_health <= 0.0:
 		_is_dead = true
 		died.emit(damage_info.source_hero_id)

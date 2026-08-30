@@ -20,8 +20,10 @@ func _ready() -> void:
 	_health_component.initialize(hero_data.base_health)
 	_health_component.died.connect(_on_health_component_died)
 	_health_component.health_changed.connect(_on_health_component_health_changed)
+	_health_component.damage_taken.connect(_on_health_component_damage_taken)
 	_movement_component.initialize(hero_data.move_speed)
 	_weapon_component.initialize(hero_data.weapon_data)
+	_weapon_component.hit_confirmed.connect(_on_weapon_hit_confirmed)
 	_ultimate_charge_component.initialize(hero_data.ultimate_cost)
 	if hero_data.ability_primary != null:
 		_skill_component.assign_ability(&"skill", hero_data.ability_primary)
@@ -39,6 +41,18 @@ func _physics_process(delta: float) -> void:
 	move_and_slide()
 	_movement_component.report_grounded(is_on_floor())
 
+	var wants_fire: bool = (cmd.buttons & InputButtons.FIRE) != 0
+	_weapon_component.process_tick(
+		delta, wants_fire, global_transform, get_world_3d().direct_space_state, get_instance_id()
+	)
+	if (cmd.buttons & InputButtons.RELOAD) != 0:
+		_weapon_component.request_reload()
+	if (cmd.buttons & InputButtons.SKILL) != 0:
+		_skill_component.try_activate(&"skill")
+	if (cmd.buttons & InputButtons.ULTIMATE) != 0 and _ultimate_charge_component.is_ready():
+		if _skill_component.try_activate(&"ultimate"):
+			_ultimate_charge_component.consume()
+
 
 func _on_health_component_died(killer_hero_id: int) -> void:
 	GameEvents.hero_died.emit(get_instance_id(), killer_hero_id)
@@ -46,6 +60,14 @@ func _on_health_component_died(killer_hero_id: int) -> void:
 
 func _on_health_component_health_changed(current_health: float, max_health: float) -> void:
 	GameEvents.health_changed.emit(get_instance_id(), current_health, max_health)
+
+
+func _on_health_component_damage_taken(damage_info: DamageInfo) -> void:
+	_ultimate_charge_component.on_damage_taken(damage_info.amount)
+
+
+func _on_weapon_hit_confirmed(damage_info: DamageInfo) -> void:
+	_ultimate_charge_component.on_damage_dealt(damage_info.amount)
 
 
 func get_health_component() -> HealthComponent:
