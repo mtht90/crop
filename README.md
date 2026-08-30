@@ -25,10 +25,23 @@ docs/       設計判断記録・エンジン検証記録・パイプライン�
 詳細な設計方針は本リポジトリ内の指示書（アーキテクチャ憲章）および
 `docs/DECISIONS.md`（ADR）を参照。
 
-## ビルド / 起動
+## ローカルで開く（GUI環境）
 
-現時点（Phase 0）ではプレイ可能なシーンは未実装。エディタで開くか、
-ヘッドレスでの起動検証のみ可能:
+1. [Godot 4.3 stable](https://godotengine.org/download/archive/4.3-stable/) をインストールする
+   （`docs/ENGINE_BASELINE.md` 記載のバージョンと必ず一致させること）。
+2. このリポジトリをクローンし、ブランチ `claude/arena-3v3-architecture-2xjgol` を取得する。
+3. Godot を起動し「Import」→ クローンしたフォルダの `project.godot` を選択する。
+4. FileSystem ドックから `scenes/debug/hero_preview.tscn` を開き、F6（または
+   右上の「現在のシーンを実行」ボタン）を押す。
+   - 地面・ライト・空・カメラをアクティブ化済みの検証用シーンで、
+     `data/heroes/hero_vanguard.tres`（KayKit CC0 アセット, `Knight.glb`）を
+     割り当てた `HeroBase` が1体配置されている。
+   - WASD で移動、マウスで視点、Space でジャンプ、Shift でダッシュ、
+     左クリックで射撃が可能（`project.godot` の入力アクション参照）。
+   - このシーンはあくまで手動確認用で、まだ HUD もゲームモード進行もない
+     （Phase 5 の残作業、ADR-013 参照）。
+
+## ヘッドレスでの起動検証（CI用）
 
 ```bash
 godot --headless --quit-after 100
