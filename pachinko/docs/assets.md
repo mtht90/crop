@@ -39,10 +39,19 @@
 ライセンス全文は `assets/ui_kit/LICENSE_kenney.txt` に同梱。ログイン不要で直接ダウンロード
 できるCC0配布元(Unity/Unreal Asset Storeはログイン必須のためこの環境からは取得不可)。
 
-**現状のスコープ**: ヘッダー統計パネルと下部操作ボタンには実アセットを使用した。
-盤面(釘フィールド)を囲む豪華な縁取りフレーム(実機筐体のクローム/ゴールド枠)は
-まだ実装していない。Kenney UI Pack: Sci-Fiには全周を囲むフレーム用のコーナー/エッジ
-素材が無いため、別途フレーム専用アセット(Kenneyの他パックまたは追加生成)が必要。
+**現状のスコープ**: ヘッダー統計パネル・下部操作ボタン・盤面を囲む筐体フレームまで
+実アセットで揃った(下記OpenGameArt由来の`cabinet_frame.png`)。
+
+## 実素材(OpenGameArt "RPG Frames: Window Border Tiling-Textures", CC0)
+
+| ファイル | 出典 | 用途 |
+|---|---|---|
+| `assets/ui_kit/cabinet_frame.png` | OpenGameArt(作者: hc)`plate_circuit.png`を加工 | 盤面を囲む筐体フレーム(9-slice) |
+
+出典: https://opengameart.org/content/rpg-frames-window-border-tiling-textures (CC0 1.0)。
+元ファイルの中央は不透明な単色パネルだったため、Pillowで中央部分のアルファ値を0にして
+「盤面が透けて見える窓枠」に加工した(グラフィックの意匠そのものは変更していない、
+中央の可視性のみを変更する非破壊的な編集)。
 
 ## 手作りベクター素材
 

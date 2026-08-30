@@ -1,4 +1,4 @@
-[gd_scene load_steps=20 format=3 uid="uid://main_scene_001"]
+[gd_scene load_steps=21 format=3 uid="uid://main_scene_001"]
 
 [ext_resource type="Script" path="res://scripts/GameManager.gd" id="1"]
 [ext_resource type="Script" path="res://scripts/Launcher.gd" id="2"]
@@ -16,6 +16,7 @@
 [ext_resource type="Texture2D" path="res://assets/ui_kit/panel_bar.png" id="14"]
 [ext_resource type="Texture2D" path="res://assets/ui_kit/button_grey.png" id="15"]
 [ext_resource type="Texture2D" path="res://assets/ui_kit/button_blue.png" id="16"]
+[ext_resource type="Texture2D" path="res://assets/ui_kit/cabinet_frame.png" id="17"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_left"]
 size = Vector2(10, 1150)
@@ -127,6 +128,17 @@ script = ExtResource("8")
 script = ExtResource("9")
 
 [node name="UI" type="CanvasLayer" parent="."]
+
+[node name="CabinetFrame" type="NinePatchRect" parent="UI"]
+offset_left = 25.0
+offset_top = 195.0
+offset_right = 695.0
+offset_bottom = 1175.0
+texture = ExtResource("17")
+patch_margin_left = 30
+patch_margin_top = 30
+patch_margin_right = 30
+patch_margin_bottom = 30
 
 [node name="Logo" type="TextureRect" parent="UI"]
 offset_left = 260.0
