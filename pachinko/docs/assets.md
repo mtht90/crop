@@ -28,6 +28,22 @@
 生成画像の権利がどう扱われるか)を、実際にリリースする前に必ず確認すること。
 本コミット時点では未確認。
 
+## 実素材(Kenney "UI Pack: Sci-Fi", CC0)
+
+| ファイル | 出典 | 用途 |
+|---|---|---|
+| `assets/ui_kit/panel_bar.png` | Kenney UI Pack: Sci-Fi (Grey/Default/bar_square_large.png) | HUD統計パネルの背景(9-slice) |
+| `assets/ui_kit/button_grey.png` / `button_blue.png` | 同上(button_square_header_large_square_screws.png) | 下部の「終了」「オート」「メニュー」ボタン |
+
+出典: https://kenney.nl/assets/ui-pack-sci-fi (CC0 1.0, 商用利用可、クレジット任意)。
+ライセンス全文は `assets/ui_kit/LICENSE_kenney.txt` に同梱。ログイン不要で直接ダウンロード
+できるCC0配布元(Unity/Unreal Asset Storeはログイン必須のためこの環境からは取得不可)。
+
+**現状のスコープ**: ヘッダー統計パネルと下部操作ボタンには実アセットを使用した。
+盤面(釘フィールド)を囲む豪華な縁取りフレーム(実機筐体のクローム/ゴールド枠)は
+まだ実装していない。Kenney UI Pack: Sci-Fiには全周を囲むフレーム用のコーナー/エッジ
+素材が無いため、別途フレーム専用アセット(Kenneyの他パックまたは追加生成)が必要。
+
 ## 手作りベクター素材
 
 | ファイル | 用途 |

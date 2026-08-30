@@ -21,6 +21,14 @@ const MAX_HOLD: int = HoldQueue.MAX_SIZE
 @onready var jackpot_controller: JackpotController = $JackpotController
 @onready var ally_arrival_overlay: TextureRect = $UI/AllyArrivalOverlay
 @onready var jackpot_overlay: TextureRect = $UI/JackpotOverlay
+@onready var hud_panel: NinePatchRect = $UI/HudPanel
+@onready var exit_button: TextureButton = $UI/ButtonBar/ExitButton
+@onready var auto_button: TextureButton = $UI/ButtonBar/AutoButton
+@onready var auto_button_label: Label = $UI/ButtonBar/AutoButton/Label
+@onready var menu_button: TextureButton = $UI/ButtonBar/MenuButton
+@onready var auto_fire_timer: Timer = $AutoFireTimer
+
+var auto_fire_enabled: bool = false
 
 var game_state: GameState
 var lottery_system: LotterySystem
@@ -54,6 +62,11 @@ func _ready() -> void:
 	jackpot_controller.round_started.connect(_on_round_started)
 	jackpot_controller.round_finished.connect(_on_round_finished)
 	jackpot_controller.jackpot_finished.connect(_on_jackpot_finished)
+
+	exit_button.pressed.connect(_on_exit_pressed)
+	auto_button.pressed.connect(_on_auto_pressed)
+	menu_button.pressed.connect(_on_menu_pressed)
+	auto_fire_timer.timeout.connect(_fire)
 
 	_update_debug_label()
 
@@ -114,6 +127,23 @@ func _on_jackpot_finished(result: LotteryResult) -> void:
 	var zone_text: String = "確変突入" if result.enters_probability_zone else "時短突入"
 	last_result_text = "大当たり終了(%s)" % zone_text
 	_update_debug_label()
+
+func _on_exit_pressed() -> void:
+	get_tree().quit()
+
+func _on_auto_pressed() -> void:
+	auto_fire_enabled = not auto_fire_enabled
+	if auto_fire_enabled:
+		auto_fire_timer.start()
+	else:
+		auto_fire_timer.stop()
+	auto_button_label.text = "オート\n%s" % ("ON" if auto_fire_enabled else "OFF")
+
+## TODO(Phase4/6): 本来のメニューはポーズ画面や設定画面を開く。現状はプレースホルダーとして
+## HUDパネルの表示/非表示だけを切り替える(盤面全体を見たいときの簡易機能として使える)。
+func _on_menu_pressed() -> void:
+	hud_panel.visible = not hud_panel.visible
+	debug_label.visible = hud_panel.visible
 
 func _mode_display_name() -> String:
 	match game_state.mode:
