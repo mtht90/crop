@@ -1,0 +1,103 @@
+[gd_scene load_steps=10 format=3 uid="uid://main_scene_001"]
+
+[ext_resource type="Script" path="res://scripts/GameManager.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/Launcher.gd" id="2"]
+[ext_resource type="Script" path="res://scripts/StartChucker.gd" id="3"]
+[ext_resource type="PackedScene" path="res://scenes/Peg.tscn" id="4"]
+[ext_resource type="PackedScene" path="res://scenes/Ball.tscn" id="5"]
+[ext_resource type="PhysicsMaterial" path="res://resources/wall_physics_material.tres" id="6"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_left"]
+size = Vector2(10, 1150)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_right"]
+size = Vector2(10, 1150)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_chucker"]
+size = Vector2(60, 16)
+
+[node name="Main" type="Node2D"]
+script = ExtResource("1")
+
+[node name="Board" type="Node2D" parent="."]
+
+[node name="LeftWall" type="StaticBody2D" parent="Board"]
+position = Vector2(65, 650)
+collision_layer = 4
+collision_mask = 1
+physics_material_override = ExtResource("6")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Board/LeftWall"]
+shape = SubResource("RectangleShape2D_left")
+
+[node name="RightWall" type="StaticBody2D" parent="Board"]
+position = Vector2(655, 650)
+collision_layer = 4
+collision_mask = 1
+physics_material_override = ExtResource("6")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Board/RightWall"]
+shape = SubResource("RectangleShape2D_right")
+
+[node name="Pegs" type="Node2D" parent="Board"]
+
+[node name="Peg1" parent="Board/Pegs" instance=ExtResource("4")]
+position = Vector2(250, 500)
+
+[node name="Peg2" parent="Board/Pegs" instance=ExtResource("4")]
+position = Vector2(320, 500)
+
+[node name="Peg3" parent="Board/Pegs" instance=ExtResource("4")]
+position = Vector2(390, 500)
+
+[node name="Peg4" parent="Board/Pegs" instance=ExtResource("4")]
+position = Vector2(460, 500)
+
+[node name="Peg5" parent="Board/Pegs" instance=ExtResource("4")]
+position = Vector2(530, 500)
+
+[node name="Peg6" parent="Board/Pegs" instance=ExtResource("4")]
+position = Vector2(285, 580)
+
+[node name="Peg7" parent="Board/Pegs" instance=ExtResource("4")]
+position = Vector2(355, 580)
+
+[node name="Peg8" parent="Board/Pegs" instance=ExtResource("4")]
+position = Vector2(425, 580)
+
+[node name="Peg9" parent="Board/Pegs" instance=ExtResource("4")]
+position = Vector2(495, 580)
+
+[node name="Peg10" parent="Board/Pegs" instance=ExtResource("4")]
+position = Vector2(320, 660)
+
+[node name="Peg11" parent="Board/Pegs" instance=ExtResource("4")]
+position = Vector2(390, 660)
+
+[node name="Peg12" parent="Board/Pegs" instance=ExtResource("4")]
+position = Vector2(460, 660)
+
+[node name="StartChucker" type="Area2D" parent="Board"]
+position = Vector2(390, 950)
+collision_layer = 8
+collision_mask = 1
+script = ExtResource("3")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Board/StartChucker"]
+shape = SubResource("RectangleShape2D_chucker")
+
+[node name="Launcher" type="Node2D" parent="."]
+position = Vector2(620, 1050)
+script = ExtResource("2")
+ball_scene = ExtResource("5")
+
+[node name="UI" type="CanvasLayer" parent="."]
+
+[node name="DebugLabel" type="Label" parent="UI"]
+offset_left = 20.0
+offset_top = 20.0
+offset_right = 700.0
+offset_bottom = 60.0
+theme_override_font_sizes/font_size = 24
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+text = "発射数: 0  入賞数: 0  保留: 0/4"
