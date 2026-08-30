@@ -11,7 +11,7 @@
 - [x] Phase 0: 世界観決定(富岳 -銀河防衛戦線 ラスト・ディフェンダー-) → `docs/phase0-worldview.md`
 - [x] Phase 1: Godotプロジェクト初期化 + 物理プロトタイプ
 - [x] Phase 2: 釘配置エディタ(Godotプラグイン) → `docs/phase2-peg-editor.md`
-- [ ] Phase 3: 抽選ロジック・保留システム
+- [x] Phase 3: 抽選ロジック・保留システム・変動フロー → `docs/phase3-lottery.md`
 - [ ] Phase 4: 演出UI・本格演出システム
 - [ ] Phase 5: サウンド統合
 - [ ] Phase 5.5: AI生成映像・実写映像統合(Kling無料枠中心)

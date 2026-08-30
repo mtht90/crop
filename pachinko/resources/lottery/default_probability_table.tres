@@ -1,0 +1,35 @@
+[gd_resource type="Resource" script_class="ProbabilityTable" load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://resources/lottery/probability_table.gd" id="1"]
+[ext_resource type="Script" path="res://resources/lottery/jackpot_type_def.gd" id="2"]
+
+[sub_resource type="Resource" id="JackpotTypeDef_4r"]
+script = ExtResource("2")
+id = "jackpot_4r"
+display_name = "通常大当たり(4R)"
+rounds = 4
+weight = 45.0
+probability_zone_entry_chance = 0.5
+
+[sub_resource type="Resource" id="JackpotTypeDef_8r"]
+script = ExtResource("2")
+id = "jackpot_8r"
+display_name = "通常大当たり(8R)"
+rounds = 8
+weight = 30.0
+probability_zone_entry_chance = 0.5
+
+[sub_resource type="Resource" id="JackpotTypeDef_16r"]
+script = ExtResource("2")
+id = "jackpot_16r_kakuhen"
+display_name = "確変大当たり(16R)"
+rounds = 16
+weight = 25.0
+probability_zone_entry_chance = 1.0
+
+[resource]
+script = ExtResource("1")
+normal_jackpot_denominator = 319
+high_jackpot_denominator = 99
+time_short_count = 100
+jackpot_types = Array[ExtResource("2")]([SubResource("JackpotTypeDef_4r"), SubResource("JackpotTypeDef_8r"), SubResource("JackpotTypeDef_16r")])

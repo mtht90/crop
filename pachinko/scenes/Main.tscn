@@ -1,4 +1,4 @@
-[gd_scene load_steps=11 format=3 uid="uid://main_scene_001"]
+[gd_scene load_steps=13 format=3 uid="uid://main_scene_001"]
 
 [ext_resource type="Script" path="res://scripts/GameManager.gd" id="1"]
 [ext_resource type="Script" path="res://scripts/Launcher.gd" id="2"]
@@ -7,6 +7,8 @@
 [ext_resource type="PackedScene" path="res://scenes/Ball.tscn" id="5"]
 [ext_resource type="PhysicsMaterial" path="res://resources/wall_physics_material.tres" id="6"]
 [ext_resource type="Script" path="res://scripts/PegBoard.gd" id="7"]
+[ext_resource type="Script" path="res://scripts/lottery/SpinController.gd" id="8"]
+[ext_resource type="Script" path="res://scripts/lottery/JackpotController.gd" id="9"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_left"]
 size = Vector2(10, 1150)
@@ -94,13 +96,19 @@ position = Vector2(620, 1050)
 script = ExtResource("2")
 ball_scene = ExtResource("5")
 
+[node name="SpinController" type="Node" parent="."]
+script = ExtResource("8")
+
+[node name="JackpotController" type="Node" parent="."]
+script = ExtResource("9")
+
 [node name="UI" type="CanvasLayer" parent="."]
 
 [node name="DebugLabel" type="Label" parent="UI"]
 offset_left = 20.0
 offset_top = 20.0
 offset_right = 700.0
-offset_bottom = 60.0
-theme_override_font_sizes/font_size = 24
+offset_bottom = 140.0
+theme_override_font_sizes/font_size = 22
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 text = "発射数: 0  入賞数: 0  保留: 0/4"
