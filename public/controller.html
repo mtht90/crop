@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<title>射的コントローラー</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Mochiy+Pop+One&family=Bungee&display=swap">
+<style>
+  :root {
+    --carnival-red: #e8432f;
+    --carnival-red-deep: #b82e1f;
+    --carnival-yellow: #ffc93c;
+    --carnival-teal: #1e9d8b;
+    --cream: #fff6e3;
+    --ink: #2b1a12;
+    --wood: #7a4a26;
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: var(--cream);
+    color: var(--ink);
+    font-family: "Mochiy Pop One", "Hiragino Maru Gothic ProN", sans-serif;
+    touch-action: none;
+    overscroll-behavior: none;
+    user-select: none;
+  }
+
+  .sunburst {
+    position: fixed;
+    inset: -20%;
+    background: repeating-conic-gradient(
+      var(--carnival-yellow) 0deg 12deg,
+      #ffe08a 12deg 24deg
+    );
+    opacity: 0.6;
+    z-index: 0;
+  }
+
+  .screen {
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 24px;
+  }
+
+  body[data-screen="start"] .screen-start,
+  body[data-screen="calibrate"] .screen-calibrate,
+  body[data-screen="play"] .screen-play,
+  body[data-screen="full"] .screen-full {
+    display: flex;
+  }
+
+  h1 {
+    font-size: 8vw;
+    margin: 0 0 8px;
+    color: var(--carnival-red);
+    -webkit-text-stroke: 2px var(--ink);
+    text-shadow: 3px 3px 0 var(--ink);
+    text-wrap: balance;
+  }
+
+  .subtitle {
+    font-size: 4.2vw;
+    margin: 0 0 32px;
+    color: var(--ink);
+    opacity: 0.85;
+  }
+
+  .poster-btn {
+    font-family: "Mochiy Pop One", sans-serif;
+    font-size: 5.5vw;
+    color: var(--cream);
+    background: var(--carnival-teal);
+    border: none;
+    border-radius: 999px;
+    padding: 20px 44px;
+    box-shadow: 0 8px 0 #0f5a4e, 0 10px 14px rgba(0, 0, 0, 0.35);
+    -webkit-text-stroke: 1px var(--ink);
+  }
+  .poster-btn:active {
+    transform: translateY(6px);
+    box-shadow: 0 2px 0 #0f5a4e, 0 4px 8px rgba(0, 0, 0, 0.35);
+  }
+
+  #statusLine {
+    position: absolute;
+    bottom: 20px;
+    left: 0;
+    right: 0;
+    font-family: sans-serif;
+    font-size: 3.4vw;
+    color: var(--wood);
+    z-index: 1;
+  }
+
+  .screen-play {
+    justify-content: flex-start;
+    padding: 0;
+  }
+
+  #topBar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    padding: 16px 16px 0;
+  }
+
+  #playerBadge {
+    background: var(--wood);
+    color: var(--cream);
+    font-size: 4vw;
+    padding: 8px 18px;
+    border-radius: 10px;
+    border: 3px solid var(--ink);
+    transform: rotate(-3deg);
+  }
+
+  #resetBtn {
+    font-family: "Mochiy Pop One", sans-serif;
+    font-size: 3.2vw;
+    color: var(--ink);
+    background: var(--carnival-yellow);
+    border: 3px solid var(--ink);
+    border-radius: 999px;
+    padding: 8px 16px;
+  }
+
+  #aimZone {
+    flex: 1;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 4vw;
+    color: var(--wood);
+    opacity: 0.7;
+    padding: 0 24px;
+    text-align: center;
+  }
+
+  #fireBtn {
+    width: 100%;
+    height: 46vh;
+    background: var(--carnival-red);
+    border-top: 6px solid var(--ink);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+  }
+  #fireBtn::before {
+    content: "";
+    position: absolute;
+    inset: -50% -10%;
+    background: repeating-conic-gradient(
+      var(--carnival-red-deep) 0deg 10deg,
+      var(--carnival-red) 10deg 20deg
+    );
+    opacity: 0.5;
+  }
+  #fireBtn span {
+    position: relative;
+    font-family: "Bungee", "Mochiy Pop One", sans-serif;
+    font-size: 14vw;
+    color: var(--carnival-yellow);
+    -webkit-text-stroke: 3px var(--ink);
+    text-shadow: 4px 4px 0 var(--ink);
+    letter-spacing: 0.05em;
+  }
+  #fireBtn.pressed {
+    filter: brightness(0.85);
+  }
+  #fireBtn.pressed span {
+    transform: scale(0.94);
+  }
+
+  @media (orientation: landscape) {
+    .screen:not(.screen-rotate) { display: none !important; }
+    .screen-rotate { display: flex !important; }
+  }
+  .screen-rotate {
+    display: none;
+    background: var(--cream);
+    z-index: 5;
+  }
+</style>
+</head>
+<body data-screen="start">
+  <div class="sunburst"></div>
+
+  <section class="screen screen-start">
+    <h1>射的<br>コントローラー</h1>
+    <p class="subtitle">スマホを銃に見立てて狙いを定めよう</p>
+    <button id="startBtn" class="poster-btn">はじめる</button>
+    <p id="statusLine">タップしてセンサーを起動します</p>
+  </section>
+
+  <section class="screen screen-calibrate">
+    <h1 style="font-size:7vw;">かまえて<br>センターを狙う</h1>
+    <p class="subtitle">画面の的の中心に狙いを合わせてタップ<br>そこが基準位置になります</p>
+    <button id="calibrateBtn" class="poster-btn">センターを狙ってタップ</button>
+  </section>
+
+  <section class="screen screen-play">
+    <div id="topBar">
+      <div id="playerBadge">--</div>
+      <button id="resetBtn">⟳ 照準リセット</button>
+    </div>
+    <div id="aimZone">スマホの向きで狙いを調整<br>下の大きなボタンで発射！</div>
+    <div id="fireBtn"><span>FIRE</span></div>
+  </section>
+
+  <section class="screen screen-full">
+    <h1 style="font-size:7vw;">満員です</h1>
+    <p class="subtitle">プレイヤーが空くまでお待ちください</p>
+  </section>
+
+  <section class="screen screen-rotate">
+    <h1 style="font-size:7vw;">たてに<br>もどしてね</h1>
+    <p class="subtitle">端末を縦向きにしてください</p>
+  </section>
+
+  <script src="controller.js"></script>
+</body>
+</html>
