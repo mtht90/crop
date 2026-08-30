@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>文化祭シューティング</title>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background: #000;
+    cursor: none;
+    font-family: sans-serif;
+  }
+  canvas {
+    display: block;
+  }
+  #hud {
+    position: fixed;
+    top: 16px;
+    left: 0;
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    padding: 0 24px;
+    box-sizing: border-box;
+    color: #fff;
+    font-size: 28px;
+    font-weight: bold;
+    text-shadow: 0 0 6px rgba(0, 0, 0, 0.8);
+    pointer-events: none;
+    user-select: none;
+  }
+  #crosshair {
+    position: fixed;
+    width: 28px;
+    height: 28px;
+    margin-left: -14px;
+    margin-top: -14px;
+    pointer-events: none;
+    z-index: 10;
+  }
+  #crosshair::before,
+  #crosshair::after {
+    content: "";
+    position: absolute;
+    background: #ff2d2d;
+  }
+  #crosshair::before {
+    left: 50%;
+    top: 0;
+    width: 2px;
+    height: 100%;
+    margin-left: -1px;
+  }
+  #crosshair::after {
+    top: 50%;
+    left: 0;
+    height: 2px;
+    width: 100%;
+    margin-top: -1px;
+  }
+  #result {
+    position: fixed;
+    inset: 0;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.75);
+    color: #fff;
+    text-align: center;
+    z-index: 20;
+  }
+  #result h1 {
+    font-size: 48px;
+    margin: 0 0 16px;
+  }
+  #result p {
+    font-size: 24px;
+    margin: 4px 0;
+  }
+</style>
+</head>
+<body>
+  <div id="hud">
+    <div id="score">SCORE: 0</div>
+    <div id="time">TIME: 90</div>
+  </div>
+  <div id="crosshair"></div>
+  <div id="result">
+    <h1>TIME UP!</h1>
+    <p id="finalScore">SCORE: 0</p>
+    <p>クリックでリスタート</p>
+  </div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
+    }
+  }
+  </script>
+  <script type="module" src="game.js"></script>
+</body>
+</html>
