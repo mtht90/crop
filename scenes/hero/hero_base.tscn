@@ -1,4 +1,4 @@
-[gd_scene load_steps=14 format=3]
+[gd_scene load_steps=15 format=3]
 
 [ext_resource type="Script" path="res://src/gameplay/hero/hero_base.gd" id="1"]
 [ext_resource type="Script" path="res://src/gameplay/components/health_component.gd" id="2"]
@@ -11,6 +11,7 @@
 [ext_resource type="Script" path="res://src/gameplay/components/team_component.gd" id="9"]
 [ext_resource type="Script" path="res://src/gameplay/components/network_component.gd" id="10"]
 [ext_resource type="Script" path="res://src/gameplay/components/camera_rig_component.gd" id="11"]
+[ext_resource type="Script" path="res://src/gameplay/components/respawn_component.gd" id="12"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_1"]
 radius = 0.4
@@ -70,3 +71,7 @@ script = ExtResource("9")
 [node name="NetworkComponent" type="Node" parent="."]
 unique_name_in_owner = true
 script = ExtResource("10")
+
+[node name="RespawnComponent" type="Node" parent="."]
+unique_name_in_owner = true
+script = ExtResource("12")

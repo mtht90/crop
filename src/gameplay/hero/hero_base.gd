@@ -13,6 +13,7 @@ class_name HeroBase extends CharacterBody3D
 @onready var _ultimate_charge_component: UltimateChargeComponent = %UltimateChargeComponent
 @onready var _status_effect_component: StatusEffectComponent = %StatusEffectComponent
 @onready var _team_component: TeamComponent = %TeamComponent
+@onready var _respawn_component: RespawnComponent = %RespawnComponent
 
 
 func _ready() -> void:
@@ -92,3 +93,7 @@ func get_ultimate_charge_component() -> UltimateChargeComponent:
 
 func get_team_component() -> TeamComponent:
 	return _team_component
+
+
+func get_respawn_component() -> RespawnComponent:
+	return _respawn_component

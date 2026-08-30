@@ -281,3 +281,24 @@
   操作できるセッション）で、本 ADR に列挙した残作業（レンダリング/UI/
   オーディオ/リスポーン演出/設定メニュー/最終最適化パス）を行い、
   各ステップで実際にゲームを動かして目視確認すること。
+
+---
+
+## ADR-014: エンティティ管理は `MultiplayerSpawner` ではなく独自 `EntityRegistry` に統一する
+
+- **決定**: 第5.8章が要求する「生成/破棄はサーバー主導。`MultiplayerSpawner` を
+  用いるか、独自の `EntityRegistry` を実装するか、どちらかに統一する」に対し、
+  独自の `EntityRegistry`（`src/net/entity_registry.gd`）を採用する。
+- **背景**: `MultiplayerSpawner` は `SceneMultiplayer` の authority 伝播に強く
+  結び付いており、本プロジェクトが第5.2/5.3章で要求する「独自スナップショット層 +
+  クライアント予測」との統合には、スポーン処理自体もサーバー権威の
+  `InputCommand`/`StateSnapshot` パイプラインと同じ土俵で扱えたほうが一貫性が高い。
+- **選択肢**: 1. `MultiplayerSpawner` を採用する 2. 独自 `EntityRegistry` を実装する
+- **選択理由**: 2 を採用。将来の Interest Management（第5.8章、遠距離/非可視
+  エンティティの更新頻度低下）フックを、`MultiplayerSpawner` の暗黙的な
+  可視性システムに頼らず、`get_update_priority_for()` として明示的に
+  拡張できるようにするため。
+- **トレードオフ**: `MultiplayerSpawner` が提供する自動レプリケーション機能
+  （スポーン通知の自動配信等）を自前で実装する必要がある。この配線自体は
+  ADR-012 で既知の負債として記録した実ネットワーク統合作業の一部として、
+  今後 `NetService` に実装する。

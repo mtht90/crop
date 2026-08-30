@@ -26,6 +26,8 @@ func fire_hitscan(
 	var hero: HeroBase = _find_hero_base(result["collider"] as Node)
 	if hero == null:
 		return null
+	if hero.get_respawn_component().is_invulnerable():
+		return null
 
 	var distance_meters: float = ray_origin.distance_to(result["position"])
 	var damage_info := DamageInfo.new(
