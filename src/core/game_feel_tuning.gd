@@ -6,8 +6,11 @@ class_name GameFeelTuning extends Resource
 @export var ground_accel: float = 12.0
 @export var ground_friction: float = 10.0
 @export var air_control: float = 0.4
+@export var jump_velocity: float = 8.0
+@export var gravity: float = 20.0
 @export var dash_curve: Curve
 @export var dash_duration_seconds: float = 0.2
+@export var dash_speed: float = 14.0
 @export var landing_dip_max_meters: float = 0.06
 @export var landing_dip_recovery_seconds: float = 0.12
 

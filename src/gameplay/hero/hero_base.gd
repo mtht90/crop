@@ -29,6 +29,17 @@ func _ready() -> void:
 		_skill_component.assign_ability(&"ultimate", hero_data.ability_ultimate)
 
 
+func _physics_process(delta: float) -> void:
+	var tick: int = Engine.get_physics_frames()
+	var cmd: InputCommand = _input_component.build_input_command(tick, delta)
+
+	_movement_component.state.position = global_position
+	var next_state: MoveState = _movement_component.compute_next_state(cmd)
+	velocity = next_state.velocity
+	move_and_slide()
+	_movement_component.report_grounded(is_on_floor())
+
+
 func _on_health_component_died(killer_hero_id: int) -> void:
 	GameEvents.hero_died.emit(get_instance_id(), killer_hero_id)
 

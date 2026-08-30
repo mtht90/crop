@@ -31,6 +31,9 @@ $ godot --headless --version
 | `GPUParticles3D` | 同上 | **存在する** |
 | `CompositorEffect` / `Compositor` | 同上 | **存在する**（4.3でポストプロセスのカスタムコンポジタが使用可能） |
 | `NavigationAgent3D` | 同上 | **存在する** |
+| `FastNoiseLite` | 同上 | **存在する**（カメラシェイクのノイズ源として Phase 2 で使用） |
+| `SpringArm3D` | 同上 | **存在する** |
+| `Camera3D` (`fov`/`h_offset`/`v_offset`) | 同上 | **存在する**（ADS FOV遷移・シェイクオフセットに使用） |
 
 ### 4.3 における設計上の結論
 - **足のIK / エイムオフセットは `LookAtModifier3D` を使わない。** 4.3には存在しないため、

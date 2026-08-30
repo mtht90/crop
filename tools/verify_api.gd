@@ -14,6 +14,9 @@ const CLASSES_TO_CHECK: PackedStringArray = [
 	"CompositorEffect",
 	"Compositor",
 	"NavigationAgent3D",
+	"FastNoiseLite",
+	"SpringArm3D",
+	"Camera3D",
 ]
 
 
