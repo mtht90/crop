@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="GameFeelTuning" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/core/game_feel_tuning.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+ground_accel = 12.0
+ground_friction = 10.0
+air_control = 0.4
+dash_duration_seconds = 0.2
+landing_dip_max_meters = 0.06
+landing_dip_recovery_seconds = 0.12
+input_buffer_seconds = 0.12
+coyote_time_seconds = 0.1
+mouse_sensitivity_base = 0.0022
+ads_transition_seconds = 0.12
+camera_collision_smooth_seconds = 0.06
+step_smoothing_seconds = 0.08
+recoil_recovery_delay_seconds = 0.25
+hitmarker_fade_seconds = 0.06

@@ -16,6 +16,14 @@ run/main_scene="res://scenes/main.tscn"
 config/features=PackedStringArray("4.3", "Forward Plus")
 config/icon="res://icon.svg"
 
+[autoload]
+
+GameEvents="*res://src/core/game_events.gd"
+NetService="*res://src/net/net_service.gd"
+MatchService="*res://src/core/match_service.gd"
+AudioService="*res://src/core/audio_service.gd"
+DebugService="*res://src/debug/debug_service.gd"
+
 [editor_plugins]
 
 enabled=PackedStringArray("res://addons/gdUnit4/plugin.cfg")

@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="HeroData" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://src/gameplay/hero/hero_data.gd" id="1"]
+[ext_resource type="Resource" path="res://data/weapons/wpn_rifle_a.tres" id="2"]
+[ext_resource type="Resource" path="res://data/abilities/abl_recon_dart.tres" id="3"]
+[ext_resource type="Resource" path="res://data/abilities/abl_pinpoint_ultimate.tres" id="4"]
+
+[resource]
+script = ExtResource("1")
+hero_id = &"kestrel"
+display_name = "Kestrel"
+base_health = 175.0
+move_speed = 6.8
+acceleration = 16.0
+weapon_data = ExtResource("2")
+ability_primary = ExtResource("3")
+ability_ultimate = ExtResource("4")
+ultimate_cost = 100.0
+hurtbox_radius = 0.35

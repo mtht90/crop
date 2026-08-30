@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="NetConfig" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/net/net_config.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+physics_ticks_per_second = 60
+snapshot_send_rate_hz = 30
+reconcile_threshold_meters = 0.02
+interpolation_delay_seconds = 0.1
+max_extrapolation_seconds = 0.2
+lag_compensation_history_seconds = 1.0
+max_rewind_seconds = 0.25
+input_jitter_buffer_ticks = 2

@@ -1,0 +1,51 @@
+[gd_scene load_steps=11 format=3]
+
+[ext_resource type="Script" path="res://src/gameplay/hero/hero_base.gd" id="1"]
+[ext_resource type="Script" path="res://src/gameplay/components/health_component.gd" id="2"]
+[ext_resource type="Script" path="res://src/gameplay/components/movement_component.gd" id="3"]
+[ext_resource type="Script" path="res://src/gameplay/components/input_component.gd" id="4"]
+[ext_resource type="Script" path="res://src/gameplay/components/weapon_component.gd" id="5"]
+[ext_resource type="Script" path="res://src/gameplay/components/skill_component.gd" id="6"]
+[ext_resource type="Script" path="res://src/gameplay/components/ultimate_charge_component.gd" id="7"]
+[ext_resource type="Script" path="res://src/gameplay/components/status_effect_component.gd" id="8"]
+[ext_resource type="Script" path="res://src/gameplay/components/team_component.gd" id="9"]
+[ext_resource type="Script" path="res://src/gameplay/components/network_component.gd" id="10"]
+
+[node name="HeroBase" type="CharacterBody3D"]
+script = ExtResource("1")
+
+[node name="HealthComponent" type="Node" parent="."]
+unique_name_in_owner = true
+script = ExtResource("2")
+
+[node name="MovementComponent" type="Node" parent="."]
+unique_name_in_owner = true
+script = ExtResource("3")
+
+[node name="InputComponent" type="Node" parent="."]
+unique_name_in_owner = true
+script = ExtResource("4")
+
+[node name="WeaponComponent" type="Node" parent="."]
+unique_name_in_owner = true
+script = ExtResource("5")
+
+[node name="SkillComponent" type="Node" parent="."]
+unique_name_in_owner = true
+script = ExtResource("6")
+
+[node name="UltimateChargeComponent" type="Node" parent="."]
+unique_name_in_owner = true
+script = ExtResource("7")
+
+[node name="StatusEffectComponent" type="Node" parent="."]
+unique_name_in_owner = true
+script = ExtResource("8")
+
+[node name="TeamComponent" type="Node" parent="."]
+unique_name_in_owner = true
+script = ExtResource("9")
+
+[node name="NetworkComponent" type="Node" parent="."]
+unique_name_in_owner = true
+script = ExtResource("10")
