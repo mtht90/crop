@@ -11,3 +11,6 @@ fire_rate_rounds_per_second = 10.0
 magazine_size = 30
 reload_seconds = 1.6
 recoil_random_factor = 0.08
+damage_falloff_start_meters = 8.0
+damage_falloff_end_meters = 25.0
+damage_falloff_min_multiplier = 0.5

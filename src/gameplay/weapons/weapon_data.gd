@@ -12,3 +12,6 @@ enum FireModeType { HITSCAN, PROJECTILE, BEAM }
 @export var spread_curve: Curve
 @export var recoil_pattern: Curve2D
 @export var recoil_random_factor: float = 0.1
+@export var damage_falloff_start_meters: float = 15.0
+@export var damage_falloff_end_meters: float = 40.0
+@export var damage_falloff_min_multiplier: float = 0.5

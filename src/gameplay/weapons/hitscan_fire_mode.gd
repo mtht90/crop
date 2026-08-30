@@ -30,8 +30,18 @@ func fire_hitscan(
 		return null
 
 	var distance_meters: float = ray_origin.distance_to(result["position"])
+	var falloff_multiplier: float = DamageFalloff.compute_multiplier(
+		distance_meters,
+		weapon_data.damage_falloff_start_meters,
+		weapon_data.damage_falloff_end_meters,
+		weapon_data.damage_falloff_min_multiplier
+	)
 	var damage_info := DamageInfo.new(
-		shooter_hero_id, weapon_data.damage_per_hit, &"ballistic", &"body", distance_meters
+		shooter_hero_id,
+		weapon_data.damage_per_hit * falloff_multiplier,
+		&"ballistic",
+		&"body",
+		distance_meters
 	)
 	hero.get_health_component().apply_damage(damage_info)
 	return damage_info
