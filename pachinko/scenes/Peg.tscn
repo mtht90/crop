@@ -1,0 +1,21 @@
+[gd_scene load_steps=5 format=3 uid="uid://peg_scene_001"]
+
+[ext_resource type="Script" path="res://scripts/Peg.gd" id="1"]
+[ext_resource type="PhysicsMaterial" path="res://resources/peg_physics_material.tres" id="2"]
+[ext_resource type="Texture2D" path="res://assets/sprites/peg.svg" id="3"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_peg"]
+radius = 4.0
+
+[node name="Peg" type="StaticBody2D"]
+script = ExtResource("1")
+physics_material_override = ExtResource("2")
+collision_layer = 2
+collision_mask = 1
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_peg")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+scale = Vector2(0.35, 0.35)
+texture = ExtResource("3")

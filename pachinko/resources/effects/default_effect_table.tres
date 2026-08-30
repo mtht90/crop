@@ -1,0 +1,48 @@
+[gd_resource type="Resource" script_class="EffectTable" load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://resources/effects/effect_table.gd" id="1"]
+[ext_resource type="Script" path="res://resources/effects/effect_def.gd" id="2"]
+
+[sub_resource type="Resource" id="EffectDef_plain"]
+script = ExtResource("2")
+id = "plain_variation"
+display_name = "通常変動(演出なし)"
+description = "指令室の戦況モニターが淡々と動くだけの、最も控えめな変動。"
+weight_win = 2.0
+weight_lose = 250.0
+
+[sub_resource type="Resource" id="EffectDef_zone"]
+script = ExtResource("2")
+id = "alert_zone"
+display_name = "基地警戒レベル上昇(ゾーン演出)"
+description = "「敵性反応、複数!」の警告とともに指令室が色めき立つ。該当保留が消化されるまで継続。"
+weight_win = 8.0
+weight_lose = 40.0
+
+[sub_resource type="Resource" id="EffectDef_normal_reach"]
+script = ExtResource("2")
+id = "normal_reach"
+display_name = "ノーマルリーチ"
+description = "雑魚敵の大群との交戦からリーチへ移行する基本パターン。"
+weight_win = 15.0
+weight_lose = 60.0
+
+[sub_resource type="Resource" id="EffectDef_sp_reach_ally"]
+script = ExtResource("2")
+id = "sp_reach_ally_cutin"
+display_name = "SPリーチ: 僚機参戦カットイン"
+description = "ボスとの一騎打ちで劣勢に陥った瞬間、僚機/ヒロイン機が『間に合ったぜ!』と割り込む王道展開。"
+weight_win = 30.0
+weight_lose = 15.0
+
+[sub_resource type="Resource" id="EffectDef_premium"]
+script = ExtResource("2")
+id = "premium_fugaku_awakening"
+display_name = "プレミア演出: 富岳完全覚醒(SYSTEM: MAXIMUM)"
+description = "メインモニターに『SYSTEM: MAXIMUM』の文字とともに機体が黄金色に輝く、大当たり確定のプレミア演出。"
+weight_win = 10.0
+weight_lose = 0.0
+
+[resource]
+script = ExtResource("1")
+effects = Array[ExtResource("2")]([SubResource("EffectDef_plain"), SubResource("EffectDef_zone"), SubResource("EffectDef_normal_reach"), SubResource("EffectDef_sp_reach_ally"), SubResource("EffectDef_premium")])

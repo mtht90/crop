@@ -1,0 +1,44 @@
+[gd_resource type="Resource" script_class="HoldColorTable" load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://resources/effects/hold_color_table.gd" id="1"]
+[ext_resource type="Script" path="res://resources/effects/hold_color_rule.gd" id="2"]
+
+[sub_resource type="Resource" id="HoldColorRule_white"]
+script = ExtResource("2")
+color = 0
+weight_win = 5.0
+weight_lose = 200.0
+
+[sub_resource type="Resource" id="HoldColorRule_blue"]
+script = ExtResource("2")
+color = 1
+weight_win = 10.0
+weight_lose = 120.0
+
+[sub_resource type="Resource" id="HoldColorRule_green"]
+script = ExtResource("2")
+color = 2
+weight_win = 15.0
+weight_lose = 45.0
+
+[sub_resource type="Resource" id="HoldColorRule_red"]
+script = ExtResource("2")
+color = 3
+weight_win = 25.0
+weight_lose = 20.0
+
+[sub_resource type="Resource" id="HoldColorRule_gold"]
+script = ExtResource("2")
+color = 4
+weight_win = 20.0
+weight_lose = 3.0
+
+[sub_resource type="Resource" id="HoldColorRule_rainbow"]
+script = ExtResource("2")
+color = 5
+weight_win = 10.0
+weight_lose = 0.0
+
+[resource]
+script = ExtResource("1")
+rules = Array[ExtResource("2")]([SubResource("HoldColorRule_white"), SubResource("HoldColorRule_blue"), SubResource("HoldColorRule_green"), SubResource("HoldColorRule_red"), SubResource("HoldColorRule_gold"), SubResource("HoldColorRule_rainbow")])
