@@ -53,7 +53,7 @@ Phase 3で確定した`LotteryResult`を受け取ってから演出を選ぶ、�
    実際の画面演出。オリジナルイラスト・カットイン素材が必要。
 3. **保留の「変動中格上げ」**: 現状は入賞時点の色のみ決定している(Phase -1リサーチが
    指摘した2パターンのうち1つ目のみ対応)。変動中に確率的に色を格上げする処理は
-   `HoldColorSelector`に`try_upgrade(current_color, result) -> HoldColor.Color`的な
+   `HoldColorSelector`に`try_upgrade(current_color, result) -> HoldColor.Tier`的な
    メソッドを追加する形で拡張可能。
 4. **ゾーン演出の持続処理**: `alert_zone`演出が選ばれた場合、「該当保留が消化されるまで
    効果を持続」させるステート管理(3.4節要件)は未実装。

@@ -15,5 +15,5 @@ func _init(p_table: HoldColorTable, seed_value: int = -1) -> void:
 	else:
 		rng.randomize()
 
-func pick(result: LotteryResult) -> HoldColor.Color:
+func pick(result: LotteryResult) -> HoldColor.Tier:
 	return table.draw(result.is_jackpot, rng)
