@@ -14,6 +14,9 @@ class_name HeroBase extends CharacterBody3D
 @onready var _status_effect_component: StatusEffectComponent = %StatusEffectComponent
 @onready var _team_component: TeamComponent = %TeamComponent
 @onready var _respawn_component: RespawnComponent = %RespawnComponent
+@onready var _animation_driver: AnimationDriver = %AnimationDriver
+@onready var _visual_root: Node3D = $VisualRoot
+@onready var _placeholder_mesh: MeshInstance3D = $PlaceholderMesh
 
 
 func _ready() -> void:
@@ -30,6 +33,28 @@ func _ready() -> void:
 		_skill_component.assign_ability(&"skill", hero_data.ability_primary)
 	if hero_data.ability_ultimate != null:
 		_skill_component.assign_ability(&"ultimate", hero_data.ability_ultimate)
+	_load_visual()
+
+
+## hero_data.visual_scene が設定されていれば実キャラクターモデルを読み込み、
+## AnimationDriver を配線する。未設定ならプレースホルダーカプセルのままにする
+## （データ駆動: ヒーロー追加時にモデルを差し込むかどうかは .tres 側の判断）。
+func _load_visual() -> void:
+	if hero_data.visual_scene == null:
+		return
+	var visual_instance: Node3D = hero_data.visual_scene.instantiate() as Node3D
+	_visual_root.add_child(visual_instance)
+	_placeholder_mesh.visible = false
+
+	var animation_players: Array[Node] = visual_instance.find_children(
+		"*", "AnimationPlayer", true, false
+	)
+	if animation_players.is_empty():
+		push_error("hero_data.visual_scene に AnimationPlayer が見つかりません: %s" % hero_data.hero_id)
+		return
+	_animation_driver.initialize(
+		_movement_component, _health_component, animation_players[0] as AnimationPlayer
+	)
 
 
 func _physics_process(delta: float) -> void:

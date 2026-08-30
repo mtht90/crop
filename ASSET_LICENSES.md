@@ -31,6 +31,28 @@
 
 ---
 
+### KayKit Character Pack: Adventurers (1.0)
+- 出典: Kay Lousberg（www.kaylousberg.com）/ GitHub ミラー
+  `KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0`
+- URL: https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0
+- ライセンス: **CC0 1.0 Universal**（パブリックドメイン）。個人・商用問わず自由に使用可能、
+  クレジット表記は任意（義務ではない）。リポジトリ同梱の
+  `assets/characters/kaykit_adventurers/LICENSE.txt` を参照。
+- 用途: プレースホルダーのヒーロービジュアル。`Knight.glb` を Vanguard、
+  `Rogue.glb` を Kestrel の `HeroData.visual_scene` として使用（`data/heroes/*.tres`）。
+  75種のアニメーションクリップが同梱されており、そのうち Idle/Walking_A/Running_A/
+  Jump_Idle/Death_A を `AnimationDriver`（`src/gameplay/components/animation_driver.gd`）が
+  実際に参照している（クリップ名は `tools/inspect_glb_animations.gd` で実測確認済み）。
+- 改変: 元パックのうち Knight/Rogue の glTF (.glb) 2体分のみを
+  `assets/characters/kaykit_adventurers/` に採用。FBX版・他3キャラクター
+  （Barbarian/Mage/Rogue_Hooded）・サンプル画像・Textures フォルダの重複ファイルは
+  リポジトリ肥大化防止のため取り込んでいない。
+- 備考: ファンタジー風の見た目のため、最終的なヒーローのビジュアル（Vanguard/Kestrel等の
+  オリジナルデザイン）ではなく、あくまで操作感・アニメーション配線の実証用
+  プレースホルダーである。本番アセットは別途オリジナルデザインで用意すること
+  （第0章の法的・IP制約: 既存アセットの流用ではなく仮称のオリジナルヒーローを実装する
+  という方針そのものは変わらない）。
+
 ## 今後追加予定のアセット（Phase 2 以降）
 
 - キャラクターモデル / アニメーション: Mixamo（ライセンス: Adobe General Terms of Use,

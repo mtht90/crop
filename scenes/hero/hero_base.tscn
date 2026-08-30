@@ -1,4 +1,4 @@
-[gd_scene load_steps=15 format=3]
+[gd_scene load_steps=16 format=3]
 
 [ext_resource type="Script" path="res://src/gameplay/hero/hero_base.gd" id="1"]
 [ext_resource type="Script" path="res://src/gameplay/components/health_component.gd" id="2"]
@@ -12,6 +12,7 @@
 [ext_resource type="Script" path="res://src/gameplay/components/network_component.gd" id="10"]
 [ext_resource type="Script" path="res://src/gameplay/components/camera_rig_component.gd" id="11"]
 [ext_resource type="Script" path="res://src/gameplay/components/respawn_component.gd" id="12"]
+[ext_resource type="Script" path="res://src/gameplay/components/animation_driver.gd" id="13"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_1"]
 radius = 0.4
@@ -25,10 +26,14 @@ height = 1.8
 script = ExtResource("1")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
 shape = SubResource("CapsuleShape3D_1")
 
 [node name="PlaceholderMesh" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
 mesh = SubResource("CapsuleMesh_1")
+
+[node name="VisualRoot" type="Node3D" parent="."]
 
 [node name="CameraRig" type="SpringArm3D" parent="."]
 script = ExtResource("11")
@@ -75,3 +80,7 @@ script = ExtResource("10")
 [node name="RespawnComponent" type="Node" parent="."]
 unique_name_in_owner = true
 script = ExtResource("12")
+
+[node name="AnimationDriver" type="Node" parent="."]
+unique_name_in_owner = true
+script = ExtResource("13")

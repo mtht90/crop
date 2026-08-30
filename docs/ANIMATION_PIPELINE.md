@@ -1,8 +1,44 @@
 # Animation Pipeline (Mixamo → Godot 4.3)
 
-このドキュメントは第4.5章「アニメーション」で要求される Mixamo リグの導入手順を定義する。
-**現時点（Phase 2 終了時点）ではリポジトリに実際のキャラクターアセットは未導入**であり、
-本書は導入時の再現可能な手順書として先に整備するもの。理由は「既知の負債」に記載する。
+## 更新: KayKit CC0 アセットによる実装（このセクションが最新の状態）
+
+Mixamo（Adobe アカウント必須のインタラクティブなダウンロードフロー）にはこのセッションの
+ネットワーク制限上到達できなかったため、代わりに **KayKit Character Pack: Adventurers**
+（CC0 1.0、`ASSET_LICENSES.md` 参照）を GitHub 経由で導入し、実アセットに対して
+`AnimationDriver`（`src/gameplay/components/animation_driver.gd`）を実装済み。
+
+- キャラクターは `assets/characters/kaykit_adventurers/{Knight,Rogue}.glb`
+  （glTF、テクスチャ・スケルトン・アニメーション全て埋め込み済み）。
+- 実際に含まれるアニメーションクリップ名は `tools/inspect_glb_animations.gd` で実測確認済み
+  （`AnimationPlayer.get_animation_list()` を実行、全77種）。使用中のクリップ:
+  `Idle` / `Walking_A` / `Running_A` / `Jump_Idle` / `Death_A`。
+- `HeroData.visual_scene`（`PackedScene`）にキャラクターシーンを差し込むだけで、
+  `HeroBase._load_visual()` が自動的にモデルを `VisualRoot` へ配置し、内部の
+  `AnimationPlayer` を検出して `AnimationDriver.initialize()` に渡す。
+  つまり新ヒーローへの見た目付与も「.tres を差し込むだけ」という第3.2章の原則を維持する。
+- `AnimationTree` はコード側で `AnimationNodeStateMachine` を動的構築する
+  （Idle/Walk/Run/Jump の相互遷移 + Death への遷移、`xfade_time` は0.10〜0.15秒で明示、
+  カット遷移なし）。ロコモーション判定は `MovementComponent.state`
+  （速度・接地フラグ）を読むだけで、AnimationDriver 自身は移動計算を一切行わない。
+
+実装していないもの（引き続き既知の負債）:
+- 上半身/下半身分離（`AnimationNodeBlend2` + ボーンフィルタ）
+- 足接地IK（`SkeletonIK3D`）、エイムオフセット（`SkeletonModifier3D` 継承クラス、
+  `LookAtModifier3D` が4.3に存在しないための代替方式は下記「4章」に記載のまま）
+- BlendSpace2D（前後×左右の連続ブレンド。現状は3段階の離散ステート）
+- 攻撃/リロード等のアクションアニメーション（`1H_Ranged_Shoot`/`Reload` 等の
+  クリップ自体はアセットに含まれているが、WeaponComponent とはまだ未接続）
+
+これらは同じ KayKit アセットの残りのクリップで実装可能であり、次のアクションとして
+優先度順に着手すること。
+
+---
+
+## 元の計画（Mixamo 想定、参考として残す）
+
+このセクションは当初 Mixamo リグを前提に書かれた手順書。KayKit CC0 アセットは
+既にリグ・アニメーション込みで配布されているため Mixamo 特有の骨名リネーム手順は
+不要だったが、将来 Mixamo 由来の別アセットを追加する場合の参考として残す。
 
 ## 1. Mixamo からの取得手順
 
@@ -59,15 +95,11 @@ Import 時に以下の変換を行う:
 
 ---
 
-## 既知の負債（Phase 2 終了時点）
+## 既知の負債（このセクションの現状）
 
-- 本書の手順はまだ実際のアセットに対して実行されていない。理由: 本セッションはネットワーク越しに
-  Mixamo（Adobe アカウントでのインタラクティブなダウンロードが必要）へアクセスできない
-  ヘッドレス環境で作業しているため。
-- `AnimationDriver` (`src/gameplay/components/animation_driver.gd`) は空のスタブのままであり、
-  実際の `AnimationTree`/`BlendSpace2D`/`SkeletonIK3D` 配線は未実装。
-- 上記のため、Phase 2 DoD のうち「足滑り・カット遷移・段差でのカメラ跳ねが目視で0」は
-  アニメーションが存在しない現状では検証不能（該当なし）。カメラの段差対応（step smoothing）
-  自体は `CameraRigComponent` に実装済みで、ロジックとしては第4.3章の式に従っている。
-- 次アクション: 実アセット（Mixamo または CC0 の代替リグ）を入手できる環境で
-  本書の手順を実行し、`AnimationDriver` を実装すること。
+冒頭の「KayKit CC0 アセットによる実装」に記載の通り、`AnimationDriver` はもはや
+空スタブではなく実装済み。残っている負債はロコモーションの離散ステート止まりである点
+（BlendSpace2D・上下半身分離・IK・エイムオフセット・攻撃アニメーション未接続）であり、
+詳細は冒頭セクションを参照。Phase 2 DoD の目視確認項目は、実際にキャラクターが
+描画される状態になったため今後 GPU/ディスプレイのある環境で確認可能になった
+（このセッションではその確認自体はまだ実施していない）。

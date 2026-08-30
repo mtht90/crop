@@ -1,9 +1,10 @@
-[gd_resource type="Resource" script_class="HeroData" load_steps=5 format=3]
+[gd_resource type="Resource" script_class="HeroData" load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://src/gameplay/hero/hero_data.gd" id="1"]
 [ext_resource type="Resource" path="res://data/weapons/wpn_smg_a.tres" id="2"]
 [ext_resource type="Resource" path="res://data/abilities/abl_dash_shield.tres" id="3"]
 [ext_resource type="Resource" path="res://data/abilities/abl_barrier_ultimate.tres" id="4"]
+[ext_resource type="PackedScene" path="res://assets/characters/kaykit_adventurers/Knight.glb" id="5"]
 
 [resource]
 script = ExtResource("1")
@@ -17,3 +18,4 @@ ability_primary = ExtResource("3")
 ability_ultimate = ExtResource("4")
 ultimate_cost = 100.0
 hurtbox_radius = 0.45
+visual_scene = ExtResource("5")

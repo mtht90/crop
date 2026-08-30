@@ -38,6 +38,8 @@ $ godot --headless --version
 | `Curve2D` (`point_count`/`get_point_position`) | 同上 | **存在する**（決定論的リコイルパターンの格納に使用、Phase 3） |
 | `PackedByteArray.encode_s32/encode_s8/encode_u16/encode_s16` 系 | 実行スクリプトで直接呼び出し確認 | **存在する**（InputCommand の量子化エンコードに使用、Phase 4） |
 | `ConfigFile` (`set_value`/`get_value`/`save`/`load`) | `ClassDB.class_get_method_list` | **存在する**（設定の永続化に使用、Phase 5） |
+| `AnimationTree`/`AnimationNodeStateMachine`/`AnimationNodeStateMachineTransition`/`AnimationNodeAnimation` | `ClassDB.class_exists` + 実引数確認 | **存在する**。`AnimationTree.anim_player`（NodePath）、`AnimationNodeStateMachineTransition.xfade_time`、`ADVANCE_MODE_DISABLED=0`、`add_node(name, node, position)`、`add_transition(from, to, transition)` を実測確認（Phase 2 残作業のアニメーション実装で使用） |
+| KayKit Character Pack Adventurers（CC0, glTF）の実アニメーションクリップ名 | `AnimationPlayer.get_animation_list()` を実行して実測 | `Idle`/`Walking_A`/`Running_A`/`Jump_Start`/`Jump_Idle`/`Jump_Land`/`Death_A`/`Hit_A`/`1H_Ranged_Aiming`/`1H_Ranged_Shoot`/`1H_Ranged_Reload` 等、全77種を確認（`tools/inspect_glb_animations.gd` で再現可能） |
 
 ### 4.3 における設計上の結論
 - **足のIK / エイムオフセットは `LookAtModifier3D` を使わない。** 4.3には存在しないため、

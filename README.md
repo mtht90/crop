@@ -66,7 +66,7 @@ godot --headless --script tools/verify_api.gd
 
 - [x] Phase 0 — 環境検証と基盤
 - [x] Phase 1 — AAA級アーキテクチャ基盤
-- [x] Phase 2 — 操作感とアニメーション（移動/カメラ/入力は実装、実アセット未導入は既知の負債）
+- [x] Phase 2 — 操作感とアニメーション（移動/カメラ/入力に加え、KayKit CC0 実アセット導入とAnimationDriver/AnimationTree実装済み。上下半身分離/IK/BlendSpace2Dは未着手、docs/ANIMATION_PIPELINE.md参照）
 - [x] Phase 3 — 射撃・スキル・ゲームフィール（戦闘ロジックは実装、HUD/VFX/SFXはPhase 5前に別途対応が必要）
 - [x] Phase 4 — ネットワーク同期（量子化/リコンサイル/サーバー検証ロジックは実装・テスト済み。実際のRPC配線と複数ピアでの実機検証は未実施、ADR-012参照）
 - [~] Phase 5 — ゲームルール・ビジュアル・ポリッシュ（GameModeBase/TDM/クリスタルアサルト/スポーン選択/リスポーン無敵/キルカメラ状態機械/ピックアップ取得権威/スコアボード/設定永続化/EntityRegistryは実装・テスト済み。第8.2章のメモリリークテストも実施しHeroBase生成/破棄でオブジェクト数リーク無しを確認。レンダリング/ライティング/UI/オーディオはビジュアル検証不可のため未着手、ADR-013参照）

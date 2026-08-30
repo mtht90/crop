@@ -13,3 +13,4 @@ class_name HeroData extends Resource
 @export var ability_ultimate: AbilityData
 @export var ultimate_cost: float = 100.0
 @export var hurtbox_radius: float = 0.4
+@export var visual_scene: PackedScene

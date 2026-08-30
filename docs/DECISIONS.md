@@ -284,7 +284,52 @@
 
 ---
 
-## ADR-014: エンティティ管理は `MultiplayerSpawner` ではなく独自 `EntityRegistry` に統一する
+## ADR-015: 指定3サイトの代わりに GitHub 経由の KayKit CC0 アセットを採用する
+
+- **決定**: ユーザーから指定された Unity Asset Store / craftpix.net / itch.io は
+  本セッションのネットワークegressポリシーでブロックされており（プロキシの
+  組織ポリシーによる拒否、`403/407` は「再試行や回避をせず報告する」ことが
+  プロキシ自身のガイドラインで明示されている）、到達不可能と判断した。
+  代わりに到達可能な GitHub 上で CC0 ライセンスの代替を探し、
+  **KayKit Character Pack: Adventurers**（Kay Lousberg 作、CC0 1.0）を採用した。
+- **背景**: Unity Asset Store のアセットは仮に取得できても Unity Asset Store
+  EULA の対象であり Godot プロジェクトでの使用可否を精査する必要がある一方、
+  KayKit は明示的に CC0（パブリックドメイン）でライセンスされ、Godot を含む
+  複数エンジンでの使用が GitHub リポジトリの topics 自体に明記されている。
+- **選択肢**: 1. ネットワーク制限の解除をユーザーに依頼し、それまで作業を止める
+  2. 到達可能な範囲でライセンスが完全にクリーンな代替を探し、統合を進める
+- **選択理由**: 2 を採用。ユーザーには制限の実態と解除方法（環境オーナーによる
+  ネットワークポリシー変更）を明示した上で、待機ではなく代替パスでの前進を
+  ユーザー自身が選択した。KayKit は glTF 形式・75種のアニメーション同梱という
+  条件が Phase 2 の未着手事項（Mixamo導入・AnimationTree実装）を埋めるのに
+  ちょうど適していた。
+- **トレードオフ**: KayKit はファンタジー風の見た目であり、指示書が定義する
+  オリジナルのSFヒーロー（Vanguard/Kestrel等）の最終ビジュアルとしては
+  使用しない。あくまで操作感・アニメーション配線を実証するプレースホルダーである
+  （`ASSET_LICENSES.md` に明記）。指定3サイトへのアクセスが確保できた場合は、
+  そちらから選定した本番アセットに差し替えること。
+
+---
+
+## ADR-016: AnimationDriver は実アセットに対しコード側で AnimationNodeStateMachine を動的構築する
+
+- **決定**: `AnimationDriver`（`src/gameplay/components/animation_driver.gd`）は
+  `.tscn` で手動配線された `AnimationTree` リソースを使うのではなく、
+  `_ready()` 相当のタイミングで `AnimationNodeStateMachine` をコードから構築する。
+- **背景**: `HeroData.visual_scene` はヒーローごとに異なる `PackedScene`
+  （Knight.glb / Rogue.glb 等）を指すため、AnimationTree の `anim_player`
+  参照先も実行時にしか定まらない。あらかじめ `.tscn` に埋め込む方式では
+  ヒーロー追加のたびにシーンを複製する必要が生じ、「.tres を足すだけで
+  ヒーローが増える」という第3.2章の原則に反する。
+- **選択肢**: 1. ヒーローごとに専用の AnimationTree 付きシーンを用意する
+  2. 汎用の AnimationDriver がクリップ名の規約（Idle/Walking_A/Running_A/
+  Jump_Idle/Death_A）に従って実行時に AnimationNodeStateMachine を組み立てる
+- **選択理由**: 2 を採用。クリップ名の規約さえ守れば（KayKitパック内の
+  他キャラクターは全員同じクリップ名セットを持つことを実測確認済み）、
+  新ヒーローは `visual_scene` を差し替えるだけで動作する。
+- **トレードオフ**: 将来、クリップ名が異なる別アセットを混在させる場合は
+  `AnimationDriver.CLIP_BY_STATE` をヒーローごとに上書きできる仕組みが
+  必要になる（現状は全ヒーロー共通のマッピングを前提としている）。: エンティティ管理は `MultiplayerSpawner` ではなく独自 `EntityRegistry` に統一する
 
 - **決定**: 第5.8章が要求する「生成/破棄はサーバー主導。`MultiplayerSpawner` を
   用いるか、独自の `EntityRegistry` を実装するか、どちらかに統一する」に対し、
