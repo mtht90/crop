@@ -36,6 +36,7 @@ $ godot --headless --version
 | `Camera3D` (`fov`/`h_offset`/`v_offset`) | 同上 | **存在する**（ADS FOV遷移・シェイクオフセットに使用） |
 | `PhysicsRayQueryParameters3D` / `PhysicsDirectSpaceState3D.intersect_ray` | 同上 | **存在する**（サーバー権威ヒットスキャン判定に使用、Phase 3） |
 | `Curve2D` (`point_count`/`get_point_position`) | 同上 | **存在する**（決定論的リコイルパターンの格納に使用、Phase 3） |
+| `PackedByteArray.encode_s32/encode_s8/encode_u16/encode_s16` 系 | 実行スクリプトで直接呼び出し確認 | **存在する**（InputCommand の量子化エンコードに使用、Phase 4） |
 
 ### 4.3 における設計上の結論
 - **足のIK / エイムオフセットは `LookAtModifier3D` を使わない。** 4.3には存在しないため、
