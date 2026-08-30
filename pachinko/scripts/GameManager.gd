@@ -19,6 +19,8 @@ const MAX_HOLD: int = HoldQueue.MAX_SIZE
 @onready var debug_label: Label = $UI/DebugLabel
 @onready var spin_controller: SpinController = $SpinController
 @onready var jackpot_controller: JackpotController = $JackpotController
+@onready var ally_arrival_overlay: TextureRect = $UI/AllyArrivalOverlay
+@onready var jackpot_overlay: TextureRect = $UI/JackpotOverlay
 
 var game_state: GameState
 var lottery_system: LotterySystem
@@ -48,6 +50,7 @@ func _ready() -> void:
 	game_state.mode_changed.connect(_on_mode_changed)
 	spin_controller.spin_started.connect(_on_spin_started)
 	spin_controller.spin_resolved.connect(_on_spin_resolved)
+	jackpot_controller.jackpot_started.connect(_on_jackpot_started)
 	jackpot_controller.round_started.connect(_on_round_started)
 	jackpot_controller.round_finished.connect(_on_round_finished)
 	jackpot_controller.jackpot_finished.connect(_on_jackpot_finished)
@@ -83,14 +86,20 @@ func _on_spin_started(result: LotteryResult) -> void:
 	if effect != null:
 		var reliability: float = effect_selector.reliability_percent(effect)
 		last_effect_text = "%s (信頼度%.1f%%)" % [effect.display_name, reliability]
+		ally_arrival_overlay.visible = effect.id == "sp_reach_ally_cutin"
 	else:
 		last_effect_text = "-"
+		ally_arrival_overlay.visible = false
 	_update_debug_label()
 
 func _on_spin_resolved(result: LotteryResult) -> void:
 	last_result_text = "大当たり!" if result.is_jackpot else "ハズレ"
+	ally_arrival_overlay.visible = false
 	jackpot_controller.handle_spin_resolved(result)
 	_update_debug_label()
+
+func _on_jackpot_started(_result: LotteryResult) -> void:
+	jackpot_overlay.visible = true
 
 func _on_round_started(round_index: int, total_rounds: int) -> void:
 	round_status_text = "R%d/%d 消化中" % [round_index, total_rounds]
@@ -101,6 +110,7 @@ func _on_round_finished(_round_index: int, _payout_balls: int) -> void:
 
 func _on_jackpot_finished(result: LotteryResult) -> void:
 	round_status_text = ""
+	jackpot_overlay.visible = false
 	var zone_text: String = "確変突入" if result.enters_probability_zone else "時短突入"
 	last_result_text = "大当たり終了(%s)" % zone_text
 	_update_debug_label()
