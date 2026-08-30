@@ -1,0 +1,7 @@
+[gd_resource type="Resource" script_class="PegLayoutResource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://resources/peg_layout_resource.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+peg_positions = Array[Vector2]([Vector2(250, 500), Vector2(320, 500), Vector2(390, 500), Vector2(460, 500), Vector2(530, 500), Vector2(285, 580), Vector2(355, 580), Vector2(425, 580), Vector2(495, 580), Vector2(320, 660), Vector2(390, 660), Vector2(460, 660)])

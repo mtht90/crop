@@ -33,6 +33,10 @@ launch_ball={
 ]
 }
 
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/peg_layout_editor/plugin.cfg")
+
 [physics]
 
 2d/default_gravity=980.0

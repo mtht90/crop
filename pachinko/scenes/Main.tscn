@@ -1,4 +1,4 @@
-[gd_scene load_steps=10 format=3 uid="uid://main_scene_001"]
+[gd_scene load_steps=11 format=3 uid="uid://main_scene_001"]
 
 [ext_resource type="Script" path="res://scripts/GameManager.gd" id="1"]
 [ext_resource type="Script" path="res://scripts/Launcher.gd" id="2"]
@@ -6,6 +6,7 @@
 [ext_resource type="PackedScene" path="res://scenes/Peg.tscn" id="4"]
 [ext_resource type="PackedScene" path="res://scenes/Ball.tscn" id="5"]
 [ext_resource type="PhysicsMaterial" path="res://resources/wall_physics_material.tres" id="6"]
+[ext_resource type="Script" path="res://scripts/PegBoard.gd" id="7"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_left"]
 size = Vector2(10, 1150)
@@ -40,6 +41,8 @@ physics_material_override = ExtResource("6")
 shape = SubResource("RectangleShape2D_right")
 
 [node name="Pegs" type="Node2D" parent="Board"]
+script = ExtResource("7")
+layout_path = "res://resources/layouts/phase1_default_layout.tres"
 
 [node name="Peg1" parent="Board/Pegs" instance=ExtResource("4")]
 position = Vector2(250, 500)
