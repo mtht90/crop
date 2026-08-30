@@ -10,5 +10,5 @@ func notify_hit(ball: Node) -> void:
 	hit.emit(self, ball)
 
 func _draw() -> void:
-	draw_circle(Vector2.ZERO, radius, Color(0.55, 0.42, 0.85))
-	draw_circle(Vector2.ZERO, radius * 0.35, Color(0.85, 0.75, 1.0))
+	draw_circle(Vector2.ZERO, radius, Color(0.23, 0.35, 0.47))
+	draw_circle(Vector2.ZERO, radius * 0.35, Color(0.82, 0.24, 0.24))

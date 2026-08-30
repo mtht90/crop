@@ -10,8 +10,8 @@ config_version=5
 
 [application]
 
-config/name="Thunder Ascension - AAA Pachinko Simulator"
-config/description="蒼雷絶界 -THUNDER ASCENSION- : 完全オリジナル世界観のデジパチシミュレーター(プロトタイプ)"
+config/name="Fugaku - AAA Pachinko Simulator"
+config/description="富岳 -銀河防衛戦線 ラスト・ディフェンダー- : 完全オリジナル世界観のデジパチシミュレーター(プロトタイプ)"
 run/main_scene="res://scenes/Main.tscn"
 config/features=PackedStringArray("4.3", "GL Compatibility")
 config/icon="res://icon.svg"
