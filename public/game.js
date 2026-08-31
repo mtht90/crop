@@ -17,6 +17,14 @@ import * as CANNON from 'cannon-es';
 const ASSETS = {
   particleStar: 'assets/kenney-particles/PNG (Transparent)/star_01.png',
   crosshair: 'assets/kenney-crosshair/PNG/Glow/crosshair-000.png',
+  // Kenney Skyboxes 2 - equirectangular sky panoramas, one per stage theme.
+  // No single panorama in the pack reads as "fiery volcanic," so the
+  // dinosaur stage borrows the alien one for its otherworldly purple sky.
+  skyboxes: {
+    farm: 'assets/kenney-skyboxes/Skyboxes/skybox-day.png',
+    dinosaur: 'assets/kenney-skyboxes/Skyboxes/skybox-alien.png',
+    western: 'assets/kenney-skyboxes/Skyboxes/skybox-morning.png',
+  },
   decorations: {
     // Foreground crate - Kenney Furniture Kit ships a real flat side-view
     // sprite for this, so no procedural fallback is needed.
@@ -289,9 +297,10 @@ const debugMode = params.get('debug') === '1';
 // A "picture-book" 2.5D stage rather than a 3D diorama: everything the
 // player sees (sky, targets, crates, background dressing) is a flat image,
 // only ever varying in which camera-facing plane it sits on and how far
-// back that plane is. The sky is a vertical-gradient canvas texture
-// (createSkyGradientTexture(), re-drawn per stage in loadStage()) standing
-// in for a painted backdrop image, since no such image was downloaded.
+// back that plane is. The sky itself is the one exception to "flat plane" -
+// it's a real equirectangular panorama (Kenney Skyboxes 2, applySkybox()
+// below) wrapped around the whole scene, with a plain gradient as the
+// instant-first-frame placeholder and the fallback if a panorama 404s.
 function hexToCss(hex) {
   return `#${hex.toString(16).padStart(6, '0')}`;
 }
@@ -315,7 +324,29 @@ function createSkyGradientTexture(topHex, bottomHex) {
 }
 
 const scene = new THREE.Scene();
-scene.background = createSkyGradientTexture(0x8fd3f4, mixHexColor(0x8fd3f4, 0xffffff, 0.55));
+
+// Kenney Skyboxes 2's equirectangular panoramas replace the gradient as the
+// real sky backdrop; the gradient stays as the immediate placeholder (shown
+// the instant a stage loads) and the fallback if a panorama ever 404s.
+const skyboxLoader = new THREE.TextureLoader();
+let skyboxLoadToken = 0;
+function applySkybox(url, fallbackTopHex, fallbackBottomHex) {
+  const token = ++skyboxLoadToken;
+  scene.background = createSkyGradientTexture(fallbackTopHex, fallbackBottomHex);
+  skyboxLoader.load(
+    url,
+    (texture) => {
+      if (token !== skyboxLoadToken) return; // a newer stage already took over
+      texture.mapping = THREE.EquirectangularReflectionMapping;
+      texture.colorSpace = THREE.SRGBColorSpace;
+      scene.background = texture;
+    },
+    undefined,
+    () => {} // 404 - the gradient set above just stays
+  );
+}
+
+applySkybox(ASSETS.skyboxes.farm, 0x8fd3f4, mixHexColor(0x8fd3f4, 0xffffff, 0.55));
 scene.fog = new THREE.Fog(0x87ceeb, 20, 60);
 
 const camera = new THREE.PerspectiveCamera(
@@ -1860,8 +1891,7 @@ function loadStage(index) {
   mode = 'stage';
   currentStageIndex = index;
   const stage = STAGES[index];
-  scene.background?.dispose?.();
-  scene.background = createSkyGradientTexture(stage.background, mixHexColor(stage.background, 0xffffff, 0.55));
+  applySkybox(ASSETS.skyboxes[stage.themeKey], stage.background, mixHexColor(stage.background, 0xffffff, 0.55));
   scene.fog.color.setHex(stage.background);
   ground.material.color.setHex(stage.groundColor ?? 0x3a7d3a);
   applyStageFrameTheme(stage);
