@@ -2,6 +2,20 @@
   const AIM_RANGE_DEG = 45; // tilt/turn needed from center to reach the -1..1 edge
   const SEND_INTERVAL_MS = 1000 / 30;
 
+  // Optional button-press SFX; dropped in under public/assets/. Missing
+  // files just fail silently, same as the game screen's sound effects.
+  const SFX_PATHS = {
+    uiClick: 'assets/sfx/ui/click.mp3',
+    uiConfirm: 'assets/sfx/ui2/confirm.mp3',
+  };
+  function playSfx(key) {
+    const src = SFX_PATHS[key];
+    if (!src) return;
+    const audio = new Audio(src);
+    audio.volume = 0.7;
+    audio.play().catch(() => {});
+  }
+
   const body = document.body;
   const startBtn = document.getElementById('startBtn');
   const calibrateBtn = document.getElementById('calibrateBtn');
@@ -118,6 +132,7 @@
   }
 
   startBtn.addEventListener('click', async () => {
+    playSfx('uiClick');
     statusLine.textContent = 'センサーを起動しています…';
     let granted = false;
     try {
@@ -137,12 +152,14 @@
   });
 
   calibrateBtn.addEventListener('click', () => {
+    playSfx('uiConfirm');
     calibrate();
     startSending();
     setScreen('play');
   });
 
   resetBtn.addEventListener('click', () => {
+    playSfx('uiClick');
     calibrate();
   });
 

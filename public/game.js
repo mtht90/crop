@@ -1,5 +1,40 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+// --- Asset manifest ----------------------------------------------------
+// Every path below is expected to be dropped in under public/assets/ (see
+// the project notes for exactly which Kenney/Poly Pizza file goes where).
+// Nothing here is required to exist: every loader below falls back to a
+// procedural placeholder when a file 404s, so the game runs fine before
+// the real assets show up and picks them up automatically once they do.
+const ASSETS = {
+  uiPanel: 'assets/kenney-ui/panel-wood.png',
+  particleStar: 'assets/kenney-particles/star.png',
+  crosshair: 'assets/kenney-crosshair/crosshair.png',
+  models: {
+    toyCar: 'assets/models/toy-car/car.glb',
+    prototypeProp: 'assets/models/prototype/prop.glb',
+    food: 'assets/models/food/can.glb',
+    holidayStar: 'assets/models/holiday/star.glb',
+    furnitureCrate: 'assets/models/furniture/crate.glb',
+    booth: 'assets/models/booth/booth.glb',
+  },
+  sfx: {
+    uiClick: 'assets/sfx/ui/click.mp3',
+    uiConfirm: 'assets/sfx/ui2/confirm.mp3',
+    hit: 'assets/sfx/hit/coin.mp3',
+    fanfare: 'assets/sfx/jingle/fanfare.mp3',
+  },
+};
+
+function playSfx(key, volume = 0.6) {
+  const src = ASSETS.sfx[key];
+  if (!src) return;
+  const audio = new Audio(src);
+  audio.volume = volume;
+  audio.play().catch(() => {}); // missing file / autoplay policy - fail silently
+}
 
 // --- Input abstraction ---------------------------------------------------
 // getAim(player) returns that player's aim as normalized device coordinates
@@ -194,6 +229,128 @@ const ground = new THREE.Mesh(
 ground.rotation.x = -Math.PI / 2;
 scene.add(ground);
 
+// --- glTF model loading (booth / crates / target props) --------------------
+// Every model is optional: preloadModel caches null on a load failure so
+// instantiateModel() (used for per-target props) just returns null and
+// callers fall back to their own placeholder, and one-off decorations
+// (booth, crates, ...) simply skip adding themselves.
+const gltfLoader = new GLTFLoader();
+const modelCache = new Map();
+
+function preloadModel(key, url, onReady, onError) {
+  gltfLoader.load(
+    url,
+    (gltf) => {
+      modelCache.set(key, gltf.scene);
+      if (onReady) onReady(gltf.scene);
+    },
+    undefined,
+    () => {
+      modelCache.set(key, null);
+      if (onError) onError();
+    }
+  );
+}
+
+function instantiateModel(key) {
+  const template = modelCache.get(key);
+  return template ? template.clone(true) : null;
+}
+
+function forEachMaterial(object3d, fn) {
+  object3d.traverse((child) => {
+    if (!child.isMesh) return;
+    for (const material of Array.isArray(child.material) ? child.material : [child.material]) {
+      fn(material);
+    }
+  });
+}
+
+function addSceneDecoration() {
+  // Carnival booth backdrop.
+  preloadModel('booth', ASSETS.models.booth, (booth) => {
+    booth.position.set(0, 0, -27);
+    booth.scale.setScalar(6);
+    scene.add(booth);
+  });
+
+  // Small hanging star accents borrowed from the Holiday Kit.
+  preloadModel('holidayStar', ASSETS.models.holidayStar, (template) => {
+    for (const x of [-6, 6]) {
+      const star = template.clone(true);
+      star.position.set(x, 5.4, -20);
+      star.scale.setScalar(0.8);
+      scene.add(star);
+    }
+  });
+
+  // Prototype-kit prop dressing the shooting counter.
+  preloadModel('prototypeProp', ASSETS.models.prototypeProp, (template) => {
+    const prop = template.clone(true);
+    prop.position.set(0, 0.9, 3.4);
+    scene.add(prop);
+  });
+
+  // Furniture-kit crates in the foreground for depth; if the model never
+  // loads, plain wooden boxes stand in so the scene still has that depth.
+  const cratePositions = [
+    [-11, 0.6, -6],
+    [11, 0.6, -6],
+    [-13, 0.6, -14],
+    [13, 0.6, -14],
+  ];
+  preloadModel(
+    'furnitureCrate',
+    ASSETS.models.furnitureCrate,
+    (template) => {
+      for (const [x, y, z] of cratePositions) {
+        const crate = template.clone(true);
+        crate.position.set(x, y, z);
+        crate.rotation.y = Math.random() * Math.PI;
+        scene.add(crate);
+      }
+    },
+    () => {
+      const geometry = new THREE.BoxGeometry(1.2, 1.2, 1.2);
+      const material = new THREE.MeshStandardMaterial({ color: 0x7a4a26 });
+      for (const [x, y, z] of cratePositions) {
+        const crate = new THREE.Mesh(geometry, material);
+        crate.position.set(x, y, z);
+        crate.rotation.y = Math.random() * Math.PI;
+        scene.add(crate);
+      }
+    }
+  );
+}
+addSceneDecoration();
+
+// Target-prop models (toy car / food can) preloaded once and cloned per spawn.
+preloadModel('toyCar', ASSETS.models.toyCar);
+preloadModel('food', ASSETS.models.food);
+
+// Particle Pack star texture for hit sparkles; falls back to the plain
+// octahedron shapes in spawnHitParticles() if it never loads.
+let starTexture = null;
+new THREE.TextureLoader().load(
+  ASSETS.particleStar,
+  (texture) => { starTexture = texture; },
+  undefined,
+  () => {}
+);
+
+// Crosshair Pack icon; the CSS circle+dot crosshair stays in place until
+// this confirms the image is actually there.
+let crosshairImageReady = false;
+{
+  const probe = new Image();
+  probe.onload = () => {
+    crosshairImageReady = true;
+    document.documentElement.style.setProperty('--crosshair-image', `url('${ASSETS.crosshair}')`);
+  };
+  probe.onerror = () => {};
+  probe.src = ASSETS.crosshair;
+}
+
 // --- Target textures ---------------------------------------------------------
 function createRingTexture(colors) {
   const size = 256;
@@ -282,6 +439,8 @@ const TARGET_TYPES = {
     spawnWeight: 4,
     movement: null,
     particleColor: 0x4be07a,
+    modelKey: 'toyCar', // a little toy car standing in for the "small" target
+    modelScale: 1.1,
     createTexture: () => createRingTexture(['#eafbea', '#22a35a', '#eafbea']),
   },
   bonus: {
@@ -302,6 +461,8 @@ const TARGET_TYPES = {
     spawnWeight: 5,
     movement: null,
     particleColor: 0x777777,
+    modelKey: 'food', // a beat-up can standing in for the "junk" target
+    modelScale: 1.3,
     createTexture: () => createDudTexture(),
   },
 };
@@ -522,13 +683,16 @@ class CurtainController {
     this.geometry.computeVertexNormals();
   }
 
-  // Runs the fall -> hold -> rise sequence and invokes `callback` once the
-  // curtain is fully closed (screen covered), so the caller can change what's
-  // behind it before the curtain rises again to reveal it.
-  show(callback) {
+  // Runs the fall -> hold -> rise sequence. `onCovered` fires once the
+  // curtain is fully closed (screen covered), so the caller can change
+  // what's behind it before the curtain rises again to reveal it.
+  // `onRevealed` (optional) fires once it has fully risen again - e.g. for
+  // a round-clear fanfare timed to when the next stage actually appears.
+  show(onCovered, onRevealed) {
     if (this.busy) return;
     this.busy = true;
-    this.callback = callback;
+    this.callback = onCovered;
+    this.onRevealed = onRevealed;
     this._resetToBunched();
     this.mesh.visible = true;
     this.phase = 'falling';
@@ -586,6 +750,11 @@ class CurtainController {
         this.phase = 'idle';
         this.mesh.visible = false;
         this.busy = false;
+        if (this.onRevealed) {
+          const revealed = this.onRevealed;
+          this.onRevealed = null;
+          revealed();
+        }
       }
     }
   }
@@ -646,6 +815,7 @@ function updateCrosshairs(connectedPlayers) {
     const el = crosshairs.get(player);
     el.style.left = `${((aim.x + 1) / 2) * window.innerWidth}px`;
     el.style.top = `${((1 - aim.y) / 2) * window.innerHeight}px`;
+    el.classList.toggle('has-image', crosshairImageReady);
   }
   for (const [player, el] of crosshairs) {
     if (!connectedPlayers.includes(player)) {
@@ -702,10 +872,22 @@ function spawnSlotTarget(slot, typeKey) {
   slot.typeKey = typeKey;
   slot.state = 'active';
 
-  const mesh = new THREE.Mesh(
-    new THREE.CircleGeometry(type.radius, 32),
-    new THREE.MeshBasicMaterial({ map: type.createTexture(), side: THREE.DoubleSide, transparent: true })
-  );
+  const modelTemplate = type.modelKey ? instantiateModel(type.modelKey) : null;
+  let mesh;
+  if (modelTemplate) {
+    mesh = modelTemplate;
+    forEachMaterial(mesh, (m) => { m.transparent = true; });
+    slot.isModel = true;
+    slot.baseScale = type.modelScale ?? 1;
+  } else {
+    mesh = new THREE.Mesh(
+      new THREE.CircleGeometry(type.radius, 32),
+      new THREE.MeshBasicMaterial({ map: type.createTexture(), side: THREE.DoubleSide, transparent: true })
+    );
+    slot.isModel = false;
+    slot.baseScale = 1;
+  }
+  mesh.scale.setScalar(slot.baseScale);
   mesh.position.copy(slot.basePosition);
   scene.add(mesh);
   slot.mesh = mesh;
@@ -756,6 +938,9 @@ function updateSlots(dt, elapsed) {
           slot.glowMesh.position.copy(slot.mesh.position);
         }
       }
+      if (slot.isModel) {
+        slot.mesh.rotation.y += dt * 0.6; // slow spin so 3D props read as "shootable"
+      }
     } else if (slot.state === 'popping') {
       slot.popAge += dt;
       slot.popVelocity.y -= 9.8 * dt;
@@ -763,8 +948,13 @@ function updateSlots(dt, elapsed) {
       slot.mesh.rotation.x += slot.popSpin.x * dt;
       slot.mesh.rotation.y += slot.popSpin.y * dt;
       const t = Math.min(slot.popAge / TARGET_POP_DURATION, 1);
-      slot.mesh.scale.setScalar(Math.max(0.001, 1 - t));
-      slot.mesh.material.opacity = 1 - t;
+      const scale = slot.baseScale * Math.max(0.001, 1 - t);
+      slot.mesh.scale.setScalar(scale);
+      if (slot.isModel) {
+        forEachMaterial(slot.mesh, (m) => { m.opacity = 1 - t; });
+      } else {
+        slot.mesh.material.opacity = 1 - t;
+      }
       if (t >= 1) {
         scene.remove(slot.mesh);
         slot.mesh = null;
@@ -795,10 +985,24 @@ const dustGeometry = new THREE.BoxGeometry(0.12, 0.12, 0.12);
 
 function spawnHitParticles(position, type) {
   const isDud = type.score < 0;
-  const geometry = isDud ? dustGeometry : sparkleGeometry;
+  // Positive hits use the Particle Pack star sprite once it's loaded (falls
+  // back to the plain spinning octahedron shards otherwise); a dud always
+  // puffs plain gray dust instead of a "celebratory" star.
+  const useStarSprite = !isDud && starTexture;
   const count = isDud ? 8 : 14;
   for (let i = 0; i < count; i++) {
-    const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: type.particleColor, transparent: true }));
+    let mesh;
+    if (useStarSprite) {
+      mesh = new THREE.Sprite(
+        new THREE.SpriteMaterial({ map: starTexture, color: type.particleColor, transparent: true })
+      );
+      mesh.scale.setScalar(0.5);
+    } else {
+      mesh = new THREE.Mesh(
+        isDud ? dustGeometry : sparkleGeometry,
+        new THREE.MeshBasicMaterial({ color: type.particleColor, transparent: true })
+      );
+    }
     mesh.position.copy(position);
     const angle = Math.random() * Math.PI * 2;
     const speed = isDud ? 1.2 + Math.random() : 2.5 + Math.random() * 3;
@@ -808,7 +1012,7 @@ function spawnHitParticles(position, type) {
       Math.sin(angle) * speed * 0.5
     );
     scene.add(mesh);
-    hitParticles.push({ mesh, velocity, age: 0 });
+    hitParticles.push({ mesh, velocity, age: 0, isSprite: useStarSprite });
   }
 }
 
@@ -817,8 +1021,12 @@ function updateHitParticles(dt) {
     const p = hitParticles[i];
     p.velocity.y -= 9.8 * dt;
     p.mesh.position.addScaledVector(p.velocity, dt);
-    p.mesh.rotation.x += dt * 6;
-    p.mesh.rotation.y += dt * 5;
+    if (p.isSprite) {
+      p.mesh.material.rotation += dt * 5;
+    } else {
+      p.mesh.rotation.x += dt * 6;
+      p.mesh.rotation.y += dt * 5;
+    }
     p.age += dt;
     p.mesh.material.opacity = Math.max(0, 1 - p.age / HIT_PARTICLE_LIFETIME);
     if (p.age >= HIT_PARTICLE_LIFETIME) {
@@ -959,6 +1167,7 @@ function handleHit(slot, player) {
   updateHud();
   spawnScorePopup(slot.mesh.position, awarded);
   spawnHitParticles(slot.mesh.position, type);
+  if (type.score >= 0) playSfx('hit'); // a "cha-ching" would feel wrong on a penalty hit
   popSlot(slot);
 }
 
@@ -1022,7 +1231,10 @@ function animate() {
     if (stageTimeLeft <= 0) {
       stageTimeLeft = 0;
       updateHud();
-      curtain.show(() => advanceStage());
+      curtain.show(
+        () => advanceStage(),
+        () => playSfx('fanfare', 0.7) // plays once the next stage (or the final result) is actually revealed
+      );
     } else {
       updateHud();
     }
