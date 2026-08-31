@@ -17,6 +17,10 @@
     --wood: #7a4a26;
     --p1-color: #ff3b3b;
     --p2-color: #3ba7ff;
+    /* Per-stage wood-panel frame color, repainted by applyStageFrameTheme()
+       in game.js on every stage change; these are just the stage-1 default. */
+    --frame-color: #c9975a;
+    --frame-color-dark: #8a6236;
   }
 
   * { box-sizing: border-box; }
@@ -33,19 +37,88 @@
     display: block;
   }
 
-  /* --- HUD: wood ticket-booth scoreboard --- */
+  /* --- Wood-plank screen frame (left/right/bottom bars + the #hud top band
+     below), common to every stage; only --frame-color/--frame-color-dark
+     change per stage. Kenney UI Pack's panel-wood.png would replace this
+     gradient directly if it's ever dropped in; until then this solid
+     wood-plank pattern stands in for it. --- */
+  #frameLeft, #frameRight, #frameBottom {
+    position: fixed;
+    pointer-events: none;
+    z-index: 5;
+    background: repeating-linear-gradient(
+      180deg,
+      var(--frame-color) 0px,
+      var(--frame-color) 10px,
+      var(--frame-color-dark) 10px,
+      var(--frame-color-dark) 12px
+    );
+    box-shadow: inset 0 0 14px rgba(0, 0, 0, 0.4);
+    transition: background 0.4s ease;
+  }
+  #frameLeft {
+    top: 0;
+    left: 0;
+    width: 34px;
+    height: 100%;
+    border-right: 4px solid var(--ink);
+  }
+  #frameRight {
+    top: 0;
+    right: 0;
+    width: 34px;
+    height: 100%;
+    border-left: 4px solid var(--ink);
+  }
+  #frameBottom {
+    left: 0;
+    bottom: 0;
+    width: 100%;
+    height: 40px;
+    background: repeating-linear-gradient(
+      90deg,
+      var(--frame-color) 0px,
+      var(--frame-color) 10px,
+      var(--frame-color-dark) 10px,
+      var(--frame-color-dark) 12px
+    );
+    border-top: 4px solid var(--ink);
+  }
+
+  /* --- HUD: top wood-plank frame band carrying the score/time panels --- */
   #hud {
     position: fixed;
-    top: 14px;
+    top: 0;
     left: 0;
     width: 100%;
+    height: 92px;
     display: flex;
     justify-content: space-between;
-    align-items: flex-start;
-    padding: 0 20px;
+    align-items: center;
+    padding: 0 46px;
     pointer-events: none;
     user-select: none;
     z-index: 6;
+    background: repeating-linear-gradient(
+      180deg,
+      var(--frame-color) 0px,
+      var(--frame-color) 10px,
+      var(--frame-color-dark) 10px,
+      var(--frame-color-dark) 12px
+    );
+    border-bottom: 4px solid var(--ink);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.35);
+    transition: background 0.4s ease;
+  }
+  .time-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+  .clock-icon {
+    font-size: 18px;
+    line-height: 1;
   }
   .score-panel {
     background: var(--wood) url('assets/kenney-ui/panel-wood.png') center / 100% 100% no-repeat;
@@ -350,6 +423,10 @@
 </style>
 </head>
 <body>
+  <div id="frameLeft"></div>
+  <div id="frameRight"></div>
+  <div id="frameBottom"></div>
+
   <div id="hud">
     <div class="score-panel" id="p1Score">
       <div class="label">PLAYER 1</div>
@@ -358,7 +435,10 @@
     </div>
     <div class="score-panel" id="timePanel">
       <div class="label" id="stageLabel">STAGE 1/3</div>
-      <div class="value" id="timeValue">30</div>
+      <div class="time-row">
+        <span class="clock-icon">⏱</span>
+        <span class="value" id="timeValue">30</span>
+      </div>
     </div>
     <div class="score-panel" id="p2Score">
       <div class="label">PLAYER 2</div>

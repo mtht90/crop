@@ -22,6 +22,22 @@ const ASSETS = {
     holidayStar: 'assets/models/holiday/star.glb',
     furnitureCrate: 'assets/models/furniture/crate.glb',
     booth: 'assets/models/booth/booth.glb',
+    // Stage 1 (farm) background dressing - Kenney Nature Kit.
+    natureTree: 'assets/models/nature/tree.glb',
+    natureFence: 'assets/models/nature/fence.glb',
+    natureGrass: 'assets/models/nature/grass.glb',
+    natureRock: 'assets/models/nature/rock.glb',
+    // Stage 2 (dinosaur) - Poly Pizza Volcano + Dinosaur Bundle.
+    volcano: 'assets/models/volcano/volcano.glb',
+    dinoTrex: 'assets/models/dinosaurs/trex.glb',
+    dinoRaptor: 'assets/models/dinosaurs/velociraptor.glb',
+    dinoTriceratops: 'assets/models/dinosaurs/triceratops.glb',
+    // Stage 3 (western) - Kenney Sketch Desert + Shooting Gallery.
+    desertBuilding: 'assets/models/desert/building.glb',
+    desertTent: 'assets/models/desert/tent.glb',
+    desertPalm: 'assets/models/desert/palm.glb',
+    galleryBottle: 'assets/models/shooting-gallery/bottle.glb',
+    galleryPlate: 'assets/models/shooting-gallery/plate.glb',
   },
   sfx: {
     uiClick: 'assets/sfx/ui/click.mp3',
@@ -584,38 +600,45 @@ const glowTexture = createGlowTexture();
 // --- Target plate mesh (3D, replaces the old flat circle) ------------------
 // A thin cylinder ("puck") whose two flat caps get the target's ring
 // texture, with a plain rim so that thin edge doesn't show a stretched
-// sliver of the texture. Real art can be dropped in at
-// assets/textures/target-<type>.png; until then (or if it 404s) the
-// type's own procedural createTexture() is used instead.
+// sliver of the texture. Real art can be dropped in per stage theme at
+// assets/textures/<themeKey>/target-<type>.png; until then (or if it
+// 404s) the type's own procedural createTexture() is used instead. The
+// rim color is theme-controlled (see STAGE_THEMES) since it's presentation,
+// not part of TARGET_TYPES.
 const TARGET_PLATE_THICKNESS = 0.14;
-const TARGET_PLATE_RIM_COLOR = 0x5a3a20;
-const targetTextureOverrides = {}; // typeKey -> loaded THREE.Texture, once confirmed to exist
+const DEFAULT_PLATE_RIM_COLOR = 0x5a3a20;
+const targetTextureOverrides = {}; // "themeKey:typeKey" -> loaded THREE.Texture, once confirmed to exist
 
-function targetTexturePath(typeKey) {
-  return `assets/textures/target-${typeKey}.png`;
+function targetTexturePath(themeKey, typeKey) {
+  return `assets/textures/${themeKey}/target-${typeKey}.png`;
 }
 
-function preloadTargetTexture(typeKey) {
+function preloadTargetTexture(themeKey, typeKey) {
+  const cacheKey = `${themeKey}:${typeKey}`;
   new THREE.TextureLoader().load(
-    targetTexturePath(typeKey),
-    (texture) => { targetTextureOverrides[typeKey] = texture; },
+    targetTexturePath(themeKey, typeKey),
+    (texture) => { targetTextureOverrides[cacheKey] = texture; },
     undefined,
     () => {} // no file there yet - createTexture()'s procedural fallback keeps being used
   );
 }
 
-function createPlateMesh(radius, texture) {
+function createPlateMesh(radius, texture, rimColor) {
   const geometry = new THREE.CylinderGeometry(radius, radius, TARGET_PLATE_THICKNESS, 32);
   const capMaterial = new THREE.MeshStandardMaterial({ map: texture, roughness: 0.65, transparent: true });
-  const rimMaterial = new THREE.MeshStandardMaterial({ color: TARGET_PLATE_RIM_COLOR, roughness: 0.85, transparent: true });
+  const rimMaterial = new THREE.MeshStandardMaterial({
+    color: rimColor ?? DEFAULT_PLATE_RIM_COLOR,
+    roughness: 0.85,
+    transparent: true,
+  });
   const mesh = new THREE.Mesh(geometry, [rimMaterial, capMaterial, capMaterial]);
   mesh.rotation.x = Math.PI / 2; // stand the puck up so its caps face the camera
   return mesh;
 }
 
-function createTargetPlateMesh(type, typeKey) {
-  const texture = targetTextureOverrides[typeKey] || type.createTexture();
-  return createPlateMesh(type.radius, texture);
+function createTargetPlateMesh(type, typeKey, themeKey, rimColor) {
+  const texture = targetTextureOverrides[`${themeKey}:${typeKey}`] || type.createTexture();
+  return createPlateMesh(type.radius, texture, rimColor);
 }
 
 // --- Target types --------------------------------------------------------
@@ -694,7 +717,9 @@ const TARGET_TYPES = {
   },
 };
 
-for (const typeKey of Object.keys(TARGET_TYPES)) preloadTargetTexture(typeKey);
+for (const themeKey of ['farm', 'dinosaur', 'western']) {
+  for (const typeKey of Object.keys(TARGET_TYPES)) preloadTargetTexture(themeKey, typeKey);
+}
 
 // --- Stages ----------------------------------------------------------------
 // Each stage sets the backdrop and its five target slots (position + which
@@ -706,75 +731,176 @@ for (const typeKey of Object.keys(TARGET_TYPES)) preloadTargetTexture(typeKey);
 // for every stage, but never actually built while FEATURE_TRIGGER_TARGET
 // is off.
 //
-// Slots sit on three depth lanes (near/mid/far) rather than one flat row:
-// perspective alone (just the z difference) makes the far lane read as
-// smaller and farther away, and the y rise per lane plus the shelf risers
-// (addTargetShelves() below) sell it as a tiered shooting-gallery stall.
-const LANE_NEAR = { y: 1.3, z: -14 };
-const LANE_MID = { y: 1.7, z: -20 };
-const LANE_FAR = { y: 2.1, z: -27 };
+// Slots sit on two depth lanes in a staggered (千鳥) arrangement rather than
+// one flat row: the upper/far lane's 3 targets and the lower/near lane's 2
+// targets interleave along x, and perspective alone (the z difference, plus
+// a touch of y rise) makes the far lane read as smaller/higher and farther
+// away, sold further by the shelf risers (addTargetShelves() below).
+const LANE_UPPER = { y: 3.1, z: -27 }; // far row - smaller/higher via perspective
+const LANE_LOWER = { y: 1.1, z: -15 }; // near row - larger/lower
+const TRIGGER_LANE_Z = (LANE_UPPER.z + LANE_LOWER.z) / 2;
 
+// Per-stage theme: everything about how a stage *looks* (sky/ground/frame
+// colors, the target rim color, which real model replaces a flat plate for
+// a given TARGET_TYPES key, and the background dressing) lives here on the
+// stage entry itself - TARGET_TYPES (score/hitbox/movement/rarity) is never
+// touched. modelKeyByType may map a type key to `null` to force a themed
+// flat plate even when that type normally carries its own modelKey (e.g.
+// TARGET_TYPES.small's toy car doesn't fit a farm/dinosaur/western theme).
 const STAGES = [
   {
     name: 'ステージ1 ひろば',
-    background: 0x87ceeb,
-    groundColor: 0x3a7d3a,
+    themeKey: 'farm',
+    background: 0x8fd3f4, // bright pastoral sky-blue
+    groundColor: 0x4caf50,
+    frameColor: '#c9975a', // light rustic farm-fence brown
+    frameColorDark: '#8a6236',
+    rimColor: 0x8a6236,
+    modelKeyByType: { small: null, dud: null }, // stay flat plates w/ farm-themed textures
     pool: ['normal', 'moving'],
     layout: [
-      { x: -6, ...LANE_NEAR, type: 'normal' },
-      { x: 6, ...LANE_NEAR, type: 'normal' },
-      { x: -3, ...LANE_MID, type: 'normal' },
-      { x: 3, ...LANE_MID, type: 'moving' },
-      { x: 0, ...LANE_FAR, type: 'normal' },
-      { x: 0, y: 4.4, z: LANE_MID.z, type: 'trigger', pinned: true },
+      { x: -6, ...LANE_UPPER, type: 'normal' },
+      { x: 0, ...LANE_UPPER, type: 'normal' },
+      { x: 6, ...LANE_UPPER, type: 'normal' },
+      { x: -3, ...LANE_LOWER, type: 'normal' },
+      { x: 3, ...LANE_LOWER, type: 'moving' },
+      { x: 0, y: 4.4, z: TRIGGER_LANE_Z, type: 'trigger', pinned: true },
     ],
   },
   {
-    name: 'ステージ2 ゆうぐれ',
-    background: 0xff9a5a,
-    groundColor: 0x8a5a2e,
+    name: 'ステージ2 かざん',
+    themeKey: 'dinosaur',
+    background: 0xff7a3c, // orange-to-red volcanic sky
+    groundColor: 0x6b4a3a,
+    frameColor: '#4a3a35', // darkened lava-rock tone
+    frameColorDark: '#2c211d',
+    rimColor: 0x2c211d,
+    modelKeyByType: { normal: 'dinoTrex', moving: 'dinoRaptor', small: 'dinoTriceratops', dud: null, bonus: null },
     pool: ['normal', 'moving', 'small', 'dud'],
     layout: [
-      { x: -6, ...LANE_NEAR, type: 'moving' },
-      { x: 6, ...LANE_NEAR, type: 'small' },
-      { x: -3, ...LANE_MID, type: 'dud' },
-      { x: 3, ...LANE_MID, type: 'moving' },
-      { x: 0, ...LANE_FAR, type: 'small' },
-      { x: 0, y: 4.4, z: LANE_MID.z, type: 'trigger', pinned: true },
+      { x: -6, ...LANE_UPPER, type: 'moving' },
+      { x: 0, ...LANE_UPPER, type: 'small' },
+      { x: 6, ...LANE_UPPER, type: 'dud' },
+      { x: -3, ...LANE_LOWER, type: 'small' },
+      { x: 3, ...LANE_LOWER, type: 'moving' },
+      { x: 0, y: 4.4, z: TRIGGER_LANE_Z, type: 'trigger', pinned: true },
     ],
   },
   {
-    name: 'ステージ3 よぞら',
-    background: 0x231146,
-    groundColor: 0x2b2033,
+    name: 'ステージ3 せいぶ',
+    themeKey: 'western',
+    background: 0xe8935a, // dusk/desert-colored sky
+    groundColor: 0xc2996a,
+    frameColor: '#d8b781', // sun-bleached wood
+    frameColorDark: '#a8794a',
+    rimColor: 0xa8794a,
+    modelKeyByType: { normal: 'galleryBottle', moving: 'galleryBottle', small: 'galleryPlate', dud: null, bonus: null },
     pool: ['moving', 'small', 'dud', 'bonus'],
     layout: [
-      { x: -6, ...LANE_NEAR, type: 'small' },
-      { x: 6, ...LANE_NEAR, type: 'dud' },
-      { x: -3, ...LANE_MID, type: 'bonus' },
-      { x: 3, ...LANE_MID, type: 'dud' },
-      { x: 0, ...LANE_FAR, type: 'small' },
-      { x: 0, y: 4.4, z: LANE_MID.z, type: 'trigger', pinned: true },
+      { x: -6, ...LANE_UPPER, type: 'small' },
+      { x: 0, ...LANE_UPPER, type: 'bonus' },
+      { x: 6, ...LANE_UPPER, type: 'small' },
+      { x: -3, ...LANE_LOWER, type: 'dud' },
+      { x: 3, ...LANE_LOWER, type: 'dud' },
+      { x: 0, y: 4.4, z: TRIGGER_LANE_Z, type: 'trigger', pinned: true },
     ],
   },
 ];
 
+// Resolve the model a slot's target should actually use: a stage theme's
+// modelKeyByType wins when the type key is listed there (even as `null`,
+// which forces a themed flat plate); otherwise fall back to the type's own
+// modelKey from TARGET_TYPES (unchanged), or no model at all.
+function effectiveModelKey(type, typeKey, stage) {
+  if (stage.modelKeyByType && typeKey in stage.modelKeyByType) return stage.modelKeyByType[typeKey];
+  return type.modelKey ?? null;
+}
+
 // Wooden riser under each depth lane so its targets read as mounted on a
-// shelf rather than floating in mid-air. One riser per lane, spanning the
-// full x range any lane uses; the target's own radius pokes up above it.
+// shelf rather than floating in mid-air. One riser per lane, sized to the x
+// range that lane's targets actually use; the target's own radius pokes up
+// above it.
 function addTargetShelves() {
-  const shelfWidth = 18;
   const shelfDepth = 1.4;
   const shelfHeight = 0.5;
-  const geometry = new THREE.BoxGeometry(shelfWidth, shelfHeight, shelfDepth);
   const material = new THREE.MeshStandardMaterial({ color: 0x5a3a20, roughness: 0.9 });
-  for (const lane of [LANE_NEAR, LANE_MID, LANE_FAR]) {
+  for (const [lane, shelfWidth] of [[LANE_UPPER, 16], [LANE_LOWER, 10]]) {
+    const geometry = new THREE.BoxGeometry(shelfWidth, shelfHeight, shelfDepth);
     const shelf = new THREE.Mesh(geometry, material);
     shelf.position.set(0, lane.y - 1.1, lane.z);
     scene.add(shelf);
   }
 }
 addTargetShelves();
+
+// --- Per-stage background decoration ---------------------------------------
+// Each stage's themed dressing (trees/fence for the farm, a volcano/rocks
+// for the dinosaur stage, buildings/tents/palms for the western stage),
+// swapped in from loadStage() while the curtain is down. Every model falls
+// back to a plain colored box when its glb 404s, same as addSceneDecoration()
+// above. decorationLoadToken guards against a slow-loading model from a
+// stage the player has already left placing itself into the new stage.
+let decorationObjects = [];
+let decorationLoadToken = 0;
+
+function clearStageDecorations() {
+  for (const obj of decorationObjects) scene.remove(obj);
+  decorationObjects = [];
+}
+
+function addDecorationFallbackBox(x, y, z, size, color) {
+  const mesh = new THREE.Mesh(
+    new THREE.BoxGeometry(size[0], size[1], size[2]),
+    new THREE.MeshStandardMaterial({ color, roughness: 0.9 })
+  );
+  mesh.position.set(x, y, z);
+  scene.add(mesh);
+  decorationObjects.push(mesh);
+}
+
+function placeThemeDecoration(modelKey, positions, scale, fallbackColor, fallbackSize, token) {
+  preloadModel(
+    modelKey,
+    ASSETS.models[modelKey],
+    (template) => {
+      if (token !== decorationLoadToken) return;
+      for (const [x, y, z] of positions) {
+        const obj = template.clone(true);
+        obj.position.set(x, y, z);
+        obj.scale.setScalar(scale);
+        scene.add(obj);
+        decorationObjects.push(obj);
+      }
+    },
+    () => {
+      if (token !== decorationLoadToken) return;
+      for (const [x, y, z] of positions) addDecorationFallbackBox(x, y, z, fallbackSize, fallbackColor);
+    }
+  );
+}
+
+function loadThemeDecorations(themeKey, token) {
+  if (themeKey === 'farm') {
+    placeThemeDecoration('natureTree', [[-17, 2.6, -30], [17, 2.6, -30], [-19, 2.6, -20], [19, 2.6, -20]], 3, 0x2f6b2f, [1.5, 5.2, 1.5], token);
+    placeThemeDecoration('natureFence', [[-9, 0.8, -33], [9, 0.8, -33]], 2.4, 0x8a6236, [5, 1.6, 0.3], token);
+    placeThemeDecoration('natureGrass', [[-4, 0.3, -30], [4, 0.3, -30]], 1.5, 0x4a9a4a, [1, 0.6, 1], token);
+  } else if (themeKey === 'dinosaur') {
+    placeThemeDecoration('volcano', [[0, 4, -40]], 8, 0x5a3a35, [12, 9, 12], token);
+    placeThemeDecoration('natureRock', [[-10, 0.8, -18], [10, 0.8, -18], [-14, 0.8, -30], [14, 0.8, -30]], 1.8, 0x6b6b6b, [1.6, 1.2, 1.6], token);
+  } else if (themeKey === 'western') {
+    placeThemeDecoration('desertBuilding', [[-15, 3, -34], [15, 3, -34]], 3.5, 0xc9a06a, [4, 6, 4], token);
+    placeThemeDecoration('desertTent', [[-9, 1.4, -33], [9, 1.4, -33]], 2.6, 0xb8895a, [3, 3, 3], token);
+    placeThemeDecoration('desertPalm', [[-19, 2.5, -22], [19, 2.5, -22]], 2.2, 0x4a7a3a, [1, 5, 1], token);
+  }
+}
+
+// The frame's wood-plank color is set via CSS custom properties so
+// index.html's #frameLeft/#frameRight/#frameBottom bars and the #hud top
+// band all repaint together on a stage change.
+function applyStageFrameTheme(stage) {
+  document.documentElement.style.setProperty('--frame-color', stage.frameColor);
+  document.documentElement.style.setProperty('--frame-color-dark', stage.frameColorDark);
+}
 
 function pickWeightedType(pool) {
   const entries = pool.map((key) => TARGET_TYPES[key]);
@@ -1253,10 +1379,12 @@ function buildSlotsForStage(stage) {
 
 function spawnSlotTarget(slot, typeKey) {
   const type = TARGET_TYPES[typeKey];
+  const stage = STAGES[currentStageIndex];
   slot.typeKey = typeKey;
   slot.state = 'active';
 
-  const modelTemplate = type.modelKey ? instantiateModel(type.modelKey) : null;
+  const modelKey = effectiveModelKey(type, typeKey, stage);
+  const modelTemplate = modelKey ? instantiateModel(modelKey) : null;
   let mesh;
   if (modelTemplate) {
     mesh = modelTemplate;
@@ -1264,7 +1392,7 @@ function spawnSlotTarget(slot, typeKey) {
     slot.isModel = true;
     slot.baseScale = type.modelScale ?? 1;
   } else {
-    mesh = createTargetPlateMesh(type, typeKey);
+    mesh = createTargetPlateMesh(type, typeKey, stage.themeKey, stage.rimColor);
     slot.isModel = false;
     slot.baseScale = 1;
   }
@@ -1354,7 +1482,8 @@ function clearSlots() {
 // they only differ in how long that lasts and what happens once it's over.
 function spawnBonusTargetAt(x, y, z) {
   const type = TARGET_TYPES.bonus;
-  const mesh = createTargetPlateMesh(type, 'bonus');
+  const stage = STAGES[currentStageIndex];
+  const mesh = createTargetPlateMesh(type, 'bonus', stage.themeKey, stage.rimColor);
   mesh.scale.setScalar(0); // pops in via updateSpawnPop below
   mesh.position.set(x, y, z);
   scene.add(mesh);
@@ -1470,7 +1599,8 @@ function spawnConveyorTarget() {
   const tier = CONVEYOR_TIERS[conveyorTier];
   const lane = CONVEYOR_LANES[conveyorLaneIndex % CONVEYOR_LANES.length];
   conveyorLaneIndex++;
-  const mesh = createPlateMesh(0.8, createRingTexture(tier.colors));
+  const stage = STAGES[currentStageIndex];
+  const mesh = createPlateMesh(0.8, createRingTexture(tier.colors), stage.rimColor);
   mesh.scale.setScalar(0); // pops in via updateSpawnPop below
   mesh.position.set(lane, 1.8, -30);
   scene.add(mesh);
@@ -1657,6 +1787,11 @@ function loadStage(index) {
   scene.background.setHex(stage.background);
   scene.fog.color.setHex(stage.background);
   ground.material.color.setHex(stage.groundColor ?? 0x3a7d3a);
+  applyStageFrameTheme(stage);
+
+  decorationLoadToken++;
+  clearStageDecorations();
+  loadThemeDecorations(stage.themeKey, decorationLoadToken);
 
   clearBullets();
   clearSlots();
