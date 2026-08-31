@@ -162,8 +162,12 @@ class RemoteInput extends InputSource {
 const GRAVITY = 2.2; // was 9.8 - lowered so shots reach the back targets almost straight
 const BULLET_SPEED = 55; // was 32 - raised for the same reason
 const BULLET_RADIUS = 0.15;
+// Ammo is unlimited by design (like the real attraction's laser guns): there
+// is no ammo counter anywhere in the code, fireBullet() never checks or
+// decrements one. #ammoBadge in index.html just makes that explicit to players.
 const PLAYER_COLORS = { 1: 0xff3b3b, 2: 0x3ba7ff };
 const TARGET_RESPAWN_DELAY = 1.4; // seconds a slot waits, empty, before its next target appears
+const TRIGGER_RESPAWN_DELAY = 10; // the pinned trigger slot waits much longer so it can't be spammed
 const TARGET_POP_DURATION = 0.5; // seconds a hit target spends flying apart before it's gone
 const HIT_PARTICLE_LIFETIME = 0.7;
 const COMBO_HITS_PER_STEP = 3;
@@ -171,6 +175,34 @@ const COMBO_MULTIPLIER_STEP = 1.5;
 const STAGE_DEFAULT_DURATION = 30;
 const RANKING_KEY = 'festival-shooting-rankings';
 const RANKING_SIZE = 10;
+
+// -- Trigger target -> bonus wave -------------------------------------------
+const BONUS_WAVE_DURATION = 6; // seconds the trigger-activated wave keeps spawning targets
+const BONUS_WAVE_SPAWN_INTERVAL = 0.4;
+const BONUS_WAVE_MAX_CONCURRENT = 10;
+
+// -- Chain trigger: two adjacent slots hit in quick succession --------------
+const CHAIN_WINDOW = 1.2; // seconds allowed between the two hits
+
+// -- Conveyor phase: a row of targets flowing toward the camera -------------
+const CONVEYOR_PHASE_DURATION = 14;
+const CONVEYOR_SPAWN_INTERVAL = 1.1;
+const CONVEYOR_SPEED = 4.5;
+const CONVEYOR_MISS_Z = 6.5; // past this it's swept behind the camera - counts as a miss
+const CONVEYOR_HIT_GAP_RESET = 2.5; // no hit for this long -> tier resets
+const CONVEYOR_HIT_RADIUS = 0.9;
+const CONVEYOR_LANES = [-3, 0, 3];
+const CONVEYOR_TIERS = [
+  { score: 500, colors: ['#eafbea', '#22a35a'] },
+  { score: 1000, colors: ['#eaf6ff', '#2f8fd1'] },
+  { score: 2000, colors: ['#fff6d0', '#d9a441'] },
+  { score: 5000, colors: ['#fff0f5', '#e8432f'] },
+];
+
+// -- Bonus stage (between stages) & the final "last bonus" rush -------------
+const BONUS_STAGE_THRESHOLD = 3000; // points gained in a stage to unlock the bonus stage after it
+const BONUS_STAGE_DURATION = 8;
+const FINISH_PHASE_DURATION = 12;
 
 // ---- Curtain transition constants ----------------------------------------
 const CURTAIN_SEGMENTS_X = 40;
@@ -390,6 +422,29 @@ function createDudTexture() {
   return new THREE.CanvasTexture(canvas);
 }
 
+function createTriggerTexture() {
+  const size = 256;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#ffe100';
+  ctx.beginPath();
+  ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#7a5e00';
+  ctx.lineWidth = 10;
+  ctx.beginPath();
+  ctx.arc(size / 2, size / 2, size / 2 - 6, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.fillStyle = '#7a5e00';
+  ctx.font = 'bold 160px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('!', size / 2, size / 2 + 12);
+  return new THREE.CanvasTexture(canvas);
+}
+
 function createGlowTexture() {
   const size = 128;
   const canvas = document.createElement('canvas');
@@ -410,6 +465,8 @@ const glowTexture = createGlowTexture();
 // movement (null = static, otherwise a left-right sine sweep), rarity
 // weight for random respawns, and how it looks. Add a new entry here and
 // list its id in a stage's `pool` to bring it into play.
+// Scores sit on a 100/500/1000/2000/5000 ladder (dud's -200 penalty is a
+// separate concern, not part of that ladder).
 const TARGET_TYPES = {
   normal: {
     id: 'normal',
@@ -423,7 +480,7 @@ const TARGET_TYPES = {
   },
   moving: {
     id: 'moving',
-    score: 300,
+    score: 500, // was 300, folded into the 500 tier
     radius: 1.0,
     glow: false,
     spawnWeight: 6,
@@ -433,7 +490,7 @@ const TARGET_TYPES = {
   },
   small: {
     id: 'small',
-    score: 500,
+    score: 1000, // was 500
     radius: 0.55,
     glow: false,
     spawnWeight: 4,
@@ -445,13 +502,25 @@ const TARGET_TYPES = {
   },
   bonus: {
     id: 'bonus',
-    score: 1000,
+    score: 2000, // was 1000; also the score used by wave/chain-bonus targets
     radius: 0.9,
     glow: true,
     spawnWeight: 1,
     movement: { amplitude: 9, speed: 0.35 },
     particleColor: 0xffd76a,
     createTexture: () => createRingTexture(['#fff6d0', '#ffcf4d', '#fff1b0', '#d9a441']),
+  },
+  // The top of the ladder. Never listed in a stage's `pool` - it only ever
+  // appears via that stage's one pinned trigger slot (see STAGES below).
+  trigger: {
+    id: 'trigger',
+    score: 5000,
+    radius: 1.0,
+    glow: true,
+    spawnWeight: 0,
+    movement: null,
+    particleColor: 0xfff066,
+    createTexture: () => createTriggerTexture(),
   },
   dud: {
     id: 'dud',
@@ -472,6 +541,8 @@ const TARGET_TYPES = {
 // type starts there). Once a slot's target is cleared it respawns as a
 // random type drawn from `pool` (weighted by TARGET_TYPES[...].spawnWeight),
 // so the initial layout is really just the opening hand for that stage.
+// A 6th, `pinned` slot always respawns as the same type (here: the trigger
+// target) instead of drawing from the pool - see buildSlotsForStage().
 const STAGES = [
   {
     name: 'ステージ1 ひろば',
@@ -484,6 +555,7 @@ const STAGES = [
       { x: 0, type: 'moving' },
       { x: 4, type: 'normal' },
       { x: 8, type: 'normal' },
+      { x: 0, y: 3.6, type: 'trigger', pinned: true },
     ],
   },
   {
@@ -497,6 +569,7 @@ const STAGES = [
       { x: 0, type: 'dud' },
       { x: 4.5, type: 'moving' },
       { x: 9, type: 'small' },
+      { x: 0, y: 3.6, type: 'trigger', pinned: true },
     ],
   },
   {
@@ -510,6 +583,7 @@ const STAGES = [
       { x: 0, type: 'bonus' },
       { x: 4.5, type: 'dud' },
       { x: 9, type: 'small' },
+      { x: 0, y: 3.6, type: 'trigger', pinned: true },
     ],
   },
 ];
@@ -777,6 +851,35 @@ const combo = {
 let currentStageIndex = 0;
 let stageTimeLeft = STAGE_DEFAULT_DURATION;
 let state = 'intro'; // 'intro' | 'playing' | 'result'
+// `mode` is only meaningful while state === 'playing': 'stage' is the normal
+// per-stage loop, 'bonusStage' and 'finish' are the target-rush interludes
+// (see startTargetRush()) that pause the stage timer/slots/conveyor.
+let mode = 'stage'; // 'stage' | 'bonusStage' | 'finish'
+const stageStartScore = { 1: 0, 2: 0 }; // snapshot at loadStage(), used to gate the bonus stage
+
+// Chain trigger: two adjacent fixed slots hit by the same player within
+// CHAIN_WINDOW seconds spawn an extra 2000pt target between them.
+const lastSlotHit = { 1: null, 2: null }; // { slot, time } | null
+
+// Trigger-wave / bonus-stage / last-bonus rush - one shared mechanic driven
+// by startTargetRush()/endTargetRush(), just with different durations and
+// completion callbacks.
+let waveActive = false;
+let waveTimer = 0;
+let waveSpawnTimer = 0;
+let waveEndCallback = null;
+let waveTargets = []; // { mesh, state: 'active' | 'popping', popAge, popVelocity, popSpin }
+
+// Conveyor phase: a row of targets flowing toward the camera in the back
+// half of each stage.
+let conveyorPhaseActive = false;
+let conveyorPhaseTriggered = false;
+let conveyorPhaseTimer = 0;
+let conveyorSpawnTimer = 0;
+let conveyorTier = 0;
+let conveyorLastHitTime = 0;
+let conveyorLaneIndex = 0;
+let conveyorTargets = []; // { mesh, tierIndex }
 
 const p1ScoreEl = document.getElementById('p1ScoreValue');
 const p2ScoreEl = document.getElementById('p2ScoreValue');
@@ -791,6 +894,14 @@ const waitingEl = document.getElementById('waiting');
 const qrHolder = document.getElementById('qrHolder');
 const p1Slot = document.getElementById('p1Slot');
 const p2Slot = document.getElementById('p2Slot');
+const eventBannerEl = document.getElementById('eventBanner');
+
+function showEventBanner(text) {
+  eventBannerEl.textContent = text;
+  eventBannerEl.classList.remove('show');
+  void eventBannerEl.offsetWidth; // restart the CSS animation
+  eventBannerEl.classList.add('show');
+}
 
 const crosshairs = new Map(); // player -> DOM element
 
@@ -850,21 +961,31 @@ function updateWaitingScreen(connectedPlayers) {
 }
 
 // --- Target slots (one per stage layout entry) ------------------------------
+// Regular slots get sequential indices (0..4) used for chain-trigger
+// adjacency; a `pinned` slot (the trigger target) always gets index -1 so
+// it can never accidentally register as "adjacent" to a regular slot, and
+// always respawns as its own initialType rather than a pool draw.
 function buildSlotsForStage(stage) {
-  return stage.layout.map((entry, index) => ({
-    index,
-    basePosition: new THREE.Vector3(entry.x, 1.6, -24),
-    phase: index * 1.7,
-    typeKey: null,
-    state: 'empty', // 'active' | 'popping' | 'waiting'
-    mesh: null,
-    glowMesh: null,
-    popAge: 0,
-    popVelocity: null,
-    popSpin: null,
-    waitTimer: 0,
-    initialType: entry.type,
-  }));
+  let poolIndex = 0;
+  return stage.layout.map((entry) => {
+    const pinned = !!entry.pinned;
+    const index = pinned ? -1 : poolIndex++;
+    return {
+      index,
+      pinned,
+      basePosition: new THREE.Vector3(entry.x, entry.y ?? 1.6, -24),
+      phase: index * 1.7 + (pinned ? 3.1 : 0),
+      typeKey: null,
+      state: 'empty', // 'active' | 'popping' | 'waiting'
+      mesh: null,
+      glowMesh: null,
+      popAge: 0,
+      popVelocity: null,
+      popSpin: null,
+      waitTimer: 0,
+      initialType: entry.type,
+    };
+  });
 }
 
 function spawnSlotTarget(slot, typeKey) {
@@ -959,12 +1080,12 @@ function updateSlots(dt, elapsed) {
         scene.remove(slot.mesh);
         slot.mesh = null;
         slot.state = 'waiting';
-        slot.waitTimer = TARGET_RESPAWN_DELAY;
+        slot.waitTimer = slot.pinned ? TRIGGER_RESPAWN_DELAY : TARGET_RESPAWN_DELAY;
       }
     } else if (slot.state === 'waiting') {
       slot.waitTimer -= dt;
       if (slot.waitTimer <= 0) {
-        spawnSlotTarget(slot, pickWeightedType(stage.pool));
+        spawnSlotTarget(slot, slot.pinned ? slot.initialType : pickWeightedType(stage.pool));
       }
     }
   }
@@ -976,6 +1097,180 @@ function clearSlots() {
     if (slot.glowMesh) scene.remove(slot.glowMesh);
   }
   slots = [];
+}
+
+// --- Target rush (shared by the trigger's bonus wave, the bonus stage, and
+// the final "last bonus" phase) -----------------------------------------
+// All three are "a bunch of 2000pt targets keep appearing for N seconds" -
+// they only differ in how long that lasts and what happens once it's over.
+function spawnBonusTargetAt(x, y, z) {
+  const type = TARGET_TYPES.bonus;
+  const mesh = new THREE.Mesh(
+    new THREE.CircleGeometry(type.radius, 24),
+    new THREE.MeshBasicMaterial({ map: type.createTexture(), side: THREE.DoubleSide, transparent: true })
+  );
+  mesh.position.set(x, y, z);
+  scene.add(mesh);
+  waveTargets.push({ mesh, state: 'active', popAge: 0, popVelocity: null, popSpin: null });
+}
+
+function spawnWaveTarget() {
+  const x = (Math.random() - 0.5) * 20;
+  const y = 1.2 + Math.random() * 3.2;
+  const z = -20 - Math.random() * 8;
+  spawnBonusTargetAt(x, y, z);
+}
+
+function startTargetRush(duration, onEnd) {
+  waveActive = true;
+  waveTimer = duration;
+  waveSpawnTimer = 0;
+  waveEndCallback = onEnd || null;
+}
+
+function endTargetRush() {
+  waveActive = false;
+  for (const w of waveTargets) scene.remove(w.mesh);
+  waveTargets = [];
+  const cb = waveEndCallback;
+  waveEndCallback = null;
+  if (cb) cb();
+}
+
+function popWaveTarget(waveTarget) {
+  waveTarget.state = 'popping';
+  waveTarget.popAge = 0;
+  waveTarget.popVelocity = new THREE.Vector3((Math.random() - 0.5) * 3, 4 + Math.random() * 2, (Math.random() - 0.5) * 2);
+  waveTarget.popSpin = new THREE.Vector3((Math.random() - 0.5) * 10, (Math.random() - 0.5) * 10, (Math.random() - 0.5) * 10);
+}
+
+function updateTargetRush(dt) {
+  if (waveActive) {
+    waveTimer -= dt;
+    waveSpawnTimer -= dt;
+    const activeCount = waveTargets.reduce((n, w) => n + (w.state === 'active' ? 1 : 0), 0);
+    if (waveSpawnTimer <= 0 && activeCount < BONUS_WAVE_MAX_CONCURRENT) {
+      spawnWaveTarget();
+      waveSpawnTimer = BONUS_WAVE_SPAWN_INTERVAL;
+    }
+    if (waveTimer <= 0) {
+      endTargetRush();
+    }
+  }
+
+  for (let i = waveTargets.length - 1; i >= 0; i--) {
+    const w = waveTargets[i];
+    if (w.state === 'active') {
+      w.mesh.rotation.z += dt * 0.8;
+    } else {
+      w.popAge += dt;
+      w.popVelocity.y -= 9.8 * dt;
+      w.mesh.position.addScaledVector(w.popVelocity, dt);
+      w.mesh.rotation.x += w.popSpin.x * dt;
+      w.mesh.rotation.y += w.popSpin.y * dt;
+      const t = Math.min(w.popAge / TARGET_POP_DURATION, 1);
+      w.mesh.scale.setScalar(Math.max(0.001, 1 - t));
+      w.mesh.material.opacity = 1 - t;
+      if (t >= 1) {
+        scene.remove(w.mesh);
+        waveTargets.splice(i, 1);
+      }
+    }
+  }
+}
+
+function handleWaveHit(waveTarget, player) {
+  awardHit(TARGET_TYPES.bonus, player, waveTarget.mesh.position);
+  popWaveTarget(waveTarget);
+}
+
+// --- Chain trigger: two adjacent slots, same player, in quick succession ---
+function checkChainTrigger(slot, player) {
+  const now = clock.getElapsedTime();
+  const last = lastSlotHit[player];
+  if (last && last.slot !== slot && Math.abs(last.slot.index - slot.index) === 1 && now - last.time <= CHAIN_WINDOW) {
+    const mid = slot.basePosition.clone().lerp(last.slot.basePosition, 0.5);
+    mid.y += 0.6;
+    spawnBonusTargetAt(mid.x, mid.y, mid.z);
+    showEventBanner('CHAIN BONUS!');
+    lastSlotHit[player] = null;
+  } else {
+    lastSlotHit[player] = { slot, time: now };
+  }
+}
+
+// --- Conveyor phase: a row of targets flowing toward the camera -----------
+function maybeStartConveyorPhase() {
+  if (conveyorPhaseTriggered) return;
+  const stage = STAGES[currentStageIndex];
+  const duration = stage.duration ?? STAGE_DEFAULT_DURATION;
+  if (stageTimeLeft <= duration / 2) {
+    conveyorPhaseTriggered = true;
+    conveyorPhaseActive = true;
+    conveyorPhaseTimer = CONVEYOR_PHASE_DURATION;
+    conveyorSpawnTimer = 0;
+    conveyorTier = 0;
+    conveyorLastHitTime = clock.getElapsedTime();
+    showEventBanner('CONVEYOR RUSH!');
+  }
+}
+
+function spawnConveyorTarget() {
+  const tier = CONVEYOR_TIERS[conveyorTier];
+  const lane = CONVEYOR_LANES[conveyorLaneIndex % CONVEYOR_LANES.length];
+  conveyorLaneIndex++;
+  const mesh = new THREE.Mesh(
+    new THREE.CircleGeometry(0.8, 24),
+    new THREE.MeshBasicMaterial({ map: createRingTexture(tier.colors), side: THREE.DoubleSide, transparent: true })
+  );
+  mesh.position.set(lane, 1.8, -30);
+  scene.add(mesh);
+  conveyorTargets.push({ mesh, tierIndex: conveyorTier });
+}
+
+function handleConveyorHit(target, player) {
+  const tier = CONVEYOR_TIERS[target.tierIndex];
+  awardHit({ score: tier.score, particleColor: 0xffe27a }, player, target.mesh.position);
+  scene.remove(target.mesh);
+  conveyorTargets.splice(conveyorTargets.indexOf(target), 1);
+  conveyorLastHitTime = clock.getElapsedTime();
+  conveyorTier = Math.min(conveyorTier + 1, CONVEYOR_TIERS.length - 1);
+}
+
+function updateConveyor(dt, elapsed) {
+  if (conveyorPhaseActive) {
+    conveyorPhaseTimer -= dt;
+    conveyorSpawnTimer -= dt;
+    if (conveyorSpawnTimer <= 0) {
+      spawnConveyorTarget();
+      conveyorSpawnTimer = CONVEYOR_SPAWN_INTERVAL;
+    }
+    if (elapsed - conveyorLastHitTime > CONVEYOR_HIT_GAP_RESET) {
+      conveyorTier = 0;
+    }
+    if (conveyorPhaseTimer <= 0) {
+      conveyorPhaseActive = false;
+    }
+  }
+
+  for (let i = conveyorTargets.length - 1; i >= 0; i--) {
+    const c = conveyorTargets[i];
+    c.mesh.position.z += CONVEYOR_SPEED * dt;
+    c.mesh.rotation.y += dt * 2;
+    if (c.mesh.position.z > CONVEYOR_MISS_Z) {
+      scene.remove(c.mesh);
+      conveyorTargets.splice(i, 1);
+      conveyorTier = 0; // missed one - streak resets
+    }
+  }
+}
+
+function clearConveyor() {
+  for (const c of conveyorTargets) scene.remove(c.mesh);
+  conveyorTargets = [];
+  conveyorPhaseActive = false;
+  conveyorPhaseTriggered = false;
+  conveyorTier = 0;
 }
 
 // --- Hit feedback: particles + floating score popup -------------------------
@@ -1091,13 +1386,22 @@ function updateHud() {
   p2ScoreEl.textContent = String(scores[2]);
   p1ComboEl.textContent = combo[1].multiplier > 1 ? `COMBO ×${formatMultiplier(combo[1].multiplier)}` : '';
   p2ComboEl.textContent = combo[2].multiplier > 1 ? `COMBO ×${formatMultiplier(combo[2].multiplier)}` : '';
-  stageLabelEl.textContent = `STAGE ${currentStageIndex + 1}/${STAGES.length}`;
-  const t = Math.max(Math.ceil(stageTimeLeft), 0);
-  timeEl.textContent = String(t);
-  timeEl.classList.toggle('low', t <= 10);
+
+  if (mode === 'bonusStage' || mode === 'finish') {
+    stageLabelEl.textContent = mode === 'bonusStage' ? 'BONUS STAGE!' : 'LAST BONUS!';
+    const t = Math.max(Math.ceil(waveTimer), 0);
+    timeEl.textContent = String(t);
+    timeEl.classList.toggle('low', t <= 3);
+  } else {
+    stageLabelEl.textContent = `STAGE ${currentStageIndex + 1}/${STAGES.length}`;
+    const t = Math.max(Math.ceil(stageTimeLeft), 0);
+    timeEl.textContent = String(t);
+    timeEl.classList.toggle('low', t <= 10);
+  }
 }
 
 function loadStage(index) {
+  mode = 'stage';
   currentStageIndex = index;
   const stage = STAGES[index];
   scene.background.setHex(stage.background);
@@ -1106,20 +1410,59 @@ function loadStage(index) {
 
   clearBullets();
   clearSlots();
+  clearConveyor();
+  lastSlotHit[1] = null;
+  lastSlotHit[2] = null;
   slots = buildSlotsForStage(stage);
   for (const slot of slots) spawnSlotTarget(slot, slot.initialType);
 
   stageTimeLeft = stage.duration ?? STAGE_DEFAULT_DURATION;
+  stageStartScore[1] = scores[1];
+  stageStartScore[2] = scores[2];
   updateHud();
 }
 
+// Between stages: if the stage just cleared earned enough points, detour
+// through a short bonus-stage rush before the next stage's curtain reveal.
+// After the last stage, always go to the (also rush-based) finish phase.
 function advanceStage() {
+  const gain = scores[1] - stageStartScore[1] + (scores[2] - stageStartScore[2]);
   const next = currentStageIndex + 1;
-  if (next < STAGES.length) {
-    loadStage(next);
-  } else {
-    finishGame();
+
+  if (next >= STAGES.length) {
+    enterFinishPhase();
+    return;
   }
+  if (gain >= BONUS_STAGE_THRESHOLD) {
+    enterBonusStage(next);
+  } else {
+    loadStage(next);
+  }
+}
+
+function enterBonusStage(nextIndex) {
+  mode = 'bonusStage';
+  clearBullets();
+  clearSlots();
+  clearConveyor();
+  showEventBanner('BONUS STAGE!');
+  startTargetRush(BONUS_STAGE_DURATION, () => {
+    curtain.show(
+      () => loadStage(nextIndex),
+      () => playSfx('fanfare', 0.7)
+    );
+  });
+}
+
+function enterFinishPhase() {
+  mode = 'finish';
+  clearBullets();
+  clearSlots();
+  clearConveyor();
+  showEventBanner('LAST BONUS!');
+  startTargetRush(FINISH_PHASE_DURATION, () => {
+    curtain.show(() => finishGame());
+  });
 }
 
 function clearBullets() {
@@ -1132,6 +1475,8 @@ function startGame() {
   scores[2] = 0;
   combo[1] = { hits: 0, multiplier: 1 };
   combo[2] = { hits: 0, multiplier: 1 };
+  endTargetRush();
+  waveActive = false;
   state = 'playing';
   resultEl.style.display = 'none';
   loadStage(0);
@@ -1151,11 +1496,14 @@ function finishGame() {
   resultEl.style.display = 'flex';
 }
 
-function handleHit(slot, player) {
-  const type = TARGET_TYPES[slot.typeKey];
+// Shared scoring path for every kind of hit (fixed slots, wave/chain-bonus
+// targets, conveyor targets): applies the combo multiplier (flat penalty
+// for a negative-score type instead, which also resets the combo), then
+// the common popup/particles/sfx feedback. Returns the points awarded.
+function awardHit(type, player, position) {
   let awarded;
   if (type.score < 0) {
-    awarded = type.score; // flat penalty - a bad hit shouldn't be reduced by a good combo
+    awarded = type.score;
     combo[player] = { hits: 0, multiplier: 1 };
   } else {
     const c = combo[player];
@@ -1165,9 +1513,23 @@ function handleHit(slot, player) {
   }
   scores[player] += awarded;
   updateHud();
-  spawnScorePopup(slot.mesh.position, awarded);
-  spawnHitParticles(slot.mesh.position, type);
+  spawnScorePopup(position, awarded);
+  spawnHitParticles(position, type);
   if (type.score >= 0) playSfx('hit'); // a "cha-ching" would feel wrong on a penalty hit
+  return awarded;
+}
+
+function handleHit(slot, player) {
+  const type = TARGET_TYPES[slot.typeKey];
+  awardHit(type, player, slot.mesh.position);
+
+  if (slot.typeKey === 'trigger') {
+    showEventBanner('BONUS WAVE!');
+    startTargetRush(BONUS_WAVE_DURATION);
+  } else if (type.score > 0) {
+    checkChainTrigger(slot, player);
+  }
+
   popSlot(slot);
 }
 
@@ -1184,6 +1546,35 @@ function fireBullet(player, aim) {
   bullets.push({ mesh, velocity, age: 0, player });
 }
 
+// Checks the fixed slots, the wave/chain-bonus targets, and the conveyor
+// targets (in that order) for a hit at this bullet position, and resolves
+// scoring/effects for whichever one it hits first. Returns true if it hit
+// something.
+function resolveBulletHit(position, player) {
+  for (const slot of slots) {
+    if (slot.state !== 'active') continue;
+    const type = TARGET_TYPES[slot.typeKey];
+    if (position.distanceTo(slot.mesh.position) < type.radius) {
+      handleHit(slot, player);
+      return true;
+    }
+  }
+  for (const w of waveTargets) {
+    if (w.state !== 'active') continue;
+    if (position.distanceTo(w.mesh.position) < TARGET_TYPES.bonus.radius) {
+      handleWaveHit(w, player);
+      return true;
+    }
+  }
+  for (const c of conveyorTargets) {
+    if (position.distanceTo(c.mesh.position) < CONVEYOR_HIT_RADIUS) {
+      handleConveyorHit(c, player);
+      return true;
+    }
+  }
+  return false;
+}
+
 function updateBullets(dt) {
   for (let i = bullets.length - 1; i >= 0; i--) {
     const b = bullets[i];
@@ -1191,20 +1582,11 @@ function updateBullets(dt) {
     b.mesh.position.addScaledVector(b.velocity, dt);
     b.age += dt;
 
-    let consumed = false;
-    for (const slot of slots) {
-      if (slot.state !== 'active') continue;
-      const type = TARGET_TYPES[slot.typeKey];
-      if (b.mesh.position.distanceTo(slot.mesh.position) < type.radius) {
-        handleHit(slot, b.player);
-        scene.remove(b.mesh);
-        bullets.splice(i, 1);
-        consumed = true;
-        break;
-      }
-    }
-
-    if (!consumed && (b.age > 5 || b.mesh.position.y < -10)) {
+    const consumed = resolveBulletHit(b.mesh.position, b.player);
+    if (consumed) {
+      scene.remove(b.mesh);
+      bullets.splice(i, 1);
+    } else if (b.age > 5 || b.mesh.position.y < -10) {
       scene.remove(b.mesh);
       bullets.splice(i, 1);
       combo[b.player] = { hits: 0, multiplier: 1 }; // a clean miss breaks the combo too
@@ -1227,25 +1609,37 @@ function animate() {
   const gameplayActive = state === 'playing' && !curtain.busy && connectedPlayers.length > 0;
 
   if (gameplayActive) {
-    stageTimeLeft -= dt;
-    if (stageTimeLeft <= 0) {
-      stageTimeLeft = 0;
-      updateHud();
-      curtain.show(
-        () => advanceStage(),
-        () => playSfx('fanfare', 0.7) // plays once the next stage (or the final result) is actually revealed
-      );
-    } else {
-      updateHud();
-    }
+    const elapsed = clock.getElapsedTime();
 
+    // Firing, bullets, and the target-rush mechanic run in every mode
+    // (normal stage play, the bonus stage, and the final last-bonus phase).
     for (const player of connectedPlayers) {
       if (input.consumeFire(player)) {
         fireBullet(player, input.getAim(player));
       }
     }
     updateBullets(dt);
-    updateSlots(dt, clock.getElapsedTime());
+    updateTargetRush(dt);
+
+    if (mode === 'stage') {
+      stageTimeLeft -= dt;
+      if (stageTimeLeft <= 0) {
+        stageTimeLeft = 0;
+        updateHud();
+        curtain.show(
+          () => advanceStage(),
+          () => playSfx('fanfare', 0.7) // plays once the next stage (or the final result) is actually revealed
+        );
+      } else {
+        updateHud();
+      }
+
+      updateSlots(dt, elapsed);
+      maybeStartConveyorPhase();
+      updateConveyor(dt, elapsed);
+    } else {
+      updateHud();
+    }
   } else if (state === 'result' && !curtain.busy) {
     for (const player of connectedPlayers) {
       if (input.consumeFire(player)) {

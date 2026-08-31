@@ -272,6 +272,51 @@
     font-size: 13px;
     line-height: 1.6;
   }
+
+  /* --- Ammo badge: unlimited by design, shown so it reads as intentional --- */
+  #ammoBadge {
+    position: fixed;
+    left: 16px;
+    bottom: 14px;
+    z-index: 6;
+    padding: 5px 14px;
+    border-radius: 999px;
+    background: rgba(20, 12, 6, 0.55);
+    border: 2px solid var(--carnival-yellow);
+    color: var(--carnival-yellow);
+    font-family: "Rye", "Bungee", serif;
+    font-size: 14px;
+    letter-spacing: 0.05em;
+    pointer-events: none;
+    user-select: none;
+  }
+
+  /* --- Event banner: trigger / chain bonus / bonus stage / last bonus --- */
+  #eventBanner {
+    position: fixed;
+    top: 36%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.4);
+    opacity: 0;
+    font-family: "Rye", "Bungee", serif;
+    font-size: 56px;
+    color: var(--carnival-yellow);
+    text-shadow: 4px 4px 0 var(--ink), 0 0 24px rgba(255, 201, 60, 0.7);
+    z-index: 14;
+    pointer-events: none;
+    user-select: none;
+    white-space: nowrap;
+  }
+  #eventBanner.show {
+    animation: eventBannerPulse 1.6s ease-out;
+  }
+  @keyframes eventBannerPulse {
+    0% { opacity: 0; transform: translate(-50%, -50%) scale(0.4); }
+    15% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); }
+    28% { transform: translate(-50%, -50%) scale(1); }
+    78% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    100% { opacity: 0; transform: translate(-50%, -50%) scale(1); }
+  }
 </style>
 </head>
 <body>
@@ -291,6 +336,9 @@
       <div class="combo" id="p2Combo"></div>
     </div>
   </div>
+
+  <div id="ammoBadge">AMMO ∞</div>
+  <div id="eventBanner"></div>
 
   <div id="waiting">
     <h1>コントローラーを<br>接続してください</h1>
