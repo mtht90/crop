@@ -57,11 +57,16 @@
 
   function currentAim() {
     if (!baseline) return { x: 0, y: 0 };
-    const turn = angleDiff(latest.alpha, baseline.alpha); // + = turned right
-    // Tilting the top of the phone back (as if raising the barrel) lowers
-    // beta; treat that as aiming up (+y). Flip the sign here if it feels
-    // inverted once tested on a real device.
-    const tilt = baseline.beta - latest.beta; // + = tilted up
+    // DeviceOrientationEvent's alpha increases turning the device
+    // counterclockwise (left) as viewed from above (right-hand rule around
+    // the z axis), and beta increases as the device's top tips away from
+    // the user past vertical - both the opposite of this game's "turn
+    // right/tilt up -> aim right/up" convention. Measuring baseline-
+    // relative-to-latest (instead of the naive latest-relative-to-baseline)
+    // corrects for both, so a real right turn/upward tilt gives a positive
+    // x/y here.
+    const turn = angleDiff(baseline.alpha, latest.alpha); // + = turned right
+    const tilt = latest.beta - baseline.beta; // + = tilted up
     return {
       x: clamp(turn / AIM_RANGE_DEG, -1, 1),
       y: clamp(tilt / AIM_RANGE_DEG, -1, 1),

@@ -10,13 +10,53 @@ import * as CANNON from 'cannon-es';
 // Everything in the scene - targets, crates, background dressing - is a
 // flat image on a camera-facing plane (a "picture-book" 2.5D stage, not a
 // 3D diorama), so only 2D art (PNG) is ever loaded here, never a glTF
-// model. Target plate textures follow their own convention instead of
-// living in this object: assets/textures/<themeKey>/target-<type>.png
-// (see targetTexturePath()/preloadTargetTexture() near TARGET_TYPES
-// below).
+// model.
 const ASSETS = {
   particleStar: 'assets/kenney-particles/PNG (Transparent)/star_01.png',
-  crosshair: 'assets/kenney-crosshair/PNG/Glow/crosshair-000.png',
+  // Per-player crosshairs from the Shooting Gallery Pack itself, replacing
+  // the single generic Crosshair Pack icon that used to be tinted per
+  // player via a CSS filter.
+  crosshairs: {
+    1: 'assets/kenney-shooting-gallery/PNG/HUD/crosshair_blue_large.png',
+    2: 'assets/kenney-shooting-gallery/PNG/HUD/crosshair_red_large.png',
+  },
+  // The Shooting Gallery Pack's own bullseye/duck art, replacing the
+  // procedural ring textures as each TARGET_TYPES entry's default look
+  // (a real per-stage-theme PNG still wins over this when one exists - see
+  // targetImageTextures below). 'moving' gets the duck since a bobbing
+  // duck reads better in motion than another static ring.
+  targets: {
+    normal: 'assets/kenney-shooting-gallery/PNG/Objects/target_red1.png',
+    small: 'assets/kenney-shooting-gallery/PNG/Objects/target_red3.png',
+    moving: 'assets/kenney-shooting-gallery/PNG/Objects/duck_target_yellow.png',
+    bonus: 'assets/kenney-shooting-gallery/PNG/Objects/target_colored.png',
+  },
+  // Bullet impact sprite, one color per player (no red in the pack, so P1
+  // gets the warmest available color instead).
+  shots: {
+    1: 'assets/kenney-shooting-gallery/PNG/Objects/shot_yellow_large.png',
+    2: 'assets/kenney-shooting-gallery/PNG/Objects/shot_blue_large.png',
+  },
+  // Lane backdrop panels (see addLanePanels()): these "Stall" pieces are
+  // drawn edge-to-edge with a scalloped top/bottom seam specifically so
+  // they tile side-by-side into a wide backdrop, the same way the
+  // reference template's screen is built from repeated panel segments.
+  lanePanels: {
+    water1: 'assets/kenney-shooting-gallery/PNG/Stall/water1.png',
+    water2: 'assets/kenney-shooting-gallery/PNG/Stall/water2.png',
+    grass1: 'assets/kenney-shooting-gallery/PNG/Stall/grass1.png',
+    grass2: 'assets/kenney-shooting-gallery/PNG/Stall/grass2.png',
+    wood: 'assets/kenney-shooting-gallery/PNG/Stall/bg_wood.png',
+  },
+  // Cloth curtain dressing: curtain_straight tiles cleanly (opaque
+  // edge-to-edge) so it's the cloth's own material; curtain_top/curtain_rope
+  // are static single-shape decoration framing the rig, not part of the
+  // cannon-es simulation.
+  curtain: {
+    cloth: 'assets/kenney-shooting-gallery/PNG/Stall/curtain_straight.png',
+    top: 'assets/kenney-shooting-gallery/PNG/Stall/curtain_top.png',
+    rope: 'assets/kenney-shooting-gallery/PNG/Stall/curtain_rope.png',
+  },
   // Kenney Skyboxes 2 - equirectangular sky panoramas, one per stage theme.
   // No single panorama in the pack reads as "fiery volcanic," so the
   // dinosaur stage borrows the alien one for its otherworldly purple sky.
@@ -197,8 +237,8 @@ const FEATURE_BONUS_STAGE = false;
 
 // ---- Tunable gameplay constants ------------------------------------------
 const GRAVITY = 2.2; // was 9.8 - lowered so shots reach the back targets almost straight
-const BULLET_SPEED = 55; // was 32 - raised for the same reason
-const BULLET_RADIUS = 0.15;
+const BULLET_SPEED = 50; // was 55 - nudged down slightly, barely perceptible
+const BULLET_RADIUS = 0.22; // was 0.15 - a size bigger, now that it's a sprite plate
 // Ammo is unlimited by design (like the real attraction's laser guns): there
 // is no ammo counter anywhere in the code, fireBullet() never checks or
 // decrements one. Deliberately not called out in the UI either - it's just
@@ -286,9 +326,9 @@ const CURTAIN_WIND_STRENGTH = 1.6;
 const CURTAIN_FALL_DURATION = 1.3;
 const CURTAIN_HOLD_DURATION = 0.5;
 const CURTAIN_RISE_DURATION = 0.9;
-// Drop a real velvet/curtain image at this path later; until it exists the
+// The Shooting Gallery Pack's tileable curtain valance; if it 404s the
 // procedural fallback texture below is used instead.
-const CURTAIN_TEXTURE_URL = 'assets/curtain-velvet.jpg';
+const CURTAIN_TEXTURE_URL = ASSETS.curtain.cloth;
 
 const params = new URLSearchParams(location.search);
 const debugMode = params.get('debug') === '1';
@@ -425,6 +465,37 @@ function createBillboardMesh(texture, height) {
   );
 }
 
+// Fills an exact width/height with the texture stretched to fit, ignoring
+// its natural aspect ratio - for one-off decoration (like the curtain's
+// pelmet) that needs to span a specific span rather than read at its own
+// native proportions.
+function createStretchedBillboardMesh(texture, width, height) {
+  return new THREE.Mesh(
+    new THREE.PlaneGeometry(width, height),
+    new THREE.MeshBasicMaterial({ map: texture, transparent: true, side: THREE.DoubleSide })
+  );
+}
+
+// Fills an exact width/height by tiling the texture at its own natural
+// aspect ratio (repeating horizontally) rather than stretching it - for
+// the "Stall" panel art (addLanePanels()) that's drawn edge-to-edge
+// specifically to tile into a wide backdrop. Clones the texture so
+// multiple panels using the same source image can each set their own
+// repeat count independently.
+function createTiledPanelMesh(texture, width, height) {
+  const img = texture.image;
+  const aspect = img && img.width ? img.width / img.height : 1;
+  const tiled = texture.clone();
+  tiled.needsUpdate = true;
+  tiled.wrapS = THREE.RepeatWrapping;
+  tiled.wrapT = THREE.ClampToEdgeWrapping;
+  tiled.repeat.set(width / (height * aspect), 1);
+  return new THREE.Mesh(
+    new THREE.PlaneGeometry(width, height),
+    new THREE.MeshBasicMaterial({ map: tiled, transparent: true, side: THREE.DoubleSide })
+  );
+}
+
 // lookAt needs the mesh's final position already set (it faces the plane
 // from wherever it currently sits toward the camera), so this is always
 // called after position.set(...)/position.copy(...), never before.
@@ -535,17 +606,15 @@ new THREE.TextureLoader().load(
   () => {}
 );
 
-// Crosshair Pack icon; the CSS circle+dot crosshair stays in place until
-// this confirms the image is actually there.
-let crosshairImageReady = false;
-{
+// Shooting Gallery Pack crosshairs (one color per player); the CSS
+// circle+dot crosshair stays in place for a given player until that
+// player's image is confirmed loadable.
+const crosshairImagesReady = {};
+for (const [player, url] of Object.entries(ASSETS.crosshairs)) {
   const probe = new Image();
-  probe.onload = () => {
-    crosshairImageReady = true;
-    document.documentElement.style.setProperty('--crosshair-image', `url('${ASSETS.crosshair}')`);
-  };
+  probe.onload = () => { crosshairImagesReady[player] = true; };
   probe.onerror = () => {};
-  probe.src = ASSETS.crosshair;
+  probe.src = url;
 }
 
 // --- Target textures ---------------------------------------------------------
@@ -606,24 +675,42 @@ const glowTexture = createGlowTexture();
 // --- Target billboard (flat cutout, replaces the old 3D puck) --------------
 // A single camera-facing plane per target: a colored "backing card" (like a
 // real shooting-gallery target's painted disc) with the type's own artwork
-// composited on top - a real per-stage-theme PNG at
-// assets/textures/<themeKey>/target-<type>.png if one has loaded, else the
-// type's own procedural createTexture() ring. Composited into one canvas so
-// each target is still just one plane/material, same as every other prop.
+// composited on top - the Shooting Gallery Pack's own bullseye/duck art
+// (ASSETS.targets) once it's loaded, else the type's own procedural
+// createTexture() ring. Composited into one canvas so each target is still
+// just one plane/material, same as every other prop.
 const TARGET_BACKING_COLOR = 0x5a3a20;
-const targetTextureOverrides = {}; // "themeKey:typeKey" -> loaded THREE.Texture, once confirmed to exist
+const targetImageTextures = {}; // typeKey -> loaded THREE.Texture, once confirmed to exist
 
-function targetTexturePath(themeKey, typeKey) {
-  return `assets/textures/${themeKey}/target-${typeKey}.png`;
+for (const [typeKey, url] of Object.entries(ASSETS.targets)) {
+  new THREE.TextureLoader().load(
+    url,
+    (texture) => { targetImageTextures[typeKey] = texture; },
+    undefined,
+    () => {} // no file there - the type's own procedural createTexture() keeps being used
+  );
 }
 
-function preloadTargetTexture(themeKey, typeKey) {
-  const cacheKey = `${themeKey}:${typeKey}`;
+// Lane backdrop panels (see addLanePanel() near loadThemeDecorations below).
+const lanePanelTextures = {}; // key of ASSETS.lanePanels -> loaded THREE.Texture
+for (const [key, url] of Object.entries(ASSETS.lanePanels)) {
   new THREE.TextureLoader().load(
-    targetTexturePath(themeKey, typeKey),
-    (texture) => { targetTextureOverrides[cacheKey] = texture; },
+    url,
+    (texture) => { lanePanelTextures[key] = texture; },
     undefined,
-    () => {} // no file there yet - createTexture()'s procedural fallback keeps being used
+    () => {}
+  );
+}
+
+// Bullet impact sprites (one per player); fireBullet() falls back to a
+// plain emissive sphere for a player whose image hasn't loaded yet.
+const shotTextures = {};
+for (const [player, url] of Object.entries(ASSETS.shots)) {
+  new THREE.TextureLoader().load(
+    url,
+    (texture) => { shotTextures[player] = texture; },
+    undefined,
+    () => {}
   );
 }
 
@@ -651,8 +738,8 @@ function createBackedTexture(sourceImage, backingColor) {
   return new THREE.CanvasTexture(canvas);
 }
 
-function createTargetBillboard(type, typeKey, themeKey, backingColor) {
-  const sourceTexture = targetTextureOverrides[`${themeKey}:${typeKey}`] || type.createTexture();
+function createTargetBillboard(type, typeKey, backingColor) {
+  const sourceTexture = targetImageTextures[typeKey] || type.createTexture();
   const texture = createBackedTexture(sourceTexture.image, backingColor);
   return createBillboardMesh(texture, type.radius * 2); // caller positions it, then calls faceBillboardAtCamera()
 }
@@ -718,9 +805,6 @@ const TARGET_TYPES = {
   },
 };
 
-for (const themeKey of ['farm', 'dinosaur', 'western']) {
-  for (const typeKey of Object.keys(TARGET_TYPES)) preloadTargetTexture(themeKey, typeKey);
-}
 
 // --- Stages ----------------------------------------------------------------
 // Each stage sets the backdrop and its five target slots (position + which
@@ -949,16 +1033,94 @@ function createVolcanoTexture() {
   return new THREE.CanvasTexture(canvas);
 }
 
+// --- Lane backdrop panels (per stage) ---------------------------------------
+// A tiled "Stall" panel filling the wall behind each depth lane's row of
+// targets, replacing the old bare-shelf-only look with a proper backdrop:
+// water/grass for the farm, wood for the western stage, and a darkened
+// (multiply-tinted) version of that same wood art standing in for rock on
+// the dinosaur stage (the pack has no rock/terrain panel of its own).
+let lanePanelObjects = [];
+let waterPanelMaterials = []; // slowly scrolled in the main animate() loop
+
+function clearLanePanels() {
+  for (const obj of lanePanelObjects) scene.remove(obj);
+  lanePanelObjects = [];
+  waterPanelMaterials = [];
+}
+
+function addLanePanelFallback(lane, width, height, color) {
+  const mesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(width, height),
+    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.92 })
+  );
+  mesh.position.set(0, lane.y - height / 2 + 0.9, lane.z - 0.5);
+  faceBillboardAtCamera(mesh);
+  scene.add(mesh);
+  lanePanelObjects.push(mesh);
+}
+
+function addLanePanelWithTexture(lane, width, height, texture, animateWater) {
+  const mesh = createTiledPanelMesh(texture, width, height);
+  mesh.position.set(0, lane.y - height / 2 + 0.9, lane.z - 0.5);
+  faceBillboardAtCamera(mesh);
+  scene.add(mesh);
+  lanePanelObjects.push(mesh);
+  if (animateWater) waterPanelMaterials.push(mesh.material);
+}
+
+function addLanePanel(lane, width, height, textureKey, fallbackColor, animateWater) {
+  const texture = lanePanelTextures[textureKey];
+  if (!texture) {
+    addLanePanelFallback(lane, width, height, fallbackColor);
+    return;
+  }
+  addLanePanelWithTexture(lane, width, height, texture, animateWater);
+}
+
+function createDarkenedPanelTexture(sourceTexture, tintCss) {
+  const img = sourceTexture.image;
+  const canvas = document.createElement('canvas');
+  canvas.width = img.width;
+  canvas.height = img.height;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, 0, 0);
+  ctx.globalCompositeOperation = 'multiply';
+  ctx.fillStyle = tintCss;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  return new THREE.CanvasTexture(canvas);
+}
+
+function updateWaterPanels(elapsed) {
+  for (const material of waterPanelMaterials) {
+    material.map.offset.x = Math.sin(elapsed * 0.25) * 0.06; // slow lapping side-to-side drift
+  }
+}
+
 function loadThemeDecorations(themeKey, token) {
+  clearLanePanels();
   if (themeKey === 'farm') {
+    addLanePanel(LANE_UPPER, 18, 3.6, 'grass1', 0x4caf50, false);
+    addLanePanel(LANE_LOWER, 12, 3.0, 'water1', 0x3ba7ff, true);
     placeProceduralDecoration(createTreeTexture(), [[-17, 2.6, -30], [17, 2.6, -30], [-19, 2.2, -20], [19, 2.2, -20]], 5.2);
     placeProceduralDecoration(createFenceTexture(), [[-9, 0.9, -33], [9, 0.9, -33]], 1.8);
     placeImageDecoration(ASSETS.decorations.foliageFlower, [[-4, 0.35, -30], [4, 0.35, -30], [-14, 0.35, -24]], 0.9, 0x4a9a4a, token);
     placeImageDecoration(ASSETS.decorations.foliageGrass, [[-2, 0.3, -28], [2, 0.3, -28], [12, 0.3, -22]], 0.7, 0x4a9a4a, token);
   } else if (themeKey === 'dinosaur') {
+    const woodTexture = lanePanelTextures.wood;
+    const darkRockColor = 0x3a322c;
+    if (woodTexture) {
+      const darkTexture = createDarkenedPanelTexture(woodTexture, 'rgba(35,25,20,0.72)');
+      addLanePanelWithTexture(LANE_UPPER, 18, 3.6, darkTexture, false);
+      addLanePanelWithTexture(LANE_LOWER, 12, 3.0, darkTexture, false);
+    } else {
+      addLanePanelFallback(LANE_UPPER, 18, 3.6, darkRockColor);
+      addLanePanelFallback(LANE_LOWER, 12, 3.0, darkRockColor);
+    }
     placeProceduralDecoration(createVolcanoTexture(), [[0, 5, -42]], 14);
     placeImageDecoration(ASSETS.decorations.rock, [[-10, 0.7, -18], [10, 0.7, -18], [-14, 0.7, -30], [14, 0.7, -30]], 1.4, 0x6b6b6b, token);
   } else if (themeKey === 'western') {
+    addLanePanel(LANE_UPPER, 18, 3.6, 'wood', 0xc9975a, false);
+    addLanePanel(LANE_LOWER, 12, 3.0, 'wood', 0xc9975a, false);
     placeImageDecoration(ASSETS.decorations.desertBuilding, [[-15, 3, -34], [15, 3, -34]], 6, 0xc9a06a, token);
     placeImageDecoration(ASSETS.decorations.desertTent, [[-9, 1.4, -33], [9, 1.4, -33]], 2.8, 0xb8895a, token);
     placeImageDecoration(ASSETS.decorations.desertPalm, [[-19, 2.6, -22], [19, 2.6, -22]], 5.2, 0x4a7a3a, token);
@@ -1018,6 +1180,20 @@ function createFallbackCurtainTexture() {
   return texture;
 }
 
+// curtain_straight.png is drawn as an opaque banded-fold strip with a
+// scalloped cutout along its bottom ~15% (transparent, but stored with
+// black RGB) - since the curtain material isn't marked transparent, those
+// pixels would render as solid black blotches once tiled. Crop that strip
+// away and repeat only the fully-opaque portion above it.
+function cropOpaqueCurtainStrip(image) {
+  const cropHeight = Math.floor(image.height * 0.8);
+  const canvas = document.createElement('canvas');
+  canvas.width = image.width;
+  canvas.height = cropHeight;
+  canvas.getContext('2d').drawImage(image, 0, 0, image.width, cropHeight, 0, 0, image.width, cropHeight);
+  return canvas;
+}
+
 function createCurtainMaterial() {
   const material = new THREE.MeshStandardMaterial({
     map: createFallbackCurtainTexture(),
@@ -1029,7 +1205,8 @@ function createCurtainMaterial() {
   // then (or if it 404s) the procedural fallback above stays in place.
   new THREE.TextureLoader().load(
     CURTAIN_TEXTURE_URL,
-    (texture) => {
+    (loaded) => {
+      const texture = new THREE.CanvasTexture(cropOpaqueCurtainStrip(loaded.image));
       texture.wrapS = THREE.RepeatWrapping;
       texture.wrapT = THREE.RepeatWrapping;
       texture.repeat.set(CURTAIN_SEGMENTS_X / 8, CURTAIN_SEGMENTS_Y / 8);
@@ -1106,6 +1283,53 @@ class CurtainController {
     this.mesh.frustumCulled = false;
     sceneRef.add(this.mesh);
 
+    // Static pelmet + tieback tassels framing the rig - purely decorative,
+    // not part of the cannon-es simulation above; the animated cloth is
+    // this.mesh alone. CURTAIN_TOP_Y/CURTAIN_WIDTH describe the cloth's own
+    // pinned anchor, which is deliberately oversized and sits above/beyond
+    // the camera's frustum so the fallen cloth always fully covers the
+    // screen regardless of sag - using those same coordinates here would
+    // place the decorations off-screen too, so instead frame them against
+    // the camera's actual visible bounds at this depth. The cloth also
+    // billows well past its own rest z under the fall/hold physics (the
+    // pinned top rows alone range roughly z=3.6..4.15), so depth-sorting
+    // these behind/in-front of it isn't reliable either - disable depth
+    // testing and force a high renderOrder so they always draw on top of
+    // the cloth while it's up, and tie their visibility to it directly so
+    // they never linger over the gameplay view once the curtain rises.
+    const decorZ = CURTAIN_Z - 0.05;
+    const decorDist = camera.position.z - decorZ;
+    const decorHalfH = decorDist * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+    const decorHalfW = decorHalfH * camera.aspect;
+    const decorTopY = camera.position.y + decorHalfH;
+    this.decorMeshes = [];
+
+    const addDecor = (mesh) => {
+      mesh.material.depthTest = false;
+      mesh.renderOrder = 10;
+      mesh.visible = this.mesh.visible;
+      sceneRef.add(mesh);
+      this.decorMeshes.push(mesh);
+    };
+
+    loadBillboardTexture(ASSETS.curtain.top, (texture) => {
+      const pelmetHeight = 0.6;
+      const pelmetWidth = Math.min(CURTAIN_WIDTH + 0.6, decorHalfW * 2 - 0.2);
+      const pelmet = createStretchedBillboardMesh(texture, pelmetWidth, pelmetHeight);
+      pelmet.position.set(0, decorTopY - pelmetHeight / 2 - 0.1, decorZ);
+      faceBillboardAtCamera(pelmet);
+      addDecor(pelmet);
+    });
+    loadBillboardTexture(ASSETS.curtain.rope, (texture) => {
+      const ropeX = Math.min(CURTAIN_WIDTH / 2 + 0.15, decorHalfW - 0.3);
+      for (const x of [-ropeX, ropeX]) {
+        const rope = createBillboardMesh(texture, 0.4);
+        rope.position.set(x, decorTopY - 0.5, decorZ);
+        faceBillboardAtCamera(rope);
+        addDecor(rope);
+      }
+    });
+
     this._syncMesh();
   }
 
@@ -1158,6 +1382,7 @@ class CurtainController {
     this.onRevealed = onRevealed;
     this._resetToBunched();
     this.mesh.visible = true;
+    for (const m of this.decorMeshes) m.visible = true;
     this.phase = 'falling';
     this.timer = 0;
   }
@@ -1220,6 +1445,7 @@ class CurtainController {
       if (t >= 1) {
         this.phase = 'idle';
         this.mesh.visible = false;
+        for (const m of this.decorMeshes) m.visible = false;
         this.busy = false;
         if (this.onRevealed) {
           const revealed = this.onRevealed;
@@ -1364,6 +1590,7 @@ function createCrosshair(player) {
   const el = document.createElement('div');
   el.className = 'crosshair';
   el.style.setProperty('--color', player === 1 ? 'var(--p1-color)' : 'var(--p2-color)');
+  el.style.setProperty('--crosshair-image', `url('${ASSETS.crosshairs[player]}')`);
   const tag = document.createElement('div');
   tag.className = 'tag';
   tag.textContent = `P${player}`;
@@ -1381,7 +1608,7 @@ function updateCrosshairs(connectedPlayers) {
     const el = crosshairs.get(player);
     el.style.left = `${((aim.x + 1) / 2) * window.innerWidth}px`;
     el.style.top = `${((1 - aim.y) / 2) * window.innerHeight}px`;
-    el.classList.toggle('has-image', crosshairImageReady);
+    el.classList.toggle('has-image', !!crosshairImagesReady[player]);
   }
   for (const [player, el] of crosshairs) {
     if (!connectedPlayers.includes(player)) {
@@ -1467,7 +1694,7 @@ function spawnSlotTarget(slot, typeKey) {
   slot.typeKey = typeKey;
   slot.state = 'active';
 
-  const mesh = createTargetBillboard(type, typeKey, stage.themeKey, stage.rimColor);
+  const mesh = createTargetBillboard(type, typeKey, stage.rimColor);
   slot.baseScale = 1;
   mesh.scale.setScalar(0); // pops in via updateSpawnPop below
   mesh.position.copy(slot.basePosition);
@@ -1555,7 +1782,7 @@ function clearSlots() {
 function spawnBonusTargetAt(x, y, z) {
   const type = TARGET_TYPES.bonus;
   const stage = STAGES[currentStageIndex];
-  const mesh = createTargetBillboard(type, 'bonus', stage.themeKey, stage.rimColor);
+  const mesh = createTargetBillboard(type, 'bonus', stage.rimColor);
   mesh.scale.setScalar(0); // pops in via updateSpawnPop below
   mesh.position.set(x, y, z);
   faceBillboardAtCamera(mesh);
@@ -1832,27 +2059,101 @@ function renderRanking(rankings) {
   }
 }
 
+// --- HUD score digits: dot-font vs. the current Rye font -------------------
+// Tried the Shooting Gallery Pack's own dot-matrix digit sprites (text_0..9)
+// here, tinted per player/timer so they don't give up the red/blue score
+// color-coding the Rye version has. Screenshot-compared against Rye at the
+// HUD's real ~28px digit height: "0" loses its hole entirely and reads as
+// a solid colored oval, and other digits come out noticeably blobbier than
+// Rye's clean glyphs - so this stays off. Flip USE_DOT_FONT_SCORE to true
+// to reconsider it (e.g. if the HUD panels ever get bigger).
+const USE_DOT_FONT_SCORE = false;
+const digitImages = {}; // '0'-'9' -> loaded <img>, once confirmed to exist
+for (let d = 0; d <= 9; d++) {
+  const img = new Image();
+  img.onload = () => { digitImages[d] = img; };
+  img.onerror = () => {};
+  img.src = `assets/kenney-shooting-gallery/PNG/HUD/text_${d}.png`;
+}
+
+// Renders valueString as a strip of tinted digit sprites (source-atop
+// compositing keeps each digit's own alpha shape, replacing only its
+// color) at the given pixel height. Returns null if any digit isn't
+// loaded yet, so the caller can fall back to plain text.
+function createTintedDigitCanvas(valueString, colorCss, digitHeight) {
+  const chars = [...valueString];
+  const imgs = chars.map((ch) => digitImages[ch]);
+  if (imgs.some((img) => !img)) return null;
+  const gap = digitHeight * 0.06;
+  const widths = imgs.map((img) => digitHeight * (img.width / img.height));
+  const totalWidth = widths.reduce((a, b) => a + b, 0) + gap * (imgs.length - 1);
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.ceil(totalWidth));
+  canvas.height = Math.ceil(digitHeight);
+  const ctx = canvas.getContext('2d');
+  let x = 0;
+  for (let i = 0; i < imgs.length; i++) {
+    const w = widths[i];
+    const tinted = document.createElement('canvas');
+    tinted.width = Math.ceil(w);
+    tinted.height = canvas.height;
+    const tctx = tinted.getContext('2d');
+    tctx.drawImage(imgs[i], 0, 0, tinted.width, tinted.height);
+    tctx.globalCompositeOperation = 'source-atop';
+    tctx.fillStyle = colorCss;
+    tctx.fillRect(0, 0, tinted.width, tinted.height);
+    ctx.drawImage(tinted, x, 0);
+    x += w + gap;
+  }
+  return canvas;
+}
+
+// Swaps an el's content between plain text (default) and a memoized
+// dot-font canvas (USE_DOT_FONT_SCORE) - memoized so a canvas is only
+// rebuilt when the value/color actually changes, not every updateHud()
+// call (which runs once a frame during gameplay).
+function setScoreDisplay(el, valueString, colorCss) {
+  if (USE_DOT_FONT_SCORE) {
+    const cacheKey = `${valueString}|${colorCss}`;
+    if (el.dataset.digitCacheKey !== cacheKey) {
+      const canvas = createTintedDigitCanvas(valueString, colorCss, 28);
+      if (canvas) {
+        el.textContent = '';
+        el.appendChild(canvas);
+        el.dataset.digitCacheKey = cacheKey;
+        return;
+      }
+    } else if (el.firstChild instanceof HTMLCanvasElement) {
+      return; // already showing this exact value/color
+    }
+  }
+  el.textContent = valueString;
+  delete el.dataset.digitCacheKey;
+}
+
 // --- Game flow ---------------------------------------------------------------
 function formatMultiplier(m) {
   return m.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
 }
 
 function updateHud() {
-  p1ScoreEl.textContent = String(scores[1]);
-  p2ScoreEl.textContent = String(scores[2]);
+  setScoreDisplay(p1ScoreEl, String(scores[1]), '#ff3b3b');
+  setScoreDisplay(p2ScoreEl, String(scores[2]), '#3ba7ff');
   p1ComboEl.textContent = combo[1].multiplier > 1 ? `COMBO ×${formatMultiplier(combo[1].multiplier)}` : '';
   p2ComboEl.textContent = combo[2].multiplier > 1 ? `COMBO ×${formatMultiplier(combo[2].multiplier)}` : '';
 
   if (mode === 'bonusStage' || mode === 'finish') {
     stageLabelEl.textContent = mode === 'bonusStage' ? 'BONUS STAGE!' : 'LAST BONUS!';
     const t = Math.max(Math.ceil(waveTimer), 0);
-    timeEl.textContent = String(t);
-    timeEl.classList.toggle('low', t <= 3);
+    const low = t <= 3;
+    setScoreDisplay(timeEl, String(t), low ? '#ffffff' : '#ffc93c');
+    timeEl.classList.toggle('low', low);
   } else {
     stageLabelEl.textContent = `STAGE ${currentStageIndex + 1}/${STAGES.length}`;
     const t = Math.max(Math.ceil(stageTimeLeft), 0);
-    timeEl.textContent = String(t);
-    timeEl.classList.toggle('low', t <= 10);
+    const low = t <= 10;
+    setScoreDisplay(timeEl, String(t), low ? '#ffffff' : '#ffc93c');
+    timeEl.classList.toggle('low', low);
   }
 }
 
@@ -2010,11 +2311,17 @@ function handleHit(slot, player) {
 function fireBullet(player, aim) {
   raycaster.setFromCamera(aim, camera);
   const velocity = raycaster.ray.direction.clone().multiplyScalar(BULLET_SPEED);
-  const color = PLAYER_COLORS[player] ?? 0xffdd33;
-  const mesh = new THREE.Mesh(
-    new THREE.SphereGeometry(BULLET_RADIUS, 12, 12),
-    new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.5 })
-  );
+  const shotTexture = shotTextures[player];
+  let mesh;
+  if (shotTexture) {
+    mesh = createBillboardMesh(shotTexture, BULLET_RADIUS * 2);
+  } else {
+    const color = PLAYER_COLORS[player] ?? 0xffdd33;
+    mesh = new THREE.Mesh(
+      new THREE.SphereGeometry(BULLET_RADIUS, 12, 12),
+      new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.5 })
+    );
+  }
   mesh.position.copy(camera.position);
   scene.add(mesh);
   bullets.push({ mesh, velocity, age: 0, player });
@@ -2054,6 +2361,7 @@ function updateBullets(dt) {
     const b = bullets[i];
     b.velocity.y -= GRAVITY * dt;
     b.mesh.position.addScaledVector(b.velocity, dt);
+    faceBillboardAtCamera(b.mesh); // no-op for the sphere fallback, keeps the sprite plate facing camera as it arcs
     b.age += dt;
 
     const consumed = resolveBulletHit(b.mesh.position, b.player);
@@ -2075,6 +2383,7 @@ function animate() {
 
   curtain.update(dt);
   updateCameraShake(dt);
+  updateWaterPanels(clock.elapsedTime);
 
   const connectedPlayers = input.getConnectedPlayers();
   updateWaitingScreen(connectedPlayers);
