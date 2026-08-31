@@ -124,13 +124,18 @@ class RemoteInput extends InputSource {
 }
 
 // ---- Tunable gameplay constants ------------------------------------------
-const GAME_TIME = 90;
 const GRAVITY = 2.2; // was 9.8 - lowered so shots reach the back targets almost straight
 const BULLET_SPEED = 55; // was 32 - raised for the same reason
 const BULLET_RADIUS = 0.15;
-const TARGET_RADIUS = 1.1;
-const TARGET_POSITIONS = [-8, -4, 0, 4, 8].map((x) => new THREE.Vector3(x, 1.6, -24));
 const PLAYER_COLORS = { 1: 0xff3b3b, 2: 0x3ba7ff };
+const TARGET_RESPAWN_DELAY = 1.4; // seconds a slot waits, empty, before its next target appears
+const TARGET_POP_DURATION = 0.5; // seconds a hit target spends flying apart before it's gone
+const HIT_PARTICLE_LIFETIME = 0.7;
+const COMBO_HITS_PER_STEP = 3;
+const COMBO_MULTIPLIER_STEP = 1.5;
+const STAGE_DEFAULT_DURATION = 30;
+const RANKING_KEY = 'festival-shooting-rankings';
+const RANKING_SIZE = 10;
 
 // ---- Curtain transition constants ----------------------------------------
 const CURTAIN_SEGMENTS_X = 40;
@@ -189,38 +194,174 @@ const ground = new THREE.Mesh(
 ground.rotation.x = -Math.PI / 2;
 scene.add(ground);
 
-// --- Target bullseye texture -----------------------------------------------
-function createTargetTexture() {
+// --- Target textures ---------------------------------------------------------
+function createRingTexture(colors) {
   const size = 256;
   const canvas = document.createElement('canvas');
   canvas.width = size;
   canvas.height = size;
   const ctx = canvas.getContext('2d');
-  const rings = [
-    [size / 2, '#ffffff'],
-    [size / 2.5, '#ff2d2d'],
-    [size / 2.5 - 30, '#ffffff'],
-    [size / 2.5 - 60, '#ff2d2d'],
-    [size / 2.5 - 90, '#ffffff'],
-  ];
-  for (const [radius, color] of rings) {
+  colors.forEach((color, i) => {
+    const radius = (size / 2) * (1 - i / colors.length);
     ctx.beginPath();
     ctx.arc(size / 2, size / 2, radius, 0, Math.PI * 2);
     ctx.fillStyle = color;
     ctx.fill();
-  }
+  });
   return new THREE.CanvasTexture(canvas);
 }
-const targetTexture = createTargetTexture();
 
-function createTarget(position) {
-  const mesh = new THREE.Mesh(
-    new THREE.CircleGeometry(TARGET_RADIUS, 32),
-    new THREE.MeshBasicMaterial({ map: targetTexture, side: THREE.DoubleSide })
-  );
-  mesh.position.copy(position);
-  scene.add(mesh);
-  return mesh;
+function createDudTexture() {
+  const size = 256;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#6b6b6b';
+  ctx.beginPath();
+  ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#2b1a12';
+  ctx.lineWidth = 16;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(size * 0.28, size * 0.28);
+  ctx.lineTo(size * 0.72, size * 0.72);
+  ctx.moveTo(size * 0.72, size * 0.28);
+  ctx.lineTo(size * 0.28, size * 0.72);
+  ctx.stroke();
+  return new THREE.CanvasTexture(canvas);
+}
+
+function createGlowTexture() {
+  const size = 128;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  const gradient = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+  gradient.addColorStop(0, 'rgba(255,240,190,1)');
+  gradient.addColorStop(1, 'rgba(255,240,190,0)');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, size, size);
+  return new THREE.CanvasTexture(canvas);
+}
+const glowTexture = createGlowTexture();
+
+// --- Target types --------------------------------------------------------
+// A single place to define every kind of target: its score, hit-box size,
+// movement (null = static, otherwise a left-right sine sweep), rarity
+// weight for random respawns, and how it looks. Add a new entry here and
+// list its id in a stage's `pool` to bring it into play.
+const TARGET_TYPES = {
+  normal: {
+    id: 'normal',
+    score: 100,
+    radius: 1.1,
+    glow: false,
+    spawnWeight: 10,
+    movement: null,
+    particleColor: 0xff5a5a,
+    createTexture: () => createRingTexture(['#ffffff', '#ff2d2d', '#ffffff', '#ff2d2d', '#ffffff']),
+  },
+  moving: {
+    id: 'moving',
+    score: 300,
+    radius: 1.0,
+    glow: false,
+    spawnWeight: 6,
+    movement: { amplitude: 2.6, speed: 1.6 },
+    particleColor: 0x4aa8ff,
+    createTexture: () => createRingTexture(['#eaf6ff', '#2f8fd1', '#eaf6ff', '#2f8fd1']),
+  },
+  small: {
+    id: 'small',
+    score: 500,
+    radius: 0.55,
+    glow: false,
+    spawnWeight: 4,
+    movement: null,
+    particleColor: 0x4be07a,
+    createTexture: () => createRingTexture(['#eafbea', '#22a35a', '#eafbea']),
+  },
+  bonus: {
+    id: 'bonus',
+    score: 1000,
+    radius: 0.9,
+    glow: true,
+    spawnWeight: 1,
+    movement: { amplitude: 9, speed: 0.35 },
+    particleColor: 0xffd76a,
+    createTexture: () => createRingTexture(['#fff6d0', '#ffcf4d', '#fff1b0', '#d9a441']),
+  },
+  dud: {
+    id: 'dud',
+    score: -200,
+    radius: 1.1,
+    glow: false,
+    spawnWeight: 5,
+    movement: null,
+    particleColor: 0x777777,
+    createTexture: () => createDudTexture(),
+  },
+};
+
+// --- Stages ----------------------------------------------------------------
+// Each stage sets the backdrop and its five target slots (position + which
+// type starts there). Once a slot's target is cleared it respawns as a
+// random type drawn from `pool` (weighted by TARGET_TYPES[...].spawnWeight),
+// so the initial layout is really just the opening hand for that stage.
+const STAGES = [
+  {
+    name: 'ステージ1 ひろば',
+    background: 0x87ceeb,
+    groundColor: 0x3a7d3a,
+    pool: ['normal', 'moving'],
+    layout: [
+      { x: -8, type: 'normal' },
+      { x: -4, type: 'normal' },
+      { x: 0, type: 'moving' },
+      { x: 4, type: 'normal' },
+      { x: 8, type: 'normal' },
+    ],
+  },
+  {
+    name: 'ステージ2 ゆうぐれ',
+    background: 0xff9a5a,
+    groundColor: 0x8a5a2e,
+    pool: ['normal', 'moving', 'small', 'dud'],
+    layout: [
+      { x: -9, type: 'moving' },
+      { x: -4.5, type: 'small' },
+      { x: 0, type: 'dud' },
+      { x: 4.5, type: 'moving' },
+      { x: 9, type: 'small' },
+    ],
+  },
+  {
+    name: 'ステージ3 よぞら',
+    background: 0x231146,
+    groundColor: 0x2b2033,
+    pool: ['moving', 'small', 'dud', 'bonus'],
+    layout: [
+      { x: -9, type: 'small' },
+      { x: -4.5, type: 'dud' },
+      { x: 0, type: 'bonus' },
+      { x: 4.5, type: 'dud' },
+      { x: 9, type: 'small' },
+    ],
+  },
+];
+
+function pickWeightedType(pool) {
+  const entries = pool.map((key) => TARGET_TYPES[key]);
+  const total = entries.reduce((sum, t) => sum + t.spawnWeight, 0);
+  let r = Math.random() * total;
+  for (const type of entries) {
+    if (r < type.spawnWeight) return type.id;
+    r -= type.spawnWeight;
+  }
+  return entries[entries.length - 1].id;
 }
 
 // --- Curtain transition (mass-spring cloth via cannon-es) -------------------
@@ -455,17 +596,28 @@ const curtain = new CurtainController(scene);
 // --- Input, HUD elements ----------------------------------------------------
 const input = debugMode ? new MouseInput(renderer.domElement) : new RemoteInput();
 const raycaster = new THREE.Raycaster();
+const clock = new THREE.Clock();
 
 const bullets = [];
-let targets = [];
+let slots = [];
 const scores = { 1: 0, 2: 0 };
-let timeLeft = GAME_TIME;
+const combo = {
+  1: { hits: 0, multiplier: 1 },
+  2: { hits: 0, multiplier: 1 },
+};
+let currentStageIndex = 0;
+let stageTimeLeft = STAGE_DEFAULT_DURATION;
 let state = 'intro'; // 'intro' | 'playing' | 'result'
 
 const p1ScoreEl = document.getElementById('p1ScoreValue');
 const p2ScoreEl = document.getElementById('p2ScoreValue');
+const p1ComboEl = document.getElementById('p1Combo');
+const p2ComboEl = document.getElementById('p2Combo');
 const timeEl = document.getElementById('timeValue');
+const stageLabelEl = document.getElementById('stageLabel');
 const resultEl = document.getElementById('result');
+const winnerLineEl = document.getElementById('winnerLine');
+const rankingListEl = document.getElementById('rankingList');
 const waitingEl = document.getElementById('waiting');
 const qrHolder = document.getElementById('qrHolder');
 const p1Slot = document.getElementById('p1Slot');
@@ -527,9 +679,239 @@ function updateWaitingScreen(connectedPlayers) {
   p2Slot.classList.toggle('online', connectedPlayers.includes(2));
 }
 
-function spawnTargets() {
-  for (const t of targets) scene.remove(t);
-  targets = TARGET_POSITIONS.map((pos) => createTarget(pos));
+// --- Target slots (one per stage layout entry) ------------------------------
+function buildSlotsForStage(stage) {
+  return stage.layout.map((entry, index) => ({
+    index,
+    basePosition: new THREE.Vector3(entry.x, 1.6, -24),
+    phase: index * 1.7,
+    typeKey: null,
+    state: 'empty', // 'active' | 'popping' | 'waiting'
+    mesh: null,
+    glowMesh: null,
+    popAge: 0,
+    popVelocity: null,
+    popSpin: null,
+    waitTimer: 0,
+    initialType: entry.type,
+  }));
+}
+
+function spawnSlotTarget(slot, typeKey) {
+  const type = TARGET_TYPES[typeKey];
+  slot.typeKey = typeKey;
+  slot.state = 'active';
+
+  const mesh = new THREE.Mesh(
+    new THREE.CircleGeometry(type.radius, 32),
+    new THREE.MeshBasicMaterial({ map: type.createTexture(), side: THREE.DoubleSide, transparent: true })
+  );
+  mesh.position.copy(slot.basePosition);
+  scene.add(mesh);
+  slot.mesh = mesh;
+
+  if (type.glow) {
+    const glow = new THREE.Sprite(
+      new THREE.SpriteMaterial({
+        map: glowTexture,
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      })
+    );
+    glow.scale.set(type.radius * 4, type.radius * 4, 1);
+    glow.position.copy(slot.basePosition);
+    scene.add(glow);
+    slot.glowMesh = glow;
+  } else {
+    slot.glowMesh = null;
+  }
+}
+
+function popSlot(slot) {
+  slot.state = 'popping';
+  slot.popAge = 0;
+  slot.popVelocity = new THREE.Vector3((Math.random() - 0.5) * 3, 4 + Math.random() * 2, (Math.random() - 0.5) * 2);
+  slot.popSpin = new THREE.Vector3((Math.random() - 0.5) * 10, (Math.random() - 0.5) * 10, (Math.random() - 0.5) * 10);
+  if (slot.glowMesh) {
+    scene.remove(slot.glowMesh);
+    slot.glowMesh = null;
+  }
+}
+
+function updateSlots(dt, elapsed) {
+  const stage = STAGES[currentStageIndex];
+  for (const slot of slots) {
+    if (slot.state === 'active') {
+      const type = TARGET_TYPES[slot.typeKey];
+      if (type.movement) {
+        const offset = Math.sin(elapsed * type.movement.speed + slot.phase) * type.movement.amplitude;
+        slot.mesh.position.x = slot.basePosition.x + offset;
+      }
+      if (type.glow) {
+        slot.mesh.rotation.z += dt * 0.6;
+        if (slot.glowMesh) {
+          const pulse = 1 + 0.15 * Math.sin(elapsed * 4 + slot.phase);
+          slot.glowMesh.scale.set(type.radius * 4 * pulse, type.radius * 4 * pulse, 1);
+          slot.glowMesh.position.copy(slot.mesh.position);
+        }
+      }
+    } else if (slot.state === 'popping') {
+      slot.popAge += dt;
+      slot.popVelocity.y -= 9.8 * dt;
+      slot.mesh.position.addScaledVector(slot.popVelocity, dt);
+      slot.mesh.rotation.x += slot.popSpin.x * dt;
+      slot.mesh.rotation.y += slot.popSpin.y * dt;
+      const t = Math.min(slot.popAge / TARGET_POP_DURATION, 1);
+      slot.mesh.scale.setScalar(Math.max(0.001, 1 - t));
+      slot.mesh.material.opacity = 1 - t;
+      if (t >= 1) {
+        scene.remove(slot.mesh);
+        slot.mesh = null;
+        slot.state = 'waiting';
+        slot.waitTimer = TARGET_RESPAWN_DELAY;
+      }
+    } else if (slot.state === 'waiting') {
+      slot.waitTimer -= dt;
+      if (slot.waitTimer <= 0) {
+        spawnSlotTarget(slot, pickWeightedType(stage.pool));
+      }
+    }
+  }
+}
+
+function clearSlots() {
+  for (const slot of slots) {
+    if (slot.mesh) scene.remove(slot.mesh);
+    if (slot.glowMesh) scene.remove(slot.glowMesh);
+  }
+  slots = [];
+}
+
+// --- Hit feedback: particles + floating score popup -------------------------
+const hitParticles = [];
+const sparkleGeometry = new THREE.OctahedronGeometry(0.14);
+const dustGeometry = new THREE.BoxGeometry(0.12, 0.12, 0.12);
+
+function spawnHitParticles(position, type) {
+  const isDud = type.score < 0;
+  const geometry = isDud ? dustGeometry : sparkleGeometry;
+  const count = isDud ? 8 : 14;
+  for (let i = 0; i < count; i++) {
+    const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: type.particleColor, transparent: true }));
+    mesh.position.copy(position);
+    const angle = Math.random() * Math.PI * 2;
+    const speed = isDud ? 1.2 + Math.random() : 2.5 + Math.random() * 3;
+    const velocity = new THREE.Vector3(
+      Math.cos(angle) * speed,
+      (isDud ? 1 : 3) + Math.random() * 2,
+      Math.sin(angle) * speed * 0.5
+    );
+    scene.add(mesh);
+    hitParticles.push({ mesh, velocity, age: 0 });
+  }
+}
+
+function updateHitParticles(dt) {
+  for (let i = hitParticles.length - 1; i >= 0; i--) {
+    const p = hitParticles[i];
+    p.velocity.y -= 9.8 * dt;
+    p.mesh.position.addScaledVector(p.velocity, dt);
+    p.mesh.rotation.x += dt * 6;
+    p.mesh.rotation.y += dt * 5;
+    p.age += dt;
+    p.mesh.material.opacity = Math.max(0, 1 - p.age / HIT_PARTICLE_LIFETIME);
+    if (p.age >= HIT_PARTICLE_LIFETIME) {
+      scene.remove(p.mesh);
+      hitParticles.splice(i, 1);
+    }
+  }
+}
+
+function spawnScorePopup(worldPosition, amount) {
+  const ndc = worldPosition.clone().project(camera);
+  const x = ((ndc.x + 1) / 2) * window.innerWidth;
+  const y = ((1 - ndc.y) / 2) * window.innerHeight;
+  const el = document.createElement('div');
+  el.className = `score-popup ${amount >= 0 ? 'positive' : 'negative'}`;
+  el.style.left = `${x}px`;
+  el.style.top = `${y}px`;
+  el.textContent = `${amount >= 0 ? '+' : ''}${amount}`;
+  document.body.appendChild(el);
+  el.addEventListener('animationend', () => el.remove());
+}
+
+// --- Ranking (localStorage) --------------------------------------------------
+function loadRankings() {
+  try {
+    const raw = localStorage.getItem(RANKING_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveRanking(p1, p2) {
+  const rankings = loadRankings();
+  rankings.push({ p1, p2, total: p1 + p2 });
+  rankings.sort((a, b) => b.total - a.total);
+  rankings.length = Math.min(rankings.length, RANKING_SIZE);
+  try {
+    localStorage.setItem(RANKING_KEY, JSON.stringify(rankings));
+  } catch {
+    // localStorage unavailable (private mode / quota) - ranking just won't persist
+  }
+  return rankings;
+}
+
+function renderRanking(rankings) {
+  rankingListEl.innerHTML = '';
+  for (const entry of rankings) {
+    const li = document.createElement('li');
+    li.textContent = `P1 ${entry.p1} / P2 ${entry.p2}（計 ${entry.total}）`;
+    rankingListEl.appendChild(li);
+  }
+}
+
+// --- Game flow ---------------------------------------------------------------
+function formatMultiplier(m) {
+  return m.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
+}
+
+function updateHud() {
+  p1ScoreEl.textContent = String(scores[1]);
+  p2ScoreEl.textContent = String(scores[2]);
+  p1ComboEl.textContent = combo[1].multiplier > 1 ? `COMBO ×${formatMultiplier(combo[1].multiplier)}` : '';
+  p2ComboEl.textContent = combo[2].multiplier > 1 ? `COMBO ×${formatMultiplier(combo[2].multiplier)}` : '';
+  stageLabelEl.textContent = `STAGE ${currentStageIndex + 1}/${STAGES.length}`;
+  const t = Math.max(Math.ceil(stageTimeLeft), 0);
+  timeEl.textContent = String(t);
+  timeEl.classList.toggle('low', t <= 10);
+}
+
+function loadStage(index) {
+  currentStageIndex = index;
+  const stage = STAGES[index];
+  scene.background.setHex(stage.background);
+  scene.fog.color.setHex(stage.background);
+  ground.material.color.setHex(stage.groundColor ?? 0x3a7d3a);
+
+  clearBullets();
+  clearSlots();
+  slots = buildSlotsForStage(stage);
+  for (const slot of slots) spawnSlotTarget(slot, slot.initialType);
+
+  stageTimeLeft = stage.duration ?? STAGE_DEFAULT_DURATION;
+  updateHud();
+}
+
+function advanceStage() {
+  const next = currentStageIndex + 1;
+  if (next < STAGES.length) {
+    loadStage(next);
+  } else {
+    finishGame();
+  }
 }
 
 function clearBullets() {
@@ -537,30 +919,47 @@ function clearBullets() {
   bullets.length = 0;
 }
 
-function updateHud() {
-  p1ScoreEl.textContent = String(scores[1]);
-  p2ScoreEl.textContent = String(scores[2]);
-  const t = Math.ceil(timeLeft);
-  timeEl.textContent = String(t);
-  timeEl.classList.toggle('low', t <= 15);
-}
-
 function startGame() {
   scores[1] = 0;
   scores[2] = 0;
-  timeLeft = GAME_TIME;
+  combo[1] = { hits: 0, multiplier: 1 };
+  combo[2] = { hits: 0, multiplier: 1 };
   state = 'playing';
-  clearBullets();
-  spawnTargets();
   resultEl.style.display = 'none';
-  updateHud();
+  loadStage(0);
 }
 
-function endGame() {
+function finishGame() {
   state = 'result';
+  clearBullets();
+  clearSlots();
+
+  winnerLineEl.textContent =
+    scores[1] === scores[2] ? 'DRAW' : scores[1] > scores[2] ? 'PLAYER 1 WIN!' : 'PLAYER 2 WIN!';
   document.querySelector('#finalP1 .value').textContent = String(scores[1]);
   document.querySelector('#finalP2 .value').textContent = String(scores[2]);
+  renderRanking(saveRanking(scores[1], scores[2]));
+
   resultEl.style.display = 'flex';
+}
+
+function handleHit(slot, player) {
+  const type = TARGET_TYPES[slot.typeKey];
+  let awarded;
+  if (type.score < 0) {
+    awarded = type.score; // flat penalty - a bad hit shouldn't be reduced by a good combo
+    combo[player] = { hits: 0, multiplier: 1 };
+  } else {
+    const c = combo[player];
+    c.hits += 1;
+    if (c.hits % COMBO_HITS_PER_STEP === 0) c.multiplier *= COMBO_MULTIPLIER_STEP;
+    awarded = Math.round(type.score * c.multiplier);
+  }
+  scores[player] += awarded;
+  updateHud();
+  spawnScorePopup(slot.mesh.position, awarded);
+  spawnHitParticles(slot.mesh.position, type);
+  popSlot(slot);
 }
 
 function fireBullet(player, aim) {
@@ -584,13 +983,11 @@ function updateBullets(dt) {
     b.age += dt;
 
     let consumed = false;
-    for (let j = targets.length - 1; j >= 0; j--) {
-      const target = targets[j];
-      if (b.mesh.position.distanceTo(target.position) < TARGET_RADIUS) {
-        scene.remove(target);
-        targets.splice(j, 1);
-        scores[b.player] = (scores[b.player] ?? 0) + 100;
-        updateHud();
+    for (const slot of slots) {
+      if (slot.state !== 'active') continue;
+      const type = TARGET_TYPES[slot.typeKey];
+      if (b.mesh.position.distanceTo(slot.mesh.position) < type.radius) {
+        handleHit(slot, b.player);
         scene.remove(b.mesh);
         bullets.splice(i, 1);
         consumed = true;
@@ -601,13 +998,12 @@ function updateBullets(dt) {
     if (!consumed && (b.age > 5 || b.mesh.position.y < -10)) {
       scene.remove(b.mesh);
       bullets.splice(i, 1);
+      combo[b.player] = { hits: 0, multiplier: 1 }; // a clean miss breaks the combo too
     }
   }
 }
 
 // --- Main loop ---------------------------------------------------------------
-const clock = new THREE.Clock();
-
 function animate() {
   requestAnimationFrame(animate);
   const dt = Math.min(clock.getDelta(), 0.05);
@@ -617,15 +1013,16 @@ function animate() {
   const connectedPlayers = input.getConnectedPlayers();
   updateWaitingScreen(connectedPlayers);
   updateCrosshairs(connectedPlayers);
+  updateHitParticles(dt);
 
   const gameplayActive = state === 'playing' && !curtain.busy && connectedPlayers.length > 0;
 
   if (gameplayActive) {
-    timeLeft -= dt;
-    if (timeLeft <= 0) {
-      timeLeft = 0;
+    stageTimeLeft -= dt;
+    if (stageTimeLeft <= 0) {
+      stageTimeLeft = 0;
       updateHud();
-      curtain.show(() => endGame());
+      curtain.show(() => advanceStage());
     } else {
       updateHud();
     }
@@ -636,6 +1033,7 @@ function animate() {
       }
     }
     updateBullets(dt);
+    updateSlots(dt, clock.getElapsedTime());
   } else if (state === 'result' && !curtain.busy) {
     for (const player of connectedPlayers) {
       if (input.consumeFire(player)) {

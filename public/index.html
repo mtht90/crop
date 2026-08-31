@@ -66,14 +66,39 @@
     font-size: 26px;
     font-variant-numeric: tabular-nums;
   }
+  .score-panel .combo {
+    height: 12px;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    color: var(--carnival-yellow);
+  }
   #p1Score .value { color: var(--p1-color); }
   #p2Score .value { color: var(--p2-color); }
   #timePanel {
     background: var(--carnival-red);
     border-color: var(--ink);
   }
+  #timePanel .label { font-family: "Bungee", sans-serif; font-size: 11px; }
   #timePanel .value { color: var(--carnival-yellow); }
   #timePanel .value.low { color: #fff; animation: none; }
+
+  /* --- Score popups (hit feedback) --- */
+  .score-popup {
+    position: fixed;
+    transform: translate(-50%, 0);
+    font-family: "Bungee", sans-serif;
+    font-size: 24px;
+    pointer-events: none;
+    z-index: 12;
+    text-shadow: 2px 2px 0 var(--ink);
+    animation: scorePopupFloat 0.9s ease-out forwards;
+  }
+  .score-popup.positive { color: var(--carnival-yellow); }
+  .score-popup.negative { color: #ff5a5a; }
+  @keyframes scorePopupFloat {
+    from { transform: translate(-50%, 0) scale(1); opacity: 1; }
+    to { transform: translate(-50%, -70px) scale(1.15); opacity: 0; }
+  }
 
   /* --- Crosshairs (created dynamically per player) --- */
   .crosshair {
@@ -128,6 +153,7 @@
     color: var(--cream);
     text-align: center;
     z-index: 15;
+    pointer-events: none; /* let fire/aim through to the canvas underneath */
   }
   #waiting h1 {
     font-size: 34px;
@@ -177,6 +203,7 @@
     color: var(--cream);
     text-align: center;
     z-index: 20;
+    pointer-events: none; /* let fire/aim through to the canvas underneath */
   }
   #result h1 {
     font-size: 46px;
@@ -200,6 +227,37 @@
     font-size: 16px;
     opacity: 0.8;
   }
+  #result #winnerLine {
+    font-family: "Bungee", sans-serif;
+    font-size: 20px;
+    color: var(--carnival-yellow);
+    margin: 0;
+  }
+  #ranking {
+    background: var(--wood);
+    border: 3px solid var(--ink);
+    border-radius: 10px;
+    padding: 10px 20px;
+    margin: 10px 0;
+    max-height: 32vh;
+    overflow-y: auto;
+    pointer-events: auto; /* scrollable even though #result lets clicks pass through */
+  }
+  #ranking .label {
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    color: var(--carnival-yellow);
+    margin-bottom: 6px;
+  }
+  #rankingList {
+    list-style: decimal;
+    margin: 0;
+    padding-left: 20px;
+    text-align: left;
+    font-family: sans-serif;
+    font-size: 13px;
+    line-height: 1.6;
+  }
 </style>
 </head>
 <body>
@@ -207,14 +265,16 @@
     <div class="score-panel" id="p1Score">
       <div class="label">PLAYER 1</div>
       <div class="value" id="p1ScoreValue">0</div>
+      <div class="combo" id="p1Combo"></div>
     </div>
     <div class="score-panel" id="timePanel">
-      <div class="label">TIME</div>
-      <div class="value" id="timeValue">90</div>
+      <div class="label" id="stageLabel">STAGE 1/3</div>
+      <div class="value" id="timeValue">30</div>
     </div>
     <div class="score-panel" id="p2Score">
       <div class="label">PLAYER 2</div>
       <div class="value" id="p2ScoreValue">0</div>
+      <div class="combo" id="p2Combo"></div>
     </div>
   </div>
 
@@ -229,10 +289,15 @@
   </div>
 
   <div id="result">
-    <h1>TIME UP!</h1>
+    <h1>GAME CLEAR!</h1>
+    <p id="winnerLine">DRAW</p>
     <div class="scores">
       <div id="finalP1"><div class="label">PLAYER 1</div><div class="value">0</div></div>
       <div id="finalP2"><div class="label">PLAYER 2</div><div class="value">0</div></div>
+    </div>
+    <div id="ranking">
+      <div class="label">RANKING TOP 10</div>
+      <ol id="rankingList"></ol>
     </div>
     <p class="hint">発射でリスタート</p>
   </div>
