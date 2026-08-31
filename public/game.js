@@ -800,17 +800,21 @@ class CurtainController {
       this.particles.push(row);
     }
 
-    const connect = (i1, j1, i2, j2) => {
+    // Rest length must be the cloth's intended hanging spacing (restX/restY),
+    // not the distance measured at construction time: bodies start in the
+    // vertically-compressed "bunched" pose (see _bunchedPosition), so
+    // measuring from there would permanently lock every vertical constraint
+    // to ~0.015 units and the curtain could never hang more than a sliver.
+    const connect = (i1, j1, i2, j2, restLength) => {
       const b1 = this.particles[j1][i1];
       const b2 = this.particles[j2][i2];
-      const dist = b1.position.distanceTo(b2.position) || 0.001;
-      this.world.addConstraint(new CANNON.DistanceConstraint(b1, b2, dist));
+      this.world.addConstraint(new CANNON.DistanceConstraint(b1, b2, restLength));
     };
 
     for (let j = 0; j < this.rows; j++) {
       for (let i = 0; i < this.cols; i++) {
-        if (i < this.cols - 1) connect(i, j, i + 1, j);
-        if (j < this.rows - 1) connect(i, j, i, j + 1);
+        if (i < this.cols - 1) connect(i, j, i + 1, j, this.restX);
+        if (j < this.rows - 1) connect(i, j, i, j + 1, this.restY);
       }
     }
 
