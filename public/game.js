@@ -565,28 +565,6 @@ function createRingTexture(colors) {
   return new THREE.CanvasTexture(canvas);
 }
 
-function createDudTexture() {
-  const size = 256;
-  const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#6b6b6b';
-  ctx.beginPath();
-  ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = '#2b1a12';
-  ctx.lineWidth = 16;
-  ctx.lineCap = 'round';
-  ctx.beginPath();
-  ctx.moveTo(size * 0.28, size * 0.28);
-  ctx.lineTo(size * 0.72, size * 0.72);
-  ctx.moveTo(size * 0.72, size * 0.28);
-  ctx.lineTo(size * 0.28, size * 0.72);
-  ctx.stroke();
-  return new THREE.CanvasTexture(canvas);
-}
-
 function createTriggerTexture() {
   const size = 256;
   const canvas = document.createElement('canvas');
@@ -684,8 +662,7 @@ function createTargetBillboard(type, typeKey, themeKey, backingColor) {
 // movement (null = static, otherwise a left-right sine sweep), rarity
 // weight for random respawns, and how it looks. Add a new entry here and
 // list its id in a stage's `pool` to bring it into play.
-// Scores sit on a 100/500/1000/2000/5000 ladder (dud's -200 penalty is a
-// separate concern, not part of that ladder).
+// Scores sit on a 100/500/1000/2000/5000 ladder.
 const TARGET_TYPES = {
   normal: {
     id: 'normal',
@@ -738,16 +715,6 @@ const TARGET_TYPES = {
     movement: null,
     particleColor: 0xfff066,
     createTexture: () => createTriggerTexture(),
-  },
-  dud: {
-    id: 'dud',
-    score: -200,
-    radius: 1.1,
-    glow: false,
-    spawnWeight: 5,
-    movement: null,
-    particleColor: 0x777777,
-    createTexture: () => createDudTexture(),
   },
 };
 
@@ -805,11 +772,11 @@ const STAGES = [
     frameColor: '#4a3a35', // darkened lava-rock tone
     frameColorDark: '#2c211d',
     rimColor: 0x2c211d,
-    pool: ['normal', 'moving', 'small', 'dud'],
+    pool: ['normal', 'moving', 'small'],
     layout: [
       { x: -6, ...LANE_UPPER, type: 'moving' },
       { x: 0, ...LANE_UPPER, type: 'small' },
-      { x: 6, ...LANE_UPPER, type: 'dud' },
+      { x: 6, ...LANE_UPPER, type: 'normal' },
       { x: -3, ...LANE_LOWER, type: 'small' },
       { x: 3, ...LANE_LOWER, type: 'moving' },
       { x: 0, y: 4.4, z: TRIGGER_LANE_Z, type: 'trigger', pinned: true },
@@ -823,13 +790,13 @@ const STAGES = [
     frameColor: '#d8b781', // sun-bleached wood
     frameColorDark: '#a8794a',
     rimColor: 0xa8794a,
-    pool: ['moving', 'small', 'dud', 'bonus'],
+    pool: ['moving', 'small', 'bonus'],
     layout: [
       { x: -6, ...LANE_UPPER, type: 'small' },
       { x: 0, ...LANE_UPPER, type: 'bonus' },
       { x: 6, ...LANE_UPPER, type: 'small' },
-      { x: -3, ...LANE_LOWER, type: 'dud' },
-      { x: 3, ...LANE_LOWER, type: 'dud' },
+      { x: -3, ...LANE_LOWER, type: 'moving' },
+      { x: 3, ...LANE_LOWER, type: 'moving' },
       { x: 0, y: 4.4, z: TRIGGER_LANE_Z, type: 'trigger', pinned: true },
     ],
   },
@@ -1768,8 +1735,10 @@ const dustGeometry = new THREE.BoxGeometry(0.12, 0.12, 0.12);
 function spawnHitParticles(position, type) {
   const isDud = type.score < 0;
   // Positive hits use the Particle Pack star sprite once it's loaded (falls
-  // back to the plain spinning octahedron shards otherwise); a dud always
-  // puffs plain gray dust instead of a "celebratory" star.
+  // back to the plain spinning octahedron shards otherwise); a negative-score
+  // hit always puffs plain gray dust instead of a "celebratory" star. No
+  // current target type scores negative, but the mechanism stays ready if
+  // one is added back.
   const useStarSprite = !isDud && starTexture;
   const count = isDud ? 8 : 14;
   for (let i = 0; i < count; i++) {
