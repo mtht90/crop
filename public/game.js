@@ -387,7 +387,7 @@ function applySkybox(url, fallbackTopHex, fallbackBottomHex) {
 }
 
 applySkybox(ASSETS.skyboxes.farm, 0x8fd3f4, mixHexColor(0x8fd3f4, 0xffffff, 0.55));
-scene.fog = new THREE.Fog(0x87ceeb, 20, 60);
+scene.fog = new THREE.Fog(0x87ceeb, 10, 30); // halved alongside the closer scene depth below
 
 const camera = new THREE.PerspectiveCamera(
   60,
@@ -567,10 +567,10 @@ function addSceneDecoration() {
   // Foreground crates - a real flat side-view sprite from the Furniture
   // Kit; a plain colored plane stands in if it never loads.
   const cratePositions = [
-    [-11, 0.8, -6],
-    [11, 0.8, -6],
-    [-13, 0.8, -14],
-    [13, 0.8, -14],
+    [-5.5, 0.8, -0.5],
+    [5.5, 0.8, -0.5],
+    [-6.5, 0.8, -4.5],
+    [6.5, 0.8, -4.5],
   ];
   loadBillboardTexture(
     ASSETS.decorations.crate,
@@ -821,8 +821,12 @@ const TARGET_TYPES = {
 // targets interleave along x, and perspective alone (the z difference, plus
 // a touch of y rise) makes the far lane read as smaller/higher and farther
 // away, sold further by the shelf risers (addTargetShelves() below).
-const LANE_UPPER = { y: 3.1, z: -27 }; // far row - smaller/higher via perspective
-const LANE_LOWER = { y: 1.1, z: -15 }; // near row - larger/lower
+// z pulled to roughly half its original camera distance (was -27/-15) so
+// targets read big in frame instead of stranded in a sea of sky - see
+// loadThemeDecorations()/addSceneDecoration() below, whose flanking props
+// are rescaled by the same factor to keep the same depth balance.
+const LANE_UPPER = { y: 3.1, z: -11 }; // far row - smaller/higher via perspective
+const LANE_LOWER = { y: 1.1, z: -5 }; // near row - larger/lower
 const TRIGGER_LANE_Z = (LANE_UPPER.z + LANE_LOWER.z) / 2;
 
 // Per-stage theme: everything about how a stage *looks* (sky/ground/frame
@@ -1101,10 +1105,10 @@ function loadThemeDecorations(themeKey, token) {
   if (themeKey === 'farm') {
     addLanePanel(LANE_UPPER, 18, 3.6, 'grass1', 0x4caf50, false);
     addLanePanel(LANE_LOWER, 12, 3.0, 'water1', 0x3ba7ff, true);
-    placeProceduralDecoration(createTreeTexture(), [[-17, 2.6, -30], [17, 2.6, -30], [-19, 2.2, -20], [19, 2.2, -20]], 5.2);
-    placeProceduralDecoration(createFenceTexture(), [[-9, 0.9, -33], [9, 0.9, -33]], 1.8);
-    placeImageDecoration(ASSETS.decorations.foliageFlower, [[-4, 0.35, -30], [4, 0.35, -30], [-14, 0.35, -24]], 0.9, 0x4a9a4a, token);
-    placeImageDecoration(ASSETS.decorations.foliageGrass, [[-2, 0.3, -28], [2, 0.3, -28], [12, 0.3, -22]], 0.7, 0x4a9a4a, token);
+    placeProceduralDecoration(createTreeTexture(), [[-8.5, 2.6, -12.5], [8.5, 2.6, -12.5], [-9.5, 2.2, -7.5], [9.5, 2.2, -7.5]], 5.2);
+    placeProceduralDecoration(createFenceTexture(), [[-4.5, 0.9, -14], [4.5, 0.9, -14]], 1.8);
+    placeImageDecoration(ASSETS.decorations.foliageFlower, [[-2, 0.35, -12.5], [2, 0.35, -12.5], [-7, 0.35, -9.5]], 0.9, 0x4a9a4a, token);
+    placeImageDecoration(ASSETS.decorations.foliageGrass, [[-1, 0.3, -11.5], [1, 0.3, -11.5], [6, 0.3, -8.5]], 0.7, 0x4a9a4a, token);
   } else if (themeKey === 'dinosaur') {
     const woodTexture = lanePanelTextures.wood;
     const darkRockColor = 0x3a322c;
@@ -1116,14 +1120,14 @@ function loadThemeDecorations(themeKey, token) {
       addLanePanelFallback(LANE_UPPER, 18, 3.6, darkRockColor);
       addLanePanelFallback(LANE_LOWER, 12, 3.0, darkRockColor);
     }
-    placeProceduralDecoration(createVolcanoTexture(), [[0, 5, -42]], 14);
-    placeImageDecoration(ASSETS.decorations.rock, [[-10, 0.7, -18], [10, 0.7, -18], [-14, 0.7, -30], [14, 0.7, -30]], 1.4, 0x6b6b6b, token);
+    placeProceduralDecoration(createVolcanoTexture(), [[0, 5, -18.5]], 14);
+    placeImageDecoration(ASSETS.decorations.rock, [[-5, 0.7, -6.5], [5, 0.7, -6.5], [-7, 0.7, -12.5], [7, 0.7, -12.5]], 1.4, 0x6b6b6b, token);
   } else if (themeKey === 'western') {
     addLanePanel(LANE_UPPER, 18, 3.6, 'wood', 0xc9975a, false);
     addLanePanel(LANE_LOWER, 12, 3.0, 'wood', 0xc9975a, false);
-    placeImageDecoration(ASSETS.decorations.desertBuilding, [[-15, 3, -34], [15, 3, -34]], 6, 0xc9a06a, token);
-    placeImageDecoration(ASSETS.decorations.desertTent, [[-9, 1.4, -33], [9, 1.4, -33]], 2.8, 0xb8895a, token);
-    placeImageDecoration(ASSETS.decorations.desertPalm, [[-19, 2.6, -22], [19, 2.6, -22]], 5.2, 0x4a7a3a, token);
+    placeImageDecoration(ASSETS.decorations.desertBuilding, [[-7.5, 3, -14.5], [7.5, 3, -14.5]], 6, 0xc9a06a, token);
+    placeImageDecoration(ASSETS.decorations.desertTent, [[-4.5, 1.4, -14], [4.5, 1.4, -14]], 2.8, 0xb8895a, token);
+    placeImageDecoration(ASSETS.decorations.desertPalm, [[-9.5, 2.6, -8.5], [9.5, 2.6, -8.5]], 5.2, 0x4a7a3a, token);
   }
 }
 
