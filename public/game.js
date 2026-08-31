@@ -204,6 +204,37 @@ const BONUS_STAGE_THRESHOLD = 3000; // points gained in a stage to unlock the bo
 const BONUS_STAGE_DURATION = 8;
 const FINISH_PHASE_DURATION = 12;
 
+// -- Animation "juice": pop-in/squash/shake/flash, all built on ease-out-back
+// rather than linear so everything reads as bouncy rather than mechanical.
+const SPAWN_POP_DURATION = 0.32; // target pop-in: scale 0 -> baseScale, overshooting
+const SQUASH_DURATION = 0.09; // brief squash right at the hit moment, before flying apart
+const SQUASH_SCALE_XZ = 1.35;
+const SQUASH_SCALE_Y = 0.55;
+const CAMERA_SHAKE_HIT = 0.35; // trauma added per normal hit
+const CAMERA_SHAKE_TRIGGER = 0.6; // bigger shake for the trigger/bonus-wave activation
+const CAMERA_SHAKE_DECAY = 4.5; // trauma lost per second
+const CAMERA_SHAKE_MAX_OFFSET = { x: 0.09, y: 0.09, z: 0.04 };
+const HIT_FLASH_OPACITY = 0.22;
+const HIT_FLASH_DURATION_MS = 130;
+const TRIGGER_FLASH_OPACITY = 0.85;
+const TRIGGER_FLASH_DURATION_MS = 260;
+const BONUS_WAVE_BURST_COUNT = 7; // extra staggered "pop-pop-pop" targets right as the wave starts
+const BONUS_WAVE_BURST_STAGGER = [0.05, 0.1]; // seconds between each, randomized in this range
+const CURTAIN_BOUNCE_IMPULSE = 1.3; // upward velocity kick when the curtain finishes falling
+const COMBO_POP_MILESTONE = COMBO_HITS_PER_STEP; // pop the corner badge on every multiplier step
+
+function easeOutBack(t) {
+  const c1 = 1.70158;
+  const c3 = c1 + 1;
+  return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
+}
+
+function easeOutElastic(t) {
+  const c4 = (2 * Math.PI) / 3;
+  if (t === 0 || t === 1) return t;
+  return Math.pow(2, -10 * t) * Math.sin((t * 10 - 0.75) * c4) + 1;
+}
+
 // ---- Curtain transition constants ----------------------------------------
 const CURTAIN_SEGMENTS_X = 40;
 const CURTAIN_SEGMENTS_Y = 25;
@@ -235,8 +266,31 @@ const camera = new THREE.PerspectiveCamera(
   0.1,
   200
 );
-camera.position.set(0, 1.6, 5);
+const CAMERA_BASE_POS = new THREE.Vector3(0, 1.6, 5);
+camera.position.copy(CAMERA_BASE_POS);
 camera.lookAt(0, 1.6, -24);
+
+// Hit shake: nudges camera.position off CAMERA_BASE_POS each frame while
+// `shakeTrauma` decays back to 0; the camera's rotation (fixed by the
+// lookAt above) is never touched, so this reads as a light jolt rather
+// than a spin.
+let shakeTrauma = 0;
+function addCameraShake(amount) {
+  shakeTrauma = Math.min(1, shakeTrauma + amount);
+}
+function updateCameraShake(dt) {
+  if (shakeTrauma <= 0) {
+    if (!camera.position.equals(CAMERA_BASE_POS)) camera.position.copy(CAMERA_BASE_POS);
+    return;
+  }
+  const s = shakeTrauma * shakeTrauma; // eased falloff
+  camera.position.set(
+    CAMERA_BASE_POS.x + (Math.random() - 0.5) * 2 * CAMERA_SHAKE_MAX_OFFSET.x * s,
+    CAMERA_BASE_POS.y + (Math.random() - 0.5) * 2 * CAMERA_SHAKE_MAX_OFFSET.y * s,
+    CAMERA_BASE_POS.z + (Math.random() - 0.5) * 2 * CAMERA_SHAKE_MAX_OFFSET.z * s
+  );
+  shakeTrauma = Math.max(0, shakeTrauma - CAMERA_SHAKE_DECAY * dt);
+}
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -296,6 +350,61 @@ function forEachMaterial(object3d, fn) {
       fn(material);
     }
   });
+}
+
+function setObjectOpacity(obj, opacity) {
+  if (obj.isModel) {
+    forEachMaterial(obj.mesh, (m) => { m.opacity = opacity; });
+  } else {
+    obj.mesh.material.opacity = opacity;
+  }
+}
+
+// Pop-in: scale 0 -> baseScale with a spring/overshoot, used whenever a
+// target (fixed slot, wave/chain-bonus, ...) first appears. Called every
+// frame while active; once spawnAge passes SPAWN_POP_DURATION it's a no-op.
+function updateSpawnPop(obj, dt) {
+  if (obj.spawnAge === undefined) obj.spawnAge = 0;
+  if (obj.spawnAge >= SPAWN_POP_DURATION) return;
+  obj.spawnAge += dt;
+  const t = Math.min(obj.spawnAge / SPAWN_POP_DURATION, 1);
+  obj.mesh.scale.setScalar(Math.max(0, obj.baseScale * easeOutBack(t)));
+}
+
+// Hit reaction: a brief squash-and-stretch bulge right at the moment of
+// impact (obj.popPhase === 'squash'), then the target flies apart, spins,
+// shrinks, and fades (obj.popPhase === 'flying'). Shared by fixed slots and
+// wave/chain-bonus targets. Returns true once the object is fully gone
+// (mesh already removed from the scene) so the caller can drop its entry.
+function updatePoppingVisual(obj, dt) {
+  obj.popAge += dt;
+
+  if (obj.popPhase === 'squash') {
+    const t = Math.min(obj.popAge / SQUASH_DURATION, 1);
+    const bulge = Math.sin(t * Math.PI); // 0 -> 1 -> 0
+    const sx = obj.baseScale * (1 + bulge * (SQUASH_SCALE_XZ - 1));
+    const sy = obj.baseScale * (1 - bulge * (1 - SQUASH_SCALE_Y));
+    obj.mesh.scale.set(sx, sy, sx);
+    if (t >= 1) {
+      obj.popPhase = 'flying';
+      obj.popAge = 0;
+    }
+    return false;
+  }
+
+  obj.popVelocity.y -= 9.8 * dt;
+  obj.mesh.position.addScaledVector(obj.popVelocity, dt);
+  obj.mesh.rotation.x += obj.popSpin.x * dt;
+  obj.mesh.rotation.y += obj.popSpin.y * dt;
+  const t = Math.min(obj.popAge / TARGET_POP_DURATION, 1);
+  const scale = obj.baseScale * (1 - t * t); // ease-in shrink - snappier than linear
+  obj.mesh.scale.setScalar(Math.max(0.001, scale));
+  setObjectOpacity(obj, 1 - t);
+  if (t >= 1) {
+    scene.remove(obj.mesh);
+    return true;
+  }
+  return false;
 }
 
 function addSceneDecoration() {
@@ -793,6 +902,14 @@ class CurtainController {
       if (this.phase === 'falling' && this.timer >= CURTAIN_FALL_DURATION) {
         this.phase = 'holding';
         this.timer = 0;
+        // A light upward kick right as it finishes falling, so the cloth
+        // visibly bounces and settles during the hold instead of just
+        // stopping dead.
+        for (let j = 1; j < this.rows; j++) {
+          for (let i = 0; i < this.cols; i++) {
+            this.particles[j][i].velocity.y += CURTAIN_BOUNCE_IMPULSE;
+          }
+        }
         if (this.callback) {
           const cb = this.callback;
           this.callback = null;
@@ -870,6 +987,23 @@ let waveSpawnTimer = 0;
 let waveEndCallback = null;
 let waveTargets = []; // { mesh, state: 'active' | 'popping', popAge, popVelocity, popSpin }
 
+// Tiny scheduler for staggered spawns (the trigger's "pon-pon-pon" burst)
+// without reaching for setTimeout, so it stays paused along with everything
+// else whenever gameplay isn't active.
+let pendingSpawns = []; // { timer, fn }
+function schedulePendingSpawn(delay, fn) {
+  pendingSpawns.push({ timer: delay, fn });
+}
+function updatePendingSpawns(dt) {
+  for (let i = pendingSpawns.length - 1; i >= 0; i--) {
+    pendingSpawns[i].timer -= dt;
+    if (pendingSpawns[i].timer <= 0) {
+      pendingSpawns[i].fn();
+      pendingSpawns.splice(i, 1);
+    }
+  }
+}
+
 // Conveyor phase: a row of targets flowing toward the camera in the back
 // half of each stage.
 let conveyorPhaseActive = false;
@@ -895,12 +1029,53 @@ const qrHolder = document.getElementById('qrHolder');
 const p1Slot = document.getElementById('p1Slot');
 const p2Slot = document.getElementById('p2Slot');
 const eventBannerEl = document.getElementById('eventBanner');
+const hitFlashEl = document.getElementById('hitFlash');
+const comboPopEls = { 1: document.getElementById('p1ComboPop'), 2: document.getElementById('p2ComboPop') };
+const scorePanelEls = [
+  document.getElementById('p1Score'),
+  document.getElementById('timePanel'),
+  document.getElementById('p2Score'),
+];
 
 function showEventBanner(text) {
   eventBannerEl.textContent = text;
   eventBannerEl.classList.remove('show');
   void eventBannerEl.offsetWidth; // restart the CSS animation
   eventBannerEl.classList.add('show');
+}
+
+// A quick full-screen white flash. Driven by an inline transition (rather
+// than a fixed-duration CSS class) so hit flashes and the bigger trigger
+// flash can use different durations without needing two animations.
+function flashScreen(opacity, durationMs) {
+  hitFlashEl.style.transition = 'none';
+  hitFlashEl.style.opacity = String(opacity);
+  requestAnimationFrame(() => {
+    hitFlashEl.style.transition = `opacity ${durationMs}ms ease-out`;
+    hitFlashEl.style.opacity = '0';
+  });
+}
+
+function showComboPop(player, hits, multiplier) {
+  const el = comboPopEls[player];
+  if (!el) return;
+  el.textContent = `P${player} COMBO ×${formatMultiplier(multiplier)}!`;
+  el.classList.remove('show');
+  void el.offsetWidth;
+  el.classList.add('show');
+}
+
+function popScorePanels() {
+  for (const el of scorePanelEls) {
+    el.classList.remove('panel-pop');
+    void el.offsetWidth;
+    el.classList.add('panel-pop');
+  }
+}
+
+function playStageClearFanfare() {
+  playSfx('fanfare', 0.7);
+  popScorePanels();
 }
 
 const crosshairs = new Map(); // player -> DOM element
@@ -1008,10 +1183,11 @@ function spawnSlotTarget(slot, typeKey) {
     slot.isModel = false;
     slot.baseScale = 1;
   }
-  mesh.scale.setScalar(slot.baseScale);
+  mesh.scale.setScalar(0); // pops in via updateSpawnPop below
   mesh.position.copy(slot.basePosition);
   scene.add(mesh);
   slot.mesh = mesh;
+  slot.spawnAge = 0;
 
   if (type.glow) {
     const glow = new THREE.Sprite(
@@ -1033,6 +1209,7 @@ function spawnSlotTarget(slot, typeKey) {
 
 function popSlot(slot) {
   slot.state = 'popping';
+  slot.popPhase = 'squash';
   slot.popAge = 0;
   slot.popVelocity = new THREE.Vector3((Math.random() - 0.5) * 3, 4 + Math.random() * 2, (Math.random() - 0.5) * 2);
   slot.popSpin = new THREE.Vector3((Math.random() - 0.5) * 10, (Math.random() - 0.5) * 10, (Math.random() - 0.5) * 10);
@@ -1047,6 +1224,7 @@ function updateSlots(dt, elapsed) {
   for (const slot of slots) {
     if (slot.state === 'active') {
       const type = TARGET_TYPES[slot.typeKey];
+      updateSpawnPop(slot, dt);
       if (type.movement) {
         const offset = Math.sin(elapsed * type.movement.speed + slot.phase) * type.movement.amplitude;
         slot.mesh.position.x = slot.basePosition.x + offset;
@@ -1063,21 +1241,7 @@ function updateSlots(dt, elapsed) {
         slot.mesh.rotation.y += dt * 0.6; // slow spin so 3D props read as "shootable"
       }
     } else if (slot.state === 'popping') {
-      slot.popAge += dt;
-      slot.popVelocity.y -= 9.8 * dt;
-      slot.mesh.position.addScaledVector(slot.popVelocity, dt);
-      slot.mesh.rotation.x += slot.popSpin.x * dt;
-      slot.mesh.rotation.y += slot.popSpin.y * dt;
-      const t = Math.min(slot.popAge / TARGET_POP_DURATION, 1);
-      const scale = slot.baseScale * Math.max(0.001, 1 - t);
-      slot.mesh.scale.setScalar(scale);
-      if (slot.isModel) {
-        forEachMaterial(slot.mesh, (m) => { m.opacity = 1 - t; });
-      } else {
-        slot.mesh.material.opacity = 1 - t;
-      }
-      if (t >= 1) {
-        scene.remove(slot.mesh);
+      if (updatePoppingVisual(slot, dt)) {
         slot.mesh = null;
         slot.state = 'waiting';
         slot.waitTimer = slot.pinned ? TRIGGER_RESPAWN_DELAY : TARGET_RESPAWN_DELAY;
@@ -1109,9 +1273,20 @@ function spawnBonusTargetAt(x, y, z) {
     new THREE.CircleGeometry(type.radius, 24),
     new THREE.MeshBasicMaterial({ map: type.createTexture(), side: THREE.DoubleSide, transparent: true })
   );
+  mesh.scale.setScalar(0); // pops in via updateSpawnPop below
   mesh.position.set(x, y, z);
   scene.add(mesh);
-  waveTargets.push({ mesh, state: 'active', popAge: 0, popVelocity: null, popSpin: null });
+  waveTargets.push({
+    mesh,
+    state: 'active',
+    isModel: false,
+    baseScale: 1,
+    spawnAge: 0,
+    popPhase: null,
+    popAge: 0,
+    popVelocity: null,
+    popSpin: null,
+  });
 }
 
 function spawnWaveTarget() {
@@ -1130,6 +1305,7 @@ function startTargetRush(duration, onEnd) {
 
 function endTargetRush() {
   waveActive = false;
+  pendingSpawns = [];
   for (const w of waveTargets) scene.remove(w.mesh);
   waveTargets = [];
   const cb = waveEndCallback;
@@ -1139,12 +1315,15 @@ function endTargetRush() {
 
 function popWaveTarget(waveTarget) {
   waveTarget.state = 'popping';
+  waveTarget.popPhase = 'squash';
   waveTarget.popAge = 0;
   waveTarget.popVelocity = new THREE.Vector3((Math.random() - 0.5) * 3, 4 + Math.random() * 2, (Math.random() - 0.5) * 2);
   waveTarget.popSpin = new THREE.Vector3((Math.random() - 0.5) * 10, (Math.random() - 0.5) * 10, (Math.random() - 0.5) * 10);
 }
 
 function updateTargetRush(dt) {
+  updatePendingSpawns(dt);
+
   if (waveActive) {
     waveTimer -= dt;
     waveSpawnTimer -= dt;
@@ -1161,20 +1340,10 @@ function updateTargetRush(dt) {
   for (let i = waveTargets.length - 1; i >= 0; i--) {
     const w = waveTargets[i];
     if (w.state === 'active') {
+      updateSpawnPop(w, dt);
       w.mesh.rotation.z += dt * 0.8;
-    } else {
-      w.popAge += dt;
-      w.popVelocity.y -= 9.8 * dt;
-      w.mesh.position.addScaledVector(w.popVelocity, dt);
-      w.mesh.rotation.x += w.popSpin.x * dt;
-      w.mesh.rotation.y += w.popSpin.y * dt;
-      const t = Math.min(w.popAge / TARGET_POP_DURATION, 1);
-      w.mesh.scale.setScalar(Math.max(0.001, 1 - t));
-      w.mesh.material.opacity = 1 - t;
-      if (t >= 1) {
-        scene.remove(w.mesh);
-        waveTargets.splice(i, 1);
-      }
+    } else if (updatePoppingVisual(w, dt)) {
+      waveTargets.splice(i, 1);
     }
   }
 }
@@ -1223,9 +1392,10 @@ function spawnConveyorTarget() {
     new THREE.CircleGeometry(0.8, 24),
     new THREE.MeshBasicMaterial({ map: createRingTexture(tier.colors), side: THREE.DoubleSide, transparent: true })
   );
+  mesh.scale.setScalar(0); // pops in via updateSpawnPop below
   mesh.position.set(lane, 1.8, -30);
   scene.add(mesh);
-  conveyorTargets.push({ mesh, tierIndex: conveyorTier });
+  conveyorTargets.push({ mesh, tierIndex: conveyorTier, isModel: false, baseScale: 1, spawnAge: 0 });
 }
 
 function handleConveyorHit(target, player) {
@@ -1255,6 +1425,7 @@ function updateConveyor(dt, elapsed) {
 
   for (let i = conveyorTargets.length - 1; i >= 0; i--) {
     const c = conveyorTargets[i];
+    updateSpawnPop(c, dt);
     c.mesh.position.z += CONVEYOR_SPEED * dt;
     c.mesh.rotation.y += dt * 2;
     if (c.mesh.position.z > CONVEYOR_MISS_Z) {
@@ -1449,7 +1620,7 @@ function enterBonusStage(nextIndex) {
   startTargetRush(BONUS_STAGE_DURATION, () => {
     curtain.show(
       () => loadStage(nextIndex),
-      () => playSfx('fanfare', 0.7)
+      () => playStageClearFanfare()
     );
   });
 }
@@ -1508,13 +1679,18 @@ function awardHit(type, player, position) {
   } else {
     const c = combo[player];
     c.hits += 1;
-    if (c.hits % COMBO_HITS_PER_STEP === 0) c.multiplier *= COMBO_MULTIPLIER_STEP;
+    if (c.hits % COMBO_HITS_PER_STEP === 0) {
+      c.multiplier *= COMBO_MULTIPLIER_STEP;
+      if (c.hits % COMBO_POP_MILESTONE === 0) showComboPop(player, c.hits, c.multiplier);
+    }
     awarded = Math.round(type.score * c.multiplier);
   }
   scores[player] += awarded;
   updateHud();
   spawnScorePopup(position, awarded);
   spawnHitParticles(position, type);
+  addCameraShake(CAMERA_SHAKE_HIT);
+  flashScreen(HIT_FLASH_OPACITY, HIT_FLASH_DURATION_MS);
   if (type.score >= 0) playSfx('hit'); // a "cha-ching" would feel wrong on a penalty hit
   return awarded;
 }
@@ -1525,7 +1701,15 @@ function handleHit(slot, player) {
 
   if (slot.typeKey === 'trigger') {
     showEventBanner('BONUS WAVE!');
+    flashScreen(TRIGGER_FLASH_OPACITY, TRIGGER_FLASH_DURATION_MS);
+    addCameraShake(CAMERA_SHAKE_TRIGGER);
     startTargetRush(BONUS_WAVE_DURATION);
+    // A quick "pon, pon, pon" burst of extra targets, staggered a beat
+    // apart, layered on top of the wave's own steady spawn timer.
+    for (let i = 0; i < BONUS_WAVE_BURST_COUNT; i++) {
+      const [lo, hi] = BONUS_WAVE_BURST_STAGGER;
+      schedulePendingSpawn(i * (lo + Math.random() * (hi - lo)), () => spawnWaveTarget());
+    }
   } else if (type.score > 0) {
     checkChainTrigger(slot, player);
   }
@@ -1600,6 +1784,7 @@ function animate() {
   const dt = Math.min(clock.getDelta(), 0.05);
 
   curtain.update(dt);
+  updateCameraShake(dt);
 
   const connectedPlayers = input.getConnectedPlayers();
   updateWaitingScreen(connectedPlayers);
@@ -1628,7 +1813,7 @@ function animate() {
         updateHud();
         curtain.show(
           () => advanceStage(),
-          () => playSfx('fanfare', 0.7) // plays once the next stage (or the final result) is actually revealed
+          () => playStageClearFanfare() // plays once the next stage (or the final result) is actually revealed
         );
       } else {
         updateHud();

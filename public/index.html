@@ -96,8 +96,56 @@
   .score-popup.positive { color: var(--carnival-yellow); }
   .score-popup.negative { color: #ff5a5a; }
   @keyframes scorePopupFloat {
-    from { transform: translate(-50%, 0) scale(1); opacity: 1; }
-    to { transform: translate(-50%, -70px) scale(1.15); opacity: 0; }
+    0% { transform: translate(-50%, 0) scale(0.3); opacity: 0; }
+    12% { transform: translate(-50%, -6px) scale(1.35); opacity: 1; }
+    24% { transform: translate(-50%, -14px) scale(0.92); }
+    38% { transform: translate(-50%, -24px) scale(1.05); }
+    55% { transform: translate(-50%, -42px) scale(1); opacity: 1; }
+    100% { transform: translate(-50%, -78px) scale(0.75); opacity: 0; }
+  }
+
+  /* --- Full-screen hit flash --- */
+  #hitFlash {
+    position: fixed;
+    inset: 0;
+    background: #fff;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 16;
+  }
+
+  /* --- Corner combo-milestone pop --- */
+  .combo-pop {
+    position: fixed;
+    top: 90px;
+    z-index: 13;
+    font-family: "Rye", "Bungee", serif;
+    font-size: 22px;
+    text-shadow: 2px 2px 0 var(--ink);
+    opacity: 0;
+    transform: scale(0.5);
+    pointer-events: none;
+  }
+  .combo-pop.p1 { left: 16px; color: var(--p1-color); }
+  .combo-pop.p2 { right: 16px; text-align: right; color: var(--p2-color); }
+  .combo-pop.show { animation: comboPopBounce 1s ease-out; }
+  @keyframes comboPopBounce {
+    0% { opacity: 0; transform: scale(0.3) translateY(6px); }
+    15% { opacity: 1; transform: scale(1.25) translateY(0); }
+    30% { transform: scale(1) translateY(0); }
+    75% { opacity: 1; transform: scale(1) translateY(0); }
+    100% { opacity: 0; transform: scale(0.9) translateY(-6px); }
+  }
+
+  /* --- Score panel pop (synced to the stage-clear fanfare) --- */
+  .score-panel.panel-pop {
+    animation: panelPopEmphasis 0.5s ease-out;
+  }
+  @keyframes panelPopEmphasis {
+    0% { transform: scale(1); }
+    30% { transform: scale(1.18); }
+    55% { transform: scale(0.96); }
+    100% { transform: scale(1); }
   }
 
   /* --- Crosshairs (created dynamically per player) --- */
@@ -339,6 +387,9 @@
 
   <div id="ammoBadge">AMMO ∞</div>
   <div id="eventBanner"></div>
+  <div id="hitFlash"></div>
+  <div id="p1ComboPop" class="combo-pop p1"></div>
+  <div id="p2ComboPop" class="combo-pop p2"></div>
 
   <div id="waiting">
     <h1>コントローラーを<br>接続してください</h1>
