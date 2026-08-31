@@ -1,47 +1,41 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { clone as cloneSkeletal } from 'three/addons/utils/SkeletonUtils.js';
 
 // --- Asset manifest ----------------------------------------------------
 // Every path below is expected to be dropped in under public/assets/ (see
-// the project notes for exactly which Kenney/Poly Pizza file goes where).
-// Nothing here is required to exist: every loader below falls back to a
+// the project notes for exactly which Kenney file goes where). Nothing
+// here is required to exist: every loader below falls back to a
 // procedural placeholder when a file 404s, so the game runs fine before
 // the real assets show up and picks them up automatically once they do.
-// Target plate textures follow their own convention instead of living in
-// this object: assets/textures/target-<TARGET_TYPES key>.png (see
-// targetTexturePath()/preloadTargetTexture() near TARGET_TYPES below).
+// Everything in the scene - targets, crates, background dressing - is a
+// flat image on a camera-facing plane (a "picture-book" 2.5D stage, not a
+// 3D diorama), so only 2D art (PNG) is ever loaded here, never a glTF
+// model. Target plate textures follow their own convention instead of
+// living in this object: assets/textures/<themeKey>/target-<type>.png
+// (see targetTexturePath()/preloadTargetTexture() near TARGET_TYPES
+// below).
 const ASSETS = {
   particleStar: 'assets/kenney-particles/PNG (Transparent)/star_01.png',
   crosshair: 'assets/kenney-crosshair/PNG/Glow/crosshair-000.png',
-  models: {
-    toyCar: 'assets/models/toy-car/car.glb',
-    prototypeProp: 'assets/models/prototype/prop.glb',
-    food: 'assets/models/food/can.glb',
-    holidayStar: 'assets/models/holiday/star.glb',
-    furnitureCrate: 'assets/kenney-furniture/Models/GLTF format/cardboardBoxClosed.glb',
-    booth: 'assets/models/booth/booth.glb',
-    // Stage 1 (farm) background dressing - Kenney Nature Kit. Excluded from
-    // this asset drop by request; left pointing at their expected path so
-    // they keep falling back to plain colored boxes rather than nothing.
-    natureTree: 'assets/models/nature/tree.glb',
-    natureFence: 'assets/models/nature/fence.glb',
-    natureGrass: 'assets/models/nature/grass.glb',
-    natureRock: 'assets/models/nature/rock.glb',
-    // Stage 2 (dinosaur) - Poly Pizza Volcano + Dinosaur Bundle.
-    volcano: 'assets/models/volcano/volcano.glb',
-    dinoTrex: 'assets/models/dinosaurs/trex.glb',
-    dinoRaptor: 'assets/models/dinosaurs/velociraptor.glb',
-    // No Triceratops model was downloaded; Diplodocus stands in for it.
-    dinoDiplodocus: 'assets/models/dinosaurs/diplodocus.glb',
-    // Stage 3 (western) - Kenney Sketch Desert. That pack ships flat 2D
-    // tile art only (no glTF models), so the buildings/tent/palm decor
-    // still fall back to plain colored boxes; kept pointed at their
-    // expected (never-present) path like the Nature Kit entries above.
-    desertBuilding: 'assets/models/desert/building.glb',
-    desertTent: 'assets/models/desert/tent.glb',
-    desertPalm: 'assets/models/desert/palm.glb',
+  decorations: {
+    // Foreground crate - Kenney Furniture Kit ships a real flat side-view
+    // sprite for this, so no procedural fallback is needed.
+    crate: 'assets/kenney-furniture/Side/cardboardBoxClosed.png',
+    // Stage 1 (farm) - Kenney Foliage Pack (flat flower/grass cutouts).
+    // No tree/fence art was downloaded, so those two stay procedural
+    // (see drawTreeBillboard()/drawFenceBillboard() near loadThemeDecorations()).
+    foliageFlower: 'assets/kenney-foliage/PNG/Default size/foliagePack_001.png',
+    foliageGrass: 'assets/kenney-foliage/PNG/Default size/foliagePack_020.png',
+    // Stage 2 (dinosaur) - the desert pack's rock tile doubles as volcanic
+    // rubble; no flat volcano art exists so that stays procedural.
+    rock: 'assets/kenney-sketch-desert/Tiles/rocks_S.png',
+    // Stage 3 (western) - Kenney Sketch Desert ships isometric tile art
+    // rather than true side-view sprites, so these read a little
+    // top-down/angled as flat cutouts, but they're the real downloaded
+    // art and stand in fine at a distance.
+    desertBuilding: 'assets/kenney-sketch-desert/Tiles/building_dark_center_windows_S.png',
+    desertTent: 'assets/kenney-sketch-desert/Tiles/dome_S.png',
+    desertPalm: 'assets/kenney-sketch-desert/Tiles/tree_S.png',
   },
   sfx: {
     uiClick: 'assets/sfx/ui/Audio/click_001.ogg',
@@ -292,8 +286,36 @@ const params = new URLSearchParams(location.search);
 const debugMode = params.get('debug') === '1';
 
 // --- Scene setup -------------------------------------------------------------
+// A "picture-book" 2.5D stage rather than a 3D diorama: everything the
+// player sees (sky, targets, crates, background dressing) is a flat image,
+// only ever varying in which camera-facing plane it sits on and how far
+// back that plane is. The sky is a vertical-gradient canvas texture
+// (createSkyGradientTexture(), re-drawn per stage in loadStage()) standing
+// in for a painted backdrop image, since no such image was downloaded.
+function hexToCss(hex) {
+  return `#${hex.toString(16).padStart(6, '0')}`;
+}
+
+function mixHexColor(hex, targetHex, amount) {
+  const c = new THREE.Color(hex).lerp(new THREE.Color(targetHex), amount);
+  return c.getHex();
+}
+
+function createSkyGradientTexture(topHex, bottomHex) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 2;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+  const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+  gradient.addColorStop(0, hexToCss(topHex));
+  gradient.addColorStop(1, hexToCss(bottomHex));
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  return new THREE.CanvasTexture(canvas);
+}
+
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x87ceeb);
+scene.background = createSkyGradientTexture(0x8fd3f4, mixHexColor(0x8fd3f4, 0xffffff, 0.55));
 scene.fog = new THREE.Fog(0x87ceeb, 20, 60);
 
 const camera = new THREE.PerspectiveCamera(
@@ -346,59 +368,37 @@ scene.add(sun);
 
 const ground = new THREE.Mesh(
   new THREE.PlaneGeometry(200, 200),
-  new THREE.MeshStandardMaterial({ color: 0x3a7d3a })
+  new THREE.MeshBasicMaterial({ color: 0x3a7d3a }) // unlit flat color, matching the flat-cutout stage
 );
 ground.rotation.x = -Math.PI / 2;
 scene.add(ground);
 
-// --- glTF model loading (booth / crates / target props) --------------------
-// Every model is optional: preloadModel caches null on a load failure so
-// instantiateModel() (used for per-target props) just returns null and
-// callers fall back to their own placeholder, and one-off decorations
-// (booth, crates, ...) simply skip adding themselves.
-const gltfLoader = new GLTFLoader();
-const modelCache = new Map();
+// --- Flat billboard helpers --------------------------------------------
+// Every prop in the scene - targets, crates, background dressing - is a
+// single PlaneGeometry with an image texture, sized to the image's own
+// aspect ratio and turned to face the camera once when it's placed. That's
+// the entire "3D" trick here: a flat cutout standing on a stage, not a
+// modeled object, matching the picture-book look of the reference template.
+const textureLoader = new THREE.TextureLoader();
 
-// Real downloaded glTF assets come from wildly different sources (Kenney,
-// Quaternius, Poly Pizza, Sketchfab exports, ...) with no shared convention
-// for what "1 unit" means - e.g. the dinosaur models load thousands of
-// units tall while the furniture-kit crate loads a fraction of a unit.
-// normalizeToSize rescales the loaded scene so its longest dimension
-// becomes that many units, so every caller can keep treating "1 unit" as
-// the model's natural size and apply the same scale.setScalar(...) values
-// they'd use for a well-behaved asset.
-function normalizeModelScale(root, targetSize) {
-  const box = new THREE.Box3().setFromObject(root);
-  const size = box.getSize(new THREE.Vector3());
-  const maxDim = Math.max(size.x, size.y, size.z);
-  if (maxDim > 0 && Number.isFinite(maxDim)) root.scale.multiplyScalar(targetSize / maxDim);
+function loadBillboardTexture(url, onReady, onError) {
+  textureLoader.load(url, onReady, undefined, () => { if (onError) onError(); });
 }
 
-function preloadModel(key, url, onReady, onError, normalizeToSize) {
-  gltfLoader.load(
-    url,
-    (gltf) => {
-      if (normalizeToSize) normalizeModelScale(gltf.scene, normalizeToSize);
-      modelCache.set(key, gltf.scene);
-      if (onReady) onReady(gltf.scene);
-    },
-    undefined,
-    () => {
-      modelCache.set(key, null);
-      if (onError) onError();
-    }
+function createBillboardMesh(texture, height) {
+  const img = texture.image;
+  const aspect = img && img.width ? img.width / img.height : 1;
+  return new THREE.Mesh(
+    new THREE.PlaneGeometry(height * aspect, height),
+    new THREE.MeshBasicMaterial({ map: texture, transparent: true, side: THREE.DoubleSide })
   );
 }
 
-function instantiateModel(key) {
-  const template = modelCache.get(key);
-  if (!template) return null;
-  // Object3D.clone(true) breaks bone bindings on rigged models (SkinnedMesh
-  // bones end up pointing at the original skeleton), rendering as huge,
-  // warped geometry despite a perfectly normal-looking bounding box.
-  // SkeletonUtils' clone() rebuilds the skeleton correctly for those models
-  // and is a plain equivalent to clone(true) for unrigged ones.
-  return cloneSkeletal(template);
+// lookAt needs the mesh's final position already set (it faces the plane
+// from wherever it currently sits toward the camera), so this is always
+// called after position.set(...)/position.copy(...), never before.
+function faceBillboardAtCamera(mesh) {
+  mesh.lookAt(camera.position);
 }
 
 function forEachMaterial(object3d, fn) {
@@ -411,8 +411,6 @@ function forEachMaterial(object3d, fn) {
 }
 
 function setObjectOpacity(obj, opacity) {
-  // forEachMaterial handles a single material, a per-face material array
-  // (the target plate's rim/cap/cap), and a multi-mesh glTF group alike.
   forEachMaterial(obj.mesh, (m) => { m.opacity = opacity; });
 }
 
@@ -464,73 +462,37 @@ function updatePoppingVisual(obj, dt) {
 }
 
 function addSceneDecoration() {
-  // Carnival booth backdrop.
-  preloadModel('booth', ASSETS.models.booth, (booth) => {
-    booth.position.set(0, 0, -27);
-    booth.scale.setScalar(6);
-    scene.add(booth);
-  });
-
-  // Small hanging star accents borrowed from the Holiday Kit.
-  preloadModel('holidayStar', ASSETS.models.holidayStar, (template) => {
-    for (const x of [-6, 6]) {
-      const star = template.clone(true);
-      star.position.set(x, 5.4, -20);
-      star.scale.setScalar(0.8);
-      scene.add(star);
-    }
-  });
-
-  // Prototype-kit prop dressing the shooting counter.
-  preloadModel('prototypeProp', ASSETS.models.prototypeProp, (template) => {
-    const prop = template.clone(true);
-    prop.position.set(0, 0.9, 3.4);
-    scene.add(prop);
-  });
-
-  // Furniture-kit crates in the foreground for depth; if the model never
-  // loads, plain wooden boxes stand in so the scene still has that depth.
+  // Foreground crates - a real flat side-view sprite from the Furniture
+  // Kit; a plain colored plane stands in if it never loads.
   const cratePositions = [
-    [-11, 0.6, -6],
-    [11, 0.6, -6],
-    [-13, 0.6, -14],
-    [13, 0.6, -14],
+    [-11, 0.8, -6],
+    [11, 0.8, -6],
+    [-13, 0.8, -14],
+    [13, 0.8, -14],
   ];
-  preloadModel(
-    'furnitureCrate',
-    ASSETS.models.furnitureCrate,
-    (template) => {
+  loadBillboardTexture(
+    ASSETS.decorations.crate,
+    (texture) => {
       for (const [x, y, z] of cratePositions) {
-        const crate = template.clone(true);
+        const crate = createBillboardMesh(texture, 1.6);
         crate.position.set(x, y, z);
-        crate.rotation.y = Math.random() * Math.PI;
+        faceBillboardAtCamera(crate);
         scene.add(crate);
       }
     },
     () => {
-      const geometry = new THREE.BoxGeometry(1.2, 1.2, 1.2);
-      const material = new THREE.MeshStandardMaterial({ color: 0x7a4a26 });
+      const geometry = new THREE.PlaneGeometry(1.6, 1.6);
+      const material = new THREE.MeshBasicMaterial({ color: 0x7a4a26 });
       for (const [x, y, z] of cratePositions) {
         const crate = new THREE.Mesh(geometry, material);
         crate.position.set(x, y, z);
-        crate.rotation.y = Math.random() * Math.PI;
+        faceBillboardAtCamera(crate);
         scene.add(crate);
       }
-    },
-    1.2 // match the fallback box's size - the real Kenney model loads far smaller than 1 unit
+    }
   );
 }
 addSceneDecoration();
-
-// Target-prop models (toy car / food can) preloaded once and cloned per spawn.
-preloadModel('toyCar', ASSETS.models.toyCar);
-preloadModel('food', ASSETS.models.food);
-// Stage 2 (dinosaur) target-prop models - same preload-once/clone-per-spawn
-// pattern; without this they were never in modelCache and every dinosaur
-// target silently fell back to a flat plate regardless of asset presence.
-preloadModel('dinoTrex', ASSETS.models.dinoTrex, undefined, undefined, 2.2);
-preloadModel('dinoRaptor', ASSETS.models.dinoRaptor, undefined, undefined, 2.2);
-preloadModel('dinoDiplodocus', ASSETS.models.dinoDiplodocus, undefined, undefined, 2.2);
 
 // Particle Pack star texture for hit sparkles; falls back to the plain
 // octahedron shapes in spawnHitParticles() if it never loads.
@@ -632,16 +594,14 @@ function createGlowTexture() {
 }
 const glowTexture = createGlowTexture();
 
-// --- Target plate mesh (3D, replaces the old flat circle) ------------------
-// A thin cylinder ("puck") whose two flat caps get the target's ring
-// texture, with a plain rim so that thin edge doesn't show a stretched
-// sliver of the texture. Real art can be dropped in per stage theme at
-// assets/textures/<themeKey>/target-<type>.png; until then (or if it
-// 404s) the type's own procedural createTexture() is used instead. The
-// rim color is theme-controlled (see STAGE_THEMES) since it's presentation,
-// not part of TARGET_TYPES.
-const TARGET_PLATE_THICKNESS = 0.14;
-const DEFAULT_PLATE_RIM_COLOR = 0x5a3a20;
+// --- Target billboard (flat cutout, replaces the old 3D puck) --------------
+// A single camera-facing plane per target: a colored "backing card" (like a
+// real shooting-gallery target's painted disc) with the type's own artwork
+// composited on top - a real per-stage-theme PNG at
+// assets/textures/<themeKey>/target-<type>.png if one has loaded, else the
+// type's own procedural createTexture() ring. Composited into one canvas so
+// each target is still just one plane/material, same as every other prop.
+const TARGET_BACKING_COLOR = 0x5a3a20;
 const targetTextureOverrides = {}; // "themeKey:typeKey" -> loaded THREE.Texture, once confirmed to exist
 
 function targetTexturePath(themeKey, typeKey) {
@@ -658,22 +618,34 @@ function preloadTargetTexture(themeKey, typeKey) {
   );
 }
 
-function createPlateMesh(radius, texture, rimColor) {
-  const geometry = new THREE.CylinderGeometry(radius, radius, TARGET_PLATE_THICKNESS, 32);
-  const capMaterial = new THREE.MeshStandardMaterial({ map: texture, roughness: 0.65, transparent: true });
-  const rimMaterial = new THREE.MeshStandardMaterial({
-    color: rimColor ?? DEFAULT_PLATE_RIM_COLOR,
-    roughness: 0.85,
-    transparent: true,
-  });
-  const mesh = new THREE.Mesh(geometry, [rimMaterial, capMaterial, capMaterial]);
-  mesh.rotation.x = Math.PI / 2; // stand the puck up so its caps face the camera
-  return mesh;
+function createBackedTexture(sourceImage, backingColor) {
+  const size = 256;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = hexToCss(backingColor ?? TARGET_BACKING_COLOR);
+  ctx.beginPath();
+  ctx.arc(size / 2, size / 2, size / 2 - 6, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#2b1a12';
+  ctx.lineWidth = 6;
+  ctx.stroke();
+  const inset = size * 0.15;
+  const box = size - inset * 2;
+  const iw = sourceImage.width || box;
+  const ih = sourceImage.height || box;
+  const fit = Math.min(box / iw, box / ih); // contain, not stretch - keeps the art's own aspect ratio
+  const dw = iw * fit;
+  const dh = ih * fit;
+  ctx.drawImage(sourceImage, (size - dw) / 2, (size - dh) / 2, dw, dh);
+  return new THREE.CanvasTexture(canvas);
 }
 
-function createTargetPlateMesh(type, typeKey, themeKey, rimColor) {
-  const texture = targetTextureOverrides[`${themeKey}:${typeKey}`] || type.createTexture();
-  return createPlateMesh(type.radius, texture, rimColor);
+function createTargetBillboard(type, typeKey, themeKey, backingColor) {
+  const sourceTexture = targetTextureOverrides[`${themeKey}:${typeKey}`] || type.createTexture();
+  const texture = createBackedTexture(sourceTexture.image, backingColor);
+  return createBillboardMesh(texture, type.radius * 2); // caller positions it, then calls faceBillboardAtCamera()
 }
 
 // --- Target types --------------------------------------------------------
@@ -712,8 +684,6 @@ const TARGET_TYPES = {
     spawnWeight: 4,
     movement: null,
     particleColor: 0x4be07a,
-    modelKey: 'toyCar', // a little toy car standing in for the "small" target
-    modelScale: 1.1,
     createTexture: () => createRingTexture(['#eafbea', '#22a35a', '#eafbea']),
   },
   bonus: {
@@ -746,8 +716,6 @@ const TARGET_TYPES = {
     spawnWeight: 5,
     movement: null,
     particleColor: 0x777777,
-    modelKey: 'food', // a beat-up can standing in for the "junk" target
-    modelScale: 1.3,
     createTexture: () => createDudTexture(),
   },
 };
@@ -776,12 +744,9 @@ const LANE_LOWER = { y: 1.1, z: -15 }; // near row - larger/lower
 const TRIGGER_LANE_Z = (LANE_UPPER.z + LANE_LOWER.z) / 2;
 
 // Per-stage theme: everything about how a stage *looks* (sky/ground/frame
-// colors, the target rim color, which real model replaces a flat plate for
-// a given TARGET_TYPES key, and the background dressing) lives here on the
-// stage entry itself - TARGET_TYPES (score/hitbox/movement/rarity) is never
-// touched. modelKeyByType may map a type key to `null` to force a themed
-// flat plate even when that type normally carries its own modelKey (e.g.
-// TARGET_TYPES.small's toy car doesn't fit a farm/dinosaur/western theme).
+// colors, the target billboard's backing-card color, and the background
+// dressing) lives here on the stage entry itself - TARGET_TYPES
+// (score/hitbox/movement/rarity) is never touched.
 const STAGES = [
   {
     name: 'ステージ1 ひろば',
@@ -791,7 +756,6 @@ const STAGES = [
     frameColor: '#c9975a', // light rustic farm-fence brown
     frameColorDark: '#8a6236',
     rimColor: 0x8a6236,
-    modelKeyByType: { small: null, dud: null }, // stay flat plates w/ farm-themed textures
     pool: ['normal', 'moving'],
     layout: [
       { x: -6, ...LANE_UPPER, type: 'normal' },
@@ -810,7 +774,6 @@ const STAGES = [
     frameColor: '#4a3a35', // darkened lava-rock tone
     frameColorDark: '#2c211d',
     rimColor: 0x2c211d,
-    modelKeyByType: { normal: 'dinoTrex', moving: 'dinoRaptor', small: 'dinoDiplodocus', dud: null, bonus: null },
     pool: ['normal', 'moving', 'small', 'dud'],
     layout: [
       { x: -6, ...LANE_UPPER, type: 'moving' },
@@ -829,11 +792,6 @@ const STAGES = [
     frameColor: '#d8b781', // sun-bleached wood
     frameColorDark: '#a8794a',
     rimColor: 0xa8794a,
-    // Kenney's Shooting Gallery pack ships flat 2D sprites only (no glTF
-    // models), so every type here stays a themed flat plate; its PNGs are
-    // used instead as assets/textures/western/target-<type>.png (see
-    // preloadTargetTexture()).
-    modelKeyByType: { normal: null, moving: null, small: null, dud: null, bonus: null },
     pool: ['moving', 'small', 'dud', 'bonus'],
     layout: [
       { x: -6, ...LANE_UPPER, type: 'small' },
@@ -845,15 +803,6 @@ const STAGES = [
     ],
   },
 ];
-
-// Resolve the model a slot's target should actually use: a stage theme's
-// modelKeyByType wins when the type key is listed there (even as `null`,
-// which forces a themed flat plate); otherwise fall back to the type's own
-// modelKey from TARGET_TYPES (unchanged), or no model at all.
-function effectiveModelKey(type, typeKey, stage) {
-  if (stage.modelKeyByType && typeKey in stage.modelKeyByType) return stage.modelKeyByType[typeKey];
-  return type.modelKey ?? null;
-}
 
 // Wooden riser under each depth lane so its targets read as mounted on a
 // shelf rather than floating in mid-air. One riser per lane, sized to the x
@@ -874,11 +823,13 @@ addTargetShelves();
 
 // --- Per-stage background decoration ---------------------------------------
 // Each stage's themed dressing (trees/fence for the farm, a volcano/rocks
-// for the dinosaur stage, buildings/tents/palms for the western stage),
-// swapped in from loadStage() while the curtain is down. Every model falls
-// back to a plain colored box when its glb 404s, same as addSceneDecoration()
-// above. decorationLoadToken guards against a slow-loading model from a
-// stage the player has already left placing itself into the new stage.
+// for the dinosaur stage, buildings/tent/palm for the western stage),
+// swapped in from loadStage() while the curtain is down. Real Kenney art is
+// used where it exists (foliage sprites, desert tiles, the furniture-kit
+// crate); everything else is a small procedural canvas billboard, same
+// spirit as TARGET_TYPES' own procedural ring textures. decorationLoadToken
+// guards the image-loaded ones against a slow load from a stage the player
+// has already left landing in the new one.
 let decorationObjects = [];
 let decorationLoadToken = 0;
 
@@ -887,50 +838,132 @@ function clearStageDecorations() {
   decorationObjects = [];
 }
 
-function addDecorationFallbackBox(x, y, z, size, color) {
-  const mesh = new THREE.Mesh(
-    new THREE.BoxGeometry(size[0], size[1], size[2]),
-    new THREE.MeshStandardMaterial({ color, roughness: 0.9 })
-  );
+function addDecorationFallbackPlane(x, y, z, height, color) {
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(height, height), new THREE.MeshBasicMaterial({ color }));
   mesh.position.set(x, y, z);
+  faceBillboardAtCamera(mesh);
   scene.add(mesh);
   decorationObjects.push(mesh);
 }
 
-function placeThemeDecoration(modelKey, positions, scale, fallbackColor, fallbackSize, token) {
-  preloadModel(
-    modelKey,
-    ASSETS.models[modelKey],
-    (template) => {
+// Real downloaded art (async load, needs the staleness guard + a fallback).
+function placeImageDecoration(url, positions, height, fallbackColor, token) {
+  loadBillboardTexture(
+    url,
+    (texture) => {
       if (token !== decorationLoadToken) return;
       for (const [x, y, z] of positions) {
-        const obj = template.clone(true);
-        obj.position.set(x, y, z);
-        obj.scale.multiplyScalar(scale); // compose with the clone's inherited normalizeModelScale() correction, don't overwrite it
-        scene.add(obj);
-        decorationObjects.push(obj);
+        const mesh = createBillboardMesh(texture, height);
+        mesh.position.set(x, y, z);
+        faceBillboardAtCamera(mesh);
+        scene.add(mesh);
+        decorationObjects.push(mesh);
       }
     },
     () => {
       if (token !== decorationLoadToken) return;
-      for (const [x, y, z] of positions) addDecorationFallbackBox(x, y, z, fallbackSize, fallbackColor);
-    },
-    1 // normalize to a 1-unit template first - downloaded decoration models have no shared scale convention (see normalizeModelScale)
+      for (const [x, y, z] of positions) addDecorationFallbackPlane(x, y, z, height, fallbackColor);
+    }
   );
+}
+
+// Procedural canvas art (already in hand, no load/fallback/staleness to guard).
+function placeProceduralDecoration(texture, positions, height) {
+  for (const [x, y, z] of positions) {
+    const mesh = createBillboardMesh(texture, height);
+    mesh.position.set(x, y, z);
+    faceBillboardAtCamera(mesh);
+    scene.add(mesh);
+    decorationObjects.push(mesh);
+  }
+}
+
+// A round two-tone canopy over a trunk - stands in for the farm's missing
+// tree art (Nature Kit was excluded from this asset drop).
+function createTreeTexture() {
+  const w = 160;
+  const h = 256;
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#6b4226';
+  ctx.fillRect(w / 2 - 14, h * 0.55, 28, h * 0.45);
+  ctx.fillStyle = '#3f8f3f';
+  for (const [cx, cy, r] of [[w / 2, h * 0.35, w * 0.34], [w * 0.28, h * 0.46, w * 0.24], [w * 0.72, h * 0.46, w * 0.24]]) {
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  return new THREE.CanvasTexture(canvas);
+}
+
+// A two-rail wood fence segment - stands in for the same missing pack.
+function createFenceTexture() {
+  const w = 256;
+  const h = 128;
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#6b4226';
+  for (let x = 8; x < w; x += 48) ctx.fillRect(x, h * 0.15, 12, h * 0.8);
+  ctx.strokeStyle = '#8a6236';
+  ctx.lineWidth = 12;
+  for (const y of [h * 0.35, h * 0.72]) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(w, y);
+    ctx.stroke();
+  }
+  return new THREE.CanvasTexture(canvas);
+}
+
+// A triangular peak with a glowing lava crack - stands in for the missing
+// flat volcano art (only a 3D model was ever downloaded for it).
+function createVolcanoTexture() {
+  const w = 256;
+  const h = 200;
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#5a3a35';
+  ctx.beginPath();
+  ctx.moveTo(w * 0.5, h * 0.05);
+  ctx.lineTo(w * 0.92, h * 0.95);
+  ctx.lineTo(w * 0.08, h * 0.95);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#ff6a2e';
+  ctx.lineWidth = 8;
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(w * 0.5, h * 0.12);
+  ctx.lineTo(w * 0.45, h * 0.42);
+  ctx.lineTo(w * 0.55, h * 0.62);
+  ctx.lineTo(w * 0.48, h * 0.9);
+  ctx.stroke();
+  ctx.fillStyle = '#ffcf6a';
+  ctx.beginPath();
+  ctx.arc(w * 0.5, h * 0.08, 14, 0, Math.PI * 2);
+  ctx.fill();
+  return new THREE.CanvasTexture(canvas);
 }
 
 function loadThemeDecorations(themeKey, token) {
   if (themeKey === 'farm') {
-    placeThemeDecoration('natureTree', [[-17, 2.6, -30], [17, 2.6, -30], [-19, 2.6, -20], [19, 2.6, -20]], 3, 0x2f6b2f, [1.5, 5.2, 1.5], token);
-    placeThemeDecoration('natureFence', [[-9, 0.8, -33], [9, 0.8, -33]], 2.4, 0x8a6236, [5, 1.6, 0.3], token);
-    placeThemeDecoration('natureGrass', [[-4, 0.3, -30], [4, 0.3, -30]], 1.5, 0x4a9a4a, [1, 0.6, 1], token);
+    placeProceduralDecoration(createTreeTexture(), [[-17, 2.6, -30], [17, 2.6, -30], [-19, 2.2, -20], [19, 2.2, -20]], 5.2);
+    placeProceduralDecoration(createFenceTexture(), [[-9, 0.9, -33], [9, 0.9, -33]], 1.8);
+    placeImageDecoration(ASSETS.decorations.foliageFlower, [[-4, 0.35, -30], [4, 0.35, -30], [-14, 0.35, -24]], 0.9, 0x4a9a4a, token);
+    placeImageDecoration(ASSETS.decorations.foliageGrass, [[-2, 0.3, -28], [2, 0.3, -28], [12, 0.3, -22]], 0.7, 0x4a9a4a, token);
   } else if (themeKey === 'dinosaur') {
-    placeThemeDecoration('volcano', [[0, 4, -40]], 12, 0x5a3a35, [12, 9, 12], token);
-    placeThemeDecoration('natureRock', [[-10, 0.8, -18], [10, 0.8, -18], [-14, 0.8, -30], [14, 0.8, -30]], 1.8, 0x6b6b6b, [1.6, 1.2, 1.6], token);
+    placeProceduralDecoration(createVolcanoTexture(), [[0, 5, -42]], 14);
+    placeImageDecoration(ASSETS.decorations.rock, [[-10, 0.7, -18], [10, 0.7, -18], [-14, 0.7, -30], [14, 0.7, -30]], 1.4, 0x6b6b6b, token);
   } else if (themeKey === 'western') {
-    placeThemeDecoration('desertBuilding', [[-15, 3, -34], [15, 3, -34]], 3.5, 0xc9a06a, [4, 6, 4], token);
-    placeThemeDecoration('desertTent', [[-9, 1.4, -33], [9, 1.4, -33]], 2.6, 0xb8895a, [3, 3, 3], token);
-    placeThemeDecoration('desertPalm', [[-19, 2.5, -22], [19, 2.5, -22]], 2.2, 0x4a7a3a, [1, 5, 1], token);
+    placeImageDecoration(ASSETS.decorations.desertBuilding, [[-15, 3, -34], [15, 3, -34]], 6, 0xc9a06a, token);
+    placeImageDecoration(ASSETS.decorations.desertTent, [[-9, 1.4, -33], [9, 1.4, -33]], 2.8, 0xb8895a, token);
+    placeImageDecoration(ASSETS.decorations.desertPalm, [[-19, 2.6, -22], [19, 2.6, -22]], 5.2, 0x4a7a3a, token);
   }
 }
 
@@ -1436,28 +1469,11 @@ function spawnSlotTarget(slot, typeKey) {
   slot.typeKey = typeKey;
   slot.state = 'active';
 
-  const modelKey = effectiveModelKey(type, typeKey, stage);
-  const modelTemplate = modelKey ? instantiateModel(modelKey) : null;
-  let mesh;
-  if (modelTemplate) {
-    // The pop-in/squash/shrink animations below always overwrite
-    // mesh.scale outright (setScalar), which would wipe out modelTemplate's
-    // own normalizeModelScale() correction if it were the mesh itself. A
-    // wrapper group keeps that correction as a permanent child transform,
-    // untouched by whatever the animation system does to the group's scale.
-    const wrapper = new THREE.Group();
-    wrapper.add(modelTemplate);
-    mesh = wrapper;
-    forEachMaterial(mesh, (m) => { m.transparent = true; });
-    slot.isModel = true;
-    slot.baseScale = type.modelScale ?? 1;
-  } else {
-    mesh = createTargetPlateMesh(type, typeKey, stage.themeKey, stage.rimColor);
-    slot.isModel = false;
-    slot.baseScale = 1;
-  }
+  const mesh = createTargetBillboard(type, typeKey, stage.themeKey, stage.rimColor);
+  slot.baseScale = 1;
   mesh.scale.setScalar(0); // pops in via updateSpawnPop below
   mesh.position.copy(slot.basePosition);
+  faceBillboardAtCamera(mesh);
   scene.add(mesh);
   slot.mesh = mesh;
   slot.spawnAge = 0;
@@ -1501,17 +1517,15 @@ function updateSlots(dt, elapsed) {
       if (type.movement) {
         const offset = Math.sin(elapsed * type.movement.speed + slot.phase) * type.movement.amplitude;
         slot.mesh.position.x = slot.basePosition.x + offset;
+        faceBillboardAtCamera(slot.mesh); // stay camera-facing as it slides sideways
       }
       if (type.glow) {
-        slot.mesh.rotation.z += dt * 0.6;
+        slot.mesh.rotation.z += dt * 0.6; // local Z is roughly "toward camera" post-lookAt, so this reads as an in-plane spin
         if (slot.glowMesh) {
           const pulse = 1 + 0.15 * Math.sin(elapsed * 4 + slot.phase);
           slot.glowMesh.scale.set(type.radius * 4 * pulse, type.radius * 4 * pulse, 1);
           slot.glowMesh.position.copy(slot.mesh.position);
         }
-      }
-      if (slot.isModel) {
-        slot.mesh.rotation.y += dt * 0.6; // slow spin so 3D props read as "shootable"
       }
     } else if (slot.state === 'popping') {
       if (updatePoppingVisual(slot, dt)) {
@@ -1543,14 +1557,14 @@ function clearSlots() {
 function spawnBonusTargetAt(x, y, z) {
   const type = TARGET_TYPES.bonus;
   const stage = STAGES[currentStageIndex];
-  const mesh = createTargetPlateMesh(type, 'bonus', stage.themeKey, stage.rimColor);
+  const mesh = createTargetBillboard(type, 'bonus', stage.themeKey, stage.rimColor);
   mesh.scale.setScalar(0); // pops in via updateSpawnPop below
   mesh.position.set(x, y, z);
+  faceBillboardAtCamera(mesh);
   scene.add(mesh);
   waveTargets.push({
     mesh,
     state: 'active',
-    isModel: false,
     baseScale: 1,
     spawnAge: 0,
     popPhase: null,
@@ -1660,11 +1674,13 @@ function spawnConveyorTarget() {
   const lane = CONVEYOR_LANES[conveyorLaneIndex % CONVEYOR_LANES.length];
   conveyorLaneIndex++;
   const stage = STAGES[currentStageIndex];
-  const mesh = createPlateMesh(0.8, createRingTexture(tier.colors), stage.rimColor);
+  const texture = createBackedTexture(createRingTexture(tier.colors).image, stage.rimColor);
+  const mesh = createBillboardMesh(texture, 1.6);
   mesh.scale.setScalar(0); // pops in via updateSpawnPop below
   mesh.position.set(lane, 1.8, -30);
+  faceBillboardAtCamera(mesh);
   scene.add(mesh);
-  conveyorTargets.push({ mesh, tierIndex: conveyorTier, isModel: false, baseScale: 1, spawnAge: 0 });
+  conveyorTargets.push({ mesh, tierIndex: conveyorTier, baseScale: 1, spawnAge: 0 });
 }
 
 function handleConveyorHit(target, player) {
@@ -1844,7 +1860,8 @@ function loadStage(index) {
   mode = 'stage';
   currentStageIndex = index;
   const stage = STAGES[index];
-  scene.background.setHex(stage.background);
+  scene.background?.dispose?.();
+  scene.background = createSkyGradientTexture(stage.background, mixHexColor(stage.background, 0xffffff, 0.55));
   scene.fog.color.setHex(stage.background);
   ground.material.color.setHex(stage.groundColor ?? 0x3a7d3a);
   applyStageFrameTheme(stage);
