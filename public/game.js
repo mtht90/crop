@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { clone as cloneSkeletal } from 'three/addons/utils/SkeletonUtils.js';
 
 // --- Asset manifest ----------------------------------------------------
 // Every path below is expected to be dropped in under public/assets/ (see
@@ -358,10 +359,26 @@ scene.add(ground);
 const gltfLoader = new GLTFLoader();
 const modelCache = new Map();
 
-function preloadModel(key, url, onReady, onError) {
+// Real downloaded glTF assets come from wildly different sources (Kenney,
+// Quaternius, Poly Pizza, Sketchfab exports, ...) with no shared convention
+// for what "1 unit" means - e.g. the dinosaur models load thousands of
+// units tall while the furniture-kit crate loads a fraction of a unit.
+// normalizeToSize rescales the loaded scene so its longest dimension
+// becomes that many units, so every caller can keep treating "1 unit" as
+// the model's natural size and apply the same scale.setScalar(...) values
+// they'd use for a well-behaved asset.
+function normalizeModelScale(root, targetSize) {
+  const box = new THREE.Box3().setFromObject(root);
+  const size = box.getSize(new THREE.Vector3());
+  const maxDim = Math.max(size.x, size.y, size.z);
+  if (maxDim > 0 && Number.isFinite(maxDim)) root.scale.multiplyScalar(targetSize / maxDim);
+}
+
+function preloadModel(key, url, onReady, onError, normalizeToSize) {
   gltfLoader.load(
     url,
     (gltf) => {
+      if (normalizeToSize) normalizeModelScale(gltf.scene, normalizeToSize);
       modelCache.set(key, gltf.scene);
       if (onReady) onReady(gltf.scene);
     },
@@ -375,7 +392,13 @@ function preloadModel(key, url, onReady, onError) {
 
 function instantiateModel(key) {
   const template = modelCache.get(key);
-  return template ? template.clone(true) : null;
+  if (!template) return null;
+  // Object3D.clone(true) breaks bone bindings on rigged models (SkinnedMesh
+  // bones end up pointing at the original skeleton), rendering as huge,
+  // warped geometry despite a perfectly normal-looking bounding box.
+  // SkeletonUtils' clone() rebuilds the skeleton correctly for those models
+  // and is a plain equivalent to clone(true) for unrigged ones.
+  return cloneSkeletal(template);
 }
 
 function forEachMaterial(object3d, fn) {
@@ -493,7 +516,8 @@ function addSceneDecoration() {
         crate.rotation.y = Math.random() * Math.PI;
         scene.add(crate);
       }
-    }
+    },
+    1.2 // match the fallback box's size - the real Kenney model loads far smaller than 1 unit
   );
 }
 addSceneDecoration();
@@ -504,9 +528,9 @@ preloadModel('food', ASSETS.models.food);
 // Stage 2 (dinosaur) target-prop models - same preload-once/clone-per-spawn
 // pattern; without this they were never in modelCache and every dinosaur
 // target silently fell back to a flat plate regardless of asset presence.
-preloadModel('dinoTrex', ASSETS.models.dinoTrex);
-preloadModel('dinoRaptor', ASSETS.models.dinoRaptor);
-preloadModel('dinoDiplodocus', ASSETS.models.dinoDiplodocus);
+preloadModel('dinoTrex', ASSETS.models.dinoTrex, undefined, undefined, 2.2);
+preloadModel('dinoRaptor', ASSETS.models.dinoRaptor, undefined, undefined, 2.2);
+preloadModel('dinoDiplodocus', ASSETS.models.dinoDiplodocus, undefined, undefined, 2.2);
 
 // Particle Pack star texture for hit sparkles; falls back to the plain
 // octahedron shapes in spawnHitParticles() if it never loads.
@@ -882,7 +906,7 @@ function placeThemeDecoration(modelKey, positions, scale, fallbackColor, fallbac
       for (const [x, y, z] of positions) {
         const obj = template.clone(true);
         obj.position.set(x, y, z);
-        obj.scale.setScalar(scale);
+        obj.scale.multiplyScalar(scale); // compose with the clone's inherited normalizeModelScale() correction, don't overwrite it
         scene.add(obj);
         decorationObjects.push(obj);
       }
@@ -890,7 +914,8 @@ function placeThemeDecoration(modelKey, positions, scale, fallbackColor, fallbac
     () => {
       if (token !== decorationLoadToken) return;
       for (const [x, y, z] of positions) addDecorationFallbackBox(x, y, z, fallbackSize, fallbackColor);
-    }
+    },
+    1 // normalize to a 1-unit template first - downloaded decoration models have no shared scale convention (see normalizeModelScale)
   );
 }
 
@@ -900,7 +925,7 @@ function loadThemeDecorations(themeKey, token) {
     placeThemeDecoration('natureFence', [[-9, 0.8, -33], [9, 0.8, -33]], 2.4, 0x8a6236, [5, 1.6, 0.3], token);
     placeThemeDecoration('natureGrass', [[-4, 0.3, -30], [4, 0.3, -30]], 1.5, 0x4a9a4a, [1, 0.6, 1], token);
   } else if (themeKey === 'dinosaur') {
-    placeThemeDecoration('volcano', [[0, 4, -40]], 8, 0x5a3a35, [12, 9, 12], token);
+    placeThemeDecoration('volcano', [[0, 4, -40]], 12, 0x5a3a35, [12, 9, 12], token);
     placeThemeDecoration('natureRock', [[-10, 0.8, -18], [10, 0.8, -18], [-14, 0.8, -30], [14, 0.8, -30]], 1.8, 0x6b6b6b, [1.6, 1.2, 1.6], token);
   } else if (themeKey === 'western') {
     placeThemeDecoration('desertBuilding', [[-15, 3, -34], [15, 3, -34]], 3.5, 0xc9a06a, [4, 6, 4], token);
@@ -1415,7 +1440,14 @@ function spawnSlotTarget(slot, typeKey) {
   const modelTemplate = modelKey ? instantiateModel(modelKey) : null;
   let mesh;
   if (modelTemplate) {
-    mesh = modelTemplate;
+    // The pop-in/squash/shrink animations below always overwrite
+    // mesh.scale outright (setScalar), which would wipe out modelTemplate's
+    // own normalizeModelScale() correction if it were the mesh itself. A
+    // wrapper group keeps that correction as a permanent child transform,
+    // untouched by whatever the animation system does to the group's scale.
+    const wrapper = new THREE.Group();
+    wrapper.add(modelTemplate);
+    mesh = wrapper;
     forEachMaterial(mesh, (m) => { m.transparent = true; });
     slot.isModel = true;
     slot.baseScale = type.modelScale ?? 1;
