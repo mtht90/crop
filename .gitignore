@@ -1,1 +1,3 @@
 node_modules/
+# Local HTTPS dev certs (e.g. mkcert output) - never commit private keys.
+certs/

@@ -1,5 +1,8 @@
 const express = require('express');
 const http = require('http');
+const https = require('https');
+const fs = require('fs');
+const path = require('path');
 const os = require('os');
 const WebSocket = require('ws');
 
@@ -12,7 +15,20 @@ app.get('/api/lan-ip', (req, res) => {
 });
 app.use(express.static('public'));
 
-const server = http.createServer(app);
+// iOS only exposes DeviceOrientationEvent (and its permission prompt) on a
+// secure context, so the phone controller needs HTTPS once it's reached
+// over the LAN rather than localhost. Drop a cert at certs/key.pem and
+// certs/cert.pem (e.g. via mkcert) to opt in; with neither present this
+// falls back to plain HTTP exactly as before.
+const CERT_DIR = path.join(__dirname, 'certs');
+const KEY_PATH = path.join(CERT_DIR, 'key.pem');
+const CERT_PATH = path.join(CERT_DIR, 'cert.pem');
+const httpsAvailable = fs.existsSync(KEY_PATH) && fs.existsSync(CERT_PATH);
+
+const server = httpsAvailable
+  ? https.createServer({ key: fs.readFileSync(KEY_PATH), cert: fs.readFileSync(CERT_PATH) }, app)
+  : http.createServer(app);
+const protocol = httpsAvailable ? 'https' : 'http';
 const wss = new WebSocket.Server({ server });
 
 // Index i holds the controller ws assigned to player (i + 1), or null when free.
@@ -103,6 +119,6 @@ function getLanIp() {
 }
 
 server.listen(PORT, () => {
-  console.log(`Server listening on http://localhost:${PORT}`);
-  console.log(`Controller: http://${getLanIp()}:${PORT}/controller.html`);
+  console.log(`Server listening on ${protocol}://localhost:${PORT}${httpsAvailable ? ' (HTTPS - certs/ found)' : ''}`);
+  console.log(`Controller: ${protocol}://${getLanIp()}:${PORT}/controller.html`);
 });
