@@ -5,8 +5,8 @@
   // Optional button-press SFX; dropped in under public/assets/. Missing
   // files just fail silently, same as the game screen's sound effects.
   const SFX_PATHS = {
-    uiClick: 'assets/sfx/ui/click.mp3',
-    uiConfirm: 'assets/sfx/ui2/confirm.mp3',
+    uiClick: 'assets/sfx/ui/Audio/click_001.ogg',
+    uiConfirm: 'assets/sfx/ui/Audio/confirmation_001.ogg',
   };
   function playSfx(key) {
     const src = SFX_PATHS[key];

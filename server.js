@@ -7,6 +7,9 @@ const PORT = process.env.PORT || 3000;
 const MAX_PLAYERS = 2;
 
 const app = express();
+app.get('/api/lan-ip', (req, res) => {
+  res.json({ ip: getLanIp(), port: PORT });
+});
 app.use(express.static('public'));
 
 const server = http.createServer(app);

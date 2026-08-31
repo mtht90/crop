@@ -12,17 +12,18 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 // this object: assets/textures/target-<TARGET_TYPES key>.png (see
 // targetTexturePath()/preloadTargetTexture() near TARGET_TYPES below).
 const ASSETS = {
-  uiPanel: 'assets/kenney-ui/panel-wood.png',
-  particleStar: 'assets/kenney-particles/star.png',
-  crosshair: 'assets/kenney-crosshair/crosshair.png',
+  particleStar: 'assets/kenney-particles/PNG (Transparent)/star_01.png',
+  crosshair: 'assets/kenney-crosshair/PNG/Glow/crosshair-000.png',
   models: {
     toyCar: 'assets/models/toy-car/car.glb',
     prototypeProp: 'assets/models/prototype/prop.glb',
     food: 'assets/models/food/can.glb',
     holidayStar: 'assets/models/holiday/star.glb',
-    furnitureCrate: 'assets/models/furniture/crate.glb',
+    furnitureCrate: 'assets/kenney-furniture/Models/GLTF format/cardboardBoxClosed.glb',
     booth: 'assets/models/booth/booth.glb',
-    // Stage 1 (farm) background dressing - Kenney Nature Kit.
+    // Stage 1 (farm) background dressing - Kenney Nature Kit. Excluded from
+    // this asset drop by request; left pointing at their expected path so
+    // they keep falling back to plain colored boxes rather than nothing.
     natureTree: 'assets/models/nature/tree.glb',
     natureFence: 'assets/models/nature/fence.glb',
     natureGrass: 'assets/models/nature/grass.glb',
@@ -31,19 +32,23 @@ const ASSETS = {
     volcano: 'assets/models/volcano/volcano.glb',
     dinoTrex: 'assets/models/dinosaurs/trex.glb',
     dinoRaptor: 'assets/models/dinosaurs/velociraptor.glb',
-    dinoTriceratops: 'assets/models/dinosaurs/triceratops.glb',
-    // Stage 3 (western) - Kenney Sketch Desert + Shooting Gallery.
+    // No Triceratops model was downloaded; Diplodocus stands in for it.
+    dinoDiplodocus: 'assets/models/dinosaurs/diplodocus.glb',
+    // Stage 3 (western) - Kenney Sketch Desert. That pack ships flat 2D
+    // tile art only (no glTF models), so the buildings/tent/palm decor
+    // still fall back to plain colored boxes; kept pointed at their
+    // expected (never-present) path like the Nature Kit entries above.
     desertBuilding: 'assets/models/desert/building.glb',
     desertTent: 'assets/models/desert/tent.glb',
     desertPalm: 'assets/models/desert/palm.glb',
-    galleryBottle: 'assets/models/shooting-gallery/bottle.glb',
-    galleryPlate: 'assets/models/shooting-gallery/plate.glb',
   },
   sfx: {
-    uiClick: 'assets/sfx/ui/click.mp3',
-    uiConfirm: 'assets/sfx/ui2/confirm.mp3',
-    hit: 'assets/sfx/hit/coin.mp3',
-    fanfare: 'assets/sfx/jingle/fanfare.mp3',
+    uiClick: 'assets/sfx/ui/Audio/click_001.ogg',
+    uiConfirm: 'assets/sfx/ui/Audio/confirmation_001.ogg',
+    // Casino Audio has no literal "coin" sound (it's a cards/chips/dice
+    // pack) - a chip-lay clink is the closest short, punchy stand-in.
+    hit: 'assets/sfx/hit/Audio/chip-lay-1.ogg',
+    fanfare: 'assets/sfx/jingle/Audio/8-Bit jingles/jingles_NES00.ogg',
   },
 };
 
@@ -496,6 +501,12 @@ addSceneDecoration();
 // Target-prop models (toy car / food can) preloaded once and cloned per spawn.
 preloadModel('toyCar', ASSETS.models.toyCar);
 preloadModel('food', ASSETS.models.food);
+// Stage 2 (dinosaur) target-prop models - same preload-once/clone-per-spawn
+// pattern; without this they were never in modelCache and every dinosaur
+// target silently fell back to a flat plate regardless of asset presence.
+preloadModel('dinoTrex', ASSETS.models.dinoTrex);
+preloadModel('dinoRaptor', ASSETS.models.dinoRaptor);
+preloadModel('dinoDiplodocus', ASSETS.models.dinoDiplodocus);
 
 // Particle Pack star texture for hit sparkles; falls back to the plain
 // octahedron shapes in spawnHitParticles() if it never loads.
@@ -775,7 +786,7 @@ const STAGES = [
     frameColor: '#4a3a35', // darkened lava-rock tone
     frameColorDark: '#2c211d',
     rimColor: 0x2c211d,
-    modelKeyByType: { normal: 'dinoTrex', moving: 'dinoRaptor', small: 'dinoTriceratops', dud: null, bonus: null },
+    modelKeyByType: { normal: 'dinoTrex', moving: 'dinoRaptor', small: 'dinoDiplodocus', dud: null, bonus: null },
     pool: ['normal', 'moving', 'small', 'dud'],
     layout: [
       { x: -6, ...LANE_UPPER, type: 'moving' },
@@ -794,7 +805,11 @@ const STAGES = [
     frameColor: '#d8b781', // sun-bleached wood
     frameColorDark: '#a8794a',
     rimColor: 0xa8794a,
-    modelKeyByType: { normal: 'galleryBottle', moving: 'galleryBottle', small: 'galleryPlate', dud: null, bonus: null },
+    // Kenney's Shooting Gallery pack ships flat 2D sprites only (no glTF
+    // models), so every type here stays a themed flat plate; its PNGs are
+    // used instead as assets/textures/western/target-<type>.png (see
+    // preloadTargetTexture()).
+    modelKeyByType: { normal: null, moving: null, small: null, dud: null, bonus: null },
     pool: ['moving', 'small', 'dud', 'bonus'],
     layout: [
       { x: -6, ...LANE_UPPER, type: 'small' },
@@ -1321,9 +1336,23 @@ function updateCrosshairs(connectedPlayers) {
 }
 
 let qrRendered = false;
-function ensureQrRendered() {
+// location.host is the address the PC operator's own browser used (often
+// "localhost:3000"), which a phone on the LAN can't reach - ask the server
+// for its actual LAN-facing IP (same one printed in the console at startup)
+// and build the QR URL from that instead. Falls back to location.host if
+// the request fails for any reason.
+async function ensureQrRendered() {
   if (qrRendered || debugMode || !window.QRCode) return;
-  const url = `${location.protocol}//${location.host}/controller.html`;
+  qrRendered = true;
+  let host = location.host;
+  try {
+    const res = await fetch('/api/lan-ip');
+    const { ip, port } = await res.json();
+    host = `${ip}:${port}`;
+  } catch {
+    // keep location.host fallback
+  }
+  const url = `${location.protocol}//${host}/controller.html`;
   new window.QRCode(qrHolder, {
     text: url,
     width: 200,
@@ -1331,7 +1360,6 @@ function ensureQrRendered() {
     colorDark: '#2b1a12',
     colorLight: '#fff6e3',
   });
-  qrRendered = true;
 }
 
 function updateWaitingScreen(connectedPlayers) {

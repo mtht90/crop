@@ -39,9 +39,9 @@
 
   /* --- Wood-plank screen frame (left/right/bottom bars + the #hud top band
      below), common to every stage; only --frame-color/--frame-color-dark
-     change per stage. Kenney UI Pack's panel-wood.png would replace this
-     gradient directly if it's ever dropped in; until then this solid
-     wood-plank pattern stands in for it. --- */
+     change per stage. This solid repeating-gradient plank pattern is the
+     real background (Kenney's UI Pack has no wood-panel image - it's a
+     button/icon pack, not panel textures). --- */
   #frameLeft, #frameRight, #frameBottom {
     position: fixed;
     pointer-events: none;
@@ -121,7 +121,7 @@
     line-height: 1;
   }
   .score-panel {
-    background: var(--wood) url('assets/kenney-ui/panel-wood.png') center / 100% 100% no-repeat;
+    background: var(--wood);
     border: 3px solid var(--ink);
     border-radius: 10px;
     padding: 6px 18px;
@@ -369,7 +369,7 @@
     margin: 0;
   }
   #ranking {
-    background: var(--wood) url('assets/kenney-ui/panel-wood.png') center / 100% 100% no-repeat;
+    background: var(--wood);
     border: 3px solid var(--ink);
     border-radius: 10px;
     padding: 10px 20px;
