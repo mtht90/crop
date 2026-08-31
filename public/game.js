@@ -8,6 +8,9 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 // Nothing here is required to exist: every loader below falls back to a
 // procedural placeholder when a file 404s, so the game runs fine before
 // the real assets show up and picks them up automatically once they do.
+// Target plate textures follow their own convention instead of living in
+// this object: assets/textures/target-<TARGET_TYPES key>.png (see
+// targetTexturePath()/preloadTargetTexture() near TARGET_TYPES below).
 const ASSETS = {
   uiPanel: 'assets/kenney-ui/panel-wood.png',
   particleStar: 'assets/kenney-particles/star.png',
@@ -158,13 +161,24 @@ class RemoteInput extends InputSource {
   }
 }
 
+// ---- Feature flags ---------------------------------------------------------
+// The trigger target / chain trigger / conveyor phase / mid-run bonus stage
+// were an earlier, busier direction. The code for all of them is still
+// here (and still correct) but is switched off by default in favor of a
+// simpler, calmer game; flip any of these back to true to bring one back.
+const FEATURE_TRIGGER_TARGET = false;
+const FEATURE_CHAIN_TRIGGER = false;
+const FEATURE_CONVEYOR = false;
+const FEATURE_BONUS_STAGE = false;
+
 // ---- Tunable gameplay constants ------------------------------------------
 const GRAVITY = 2.2; // was 9.8 - lowered so shots reach the back targets almost straight
 const BULLET_SPEED = 55; // was 32 - raised for the same reason
 const BULLET_RADIUS = 0.15;
 // Ammo is unlimited by design (like the real attraction's laser guns): there
 // is no ammo counter anywhere in the code, fireBullet() never checks or
-// decrements one. #ammoBadge in index.html just makes that explicit to players.
+// decrements one. Deliberately not called out in the UI either - it's just
+// how the game works, not a feature to announce.
 const PLAYER_COLORS = { 1: 0xff3b3b, 2: 0x3ba7ff };
 const TARGET_RESPAWN_DELAY = 1.4; // seconds a slot waits, empty, before its next target appears
 const TRIGGER_RESPAWN_DELAY = 10; // the pinned trigger slot waits much longer so it can't be spammed
@@ -353,11 +367,9 @@ function forEachMaterial(object3d, fn) {
 }
 
 function setObjectOpacity(obj, opacity) {
-  if (obj.isModel) {
-    forEachMaterial(obj.mesh, (m) => { m.opacity = opacity; });
-  } else {
-    obj.mesh.material.opacity = opacity;
-  }
+  // forEachMaterial handles a single material, a per-face material array
+  // (the target plate's rim/cap/cap), and a multi-mesh glTF group alike.
+  forEachMaterial(obj.mesh, (m) => { m.opacity = opacity; });
 }
 
 // Pop-in: scale 0 -> baseScale with a spring/overshoot, used whenever a
@@ -569,6 +581,43 @@ function createGlowTexture() {
 }
 const glowTexture = createGlowTexture();
 
+// --- Target plate mesh (3D, replaces the old flat circle) ------------------
+// A thin cylinder ("puck") whose two flat caps get the target's ring
+// texture, with a plain rim so that thin edge doesn't show a stretched
+// sliver of the texture. Real art can be dropped in at
+// assets/textures/target-<type>.png; until then (or if it 404s) the
+// type's own procedural createTexture() is used instead.
+const TARGET_PLATE_THICKNESS = 0.14;
+const TARGET_PLATE_RIM_COLOR = 0x5a3a20;
+const targetTextureOverrides = {}; // typeKey -> loaded THREE.Texture, once confirmed to exist
+
+function targetTexturePath(typeKey) {
+  return `assets/textures/target-${typeKey}.png`;
+}
+
+function preloadTargetTexture(typeKey) {
+  new THREE.TextureLoader().load(
+    targetTexturePath(typeKey),
+    (texture) => { targetTextureOverrides[typeKey] = texture; },
+    undefined,
+    () => {} // no file there yet - createTexture()'s procedural fallback keeps being used
+  );
+}
+
+function createPlateMesh(radius, texture) {
+  const geometry = new THREE.CylinderGeometry(radius, radius, TARGET_PLATE_THICKNESS, 32);
+  const capMaterial = new THREE.MeshStandardMaterial({ map: texture, roughness: 0.65, transparent: true });
+  const rimMaterial = new THREE.MeshStandardMaterial({ color: TARGET_PLATE_RIM_COLOR, roughness: 0.85, transparent: true });
+  const mesh = new THREE.Mesh(geometry, [rimMaterial, capMaterial, capMaterial]);
+  mesh.rotation.x = Math.PI / 2; // stand the puck up so its caps face the camera
+  return mesh;
+}
+
+function createTargetPlateMesh(type, typeKey) {
+  const texture = targetTextureOverrides[typeKey] || type.createTexture();
+  return createPlateMesh(type.radius, texture);
+}
+
 // --- Target types --------------------------------------------------------
 // A single place to define every kind of target: its score, hit-box size,
 // movement (null = static, otherwise a left-right sine sweep), rarity
@@ -645,13 +694,26 @@ const TARGET_TYPES = {
   },
 };
 
+for (const typeKey of Object.keys(TARGET_TYPES)) preloadTargetTexture(typeKey);
+
 // --- Stages ----------------------------------------------------------------
 // Each stage sets the backdrop and its five target slots (position + which
 // type starts there). Once a slot's target is cleared it respawns as a
 // random type drawn from `pool` (weighted by TARGET_TYPES[...].spawnWeight),
 // so the initial layout is really just the opening hand for that stage.
-// A 6th, `pinned` slot always respawns as the same type (here: the trigger
-// target) instead of drawing from the pool - see buildSlotsForStage().
+// A 6th, `pinned` slot would always respawn as the trigger target instead of
+// drawing from the pool (see buildSlotsForStage()) - kept in the data below
+// for every stage, but never actually built while FEATURE_TRIGGER_TARGET
+// is off.
+//
+// Slots sit on three depth lanes (near/mid/far) rather than one flat row:
+// perspective alone (just the z difference) makes the far lane read as
+// smaller and farther away, and the y rise per lane plus the shelf risers
+// (addTargetShelves() below) sell it as a tiered shooting-gallery stall.
+const LANE_NEAR = { y: 1.3, z: -14 };
+const LANE_MID = { y: 1.7, z: -20 };
+const LANE_FAR = { y: 2.1, z: -27 };
+
 const STAGES = [
   {
     name: 'ステージ1 ひろば',
@@ -659,12 +721,12 @@ const STAGES = [
     groundColor: 0x3a7d3a,
     pool: ['normal', 'moving'],
     layout: [
-      { x: -8, type: 'normal' },
-      { x: -4, type: 'normal' },
-      { x: 0, type: 'moving' },
-      { x: 4, type: 'normal' },
-      { x: 8, type: 'normal' },
-      { x: 0, y: 3.6, type: 'trigger', pinned: true },
+      { x: -6, ...LANE_NEAR, type: 'normal' },
+      { x: 6, ...LANE_NEAR, type: 'normal' },
+      { x: -3, ...LANE_MID, type: 'normal' },
+      { x: 3, ...LANE_MID, type: 'moving' },
+      { x: 0, ...LANE_FAR, type: 'normal' },
+      { x: 0, y: 4.4, z: LANE_MID.z, type: 'trigger', pinned: true },
     ],
   },
   {
@@ -673,12 +735,12 @@ const STAGES = [
     groundColor: 0x8a5a2e,
     pool: ['normal', 'moving', 'small', 'dud'],
     layout: [
-      { x: -9, type: 'moving' },
-      { x: -4.5, type: 'small' },
-      { x: 0, type: 'dud' },
-      { x: 4.5, type: 'moving' },
-      { x: 9, type: 'small' },
-      { x: 0, y: 3.6, type: 'trigger', pinned: true },
+      { x: -6, ...LANE_NEAR, type: 'moving' },
+      { x: 6, ...LANE_NEAR, type: 'small' },
+      { x: -3, ...LANE_MID, type: 'dud' },
+      { x: 3, ...LANE_MID, type: 'moving' },
+      { x: 0, ...LANE_FAR, type: 'small' },
+      { x: 0, y: 4.4, z: LANE_MID.z, type: 'trigger', pinned: true },
     ],
   },
   {
@@ -687,15 +749,32 @@ const STAGES = [
     groundColor: 0x2b2033,
     pool: ['moving', 'small', 'dud', 'bonus'],
     layout: [
-      { x: -9, type: 'small' },
-      { x: -4.5, type: 'dud' },
-      { x: 0, type: 'bonus' },
-      { x: 4.5, type: 'dud' },
-      { x: 9, type: 'small' },
-      { x: 0, y: 3.6, type: 'trigger', pinned: true },
+      { x: -6, ...LANE_NEAR, type: 'small' },
+      { x: 6, ...LANE_NEAR, type: 'dud' },
+      { x: -3, ...LANE_MID, type: 'bonus' },
+      { x: 3, ...LANE_MID, type: 'dud' },
+      { x: 0, ...LANE_FAR, type: 'small' },
+      { x: 0, y: 4.4, z: LANE_MID.z, type: 'trigger', pinned: true },
     ],
   },
 ];
+
+// Wooden riser under each depth lane so its targets read as mounted on a
+// shelf rather than floating in mid-air. One riser per lane, spanning the
+// full x range any lane uses; the target's own radius pokes up above it.
+function addTargetShelves() {
+  const shelfWidth = 18;
+  const shelfDepth = 1.4;
+  const shelfHeight = 0.5;
+  const geometry = new THREE.BoxGeometry(shelfWidth, shelfHeight, shelfDepth);
+  const material = new THREE.MeshStandardMaterial({ color: 0x5a3a20, roughness: 0.9 });
+  for (const lane of [LANE_NEAR, LANE_MID, LANE_FAR]) {
+    const shelf = new THREE.Mesh(geometry, material);
+    shelf.position.set(0, lane.y - 1.1, lane.z);
+    scene.add(shelf);
+  }
+}
+addTargetShelves();
 
 function pickWeightedType(pool) {
   const entries = pool.map((key) => TARGET_TYPES[key]);
@@ -1143,28 +1222,33 @@ function updateWaitingScreen(connectedPlayers) {
 // Regular slots get sequential indices (0..4) used for chain-trigger
 // adjacency; a `pinned` slot (the trigger target) always gets index -1 so
 // it can never accidentally register as "adjacent" to a regular slot, and
-// always respawns as its own initialType rather than a pool draw.
+// always respawns as its own initialType rather than a pool draw. Pinned
+// (trigger) entries are dropped entirely here when FEATURE_TRIGGER_TARGET
+// is off, so the stage data can keep listing them without them ever
+// actually appearing.
 function buildSlotsForStage(stage) {
   let poolIndex = 0;
-  return stage.layout.map((entry) => {
-    const pinned = !!entry.pinned;
-    const index = pinned ? -1 : poolIndex++;
-    return {
-      index,
-      pinned,
-      basePosition: new THREE.Vector3(entry.x, entry.y ?? 1.6, -24),
-      phase: index * 1.7 + (pinned ? 3.1 : 0),
-      typeKey: null,
-      state: 'empty', // 'active' | 'popping' | 'waiting'
-      mesh: null,
-      glowMesh: null,
-      popAge: 0,
-      popVelocity: null,
-      popSpin: null,
-      waitTimer: 0,
-      initialType: entry.type,
-    };
-  });
+  return stage.layout
+    .filter((entry) => FEATURE_TRIGGER_TARGET || !entry.pinned)
+    .map((entry) => {
+      const pinned = !!entry.pinned;
+      const index = pinned ? -1 : poolIndex++;
+      return {
+        index,
+        pinned,
+        basePosition: new THREE.Vector3(entry.x, entry.y ?? 1.6, entry.z ?? -24),
+        phase: index * 1.7 + (pinned ? 3.1 : 0),
+        typeKey: null,
+        state: 'empty', // 'active' | 'popping' | 'waiting'
+        mesh: null,
+        glowMesh: null,
+        popAge: 0,
+        popVelocity: null,
+        popSpin: null,
+        waitTimer: 0,
+        initialType: entry.type,
+      };
+    });
 }
 
 function spawnSlotTarget(slot, typeKey) {
@@ -1180,10 +1264,7 @@ function spawnSlotTarget(slot, typeKey) {
     slot.isModel = true;
     slot.baseScale = type.modelScale ?? 1;
   } else {
-    mesh = new THREE.Mesh(
-      new THREE.CircleGeometry(type.radius, 32),
-      new THREE.MeshBasicMaterial({ map: type.createTexture(), side: THREE.DoubleSide, transparent: true })
-    );
+    mesh = createTargetPlateMesh(type, typeKey);
     slot.isModel = false;
     slot.baseScale = 1;
   }
@@ -1273,10 +1354,7 @@ function clearSlots() {
 // they only differ in how long that lasts and what happens once it's over.
 function spawnBonusTargetAt(x, y, z) {
   const type = TARGET_TYPES.bonus;
-  const mesh = new THREE.Mesh(
-    new THREE.CircleGeometry(type.radius, 24),
-    new THREE.MeshBasicMaterial({ map: type.createTexture(), side: THREE.DoubleSide, transparent: true })
-  );
+  const mesh = createTargetPlateMesh(type, 'bonus');
   mesh.scale.setScalar(0); // pops in via updateSpawnPop below
   mesh.position.set(x, y, z);
   scene.add(mesh);
@@ -1374,7 +1452,7 @@ function checkChainTrigger(slot, player) {
 
 // --- Conveyor phase: a row of targets flowing toward the camera -----------
 function maybeStartConveyorPhase() {
-  if (conveyorPhaseTriggered) return;
+  if (!FEATURE_CONVEYOR || conveyorPhaseTriggered) return;
   const stage = STAGES[currentStageIndex];
   const duration = stage.duration ?? STAGE_DEFAULT_DURATION;
   if (stageTimeLeft <= duration / 2) {
@@ -1392,10 +1470,7 @@ function spawnConveyorTarget() {
   const tier = CONVEYOR_TIERS[conveyorTier];
   const lane = CONVEYOR_LANES[conveyorLaneIndex % CONVEYOR_LANES.length];
   conveyorLaneIndex++;
-  const mesh = new THREE.Mesh(
-    new THREE.CircleGeometry(0.8, 24),
-    new THREE.MeshBasicMaterial({ map: createRingTexture(tier.colors), side: THREE.DoubleSide, transparent: true })
-  );
+  const mesh = createPlateMesh(0.8, createRingTexture(tier.colors));
   mesh.scale.setScalar(0); // pops in via updateSpawnPop below
   mesh.position.set(lane, 1.8, -30);
   scene.add(mesh);
@@ -1608,7 +1683,7 @@ function advanceStage() {
     enterFinishPhase();
     return;
   }
-  if (gain >= BONUS_STAGE_THRESHOLD) {
+  if (FEATURE_BONUS_STAGE && gain >= BONUS_STAGE_THRESHOLD) {
     enterBonusStage(next);
   } else {
     loadStage(next);
@@ -1703,7 +1778,7 @@ function handleHit(slot, player) {
   const type = TARGET_TYPES[slot.typeKey];
   awardHit(type, player, slot.mesh.position);
 
-  if (slot.typeKey === 'trigger') {
+  if (FEATURE_TRIGGER_TARGET && slot.typeKey === 'trigger') {
     showEventBanner('BONUS WAVE!');
     flashScreen(TRIGGER_FLASH_OPACITY, TRIGGER_FLASH_DURATION_MS);
     addCameraShake(CAMERA_SHAKE_TRIGGER);
@@ -1714,7 +1789,7 @@ function handleHit(slot, player) {
       const [lo, hi] = BONUS_WAVE_BURST_STAGGER;
       schedulePendingSpawn(i * (lo + Math.random() * (hi - lo)), () => spawnWaveTarget());
     }
-  } else if (type.score > 0) {
+  } else if (FEATURE_CHAIN_TRIGGER && type.score > 0) {
     checkChainTrigger(slot, player);
   }
 

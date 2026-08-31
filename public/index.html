@@ -40,9 +40,9 @@
     left: 0;
     width: 100%;
     display: flex;
-    justify-content: center;
+    justify-content: space-between;
     align-items: flex-start;
-    gap: 18px;
+    padding: 0 20px;
     pointer-events: none;
     user-select: none;
     z-index: 6;
@@ -321,24 +321,6 @@
     line-height: 1.6;
   }
 
-  /* --- Ammo badge: unlimited by design, shown so it reads as intentional --- */
-  #ammoBadge {
-    position: fixed;
-    left: 16px;
-    bottom: 14px;
-    z-index: 6;
-    padding: 5px 14px;
-    border-radius: 999px;
-    background: rgba(20, 12, 6, 0.55);
-    border: 2px solid var(--carnival-yellow);
-    color: var(--carnival-yellow);
-    font-family: "Rye", "Bungee", serif;
-    font-size: 14px;
-    letter-spacing: 0.05em;
-    pointer-events: none;
-    user-select: none;
-  }
-
   /* --- Event banner: trigger / chain bonus / bonus stage / last bonus --- */
   #eventBanner {
     position: fixed;
@@ -385,7 +367,6 @@
     </div>
   </div>
 
-  <div id="ammoBadge">AMMO ∞</div>
   <div id="eventBanner"></div>
   <div id="hitFlash"></div>
   <div id="p1ComboPop" class="combo-pop p1"></div>
