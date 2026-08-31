@@ -53,6 +53,10 @@ wss.on('connection', (ws) => {
       if (msg.role === 'game') {
         ws.role = 'game';
         gameSockets.add(ws);
+        const connected = controllerSlots
+          .map((slot, i) => (slot ? i + 1 : null))
+          .filter((player) => player !== null);
+        ws.send(JSON.stringify({ type: 'players', connected }));
       } else if (msg.role === 'controller') {
         const player = assignSlot(ws);
         if (player === -1) {
@@ -63,6 +67,7 @@ wss.on('connection', (ws) => {
         ws.role = 'controller';
         ws.player = player;
         ws.send(JSON.stringify({ type: 'assigned', player }));
+        broadcastToGames({ type: 'player-connected', player });
       }
       return;
     }
@@ -77,6 +82,7 @@ wss.on('connection', (ws) => {
       gameSockets.delete(ws);
     } else if (ws.role === 'controller') {
       freeSlot(ws);
+      broadcastToGames({ type: 'player-disconnected', player: ws.player });
     }
   });
 });

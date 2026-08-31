@@ -4,63 +4,167 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>文化祭シューティング</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Mochiy+Pop+One&family=Bungee&display=swap">
 <style>
+  :root {
+    --carnival-red: #e8432f;
+    --carnival-yellow: #ffc93c;
+    --carnival-teal: #1e9d8b;
+    --cream: #fff6e3;
+    --ink: #2b1a12;
+    --wood: #7a4a26;
+    --p1-color: #ff3b3b;
+    --p2-color: #3ba7ff;
+  }
+
+  * { box-sizing: border-box; }
+
   html, body {
     margin: 0;
     padding: 0;
     overflow: hidden;
     background: #000;
     cursor: none;
-    font-family: sans-serif;
+    font-family: "Mochiy Pop One", sans-serif;
   }
   canvas {
     display: block;
   }
+
+  /* --- HUD: wood ticket-booth scoreboard --- */
   #hud {
     position: fixed;
-    top: 16px;
+    top: 14px;
     left: 0;
     width: 100%;
     display: flex;
-    justify-content: space-between;
-    padding: 0 24px;
-    box-sizing: border-box;
-    color: #fff;
-    font-size: 28px;
-    font-weight: bold;
-    text-shadow: 0 0 6px rgba(0, 0, 0, 0.8);
+    justify-content: center;
+    align-items: flex-start;
+    gap: 18px;
     pointer-events: none;
     user-select: none;
+    z-index: 6;
   }
-  #crosshair {
+  .score-panel {
+    background: var(--wood);
+    border: 3px solid var(--ink);
+    border-radius: 10px;
+    padding: 6px 18px;
+    color: var(--cream);
+    text-align: center;
+    box-shadow: 0 4px 0 rgba(0, 0, 0, 0.35);
+  }
+  .score-panel .label {
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    opacity: 0.85;
+  }
+  .score-panel .value {
+    font-family: "Bungee", sans-serif;
+    font-size: 26px;
+    font-variant-numeric: tabular-nums;
+  }
+  #p1Score .value { color: var(--p1-color); }
+  #p2Score .value { color: var(--p2-color); }
+  #timePanel {
+    background: var(--carnival-red);
+    border-color: var(--ink);
+  }
+  #timePanel .value { color: var(--carnival-yellow); }
+  #timePanel .value.low { color: #fff; animation: none; }
+
+  /* --- Crosshairs (created dynamically per player) --- */
+  .crosshair {
     position: fixed;
-    width: 28px;
-    height: 28px;
-    margin-left: -14px;
-    margin-top: -14px;
+    width: 30px;
+    height: 30px;
+    margin-left: -15px;
+    margin-top: -15px;
     pointer-events: none;
-    z-index: 10;
+    z-index: 8;
   }
-  #crosshair::before,
-  #crosshair::after {
+  .crosshair::before {
     content: "";
     position: absolute;
-    background: #ff2d2d;
+    inset: 0;
+    border: 2px solid var(--color, #fff);
+    border-radius: 50%;
+    box-shadow: 0 0 6px var(--color, #fff);
   }
-  #crosshair::before {
+  .crosshair::after {
+    content: "";
+    position: absolute;
     left: 50%;
-    top: 0;
-    width: 2px;
-    height: 100%;
-    margin-left: -1px;
-  }
-  #crosshair::after {
     top: 50%;
-    left: 0;
-    height: 2px;
-    width: 100%;
-    margin-top: -1px;
+    width: 4px;
+    height: 4px;
+    margin: -2px 0 0 -2px;
+    background: var(--color, #fff);
+    border-radius: 50%;
   }
+  .crosshair .tag {
+    position: absolute;
+    top: -20px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 11px;
+    color: var(--color, #fff);
+    font-family: "Bungee", sans-serif;
+    text-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
+  }
+
+  /* --- Waiting-for-controller screen --- */
+  #waiting {
+    position: fixed;
+    inset: 0;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    background: rgba(20, 12, 6, 0.92);
+    color: var(--cream);
+    text-align: center;
+    z-index: 15;
+  }
+  #waiting h1 {
+    font-size: 34px;
+    margin: 0;
+    color: var(--carnival-yellow);
+    text-shadow: 3px 3px 0 var(--ink);
+  }
+  #waiting p {
+    margin: 0;
+    font-family: sans-serif;
+    font-size: 15px;
+    opacity: 0.85;
+  }
+  #qrHolder {
+    background: var(--cream);
+    padding: 12px;
+    border-radius: 12px;
+    border: 4px solid var(--wood);
+  }
+  #playerStatus {
+    display: flex;
+    gap: 12px;
+  }
+  #playerStatus .slot {
+    padding: 6px 16px;
+    border-radius: 999px;
+    border: 2px solid var(--ink);
+    font-size: 13px;
+    opacity: 0.5;
+  }
+  #playerStatus .slot.online {
+    opacity: 1;
+  }
+  #p1Slot { color: var(--p1-color); border-color: var(--p1-color); }
+  #p2Slot { color: var(--p2-color); border-color: var(--p2-color); }
+
+  /* --- Result screen --- */
   #result {
     position: fixed;
     inset: 0;
@@ -68,37 +172,77 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    background: rgba(0, 0, 0, 0.75);
-    color: #fff;
+    gap: 6px;
+    background: rgba(20, 12, 6, 0.85);
+    color: var(--cream);
     text-align: center;
     z-index: 20;
   }
   #result h1 {
-    font-size: 48px;
-    margin: 0 0 16px;
+    font-size: 46px;
+    margin: 0 0 12px;
+    color: var(--carnival-yellow);
+    text-shadow: 3px 3px 0 var(--ink);
   }
-  #result p {
-    font-size: 24px;
-    margin: 4px 0;
+  #result .scores {
+    display: flex;
+    gap: 24px;
+    margin: 8px 0 18px;
+  }
+  #result .scores .value {
+    font-family: "Bungee", sans-serif;
+    font-size: 22px;
+  }
+  #result #finalP1 .value { color: var(--p1-color); }
+  #result #finalP2 .value { color: var(--p2-color); }
+  #result p.hint {
+    font-family: sans-serif;
+    font-size: 16px;
+    opacity: 0.8;
   }
 </style>
 </head>
 <body>
   <div id="hud">
-    <div id="score">SCORE: 0</div>
-    <div id="time">TIME: 90</div>
-  </div>
-  <div id="crosshair"></div>
-  <div id="result">
-    <h1>TIME UP!</h1>
-    <p id="finalScore">SCORE: 0</p>
-    <p>クリックでリスタート</p>
+    <div class="score-panel" id="p1Score">
+      <div class="label">PLAYER 1</div>
+      <div class="value" id="p1ScoreValue">0</div>
+    </div>
+    <div class="score-panel" id="timePanel">
+      <div class="label">TIME</div>
+      <div class="value" id="timeValue">90</div>
+    </div>
+    <div class="score-panel" id="p2Score">
+      <div class="label">PLAYER 2</div>
+      <div class="value" id="p2ScoreValue">0</div>
+    </div>
   </div>
 
+  <div id="waiting">
+    <h1>コントローラーを<br>接続してください</h1>
+    <div id="qrHolder"></div>
+    <p>スマホでQRコードを読み取って<br>コントローラー画面を開いてください</p>
+    <div id="playerStatus">
+      <div class="slot" id="p1Slot">PLAYER 1</div>
+      <div class="slot" id="p2Slot">PLAYER 2</div>
+    </div>
+  </div>
+
+  <div id="result">
+    <h1>TIME UP!</h1>
+    <div class="scores">
+      <div id="finalP1"><div class="label">PLAYER 1</div><div class="value">0</div></div>
+      <div id="finalP2"><div class="label">PLAYER 2</div><div class="value">0</div></div>
+    </div>
+    <p class="hint">発射でリスタート</p>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
   <script type="importmap">
   {
     "imports": {
-      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "cannon-es": "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js"
     }
   }
   </script>
