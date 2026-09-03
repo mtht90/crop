@@ -103,6 +103,53 @@
 
 ---
 
+## ADR-017: 新規クローン直後は `--editor` によるウォームアップが必須（`tools/ci_test.sh` に組み込み）
+
+- **決定**: `.godot/` はコミットしない（`.gitignore`）ため、新規クローン/ZIP展開直後は
+  グローバルスクリプトクラスキャッシュ（`global_script_class_cache.cfg`）が
+  存在しない。この状態でいきなり `godot --headless --quit-after N` や
+  `godot --headless --server` を実行すると、`class_name` 経由で他スクリプトの
+  型を参照する Autoload（例: `NetService` が `Result` を返り値の型として使う、
+  `MatchService` が `StateMachine` を使う）が
+  `Parse Error: Could not find type "Result" in the current scope` で
+  パースエラーになることを実測確認した。`tools/ci_test.sh` に
+  「`--editor --quit-after` によるキャッシュ構築ウォームアップ」を明示的な
+  ステップとして追加し、その後に通常の起動検証・テストを走らせる構成に変更した。
+- **背景**: ユーザーが GitHub から ZIP をダウンロードしてローカルの Godot
+  エディタで開こうとした際の混乱をきっかけに、「本当にゼロの状態から
+  このプロジェクトを開くと何が起きるか」を `--headless` で実測することで
+  発見した。これまでのセッションでは常に手動でウォームアップを先に
+  実行していたため、`tools/ci_test.sh` 単体では一度も「真にクリーンな
+  状態からの起動」が検証されていなかった。
+- **原因切り分け**: 一度は「Autoload 側で `preload()` を使えば
+  グローバルキャッシュに依存せず解決できるのでは」という修正を試みたが、
+  `Result`/`StateMachine` 自身の内部で自クラス名を自己参照している箇所
+  （例: `static func ok() -> Result: return Result.new()`）で
+  今度は `Identifier not found: Result` という*別の*コンパイルエラーが
+  発生することを確認し、この対処は無効と判断して撤回した。
+  最終的に「`--editor` によるウォームアップさえ通せば、他は一切変更せずとも
+  完全にクリーンな起動ができる」ことを実測で確認し、これを正式な手順とした。
+- **選択肢**: 1. Autoload 側のコードを preload ベースに書き換えてキャッシュ非依存にする
+  2. `.godot/global_script_class_cache.cfg` 自体をコミットする
+  3. `tools/ci_test.sh`（および README のローカル起動手順）に
+  ウォームアップ手順を明示的に組み込む
+- **選択理由**: 3 を採用。1 は上記の通り別のエラーを生むだけで根本解決にならず、
+  かつ「`class_name` によるグローバル型解決」という GDScript 標準の仕組みを
+  部分的に迂回する不自然なコードになる（第0章の「無駄な回避策を書かない」
+  方針に反する）。2 は `.godot/` 配下がエンジンバージョン・OS・ローカル環境に
+  依存するキャッシュであり、コミットすると環境間の不整合の温床になる。
+  3 が最も単純で、かつ「新規プロジェクトを Godot で開いたら最初に一度
+  エディタでインポートする」という Godot の標準的な運用そのものに沿っている。
+- **トレードオフ**: `godot --headless --server` を専用サーバーとして
+  本番環境に初めてデプロイする際は、必ず事前に一度
+  `godot --headless --editor --quit-after 60` （またはエディタでの
+  インポート）を実行し、`.godot/` キャッシュを生成してから
+  `--server` を起動するデプロイ手順を用意すること（次アクション）。
+  GUI エディタで「インポート」から開く場合はエディタ自身が同等の
+  スキャンを行うため、この問題には遭遇しない。
+
+---
+
 ## ADR-007: MovementSimulation は「速度計算の純粋関数」に限定し、衝突解決は呼び出し側が担う
 
 - **決定**: `MovementSimulation.step()` は `MoveState`/`InputCommand`/`MoveConfig` のみを
