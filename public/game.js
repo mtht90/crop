@@ -84,6 +84,10 @@ const ASSETS = {
     desertBuilding: 'assets/kenney-sketch-desert/Tiles/building_dark_center_windows_S.png',
     desertTent: 'assets/kenney-sketch-desert/Tiles/dome_S.png',
     desertPalm: 'assets/kenney-sketch-desert/Tiles/tree_S.png',
+    // A second desert-tile cluster, reused as extra western-stage scrub
+    // dressing for variety - there's no dedicated cactus/barrel art in
+    // either downloaded pack.
+    desertScrub: 'assets/kenney-sketch-desert/Tiles/trees_S.png',
   },
   sfx: {
     uiClick: 'assets/sfx/ui/Audio/click_001.ogg',
@@ -292,9 +296,16 @@ const CAMERA_SHAKE_HIT = 0.35; // trauma added per normal hit
 const CAMERA_SHAKE_TRIGGER = 0.6; // bigger shake for the trigger/bonus-wave activation
 const CAMERA_SHAKE_DECAY = 4.5; // trauma lost per second
 const CAMERA_SHAKE_MAX_OFFSET = { x: 0.09, y: 0.09, z: 0.04 };
-const HIT_FLASH_OPACITY = 0.22;
+// Both flashes are a soft warm-white glow (see #hitFlash in index.html),
+// not a pure-white strobe - opacity is a peak, not a solid fill, and radius
+// keeps a normal hit's glow local to the target rather than lighting the
+// whole screen. The trigger flash stays screen-wide (it marks a bonus wave
+// starting, not one specific target) but far dimmer than before.
+const HIT_FLASH_OPACITY = 0.11;
+const HIT_FLASH_RADIUS_PCT = 30;
 const HIT_FLASH_DURATION_MS = 130;
-const TRIGGER_FLASH_OPACITY = 0.85;
+const TRIGGER_FLASH_OPACITY = 0.4;
+const TRIGGER_FLASH_RADIUS_PCT = 80;
 const TRIGGER_FLASH_DURATION_MS = 260;
 const BONUS_WAVE_BURST_COUNT = 7; // extra staggered "pop-pop-pop" targets right as the wave starts
 const BONUS_WAVE_BURST_STAGGER = [0.05, 0.1]; // seconds between each, randomized in this range
@@ -807,27 +818,37 @@ const TARGET_TYPES = {
 
 
 // --- Stages ----------------------------------------------------------------
-// Each stage sets the backdrop and its five target slots (position + which
-// type starts there). Once a slot's target is cleared it respawns as a
-// random type drawn from `pool` (weighted by TARGET_TYPES[...].spawnWeight),
-// so the initial layout is really just the opening hand for that stage.
-// A 6th, `pinned` slot would always respawn as the trigger target instead of
-// drawing from the pool (see buildSlotsForStage()) - kept in the data below
-// for every stage, but never actually built while FEATURE_TRIGGER_TARGET
-// is off.
+// Each stage sets the backdrop and its target slots (position + which type
+// starts there, plus an optional per-slot `pool` - see below). Once a
+// slot's target is cleared it respawns as a random type weighted-drawn from
+// its pool (TARGET_TYPES[...].spawnWeight), so the initial layout is really
+// just the opening hand for that stage. A `pinned` slot would always
+// respawn as the trigger target instead of drawing from any pool (see
+// buildSlotsForStage()) - kept in the data below for every stage, but never
+// actually built while FEATURE_TRIGGER_TARGET is off.
 //
-// Slots sit on two depth lanes in a staggered (千鳥) arrangement rather than
-// one flat row: the upper/far lane's 3 targets and the lower/near lane's 2
-// targets interleave along x, and perspective alone (the z difference, plus
-// a touch of y rise) makes the far lane read as smaller/higher and farther
-// away, sold further by the shelf risers (addTargetShelves() below).
-// z pulled to roughly half its original camera distance (was -27/-15) so
-// targets read big in frame instead of stranded in a sea of sky - see
-// loadThemeDecorations()/addSceneDecoration() below, whose flanking props
-// are rescaled by the same factor to keep the same depth balance.
-const LANE_UPPER = { y: 3.1, z: -11 }; // far row - smaller/higher via perspective
-const LANE_LOWER = { y: 1.1, z: -5 }; // near row - larger/lower
-const TRIGGER_LANE_Z = (LANE_UPPER.z + LANE_LOWER.z) / 2;
+// Slots sit on three shared depth rows - ROW_BACK/ROW_MID/ROW_FRONT below,
+// nearest at the bottom - and perspective (the z difference, plus a touch
+// of y rise) alone makes farther rows read as smaller/higher, sold further
+// by the shelf risers (addTargetShelves()) and lane backdrop panels
+// (loadThemeDecorations()) sitting just behind each row. Each stage gives
+// its own x-grid to every row (column count and spacing both vary - a
+// straight fence-post grid for the farm, a converging spread for the
+// dinosaur stage, staggered/offset signage for the western stage - see each
+// stage's `layout` below), and pins a row to one size/movement class via a
+// per-slot `pool` override so e.g. the back row always reads small and
+// static rather than drifting into whatever the whole stage's pool draws.
+// z is roughly half its pre-zoom camera distance (see loadThemeDecorations()
+// /addSceneDecoration(), whose flanking props are rescaled by the same
+// factor to keep the same depth balance).
+const ROW_BACK = { y: 3.1, z: -11 }; // far row - smaller/higher via perspective
+// y chosen so the row reads as a clearly separate screen height from both
+// neighbors (not so close to ROW_BACK's that it visually merges with it)
+// while still clearing the near lane panel's top edge - see the panel
+// height comment in loadThemeDecorations().
+const ROW_MID = { y: 2.3, z: -8 };
+const ROW_FRONT = { y: 1.1, z: -5 }; // near row - larger/lower
+const TRIGGER_LANE_Z = ROW_MID.z;
 
 // Per-stage theme: everything about how a stage *looks* (sky/ground/frame
 // colors, the target billboard's backing-card color, and the background
@@ -843,12 +864,18 @@ const STAGES = [
     frameColorDark: '#8a6236',
     rimColor: 0x8a6236,
     pool: ['normal', 'moving'],
+    // Fence-post grid: back and middle rows share the same 3 columns so the
+    // whole thing reads as straight posts receding into the distance; the
+    // front row narrows in to avoid crowding the foreground.
     layout: [
-      { x: -6, ...LANE_UPPER, type: 'normal' },
-      { x: 0, ...LANE_UPPER, type: 'normal' },
-      { x: 6, ...LANE_UPPER, type: 'normal' },
-      { x: -3, ...LANE_LOWER, type: 'normal' },
-      { x: 3, ...LANE_LOWER, type: 'moving' },
+      { x: -5, ...ROW_BACK, type: 'small', pool: ['small'] },
+      { x: 0, ...ROW_BACK, type: 'small', pool: ['small'] },
+      { x: 5, ...ROW_BACK, type: 'small', pool: ['small'] },
+      { x: -5, ...ROW_MID, type: 'small', pool: ['small'] },
+      { x: 0, ...ROW_MID, type: 'small', pool: ['small'] },
+      { x: 5, ...ROW_MID, type: 'small', pool: ['small'] },
+      { x: -3, ...ROW_FRONT, type: 'moving', pool: ['moving'] },
+      { x: 3, ...ROW_FRONT, type: 'moving', pool: ['moving'] },
       { x: 0, y: 4.4, z: TRIGGER_LANE_Z, type: 'trigger', pinned: true },
     ],
   },
@@ -861,12 +888,18 @@ const STAGES = [
     frameColorDark: '#2c211d',
     rimColor: 0x2c211d,
     pool: ['normal', 'moving', 'small'],
+    // Converging spread: narrow at the back (near the volcano's peak),
+    // widening toward the front - column counts (2/3/3) differ from the
+    // farm's even 3/3/2 grid for its own visual identity.
     layout: [
-      { x: -6, ...LANE_UPPER, type: 'moving' },
-      { x: 0, ...LANE_UPPER, type: 'small' },
-      { x: 6, ...LANE_UPPER, type: 'normal' },
-      { x: -3, ...LANE_LOWER, type: 'small' },
-      { x: 3, ...LANE_LOWER, type: 'moving' },
+      { x: -3, ...ROW_BACK, type: 'small', pool: ['small'] },
+      { x: 3, ...ROW_BACK, type: 'small', pool: ['small'] },
+      { x: -6, ...ROW_MID, type: 'small', pool: ['small'] },
+      { x: 0, ...ROW_MID, type: 'small', pool: ['small'] },
+      { x: 6, ...ROW_MID, type: 'small', pool: ['small'] },
+      { x: -7, ...ROW_FRONT, type: 'moving', pool: ['moving'] },
+      { x: 0, ...ROW_FRONT, type: 'moving', pool: ['moving'] },
+      { x: 7, ...ROW_FRONT, type: 'moving', pool: ['moving'] },
       { x: 0, y: 4.4, z: TRIGGER_LANE_Z, type: 'trigger', pinned: true },
     ],
   },
@@ -879,26 +912,33 @@ const STAGES = [
     frameColorDark: '#a8794a',
     rimColor: 0xa8794a,
     pool: ['moving', 'small', 'bonus'],
+    // Staggered saloon signage: the middle row's 3 columns sit offset from
+    // the back row's 4 (rather than sharing a grid) and alternate up/down
+    // in y, reading as uneven boards rather than a flat grid.
     layout: [
-      { x: -6, ...LANE_UPPER, type: 'small' },
-      { x: 0, ...LANE_UPPER, type: 'bonus' },
-      { x: 6, ...LANE_UPPER, type: 'small' },
-      { x: -3, ...LANE_LOWER, type: 'moving' },
-      { x: 3, ...LANE_LOWER, type: 'moving' },
+      { x: -6, ...ROW_BACK, type: 'small', pool: ['small'] },
+      { x: -2, ...ROW_BACK, type: 'small', pool: ['small'] },
+      { x: 2, ...ROW_BACK, type: 'small', pool: ['small'] },
+      { x: 6, ...ROW_BACK, type: 'small', pool: ['small'] },
+      { x: -4, ...ROW_MID, y: ROW_MID.y + 0.15, type: 'small', pool: ['small'] },
+      { x: 0, ...ROW_MID, y: ROW_MID.y - 0.15, type: 'small', pool: ['small'] },
+      { x: 4, ...ROW_MID, y: ROW_MID.y + 0.15, type: 'small', pool: ['small'] },
+      { x: -2, ...ROW_FRONT, type: 'moving', pool: ['moving', 'bonus'] },
+      { x: 2, ...ROW_FRONT, type: 'bonus', pool: ['moving', 'bonus'] },
       { x: 0, y: 4.4, z: TRIGGER_LANE_Z, type: 'trigger', pinned: true },
     ],
   },
 ];
 
-// Wooden riser under each depth lane so its targets read as mounted on a
-// shelf rather than floating in mid-air. One riser per lane, sized to the x
-// range that lane's targets actually use; the target's own radius pokes up
-// above it.
+// Wooden riser under each depth row so its targets read as mounted on a
+// shelf rather than floating in mid-air. One riser per row, sized to the
+// widest x-spread any stage's layout actually uses on that row (see the
+// STAGES layouts above); the target's own radius pokes up above it.
 function addTargetShelves() {
   const shelfDepth = 1.4;
   const shelfHeight = 0.5;
   const material = new THREE.MeshStandardMaterial({ color: 0x5a3a20, roughness: 0.9 });
-  for (const [lane, shelfWidth] of [[LANE_UPPER, 16], [LANE_LOWER, 10]]) {
+  for (const [lane, shelfWidth] of [[ROW_BACK, 18], [ROW_MID, 16], [ROW_FRONT, 18]]) {
     const geometry = new THREE.BoxGeometry(shelfWidth, shelfHeight, shelfDepth);
     const shelf = new THREE.Mesh(geometry, material);
     shelf.position.set(0, lane.y - 1.1, lane.z);
@@ -924,16 +964,48 @@ function clearStageDecorations() {
   decorationObjects = [];
 }
 
-function addDecorationFallbackPlane(x, y, z, height, color) {
+// Optional per-decoration motion, read every frame by updateDecorations():
+// `sway: amount` gently rocks the billboard around its own z-axis (a tree
+// or bush nodding in a breeze); `bob: amount` gently bobs it up and down
+// (a grazing animal's idle motion); `drift: speed` scrolls it sideways at
+// `speed` units/sec, wrapping back around at `wrapMin`/`wrapMax` (a cloud
+// crossing the sky). Each instance gets its own random phase so a group
+// of them doesn't move in lockstep.
+function applyDecorationAnim(mesh, anim) {
+  if (!anim) return;
+  mesh.userData.anim = { ...anim, phase: Math.random() * Math.PI * 2, baseX: mesh.position.x, baseY: mesh.position.y };
+}
+
+function updateDecorations(dt, elapsed) {
+  for (const obj of decorationObjects) {
+    const anim = obj.userData.anim;
+    if (!anim) continue;
+    if (anim.sway) {
+      obj.rotation.z = Math.sin(elapsed * 0.7 + anim.phase) * anim.sway;
+    }
+    if (anim.bob) {
+      obj.position.y = anim.baseY + Math.sin(elapsed * 1.2 + anim.phase) * anim.bob;
+    }
+    if (anim.drift) {
+      let x = anim.baseX + elapsed * anim.drift + anim.phase * 4;
+      const span = anim.wrapMax - anim.wrapMin;
+      x = anim.wrapMin + (((x - anim.wrapMin) % span) + span) % span;
+      obj.position.x = x;
+    }
+  }
+}
+
+function addDecorationFallbackPlane(x, y, z, height, color, anim) {
   const mesh = new THREE.Mesh(new THREE.PlaneGeometry(height, height), new THREE.MeshBasicMaterial({ color }));
   mesh.position.set(x, y, z);
   faceBillboardAtCamera(mesh);
   scene.add(mesh);
+  applyDecorationAnim(mesh, anim);
   decorationObjects.push(mesh);
 }
 
 // Real downloaded art (async load, needs the staleness guard + a fallback).
-function placeImageDecoration(url, positions, height, fallbackColor, token) {
+function placeImageDecoration(url, positions, height, fallbackColor, token, anim) {
   loadBillboardTexture(
     url,
     (texture) => {
@@ -943,23 +1015,25 @@ function placeImageDecoration(url, positions, height, fallbackColor, token) {
         mesh.position.set(x, y, z);
         faceBillboardAtCamera(mesh);
         scene.add(mesh);
+        applyDecorationAnim(mesh, anim);
         decorationObjects.push(mesh);
       }
     },
     () => {
       if (token !== decorationLoadToken) return;
-      for (const [x, y, z] of positions) addDecorationFallbackPlane(x, y, z, height, fallbackColor);
+      for (const [x, y, z] of positions) addDecorationFallbackPlane(x, y, z, height, fallbackColor, anim);
     }
   );
 }
 
 // Procedural canvas art (already in hand, no load/fallback/staleness to guard).
-function placeProceduralDecoration(texture, positions, height) {
+function placeProceduralDecoration(texture, positions, height, anim) {
   for (const [x, y, z] of positions) {
     const mesh = createBillboardMesh(texture, height);
     mesh.position.set(x, y, z);
     faceBillboardAtCamera(mesh);
     scene.add(mesh);
+    applyDecorationAnim(mesh, anim);
     decorationObjects.push(mesh);
   }
 }
@@ -980,6 +1054,49 @@ function createTreeTexture() {
     ctx.beginPath();
     ctx.arc(cx, cy, r, 0, Math.PI * 2);
     ctx.fill();
+  }
+  return new THREE.CanvasTexture(canvas);
+}
+
+// A soft puffy cloud - the Shooting Gallery pack's own "cloud1/cloud2.png"
+// are actually wood-bordered signboard shapes (a plaque for HUD text, not
+// sky art), so this stands in for a real drifting sky cloud instead.
+function createCloudTexture(fillCss) {
+  const w = 220;
+  const h = 110;
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = fillCss;
+  for (const [cx, cy, r] of [[w * 0.3, h * 0.62, h * 0.34], [w * 0.55, h * 0.48, h * 0.42], [w * 0.78, h * 0.6, h * 0.3], [w * 0.5, h * 0.72, h * 0.3]]) {
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  return new THREE.CanvasTexture(canvas);
+}
+
+// A simple grazing-animal silhouette (round wool body, small head) - farm
+// atmosphere dressing where neither pack has actual livestock art.
+function createAnimalSilhouetteTexture() {
+  const w = 140;
+  const h = 100;
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#f5f2e8';
+  ctx.beginPath();
+  ctx.ellipse(w * 0.42, h * 0.55, w * 0.36, h * 0.32, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#3a332c';
+  ctx.beginPath();
+  ctx.ellipse(w * 0.82, h * 0.42, w * 0.14, h * 0.16, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#3a332c';
+  for (const [lx, ly] of [[w * 0.28, h * 0.86], [w * 0.5, h * 0.88]]) {
+    ctx.fillRect(lx, ly, w * 0.06, h * 0.14);
   }
   return new THREE.CanvasTexture(canvas);
 }
@@ -1100,34 +1217,80 @@ function updateWaterPanels(elapsed) {
   }
 }
 
+// Clouds drift slowly across the sky, wrapping back around once they exit
+// this x range - shared by every theme since they all sit at the same
+// depth/height, just tinted differently below.
+const CLOUD_DRIFT = { drift: 0.35, wrapMin: -26, wrapMax: 26 };
+function placeClouds(fillCss) {
+  const texture = createCloudTexture(fillCss);
+  placeProceduralDecoration(texture, [[-18, 10, -20], [-4, 13, -24], [10, 9.5, -19], [20, 12, -23]], 4.6, CLOUD_DRIFT);
+}
+
 function loadThemeDecorations(themeKey, token) {
   clearLanePanels();
   if (themeKey === 'farm') {
-    addLanePanel(LANE_UPPER, 18, 3.6, 'grass1', 0x4caf50, false);
-    addLanePanel(LANE_LOWER, 12, 3.0, 'water1', 0x3ba7ff, true);
-    placeProceduralDecoration(createTreeTexture(), [[-8.5, 2.6, -12.5], [8.5, 2.6, -12.5], [-9.5, 2.2, -7.5], [9.5, 2.2, -7.5]], 5.2);
+    // Only the back and front rows get a dedicated backdrop panel - a
+    // middle one would sit close enough to camera to occlude the back
+    // row's targets at this depth (see ROW_MID's comment above); the
+    // middle row instead reads against whichever panel shows through
+    // behind it.
+    addLanePanel(ROW_BACK, 20, 3.6, 'grass1', 0x4caf50, false);
+    addLanePanel(ROW_FRONT, 16, 3.0, 'water1', 0x3ba7ff, true);
+    placeClouds('rgba(255,255,255,0.92)');
+    placeProceduralDecoration(
+      createTreeTexture(),
+      [[-8.5, 2.6, -12.5], [8.5, 2.6, -12.5], [-9.5, 2.2, -7.5], [9.5, 2.2, -7.5]],
+      5.2,
+      { sway: 0.035 }
+    );
     placeProceduralDecoration(createFenceTexture(), [[-4.5, 0.9, -14], [4.5, 0.9, -14]], 1.8);
     placeImageDecoration(ASSETS.decorations.foliageFlower, [[-2, 0.35, -12.5], [2, 0.35, -12.5], [-7, 0.35, -9.5]], 0.9, 0x4a9a4a, token);
     placeImageDecoration(ASSETS.decorations.foliageGrass, [[-1, 0.3, -11.5], [1, 0.3, -11.5], [6, 0.3, -8.5]], 0.7, 0x4a9a4a, token);
+    // Grazing silhouettes off to either side, clear of the target grid.
+    placeProceduralDecoration(createAnimalSilhouetteTexture(), [[-11.5, 0.5, -4], [11.5, 0.5, -6]], 1.3, { bob: 0.05 });
   } else if (themeKey === 'dinosaur') {
     const woodTexture = lanePanelTextures.wood;
     const darkRockColor = 0x3a322c;
     if (woodTexture) {
       const darkTexture = createDarkenedPanelTexture(woodTexture, 'rgba(35,25,20,0.72)');
-      addLanePanelWithTexture(LANE_UPPER, 18, 3.6, darkTexture, false);
-      addLanePanelWithTexture(LANE_LOWER, 12, 3.0, darkTexture, false);
+      addLanePanelWithTexture(ROW_BACK, 20, 3.6, darkTexture, false);
+      addLanePanelWithTexture(ROW_FRONT, 16, 3.0, darkTexture, false);
     } else {
-      addLanePanelFallback(LANE_UPPER, 18, 3.6, darkRockColor);
-      addLanePanelFallback(LANE_LOWER, 12, 3.0, darkRockColor);
+      addLanePanelFallback(ROW_BACK, 20, 3.6, darkRockColor);
+      addLanePanelFallback(ROW_FRONT, 16, 3.0, darkRockColor);
     }
+    placeClouds('rgba(224,196,224,0.85)');
     placeProceduralDecoration(createVolcanoTexture(), [[0, 5, -18.5]], 14);
     placeImageDecoration(ASSETS.decorations.rock, [[-5, 0.7, -6.5], [5, 0.7, -6.5], [-7, 0.7, -12.5], [7, 0.7, -12.5]], 1.4, 0x6b6b6b, token);
+    // Low fern-like undergrowth - the foliage pack's grass tuft stands in,
+    // since neither pack ships an actual fern sprite.
+    placeImageDecoration(
+      ASSETS.decorations.foliageGrass,
+      [[-9, 0.35, -9.5], [9, 0.35, -9.5], [-2, 0.3, -5.5], [2, 0.3, -5.5]],
+      0.8,
+      0x3a5a3a,
+      token,
+      { sway: 0.05 }
+    );
   } else if (themeKey === 'western') {
-    addLanePanel(LANE_UPPER, 18, 3.6, 'wood', 0xc9975a, false);
-    addLanePanel(LANE_LOWER, 12, 3.0, 'wood', 0xc9975a, false);
+    addLanePanel(ROW_BACK, 20, 3.6, 'wood', 0xc9975a, false);
+    addLanePanel(ROW_FRONT, 16, 3.0, 'wood', 0xc9975a, false);
+    placeClouds('rgba(255,224,196,0.85)');
     placeImageDecoration(ASSETS.decorations.desertBuilding, [[-7.5, 3, -14.5], [7.5, 3, -14.5]], 6, 0xc9a06a, token);
     placeImageDecoration(ASSETS.decorations.desertTent, [[-4.5, 1.4, -14], [4.5, 1.4, -14]], 2.8, 0xb8895a, token);
-    placeImageDecoration(ASSETS.decorations.desertPalm, [[-9.5, 2.6, -8.5], [9.5, 2.6, -8.5]], 5.2, 0x4a7a3a, token);
+    placeImageDecoration(
+      ASSETS.decorations.desertPalm,
+      [[-9.5, 2.6, -8.5], [9.5, 2.6, -8.5]],
+      5.2,
+      0x4a7a3a,
+      token,
+      { sway: 0.03 }
+    );
+    // Scrub clusters + a couple of barrels (the crate sprite doubles for
+    // both) flanking the foreground - neither pack has dedicated
+    // cactus/barrel art.
+    placeImageDecoration(ASSETS.decorations.desertScrub, [[-12, 0.9, -4.5], [12, 0.9, -4.5]], 1.6, 0x5a7a3a, token, { sway: 0.025 });
+    placeImageDecoration(ASSETS.decorations.crate, [[-9, 0.7, -2.5], [9, 0.7, -2.5]], 1.4, 0x7a4a26, token);
   }
 }
 
@@ -1554,10 +1717,23 @@ function showEventBanner(text) {
   eventBannerEl.classList.add('show');
 }
 
-// A quick full-screen white flash. Driven by an inline transition (rather
-// than a fixed-duration CSS class) so hit flashes and the bigger trigger
-// flash can use different durations without needing two animations.
-function flashScreen(opacity, durationMs) {
+// Projects a world position to CSS percent coordinates, for centering the
+// hit flash's radial glow on the target that was actually hit.
+function worldToScreenPercent(position) {
+  const ndc = position.clone().project(camera);
+  return { xPct: (ndc.x * 0.5 + 0.5) * 100, yPct: (1 - (ndc.y * 0.5 + 0.5)) * 100 };
+}
+
+// A quick radial flash, driven by an inline transition (rather than a
+// fixed-duration CSS class) so hit flashes and the bigger trigger flash can
+// use different durations without needing two animations. `position`
+// centers the glow on the world point that caused it (a hit target); omit
+// it (as the screen-wide trigger flash does) to center on screen instead.
+function flashScreen(opacity, durationMs, radiusPct, position) {
+  const { xPct, yPct } = position ? worldToScreenPercent(position) : { xPct: 50, yPct: 50 };
+  hitFlashEl.style.setProperty('--flash-x', `${xPct}%`);
+  hitFlashEl.style.setProperty('--flash-y', `${yPct}%`);
+  hitFlashEl.style.setProperty('--flash-radius', `${radiusPct}%`);
   hitFlashEl.style.transition = 'none';
   hitFlashEl.style.opacity = String(opacity);
   requestAnimationFrame(() => {
@@ -1688,6 +1864,11 @@ function buildSlotsForStage(stage) {
         popSpin: null,
         waitTimer: 0,
         initialType: entry.type,
+        // A row-specific pool (see the STAGES layouts below) keeps a slot
+        // respawning within its own size/movement class - e.g. a back-row
+        // slot always comes back small and static - instead of drawing
+        // from the whole stage's pool and breaking the row's look.
+        pool: entry.pool || stage.pool,
       };
     });
 }
@@ -1738,7 +1919,6 @@ function popSlot(slot) {
 }
 
 function updateSlots(dt, elapsed) {
-  const stage = STAGES[currentStageIndex];
   for (const slot of slots) {
     if (slot.state === 'active') {
       const type = TARGET_TYPES[slot.typeKey];
@@ -1765,7 +1945,7 @@ function updateSlots(dt, elapsed) {
     } else if (slot.state === 'waiting') {
       slot.waitTimer -= dt;
       if (slot.waitTimer <= 0) {
-        spawnSlotTarget(slot, slot.pinned ? slot.initialType : pickWeightedType(stage.pool));
+        spawnSlotTarget(slot, slot.pinned ? slot.initialType : pickWeightedType(slot.pool));
       }
     }
   }
@@ -1804,9 +1984,9 @@ function spawnBonusTargetAt(x, y, z) {
 }
 
 function spawnWaveTarget() {
-  const x = (Math.random() - 0.5) * 20;
-  const y = 1.2 + Math.random() * 3.2;
-  const z = -20 - Math.random() * 8;
+  const x = (Math.random() - 0.5) * 16;
+  const y = ROW_FRONT.y + Math.random() * (ROW_BACK.y - ROW_FRONT.y);
+  const z = ROW_FRONT.z + Math.random() * (ROW_BACK.z - ROW_FRONT.z); // between the near and far rows
   spawnBonusTargetAt(x, y, z);
 }
 
@@ -2285,7 +2465,7 @@ function awardHit(type, player, position) {
   spawnScorePopup(position, awarded);
   spawnHitParticles(position, type);
   addCameraShake(CAMERA_SHAKE_HIT);
-  flashScreen(HIT_FLASH_OPACITY, HIT_FLASH_DURATION_MS);
+  flashScreen(HIT_FLASH_OPACITY, HIT_FLASH_DURATION_MS, HIT_FLASH_RADIUS_PCT, position);
   if (type.score >= 0) playSfx('hit'); // a "cha-ching" would feel wrong on a penalty hit
   return awarded;
 }
@@ -2296,7 +2476,7 @@ function handleHit(slot, player) {
 
   if (FEATURE_TRIGGER_TARGET && slot.typeKey === 'trigger') {
     showEventBanner('BONUS WAVE!');
-    flashScreen(TRIGGER_FLASH_OPACITY, TRIGGER_FLASH_DURATION_MS);
+    flashScreen(TRIGGER_FLASH_OPACITY, TRIGGER_FLASH_DURATION_MS, TRIGGER_FLASH_RADIUS_PCT);
     addCameraShake(CAMERA_SHAKE_TRIGGER);
     startTargetRush(BONUS_WAVE_DURATION);
     // A quick "pon, pon, pon" burst of extra targets, staggered a beat
@@ -2388,6 +2568,7 @@ function animate() {
   curtain.update(dt);
   updateCameraShake(dt);
   updateWaterPanels(clock.elapsedTime);
+  updateDecorations(dt, clock.elapsedTime);
 
   const connectedPlayers = input.getConnectedPlayers();
   updateWaitingScreen(connectedPlayers);

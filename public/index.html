@@ -177,11 +177,17 @@
     100% { transform: translate(-50%, -78px) scale(0.75); opacity: 0; }
   }
 
-  /* --- Full-screen hit flash --- */
+  /* --- Hit flash: a soft warm-white glow centered on the hit, not a
+     full-screen strobe. --flash-x/--flash-y/--flash-radius are set per-call
+     from game.js (see flashScreen()). */
   #hitFlash {
     position: fixed;
     inset: 0;
-    background: #fff;
+    background: radial-gradient(
+      circle at var(--flash-x, 50%) var(--flash-y, 50%),
+      rgba(255, 238, 200, 1) 0%,
+      rgba(255, 238, 200, 0) var(--flash-radius, 40%)
+    );
     opacity: 0;
     pointer-events: none;
     z-index: 16;
