@@ -817,43 +817,59 @@ const TARGET_TYPES = {
 };
 
 
-// --- Stages ----------------------------------------------------------------
-// Each stage sets the backdrop and its target slots (position + which type
-// starts there, plus an optional per-slot `pool` - see below). Once a
-// slot's target is cleared it respawns as a random type weighted-drawn from
-// its pool (TARGET_TYPES[...].spawnWeight), so the initial layout is really
-// just the opening hand for that stage. A `pinned` slot would always
-// respawn as the trigger target instead of drawing from any pool (see
-// buildSlotsForStage()) - kept in the data below for every stage, but never
-// actually built while FEATURE_TRIGGER_TARGET is off.
+// --- Lanes -------------------------------------------------------------
+// A lane is the one unit a stage's shooting gallery is built from: a
+// backdrop band (texture/tint/fallback color) plus the row of targets that
+// sits on it, always defined and rebuilt together so they can never end up
+// mismatched (a panel sized for the wrong target count, targets floating
+// past their own backdrop, etc). Shape:
+//   z, y            - depth and base height
+//   centerX, width  - the lane's horizontal span (targets and its panel/
+//                     shelf both key off this, so an off-center or
+//                     short/one-sided lane still lines everything up)
+//   targetCount     - spread evenly across `width`, centered on `centerX`
+//   targetType      - a single TARGET_TYPES key for the whole lane (a ring
+//                     lane, a duck lane, a bonus lane, ...)
+//   pool            - optional respawn pool override (defaults to just
+//                     [targetType], so the lane always respawns in its own
+//                     class rather than drawing from anything else)
+//   tilt            - optional: y rises by this much per target index,
+//                     sloping the lane diagonally (e.g. along a hillside)
+//   stagger         - optional: y alternates +/- this per index instead of
+//                     sloping (uneven signage heights) - a lane uses at
+//                     most one of tilt/stagger
+//   panelTexture/panelTint/panelFallbackColor/panelWidth/panelHeight/
+//   animateWater    - passed straight through to buildLanePanel() below
 //
-// Slots sit on three shared depth rows - ROW_BACK/ROW_MID/ROW_FRONT below,
-// nearest at the bottom - and perspective (the z difference, plus a touch
-// of y rise) alone makes farther rows read as smaller/higher, sold further
-// by the shelf risers (addTargetShelves()) and lane backdrop panels
-// (loadThemeDecorations()) sitting just behind each row. Each stage gives
-// its own x-grid to every row (column count and spacing both vary - a
-// straight fence-post grid for the farm, a converging spread for the
-// dinosaur stage, staggered/offset signage for the western stage - see each
-// stage's `layout` below), and pins a row to one size/movement class via a
-// per-slot `pool` override so e.g. the back row always reads small and
-// static rather than drifting into whatever the whole stage's pool draws.
 // z is roughly half its pre-zoom camera distance (see loadThemeDecorations()
-// /addSceneDecoration(), whose flanking props are rescaled by the same
+// /addSceneDecoration(), whose flanking decor is rescaled by the same
 // factor to keep the same depth balance).
-const ROW_BACK = { y: 3.1, z: -11 }; // far row - smaller/higher via perspective
-// y chosen so the row reads as a clearly separate screen height from both
-// neighbors (not so close to ROW_BACK's that it visually merges with it)
-// while still clearing the near lane panel's top edge - see the panel
-// height comment in loadThemeDecorations().
-const ROW_MID = { y: 2.3, z: -8 };
-const ROW_FRONT = { y: 1.1, z: -5 }; // near row - larger/lower
-const TRIGGER_LANE_Z = ROW_MID.z;
+
+// Evenly spaces `lane.targetCount` targets across `lane.width`, applying
+// its optional tilt/stagger to y - the one place that turns a lane
+// definition into actual per-target positions, used by both
+// buildSlotsForStage() (the targets) and nothing else (the panel/shelf
+// just read the lane's own z/y/width directly).
+function laneTargetEntries(lane) {
+  const entries = [];
+  const step = lane.width / lane.targetCount;
+  const pool = lane.pool ?? [lane.targetType];
+  for (let i = 0; i < lane.targetCount; i++) {
+    const x = (lane.centerX ?? 0) - lane.width / 2 + step * (i + 0.5);
+    let y = lane.y;
+    if (lane.tilt) y += lane.tilt * i;
+    if (lane.stagger) y += i % 2 === 0 ? lane.stagger : -lane.stagger;
+    entries.push({ x, y, z: lane.z, type: lane.targetType, pool });
+  }
+  return entries;
+}
 
 // Per-stage theme: everything about how a stage *looks* (sky/ground/frame
-// colors, the target billboard's backing-card color, and the background
-// dressing) lives here on the stage entry itself - TARGET_TYPES
-// (score/hitbox/movement/rarity) is never touched.
+// colors, the target billboard's backing-card color, its lanes, and the
+// background dressing) lives here on the stage entry itself - TARGET_TYPES
+// (score/hitbox/movement/rarity) is never touched. `trigger` is the one
+// pinned bonus-wave slot, positioned above its lanes rather than belonging
+// to any one of them.
 const STAGES = [
   {
     name: 'ステージ1 ひろば',
@@ -863,20 +879,14 @@ const STAGES = [
     frameColor: '#c9975a', // light rustic farm-fence brown
     frameColorDark: '#8a6236',
     rimColor: 0x8a6236,
-    pool: ['normal', 'moving'],
-    // Fence-post grid: back and middle rows share the same 3 columns so the
-    // whole thing reads as straight posts receding into the distance; the
-    // front row narrows in to avoid crowding the foreground.
-    layout: [
-      { x: -5, ...ROW_BACK, type: 'small', pool: ['small'] },
-      { x: 0, ...ROW_BACK, type: 'small', pool: ['small'] },
-      { x: 5, ...ROW_BACK, type: 'small', pool: ['small'] },
-      { x: -5, ...ROW_MID, type: 'small', pool: ['small'] },
-      { x: 0, ...ROW_MID, type: 'small', pool: ['small'] },
-      { x: 5, ...ROW_MID, type: 'small', pool: ['small'] },
-      { x: -3, ...ROW_FRONT, type: 'moving', pool: ['moving'] },
-      { x: 3, ...ROW_FRONT, type: 'moving', pool: ['moving'] },
-      { x: 0, y: 4.4, z: TRIGGER_LANE_Z, type: 'trigger', pinned: true },
+    trigger: { x: 0, y: 4.4, z: -8 },
+    lanes: [
+      // Back: full-width, straight fence-post row of ring targets.
+      { z: -11, y: 3.1, width: 12, targetCount: 3, targetType: 'small', panelTexture: 'grass1', panelFallbackColor: 0x4caf50, panelHeight: 3.4 },
+      // Middle: shifted left and narrower, breaking the symmetry.
+      { z: -8, y: 2.2, centerX: -2.5, width: 7, targetCount: 2, targetType: 'small', panelTexture: 'grass2', panelFallbackColor: 0x6ab86a, panelHeight: 2.6 },
+      // Front: shifted right, ducks, big and moving.
+      { z: -5, y: 1.1, centerX: 1, width: 6, targetCount: 2, targetType: 'moving', panelTexture: 'water1', panelFallbackColor: 0x3ba7ff, panelHeight: 3.0, animateWater: true },
     ],
   },
   {
@@ -887,20 +897,14 @@ const STAGES = [
     frameColor: '#4a3a35', // darkened lava-rock tone
     frameColorDark: '#2c211d',
     rimColor: 0x2c211d,
-    pool: ['normal', 'moving', 'small'],
-    // Converging spread: narrow at the back (near the volcano's peak),
-    // widening toward the front - column counts (2/3/3) differ from the
-    // farm's even 3/3/2 grid for its own visual identity.
-    layout: [
-      { x: -3, ...ROW_BACK, type: 'small', pool: ['small'] },
-      { x: 3, ...ROW_BACK, type: 'small', pool: ['small'] },
-      { x: -6, ...ROW_MID, type: 'small', pool: ['small'] },
-      { x: 0, ...ROW_MID, type: 'small', pool: ['small'] },
-      { x: 6, ...ROW_MID, type: 'small', pool: ['small'] },
-      { x: -7, ...ROW_FRONT, type: 'moving', pool: ['moving'] },
-      { x: 0, ...ROW_FRONT, type: 'moving', pool: ['moving'] },
-      { x: 7, ...ROW_FRONT, type: 'moving', pool: ['moving'] },
-      { x: 0, y: 4.4, z: TRIGGER_LANE_Z, type: 'trigger', pinned: true },
+    trigger: { x: 0, y: 4.4, z: -8 },
+    lanes: [
+      // Back: narrow, near the volcano's peak.
+      { z: -11, y: 3.1, width: 6, targetCount: 2, targetType: 'small', panelTexture: 'wood', panelTint: 'rgba(35,25,20,0.72)', panelFallbackColor: 0x3a322c, panelHeight: 3.0 },
+      // Middle: slopes diagonally left-to-right, following the mountain's flank.
+      { z: -8, y: 1.8, width: 14, targetCount: 3, targetType: 'small', tilt: 0.4, panelTexture: 'wood', panelTint: 'rgba(35,25,20,0.72)', panelFallbackColor: 0x3a322c, panelHeight: 2.8 },
+      // Front: shifted left, concentrating the moving targets on one side.
+      { z: -5, y: 1.1, centerX: -2.5, width: 9, targetCount: 3, targetType: 'moving', panelTexture: 'wood', panelTint: 'rgba(35,25,20,0.72)', panelFallbackColor: 0x3a322c, panelHeight: 3.0 },
     ],
   },
   {
@@ -911,41 +915,18 @@ const STAGES = [
     frameColor: '#d8b781', // sun-bleached wood
     frameColorDark: '#a8794a',
     rimColor: 0xa8794a,
-    pool: ['moving', 'small', 'bonus'],
-    // Staggered saloon signage: the middle row's 3 columns sit offset from
-    // the back row's 4 (rather than sharing a grid) and alternate up/down
-    // in y, reading as uneven boards rather than a flat grid.
-    layout: [
-      { x: -6, ...ROW_BACK, type: 'small', pool: ['small'] },
-      { x: -2, ...ROW_BACK, type: 'small', pool: ['small'] },
-      { x: 2, ...ROW_BACK, type: 'small', pool: ['small'] },
-      { x: 6, ...ROW_BACK, type: 'small', pool: ['small'] },
-      { x: -4, ...ROW_MID, y: ROW_MID.y + 0.15, type: 'small', pool: ['small'] },
-      { x: 0, ...ROW_MID, y: ROW_MID.y - 0.15, type: 'small', pool: ['small'] },
-      { x: 4, ...ROW_MID, y: ROW_MID.y + 0.15, type: 'small', pool: ['small'] },
-      { x: -2, ...ROW_FRONT, type: 'moving', pool: ['moving', 'bonus'] },
-      { x: 2, ...ROW_FRONT, type: 'bonus', pool: ['moving', 'bonus'] },
-      { x: 0, y: 4.4, z: TRIGGER_LANE_Z, type: 'trigger', pinned: true },
+    trigger: { x: 0, y: 4.4, z: -8 },
+    lanes: [
+      // Back: full-width row of ring targets.
+      { z: -11, y: 3.1, width: 14, targetCount: 4, targetType: 'small', panelTexture: 'wood', panelFallbackColor: 0xc9975a, panelHeight: 3.4 },
+      // Middle: a dedicated bonus-target lane, alternating up/down like
+      // uneven saloon signage instead of sitting flat.
+      { z: -8, y: 2.0, width: 9, targetCount: 3, targetType: 'bonus', stagger: 0.3, panelTexture: 'wood', panelFallbackColor: 0xc9975a, panelHeight: 2.6 },
+      // Front: shifted right, ducks concentrated on one side.
+      { z: -5, y: 1.1, centerX: 2, width: 5, targetCount: 2, targetType: 'moving', panelTexture: 'wood', panelFallbackColor: 0xc9975a, panelHeight: 3.0 },
     ],
   },
 ];
-
-// Wooden riser under each depth row so its targets read as mounted on a
-// shelf rather than floating in mid-air. One riser per row, sized to the
-// widest x-spread any stage's layout actually uses on that row (see the
-// STAGES layouts above); the target's own radius pokes up above it.
-function addTargetShelves() {
-  const shelfDepth = 1.4;
-  const shelfHeight = 0.5;
-  const material = new THREE.MeshStandardMaterial({ color: 0x5a3a20, roughness: 0.9 });
-  for (const [lane, shelfWidth] of [[ROW_BACK, 18], [ROW_MID, 16], [ROW_FRONT, 18]]) {
-    const geometry = new THREE.BoxGeometry(shelfWidth, shelfHeight, shelfDepth);
-    const shelf = new THREE.Mesh(geometry, material);
-    shelf.position.set(0, lane.y - 1.1, lane.z);
-    scene.add(shelf);
-  }
-}
-addTargetShelves();
 
 // --- Per-stage background decoration ---------------------------------------
 // Each stage's themed dressing (trees/fence for the farm, a volcano/rocks
@@ -1154,18 +1135,27 @@ function createVolcanoTexture() {
   return new THREE.CanvasTexture(canvas);
 }
 
-// --- Lane backdrop panels (per stage) ---------------------------------------
-// A tiled "Stall" panel filling the wall behind each depth lane's row of
-// targets, replacing the old bare-shelf-only look with a proper backdrop:
-// water/grass for the farm, wood for the western stage, and a darkened
-// (multiply-tinted) version of that same wood art standing in for rock on
-// the dinosaur stage (the pack has no rock/terrain panel of its own).
+// --- Lane backdrop panels + shelves (per stage) -----------------------------
+// A tiled "Stall" panel filling the wall behind each lane's row of targets,
+// plus a wooden shelf riser under it - every lane gets both (see the STAGES
+// `lanes` comment above), rebuilt from scratch on every stage load.
+// Positions come straight off the lane object (centerX/y/z), so an
+// off-center or narrower lane's panel and shelf still line up with its own
+// targets rather than the old shared-row assumption. The vertical offset
+// above the lane's own y is kept small (0.5, was 0.9) - a taller panel on a
+// near lane risks poking into the camera ray toward a farther lane's
+// targets and occluding them (this is what broke the previous two-row
+// version of this scene when a middle lane's panel was added).
 let lanePanelObjects = [];
+let laneShelfObjects = [];
 let waterPanelMaterials = []; // slowly scrolled in the main animate() loop
+const laneShelfMaterial = new THREE.MeshStandardMaterial({ color: 0x5a3a20, roughness: 0.9 });
 
 function clearLanePanels() {
   for (const obj of lanePanelObjects) scene.remove(obj);
+  for (const obj of laneShelfObjects) scene.remove(obj);
   lanePanelObjects = [];
+  laneShelfObjects = [];
   waterPanelMaterials = [];
 }
 
@@ -1174,7 +1164,7 @@ function addLanePanelFallback(lane, width, height, color) {
     new THREE.PlaneGeometry(width, height),
     new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.92 })
   );
-  mesh.position.set(0, lane.y - height / 2 + 0.9, lane.z - 0.5);
+  mesh.position.set(lane.centerX ?? 0, lane.y - height / 2 + 0.5, lane.z - 0.5);
   faceBillboardAtCamera(mesh);
   scene.add(mesh);
   lanePanelObjects.push(mesh);
@@ -1182,20 +1172,11 @@ function addLanePanelFallback(lane, width, height, color) {
 
 function addLanePanelWithTexture(lane, width, height, texture, animateWater) {
   const mesh = createTiledPanelMesh(texture, width, height);
-  mesh.position.set(0, lane.y - height / 2 + 0.9, lane.z - 0.5);
+  mesh.position.set(lane.centerX ?? 0, lane.y - height / 2 + 0.5, lane.z - 0.5);
   faceBillboardAtCamera(mesh);
   scene.add(mesh);
   lanePanelObjects.push(mesh);
   if (animateWater) waterPanelMaterials.push(mesh.material);
-}
-
-function addLanePanel(lane, width, height, textureKey, fallbackColor, animateWater) {
-  const texture = lanePanelTextures[textureKey];
-  if (!texture) {
-    addLanePanelFallback(lane, width, height, fallbackColor);
-    return;
-  }
-  addLanePanelWithTexture(lane, width, height, texture, animateWater);
 }
 
 function createDarkenedPanelTexture(sourceTexture, tintCss) {
@@ -1209,6 +1190,33 @@ function createDarkenedPanelTexture(sourceTexture, tintCss) {
   ctx.fillStyle = tintCss;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   return new THREE.CanvasTexture(canvas);
+}
+
+// Resolves a lane's panelTexture (optionally darkened via panelTint) and
+// falls back to a flat panelFallbackColor plane if that texture never
+// loads - the one place a lane's backdrop actually gets built.
+function buildLanePanel(lane) {
+  const width = lane.panelWidth ?? lane.width + 4;
+  const height = lane.panelHeight ?? 3.2;
+  let texture = lanePanelTextures[lane.panelTexture];
+  if (texture && lane.panelTint) texture = createDarkenedPanelTexture(texture, lane.panelTint);
+  if (!texture) {
+    addLanePanelFallback(lane, width, height, lane.panelFallbackColor ?? 0x888888);
+    return;
+  }
+  addLanePanelWithTexture(lane, width, height, texture, !!lane.animateWater);
+}
+
+// The shelf riser under a lane's targets - sized a little past its target
+// spread so the row reads as mounted on a real surface, not floating.
+function buildLaneShelf(lane) {
+  const shelfDepth = 1.4;
+  const shelfHeight = 0.5;
+  const geometry = new THREE.BoxGeometry(lane.width + 2, shelfHeight, shelfDepth);
+  const shelf = new THREE.Mesh(geometry, laneShelfMaterial);
+  shelf.position.set(lane.centerX ?? 0, lane.y - 1.1, lane.z);
+  scene.add(shelf);
+  laneShelfObjects.push(shelf);
 }
 
 function updateWaterPanels(elapsed) {
@@ -1226,16 +1234,14 @@ function placeClouds(fillCss) {
   placeProceduralDecoration(texture, [[-18, 10, -20], [-4, 13, -24], [10, 9.5, -19], [20, 12, -23]], 4.6, CLOUD_DRIFT);
 }
 
-function loadThemeDecorations(themeKey, token) {
+function loadThemeDecorations(stage, token) {
   clearLanePanels();
+  for (const lane of stage.lanes) {
+    buildLanePanel(lane);
+    buildLaneShelf(lane);
+  }
+  const themeKey = stage.themeKey;
   if (themeKey === 'farm') {
-    // Only the back and front rows get a dedicated backdrop panel - a
-    // middle one would sit close enough to camera to occlude the back
-    // row's targets at this depth (see ROW_MID's comment above); the
-    // middle row instead reads against whichever panel shows through
-    // behind it.
-    addLanePanel(ROW_BACK, 20, 3.6, 'grass1', 0x4caf50, false);
-    addLanePanel(ROW_FRONT, 16, 3.0, 'water1', 0x3ba7ff, true);
     placeClouds('rgba(255,255,255,0.92)');
     placeProceduralDecoration(
       createTreeTexture(),
@@ -1249,16 +1255,6 @@ function loadThemeDecorations(themeKey, token) {
     // Grazing silhouettes off to either side, clear of the target grid.
     placeProceduralDecoration(createAnimalSilhouetteTexture(), [[-11.5, 0.5, -4], [11.5, 0.5, -6]], 1.3, { bob: 0.05 });
   } else if (themeKey === 'dinosaur') {
-    const woodTexture = lanePanelTextures.wood;
-    const darkRockColor = 0x3a322c;
-    if (woodTexture) {
-      const darkTexture = createDarkenedPanelTexture(woodTexture, 'rgba(35,25,20,0.72)');
-      addLanePanelWithTexture(ROW_BACK, 20, 3.6, darkTexture, false);
-      addLanePanelWithTexture(ROW_FRONT, 16, 3.0, darkTexture, false);
-    } else {
-      addLanePanelFallback(ROW_BACK, 20, 3.6, darkRockColor);
-      addLanePanelFallback(ROW_FRONT, 16, 3.0, darkRockColor);
-    }
     placeClouds('rgba(224,196,224,0.85)');
     placeProceduralDecoration(createVolcanoTexture(), [[0, 5, -18.5]], 14);
     placeImageDecoration(ASSETS.decorations.rock, [[-5, 0.7, -6.5], [5, 0.7, -6.5], [-7, 0.7, -12.5], [7, 0.7, -12.5]], 1.4, 0x6b6b6b, token);
@@ -1273,8 +1269,6 @@ function loadThemeDecorations(themeKey, token) {
       { sway: 0.05 }
     );
   } else if (themeKey === 'western') {
-    addLanePanel(ROW_BACK, 20, 3.6, 'wood', 0xc9975a, false);
-    addLanePanel(ROW_FRONT, 16, 3.0, 'wood', 0xc9975a, false);
     placeClouds('rgba(255,224,196,0.85)');
     placeImageDecoration(ASSETS.decorations.desertBuilding, [[-7.5, 3, -14.5], [7.5, 3, -14.5]], 6, 0xc9a06a, token);
     placeImageDecoration(ASSETS.decorations.desertTent, [[-4.5, 1.4, -14], [4.5, 1.4, -14]], 2.8, 0xb8895a, token);
@@ -1835,17 +1829,19 @@ function updateWaitingScreen(connectedPlayers) {
   p2Slot.classList.toggle('online', connectedPlayers.includes(2));
 }
 
-// --- Target slots (one per stage layout entry) ------------------------------
-// Regular slots get sequential indices (0..4) used for chain-trigger
-// adjacency; a `pinned` slot (the trigger target) always gets index -1 so
-// it can never accidentally register as "adjacent" to a regular slot, and
-// always respawns as its own initialType rather than a pool draw. Pinned
-// (trigger) entries are dropped entirely here when FEATURE_TRIGGER_TARGET
-// is off, so the stage data can keep listing them without them ever
-// actually appearing.
+// --- Target slots (one per stage lane target, plus the pinned trigger) -----
+// Regular slots get sequential indices (0..N-1) used for chain-trigger
+// adjacency; the pinned trigger slot always gets index -1 so it can never
+// accidentally register as "adjacent" to a regular slot, and always
+// respawns as its own initialType rather than drawing from a pool. It's
+// dropped entirely here when FEATURE_TRIGGER_TARGET is off, so a stage can
+// keep declaring it without it ever actually appearing.
 function buildSlotsForStage(stage) {
+  const layout = stage.lanes.flatMap(laneTargetEntries);
+  if (stage.trigger) layout.push({ ...stage.trigger, type: 'trigger', pinned: true });
+
   let poolIndex = 0;
-  return stage.layout
+  return layout
     .filter((entry) => FEATURE_TRIGGER_TARGET || !entry.pinned)
     .map((entry) => {
       const pinned = !!entry.pinned;
@@ -1864,11 +1860,12 @@ function buildSlotsForStage(stage) {
         popSpin: null,
         waitTimer: 0,
         initialType: entry.type,
-        // A row-specific pool (see the STAGES layouts below) keeps a slot
-        // respawning within its own size/movement class - e.g. a back-row
-        // slot always comes back small and static - instead of drawing
-        // from the whole stage's pool and breaking the row's look.
-        pool: entry.pool || stage.pool,
+        // Every lane target's pool is set by laneTargetEntries() (defaults
+        // to just its own lane's targetType), so a slot always respawns
+        // within its own lane's class instead of drifting into another
+        // lane's - only the pinned trigger slot has no pool at all (it
+        // never draws one, see spawnSlotTarget()'s caller).
+        pool: entry.pool,
       };
     });
 }
@@ -1983,10 +1980,15 @@ function spawnBonusTargetAt(x, y, z) {
   });
 }
 
+// Bonus-wave/finish-rush targets aren't tied to any one stage's lanes, so
+// they get their own fixed depth/height range instead - matching roughly
+// the near-to-far span the lanes themselves sit within (see STAGES above).
+const RUSH_TARGET_Y_RANGE = [1.1, 3.1];
+const RUSH_TARGET_Z_RANGE = [-5, -11];
 function spawnWaveTarget() {
   const x = (Math.random() - 0.5) * 16;
-  const y = ROW_FRONT.y + Math.random() * (ROW_BACK.y - ROW_FRONT.y);
-  const z = ROW_FRONT.z + Math.random() * (ROW_BACK.z - ROW_FRONT.z); // between the near and far rows
+  const y = RUSH_TARGET_Y_RANGE[0] + Math.random() * (RUSH_TARGET_Y_RANGE[1] - RUSH_TARGET_Y_RANGE[0]);
+  const z = RUSH_TARGET_Z_RANGE[0] + Math.random() * (RUSH_TARGET_Z_RANGE[1] - RUSH_TARGET_Z_RANGE[0]);
   spawnBonusTargetAt(x, y, z);
 }
 
@@ -2352,7 +2354,7 @@ function loadStage(index) {
 
   decorationLoadToken++;
   clearStageDecorations();
-  loadThemeDecorations(stage.themeKey, decorationLoadToken);
+  loadThemeDecorations(stage, decorationLoadToken);
 
   clearBullets();
   clearSlots();
