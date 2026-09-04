@@ -838,6 +838,29 @@ const TARGET_TYPES = {
 //   stagger         - optional: y alternates +/- this per index instead of
 //                     sloping (uneven signage heights) - a lane uses at
 //                     most one of tilt/stagger
+//   staggerPattern  - optional: an explicit per-index y-offset array
+//                     (cycled if shorter than targetCount) instead of
+//                     stagger's simple alternation - lets a lane keep its
+//                     "low" points on whichever index/x is clear of a
+//                     neighboring lane's reach, overrides `stagger`
+//   conveyorSpeed   - optional: instead of staying put, every target on the
+//                     lane drifts at this many units/sec (negative = left)
+//                     and wraps around once it exits the screen - see
+//                     screenWrapBounds()/laneTargetEntries() below
+//   noMovement      - optional: suppresses targetType's own TARGET_TYPES
+//                     movement (e.g. 'bonus' normally sways +/-9, more than
+//                     enough to sweep back into a neighboring lane) so a
+//                     lane can use a type for its look/score/glow without
+//                     inheriting motion that would break its own carefully
+//                     placed x/y - other uses of that type (the wave/rush
+//                     bonus targets, say) are untouched, this only strips
+//                     movement from this one lane's own slots
+//   syncPhase       - optional: every target on the lane shares one sway
+//                     phase instead of each getting a different one, so
+//                     they swing in lockstep (constant relative spacing)
+//                     rather than periodically crossing paths - needed
+//                     whenever a lane's own spacing is smaller than twice
+//                     its movement amplitude
 //   panelTexture/panelTint/panelFallbackColor/panelWidth/panelHeight/
 //   animateWater    - passed straight through to buildLanePanel() below
 //
@@ -845,21 +868,37 @@ const TARGET_TYPES = {
 // /addSceneDecoration(), whose flanking decor is rescaled by the same
 // factor to keep the same depth balance).
 
+// The camera's actual visible x-range at a given depth, with a little
+// margin so a conveyor lane's targets fully exit the frame before
+// wrapping back around (see `conveyorSpeed` below) - keeps the wrap itself
+// off-screen instead of having a target visibly snap across the middle.
+function screenWrapBounds(z) {
+  const dist = camera.position.z - z;
+  const halfWidth = dist * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect;
+  const margin = 1.5;
+  return { min: -halfWidth - margin, max: halfWidth + margin };
+}
+
 // Evenly spaces `lane.targetCount` targets across `lane.width`, applying
 // its optional tilt/stagger to y - the one place that turns a lane
 // definition into actual per-target positions, used by both
 // buildSlotsForStage() (the targets) and nothing else (the panel/shelf
-// just read the lane's own z/y/width directly).
+// just read the lane's own z/y/width directly). `lane.conveyorSpeed`, if
+// set, makes every target on the lane drift continuously at that many
+// units/sec (positive = rightward) and wrap edge-to-edge instead of
+// staying put - `width`/`centerX` still place their initial positions.
 function laneTargetEntries(lane) {
   const entries = [];
   const step = lane.width / lane.targetCount;
   const pool = lane.pool ?? [lane.targetType];
+  const conveyor = lane.conveyorSpeed ? { speed: lane.conveyorSpeed, ...screenWrapBounds(lane.z) } : null;
   for (let i = 0; i < lane.targetCount; i++) {
     const x = (lane.centerX ?? 0) - lane.width / 2 + step * (i + 0.5);
     let y = lane.y;
     if (lane.tilt) y += lane.tilt * i;
-    if (lane.stagger) y += i % 2 === 0 ? lane.stagger : -lane.stagger;
-    entries.push({ x, y, z: lane.z, type: lane.targetType, pool });
+    if (lane.staggerPattern) y += lane.staggerPattern[i % lane.staggerPattern.length];
+    else if (lane.stagger) y += i % 2 === 0 ? lane.stagger : -lane.stagger;
+    entries.push({ x, y, z: lane.z, type: lane.targetType, pool, conveyor, noMovement: !!lane.noMovement, syncPhase: !!lane.syncPhase });
   }
   return entries;
 }
@@ -881,12 +920,14 @@ const STAGES = [
     rimColor: 0x8a6236,
     trigger: { x: 0, y: 4.4, z: -8 },
     lanes: [
-      // Back: full-width, straight fence-post row of ring targets.
-      { z: -11, y: 3.1, width: 12, targetCount: 3, targetType: 'small', panelTexture: 'grass1', panelFallbackColor: 0x4caf50, panelHeight: 3.4 },
-      // Middle: shifted left and narrower, breaking the symmetry.
-      { z: -8, y: 2.2, centerX: -2.5, width: 7, targetCount: 2, targetType: 'small', panelTexture: 'grass2', panelFallbackColor: 0x6ab86a, panelHeight: 2.6 },
+      // Back: a conveyor belt spanning edge-to-edge, drifting rightward.
+      { z: -11, y: 3.6, width: 24, targetCount: 4, targetType: 'small', conveyorSpeed: 1.3, panelTexture: 'grass1', panelFallbackColor: 0x4caf50, panelHeight: 3.4 },
+      // Middle: shifted well left and narrower, breaking the symmetry and
+      // clearing the front lane's shifted-right sweep below (a `moving`
+      // target's sway needs real x-separation from a neighboring row).
+      { z: -8, y: 2.0, centerX: -9.5, width: 6, targetCount: 2, targetType: 'small', panelTexture: 'grass2', panelFallbackColor: 0x6ab86a, panelHeight: 2.6 },
       // Front: shifted right, ducks, big and moving.
-      { z: -5, y: 1.1, centerX: 1, width: 6, targetCount: 2, targetType: 'moving', panelTexture: 'water1', panelFallbackColor: 0x3ba7ff, panelHeight: 3.0, animateWater: true },
+      { z: -5, y: 1.1, centerX: 1, width: 8, targetCount: 2, targetType: 'moving', syncPhase: true, panelTexture: 'water1', panelFallbackColor: 0x3ba7ff, panelHeight: 3.0, animateWater: true },
     ],
   },
   {
@@ -899,12 +940,20 @@ const STAGES = [
     rimColor: 0x2c211d,
     trigger: { x: 0, y: 4.4, z: -8 },
     lanes: [
-      // Back: narrow, near the volcano's peak.
-      { z: -11, y: 3.1, width: 6, targetCount: 2, targetType: 'small', panelTexture: 'wood', panelTint: 'rgba(35,25,20,0.72)', panelFallbackColor: 0x3a322c, panelHeight: 3.0 },
-      // Middle: slopes diagonally left-to-right, following the mountain's flank.
-      { z: -8, y: 1.8, width: 14, targetCount: 3, targetType: 'small', tilt: 0.4, panelTexture: 'wood', panelTint: 'rgba(35,25,20,0.72)', panelFallbackColor: 0x3a322c, panelHeight: 2.8 },
-      // Front: shifted left, concentrating the moving targets on one side.
-      { z: -5, y: 1.1, centerX: -2.5, width: 9, targetCount: 3, targetType: 'moving', panelTexture: 'wood', panelTint: 'rgba(35,25,20,0.72)', panelFallbackColor: 0x3a322c, panelHeight: 3.0 },
+      // Back: a conveyor belt spanning edge-to-edge, drifting leftward
+      // (opposite the farm's) past the volcano's base.
+      { z: -11, y: 3.6, width: 20, targetCount: 3, targetType: 'small', conveyorSpeed: -1.1, panelTexture: 'wood', panelTint: 'rgba(35,25,20,0.72)', panelFallbackColor: 0x3a322c, panelHeight: 3.0 },
+      // Middle: shifted right and slopes diagonally along the mountain's
+      // flank - shifted specifically so its x-range clears the front
+      // lane's left-shifted sweep below (a wide `moving` swing needs real
+      // x-separation from a neighboring row, not just a y gap).
+      { z: -8, y: 1.7, centerX: 10.5, width: 6, targetCount: 3, targetType: 'small', tilt: 0.15, panelTexture: 'wood', panelTint: 'rgba(35,25,20,0.72)', panelFallbackColor: 0x3a322c, panelHeight: 2.4 },
+      // Front: shifted left, concentrating the moving targets on one side -
+      // leaves the middle lane's shifted-right span clear above. syncPhase
+      // keeps the 3 ducks swaying in lockstep (constant spacing) instead
+      // of periodically crossing each other, since amplitude(2.6)*2 would
+      // otherwise exceed their own spacing.
+      { z: -5, y: 1.1, centerX: -2.5, width: 9, targetCount: 3, targetType: 'moving', syncPhase: true, panelTexture: 'wood', panelTint: 'rgba(35,25,20,0.72)', panelFallbackColor: 0x3a322c, panelHeight: 3.0 },
     ],
   },
   {
@@ -917,13 +966,18 @@ const STAGES = [
     rimColor: 0xa8794a,
     trigger: { x: 0, y: 4.4, z: -8 },
     lanes: [
-      // Back: full-width row of ring targets.
-      { z: -11, y: 3.1, width: 14, targetCount: 4, targetType: 'small', panelTexture: 'wood', panelFallbackColor: 0xc9975a, panelHeight: 3.4 },
-      // Middle: a dedicated bonus-target lane, alternating up/down like
-      // uneven saloon signage instead of sitting flat.
-      { z: -8, y: 2.0, width: 9, targetCount: 3, targetType: 'bonus', stagger: 0.3, panelTexture: 'wood', panelFallbackColor: 0xc9975a, panelHeight: 2.6 },
+      // Back: a conveyor belt spanning edge-to-edge, drifting rightward
+      // and a touch faster than the farm's for some wild-west urgency.
+      { z: -11, y: 3.6, width: 24, targetCount: 4, targetType: 'small', conveyorSpeed: 1.6, panelTexture: 'wood', panelFallbackColor: 0xc9975a, panelHeight: 3.4 },
+      // Middle: a dedicated bonus-target lane, shifted well left - clear of
+      // both the front lane's sweep below and the back conveyor's full
+      // width above, so its uneven saloon-signage stagger has room to work
+      // with on both sides. noMovement suppresses 'bonus' 's own +/-9 sway
+      // (meant for a single rare spawn, not a whole row of 3), which would
+      // otherwise sweep this carefully-placed lane right back into both.
+      { z: -9, y: 1.7, centerX: -9.5, width: 6, targetCount: 3, targetType: 'bonus', stagger: 0.2, noMovement: true, panelTexture: 'wood', panelFallbackColor: 0xc9975a, panelHeight: 2.4 },
       // Front: shifted right, ducks concentrated on one side.
-      { z: -5, y: 1.1, centerX: 2, width: 5, targetCount: 2, targetType: 'moving', panelTexture: 'wood', panelFallbackColor: 0xc9975a, panelHeight: 3.0 },
+      { z: -5, y: 1.1, centerX: 2, width: 8, targetCount: 2, targetType: 'moving', syncPhase: true, panelTexture: 'wood', panelFallbackColor: 0xc9975a, panelHeight: 3.0 },
     ],
   },
 ];
@@ -1254,6 +1308,10 @@ function loadThemeDecorations(stage, token) {
     placeImageDecoration(ASSETS.decorations.foliageGrass, [[-1, 0.3, -11.5], [1, 0.3, -11.5], [6, 0.3, -8.5]], 0.7, 0x4a9a4a, token);
     // Grazing silhouettes off to either side, clear of the target grid.
     placeProceduralDecoration(createAnimalSilhouetteTexture(), [[-11.5, 0.5, -4], [11.5, 0.5, -6]], 1.3, { bob: 0.05 });
+    // Foreground grass tufts closer than the front lane (z=-5), low and
+    // well clear of its x-range so they dress the near ground without
+    // blocking the view or the front row's own hitboxes.
+    placeImageDecoration(ASSETS.decorations.foliageGrass, [[-8, 0.25, -2.5], [8.5, 0.25, -2.8]], 0.6, 0x4a9a4a, token, { sway: 0.03 });
   } else if (themeKey === 'dinosaur') {
     placeClouds('rgba(224,196,224,0.85)');
     placeProceduralDecoration(createVolcanoTexture(), [[0, 5, -18.5]], 14);
@@ -1268,6 +1326,9 @@ function loadThemeDecorations(stage, token) {
       token,
       { sway: 0.05 }
     );
+    // Small foreground rocks closer than the front lane (z=-5), off to the
+    // sides clear of its x-range.
+    placeImageDecoration(ASSETS.decorations.rock, [[-10, 0.4, -2.5], [9.5, 0.4, -2.8]], 1.0, 0x6b6b6b, token);
   } else if (themeKey === 'western') {
     placeClouds('rgba(255,224,196,0.85)');
     placeImageDecoration(ASSETS.decorations.desertBuilding, [[-7.5, 3, -14.5], [7.5, 3, -14.5]], 6, 0xc9a06a, token);
@@ -1850,7 +1911,7 @@ function buildSlotsForStage(stage) {
         index,
         pinned,
         basePosition: new THREE.Vector3(entry.x, entry.y ?? 1.6, entry.z ?? -24),
-        phase: index * 1.7 + (pinned ? 3.1 : 0),
+        phase: entry.syncPhase ? 0 : index * 1.7 + (pinned ? 3.1 : 0),
         typeKey: null,
         state: 'empty', // 'active' | 'popping' | 'waiting'
         mesh: null,
@@ -1866,6 +1927,11 @@ function buildSlotsForStage(stage) {
         // lane's - only the pinned trigger slot has no pool at all (it
         // never draws one, see spawnSlotTarget()'s caller).
         pool: entry.pool,
+        // Set for a conveyor lane's targets (see laneTargetEntries()) -
+        // updateSlots() drifts basePosition.x by this every frame and
+        // wraps it at min/max instead of leaving the target parked.
+        conveyor: entry.conveyor ?? null,
+        noMovement: !!entry.noMovement,
       };
     });
 }
@@ -1886,15 +1952,21 @@ function spawnSlotTarget(slot, typeKey) {
   slot.spawnAge = 0;
 
   if (type.glow) {
+    // Sized to hug the target's own edge (was radius*4, a halo twice the
+    // target's diameter) and given a capped opacity - full-opacity additive
+    // blending at that size made neighboring glow targets' halos overlap
+    // into a washed-out bloom that could read as an unhit target "glowing"
+    // like it had just been shot.
     const glow = new THREE.Sprite(
       new THREE.SpriteMaterial({
         map: glowTexture,
         transparent: true,
+        opacity: 0.55,
         blending: THREE.AdditiveBlending,
         depthWrite: false,
       })
     );
-    glow.scale.set(type.radius * 4, type.radius * 4, 1);
+    glow.scale.set(type.radius * 2.2, type.radius * 2.2, 1);
     glow.position.copy(slot.basePosition);
     scene.add(glow);
     slot.glowMesh = glow;
@@ -1920,7 +1992,16 @@ function updateSlots(dt, elapsed) {
     if (slot.state === 'active') {
       const type = TARGET_TYPES[slot.typeKey];
       updateSpawnPop(slot, dt);
-      if (type.movement) {
+      if (slot.conveyor) {
+        // Continuous belt drift, wrapping edge-to-edge - mutates
+        // basePosition itself (not an offset from it) so a respawn after a
+        // hit picks up from wherever the belt currently is.
+        slot.basePosition.x += slot.conveyor.speed * dt;
+        if (slot.basePosition.x > slot.conveyor.max) slot.basePosition.x = slot.conveyor.min;
+        else if (slot.basePosition.x < slot.conveyor.min) slot.basePosition.x = slot.conveyor.max;
+        slot.mesh.position.x = slot.basePosition.x;
+        faceBillboardAtCamera(slot.mesh);
+      } else if (type.movement && !slot.noMovement) {
         const offset = Math.sin(elapsed * type.movement.speed + slot.phase) * type.movement.amplitude;
         slot.mesh.position.x = slot.basePosition.x + offset;
         faceBillboardAtCamera(slot.mesh); // stay camera-facing as it slides sideways
@@ -1929,7 +2010,7 @@ function updateSlots(dt, elapsed) {
         slot.mesh.rotation.z += dt * 0.6; // local Z is roughly "toward camera" post-lookAt, so this reads as an in-plane spin
         if (slot.glowMesh) {
           const pulse = 1 + 0.15 * Math.sin(elapsed * 4 + slot.phase);
-          slot.glowMesh.scale.set(type.radius * 4 * pulse, type.radius * 4 * pulse, 1);
+          slot.glowMesh.scale.set(type.radius * 2.2 * pulse, type.radius * 2.2 * pulse, 1);
           slot.glowMesh.position.copy(slot.mesh.position);
         }
       }
