@@ -1,11 +1,12 @@
 extends Node3D
 
 # 第1段階の土台（壁・床の設置/削除、自由飛行、DDAレイキャスト、チャンク単位の
-# MultiMesh描画、設置プレビュー）+ 第2段階の入口として4章の素材システムを実装。
-# 編集（3×3格子）・アンドゥ・セーブ・チャンクの動的生成/解放はまだ未実装。
+# MultiMesh描画、設置プレビュー）+ 4章の素材システム + 7章のアンドゥ/リドゥ履歴。
+# 編集（3×3格子）・セーブ・チャンクの動的生成/解放はまだ未実装。
 
 const WorldData = preload("res://scripts/World.gd")
 const ChunkRenderer = preload("res://scripts/ChunkRenderer.gd")
+const History = preload("res://scripts/History.gd")
 
 const WORLD_SIZE := 200.0 # 固定ワールドの一辺（m）
 
@@ -13,7 +14,7 @@ func _ready() -> void:
 	_setup_environment()
 	_setup_ground()
 	var player := _setup_player()
-	var material_label := _setup_ui()
+	var labels := _setup_ui()
 
 	var world := WorldData.new()
 
@@ -21,12 +22,16 @@ func _ready() -> void:
 	renderer.name = "ChunkRenderer"
 	add_child(renderer)
 
+	var history := History.new()
+
 	var build_system := preload("res://scripts/BuildSystem.gd").new()
 	build_system.name = "BuildSystem"
 	build_system.camera = player.get("camera")
 	build_system.world = world
 	build_system.renderer = renderer
-	build_system.material_label = material_label
+	build_system.history = history
+	build_system.material_label = labels["material"]
+	build_system.history_label = labels["history"]
 	add_child(build_system)
 
 # 仕様書10章末尾: 建築中は常に明るい固定光。時刻・天候は撮影モード専用（未実装）。
@@ -70,7 +75,7 @@ func _setup_player() -> Node3D:
 	add_child(player)
 	return player
 
-func _setup_ui() -> Label:
+func _setup_ui() -> Dictionary:
 	var layer := CanvasLayer.new()
 
 	var crosshair := ColorRect.new()
@@ -83,13 +88,20 @@ func _setup_ui() -> Label:
 	crosshair.position = Vector2(-2.0, -2.0)
 	layer.add_child(crosshair)
 
-	var material_label := Label.new()
-	material_label.position = Vector2(16.0, 16.0)
-	material_label.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0))
-	material_label.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.85))
-	material_label.add_theme_constant_override("shadow_offset_x", 1)
-	material_label.add_theme_constant_override("shadow_offset_y", 1)
+	var material_label := _make_corner_label(Vector2(16.0, 16.0))
 	layer.add_child(material_label)
 
+	var history_label := _make_corner_label(Vector2(16.0, 40.0))
+	layer.add_child(history_label)
+
 	add_child(layer)
-	return material_label
+	return {"material": material_label, "history": history_label}
+
+func _make_corner_label(pos: Vector2) -> Label:
+	var label := Label.new()
+	label.position = pos
+	label.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0))
+	label.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.85))
+	label.add_theme_constant_override("shadow_offset_x", 1)
+	label.add_theme_constant_override("shadow_offset_y", 1)
+	return label
