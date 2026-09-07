@@ -1,0 +1,20 @@
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are meant to be edited using the UI.
+
+config_version=5
+
+[application]
+
+config/name="Building Sandbox"
+config/description="戦闘のない建築特化サンドボックス（プロトタイプ・第1段階）"
+run/main_scene="res://scenes/Main.tscn"
+config/features=PackedStringArray("4.3", "Forward Plus")
+
+[physics]
+
+common/physics_ticks_per_second=60
+
+[rendering]
+
+environment/defaults/default_clear_color=Color(0.6, 0.75, 0.9, 1)
