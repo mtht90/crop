@@ -1,6 +1,7 @@
-class_name Grid
-
 # 仕様書 1.1 / 1.2: セル寸法とパーツの枠、壁の所有権の正規化。
+# class_name によるグローバル解決はエディタでプロジェクトを開いてキャッシュが
+# 作られるまで効かない（実際にハマった）ため使わず、各所で
+# `const Grid = preload("res://scripts/Grid.gd")` して参照する。
 const CELL_SIZE := 2.5
 
 enum Face { PX, NX, PZ, NZ, FLOOR }

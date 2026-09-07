@@ -1,7 +1,11 @@
 extends Node3D
 
-# 第1段階（仕様書14章）: 壁・床のみ、素材1種、固定サイズの平地、
-# 編集なし、保存なし。自由飛行と設置・削除だけを実装する。
+# 第1段階の土台（壁・床の設置/削除、自由飛行、DDAレイキャスト、チャンク単位の
+# MultiMesh描画、設置プレビュー）+ 第2段階の入口として4章の素材システムを実装。
+# 編集（3×3格子）・アンドゥ・セーブ・チャンクの動的生成/解放はまだ未実装。
+
+const WorldData = preload("res://scripts/World.gd")
+const ChunkRenderer = preload("res://scripts/ChunkRenderer.gd")
 
 const WORLD_SIZE := 200.0 # 固定ワールドの一辺（m）
 
@@ -9,8 +13,21 @@ func _ready() -> void:
 	_setup_environment()
 	_setup_ground()
 	var player := _setup_player()
-	_setup_build_system(player)
-	_setup_ui()
+	var material_label := _setup_ui()
+
+	var world := WorldData.new()
+
+	var renderer := ChunkRenderer.new()
+	renderer.name = "ChunkRenderer"
+	add_child(renderer)
+
+	var build_system := preload("res://scripts/BuildSystem.gd").new()
+	build_system.name = "BuildSystem"
+	build_system.camera = player.get("camera")
+	build_system.world = world
+	build_system.renderer = renderer
+	build_system.material_label = material_label
+	add_child(build_system)
 
 # 仕様書10章末尾: 建築中は常に明るい固定光。時刻・天候は撮影モード専用（未実装）。
 func _setup_environment() -> void:
@@ -30,30 +47,21 @@ func _setup_environment() -> void:
 	sun.light_energy = 1.3
 	add_child(sun)
 
-# 仕様書8.3: 地形はない。y=0 に固定サイズの平面（第1〜3段階は固定ワールドで可）。
+# 仕様書8.3: 地形はない。y=0 に固定サイズの平面。
+# 物理エンジンは使わない方針のため、当たり判定は持たせない（見た目のみ）。
 func _setup_ground() -> void:
-	var body := StaticBody3D.new()
-	body.name = "Ground"
-
 	var box := BoxMesh.new()
 	box.size = Vector3(WORLD_SIZE, 0.2, WORLD_SIZE)
 
 	var mesh_instance := MeshInstance3D.new()
+	mesh_instance.name = "Ground"
 	mesh_instance.mesh = box
 	mesh_instance.position.y = -0.1
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = Color(0.55, 0.55, 0.58)
 	mesh_instance.material_override = mat
-	body.add_child(mesh_instance)
 
-	var collision := CollisionShape3D.new()
-	var shape := BoxShape3D.new()
-	shape.size = box.size
-	collision.shape = shape
-	collision.position.y = -0.1
-	body.add_child(collision)
-
-	add_child(body)
+	add_child(mesh_instance)
 
 func _setup_player() -> Node3D:
 	var player: Node3D = preload("res://scripts/FreeCamera.gd").new()
@@ -62,15 +70,9 @@ func _setup_player() -> Node3D:
 	add_child(player)
 	return player
 
-func _setup_build_system(player: Node3D) -> void:
-	var build_system := preload("res://scripts/BuildSystem.gd").new()
-	build_system.name = "BuildSystem"
-	build_system.camera = player.get("camera")
-	build_system.parts_root = self
-	add_child(build_system)
-
-func _setup_ui() -> void:
+func _setup_ui() -> Label:
 	var layer := CanvasLayer.new()
+
 	var crosshair := ColorRect.new()
 	crosshair.color = Color(1.0, 1.0, 1.0, 0.85)
 	crosshair.size = Vector2(4.0, 4.0)
@@ -80,4 +82,14 @@ func _setup_ui() -> void:
 	crosshair.anchor_bottom = 0.5
 	crosshair.position = Vector2(-2.0, -2.0)
 	layer.add_child(crosshair)
+
+	var material_label := Label.new()
+	material_label.position = Vector2(16.0, 16.0)
+	material_label.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0))
+	material_label.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.85))
+	material_label.add_theme_constant_override("shadow_offset_x", 1)
+	material_label.add_theme_constant_override("shadow_offset_y", 1)
+	layer.add_child(material_label)
+
 	add_child(layer)
+	return material_label

@@ -1,100 +1,85 @@
 extends Node3D
 
-# 仕様書 2章・5章（第1段階の範囲）: 壁・床のみ、素材1種、編集なし。
-# 設置は向きを自動決定し、削除は照準したパーツを1つ消す。連続設置/削除に対応。
+# 仕様書2章・4章・5章: 設置・削除・向きの自動決定・素材の選択とプレビュー。
+# 物理エンジンは使わず、DDARaycaster でセルグリッドを直接判定する。
 
-# class_name によるグローバル解決は初回エディタ起動でキャッシュが作られるまで
-# 効かないため、preload で明示的に参照する。
 const Grid = preload("res://scripts/Grid.gd")
+const Materials = preload("res://scripts/Materials.gd")
+const ShapeMesh = preload("res://scripts/ShapeMesh.gd")
+const DDARaycaster = preload("res://scripts/DDARaycaster.gd")
+const PieceInstance = preload("res://scripts/PieceInstance.gd")
 
 const RAY_DISTANCE := 20.0
-const WALL_THICKNESS := 0.12
-const FLOOR_THICKNESS := 0.12
-const PLACE_OFFSET := 0.05
-
-enum PartKind { WALL, FLOOR }
+const PLACE_OFFSET := 0.02
 
 var camera: Camera3D
-var parts_root: Node3D
+var world       # World (data)
+var renderer    # ChunkRenderer (MultiMesh描画)
+var material_label: Label
 
-var current_kind: PartKind = PartKind.WALL
-var placed_parts: Dictionary = {} # key(String) -> StaticBody3D
-var last_place_key := ""
-var last_delete_key := ""
+var current_kind_is_wall := true # false ならFLOOR。ホイールで切替
+var current_material_id: int = 0 # 数字キー 1〜8 で切替
+
+var _preview: MeshInstance3D
+var _last_place_key := ""
+var _last_delete_key := ""
+
+func _ready() -> void:
+	_preview = MeshInstance3D.new()
+	_preview.visible = false
+	add_child(_preview)
+	_update_material_label()
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.pressed:
+		if event.button_index == MOUSE_BUTTON_WHEEL_UP or event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			current_kind_is_wall = not current_kind_is_wall
+	elif event is InputEventKey and event.pressed and not event.echo:
+		var slot: int = event.keycode - KEY_1
+		if slot >= 0 and slot < Materials.count():
+			current_material_id = slot
+			_update_material_label()
 
 func _process(_delta: float) -> void:
-	if camera == null:
+	if camera == null or world == null or renderer == null:
 		return
-	_handle_type_switch()
+
+	var target := _compute_target()
+	_update_preview(target)
 
 	if Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
-		_try_place()
+		_try_place(target)
 	else:
-		last_place_key = ""
+		_last_place_key = ""
 
 	if Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT):
 		_try_delete()
 	else:
-		last_delete_key = ""
+		_last_delete_key = ""
 
-func _handle_type_switch() -> void:
-	if Input.is_key_pressed(KEY_1):
-		current_kind = PartKind.WALL
-	elif Input.is_key_pressed(KEY_2):
-		current_kind = PartKind.FLOOR
+func _update_material_label() -> void:
+	if material_label != null:
+		material_label.text = "素材: %s" % Materials.name_of(current_material_id)
 
-func _camera_ray() -> Dictionary:
+func _compute_target() -> Dictionary:
 	var from := camera.global_position
 	var dir := -camera.global_transform.basis.z
-	var to := from + dir * RAY_DISTANCE
-	var space_state := camera.get_world_3d().direct_space_state
-	var query := PhysicsRayQueryParameters3D.create(from, to)
-	return space_state.intersect_ray(query)
-
-func _try_place() -> void:
-	var from := camera.global_position
-	var dir := -camera.global_transform.basis.z
-	var result := _camera_ray()
+	var result := DDARaycaster.raycast(world, from, dir, RAY_DISTANCE)
 
 	var point: Vector3
-	if result.size() > 0:
-		point = (result["position"] as Vector3) + (result["normal"] as Vector3) * PLACE_OFFSET
+	if result.get("hit", false):
+		point = (result["point"] as Vector3) + (result["normal"] as Vector3) * PLACE_OFFSET
 	else:
 		point = from + dir * RAY_DISTANCE
 
 	var cell := Grid.world_to_cell(point)
-	var face: int
-	if current_kind == PartKind.FLOOR:
-		face = Grid.Face.FLOOR
+	var shape_id: int
+	if current_kind_is_wall:
+		shape_id = _nearest_wall_face(cell, from)
 	else:
-		face = _nearest_wall_face(cell, from)
+		shape_id = Grid.Face.FLOOR
 
-	var k := Grid.key(cell, face)
-	if k == last_place_key:
-		return
-	last_place_key = k
-
-	if placed_parts.has(k):
-		return
-	_spawn_part(cell, face, k)
-
-func _try_delete() -> void:
-	var result := _camera_ray()
-	if result.size() == 0:
-		return
-
-	var collider: Object = result["collider"]
-	if collider == null or not (collider as Node).has_meta("part_key"):
-		return
-
-	var k: String = (collider as Node).get_meta("part_key")
-	if k == last_delete_key:
-		return
-	last_delete_key = k
-
-	if placed_parts.has(k):
-		(placed_parts[k] as Node).queue_free()
-		placed_parts.erase(k)
+	return {"cell": cell, "shape_id": shape_id}
 
 func _nearest_wall_face(cell: Vector3i, from_pos: Vector3) -> int:
 	var center := Grid.cell_origin(cell) + Vector3.ONE * (Grid.CELL_SIZE / 2.0)
@@ -104,43 +89,47 @@ func _nearest_wall_face(cell: Vector3i, from_pos: Vector3) -> int:
 	else:
 		return (Grid.Face.PZ if local.z > 0.0 else Grid.Face.NZ)
 
-func _spawn_part(cell: Vector3i, face: int, part_key: String) -> void:
-	var body := StaticBody3D.new()
-	body.set_meta("part_key", part_key)
+func _update_preview(target: Dictionary) -> void:
+	var cell: Vector3i = target["cell"]
+	var shape_id: int = target["shape_id"]
 
-	var box := BoxMesh.new()
-	var origin := Grid.cell_origin(cell)
-	var half := Grid.CELL_SIZE / 2.0
+	if world.has_slot(cell, shape_id):
+		_preview.visible = false
+		return
 
-	match face:
-		Grid.Face.PX:
-			box.size = Vector3(WALL_THICKNESS, Grid.CELL_SIZE, Grid.CELL_SIZE)
-			body.position = origin + Vector3(Grid.CELL_SIZE, half, half)
-		Grid.Face.NX:
-			box.size = Vector3(WALL_THICKNESS, Grid.CELL_SIZE, Grid.CELL_SIZE)
-			body.position = origin + Vector3(0.0, half, half)
-		Grid.Face.PZ:
-			box.size = Vector3(Grid.CELL_SIZE, Grid.CELL_SIZE, WALL_THICKNESS)
-			body.position = origin + Vector3(half, half, Grid.CELL_SIZE)
-		Grid.Face.NZ:
-			box.size = Vector3(Grid.CELL_SIZE, Grid.CELL_SIZE, WALL_THICKNESS)
-			body.position = origin + Vector3(half, half, 0.0)
-		Grid.Face.FLOOR:
-			box.size = Vector3(Grid.CELL_SIZE, FLOOR_THICKNESS, Grid.CELL_SIZE)
-			body.position = origin + Vector3(half, 0.0, half)
+	_preview.mesh = ShapeMesh.mesh_for(shape_id)
+	_preview.material_override = Materials.get_material(current_material_id)
+	_preview.transform = ShapeMesh.transform_for(cell, shape_id)
+	_preview.visible = true
 
-	var mesh_instance := MeshInstance3D.new()
-	mesh_instance.mesh = box
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.85, 0.83, 0.78)
-	mesh_instance.material_override = mat
-	body.add_child(mesh_instance)
+func _try_place(target: Dictionary) -> void:
+	var cell: Vector3i = target["cell"]
+	var shape_id: int = target["shape_id"]
 
-	var collision := CollisionShape3D.new()
-	var shape := BoxShape3D.new()
-	shape.size = box.size
-	collision.shape = shape
-	body.add_child(collision)
+	var slot_key := Grid.key(cell, shape_id)
+	if slot_key == _last_place_key:
+		return
+	_last_place_key = slot_key
 
-	parts_root.add_child(body)
-	placed_parts[part_key] = body
+	var piece: PieceInstance = world.place(cell, shape_id, current_material_id)
+	if piece != null:
+		renderer.on_piece_added(piece)
+
+func _try_delete() -> void:
+	var from := camera.global_position
+	var dir := -camera.global_transform.basis.z
+	var result := DDARaycaster.raycast(world, from, dir, RAY_DISTANCE)
+	if not result.get("hit", false):
+		return
+
+	var cell: Vector3i = result["cell"]
+	var face: int = result["face"]
+
+	var slot_key := Grid.key(cell, face)
+	if slot_key == _last_delete_key:
+		return
+	_last_delete_key = slot_key
+
+	var piece: PieceInstance = world.remove(cell, face)
+	if piece != null:
+		renderer.on_piece_removed(piece)
