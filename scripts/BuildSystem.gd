@@ -3,6 +3,10 @@ extends Node3D
 # 仕様書 2章・5章（第1段階の範囲）: 壁・床のみ、素材1種、編集なし。
 # 設置は向きを自動決定し、削除は照準したパーツを1つ消す。連続設置/削除に対応。
 
+# class_name によるグローバル解決は初回エディタ起動でキャッシュが作られるまで
+# 効かないため、preload で明示的に参照する。
+const Grid = preload("res://scripts/Grid.gd")
+
 const RAY_DISTANCE := 20.0
 const WALL_THICKNESS := 0.12
 const FLOOR_THICKNESS := 0.12
