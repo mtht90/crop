@@ -9,7 +9,10 @@
 **4章「素材」** と **7章「履歴（アンドゥ／リドゥ）」** を実装しています。
 
 - 壁・床の2種のみ（階段・屋根は未実装）
-- 形状（shape_id）と素材（material_id）を分離。8種の仮素材を数字キーで切替可能
+- 形状（shape_id）と素材（material_id）を分離。8種の素材を数字キーで切替可能
+- **`res://materials/<folder>/` にPBRテクスチャ（Color/NormalGL/Roughness/AmbientOcclusion）
+  を置くと自動でORMMaterial3Dとして使う。無ければ単色にフォールバックする（後述）**
+- **UVはセル1辺2.5mでテクスチャ1タイルになるようスケール。壁・床で見た目のタイル密度が揃う**
 - 設置プレビュー表示（選択中の素材が反映される）
 - **アンドゥ／リドゥ（`Ctrl+Z` / `Ctrl+Y`）。回数上限なし、差分ベースの履歴**
 - 固定サイズ（200m四方）の平坦な地面
@@ -65,6 +68,49 @@
   再構築される。1操作＝1エントリで、ボタンを押してから離すまでの連続設置／
   連続削除はまとめて1エントリになる
 
+## 素材テクスチャの配置方法
+
+`res://materials/<folder>/` に、ambientCG など由来のPBRテクスチャ4枚を
+**展開したままのファイル名で**置くと、`Materials.gd` が自動で読み込む。
+判定はファイル名の**末尾**だけを見るので、接頭辞（製品名や解像度）は自由でよい。
+
+| 拡張子の末尾 | 用途 |
+|---|---|
+| `..._Color.png` | アルベド（`albedo_texture`）。sRGBとして扱われる |
+| `..._NormalGL.png` | 法線（`normal_texture`）。OpenGL形式（Godot標準）前提 |
+| `..._Roughness.png` | 粗さ。AOと合成して`orm_texture`のGチャンネルに詰める |
+| `..._AmbientOcclusion.png` | 遮蔽。AOと合成して`orm_texture`のRチャンネルに詰める |
+
+例: `res://materials/concrete/Concrete034_1K-PNG_Color.png`
+
+**置くべきフォルダ名（`scripts/Materials.gd` の `DEFS` と対応）:**
+
+| フォルダ名 | 素材名（画面表示） |
+|---|---|
+| `concrete` | コンクリート |
+| `wood` | 木材 |
+| `tin` | トタン |
+| `tile` | タイル |
+| `mud_wall` | 土壁 |
+| `glass` | ガラス |
+| `brick` | れんが |
+| `white_paint` | 白ペンキ |
+
+4枚のうち1枚でも欠けている素材は、既存の単色 `ORMMaterial3D` に自動でフォールバックする
+（落ちない）。9種目以降を増やす場合は `Materials.gd` の `DEFS` に1行足すだけでよい。
+
+**画像を置いた後は、一度インポートを走らせる必要がある**（Godotエディタで開いて
+数秒待つか、CLIなら `godot --path . --import` を一度実行する）。`.import` サイドカーが
+無いテクスチャは `load()` に失敗する。
+
+**未実装（次回以降）**:
+- Downloads フォルダから `res://materials/` へコピーするスクリプト
+- VRAM圧縮・ミップマップ有効化などのインポート設定の自動適用
+  （sRGB/リニアの区別はGodotのシェーダー側が `albedo_texture` とその他で
+  自動的に扱うため、インポート時の設定は不要と確認済み）
+
+これらは実ファイルの正確なファイル名が分かってから着手する。
+
 ## ディレクトリ構成
 
 ```
@@ -76,8 +122,8 @@ scripts/BuildSystem.gd    設置・削除・プレビュー・素材選択のロ
 scripts/Grid.gd           セル座標・壁の正規化ユーティリティ
 scripts/PieceInstance.gd  1枠分のパーツデータ（shape_id / material_id）
 scripts/World.gd          スロット単位のワールドデータ（描画とは分離）
-scripts/Materials.gd      素材8種のカタログ（ORMMaterial3D、後でテクスチャ差込可）
-scripts/ShapeMesh.gd      shape_id ごとのメッシュ形状・セル内配置（キャッシュ付き）
+scripts/Materials.gd      素材8種のカタログ。テクスチャ読込・ORM合成・フォールバック
+scripts/ShapeMesh.gd      shape_idごとのメッシュ生成（UVはセル寸法基準で自前で張る）
 scripts/DDARaycaster.gd   物理エンジンを使わないセルグリッドDDAレイキャスト
 scripts/ChunkRenderer.gd  (チャンク, shape_id, material_id) 単位のMultiMesh描画
 scripts/History.gd        差分ベースのアンドゥ/リドゥ履歴（回数上限なし）
