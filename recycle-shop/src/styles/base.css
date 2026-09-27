@@ -1,0 +1,4 @@
+html, body { margin: 0; height: 100%; overflow: hidden; background: #0d0f14; }
+#app { position: fixed; inset: 0; }
+#app canvas { display: block; }
+.label-layer { position: absolute; inset: 0; pointer-events: none; }
