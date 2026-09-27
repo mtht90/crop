@@ -75,8 +75,12 @@ export function App() {
           </linearGradient>
         </defs>
       </svg>
+      <div className="rotate-hint">
+        <div>📱↻</div>
+        <p>画面を横向きにしてお楽しみください</p>
+      </div>
       <AnimatePresence mode="wait">
-        <motion.div key={screen === 'battle' ? `battle-${seq}` : screen} className="screen" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }}>
+        <motion.div key={screen === 'battle' ? `battle-${seq}` : screen} className="screen" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, pointerEvents: 'none' }} transition={{ duration: 0.25 }}>
           <Comp />
         </motion.div>
       </AnimatePresence>

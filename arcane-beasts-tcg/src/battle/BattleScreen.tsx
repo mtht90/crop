@@ -5,7 +5,7 @@ import { autoRetreatDiscard, canPay, energyUnits, maxHp, posEq, posKey, retreatC
 import type { Action, CardInst, EnergyCard, GameState, MonsterCard, Pos, Prompt, Slot, TrainerCard } from '../engine/types';
 import { CardBack, CardFace, EnergySymbol, RainbowSymbol } from '../ui/Card';
 import { Icon } from '../ui/Icon';
-import { artUrl } from '../lib/assets';
+import { artUrl, preload, TYPE_SCENE } from '../lib/assets';
 import { BattleController, HUMAN, useBattle } from './controller';
 import { FxLayer } from './FxLayer';
 import { PromptLayer } from './PromptLayer';
@@ -100,7 +100,7 @@ function SlotView({ s, slot, pos, highlight, selectable, onClick, big }: SlotPro
           ))}
         </div>
       )}
-      <BoardCard inst={top} face />
+      <BoardCard key={top.uid} inst={top} face />
       <div className="hpbar">
         <div className={`hpfill ${pct <= 0.25 ? 'low' : pct <= 0.5 ? 'mid' : ''}`} style={{ width: `${pct * 100}%` }} />
         <span>
@@ -450,6 +450,16 @@ export function BattleScreen() {
   const [logOpen, setLogOpen] = useState(false);
   const [discardView, setDiscardView] = useState<0 | 1 | null>(null);
   const [confirmEnd, setConfirmEnd] = useState(false);
+  const guideSeen = useStore((s) => !!s.save.guideSeen);
+  const [guide, setGuide] = useState(!guideSeen && !cfg.spectate);
+  const [ready, setReady] = useState(false);
+  const startedRef = useRef(false);
+  useEffect(() => {
+    if (ready && !guide && !startedRef.current && ctrlRef.current) {
+      startedRef.current = true;
+      ctrlRef.current.start();
+    }
+  }, [ready, guide]);
 
   // lifecycle
   useEffect(() => {
@@ -459,9 +469,21 @@ export function BattleScreen() {
     ctrlRef.current = ctrl;
     const boss = cfg.rival?.id === 'necros' || cfg.rival?.id === 'lilith';
     playMusic(boss ? 'boss' : (['battle1', 'battle2', 'battle3'] as const)[Math.floor(Math.random() * 3)]);
-    const t = setTimeout(() => ctrl.start(), 400);
+    // preload the art used by both decks so cards never pop in
+    const urls = new Set<string>([artUrl(cfg.scene)]);
+    for (const cid of [...cfg.playerDeck, ...cfg.oppDeck]) {
+      const c = card(cid);
+      if (c.kind === 'monster') {
+        urls.add(artUrl(c.art));
+        urls.add(artUrl(c.scene ?? TYPE_SCENE[c.type]));
+      } else if (c.kind === 'trainer' && c.art !== 'item') urls.add(artUrl(c.art));
+    }
+    let cancelled = false;
+    Promise.race([preload([...urls]), new Promise((r) => setTimeout(r, 2500))]).then(() => {
+      if (!cancelled) setReady(true);
+    });
     return () => {
-      clearTimeout(t);
+      cancelled = true;
       ctrl.dispose();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -682,14 +704,14 @@ export function BattleScreen() {
             <DeckPile s={s} p={1} />
             <DiscardPile s={s} p={1} onOpen={() => setDiscardView(1)} />
             <div className="zone-active opp">
-              {opp.active && <SlotView s={s} slot={opp.active} pos={{ p: 1, z: 'active' }} big highlight={slotHL({ p: 1, z: 'active' })} onClick={() => onSlotClick({ p: 1, z: 'active' })} />}
+              {opp.active && <SlotView key={opp.active.stack[0].uid} s={s} slot={opp.active} pos={{ p: 1, z: 'active' }} big highlight={slotHL({ p: 1, z: 'active' })} onClick={() => onSlotClick({ p: 1, z: 'active' })} />}
             </div>
             <div className="zone-bench opp">
               {Array.from({ length: 5 }, (_, i) =>
                 opp.bench[i] ? (
-                  <SlotView key={i} s={s} slot={opp.bench[i]} pos={{ p: 1, z: 'bench', i }} highlight={slotHL({ p: 1, z: 'bench', i })} onClick={() => onSlotClick({ p: 1, z: 'bench', i })} />
+                  <SlotView key={opp.bench[i].stack[0].uid} s={s} slot={opp.bench[i]} pos={{ p: 1, z: 'bench', i }} highlight={slotHL({ p: 1, z: 'bench', i })} onClick={() => onSlotClick({ p: 1, z: 'bench', i })} />
                 ) : (
-                  <EmptySlot key={i} pos={{ p: 1, z: 'bench', i }} />
+                  <EmptySlot key={`e${i}`} pos={{ p: 1, z: 'bench', i }} />
                 ),
               )}
             </div>
@@ -699,7 +721,7 @@ export function BattleScreen() {
             <DeckPile s={s} p={0} />
             <DiscardPile s={s} p={0} onOpen={() => setDiscardView(0)} />
             <div className="zone-active me">
-              {me.active && <SlotView s={s} slot={me.active} pos={{ p: 0, z: 'active' }} big highlight={slotHL({ p: 0, z: 'active' })} selectable={myAction} onClick={() => onSlotClick({ p: 0, z: 'active' })} />}
+              {me.active && <SlotView key={me.active.stack[0].uid} s={s} slot={me.active} pos={{ p: 0, z: 'active' }} big highlight={slotHL({ p: 0, z: 'active' })} selectable={myAction} onClick={() => onSlotClick({ p: 0, z: 'active' })} />}
               {setupActiveInst && (
                 <div className="slot slot-active" data-drop="0a">
                   <BoardCard inst={setupActiveInst} face onClick={() => onSetupPick(setupActiveInst.uid)} />
@@ -725,9 +747,9 @@ export function BattleScreen() {
                   );
                 }
                 return me.bench[i] ? (
-                  <SlotView key={i} s={s} slot={me.bench[i]} pos={pos} highlight={slotHL(pos)} selectable={myAction} onClick={() => onSlotClick(pos)} />
+                  <SlotView key={me.bench[i].stack[0].uid} s={s} slot={me.bench[i]} pos={pos} highlight={slotHL(pos)} selectable={myAction} onClick={() => onSlotClick(pos)} />
                 ) : (
-                  <EmptySlot key={i} pos={pos} highlight={benchTarget && i === me.bench.length} onClick={() => onSlotClick(pos)} />
+                  <EmptySlot key={`e${i}`} pos={pos} highlight={benchTarget && i === me.bench.length} onClick={() => onSlotClick(pos)} />
                 );
               })}
             </div>
@@ -802,13 +824,13 @@ export function BattleScreen() {
           </button>
 
           <AnimatePresence>
-            {menu && myAction && <ActionMenu s={s} pos={menu} legal={legal} onAct={act} onRetreat={startRetreat} onClose={() => setMenu(null)} />}
+            {menu && myAction && <ActionMenu key={posKey(menu)} s={s} pos={menu} legal={legal} onAct={act} onRetreat={startRetreat} onClose={() => setMenu(null)} />}
           </AnimatePresence>
 
           {/* selection helpers */}
           <AnimatePresence>
-            {selected !== null && myAction && (
-              <motion.div className="sel-bar" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+ {selected !== null && myAction && (
+              <motion.div key="sel" className="sel-bar" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
                 <span>{selHint(card(me.hand.find((c) => c.uid === selected)?.cid ?? ''), benchTarget, targetKeys.size > 0)}</span>
                 {selNoTarget && (
                   <button className="btn blue" onClick={() => act(selNoTarget)}>
@@ -820,8 +842,8 @@ export function BattleScreen() {
                 </button>
               </motion.div>
             )}
-            {retreat && (
-              <motion.div className="sel-bar" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+ {retreat && (
+              <motion.div key="retreat" className="sel-bar" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
                 {retreat.choosing ? (
                   <span>入れ替えるベンチモンスターを選んでください</span>
                 ) : (
@@ -832,16 +854,16 @@ export function BattleScreen() {
                 </button>
               </motion.div>
             )}
-            {isSetup && (
-              <motion.div className="sel-bar setup" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+ {isSetup && (
+              <motion.div key="setup" className="sel-bar setup" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
                 <span>{setupActive === null ? 'バトル場に出すたねモンスターを選んでください' : 'ベンチに出すたねモンスターを選んでください（任意）'}</span>
                 <button className="btn blue" disabled={setupActive === null} onClick={finishSetup}>
                   準備完了
                 </button>
               </motion.div>
             )}
-            {slotPrompt && slotPrompt.player === HUMAN && (
-              <motion.div className="sel-bar prompt" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+ {slotPrompt && slotPrompt.player === HUMAN && (
+              <motion.div key={`slot-${slotPrompt.title}`} className="sel-bar prompt" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
                 <span>{slotPrompt.title}</span>
                 {slotPrompt.optional && (
                   <button className="btn ghost small" onClick={() => ctrl?.answer({ type: 'slot', pos: null })}>
@@ -857,6 +879,37 @@ export function BattleScreen() {
           <PromptLayer ctrl={ctrl} />
           {discardView !== null && <DiscardModal cards={s.players[discardView].discard} title={discardView === 0 ? 'あなたのトラッシュ' : '相手のトラッシュ'} onClose={() => setDiscardView(null)} />}
           <ResultOverlay />
+          {guide && (
+            <div className="modal-back" style={{ zIndex: 640 }}>
+              <motion.div className="panel guide" initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}>
+                <h3>操作ガイド</h3>
+                <ol>
+                  <li>
+                    手札のカードは <b>ドラッグ</b> で場に出すか、<b>クリック</b> で選んでから出し先をクリック
+                  </li>
+                  <li>
+                    光っているカードが今使えるカード。エネルギーは1ターンに1枚まで
+                  </li>
+                  <li>
+                    自分の <b>バトル場のモンスターをクリック</b> するとワザ・特性・にげるのメニュー
+                  </li>
+                  <li>
+                    カードに <b>マウスを乗せる（スマホは長押し）</b> と拡大表示。右上の本アイコンでログ
+                  </li>
+                  <li>相手のサイドを6枚とれば勝ち！Ωモンスターを倒すと2枚とれる</li>
+                </ol>
+                <button
+                  className="btn big"
+                  onClick={() => {
+                    setGuide(false);
+                    useStore.getState().update((s) => void (s.guideSeen = true));
+                  }}
+                >
+                  はじめる
+                </button>
+              </motion.div>
+            </div>
+          )}
         </div>
       </div>
     </div>

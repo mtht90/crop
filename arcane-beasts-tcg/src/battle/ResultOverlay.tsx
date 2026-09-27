@@ -6,6 +6,7 @@ import { artUrl } from '../lib/assets';
 import { Icon } from '../ui/Icon';
 import { foley, playMusic, sfx } from '../audio/audio';
 import { particles } from './particles';
+import { useFx } from './fx';
 
 export function ResultOverlay() {
   const result = useBattle((s) => s.result);
@@ -20,6 +21,7 @@ export function ResultOverlay() {
   useEffect(() => {
     if (!result || !cfg || applied.current) return;
     applied.current = true;
+    useFx.setState({ banner: null, attack: null, coin: null, toast: null });
     const win = result.winner === 0;
     let coins = win ? cfg.reward : Math.round(cfg.reward * 0.2);
     let first = false;

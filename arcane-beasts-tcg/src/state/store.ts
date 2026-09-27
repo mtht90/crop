@@ -32,6 +32,7 @@ export interface Save {
   newCards: string[];
   settings: Settings;
   started: boolean;
+  guideSeen?: boolean;
 }
 
 export interface BattleConfig {

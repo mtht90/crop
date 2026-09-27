@@ -37,6 +37,8 @@ export const useBattle = create<BattleStore>((set) => ({
   setHover: (cid) => set({ hover: cid }),
 }));
 
+if (import.meta.env.DEV) (window as unknown as Record<string, unknown>).__battle = useBattle;
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export class BattleController {

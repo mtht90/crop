@@ -15,18 +15,21 @@ const shot = async (n) => page.screenshot({ path: `${out}-${String(shots++).padS
 async function waitMyAction(max = 60000) {
   const t0 = Date.now();
   while (Date.now() - t0 < max) {
+    if (await has('.guide')) { await btn('はじめる').click(); await wait(300); }
     if (await has('.result')) return 'over';
-    if (await has('.sel-bar.setup')) return 'setup';
-    if (await has('.choice-modal')) return 'choice';
-    if (await has('.prompt-modal')) return 'cards';
-    if (await has('.sel-bar.prompt')) return 'slot';
-    if (await page.locator('.end-turn.ready').count()) return 'action';
+    const pt = await page.evaluate(() => { const p = window.__battle?.getState().prompt; return p && p.player === 0 ? p.type : null; });
+    if (pt === 'setup') return 'setup';
+    if (pt === 'choice') return 'choice';
+    if (pt === 'cards') { if (await has('.prompt-modal')) return 'cards'; }
+    if (pt === 'slot') return 'slot';
+    if (pt === 'action' && (await page.locator('.end-turn.ready').count())) return 'action';
     await wait(300);
   }
   return 'timeout';
 }
 
-for (let step = 0; step < 80; step++) {
+const t00 = Date.now();
+for (let step = 0; step < 80 && Date.now() - t00 < 200000; step++) {
   const st = await waitMyAction();
   if (st === 'over' || st === 'timeout') { console.log('end', st); break; }
   if (st === 'choice') { await btn('先攻').click(); continue; }
@@ -51,7 +54,15 @@ for (let step = 0; step < 80; step++) {
   }
   if (st === 'slot') {
     await shot('slot');
-    await page.locator('.slot.hl').first().click();
+    const ok = await page.locator('.slot.hl').first().click({ timeout: 4000 }).then(() => true).catch(() => false);
+    if (!ok) {
+      const dbg = await page.evaluate(() => {
+        const st = window.__battle.getState();
+        return { prompt: st.prompt, bench: st.view?.players[0].bench.length, active: !!st.view?.players[0].active, slots: [...document.querySelectorAll('.zone-bench.me .slot, .zone-active.me .slot')].map((e) => e.className + ' ' + e.getAttribute('data-pos')) };
+      });
+      console.log('DEBUG', JSON.stringify(dbg));
+      break;
+    }
     continue;
   }
   // my main action: try energy -> active, bench basic via drag, attack

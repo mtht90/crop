@@ -1,0 +1,15 @@
+import { chromium } from 'playwright';
+const [url, wait = '15000', w = '1600', h = '900', out] = process.argv.slice(2);
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', args: ['--autoplay-policy=no-user-gesture-required'] });
+const page = await browser.newPage({ viewport: { width: Number(w), height: Number(h) } });
+const fails = new Set(); let ok = 0;
+page.on('response', (r) => { if (r.status() >= 400) fails.add(r.status() + ' ' + r.url()); else ok++; });
+page.on('requestfailed', (r) => fails.add('FAILED ' + r.url() + ' ' + r.failure()?.errorText));
+page.on('pageerror', (e) => console.log('pageerror:', e.message));
+page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') console.log(m.type(), m.text().slice(0, 200)); });
+await page.goto(url);
+if (process.env.CLICK) await page.mouse.click(10, 10);
+await page.waitForTimeout(Number(wait));
+if (out) await page.screenshot({ path: out });
+console.log('ok responses', ok); console.log([...fails].join('\n'));
+await browser.close();
