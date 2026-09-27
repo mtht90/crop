@@ -4,36 +4,29 @@ import type { MonsterCard } from '../../engine/types';
 import type { Booster } from '../../state/store';
 import { artUrl, TYPE_SCENE } from '../../lib/assets';
 
-/** y position (fraction of pack height) of the tear line */
-export const TEAR_Y = 0.082;
+/** y position (fraction of pack height) of the tear line, just under the top seal */
+export const TEAR_Y = 0.07;
 
 // ---------------------------------------------------------------------------
-// Clip-path geometry
+// Clip-path geometry: fine crimped seals top and bottom, jagged tear edge
 // ---------------------------------------------------------------------------
-const TEETH = 26;
-const CRIMP = 1.6; // % of height
+const TEETH = 44;
+const CRIMP = 0.9; // % of height
 
 function crimpPolygon(): string {
   const pts: string[] = [];
-  for (let i = 0; i <= TEETH; i++) {
-    const x = (i / TEETH) * 100;
-    pts.push(`${x}% ${i % 2 ? CRIMP : 0}%`);
-  }
-  for (let i = TEETH; i >= 0; i--) {
-    const x = (i / TEETH) * 100;
-    pts.push(`${x}% ${100 - (i % 2 ? CRIMP : 0)}%`);
-  }
+  for (let i = 0; i <= TEETH; i++) pts.push(`${(i / TEETH) * 100}% ${i % 2 ? CRIMP : 0}%`);
+  for (let i = TEETH; i >= 0; i--) pts.push(`${(i / TEETH) * 100}% ${100 - (i % 2 ? CRIMP : 0)}%`);
   return `polygon(${pts.join(',')})`;
 }
 export const CRIMP_CLIP = crimpPolygon();
 
-/** jagged tear edge, deterministic so both halves match */
 function tearEdge(): [number, number][] {
   const pts: [number, number][] = [];
-  let seed = 7;
-  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-  const n = 34;
-  for (let i = 0; i <= n; i++) pts.push([(i / n) * 100, TEAR_Y * 100 + (rnd() - 0.5) * 1.6]);
+  let seed = 11;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const n = 48;
+  for (let i = 0; i <= n; i++) pts.push([(i / n) * 100, TEAR_Y * 100 + (rnd() - 0.5) * 0.9]);
   return pts;
 }
 const EDGE = tearEdge();
@@ -41,20 +34,19 @@ export const TOP_CLIP = `polygon(0% 0%, 100% 0%, ${[...EDGE].reverse().map(([x, 
 export const BODY_CLIP = `polygon(${EDGE.map(([x, y]) => `${x}% ${y}%`).join(',')}, 100% 100%, 0% 100%)`;
 
 // ---------------------------------------------------------------------------
-// Pack
-// ---------------------------------------------------------------------------
 interface Props {
   booster: Booster;
   className?: string;
   style?: React.CSSProperties;
   part?: 'full' | 'top' | 'body';
+  /** follow the pointer with tilt + specular highlight */
   tilt?: boolean;
-  god?: boolean;
+  /** freeze ambient animations (used for background packs) */
   still?: boolean;
-  onClick?: () => void;
+  god?: boolean;
 }
 
-export const BoosterPack = memo(function BoosterPack({ booster, className, style, part = 'full', tilt, god, still, onClick }: Props) {
+export const BoosterPack = memo(function BoosterPack({ booster, className, style, part = 'full', tilt, still, god }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const mascot = useMemo(() => byName(booster.mascot) as MonsterCard, [booster.mascot]);
   const move = (e: React.PointerEvent) => {
@@ -62,47 +54,51 @@ export const BoosterPack = memo(function BoosterPack({ booster, className, style
     const r = ref.current.getBoundingClientRect();
     const x = (e.clientX - r.left) / r.width;
     const y = (e.clientY - r.top) / r.height;
-    ref.current.style.setProperty('--mx', `${x * 100}%`);
-    ref.current.style.setProperty('--my', `${y * 100}%`);
-    ref.current.style.setProperty('--rx', `${(0.5 - y) * 14}deg`);
-    ref.current.style.setProperty('--ry', `${(x - 0.5) * 18}deg`);
+    const s = ref.current.style;
+    s.setProperty('--mx', `${x * 100}%`);
+    s.setProperty('--my', `${y * 100}%`);
+    s.setProperty('--rx', `${(0.5 - y) * 9}deg`);
+    s.setProperty('--ry', `${(x - 0.5) * 13}deg`);
   };
   const leave = () => {
-    const el = ref.current;
-    if (!el) return;
-    el.style.setProperty('--rx', '0deg');
-    el.style.setProperty('--ry', '0deg');
+    const s = ref.current?.style;
+    if (!s) return;
+    s.setProperty('--rx', '0deg');
+    s.setProperty('--ry', '0deg');
+    s.setProperty('--mx', '32%');
+    s.setProperty('--my', '22%');
   };
   const clip = part === 'top' ? TOP_CLIP : part === 'body' ? BODY_CLIP : undefined;
   return (
     <div
       ref={ref}
-      className={`bp ${tilt ? 'tilt' : ''} ${god ? 'god' : ''} ${still ? 'still' : ''} ${className ?? ''}`}
+      className={`bp ${tilt ? 'tilt' : ''} ${still ? 'still' : ''} ${god ? 'god' : ''} ${part !== 'full' ? 'part' : ''} ${className ?? ''}`}
       style={{ ['--hue' as string]: booster.hue, ['--hue2' as string]: booster.hue2, ...style }}
       onPointerMove={move}
       onPointerLeave={leave}
-      onClick={onClick}
     >
+      {part === 'full' && <div className="bp-shadow" />}
       <div className="bp-clip" style={clip ? { clipPath: clip } : undefined}>
         <div className="bp-shape" style={{ clipPath: CRIMP_CLIP }}>
-          <div className="bp-bg" />
+          <div className="bp-base" />
           <img className="bp-scene" src={artUrl(mascot.scene ?? TYPE_SCENE[mascot.type])} alt="" draggable={false} />
-          <div className="bp-burst" />
+          <div className="bp-grade" />
           <img className="bp-mascot" src={artUrl(mascot.art)} alt="" draggable={false} />
-          <div className="bp-crimp top" />
-          <div className="bp-crimp bottom" />
+          <div className="bp-fade" />
           <div className="bp-logo">
             <span className="a">ARCANE BEASTS</span>
-            <span className="b">TRADING CARD GAME</span>
+            <span className="b">目覚めの咆哮</span>
           </div>
-          <div className="bp-label">
-            <span className="set">拡張パック 第1弾「目覚めの咆哮」</span>
-            <span className="name">{booster.name}</span>
-            <span className="count">5枚入り</span>
+          <div className="bp-foot">
+            <span className="line" />
+            <span className="t">BOOSTER PACK</span>
+            <span className="line" />
           </div>
-          <div className="bp-foil" />
-          <div className="bp-gloss" />
-          <div className="bp-wrap" />
+          <div className="bp-seal top" />
+          <div className="bp-seal bottom" />
+          <div className="bp-pillow" />
+          <div className="bp-spec" />
+          <div className="bp-sheen" />
         </div>
       </div>
     </div>

@@ -47,6 +47,9 @@ const PRESETS: Record<string, Preset> = {
   sleep: { colors: ['#ffffff', '#cfe3ff'], shape: ['z'], speed: [0.5, 2], size: [8, 14], life: [50, 80], g: -0.08, drag: 0.98, glow: false },
   ko: { colors: ['#ffffff', '#cccccc', '#888888', '#444444'], shape: ['square', 'circle'], speed: [2, 11], size: [2, 6], life: [40, 70], g: 0.18, drag: 0.96, glow: false },
   gold: { colors: ['#fff6c9', '#ffd86b', '#f2c75c', '#ffffff'], shape: ['star', 'spark'], speed: [2, 12], size: [3, 8], life: [50, 100], g: 0.08, drag: 0.97, glow: true },
+  mote: { colors: ['#ffffff', '#fff6dc', '#ffe7a8'], shape: ['circle'], speed: [0.4, 2.6], size: [0.8, 2.2], life: [70, 140], g: -0.025, drag: 0.985, glow: true },
+  sparkw: { colors: ['#ffffff', '#fffaf0', '#fff1c9'], shape: ['spark'], speed: [3, 9], size: [0.8, 1.6], life: [14, 28], g: 0.05, drag: 0.9, glow: true },
+  glint: { colors: ['#ffffff', '#fff3c4', '#ffd98a'], shape: ['star'], speed: [0.6, 4], size: [1.5, 3.5], life: [50, 110], g: -0.01, drag: 0.975, glow: true },
   rainbow: { colors: ['#ff5f5f', '#ffd84a', '#6ee36e', '#4fb3ff', '#b77ae6', '#ff5fa2', '#ffffff'], shape: ['star', 'spark'], speed: [3, 14], size: [3, 8], life: [60, 110], g: 0.06, drag: 0.97, glow: true },
 };
 

@@ -1,29 +1,32 @@
 // ============================================================================
-// Pack opening — modelled on the TCG Pocket flow:
-//   booster select → pick one pack from a coverflow → trace the top edge to
-//   tear it → cards rise out of the pack → swipe through the stack (rares last,
-//   ★ cards arrive face-down and flip on tap) → results grid
+// Pack opening, modelled on the TCG Pocket flow:
+//   booster select → pick a pack → trace the top edge to tear it → cards rise
+//   out of the pack → swipe through the stack (rarest last; ★ cards arrive
+//   face-down and turn over on tap) → results
+// Effects are light-based (bloom, rings, glints); motion is transform/opacity.
 // ============================================================================
 import { AnimatePresence, animate, motion, useAnimationControls, useMotionValue, useTransform, type MotionValue } from 'motion/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CardDef, Rarity } from '../engine/types';
 import { byName } from '../engine/cards';
-import { BOOSTERS, openPack, PACK_PRICE, PACK_SIZE, RARITY_ORDER, useStore, type Booster } from '../state/store';
-import { artUrl, TYPE_SCENE } from '../lib/assets';
+import { BOOSTERS, openPack, PACK_PRICE, RARITY_ORDER, useStore, type Booster } from '../state/store';
 import { CardBack, CardFace } from '../ui/Card';
 import { TopBar } from '../ui/TopBar';
 import { Icon } from '../ui/Icon';
 import { foley, playMusic, sfx } from '../audio/audio';
 import { particles } from '../battle/particles';
 import { BoosterPack, TEAR_Y } from './pack/BoosterPack';
-import type { MonsterCard } from '../engine/types';
 import './pack/pack.css';
 
-type Phase = 'choose' | 'tear' | 'emerge' | 'reveal' | 'results';
+type Phase = 'choose' | 'tear' | 'reveal' | 'results';
 
-// ---------------------------------------------------------------------------
-// helpers
-// ---------------------------------------------------------------------------
+const EASE_OUT = [0.16, 1, 0.3, 1] as const;
+const EASE_IN = [0.7, 0, 0.84, 0] as const;
+const EASE_IN_OUT = [0.65, 0, 0.35, 1] as const;
+
+const isStar = (r: Rarity) => r === 'SR' || r === 'UR';
+const rareColor = (r: Rarity) => (r === 'UR' ? '#ffd27a' : r === 'SR' ? '#bfe6ff' : '#ffffff');
+
 function useUnit() {
   const calc = () => Math.min(window.innerWidth / 100, (window.innerHeight * 1.7778) / 100);
   const [u, setU] = useState(calc);
@@ -35,91 +38,68 @@ function useUnit() {
   return u;
 }
 
-const isStar = (r: Rarity) => r === 'SR' || r === 'UR';
-
-function Diamond() {
-  return (
-    <svg viewBox="0 0 20 20">
-      <path d="M10 1 L19 10 L10 19 L1 10 Z" fill="url(#rm-silver)" stroke="#3a3f4a" strokeWidth="1.2" />
-    </svg>
-  );
-}
-function Star() {
-  return (
-    <svg viewBox="0 0 20 20">
-      <path d="M10 1.2l2.6 5.6 6.1.7-4.5 4.2 1.2 6.1L10 14.8l-5.4 3 1.2-6.1L1.3 7.5l6.1-.7z" fill="url(#rm-gold)" stroke="#5a3a00" strokeWidth="1" />
-    </svg>
-  );
-}
-function Crown() {
-  return (
-    <svg viewBox="0 0 24 20">
-      <path d="M2 6l5 4 5-8 5 8 5-4-2 12H4z" fill="url(#rm-gold)" stroke="#5a3a00" strokeWidth="1.1" />
-    </svg>
-  );
+/** Shows a hint only after the viewer has been idle for a moment. */
+function useIdleHint(key: unknown, delay = 1600) {
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    setShow(false);
+    const t = setTimeout(() => setShow(true), delay);
+    return () => clearTimeout(t);
+  }, [key, delay]);
+  return [show, () => setShow(false)] as const;
 }
 
-export function RarityMarks({ rarity }: { rarity: Rarity }) {
-  const n = { C: 1, U: 2, R: 3, RR: 4, SR: 2, UR: 1 }[rarity];
-  return (
-    <span className="rmarks" aria-label={rarity}>
-      {rarity === 'UR' ? <Crown /> : Array.from({ length: n }, (_, i) => (isStar(rarity) ? <Star key={i} /> : <Diamond key={i} />))}
-    </span>
-  );
-}
-
-function RarityDefs() {
-  return (
-    <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden>
-      <defs>
-        <linearGradient id="rm-silver" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#ffffff" />
-          <stop offset="0.5" stopColor="#c7d0de" />
-          <stop offset="1" stopColor="#7f8a9c" />
-        </linearGradient>
-        <linearGradient id="rm-gold" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#fff7cc" />
-          <stop offset="0.5" stopColor="#ffc94a" />
-          <stop offset="1" stopColor="#b8801c" />
-        </linearGradient>
-      </defs>
-    </svg>
-  );
-}
-
-function Motes({ n = 26 }: { n?: number }) {
-  const motes = useMemo(
-    () => Array.from({ length: n }, (_, i) => ({ left: `${(i * 37) % 100}%`, delay: `${(i * 0.63) % 9}s`, dur: `${7 + ((i * 1.7) % 6)}s`, size: 2 + ((i * 3) % 4) })),
-    [n],
+function Backdrop({ hue, dim = 0 }: { hue: string; dim?: number }) {
+  const bokeh = useMemo(
+    () =>
+      Array.from({ length: 9 }, (_, i) => ({
+        left: `${(i * 23 + 7) % 100}%`,
+        top: `${(i * 37 + 20) % 90}%`,
+        size: `${10 + ((i * 7) % 14)}vmin`,
+        dur: `${14 + ((i * 5) % 10)}s`,
+        delay: `${-i * 2.3}s`,
+      })),
+    [],
   );
   return (
-    <div className="po-motes">
-      {motes.map((m, i) => (
-        <i key={i} style={{ left: m.left, animationDelay: m.delay, animationDuration: m.dur, width: m.size, height: m.size }} />
-      ))}
-    </div>
+    <>
+      <div className="po-backdrop" style={{ ['--hue' as string]: hue }} />
+      <div className="po-glow" style={{ ['--hue' as string]: hue }} />
+      <div className="po-bokeh">
+        {bokeh.map((b, i) => (
+          <i key={i} style={{ left: b.left, top: b.top, width: b.size, height: b.size, animationDuration: b.dur, animationDelay: b.delay }} />
+        ))}
+      </div>
+      <motion.div className="po-dim" initial={false} animate={{ opacity: dim }} transition={{ duration: 0.6, ease: EASE_IN_OUT }} />
+    </>
   );
 }
 
 // ---------------------------------------------------------------------------
 // Shop screen (booster select)
 // ---------------------------------------------------------------------------
+interface OpeningState {
+  booster: Booster;
+  cards: CardDef[];
+  god: boolean;
+  fresh: Set<string>;
+  key: number;
+}
+
 export function Shop() {
   const save = useStore((s) => s.save);
   const update = useStore((s) => s.update);
   const addCards = useStore((s) => s.addCards);
   const [sel, setSel] = useState(0);
-  const [opening, setOpening] = useState<{ booster: Booster; cards: CardDef[]; god: boolean; fresh: Set<string>; key: number } | null>(null);
+  const [opening, setOpening] = useState<OpeningState | null>(null);
   const [odds, setOdds] = useState(false);
   const u = useUnit();
   useEffect(() => playMusic('shop'), []);
   const b = BOOSTERS[sel];
-  const mascot = byName(b.mascot) as MonsterCard;
 
   const buy = useCallback(
     (booster: Booster) => {
-      const coins = useStore.getState().save.coins;
-      if (coins < PACK_PRICE) {
+      if (useStore.getState().save.coins < PACK_PRICE) {
         sfx('miss-2', 0.5);
         return false;
       }
@@ -138,21 +118,20 @@ export function Shop() {
   );
 
   const shift = (d: number) => {
-    foley.tick();
     foley.slide();
     setSel((sel + d + BOOSTERS.length) % BOOSTERS.length);
   };
 
+  const TYPE_JP: Record<string, string> = { fire: '炎', water: '水', grass: '草', lightning: '雷', psychic: '超', fighting: '闘', dark: '悪', colorless: '無色' };
+
   return (
-    <div className="screen shop2" style={{ ['--hue' as string]: b.hue }}>
-      <RarityDefs />
-      <div className="shop2-bg" style={{ backgroundImage: `url(${artUrl(TYPE_SCENE[mascot.type])})` }} />
-      <div className="shop2-tint" />
+    <div className="screen shop2">
+      <Backdrop hue={b.hue} />
       <div className="stage">
         <TopBar
           title="パック開封"
           right={
-            <button className="btn ghost small" onClick={() => setOdds(true)}>
+            <button className="textbtn" onClick={() => setOdds(true)}>
               提供割合
             </button>
           }
@@ -162,17 +141,19 @@ export function Shop() {
             let d = i - sel;
             if (d > 1) d -= BOOSTERS.length;
             if (d < -1) d += BOOSTERS.length;
+            const center = d === 0;
             return (
               <motion.div
                 key={bo.id}
                 className="shop2-pack"
-                animate={{ x: d * u * 23 - u * 10.75, scale: d === 0 ? 1 : 0.72, y: d === 0 ? 0 : u * 5, rotateY: d * -18, opacity: d === 0 ? 1 : 0.6, zIndex: d === 0 ? 3 : 1 }}
-                transition={{ type: 'spring', stiffness: 220, damping: 26 }}
-                style={{ filter: d === 0 ? undefined : 'brightness(0.6) saturate(0.8)' }}
-                onClick={() => (d === 0 ? buy(bo) : shift(d))}
+                initial={false}
+                animate={{ x: d * u * 24 - u * 10.5, scale: center ? 1 : 0.7, y: center ? 0 : u * 5.5, rotateY: d * -22, opacity: center ? 1 : 0.45 }}
+                transition={{ type: 'spring', stiffness: 170, damping: 26, mass: 1 }}
+                style={{ zIndex: center ? 3 : 1 }}
+                onClick={() => (center ? buy(bo) : shift(d))}
               >
-                <motion.div animate={d === 0 ? { y: [0, -u * 0.8, 0] } : { y: 0 }} transition={{ duration: 3.2, repeat: Infinity, ease: 'easeInOut' }}>
-                  <BoosterPack booster={bo} tilt={d === 0} />
+                <motion.div animate={center ? { y: [0, -u * 0.6, 0] } : { y: 0 }} transition={{ duration: 4.5, repeat: Infinity, ease: 'easeInOut' }}>
+                  <BoosterPack booster={bo} tilt={center} still={!center} />
                 </motion.div>
               </motion.div>
             );
@@ -185,21 +166,18 @@ export function Shop() {
           </button>
         </div>
         <div className="shop2-bottom">
-          <div className="shop2-dots">
-            {BOOSTERS.map((x, i) => (
-              <span key={x.id} className={i === sel ? 'on' : ''} />
-            ))}
-          </div>
-          <div className="shop2-name">{b.name}</div>
-          <div className="shop2-sub">
-            {b.mascot}が表紙。{b.types.map((t) => ({ fire: '炎', water: '水', grass: '草', lightning: '雷', psychic: '超', fighting: '闘', dark: '悪', colorless: '無色' })[t]).join('・')}タイプが出やすい
-          </div>
-          <div className="shop2-actions">
-            <button className="btn big" disabled={save.coins < PACK_PRICE} onClick={() => buy(b)}>
-              <Icon name="coin" /> {PACK_PRICE} で開封する
-            </button>
-          </div>
-          {save.coins < PACK_PRICE && <div className="warn">コインが足りません。バトルに勝ってコインを集めよう！</div>}
+          <AnimatePresence mode="wait">
+            <motion.div key={b.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.25 }} style={{ textAlign: 'center' }}>
+              <div className="shop2-name">{b.name}</div>
+              <div className="shop2-sub">{b.types.map((t) => TYPE_JP[t]).join('・')}タイプが出やすい</div>
+            </motion.div>
+          </AnimatePresence>
+          <button className="pill" disabled={save.coins < PACK_PRICE} onClick={() => buy(b)}>
+            開封する
+            <span className="coin">
+              <Icon name="coin" /> {PACK_PRICE}
+            </span>
+          </button>
         </div>
       </div>
 
@@ -222,10 +200,10 @@ export function Shop() {
 }
 
 function OddsModal({ onClose }: { onClose: () => void }) {
-  const rows: [string, Rarity, string][] = [
-    ['1〜3枚目', 'C', 'コモン 75〜90% ／ アンコモン 10〜25%'],
-    ['4枚目', 'U', 'アンコモン 72% ／ レア 22% ／ ダブルレア 6%'],
-    ['5枚目', 'R', 'レア 64% ／ ダブルレア 25% ／ SR 8% ／ UR 3%'],
+  const rows: [string, string][] = [
+    ['1〜3枚目', 'C 75〜90% ／ U 10〜25%'],
+    ['4枚目', 'U 72% ／ R 22% ／ RR 6%'],
+    ['5枚目', 'R 64% ／ RR 25% ／ SR 8% ／ UR 3%'],
   ];
   return (
     <div className="zoom-back" onClick={onClose}>
@@ -233,21 +211,16 @@ function OddsModal({ onClose }: { onClose: () => void }) {
         <div className="modal-title">提供割合</div>
         <table className="odds-table">
           <tbody>
-            {rows.map(([slot, r, text]) => (
+            {rows.map(([slot, text]) => (
               <tr key={slot}>
                 <th>{slot}</th>
-                <td>
-                  <RarityMarks rarity={r} />
-                </td>
                 <td>{text}</td>
               </tr>
             ))}
           </tbody>
         </table>
-        <div className="odds-note">
-          ◆1＝C ◆2＝U ◆3＝R ◆4＝RR（Ω） ★★＝SR（フルアート） ♛＝UR（ゴールド）。パックの表紙のタイプのカードは2倍出やすくなります。ごくまれに、すべてRR以上の「ゴッドパック」が出ることがあります。
-        </div>
-        <button className="btn" onClick={onClose}>
+        <div className="odds-note">パックに描かれたタイプのカードは2倍出やすくなります。ごくまれに、5枚すべてがRR以上のパックが出ることがあります。</div>
+        <button className="pill ghost" onClick={onClose}>
           閉じる
         </button>
       </div>
@@ -258,11 +231,7 @@ function OddsModal({ onClose }: { onClose: () => void }) {
 // ---------------------------------------------------------------------------
 // Opening overlay
 // ---------------------------------------------------------------------------
-interface OpeningProps {
-  booster: Booster;
-  cards: CardDef[];
-  god: boolean;
-  fresh: Set<string>;
+interface OpeningProps extends Omit<OpeningState, 'key'> {
   onClose: () => void;
   onAgain: () => void;
 }
@@ -271,8 +240,8 @@ function Opening({ booster, cards, god, fresh, onClose, onAgain }: OpeningProps)
   const u = useUnit();
   const [phase, setPhase] = useState<Phase>('choose');
   const [idx, setIdx] = useState(0);
-  const [faceUp, setFaceUp] = useState<Set<number>>(new Set());
-  const [flash, setFlash] = useState(0);
+  const [revealed, setRevealed] = useState<Set<number>>(new Set());
+  const [fx, setFx] = useState<{ id: number; color: string } | null>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const root = useRef<HTMLDivElement>(null);
   const coins = useStore((s) => s.save.coins);
@@ -287,37 +256,52 @@ function Opening({ booster, cards, god, fresh, onClose, onAgain }: OpeningProps)
     };
   }, []);
 
-  const burstAt = (clientX: number, clientY: number, preset: string, n: number, scale = 1) => {
+  const burstAt = useCallback((clientX: number, clientY: number, preset: string, n: number, scale = 1) => {
     const r = root.current?.getBoundingClientRect();
     if (r) particles.burst(clientX - r.left, clientY - r.top, preset, n, scale);
-  };
-  const doFlash = () => setFlash((f) => f + 1);
+  }, []);
 
   const top = cards[idx];
-  const topIsStar = top && isStar(top.rarity);
-  const bgClass = phase === 'reveal' && top ? (top.rarity === 'SR' || god ? 'rainbow' : top.rarity === 'UR' ? 'rare' : '') : god && phase !== 'results' ? 'rainbow' : '';
-
-  const skip = () => {
-    foley.shuffle();
-    setPhase('results');
-  };
+  const awaitingFlip = phase === 'reveal' && !!top && isStar(top.rarity) && !revealed.has(idx);
+  const dim = phase === 'reveal' ? (awaitingFlip ? 0.45 : 0.15) : phase === 'results' ? 0.1 : 0;
 
   return (
-    <motion.div
-      ref={root}
-      className={`po ${bgClass}`}
-      style={{ ['--hue' as string]: booster.hue }}
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.35 }}
-    >
-      <div className="po-rays" />
-      <Motes />
+    <motion.div ref={root} className="po" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.45, ease: EASE_IN_OUT }}>
+      <Backdrop hue={booster.hue} dim={dim} />
       <canvas ref={canvas} className="po-canvas" />
+
+      {/* light shafts behind a face-down rare card */}
       <AnimatePresence>
-        {flash > 0 && (
-          <motion.div key={flash} className="po-flash" initial={{ opacity: 0.95 }} animate={{ opacity: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.6, ease: 'easeOut' }} />
+        {awaitingFlip && (
+          <motion.div
+            key={`shafts${idx}`}
+            className="shafts"
+            style={{ ['--rc' as string]: rareColor(top.rarity) }}
+            initial={{ opacity: 0, rotate: -8 }}
+            animate={{ opacity: 1, rotate: 8 }}
+            exit={{ opacity: 0 }}
+            transition={{ opacity: { duration: 0.8 }, rotate: { duration: 8, ease: 'linear' } }}
+          >
+            {[-60, -34, -12, 12, 34, 60, 180].map((a, i) => (
+              <i key={i} style={{ transform: `rotate(${a}deg)` }} />
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* flip impact: bloom + shock ring */}
+      <AnimatePresence>
+        {fx && (
+          <motion.div key={fx.id} style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 26 }} initial={{ opacity: 1 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <motion.div className="flash" initial={{ opacity: 0, scale: 0.6 }} animate={{ opacity: [0, 0.85, 0], scale: [0.6, 1, 1.15] }} transition={{ duration: 0.9, times: [0, 0.18, 1], ease: 'easeOut' }} />
+            <motion.div
+              className="ring"
+              style={{ borderColor: fx.color }}
+              initial={{ opacity: 0.9, scale: 0.35 }}
+              animate={{ opacity: 0, scale: 2.4 }}
+              transition={{ duration: 1.1, ease: EASE_OUT }}
+            />
+          </motion.div>
         )}
       </AnimatePresence>
 
@@ -328,121 +312,112 @@ function Opening({ booster, cards, god, fresh, onClose, onAgain }: OpeningProps)
             god={god}
             u={u}
             onPick={() => {
-              foley.pop();
-              sfx('expand', 0.5);
+              sfx('select', 0.45);
               setPhase('tear');
             }}
           />
         )}
 
-        {(phase === 'tear' || phase === 'emerge') && (
-          <TearStage
-            booster={booster}
-            god={god}
-            u={u}
-            torn={phase === 'emerge'}
-            cards={cards}
-            burstAt={burstAt}
-            onTorn={() => {
-              foley.rip();
-              doFlash();
-              sfx('open-chest', 0.45);
-              setPhase('emerge');
-              setTimeout(() => {
-                foley.slide();
-                setTimeout(() => setPhase('reveal'), 900);
-              }, 650);
-            }}
-          />
-        )}
+        {phase === 'tear' && <TearStage booster={booster} god={god} u={u} cards={cards} burstAt={burstAt} onDone={() => setPhase('reveal')} />}
 
         {phase === 'reveal' && top && (
           <>
-            <div className="counter">
-              {idx + 1} / {cards.length}
-            </div>
             <div className="stack">
-              {cards
-                .slice(idx + 1, idx + 4)
-                .reverse()
-                .map((c, k, arr) => {
-                  const depth = arr.length - k;
-                  return (
-                    <div key={`${idx + depth}`} className="stack-card stack-under" style={{ transform: `translate(${depth * 0.35 * u}px, ${depth * 0.35 * u}px)` }}>
+              {cards.map((c, i) => {
+                const depth = i - idx;
+                if (depth < 1 || depth > 3) return null;
+                return (
+                  <motion.div
+                    key={i}
+                    className="sc"
+                    initial={false}
+                    animate={{ x: depth * u * 0.28, y: depth * u * 0.34, scale: 1 - depth * 0.012 }}
+                    transition={{ type: 'spring', stiffness: 260, damping: 30 }}
+                    style={{ zIndex: 10 - depth }}
+                  >
+                    <div className="sc-face" style={{ transform: 'none' }}>
                       {isStar(c.rarity) ? <CardBack /> : <CardFace cid={c.id} />}
                     </div>
-                  );
-                })}
+                  </motion.div>
+                );
+              })}
               <TopCard
                 key={idx}
                 card={top}
                 u={u}
-                faceUp={!topIsStar || faceUp.has(idx)}
+                first={idx === 0}
+                faceDown={isStar(top.rarity) && !revealed.has(idx)}
                 burstAt={burstAt}
-                onFlip={() => {
-                  setFaceUp((s) => new Set(s).add(idx));
-                  doFlash();
-                }}
+                onFlipImpact={() => setFx({ id: Date.now(), color: rareColor(top.rarity) })}
+                onFlipped={() => setRevealed((s) => new Set(s).add(idx))}
                 onGone={() => {
+                  setFx(null);
                   if (idx + 1 >= cards.length) setPhase('results');
                   else setIdx(idx + 1);
                 }}
               />
             </div>
-            {(!topIsStar || faceUp.has(idx)) && (
-              <motion.div key={`meta${idx}`} className="card-meta" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}>
-                <RarityMarks rarity={top.rarity} />
-                <span className="nm">{top.name}</span>
-                {fresh.has(top.id) && <span className="new-chip">NEW</span>}
-              </motion.div>
-            )}
-            <div className="po-hint">{topIsStar && !faceUp.has(idx) ? 'タップしてめくる' : 'スワイプ（またはタップ）で次のカードへ'}</div>
-            <button className="btn ghost small po-skip" onClick={skip}>
+            <button
+              className="textbtn po-skip"
+              onClick={() => {
+                foley.shuffle();
+                setPhase('results');
+              }}
+            >
               スキップ
             </button>
           </>
         )}
 
-        {phase === 'results' && <Results cards={cards} fresh={fresh} onClose={onClose} onAgain={onAgain} canAgain={coins >= PACK_PRICE} />}
+        {phase === 'results' && <Results cards={cards} fresh={fresh} onClose={onClose} onAgain={onAgain} canAgain={coins >= PACK_PRICE} u={u} />}
       </div>
     </motion.div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Coverflow: pick one pack out of a row
+// Coverflow
 // ---------------------------------------------------------------------------
 const CF_COUNT = 9;
+const CF_STEP = 12;
 
-function CoverPack({ i, pos, u, booster, god }: { i: number; pos: MotionValue<number>; u: number; booster: Booster; god: boolean }) {
+function CoverPack({ i, pos, u, booster, god, picked }: { i: number; pos: MotionValue<number>; u: number; booster: Booster; god: boolean; picked: number | null }) {
   const d = useTransform(pos, (p) => i - p);
-  const x = useTransform(d, (v) => Math.sign(v) * Math.min(Math.abs(v), 1) * u * 17 + Math.sign(v) * Math.max(0, Math.abs(v) - 1) * u * 9);
-  const rotateY = useTransform(d, (v) => Math.max(-1, Math.min(1, v)) * -42);
-  const z = useTransform(d, (v) => -Math.min(Math.abs(v), 4) * u * 7);
-  const scale = useTransform(d, (v) => 1 - Math.min(Math.abs(v), 3) * 0.06);
-  const opacity = useTransform(d, (v) => (Math.abs(v) > 3.6 ? 0 : 1 - Math.max(0, Math.abs(v) - 2.2) * 0.7));
+  const x = useTransform(d, (v) => Math.sign(v) * (Math.min(Math.abs(v), 1) * u * 16 + Math.max(0, Math.abs(v) - 1) * u * 8.5));
+  const rotateY = useTransform(d, (v) => Math.max(-1, Math.min(1, v)) * -38);
+  const z = useTransform(d, (v) => -Math.min(Math.abs(v), 4) * u * 6);
+  const opacity = useTransform(d, (v) => Math.max(0, 1 - Math.max(0, Math.abs(v) - 2.4) * 1.2));
   const zIndex = useTransform(d, (v) => 100 - Math.round(Math.abs(v) * 10));
-  const filter = useTransform(d, (v) => `brightness(${1 - Math.min(Math.abs(v), 2) * 0.22})`);
+  const shade = useTransform(d, (v) => Math.min(Math.abs(v), 2) * 0.3);
+  const chosen = picked === i;
   return (
-    <motion.div className="cf-pack" style={{ x, rotateY, z, scale, opacity, zIndex, filter }} data-i={i}>
-      <BoosterPack booster={booster} god={god && i === 4} still />
+    <motion.div className="cf-pack" style={{ x, rotateY, z, opacity, zIndex }} data-i={i}>
+      <motion.div
+        style={{ transformOrigin: '50% 0%' }}
+        animate={picked === null ? { y: 0, scale: 1, opacity: 1 } : chosen ? { y: -u * 0.9, scale: 24 / 21, opacity: 1 } : { y: u * 6, scale: 0.94, opacity: 0 }}
+        transition={picked === null ? { duration: 0 } : { duration: chosen ? 0.7 : 0.45, ease: chosen ? EASE_OUT : EASE_IN_OUT }}
+      >
+        <BoosterPack booster={booster} god={god && i === Math.floor(CF_COUNT / 2)} still={!chosen} />
+        <motion.div className="cf-shade" style={{ opacity: shade }} />
+      </motion.div>
     </motion.div>
   );
 }
 
 function Coverflow({ booster, god, u, onPick }: { booster: Booster; god: boolean; u: number; onPick: () => void }) {
   const start = Math.floor(CF_COUNT / 2);
-  const pos = useMotionValue(start + 2.5);
-  const drag = useRef<{ x: number; p: number; t: number; moved: number; lastX: number; lastT: number } | null>(null);
-  const [picked, setPicked] = useState(false);
-  const lastTick = useRef(Math.round(pos.get()));
+  const pos = useMotionValue(start + 1.6);
+  const drag = useRef<{ x: number; p: number; moved: number; samples: { x: number; t: number }[] } | null>(null);
+  const [picked, setPicked] = useState<number | null>(null);
+  const [hint, hideHint] = useIdleHint('cf', 1400);
+  const last = useRef(Math.round(pos.get()));
 
   useEffect(() => {
-    const c = animate(pos, start, { type: 'spring', stiffness: 60, damping: 16 });
+    const c = animate(pos, start, { type: 'spring', stiffness: 70, damping: 18 });
     const unsub = pos.on('change', (v) => {
       const r = Math.round(v);
-      if (r !== lastTick.current) {
-        lastTick.current = r;
+      if (r !== last.current) {
+        last.current = r;
         foley.tick();
       }
     });
@@ -452,125 +427,106 @@ function Coverflow({ booster, god, u, onPick }: { booster: Booster; god: boolean
     };
   }, [pos, start]);
 
-  const snap = (target: number) => {
+  const snap = (target: number, velocity = 0) => {
     const t = Math.max(0, Math.min(CF_COUNT - 1, Math.round(target)));
-    animate(pos, t, { type: 'spring', stiffness: 180, damping: 24 });
+    animate(pos, t, { type: 'spring', stiffness: 150, damping: 24, velocity });
     return t;
   };
 
-  const choose = () => {
-    if (picked) return;
-    setPicked(true);
-    snap(pos.get());
-    setTimeout(onPick, 650);
+  const choose = (i: number) => {
+    if (picked !== null) return;
+    hideHint();
+    snap(i);
+    setPicked(i);
+    setTimeout(onPick, 720);
   };
 
   return (
     <>
-      <div className="po-head">開封するパックを1つ選んでください</div>
-      <motion.div
+      <div
         className="cf"
-        animate={picked ? { opacity: 1 } : {}}
         onPointerDown={(e) => {
-          if (picked) return;
-          (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
-          drag.current = { x: e.clientX, p: pos.get(), t: performance.now(), moved: 0, lastX: e.clientX, lastT: performance.now() };
+          if (picked !== null) return;
+          (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+          drag.current = { x: e.clientX, p: pos.get(), moved: 0, samples: [{ x: e.clientX, t: performance.now() }] };
           pos.stop();
+          hideHint();
         }}
         onPointerMove={(e) => {
           const g = drag.current;
           if (!g) return;
           g.moved = Math.max(g.moved, Math.abs(e.clientX - g.x));
-          pos.set(g.p - (e.clientX - g.x) / (u * 12));
-          g.lastX = e.clientX;
-          g.lastT = performance.now();
+          pos.set(g.p - (e.clientX - g.x) / (u * CF_STEP));
+          g.samples.push({ x: e.clientX, t: performance.now() });
+          if (g.samples.length > 5) g.samples.shift();
         }}
         onPointerUp={(e) => {
           const g = drag.current;
           drag.current = null;
           if (!g) return;
           if (g.moved < 6) {
-            // tap: center pack → choose; side pack → bring it to center
-            const el = (document.elementsFromPoint(e.clientX, e.clientY).find((x) => (x as HTMLElement).closest?.('.cf-pack')) as HTMLElement | undefined)?.closest('.cf-pack') as HTMLElement | null;
-            const i = el ? Number(el.dataset.i) : Math.round(pos.get());
-            if (i === Math.round(pos.get())) choose();
+            const hit = document.elementsFromPoint(e.clientX, e.clientY).map((x) => (x as HTMLElement).closest?.('.cf-pack') as HTMLElement | null).find(Boolean);
+            const i = hit ? Number(hit.dataset.i) : Math.round(pos.get());
+            if (i === Math.round(pos.get())) choose(i);
             else snap(i);
             return;
           }
-          const dt = Math.max(16, performance.now() - g.t);
-          const v = -(e.clientX - g.x) / (u * 12) / (dt / 1000);
-          snap(pos.get() + Math.max(-2.5, Math.min(2.5, v * 0.12)));
+          const a = g.samples[0];
+          const b = g.samples[g.samples.length - 1];
+          const v = -((b.x - a.x) / (u * CF_STEP)) / Math.max(0.016, (b.t - a.t) / 1000); // packs per second
+          snap(pos.get() + v * 0.18, v);
         }}
       >
         {Array.from({ length: CF_COUNT }, (_, i) => (
-          <PickWrap key={i} i={i} pos={pos} picked={picked} u={u}>
-            <CoverPack i={i} pos={pos} u={u} booster={booster} god={god} />
-          </PickWrap>
+          <CoverPack key={i} i={i} pos={pos} u={u} booster={booster} god={god} picked={picked} />
         ))}
-      </motion.div>
-      <div className="cf-pick">
-        {!picked && (
-          <button className="btn big" onClick={choose}>
-            このパックにする
-          </button>
-        )}
       </div>
-      {!picked && <div className="po-hint">左右にドラッグして選び、まんなかのパックをタップ</div>}
+      <AnimatePresence>{hint && picked === null && <motion.div className="po-hint" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>パックを選んでタップ</motion.div>}</AnimatePresence>
     </>
   );
 }
 
-function PickWrap({ i, pos, picked, u, children }: { i: number; pos: MotionValue<number>; picked: boolean; u: number; children: React.ReactNode }) {
-  const center = Math.round(pos.get());
-  const chosen = picked && i === center;
-  return (
-    <motion.div
-      style={{ position: 'absolute', inset: 0, transformStyle: 'preserve-3d', pointerEvents: 'none' }}
-      animate={picked ? (chosen ? { y: -u * 0.2, scale: 24 / 21 } : { y: u * 30, opacity: 0 }) : { y: 0, opacity: 1, scale: 1 }}
-      transition={picked ? { duration: chosen ? 0.55 : 0.45, ease: chosen ? 'easeOut' : 'easeIn', delay: chosen ? 0 : Math.abs(i - center) * 0.03 } : { duration: 0 }}
-    >
-      <div style={{ pointerEvents: 'auto', transformStyle: 'preserve-3d' }}>{children}</div>
-    </motion.div>
-  );
-}
-
 // ---------------------------------------------------------------------------
-// Tear: trace along the top edge
+// Tear
 // ---------------------------------------------------------------------------
 interface TearProps {
   booster: Booster;
   god: boolean;
   u: number;
-  torn: boolean;
   cards: CardDef[];
   burstAt: (x: number, y: number, preset: string, n: number, scale?: number) => void;
-  onTorn: () => void;
+  onDone: () => void;
 }
 
-function TearStage({ booster, god, u, torn, cards, burstAt, onTorn }: TearProps) {
+function TearStage({ booster, god, u, cards, burstAt, onDone }: TearProps) {
   const packRef = useRef<HTMLDivElement>(null);
   const prog = useMotionValue(0);
   const [dir, setDir] = useState<1 | -1>(1);
-  const [dragging, setDragging] = useState(false);
+  const [torn, setTorn] = useState(false);
+  const [active, setActive] = useState(false);
+  const [hint, hideHint] = useIdleHint('tear', 1800);
   const g = useRef<{ x: number; max: number; lastSound: number } | null>(null);
-  const done = useRef(false);
-  const cutW = useTransform(prog, (p) => `${p * 100}%`);
+  const cutW = useTransform(prog, (p) => `${p * 92}%`);
 
   const finish = () => {
-    if (done.current) return;
-    done.current = true;
-    animate(prog, 1, { duration: 0.12 });
+    if (torn) return;
+    setTorn(true);
+    hideHint();
+    animate(prog, 1, { duration: 0.1 });
+    foley.rip();
     const r = packRef.current?.getBoundingClientRect();
     if (r) {
       const y = r.top + r.height * TEAR_Y;
-      for (let k = 0; k <= 8; k++) setTimeout(() => burstAt(r.left + (r.width * k) / 8, y, god ? 'rainbow' : 'gold', 14, 1.2), k * 22);
+      for (let k = 0; k <= 10; k++) setTimeout(() => burstAt(r.left + (r.width * (dir > 0 ? k : 10 - k)) / 10, y, 'sparkw', 5, 1), k * 14);
+      setTimeout(() => burstAt(r.left + r.width / 2, y, 'mote', 40, 1.4), 120);
     }
-    onTorn();
+    setTimeout(() => foley.slide(), 520);
+    setTimeout(onDone, 1500);
   };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!torn && (e.key === 'Enter' || e.key === ' ')) finish();
+      if (e.key === 'Enter' || e.key === ' ') finish();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -579,271 +535,302 @@ function TearStage({ booster, god, u, torn, cards, burstAt, onTorn }: TearProps)
 
   const onDown = (e: React.PointerEvent) => {
     if (torn) return;
-    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+    (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
     g.current = { x: e.clientX, max: 0, lastSound: 0 };
-    setDragging(true);
+    setActive(true);
+    hideHint();
   };
   const onMove = (e: React.PointerEvent) => {
     const s = g.current;
     const r = packRef.current?.getBoundingClientRect();
     if (!s || !r || torn) return;
     const dx = e.clientX - s.x;
-    if (Math.abs(dx) < 4) return;
-    const d = dx > 0 ? 1 : -1;
-    if (s.max === 0) setDir(d);
-    const p = Math.min(1, Math.abs(dx) / (r.width * 0.82));
+    if (Math.abs(dx) < 3) return;
+    if (s.max === 0) setDir(dx > 0 ? 1 : -1);
+    const p = Math.min(1, Math.abs(dx) / (r.width * 0.8));
     if (p > s.max) {
       s.max = p;
       prog.set(p);
-      burstAt(e.clientX, r.top + r.height * TEAR_Y, god ? 'rainbow' : 'gold', 3, 0.8);
+      burstAt(e.clientX, r.top + r.height * TEAR_Y, 'sparkw', 2, 0.8);
       const now = performance.now();
-      if (now - s.lastSound > 45) {
+      if (now - s.lastSound > 40) {
         s.lastSound = now;
         foley.scratch();
       }
     }
     if (p >= 1) {
       g.current = null;
-      setDragging(false);
+      setActive(false);
       finish();
     }
   };
   const onUp = () => {
     const s = g.current;
     g.current = null;
-    setDragging(false);
+    setActive(false);
     if (!s || torn) return;
-    if (s.max >= 0.78) finish();
-    else animate(prog, 0, { duration: 0.35, ease: 'easeOut' });
+    if (s.max >= 0.75) finish();
+    else animate(prog, 0, { duration: 0.45, ease: EASE_OUT });
   };
 
-  const packH = (u * 24) / 0.62;
   return (
     <>
-      {!torn && <div className="po-head">パックの上をなぞって開封しよう</div>}
-      {/* the card stack waiting inside the pack */}
-      {torn && (
-        <motion.div className="stack" initial={{ y: u * 15 }} animate={{ y: 0 }} transition={{ delay: 0.35, duration: 0.9, ease: [0.2, 0.8, 0.25, 1] }}>
-          {cards
-            .slice(0, 3)
-            .reverse()
-            .map((c, k, arr) => {
-              const depth = arr.length - 1 - k;
-              return (
-                <div key={k} className="stack-card" style={{ transform: `translate(${depth * 0.35 * u}px, ${depth * 0.35 * u}px)` }}>
+      {/* cards waiting inside the pack; they rise once it opens */}
+      <motion.div
+        className="stack"
+        initial={{ y: u * 17, scale: 0.97, opacity: 0 }}
+        animate={torn ? { y: 0, scale: 1, opacity: 1 } : { y: u * 17, scale: 0.97, opacity: 0 }}
+        transition={{ delay: torn ? 0.42 : 0, duration: 1.0, ease: EASE_OUT, opacity: { duration: 0.01, delay: torn ? 0.42 : 0 } }}
+      >
+        {cards
+          .slice(0, 3)
+          .reverse()
+          .map((c, k, arr) => {
+            const depth = arr.length - 1 - k;
+            return (
+              <div key={k} className="sc" style={{ transform: `translate(${depth * u * 0.28}px, ${depth * u * 0.34}px) scale(${1 - depth * 0.012})` }}>
+                <div className="sc-face" style={{ transform: 'none' }}>
                   {isStar(c.rarity) ? <CardBack /> : <CardFace cid={c.id} />}
                 </div>
-              );
-            })}
-        </motion.div>
-      )}
+              </div>
+            );
+          })}
+      </motion.div>
+
       <div className="tear-wrap">
-        <motion.div
-          className="tear-float"
-          ref={packRef}
-          initial={{ scale: 1 }}
-          animate={torn ? { y: 0 } : { y: [0, -u * 0.7, 0] }}
-          transition={torn ? { duration: 0.2 } : { duration: 3, repeat: Infinity, ease: 'easeInOut' }}
-        >
-          {!torn && <BoosterPack booster={booster} tilt={!dragging} god={god} />}
+        <motion.div className="tear-float" ref={packRef} animate={torn ? { y: 0 } : { y: [0, -u * 0.45, 0] }} transition={torn ? { duration: 0.3 } : { duration: 4.5, repeat: Infinity, ease: 'easeInOut' }}>
           {torn && (
+            <motion.div className="tear-beam" initial={{ opacity: 0, scaleY: 0.2 }} animate={{ opacity: [0, 0.9, 0], scaleY: [0.2, 1, 1.15] }} transition={{ delay: 0.25, duration: 1.3, times: [0, 0.35, 1], ease: 'easeOut' }} />
+          )}
+          {!torn ? (
+            <BoosterPack booster={booster} tilt={!active} god={god} />
+          ) : (
             <>
-              <motion.div className="tear-body" initial={{ y: 0, opacity: 1 }} animate={{ y: packH * 1.15, opacity: 0.2 }} transition={{ delay: 0.45, duration: 0.9, ease: [0.5, 0, 0.75, 0.4] }}>
+              <motion.div className="tear-part" style={{ zIndex: 4 }} initial={{ y: 0, opacity: 1 }} animate={{ y: u * 70, opacity: 1 }} transition={{ delay: 0.38, duration: 0.85, ease: EASE_IN }}>
                 <BoosterPack booster={booster} part="body" god={god} />
               </motion.div>
               <motion.div
-                className="tear-piece"
+                className="tear-part"
+                style={{ zIndex: 9, transformOrigin: dir > 0 ? '100% 4%' : '0% 4%' }}
                 initial={{ x: 0, y: 0, rotate: 0, opacity: 1 }}
-                animate={{ x: dir * u * 16, y: -u * 22, rotate: dir * 32, opacity: 0 }}
-                transition={{ duration: 0.8, ease: [0.2, 0.7, 0.4, 1] }}
-                style={{ transformOrigin: dir > 0 ? '100% 10%' : '0% 10%' }}
+                animate={{ x: dir * u * 9, y: -u * 13, rotate: dir * 16, opacity: [1, 1, 0] }}
+                transition={{ duration: 1.0, ease: EASE_OUT, opacity: { duration: 1.0, times: [0, 0.55, 1] } }}
               >
                 <BoosterPack booster={booster} part="top" god={god} />
               </motion.div>
+              <motion.div
+                className="tear-bloom"
+                style={{ top: `${TEAR_Y * 100}%` }}
+                initial={{ opacity: 0, scaleX: 0.2, scaleY: 0.5 }}
+                animate={{ opacity: [0, 1, 0], scaleX: [0.2, 1, 1.25], scaleY: [0.5, 1, 0.7] }}
+                transition={{ duration: 0.75, times: [0, 0.2, 1], ease: 'easeOut' }}
+              />
             </>
           )}
           {!torn && (
             <>
               <div className="tear-guide" style={{ top: `${TEAR_Y * 100}%` }} />
-              <motion.div className="tear-cut" style={{ top: `${TEAR_Y * 100}%`, width: cutW, left: dir > 0 ? 0 : 'auto', right: dir > 0 ? 'auto' : 0 }} />
-              {!dragging && (
+              <motion.div className="tear-cut" style={{ top: `${TEAR_Y * 100}%`, width: cutW, left: dir > 0 ? '4%' : 'auto', right: dir > 0 ? 'auto' : '4%' }} />
+              {!active && (
                 <motion.div
-                  className="tear-hand"
-                  style={{ top: `calc(${TEAR_Y * 100}% - ${u * 0.6}px)` }}
-                  initial={{ left: '-6%', opacity: 0 }}
-                  animate={{ left: ['-6%', '-6%', '88%', '88%'], opacity: [0, 1, 1, 0] }}
-                  transition={{ duration: 2.2, times: [0, 0.15, 0.75, 1], repeat: Infinity, repeatDelay: 0.4, ease: 'easeInOut' }}
-                >
-                  <Icon name="pointing" size="100%" />
-                </motion.div>
+                  className="tear-dot"
+                  style={{ top: `${TEAR_Y * 100}%` }}
+                  initial={{ left: '6%', opacity: 0 }}
+                  animate={{ left: ['6%', '94%'], opacity: [0, 1, 1, 0] }}
+                  transition={{ duration: 1.6, times: [0, 0.15, 0.8, 1], repeat: Infinity, repeatDelay: 0.9, ease: EASE_IN_OUT }}
+                />
               )}
               <div className="tear-zone" onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp} />
             </>
           )}
         </motion.div>
       </div>
-      {!torn && <div className="po-hint">{god ? '✦ パックが虹色に輝いている……！ ✦' : '点線にそって左右になぞる（Enterキーでも開封）'}</div>}
+      <AnimatePresence>{hint && !torn && <motion.div className="po-hint" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>パックの上端をなぞって開封</motion.div>}</AnimatePresence>
     </>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Top card of the stack: swipe away, or flip a face-down ★ card
+// Top card: throw it off to reveal the next; ★ cards turn over first
 // ---------------------------------------------------------------------------
 interface TopProps {
   card: CardDef;
   u: number;
-  faceUp: boolean;
+  first: boolean;
+  faceDown: boolean;
   burstAt: (x: number, y: number, preset: string, n: number, scale?: number) => void;
-  onFlip: () => void;
+  onFlipImpact: () => void;
+  onFlipped: () => void;
   onGone: () => void;
 }
 
-function TopCard({ card, u, faceUp, burstAt, onFlip, onGone }: TopProps) {
+function TopCard({ card, u, first, faceDown, burstAt, onFlipImpact, onFlipped, onGone }: TopProps) {
   const x = useMotionValue(0);
-  const rotate = useTransform(x, [-u * 40, u * 40], [-16, 16]);
+  const rotate = useTransform(x, [-u * 45, u * 45], [-14, 14]);
+  const opacity = useTransform(x, [-u * 70, -u * 40, 0, u * 40, u * 70], [0, 1, 1, 1, 0]);
   const controls = useAnimationControls();
   const ref = useRef<HTMLDivElement>(null);
   const busy = useRef(false);
   const star = isStar(card.rarity);
   const rank = RARITY_ORDER[card.rarity];
-  useEffect(() => {
-    controls.start({ scale: 1, transition: { type: 'spring', stiffness: 300, damping: 22 } });
-  }, [controls]);
+  const [up, setUp] = useState(!faceDown);
+  const [hint, hideHint] = useIdleHint(`${card.id}${up}`, first || !up ? 1500 : 999999);
 
-  // arrival cues
   useEffect(() => {
-    if (star && !faceUp) {
-      foley.charge();
-      sfx('magic-holy-2', 0.5);
-    } else if (rank === 3) {
+    controls.set({ rotateY: faceDown ? 180 : 0, scale: 0.985 });
+    controls.start({ scale: 1, transition: { type: 'spring', stiffness: 260, damping: 26 } });
+    if (faceDown) foley.charge();
+    else if (rank === 3) {
       setTimeout(() => {
         foley.sparkle();
         const r = ref.current?.getBoundingClientRect();
-        if (r) burstAt(r.left + r.width / 2, r.top + r.height / 2, 'sparkle', 30, 1.3);
-      }, 120);
+        if (r) burstAt(r.left + r.width / 2, r.top + r.height * 0.4, 'glint', 14, 1.2);
+      }, 150);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const fly = async (dir: 1 | -1) => {
-    if (busy.current) return;
-    busy.current = true;
-    foley.swipe();
-    await controls.start({ x: dir * u * 90, y: -u * 4, rotate: dir * 28, opacity: 0, transition: { duration: 0.34, ease: [0.4, 0, 1, 1] } });
-    onGone();
+  const center = () => {
+    const r = ref.current?.getBoundingClientRect();
+    return r ? { cx: r.left + r.width / 2, cy: r.top + r.height / 2 } : null;
   };
 
   const flip = async () => {
     if (busy.current) return;
     busy.current = true;
-    await controls.start({ rotateY: 90, scale: 1.16, transition: { duration: 0.32, ease: 'easeIn' } });
-    onFlip();
-    foley.impact();
-    const r = ref.current?.getBoundingClientRect();
-    if (r) {
-      const cx = r.left + r.width / 2;
-      const cy = r.top + r.height / 2;
-      burstAt(cx, cy, card.rarity === 'UR' ? 'gold' : 'rainbow', 140, 2);
-      setTimeout(() => burstAt(cx, cy, 'sparkle', 60, 1.6), 200);
-    }
+    hideHint();
+    sfx('magic-holy-2', 0.35);
+    await controls.start({ y: -u * 1.2, scale: 1.05, transition: { duration: 0.28, ease: EASE_OUT } });
     setTimeout(() => {
-      sfx('fanfare-short', 0.8);
+      setUp(true);
+      onFlipImpact();
+      foley.impact();
       foley.rarity(5);
-    }, 120);
-    controls.start({ rotateY: 0, scale: 1, transition: { type: 'spring', stiffness: 170, damping: 13 } });
-    // allow swiping as soon as the card has turned face up
-    setTimeout(() => (busy.current = false), 450);
+      const c = center();
+      if (c) {
+        burstAt(c.cx, c.cy, 'glint', 50, 1.6);
+        burstAt(c.cx, c.cy, 'mote', 60, 1.8);
+        burstAt(c.cx, c.cy, 'sparkw', 24, 1.4);
+      }
+    }, 330);
+    await controls.start({ rotateY: 0, scale: [1.05, 1.14, 1], y: [-u * 1.2, -u * 2, 0], transition: { duration: 0.85, ease: EASE_IN_OUT } });
+    onFlipped();
+    busy.current = false;
   };
 
-  const showBack = star && !faceUp;
+  const fly = (dir: 1 | -1, velocity = 0) => {
+    if (busy.current) return;
+    busy.current = true;
+    hideHint();
+    foley.swipe();
+    const target = dir * window.innerWidth * 0.9;
+    animate(x, target, { type: 'spring', stiffness: 90, damping: 20, velocity: velocity || dir * 2600, restDelta: 40 });
+    controls.start({ y: -u * 2, transition: { duration: 0.4, ease: EASE_OUT } });
+    setTimeout(onGone, 330);
+  };
+
+  const rc = rareColor(card.rarity);
   return (
-    <motion.div
-      ref={ref}
-      className="stack-card top"
-      style={{ x, rotate }}
-      initial={{ scale: 0.96 }}
-      animate={controls}
-      drag={showBack ? false : 'x'}
-      dragConstraints={{ left: 0, right: 0 }}
-      dragElastic={1}
-      onDragEnd={(_, info) => {
-        if (Math.abs(info.offset.x) > u * 7 || Math.abs(info.velocity.x) > 600) fly(info.offset.x > 0 ? 1 : -1);
-      }}
-      onTap={() => (showBack ? flip() : fly(-1))}
-    >
-      {showBack ? (
-        <div className="rare-back">
-          <div className={`rare-aura ${card.rarity}`} />
-          <CardBack />
-          <div className="rare-glint" />
+    <>
+      <motion.div
+        ref={ref}
+        className="sc top"
+        style={{ x, rotate, opacity, ['--rc' as string]: rc }}
+        animate={controls}
+        drag={up ? 'x' : false}
+        dragConstraints={{ left: 0, right: 0 }}
+        dragElastic={0.85}
+        dragTransition={{ bounceStiffness: 300, bounceDamping: 26 }}
+        onDragStart={hideHint}
+        onDragEnd={(_, info) => {
+          if (Math.abs(info.offset.x) > u * 6 || Math.abs(info.velocity.x) > 500) fly(info.offset.x > 0 ? 1 : -1, info.velocity.x);
+        }}
+        onTap={() => (!up ? flip() : fly(-1))}
+      >
+        {star && <motion.div className="halo" animate={{ scale: [1, 1.06, 1], opacity: up ? [0.35, 0.5, 0.35] : [0.28, 0.45, 0.28] }} transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }} />}
+        <div className="sc-face">
+          <CardFace cid={card.id} interactive={up} />
+          {(rank === 3 || (star && up)) && <div className="glare" />}
         </div>
-      ) : (
-        <>
-          {rank === 3 && <div className="shine-ring" />}
-          {star && <div className={`rare-aura ${card.rarity}`} style={{ inset: '-8%', opacity: 0.7 }} />}
-          <CardFace cid={card.id} interactive />
-        </>
-      )}
-    </motion.div>
+        <div className="sc-back">
+          <CardBack />
+          {!up && <div className="edge-light" />}
+        </div>
+      </motion.div>
+      <AnimatePresence>
+        {hint && (
+          <motion.div className="po-hint" style={{ position: 'fixed' }} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            {up ? 'スワイプして次へ' : 'タップしてめくる'}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Results grid (3 + 2)
+// Results
 // ---------------------------------------------------------------------------
-function Results({ cards, fresh, onClose, onAgain, canAgain }: { cards: CardDef[]; fresh: Set<string>; onClose: () => void; onAgain: () => void; canAgain: boolean }) {
+function Results({ cards, fresh, onClose, onAgain, canAgain, u }: { cards: CardDef[]; fresh: Set<string>; onClose: () => void; onAgain: () => void; canAgain: boolean; u: number }) {
   const [zoom, setZoom] = useState<string | null>(null);
   useEffect(() => {
-    cards.forEach((_, i) => setTimeout(() => foley.flip(), 120 + i * 110));
-    if (cards.some((c) => RARITY_ORDER[c.rarity] >= 3)) setTimeout(() => foley.sparkle(), 700);
+    cards.forEach((_, i) => setTimeout(() => foley.slide(), 80 + i * 90));
   }, [cards]);
-  const rows = [cards.slice(0, 3), cards.slice(3, PACK_SIZE)];
+  const rows = [cards.slice(0, 3), cards.slice(3)];
   let n = 0;
   return (
     <div className="results">
-      <div className="results-title">開封結果</div>
       <div className="results-grid">
         {rows.map((row, ri) => (
           <div className="results-row" key={ri}>
             {row.map((c) => {
               const i = n++;
+              const rank = RARITY_ORDER[c.rarity];
               return (
                 <motion.div
                   key={i}
                   className="results-item"
-                  initial={{ opacity: 0, rotateY: 180, scale: 0.7, y: 20 }}
-                  animate={{ opacity: 1, rotateY: 0, scale: 1, y: 0 }}
-                  transition={{ delay: 0.1 + i * 0.11, type: 'spring', stiffness: 200, damping: 20 }}
+                  initial={{ opacity: 0, y: u * 1.6, scale: 0.97 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  transition={{ delay: 0.08 + i * 0.07, duration: 0.6, ease: EASE_OUT }}
+                  whileHover={{ y: -u * 0.5, transition: { duration: 0.25, ease: EASE_OUT } }}
                   onClick={() => {
                     foley.flip();
                     setZoom(c.id);
                   }}
                 >
-                  <CardFace cid={c.id} interactive />
-                  {fresh.has(c.id) && <span className="new-chip">NEW</span>}
-                  <RarityMarks rarity={c.rarity} />
+                  <CardFace cid={c.id} />
+                  {rank >= 3 && <div className="glare" style={{ animationDelay: `${0.5 + i * 0.07}s` }} />}
+                  {fresh.has(c.id) && <span className="new">NEW</span>}
                 </motion.div>
               );
             })}
           </div>
         ))}
       </div>
-      <div className="results-actions">
-        <button className="btn ghost big" onClick={onClose}>
+      <motion.div className="results-actions" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.55, duration: 0.5, ease: EASE_OUT }}>
+        <button className="pill ghost" onClick={onClose}>
           とじる
         </button>
-        <button className="btn big" disabled={!canAgain} onClick={onAgain}>
-          <Icon name="coin" /> もう1パック（{PACK_PRICE}）
+        <button className="pill" disabled={!canAgain} onClick={onAgain}>
+          もう1パック開ける
+          <span className="coin">
+            <Icon name="coin" /> {PACK_PRICE}
+          </span>
         </button>
-      </div>
-      {zoom && (
-        <div className="zoom-back" onClick={() => setZoom(null)}>
-          <motion.div className="zoom-card" initial={{ scale: 0.7, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} onClick={(e) => e.stopPropagation()}>
-            <CardFace cid={zoom} interactive />
+      </motion.div>
+      <AnimatePresence>
+        {zoom && (
+          <motion.div className="zoom-back" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setZoom(null)}>
+            <motion.div className="zoom-card" initial={{ scale: 0.92, y: 12 }} animate={{ scale: 1, y: 0 }} transition={{ duration: 0.45, ease: EASE_OUT }} onClick={(e) => e.stopPropagation()}>
+              <CardFace cid={zoom} interactive />
+            </motion.div>
           </motion.div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
     </div>
   );
 }
+
+// keep the mascot lookup warm so packs render without a hitch
+BOOSTERS.forEach((b) => byName(b.mascot));
