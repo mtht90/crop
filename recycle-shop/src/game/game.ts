@@ -76,7 +76,8 @@ export class Game {
   }
 
   async boot(onProgress: (p: number, label: string) => void) {
-    await preloadAll(ALL_MODELS, ICONS, onProgress);
+    const failures = await preloadAll(ALL_MODELS, ICONS, onProgress);
+    if (failures.length) throw new Error(`素材 ${failures.length} 件の読み込みに失敗 (${failures[0]})`);
     await document.fonts?.ready;
     // タイトル背景用に店舗を作る (セーブがあればその店)
     const model = GameModel.load() ?? GameModel.create('ふくろう堂');

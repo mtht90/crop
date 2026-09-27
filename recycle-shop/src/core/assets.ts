@@ -11,22 +11,26 @@ export const ASSET_ROOT = `${import.meta.env.BASE_URL}assets/`;
  * 読み込み時に復元して blob URL にする。
  */
 const ASSET_B64 = import.meta.env.VITE_ASSET_B64 === '1';
+// Artifact の CSP は fetch(blob:) を許可しないため、GLTFLoader に ImageBitmapLoader (fetch) ではなく
+// <img> 要素で埋め込みテクスチャを読ませる (createImageBitmap が無いと TextureLoader を使う)
+if (ASSET_B64) (globalThis as any).createImageBitmap = undefined;
 
-async function binaryUrl(url: string): Promise<string> {
-  if (!ASSET_B64) return url;
-  const res = await fetch(`${url}.txt`);
+/** 素材のバイト列を取得 (Artifact 版は base64 テキストから復元)。blob: URL は CSP で弾かれるので使わない */
+async function fetchBinary(url: string): Promise<ArrayBuffer> {
+  const res = await fetch(ASSET_B64 ? `${url}.txt` : url);
   if (!res.ok) throw new Error(`HTTP ${res.status} ${url}`);
+  if (!ASSET_B64) return res.arrayBuffer();
   const b64 = (await res.text()).trim();
   const fromB64 = (Uint8Array as any).fromBase64 as ((s: string) => Uint8Array) | undefined;
-  let bytes: Uint8Array;
-  if (fromB64) bytes = fromB64(b64);
-  else {
-    const bin = atob(b64);
-    bytes = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  }
-  return URL.createObjectURL(new Blob([bytes as BlobPart]));
+  if (fromB64) return fromB64(b64).buffer as ArrayBuffer;
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes.buffer;
 }
+
+/** 読み込み失敗時にどのファイルかわかるようにする */
+const withName = <T>(p: Promise<T>, name: string) => p.catch((e: Error) => { throw new Error(`${name}: ${e?.message ?? e}`); });
 
 /** UI アイコン (SVG) はビルドに同梱してファイル数を減らす */
 const BUNDLED_ICONS = import.meta.glob('../../public/assets/icons/*.svg', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
@@ -68,7 +72,7 @@ class AssetStore {
   loadGltf(rel: string): Promise<GLTF> {
     let p = this.gltfCache.get(rel);
     if (!p) {
-      p = binaryUrl(this.url(`models/${rel}`)).then((u) => this.gltfLoader.loadAsync(u)).then((g) => {
+      p = withName(fetchBinary(this.url(`models/${rel}`)).then((buf) => this.gltfLoader.parseAsync(buf, '')), rel).then((g) => {
         g.scene.traverse((o) => {
           const m = o as THREE.Mesh;
           if (m.isMesh) {
@@ -150,7 +154,16 @@ class AssetStore {
   loadHdr(rel: string): Promise<THREE.DataTexture> {
     let p = this.hdrCache.get(rel);
     if (!p) {
-      p = binaryUrl(this.url(rel)).then((u) => this.hdrLoader.loadAsync(u)).then((t) => {
+      p = withName(fetchBinary(this.url(rel)), rel).then((buf) => {
+        // HDRLoader.load 相当を parse から組み立てる
+        const d = this.hdrLoader.parse(buf) as { data: Uint16Array | Float32Array; width: number; height: number; type: THREE.TextureDataType };
+        const t = new THREE.DataTexture(d.data, d.width, d.height, THREE.RGBAFormat, d.type);
+        t.colorSpace = THREE.LinearSRGBColorSpace;
+        t.minFilter = THREE.LinearFilter;
+        t.magFilter = THREE.LinearFilter;
+        t.generateMipmaps = false;
+        t.flipY = true;
+        t.needsUpdate = true;
         t.mapping = THREE.EquirectangularReflectionMapping;
         return t;
       });
@@ -188,7 +201,8 @@ class AssetStore {
 
 export const assets = new AssetStore();
 
-export async function preloadAll(paths: string[], icons: string[], onProgress: (p: number, label: string) => void) {
+export async function preloadAll(paths: string[], icons: string[], onProgress: (p: number, label: string) => void): Promise<string[]> {
+  const failures: string[] = [];
   let done = 0;
   const total = paths.length + icons.length;
   const tick = (label: string) => { done++; onProgress(done / total, label); };
@@ -198,11 +212,12 @@ export async function preloadAll(paths: string[], icons: string[], onProgress: (
   const worker = async () => {
     while (queue.length) {
       const p = queue.shift()!;
-      try { await assets.loadGltf(p); } catch (e) { console.warn('failed to load', p, e); }
+      try { await assets.loadGltf(p); } catch (e) { console.warn('failed to load', p, e); failures.push((e as Error)?.message ?? String(e)); }
       tick(p);
     }
   };
   for (let i = 0; i < 6; i++) jobs.push(worker());
   jobs.push(...icons.map((i) => assets.loadIcon(i).then(() => tick(i), () => tick(i))));
   await Promise.all(jobs);
+  return failures;
 }
