@@ -30,7 +30,7 @@ export class Interaction {
 
   constructor(private g: Game) {
     g.engine.camera.add(this.holder);
-    this.holder.position.set(0.32, -0.3, -0.62);
+    this.holder.position.set(0.34, -0.3, -0.66);
     this.slotMarker = new THREE.Mesh(new THREE.BoxGeometry(1, 0.02, 1), this.markerOk);
     this.slotMarker.visible = false;
     this.slotMarker.renderOrder = 3;
@@ -70,7 +70,7 @@ export class Interaction {
     this.held = view;
     view.root.removeFromParent();
     const s = view.size;
-    const k = 0.34 / Math.max(s.x, s.y, s.z, 0.1);
+    const k = 0.26 / Math.max(s.x, s.y, s.z, 0.1);
     view.root.scale.setScalar(k);
     view.root.position.set(0, -s.y * k * 0.35, 0);
     view.root.rotation.set(0.15, -0.5, 0);

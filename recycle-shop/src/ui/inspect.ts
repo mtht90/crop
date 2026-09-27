@@ -287,7 +287,7 @@ export class InspectStage {
     this.resize();
     if (this.scrubbing) this.scrub(dt);
     if (!this.dragging && !this.scrubbing) this.yaw += dt * 0.12;
-    const r = this.radius * 4.2 * this.zoom;
+    const r = this.radius * 5 * this.zoom;
     const target = new THREE.Vector3(0, this.centerY, 0);
     this.camera.position.set(Math.sin(this.yaw) * Math.cos(this.pitch) * r, target.y + Math.sin(this.pitch) * r, Math.cos(this.yaw) * Math.cos(this.pitch) * r);
     this.camera.lookAt(target);

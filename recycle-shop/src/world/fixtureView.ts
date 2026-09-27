@@ -115,7 +115,7 @@ export function buildFixtureVisual(def: FixtureDef): { group: THREE.Group; extra
         fitText(ctx, '買取受付', w - 20, 64);
         ctx.fillText('買取受付', w / 2, h / 2);
       });
-      const sign = new THREE.Mesh(new THREE.PlaneGeometry(0.62, 0.31), new THREE.MeshStandardMaterial({ map: tex.texture, emissive: '#fff', emissiveMap: tex.texture, emissiveIntensity: 0.5 }));
+      const sign = new THREE.Mesh(new THREE.PlaneGeometry(0.62, 0.31), new THREE.MeshStandardMaterial({ map: tex.texture, emissive: '#fff', emissiveMap: tex.texture, emissiveIntensity: 0.5, side: THREE.DoubleSide }));
       sign.position.set(0, 1.35, 0.35);
       g.add(sign);
       const pole = box(0.03, 0.6, 0.03, METAL, 0, 0.75, 0.35);
