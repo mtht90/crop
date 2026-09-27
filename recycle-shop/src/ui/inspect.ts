@@ -113,6 +113,8 @@ export class InspectStage {
     c.addEventListener('pointerdown', (e) => {
       this.last.set(e.clientX, e.clientY);
       this.updatePointer(e);
+      // 作業台でもクリックで傷を記録できる (当たらなければこすり開始)
+      if (this.mode === 'clean' && e.button === 0 && this.tryFind()) return;
       if (this.mode === 'clean' && e.button === 0) {
         this.scrubbing = true;
         c.setPointerCapture(e.pointerId);
@@ -237,7 +239,6 @@ export class InspectStage {
   }
 
   private tryFind(): boolean {
-    if (this.mode !== 'appraise') return false;
     this.ray.setFromCamera(this.pointer, this.camera);
     const hits = this.ray.intersectObjects(this.markers.filter((m) => m.defect && !m.defect.found).map((m) => m.hit), false);
     if (hits.length) {

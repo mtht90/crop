@@ -8,8 +8,29 @@ import {
   type FixtureState, type GameState, type ItemState, type MarketState,
 } from './state';
 import { generateItem, trueValue } from './valuation';
+import type { RequestState } from './requests';
 
 const SAVE_KEY = 'recycle-shop-sim/save';
+
+export interface LotDef {
+  id: string;
+  name: string;
+  desc: string;
+  price: number;
+  level: number;
+  count: number;
+  cats: CategoryId[];
+  careful: number;
+  fakeRate: number;
+}
+
+/** 業者からのまとめ仕入れ (1 日 1 回ずつ) */
+export const LOTS: LotDef[] = [
+  { id: 'junk', name: 'ジャンク箱', desc: '家電・おもちゃ中心の 6 点。壊れ物・汚れ物が多いが、直せば化ける。', price: 5000, level: 1, count: 6, cats: ['appliance', 'hobby', 'kitchen'], careful: 0.15, fakeRate: 0 },
+  { id: 'household', name: '引っ越し整理品', desc: '家具・日用品の 5 点。状態はまずまず。', price: 9000, level: 1, count: 5, cats: ['furniture', 'kitchen'], careful: 0.55, fakeRate: 0 },
+  { id: 'estate', name: '遺品整理ロット', desc: '骨董・美術品を含む 4 点。掘り出し物があるかも。', price: 26000, level: 2, count: 4, cats: ['antique', 'furniture'], careful: 0.5, fakeRate: 0.2 },
+  { id: 'brand', name: 'ブランド品オークション', desc: 'ブランド品 3 点。偽物が混じっているので鑑定は必須。', price: 70000, level: 3, count: 3, cats: ['brand'], careful: 0.7, fakeRate: 0.35 },
+];
 
 export interface Objective {
   id: string;
@@ -158,6 +179,32 @@ export class GameModel {
     return generateItem(def, this.rng, { careful: clamp(opt.careful + (opt.flyer ? 0.08 : 0) + this.rng.range(-0.15, 0.15), 0, 1), fakeRate: opt.fakeRate, day: this.state.day }, uid('it'));
   }
 
+  requests(): RequestState[] { return (this.state.requests ??= []); }
+
+  // ───── まとめ仕入れ ─────
+  lotsBoughtToday(): string[] { return this.state.lotsToday ?? []; }
+
+  buyLot(lot: LotDef): ItemState[] | null {
+    if (this.state.level < lot.level || !this.canAfford(lot.price) || this.lotsBoughtToday().includes(lot.id)) return null;
+    this.addMoney(-lot.price, `まとめ仕入れ: ${lot.name}`);
+    this.state.today.purchases += lot.price;
+    this.state.stats.totalPurchases += lot.price;
+    this.state.stats.profit -= lot.price;
+    this.state.lotsToday = [...this.lotsBoughtToday(), lot.id];
+    const out: ItemState[] = [];
+    const pool = ITEMS.filter((d) => lot.cats.includes(d.category) && d.level <= this.state.level + 1);
+    for (let i = 0; i < lot.count; i++) {
+      const def = this.rng.weighted<ItemDef>(pool, (d) => d.weight);
+      const it = generateItem(def, this.rng, { careful: clamp(lot.careful + this.rng.range(-0.2, 0.2), 0, 1), fakeRate: lot.fakeRate, day: this.state.day }, uid('it'));
+      it.cost = Math.round(lot.price / lot.count);
+      this.addItem(it);
+      out.push(it);
+    }
+    this.state.stats.itemsBought += out.length;
+    this.state.today.bought += out.length;
+    return out;
+  }
+
   // ───── アップグレード ─────
   has(id: string) { return this.state.upgrades.includes(id); }
 
@@ -211,7 +258,19 @@ export class GameModel {
     s.minute = OPEN_MINUTE - 60;
     s.phase = 'prep';
     s.today = emptyLedger(s.reputation);
+    s.lotsToday = [];
     const notes = this.advanceMarket();
+    // 探し物依頼の期限切れ
+    for (const r of this.requests()) {
+      if (r.status === 'open' && s.day > r.deadline) {
+        r.status = 'expired';
+        this.addRep(-1);
+        notes.push(`「${itemDef(r.defId).name}」の依頼 (${r.customerName}) は期限切れになりました。評判 -1`);
+      }
+      if (r.status === 'coming') r.status = 'open';
+      r.visitMinute = undefined;
+    }
+    s.requests = this.requests().filter((r) => r.status === 'open' || r.status === 'coming');
     // 偽物を売ったクレーム
     const keep: typeof s.pendingComplaints = [];
     for (const c of s.pendingComplaints) {

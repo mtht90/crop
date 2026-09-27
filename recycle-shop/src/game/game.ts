@@ -11,6 +11,7 @@ import { Player } from '../entities/player';
 import { CustomerManager } from '../systems/customers';
 import { Interaction } from '../systems/interaction';
 import { BuildMode } from '../systems/build';
+import { AutoQuality, GuideMarker, Stocker } from '../systems/helpers';
 import { UI } from '../ui/ui';
 import { Hud } from '../ui/hud';
 import { AppraisalUI } from '../ui/appraisal';
@@ -35,6 +36,9 @@ export class Game {
   interaction!: Interaction;
   build!: BuildMode;
   hud!: Hud;
+  stocker!: Stocker;
+  guide!: GuideMarker;
+  autoQuality!: AutoQuality;
   appraisal!: AppraisalUI;
   checkout!: CheckoutUI;
   workshop!: WorkshopUI;
@@ -88,6 +92,7 @@ export class Game {
     for (const c of [...scene.children]) if (c !== this.engine.camera) scene.remove(c);
     for (const c of [...this.engine.camera.children]) this.engine.camera.remove(c);
     this.hud?.el.remove();
+    this.guide?.dispose();
     this.model = model;
     this.world = new World(this.engine, model);
     await this.world.build();
@@ -107,6 +112,9 @@ export class Game {
     this.stockUI = new StockUI(this);
     this.terminal = new TerminalUI(this);
     this.pauseUI = new PauseUI(this);
+    this.stocker = new Stocker(this);
+    this.guide = new GuideMarker(this);
+    this.autoQuality ??= new AutoQuality(this);
     this.world.building.setOpenSign(model.state.phase === 'open');
     this.world.building.updateTime(model.state.minute);
     this.world.building.onDoorOpen = () => { if (this.mode === 'play') audio.doorBell(); };
@@ -210,6 +218,9 @@ export class Game {
       this.world.update(dt, this.customers.positions());
       this.build.update();
       this.interaction.update();
+      this.stocker.update(gameMinutes);
+      this.guide.update();
+      this.autoQuality.update(dt);
     }
     this.world.building.updateTime(s.minute);
     this.hud.update(dt);

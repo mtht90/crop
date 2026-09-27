@@ -44,6 +44,11 @@ export class WorkshopUI extends Modal {
     this.stage.setItem(this.it!, 'clean');
     this.stage.scrubPower = this.g.model.has('cleaner') ? 2 : 1;
     this.stage.onScrub = (rem) => this.onScrub(rem);
+    this.stage.onDefectFound = (d) => {
+      audio.play('success', { volume: 0.5, rate: 1.4 });
+      toast(`傷を発見 (状態 -${d.severity})`, 'info', 'magnifying-glass');
+      this.render();
+    };
     this.repair = null;
     this.suppliesPaid = false;
     this.el.querySelector('.ws-repair')!.classList.add('hidden');
@@ -109,7 +114,7 @@ export class WorkshopUI extends Modal {
     const why = this.canRepair(it);
     const cost = this.repairCost(it);
     const mode = def.electronic && !it.working ? '故障修理' : '傷の補修';
-    this.el.querySelector('.ws-mode')!.innerHTML = it.dirt > 0.02 ? `${icon('broom')} 汚れを<b>ドラッグでこすって</b>落とそう (残り ${Math.round(it.dirt * 100)}%)` : `${icon('sparkles')} 清掃完了`;
+    this.el.querySelector('.ws-mode')!.innerHTML = (it.dirt > 0.02 ? `${icon('broom')} 汚れを<b>ドラッグでこすって</b>落とそう (残り ${Math.round(it.dirt * 100)}%)` : `${icon('sparkles')} 清掃完了`) + ' ・ 傷は<b>クリック</b>で記録';
     this.side.innerHTML = `
       <div class="ap-item">
         <div class="ap-name">${escapeHtml(def.name)}</div>

@@ -87,6 +87,8 @@ input, select { font-family: var(--font); pointer-events: auto; }
 .hud-obj .obj-title { font-weight: 800; color: var(--accent); margin-bottom: 4px; }
 .hud-obj .obj { margin: 3px 0; line-height: 1.4; }
 .hud-obj .rw { color: var(--green); font-size: 11px; font-weight: 800; }
+.hud-obj .obj-title.req { margin-top: 8px; color: var(--blue); }
+.hud-obj .obj.ready { color: #c9ffd9; }
 .hud-keys { position: absolute; left: 16px; bottom: 14px; font-size: 12px; color: rgba(255,255,255,.65); text-shadow: 0 1px 2px #000; }
 .levelup { position: absolute; top: 28%; left: 50%; transform: translateX(-50%); text-align: center; background: linear-gradient(180deg, rgba(60, 40, 120, .92), rgba(30, 20, 70, .92)); border: 2px solid #b48cff; border-radius: 18px; padding: 18px 34px; font-size: 22px; font-weight: 800; animation: pop .5s cubic-bezier(.2,1.6,.4,1); box-shadow: 0 0 60px rgba(180, 140, 255, .5); }
 .levelup .ico { width: 42px; height: 42px; color: #ffd34d; }
@@ -351,3 +353,8 @@ input, select { font-family: var(--font); pointer-events: auto; }
   .ap-side { width: 50vw; }
   .help-grid { grid-template-columns: 1fr; }
 }
+
+/* ───── 目標マーカー ───── */
+.guide-marker { pointer-events: none; }
+.guide-marker span { display: block; color: #ffd34d; font-size: 30px; text-shadow: 0 2px 6px rgba(0,0,0,.7); animation: bob 1s ease-in-out infinite; }
+@keyframes bob { 50% { transform: translateY(-8px); } }

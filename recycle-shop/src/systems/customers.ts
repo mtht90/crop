@@ -7,6 +7,7 @@ import { events, toast } from '../core/events';
 import { rng, uid, yen } from '../core/util';
 import { Customer, type CustomerRole } from '../entities/customer';
 import { buyChance, sellerTerms } from '../game/pricing';
+import { makeRequest, matchRequest, requestLabel } from '../game/requests';
 import { SPOTS } from '../world/layout';
 import type { SlotRuntime } from '../world/fixtureView';
 import type { Game } from '../game/game';
@@ -40,6 +41,7 @@ export class CustomerManager {
 
   update(dt: number, gameMinutes: number) {
     const s = this.g.model.state;
+    this.updateRequests();
     if (s.phase === 'open' && s.minute < this.g.model.closeMinute() - 20) {
       this.spawnAcc += this.rate() * gameMinutes;
       const cap = 9 + (this.g.model.has('expand') ? 4 : 0);
@@ -72,7 +74,8 @@ export class CustomerManager {
     const hour = m.state.minute / 60;
     const pool = ARCHETYPES.filter((a) => a.minLevel <= m.state.level && (!a.hours || (hour >= a.hours[0] && hour < a.hours[1])));
     const arch = forceArch ? ARCHETYPES.find((a) => a.id === forceArch)! : rng.weighted(pool, (a) => a.rarity);
-    let sellW = arch.sellWeight * (m.has('flyer') ? 1.4 : 1);
+    let sellW = arch.sellWeight * 0.6 * (m.has('flyer') ? 1.5 : 1);
+    if (this.sellQueue.length >= 2) sellW *= 0.4;
     if (this.sellQueue.length >= 3) sellW = 0;
     const role: CustomerRole = forceRole ?? (rng.next() * (sellW + arch.buyWeight) < sellW ? 'seller' : 'buyer');
     if (role === 'seller' && arch.sellWeight === 0 && !forceRole) return null;
@@ -109,6 +112,7 @@ export class CustomerManager {
           if (c.stateTime > 0.3) {
             if (rng.chance(0.4)) c.say(line('enter'), 2);
             if (c.role === 'seller') this.joinSellQueue(c);
+            else if (c.requestId) { c.say('頼んでいたもの、ありますか？', 3); this.joinBuyQueue(c); }
             else this.startBrowse(c);
           }
         }
@@ -125,8 +129,11 @@ export class CustomerManager {
         break;
       case 'look':
         if (c.stateTime > 1.8) {
-          c.pendingDecision?.();
+          // 判断の中で次の行動 (pendingDecision) が設定されるので、先に外してから呼ぶ
+          const decide = c.pendingDecision;
           c.pendingDecision = null;
+          if (decide) decide();
+          else this.finishBrowsing(c);
         }
         break;
       case 'toRegister':
@@ -244,7 +251,7 @@ export class CustomerManager {
         }
       }
     }
-    const moreChance = c.basket.length ? 0.3 : 0.75;
+    const moreChance = c.basket.length ? 0.45 : 0.8;
     if (c.visits < c.maxVisits && rng.chance(moreChance) && c.budget > 200) this.startBrowse(c);
     else this.finishBrowsing(c);
   }
@@ -254,8 +261,44 @@ export class CustomerManager {
     if (c.basket.length) this.joinBuyQueue(c);
     else {
       if (c.rejects >= 2) this.g.model.addRep(-0.3);
-      c.say(line('nothing'), 2.5);
+      const m = this.g.model;
+      const open = m.requests().filter((r) => r.status === 'open').length;
+      if (!c.requestId && open < 4 && c.arch.id !== 'window' && rng.chance(0.28)) {
+        // 欲しい物がなかった → 探し物を依頼していく
+        const r = makeRequest(m, rng, c.name, c.arch.id, c.arch.fav);
+        m.requests().push(r);
+        c.say(`${itemDef(r.defId).name}を探してるんです。入ったら取っておいてください！`, 4.5);
+        toast(`探し物の依頼: ${requestLabel(r)} を ${r.deadline}日目までに (予算 ${yen(r.budget)})`, 'info', 'conversation');
+      } else c.say(line('nothing'), 2.5);
       this.leave(c);
+    }
+  }
+
+  /** 依頼品が揃っていれば依頼主が来店する */
+  private updateRequests() {
+    const m = this.g.model;
+    const s = m.state;
+    if (s.phase !== 'open') return;
+    for (const r of m.requests()) {
+      if (r.status !== 'open') continue;
+      const it = matchRequest(m, r);
+      if (!it) continue;
+      if (r.visitMinute === undefined || r.visitMinute < s.minute - 400) r.visitMinute = s.minute + rng.range(20, 90);
+      if (s.minute < r.visitMinute || s.minute > m.closeMinute() - 30) continue;
+      // 依頼主が品物を受け取りに来る
+      const arch = ARCHETYPES.find((a) => a.id === r.archetype) ?? ARCHETYPES[0];
+      const c = this.spawn('buyer', arch.id);
+      if (!c) continue;
+      (c as { name: string }).name = r.customerName;
+      c.requestId = r.id;
+      c.haggled = true;
+      r.status = 'coming';
+      if (it.loc.type === 'fixture' || it.loc.type === 'bench') this.g.world.destroyView(it.uid);
+      it.loc = { type: 'customer', customer: c.id };
+      it.price = r.budget;
+      c.basket.push(it);
+      c.budget = 0;
+      toast(`${r.customerName}が依頼の「${itemDef(r.defId).name}」を受け取りに来ました`, 'good', 'conversation');
     }
   }
 
@@ -280,6 +323,7 @@ export class CustomerManager {
 
   /** レジ待ちを諦めて帰る: 商品は在庫へ */
   private abandonQueue(c: Customer) {
+    // 依頼の引き取り客は翌日また来る (status は 'coming' のまま、翌朝 open に戻る)
     for (const it of c.basket) it.loc = { type: 'stock' };
     if (c.basket.length) toast(`${c.name}が待ちくたびれて帰りました (商品は在庫に戻しました)`, 'bad', 'angry-eyes');
     c.basket = [];
@@ -294,6 +338,15 @@ export class CustomerManager {
 
   /** 会計完了 */
   completePurchase(c: Customer) {
+    if (c.requestId) {
+      const r = this.g.model.requests().find((x) => x.id === c.requestId);
+      if (r && c.basket.length) {
+        r.status = 'done';
+        this.g.model.addRep(2);
+        this.g.model.addXp(30);
+        toast(`依頼達成！ ${r.customerName}に喜ばれました (評判 +2)`, 'good', 'thumb-up');
+      } else if (r) r.status = 'open';
+    }
     c.basket = [];
     c.say(line('paid'), 3, 'good');
     c.gesture('Cheer', 'Idle');

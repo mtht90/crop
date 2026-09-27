@@ -114,6 +114,10 @@ export interface GameState {
   objectivesDone: string[];
   /** 偽物を知らずに売った記録 (後日クレームの種) */
   pendingComplaints: { itemName: string; price: number; day: number }[];
+  /** 今日すでに買ったまとめ仕入れ */
+  lotsToday?: string[];
+  /** お客さんからの探し物依頼 */
+  requests?: import('./requests').RequestState[];
   seed: number;
 }
 

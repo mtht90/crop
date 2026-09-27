@@ -5,6 +5,7 @@ import { GRADE_COLOR, knownValue } from '../game/valuation';
 import type { Game } from '../game/game';
 import type { ItemState } from '../game/state';
 import { icon } from './ui';
+import { matchRequest, requestLabel } from '../game/requests';
 
 export interface PromptLine { key: string; text: string; disabled?: boolean }
 
@@ -131,8 +132,14 @@ export class Hud {
     this.lvl.textContent = `Lv.${s.level}`;
     this.xpBar.style.width = `${(s.xp / this.g.model.xpForLevel(s.level)) * 100}%`;
     const objs = this.g.model.currentObjectives(3);
-    const oh = `<div class="obj-title">${icon('star-formation')} 目標</div>` + objs.map((o) => `<div class="obj">・${escapeHtml(o.text)}${o.reward ? ` <span class="rw">${yen(o.reward)}</span>` : ''}</div>`).join('');
-    if (oh !== this.lastObj) { this.objectives.innerHTML = oh; this.lastObj = oh; this.objectives.classList.toggle('hidden', !objs.length); }
+    const reqs = this.g.model.requests().filter((r) => r.status !== 'done' && r.status !== 'expired');
+    const oh = (objs.length ? `<div class="obj-title">${icon('star-formation')} 目標</div>` + objs.map((o) => `<div class="obj">・${escapeHtml(o.text)}${o.reward ? ` <span class="rw">${yen(o.reward)}</span>` : ''}</div>`).join('') : '')
+      + (reqs.length ? `<div class="obj-title req">${icon('conversation')} 探し物の依頼</div>` + reqs.map((r) => {
+        const have = !!matchRequest(this.g.model, r);
+        const left = r.deadline - s.day;
+        return `<div class="obj ${have ? 'ready' : ''}">・${escapeHtml(requestLabel(r))} <span class="rw">${yen(r.budget)}</span> <span class="dim">${left <= 0 ? '今日まで' : `あと${left}日`}${have ? ' ✔入荷済' : ''}</span></div>`;
+      }).join('') : '');
+    if (oh !== this.lastObj) { this.objectives.innerHTML = oh; this.lastObj = oh; this.objectives.classList.toggle('hidden', !objs.length && !reqs.length); }
     const cm = this.g.customers;
     const sq = cm.sellQueue.length;
     const bq = cm.buyQueue.length;

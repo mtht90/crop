@@ -7,6 +7,8 @@ import type { ItemState } from '../game/state';
 
 const CHAR_SCALE = 0.68;
 const HIDE = /Sword|Shield|Axe|Mug|Spellbook|Wand|Staff|Knife|Crossbow|Throwable/;
+/** 人間の客は兜・マント・帽子を外して「街の人」らしくする */
+const HUMAN_HIDE = /Knight_Helmet|Knight_Cape|Barbarian_Cape|Mage_Cape|Mage_Hat|Rogue_Cape/;
 const OPTIONAL = /Helmet|Hat|Cape|Cloak|Hood$/;
 
 export type CustomerRole = 'buyer' | 'seller';
@@ -47,6 +49,8 @@ export class Customer {
   /** 交渉中の状態 */
   negotiation: { ask: number; reserve: number; rounds: number; lastCounter: number | null } | null = null;
   haggled = false;
+  /** 探し物依頼の引き取り客 */
+  requestId: string | null = null;
 
   constructor(
     readonly id: string,
@@ -60,7 +64,7 @@ export class Customer {
     const model = assets.instance(modelPath, { scale: CHAR_SCALE, ground: false });
     model.traverse((o) => {
       if (!(o as THREE.Mesh).isMesh) return;
-      if (HIDE.test(o.name)) o.visible = false;
+      if (HIDE.test(o.name) || HUMAN_HIDE.test(o.name)) o.visible = false;
       else if (OPTIONAL.test(o.name) && rng.chance(0.45)) o.visible = false;
     });
     // 同じモデルでも少し体格差をつける
@@ -71,7 +75,7 @@ export class Customer {
     for (const clip of assets.animations('chars/anims.glb')) this.actions.set(clip.name, this.mixer.clipAction(clip));
     this.play('Walking_A');
     this.budget = Math.round(rng.range(arch.budget[0], arch.budget[1]));
-    this.maxVisits = rng.int(2, 6);
+    this.maxVisits = rng.int(3, 7);
 
     this.bubbleEl = document.createElement('div');
     this.bubbleEl.className = 'bubble';

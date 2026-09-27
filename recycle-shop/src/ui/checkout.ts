@@ -265,7 +265,7 @@ export class CheckoutUI extends Modal {
     m.state.today.sold++;
     m.addXp(6 + Math.sqrt(price) * 0.2);
     const tv = trueValue(it, m.trend(def.category));
-    if (price <= tv * 1.05) m.addRep(0.35);
+    if (price <= tv * 1.05) m.addRep(0.12);
     // 偽物を本物価格で売った
     if (!it.authentic && price > tv * 3) m.state.pendingComplaints.push({ itemName: def.name, price, day: m.state.day });
     it.loc = { type: 'gone' };

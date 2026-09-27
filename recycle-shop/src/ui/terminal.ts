@@ -5,10 +5,11 @@ import { CATEGORIES, ITEMS, SIZE_LABEL, itemDef, type CategoryId } from '../data
 import { FIXTURES } from '../data/fixtures';
 import { UPGRADES } from '../data/upgrades';
 import type { Game } from '../game/game';
+import { LOTS } from '../game/model';
 import { CHECK_TABLE, GRADE_COLOR, knownValue } from '../game/valuation';
 import { Modal, icon } from './ui';
 
-type Tab = 'market' | 'items' | 'fixtures' | 'upgrades' | 'guide' | 'stats';
+type Tab = 'market' | 'lots' | 'items' | 'fixtures' | 'upgrades' | 'guide' | 'stats';
 
 /** 店舗 PC (Tab キーでも開けるタブレット) */
 export class TerminalUI extends Modal {
@@ -27,7 +28,7 @@ export class TerminalUI extends Modal {
 
   onOpen() {
     const tabs: [Tab, string, string][] = [
-      ['market', 'chart', '相場・ニュース'], ['items', 'cardboard-box', '商品管理'], ['fixtures', 'shop', '什器'],
+      ['market', 'chart', '相場・ニュース'], ['lots', 'cardboard-box-closed', '仕入れ'], ['items', 'cardboard-box', '商品管理'], ['fixtures', 'shop', '什器'],
       ['upgrades', 'upgrade', '設備投資'], ['guide', 'magnifying-glass', '鑑定ガイド'], ['stats', 'histogram', '経営状況'],
     ];
     this.el.innerHTML = `
@@ -56,7 +57,7 @@ export class TerminalUI extends Modal {
     const c = this.content;
     c.innerHTML = '';
     c.scrollTop = 0;
-    ({ market: () => this.renderMarket(), items: () => this.renderItems(), fixtures: () => this.renderFixtures(), upgrades: () => this.renderUpgrades(), guide: () => this.renderGuide(), stats: () => this.renderStats() })[this.tab]();
+    ({ market: () => this.renderMarket(), lots: () => this.renderLots(), items: () => this.renderItems(), fixtures: () => this.renderFixtures(), upgrades: () => this.renderUpgrades(), guide: () => this.renderGuide(), stats: () => this.renderStats() })[this.tab]();
   }
 
   // ───── 相場 ─────
@@ -115,6 +116,34 @@ export class TerminalUI extends Modal {
     x.strokeStyle = color; x.lineWidth = 2; x.lineJoin = 'round'; x.stroke();
     x.fillStyle = color;
     x.beginPath(); x.arc(X(data.length - 1), Y(data[data.length - 1]), 4, 0, Math.PI * 2); x.fill();
+  }
+
+  // ───── まとめ仕入れ ─────
+  private renderLots() {
+    const m = this.g.model;
+    const bought = m.lotsBoughtToday();
+    this.content.innerHTML = `<div class="dim small">業者からまとめて仕入れます (各ロット 1 日 1 回)。中身は在庫置き場に届きます。<b>未検品</b>なので、作業台で傷を確かめ、清掃・修理してから並べましょう。</div><div class="shop-grid"></div>`;
+    const grid = this.content.querySelector('.shop-grid')!;
+    for (const lot of LOTS) {
+      const locked = m.state.level < lot.level;
+      const done = bought.includes(lot.id);
+      const card = el('div', `shop-card ${done ? 'owned' : ''} ${locked ? 'locked' : ''}`, `
+        <div class="sc-name">${icon('cardboard-box-closed')} ${escapeHtml(lot.name)}</div>
+        <div class="sc-desc">${escapeHtml(lot.desc)}</div>
+        <div class="sc-meta">${lot.count} 点 ・ ${lot.cats.map((c) => CATEGORIES[c].name).join(' / ')}</div>
+        <div class="sc-foot"><b>${yen(lot.price)}</b></div>`);
+      const b = el('button', 'primary', done ? '本日は購入済み' : locked ? `Lv.${lot.level} で解放` : '仕入れる');
+      b.disabled = done || locked || !m.canAfford(lot.price);
+      b.onclick = () => {
+        const items = m.buyLot(lot);
+        if (!items) return;
+        audio.play('success');
+        toast(`${lot.name} (${items.length} 点) が在庫置き場に届きました`, 'good', 'cardboard-box');
+        this.render();
+      };
+      card.querySelector('.sc-foot')!.appendChild(b);
+      grid.appendChild(card);
+    }
   }
 
   // ───── 商品管理 ─────

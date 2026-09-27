@@ -282,7 +282,7 @@ export class AppraisalUI extends Modal {
     m.state.stats.itemsBought++;
     m.state.stats.profit -= o;
     m.addXp(8 + Math.sqrt(o) * 0.15);
-    if (happy) m.addRep(0.8);
+    if (happy) m.addRep(0.35);
     if (!it.authentic) {
       if (it.verdict === 'fake') { m.state.stats.fakesCaught++; m.addXp(40); events.emit('fake:detected', { itemUid: it.uid }); }
       else { m.state.stats.fakesBought++; events.emit('fake:bought', { itemUid: it.uid }); }

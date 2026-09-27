@@ -16,7 +16,8 @@ export function perceivedValue(m: GameModel, it: ItemState, arch: Archetype, pre
   if (arch.fav.includes(def.category)) v *= 1.15;
   if (prestige && (def.category === 'brand' || def.category === 'antique')) v *= 1 + prestige;
   v *= 0.9 + m.state.reputation / 500;
-  v *= rng.range(0.9, 1.12);
+  // 客は少し高めでも「欲しい」と思う (リサイクル品はお得感が大事)
+  v *= rng.range(0.98, 1.25);
   return v;
 }
 
@@ -29,7 +30,7 @@ export function buyChance(m: GameModel, it: ItemState, arch: Archetype, price: n
   }
   const v = perceivedValue(m, it, arch, prestige);
   const ratio = price / v;
-  return 1 / (1 + Math.exp((ratio - 1.0) * 5 * arch.priceSensitivity));
+  return 1 / (1 + Math.exp((ratio - 1.02) * 4.5 * arch.priceSensitivity));
 }
 
 /** 売り手の希望額・最低ライン */
@@ -43,7 +44,7 @@ export function sellerTerms(m: GameModel, it: ItemState, arch: Archetype) {
   const base = knowsBroken ? real * 1.4 : claimed;
   const noise = 1 + rng.gauss(0, (1 - arch.knowledge) * 0.35);
   const est = Math.max(50, base * noise);
-  const ask = Math.max(100, est * 0.58 * arch.greed);
-  const reserve = Math.max(50, est * (arch.id === 'mover' ? 0.22 : arch.id === 'elder' ? 0.25 : 0.33) * arch.greed);
+  const ask = Math.max(100, est * 0.62 * arch.greed);
+  const reserve = Math.max(50, est * (arch.id === 'mover' ? 0.25 : arch.id === 'elder' ? 0.28 : 0.37) * arch.greed);
   return { ask, reserve, knowsBroken };
 }
