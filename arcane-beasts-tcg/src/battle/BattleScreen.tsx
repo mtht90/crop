@@ -12,6 +12,7 @@ import { PromptLayer } from './PromptLayer';
 import { ResultOverlay } from './ResultOverlay';
 import { useStore } from '../state/store';
 import { foley, playMusic, sfx } from '../audio/audio';
+import { askConfirm } from '../ui/Confirm';
 import './battle.css';
 
 const LAYOUT = { type: 'spring' as const, stiffness: 260, damping: 30, mass: 0.9 };
@@ -816,8 +817,8 @@ export function BattleScreen() {
           <button
             className="log-toggle surrender"
             title="降参する"
-            onClick={() => {
-              if (confirm('降参しますか？（敗北になります）')) ctrl?.surrender();
+            onClick={async () => {
+              if (await askConfirm('降参しますか？（敗北になります）', '降参する', true)) ctrl?.surrender();
             }}
           >
             <Icon name="skull" />

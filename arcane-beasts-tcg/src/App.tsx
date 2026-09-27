@@ -14,6 +14,7 @@ import { Credits, Rules, Settings } from './screens/Misc';
 import { setVolumes, unlockAudio } from './audio/audio';
 import { expand, RIVALS, STARTER_DECKS } from './engine/decks';
 import './screens/screens.css';
+import { ConfirmDialog } from './ui/Confirm';
 
 function debugBattle() {
   const q = new URLSearchParams(location.search);
@@ -84,6 +85,7 @@ export function App() {
           <Comp />
         </motion.div>
       </AnimatePresence>
+      <ConfirmDialog />
     </>
   );
 }

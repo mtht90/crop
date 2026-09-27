@@ -5,6 +5,7 @@ import { TopBar } from '../ui/TopBar';
 import { CardFace, EnergySymbol } from '../ui/Card';
 import { byName } from '../engine/cards';
 import { playMusic, sfx } from '../audio/audio';
+import { askConfirm } from '../ui/Confirm';
 
 export function Settings() {
   const settings = useStore((s) => s.save.settings);
@@ -43,8 +44,8 @@ export function Settings() {
             <label>セーブデータ</label>
             <button
               className="btn red small"
-              onClick={() => {
-                if (confirm('すべてのカード・コイン・デッキが消去されます。本当にリセットしますか？')) reset();
+              onClick={async () => {
+                if (await askConfirm('すべてのカード・コイン・デッキが消去されます。本当にリセットしますか？', 'リセットする', true)) reset();
               }}
             >
               データをリセット

@@ -10,6 +10,7 @@ import { CardFace, EnergySymbol } from '../ui/Card';
 import { Icon } from '../ui/Icon';
 import { TopBar } from '../ui/TopBar';
 import { foley, playMusic, sfx } from '../audio/audio';
+import { askConfirm } from '../ui/Confirm';
 
 type Kind = 'all' | 'monster' | 'trainer' | 'energy';
 
@@ -113,9 +114,9 @@ export function DeckBuilder() {
     setEditing({ id: `deck-${Date.now()}`, name: `デッキ${save.decks.length + 1}`, cards: [], cover: '' });
     setDirty(true);
   };
-  const deleteDeck = () => {
+  const deleteDeck = async () => {
     if (save.decks.length <= 1) return flash('最後のデッキは削除できません');
-    if (!confirm(`「${editing.name}」を削除しますか？`)) return;
+    if (!(await askConfirm(`「${editing.name}」を削除しますか？`, '削除する', true))) return;
     update((s) => {
       s.decks = s.decks.filter((d) => d.id !== editing.id);
       if (s.activeDeck === editing.id) s.activeDeck = s.decks[0].id;
@@ -150,8 +151,8 @@ export function DeckBuilder() {
               <button
                 key={d.id}
                 className={d.id === editing.id ? 'on' : ''}
-                onClick={() => {
-                  if (dirty && !confirm('保存していない変更があります。破棄しますか？')) return;
+                onClick={async () => {
+                  if (dirty && !(await askConfirm('保存していない変更があります。破棄して切り替えますか？', '破棄する', true))) return;
                   setEditing(structuredClone(d));
                   setDirty(false);
                 }}
