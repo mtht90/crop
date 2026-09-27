@@ -12,6 +12,16 @@ import { fx } from './fx';
 
 export const HUMAN = 0 as const;
 
+export interface BattleStats {
+  kos: number;
+  damage: number;
+  prizes: number;
+  prizesLost: number;
+  evolves: number;
+  trainers: number;
+}
+const EMPTY: BattleStats = { kos: 0, damage: 0, prizes: 0, prizesLost: 0, evolves: 0, trainers: 0 };
+
 export interface BattleResult {
   winner: 0 | 1 | -1;
   reason: string;
@@ -23,6 +33,7 @@ interface BattleStore {
   thinking: boolean;
   result: BattleResult | null;
   lastEvent: GameEvent | null;
+  stats: BattleStats;
   hover: string | null; // cid being previewed
   setHover: (cid: string | null) => void;
 }
@@ -33,6 +44,7 @@ export const useBattle = create<BattleStore>((set) => ({
   thinking: false,
   result: null,
   lastEvent: null,
+  stats: { ...EMPTY },
   hover: null,
   setHover: (cid) => set({ hover: cid }),
 }));
@@ -54,7 +66,7 @@ export class BattleController {
   constructor(decks: [string[], string[]], names: [string, string], level: Difficulty) {
     this.game = Game.create(decks, names, (Math.random() * 2 ** 31) | 0, { record: true });
     this.level = level;
-    useBattle.setState({ view: structuredClone(this.game.s), prompt: null, result: null, thinking: false, lastEvent: null, hover: null });
+    useBattle.setState({ view: structuredClone(this.game.s), prompt: null, result: null, thinking: false, lastEvent: null, hover: null, stats: { ...EMPTY } });
   }
 
   start() {
@@ -137,8 +149,22 @@ export class BattleController {
   // --------------------------------------------------------------------------
   // Frame playback
   // --------------------------------------------------------------------------
+  private tally(ev: GameEvent) {
+    const st = { ...useBattle.getState().stats };
+    if (ev.e === 'ko' && ev.pos.p === 1) st.kos++;
+    else if (ev.e === 'damage' && ev.pos.p === 1 && ev.source === 'attack') st.damage += ev.amount;
+    else if (ev.e === 'prize') {
+      if (ev.p === HUMAN) st.prizes += ev.uids.length;
+      else st.prizesLost += ev.uids.length;
+    } else if (ev.e === 'evolve' && ev.p === HUMAN) st.evolves++;
+    else if ((ev.e === 'trainer' || ev.e === 'stadium') && ev.p === HUMAN) st.trainers++;
+    else return;
+    useBattle.setState({ stats: st });
+  }
+
   private async play(f: Frame) {
     const ev = f.ev;
+    this.tally(ev);
     const prev = useBattle.getState().view;
     useBattle.setState({ view: f.state, lastEvent: ev });
     const d = (ms: number) => sleep(ms / this.speed);

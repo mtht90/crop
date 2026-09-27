@@ -9,7 +9,8 @@ import { AnimatePresence, animate, motion, useAnimationControls, useMotionValue,
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CardDef, Rarity } from '../engine/types';
 import { byName } from '../engine/cards';
-import { BOOSTERS, openPack, PACK_PRICE, RARITY_ORDER, useStore, type Booster } from '../state/store';
+import { BOOSTERS, openPack, openPremium, PACK_PRICE, premiumBooster, PREMIUM_PRICE, RARITY_ORDER, useStore, type Booster } from '../state/store';
+import { currentPickup, fmtRemain } from '../state/progress';
 import { CardBack, CardFace } from '../ui/Card';
 import { TopBar } from '../ui/TopBar';
 import { Icon } from '../ui/Icon';
@@ -26,6 +27,7 @@ const EASE_IN_OUT = [0.65, 0, 0.35, 1] as const;
 
 const isStar = (r: Rarity) => r === 'SR' || r === 'UR';
 const rareColor = (r: Rarity) => (r === 'UR' ? '#ffd27a' : r === 'SR' ? '#bfe6ff' : '#ffffff');
+const priceOf = (b: Booster) => (b.premium ? PREMIUM_PRICE : PACK_PRICE);
 
 function useUnit() {
   const calc = () => Math.min(window.innerWidth / 100, (window.innerHeight * 1.7778) / 100);
@@ -93,23 +95,34 @@ export function Shop() {
   const [sel, setSel] = useState(0);
   const [opening, setOpening] = useState<OpeningState | null>(null);
   const [odds, setOdds] = useState(false);
+  const [kind, setKind] = useState<'normal' | 'premium'>(() => (/[?&]premium/.test(location.search) ? 'premium' : 'normal'));
   const u = useUnit();
   useEffect(() => playMusic('shop'), []);
-  const b = BOOSTERS[sel];
+  const premium = useMemo(() => premiumBooster(), []);
+  const pickup = useMemo(() => currentPickup(), []);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const b = kind === 'premium' ? premium : BOOSTERS[sel];
+  const price = priceOf(b);
 
   const buy = useCallback(
     (booster: Booster) => {
-      if (useStore.getState().save.coins < PACK_PRICE) {
+      const cost = priceOf(booster);
+      if (useStore.getState().save.coins < cost) {
         sfx('miss-2', 0.5);
         return false;
       }
-      const res = openPack(booster);
+      const res = booster.premium ? openPremium() : openPack(booster);
       const col = useStore.getState().save.collection;
       const fresh = new Set(res.cards.filter((c) => !(col[c.id] ?? 0)).map((c) => c.id));
       update((s) => {
-        s.coins -= PACK_PRICE;
+        s.coins -= cost;
         s.packsOpened++;
       });
+      useStore.getState().recordPack(!!booster.premium);
       addCards(res.cards.map((c) => c.id));
       setOpening({ booster, cards: res.cards, god: res.god, fresh, key: Date.now() });
       return true;
@@ -131,11 +144,30 @@ export function Shop() {
         <TopBar
           title="パック開封"
           right={
+            <>
+            <div className="shop-kind">
+              {(['normal', 'premium'] as const).map((k) => (
+                <button
+                  key={k}
+                  className={`${kind === k ? 'on' : ''} ${k}`}
+                  onClick={() => {
+                    if (kind === k) return;
+                    foley.slide();
+                    setKind(k);
+                  }}
+                >
+                  {k === 'normal' ? '通常パック' : 'プレミアム'}
+                  {k === 'premium' && pickup && <i>PICK UP</i>}
+                </button>
+              ))}
+            </div>
             <button className="textbtn" onClick={() => setOdds(true)}>
               提供割合
             </button>
+            </>
           }
         />
+        {kind === 'normal' ? (
         <div className="shop2-row">
           {BOOSTERS.map((bo, i) => {
             let d = i - sel;
@@ -165,17 +197,20 @@ export function Shop() {
             ›
           </button>
         </div>
+        ) : (
+          <PremiumView booster={premium} pickup={pickup} now={now} u={u} onBuy={() => buy(premium)} />
+        )}
         <div className="shop2-bottom">
           <AnimatePresence mode="wait">
             <motion.div key={b.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.25 }} style={{ textAlign: 'center' }}>
               <div className="shop2-name">{b.name}</div>
-              <div className="shop2-sub">{b.types.map((t) => TYPE_JP[t]).join('・')}タイプが出やすい</div>
+              <div className="shop2-sub">{b.premium ? '全スロットのレアリティ上昇・5枚目はRR以上確定' : `${b.types.map((t) => TYPE_JP[t]).join('・')}タイプが出やすい`}</div>
             </motion.div>
           </AnimatePresence>
-          <button className="pill" disabled={save.coins < PACK_PRICE} onClick={() => buy(b)}>
+          <button className={`pill ${b.premium ? 'gold' : ''}`} disabled={save.coins < price} onClick={() => buy(b)}>
             開封する
             <span className="coin">
-              <Icon name="coin" /> {PACK_PRICE}
+              <Icon name="coin" /> {price}
             </span>
           </button>
         </div>
@@ -194,21 +229,28 @@ export function Shop() {
         )}
       </AnimatePresence>
 
-      {odds && <OddsModal onClose={() => setOdds(false)} />}
+      {odds && <OddsModal premium={kind === 'premium'} onClose={() => setOdds(false)} />}
     </div>
   );
 }
 
-function OddsModal({ onClose }: { onClose: () => void }) {
-  const rows: [string, string][] = [
-    ['1〜3枚目', 'C 75〜90% ／ U 10〜25%'],
-    ['4枚目', 'U 72% ／ R 22% ／ RR 6%'],
-    ['5枚目', 'R 64% ／ RR 25% ／ SR 8% ／ UR 3%'],
-  ];
+function OddsModal({ onClose, premium }: { onClose: () => void; premium?: boolean }) {
+  const rows: [string, string][] = premium
+    ? [
+        ['1〜2枚目', 'U 50〜55% ／ R 33〜36% ／ RR 12〜14%'],
+        ['3枚目', 'R 60% ／ RR 32% ／ SR 8%'],
+        ['4枚目', 'R 35% ／ RR 45% ／ SR 15% ／ UR 5%'],
+        ['5枚目', 'RR 50% ／ SR 35% ／ UR 15%'],
+      ]
+    : [
+        ['1〜3枚目', 'C 75〜90% ／ U 10〜25%'],
+        ['4枚目', 'U 72% ／ R 22% ／ RR 6%'],
+        ['5枚目', 'R 64% ／ RR 25% ／ SR 8% ／ UR 3%'],
+      ];
   return (
     <div className="zoom-back" onClick={onClose}>
       <div className="panel odds-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-title">提供割合</div>
+        <div className="modal-title">提供割合{premium ? '（プレミアムパック）' : '（通常パック）'}</div>
         <table className="odds-table">
           <tbody>
             {rows.map(([slot, text]) => (
@@ -219,7 +261,11 @@ function OddsModal({ onClose }: { onClose: () => void }) {
             ))}
           </tbody>
         </table>
-        <div className="odds-note">パックに描かれたタイプのカードは2倍出やすくなります。ごくまれに、5枚すべてがRR以上のパックが出ることがあります。</div>
+        <div className="odds-note">
+          {premium
+            ? 'ピックアップ開催中は、ピックアップ対象と同じレアリティが出た場合、その50%がピックアップカードになります。'
+            : 'パックに描かれたタイプのカードは2倍出やすくなります。ごくまれに、5枚すべてがRR以上のパックが出ることがあります。'}
+        </div>
         <button className="pill ghost" onClick={onClose}>
           閉じる
         </button>
@@ -369,7 +415,7 @@ function Opening({ booster, cards, god, fresh, onClose, onAgain }: OpeningProps)
           </>
         )}
 
-        {phase === 'results' && <Results cards={cards} fresh={fresh} onClose={onClose} onAgain={onAgain} canAgain={coins >= PACK_PRICE} u={u} />}
+        {phase === 'results' && <Results cards={cards} fresh={fresh} onClose={onClose} onAgain={onAgain} canAgain={coins >= priceOf(booster)} price={priceOf(booster)} u={u} />}
       </div>
     </motion.div>
   );
@@ -771,7 +817,7 @@ function TopCard({ card, u, first, faceDown, burstAt, onFlipImpact, onFlipped, o
 // ---------------------------------------------------------------------------
 // Results
 // ---------------------------------------------------------------------------
-function Results({ cards, fresh, onClose, onAgain, canAgain, u }: { cards: CardDef[]; fresh: Set<string>; onClose: () => void; onAgain: () => void; canAgain: boolean; u: number }) {
+function Results({ cards, fresh, onClose, onAgain, canAgain, price, u }: { cards: CardDef[]; fresh: Set<string>; onClose: () => void; onAgain: () => void; canAgain: boolean; price: number; u: number }) {
   const [zoom, setZoom] = useState<string | null>(null);
   useEffect(() => {
     cards.forEach((_, i) => setTimeout(() => foley.slide(), 80 + i * 90));
@@ -815,7 +861,7 @@ function Results({ cards, fresh, onClose, onAgain, canAgain, u }: { cards: CardD
         <button className="pill" disabled={!canAgain} onClick={onAgain}>
           もう1パック開ける
           <span className="coin">
-            <Icon name="coin" /> {PACK_PRICE}
+            <Icon name="coin" /> {price}
           </span>
         </button>
       </motion.div>
@@ -828,6 +874,72 @@ function Results({ cards, fresh, onClose, onAgain, canAgain, u }: { cards: CardD
           </motion.div>
         )}
       </AnimatePresence>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Premium pack view with the (irregular) pick-up banner
+// ---------------------------------------------------------------------------
+function PremiumView({ booster, pickup, now, u, onBuy }: { booster: Booster; pickup: ReturnType<typeof currentPickup>; now: number; u: number; onBuy: () => void }) {
+  return (
+    <div className="prem">
+      <motion.div className="prem-info" initial={{ opacity: 0, x: -u * 2 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.6, ease: EASE_OUT }}>
+        <div className="prem-kicker">PREMIUM PACK</div>
+        <h3>プレミアムパック</h3>
+        <ul>
+          <li>
+            <b>全スロット</b>のレアリティが上昇
+          </li>
+          <li>
+            5枚目は<b>RR以上</b>確定
+          </li>
+          <li>
+            SR・URの出現率 通常の<b>約7倍</b>
+          </li>
+        </ul>
+      </motion.div>
+      <motion.div
+        className="shop2-pack prem-pack"
+        initial={{ opacity: 0, y: u * 2, scale: 0.96 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.7, ease: EASE_OUT }}
+        onClick={onBuy}
+      >
+        <motion.div animate={{ y: [0, -u * 0.6, 0] }} transition={{ duration: 4.5, repeat: Infinity, ease: 'easeInOut' }}>
+          <BoosterPack booster={booster} tilt />
+        </motion.div>
+      </motion.div>
+      <motion.div className={`prem-pu ${pickup ? 'on' : ''}`} initial={{ opacity: 0, x: u * 2 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.6, ease: EASE_OUT, delay: 0.05 }}>
+        {pickup ? (
+          <>
+            <div className="pu-head">
+              <span className="pu-tag">PICK UP</span>
+              <span className="pu-time">
+                <Icon name="hourglass" /> 残り {fmtRemain(pickup.end.getTime() - now)}
+              </span>
+            </div>
+            <div className="pu-card">
+              <CardFace cid={pickup.card.id} />
+              <div className="glare" />
+            </div>
+            <div className="pu-name">{pickup.card.name}</div>
+            <div className="pu-desc">{pickup.card.rarity} が出たとき、50%でこのカードに</div>
+          </>
+        ) : (
+          <>
+            <div className="pu-head">
+              <span className="pu-tag off">PICK UP</span>
+            </div>
+            <div className="pu-empty">
+              <div className="q">?</div>
+              現在開催中のピックアップはありません。
+              <br />
+              ピックアップは<b>不定期</b>に開催されます。
+            </div>
+          </>
+        )}
+      </motion.div>
     </div>
   );
 }

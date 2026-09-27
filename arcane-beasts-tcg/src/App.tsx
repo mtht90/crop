@@ -10,11 +10,15 @@ import { Rivals } from './screens/Rivals';
 import { DeckBuilder } from './screens/DeckBuilder';
 import { Collection } from './screens/Collection';
 import { Shop } from './screens/Shop';
+import { Missions } from './screens/Missions';
 import { Credits, Rules, Settings } from './screens/Misc';
 import { setVolumes, unlockAudio } from './audio/audio';
 import { expand, RIVALS, STARTER_DECKS } from './engine/decks';
 import './screens/screens.css';
 import { ConfirmDialog } from './ui/Confirm';
+import { useBattle } from './battle/controller';
+
+if (import.meta.env.DEV) Object.assign(window, { __stores: { useStore, useBattle } });
 
 function debugBattle() {
   const q = new URLSearchParams(location.search);
@@ -44,6 +48,7 @@ const SCREENS = {
   deck: DeckBuilder,
   collection: Collection,
   shop: Shop,
+  missions: Missions,
   settings: Settings,
   credits: Credits,
   rules: Rules,

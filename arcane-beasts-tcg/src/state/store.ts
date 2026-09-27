@@ -3,8 +3,31 @@ import { ALL_CARDS, card } from '../engine/cards';
 import { expand, RIVALS, STARTER_DECKS, type Rival } from '../engine/decks';
 import type { Difficulty } from '../engine/ai';
 import type { CardDef, EType, Rarity } from '../engine/types';
+import {
+  ACHIEVEMENTS,
+  addExp,
+  battleReward,
+  bump,
+  canClaimLogin,
+  currentPickup,
+  dailyMissions,
+  dayKey,
+  ensurePeriods,
+  freshProgress,
+  levelReward,
+  LOGIN_REWARDS,
+  loginSlot,
+  missionValue,
+  weeklyMissions,
+  type BattleOutcome,
+  type ExtCtx,
+  type Mission,
+  type Progress,
+  type RewardLine,
+  type Stats,
+} from './progress';
 
-export type Screen = 'title' | 'starter' | 'home' | 'rivals' | 'battle' | 'deck' | 'collection' | 'shop' | 'settings' | 'credits' | 'rules' | 'gallery';
+export type Screen = 'title' | 'starter' | 'home' | 'rivals' | 'battle' | 'deck' | 'collection' | 'shop' | 'missions' | 'settings' | 'credits' | 'rules' | 'gallery';
 
 export interface SavedDeck {
   id: string;
@@ -33,6 +56,7 @@ export interface Save {
   settings: Settings;
   started: boolean;
   guideSeen?: boolean;
+  progress: Progress;
 }
 
 export interface BattleConfig {
@@ -63,13 +87,19 @@ function freshSave(): Save {
     newCards: [],
     settings: { music: 0.5, sfx: 0.8, speed: 1 },
     started: false,
+    progress: freshProgress(),
   };
 }
 
 function load(): Save {
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) return { ...freshSave(), ...JSON.parse(raw) };
+    if (raw) {
+      const s = { ...freshSave(), ...JSON.parse(raw) } as Save;
+      s.progress = { ...freshProgress(), ...(s.progress ?? {}) };
+      s.progress.stats = { ...freshProgress().stats, ...s.progress.stats };
+      return s;
+    }
   } catch {
     /* ignore */
   }
@@ -95,6 +125,20 @@ interface Store {
   addCards: (cids: string[]) => void;
   startBattle: (cfg: BattleConfig) => void;
   reset: () => void;
+  claimLogin: () => number;
+  claimMission: (m: Mission, period: 'daily' | 'weekly' | 'achv') => number;
+  recordPack: (premium: boolean) => void;
+  recordBattle: (o: BattleOutcome, st: Partial<Stats>) => BattleRewardResult;
+}
+
+export interface BattleRewardResult {
+  lines: RewardLine[];
+  total: number;
+  exp: number;
+  levelBefore: number;
+  expBefore: number;
+  levelUps: number[];
+  levelCoins: number;
 }
 
 export const useStore = create<Store>((set, get) => ({
@@ -135,7 +179,78 @@ export const useStore = create<Store>((set, get) => ({
     persist(s);
     set({ save: s, screen: 'title' });
   },
+  claimLogin: () => {
+    let got = 0;
+    get().update((s) => {
+      const p = s.progress;
+      if (!canClaimLogin(p)) return;
+      got = LOGIN_REWARDS[loginSlot(p)];
+      p.loginCount++;
+      p.loginDay = dayKey();
+      s.coins += got;
+    });
+    return got;
+  },
+  claimMission: (m, period) => {
+    let got = 0;
+    get().update((s) => {
+      const p = s.progress;
+      ensurePeriods(p);
+      const ext = extCtx(s);
+      const list = period === 'daily' ? p.daily.claimed : period === 'weekly' ? p.weekly.claimed : p.achvClaimed;
+      if (list.includes(m.id) || missionValue(p, m, period, ext) < m.target) return;
+      list.push(m.id);
+      s.coins += m.reward;
+      got = m.reward;
+    });
+    return got;
+  },
+  recordPack: (premium) =>
+    get().update((s) => {
+      bump(s.progress, { packs: 1, premiumPacks: premium ? 1 : 0 });
+    }),
+  recordBattle: (o, st) => {
+    let res: BattleRewardResult = { lines: [], total: 0, exp: 0, levelBefore: 1, expBefore: 0, levelUps: [], levelCoins: 0 };
+    get().update((s) => {
+      const p = s.progress;
+      ensurePeriods(p);
+      const r = battleReward(p, o);
+      res = { ...r, levelBefore: p.level, expBefore: p.exp, levelUps: [], levelCoins: 0 };
+      bump(p, {
+        ...st,
+        battles: 1,
+        wins: o.win ? 1 : 0,
+        hardWins: o.win && o.level === 'hard' ? 1 : 0,
+        perfectWins: o.win && o.prizesLost === 0 ? 1 : 0,
+      });
+      if (o.win) {
+        p.streak++;
+        p.lastWinDay = dayKey();
+        s.wins++;
+      } else {
+        p.streak = 0;
+        s.losses++;
+      }
+      const ups = addExp(p, r.exp);
+      res.levelUps = ups;
+      res.levelCoins = ups.reduce((n, l) => n + levelReward(l), 0);
+      s.coins += r.total + res.levelCoins;
+    });
+    return res;
+  },
 }));
+
+export function collectionPct(s: Save) {
+  const total = ALL_CARDS.length;
+  const have = ALL_CARDS.filter((c) => (c.kind === 'energy' && c.basic) || (s.collection[c.id] ?? 0) > 0).length;
+  return (have / total) * 100;
+}
+
+export function extCtx(s: Save): ExtCtx {
+  return { collectionPct: collectionPct(s), rivals: s.beaten.length };
+}
+
+export { dailyMissions, weeklyMissions, ACHIEVEMENTS };
 
 export function activeDeck(s: Save): SavedDeck | undefined {
   return s.decks.find((d) => d.id === s.activeDeck) ?? s.decks[0];
@@ -160,6 +275,35 @@ export interface Booster {
   types: EType[]; // featured types (drawn twice as often)
   hue: string; // accent colour for the pack art
   hue2: string;
+  premium?: boolean;
+}
+
+export const PREMIUM_PRICE = 300;
+
+export function premiumBooster(): Booster {
+  const pu = currentPickup();
+  return { id: 'premium', name: 'プレミアムパック', mascot: pu?.card.name ?? 'デスナイト', types: [], hue: '#e9c46a', hue2: '#1c1206', premium: true };
+}
+
+/** Premium pack: every slot rolls higher; the last slot is RR or better. */
+export function openPremium(): PackResult {
+  const pu = currentPickup();
+  const slots: [Rarity, number][][] = [
+    [['U', 0.55], ['R', 0.88], ['RR', 1]],
+    [['U', 0.5], ['R', 0.86], ['RR', 1]],
+    [['R', 0.6], ['RR', 0.92], ['SR', 1]],
+    [['R', 0.35], ['RR', 0.8], ['SR', 0.95], ['UR', 1]],
+    [['RR', 0.5], ['SR', 0.85], ['UR', 1]],
+  ];
+  const cards = slots.map((t) => {
+    const r = roll(t);
+    // pick-up: half of the draws at the pick-up card's rarity become that card
+    if (pu && pu.card.rarity === r && Math.random() < 0.5) return pu.card;
+    const arr = pool(r);
+    return arr[Math.floor(Math.random() * arr.length)];
+  });
+  cards.sort((x, y) => RARITY_ORDER[x.rarity] - RARITY_ORDER[y.rarity]);
+  return { cards, god: false };
 }
 
 export const BOOSTERS: Booster[] = [

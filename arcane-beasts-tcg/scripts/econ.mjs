@@ -1,0 +1,56 @@
+// Drives the economy screens: login bonus, missions, premium shop, battle result
+import { chromium } from 'playwright';
+const [base, out] = process.argv.slice(2);
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
+page.on('pageerror', (e) => console.log('pageerror:', e.message));
+page.on('console', (m) => { if (m.type() === 'error') console.log('console:', m.text().slice(0, 200)); });
+const shot = async (n, w = 1200) => { await page.waitForTimeout(w); await page.screenshot({ path: `${out}-${n}.png` }); };
+await page.goto(base + '?pickup');
+await page.waitForTimeout(2000);
+await page.mouse.click(800, 450);
+await page.waitForTimeout(1500);
+await page.getByText('深海の王').click();
+await page.getByText('で冒険をはじめる').click();
+await shot('home-login', 2000);
+await page.getByText('コインを受け取る').click();
+await shot('home-login-claimed', 500);
+await shot('home', 1500);
+// battle result (win) — drive the stores directly
+await page.evaluate(() => {
+  const { useStore, useBattle } = window.__stores;
+  const s = useStore.getState();
+  const d = s.save.decks[0].cards;
+  s.startBattle({ rival: null, playerDeck: d, oppDeck: d, oppName: 'テスト', oppPortrait: 'humans/mage-white+female', level: 'normal', scene: 'story/landscape-lava', reward: 120 });
+});
+await page.waitForTimeout(2500);
+await page.evaluate(() => {
+  const { useBattle } = window.__stores;
+  useBattle.setState({ stats: { kos: 6, damage: 720, prizes: 6, prizesLost: 0, evolves: 3, trainers: 9 }, result: { winner: 0, reason: 'サイドをすべてとった！' } });
+});
+await shot('result-1', 1400);
+await shot('result-2', 2500);
+const mb = page.getByText(/ミッション達成/);
+if (await mb.count()) await mb.click(); else await page.getByText('ホームへ').click();
+await shot('missions', 1500);
+await page.getByText('まとめて受け取る').click().catch(() => {});
+await shot('missions-claimed', 700);
+await page.locator('.ms-tab', { hasText: 'ウィークリー' }).click();
+await shot('missions-weekly', 800);
+await page.locator('.ms-tab', { hasText: '実績' }).click();
+await shot('missions-achv', 800);
+await page.locator('.ms-tab', { hasText: 'ログインボーナス' }).click();
+await shot('missions-login', 800);
+await page.getByText('もどる').click();
+await page.waitForTimeout(800);
+await page.getByText('パック開封', { exact: true }).first().click();
+await shot('shop', 1500);
+await page.locator('.shop-kind button.premium').click();
+await shot('shop-premium', 1500);
+await page.locator('.shop-kind .textbtn, .textbtn', { hasText: '提供割合' }).click();
+await shot('odds', 600);
+await page.mouse.click(40, 850);
+await page.waitForTimeout(400);
+await page.locator('.prem-pack').click();
+await shot('prem-choose', 2200);
+await browser.close();

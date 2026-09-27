@@ -72,7 +72,7 @@ export const BoosterPack = memo(function BoosterPack({ booster, className, style
   return (
     <div
       ref={ref}
-      className={`bp ${tilt ? 'tilt' : ''} ${still ? 'still' : ''} ${god ? 'god' : ''} ${part !== 'full' ? 'part' : ''} ${className ?? ''}`}
+      className={`bp ${booster.premium ? 'premium' : ''} ${tilt ? 'tilt' : ''} ${still ? 'still' : ''} ${god ? 'god' : ''} ${part !== 'full' ? 'part' : ''} ${className ?? ''}`}
       style={{ ['--hue' as string]: booster.hue, ['--hue2' as string]: booster.hue2, ...style }}
       onPointerMove={move}
       onPointerLeave={leave}
@@ -87,13 +87,14 @@ export const BoosterPack = memo(function BoosterPack({ booster, className, style
           <div className="bp-fade" />
           <div className="bp-logo">
             <span className="a">ARCANE BEASTS</span>
-            <span className="b">目覚めの咆哮</span>
+            <span className="b">{booster.premium ? 'PREMIUM' : '目覚めの咆哮'}</span>
           </div>
           <div className="bp-foot">
             <span className="line" />
-            <span className="t">BOOSTER PACK</span>
+            <span className="t">{booster.premium ? 'PREMIUM PACK' : 'BOOSTER PACK'}</span>
             <span className="line" />
           </div>
+          {booster.premium && <div className="bp-frame" />}
           <div className="bp-seal top" />
           <div className="bp-seal bottom" />
           <div className="bp-pillow" />
