@@ -1,0 +1,82 @@
+{
+ "fire": {
+  "w": 100,
+  "h": 150,
+  "frames": 16
+ },
+ "flame": {
+  "w": 100,
+  "h": 200,
+  "frames": 8
+ },
+ "water": {
+  "w": 72,
+  "h": 72,
+  "frames": 7
+ },
+ "ice": {
+  "w": 95,
+  "h": 95,
+  "frames": 9
+ },
+ "grass": {
+  "w": 72,
+  "h": 72,
+  "frames": 8
+ },
+ "lightning": {
+  "w": 200,
+  "h": 360,
+  "frames": 4
+ },
+ "lightning2": {
+  "w": 200,
+  "h": 360,
+  "frames": 4
+ },
+ "psychic": {
+  "w": 96,
+  "h": 96,
+  "frames": 7
+ },
+ "dark": {
+  "w": 72,
+  "h": 72,
+  "frames": 6
+ },
+ "darkburst": {
+  "w": 100,
+  "h": 100,
+  "frames": 5
+ },
+ "impact": {
+  "w": 100,
+  "h": 100,
+  "frames": 8
+ },
+ "heal": {
+  "w": 72,
+  "h": 72,
+  "frames": 8
+ },
+ "holy": {
+  "w": 150,
+  "h": 670,
+  "frames": 7
+ },
+ "flare": {
+  "w": 72,
+  "h": 72,
+  "frames": 13
+ },
+ "smoke": {
+  "w": 72,
+  "h": 72,
+  "frames": 11
+ },
+ "staff": {
+  "w": 50,
+  "h": 50,
+  "frames": 7
+ }
+}

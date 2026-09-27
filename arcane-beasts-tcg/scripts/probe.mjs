@@ -1,0 +1,10 @@
+import { chromium } from 'playwright';
+const [url, js] = process.argv.slice(2);
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' }).catch(() => chromium.launch());
+const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
+page.on('pageerror', (e) => console.log('pageerror:', e.message));
+page.on('console', (m) => { if (m.type() === 'error') console.log('console:', m.text()); });
+await page.goto(url);
+await page.waitForTimeout(2000);
+console.log(JSON.stringify(await page.evaluate(js), null, 1));
+await browser.close();
