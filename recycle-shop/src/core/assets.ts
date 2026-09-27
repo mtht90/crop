@@ -6,6 +6,31 @@ import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 
 export const ASSET_ROOT = `${import.meta.env.BASE_URL}assets/`;
 
+/**
+ * Artifact 版では .glb / .hdr がそのまま配信できないため、base64 テキスト (.txt) で置き、
+ * 読み込み時に復元して blob URL にする。
+ */
+const ASSET_B64 = import.meta.env.VITE_ASSET_B64 === '1';
+
+async function binaryUrl(url: string): Promise<string> {
+  if (!ASSET_B64) return url;
+  const res = await fetch(`${url}.txt`);
+  if (!res.ok) throw new Error(`HTTP ${res.status} ${url}`);
+  const b64 = (await res.text()).trim();
+  const fromB64 = (Uint8Array as any).fromBase64 as ((s: string) => Uint8Array) | undefined;
+  let bytes: Uint8Array;
+  if (fromB64) bytes = fromB64(b64);
+  else {
+    const bin = atob(b64);
+    bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  }
+  return URL.createObjectURL(new Blob([bytes as BlobPart]));
+}
+
+/** UI アイコン (SVG) はビルドに同梱してファイル数を減らす */
+const BUNDLED_ICONS = import.meta.glob('../../public/assets/icons/*.svg', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
+
 export interface InstanceOptions {
   /** 目標サイズ (m)。fit で基準軸を選ぶ */
   size?: number;
@@ -43,7 +68,7 @@ class AssetStore {
   loadGltf(rel: string): Promise<GLTF> {
     let p = this.gltfCache.get(rel);
     if (!p) {
-      p = this.gltfLoader.loadAsync(this.url(`models/${rel}`)).then((g) => {
+      p = binaryUrl(this.url(`models/${rel}`)).then((u) => this.gltfLoader.loadAsync(u)).then((g) => {
         g.scene.traverse((o) => {
           const m = o as THREE.Mesh;
           if (m.isMesh) {
@@ -125,7 +150,7 @@ class AssetStore {
   loadHdr(rel: string): Promise<THREE.DataTexture> {
     let p = this.hdrCache.get(rel);
     if (!p) {
-      p = this.hdrLoader.loadAsync(this.url(rel)).then((t) => {
+      p = binaryUrl(this.url(rel)).then((u) => this.hdrLoader.loadAsync(u)).then((t) => {
         t.mapping = THREE.EquirectangularReflectionMapping;
         return t;
       });
@@ -148,8 +173,8 @@ class AssetStore {
   async loadIcon(name: string): Promise<string> {
     const cached = this.textCache.get(name);
     if (cached) return cached;
-    const res = await fetch(this.url(`icons/${name}.svg`));
-    let svg = await res.text();
+    let svg = BUNDLED_ICONS[`../../public/assets/icons/${name}.svg`];
+    if (!svg) svg = await (await fetch(this.url(`icons/${name}.svg`))).text();
     // 背景の黒矩形を消し、currentColor で塗れるようにする
     svg = svg.replace(/<path d="M0 0h512v512H0z"\/>/, '').replace(/fill="#fff"/g, 'fill="currentColor"');
     this.textCache.set(name, svg);

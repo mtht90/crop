@@ -41,7 +41,7 @@ export class UI {
     this.toasts = el('div', 'toasts');
     this.clickToPlay = el('div', 'click-to-play hidden', `<div class="ctp-card"><div class="ctp-title">クリックで再開</div><div class="ctp-sub">WASD 移動 ・ マウス 視点 ・ Esc メニュー</div></div>`);
     root.append(this.layer, this.toasts, this.clickToPlay);
-    this.clickToPlay.addEventListener('click', () => { audio.init(); input.lock(); });
+    this.clickToPlay.addEventListener('click', () => { audio.init(); input.lock(true); });
     events.on('toast', (t) => this.toast(t.text, t.kind, t.icon));
     input.onLockChange = () => this.refreshLock();
     // ボタンのクリック音
@@ -87,7 +87,7 @@ export class UI {
   closeAll() { while (this.stack.length) this.close(); }
 
   refreshLock() {
-    const show = this.inGame && !this.stack.length && !input.locked;
+    const show = this.inGame && !this.stack.length && !input.active;
     this.clickToPlay.classList.toggle('hidden', !show);
   }
 

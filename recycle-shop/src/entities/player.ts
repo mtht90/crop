@@ -33,7 +33,7 @@ export class Player {
   }
 
   update(dt: number) {
-    if (!this.frozen && input.locked) {
+    if (!this.frozen && input.active) {
       const sens = 0.0022 * input.sensitivity;
       this.yaw -= input.mouseDX * sens;
       this.pitch -= input.mouseDY * sens * (input.invertY ? -1 : 1);

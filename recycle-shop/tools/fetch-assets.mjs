@@ -123,7 +123,7 @@ function credits() {
   for (const f of FILES.filter((x) => x.license)) lines.push(`| ${f.out} | ${f.author} | ${f.license} |`);
   const iconAuthors = [...new Set(FILES.filter((f) => f.src === 'icons').map((f) => f.author))];
   lines.push('', `UI アイコン作者 (game-icons.net, CC-BY 3.0): ${iconAuthors.join(', ')}`);
-  lines.push('', '日本語フォント: M PLUS Rounded 1c / DotGothic16 (SIL OFL 1.1, @fontsource 経由)', '');
+  lines.push('', '日本語フォント: M PLUS Rounded 1c (SIL OFL 1.1, Google Fonts)', '');
   return lines.join('\n');
 }
 

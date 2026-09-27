@@ -1,4 +1,5 @@
 import { events } from '../core/events';
+import { input } from '../core/input';
 import { el, escapeHtml, yen } from '../core/util';
 import { itemDef } from '../data/items';
 import { GRADE_COLOR, knownValue } from '../game/valuation';
@@ -49,7 +50,7 @@ export class Hud {
       <div class="hud-info"></div>
       <div class="hud-held"></div>
       <div class="hud-obj panel"></div>
-      <div class="hud-keys">Tab: 店長タブレット ・ Q: 持っている品を在庫へ ・ Esc: メニュー</div>
+      <div class="hud-keys"></div>
     `;
     const q = (s: string) => this.el.querySelector(s) as HTMLElement;
     this.day = q('.hud-day');
@@ -117,6 +118,9 @@ export class Hud {
 
   update(dt: number) {
     const s = this.g.model.state;
+    const keys = `${input.dragMode ? 'ドラッグ: 視点 ・ ' : ''}Tab: 店長タブレット ・ Q: 持っている品を在庫へ ・ Esc: メニュー`;
+    const kEl = this.el.querySelector('.hud-keys')!;
+    if (kEl.textContent !== keys) kEl.textContent = keys;
     this.day.textContent = `${s.day}日目`;
     const hh = Math.floor(s.minute / 60);
     const mm = Math.floor(s.minute % 60);

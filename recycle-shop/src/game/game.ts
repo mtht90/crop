@@ -58,7 +58,7 @@ export class Game {
     this.settingsUI = new SettingsUI(this);
     input.attach(this.engine.renderer.domElement);
     this.engine.renderer.domElement.addEventListener('click', () => {
-      if (this.mode === 'play' && !this.ui.modalOpen) { audio.init(); input.lock(); }
+      if (this.mode === 'play' && !this.ui.modalOpen) { audio.init(); input.lock(true); }
     });
     this.applySettings(true);
     this.engine.onUpdate((dt) => this.update(dt));

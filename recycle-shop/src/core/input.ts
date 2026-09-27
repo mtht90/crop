@@ -7,6 +7,10 @@ class Input {
   mouseDY = 0;
   wheel = 0;
   locked = false;
+  /** ポインタロックが使えない環境 (埋め込み表示など) では、ドラッグで視点を動かす */
+  dragMode = false;
+  private dragging = false;
+  private dragDist = 0;
   /** UI が開いている間はゲーム操作を無効化 */
   enabled = true;
   sensitivity = 1;
@@ -28,21 +32,39 @@ class Input {
     });
     window.addEventListener('blur', () => this.down.clear());
     window.addEventListener('mousedown', (e) => {
+      if (this.dragMode && e.button === 0 && e.target === this.canvas) {
+        // クリックかドラッグかは離したときに判定
+        this.dragging = true;
+        this.dragDist = 0;
+        return;
+      }
       const k = `Mouse${e.button}`;
       if (!this.down.has(k)) this.pressed.add(k);
       this.down.add(k);
     });
     window.addEventListener('mouseup', (e) => {
+      if (this.dragMode && e.button === 0 && this.dragging) {
+        this.dragging = false;
+        if (this.dragDist < 6) this.pressed.add('Mouse0');
+        return;
+      }
       const k = `Mouse${e.button}`;
       this.down.delete(k);
       this.released.add(k);
     });
     window.addEventListener('mousemove', (e) => {
+      if (this.dragMode && this.dragging) {
+        this.dragDist += Math.abs(e.movementX) + Math.abs(e.movementY);
+        this.mouseDX += e.movementX;
+        this.mouseDY += e.movementY;
+        return;
+      }
       if (!this.locked) return;
       this.mouseDX += e.movementX;
       this.mouseDY += e.movementY;
     });
     window.addEventListener('wheel', (e) => { this.wheel += Math.sign(e.deltaY); }, { passive: true });
+    document.addEventListener('pointerlockerror', () => { if (this.lockFromClick) this.enableDragMode(); });
     document.addEventListener('pointerlockchange', () => {
       this.locked = document.pointerLockElement === this.canvas;
       this.onLockChange?.(this.locked);
@@ -50,12 +72,28 @@ class Input {
     window.addEventListener('contextmenu', (e) => { if (this.locked) e.preventDefault(); });
   }
 
-  lock() {
-    if (!this.canvas || this.locked) return;
+  /** 視点操作が有効か (ポインタロック中 or ドラッグモード) */
+  get active() { return this.locked || this.dragMode; }
+
+  private enableDragMode() {
+    if (this.dragMode) return;
+    this.dragMode = true;
+    this.onLockChange?.(false);
+  }
+
+  private lockFromClick = false;
+
+  /** fromClick: ユーザーのクリック起点。これで失敗した場合だけドラッグ操作に切り替える */
+  lock(fromClick = false) {
+    if (!this.canvas || this.locked || this.dragMode) return;
+    this.lockFromClick = fromClick;
+    const fail = () => { if (fromClick) this.enableDragMode(); else this.onLockChange?.(false); };
     try {
-      const p = (this.canvas as any).requestPointerLock?.({ unadjustedMovement: false });
-      if (p && typeof p.catch === 'function') p.catch(() => {});
-    } catch { /* ヘッドレス環境など */ }
+      const fn = (this.canvas as any).requestPointerLock;
+      if (!fn) { this.enableDragMode(); return; }
+      const p = fn.call(this.canvas);
+      if (p && typeof p.catch === 'function') p.catch(fail);
+    } catch { fail(); }
   }
 
   unlock() {

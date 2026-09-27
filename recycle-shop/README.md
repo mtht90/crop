@@ -14,6 +14,10 @@ npm run dev        # http://localhost:5173 を開く
 npm run build      # dist/ に静的ファイルを出力 (GitHub Pages 等にそのまま置ける)
 ```
 
+claude.ai の Artifact として公開する場合は `node tools/build-artifact.mjs` を実行します。
+JS/CSS を 1 枚の HTML に埋め込み、Artifact が配信できない `.glb` / `.hdr` は base64 テキスト (`.txt`) に変換して `dist-artifact/` に出力します。
+マウスを固定できない環境では、自動で「ドラッグで視点移動」に切り替わります。
+
 | 操作 | キー |
 |---|---|
 | 移動 / 走る / 視点 | `WASD` / `Shift` / マウス |

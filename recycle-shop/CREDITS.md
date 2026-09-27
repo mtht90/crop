@@ -64,4 +64,4 @@
 
 UI アイコン作者 (game-icons.net, CC-BY 3.0): lorc, delapouite, sbed, skoll
 
-日本語フォント: M PLUS Rounded 1c / DotGothic16 (SIL OFL 1.1, @fontsource 経由)
+日本語フォント: M PLUS Rounded 1c (SIL OFL 1.1, Google Fonts)
