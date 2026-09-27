@@ -1,6 +1,6 @@
 import { motion } from 'motion/react';
 import { useEffect } from 'react';
-import { activeDeck, useStore, RIVALS } from '../state/store';
+import { activeDeck, useStore, RIVALS, PACK_PRICE } from '../state/store';
 import { ALL_CARDS } from '../engine/cards';
 import { artUrl } from '../lib/assets';
 import { CardFace } from '../ui/Card';
@@ -30,7 +30,7 @@ export function Home() {
   const tiles: TileDef[] = [
     { to: 'rivals', title: 'バトル', sub: next ? `次の相手：${next.title} ${next.name}` : '全ての強敵を撃破！フリー対戦で腕を磨こう', bg: 'story/landscape-lava', fig: 'monsters/fire-dragon', icon: 'swords', big: true },
     { to: 'deck', title: 'デッキ編集', sub: '60枚のデッキを組もう', bg: 'story/grim-altar', fig: 'woses/ancient-wose', icon: 'deck' },
-    { to: 'shop', title: 'パック開封', sub: '1パック150コイン', bg: 'story/swamp-02', fig: 'monsters/jinn', icon: 'chest', badge: save.coins >= 150 ? 'OPEN!' : undefined },
+    { to: 'shop', title: 'パック開封', sub: `1パック${PACK_PRICE}コイン・5枚入り`, bg: 'story/swamp-02', fig: 'monsters/jinn', icon: 'chest', badge: save.coins >= PACK_PRICE ? 'OPEN!' : undefined },
     { to: 'collection', title: 'コレクション', sub: `収集率 ${pct}%`, bg: 'story/landscape-mountains-01', fig: 'monsters/sea-serpent', icon: 'cards', badge: save.newCards.length ? `NEW ${save.newCards.length}` : undefined },
     { to: 'rules', title: 'あそびかた', sub: 'ルールと操作を確認', bg: 'story/landscape-castle', fig: 'humans/mage-white+female', icon: 'book' },
   ];

@@ -257,6 +257,7 @@ ICONS = {
     'music': 'musical-notes', 'speaker': 'speaker', 'mute': 'speaker-off', 'lock': 'padlock', 'dragon': 'dragon-head',
     'omega': 'triorb', 'ability': 'spark-spirit', 'info': 'info', 'plus': 'heart-plus', 'minus': 'heart-minus',
     'trash': 'trash-can', 'filter': 'magnifying-glass', 'save': 'save', 'person': 'person', 'robot': 'robot-golem',
+    'pointing': 'pointing', 'swipe': 'swipe-card', 'scissors': 'scissors',
 }
 
 

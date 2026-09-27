@@ -153,6 +153,7 @@ Assets were resized / re-encoded (WebP, MP3) and effect frames were packed into 
 | image | `data/core/images/portraits/humans/mage+female.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
 | image | `data/core/images/portraits/humans/mage-arch.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
 | image | `data/core/images/portraits/humans/mage-light.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
+| image | `data/core/images/portraits/humans/mage-silver.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
 | image | `data/core/images/portraits/humans/mage-white+female.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
 | image | `data/core/images/portraits/humans/marshal.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
 | image | `data/core/images/portraits/humans/necromancer.webp` | GNU GPL v2+ | Battle for Wesnoth Project |

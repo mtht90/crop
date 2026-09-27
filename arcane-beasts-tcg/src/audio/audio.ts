@@ -125,6 +125,28 @@ export const foley = {
     for (let i = 0; i < 6; i++) tone(1200 + Math.random() * 1800, 0.2, 0.05, 'sine', i * 0.05);
   },
   whoosh: () => noise(0.35, 400, 2600, 0.3, 0.6),
+  /** paper/foil tear: a bright noise sweep with crackles */
+  rip: () => {
+    noise(0.42, 5200, 700, 0.55, 0.9);
+    for (let i = 0; i < 9; i++) noise(0.03, 3000 + Math.random() * 3000, 1500, 0.25, 2, 0.02 + i * 0.035);
+    tone(90, 0.25, 0.15, 'sine', 0.05, 0.5);
+  },
+  /** short scrape while the finger drags along the tear line */
+  scratch: () => noise(0.05, 4200, 2600, 0.12, 1.5),
+  pop: () => {
+    tone(520, 0.12, 0.14, 'sine', 0, 1.8);
+    noise(0.05, 2500, 1200, 0.15, 1.2);
+  },
+  tick: () => tone(1400, 0.035, 0.05, 'square', 0, 0.9),
+  swipe: () => noise(0.22, 900, 3400, 0.32, 0.7),
+  /** rising shimmer that builds suspense before a rare flip */
+  charge: () => {
+    for (let i = 0; i < 10; i++) tone(400 * Math.pow(2, i / 6), 0.18, 0.04, 'triangle', i * 0.06);
+  },
+  impact: () => {
+    tone(70, 0.5, 0.35, 'sine', 0, 0.4);
+    noise(0.3, 1800, 200, 0.4, 0.6);
+  },
   rarity: (level: number) => {
     const notes = [0, 4, 7, 12, 16, 19];
     for (let i = 0; i < Math.min(notes.length, 2 + level); i++) tone(523 * Math.pow(2, notes[i] / 12), 0.5, 0.09, 'triangle', i * 0.07);
