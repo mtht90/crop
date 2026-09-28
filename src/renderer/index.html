@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; img-src 'self' data: http: https:; style-src 'self'; script-src 'self'">
+  <title>Crop Browser</title>
+  <link rel="stylesheet" href="styles.css">
+  <script type="module" src="renderer.js"></script>
+</head>
+<body>
+  <header id="chrome">
+    <div id="tabstrip">
+      <div id="tabs" role="tablist"></div>
+      <button id="new-tab" class="icon-btn" data-icon="plus" title="新しいタブ (Ctrl+T)"></button>
+    </div>
+
+    <div id="toolbar">
+      <button id="back" class="icon-btn" data-icon="back" title="戻る (Alt+←)"></button>
+      <button id="forward" class="icon-btn" data-icon="forward" title="進む (Alt+→)"></button>
+      <button id="reload" class="icon-btn" data-icon="reload" title="再読み込み (Ctrl+R)"></button>
+      <button id="home" class="icon-btn" data-icon="home" title="ホーム"></button>
+
+      <form id="address-form" autocomplete="off">
+        <span id="security" data-icon="search"></span>
+        <input id="address" type="text" spellcheck="false" placeholder="検索するか URL を入力">
+        <button type="button" id="zoom-indicator" hidden title="ズームをリセット"></button>
+        <button type="button" id="bookmark-star" class="icon-btn small" data-icon="star" title="このページをブックマーク (Ctrl+D)"></button>
+      </form>
+
+      <button id="btn-bookmarks" class="icon-btn" data-icon="bookmarks" title="ブックマーク (Ctrl+Shift+O)"></button>
+      <button id="btn-history" class="icon-btn" data-icon="history" title="履歴 (Ctrl+H)"></button>
+      <button id="btn-downloads" class="icon-btn" data-icon="download" title="ダウンロード (Ctrl+J)">
+        <span id="download-badge" hidden></span>
+      </button>
+      <button id="btn-settings" class="icon-btn" data-icon="settings" title="設定"></button>
+    </div>
+
+    <div id="findbar" hidden>
+      <input id="find-input" type="text" spellcheck="false" placeholder="ページ内を検索">
+      <span id="find-count"></span>
+      <button id="find-prev" class="icon-btn small" data-icon="up" title="前へ (Shift+Enter)"></button>
+      <button id="find-next" class="icon-btn small" data-icon="down" title="次へ (Enter)"></button>
+      <button id="find-close" class="icon-btn small" data-icon="close" title="閉じる (Esc)"></button>
+    </div>
+
+    <nav id="bookmarks-bar" hidden></nav>
+  </header>
+
+  <aside id="panel" hidden>
+    <div class="panel-header">
+      <h2 id="panel-title"></h2>
+      <button id="panel-close" class="icon-btn small" data-icon="close" title="閉じる"></button>
+    </div>
+    <div id="panel-body"></div>
+  </aside>
+</body>
+</html>

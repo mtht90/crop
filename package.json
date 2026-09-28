@@ -1,0 +1,43 @@
+{
+  "name": "crop-browser",
+  "productName": "Crop Browser",
+  "version": "1.0.0",
+  "description": "Electron (Chromium) ベースのシンプルなタブ型Webブラウザ",
+  "main": "dist/main/main.js",
+  "license": "MIT",
+  "scripts": {
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig.renderer.json && node scripts/copy-static.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.renderer.json --noEmit",
+    "start": "npm run build && electron .",
+    "test": "npm run build && node --test test/*.test.mjs",
+    "dist": "npm run build && electron-builder --publish never"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "electron": "^44.0.0",
+    "electron-builder": "^26.0.0",
+    "typescript": "^5.9.0"
+  },
+  "build": {
+    "appId": "com.nakao.cropbrowser",
+    "productName": "Crop Browser",
+    "files": [
+      "dist/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "mac": {
+      "target": "dmg",
+      "category": "public.app-category.productivity"
+    },
+    "linux": {
+      "target": "AppImage",
+      "category": "Network"
+    }
+  }
+}

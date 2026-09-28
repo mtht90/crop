@@ -1,28 +1,61 @@
-name: Build Plugin Jar
+name: Build Browser
 
 on:
   push:
     branches: [ "main", "master" ]
+  pull_request:
   workflow_dispatch: {}
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - uses: actions/setup-node@v4
         with:
-          distribution: temurin
-          java-version: '17'
-          cache: maven
+          node-version: '22'
+          cache: npm
 
-      - name: Build with Maven
-        run: mvn -B package
+      - name: Install dependencies
+        run: npm ci
 
-      - name: Upload jar artifact
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+  package:
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build installer
+        run: npm run dist
+        env:
+          # コード署名は行わない
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      - name: Upload installer
         uses: actions/upload-artifact@v4
         with:
-          name: CropSneakGrowth
-          path: target/CropSneakGrowth.jar
+          name: CropBrowser-${{ runner.os }}
+          path: |
+            release/*.exe
+            release/*.dmg
+            release/*.AppImage
+          if-no-files-found: error
