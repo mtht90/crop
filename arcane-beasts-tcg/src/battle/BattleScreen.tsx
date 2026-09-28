@@ -133,7 +133,7 @@ function SlotView({ s, slot, pos, highlight, selectable, onClick, big }: SlotPro
           ))}
         </div>
       )}
-      {mc.omega && <div className="omega-glow" />}
+      {(mc.omega || mc.ex) && <div className={`omega-glow ${mc.ex ? 'ex' : ''}`} />}
     </div>
   );
 }

@@ -1,19 +1,30 @@
-import { motion } from 'motion/react';
-import { useEffect, useState } from 'react';
-import { ALL_CARDS } from '../engine/cards';
-import type { EType, Rarity } from '../engine/types';
+import { AnimatePresence, motion } from 'motion/react';
+import { useEffect, useMemo, useState } from 'react';
+import { ALL_CARDS, SET_INFO, SETS } from '../engine/cards';
+import type { CardDef, EType, Rarity, SetCode } from '../engine/types';
 import { ENERGY_TYPES } from '../engine/types';
-import { owned, useStore } from '../state/store';
+import { collectionPct, owned, SHARD_RARITIES, useStore } from '../state/store';
 import { artUrl } from '../lib/assets';
 import { CardFace, EnergySymbol } from '../ui/Card';
 import { TopBar } from '../ui/TopBar';
-import { foley, playMusic } from '../audio/audio';
+import { Icon } from '../ui/Icon';
+import { foley, playMusic, sfx } from '../audio/audio';
 
-const RARITIES: Rarity[] = ['C', 'U', 'R', 'RR', 'SR', 'UR'];
+type Kind = 'all' | 'base' | 'mirror' | 'special';
+const KINDS: [Kind, string][] = [
+  ['all', 'すべて'],
+  ['base', '通常'],
+  ['mirror', 'ミラー'],
+  ['special', 'スペシャル'],
+];
+const isSpecial = (c: CardDef) => !!c.variant && c.variant !== 'mirror';
 
 export function Collection() {
   const save = useStore((s) => s.save);
   const update = useStore((s) => s.update);
+  const go = useStore((s) => s.go);
+  const [set, setSet] = useState<SetCode | 'all'>('all');
+  const [kind, setKind] = useState<Kind>('base');
   const [types, setTypes] = useState<EType[]>([]);
   const [rar, setRar] = useState<Rarity[]>([]);
   const [ownedOnly, setOwnedOnly] = useState(false);
@@ -26,11 +37,19 @@ export function Collection() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const list = ALL_CARDS.filter((c) => !types.length || (c.kind === 'monster' && types.includes(c.type)) || (c.kind === 'energy' && types.includes(c.energyType)))
-    .filter((c) => !rar.length || rar.includes(c.rarity))
-    .filter((c) => !ownedOnly || owned(save, c.id) > 0);
-  const have = ALL_CARDS.filter((c) => owned(save, c.id) > 0).length;
-  const pct = (have / ALL_CARDS.length) * 100;
+  const list = useMemo(
+    () =>
+      ALL_CARDS.filter((c) => set === 'all' || c.set === set)
+        .filter((c) => kind === 'all' || (kind === 'base' ? !c.variant : kind === 'mirror' ? c.variant === 'mirror' : isSpecial(c)))
+        .filter((c) => !types.length || (c.kind === 'monster' && types.includes(c.type)) || (c.kind === 'energy' && types.includes(c.energyType)))
+        .filter((c) => !rar.length || rar.includes(c.rarity))
+        .filter((c) => !ownedOnly || owned(save, c.id) > 0),
+    [set, kind, types, rar, ownedOnly, save],
+  );
+  const scope = ALL_CARDS.filter((c) => c.variant !== 'mirror' && (set === 'all' || c.set === set));
+  const have = scope.filter((c) => owned(save, c.id) > 0).length;
+  const pct = collectionPct(save, set === 'all' ? undefined : set);
+  const shardTotal = SHARD_RARITIES.reduce((n, r) => n + (save.shards[r] ?? 0), 0);
 
   return (
     <div className="screen">
@@ -40,17 +59,43 @@ export function Collection() {
         <TopBar
           title="コレクション"
           right={
-            <div className="col-progress">
-              {have}/{ALL_CARDS.length}
-              <div className="bar">
-                <div style={{ width: `${pct}%` }} />
+            <>
+              <button
+                className="shard-btn"
+                onClick={() => {
+                  sfx('button');
+                  go('exchange');
+                }}
+              >
+                <Icon name="shard" /> かけら {shardTotal}
+                <span>交換所へ</span>
+              </button>
+              <div className="col-progress">
+                {have}/{scope.length}
+                <div className="bar">
+                  <div style={{ width: `${pct}%` }} />
+                </div>
+                {pct.toFixed(0)}%
               </div>
-              {pct.toFixed(0)}%
-            </div>
+            </>
           }
         />
         <div className="db-right" style={{ left: 'calc(var(--u) * 1)' }}>
           <div className="filters">
+            <div className="seg">
+              {(['all', ...SETS] as const).map((k) => (
+                <button key={k} className={set === k ? 'on' : ''} onClick={() => setSet(k)}>
+                  {k === 'all' ? '全弾' : SET_INFO[k].short}
+                </button>
+              ))}
+            </div>
+            <div className="seg">
+              {KINDS.map(([k, label]) => (
+                <button key={k} className={kind === k ? 'on' : ''} onClick={() => setKind(k)}>
+                  {label}
+                </button>
+              ))}
+            </div>
             <div className="type-filter">
               {[...ENERGY_TYPES, 'colorless' as EType].map((t) => (
                 <button key={t} className={types.includes(t) ? 'on' : ''} onClick={() => setTypes(types.includes(t) ? types.filter((x) => x !== t) : [...types, t])}>
@@ -58,8 +103,8 @@ export function Collection() {
                 </button>
               ))}
             </div>
-            <div className="seg">
-              {RARITIES.map((r) => (
+            <div className="seg rar">
+              {SHARD_RARITIES.map((r) => (
                 <button key={r} className={rar.includes(r) ? 'on' : ''} onClick={() => setRar(rar.includes(r) ? rar.filter((x) => x !== r) : [...rar, r])}>
                   {r}
                 </button>
@@ -95,15 +140,18 @@ export function Collection() {
                 </motion.div>
               );
             })}
+            {!list.length && <div className="ms-empty" style={{ gridColumn: '1 / -1' }}>該当するカードはありません</div>}
           </div>
         </div>
-        {zoom && (
-          <div className="zoom-back" onClick={() => setZoom(null)}>
-            <motion.div className="zoom-card" initial={{ scale: 0.6, rotateY: 90 }} animate={{ scale: 1, rotateY: 0 }} transition={{ type: 'spring', stiffness: 200, damping: 20 }} onClick={(e) => e.stopPropagation()}>
-              <CardFace cid={zoom} interactive />
+        <AnimatePresence>
+          {zoom && (
+            <motion.div className="zoom-back" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setZoom(null)}>
+              <motion.div className="zoom-card" initial={{ scale: 0.92, y: 12 }} animate={{ scale: 1, y: 0 }} transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }} onClick={(e) => e.stopPropagation()}>
+                <CardFace cid={zoom} interactive />
+              </motion.div>
             </motion.div>
-          </div>
-        )}
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );

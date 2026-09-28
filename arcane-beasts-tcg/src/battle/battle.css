@@ -265,6 +265,7 @@
   animation: spin 6s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+.omega-glow.ex { background: conic-gradient(from 0deg, rgba(255, 70, 40, 0), rgba(255, 190, 90, 0.6), rgba(255, 70, 40, 0), rgba(255, 240, 200, 0.5), rgba(255, 70, 40, 0)); animation-duration: 4s; }
 
 /* --------------------------------- Piles -------------------------------- */
 .pile { position: absolute; width: calc(var(--u) * 5.4); aspect-ratio: 63 / 88; }

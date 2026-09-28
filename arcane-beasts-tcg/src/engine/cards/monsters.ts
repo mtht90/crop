@@ -1,58 +1,7 @@
-import type { Ability, Attack, EType, MonsterCard, Rarity, Stage } from '../types';
+import type { EType, MonsterCard } from '../types';
+import { monsterFactory } from './factory';
 
-const WEAK: Record<EType, EType | undefined> = {
-  fire: 'water',
-  water: 'lightning',
-  grass: 'fire',
-  lightning: 'fighting',
-  psychic: 'dark',
-  fighting: 'psychic',
-  dark: 'grass',
-  colorless: 'fighting',
-};
-
-type Opt = Partial<Pick<MonsterCard, 'evolvesFrom' | 'weakness' | 'resistance' | 'omega' | 'flavor' | 'scene'>> & {
-  ability?: Ability;
-  noWeak?: boolean;
-};
-
-let counter = 0;
-function m(
-  name: string,
-  art: string,
-  type: EType,
-  stage: Stage,
-  hp: number,
-  retreat: number,
-  rarity: Rarity,
-  species: string,
-  attacks: Attack[],
-  opt: Opt = {},
-): MonsterCard {
-  counter++;
-  const no = counter;
-  return {
-    kind: 'monster',
-    id: `AB1-${String(no).padStart(3, '0')}`,
-    no,
-    name,
-    art,
-    type,
-    stage,
-    hp,
-    retreat,
-    rarity,
-    species,
-    attacks,
-    weakness: opt.noWeak ? undefined : opt.weakness ?? WEAK[type],
-    resistance: opt.resistance,
-    evolvesFrom: opt.evolvesFrom,
-    ability: opt.ability,
-    omega: opt.omega,
-    flavor: opt.flavor,
-    scene: opt.scene,
-  };
-}
+const m = monsterFactory('AB1');
 
 const F: EType = 'fire', W: EType = 'water', G: EType = 'grass', L: EType = 'lightning', P: EType = 'psychic', X: EType = 'fighting', D: EType = 'dark', C: EType = 'colorless';
 

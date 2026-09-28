@@ -1,5 +1,5 @@
 import { memo, useMemo, useRef } from 'react';
-import { byName } from '../../engine/cards';
+import { byName, SET_INFO } from '../../engine/cards';
 import type { MonsterCard } from '../../engine/types';
 import type { Booster } from '../../state/store';
 import { artUrl, TYPE_SCENE } from '../../lib/assets';
@@ -72,7 +72,7 @@ export const BoosterPack = memo(function BoosterPack({ booster, className, style
   return (
     <div
       ref={ref}
-      className={`bp ${booster.premium ? 'premium' : ''} ${tilt ? 'tilt' : ''} ${still ? 'still' : ''} ${god ? 'god' : ''} ${part !== 'full' ? 'part' : ''} ${className ?? ''}`}
+      className={`bp set-${booster.set} ${booster.premium ? 'premium' : ''} ${tilt ? 'tilt' : ''} ${still ? 'still' : ''} ${god ? 'god' : ''} ${part !== 'full' ? 'part' : ''} ${className ?? ''}`}
       style={{ ['--hue' as string]: booster.hue, ['--hue2' as string]: booster.hue2, ...style }}
       onPointerMove={move}
       onPointerLeave={leave}
@@ -87,7 +87,7 @@ export const BoosterPack = memo(function BoosterPack({ booster, className, style
           <div className="bp-fade" />
           <div className="bp-logo">
             <span className="a">ARCANE BEASTS</span>
-            <span className="b">{booster.premium ? 'PREMIUM' : '目覚めの咆哮'}</span>
+            <span className="b">{booster.premium ? 'PREMIUM' : SET_INFO[booster.set].name}</span>
           </div>
           <div className="bp-foot">
             <span className="line" />

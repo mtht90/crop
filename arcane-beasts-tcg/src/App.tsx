@@ -11,9 +11,10 @@ import { DeckBuilder } from './screens/DeckBuilder';
 import { Collection } from './screens/Collection';
 import { Shop } from './screens/Shop';
 import { Missions } from './screens/Missions';
+import { Exchange } from './screens/Exchange';
 import { Credits, Rules, Settings } from './screens/Misc';
 import { setVolumes, unlockAudio } from './audio/audio';
-import { expand, RIVALS, STARTER_DECKS } from './engine/decks';
+import { expand, RIVALS, deckById } from './engine/decks';
 import './screens/screens.css';
 import { ConfirmDialog } from './ui/Confirm';
 import { useBattle } from './battle/controller';
@@ -22,9 +23,9 @@ if (import.meta.env.DEV) Object.assign(window, { __stores: { useStore, useBattle
 
 function debugBattle() {
   const q = new URLSearchParams(location.search);
-  const mine = STARTER_DECKS.find((d) => d.id === (q.get('me') ?? 'fire'))!;
+  const mine = deckById(q.get('me') ?? 'fire');
   const rival = RIVALS.find((r) => r.id === (q.get('vs') ?? 'marina'))!;
-  const theirs = STARTER_DECKS.find((d) => d.id === rival.deck)!;
+  const theirs = deckById(rival.deck);
   if (q.has('speed')) useStore.getState().update((s) => void (s.settings.speed = Number(q.get('speed'))));
   useStore.getState().startBattle({
     rival,
@@ -49,6 +50,7 @@ const SCREENS = {
   collection: Collection,
   shop: Shop,
   missions: Missions,
+  exchange: Exchange,
   settings: Settings,
   credits: Credits,
   rules: Rules,

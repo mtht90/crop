@@ -651,3 +651,246 @@
 }
 .back-logo .b1 { font-size: 7cqw; letter-spacing: 0.25em; }
 .back-logo .b2 { font-size: 11cqw; letter-spacing: 0.12em; }
+
+/* ==========================================================================
+   Variants (第2弾)
+   ========================================================================== */
+
+/* ---------------------------------- EX ---------------------------------- */
+.exmark {
+  display: inline-block;
+  height: 1.05em;
+  width: 1.87em;
+  margin-left: 0.5cqw;
+  vertical-align: -0.16em;
+  filter: drop-shadow(0 0.25cqw 0 rgba(0, 0, 0, 0.45));
+  overflow: visible;
+}
+.ex-rule b { color: #ffb36b; }
+.tcg.ex:not(.full-art):not(.bleed) .tcg-frame {
+  background: linear-gradient(135deg, #fdfdfd 0%, #a9aeb6 16%, #ffffff 30%, #c9ccd2 44%, #7d828c 58%, #f2f3f5 74%, #9aa0aa 88%, #ffffff 100%);
+}
+.tcg.ex:not(.full-art):not(.bleed) .tcg-art {
+  box-shadow:
+    0 0 0 0.8cqw #d8dde6,
+    0 0 0 1.15cqw rgba(0, 0, 0, 0.45),
+    inset 0 0 3cqw rgba(0, 0, 0, 0.45);
+}
+.tcg.ex:not(.full-art):not(.bleed) .tcg-inner::before {
+  background:
+    repeating-conic-gradient(from 0deg at 50% 36%, rgba(255, 255, 255, 0.09) 0 3deg, transparent 3deg 9deg),
+    radial-gradient(ellipse at 30% 0%, rgba(255, 255, 255, 0.45), transparent 60%);
+}
+.r-RRR .tcg-shine {
+  opacity: 0.32;
+  background:
+    repeating-conic-gradient(from 0deg at 50% 36%, rgba(255, 255, 255, 0.35) 0 2deg, transparent 2deg 7deg),
+    repeating-linear-gradient(110deg, rgba(255, 0, 132, 0.55) 0%, rgba(252, 164, 0, 0.55) 6%, rgba(255, 255, 0, 0.5) 12%, rgba(0, 255, 138, 0.5) 18%, rgba(0, 207, 255, 0.55) 24%, rgba(204, 76, 250, 0.55) 30%, rgba(255, 0, 132, 0.55) 36%);
+  background-size: 100% 100%, 300% 300%;
+}
+
+/* ------------------------- Mirror (reverse holo) ------------------------ */
+/* foil everywhere except the illustration window */
+.tcg-mirror {
+  position: absolute;
+  inset: 0;
+  z-index: 1; /* above the card stock, below the printed text */
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 20% 30%, rgba(255, 255, 255, 0.9) 0 0.25cqw, transparent 0.5cqw),
+    radial-gradient(circle at 70% 60%, rgba(255, 255, 255, 0.7) 0 0.2cqw, transparent 0.45cqw),
+    radial-gradient(circle at 45% 85%, rgba(255, 255, 255, 0.8) 0 0.2cqw, transparent 0.45cqw),
+    linear-gradient(115deg, rgba(255, 90, 170, 0.55), rgba(255, 220, 90, 0.5) 20%, rgba(90, 255, 180, 0.5) 40%, rgba(80, 190, 255, 0.55) 60%, rgba(190, 110, 255, 0.55) 80%, rgba(255, 90, 170, 0.55));
+  background-size: 9cqw 9cqw, 13cqw 13cqw, 11cqw 11cqw, 250% 250%;
+  background-position: 0 0, 0 0, 0 0, var(--mx) var(--my);
+  mix-blend-mode: color-dodge;
+  opacity: 0.5;
+  -webkit-mask: linear-gradient(#000 0 0), linear-gradient(#000 0 0);
+  -webkit-mask-size: 100% 100%, 85.4cqw 54cqw;
+  -webkit-mask-position: 0 0, 4.4cqw 11cqw;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0), linear-gradient(#000 0 0);
+  mask-size: 100% 100%, 85.4cqw 54cqw;
+  mask-position: 0 0, 4.4cqw 11cqw;
+  mask-repeat: no-repeat;
+  mask-composite: exclude;
+}
+.tcg-mirror.tw { -webkit-mask-size: 100% 100%, 85.4cqw 50cqw; -webkit-mask-position: 0 0, 4.4cqw 18cqw; mask-size: 100% 100%, 85.4cqw 50cqw; mask-position: 0 0, 4.4cqw 18cqw; }
+.tcg-mirror.ew { -webkit-mask: none; mask: none; opacity: 0.3; }
+.t-dark .tcg-mirror, .t-psychic .tcg-mirror { opacity: 0.3; }
+.tcg.interactive .tcg-mirror { opacity: calc(0.3 + var(--hyp) * 0.35); }
+
+/* ------------------------------- Bleed art ------------------------------- */
+/* AR / CHR / SAR: the illustration covers the whole card */
+.tcg.bleed .tcg-art {
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 100%;
+  border-radius: 0;
+  box-shadow: none;
+}
+.tcg.bleed .tcg-art::after { box-shadow: none; }
+.tcg.bleed .tcg-art .portrait {
+  height: calc(var(--ps, 1) * 84%);
+  left: var(--px, 50%);
+  bottom: var(--py, 26%);
+}
+.tcg.bleed .tcg-species, .tcg.bleed .evo-from { display: none; }
+.tcg.bleed .tcg-head, .tcg.bleed .tcg-body, .tcg.bleed .tcg-stats, .tcg.bleed .tcg-footer { color: #fff; }
+.tcg.bleed .tcg-head .name { text-shadow: 0 0.3cqw 0.8cqw #000, 0 0 2cqw rgba(0, 0, 0, 0.6); }
+.tcg.bleed .tcg-head .hp { color: #fff; text-shadow: 0 0.3cqw 0.8cqw #000; }
+.tcg.bleed .tcg-head::before {
+  content: '';
+  position: absolute;
+  inset: -1.4cqw -2.2cqw -3cqw;
+  background: linear-gradient(rgba(0, 0, 0, 0.55), transparent);
+  z-index: -1;
+}
+.tcg.bleed .tcg-body {
+  top: 72cqw;
+  left: 2.4cqw;
+  right: 2.4cqw;
+  bottom: 17cqw;
+  padding: 1cqw 2cqw;
+  border-radius: 2cqw;
+}
+.tcg.bleed .tcg-stats { border-color: rgba(255, 255, 255, 0.3); }
+.tcg.bleed .ability { background: rgba(0, 0, 0, 0.3); border-color: rgba(255, 140, 140, 0.5); }
+.tcg.bleed .ab-name { color: #ffe3a0; }
+.tcg.bleed .tcg-inner::after {
+  /* lower third darkening so the text stays legible over any painting */
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(transparent 52%, rgba(6, 8, 18, 0.55) 64%, rgba(6, 8, 18, 0.82) 80%, rgba(6, 8, 18, 0.9));
+  z-index: 1;
+  pointer-events: none;
+}
+
+/* AR — bright, painterly; canvas grain instead of foil lines */
+.tcg.v-AR .tcg-art .scene { filter: saturate(1.25) contrast(1.04) brightness(1.02); }
+.tcg.v-AR .tcg-art .portrait { filter: drop-shadow(0 1.2cqw 1.8cqw rgba(0, 0, 0, 0.5)); }
+.tcg.v-AR .tcg-inner::before {
+  background:
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.05) 0 0.25cqw, transparent 0.25cqw 0.6cqw),
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.05) 0 0.25cqw, transparent 0.25cqw 0.7cqw);
+  z-index: 2;
+}
+.r-AR .tcg-shine, .r-CHR .tcg-shine {
+  opacity: 0.2;
+  background: linear-gradient(115deg, transparent 20%, rgba(255, 245, 210, 0.9) 45%, rgba(170, 220, 255, 0.8) 55%, transparent 80%);
+  background-size: 250% 250%;
+  mix-blend-mode: soft-light;
+}
+
+/* CHR — the monster with its trainer in front */
+.tcg.v-CHR .tcg-art .scene { filter: saturate(1.1) brightness(0.9); }
+.tcg.v-CHR .tcg-art .portrait { left: var(--px, 62%); height: calc(var(--ps, 1) * 80%); bottom: var(--py, 30%); }
+.tcg.v-CHR .tcg-art .partner {
+  position: absolute;
+  left: 2%;
+  bottom: 22%;
+  height: 62%;
+  object-fit: contain;
+  filter: drop-shadow(0 1cqw 1.6cqw rgba(0, 0, 0, 0.6)) drop-shadow(0 0 0.4cqw rgba(255, 255, 255, 0.35));
+}
+
+/* SAR — dramatic close-up, colour-washed sky, iridescent frame */
+.tcg.v-SAR .tcg-frame {
+  background: linear-gradient(135deg, #fff4fb 0%, #c7d7ff 18%, #fffbe6 34%, #e3c9ff 50%, #c9fff0 66%, #ffe0c2 82%, #f4f7ff 100%);
+}
+.tcg.v-SAR .tcg-art .scene { filter: saturate(1.4) contrast(1.1) brightness(0.9); transform: scale(1.15); }
+.tcg.v-SAR .tcg-art .portrait {
+  /* close-up: anchored from the top so heads stay in frame, bodies run under the text */
+  height: calc(var(--ps, 1.3) * 84%);
+  left: var(--px, 54%);
+  top: var(--py, 5%);
+  bottom: auto;
+  filter: drop-shadow(0 0 1.2cqw rgba(255, 255, 255, 0.35)) drop-shadow(0 2cqw 3cqw rgba(0, 0, 0, 0.6));
+}
+.tcg.v-SAR.kind-trainer .tcg-art .portrait { height: 128%; top: 6%; bottom: auto; left: 56%; }
+.sar-wash {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 20% 15%, color-mix(in srgb, var(--ta, #ffd6a0) 80%, transparent), transparent 55%),
+    linear-gradient(200deg, color-mix(in srgb, var(--tb, #7c5cff) 70%, transparent), transparent 60%);
+  mix-blend-mode: soft-light;
+  opacity: 0.7;
+}
+.r-SAR .tcg-shine {
+  opacity: 0.2;
+  background:
+    repeating-linear-gradient(170deg, rgba(255, 255, 255, 0.28) 0 0.3cqw, transparent 0.3cqw 1.2cqw),
+    repeating-linear-gradient(110deg, rgba(255, 0, 132, 0.6) 0%, rgba(255, 255, 0, 0.55) 8%, rgba(0, 255, 138, 0.55) 16%, rgba(0, 207, 255, 0.6) 24%, rgba(204, 76, 250, 0.6) 32%, rgba(255, 0, 132, 0.6) 40%);
+  background-size: 100% 100%, 300% 300%;
+}
+
+/* ------------------------------ S (shiny) ------------------------------- */
+.tcg.v-S .tcg-frame {
+  background: linear-gradient(135deg, #8d93a1 0%, #1d2029 22%, #b9bfcc 40%, #15171d 58%, #9ea4b1 78%, #22252e 100%);
+}
+.tcg.v-S .tcg-inner { background: radial-gradient(ellipse at 50% 30%, #3b4270 0%, #1a1d38 55%, #0b0c1a 100%); }
+.tcg.v-S .tcg-head, .tcg.v-S .tcg-body, .tcg.v-S .tcg-stats, .tcg.v-S .tcg-footer, .tcg.v-S .tcg-species { color: #f1f2ff; }
+.tcg.v-S .tcg-species { background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.18), transparent); color: #e6e9ff; }
+.tcg.v-S .tcg-head .hp { color: #fff; text-shadow: 0 0.3cqw 0 #2a2d55; }
+.tcg.v-S .tcg-head .name { text-shadow: 0 0.3cqw 0.6cqw rgba(0, 0, 0, 0.8); }
+.tcg.v-S .tcg-head .name::after { content: '✦'; margin-left: 0.8cqw; font-size: 0.7em; color: #ffe9a8; vertical-align: 0.2em; }
+.tcg.v-S .ability { background: rgba(0, 0, 0, 0.3); }
+.tcg.v-S .ab-name { color: #ffe3a0; }
+.tcg.v-S .tcg-art { box-shadow: 0 0 0 0.8cqw #c9cfdc, 0 0 0 1.15cqw rgba(0, 0, 0, 0.5), inset 0 0 3cqw rgba(0, 0, 0, 0.45); }
+.tcg.v-S .tcg-art .scene { filter: grayscale(0.55) brightness(0.55) contrast(1.1); }
+.tcg-glitter {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  background:
+    radial-gradient(circle, rgba(255, 255, 255, 0.95) 0 0.22cqw, transparent 0.5cqw) 0 0 / 7cqw 7cqw,
+    radial-gradient(circle, rgba(255, 236, 170, 0.9) 0 0.18cqw, transparent 0.45cqw) 3.5cqw 2cqw / 9cqw 9cqw,
+    radial-gradient(circle, rgba(170, 220, 255, 0.9) 0 0.18cqw, transparent 0.45cqw) 1.5cqw 5cqw / 11cqw 11cqw;
+  mix-blend-mode: screen;
+  opacity: 0.55;
+  animation: glitter 3.2s ease-in-out infinite alternate;
+}
+@keyframes glitter { from { opacity: 0.25; } to { opacity: 0.7; } }
+.tcg.interactive .tcg-glitter { animation: none; opacity: calc(0.35 + var(--hyp) * 0.5); }
+.r-S .tcg-shine {
+  opacity: 0.22;
+  background: repeating-linear-gradient(115deg, rgba(220, 230, 255, 0.8) 0%, rgba(120, 130, 170, 0.4) 10%, rgba(255, 255, 255, 0.85) 20%, rgba(120, 130, 170, 0.4) 30%, rgba(220, 230, 255, 0.8) 40%);
+  background-size: 300% 300%;
+}
+
+/* ------------------------------ Rarity marks ----------------------------- */
+.rmark.r-RR, .rmark.r-RRR { font-family: 'Cinzel', serif; font-weight: 900; color: #111; }
+.t-dark .rmark.r-RRR, .tcg.bleed .rmark.r-RR, .tcg.bleed .rmark.r-RRR { color: #fff; }
+.rmark.r-AR, .rmark.r-CHR, .rmark.r-S {
+  font-family: 'Cinzel', serif;
+  font-weight: 900;
+  background: linear-gradient(90deg, #fff1b3, #e0a526);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.rmark.r-SAR {
+  font-family: 'Cinzel', serif;
+  font-weight: 900;
+  background: linear-gradient(90deg, #ffd86b, #ff5fa2, #7c5cff, #4fb3ff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.tcg.v-mirror .tcg-footer .setno::after { content: 'MIRROR'; margin-left: 1cqw; font-family: 'Cinzel', serif; font-weight: 900; font-size: 0.85em; letter-spacing: 0.08em; opacity: 0.7; }
+
+/* mirror pattern: fine diagonal etching on top of the rainbow */
+.tcg-mirror::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.4) 0 0.15cqw, transparent 0.15cqw 1.4cqw),
+    repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.22) 0 0.15cqw, transparent 0.15cqw 1.4cqw);
+  mix-blend-mode: overlay;
+}

@@ -1,6 +1,8 @@
-import type { AbilitySpec, AttackEffect, CardDef, Condition, EType, MonsterCard } from '../types';
+import type { AbilitySpec, AttackEffect, CardDef, Condition, EType, MonsterCard, Rarity, SetCode, TrainerCard, Variant } from '../types';
 import { MONSTERS } from './monsters';
 import { ENERGIES, TRAINERS } from './trainers';
+import { MONSTERS2 } from './monsters2';
+import { TRAINERS2 } from './trainers2';
 
 export const TYPE_JP: Record<EType, string> = {
   fire: '炎',
@@ -68,7 +70,7 @@ export function describeEffect(e: AttackEffect): string {
       return `自分の${src}から基本${TYPE_JP[e.type]}エネルギーを${e.n}枚まで選び、${to}に好きなようにつける。${e.from === 'deck' ? 'そして山札を切る。' : ''}`;
     }
     case 'callForFamily':
-      return `自分の山札からたねモンスターを${e.n}枚まで選び、ベンチに出す。そして山札を切る。`;
+      return `自分の山札から${e.name ? `名前に「${e.name}」とつく` : ''}たねモンスターを${e.n}枚まで選び、ベンチに出す。そして山札を切る。`;
     case 'bonusPerEnergy':
       return e.on === 'both'
         ? `おたがいのバトルモンスターについているエネルギーの数×${e.per}ダメージ追加。`
@@ -87,9 +89,9 @@ export function describeEffect(e: AttackEffect): string {
       return `${who}ベンチの${nm}モンスターの数×${e.per}ダメージ追加。`;
     }
     case 'bonusPerDiscardMonster':
-      return `自分のトラッシュにあるモンスターの数×${e.per}ダメージ追加。${e.max ? `（最大${e.max}）` : ''}`;
+      return `自分のトラッシュにあるモンスターの数×${e.per}ダメージ追加。${e.max ? `（追加は最大${e.max}ダメージ）` : ''}`;
     case 'bonusIfOmega':
-      return `相手のバトルモンスターがΩなら、${e.bonus}ダメージ追加。`;
+      return `相手のバトルモンスターがΩかEXなら、${e.bonus}ダメージ追加。`;
     case 'cantAttackNext':
       return '次の自分の番、このモンスターはワザが使えない。';
     case 'reduceNext':
@@ -145,33 +147,123 @@ export function describeAbility(a: AbilitySpec): string {
 }
 
 // Fill in auto-generated texts
-for (const mc of MONSTERS) {
+for (const mc of [...MONSTERS, ...MONSTERS2]) {
   if (mc.ability && !mc.ability.text) mc.ability.text = describeAbility(mc.ability.spec);
   for (const atk of mc.attacks) {
     if (!atk.text && atk.effects?.length) atk.text = atk.effects.map(describeEffect).join('');
   }
 }
 
-export const MAIN_SET: CardDef[] = [...MONSTERS, ...TRAINERS, ...ENERGIES];
-MAIN_SET.forEach((c, i) => (c.no = i + 1));
-export const SET_MAIN_COUNT = MAIN_SET.length;
+// --------------------------------------------------------------------------
+// Sets
+// --------------------------------------------------------------------------
+export const SET_INFO: Record<SetCode, { name: string; short: string }> = {
+  AB1: { name: '目覚めの咆哮', short: '第1弾' },
+  AB2: { name: '覇者の降臨', short: '第2弾' },
+};
+export const SETS: SetCode[] = ['AB1', 'AB2'];
 
-// Secret rares: full-art (SR) and gold (UR) alternate versions
+const MAIN1: CardDef[] = [...MONSTERS, ...TRAINERS, ...ENERGIES];
+MAIN1.forEach((c, i) => (c.no = i + 1));
+const MAIN2: CardDef[] = [...MONSTERS2, ...TRAINERS2];
+MAIN2.forEach((c, i) => (c.no = i + 1));
+export const MAIN_SET: CardDef[] = [...MAIN1, ...MAIN2];
+/** Number of regular (non-secret) cards per set, printed as "no/COUNT" */
+export const SET_COUNT: Record<SetCode, number> = { AB1: MAIN1.length, AB2: MAIN2.length };
+
+// --------------------------------------------------------------------------
+// Alternate printings
+//   mirror … reverse-holo version of a C/U/R card (same number)
+//   AR     … illustration rare: the art spreads over the whole card
+//   CHR    … character rare: the monster together with its trainer
+//   S      … shiny: rare colouring with a star-foil frame
+//   SR     … full-art Ω / EX / supporter
+//   SAR    … special art: dramatic close-up illustration
+//   UR     … gold
+// --------------------------------------------------------------------------
+const SUFFIX: Record<Variant, string> = { mirror: 'M', AR: 'AR', CHR: 'CHR', S: 'S', SR: 'SR', SAR: 'SAR', UR: 'UR' };
+const secret: Record<SetCode, number> = { AB1: MAIN1.length, AB2: MAIN2.length };
 const VARIANTS: CardDef[] = [];
-let secret = SET_MAIN_COUNT;
-for (const mc of MONSTERS.filter((m) => m.omega)) {
-  secret++;
-  VARIANTS.push({ ...mc, id: `${mc.id}-SR`, no: secret, rarity: 'SR', fullArt: true, baseId: mc.id });
+
+function named(name: string): CardDef {
+  const c = MAIN_SET.find((x) => x.name === name);
+  if (!c) throw new Error(`variant: unknown card ${name}`);
+  return c;
 }
-for (const name of ['大賢者の研究', '司令官の号令', '盗賊団の手引き', '白魔導士の祈り']) {
-  const t = TRAINERS.find((x) => x.name === name)!;
-  secret++;
-  VARIANTS.push({ ...t, id: `${t.id}-SR`, no: secret, rarity: 'SR', fullArt: true, baseId: t.id });
+
+function alt(base: CardDef, v: Variant, extra: Partial<CardDef> = {}) {
+  const rarity: Rarity = v === 'mirror' ? base.rarity : v;
+  const no = v === 'mirror' ? base.no : ++secret[base.set];
+  VARIANTS.push({
+    ...base,
+    id: `${base.id}-${SUFFIX[v]}`,
+    no,
+    rarity,
+    variant: v,
+    baseId: base.id,
+    fullArt: v === 'SR' || v === 'UR' || (v === 'SAR' && base.kind === 'trainer') || undefined,
+    gold: v === 'UR' || undefined,
+    ...extra,
+  } as CardDef);
 }
-for (const name of ['ヴォルカリオン', 'リヴァイアサーペント', 'デスナイト', 'トロルキング', 'エンシェントウッド', 'ナイトゴーント']) {
-  const mc = MONSTERS.find((x) => x.name === name)!;
-  secret++;
-  VARIANTS.push({ ...mc, id: `${mc.id}-UR`, no: secret, rarity: 'UR', fullArt: true, gold: true, baseId: mc.id });
+
+type CropSpec = { scale?: number; x?: number; y?: number };
+interface SetVariants {
+  AR: [string, CropSpec?][];
+  CHR: [string, string, CropSpec?][]; // monster, partner portrait
+  S: [string, number][]; // monster, hue rotation
+  SR: string[];
+  SAR: [string, CropSpec?][];
+  UR: string[];
+}
+
+const PLAN: Record<SetCode, SetVariants> = {
+  AB1: {
+    AR: [['ヒアリクイーン'], ['ゴウカレイス'], ['イエティ'], ['コガネスカラベ'], ['サンダーグリフォン'], ['レイス'], ['グリズリー'], ['ホワイトホース'], ['ドレッドバット'], ['ヤミオオカミ']],
+    CHR: [
+      ['コダマギ', 'humans/peasant'],
+      ['ミズチ', 'merfolk/initiate'],
+      ['ライメイハヤブサ', 'humans/longbowman'],
+      ['トロル', 'trolls/troll-shaman'],
+      ['バーナドレイク', 'drakes/flameheart'],
+      ['グレートウルフ', 'goblins/wolf-rider'],
+      ['ナイトメア', 'humans/dark-adept+female'],
+      ['レヴナント', 'undead/ancient-lich'],
+    ],
+    S: [['ヒオネコ', 200], ['ワイバーン', 110], ['アカオオカミ', 190], ['オオツチグモ', 250], ['ゴースト', 150], ['ディープテンタクル', 90]],
+    SR: [...MONSTERS.filter((x) => x.omega).map((x) => x.name), '大賢者の研究', '司令官の号令', '盗賊団の手引き', '白魔導士の祈り'],
+    SAR: [['ヴォルカリオン'], ['リヴァイアサーペント', { scale: 1.1, x: 40, y: 14 }], ['ナイトゴーント'], ['大賢者の研究']],
+    UR: ['ヴォルカリオン', 'リヴァイアサーペント', 'デスナイト', 'トロルキング', 'エンシェントウッド', 'ナイトゴーント', '進化の秘薬', '虹色エネルギー'],
+  },
+  AB2: {
+    AR: [['ドレイクガーディアン'], ['ヒブネ'], ['ナーガリングキャスター'], ['シャイード'], ['セイレーン'], ['オオヒグマ'], ['ドラウグ'], ['ゾンビグリフォン']],
+    CHR: [
+      ['ドレイククラッシャー', 'humans/grand-knight'],
+      ['ナーガミュルミドン', 'merfolk/priestess'],
+      ['ブラウンリッチ', 'humans/necromancer+female'],
+      ['ロックトロル', 'orcs/warlord'],
+      ['ヘイタイアリ', 'elves/druid'],
+    ],
+    S: [['ドレイクファイター', 170], ['ナーガソルジャー', 260], ['クサレオオカミ', 200], ['シルフ', 300]],
+    SR: [...MONSTERS2.filter((x) => x.omega || x.ex).map((x) => x.name), '騎士の突撃', '暗殺者の刃', '聖騎士の加護'],
+    SAR: [['ドラグーン'], ['ナーガクイーン'], ['リッチロード', { y: 10 }], ['クイーンアント', { x: 40 }], ['トロルジェネラル'], ['暗殺者の刃']],
+    UR: [...MONSTERS2.filter((x) => x.ex).map((x) => x.name), '賢者の水晶', '覇者の紋章'],
+  },
+};
+
+for (const set of SETS) {
+  const main = set === 'AB1' ? MAIN1 : MAIN2;
+  for (const c of main) {
+    const basicEnergy = c.kind === 'energy' && c.basic;
+    if (!basicEnergy && (c.rarity === 'C' || c.rarity === 'U' || c.rarity === 'R')) alt(c, 'mirror');
+  }
+  const plan = PLAN[set];
+  for (const [n, crop] of plan.AR) alt(named(n), 'AR', { crop });
+  for (const [n, partner, crop] of plan.CHR) alt(named(n), 'CHR', { partner, crop });
+  for (const [n, hue] of plan.S) alt(named(n), 'S', { hue });
+  for (const n of plan.SR) alt(named(n), 'SR');
+  for (const [n, crop] of plan.SAR) alt(named(n), 'SAR', { crop });
+  for (const n of plan.UR) alt(named(n), 'UR');
 }
 
 export const ALL_CARDS: CardDef[] = [...MAIN_SET, ...VARIANTS];
@@ -194,4 +286,8 @@ export function isMonster(c: CardDef): c is MonsterCard {
   return c.kind === 'monster';
 }
 
-export { MONSTERS, TRAINERS, ENERGIES };
+export function isTrainer(c: CardDef): c is TrainerCard {
+  return c.kind === 'trainer';
+}
+
+export { MONSTERS, TRAINERS, ENERGIES, MONSTERS2, TRAINERS2 };

@@ -1,5 +1,5 @@
 import { aiAnswer } from '../src/engine/ai';
-import { expand, STARTER_DECKS } from '../src/engine/decks';
+import { ALL_DECKS as STARTER_DECKS, expand } from '../src/engine/decks';
 import { Game } from '../src/engine/game';
 
 const N = Number(process.argv[2] ?? 4);

@@ -1,5 +1,5 @@
 import { memo, useRef } from 'react';
-import { card, COND_JP, STAGE_JP, SET_MAIN_COUNT, TYPE_JP, byName } from '../engine/cards';
+import { card, COND_JP, STAGE_JP, SET_COUNT, TYPE_JP, byName } from '../engine/cards';
 import type { CardDef, EnergyCard, EType, MonsterCard, TrainerCard } from '../engine/types';
 import { artUrl, TYPE_COLOR, TYPE_SCENE } from '../lib/assets';
 import { Icon } from './Icon';
@@ -29,7 +29,11 @@ export function RainbowSymbol({ size = '1em' }: { size?: string | number }) {
   );
 }
 
-const RARITY_MARK: Record<string, string> = { C: '●', U: '◆', R: '★', RR: '★★', SR: 'SR', UR: 'UR' };
+const RARITY_MARK: Record<string, string> = { C: '●', U: '◆', R: '★', RR: 'RR', RRR: 'RRR', AR: 'AR', CHR: 'CHR', S: 'S', SR: 'SR', SAR: 'SAR', UR: 'UR' };
+/** rarities printed with a foil treatment */
+const HOLO = new Set(['R', 'RR', 'RRR', 'AR', 'CHR', 'S', 'SR', 'SAR', 'UR']);
+/** variants whose illustration covers the whole card */
+const BLEED = new Set(['AR', 'CHR', 'SAR']);
 const SUB_JP: Record<string, string> = { item: 'アイテム', supporter: 'サポーター', stadium: 'スタジアム', tool: 'どうぐ' };
 const SUB_RULE: Record<string, string> = {
   item: 'アイテムは、自分の番に何枚でも使える。',
@@ -81,10 +85,14 @@ export const CardFace = memo(function CardFace({ cid, className, style, interact
   };
 
   const rare = def.rarity;
-  const holo = rare === 'R' || rare === 'RR' || rare === 'SR' || rare === 'UR';
+  const v = def.variant;
+  const holo = HOLO.has(rare) && v !== 'mirror';
   const classes = [
     'tcg',
     `kind-${def.kind}`,
+    v ? `v-${v}` : '',
+    v && BLEED.has(v) ? 'bleed' : '',
+    def.kind === 'monster' && def.ex ? 'ex' : '',
     def.kind === 'monster' ? `t-${def.type}` : def.kind === 'energy' ? `t-${def.energyType}` : `sub-${(def as TrainerCard).sub}`,
     def.fullArt ? 'full-art' : '',
     def.gold ? 'gold' : '',
@@ -111,8 +119,10 @@ export const CardFace = memo(function CardFace({ cid, className, style, interact
           {def.kind === 'monster' && <MonsterFace def={def} />}
           {def.kind === 'trainer' && <TrainerFace def={def} />}
           {def.kind === 'energy' && <EnergyFace def={def} />}
+          {v === 'mirror' && <div className={`tcg-mirror ${def.kind === 'trainer' ? 'tw' : def.kind === 'energy' ? 'ew' : ''}`} />}
+          {v === 'S' && <div className="tcg-glitter" />}
           {holo && <div className="tcg-shine" />}
-          {holo && <div className="tcg-glare" />}
+          {(holo || v === 'mirror') && <div className="tcg-glare" />}
         </div>
       </div>
     </div>
@@ -141,12 +151,30 @@ export function OmegaMark() {
   );
 }
 
+export function ExMark() {
+  return (
+    <svg className="exmark" viewBox="0 0 64 36" aria-label="EX">
+      <defs>
+        <linearGradient id="exg" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#ffffff" />
+          <stop offset="0.45" stopColor="#ffe7a3" />
+          <stop offset="0.55" stopColor="#ff9b3d" />
+          <stop offset="1" stopColor="#d6321b" />
+        </linearGradient>
+      </defs>
+      <text x="32" y="29" textAnchor="middle" fontFamily="'Dela Gothic One', sans-serif" fontSize="30" transform="skewX(-12) translate(6 0)" fill="url(#exg)" stroke="#2a0a00" strokeWidth="3.2" paintOrder="stroke" letterSpacing="-1">
+        EX
+      </text>
+    </svg>
+  );
+}
+
 function Footer({ def }: { def: CardDef }) {
   return (
     <div className="tcg-footer">
       <span className="illus">{def.kind === 'energy' || (def.kind === 'trainer' && (def.sub === 'item' || def.sub === 'tool')) ? 'Icon. game-icons.net' : 'Illus. Wesnoth'}</span>
       <span className="setno">
-        <b>AB1</b> {String(def.no).padStart(3, '0')}/{SET_MAIN_COUNT} <i className={`rmark r-${def.rarity}`}>{RARITY_MARK[def.rarity]}</i>
+        <b>{def.set}</b> {String(def.no).padStart(3, '0')}/{SET_COUNT[def.set]} <i className={`rmark r-${def.rarity}`}>{RARITY_MARK[def.rarity]}</i>
       </span>
     </div>
   );
@@ -173,18 +201,28 @@ function MonsterFace({ def }: { def: MonsterCard }) {
       prev = null;
     }
   }
-  const nameLen = def.name.length + (def.omega ? 1 : 0) + (def.hp >= 100 ? 0.5 : 0);
+  const nameLen = def.name.length + (def.omega ? 1 : 0) + (def.ex ? 1.6 : 0) + (def.hp >= 100 ? 0.5 : 0);
+  const crop = def.crop ?? {};
+  const pStyle: React.CSSProperties | undefined =
+    def.variant === 'S'
+      ? { filter: `hue-rotate(${def.hue ?? 180}deg) saturate(1.2) drop-shadow(0 1cqw 1.4cqw rgba(0, 0, 0, 0.55))` }
+      : crop.scale || crop.x !== undefined || crop.y !== undefined
+        ? { ['--ps' as string]: crop.scale, ['--px' as string]: crop.x !== undefined ? `${crop.x}%` : undefined, ['--py' as string]: crop.y !== undefined ? `${crop.y}%` : undefined }
+        : undefined;
   return (
     <>
       <div className="tcg-art">
         <img className="scene" src={artUrl(scene)} alt="" draggable={false} loading="lazy" />
-        <img className="portrait" src={artUrl(def.art)} alt={def.name} draggable={false} loading="lazy" />
+        {def.variant === 'SAR' && <div className="sar-wash" />}
+        <img className="portrait" src={artUrl(def.art)} alt={def.name} draggable={false} loading="lazy" style={pStyle} />
+        {def.variant === 'CHR' && def.partner && <img className="partner" src={artUrl(def.partner)} alt="" draggable={false} loading="lazy" />}
       </div>
       <div className="tcg-head">
         <span className={`tcg-stage stage-${def.stage}`}>{STAGE_JP[def.stage]}</span>
         <span className={`name ${nameLen > 6.5 ? 'long' : ''} ${nameLen > 8 ? 'xlong' : ''} ${nameLen > 9.5 ? 'xxlong' : ''}`}>
           {def.name}
           {def.omega && <OmegaMark />}
+          {def.ex && <ExMark />}
         </span>
         <span className="hp">
           <small>HP</small>
@@ -227,7 +265,8 @@ function MonsterFace({ def }: { def: MonsterCard }) {
           </div>
         ))}
         {def.omega && <div className="omega-rule"><b>Ωルール</b>：Ωがきぜつしたとき、相手はサイドを2枚とる。</div>}
-        {def.flavor && !def.ability && def.attacks.length < 2 && !def.omega && <div className="tcg-flavor">{def.flavor}</div>}
+        {def.ex && <div className="omega-rule ex-rule"><b>EXルール</b>：EXがきぜつしたとき、相手はサイドを3枚とる。</div>}
+        {def.flavor && !def.ability && def.attacks.length < 2 && !def.omega && !def.ex && <div className="tcg-flavor">{def.flavor}</div>}
       </div>
       <div className="tcg-stats">
         <div>

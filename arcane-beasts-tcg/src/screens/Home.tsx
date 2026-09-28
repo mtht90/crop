@@ -1,9 +1,8 @@
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useState } from 'react';
-import { activeDeck, extCtx, useStore, RIVALS, PACK_PRICE, PREMIUM_PRICE } from '../state/store';
+import { activeDeck, collectionPct, extCtx, useStore, RIVALS, SHARD_COST, SHARD_RARITIES } from '../state/store';
 import { canClaimLogin, claimableCount, currentPickup, expToNext } from '../state/progress';
 import { LoginTrack } from './Missions';
-import { ALL_CARDS } from '../engine/cards';
 import { artUrl } from '../lib/assets';
 import { CardFace } from '../ui/Card';
 import { Icon } from '../ui/Icon';
@@ -28,8 +27,8 @@ export function Home() {
   const go = useStore((s) => s.go);
   useEffect(() => playMusic('menu'), []);
   const deck = activeDeck(save);
-  const ownedKinds = ALL_CARDS.filter((c) => (c.kind === 'energy' && c.basic) || (save.collection[c.id] ?? 0) > 0).length;
-  const pct = Math.round((ownedKinds / ALL_CARDS.length) * 100);
+  const pct = Math.floor(collectionPct(save));
+  const shardReady = SHARD_RARITIES.some((r) => (save.shards[r] ?? 0) >= SHARD_COST[r]);
   const next = RIVALS.find((r) => !save.beaten.includes(r.id));
   const missionN = claimableCount(save.progress, extCtx(save));
   const pickup = currentPickup();
@@ -43,8 +42,8 @@ export function Home() {
   const tiles: TileDef[] = [
     { to: 'rivals', title: 'バトル', sub: next ? `次の相手：${next.title} ${next.name}` : '全ての強敵を撃破！フリー対戦で腕を磨こう', bg: 'story/landscape-lava', fig: 'monsters/fire-dragon', icon: 'swords', big: true },
     { to: 'deck', title: 'デッキ編集', sub: '60枚のデッキを組もう', bg: 'story/grim-altar', fig: 'woses/ancient-wose', icon: 'deck' },
-    { to: 'shop', title: 'パック開封', sub: pickup ? `ピックアップ開催中！` : `通常${PACK_PRICE}・プレミアム${PREMIUM_PRICE}コイン`, bg: 'story/swamp-02', fig: 'monsters/jinn', icon: 'chest', badge: pickup ? 'PICK UP' : save.coins >= PACK_PRICE ? 'OPEN!' : undefined },
-    { to: 'collection', title: 'コレクション', sub: `収集率 ${pct}%`, bg: 'story/landscape-mountains-01', fig: 'monsters/sea-serpent', icon: 'cards', badge: save.newCards.length ? `NEW ${save.newCards.length}` : undefined },
+    { to: 'shop', title: 'パック開封', sub: pickup ? `ピックアップ開催中！` : `第2弾「覇者の降臨」登場`, bg: 'story/swamp-02', fig: 'monsters/jinn', icon: 'chest', badge: pickup ? 'PICK UP' : 'NEW' },
+    { to: 'collection', title: 'コレクション', sub: `収集率 ${pct}%`, bg: 'story/landscape-mountains-01', fig: 'monsters/sea-serpent', icon: 'cards', badge: save.newCards.length ? `NEW ${save.newCards.length}` : shardReady ? '交換可' : undefined },
     { to: 'missions', title: 'ミッション', sub: missionN ? `報酬を受け取れます` : 'デイリー・ウィークリー・実績', bg: 'story/landscape-castle', fig: 'humans/mage-white+female', icon: 'trophy', badge: missionN ? `${missionN}` : undefined },
   ];
 

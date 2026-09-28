@@ -1,18 +1,7 @@
-import type { EnergyCard, EType, Rarity, TrainerCard, TrainerSub } from '../types';
+import type { EnergyCard, EType, Rarity, TrainerCard } from '../types';
+import { trainerFactory } from './factory';
 
-let n = 100;
-function t(
-  key: string,
-  name: string,
-  sub: TrainerSub,
-  rarity: Rarity,
-  text: string,
-  art: string,
-  extra: Partial<TrainerCard> = {},
-): TrainerCard {
-  n++;
-  return { kind: 'trainer', key, id: `AB1-${n}`, no: n, name, sub, rarity, text, art, ...extra };
-}
+const t = trainerFactory('AB1');
 
 // Trainer ids are referenced by effect implementations via their name.
 export const TRAINERS: TrainerCard[] = [
@@ -74,6 +63,7 @@ export const ENERGIES: EnergyCard[] = [
     return {
       kind: 'energy' as const,
       id: `AB1-E${ty}`,
+      set: 'AB1' as const,
       no: en,
       name: ENAMES[ty],
       rarity: 'C' as Rarity,
@@ -86,6 +76,7 @@ export const ENERGIES: EnergyCard[] = [
   {
     kind: 'energy',
     id: 'AB1-208',
+    set: 'AB1',
     no: 208,
     name: 'ダブル無色エネルギー',
     rarity: 'U',
@@ -99,6 +90,7 @@ export const ENERGIES: EnergyCard[] = [
   {
     kind: 'energy',
     id: 'AB1-209',
+    set: 'AB1',
     no: 209,
     name: '虹色エネルギー',
     rarity: 'R',

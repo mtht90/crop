@@ -127,6 +127,82 @@ export const STARTER_DECKS: DeckList[] = [
   },
 ];
 
+// ----------------------------------------------------------------------------
+// 第2弾 decks (used by the new rivals and free battle)
+// ----------------------------------------------------------------------------
+export const EX_DECKS: DeckList[] = [
+  {
+    id: 'dragoon',
+    name: '覇竜の軍団',
+    type: 'fire',
+    cover: 'ドラグーン',
+    description: 'ドラグーンEXの覇王の業火で3枚のサイドごと焼き尽くす。トラッシュの炎エネルギーを覇竜の号令で再利用しよう。',
+    cards: [
+      ['ドレイクファイター', 4], ['ドラグーン', 3], ['ドレイククラッシャー', 2], ['ドレイクガーディアン', 2], ['カエンアリ', 2], ['ヒブネ', 1],
+      ['クロウマ', 2], ['ブラックスタリオン', 2],
+      ['大賢者の研究', 4], ['騎士の突撃', 2], ['司令官の号令', 2], ['召喚の巻物', 3], ['魔獣の笛', 2], ['賢者の水晶', 1],
+      ['魔力の転移', 2], ['転移の羽', 2], ['覇者の紋章', 1], ['エネルギー結晶', 2], ['灼熱の火山帯', 2], ['狩人の知恵', 2],
+      [E('炎'), 17],
+    ],
+  },
+  {
+    id: 'naga',
+    name: '深淵の女王',
+    type: 'water',
+    cover: 'ナーガクイーン',
+    description: 'ナーガを並べるほど強くなるナーガクイーンEX。潮の支配でエネルギーを一気に加速する。',
+    cards: [
+      ['ナーガソルジャー', 4], ['ナーガクイーン', 3], ['ナーガミュルミドン', 2], ['ナーガリングキャスター', 3], ['トリトン', 2], ['セイレーン', 2],
+      ['クサレワニ', 1],
+      ['大賢者の研究', 4], ['騎士の突撃', 3], ['司令官の号令', 2], ['盗賊団の手引き', 1], ['召喚の巻物', 3], ['魔獣の笛', 2],
+      ['賢者の水晶', 1], ['転移の羽', 2], ['回復薬', 2], ['覇者の紋章', 1], ['嵐の海岸', 1], ['狩人の知恵', 2],
+      [E('水'), 16], [E('超'), 3],
+    ],
+  },
+  {
+    id: 'lich',
+    name: '亡国の王',
+    type: 'dark',
+    cover: 'リッチロード',
+    description: 'トラッシュのモンスターが増えるほどリッチロードEXの審判は重くなる。暗殺者の刃でベンチを狙い撃て。',
+    cards: [
+      ['ソウルレス', 4], ['ブラウンリッチ', 3], ['リッチロード', 3], ['デスブレード', 2], ['ドラウグ', 2], ['ウルフライダー', 2], ['クサレオオカミ', 2],
+      ['大賢者の研究', 4], ['死霊術師の儀式', 2], ['暗殺者の刃', 2], ['司令官の号令', 1], ['召喚の巻物', 4], ['魔獣の笛', 2],
+      ['進化の秘薬', 2], ['夜の担架', 2], ['砕きの鉄槌', 2], ['亡者の港', 1], ['転移の羽', 2],
+      [E('悪'), 18],
+    ],
+  },
+  {
+    id: 'troll',
+    name: '巨人の行軍',
+    type: 'fighting',
+    cover: 'トロルジェネラル',
+    description: '倒れても再生するトロルジェネラルEXと、硬い甲殻のサソリで押し込む闘デッキ。',
+    cards: [
+      ['トロルウォリアー', 4], ['トロルジェネラル', 3], ['ロックトロル', 2], ['スナサソリ', 3], ['ヨロイサソリ', 2], ['オオヒグマ', 2], ['グリズリー', 1],
+      ['大賢者の研究', 4], ['騎士の突撃', 2], ['司令官の号令', 2], ['聖騎士の加護', 2], ['召喚の巻物', 4], ['魔獣の笛', 2],
+      ['上級回復薬', 2], ['転移の羽', 2], ['守りの護符', 1], ['覇者の紋章', 1], ['英雄の古戦場', 1], ['狩人の知恵', 2],
+      [E('闘'), 18],
+    ],
+  },
+  {
+    id: 'swarm',
+    name: '女王の巣',
+    type: 'grass',
+    cover: 'クイーンアント',
+    description: 'オオアリで仲間を呼び、軍隊の行進で数の暴力を。巣の奥からクイーンアントEXが目を覚ます。',
+    cards: [
+      ['オオアリ', 4], ['ヘイタイアリ', 3], ['クイーンアント', 3], ['カレキダマ', 2], ['ゾンビバグ', 2], ['シルフ', 2], ['コガネスカラベ', 2],
+      ['大賢者の研究', 4], ['騎士の突撃', 2], ['司令官の号令', 2], ['召喚の巻物', 4], ['魔獣の笛', 2], ['進化の秘薬', 3],
+      ['聖騎士の加護', 1], ['転移の羽', 2], ['回復薬', 2], ['瘴気の沼', 1], ['大地の器', 1], ['狩人の知恵', 1],
+      [E('草'), 17],
+    ],
+  },
+];
+
+export const ALL_DECKS: DeckList[] = [...STARTER_DECKS, ...EX_DECKS];
+export const deckById = (id: string) => ALL_DECKS.find((d) => d.id === id)!;
+
 export function expand(list: [string, number][]): string[] {
   const out: string[] = [];
   for (const [name, n] of list) for (let i = 0; i < n; i++) out.push(byName(name).id);
@@ -165,6 +241,8 @@ export interface Rival {
   win: string;
   lose: string;
   scene: string;
+  /** set the rival belongs to (第2弾 rivals unlock after the first 8) */
+  set?: 'AB1' | 'AB2';
 }
 
 export const RIVALS: Rival[] = [
@@ -199,5 +277,25 @@ export const RIVALS: Rival[] = [
   {
     id: 'necros', name: 'ネクロス', title: '冥府の王', portrait: 'undead/ancient-lich', deck: 'dark', level: 'hard', reward: 600,
     intro: '千年の眠りを妨げし者よ…その魂、我が軍勢に加えてくれよう。', win: '魂はもらったぞ…', lose: 'バカな…この我が敗れるだと…！', scene: 'story/bones',
+  },
+  {
+    id: 'flora', name: 'フローラ', title: '蟲使いのドルイド', portrait: 'elves/druid', deck: 'swarm', level: 'normal', reward: 380, set: 'AB2',
+    intro: '森の小さな命たち…その数を甘く見ないことね。', win: '女王の目覚めには、誰も逆らえないの。', lose: 'あなた、森に愛されているのね。', scene: 'story/landscape-hills-02',
+  },
+  {
+    id: 'garm', name: 'ガルム', title: '大戦士長', portrait: 'orcs/warlord', deck: 'troll', level: 'hard', reward: 460, set: 'AB2',
+    intro: '我が軍勢は倒れても立ち上がる。お前の心が先に折れるだろう。', win: '進め！巨人の行軍は止まらぬ！', lose: '…見事。お前を戦士と認めよう。', scene: 'story/landscape-mountains-03',
+  },
+  {
+    id: 'nerea', name: 'ネレア', title: '深淵の巫女王', portrait: 'merfolk/priestess', deck: 'naga', level: 'hard', reward: 480, set: 'AB2',
+    intro: '潮が満ちる音が聞こえるかしら。あなたを深淵へ招待するわ。', win: '海の底は静かでしょう？', lose: '潮が…引いていく…。あなたの勝ちよ。', scene: 'story/landscape-beach',
+  },
+  {
+    id: 'sieg', name: 'ジーク', title: '覇竜騎士団長', portrait: 'humans/grand-knight', deck: 'dragoon', level: 'hard', reward: 520, set: 'AB2',
+    intro: '覇者の名にかけて、全力で相手をしよう。騎士団、前へ！', win: '覇竜の炎こそ、王者の証だ。', lose: 'その力…お前こそ次の覇者かもしれんな。', scene: 'story/landscape-mountains-05',
+  },
+  {
+    id: 'morgana', name: 'モルガナ', title: '亡国の死霊術師', portrait: 'humans/necromancer+female', deck: 'lich', level: 'hard', reward: 650, set: 'AB2',
+    intro: '滅びた王国の王が、あなたの魂をご所望よ。', win: '陛下、新しい臣下をお連れしました…ふふ。', lose: '王が…再び眠りにつくなんて…。', scene: 'story/grim-altar',
   },
 ];

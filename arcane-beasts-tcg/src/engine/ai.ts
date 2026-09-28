@@ -8,7 +8,9 @@ import {
   energyUnits,
   Game,
   hpLeft,
+  hasRule,
   isBasic,
+  prizeValue,
   maxHp,
   other,
   retreatCost,
@@ -45,7 +47,7 @@ function slotValue(s: GameState, slot: Slot, active: boolean): number {
   let v = 0;
   v += (left / hp) * 30 + left * 0.05;
   v += mc.stage === 'basic' ? 10 : mc.stage === 'stage1' ? 32 : 55;
-  if (mc.omega) v += 15;
+  if (hasRule(mc)) v += 15 * (prizeValue(mc) - 1);
   const atks = mc.attacks;
   const maxCost = Math.max(...atks.map((a) => a.cost.length), 1);
   v += Math.min(energyCount(slot), maxCost + 1) * (active ? 11 : 6);
@@ -85,9 +87,9 @@ export function evaluate(s: GameState, p: 0 | 1): number {
   const them = s.players[o].active;
   if (me && them) {
     const d = bestDamage(me) * (topCard(them).weakness === topCard(me).type ? 2 : 1);
-    if (d >= hpLeft(s, them)) score += topCard(them).omega ? 60 : 30;
+    if (d >= hpLeft(s, them)) score += 30 * prizeValue(topCard(them));
     const t = bestDamage(them) * (topCard(me).weakness === topCard(them).type ? 2 : 1);
-    if (t >= hpLeft(s, me)) score -= topCard(me).omega ? 50 : 25;
+    if (t >= hpLeft(s, me)) score -= 25 * prizeValue(topCard(me));
   }
   return score;
 }
@@ -105,10 +107,10 @@ function cardValue(g: Game, p: 0 | 1, c: CardInst): number {
     if (d.stage !== 'basic') {
       const target = slots.some((x) => topCard(x.slot).name === d.evolvesFrom);
       v += target ? 45 : 5;
-      if (d.omega) v += 10;
+      if (hasRule(d)) v += 10;
     } else {
       v += pl.bench.length < 3 ? 25 : 5;
-      if (d.omega) v += 20;
+      if (hasRule(d)) v += 20;
       // a basic whose evolution is in hand
       if (pl.hand.some((h) => {
         const hd = card(h.cid);
@@ -136,7 +138,7 @@ function cardValue(g: Game, p: 0 | 1, c: CardInst): number {
 // Prompt heuristics
 // ----------------------------------------------------------------------------
 function slotScoreForActive(s: GameState, slot: Slot): number {
-  return bestDamage(slot) * 1.2 + hpLeft(s, slot) * 0.3 + readiness(slot) * 40 + (topCard(slot).omega ? 10 : 0);
+  return bestDamage(slot) * 1.2 + hpLeft(s, slot) * 0.3 + readiness(slot) * 40 + (hasRule(topCard(slot)) ? 10 : 0);
 }
 
 export function heuristicAnswer(g: Game, pr: Prompt): Answer {
@@ -151,7 +153,7 @@ export function heuristicAnswer(g: Game, pr: Prompt): Answer {
       const score = (c: CardInst) => {
         const d = card(c.cid) as MonsterCard;
         const cheap = Math.min(...d.attacks.map((a) => a.cost.length));
-        return d.hp * 0.5 - cheap * 10 - d.retreat * 6 - (d.omega ? 30 : 0) + (d.retreat === 0 ? 10 : 0);
+        return d.hp * 0.5 - cheap * 10 - d.retreat * 6 - (hasRule(d) ? 30 * (prizeValue(d) - 1) : 0) + (d.retreat === 0 ? 10 : 0);
       };
       basics.sort((a, b) => score(b) - score(a));
       const active = basics[0];
@@ -181,21 +183,27 @@ export function heuristicAnswer(g: Game, pr: Prompt): Answer {
         if (!mine) {
           const myAct = s.players[pr.player].active;
           const dmgTitle = /(\d+)ダメージ/.exec(t);
-          if (dmgTitle) {
+          if (t.includes('エネルギーをトラッシュ')) {
+            v = energyCount(sl) * 10 + (o.z === 'active' ? 25 : 0) + (hasRule(topCard(sl)) ? 15 : 0);
+          } else if (dmgTitle) {
             const n = Number(dmgTitle[1]);
-            v = (n >= hpLeft(s, sl) ? 200 + (topCard(sl).omega ? 100 : 0) : 0) + sl.damage + maxHp(s, sl) * 0.05;
+            v = (n >= hpLeft(s, sl) ? 100 + 100 * prizeValue(topCard(sl)) : 0) + sl.damage + maxHp(s, sl) * 0.05;
           } else {
             // gust: bring out something we can KO, or a stuck high-retreat monster
             const d = myAct ? bestDamage(myAct) : 0;
-            v = (d >= hpLeft(s, sl) ? 300 + (topCard(sl).omega ? 200 : 0) : 0) - hpLeft(s, sl) * 0.3 + retreatCost(s, sl) * 15 - energyCount(sl) * 5;
+            v = (d >= hpLeft(s, sl) ? 100 + 200 * prizeValue(topCard(sl)) : 0) - hpLeft(s, sl) * 0.3 + retreatCost(s, sl) * 15 - energyCount(sl) * 5;
           }
+        } else if (t.includes('エネルギーを移す')) {
+          // move surplus energy off a monster that has more than it needs (prefer the bench)
+          const maxCost = Math.max(...topCard(sl).attacks.map((a) => a.cost.length), 1);
+          v = energyCount(sl) - maxCost + (o.z === 'bench' ? 0.5 : 0);
         } else if (t.includes('回復')) {
           v = sl.damage + (o.z === 'active' ? 5 : 0);
         } else if (t.includes('つける')) {
           const units = energyUnits(sl);
           const atks = topCard(sl).attacks;
           const maxCost = Math.max(...atks.map((a) => a.cost.length));
-          v = (units.length < maxCost ? 30 : 0) + (o.z === 'active' ? 15 : 0) + (topCard(sl).omega ? 10 : 0) + topCard(sl).hp * 0.05;
+          v = (units.length < maxCost ? 30 : 0) + (o.z === 'active' ? 15 : 0) + (hasRule(topCard(sl)) ? 10 : 0) + topCard(sl).hp * 0.05;
         } else {
           v = slotScoreForActive(s, sl);
         }

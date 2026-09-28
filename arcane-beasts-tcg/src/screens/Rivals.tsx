@@ -1,8 +1,9 @@
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useState } from 'react';
 import { activeDeck, RIVALS, useStore } from '../state/store';
-import { expand, STARTER_DECKS, validateDeck } from '../engine/decks';
-import { byName, TYPE_JP } from '../engine/cards';
+import { expand, ALL_DECKS, deckById, validateDeck } from '../engine/decks';
+import { byName, SET_INFO, SETS, TYPE_JP } from '../engine/cards';
+import type { SetCode } from '../engine/types';
 import type { Difficulty } from '../engine/ai';
 import { artUrl } from '../lib/assets';
 import { CardFace, EnergySymbol } from '../ui/Card';
@@ -16,20 +17,25 @@ export function Rivals() {
   const save = useStore((s) => s.save);
   const startBattle = useStore((s) => s.startBattle);
   const go = useStore((s) => s.go);
+  const setOf = (i: number) => RIVALS[i].set ?? 'AB1';
   const firstOpen = RIVALS.findIndex((r) => !save.beaten.includes(r.id));
   const [sel, setSel] = useState(Math.max(0, firstOpen === -1 ? RIVALS.length - 1 : firstOpen));
+  const [rset, setRset] = useState<SetCode>(() => setOf(Math.max(0, firstOpen === -1 ? RIVALS.length - 1 : firstOpen)));
+  const shown = RIVALS.map((rv, i) => ({ rv, i })).filter((x) => setOf(x.i) === rset);
   const [freeDeck, setFreeDeck] = useState('fire');
   const [freeLv, setFreeLv] = useState<Difficulty>('normal');
   useEffect(() => playMusic('menu'), []);
 
   const deck = activeDeck(save);
   const errs = deck ? validateDeck(deck.cards) : ['デッキがありません'];
-  const unlocked = (i: number) => i === 0 || save.beaten.includes(RIVALS[i - 1].id);
+  // each set is its own ladder: the first rival of a set is always open
+  const unlocked = (i: number) => i === 0 || setOf(i - 1) !== setOf(i) || save.beaten.includes(RIVALS[i - 1].id);
+  const numInSet = (i: number) => RIVALS.slice(0, i + 1).filter((_, k) => setOf(k) === setOf(i)).length;
   const r = RIVALS[sel];
-  const rdeck = STARTER_DECKS.find((d) => d.id === r.deck)!;
+  const rdeck = deckById(r.deck);
   const keyCards = rdeck.cards
     .map(([n]) => byName(n))
-    .filter((c) => c.kind === 'monster' && (c.omega || c.stage === 'stage2'))
+    .filter((c) => c.kind === 'monster' && (c.omega || c.ex || c.stage === 'stage2'))
     .slice(0, 3);
 
   const fight = (spectate = false) => {
@@ -50,7 +56,7 @@ export function Rivals() {
 
   const fightFree = (spectate = false) => {
     if (!deck || errs.length) return;
-    const d = STARTER_DECKS.find((x) => x.id === freeDeck)!;
+    const d = deckById(freeDeck);
     sfx('horn-3', 0.7);
     startBattle({
       rival: null,
@@ -71,8 +77,25 @@ export function Rivals() {
       <div className="screen-shade" />
       <div className="stage">
         <TopBar title="バトル" />
+        <div className="seg rival-sets">
+          {SETS.map((k) => (
+            <button
+              key={k}
+              className={rset === k ? 'on' : ''}
+              onClick={() => {
+                foley.tick();
+                setRset(k);
+                const first = RIVALS.findIndex((rv, i) => setOf(i) === k && !save.beaten.includes(rv.id));
+                setSel(first === -1 ? RIVALS.findIndex((_, i) => setOf(i) === k) : first);
+              }}
+            >
+              {SET_INFO[k].short}の強敵
+              {k === 'AB2' && <i>NEW</i>}
+            </button>
+          ))}
+        </div>
         <div className="rival-list">
-          {RIVALS.map((rv, i) => {
+          {shown.map(({ rv, i }) => {
             const open = unlocked(i);
             return (
               <motion.div
@@ -89,7 +112,7 @@ export function Rivals() {
               >
                 <img className="scene" src={artUrl(rv.scene)} alt="" />
                 <img className="por" src={artUrl(rv.portrait)} alt="" />
-                <div className="num">{i + 1}</div>
+                <div className="num">{numInSet(i)}</div>
                 {save.beaten.includes(rv.id) && <div className="cleared">CLEAR</div>}
                 {!open && (
                   <div className="lock">
@@ -108,7 +131,7 @@ export function Rivals() {
         <div className="panel free-box">
           <h3>フリー対戦</h3>
           <div className="seg">
-            {STARTER_DECKS.map((d) => (
+            {ALL_DECKS.map((d) => (
               <button key={d.id} className={freeDeck === d.id ? 'on' : ''} onClick={() => setFreeDeck(d.id)}>
                 {d.name}
               </button>
@@ -137,7 +160,7 @@ export function Rivals() {
               <img className="rd-por" src={artUrl(r.portrait)} alt="" />
               <div>
                 <div className="rtitle">
-                  第{sel + 1}の強敵 ・ {r.title}
+                  {SET_INFO[setOf(sel)].short} 第{numInSet(sel)}の強敵 ・ {r.title}
                 </div>
                 <h2>{r.name}</h2>
                 <div className="rd-meta">

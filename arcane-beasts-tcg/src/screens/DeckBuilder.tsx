@@ -190,7 +190,7 @@ export function DeckBuilder() {
                       {c.kind === 'trainer' && <Icon name={c.sub === 'supporter' ? 'person' : c.sub === 'stadium' ? 'shield' : 'sparkles'} />}
                       <span className="nm">
                         {c.name}
-                        {c.rarity === 'SR' || c.rarity === 'UR' ? ` (${c.rarity})` : ''}
+                        {c.variant ? ` (${c.variant === 'mirror' ? 'ミラー' : c.rarity})` : ''}
                       </span>
                       <span className="rm">－</span>
                     </div>

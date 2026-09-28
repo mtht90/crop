@@ -50,6 +50,11 @@ export function topCard(slot: Slot): MonsterCard {
   return card(slot.stack[slot.stack.length - 1].cid) as MonsterCard;
 }
 
+/** Prize cards the opponent takes when this monster is knocked out */
+export const prizeValue = (mc: MonsterCard) => (mc.ex ? 3 : mc.omega ? 2 : 1);
+/** Ω and EX monsters carry a rule box */
+export const hasRule = (mc: MonsterCard) => !!(mc.omega || mc.ex);
+
 export function slotAt(s: GameState, pos: Pos): Slot | null {
   const pl = s.players[pos.p];
   return pos.z === 'active' ? pl.active : pl.bench[pos.i] ?? null;
@@ -76,6 +81,7 @@ export function maxHp(s: GameState, slot: Slot): number {
   const mc = topCard(slot);
   let hp = mc.hp;
   if (toolKey(slot) === 'charm') hp += 30;
+  if (stadiumKey(s) === 'harbor' && !hasRule(mc)) hp += 30;
   return hp;
 }
 
@@ -639,6 +645,18 @@ export class Game {
         return pl.discard.some((d) => card(d.cid).kind === 'monster' || isBasicEnergy(d.cid));
       case 'catcher':
         return opp.bench.length > 0;
+      case 'rally':
+        return pl.bench.length < BENCH_MAX && pl.deck.some((d) => isBasic(d.cid));
+      case 'assassin':
+        return true;
+      case 'paladin':
+        return damaged;
+      case 'tutor':
+        return pl.deck.some((d) => card(d.cid).kind === 'trainer');
+      case 'energyswap':
+        return slotsOf(s, p).length > 1 && slotsOf(s, p).some((x) => x.slot.energy.some((e) => isBasicEnergy(e.cid)));
+      case 'hammer':
+        return slotsOf(s, other(p)).some((x) => x.slot.energy.length > 0);
       default:
         return true;
     }
@@ -922,7 +940,7 @@ export class Game {
           break;
         }
         case 'bonusIfOmega':
-          if (this.pl(opp).active && topCard(this.pl(opp).active!).omega) dmg += e.bonus;
+          if (this.pl(opp).active && hasRule(topCard(this.pl(opp).active!))) dmg += e.bonus;
           break;
       }
     }
@@ -968,6 +986,7 @@ export class Game {
         // defender-side modifiers
         const red = hasAbility(D, 'damageReduce');
         if (red && red.k === 'damageReduce') dmg -= red.n;
+        if (toolKey(D) === 'crest' && hasRule(dc)) dmg -= 30;
         for (const f of D.flags) if (f.k === 'reduce' && f.untilTurn >= s.turn) dmg -= f.n ?? 0;
         dmg = Math.max(0, dmg);
         if (dmg > 0) {
@@ -1052,7 +1071,7 @@ export class Game {
           yield* this.searchEnergyAttach(p, e.n, e.type, e.from, e.to);
           break;
         case 'callForFamily':
-          yield* this.benchFromDeck(p, e.n, (c) => !e.name || c.name === e.name);
+          yield* this.benchFromDeck(p, e.n, (c) => !e.name || c.name.includes(e.name));
           break;
         case 'cantAttackNext':
           A.flags.push({ k: 'cantAttack', untilTurn: s.turn + 2 });
@@ -1330,6 +1349,47 @@ export class Game {
       case 'compass':
         yield* this.searchToHand(p, '基本エネルギーを1枚選んでください', (d) => d.kind === 'energy' && d.basic, 1);
         break;
+      case 'rally':
+        yield* this.benchFromDeck(p, 2, () => true);
+        break;
+      case 'assassin': {
+        const opts = slotsOf(s, opp).map((x) => x.pos);
+        const pos = yield* this.chooseSlot(p, '30ダメージぶんのダメカンをのせる相手のモンスターを選んでください', opts);
+        if (pos) this.putDamage(pos, 30, 'colorless', 'effect');
+        break;
+      }
+      case 'paladin':
+        for (const { pos, slot } of slotsOf(s, p)) if (slot.damage > 0) this.heal(pos, 30);
+        break;
+      case 'tutor':
+        yield* this.searchToHand(p, '手札に加えるトレーナーズを選んでください', (d) => d.kind === 'trainer', 1);
+        break;
+      case 'energyswap': {
+        const from = slotsOf(s, p).filter((x) => x.slot.energy.some((e) => isBasicEnergy(e.cid))).map((x) => x.pos);
+        const src = yield* this.chooseSlot(p, 'エネルギーを移すモンスターを選んでください', from);
+        if (!src) break;
+        const sl = slotAt(s, src)!;
+        const basics = sl.energy.filter((e) => isBasicEnergy(e.cid));
+        const [u] = yield* this.chooseCards(p, '移す基本エネルギーを選んでください', sl.energy, basics.map((c) => c.uid), 1, 1);
+        const dests = slotsOf(s, p).filter((x) => !posEq(x.pos, src)).map((x) => x.pos);
+        const dst = yield* this.chooseSlot(p, 'エネルギーをつけるモンスターを選んでください', dests);
+        if (!dst || u === undefined) break;
+        const i = sl.energy.findIndex((c) => c.uid === u);
+        const [c] = sl.energy.splice(i, 1);
+        slotAt(s, dst)!.energy.push(c);
+        this.emit({ e: 'attach', p, uid: c.uid, pos: dst });
+        break;
+      }
+      case 'hammer': {
+        if (!this.flip(p, def.name)) break;
+        const opts = slotsOf(s, opp).filter((x) => x.slot.energy.length).map((x) => x.pos);
+        const pos = yield* this.chooseSlot(p, 'エネルギーをトラッシュする相手のモンスターを選んでください', opts);
+        if (!pos) break;
+        const sl = slotAt(s, pos)!;
+        const chosen = yield* this.chooseCards(p, 'トラッシュする相手のエネルギーを選んでください', sl.energy, sl.energy.map((c) => c.uid), 1, 1);
+        this.discardEnergyFrom(opp, pos, chosen);
+        break;
+      }
     }
   }
 
@@ -1352,7 +1412,7 @@ export class Game {
             pl.discard.push(...slot.stack, ...slot.energy, ...(slot.tool ? [slot.tool] : []));
             if (pos.z === 'active') pl.active = null;
             else pl.bench.splice(pos.i, 1);
-            prizesFor[other(p)] += top.omega ? 2 : 1;
+            prizesFor[other(p)] += prizeValue(top);
           }
         }
       }

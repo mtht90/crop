@@ -54,7 +54,7 @@ def find_src(key):
 # ---------------------------------------------------------------------------
 # 1. Collect art keys referenced from the source code
 # ---------------------------------------------------------------------------
-KEY_RE = re.compile(r"'((?:monsters|drakes|trolls|woses|undead|saurians|merfolk|nagas|wolves|humans|goblins|elves|dwarves|orcs|story)/[\w+\-]+)'")
+KEY_RE = re.compile(r"'((?:monsters|drakes|trolls|woses|undead|saurians|merfolk|nagas|wolves|humans|goblins|elves|dwarves|orcs|dunefolk|transport|story)/[\w+\-]+)'")
 keys = set()
 for f in glob.glob(os.path.join(ROOT, 'src/**/*.ts'), recursive=True) + glob.glob(os.path.join(ROOT, 'src/**/*.tsx'), recursive=True):
     keys.update(KEY_RE.findall(open(f, encoding='utf-8').read()))
@@ -248,6 +248,8 @@ ICONS = {
     'potion-ball': 'potion-ball', 'feather': 'feather', 'magic-potion': 'magic-potion', 'crystal-growth': 'crystal-growth',
     'amphora': 'amphora', 'night-sky': 'night-sky', 'coins': 'coins', 'crossed-chains': 'crossed-chains', 'compass': 'compass',
     'feathered-wing': 'feathered-wing', 'bracer': 'bracer', 'pendant-key': 'pendant-key', 'spiked-armor': 'spiked-armor',
+    'crystal-ball': 'crystal-ball', 'energy-arrow': 'energy-arrow', 'hammer-drop': 'hammer-drop', 'dragon-shield': 'dragon-shield',
+    'shard': 'crystal-cluster', 'exchange': 'card-exchange', 'stars': 'star-swirl',
     # ui
     'cards': 'card-random', 'deck': 'stack', 'swords': 'crossed-swords', 'shop': 'shop', 'book': 'book-cover',
     'gear': 'cog', 'trophy': 'trophy-cup', 'chest': 'open-treasure-chest', 'skull': 'skull-crossed-bones',

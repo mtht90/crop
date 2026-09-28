@@ -16,7 +16,10 @@ export const ENERGY_TYPES: EType[] = ['fire', 'water', 'grass', 'lightning', 'ps
 export const ALL_TYPES: EType[] = [...ENERGY_TYPES, 'colorless'];
 
 export type Stage = 'basic' | 'stage1' | 'stage2';
-export type Rarity = 'C' | 'U' | 'R' | 'RR' | 'SR' | 'UR';
+export type Rarity = 'C' | 'U' | 'R' | 'RR' | 'RRR' | 'AR' | 'CHR' | 'S' | 'SR' | 'SAR' | 'UR';
+export type SetCode = 'AB1' | 'AB2';
+/** Alternate printings of a base card */
+export type Variant = 'mirror' | 'AR' | 'CHR' | 'S' | 'SR' | 'SAR' | 'UR';
 export type Condition = 'poisoned' | 'burned' | 'asleep' | 'paralyzed' | 'confused';
 
 // ---------------------------------------------------------------------------
@@ -99,6 +102,14 @@ interface CardBase {
   fullArt?: boolean;
   gold?: boolean;
   baseId?: string; // for alternate-art variants
+  set: SetCode;
+  variant?: Variant;
+  /** CHR: portrait of the trainer drawn with the monster */
+  partner?: string;
+  /** S (shiny): hue rotation applied to the portrait */
+  hue?: number;
+  /** AR/SAR/CHR art framing: portrait scale / horizontal anchor (%) / bottom offset (%) */
+  crop?: { scale?: number; x?: number; y?: number };
 }
 
 export interface MonsterCard extends CardBase {
@@ -113,6 +124,8 @@ export interface MonsterCard extends CardBase {
   attacks: Attack[];
   ability?: Ability;
   omega?: boolean;
+  /** EX: knocked out → opponent takes 3 prize cards */
+  ex?: boolean;
   species: string;
   scene?: string; // override background landscape
 }

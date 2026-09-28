@@ -7,9 +7,9 @@
 // ============================================================================
 import { AnimatePresence, animate, motion, useAnimationControls, useMotionValue, useTransform, type MotionValue } from 'motion/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { CardDef, Rarity } from '../engine/types';
-import { byName } from '../engine/cards';
-import { BOOSTERS, openPack, openPremium, PACK_PRICE, premiumBooster, PREMIUM_PRICE, RARITY_ORDER, useStore, type Booster } from '../state/store';
+import type { CardDef, Rarity, SetCode } from '../engine/types';
+import { byName, SET_INFO } from '../engine/cards';
+import { BOOSTERS, MIRROR_CHANCE, openPack, openPremium, PACK_PRICE, PACK_TABLE, premiumBooster, PREMIUM_PRICE, PREMIUM_TABLE, RARITY_ORDER, useStore, type Booster } from '../state/store';
 import { currentPickup, fmtRemain } from '../state/progress';
 import { CardBack, CardFace } from '../ui/Card';
 import { TopBar } from '../ui/TopBar';
@@ -25,9 +25,17 @@ const EASE_OUT = [0.16, 1, 0.3, 1] as const;
 const EASE_IN = [0.7, 0, 0.84, 0] as const;
 const EASE_IN_OUT = [0.65, 0, 0.35, 1] as const;
 
-const isStar = (r: Rarity) => r === 'SR' || r === 'UR';
-const rareColor = (r: Rarity) => (r === 'UR' ? '#ffd27a' : r === 'SR' ? '#bfe6ff' : '#ffffff');
+/** ☆ rarities arrive face-down and turn over on tap */
+const isStar = (r: Rarity) => RARITY_ORDER[r] >= 5;
+const RARE_COLOR: Partial<Record<Rarity, string>> = { UR: '#ffd27a', SAR: '#ffc9ee', SR: '#bfe6ff', S: '#dfe6ff', AR: '#fff1c4', CHR: '#fff1c4', RRR: '#ffd9b0' };
+const rareColor = (r: Rarity) => RARE_COLOR[r] ?? '#ffffff';
 const priceOf = (b: Booster) => (b.premium ? PREMIUM_PRICE : PACK_PRICE);
+type Tab = SetCode | 'premium';
+const TABS: [Tab, string][] = [
+  ['AB1', `第1弾 ${SET_INFO.AB1.name}`],
+  ['AB2', `第2弾 ${SET_INFO.AB2.name}`],
+  ['premium', 'プレミアム'],
+];
 
 function useUnit() {
   const calc = () => Math.min(window.innerWidth / 100, (window.innerHeight * 1.7778) / 100);
@@ -85,6 +93,8 @@ interface OpeningState {
   cards: CardDef[];
   god: boolean;
   fresh: Set<string>;
+  /** indices of cards that became shards (11th copy or later) */
+  shards: Set<number>;
   key: number;
 }
 
@@ -95,7 +105,8 @@ export function Shop() {
   const [sel, setSel] = useState(0);
   const [opening, setOpening] = useState<OpeningState | null>(null);
   const [odds, setOdds] = useState(false);
-  const [kind, setKind] = useState<'normal' | 'premium'>(() => (/[?&]premium/.test(location.search) ? 'premium' : 'normal'));
+  const [kind, setKind] = useState<Tab>(() => (/[?&]premium/.test(location.search) ? 'premium' : 'AB2'));
+  const list = kind === 'premium' ? [] : BOOSTERS.filter((x) => x.set === kind);
   const u = useUnit();
   useEffect(() => playMusic('shop'), []);
   const premium = useMemo(() => premiumBooster(), []);
@@ -105,7 +116,7 @@ export function Shop() {
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
   }, []);
-  const b = kind === 'premium' ? premium : BOOSTERS[sel];
+  const b = kind === 'premium' ? premium : list[Math.min(sel, list.length - 1)];
   const price = priceOf(b);
 
   const buy = useCallback(
@@ -123,8 +134,9 @@ export function Shop() {
         s.packsOpened++;
       });
       useStore.getState().recordPack(!!booster.premium);
-      addCards(res.cards.map((c) => c.id));
-      setOpening({ booster, cards: res.cards, god: res.god, fresh, key: Date.now() });
+      const flags = addCards(res.cards.map((c) => c.id));
+      const shards = new Set(flags.flatMap((f, i) => (f ? [i] : [])));
+      setOpening({ booster, cards: res.cards, god: res.god, fresh, shards, key: Date.now() });
       return true;
     },
     [update, addCards],
@@ -132,7 +144,7 @@ export function Shop() {
 
   const shift = (d: number) => {
     foley.slide();
-    setSel((sel + d + BOOSTERS.length) % BOOSTERS.length);
+    setSel((sel + d + list.length) % list.length);
   };
 
   const TYPE_JP: Record<string, string> = { fire: '炎', water: '水', grass: '草', lightning: '雷', psychic: '超', fighting: '闘', dark: '悪', colorless: '無色' };
@@ -146,7 +158,7 @@ export function Shop() {
           right={
             <>
             <div className="shop-kind">
-              {(['normal', 'premium'] as const).map((k) => (
+              {TABS.map(([k, label]) => (
                 <button
                   key={k}
                   className={`${kind === k ? 'on' : ''} ${k}`}
@@ -154,9 +166,11 @@ export function Shop() {
                     if (kind === k) return;
                     foley.slide();
                     setKind(k);
+                    setSel(0);
                   }}
                 >
-                  {k === 'normal' ? '通常パック' : 'プレミアム'}
+                  {label}
+                  {k === 'AB2' && <i className="new">NEW</i>}
                   {k === 'premium' && pickup && <i>PICK UP</i>}
                 </button>
               ))}
@@ -167,12 +181,12 @@ export function Shop() {
             </>
           }
         />
-        {kind === 'normal' ? (
-        <div className="shop2-row">
-          {BOOSTERS.map((bo, i) => {
+        {kind !== 'premium' ? (
+        <div className="shop2-row" key={kind}>
+          {list.map((bo, i) => {
             let d = i - sel;
-            if (d > 1) d -= BOOSTERS.length;
-            if (d < -1) d += BOOSTERS.length;
+            if (d > 1) d -= list.length;
+            if (d < -1) d += list.length;
             const center = d === 0;
             return (
               <motion.div
@@ -204,7 +218,7 @@ export function Shop() {
           <AnimatePresence mode="wait">
             <motion.div key={b.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.25 }} style={{ textAlign: 'center' }}>
               <div className="shop2-name">{b.name}</div>
-              <div className="shop2-sub">{b.premium ? '全スロットのレアリティ上昇・5枚目はRR以上確定' : `${b.types.map((t) => TYPE_JP[t]).join('・')}タイプが出やすい`}</div>
+              <div className="shop2-sub">{b.premium ? '全スロットのレアリティ上昇・5枚目はRRR以上確定' : `${b.types.map((t) => TYPE_JP[t]).join('・')}タイプが出やすい`}</div>
             </motion.div>
           </AnimatePresence>
           <button className={`pill ${b.premium ? 'gold' : ''}`} disabled={save.coins < price} onClick={() => buy(b)}>
@@ -234,19 +248,22 @@ export function Shop() {
   );
 }
 
+/** turn cumulative slot tables into "C 75% ／ U 25%" rows */
+function oddsRows(table: [Rarity, number][][], labels: string[]): [string, string][] {
+  return table.map((t, i) => {
+    let prev = 0;
+    const parts = t.map(([r, p]) => {
+      const pct = Math.round((p - prev) * 1000) / 10;
+      prev = p;
+      return `${r} ${pct}%`;
+    });
+    return [labels[i], parts.join(' ／ ')];
+  });
+}
+
 function OddsModal({ onClose, premium }: { onClose: () => void; premium?: boolean }) {
-  const rows: [string, string][] = premium
-    ? [
-        ['1〜2枚目', 'U 50〜55% ／ R 33〜36% ／ RR 12〜14%'],
-        ['3枚目', 'R 60% ／ RR 32% ／ SR 8%'],
-        ['4枚目', 'R 35% ／ RR 45% ／ SR 15% ／ UR 5%'],
-        ['5枚目', 'RR 50% ／ SR 35% ／ UR 15%'],
-      ]
-    : [
-        ['1〜3枚目', 'C 75〜90% ／ U 10〜25%'],
-        ['4枚目', 'U 72% ／ R 22% ／ RR 6%'],
-        ['5枚目', 'R 64% ／ RR 25% ／ SR 8% ／ UR 3%'],
-      ];
+  const labels = ['1枚目', '2枚目', '3枚目', '4枚目', '5枚目'];
+  const rows = oddsRows(premium ? PREMIUM_TABLE : PACK_TABLE, labels);
   return (
     <div className="zoom-back" onClick={onClose}>
       <div className="panel odds-modal" onClick={(e) => e.stopPropagation()}>
@@ -263,8 +280,8 @@ function OddsModal({ onClose, premium }: { onClose: () => void; premium?: boolea
         </table>
         <div className="odds-note">
           {premium
-            ? 'ピックアップ開催中は、ピックアップ対象と同じレアリティが出た場合、その50%がピックアップカードになります。'
-            : 'パックに描かれたタイプのカードは2倍出やすくなります。ごくまれに、5枚すべてがRR以上のパックが出ることがあります。'}
+            ? 'すべての弾のカードが出ます。ピックアップ開催中は、ピックアップ対象と同じレアリティが出た場合、その50%がピックアップカードになります。'
+            : `3枚目は${Math.round(MIRROR_CHANCE * 100)}%でミラー仕様のカードになります。パックに描かれたタイプのカードは2倍出やすくなります。ごくまれに、5枚すべてがRR以上のパックが出ることがあります。そのパックの弾に存在しないレアリティが出た場合は、1つ下のレアリティになります。`}
         </div>
         <button className="pill ghost" onClick={onClose}>
           閉じる
@@ -282,7 +299,7 @@ interface OpeningProps extends Omit<OpeningState, 'key'> {
   onAgain: () => void;
 }
 
-function Opening({ booster, cards, god, fresh, onClose, onAgain }: OpeningProps) {
+function Opening({ booster, cards, god, fresh, shards, onClose, onAgain }: OpeningProps) {
   const u = useUnit();
   const [phase, setPhase] = useState<Phase>('choose');
   const [idx, setIdx] = useState(0);
@@ -415,7 +432,7 @@ function Opening({ booster, cards, god, fresh, onClose, onAgain }: OpeningProps)
           </>
         )}
 
-        {phase === 'results' && <Results cards={cards} fresh={fresh} onClose={onClose} onAgain={onAgain} canAgain={coins >= priceOf(booster)} price={priceOf(booster)} u={u} />}
+        {phase === 'results' && <Results cards={cards} fresh={fresh} shards={shards} onClose={onClose} onAgain={onAgain} canAgain={coins >= priceOf(booster)} price={priceOf(booster)} u={u} />}
       </div>
     </motion.div>
   );
@@ -726,7 +743,13 @@ function TopCard({ card, u, first, faceDown, burstAt, onFlipImpact, onFlipped, o
     controls.set({ rotateY: faceDown ? 180 : 0, scale: 0.985 });
     controls.start({ scale: 1, transition: { type: 'spring', stiffness: 260, damping: 26 } });
     if (faceDown) foley.charge();
-    else if (rank === 3) {
+    else if (card.variant === 'mirror') {
+      setTimeout(() => {
+        foley.sparkle();
+        const r = ref.current?.getBoundingClientRect();
+        if (r) burstAt(r.left + r.width / 2, r.top + r.height * 0.4, 'glint', 6, 1);
+      }, 150);
+    } else if (rank === 3 || rank === 4) {
       setTimeout(() => {
         foley.sparkle();
         const r = ref.current?.getBoundingClientRect();
@@ -751,7 +774,7 @@ function TopCard({ card, u, first, faceDown, burstAt, onFlipImpact, onFlipped, o
       setUp(true);
       onFlipImpact();
       foley.impact();
-      foley.rarity(5);
+      foley.rarity(rank >= 7 ? 5 : 4);
       const c = center();
       if (c) {
         burstAt(c.cx, c.cy, 'glint', 50, 1.6);
@@ -796,7 +819,7 @@ function TopCard({ card, u, first, faceDown, burstAt, onFlipImpact, onFlipped, o
         {star && <motion.div className="halo" animate={{ scale: [1, 1.06, 1], opacity: up ? [0.35, 0.5, 0.35] : [0.28, 0.45, 0.28] }} transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }} />}
         <div className="sc-face">
           <CardFace cid={card.id} interactive={up} />
-          {(rank === 3 || (star && up)) && <div className="glare" />}
+          {(rank === 3 || rank === 4 || card.variant === 'mirror' || (star && up)) && <div className="glare" />}
         </div>
         <div className="sc-back">
           <CardBack />
@@ -817,7 +840,7 @@ function TopCard({ card, u, first, faceDown, burstAt, onFlipImpact, onFlipped, o
 // ---------------------------------------------------------------------------
 // Results
 // ---------------------------------------------------------------------------
-function Results({ cards, fresh, onClose, onAgain, canAgain, price, u }: { cards: CardDef[]; fresh: Set<string>; onClose: () => void; onAgain: () => void; canAgain: boolean; price: number; u: number }) {
+function Results({ cards, fresh, shards, onClose, onAgain, canAgain, price, u }: { cards: CardDef[]; fresh: Set<string>; shards: Set<number>; onClose: () => void; onAgain: () => void; canAgain: boolean; price: number; u: number }) {
   const [zoom, setZoom] = useState<string | null>(null);
   useEffect(() => {
     cards.forEach((_, i) => setTimeout(() => foley.slide(), 80 + i * 90));
@@ -848,6 +871,11 @@ function Results({ cards, fresh, onClose, onAgain, canAgain, price, u }: { cards
                   <CardFace cid={c.id} />
                   {rank >= 3 && <div className="glare" style={{ animationDelay: `${0.5 + i * 0.07}s` }} />}
                   {fresh.has(c.id) && <span className="new">NEW</span>}
+                  {shards.has(i) && (
+                    <span className="shard-tag">
+                      <Icon name="shard" /> かけら+1
+                    </span>
+                  )}
                 </motion.div>
               );
             })}
@@ -892,10 +920,13 @@ function PremiumView({ booster, pickup, now, u, onBuy }: { booster: Booster; pic
             <b>全スロット</b>のレアリティが上昇
           </li>
           <li>
-            5枚目は<b>RR以上</b>確定
+            5枚目は<b>RRR以上</b>確定
           </li>
           <li>
-            SR・URの出現率 通常の<b>約7倍</b>
+            AR以上の☆レア 通常の<b>約5倍</b>
+          </li>
+          <li>
+            <b>全弾</b>のカードが封入
           </li>
         </ul>
       </motion.div>
