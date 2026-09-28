@@ -1,0 +1,1502 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>漢字でGO! 再現版</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Shippori+Mincho+B1:wght@700;800&family=Zen+Kaku+Gothic+New:wght@500;700&display=swap">
+<style>
+  /* 夜のホームと発車標(LED)をモチーフにした、単一ダークテーマのデザイン */
+  :root {
+    color-scheme: dark;
+    --night: #0A1C25;
+    --field: #0C2330;
+    --board: #0F2C38;
+    --board-edge: #1F4757;
+    --deep: #061319;
+    --led: #FFB23E;
+    --led-soft: #C8944A;
+    --ink: #EEF3EF;
+    --muted: #93AFB8;
+    --go: #3AD58A;
+    --go-ink: #04200F;
+    --stop: #FF5A52;
+    --caution: #F2C230;
+    --rail: #2B5868;
+    --sleeper: rgba(147, 175, 184, 0.09);
+    --platform-h: 26px;
+    --f-kanji: "Shippori Mincho B1", "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", "Noto Serif CJK JP", serif;
+    --f-led: "DotGothic16", "Osaka-Mono", "MS Gothic", monospace;
+    --f-ui: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", "Noto Sans JP", sans-serif;
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--night);
+    color: var(--ink);
+    font-family: var(--f-ui);
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+  button { font: inherit; }
+
+  .app {
+    position: relative;
+    height: 100%;
+    max-width: 1040px;
+    margin: 0 auto;
+    padding-inline: 16px;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+  }
+
+  /* ---- 発車標風 HUD ---- */
+  .hud {
+    margin-top: 12px;
+    display: grid;
+    grid-template-columns: 1.4fr repeat(3, minmax(0, 1fr));
+    gap: 4px 16px;
+    padding: 10px 16px;
+    background: var(--board);
+    border: 1px solid var(--board-edge);
+    border-radius: 4px;
+    box-shadow: inset 0 0 0 3px #08171E;
+    font-family: var(--f-led);
+  }
+  .hud-cell { min-width: 0; }
+  .hud-cell .k { display: block; font-size: 11px; letter-spacing: .14em; color: var(--led-soft); }
+  .hud-cell .v {
+    display: block;
+    font-size: clamp(17px, 3vw, 25px);
+    color: var(--led);
+    text-shadow: 0 0 8px rgba(255, 178, 62, .45);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  @media (max-width: 560px) {
+    .hud { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+
+  /* ---- 線路とフィールド ---- */
+  .stage {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 128px;
+    gap: 14px;
+    margin-block: 12px;
+    min-height: 0;
+  }
+  .field {
+    position: relative;
+    overflow: hidden;
+    min-height: 220px;
+    border-radius: 4px;
+    background: var(--field);
+    border: 1px solid var(--board-edge);
+    cursor: text;
+  }
+  .track { position: absolute; inset: 0 0 var(--platform-h) 0; pointer-events: none; }
+  .track::before {
+    content: "";
+    position: absolute; top: 0; bottom: 0; left: 50%;
+    width: min(260px, 70%);
+    transform: translateX(-50%);
+    background: repeating-linear-gradient(to bottom, transparent 0 30px, var(--sleeper) 30px 40px);
+  }
+  .track::after {
+    content: "";
+    position: absolute; top: 0; bottom: 0; left: 50%;
+    width: min(200px, 54%);
+    transform: translateX(-50%);
+    border-inline: 5px solid var(--rail);
+  }
+  .platform {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    height: var(--platform-h);
+    background-color: var(--caution);
+    background-image: radial-gradient(circle, rgba(60, 40, 0, .35) 2.3px, transparent 2.8px);
+    background-size: 11px 11px;
+    border-top: 2px solid #FFE58A;
+  }
+  .platform-label {
+    position: absolute; left: 10px; bottom: calc(var(--platform-h) + 6px);
+    font-family: var(--f-led); font-size: 12px; letter-spacing: .24em; color: var(--stop);
+  }
+  .field.crash { animation: crash .5s ease; }
+  @keyframes crash {
+    0% { box-shadow: inset 0 0 0 0 rgba(255, 90, 82, 0); }
+    30% { box-shadow: inset 0 0 0 6px rgba(255, 90, 82, .8); }
+    100% { box-shadow: inset 0 0 0 0 rgba(255, 90, 82, 0); }
+  }
+
+  .word {
+    position: absolute; top: 0; left: 0;
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    pointer-events: none;
+    will-change: transform;
+  }
+  .word-tag {
+    font-family: var(--f-led); font-size: 12px; letter-spacing: .1em;
+    color: var(--led); background: #08171E; padding: 2px 8px; border-radius: 2px;
+    white-space: nowrap;
+  }
+  .word-yomi {
+    order: -1;
+    min-height: 1.4em;
+    font-weight: 700; font-size: clamp(16px, 2.6vw, 22px);
+    color: var(--go); opacity: 0; transition: opacity .12s;
+    white-space: nowrap;
+  }
+  .word-kanji {
+    font-family: var(--f-kanji); font-weight: 800;
+    font-size: clamp(44px, 8.2vw, 80px); line-height: 1.1;
+    color: var(--ink);
+    white-space: nowrap;
+    padding-inline: .12em;
+    text-shadow: 0 2px 0 #05121A, 0 0 22px rgba(10, 28, 37, .95);
+    transition: color .25s, transform .25s;
+  }
+  .word.danger .word-kanji { color: #FFD3CD; }
+  .word.danger .word-tag { color: var(--stop); }
+  .word.hit { opacity: 0; transition: opacity .3s .3s; }
+  .word.hit .word-kanji { color: var(--go); transform: scale(1.08); }
+  .word.hit .word-yomi { opacity: 1; }
+  .word.missed .word-kanji { color: var(--stop); }
+  .word.missed .word-yomi { opacity: 1; color: var(--stop); }
+
+  .pop {
+    position: absolute;
+    font-family: var(--f-led); font-size: 22px; color: var(--go);
+    text-shadow: 0 0 10px rgba(58, 213, 138, .5);
+    pointer-events: none; white-space: nowrap;
+    animation: rise .9s ease-out forwards;
+  }
+  @keyframes rise {
+    from { opacity: 1; transform: translate(-50%, 0); }
+    to { opacity: 0; transform: translate(-50%, -52px); }
+  }
+  .banner {
+    position: absolute; left: 50%; top: 16%;
+    font-family: var(--f-led); font-size: clamp(18px, 3.6vw, 30px);
+    color: var(--led); background: #08171E; border: 1px solid var(--led-soft);
+    padding: 8px 18px; white-space: nowrap; pointer-events: none;
+    animation: banner 1.7s ease forwards;
+  }
+  @keyframes banner {
+    0% { opacity: 0; transform: translate(-50%, 10px); }
+    12%, 78% { opacity: 1; transform: translate(-50%, 0); }
+    100% { opacity: 0; transform: translate(-50%, 0); }
+  }
+  .count {
+    position: absolute; inset: 0; display: grid; place-items: center;
+    font-family: var(--f-led); font-size: clamp(64px, 14vw, 140px);
+    color: var(--led); text-shadow: 0 0 20px rgba(255, 178, 62, .6);
+    pointer-events: none;
+  }
+
+  /* ---- 路線図(レベル進行) ---- */
+  .route {
+    position: relative;
+    list-style: none; margin: 0; padding: 8px 0;
+    display: flex; flex-direction: column; justify-content: space-between;
+  }
+  .route::before {
+    content: ""; position: absolute; left: 7px; top: 16px; bottom: 16px; width: 3px;
+    background: var(--board-edge);
+  }
+  .route li { position: relative; display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); }
+  .route .dot {
+    flex: none; width: 17px; height: 17px; border-radius: 50%;
+    background: var(--night); border: 3px solid var(--board-edge);
+  }
+  .route .lv { font-family: var(--f-led); font-size: 11px; color: var(--board-edge); margin-left: auto; }
+  .route li.done .dot { background: var(--led-soft); border-color: var(--led-soft); }
+  .route li.now { color: var(--led); font-weight: 700; }
+  .route li.now .dot { border-color: var(--led); box-shadow: 0 0 0 4px rgba(255, 178, 62, .2); }
+  .route li.now .lv { color: var(--led-soft); }
+  @media (max-width: 680px) {
+    .stage { grid-template-columns: minmax(0, 1fr); }
+    .route { display: none; }
+  }
+
+  /* ---- 入力欄 ---- */
+  .console { padding-bottom: 14px; display: grid; gap: 6px; }
+  .answer-row { display: flex; gap: 8px; }
+  #answer {
+    flex: 1; min-width: 0;
+    font: 700 clamp(18px, 3vw, 24px)/1.2 var(--f-ui);
+    color: var(--ink); background: var(--deep);
+    border: 2px solid var(--board-edge); border-radius: 4px;
+    padding: 12px 14px;
+  }
+  #answer::placeholder { color: #4F6F7A; font-weight: 500; }
+  #answer:focus { outline: none; border-color: var(--led); }
+  #answer.bad { border-color: var(--stop); animation: shake .3s; }
+  #answer:disabled { opacity: .5; }
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-8px); }
+    40% { transform: translateX(7px); }
+    60% { transform: translateX(-5px); }
+    80% { transform: translateX(3px); }
+  }
+  .btn-go {
+    flex: none;
+    font-weight: 700; font-size: 16px;
+    background: var(--go); color: var(--go-ink);
+    border: 0; border-radius: 4px; padding: 0 22px; cursor: pointer;
+  }
+  .btn-go:focus-visible { outline: 2px solid var(--led); outline-offset: 2px; }
+  .hint { display: flex; justify-content: space-between; align-items: center; gap: 6px 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); min-height: 24px; }
+  .preview { font-family: var(--f-led); font-size: 14px; color: var(--led); }
+  .link-btn {
+    background: none; border: 0; padding: 2px 4px; color: var(--muted);
+    font-size: 12px; cursor: pointer; text-decoration: underline; text-underline-offset: 3px;
+  }
+  .link-btn:focus-visible { outline: 2px solid var(--led); }
+
+  /* ---- オーバーレイ画面 ---- */
+  .overlay {
+    position: fixed; inset: 0; z-index: 10;
+    display: flex; overflow: auto;
+    padding: calc(24px + env(safe-area-inset-top, 0px)) 16px calc(24px + env(safe-area-inset-bottom, 0px));
+    background: rgba(6, 17, 23, .95);
+  }
+  .panel { margin: auto; width: 100%; max-width: 640px; }
+  .eyebrow { margin: 0; font-family: var(--f-led); font-size: 12px; letter-spacing: .18em; color: var(--led-soft); }
+  .logo {
+    margin: .12em 0 .08em;
+    font-family: var(--f-kanji); font-weight: 800;
+    font-size: clamp(64px, 17vw, 136px); line-height: 1; letter-spacing: -.02em;
+    color: var(--ink);
+  }
+  .logo .go {
+    font-family: var(--f-led); font-weight: 400; color: var(--led);
+    text-shadow: 0 0 18px rgba(255, 178, 62, .55);
+    margin-left: .04em; letter-spacing: 0;
+  }
+  .lead { margin: 0; font-size: 16px; line-height: 1.75; color: var(--muted); max-width: 34em; }
+  .lead strong { color: var(--ink); }
+  .modes { display: grid; gap: 10px; margin-block: 22px; }
+  .mode {
+    display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 2px 14px;
+    text-align: left; cursor: pointer;
+    background: var(--board); color: var(--ink);
+    border: 1px solid var(--board-edge); border-radius: 4px;
+    padding: 14px 16px;
+  }
+  .mode:hover, .mode:focus-visible { border-color: var(--led); outline: none; }
+  .mode .key {
+    grid-row: span 2;
+    width: 30px; height: 30px; display: grid; place-items: center;
+    font-family: var(--f-led); font-size: 16px;
+    background: var(--led); color: var(--night); border-radius: 3px;
+  }
+  .mode .name { font-weight: 700; font-size: 18px; }
+  .mode .name small { font-family: var(--f-led); font-weight: 400; font-size: 12px; color: var(--led-soft); margin-left: 8px; }
+  .mode .desc { grid-column: 2; font-size: 13px; line-height: 1.5; color: var(--muted); }
+  .mode .best { grid-row: 1 / span 2; grid-column: 3; font-family: var(--f-led); font-size: 13px; color: var(--led); text-align: right; white-space: nowrap; }
+  .mode .best span { display: block; font-size: 10px; letter-spacing: .14em; color: var(--led-soft); }
+
+  details { border-top: 1px solid var(--board-edge); padding-block: 12px; }
+  summary { cursor: pointer; font-weight: 700; font-size: 14px; }
+  summary:focus-visible { outline: 2px solid var(--led); outline-offset: 2px; }
+  .rules { margin: 10px 0 0; padding-left: 1.2em; font-size: 14px; line-height: 1.8; color: var(--muted); }
+  .rules b { color: var(--ink); }
+  kbd {
+    font-family: var(--f-led); font-size: 12px; padding: 1px 6px;
+    border: 1px solid var(--board-edge); border-bottom-width: 2px; border-radius: 3px; color: var(--ink);
+  }
+  .foot { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 16px; border-top: 1px solid var(--board-edge); padding-top: 12px; font-size: 12px; color: var(--muted); }
+  .toggle { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-size: 13px; color: var(--ink); }
+  .toggle input { accent-color: var(--led); width: 16px; height: 16px; }
+
+  .missed {
+    display: grid; justify-items: center; gap: 2px;
+    margin-top: 14px; padding: 18px 16px;
+    background: var(--board); border: 1px solid var(--board-edge); border-radius: 4px;
+    text-align: center;
+  }
+  .missed .k { font-family: var(--f-led); font-size: 11px; letter-spacing: .14em; color: var(--led-soft); }
+  .missed .mk { font-family: var(--f-kanji); font-weight: 800; font-size: clamp(52px, 12vw, 92px); line-height: 1.15; }
+  .missed .my { font-weight: 700; font-size: 22px; color: var(--stop); }
+  .missed .mm { font-size: 14px; color: var(--muted); }
+  .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-block: 14px; }
+  @media (max-width: 520px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .stat { background: var(--board); border: 1px solid var(--board-edge); border-radius: 4px; padding: 10px 12px; min-width: 0; }
+  .stat .k { display: block; font-family: var(--f-led); font-size: 11px; letter-spacing: .12em; color: var(--led-soft); }
+  .stat .v { display: block; font-family: var(--f-led); font-size: 22px; color: var(--led); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .record { display: inline-block; margin-left: 6px; font-size: 11px; color: var(--night); background: var(--led); padding: 0 5px; border-radius: 2px; vertical-align: middle; }
+  .rank { margin: 0; font-size: 16px; line-height: 1.7; }
+  .rank strong { font-family: var(--f-kanji); font-weight: 800; font-size: 28px; color: var(--ink); margin-inline: 4px; }
+  .rank span { color: var(--muted); font-size: 14px; }
+  .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-block: 18px; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-weight: 700; font-size: 15px; text-decoration: none; cursor: pointer;
+    padding: 12px 18px; border-radius: 4px;
+    background: var(--board); color: var(--ink); border: 1px solid var(--board-edge);
+  }
+  .btn.primary { background: var(--go); color: var(--go-ink); border-color: var(--go); }
+  .btn:hover { border-color: var(--led); }
+  .btn:focus-visible { outline: 2px solid var(--led); outline-offset: 2px; }
+  .btn kbd { border-color: currentColor; color: inherit; opacity: .7; }
+  .log-list { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+  .log-list li {
+    padding: 4px 10px; font-size: 13px; color: var(--muted);
+    background: var(--board); border: 1px solid var(--board-edge); border-left: 3px solid var(--go); border-radius: 2px;
+  }
+  .log-list li.ng { border-left-color: var(--stop); }
+  .log-list b { font-family: var(--f-kanji); font-weight: 800; font-size: 16px; color: var(--ink); margin-right: 6px; }
+  .pause-panel { max-width: 420px; text-align: center; }
+  .pause-panel .actions { justify-content: center; }
+  .pause-title { margin: .2em 0 0; font-family: var(--f-kanji); font-weight: 800; font-size: 44px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pop, .banner, #answer.bad, .field.crash { animation-duration: .01s; }
+    .word-kanji, .word.hit { transition: none; }
+  }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <header class="hud" aria-label="運行状況">
+    <div class="hud-cell"><span class="k">区間</span><span class="v" id="hudLevel">Lv1 各駅停車</span></div>
+    <div class="hud-cell"><span class="k">SCORE</span><span class="v" id="hudScore">000000</span></div>
+    <div class="hud-cell"><span class="k" id="hudCountLabel">正解</span><span class="v" id="hudCount">0</span></div>
+    <div class="hud-cell"><span class="k">BEST</span><span class="v" id="hudBest">000000</span></div>
+  </header>
+
+  <main class="stage">
+    <div class="field" id="field">
+      <div class="track" aria-hidden="true"></div>
+      <div class="word" id="word" hidden>
+        <span class="word-tag" id="wordTag">Lv1 各駅停車</span>
+        <span class="word-kanji" id="wordKanji" lang="ja"></span>
+        <span class="word-yomi" id="wordYomi"></span>
+      </div>
+      <div class="count" id="count" hidden></div>
+      <span class="platform-label" aria-hidden="true">終点</span>
+      <div class="platform" aria-hidden="true"></div>
+    </div>
+    <ol class="route" id="route" aria-label="路線図(レベル)"></ol>
+  </main>
+
+  <footer class="console">
+    <form class="answer-row" id="answerForm" autocomplete="off">
+      <input id="answer" type="text" inputmode="text" enterkeyhint="go" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             placeholder="読みを入力(ひらがな / ローマ字)" aria-label="読みを入力">
+      <button class="btn-go" id="submitBtn" type="submit">決定</button>
+    </form>
+    <div class="hint">
+      <span><span class="preview" id="preview"></span><span id="hintText">正解すると次の漢字が発車。終点に着いたら終了。</span></span>
+      <button class="link-btn" id="pauseBtn" type="button">一時停止 (Esc)</button>
+    </div>
+  </footer>
+</div>
+
+<!-- タイトル -->
+<section class="overlay" id="titleScreen" aria-labelledby="logo">
+  <div class="panel">
+    <p class="eyebrow">KANJI DE GO! ─ 非公式ファンメイド再現版</p>
+    <h1 class="logo" id="logo">漢字で<span class="go">GO!</span></h1>
+    <p class="lead">上から降りてくる漢字の<strong>読み</strong>を入力して、<strong>終点</strong>(黄色い線)に着く前に答えよう。1問でも終点に着いたらゲームオーバー。</p>
+
+    <div class="modes">
+      <button class="mode" type="button" data-mode="normal">
+        <span class="key">1</span>
+        <span class="name">ノーマル<small>各駅停車発</small></span>
+        <span class="desc">Lv1から出発。5問ごとに列車が速くなり、漢字も難しくなる。</span>
+        <span class="best"><span>BEST</span><b data-best="normal">0</b></span>
+      </button>
+      <button class="mode" type="button" data-mode="hard">
+        <span class="key">2</span>
+        <span class="name">難読<small>快速特急発</small></span>
+        <span class="desc">Lv6の難読漢字からいきなりスタート。腕に覚えのある人向け。</span>
+        <span class="best"><span>BEST</span><b data-best="hard">0</b></span>
+      </button>
+      <button class="mode" type="button" data-mode="practice">
+        <span class="key">3</span>
+        <span class="name">練習<small>回送</small></span>
+        <span class="desc">終点に着いても終わらない。読めなかった漢字は答えを表示して次へ。</span>
+        <span class="best"><span>BEST</span><b data-best="practice">0</b></span>
+      </button>
+    </div>
+
+    <details>
+      <summary>遊び方</summary>
+      <ul class="rules">
+        <li>読みは<b>ひらがな</b>でも<b>ローマ字</b>でも入力できます(例: <kbd>kanji</kbd> → かんじ)。</li>
+        <li>正しい読みになった瞬間に自動で正解。<kbd>Enter</kbd> で決定すると、まちがいの場合は漢字が<b>少し進んで</b>しまいます。</li>
+        <li>早く答えるほどスピードボーナス。レベルが上がるほど1問の得点も高くなります。</li>
+        <li>読みが複数ある語はどれでも正解(例: 紅葉 → こうよう / もみじ)。</li>
+        <li><kbd>Esc</kbd> で一時停止。タイトルでは <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> でモードを選べます。</li>
+      </ul>
+    </details>
+
+    <div class="foot">
+      <label class="toggle"><input type="checkbox" id="soundToggle" checked> 効果音</label>
+      <span>「漢字でGO!」のゲーム性をもとにした非公式作品です。問題・デザイン・音はすべてオリジナル。</span>
+    </div>
+  </div>
+</section>
+
+<!-- 一時停止 -->
+<section class="overlay" id="pauseScreen" hidden aria-labelledby="pauseTitle">
+  <div class="panel pause-panel">
+    <p class="eyebrow">PAUSE</p>
+    <h2 class="pause-title" id="pauseTitle">停車中</h2>
+    <div class="actions">
+      <button class="btn primary" id="resumeBtn" type="button">再開 <kbd>Esc</kbd></button>
+      <button class="btn" id="quitBtn" type="button">やめる</button>
+    </div>
+  </div>
+</section>
+
+<!-- 結果 -->
+<section class="overlay" id="resultScreen" hidden aria-labelledby="resultEyebrow">
+  <div class="panel">
+    <p class="eyebrow" id="resultEyebrow">終点です ─ GAME OVER</p>
+    <div class="missed" id="missedBox">
+      <span class="k">最後に読めなかった漢字</span>
+      <span class="mk" id="missedKanji"></span>
+      <span class="my" id="missedYomi"></span>
+      <span class="mm" id="missedMean"></span>
+    </div>
+    <div class="stats">
+      <div class="stat"><span class="k">SCORE</span><span class="v" id="resScore">0</span></div>
+      <div class="stat"><span class="k">正解数</span><span class="v" id="resCorrect">0</span></div>
+      <div class="stat"><span class="k">到達</span><span class="v" id="resLevel">Lv1</span></div>
+      <div class="stat"><span class="k">BEST</span><span class="v" id="resBest">0</span></div>
+    </div>
+    <p class="rank" id="rankLine"></p>
+    <div class="actions">
+      <button class="btn primary" id="retryBtn" type="button">もう一度 <kbd>Enter</kbd></button>
+      <button class="btn" id="titleBtn" type="button">タイトルへ <kbd>Esc</kbd></button>
+      <a class="btn" id="shareLink" href="https://x.com/intent/tweet" target="_blank" rel="noopener">結果をポスト</a>
+    </div>
+    <details id="logBox">
+      <summary id="logSummary">出題された漢字</summary>
+      <ul class="log-list" id="logList"></ul>
+    </details>
+  </div>
+</section>
+
+<script>
+(() => {
+  'use strict';
+
+  // ───────── 出題データ(オリジナル) 書式: 漢字|よみ[,別のよみ]|ひとこと ─────────
+  const RAW = [
+`学校|がっこう|勉強を教わる所
+先生|せんせい|教える人
+天気|てんき|空模様
+電車|でんしゃ|電気で走る列車
+花火|はなび|夜空を彩る火の芸術
+図書館|としょかん|本を貸し出す施設
+夕方|ゆうがた|日が暮れるころ
+名前|なまえ|呼び名
+時計|とけい|時刻を示す道具
+教室|きょうしつ|授業をする部屋
+宿題|しゅくだい|家でやる課題
+運動会|うんどうかい|学校の体育行事
+地図|ちず|土地を描いた図
+動物|どうぶつ|けものや鳥など
+新聞|しんぶん|ニュースを載せた刷り物
+牛乳|ぎゅうにゅう|牛の乳
+公園|こうえん|遊び場のある広場
+自転車|じてんしゃ|ペダルでこぐ二輪車
+家族|かぞく|一緒に暮らす人たち
+手紙|てがみ|文を書いて送るもの
+音楽|おんがく|音による芸術
+算数|さんすう|小学校の計算の教科
+遠足|えんそく|歩いて行く校外行事
+空港|くうこう|飛行機の発着場
+火山|かざん|噴火する山
+野原|のはら|草の生えた広い土地
+青空|あおぞら|晴れた空
+金魚|きんぎょ|赤い観賞魚
+雨雲|あまぐも|雨を降らせる雲
+夏休み|なつやすみ|夏の長い休み
+朝日|あさひ|朝の太陽
+星空|ほしぞら|星が輝く夜空
+丸太|まるた|切り倒した木
+本当|ほんとう|うそでないこと
+元気|げんき|活力があること
+市場|いちば,しじょう|物を売り買いする所
+半分|はんぶん|二つに分けた一方
+交番|こうばん|警察官の詰め所
+友達|ともだち|仲のよい相手
+汽車|きしゃ|機関車が引く列車
+昼食|ちゅうしょく|昼ごはん
+森林|しんりん|木が生い茂る所
+海水浴|かいすいよく|海で泳ぐこと
+長生き|ながいき|長く生きること
+黒板|こくばん|チョークで書く板
+兄弟|きょうだい|兄と弟
+雪合戦|ゆきがっせん|雪玉の投げ合い`,
+`宇宙|うちゅう|星々が広がる空間
+郵便局|ゆうびんきょく|手紙を扱う局
+貿易|ぼうえき|国同士の売り買い
+景色|けしき|ながめ
+部屋|へや|家の中の区切られた所
+迷子|まいご|道に迷った子
+笑顔|えがお|笑った顔
+七夕|たなばた|七月七日の星祭り
+大人|おとな|成人した人
+果物|くだもの|食べられる木の実
+眼鏡|めがね|視力を補う道具
+田舎|いなか|都会から離れた土地
+今朝|けさ|今日の朝
+一日|ついたち,いちにち|月の最初の日
+上手|じょうず,うわて,かみて|うまいこと
+下手|へた,したて,しもて|うまくないこと
+真面目|まじめ|本気で誠実なこと
+博士|はかせ,はくし|学位の一つ
+河原|かわら|川辺の石原
+八百屋|やおや|野菜を売る店
+伝統|でんとう|受け継がれてきた習わし
+演奏|えんそう|楽器を奏でること
+準備|じゅんび|前もって用意すること
+複雑|ふくざつ|入り組んでいること
+規則|きそく|決まり
+貯金|ちょきん|お金をためること
+永久|えいきゅう|いつまでも続くこと
+燃料|ねんりょう|燃やして熱を得るもの
+災害|さいがい|自然などによる被害
+輸出|ゆしゅつ|外国へ売ること
+往復|おうふく|行って帰ること
+資源|しげん|役立つ原料
+夢中|むちゅう|熱中すること
+容易|ようい|たやすいこと
+衛星|えいせい|惑星を回る天体
+快晴|かいせい|雲のない晴れ
+素直|すなお|ひねくれていないこと
+風邪|かぜ|鼻やのどの病気
+梅雨|つゆ,ばいう|六月ごろの長雨
+相撲|すもう|土俵での格闘技
+清水|しみず,きよみず|澄んだわき水
+二十歳|はたち|二十才
+眼科|がんか|目の診療科
+紅葉|こうよう,もみじ|秋に色づく葉
+河川|かせん|大小の川`,
+`挨拶|あいさつ|会ったときの言葉
+雰囲気|ふんいき|その場の空気
+曖昧|あいまい|はっきりしないこと
+披露|ひろう|広く見せること
+土産|みやげ,どさん|旅先から持ち帰る品
+息子|むすこ|男の子ども
+行方|ゆくえ|行った先
+為替|かわせ|通貨の交換
+雪崩|なだれ|山の雪が崩れ落ちること
+吹雪|ふぶき|風を伴う激しい雪
+時雨|しぐれ|晩秋の通り雨
+足袋|たび|和装用の靴下
+草履|ぞうり|鼻緒のある履物
+浴衣|ゆかた|夏の木綿の着物
+木綿|もめん|綿の布
+砂利|じゃり|小石
+芝生|しばふ|芝が一面に生えた所
+名残|なごり|余韻・心残り
+心地|ここち|気分
+凡例|はんれい|書物の使い方の説明
+相殺|そうさい|差し引きゼロにすること
+遂行|すいこう|最後までやり遂げること
+緩和|かんわ|和らげること
+抑揚|よくよう|声の上げ下げ
+賄賂|わいろ|不正な贈り物
+閑静|かんせい|静かで落ち着いたこと
+慌てる|あわてる|落ち着きを失う
+潔い|いさぎよい|未練がない
+煩わしい|わずらわしい|面倒くさい
+促す|うながす|せきたてる
+著しい|いちじるしい|際立っている
+覆す|くつがえす|ひっくり返す
+携わる|たずさわる|関わる
+賑やか|にぎやか|活気のある様子
+概ね|おおむね|だいたい
+捗る|はかどる|順調に進む
+遮る|さえぎる|間に入って妨げる
+滞る|とどこおる|順調に進まない
+拙い|つたない|へたである
+貼付|ちょうふ,てんぷ|貼りつけること
+蛇口|じゃぐち|水道の栓
+仮病|けびょう|病気のふり
+納戸|なんど|物置部屋
+境内|けいだい|寺社の敷地`,
+`脆弱|ぜいじゃく|もろくて弱い
+杜撰|ずさん|いいかげん
+所謂|いわゆる|世に言う
+漸く|ようやく|やっと
+稀有|けう|めったにない
+須らく|すべからく|当然なすべきこととして
+忖度|そんたく|他人の心を推し量ること
+逐一|ちくいち|一つ一つ
+更迭|こうてつ|役職を入れ替えること
+捏造|ねつぞう|でっち上げ
+進捗|しんちょく|物事の進み具合
+払拭|ふっしょく|すっかり取り除くこと
+踏襲|とうしゅう|前例を受け継ぐこと
+督促|とくそく|催促すること
+暫く|しばらく|少しの間
+嗜む|たしなむ|好んで親しむ
+蔑む|さげすむ|見下す
+誂える|あつらえる|注文して作らせる
+灰汁|あく|野菜のえぐみ
+生憎|あいにく|都合悪く
+流石|さすが|やはり大したもの
+素人|しろうと|専門でない人
+玄人|くろうと|その道のプロ
+老舗|しにせ|代々続く店
+固唾|かたず|緊張でたまるつば
+出納|すいとう|お金の出し入れ
+読経|どきょう,どっきょう,どくきょう|お経を読むこと
+遊説|ゆうぜい|各地を演説して回ること
+反故|ほご,ほうぐ,ほうご|無効にすること
+御用達|ごようたし,ごようたつ,ごようだち|宮中などへの納入業者
+早急|さっきゅう,そうきゅう|非常に急ぐこと
+市井|しせい|人が集まり住む所
+云々|うんぬん|などなど
+弛緩|しかん,ちかん|ゆるむこと
+凋落|ちょうらく|落ちぶれること
+恣意|しい|気ままな考え
+衷心|ちゅうしん|心の底
+顛末|てんまつ|事の一部始終
+瑕疵|かし|きず・欠点
+贔屓|ひいき|特に目をかけること
+蔓延|まんえん|はびこること
+猶予|ゆうよ|先延ばしにすること
+悪寒|おかん|ぞくぞくする寒気
+解熱|げねつ|熱を下げること`,
+`設える|しつらえる|整えて備える
+強ち|あながち|必ずしも
+徐に|おもむろに|ゆっくりと
+論う|あげつらう|あれこれ言い立てる
+宥める|なだめる|怒りを和らげる
+詳らか|つまびらか|詳しい様子
+恭しい|うやうやしい|礼儀正しく丁寧
+悍ましい|おぞましい|ぞっとするほど嫌な
+夥しい|おびただしい|非常に多い
+慮る|おもんぱかる,おもんばかる|よく考える
+蔑ろ|ないがしろ|軽んじること
+疎か|おろそか|いいかげん
+相応しい|ふさわしい|似つかわしい
+蹲る|うずくまる|しゃがみこむ
+呟く|つぶやく|小声でひとりごとを言う
+躊躇う|ためらう|迷ってぐずぐずする
+誑かす|たぶらかす|だます
+拗ねる|すねる|ひねくれて逆らう
+綻びる|ほころびる|縫い目がほどける
+燻る|くすぶる,いぶる,ふすぶる|煙だけ出て燃える
+翻す|ひるがえす|裏返す
+否応|いやおう|承知と不承知
+刹那|せつな|ほんの一瞬
+団扇|うちわ|あおいで風を送る道具
+胡坐|あぐら|足を組んで座ること
+欠伸|あくび|眠いときに出る大口
+蝋燭|ろうそく|ろうで作った灯り
+煙管|きせる|刻みたばこを吸う道具
+陽炎|かげろう|地面から立つゆらめき
+東風|こち,とうふう|春に東から吹く風
+野分|のわき,のわけ|秋の暴風
+黄昏|たそがれ|夕暮れ
+十六夜|いざよい|陰暦十六日の夜
+不知火|しらぬい|海上に見える怪火
+松明|たいまつ|手に持つたき火
+雑魚|ざこ|小物
+海原|うなばら|広々とした海
+心太|ところてん|天草から作る食品
+所以|ゆえん|理由
+山車|だし|祭りの飾り車`,
+`薔薇|ばら,しょうび,そうび|とげのある花
+向日葵|ひまわり|夏の大輪の花
+紫陽花|あじさい|梅雨の花
+蒲公英|たんぽぽ|綿毛を飛ばす花
+秋桜|こすもす|秋に咲く花
+百日紅|さるすべり,ひゃくじつこう|幹がすべすべの木
+山葵|わさび|ツンとくる薬味
+胡瓜|きゅうり|緑の細長い野菜
+南瓜|かぼちゃ|冬至に食べる野菜
+玉蜀黍|とうもろこし|黄色い粒の穀物
+牛蒡|ごぼう|細長い根菜
+蜜柑|みかん|冬の柑橘
+林檎|りんご|赤い果物
+葡萄|ぶどう|房になる果物
+檸檬|れもん|酸っぱい柑橘
+西瓜|すいか|夏の大きな果物
+蝸牛|かたつむり,でんでんむし,かぎゅう|殻を背負う生き物
+蜻蛉|とんぼ,かげろう,せいれい|羽の透けた虫
+蟋蟀|こおろぎ|秋に鳴く虫
+蝙蝠|こうもり|空飛ぶ哺乳類
+海豚|いるか|賢い海の哺乳類
+海月|くらげ|ふわふわ漂う生き物
+河豚|ふぐ|毒をもつ魚
+秋刀魚|さんま|秋の細長い魚
+烏賊|いか|十本足の軟体動物
+土竜|もぐら|地中に住む動物
+栗鼠|りす|ふさふさ尾の小動物
+駱駝|らくだ|こぶのある動物
+麒麟|きりん|首の長い動物
+河馬|かば|大きな口の動物
+驢馬|ろば|小型の馬の仲間
+鸚鵡|おうむ|言葉をまねる鳥
+雲雀|ひばり|空高くさえずる鳥
+啄木鳥|きつつき|木をつつく鳥
+胡麻|ごま|小さな油の種
+生姜|しょうが|辛みのある根
+大蒜|にんにく|香りの強い球根
+茄子|なす,なすび|紫の夏野菜
+人参|にんじん|橙色の根菜
+玉葱|たまねぎ|切ると涙が出る野菜
+椎茸|しいたけ|干すとうまいきのこ
+海苔|のり|紙状の海藻
+昆布|こんぶ,こぶ|だしをとる海藻
+鮪|まぐろ|赤身の大型魚
+鰯|いわし|群れで泳ぐ小魚
+蛸|たこ|八本足の軟体動物
+狐|きつね|油揚げが好きな動物
+梟|ふくろう|夜行性の鳥
+燕|つばめ|春に来る鳥`,
+`齟齬|そご|食い違い
+邂逅|かいこう|思いがけない出会い
+揶揄|やゆ|からかうこと
+矜持|きょうじ,きんじ|誇り
+蹂躙|じゅうりん|踏みにじること
+慟哭|どうこく|声を上げて泣くこと
+憧憬|しょうけい,どうけい|あこがれ
+忸怩|じくじ|恥じ入る様子
+嚆矢|こうし|物事の始まり
+就中|なかんずく|とりわけ
+贖罪|しょくざい|罪をつぐなうこと
+逼迫|ひっぱく|差し迫ること
+乖離|かいり|そむき離れること
+諧謔|かいぎゃく|おどけ・ユーモア
+韜晦|とうかい|才能や本心を隠すこと
+蘊蓄|うんちく|蓄えた深い知識
+傀儡|かいらい,くぐつ|あやつり人形
+狼狽|ろうばい|うろたえること
+跋扈|ばっこ|のさばること
+誤謬|ごびゅう|まちがい
+敷衍|ふえん|押し広げて説明すること
+畢竟|ひっきょう|結局
+殷賑|いんしん|にぎわい栄えること
+奢侈|しゃし|ぜいたく
+瀟洒|しょうしゃ|すっきりあか抜けた様子
+蠱惑|こわく|人を惑わす魅力
+顰蹙|ひんしゅく|眉をひそめること
+嘯く|うそぶく|とぼけて言う
+謙る|へりくだる|自分を低くする
+窘める|たしなめる|穏やかに注意する
+眩い|まばゆい|まぶしい
+抉る|えぐる,こじる,くじる|刃物でくりぬく
+啜る|すする|音を立てて吸う
+攫う|さらう|奪い去る
+撓む|たわむ|しなって曲がる
+靡く|なびく|風に揺れて伏す
+縋る|すがる|頼ってしがみつく
+屯する|たむろする|群れ集まる
+嘲る|あざける|ばかにして笑う
+贖う|あがなう|つぐなう
+魑魅魍魎|ちみもうりょう|さまざまな化け物
+捲土重来|けんどちょうらい,けんどじゅうらい|再起を図ること
+有職故実|ゆうそくこじつ|朝廷や武家の古いしきたり`,
+`長閑|のどか|のんびりした様子
+強か|したたか|粘り強く手ごわい
+天晴|あっぱれ|見事
+驟雨|しゅうう|にわか雨
+五月蝿い|うるさい|やかましい
+胡散臭い|うさんくさい|怪しい
+草臥れる|くたびれる|疲れる
+微睡む|まどろむ|うとうとする
+燥ぐ|はしゃぐ|浮かれて騒ぐ
+屡々|しばしば|たびたび
+態々|わざわざ|特別に手間をかけて
+偶々|たまたま|偶然に
+努々|ゆめゆめ|決して
+転寝|うたたね|うとうと眠ること
+流行る|はやる|広く行われる
+仄めかす|ほのめかす|それとなく示す
+拱く|こまぬく,こまねく|腕組みして何もしない
+蟠り|わだかまり|心のしこり
+誼|よしみ|親しい付き合い
+柵|しがらみ,さく|まとわりつく束縛
+虚仮|こけ|愚かなこと
+蒟蒻|こんにゃく|芋から作る食品
+雲丹|うに|とげのある海の生き物の加工品
+海老|えび|腰の曲がった甲殻類
+海鼠|なまこ|海底の軟らかい生き物
+心算|つもり,しんさん|心づもり
+嚔|くしゃみ|はくしょん
+鼾|いびき|寝ているときの音
+痘痕|あばた|顔のくぼみ跡
+靨|えくぼ|笑うとできるくぼみ
+黒子|ほくろ,くろこ,くろご|皮膚の黒い点
+塒|ねぐら|鳥の寝る所
+蟀谷|こめかみ|目の横の部分
+鳩尾|みぞおち,きゅうび|胸の中央のくぼみ
+項|うなじ,こう|首の後ろ
+踝|くるぶし|足首の骨の出っ張り
+膕|ひかがみ|膝の裏のくぼみ
+旋毛|つむじ|頭の毛の渦
+雀斑|そばかす|顔の小さな斑点
+瘡蓋|かさぶた|傷の上にできる膜
+欠片|かけら|割れた一部
+為体|ていたらく|よくないありさま
+可惜|あたら|惜しいことに`,
+`翡翠|ひすい,かわせみ|緑の宝石(鳥の名も)
+鶺鴒|せきれい|尾を振る水辺の鳥
+杜鵑|ほととぎす|初夏に鳴く鳥
+鵯|ひよどり|ピーヨと鳴く鳥
+鶫|つぐみ|冬に来る鳥
+鴫|しぎ|くちばしの長い水鳥
+鶉|うずら|小さな卵の鳥
+蟷螂|かまきり,とうろう|鎌を持つ虫
+蜉蝣|かげろう,ふゆう|はかない命の虫
+蚯蚓|みみず|土を耕す生き物
+蜈蚣|むかで|足の多い虫
+蛞蝓|なめくじ|塩に弱い生き物
+蜚蠊|ごきぶり|台所の嫌われ者
+螽斯|きりぎりす|ギーッと鳴く虫
+鼯鼠|むささび,ももんが|滑空する動物
+海驢|あしか|芸達者な海獣
+膃肭臍|おっとせい|毛皮の海獣
+儒艮|じゅごん|人魚伝説の海獣
+鱧|はも|京都の夏の魚
+鰍|かじか|川の小魚
+鮟鱇|あんこう|冬の鍋の魚
+鰻|うなぎ|土用に食べる魚
+鱈|たら|冬の白身魚
+鰈|かれい|平たい魚(目が右)
+鮃|ひらめ|平たい魚(目が左)
+鯱|しゃち,しゃちほこ|城の屋根の飾り・海獣
+公魚|わかさぎ|氷上で釣る魚
+虎魚|おこぜ|とげに毒のある魚
+翻車魚|まんぼう|平たく大きな魚
+金糸雀|かなりあ|黄色い歌う鳥
+信天翁|あほうどり|大きな海鳥
+百舌|もず|はやにえをする鳥
+石楠花|しゃくなげ|高山の花木
+馬酔木|あせび,あしび|毒のある花木
+仙人掌|さぼてん|とげの植物
+無花果|いちじく|花が実の中の果物
+酸漿|ほおずき|赤い袋の実
+虎杖|いたどり|若芽を食べる野草
+土筆|つくし|春の野の草
+独活|うど|香りのよい山菜
+蓬|よもぎ|草餅の草
+薇|ぜんまい|渦巻く山菜
+蕨|わらび|春の山菜
+山茶花|さざんか|冬に咲く花
+沈丁花|じんちょうげ,ちんちょうげ|香りの強い春の花
+躑躅|つつじ|春の花木`,
+`饂飩|うどん|太い麺
+雁擬|がんもどき|豆腐の揚げ物
+蚊帳|かや|虫よけの網
+蚊遣火|かやりび|蚊よけの煙
+鼈|すっぽん|かみつく亀
+鶏冠|とさか|鶏の頭の飾り
+蝦蛄|しゃこ|寿司だねの甲殻類
+鱵|さより|口の尖った魚
+魴鮄|ほうぼう|ひれで歩く魚
+鯔|ぼら|出世魚の一つ
+鸛|こうのとり|赤ちゃんを運ぶ鳥
+鶚|みさご|魚を捕る猛禽
+鵲|かささぎ|七夕の橋の鳥
+鵤|いかる,いかるが|太いくちばしの鳥
+鶸|ひわ|黄緑の小鳥
+鵺|ぬえ|伝説の怪物
+蟒蛇|うわばみ,おろち|大蛇・大酒飲み
+蛟|みずち|水の竜
+狒々|ひひ|大きな猿
+貂|てん|イタチの仲間
+獺|かわうそ,おそ|川の獣
+麝香|じゃこう|香料
+蝲蛄|ざりがに|はさみを持つ甲殻類
+蜥蜴|とかげ|尾を切る爬虫類
+守宮|やもり|家を守る爬虫類
+井守|いもり|赤い腹の両生類
+蝮|まむし|毒蛇
+蛤|はまぐり|ひな祭りの貝
+浅蜊|あさり|みそ汁の貝
+蜆|しじみ|小さな黒い貝
+栄螺|さざえ|つぼ焼きの貝
+燐寸|まっち|火をつける棒
+硝子|がらす|透明な素材
+煙草|たばこ|吸う嗜好品
+型録|かたろぐ|商品目録
+老酒|らおちゅう|中国の醸造酒
+麦酒|びーる|泡の出る酒
+倫敦|ろんどん|英国の首都
+紐育|にゅーよーく|米国の大都市
+伯林|べるりん|ドイツの首都
+西班牙|すぺいん|イベリア半島の国
+葡萄牙|ぽるとがる|イベリア半島西端の国
+独逸|どいつ|欧州中部の国
+加奈陀|かなだ|北米の国
+瑞西|すいす|アルプスの国
+越南|べとなむ|東南アジアの国
+新嘉坡|しんがぽーる|東南アジアの都市国家
+土耳古|とるこ|欧亜にまたがる国
+桑港|さんふらんしすこ|米国西海岸の都市`
+  ];
+
+  const WORDS = RAW.map(block => block.trim().split('\n').map(line => {
+    const [k, y, m] = line.split('|');
+    return { k, y: y.split(','), m: m || '' };
+  }));
+
+  // 列車種別 = レベル。dur は1問が終点に着くまでの秒数
+  const LEVELS = [
+    { name: '各駅停車', rank: '小学生(低学年)', dur: 12 },
+    { name: '準急',     rank: '小学生(高学年)', dur: 11 },
+    { name: '快速',     rank: '中学生',         dur: 10.2 },
+    { name: '急行',     rank: '高校生',         dur: 9.4 },
+    { name: '特急',     rank: '大学生',         dur: 8.8 },
+    { name: '快速特急', rank: '教養人',         dur: 8.2 },
+    { name: '超特急',   rank: '読書家',         dur: 7.6 },
+    { name: '新幹線',   rank: '文豪',           dur: 7.0 },
+    { name: 'リニア',   rank: '漢字博士',       dur: 6.5 },
+    { name: '銀河鉄道', rank: '漢字仙人',       dur: 6.0 },
+  ];
+  const MODES = {
+    normal:   { label: 'ノーマル', start: 0, practice: false },
+    hard:     { label: '難読',     start: 5, practice: false },
+    practice: { label: '練習',     start: 0, practice: true },
+  };
+  const PER_LEVEL = 5;       // 何問正解でレベルアップするか
+  const WRONG_PENALTY = 0.08; // 誤答で進む割合
+  const PLATFORM_H = 26;
+
+  // ───────── ローマ字 → ひらがな ─────────
+  const ROMA = {
+    a:'あ',i:'い',u:'う',e:'え',o:'お',
+    ka:'か',ki:'き',ku:'く',ke:'け',ko:'こ',ca:'か',cu:'く',co:'こ',qa:'くぁ',qi:'くぃ',qe:'くぇ',qo:'くぉ',
+    ga:'が',gi:'ぎ',gu:'ぐ',ge:'げ',go:'ご',
+    sa:'さ',si:'し',shi:'し',su:'す',se:'せ',so:'そ',
+    za:'ざ',zi:'じ',ji:'じ',zu:'ず',ze:'ぜ',zo:'ぞ',
+    ta:'た',ti:'ち',chi:'ち',tu:'つ',tsu:'つ',te:'て',to:'と',
+    da:'だ',di:'ぢ',du:'づ',de:'で',do:'ど',
+    na:'な',ni:'に',nu:'ぬ',ne:'ね',no:'の',
+    ha:'は',hi:'ひ',hu:'ふ',fu:'ふ',he:'へ',ho:'ほ',
+    fa:'ふぁ',fi:'ふぃ',fe:'ふぇ',fo:'ふぉ',
+    ba:'ば',bi:'び',bu:'ぶ',be:'べ',bo:'ぼ',
+    pa:'ぱ',pi:'ぴ',pu:'ぷ',pe:'ぺ',po:'ぽ',
+    ma:'ま',mi:'み',mu:'む',me:'め',mo:'も',
+    ya:'や',yu:'ゆ',yo:'よ',ye:'いぇ',
+    ra:'ら',ri:'り',ru:'る',re:'れ',ro:'ろ',
+    wa:'わ',wi:'うぃ',we:'うぇ',wo:'を',
+    va:'ゔぁ',vi:'ゔぃ',vu:'ゔ',ve:'ゔぇ',vo:'ゔぉ',
+    sha:'しゃ',shu:'しゅ',she:'しぇ',sho:'しょ',
+    cha:'ちゃ',chu:'ちゅ',che:'ちぇ',cho:'ちょ',
+    ja:'じゃ',ju:'じゅ',je:'じぇ',jo:'じょ',
+    tsa:'つぁ',tsi:'つぃ',tse:'つぇ',tso:'つぉ',
+    thi:'てぃ',thu:'てゅ',dhi:'でぃ',dhu:'でゅ',twu:'とぅ',dwu:'どぅ',
+    xa:'ぁ',xi:'ぃ',xu:'ぅ',xe:'ぇ',xo:'ぉ',la:'ぁ',li:'ぃ',lu:'ぅ',le:'ぇ',lo:'ぉ',
+    xya:'ゃ',xyu:'ゅ',xyo:'ょ',lya:'ゃ',lyu:'ゅ',lyo:'ょ',
+    xtu:'っ',ltu:'っ',xtsu:'っ',ltsu:'っ',xwa:'ゎ',lwa:'ゎ',
+  };
+  const YOUON = { k:'き',g:'ぎ',s:'し',z:'じ',j:'じ',t:'ち',c:'ち',d:'ぢ',n:'に',h:'ひ',b:'び',p:'ぴ',m:'み',r:'り',f:'ふ',v:'ゔ' };
+  for (const [c, base] of Object.entries(YOUON)) {
+    ROMA[c + 'ya'] = base + 'ゃ';
+    ROMA[c + 'yi'] = base + 'ぃ';
+    ROMA[c + 'yu'] = base + 'ゅ';
+    ROMA[c + 'ye'] = base + 'ぇ';
+    ROMA[c + 'yo'] = base + 'ょ';
+  }
+
+  // loose=true のとき "konnichi" のような nn+母音 を「ん」+「に」と解釈する
+  function romaToKana(s, final, loose) {
+    let out = '';
+    let i = 0;
+    while (i < s.length) {
+      const ch = s[i];
+      if (ch === '-') { out += 'ー'; i++; continue; }
+      if (!/[a-z']/.test(ch)) { out += ch; i++; continue; }
+      if (ch === "'") { i++; continue; }
+      if (ch === 'n') {
+        const nx = s[i + 1];
+        if (nx === undefined) { out += final ? 'ん' : 'n'; i++; continue; }
+        if (nx === "'") { out += 'ん'; i += 2; continue; }
+        if (nx === 'n') {
+          const nx2 = s[i + 2];
+          out += 'ん';
+          i += (loose && nx2 !== undefined && /[aiueoy]/.test(nx2)) ? 1 : 2;
+          continue;
+        }
+        if (!/[aiueoy]/.test(nx)) { out += 'ん'; i++; continue; }
+      }
+      const nx = s[i + 1];
+      if (nx === ch && /[bcdfghjklmpqrstvwxyz]/.test(ch)) { out += 'っ'; i++; continue; }
+      if (ch === 't' && nx === 'c' && s[i + 2] === 'h') { out += 'っ'; i++; continue; }
+      let matched = false;
+      for (let len = 4; len >= 1; len--) {
+        const kana = ROMA[s.substr(i, len)];
+        if (kana) { out += kana; i += len; matched = true; break; }
+      }
+      if (!matched) { out += ch; i++; }
+    }
+    return out;
+  }
+
+  function normalize(str) {
+    return str.normalize('NFKC')
+      .replace(/\s+/g, '')
+      .toLowerCase()
+      .replace(/[ァ-ヶ]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60))
+      .replace(/[‐‑‒–—―−ｰ〜~]/g, 'ー');
+  }
+  function candidates(raw) {
+    const n = normalize(raw);
+    return new Set([romaToKana(n, true, false), romaToKana(n, true, true)]);
+  }
+
+  // ───────── 保存(失敗しても遊べる) ─────────
+  function load(key, fallback) {
+    try { const v = localStorage.getItem(key); return v == null ? fallback : JSON.parse(v); } catch { return fallback; }
+  }
+  function save(key, value) {
+    try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* 保存できない環境では無視 */ }
+  }
+  const best = Object.assign({ normal: 0, hard: 0, practice: 0 }, load('kanjigo.best', {}));
+  let soundOn = load('kanjigo.sound', true);
+
+  // ───────── 効果音(Web Audio で合成) ─────────
+  let actx = null;
+  function ensureAudio() {
+    try {
+      if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+      if (actx.state === 'suspended') actx.resume();
+    } catch { actx = null; }
+  }
+  function tone(freq, at, dur, opt = {}) {
+    if (!soundOn || !actx) return;
+    const { type = 'square', vol = 0.06, to = null } = opt;
+    const t = actx.currentTime + at;
+    const o = actx.createOscillator();
+    const g = actx.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(freq, t);
+    if (to) o.frequency.exponentialRampToValueAtTime(to, t + dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(actx.destination);
+    o.start(t);
+    o.stop(t + dur + 0.02);
+  }
+  const sfx = {
+    count: () => tone(660, 0, 0.12),
+    go: () => { tone(880, 0, 0.14, { type: 'triangle', vol: 0.09 }); tone(1175, 0.12, 0.3, { type: 'triangle', vol: 0.09 }); },
+    ok: () => { tone(988, 0, 0.08, { type: 'triangle', vol: 0.09 }); tone(1319, 0.07, 0.18, { type: 'triangle', vol: 0.09 }); },
+    ng: () => tone(190, 0, 0.22, { type: 'sawtooth', vol: 0.05, to: 110 }),
+    levelup: () => [523, 659, 784, 1047].forEach((f, i) => tone(f, i * 0.08, 0.16, { type: 'triangle', vol: 0.08 })),
+    miss: () => tone(330, 0, 0.45, { vol: 0.05, to: 160 }),
+    over: () => [392, 330, 262, 196].forEach((f, i) => tone(f, i * 0.17, 0.3, { vol: 0.06 })),
+  };
+
+  // ───────── DOM ─────────
+  const $ = id => document.getElementById(id);
+  const field = $('field'), wordEl = $('word'), wordTag = $('wordTag'), wordKanji = $('wordKanji'), wordYomi = $('wordYomi');
+  const countEl = $('count'), routeEl = $('route');
+  const input = $('answer'), preview = $('preview'), hintText = $('hintText');
+  const titleScreen = $('titleScreen'), pauseScreen = $('pauseScreen'), resultScreen = $('resultScreen');
+
+  routeEl.innerHTML = LEVELS.map((lv, i) =>
+    `<li><span class="dot"></span><span>${lv.name}</span><span class="lv">Lv${i + 1}</span></li>`).join('');
+
+  let mode = MODES.normal;
+  let state = null;
+  let gen = 0;          // 画面遷移のたびに増やし、古いタイマーを無効化する
+  let composing = false;
+
+  function later(fn, ms) {
+    const g = gen;
+    setTimeout(() => { if (g === gen) fn(); }, ms);
+  }
+  function shuffle(a) {
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+  const pad = n => String(n).padStart(6, '0');
+
+  function levelFor(correct) {
+    return Math.min(LEVELS.length - 1, mode.start + Math.floor(correct / PER_LEVEL));
+  }
+  function durationFor(word) {
+    const last = LEVELS.length - 1;
+    let d = LEVELS[state.level].dur;
+    const extra = state.correct - (last - mode.start) * PER_LEVEL;
+    if (state.level === last && extra > 0) d = Math.max(4.2, d - extra * 0.08);
+    const len = Math.min(...word.y.map(r => r.length));
+    return d + Math.max(0, len - 4) * 0.35; // 長い読みは打鍵時間を足す
+  }
+  function pick(level) {
+    if (!state.pools[level] || state.pools[level].length === 0) state.pools[level] = shuffle(WORDS[level].slice());
+    return state.pools[level].pop();
+  }
+
+  function updateHud() {
+    const lv = state ? state.level : mode.start;
+    $('hudLevel').textContent = `Lv${lv + 1} ${LEVELS[lv].name}`;
+    $('hudScore').textContent = pad(state ? state.score : 0);
+    $('hudCount').textContent = state
+      ? (mode.practice ? `${state.correct}/ミス${state.misses}` : String(state.correct))
+      : '0';
+    $('hudBest').textContent = pad(best[modeKey()]);
+    [...routeEl.children].forEach((li, i) => {
+      li.classList.toggle('done', i < lv);
+      li.classList.toggle('now', i === lv);
+    });
+  }
+  function modeKey() {
+    return Object.keys(MODES).find(k => MODES[k] === mode);
+  }
+
+  function hideOverlays() {
+    titleScreen.hidden = true;
+    pauseScreen.hidden = true;
+    resultScreen.hidden = true;
+  }
+
+  // ───────── ゲーム進行 ─────────
+  function startGame(key) {
+    ensureAudio();
+    gen++;
+    mode = MODES[key];
+    state = {
+      level: mode.start, correct: 0, score: 0, misses: 0,
+      log: [], pools: [], current: null,
+      elapsed: 0, duration: 1, xFrac: 0.5, phase: 'countdown',
+    };
+    hideOverlays();
+    wordEl.hidden = true;
+    wordEl.style.visibility = '';
+    input.disabled = false;
+    input.value = '';
+    updatePreview();
+    hintText.textContent = mode.practice
+      ? '練習モード:終点に着いたら答えを表示して次へ。'
+      : '正解すると次の漢字が発車。終点に着いたら終了。';
+    updateHud();
+    input.focus();
+    countdown();
+  }
+
+  function countdown() {
+    let n = 3;
+    countEl.hidden = false;
+    const tick = () => {
+      if (n > 0) {
+        countEl.textContent = n;
+        sfx.count();
+        n--;
+        later(tick, 620);
+      } else {
+        countEl.textContent = 'GO!';
+        sfx.go();
+        later(() => { countEl.hidden = true; spawn(); }, 480);
+      }
+    };
+    tick();
+  }
+
+  function spawn() {
+    const w = pick(state.level);
+    state.current = w;
+    state.elapsed = 0;
+    state.duration = durationFor(w);
+    state.xFrac = 0.3 + Math.random() * 0.4;
+    wordEl.className = 'word';
+    wordTag.textContent = `Lv${state.level + 1} ${LEVELS[state.level].name}`;
+    wordKanji.textContent = w.k;
+    wordYomi.textContent = '';
+    wordEl.hidden = false;
+    state.phase = 'play';
+    position();
+    // 前の問題中に打ちかけた文字が残っていれば判定する
+    if (input.value && !composing) check(false);
+  }
+
+  function progress() {
+    return Math.min(1, state.elapsed / state.duration);
+  }
+
+  function position() {
+    const W = field.clientWidth, H = field.clientHeight;
+    const w = wordEl.offsetWidth, h = wordEl.offsetHeight;
+    const p = progress();
+    const top = 8;
+    const y = top + p * Math.max(0, H - PLATFORM_H - h - top);
+    const x = Math.max(8, Math.min(W - w - 8, state.xFrac * W - w / 2));
+    wordEl.style.transform = `translate(${x}px, ${y}px)`;
+    wordEl.classList.toggle('danger', state.phase === 'play' && p > 0.72);
+  }
+
+  function check(fromEnter) {
+    if (!state || state.phase !== 'play') return;
+    const raw = input.value;
+    if (!raw.trim()) return;
+    const cands = candidates(raw);
+    const hitReading = state.current.y.find(r => cands.has(r));
+    if (hitReading) hit(hitReading);
+    else if (fromEnter) wrong();
+  }
+
+  function hit(reading) {
+    state.phase = 'clear';
+    const mul = state.level + 1;
+    const pts = mul * 100 + Math.round((1 - progress()) * mul * 100);
+    state.score += pts;
+    state.correct++;
+    state.log.push({ w: state.current, ok: true });
+    wordYomi.textContent = reading;
+    wordEl.classList.remove('danger');
+    wordEl.classList.add('hit');
+    popAt(`+${pts}`);
+    sfx.ok();
+    input.value = '';
+    updatePreview();
+
+    let delay = 600;
+    const next = levelFor(state.correct);
+    if (next > state.level) {
+      state.level = next;
+      banner(`LEVEL UP ▶ Lv${next + 1} ${LEVELS[next].name}`);
+      sfx.levelup();
+      delay = 1100;
+    }
+    updateHud();
+    later(spawn, delay);
+  }
+
+  function wrong() {
+    sfx.ng();
+    input.classList.remove('bad');
+    void input.offsetWidth; // アニメーションを再生し直す
+    input.classList.add('bad');
+    state.elapsed = Math.min(state.duration, state.elapsed + state.duration * WRONG_PENALTY);
+    input.select();
+  }
+
+  function drop() {
+    const w = state.current;
+    state.log.push({ w, ok: false });
+    wordYomi.textContent = w.y[0];
+    wordEl.classList.remove('danger');
+    wordEl.classList.add('missed');
+    field.classList.remove('crash');
+    void field.offsetWidth;
+    field.classList.add('crash');
+    if (mode.practice) {
+      state.misses++;
+      state.phase = 'clear';
+      sfx.miss();
+      updateHud();
+      input.value = '';
+      updatePreview();
+      later(spawn, 1700);
+    } else {
+      state.phase = 'over';
+      sfx.over();
+      input.blur();
+      input.disabled = true;
+      later(showResult, 1300);
+    }
+  }
+
+  function popAt(text) {
+    const el = document.createElement('span');
+    el.className = 'pop';
+    el.textContent = text;
+    const rect = wordEl.getBoundingClientRect(), fr = field.getBoundingClientRect();
+    el.style.left = `${rect.left - fr.left + rect.width / 2}px`;
+    el.style.top = `${Math.max(4, rect.top - fr.top - 8)}px`;
+    field.appendChild(el);
+    el.addEventListener('animationend', () => el.remove());
+  }
+
+  function banner(text) {
+    const el = document.createElement('div');
+    el.className = 'banner';
+    el.textContent = text;
+    field.appendChild(el);
+    el.addEventListener('animationend', () => el.remove());
+  }
+
+  // ───────── 一時停止・結果・タイトル ─────────
+  function pause() {
+    if (!state || state.phase !== 'play') return;
+    state.phase = 'pause';
+    wordEl.style.visibility = 'hidden'; // 停止中にじっくり考えられないよう隠す
+    pauseScreen.hidden = false;
+    $('resumeBtn').focus();
+  }
+  function resume() {
+    pauseScreen.hidden = true;
+    wordEl.style.visibility = '';
+    state.phase = 'play';
+    input.focus();
+  }
+  function quit() {
+    if (mode.practice && state && state.log.length) showResult();
+    else toTitle();
+  }
+
+  function showResult() {
+    gen++;
+    const key = modeKey();
+    state.phase = 'result';
+    wordEl.style.visibility = '';
+    const isRecord = state.score > best[key];
+    if (isRecord) { best[key] = state.score; save('kanjigo.best', best); }
+
+    const missed = [...state.log].reverse().find(e => !e.ok);
+    $('resultEyebrow').textContent = mode.practice ? '回送 ─ 練習おつかれさまでした' : '終点です ─ GAME OVER';
+    $('missedBox').hidden = !missed;
+    if (missed) {
+      $('missedKanji').textContent = missed.w.k;
+      $('missedYomi').textContent = missed.w.y.join(' / ');
+      $('missedMean').textContent = missed.w.m;
+    }
+    $('resScore').textContent = state.score;
+    if (isRecord && state.score > 0) {
+      const b = document.createElement('span');
+      b.className = 'record';
+      b.textContent = 'NEW';
+      $('resScore').appendChild(b);
+    }
+    $('resCorrect').textContent = mode.practice ? `${state.correct}/${state.log.length}` : state.correct;
+    $('resLevel').textContent = `Lv${state.level + 1}`;
+    $('resBest').textContent = best[key];
+
+    const lv = LEVELS[state.level];
+    const rankName = state.correct === 0 ? '発車前' : lv.rank;
+    const rankLine = $('rankLine');
+    rankLine.textContent = '';
+    rankLine.append('あなたの漢字力は', Object.assign(document.createElement('strong'), { textContent: rankName }), 'クラス ');
+    rankLine.append(Object.assign(document.createElement('span'), { textContent: `(${lv.name}まで到達)` }));
+
+    let text = `漢字でGO! 再現版【${mode.label}】で ${state.score} 点!\n漢字力:${rankName}クラス(Lv${state.level + 1} ${lv.name})`;
+    if (missed) text += `\n「${missed.w.k}」が読めずに終点…`;
+    $('shareLink').href = 'https://x.com/intent/tweet?text=' + encodeURIComponent(text);
+
+    const list = $('logList');
+    list.textContent = '';
+    for (const e of state.log) {
+      const li = document.createElement('li');
+      if (!e.ok) li.className = 'ng';
+      li.append(Object.assign(document.createElement('b'), { textContent: e.w.k }), e.w.y[0]);
+      list.appendChild(li);
+    }
+    $('logSummary').textContent = `出題された漢字(${state.log.length}問)`;
+    $('logBox').hidden = state.log.length === 0;
+
+    updateHud();
+    pauseScreen.hidden = true;
+    resultScreen.hidden = false;
+    $('retryBtn').focus();
+  }
+
+  function toTitle() {
+    gen++;
+    if (state) state.phase = 'title';
+    wordEl.hidden = true;
+    countEl.hidden = true;
+    input.value = '';
+    updatePreview();
+    document.querySelectorAll('[data-best]').forEach(el => { el.textContent = best[el.dataset.best]; });
+    pauseScreen.hidden = true;
+    resultScreen.hidden = true;
+    titleScreen.hidden = false;
+    updateHud();
+    titleScreen.querySelector('.mode').focus();
+  }
+
+  function updatePreview() {
+    const n = normalize(input.value);
+    preview.textContent = /[a-z]/.test(n) ? `→ ${romaToKana(n, false, false)}  ` : '';
+    hintText.hidden = preview.textContent !== '';
+  }
+
+  // ───────── 入力 ─────────
+  input.addEventListener('compositionstart', () => { composing = true; });
+  input.addEventListener('compositionend', () => { composing = false; updatePreview(); check(false); });
+  input.addEventListener('input', e => {
+    input.classList.remove('bad');
+    updatePreview();
+    if (!composing && !e.isComposing) check(false);
+  });
+  $('answerForm').addEventListener('submit', e => {
+    e.preventDefault();
+    if (composing) return;
+    check(true);
+    input.focus();
+  });
+  field.addEventListener('pointerdown', () => { if (!input.disabled) setTimeout(() => input.focus(), 0); });
+
+  document.querySelectorAll('.mode').forEach(btn => btn.addEventListener('click', () => startGame(btn.dataset.mode)));
+  $('pauseBtn').addEventListener('click', pause);
+  $('resumeBtn').addEventListener('click', resume);
+  $('quitBtn').addEventListener('click', quit);
+  $('retryBtn').addEventListener('click', () => startGame(modeKey()));
+  $('titleBtn').addEventListener('click', toTitle);
+
+  const soundToggle = $('soundToggle');
+  soundToggle.checked = soundOn;
+  soundToggle.addEventListener('change', () => { soundOn = soundToggle.checked; save('kanjigo.sound', soundOn); ensureAudio(); });
+
+  document.addEventListener('keydown', e => {
+    if (e.isComposing || e.keyCode === 229) return; // IME 変換中のキーは無視
+    const tag = document.activeElement ? document.activeElement.tagName : '';
+    const onControl = tag === 'BUTTON' || tag === 'A' || tag === 'SUMMARY' || tag === 'INPUT';
+    if (!titleScreen.hidden) {
+      const idx = ['1', '2', '3'].indexOf(e.key);
+      if (idx >= 0) { e.preventDefault(); startGame(Object.keys(MODES)[idx]); }
+      else if (e.key === 'Enter' && !onControl) { e.preventDefault(); startGame('normal'); }
+      return;
+    }
+    if (!resultScreen.hidden) {
+      if (e.key === 'Enter' && !onControl) { e.preventDefault(); startGame(modeKey()); }
+      else if (e.key === 'Escape') { e.preventDefault(); toTitle(); }
+      return;
+    }
+    if (!pauseScreen.hidden) {
+      if (e.key === 'Escape') { e.preventDefault(); resume(); }
+      return;
+    }
+    if (e.key === 'Escape') { e.preventDefault(); pause(); }
+  });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
+
+  // ───────── メインループ ─────────
+  let lastTs = 0;
+  function frame(ts) {
+    const dt = lastTs ? Math.min(0.05, (ts - lastTs) / 1000) : 0;
+    lastTs = ts;
+    if (state && state.phase === 'play') {
+      state.elapsed += dt;
+      if (state.elapsed >= state.duration) {
+        state.elapsed = state.duration;
+        position();
+        drop();
+      } else {
+        position();
+      }
+    }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  toTitle();
+})();
+</script>
+</body>
+</html>
