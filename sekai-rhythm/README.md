@@ -106,7 +106,7 @@ npm run app        # Electron で起動
 npm run dist:win   # Windows 用インストーラ / ポータブル版を release/ に作成
 ```
 
-GitHub Actions（`.github/workflows/build.yml`）が push のたびにテストし、Windows (.exe) と macOS (.dmg) のビルドを Artifacts に置きます。
+GitHub Actions（`.github/workflows/build.yml`）が push のたびにテストし、Windows (.exe) と macOS (.dmg) のビルドを Artifacts に置きます（crop リポジトリでは `.github/workflows/sekai-rhythm.yml` が Windows 版を作り、Releases の「sekai-rhythm-latest」に置きます）。
 
 ### 構成
 

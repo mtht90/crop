@@ -28,19 +28,24 @@
     ],
     "win": {
       "target": [
-        "nsis",
-        "portable"
-      ]
+        "portable",
+        "nsis"
+      ],
+      "signAndEditExecutable": false
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "SekaiRhythm-${version}-setup.exe"
     },
     "mac": {
       "target": "dmg"
     },
     "linux": {
       "target": "AppImage"
+    },
+    "portable": {
+      "artifactName": "SekaiRhythm-${version}-portable.exe"
     }
   },
   "devDependencies": {
@@ -50,5 +55,6 @@
     "vite": "^8.3.1",
     "vitest": "^5.0.2"
   },
-  "author": "mtht90"
+  "author": "mtht90",
+  "repository": "github:mtht90/crop"
 }
