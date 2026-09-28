@@ -1,4 +1,5 @@
 // Lightweight canvas particle system for impacts, sparkles and dust
+import { fxScale } from '../lib/fx';
 type Shape = 'circle' | 'spark' | 'square' | 'leaf' | 'star' | 'ring' | 'z';
 
 interface P {
@@ -83,6 +84,8 @@ class Particles {
   }
 
   burst(x: number, y: number, preset: string, count: number, scale = 1) {
+    const q = fxScale();
+    if (q < 1) count = count > 1 ? Math.max(1, Math.round(count * q)) : Math.random() < q ? count : 0;
     const p = PRESETS[preset] ?? PRESETS.colorless;
     const s = Math.max(0.5, scale);
     for (let i = 0; i < count; i++) {

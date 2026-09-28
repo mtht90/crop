@@ -1,6 +1,7 @@
-import { memo, useId, useRef } from 'react';
+import { memo, useEffect, useRef } from 'react';
 import { card, COND_JP, RARITY_SYMBOL, STAGE_JP, SET_COUNT, TYPE_JP, byName } from '../engine/cards';
 import type { CardDef, EnergyCard, EType, MonsterCard, TrainerCard } from '../engine/types';
+import { onGyro } from '../lib/gyro';
 import { artUrl, TYPE_COLOR, TYPE_SCENE } from '../lib/assets';
 import { Icon } from './Icon';
 import './card.css';
@@ -59,19 +60,30 @@ export const CardFace = memo(function CardFace({ cid, className, style, interact
   const def = card(cid);
   const ref = useRef<HTMLDivElement>(null);
 
-  const onMove = (e: React.PointerEvent) => {
-    if (!interactive || !ref.current) return;
-    const r = ref.current.getBoundingClientRect();
-    const x = (e.clientX - r.left) / r.width;
-    const y = (e.clientY - r.top) / r.height;
+  const hovering = useRef(false);
+  const tilt = (x: number, y: number) => {
     const el = ref.current;
+    if (!el) return;
     el.style.setProperty('--mx', `${x * 100}%`);
     el.style.setProperty('--my', `${y * 100}%`);
     el.style.setProperty('--rx', `${(0.5 - y) * 18}deg`);
     el.style.setProperty('--ry', `${(x - 0.5) * 22}deg`);
     el.style.setProperty('--hyp', `${Math.min(1, Math.hypot(x - 0.5, y - 0.5) * 2)}`);
   };
+  const onMove = (e: React.PointerEvent) => {
+    if (!interactive || !ref.current) return;
+    if (e.pointerType === 'mouse') hovering.current = true;
+    const r = ref.current.getBoundingClientRect();
+    tilt((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height);
+  };
+  // the phone's tilt moves the shine too (while no mouse is hovering)
+  useEffect(() => {
+    if (!interactive) return;
+    return onGyro((x, y) => !hovering.current && tilt(x, y));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [interactive]);
   const onLeave = () => {
+    hovering.current = false;
     const el = ref.current;
     if (el) {
       el.style.setProperty('--rx', '0deg');
@@ -358,131 +370,21 @@ function EnergyFace({ def }: { def: EnergyCard }) {
 // Card back
 // ---------------------------------------------------------------------------
 export const CardBack = memo(function CardBack({ className, style }: { className?: string; style?: React.CSSProperties }) {
-  const uid = useId().replace(/:/g, '');
   return (
     <div className={`tcg tcg-back ${className ?? ''}`} style={style}>
-      <svg className="back-svg" viewBox="0 0 630 880" preserveAspectRatio="none" aria-hidden>
-        <defs>
-          <linearGradient id={`${uid}gold`} x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stopColor="#fff4c4" />
-            <stop offset="0.3" stopColor="#d9a93a" />
-            <stop offset="0.55" stopColor="#fff0b0" />
-            <stop offset="0.8" stopColor="#9c6a14" />
-            <stop offset="1" stopColor="#f3d58a" />
-          </linearGradient>
-          <radialGradient id={`${uid}bg`} cx="0.5" cy="0.5" r="0.75">
-            <stop offset="0" stopColor="#23338a" />
-            <stop offset="0.45" stopColor="#101a4e" />
-            <stop offset="1" stopColor="#050818" />
-          </radialGradient>
-          <radialGradient id={`${uid}core`} cx="0.5" cy="0.5" r="0.5">
-            <stop offset="0" stopColor="#6f8cff" stopOpacity="0.55" />
-            <stop offset="0.6" stopColor="#1a2a78" stopOpacity="0.4" />
-            <stop offset="1" stopColor="#070b24" stopOpacity="0" />
-          </radialGradient>
-          <pattern id={`${uid}stars`} width="90" height="90" patternUnits="userSpaceOnUse">
-            <circle cx="12" cy="18" r="1.4" fill="#cfd9ff" opacity="0.5" />
-            <circle cx="61" cy="9" r="0.9" fill="#fff" opacity="0.4" />
-            <circle cx="40" cy="52" r="1.1" fill="#ffe8b0" opacity="0.45" />
-            <circle cx="79" cy="71" r="1.5" fill="#cfd9ff" opacity="0.35" />
-            <circle cx="24" cy="80" r="0.8" fill="#fff" opacity="0.4" />
-          </pattern>
-          <pattern id={`${uid}weave`} width="36" height="36" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-            <path d="M0 18 H36 M18 0 V36" stroke="#8ea4ff" strokeWidth="0.6" opacity="0.08" />
-          </pattern>
-        </defs>
-
-        {/* card stock and gold edge */}
-        <rect x="0" y="0" width="630" height="880" rx="30" fill={`url(#${uid}gold)`} />
-        <rect x="16" y="16" width="598" height="848" rx="20" fill={`url(#${uid}bg)`} />
-        <rect x="16" y="16" width="598" height="848" rx="20" fill={`url(#${uid}weave)`} />
-        <rect x="16" y="16" width="598" height="848" rx="20" fill={`url(#${uid}stars)`} />
-        <rect x="30" y="30" width="570" height="820" rx="14" fill="none" stroke={`url(#${uid}gold)`} strokeWidth="3" />
-        <rect x="40" y="40" width="550" height="800" rx="10" fill="none" stroke={`url(#${uid}gold)`} strokeWidth="1" opacity="0.6" />
-
-        {/* corner filigree */}
-        {[
-          [40, 40, 1, 1],
-          [590, 40, -1, 1],
-          [40, 840, 1, -1],
-          [590, 840, -1, -1],
-        ].map(([x, y, sx, sy], k) => (
-          <g key={k} transform={`translate(${x} ${y}) scale(${sx} ${sy})`} fill="none" stroke={`url(#${uid}gold)`} strokeLinecap="round">
-            <path d="M0 70 Q0 0 70 0" strokeWidth="2.5" />
-            <path d="M14 70 Q14 14 70 14" strokeWidth="1" opacity="0.7" />
-            <path d="M22 22 L44 44 M34 26 Q46 30 50 44" strokeWidth="1.4" opacity="0.8" />
-            <path d="M44 44 l8 -8 l8 8 l-8 8 z" fill={`url(#${uid}gold)`} stroke="none" />
-          </g>
-        ))}
-
-        {/* axis beams */}
-        <g stroke={`url(#${uid}gold)`} strokeWidth="1.5" opacity="0.75">
-          <line x1="315" y1="60" x2="315" y2="190" />
-          <line x1="315" y1="690" x2="315" y2="820" />
-          <line x1="60" y1="440" x2="75" y2="440" />
-          <line x1="555" y1="440" x2="570" y2="440" />
-        </g>
-        <path d="M315 196 l9 -9 l-9 -9 l-9 9 z M315 684 l9 9 l-9 9 l-9 -9 z" fill={`url(#${uid}gold)`} />
-
-        {/* arcane seal */}
-        <g transform="translate(315 440)">
-          <circle r="232" fill={`url(#${uid}core)`} />
-          <circle r="232" fill="none" stroke={`url(#${uid}gold)`} strokeWidth="4" />
-          <circle r="219" fill="none" stroke={`url(#${uid}gold)`} strokeWidth="1.2" />
-          {Array.from({ length: 72 }, (_, k) => {
-            const a = (k * 5 * Math.PI) / 180;
-            const long = k % 6 === 0;
-            const r1 = long ? 197 : 206;
-            return <line key={k} x1={Math.sin(a) * r1} y1={-Math.cos(a) * r1} x2={Math.sin(a) * 217} y2={-Math.cos(a) * 217} stroke="#e8c567" strokeWidth={long ? 2.2 : 1} opacity={long ? 0.95 : 0.6} />;
-          })}
-          <circle r="186" fill="none" stroke={`url(#${uid}gold)`} strokeWidth="1.5" opacity="0.8" />
-          {/* eight-point star */}
-          <path
-            d={Array.from({ length: 16 }, (_, k) => {
-              const a = (k * Math.PI) / 8;
-              const r = k % 2 ? 78 : 180;
-              return `${k ? 'L' : 'M'}${(Math.sin(a) * r).toFixed(1)} ${(-Math.cos(a) * r).toFixed(1)}`;
-            }).join(' ') + 'Z'}
-            fill="rgba(255,220,140,0.06)"
-            stroke={`url(#${uid}gold)`}
-            strokeWidth="2"
-            strokeLinejoin="round"
-          />
-          <path
-            d={Array.from({ length: 16 }, (_, k) => {
-              const a = (k * Math.PI) / 8 + Math.PI / 8;
-              const r = k % 2 ? 62 : 132;
-              return `${k ? 'L' : 'M'}${(Math.sin(a) * r).toFixed(1)} ${(-Math.cos(a) * r).toFixed(1)}`;
-            }).join(' ') + 'Z'}
-            fill="none"
-            stroke="#e8c567"
-            strokeWidth="1"
-            opacity="0.55"
-          />
-          <circle r="98" fill="#070b24" stroke={`url(#${uid}gold)`} strokeWidth="3" />
-          <circle r="98" fill={`url(#${uid}core)`} />
-          {/* three interlocking rings: the Arcane Beasts crest */}
-          <g fill="none" stroke={`url(#${uid}gold)`} strokeWidth="6">
-            <circle cx="0" cy="-26" r="40" />
-            <circle cx="-23" cy="14" r="40" />
-            <circle cx="23" cy="14" r="40" />
-          </g>
-          <circle r="11" fill={`url(#${uid}gold)`} />
-          <circle r="4" fill="#fff" />
-        </g>
-
-        {/* wordmark */}
-        <text x="315" y="130" textAnchor="middle" fontFamily="Cinzel, serif" fontWeight="900" fontSize="54" letterSpacing="14" fill={`url(#${uid}gold)`} stroke="#2a1a00" strokeWidth="1.2" paintOrder="stroke">
-          ARCANE
-        </text>
-        <text x="315" y="782" textAnchor="middle" fontFamily="Cinzel, serif" fontWeight="900" fontSize="62" letterSpacing="12" fill={`url(#${uid}gold)`} stroke="#2a1a00" strokeWidth="1.2" paintOrder="stroke">
-          BEASTS
-        </text>
-        <text x="315" y="812" textAnchor="middle" fontFamily="Cinzel, serif" fontWeight="700" fontSize="15" letterSpacing="9" fill="#e8c567" opacity="0.8">
-          TRADING CARD GAME
-        </text>
-      </svg>
-      <div className="back-sheen" />
+      <div className="tcg-frame">
+        <div className="back-inner">
+          <div className="back-line" />
+          <svg className="back-mark" viewBox="0 0 100 100" aria-hidden>
+            <circle cx="50" cy="50" r="46" fill="none" stroke="currentColor" strokeWidth="1.6" />
+            <circle cx="50" cy="50" r="40" fill="none" stroke="currentColor" strokeWidth="0.6" opacity="0.55" />
+            <path d="M50 18 L55 45 L82 50 L55 55 L50 82 L45 55 L18 50 L45 45 Z" fill="currentColor" />
+            <circle cx="50" cy="50" r="4" fill="#0b1336" />
+          </svg>
+          <div className="back-name">ARCANE BEASTS</div>
+          <div className="back-sheen" />
+        </div>
+      </div>
     </div>
   );
 });

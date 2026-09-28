@@ -125,11 +125,18 @@ export const foley = {
     for (let i = 0; i < 6; i++) tone(1200 + Math.random() * 1800, 0.2, 0.05, 'sine', i * 0.05);
   },
   whoosh: () => noise(0.35, 400, 2600, 0.3, 0.6),
-  /** paper/foil tear: a bright noise sweep with crackles */
-  rip: () => {
-    noise(0.42, 5200, 700, 0.55, 0.9);
-    for (let i = 0; i < 9; i++) noise(0.03, 3000 + Math.random() * 3000, 1500, 0.25, 2, 0.02 + i * 0.035);
-    tone(90, 0.25, 0.15, 'sine', 0.05, 0.5);
+  /**
+   * paper/foil tear: a bright noise sweep with crackles. `speed` (0 slow … 1
+   * fast) shapes it: a quick swipe is a short bright "shak!", a slow pull a
+   * longer, lower "shaaa…".
+   */
+  rip: (speed = 0.6) => {
+    const s = Math.min(1, Math.max(0, speed));
+    const dur = 0.2 + (1 - s) * 0.38;
+    noise(dur, 4200 + s * 2200, 700 + s * 500, 0.45 + s * 0.2, 0.9);
+    const n = Math.round(6 + (1 - s) * 8);
+    for (let i = 0; i < n; i++) noise(0.03, 3000 + Math.random() * 3000, 1500, 0.22, 2, 0.02 + (i * dur) / n);
+    tone(90, 0.25, 0.1 + s * 0.1, 'sine', 0.03, 0.5);
   },
   /** short scrape while the finger drags along the tear line */
   scratch: () => noise(0.05, 4200, 2600, 0.12, 1.5),
@@ -156,6 +163,51 @@ export const foley = {
 // ---------------------------------------------------------------------------
 // Semantic game sounds
 // ---------------------------------------------------------------------------
+/**
+ * Continuous tear sound while the finger cuts the pack: filtered noise whose
+ * brightness and loudness follow the finger speed, with crackles.
+ */
+export function tearLoop() {
+  const c = ctx();
+  if (!c || !noiseBuf) return null;
+  const src = c.createBufferSource();
+  src.buffer = noiseBuf;
+  src.loop = true;
+  const hp = c.createBiquadFilter();
+  hp.type = 'highpass';
+  hp.frequency.value = 900;
+  const bp = c.createBiquadFilter();
+  bp.type = 'bandpass';
+  bp.Q.value = 1.1;
+  bp.frequency.value = 2200;
+  const g = c.createGain();
+  g.gain.value = 0.0001;
+  src.connect(hp).connect(bp).connect(g).connect(c.destination);
+  src.start();
+  let stopped = false;
+  return {
+    /** speed: 0 (still) … 1 (a fast swipe) */
+    update(speed: number) {
+      if (stopped) return;
+      const t = c.currentTime;
+      const s = Math.min(1, Math.max(0, speed));
+      bp.frequency.setTargetAtTime(1500 + s * 4300, t, 0.03);
+      g.gain.setTargetAtTime(Math.max(0.0001, (0.03 + s * 0.28) * vol.sfx * vol.master), t, 0.03);
+      if (Math.random() < 0.2 + s * 0.5) noise(0.02, 2500 + Math.random() * 3500, 1500, 0.08 + s * 0.18, 2.5);
+    },
+    idle() {
+      if (!stopped) g.gain.setTargetAtTime(0.0001, c.currentTime, 0.05);
+    },
+    stop() {
+      if (stopped) return;
+      stopped = true;
+      const t = c.currentTime;
+      g.gain.setTargetAtTime(0.0001, t, 0.04);
+      src.stop(t + 0.3);
+    },
+  };
+}
+
 export const ATTACK_SFX: Record<EType, string[]> = {
   fire: ['flame-big', 'fire', 'melee-fire'],
   water: ['water-blast', 'ink'],

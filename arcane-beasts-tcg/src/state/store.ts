@@ -1,3 +1,4 @@
+import type { FxLevel } from '../lib/fx';
 import { create } from 'zustand';
 import { ALL_CARDS, card, CARDS, SET_INFO } from '../engine/cards';
 import { applyRanked, ensureSeason, freshRank, type RankChange, type RankState } from './ranked';
@@ -56,6 +57,10 @@ export interface Settings {
   music: number;
   sfx: number;
   speed: number; // animation speed multiplier
+  fx: FxLevel;
+  vibrate: boolean;
+  /** tilt cards (holo shine) with the device's motion sensor */
+  gyro: boolean;
 }
 
 export interface Save {
@@ -106,7 +111,7 @@ function freshSave(): Save {
     losses: 0,
     packsOpened: 0,
     newCards: [],
-    settings: { music: 0.5, sfx: 0.8, speed: 1 },
+    settings: { music: 0.5, sfx: 0.8, speed: 1, fx: 'auto', vibrate: true, gyro: true },
     started: false,
     progress: freshProgress(),
     shards: {},
@@ -119,6 +124,7 @@ function load(): Save {
     const raw = localStorage.getItem(KEY);
     if (raw) {
       const s = { ...freshSave(), ...JSON.parse(raw) } as Save;
+      s.settings = { ...freshSave().settings, ...(s.settings ?? {}) };
       s.progress = { ...freshProgress(), ...(s.progress ?? {}) };
       s.progress.stats = { ...freshProgress().stats, ...s.progress.stats };
       s.shards = s.shards ?? {};

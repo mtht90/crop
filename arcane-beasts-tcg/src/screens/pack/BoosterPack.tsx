@@ -33,6 +33,39 @@ const EDGE = tearEdge();
 export const TOP_CLIP = `polygon(0% 0%, 100% 0%, ${[...EDGE].reverse().map(([x, y]) => `${x}% ${y}%`).join(',')})`;
 export const BODY_CLIP = `polygon(${EDGE.map(([x, y]) => `${x}% ${y}%`).join(',')}, 100% 100%, 0% 100%)`;
 
+/** band (fraction of pack height) in which the player may trace the tear */
+export const TEAR_BAND: [number, number] = [0.025, 0.2];
+
+/**
+ * Turns a traced path (percent coordinates, any direction) into a full-width
+ * tear edge: ends extended flat to the sides, with a fine paper-fibre jitter.
+ */
+export function tearEdgeFrom(path: [number, number][]): [number, number][] {
+  if (path.length === 0) return EDGE;
+  const pts = [...path].sort((a, b) => a[0] - b[0]);
+  const full: [number, number][] = [[0, pts[0][1]], ...pts, [100, pts[pts.length - 1][1]]];
+  const out: [number, number][] = [];
+  const jitter = (x: number) => {
+    const v = Math.sin(x * 12.9898) * 43758.5453;
+    return (v - Math.floor(v) - 0.5) * 0.7;
+  };
+  for (let i = 0; i < full.length - 1; i++) {
+    const [x0, y0] = full[i];
+    const [x1, y1] = full[i + 1];
+    const steps = Math.max(1, Math.ceil((x1 - x0) / 1.6));
+    for (let k = 0; k < steps; k++) {
+      const x = x0 + ((x1 - x0) * k) / steps;
+      out.push([x, y0 + ((y1 - y0) * k) / steps + (x > 0 && x < 100 ? jitter(x) : 0)]);
+    }
+  }
+  out.push(full[full.length - 1]);
+  return out;
+}
+export function tearClips(edge: [number, number][]) {
+  const pts = edge.map(([x, y]) => `${x.toFixed(2)}% ${y.toFixed(2)}%`);
+  return { top: `polygon(0% 0%, 100% 0%, ${[...pts].reverse().join(',')})`, body: `polygon(${pts.join(',')}, 100% 100%, 0% 100%)` };
+}
+
 // ---------------------------------------------------------------------------
 interface Props {
   booster: Booster;
@@ -44,9 +77,11 @@ interface Props {
   /** freeze ambient animations (used for background packs) */
   still?: boolean;
   god?: boolean;
+  /** custom clip for part="top" / "body" (a traced tear) */
+  clip?: string;
 }
 
-export const BoosterPack = memo(function BoosterPack({ booster, className, style, part = 'full', tilt, still, god }: Props) {
+export const BoosterPack = memo(function BoosterPack({ booster, className, style, part = 'full', tilt, still, god, clip: customClip }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const mascot = useMemo(() => byName(booster.mascot) as MonsterCard, [booster.mascot]);
   const move = (e: React.PointerEvent) => {
@@ -68,7 +103,7 @@ export const BoosterPack = memo(function BoosterPack({ booster, className, style
     s.setProperty('--mx', '32%');
     s.setProperty('--my', '22%');
   };
-  const clip = part === 'top' ? TOP_CLIP : part === 'body' ? BODY_CLIP : undefined;
+  const clip = part === 'full' ? undefined : (customClip ?? (part === 'top' ? TOP_CLIP : BODY_CLIP));
   return (
     <div
       ref={ref}

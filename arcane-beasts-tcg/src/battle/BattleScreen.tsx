@@ -9,6 +9,7 @@ import { artUrl, preload, TYPE_SCENE } from '../lib/assets';
 import { BattleController, HUMAN, useBattle } from './controller';
 import { FxLayer } from './FxLayer';
 import { PromptLayer } from './PromptLayer';
+import { Stamps } from './Stamps';
 import { ResultOverlay } from './ResultOverlay';
 import { useStore } from '../state/store';
 import { foley, playMusic, sfx } from '../audio/audio';
@@ -781,6 +782,7 @@ export function BattleScreen() {
             </div>
             {thinking && <div className="thinking">考え中<span>...</span></div>}
           </div>
+          {!cfg.spectate && <Stamps oppName={cfg.oppName} />}
           <div className="plate me">
             <img src={artUrl('humans/lieutenant')} alt="" />
             <div>

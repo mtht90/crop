@@ -5,7 +5,7 @@
 //   face-down and turn over on tap) → results
 // Effects are light-based (bloom, rings, glints); motion is transform/opacity.
 // ============================================================================
-import { AnimatePresence, animate, motion, useAnimationControls, useMotionValue, useTransform } from 'motion/react';
+import { AnimatePresence, animate, motion, useAnimationControls, useMotionValue, useTransform, type MotionValue } from 'motion/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CardDef, Rarity, SetCode } from '../engine/types';
 import { byName, RARITY_SYMBOL, SET_INFO } from '../engine/cards';
@@ -14,13 +14,14 @@ import { currentPickup, fmtRemain } from '../state/progress';
 import { CardBack, CardFace } from '../ui/Card';
 import { TopBar } from '../ui/TopBar';
 import { Icon } from '../ui/Icon';
-import { foley, playMusic, sfx } from '../audio/audio';
+import { foley, playMusic, sfx, tearLoop } from '../audio/audio';
 import { particles } from '../battle/particles';
-import { BoosterPack, TEAR_Y } from './pack/BoosterPack';
+import { BoosterPack, TEAR_BAND, TEAR_Y, tearClips, tearEdgeFrom } from './pack/BoosterPack';
 import { MeteorCinema, OMEN_COLORS, type OmenTier } from './pack/cinema';
 import './pack/pack.css';
+import { vibrate } from '../lib/fx';
 
-type Phase = 'cinema' | 'tear' | 'reveal' | 'results' | 'multi';
+type Phase = 'pick' | 'cinema' | 'tear' | 'reveal' | 'results' | 'multi';
 
 const EASE_OUT = [0.16, 1, 0.3, 1] as const;
 const EASE_IN = [0.7, 0, 0.84, 0] as const;
@@ -345,7 +346,7 @@ interface OpeningProps extends Omit<OpeningState, 'key'> {
 
 function Opening({ booster, cards, god, fresh, shards, packs, onClose, onAgain }: OpeningProps) {
   const u = useUnit();
-  const [phase, setPhase] = useState<Phase>('cinema');
+  const [phase, setPhase] = useState<Phase>(packs > 1 ? 'cinema' : 'pick');
   const omen = useMemo(() => makeOmen(cards, god), [cards, god]);
   const [aura, setAura] = useState<AuraState>({ tier: omen.shown, visible: false, hot: false });
   const packSlot = useRef<HTMLDivElement>(null);
@@ -380,7 +381,15 @@ function Opening({ booster, cards, god, fresh, shards, packs, onClose, onAgain }
       <Backdrop hue={booster.hue} dim={dim} />
       <AnimatePresence>
         {(phase === 'cinema' || phase === 'tear') && (
-          <CinemaLayer key="cinema" omen={omen} aura={aura} playing={phase === 'cinema'} target={() => packSlot.current?.getBoundingClientRect() ?? null} onDone={() => setPhase('tear')} />
+          <CinemaLayer
+            key="cinema"
+            omen={omen}
+            god={god && packs === 1}
+            aura={aura}
+            playing={phase === 'cinema'}
+            target={() => packSlot.current?.getBoundingClientRect() ?? null}
+            onDone={() => setPhase('tear')}
+          />
         )}
       </AnimatePresence>
       <canvas ref={canvas} className="po-canvas" />
@@ -422,6 +431,8 @@ function Opening({ booster, cards, god, fresh, shards, packs, onClose, onAgain }
 
       <div className="stage">
         {/* where the pack will be: the cinematic's light (and later the aura) aims here */}
+        {phase === 'pick' && <PackPicker booster={booster} u={u} onPicked={() => setPhase('cinema')} />}
+
         {(phase === 'cinema' || phase === 'tear') && (
           <div className="tear-wrap" style={{ visibility: 'hidden', pointerEvents: 'none' }}>
             <div className="tear-float" ref={packSlot} />
@@ -430,6 +441,7 @@ function Opening({ booster, cards, god, fresh, shards, packs, onClose, onAgain }
 
         {phase === 'tear' && <TearStage booster={booster} god={god} u={u} cards={cards} omen={omen} packs={packs} onAura={setAura} burstAt={burstAt} onDone={() => setPhase(packs > 1 ? 'multi' : 'reveal')} />}
 
+        {phase === 'multi' && <TornPile booster={booster} u={u} n={Math.min(packs, 10)} fall={false} />}
         {phase === 'multi' && (
           <MultiResults cards={cards} fresh={fresh} shards={shards} burstAt={burstAt} onClose={onClose} onAgain={onAgain} canAgain={coins >= priceOf(booster) * packs} price={priceOf(booster) * packs} u={u} />
         )}
@@ -492,13 +504,116 @@ function Opening({ booster, cards, god, fresh, shards, packs, onClose, onAgain }
 // ---------------------------------------------------------------------------
 // 流星降臨: the live-rendered cinematic that delivers the pack
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Pack pick: a few packs drift in a row; swipe through them and tap one
+// (every pack holds the same pull — choosing is for the feel of it)
+// ---------------------------------------------------------------------------
+const PICK_N = 5;
+
+function PickPack({ booster, i, x, sp, u, chosen, onPick }: { booster: Booster; i: number; x: MotionValue<number>; sp: number; u: number; chosen: number | null; onPick: (i: number) => void }) {
+  const base = (i - (PICK_N - 1) / 2) * sp;
+  const d = useTransform(x, (v) => (base + v) / sp); // distance from centre, in slots
+  const rotateY = useTransform(d, (v) => Math.max(-1, Math.min(1, v)) * -28);
+  const scale = useTransform(d, (v) => 1 - Math.min(1, Math.abs(v)) * 0.16);
+  const z = useTransform(d, (v) => -Math.min(2, Math.abs(v)) * u * 4);
+  const bright = useTransform(d, (v) => `brightness(${1 - Math.min(1, Math.abs(v)) * 0.35})`);
+  const me = chosen === i;
+  const other = chosen !== null && !me;
+  return (
+    <motion.div className="pick-slot" style={{ left: `calc(50% + ${base}px)`, zIndex: me ? 20 : 10 - Math.abs(i - 2) }}>
+      <motion.div
+        className="pick-pack"
+        style={{ rotateY: me ? 0 : rotateY, scale: me ? 1 : scale, z: me ? 0 : z, filter: me ? 'none' : bright }}
+        initial={{ opacity: 0, y: u * 6 }}
+        animate={
+          me
+            ? { opacity: [1, 1, 0], y: [0, -u * 2, -u * 26], scale: [1, 1.12, 0.35], transition: { duration: 1.25, times: [0, 0.35, 1], ease: EASE_IN_OUT } }
+            : other
+              ? { opacity: 0, y: u * 10, transition: { duration: 0.5, ease: EASE_IN } }
+              : { opacity: 1, y: [0, -u * 0.5, 0], transition: { opacity: { duration: 0.5, delay: 0.1 + i * 0.07 }, y: { duration: 3.6 + i * 0.3, repeat: Infinity, ease: 'easeInOut' } } }
+        }
+        onTap={() => chosen === null && onPick(i)}
+      >
+        <BoosterPack booster={booster} still={!me} />
+        {me && <motion.div className="pick-glow" initial={{ opacity: 0 }} animate={{ opacity: [0, 1, 1] }} transition={{ duration: 1.2, times: [0, 0.3, 1] }} />}
+      </motion.div>
+    </motion.div>
+  );
+}
+
+function PackPicker({ booster, u, onPicked }: { booster: Booster; u: number; onPicked: () => void }) {
+  const sp = u * 19;
+  const x = useMotionValue(0);
+  const [chosen, setChosen] = useState<number | null>(null);
+  const [hint, hideHint] = useIdleHint('pick', 1200);
+  const lastSlot = useRef(0);
+  // a soft tick as each pack passes the centre
+  useEffect(
+    () =>
+      x.on('change', (v) => {
+        const slot = Math.round(-v / sp);
+        if (slot !== lastSlot.current) {
+          lastSlot.current = slot;
+          foley.tick();
+          vibrate(4);
+        }
+      }),
+    [x, sp],
+  );
+  const pick = (i: number) => {
+    hideHint();
+    const centre = -(i - (PICK_N - 1) / 2) * sp;
+    // bring the chosen pack to the centre first, then lift it into the sky
+    animate(x, centre, { type: 'spring', stiffness: 260, damping: 30 });
+    setTimeout(
+      () => {
+        setChosen(i);
+        foley.pop();
+        sfx('magic-holy-2', 0.35);
+        vibrate(14);
+        setTimeout(() => foley.whoosh(), 380);
+        setTimeout(onPicked, 1150);
+      },
+      Math.abs(x.get() - centre) > 4 ? 280 : 0,
+    );
+  };
+  const lim = ((PICK_N - 1) / 2) * sp;
+  return (
+    <div className="picker">
+      <motion.div className="pick-title" initial={{ opacity: 0, y: -8 }} animate={{ opacity: chosen === null ? 1 : 0, y: 0 }} transition={{ duration: 0.5 }}>
+        パックを1つ選んでください
+      </motion.div>
+      <motion.div
+        className="pick-row"
+        style={{ x }}
+        drag={chosen === null ? 'x' : false}
+        dragConstraints={{ left: -lim, right: lim }}
+        dragElastic={0.18}
+        dragTransition={{ power: 0.25, timeConstant: 180, modifyTarget: (t) => Math.round(t / sp) * sp }}
+        onDragStart={hideHint}
+      >
+        {Array.from({ length: PICK_N }, (_, i) => (
+          <PickPack key={i} booster={booster} i={i} x={x} sp={sp} u={u} chosen={chosen} onPick={pick} />
+        ))}
+      </motion.div>
+      <AnimatePresence>
+        {hint && chosen === null && (
+          <motion.div className="po-hint" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            スワイプして選び、タップで決定
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 interface AuraState {
   tier: OmenTier;
   visible: boolean;
   hot: boolean;
 }
 
-function CinemaLayer({ omen, aura, playing, target, onDone }: { omen: Omen; aura: AuraState; playing: boolean; target: () => DOMRect | null; onDone: () => void }) {
+function CinemaLayer({ omen, god, aura, playing, target, onDone }: { omen: Omen; god: boolean; aura: AuraState; playing: boolean; target: () => DOMRect | null; onDone: () => void }) {
   const host = useRef<HTMLDivElement>(null);
   const cine = useRef<MeteorCinema | null>(null);
   const doneRef = useRef(onDone);
@@ -510,12 +625,14 @@ function CinemaLayer({ omen, aura, playing, target, onDone }: { omen: Omen; aura
     try {
       c = new MeteorCinema(host.current, {
         tier: omen.shown,
+        god,
         meteors: omen.meteors,
         target,
         onBeat: (b) => {
           if (b === 'enter') {
             foley.whoosh();
             if (omen.shown >= 2) setTimeout(() => foley.sparkle(), 250);
+            if (god) setTimeout(() => foley.rarity(5), 700);
           } else if (b === 'dive') foley.charge();
           else if (b === 'impact') {
             foley.impact();
@@ -622,49 +739,95 @@ function TearStage({ booster, god, u, cards, omen, packs, onAura, burstAt, onDon
   const auraRef = useRef(aura);
   auraRef.current = aura;
   const packRef = useRef<HTMLDivElement>(null);
-  const prog = useMotionValue(0);
   const [dir, setDir] = useState<1 | -1>(1);
   const [torn, setTorn] = useState(false);
   const [active, setActive] = useState(false);
   const [hint, hideHint] = useIdleHint('tear', 1800);
-  const g = useRef<{ x: number; dir: 1 | -1; max: number; lastSound: number; lastBuzz: number } | null>(null);
-  const cutW = useTransform(prog, (p) => `${p * 92}%`);
-  const headPos = useTransform(prog, (p) => `${4 + p * 92}%`);
-  const leak = useTransform(prog, [0, 0.15, 1], [0, 0.55, 1]);
+  // the traced cut, in percent of the pack box; only points inside TEAR_BAND count
+  const pathRef = useRef<[number, number][]>([]);
+  const [path, setPath] = useState<[number, number][]>([]);
+  const [outside, setOutside] = useState(false);
+  const g = useRef<{ dir: 0 | 1 | -1; lost: boolean; lastBuzz: number; lastT: number; lastX: number; speed: number; t0: number } | null>(null);
+  // the tear's sound follows the finger speed
+  const sound = useRef<ReturnType<typeof tearLoop>>(null);
+  const idleTimer = useRef<ReturnType<typeof setTimeout>>();
+  const stopSound = () => {
+    clearTimeout(idleTimer.current);
+    sound.current?.stop();
+    sound.current = null;
+  };
+  useEffect(() => stopSound, []);
   // the cut strip peels up from where the finger started (pivoting on the uncut end)
   const lift = useMotionValue(0); // signed progress
   const stripRot = useTransform(lift, (v) => v * 4.5);
   const stripY = useTransform(lift, (v) => -Math.abs(v) * u * 0.35);
-  const [cutting, setCutting] = useState(false);
   const [snap, setSnap] = useState(false);
+  const [healing, setHealing] = useState(false);
   const finishing = useRef(false);
-  const buzz = (ms: number | number[]) => {
-    try {
-      navigator.vibrate?.(ms);
-    } catch {
-      /* not supported */
-    }
-  };
+  const buzz = vibrate;
   useEffect(() => onAura({ tier: aura, visible: !torn, hot: shaking }), [aura, torn, shaking, onAura]);
+
+  const B0 = TEAR_BAND[0] * 100;
+  const B1 = TEAR_BAND[1] * 100;
+  const cutting = path.length >= 2;
+  const tip = path[path.length - 1];
+  const span = cutting ? Math.abs(tip[0] - path[0][0]) : 0;
+  const progress = Math.min(1, span / 70);
+  const clips = useMemo(() => tearClips(tearEdgeFrom(path.length >= 2 ? path : [])), [path]);
+  const seam = path.map(([x, y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(' ');
+  const pivot = cutting ? `${dir > 0 ? 100 : 0}% ${tip[1]}%` : dir > 0 ? '100% 7%' : '0% 7%';
+  const seamY = cutting ? path.reduce((a, p) => a + p[1], 0) / path.length : TEAR_Y * 100;
+
+  const toPct = (e: { clientX: number; clientY: number }): [number, number] | null => {
+    const r = packRef.current?.getBoundingClientRect();
+    if (!r) return null;
+    return [((e.clientX - r.left) / r.width) * 100, ((e.clientY - r.top) / r.height) * 100];
+  };
+  const pctToClient = ([x, y]: [number, number]) => {
+    const r = packRef.current!.getBoundingClientRect();
+    return [r.left + (r.width * x) / 100, r.top + (r.height * y) / 100] as const;
+  };
 
   const finish = () => {
     if (torn || locked || finishing.current) return;
     finishing.current = true;
     hideHint();
-    setCutting(true);
-    animate(prog, 1, { duration: 0.08 });
-    animate(lift, dir, { duration: 0.08 });
-    foley.rip();
+    setOutside(false);
+    // keyboard / auto-complete: run the cut straight to the far side
+    let pts = pathRef.current;
+    let d = dir;
+    if (pts.length < 2) {
+      pts = [[0, TEAR_Y * 100], [100, TEAR_Y * 100]];
+      d = 1;
+      setDir(1);
+    }
+    pathRef.current = pts;
+    setPath(pts);
+    animate(lift, d, { duration: 0.08 });
+    // a quick swipe rips short and bright, a slow pull long and low
+    const s0 = g.current;
+    const secs = s0 && pts.length >= 2 ? (performance.now() - s0.t0) / 1000 : 0.3;
+    const sweep = pts.length >= 2 ? Math.abs(pts[pts.length - 1][0] - pts[0][0]) : 100;
+    stopSound();
+    foley.rip(Math.min(1, sweep / 100 / Math.max(0.05, secs) / 2.2));
     buzz([0, 28]);
     // hit-stop: the pack freezes bright for a beat, then the strip flies off
     setSnap(true);
-    const r = packRef.current?.getBoundingClientRect();
-    if (r) {
-      const y = r.top + r.height * TEAR_Y;
-      for (let k = 0; k <= 12; k++) setTimeout(() => burstAt(r.left + (r.width * (dir > 0 ? k : 12 - k)) / 12, y, k % 2 ? 'glint' : 'sparkw', 2, 1), k * 10);
-      burstAt(dir > 0 ? r.right : r.left, y, 'glint', 16, 1.3);
-      setTimeout(() => burstAt(r.left + r.width / 2, y, 'mote', 50, 1.5), 140);
-      setTimeout(() => burstAt(r.left + r.width / 2, y, `aura${auraRef.current}`, 30, 1.3), 180);
+    if (packRef.current) {
+      const n = 12;
+      for (let k = 0; k <= n; k++) {
+        const p = pts[Math.round((k / n) * (pts.length - 1))];
+        setTimeout(() => {
+          const [cx, cy] = pctToClient(p);
+          burstAt(cx, cy, k % 2 ? 'glint' : 'sparkw', 2, 1);
+        }, k * 10);
+      }
+      const [ex, ey] = pctToClient(pts[pts.length - 1]);
+      burstAt(ex, ey, 'glint', 16, 1.3);
+      const r = packRef.current.getBoundingClientRect();
+      const my = r.top + (r.height * pts.reduce((a, p) => a + p[1], 0)) / pts.length / 100;
+      setTimeout(() => burstAt(r.left + r.width / 2, my, 'mote', 50, 1.5), 140);
+      setTimeout(() => burstAt(r.left + r.width / 2, my, `aura${auraRef.current}`, 30, 1.3), 180);
     }
     setTimeout(() => {
       setSnap(false);
@@ -674,69 +837,133 @@ function TearStage({ booster, god, u, cards, omen, packs, onAura, burstAt, onDon
     setTimeout(onDone, 1620);
   };
 
+  // the key handler always calls the latest finish (lock state changes while waiting)
+  const finishRef = useRef(finish);
+  finishRef.current = finish;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Enter' || e.key === ' ') finish();
+      if (e.key === 'Enter' || e.key === ' ') finishRef.current();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [torn]);
+  }, []);
+
+  const heal = () => {
+    // not far enough: the seam closes up again
+    setHealing(true);
+    stopSound();
+    animate(lift, 0, { type: 'spring', stiffness: 420, damping: 18 });
+    setTimeout(() => {
+      pathRef.current = [];
+      setPath([]);
+      setHealing(false);
+      setOutside(false);
+    }, 260);
+  };
+
+  const addPoint = (pt: [number, number]) => {
+    const s = g.current;
+    if (!s || torn || finishing.current) return;
+    const [x, y] = pt;
+    const pts = pathRef.current;
+    const inBand = y >= B0 && y <= B1 && x >= -12 && x <= 112;
+    if (!inBand) {
+      // off the line: the blade stops until the finger comes back to the tip
+      if (pts.length && !s.lost) {
+        s.lost = true;
+        setOutside(true);
+        buzz(18);
+        sound.current?.idle();
+      }
+      return;
+    }
+    const cx = Math.max(0, Math.min(100, x));
+    if (!pts.length) {
+      pathRef.current = [[cx, y]];
+      s.lastX = cx;
+      s.lastT = performance.now();
+      s.t0 = s.lastT;
+      return;
+    }
+    const last = pts[pts.length - 1];
+    if (s.lost) {
+      if (Math.abs(cx - last[0]) > 9) return;
+      s.lost = false;
+      setOutside(false);
+    }
+    if (s.dir === 0) {
+      if (Math.abs(cx - last[0]) < 2) {
+        pathRef.current = [[cx, y]];
+        return;
+      }
+      s.dir = cx > last[0] ? 1 : -1;
+      setDir(s.dir);
+    }
+    const adv = (cx - last[0]) * s.dir;
+    if (adv < 0.8) return;
+    const next: [number, number][] = [...pts, [cx, y]];
+    pathRef.current = next;
+    setPath(next);
+    const p = Math.min(1, Math.abs(cx - next[0][0]) / 70);
+    lift.set(s.dir * p);
+    const [hx, hy] = pctToClient([cx, y]);
+    burstAt(hx, hy, 'sparkw', 1, 0.8);
+    if (Math.random() < 0.35) burstAt(hx, hy, `aura${auraRef.current}`, 1, 0.8);
+    // finger speed in pack widths per second, smoothed
+    const now = performance.now();
+    const v = Math.abs(cx - s.lastX) / 100 / Math.max(0.008, (now - s.lastT) / 1000);
+    s.speed = s.speed * 0.6 + v * 0.4;
+    s.lastX = cx;
+    s.lastT = now;
+    if (!sound.current) sound.current = tearLoop();
+    sound.current?.update(s.speed / 2.2);
+    clearTimeout(idleTimer.current);
+    idleTimer.current = setTimeout(() => sound.current?.idle(), 90);
+    // a light tick every ~7% of the cut
+    if (p - s.lastBuzz > 0.07) {
+      s.lastBuzz = p;
+      buzz(6);
+    }
+    if (p >= 1 || (s.dir > 0 ? cx >= 100 : cx <= 0)) {
+      if (p >= 0.6) {
+        setActive(false);
+        finish();
+        g.current = null;
+      }
+    }
+  };
 
   const onDown = (e: React.PointerEvent) => {
-    if (torn || locked) return;
+    if (torn || locked || finishing.current || healing) return;
     (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
-    g.current = { x: e.clientX, dir: 1, max: 0, lastSound: 0, lastBuzz: 0 };
+    g.current = { dir: 0, lost: false, lastBuzz: 0, lastT: 0, lastX: 0, speed: 0, t0: performance.now() };
+    pathRef.current = [];
     setActive(true);
     hideHint();
+    const pt = toPct(e);
+    if (pt) addPoint(pt);
   };
   const onMove = (e: React.PointerEvent) => {
-    const s = g.current;
-    const r = packRef.current?.getBoundingClientRect();
-    if (!s || !r || torn) return;
-    const dx = e.clientX - s.x;
-    if (Math.abs(dx) < 3) return;
-    if (s.max === 0) {
-      s.dir = dx > 0 ? 1 : -1;
-      setDir(s.dir);
-      setCutting(true);
-    }
-    const d = s.dir;
-    const p = Math.min(1, Math.max(0, (dx * d) / (r.width * 0.72)));
-    if (p > s.max) {
-      s.max = p;
-      prog.set(p);
-      lift.set(s.dir * p);
-      const hx = d > 0 ? r.left + r.width * (0.04 + p * 0.92) : r.right - r.width * (0.04 + p * 0.92);
-      burstAt(hx, r.top + r.height * TEAR_Y, 'sparkw', 1, 0.8);
-      if (Math.random() < 0.35) burstAt(hx, r.top + r.height * TEAR_Y, `aura${auraRef.current}`, 1, 0.8);
-      const now = performance.now();
-      if (now - s.lastSound > 40) {
-        s.lastSound = now;
-        foley.scratch();
-      }
-      // a light tick every ~7% of the cut
-      if (p - s.lastBuzz > 0.07) {
-        s.lastBuzz = p;
-        buzz(6);
-      }
-    }
-    if (p >= 1) {
-      g.current = null;
-      setActive(false);
-      finish();
+    if (!g.current) return;
+    // use the coalesced samples so a fast stroke still follows the finger
+    const evs = (e.nativeEvent as PointerEvent).getCoalescedEvents?.() ?? [];
+    for (const ev of evs.length ? evs : [e]) {
+      const pt = toPct(ev);
+      if (pt) addPoint(pt);
     }
   };
   const onUp = () => {
     const s = g.current;
-    g.current = null;
     setActive(false);
-    if (!s || torn) return;
-    if (s.max >= 0.7) finish();
-    else {
-      animate(lift, 0, { type: 'spring', stiffness: 420, damping: 18 });
-      animate(prog, 0, { duration: 0.45, ease: EASE_OUT, onComplete: () => setCutting(false) });
+    if (!s || torn || finishing.current) {
+      g.current = null;
+      return;
     }
+    const pts = pathRef.current;
+    const done = pts.length >= 2 ? Math.abs(pts[pts.length - 1][0] - pts[0][0]) / 70 : 0;
+    if (done >= 0.7) finish();
+    else if (pts.length) heal();
+    g.current = null;
   };
 
   return (
@@ -772,7 +999,10 @@ function TearStage({ booster, god, u, cards, omen, packs, onAura, burstAt, onDon
                 <BoosterPack booster={booster} still god={god} />
               </div>
             ))}
-            <span className="tb-count">×{packs}</span>
+            <span className="tb-count">
+              <small>×</small>
+              {packs}
+            </span>
           </motion.div>
         )}
         <motion.div
@@ -781,79 +1011,104 @@ function TearStage({ booster, god, u, cards, omen, packs, onAura, burstAt, onDon
           transition={snap ? { duration: 0.06 } : { type: 'spring', stiffness: 380, damping: 22 }}
           style={{ filter: snap ? 'brightness(1.8) saturate(0.6)' : undefined }}
         >
-        <motion.div
-          className={`tear-float ${shaking ? 'shaking' : ''}`}
-          ref={packRef}
-          initial={{ opacity: 0, filter: 'brightness(4) saturate(0)' }}
-          animate={torn ? { y: 0, opacity: 1, filter: 'brightness(1) saturate(1)' } : { y: [0, -u * 0.45, 0], opacity: 1, filter: 'brightness(1) saturate(1)' }}
-          transition={
-            torn
-              ? { duration: 0.3 }
-              : { y: { duration: 4.5, repeat: Infinity, ease: 'easeInOut' }, opacity: { duration: 0.35 }, filter: { duration: 0.9, ease: EASE_OUT } }
-          }
-        >
-          {torn && (
-            <motion.div className="tear-beam" initial={{ opacity: 0, scaleY: 0.2 }} animate={{ opacity: [0, 0.9, 0], scaleY: [0.2, 1, 1.15] }} transition={{ delay: 0.25, duration: 1.3, times: [0, 0.35, 1], ease: 'easeOut' }} />
-          )}
-          {!torn && !cutting && <BoosterPack booster={booster} tilt={!active} god={god} />}
-          {!torn && cutting && (
-            <>
-              <div className="tear-part" style={{ zIndex: 4 }}>
-                <BoosterPack booster={booster} part="body" god={god} />
-              </div>
-              <motion.div className="tear-leak" style={{ top: `${TEAR_Y * 100}%`, opacity: leak, width: cutW, left: dir > 0 ? '4%' : 'auto', right: dir > 0 ? 'auto' : '4%' }} />
-              <motion.div className="tear-part" style={{ zIndex: 9, transformOrigin: dir > 0 ? '100% 7%' : '0% 7%', rotate: stripRot, y: stripY }}>
-                <BoosterPack booster={booster} part="top" god={god} />
-              </motion.div>
-            </>
-          )}
-          {torn && (
-            <>
-              <motion.div className="tear-part" style={{ zIndex: 4 }} initial={{ y: 0, opacity: 1 }} animate={{ y: u * 70, opacity: 1 }} transition={{ delay: 0.38, duration: 0.85, ease: EASE_IN }}>
-                <BoosterPack booster={booster} part="body" god={god} />
-              </motion.div>
-              <motion.div
-                className="tear-part"
-                style={{ zIndex: 9, transformOrigin: dir > 0 ? '100% 4%' : '0% 4%' }}
-                initial={{ x: 0, y: 0, rotate: 0, opacity: 1 }}
-                animate={{ x: dir * u * 9, y: -u * 13, rotate: dir * 16, opacity: [1, 1, 0] }}
-                transition={{ duration: 1.0, ease: EASE_OUT, opacity: { duration: 1.0, times: [0, 0.55, 1] } }}
-              >
-                <BoosterPack booster={booster} part="top" god={god} />
-              </motion.div>
-              <motion.div
-                className="tear-bloom"
-                style={{ top: `${TEAR_Y * 100}%` }}
-                initial={{ opacity: 0, scaleX: 0.2, scaleY: 0.5 }}
-                animate={{ opacity: [0, 1, 0], scaleX: [0.2, 1, 1.25], scaleY: [0.5, 1, 0.7] }}
-                transition={{ duration: 0.75, times: [0, 0.2, 1], ease: 'easeOut' }}
-              />
-            </>
-          )}
-          {!torn && (
-            <>
-              <div className="tear-guide" style={{ top: `${TEAR_Y * 100}%` }} />
-              <motion.div className="tear-cut" style={{ top: `${TEAR_Y * 100}%`, width: cutW, left: dir > 0 ? '4%' : 'auto', right: dir > 0 ? 'auto' : '4%' }} />
-              {cutting && <motion.div className="tear-head" style={{ top: `${TEAR_Y * 100}%`, left: dir > 0 ? headPos : 'auto', right: dir > 0 ? 'auto' : headPos }} />}
-              {!active && (
+          <motion.div
+            className={`tear-float ${shaking ? 'shaking' : ''}`}
+            ref={packRef}
+            initial={{ opacity: 0, filter: 'brightness(4) saturate(0)' }}
+            animate={torn ? { y: 0, opacity: 1, filter: 'brightness(1) saturate(1)' } : { y: [0, -u * 0.45, 0], opacity: 1, filter: 'brightness(1) saturate(1)' }}
+            transition={
+              torn
+                ? { duration: 0.3 }
+                : { y: { duration: 4.5, repeat: Infinity, ease: 'easeInOut' }, opacity: { duration: 0.35 }, filter: { duration: 0.9, ease: EASE_OUT } }
+            }
+          >
+            {torn && (
+              <motion.div className="tear-beam" initial={{ opacity: 0, scaleY: 0.2 }} animate={{ opacity: [0, 0.9, 0], scaleY: [0.2, 1, 1.15] }} transition={{ delay: 0.25, duration: 1.3, times: [0, 0.35, 1], ease: 'easeOut' }} />
+            )}
+            {!torn && !cutting && <BoosterPack booster={booster} tilt={!active} god={god} />}
+            {!torn && cutting && (
+              <>
+                <div className="tear-part" style={{ zIndex: 4 }}>
+                  <BoosterPack booster={booster} part="body" god={god} clip={clips.body} />
+                </div>
+                <svg className="tear-leak" viewBox="0 0 100 100" preserveAspectRatio="none" style={{ opacity: healing ? 0 : Math.min(1, 0.35 + progress) }}>
+                  <polyline points={seam} />
+                </svg>
+                <motion.div className="tear-part" style={{ zIndex: 9, transformOrigin: pivot, rotate: stripRot, y: stripY }}>
+                  <BoosterPack booster={booster} part="top" god={god} clip={clips.top} />
+                </motion.div>
+              </>
+            )}
+            {torn && (
+              <>
                 <motion.div
-                  className="tear-dot"
-                  style={{ top: `${TEAR_Y * 100}%` }}
-                  initial={{ left: '6%', opacity: 0 }}
-                  animate={{ left: ['6%', '94%'], opacity: [0, 1, 1, 0] }}
-                  transition={{ duration: 1.6, times: [0, 0.15, 0.8, 1], repeat: Infinity, repeatDelay: 0.9, ease: EASE_IN_OUT }}
+                  className="tear-part"
+                  style={{ zIndex: 4 }}
+                  initial={{ y: 0, opacity: 1 }}
+                  animate={packs > 1 ? { y: u * 30, opacity: 0 } : { y: u * 70, opacity: 1 }}
+                  transition={{ delay: 0.38, duration: 0.85, ease: EASE_IN }}
+                >
+                  <BoosterPack booster={booster} part="body" god={god} clip={clips.body} />
+                </motion.div>
+                <motion.div
+                  className="tear-part"
+                  style={{ zIndex: 9, transformOrigin: pivot }}
+                  initial={{ x: 0, y: 0, rotate: lift.get() * 4.5, opacity: 1 }}
+                  animate={{ x: dir * u * 9, y: -u * 13, rotate: dir * 16, opacity: [1, 1, 0] }}
+                  transition={{ duration: 1.0, ease: EASE_OUT, opacity: { duration: 1.0, times: [0, 0.55, 1] } }}
+                >
+                  <BoosterPack booster={booster} part="top" god={god} clip={clips.top} />
+                </motion.div>
+                <motion.div
+                  className="tear-bloom"
+                  style={{ top: `${seamY}%` }}
+                  initial={{ opacity: 0, scaleX: 0.2, scaleY: 0.5 }}
+                  animate={{ opacity: [0, 1, 0], scaleX: [0.2, 1, 1.25], scaleY: [0.5, 1, 0.7] }}
+                  transition={{ duration: 0.75, times: [0, 0.2, 1], ease: 'easeOut' }}
                 />
-              )}
-              <div className="tear-zone" onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp} />
-            </>
-          )}
-        </motion.div>
+              </>
+            )}
+            {!torn && (
+              <>
+                <div className={`tear-band ${active ? 'on' : ''} ${outside ? 'warn' : ''}`} style={{ top: `${B0}%`, height: `${B1 - B0}%` }} />
+                {!cutting && <div className="tear-guide" style={{ top: `${TEAR_Y * 100}%` }} />}
+                {cutting && (
+                  <svg className={`tear-seam ${healing ? 'heal' : ''}`} viewBox="0 0 100 100" preserveAspectRatio="none">
+                    <polyline points={seam} />
+                  </svg>
+                )}
+                {cutting && !healing && <div className={`tear-head ${outside ? 'stop' : ''}`} style={{ left: `${tip[0]}%`, top: `${tip[1]}%` }} />}
+                {!active && !cutting && (
+                  <motion.div
+                    className="tear-dot"
+                    style={{ top: `${TEAR_Y * 100}%` }}
+                    initial={{ left: '6%', opacity: 0 }}
+                    animate={{ left: ['6%', '94%'], opacity: [0, 1, 1, 0] }}
+                    transition={{ duration: 1.6, times: [0, 0.15, 0.8, 1], repeat: Infinity, repeatDelay: 0.9, ease: EASE_IN_OUT }}
+                  />
+                )}
+                <div className="tear-zone" style={{ top: `${B0 - 7}%`, height: `${B1 - B0 + 14}%` }} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp} />
+              </>
+            )}
+          </motion.div>
         </motion.div>
       </div>
+      {torn && packs > 1 && <TornPile booster={booster} u={u} n={Math.min(packs, 10)} fall />}
       <AnimatePresence>
         {snap && <motion.div key="snap" className="tear-flash" initial={{ opacity: 0.9 }} animate={{ opacity: 0.9 }} exit={{ opacity: 0, transition: { duration: 0.5, ease: 'easeOut' } }} />}
       </AnimatePresence>
-      <AnimatePresence>{hint && !torn && !locked && <motion.div className="po-hint" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>パックの上端をなぞって開封</motion.div>}</AnimatePresence>
+      <AnimatePresence>
+        {outside && !torn && (
+          <motion.div key="out" className="po-hint warn" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            光の帯の中をなぞってください
+          </motion.div>
+        )}
+        {hint && !outside && !torn && !locked && (
+          <motion.div key="hint" className="po-hint" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            パックの上のほうを好きな線でなぞって開封
+          </motion.div>
+        )}
+      </AnimatePresence>
     </>
   );
 }
@@ -1001,6 +1256,45 @@ function TopCard({ card, u, first, faceDown, burstAt, onFlipImpact, onFlipped, o
 }
 
 // ---------------------------------------------------------------------------
+// 10連: the opened packs tumble down and pile up at the bottom of the screen
+// ---------------------------------------------------------------------------
+function pileSpot(k: number) {
+  const r = (n: number) => {
+    const v = Math.sin((k + 1) * 12.9898 + n * 78.233) * 43758.5453;
+    return v - Math.floor(v);
+  };
+  return { x: (r(1) - 0.5) * 70, y: r(2) * 5, rot: (r(3) - 0.5) * 80 };
+}
+
+function TornPile({ booster, u, n, fall }: { booster: Booster; u: number; n: number; fall: boolean }) {
+  // a soft thud as each pack lands
+  useEffect(() => {
+    if (!fall) return;
+    const ts = Array.from({ length: n }, (_, k) => setTimeout(() => foley.place(), 350 + k * 90 + 700));
+    return () => ts.forEach(clearTimeout);
+  }, [fall, n]);
+  return (
+    <div className="torn-pile">
+      {Array.from({ length: n }, (_, k) => {
+        const p = pileSpot(k);
+        return (
+          <motion.div
+            key={k}
+            className="torn-piece"
+            style={{ zIndex: k }}
+            initial={fall ? { x: 0, y: -u * 30, scale: 2, rotate: 0, opacity: 0 } : false}
+            animate={{ x: p.x * u, y: p.y * u, scale: 1, rotate: p.rot, opacity: 1 }}
+            transition={fall ? { delay: 0.35 + k * 0.09, duration: 0.75, ease: [0.3, 0, 0.2, 1], opacity: { delay: 0.35 + k * 0.09, duration: 0.05 } } : { duration: 0 }}
+          >
+            <BoosterPack booster={booster} part="body" still />
+          </motion.div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // 10連 results: every card at once, rarest last; ☆ / ♛ wait face down
 // ---------------------------------------------------------------------------
 interface MultiProps {
@@ -1026,6 +1320,8 @@ function MultiResults({ cards, fresh, shards, burstAt, onClose, onAgain, canAgai
   );
   const hidden = items.filter((x) => isStar(x.c.rarity)).map((x) => x.i);
   const [open, setOpen] = useState<Set<number>>(new Set());
+  const [onlyNew, setOnlyNew] = useState(false);
+  const newCount = items.filter((x) => fresh.has(x.c.id)).length;
   const [zoom, setZoom] = useState<string | null>(null);
   const [flash, setFlash] = useState<{ id: number; color: string } | null>(null);
   const refs = useRef(new Map<number, HTMLDivElement>());
@@ -1081,9 +1377,18 @@ function MultiResults({ cards, fresh, shards, burstAt, onClose, onAgain, canAgai
             ☆以上 <b>{hidden.length}</b>枚
           </em>
         )}
+        <div className="seg multi-filter">
+          <button className={!onlyNew ? 'on' : ''} onClick={() => setOnlyNew(false)}>
+            すべて
+          </button>
+          <button className={onlyNew ? 'on' : ''} disabled={newCount === 0} onClick={() => setOnlyNew(true)}>
+            NEWのみ（{newCount}）
+          </button>
+        </div>
       </div>
       <div className="multi-grid" style={{ gridTemplateColumns: `repeat(${cols}, calc(var(--u) * ${w}))` }}>
         {items.map(({ c, i }, k) => {
+          if (onlyNew && !fresh.has(c.id)) return null;
           const star = isStar(c.rarity);
           const down = star && !open.has(i);
           const rank = RARITY_ORDER[c.rarity];

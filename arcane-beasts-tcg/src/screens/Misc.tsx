@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useStore } from '../state/store';
 import { artUrl } from '../lib/assets';
 import { TopBar } from '../ui/TopBar';
@@ -6,6 +6,9 @@ import { CardFace, EnergySymbol } from '../ui/Card';
 import { byName } from '../engine/cards';
 import { playMusic, sfx } from '../audio/audio';
 import { askConfirm } from '../ui/Confirm';
+import { canVibrate, liteFx, resetAutoFx, type FxLevel } from '../lib/fx';
+import { startGyro } from '../lib/gyro';
+import { canPromptInstall, isInstalled, isIOS, onInstallChange, promptInstall, pwaAvailable } from '../lib/pwa';
 
 export function Settings() {
   const settings = useStore((s) => s.save.settings);
@@ -40,6 +43,62 @@ export function Settings() {
               ))}
             </div>
           </div>
+          <div className="set-row">
+            <label>演出の強さ</label>
+            <div className="seg">
+              {(
+                [
+                  ['auto', '自動'],
+                  ['full', 'フル'],
+                  ['lite', '軽量'],
+                ] as [FxLevel, string][]
+              ).map(([v, l]) => (
+                <button
+                  key={v}
+                  className={settings.fx === v ? 'on' : ''}
+                  onClick={() => {
+                    if (v === 'auto') resetAutoFx();
+                    update((s) => void (s.settings.fx = v));
+                  }}
+                >
+                  {l}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="set-note">
+            自動：端末の速さを計って、重いときは自動で軽量にします
+            {settings.fx === 'auto' && liteFx() ? '（現在：軽量）' : ''}
+          </div>
+          <div className="set-row">
+            <label>振動</label>
+            <div className="seg">
+              {[true, false].map((v) => (
+                <button key={String(v)} className={settings.vibrate === v ? 'on' : ''} onClick={() => update((s) => void (s.settings.vibrate = v))}>
+                  {v ? 'ON' : 'OFF'}
+                </button>
+              ))}
+            </div>
+          </div>
+          {!canVibrate() && <div className="set-note">この端末・ブラウザは振動に対応していません</div>}
+          <div className="set-row">
+            <label>傾きでカードが光る</label>
+            <div className="seg">
+              {[true, false].map((v) => (
+                <button
+                  key={String(v)}
+                  className={settings.gyro === v ? 'on' : ''}
+                  onClick={() => {
+                    update((s) => void (s.settings.gyro = v));
+                    if (v) void startGyro();
+                  }}
+                >
+                  {v ? 'ON' : 'OFF'}
+                </button>
+              ))}
+            </div>
+          </div>
+          <InstallRow />
           <div className="set-row danger">
             <label>セーブデータ</label>
             <button
@@ -54,6 +113,30 @@ export function Settings() {
         </div>
       </div>
     </div>
+  );
+}
+
+/** アプリとして追加 (only on the standalone site; the Artifact frame cannot install) */
+function InstallRow() {
+  const [, bump] = useState(0);
+  useEffect(() => onInstallChange(() => bump((n) => n + 1)), []);
+  if (!pwaAvailable()) return null;
+  return (
+    <>
+      <div className="set-row">
+        <label>アプリとして追加</label>
+        {isInstalled() ? (
+          <span className="set-ok">追加済み</span>
+        ) : canPromptInstall() ? (
+          <button className="btn small gold-btn" onClick={() => void promptInstall()}>
+            ホーム画面に追加
+          </button>
+        ) : (
+          <span className="set-ok">{isIOS() ? '共有ボタン →「ホーム画面に追加」' : 'ブラウザのメニューから「アプリをインストール」'}</span>
+        )}
+      </div>
+      <div className="set-note">追加すると全画面で起動し、一度読み込んだ画像や音はオフラインでも使えます</div>
+    </>
   );
 }
 

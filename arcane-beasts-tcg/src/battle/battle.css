@@ -832,3 +832,89 @@
 .exp-bar { height: calc(var(--u) * 0.55); margin-top: 4px; border-radius: 999px; background: rgba(255, 255, 255, 0.1); overflow: hidden; }
 .exp-fill { height: 100%; border-radius: inherit; background: linear-gradient(90deg, #4dabf7, #a5d8ff); box-shadow: 0 0 10px rgba(120, 190, 255, 0.7); }
 .lvup { margin-top: calc(var(--u) * 0.5); font-weight: 900; font-size: calc(var(--u) * 1); color: #ffe3a0; text-align: center; letter-spacing: 0.04em; }
+
+/* -------------------------------- Stamps -------------------------------- */
+.stamp-ui { position: absolute; left: calc(var(--u) * 16.2); top: calc(var(--u) * 51); z-index: 70; }
+.stamp-btn {
+  width: calc(var(--u) * 3.2);
+  height: calc(var(--u) * 3.2);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  background: rgba(10, 16, 40, 0.85);
+  color: #e9edf7;
+  cursor: pointer;
+  transition: transform 0.2s, background 0.2s;
+}
+.stamp-btn svg { width: 58%; height: 58%; }
+.stamp-btn:hover, .stamp-btn.on { background: var(--gold); color: #2a1a00; transform: scale(1.06); }
+.stamp-palette {
+  position: absolute;
+  left: 0;
+  bottom: calc(var(--u) * 3.8);
+  width: calc(var(--u) * 30);
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: calc(var(--u) * 0.5);
+  padding: calc(var(--u) * 0.7);
+  border-radius: calc(var(--u) * 1);
+  background: rgba(8, 12, 32, 0.95);
+  border: 1px solid var(--line);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
+  transform-origin: 0 100%;
+}
+.stamp-chip {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 0.4);
+  padding: calc(var(--u) * 0.5) calc(var(--u) * 0.6);
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+  font-weight: 800;
+  font-size: calc(var(--u) * 0.85);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.stamp-chip:hover { background: rgba(255, 255, 255, 0.14); }
+.stamp-chip i, .stamp-bubble i {
+  font-style: normal;
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.7em;
+  height: 1.7em;
+  border-radius: 999px;
+  font-size: 0.85em;
+  font-weight: 900;
+  color: #fff;
+  background: var(--tone);
+}
+.warm { --tone: linear-gradient(135deg, #ff9a62, #e0527a); }
+.hot { --tone: linear-gradient(135deg, #ffd24a, #ff6a2a); }
+.cool { --tone: linear-gradient(135deg, #5ec8ff, #6a5cff); }
+.calm { --tone: linear-gradient(135deg, #9fb0cc, #5d6d8c); }
+.stamp-bubble {
+  position: absolute;
+  z-index: 75;
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 0.6);
+  padding: calc(var(--u) * 0.7) calc(var(--u) * 1.3) calc(var(--u) * 0.7) calc(var(--u) * 0.7);
+  border-radius: calc(var(--u) * 1.4);
+  background: #fff;
+  color: #141a33;
+  font-weight: 900;
+  font-size: calc(var(--u) * 1.25);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+  white-space: nowrap;
+}
+.stamp-bubble i { font-size: calc(var(--u) * 0.9); }
+.stamp-bubble small { position: absolute; top: calc(var(--u) * -1.4); left: calc(var(--u) * 0.8); font-size: calc(var(--u) * 0.75); color: rgba(255, 255, 255, 0.8); font-weight: 800; }
+.stamp-bubble.me { left: calc(var(--u) * 5.4); top: calc(var(--u) * 46.2); transform-origin: 0 100%; }
+.stamp-bubble.opp { left: calc(var(--u) * 2); top: calc(var(--u) * 6.4); transform-origin: 0 0; }
+.stamp-bubble::after { content: ''; position: absolute; width: calc(var(--u) * 1); height: calc(var(--u) * 1); background: #fff; transform: rotate(45deg); }
+.stamp-bubble.me::after { left: calc(var(--u) * -0.3); bottom: calc(var(--u) * 0.9); }
+.stamp-bubble.opp::after { left: calc(var(--u) * 1.4); top: calc(var(--u) * -0.4); }

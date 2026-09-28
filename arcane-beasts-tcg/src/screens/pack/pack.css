@@ -280,7 +280,7 @@
 .tear-wrap { position: absolute; left: 50%; top: calc(var(--u) * 6.6); width: calc(var(--u) * 24); margin-left: calc(var(--u) * -12); z-index: 10; }
 .tear-float { position: relative; width: 100%; aspect-ratio: 60 / 100; }
 .tear-float > .bp, .tear-part { position: absolute; inset: 0; }
-.tear-zone { position: absolute; left: -15%; right: -15%; top: -6%; height: 30%; cursor: ew-resize; z-index: 6; }
+.tear-zone { position: absolute; left: -15%; right: -15%; cursor: crosshair; z-index: 6; touch-action: none; }
 .tear-guide {
   position: absolute;
   left: 4%;
@@ -634,24 +634,28 @@
 
 /* Pocket-style tear: the strip peels, light leaks from the seam, a spark rides the cut */
 .tear-press { position: relative; width: 100%; }
-.tear-zone { top: -10%; height: 34%; }
-.tear-cut {
-  height: 3px;
-  margin-top: -1.5px;
-  border-radius: 2px;
-  background: linear-gradient(90deg, color-mix(in srgb, var(--ac, #fff) 50%, white), #fff);
-  box-shadow: 0 0 4px 1px #fff, 0 0 14px 3px var(--ac, #fff), 0 0 36px 8px color-mix(in srgb, var(--ac, #fff) 45%, transparent);
-}
-.tear-leak {
+.tear-band {
   position: absolute;
-  height: calc(var(--u) * 5);
-  margin-top: calc(var(--u) * -2.5);
-  background: radial-gradient(50% 50% at 50% 50%, color-mix(in srgb, var(--ac, #fff) 55%, white) 0%, color-mix(in srgb, var(--ac, #fff) 35%, transparent) 40%, transparent 72%);
-  filter: blur(2px);
-  mix-blend-mode: screen;
-  z-index: 8;
+  left: 0;
+  right: 0;
+  z-index: 5;
   pointer-events: none;
+  border-radius: 0.6cqw;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--ac, #fff) 10%, transparent) 15%, color-mix(in srgb, var(--ac, #fff) 10%, transparent) 85%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.0), inset 0 -1px 0 rgba(255, 255, 255, 0.0);
+  opacity: 0;
+  transition: opacity 0.3s, box-shadow 0.2s, background 0.2s;
 }
+.tear-band.on { opacity: 1; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), inset 0 -1px 0 rgba(255, 255, 255, 0.35); }
+.tear-band.warn { opacity: 1; background: linear-gradient(90deg, transparent, rgba(255, 110, 90, 0.16) 15%, rgba(255, 110, 90, 0.16) 85%, transparent); box-shadow: inset 0 2px 0 rgba(255, 140, 110, 0.9), inset 0 -2px 0 rgba(255, 140, 110, 0.9); animation: band-warn 0.5s ease-in-out infinite alternate; }
+@keyframes band-warn { to { opacity: 0.55; } }
+.tear-seam, .tear-leak { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.tear-seam { z-index: 10; filter: drop-shadow(0 0 2px #fff) drop-shadow(0 0 6px var(--ac, #fff)); transition: opacity 0.25s; }
+.tear-seam.heal { opacity: 0; }
+.tear-seam polyline { fill: none; stroke: #fff; stroke-width: 2.6px; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.tear-leak { z-index: 8; filter: blur(7px); mix-blend-mode: screen; transition: opacity 0.25s; }
+.tear-leak polyline { fill: none; stroke: color-mix(in srgb, var(--ac, #fff) 65%, white); stroke-width: 22px; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.po-hint.warn { color: #ffb4a0; }
 .tear-head {
   position: absolute;
   width: calc(var(--u) * 4);
@@ -663,9 +667,10 @@
     linear-gradient(0deg, transparent 0 48%, rgba(255, 255, 255, 0.7) 50%, transparent 52% 100%);
   mix-blend-mode: screen;
   animation: head-spin 0.9s linear infinite;
-  z-index: 10;
+  z-index: 11;
   pointer-events: none;
 }
+  .tear-head.stop { filter: hue-rotate(0deg) saturate(0.2) brightness(0.8); animation-play-state: paused; }
 @keyframes head-spin { from { transform: rotate(0deg) scale(1); } 50% { transform: rotate(45deg) scale(1.15); } to { transform: rotate(90deg) scale(1); } }
 .tear-flash {
   position: absolute;
@@ -687,3 +692,21 @@
   text-shadow: 0 0 12px var(--ac, #fff), 0 3px 8px rgba(0, 0, 0, 0.8);
   letter-spacing: 0.02em;
 }
+
+/* ------------------------------- Pack pick ------------------------------ */
+.picker { position: absolute; inset: 0; z-index: 12; }
+.pick-title { position: absolute; left: 0; right: 0; top: calc(var(--u) * 6); text-align: center; font-weight: 800; font-size: calc(var(--u) * 1.3); letter-spacing: 0.16em; color: rgba(255, 255, 255, 0.85); text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6); }
+.pick-row { position: absolute; left: 0; right: 0; top: calc(var(--u) * 13.5); height: calc(var(--u) * 29); perspective: 1400px; transform-style: preserve-3d; cursor: grab; touch-action: pan-y; }
+.pick-row:active { cursor: grabbing; }
+.pick-slot { position: absolute; top: 0; width: calc(var(--u) * 17); margin-left: calc(var(--u) * -8.5); transform-style: preserve-3d; }
+.pick-pack { position: relative; width: 100%; aspect-ratio: 60 / 100; cursor: pointer; }
+.pick-pack > .bp { position: absolute; inset: 0; }
+.pick-glow { position: absolute; inset: -30%; border-radius: 50%; background: radial-gradient(closest-side, rgba(255, 250, 230, 0.9), rgba(255, 240, 200, 0.25) 45%, transparent 70%); mix-blend-mode: screen; pointer-events: none; }
+
+.torn-pile { position: absolute; left: 50%; top: calc(var(--u) * 42); width: 0; height: 0; z-index: 4; pointer-events: none; }
+.torn-piece { position: absolute; width: calc(var(--u) * 11); margin-left: calc(var(--u) * -5.5); aspect-ratio: 60 / 100; filter: brightness(0.7) drop-shadow(0 6px 10px rgba(0, 0, 0, 0.5)); }
+.torn-piece > .bp { position: absolute; inset: 0; }
+.multi-filter { margin-left: calc(var(--u) * 1.2); }
+.multi-filter button { font-size: calc(var(--u) * 0.8); padding: 2px calc(var(--u) * 0.8); letter-spacing: 0.04em; }
+.multi-filter button:disabled { opacity: 0.4; cursor: default; }
+.tb-count small { font-family: var(--font-ui); font-weight: 900; font-size: 0.7em; margin-right: 0.05em; }

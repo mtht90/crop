@@ -12,6 +12,10 @@
 // Afterwards the scene keeps running quietly behind the pack and draws the
 // pack's aura (the omen colour, which can climb — 昇格 — before opening).
 //
+// A god pack (every card ☆ or better) gets its own ending: every meteor is
+// gold, a golden rain follows the shower, and after the impact the night
+// gives way to dawn — the sun rises behind the pack.
+//
 // Everything is a pure function of the timeline clock, so the sequence plays
 // the same everywhere and can be skipped to any point.
 // ============================================================================
@@ -21,6 +25,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
+import { liteFx, reportFrameTime } from '../../lib/fx';
 
 /** 0 = nothing special, 1 = ◇◇◇◇, 2 = ☆, 3 = ♛ */
 export type OmenTier = 0 | 1 | 2 | 3;
@@ -34,6 +39,8 @@ type Beat = 'enter' | 'dive' | 'impact' | 'orb' | 'morph';
 
 export interface CinemaOptions {
   tier: OmenTier;
+  /** god pack: golden meteors and a dawn ending */
+  god?: boolean;
   /** one entry per card: the colour (omen tier) its meteor shows; the first one is the main meteor */
   meteors: OmenTier[];
   /** element whose rect the light should settle on (the pack) */
@@ -76,7 +83,7 @@ varying vec3 vDir;
 void main(){ vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
 `;
 const SKY_FRAG = /* glsl */ `
-uniform float uTime; uniform vec3 uTint; uniform float uTintAmt; uniform float uGlowAmt; uniform vec3 uGlowDir; uniform vec3 uMoonDir;
+uniform float uTime; uniform vec3 uTint; uniform float uTintAmt; uniform float uGlowAmt; uniform vec3 uGlowDir; uniform vec3 uMoonDir; uniform float uDawn; uniform vec3 uSunDir;
 varying vec3 vDir;
 ${NOISE}
 vec3 skyCol(vec3 d){
@@ -102,9 +109,18 @@ vec3 skyCol(vec3 d){
   col += uTint * uTintAmt * (0.3 + 0.7 * smoothstep(0.0, 0.5, h)) * 0.12;
   // light of the falling star / the orb near the horizon
   col += uTint * uGlowAmt * pow(max(dot(d, uGlowDir), 0.0), 18.0) * 0.6;
+  // dawn (god pack): warm horizon, lavender band, the sun behind the pack
+  if (uDawn > 0.0) {
+    vec3 dawn = mix(vec3(0.34, 0.13, 0.05), vec3(0.11, 0.06, 0.13), smoothstep(0.0, 0.14, h));
+    dawn = mix(dawn, vec3(0.012, 0.025, 0.08), smoothstep(0.14, 0.6, h));
+    float sd = max(dot(d, uSunDir), 0.0);
+    dawn += vec3(1.0, 0.7, 0.35) * (pow(sd, 120.0) * 0.7 + pow(sd, 16.0) * 0.12 + pow(sd, 4.0) * 0.03);
+    dawn += vec3(0.6, 0.3, 0.16) * exp(-max(h, 0.0) * 30.0) * 0.15;
+    col = mix(col, dawn, uDawn);
+  }
   // moonlight halo
   float mdot = max(dot(d, uMoonDir), 0.0);
-  col += vec3(0.55, 0.62, 0.85) * (pow(mdot, 60.0) * 0.35 + pow(mdot, 8.0) * 0.05);
+  col += vec3(0.55, 0.62, 0.85) * (pow(mdot, 60.0) * 0.35 + pow(mdot, 8.0) * 0.05) * (1.0 - uDawn);
   return col;
 }
 void main(){
@@ -116,7 +132,10 @@ void main(){
   float rip = noise(vec3(d.x * k * 0.9, d.z * k * 0.12, uTime * 0.45)) - 0.5;
   vec3 r = normalize(vec3(d.x + rip * 0.035, max(0.0, depth + rip * 0.01), d.z));
   vec3 col = skyCol(r) * 0.55;
-  col = mix(col, vec3(0.003, 0.005, 0.013), smoothstep(0.03, 0.4, depth));
+  col = mix(col, mix(vec3(0.003, 0.005, 0.013), vec3(0.02, 0.012, 0.018), uDawn), smoothstep(0.03, 0.4, depth));
+  // the sun's path on the water
+  float saz = d.x / -d.z - uSunDir.x / -uSunDir.z;
+  col += vec3(1.0, 0.62, 0.3) * exp(-abs(saz + rip * 0.1) * 16.0) * smoothstep(0.5, 0.0, depth) * (0.4 + 0.9 * max(rip, 0.0)) * 0.22 * uDawn;
   // moon path on the water
   float az = d.x / -d.z - uMoonDir.x / -uMoonDir.z;
   float moonPath = exp(-abs(az + rip * 0.08) * 28.0) * smoothstep(0.45, 0.0, depth) * (0.45 + 0.9 * max(rip, 0.0));
@@ -400,6 +419,8 @@ export class MeteorCinema {
   private last = 0;
   private clock = -1;
   private slow = 0;
+  private frameSum = 0;
+  private frames = 0;
   private offset = 0;
   private done = false;
   private idle = false;
@@ -421,14 +442,15 @@ export class MeteorCinema {
     private readonly host: HTMLElement,
     private readonly opts: CinemaOptions,
   ) {
-    this.color = new THREE.Color(OMEN_COLORS[opts.tier]);
+    this.color = new THREE.Color(opts.god ? OMEN_COLORS[2] : OMEN_COLORS[opts.tier]);
     this.auraTier = opts.tier;
     this.auraColor.copy(this.color);
     const rainbow = opts.tier === 3;
 
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
+    const lite = liteFx();
+    this.renderer = new THREE.WebGLRenderer({ antialias: !lite, alpha: false, powerPreference: 'high-performance' });
     // the scene is soft and bloomed, so 1x is plenty; drops further if frames get slow
-    this.renderer.setPixelRatio(1);
+    this.renderer.setPixelRatio(lite ? 0.65 : 1);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 0.95;
@@ -457,6 +479,8 @@ export class MeteorCinema {
           uGlowAmt: { value: 0 },
           uGlowDir: { value: new THREE.Vector3(0, 0, -1) },
           uMoonDir: { value: new THREE.Vector3(0.5, 0.36, -0.79).normalize() },
+          uDawn: { value: 0 },
+          uSunDir: { value: new THREE.Vector3(-0.04, 0.035, -1).normalize() },
         },
         side: THREE.BackSide,
         depthWrite: false,
@@ -465,7 +489,7 @@ export class MeteorCinema {
     this.scene.add(this.sky);
 
     // stars (and their reflection)
-    const N = 3200;
+    const N = lite ? 1500 : 3200;
     const sp = new Float32Array(N * 3);
     const ss = new Float32Array(N);
     const sph = new Float32Array(N);
@@ -545,7 +569,10 @@ export class MeteorCinema {
 
     // meteors: one per card. The main one (best card) dives; the rest fall
     // away from a shared radiant like a real meteor shower.
-    const tiers = opts.meteors.length ? opts.meteors : [opts.tier];
+    const god = !!opts.god;
+    let tiers = opts.meteors.length ? opts.meteors : [opts.tier];
+    // god pack: every meteor gold, and a golden rain on top
+    if (god) tiers = [...tiers.map((t): OmenTier => (t === 3 ? 3 : 2)), ...Array.from({ length: lite ? 10 : 26 }, (): OmenTier => 2)];
     const many = tiers.length > 12;
     const mk = (path: THREE.Vector3[], t0: number, t1: number, main: boolean, tier: OmenTier) => {
       const col = new THREE.Color(OMEN_COLORS[tier]);
@@ -576,7 +603,7 @@ export class MeteorCinema {
       const mid = start.clone().lerp(end, 0.5);
       mk([start, mid, end], t0, t0 + rnd(0.45, 0.8) * (many ? 0.8 : 1), false, tier);
     });
-    this.color = new THREE.Color(OMEN_COLORS[tiers[0]]);
+    this.color = new THREE.Color(god ? OMEN_COLORS[2] : OMEN_COLORS[tiers[0]]);
 
     // the main meteor mirrored in the lake
     this.reflection = new THREE.Mesh(this.meteors[0].ribbon.mesh.geometry, this.meteors[0].ribbon.mat.clone());
@@ -637,7 +664,7 @@ export class MeteorCinema {
     this.scene.add(this.moon);
 
     // fireflies over the water
-    const FN = 140;
+    const FN = lite ? 50 : 140;
     const fp = new Float32Array(FN * 3);
     const fa = new Float32Array(FN);
     const fc = new Float32Array(FN * 3);
@@ -885,6 +912,10 @@ export class MeteorCinema {
     }
     this.clock += dt;
     this.last = now;
+    if (!this.done && raw < 0.5) {
+      this.frameSum += raw;
+      this.frames++;
+    }
     const t = this.time();
     (window as unknown as { __cineT?: number }).__cineT = t;
     const T = Math.min(t, T_DONE);
@@ -956,6 +987,15 @@ export class MeteorCinema {
     const toImpact = this.IMPACT.clone().sub(camPos).normalize();
     skyU.uGlowDir.value.copy(toImpact);
     skyU.uGlowAmt.value = smooth(2.2, T_IMPACT, T) * (1 - smooth(T_IMPACT + 0.3, T_IMPACT + 1.4, T)) * 1.2;
+    // god pack: night turns to dawn after the impact (and stays while the pack waits)
+    if (this.opts.god) {
+      const dawn = easeInOut(smooth(T_IMPACT + 0.15, T_IMPACT + 2.1, t));
+      skyU.uDawn.value = dawn;
+      (this.stars.material as THREE.ShaderMaterial).uniforms.uDim.value = 1 - dawn * 0.9;
+      (this.starsMirror.material as THREE.ShaderMaterial).uniforms.uDim.value = 0.22 * (1 - dawn * 0.9);
+      (this.aurora.material as THREE.ShaderMaterial).uniforms.uAmt.value = 0.55 * (1 - dawn);
+      this.moon.children.forEach((c, k) => (((c as THREE.Sprite).material as THREE.SpriteMaterial).opacity = (k === 0 ? 0.55 : 1) * (1 - dawn * 0.85)));
+    }
 
     // ---------------- impact ----------------
     if (T >= T_IMPACT && !this.beats.has('impact')) {
@@ -1054,6 +1094,8 @@ export class MeteorCinema {
 
     if (T >= T_DONE && !this.done) {
       this.done = true;
+      // remember slow devices so the next opening starts light (auto mode)
+      if (this.frames > 20) reportFrameTime((this.frameSum / this.frames) * 1000);
       this.opts.onDone();
     }
     this.composer.render();

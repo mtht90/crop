@@ -1,0 +1,24 @@
+// Pack pick: node scripts/pick-shot.mjs <outprefix>
+import { chromium } from 'playwright';
+const [out] = process.argv.slice(2);
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+page.on('pageerror', (e) => console.log('pageerror:', e.message));
+let n = 0;
+const shot = async (name, w = 0) => { if (w) await page.waitForTimeout(w); await page.screenshot({ path: `${out}-${String(n++).padStart(2, '0')}-${name}.png` }); };
+await page.goto('http://127.0.0.1:5173/?screen=shop');
+await page.waitForTimeout(1500);
+await page.evaluate(() => window.__stores.useStore.getState().update((s) => { s.coins = 99999; }));
+await page.locator('.pill', { hasText: '開封する' }).first().click();
+await shot('row', 1500);
+await page.mouse.move(640, 330); await page.mouse.down();
+await page.mouse.move(460, 330, { steps: 8 }); await page.mouse.up();
+await shot('swiped', 900);
+const packs = page.locator('.pick-pack');
+const b = await packs.nth(3).boundingBox();
+await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2);
+await shot('chosen', 350);
+await shot('lift', 500);
+await page.waitForFunction(() => (window.__cineT ?? 0) >= 0.4, null, { timeout: 90000 });
+await shot('cinema');
+await browser.close();

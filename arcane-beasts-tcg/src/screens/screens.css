@@ -281,6 +281,7 @@
 .set-row { display: flex; align-items: center; gap: calc(var(--u) * 1.4); font-weight: 800; font-size: calc(var(--u) * 1.2); }
 .set-row label { width: calc(var(--u) * 14); }
 .set-row input[type='range'] { flex: 1; accent-color: var(--gold); }
+.set-note { margin-top: calc(var(--u) * -1); padding-left: calc(var(--u) * 15.4); font-size: calc(var(--u) * 0.85); color: var(--ink-dim); font-weight: 600; }
 .danger { border-top: 1px solid rgba(255, 255, 255, 0.1); padding-top: calc(var(--u) * 1.4); }
 
 /* ------------------------------ Rules/Credits ----------------------------- */
@@ -585,3 +586,4 @@
 .rp-reward { font-size: calc(var(--u) * 0.8); font-weight: 800; color: var(--gold-2); text-align: center; display: flex; align-items: center; gap: 3px; flex-wrap: wrap; justify-content: center; }
 @keyframes pop-in { from { transform: scale(1.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 @keyframes glow-breathe { 50% { transform: scale(1.08); opacity: 0.8; } }
+.set-ok { font-size: calc(var(--u) * 0.95); color: var(--ink-dim); font-weight: 700; }

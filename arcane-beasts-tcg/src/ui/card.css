@@ -598,18 +598,47 @@
 }
 
 /* ---------------------------------- Back --------------------------------- */
-.tcg-back { border-radius: 4.8cqw; overflow: hidden; box-shadow: 0 0.6cqw 1.2cqw rgba(0, 0, 0, 0.35), 0 0 0 0.35cqw rgba(0, 0, 0, 0.35); }
-.back-svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.tcg-back .tcg-frame {
+  background: linear-gradient(135deg, #3a2a10, #c9962b 20%, #5e4411 40%, #e8c567 60%, #4a3410 80%, #c9962b);
+  padding: 2.6cqw;
+}
+.back-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 3cqw;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(90% 70% at 50% 45%, #1b2a6e 0%, #0f1a4a 55%, #080d28 100%);
+  box-shadow: inset 0 0 0 0.4cqw rgba(0, 0, 0, 0.45);
+}
+.back-line { position: absolute; inset: 3.4cqw; border-radius: 1.6cqw; border: 0.35cqw solid rgba(233, 196, 106, 0.45); pointer-events: none; }
+.back-mark { width: 40cqw; height: 40cqw; color: #e2bd62; filter: drop-shadow(0 0 1.6cqw rgba(233, 196, 106, 0.35)); }
+.back-name {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 9cqw;
+  text-align: center;
+  font-family: 'Cinzel', serif;
+  font-weight: 700;
+  font-size: 5.2cqw;
+  letter-spacing: 0.32em;
+  padding-left: 0.32em;
+  color: #e2bd62;
+  opacity: 0.85;
+}
 .back-sheen {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: linear-gradient(115deg, transparent 30%, rgba(255, 240, 200, 0.16) 45%, rgba(170, 200, 255, 0.12) 52%, transparent 65%);
+  background: linear-gradient(115deg, transparent 35%, rgba(255, 240, 200, 0.1) 48%, transparent 60%);
   background-size: 260% 100%;
-  animation: back-sheen 6s ease-in-out infinite;
+  animation: back-sheen 7s ease-in-out infinite;
   mix-blend-mode: screen;
 }
-@keyframes back-sheen { 0%, 55% { background-position: 130% 0; } 100% { background-position: -60% 0; } }
+@keyframes back-sheen { 0%, 60% { background-position: 130% 0; } 100% { background-position: -60% 0; } }
 
 /* ==========================================================================
    Variants (第2弾)

@@ -15,6 +15,8 @@ import { Exchange } from './screens/Exchange';
 import { Ranked } from './screens/Ranked';
 import { Credits, Rules, Settings } from './screens/Misc';
 import { setVolumes, unlockAudio } from './audio/audio';
+import { configureFx } from './lib/fx';
+import { setGyroEnabled, startGyro } from './lib/gyro';
 import { expand, RIVALS, deckById } from './engine/decks';
 import './screens/screens.css';
 import { ConfirmDialog } from './ui/Confirm';
@@ -64,12 +66,17 @@ export function App() {
   const seq = useStore((s) => s.battleSeq);
   const settings = useStore((s) => s.save.settings);
   useEffect(() => setVolumes({ music: settings.music, sfx: settings.sfx }), [settings.music, settings.sfx]);
+  useEffect(() => configureFx(settings.fx, settings.vibrate), [settings.fx, settings.vibrate]);
+  useEffect(() => setGyroEnabled(settings.gyro), [settings.gyro]);
   useEffect(() => {
     const q = new URLSearchParams(location.search);
     if (q.has('gallery')) useStore.getState().go('gallery');
     else if (q.has('battle')) debugBattle();
     else if (q.has('screen')) useStore.getState().go(q.get('screen') as never);
-    const unlock = () => unlockAudio();
+    const unlock = () => {
+      unlockAudio();
+      if (useStore.getState().save.settings.gyro) void startGyro();
+    };
     window.addEventListener('pointerdown', unlock);
     return () => window.removeEventListener('pointerdown', unlock);
   }, []);
