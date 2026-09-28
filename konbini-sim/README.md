@@ -85,3 +85,7 @@ src/
   player/  Player（一人称操作）
   ui/      UI, PCMenu, Menus, style.css
 ```
+
+## ホスト版ビルド
+
+`tools/build-artifact.sh` で、フォントを Google Fonts から読み込み、WebAssembly を使わない（meshopt を展開した）GLB を使い、JS/CSS をインライン化した配布版を `dist-artifact/` に出力します。ポインターロックが使えない環境では、右ボタンドラッグで視点を動かせます。

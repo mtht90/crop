@@ -250,17 +250,36 @@ export class Game {
   }
 
   headless = false;
+  private lockHintShown = false;
   private catcher: HTMLElement | null = null;
 
   requestLock(): void {
     if (this.mode !== 'play') return;
     this.input.lock();
     if (this.headless || this.catcher) return;
+    if (this.input.lockFailed) {
+      if (!this.lockHintShown) {
+        this.lockHintShown = true;
+        this.ui.notify('この環境ではマウスロックが使えません。右ボタンを押しながらドラッグで視点を動かせます。', 'warn', 9000);
+      }
+      return;
+    }
     // Browsers only grant pointer lock on a user gesture: show a click catcher
     // until we get it (or the game leaves play mode).
     setTimeout(() => {
       if (this.input.locked || this.mode !== 'play' || this.catcher) return;
-      const el = h('div', { class: 'clickcatch interactive', onclick: () => { this.input.lock(); this.audio.resume(); } }, h('div', {}, 'クリックして再開'));
+      const el = h('div', { class: 'clickcatch interactive', onclick: () => {
+        this.input.lock();
+        this.audio.resume();
+        setTimeout(() => {
+          if (!this.input.locked) {
+            this.input.lockFailed = true;
+            el.remove();
+            this.catcher = null;
+            this.requestLock();
+          }
+        }, 600);
+      } }, h('div', {}, 'クリックして再開'));
       this.catcher = el;
       this.ui.root.append(el);
       const t = setInterval(() => {

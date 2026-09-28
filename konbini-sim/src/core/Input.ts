@@ -14,6 +14,8 @@ export class Input {
   ndcX = 0;
   ndcY = 0;
   locked = false;
+  /** Pointer lock refused (embedded frames, some browsers): right-drag to look instead. */
+  lockFailed = false;
   /** When false, gameplay ignores keys (e.g. while typing in a modal). */
   enabled = true;
   sensitivity = 1;
@@ -28,7 +30,7 @@ export class Input {
     window.addEventListener('keyup', (e) => this.down.delete(e.code));
     window.addEventListener('blur', () => this.down.clear());
     window.addEventListener('mousemove', (e) => {
-      if (this.locked) {
+      if (this.locked || (this.lockFailed && e.buttons & 2)) {
         this.mouseDX += e.movementX;
         this.mouseDY += e.movementY;
       }
@@ -42,6 +44,9 @@ export class Input {
     window.addEventListener('mouseup', (e) => this.mouseDown.delete(e.button));
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
     window.addEventListener('wheel', (e) => (this.wheel += Math.sign(e.deltaY)), { passive: true });
+    document.addEventListener('pointerlockerror', () => {
+      this.lockFailed = true;
+    });
     document.addEventListener('pointerlockchange', () => {
       this.locked = document.pointerLockElement === this.canvas;
     });
@@ -49,8 +54,12 @@ export class Input {
 
   lock(): void {
     if (!this.locked) {
-      const p = this.canvas.requestPointerLock() as unknown as Promise<void> | undefined;
-      p?.catch?.(() => undefined);
+      try {
+        const p = this.canvas.requestPointerLock() as unknown as Promise<void> | undefined;
+        p?.catch?.(() => undefined);
+      } catch {
+        this.lockFailed = true;
+      }
     }
   }
 

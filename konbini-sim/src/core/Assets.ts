@@ -1,9 +1,10 @@
 import * as THREE from 'three';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { HDRLoader } from 'three/examples/jsm/loaders/HDRLoader.js';
-import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 
 const BASE = import.meta.env.BASE_URL + 'assets/';
+/** The hosted build serves binary assets under an extension its host accepts. */
+const BIN = import.meta.env.VITE_HOSTED === '1' ? '.wasm' : '';
 
 export const CHARACTER_IDS = [
   'Male_Adult_01', 'Male_Adult_03', 'Male_Adult_05', 'Male_Adult_08', 'Male_Adult_09', 'Male_Adult_11',
@@ -37,20 +38,21 @@ export class Assets {
   readonly textures = new Map<string, THREE.Texture>();
   readonly sfx = new Map<SfxId, ArrayBuffer>();
 
-  constructor() {
-    this.gltf.setMeshoptDecoder(MeshoptDecoder);
-  }
-
   async loadAll(onProgress: (p: number, label: string) => void): Promise<void> {
+    // The hosted build ships uncompressed glTF (its CSP forbids WebAssembly).
+    if (import.meta.env.VITE_HOSTED !== '1') {
+      const { MeshoptDecoder } = await import('three/examples/jsm/libs/meshopt_decoder.module.js');
+      this.gltf.setMeshoptDecoder(MeshoptDecoder);
+    }
     const jobs: { label: string; run: () => Promise<void>; weight: number }[] = [];
     for (const id of CHARACTER_IDS) {
-      jobs.push({ label: `人物 ${id}`, weight: 3, run: async () => void this.characters.set(id, await this.gltf.loadAsync(`${BASE}characters/${id}.glb`)) });
+      jobs.push({ label: `人物 ${id}`, weight: 3, run: async () => void this.characters.set(id, await this.gltf.loadAsync(`${BASE}characters/${id}.glb${BIN}`)) });
     }
     for (const g of ['m', 'f'] as const) {
       jobs.push({
         label: `アニメーション (${g})`, weight: 4,
         run: async () => {
-          const a = await this.gltf.loadAsync(`${BASE}anims/anims_${g}.glb`);
+          const a = await this.gltf.loadAsync(`${BASE}anims/anims_${g}.glb${BIN}`);
           this.anims[g] = a.animations.map((clip) => {
             // Keep rotations everywhere, and only the pelvis translation (hip bob);
             // bone lengths differ between avatars so other translations would distort them.
@@ -61,14 +63,14 @@ export class Assets {
       });
     }
     for (const id of PROP_IDS) {
-      jobs.push({ label: `モデル ${id}`, weight: id === 'car' ? 4 : 1, run: async () => void this.props.set(id, await this.gltf.loadAsync(`${BASE}props/${id}.glb`)) });
+      jobs.push({ label: `モデル ${id}`, weight: id === 'car' ? 4 : 1, run: async () => void this.props.set(id, await this.gltf.loadAsync(`${BASE}props/${id}.glb${BIN}`)) });
     }
     const hd: [keyof Assets['hdri'], string][] = [['day', 'pedestrian_overpass_1k'], ['dusk', 'venice_sunset_1k'], ['night', 'moonless_golf_1k']];
     for (const [k, f] of hd) {
       jobs.push({
         label: `HDRI ${f}`, weight: 2,
         run: async () => {
-          const t = await this.rgbe.loadAsync(`${BASE}hdri/${f}.hdr`);
+          const t = await this.rgbe.loadAsync(`${BASE}hdri/${f}.hdr${BIN}`);
           t.mapping = THREE.EquirectangularReflectionMapping;
           this.hdri[k] = t;
         },

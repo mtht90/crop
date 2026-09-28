@@ -1,7 +1,17 @@
-import '@fontsource/noto-sans-jp/400.css';
-import '@fontsource/noto-sans-jp/700.css';
-import '@fontsource/noto-sans-jp/900.css';
-import '@fontsource/dela-gothic-one/400.css';
+// Fonts: bundled via @fontsource by default; the hosted build pulls them from Google Fonts instead
+// and decodes glTF textures through <img> (blob: fetches are blocked by the host's CSP).
+if (import.meta.env.VITE_HOSTED === '1') {
+  const l = document.createElement('link');
+  l.rel = 'stylesheet';
+  l.href = 'https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Noto+Sans+JP:wght@400;700;900&display=swap';
+  document.head.append(l);
+  (window as unknown as { createImageBitmap?: unknown }).createImageBitmap = undefined;
+} else {
+  void import('@fontsource/noto-sans-jp/400.css');
+  void import('@fontsource/noto-sans-jp/700.css');
+  void import('@fontsource/noto-sans-jp/900.css');
+  void import('@fontsource/dela-gothic-one/400.css');
+}
 import * as THREE from 'three';
 import { Engine } from './core/Engine';
 import { Assets } from './core/Assets';
