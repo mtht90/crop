@@ -933,3 +933,29 @@ kbd {
   background: rgba(255, 255, 255, 0.15);
   border-radius: 5px;
 }
+
+.key-badge {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 900;
+  color: #0b0d1c;
+  background: #6ff0ff;
+}
+.convert-report {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+.choice-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 10px 0;
+}
+.choice-list .btn {
+  text-align: left;
+  white-space: normal;
+  border-radius: 12px;
+}

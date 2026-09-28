@@ -1,4 +1,5 @@
 import { TimingMap } from '../core/chart';
+import { CHORDS, DrumHit, MelodyNote, SONGS, Song, sectionAt } from '../music/song';
 import { audioCtx, noiseBuffer, outputLatency } from './context';
 import { MusicSource } from './music';
 
@@ -39,14 +40,32 @@ export class SynthMusic implements MusicSource {
   private nextStep = 0;
   private timer: number | null = null;
   private melody: number[][] = [];
+  private song: Song | null = null;
+  private songDrums = new Map<number, DrumHit[]>();
+  private songMelody = new Map<number, { note: MelodyNote; voice: 'vocal' | 'riff' }[]>();
 
   constructor(
     private timing: TimingMap,
     private lengthBeats: number,
     seed: number,
     volume: number,
+    songId?: string,
   ) {
     this.volume = volume;
+    const song = songId ? SONGS[songId] : undefined;
+    if (song) {
+      this.song = song;
+      this.lengthBeats = song.endBeat;
+      for (const d of song.drums) {
+        const st = Math.round(d.beat * 4);
+        this.songDrums.set(st, [...(this.songDrums.get(st) ?? []), d]);
+      }
+      for (const sec of song.sections)
+        for (const n of sec.notes) {
+          const st = Math.round(n.beat * 4);
+          this.songMelody.set(st, [...(this.songMelody.get(st) ?? []), { note: n, voice: sec.voice }]);
+        }
+    }
     // 2小節ごとのメロディ（8分音符 x16、-1 = 休符）
     const r = rng(seed);
     let idx = 3;
@@ -69,7 +88,7 @@ export class SynthMusic implements MusicSource {
   }
 
   duration(): number {
-    return this.timing.beatToTime(this.lengthBeats + 4);
+    return this.timing.beatToTime((this.song ? this.song.endBeat : this.lengthBeats) + 4);
   }
 
   private stepTime(step: number): number {
@@ -150,7 +169,77 @@ export class SynthMusic implements MusicSource {
     }
   }
 
+  private playSongStep(song: Song, step: number, t: number) {
+    const beat = step / 4;
+    const beatLen = this.stepTime(step + 4) - this.stepTime(step);
+    const endStep = song.endBeat * 4;
+    if (step > endStep + 16) return;
+    if (step >= endStep) {
+      if (step === endStep) {
+        const last = song.sections[song.sections.length - 1];
+        const chord = CHORDS[last.chords[last.chords.length - 1]];
+        this.crash(t);
+        this.kick(t);
+        this.pad(t, chord, beatLen * 4);
+        this.bass(t, chord[0] - 12, beatLen * 3);
+        this.lead(t, chord[0] + 24, beatLen * 3);
+      }
+      return;
+    }
+    const sec = sectionAt(song, beat);
+    const bar = Math.floor((beat - sec.start) / 4);
+    const inBar = step % 16;
+    const chord = CHORDS[sec.chords[bar]] ?? CHORDS.C;
+    if (inBar === 0) this.pad(t, chord, beatLen * 4);
+    for (const d of this.songDrums.get(step) ?? []) {
+      if (d.type === 'kick') this.kick(t);
+      else if (d.type === 'snare') this.snare(t, d.vel);
+      else if (d.type === 'hat') this.hat(t, false, d.vel);
+      else if (d.type === 'open') this.hat(t, true, d.vel);
+      else this.crash(t);
+    }
+    // ベース
+    const root = chord[0] - 12;
+    switch (sec.drums) {
+      case 'light':
+        if (inBar % 8 === 0) this.bass(t, root, beatLen * 1.8);
+        break;
+      case 'verse':
+        if (inBar % 4 === 0) this.bass(t, root, beatLen * 0.85);
+        break;
+      case 'half':
+        if (inBar === 0 || inBar === 10) this.bass(t, root, beatLen * 1.4);
+        break;
+      default:
+        if (step % 2 === 0) this.bass(t, root + (sec.drums !== 'build' && step % 4 === 2 ? 12 : 0), beatLen * 0.45);
+    }
+    if (sec.arp) this.arp(t, chord, step, sec.kind === 'chorus' ? 0.7 : 0.5);
+    for (const m of this.songMelody.get(step) ?? []) {
+      const dur = m.note.dur * beatLen;
+      if (m.voice === 'riff') this.pluck(t, m.note.pitch, Math.min(dur, beatLen * 0.9));
+      else this.lead(t, m.note.pitch, dur * 0.92);
+    }
+  }
+
+  private pluck(t: number, midi: number, dur: number) {
+    const f = this.ctx.createBiquadFilter();
+    f.type = 'lowpass';
+    f.frequency.setValueAtTime(5200, t);
+    f.frequency.exponentialRampToValueAtTime(1200, t + dur);
+    const g = this.env(t, 0.11, 0.003, dur);
+    f.connect(g).connect(this.out());
+    this.osc('square', mtof(midi), t, dur).connect(f);
+    const o2 = this.osc('sawtooth', mtof(midi) * 2.001, t, dur);
+    const g2 = this.ctx.createGain();
+    g2.gain.value = 0.35;
+    o2.connect(g2).connect(f);
+  }
+
   private playStep(step: number, t: number) {
+    if (this.song) {
+      this.playSongStep(this.song, step, t);
+      return;
+    }
     const endStep = this.lengthBeats * 4;
     if (step > endStep) return;
     const beatLen = this.stepTime(step + 4) - this.stepTime(step);

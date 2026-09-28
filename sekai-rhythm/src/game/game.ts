@@ -92,7 +92,7 @@ export class GameScreen {
         yt.onError = (msg) => this.fatal(msg);
         this.music = yt;
       } else {
-        this.music = new SynthMusic(this.runtime.timing, chart.audio.lengthBeats, chart.audio.seed ?? 1, this.opts.settings.musicVolume);
+        this.music = new SynthMusic(this.runtime.timing, chart.audio.lengthBeats, chart.audio.seed ?? 1, this.opts.settings.musicVolume, chart.audio.song);
       }
       await this.music.prepare(this.musicStart);
     } catch (e) {
@@ -199,6 +199,7 @@ export class GameScreen {
         flickLabel: s.flickKeys.map(keyLabel).join(' / '),
         videoBg: chart.audio.type === 'youtube' && s.showVideo,
         dim: s.bgDim,
+        sixLane: chart.keyMode === 6,
       },
       (now - (this.startTime ?? 0)) / span,
     );

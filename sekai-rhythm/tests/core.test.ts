@@ -149,7 +149,7 @@ describe('GameEngine', () => {
     expect(rt.objs[1].judge).toBe('perfect');
     // キーを押すだけではフリックにならない
     e.keyDown(3, 3.0);
-    e.update(3.0 + WINDOWS.bad + 0.01);
+    e.update(3.0 + WINDOWS.flick.bad[1] + 0.01);
     expect(rt.objs[2].judge).toBe('miss');
   });
 
@@ -206,5 +206,73 @@ describe('GameEngine', () => {
     expect(kinds[0]).toBe('slideStart:perfect');
     expect(kinds).toContain('tick:miss');
     expect(kinds[kinds.length - 1]).toBe('slideEnd:miss');
+  });
+});
+
+describe('parseSus (Sonolus 準拠の拡張)', () => {
+  const sus = [
+    '#REQUEST "ticks_per_beat 480"',
+    '#BPM01: 120',
+    '#00008: 01',
+    '#00002: 4',
+    '#00102: 3',
+    // ガイド（判定なし）: 拍0→拍2
+    '#00094a: 12002200',
+    // 始点なし・経路に沿う中継点・なぞり終点のスライド（小節1は3拍 = 拍4〜6、小節2は拍7〜）
+    '#00136b: 133300',
+    '#00236b: 2300',
+    '#00116: 710000',
+    '#00116: 003100',
+    '#00216: 5300',
+    '#MEASUREBS 3',
+    '#00012: 1200',
+  ].join('\n');
+
+  it('handles guides, removed heads, attached ticks, trace ends and MEASUREBS', () => {
+    const c = parseSus(sus);
+    const guide = c.notes.find((n) => n.type === 'slide' && n.guide);
+    expect(guide).toBeTruthy();
+    const slide = c.notes.find((n) => n.type === 'slide' && !n.guide);
+    expect(slide?.type).toBe('slide');
+    if (slide?.type !== 'slide') return;
+    expect(slide.startHidden).toBe(true);
+    expect(slide.endHidden).toBeUndefined();
+    expect(slide.points.map((p) => p.beat)).toEqual([4, 5, 7]);
+    expect(slide.points[1]).toMatchObject({ attach: true, visible: true });
+    expect(slide.points[2]).toMatchObject({ trace: true });
+    // MEASUREBS 3 → 小節3 = 4 + 3 + 3 = 拍10
+    expect(c.notes).toContainEqual({ type: 'single', kind: 'tap', beat: 10, lane: 0, width: 2 });
+    // スライド始点位置のタップ種別7はノーツにならない
+    expect(c.notes.filter((n) => n.type === 'single').length).toBe(1);
+
+    const rt = compileChart(c);
+    expect(rt.guides.length).toBe(1);
+    const s = rt.slides[0];
+    expect(s.start).toBeNull();
+    expect(s.end?.trace).toBe(true);
+    // 中継点(1) + 半拍ごとの不可視判定 4.5,5,5.5,6,6.5 (5)
+    expect(s.ticks.length).toBe(6);
+    expect(s.ticks.filter((t) => t.hidden).map((t) => t.beat)).toEqual([4.5, 5, 5.5, 6, 6.5]);
+  });
+
+  it('uses per-type judgement windows from the original game', () => {
+    const rt = compileChart(
+      emptyChart({
+        bpms: [{ beat: 0, bpm: 60 }],
+        notes: [
+          { type: 'single', kind: 'tap', beat: 1, lane: 0, width: 2, critical: true },
+          { type: 'single', kind: 'flick', beat: 2, lane: 0, width: 2, dir: 'up' },
+        ],
+      }),
+    );
+    const e = new GameEngine(rt, false);
+    // クリティカルの PERFECT は ±3.3F (55ms)
+    e.keyDown(0, 1.05);
+    e.keyUp(0, 1.1);
+    expect(rt.objs[0].judge).toBe('perfect');
+    // フリックの GREAT は遅い側 7.5F (125ms) まで
+    e.keyDown(0, 2.1);
+    e.flickDown(2.12);
+    expect(rt.objs[1].judge).toBe('great');
   });
 });

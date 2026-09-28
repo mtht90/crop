@@ -6,6 +6,7 @@ import { ChartData, DIFFICULTIES, Difficulty, cloneChart, emptyChart, newChartId
 import { Settings } from './core/settings';
 import { storage } from './core/storage';
 import { parseSus } from './core/sus';
+import { Convert6Options, ThinLevel, convertTo6 } from './core/convert6';
 import { EditorScreen } from './editor/editor';
 import { GameExit, GameResult, GameScreen } from './game/game';
 import { resultScreen } from './ui/result';
@@ -60,6 +61,7 @@ class App {
         },
         edit: (c) => this.openEditor(cloneChart(c)),
         duplicate: (c) => void this.duplicate(c),
+        convert6: (c) => void this.convert6(c),
         exportJson: (c) => downloadText(`${safeFileName(c.title)}_${c.difficulty}.json`, JSON.stringify(c, null, 1)),
         remove: (c) => void this.remove(c),
         create: () => this.create(),
@@ -201,31 +203,91 @@ class App {
     title.focus();
   }
 
+  /** 6レーン変換の設定を聞く。キャンセルなら null */
+  private askConvert6(title: string, allowKeep12: boolean): Promise<{ keep12: boolean; make6: boolean; opts: Convert6Options } | null> {
+    return new Promise((resolve) => {
+      let result: { keep12: boolean; make6: boolean; opts: Convert6Options } | null = null;
+      const m = modal(title, { onClose: () => resolve(result) });
+      const chord = h(
+        'select',
+        {},
+        h('option', { value: '2', selected: true }, '2（両手1本ずつ・おすすめ）'),
+        h('option', { value: '3' }, '3'),
+        h('option', { value: '0' }, '制限なし（元の譜面のまま）'),
+      );
+      const thin = h(
+        'select',
+        {},
+        h('option', { value: 'none', selected: true }, 'なし（元の密度のまま）'),
+        h('option', { value: 'light' }, 'やさしめ（8分より細かいノーツを省く）'),
+        h('option', { value: 'easy' }, 'かんたん（4分より細かいノーツを省く）'),
+      );
+      const field = (label: string, input: HTMLElement) => h('label', { class: 'field' }, h('span', { class: 'field-label' }, label), input);
+      const done = (keep12: boolean, make6: boolean) => {
+        result = { keep12, make6, opts: { maxChord: Number(chord.value), thin: thin.value as ThinLevel } };
+        m.close();
+      };
+      m.body.append(
+        h('p', { class: 'convert-report' }, '12レーンの譜面を 6 キー用に変換します。幅の広いノーツは中心に近い 1 キーに、動くスライドはキー単位の階段に、スライドで押さえているキーと重なるノーツは隣のキーに移します。'),
+        field('同時押しの上限（押しっぱなしのスライドも 1 と数える）', chord),
+        field('間引き', thin),
+        h(
+          'div',
+          { class: 'choice-list' },
+          h('button', { class: 'btn primary', onclick: () => done(false, true) }, allowKeep12 ? '6レーンに変換して読み込む' : '6レーン版を作成'),
+          allowKeep12 ? h('button', { class: 'btn', onclick: () => done(true, true) }, '12レーン版と6レーン版の両方を読み込む') : null,
+          allowKeep12 ? h('button', { class: 'btn', onclick: () => done(true, false) }, '12レーンのまま読み込む') : null,
+        ),
+      );
+    });
+  }
+
+  private async saveConverted(src: ChartData, opts: Convert6Options): Promise<ChartData> {
+    const { chart, report } = convertTo6(src, opts);
+    chart.title = src.title.replace(/［6レーン］$/, '') + '［6レーン］';
+    await storage.saveChart(chart);
+    toast(`6レーン版を作成: ${report.input} → ${report.output} ノーツ（省略 ${report.dropped} / 位置調整 ${report.moved}）`, 'ok', 5000);
+    return chart;
+  }
+
+  private async convert6(c: ChartData) {
+    const ans = await this.askConvert6('6レーン版を作成', false);
+    if (!ans) return;
+    const made = await this.saveConverted(c, ans.opts);
+    await this.showSelect(made.id);
+  }
+
   private async importFile() {
     const file = await pickFile('.sus,.json,.txt');
     if (!file) return;
+    let chart: ChartData;
     try {
       const text = await file.text();
-      let chart: ChartData;
       if (/\.json$/i.test(file.name) || text.trimStart().startsWith('{')) {
         chart = normalizeChart(JSON.parse(text));
       } else {
         chart = parseSus(text);
       }
-      const existing = await this.allCharts();
-      if (existing.some((c) => c.id === chart.id)) chart.id = newChartId();
-      delete chart.builtin;
-      await storage.saveChart(chart);
-      toast(`「${chart.title}」を読み込みました（${chart.notes.length} ノーツ）`, 'ok');
-      if (chart.audio.type === 'youtube' && !chart.audio.videoId) {
-        toast('エディタ右側で YouTube の URL を設定してください', 'info', 5000);
-        this.openEditor(chart);
-      } else {
-        await this.showSelect(chart.id);
-      }
     } catch (e) {
       toast('読み込みに失敗しました: ' + (e as Error).message, 'error', 5000);
+      return;
     }
+    const existing = await this.allCharts();
+    if (existing.some((c) => c.id === chart.id)) chart.id = newChartId();
+    delete chart.builtin;
+    let selectId = chart.id;
+    if (chart.keyMode === 6) {
+      await storage.saveChart(chart);
+    } else {
+      const ans = await this.askConvert6(`「${chart.title}」を読み込み（${chart.notes.length} ノーツ）`, true);
+      if (!ans) return;
+      if (ans.keep12) await storage.saveChart(chart);
+      if (ans.make6) selectId = (await this.saveConverted(chart, ans.opts)).id;
+    }
+    if (chart.audio.type === 'youtube' && !chart.audio.videoId) {
+      toast('音源が未設定です。「✎ 編集」の右側で YouTube の URL とオフセットを設定してください', 'info', 6000);
+    }
+    await this.showSelect(selectId);
   }
 
   private async duplicate(c: ChartData) {

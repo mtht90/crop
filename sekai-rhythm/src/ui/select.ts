@@ -6,6 +6,7 @@ export interface SelectActions {
   play(c: ChartData, autoplay: boolean): void;
   edit(c: ChartData): void;
   duplicate(c: ChartData): void;
+  convert6(c: ChartData): void;
   exportJson(c: ChartData): void;
   remove(c: ChartData): void;
   create(): void;
@@ -118,7 +119,7 @@ export class SelectScreen {
           h(
             'div',
             { class: 'song-right' },
-            h('span', { class: 'diff-badge', style: { background: DIFFICULTY_COLORS[c.difficulty] } }, `${c.difficulty.toUpperCase()} ${c.level}`),
+            h('span', { class: 'row' }, c.keyMode === 6 ? h('span', { class: 'key-badge' }, '6K') : null, h('span', { class: 'diff-badge', style: { background: DIFFICULTY_COLORS[c.difficulty] } }, `${c.difficulty.toUpperCase()} ${c.level}`)),
             best ? h('span', { class: 'best-mini' }, best.allPerfect ? 'AP' : best.fullCombo ? 'FC' : best.rank) : null,
           ),
         );
@@ -148,6 +149,8 @@ export class SelectScreen {
         { class: 'detail-grid' },
         h('span', {}, '難易度'),
         h('span', { class: 'diff-badge', style: { background: DIFFICULTY_COLORS[c.difficulty] } }, `${c.difficulty.toUpperCase()} ${c.level}`),
+        h('span', {}, 'レーン'),
+        h('span', {}, c.keyMode === 6 ? '6レーン（1キー1レーン）' : '12レーン（プロセカと同じ。幅の広いノーツはかかっているどのキーでも可）'),
         h('span', {}, '音源'),
         h('span', {}, c.audio.type === 'youtube' ? (c.audio.videoId ? `YouTube (${c.audio.videoId})` : 'YouTube（未設定）') : '内蔵シンセ（オフライン）'),
         h('span', {}, 'BPM'),
@@ -167,6 +170,7 @@ export class SelectScreen {
         c.builtin
           ? h('button', { class: 'btn', onclick: () => a.duplicate(c) }, '複製して編集')
           : h('button', { class: 'btn', onclick: () => a.edit(c) }, '✎ 編集'),
+        c.keyMode === 6 ? null : h('button', { class: 'btn', onclick: () => a.convert6(c) }, '6レーン版を作成'),
         h('button', { class: 'btn', onclick: () => a.exportJson(c) }, '書き出し'),
         c.builtin ? null : h('button', { class: 'btn danger', onclick: () => a.remove(c) }, '削除'),
       ),

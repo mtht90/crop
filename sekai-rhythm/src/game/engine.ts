@@ -1,24 +1,20 @@
-import { HitObj, Judge, RSlide, RuntimeChart, slideRangeAt } from './runtime';
+import { HitObj, Judge, RSlide, RuntimeChart, WINDOWS, Windows, slideRangeAt } from './runtime';
 
-/** 判定幅（秒）。本家の 60fps フレーム基準: PERFECT 2.5F / GREAT 5F / GOOD 6.5F / BAD 7.5F */
-export const WINDOWS = {
-  perfect: 0.0417,
-  great: 0.0833,
-  good: 0.1083,
-  bad: 0.125,
-};
-/** スライド終点は少し甘め */
-const END_WINDOWS = { perfect: 0.06, great: 0.1, good: 0.125, bad: 0.15 };
+export { WINDOWS };
+
 /** Space → レーンキー の順に押した場合に許す時間差 */
 const FLICK_COMBINE = 0.15;
-/** スライド追従の許容（レーン） */
-const SLIDE_MARGIN = 0.35;
+/** スライド追従の許容（レーン）。Sonolus 版の中継点判定の leniency = 1 */
+const SLIDE_MARGIN = 1;
 
 export const KEY_COUNT = 6;
 export const LANES_PER_KEY = 2;
 
-export const JUDGE_SCORE: Record<Judge, number> = { perfect: 1, great: 0.8, good: 0.5, bad: 0, miss: 0 };
+/** スコア倍率（Sonolus 版 pjsekai: perfect 1 / great 0.7 / good 0.5） */
+export const JUDGE_SCORE: Record<Judge, number> = { perfect: 1, great: 0.7, good: 0.5, bad: 0, miss: 0 };
+/** ライフ減少（ノーツのミス -80、中継点のミス -40） */
 const LIFE_DAMAGE: Record<Judge, number> = { perfect: 0, great: 0, good: 0, bad: 50, miss: 80 };
+const TICK_MISS_DAMAGE = 40;
 
 export interface JudgeEvent {
   obj: HitObj;
@@ -55,17 +51,19 @@ export const RANK_BORDERS: [string, number][] = [
   ['S', 950000],
 ];
 
-function judgeByDiff(diff: number, w = WINDOWS): Judge | null {
-  const a = Math.abs(diff);
-  if (a <= w.perfect) return 'perfect';
-  if (a <= w.great) return 'great';
-  if (a <= w.good) return 'good';
-  if (a <= w.bad) return 'bad';
+export function judgeByDiff(diff: number, w: Windows): Judge | null {
+  const within = (r: [number, number]) => diff >= r[0] - 1e-9 && diff <= r[1] + 1e-9;
+  if (within(w.perfect)) return 'perfect';
+  if (within(w.great)) return 'great';
+  if (within(w.good)) return 'good';
+  if (within(w.bad)) return 'bad';
   return null;
 }
 
 const keyLo = (k: number) => k * LANES_PER_KEY;
 const keyHi = (k: number) => (k + 1) * LANES_PER_KEY;
+/** 最大の判定幅（候補探索用） */
+const MAX_WIN = 0.16;
 
 export class GameEngine {
   readonly chart: RuntimeChart;
@@ -143,19 +141,21 @@ export class GameEngine {
       else s.late++;
     }
     s.weightSum += obj.weight * JUDGE_SCORE[judge];
-    const dmg = obj.kind === 'tick' || obj.kind === 'trace' ? (judge === 'miss' ? 20 : 0) : LIFE_DAMAGE[judge];
+    const dmg = obj.kind === 'tick' ? (judge === 'miss' ? TICK_MISS_DAMAGE : 0) : LIFE_DAMAGE[judge];
     s.life = Math.max(0, s.life - dmg);
     if (s.life <= 0) s.failed = true;
     this.onJudge({ obj, judge, diff });
   }
 
-  /** 時刻 t 付近の、条件を満たす最も早い未判定ノーツ */
-  private findCandidate(t: number, win: number, pred: (o: HitObj) => boolean): HitObj | null {
+  /** 時刻 t で判定幅に入っている、条件を満たす最も早い未判定ノーツ */
+  private findCandidate(t: number, pred: (o: HitObj) => boolean): HitObj | null {
     const objs = this.chart.objs;
     for (let i = this.head; i < objs.length; i++) {
       const o = objs[i];
-      if (o.time > t + win) break;
-      if (o.judge !== null || o.time < t - win) continue;
+      if (o.time > t + MAX_WIN) break;
+      if (o.judge !== null) continue;
+      const d = t - o.time;
+      if (d < o.win.bad[0] || d > o.win.bad[1]) continue;
       if (pred(o)) return o;
     }
     return null;
@@ -165,8 +165,8 @@ export class GameEngine {
     return keyLo(k) < o.lane + o.width && keyHi(k) > o.lane;
   }
 
-  private overlapsHeld(o: { lane: number; width: number }, extra = -1): boolean {
-    for (let k = 0; k < KEY_COUNT; k++) if ((this.held[k] || k === extra) && this.overlapsKey(o, k)) return true;
+  private overlapsHeld(o: { lane: number; width: number }): boolean {
+    for (let k = 0; k < KEY_COUNT; k++) if (this.held[k] && this.overlapsKey(o, k)) return true;
     return false;
   }
 
@@ -178,23 +178,34 @@ export class GameEngine {
     return false;
   }
 
+  /** キーを新しく押して取るノーツ */
+  private isTapTarget(o: HitObj): boolean {
+    return (o.kind === 'tap' || o.kind === 'slideStart') && !o.trace;
+  }
+
+  /** フリックキーで取るノーツ */
   private isFlickTarget(o: HitObj): boolean {
-    return o.kind === 'flick' || (o.kind === 'slideEnd' && !!o.dir);
+    return !!o.dir && (o.kind === 'flick' || o.kind === 'trace' || o.kind === 'slideEnd');
+  }
+
+  /** 押さえているだけで取れるノーツ（なぞり系・フリックでないもの） */
+  private isHoldTarget(o: HitObj): boolean {
+    return o.trace && !o.dir;
   }
 
   keyDown(k: number, t: number) {
     if (this.autoplay || this.held[k]) return;
     this.held[k] = true;
     this.keyDownAt[k] = t;
-    const tap = this.findCandidate(t, WINDOWS.bad, (o) => (o.kind === 'tap' || o.kind === 'slideStart') && this.overlapsKey(o, k));
+    const tap = this.findCandidate(t, (o) => this.isTapTarget(o) && this.overlapsKey(o, k));
     let flick: HitObj | null = null;
     if (this.flickHeld && t - this.flickDownAt <= FLICK_COMBINE) {
-      flick = this.findCandidate(t, WINDOWS.bad, (o) => this.isFlickTarget(o) && this.overlapsKey(o, k));
+      flick = this.findCandidate(t, (o) => this.isFlickTarget(o) && this.overlapsKey(o, k));
     }
     const target = tap && flick ? (flick.time < tap.time ? flick : tap) : tap ?? flick;
     if (!target) return;
     const diff = t - target.time;
-    const j = judgeByDiff(diff);
+    const j = judgeByDiff(diff, target.win);
     if (j) this.apply(target, j, diff);
     this.advanceHead();
   }
@@ -209,10 +220,10 @@ export class GameEngine {
     if (this.autoplay || this.flickHeld) return;
     this.flickHeld = true;
     this.flickDownAt = t;
-    const target = this.findCandidate(t, WINDOWS.bad, (o) => this.isFlickTarget(o) && (!this.flickNeedsLane || this.overlapsHeld(o)));
+    const target = this.findCandidate(t, (o) => this.isFlickTarget(o) && (!this.flickNeedsLane || this.overlapsHeld(o)));
     if (!target) return;
     const diff = t - target.time;
-    const j = judgeByDiff(diff, target.kind === 'slideEnd' ? END_WINDOWS : WINDOWS);
+    const j = judgeByDiff(diff, target.win);
     if (j) this.apply(target, j, diff);
     this.advanceHead();
   }
@@ -235,30 +246,35 @@ export class GameEngine {
 
     for (const s of this.chart.slides) {
       if (s.startTime > now + 1) break;
-      if (now < s.startTime - WINDOWS.bad || s.end.judge !== null) {
+      if (now < s.startTime - MAX_WIN || now > s.endTime + MAX_WIN) {
         s.covered = false;
         continue;
       }
-      s.covered = this.slideCovered(s, Math.min(now, s.endTime));
+      s.covered = this.slideCovered(s, Math.min(Math.max(now, s.startTime), s.endTime));
       if (s.covered) s.lastCovered = now;
     }
 
     for (let i = this.head; i < objs.length; i++) {
       const o = objs[i];
-      if (o.time > now + WINDOWS.great) break;
+      if (o.time > now + MAX_WIN) break;
       if (o.judge !== null) continue;
+      const late = now - o.time;
+      if (this.isHoldTarget(o)) {
+        // なぞり: 判定幅の中でキーを押さえていれば PERFECT
+        const covered = o.slide && o.kind !== 'trace' ? this.slideCovered(o.slide, o.time) : this.overlapsHeld(o);
+        if (late >= o.win.perfect[0] && covered) this.apply(o, 'perfect', 0);
+        else if (late > o.win.bad[1]) this.apply(o, 'miss', 0);
+        continue;
+      }
       switch (o.kind) {
         case 'tap':
         case 'flick':
-        case 'slideStart':
-          if (now > o.time + WINDOWS.bad) this.apply(o, 'miss', WINDOWS.bad);
-          break;
         case 'trace':
-          if (now >= o.time - WINDOWS.great && this.overlapsHeld(o)) this.apply(o, 'perfect', 0);
-          else if (now > o.time + WINDOWS.good) this.apply(o, 'miss', 0);
+        case 'slideStart':
+          if (late > o.win.bad[1]) this.apply(o, 'miss', o.win.bad[1]);
           break;
         case 'tick': {
-          if (now < o.time) break;
+          if (late < 0) break;
           const s = o.slide!;
           this.apply(o, s.covered || s.lastCovered >= o.time - 0.05 ? 'perfect' : 'miss', 0);
           break;
@@ -266,16 +282,16 @@ export class GameEngine {
         case 'slideEnd': {
           const s = o.slide!;
           if (o.dir) {
-            if (now > o.time + END_WINDOWS.bad) this.apply(o, 'miss', END_WINDOWS.bad);
+            if (late > o.win.bad[1]) this.apply(o, 'miss', o.win.bad[1]);
             break;
           }
-          if (now < o.time) break;
+          if (late < 0) break;
           if (s.covered) {
             this.apply(o, 'perfect', 0);
           } else {
+            // 早めに離した場合は離した時刻で判定
             const diff = s.lastCovered - o.time;
-            const j = judgeByDiff(diff, END_WINDOWS);
-            this.apply(o, j ?? 'miss', diff);
+            this.apply(o, judgeByDiff(diff, o.win) ?? 'miss', diff);
           }
           break;
         }

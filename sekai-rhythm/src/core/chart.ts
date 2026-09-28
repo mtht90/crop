@@ -23,6 +23,7 @@ export interface BpmChange {
 
 export interface SingleNoteData {
   type: 'single';
+  /** trace に dir を付けるとトレースフリック */
   kind: 'tap' | 'flick' | 'trace';
   beat: number;
   /** 左端レーン 0..11 */
@@ -39,6 +40,12 @@ export interface SlidePointData {
   width: number;
   /** 中継点のみ有効: true = 表示される中継点（コンボあり）、false = 不可視の折れ点 */
   visible?: boolean;
+  /** 中継点のみ: 経路を曲げず、経路上に乗る中継点（SUS のタップ種別3付き中継点） */
+  attach?: boolean;
+  /** 始点・終点・中継点をなぞり判定にする */
+  trace?: boolean;
+  /** この点だけクリティカル */
+  critical?: boolean;
 }
 
 export interface SlideNoteData {
@@ -46,6 +53,12 @@ export interface SlideNoteData {
   critical?: boolean;
   /** 終点をフリックにする */
   endFlick?: FlickDir;
+  /** 始点ノーツなし（途中から押さえ始めるスライド） */
+  startHidden?: boolean;
+  /** 終点ノーツなし */
+  endHidden?: boolean;
+  /** ガイド（判定なしの見た目だけのライン） */
+  guide?: boolean;
   points: SlidePointData[];
 }
 
@@ -53,7 +66,7 @@ export type NoteData = SingleNoteData | SlideNoteData;
 
 export type AudioData =
   | { type: 'youtube'; videoId: string }
-  | { type: 'synth'; lengthBeats: number; seed?: number };
+  | { type: 'synth'; lengthBeats: number; seed?: number; /** 内蔵曲ID（無ければ自動演奏） */ song?: string };
 
 export interface ChartData {
   format: 'sekai-rhythm';
@@ -70,6 +83,8 @@ export interface ChartData {
   bpms: BpmChange[];
   notes: NoteData[];
   beatsPerMeasure?: number;
+  /** 6 = 6レーン譜面（全ノーツが1キー幅） */
+  keyMode?: 6;
   builtin?: boolean;
 }
 
@@ -220,7 +235,10 @@ export function normalizeChart(raw: unknown): ChartData {
   const base = emptyChart();
   const difficulty: Difficulty = DIFFICULTIES.includes(r.difficulty) ? r.difficulty : 'expert';
   let audio: AudioData;
-  if (r.audio?.type === 'synth') audio = { type: 'synth', lengthBeats: num(r.audio.lengthBeats, 128), seed: num(r.audio.seed, 1) };
+  if (r.audio?.type === 'synth') {
+    audio = { type: 'synth', lengthBeats: num(r.audio.lengthBeats, 128), seed: num(r.audio.seed, 1) };
+    if (typeof r.audio.song === 'string') audio.song = r.audio.song;
+  }
   else audio = { type: 'youtube', videoId: typeof r.audio?.videoId === 'string' ? r.audio.videoId : '' };
   const bpms: BpmChange[] = Array.isArray(r.bpms)
     ? r.bpms.map((b: any) => ({ beat: num(b?.beat, 0), bpm: num(b?.bpm, 120) })).filter((b: BpmChange) => b.bpm > 0)
@@ -232,15 +250,25 @@ export function normalizeChart(raw: unknown): ChartData {
       const note: SingleNoteData = { type: 'single', kind, beat: num(n.beat, 0), ...normLaneWidth(n.lane, n.width) };
       if (n.critical) note.critical = true;
       if (kind === 'flick') note.dir = FLICK_DIRS.includes(n.dir) ? n.dir : 'up';
+      else if (kind === 'trace' && FLICK_DIRS.includes(n.dir)) note.dir = n.dir;
       notes.push(note);
     } else if (n?.type === 'slide' && Array.isArray(n.points)) {
       const points: SlidePointData[] = n.points
-        .map((p: any) => ({ beat: num(p?.beat, 0), ...normLaneWidth(p?.lane, p?.width), visible: p?.visible !== false }))
+        .map((p: any) => {
+          const pt: SlidePointData = { beat: num(p?.beat, 0), ...normLaneWidth(p?.lane, p?.width), visible: p?.visible !== false };
+          if (p?.attach) pt.attach = true;
+          if (p?.trace) pt.trace = true;
+          if (p?.critical) pt.critical = true;
+          return pt;
+        })
         .sort((a: SlidePointData, b: SlidePointData) => a.beat - b.beat);
       if (points.length < 2) continue;
       const slide: SlideNoteData = { type: 'slide', points };
       if (n.critical) slide.critical = true;
       if (FLICK_DIRS.includes(n.endFlick)) slide.endFlick = n.endFlick;
+      if (n.startHidden) slide.startHidden = true;
+      if (n.endHidden) slide.endHidden = true;
+      if (n.guide) slide.guide = true;
       notes.push(slide);
     }
   }
@@ -257,6 +285,7 @@ export function normalizeChart(raw: unknown): ChartData {
     bpms: bpms.length ? bpms : base.bpms,
     notes,
     beatsPerMeasure: r.beatsPerMeasure ? clampInt(r.beatsPerMeasure, 1, 16, 4) : undefined,
+    keyMode: r.keyMode === 6 ? 6 : undefined,
   };
 }
 

@@ -66,6 +66,8 @@ export interface HudInfo {
   flickLabel: string;
   videoBg: boolean;
   dim: number;
+  /** 6レーン譜面: キーの境目だけ線を引く */
+  sixLane: boolean;
 }
 
 const wall = () => performance.now() / 1000;
@@ -180,12 +182,18 @@ export class GameRenderer {
     let end = lo;
     while (end < objs.length && objs[end].time <= tMax) end++;
 
+    // ガイド（判定なし）
+    for (let i = chart.guides.length - 1; i >= 0; i--) {
+      const g = chart.guides[i];
+      if (g.startTime > tMax || g.endTime < now) continue;
+      this.drawSlideBody(g, now, duration, true);
+    }
     // スライド本体
     for (let i = chart.slides.length - 1; i >= 0; i--) {
       const s = chart.slides[i];
       if (s.startTime > tMax || s.endTime < now - 0.05) continue;
-      if (s.end.judge !== null && s.end.judge !== 'miss' && now > s.endTime) continue;
-      this.drawSlideBody(s, now, duration);
+      if (s.end && s.end.judge !== null && s.end.judge !== 'miss' && now > s.endTime) continue;
+      this.drawSlideBody(s, now, duration, false);
     }
 
     // 同時押しライン
@@ -206,7 +214,7 @@ export class GameRenderer {
     // スライドの押さえている位置（判定ライン上）
     for (const s of chart.slides) {
       if (now < s.startTime || now > s.endTime) continue;
-      if (s.end.judge !== null) continue;
+      if (s.end && s.end.judge !== null) continue;
       const [l, r] = slideRangeAt(s, now);
       this.drawNote(l, r - l, 1, s.critical ? PAL.critical : PAL.slide, s.covered ? 1 : 0.45, false);
       if (s.covered) this.holdEffect(l, r, s.critical ? PAL.critical.glow : PAL.slide.glow);
@@ -222,13 +230,13 @@ export class GameRenderer {
       if (o.kind === 'tick') {
         if (!o.hidden) {
           const [l, r] = o.slide ? slideRangeAt(o.slide, o.time) : [o.lane, o.lane + o.width];
-          this.drawDiamond((l + r) / 2, y, o.critical ? PAL.critical : PAL.slide, a, 1);
+          this.drawDiamond((l + r) / 2, y, o.critical ? PAL.critical : o.trace ? PAL.trace : PAL.slide, a, o.trace ? 0.8 : 1);
         }
         continue;
       }
       const pal = palOf(o);
-      this.drawNote(o.lane, o.width, y, pal, a, o.kind === 'trace');
-      if (o.kind === 'trace') this.drawDiamond(o.lane + o.width / 2, y, pal, a, 0.8);
+      this.drawNote(o.lane, o.width, y, pal, a, o.trace);
+      if (o.trace) this.drawDiamond(o.lane + o.width / 2, y, pal, a, 0.8);
       if (o.dir) this.drawFlickArrow(o.lane, o.width, y, o.dir, o.critical, a);
     }
 
@@ -326,6 +334,7 @@ export class GameRenderer {
     };
     for (let i = 1; i < LANES; i++) {
       const major = i % LANES_PER_KEY === 0;
+      if (hud.sixLane && !major) continue;
       c.strokeStyle = lineGrad(major ? 0.32 : 0.1);
       c.lineWidth = major ? 1.6 : 1;
       c.beginPath();
@@ -383,7 +392,7 @@ export class GameRenderer {
     }
   }
 
-  private drawSlideBody(s: RSlide, now: number, duration: number) {
+  private drawSlideBody(s: RSlide, now: number, duration: number, guide: boolean) {
     const c = this.ctx;
     const tA = Math.max(s.startTime, now);
     const tB = Math.min(s.endTime, now + duration);
@@ -406,8 +415,8 @@ export class GameRenderer {
     const yTopScreen = left[left.length - 1][1];
     const g = c.createLinearGradient(0, yTopScreen, 0, this.J);
     const base = s.critical ? '255,214,70' : '70,235,150';
-    const dimmed = !s.covered && now > s.startTime && s.start.judge === 'miss';
-    const a = dimmed ? 0.18 : 0.42;
+    const dimmed = guide || (!s.covered && now > s.startTime && s.start?.judge === 'miss');
+    const a = guide ? 0.22 : dimmed ? 0.18 : 0.42;
     g.addColorStop(0, `rgba(${base},0)`);
     g.addColorStop(0.08, `rgba(${base},${a})`);
     g.addColorStop(1, `rgba(${base},${a + 0.1})`);
@@ -418,6 +427,7 @@ export class GameRenderer {
     c.closePath();
     c.fillStyle = g;
     c.fill();
+    if (guide) return;
     // 縁
     c.strokeStyle = `rgba(${s.critical ? '255,240,180' : '190,255,220'},${dimmed ? 0.25 : 0.6})`;
     c.lineWidth = 2;

@@ -348,9 +348,17 @@ export class EditorScreen {
   }
 
   /** カーソル位置からノーツのレーン範囲を求める（クリック = 中央寄せ / ドラッグ = 範囲） */
+  private get sixLane() {
+    return this.chart.keyMode === 6;
+  }
+
   private rangeFrom(x0: number, x1: number): { lane: number; width: number } {
     const a = this.laneF(x0);
     const b = this.laneF(x1);
+    if (this.sixLane) {
+      const k = Math.max(0, Math.min(5, Math.floor(a / 2)));
+      return { lane: k * 2, width: 2 };
+    }
     if (Math.abs(a - b) * this.laneW < 6 || Math.floor(a) === Math.floor(b)) {
       const w = this.width;
       const lane = Math.max(0, Math.min(LANES - w, Math.round(a - w / 2)));
@@ -457,7 +465,7 @@ export class EditorScreen {
   }
 
   private applyMove(d: Extract<Drag, { kind: 'move' }>, x: number, y: number) {
-    const dl = Math.round(this.laneF(x) - d.lane0);
+    const dl = this.sixLane ? Math.round((this.laneF(x) - d.lane0) / 2) * 2 : Math.round(this.laneF(x) - d.lane0);
     const db = this.snapBeat(this.beatOf(y)) - this.snapBeat(d.beat0);
     const orig = JSON.parse(d.orig) as NoteData;
     const n = d.sel.note;
@@ -750,7 +758,7 @@ export class EditorScreen {
       this.music = this.yt;
     } else {
       this.music?.destroy();
-      this.music = new SynthMusic(this.timing, a.lengthBeats, a.seed ?? 1, this.opts.settings.musicVolume);
+      this.music = new SynthMusic(this.timing, a.lengthBeats, a.seed ?? 1, this.opts.settings.musicVolume, a.song);
     }
     const t = this.timing.beatToTime(this.curBeat);
     this.playing = true;
@@ -840,7 +848,7 @@ export class EditorScreen {
       c.fillRect(lx + k * 2 * lw, 0, lw * 2, H);
     }
     for (let i = 0; i <= LANES; i++) {
-      c.fillStyle = i % 2 === 0 ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.07)';
+      c.fillStyle = i % 2 === 0 ? 'rgba(255,255,255,0.22)' : this.sixLane ? 'rgba(255,255,255,0)' : 'rgba(255,255,255,0.07)';
       c.fillRect(lx + i * lw - 0.5, 0, 1, H);
     }
 
@@ -994,11 +1002,26 @@ export class EditorScreen {
     const y0 = this.yOf(points[0].beat);
     const y1 = this.yOf(points[points.length - 1].beat);
     if (y1 > H + 20 || y0 < -20) return;
+    const guide = !!note?.guide;
     const base = critical ? '255,201,51' : '61,228,139';
-    c.fillStyle = `rgba(${base},${pending ? 0.2 : 0.3})`;
-    for (let i = 0; i < points.length - 1; i++) {
-      const a = points[i];
-      const b = points[i + 1];
+    // 経路（attach 中継点は経路を曲げない）
+    const joints = points.filter((p, i) => i === 0 || i === points.length - 1 || !p.attach);
+    const pathAt = (beat: number): [number, number] => {
+      for (let i = 0; i < joints.length - 1; i++) {
+        const a = joints[i];
+        const b = joints[i + 1];
+        if (beat <= b.beat) {
+          const u = b.beat > a.beat ? Math.max(0, (beat - a.beat) / (b.beat - a.beat)) : 1;
+          return [a.lane + (b.lane - a.lane) * u, a.lane + a.width + (b.lane + b.width - a.lane - a.width) * u];
+        }
+      }
+      const e = joints[joints.length - 1];
+      return [e.lane, e.lane + e.width];
+    };
+    c.fillStyle = `rgba(${base},${guide ? 0.14 : pending ? 0.2 : 0.3})`;
+    for (let i = 0; i < joints.length - 1; i++) {
+      const a = joints[i];
+      const b = joints[i + 1];
       c.beginPath();
       c.moveTo(this.xOf(a.lane) + 4, this.yOf(a.beat));
       c.lineTo(this.xOf(a.lane + a.width) - 4, this.yOf(a.beat));
@@ -1007,12 +1030,12 @@ export class EditorScreen {
       c.closePath();
       c.fill();
     }
-    c.strokeStyle = `rgba(${base},0.8)`;
+    c.strokeStyle = `rgba(${base},${guide ? 0.35 : 0.8})`;
     c.lineWidth = 1.5;
-    if (pending) c.setLineDash([6, 4]);
+    if (pending || guide) c.setLineDash([6, 4]);
     for (const side of [0, 1]) {
       c.beginPath();
-      points.forEach((p, i) => {
+      joints.forEach((p, i) => {
         const x = side ? this.xOf(p.lane + p.width) - 4 : this.xOf(p.lane) + 4;
         if (i) c.lineTo(x, this.yOf(p.beat));
         else c.moveTo(x, this.yOf(p.beat));
@@ -1024,13 +1047,27 @@ export class EditorScreen {
     points.forEach((p, i) => {
       const y = this.yOf(p.beat);
       const selected = !!note && this.sel?.note === note && (this.sel.point === i || this.sel.point === -1);
-      if (i === 0 || i === points.length - 1) {
-        const isFlickEnd = i === points.length - 1 && i > 0 && !!endFlick;
-        this.noteRect(p.lane, p.width, y, isFlickEnd && !critical ? COLORS.flick : col, false, selected);
+      const isStart = i === 0;
+      const isEnd = i === points.length - 1;
+      const pcol = p.critical ? COLORS.critical : p.trace ? COLORS.trace : col;
+      if (isStart || isEnd) {
+        const hiddenHead = guide || (isStart ? note?.startHidden : note?.endHidden);
+        if (hiddenHead) {
+          c.strokeStyle = selected ? '#fff' : `rgba(${base},0.7)`;
+          c.lineWidth = 1.5;
+          c.setLineDash([3, 3]);
+          c.strokeRect(this.xOf(p.lane) + 2, y - 5, p.width * this.laneW - 4, 10);
+          c.setLineDash([]);
+          return;
+        }
+        const isFlickEnd = isEnd && i > 0 && !!endFlick;
+        this.noteRect(p.lane, p.width, y, isFlickEnd && !critical ? COLORS.flick : pcol, !!p.trace, selected);
+        if (p.trace) this.diamond(this.xOf(p.lane + p.width / 2), y, pcol, 5);
         if (isFlickEnd) this.arrow(p.lane, p.width, y, endFlick!, critical ? COLORS.critical : COLORS.flick);
       } else if (p.visible !== false) {
-        this.diamond(this.xOf(p.lane + p.width / 2), y, col, selected ? 9 : 7);
-        if (selected) this.noteRect(p.lane, p.width, y, 'rgba(255,255,255,0.15)', true, true);
+        const [l, r] = p.attach ? pathAt(p.beat) : [p.lane, p.lane + p.width];
+        this.diamond(this.xOf((l + r) / 2), y, pcol, selected ? 9 : 7);
+        if (selected) this.noteRect(l, r - l, y, 'rgba(255,255,255,0.15)', true, true);
       } else {
         c.beginPath();
         c.arc(this.xOf(p.lane + p.width / 2), y, selected ? 6 : 4, 0, Math.PI * 2);
@@ -1107,10 +1144,17 @@ export class EditorScreen {
         numField('レーン (0-11)', p.lane, 0, LANES - p.width, (v) => (p.lane = Math.round(v))),
         numField('幅', p.width, 1, LANES - p.lane, (v) => (p.width = Math.round(v))),
       );
-      if (role === '中継点') items.push(checkField('表示する（コンボあり）', p.visible !== false, (v) => (p.visible = v)));
+      if (role === '中継点') {
+        items.push(checkField('表示する（コンボあり）', p.visible !== false, (v) => (p.visible = v)));
+        if (p.visible !== false) items.push(checkField('経路に沿わせる（経路を曲げない）', !!p.attach, (v) => (v ? (p.attach = true) : delete p.attach)));
+      }
+      if (role === '始点') items.push(checkField('始点ノーツなし', !!n.startHidden, (v) => (v ? (n.startHidden = true) : delete n.startHidden)));
+      if (role === '終点') items.push(checkField('終点ノーツなし', !!n.endHidden, (v) => (v ? (n.endHidden = true) : delete n.endHidden)));
+      if (p.visible !== false) items.push(checkField('なぞり判定にする', !!p.trace, (v) => (v ? (p.trace = true) : delete p.trace)));
       items.push(
         h('h4', {}, 'スライド全体'),
         checkField('クリティカル', !!n.critical, (v) => (v ? (n.critical = true) : delete n.critical)),
+        checkField('ガイド（判定なしの見た目だけ）', !!n.guide, (v) => (v ? (n.guide = true) : delete n.guide)),
         selectField<'none' | FlickDir>('終点フリック', n.endFlick ?? 'none', [['none', 'なし'], ...FLICK_DIRS.map((d) => [d, DIR_LABEL[d]] as [FlickDir, string])], (v) =>
           v === 'none' ? delete n.endFlick : (n.endFlick = v),
         ),

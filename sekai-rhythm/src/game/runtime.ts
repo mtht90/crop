@@ -3,6 +3,40 @@ import { ChartData, FlickDir, TimingMap } from '../core/chart';
 export type Judge = 'perfect' | 'great' | 'good' | 'bad' | 'miss';
 export type ObjKind = 'tap' | 'flick' | 'trace' | 'slideStart' | 'slideEnd' | 'tick';
 
+/** 判定幅（秒, [早い側(負), 遅い側]） */
+export interface Windows {
+  perfect: [number, number];
+  great: [number, number];
+  good: [number, number];
+  bad: [number, number];
+}
+
+const F = 1 / 60;
+type Frames = number | [number, number];
+const rng = (f: Frames): [number, number] => (typeof f === 'number' ? [-f * F, f * F] : [-f[0] * F, f[1] * F]);
+/**
+ * 本家の判定幅（60fps フレーム）。Sonolus 版 pjsekai エンジン shared/src/engine/data/windows.ts に準拠。
+ * Sonolus 版は GOOD と BAD をまとめているので、外側 1 フレームを BAD とする。
+ */
+function win(perfect: Frames, great: Frames, good: Frames): Windows {
+  const p = rng(perfect);
+  const g = rng(great);
+  const b = rng(good);
+  const gd: [number, number] = [Math.min(g[0], b[0] + F), Math.max(g[1], b[1] - F)];
+  return { perfect: p, great: g, good: gd, bad: b };
+}
+export const WINDOWS = {
+  tap: win(2.5, 5, 7.5),
+  tapCritical: win(3.3, 4.5, 7.5),
+  flick: win(2.5, [6.5, 7.5], [7.5, 8.5]),
+  flickCritical: win(3.5, [6.5, 7.5], [7.5, 8.5]),
+  trace: win(3.5, 3.5, 3.5),
+  traceFlick: win([6.5, 7.5], [6.5, 7.5], [6.5, 7.5]),
+  slideEnd: win([3.5, 4], [6.5, 8], [7.5, 8.5]),
+  slideEndTrace: win([6, 8.5], [6, 8.5], [6, 8.5]),
+  tick: win(3.5, 3.5, 3.5),
+};
+
 export interface HitObj {
   id: number;
   kind: ObjKind;
@@ -11,31 +45,35 @@ export interface HitObj {
   lane: number;
   width: number;
   critical: boolean;
-  /** フリック方向（flick / フリック終点） */
+  /** なぞり判定（押さえているだけで取れる） */
+  trace: boolean;
+  /** フリック方向（フリック / トレースフリック / フリック終点） */
   dir?: FlickDir;
   slide?: RSlide;
   /** 不可視の中継判定（半拍ごとのコンボ） */
   hidden: boolean;
+  win: Windows;
   weight: number;
   judge: Judge | null;
   /** 入力 - ノーツ時刻 (秒) */
   diff: number;
 }
 
+/** スライドの経路を決める点（attach 中継点は含まない） */
 export interface RSlidePoint {
   time: number;
   beat: number;
   lane: number;
   width: number;
-  visible: boolean;
 }
 
 export interface RSlide {
   id: number;
   points: RSlidePoint[];
   critical: boolean;
-  start: HitObj;
-  end: HitObj;
+  guide: boolean;
+  start: HitObj | null;
+  end: HitObj | null;
   ticks: HitObj[];
   startTime: number;
   endTime: number;
@@ -54,7 +92,9 @@ export interface SimLine {
 export interface RuntimeChart {
   timing: TimingMap;
   objs: HitObj[];
+  /** 判定のあるスライド（ガイドは含まない） */
   slides: RSlide[];
+  guides: RSlide[];
   simLines: SimLine[];
   totalCombo: number;
   totalWeight: number;
@@ -92,9 +132,10 @@ export function compileChart(chart: ChartData): RuntimeChart {
   const timing = new TimingMap(chart.bpms, chart.offset);
   const objs: HitObj[] = [];
   const slides: RSlide[] = [];
+  const guides: RSlide[] = [];
   let id = 0;
 
-  const mk = (kind: ObjKind, beat: number, lane: number, width: number, critical: boolean, extra: Partial<HitObj> = {}): HitObj => ({
+  const mk = (kind: ObjKind, beat: number, lane: number, width: number, critical: boolean, w: Windows, extra: Partial<HitObj> = {}): HitObj => ({
     id: id++,
     kind,
     time: timing.beatToTime(beat),
@@ -102,7 +143,9 @@ export function compileChart(chart: ChartData): RuntimeChart {
     lane,
     width,
     critical,
+    trace: false,
     hidden: false,
+    win: w,
     weight: WEIGHTS[kind][critical ? 1 : 0],
     judge: null,
     diff: 0,
@@ -111,55 +154,79 @@ export function compileChart(chart: ChartData): RuntimeChart {
 
   for (const n of chart.notes) {
     if (n.type === 'single') {
-      const o = mk(n.kind, n.beat, n.lane, n.width, !!n.critical);
-      if (n.kind === 'flick') o.dir = n.dir ?? 'up';
-      objs.push(o);
+      const crit = !!n.critical;
+      if (n.kind === 'trace') {
+        const o = mk('trace', n.beat, n.lane, n.width, crit, n.dir ? WINDOWS.traceFlick : WINDOWS.trace, { trace: true, dir: n.dir });
+        if (n.dir) o.weight = WEIGHTS.flick[crit ? 1 : 0];
+        objs.push(o);
+      } else if (n.kind === 'flick') {
+        objs.push(mk('flick', n.beat, n.lane, n.width, crit, crit ? WINDOWS.flickCritical : WINDOWS.flick, { dir: n.dir ?? 'up' }));
+      } else {
+        objs.push(mk('tap', n.beat, n.lane, n.width, crit, crit ? WINDOWS.tapCritical : WINDOWS.tap));
+      }
       continue;
     }
+
     const sorted = [...n.points].sort((a, b) => a.beat - b.beat);
     if (sorted.length < 2) continue;
     const critical = !!n.critical;
-    const points: RSlidePoint[] = sorted.map((p, i) => ({
-      time: timing.beatToTime(p.beat),
-      beat: p.beat,
-      lane: p.lane,
-      width: p.width,
-      visible: i === 0 || i === sorted.length - 1 ? true : p.visible !== false,
-    }));
-    const first = points[0];
-    const last = points[points.length - 1];
+    const first = sorted[0];
+    const last = sorted[sorted.length - 1];
+    const joints = sorted.filter((p, i) => i === 0 || i === sorted.length - 1 || !p.attach);
     const slide: RSlide = {
-      id: slides.length,
-      points,
+      id: slides.length + guides.length,
+      points: joints.map((p) => ({ time: timing.beatToTime(p.beat), beat: p.beat, lane: p.lane, width: p.width })),
       critical,
-      start: null as unknown as HitObj,
-      end: null as unknown as HitObj,
+      guide: !!n.guide,
+      start: null,
+      end: null,
       ticks: [],
-      startTime: first.time,
-      endTime: last.time,
+      startTime: timing.beatToTime(first.beat),
+      endTime: timing.beatToTime(last.beat),
       lastCovered: -Infinity,
       covered: false,
     };
-    slide.start = mk('slideStart', first.beat, first.lane, first.width, critical, { slide });
-    slide.end = mk('slideEnd', last.beat, last.lane, last.width, critical, { slide, dir: n.endFlick });
-    if (n.endFlick) slide.end.weight = WEIGHTS.flick[critical ? 1 : 0];
-    objs.push(slide.start, slide.end);
+    if (n.guide) {
+      guides.push(slide);
+      continue;
+    }
 
-    const visibleBeats: number[] = [];
-    for (let i = 1; i < points.length - 1; i++) {
-      const p = points[i];
-      if (!p.visible) continue;
-      visibleBeats.push(p.beat);
-      const t = mk('tick', p.beat, p.lane, p.width, critical, { slide });
+    if (!n.startHidden) {
+      const tr = !!first.trace;
+      const crit = critical || !!first.critical;
+      slide.start = mk(tr ? 'trace' : 'slideStart', first.beat, first.lane, first.width, crit, tr ? WINDOWS.trace : crit ? WINDOWS.tapCritical : WINDOWS.tap, { slide, trace: tr });
+      if (tr) slide.start.kind = 'slideStart';
+      objs.push(slide.start);
+    }
+    if (!n.endHidden) {
+      const tr = !!last.trace;
+      const crit = critical || !!last.critical;
+      const w = n.endFlick ? (tr ? WINDOWS.traceFlick : WINDOWS.slideEnd) : tr ? WINDOWS.slideEndTrace : WINDOWS.slideEnd;
+      slide.end = mk('slideEnd', last.beat, last.lane, last.width, crit, w, { slide, dir: n.endFlick, trace: tr });
+      if (n.endFlick) slide.end.weight = WEIGHTS.flick[crit ? 1 : 0];
+      objs.push(slide.end);
+    }
+
+    for (let i = 1; i < sorted.length - 1; i++) {
+      const p = sorted[i];
+      if (p.visible === false) continue;
+      const crit = critical || !!p.critical;
+      const t = mk('tick', p.beat, p.lane, p.width, crit, WINDOWS.tick, { slide, trace: !!p.trace });
+      if (p.attach) {
+        const [l, r] = slideRangeAt(slide, t.time);
+        t.lane = l;
+        t.width = r - l;
+      }
       slide.ticks.push(t);
     }
-    // 半拍ごとの不可視コンボ判定
-    for (let b = Math.floor(first.beat * 2 + 1e-6) / 2 + 0.5; b < last.beat - 1e-6; b += 0.5) {
-      if (b <= first.beat + 1e-6) continue;
-      if (visibleBeats.some((v) => Math.abs(v - b) < 1e-4)) continue;
+    // 半拍ごとの不可視コンボ判定（始点より後・終点より前の半拍すべて）
+    const min = first.beat;
+    const max = last.beat;
+    const startBeat = Math.max(Math.ceil(min / 0.5) * 0.5, Math.floor(min / 0.5 + 1) * 0.5);
+    for (let b = startBeat; b < max - 1e-9; b += 0.5) {
       const tt = timing.beatToTime(b);
       const [l, r] = slideRangeAt(slide, tt);
-      slide.ticks.push(mk('tick', b, l, r - l, critical, { slide, hidden: true }));
+      slide.ticks.push(mk('tick', b, l, r - l, critical, WINDOWS.tick, { slide, hidden: true }));
     }
     slide.ticks.sort((a, b) => a.time - b.time);
     objs.push(...slide.ticks);
@@ -168,9 +235,10 @@ export function compileChart(chart: ChartData): RuntimeChart {
 
   objs.sort((a, b) => a.time - b.time || a.id - b.id);
   slides.sort((a, b) => a.startTime - b.startTime);
+  guides.sort((a, b) => a.startTime - b.startTime);
 
-  // 同時押しライン
-  const heads = objs.filter((o) => o.kind !== 'tick' && o.kind !== 'trace');
+  // 同時押しライン（単ノーツ・なぞり・スライド始点/終点。中継点は除く）
+  const heads = objs.filter((o) => o.kind !== 'tick');
   const simLines: SimLine[] = [];
   for (let i = 0; i < heads.length; ) {
     let j = i + 1;
@@ -189,7 +257,8 @@ export function compileChart(chart: ChartData): RuntimeChart {
   }
 
   const totalWeight = objs.reduce((s, o) => s + o.weight, 0);
-  const firstTime = objs.length ? objs[0].time : 0;
-  const endTime = objs.length ? Math.max(...objs.map((o) => o.time)) : 0;
-  return { timing, objs, slides, simLines, totalCombo: objs.length, totalWeight, firstTime, endTime };
+  const times = [...objs.map((o) => o.time), ...guides.map((g) => g.endTime)];
+  const firstTime = objs.length ? objs[0].time : guides.length ? guides[0].startTime : 0;
+  const endTime = times.length ? Math.max(...times) : 0;
+  return { timing, objs, slides, guides, simLines, totalCombo: objs.length, totalWeight, firstTime, endTime };
 }
