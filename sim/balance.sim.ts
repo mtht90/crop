@@ -14,12 +14,14 @@ import { fmt, fmtTime } from '../src/core/format';
  * 効率の良い施設を買い、アップグレード・研究・ショップは買えるだけ買い、条件を満たしたら転生する。
  *   SIM_DAYS=60 npx vitest run --config vitest.sim.config.ts
  */
+const env = (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env ?? {};
+
 test('balance simulation', () => {
   let t = 0;
   const g = new Game(defaultState(0), () => t, () => 0.5);
-  const DAYS = Number(process.env.SIM_DAYS ?? 30);
-  const CPS = Number(process.env.SIM_CPS ?? 2);
-  const WALL = Number(process.env.SIM_WALL ?? 500) * 1000;
+  const DAYS = Number(env.SIM_DAYS ?? 30);
+  const CPS = Number(env.SIM_CPS ?? 2);
+  const WALL = Number(env.SIM_WALL ?? 500) * 1000;
   const end = DAYS * 86400;
   const lines: string[] = [];
   const mark = (label: string) => lines.push(`${fmtTime(t / 1000)}\t${label}`);

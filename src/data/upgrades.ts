@@ -1,5 +1,5 @@
 import { Decimal } from '../core/decimal';
-import { fmt, fmtPct } from '../core/format';
+import { fmtPct } from '../core/format';
 import type { Mods } from '../core/mods';
 import type { Game } from '../core/game';
 import { BUILDINGS } from './buildings';
@@ -134,6 +134,3 @@ function buildUpgrades(): UpgradeDef[] {
 export const UPGRADES: UpgradeDef[] = buildUpgrades();
 export const UPGRADE_MAP: Map<string, UpgradeDef> = new Map(UPGRADES.map((u) => [u.id, u]));
 
-export function upgradeCostLabel(u: UpgradeDef, g: Game): string {
-  return fmt(u.cost.mul(g.mods.upgradeCostMult));
-}

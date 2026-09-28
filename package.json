@@ -8,7 +8,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "sim": "vitest run --config vitest.sim.config.ts"
   },
   "dependencies": {
     "break_infinity.js": "^2.2.0"
