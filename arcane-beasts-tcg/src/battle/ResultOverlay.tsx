@@ -8,6 +8,12 @@ import { Icon } from '../ui/Icon';
 import { foley, playMusic, sfx } from '../audio/audio';
 import { particles } from './particles';
 import { useFx } from './fx';
+import { PROMOTE_AT, MEIJIN, RANKS, type RankChange } from '../state/ranked';
+import { RankEmblem } from '../ui/RankEmblem';
+import { RARITY_SYMBOL } from '../engine/cards';
+import type { Rarity } from '../engine/types';
+
+const draw0 = (w: number) => w === -1;
 
 export function ResultOverlay() {
   const result = useBattle((s) => s.result);
@@ -19,6 +25,7 @@ export function ResultOverlay() {
   const applied = useRef(false);
   const [res, setRes] = useState<BattleRewardResult | null>(null);
   const [missionsReady, setMissionsReady] = useState(0);
+  const [rank, setRank] = useState<RankChange | null>(null);
 
   useEffect(() => {
     if (!result || !cfg || applied.current) return;
@@ -41,6 +48,7 @@ export function ResultOverlay() {
       { kos: st.kos, damage: st.damage, prizes: st.prizes, evolves: st.evolves, trainers: st.trainers },
     );
     setRes(r);
+    if (cfg.ranked && !draw0(result.winner)) setRank(useStore.getState().recordRanked(win));
     const after = claimableCount(useStore.getState().save.progress, extCtx(useStore.getState().save));
     setMissionsReady(Math.max(0, after - before));
   }, [result, cfg, update, recordBattle]);
@@ -95,6 +103,7 @@ export function ResultOverlay() {
           <ExpBar res={res} delay={lineDelay + nLines * 0.18 + 0.5} />
         </div>
       )}
+      {rank && <RankPanel rc={rank} delay={lineDelay + 0.4} />}
       {!res && cfg.spectate && <div className="result-reason">観戦モードでは報酬はありません</div>}
       </div>
 
@@ -104,10 +113,11 @@ export function ResultOverlay() {
           onClick={() => {
             sfx('button');
             useBattle.setState({ result: null, view: null, prompt: null });
-            startBattle({ ...cfg });
+            if (cfg.ranked) go('ranked');
+            else startBattle({ ...cfg });
           }}
         >
-          もう一度
+          {cfg.ranked ? '次の対戦へ' : 'もう一度'}
         </button>
         {missionsReady > 0 && (
           <button
@@ -126,7 +136,7 @@ export function ResultOverlay() {
           onClick={() => {
             sfx('button');
             useBattle.setState({ result: null, view: null, prompt: null });
-            go(cfg.rival ? 'rivals' : 'home');
+            go(cfg.ranked ? 'home' : cfg.rival ? 'rivals' : 'home');
           }}
         >
           {cfg.rival ? '対戦相手を選ぶ' : 'ホームへ'}
@@ -183,6 +193,55 @@ function ExpBar({ res, delay }: { res: BattleRewardResult; delay: number }) {
           </motion.div>
         )}
       </AnimatePresence>
+    </motion.div>
+  );
+}
+
+/** ranked: points bar that moves, the crest that changes on promotion, and first-reach rewards */
+function RankPanel({ rc, delay }: { rc: RankChange; delay: number }) {
+  const [shown, setShown] = useState(rc.before);
+  const [flash, setFlash] = useState<'up' | 'down' | null>(null);
+  useEffect(() => {
+    const t1 = setTimeout(() => {
+      if (rc.promoted.length) {
+        setShown({ rank: rc.before.rank, pts: PROMOTE_AT });
+        setTimeout(() => {
+          setShown(rc.after);
+          setFlash('up');
+          foley.rarity(5);
+          sfx('fanfare-short', 0.7);
+        }, 700);
+      } else if (rc.demoted) {
+        setShown({ rank: rc.before.rank, pts: 0 });
+        setTimeout(() => {
+          setShown(rc.after);
+          setFlash('down');
+        }, 700);
+      } else setShown(rc.after);
+    }, delay * 1000);
+    return () => clearTimeout(t1);
+  }, [rc, delay]);
+  const pct = shown.rank >= MEIJIN ? 1 : Math.max(0, Math.min(1, shown.pts / PROMOTE_AT));
+  return (
+    <motion.div className={`rank-panel panel ${flash ?? ''}`} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: delay - 0.3, duration: 0.5 }}>
+      <div className="rp-head">ランクマッチ</div>
+      <motion.div key={shown.rank} className="rp-crest" initial={{ scale: flash ? 1.4 : 1, opacity: flash ? 0 : 1 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}>
+        <RankEmblem rank={shown.rank} size="calc(var(--u) * 8)" />
+      </motion.div>
+      <div className="rp-name">{RANKS[shown.rank]}</div>
+      <div className="rp-bar">
+        <motion.div className="rp-fill" animate={{ width: `${pct * 100}%` }} transition={{ duration: 0.6, ease: [0.65, 0, 0.35, 1] }} />
+      </div>
+      <div className={`rp-delta ${rc.delta > 0 ? 'up' : rc.delta < 0 ? 'down' : ''}`}>{rc.delta > 0 ? `+${rc.delta}pt` : rc.delta < 0 ? `${rc.delta}pt` : '±0pt'}</div>
+      {flash === 'up' && <div className="rp-banner">{rc.after.rank >= 10 ? '昇段' : '昇級'}！</div>}
+      {flash === 'down' && <div className="rp-banner down">降段…</div>}
+      {flash === 'up' &&
+        rc.rewards.map(({ rank, reward }) => (
+          <div key={rank} className="rp-reward">
+            {RANKS[rank]}到達報酬：<Icon name="coin" /> {reward.coins}
+            {Object.entries(reward.shards ?? {}).map(([k, n]) => ` ・ ${RARITY_SYMBOL[k as Rarity]}のかけら×${n}`)}
+          </div>
+        ))}
     </motion.div>
   );
 }

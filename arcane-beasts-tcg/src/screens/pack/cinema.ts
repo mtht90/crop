@@ -2,7 +2,7 @@
 // 流星降臨 — the pack-opening cinematic, rendered live with three.js.
 //
 //   0.0s  night sky over a mountain lake; the camera slowly tilts up
-//   1.0s  meteors streak across the sky          ← omen: colour + count
+//   1.0s  a meteor shower: one meteor per card    ← omen: each meteor's colour
 //   1.95s the main meteor turns and dives toward the viewer
 //   2.55s impact on the lake: flash, shock ring, sparks, camera shake
 //   2.65s a ball of light rises and hovers where the pack will be
@@ -20,6 +20,7 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 
 /** 0 = nothing special, 1 = ◇◇◇◇, 2 = ☆, 3 = ♛ */
 export type OmenTier = 0 | 1 | 2 | 3;
@@ -33,8 +34,8 @@ type Beat = 'enter' | 'dive' | 'impact' | 'orb' | 'morph';
 
 export interface CinemaOptions {
   tier: OmenTier;
-  /** number of meteors crossing the sky (1–3) */
-  meteors: number;
+  /** one entry per card: the colour (omen tier) its meteor shows; the first one is the main meteor */
+  meteors: OmenTier[];
   /** element whose rect the light should settle on (the pack) */
   target: () => DOMRect | null;
   onBeat?: (beat: Beat) => void;
@@ -75,7 +76,7 @@ varying vec3 vDir;
 void main(){ vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
 `;
 const SKY_FRAG = /* glsl */ `
-uniform float uTime; uniform vec3 uTint; uniform float uTintAmt; uniform float uGlowAmt; uniform vec3 uGlowDir;
+uniform float uTime; uniform vec3 uTint; uniform float uTintAmt; uniform float uGlowAmt; uniform vec3 uGlowDir; uniform vec3 uMoonDir;
 varying vec3 vDir;
 ${NOISE}
 vec3 skyCol(vec3 d){
@@ -101,6 +102,9 @@ vec3 skyCol(vec3 d){
   col += uTint * uTintAmt * (0.3 + 0.7 * smoothstep(0.0, 0.5, h)) * 0.12;
   // light of the falling star / the orb near the horizon
   col += uTint * uGlowAmt * pow(max(dot(d, uGlowDir), 0.0), 18.0) * 0.6;
+  // moonlight halo
+  float mdot = max(dot(d, uMoonDir), 0.0);
+  col += vec3(0.55, 0.62, 0.85) * (pow(mdot, 60.0) * 0.35 + pow(mdot, 8.0) * 0.05);
   return col;
 }
 void main(){
@@ -113,6 +117,10 @@ void main(){
   vec3 r = normalize(vec3(d.x + rip * 0.035, max(0.0, depth + rip * 0.01), d.z));
   vec3 col = skyCol(r) * 0.55;
   col = mix(col, vec3(0.003, 0.005, 0.013), smoothstep(0.03, 0.4, depth));
+  // moon path on the water
+  float az = d.x / -d.z - uMoonDir.x / -uMoonDir.z;
+  float moonPath = exp(-abs(az + rip * 0.08) * 28.0) * smoothstep(0.45, 0.0, depth) * (0.45 + 0.9 * max(rip, 0.0));
+  col += vec3(0.5, 0.58, 0.8) * moonPath * 0.35;
   // shimmering reflection of the glow on the water
   float streak = exp(-abs(d.x - uGlowDir.x * 0.9) * 22.0) * smoothstep(0.35, 0.0, depth) * (0.6 + 0.4 * rip);
   col += uTint * uGlowAmt * streak * 0.5;
@@ -166,7 +174,7 @@ varying float vAlpha; varying float vHue; varying float vSide;
 void main(){ vAlpha = aAlpha; vHue = aHue; vSide = aSide; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
 `;
 const TRAIL_FRAG = /* glsl */ `
-uniform vec3 uColor; uniform float uRainbow; uniform float uTime;
+uniform vec3 uColor; uniform float uRainbow; uniform float uTime; uniform float uFade;
 varying float vAlpha; varying float vHue; varying float vSide;
 ${NOISE}
 void main(){
@@ -174,7 +182,7 @@ void main(){
   vec3 col = mix(uColor, hsv2rgb(vec3(fract(vHue * 1.5 - uTime * 0.4), 0.7, 1.0)), uRainbow);
   // hot white core near the head
   col = mix(col, vec3(1.0), pow(across, 5.0) * smoothstep(0.35, 1.0, vAlpha) * 0.85);
-  float a = vAlpha * across;
+  float a = vAlpha * across * uFade;
   gl_FragColor = vec4(col * a, a);
 }
 `;
@@ -222,6 +230,43 @@ void main(){
   gl_FragColor = vec4(col * a, a);
 }
 `;
+
+// aurora curtains hanging over the mountains
+const AURORA_FRAG = /* glsl */ `
+uniform float uTime; uniform float uAmt;
+varying vec2 vUv;
+${NOISE}
+void main(){
+  float x = vUv.x * 6.2832;
+  float y = vUv.y;
+  float fold = sin(x * 3.0 + uTime * 0.15) * 0.08 + sin(x * 7.0 - uTime * 0.23) * 0.04;
+  float base = 0.18 + fold;
+  float band = smoothstep(base - 0.02, base + 0.03, y) * exp(-(y - base) * 3.2);
+  float rays = fbm(vec3(vUv.x * 60.0, y * 1.5 - uTime * 0.12, uTime * 0.05));
+  float curtain = band * (0.35 + 0.9 * smoothstep(0.35, 0.8, rays));
+  float patchy = smoothstep(0.3, 0.7, fbm(vec3(vUv.x * 5.0, 0.0, uTime * 0.03)));
+  vec3 col = mix(vec3(0.15, 0.95, 0.6), vec3(0.55, 0.3, 1.0), smoothstep(0.15, 0.6, y - base + 0.1));
+  float a = curtain * patchy * uAmt;
+  gl_FragColor = vec4(col * a, a);
+}
+`;
+
+// final grade: vignette and a whisper of film grain
+const GRADE = {
+  uniforms: { tDiffuse: { value: null }, uTime: { value: 0 } },
+  vertexShader: PASS_VERT,
+  fragmentShader: /* glsl */ `
+    uniform sampler2D tDiffuse; uniform float uTime; varying vec2 vUv;
+    float h(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+    void main(){
+      vec4 c = texture2D(tDiffuse, vUv);
+      vec2 q = vUv - 0.5;
+      float vig = smoothstep(0.85, 0.2, length(q * vec2(1.0, 1.25)));
+      c.rgb *= mix(0.55, 1.0, vig);
+      c.rgb += (h(vUv * 800.0 + uTime) - 0.5) * 0.025;
+      gl_FragColor = c;
+    }`,
+};
 
 // ---------------------------------------------------------------------------
 function radialTexture(stops: [number, string][], size = 128) {
@@ -272,7 +317,7 @@ class Ribbon {
     this.mat = new THREE.ShaderMaterial({
       vertexShader: TRAIL_VERT,
       fragmentShader: TRAIL_FRAG,
-      uniforms: { uColor: { value: color }, uRainbow: { value: rainbow ? 1 : 0 }, uTime: { value: 0 } },
+      uniforms: { uColor: { value: color }, uRainbow: { value: rainbow ? 1 : 0 }, uTime: { value: 0 }, uFade: { value: 1 } },
       transparent: true,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
@@ -346,6 +391,11 @@ export class MeteorCinema {
   private morph: THREE.Mesh;
   private aura: THREE.Mesh;
   private flash: THREE.Mesh;
+  private aurora: THREE.Mesh;
+  private moon: THREE.Group;
+  private flies: THREE.Points;
+  private grade: ShaderPass;
+  private reflection: THREE.Mesh;
   private raf = 0;
   private last = 0;
   private clock = -1;
@@ -391,6 +441,8 @@ export class MeteorCinema {
     this.bloom = new UnrealBloomPass(new THREE.Vector2(512, 512), 0.8, 0.55, 0.32);
     this.composer.addPass(this.bloom);
     this.composer.addPass(new OutputPass());
+    this.grade = new ShaderPass(GRADE);
+    this.composer.addPass(this.grade);
 
     // sky dome with the lake
     this.sky = new THREE.Mesh(
@@ -404,6 +456,7 @@ export class MeteorCinema {
           uTintAmt: { value: 0 },
           uGlowAmt: { value: 0 },
           uGlowDir: { value: new THREE.Vector3(0, 0, -1) },
+          uMoonDir: { value: new THREE.Vector3(0.5, 0.36, -0.79).normalize() },
         },
         side: THREE.BackSide,
         depthWrite: false,
@@ -490,24 +543,141 @@ export class MeteorCinema {
     ], 256);
     this.textures.push(headTex, glowTex, ringTex);
 
-    // meteors: the main one dives; companions only cross the sky
-    const n = Math.max(1, Math.min(3, opts.meteors));
-    const mk = (path: THREE.Vector3[], t0: number, t1: number, main: boolean) => {
-      const ribbon = new Ribbon(main ? 64 : 40, this.color, rainbow);
+    // meteors: one per card. The main one (best card) dives; the rest fall
+    // away from a shared radiant like a real meteor shower.
+    const tiers = opts.meteors.length ? opts.meteors : [opts.tier];
+    const many = tiers.length > 12;
+    const mk = (path: THREE.Vector3[], t0: number, t1: number, main: boolean, tier: OmenTier) => {
+      const col = new THREE.Color(OMEN_COLORS[tier]);
+      const ribbon = new Ribbon(main ? 64 : many ? 22 : 36, col, tier === 3);
       const head = new THREE.Sprite(new THREE.SpriteMaterial({ map: headTex, color: 0xffffff, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
-      const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: this.color, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
+      const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: col, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
       head.visible = glow.visible = false;
       this.scene.add(ribbon.mesh, glow, head);
-      this.meteors.push({ ribbon, head, glow, path: new THREE.CatmullRomCurve3(path), t0, t1, main, span: main ? 0.55 : 0.4 });
+      this.meteors.push({ ribbon, head, glow, path: new THREE.CatmullRomCurve3(path), t0, t1, main, span: main ? 0.55 : many ? 0.22 : 0.35 });
     };
     mk(
       [new THREE.Vector3(-230, 190, -330), new THREE.Vector3(-120, 130, -260), new THREE.Vector3(-40, 60, -170), new THREE.Vector3(-6, 14, -75), this.IMPACT.clone()],
       1.0,
       T_IMPACT,
       true,
+      tiers[0],
     );
-    if (n >= 2) mk([new THREE.Vector3(260, 230, -380), new THREE.Vector3(90, 185, -360), new THREE.Vector3(-160, 140, -330)], 1.2, 2.05, false);
-    if (n >= 3) mk([new THREE.Vector3(-300, 250, -340), new THREE.Vector3(-110, 205, -370), new THREE.Vector3(120, 150, -390)], 1.45, 2.3, false);
+    const radiant = new THREE.Vector3(240, 300, -420);
+    const rnd = (a: number, b: number) => a + Math.random() * (b - a);
+    const rest = tiers.slice(1);
+    rest.forEach((tier, k) => {
+      const f = rest.length > 1 ? k / (rest.length - 1) : 0.5;
+      const t0 = 0.85 + f * 1.45 + rnd(-0.08, 0.08);
+      const start = radiant.clone().add(new THREE.Vector3(rnd(-160, 60), rnd(-90, 30), rnd(-40, 60)));
+      const dir = start.clone().sub(radiant).add(new THREE.Vector3(-120, -70, 0)).normalize();
+      const len = rnd(90, 190);
+      const end = start.clone().addScaledVector(dir, len);
+      const mid = start.clone().lerp(end, 0.5);
+      mk([start, mid, end], t0, t0 + rnd(0.45, 0.8) * (many ? 0.8 : 1), false, tier);
+    });
+    this.color = new THREE.Color(OMEN_COLORS[tiers[0]]);
+
+    // the main meteor mirrored in the lake
+    this.reflection = new THREE.Mesh(this.meteors[0].ribbon.mesh.geometry, this.meteors[0].ribbon.mat.clone());
+    (this.reflection.material as THREE.ShaderMaterial).uniforms.uFade.value = 0.3;
+    this.reflection.scale.y = -1;
+    this.reflection.position.y = -3.0;
+    this.reflection.frustumCulled = false;
+    this.scene.add(this.reflection);
+
+    // aurora
+    this.aurora = new THREE.Mesh(
+      new THREE.CylinderGeometry(640, 640, 520, 128, 1, true),
+      new THREE.ShaderMaterial({
+        vertexShader: PASS_VERT,
+        fragmentShader: AURORA_FRAG,
+        uniforms: { uTime: { value: 0 }, uAmt: { value: 0.55 } },
+        side: THREE.BackSide,
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      }),
+    );
+    this.aurora.position.y = 200;
+    this.aurora.rotation.y = 1.2;
+    this.scene.add(this.aurora);
+
+    // moon
+    this.moon = new THREE.Group();
+    const moonTex = (() => {
+      const c = document.createElement('canvas');
+      c.width = c.height = 256;
+      const g = c.getContext('2d')!;
+      const grad = g.createRadialGradient(110, 100, 10, 128, 128, 120);
+      grad.addColorStop(0, '#fffdf4');
+      grad.addColorStop(0.7, '#e9e6dc');
+      grad.addColorStop(1, '#c9c5bb');
+      g.fillStyle = grad;
+      g.beginPath();
+      g.arc(128, 128, 118, 0, Math.PI * 2);
+      g.fill();
+      for (let k = 0; k < 26; k++) {
+        g.fillStyle = `rgba(150,150,160,${0.08 + Math.random() * 0.12})`;
+        g.beginPath();
+        g.arc(60 + Math.random() * 140, 60 + Math.random() * 140, 6 + Math.random() * 20, 0, Math.PI * 2);
+        g.fill();
+      }
+      const t = new THREE.CanvasTexture(c);
+      t.colorSpace = THREE.SRGBColorSpace;
+      return t;
+    })();
+    this.textures.push(moonTex);
+    const moonDisc = new THREE.Sprite(new THREE.SpriteMaterial({ map: moonTex, transparent: true, depthWrite: false, color: 0xeef2ff }));
+    moonDisc.scale.setScalar(26);
+    const moonHalo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: 0x9fb4ff, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.55 }));
+    moonHalo.scale.setScalar(150);
+    this.moon.add(moonHalo, moonDisc);
+    this.moon.position.copy(new THREE.Vector3(0.5, 0.36, -0.79).normalize().multiplyScalar(700));
+    this.scene.add(this.moon);
+
+    // fireflies over the water
+    const FN = 140;
+    const fp = new Float32Array(FN * 3);
+    const fa = new Float32Array(FN);
+    const fc = new Float32Array(FN * 3);
+    for (let k = 0; k < FN; k++) {
+      fp.set([rnd(-40, 40), rnd(-1.2, 4), rnd(-70, -9)], k * 3);
+      fa[k] = Math.random();
+      const c = new THREE.Color().setHSL(rnd(0.14, 0.2), 0.9, 0.7);
+      fc.set([c.r, c.g, c.b], k * 3);
+    }
+    const fg = new THREE.BufferGeometry();
+    fg.setAttribute('position', new THREE.BufferAttribute(fp, 3));
+    fg.setAttribute('aAlpha', new THREE.BufferAttribute(fa, 1));
+    fg.setAttribute('aColor', new THREE.BufferAttribute(fc, 3));
+    this.flies = new THREE.Points(
+      fg,
+      new THREE.ShaderMaterial({
+        vertexShader: /* glsl */ `
+          attribute float aAlpha; attribute vec3 aColor; uniform float uTime; uniform float uPx;
+          varying float vA; varying vec3 vC;
+          void main(){
+            vec3 p = position;
+            p.x += sin(uTime * 0.4 + aAlpha * 30.0) * 0.8;
+            p.y += sin(uTime * 0.6 + aAlpha * 17.0) * 0.4;
+            vA = pow(0.5 + 0.5 * sin(uTime * (1.0 + aAlpha) + aAlpha * 50.0), 3.0);
+            vC = aColor;
+            vec4 mv = modelViewMatrix * vec4(p, 1.0);
+            gl_PointSize = uPx * clamp(70.0 / -mv.z, 1.5, 7.0);
+            gl_Position = projectionMatrix * mv;
+          }`,
+        fragmentShader: /* glsl */ `
+          varying float vA; varying vec3 vC;
+          void main(){ vec2 c = gl_PointCoord - 0.5; float a = exp(-dot(c, c) * 20.0) * vA; if (a < 0.01) discard; gl_FragColor = vec4(vC * a, a); }`,
+        uniforms: { uTime: { value: 0 }, uPx: { value: 1 } },
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      }),
+    );
+    this.flies.frustumCulled = false;
+    this.scene.add(this.flies);
 
     // sparks
     const MAXS = 600;
@@ -723,6 +893,9 @@ export class MeteorCinema {
     skyU.uTime.value = t;
     (this.stars.material as THREE.ShaderMaterial).uniforms.uTime.value = t;
     (this.starsMirror.material as THREE.ShaderMaterial).uniforms.uTime.value = t;
+    (this.aurora.material as THREE.ShaderMaterial).uniforms.uTime.value = t;
+    (this.flies.material as THREE.ShaderMaterial).uniforms.uTime.value = t;
+    this.grade.uniforms.uTime.value = t;
     const camPos = this.camera.position;
 
     // ---------------- camera ----------------
@@ -734,7 +907,7 @@ export class MeteorCinema {
     if (follow > 0) look.lerp(main.path.getPointAt(this.meteorS(main, Math.min(T, main.t1))), follow * 0.8);
     const settle = smooth(T_IMPACT - 0.05, T_IMPACT + 0.9, T);
     if (settle > 0) look.lerp(new THREE.Vector3(0, 1.2, -60), easeInOut(settle));
-    camPos.set(0, 1.4, 6 - 1.2 * smooth(0, 4.4, T));
+    camPos.set(Math.sin(t * 0.37) * 0.08, 1.4 + Math.sin(t * 0.53) * 0.05, 6 - 1.2 * smooth(0, 4.4, T));
     const sinceImpact = T - T_IMPACT;
     const shake = sinceImpact >= 0 ? Math.max(0, 1 - sinceImpact / 0.5) : 0;
     if (shake > 0) {
@@ -776,6 +949,8 @@ export class MeteorCinema {
         if (m.main) this.emit(head, 1, dist * 0.02);
       }
     }
+    this.reflection.visible = main.ribbon.mesh.visible;
+    (this.reflection.material as THREE.ShaderMaterial).uniforms.uTime.value = t;
     // sky tint while the meteors are out; glow on the horizon where it lands
     skyU.uTintAmt.value = smooth(1.0, 1.8, T) * (1 - smooth(T_IMPACT, T_IMPACT + 1.4, T)) * (0.5 + this.opts.tier * 0.35);
     const toImpact = this.IMPACT.clone().sub(camPos).normalize();

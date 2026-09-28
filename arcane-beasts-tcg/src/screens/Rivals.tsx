@@ -9,6 +9,8 @@ import { artUrl } from '../lib/assets';
 import { CardFace, EnergySymbol } from '../ui/Card';
 import { Icon } from '../ui/Icon';
 import { TopBar } from '../ui/TopBar';
+import { RankEmblem } from '../ui/RankEmblem';
+import { RANKS } from '../state/ranked';
 import { foley, playMusic, sfx } from '../audio/audio';
 
 const LV: Record<Difficulty, number> = { easy: 1, normal: 2, hard: 3 };
@@ -93,6 +95,17 @@ export function Rivals() {
               {k === 'AB2' && <i>NEW</i>}
             </button>
           ))}
+          <button
+            className="rk-entry"
+            onClick={() => {
+              sfx('expand', 0.5);
+              go('ranked');
+            }}
+          >
+            <RankEmblem rank={save.ranked.rank} size="1.6em" />
+            ランクマッチ
+            <b>{RANKS[save.ranked.rank]}</b>
+          </button>
         </div>
         <div className="rival-list">
           {shown.map(({ rv, i }) => {

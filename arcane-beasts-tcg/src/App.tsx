@@ -12,6 +12,7 @@ import { Collection } from './screens/Collection';
 import { Shop } from './screens/Shop';
 import { Missions } from './screens/Missions';
 import { Exchange } from './screens/Exchange';
+import { Ranked } from './screens/Ranked';
 import { Credits, Rules, Settings } from './screens/Misc';
 import { setVolumes, unlockAudio } from './audio/audio';
 import { expand, RIVALS, deckById } from './engine/decks';
@@ -51,6 +52,7 @@ const SCREENS = {
   shop: Shop,
   missions: Missions,
   exchange: Exchange,
+  ranked: Ranked,
   settings: Settings,
   credits: Credits,
   rules: Rules,

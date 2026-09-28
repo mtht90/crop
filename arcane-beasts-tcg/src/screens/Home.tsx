@@ -3,6 +3,8 @@ import { useEffect, useState } from 'react';
 import { activeDeck, collectionPct, extCtx, useStore, RIVALS, SHARD_COST, SHARD_RARITIES } from '../state/store';
 import { canClaimLogin, claimableCount, currentPickup, expToNext } from '../state/progress';
 import { LoginTrack } from './Missions';
+import { RankEmblem } from '../ui/RankEmblem';
+import { RANKS } from '../state/ranked';
 import { artUrl } from '../lib/assets';
 import { CardFace } from '../ui/Card';
 import { Icon } from '../ui/Icon';
@@ -70,6 +72,10 @@ export function Home() {
               </div>
             </div>
           </div>
+          <button className="rank-chip" title="ランクマッチ" onClick={() => go('ranked')}>
+            <RankEmblem rank={save.ranked.rank} size="calc(var(--u) * 2.8)" />
+            <span>{RANKS[save.ranked.rank]}</span>
+          </button>
           <button className="icon-btn" title="ミッション" onClick={() => go('missions')}>
             <Icon name="trophy" />
             {missionN > 0 && <i className="dot">{missionN}</i>}

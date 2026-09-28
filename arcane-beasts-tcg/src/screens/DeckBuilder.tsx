@@ -11,6 +11,7 @@ import { Icon } from '../ui/Icon';
 import { TopBar } from '../ui/TopBar';
 import { foley, playMusic, sfx } from '../audio/audio';
 import { askConfirm } from '../ui/Confirm';
+import { AutoDeckModal } from './AutoDeck';
 
 type Kind = 'all' | 'monster' | 'trainer' | 'energy';
 
@@ -30,6 +31,7 @@ export function DeckBuilder() {
   const [types, setTypes] = useState<EType[]>([]);
   const [zoom, setZoom] = useState<string | null>(null);
   const [toast, setToast] = useState('');
+  const [auto, setAuto] = useState(false);
 
   const errs = validateDeck(editing.cards);
   const counts = useMemo(() => {
@@ -202,6 +204,9 @@ export function DeckBuilder() {
           </div>
           {errs.length > 0 && <div className="db-errs">{errs.map((e) => <div key={e}>・{e}</div>)}</div>}
           <div className="db-actions">
+            <button className="btn small gold-btn" onClick={() => setAuto(true)} title="持っているカードで自動的にデッキを組む">
+              おすすめ編成
+            </button>
             <button className="btn small ghost" onClick={autoEnergy} title="残り枠を基本エネルギーで埋める">
               エネルギー自動
             </button>
@@ -266,6 +271,20 @@ export function DeckBuilder() {
             <motion.div className="fx-toast" style={{ top: 'calc(var(--u) * 6)', zIndex: 300 }} initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
               {toast}
             </motion.div>
+          )}
+        </AnimatePresence>
+        <AnimatePresence>
+          {auto && (
+            <AutoDeckModal
+              onClose={() => setAuto(false)}
+              onBuild={(d, mode) => {
+                const base = mode === 'new' ? { id: `deck-${Date.now()}`, name: `${d.ace}デッキ`, cards: [], cover: '' } : editing;
+                setEditing({ ...base, cards: d.cards, cover: d.cards.find((id) => card(id).name === d.ace) ?? d.cards[0] });
+                setDirty(true);
+                setAuto(false);
+                flash(`${d.ace}を軸に60枚を組みました。保存を忘れずに`);
+              }}
+            />
           )}
         </AnimatePresence>
         {zoom && (

@@ -591,3 +591,99 @@
 .aura-flash { position: absolute; inset: -40%; background: radial-gradient(closest-side, #fff, color-mix(in srgb, var(--ac) 60%, transparent) 40%, transparent 70%); }
 .tear-float.shaking { animation: pack-tremble 0.07s linear infinite; }
 @keyframes pack-tremble { 0% { translate: -2px 1px; } 25% { translate: 2px -1px; } 50% { translate: -1px -2px; } 75% { translate: 1px 2px; } 100% { translate: -2px 1px; } }
+
+/* ------------------------------ 10-pack --------------------------------- */
+.shop2-buttons { display: flex; gap: calc(var(--u) * 1.2); }
+.pill.ten { position: relative; background: linear-gradient(180deg, #e9f0ff, #b9c8ef); }
+.pill.ten.gold { background: linear-gradient(180deg, #fff8dc, #f1c75a 55%, #b8862c); }
+.pill.ten::before {
+  content: '×10';
+  position: absolute;
+  right: calc(var(--u) * -0.6);
+  top: calc(var(--u) * -0.9);
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #d6263b;
+  color: #fff;
+  font-family: var(--font-latin);
+  font-size: calc(var(--u) * 0.75);
+  letter-spacing: 0.06em;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4);
+}
+
+.multi { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: calc(var(--u) * 1.4); z-index: 20; }
+.multi-head { display: flex; align-items: baseline; gap: calc(var(--u) * 1.2); font-weight: 800; font-size: calc(var(--u) * 1.05); letter-spacing: 0.12em; color: rgba(255, 255, 255, 0.75); }
+.multi-head em { font-style: normal; color: #ffe7a0; }
+.multi-head b { font-family: var(--font-latin); font-size: 1.3em; }
+.multi-grid { display: grid; gap: calc(var(--u) * 0.55) calc(var(--u) * 0.6); perspective: 1400px; }
+.multi-item { position: relative; aspect-ratio: 63 / 88; cursor: pointer; }
+.multi-flip { position: absolute; inset: 0; transform-style: preserve-3d; }
+.multi-item .tcg { width: 100%; }
+.multi-item.down { z-index: 2; }
+.multi-halo {
+  position: absolute;
+  inset: -18%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, var(--rc), transparent);
+  z-index: -1;
+  pointer-events: none;
+}
+.multi-item .new { position: absolute; left: 50%; top: calc(var(--u) * -0.5); transform: translateX(-50%); z-index: 3; padding: 0 6px; border-radius: 999px; background: #fff; color: #d6263b; font-family: var(--font-latin); font-weight: 900; font-size: calc(var(--u) * 0.55); letter-spacing: 0.1em; box-shadow: 0 3px 8px rgba(0, 0, 0, 0.4); }
+.multi-item .shard-tag { top: auto; bottom: -6px; padding: 0 5px; font-size: calc(var(--u) * 0.6); }
+.multi-flash { position: absolute; inset: 0; background: radial-gradient(60% 60% at 50% 50%, color-mix(in srgb, var(--rc) 60%, white), transparent 75%); pointer-events: none; z-index: 25; }
+
+/* Pocket-style tear: the strip peels, light leaks from the seam, a spark rides the cut */
+.tear-press { position: relative; width: 100%; }
+.tear-zone { top: -10%; height: 34%; }
+.tear-cut {
+  height: 3px;
+  margin-top: -1.5px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--ac, #fff) 50%, white), #fff);
+  box-shadow: 0 0 4px 1px #fff, 0 0 14px 3px var(--ac, #fff), 0 0 36px 8px color-mix(in srgb, var(--ac, #fff) 45%, transparent);
+}
+.tear-leak {
+  position: absolute;
+  height: calc(var(--u) * 5);
+  margin-top: calc(var(--u) * -2.5);
+  background: radial-gradient(50% 50% at 50% 50%, color-mix(in srgb, var(--ac, #fff) 55%, white) 0%, color-mix(in srgb, var(--ac, #fff) 35%, transparent) 40%, transparent 72%);
+  filter: blur(2px);
+  mix-blend-mode: screen;
+  z-index: 8;
+  pointer-events: none;
+}
+.tear-head {
+  position: absolute;
+  width: calc(var(--u) * 4);
+  height: calc(var(--u) * 4);
+  margin: calc(var(--u) * -2) calc(var(--u) * -2);
+  background:
+    radial-gradient(closest-side, #fff 0%, #fff 12%, color-mix(in srgb, var(--ac, #fff) 70%, transparent) 30%, transparent 70%),
+    linear-gradient(90deg, transparent 0 47%, rgba(255, 255, 255, 0.9) 50%, transparent 53% 100%),
+    linear-gradient(0deg, transparent 0 48%, rgba(255, 255, 255, 0.7) 50%, transparent 52% 100%);
+  mix-blend-mode: screen;
+  animation: head-spin 0.9s linear infinite;
+  z-index: 10;
+  pointer-events: none;
+}
+@keyframes head-spin { from { transform: rotate(0deg) scale(1); } 50% { transform: rotate(45deg) scale(1.15); } to { transform: rotate(90deg) scale(1); } }
+.tear-flash {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(70% 60% at 50% 20%, #fff 0%, color-mix(in srgb, var(--ac, #fff) 40%, rgba(255, 255, 255, 0.4)) 40%, transparent 80%);
+  mix-blend-mode: screen;
+  z-index: 28;
+  pointer-events: none;
+}
+.tear-bundle { position: absolute; inset: 0; aspect-ratio: 60 / 100; z-index: -1; pointer-events: none; }
+.tb-sheet { position: absolute; inset: 0; filter: brightness(0.55) saturate(0.8); transform-origin: 50% 100%; }
+.tb-count {
+  position: absolute;
+  right: calc(var(--u) * -2.6);
+  bottom: calc(var(--u) * 2);
+  font-family: var(--font-display);
+  font-size: calc(var(--u) * 2.2);
+  color: #fff;
+  text-shadow: 0 0 12px var(--ac, #fff), 0 3px 8px rgba(0, 0, 0, 0.8);
+  letter-spacing: 0.02em;
+}

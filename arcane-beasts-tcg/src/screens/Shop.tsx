@@ -20,7 +20,7 @@ import { BoosterPack, TEAR_Y } from './pack/BoosterPack';
 import { MeteorCinema, OMEN_COLORS, type OmenTier } from './pack/cinema';
 import './pack/pack.css';
 
-type Phase = 'cinema' | 'tear' | 'reveal' | 'results';
+type Phase = 'cinema' | 'tear' | 'reveal' | 'results' | 'multi';
 
 const EASE_OUT = [0.16, 1, 0.3, 1] as const;
 const EASE_IN = [0.7, 0, 0.84, 0] as const;
@@ -42,11 +42,13 @@ const priceOf = (b: Booster) => (b.premium ? PREMIUM_PRICE : PACK_PRICE);
 interface Omen {
   actual: OmenTier;
   shown: OmenTier;
-  meteors: number;
+  /** one meteor per card, best first; a card's meteor never shows more than the omen */
+  meteors: OmenTier[];
 }
+const cardTier = (c: CardDef): OmenTier => (RARITY_ORDER[c.rarity] >= RARITY_ORDER.CR ? 3 : RARITY_ORDER[c.rarity] >= RARITY_ORDER.ST ? 2 : RARITY_ORDER[c.rarity] >= RARITY_ORDER.RR ? 1 : 0);
 function makeOmen(cards: CardDef[], god: boolean): Omen {
-  const best = Math.max(...cards.map((c) => RARITY_ORDER[c.rarity]));
-  const actual = (god ? 3 : best >= RARITY_ORDER.CR ? 3 : best >= RARITY_ORDER.ST ? 2 : best >= RARITY_ORDER.RR ? 1 : 0) as OmenTier;
+  const tiers = cards.map(cardTier).sort((a, b) => b - a);
+  const actual = (god ? 3 : tiers[0]) as OmenTier;
   let shown = actual;
   const r = Math.random();
   if (actual === 3) shown = (r < 0.15 ? 1 : r < 0.5 ? 2 : 3) as OmenTier;
@@ -55,9 +57,9 @@ function makeOmen(cards: CardDef[], god: boolean): Omen {
   const dbg = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('omen') : null; // e.g. ?omen=3,1
   if (dbg) {
     const [a, b] = dbg.split(',').map(Number);
-    return { actual: a as OmenTier, shown: (b ?? a) as OmenTier, meteors: Math.max(1, b ?? a) };
+    return { actual: a as OmenTier, shown: (b ?? a) as OmenTier, meteors: tiers.map((t, i) => (i === 0 ? ((b ?? a) as OmenTier) : (Math.min(t, b ?? a) as OmenTier))) };
   }
-  const meteors = shown === 3 ? 3 : shown === 2 ? 2 : shown === 1 ? (Math.random() < 0.5 ? 2 : 1) : 1;
+  const meteors = tiers.map((t, i) => (i === 0 ? shown : (Math.min(t, shown) as OmenTier)));
   return { actual, shown, meteors };
 }
 type Tab = SetCode | 'premium';
@@ -125,6 +127,8 @@ interface OpeningState {
   fresh: Set<string>;
   /** indices of cards that became shards (11th copy or later) */
   shards: Set<number>;
+  /** 1 or 10 (10連) */
+  packs: number;
   key: number;
 }
 
@@ -150,23 +154,25 @@ export function Shop() {
   const price = priceOf(b);
 
   const buy = useCallback(
-    (booster: Booster) => {
-      const cost = priceOf(booster);
+    (booster: Booster, packs = 1) => {
+      const cost = priceOf(booster) * packs;
       if (useStore.getState().save.coins < cost) {
         sfx('miss-2', 0.5);
         return false;
       }
-      const res = booster.premium ? openPremium() : openPack(booster);
+      const results = Array.from({ length: packs }, () => (booster.premium ? openPremium() : openPack(booster)));
+      const cards = results.flatMap((r) => r.cards);
+      const god = results.some((r) => r.god);
       const col = useStore.getState().save.collection;
-      const fresh = new Set(res.cards.filter((c) => !(col[c.id] ?? 0)).map((c) => c.id));
+      const fresh = new Set(cards.filter((c) => !(col[c.id] ?? 0)).map((c) => c.id));
       update((s) => {
         s.coins -= cost;
-        s.packsOpened++;
+        s.packsOpened += packs;
       });
-      useStore.getState().recordPack(!!booster.premium);
-      const flags = addCards(res.cards.map((c) => c.id));
+      for (let k = 0; k < packs; k++) useStore.getState().recordPack(!!booster.premium);
+      const flags = addCards(cards.map((c) => c.id));
       const shards = new Set(flags.flatMap((f, i) => (f ? [i] : [])));
-      setOpening({ booster, cards: res.cards, god: res.god, fresh, shards, key: Date.now() });
+      setOpening({ booster, cards, god, fresh, shards, packs, key: Date.now() });
       return true;
     },
     [update, addCards],
@@ -251,12 +257,20 @@ export function Shop() {
               <div className="shop2-sub">{b.premium ? '全スロットのレアリティ上昇・5枚目は◇◇◇◇以上確定' : `${b.types.map((t) => TYPE_JP[t]).join('・')}タイプが出やすい`}</div>
             </motion.div>
           </AnimatePresence>
-          <button className={`pill ${b.premium ? 'gold' : ''}`} disabled={save.coins < price} onClick={() => buy(b)}>
-            開封する
-            <span className="coin">
-              <Icon name="coin" /> {price}
-            </span>
-          </button>
+          <div className="shop2-buttons">
+            <button className={`pill ${b.premium ? 'gold' : ''}`} disabled={save.coins < price} onClick={() => buy(b)}>
+              開封する
+              <span className="coin">
+                <Icon name="coin" /> {price}
+              </span>
+            </button>
+            <button className={`pill ten ${b.premium ? 'gold' : ''}`} disabled={save.coins < price * 10} onClick={() => buy(b, 10)}>
+              10パック開封
+              <span className="coin">
+                <Icon name="coin" /> {(price * 10).toLocaleString()}
+              </span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -267,7 +281,7 @@ export function Shop() {
             key={opening.key}
             onClose={() => setOpening(null)}
             onAgain={() => {
-              if (!buy(opening.booster)) setOpening(null);
+              if (!buy(opening.booster, opening.packs)) setOpening(null);
             }}
           />
         )}
@@ -329,7 +343,7 @@ interface OpeningProps extends Omit<OpeningState, 'key'> {
   onAgain: () => void;
 }
 
-function Opening({ booster, cards, god, fresh, shards, onClose, onAgain }: OpeningProps) {
+function Opening({ booster, cards, god, fresh, shards, packs, onClose, onAgain }: OpeningProps) {
   const u = useUnit();
   const [phase, setPhase] = useState<Phase>('cinema');
   const omen = useMemo(() => makeOmen(cards, god), [cards, god]);
@@ -414,7 +428,11 @@ function Opening({ booster, cards, god, fresh, shards, onClose, onAgain }: Openi
           </div>
         )}
 
-        {phase === 'tear' && <TearStage booster={booster} god={god} u={u} cards={cards} omen={omen} onAura={setAura} burstAt={burstAt} onDone={() => setPhase('reveal')} />}
+        {phase === 'tear' && <TearStage booster={booster} god={god} u={u} cards={cards} omen={omen} packs={packs} onAura={setAura} burstAt={burstAt} onDone={() => setPhase(packs > 1 ? 'multi' : 'reveal')} />}
+
+        {phase === 'multi' && (
+          <MultiResults cards={cards} fresh={fresh} shards={shards} burstAt={burstAt} onClose={onClose} onAgain={onAgain} canAgain={coins >= priceOf(booster) * packs} price={priceOf(booster) * packs} u={u} />
+        )}
 
         {phase === 'reveal' && top && (
           <>
@@ -548,12 +566,13 @@ interface TearProps {
   u: number;
   cards: CardDef[];
   omen: Omen;
+  packs: number;
   onAura: (a: AuraState) => void;
   burstAt: (x: number, y: number, preset: string, n: number, scale?: number) => void;
   onDone: () => void;
 }
 
-function TearStage({ booster, god, u, cards, omen, onAura, burstAt, onDone }: TearProps) {
+function TearStage({ booster, god, u, cards, omen, packs, onAura, burstAt, onDone }: TearProps) {
   // aura: starts at the omen shown by the meteors and climbs to the truth
   const [aura, setAura] = useState<OmenTier>(omen.shown);
   const [shaking, setShaking] = useState(false);
@@ -608,24 +627,51 @@ function TearStage({ booster, god, u, cards, omen, onAura, burstAt, onDone }: Te
   const [torn, setTorn] = useState(false);
   const [active, setActive] = useState(false);
   const [hint, hideHint] = useIdleHint('tear', 1800);
-  const g = useRef<{ x: number; max: number; lastSound: number } | null>(null);
+  const g = useRef<{ x: number; dir: 1 | -1; max: number; lastSound: number; lastBuzz: number } | null>(null);
   const cutW = useTransform(prog, (p) => `${p * 92}%`);
+  const headPos = useTransform(prog, (p) => `${4 + p * 92}%`);
+  const leak = useTransform(prog, [0, 0.15, 1], [0, 0.55, 1]);
+  // the cut strip peels up from where the finger started (pivoting on the uncut end)
+  const lift = useMotionValue(0); // signed progress
+  const stripRot = useTransform(lift, (v) => v * 4.5);
+  const stripY = useTransform(lift, (v) => -Math.abs(v) * u * 0.35);
+  const [cutting, setCutting] = useState(false);
+  const [snap, setSnap] = useState(false);
+  const finishing = useRef(false);
+  const buzz = (ms: number | number[]) => {
+    try {
+      navigator.vibrate?.(ms);
+    } catch {
+      /* not supported */
+    }
+  };
   useEffect(() => onAura({ tier: aura, visible: !torn, hot: shaking }), [aura, torn, shaking, onAura]);
 
   const finish = () => {
-    if (torn || locked) return;
-    setTorn(true);
+    if (torn || locked || finishing.current) return;
+    finishing.current = true;
     hideHint();
-    animate(prog, 1, { duration: 0.1 });
+    setCutting(true);
+    animate(prog, 1, { duration: 0.08 });
+    animate(lift, dir, { duration: 0.08 });
     foley.rip();
+    buzz([0, 28]);
+    // hit-stop: the pack freezes bright for a beat, then the strip flies off
+    setSnap(true);
     const r = packRef.current?.getBoundingClientRect();
     if (r) {
       const y = r.top + r.height * TEAR_Y;
-      for (let k = 0; k <= 10; k++) setTimeout(() => burstAt(r.left + (r.width * (dir > 0 ? k : 10 - k)) / 10, y, 'sparkw', 5, 1), k * 14);
-      setTimeout(() => burstAt(r.left + r.width / 2, y, 'mote', 40, 1.4), 120);
+      for (let k = 0; k <= 12; k++) setTimeout(() => burstAt(r.left + (r.width * (dir > 0 ? k : 12 - k)) / 12, y, k % 2 ? 'glint' : 'sparkw', 2, 1), k * 10);
+      burstAt(dir > 0 ? r.right : r.left, y, 'glint', 16, 1.3);
+      setTimeout(() => burstAt(r.left + r.width / 2, y, 'mote', 50, 1.5), 140);
+      setTimeout(() => burstAt(r.left + r.width / 2, y, `aura${auraRef.current}`, 30, 1.3), 180);
     }
-    setTimeout(() => foley.slide(), 520);
-    setTimeout(onDone, 1500);
+    setTimeout(() => {
+      setSnap(false);
+      setTorn(true);
+    }, 120);
+    setTimeout(() => foley.slide(), 640);
+    setTimeout(onDone, 1620);
   };
 
   useEffect(() => {
@@ -640,7 +686,7 @@ function TearStage({ booster, god, u, cards, omen, onAura, burstAt, onDone }: Te
   const onDown = (e: React.PointerEvent) => {
     if (torn || locked) return;
     (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
-    g.current = { x: e.clientX, max: 0, lastSound: 0 };
+    g.current = { x: e.clientX, dir: 1, max: 0, lastSound: 0, lastBuzz: 0 };
     setActive(true);
     hideHint();
   };
@@ -650,16 +696,29 @@ function TearStage({ booster, god, u, cards, omen, onAura, burstAt, onDone }: Te
     if (!s || !r || torn) return;
     const dx = e.clientX - s.x;
     if (Math.abs(dx) < 3) return;
-    if (s.max === 0) setDir(dx > 0 ? 1 : -1);
-    const p = Math.min(1, Math.abs(dx) / (r.width * 0.8));
+    if (s.max === 0) {
+      s.dir = dx > 0 ? 1 : -1;
+      setDir(s.dir);
+      setCutting(true);
+    }
+    const d = s.dir;
+    const p = Math.min(1, Math.max(0, (dx * d) / (r.width * 0.72)));
     if (p > s.max) {
       s.max = p;
       prog.set(p);
-      burstAt(e.clientX, r.top + r.height * TEAR_Y, 'sparkw', 2, 0.8);
+      lift.set(s.dir * p);
+      const hx = d > 0 ? r.left + r.width * (0.04 + p * 0.92) : r.right - r.width * (0.04 + p * 0.92);
+      burstAt(hx, r.top + r.height * TEAR_Y, 'sparkw', 1, 0.8);
+      if (Math.random() < 0.35) burstAt(hx, r.top + r.height * TEAR_Y, `aura${auraRef.current}`, 1, 0.8);
       const now = performance.now();
       if (now - s.lastSound > 40) {
         s.lastSound = now;
         foley.scratch();
+      }
+      // a light tick every ~7% of the cut
+      if (p - s.lastBuzz > 0.07) {
+        s.lastBuzz = p;
+        buzz(6);
       }
     }
     if (p >= 1) {
@@ -673,8 +732,11 @@ function TearStage({ booster, god, u, cards, omen, onAura, burstAt, onDone }: Te
     g.current = null;
     setActive(false);
     if (!s || torn) return;
-    if (s.max >= 0.75) finish();
-    else animate(prog, 0, { duration: 0.45, ease: EASE_OUT });
+    if (s.max >= 0.7) finish();
+    else {
+      animate(lift, 0, { type: 'spring', stiffness: 420, damping: 18 });
+      animate(prog, 0, { duration: 0.45, ease: EASE_OUT, onComplete: () => setCutting(false) });
+    }
   };
 
   return (
@@ -701,8 +763,24 @@ function TearStage({ booster, god, u, cards, omen, onAura, burstAt, onDone }: Te
           })}
       </motion.div>
 
-      <div className="tear-wrap">
+      <div className="tear-wrap" style={{ ['--ac' as string]: OMEN_COLORS[aura] }}>
         <PackAura tier={aura} promo={promo} />
+        {packs > 1 && (
+          <motion.div className="tear-bundle" initial={{ opacity: 0 }} animate={{ opacity: torn ? 0 : 1 }} transition={{ duration: torn ? 0.3 : 0.6, delay: torn ? 0 : 0.2 }}>
+            {[3, 2, 1].map((k) => (
+              <div key={k} className="tb-sheet" style={{ transform: `translate(${k * u * 0.55}px, ${k * u * 0.35}px) rotate(${k * 1.6}deg)`, opacity: 1 - k * 0.18 }}>
+                <BoosterPack booster={booster} still god={god} />
+              </div>
+            ))}
+            <span className="tb-count">×{packs}</span>
+          </motion.div>
+        )}
+        <motion.div
+          className="tear-press"
+          animate={snap ? { scale: 1.035, rotate: 0 } : active ? { scale: 0.985, rotate: -dir * 0.6 } : { scale: 1, rotate: 0 }}
+          transition={snap ? { duration: 0.06 } : { type: 'spring', stiffness: 380, damping: 22 }}
+          style={{ filter: snap ? 'brightness(1.8) saturate(0.6)' : undefined }}
+        >
         <motion.div
           className={`tear-float ${shaking ? 'shaking' : ''}`}
           ref={packRef}
@@ -717,9 +795,19 @@ function TearStage({ booster, god, u, cards, omen, onAura, burstAt, onDone }: Te
           {torn && (
             <motion.div className="tear-beam" initial={{ opacity: 0, scaleY: 0.2 }} animate={{ opacity: [0, 0.9, 0], scaleY: [0.2, 1, 1.15] }} transition={{ delay: 0.25, duration: 1.3, times: [0, 0.35, 1], ease: 'easeOut' }} />
           )}
-          {!torn ? (
-            <BoosterPack booster={booster} tilt={!active} god={god} />
-          ) : (
+          {!torn && !cutting && <BoosterPack booster={booster} tilt={!active} god={god} />}
+          {!torn && cutting && (
+            <>
+              <div className="tear-part" style={{ zIndex: 4 }}>
+                <BoosterPack booster={booster} part="body" god={god} />
+              </div>
+              <motion.div className="tear-leak" style={{ top: `${TEAR_Y * 100}%`, opacity: leak, width: cutW, left: dir > 0 ? '4%' : 'auto', right: dir > 0 ? 'auto' : '4%' }} />
+              <motion.div className="tear-part" style={{ zIndex: 9, transformOrigin: dir > 0 ? '100% 7%' : '0% 7%', rotate: stripRot, y: stripY }}>
+                <BoosterPack booster={booster} part="top" god={god} />
+              </motion.div>
+            </>
+          )}
+          {torn && (
             <>
               <motion.div className="tear-part" style={{ zIndex: 4 }} initial={{ y: 0, opacity: 1 }} animate={{ y: u * 70, opacity: 1 }} transition={{ delay: 0.38, duration: 0.85, ease: EASE_IN }}>
                 <BoosterPack booster={booster} part="body" god={god} />
@@ -746,6 +834,7 @@ function TearStage({ booster, god, u, cards, omen, onAura, burstAt, onDone }: Te
             <>
               <div className="tear-guide" style={{ top: `${TEAR_Y * 100}%` }} />
               <motion.div className="tear-cut" style={{ top: `${TEAR_Y * 100}%`, width: cutW, left: dir > 0 ? '4%' : 'auto', right: dir > 0 ? 'auto' : '4%' }} />
+              {cutting && <motion.div className="tear-head" style={{ top: `${TEAR_Y * 100}%`, left: dir > 0 ? headPos : 'auto', right: dir > 0 ? 'auto' : headPos }} />}
               {!active && (
                 <motion.div
                   className="tear-dot"
@@ -759,7 +848,11 @@ function TearStage({ booster, god, u, cards, omen, onAura, burstAt, onDone }: Te
             </>
           )}
         </motion.div>
+        </motion.div>
       </div>
+      <AnimatePresence>
+        {snap && <motion.div key="snap" className="tear-flash" initial={{ opacity: 0.9 }} animate={{ opacity: 0.9 }} exit={{ opacity: 0, transition: { duration: 0.5, ease: 'easeOut' } }} />}
+      </AnimatePresence>
       <AnimatePresence>{hint && !torn && !locked && <motion.div className="po-hint" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>パックの上端をなぞって開封</motion.div>}</AnimatePresence>
     </>
   );
@@ -904,6 +997,171 @@ function TopCard({ card, u, first, faceDown, burstAt, onFlipImpact, onFlipped, o
         )}
       </AnimatePresence>
     </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// 10連 results: every card at once, rarest last; ☆ / ♛ wait face down
+// ---------------------------------------------------------------------------
+interface MultiProps {
+  cards: CardDef[];
+  fresh: Set<string>;
+  shards: Set<number>;
+  burstAt: (x: number, y: number, preset: string, n: number, scale?: number) => void;
+  onClose: () => void;
+  onAgain: () => void;
+  canAgain: boolean;
+  price: number;
+  u: number;
+}
+
+function MultiResults({ cards, fresh, shards, burstAt, onClose, onAgain, canAgain, price, u }: MultiProps) {
+  // keep each card's original index (shard flags refer to it), sort rarest last
+  const items = useMemo(
+    () =>
+      cards
+        .map((c, i) => ({ c, i }))
+        .sort((a, b) => RARITY_ORDER[a.c.rarity] - RARITY_ORDER[b.c.rarity] || (a.c.variant ? 1 : 0) - (b.c.variant ? 1 : 0) || a.i - b.i),
+    [cards],
+  );
+  const hidden = items.filter((x) => isStar(x.c.rarity)).map((x) => x.i);
+  const [open, setOpen] = useState<Set<number>>(new Set());
+  const [zoom, setZoom] = useState<string | null>(null);
+  const [flash, setFlash] = useState<{ id: number; color: string } | null>(null);
+  const refs = useRef(new Map<number, HTMLDivElement>());
+  const running = useRef(false);
+  const left = hidden.filter((i) => !open.has(i));
+  const deal = 0.05 + items.length * 0.018;
+
+  useEffect(() => {
+    for (let k = 0; k < Math.min(12, items.length); k++) setTimeout(() => foley.slide(), 60 + k * 70);
+    // a shimmer for the RR (◇◇◇◇) cards as they land
+    items.forEach((x, k) => {
+      if (RARITY_ORDER[x.c.rarity] !== RARITY_ORDER.RR) return;
+      setTimeout(() => {
+        const r = refs.current.get(x.i)?.getBoundingClientRect();
+        if (r) burstAt(r.left + r.width / 2, r.top + r.height / 2, 'glint', 5, 0.7);
+      }, 500 + k * 18);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const reveal = (i: number) => {
+    if (open.has(i)) return;
+    const c = cards[i];
+    setOpen((s) => new Set(s).add(i));
+    setFlash({ id: Date.now() + i, color: rareColor(c.rarity) });
+    foley.impact();
+    foley.rarity(RARITY_ORDER[c.rarity] >= RARITY_ORDER.CR ? 5 : 4);
+    sfx('magic-holy-2', 0.3);
+    const r = refs.current.get(i)?.getBoundingClientRect();
+    if (r) {
+      const cx = r.left + r.width / 2;
+      const cy = r.top + r.height / 2;
+      burstAt(cx, cy, 'glint', 26, 1.1);
+      burstAt(cx, cy, 'mote', 30, 1.2);
+      burstAt(cx, cy, 'sparkw', 14, 1);
+    }
+  };
+  const revealAll = () => {
+    if (running.current) return;
+    running.current = true;
+    left.forEach((i, k) => setTimeout(() => reveal(i), k * 520));
+    setTimeout(() => (running.current = false), left.length * 520);
+  };
+
+  const cols = items.length > 30 ? 10 : 5;
+  const w = items.length > 30 ? 6.05 : 9.6;
+  return (
+    <div className="multi">
+      <div className="multi-head">
+        <span>{cards.length}枚のカード</span>
+        {hidden.length > 0 && (
+          <em>
+            ☆以上 <b>{hidden.length}</b>枚
+          </em>
+        )}
+      </div>
+      <div className="multi-grid" style={{ gridTemplateColumns: `repeat(${cols}, calc(var(--u) * ${w}))` }}>
+        {items.map(({ c, i }, k) => {
+          const star = isStar(c.rarity);
+          const down = star && !open.has(i);
+          const rank = RARITY_ORDER[c.rarity];
+          return (
+            <motion.div
+              key={i}
+              ref={(el) => {
+                if (el) refs.current.set(i, el);
+              }}
+              className={`multi-item r${rank} ${down ? 'down' : ''}`}
+              style={{ ['--rc' as string]: rareColor(c.rarity) }}
+              initial={{ opacity: 0, y: u * 1.2, scale: 0.94 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              transition={{ delay: 0.05 + k * 0.018, duration: 0.5, ease: EASE_OUT }}
+              whileHover={{ y: -u * 0.4, transition: { duration: 0.2, ease: EASE_OUT } }}
+              onClick={() => {
+                if (down) reveal(i);
+                else {
+                  foley.flip();
+                  setZoom(c.id);
+                }
+              }}
+            >
+              <motion.div className="multi-flip" initial={false} animate={{ rotateY: down ? 180 : 0 }} transition={{ duration: 0.6, ease: EASE_IN_OUT }}>
+                <div className="sc-face">
+                  <CardFace cid={c.id} />
+                  {(rank >= 3 || (star && open.has(i))) && <div className="glare" style={{ animationDelay: star ? '0.3s' : `${deal + 0.1}s` }} />}
+                </div>
+                <div className="sc-back">
+                  <CardBack />
+                  {down && <div className="edge-light" />}
+                </div>
+              </motion.div>
+              {down && <motion.div className="multi-halo" animate={{ opacity: [0.35, 0.7, 0.35] }} transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }} />}
+              {!down && fresh.has(c.id) && <span className="new">NEW</span>}
+              {!down && shards.has(i) && (
+                <span className="shard-tag">
+                  <Icon name="shard" />
+                </span>
+              )}
+            </motion.div>
+          );
+        })}
+      </div>
+      <motion.div className="results-actions" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: deal + 0.3, duration: 0.5, ease: EASE_OUT }}>
+        {left.length > 0 ? (
+          <button className="pill gold" onClick={revealAll}>
+            すべてめくる（{left.length}）
+          </button>
+        ) : (
+          <>
+            <button className="pill ghost" onClick={onClose}>
+              とじる
+            </button>
+            <button className="pill" disabled={!canAgain} onClick={onAgain}>
+              もう一度10パック
+              <span className="coin">
+                <Icon name="coin" /> {price}
+              </span>
+            </button>
+          </>
+        )}
+      </motion.div>
+      <AnimatePresence>
+        {flash && (
+          <motion.div key={flash.id} className="multi-flash" style={{ ['--rc' as string]: flash.color }} initial={{ opacity: 0.55 }} animate={{ opacity: 0 }} transition={{ duration: 0.6, ease: 'easeOut' }} />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {zoom && (
+          <motion.div className="zoom-back" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setZoom(null)}>
+            <motion.div className="zoom-card" initial={{ scale: 0.92, y: 12 }} animate={{ scale: 1, y: 0 }} transition={{ duration: 0.45, ease: EASE_OUT }} onClick={(e) => e.stopPropagation()}>
+              <CardFace cid={zoom} interactive />
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   );
 }
 

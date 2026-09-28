@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { ALL_CARDS, card, CARDS, SET_INFO } from '../engine/cards';
+import { applyRanked, ensureSeason, freshRank, type RankChange, type RankState } from './ranked';
 import { expand, RIVALS, STARTER_DECKS, type Rival } from '../engine/decks';
 import type { Difficulty } from '../engine/ai';
 import type { CardDef, EType, Rarity, SetCode } from '../engine/types';
@@ -42,7 +43,7 @@ const isBasicEnergy = (cid: string) => {
   return c.kind === 'energy' && c.basic;
 };
 
-export type Screen = 'title' | 'starter' | 'home' | 'rivals' | 'battle' | 'deck' | 'collection' | 'shop' | 'missions' | 'exchange' | 'settings' | 'credits' | 'rules' | 'gallery';
+export type Screen = 'title' | 'starter' | 'home' | 'rivals' | 'battle' | 'deck' | 'collection' | 'shop' | 'missions' | 'exchange' | 'ranked' | 'settings' | 'credits' | 'rules' | 'gallery';
 
 export interface SavedDeck {
   id: string;
@@ -74,6 +75,7 @@ export interface Save {
   progress: Progress;
   /** かけら: duplicates beyond MAX_COPIES, per rarity */
   shards: Partial<Record<Rarity, number>>;
+  ranked: RankState;
 }
 
 export interface BattleConfig {
@@ -86,6 +88,8 @@ export interface BattleConfig {
   scene: string;
   reward: number;
   spectate?: boolean;
+  /** ranked match: the opponent's rank index */
+  ranked?: { oppRank: number };
 }
 
 const KEY = 'arcane-beasts-save-v1';
@@ -106,6 +110,7 @@ function freshSave(): Save {
     started: false,
     progress: freshProgress(),
     shards: {},
+    ranked: freshRank(),
   };
 }
 
@@ -117,6 +122,8 @@ function load(): Save {
       s.progress = { ...freshProgress(), ...(s.progress ?? {}) };
       s.progress.stats = { ...freshProgress().stats, ...s.progress.stats };
       s.shards = s.shards ?? {};
+      s.ranked = { ...freshRank(), ...(s.ranked ?? {}) };
+      ensureSeason(s.ranked);
       for (const [k, n] of Object.entries(s.shards) as [string, number][]) {
         const to = OLD_RARITY[k];
         if (!to) continue;
@@ -158,6 +165,7 @@ interface Store {
   /** adds cards; returns, per card, whether it became a shard instead */
   addCards: (cids: string[]) => boolean[];
   exchange: (cid: string) => boolean;
+  recordRanked: (win: boolean) => RankChange;
   startBattle: (cfg: BattleConfig) => void;
   reset: () => void;
   claimLogin: () => number;
@@ -218,6 +226,17 @@ export const useStore = create<Store>((set, get) => ({
       }
     });
     return out;
+  },
+  recordRanked: (win) => {
+    let res!: RankChange;
+    get().update((s) => {
+      res = applyRanked(s.ranked, win);
+      for (const { reward } of res.rewards) {
+        s.coins += reward.coins;
+        for (const [r, n] of Object.entries(reward.shards ?? {}) as [Rarity, number][]) s.shards[r] = (s.shards[r] ?? 0) + n;
+      }
+    });
+    return res;
   },
   exchange: (cid) => {
     let ok = false;
