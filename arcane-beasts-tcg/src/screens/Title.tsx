@@ -13,7 +13,7 @@ export function Title() {
   const started = useStore((s) => s.save.started);
   const [m, setM] = useState({ x: 0, y: 0 });
   const [leaving, setLeaving] = useState(false);
-  const cards = SHOWCASE.map((n) => ALL_CARDS.find((c) => c.name === n && c.rarity === 'SR')!);
+  const cards = SHOWCASE.map((n) => ALL_CARDS.find((c) => c.name === n && c.variant === 'SR')!);
 
   useEffect(() => {
     playMusic('title');

@@ -155,6 +155,46 @@ for (const mc of [...MONSTERS, ...MONSTERS2]) {
 }
 
 // --------------------------------------------------------------------------
+// Rarity (6 tiers) and model (how the card is printed)
+// --------------------------------------------------------------------------
+export const RARITIES: Rarity[] = ['C', 'U', 'R', 'RR', 'ST', 'CR'];
+export const RARITY_SYMBOL: Record<Rarity, string> = { C: '◇', U: '◇◇', R: '◇◇◇', RR: '◇◇◇◇', ST: '☆', CR: '♛' };
+export const RARITY_NAME: Record<Rarity, string> = { C: 'コモン', U: 'アンコモン', R: 'レア', RR: 'ダブルレア', ST: 'スター', CR: 'クラウン' };
+
+export type Model = 'normal' | 'mirror' | 'omega' | 'ex' | 'illust' | 'fullart' | 'shiny' | 'gold';
+export const MODEL_NAME: Record<Model, string> = {
+  normal: 'ノーマル',
+  mirror: 'ミラー',
+  omega: 'Ω',
+  ex: 'EX',
+  illust: 'イラスト',
+  fullart: 'フルアート',
+  shiny: 'シャイニー',
+  gold: 'ゴールド',
+};
+export function modelOf(c: CardDef): Model {
+  switch (c.variant) {
+    case 'mirror':
+      return 'mirror';
+    case 'AR':
+    case 'CHR':
+    case 'SAR':
+      return 'illust';
+    case 'SR':
+      return 'fullart';
+    case 'S':
+      return 'shiny';
+    case 'UR':
+      return 'gold';
+  }
+  if (c.kind === 'monster' && c.ex) return 'ex';
+  if (c.kind === 'monster' && c.omega) return 'omega';
+  return 'normal';
+}
+/** "☆ イラスト" style label */
+export const printLabel = (c: CardDef) => `${RARITY_SYMBOL[c.rarity]} ${MODEL_NAME[modelOf(c)]}`;
+
+// --------------------------------------------------------------------------
 // Sets
 // --------------------------------------------------------------------------
 export const SET_INFO: Record<SetCode, { name: string; short: string }> = {
@@ -192,7 +232,7 @@ function named(name: string): CardDef {
 }
 
 function alt(base: CardDef, v: Variant, extra: Partial<CardDef> = {}) {
-  const rarity: Rarity = v === 'mirror' ? base.rarity : v;
+  const rarity: Rarity = v === 'mirror' ? base.rarity : v === 'SAR' || v === 'UR' ? 'CR' : 'ST';
   const no = v === 'mirror' ? base.no : ++secret[base.set];
   VARIANTS.push({
     ...base,
@@ -208,18 +248,24 @@ function alt(base: CardDef, v: Variant, extra: Partial<CardDef> = {}) {
 }
 
 type CropSpec = { scale?: number; x?: number; y?: number };
+/** [card name, framing, painted background] — backgrounds are Wesnoth campaign story paintings */
+type ArtSpec = [string, CropSpec?, string?];
 interface SetVariants {
-  AR: [string, CropSpec?][];
+  AR: ArtSpec[];
   CHR: [string, string, CropSpec?][]; // monster, partner portrait
   S: [string, number][]; // monster, hue rotation
   SR: string[];
-  SAR: [string, CropSpec?][];
+  SAR: ArtSpec[];
   UR: string[];
 }
 
 const PLAN: Record<SetCode, SetVariants> = {
   AB1: {
-    AR: [['ヒアリクイーン'], ['ゴウカレイス'], ['イエティ'], ['コガネスカラベ'], ['サンダーグリフォン'], ['レイス'], ['グリズリー'], ['ホワイトホース'], ['ドレッドバット'], ['ヤミオオカミ']],
+    AR: [
+      ['ヒアリクイーン'], ['ゴウカレイス', undefined, 'story/p-burning'], ['イエティ', undefined, 'story/p-snowfield'], ['コガネスカラベ', undefined, 'story/p-great-tree'],
+      ['サンダーグリフォン', undefined, 'story/p-mountains'], ['レイス', undefined, 'story/p-graves'], ['グリズリー'], ['ホワイトホース', undefined, 'story/p-summer'],
+      ['ドレッドバット'], ['ヤミオオカミ', undefined, 'story/p-black-forest'],
+    ],
     CHR: [
       ['コダマギ', 'humans/peasant'],
       ['ミズチ', 'merfolk/initiate'],
@@ -232,11 +278,21 @@ const PLAN: Record<SetCode, SetVariants> = {
     ],
     S: [['ヒオネコ', 200], ['ワイバーン', 110], ['アカオオカミ', 190], ['オオツチグモ', 250], ['ゴースト', 150], ['ディープテンタクル', 90]],
     SR: [...MONSTERS.filter((x) => x.omega).map((x) => x.name), '大賢者の研究', '司令官の号令', '盗賊団の手引き', '白魔導士の祈り'],
-    SAR: [['ヴォルカリオン'], ['リヴァイアサーペント', { scale: 1.1, x: 40, y: 14 }], ['ナイトゴーント'], ['大賢者の研究']],
+    SAR: [
+      ['ヴォルカリオン', undefined, 'story/p-burning'],
+      ['リヴァイアサーペント', { scale: 1.1, x: 40, y: 14 }, 'story/p-storm-sea'],
+      ['ナイトゴーント', undefined, 'story/p-black-forest'],
+      ['大賢者の研究', undefined, 'story/p-study'],
+    ],
     UR: ['ヴォルカリオン', 'リヴァイアサーペント', 'デスナイト', 'トロルキング', 'エンシェントウッド', 'ナイトゴーント', '進化の秘薬', '虹色エネルギー'],
   },
   AB2: {
-    AR: [['ドレイクガーディアン'], ['ヒブネ'], ['ナーガリングキャスター'], ['シャイード'], ['セイレーン'], ['オオヒグマ'], ['ドラウグ'], ['ゾンビグリフォン']],
+    AR: [
+      ['ドレイクガーディアン'], ['ヒブネ', undefined, 'story/p-island'], ['ナーガリングキャスター'], ['シャイード', undefined, 'story/p-great-tree'],
+      ['セイレーン', undefined, 'story/p-wild-sea'], ['オオヒグマ', undefined, 'story/p-summer'], ['ドラウグ', undefined, 'story/p-graves'], ['ゾンビグリフォン'],
+      ['スノーゴーレム', undefined, 'story/p-winter'], ['テュポーン', undefined, 'story/p-storm-sea'], ['カエンワイト', undefined, 'story/p-burning'],
+      ['フレッシュゴーレム', undefined, 'story/p-fog'], ['メダマソウ', undefined, 'story/p-great-tree'],
+    ],
     CHR: [
       ['ドレイククラッシャー', 'humans/grand-knight'],
       ['ナーガミュルミドン', 'merfolk/priestess'],
@@ -244,9 +300,18 @@ const PLAN: Record<SetCode, SetVariants> = {
       ['ロックトロル', 'orcs/warlord'],
       ['ヘイタイアリ', 'elves/druid'],
     ],
-    S: [['ドレイクファイター', 170], ['ナーガソルジャー', 260], ['クサレオオカミ', 200], ['シルフ', 300]],
+    S: [['ドレイクファイター', 170], ['ナーガソルジャー', 260], ['クサレオオカミ', 200], ['シルフ', 300], ['ワーム', 190], ['ユキダマ', 300]],
     SR: [...MONSTERS2.filter((x) => x.omega || x.ex).map((x) => x.name), '騎士の突撃', '暗殺者の刃', '聖騎士の加護'],
-    SAR: [['ドラグーン'], ['ナーガクイーン'], ['リッチロード', { y: 10 }], ['クイーンアント', { x: 40 }], ['トロルジェネラル'], ['暗殺者の刃']],
+    SAR: [
+      ['ドラグーン', undefined, 'story/p-drake-fleet'],
+      ['ナーガクイーン', undefined, 'story/p-wild-sea'],
+      ['リッチロード', { y: 10 }, 'story/p-summoning'],
+      ['クイーンアント', { x: 40 }, 'story/p-swamp'],
+      ['トロルジェネラル', undefined, 'story/p-the-fall'],
+      ['エルダーワイアーム', { scale: 1.15, x: 44, y: 8 }, 'story/p-mountains'],
+      ['ヴァンパイア', { scale: 1.2 }, 'story/p-graves'],
+      ['暗殺者の刃', undefined, 'story/p-shadows'],
+    ],
     UR: [...MONSTERS2.filter((x) => x.ex).map((x) => x.name), '賢者の水晶', '覇者の紋章'],
   },
 };
@@ -258,11 +323,16 @@ for (const set of SETS) {
     if (!basicEnergy && (c.rarity === 'C' || c.rarity === 'U' || c.rarity === 'R')) alt(c, 'mirror');
   }
   const plan = PLAN[set];
-  for (const [n, crop] of plan.AR) alt(named(n), 'AR', { crop });
+  const withScene = (scene?: string) => (scene ? { scene } : {});
+  for (const [n, crop, scene] of plan.AR) alt(named(n), 'AR', { crop, ...withScene(scene) });
   for (const [n, partner, crop] of plan.CHR) alt(named(n), 'CHR', { partner, crop });
   for (const [n, hue] of plan.S) alt(named(n), 'S', { hue });
   for (const n of plan.SR) alt(named(n), 'SR');
-  for (const [n, crop] of plan.SAR) alt(named(n), 'SAR', { crop });
+  // supporters with a painting are printed as the painting alone
+  for (const [n, crop, scene] of plan.SAR) {
+    const base = named(n);
+    alt(base, 'SAR', { crop, ...withScene(scene), ...(scene && base.kind === 'trainer' ? { paint: true } : {}) });
+  }
   for (const n of plan.UR) alt(named(n), 'UR');
 }
 

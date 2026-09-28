@@ -5,10 +5,10 @@
 //   face-down and turn over on tap) → results
 // Effects are light-based (bloom, rings, glints); motion is transform/opacity.
 // ============================================================================
-import { AnimatePresence, animate, motion, useAnimationControls, useMotionValue, useTransform, type MotionValue } from 'motion/react';
+import { AnimatePresence, animate, motion, useAnimationControls, useMotionValue, useTransform } from 'motion/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CardDef, Rarity, SetCode } from '../engine/types';
-import { byName, SET_INFO } from '../engine/cards';
+import { byName, RARITY_SYMBOL, SET_INFO } from '../engine/cards';
 import { BOOSTERS, MIRROR_CHANCE, openPack, openPremium, PACK_PRICE, PACK_TABLE, premiumBooster, PREMIUM_PRICE, PREMIUM_TABLE, RARITY_ORDER, useStore, type Booster } from '../state/store';
 import { currentPickup, fmtRemain } from '../state/progress';
 import { CardBack, CardFace } from '../ui/Card';
@@ -17,19 +17,49 @@ import { Icon } from '../ui/Icon';
 import { foley, playMusic, sfx } from '../audio/audio';
 import { particles } from '../battle/particles';
 import { BoosterPack, TEAR_Y } from './pack/BoosterPack';
+import { MeteorCinema, OMEN_COLORS, type OmenTier } from './pack/cinema';
 import './pack/pack.css';
 
-type Phase = 'choose' | 'tear' | 'reveal' | 'results';
+type Phase = 'cinema' | 'tear' | 'reveal' | 'results';
 
 const EASE_OUT = [0.16, 1, 0.3, 1] as const;
 const EASE_IN = [0.7, 0, 0.84, 0] as const;
 const EASE_IN_OUT = [0.65, 0, 0.35, 1] as const;
 
 /** ☆ rarities arrive face-down and turn over on tap */
-const isStar = (r: Rarity) => RARITY_ORDER[r] >= 5;
-const RARE_COLOR: Partial<Record<Rarity, string>> = { UR: '#ffd27a', SAR: '#ffc9ee', SR: '#bfe6ff', S: '#dfe6ff', AR: '#fff1c4', CHR: '#fff1c4', RRR: '#ffd9b0' };
+const isStar = (r: Rarity) => RARITY_ORDER[r] >= RARITY_ORDER.ST;
+const RARE_COLOR: Partial<Record<Rarity, string>> = { CR: '#ffd27a', ST: '#fff1c4', RR: '#ffd9b0' };
 const rareColor = (r: Rarity) => RARE_COLOR[r] ?? '#ffffff';
 const priceOf = (b: Booster) => (b.premium ? PREMIUM_PRICE : PACK_PRICE);
+
+// ---------------------------------------------------------------------------
+// Omen (予兆) and promotion (昇格)
+//   actual: the best card in the pack → 0 nothing / 1 ◇◇◇◇ / 2 ☆ / 3 ♛
+//   shown:  what the meteors and the first aura colour reveal. It is never
+//           higher than the truth; sometimes lower, and the pack's aura then
+//           climbs to the real colour before it can be opened.
+// ---------------------------------------------------------------------------
+interface Omen {
+  actual: OmenTier;
+  shown: OmenTier;
+  meteors: number;
+}
+function makeOmen(cards: CardDef[], god: boolean): Omen {
+  const best = Math.max(...cards.map((c) => RARITY_ORDER[c.rarity]));
+  const actual = (god ? 3 : best >= RARITY_ORDER.CR ? 3 : best >= RARITY_ORDER.ST ? 2 : best >= RARITY_ORDER.RR ? 1 : 0) as OmenTier;
+  let shown = actual;
+  const r = Math.random();
+  if (actual === 3) shown = (r < 0.15 ? 1 : r < 0.5 ? 2 : 3) as OmenTier;
+  else if (actual === 2) shown = (r < 0.35 ? 1 : 2) as OmenTier;
+  else if (actual === 1) shown = (r < 0.25 ? 0 : 1) as OmenTier;
+  const dbg = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('omen') : null; // e.g. ?omen=3,1
+  if (dbg) {
+    const [a, b] = dbg.split(',').map(Number);
+    return { actual: a as OmenTier, shown: (b ?? a) as OmenTier, meteors: Math.max(1, b ?? a) };
+  }
+  const meteors = shown === 3 ? 3 : shown === 2 ? 2 : shown === 1 ? (Math.random() < 0.5 ? 2 : 1) : 1;
+  return { actual, shown, meteors };
+}
 type Tab = SetCode | 'premium';
 const TABS: [Tab, string][] = [
   ['AB1', `第1弾 ${SET_INFO.AB1.name}`],
@@ -218,7 +248,7 @@ export function Shop() {
           <AnimatePresence mode="wait">
             <motion.div key={b.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.25 }} style={{ textAlign: 'center' }}>
               <div className="shop2-name">{b.name}</div>
-              <div className="shop2-sub">{b.premium ? '全スロットのレアリティ上昇・5枚目はRRR以上確定' : `${b.types.map((t) => TYPE_JP[t]).join('・')}タイプが出やすい`}</div>
+              <div className="shop2-sub">{b.premium ? '全スロットのレアリティ上昇・5枚目は◇◇◇◇以上確定' : `${b.types.map((t) => TYPE_JP[t]).join('・')}タイプが出やすい`}</div>
             </motion.div>
           </AnimatePresence>
           <button className={`pill ${b.premium ? 'gold' : ''}`} disabled={save.coins < price} onClick={() => buy(b)}>
@@ -255,7 +285,7 @@ function oddsRows(table: [Rarity, number][][], labels: string[]): [string, strin
     const parts = t.map(([r, p]) => {
       const pct = Math.round((p - prev) * 1000) / 10;
       prev = p;
-      return `${r} ${pct}%`;
+      return `${RARITY_SYMBOL[r]} ${pct}%`;
     });
     return [labels[i], parts.join(' ／ ')];
   });
@@ -281,7 +311,7 @@ function OddsModal({ onClose, premium }: { onClose: () => void; premium?: boolea
         <div className="odds-note">
           {premium
             ? 'すべての弾のカードが出ます。ピックアップ開催中は、ピックアップ対象と同じレアリティが出た場合、その50%がピックアップカードになります。'
-            : `3枚目は${Math.round(MIRROR_CHANCE * 100)}%でミラー仕様のカードになります。パックに描かれたタイプのカードは2倍出やすくなります。ごくまれに、5枚すべてがRR以上のパックが出ることがあります。そのパックの弾に存在しないレアリティが出た場合は、1つ下のレアリティになります。`}
+            : `3枚目は${Math.round(MIRROR_CHANCE * 100)}%でミラー仕様のカードになります。パックに描かれたタイプのカードは2倍出やすくなります。ごくまれに、5枚すべてが◇◇◇◇以上のパックが出ることがあります。そのパックの弾に存在しないレアリティが出た場合は、1つ下のレアリティになります。`}
         </div>
         <button className="pill ghost" onClick={onClose}>
           閉じる
@@ -301,7 +331,10 @@ interface OpeningProps extends Omit<OpeningState, 'key'> {
 
 function Opening({ booster, cards, god, fresh, shards, onClose, onAgain }: OpeningProps) {
   const u = useUnit();
-  const [phase, setPhase] = useState<Phase>('choose');
+  const [phase, setPhase] = useState<Phase>('cinema');
+  const omen = useMemo(() => makeOmen(cards, god), [cards, god]);
+  const [aura, setAura] = useState<AuraState>({ tier: omen.shown, visible: false, hot: false });
+  const packSlot = useRef<HTMLDivElement>(null);
   const [idx, setIdx] = useState(0);
   const [revealed, setRevealed] = useState<Set<number>>(new Set());
   const [fx, setFx] = useState<{ id: number; color: string } | null>(null);
@@ -331,6 +364,11 @@ function Opening({ booster, cards, god, fresh, shards, onClose, onAgain }: Openi
   return (
     <motion.div ref={root} className="po" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.45, ease: EASE_IN_OUT }}>
       <Backdrop hue={booster.hue} dim={dim} />
+      <AnimatePresence>
+        {(phase === 'cinema' || phase === 'tear') && (
+          <CinemaLayer key="cinema" omen={omen} aura={aura} playing={phase === 'cinema'} target={() => packSlot.current?.getBoundingClientRect() ?? null} onDone={() => setPhase('tear')} />
+        )}
+      </AnimatePresence>
       <canvas ref={canvas} className="po-canvas" />
 
       {/* light shafts behind a face-down rare card */}
@@ -369,19 +407,14 @@ function Opening({ booster, cards, god, fresh, shards, onClose, onAgain }: Openi
       </AnimatePresence>
 
       <div className="stage">
-        {phase === 'choose' && (
-          <Coverflow
-            booster={booster}
-            god={god}
-            u={u}
-            onPick={() => {
-              sfx('select', 0.45);
-              setPhase('tear');
-            }}
-          />
+        {/* where the pack will be: the cinematic's light (and later the aura) aims here */}
+        {(phase === 'cinema' || phase === 'tear') && (
+          <div className="tear-wrap" style={{ visibility: 'hidden', pointerEvents: 'none' }}>
+            <div className="tear-float" ref={packSlot} />
+          </div>
         )}
 
-        {phase === 'tear' && <TearStage booster={booster} god={god} u={u} cards={cards} burstAt={burstAt} onDone={() => setPhase('reveal')} />}
+        {phase === 'tear' && <TearStage booster={booster} god={god} u={u} cards={cards} omen={omen} onAura={setAura} burstAt={burstAt} onDone={() => setPhase('reveal')} />}
 
         {phase === 'reveal' && top && (
           <>
@@ -439,129 +472,136 @@ function Opening({ booster, cards, god, fresh, shards, onClose, onAgain }: Openi
 }
 
 // ---------------------------------------------------------------------------
-// Coverflow
+// 流星降臨: the live-rendered cinematic that delivers the pack
 // ---------------------------------------------------------------------------
-const CF_COUNT = 9;
-const CF_STEP = 12;
-
-function CoverPack({ i, pos, u, booster, god, picked }: { i: number; pos: MotionValue<number>; u: number; booster: Booster; god: boolean; picked: number | null }) {
-  const d = useTransform(pos, (p) => i - p);
-  const x = useTransform(d, (v) => Math.sign(v) * (Math.min(Math.abs(v), 1) * u * 16 + Math.max(0, Math.abs(v) - 1) * u * 8.5));
-  const rotateY = useTransform(d, (v) => Math.max(-1, Math.min(1, v)) * -38);
-  const z = useTransform(d, (v) => -Math.min(Math.abs(v), 4) * u * 6);
-  const opacity = useTransform(d, (v) => Math.max(0, 1 - Math.max(0, Math.abs(v) - 2.4) * 1.2));
-  const zIndex = useTransform(d, (v) => 100 - Math.round(Math.abs(v) * 10));
-  const shade = useTransform(d, (v) => Math.min(Math.abs(v), 2) * 0.3);
-  const chosen = picked === i;
-  return (
-    <motion.div className="cf-pack" style={{ x, rotateY, z, opacity, zIndex }} data-i={i}>
-      <motion.div
-        style={{ transformOrigin: '50% 0%' }}
-        animate={picked === null ? { y: 0, scale: 1, opacity: 1 } : chosen ? { y: -u * 0.9, scale: 24 / 21, opacity: 1 } : { y: u * 6, scale: 0.94, opacity: 0 }}
-        transition={picked === null ? { duration: 0 } : { duration: chosen ? 0.7 : 0.45, ease: chosen ? EASE_OUT : EASE_IN_OUT }}
-      >
-        <BoosterPack booster={booster} god={god && i === Math.floor(CF_COUNT / 2)} still={!chosen} />
-        <motion.div className="cf-shade" style={{ opacity: shade }} />
-      </motion.div>
-    </motion.div>
-  );
+interface AuraState {
+  tier: OmenTier;
+  visible: boolean;
+  hot: boolean;
 }
 
-function Coverflow({ booster, god, u, onPick }: { booster: Booster; god: boolean; u: number; onPick: () => void }) {
-  const start = Math.floor(CF_COUNT / 2);
-  const pos = useMotionValue(start + 1.6);
-  const drag = useRef<{ x: number; p: number; moved: number; samples: { x: number; t: number }[] } | null>(null);
-  const [picked, setPicked] = useState<number | null>(null);
-  const [hint, hideHint] = useIdleHint('cf', 1400);
-  const last = useRef(Math.round(pos.get()));
+function CinemaLayer({ omen, aura, playing, target, onDone }: { omen: Omen; aura: AuraState; playing: boolean; target: () => DOMRect | null; onDone: () => void }) {
+  const host = useRef<HTMLDivElement>(null);
+  const cine = useRef<MeteorCinema | null>(null);
+  const doneRef = useRef(onDone);
+  doneRef.current = onDone;
 
   useEffect(() => {
-    const c = animate(pos, start, { type: 'spring', stiffness: 70, damping: 18 });
-    const unsub = pos.on('change', (v) => {
-      const r = Math.round(v);
-      if (r !== last.current) {
-        last.current = r;
-        foley.tick();
-      }
-    });
+    if (!host.current) return;
+    let c: MeteorCinema;
+    try {
+      c = new MeteorCinema(host.current, {
+        tier: omen.shown,
+        meteors: omen.meteors,
+        target,
+        onBeat: (b) => {
+          if (b === 'enter') {
+            foley.whoosh();
+            if (omen.shown >= 2) setTimeout(() => foley.sparkle(), 250);
+          } else if (b === 'dive') foley.charge();
+          else if (b === 'impact') {
+            foley.impact();
+            sfx('rumble', 0.5);
+          } else if (b === 'orb') foley.chime(3 + omen.shown);
+          else if (b === 'morph') sfx('magic-holy-2', 0.4);
+        },
+        onDone: () => doneRef.current(),
+      });
+    } catch {
+      // no WebGL: go straight to the pack
+      setTimeout(() => doneRef.current(), 0);
+      return;
+    }
+    cine.current = c;
+    c.play();
     return () => {
-      c.stop();
-      unsub();
+      c.dispose();
+      cine.current = null;
     };
-  }, [pos, start]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const snap = (target: number, velocity = 0) => {
-    const t = Math.max(0, Math.min(CF_COUNT - 1, Math.round(target)));
-    animate(pos, t, { type: 'spring', stiffness: 150, damping: 24, velocity });
-    return t;
-  };
-
-  const choose = (i: number) => {
-    if (picked !== null) return;
-    hideHint();
-    snap(i);
-    setPicked(i);
-    setTimeout(onPick, 720);
-  };
+  useEffect(() => cine.current?.setIdle(!playing), [playing]);
+  useEffect(() => cine.current?.setAura(aura.tier, aura.visible, aura.hot), [aura]);
 
   return (
     <>
-      <div
-        className="cf"
-        onPointerDown={(e) => {
-          if (picked !== null) return;
-          (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
-          drag.current = { x: e.clientX, p: pos.get(), moved: 0, samples: [{ x: e.clientX, t: performance.now() }] };
-          pos.stop();
-          hideHint();
-        }}
-        onPointerMove={(e) => {
-          const g = drag.current;
-          if (!g) return;
-          g.moved = Math.max(g.moved, Math.abs(e.clientX - g.x));
-          pos.set(g.p - (e.clientX - g.x) / (u * CF_STEP));
-          g.samples.push({ x: e.clientX, t: performance.now() });
-          if (g.samples.length > 5) g.samples.shift();
-        }}
-        onPointerUp={(e) => {
-          const g = drag.current;
-          drag.current = null;
-          if (!g) return;
-          if (g.moved < 6) {
-            const hit = document.elementsFromPoint(e.clientX, e.clientY).map((x) => (x as HTMLElement).closest?.('.cf-pack') as HTMLElement | null).find(Boolean);
-            const i = hit ? Number(hit.dataset.i) : Math.round(pos.get());
-            if (i === Math.round(pos.get())) choose(i);
-            else snap(i);
-            return;
-          }
-          const a = g.samples[0];
-          const b = g.samples[g.samples.length - 1];
-          const v = -((b.x - a.x) / (u * CF_STEP)) / Math.max(0.016, (b.t - a.t) / 1000); // packs per second
-          snap(pos.get() + v * 0.18, v);
-        }}
-      >
-        {Array.from({ length: CF_COUNT }, (_, i) => (
-          <CoverPack key={i} i={i} pos={pos} u={u} booster={booster} god={god} picked={picked} />
-        ))}
-      </div>
-      <AnimatePresence>{hint && picked === null && <motion.div className="po-hint" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>パックを選んでタップ</motion.div>}</AnimatePresence>
+      <motion.div className="cine" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.6 }}>
+        <div ref={host} className="cine-host" />
+      </motion.div>
+      {/* tap anywhere to skip; lives outside .cine so it sits above the stage */}
+      {playing && (
+        <>
+          <div className="cine-tap" onPointerDown={() => cine.current?.skip()} />
+          <button className="textbtn po-skip cine-skip" onClick={() => cine.current?.skip()}>
+            スキップ
+          </button>
+        </>
+      )}
     </>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Tear
-// ---------------------------------------------------------------------------
 interface TearProps {
   booster: Booster;
   god: boolean;
   u: number;
   cards: CardDef[];
+  omen: Omen;
+  onAura: (a: AuraState) => void;
   burstAt: (x: number, y: number, preset: string, n: number, scale?: number) => void;
   onDone: () => void;
 }
 
-function TearStage({ booster, god, u, cards, burstAt, onDone }: TearProps) {
+function TearStage({ booster, god, u, cards, omen, onAura, burstAt, onDone }: TearProps) {
+  // aura: starts at the omen shown by the meteors and climbs to the truth
+  const [aura, setAura] = useState<OmenTier>(omen.shown);
+  const [shaking, setShaking] = useState(false);
+  const [promo, setPromo] = useState(0);
+  const locked = aura < omen.actual;
+  useEffect(() => {
+    if (omen.actual <= omen.shown) return;
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    let at = 1100;
+    for (let tier = omen.shown + 1; tier <= omen.actual; tier++) {
+      const t = tier as OmenTier;
+      timers.push(setTimeout(() => {
+        setShaking(true);
+        foley.charge();
+      }, at));
+      timers.push(setTimeout(() => {
+        setShaking(false);
+        setAura(t);
+        setPromo((n) => n + 1);
+        foley.impact();
+        foley.rarity(2 + t);
+        sfx('magic-holy-2', 0.5);
+        const r = packRef.current?.getBoundingClientRect();
+        if (r) {
+          burstAt(r.left + r.width / 2, r.top + r.height / 2, `aura${t}`, 70, 1.6);
+          burstAt(r.left + r.width / 2, r.top + r.height / 2, 'sparkw', 30, 1.4);
+        }
+      }, at + 750));
+      at += 1500;
+    }
+    return () => timers.forEach(clearTimeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // drifting motes around the pack in the aura colour
+  useEffect(() => {
+    const iv = setInterval(() => {
+      const r = packRef.current?.getBoundingClientRect();
+      if (!r) return;
+      const edge = Math.random() * 4;
+      const x = edge < 1 ? r.left : edge < 2 ? r.right : r.left + Math.random() * r.width;
+      const y = edge < 2 ? r.top + Math.random() * r.height : edge < 3 ? r.top : r.bottom;
+      burstAt(x, y, `aura${auraRef.current}`, auraRef.current === 0 ? 1 : 2, 0.9);
+    }, 130);
+    return () => clearInterval(iv);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const auraRef = useRef(aura);
+  auraRef.current = aura;
   const packRef = useRef<HTMLDivElement>(null);
   const prog = useMotionValue(0);
   const [dir, setDir] = useState<1 | -1>(1);
@@ -570,9 +610,10 @@ function TearStage({ booster, god, u, cards, burstAt, onDone }: TearProps) {
   const [hint, hideHint] = useIdleHint('tear', 1800);
   const g = useRef<{ x: number; max: number; lastSound: number } | null>(null);
   const cutW = useTransform(prog, (p) => `${p * 92}%`);
+  useEffect(() => onAura({ tier: aura, visible: !torn, hot: shaking }), [aura, torn, shaking, onAura]);
 
   const finish = () => {
-    if (torn) return;
+    if (torn || locked) return;
     setTorn(true);
     hideHint();
     animate(prog, 1, { duration: 0.1 });
@@ -597,7 +638,7 @@ function TearStage({ booster, god, u, cards, burstAt, onDone }: TearProps) {
   }, [torn]);
 
   const onDown = (e: React.PointerEvent) => {
-    if (torn) return;
+    if (torn || locked) return;
     (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
     g.current = { x: e.clientX, max: 0, lastSound: 0 };
     setActive(true);
@@ -661,7 +702,18 @@ function TearStage({ booster, god, u, cards, burstAt, onDone }: TearProps) {
       </motion.div>
 
       <div className="tear-wrap">
-        <motion.div className="tear-float" ref={packRef} animate={torn ? { y: 0 } : { y: [0, -u * 0.45, 0] }} transition={torn ? { duration: 0.3 } : { duration: 4.5, repeat: Infinity, ease: 'easeInOut' }}>
+        <PackAura tier={aura} promo={promo} />
+        <motion.div
+          className={`tear-float ${shaking ? 'shaking' : ''}`}
+          ref={packRef}
+          initial={{ opacity: 0, filter: 'brightness(4) saturate(0)' }}
+          animate={torn ? { y: 0, opacity: 1, filter: 'brightness(1) saturate(1)' } : { y: [0, -u * 0.45, 0], opacity: 1, filter: 'brightness(1) saturate(1)' }}
+          transition={
+            torn
+              ? { duration: 0.3 }
+              : { y: { duration: 4.5, repeat: Infinity, ease: 'easeInOut' }, opacity: { duration: 0.35 }, filter: { duration: 0.9, ease: EASE_OUT } }
+          }
+        >
           {torn && (
             <motion.div className="tear-beam" initial={{ opacity: 0, scaleY: 0.2 }} animate={{ opacity: [0, 0.9, 0], scaleY: [0.2, 1, 1.15] }} transition={{ delay: 0.25, duration: 1.3, times: [0, 0.35, 1], ease: 'easeOut' }} />
           )}
@@ -708,8 +760,26 @@ function TearStage({ booster, god, u, cards, burstAt, onDone }: TearProps) {
           )}
         </motion.div>
       </div>
-      <AnimatePresence>{hint && !torn && <motion.div className="po-hint" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>パックの上端をなぞって開封</motion.div>}</AnimatePresence>
+      <AnimatePresence>{hint && !torn && !locked && <motion.div className="po-hint" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>パックの上端をなぞって開封</motion.div>}</AnimatePresence>
     </>
+  );
+}
+
+/** 昇格 burst: a shock ring and a flash when the aura climbs (the flames themselves are drawn in 3D) */
+function PackAura({ tier, promo }: { tier: OmenTier; promo: number }) {
+  return (
+    <div className={`aura t${tier}`} style={{ ['--ac' as string]: OMEN_COLORS[tier] }}>
+      <AnimatePresence>
+        {promo > 0 && (
+          <motion.div key={promo} className="aura-burst" initial={{ opacity: 1, scale: 0.6 }} animate={{ opacity: 0, scale: 2.6 }} transition={{ duration: 1.1, ease: EASE_OUT }} />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {promo > 0 && (
+          <motion.div key={`f${promo}`} className="aura-flash" initial={{ opacity: 0.8 }} animate={{ opacity: 0 }} transition={{ duration: 0.7, ease: 'easeOut' }} />
+        )}
+      </AnimatePresence>
+    </div>
   );
 }
 
@@ -749,7 +819,7 @@ function TopCard({ card, u, first, faceDown, burstAt, onFlipImpact, onFlipped, o
         const r = ref.current?.getBoundingClientRect();
         if (r) burstAt(r.left + r.width / 2, r.top + r.height * 0.4, 'glint', 6, 1);
       }, 150);
-    } else if (rank === 3 || rank === 4) {
+    } else if (rank === 3) {
       setTimeout(() => {
         foley.sparkle();
         const r = ref.current?.getBoundingClientRect();
@@ -774,7 +844,7 @@ function TopCard({ card, u, first, faceDown, burstAt, onFlipImpact, onFlipped, o
       setUp(true);
       onFlipImpact();
       foley.impact();
-      foley.rarity(rank >= 7 ? 5 : 4);
+      foley.rarity(rank >= 5 ? 5 : 4);
       const c = center();
       if (c) {
         burstAt(c.cx, c.cy, 'glint', 50, 1.6);
@@ -819,7 +889,7 @@ function TopCard({ card, u, first, faceDown, burstAt, onFlipImpact, onFlipped, o
         {star && <motion.div className="halo" animate={{ scale: [1, 1.06, 1], opacity: up ? [0.35, 0.5, 0.35] : [0.28, 0.45, 0.28] }} transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }} />}
         <div className="sc-face">
           <CardFace cid={card.id} interactive={up} />
-          {(rank === 3 || rank === 4 || card.variant === 'mirror' || (star && up)) && <div className="glare" />}
+          {(rank === 3 || card.variant === 'mirror' || (star && up)) && <div className="glare" />}
         </div>
         <div className="sc-back">
           <CardBack />
@@ -920,10 +990,10 @@ function PremiumView({ booster, pickup, now, u, onBuy }: { booster: Booster; pic
             <b>全スロット</b>のレアリティが上昇
           </li>
           <li>
-            5枚目は<b>RRR以上</b>確定
+            5枚目は<b>◇◇◇◇以上</b>確定
           </li>
           <li>
-            AR以上の☆レア 通常の<b>約5倍</b>
+            ☆・♛ の出現数 通常の<b>約6倍</b>
           </li>
           <li>
             <b>全弾</b>のカードが封入
@@ -955,7 +1025,7 @@ function PremiumView({ booster, pickup, now, u, onBuy }: { booster: Booster; pic
               <div className="glare" />
             </div>
             <div className="pu-name">{pickup.card.name}</div>
-            <div className="pu-desc">{pickup.card.rarity} が出たとき、50%でこのカードに</div>
+            <div className="pu-desc">{RARITY_SYMBOL[pickup.card.rarity]} が出たとき、50%でこのカードに</div>
           </>
         ) : (
           <>

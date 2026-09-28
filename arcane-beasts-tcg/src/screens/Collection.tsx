@@ -1,30 +1,25 @@
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useMemo, useState } from 'react';
-import { ALL_CARDS, SET_INFO, SETS } from '../engine/cards';
-import type { CardDef, EType, Rarity, SetCode } from '../engine/types';
+import { ALL_CARDS, card, MODEL_NAME, modelOf, RARITY_SYMBOL, SET_INFO, SETS, type Model } from '../engine/cards';
+import type { EType, Rarity, SetCode } from '../engine/types';
 import { ENERGY_TYPES } from '../engine/types';
 import { collectionPct, owned, SHARD_RARITIES, useStore } from '../state/store';
 import { artUrl } from '../lib/assets';
 import { CardFace, EnergySymbol } from '../ui/Card';
 import { TopBar } from '../ui/TopBar';
 import { Icon } from '../ui/Icon';
+import { RarityBadge } from '../ui/RarityBadge';
 import { foley, playMusic, sfx } from '../audio/audio';
 
-type Kind = 'all' | 'base' | 'mirror' | 'special';
-const KINDS: [Kind, string][] = [
-  ['all', 'すべて'],
-  ['base', '通常'],
-  ['mirror', 'ミラー'],
-  ['special', 'スペシャル'],
-];
-const isSpecial = (c: CardDef) => !!c.variant && c.variant !== 'mirror';
+type Kind = 'all' | Model;
+const KINDS: [Kind, string][] = [['all', 'すべて'], ...(Object.entries(MODEL_NAME) as [Model, string][])];
 
 export function Collection() {
   const save = useStore((s) => s.save);
   const update = useStore((s) => s.update);
   const go = useStore((s) => s.go);
   const [set, setSet] = useState<SetCode | 'all'>('all');
-  const [kind, setKind] = useState<Kind>('base');
+  const [kind, setKind] = useState<Kind>('all');
   const [types, setTypes] = useState<EType[]>([]);
   const [rar, setRar] = useState<Rarity[]>([]);
   const [ownedOnly, setOwnedOnly] = useState(false);
@@ -40,13 +35,13 @@ export function Collection() {
   const list = useMemo(
     () =>
       ALL_CARDS.filter((c) => set === 'all' || c.set === set)
-        .filter((c) => kind === 'all' || (kind === 'base' ? !c.variant : kind === 'mirror' ? c.variant === 'mirror' : isSpecial(c)))
+        .filter((c) => kind === 'all' || modelOf(c) === kind)
         .filter((c) => !types.length || (c.kind === 'monster' && types.includes(c.type)) || (c.kind === 'energy' && types.includes(c.energyType)))
         .filter((c) => !rar.length || rar.includes(c.rarity))
         .filter((c) => !ownedOnly || owned(save, c.id) > 0),
     [set, kind, types, rar, ownedOnly, save],
   );
-  const scope = ALL_CARDS.filter((c) => c.variant !== 'mirror' && (set === 'all' || c.set === set));
+  const scope = ALL_CARDS.filter((c) => set === 'all' || c.set === set);
   const have = scope.filter((c) => owned(save, c.id) > 0).length;
   const pct = collectionPct(save, set === 'all' ? undefined : set);
   const shardTotal = SHARD_RARITIES.reduce((n, r) => n + (save.shards[r] ?? 0), 0);
@@ -106,7 +101,7 @@ export function Collection() {
             <div className="seg rar">
               {SHARD_RARITIES.map((r) => (
                 <button key={r} className={rar.includes(r) ? 'on' : ''} onClick={() => setRar(rar.includes(r) ? rar.filter((x) => x !== r) : [...rar, r])}>
-                  {r}
+                  {RARITY_SYMBOL[r]}
                 </button>
               ))}
             </div>
@@ -148,6 +143,10 @@ export function Collection() {
             <motion.div className="zoom-back" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setZoom(null)}>
               <motion.div className="zoom-card" initial={{ scale: 0.92, y: 12 }} animate={{ scale: 1, y: 0 }} transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }} onClick={(e) => e.stopPropagation()}>
                 <CardFace cid={zoom} interactive />
+                <div className="zoom-label">
+                  <RarityBadge r={card(zoom).rarity} named />
+                  <span>{MODEL_NAME[modelOf(card(zoom))]}モデル</span>
+                </div>
               </motion.div>
             </motion.div>
           )}

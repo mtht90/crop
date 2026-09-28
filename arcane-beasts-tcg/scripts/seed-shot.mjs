@@ -13,7 +13,7 @@ await page.evaluate(() => {
   st.update((s) => {
     s.coins = 5000;
     s.progress.loginDay = new Date().toISOString();
-    s.shards = { C: 14, U: 9, R: 12, RR: 3, RRR: 20, AR: 5, SAR: 31 };
+    s.shards = { C: 14, U: 9, R: 12, RR: 20, ST: 5, CR: 31 };
     s.beaten = ['tim', 'marina', 'vane'];
   });
 });

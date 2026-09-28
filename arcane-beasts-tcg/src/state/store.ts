@@ -32,8 +32,10 @@ import {
 // and shards of a rarity can be exchanged for any card of the same rarity.
 // ----------------------------------------------------------------------------
 export const MAX_COPIES = 10;
-export const SHARD_COST: Record<Rarity, number> = { C: 10, U: 10, R: 12, RR: 15, RRR: 18, AR: 20, CHR: 20, S: 20, SR: 25, SAR: 30, UR: 30 };
-export const SHARD_RARITIES: Rarity[] = ['C', 'U', 'R', 'RR', 'RRR', 'AR', 'CHR', 'S', 'SR', 'SAR', 'UR'];
+export const SHARD_COST: Record<Rarity, number> = { C: 10, U: 10, R: 12, RR: 18, ST: 25, CR: 30 };
+export const SHARD_RARITIES: Rarity[] = ['C', 'U', 'R', 'RR', 'ST', 'CR'];
+/** shard keys from the 11-rarity era */
+const OLD_RARITY: Record<string, Rarity> = { RRR: 'RR', AR: 'ST', CHR: 'ST', S: 'ST', SR: 'ST', SAR: 'CR', UR: 'CR' };
 const CARDS_OK = (cid: string) => cid in CARDS;
 const isBasicEnergy = (cid: string) => {
   const c = card(cid);
@@ -115,6 +117,12 @@ function load(): Save {
       s.progress = { ...freshProgress(), ...(s.progress ?? {}) };
       s.progress.stats = { ...freshProgress().stats, ...s.progress.stats };
       s.shards = s.shards ?? {};
+      for (const [k, n] of Object.entries(s.shards) as [string, number][]) {
+        const to = OLD_RARITY[k];
+        if (!to) continue;
+        s.shards[to] = (s.shards[to] ?? 0) + n;
+        delete (s.shards as Record<string, number>)[k];
+      }
       // migrate: anything already over the cap becomes shards
       for (const [cid, n] of Object.entries(s.collection)) {
         if (n > MAX_COPIES && CARDS_OK(cid) && !isBasicEnergy(cid)) {
@@ -291,9 +299,9 @@ export const useStore = create<Store>((set, get) => ({
   },
 }));
 
-/** Collection progress over every printing except mirrors (those are a bonus "master set") */
+/** Collection progress over every printing (mirrors included) */
 export function collectionPct(s: Save, set?: SetCode) {
-  const list = ALL_CARDS.filter((c) => c.variant !== 'mirror' && (!set || c.set === set));
+  const list = ALL_CARDS.filter((c) => !set || c.set === set);
   const have = list.filter((c) => (c.kind === 'energy' && c.basic) || (s.collection[c.id] ?? 0) > 0).length;
   return (have / list.length) * 100;
 }
@@ -403,16 +411,16 @@ export const PACK_TABLE: [Rarity, number][][] = [
   [['C', 0.9], ['U', 1]],
   [['C', 0.85], ['U', 1]],
   [['C', 0.75], ['U', 1]],
-  [['U', 0.66], ['R', 0.9], ['RR', 0.97], ['RRR', 1]],
-  [['R', 0.5], ['RR', 0.7], ['RRR', 0.78], ['AR', 0.87], ['CHR', 0.91], ['S', 0.94], ['SR', 0.97], ['SAR', 0.99], ['UR', 1]],
+  [['U', 0.66], ['R', 0.9], ['RR', 1]],
+  [['R', 0.52], ['RR', 0.78], ['ST', 0.97], ['CR', 1]],
 ];
 export const MIRROR_CHANCE = 0.3;
 const GOD_TABLE: [Rarity, number][][] = [
-  [['RR', 0.5], ['RRR', 0.75], ['AR', 1]],
-  [['RRR', 0.4], ['AR', 0.8], ['CHR', 1]],
-  [['AR', 0.5], ['S', 0.8], ['SR', 1]],
-  [['SR', 0.6], ['SAR', 1]],
-  [['SAR', 0.6], ['UR', 1]],
+  [['RR', 1]],
+  [['RR', 0.5], ['ST', 1]],
+  [['ST', 1]],
+  [['ST', 0.6], ['CR', 1]],
+  [['ST', 0.3], ['CR', 1]],
 ];
 
 export function openPack(b: Booster = BOOSTERS[0]): PackResult {
@@ -431,10 +439,10 @@ export function openPack(b: Booster = BOOSTERS[0]): PackResult {
 /** Premium pack: every slot rolls higher; the last slot is RR or better. Cards from every set. */
 export const PREMIUM_TABLE: [Rarity, number][][] = [
   [['U', 0.5], ['R', 0.85], ['RR', 1]],
-  [['U', 0.45], ['R', 0.8], ['RR', 0.95], ['RRR', 1]],
-  [['R', 0.45], ['RR', 0.75], ['RRR', 0.88], ['AR', 0.96], ['CHR', 1]],
-  [['RR', 0.35], ['RRR', 0.6], ['AR', 0.75], ['CHR', 0.83], ['S', 0.9], ['SR', 0.97], ['SAR', 1]],
-  [['RRR', 0.3], ['AR', 0.48], ['CHR', 0.58], ['S', 0.68], ['SR', 0.84], ['SAR', 0.94], ['UR', 1]],
+  [['U', 0.45], ['R', 0.8], ['RR', 1]],
+  [['R', 0.45], ['RR', 0.85], ['ST', 1]],
+  [['RR', 0.5], ['ST', 0.92], ['CR', 1]],
+  [['RR', 0.3], ['ST', 0.82], ['CR', 1]],
 ];
 
 export function openPremium(): PackResult {
@@ -450,6 +458,6 @@ export function openPremium(): PackResult {
   return { cards, god: false };
 }
 
-export const RARITY_ORDER: Record<Rarity, number> = { C: 0, U: 1, R: 2, RR: 3, RRR: 4, AR: 5, CHR: 5, S: 6, SR: 6, SAR: 7, UR: 8 };
+export const RARITY_ORDER: Record<Rarity, number> = { C: 0, U: 1, R: 2, RR: 3, ST: 4, CR: 5 };
 
 export { RIVALS };

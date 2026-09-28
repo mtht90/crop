@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useMemo, useState } from 'react';
-import { ALL_CARDS, card, ENERGIES } from '../engine/cards';
+import { ALL_CARDS, card, ENERGIES, MODEL_NAME, modelOf } from '../engine/cards';
 import { validateDeck } from '../engine/decks';
 import type { CardDef, EType } from '../engine/types';
 import { ENERGY_TYPES } from '../engine/types';
@@ -190,7 +190,7 @@ export function DeckBuilder() {
                       {c.kind === 'trainer' && <Icon name={c.sub === 'supporter' ? 'person' : c.sub === 'stadium' ? 'shield' : 'sparkles'} />}
                       <span className="nm">
                         {c.name}
-                        {c.variant ? ` (${c.variant === 'mirror' ? 'ミラー' : c.rarity})` : ''}
+                        {c.variant ? ` (${MODEL_NAME[modelOf(c)]})` : ''}
                       </span>
                       <span className="rm">－</span>
                     </div>

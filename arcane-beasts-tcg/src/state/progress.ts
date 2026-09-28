@@ -263,7 +263,7 @@ export interface Pickup {
   end: Date;
 }
 
-const PICKUP_POOL = ALL_CARDS.filter((c) => (c.rarity === 'SR' || c.rarity === 'SAR' || c.rarity === 'UR') && c.kind === 'monster');
+const PICKUP_POOL = ALL_CARDS.filter((c) => (c.rarity === 'ST' || c.rarity === 'CR') && c.variant !== 'S' && c.kind === 'monster');
 const ANCHOR = new Date(2026, 0, 1);
 
 /** Pick-ups run for 2–4 days with irregular 1–5 day breaks in between. */

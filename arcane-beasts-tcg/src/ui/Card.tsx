@@ -1,5 +1,5 @@
 import { memo, useRef } from 'react';
-import { card, COND_JP, STAGE_JP, SET_COUNT, TYPE_JP, byName } from '../engine/cards';
+import { card, COND_JP, RARITY_SYMBOL, STAGE_JP, SET_COUNT, TYPE_JP, byName } from '../engine/cards';
 import type { CardDef, EnergyCard, EType, MonsterCard, TrainerCard } from '../engine/types';
 import { artUrl, TYPE_COLOR, TYPE_SCENE } from '../lib/assets';
 import { Icon } from './Icon';
@@ -29,9 +29,8 @@ export function RainbowSymbol({ size = '1em' }: { size?: string | number }) {
   );
 }
 
-const RARITY_MARK: Record<string, string> = { C: '●', U: '◆', R: '★', RR: 'RR', RRR: 'RRR', AR: 'AR', CHR: 'CHR', S: 'S', SR: 'SR', SAR: 'SAR', UR: 'UR' };
 /** rarities printed with a foil treatment */
-const HOLO = new Set(['R', 'RR', 'RRR', 'AR', 'CHR', 'S', 'SR', 'SAR', 'UR']);
+const HOLO = new Set(['R', 'RR', 'ST', 'CR']);
 /** variants whose illustration covers the whole card */
 const BLEED = new Set(['AR', 'CHR', 'SAR']);
 const SUB_JP: Record<string, string> = { item: 'アイテム', supporter: 'サポーター', stadium: 'スタジアム', tool: 'どうぐ' };
@@ -174,7 +173,7 @@ function Footer({ def }: { def: CardDef }) {
     <div className="tcg-footer">
       <span className="illus">{def.kind === 'energy' || (def.kind === 'trainer' && (def.sub === 'item' || def.sub === 'tool')) ? 'Icon. game-icons.net' : 'Illus. Wesnoth'}</span>
       <span className="setno">
-        <b>{def.set}</b> {String(def.no).padStart(3, '0')}/{SET_COUNT[def.set]} <i className={`rmark r-${def.rarity}`}>{RARITY_MARK[def.rarity]}</i>
+        <b>{def.set}</b> {String(def.no).padStart(3, '0')}/{SET_COUNT[def.set]} <i className={`rmark r-${def.rarity}`}>{RARITY_SYMBOL[def.rarity]}</i>
       </span>
     </div>
   );
@@ -213,7 +212,7 @@ function MonsterFace({ def }: { def: MonsterCard }) {
     <>
       <div className="tcg-art">
         <img className="scene" src={artUrl(scene)} alt="" draggable={false} loading="lazy" />
-        {def.variant === 'SAR' && <div className="sar-wash" />}
+        {def.variant === 'SAR' && !scene.startsWith('story/p-') && <div className="sar-wash" />}
         <img className="portrait" src={artUrl(def.art)} alt={def.name} draggable={false} loading="lazy" style={pStyle} />
         {def.variant === 'CHR' && def.partner && <img className="partner" src={artUrl(def.partner)} alt="" draggable={false} loading="lazy" />}
       </div>
@@ -314,8 +313,8 @@ function TrainerFace({ def }: { def: TrainerCard }) {
       <div className={`tcg-art trainer-art ${isPortrait ? 'portrait-art' : isStadium ? 'stadium-art' : 'item-art'}`}>
         {isPortrait && (
           <>
-            <img className="scene" src={artUrl('story/landscape-castle')} alt="" draggable={false} loading="lazy" />
-            <img className="portrait" src={artUrl(def.art)} alt="" draggable={false} loading="lazy" />
+            <img className={`scene ${def.paint ? 'painting' : ''}`} src={artUrl(def.scene ?? 'story/landscape-castle')} alt="" draggable={false} loading="lazy" />
+            {!def.paint && <img className="portrait" src={artUrl(def.art)} alt="" draggable={false} loading="lazy" />}
           </>
         )}
         {isStadium && <img className="scene full" src={artUrl(def.art)} alt="" draggable={false} loading="lazy" />}

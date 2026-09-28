@@ -4,7 +4,8 @@
 // ============================================================================
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useMemo, useState } from 'react';
-import { ALL_CARDS, SET_INFO, SETS } from '../engine/cards';
+import { ALL_CARDS, RARITY_NAME, SET_INFO, SETS } from '../engine/cards';
+import { RarityBadge } from '../ui/RarityBadge';
 import type { Rarity, SetCode } from '../engine/types';
 import { MAX_COPIES, owned, SHARD_COST, SHARD_RARITIES, useStore } from '../state/store';
 import { artUrl } from '../lib/assets';
@@ -15,23 +16,7 @@ import { foley, playMusic, sfx } from '../audio/audio';
 
 const EASE_OUT = [0.16, 1, 0.3, 1] as const;
 
-export const RARITY_LABEL: Record<Rarity, string> = {
-  C: 'コモン',
-  U: 'アンコモン',
-  R: 'レア',
-  RR: 'ダブルレア',
-  RRR: 'トリプルレア',
-  AR: 'アートレア',
-  CHR: 'キャラクターレア',
-  S: 'シャイニー',
-  SR: 'スーパーレア',
-  SAR: 'スペシャルアートレア',
-  UR: 'ウルトラレア',
-};
-
-export function RarityBadge({ r }: { r: Rarity }) {
-  return <span className={`rbadge rb-${r}`}>{r}</span>;
-}
+const RARITY_LABEL = RARITY_NAME;
 
 export function Exchange() {
   const save = useStore((s) => s.save);

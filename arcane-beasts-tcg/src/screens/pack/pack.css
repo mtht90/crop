@@ -275,11 +275,6 @@
 }
 .po-skip { position: absolute; right: calc(var(--u) * 1.4); top: calc(var(--u) * 1.2); z-index: 50; }
 
-/* Coverflow */
-.cf { position: absolute; left: 0; right: 0; top: calc(var(--u) * 7.5); height: calc(var(--u) * 40); perspective: 1600px; cursor: grab; }
-.cf:active { cursor: grabbing; }
-.cf-pack { position: absolute; left: 50%; top: 0; width: calc(var(--u) * 21); margin-left: calc(var(--u) * -10.5); will-change: transform; }
-.cf-shade { position: absolute; inset: 0; background: #04050b; pointer-events: none; clip-path: inset(0 round 2%); }
 
 /* Tear stage */
 .tear-wrap { position: absolute; left: 50%; top: calc(var(--u) * 6.6); width: calc(var(--u) * 24); margin-left: calc(var(--u) * -12); z-index: 10; }
@@ -581,3 +576,18 @@
   font-size: calc(var(--u) * 0.75);
   box-shadow: 0 0 12px rgba(157, 123, 255, 0.6);
 }
+
+/* ------------------------------ 流星降臨 cinematic ------------------------ */
+.cine { position: absolute; inset: 0; z-index: 1; }
+.cine-host { position: absolute; inset: 0; }
+.cine-tap { position: absolute; inset: 0; z-index: 60; cursor: pointer; }
+.po-skip.cine-skip { z-index: 61; }
+.po .stage { z-index: 2; }
+
+/* --------------------------- Pack aura (予兆・昇格) ------------------------- */
+.aura { position: absolute; inset: -22% -30%; pointer-events: none; z-index: 0; }
+.aura-burst { position: absolute; left: 50%; top: 50%; width: 60%; aspect-ratio: 1; margin: -30% 0 0 -30%; border-radius: 50%; border: 3px solid var(--ac); box-shadow: 0 0 40px var(--ac), inset 0 0 40px var(--ac); }
+.aura.t3 .aura-burst { border-color: #fff; box-shadow: 0 0 40px #ff7ad9, 0 0 80px #4fb3ff, inset 0 0 40px #ffd84a; }
+.aura-flash { position: absolute; inset: -40%; background: radial-gradient(closest-side, #fff, color-mix(in srgb, var(--ac) 60%, transparent) 40%, transparent 70%); }
+.tear-float.shaking { animation: pack-tremble 0.07s linear infinite; }
+@keyframes pack-tremble { 0% { translate: -2px 1px; } 25% { translate: 2px -1px; } 50% { translate: -1px -2px; } 75% { translate: 1px 2px; } 100% { translate: -2px 1px; } }

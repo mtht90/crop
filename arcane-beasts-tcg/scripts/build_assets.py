@@ -42,7 +42,49 @@ def ensure(p):
     os.makedirs(p, exist_ok=True)
 
 
+# Art from Wesnoth's mainline campaigns: extra monster portraits ('camp/…')
+# and painted story illustrations used behind illustration-model cards ('story/p-…')
+CAMPAIGN = {
+    'camp/snowball': 'Sceptre_of_Fire/images/portraits/monsters/snowball.webp',
+    'camp/snowgolem': 'Sceptre_of_Fire/images/portraits/monsters/snowgolem.webp',
+    'camp/wyrm': 'Winds_of_Fate/images/portraits/wyrm.webp',
+    'camp/wyrm-elder': 'Sceptre_of_Fire/images/portraits/monsters/wyrm-elder.webp',
+    'camp/crab': 'The_Deceivers_Gambit/images/portraits/crab.webp',
+    'camp/eyestalk': 'The_South_Guard/images/portraits/eyestalk.webp',
+    'camp/familiar': 'The_Rise_Of_Wesnoth/images/portraits/familiar.webp',
+    'camp/flesh-golem': 'Under_the_Burning_Suns/images/portraits/monsters/flesh_golem.webp',
+    'camp/typhon': 'The_Rise_Of_Wesnoth/images/portraits/typhon.webp',
+    'camp/naga-hunter': 'Under_the_Burning_Suns/images/portraits/nagas/naga-hunter.webp',
+    'camp/cave-imp': 'Sceptre_of_Fire/images/portraits/monsters/cave-imp.webp',
+    'camp/pyre-wight': 'Eastern_Invasion/images/portraits/pyre-wight.webp',
+    'camp/vampire-lady': 'The_Rise_Of_Wesnoth/images/portraits/vampire_lady.webp',
+    'camp/tauroch-rider': 'Under_the_Burning_Suns/images/portraits/quenoth/tauroch_rider.webp',
+    'story/p-summoning': 'The_Rise_Of_Wesnoth/images/story/trow_intro_03.webp',
+    'story/p-drake-fleet': 'Winds_of_Fate/images/story/drakes-engage-fleet.webp',
+    'story/p-storm-sea': 'The_Rise_Of_Wesnoth/images/story/trow_intro_05.webp',
+    'story/p-wild-sea': 'The_Rise_Of_Wesnoth/images/story/trow_intro_06.webp',
+    'story/p-the-fall': 'The_Rise_Of_Wesnoth/images/story/trow_story_02-The_Fall.jpg',
+    'story/p-swamp': 'The_Rise_Of_Wesnoth/images/story/trow_story_04a-The_Swamp_of_Esten.jpg',
+    'story/p-burning': 'The_Deceivers_Gambit/images/story/burning-wp.png',
+    'story/p-black-forest': 'The_South_Guard/images/story/black-forest.webp',
+    'story/p-study': 'The_Rise_Of_Wesnoth/images/story/trow_intro_07.webp',
+    'story/p-shadows': 'Two_Brothers/images/story/Two_Brothers_M1P1.webp',
+    'story/p-winter': 'The_South_Guard/images/story/winter1.webp',
+    'story/p-summer': 'The_South_Guard/images/story/summer.webp',
+    'story/p-great-tree': 'The_Rise_Of_Wesnoth/images/story/trow_intro_01.webp',
+    'story/p-island': 'Liberty/images/story/island.webp',
+    'story/p-mountains': 'The_Deceivers_Gambit/images/story/mountains-wp.png',
+    'story/p-snowfield': 'The_South_Guard/images/story/awinter1.webp',
+    'story/p-fog': 'The_Deceivers_Gambit/images/story/fog-wp.png',
+    'story/p-temple': 'The_Rise_Of_Wesnoth/images/story/trow_story_06-Temple_in_the_Deep.webp',
+    'story/p-graves': 'The_Deceivers_Gambit/images/story/graves-wp.png',
+}
+
+
 def find_src(key):
+    if key in CAMPAIGN:
+        p = os.path.join(WES, 'data/campaigns', CAMPAIGN[key])
+        return p if os.path.exists(p) else None
     base = key if key.startswith('story/') else 'portraits/' + key
     for ext in ('.webp', '.png', '.jpg'):
         p = os.path.join(IMG, base + ext)
@@ -54,7 +96,7 @@ def find_src(key):
 # ---------------------------------------------------------------------------
 # 1. Collect art keys referenced from the source code
 # ---------------------------------------------------------------------------
-KEY_RE = re.compile(r"'((?:monsters|drakes|trolls|woses|undead|saurians|merfolk|nagas|wolves|humans|goblins|elves|dwarves|orcs|dunefolk|transport|story)/[\w+\-]+)'")
+KEY_RE = re.compile(r"'((?:monsters|drakes|trolls|woses|undead|saurians|merfolk|nagas|wolves|humans|goblins|elves|dwarves|orcs|dunefolk|transport|camp|story)/[\w+\-]*[\w+])'")
 keys = set()
 for f in glob.glob(os.path.join(ROOT, 'src/**/*.ts'), recursive=True) + glob.glob(os.path.join(ROOT, 'src/**/*.tsx'), recursive=True):
     keys.update(KEY_RE.findall(open(f, encoding='utf-8').read()))
@@ -91,9 +133,12 @@ def build_images():
         if not src:
             missing.append(key)
             continue
+        dst = os.path.join(OUT, key + '.webp') if key.startswith('story/') else os.path.join(OUT, 'art', key + '.webp')
+        if os.path.exists(dst) and os.path.getmtime(dst) >= os.path.getmtime(src):
+            credit(os.path.relpath(src, WES), 'image')
+            continue  # already encoded
         im = Image.open(src)
         if key.startswith('story/'):
-            dst = os.path.join(OUT, key + '.webp')
             im = im.convert('RGB')
             im.thumbnail((1280, 960), Image.LANCZOS)
             ensure(os.path.dirname(dst))

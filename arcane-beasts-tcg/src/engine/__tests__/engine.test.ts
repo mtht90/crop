@@ -100,6 +100,6 @@ describe('第2弾 rules', () => {
   it('EX cards carry their flag and rarity', () => {
     const exs = ALL_CARDS.filter((c) => c.kind === 'monster' && c.ex && !c.variant);
     expect(exs.length).toBe(5);
-    for (const c of exs) expect(c.rarity).toBe('RRR');
+    for (const c of exs) expect(c.rarity).toBe('RR');
   });
 });

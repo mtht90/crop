@@ -21,7 +21,7 @@ export const MONSTERS2: MonsterCard[] = [
     { name: 'やりぶすま', cost: [F, C], damage: 50 },
     { name: 'ドラゴンチャージ', cost: [F, F, C], damage: 120, effects: [{ k: 'selfDamage', n: 20 }] },
   ], { evolvesFrom: 'ドレイクファイター', flavor: '翼を捨て、重い鎧を選んだドレイク。地上戦では一歩も退かない。' }),
-  m('ドラグーン', 'drakes/enforcer', F, 'stage1', 300, 3, 'RRR', 'はりゅう', [
+  m('ドラグーン', 'drakes/enforcer', F, 'stage1', 300, 3, 'RR', 'はりゅう', [
     { name: '覇竜の号令', cost: [F], effects: [{ k: 'searchEnergyAttach', n: 2, type: 'fire', from: 'discard', to: 'any' }] },
     { name: '覇王の業火', cost: [F, F, F, C], damage: 260, effects: [{ k: 'discardSelfEnergy', n: 2, type: 'fire' }] },
   ], { evolvesFrom: 'ドレイクファイター', ex: true, flavor: '黄金の鎧をまとうドレイクの覇者。その咆哮ひとつで軍勢が膝をつく。' }),
@@ -44,7 +44,7 @@ export const MONSTERS2: MonsterCard[] = [
     { name: 'トライデント', cost: [W, C], damage: 60 },
     { name: '大渦の刃', cost: [W, W, C], damage: 110 },
   ], { evolvesFrom: 'ナーガソルジャー', flavor: '双剣を操るナーガの精鋭。渦潮の中でも刃筋がぶれることはない。' }),
-  m('ナーガクイーン', 'nagas/naga-ophidian', W, 'stage1', 290, 2, 'RRR', 'かいおう', [
+  m('ナーガクイーン', 'nagas/naga-ophidian', W, 'stage1', 290, 2, 'RR', 'かいおう', [
     { name: 'アビスダンス', cost: [W, W, C], damage: 130, suffix: '+', effects: [{ k: 'bonusPerBench', per: 20, whose: 'self', nameIncludes: 'ナーガ' }] },
   ], {
     evolvesFrom: 'ナーガソルジャー',
@@ -73,7 +73,7 @@ export const MONSTERS2: MonsterCard[] = [
     { name: '顎の一撃', cost: [G, C], damage: 50 },
     { name: '軍隊の行進', cost: [G, G, C], damage: 50, suffix: '+', effects: [{ k: 'bonusPerBench', per: 30, whose: 'self' }] },
   ], { evolvesFrom: 'オオアリ', flavor: '巨大な顎を持つ兵隊アリ。仲間が多いほど士気が上がり、突撃が激しくなる。' }),
-  m('クイーンアント', 'monsters/ant-queen', G, 'stage2', 350, 3, 'RRR', 'じょおうアリ', [
+  m('クイーンアント', 'monsters/ant-queen', G, 'stage2', 350, 3, 'RR', 'じょおうアリ', [
     { name: 'ロイヤルスティング', cost: [G, G, C, C], damage: 220, effects: [{ k: 'condition', cond: 'poisoned' }] },
   ], {
     evolvesFrom: 'ヘイタイアリ',
@@ -144,7 +144,7 @@ export const MONSTERS2: MonsterCard[] = [
   m('ロックトロル', 'trolls/troll-rocklobber', X, 'basic', 120, 3, 'U', 'トロル', [
     { name: '岩なげ', cost: [X, X], effects: [{ k: 'anySnipe', n: 50 }] },
   ], { flavor: '大岩を軽々と投げる山のトロル。狙いは粗いが、当たれば骨まで砕ける。' }),
-  m('トロルジェネラル', 'trolls/troll-hero-alt', X, 'stage1', 320, 3, 'RRR', 'トロル', [
+  m('トロルジェネラル', 'trolls/troll-hero-alt', X, 'stage1', 320, 3, 'RR', 'トロル', [
     { name: '大地の怒号', cost: [X, X, C, C], damage: 240 },
   ], {
     evolvesFrom: 'トロルウォリアー',
@@ -168,7 +168,7 @@ export const MONSTERS2: MonsterCard[] = [
     ability: { name: '死霊の囁き', text: '', spec: { k: 'energyFromDiscard', type: 'dark', selfDamage: 10 } },
     flavor: '死を超えて知識を求める魔術師。朽ちた指先に、冥府の力が集まる。',
   }),
-  m('リッチロード', 'undead/lich', D, 'stage2', 340, 2, 'RRR', 'めいおう', [
+  m('リッチロード', 'undead/lich', D, 'stage2', 340, 2, 'RR', 'めいおう', [
     { name: '冥雷', cost: [D, C], damage: 60, effects: [{ k: 'benchSnipe', n: 30 }] },
     { name: '亡国の審判', cost: [D, D, C, C], damage: 180, suffix: '+', effects: [{ k: 'bonusPerDiscardMonster', per: 10, max: 100 }] },
   ], { evolvesFrom: 'ブラウンリッチ', ex: true, flavor: '滅びた王国を今も治める死霊の王。杖が光るたび、墓の底で何かが目を覚ます。' }),
@@ -205,4 +205,66 @@ export const MONSTERS2: MonsterCard[] = [
   m('ゾンビグリフォン', 'undead/zombie-gryphon', C, 'basic', 120, 2, 'U', 'グリフォン', [
     { name: '腐翼の一撃', cost: [C, C, C], damage: 90 },
   ], { flavor: '朽ちた翼でなおも空を目指すグリフォン。落ちてくるときがいちばん恐ろしい。' }),
+  // ===================== 追加収録（キャンペーンの新イラスト） =====================
+  m('ユキダマ', 'camp/snowball', W, 'basic', 70, 2, 'C', 'ゆきだま', [
+    { name: 'ゆきだまころがし', cost: [W], damage: 10, suffix: '+', effects: [{ k: 'flipBonus', bonus: 30 }] },
+    { name: 'こおりのいき', cost: [W, C], damage: 30, effects: [{ k: 'condition', cond: 'paralyzed', flip: true }] },
+  ], { flavor: '雪山の斜面を転がり落ちてくる魔物。転がるたびに少しずつ大きくなる。', scene: 'story/p-snowfield' }),
+  m('スノーゴーレム', 'camp/snowgolem', W, 'stage1', 150, 3, 'U', 'ゆきおに', [
+    { name: 'こおりのかべ', cost: [C], effects: [{ k: 'reduceNext', n: 40 }] },
+    { name: 'ブリザードパンチ', cost: [W, C, C], damage: 90, effects: [{ k: 'condition', cond: 'paralyzed', flip: true }] },
+  ], { evolvesFrom: 'ユキダマ', flavor: '万年雪が意志を持った巨人。吹雪の夜、峠を越える旅人の前に立ちはだかる。', scene: 'story/p-snowfield' }),
+  m('ワーム', 'camp/wyrm', G, 'basic', 70, 1, 'C', 'ようりゅう', [
+    { name: 'かみつく', cost: [G], damage: 20 },
+    { name: 'どくのいき', cost: [G, C], damage: 30, effects: [{ k: 'condition', cond: 'poisoned' }] },
+  ], { flavor: '沼地に棲む小さな竜の子。翼はまだ飛ぶには弱く、毒の息で身を守る。' }),
+  m('エルダーワイアーム', 'camp/wyrm-elder', G, 'stage1', 270, 2, 'RR', 'こりゅう', [
+    { name: 'しびれ霧', cost: [G, C], damage: 50, effects: [{ k: 'condition', cond: 'paralyzed', flip: true }] },
+    { name: '瘴竜の吐息', cost: [G, G, C, C], damage: 200, effects: [{ k: 'condition', cond: 'poisoned' }] },
+  ], { evolvesFrom: 'ワーム', omega: true, flavor: '千年を生きた古竜。その吐息が通った森は、一夜にして黄色い霧に沈む。' }),
+  m('オオガニ', 'camp/crab', W, 'basic', 110, 2, 'U', 'おおガニ', [
+    { name: 'はさみうち', cost: [W, C, C], damage: 80 },
+  ], {
+    ability: { name: '硬い甲羅', text: '', spec: { k: 'damageReduce', n: 20 } },
+    flavor: '浜辺の岩と見分けがつかない巨大なカニ。うかつに近づいた者はハサミの餌食になる。',
+    scene: 'story/landscape-beach',
+  }),
+  m('メダマソウ', 'camp/eyestalk', P, 'basic', 90, 1, 'U', 'めだまそう', [
+    { name: 'にらみつける', cost: [P], effects: [{ k: 'condition', cond: 'confused' }] },
+    { name: 'サイコビーム', cost: [P, C], damage: 50 },
+  ], { flavor: '森の奥に咲く目玉の花。見つめ返した者は、帰り道が分からなくなる。' }),
+  m('ツカイマ', 'camp/familiar', D, 'basic', 50, 0, 'C', 'つかいま', [
+    { name: 'のろいのささやき', cost: [D], damage: 10, effects: [{ k: 'condition', cond: 'confused', flip: true }] },
+  ], {
+    ability: { name: '主への報せ', text: '', spec: { k: 'drawOnce', n: 1 } },
+    flavor: '死霊術師に仕える翼の生えたドクロ。主のためなら、どんな秘密も盗み聞く。',
+  }),
+  m('フレッシュゴーレム', 'camp/flesh-golem', X, 'basic', 160, 3, 'R', 'にくのきょじん', [
+    { name: 'つかみかかる', cost: [X, C, C], damage: 100 },
+  ], {
+    ability: { name: '継ぎはぎの体', text: '', spec: { k: 'regen', n: 20 } },
+    flavor: '禁じられた術で縫い合わされた巨人。痛みを知らず、ただ命じられるままに進む。',
+  }),
+  m('テュポーン', 'camp/typhon', W, 'basic', 130, 2, 'R', 'かいま', [
+    { name: 'うずまく潮', cost: [W, C], damage: 40, effects: [{ k: 'benchSnipe', n: 20 }] },
+    { name: '海魔の槍', cost: [W, W, C], damage: 110 },
+  ], { flavor: '深海から現れる魔人の王。棘の冠が光るとき、港の船は一隻残らず沈む。', scene: 'story/p-wild-sea' }),
+  m('ナーガハンター', 'camp/naga-hunter', W, 'basic', 80, 1, 'C', 'ナーガ', [
+    { name: 'ねらいうち', cost: [W, C], damage: 20, effects: [{ k: 'benchSnipe', n: 30 }] },
+  ], { flavor: '砂漠のオアシスに潜むナーガの射手。蛇の尾で砂を蹴り、一瞬で間合いを詰める。' }),
+  m('ドウクツインプ', 'camp/cave-imp', D, 'basic', 60, 1, 'C', 'いんま', [
+    { name: 'いたずら', cost: [D], effects: [{ k: 'discardOppEnergy', n: 1, flip: true }] },
+    { name: 'ひっかく', cost: [D, C], damage: 30 },
+  ], { flavor: '洞窟の暗がりに潜む小鬼。旅人の荷物から光るものを盗むのが何より好き。' }),
+  m('カエンワイト', 'camp/pyre-wight', F, 'basic', 120, 2, 'R', 'ほむらのしびと', [
+    { name: 'ほむらの剣', cost: [F, C, C], damage: 90, effects: [{ k: 'condition', cond: 'burned' }] },
+  ], { flavor: '火葬の炎から蘇った騎士。燃え尽きない剣を掲げ、今も戦場を探し歩く。', scene: 'story/p-burning' }),
+  m('ヴァンパイア', 'camp/vampire-lady', D, 'basic', 230, 1, 'RR', 'きゅうけつき', [
+    { name: '吸血のくちづけ', cost: [D, C], damage: 60, effects: [{ k: 'healSelf', n: 60 }] },
+    { name: '紅の月夜', cost: [D, D, C], damage: 160, effects: [{ k: 'condition', cond: 'confused' }] },
+  ], { omega: true, flavor: '月夜の舞踏会にだけ姿を見せる貴婦人。踊った相手は、翌朝には誰も覚えていない。' }),
+  m('タウロスライダー', 'camp/tauroch-rider', X, 'basic', 120, 2, 'U', 'きへい', [
+    { name: 'とっしん', cost: [X, C], damage: 50 },
+    { name: '角の一撃', cost: [X, X, C], damage: 110, effects: [{ k: 'selfDamage', n: 20 }] },
+  ], { flavor: '砂漠の民が駆る大角の牛。一度走り出せば、城門すら角で打ち破る。', scene: 'story/landscape-plain' }),
 ];

@@ -16,7 +16,8 @@ export const ENERGY_TYPES: EType[] = ['fire', 'water', 'grass', 'lightning', 'ps
 export const ALL_TYPES: EType[] = [...ENERGY_TYPES, 'colorless'];
 
 export type Stage = 'basic' | 'stage1' | 'stage2';
-export type Rarity = 'C' | 'U' | 'R' | 'RR' | 'RRR' | 'AR' | 'CHR' | 'S' | 'SR' | 'SAR' | 'UR';
+/** ◇ ◇◇ ◇◇◇ ◇◇◇◇ ☆ ♛ */
+export type Rarity = 'C' | 'U' | 'R' | 'RR' | 'ST' | 'CR';
 export type SetCode = 'AB1' | 'AB2';
 /** Alternate printings of a base card */
 export type Variant = 'mirror' | 'AR' | 'CHR' | 'S' | 'SR' | 'SAR' | 'UR';
@@ -110,6 +111,8 @@ interface CardBase {
   hue?: number;
   /** AR/SAR/CHR art framing: portrait scale / horizontal anchor (%) / bottom offset (%) */
   crop?: { scale?: number; x?: number; y?: number };
+  /** illustration printed as a painting only (no portrait on top) */
+  paint?: boolean;
 }
 
 export interface MonsterCard extends CardBase {

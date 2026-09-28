@@ -569,7 +569,7 @@
 }
 .kind-trainer.r-R .tcg-shine { top: 18cqw; height: 50cqw; }
 .r-RR .tcg-shine { opacity: 0.28; }
-.r-SR .tcg-shine {
+.v-SR .tcg-shine {
   opacity: 0.4;
   background:
     repeating-linear-gradient(120deg,
@@ -577,7 +577,7 @@
     repeating-linear-gradient(35deg, rgba(255, 255, 255, 0.3) 0 0.5cqw, transparent 0.5cqw 2.5cqw);
   background-size: 300% 300%, 100% 100%;
 }
-.r-UR .tcg-shine {
+.v-UR .tcg-shine {
   opacity: 0.45;
   background:
     repeating-linear-gradient(115deg, rgba(255, 236, 170, 0.8) 0%, rgba(201, 150, 43, 0.6) 10%, rgba(255, 250, 220, 0.85) 20%, rgba(143, 95, 12, 0.6) 30%, rgba(255, 236, 170, 0.8) 40%);
@@ -681,7 +681,7 @@
     repeating-conic-gradient(from 0deg at 50% 36%, rgba(255, 255, 255, 0.09) 0 3deg, transparent 3deg 9deg),
     radial-gradient(ellipse at 30% 0%, rgba(255, 255, 255, 0.45), transparent 60%);
 }
-.r-RRR .tcg-shine {
+.tcg.ex:not([class*=' v-']) .tcg-shine {
   opacity: 0.32;
   background:
     repeating-conic-gradient(from 0deg at 50% 36%, rgba(255, 255, 255, 0.35) 0 2deg, transparent 2deg 7deg),
@@ -778,7 +778,7 @@
     repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.05) 0 0.25cqw, transparent 0.25cqw 0.7cqw);
   z-index: 2;
 }
-.r-AR .tcg-shine, .r-CHR .tcg-shine {
+.v-AR .tcg-shine, .v-CHR .tcg-shine {
   opacity: 0.2;
   background: linear-gradient(115deg, transparent 20%, rgba(255, 245, 210, 0.9) 45%, rgba(170, 220, 255, 0.8) 55%, transparent 80%);
   background-size: 250% 250%;
@@ -820,7 +820,7 @@
   mix-blend-mode: soft-light;
   opacity: 0.7;
 }
-.r-SAR .tcg-shine {
+.v-SAR .tcg-shine {
   opacity: 0.2;
   background:
     repeating-linear-gradient(170deg, rgba(255, 255, 255, 0.28) 0 0.3cqw, transparent 0.3cqw 1.2cqw),
@@ -857,30 +857,25 @@
 }
 @keyframes glitter { from { opacity: 0.25; } to { opacity: 0.7; } }
 .tcg.interactive .tcg-glitter { animation: none; opacity: calc(0.35 + var(--hyp) * 0.5); }
-.r-S .tcg-shine {
+.v-S .tcg-shine {
   opacity: 0.22;
   background: repeating-linear-gradient(115deg, rgba(220, 230, 255, 0.8) 0%, rgba(120, 130, 170, 0.4) 10%, rgba(255, 255, 255, 0.85) 20%, rgba(120, 130, 170, 0.4) 30%, rgba(220, 230, 255, 0.8) 40%);
   background-size: 300% 300%;
 }
 
 /* ------------------------------ Rarity marks ----------------------------- */
-.rmark.r-RR, .rmark.r-RRR { font-family: 'Cinzel', serif; font-weight: 900; color: #111; }
-.t-dark .rmark.r-RRR, .tcg.bleed .rmark.r-RR, .tcg.bleed .rmark.r-RRR { color: #fff; }
-.rmark.r-AR, .rmark.r-CHR, .rmark.r-S {
-  font-family: 'Cinzel', serif;
-  font-weight: 900;
-  background: linear-gradient(90deg, #fff1b3, #e0a526);
+.rmark { font-style: normal; letter-spacing: -0.12em; margin-left: 0.8cqw; font-family: 'M PLUS 1p', sans-serif; font-weight: 900; }
+.rmark.r-C, .rmark.r-U, .rmark.r-R, .rmark.r-RR { color: #1b1b1f; }
+.t-dark .rmark.r-C, .t-dark .rmark.r-U, .t-dark .rmark.r-R, .t-dark .rmark.r-RR,
+.tcg.bleed .rmark, .tcg.v-S .rmark, .kind-energy .rmark { color: #fff; }
+.rmark.r-ST, .rmark.r-CR {
+  letter-spacing: 0;
+  font-size: 1.25em;
+  background: linear-gradient(180deg, #fff6c9, #e0a526);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-}
-.rmark.r-SAR {
-  font-family: 'Cinzel', serif;
-  font-weight: 900;
-  background: linear-gradient(90deg, #ffd86b, #ff5fa2, #7c5cff, #4fb3ff);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  filter: drop-shadow(0 0 0.4cqw rgba(0, 0, 0, 0.5));
 }
 .tcg.v-mirror .tcg-footer .setno::after { content: 'MIRROR'; margin-left: 1cqw; font-family: 'Cinzel', serif; font-weight: 900; font-size: 0.85em; letter-spacing: 0.08em; opacity: 0.7; }
 
@@ -894,3 +889,7 @@
     repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.22) 0 0.15cqw, transparent 0.15cqw 1.4cqw);
   mix-blend-mode: overlay;
 }
+/* painted backgrounds (campaign story art) keep their own colours */
+.tcg.bleed .tcg-art .scene[src*='/p-'] { filter: saturate(1.08) contrast(1.02); transform: none; }
+.portrait-art .scene.painting { filter: none; }
+.tcg.full-art.kind-trainer .tcg-art .scene.painting { filter: saturate(1.05); }
