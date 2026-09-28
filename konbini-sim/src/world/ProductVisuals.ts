@@ -465,7 +465,7 @@ function boxGeo(w: number, h: number, d: number, segs = 1): THREE.BufferGeometry
 
 /** Pillow-bag deformation of a subdivided box (chips bags etc.). */
 function bagGeo(w: number, h: number, d: number): THREE.BufferGeometry {
-  const g = new THREE.BoxGeometry(w, h, d, 12, 16, 2);
+  const g = new THREE.BoxGeometry(w, h, d, 8, 10, 1);
   const p = g.attributes.position as THREE.BufferAttribute;
   for (let i = 0; i < p.count; i++) {
     const x = p.getX(i) / (w / 2);
@@ -489,10 +489,10 @@ function petGeo(): THREE.BufferGeometry {
     [0, 0], [r * 0.82, 0], [r * 0.95, 0.006], [r, 0.02], [r, 0.07], [r * 0.93, 0.08], [r, 0.09], [r, 0.155],
     [r * 0.9, 0.172], [r * 0.55, 0.19], [r * 0.4, 0.198], [r * 0.4, 0.2],
   ];
-  const body = new THREE.LatheGeometry(prof.map(([x, y]) => new THREE.Vector2(x, y)), 28);
-  const label = new THREE.CylinderGeometry(r * 1.01, r * 1.01, 0.062, 28, 1, true);
+  const body = new THREE.LatheGeometry(prof.map(([x, y]) => new THREE.Vector2(x, y)), 14);
+  const label = new THREE.CylinderGeometry(r * 1.01, r * 1.01, 0.062, 14, 1, true);
   label.translate(0, 0.123, 0);
-  const cap = new THREE.CylinderGeometry(r * 0.42, r * 0.42, 0.018, 20);
+  const cap = new THREE.CylinderGeometry(r * 0.42, r * 0.42, 0.018, 10);
   cap.translate(0, 0.207, 0);
   const merged = mergeGeometries([body, label, cap], true)!;
   return merged;
@@ -501,12 +501,12 @@ function petGeo(): THREE.BufferGeometry {
 function canGeo(slim: boolean): THREE.BufferGeometry {
   const [w, h] = slim ? SHAPE_SIZE.slimcan : SHAPE_SIZE.can;
   const r = w / 2;
-  const side = new THREE.CylinderGeometry(r, r, h * 0.86, 28, 1, true);
+  const side = new THREE.CylinderGeometry(r, r, h * 0.86, 16, 1, true);
   side.translate(0, h * 0.5, 0);
   const prof: [number, number][] = [[0, h * 0.965], [r * 0.82, h * 0.965], [r * 0.86, h], [r * 0.9, h * 0.975], [r, h * 0.93], [r, h * 0.93]];
-  const top = new THREE.LatheGeometry(prof.map(([x, y]) => new THREE.Vector2(x, y)), 28);
+  const top = new THREE.LatheGeometry(prof.map(([x, y]) => new THREE.Vector2(x, y)), 16);
   const botProf: [number, number][] = [[r, h * 0.07], [r * 0.85, h * 0.01], [r * 0.7, 0], [0, 0.006]];
-  const bottom = new THREE.LatheGeometry(botProf.map(([x, y]) => new THREE.Vector2(x, y)), 28);
+  const bottom = new THREE.LatheGeometry(botProf.map(([x, y]) => new THREE.Vector2(x, y)), 16);
   return mergeGeometries([side, mergeGeometries([top, bottom])!], true)!;
 }
 
@@ -546,7 +546,7 @@ function onigiriGeo(): THREE.BufferGeometry {
     s.lineTo(a.x - dirIn.x * rr, a.y - dirIn.y * rr);
     s.quadraticCurveTo(a.x, a.y, a.x + dirOut.x * rr, a.y + dirOut.y * rr);
   }
-  const g = new THREE.ExtrudeGeometry(s, { depth: d - 0.012, bevelEnabled: true, bevelThickness: 0.006, bevelSize: 0.005, bevelSegments: 3, curveSegments: 6 });
+  const g = new THREE.ExtrudeGeometry(s, { depth: d - 0.012, bevelEnabled: true, bevelThickness: 0.006, bevelSize: 0.005, bevelSegments: 2, curveSegments: 4 });
   g.translate(0, 0, -(d - 0.012) / 2);
   projectUV(g, w, h);
   return stripGroups(g);
@@ -592,7 +592,7 @@ function mergeWithGroups(first: THREE.BufferGeometry[], extra: THREE.BufferGeome
 }
 
 function cylGeo(rTop: number, rBot: number, h: number): THREE.BufferGeometry {
-  const g = new THREE.CylinderGeometry(rTop, rBot, h, 28, 1, false);
+  const g = new THREE.CylinderGeometry(rTop, rBot, h, 18, 1, false);
   g.translate(0, h / 2, 0);
   return g;
 }

@@ -155,7 +155,7 @@ export class PCMenu {
       let expired = 0;
       let slots = 0;
       for (const sl of g.store.slots) if (sl.productId === p.id) {
-        expired += sl.expiredCount(s.day);
+        expired += sl.expiredCount(s.abs);
         slots++;
       }
       const hot = p.zone === 'hot';

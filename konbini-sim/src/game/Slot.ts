@@ -1,14 +1,87 @@
 import * as THREE from 'three';
 import { product, SHAPE_SIZE, STACKABLE, type ProductDef, type Zone } from '../data/products';
 import { productVisual } from '../world/ProductVisuals';
-import { canvas, fitText } from '../world/Textures';
+import { fitText } from '../world/Textures';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 export interface Item {
-  /** Business day on which this item becomes expired (99999 = never). */
+  /** Absolute game minute at which this item expires (1e9 = never). */
   expiry: number;
 }
 
 let nextSlotId = 0;
+
+const CELL_W = 256;
+const CELL_H = 64;
+const COLS = 8;
+
+/**
+ * All shelf price tags share one canvas atlas and one merged mesh, which saves
+ * hundreds of draw calls. Slots draw into their own cell.
+ */
+export class TagAtlas {
+  static canvas: HTMLCanvasElement | null = null;
+  static texture: THREE.CanvasTexture | null = null;
+  static material: THREE.MeshStandardMaterial | null = null;
+  static count = 0;
+  static dirty = false;
+  private static pending: THREE.BufferGeometry[] = [];
+
+  static alloc(): number {
+    return TagAtlas.count++;
+  }
+
+  /** Create the canvas once the number of cells is known. */
+  static ensure(): void {
+    if (TagAtlas.canvas) return;
+    const rows = Math.ceil(Math.max(1, TagAtlas.count) / COLS);
+    const c = document.createElement('canvas');
+    c.width = CELL_W * COLS;
+    c.height = CELL_H * rows;
+    TagAtlas.canvas = c;
+    TagAtlas.texture = new THREE.CanvasTexture(c);
+    TagAtlas.texture.colorSpace = THREE.SRGBColorSpace;
+    TagAtlas.texture.anisotropy = 8;
+    TagAtlas.texture.generateMipmaps = true;
+    TagAtlas.material = new THREE.MeshStandardMaterial({ map: TagAtlas.texture, roughness: 0.4 });
+  }
+
+  static add(geo: THREE.BufferGeometry): void {
+    TagAtlas.pending.push(geo);
+  }
+
+  /** Merge every tag quad (already in world space) into one mesh. */
+  static build(parent: THREE.Object3D): THREE.Mesh | null {
+    TagAtlas.ensure();
+    if (!TagAtlas.pending.length) return null;
+    const merged = mergeGeometries(TagAtlas.pending, false);
+    TagAtlas.pending = [];
+    if (!merged) return null;
+    const mesh = new THREE.Mesh(merged, TagAtlas.material!);
+    mesh.receiveShadow = true;
+    mesh.name = 'priceTags';
+    parent.add(mesh);
+    return mesh;
+  }
+
+  static cellUV(i: number): [number, number, number, number] {
+    const rows = TagAtlas.canvas ? TagAtlas.canvas.height / CELL_H : Math.ceil(TagAtlas.count / COLS);
+    const col = i % COLS;
+    const row = Math.floor(i / COLS);
+    const u0 = col / COLS;
+    const u1 = (col + 1) / COLS;
+    const v1 = 1 - row / rows;
+    const v0 = 1 - (row + 1) / rows;
+    return [u0, v0, u1, v1];
+  }
+
+  static flush(): void {
+    if (TagAtlas.dirty && TagAtlas.texture) {
+      TagAtlas.texture.needsUpdate = true;
+      TagAtlas.dirty = false;
+    }
+  }
+}
 
 /**
  * One product facing on a shelf / fridge shelf / rack. Items are packed front
@@ -21,9 +94,8 @@ export class Slot {
   items: Item[] = [];
   /** World transform of the slot's front-centre on the shelf surface; local -z goes into the shelf. */
   readonly frame = new THREE.Object3D();
-  tag: THREE.Mesh | null = null;
-  private tagCanvas: HTMLCanvasElement | null = null;
-  private tagTex: THREE.CanvasTexture | null = null;
+  private tagCell = -1;
+  private tagGeo: THREE.BufferGeometry | null = null;
   private lastTagKey = '';
   /** Invisible volume used for ray picking. */
   readonly pick: THREE.Mesh;
@@ -67,26 +139,40 @@ export class Slot {
   }
 
   private makeTag() {
-    const [c] = canvas(256, 72);
-    this.tagCanvas = c;
-    this.tagTex = new THREE.CanvasTexture(c);
-    this.tagTex.colorSpace = THREE.SRGBColorSpace;
-    this.tagTex.anisotropy = 4;
+    this.tagCell = TagAtlas.alloc();
     const w = Math.min(0.12, this.width * 0.6);
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, w * 0.28), new THREE.MeshStandardMaterial({ map: this.tagTex, roughness: 0.4 }));
-    m.position.set(-this.width / 2 + w / 2 + 0.01, -0.022, 0.012);
-    m.userData.slot = this;
-    this.tag = m;
-    this.frame.add(m);
+    const g = new THREE.PlaneGeometry(w, w * 0.25);
+    g.translate(-this.width / 2 + w / 2 + 0.01, -0.022, 0.012);
+    this.tagGeo = g;
+  }
+
+  /** Bake the tag quad into world space and hand it to the shared atlas mesh. */
+  finalizeTag(): void {
+    if (!this.tagGeo) return;
+    this.frame.updateWorldMatrix(true, false);
+    const g = this.tagGeo.clone().applyMatrix4(this.frame.matrixWorld);
+    const [u0, v0, u1, v1] = TagAtlas.cellUV(this.tagCell);
+    const uv = g.attributes.uv as THREE.BufferAttribute;
+    for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) ? u1 : u0, uv.getY(i) ? v1 : v0);
+    TagAtlas.add(g.index ? g.toNonIndexed() : g);
   }
 
   updateTag(price: number | null, alert: boolean): void {
-    if (!this.tagCanvas || !this.tagTex) return;
+    if (this.tagCell < 0) return;
+    TagAtlas.ensure();
     const p = this.product;
     const key = `${this.productId}|${price}|${alert}`;
     if (key === this.lastTagKey) return;
     this.lastTagKey = key;
-    const ctx = this.tagCanvas.getContext('2d')!;
+    const ctx = TagAtlas.canvas!.getContext('2d')!;
+    const ox = (this.tagCell % COLS) * CELL_W;
+    const oy = Math.floor(this.tagCell / COLS) * CELL_H;
+    ctx.save();
+    ctx.translate(ox, oy);
+    ctx.beginPath();
+    ctx.rect(0, 0, CELL_W, CELL_H);
+    ctx.clip();
+    ctx.scale(1, CELL_H / 72);
     ctx.fillStyle = alert ? '#fff1a8' : '#ffffff';
     ctx.fillRect(0, 0, 256, 72);
     ctx.fillStyle = '#e53935';
@@ -109,7 +195,8 @@ export class Slot {
       ctx.font = '700 22px "Noto Sans JP", sans-serif';
       ctx.fillText('空き棚', 128, 36);
     }
-    this.tagTex.needsUpdate = true;
+    ctx.restore();
+    TagAtlas.dirty = true;
   }
 
   /** Grid dimensions for a product in this slot. */

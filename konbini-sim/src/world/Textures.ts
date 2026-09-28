@@ -101,12 +101,19 @@ export function floorTiles(): PBRSet {
   ctx.globalAlpha = 1;
   hctx.fillStyle = '#fff';
   hctx.fillRect(0, 0, S, S);
-  rctx.fillStyle = 'rgb(60,60,60)';
+  rctx.fillStyle = 'rgb(88,88,88)';
   rctx.fillRect(0, 0, S, S);
-  for (let r = 0; r < 800; r++) {
-    const g = 45 + Math.floor(rand() * 40);
-    rctx.fillStyle = `rgba(${g},${g},${g},0.35)`;
-    rctx.fillRect(rand() * S, rand() * S, 20 + rand() * 90, 20 + rand() * 90);
+  // soft polish variation (wax build-up / foot traffic), no hard edges
+  for (let r = 0; r < 260; r++) {
+    const x = rand() * S;
+    const y = rand() * S;
+    const rad = 30 + rand() * 120;
+    const g = 50 + Math.floor(rand() * 45);
+    const grad = rctx.createRadialGradient(x, y, 0, x, y, rad);
+    grad.addColorStop(0, `rgba(${g},${g},${g},0.22)`);
+    grad.addColorStop(1, `rgba(${g},${g},${g},0)`);
+    rctx.fillStyle = grad;
+    rctx.fillRect(x - rad, y - rad, rad * 2, rad * 2);
   }
   // grout lines
   for (let i = 0; i <= tiles; i++) {

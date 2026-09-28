@@ -30,7 +30,7 @@ export class Materials {
 
   constructor(asphaltMap?: THREE.Texture, asphaltRough?: THREE.Texture) {
     const f = T.floorTiles();
-    this.floor = new THREE.MeshStandardMaterial({ map: f.map, roughnessMap: f.roughnessMap, normalMap: f.normalMap, roughness: 1, metalness: 0, envMapIntensity: 1.1 });
+    this.floor = new THREE.MeshStandardMaterial({ map: f.map, roughnessMap: f.roughnessMap, normalMap: f.normalMap, roughness: 1, metalness: 0, envMapIntensity: 0.9 });
     this.floor.normalScale.set(0.6, 0.6);
     const bf = T.plasticGrain('#9aa0a6');
     this.backFloor = new THREE.MeshStandardMaterial({ map: bf.map, normalMap: bf.normalMap, roughness: 0.6 });

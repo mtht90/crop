@@ -87,6 +87,12 @@ export class Input {
     this.mousePressed.add(button);
   }
 
+  /** Forget key presses of this frame (after closing a menu with the same key). */
+  clearPressed(): void {
+    this.pressedKeys.clear();
+    this.mousePressed.clear();
+  }
+
   endFrame(): void {
     this.pressedKeys.clear();
     this.mousePressed.clear();

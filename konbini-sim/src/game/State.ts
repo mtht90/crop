@@ -36,6 +36,13 @@ export const DAY_START = 6 * 60;
 export const DAY_END = 26 * 60; // 02:00 next day
 export const DELIVERY_TIMES = [7 * 60, 13 * 60, 19 * 60];
 export const HOT_HOLD_MIN = 180;
+export const NEVER = 1e9;
+
+/** Absolute game minute at which a product delivered at `now` expires. */
+export function expiryFor(life: number, now: number): number {
+  // 1-day items (onigiri, bento …) keep ~30h, so yesterday's stock expires mid-morning.
+  return life >= 99 ? NEVER : now + life * 1440 + 6 * 60;
+}
 
 export const RANKS = [
   { rank: 1, need: 0, title: '新米オーナー' },

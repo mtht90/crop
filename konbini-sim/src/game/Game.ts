@@ -8,8 +8,8 @@ import { Store } from '../world/Store';
 import { Environment } from '../world/Environment';
 import { P } from '../world/Layout';
 import { Player } from '../player/Player';
-import { GameState, DAY_END, DAY_START, emptyStats, HOT_HOLD_MIN, type Weather } from './State';
-import { ProductInstancer, type Slot } from './Slot';
+import { GameState, DAY_END, DAY_START, emptyStats, HOT_HOLD_MIN, NEVER, expiryFor, type Weather } from './State';
+import { ProductInstancer, TagAtlas, type Slot } from './Slot';
 import { Box } from './Boxes';
 import { Dialog } from './Dialog';
 import { HotSnacks } from './HotSnacks';
@@ -80,7 +80,7 @@ export class Game {
     this.pc = new PCMenu(this);
     this.menus = new Menus(this);
     this.loadSettings();
-    for (const s of this.store.slots) this.pickables.push(s.pick, ...(s.tag ? [s.tag] : []));
+    for (const s of this.store.slots) this.pickables.push(s.pick);
     for (const key of ['register', 'pc', 'fryer', 'hotCase', 'stocker', 'wasteBin', 'cardboardBin', 'mop']) {
       const a = this.store.anchors[key];
       if (a) this.pickables.push(a);
@@ -198,19 +198,20 @@ export class Game {
         const p = product(id);
         const n = Math.floor(s.capacity(p) * fill * (0.7 + ((i * 37) % 10) / 30));
         s.productId = id;
-        for (let k = 0; k < n; k++) s.add(p, { expiry: this.state.day + p.life });
+        // starter stock arrived last night
+        for (let k = 0; k < n; k++) s.add(p, { expiry: expiryFor(p.life, this.state.abs - 8 * 60) });
       });
     };
     const fridge = byZone('fridge');
     // column-major so each fridge door holds one kind of drink family
-    const fridgeIds = ['greentea', 'water', 'sports', 'cola', 'milktea', 'cancoffee', 'greentea'];
+    const fridgeIds = ['greentea', 'water', 'sports', 'cola', 'cancoffee', 'beer', 'chuhai'];
     fridge.forEach((s, i) => {
       const unit = Math.floor(i / 5);
       const id = fridgeIds[unit];
       const p = product(id);
       s.productId = id;
       const n = Math.floor(s.capacity(p) * 0.75);
-      for (let k = 0; k < n; k++) s.add(p, { expiry: 99999 });
+      for (let k = 0; k < n; k++) s.add(p, { expiry: NEVER });
     });
     place(byZone('chilled'), ['onigiri_salmon', 'onigiri_tuna', 'onigiri_ume', 'sandwich', 'bento_karaage', 'pudding', 'milk', 'onigiri_salmon', 'onigiri_tuna', 'sandwich'], 0.6);
     const shelf = byZone('shelf');
@@ -281,6 +282,7 @@ export class Game {
   private prevMode: Mode = 'play';
 
   exitUIMode(): void {
+    this.input.clearPressed();
     this.mode = this.prevMode === 'register' && this.checkout.active ? 'register' : 'play';
     if (this.mode === 'play') this.requestLock();
   }
@@ -305,7 +307,7 @@ export class Game {
     for (const o of list) {
       const p = product(o.productId);
       for (let c = 0; c < o.cases; c++) {
-        const b = new Box(p.id, p.caseSize, p.life >= 99 ? 99999 : this.state.day + p.life);
+        const b = new Box(p.id, p.caseSize, expiryFor(p.life, this.state.abs));
         const col = k % 4;
         const row = Math.floor(k / 4) % 3;
         const layer = Math.floor(k / 12);
@@ -317,7 +319,7 @@ export class Game {
   }
 
   refreshTags(): void {
-    const today = this.state.day;
+    const today = this.state.abs;
     for (const s of this.store.slots) s.updateTag(s.productId ? this.state.price(s.productId) : null, s.expiredCount(today) > 0);
   }
 
@@ -325,7 +327,7 @@ export class Game {
   stockOf(id: string): { shelf: number; boxes: number } {
     let shelf = 0;
     let boxes = 0;
-    const today = this.state.day;
+    const today = this.state.abs;
     for (const s of this.store.slots) if (s.productId === id) shelf += s.items.filter((i) => i.expiry > today).length;
     for (const b of this.boxes) if (b.productId === id) boxes += b.count;
     if (this.player.held?.kind === 'box' && this.player.held.box.productId === id && !this.boxes.includes(this.player.held.box)) boxes += this.player.held.box.count;
@@ -380,6 +382,7 @@ export class Game {
     for (const c of this.customers.characters()) if (c.position.distanceTo(door) < 1.8) near = true;
     this.store.update(dt, near);
     this.instancer.update();
+    TagAtlas.flush();
     this.audio.updateListener(this.engine.camera);
 
     // UI
@@ -406,6 +409,7 @@ export class Game {
     this.deliveries.tick();
     this.customers.tickMinute();
     this.dirt.tickMinute();
+    if (s.minute % 10 === 0) this.refreshTags();
     // fixed costs are charged at day end
     if (s.minute === 9 * 60 && s.has('parttimer')) this.ui.notify('アルバイトが出勤しました（〜17時）', 'info');
     if (s.minute === 22 * 60) this.ui.notify('22時。深夜帯は困ったお客さんが増えます。', 'warn', 6000);
@@ -418,7 +422,7 @@ export class Game {
     let expired = 0;
     let empty = 0;
     for (const sl of this.store.slots) {
-      expired += sl.expiredCount(s.day);
+      expired += sl.expiredCount(s.abs);
       if (sl.productId && sl.items.length === 0) empty++;
     }
     if (expired) alerts.push({ text: `⚠ 期限切れ商品 ${expired}点 が陳列中（R で撤去）` });
@@ -481,8 +485,7 @@ export class Game {
     if (t?.kind === 'slot' && t.slot) {
       const sl = t.slot;
       const p = sl.product;
-      const today = this.state.day;
-      const exp = sl.expiredCount(today);
+      const exp = sl.expiredCount(this.state.abs);
       const keys: [string, string][] = [];
       if (held?.kind === 'box') {
         const bp = held.box.product;
@@ -648,7 +651,7 @@ export class Game {
     sl.onTouch?.();
     this.instancer.markDirty(p.id);
     if (prev && prev !== p.id) this.instancer.markDirty(prev);
-    sl.updateTag(this.state.price(p.id), sl.expiredCount(this.state.day) > 0);
+    sl.updateTag(this.state.price(p.id), sl.expiredCount(this.state.abs) > 0);
     const snd = p.shape === 'can' || p.shape === 'slimcan' ? 'place_can' : p.shape === 'pet' ? 'place2' : 'place';
     this.audio.play(snd, { pos: sl.access.clone().setY(1), volume: 0.6 });
     this.state.tutorial |= 2;
@@ -665,7 +668,7 @@ export class Game {
 
   private removeExpired(sl: Slot): void {
     const p = sl.product!;
-    const removed = sl.removeExpired(this.state.day);
+    const removed = sl.removeExpired(this.state.abs);
     if (!removed.length) return;
     const loss = removed.length * p.cost;
     this.state.stats.waste += loss;
@@ -713,7 +716,7 @@ export class Game {
     for (const sl of this.store.slots) {
       const p = sl.product;
       if (!p) continue;
-      const r = sl.removeExpired(s.day + 1);
+      const r = sl.removeExpired(s.abs);
       if (r.length) {
         autoWaste += r.length * p.cost;
         s.stats.wasteItems += r.length;

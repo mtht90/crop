@@ -107,9 +107,14 @@ export class Environment {
         for (const m of mats) if (m && 'envMap' in m) m.envMap = env;
       });
     }
-    const overcast = this.rain > 0 ? 0.45 : 1;
-    this.scene.backgroundIntensity = (key === 'night' ? 0.25 : key === 'dusk' ? 0.7 : 1) * (0.5 + 0.5 * overcast);
-    this.scene.backgroundBlurriness = 0.0;
+    const overcast = 1 - this.rain * 0.85;
+    this.scene.backgroundIntensity = (key === 'night' ? 0.25 : key === 'dusk' ? 0.7 : 1) * (1 - this.rain * 0.55);
+    this.scene.backgroundBlurriness = this.rain * 0.6;
+    if (this.rain > 0.01) {
+      const fog = (this.scene.fog as THREE.FogExp2 | null) ?? (this.scene.fog = new THREE.FogExp2('#8e979f', 0));
+      fog.density = 0.012 * this.rain;
+      fog.color.set(key === 'night' ? '#1c2026' : '#8e979f');
+    } else this.scene.fog = null;
     // sun path (east -> west)
     const t = (hour - 6) / 12;
     const ang = t * Math.PI;
@@ -118,8 +123,8 @@ export class Environment {
     s.sun.color.set(sunUp > 0.2 ? (dusk > 0.3 ? '#ffc58a' : '#fff4e0') : '#9fb4ff');
     s.hemi.intensity = 0.35 + 0.25 * sunUp;
     for (const l of s.exteriorNightLights) (l as THREE.SpotLight).intensity = night * (l.userData.base ?? ((l as THREE.SpotLight).distance > 15 ? 160 : 40));
-    s.windowSpill.intensity = night * 2.2 + 0.3;
-    for (const m of s.signMaterials) m.emissiveIntensity = 0.15 + night * 0.55;
+    s.windowSpill.intensity = night * 5.5 + 0.4;
+    for (const m of s.signMaterials) m.emissiveIntensity = 0.04 + night * 0.26;
     for (const m of s.vendingMaterials) m.emissiveIntensity = 0.4 + night * 1.4;
     for (const m of s.streetLampMats) m.emissiveIntensity = night * 6;
     for (const m of s.neighbourWindowMats) m.emissiveIntensity = night * 1.2;

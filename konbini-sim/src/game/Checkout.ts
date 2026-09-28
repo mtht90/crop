@@ -131,6 +131,7 @@ export class Checkout {
     g.player.lookAtPoint(new THREE.Vector3(3.0, 1.2, L.register.z));
     g.ui.setCrosshair(true);
     g.mode = 'play';
+    g.input.clearPressed();
     g.requestLock();
   }
 

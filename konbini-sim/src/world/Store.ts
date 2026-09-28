@@ -2,13 +2,14 @@ import * as THREE from 'three';
 import { RectAreaLightUniformsLib } from 'three/examples/jsm/lights/RectAreaLightUniformsLib.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import type { Assets } from '../core/Assets';
-import { Slot } from '../game/Slot';
+import { Slot, TagAtlas } from '../game/Slot';
 import type { Zone } from '../data/products';
 import { Collision } from './Collision';
 import { L, P, V } from './Layout';
 import { Materials, box, plane } from './Materials';
 import { Nav } from './Nav';
 import { canvas, fitText } from './Textures';
+import { batchStatic } from './Batch';
 
 export interface FridgeUnit {
   root: THREE.Object3D;
@@ -51,6 +52,7 @@ export class Store {
   registerScreenCanvas!: HTMLCanvasElement;
   pcScreen!: THREE.CanvasTexture;
   pcScreenCanvas!: HTMLCanvasElement;
+  batched = 0;
 
   constructor(private assets: Assets) {
     RectAreaLightUniformsLib.init();
@@ -69,6 +71,21 @@ export class Store {
     this.buildEntranceExtras();
     this.buildExterior();
     this.root.updateMatrixWorld(true);
+    // Flatten placement surfaces to meshes before batching detaches them
+    // (detached meshes keep a valid matrixWorld, so ray casts still work).
+    const flat: THREE.Object3D[] = [];
+    for (const s of this.placeSurfaces) {
+      s.traverse((o) => {
+        const mesh = o as THREE.Mesh;
+        if (mesh.isMesh && !o.userData.slot && (mesh.material as THREE.Material).visible !== false) flat.push(o);
+      });
+    }
+    this.placeSurfaces.length = 0;
+    this.placeSurfaces.push(...flat);
+    this.batched = batchStatic(this.interior, this.interior) + batchStatic(this.exterior, this.exterior);
+    TagAtlas.ensure();
+    for (const s of this.slots) s.finalizeTag();
+    TagAtlas.build(this.interior);
     this.nav.build(this.col, [
       { minX: L.staffArea.minX - 0.05, maxX: 20, minZ: -5.2, maxZ: 5 },
       { minX: -20, maxX: 20, minZ: -20, maxZ: -5.05 },
@@ -148,6 +165,7 @@ export class Store {
       box(panel, 0.28, 0.12, 0.02, this.textMat('自動ドア', '#fff', '#128a5a', 256, 110), 0, 1.1, 0.02, { cast: false });
       panel.position.set(i === 0 ? e.minX + pw / 2 : e.maxX - pw / 2, 0, fz - 0.03 + i * 0.05);
       panel.userData.baseX = panel.position.x;
+      panel.userData.noMerge = true;
       panel.userData.dir = i === 0 ? -1 : 1;
       g.add(panel);
       this.doorPanels.push(gl);
@@ -262,7 +280,7 @@ export class Store {
 
     // A single shadow-casting key light from above the aisles adds contact
     // shadows under people and fixtures.
-    const key = new THREE.SpotLight('#fff8ee', 9, 14, 1.35, 1.0, 1.2);
+    const key = new THREE.SpotLight('#fff8ee', 5, 14, 1.4, 1.0, 1.2);
     key.position.set(-0.5, L.ceiling + 1.2, 0.8);
     key.target.position.set(-0.5, 0, 0.8);
     key.castShadow = true;
@@ -372,7 +390,7 @@ export class Store {
     this.interior.add(g);
     const H = 2.0;
     box(g, len, 0.5, depth, m.whitePlastic, 0, 0, 0);
-    box(g, len, H, 0.06, m.steel, 0, 0, -depth / 2 + 0.03);
+    box(g, len, H, 0.06, m.whitePlastic, 0, 0, -depth / 2 + 0.03);
     box(g, len, 0.18, depth * 0.55, m.whitePlastic, 0, H - 0.18, -depth / 2 + depth * 0.275);
     // canopy light
     const lamp = box(g, len - 0.1, 0.03, 0.08, m.lightPanel, 0, H - 0.21, -0.02, { cast: false });
@@ -415,6 +433,7 @@ export class Store {
     for (let i = 0; i < n; i++) {
       const x = xStart + i * pitch;
       const root = gl ? SkeletonUtils.clone(gl.scene) : new THREE.Group();
+      root.userData.noMerge = true;
       root.position.set(x, 0, zc);
       this.interior.add(root);
       let door: THREE.Object3D | null = null;
@@ -561,6 +580,7 @@ export class Store {
     // item drop zone marker (rubber mat) where customers put their shopping
     const mat = box(g, 0.46, 0.006, 0.62, m.rubber, c.minX + 0.3, c.h, L.register.z - 0.62, { cast: false });
     mat.name = 'counterMat';
+    mat.userData.noMerge = true;
     this.anchors.counterMat = mat;
     // bagging area
     this.anchors.bagArea = new THREE.Object3D();
@@ -975,10 +995,10 @@ export class Store {
     sctx.fillRect(0, 36, 2048, 18);
     sctx.fillStyle = '#e8423a';
     sctx.fillRect(0, 54, 2048, 14);
-    sctx.fillStyle = '#128a5a';
+    sctx.fillStyle = '#0b6b44';
     sctx.textAlign = 'center';
     sctx.textBaseline = 'middle';
-    fitText(sctx, 'まいにちマート', 1024, 160, 1400, 150, '400', '"Dela Gothic One", "Noto Sans JP"');
+    fitText(sctx, 'まいにちマート', 1024, 165, 1500, 170, '400', '"Dela Gothic One", "Noto Sans JP"');
     sctx.fillStyle = '#e8423a';
     sctx.font = '900 44px "Noto Sans JP", sans-serif';
     sctx.fillText('24H', 1880, 160);
@@ -986,7 +1006,7 @@ export class Store {
     const stex = new THREE.CanvasTexture(sc);
     stex.colorSpace = THREE.SRGBColorSpace;
     stex.anisotropy = 8;
-    const signMat = new THREE.MeshStandardMaterial({ map: stex, emissiveMap: stex, emissive: '#ffffff', emissiveIntensity: 0.2, roughness: 0.4 });
+    const signMat = new THREE.MeshStandardMaterial({ map: stex, emissiveMap: stex, emissive: '#ffffff', emissiveIntensity: 0.2, roughness: 0.4, color: '#c8c8c8' });
     this.signMaterials.push(signMat);
     const sign = new THREE.Mesh(new THREE.PlaneGeometry(9, 1.1), signMat);
     sign.position.set(0.8, 3.1, bz1 + 1.17);
@@ -1044,6 +1064,7 @@ export class Store {
           mm.castShadow = true;
           mm.receiveShadow = true;
           const mat = mm.material as THREE.MeshPhysicalMaterial;
+          mat.envMapIntensity = 1.6;
           if (mat.transmission) {
             mat.transmission = 0;
             mat.transparent = true;

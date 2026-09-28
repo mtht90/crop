@@ -23,7 +23,7 @@ export interface ProductDef {
   price: number; // suggested retail
   cost: number;
   caseSize: number;
-  /** Days until expiry after delivery (99 = effectively none). */
+  /** Shelf life in days after delivery (99 = effectively none). Expiry = delivery + life days + 6h. */
   life: number;
   age?: boolean;
   rank: number;
@@ -44,8 +44,8 @@ export const PRODUCTS: ProductDef[] = [
   { id: 'milktea', name: 'ロイヤルミルクティー', brand: 'Afternoon', category: 'drink', zone: 'fridge', shape: 'pet', price: 160, cost: 85, caseSize: 24, life: 99, rank: 1, colors: ['#f3e2c7', '#8a5a2b', '#5a3413'], demand: [0.9, 1.1, 0.8, 0.6] },
   { id: 'cancoffee', name: '微糖ブラック缶', brand: 'BOSSO', category: 'drink', zone: 'fridge', shape: 'can', price: 140, cost: 68, caseSize: 30, life: 99, rank: 1, colors: ['#23252b', '#c9a24a', '#f2e3b5'], demand: [1.8, 0.8, 0.6, 1.0] },
   { id: 'energy', name: 'エナジーZ', brand: 'VOLT', category: 'drink', zone: 'fridge', shape: 'slimcan', price: 230, cost: 120, caseSize: 24, life: 99, rank: 2, colors: ['#111111', '#aef227', '#aef227'], demand: [0.8, 0.8, 1, 1.5] },
-  { id: 'beer', name: '生ビール 極', brand: 'KIWAMI', category: 'alcohol', zone: 'fridge', shape: 'can', price: 240, cost: 170, caseSize: 24, life: 99, age: true, rank: 2, colors: ['#d8b25a', '#7a1e1e', '#2a1a0a'], demand: [0.1, 0.4, 1.8, 1.8] },
-  { id: 'chuhai', name: 'ストロングレモン', brand: 'ZEST', category: 'alcohol', zone: 'fridge', shape: 'can', price: 190, cost: 120, caseSize: 24, life: 99, age: true, rank: 2, colors: ['#f6e34a', '#1f5fbf', '#1f3d7a'], demand: [0.1, 0.3, 1.5, 2.0] },
+  { id: 'beer', name: '生ビール 極', brand: 'KIWAMI', category: 'alcohol', zone: 'fridge', shape: 'can', price: 240, cost: 170, caseSize: 24, life: 99, age: true, rank: 1, colors: ['#d8b25a', '#7a1e1e', '#2a1a0a'], demand: [0.1, 0.4, 1.8, 1.8] },
+  { id: 'chuhai', name: 'ストロングレモン', brand: 'ZEST', category: 'alcohol', zone: 'fridge', shape: 'can', price: 190, cost: 120, caseSize: 24, life: 99, age: true, rank: 1, colors: ['#f6e34a', '#1f5fbf', '#1f3d7a'], demand: [0.1, 0.3, 1.5, 2.0] },
   // ---- chilled open case
   { id: 'onigiri_salmon', name: '手巻 焼鮭', brand: 'おにぎり', category: 'onigiri', zone: 'chilled', shape: 'onigiri', price: 170, cost: 98, caseSize: 12, life: 1, rank: 1, colors: ['#f08b5b', '#1d1d1d', '#ffffff'], demand: [2.2, 1.6, 0.9, 0.9] },
   { id: 'onigiri_tuna', name: '手巻 ツナマヨ', brand: 'おにぎり', category: 'onigiri', zone: 'chilled', shape: 'onigiri', price: 150, cost: 85, caseSize: 12, life: 1, rank: 1, colors: ['#f4d35e', '#1d1d1d', '#1d1d1d'], demand: [2.0, 1.6, 1.0, 1.0] },

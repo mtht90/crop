@@ -99,7 +99,7 @@ export class Customer {
   /** Put an item back on a shelf (e.g. refused alcohol, abandoned basket). */
   returnItem(productId: string): void {
     const i = this.basket.findIndex((b) => b.productId === productId);
-    const it = i >= 0 ? this.basket.splice(i, 1)[0] : { productId, expiry: 99999, slot: null };
+    const it = i >= 0 ? this.basket.splice(i, 1)[0] : { productId, expiry: 1e9, slot: null };
     const g = this.m.g;
     const p = product(productId);
     const slot = (it.slot && it.slot.canAccept(p) ? it.slot : null) ?? g.store.slots.find((s) => s.productId === productId && s.canAccept(p));
@@ -442,14 +442,14 @@ export class Customer {
     const id = this.shopping.shift();
     this.state = 'browse';
     if (!s || !id) return;
-    if (s.productId !== id || !s.items.some((i) => i.expiry > g.state.day)) {
+    if (s.productId !== id || !s.items.some((i) => i.expiry > g.state.abs)) {
       // someone else took the last one
       this.shopping.unshift(id);
       this.nextTarget(time);
       return;
     }
     // expired goods on display annoy people
-    if (s.expiredCount(g.state.day) > 0) {
+    if (s.expiredCount(g.state.abs) > 0) {
       this.mood -= 1;
       c.say('これ、期限切れてる…', time, 2.5, 'thought');
       g.state.addRep(-0.4);
@@ -466,10 +466,10 @@ export class Customer {
       return;
     }
     // take oldest non-expired
-    const idx = s.items.findIndex((i) => i.expiry > g.state.day);
+    const idx = s.items.findIndex((i) => i.expiry > g.state.abs);
     const item = s.items.splice(idx, 1)[0];
     g.instancer.markDirty(id);
-    if (this.type === 'thief' && (p.price >= 180 || Math.random() < 0.5) && this.concealed.length < 2) {
+    if (this.type === 'thief' && (this.concealed.length === 0 || (this.concealed.length < 2 && Math.random() < 0.6))) {
       this.concealed.push({ productId: id, expiry: item.expiry });
       c.gesture('look', time);
       if (g.state.has('camera')) {
@@ -536,7 +536,7 @@ export class Customers {
   }
 
   findSlot(id: string, from: THREE.Vector3): Slot | null {
-    const today = this.g.state.day;
+    const today = this.g.state.abs;
     let best: Slot | null = null;
     let bd = Infinity;
     for (const s of this.g.store.slots) {
@@ -564,7 +564,7 @@ export class Customers {
 
   makeClaim(): Claim {
     const g = this.g;
-    const today = g.state.day;
+    const today = g.state.abs;
     let expired = 0;
     for (const s of g.store.slots) expired += s.expiredCount(today);
     let ratioSum = 0;
