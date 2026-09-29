@@ -12,7 +12,7 @@ npm run dev        # http://127.0.0.1:5173
 npm run build      # dist/ に静的ファイルを出力（どこにでも置けます）
 ```
 
-WebGL2 が使える PC ブラウザ（Chrome / Edge / Firefox 最新版）を推奨します。
+WebGL2 が使える PC ブラウザ（Chrome / Edge / Firefox / Safari 最新版）と iPad（iPadOS 16 以降の Safari）で遊べます。
 
 ## 操作
 
@@ -28,6 +28,23 @@ WebGL2 が使える PC ブラウザ（Chrome / Edge / Firefox 最新版）を推
 | T | 見ている棚の商品の売価を変更 |
 | Space | （レジ）次の商品をスキャン |
 | Tab / Esc | メニュー |
+
+### iPad（タッチ操作）
+
+| 操作 | 動作 |
+| --- | --- |
+| 画面左側をドラッグ | 移動（出てくるスティックを奥まで倒すと走る） |
+| 画面右側をドラッグ | 視点 |
+| 使う | 手に取る・使う・話しかける（キーボードの E） |
+| 陳列/掃除 | 箱から棚へ陳列 / 押し続けてモップ掃除（左クリック） |
+| 戻す / 置く / 撤去 / 価格 | 右クリック / Q / R / T と同じ |
+| 走る | 走る（切り替え） |
+| ☰ | メニュー |
+| レジ | カウンターの商品をタップしてスキャン（「次の商品をスキャン」ボタンでも可） |
+
+プロンプトのキー表示はタッチ中はボタン名に切り替わり、今使えるボタンは橙色に光ります。
+iPad に Magic Keyboard やトラックパッドを接続している場合は、トラックパッドをクリックすると PC と同じ操作（ポインターロック + WASD）に切り替わります。画面に触れると再びタッチ操作に戻ります。
+タブレットでは描画品質の初期値が「中」になります（設定で変更可）。横向きでプレイしてください。ホーム画面に追加するとフルスクリーンで遊べます。
 
 ## ゲームの流れ
 
@@ -46,6 +63,11 @@ WebGL2 が使える PC ブラウザ（Chrome / Edge / Firefox 最新版）を推
 | 素材 | 出典 | ライセンス |
 | --- | --- | --- |
 | 人物モデル 26 体・アニメーション 20 種（男女） | [Microsoft Rocketbox Avatar Library](https://github.com/microsoft/Microsoft-Rocketbox) | MIT |
+| ゴンドラ棚・エンド棚・冷蔵オープンケース・アイスケース・雑誌ラック・バックカウンター・電子レンジ | [SIGVerse convenience-store-3d-models](https://github.com/SIGVerse/convenience-store-3d-models)（NII 稲邑グループ） | SIGVerse ライセンス（非商用で利用） |
+| レジ（numiteg）・コーヒーマシン（Kreutergarten）・コピー機（thethieme）・買い物カゴ（kowbassen） | SIGVerse 経由 / Sketchfab | CC-BY 4.0 |
+| ATM（kavabanga） | SIGVerse 経由 / Blend Swap | CC0 |
+| 床タイル・ヘアライン金属・アルミ・コンクリートのテクスチャ | SIGVerse 経由 / ShareTextures | CC0 |
+| 段ボール箱・番重（プラスチックコンテナ）・防犯カメラ・分電盤・配電箱・ゴミ袋・スツール・ブラウン管テレビ・カバー付きの車・コンクリート車止め・マンホール・外灯・観葉植物・蛍光灯器具 | [Poly Haven](https://polyhaven.com)（[localgpt-world-assets](https://github.com/localgpt-app/localgpt-world-assets) 経由） | CC0 |
 | ドリンク冷蔵ケース（CommercialRefrigerator） | [Khronos glTF Sample Assets](https://github.com/KhronosGroup/glTF-Sample-Assets) / Sean Thomas | CC-BY 4.0 |
 | 駐車中の車（CarConcept） | Khronos glTF Sample Assets（元: Unity Fan, Public Domain） | CC-BY 4.0 |
 | カラーコーン（TrafficCone） | Khronos glTF Sample Assets / hinndia | CC-BY 4.0 |
@@ -53,7 +75,9 @@ WebGL2 が使える PC ブラウザ（Chrome / Edge / Firefox 最新版）を推
 | 効果音（足音・物音・硬貨・UI） | [Kenney](https://kenney.nl)（[open-game-sfx-index](https://github.com/Mcamento8/open-game-sfx-index) 経由） | CC0 |
 | フォント | Noto Sans JP / Dela Gothic One（@fontsource） | OFL |
 
-店内の建具・什器・商品パッケージ・ドアチャイム・BGM はプロシージャル生成です。登場する商品名・ブランド名・店名はすべて架空のものです。
+SIGVerse 素材は NII 稲邑グループによる SIGVerse プロジェクトを元にしています（Unity 形式から glTF へ変換・圧縮。詳細は `public/assets/licenses/sigverse/NOTICE.md`）。SIGVerse ライセンスでは商用利用に事前承諾が必要なため、本プロジェクトは非商用（個人・趣味）での利用に限ります。
+
+外部素材が見つからなかったもの（無料でリアルなものが入手できなかったフライヤー・ホットケース・レジカウンター本体・建物の壁と天井・商品パッケージ）と、ドアチャイム・BGM はプロシージャル生成です。登場する商品名・ブランド名・店名はすべて架空のものです。
 各ライセンス文は `public/assets/licenses/` と `public/assets/characters/LICENSE-Rocketbox.md` にあります。
 
 ## 素材パイプライン
@@ -65,11 +89,13 @@ WebGL2 が使える PC ブラウザ（Chrome / Edge / Firefox 最新版）を推
 - `anim_opt.mjs` — 不要トラック削除・リサンプル・meshopt 圧縮（15MB → 1.7MB）
 - `opt.mjs` — glTF の不要ノード削除・テクスチャ縮小・meshopt 圧縮
 - `batch.sh` — 上記を一括実行
+- `unity2glb.py` — Unity の prefab / Mesh アセット / FBX（.meta の scale とマテリアル対応を反映）を GLB に変換（SIGVerse 素材用）
 
 ## 開発用ツール
 
 - `tools/playtest.mjs` — ヘッドレス Chromium で実際にゲームを進め、レジ接客まで自動で行うテスト
 - `tools/interact.mjs` — キーボード・マウス入力で品出し・発注・フライヤーを操作するテスト
+- `tools/touchtest.mjs` — iPad をエミュレートし、タッチイベントでスティック・視点・ボタンを操作するテスト
 - `tools/shots.mjs` — 指定カメラ位置のスクリーンショット
 - URL に `?test=new` を付けるとタイトルを飛ばしてテスト用フック（`window.__sim`, `window.__shot`）が有効になります
 

@@ -10,6 +10,30 @@ export interface PromptInfo {
   keys?: [string, string][];
 }
 
+/** Keyboard label → on-screen touch button label. */
+const TOUCH_KEYS: Record<string, [string, string]> = {
+  E: ['使う', 'use'],
+  左クリック: ['陳列', 'primary'],
+  左クリック長押し: ['掃除 長押し', 'primary'],
+  右クリック: ['戻す', 'back'],
+  Q: ['置く', 'drop'],
+  R: ['撤去', 'dispose'],
+  T: ['価格', 'price'],
+};
+
+/** Rewrites keyboard hints in free text for touch players. */
+export function touchText(t: string): string {
+  return t
+    .replace(/ ?\[E\]/g, '')
+    .replace(/\[Space\] ?で?/g, '')
+    .replace(/［左クリック］/g, '［陳列］')
+    .replace(/［([EQRT])］/g, (_m, k: string) => `［${TOUCH_KEYS[k][0]}］`)
+    .replace(/左クリック長押し/g, '［陳列/掃除］長押し')
+    .replace(/右クリック/g, '［戻す］')
+    .replace(/左クリック|クリック/g, 'タップ')
+    .replace(/(^|[^A-Za-z])E ?(で|を)/g, '$1［使う］$2');
+}
+
 export interface BubbleSource {
   id: number;
   anchor: THREE.Object3D;
@@ -109,16 +133,37 @@ export class UI {
     this.weatherEl.textContent = { sunny: '☀ 晴れ', cloudy: '☁ くもり', rain: '☂ 雨' }[s.weather];
   }
 
+  /** Touch play: button labels instead of keys, UI rearranged around the on-screen controls. */
+  touch = false;
+  /** Called with the touch button ids the current prompt offers. */
+  onPromptButtons: ((ids: string[]) => void) | null = null;
+
+  setTouch(on: boolean): void {
+    this.touch = on;
+    this.root.classList.toggle('touch', on);
+    this.lastPromptKey = '#';
+  }
+
+  /** Text shown to the player, adapted to the current input device. */
+  tx(t: string): string {
+    return this.touch ? touchText(t) : t;
+  }
+
   setPrompt(p: PromptInfo | null): void {
-    const key = p ? JSON.stringify(p) : '';
+    const key = p ? JSON.stringify(p) + this.touch : '';
     if (key === this.lastPromptKey) return;
     this.lastPromptKey = key;
     this.cross.classList.toggle('active', !!p);
     this.promptEl.replaceChildren();
-    if (!p) return;
+    if (!p) {
+      this.onPromptButtons?.([]);
+      return;
+    }
     this.promptEl.append(h('div', { class: 'title' }, p.title));
     if (p.sub) this.promptEl.append(h('div', { class: 'sub' }, p.sub));
-    if (p.keys?.length) this.promptEl.append(h('div', { class: 'keys' }, ...p.keys.map(([k, t]) => h('div', {}, h('kbd', {}, k), t))));
+    const keys = p.keys ?? [];
+    if (keys.length) this.promptEl.append(h('div', { class: 'keys' }, ...keys.map(([k, t]) => h('div', {}, h('kbd', {}, this.touch ? TOUCH_KEYS[k]?.[0] ?? k : k), t))));
+    this.onPromptButtons?.(keys.map(([k]) => TOUCH_KEYS[k]?.[1]).filter((x): x is string => !!x));
   }
 
   setCrosshair(on: boolean): void {
@@ -131,11 +176,11 @@ export class UI {
       return;
     }
     this.heldEl.style.display = '';
-    this.heldEl.replaceChildren(h('div', { class: 'name' }, title), h('div', { class: 'meta' }, meta));
+    this.heldEl.replaceChildren(h('div', { class: 'name' }, title), h('div', { class: 'meta' }, this.tx(meta)));
   }
 
   notify(text: string, kind: 'info' | 'good' | 'bad' | 'warn' = 'info', ms = 4200): void {
-    const n = h('div', { class: `note ${kind === 'info' ? '' : kind}` }, text);
+    const n = h('div', { class: `note ${kind === 'info' ? '' : kind}` }, this.tx(text));
     this.notesEl.prepend(n);
     while (this.notesEl.children.length > 6) this.notesEl.lastChild?.remove();
     setTimeout(() => n.classList.add('fade'), ms);
@@ -253,14 +298,19 @@ export class UI {
         h('button', { onclick: opts.onSettings }, '⚙ 設定'),
       ),
       h('div', { class: 'credits' },
-        '人物: Microsoft Rocketbox Avatar Library (MIT) / 冷蔵庫・車・カラーコーン: Khronos glTF Sample Assets (CC-BY 4.0) / HDRI・アスファルト: Poly Haven (CC0) / 効果音: Kenney (CC0) / 登場する商品・ブランドはすべて架空のものです'),
+        '人物: Microsoft Rocketbox (MIT) / 店舗什器: SIGVerse project (NII 稲邑グループ) — レジ numiteg・コーヒーマシン Kreutergarten・コピー機 thethieme・カゴ kowbassen (CC-BY 4.0) / 冷蔵庫・車・カラーコーン: Khronos glTF Sample Assets (CC-BY 4.0) / 小物・HDRI: Poly Haven (CC0) / テクスチャ: ShareTextures (CC0) / 効果音: Kenney (CC0) / 登場する商品・ブランドはすべて架空のものです'),
     );
     this.root.append(el);
     return () => el.remove();
   }
 
   helpContent(): HTMLElement {
-    const rows: [string, string][] = [
+    const rows: [string, string][] = this.touch ? [
+      ['左側をドラッグ', '移動（スティックを奥まで倒すと走る）'], ['右側をドラッグ', '視点移動'], ['使う', '手に取る / 使う / 話しかける'],
+      ['陳列/掃除', '商品を棚に並べる / 長押しで掃除'], ['戻す', '棚の商品を箱に戻す'], ['置く', '持っている物を置く'],
+      ['撤去', '期限切れ商品を撤去'], ['価格', '棚の商品の売価を変更'], ['走る', '走る（切り替え）'], ['☰', 'メニュー'],
+      ['キーボード', 'iPadにキーボード・トラックパッドを繋げばPCと同じ操作もできます'],
+    ] : [
       ['W A S D', '移動'], ['Shift', '走る'], ['マウス', '視点移動'], ['E', '手に取る / 使う / 話しかける'],
       ['左クリック', '商品を棚に並べる / 掃除する'], ['右クリック', '棚の商品を箱に戻す'], ['Q', '持っている物を置く'],
       ['R', '期限切れ商品を撤去（棚・ホットケース）'], ['T', '棚の商品の売価を変更'], ['Tab / Esc', 'メニュー'],
@@ -269,7 +319,7 @@ export class UI {
       h('div', { class: 'pause-help' }, ...rows.flatMap(([k, t]) => [h('div', {}, h('kbd', {}, k)), h('div', {}, t)])),
       h('p', { style: 'color:var(--muted);font-size:13px;line-height:1.7;margin-top:14px' },
         'バックヤードのPCで商品を発注すると、納品時間（7時・13時・19時）に段ボールが届きます。箱を持って売場の棚に陳列しましょう。',
-        h('br'), 'お客さんがレジに並んだら、レジで E を押して接客。カウンターの商品をクリックしてスキャンし、会計・おつりを渡します。',
+        h('br'), this.tx('お客さんがレジに並んだら、レジで E を押して接客。カウンターの商品をクリックしてスキャンし、会計・おつりを渡します。'),
         h('br'), '夜になると酔っ払い・クレーマー・万引き犯・立ち読み客など、ちょっと困ったお客さんもやってきます。',
       ),
     );

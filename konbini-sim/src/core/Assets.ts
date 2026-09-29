@@ -19,6 +19,19 @@ export type CharacterId = (typeof CHARACTER_IDS)[number];
 export const PROP_IDS = ['fridge', 'car', 'cone', 'waterbottle', 'coffeemug'] as const;
 export type PropId = (typeof PROP_IDS)[number];
 
+/** Store fixtures (SIGVerse, CC-BY/CC0 via NII) and CC0 props (Poly Haven). */
+export const EXT_IDS = [
+  'gondola', 'endcap', 'opencase_wide', 'opencase_narrow', 'magazine_rack', 'ice_chest', 'back_cabinet', 'cash_register',
+  'coffee_machine', 'copy_machine', 'atm', 'basket', 'microwave', 'cardboard_box', 'crate', 'fluorescent', 'security_camera',
+  'utility_box', 'power_box', 'trashbag', 'stool', 'crt_monitor', 'covered_car', 'road_barrier', 'manhole', 'wall_light', 'potted_plant',
+] as const;
+export type ExtId = (typeof EXT_IDS)[number];
+
+const TEXTURE_FILES = [
+  'asphalt_02_diff_1k', 'asphalt_02_rough_1k', 'floor_tiles_color', 'floor_tiles_rough', 'floor_tiles_normal',
+  'brushed_metal_color', 'brushed_metal_normal', 'aluminium_color', 'concrete_color', 'concrete_normal',
+];
+
 export const SFX_IDS = [
   'step0', 'step1', 'step2', 'step3', 'box_drop', 'box_drop2', 'place', 'place2', 'place_can', 'place_glass',
   'metal', 'plate', 'coin0', 'coin1', 'coins', 'bill', 'bill2', 'box_open', 'click', 'switch', 'rollover',
@@ -33,6 +46,7 @@ export class Assets {
   private tex = new THREE.TextureLoader();
   readonly characters = new Map<CharacterId, GLTF>();
   readonly props = new Map<PropId, GLTF>();
+  readonly ext = new Map<ExtId, GLTF>();
   readonly anims: Record<'m' | 'f', THREE.AnimationClip[]> = { m: [], f: [] };
   readonly hdri: Record<'day' | 'dusk' | 'night', THREE.DataTexture | null> = { day: null, dusk: null, night: null };
   readonly textures = new Map<string, THREE.Texture>();
@@ -76,14 +90,17 @@ export class Assets {
         },
       });
     }
-    for (const f of ['asphalt_02_diff_1k', 'asphalt_02_rough_1k']) {
+    for (const id of EXT_IDS) {
+      jobs.push({ label: `什器 ${id}`, weight: 1, run: async () => void this.ext.set(id, await this.gltf.loadAsync(`${BASE}ext/${id}.glb${BIN}`)) });
+    }
+    for (const f of TEXTURE_FILES) {
       jobs.push({
         label: `テクスチャ ${f}`, weight: 1,
         run: async () => {
           const t = await this.tex.loadAsync(`${BASE}textures/${f}.webp`);
           t.wrapS = t.wrapT = THREE.RepeatWrapping;
           t.anisotropy = 8;
-          if (f.includes('diff')) t.colorSpace = THREE.SRGBColorSpace;
+          if (f.includes('diff') || f.endsWith('_color')) t.colorSpace = THREE.SRGBColorSpace;
           this.textures.set(f, t);
         },
       });

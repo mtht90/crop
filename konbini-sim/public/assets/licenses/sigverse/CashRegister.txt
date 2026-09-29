@@ -1,0 +1,11 @@
+Model Information:
+* title:	cash register [by Numiteg]
+* source:	https://sketchfab.com/3d-models/cash-register-by-numiteg-93e2d04acb5541e1a12a181f8b1addc4
+* author:	numiteg (https://sketchfab.com/numiteg)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "cash register [by Numiteg]" (https://sketchfab.com/3d-models/cash-register-by-numiteg-93e2d04acb5541e1a12a181f8b1addc4) by numiteg (https://sketchfab.com/numiteg) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

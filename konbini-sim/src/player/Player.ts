@@ -77,12 +77,12 @@ export class Player {
       this.yaw -= this.input.mouseDX * sens;
       this.pitch -= this.input.mouseDY * sens;
       this.pitch = Math.max(-1.45, Math.min(1.45, this.pitch));
-      const fwd = (this.input.isDown('KeyW') ? 1 : 0) - (this.input.isDown('KeyS') ? 1 : 0);
-      const strafe = (this.input.isDown('KeyD') ? 1 : 0) - (this.input.isDown('KeyA') ? 1 : 0);
+      const fwd = (this.input.isDown('KeyW') || this.input.isDown('ArrowUp') ? 1 : 0) - (this.input.isDown('KeyS') || this.input.isDown('ArrowDown') ? 1 : 0) + this.input.moveY;
+      const strafe = (this.input.isDown('KeyD') || this.input.isDown('ArrowRight') ? 1 : 0) - (this.input.isDown('KeyA') || this.input.isDown('ArrowLeft') ? 1 : 0) + this.input.moveX;
       const run = this.input.isDown('ShiftLeft') || this.input.isDown('ShiftRight');
       const speed = run ? 4.4 : 2.6;
       const dir = new THREE.Vector3(strafe, 0, -fwd);
-      if (dir.lengthSq() > 0) dir.normalize();
+      if (dir.lengthSq() > 1) dir.normalize();
       dir.applyAxisAngle(new THREE.Vector3(0, 1, 0), this.yaw);
       const target = dir.multiplyScalar(speed);
       this.vel.lerp(target, Math.min(1, dt * 12));

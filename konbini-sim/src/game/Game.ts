@@ -10,17 +10,18 @@ import { P } from '../world/Layout';
 import { Player } from '../player/Player';
 import { GameState, DAY_END, DAY_START, emptyStats, HOT_HOLD_MIN, NEVER, expiryFor, type Weather } from './State';
 import { ProductInstancer, TagAtlas, type Slot } from './Slot';
-import { Box } from './Boxes';
+import { Box, BoxModels } from './Boxes';
 import { Dialog } from './Dialog';
 import { HotSnacks } from './HotSnacks';
 import { Dirt } from './Dirt';
 import { Deliveries } from './Deliveries';
 import { Checkout } from './Checkout';
-import { Customers } from '../npc/Customers';
+import { Customers, BasketModel } from '../npc/Customers';
 import { PCMenu } from '../ui/PCMenu';
 import { Menus } from '../ui/Menus';
 import { PRODUCTS, product, type ProductDef } from '../data/products';
 import { h, yen } from '../ui/dom';
+import { TouchControls } from '../ui/TouchControls';
 
 const SAVE_KEY = 'konbini-sim-save-v1';
 
@@ -53,6 +54,7 @@ export class Game {
   readonly customers: Customers;
   readonly pc: PCMenu;
   readonly menus: Menus;
+  readonly touch: TouchControls;
   mode: Mode = 'title';
   time = 0;
   private minuteAcc = 0;
@@ -66,6 +68,9 @@ export class Game {
 
   constructor(readonly engine: Engine, readonly assets: Assets, readonly audio: Audio, readonly ui: UI) {
     this.input = new Input(engine.renderer.domElement);
+    BoxModels.cardboard = assets.ext.get('cardboard_box')?.scene ?? null;
+    BoxModels.crate = assets.ext.get('crate')?.scene ?? null;
+    BasketModel.src = assets.ext.get('basket')?.scene ?? null;
     this.store = new Store(assets);
     engine.scene.add(this.store.root);
     this.env = new Environment(engine.renderer, engine.scene, this.store, assets);
@@ -79,6 +84,22 @@ export class Game {
     this.customers = new Customers(this);
     this.pc = new PCMenu(this);
     this.menus = new Menus(this);
+    this.touch = new TouchControls(this.input, ui.root, () => this.menus.pause());
+    ui.onPromptButtons = (ids) => this.touch.highlight(ids);
+    const onTouch = (on: boolean) => {
+      ui.setTouch(on);
+      if (on) {
+        this.catcher?.remove();
+        this.catcher = null;
+        this.input.unlock();
+      } else if (this.mode === 'play') this.requestLock();
+      if (this.checkout.active) this.checkout.refresh();
+    };
+    this.input.onTouchModeChange(onTouch);
+    if (matchMedia('(pointer: coarse)').matches && navigator.maxTouchPoints > 0) {
+      this.input.setTouchMode(true);
+      this.settings.quality = 'medium'; // tablets: lighter default, still overridable in settings
+    }
     this.loadSettings();
     for (const s of this.store.slots) this.pickables.push(s.pick);
     for (const key of ['register', 'pc', 'fryer', 'hotCase', 'stocker', 'wasteBin', 'cardboardBin', 'mop']) {
@@ -133,6 +154,7 @@ export class Game {
       for (const b of data.boxes as { p: string; e: number[]; x: number; y: number; z: number; r: number; o: boolean }[]) {
         const box = new Box(b.p, 0, 0);
         box.items = b.e.map((expiry) => ({ expiry }));
+        box.changed();
         if (b.o) box.open();
         this.addBox(box, new THREE.Vector3(b.x, b.y, b.z), b.r);
       }
@@ -255,6 +277,7 @@ export class Game {
 
   requestLock(): void {
     if (this.mode !== 'play') return;
+    if (this.input.touchMode) return;
     this.input.lock();
     if (this.headless || this.catcher) return;
     if (this.input.lockFailed) {
@@ -267,7 +290,7 @@ export class Game {
     // Browsers only grant pointer lock on a user gesture: show a click catcher
     // until we get it (or the game leaves play mode).
     setTimeout(() => {
-      if (this.input.locked || this.mode !== 'play' || this.catcher) return;
+      if (this.input.locked || this.mode !== 'play' || this.catcher || this.input.touchMode) return;
       const el = h('div', { class: 'clickcatch interactive', onclick: () => {
         this.input.lock();
         this.audio.resume();
@@ -283,7 +306,7 @@ export class Game {
       this.catcher = el;
       this.ui.root.append(el);
       const t = setInterval(() => {
-        if (this.input.locked || this.mode !== 'play') {
+        if (this.input.locked || this.mode !== 'play' || this.input.touchMode) {
           el.remove();
           this.catcher = null;
           clearInterval(t);
@@ -400,6 +423,8 @@ export class Game {
     let near = this.player.position.distanceTo(door) < 1.7;
     for (const c of this.customers.characters()) if (c.position.distanceTo(door) < 1.8) near = true;
     this.store.update(dt, near);
+    const cams = this.store.anchors.securityCams;
+    if (cams) cams.visible = s.has('camera');
     this.instancer.update();
     TagAtlas.flush();
     this.audio.updateListener(this.engine.camera);
@@ -419,6 +444,11 @@ export class Game {
       this.save();
     }
     if (this.input.pressedRaw('Tab') && (this.mode === 'play')) this.menus.pause();
+    // on-screen controls: shown while playing on a touch screen
+    const touchOn = this.input.touchMode && (this.mode === 'play' || this.mode === 'register') && !this.dayEnding;
+    this.touch.setVisible(touchOn);
+    this.touch.setContext(this.mode === 'register' ? 'register' : 'play');
+    this.input.tapClicks = this.mode === 'register';
     this.input.endFrame();
   }
 
@@ -665,6 +695,7 @@ export class Game {
     }
     b.open();
     const it = b.items.pop()!;
+    b.changed();
     const prev = sl.productId;
     sl.add(p, it);
     sl.onTouch?.();
@@ -680,6 +711,7 @@ export class Game {
     if (sl.productId !== b.productId || !sl.items.length || b.count >= b.product.caseSize) return;
     const it = sl.takeBack()!;
     b.items.push(it);
+    b.changed();
     this.instancer.markDirty(sl.productId);
     sl.onTouch?.();
     this.audio.play('place', { volume: 0.4, rate: 1.2 });

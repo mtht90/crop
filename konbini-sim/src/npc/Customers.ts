@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { Game } from '../game/Game';
 import { Character, type AnimName } from './Character';
 import { CHARACTER_IDS, type CharacterId } from '../core/Assets';
@@ -899,47 +898,18 @@ function pickN<T>(list: T[], n: number, w: (x: T) => number): T[] {
 
 export type { AnimName, ProductDef };
 
-let basketGeo: THREE.BufferGeometry | null = null;
-let basketMat: THREE.MeshStandardMaterial | null = null;
+/** Shopping basket model (SIGVerse / kowbassen, CC-BY 4.0), injected at start-up. */
+export const BasketModel: { src: THREE.Object3D | null } = { src: null };
 
-/** Open-top plastic shopping basket with a grid pattern and a handle. */
 function basketMesh(): THREE.Object3D {
-  if (!basketGeo || !basketMat) {
-    const c = document.createElement('canvas');
-    c.width = c.height = 64;
-    const ctx = c.getContext('2d')!;
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(0, 0, 64, 64);
-    ctx.fillStyle = '#000';
-    for (let y = 8; y < 64; y += 16) for (let x = 6; x < 64; x += 16) ctx.fillRect(x, y, 10, 8);
-    const alpha = new THREE.CanvasTexture(c);
-    alpha.wrapS = alpha.wrapT = THREE.RepeatWrapping;
-    alpha.repeat.set(4, 2);
-    basketMat = new THREE.MeshStandardMaterial({ color: '#d32f2f', roughness: 0.45, alphaMap: alpha, alphaTest: 0.5, side: THREE.DoubleSide });
-    const W = 0.36, H = 0.19, D = 0.26;
-    const parts: THREE.BufferGeometry[] = [];
-    const wall = (w: number, x: number, z: number, ry: number) => {
-      const g = new THREE.PlaneGeometry(w, H);
-      g.rotateY(ry);
-      g.translate(x, -H / 2, z);
-      parts.push(g);
-    };
-    wall(W, 0, D / 2, 0);
-    wall(W, 0, -D / 2, 0);
-    wall(D, W / 2, 0, Math.PI / 2);
-    wall(D, -W / 2, 0, Math.PI / 2);
-    const bottom = new THREE.PlaneGeometry(W, D);
-    bottom.rotateX(-Math.PI / 2);
-    bottom.translate(0, -H, 0);
-    parts.push(bottom);
-    basketGeo = mergeGeometries(parts)!;
-  }
   const g = new THREE.Group();
-  const body = new THREE.Mesh(basketGeo, basketMat);
-  body.position.y = -0.1;
-  body.castShadow = true;
-  const handle = new THREE.Mesh(new THREE.TorusGeometry(0.13, 0.01, 6, 16, Math.PI), new THREE.MeshStandardMaterial({ color: '#b71c1c', roughness: 0.4 }));
-  handle.position.y = -0.1;
-  g.add(body, handle);
+  if (BasketModel.src) {
+    const b = BasketModel.src.clone(true);
+    b.scale.setScalar(0.1); // source is authored at 10x
+    b.rotation.y = Math.PI / 2;
+    b.position.y = -0.3;
+    b.traverse((o) => ((o as THREE.Mesh).isMesh && ((o as THREE.Mesh).castShadow = true)));
+    g.add(b);
+  }
   return g;
 }

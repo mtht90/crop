@@ -28,9 +28,17 @@ export class Materials {
   screen: THREE.MeshStandardMaterial;
   shadow: THREE.MeshBasicMaterial;
 
-  constructor(asphaltMap?: THREE.Texture, asphaltRough?: THREE.Texture) {
-    const f = T.floorTiles();
-    this.floor = new THREE.MeshStandardMaterial({ map: f.map, roughnessMap: f.roughnessMap, normalMap: f.normalMap, roughness: 1, metalness: 0, envMapIntensity: 0.9 });
+  constructor(tex: Map<string, THREE.Texture>) {
+    const asphaltMap = tex.get('asphalt_02_diff_1k');
+    const asphaltRough = tex.get('asphalt_02_rough_1k');
+    // Floor: CC0 ceramic tiles (sharetextures "tiling 52"); fall back to procedural.
+    const ft = tex.get('floor_tiles_color');
+    if (ft) {
+      this.floor = new THREE.MeshStandardMaterial({ map: ft, roughnessMap: tex.get('floor_tiles_rough') ?? null, normalMap: tex.get('floor_tiles_normal') ?? null, roughness: 0.55, metalness: 0, envMapIntensity: 0.9, color: '#f4f2ee' });
+    } else {
+      const f = T.floorTiles();
+      this.floor = new THREE.MeshStandardMaterial({ map: f.map, roughnessMap: f.roughnessMap, normalMap: f.normalMap, roughness: 1, metalness: 0, envMapIntensity: 0.9 });
+    }
     this.floor.normalScale.set(0.6, 0.6);
     const bf = T.plasticGrain('#9aa0a6');
     this.backFloor = new THREE.MeshStandardMaterial({ map: bf.map, normalMap: bf.normalMap, roughness: 0.6 });
@@ -42,8 +50,13 @@ export class Materials {
     this.wallBack = new THREE.MeshStandardMaterial({ map: wb.map, normalMap: wb.normalMap, roughness: 0.9 });
     this.shelfMetal = new THREE.MeshStandardMaterial({ color: '#ecebe7', roughness: 0.38, metalness: 0.25 });
     this.shelfDark = new THREE.MeshStandardMaterial({ color: '#3b3f45', roughness: 0.5, metalness: 0.3 });
-    const s = T.brushedMetal();
-    this.steel = new THREE.MeshStandardMaterial({ map: s.map, roughnessMap: s.roughnessMap, metalness: 0.95, roughness: 1 });
+    const bm = tex.get('brushed_metal_color');
+    if (bm) {
+      this.steel = new THREE.MeshStandardMaterial({ map: bm, normalMap: tex.get('brushed_metal_normal') ?? null, metalness: 0.85, roughness: 0.35, color: '#e6e8ea' });
+    } else {
+      const s = T.brushedMetal();
+      this.steel = new THREE.MeshStandardMaterial({ map: s.map, roughnessMap: s.roughnessMap, metalness: 0.95, roughness: 1 });
+    }
     const wd = T.woodLaminate();
     this.wood = new THREE.MeshStandardMaterial({ map: wd.map, normalMap: wd.normalMap, roughness: 0.45 });
     this.whitePlastic = new THREE.MeshStandardMaterial({ color: '#f6f6f3', roughness: 0.35 });
@@ -53,7 +66,7 @@ export class Materials {
       color: '#dfeff0', metalness: 0, roughness: 0.03, transparent: true, opacity: 0.16, envMapIntensity: 1.6,
       clearcoat: 1, clearcoatRoughness: 0.02, depthWrite: false, side: THREE.DoubleSide,
     });
-    this.frame = new THREE.MeshStandardMaterial({ color: '#9ea3a8', metalness: 0.9, roughness: 0.32 });
+    this.frame = new THREE.MeshStandardMaterial({ map: tex.get('aluminium_color') ?? null, color: '#c4c8cc', metalness: 0.9, roughness: 0.32 });
     this.lightPanel = new THREE.MeshStandardMaterial({ color: '#ffffff', emissive: '#fffaf0', emissiveIntensity: 3.2, roughness: 0.4 });
     this.brandGreen = new THREE.MeshStandardMaterial({ color: '#128a5a', roughness: 0.4 });
     this.brandOrange = new THREE.MeshStandardMaterial({ color: '#f39a1e', roughness: 0.4 });
@@ -65,8 +78,13 @@ export class Materials {
     this.concrete.normalMap!.repeat.set(8, 8);
     this.asphalt = new THREE.MeshStandardMaterial({ map: asphaltMap ?? null, roughnessMap: asphaltRough ?? null, color: asphaltMap ? '#ffffff' : '#3a3a3a', roughness: 1 });
     this.paint = new THREE.MeshStandardMaterial({ color: '#f2f2ec', roughness: 0.7 });
-    const ew = T.paintedWall('#f4f3ef');
-    this.exteriorWall = new THREE.MeshStandardMaterial({ map: ew.map, normalMap: ew.normalMap, roughness: 0.8 });
+    const cc = tex.get('concrete_color');
+    if (cc) {
+      this.exteriorWall = new THREE.MeshStandardMaterial({ map: cc, normalMap: tex.get('concrete_normal') ?? null, roughness: 0.85, color: '#f7f7f7' });
+    } else {
+      const ew = T.paintedWall('#f4f3ef');
+      this.exteriorWall = new THREE.MeshStandardMaterial({ map: ew.map, normalMap: ew.normalMap, roughness: 0.8 });
+    }
     this.screen = new THREE.MeshStandardMaterial({ color: '#000', emissive: '#ffffff', emissiveIntensity: 1, roughness: 0.2 });
     this.shadow = new THREE.MeshBasicMaterial({ map: T.blobShadow(), transparent: true, depthWrite: false });
   }

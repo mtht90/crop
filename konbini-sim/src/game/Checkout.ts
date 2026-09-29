@@ -207,12 +207,17 @@ export class Checkout {
 
   // ------------------------------------------------------------------ UI
 
+  /** Re-draw the register panel (input device changed). */
+  refresh(): void {
+    if (this.active) this.render();
+  }
+
   private render(): void {
     const g = this.g;
     const c = this.customer;
     const panel = h('div', { class: 'register interactive' });
     const header = h('header', { style: 'padding:12px 14px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;background:linear-gradient(90deg,rgba(18,138,90,.4),transparent)' },
-      h('b', {}, '🧾 POSレジ'), h('button', { onclick: () => this.exit() }, 'レジを離れる [E]'));
+      h('b', {}, '🧾 POSレジ'), h('button', { onclick: () => this.exit() }, g.ui.tx('レジを離れる [E]')));
     panel.append(header);
     const screen = h('div', { class: 'screen' });
     if (!c) {
@@ -233,7 +238,8 @@ export class Checkout {
       const actions = h('div', { class: 'actions' });
       if (this.stage === 'scan') {
         const remaining = this.items.filter((i) => !i.scanned).length;
-        panel.append(h('div', { class: 'hint' }, remaining ? `カウンターの商品をクリック、または [Space] でスキャン（残り${remaining}点）` : 'スキャン完了。会計へ進みましょう。'));
+        panel.append(h('div', { class: 'hint' }, g.ui.tx(remaining ? `カウンターの商品をクリック、または [Space] でスキャン（残り${remaining}点）` : 'スキャン完了。会計へ進みましょう。')));
+        if (remaining && g.input.touchMode) actions.append(h('button', { onclick: () => this.scanNext() }, `▶ 次の商品をスキャン`));
         // hot snack request
         if (c.wantsHot && c.hotState === 'asked') {
           const id = c.wantsHot;

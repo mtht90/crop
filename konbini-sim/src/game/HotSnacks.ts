@@ -145,6 +145,7 @@ export class HotSnacks {
         const n = g.input.mouse(0) ? 1 : b.count;
         for (let i = 0; i < n && b.count; i++) {
           b.items.pop();
+          b.changed();
           g.state.hotStock[b.productId] = (g.state.hotStock[b.productId] ?? 0) + 1;
         }
         b.open();

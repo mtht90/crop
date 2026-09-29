@@ -163,7 +163,7 @@ export class Menus {
     const t = g.state.tutorial;
     if (g.mode === 'title') return;
     if (g.state.day <= 2 && (t & 127) !== 127) {
-      g.ui.setTasks('はじめての仕事', [
+      g.ui.setTasks('はじめての仕事', ([
         { text: 'バックヤードの段ボールを持つ［E］', done: !!(t & 1) },
         { text: '売場の棚に陳列する［左クリック］', done: !!(t & 2) },
         { text: 'レジで接客する（レジで［E］）', done: !!(t & 4) },
@@ -171,7 +171,7 @@ export class Menus {
         { text: 'フライヤーでホットスナックを揚げる', done: !!(t & 16) },
         { text: '期限切れ商品を撤去する［R］', done: !!(t & 32) },
         { text: 'モップで床を掃除する', done: !!(t & 64) },
-      ]);
+      ] as { text: string; done: boolean }[]).map((x) => ({ ...x, text: g.ui.tx(x.text) })));
     } else g.ui.setTasks('', null);
   }
 }

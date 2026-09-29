@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { RectAreaLightUniformsLib } from 'three/examples/jsm/lights/RectAreaLightUniformsLib.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
-import type { Assets } from '../core/Assets';
+import type { Assets, ExtId } from '../core/Assets';
 import { Slot, TagAtlas } from '../game/Slot';
 import type { Zone } from '../data/products';
 import { Collision } from './Collision';
@@ -56,7 +56,7 @@ export class Store {
 
   constructor(private assets: Assets) {
     RectAreaLightUniformsLib.init();
-    this.m = new Materials(assets.textures.get('asphalt_02_diff_1k'), assets.textures.get('asphalt_02_rough_1k'));
+    this.m = new Materials(assets.textures);
     this.root.add(this.interior, this.exterior);
     this.buildShell();
     this.buildLights();
@@ -100,7 +100,7 @@ export class Store {
     const { minX, maxX, minZ, maxZ } = L.floor;
     const W = maxX - minX;
     // sales floor
-    const fl = plane(g, W, maxZ - minZ, m.floor, V(0, 0, (minZ + maxZ) / 2), new THREE.Euler(-Math.PI / 2, 0, 0), 0.6);
+    const fl = plane(g, W, maxZ - minZ, m.floor, V(0, 0, (minZ + maxZ) / 2), new THREE.Euler(-Math.PI / 2, 0, 0), 1.2);
     fl.name = 'floor';
     this.placeSurfaces.push(fl);
     // back room floor
@@ -327,40 +327,63 @@ export class Store {
     return s;
   }
 
+  /** Place an external model (static clone). Collision from its world bounds when `collide`. */
+  private model(id: ExtId, parent: THREE.Object3D, pos: THREE.Vector3, rotY = 0, scale: number | THREE.Vector3 = 1, opts: { collide?: string; cast?: boolean; name?: string } = {}): THREE.Object3D {
+    const gl = this.assets.ext.get(id);
+    const o = gl ? gl.scene.clone(true) : new THREE.Group();
+    o.position.copy(pos);
+    o.rotation.y = rotY;
+    if (typeof scale === 'number') o.scale.setScalar(scale);
+    else o.scale.copy(scale);
+    o.name = opts.name ?? id;
+    o.traverse((c) => {
+      const mesh = c as THREE.Mesh;
+      if (mesh.isMesh) {
+        mesh.castShadow = opts.cast ?? true;
+        mesh.receiveShadow = true;
+      }
+    });
+    parent.add(o);
+    if (opts.collide) {
+      o.updateWorldMatrix(true, true);
+      const b = new THREE.Box3().setFromObject(o);
+      this.col.add({ minX: b.min.x, maxX: b.max.x, minZ: b.min.z, maxZ: b.max.z, tag: opts.collide });
+    }
+    return o;
+  }
+
+  /**
+   * Island gondolas: SIGVerse wire-mesh gondola (2.7 m, three levels a side)
+   * with an end-cap rack on each end.
+   */
   private buildGondolas() {
-    const m = this.m;
-    const len = L.gondolaLen;
-    const dep = L.gondolaDepth;
-    const levels = [0.12, 0.46, 0.8, 1.14];
-    const H = 1.46;
+    const levels = [0.08, 0.51, 0.94];
+    const capLevels = [0.07, 0.5, 0.93];
+    const half = 1.357;
     L.gondolas.forEach((gd, gi) => {
       const g = new THREE.Group();
       g.position.set(gd.cx, 0, gd.cz);
       this.interior.add(g);
-      // base plinth + spine
-      box(g, len, 0.12, dep, m.shelfDark, 0, 0, 0);
-      box(g, len, H - 0.12, 0.05, m.shelfMetal, 0, 0.12, 0);
-      box(g, len + 0.04, 0.04, dep * 0.3, m.shelfMetal, 0, H - 0.04, 0);
-      for (let b = 0; b <= 3; b++) box(g, 0.04, H, dep * 0.96, m.shelfMetal, -len / 2 + b * (len / 3), 0, 0);
+      this.model('gondola', g, V(0, 0, 0));
+      this.model('endcap', g, V(half + 0.03, 0, 0), Math.PI / 2);
+      this.model('endcap', g, V(-half - 0.03, 0, 0), -Math.PI / 2);
+      g.updateWorldMatrix(true, true);
       for (const side of [1, -1]) {
-        for (let li = 0; li < levels.length; li++) {
-          const y = levels[li];
-          if (li > 0) {
-            box(g, len, 0.025, dep / 2 - 0.05, m.shelfMetal, 0, y - 0.025, side * (dep / 4 + 0.012));
-            box(g, len, 0.045, 0.012, m.whitePlastic, 0, y - 0.045, side * (dep / 2 - 0.02), { cast: false });
+        levels.forEach((y, li) => {
+          const slotH = (levels[li + 1] ?? 1.34) - y - 0.03;
+          for (let b = 0; b < 4; b++) {
+            const x = -half + 0.34 + b * 0.67;
+            this.addSlot('shelf', g, 0.64, 0.4, slotH, V(x, y + 0.005, side * 0.445), side > 0 ? 0 : Math.PI, li, `ゴンドラ${gi + 1}`);
           }
-          for (let b = 0; b < 6; b++) {
-            const x = -len / 2 + 0.35 + b * 0.7;
-            const slotH = (levels[li + 1] ?? H + 0.3) - y - 0.05;
-            this.addSlot('shelf', g, 0.66, dep / 2 - 0.08, slotH, V(x, y, side * (dep / 2 - 0.02)), side > 0 ? 0 : Math.PI, li, `ゴンドラ${gi + 1}`);
-          }
-        }
+        });
       }
-      // end caps with category signs
-      for (const ex of [-1, 1]) {
-        box(g, 0.05, H, dep, m.brandGreen, ex * (len / 2 + 0.03), 0, 0);
-        const sign = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 0.22), this.textMat(['お菓子・パン', 'カップ麺・食品', '日用品・雑貨'][gi], '#fff', '#128a5a', 512, 140));
-        sign.position.set(ex * (len / 2 + 0.06), H - 0.2, 0);
+      for (const ex of [1, -1]) {
+        capLevels.forEach((y, li) => {
+          const slotH = (capLevels[li + 1] ?? 1.3) - y - 0.03;
+          this.addSlot('shelf', g, 0.84, 0.4, slotH, V(ex * (half + 0.03 + 0.445), y + 0.005, 0), ex > 0 ? Math.PI / 2 : -Math.PI / 2, li, `エンド${gi + 1}`);
+        });
+        const sign = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 0.2), this.textMat(['お菓子・パン', 'カップ麺・食品', '日用品・雑貨'][gi], '#fff', '#128a5a', 512, 128));
+        sign.position.set(ex * (half + 0.49), 1.42, 0);
         sign.rotation.y = ex * Math.PI / 2;
         g.add(sign);
       }
@@ -371,56 +394,52 @@ export class Store {
       const hs2 = hs.clone();
       hs2.rotation.y = Math.PI;
       this.interior.add(hs2);
-      box(this.interior, 0.01, 0.4, 0.01, m.frame, gd.cx - 0.4, 2.48, gd.cz, { cast: false });
-      box(this.interior, 0.01, 0.4, 0.01, m.frame, gd.cx + 0.4, 2.48, gd.cz, { cast: false });
-      this.col.addBox(gd.cx, gd.cz, len + 0.1, dep, 'gondola');
+      box(this.interior, 0.01, 0.4, 0.01, this.m.frame, gd.cx - 0.4, 2.48, gd.cz, { cast: false });
+      box(this.interior, 0.01, 0.4, 0.01, this.m.frame, gd.cx + 0.4, 2.48, gd.cz, { cast: false });
+      this.col.addBox(gd.cx, gd.cz, 2 * (half + 0.5), 0.92, 'gondola');
       this.placeSurfaces.push(g);
     });
   }
 
+  /** Multi-deck refrigerated open cases along the west wall (SIGVerse CVK series). */
   private buildOpenCase() {
-    const m = this.m;
-    const g = new THREE.Group();
-    const x0 = L.floor.minX;
-    const depth = 0.85;
-    const z0 = -3.9;
-    const len = 7.2;
-    g.position.set(x0 + depth / 2, 0, z0 + len / 2);
-    g.rotation.y = Math.PI / 2; // faces +x
-    this.interior.add(g);
-    const H = 2.0;
-    box(g, len, 0.5, depth, m.whitePlastic, 0, 0, 0);
-    box(g, len, H, 0.06, m.whitePlastic, 0, 0, -depth / 2 + 0.03);
-    box(g, len, 0.18, depth * 0.55, m.whitePlastic, 0, H - 0.18, -depth / 2 + depth * 0.275);
-    // canopy light
-    const lamp = box(g, len - 0.1, 0.03, 0.08, m.lightPanel, 0, H - 0.21, -0.02, { cast: false });
-    lamp.name = 'caseLamp';
-    const levels = [0.5, 0.86, 1.2, 1.52];
-    for (let li = 0; li < levels.length; li++) {
-      const y = levels[li];
-      const d = depth - 0.1 - li * 0.1;
-      if (li > 0) {
-        box(g, len, 0.02, d, m.glass, 0, y - 0.02, -depth / 2 + 0.06 + d / 2, { cast: false });
-        box(g, len, 0.04, 0.012, m.whitePlastic, 0, y - 0.04, -depth / 2 + 0.06 + d, { cast: false });
-      }
-      for (let b = 0; b < 10; b++) {
-        const x = -len / 2 + 0.36 + b * 0.72;
-        const slotH = (levels[li + 1] ?? H - 0.25) - y - 0.04;
-        this.addSlot('chilled', g, 0.68, d - 0.04, slotH, V(x, y, -depth / 2 + 0.06 + d), 0, li, '冷蔵オープンケース');
-      }
-    }
-    // front air curtain grille + side panels
-    box(g, len, 0.06, 0.12, m.steel, 0, 0.44, depth / 2 - 0.06);
-    for (const ex of [-1, 1]) box(g, 0.04, H, depth, m.whitePlastic, ex * (len / 2), 0, 0);
-    const sign = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.16), this.textMat('おにぎり・お弁当・サンドイッチ・デザート', '#fff', '#e8423a', 1024, 70));
-    sign.position.set(0, H - 0.09, -depth / 2 + depth * 0.55 + 0.001);
-    g.add(sign);
-    this.col.addBox(x0 + depth / 2, z0 + len / 2, depth, len, 'opencase');
-    this.anchors.openCase = g;
-    // cold light spill
-    const cl = new THREE.RectAreaLight('#e8f4ff', 3, 7, 0.1);
-    cl.position.set(x0 + 0.5, 1.75, z0 + len / 2);
-    cl.lookAt(x0 + 0.5, 0, z0 + len / 2);
+    const units: { id: ExtId; w: number }[] = [
+      { id: 'opencase_wide', w: 1.879 }, { id: 'opencase_wide', w: 1.879 }, { id: 'opencase_wide', w: 1.879 }, { id: 'opencase_narrow', w: 0.94 },
+    ];
+    // board heights, their front edge (local z) and usable depth
+    const levels: [number, number, number][] = [
+      [0.31, 0.55, 0.5], [0.63, 0.4, 0.36], [0.82, 0.38, 0.36], [1.0, 0.37, 0.36], [1.19, 0.35, 0.35], [1.37, 0.33, 0.35], [1.55, 0.31, 0.34],
+    ];
+    let z = -3.9;
+    const cx = L.floor.minX + 0.19;
+    units.forEach((u, ui) => {
+      const g = new THREE.Group();
+      g.position.set(cx, 0, z + u.w / 2);
+      g.rotation.y = Math.PI / 2; // model front (+z) faces into the store (+x)
+      this.interior.add(g);
+      this.model(u.id, g, V(0, 0, 0));
+      g.updateWorldMatrix(true, true);
+      const perRow = u.w > 1 ? 2 : 1;
+      levels.forEach(([y, front, depth], li) => {
+        const slotH = (levels[li + 1]?.[0] ?? 1.76) - y - 0.02;
+        for (let b = 0; b < perRow; b++) {
+          const x = perRow === 2 ? (b - 0.5) * 0.89 : 0;
+          this.addSlot('chilled', g, 0.84, depth - 0.02, slotH, V(x, y + 0.012, front), 0, li, '冷蔵オープンケース');
+        }
+      });
+      if (ui === 0) this.anchors.openCase = g;
+      z += u.w;
+    });
+    const total = z + 3.9;
+    this.col.addBox(L.floor.minX + 0.4, -3.9 + total / 2, 0.8, total, 'opencase');
+    const sign = new THREE.Mesh(new THREE.PlaneGeometry(3, 0.22), this.textMat('おにぎり・お弁当・サンドイッチ・デザート', '#fff', '#e8423a', 1024, 76));
+    sign.position.set(L.floor.minX + 0.02, 2.2, -3.9 + total / 2);
+    sign.rotation.y = Math.PI / 2;
+    this.interior.add(sign);
+    // cold light spill from the case canopies
+    const cl = new THREE.RectAreaLight('#e8f4ff', 3, total, 0.1);
+    cl.position.set(L.floor.minX + 0.5, 1.75, -3.9 + total / 2);
+    cl.lookAt(L.floor.minX + 0.5, 0, -3.9 + total / 2);
     this.interior.add(cl);
   }
 
@@ -471,88 +490,64 @@ export class Store {
     box(this.interior, 6.1, 0.4, 0.08, this.m.shelfDark, xStart + (n - 1) * pitch * 0.5, 2.25, -4.98, { cast: false });
   }
 
+  /** Chest freezer for ice cream (SIGVerse IMC series). */
   private buildIceChest() {
-    const m = this.m;
     const g = new THREE.Group();
     g.position.set(1.55, 0, -4.45);
     this.interior.add(g);
-    const W = 1.8;
-    const D = 0.8;
-    const H = 0.82;
-    box(g, W, H - 0.25, D, m.whitePlastic, 0, 0, 0);
-    box(g, W, 0.1, D, m.brandGreen, 0, 0.05, 0.005, { cast: false });
-    // inner tub (dark) and glass sliding lids
-    box(g, W - 0.08, 0.02, D - 0.08, m.shelfDark, 0, H - 0.4, 0);
-    for (const z of [-0.18, 0.18]) box(g, W - 0.06, 0.012, D / 2 - 0.02, m.glass, 0, H, z, { cast: false, receive: false });
-    for (const ex of [-1, 1]) box(g, 0.04, 0.26, D, m.whitePlastic, ex * (W / 2 - 0.02), H - 0.26, 0);
-    box(g, W, 0.26, 0.04, m.whitePlastic, 0, H - 0.26, D / 2 - 0.02);
-    box(g, W, 0.26, 0.04, m.whitePlastic, 0, H - 0.26, -D / 2 + 0.02);
+    this.model('ice_chest', g, V(0, 0.515, 0));
+    g.updateWorldMatrix(true, true);
     for (let i = 0; i < 4; i++) {
-      const x = -W / 2 + 0.24 + (i % 2) * 0.44 + (i >= 2 ? W / 2 - 0.02 : 0);
-      this.addSlot('freezer', g, 0.4, D - 0.14, 0.3, V(x, H - 0.38, D / 2 - 0.07), 0, 0, 'アイスケース', 0, i < 4);
+      const x = i % 2 ? 0.43 : -0.43;
+      const zf = i < 2 ? 0.38 : 0.0;
+      this.addSlot('freezer', g, 0.8, 0.36, 0.28, V(x, 0.52, zf), 0, 0, 'アイスケース');
     }
     const sign = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.2), this.textMat('アイスクリーム', '#fff', '#0288d1', 512, 110));
-    sign.position.set(0, 1.25, -D / 2 + 0.01);
+    sign.position.set(0, 1.3, -0.44);
     g.add(sign);
-    box(g, 0.03, 0.45, 0.03, m.frame, 0, H, -D / 2 + 0.02);
-    this.col.addBox(1.55, -4.45, W, D, 'ice');
+    box(g, 0.03, 0.4, 0.03, this.m.frame, 0, 0.9, -0.44);
+    this.col.addBox(1.55, -4.45, 1.84, 0.94, 'ice');
   }
 
+  /** Daily-goods shelving against the staff partition: gondola + end cap, one side used. */
   private buildWallShelf() {
-    const m = this.m;
     const g = new THREE.Group();
-    const len = 4.2;
-    g.position.set(L.staffArea.minX - 0.2, 0, -4.85 + len / 2);
-    g.rotation.y = -Math.PI / 2; // faces -x
+    g.position.set(L.staffArea.minX - 0.48, 0, -3.0);
+    g.rotation.y = -Math.PI / 2; // shoppable side (+z) faces -x
     this.interior.add(g);
-    const H = 1.85;
-    const dep = 0.42;
-    box(g, len, 0.12, dep, m.shelfDark, 0, 0, 0);
-    box(g, len, H, 0.05, m.shelfMetal, 0, 0, -dep / 2);
-    for (let b = 0; b <= 3; b++) box(g, 0.04, H, dep, m.shelfMetal, -len / 2 + b * 1.4, 0, 0);
-    const levels = [0.12, 0.47, 0.82, 1.17, 1.5];
+    this.model('gondola', g, V(0, 0, 0));
+    this.model('endcap', g, V(1.357 + 0.03, 0, 0), Math.PI / 2);
+    g.updateWorldMatrix(true, true);
+    const levels = [0.08, 0.51, 0.94];
     levels.forEach((y, li) => {
-      if (li > 0) {
-        box(g, len, 0.025, dep - 0.04, m.shelfMetal, 0, y - 0.025, 0);
-        box(g, len, 0.045, 0.012, m.whitePlastic, 0, y - 0.045, dep / 2 - 0.01, { cast: false });
-      }
-      for (let b = 0; b < 6; b++) {
-        const slotH = (levels[li + 1] ?? H + 0.15) - y - 0.05;
-        this.addSlot('shelf', g, 0.66, dep - 0.08, slotH, V(-len / 2 + 0.35 + b * 0.7, y, dep / 2 - 0.02), 0, li, '壁面棚');
-      }
+      const slotH = (levels[li + 1] ?? 1.34) - y - 0.03;
+      for (let b = 0; b < 4; b++) this.addSlot('shelf', g, 0.64, 0.4, slotH, V(-1.357 + 0.34 + b * 0.67, y + 0.005, 0.445), 0, li, '壁面棚');
     });
+    [0.07, 0.5, 0.93].forEach((y, li) => this.addSlot('shelf', g, 0.84, 0.4, 0.4, V(1.357 + 0.475, y + 0.005, 0), Math.PI / 2, li, '壁面棚'));
     const sign = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.24), this.textMat('日用品', '#fff', '#128a5a', 512, 90));
-    sign.position.set(0, H + 0.2, -dep / 2 + 0.02);
+    sign.position.set(0, 1.62, 0.02);
     g.add(sign);
-    this.col.addBox(L.staffArea.minX - 0.2, -4.85 + len / 2, dep, len, 'wallshelf');
+    this.col.addBox(L.staffArea.minX - 0.48, -2.78, 0.92, 3.3, 'wallshelf');
     this.placeSurfaces.push(g);
   }
 
+  /** Wire magazine racks along the front window (SIGVerse CVS magazine rack). */
   private buildMagazineRack() {
-    const m = this.m;
-    const g = new THREE.Group();
-    const len = 5.6;
-    g.position.set(-0.6, 0, 4.72);
-    g.rotation.y = Math.PI; // faces -z (into the store)
-    this.interior.add(g);
-    const dep = 0.42;
-    box(g, len, 0.3, dep, m.shelfDark, 0, 0, 0);
-    box(g, len, 1.15, 0.04, m.shelfMetal, 0, 0, -dep / 2);
-    for (let b = 0; b <= 4; b++) box(g, 0.035, 1.15, dep, m.shelfMetal, -len / 2 + b * 1.4, 0, 0);
-    // lower flat shelf + upper tilted display
-    box(g, len, 0.02, dep - 0.05, m.shelfMetal, 0, 0.3, 0);
-    const tilt = 0.35;
-    const up = new THREE.Mesh(new THREE.BoxGeometry(len, 0.015, 0.34), m.shelfMetal);
-    up.position.set(0, 0.86, -0.02);
-    up.rotation.x = tilt;
-    g.add(up);
-    for (let b = 0; b < 4; b++) {
-      const x = -len / 2 + 0.7 + b * 1.4;
-      this.addSlot('magazine', g, 1.3, 0.3, 0.08, V(x, 0.32, dep / 2 - 0.02), 0, 0, '雑誌ラック');
-      this.addSlot('magazine', g, 1.3, 0.3, 0.05, V(x, 0.82, 0.135), 0, 1, '雑誌ラック', tilt);
+    const n = 6;
+    const w = 0.89;
+    const x0 = -2.9 + w / 2;
+    for (let i = 0; i < n; i++) {
+      const g = new THREE.Group();
+      g.position.set(x0 + i * w, 0, L.floor.maxZ - 0.06);
+      g.rotation.y = Math.PI; // faces -z (into the store)
+      this.interior.add(g);
+      this.model('magazine_rack', g, V(0, 0.338, 0));
+      g.updateWorldMatrix(true, true);
+      // magazines lean against the stepped, slanted tiers
+      [[0.9, 0.4], [1.12, 0.33], [1.34, 0.26]].forEach(([y, z], li) => this.addSlot('magazine', g, 0.84, 0.28, 0.04, V(0, y, z), 0, li + 1, '雑誌ラック', 1.12));
+      if (i === 0) this.anchors.magazineRack = g;
     }
-    this.col.addBox(-0.6, 4.72, len, dep + 0.05, 'magazine');
-    this.anchors.magazineRack = g;
+    this.col.addBox(x0 - w / 2 + (n * w) / 2, L.floor.maxZ - 0.3, n * w, 0.48, 'magazine');
   }
 
   private buildCounter() {
@@ -590,22 +585,37 @@ export class Store {
     this.buildHotCase(V(cx - 0.03, c.h, 0.62));
     // tray of plastic bags & cash tray
     box(g, 0.22, 0.02, 0.16, m.blackPlastic, c.minX + 0.14, c.h, L.register.z + 0.35, { cast: false });
-    // back counter with fryer + stocker
+    // back counter: four stainless under-counter cabinets (SIGVerse YRC series)
     const bc = L.backCounter;
-    const bcx = (bc.minX + bc.maxX) / 2;
     const bcz = (bc.minZ + bc.maxZ) / 2;
-    box(g, bc.maxX - bc.minX, 0.9, bc.maxZ - bc.minZ, m.steel, bcx, 0, bcz);
-    const btop = box(g, bc.maxX - bc.minX + 0.02, 0.03, bc.maxZ - bc.minZ, m.steel, bcx, 0.9, bcz);
+    const cabX = L.floor.maxX - 0.34;
+    const topY = 0.835;
+    for (let i = 0; i < 4; i++) {
+      const z = bc.minZ + 0.6025 + i * 1.205;
+      const cab = new THREE.Group();
+      cab.position.set(cabX, 0, z);
+      cab.rotation.y = -Math.PI / 2; // doors face the staff aisle (-x)
+      g.add(cab);
+      this.model('back_cabinet', cab, V(0, 0, 0));
+      if (i === 0) {
+        // the first cabinet is the freezer stocker for hot-snack stock
+        const lab = new THREE.Mesh(new THREE.PlaneGeometry(0.46, 0.09), this.textMat('冷凍ストッカー', '#fff', '#0277bd', 512, 100));
+        lab.position.set(0, 0.62, 0.34);
+        cab.add(lab);
+        cab.userData.interact = 'stocker';
+        cab.traverse((o) => (o.userData.interactRoot = cab));
+        this.anchors.stocker = cab;
+      }
+    }
+    const btop = box(g, 0.66, 0.004, bc.maxZ - bc.minZ, m.steel, cabX - 0.01, topY, bcz, { cast: false });
     this.placeSurfaces.push(btop);
-    this.col.addBox(bcx, bcz, bc.maxX - bc.minX, bc.maxZ - bc.minZ, 'backcounter');
-    this.buildFryer(V(bcx, 0.93, 0.05));
-    this.buildStocker(V(bcx - 0.02, 0, -0.45));
-    // coffee machine (decor) + cup stack
-    const cm = new THREE.Group();
-    cm.position.set(bcx, 0.93, 2.3);
-    box(cm, 0.36, 0.62, 0.42, m.blackPlastic, 0, 0, 0);
-    box(cm, 0.3, 0.14, 0.02, this.textMat('COFFEE', '#fff', '#5d4037', 256, 110), -0.19, 0.4, 0, { cast: false }).rotation.y = -Math.PI / 2;
-    g.add(cm);
+    this.col.addBox(cabX, bcz, 0.66, bc.maxZ - bc.minZ, 'backcounter');
+    this.buildFryer(V(cabX - 0.02, topY, 0.05));
+    // coffee machine and microwave on the back counter
+    this.model('coffee_machine', g, V(cabX + 0.05, topY, 2.2), -Math.PI / 2);
+    this.model('coffee_machine', g, V(cabX + 0.05, topY, 2.5), -Math.PI / 2);
+    this.model('microwave', g, V(cabX + 0.02, topY, 3.45), -Math.PI / 2);
+    this.model('potted_plant', g, V(c.minX + 0.12, c.h, 3.72), 0.4);
     // cigarette-style display wall above back counter (decor: lottery/ gift cards)
     const rack = new THREE.Group();
     rack.position.set(L.floor.maxX - 0.12, 1.25, 2.4);
@@ -660,10 +670,8 @@ export class Store {
     g.position.copy(pos);
     g.rotation.y = -Math.PI / 2; // staff faces -x … screen faces +x (staff side)
     this.interior.add(g);
-    // drawer base
-    box(g, 0.4, 0.1, 0.4, m.blackPlastic, 0, 0, 0.05);
-    // POS body
-    box(g, 0.26, 0.06, 0.24, m.whitePlastic, 0, 0.1, 0.05);
+    // cash register body (SIGVerse / numiteg, CC-BY 4.0)
+    this.model('cash_register', g, V(0, 0, 0.02), Math.PI, 0.9);
     // staff touchscreen
     const [sc, sctx] = canvas(512, 384);
     sctx.fillStyle = '#1b4f7a';
@@ -671,14 +679,11 @@ export class Store {
     const st = new THREE.CanvasTexture(sc);
     st.colorSpace = THREE.SRGBColorSpace;
     const scrMat = new THREE.MeshStandardMaterial({ map: st, emissiveMap: st, emissive: '#ffffff', emissiveIntensity: active ? 0.9 : 0.25, roughness: 0.2 });
-    const scr = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.26, 0.02), [m.blackPlastic, m.blackPlastic, m.blackPlastic, m.blackPlastic, m.blackPlastic, scrMat]);
-    scr.position.set(0, 0.36, 0.12);
-    scr.rotation.x = 0.25;
+    const scr = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.17, 0.015), [m.blackPlastic, m.blackPlastic, m.blackPlastic, m.blackPlastic, m.blackPlastic, scrMat]);
+    scr.position.set(0.3, 0.4, 0.12);
+    scr.rotation.set(0.3, -0.35, 0);
     g.add(scr);
-    box(g, 0.05, 0.2, 0.05, m.blackPlastic, 0, 0.14, 0.1);
-    // customer display (faces customer)
-    const cd = box(g, 0.2, 0.12, 0.02, m.blackPlastic, 0, 0.5, -0.12);
-    cd.rotation.x = 0.2;
+    box(g, 0.03, 0.3, 0.03, m.blackPlastic, 0.3, 0.12, 0.08);
     // hand scanner in its cradle, next to the item mat
     box(g, 0.07, 0.05, 0.1, m.blackPlastic, 0.34, 0, 0.05);
     const gun = box(g, 0.05, 0.14, 0.06, m.blackPlastic, 0.34, 0.03, 0.05);
@@ -686,8 +691,6 @@ export class Store {
     const beam = new THREE.Mesh(new THREE.PlaneGeometry(0.03, 0.012), new THREE.MeshBasicMaterial({ color: '#ff1a1a' }));
     beam.position.set(0.36, 0.17, 0.081);
     g.add(beam);
-    // receipt printer
-    box(g, 0.14, 0.12, 0.16, m.whitePlastic, -0.2, 0, 0.1);
     g.userData.interact = active ? 'register' : 'register_idle';
     g.traverse((o) => (o.userData.interactRoot = g));
     if (active) {
@@ -766,22 +769,6 @@ export class Store {
     this.anchors.fryer = g;
   }
 
-  private buildStocker(pos: THREE.Vector3) {
-    const m = this.m;
-    const g = new THREE.Group();
-    g.position.copy(pos);
-    g.rotation.y = -Math.PI / 2;
-    this.interior.add(g);
-    box(g, 0.5, 0.86, 0.55, m.whitePlastic, 0, 0, 0);
-    box(g, 0.46, 0.4, 0.01, m.steel, 0, 0.4, 0.28, { cast: false });
-    const lab = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 0.08), this.textMat('冷凍ストッカー', '#fff', '#0277bd', 512, 100));
-    lab.position.set(0, 0.7, 0.281);
-    g.add(lab);
-    g.userData.interact = 'stocker';
-    g.traverse((o) => (o.userData.interactRoot = g));
-    this.anchors.stocker = g;
-  }
-
   private buildBackroom() {
     const m = this.m;
     const g = this.interior;
@@ -813,14 +800,23 @@ export class Store {
     pc.userData.interact = 'pc';
     pc.traverse((o) => (o.userData.interactRoot = pc));
     this.anchors.pc = pc;
-    // chair
-    const chair = new THREE.Group();
-    chair.position.set(5.5, 0, zb + 1.2);
-    chair.rotation.y = 0.3;
-    g.add(chair);
-    box(chair, 0.46, 0.06, 0.46, m.blackPlastic, 0, 0.45, 0);
-    box(chair, 0.46, 0.5, 0.06, m.blackPlastic, 0, 0.5, 0.22);
-    box(chair, 0.05, 0.45, 0.05, m.frame, 0, 0, 0);
+    // stool + security monitor on the desk (Poly Haven, CC0)
+    this.model('stool', g, V(5.4, 0, zb + 1.15), 0.3);
+    this.model('crt_monitor', desk, V(-0.55, 0.74, -0.12), 0.35);
+    this.model('power_box', g, V(6.93, 1.6, zb + 1.6), -Math.PI / 2);
+    // ceiling fixtures
+    for (const x of [-4.5, -1.5, 1.5, 4.5]) {
+      const fl = this.model('fluorescent', g, V(x, L.backCeiling, -6.9), 0, 1, { cast: false });
+      fl.traverse((o) => {
+        const mm = (o as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined;
+        if (mm && /glass/.test(mm.name)) {
+          const lit = mm.clone();
+          lit.emissive.set('#fffaf0');
+          lit.emissiveIntensity = 2.5;
+          (o as THREE.Mesh).material = lit;
+        }
+      });
+    }
     // storage racks (boxes can be stored here)
     for (let i = 0; i < 3; i++) {
       const rack = new THREE.Group();
@@ -832,6 +828,11 @@ export class Store {
       }
       for (const [x, z] of [[-0.73, -0.28], [0.73, -0.28], [-0.73, 0.28], [0.73, 0.28]]) box(rack, 0.035, 2.1, 0.035, m.shelfDark, x, 0, z);
       this.col.addBox(-5.9 + i * 1.6, zb + 0.35, 1.5, 0.6, 'rack');
+      // stacked food crates (番重) and spare boxes on the racks
+      this.model('crate', rack, V(-0.4, 0.93, 0), 0.05);
+      this.model('crate', rack, V(-0.4, 1.19, 0), -0.05);
+      if (i !== 1) this.model('crate', rack, V(0.35, 1.73, 0), 0.1);
+      this.model('cardboard_box', rack, V(0.4, 0.93, -0.02), Math.PI / 2 + 0.1, 0.9);
     }
     // waste + cardboard bins
     const bin = new THREE.Group();
@@ -912,26 +913,12 @@ export class Store {
     mat.rotation.x = -Math.PI / 2;
     mat.position.set(-4.5, 0.004, 4.4);
     g.add(mat);
-    // basket stand
-    const bs = new THREE.Group();
-    bs.position.set(-6.4, 0, 4.4);
-    g.add(bs);
-    const basketMat = new THREE.MeshStandardMaterial({ color: '#e53935', roughness: 0.45 });
-    for (let i = 0; i < 6; i++) box(bs, 0.46, 0.05, 0.32, basketMat, 0, 0.1 + i * 0.05, 0);
-    box(bs, 0.5, 0.1, 0.36, m.frame, 0, 0, 0);
-    this.col.addBox(-6.4, 4.4, 0.5, 0.36, 'basket');
-    // ATM
-    const atm = new THREE.Group();
-    atm.position.set(-6.55, 0, 3.75);
-    atm.rotation.y = Math.PI / 2;
-    g.add(atm);
-    box(atm, 0.7, 1.45, 0.6, new THREE.MeshStandardMaterial({ color: '#dfe3e6', roughness: 0.4, metalness: 0.3 }), 0, 0, 0);
-    box(atm, 0.5, 0.35, 0.02, this.m.screen, 0, 1.0, 0.31, { cast: false });
-    const atmTop = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.2), this.textMat('ATM', '#fff', '#1565c0', 256, 80));
-    atmTop.position.set(0, 1.6, 0.301);
-    atm.add(atmTop);
-    box(atm, 0.7, 0.3, 0.6, new THREE.MeshStandardMaterial({ color: '#1565c0', roughness: 0.4 }), 0, 1.45, 0);
-    this.col.addBox(-6.55, 3.75, 0.6, 0.7, 'atm');
+    // shopping baskets stacked by the door (SIGVerse / kowbassen, CC-BY 4.0)
+    for (let i = 0; i < 5; i++) this.model('basket', g, V(-3.28, 0.02 + i * 0.075, 4.62), Math.PI / 2 + (i % 2) * 0.04, 0.1, { cast: i === 4 });
+    this.col.addBox(-3.28, 4.62, 0.3, 0.44, 'basket');
+    // ATM (kavabanga, CC0) and a multifunction copier (thethieme, CC-BY 4.0) in the front corner
+    this.model('atm', g, V(-5.78, 0, 4.6), Math.PI / 2, 1, { collide: 'atm' });
+    this.model('copy_machine', g, V(-6.6, 0, 4.1), Math.PI / 2, 0.75, { collide: 'copier' });
     // umbrella stand outside the door
     box(this.exterior, 0.5, 0.55, 0.3, m.frame, -3.2, 0, 5.45);
   }
@@ -1106,6 +1093,28 @@ export class Store {
       hedge.scale.y = 1;
       this.col.addBox(x, 10.5, 0.8, 10, 'hedge');
     }
+    // CC0 street furniture (Poly Haven)
+    this.model('covered_car', g, V(-10.9, 0, 9.6), 0.02, 1, { collide: 'car2' });
+    this.model('road_barrier', g, V(13.2, 0, 15.2), Math.PI / 2, 1, { collide: 'barrier' });
+    this.model('road_barrier', g, V(-13.4, 0, 15.2), Math.PI / 2, 1, { collide: 'barrier' });
+    for (const [x, z] of [[3.5, 21.3], [-19, 21.8], [9.5, 17.1]]) this.model('manhole', g, V(x, z > 20 ? -0.005 : 0.02, z), Math.random() * 3, 1, { cast: false });
+    this.model('utility_box', g, V(L.floor.maxX + 0.45, 0, -2.2), -Math.PI / 2, 1, { collide: 'ubox' });
+    for (const z of [-6.5, -1.5, 3.2]) {
+      this.model('wall_light', g, V(L.floor.maxX + 0.17, 2.7, z), Math.PI / 2, 0.8);
+      this.model('wall_light', g, V(L.floor.minX - 0.17, 2.7, z), -Math.PI / 2, 0.8);
+    }
+    this.model('trashbag', this.interior, V(3.95, 0, -5.55), 0.4, 1, { collide: 'bag' });
+    this.model('trashbag', this.interior, V(4.35, 0, -5.8), 1.9, 0.85);
+    // security cameras (shown once the upgrade is bought)
+    const cams = new THREE.Group();
+    cams.visible = false;
+    cams.userData.noMerge = true;
+    this.interior.add(cams);
+    this.model('security_camera', cams, V(-6.8, 2.62, 4.8), Math.PI * 0.75);
+    this.model('security_camera', cams, V(6.8, 2.62, -4.8), -Math.PI * 0.25);
+    this.model('security_camera', cams, V(-6.8, 2.62, -4.8), -Math.PI * 0.75);
+    this.anchors.securityCams = cams;
+
     // lot boundary to keep the player around the shop
     this.col.addBox(0, 18.7, 60, 0.3, 'bound');
     this.col.addBox(-15.2, 5, 0.3, 30, 'bound');

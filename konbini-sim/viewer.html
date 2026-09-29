@@ -1,0 +1,23 @@
+<!doctype html><html><body style="margin:0;background:#888"><script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+const files = new URLSearchParams(location.search).get('f').split(',');
+const W = 1400, H = 260 * Math.ceil(files.length / 4);
+const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }); r.setSize(W, H); document.body.appendChild(r.domElement);
+r.setScissorTest(true);
+const pm = new THREE.PMREMGenerator(r); const env = pm.fromScene(new RoomEnvironment(), 0.04).texture;
+const L = new GLTFLoader(); const info = [];
+for (let i = 0; i < files.length; i++) {
+  const g = await L.loadAsync('/_view/' + files[i] + '.glb');
+  const s = new THREE.Scene(); s.environment = env; s.background = new THREE.Color(0x9aa0a6); s.add(g.scene);
+  s.add(new THREE.DirectionalLight(0xffffff, 1.5).translateX(2).translateY(3).translateZ(2));
+  const b = new THREE.Box3().setFromObject(g.scene); const size = b.getSize(new THREE.Vector3()); const c = b.getCenter(new THREE.Vector3());
+  info.push([files[i], size.toArray().map(v => +v.toFixed(3)), b.min.toArray().map(v=>+v.toFixed(2))]);
+  const cam = new THREE.PerspectiveCamera(35, 350 / 260, 0.01, 1000); const d = Math.max(size.x, size.y, size.z) * 1.8;
+  cam.position.set(c.x + d * 0.6, c.y + d * 0.35, c.z + d * 0.8); cam.lookAt(c);
+  const x = (i % 4) * 350, y = H - 260 - Math.floor(i / 4) * 260;
+  r.setViewport(x, y, 350, 260); r.setScissor(x, y, 350, 260); r.render(s, cam);
+}
+window.INFO = info; window.SHOT = r.domElement.toDataURL('image/jpeg', 0.85); window.DONE = true;
+</script></body></html>
