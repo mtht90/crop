@@ -5,8 +5,9 @@ set -e
 cd "$(dirname "$0")/.."
 rm -rf dist-artifact
 VITE_HOSTED=1 npx vite build --outDir dist-artifact --emptyOutDir >/dev/null
+rm -rf dist-artifact/_view  # dev-only asset viewer files
 GT=${GT:-/home/user/ext/gt}
-for f in dist-artifact/assets/anims/*.glb dist-artifact/assets/props/*.glb; do
+for f in dist-artifact/assets/anims/*.glb dist-artifact/assets/props/*.glb dist-artifact/assets/ext/*.glb; do
   node $GT/decompress.mjs "$f" "$f"
 done
 node tools/make-publish-page.mjs dist-artifact
