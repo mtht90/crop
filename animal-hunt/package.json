@@ -1,0 +1,17 @@
+{
+  "name": "mofumofu-hunt",
+  "version": "1.0.0",
+  "description": "可愛い動物たちの非対称マルチプレイ対戦ゲーム (1 ハンター vs 複数サバイバー)",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "node server/index.js",
+    "test": "node --test test/*.test.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
