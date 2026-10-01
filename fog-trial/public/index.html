@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0d12" />
+  <title>FOG TRIAL</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💀</text></svg>" />
+  <link rel="stylesheet" href="style.css" />
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "/vendor/three/build/three.module.js",
+        "three/addons/": "/vendor/three/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <canvas id="world"></canvas>
+  <canvas id="hud"></canvas>
+
+  <!-- タッチ操作 (タッチ端末でのみ表示) -->
+  <div id="touch" class="hidden">
+    <div id="stick-zone"><div id="stick-base"><div id="stick-knob"></div></div></div>
+    <div id="touch-buttons"></div>
+    <button id="touch-help" class="tbtn small-btn">?</button>
+  </div>
+
+  <!-- タイトル -->
+  <section id="title" class="screen">
+    <div class="panel title-panel">
+      <h1>FOG TRIAL</h1>
+      <p class="tagline">霧の中の儀式 — 1 人のキラーと 4 人のサバイバー</p>
+      <label class="field">
+        <span>名前</span>
+        <input id="name" maxlength="12" placeholder="名無し" autocomplete="off" />
+      </label>
+      <div class="row">
+        <button id="btn-create" class="primary">ロビーを作成</button>
+      </div>
+      <div class="row join-row">
+        <input id="room-code" maxlength="4" placeholder="ABCD" autocomplete="off" />
+        <button id="btn-join">ロビーに参加</button>
+      </div>
+      <div class="divider"><span>ソロ練習 (ボット戦)</span></div>
+      <div class="row">
+        <button id="btn-solo-survivor">サバイバーで遊ぶ</button>
+        <button id="btn-solo-killer">キラーで遊ぶ</button>
+      </div>
+      <div class="row small">
+        <label>ボットの強さ
+          <select id="solo-level">
+            <option value="0">弱い</option>
+            <option value="1" selected>普通</option>
+            <option value="2">強い</option>
+          </select>
+        </label>
+      </div>
+      <details class="howto">
+        <summary>遊び方</summary>
+        <div class="howto-body">
+          <h3>サバイバー (最大 4 人)</h3>
+          <ul>
+            <li><b>発電機</b> を規定数修理すると <b>脱出ゲート</b> に通電。ゲートを開けて脱出する</li>
+            <li>修理中の <b>スキルチェック</b> は針がゾーンに入ったら Space (タッチは画面をタップ)</li>
+            <li><b>板</b> を倒してキラーの道をふさぐ (下にいれば気絶)。<b>窓枠</b> は乗り越えられる</li>
+            <li>しゃがむと足跡 (スクラッチマーク) が残らず、咆哮にも見つからない</li>
+            <li>2 回攻撃されるとダウン。担がれたら左右交互連打でもがく</li>
+            <li>フックに吊るされた仲間は救出できる。3 回目のフックで生贄に</li>
+            <li>最後の 1 人になると <b>ハッチ</b> が開く</li>
+          </ul>
+          <h3>キラー</h3>
+          <ul>
+            <li>視界は前方だけ。心音 (恐怖範囲) でサバイバーに接近を気づかれる</li>
+            <li>攻撃・突進 (溜めて離す)・咆哮 (走っている者を暴く)</li>
+            <li>ダウンさせたら担いでフックへ。板の破壊・発電機の破壊・ロッカー捜索も可能</li>
+            <li>赤い足跡・血痕・物音の通知はキラーだけが見られる手がかり</li>
+          </ul>
+          <h3>操作</h3>
+          <ul>
+            <li>PC: WASD 移動 / マウスで向き / Shift しゃがみ / E 長押し 修理・治療・救出 / Space 板・窓枠・スキルチェック / 左クリック 攻撃 / 右クリック 突進 / Q 咆哮</li>
+            <li>スマホ: 左側をドラッグで移動、右側のボタンで各アクション</li>
+          </ul>
+        </div>
+      </details>
+      <p class="credit">素材: KayKit (Kay Lousberg) / Kenney — CC0</p>
+    </div>
+  </section>
+
+  <!-- ロビー -->
+  <section id="lobby" class="screen hidden">
+    <div class="panel lobby-panel">
+      <div class="lobby-head">
+        <h2>ロビー <span id="lobby-code" class="code"></span></h2>
+        <button id="btn-copy" class="ghost">招待リンクをコピー</button>
+      </div>
+      <div class="lobby-grid">
+        <div>
+          <h3>参加者</h3>
+          <ul id="lobby-players" class="players"></ul>
+          <div id="host-controls" class="host-controls">
+            <div class="row">
+              <button data-bot="killer">+ ボットキラー</button>
+              <button data-bot="survivor">+ ボットサバイバー</button>
+              <button id="btn-fill">ボットで埋める</button>
+            </div>
+            <label class="small">ボットの強さ
+              <select id="lobby-level">
+                <option value="0">弱い</option>
+                <option value="1">普通</option>
+                <option value="2">強い</option>
+              </select>
+            </label>
+          </div>
+        </div>
+        <div>
+          <h3>役割</h3>
+          <div class="row role-row">
+            <button id="role-survivor" class="role">サバイバー</button>
+            <button id="role-killer" class="role">キラー</button>
+          </div>
+          <h3 id="character-title">キャラクター</h3>
+          <div id="character-picker" class="characters"></div>
+        </div>
+      </div>
+      <div class="row lobby-foot">
+        <button id="btn-leave" class="ghost">退出</button>
+        <span id="lobby-hint" class="hint"></span>
+        <button id="btn-start" class="primary">試合開始</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 結果 -->
+  <section id="results" class="screen hidden">
+    <div class="panel results-panel">
+      <h2 id="result-title"></h2>
+      <p id="result-sub"></p>
+      <table id="result-table"></table>
+      <div class="row">
+        <button id="btn-back" class="primary">ロビーへ</button>
+      </div>
+    </div>
+  </section>
+
+  <div id="loading" class="hidden"><div class="spinner"></div><span id="loading-text">読み込み中…</span></div>
+  <div id="toasts"></div>
+  <div id="help" class="hidden"></div>
+  <div id="conn" class="hidden">サーバーに接続中…</div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

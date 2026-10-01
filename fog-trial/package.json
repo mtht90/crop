@@ -1,0 +1,22 @@
+{
+  "name": "fog-trial",
+  "version": "1.0.0",
+  "description": "Dead by Daylight 風の非対称マルチプレイ対戦ゲーム (Three.js 3D, 1 キラー vs 4 サバイバー)",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "node server/index.js",
+    "test": "node --test test/*.test.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "three": "^0.180.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@gltf-transform/core": "^4.5.1",
+    "@gltf-transform/functions": "^4.5.1"
+  }
+}
