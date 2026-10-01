@@ -1,6 +1,6 @@
 // 視界ポリゴン (サーバーの視界判定と同じ castRay を使う)
-import { castRay } from '/shared/physics.js';
-import { VISION } from '/shared/constants.js';
+import { castRay } from '../shared/physics.js';
+import { VISION } from '../shared/constants.js';
 
 // 光線を壁の中まで少し伸ばして、見えている壁の表面を明るくする
 const WALL_LIT = 0.6;

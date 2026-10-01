@@ -1,5 +1,5 @@
 // スマホ・タブレット用の操作: 左半分ドラッグでバーチャルスティック、右下にボタン
-import { BTN } from '/shared/constants.js';
+import { BTN } from '../shared/constants.js';
 
 const LAYOUTS = {
   survivor: [

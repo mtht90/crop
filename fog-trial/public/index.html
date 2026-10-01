@@ -39,7 +39,7 @@
       <div class="row">
         <button id="btn-create" class="primary">ロビーを作成</button>
       </div>
-      <div class="row join-row">
+      <div class="row join-row online-only">
         <input id="room-code" maxlength="4" placeholder="ABCD" autocomplete="off" />
         <button id="btn-join">ロビーに参加</button>
       </div>
@@ -84,6 +84,7 @@
           </ul>
         </div>
       </details>
+      <p class="credit offline-only hidden">オフライン版: ボット戦とローカルロビーで遊べます。友だちとのオンライン対戦はサーバー版 (npm start) で。</p>
       <p class="credit">素材: KayKit (Kay Lousberg) / Kenney — CC0</p>
     </div>
   </section>
@@ -93,7 +94,7 @@
     <div class="panel lobby-panel">
       <div class="lobby-head">
         <h2>ロビー <span id="lobby-code" class="code"></span></h2>
-        <button id="btn-copy" class="ghost">招待リンクをコピー</button>
+        <button id="btn-copy" class="ghost online-only">招待リンクをコピー</button>
       </div>
       <div class="lobby-grid">
         <div>

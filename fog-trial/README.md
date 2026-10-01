@@ -20,6 +20,12 @@ npm start          # http://localhost:3000
 `PORT=8080 npm start` でポート変更。同じ LAN の端末からは `http://<PCのIP>:3000` で参加できます。
 ロビーの「招待リンクをコピー」で部屋のリンク (`?room=ABCD`) を共有できます。
 
+### サーバー無しのオフライン版
+
+`node scripts/build-artifact.mjs <出力先>` で、サーバー不要のオフライン版 (ボット戦・ローカルロビー) を静的ファイル一式として書き出せます。
+ゲームロジックとボットをブラウザ内で動かし、three.js は CDN から読み込みます。`.glb` を配信できないホスティング向けに、モデルはバイナリを埋め込んだ glTF (`.json`) に変換されます。
+開発中は `http://localhost:3000/?offline` でも同じオフライン動作を確認できます。
+
 ```bash
 npm test                          # ルール・視界・通信のテスト
 node scripts/simulate.js 5        # ボット同士の試合をヘッドレスで 1 回 (seed=5)

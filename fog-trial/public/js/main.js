@@ -1,7 +1,7 @@
 // クライアント本体: 画面遷移・通信・入力・予測・描画ループ・HUD
-import { BTN, HEALTH, TICK_DT, INTERP_DELAY, RADIUS, SPEED, INTERACT_RANGE, KILLER as KILLER_CFG } from '/shared/constants.js';
-import { CollisionGrid, moveCircle, inputDir, angleDiff } from '/shared/physics.js';
-import { SURVIVOR_CHARACTERS, KILLER_CHARACTER, CHARACTER_IDS } from '/shared/characters.js';
+import { BTN, HEALTH, TICK_DT, INTERP_DELAY, RADIUS, SPEED, INTERACT_RANGE, KILLER as KILLER_CFG } from '../shared/constants.js';
+import { CollisionGrid, moveCircle, inputDir, angleDiff } from '../shared/physics.js';
+import { SURVIVOR_CHARACTERS, KILLER_CHARACTER, CHARACTER_IDS } from '../shared/characters.js';
 import { World3D } from './world3d.js';
 import { TouchControls } from './touch.js';
 import { visibilityPolygons } from './vision.js';
@@ -53,7 +53,17 @@ function newGameState(msg) {
 }
 
 // ==================== 通信 ====================
-function connect() {
+// サーバーが無い環境 (静的ホスティング) ではブラウザ内でサーバーを動かすオフライン版になる
+const OFFLINE = window.FOG_OFFLINE === true || new URLSearchParams(location.search).has('offline');
+
+async function connect() {
+  if (OFFLINE) {
+    const { createLocalSocket } = await import('./local-server.js');
+    S.ws = createLocalSocket(onMessage);
+    for (const el of document.querySelectorAll('.online-only')) el.classList.add('hidden');
+    for (const el of document.querySelectorAll('.offline-only')) el.classList.remove('hidden');
+    return;
+  }
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   const ws = new WebSocket(`${proto}://${location.host}`);
   S.ws = ws;
@@ -82,7 +92,7 @@ async function onMessage(msg) {
   switch (msg.type) {
     case 'joined':
       S.you = msg.you;
-      history.replaceState(null, '', `?room=${msg.room}`);
+      if (!OFFLINE) history.replaceState(null, '', `?room=${msg.room}`);
       break;
     case 'lobby':
       S.lobby = msg;
@@ -122,7 +132,7 @@ async function onMessage(msg) {
       break;
     case 'left':
       S.lobby = null;
-      history.replaceState(null, '', location.pathname);
+      if (!OFFLINE) history.replaceState(null, '', location.pathname);
       show('title');
       break;
   }

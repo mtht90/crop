@@ -2,9 +2,9 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
-import { TILE, mulberry32 } from '/shared/map.js';
-import { HEALTH } from '/shared/constants.js';
-import { SURVIVOR_CHARACTERS, KILLER_CHARACTER } from '/shared/characters.js';
+import { TILE, mulberry32 } from '../shared/map.js';
+import { HEALTH } from '../shared/constants.js';
+import { SURVIVOR_CHARACTERS, KILLER_CHARACTER } from '../shared/characters.js';
 
 const MODEL_NAMES = [
   'survivor_knight',
