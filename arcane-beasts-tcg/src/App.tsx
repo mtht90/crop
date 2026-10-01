@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect } from 'react';
-import { useStore } from './state/store';
+import { activeDeck, useStore } from './state/store';
 import { Gallery } from './screens/Gallery';
 import { BattleScreen } from './battle/BattleScreen';
 import { Title } from './screens/Title';
@@ -13,6 +13,8 @@ import { Shop } from './screens/Shop';
 import { Missions } from './screens/Missions';
 import { Exchange } from './screens/Exchange';
 import { Ranked } from './screens/Ranked';
+import { Lobby } from './screens/Lobby';
+import { online } from './online/client';
 import { Credits, Rules, Settings } from './screens/Misc';
 import { setVolumes, unlockAudio } from './audio/audio';
 import { configureFx } from './lib/fx';
@@ -55,6 +57,7 @@ const SCREENS = {
   missions: Missions,
   exchange: Exchange,
   ranked: Ranked,
+  lobby: Lobby,
   settings: Settings,
   credits: Credits,
   rules: Rules,
@@ -70,7 +73,25 @@ export function App() {
   useEffect(() => setGyroEnabled(settings.gyro), [settings.gyro]);
   useEffect(() => {
     const q = new URLSearchParams(location.search);
-    if (q.has('gallery')) useStore.getState().go('gallery');
+    // a game found by the server opens the battle screen
+    online.onStart = (m) => {
+      const st = useStore.getState();
+      const deck = activeDeck(st.save);
+      st.startBattle({
+        rival: null,
+        playerDeck: deck?.cards ?? [],
+        oppDeck: [],
+        oppName: m.opp.name,
+        oppPortrait: m.opp.portrait,
+        level: 'normal',
+        scene: ['story/landscape-battlefield_nohumans', 'story/p-mountains', 'story/p-summer', 'story/landscape-castle', 'story/p-winter', 'story/p-great-tree'][Math.floor(Math.random() * 6)],
+        reward: 0,
+        spectate: m.you === 'spectator',
+        online: m,
+      });
+    };
+    if (q.has('room') || q.has('watch')) useStore.getState().go(useStore.getState().save.started ? 'lobby' : 'starter');
+    else if (q.has('gallery')) useStore.getState().go('gallery');
     else if (q.has('battle')) debugBattle();
     else if (q.has('screen')) useStore.getState().go(q.get('screen') as never);
     const unlock = () => {

@@ -918,3 +918,24 @@
 .stamp-bubble::after { content: ''; position: absolute; width: calc(var(--u) * 1); height: calc(var(--u) * 1); background: #fff; transform: rotate(45deg); }
 .stamp-bubble.me::after { left: calc(var(--u) * -0.3); bottom: calc(var(--u) * 0.9); }
 .stamp-bubble.opp::after { left: calc(var(--u) * 1.4); top: calc(var(--u) * -0.4); }
+
+/* ------------------------------- Online HUD ------------------------------ */
+.online-hud {
+  position: absolute;
+  left: 50%;
+  top: calc(var(--u) * 0.9);
+  translate: -50% 0;
+  z-index: 80;
+  padding: calc(var(--u) * 0.45) calc(var(--u) * 1.4);
+  border-radius: 999px;
+  background: rgba(10, 16, 40, 0.92);
+  border: 1px solid var(--line);
+  font-weight: 800;
+  font-size: calc(var(--u) * 1);
+  letter-spacing: 0.04em;
+  pointer-events: none;
+}
+.online-hud.me { border-color: #ffc245; color: #ffe08a; }
+.online-hud.warn { border-color: #ff8a6a; color: #ffb4a0; animation: hud-pulse 1s ease-in-out infinite alternate; }
+@keyframes hud-pulse { to { background: rgba(60, 20, 20, 0.92); } }
+.opp-hand.mine { top: auto; bottom: calc(var(--u) * -3.4); transform: rotate(180deg); }

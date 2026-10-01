@@ -262,6 +262,17 @@ export class Game {
     return this.s.phase === 'over';
   }
 
+  /** end the game from outside the rules (surrender, timeout, disconnect) */
+  forfeit(winner: 0 | 1 | -1, reason: string) {
+    if (this.s.phase === 'over') return;
+    try {
+      this.win(winner, reason);
+    } catch (e) {
+      if (!(e instanceof GameOver)) throw e;
+    }
+    this.pending = null;
+  }
+
   private validate(p: Prompt, a: Answer) {
     if (p.type !== a.type) throw new Error(`Answer type ${a.type} does not match prompt ${p.type}`);
     if (p.type === 'cards' && a.type === 'cards') {

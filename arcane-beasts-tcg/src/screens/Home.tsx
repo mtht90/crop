@@ -1,3 +1,4 @@
+import { onlineSupported } from '../online/client';
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useState } from 'react';
 import { activeDeck, collectionPct, extCtx, useStore, RIVALS, SHARD_COST, SHARD_RARITIES } from '../state/store';
@@ -144,6 +145,17 @@ export function Home() {
               <span>コレクション</span>
             </div>
           </motion.div>
+          {onlineSupported() && (
+            <button
+              className="btn gold-btn home-online"
+              onClick={() => {
+                sfx('expand', 0.5);
+                go('lobby');
+              }}
+            >
+              <Icon name="swords" /> オンライン対戦
+            </button>
+          )}
           <div className="home-links">
             <button className="btn ghost small" onClick={() => go('settings')}>
               <Icon name="gear" /> 設定

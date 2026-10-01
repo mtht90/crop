@@ -587,3 +587,4 @@
 @keyframes pop-in { from { transform: scale(1.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 @keyframes glow-breathe { 50% { transform: scale(1.08); opacity: 0.8; } }
 .set-ok { font-size: calc(var(--u) * 0.95); color: var(--ink-dim); font-weight: 700; }
+.home-online { width: 100%; margin-top: calc(var(--u) * 0.2); }

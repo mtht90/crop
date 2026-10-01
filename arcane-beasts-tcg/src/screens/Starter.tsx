@@ -59,7 +59,7 @@ export function Starter() {
               sfx('fanfare-short', 0.8);
               foley.rarity(4);
               choose(sel);
-              setTimeout(() => go('home'), 900);
+              setTimeout(() => go(/[?&](room|watch)=/.test(location.search) ? 'lobby' : 'home'), 900);
             }}
           >
             「{d.name}」で冒険をはじめる

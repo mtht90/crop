@@ -1,0 +1,1 @@
+{"extends":"./tsconfig.json","compilerOptions":{"types":["node"],"lib":["ES2022"],"noUnusedLocals":true},"include":["src/engine","src/online/protocol.ts","src/online/session.ts","src/online/view.ts","src/state/ranked.ts","server"]}

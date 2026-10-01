@@ -6,7 +6,8 @@ import type { Action, CardInst, EnergyCard, GameState, MonsterCard, Pos, Prompt,
 import { CardBack, CardFace, EnergySymbol, RainbowSymbol } from '../ui/Card';
 import { Icon } from '../ui/Icon';
 import { artUrl, preload, TYPE_SCENE } from '../lib/assets';
-import { BattleController, HUMAN, useBattle } from './controller';
+import { BattleController, HUMAN, useBattle, type BattleDriver } from './controller';
+import { OnlineController } from '../online/controller';
 import { FxLayer } from './FxLayer';
 import { PromptLayer } from './PromptLayer';
 import { Stamps } from './Stamps';
@@ -287,11 +288,11 @@ function Hand({ cards, playable, selected, onSelect, onDrop, setupPick }: HandPr
   );
 }
 
-function OppHand({ cards }: { cards: CardInst[] }) {
+function OppHand({ cards, mine }: { cards: CardInst[]; mine?: boolean }) {
   const n = cards.length;
   const step = Math.min(2.6, 26 / Math.max(n, 1));
   return (
-    <div className="opp-hand">
+    <div className={`opp-hand ${mine ? 'mine' : ''}`}>
       {cards.map((c, i) => (
         <BoardCard
           key={c.uid}
@@ -435,12 +436,40 @@ function LogPanel({ s, open, onToggle }: { s: GameState; open: boolean; onToggle
 }
 
 // ---------------------------------------------------------------------------
+// Online: connection warning and the time left to act
+// ---------------------------------------------------------------------------
+function OnlineHud({ spectating }: { spectating: boolean }) {
+  const timer = useBattle((s) => s.timer);
+  const peerOffline = useBattle((s) => s.peerOffline);
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const iv = setInterval(() => setNow(Date.now()), 250);
+    return () => clearInterval(iv);
+  }, []);
+  const left = (t: number) => Math.max(0, Math.ceil((t - now) / 1000));
+  if (peerOffline)
+    return (
+      <div className="online-hud warn">
+        相手の通信が切れています… あと{left(peerOffline)}秒で勝ちになります
+      </div>
+    );
+  if (timer && left(timer.until) <= (timer.actor === 0 ? 40 : 30) && !spectating) {
+    return (
+      <div className={`online-hud ${timer.actor === 0 ? 'me' : ''}`}>
+        {timer.actor === 0 ? `あなたの持ち時間 あと${left(timer.until)}秒` : `相手の持ち時間 あと${left(timer.until)}秒`}
+      </div>
+    );
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
 // Main screen
 // ---------------------------------------------------------------------------
 export function BattleScreen() {
   const cfg = useStore((s) => s.battle)!;
   const settings = useStore((s) => s.save.settings);
-  const ctrlRef = useRef<BattleController | null>(null);
+  const ctrlRef = useRef<BattleDriver | null>(null);
   const view = useBattle((s) => s.view);
   const prompt = useBattle((s) => s.prompt);
   const thinking = useBattle((s) => s.thinking);
@@ -453,7 +482,7 @@ export function BattleScreen() {
   const [discardView, setDiscardView] = useState<0 | 1 | null>(null);
   const [confirmEnd, setConfirmEnd] = useState(false);
   const guideSeen = useStore((s) => !!s.save.guideSeen);
-  const [guide, setGuide] = useState(!guideSeen && !cfg.spectate);
+  const [guide, setGuide] = useState(!guideSeen && !cfg.spectate && !cfg.online);
   const [ready, setReady] = useState(false);
   const startedRef = useRef(false);
   useEffect(() => {
@@ -465,10 +494,11 @@ export function BattleScreen() {
 
   // lifecycle
   useEffect(() => {
-    const ctrl = new BattleController([cfg.playerDeck, cfg.oppDeck], ['あなた', cfg.oppName], cfg.level);
+    const ctrl: BattleDriver = cfg.online ? new OnlineController(cfg.online) : new BattleController([cfg.playerDeck, cfg.oppDeck], ['あなた', cfg.oppName], cfg.level);
     ctrl.speed = settings.speed;
-    ctrl.autoHuman = !!cfg.spectate;
+    ctrl.autoHuman = !!cfg.spectate && !cfg.online;
     ctrlRef.current = ctrl;
+    if (import.meta.env.DEV) (window as unknown as Record<string, unknown>).__ctrl = ctrl;
     const boss = cfg.rival?.id === 'necros' || cfg.rival?.id === 'lilith';
     playMusic(boss ? 'boss' : (['battle1', 'battle2', 'battle3'] as const)[Math.floor(Math.random() * 3)]);
     // preload the art used by both decks so cards never pop in
@@ -768,7 +798,7 @@ export function BattleScreen() {
               )}
             </AnimatePresence>
 
-            <Hand cards={handCards} playable={playable} selected={selected} onSelect={onSelectHand} onDrop={onDropHand} setupPick={isSetup ? setupBasics : undefined} />
+            {cfg.online?.you === 'spectator' ? <OppHand cards={me.hand} mine /> : <Hand cards={handCards} playable={playable} selected={selected} onSelect={onSelectHand} onDrop={onDropHand} setupPick={isSetup ? setupBasics : undefined} />}
           </LayoutGroup>
 
           {/* HUD */}
@@ -780,13 +810,19 @@ export function BattleScreen() {
                 手札 {opp.hand.length} ・ 山札 {opp.deck.length}
               </div>
             </div>
-            {thinking && <div className="thinking">考え中<span>...</span></div>}
+            {thinking && (
+              <div className="thinking">
+                {cfg.online ? '相手の番' : '考え中'}
+                <span>...</span>
+              </div>
+            )}
           </div>
-          {!cfg.spectate && <Stamps oppName={cfg.oppName} />}
+          {(!cfg.spectate || cfg.online) && <Stamps oppName={cfg.oppName} online={cfg.online ? (ctrl as OnlineController) : null} />}
+          {cfg.online && <OnlineHud spectating={cfg.online.you === 'spectator'} />}
           <div className="plate me">
-            <img src={artUrl('humans/lieutenant')} alt="" />
+            <img src={artUrl(cfg.online ? cfg.online.me.portrait : 'humans/lieutenant')} alt="" />
             <div>
-              <div className="plate-name">あなた</div>
+              <div className="plate-name">{cfg.online ? cfg.online.me.name : 'あなた'}</div>
               <div className="plate-sub">
                 手札 {me.hand.length} ・ 山札 {me.deck.length}
               </div>
@@ -796,7 +832,7 @@ export function BattleScreen() {
           <div className="turn-box">
             <div className={`turn-chip ${s.current === 0 ? 'me' : 'opp'}`}>
               <small>TURN {Math.max(1, s.turn)}</small>
-              {s.phase === 'setup' ? '準備中' : s.current === 0 ? 'あなたの番' : '相手の番'}
+              {s.phase === 'setup' ? '準備中' : cfg.online?.you === 'spectator' ? `${s.players[s.current].name}の番` : s.current === 0 ? 'あなたの番' : '相手の番'}
             </div>
             <div className="turn-flags">
               <span className={s.flags.energyAttached || s.current !== 0 ? 'used' : ''} title="エネルギー">

@@ -3,9 +3,9 @@ import { useEffect, useState } from 'react';
 import type { Prompt } from '../engine/types';
 import { CardFace } from '../ui/Card';
 import { sfx } from '../audio/audio';
-import { HUMAN, useBattle, type BattleController } from './controller';
+import { HUMAN, useBattle, type BattleDriver } from './controller';
 
-export function PromptLayer({ ctrl }: { ctrl: BattleController | null }) {
+export function PromptLayer({ ctrl }: { ctrl: BattleDriver | null }) {
   const prompt = useBattle((s) => s.prompt);
   if (!prompt || prompt.player !== HUMAN || !ctrl) return null;
   if (prompt.type === 'cards') return <CardsPrompt key={JSON.stringify(prompt.selectable) + prompt.title} prompt={prompt} ctrl={ctrl} />;
@@ -13,7 +13,7 @@ export function PromptLayer({ ctrl }: { ctrl: BattleController | null }) {
   return null;
 }
 
-function CardsPrompt({ prompt, ctrl }: { prompt: Extract<Prompt, { type: 'cards' }>; ctrl: BattleController }) {
+function CardsPrompt({ prompt, ctrl }: { prompt: Extract<Prompt, { type: 'cards' }>; ctrl: BattleDriver }) {
   const [sel, setSel] = useState<number[]>([]);
   const [hidden, setHidden] = useState(false);
   useEffect(() => setSel([]), [prompt]);
@@ -73,7 +73,7 @@ function CardsPrompt({ prompt, ctrl }: { prompt: Extract<Prompt, { type: 'cards'
   );
 }
 
-function ChoicePrompt({ prompt, ctrl }: { prompt: Extract<Prompt, { type: 'choice' }>; ctrl: BattleController }) {
+function ChoicePrompt({ prompt, ctrl }: { prompt: Extract<Prompt, { type: 'choice' }>; ctrl: BattleDriver }) {
   return (
     <div className="modal-back prompt-back">
       <motion.div className="modal panel choice-modal" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}>

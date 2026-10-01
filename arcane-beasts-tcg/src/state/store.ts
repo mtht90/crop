@@ -1,4 +1,5 @@
 import type { FxLevel } from '../lib/fx';
+import type { MatchInfo } from '../online/client';
 import { create } from 'zustand';
 import { ALL_CARDS, card, CARDS, SET_INFO } from '../engine/cards';
 import { applyRanked, ensureSeason, freshRank, type RankChange, type RankState } from './ranked';
@@ -44,7 +45,7 @@ const isBasicEnergy = (cid: string) => {
   return c.kind === 'energy' && c.basic;
 };
 
-export type Screen = 'title' | 'starter' | 'home' | 'rivals' | 'battle' | 'deck' | 'collection' | 'shop' | 'missions' | 'exchange' | 'ranked' | 'settings' | 'credits' | 'rules' | 'gallery';
+export type Screen = 'lobby' | 'title' | 'starter' | 'home' | 'rivals' | 'battle' | 'deck' | 'collection' | 'shop' | 'missions' | 'exchange' | 'ranked' | 'settings' | 'credits' | 'rules' | 'gallery';
 
 export interface SavedDeck {
   id: string;
@@ -95,6 +96,8 @@ export interface BattleConfig {
   spectate?: boolean;
   /** ranked match: the opponent's rank index */
   ranked?: { oppRank: number };
+  /** an online match (the rules run on the server) */
+  online?: MatchInfo;
 }
 
 const KEY = 'arcane-beasts-save-v1';
@@ -172,6 +175,8 @@ interface Store {
   addCards: (cids: string[]) => boolean[];
   exchange: (cid: string) => boolean;
   recordRanked: (win: boolean) => RankChange;
+  /** pay rank rewards decided by the server (online ranked) */
+  grantRankRewards: (rewards: RankChange['rewards']) => void;
   startBattle: (cfg: BattleConfig) => void;
   reset: () => void;
   claimLogin: () => number;
@@ -244,6 +249,13 @@ export const useStore = create<Store>((set, get) => ({
     });
     return res;
   },
+  grantRankRewards: (rewards) =>
+    get().update((s) => {
+      for (const { reward } of rewards) {
+        s.coins += reward.coins;
+        for (const [r, n] of Object.entries(reward.shards ?? {}) as [Rarity, number][]) s.shards[r] = (s.shards[r] ?? 0) + n;
+      }
+    }),
   exchange: (cid) => {
     let ok = false;
     get().update((s) => {

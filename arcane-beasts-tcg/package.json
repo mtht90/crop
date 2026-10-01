@@ -5,11 +5,15 @@
   "main": "index.js",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "tsc && tsc --noEmit -p tsconfig.server.json && vite build",
     "preview": "vite preview",
     "test": "vitest run",
     "assets": "python3 scripts/build_assets.py",
-    "build:artifact": "vite build --mode artifact && python3 scripts/make_artifact.py"
+    "build:artifact": "vite build --mode artifact && python3 scripts/make_artifact.py",
+    "server": "tsx server/index.ts",
+    "server:check": "tsc --noEmit -p tsconfig.server.json",
+    "start": "vite build && tsx server/index.ts",
+    "build:web": "vite build"
   },
   "keywords": [],
   "author": "",
@@ -18,9 +22,12 @@
     "@types/three": "^0.169.0",
     "howler": "^2.2.4",
     "motion": "^13.4.4",
+    "qrcode": "^1.5.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "three": "^0.169.0",
+    "tsx": "^4.23.15",
+    "ws": "^8.22.0",
     "zustand": "^5.0.15"
   },
   "devDependencies": {
@@ -30,8 +37,10 @@
     "@fontsource/m-plus-rounded-1c": "^5.3.0",
     "@iconify-json/game-icons": "^1.2.4",
     "@types/howler": "^2.2.13",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^18.3.31",
     "@types/react-dom": "^18.3.7",
+    "@types/ws": "^8.18.2",
     "@vitejs/plugin-react": "^4.7.0",
     "playwright": "^1.63.0",
     "typescript": "^5.9.3",

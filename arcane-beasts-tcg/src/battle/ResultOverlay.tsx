@@ -11,6 +11,7 @@ import { useFx } from './fx';
 import { PROMOTE_AT, MEIJIN, RANKS, type RankChange } from '../state/ranked';
 import { RankEmblem } from '../ui/RankEmblem';
 import { RARITY_SYMBOL } from '../engine/cards';
+import { online } from '../online/client';
 import type { Rarity } from '../engine/types';
 
 const draw0 = (w: number) => w === -1;
@@ -39,6 +40,26 @@ export function ResultOverlay() {
       setTimeout(() => clearInterval(iv), 2200);
     }
     if (cfg.spectate) return;
+    if (cfg.online) {
+      // online: the server decides ranks; coins and progress are paid here
+      if (draw0(result.winner)) return;
+      const or = useBattle.getState().onlineResult;
+      const kind = cfg.online.kind;
+      const st0 = useBattle.getState().stats;
+      const before0 = claimableCount(useStore.getState().save.progress, extCtx(useStore.getState().save));
+      const r0 = recordBattle(
+        { win, level: 'normal', baseReward: kind === 'ranked' ? 90 : kind === 'random' ? 60 : 0, prizesTaken: st0.prizes, prizesLost: st0.prizesLost, firstClear: false },
+        { kos: st0.kos, damage: st0.damage, prizes: st0.prizes, evolves: st0.evolves, trainers: st0.trainers },
+      );
+      setRes(r0);
+      if (or && or.t === 'over' && or.rank) {
+        useStore.getState().grantRankRewards(or.rank.rewards);
+        setRank(or.rank);
+      }
+      const after0 = claimableCount(useStore.getState().save.progress, extCtx(useStore.getState().save));
+      setMissionsReady(Math.max(0, after0 - before0));
+      return;
+    }
     const before = claimableCount(useStore.getState().save.progress, extCtx(useStore.getState().save));
     const st = useBattle.getState().stats;
     const firstClear = win && !!cfg.rival && !useStore.getState().save.beaten.includes(cfg.rival.id);
@@ -54,24 +75,25 @@ export function ResultOverlay() {
   }, [result, cfg, update, recordBattle]);
 
   if (!result || !cfg) return null;
-  const win = result.winner === 0;
+  const watching = cfg.online?.you === 'spectator';
+  const win = result.winner === 0 || watching;
   const draw = result.winner === -1;
   const lineDelay = 1.0;
   const nLines = res?.lines.length ?? 0;
   return (
     <motion.div className={`result ${win ? 'win' : 'lose'}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.6 }}>
       <motion.div className="result-title" initial={{ scale: 1.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1], delay: 0.15 }}>
-        {draw ? 'DRAW' : win ? 'VICTORY' : 'DEFEAT'}
+        {draw ? 'DRAW' : watching ? 'GAME SET' : win ? 'VICTORY' : 'DEFEAT'}
       </motion.div>
-      <div className="result-reason">{result.reason}</div>
+      <div className="result-reason">{watching && !draw ? `${useBattle.getState().view?.players[result.winner as 0 | 1]?.name ?? ''}の勝ち　${result.reason}` : result.reason}</div>
       <div className="result-row">
-      <motion.div className="result-rival" initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.6 }}>
+      {!watching && <motion.div className="result-rival" initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.6 }}>
         <img src={artUrl(cfg.oppPortrait)} alt="" />
         <div className="bubble">
           <b>{cfg.oppName}</b>
-          <p>{cfg.rival ? (win ? cfg.rival.lose : cfg.rival.win) : win ? '参りました！' : '私の勝ちですね。'}</p>
+          <p>{cfg.online ? 'ありがとうございました！' : cfg.rival ? (win ? cfg.rival.lose : cfg.rival.win) : win ? '参りました！' : '私の勝ちですね。'}</p>
         </div>
-      </motion.div>
+      </motion.div>}
 
       {res && (
         <div className="reward-panel panel">
@@ -113,11 +135,14 @@ export function ResultOverlay() {
           onClick={() => {
             sfx('button');
             useBattle.setState({ result: null, view: null, prompt: null });
-            if (cfg.ranked) go('ranked');
+            if (cfg.online) {
+              online.clearMatch();
+              go('lobby');
+            } else if (cfg.ranked) go('ranked');
             else startBattle({ ...cfg });
           }}
         >
-          {cfg.ranked ? '次の対戦へ' : 'もう一度'}
+          {cfg.online ? 'ロビーへ' : cfg.ranked ? '次の対戦へ' : 'もう一度'}
         </button>
         {missionsReady > 0 && (
           <button
@@ -136,7 +161,8 @@ export function ResultOverlay() {
           onClick={() => {
             sfx('button');
             useBattle.setState({ result: null, view: null, prompt: null });
-            go(cfg.ranked ? 'home' : cfg.rival ? 'rivals' : 'home');
+            if (cfg.online) online.clearMatch();
+            go(cfg.ranked || cfg.online ? 'home' : cfg.rival ? 'rivals' : 'home');
           }}
         >
           {cfg.rival ? '対戦相手を選ぶ' : 'ホームへ'}

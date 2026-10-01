@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
 import { useBattle } from './controller';
 import { foley } from '../audio/audio';
+import type { OnlineController } from '../online/controller';
 
 export interface Stamp {
   id: string;
@@ -46,7 +47,7 @@ interface Shown {
   stamp: Stamp;
 }
 
-export function Stamps({ oppName }: { oppName: string }) {
+export function Stamps({ oppName, online }: { oppName: string; online?: OnlineController | null }) {
   const [open, setOpen] = useState(false);
   const [mine, setMine] = useState<Shown | null>(null);
   const [theirs, setTheirs] = useState<Shown | null>(null);
@@ -75,6 +76,7 @@ export function Stamps({ oppName }: { oppName: string }) {
     foley.pop();
     setMine({ key: Date.now(), stamp: s });
     later(2600, () => setMine(null));
+    if (online) return online.stamp(s.id);
     if (Math.random() < 0.75) cpuSay(pick(REPLY[s.id] ?? ['think']), 900 + Math.random() * 900);
   };
 
@@ -82,6 +84,22 @@ export function Stamps({ oppName }: { oppName: string }) {
   useEffect(
     () =>
       useBattle.subscribe((st, prev) => {
+        if (online) {
+          // a stamp from the other side (or a spectator)
+          const inc = st.incomingStamp;
+          if (inc && inc !== prev.incomingStamp && STAMPS.some((x) => x.id === inc.id)) {
+            foley.pop();
+            const stamp = byId(inc.id);
+            if (inc.from === 0 && online.spectating) {
+              setMine({ key: inc.key, stamp });
+              later(2600, () => setMine(null));
+            } else {
+              setTheirs({ key: inc.key, stamp });
+              later(2600, () => setTheirs(null));
+            }
+          }
+          return;
+        }
         const ev = st.lastEvent;
         if (!ev || ev === prev.lastEvent) return;
         if (ev.e === 'setupDone') cpuSay('hi', 700);

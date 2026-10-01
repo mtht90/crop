@@ -15,5 +15,6 @@ export default defineConfig(({ mode }) => ({
     outDir: mode === 'artifact' ? 'dist-artifact' : 'dist',
     ...(mode === 'artifact' ? { assetsInlineLimit: 0, cssCodeSplit: false, rollupOptions: { output: { inlineDynamicImports: true } } } : {}),
   },
+  server: { proxy: { '/ws': { target: 'ws://127.0.0.1:8787', ws: true } } },
   test: { environment: 'node' },
 }) as any);
