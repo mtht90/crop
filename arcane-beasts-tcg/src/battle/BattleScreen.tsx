@@ -42,7 +42,7 @@ const BoardCard = memo(function BoardCard({ inst, face, className, style, onClic
       className={`bc ${className ?? ''}`}
       style={style}
       onClick={onClick}
-      onMouseEnter={hoverPreview && face ? () => setHover(inst.cid) : undefined}
+      onMouseEnter={hoverPreview && face ? () => !document.body.classList.contains('hand-dragging') && setHover(inst.cid) : undefined}
       onMouseLeave={hoverPreview && face ? () => setHover(null) : undefined}
       onContextMenu={face ? (e) => {
         e.preventDefault();
@@ -213,9 +213,77 @@ interface HandProps {
   setupPick?: Set<number>;
   onSelect: (uid: number) => void;
   onDrop: (uid: number, target: string | null) => void;
+  /** where a card from the hand may be dropped (data-drop keys) */
+  dropKeys: (uid: number) => Set<string>;
+  /** tells the board which card is being dragged, so it can light up the places it can go */
+  onDragging: (uid: number | null) => void;
 }
 
-function Hand({ cards, playable, selected, onSelect, onDrop, setupPick }: HandProps) {
+/** the stage unit in px */
+const unitPx = () => Math.min(window.innerWidth / 100, (window.innerHeight * 1.7778) / 100);
+
+/**
+ * The drop target for a card whose picture is centred at (x, y): the slot under it,
+ * or failing that the nearest place it may go, as long as it is close enough.
+ * Broad zones (the whole bench, the whole mat) only count when no single slot does.
+ */
+function pickDrop(x: number, y: number, keys: Set<string>): string | null {
+  if (!keys.size) return null;
+  const u = unitPx();
+  const hand = document.querySelector('.hand')?.getBoundingClientRect();
+  // still over the hand: not played yet
+  if (hand && y > hand.top + u * 2) return null;
+  let best: string | null = null;
+  let score = Infinity;
+  for (const el of document.querySelectorAll<HTMLElement>('[data-drop]')) {
+    const key = el.dataset.drop!;
+    if (!keys.has(key)) continue;
+    const r = el.getBoundingClientRect();
+    const d = Math.hypot(Math.max(r.left - x, 0, x - r.right), Math.max(r.top - y, 0, y - r.bottom));
+    const broad = key === 'board' || key === 'bench';
+    if (d > (broad ? 0 : u * 6)) continue;
+    const sc = d + (broad ? u * 100 : 0);
+    if (sc < score) {
+      score = sc;
+      best = key;
+    }
+  }
+  return best;
+}
+
+/** light the place a dragged card would land on */
+function markHot(key: string | null) {
+  for (const el of document.querySelectorAll('.drop-hot')) el.classList.remove('drop-hot');
+  if (!key) return;
+  const sel = key === 'board' ? '.mat' : key === 'bench' ? '.zone-bench.me' : `[data-drop="${key}"]`;
+  for (const el of document.querySelectorAll(sel)) el.classList.add('drop-hot');
+}
+
+/** the centre of a hand card's picture, wherever the drag has taken it */
+function cardCentre(uid: number): [number, number] | null {
+  const el = document.querySelector(`.hand-card[data-uid="${uid}"] .bc-card`);
+  if (!el) return null;
+  const r = el.getBoundingClientRect();
+  return [r.left + r.width / 2, r.top + r.height / 2];
+}
+
+function Hand({ cards, playable, selected, onSelect, onDrop, setupPick, dropKeys, onDragging }: HandProps) {
+  const [dragging, setDragging] = useState<number | null>(null);
+  const touch = useRef(false);
+  const hot = useRef<string | null>(null);
+  /** a click that ends a drag is not a tap */
+  const dragged = useRef(false);
+  // y is animated in px: a calc() string cannot be added to the drag offset
+  const [u, setU] = useState(unitPx);
+  useEffect(() => {
+    const on = () => setU(unitPx());
+    window.addEventListener('resize', on);
+    return () => window.removeEventListener('resize', on);
+  }, []);
+  const target = (uid: number) => {
+    const c = cardCentre(uid);
+    return c ? pickDrop(c[0], c[1], dropKeys(uid)) : null;
+  };
   const n = cards.length;
   const maxW = 50;
   const cw = 8.2;
@@ -238,7 +306,7 @@ function Hand({ cards, playable, selected, onSelect, onDrop, setupPick }: HandPr
             key={c.uid}
             layoutId={`c${c.uid}`}
             transition={{ layout: LAYOUT }}
-            className={`bc hand-card ${can ? 'can' : ''} ${isSel ? 'sel' : ''}`}
+            className={`bc hand-card ${can ? 'can' : ''} ${isSel ? 'sel' : ''} ${dragging === c.uid ? `dragging ${touch.current ? 'lifted' : ''}` : ''}`}
             style={{
               left: `calc(var(--u) * ${50 - total / 2 + i * step})`,
               zIndex: isHover || isSel ? 100 : i,
@@ -246,22 +314,50 @@ function Hand({ cards, playable, selected, onSelect, onDrop, setupPick }: HandPr
             initial={{ rotateY: 90 }}
             animate={{
               rotate: isHover || isSel ? 0 : rot,
-              y: `calc(var(--u) * ${isSel ? -8.5 : isHover ? -7 : lift})`,
+              y: u * (isSel ? -8.5 : isHover ? -7 : lift),
               scale: isHover || isSel ? 1.18 : 1,
               rotateY: 0,
             }}
             drag={can}
             dragSnapToOrigin
-            dragElastic={0.9}
-            whileDrag={{ scale: 1.08, zIndex: 200, rotate: 0 }}
-            onDragStart={() => foley.slide()}
-            onDragEnd={(e, info) => {
-              void e;
-              const els = document.elementsFromPoint(info.point.x - window.scrollX, info.point.y - window.scrollY);
-              const t = els.map((el) => (el as HTMLElement).closest('[data-drop]')?.getAttribute('data-drop')).find(Boolean) ?? null;
-              onDrop(c.uid, t);
+            dragMomentum={false}
+            dragElastic={1}
+            dragTransition={{ bounceStiffness: 500, bounceDamping: 32 }}
+            whileDrag={{ scale: touch.current ? 1 : 0.92, zIndex: 200, rotate: 0 }}
+            onPointerDown={(e) => {
+              touch.current = e.pointerType !== 'mouse';
+            }}
+            onDragStart={() => {
+              foley.slide();
+              setHover(null);
+              setPreview(null);
+              setDragging(c.uid);
+              onDragging(c.uid);
+              document.body.classList.add('hand-dragging');
+            }}
+            onDrag={() => {
+              const t = target(c.uid);
+              if (t !== hot.current) {
+                hot.current = t;
+                markHot(t);
+                if (t) foley.tick();
+              }
+            }}
+            onDragEnd={(_, info) => {
+              const t = target(c.uid);
+              hot.current = null;
+              markHot(null);
+              dragged.current = true;
+              setTimeout(() => (dragged.current = false), 0);
+              setDragging(null);
+              onDragging(null);
+              document.body.classList.remove('hand-dragging');
+              if (t) onDrop(c.uid, t);
+              // a short wobble is a tap
+              else if (Math.hypot(info.offset.x, info.offset.y) < 14) onSelect(c.uid);
             }}
             onMouseEnter={() => {
+              if (dragging !== null) return;
               setHover(c.uid);
               setPreview(c.cid);
               foley.hover();
@@ -270,7 +366,7 @@ function Hand({ cards, playable, selected, onSelect, onDrop, setupPick }: HandPr
               setHover(null);
               setPreview(null);
             }}
-            onClick={() => onSelect(c.uid)}
+            onClick={() => !dragged.current && onSelect(c.uid)}
             onContextMenu={(e) => {
               e.preventDefault();
               setPreview(c.cid);
@@ -474,6 +570,7 @@ export function BattleScreen() {
   const prompt = useBattle((s) => s.prompt);
   const thinking = useBattle((s) => s.thinking);
   const [selected, setSelected] = useState<number | null>(null);
+  const [dragUid, setDragUid] = useState<number | null>(null);
   const [menu, setMenu] = useState<Pos | null>(null);
   const [retreat, setRetreat] = useState<{ discard: number[]; need: number; choosing: boolean } | null>(null);
   const [setupActive, setSetupActive] = useState<number | null>(null);
@@ -560,7 +657,9 @@ export function BattleScreen() {
   // --- playable cards / targets ---
   const playable = new Set<number>();
   for (const a of legal) if ('uid' in a) playable.add(a.uid);
-  const selActions = selected !== null ? legal.filter((a) => 'uid' in a && a.uid === selected) : [];
+  // the card being dragged (or else the one picked) decides which places light up
+  const focus = dragUid ?? selected;
+  const selActions = focus !== null ? legal.filter((a) => 'uid' in a && a.uid === focus) : [];
   const targetKeys = new Set<string>();
   let benchTarget = false;
   for (const a of selActions) {
@@ -613,6 +712,28 @@ export function BattleScreen() {
     ctrl.answer({ type: 'setup', active: setupActive, bench: setupBench });
     setSetupActive(null);
     setSetupBench([]);
+  };
+
+  /** where a hand card may be dropped */
+  const dropKeys = (uid: number): Set<string> => {
+    const keys = new Set<string>();
+    if (isSetup) {
+      if (!setupBasics.has(uid)) return keys;
+      keys.add('0a');
+      if (setupBench.length < 5) for (let i = 0; i < 5; i++) keys.add(`0b${i}`);
+      return keys;
+    }
+    if (!myAction) return keys;
+    for (const a of legal) {
+      if (!('uid' in a) || a.uid !== uid) continue;
+      if ('target' in a && a.target) keys.add(posKey(a.target));
+      if (a.t === 'playBasic') {
+        keys.add(`0b${me.bench.length}`);
+        keys.add('bench');
+      }
+      if (a.t === 'playTrainer' && !a.target) keys.add('board');
+    }
+    return keys;
   };
 
   // --- hand interaction ---
@@ -719,7 +840,7 @@ export function BattleScreen() {
       <div className="battle-bg-shade" />
       <div className="stage battle-stage">
         <div className="battle-shake">
-          <div className="mat" data-drop="board">
+          <div className={`mat ${dragUid !== null && selNoTarget ? 'drop-any' : ''}`} data-drop="board">
             <div className="mat-line" />
             <div className="mat-zone active me" />
             <div className="mat-zone active opp" />
@@ -798,7 +919,7 @@ export function BattleScreen() {
               )}
             </AnimatePresence>
 
-            {cfg.online?.you === 'spectator' ? <OppHand cards={me.hand} mine /> : <Hand cards={handCards} playable={playable} selected={selected} onSelect={onSelectHand} onDrop={onDropHand} setupPick={isSetup ? setupBasics : undefined} />}
+            {cfg.online?.you === 'spectator' ? <OppHand cards={me.hand} mine /> : <Hand cards={handCards} playable={playable} selected={selected} onSelect={onSelectHand} onDrop={onDropHand} setupPick={isSetup ? setupBasics : undefined} dropKeys={dropKeys} onDragging={setDragUid} />}
           </LayoutGroup>
 
           {/* HUD */}

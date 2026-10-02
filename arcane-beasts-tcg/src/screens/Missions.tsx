@@ -4,7 +4,7 @@ import { TopBar } from '../ui/TopBar';
 import { Icon } from '../ui/Icon';
 import { artUrl } from '../lib/assets';
 import { foley, playMusic, sfx } from '../audio/audio';
-import { ACHIEVEMENTS, dailyMissions, extCtx, useStore, weeklyMissions, type Save } from '../state/store';
+import { ACHIEVEMENTS, dailyMissions, extCtx, NORMAL_MISSIONS, useStore, weeklyMissions, type Save } from '../state/store';
 import {
   canClaimLogin,
   ensurePeriods,
@@ -17,8 +17,8 @@ import {
   type Mission,
 } from '../state/progress';
 
-type Tab = 'login' | 'daily' | 'weekly' | 'achv';
-type Period = 'daily' | 'weekly' | 'achv';
+type Tab = 'login' | 'normal' | 'daily' | 'weekly' | 'achv';
+type Period = 'normal' | 'daily' | 'weekly' | 'achv';
 
 interface Row {
   m: Mission;
@@ -32,8 +32,8 @@ function rows(save: Save, period: Period): Row[] {
   const p = structuredClone(save.progress);
   ensurePeriods(p);
   const ext = extCtx(save);
-  const list = period === 'daily' ? dailyMissions(p) : period === 'weekly' ? weeklyMissions(p) : ACHIEVEMENTS;
-  const claimedIds = period === 'daily' ? p.daily.claimed : period === 'weekly' ? p.weekly.claimed : p.achvClaimed;
+  const list = period === 'daily' ? dailyMissions(p) : period === 'weekly' ? weeklyMissions(p) : period === 'normal' ? NORMAL_MISSIONS : ACHIEVEMENTS;
+  const claimedIds = period === 'daily' ? p.daily.claimed : period === 'weekly' ? p.weekly.claimed : period === 'normal' ? (p.normalClaimed ?? []) : p.achvClaimed;
   let out = list.map((m) => {
     const value = missionValue(p, m, period, ext);
     return { m, period, value, done: value >= m.target, claimed: claimedIds.includes(m.id) };
@@ -48,6 +48,12 @@ function rows(save: Save, period: Period): Row[] {
       seen.add(line);
       return true;
     });
+  }
+  if (period === 'normal') {
+    // hide what has been claimed; the closest goals come first
+    out = out.filter((r) => !r.claimed);
+    const near = (r: Row) => (r.done ? 2 : r.value / r.m.target);
+    return out.sort((a, b) => near(b) - near(a));
   }
   // claimable first, then in progress, then claimed
   const rank = (r: Row) => (r.claimed ? 2 : r.done ? 0 : 1);
@@ -68,13 +74,14 @@ export function Missions() {
   const claimMission = useStore((s) => s.claimMission);
   useEffect(() => playMusic('menu'), []);
   const now = useNow();
-  const [tab, setTab] = useState<Tab>(() => (canClaimLogin(save.progress) ? 'login' : 'daily'));
+  const [tab, setTab] = useState<Tab>(() => (canClaimLogin(save.progress) ? 'login' : 'normal'));
   const [flash, setFlash] = useState<{ id: number; coins: number } | null>(null);
 
-  const data = useMemo(() => ({ daily: rows(save, 'daily'), weekly: rows(save, 'weekly'), achv: rows(save, 'achv') }), [save]);
+  const data = useMemo(() => ({ normal: rows(save, 'normal'), daily: rows(save, 'daily'), weekly: rows(save, 'weekly'), achv: rows(save, 'achv') }), [save]);
   const count = (list: Row[]) => list.filter((r) => r.done && !r.claimed).length;
   const tabs: { id: Tab; label: string; icon: string; n: number }[] = [
     { id: 'login', label: 'ログインボーナス', icon: 'crown', n: canClaimLogin(save.progress) ? 1 : 0 },
+    { id: 'normal', label: '通常', icon: 'scroll-quill', n: count(data.normal) },
     { id: 'daily', label: 'デイリー', icon: 'hourglass', n: count(data.daily) },
     { id: 'weekly', label: 'ウィークリー', icon: 'scroll-unfurled', n: count(data.weekly) },
     { id: 'achv', label: '実績', icon: 'trophy', n: count(data.achv) },
@@ -148,7 +155,7 @@ export function Missions() {
                       initial={{ opacity: 0, y: 8 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, x: 30 }}
-                      transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1], delay: i * 0.03 }}
+                      transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1], delay: Math.min(i, 12) * 0.03 }}
                     >
                       <div className="ms-main">
                         <div className="ms-label">{r.m.label}</div>
@@ -171,6 +178,7 @@ export function Missions() {
                   ))}
                 </AnimatePresence>
                 {tab === 'achv' && !list.length && <div className="ms-empty">すべての実績を達成しました</div>}
+                {tab === 'normal' && !list.length && <div className="ms-empty">すべての通常ミッションを達成しました</div>}
               </div>
             </>
           )}

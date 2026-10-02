@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useStore } from '../state/store';
+import { DEV_CODE, enterDevMode, grantAllCards, useStore } from '../state/store';
+import { CHAPTERS } from '../story';
 import { artUrl } from '../lib/assets';
 import { TopBar } from '../ui/TopBar';
 import { CardFace, EnergySymbol } from '../ui/Card';
@@ -99,6 +100,7 @@ export function Settings() {
             </div>
           </div>
           <InstallRow />
+          <DevRow />
           <div className="set-row danger">
             <label>セーブデータ</label>
             <button
@@ -113,6 +115,60 @@ export function Settings() {
         </div>
       </div>
     </div>
+  );
+}
+
+/** 開発者モード: a code unlocks everything (story cleared, endless coins and shards) */
+function DevRow() {
+  const dev = useStore((s) => !!s.save.dev);
+  const update = useStore((s) => s.update);
+  const [code, setCode] = useState('');
+  const [msg, setMsg] = useState('');
+  if (dev)
+    return (
+      <>
+        <div className="set-row dev-on">
+          <label>開発者モード</label>
+          <span className="dev-badge">ON</span>
+          <button
+            className="btn small"
+            onClick={() => {
+              update((s) => grantAllCards(s));
+              sfx('gold', 0.6);
+              setMsg('すべてのカードを4枚ずつ追加しました');
+            }}
+          >
+            全カードを入手
+          </button>
+          <button className="btn ghost small" onClick={() => update((s) => void (s.dev = false))}>
+            オフにする
+          </button>
+        </div>
+        <div className="set-note">{msg || 'ストーリー全章・強敵すべてクリア済み。コインとかけらは使っても減りません'}</div>
+      </>
+    );
+  const submit = () => {
+    if (code.trim().toUpperCase() !== DEV_CODE) {
+      sfx('miss-2', 0.5);
+      setMsg('コードがちがいます');
+      return;
+    }
+    update((s) => enterDevMode(s, CHAPTERS.map((c) => c.id)));
+    sfx('fanfare-short', 0.6);
+    setCode('');
+    setMsg('');
+  };
+  return (
+    <>
+      <div className="set-row">
+        <label>開発者コード</label>
+        <input className="dev-input" value={code} placeholder="コードを入力" onChange={(e) => setCode(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && submit()} />
+        <button className="btn small" disabled={!code.trim()} onClick={submit}>
+          決定
+        </button>
+      </div>
+      {msg && <div className="set-note">{msg}</div>}
+    </>
   );
 }
 

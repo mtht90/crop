@@ -126,7 +126,7 @@ export const BoosterPack = memo(function BoosterPack({ booster, className, style
           </div>
           <div className="bp-foot">
             <span className="line" />
-            <span className="t">{booster.premium ? 'PREMIUM PACK' : booster.theme ? 'THEME PACK' : 'BOOSTER PACK'}</span>
+            <span className="t">{booster.premium ? 'PREMIUM PACK' : booster.theme ? 'DAILY PACK' : 'BOOSTER PACK'}</span>
             <span className="line" />
           </div>
           {booster.premium && <div className="bp-frame" />}

@@ -78,7 +78,7 @@ export function Rivals() {
       <div className="screen-bg" style={{ backgroundImage: `url(${artUrl(r.scene)})` }} key={r.scene} />
       <div className="screen-shade" />
       <div className="stage">
-        <TopBar title="バトル" />
+        <TopBar title="フリー対戦" back="arena" />
         <div className="seg rival-sets">
           {SETS.map((k) => (
             <button

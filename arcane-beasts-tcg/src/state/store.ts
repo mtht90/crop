@@ -7,7 +7,7 @@ import { applyRanked, ensureSeason, freshRank, type RankChange, type RankState }
 import { expand, RIVALS, STARTER_DECKS, type Rival } from '../engine/decks';
 import type { Difficulty } from '../engine/ai';
 import type { CardDef, EType, Rarity, SetCode } from '../engine/types';
-import { dayNumber, inTheme, lineupFor, type Series } from './themes';
+import { dayNumber, lineupFor, type Series } from './themes';
 import {
   ACHIEVEMENTS,
   addExp,
@@ -27,6 +27,8 @@ import {
   type BattleOutcome,
   type ExtCtx,
   type Mission,
+  type MissionPeriod,
+  NORMAL_MISSIONS,
   type Progress,
   type RewardLine,
   type Stats,
@@ -47,7 +49,7 @@ const isBasicEnergy = (cid: string) => {
   return c.kind === 'energy' && c.basic;
 };
 
-export type Screen = 'story' | 'scene' | 'lobby' | 'title' | 'starter' | 'home' | 'rivals' | 'battle' | 'deck' | 'collection' | 'shop' | 'missions' | 'exchange' | 'ranked' | 'settings' | 'credits' | 'rules' | 'gallery';
+export type Screen = 'arena' | 'story' | 'scene' | 'lobby' | 'title' | 'starter' | 'home' | 'rivals' | 'battle' | 'deck' | 'collection' | 'shop' | 'missions' | 'exchange' | 'ranked' | 'settings' | 'credits' | 'rules' | 'gallery';
 
 export interface SavedDeck {
   id: string;
@@ -86,6 +88,8 @@ export interface Save {
   ranked: RankState;
   /** story mode progress */
   story: StorySave;
+  /** developer mode (entered with a code in 設定): everything cleared, coins and shards never run out */
+  dev?: boolean;
 }
 
 export interface StorySave {
@@ -124,6 +128,40 @@ export interface BattleConfig {
 }
 
 const KEY = 'arcane-beasts-save-v1';
+
+// ----------------------------------------------------------------------------
+// Developer mode
+// ----------------------------------------------------------------------------
+export const DEV_CODE = 'ARCANE-DEV';
+const DEV_COINS = 9_999_999;
+const DEV_SHARDS = 9_999;
+
+/** developer mode keeps coins and shards topped up */
+function refill(s: Save) {
+  s.coins = Math.max(s.coins, DEV_COINS);
+  for (const r of SHARD_RARITIES) s.shards[r] = Math.max(s.shards[r] ?? 0, DEV_SHARDS);
+}
+
+/** turn developer mode on: the story and every rival cleared, resources without limit */
+export function enterDevMode(s: Save, chapterIds: string[]) {
+  s.dev = true;
+  s.started = true;
+  s.story.started = true;
+  s.story.hero ??= { name: 'ユウ', look: 'konrad' };
+  s.story.cleared = [...chapterIds];
+  s.story.seen = ['prologue', ...chapterIds.flatMap((id) => [`${id}:before`, `${id}:after`])];
+  s.beaten = RIVALS.map((r) => r.id);
+  refill(s);
+}
+
+/** every printing, up to the copy limit */
+export function grantAllCards(s: Save) {
+  for (const c of ALL_CARDS) {
+    if (c.kind === 'energy' && c.basic) continue;
+    if (!s.collection[c.id]) s.newCards.push(c.id);
+    s.collection[c.id] = Math.max(s.collection[c.id] ?? 0, 4);
+  }
+}
 
 function freshSave(): Save {
   return {
@@ -211,7 +249,7 @@ interface Store {
   startBattle: (cfg: BattleConfig) => void;
   reset: () => void;
   claimLogin: () => number;
-  claimMission: (m: Mission, period: 'daily' | 'weekly' | 'achv') => number;
+  claimMission: (m: Mission, period: MissionPeriod) => number;
   recordPack: (premium: boolean) => void;
   recordBattle: (o: BattleOutcome, st: Partial<Stats>) => BattleRewardResult;
 }
@@ -236,6 +274,7 @@ export const useStore = create<Store>((set, get) => ({
   update: (f) => {
     const s = structuredClone(get().save);
     f(s);
+    if (s.dev) refill(s);
     persist(s);
     set({ save: s });
   },
@@ -283,6 +322,7 @@ export const useStore = create<Store>((set, get) => ({
     let res!: RankChange;
     get().update((s) => {
       res = applyRanked(s.ranked, win);
+      if (win) bump(s.progress, { rankedWins: 1 });
       for (const { reward } of res.rewards) {
         s.coins += reward.coins;
         for (const [r, n] of Object.entries(reward.shards ?? {}) as [Rarity, number][]) s.shards[r] = (s.shards[r] ?? 0) + n;
@@ -306,6 +346,7 @@ export const useStore = create<Store>((set, get) => ({
       s.shards[c.rarity] = (s.shards[c.rarity] ?? 0) - cost;
       if (!s.collection[cid]) s.newCards.push(cid);
       s.collection[cid] = (s.collection[cid] ?? 0) + 1;
+      bump(s.progress, { exchanges: 1 });
       ok = true;
     });
     return ok;
@@ -334,7 +375,8 @@ export const useStore = create<Store>((set, get) => ({
       const p = s.progress;
       ensurePeriods(p);
       const ext = extCtx(s);
-      const list = period === 'daily' ? p.daily.claimed : period === 'weekly' ? p.weekly.claimed : p.achvClaimed;
+      p.normalClaimed ??= [];
+      const list = period === 'daily' ? p.daily.claimed : period === 'weekly' ? p.weekly.claimed : period === 'normal' ? p.normalClaimed : p.achvClaimed;
       if (list.includes(m.id) || missionValue(p, m, period, ext) < m.target) return;
       list.push(m.id);
       s.coins += m.reward;
@@ -362,6 +404,7 @@ export const useStore = create<Store>((set, get) => ({
       });
       if (o.win) {
         p.streak++;
+        p.stats.bestStreak = Math.max(p.stats.bestStreak ?? 0, p.streak);
         p.lastWinDay = dayKey();
         s.wins++;
       } else {
@@ -387,10 +430,19 @@ export function collectionPct(s: Save, set?: SetCode) {
 
 
 export function extCtx(s: Save): ExtCtx {
-  return { collectionPct: collectionPct(s), rivals: s.beaten.length };
+  let uniques = 0;
+  let stars = 0;
+  for (const [cid, k] of Object.entries(s.collection)) {
+    if (!k || !(cid in CARDS)) continue;
+    const c = card(cid);
+    if (c.kind === 'energy' && c.basic) continue;
+    uniques++;
+    if (RARITY_ORDER[c.rarity] >= RARITY_ORDER.ST) stars++;
+  }
+  return { collectionPct: collectionPct(s), rivals: s.beaten.length, story: s.story.cleared.length, rank: s.ranked.rank, uniques, stars, decks: s.decks.length };
 }
 
-export { dailyMissions, weeklyMissions, ACHIEVEMENTS };
+export { dailyMissions, weeklyMissions, ACHIEVEMENTS, NORMAL_MISSIONS };
 
 export function activeDeck(s: Save): SavedDeck | undefined {
   return s.decks.find((d) => d.id === s.activeDeck) ?? s.decks[0];
@@ -405,7 +457,8 @@ export function owned(s: Save, cid: string) {
 // ----------------------------------------------------------------------------
 // Booster packs (5 cards, the last slot is the rare slot)
 // ----------------------------------------------------------------------------
-export const PACK_PRICE = 75;
+/** every normal pack costs the same */
+export const PACK_PRICE = 150;
 export const PACK_SIZE = 5;
 
 export interface Booster {
@@ -417,12 +470,12 @@ export interface Booster {
   hue: string; // accent colour for the pack art
   hue2: string;
   premium?: boolean;
-  /** theme pack: cards of every set that fit the theme (see themes.ts) */
+  /** daily pack: draws from every set (see themes.ts) */
   theme?: string;
   /** name printed on the pack instead of the set name */
   title?: string;
-  /** coins per pack (default PACK_PRICE) */
-  price?: number;
+  /** daily packs: the share of draws that should be of the featured types (set packs just double them) */
+  share?: number;
 }
 
 export const PREMIUM_PRICE = 300;
@@ -434,15 +487,15 @@ export function premiumBooster(): Booster {
 }
 
 export const BOOSTERS: Booster[] = [
-  { id: 'blaze', name: '紅蓮パック', set: 'AB1', mascot: 'ヴォルカリオン', types: ['fire', 'fighting'], hue: '#ff6a2b', hue2: '#7a1405' },
-  { id: 'abyss', name: '深淵パック', set: 'AB1', mascot: 'リヴァイアサーペント', types: ['water', 'lightning'], hue: '#39a8ff', hue2: '#0a2a6e' },
-  { id: 'grove', name: '古樹パック', set: 'AB1', mascot: 'エンシェントウッド', types: ['grass', 'psychic', 'dark'], hue: '#7fdc5a', hue2: '#123f1a' },
-  { id: 'dragon', name: '覇竜パック', set: 'AB2', mascot: 'ドラグーン', types: ['fire', 'fighting', 'colorless'], hue: '#ffb03a', hue2: '#4a1a02' },
-  { id: 'deep', name: '冥海パック', set: 'AB2', mascot: 'ナーガクイーン', types: ['water', 'psychic'], hue: '#3fd6c8', hue2: '#062a3a' },
-  { id: 'undead', name: '死霊パック', set: 'AB2', mascot: 'リッチロード', types: ['dark', 'grass', 'lightning'], hue: '#9d7bff', hue2: '#150a33' },
-  { id: 'horde', name: '蛮勇パック', set: 'AB3', mascot: 'オークソブリン', types: ['fighting', 'fire', 'colorless'], hue: '#d8742c', hue2: '#3a1606' },
-  { id: 'stone', name: '鉱脈パック', set: 'AB3', mascot: 'ドラゴンガード', types: ['lightning', 'water', 'grass'], hue: '#79b8ff', hue2: '#0c1f3d' },
-  { id: 'plague', name: '凶星パック', set: 'AB3', mascot: 'ドラウグロード', types: ['dark', 'psychic', 'colorless'], hue: '#c36bff', hue2: '#1c0b2e' },
+  { id: 'blaze', name: 'ヴォルカリオンパック', set: 'AB1', mascot: 'ヴォルカリオン', types: ['fire', 'fighting'], hue: '#ff6a2b', hue2: '#7a1405' },
+  { id: 'abyss', name: 'リヴァイアサーペントパック', set: 'AB1', mascot: 'リヴァイアサーペント', types: ['water', 'lightning'], hue: '#39a8ff', hue2: '#0a2a6e' },
+  { id: 'grove', name: 'エンシェントウッドパック', set: 'AB1', mascot: 'エンシェントウッド', types: ['grass', 'psychic', 'dark'], hue: '#7fdc5a', hue2: '#123f1a' },
+  { id: 'dragon', name: 'ドラグーンパック', set: 'AB2', mascot: 'ドラグーン', types: ['fire', 'fighting', 'colorless'], hue: '#ffb03a', hue2: '#4a1a02' },
+  { id: 'deep', name: 'ナーガクイーンパック', set: 'AB2', mascot: 'ナーガクイーン', types: ['water', 'psychic'], hue: '#3fd6c8', hue2: '#062a3a' },
+  { id: 'undead', name: 'リッチロードパック', set: 'AB2', mascot: 'リッチロード', types: ['dark', 'grass', 'lightning'], hue: '#9d7bff', hue2: '#150a33' },
+  { id: 'horde', name: 'オークソブリンパック', set: 'AB3', mascot: 'オークソブリン', types: ['fighting', 'fire', 'colorless'], hue: '#d8742c', hue2: '#3a1606' },
+  { id: 'stone', name: 'ドラゴンガードパック', set: 'AB3', mascot: 'ドラゴンガード', types: ['lightning', 'water', 'grass'], hue: '#79b8ff', hue2: '#0c1f3d' },
+  { id: 'plague', name: 'ドラウグロードパック', set: 'AB3', mascot: 'ドラウグロード', types: ['dark', 'psychic', 'colorless'], hue: '#c36bff', hue2: '#1c0b2e' },
 ];
 
 export const setName = (set: SetCode) => SET_INFO[set].name;
@@ -462,11 +515,11 @@ export function todaysLineup(now = Date.now()): [Series, Series] {
   return lineupFor(dayNumber(now) + off, SET_SERIES);
 }
 
-/** which cards a pack draws from: one set, one theme, or everything (premium) */
-type Scope = SetCode | { theme: string } | undefined;
-const scopeOf = (b: Booster): Scope => (b.theme ? { theme: b.theme } : b.premium ? undefined : b.set);
-const scopeKey = (s: Scope) => (s === undefined ? '*' : typeof s === 'string' ? s : `T:${s.theme}`);
-const inScope = (c: CardDef, s: Scope) => (s === undefined ? true : typeof s === 'string' ? c.set === s : inTheme(s.theme, c));
+/** which cards a pack draws from: one set, or every set (daily and premium packs) */
+type Scope = SetCode | undefined;
+const scopeOf = (b: Booster): Scope => (b.theme || b.premium ? undefined : b.set);
+const scopeKey = (s: Scope) => s ?? '*';
+const inScope = (c: CardDef, s: Scope) => s === undefined || c.set === s;
 
 /** cards that can appear for a rarity (mirrors come from their own slot) */
 const POOLS = new Map<string, CardDef[]>();
@@ -485,7 +538,11 @@ function featured(c: CardDef, b: Booster) {
 }
 
 function pickWeighted(arr: CardDef[], b: Booster): CardDef {
-  const w = arr.map((c) => (featured(c, b) ? 2 : 1));
+  const isF = arr.map((c) => featured(c, b));
+  const nF = isF.filter(Boolean).length;
+  // weight the featured cards so they make up `share` of the draws, whatever the pool looks like
+  const fw = b.share && nF && nF < arr.length ? (b.share * (arr.length - nF)) / ((1 - b.share) * nF) : 2;
+  const w = isF.map((f) => (f ? Math.max(1, fw) : 1));
   let r = Math.random() * w.reduce((x, y) => x + y, 0);
   for (let i = 0; i < arr.length; i++) if ((r -= w[i]) <= 0) return arr[i];
   return arr[arr.length - 1];
@@ -547,13 +604,13 @@ export function openPack(b: Booster = BOOSTERS[0]): PackResult {
   return { cards, god };
 }
 
-/** Premium pack: every slot rolls higher; the last slot is RR or better. Cards from every set. */
+/** Premium pack: slots roll a little higher; the last slot is RR or better. Cards from every set. */
 export const PREMIUM_TABLE: [Rarity, number][][] = [
-  [['U', 0.5], ['R', 0.85], ['RR', 1]],
-  [['U', 0.45], ['R', 0.8], ['RR', 1]],
-  [['R', 0.45], ['RR', 0.85], ['ST', 1]],
-  [['RR', 0.5], ['ST', 0.85], ['ST2', 0.95], ['CR', 1]],
-  [['RR', 0.3], ['ST', 0.72], ['ST2', 0.9], ['CR', 1]],
+  [['U', 0.7], ['R', 0.95], ['RR', 1]],
+  [['U', 0.65], ['R', 0.93], ['RR', 1]],
+  [['R', 0.7], ['RR', 0.96], ['ST', 1]],
+  [['R', 0.45], ['RR', 0.88], ['ST', 0.97], ['ST2', 0.995], ['CR', 1]],
+  [['RR', 0.72], ['ST', 0.92], ['ST2', 0.98], ['CR', 1]],
 ];
 
 export function openPremium(): PackResult {

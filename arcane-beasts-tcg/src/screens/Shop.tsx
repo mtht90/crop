@@ -9,7 +9,7 @@ import { AnimatePresence, animate, motion, useAnimationControls, useMotionValue,
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CardDef, Rarity, SetCode } from '../engine/types';
 import { byName, RARITY_SYMBOL } from '../engine/cards';
-import { dayNumber, msToNextLineup, THEMES } from '../state/themes';
+import { dayNumber, msToNextLineup, THEMES, typesLabel } from '../state/themes';
 import { todaysLineup, BOOSTERS, MIRROR_CHANCE, openPack, openPremium, PACK_PRICE, PACK_TABLE, premiumBooster, PREMIUM_PRICE, PREMIUM_TABLE, RARITY_ORDER, useStore, type Booster } from '../state/store';
 import { currentPickup, fmtRemain } from '../state/progress';
 import { CardBack, CardFace } from '../ui/Card';
@@ -32,7 +32,7 @@ const EASE_IN_OUT = [0.65, 0, 0.35, 1] as const;
 const isStar = (r: Rarity) => RARITY_ORDER[r] >= RARITY_ORDER.ST;
 const RARE_COLOR: Partial<Record<Rarity, string>> = { CR: '#ffd27a', ST2: '#ffe9a8', ST: '#fff1c4', RR: '#ffd9b0' };
 const rareColor = (r: Rarity) => RARE_COLOR[r] ?? '#ffffff';
-const priceOf = (b: Booster) => (b.premium ? PREMIUM_PRICE : (b.price ?? PACK_PRICE));
+const priceOf = (b: Booster) => (b.premium ? PREMIUM_PRICE : PACK_PRICE);
 
 // ---------------------------------------------------------------------------
 // Omen (予兆) and promotion (昇格)
@@ -64,7 +64,7 @@ function makeOmen(cards: CardDef[], god: boolean): Omen {
   const meteors = tiers.map((t, i) => (i === 0 ? shown : (Math.min(t, shown) as OmenTier)));
   return { actual, shown, meteors };
 }
-type Tab = 0 | 1 | 'premium';
+type Tab = 'today' | 'premium';
 const hms = (ms: number) => {
   const t = Math.max(0, Math.floor(ms / 1000));
   return `${String(Math.floor(t / 3600)).padStart(2, '0')}:${String(Math.floor((t % 3600) / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
@@ -140,7 +140,7 @@ export function Shop() {
   const [sel, setSel] = useState(0);
   const [opening, setOpening] = useState<OpeningState | null>(null);
   const [odds, setOdds] = useState(false);
-  const [kind, setKind] = useState<Tab>(() => (/[?&]premium/.test(location.search) ? 'premium' : 0));
+  const [kind, setKind] = useState<Tab>(() => (/[?&]premium/.test(location.search) ? 'premium' : 'today'));
   const u = useUnit();
   useEffect(() => playMusic('shop'), []);
   const premium = useMemo(() => premiumBooster(), []);
@@ -154,8 +154,10 @@ export function Shop() {
   const day = dayNumber(now);
   const lineup = useMemo(() => todaysLineup(), [day]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => setSel(0), [day]);
-  const series = kind === 'premium' ? null : lineup[kind];
-  const list = series ? series.boosters : [];
+  // every pack on sale today, side by side (the set series first)
+  const today = useMemo(() => [...lineup].sort((x, y) => (x.kind === 'set' ? -1 : 0) - (y.kind === 'set' ? -1 : 0)).flatMap((se) => se.boosters.map((bo) => ({ bo, se }))), [lineup]);
+  const list = kind === 'premium' ? [] : today.map((t) => t.bo);
+  const series = kind === 'premium' ? null : today[Math.min(sel, today.length - 1)].se;
   const b = kind === 'premium' ? premium : list[Math.min(sel, list.length - 1)];
   const price = priceOf(b);
 
@@ -189,8 +191,6 @@ export function Shop() {
     setSel((sel + d + list.length) % list.length);
   };
 
-  const TYPE_JP: Record<string, string> = { fire: '炎', water: '水', grass: '草', lightning: '雷', psychic: '超', fighting: '闘', dark: '悪', colorless: '無色' };
-
   return (
     <div className="screen shop2">
       <Backdrop hue={b.hue} />
@@ -200,7 +200,7 @@ export function Shop() {
           right={
             <>
             <div className="shop-kind">
-              {([0, 1, 'premium'] as Tab[]).map((k) => (
+              {(['today', 'premium'] as Tab[]).map((k) => (
                 <button
                   key={k}
                   className={`${kind === k ? 'on' : ''} ${k === 'premium' ? 'premium' : ''}`}
@@ -211,13 +211,13 @@ export function Shop() {
                     setSel(0);
                   }}
                 >
-                  {k === 'premium' ? 'プレミアム' : lineup[k].name}
-                  {k !== 'premium' && <i className={lineup[k].kind === 'set' ? 'new' : 'lim'}>{lineup[k].kind === 'set' ? '弾' : '本日'}</i>}
+                  {k === 'premium' ? 'プレミアム' : '本日のパック'}
+                  {k !== 'premium' && <i className="lim">{list.length || today.length}種</i>}
                   {k === 'premium' && pickup && <i>PICK UP</i>}
                 </button>
               ))}
             </div>
-            <span className="lineup-timer" title="毎日0時に、開催中の2つのパックが入れ替わります">
+            <span className="lineup-timer" title="毎日0時に、本日のパックが入れ替わります">
               入れ替えまで <b>{hms(msToNextLineup(now))}</b>
             </span>
             <button className="textbtn" onClick={() => setOdds(true)}>
@@ -229,18 +229,18 @@ export function Shop() {
         {kind !== 'premium' ? (
         <div className="shop2-row" key={`${kind}-${day}`}>
           {list.map((bo, i) => {
-            let d = i - sel;
-            if (d > 1) d -= list.length;
-            if (d < -1) d += list.length;
+            let d = (((i - sel) % list.length) + list.length) % list.length;
+            if (d > list.length / 2) d -= list.length;
             const center = d === 0;
+            const far = Math.abs(d) > 1;
             return (
               <motion.div
                 key={bo.id}
                 className="shop2-pack"
                 initial={false}
-                animate={{ x: d * u * 24 - u * 10.5, scale: center ? 1 : 0.7, y: center ? 0 : u * 5.5, rotateY: d * -22, opacity: center ? 1 : 0.45 }}
+                animate={{ x: d * u * 24 - u * 10.5, scale: center ? 1 : 0.7, y: center ? 0 : u * 5.5, rotateY: Math.max(-1, Math.min(1, d)) * -22, opacity: center ? 1 : far ? 0 : 0.45 }}
                 transition={{ type: 'spring', stiffness: 170, damping: 26, mass: 1 }}
-                style={{ zIndex: center ? 3 : 1 }}
+                style={{ zIndex: center ? 3 : 1, pointerEvents: far ? 'none' : undefined }}
                 onClick={() => (center ? buy(bo) : shift(d))}
               >
                 <motion.div animate={center ? { y: [0, -u * 0.6, 0] } : { y: 0 }} transition={{ duration: 4.5, repeat: Infinity, ease: 'easeInOut' }}>
@@ -267,7 +267,14 @@ export function Shop() {
           <AnimatePresence mode="wait">
             <motion.div key={b.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.25 }} style={{ textAlign: 'center' }}>
               <div className="shop2-name">{b.name}</div>
-              <div className="shop2-sub">{b.premium ? '全スロットのレアリティ上昇・5枚目は◇◇◇◇以上確定' : b.theme ? (series?.blurb ?? '') : `${series?.name ?? ''} ・ ${b.types.map((t) => TYPE_JP[t]).join('・')}タイプが出やすい`}</div>
+              <div className="shop2-sub">{b.premium ? '全弾から・5枚目は◇◇◇◇以上確定' : b.theme ? `本日のパック ・ 全弾から ・ ${typesLabel(b.types)}` : `${series?.name ?? ''} ・ ${typesLabel(b.types)}`}</div>
+              {!b.premium && list.length > 1 && (
+                <div className="shop2-dots">
+                  {list.map((x, i) => (
+                    <i key={x.id} className={i === sel ? 'on' : ''} onClick={() => (foley.tick(), setSel(i))} />
+                  ))}
+                </div>
+              )}
             </motion.div>
           </AnimatePresence>
           <div className="shop2-buttons">

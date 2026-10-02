@@ -166,7 +166,7 @@ export function Lobby() {
         <div className="screen-bg" style={{ backgroundImage: `url(${artUrl('story/p-mountains')})` }} />
         <div className="screen-shade" />
         <div className="stage">
-          <TopBar title="オンライン対戦" />
+          <TopBar title="フレンド対戦" back="arena" />
           <div className="panel lb-unsupported">
             <h2>この画面ではオンライン対戦を使えません</h2>
             <p>オンライン対戦は、自宅のパソコンで動かす専用サーバーにつないで遊びます。サーバーが配信しているゲームのURLを開いてください。</p>
@@ -189,7 +189,7 @@ export function Lobby() {
       <div className="screen-bg" style={{ backgroundImage: `url(${artUrl('story/p-mountains')})` }} />
       <div className="screen-shade" />
       <div className="stage">
-        <TopBar title="オンライン対戦" />
+        <TopBar title="フレンド対戦" back="arena" />
         <div className="lb-status">
           <span className={`lb-dot ${st.status}`} />
           {st.status === 'open' ? `接続中　オンライン ${st.online}人 ・ マッチ待ち ${st.waiting}人` : st.status === 'connecting' ? (st.failed ? 'サーバーにつながりません。再接続しています…' : 'サーバーに接続しています…') : '未接続'}

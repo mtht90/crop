@@ -19,10 +19,14 @@ export interface Stats {
   trainers: number;
   packs: number;
   premiumPacks: number;
+  rankedWins: number;
+  exchanges: number;
+  /** the longest win streak so far (kept with max, not added) */
+  bestStreak: number;
 }
 export type StatKey = keyof Stats;
 
-export const EMPTY_STATS: Stats = { battles: 0, wins: 0, hardWins: 0, perfectWins: 0, kos: 0, damage: 0, prizes: 0, evolves: 0, trainers: 0, packs: 0, premiumPacks: 0 };
+export const EMPTY_STATS: Stats = { battles: 0, wins: 0, hardWins: 0, perfectWins: 0, kos: 0, damage: 0, prizes: 0, evolves: 0, trainers: 0, packs: 0, premiumPacks: 0, rankedWins: 0, exchanges: 0, bestStreak: 0 };
 
 export interface Period {
   key: string;
@@ -39,6 +43,8 @@ export interface Progress {
   daily: Period;
   weekly: Period;
   achvClaimed: string[];
+  /** 通常ミッション already claimed */
+  normalClaimed: string[];
   loginCount: number;
   loginDay: string;
 }
@@ -53,6 +59,7 @@ export function freshProgress(): Progress {
     daily: { key: '', counters: {}, claimed: [] },
     weekly: { key: '', counters: {}, claimed: [] },
     achvClaimed: [],
+    normalClaimed: [],
     loginCount: 0,
     loginDay: '',
   };
@@ -181,7 +188,7 @@ export function battleReward(p: Progress, o: BattleOutcome): { lines: RewardLine
 export interface Mission {
   id: string;
   label: string;
-  stat: StatKey | 'level' | 'collection' | 'rivals';
+  stat: StatKey | 'level' | 'collection' | 'rivals' | 'story' | 'rank' | 'uniques' | 'stars' | 'decks';
   target: number;
   reward: number;
 }
@@ -223,6 +230,48 @@ export const ACHIEVEMENTS: Mission[] = [
   ...tiered('perfect', (n) => `パーフェクト勝利を通算${n}回`, 'perfectWins', [[1, 200], [10, 800]]),
 ];
 
+// 通常ミッション: one-off goals, all shown at once
+const n = (id: string, label: string, stat: Mission['stat'], target: number, reward: number): Mission => ({ id: `n-${id}-${target}`, label, stat, target, reward });
+const many = (id: string, stat: Mission['stat'], label: (t: number) => string, tiers: [number, number][]) => tiers.map(([t, r]) => n(id, label(t), stat, t, r));
+const RANK_NAMES = ['10級', '9級', '8級', '7級', '6級', '5級', '4級', '3級', '2級', '1級', '初段', '二段', '三段', '四段', '五段', '六段', '七段', '八段', '九段', '十段', '名人'];
+
+export const NORMAL_MISSIONS: Mission[] = [
+  // はじめの一歩
+  n('first', 'はじめてのバトルをする', 'battles', 1, 50),
+  n('firstwin', 'はじめてバトルに勝つ', 'wins', 1, 50),
+  n('firstpack', 'はじめてパックを開ける', 'packs', 1, 50),
+  n('firstevo', 'はじめてモンスターを進化させる', 'evolves', 1, 50),
+  n('firstko', 'はじめて相手のモンスターをきぜつさせる', 'kos', 1, 50),
+  n('firsttr', 'はじめてトレーナーズを使う', 'trainers', 1, 30),
+  n('firstdeck', 'デッキを2つ作る', 'decks', 2, 100),
+  // ストーリー
+  ...Array.from({ length: 12 }, (_, i) => n('story', `ストーリー第${i + 1}章をクリア`, 'story', i + 1, i === 11 ? 1500 : 100 + i * 30)),
+  // バトル
+  ...many('battle', 'battles', (t) => `バトルを通算${t}回する`, [[3, 60], [5, 80], [20, 150], [30, 200], [75, 400], [150, 700], [200, 900], [500, 2000]]),
+  ...many('win', 'wins', (t) => `バトルに通算${t}回勝つ`, [[3, 80], [5, 100], [20, 200], [30, 300], [75, 600], [150, 1000], [200, 1400]]),
+  ...many('hard', 'hardWins', (t) => `「むずかしい」相手に通算${t}回勝つ`, [[1, 150], [5, 300], [10, 500], [25, 900], [50, 1500]]),
+  ...many('perfect', 'perfectWins', (t) => `パーフェクト勝利を通算${t}回`, [[3, 200], [5, 300], [20, 700], [30, 1000]]),
+  ...many('streak', 'bestStreak', (t) => `${t}連勝する`, [[2, 100], [3, 150], [5, 300], [7, 500], [10, 1000]]),
+  ...many('ko', 'kos', (t) => `通算${t}匹きぜつさせる`, [[5, 60], [30, 150], [50, 200], [200, 600], [300, 800], [1000, 2500]]),
+  ...many('dmg', 'damage', (t) => `ワザで通算${t.toLocaleString()}ダメージを与える`, [[1000, 80], [3000, 150], [10000, 300], [30000, 700], [100000, 2000]]),
+  ...many('prize', 'prizes', (t) => `サイドを通算${t}枚とる`, [[10, 100], [30, 200], [100, 500], [300, 1200]]),
+  ...many('evo', 'evolves', (t) => `通算${t}回進化させる`, [[5, 60], [20, 150], [50, 300], [100, 500], [300, 1200]]),
+  ...many('tr', 'trainers', (t) => `トレーナーズを通算${t}枚使う`, [[10, 60], [30, 120], [100, 300], [300, 700], [1000, 1800]]),
+  // ランクマッチ
+  ...many('rwin', 'rankedWins', (t) => `ランクマッチで通算${t}回勝つ`, [[1, 100], [3, 150], [10, 400], [30, 900], [100, 2500]]),
+  ...[1, 3, 5, 9, 10, 13, 15, 19, 20].map((i) => n('rank', `ランク「${RANK_NAMES[i]}」に到達`, 'rank', i, i >= 20 ? 5000 : i >= 10 ? 400 + (i - 10) * 150 : 100 + i * 40)),
+  // 強敵
+  ...many('rival', 'rivals', (t) => `強敵を${t}人撃破`, [[2, 120], [3, 150], [6, 300], [10, 500], [15, 800], [22, 2000]]),
+  // パック・コレクション
+  ...many('pack', 'packs', (t) => `パックを通算${t}回開ける`, [[3, 60], [10, 150], [20, 250], [50, 500], [200, 1500]]),
+  ...many('prem', 'premiumPacks', (t) => `プレミアムパックを通算${t}回開ける`, [[3, 150], [5, 250], [20, 700]]),
+  ...many('ex', 'exchanges', (t) => `かけらでカードを${t}回交換する`, [[1, 100], [5, 250], [20, 800]]),
+  ...many('uniq', 'uniques', (t) => `ちがうカードを${t}種類集める`, [[30, 100], [50, 150], [100, 300], [150, 450], [200, 600], [300, 1000], [400, 1600], [500, 2500]]),
+  ...many('star', 'stars', (t) => `☆以上のカードを${t}種類集める`, [[1, 150], [5, 300], [10, 500], [25, 1000], [50, 2000]]),
+  ...many('deck', 'decks', (t) => `デッキを${t}つ作る`, [[3, 120], [5, 250], [10, 500]]),
+  ...many('lv', 'level', (t) => `プレイヤーレベル${t}に到達`, [[2, 60], [3, 80], [4, 100], [6, 150], [8, 200], [15, 500], [25, 900], [40, 1500], [50, 2500]]),
+];
+
 export function dailyMissions(p: Progress): Mission[] {
   const r = seeded(`daily-${p.daily.key || dayKey()}`);
   return [...DAILY_POOL].sort(() => r() - 0.5).slice(0, 3);
@@ -235,12 +284,19 @@ export function weeklyMissions(p: Progress): Mission[] {
 export interface ExtCtx {
   collectionPct: number;
   rivals: number;
+  story: number;
+  rank: number;
+  uniques: number;
+  stars: number;
+  decks: number;
 }
 
-export function missionValue(p: Progress, m: Mission, period: 'daily' | 'weekly' | 'achv', ext: ExtCtx): number {
+export type MissionPeriod = 'daily' | 'weekly' | 'achv' | 'normal';
+
+export function missionValue(p: Progress, m: Mission, period: MissionPeriod, ext: ExtCtx): number {
   if (m.stat === 'level') return p.level;
   if (m.stat === 'collection') return Math.floor(ext.collectionPct);
-  if (m.stat === 'rivals') return ext.rivals;
+  if (m.stat === 'rivals' || m.stat === 'story' || m.stat === 'rank' || m.stat === 'uniques' || m.stat === 'stars' || m.stat === 'decks') return ext[m.stat];
   if (period === 'daily') return p.daily.counters[m.stat] ?? 0;
   if (period === 'weekly') return p.weekly.counters[m.stat] ?? 0;
   return p.stats[m.stat] ?? 0;
@@ -251,6 +307,7 @@ export function claimableCount(p: Progress, ext: ExtCtx): number {
   for (const m of dailyMissions(p)) if (!p.daily.claimed.includes(m.id) && missionValue(p, m, 'daily', ext) >= m.target) n++;
   for (const m of weeklyMissions(p)) if (!p.weekly.claimed.includes(m.id) && missionValue(p, m, 'weekly', ext) >= m.target) n++;
   for (const m of ACHIEVEMENTS) if (!p.achvClaimed.includes(m.id) && missionValue(p, m, 'achv', ext) >= m.target) n++;
+  for (const m of NORMAL_MISSIONS) if (!(p.normalClaimed ?? []).includes(m.id) && missionValue(p, m, 'normal', ext) >= m.target) n++;
   return n;
 }
 

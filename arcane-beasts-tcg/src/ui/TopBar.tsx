@@ -1,8 +1,8 @@
-import { useStore } from '../state/store';
+import { useStore, type Screen } from '../state/store';
 import { Icon } from './Icon';
 import { sfx } from '../audio/audio';
 
-export function TopBar({ title, back = 'home' as const, right }: { title: string; back?: 'home' | 'title' | null; right?: React.ReactNode }) {
+export function TopBar({ title, back = 'home', right }: { title: string; back?: Screen | null; right?: React.ReactNode }) {
   const go = useStore((s) => s.go);
   const coins = useStore((s) => s.save.coins);
   return (

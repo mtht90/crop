@@ -6,6 +6,7 @@ import { BattleScreen } from './battle/BattleScreen';
 import { Title } from './screens/Title';
 import { Starter } from './screens/Starter';
 import { Home } from './screens/Home';
+import { Arena } from './screens/Arena';
 import { Rivals } from './screens/Rivals';
 import { DeckBuilder } from './screens/DeckBuilder';
 import { Collection } from './screens/Collection';
@@ -51,6 +52,7 @@ const SCREENS = {
   title: Title,
   starter: Starter,
   home: Home,
+  arena: Arena,
   rivals: Rivals,
   battle: BattleScreen,
   deck: DeckBuilder,

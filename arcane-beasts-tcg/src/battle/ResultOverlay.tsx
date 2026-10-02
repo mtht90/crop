@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
-import { claimableCount, expToNext, levelReward } from '../state/progress';
+import { claimableCount, expToNext, levelReward, bump } from '../state/progress';
 import { extCtx, useStore, type BattleRewardResult } from '../state/store';
 import { useBattle } from './controller';
 import { artUrl } from '../lib/assets';
@@ -54,6 +54,7 @@ export function ResultOverlay() {
         { kos: st0.kos, damage: st0.damage, prizes: st0.prizes, evolves: st0.evolves, trainers: st0.trainers },
       );
       setRes(r0);
+      if (win && kind === 'ranked') update((s) => bump(s.progress, { rankedWins: 1 }));
       if (or && or.t === 'over' && or.rank) {
         useStore.getState().grantRankRewards(or.rank.rewards);
         setRank(or.rank);
@@ -134,7 +135,7 @@ export function ResultOverlay() {
 
       <motion.div className="result-actions" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: lineDelay + nLines * 0.18 + 1.2 }}>
         <button
-          className="btn ghost big"
+          className={`btn big ${cfg.story && win ? 'red' : 'ghost'}`}
           onClick={() => {
             sfx('button');
             useBattle.setState({ result: null, view: null, prompt: null });
@@ -151,7 +152,7 @@ export function ResultOverlay() {
         >
           {cfg.story ? (win ? '物語をつづける' : 'もう一度挑む') : cfg.online ? 'ロビーへ' : cfg.ranked ? '次の対戦へ' : 'もう一度'}
         </button>
-        {missionsReady > 0 && (
+        {missionsReady > 0 && !(cfg.story && win) && (
           <button
             className="btn blue big"
             onClick={() => {
@@ -163,17 +164,20 @@ export function ResultOverlay() {
             ミッション達成 {missionsReady}
           </button>
         )}
+        {/* a won story duel always goes on to the scene after it (that is where the card is handed over) */}
+        {!(cfg.story && win) && (
         <button
           className="btn big"
           onClick={() => {
             sfx('button');
             useBattle.setState({ result: null, view: null, prompt: null });
             if (cfg.online) online.clearMatch();
-            go(cfg.story ? 'story' : cfg.ranked || cfg.online ? 'home' : cfg.rival ? 'rivals' : 'home');
+            go(cfg.story ? 'story' : cfg.ranked || cfg.online ? 'arena' : cfg.rival ? 'rivals' : 'home');
           }}
         >
-          {cfg.story ? 'ストーリーへ' : cfg.rival ? '対戦相手を選ぶ' : 'ホームへ'}
+          {cfg.story ? 'ストーリーへ' : cfg.ranked || cfg.online ? 'バトルメニューへ' : cfg.rival ? '対戦相手を選ぶ' : 'ホームへ'}
         </button>
+        )}
       </motion.div>
     </motion.div>
   );

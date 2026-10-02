@@ -97,7 +97,7 @@ export function StoryMap() {
       <div className="sc-shade" />
 
       <div className="stage">
-        <TopBar title="ストーリー" />
+        <TopBar title="ストーリー" back="arena" />
         <div className="sc-tools">
           <span className="sc-deck">
             使用デッキ <b>{deck?.name ?? 'なし'}</b>

@@ -57,7 +57,7 @@ export function Ranked() {
       <div className="screen-bg" style={{ backgroundImage: `url(${artUrl('story/p-mountains')})` }} />
       <div className="screen-shade" />
       <div className="stage">
-        <TopBar title="ランクマッチ" back="home" />
+        <TopBar title="ランクマッチ" back="arena" />
 
         <motion.div className="rk-main panel" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: EASE_OUT }}>
           <div className="rk-season">

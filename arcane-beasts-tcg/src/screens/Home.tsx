@@ -1,4 +1,3 @@
-import { onlineSupported } from '../online/client';
 import { CHAPTERS } from '../story';
 import { nextChapterIndex } from '../story/flow';
 import { AnimatePresence, motion } from 'motion/react';
@@ -34,7 +33,6 @@ export function Home() {
   const deck = activeDeck(save);
   const pct = Math.floor(collectionPct(save));
   const shardReady = SHARD_RARITIES.some((r) => (save.shards[r] ?? 0) >= SHARD_COST[r]);
-  const next = RIVALS.find((r) => !save.beaten.includes(r.id));
   const nextIdx = nextChapterIndex(save);
   const nextCh = CHAPTERS[nextIdx];
   const missionN = claimableCount(save.progress, extCtx(save));
@@ -47,7 +45,7 @@ export function Home() {
     return open;
   });
   const tiles: TileDef[] = [
-    { to: 'story', title: 'ストーリー', sub: next ? `第${nextCh.act}幕 第${nextIdx + 1}章「${nextCh.title}」` : '全ての強敵を撃破！フリー対戦で腕を磨こう', bg: 'story/landscape-lava', fig: 'monsters/fire-dragon', icon: 'swords', big: true },
+    { to: 'arena', title: 'バトル', sub: save.story.started ? `ストーリー 第${nextIdx + 1}章「${nextCh.title}」・ランク ${RANKS[save.ranked.rank]}` : 'ストーリー・ランクマッチ・フリー対戦', bg: 'story/landscape-lava', fig: 'monsters/fire-dragon', icon: 'swords', big: true },
     { to: 'deck', title: 'デッキ編集', sub: '60枚のデッキを組もう', bg: 'story/grim-altar', fig: 'woses/ancient-wose', icon: 'deck' },
     { to: 'shop', title: 'パック開封', sub: pickup ? `ピックアップ開催中！` : `第2弾「覇者の降臨」登場`, bg: 'story/swamp-02', fig: 'monsters/jinn', icon: 'chest', badge: pickup ? 'PICK UP' : 'NEW' },
     { to: 'collection', title: 'コレクション', sub: `収集率 ${pct}%`, bg: 'story/landscape-mountains-01', fig: 'monsters/sea-serpent', icon: 'cards', badge: save.newCards.length ? `NEW ${save.newCards.length}` : shardReady ? '交換可' : undefined },
@@ -149,17 +147,6 @@ export function Home() {
               <span>コレクション</span>
             </div>
           </motion.div>
-          {onlineSupported() && (
-            <button
-              className="btn gold-btn home-online"
-              onClick={() => {
-                sfx('expand', 0.5);
-                go('lobby');
-              }}
-            >
-              <Icon name="swords" /> オンライン対戦
-            </button>
-          )}
           <div className="home-links">
             <button className="btn ghost small" onClick={() => go('settings')}>
               <Icon name="gear" /> 設定

@@ -1,5 +1,5 @@
 // 序章「黄昏のリーフェル」 — the festival, the old master, the twelve cards.
-import { bars, bg, bgm, cg, choice, fx, hide, mood, narr, place, say, show, showCard, sfx, title, tone, wait, weather, whisper } from './dsl';
+import { bars, bg, bgm, cg, choice, fx, hide, mood, narr, place, say, show, showCard, sfx, think, title, tone, wait, weather, whisper } from './dsl';
 import type { Beat } from './types';
 
 export const PROLOGUE: Beat[] = [
@@ -81,6 +81,11 @@ export const PROLOGUE: Beat[] = [
   say('olden', 'よいか、{name}。伝説のカードは、持ち主とバトルして勝ったときにだけ、譲り受けられる。それが古い掟じゃ。'),
   say('olden', '奪ってはならん。盗んでもならん。……勝って、手に入れるのじゃ。必ず、おまえの手でな。'),
   say('hero', 'はい。'),
+  sfx('receive', 0.6),
+  narr('オルデンは、赤い竜のカードを、{name}の手のひらにのせた。思っていたより、ずっと重かった。'),
+  say('olden', 'これは、おまえが持っていけ。旅の最初の一枚じゃ。', 'teach'),
+  say('olden', '残りは十一枚。……一枚ずつ、勝って増やしていけばよい。'),
+  think('hero', '……先生の、一枚目。'),
 
   // ---------------------------------------------------------------- dawn
   bgm('journey'),
