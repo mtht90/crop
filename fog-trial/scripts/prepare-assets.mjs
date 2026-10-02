@@ -14,10 +14,13 @@
 //   https://github.com/KenneyNL/Starter-Kit-FPS
 //   https://github.com/KenneyNL/Starter-Kit-City-Builder
 //   https://github.com/KenneyNL/Starter-Kit-Racing
+// 効果音の変換に ffmpeg (libmp3lame) が必要。
 
 import { NodeIO } from '@gltf-transform/core';
 import { prune, dedup } from '@gltf-transform/functions';
-import { mkdir, copyFile, readdir } from 'node:fs/promises';
+import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
+import { mkdir, readdir } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -114,9 +117,13 @@ const props = {
   barrel: `${DUN}/barrel_large.gltf.glb`,
   crates: `${DUN}/crates_stacked.gltf.glb`,
   rock: `${SPACE}/rock_A.gltf`,
+  rocks: `${SPACE}/rocks_A.gltf`,
+  bench: `${HAL}/bench.gltf`,
+  grass: 'Starter-Kit-3D-Platformer/models/grass.glb',
+  grass_small: 'Starter-Kit-3D-Platformer/models/grass-small.glb',
 };
 
-const io = new NodeIO();
+const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
 
 async function convertCharacter(c) {
   const doc = await io.read(join(SRC, c.src));
@@ -185,6 +192,8 @@ for (const [name, rel] of Object.entries(SOUNDS)) {
     console.warn('missing sound', rel);
     continue;
   }
-  await copyFile(f, join(OUT, 'sounds', `${name}.ogg`));
+  // Safari でも再生できるよう MP3 (モノラル) に変換する。環境音は長いのでビットレートを下げる
+  const rate = name === 'ambience' ? ['-ar', '32000', '-b:a', '64k'] : ['-ar', '44100', '-b:a', '96k'];
+  execFileSync('ffmpeg', ['-v', 'error', '-y', '-i', f, '-ac', '1', ...rate, join(OUT, 'sounds', `${name}.mp3`)]);
   console.log('sound', name);
 }

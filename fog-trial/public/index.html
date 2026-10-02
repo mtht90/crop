@@ -24,7 +24,6 @@
   <div id="touch" class="hidden">
     <div id="stick-zone"><div id="stick-base"><div id="stick-knob"></div></div></div>
     <div id="touch-buttons"></div>
-    <button id="touch-help" class="tbtn small-btn">?</button>
   </div>
 
   <!-- タイトル -->
@@ -84,6 +83,9 @@
           </ul>
         </div>
       </details>
+      <div class="row small">
+        <button id="btn-settings-title" class="ghost">設定</button>
+      </div>
       <p class="credit offline-only hidden">オフライン版: ボット戦とローカルロビーで遊べます。友だちとのオンライン対戦はサーバー版 (npm start) で。</p>
       <p class="credit">素材: KayKit (Kay Lousberg) / Kenney — CC0</p>
     </div>
@@ -145,7 +147,56 @@
     </div>
   </section>
 
-  <div id="loading" class="hidden"><div class="spinner"></div><span id="loading-text">読み込み中…</span></div>
+  <div id="loading" class="hidden">
+    <div class="spinner"></div>
+    <span id="loading-text">読み込み中…</span>
+    <p id="loading-tip" class="tip"></p>
+  </div>
+
+  <!-- 試合中のメニューボタン -->
+  <button id="btn-pause" class="hidden" aria-label="メニュー">☰</button>
+
+  <!-- ポーズメニュー (オンライン対戦なので試合は止まらない) -->
+  <section id="pause" class="overlay hidden">
+    <div class="panel small-panel">
+      <h2>メニュー</h2>
+      <p class="small">試合は続いています</p>
+      <div class="col">
+        <button id="pause-resume" class="primary">試合に戻る</button>
+        <button id="pause-settings">設定</button>
+        <button id="pause-help">操作説明</button>
+        <button id="pause-leave">試合を抜ける</button>
+      </div>
+      <div id="leave-confirm" class="col hidden">
+        <p class="small">抜けるとボットがあなたの代わりに戦います。本当に抜けますか?</p>
+        <div class="row">
+          <button id="leave-no">やめる</button>
+          <button id="leave-yes" class="primary">抜ける</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 設定 -->
+  <section id="settings" class="overlay hidden">
+    <div class="panel small-panel">
+      <h2>設定</h2>
+      <label class="setting"><span>明るさ</span><input id="set-brightness" type="range" min="0" max="1" step="0.05" /></label>
+      <label class="setting"><span>音量</span><input id="set-volume" type="range" min="0" max="1" step="0.05" /></label>
+      <label class="setting"><span>カメラの距離</span><input id="set-camera" type="range" min="0.75" max="1.35" step="0.05" /></label>
+      <label class="setting"><span>画質</span>
+        <select id="set-quality">
+          <option value="auto">自動</option>
+          <option value="high">高 (影・発光)</option>
+          <option value="medium">中</option>
+          <option value="low">低 (軽量)</option>
+        </select>
+      </label>
+      <div class="row">
+        <button id="settings-close" class="primary">閉じる</button>
+      </div>
+    </div>
+  </section>
   <div id="toasts"></div>
   <div id="help" class="hidden"></div>
   <div id="conn" class="hidden">サーバーに接続中…</div>

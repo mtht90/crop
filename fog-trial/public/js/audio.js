@@ -48,8 +48,16 @@ const MAP = {
   rustle: { file: 'land', vol: 0.8, rate: 0.7 },
   boing: { file: 'stun', vol: 0.7, rate: 1.4 },
   footstep: { file: 'footstep', vol: 0.35 },
+  gen_hum: { file: 'gen_loop', vol: 1, rate: 0.6 },
   ui: { file: 'ui', vol: 0.6 },
 };
+
+let volume = 0.7;
+
+export function setVolume(v) {
+  volume = v;
+  if (master) master.gain.value = v;
+}
 
 export function unlockAudio() {
   if (!ctx) {
@@ -57,7 +65,7 @@ export function unlockAudio() {
     if (!AC) return;
     ctx = new AC();
     master = ctx.createGain();
-    master.gain.value = 0.7;
+    master.gain.value = volume;
     master.connect(ctx.destination);
     loadAll();
   }
@@ -68,7 +76,7 @@ async function loadAll() {
   await Promise.all(
     FILES.map(async (name) => {
       try {
-        const res = await fetch(`assets/sounds/${name}.ogg`);
+        const res = await fetch(`assets/sounds/${name}.mp3`);
         const data = await res.arrayBuffer();
         buffers.set(name, await ctx.decodeAudioData(data));
       } catch {
@@ -150,4 +158,58 @@ export function stopAmbience() {
     ambience.src.stop();
     ambience = null;
   }
+}
+
+// 追跡中の緊張感 (キラーが近いほど低音のうなりが強くなる)
+let chase = null;
+export function setChase(intensity) {
+  if (!ctx) return;
+  if (!chase) {
+    const gain = ctx.createGain();
+    gain.gain.value = 0;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 300;
+    filter.Q.value = 6;
+    const oscs = [55, 55.6, 82.4].map((f, i) => {
+      const o = ctx.createOscillator();
+      o.type = i === 2 ? 'triangle' : 'sawtooth';
+      o.frequency.value = f;
+      o.connect(filter);
+      o.start();
+      return o;
+    });
+    // ゆっくり揺れるフィルター
+    const lfo = ctx.createOscillator();
+    const lfoGain = ctx.createGain();
+    lfo.frequency.value = 0.35;
+    lfoGain.gain.value = 120;
+    lfo.connect(lfoGain).connect(filter.frequency);
+    lfo.start();
+    filter.connect(gain).connect(master);
+    chase = { gain, filter, oscs };
+  }
+  const t = ctx.currentTime;
+  chase.gain.gain.setTargetAtTime(Math.min(1, intensity) * 0.16, t, 0.5);
+  chase.filter.frequency.setTargetAtTime(260 + intensity * 900, t, 0.5);
+}
+
+// ループ再生する環境音 (修理済み発電機のうなり等)
+const loops = new Map();
+export function setLoop(name, vol) {
+  if (!ctx) return;
+  let l = loops.get(name);
+  if (!l) {
+    if (vol <= 0.001 || !buffers.get(MAP[name]?.file || name)) return;
+    l = playBuffer(MAP[name]?.file || name, 0, MAP[name]?.rate || 1, true);
+    if (!l) return;
+    loops.set(name, l);
+  }
+  l.gain.gain.setTargetAtTime(vol, ctx.currentTime, 0.3);
+}
+
+export function stopLoops() {
+  for (const l of loops.values()) l.src.stop();
+  loops.clear();
+  setChase(0);
 }

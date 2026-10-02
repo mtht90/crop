@@ -17,6 +17,7 @@ const MIME = {
   '.ico': 'image/x-icon',
   '.glb': 'model/gltf-binary',
   '.ogg': 'audio/ogg',
+  '.mp3': 'audio/mpeg',
   '.json': 'application/json',
   '.md': 'text/markdown; charset=utf-8',
 };

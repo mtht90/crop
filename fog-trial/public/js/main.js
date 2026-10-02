@@ -5,26 +5,58 @@ import { SURVIVOR_CHARACTERS, KILLER_CHARACTER, CHARACTER_IDS } from '../shared/
 import { World3D } from './world3d.js';
 import { TouchControls } from './touch.js';
 import { visibilityPolygons } from './vision.js';
-import { unlockAudio, play, playAt, startAmbience, stopAmbience } from './audio.js';
+import { unlockAudio, play, playAt, startAmbience, setVolume, setChase, setLoop, stopLoops } from './audio.js';
 
 const $ = (id) => document.getElementById(id);
 const hud = $('hud');
 const ctx = hud.getContext('2d');
-const world = new World3D($('world'));
+
+// ==================== 設定 ====================
+const SETTINGS_KEY = 'fog-settings';
+const settings = { brightness: 0.5, volume: 0.7, camera: 1, quality: 'auto' };
+try {
+  Object.assign(settings, JSON.parse(safeGet(SETTINGS_KEY) || '{}'));
+} catch {
+  /* 壊れた設定は無視 */
+}
+function resolvedSettings() {
+  const quality = settings.quality === 'auto' ? (matchMedia('(pointer: coarse)').matches ? 'medium' : 'high') : settings.quality;
+  return { ...settings, quality };
+}
+
+const world = new World3D($('world'), resolvedSettings());
 const touch = new TouchControls();
+setVolume(settings.volume);
 
 const S = { ws: null, you: null, lobby: null, screen: 'title', game: null, assetsReady: false };
 const isKillerRole = (r) => r === 'killer' || r === 'hunter';
+
+const TIPS = [
+  'サバイバー: 心音が聞こえたらキラーが近い。修理を続けるか、離れるかの判断が生死を分ける。',
+  'サバイバー: しゃがむと足跡が残らず、咆哮でも位置がばれない。',
+  'サバイバー: 板は倒すと二度と使えない。キラーが真下に来るまで引きつけて気絶を狙おう。',
+  'サバイバー: スキルチェックの失敗は大きな物音になり、キラーに位置を知られる。',
+  'サバイバー: 救出直後は「与えられた猶予」で一度だけ攻撃を防げる。',
+  'キラー: 視界は前方だけ。赤い足跡と血痕を追いかけて見失わないようにしよう。',
+  'キラー: 担いでいる間に板を当てられると落としてしまう。板の近くでは注意。',
+  'キラー: 発電機を蹴ると進捗が少しずつ戻る。修理の多い発電機を見回ろう。',
+  'キラー: 突進は壁に当たると怯む。まっすぐな道で使おう。',
+  'ロッカーに隠れた相手は見えない。足跡が途切れた場所の近くを捜索しよう。',
+];
 
 // 素材はタイトル画面の間に読み込んでおく
 const assetsPromise = world
   .load((p) => {
     $('loading-text').textContent = `素材を読み込み中… ${Math.round(p * 100)}%`;
   })
-  .then(() => (S.assetsReady = true))
+  .then(() => {
+    S.assetsReady = true;
+    world.buildMenu();
+    if (world.failed.length) toast(`一部の素材 (${world.failed.length} 個) を読み込めなかったため、簡易表示にしています`, 'bad');
+  })
   .catch((e) => {
     console.error(e);
-    toast('素材の読み込みに失敗しました', 'bad');
+    toast('素材の読み込みに失敗しました。ページを再読み込みしてください', 'bad');
   });
 
 function newGameState(msg) {
@@ -105,19 +137,29 @@ async function onMessage(msg) {
       S.game = G;
       show('game');
       if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
-      if (!S.assetsReady) {
-        $('loading').classList.remove('hidden');
-        await assetsPromise;
-        $('loading').classList.add('hidden');
-      }
+      $('loading-tip').textContent = TIPS[Math.floor(Math.random() * TIPS.length)];
+      $('loading').classList.remove('hidden');
+      if (!S.assetsReady) await assetsPromise;
       if (S.game !== G) return;
-      world.buildMap(G.map);
+      try {
+        world.buildMap(G.map);
+      } catch (e) {
+        console.error(e);
+        toast('マップの作成に失敗しました', 'bad');
+      }
+      $('loading').classList.add('hidden');
+      $('btn-pause').classList.remove('hidden');
       G.ready = true;
       touch.enableIfTouch();
       touch.show(G.role);
       startAmbience();
       toast(G.role === 'killer' ? 'あなたはキラー。サバイバーを全員フックに吊るせ' : 'あなたはサバイバー。発電機を修理して脱出せよ', 'info');
-      if (!touch.enabled) toast('H キーで操作説明', 'info');
+      // 役割ごとに初回だけ操作説明を出す
+      const seenKey = `fog-guide-${G.role}`;
+      if (!safeGet(seenKey)) {
+        safeSet(seenKey, '1');
+        toggleHelp();
+      } else if (!touch.enabled) toast('H キーで操作説明', 'info');
       break;
     }
     case 'snap':
@@ -131,6 +173,7 @@ async function onMessage(msg) {
       toast(msg.text, 'bad');
       break;
     case 'left':
+      endGame();
       S.lobby = null;
       if (!OFFLINE) history.replaceState(null, '', location.pathname);
       show('title');
@@ -141,7 +184,10 @@ async function onMessage(msg) {
 function endGame() {
   S.game = null;
   touch.hide();
-  stopAmbience();
+  stopLoops();
+  $('btn-pause').classList.add('hidden');
+  $('pause').classList.add('hidden');
+  $('loading').classList.add('hidden');
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, hud.width, hud.height);
 }
@@ -222,7 +268,7 @@ function charInfo(p) {
 function renderLobby() {
   const L = S.lobby;
   if (!L) return;
-  $('lobby-code').textContent = L.room;
+  $('lobby-code').textContent = OFFLINE ? 'ローカル' : L.room;
   const isHost = L.hostId === S.you;
   const me = L.players.find((p) => p.id === S.you);
   const ul = $('lobby-players');
@@ -278,6 +324,12 @@ function renderLobby() {
         : `準備完了 (サバイバー ${survivors} / キラー ${killers})`
     : 'ホストの開始を待っています…';
 
+  const focus = me ? (isKillerRole(me.role) ? 'killer' : me.character) : null;
+  if (focus && focus !== S.menuFocus) {
+    S.menuFocus = focus;
+    if (S.assetsReady) world.menuFocus(focus);
+  }
+
   const picker = $('character-picker');
   picker.innerHTML = '';
   $('character-title').classList.toggle('hidden', me?.role !== 'survivor');
@@ -317,10 +369,17 @@ function showResults(r) {
       const killer = isKillerRole(p.role);
       const out = killer ? '—' : p.outcome === 'escaped' ? '脱出' : '生贄';
       const detail = killer ? `攻撃 ${st.hits} / フック ${st.hooks}` : `修理 ${st.gens} / 治療 ${st.heals} / 救出 ${st.rescues} / 気絶 ${st.stuns}`;
-      return `<tr><td>${escapeHtml(p.name)}${p.bot ? ' [BOT]' : ''}</td><td>${charInfo(p).name}</td><td class="out-${p.outcome || ''}">${out}</td><td>${detail}</td></tr>`;
+      return `<tr><td>${escapeHtml(p.name)}${p.bot ? ' [BOT]' : ''}</td><td>${charInfo(p).name}</td><td class="out-${p.outcome || ''}">${out}</td><td>${detail}</td><td class="score">${score(p, r).toLocaleString()}</td></tr>`;
     })
     .join('');
-  $('result-table').innerHTML = `<tr><th>名前</th><th>キャラ</th><th>結果</th><th>記録</th></tr>${rows}`;
+  $('result-table').innerHTML = `<tr><th>名前</th><th>キャラ</th><th>結果</th><th>記録</th><th>スコア</th></tr>${rows}`;
+}
+
+// 試合の貢献度 (DbD のブラッドポイント相当)
+function score(p, r) {
+  const st = p.stats;
+  if (isKillerRole(p.role)) return st.hits * 300 + st.hooks * 1000 + r.dead * 2500;
+  return st.gens * 1250 + st.heals * 600 + st.rescues * 1500 + st.stuns * 800 + (p.outcome === 'escaped' ? 5000 : 0);
 }
 
 function escapeHtml(s) {
@@ -361,6 +420,11 @@ const KEYMAP = {
 };
 
 window.addEventListener('keydown', (e) => {
+  if (e.code === 'Escape') {
+    if (!$('settings').classList.contains('hidden')) closeSettings();
+    else if (S.game && S.game.ready) togglePause();
+    return;
+  }
   if (S.screen !== 'game') return;
   if (e.target.tagName === 'INPUT') return;
   if (e.code === 'KeyH') {
@@ -448,15 +512,72 @@ function toggleHelp() {
     return;
   }
   const killer = S.game && S.game.role === 'killer';
-  h.innerHTML = killer
-    ? `<b>キラー操作</b><br><kbd>WASD</kbd> 移動 / マウスで向き<br><kbd>左クリック</kbd> 攻撃<br><kbd>右クリック</kbd> 長押し→離す: 突進<br><kbd>Q</kbd> 咆哮 (走っている者を暴く)<br><kbd>Space</kbd> 担ぐ・フックに吊るす・板破壊・窓枠越え・発電機破壊・ロッカー捜索・ハッチを閉じる<br><kbd>H</kbd> 閉じる`
-    : `<b>サバイバー操作</b><br><kbd>WASD</kbd> 移動 / <kbd>Shift</kbd> しゃがみ<br><kbd>E</kbd> 長押し: 修理・治療・救出・ゲート / 押す: ロッカー・ハッチ<br><kbd>Space</kbd> 板を倒す・窓枠を越える・スキルチェック<br>担がれたら <kbd>A</kbd><kbd>D</kbd> 交互連打<br><kbd>H</kbd> 閉じる`;
+  const T = touch.enabled;
+  let body;
+  if (killer) {
+    body = T
+      ? `<b>キラーの操作</b><br>左側をドラッグ: 移動 (向きも変わる)<br><b>攻撃</b>: 近くのサバイバーに自動で狙いを合わせる<br><b>突進</b>: 長押しで溜めて離すと突進<br><b>咆哮</b>: 走っているサバイバーの位置を暴く<br><b>アクション</b>: 担ぐ・フックに吊るす・板の破壊・窓枠越え・発電機の破壊・ロッカー捜索`
+      : `<b>キラーの操作</b><br><kbd>WASD</kbd> 移動 / マウスで向き<br><kbd>左クリック</kbd> 攻撃<br><kbd>右クリック</kbd> 長押し→離す: 突進<br><kbd>Q</kbd> 咆哮 (走っている者を暴く)<br><kbd>Space</kbd> 担ぐ・フックに吊るす・板破壊・窓枠越え・発電機破壊・ロッカー捜索・ハッチを閉じる<br><kbd>Esc</kbd> メニュー`;
+    body += '<br><br>目標: サバイバーを攻撃してダウンさせ、赤い印のフックに吊るす。赤い足跡と血痕が手がかり。';
+  } else {
+    body = T
+      ? `<b>サバイバーの操作</b><br>左側をドラッグ: 移動<br><b>大ボタン</b>: 長押しで発電機の修理・治療・救出。押すとロッカーに隠れる<br><b>板/窓枠</b>: 板を倒す・窓枠を越える<br><b>しゃがむ</b>: 足跡を残さず静かに動く<br>スキルチェックは画面をタップ`
+      : `<b>サバイバーの操作</b><br><kbd>WASD</kbd> 移動 / <kbd>Shift</kbd> しゃがみ<br><kbd>E</kbd> 長押し: 修理・治療・救出・ゲート / 押す: ロッカー・ハッチ<br><kbd>Space</kbd> 板を倒す・窓枠を越える・スキルチェック<br>担がれたら <kbd>A</kbd><kbd>D</kbd> 交互連打<br><kbd>Esc</kbd> メニュー`;
+    body += '<br><br>目標: 黄色い歯車の発電機を修理して脱出ゲートに通電させ、脱出する。心音が聞こえたらキラーが近い。';
+  }
+  h.innerHTML = `${body}<div class="row"><button id="help-close" class="primary">はじめる</button></div>`;
   h.classList.remove('hidden');
+  $('help-close').onclick = () => h.classList.add('hidden');
 }
-$('touch-help').addEventListener('pointerdown', (e) => {
-  e.preventDefault();
+// ==================== ポーズ・設定 ====================
+function togglePause(force) {
+  const el = $('pause');
+  const open = force ?? el.classList.contains('hidden');
+  el.classList.toggle('hidden', !open);
+  $('leave-confirm').classList.add('hidden');
+  keys.clear();
+}
+$('btn-pause').onclick = () => togglePause(true);
+$('pause-resume').onclick = () => togglePause(false);
+$('pause-help').onclick = () => {
+  togglePause(false);
   toggleHelp();
-});
+};
+$('pause-settings').onclick = () => {
+  $('pause').classList.add('hidden');
+  openSettings();
+};
+$('pause-leave').onclick = () => $('leave-confirm').classList.remove('hidden');
+$('leave-no').onclick = () => $('leave-confirm').classList.add('hidden');
+$('leave-yes').onclick = () => {
+  togglePause(false);
+  send({ type: 'leave' });
+};
+$('btn-settings-title').onclick = () => openSettings();
+
+function openSettings() {
+  $('set-brightness').value = settings.brightness;
+  $('set-volume').value = settings.volume;
+  $('set-camera').value = settings.camera;
+  $('set-quality').value = settings.quality;
+  $('settings').classList.remove('hidden');
+}
+function closeSettings() {
+  $('settings').classList.add('hidden');
+  // 試合中にポーズから開いた場合はポーズに戻る
+  if (S.game && S.game.ready) togglePause(true);
+}
+function saveSettings() {
+  settings.brightness = Number($('set-brightness').value);
+  settings.volume = Number($('set-volume').value);
+  settings.camera = Number($('set-camera').value);
+  settings.quality = $('set-quality').value;
+  safeSet(SETTINGS_KEY, JSON.stringify(settings));
+  setVolume(settings.volume);
+  world.applySettings(resolvedSettings());
+}
+for (const id of ['set-brightness', 'set-volume', 'set-camera', 'set-quality']) $(id).addEventListener('input', saveSettings);
+$('settings-close').onclick = closeSettings;
 
 // 30Hz で入力を送信し、同時に自分の移動を予測する
 setInterval(() => {
@@ -611,6 +732,13 @@ function onEvent(G, e) {
       else play(e.sound);
       if (['hit', 'stun', 'pallet', 'bonk'].includes(e.sound) && me && e.x !== undefined && Math.hypot(e.x - me.x, e.y - me.y) < 6)
         world.shake = 0.25;
+      if (G.ready && e.x !== undefined) {
+        const fx = { hit: 'blood', down: 'blood', crack: 'dust', kick: 'sparks', stun: 'stun', bonk: 'stun', gen_done: 'gold' }[e.sound];
+        if (fx) world.burst(fx, e.x, e.y);
+      }
+      // 自分が攻撃されたら画面を赤く
+      if ((e.sound === 'hit' || e.sound === 'down') && me && e.x !== undefined && Math.hypot(e.x - me.x, e.y - me.y) < 0.8 && G.role === 'survivor')
+        G.hurtFlash = performance.now() / 1000;
       break;
     case 'skill':
       G.skill = { ...e.skill, startedAt: performance.now() / 1000, warned: false };
@@ -706,7 +834,10 @@ function frame() {
   const dt = Math.min(0.1, (now - lastFrame) / 1000);
   lastFrame = now;
   const G = S.game;
-  if (!G || !G.snap || !G.ready) return;
+  if (!G || !G.snap || !G.ready) {
+    if (S.assetsReady && $('loading').classList.contains('hidden')) world.renderMenu(dt, now / 1000);
+    return;
+  }
   const k = Math.min(1, dt * 10);
   G.smooth.x -= G.smooth.x * k;
   G.smooth.y -= G.smooth.y * k;
@@ -755,8 +886,32 @@ function drawFrame(G, dt, T) {
   }
 
   world.render({ dt, T, self, list, snap, isKiller, selfAlive: alive, gone: G.gone });
+  updateTension(G, list, self, alive);
   drawHud(G, list, T);
   updateTouchButtons(G);
+}
+
+// 追跡中の緊張感と、修理済み発電機のうなり
+function updateTension(G, list, self, alive) {
+  let chase = 0;
+  if (alive) {
+    if (G.role === 'survivor') {
+      const k = list.find((e) => isKillerRole(e.d.role) && !e.d.aura);
+      if (k) chase = Math.max(0, 1 - Math.hypot(k.x - self.x, k.y - self.y) / 10);
+      chase = Math.max(chase, G.snap.heartbeat * 0.5);
+    } else {
+      for (const e of list) {
+        if (e.self || e.d.aura || e.d.role !== 'survivor' || ![HEALTH.HEALTHY, HEALTH.INJURED].includes(e.d.h)) continue;
+        chase = Math.max(chase, 1 - Math.hypot(e.x - self.x, e.y - self.y) / 10);
+      }
+    }
+  }
+  setChase(chase);
+  let near = Infinity;
+  G.map.gens.forEach((g, i) => {
+    if (G.snap.gens[i].done) near = Math.min(near, Math.hypot(g.x + 0.5 - self.x, g.y + 0.5 - self.y));
+  });
+  setLoop('gen_hum', Math.max(0, 1 - near / 9) * 0.35);
 }
 
 function updateTouchButtons(G) {
@@ -827,6 +982,21 @@ function drawHud(G, list, T) {
   const small = W < 700;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, W, H);
+
+  // 画面の縁を暗くして視線を中央に集める
+  const vg = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.35, W / 2, H / 2, Math.max(W, H) * 0.75);
+  vg.addColorStop(0, 'rgba(0,0,0,0)');
+  vg.addColorStop(1, 'rgba(0,0,0,0.55)');
+  ctx.fillStyle = vg;
+  ctx.fillRect(0, 0, W, H);
+  // 被弾時の赤いフラッシュ
+  if (G.hurtFlash) {
+    const k = 1 - (performance.now() / 1000 - G.hurtFlash) / 0.6;
+    if (k > 0) {
+      ctx.fillStyle = `rgba(170,0,10,${0.35 * k})`;
+      ctx.fillRect(0, 0, W, H);
+    }
+  }
 
   // 心音 (恐怖範囲)
   if (!isKiller && snap.heartbeat > 0) {
@@ -926,38 +1096,60 @@ function drawHud(G, list, T) {
     outlinedText(snap.gates[i].o ? 'EXIT' : `ゲート ${Math.round(snap.gates[i].p * 100)}%`, p.x, p.y, snap.gates[i].o ? '#7dff9a' : '#ffd25a');
   });
 
-  // 上部: 残り発電機
+  // 上部: 残り発電機 (DbD と同じく発電機アイコン + 数字)
   const left = Math.max(0, snap.gensRequired - snap.gensDone);
-  ctx.textAlign = 'center';
-  ctx.font = `bold ${small ? 15 : 18}px sans-serif`;
-  const top = touch.enabled ? 56 : 10;
-  panel(W / 2 - 120, top, 240, 34);
-  outlinedText(snap.gates[0].pw ? '脱出ゲートに通電' : `⚙ 残り発電機 ${left}`, W / 2, top + 24, snap.gates[0].pw ? '#ffd25a' : '#eee');
+  const top = touch.enabled ? 10 : 12;
+  const cxTop = W / 2;
+  panel(cxTop - 70, top, 140, 40, 'rgba(8,9,13,0.7)');
+  drawGenIcon(cxTop - 38, top + 20, 13, snap.gates[0].pw ? '#ffd25a' : '#e8e3d9');
+  ctx.textAlign = 'left';
+  ctx.font = 'bold 22px sans-serif';
+  outlinedText(snap.gates[0].pw ? '通電' : String(left), cxTop - 18, top + 28, snap.gates[0].pw ? '#ffd25a' : '#f2ede4');
   if (snap.collapse !== null) {
-    panel(W / 2 - 110, top + 40, 220, 28, 'rgba(90,0,0,0.75)');
+    const urgent = snap.collapse < 30;
+    panel(cxTop - 110, top + 46, 220, 28, urgent ? 'rgba(120,0,0,0.85)' : 'rgba(70,0,0,0.75)');
+    ctx.textAlign = 'center';
     ctx.font = 'bold 15px sans-serif';
-    outlinedText(`エンドゲーム崩壊 ${Math.ceil(snap.collapse)} 秒`, W / 2, top + 60, '#ff8080');
+    outlinedText(`エンドゲーム崩壊 ${Math.ceil(snap.collapse)}`, cxTop, top + 66, urgent && Math.floor(T * 2) % 2 ? '#fff' : '#ff8080');
   }
 
-  // 左上: サバイバーの状態
-  ctx.textAlign = 'left';
-  let y = 10;
-  const rowW = small ? 150 : 190;
+  // 左側: サバイバーの状態アイコン (狭い画面ではアイコンだけ)
+  const compact = W < 520;
+  const rowH = compact ? 40 : small ? 40 : 46;
+  let y = compact ? 62 : small ? 10 : 14;
+  const x0 = touch.enabled ? 10 : 14;
   for (const t of snap.team) {
-    panel(10, y, rowW, 34, t.id === S.you ? 'rgba(80,16,20,0.8)' : undefined);
-    ctx.fillStyle = (SURVIVOR_CHARACTERS[t.character] || SURVIVOR_CHARACTERS.knight).color;
-    ctx.fillRect(10, y, 4, 34);
-    ctx.font = 'bold 12px sans-serif';
-    ctx.fillStyle = '#eee';
-    ctx.fillText(t.name.slice(0, 9) + (t.bot ? ' ·BOT' : ''), 20, y + 15);
-    ctx.font = '11px sans-serif';
-    ctx.fillStyle = HEALTH_COLOR[t.h];
-    ctx.fillText(HEALTH_LABEL[t.h] + (t.h === 'caged' ? ` (段階 ${t.st})` : ''), 20, y + 29);
-    for (let i = 0; i < 2; i++) {
-      ctx.fillStyle = i < t.hk ? '#e5534b' : 'rgba(255,255,255,0.15)';
-      ctx.fillRect(rowW - 4 - i * 10, y + 22, 6, 6);
+    const col = (SURVIVOR_CHARACTERS[t.character] || SURVIVOR_CHARACTERS.knight).color;
+    const mine = t.id === S.you;
+    if (compact) {
+      drawStatusIcon(x0 + 16, y + 14, 12, t.h, col, T);
+      for (let i = 0; i < t.hk; i++) {
+        ctx.fillStyle = '#d63a3f';
+        ctx.fillRect(x0 + 34, y + 6 + i * 9, 4, 6);
+      }
+      y += rowH - 4;
+      continue;
     }
-    y += 38;
+    panel(x0, y, small ? 150 : 186, rowH - 6, mine ? 'rgba(90,16,22,0.78)' : 'rgba(8,9,13,0.66)');
+    drawStatusIcon(x0 + 20, y + (rowH - 6) / 2, small ? 12 : 14, t.h, col, T);
+    ctx.textAlign = 'left';
+    ctx.font = `bold ${small ? 11 : 13}px sans-serif`;
+    ctx.fillStyle = t.h === 'dead' ? '#777' : '#eee';
+    ctx.fillText(t.name.slice(0, 9) + (t.bot ? ' ·BOT' : ''), x0 + 40, y + (small ? 15 : 18));
+    ctx.font = `${small ? 10 : 11}px sans-serif`;
+    ctx.fillStyle = HEALTH_COLOR[t.h];
+    ctx.fillText(HEALTH_LABEL[t.h] + (t.h === 'caged' ? ` (段階 ${t.st})` : ''), x0 + 40, y + (small ? 29 : 34));
+    // フック回数のピン
+    for (let i = 0; i < 2; i++) {
+      ctx.fillStyle = i < t.hk ? '#d63a3f' : 'rgba(255,255,255,0.14)';
+      ctx.beginPath();
+      ctx.moveTo((small ? 150 : 186) + x0 - 14 - i * 12, y + 10);
+      ctx.lineTo((small ? 150 : 186) + x0 - 8 - i * 12, y + 22);
+      ctx.lineTo((small ? 150 : 186) + x0 - 20 - i * 12, y + 22);
+      ctx.closePath();
+      ctx.fill();
+    }
+    y += rowH;
   }
 
   // 下部: ヒントと進捗
@@ -1037,6 +1229,102 @@ function drawHud(G, list, T) {
     );
   }
   drawSkill(G, W, H);
+}
+
+// 発電機のアイコン (歯車)
+function drawGenIcon(x, y, r, color) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  for (let i = 0; i < 16; i++) {
+    const a = (i / 16) * Math.PI * 2;
+    const rr = i % 2 ? r * 0.78 : r;
+    ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = 'rgba(8,9,13,0.9)';
+  ctx.beginPath();
+  ctx.arc(0, 0, r * 0.38, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+// サバイバーの状態アイコン (健康・負傷・ダウン・担がれ・フック・生贄・脱出)
+function drawStatusIcon(x, y, r, h, color, T) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.lineWidth = 2;
+  // 外枠
+  ctx.strokeStyle = h === 'dead' ? '#555' : color;
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.beginPath();
+  ctx.arc(0, 0, r + 3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  const fg = { healthy: '#e8e3d9', injured: '#f0a046', downed: '#e5534b', carried: '#e5534b', caged: '#e5534b', escaped: '#7cc7ff', dead: '#666' }[h];
+  ctx.fillStyle = fg;
+  ctx.strokeStyle = fg;
+  if (h === 'dead') {
+    // ドクロ
+    ctx.beginPath();
+    ctx.arc(0, -r * 0.15, r * 0.55, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillRect(-r * 0.3, r * 0.2, r * 0.6, r * 0.35);
+    ctx.fillStyle = '#111';
+    ctx.beginPath();
+    ctx.arc(-r * 0.2, -r * 0.15, r * 0.14, 0, Math.PI * 2);
+    ctx.arc(r * 0.2, -r * 0.15, r * 0.14, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (h === 'caged') {
+    // フック
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(0, -r * 0.7);
+    ctx.lineTo(0, r * 0.1);
+    ctx.arc(-r * 0.3, r * 0.1, r * 0.3, 0, Math.PI, false);
+    ctx.stroke();
+    ctx.globalAlpha = 0.5 + 0.5 * Math.sin(T * 6);
+    ctx.beginPath();
+    ctx.arc(0, 0, r + 3, 0, Math.PI * 2);
+    ctx.stroke();
+  } else if (h === 'escaped') {
+    // 扉
+    ctx.strokeRect(-r * 0.45, -r * 0.6, r * 0.9, r * 1.2);
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.1, 0);
+    ctx.lineTo(r * 0.55, 0);
+    ctx.moveTo(r * 0.3, -r * 0.25);
+    ctx.lineTo(r * 0.55, 0);
+    ctx.lineTo(r * 0.3, r * 0.25);
+    ctx.stroke();
+  } else if (h === 'downed' || h === 'carried') {
+    // 倒れた人
+    ctx.beginPath();
+    ctx.arc(-r * 0.5, r * 0.15, r * 0.22, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillRect(-r * 0.25, r * 0.05, r * 0.85, r * 0.22);
+  } else {
+    // 立っている人 (負傷は血のしずく付き)
+    ctx.beginPath();
+    ctx.arc(0, -r * 0.4, r * 0.24, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.35, r * 0.6);
+    ctx.lineTo(-r * 0.25, -r * 0.1);
+    ctx.lineTo(r * 0.25, -r * 0.1);
+    ctx.lineTo(r * 0.35, r * 0.6);
+    ctx.closePath();
+    ctx.fill();
+    if (h === 'injured') {
+      ctx.fillStyle = '#d63a3f';
+      ctx.beginPath();
+      ctx.arc(r * 0.55, r * 0.35, r * 0.16, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ctx.restore();
 }
 
 function actionProgress(G) {
@@ -1181,6 +1469,16 @@ function drawSkill(G, W, H) {
   ctx.fillText(touch.enabled ? 'TAP' : 'SPACE', 0, 5);
   ctx.restore();
 }
+
+// 最初の操作で音を有効にして環境音を流す (ブラウザは操作前の再生を禁止している)
+window.addEventListener(
+  'pointerdown',
+  () => {
+    unlockAudio();
+    startAmbience();
+  },
+  { once: true },
+);
 
 // ?debug を付けると開発者ツールから状態を触れる
 if (new URLSearchParams(location.search).has('debug')) window.__fog = { S, onMessage, world };
