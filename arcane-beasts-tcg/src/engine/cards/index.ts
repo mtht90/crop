@@ -3,6 +3,8 @@ import { MONSTERS } from './monsters';
 import { ENERGIES, TRAINERS } from './trainers';
 import { MONSTERS2 } from './monsters2';
 import { TRAINERS2 } from './trainers2';
+import { MONSTERS3 } from './monsters3';
+import { TRAINERS3 } from './trainers3';
 
 export const TYPE_JP: Record<EType, string> = {
   fire: '炎',
@@ -92,6 +94,16 @@ export function describeEffect(e: AttackEffect): string {
       return `自分のトラッシュにあるモンスターの数×${e.per}ダメージ追加。${e.max ? `（追加は最大${e.max}ダメージ）` : ''}`;
     case 'bonusIfOmega':
       return `相手のバトルモンスターがΩかEXなら、${e.bonus}ダメージ追加。`;
+    case 'bonusPerHand':
+      return `${e.whose === 'self' ? '自分' : '相手'}の手札の枚数×${e.per}ダメージ追加。${e.max ? `（追加は最大${e.max}ダメージ）` : ''}`;
+    case 'bonusPerTrash':
+      return `自分のトラッシュにある${e.of === 'energy' ? 'エネルギー' : 'トレーナーズ'}の枚数×${e.per}ダメージ追加。${e.max ? `（追加は最大${e.max}ダメージ）` : ''}`;
+    case 'discardOppHand':
+      return `相手の手札をウラにして${e.n}枚ランダムに選び、トラッシュする。`;
+    case 'healAllSelf':
+      return `自分のモンスター全員のHPを、それぞれ「${e.n}」回復する。`;
+    case 'millOpp':
+      return `相手の山札を上から${e.n}枚、トラッシュする。`;
     case 'cantAttackNext':
       return '次の自分の番、このモンスターはワザが使えない。';
     case 'reduceNext':
@@ -147,7 +159,7 @@ export function describeAbility(a: AbilitySpec): string {
 }
 
 // Fill in auto-generated texts
-for (const mc of [...MONSTERS, ...MONSTERS2]) {
+for (const mc of [...MONSTERS, ...MONSTERS2, ...MONSTERS3]) {
   if (mc.ability && !mc.ability.text) mc.ability.text = describeAbility(mc.ability.spec);
   for (const atk of mc.attacks) {
     if (!atk.text && atk.effects?.length) atk.text = atk.effects.map(describeEffect).join('');
@@ -200,16 +212,20 @@ export const printLabel = (c: CardDef) => `${RARITY_SYMBOL[c.rarity]} ${MODEL_NA
 export const SET_INFO: Record<SetCode, { name: string; short: string }> = {
   AB1: { name: '目覚めの咆哮', short: '第1弾' },
   AB2: { name: '覇者の降臨', short: '第2弾' },
+  AB3: { name: '辺境の軍勢', short: '第3弾' },
 };
-export const SETS: SetCode[] = ['AB1', 'AB2'];
+export const SETS: SetCode[] = ['AB1', 'AB2', 'AB3'];
 
 const MAIN1: CardDef[] = [...MONSTERS, ...TRAINERS, ...ENERGIES];
 MAIN1.forEach((c, i) => (c.no = i + 1));
 const MAIN2: CardDef[] = [...MONSTERS2, ...TRAINERS2];
 MAIN2.forEach((c, i) => (c.no = i + 1));
-export const MAIN_SET: CardDef[] = [...MAIN1, ...MAIN2];
+const MAIN3: CardDef[] = [...MONSTERS3, ...TRAINERS3];
+MAIN3.forEach((c, i) => (c.no = i + 1));
+export const MAIN_SET: CardDef[] = [...MAIN1, ...MAIN2, ...MAIN3];
+const MAIN_OF: Record<SetCode, CardDef[]> = { AB1: MAIN1, AB2: MAIN2, AB3: MAIN3 };
 /** Number of regular (non-secret) cards per set, printed as "no/COUNT" */
-export const SET_COUNT: Record<SetCode, number> = { AB1: MAIN1.length, AB2: MAIN2.length };
+export const SET_COUNT: Record<SetCode, number> = { AB1: MAIN1.length, AB2: MAIN2.length, AB3: MAIN3.length };
 
 // --------------------------------------------------------------------------
 // Alternate printings
@@ -222,7 +238,7 @@ export const SET_COUNT: Record<SetCode, number> = { AB1: MAIN1.length, AB2: MAIN
 //   UR     … gold
 // --------------------------------------------------------------------------
 const SUFFIX: Record<Variant, string> = { mirror: 'M', AR: 'AR', CHR: 'CHR', S: 'S', SR: 'SR', SAR: 'SAR', UR: 'UR' };
-const secret: Record<SetCode, number> = { AB1: MAIN1.length, AB2: MAIN2.length };
+const secret: Record<SetCode, number> = { AB1: MAIN1.length, AB2: MAIN2.length, AB3: MAIN3.length };
 const VARIANTS: CardDef[] = [];
 
 function named(name: string): CardDef {
@@ -260,6 +276,38 @@ interface SetVariants {
 }
 
 const PLAN: Record<SetCode, SetVariants> = {
+  AB3: {
+    AR: [
+      ['ガレオン', undefined, 'story/p-island'], ['サンシルフ', undefined, 'story/p-burning'], ['タウロクヴァンガード', undefined, 'story/landscape-desert'], ['サンチャンピオン', undefined, 'story/p-mountains'],
+      ['マーフォークブローラー', undefined, 'story/p-wild-sea'], ['エルフヒーロー', undefined, 'story/p-great-tree'], ['エルフキャプテン', undefined, 'story/p-black-forest'], ['シャイド', undefined, 'story/p-storm-sea'],
+      ['オークスレイヤー', undefined, 'story/p-the-fall'], ['ドワーフセンチネル', undefined, 'story/blacksmith'], ['ゴブリンラウザー'], ['スケルトンライダー', undefined, 'story/p-graves'],
+      ['メカニカルレイダー'], ['ハルバードナイト', undefined, 'story/landscape-castle'],
+    ],
+    CHR: [
+      ['エルフヒーロー', 'camp/lisar'],
+      ['サンチャンピオン', 'camp/konrad'],
+      ['アークウィッチ', 'camp/delfador'],
+      ['ドラウグロード', 'camp/asheviere'],
+      ['グランドナイト', 'camp/lisar-glad'],
+      ['オークスレイヤー', 'orcs/warlord'],
+      ['ナーガウォーロード', 'merfolk/priestess'],
+      ['エルフキャプテン', 'elves/druid'],
+    ],
+    S: [['グランティ', 200], ['エルフスカウト', 60], ['ゾンビラット', 280], ['ミスティック', 120], ['カヌー', 20], ['ドワーフガード', 320]],
+    SR: [...MONSTERS3.filter((x) => x.omega || x.ex).map((x) => x.name), '傭兵の契約', '案内人の笛', '族長の号令'],
+    SAR: [
+      ['タウロクプロテクター', undefined, 'story/p-burning'],
+      ['ナーガウォーロード', undefined, 'story/p-storm-sea'],
+      ['エルフハイロード', undefined, 'story/p-great-tree'],
+      ['ドラゴンガード', undefined, 'story/p-mountains'],
+      ['アークウィッチ', undefined, 'story/p-study'],
+      ['オークソブリン', undefined, 'story/p-the-fall'],
+      ['ドラウグロード', undefined, 'story/p-graves'],
+      ['グランドナイト', undefined, 'story/landscape-castle'],
+      ['傭兵の契約', undefined, 'story/p-shadows'],
+    ],
+    UR: [...MONSTERS3.filter((x) => x.ex).map((x) => x.name), 'サイキックメイジ', 'ドワーフロード', '傭兵の契約'],
+  },
   AB1: {
     AR: [
       ['ヒアリクイーン'], ['ゴウカレイス', undefined, 'story/p-burning'], ['イエティ', undefined, 'story/p-snowfield'], ['コガネスカラベ', undefined, 'story/p-great-tree'],
@@ -320,7 +368,7 @@ const PLAN: Record<SetCode, SetVariants> = {
 };
 
 for (const set of SETS) {
-  const main = set === 'AB1' ? MAIN1 : MAIN2;
+  const main = MAIN_OF[set];
   for (const c of main) {
     const basicEnergy = c.kind === 'energy' && c.basic;
     if (!basicEnergy && (c.rarity === 'C' || c.rarity === 'U' || c.rarity === 'R')) alt(c, 'mirror');
@@ -363,4 +411,4 @@ export function isTrainer(c: CardDef): c is TrainerCard {
   return c.kind === 'trainer';
 }
 
-export { MONSTERS, TRAINERS, ENERGIES, MONSTERS2, TRAINERS2 };
+export { MONSTERS, TRAINERS, ENERGIES, MONSTERS2, TRAINERS2, MONSTERS3, TRAINERS3 };

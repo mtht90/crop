@@ -37,7 +37,7 @@ npm run build    # dist/ に静的サイトを出力
 npm test         # ルールエンジンのテスト（CPU 同士の全デッキ総当たり対戦を含む）
 ```
 
-`main` ブランチに push すると GitHub Actions が GitHub Pages にデプロイします（リポジトリ設定の Pages で「GitHub Actions」を選択してください）。
+`main` ブランチに push すると GitHub Actions が GitHub Pages にデプロイします（リポジトリ設定の Pages で「GitHub Actions」を選択してください）。公開の手順は [docs/PUBLISH.md](docs/PUBLISH.md) を参照。
 
 開発用 URL パラメータ：
 

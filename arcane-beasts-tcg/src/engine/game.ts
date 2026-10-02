@@ -81,6 +81,7 @@ export function maxHp(s: GameState, slot: Slot): number {
   const mc = topCard(slot);
   let hp = mc.hp;
   if (toolKey(slot) === 'charm') hp += 30;
+  if (toolKey(slot) === 'mailcoat' && mc.stage === 'basic') hp += 60;
   if (stadiumKey(s) === 'harbor' && !hasRule(mc)) hp += 30;
   return hp;
 }
@@ -527,6 +528,7 @@ export class Game {
     // stadium
     if (stadiumKey(s) === 'forest' && !s.flags.stadiumUsed && pl.bench.length < BENCH_MAX && pl.deck.some((c) => isBasic(c.cid)))
       out.push({ t: 'stadium' });
+    if (stadiumKey(s) === 'mine' && !s.flags.stadiumUsed && pl.hand.length > 0 && pl.deck.length > 1) out.push({ t: 'stadium' });
     // attacks
     if (act && !firstTurn) {
       topCard(act).attacks.forEach((_, i) => {
@@ -668,6 +670,36 @@ export class Game {
         return slotsOf(s, p).length > 1 && slotsOf(s, p).some((x) => x.slot.energy.some((e) => isBasicEnergy(e.cid)));
       case 'hammer':
         return slotsOf(s, other(p)).some((x) => x.slot.energy.length > 0);
+      case 'spy':
+      case 'mercenary':
+        return pl.deck.length > 0;
+      case 'smith':
+        return pl.discard.some((d) => isBasicEnergy(d.cid)) && slotsOf(s, p).length > 0;
+      case 'herbalist':
+        return true;
+      case 'warchief':
+        return handOthers.length < 5 && pl.deck.length > 0;
+      case 'thief':
+        return opp.hand.length > 0;
+      case 'venom':
+      case 'snare':
+        return !!opp.active;
+      case 'guide':
+        return pl.bench.length < BENCH_MAX && pl.discard.some((d) => isBasic(d.cid));
+      case 'bomb':
+        return true;
+      case 'scroll2':
+        return handOthers.length <= 5 && pl.deck.length > 0;
+      case 'tonic':
+        return slotsOf(s, p).some((x) => x.slot.damage > 0 || x.slot.conditions.length > 0);
+      case 'relay':
+        return !!pl.active && pl.bench.length > 0 && pl.active.energy.length > 0;
+      case 'shovel':
+        return pl.discard.some((d) => card(d.cid).kind === 'trainer');
+      case 'nectar':
+        return damaged;
+      case 'ladder':
+        return pl.bench.length > 0;
       default:
         return true;
     }
@@ -770,7 +802,14 @@ export class Game {
       case 'stadium': {
         s.flags.stadiumUsed = true;
         this.emit({ e: 'message', text: `${pl.name}は${cardName(s.stadium!.cid)}の効果を使った` });
-        yield* this.benchFromDeck(p, 1, () => true);
+        if (stadiumKey(s) === 'mine') {
+          const [u] = yield* this.chooseCards(p, 'トラッシュする手札を1枚選んでください', pl.hand, pl.hand.map((c) => c.uid), 1, 1);
+          const moved = pl.hand.filter((c) => c.uid === u);
+          pl.hand = pl.hand.filter((c) => c.uid !== u);
+          pl.discard.push(...moved);
+          if (moved.length) this.emit({ e: 'discard', p, uids: [u] });
+          this.draw(p, 2);
+        } else yield* this.benchFromDeck(p, 1, () => true);
         return false;
       }
       case 'attack': {
@@ -953,6 +992,14 @@ export class Game {
         case 'bonusIfOmega':
           if (this.pl(opp).active && hasRule(topCard(this.pl(opp).active!))) dmg += e.bonus;
           break;
+        case 'bonusPerHand':
+          dmg += Math.min(e.max ?? 9999, this.pl(e.whose === 'self' ? p : opp).hand.length * e.per);
+          break;
+        case 'bonusPerTrash': {
+          const n = me.discard.filter((c) => (e.of === 'energy' ? card(c.cid).kind === 'energy' : card(c.cid).kind === 'trainer')).length;
+          dmg += Math.min(e.max ?? 9999, n * e.per);
+          break;
+        }
       }
     }
     if (failed) {
@@ -970,6 +1017,7 @@ export class Game {
         // attacker-side modifiers
         dmg += s.flags.attackBonus;
         if (toolKey(A) === 'band') dmg += 20;
+        if (toolKey(A) === 'drum' && mc.stage === 'basic') dmg += 30;
         let boost = 0;
         for (const { slot } of slotsOf(s, p)) {
           const sp = hasAbility(slot, 'typeBoost');
@@ -981,6 +1029,9 @@ export class Game {
         dmg += boost;
         const st = stadiumKey(s);
         if (st === 'volcano' && mc.type === 'fire') dmg += 20;
+        if (st === 'ruins' && mc.type === 'psychic') dmg += 20;
+        if (st === 'crypt' && mc.type === 'dark') dmg += 20;
+        if (st === 'peak' && mc.type === 'lightning') dmg += 20;
         if (st === 'battlefield') dmg += 10;
         // weakness / resistance
         const dc = topCard(D);
@@ -998,10 +1049,12 @@ export class Game {
         const red = hasAbility(D, 'damageReduce');
         if (red && red.k === 'damageReduce') dmg -= red.n;
         if (toolKey(D) === 'crest' && hasRule(dc)) dmg -= 30;
+        if (toolKey(D) === 'tower') dmg -= 20;
         for (const f of D.flags) if (f.k === 'reduce' && f.untilTurn >= s.turn) dmg -= f.n ?? 0;
         dmg = Math.max(0, dmg);
         if (dmg > 0) {
           this.putDamage({ p: opp, z: 'active' }, dmg, mc.type, 'attack', weak, resist);
+          if (toolKey(A) === 'fangs') this.heal({ p, z: 'active' }, 20);
           // reactive effects
           const cd = hasAbility(D, 'counterDamage');
           if (cd && cd.k === 'counterDamage') this.putDamage({ p, z: 'active' }, cd.n, topCard(D).type, 'effect');
@@ -1078,6 +1131,28 @@ export class Game {
         case 'draw':
           this.draw(p, e.n);
           break;
+        case 'discardOppHand': {
+          const oh = this.pl(opp).hand;
+          const out: CardInst[] = [];
+          for (let i = 0; i < e.n && oh.length; i++) out.push(...oh.splice(Math.floor(this.rand() * oh.length), 1));
+          if (out.length) {
+            this.pl(opp).discard.push(...out);
+            this.emit({ e: 'discard', p: opp, uids: out.map((c) => c.uid) });
+          }
+          break;
+        }
+        case 'healAllSelf':
+          for (const { pos, slot } of slotsOf(s, p)) if (slot.damage > 0) this.heal(pos, e.n);
+          break;
+        case 'millOpp': {
+          const od = this.pl(opp).deck;
+          const out = od.splice(0, Math.min(e.n, od.length));
+          if (out.length) {
+            this.pl(opp).discard.push(...out);
+            this.emit({ e: 'discard', p: opp, uids: out.map((c) => c.uid) });
+          }
+          break;
+        }
         case 'searchEnergyAttach':
           yield* this.searchEnergyAttach(p, e.n, e.type, e.from, e.to);
           break;
@@ -1391,6 +1466,127 @@ export class Game {
         this.emit({ e: 'attach', p, uid: c.uid, pos: dst });
         break;
       }
+      case 'spy': {
+        const top = pl.deck.slice(0, 5);
+        if (!top.length) break;
+        const [u] = yield* this.chooseCards(p, '手札に加えるカードを1枚選んでください', top, top.map((c) => c.uid), 1, 1);
+        const got = top.find((c) => c.uid === u);
+        const rest = top.filter((c) => c.uid !== u);
+        pl.deck.splice(0, top.length);
+        pl.deck.push(...rest);
+        if (got) {
+          pl.hand.push(got);
+          this.emit({ e: 'search', p, uids: [got.uid] });
+        }
+        break;
+      }
+      case 'smith': {
+        for (let k = 0; k < 2; k++) {
+          const cands = pl.discard.filter((d) => isBasicEnergy(d.cid));
+          if (!cands.length) break;
+          const [u] = yield* this.chooseCards(p, 'つけるエネルギーを選んでください', cands, cands.map((c) => c.uid), 1, 1);
+          const target = yield* this.chooseSlot(p, 'エネルギーをつけるモンスターを選んでください', slotsOf(s, p).map((x) => x.pos));
+          if (!target || u === undefined) break;
+          const i = pl.discard.findIndex((c) => c.uid === u);
+          const [c] = pl.discard.splice(i, 1);
+          slotAt(s, target)!.energy.push(c);
+          this.emit({ e: 'attach', p, uid: c.uid, pos: target });
+        }
+        break;
+      }
+      case 'herbalist': {
+        for (const { pos, slot } of slotsOf(s, p)) {
+          if (slot.conditions.length) {
+            slot.conditions = [];
+            this.emit({ e: 'cure', pos });
+          }
+        }
+        this.draw(p, 1);
+        break;
+      }
+      case 'warchief':
+        this.draw(p, Math.max(0, 5 - pl.hand.length));
+        break;
+      case 'mercenary': {
+        for (let k = 0; k < 2; k++) if (this.flip(p, def.name)) yield* this.searchToHand(p, '手札に加えるカードを1枚選んでください', () => true, 1);
+        break;
+      }
+      case 'thief': {
+        const oh = this.pl(opp).hand;
+        const out: CardInst[] = [];
+        for (let i = 0; i < 2 && oh.length; i++) out.push(...oh.splice(Math.floor(this.rand() * oh.length), 1));
+        if (out.length) {
+          this.pl(opp).discard.push(...out);
+          this.emit({ e: 'discard', p: opp, uids: out.map((c) => c.uid) });
+        }
+        break;
+      }
+      case 'venom':
+        this.addCondition({ p: opp, z: 'active' }, 'poisoned');
+        break;
+      case 'snare':
+        if (this.flip(p, def.name)) this.addCondition({ p: opp, z: 'active' }, 'paralyzed');
+        break;
+      case 'guide': {
+        const room = BENCH_MAX - pl.bench.length;
+        const cands = pl.discard.filter((d) => isBasic(d.cid));
+        const chosen = yield* this.chooseCards(p, 'ベンチに出すたねモンスターを選んでください', cands, cands.map((c) => c.uid), 0, Math.min(2, room));
+        for (const uid of chosen) {
+          const i = pl.discard.findIndex((c) => c.uid === uid);
+          const c = pl.discard.splice(i, 1)[0];
+          pl.bench.push(this.newSlot(c));
+          this.emit({ e: 'play', p, uid: c.uid, to: { p, z: 'bench', i: pl.bench.length - 1 } });
+        }
+        break;
+      }
+      case 'bomb': {
+        const pos = yield* this.chooseSlot(p, '20ダメージぶんのダメカンをのせる相手のモンスターを選んでください', slotsOf(s, opp).map((x) => x.pos));
+        if (pos) this.putDamage(pos, 20, 'colorless', 'effect');
+        break;
+      }
+      case 'scroll2':
+        this.draw(p, 2);
+        break;
+      case 'tonic': {
+        const opts = slotsOf(s, p).filter((x) => x.slot.damage > 0 || x.slot.conditions.length).map((x) => x.pos);
+        const pos = yield* this.chooseSlot(p, '回復するモンスターを選んでください', opts);
+        if (pos) {
+          this.heal(pos, 50);
+          const sl = slotAt(s, pos)!;
+          if (sl.conditions.length) {
+            sl.conditions = [];
+            this.emit({ e: 'cure', pos });
+          }
+        }
+        break;
+      }
+      case 'relay': {
+        const act = pl.active;
+        if (!act) break;
+        const dst = yield* this.chooseSlot(p, 'エネルギーを移すベンチモンスターを選んでください', pl.bench.map((_, i) => ({ p, z: 'bench', i }) as Pos));
+        if (!dst) break;
+        const moved = act.energy.splice(0);
+        for (const c of moved) {
+          slotAt(s, dst)!.energy.push(c);
+          this.emit({ e: 'attach', p, uid: c.uid, pos: dst });
+        }
+        break;
+      }
+      case 'shovel':
+        yield* this.fromDiscardToHand(p, '手札に加えるトレーナーズを選んでください', (d) => d.kind === 'trainer', 1);
+        break;
+      case 'nectar': {
+        const opts = slotsOf(s, p).filter((x) => x.slot.damage > 0).map((x) => x.pos);
+        const pos = yield* this.chooseSlot(p, '回復するモンスターを選んでください', opts);
+        if (pos) this.heal(pos, 30);
+        this.draw(p, 1);
+        break;
+      }
+      case 'ladder': {
+        const ok = yield* this.promptSwitch(p, p, 'バトル場に出すベンチモンスターを選んでください');
+        if (ok && pl.active) this.heal({ p, z: 'active' }, 20);
+        break;
+      }
       case 'hammer': {
         if (!this.flip(p, def.name)) break;
         const opts = slotsOf(s, opp).filter((x) => x.slot.energy.length).map((x) => x.pos);
@@ -1496,6 +1692,9 @@ export class Game {
         slot.conditions = slot.conditions.filter((c) => c !== 'paralyzed');
         this.emit({ e: 'cure', pos });
       }
+    }
+    if (stadiumKey(s) === 'oasis') {
+      for (const p of order) if (this.pl(p).active && this.pl(p).active!.damage > 0) this.heal({ p, z: 'active' }, 10);
     }
     // abilities between turns
     for (const p of order) {

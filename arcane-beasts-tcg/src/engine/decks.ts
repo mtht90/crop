@@ -239,7 +239,71 @@ export const EX_DECKS: DeckList[] = [
   },
 ];
 
-export const ALL_DECKS: DeckList[] = [...STARTER_DECKS, ...EX_DECKS];
+/** 第3弾の強敵が使うデッキ */
+export const AB3_DECKS: DeckList[] = [
+  {
+    id: 'sunfolk',
+    name: '砂陽の軍旗',
+    type: 'fire',
+    cover: 'タウロクプロテクター',
+    description: '砂漠の民と大牛タウロクの炎デッキ。軍旗がはためくたび、炎が強く燃える。',
+    cards: [
+      ['サンスカウト', 4], ['サンパスファインダー', 3], ['サンチャンピオン', 2], ['タウロクヴァンガード', 3], ['タウロクフラッグベアラー', 2], ['タウロクプロテクター', 2], ['サンシンガー', 2],
+      ['大賢者の研究', 4], ['斥候の報告', 2], ['砂漠の薬師', 2], ['召喚の巻物', 4], ['戦太鼓', 2], ['活力のエリクサー', 2], ['砂漠のオアシス', 2], ['狩人の知恵', 2], ['司令官の号令', 2], ['回復薬', 2],
+      [E('炎'), 18],
+    ],
+  },
+  {
+    id: 'mine',
+    name: '鋼鉄の坑道',
+    type: 'fighting',
+    cover: 'ドワーフロード',
+    description: 'ドワーフ一族の闘・雷デッキ。鋼の大盾と鎖かたびらで固め、坑道から鉄槌を振るう。',
+    cards: [
+      ['ドワーフファイター', 4], ['ドワーフバーサーカー', 3], ['ドワーフガード', 3], ['ドワーフセンチネル', 2], ['ドワーフロード', 2], ['ドワーフサンダラー', 2], ['ドラゴンガード', 2],
+      ['大賢者の研究', 4], ['ドワーフの鍛冶師', 3], ['鋼の大盾', 2], ['鎖かたびら', 2], ['ドワーフの坑道', 2], ['召喚の巻物', 4], ['雷鳴の頂', 1], ['爆薬樽', 2], ['司令官の号令', 2], ['回復薬', 2],
+      [E('闘'), 10], [E('雷'), 8],
+    ],
+  },
+  {
+    id: 'horde',
+    name: '蛮勇の大軍',
+    type: 'fighting',
+    cover: 'オークソブリン',
+    description: 'オークの軍勢を一気に並べて押し潰す闘デッキ。戦太鼓が響けば、止まらない。',
+    cards: [
+      ['グランティ', 4], ['グラントウォリアー', 4], ['オークスレイヤー', 2], ['オークソブリン', 4], ['オークアーチャー', 3], ['オークバーサーカー', 2],
+      ['大賢者の研究', 4], ['族長の号令', 2], ['戦太鼓', 2], ['盗賊のすり', 2], ['召喚の巻物', 4], ['騎士の突撃', 3], ['進化の秘薬', 2], ['砕きの鉄槌', 2], ['回復薬', 2],
+      [E('闘'), 18],
+    ],
+  },
+  {
+    id: 'highelf',
+    name: '大森林の王',
+    type: 'grass',
+    cover: 'エルフハイロード',
+    description: 'エルフの隊列で粘り、エルフハイロードで一気に決める草デッキ。森が味方の傷を癒やす。',
+    cards: [
+      ['エルフスカウト', 3], ['エルフレンジャー', 3], ['エルフキャプテン', 2], ['エルフロード', 3], ['エルフハイロード', 3], ['エルフファイター', 2], ['エルフヒーロー', 2], ['エルフレディ', 1],
+      ['大賢者の研究', 4], ['白魔導士の祈り', 2], ['甘い蜜', 3], ['司令官の号令', 2], ['召喚の巻物', 4], ['活力のエリクサー', 2], ['エルフの森', 2], ['属性の羅針盤', 1], ['転移の羽', 2],
+      [E('草'), 19],
+    ],
+  },
+  {
+    id: 'shadow',
+    name: '影の玉座',
+    type: 'dark',
+    cover: 'ドラウグロード',
+    description: '亡者の覇王を軸に、盗み・毒・吸血で追い詰める悪デッキ。影の女王は容赦しない。',
+    cards: [
+      ['ゾンビドワーフ', 4], ['ゾンビトロル', 4], ['ドラウグロード', 3], ['ダークアデプト', 3], ['スケルトンライダー', 2], ['ゾンビバット', 2],
+      ['大賢者の研究', 4], ['呪われた地下墓地', 2], ['吸血の牙', 2], ['毒薬売り', 2], ['盗賊のすり', 2], ['召喚の巻物', 4], ['発掘のシャベル', 2], ['暗殺者の刃', 2], ['転移の羽', 2], ['進化の秘薬', 2],
+      [E('悪'), 18],
+    ],
+  },
+];
+
+export const ALL_DECKS: DeckList[] = [...STARTER_DECKS, ...EX_DECKS, ...AB3_DECKS];
 export const deckById = (id: string) => ALL_DECKS.find((d) => d.id === id)!;
 
 export function expand(list: [string, number][]): string[] {
@@ -281,7 +345,7 @@ export interface Rival {
   lose: string;
   scene: string;
   /** set the rival belongs to (第2弾 rivals unlock after the first 8) */
-  set?: 'AB1' | 'AB2';
+  set?: 'AB1' | 'AB2' | 'AB3';
 }
 
 export const RIVALS: Rival[] = [
@@ -348,5 +412,25 @@ export const RIVALS: Rival[] = [
   {
     id: 'carmilla', name: 'カーミラ', title: '夜会の女主人', portrait: 'humans/mage-red+female', deck: 'night', level: 'hard', reward: 600, set: 'AB2',
     intro: 'ようこそ、月夜の舞踏会へ。最後まで踊っていられるかしら。', win: 'いい夜だったわ。あなたの血も、ね。', lose: '夜明けが…来てしまったのね。', scene: 'story/p-graves',
+  },
+  {
+    id: 'salima', name: 'サリマ', title: '砂陽の戦士長', portrait: 'camp/q-champion', deck: 'sunfolk', level: 'hard', reward: 620, set: 'AB3',
+    intro: '砂漠に入る者は、まず太陽に試される。次に、わたしが試す。', win: '日輪は、誰にも沈められない。', lose: '……見事。砂の民は、強き者に旗を預ける。', scene: 'story/landscape-desert',
+  },
+  {
+    id: 'dorgan', name: 'ドルガン', title: '鋼鉄の坑道長', portrait: 'dwarves/lord', deck: 'mine', level: 'hard', reward: 680, set: 'AB3',
+    intro: 'ガハハ！ 坑道の扉は、わしの鉄槌を越えた者にしか開かんぞ！', win: '鍛え直して出直してこい！', lose: '……ふん、石頭のわしを割るとは。気に入った！', scene: 'story/landscape-mountains-03',
+  },
+  {
+    id: 'zaluk', name: 'ザルク', title: '蛮勇の大王', portrait: 'orcs/sovereign', deck: 'horde', level: 'hard', reward: 720, set: 'AB3',
+    intro: 'グォォォ！ 我が軍勢の足音が聞こえぬか！ 踏み潰してくれる！', win: '弱き者に、居場所はない！', lose: 'グ……フ、フハハ！ 小さいくせに、よく吠える！', scene: 'story/p-burning',
+  },
+  {
+    id: 'elwin', name: 'エルウィン', title: '大森林の王', portrait: 'elves/high-lord', deck: 'highelf', level: 'hard', reward: 760, set: 'AB3',
+    intro: '森は、あなたを見ていた。その覚悟が本物か、剣で語ってもらおう。', win: '森の声に、耳をかたむけなさい。', lose: '……参りました。森も、あなたを認めたようだ。', scene: 'story/p-black-forest',
+  },
+  {
+    id: 'asha', name: '影の女王', title: '千年の黒幕', portrait: 'camp/asheviere', deck: 'shadow', level: 'hard', reward: 1000, set: 'AB3',
+    intro: 'ようこそ、小さな召喚士。あなたの絆ごと、闇に溶かしてあげましょう。', win: '光など、影があるから輝けるのよ。', lose: '……ありえない。私の、千年が……！', scene: 'story/p-shadows',
   },
 ];

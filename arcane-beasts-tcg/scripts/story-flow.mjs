@@ -1,0 +1,31 @@
+// Story flow: map → chapter → duel (forced win) → after-scene → map. node scripts/story-flow.mjs <outprefix>
+import { chromium } from 'playwright';
+const [out] = process.argv.slice(2);
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+page.on('pageerror', (e) => console.log('pageerror:', e.message));
+await page.goto('http://127.0.0.1:5173/');
+await page.evaluate(() => localStorage.clear());
+await page.goto('http://127.0.0.1:5173/');
+await page.evaluate(() => { const st = window.__stores.useStore.getState(); st.chooseStarter('fire'); st.update((s) => { s.guideSeen = true; s.story.started = true; s.beaten = ['tim', 'marina', 'vane', 'grom', 'ignis']; }); st.go('story'); });
+await page.waitForTimeout(1500);
+let n = 0;
+const snap = async (t) => page.screenshot({ path: `${out}-${String(n++).padStart(2, '0')}-${t}.png` });
+await snap('map');
+// start the selected chapter with scenes off, win by force
+await page.evaluate(() => window.__stores.useStore.getState().update((s) => void (s.story.scenes = false)));
+await page.getByText('この章をはじめる').click();
+await page.waitForSelector('.battle-screen', { timeout: 15000 });
+await page.waitForTimeout(3500);
+await page.evaluate(() => window.__stores.useBattle.setState({ stats: { kos: 3, damage: 400, prizes: 6, prizesLost: 2, evolves: 1, trainers: 4 }, result: { winner: 0, reason: 'サイドをすべてとった！' } }));
+await page.waitForTimeout(4500);
+await snap('result');
+await page.evaluate(() => window.__stores.useStore.getState().update((s) => void (s.story.scenes = true)));
+await page.getByText('物語をつづける').click();
+await page.waitForTimeout(2500);
+await snap('after');
+console.log('screen', await page.evaluate(() => window.__stores.useStore.getState().screen));
+await page.evaluate(() => window.__stores.useStore.getState().go('home'));
+await page.waitForTimeout(1500);
+await snap('home');
+await browser.close();

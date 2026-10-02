@@ -67,6 +67,7 @@ type Tab = SetCode | 'premium';
 const TABS: [Tab, string][] = [
   ['AB1', `第1弾 ${SET_INFO.AB1.name}`],
   ['AB2', `第2弾 ${SET_INFO.AB2.name}`],
+  ['AB3', `第3弾 ${SET_INFO.AB3.name}`],
   ['premium', 'プレミアム'],
 ];
 
@@ -140,7 +141,7 @@ export function Shop() {
   const [sel, setSel] = useState(0);
   const [opening, setOpening] = useState<OpeningState | null>(null);
   const [odds, setOdds] = useState(false);
-  const [kind, setKind] = useState<Tab>(() => (/[?&]premium/.test(location.search) ? 'premium' : 'AB2'));
+  const [kind, setKind] = useState<Tab>(() => (/[?&]premium/.test(location.search) ? 'premium' : 'AB3'));
   const list = kind === 'premium' ? [] : BOOSTERS.filter((x) => x.set === kind);
   const u = useUnit();
   useEffect(() => playMusic('shop'), []);
@@ -207,7 +208,7 @@ export function Shop() {
                   }}
                 >
                   {label}
-                  {k === 'AB2' && <i className="new">NEW</i>}
+                  {k === 'AB3' && <i className="new">NEW</i>}
                   {k === 'premium' && pickup && <i>PICK UP</i>}
                 </button>
               ))}

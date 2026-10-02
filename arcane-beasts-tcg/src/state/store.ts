@@ -1,5 +1,6 @@
 import type { FxLevel } from '../lib/fx';
 import type { MatchInfo } from '../online/client';
+import type { Beat } from '../story/types';
 import { create } from 'zustand';
 import { ALL_CARDS, card, CARDS, SET_INFO } from '../engine/cards';
 import { applyRanked, ensureSeason, freshRank, type RankChange, type RankState } from './ranked';
@@ -45,7 +46,7 @@ const isBasicEnergy = (cid: string) => {
   return c.kind === 'energy' && c.basic;
 };
 
-export type Screen = 'lobby' | 'title' | 'starter' | 'home' | 'rivals' | 'battle' | 'deck' | 'collection' | 'shop' | 'missions' | 'exchange' | 'ranked' | 'settings' | 'credits' | 'rules' | 'gallery';
+export type Screen = 'story' | 'scene' | 'lobby' | 'title' | 'starter' | 'home' | 'rivals' | 'battle' | 'deck' | 'collection' | 'shop' | 'missions' | 'exchange' | 'ranked' | 'settings' | 'credits' | 'rules' | 'gallery';
 
 export interface SavedDeck {
   id: string;
@@ -82,7 +83,21 @@ export interface Save {
   /** かけら: duplicates beyond MAX_COPIES, per rarity */
   shards: Partial<Record<Rarity, number>>;
   ranked: RankState;
+  /** story mode progress */
+  story: StorySave;
 }
+
+export interface StorySave {
+  /** the prologue has been played */
+  started: boolean;
+  /** chapters won through the story */
+  cleared: string[];
+  /** scenes that have been watched (ids like "c03:before") */
+  seen: string[];
+  /** read the conversations automatically (false = skip straight to battles) */
+  scenes: boolean;
+}
+export const freshStory = (): StorySave => ({ started: false, cleared: [], seen: [], scenes: true });
 
 export interface BattleConfig {
   rival: Rival | null;
@@ -98,6 +113,8 @@ export interface BattleConfig {
   ranked?: { oppRank: number };
   /** an online match (the rules run on the server) */
   online?: MatchInfo;
+  /** a story chapter's duel */
+  story?: { chapterId: string };
 }
 
 const KEY = 'arcane-beasts-save-v1';
@@ -119,6 +136,7 @@ function freshSave(): Save {
     progress: freshProgress(),
     shards: {},
     ranked: freshRank(),
+    story: freshStory(),
   };
 }
 
@@ -132,6 +150,7 @@ function load(): Save {
       s.progress.stats = { ...freshProgress().stats, ...s.progress.stats };
       s.shards = s.shards ?? {};
       s.ranked = { ...freshRank(), ...(s.ranked ?? {}) };
+      s.story = { ...freshStory(), ...(s.story ?? {}) };
       ensureSeason(s.ranked);
       for (const [k, n] of Object.entries(s.shards) as [string, number][]) {
         const to = OLD_RARITY[k];
@@ -167,6 +186,7 @@ interface Store {
   screen: Screen;
   save: Save;
   battle: BattleConfig | null;
+  scene: { id: string; beats: Beat[]; then: () => void } | null;
   battleSeq: number;
   go: (s: Screen) => void;
   update: (f: (s: Save) => void) => void;
@@ -175,6 +195,10 @@ interface Store {
   addCards: (cids: string[]) => boolean[];
   exchange: (cid: string) => boolean;
   recordRanked: (win: boolean) => RankChange;
+  /** play a scene full-screen, then call `then` */
+  playScene: (id: string, beats: Beat[], then: () => void) => void;
+  markScene: (id: string) => void;
+  clearChapter: (chapterId: string) => void;
   /** pay rank rewards decided by the server (online ranked) */
   grantRankRewards: (rewards: RankChange['rewards']) => void;
   startBattle: (cfg: BattleConfig) => void;
@@ -199,6 +223,7 @@ export const useStore = create<Store>((set, get) => ({
   screen: 'title',
   save: load(),
   battle: null,
+  scene: null,
   battleSeq: 0,
   go: (screen) => set({ screen }),
   update: (f) => {
@@ -238,6 +263,15 @@ export const useStore = create<Store>((set, get) => ({
     });
     return out;
   },
+  playScene: (id, beats, then) => set((st) => ({ scene: { id, beats, then }, screen: 'scene', battleSeq: st.battleSeq })),
+  markScene: (id) =>
+    get().update((s) => {
+      if (!s.story.seen.includes(id)) s.story.seen.push(id);
+    }),
+  clearChapter: (chapterId) =>
+    get().update((s) => {
+      if (!s.story.cleared.includes(chapterId)) s.story.cleared.push(chapterId);
+    }),
   recordRanked: (win) => {
     let res!: RankChange;
     get().update((s) => {
@@ -393,6 +427,9 @@ export const BOOSTERS: Booster[] = [
   { id: 'dragon', name: '覇竜パック', set: 'AB2', mascot: 'ドラグーン', types: ['fire', 'fighting', 'colorless'], hue: '#ffb03a', hue2: '#4a1a02' },
   { id: 'deep', name: '冥海パック', set: 'AB2', mascot: 'ナーガクイーン', types: ['water', 'psychic'], hue: '#3fd6c8', hue2: '#062a3a' },
   { id: 'undead', name: '死霊パック', set: 'AB2', mascot: 'リッチロード', types: ['dark', 'grass', 'lightning'], hue: '#9d7bff', hue2: '#150a33' },
+  { id: 'horde', name: '蛮勇パック', set: 'AB3', mascot: 'オークソブリン', types: ['fighting', 'fire', 'colorless'], hue: '#d8742c', hue2: '#3a1606' },
+  { id: 'stone', name: '鉱脈パック', set: 'AB3', mascot: 'ドラゴンガード', types: ['lightning', 'water', 'grass'], hue: '#79b8ff', hue2: '#0c1f3d' },
+  { id: 'plague', name: '凶星パック', set: 'AB3', mascot: 'ドラウグロード', types: ['dark', 'psychic', 'colorless'], hue: '#c36bff', hue2: '#1c0b2e' },
 ];
 
 export const setName = (set: SetCode) => SET_INFO[set].name;

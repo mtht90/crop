@@ -46,7 +46,9 @@ export const onlineSupported = () => import.meta.env.MODE !== 'artifact' && !inF
 export function serverUrl(): string {
   let custom: string | null = null;
   try {
-    custom = new URLSearchParams(location.search).get('server') || localStorage.getItem(SERVER_KEY);
+    const q = new URLSearchParams(location.search).get('server');
+    if (q) localStorage.setItem(SERVER_KEY, q); // remember it, so the link only has to be opened once
+    custom = q || localStorage.getItem(SERVER_KEY);
   } catch {
     /* ignore */
   }
@@ -56,6 +58,17 @@ export function serverUrl(): string {
     return `${/^(localhost|127\.|192\.168\.|10\.)/.test(custom) ? 'ws' : secure ? 'wss' : 'ws'}://${custom.replace(/\/ws$/, '')}/ws`;
   }
   return `${secure ? 'wss' : 'ws'}://${location.host}/ws`;
+}
+
+/** point the game at another server (empty = the page's own origin) */
+export function setServerAddress(addr: string) {
+  try {
+    const v = addr.trim();
+    if (v) localStorage.setItem(SERVER_KEY, v);
+    else localStorage.removeItem(SERVER_KEY);
+  } catch {
+    /* ignore */
+  }
 }
 
 export type Status = 'idle' | 'connecting' | 'open';

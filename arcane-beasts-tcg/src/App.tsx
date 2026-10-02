@@ -14,6 +14,8 @@ import { Missions } from './screens/Missions';
 import { Exchange } from './screens/Exchange';
 import { Ranked } from './screens/Ranked';
 import { Lobby } from './screens/Lobby';
+import { StoryMap } from './screens/StoryMap';
+import { Scene } from './screens/Scene';
 import { online } from './online/client';
 import { Credits, Rules, Settings } from './screens/Misc';
 import { setVolumes, unlockAudio } from './audio/audio';
@@ -58,6 +60,8 @@ const SCREENS = {
   exchange: Exchange,
   ranked: Ranked,
   lobby: Lobby,
+  story: StoryMap,
+  scene: Scene,
   settings: Settings,
   credits: Credits,
   rules: Rules,

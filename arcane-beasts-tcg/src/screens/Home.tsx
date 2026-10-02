@@ -1,4 +1,6 @@
 import { onlineSupported } from '../online/client';
+import { CHAPTERS } from '../story';
+import { nextChapterIndex } from '../story/flow';
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useState } from 'react';
 import { activeDeck, collectionPct, extCtx, useStore, RIVALS, SHARD_COST, SHARD_RARITIES } from '../state/store';
@@ -33,6 +35,8 @@ export function Home() {
   const pct = Math.floor(collectionPct(save));
   const shardReady = SHARD_RARITIES.some((r) => (save.shards[r] ?? 0) >= SHARD_COST[r]);
   const next = RIVALS.find((r) => !save.beaten.includes(r.id));
+  const nextIdx = nextChapterIndex(save);
+  const nextCh = CHAPTERS[nextIdx];
   const missionN = claimableCount(save.progress, extCtx(save));
   const pickup = currentPickup();
   const p = save.progress;
@@ -43,7 +47,7 @@ export function Home() {
     return open;
   });
   const tiles: TileDef[] = [
-    { to: 'rivals', title: 'バトル', sub: next ? `次の相手：${next.title} ${next.name}` : '全ての強敵を撃破！フリー対戦で腕を磨こう', bg: 'story/landscape-lava', fig: 'monsters/fire-dragon', icon: 'swords', big: true },
+    { to: 'story', title: 'ストーリー', sub: next ? `第${nextCh.act}幕 第${nextIdx + 1}章「${nextCh.title}」` : '全ての強敵を撃破！フリー対戦で腕を磨こう', bg: 'story/landscape-lava', fig: 'monsters/fire-dragon', icon: 'swords', big: true },
     { to: 'deck', title: 'デッキ編集', sub: '60枚のデッキを組もう', bg: 'story/grim-altar', fig: 'woses/ancient-wose', icon: 'deck' },
     { to: 'shop', title: 'パック開封', sub: pickup ? `ピックアップ開催中！` : `第2弾「覇者の降臨」登場`, bg: 'story/swamp-02', fig: 'monsters/jinn', icon: 'chest', badge: pickup ? 'PICK UP' : 'NEW' },
     { to: 'collection', title: 'コレクション', sub: `収集率 ${pct}%`, bg: 'story/landscape-mountains-01', fig: 'monsters/sea-serpent', icon: 'cards', badge: save.newCards.length ? `NEW ${save.newCards.length}` : shardReady ? '交換可' : undefined },

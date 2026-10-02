@@ -101,7 +101,7 @@ describe('第2弾 rules', () => {
 
   it('EX cards carry their flag and rarity', () => {
     const exs = ALL_CARDS.filter((c) => c.kind === 'monster' && c.ex && !c.variant);
-    expect(exs.length).toBe(5);
+    expect(exs.filter((c) => c.set !== 'AB3').length).toBe(5);
     for (const c of exs) expect(c.rarity).toBe('RR');
   });
 });
@@ -174,4 +174,66 @@ describe('ランクマッチ', () => {
     expect(RANKS[19]).toBe('十段');
     expect(RANKS[MEIJIN]).toBe('名人');
   });
+});
+
+describe('第3弾 辺境の軍勢', () => {
+  const ab3 = ALL_CARDS.filter((c) => c.set === 'AB3' && !c.variant);
+  it('has 120 base cards and every evolution line resolves', () => {
+    expect(ab3.length).toBe(120);
+    for (const c of ab3) {
+      if (c.kind !== 'monster' || !c.evolvesFrom) continue;
+      const p = byName(c.evolvesFrom);
+      expect(p.kind, c.name).toBe('monster');
+    }
+  });
+  it('AI plays full games with decks built around every AB3 ex / Ω', () => {
+    const all = () => 4;
+    const aces = ab3.filter((c) => c.kind === 'monster' && (c.ex || c.omega));
+    expect(aces.length).toBeGreaterThanOrEqual(10);
+    for (let i = 0; i < aces.length; i++) {
+      const a = buildDeck(aces[i].name, all).cards;
+      const b = buildDeck(aces[(i + 3) % aces.length].name, all).cards;
+      const g = Game.create([a, b], ['A', 'B'], 100 + i);
+      g.start();
+      let steps = 0;
+      let acts = 0;
+      let turn = 0;
+      while (g.pending && steps++ < 6000) {
+        if (g.s.turn !== turn) {
+          turn = g.s.turn;
+          acts = 0;
+        }
+        if (g.pending.type === 'action') acts++;
+        g.answer(aiAnswer(g, 'normal', acts));
+      }
+      expect(g.over, aces[i].name).toBe(true);
+    }
+  }, 120000);
+  it('random AB3-only piles never crash the engine (all trainers and effects get exercised)', () => {
+    const pool = ab3.filter((c) => !(c.kind === 'energy'));
+    const basics = ab3.filter((c) => c.kind === 'monster' && c.stage === 'basic');
+    let seed = 7;
+    const rnd = () => (seed = (seed * 1664525 + 1013904223) % 4294967296) / 4294967296;
+    const pile = () => {
+      const d: string[] = [];
+      for (let k = 0; k < 4; k++) d.push(basics[Math.floor(rnd() * basics.length)].id);
+      while (d.length < 20) d.push(pool[Math.floor(rnd() * pool.length)].id);
+      return d;
+    };
+    for (let i = 0; i < 40; i++) {
+      const g = Game.create([pile(), pile()], ['A', 'B'], 500 + i);
+      g.start();
+      let steps = 0;
+      let acts = 0;
+      let turn = 0;
+      while (g.pending && steps++ < 4000) {
+        if (g.s.turn !== turn) {
+          turn = g.s.turn;
+          acts = 0;
+        }
+        if (g.pending.type === 'action') acts++;
+        g.answer(aiAnswer(g, 'normal', acts));
+      }
+    }
+  }, 120000);
 });

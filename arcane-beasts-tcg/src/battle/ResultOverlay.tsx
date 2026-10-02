@@ -12,6 +12,8 @@ import { PROMOTE_AT, MEIJIN, RANKS, type RankChange } from '../state/ranked';
 import { RankEmblem } from '../ui/RankEmblem';
 import { RARITY_SYMBOL } from '../engine/cards';
 import { online } from '../online/client';
+import { chapterById } from '../story';
+import { finishChapter, retryChapter } from '../story/flow';
 import type { Rarity } from '../engine/types';
 
 const draw0 = (w: number) => w === -1;
@@ -62,6 +64,7 @@ export function ResultOverlay() {
     }
     const before = claimableCount(useStore.getState().save.progress, extCtx(useStore.getState().save));
     const st = useBattle.getState().stats;
+    if (cfg.story && win) useStore.getState().clearChapter(cfg.story.chapterId);
     const firstClear = win && !!cfg.rival && !useStore.getState().save.beaten.includes(cfg.rival.id);
     if (firstClear) update((s) => void s.beaten.push(cfg.rival!.id));
     const r = recordBattle(
@@ -135,14 +138,18 @@ export function ResultOverlay() {
           onClick={() => {
             sfx('button');
             useBattle.setState({ result: null, view: null, prompt: null });
-            if (cfg.online) {
+            if (cfg.story) {
+              const ch = chapterById(cfg.story.chapterId)!;
+              if (win) finishChapter(ch);
+              else retryChapter(ch);
+            } else if (cfg.online) {
               online.clearMatch();
               go('lobby');
             } else if (cfg.ranked) go('ranked');
             else startBattle({ ...cfg });
           }}
         >
-          {cfg.online ? 'ロビーへ' : cfg.ranked ? '次の対戦へ' : 'もう一度'}
+          {cfg.story ? (win ? '物語をつづける' : 'もう一度挑む') : cfg.online ? 'ロビーへ' : cfg.ranked ? '次の対戦へ' : 'もう一度'}
         </button>
         {missionsReady > 0 && (
           <button
@@ -162,10 +169,10 @@ export function ResultOverlay() {
             sfx('button');
             useBattle.setState({ result: null, view: null, prompt: null });
             if (cfg.online) online.clearMatch();
-            go(cfg.ranked || cfg.online ? 'home' : cfg.rival ? 'rivals' : 'home');
+            go(cfg.story ? 'story' : cfg.ranked || cfg.online ? 'home' : cfg.rival ? 'rivals' : 'home');
           }}
         >
-          {cfg.rival ? '対戦相手を選ぶ' : 'ホームへ'}
+          {cfg.story ? 'ストーリーへ' : cfg.rival ? '対戦相手を選ぶ' : 'ホームへ'}
         </button>
       </motion.div>
     </motion.div>

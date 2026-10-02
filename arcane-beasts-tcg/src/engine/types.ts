@@ -18,7 +18,7 @@ export const ALL_TYPES: EType[] = [...ENERGY_TYPES, 'colorless'];
 export type Stage = 'basic' | 'stage1' | 'stage2';
 /** ◇ ◇◇ ◇◇◇ ◇◇◇◇ ☆ ♛ */
 export type Rarity = 'C' | 'U' | 'R' | 'RR' | 'ST' | 'CR';
-export type SetCode = 'AB1' | 'AB2';
+export type SetCode = 'AB1' | 'AB2' | 'AB3';
 /** Alternate printings of a base card */
 export type Variant = 'mirror' | 'AR' | 'CHR' | 'S' | 'SR' | 'SAR' | 'UR';
 export type Condition = 'poisoned' | 'burned' | 'asleep' | 'paralyzed' | 'confused';
@@ -52,6 +52,11 @@ export type AttackEffect =
   | { k: 'bonusIfOppCondition'; cond: Condition; bonus: number }
   | { k: 'bonusPerBench'; per: number; whose: 'self' | 'opp' | 'both'; nameIncludes?: string }
   | { k: 'bonusPerDiscardMonster'; per: number; max?: number }
+  | { k: 'bonusPerHand'; per: number; whose: 'self' | 'opp'; max?: number } // per card in hand
+  | { k: 'bonusPerTrash'; per: number; of: 'energy' | 'trainer'; max?: number } // per card of that kind in own trash
+  | { k: 'discardOppHand'; n: number } // opponent discards n random cards from hand
+  | { k: 'healAllSelf'; n: number } // heal every one of your monsters
+  | { k: 'millOpp'; n: number } // top n cards of the opponent's deck go to the trash
   | { k: 'bonusIfOmega'; bonus: number }
   | { k: 'cantAttackNext' }
   | { k: 'reduceNext'; n: number } // damage to this monster reduced next opp turn

@@ -12,7 +12,7 @@ import { RankEmblem } from '../ui/RankEmblem';
 import { Icon } from '../ui/Icon';
 import { RANKS } from '../state/ranked';
 import { PORTRAITS, type MatchKind } from '../online/protocol';
-import { online, onlineSupported, serverUrl, useOnline } from '../online/client';
+import { online, onlineSupported, serverUrl, setServerAddress, useOnline } from '../online/client';
 import { foley, playMusic, sfx } from '../audio/audio';
 import './lobby.css';
 
@@ -194,6 +194,19 @@ export function Lobby() {
           <span className={`lb-dot ${st.status}`} />
           {st.status === 'open' ? `接続中　オンライン ${st.online}人 ・ マッチ待ち ${st.waiting}人` : st.status === 'connecting' ? (st.failed ? 'サーバーにつながりません。再接続しています…' : 'サーバーに接続しています…') : '未接続'}
           <small>{serverUrl().replace(/^wss?:\/\//, '').replace(/\/ws$/, '')}</small>
+          <button
+            className="textbtn lb-server"
+            onClick={() => {
+              const cur = serverUrl().replace(/^wss?:\/\//, '').replace(/\/ws$/, '');
+              const v = window.prompt('サーバーのアドレス（例: xxxx.trycloudflare.com）\n空にするとこのページと同じ場所に戻します', cur);
+              if (v === null) return;
+              setServerAddress(v);
+              online.disconnect();
+              online.connect();
+            }}
+          >
+            サーバー変更
+          </button>
         </div>
 
         {/* ------------------------------ profile ------------------------------ */}

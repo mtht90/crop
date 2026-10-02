@@ -92,7 +92,7 @@ export function Rivals() {
               }}
             >
               {SET_INFO[k].short}の強敵
-              {k === 'AB2' && <i>NEW</i>}
+              {k === 'AB3' && <i>NEW</i>}
             </button>
           ))}
           <button
@@ -107,7 +107,7 @@ export function Rivals() {
             <b>{RANKS[save.ranked.rank]}</b>
           </button>
         </div>
-        <div className="rival-list">
+        <div className="rival-list" style={shown.length <= 5 ? { gridTemplateColumns: `repeat(${shown.length}, 1fr)` } : undefined}>
           {shown.map(({ rv, i }) => {
             const open = unlocked(i);
             return (
