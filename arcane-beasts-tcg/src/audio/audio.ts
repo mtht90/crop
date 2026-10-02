@@ -3,7 +3,7 @@ import { Howl, Howler } from 'howler';
 import { asset } from '../lib/assets';
 import type { EType, MonsterCard } from '../engine/types';
 
-type MusicKey = 'title' | 'menu' | 'shop' | 'battle1' | 'battle2' | 'battle3' | 'boss' | 'victory' | 'defeat';
+export type MusicKey = 'title' | 'menu' | 'shop' | 'battle1' | 'battle2' | 'battle3' | 'boss' | 'victory' | 'defeat' | 'sad' | 'revelation' | 'suspense' | 'shadows' | 'journey' | 'love' | 'transience' | 'elegy' | 'silence' | 'legends' | 'knolls' | 'revenge';
 
 const vol = { master: 0.8, music: 0.5, sfx: 0.8 };
 const sfxCache = new Map<string, Howl>();

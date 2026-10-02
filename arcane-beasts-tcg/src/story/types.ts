@@ -8,7 +8,7 @@ export type Pan = 'in' | 'out' | 'left' | 'right' | 'up' | 'down' | 'still';
 export type Weather = 'none' | 'rain' | 'storm' | 'snow' | 'embers' | 'ash' | 'petals' | 'stars' | 'fog' | 'motes';
 export type FxName = 'shake' | 'flash' | 'flashRed' | 'fadeBlack' | 'fadeWhite' | 'unfade' | 'zoomPunch' | 'quake';
 export type Style = 'normal' | 'shout' | 'whisper' | 'think';
-export type MusicKey = 'title' | 'menu' | 'shop' | 'battle1' | 'battle2' | 'battle3' | 'boss' | 'victory' | 'defeat' | 'stop';
+export type MusicKey = 'title' | 'menu' | 'shop' | 'battle1' | 'battle2' | 'battle3' | 'boss' | 'victory' | 'defeat' | 'stop' | 'sad' | 'revelation' | 'suspense' | 'shadows' | 'journey' | 'love' | 'transience' | 'elegy' | 'silence' | 'legends' | 'knolls' | 'revenge';
 
 export type Beat =
   | { t: 'bg'; key: string; pan?: Pan; fade?: number; tint?: string }
@@ -47,6 +47,8 @@ export interface Chapter {
   title: string;
   /** one line shown on the map */
   summary: string;
+  /** key art for the chapter select (a painted story image) */
+  art?: string;
   before: Beat[];
   after: Beat[];
   /** short scene on the first defeat */

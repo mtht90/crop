@@ -19,7 +19,6 @@
   "author": "",
   "license": "GPL-2.0-or-later",
   "dependencies": {
-    "@fontsource/shippori-mincho": "^5.3.0",
     "@types/three": "^0.169.0",
     "howler": "^2.2.4",
     "motion": "^13.4.4",

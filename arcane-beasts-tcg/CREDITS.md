@@ -139,6 +139,10 @@ Assets were resized / re-encoded (WebP, MP3) and effect frames were packed into 
 | effect | `data/core/images/projectiles/whitemissile-impact-6.png` | GNU GPL v2+ | Battle for Wesnoth Project |
 | effect | `data/core/images/projectiles/whitemissile-impact-7.png` | GNU GPL v2+ | Battle for Wesnoth Project |
 | effect | `data/core/images/projectiles/whitemissile-impact-8.png` | GNU GPL v2+ | Battle for Wesnoth Project |
+| image | `data/campaigns/Descent_Into_Darkness/images/story/book.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
+| image | `data/campaigns/Descent_Into_Darkness/images/story/end.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
+| image | `data/campaigns/Descent_Into_Darkness/images/story/parthyn.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
+| image | `data/campaigns/Descent_Into_Darkness/images/story/travel.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
 | image | `data/campaigns/Eastern_Invasion/images/portraits/pyre-wight.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
 | image | `data/campaigns/Heir_To_The_Throne_Classic/images/portraits/asheviere-defeated.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
 | image | `data/campaigns/Heir_To_The_Throne_Classic/images/portraits/asheviere-mad.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
@@ -154,7 +158,10 @@ Assets were resized / re-encoded (WebP, MP3) and effect frames were packed into 
 | image | `data/campaigns/Heir_To_The_Throne_Classic/images/portraits/lisar-glad.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
 | image | `data/campaigns/Heir_To_The_Throne_Classic/images/portraits/lisar-mad.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
 | image | `data/campaigns/Heir_To_The_Throne_Classic/images/portraits/lisar.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
+| image | `data/campaigns/Liberty/images/story/Halstead.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
+| image | `data/campaigns/Liberty/images/story/frontier.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
 | image | `data/campaigns/Liberty/images/story/island.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
+| image | `data/campaigns/Liberty/images/story/return_to_Dallben_and_Delwyn.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
 | image | `data/campaigns/Sceptre_of_Fire/images/portraits/monsters/cave-imp.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
 | image | `data/campaigns/Sceptre_of_Fire/images/portraits/monsters/snowball.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
 | image | `data/campaigns/Sceptre_of_Fire/images/portraits/monsters/snowgolem.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
@@ -162,28 +169,52 @@ Assets were resized / re-encoded (WebP, MP3) and effect frames were packed into 
 | image | `data/campaigns/Secrets_of_the_Ancients/images/portraits/orcish-shaman.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
 | image | `data/campaigns/Secrets_of_the_Ancients/images/portraits/shynal-adept.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
 | image | `data/campaigns/The_Deceivers_Gambit/images/portraits/crab.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
+| image | `data/campaigns/The_Deceivers_Gambit/images/story/alduin-wp.png` | GNU GPL v2+ | Battle for Wesnoth Project |
+| image | `data/campaigns/The_Deceivers_Gambit/images/story/bride-wp.png` | GNU GPL v2+ | Battle for Wesnoth Project |
 | image | `data/campaigns/The_Deceivers_Gambit/images/story/burning-wp.png` | GNU GPL v2+ | Battle for Wesnoth Project |
+| image | `data/campaigns/The_Deceivers_Gambit/images/story/farmer-wp.png` | GNU GPL v2+ | Battle for Wesnoth Project |
 | image | `data/campaigns/The_Deceivers_Gambit/images/story/fog-wp.png` | GNU GPL v2+ | Battle for Wesnoth Project |
+| image | `data/campaigns/The_Deceivers_Gambit/images/story/fort-wp.png` | GNU GPL v2+ | Battle for Wesnoth Project |
 | image | `data/campaigns/The_Deceivers_Gambit/images/story/graves-wp.png` | GNU GPL v2+ | Battle for Wesnoth Project |
+| image | `data/campaigns/The_Deceivers_Gambit/images/story/knight-wp.png` | GNU GPL v2+ | Battle for Wesnoth Project |
 | image | `data/campaigns/The_Deceivers_Gambit/images/story/mountains-wp.png` | GNU GPL v2+ | Battle for Wesnoth Project |
+| image | `data/campaigns/The_Deceivers_Gambit/images/story/river-wp.png` | GNU GPL v2+ | Battle for Wesnoth Project |
 | image | `data/campaigns/The_Hammer_of_Thursagan/images/portraits/grenadier.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
 | image | `data/campaigns/The_Rise_Of_Wesnoth/images/portraits/familiar.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
 | image | `data/campaigns/The_Rise_Of_Wesnoth/images/portraits/typhon.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
 | image | `data/campaigns/The_Rise_Of_Wesnoth/images/portraits/vampire_lady.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
 | image | `data/campaigns/The_Rise_Of_Wesnoth/images/story/trow_intro_01.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
+| image | `data/campaigns/The_Rise_Of_Wesnoth/images/story/trow_intro_02.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
 | image | `data/campaigns/The_Rise_Of_Wesnoth/images/story/trow_intro_03.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
+| image | `data/campaigns/The_Rise_Of_Wesnoth/images/story/trow_intro_04.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
 | image | `data/campaigns/The_Rise_Of_Wesnoth/images/story/trow_intro_05.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
 | image | `data/campaigns/The_Rise_Of_Wesnoth/images/story/trow_intro_06.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
 | image | `data/campaigns/The_Rise_Of_Wesnoth/images/story/trow_intro_07.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
+| image | `data/campaigns/The_Rise_Of_Wesnoth/images/story/trow_intro_08.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
+| image | `data/campaigns/The_Rise_Of_Wesnoth/images/story/trow_intro_09.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
+| image | `data/campaigns/The_Rise_Of_Wesnoth/images/story/trow_intro_10.jpg` | GNU GPL v2+ | Battle for Wesnoth Project |
+| image | `data/campaigns/The_Rise_Of_Wesnoth/images/story/trow_story_01-A_Summer_of_Storms.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
 | image | `data/campaigns/The_Rise_Of_Wesnoth/images/story/trow_story_02-The_Fall.jpg` | GNU GPL v2+ | Battle for Wesnoth Project |
+| image | `data/campaigns/The_Rise_Of_Wesnoth/images/story/trow_story_03-A_Harrowing_Escape.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
+| image | `data/campaigns/The_Rise_Of_Wesnoth/images/story/trow_story_04-Fall_of_Eldaric.jpg` | GNU GPL v2+ | Battle for Wesnoth Project |
 | image | `data/campaigns/The_Rise_Of_Wesnoth/images/story/trow_story_04a-The_Swamp_of_Esten.jpg` | GNU GPL v2+ | Battle for Wesnoth Project |
+| image | `data/campaigns/The_Rise_Of_Wesnoth/images/story/trow_story_04b-The_Midlands.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
 | image | `data/campaigns/The_Rise_Of_Wesnoth/images/story/trow_story_06-Temple_in_the_Deep.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
+| image | `data/campaigns/The_Rise_Of_Wesnoth/images/story/trow_story_13-Peoples_in_Decline.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
+| image | `data/campaigns/The_Rise_Of_Wesnoth/images/story/trow_story_15-A_New_Land.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
 | image | `data/campaigns/The_South_Guard/images/portraits/eyestalk.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
 | image | `data/campaigns/The_South_Guard/images/story/awinter1.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
 | image | `data/campaigns/The_South_Guard/images/story/black-forest.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
+| image | `data/campaigns/The_South_Guard/images/story/black-forest2.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
+| image | `data/campaigns/The_South_Guard/images/story/fall.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
 | image | `data/campaigns/The_South_Guard/images/story/summer.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
+| image | `data/campaigns/The_South_Guard/images/story/winter.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
 | image | `data/campaigns/The_South_Guard/images/story/winter1.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
+| image | `data/campaigns/The_South_Guard/images/story/winter4.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
 | image | `data/campaigns/Two_Brothers/images/story/Two_Brothers_M1P1.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
+| image | `data/campaigns/Two_Brothers/images/story/Two_Brothers_M1P2.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
+| image | `data/campaigns/Two_Brothers/images/story/Two_Brothers_M2P1.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
+| image | `data/campaigns/Two_Brothers/images/story/Two_Brothers_M4P1_the_end.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
 | image | `data/campaigns/Under_the_Burning_Suns/images/portraits/monsters/flesh_golem.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
 | image | `data/campaigns/Under_the_Burning_Suns/images/portraits/nagas/naga-hunter.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
 | image | `data/campaigns/Under_the_Burning_Suns/images/portraits/quenoth/archer.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
@@ -447,7 +478,9 @@ Assets were resized / re-encoded (WebP, MP3) and effect frames were packed into 
 | image | `data/core/images/portraits/woses/wose.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
 | image | `data/core/images/story/blacksmith.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
 | image | `data/core/images/story/bones.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
+| image | `data/core/images/story/drake.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
 | image | `data/core/images/story/grim-altar.jpg` | GNU GPL v2+ | Battle for Wesnoth Project |
+| image | `data/core/images/story/horse.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
 | image | `data/core/images/story/landscape-battlefield_nohumans.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
 | image | `data/core/images/story/landscape-beach.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
 | image | `data/core/images/story/landscape-bridge.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
@@ -463,18 +496,32 @@ Assets were resized / re-encoded (WebP, MP3) and effect frames were packed into 
 | image | `data/core/images/story/landscape-mountains-04.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
 | image | `data/core/images/story/landscape-mountains-05.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
 | image | `data/core/images/story/landscape-plain.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
+| image | `data/core/images/story/skeleton.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
 | image | `data/core/images/story/swamp-01.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
 | image | `data/core/images/story/swamp-02.jpg` | GNU GPL v2+ | Battle for Wesnoth Project |
 | image | `data/core/images/story/swamp-03.jpg` | GNU GPL v2+ | Battle for Wesnoth Project |
+| image | `data/core/images/story/wesmere.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
 | music | `data/core/music/battle-epic.ogg` | GNU GPL v2+ | Doug Kaufman(dkaufman) |
 | music | `data/core/music/battle.ogg` | GNU GPL v2+ | Aleksi Aubry-Carlson(Aleksi) |
 | music | `data/core/music/defeat.ogg` | GNU GPL v2+ | Timothy Pinkham(TimothyP) |
 | music | `data/core/music/frantic.ogg` | GNU GPL v2+ | Stephen Rozanc(TreizeCouleurs) |
+| music | `data/core/music/into_the_shadows.ogg` | GNU GPL v2+ | Tyler Johnson |
+| music | `data/core/music/journeys_end.ogg` | GNU GPL v2+ | Mattias Westlund(West) |
+| music | `data/core/music/knolls.ogg` | GNU GPL v2+ | Timothy Pinkham(TimothyP) |
+| music | `data/core/music/legends_of_the_north.ogg` | GNU GPL v2+ | Mattias Westlund(West) |
+| music | `data/core/music/love_theme.ogg` | GNU GPL v2+ | Ryan Reilly(Rain) |
 | music | `data/core/music/main_menu.ogg` | GNU GPL v2+ | Aleksi Aubry-Carlson(Aleksi) |
+| music | `data/core/music/revelation.ogg` | GNU GPL v2+ | Joseph G. Toscano(Zhaytee) |
+| music | `data/core/music/sad.ogg` | GNU GPL v2+ | Tyler Johnson |
+| music | `data/core/music/silence.ogg` | GNU GPL v2+ | Iris Morelle(shadowm) |
+| music | `data/core/music/suspense.ogg` | GNU GPL v2+ | Ryan Reilly(Rain) |
 | music | `data/core/music/the_dangerous_symphony.ogg` | GNU GPL v2+ | Gianmarco Leone(gmlion) |
+| music | `data/core/music/the_king_is_dead.ogg` | GNU GPL v2+ | Mattias Westlund(West) |
+| music | `data/core/music/transience.ogg` | GNU GPL v2+ | Aleksi Aubry-Carlson(Aleksi) |
 | music | `data/core/music/traveling_minstrels.ogg` | GNU GPL v2+ | Mattias Westlund(West) |
 | music | `data/core/music/victory.ogg` | GNU GPL v2+ | Timothy Pinkham(TimothyP) |
 | music | `data/core/music/wanderer.ogg` | GNU GPL v2+ | Timothy Pinkham(TimothyP) |
+| music | `data/core/music/weight_of_revenge.ogg` | GNU GPL v2+ | Doug Kaufman(dkaufman) |
 | sound | `data/core/sounds/bat-hit-1.ogg` | GNU GPL v2+ | Lari Nieminen(zookeeper) |
 | sound | `data/core/sounds/bite.ogg` | GNU GPL v2+ | Lari Nieminen(zookeeper) |
 | sound | `data/core/sounds/claws.ogg` | GNU GPL v2+ | Lari Nieminen(zookeeper) |

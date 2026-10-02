@@ -8,6 +8,3 @@ import '@fontsource/m-plus-rounded-1c/800.css';
 import '@fontsource/dela-gothic-one/400.css';
 import '@fontsource/cinzel/700.css';
 import '@fontsource/cinzel/900.css';
-import '@fontsource/shippori-mincho/500.css';
-import '@fontsource/shippori-mincho/700.css';
-import '@fontsource/shippori-mincho/800.css';
