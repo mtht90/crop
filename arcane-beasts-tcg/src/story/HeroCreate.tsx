@@ -39,7 +39,7 @@ export function HeroCreate({ initial, onDone, onCancel }: { initial?: { name: st
 
         <motion.div className="hc-form" initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.15, duration: 0.6, ease: EASE_OUT }}>
           <div className="hc-kick">PROLOGUE</div>
-          <h2>あなたは、だれ？</h2>
+          <h2 className="gold-title">あなたは、だれ？</h2>
           <p>物語の主人公の名前と姿を決めてください。あとから変えることもできます。</p>
           <label className="hc-label">なまえ</label>
           <input

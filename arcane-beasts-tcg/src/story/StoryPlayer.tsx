@@ -449,7 +449,7 @@ export function StoryPlayer({ beats: initial, cast, onDone, label, allowSkip = t
                 {card.kicker}
               </motion.div>
             )}
-            <motion.div className="main" initial={{ opacity: 0, letterSpacing: '0.6em' }} animate={{ opacity: 1, letterSpacing: '0.18em' }} transition={{ delay: 0.5, duration: 1.4, ease: [0.16, 1, 0.3, 1] }}>
+            <motion.div className="main" initial={{ opacity: 0, letterSpacing: '0.6em' }} animate={{ opacity: 1, letterSpacing: '0.08em' }} transition={{ delay: 0.5, duration: 1.4, ease: [0.16, 1, 0.3, 1] }}>
               {card.main}
             </motion.div>
             <motion.div className="rule" initial={{ scaleX: 0 }} animate={{ scaleX: 1 }} transition={{ delay: 0.9, duration: 1 }} />
@@ -507,9 +507,8 @@ export function StoryPlayer({ beats: initial, cast, onDone, label, allowSkip = t
           <motion.div className="story-choice" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={(e) => e.stopPropagation()}>
             {pick.prompt && <div className="q">{fmt(pick.prompt)}</div>}
             {pick.options.map((o, k) => (
-              <motion.button key={k} className="opt" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.12 * k + 0.1 }} onClick={() => choose(k)}>
-                <span className="num">{['I', 'II', 'III', 'IV'][k] ?? k + 1}</span>
-                <span>{fmt(o.label)}</span>
+              <motion.button key={k} className="opt" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 * k + 0.1 }} onClick={() => choose(k)}>
+                {fmt(o.label)}
               </motion.button>
             ))}
           </motion.div>

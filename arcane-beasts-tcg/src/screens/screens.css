@@ -47,16 +47,16 @@
 .title-card { position: absolute; width: calc(var(--u) * 15); left: calc(var(--u) * -7.5); top: calc(var(--u) * -10.5); filter: drop-shadow(0 20px 40px rgba(0, 0, 0, 0.7)); }
 .title-logo { position: absolute; left: 0; right: 0; top: 10%; text-align: center; }
 .title-logo .l1 {
-  font-family: var(--font-latin);
+  font-family: var(--font-title);
   font-weight: 900;
   font-size: calc(var(--u) * 9);
   line-height: 1;
   letter-spacing: 0.08em;
-  background: linear-gradient(180deg, #fffdf0 0%, #ffe08a 35%, #c98d1f 62%, #fff1b3 80%, #b8801c 100%);
+  background: var(--title-grad);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  filter: drop-shadow(0 5px 0 #3a2200) drop-shadow(0 0 30px rgba(255, 190, 80, 0.55));
+  filter: var(--title-shadow);
 }
 .title-logo .l2 { font-family: var(--font-display); font-size: calc(var(--u) * 2.2); letter-spacing: 0.6em; color: #fff; text-shadow: 0 2px 8px #000; margin-top: calc(var(--u) * 0.6); }
 .title-logo .l3 { font-size: calc(var(--u) * 1.1); color: var(--gold-2); letter-spacing: 0.3em; margin-top: calc(var(--u) * 0.8); opacity: 0.85; }

@@ -121,7 +121,7 @@ export function StoryMap() {
         <AnimatePresence mode="wait">
           <motion.div key={sel} className="sc-info" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.45, ease: EASE_OUT }}>
             <div className="sc-kick">{isPro ? 'PROLOGUE' : `第${ch!.act}幕 ${act!.title}　・　第${sel + 1}章`}</div>
-            <h1>{isPro ? 'プロローグ' : locked ? '？？？' : ch!.title}</h1>
+            <h1 className="gold-title">{isPro ? 'プロローグ' : locked ? '？？？' : ch!.title}</h1>
             {isPro ? (
               <p className="sc-sum">すべての始まり。</p>
             ) : locked ? (

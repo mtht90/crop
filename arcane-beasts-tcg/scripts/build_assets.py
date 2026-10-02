@@ -458,42 +458,6 @@ def write_credits():
     open(os.path.join(ROOT, 'CREDITS.md'), 'w', encoding='utf-8').write('\n'.join(lines))
 
 
-# ---------------------------------------------------------------------------
-# 5. UI chrome (Wesnoth's own buttons, check boxes and frames)
-# ---------------------------------------------------------------------------
-UI = {
-    'btn': 'images/buttons/button_normal/button_H22@2x.png',
-    'btn-active': 'images/buttons/button_normal/button_H22-active@2x.png',
-    'btn-pressed': 'images/buttons/button_normal/button_H22-pressed@2x.png',
-    'sq': 'images/buttons/button_square/button_square_60.png',
-    'sq-active': 'images/buttons/button_square/button_square_60-active.png',
-    'sq-pressed': 'images/buttons/button_square/button_square_60-pressed.png',
-    'large': 'images/buttons/large-button.png',
-    'large-active': 'images/buttons/large-button-active.png',
-    'large-pressed': 'images/buttons/large-button-pressed.png',
-    'menu': 'images/buttons/button_menu/menu_button_copper_H20@2x.png',
-    'menu-active': 'images/buttons/button_menu/menu_button_copper_H20-active@2x.png',
-    'menu-pressed': 'images/buttons/button_menu/menu_button_copper_H20-pressed@2x.png',
-    'check': 'images/buttons/checkbox@2x.png',
-    'check-on': 'images/buttons/checkbox-pressed@2x.png',
-    'panel-bg': 'images/dialogs/opaque-background.png',
-}
-
-
-def build_ui():
-    ensure(os.path.join(OUT, 'ui'))
-    for key, rel in UI.items():
-        src = os.path.join(WES, rel)
-        if not os.path.exists(src):
-            print('ui missing', rel)
-            continue
-        dst = os.path.join(OUT, 'ui', key + '.png')
-        if not os.path.exists(dst):
-            Image.open(src).convert('RGBA').save(dst, optimize=True)
-        credit(rel, 'interface')
-    print(f'ui: {len(UI)}')
-
-
 if __name__ == '__main__':
     ensure(OUT)
     ensure(os.path.join(ROOT, 'src/assets'))
@@ -501,6 +465,5 @@ if __name__ == '__main__':
     build_fx()
     build_audio()
     build_icons()
-    build_ui()
     write_credits()
     print('done')

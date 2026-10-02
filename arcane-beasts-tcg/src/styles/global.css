@@ -20,6 +20,10 @@
   --font-ui: 'M PLUS Rounded 1c', 'M PLUS 1p', system-ui, sans-serif;
   --font-display: 'Dela Gothic One', 'M PLUS 1p', sans-serif;
   --font-latin: 'Cinzel', serif;
+  /* big titles: Cinzel for Latin letters (the title logo), Dela Gothic One for Japanese */
+  --font-title: 'Cinzel', 'Dela Gothic One', serif;
+  --title-grad: linear-gradient(180deg, #fffdf0 0%, #ffe08a 35%, #c98d1f 62%, #fff1b3 80%, #b8801c 100%);
+  --title-shadow: drop-shadow(0 5px 0 #3a2200) drop-shadow(0 0 30px rgba(255, 190, 80, 0.55));
 }
 * { box-sizing: border-box; }
 html, body, #root {
@@ -109,6 +113,15 @@ img { -webkit-user-drag: none; }
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.06);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
+}
+.gold-title {
+  font-family: var(--font-title);
+  font-weight: 900;
+  background: var(--title-grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: var(--title-shadow);
 }
 .title-display {
   font-family: var(--font-display);
