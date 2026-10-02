@@ -19,3 +19,10 @@ export const title = (main: string, sub?: string, kicker?: string): Beat => ({ t
 export const bars = (on: boolean): Beat => ({ t: 'bars', on });
 export const wait = (ms: number): Beat => ({ t: 'wait', ms });
 export const choice = (prompt: string, options: { label: string; then: Beat[] }[]): Beat => ({ t: 'choice', prompt, options });
+
+/** full-screen illustration (a "CG"): characters step out, letterbox in. cg(null) returns to the stage */
+export const cg = (key: string | null, pan: Pan = 'in', caption?: string): Beat => ({ t: 'cg', key, pan, caption });
+/** a dramatic cut-in of a character: big portrait, slash, name */
+export const cutin = (id: string, mood?: string, line?: string): Beat => ({ t: 'cutin', id, mood, line });
+/** location caption in the corner */
+export const place = (name: string, sub?: string): Beat => ({ t: 'place', name, sub });

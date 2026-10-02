@@ -31,7 +31,7 @@ export function RainbowSymbol({ size = '1em' }: { size?: string | number }) {
 }
 
 /** rarities printed with a foil treatment */
-const HOLO = new Set(['R', 'RR', 'ST', 'CR']);
+const HOLO = new Set(['R', 'RR', 'ST', 'ST2', 'CR']);
 /** variants whose illustration covers the whole card */
 const BLEED = new Set(['AR', 'CHR', 'SAR']);
 const SUB_JP: Record<string, string> = { item: 'アイテム', supporter: 'サポーター', stadium: 'スタジアム', tool: 'どうぐ' };

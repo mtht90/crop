@@ -27,6 +27,23 @@ interface SayState {
   style: Style;
   nonce: number;
 }
+interface CgState {
+  key: string;
+  pan: Pan;
+  caption?: string;
+  nonce: number;
+}
+interface CutinState {
+  id: string;
+  mood: string;
+  line?: string;
+  nonce: number;
+}
+interface PlaceState {
+  name: string;
+  sub?: string;
+  nonce: number;
+}
 interface BgState {
   key: string;
   pan: Pan;
@@ -54,6 +71,10 @@ export function StoryPlayer({ beats: initial, cast, onDone, label, allowSkip = t
   const [chars, setChars] = useState<CharState[]>([]);
   const [wx, setWx] = useState<Weather>('none');
   const [bars, setBars] = useState(false);
+  const [cg, setCg] = useState<CgState | null>(null);
+  const [cutin, setCutin] = useState<CutinState | null>(null);
+  const [place, setPlace] = useState<PlaceState | null>(null);
+  const placeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [say, setSay] = useState<SayState | null>(null);
   const [typed, setTyped] = useState(false);
   const [card, setCard] = useState<{ main: string; sub?: string; kicker?: string; nonce: number } | null>(null);
@@ -110,6 +131,26 @@ export function StoryPlayer({ beats: initial, cast, onDone, label, allowSkip = t
       case 'bars':
         setBars(b.on);
         return next(fast ? 0 : 500);
+      case 'cg':
+        setCg(b.key ? { key: b.key, pan: b.pan ?? 'in', caption: b.caption, nonce: ++nonce.current } : null);
+        return next(fast ? 0 : 700);
+      case 'place': {
+        setPlace({ name: b.name, sub: b.sub, nonce: ++nonce.current });
+        if (placeTimer.current) clearTimeout(placeTimer.current);
+        placeTimer.current = setTimeout(() => setPlace(null), 3800);
+        return next(0);
+      }
+      case 'cutin': {
+        setSay(null);
+        setCutin({ id: b.id, mood: b.mood ?? 'normal', line: b.line, nonce: ++nonce.current });
+        foley.impact();
+        setShake((n) => n + 1);
+        const t = setTimeout(() => {
+          setCutin(null);
+          setI((n) => n + 1);
+        }, fast ? 200 : 2100);
+        return () => clearTimeout(t);
+      }
       case 'bgm':
         if (b.key === 'stop') stopMusic();
         else playMusic(b.key);
@@ -187,6 +228,10 @@ export function StoryPlayer({ beats: initial, cast, onDone, label, allowSkip = t
     const b = beats[i];
     if (!b) return;
     if (b.t === 'title') return setI((n) => n + 1);
+    if (b.t === 'cutin') {
+      setCutin(null);
+      return setI((n) => n + 1);
+    }
     if (b.t === 'say') {
       if (!typedRef.current) return setTyped(true);
       foley.tick();
@@ -267,24 +312,28 @@ export function StoryPlayer({ beats: initial, cast, onDone, label, allowSkip = t
               return (
                 <motion.div
                   key={c.id + c.nonce}
-                  className={`story-char at-${c.at} ${lit ? 'lit' : 'dim'} mood-${c.mood}`}
+                  className={`story-char at-${c.at} ${lit ? 'lit' : 'dim'} mood-${c.mood} ${c.mood === 'silhouette' ? 'sil' : ''}`}
+                  style={{ ['--cc' as string]: info.color }}
                   initial={{ opacity: 0, x: from.x, y: from.y }}
                   animate={{ opacity: 1, x: 0, y: 0, left: `${SLOT_X[c.at]}%`, filter: lit ? 'brightness(1) saturate(1)' : 'brightness(0.5) saturate(0.7)', scale: lit ? 1 : 0.965 }}
                   exit={{ opacity: 0, transition: { duration: 0.25 } }}
                   transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1], left: { duration: 0.6, ease: [0.16, 1, 0.3, 1] } }}
                 >
                   <div className="story-breath">
-                    <motion.img
-                      key={art}
-                      src={artUrl(art)}
-                      alt=""
-                      draggable={false}
-                      style={{ scaleX: flip }}
-                      initial={{ opacity: 0.4 }}
-                      animate={speaker === c.id && say ? { opacity: 1, y: [0, -7, 0] } : { opacity: 1, y: 0 }}
-                      transition={{ duration: 0.28 }}
-                      className={speaker === c.id && say?.style === 'shout' ? 'shouting' : ''}
-                    />
+                    <AnimatePresence initial={false}>
+                      <motion.img
+                        key={art}
+                        src={artUrl(art)}
+                        alt=""
+                        draggable={false}
+                        style={{ scaleX: flip }}
+                        initial={{ opacity: 0 }}
+                        animate={speaker === c.id && say ? { opacity: 1, y: [0, -7, 0] } : { opacity: 1, y: 0 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.24 }}
+                        className={speaker === c.id && say?.style === 'shout' ? 'shouting' : ''}
+                      />
+                    </AnimatePresence>
                   </div>
                 </motion.div>
               );
@@ -292,14 +341,62 @@ export function StoryPlayer({ beats: initial, cast, onDone, label, allowSkip = t
           </AnimatePresence>
         </div>
 
+        <AnimatePresence>
+          {cg && (
+            <motion.div key={cg.nonce} className="story-cg" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.8 }}>
+              <div className={`art pan-${cg.pan}`} style={{ backgroundImage: `url(${artUrl(cg.key)})` }} />
+              {cg.caption && <div className="cap">{cg.caption}</div>}
+            </motion.div>
+          )}
+        </AnimatePresence>
         <div className="story-vignette" />
         <AnimatePresence>{flash && <motion.div key={flash.nonce} className={`story-flash ${flash.kind}`} initial={{ opacity: 0.9 }} animate={{ opacity: 0 }} transition={{ duration: 0.7, ease: 'easeOut' }} />}</AnimatePresence>
         <div className={`story-veil ${veil.color} ${veil.on ? 'on' : ''}`} />
       </motion.div>
 
       {/* letterbox */}
-      <div className={`story-bar top ${bars ? 'on' : ''}`} />
-      <div className={`story-bar bottom ${bars ? 'on' : ''}`} />
+      <div className={`story-bar top ${bars || cg ? 'on' : ''}`} />
+      <div className={`story-bar bottom ${bars || cg ? 'on' : ''}`} />
+
+      {/* location caption */}
+      <AnimatePresence>
+        {place && (
+          <motion.div key={place.nonce} className="story-place" initial={{ opacity: 0, x: -24 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 12 }} transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}>
+            <div className="nm">{place.name}</div>
+            {place.sub && <div className="sb">{place.sub}</div>}
+            <motion.div className="ln" initial={{ scaleX: 0 }} animate={{ scaleX: 1 }} transition={{ delay: 0.3, duration: 0.9 }} />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* cut-in */}
+      <AnimatePresence>
+        {cutin && cast[cutin.id] && (
+          <motion.div key={cutin.nonce} className="story-cutin" style={{ ['--cc' as string]: cast[cutin.id].color }} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: { duration: 0.3 } }}>
+            <div className="shade" />
+            <motion.div className="band" initial={{ scaleY: 0 }} animate={{ scaleY: 1 }} transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}>
+              <div className="lines" />
+            </motion.div>
+            <motion.img
+              className="por"
+              style={{ left: '5%' }}
+              src={artUrl(cast[cutin.id].look[cutin.mood] ?? cast[cutin.id].look.normal)}
+              alt=""
+              initial={{ x: -160, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              transition={{ delay: 0.08, duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
+            />
+            <motion.div className="nm" style={{ right: '6%' }} initial={{ x: 200, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ delay: 0.18, duration: 0.55, ease: [0.16, 1, 0.3, 1] }}>
+              {cast[cutin.id].name}
+            </motion.div>
+            {cutin.line && (
+              <motion.div className="ln" style={{ right: '7%' }} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.7, duration: 0.5 }}>
+                {cutin.line}
+              </motion.div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* chapter card */}
       <AnimatePresence>
@@ -326,7 +423,7 @@ export function StoryPlayer({ beats: initial, cast, onDone, label, allowSkip = t
       {/* text box */}
       <AnimatePresence>
         {say && !card && !pick && (
-          <motion.div key="box" className={`story-box ${say.style}`} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }}>
+          <motion.div key="box" className={`story-box ${say.style} ${say.who ? '' : 'narr'}`} initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }}>
             {say.name && (
               <div className="story-name" style={{ ['--nc' as string]: say.color }}>
                 {say.name}
@@ -345,7 +442,8 @@ export function StoryPlayer({ beats: initial, cast, onDone, label, allowSkip = t
             {pick.prompt && <div className="q">{pick.prompt}</div>}
             {pick.options.map((o, k) => (
               <motion.button key={k} className="opt" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.12 * k + 0.1 }} onClick={() => choose(k)}>
-                {o.label}
+                <span className="num">{['I', 'II', 'III', 'IV'][k] ?? k + 1}</span>
+                <span>{o.label}</span>
               </motion.button>
             ))}
           </motion.div>

@@ -20,7 +20,7 @@ css = ''.join(open(os.path.join(DIST, c), encoding='utf-8').read() for c in css_
 assert 'url(' not in re.sub(r'url\((data:|"data:|#)', '', css) or True
 
 FONTS = ('https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Dela+Gothic+One'
-         '&family=M+PLUS+1p:wght@500;700;900&family=M+PLUS+Rounded+1c:wght@700;800&display=swap')
+         '&family=M+PLUS+1p:wght@500;700;900&family=M+PLUS+Rounded+1c:wght@700;800&family=Shippori+Mincho:wght@500;700;800&display=swap')
 
 page = f'''<title>ARCANE BEASTS</title>
 <meta name="theme-color" content="#060a1c">

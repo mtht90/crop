@@ -167,11 +167,11 @@ for (const mc of [...MONSTERS, ...MONSTERS2, ...MONSTERS3]) {
 }
 
 // --------------------------------------------------------------------------
-// Rarity (6 tiers) and model (how the card is printed)
+// Rarity (7 tiers) and model (how the card is printed)
 // --------------------------------------------------------------------------
-export const RARITIES: Rarity[] = ['C', 'U', 'R', 'RR', 'ST', 'CR'];
-export const RARITY_SYMBOL: Record<Rarity, string> = { C: '◇', U: '◇◇', R: '◇◇◇', RR: '◇◇◇◇', ST: '☆', CR: '♛' };
-export const RARITY_NAME: Record<Rarity, string> = { C: 'コモン', U: 'アンコモン', R: 'レア', RR: 'ダブルレア', ST: 'スター', CR: 'クラウン' };
+export const RARITIES: Rarity[] = ['C', 'U', 'R', 'RR', 'ST', 'ST2', 'CR'];
+export const RARITY_SYMBOL: Record<Rarity, string> = { C: '◇', U: '◇◇', R: '◇◇◇', RR: '◇◇◇◇', ST: '☆', ST2: '☆☆', CR: '♛' };
+export const RARITY_NAME: Record<Rarity, string> = { C: 'コモン', U: 'アンコモン', R: 'レア', RR: 'ダブルレア', ST: 'スター', ST2: 'ダブルスター', CR: 'クラウン' };
 
 export type Model = 'normal' | 'mirror' | 'omega' | 'ex' | 'illust' | 'fullart' | 'shiny' | 'gold';
 export const MODEL_NAME: Record<Model, string> = {
@@ -216,6 +216,8 @@ export const SET_INFO: Record<SetCode, { name: string; short: string }> = {
 };
 export const SETS: SetCode[] = ['AB1', 'AB2', 'AB3'];
 
+// EX is a ☆ card (it used to share ◇◇◇◇ with Ω)
+for (const mc of [...MONSTERS, ...MONSTERS2, ...MONSTERS3]) if (mc.ex) mc.rarity = 'ST';
 const MAIN1: CardDef[] = [...MONSTERS, ...TRAINERS, ...ENERGIES];
 MAIN1.forEach((c, i) => (c.no = i + 1));
 const MAIN2: CardDef[] = [...MONSTERS2, ...TRAINERS2];
@@ -248,7 +250,9 @@ function named(name: string): CardDef {
 }
 
 function alt(base: CardDef, v: Variant, extra: Partial<CardDef> = {}) {
-  const rarity: Rarity = v === 'mirror' ? base.rarity : v === 'SAR' || v === 'UR' ? 'CR' : 'ST';
+  // EX prints climb one step: the plain EX is ☆, its full-art / illustration prints are ☆☆ (gold stays ♛)
+  const isEx = base.kind === 'monster' && !!base.ex;
+  const rarity: Rarity = v === 'mirror' ? base.rarity : v === 'UR' ? 'CR' : isEx && (v === 'SAR' || v === 'SR') ? 'ST2' : v === 'SAR' ? 'CR' : 'ST';
   const no = v === 'mirror' ? base.no : ++secret[base.set];
   VARIANTS.push({
     ...base,

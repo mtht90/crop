@@ -36,8 +36,8 @@ import {
 // and shards of a rarity can be exchanged for any card of the same rarity.
 // ----------------------------------------------------------------------------
 export const MAX_COPIES = 10;
-export const SHARD_COST: Record<Rarity, number> = { C: 10, U: 10, R: 12, RR: 18, ST: 25, CR: 30 };
-export const SHARD_RARITIES: Rarity[] = ['C', 'U', 'R', 'RR', 'ST', 'CR'];
+export const SHARD_COST: Record<Rarity, number> = { C: 10, U: 10, R: 12, RR: 18, ST: 25, ST2: 28, CR: 30 };
+export const SHARD_RARITIES: Rarity[] = ['C', 'U', 'R', 'RR', 'ST', 'ST2', 'CR'];
 /** shard keys from the 11-rarity era */
 const OLD_RARITY: Record<string, Rarity> = { RRR: 'RR', AR: 'ST', CHR: 'ST', S: 'ST', SR: 'ST', SAR: 'CR', UR: 'CR' };
 const CARDS_OK = (cid: string) => cid in CARDS;
@@ -486,15 +486,15 @@ export const PACK_TABLE: [Rarity, number][][] = [
   [['C', 0.85], ['U', 1]],
   [['C', 0.75], ['U', 1]],
   [['U', 0.66], ['R', 0.9], ['RR', 1]],
-  [['R', 0.52], ['RR', 0.78], ['ST', 0.97], ['CR', 1]],
+  [['R', 0.52], ['RR', 0.78], ['ST', 0.95], ['ST2', 0.98], ['CR', 1]],
 ];
 export const MIRROR_CHANCE = 0.3;
 const GOD_TABLE: [Rarity, number][][] = [
   [['RR', 1]],
   [['RR', 0.5], ['ST', 1]],
   [['ST', 1]],
-  [['ST', 0.6], ['CR', 1]],
-  [['ST', 0.3], ['CR', 1]],
+  [['ST', 0.5], ['ST2', 0.8], ['CR', 1]],
+  [['ST', 0.3], ['ST2', 0.6], ['CR', 1]],
 ];
 
 export function openPack(b: Booster = BOOSTERS[0]): PackResult {
@@ -515,8 +515,8 @@ export const PREMIUM_TABLE: [Rarity, number][][] = [
   [['U', 0.5], ['R', 0.85], ['RR', 1]],
   [['U', 0.45], ['R', 0.8], ['RR', 1]],
   [['R', 0.45], ['RR', 0.85], ['ST', 1]],
-  [['RR', 0.5], ['ST', 0.92], ['CR', 1]],
-  [['RR', 0.3], ['ST', 0.82], ['CR', 1]],
+  [['RR', 0.5], ['ST', 0.85], ['ST2', 0.95], ['CR', 1]],
+  [['RR', 0.3], ['ST', 0.72], ['ST2', 0.9], ['CR', 1]],
 ];
 
 export function openPremium(): PackResult {
@@ -532,6 +532,6 @@ export function openPremium(): PackResult {
   return { cards, god: false };
 }
 
-export const RARITY_ORDER: Record<Rarity, number> = { C: 0, U: 1, R: 2, RR: 3, ST: 4, CR: 5 };
+export const RARITY_ORDER: Record<Rarity, number> = { C: 0, U: 1, R: 2, RR: 3, ST: 4, ST2: 5, CR: 6 };
 
 export { RIVALS };

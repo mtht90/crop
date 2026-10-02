@@ -24,6 +24,9 @@ export type Beat =
   | { t: 'title'; main: string; sub?: string; kicker?: string }
   | { t: 'bars'; on: boolean }
   | { t: 'wait'; ms: number }
+  | { t: 'cg'; key: string | null; pan?: Pan; caption?: string }
+  | { t: 'cutin'; id: string; mood?: string; line?: string }
+  | { t: 'place'; name: string; sub?: string }
   | { t: 'choice'; prompt?: string; options: { label: string; then: Beat[] }[] };
 
 export interface Cast {

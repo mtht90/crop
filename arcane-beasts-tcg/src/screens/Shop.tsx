@@ -29,7 +29,7 @@ const EASE_IN_OUT = [0.65, 0, 0.35, 1] as const;
 
 /** ☆ rarities arrive face-down and turn over on tap */
 const isStar = (r: Rarity) => RARITY_ORDER[r] >= RARITY_ORDER.ST;
-const RARE_COLOR: Partial<Record<Rarity, string>> = { CR: '#ffd27a', ST: '#fff1c4', RR: '#ffd9b0' };
+const RARE_COLOR: Partial<Record<Rarity, string>> = { CR: '#ffd27a', ST2: '#ffe9a8', ST: '#fff1c4', RR: '#ffd9b0' };
 const rareColor = (r: Rarity) => RARE_COLOR[r] ?? '#ffffff';
 const priceOf = (b: Booster) => (b.premium ? PREMIUM_PRICE : PACK_PRICE);
 
@@ -1193,7 +1193,7 @@ function TopCard({ card, u, first, faceDown, burstAt, onFlipImpact, onFlipped, o
       setUp(true);
       onFlipImpact();
       foley.impact();
-      foley.rarity(rank >= 5 ? 5 : 4);
+      foley.rarity(rank >= RARITY_ORDER.CR ? 5 : 4);
       const c = center();
       if (c) {
         burstAt(c.cx, c.cy, 'glint', 50, 1.6);
@@ -1224,6 +1224,7 @@ function TopCard({ card, u, first, faceDown, burstAt, onFlipImpact, onFlipped, o
         ref={ref}
         className="sc top"
         style={{ x, rotate, opacity, ['--rc' as string]: rc }}
+        initial={{ rotateY: faceDown ? 180 : 0, scale: 0.985 }}
         animate={controls}
         drag={up ? 'x' : false}
         dragConstraints={{ left: 0, right: 0 }}

@@ -856,7 +856,7 @@
 .rmark.r-C, .rmark.r-U, .rmark.r-R, .rmark.r-RR { color: #1b1b1f; }
 .t-dark .rmark.r-C, .t-dark .rmark.r-U, .t-dark .rmark.r-R, .t-dark .rmark.r-RR,
 .tcg.bleed .rmark, .tcg.v-S .rmark, .kind-energy .rmark { color: #fff; }
-.rmark.r-ST, .rmark.r-CR {
+.rmark.r-ST, .rmark.r-ST2, .rmark.r-CR {
   letter-spacing: 0;
   font-size: 1.25em;
   background: linear-gradient(180deg, #fff6c9, #e0a526);

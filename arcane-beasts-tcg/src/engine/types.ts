@@ -17,7 +17,7 @@ export const ALL_TYPES: EType[] = [...ENERGY_TYPES, 'colorless'];
 
 export type Stage = 'basic' | 'stage1' | 'stage2';
 /** ◇ ◇◇ ◇◇◇ ◇◇◇◇ ☆ ♛ */
-export type Rarity = 'C' | 'U' | 'R' | 'RR' | 'ST' | 'CR';
+export type Rarity = 'C' | 'U' | 'R' | 'RR' | 'ST' | 'ST2' | 'CR';
 export type SetCode = 'AB1' | 'AB2' | 'AB3';
 /** Alternate printings of a base card */
 export type Variant = 'mirror' | 'AR' | 'CHR' | 'S' | 'SR' | 'SAR' | 'UR';

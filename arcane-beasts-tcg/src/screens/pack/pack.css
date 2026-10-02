@@ -339,7 +339,9 @@
 .sc.top:active { cursor: grabbing; }
 .sc-face, .sc-back { position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden; }
 .sc-back { transform: rotateY(180deg); }
-.sc-face .tcg, .sc-back .tcg { width: 100%; }
+/* the card itself is a 3D context (tilt); inside a flipping face it must be flat, or its layers show through the back */
+.sc-face .tcg, .sc-back .tcg { width: 100%; transform-style: flat; backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+.sc-face *, .sc-back * { backface-visibility: hidden; -webkit-backface-visibility: hidden; }
 
 .edge-light {
   position: absolute;
