@@ -501,6 +501,21 @@ Assets were resized / re-encoded (WebP, MP3) and effect frames were packed into 
 | image | `data/core/images/story/swamp-02.jpg` | GNU GPL v2+ | Battle for Wesnoth Project |
 | image | `data/core/images/story/swamp-03.jpg` | GNU GPL v2+ | Battle for Wesnoth Project |
 | image | `data/core/images/story/wesmere.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
+| interface | `images/buttons/button_menu/menu_button_copper_H20-active@2x.png` | GNU GPL v2+ | Battle for Wesnoth Project |
+| interface | `images/buttons/button_menu/menu_button_copper_H20-pressed@2x.png` | GNU GPL v2+ | Battle for Wesnoth Project |
+| interface | `images/buttons/button_menu/menu_button_copper_H20@2x.png` | GNU GPL v2+ | Battle for Wesnoth Project |
+| interface | `images/buttons/button_normal/button_H22-active@2x.png` | GNU GPL v2+ | Battle for Wesnoth Project |
+| interface | `images/buttons/button_normal/button_H22-pressed@2x.png` | GNU GPL v2+ | Battle for Wesnoth Project |
+| interface | `images/buttons/button_normal/button_H22@2x.png` | GNU GPL v2+ | Battle for Wesnoth Project |
+| interface | `images/buttons/button_square/button_square_60-active.png` | GNU GPL v2+ | Battle for Wesnoth Project |
+| interface | `images/buttons/button_square/button_square_60-pressed.png` | GNU GPL v2+ | Battle for Wesnoth Project |
+| interface | `images/buttons/button_square/button_square_60.png` | GNU GPL v2+ | Battle for Wesnoth Project |
+| interface | `images/buttons/checkbox-pressed@2x.png` | GNU GPL v2+ | Battle for Wesnoth Project |
+| interface | `images/buttons/checkbox@2x.png` | GNU GPL v2+ | Battle for Wesnoth Project |
+| interface | `images/buttons/large-button-active.png` | GNU GPL v2+ | Battle for Wesnoth Project |
+| interface | `images/buttons/large-button-pressed.png` | GNU GPL v2+ | Battle for Wesnoth Project |
+| interface | `images/buttons/large-button.png` | GNU GPL v2+ | Battle for Wesnoth Project |
+| interface | `images/dialogs/opaque-background.png` | GNU GPL v2+ | Battle for Wesnoth Project |
 | music | `data/core/music/battle-epic.ogg` | GNU GPL v2+ | Doug Kaufman(dkaufman) |
 | music | `data/core/music/battle.ogg` | GNU GPL v2+ | Aleksi Aubry-Carlson(Aleksi) |
 | music | `data/core/music/defeat.ogg` | GNU GPL v2+ | Timothy Pinkham(TimothyP) |

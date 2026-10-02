@@ -722,3 +722,18 @@
 .multi-filter button { font-size: calc(var(--u) * 0.8); padding: 2px calc(var(--u) * 0.8); letter-spacing: 0.04em; }
 .multi-filter button:disabled { opacity: 0.4; cursor: default; }
 .tb-count small { font-family: var(--font-ui); font-weight: 900; font-size: 0.7em; margin-right: 0.05em; }
+
+/* daily line-up */
+.shop-kind button i.lim { background: #2b8a3e; }
+.lineup-timer { display: inline-flex; align-items: center; gap: 6px; font-size: calc(var(--u) * 0.9); font-weight: 800; color: var(--ink-dim); white-space: nowrap; }
+.lineup-timer b { color: #f1d58a; font-variant-numeric: tabular-nums; }
+/* theme packs: a silver-and-colour foil logo */
+.bp.theme:not(.premium) .bp-logo .a {
+  background: linear-gradient(100deg, color-mix(in srgb, var(--hue) 60%, #fff) 0%, #ffffff 28%, var(--hue) 46%, color-mix(in srgb, var(--hue) 50%, #000) 60%, #ffffff 80%, var(--hue) 100%);
+  background-size: 220% 100%;
+  background-position: var(--mx) 0;
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+.bp.theme:not(.premium) .bp-logo .b { color: color-mix(in srgb, var(--hue) 35%, #fff); letter-spacing: 0.3em; }
+.bp.theme:not(.premium) .bp-foot .t { color: color-mix(in srgb, var(--hue) 35%, #fff); }

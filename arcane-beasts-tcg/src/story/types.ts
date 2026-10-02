@@ -6,7 +6,8 @@
 export type Slot = 'FL' | 'L' | 'C' | 'R' | 'FR';
 export type Pan = 'in' | 'out' | 'left' | 'right' | 'up' | 'down' | 'still';
 export type Weather = 'none' | 'rain' | 'storm' | 'snow' | 'embers' | 'ash' | 'petals' | 'stars' | 'fog' | 'motes';
-export type FxName = 'shake' | 'flash' | 'flashRed' | 'fadeBlack' | 'fadeWhite' | 'unfade' | 'zoomPunch' | 'quake';
+export type FxName = 'shake' | 'flash' | 'flashRed' | 'fadeBlack' | 'fadeWhite' | 'fadeBlackSlow' | 'fadeWhiteSlow' | 'unfade' | 'zoomPunch' | 'quake' | 'pulse';
+export type Tone = 'none' | 'sepia' | 'mono' | 'cold' | 'blood' | 'dusk';
 export type Style = 'normal' | 'shout' | 'whisper' | 'think';
 export type MusicKey = 'title' | 'menu' | 'shop' | 'battle1' | 'battle2' | 'battle3' | 'boss' | 'victory' | 'defeat' | 'stop' | 'sad' | 'revelation' | 'suspense' | 'shadows' | 'journey' | 'love' | 'transience' | 'elegy' | 'silence' | 'legends' | 'knolls' | 'revenge';
 
@@ -25,6 +26,8 @@ export type Beat =
   | { t: 'bars'; on: boolean }
   | { t: 'wait'; ms: number }
   | { t: 'cg'; key: string | null; pan?: Pan; caption?: string }
+  | { t: 'tone'; kind: Tone }
+  | { t: 'card'; name: string; caption?: string }
   | { t: 'cutin'; id: string; mood?: string; line?: string }
   | { t: 'place'; name: string; sub?: string }
   | { t: 'choice'; prompt?: string; options: { label: string; then: Beat[] }[] };

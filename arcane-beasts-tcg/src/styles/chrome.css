@@ -1,0 +1,161 @@
+/* ============================================================================
+   Interface chrome built from Wesnoth's own art: gold-framed leather buttons,
+   copper menu buttons and framed check boxes. Loaded after every screen sheet.
+   (the images are set as --ui-* custom properties by src/ui/chrome.ts)
+   ========================================================================= */
+
+/* ------------------------------ main buttons ------------------------------ */
+.btn,
+.pill {
+  --bw: calc(var(--u) * 0.55);
+  position: relative;
+  isolation: isolate;
+  border: var(--bw) solid transparent;
+  border-radius: 0;
+  border-image: var(--ui-sq) 10 fill / var(--bw) stretch;
+  background: none;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
+  color: #fbefd2;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-shadow: 0 1px 0 #000, 0 0 8px rgba(0, 0, 0, 0.7);
+  transition: transform 0.12s, filter 0.15s;
+}
+/* coloured buttons: the gold frame from Wesnoth, our own leather inside */
+.btn,
+.pill {
+  background-clip: padding-box !important;
+  background-image: var(--fill, none), var(--ui-panel-bg) !important;
+  background-size: 100% 100%, 160px 160px !important;
+  background-blend-mode: normal, normal;
+}
+/* a soft highlight across the top */
+.btn::after,
+.pill::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.16), transparent 45%, rgba(0, 0, 0, 0.25));
+}
+.btn:hover:not(:disabled),
+.pill:hover:not(:disabled) {
+  border-image-source: var(--ui-sq-active);
+  filter: brightness(1.12);
+  transform: translateY(-1px);
+}
+.btn:active:not(:disabled),
+.pill:active:not(:disabled) {
+  border-image-source: var(--ui-sq-pressed);
+  transform: translateY(1px);
+  filter: brightness(0.95);
+}
+.btn:disabled,
+.pill:disabled { filter: grayscale(0.9) brightness(0.55); cursor: not-allowed; transform: none; opacity: 1; }
+
+/* the gold call to action (default) */
+.btn { --fill: linear-gradient(180deg, rgba(232, 178, 72, 0.92), rgba(150, 98, 24, 0.9) 55%, rgba(98, 60, 10, 0.92)); border-image-slice: 10; }
+.btn.red { --fill: linear-gradient(180deg, rgba(214, 66, 48, 0.92), rgba(140, 24, 16, 0.9) 55%, rgba(84, 10, 6, 0.94)); color: #fff1e6; }
+.btn.blue { --fill: none; border-image-slice: 10 fill; color: #e8f6ff; }
+.btn.ghost {
+  --fill: none;
+  border-image-source: var(--ui-btn);
+  border-image-slice: 8 fill;
+  color: #e9dfc6;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.4);
+}
+.btn.ghost:hover:not(:disabled) { border-image-source: var(--ui-btn-active); }
+.btn.ghost:active:not(:disabled) { border-image-source: var(--ui-btn-pressed); }
+.btn.big { --bw: calc(var(--u) * 0.7); letter-spacing: 0.16em; }
+.btn.small { --bw: calc(var(--u) * 0.4); letter-spacing: 0.06em; }
+
+/* shop buy buttons: the double-framed large button */
+.pill {
+  --bw: calc(var(--u) * 0.6);
+  border-image: var(--ui-large) 9 / var(--bw) stretch;
+  --fill: linear-gradient(180deg, rgba(232, 178, 72, 0.92), rgba(150, 98, 24, 0.9) 55%, rgba(98, 60, 10, 0.92));
+}
+.pill:hover:not(:disabled) { border-image-source: var(--ui-large-active); }
+.pill:active:not(:disabled) { border-image-source: var(--ui-large-pressed); }
+.pill.ten { --fill: linear-gradient(180deg, rgba(48, 98, 120, 0.9), rgba(18, 48, 66, 0.9) 55%, rgba(8, 24, 34, 0.92)); }
+.pill.gold { --fill: linear-gradient(180deg, rgba(250, 214, 112, 0.94), rgba(190, 130, 30, 0.92) 55%, rgba(120, 76, 8, 0.94)); }
+.pill.ghost { --fill: linear-gradient(180deg, #1c3442, #0b1a24); color: #e9dfc6; }
+.pill .coin { border-left-color: rgba(255, 230, 170, 0.35); color: #ffe7a6; }
+
+/* ------------------------------ menu-style buttons ------------------------------ */
+.back-btn,
+.coin-chip,
+.textbtn.framed {
+  border: calc(var(--u) * 0.35) solid transparent !important;
+  border-radius: 0 !important;
+  border-image: var(--ui-menu) 8 fill / calc(var(--u) * 0.35) stretch !important;
+  background: none !important;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.45);
+  color: #f3e4c0;
+  text-shadow: 0 1px 0 #000;
+}
+.back-btn:hover { border-image-source: var(--ui-menu-active) !important; }
+.back-btn:active { border-image-source: var(--ui-menu-pressed) !important; }
+
+/* tabs and segmented switches */
+.seg button,
+.shop-kind button,
+.rival-sets button,
+.rk-entry {
+  border: calc(var(--u) * 0.3) solid transparent !important;
+  border-radius: 0 !important;
+  border-image: var(--ui-btn) 8 fill / calc(var(--u) * 0.3) stretch !important;
+  background: none !important;
+  color: #cfc6ad !important;
+  text-shadow: 0 1px 0 #000;
+  box-shadow: none !important;
+}
+.seg button:hover,
+.shop-kind button:hover,
+.rival-sets button:hover { border-image-source: var(--ui-btn-active) !important; color: #fff !important; }
+.seg button.on,
+.shop-kind button.on,
+.rival-sets button.on {
+  border-image-source: var(--ui-btn-active) !important;
+  color: #ffe9a8 !important;
+  filter: drop-shadow(0 0 6px rgba(255, 210, 120, 0.45));
+}
+.shop-kind { background: none !important; box-shadow: none !important; gap: 4px; padding: 0 !important; }
+
+/* round arrows */
+.shop2-arrow,
+.sc-arrow,
+.bk-turn {
+  border: calc(var(--u) * 0.35) solid transparent !important;
+  border-image: var(--ui-sq) 10 fill / calc(var(--u) * 0.35) stretch !important;
+  border-radius: 0 !important;
+  background: none !important;
+  color: #fbefd2 !important;
+  text-shadow: 0 1px 0 #000;
+}
+.shop2-arrow:hover,
+.sc-arrow:hover:not(:disabled) { border-image-source: var(--ui-sq-active) !important; }
+
+/* check boxes */
+input[type='checkbox'] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: calc(var(--u) * 1.6) !important;
+  height: calc(var(--u) * 1.6) !important;
+  margin: 0;
+  background: var(--ui-check) center / 100% 100% no-repeat;
+  cursor: pointer;
+  flex: none;
+}
+input[type='checkbox']:checked { background-image: var(--ui-check-on); }
+
+/* text buttons: gold small caps with a rule on hover */
+.textbtn { color: #d8cba8; text-shadow: 0 1px 2px #000; position: relative; }
+.textbtn:hover:not(:disabled) { color: #fff3c4; }
+.textbtn::after { content: ''; position: absolute; left: 20%; right: 20%; bottom: 4px; height: 1px; background: linear-gradient(90deg, transparent, #e8c567, transparent); opacity: 0; transition: opacity 0.2s; }
+.textbtn:hover:not(:disabled)::after { opacity: 1; }
+
+/* readable light lettering on every coloured button */
+.btn:not(.ghost):not(.blue) { color: #fff6e0 !important; }
+.sc-tools { text-shadow: 0 1px 3px #000, 0 0 8px #000; }

@@ -301,7 +301,21 @@ export const AB3_DECKS: DeckList[] = [
       [E('悪'), 18],
     ],
   },
+  {
+    id: 'elder',
+    name: '賢者の書斎',
+    type: 'psychic',
+    cover: 'アークウィッチ',
+    description: '老いた賢者が四十年かけて磨いた超デッキ。大魔女と銀の魔女、そして大地を揺らす騎士たち。',
+    cards: [
+      ['ミスティック', 4], ['サンシャーマン', 3], ['アークウィッチ', 3], ['サイキックメイジ', 2], ['グランドナイト', 2], ['ロック', 2], ['メカニカルレイダー', 2],
+      ['大賢者の研究', 4], ['召喚の巻物', 4], ['魔獣の笛', 2], ['司令官の号令', 2], ['進化の秘薬', 2], ['騎士の突撃', 2], ['狩人の知恵', 2], ['転移の羽', 2],
+      ['賢者の水晶', 1], ['エネルギー結晶', 2], ['覇者の紋章', 1], ['瘴気の沼', 2], ['回復薬', 1],
+      [E('超'), 15],
+    ],
+  },
 ];
+
 
 export const ALL_DECKS: DeckList[] = [...STARTER_DECKS, ...EX_DECKS, ...AB3_DECKS];
 export const deckById = (id: string) => ALL_DECKS.find((d) => d.id === id)!;
@@ -351,15 +365,15 @@ export interface Rival {
 export const RIVALS: Rival[] = [
   {
     id: 'tim', name: 'ティム', title: '村の少年', portrait: 'humans/peasant', deck: 'grass', level: 'easy', reward: 150,
-    intro: 'ぼくの森の仲間たち、すっごく強いんだ！勝負しよう！', win: 'やったー！森のみんな、ありがとう！', lose: 'うわぁ、負けちゃった…でも楽しかった！', scene: 'story/landscape-hills-01',
+    intro: '父ちゃんのカードは、誰にも渡さない！', win: '……父ちゃん、守ったよ。', lose: '……わかった。約束は、約束だから。', scene: 'story/landscape-hills-01',
   },
   {
     id: 'marina', name: 'マリナ', title: '潮騒の巫女', portrait: 'merfolk/initiate', deck: 'water', level: 'easy', reward: 180,
-    intro: '海の声が聞こえる…あなたの実力、見せてもらうわ。', win: '波は全てを飲み込むの。', lose: '見事ね。海もあなたを認めたみたい。', scene: 'story/landscape-coast',
+    intro: '海の祠のカードは、不幸を呼ぶの。それでも、望むのね？', win: '波は、欲を連れ去ってくれる。', lose: '……あなたに、海の加護がありますように。', scene: 'story/landscape-coast',
   },
   {
     id: 'vane', name: 'ヴェイン', title: '雷弓の射手', portrait: 'humans/longbowman', deck: 'lightning', level: 'normal', reward: 220,
-    intro: '俺の雷は一瞬で獲物を射抜く。目を離すなよ。', win: '遅い、遅すぎる！', lose: '…ちっ、俺の矢が見切られるとはな。', scene: 'story/landscape-mountains-04',
+    intro: 'カード遊びで、兄貴は首を吊った。……勝負だ、遊び人。', win: 'これで、少しは懲りたか。', lose: '……持っていけ。そんなもんのために、人は死ぬんだ。', scene: 'story/landscape-mountains-04',
   },
   {
     id: 'grom', name: 'グロム', title: '岩山の戦士', portrait: 'trolls/troll-shaman', deck: 'fighting', level: 'normal', reward: 250,
@@ -370,8 +384,8 @@ export const RIVALS: Rival[] = [
     intro: '我が炎は千の戦を越えてきた。貴様に耐えられるか！', win: '灰となれ！', lose: '見事だ…貴様の炎、確かに受け取った。', scene: 'story/landscape-lava',
   },
   {
-    id: 'rouga', name: 'ロウガ', title: '狼使い', portrait: 'goblins/wolf-rider', deck: 'wolf', level: 'hard', reward: 350,
-    intro: '群れの牙から逃げられると思うなよ。', win: '狩りは終わりだ。', lose: '…群れを率いる器、お前にはあるようだな。', scene: 'story/landscape-plain',
+    id: 'rouga', name: 'ロウガ', title: '街道の野盗頭', portrait: 'goblins/wolf-rider', deck: 'wolf', level: 'hard', reward: 350,
+    intro: '荷物も、カードも、命もだ。ぜんぶ置いていけ。', win: '狩りは終わりだ。身ぐるみ剥いでやれ！', lose: '……ちっ。おい、何を見てる、お前ら……。', scene: 'story/landscape-plain',
   },
   {
     id: 'lilith', name: 'リリス', title: '夢魔の魔女', portrait: 'humans/dark-adept+female', deck: 'psychic', level: 'hard', reward: 400,
@@ -382,36 +396,36 @@ export const RIVALS: Rival[] = [
     intro: '千年の眠りを妨げし者よ…その魂、我が軍勢に加えてくれよう。', win: '魂はもらったぞ…', lose: 'バカな…この我が敗れるだと…！', scene: 'story/bones',
   },
   {
-    id: 'flora', name: 'フローラ', title: '蟲使いのドルイド', portrait: 'elves/druid', deck: 'swarm', level: 'normal', reward: 380, set: 'AB2',
-    intro: '森の小さな命たち…その数を甘く見ないことね。', win: '女王の目覚めには、誰も逆らえないの。', lose: 'あなた、森に愛されているのね。', scene: 'story/landscape-hills-02',
+    id: 'flora', name: 'フローラ', title: '墓守のドルイド', portrait: 'elves/druid', deck: 'swarm', level: 'normal', reward: 380, set: 'AB2',
+    intro: '彼の眠りを、乱さないで。', win: '帰って。ここは、死んだ人の場所よ。', lose: '……掘るなら、せめて、優しくしてあげて。', scene: 'story/landscape-hills-02',
   },
   {
-    id: 'garm', name: 'ガルム', title: '大戦士長', portrait: 'orcs/warlord', deck: 'troll', level: 'hard', reward: 460, set: 'AB2',
-    intro: '我が軍勢は倒れても立ち上がる。お前の心が先に折れるだろう。', win: '進め！巨人の行軍は止まらぬ！', lose: '…見事。お前を戦士と認めよう。', scene: 'story/landscape-mountains-03',
+    id: 'garm', name: 'ガルム', title: '鉱山の親方', portrait: 'orcs/warlord', deck: 'troll', level: 'hard', reward: 460, set: 'AB2',
+    intro: '賃金がほしけりゃ、勝って取れ。それがこの山の掟だ。', win: '次の給金も、俺のもんだな。', lose: '……グハ。山の掟は、お前の勝ちだ。', scene: 'story/landscape-mountains-03',
   },
   {
-    id: 'nerea', name: 'ネレア', title: '深淵の巫女王', portrait: 'merfolk/priestess', deck: 'naga', level: 'hard', reward: 480, set: 'AB2',
-    intro: '潮が満ちる音が聞こえるかしら。あなたを深淵へ招待するわ。', win: '海の底は静かでしょう？', lose: '潮が…引いていく…。あなたの勝ちよ。', scene: 'story/landscape-beach',
+    id: 'nerea', name: 'ネレア', title: '湖の神殿の大巫女', portrait: 'merfolk/priestess', deck: 'naga', level: 'hard', reward: 480, set: 'AB2',
+    intro: '聖なるカードに触れる者には、罰が下ります。', win: '祈りなさい。あなたの罪が、洗われるまで。', lose: '……神よ。なぜ、この者を選ぶのですか。', scene: 'story/landscape-beach',
   },
   {
     id: 'sieg', name: 'ジーク', title: '覇竜騎士団長', portrait: 'humans/grand-knight', deck: 'dragoon', level: 'hard', reward: 520, set: 'AB2',
     intro: '覇者の名にかけて、全力で相手をしよう。騎士団、前へ！', win: '覇竜の炎こそ、王者の証だ。', lose: 'その力…お前こそ次の覇者かもしれんな。', scene: 'story/landscape-mountains-05',
   },
   {
-    id: 'morgana', name: 'モルガナ', title: '亡国の死霊術師', portrait: 'humans/necromancer+female', deck: 'lich', level: 'hard', reward: 650, set: 'AB2',
-    intro: '滅びた王国の王が、あなたの魂をご所望よ。', win: '陛下、新しい臣下をお連れしました…ふふ。', lose: '王が…再び眠りにつくなんて…。', scene: 'story/grim-altar',
+    id: 'morgana', name: 'モルガナ', title: '庭の門番', portrait: 'humans/necromancer+female', deck: 'lich', level: 'hard', reward: 650, set: 'AB2',
+    intro: 'ここから先へは、行かせない。あなたのために。', win: '帰りなさい。まだ、間に合うかもしれない。', lose: '……もう、止められないのね。', scene: 'story/grim-altar',
   },
   {
     id: 'setsuna', name: 'セツナ', title: '氷河の魔導士', portrait: 'elves/sorceress', deck: 'frost', level: 'hard', reward: 540, set: 'AB2',
-    intro: '凍てつく風の音が聞こえますか。あなたの動きも、いずれ止まります。', win: '氷は、すべてを静かにするのです。', lose: '溶けてしまいました…あなたの熱で。', scene: 'story/p-snowfield',
+    intro: '伝承を知りたいのなら、まず、私に勝ちなさい。', win: '知らないほうが、幸せなこともあるのです。', lose: '……いいでしょう。代価を、教えてあげます。', scene: 'story/p-snowfield',
   },
   {
     id: 'verd', name: 'ヴェルド', title: '古竜の守り手', portrait: 'elves/shaman', deck: 'wyrm', level: 'hard', reward: 560, set: 'AB2',
-    intro: '千年の森が、あなたを試したいと言っている。', win: '森の吐息に、抗える者はいない。', lose: '古竜も、あなたを認めたようだ。', scene: 'story/p-great-tree',
+    intro: 'あの男の弟子か。……その顔、昔のあいつにそっくりだ。', win: '森へ帰りな。庭へは、行くんじゃない。', lose: '……行くのか。なら、覚悟して行け。', scene: 'story/p-great-tree',
   },
   {
     id: 'carmilla', name: 'カーミラ', title: '夜会の女主人', portrait: 'humans/mage-red+female', deck: 'night', level: 'hard', reward: 600, set: 'AB2',
-    intro: 'ようこそ、月夜の舞踏会へ。最後まで踊っていられるかしら。', win: 'いい夜だったわ。あなたの血も、ね。', lose: '夜明けが…来てしまったのね。', scene: 'story/p-graves',
+    intro: 'ようこそ、坊や。……あら、可愛い番犬も一緒なのね。', win: '踊り疲れたかしら。今夜はここまで。', lose: '……ふふ、いいわ。あの方の所へ行きなさい。', scene: 'story/p-graves',
   },
   {
     id: 'salima', name: 'サリマ', title: '砂陽の戦士長', portrait: 'camp/q-champion', deck: 'sunfolk', level: 'hard', reward: 620, set: 'AB3',
@@ -432,5 +446,9 @@ export const RIVALS: Rival[] = [
   {
     id: 'asha', name: '影の女王', title: '千年の黒幕', portrait: 'camp/asheviere', deck: 'shadow', level: 'hard', reward: 1000, set: 'AB3',
     intro: 'ようこそ、小さな召喚士。あなたの絆ごと、闇に溶かしてあげましょう。', win: '光など、影があるから輝けるのよ。', lose: '……ありえない。私の、千年が……！', scene: 'story/p-shadows',
+  },
+  {
+    id: 'olden', name: 'オルデン', title: '師', portrait: 'camp/delfador', deck: 'elder', level: 'hard', reward: 1500, set: 'AB3',
+    intro: '来たか。よく、ここまで勝ち続けてくれた。', win: 'お前の役目は終わった。……ありがとう。', lose: '……強くなったな。だが、もう遅い。', scene: 'story/p-shrine',
   },
 ];

@@ -12,6 +12,7 @@ import { EnergySymbol } from '../ui/Card';
 import { ACTS, CHAPTERS } from '../story';
 import { chapterState, isCleared, nextChapterIndex, replayScene, startChapter } from '../story/flow';
 import { foley, playMusic, sfx } from '../audio/audio';
+import { HeroCreate } from '../story/HeroCreate';
 import './story-map.css';
 
 const EASE_OUT = [0.16, 1, 0.3, 1] as const;
@@ -26,6 +27,8 @@ export function StoryMap() {
   useEffect(() => playMusic('menu'), []);
   const [sel, setSel] = useState(() => (save.story.started ? nextChapterIndex(save) : -1));
   const drag = useRef<{ x: number; moved: boolean } | null>(null);
+  /** naming the hero; holds what to do afterwards */
+  const [creating, setCreating] = useState<null | { then: () => void }>(null);
 
   const isPro = sel < 0;
   const ch = isPro ? null : CHAPTERS[sel];
@@ -48,6 +51,7 @@ export function StoryMap() {
   };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (creating || (e.target as HTMLElement)?.tagName === 'INPUT') return;
       if (e.key === 'ArrowLeft') move(-1);
       else if (e.key === 'ArrowRight') move(1);
     };
@@ -56,6 +60,13 @@ export function StoryMap() {
   });
 
   const start = () => {
+    if (!save.story.hero) {
+      setCreating({ then: start2 });
+      return;
+    }
+    start2();
+  };
+  const start2 = () => {
     if (isPro) {
       sfx('expand', 0.5);
       if (!save.story.started) update((s) => void (s.story.started = true));
@@ -71,6 +82,7 @@ export function StoryMap() {
       className="screen sc-screen"
       onPointerDown={(e) => (drag.current = { x: e.clientX, moved: false })}
       onPointerUp={(e) => {
+        if (creating) return;
         const d = drag.current;
         drag.current = null;
         if (d && Math.abs(e.clientX - d.x) > 60) move(e.clientX < d.x ? 1 : -1);
@@ -95,6 +107,9 @@ export function StoryMap() {
           </button>
           <button className="btn small ghost" onClick={() => go('rivals')}>
             フリー対戦
+          </button>
+          <button className="btn small ghost" onClick={() => setCreating({ then: () => {} })}>
+            主人公
           </button>
           <label className="sc-toggle" title="オフにすると会話を飛ばして、すぐ対戦に入ります">
             <input type="checkbox" checked={save.story.scenes} onChange={(e) => update((s) => void (s.story.scenes = e.target.checked))} />
@@ -202,6 +217,20 @@ export function StoryMap() {
           </div>
         </div>
       </div>
+      <AnimatePresence>
+        {creating && (
+          <HeroCreate
+            initial={save.story.hero}
+            onCancel={() => setCreating(null)}
+            onDone={(h) => {
+              update((x) => void (x.story.hero = h));
+              const then = creating.then;
+              setCreating(null);
+              setTimeout(then, 50);
+            }}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

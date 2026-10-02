@@ -7,6 +7,7 @@ import { applyRanked, ensureSeason, freshRank, type RankChange, type RankState }
 import { expand, RIVALS, STARTER_DECKS, type Rival } from '../engine/decks';
 import type { Difficulty } from '../engine/ai';
 import type { CardDef, EType, Rarity, SetCode } from '../engine/types';
+import { dayNumber, inTheme, lineupFor, type Series } from './themes';
 import {
   ACHIEVEMENTS,
   addExp,
@@ -96,8 +97,13 @@ export interface StorySave {
   seen: string[];
   /** read the conversations automatically (false = skip straight to battles) */
   scenes: boolean;
+  /** the player's character: name and portrait (chosen before the prologue) */
+  hero?: { name: string; look: string };
+  /** story edition; saves from an older story start the new one from the beginning */
+  v?: number;
 }
-export const freshStory = (): StorySave => ({ started: false, cleared: [], seen: [], scenes: true });
+export const STORY_VERSION = 2;
+export const freshStory = (): StorySave => ({ started: false, cleared: [], seen: [], scenes: true, v: STORY_VERSION });
 
 export interface BattleConfig {
   rival: Rival | null;
@@ -148,6 +154,7 @@ function load(): Save {
       s.settings = { ...freshSave().settings, ...(s.settings ?? {}) };
       s.progress = { ...freshProgress(), ...(s.progress ?? {}) };
       s.progress.stats = { ...freshProgress().stats, ...s.progress.stats };
+      if ((s.story?.v ?? 1) < STORY_VERSION) s.story = { ...freshStory(), scenes: s.story?.scenes ?? true, hero: s.story?.hero };
       s.shards = s.shards ?? {};
       s.ranked = { ...freshRank(), ...(s.ranked ?? {}) };
       s.story = { ...freshStory(), ...(s.story ?? {}) };
@@ -410,6 +417,12 @@ export interface Booster {
   hue: string; // accent colour for the pack art
   hue2: string;
   premium?: boolean;
+  /** theme pack: cards of every set that fit the theme (see themes.ts) */
+  theme?: string;
+  /** name printed on the pack instead of the set name */
+  title?: string;
+  /** coins per pack (default PACK_PRICE) */
+  price?: number;
 }
 
 export const PREMIUM_PRICE = 300;
@@ -434,13 +447,34 @@ export const BOOSTERS: Booster[] = [
 
 export const setName = (set: SetCode) => SET_INFO[set].name;
 
+const SET_BLURB: Record<SetCode, string> = {
+  AB1: 'はじまりの弾。基本の魔獣とトレーナーがそろう。',
+  AB2: 'EXが初登場した弾。覇竜・冥海・死霊の3パック。',
+  AB3: '最新弾。辺境の軍勢と、新しいEXたち。',
+};
+export const SET_SERIES = Object.fromEntries(
+  (['AB1', 'AB2', 'AB3'] as SetCode[]).map((set) => [set, { id: set, kind: 'set', set, name: `${SET_INFO[set].short} ${SET_INFO[set].name}`, blurb: SET_BLURB[set], boosters: BOOSTERS.filter((x) => x.set === set) }]),
+) as Record<SetCode, Series>;
+
+/** the two series on sale today (?lineup=N looks N days ahead) */
+export function todaysLineup(now = Date.now()): [Series, Series] {
+  const off = typeof location !== 'undefined' ? Number(new URLSearchParams(location.search).get('lineup') ?? 0) || 0 : 0;
+  return lineupFor(dayNumber(now) + off, SET_SERIES);
+}
+
+/** which cards a pack draws from: one set, one theme, or everything (premium) */
+type Scope = SetCode | { theme: string } | undefined;
+const scopeOf = (b: Booster): Scope => (b.theme ? { theme: b.theme } : b.premium ? undefined : b.set);
+const scopeKey = (s: Scope) => (s === undefined ? '*' : typeof s === 'string' ? s : `T:${s.theme}`);
+const inScope = (c: CardDef, s: Scope) => (s === undefined ? true : typeof s === 'string' ? c.set === s : inTheme(s.theme, c));
+
 /** cards that can appear for a rarity (mirrors come from their own slot) */
 const POOLS = new Map<string, CardDef[]>();
-function pool(r: Rarity, set?: SetCode, mirror = false): CardDef[] {
-  const key = `${r}|${set ?? '*'}|${mirror}`;
+function pool(r: Rarity, scope?: Scope, mirror = false): CardDef[] {
+  const key = `${r}|${scopeKey(scope)}|${mirror}`;
   let p = POOLS.get(key);
   if (!p) {
-    p = ALL_CARDS.filter((c) => c.rarity === r && (c.variant === 'mirror') === mirror && !(c.kind === 'energy' && c.basic) && (!set || c.set === set));
+    p = ALL_CARDS.filter((c) => c.rarity === r && (c.variant === 'mirror') === mirror && !(c.kind === 'energy' && c.basic) && inScope(c, scope));
     POOLS.set(key, p);
   }
   return p;
@@ -464,15 +498,16 @@ function roll(table: [Rarity, number][]): Rarity {
   return table[table.length - 1][0];
 }
 
-/** roll a rarity; if the set has no card of that rarity, step down to the next one that exists */
-function rollCard(table: [Rarity, number][], b: Booster, set?: SetCode): CardDef {
+/** roll a rarity; if the pool has no card of that rarity, take the nearest lower one (or the nearest higher) */
+function rollCard(table: [Rarity, number][], b: Booster, scope?: Scope): CardDef {
   let r = roll(table);
   const order = Object.keys(RARITY_ORDER) as Rarity[];
-  while (!pool(r, set).length) {
-    const lower = order.filter((k) => RARITY_ORDER[k] < RARITY_ORDER[r] && pool(k, set).length);
-    r = lower.length ? lower[lower.length - 1] : 'C';
+  if (!pool(r, scope).length) {
+    const lower = order.filter((k) => RARITY_ORDER[k] < RARITY_ORDER[r] && pool(k, scope).length);
+    const higher = order.filter((k) => RARITY_ORDER[k] > RARITY_ORDER[r] && pool(k, scope).length);
+    r = lower.length ? lower[lower.length - 1] : higher[0];
   }
-  return pickWeighted(pool(r, set), b);
+  return pickWeighted(pool(r, scope), b);
 }
 
 export interface PackResult {
@@ -500,11 +535,13 @@ const GOD_TABLE: [Rarity, number][][] = [
 export function openPack(b: Booster = BOOSTERS[0]): PackResult {
   const god = Math.random() < 0.005 || (typeof location !== 'undefined' && location.search.includes('godpack'));
   const cards = (god ? GOD_TABLE : PACK_TABLE).map((t, i) => {
+    const scope = scopeOf(b);
     if (!god && i === 2 && Math.random() < MIRROR_CHANCE) {
       const r = roll([['C', 0.6], ['U', 0.9], ['R', 1]]);
-      return pickWeighted(pool(r, b.set, true), b);
+      const m = pool(r, scope, true);
+      if (m.length) return pickWeighted(m, b);
     }
-    return rollCard(t, b, b.set);
+    return rollCard(t, b, scope);
   });
   cards.sort((x, y) => RARITY_ORDER[x.rarity] - RARITY_ORDER[y.rarity]);
   return { cards, god };

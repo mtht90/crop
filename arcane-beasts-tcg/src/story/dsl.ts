@@ -1,5 +1,5 @@
 // Small builders so scripts read like a screenplay.
-import type { Beat, Pan, Slot, Style, Weather, FxName, MusicKey } from './types';
+import type { Beat, Pan, Slot, Style, Weather, FxName, MusicKey, Tone } from './types';
 
 export const bg = (key: string, pan: Pan = 'in', o: { fade?: number; tint?: string } = {}): Beat => ({ t: 'bg', key, pan, ...o });
 export const show = (id: string, at: Slot, mood?: string, enter: 'slide' | 'fade' | 'drop' | 'rise' = 'slide'): Beat => ({ t: 'show', id, at, mood, enter });
@@ -26,3 +26,7 @@ export const cg = (key: string | null, pan: Pan = 'in', caption?: string): Beat 
 export const cutin = (id: string, mood?: string, line?: string): Beat => ({ t: 'cutin', id, mood, line });
 /** location caption in the corner */
 export const place = (name: string, sub?: string): Beat => ({ t: 'place', name, sub });
+/** colour grade of the whole scene (flashbacks, cold dread, blood) */
+export const tone = (kind: Tone): Beat => ({ t: 'tone', kind });
+/** a card appears in the middle of the scene and waits for a tap */
+export const showCard = (name: string, caption?: string): Beat => ({ t: 'card', name, caption });

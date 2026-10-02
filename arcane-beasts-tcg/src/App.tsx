@@ -25,6 +25,7 @@ import { expand, RIVALS, deckById } from './engine/decks';
 import './screens/screens.css';
 import { ConfirmDialog } from './ui/Confirm';
 import { useBattle } from './battle/controller';
+import './styles/chrome.css';
 
 if (import.meta.env.DEV) Object.assign(window, { __stores: { useStore, useBattle } });
 

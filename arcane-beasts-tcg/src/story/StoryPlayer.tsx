@@ -9,7 +9,9 @@ import { artUrl } from '../lib/assets';
 import { foley, playMusic, sfx, stopMusic } from '../audio/audio';
 import { askConfirm } from '../ui/Confirm';
 import { Weather as WeatherLayer } from './Weather';
-import type { Beat, Cast, Pan, Slot, Style, Weather } from './types';
+import type { Beat, Cast, Pan, Slot, Style, Tone, Weather } from './types';
+import { byName } from '../engine/cards';
+import { CardFace } from '../ui/Card';
 import './story.css';
 
 interface CharState {
@@ -72,6 +74,12 @@ export function StoryPlayer({ beats: initial, cast, onDone, label, allowSkip = t
   const [wx, setWx] = useState<Weather>('none');
   const [bars, setBars] = useState(false);
   const [cg, setCg] = useState<CgState | null>(null);
+  const [tone, setTone] = useState<Tone>('none');
+  const [shown, setShown] = useState<{ id: string; caption?: string; nonce: number } | null>(null);
+  const [pulse, setPulse] = useState(0);
+  /** {name} in any line becomes the player's name */
+  const heroName = cast.hero?.name ?? '';
+  const fmt = useCallback((t: string) => t.replaceAll('{name}', heroName), [heroName]);
   const [cutin, setCutin] = useState<CutinState | null>(null);
   const [place, setPlace] = useState<PlaceState | null>(null);
   const placeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -82,7 +90,7 @@ export function StoryPlayer({ beats: initial, cast, onDone, label, allowSkip = t
   const [flash, setFlash] = useState<{ kind: string; nonce: number } | null>(null);
   const [shake, setShake] = useState(0);
   const [punch, setPunch] = useState(0);
-  const [veil, setVeil] = useState<{ color: 'black' | 'white'; on: boolean }>({ color: 'black', on: false });
+  const [veil, setVeil] = useState<{ color: 'black' | 'white'; on: boolean; slow?: boolean }>({ color: 'black', on: false });
   const [auto, setAuto] = useState(false);
   const [fast, setFast] = useState(false);
   const [logOpen, setLogOpen] = useState(false);
@@ -131,6 +139,25 @@ export function StoryPlayer({ beats: initial, cast, onDone, label, allowSkip = t
       case 'bars':
         setBars(b.on);
         return next(fast ? 0 : 500);
+      case 'tone':
+        setTone(b.kind);
+        return next(0);
+      case 'card': {
+        setSay(null);
+        let id = '';
+        try {
+          id = byName(b.name).id;
+        } catch {
+          return next(0);
+        }
+        setShown({ id, caption: b.caption, nonce: ++nonce.current });
+        foley.charge();
+        const t = setTimeout(() => {
+          foley.impact();
+          foley.sparkle();
+        }, 700);
+        return () => clearTimeout(t);
+      }
       case 'cg':
         setCg(b.key ? { key: b.key, pan: b.pan ?? 'in', caption: b.caption, nonce: ++nonce.current } : null);
         return next(fast ? 0 : 700);
@@ -162,10 +189,10 @@ export function StoryPlayer({ beats: initial, cast, onDone, label, allowSkip = t
         return next(b.ms);
       case 'fx':
         runFx(b.fx);
-        return next(b.fx === 'fadeBlack' || b.fx === 'fadeWhite' ? (fast ? 0 : 700) : b.fx === 'unfade' ? (fast ? 0 : 600) : fast ? 0 : 380);
+        return next(b.fx === 'fadeBlackSlow' || b.fx === 'fadeWhiteSlow' ? (fast ? 0 : 2600) : b.fx === 'fadeBlack' || b.fx === 'fadeWhite' ? (fast ? 0 : 700) : b.fx === 'unfade' ? (fast ? 0 : 600) : b.fx === 'pulse' ? (fast ? 0 : 900) : fast ? 0 : 380);
       case 'title': {
         setSay(null);
-        setCard({ main: b.main, sub: b.sub, kicker: b.kicker, nonce: ++nonce.current });
+        setCard({ main: fmt(b.main), sub: b.sub && fmt(b.sub), kicker: b.kicker, nonce: ++nonce.current });
         foley.chime(5);
         const t = setTimeout(() => setI((n) => n + 1), fast ? 300 : 3400);
         return () => clearTimeout(t);
@@ -179,7 +206,7 @@ export function StoryPlayer({ beats: initial, cast, onDone, label, allowSkip = t
         const id = b.who;
         if (id && b.mood) setChars((cs) => cs.map((c) => (c.id === id ? { ...c, mood: b.mood! } : c)));
         const c = id ? cast[id] : null;
-        const st: SayState = { who: id, name: b.as ?? c?.name ?? '', color: c?.color ?? '#cfd6ee', text: b.text, style: b.style ?? 'normal', nonce: ++nonce.current };
+        const st: SayState = { who: id, name: fmt(b.as ?? c?.name ?? ''), color: c?.color ?? '#cfd6ee', text: fmt(b.text), style: b.style ?? 'normal', nonce: ++nonce.current };
         setSay(st);
         setTyped(false);
         log.current.push({ name: st.name, text: st.text, color: st.color });
@@ -213,6 +240,15 @@ export function StoryPlayer({ beats: initial, cast, onDone, label, allowSkip = t
       case 'fadeWhite':
         setVeil({ color: 'white', on: true });
         break;
+      case 'fadeBlackSlow':
+        setVeil({ color: 'black', on: true, slow: true });
+        break;
+      case 'fadeWhiteSlow':
+        setVeil({ color: 'white', on: true, slow: true });
+        break;
+      case 'pulse':
+        setPulse((n) => n + 1);
+        break;
       case 'unfade':
         setVeil((v) => ({ ...v, on: false }));
         break;
@@ -228,6 +264,11 @@ export function StoryPlayer({ beats: initial, cast, onDone, label, allowSkip = t
     const b = beats[i];
     if (!b) return;
     if (b.t === 'title') return setI((n) => n + 1);
+    if (b.t === 'card') {
+      setShown(null);
+      foley.flip();
+      return setI((n) => n + 1);
+    }
     if (b.t === 'cutin') {
       setCutin(null);
       return setI((n) => n + 1);
@@ -270,7 +311,7 @@ export function StoryPlayer({ beats: initial, cast, onDone, label, allowSkip = t
     if (!pick) return;
     const o = pick.options[k];
     sfx('button', 0.6);
-    log.current.push({ name: 'アルト', text: `▶ ${o.label}`, color: '#8fd0ff' });
+    log.current.push({ name: heroName, text: `▶ ${fmt(o.label)}`, color: cast.hero?.color ?? '#8fd0ff' });
     setPick(null);
     setBeats((bs) => [...bs.slice(0, i + 1), ...o.then, ...bs.slice(i + 1)]);
     setI((n) => n + 1);
@@ -286,7 +327,7 @@ export function StoryPlayer({ beats: initial, cast, onDone, label, allowSkip = t
 
   return (
     <div className="story" onClick={advance} data-label={label}>
-      <motion.div key={shakeKey} className="story-world" animate={shake ? { x: [0, -10, 9, -7, 5, -3, 0], y: [0, 5, -6, 4, -3, 2, 0] } : undefined} transition={{ duration: 0.55 }}>
+      <motion.div key={shakeKey} className={`story-world tone-${tone}`} animate={shake ? { x: [0, -10, 9, -7, 5, -3, 0], y: [0, 5, -6, 4, -3, 2, 0] } : undefined} transition={{ duration: 0.55 }}>
         {/* background (cross-fades when the key changes) */}
         <AnimatePresence initial={false}>
           {bg && (
@@ -351,7 +392,8 @@ export function StoryPlayer({ beats: initial, cast, onDone, label, allowSkip = t
         </AnimatePresence>
         <div className="story-vignette" />
         <AnimatePresence>{flash && <motion.div key={flash.nonce} className={`story-flash ${flash.kind}`} initial={{ opacity: 0.9 }} animate={{ opacity: 0 }} transition={{ duration: 0.7, ease: 'easeOut' }} />}</AnimatePresence>
-        <div className={`story-veil ${veil.color} ${veil.on ? 'on' : ''}`} />
+        <div className={`story-veil ${veil.color} ${veil.on ? 'on' : ''} ${veil.slow ? 'slow' : ''}`} />
+        <AnimatePresence>{pulse > 0 && <motion.div key={`p${pulse}`} className="story-pulse" initial={{ opacity: 0 }} animate={{ opacity: [0, 0.85, 0.2, 0.7, 0] }} transition={{ duration: 1.6, times: [0, 0.12, 0.3, 0.45, 1] }} />}</AnimatePresence>
       </motion.div>
 
       {/* letterbox */}
@@ -420,6 +462,30 @@ export function StoryPlayer({ beats: initial, cast, onDone, label, allowSkip = t
         )}
       </AnimatePresence>
 
+      {/* a card held up to the light */}
+      <AnimatePresence>
+        {shown && (
+          <motion.div key={shown.nonce} className="story-showcard" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: { duration: 0.35 } }}>
+            <motion.div className="rays" initial={{ opacity: 0, scale: 0.6 }} animate={{ opacity: 1, scale: 1, rotate: 40 }} transition={{ duration: 6, ease: 'linear' }} />
+            <motion.div
+              className="sc-card"
+              initial={{ y: 80, rotateY: 180, scale: 0.6, opacity: 0 }}
+              animate={{ y: 0, rotateY: 0, scale: 1, opacity: 1 }}
+              transition={{ duration: 1.1, ease: [0.16, 1, 0.3, 1] }}
+            >
+              <motion.div animate={{ y: [0, -8, 0] }} transition={{ duration: 3.2, repeat: Infinity, ease: 'easeInOut', delay: 1.1 }}>
+                <CardFace cid={shown.id} />
+              </motion.div>
+            </motion.div>
+            {shown.caption && (
+              <motion.div className="cap" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1, duration: 0.6 }}>
+                {fmt(shown.caption)}
+              </motion.div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* text box */}
       <AnimatePresence>
         {say && !card && !pick && (
@@ -439,11 +505,11 @@ export function StoryPlayer({ beats: initial, cast, onDone, label, allowSkip = t
       <AnimatePresence>
         {pick && (
           <motion.div className="story-choice" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={(e) => e.stopPropagation()}>
-            {pick.prompt && <div className="q">{pick.prompt}</div>}
+            {pick.prompt && <div className="q">{fmt(pick.prompt)}</div>}
             {pick.options.map((o, k) => (
               <motion.button key={k} className="opt" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.12 * k + 0.1 }} onClick={() => choose(k)}>
                 <span className="num">{['I', 'II', 'III', 'IV'][k] ?? k + 1}</span>
-                <span>{o.label}</span>
+                <span>{fmt(o.label)}</span>
               </motion.button>
             ))}
           </motion.div>

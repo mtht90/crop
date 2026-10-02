@@ -8,7 +8,7 @@ page.on('console', (m) => m.type() === 'error' && console.log('console.error:', 
 await page.goto('http://127.0.0.1:5173/');
 await page.evaluate(() => localStorage.clear());
 await page.goto('http://127.0.0.1:5173/');
-await page.evaluate(() => { const st = window.__stores.useStore.getState(); st.chooseStarter('fire'); st.update((s) => { s.guideSeen = true; }); });
+await page.evaluate(() => { const st = window.__stores.useStore.getState(); st.chooseStarter('fire'); st.update((s) => { s.guideSeen = true; s.story.hero = { name: 'ユウ', look: 'konrad' }; }); });
 await page.evaluate(async (w) => {
   const st = window.__stores.useStore.getState();
   const m = await import('/src/story/index.ts');

@@ -5,9 +5,9 @@ import { CHAPTERS, PROLOGUE, type Chapter } from './index';
 
 export type ChapterState = 'cleared' | 'open' | 'locked';
 
-/** a chapter counts as cleared if its rival was beaten (also covers saves from before story mode) */
+/** a chapter counts as cleared once it has been won through the story (free battles do not count) */
 export function isCleared(save: Save, ch: Chapter): boolean {
-  return save.story.cleared.includes(ch.id) || save.beaten.includes(ch.rival);
+  return save.story.cleared.includes(ch.id);
 }
 
 export function chapterState(save: Save, i: number): ChapterState {
