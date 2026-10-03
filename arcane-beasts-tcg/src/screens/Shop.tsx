@@ -1194,6 +1194,11 @@ function TopCard({ card, u, first, faceDown, burstAt, onFlipImpact, onFlipped, o
   const star = isStar(card.rarity);
   const rank = RARITY_ORDER[card.rarity];
   const [up, setUp] = useState(!faceDown);
+  // Which face shows is decided here from the flip angle, not left to backface-visibility:
+  // iOS Safari lets the front show through the back of a card with layered effects.
+  const ry = useMotionValue(faceDown ? 180 : 0);
+  const frontVis = useTransform(ry, (a) => (Math.abs(((a % 360) + 360) % 360 - 180) >= 90 ? 'visible' : 'hidden'));
+  const backVis = useTransform(ry, (a) => (Math.abs(((a % 360) + 360) % 360 - 180) < 90 ? 'visible' : 'hidden'));
   const [hint, hideHint] = useIdleHint(`${card.id}${up}`, first || !up ? 1500 : 999999);
 
   useEffect(() => {
@@ -1261,7 +1266,7 @@ function TopCard({ card, u, first, faceDown, burstAt, onFlipImpact, onFlipped, o
       <motion.div
         ref={ref}
         className="sc top"
-        style={{ x, rotate, opacity, ['--rc' as string]: rc }}
+        style={{ x, rotate, opacity, rotateY: ry, ['--rc' as string]: rc }}
         initial={{ rotateY: faceDown ? 180 : 0, scale: 0.985 }}
         animate={controls}
         drag={up ? 'x' : false}
@@ -1275,14 +1280,14 @@ function TopCard({ card, u, first, faceDown, burstAt, onFlipImpact, onFlipped, o
         onTap={() => (!up ? flip() : fly(-1))}
       >
         {star && <motion.div className="halo" animate={{ scale: [1, 1.06, 1], opacity: up ? [0.35, 0.5, 0.35] : [0.28, 0.45, 0.28] }} transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }} />}
-        <div className="sc-face">
+        <motion.div className="sc-face" style={{ visibility: frontVis }}>
           <CardFace cid={card.id} interactive={up} />
           {(rank === 3 || card.variant === 'mirror' || (star && up)) && <div className="glare" />}
-        </div>
-        <div className="sc-back">
+        </motion.div>
+        <motion.div className="sc-back" style={{ visibility: backVis }}>
           <CardBack />
           {!up && <div className="edge-light" />}
-        </div>
+        </motion.div>
       </motion.div>
       <AnimatePresence>
         {hint && (
@@ -1454,7 +1459,7 @@ function MultiResults({ opened, cards, fresh, shards, burstAt, onClose, onAgain,
                 }
               }}
             >
-              <motion.div className="multi-flip" initial={false} animate={{ rotateY: down ? 180 : 0 }} transition={{ duration: 0.6, ease: EASE_IN_OUT }}>
+              <motion.div className={`multi-flip ${down ? 'down' : ''}`} initial={false} animate={{ rotateY: down ? 180 : 0 }} transition={{ duration: 0.6, ease: EASE_IN_OUT }}>
                 <div className="sc-face">
                   <CardFace cid={c.id} />
                   {(rank >= 3 || (star && open.has(i))) && <div className="glare" style={{ animationDelay: star ? '0.3s' : `${deal + 0.1}s` }} />}

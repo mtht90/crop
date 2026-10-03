@@ -748,3 +748,9 @@
 .po-pips i { width: calc(var(--u) * 0.8); height: calc(var(--u) * 0.8); border-radius: 50%; background: rgba(255, 255, 255, 0.25); transition: background 0.2s, transform 0.2s; }
 .po-pips i.done { background: rgba(233, 196, 106, 0.7); }
 .po-pips i.on { background: #fff; transform: scale(1.35); box-shadow: 0 0 8px #fff; }
+
+/* the face that is turned away is hidden outright at the middle of the flip (iOS Safari ignores backface-visibility on busy cards) */
+.multi-flip .sc-face { visibility: visible; transition: visibility 0s linear 0.3s; }
+.multi-flip .sc-back { visibility: hidden; transition: visibility 0s linear 0.3s; }
+.multi-flip.down .sc-face { visibility: hidden; }
+.multi-flip.down .sc-back { visibility: visible; }
