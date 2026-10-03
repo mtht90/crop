@@ -754,7 +754,7 @@
 .launch-pack { position: relative; width: 100%; aspect-ratio: 60 / 100; cursor: grab; touch-action: none; pointer-events: auto; animation: launch-bob 4.2s ease-in-out infinite; }
 .launch-pack:active { cursor: grabbing; }
 .launch-pack.gone { animation: none; }
-.launch-one { position: absolute; inset: 0; }
+.launch-one { position: absolute; inset: 0; transform-origin: 50% 60%; }
 .launch-one > .bp { position: absolute; inset: 0; }
 /* the streak of light behind a flying pack (it trails along the path because the pack faces its way) */
 .launch-trail { position: absolute; left: 40%; right: 40%; top: 75%; height: 120%; transform-origin: 50% 0; border-radius: 50%; background: linear-gradient(180deg, rgba(255, 252, 235, 0.8), rgba(190, 220, 255, 0.3) 35%, transparent); filter: blur(4px); mix-blend-mode: screen; pointer-events: none; z-index: -1; }

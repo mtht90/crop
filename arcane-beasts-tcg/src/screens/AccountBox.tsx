@@ -27,6 +27,19 @@ export function markAskedToSignUp() {
   }
 }
 
+/**
+ * what this device calls its unlock, so the button says "Face ID" rather than
+ * the word "passkey" (it is the same thing: iPhone keeps it in iCloud Keychain)
+ */
+function unlockName(): string {
+  const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+  if (/iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && 'ontouchend' in document)) return 'Face ID';
+  if (/Android/.test(ua)) return '指紋・顔認証';
+  if (/Macintosh/.test(ua)) return 'Touch ID';
+  if (/Windows/.test(ua)) return 'Windows Hello';
+  return '顔・指紋認証';
+}
+
 const passkeysUsable = () => typeof window !== 'undefined' && 'PublicKeyCredential' in window && window.isSecureContext;
 
 /** a key with a person: the usual passkey mark */
@@ -54,8 +67,9 @@ function GoogleButton({ text }: { text: 'signup_with' | 'signin_with' }) {
       alive = false;
     };
   }, [clientId, text]);
-  if (!clientId) return null;
-  return failed ? <p className="ac-note err">Googleのボタンを読み込めませんでした</p> : <div ref={box} className="ac-google" />;
+  // Google's script could not load (blocked or offline): just leave the button out
+  if (!clientId || failed) return null;
+  return <div ref={box} className="ac-google" />;
 }
 
 /** the sign-in card itself */
@@ -63,6 +77,7 @@ export function AccountBox() {
   const st = useOnline();
   const reg = isRegistered(st.profile);
   const pk = passkeysUsable();
+  const unlock = unlockName();
   const open = st.status === 'open' && !!st.profile;
 
   // challenges ready before the tap (Safari needs the passkey call to start inside the tap)
@@ -87,13 +102,13 @@ export function AccountBox() {
           <span className="ac-check">✓</span>
           <div>
             <b>登録済み</b>
-            <small>{[st.profile!.google && `Google（${st.profile!.google}）`, st.profile!.passkeys ? `パスキー ${st.profile!.passkeys}個` : null].filter(Boolean).join('・')}</small>
+            <small>{[st.profile!.google && `Google（${st.profile!.google}）`, st.profile!.passkeys ? `${unlock}（パスキー）${st.profile!.passkeys}台` : null].filter(Boolean).join('・')}</small>
           </div>
         </div>
         {pk && (
           <button className="ac-btn outline" onClick={() => void online.passkey('register')}>
             <PasskeyIcon />
-            この端末のパスキーを追加
+            この端末でも{unlock}でログインできるようにする
           </button>
         )}
         {!st.profile!.google && <GoogleButton text="signup_with" />}
@@ -106,11 +121,11 @@ export function AccountBox() {
       {pk && (
         <button className="ac-btn dark" onClick={() => void online.passkey('register')}>
           <PasskeyIcon />
-          パスキーで新規登録
+          {unlock}で新規登録
         </button>
       )}
       <GoogleButton text="signup_with" />
-      {pk && <p className="ac-note">パスキー: 顔・指紋・画面ロックで登録。パスワードは不要です。</p>}
+      {pk && <p className="ac-note">パスワードもメールアドレスも不要。{unlock}で本人確認するだけで登録できます（パスキー）。</p>}
 
       <div className="ac-or">
         <span>すでにアカウントをお持ちの方</span>
@@ -118,7 +133,7 @@ export function AccountBox() {
       {pk && (
         <button className="ac-btn outline" onClick={() => void online.passkey('login')}>
           <PasskeyIcon />
-          パスキーでログイン
+          {unlock}でログイン
         </button>
       )}
       <GoogleButton text="signin_with" />

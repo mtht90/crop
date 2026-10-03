@@ -570,29 +570,26 @@ const LAUNCH_HOLD = 1.5;
 const LAUNCH_GAP = 0.11;
 const LAUNCH_FLIGHT = 0.62;
 
-/** a thrown arc: straight up at first, bending over to the side as it climbs */
-function flightPath(dir: number, w: number, h: number, seed: number) {
-  const spanX = (0.34 + seed * 0.12) * w * dir;
-  const spanY = (0.4 + (1 - seed) * 0.08) * h;
+/** thrown into the sky ahead: the pack tips over backwards and shrinks into the distance */
+function flightPath(w: number, h: number, seed: number) {
+  const drift = (seed - 0.5) * 0.08 * w; // the front pack goes straight; the rest wander a little
+  const spanY = (0.24 + seed * 0.05) * h;
   const N = 9;
   const x: number[] = [];
   const y: number[] = [];
-  const rotate: number[] = [];
+  const rotateX: number[] = [];
   const scale: number[] = [];
   const opacity: number[] = [];
   for (let i = 0; i <= N; i++) {
     const t = i / N;
-    const s = Math.pow(t, 1.6); // shoots off: slow out of the hand, fast into the sky
-    x.push(spanX * Math.pow(s, 1.7));
-    y.push(-spanY * (1 - Math.pow(1 - s, 2.2)));
-    // face along the path
-    const dx = spanX * 1.7 * Math.pow(Math.max(s, 0.001), 0.7);
-    const dy = -spanY * 2.2 * Math.pow(1 - s, 1.2);
-    rotate.push((Math.atan2(dx, -dy) * 180) / Math.PI);
-    scale.push(1 - 0.95 * Math.pow(s, 0.75));
+    const s = Math.pow(t, 1.3); // slow out of the hand, fast into the sky
+    x.push(drift * s);
+    y.push(-spanY * (1 - Math.pow(1 - s, 1.8)));
+    rotateX.push(62 * Math.pow(s, 0.6)); // the top falls away from you
+    scale.push(1 - 0.95 * Math.pow(s, 0.7));
     opacity.push(t < 0.85 ? 1 : 1 - (t - 0.85) / 0.15);
   }
-  return { x, y, rotate, scale, opacity };
+  return { x, y, rotateX, scale, opacity };
 }
 
 function PackLaunch({ booster, packs, u, onLaunch, onGone }: { booster: Booster; packs: number; u: number; onLaunch: (points: { x: number; y: number; delay: number }[]) => void; onGone: () => void }) {
@@ -600,6 +597,8 @@ function PackLaunch({ booster, packs, u, onLaunch, onGone }: { booster: Booster;
   const y = useMotionValue(0);
   const box = useRef<HTMLDivElement>(null);
   const [gone, setGone] = useState(false);
+  /** how far the pack had been pulled up when it was let go (the flights start from there) */
+  const [from, setFrom] = useState(0);
   const [hint, hideHint] = useIdleHint('launch', 900);
   const lift = useTransform(y, [-u * 14, 0], [1, 0]);
   const tilt = useTransform(y, [-u * 14, 0, u * 4], [-6, 0, 2]);
@@ -608,14 +607,23 @@ function PackLaunch({ booster, packs, u, onLaunch, onGone }: { booster: Booster;
   const W = typeof window !== 'undefined' ? window.innerWidth : 1000;
   const H = typeof window !== 'undefined' ? window.innerHeight : 600;
   /** one flight per pack, by launch order (0 = the front pack, first to go) */
-  const paths = useMemo(() => Array.from({ length: n }, (_, o) => flightPath(-1, W, H, o === 0 ? 0.5 : Math.random())), [n, W, H]);
+  const paths = useMemo(() => Array.from({ length: n }, (_, o) => flightPath(W, H, o === 0 ? 0.5 : Math.random())), [n, W, H]);
   const restOf = (o: number) => ({ x: o * u * 0.32, y: o * u * 0.26, rotate: n > 1 ? (o % 2 ? 1.2 : -1.2) * Math.min(1, o) : 0, scale: 1, opacity: 1 });
 
   const launch = () => {
     if (gone) return;
     hideHint();
-    setGone(true);
     const r = box.current?.getBoundingClientRect();
+    // the holder must not spring back down under the packs: freeze it and hand its offset to the flights
+    const pulled = y.get();
+    setFrom(pulled);
+    setGone(true);
+    const still = () => {
+      y.stop();
+      y.jump(0);
+    };
+    still();
+    requestAnimationFrame(still);
     if (r) {
       // where each pack ends as a point of light; the 3D star carries on from there
       const cx = r.left + r.width / 2;
@@ -667,11 +675,11 @@ function PackLaunch({ booster, packs, u, onLaunch, onGone }: { booster: Booster;
               <motion.div
                 key={k}
                 className="launch-one"
-                style={{ zIndex: k }}
+                style={{ zIndex: k, transformPerspective: 1100 }}
                 initial={false}
                 animate={
                   gone
-                    ? { x: path.x.map((v) => v + rest.x), y: path.y.map((v) => v + rest.y), rotate: path.rotate, scale: path.scale, opacity: path.opacity, filter: ['brightness(1)', 'brightness(1.6)', 'brightness(2.6)'] }
+                    ? { x: path.x.map((v) => v + rest.x), y: path.y.map((v) => v + rest.y + from), rotate: 0, rotateX: path.rotateX, scale: path.scale, opacity: path.opacity, filter: ['brightness(1)', 'brightness(1.6)', 'brightness(2.6)'] }
                     : rest
                 }
                 transition={gone ? { duration: LAUNCH_FLIGHT, delay: order * LAUNCH_GAP, ease: 'linear' } : { duration: 0.3 }}

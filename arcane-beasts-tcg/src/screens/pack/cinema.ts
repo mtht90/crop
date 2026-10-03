@@ -40,8 +40,8 @@ const L_IMPACT = 2.55;
 const L_DONE = 4.45;
 export const T_IMPACT = T0 + L_IMPACT;
 export const T_DONE = T0 + L_DONE;
-/** where the shower radiates from: up and to the left, where the launched packs went */
-const RADIANT = new THREE.Vector3(-250, 300, -420);
+/** where the shower radiates from: high up ahead, where the launched packs went */
+const RADIANT = new THREE.Vector3(-90, 320, -440);
 const MOON_DIR = new THREE.Vector3(0.5, 0.3, -0.81).normalize();
 
 type Beat = 'twinkle' | 'enter' | 'dive' | 'impact' | 'orb' | 'morph';
@@ -794,7 +794,7 @@ export class MeteorCinema {
       this.meteors.push({ ribbon, head, glow, path: new THREE.CatmullRomCurve3(path), t0, t1, main, span: main ? 0.55 : many ? 0.22 : 0.35 });
     };
     mk(
-      [new THREE.Vector3(-230, 190, -330), new THREE.Vector3(-120, 130, -260), new THREE.Vector3(-40, 60, -170), new THREE.Vector3(-6, 14, -75), this.IMPACT.clone()],
+      [new THREE.Vector3(-30, 205, -380), new THREE.Vector3(-95, 140, -290), new THREE.Vector3(-55, 62, -170), new THREE.Vector3(-6, 14, -75), this.IMPACT.clone()],
       1.0,
       L_IMPACT,
       true,
@@ -1025,7 +1025,7 @@ export class MeteorCinema {
     this.rise = { screen: main, from: null, t0: t0 + main.delay, base: t0 };
     const rnd = (a: number, b: number) => a + Math.random() * (b - a);
     for (const p of rest.slice(0, 9)) {
-      const to = RADIANT.clone().add(new THREE.Vector3(rnd(-40, 200), rnd(-120, 20), rnd(-30, 50)));
+      const to = RADIANT.clone().add(new THREE.Vector3(rnd(-110, 150), rnd(-120, 20), rnd(-30, 50)));
       this.riseExtra.push({ to, screen: p, from: null, delay: p.delay, core: this.riseSprite(0.55, false), halo: this.riseSprite(0.3, true) });
     }
     this.offset += this.hold - this.time();
@@ -1207,7 +1207,7 @@ export class MeteorCinema {
       const from = this.rise.from;
       const climb = easeOutCubic(smooth(t0, t0 + 1.7, t));
       // an arc: up first, then out toward its place in the sky
-      // a thrown arc lying on its side: straight up first, then over to the left
+      // up and away into the sky ahead
       const ctl = new THREE.Vector3(from.x + (sky.x - from.x) * 0.12, sky.y * 0.92, from.z * 0.3 + sky.z * 0.7);
       const a = from.clone().lerp(ctl, climb);
       const pos = a.lerp(ctl.clone().lerp(sky, climb), climb);

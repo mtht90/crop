@@ -354,10 +354,10 @@ class OnlineClient {
       useOnline.setState({
         error:
           name === 'NotAllowedError' || name === 'AbortError'
-            ? 'パスキーの操作がキャンセルされました'
+            ? '登録・ログインがキャンセルされました'
             : name === 'InvalidStateError'
-              ? 'この端末のパスキーはすでに登録されています'
-              : 'この端末ではパスキーを使えませんでした',
+              ? 'この端末はすでに登録されています。「ログイン」の方を押してください'
+              : 'この端末では顔・指紋認証での登録が使えませんでした',
       });
     } finally {
       // a used challenge is gone: get the next one ready
