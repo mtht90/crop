@@ -365,7 +365,7 @@ interface OpeningProps extends Omit<OpeningState, 'key'> {
 
 function Opening({ booster, cards, god, fresh, shards, packs, onClose, onAgain }: OpeningProps) {
   const u = useUnit();
-  const [phase, setPhase] = useState<Phase>(packs > 1 ? 'cinema' : 'pick');
+  const [phase, setPhase] = useState<Phase>('pick');
   const omen = useMemo(() => makeOmen(cards, god), [cards, god]);
   const [aura, setAura] = useState<AuraState>({ tier: omen.shown, visible: false, hot: false });
   const packSlot = useRef<HTMLDivElement>(null);
@@ -392,6 +392,10 @@ function Opening({ booster, cards, god, fresh, shards, packs, onClose, onAgain }
   }, []);
 
   const top = cards[idx];
+  /** every pack has the same number of cards; the reveal goes pack by pack */
+  const perPack = Math.max(1, Math.round(cards.length / packs));
+  const packNo = Math.floor(idx / perPack) + 1;
+  const finish = () => setPhase(packs > 1 ? 'multi' : 'results');
   const awaitingFlip = phase === 'reveal' && !!top && isStar(top.rarity) && !revealed.has(idx);
   const dim = phase === 'reveal' ? (awaitingFlip ? 0.45 : 0.15) : phase === 'results' ? 0.1 : 0;
 
@@ -458,11 +462,11 @@ function Opening({ booster, cards, god, fresh, shards, packs, onClose, onAgain }
           </div>
         )}
 
-        {phase === 'tear' && <TearStage booster={booster} god={god} u={u} cards={cards} omen={omen} packs={packs} onAura={setAura} burstAt={burstAt} onDone={() => setPhase(packs > 1 ? 'multi' : 'reveal')} />}
+        {phase === 'tear' && <TearStage booster={booster} god={god} u={u} cards={cards} omen={omen} packs={packs} onAura={setAura} burstAt={burstAt} onDone={() => setPhase('reveal')} />}
 
-        {phase === 'multi' && <TornPile booster={booster} u={u} n={Math.min(packs, 10)} fall={false} />}
+        {(phase === 'multi' || (phase === 'reveal' && packs > 1)) && <TornPile booster={booster} u={u} n={Math.min(packs, 10)} fall={false} />}
         {phase === 'multi' && (
-          <MultiResults cards={cards} fresh={fresh} shards={shards} burstAt={burstAt} onClose={onClose} onAgain={onAgain} canAgain={coins >= priceOf(booster) * packs} price={priceOf(booster) * packs} u={u} />
+          <MultiResults opened={revealed} cards={cards} fresh={fresh} shards={shards} burstAt={burstAt} onClose={onClose} onAgain={onAgain} canAgain={coins >= priceOf(booster) * packs} price={priceOf(booster) * packs} u={u} />
         )}
 
         {phase === 'reveal' && top && (
@@ -497,19 +501,35 @@ function Opening({ booster, cards, god, fresh, shards, packs, onClose, onAgain }
                 onFlipped={() => setRevealed((s) => new Set(s).add(idx))}
                 onGone={() => {
                   setFx(null);
-                  if (idx + 1 >= cards.length) setPhase('results');
+                  if (idx + 1 >= cards.length) finish();
                   else setIdx(idx + 1);
                 }}
               />
             </div>
+            {packs > 1 && (
+              <div className="po-packno">
+                <AnimatePresence mode="wait">
+                  <motion.div key={packNo} initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.35 }}>
+                    <small>PACK</small>
+                    <b>{packNo}</b>
+                    <span>/ {packs}</span>
+                  </motion.div>
+                </AnimatePresence>
+                <div className="po-pips">
+                  {Array.from({ length: perPack }, (_, k) => (
+                    <i key={k} className={k < idx - (packNo - 1) * perPack ? 'done' : k === idx - (packNo - 1) * perPack ? 'on' : ''} />
+                  ))}
+                </div>
+              </div>
+            )}
             <button
               className="textbtn po-skip"
               onClick={() => {
                 foley.shuffle();
-                setPhase('results');
+                finish();
               }}
             >
-              スキップ
+              {packs > 1 ? '残りをスキップして一覧へ' : 'スキップ'}
             </button>
           </>
         )}
@@ -1318,6 +1338,8 @@ function TornPile({ booster, u, n, fall }: { booster: Booster; u: number; n: num
 // 10連 results: every card at once, rarest last; ☆ / ♛ wait face down
 // ---------------------------------------------------------------------------
 interface MultiProps {
+  /** cards already turned over one by one before the list */
+  opened?: Set<number>;
   cards: CardDef[];
   fresh: Set<string>;
   shards: Set<number>;
@@ -1329,7 +1351,7 @@ interface MultiProps {
   u: number;
 }
 
-function MultiResults({ cards, fresh, shards, burstAt, onClose, onAgain, canAgain, price, u }: MultiProps) {
+function MultiResults({ opened, cards, fresh, shards, burstAt, onClose, onAgain, canAgain, price, u }: MultiProps) {
   // keep each card's original index (shard flags refer to it), sort rarest last
   const items = useMemo(
     () =>
@@ -1339,7 +1361,7 @@ function MultiResults({ cards, fresh, shards, burstAt, onClose, onAgain, canAgai
     [cards],
   );
   const hidden = items.filter((x) => isStar(x.c.rarity)).map((x) => x.i);
-  const [open, setOpen] = useState<Set<number>>(new Set());
+  const [open, setOpen] = useState<Set<number>>(() => new Set(opened ?? []));
   const [onlyNew, setOnlyNew] = useState(false);
   const newCount = items.filter((x) => fresh.has(x.c.id)).length;
   const [zoom, setZoom] = useState<string | null>(null);

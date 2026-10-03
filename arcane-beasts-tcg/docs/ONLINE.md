@@ -69,6 +69,16 @@ set PUBLIC_URL=https://arcane.example.com
 npm run server
 ```
 
+## Render（無料のクラウド）で公開する
+
+PCをつけっぱなしにしたくないときは、Render の無料枠に置けます。リポジトリの `render.yaml` に設定が入っています。
+
+1. このリポジトリを GitHub に置く（ブランチは `main`）
+2. Render で **New → Blueprint** → このリポジトリを選び、**Apply**
+3. 5分ほどで `https://（サービス名）.onrender.com` が開く（`main` に push するたびに自動で更新）
+4. 無料枠は15分アクセスがないと眠るので、UptimeRobot などで `https://（サービス名）.onrender.com/healthz` を5分おきに見に行く
+5. ランクなどの保存先 `data/` は、Render の無料枠では再起動で消えます（カードやコインは各端末に保存されているので消えません）
+
 ## 設定（環境変数）
 
 | 名前 | 既定値 | 内容 |

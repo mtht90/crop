@@ -1,13 +1,14 @@
 // ============================================================================
 // 流星降臨 — the pack-opening cinematic, rendered live with three.js.
 //
-//   0.0s  night sky over a mountain lake; the camera slowly tilts up
-//   1.0s  a meteor shower: one meteor per card    ← omen: each meteor's colour
-//   1.95s the main meteor turns and dives toward the viewer
-//   2.55s impact on the lake: flash, shock ring, sparks, camera shake
-//   2.65s a ball of light rises and hovers where the pack will be
-//   3.55s the light stretches into the silhouette of a booster pack
-//   4.45s done → the real (DOM) pack materialises in the same place
+//   0.0s  a still night: snow mountains and pines mirrored in a lake, a drifting
+//         sky of clouds and Milky Way; the camera rises slowly from the water
+//   3.5s  a meteor shower: one meteor per card    ← omen: each meteor's colour
+//   5.45s the main meteor turns and dives toward the viewer
+//   6.05s impact on the lake: flash, shock ring, sparks, camera shake
+//   6.15s a ball of light rises and hovers where the pack will be
+//   7.05s the light stretches into the silhouette of a booster pack
+//   7.95s done → the real (DOM) pack materialises in the same place
 //
 // Afterwards the scene keeps running quietly behind the pack and draws the
 // pack's aura (the omen colour, which can climb — 昇格 — before opening).
@@ -32,8 +33,14 @@ export type OmenTier = 0 | 1 | 2 | 3;
 
 export const OMEN_COLORS: Record<OmenTier, string> = { 0: '#cfe0ff', 1: '#4fa8ff', 2: '#ffc245', 3: '#ff79d6' };
 
-export const T_IMPACT = 2.55;
-export const T_DONE = 4.45;
+/** the quiet opening before the meteors; the rest of the timeline is written relative to it */
+const T0 = 3.5;
+/** impact and end of the sequence, relative to the first meteor */
+const L_IMPACT = 2.55;
+const L_DONE = 4.45;
+export const T_IMPACT = T0 + L_IMPACT;
+export const T_DONE = T0 + L_DONE;
+const MOON_DIR = new THREE.Vector3(0.5, 0.3, -0.81).normalize();
 
 type Beat = 'enter' | 'dive' | 'impact' | 'orb' | 'morph';
 
@@ -83,28 +90,56 @@ varying vec3 vDir;
 void main(){ vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
 `;
 const SKY_FRAG = /* glsl */ `
-uniform float uTime; uniform vec3 uTint; uniform float uTintAmt; uniform float uGlowAmt; uniform vec3 uGlowDir; uniform vec3 uMoonDir; uniform float uDawn; uniform vec3 uSunDir;
+uniform float uTime; uniform vec3 uTint; uniform float uTintAmt; uniform float uGlowAmt; uniform vec3 uGlowDir; uniform vec3 uMoonDir; uniform float uDawn; uniform vec3 uSunDir; uniform float uLite;
 varying vec3 vDir;
 ${NOISE}
-vec3 skyCol(vec3 d){
+
+// drifting clouds on a plane overhead; the edge facing the moon catches its light
+vec4 clouds(vec3 d, float scale, float speed, float seed, float detail){
+  float y = max(d.y, 0.0);
+  vec2 p = d.xz / (y + 0.14) * scale + vec2(uTime * speed, seed);
+  vec2 q = vec2(0.0);
+  if (detail > 0.5) q = vec2(fbm(vec3(p * 0.7, 1.7)), fbm(vec3(p * 0.7 + 5.2, 3.1))) - 0.5;
+  vec2 pp = p + q * 1.6;
+  float n = fbm(vec3(pp, uTime * 0.015 + seed));
+  float dens = mix(smoothstep(0.5, 0.82, n), smoothstep(0.58, 0.615, n), 0.3);
+  vec2 md = normalize(uMoonDir.xz + vec2(0.0001)) * 0.16;
+  float n2 = fbm(vec3(pp + md, uTime * 0.015 + seed));
+  float rim = clamp((n - n2) * 6.0, 0.0, 1.0) * dens;
+  float mdot = max(dot(d, uMoonDir), 0.0);
+  vec3 body = mix(vec3(0.015, 0.03, 0.11), vec3(0.07, 0.10, 0.26), n) + vec3(0.07, 0.09, 0.2) * pow(mdot, 4.0);
+  vec3 lit = vec3(0.55, 0.70, 1.0) * (0.12 + 0.75 * pow(mdot, 3.0));
+  float fade = smoothstep(0.02, 0.2, d.y) * (1.0 - smoothstep(0.75, 1.0, d.y) * 0.5);
+  return vec4(body + lit * rim, dens * fade);
+}
+
+vec3 skyCol(vec3 d, float detail){
   float h = d.y;
-  vec3 zenith = vec3(0.004, 0.007, 0.028);
-  vec3 mid = vec3(0.016, 0.026, 0.08);
-  vec3 horizon = vec3(0.07, 0.06, 0.12);
-  vec3 col = mix(horizon, mid, smoothstep(0.0, 0.2, h));
-  col = mix(col, zenith, smoothstep(0.2, 0.85, h));
-  // milky way: a soft band along a tilted great circle
-  vec3 bandN = normalize(vec3(0.42, 0.18, 1.0));
-  float band = exp(-pow(dot(d, bandN) * 4.2, 2.0));
-  float n = fbm(d * 3.2 + vec3(0.0, uTime * 0.004, 0.0));
-  float n2 = fbm(d * 11.0);
-  col += band * (vec3(0.12, 0.09, 0.2) * n + vec3(0.05, 0.1, 0.15) * n2 * 0.7) * smoothstep(0.0, 0.35, h);
-  col += band * vec3(0.015, 0.015, 0.025) * smoothstep(0.55, 0.8, n2) * 4.0;
-  // drifting nebulae
-  col += vec3(0.07, 0.03, 0.12) * smoothstep(0.52, 0.86, fbm(d * 2.1 + vec3(3.1, 0.0, 1.7))) * 0.8;
-  col += vec3(0.015, 0.045, 0.07) * smoothstep(0.55, 0.9, fbm(d * 2.7 + 7.0)) * 0.7;
-  // cold glow above the ridges
-  col += vec3(0.10, 0.10, 0.18) * exp(-max(h, 0.0) * 14.0) * 0.35;
+  vec3 zenith = vec3(0.004, 0.010, 0.070);
+  vec3 mid = vec3(0.014, 0.050, 0.210);
+  vec3 low = vec3(0.050, 0.130, 0.380);
+  vec3 horizon = vec3(0.230, 0.230, 0.470);
+  vec3 col = mix(horizon, low, smoothstep(0.0, 0.07, h));
+  col = mix(col, mid, smoothstep(0.05, 0.3, h));
+  col = mix(col, zenith, smoothstep(0.25, 0.95, h));
+  // a warm glow low in the distance
+  col += vec3(0.50, 0.20, 0.30) * exp(-max(h, 0.0) * 22.0) * smoothstep(0.1, -0.9, d.z) * 0.14;
+  // the milky way: a wide band with a bright core and dark dust lanes
+  vec3 bandN = normalize(vec3(0.7, 0.8, 0.6));
+  float bd = dot(d, bandN);
+  float band = exp(-bd * bd * 12.0);
+  float core = exp(-bd * bd * 60.0);
+  float dust = fbm(d * 6.5 + 1.3);
+  float cl = fbm(d * 2.6 + vec3(0.0, uTime * 0.003, 0.0));
+  float lane = smoothstep(0.40, 0.64, dust);
+  float up = smoothstep(0.02, 0.3, h);
+  float moonMask = 1.0 - 0.8 * smoothstep(0.6, 0.97, dot(d, uMoonDir));
+  vec3 mw = mix(vec3(0.18, 0.28, 0.66), vec3(0.72, 0.48, 0.80), smoothstep(0.3, 0.85, cl));
+  col += mw * band * (0.3 + 0.8 * cl) * (1.0 - 0.7 * lane) * 0.8 * up * moonMask;
+  col += vec3(0.65, 0.75, 1.0) * core * (0.3 + cl) * (1.0 - lane) * 0.2 * up * moonMask;
+  // faint nebula tints
+  col += vec3(0.08, 0.03, 0.16) * smoothstep(0.52, 0.86, fbm(d * 2.1 + vec3(3.1, 0.0, 1.7))) * 0.7;
+  col += vec3(0.01, 0.05, 0.09) * smoothstep(0.55, 0.9, fbm(d * 2.7 + 7.0)) * 0.7;
   // the omen colour washes over the sky while the meteors are out
   col += uTint * uTintAmt * (0.3 + 0.7 * smoothstep(0.0, 0.5, h)) * 0.12;
   // light of the falling star / the orb near the horizon
@@ -118,28 +153,48 @@ vec3 skyCol(vec3 d){
     dawn += vec3(0.6, 0.3, 0.16) * exp(-max(h, 0.0) * 30.0) * 0.15;
     col = mix(col, dawn, uDawn);
   }
-  // moonlight halo
-  float mdot = max(dot(d, uMoonDir), 0.0);
-  col += vec3(0.55, 0.62, 0.85) * (pow(mdot, 60.0) * 0.35 + pow(mdot, 8.0) * 0.05) * (1.0 - uDawn);
+  // the moon: a bright disc with a few seas, a halo and a thin ring
+  float mdot = dot(d, uMoonDir);
+  float ang = acos(clamp(mdot, -1.0, 1.0));
+  if (ang < 0.05 && uDawn < 0.99) {
+    vec3 lp = (d - uMoonDir * mdot) / 0.036;
+    float sea = smoothstep(0.45, 0.7, fbm(lp * 2.2 + 3.0));
+    vec3 disc = mix(vec3(1.0, 0.98, 0.9), vec3(0.74, 0.8, 0.92), sea * 0.55) * (0.82 + 0.18 * smoothstep(-1.0, 1.0, lp.x));
+    col = mix(col, disc * 1.05, smoothstep(0.038, 0.034, ang) * (1.0 - uDawn));
+  }
+  float md = max(mdot, 0.0);
+  col += vec3(0.55, 0.64, 0.95) * (pow(md, 140.0) * 0.4 + pow(md, 22.0) * 0.05 + pow(md, 3.0) * 0.008) * (1.0 - uDawn);
+  col += vec3(0.5, 0.6, 1.0) * exp(-pow((ang - 0.1) * 42.0, 2.0)) * 0.07 * (1.0 - uDawn);
+  // clouds drift in front of the moon
+  if (uDawn < 0.99) {
+    vec4 c1 = clouds(d, 2.4, 0.010, 0.0, detail);
+    col = mix(col, c1.rgb, c1.a * 0.72 * (1.0 - uDawn));
+    if (detail > 0.5 && uLite < 0.5) {
+      vec4 c2 = clouds(d, 4.2, 0.018, 9.0, 1.0);
+      col = mix(col, c2.rgb * 0.8, c2.a * 0.5 * (1.0 - uDawn));
+    }
+  }
   return col;
 }
 void main(){
   vec3 d = normalize(vDir);
-  if (d.y >= 0.0) { gl_FragColor = vec4(skyCol(d), 1.0); return; }
+  if (d.y >= 0.0) { gl_FragColor = vec4(skyCol(d, 1.0), 1.0); return; }
   // still lake: the sky mirrored and broken up by slow ripples, darker toward the viewer
   float depth = -d.y;
   float k = 1.0 / max(depth, 0.015);
   float rip = noise(vec3(d.x * k * 0.9, d.z * k * 0.12, uTime * 0.45)) - 0.5;
-  vec3 r = normalize(vec3(d.x + rip * 0.035, max(0.0, depth + rip * 0.01), d.z));
-  vec3 col = skyCol(r) * 0.55;
-  col = mix(col, mix(vec3(0.003, 0.005, 0.013), vec3(0.02, 0.012, 0.018), uDawn), smoothstep(0.03, 0.4, depth));
+  float rip2 = noise(vec3(d.x * k * 4.0, d.z * k * 0.5, uTime * 0.8)) - 0.5;
+  vec3 r = normalize(vec3(d.x + rip * 0.035 + rip2 * 0.012, max(0.0, depth + rip * 0.01), d.z));
+  vec3 col = skyCol(r, 0.0) * 0.62;
+  col = mix(col, mix(vec3(0.006, 0.02, 0.06), vec3(0.02, 0.012, 0.018), uDawn), smoothstep(0.03, 0.45, depth) * 0.9);
   // the sun's path on the water
   float saz = d.x / -d.z - uSunDir.x / -uSunDir.z;
   col += vec3(1.0, 0.62, 0.3) * exp(-abs(saz + rip * 0.1) * 16.0) * smoothstep(0.5, 0.0, depth) * (0.4 + 0.9 * max(rip, 0.0)) * 0.22 * uDawn;
-  // moon path on the water
+  // moon path on the water: broken into little glints
   float az = d.x / -d.z - uMoonDir.x / -uMoonDir.z;
-  float moonPath = exp(-abs(az + rip * 0.08) * 28.0) * smoothstep(0.45, 0.0, depth) * (0.45 + 0.9 * max(rip, 0.0));
-  col += vec3(0.5, 0.58, 0.8) * moonPath * 0.35;
+  float moonPath = exp(-abs(az + rip * 0.08) * 24.0) * smoothstep(0.5, 0.0, depth);
+  float glint = smoothstep(0.62, 0.9, noise(vec3(d.x * k * 13.0, d.z * k * 1.6, uTime * 1.2)));
+  col += vec3(0.55, 0.65, 0.95) * moonPath * (0.28 + 1.1 * glint) * 0.5 * (1.0 - uDawn);
   // shimmering reflection of the glow on the water
   float streak = exp(-abs(d.x - uGlowDir.x * 0.9) * 22.0) * smoothstep(0.35, 0.0, depth) * (0.6 + 0.4 * rip);
   col += uTint * uGlowAmt * streak * 0.5;
@@ -171,19 +226,104 @@ void main(){
 }
 `;
 
+// terrain wraps the viewer in a cylinder; the azimuth (0 = straight ahead) drives every profile
+const TERRAIN_VERT = /* glsl */ `
+varying vec2 vUv; varying float vAz;
+void main(){ vUv = uv; vAz = atan(position.x, -position.z); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
+`;
+
+// snow mountains: sharp ridged peaks, snow caps, moonlit faces and a soft haze at the foot
 const RIDGE_FRAG = /* glsl */ `
-uniform float uSeed; uniform vec3 uColor; uniform float uHeight; uniform float uHaze;
-varying vec2 vUv;
+uniform float uSeed; uniform float uScale; uniform vec3 uColor; uniform vec3 uHazeCol; uniform float uHeight; uniform float uHaze; uniform float uSnow; uniform float uMirror; uniform float uTime; uniform float uDawn;
+varying vec2 vUv; varying float vAz;
+${NOISE}
+float ridgeAt(float a){
+  float x = a * uScale + uSeed;
+  float r = 0.0; float amp = 0.55; float f = 1.0;
+  for (int i = 0; i < 4; i++){
+    float n = noise(vec3(x * f, uSeed * 1.7, 0.0));
+    n = 1.0 - abs(2.0 * n - 1.0);
+    r += n * n * amp; amp *= 0.5; f *= 2.1;
+  }
+  return uHeight * (0.10 + r * 0.95);
+}
+void main(){
+  float y = vUv.y;
+  float a = vAz;
+  if (uMirror > 0.5) a += (noise(vec3(y * 150.0, uTime * 0.7, uSeed)) - 0.5) * 0.005 * (0.4 + y * 8.0);
+  float ridge = ridgeAt(a);
+  if (y > ridge) discard;
+  float dh = (ridge - y) / uHeight;
+  float e = 0.012;
+  float slope = (ridgeAt(a + e) - ridgeAt(a - e)) / (2.0 * e) / uHeight;
+  float s = clamp((0.55 - a) * 2.0, -1.0, 1.0);
+  float lit = 0.5 + 0.5 * clamp(-slope * s * 0.05, -1.0, 1.0);
+  // gullies run down from the crests; a finer grain sits on top
+  float gully = noise(vec3(a * 110.0 + y * 6.0, y * 7.0, uSeed * 3.0));
+  float crag2 = noise(vec3(a * 190.0, y * 150.0, uSeed));
+  float shade = 0.55 + 0.55 * gully;
+  vec3 rock = uColor * shade + vec3(0.02, 0.035, 0.085) * lit * (0.4 + crag2) * (0.5 + gully);
+  float tall = smoothstep(0.35, 0.8, ridge / uHeight);
+  float sn = noise(vec3(a * 160.0, y * 150.0, uSeed)) * 0.6 + gully * 0.4;
+  float snow = smoothstep(0.40, 0.2, dh + (sn - 0.5) * 0.22 + (0.5 - gully) * 0.12) * uSnow * (0.3 + 0.7 * tall);
+  vec3 snowCol = mix(vec3(0.18, 0.24, 0.48), vec3(0.62, 0.74, 0.96), clamp(lit * (0.7 + 0.5 * gully) + (crag2 - 0.5) * 0.15, 0.0, 1.0));
+  vec3 col = mix(rock, snowCol, snow);
+  col += vec3(0.45, 0.60, 1.0) * smoothstep(ridge - 0.008, ridge, y) * 0.22 * (0.3 + lit);
+  float fog = clamp(uHaze * (0.25 + smoothstep(0.3, 0.0, y) * 0.9), 0.0, 1.0);
+  col = mix(col, uHazeCol, fog);
+  col = mix(col, col * vec3(1.5, 1.0, 0.7) + vec3(0.1, 0.03, 0.0), uDawn * 0.4);
+  float alpha = 1.0;
+  if (uMirror > 0.5) { col = mix(col, vec3(0.01, 0.03, 0.08), 0.25) * 0.8; alpha = 0.8 * (1.0 - smoothstep(0.0, 0.2, y)); }
+  gl_FragColor = vec4(col, alpha);
+}
+`;
+
+// a line of pines along the shore, taller toward both sides so they frame the view
+const FOREST_FRAG = /* glsl */ `
+uniform float uSeed; uniform float uHeight; uniform vec3 uColor; uniform float uMirror; uniform float uTime; uniform float uDawn;
+varying vec2 vUv; varying float vAz;
+${NOISE}
+float h1(float n){ return fract(sin(n * 91.3458) * 47453.5453); }
+void main(){
+  float y = vUv.y;
+  float a = vAz;
+  if (uMirror > 0.5) a += (noise(vec3(y * 150.0, uTime * 0.7, uSeed)) - 0.5) * 0.003 * (0.4 + y * 8.0);
+  float edge = smoothstep(0.34, 0.8, abs(a));
+  float cell = a * 64.0;
+  float id0 = floor(cell);
+  float hit = 0.0; float rim = 0.0;
+  for (int i = -1; i <= 1; i++){
+    float id = id0 + float(i);
+    float hh = (0.35 + 0.9 * h1(id + uSeed)) * uHeight * edge;
+    float cx = id + 0.5 + (h1(id * 1.7 + uSeed) - 0.5) * 0.5;
+    float u = cell - cx;
+    float yr = y / max(hh, 0.0001);
+    if (yr < 1.0) {
+      float tiers = 1.0 - fract(yr * (7.0 + 3.0 * h1(id)));
+      float hw = (1.0 - yr) * (0.62 + 0.2 * tiers) * (0.9 + 0.5 * h1(id + 3.0));
+      if (abs(u) < hw) { hit = 1.0; rim = max(rim, smoothstep(0.0, 0.6, u / hw) * (1.0 - yr)); }
+    }
+  }
+  if (hit < 0.5) discard;
+  vec3 col = uColor + vec3(0.03, 0.06, 0.12) * rim * 0.6 * (1.0 - uDawn);
+  float alpha = 1.0;
+  if (uMirror > 0.5) { col *= 0.9; alpha = 0.85 * (1.0 - smoothstep(0.0, 0.25, y)); }
+  gl_FragColor = vec4(col, alpha);
+}
+`;
+
+// low mist lying on the water between the ranges
+const MIST_FRAG = /* glsl */ `
+uniform float uTime; uniform vec3 uCol; uniform float uAmt; uniform float uSeed;
+varying vec2 vUv; varying float vAz;
 ${NOISE}
 void main(){
-  float x = vUv.x * 18.0;
-  float ridge = uHeight * (0.3 + 0.7 * fbm(vec3(x, uSeed, 0.0))) + 0.035 * noise(vec3(x * 9.0, uSeed, 1.0));
   float y = vUv.y;
-  if (y > ridge) discard;
-  // faint moonlit edge, and haze that lifts toward the base
-  float edge = smoothstep(ridge - 0.02, ridge, y) * 0.06;
-  vec3 col = uColor + vec3(0.2, 0.22, 0.34) * edge + vec3(0.04, 0.045, 0.08) * uHaze * smoothstep(0.35, 0.0, y);
-  gl_FragColor = vec4(col, 1.0);
+  float n = fbm(vec3(vAz * 7.0 + uTime * 0.02, y * 5.0, uSeed + uTime * 0.015));
+  float n2 = fbm(vec3(vAz * 17.0 - uTime * 0.035, y * 9.0, uSeed + 4.0));
+  float band = smoothstep(0.0, 0.012, y) * exp(-y * 20.0);
+  float a = uAmt * band * smoothstep(0.25, 0.75, n) * (0.5 + 0.9 * n2);
+  gl_FragColor = vec4(uCol, clamp(a, 0.0, 1.0));
 }
 `;
 
@@ -280,9 +420,13 @@ const GRADE = {
     void main(){
       vec4 c = texture2D(tDiffuse, vUv);
       vec2 q = vUv - 0.5;
-      float vig = smoothstep(0.85, 0.2, length(q * vec2(1.0, 1.25)));
-      c.rgb *= mix(0.55, 1.0, vig);
-      c.rgb += (h(vUv * 800.0 + uTime) - 0.5) * 0.025;
+      float vig = smoothstep(0.9, 0.2, length(q * vec2(1.0, 1.25)));
+      c.rgb *= mix(0.62, 1.0, vig);
+      float l = dot(c.rgb, vec3(0.299, 0.587, 0.114));
+      c.rgb = mix(vec3(l), c.rgb, 1.16);
+      c.rgb += vec3(0.0, 0.006, 0.02) * (1.0 - l);
+      c.rgb = mix(c.rgb, c.rgb * vec3(1.05, 1.0, 0.95), smoothstep(0.5, 1.0, l));
+      c.rgb += (h(vUv * 800.0 + uTime) - 0.5) * 0.02;
       gl_FragColor = c;
     }`,
 };
@@ -412,6 +556,9 @@ export class MeteorCinema {
   private flash: THREE.Mesh;
   private aurora: THREE.Mesh;
   private moon: THREE.Group;
+  private terrain: THREE.ShaderMaterial[] = [];
+  private mists: THREE.Mesh[] = [];
+  private bokeh: THREE.Points;
   private flies: THREE.Points;
   private grade: ShaderPass;
   private reflection: THREE.Mesh;
@@ -453,14 +600,14 @@ export class MeteorCinema {
     this.renderer.setPixelRatio(lite ? 0.65 : 1);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 0.95;
+    this.renderer.toneMappingExposure = 0.9;
     this.renderer.domElement.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;display:block';
     host.appendChild(this.renderer.domElement);
 
     this.camera = new THREE.PerspectiveCamera(50, 1, 0.1, 2000);
     this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(512, 512), 0.8, 0.55, 0.32);
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(512, 512), 0.8, 0.65, 0.5);
     this.composer.addPass(this.bloom);
     this.composer.addPass(new OutputPass());
     this.grade = new ShaderPass(GRADE);
@@ -478,7 +625,8 @@ export class MeteorCinema {
           uTintAmt: { value: 0 },
           uGlowAmt: { value: 0 },
           uGlowDir: { value: new THREE.Vector3(0, 0, -1) },
-          uMoonDir: { value: new THREE.Vector3(0.5, 0.36, -0.79).normalize() },
+          uMoonDir: { value: MOON_DIR.clone() },
+          uLite: { value: lite ? 1 : 0 },
           uDawn: { value: 0 },
           uSunDir: { value: new THREE.Vector3(-0.04, 0.035, -1).normalize() },
         },
@@ -489,19 +637,26 @@ export class MeteorCinema {
     this.scene.add(this.sky);
 
     // stars (and their reflection)
-    const N = lite ? 1500 : 3200;
+    const N = lite ? 1800 : 4800;
     const sp = new Float32Array(N * 3);
     const ss = new Float32Array(N);
     const sph = new Float32Array(N);
     const sc = new Float32Array(N * 3);
     const warm = new THREE.Color('#ffe8c4');
     const cool = new THREE.Color('#c8dcff');
+    const bandN = new THREE.Vector3(0.7, 0.8, 0.6).normalize();
     for (let i = 0; i < N; i++) {
-      const y = Math.pow(Math.random(), 0.8) * 0.97 + 0.03;
-      const th = Math.random() * Math.PI * 2;
-      const r = Math.sqrt(1 - y * y);
-      sp.set([Math.cos(th) * r * 800, y * 800, Math.sin(th) * r * 800], i * 3);
-      ss[i] = Math.random() < 0.03 ? 5 + Math.random() * 5 : 1.2 + Math.pow(Math.random(), 3) * 3;
+      let dir = new THREE.Vector3();
+      for (let tries = 0; tries < 40; tries++) {
+        const yy = Math.pow(Math.random(), 0.8) * 0.97 + 0.03;
+        const th0 = Math.random() * Math.PI * 2;
+        const rr = Math.sqrt(1 - yy * yy);
+        dir.set(Math.cos(th0) * rr, yy, Math.sin(th0) * rr);
+        // two in five stars are drawn toward the milky way band
+        if (i % 5 > 1 || Math.random() < Math.exp(-Math.pow(dir.dot(bandN), 2) * 12)) break;
+      }
+      sp.set([dir.x * 800, dir.y * 800, dir.z * 800], i * 3);
+      ss[i] = Math.random() < 0.035 ? 6 + Math.random() * 6 : 1.2 + Math.pow(Math.random(), 3) * 3;
       sph[i] = Math.random();
       const c = cool.clone().lerp(warm, Math.random());
       sc.set([c.r, c.g, c.b], i * 3);
@@ -526,25 +681,56 @@ export class MeteorCinema {
     this.starsMirror.scale.y = -1;
     this.scene.add(this.starsMirror);
 
-    // mountain ridges (far → near); their base sits on the lake's horizon
-    const ridges: [number, string, number, number, number][] = [
-      [520, '#0a0f26', 0.26, 1, 1],
-      [360, '#060918', 0.19, 7, 0.6],
-      [230, '#03040a', 0.12, 13, 0.3],
-    ];
-    for (const [r, col, hgt, seed, haze] of ridges) {
-      const m = new THREE.Mesh(
-        new THREE.CylinderGeometry(r, r, r * 0.9, 256, 1, true),
+    // terrain wraps the lake: snow ranges far → near, then a shore of pines. Each layer is
+    // mirrored below the horizon so the water reflects it. (They write depth, so stars,
+    // meteors and the moon pass behind them.)
+    const cyl = (r: number) => new THREE.CylinderGeometry(r, r, r * 0.9, 256, 1, true);
+    const mats: THREE.ShaderMaterial[] = [];
+    const layer = (r: number, frag: string, uniforms: Record<string, THREE.IUniform>, order: number) => {
+      const make = (mirror: boolean) => {
+        const mat = new THREE.ShaderMaterial({
+          vertexShader: TERRAIN_VERT,
+          fragmentShader: frag,
+          uniforms: { ...Object.fromEntries(Object.entries(uniforms).map(([k, v]) => [k, { value: (v.value as { clone?: () => unknown }).clone ? (v.value as { clone: () => unknown }).clone() : v.value }])), uMirror: { value: mirror ? 1 : 0 }, uTime: { value: 0 }, uDawn: { value: 0 } },
+          side: mirror ? THREE.DoubleSide : THREE.BackSide,
+          transparent: mirror,
+          depthWrite: !mirror,
+        });
+        mats.push(mat);
+        const m = new THREE.Mesh(cyl(r), mat);
+        m.position.y = mirror ? -r * 0.45 : r * 0.45;
+        if (mirror) m.scale.y = -1;
+        m.renderOrder = order + (mirror ? 20 : 0);
+        this.scene.add(m);
+      };
+      make(false);
+      make(true);
+    };
+    const C = (hex: string) => new THREE.Color(hex);
+    const ridge = (r: number, seed: number, scale: number, height: number, rock: string, haze: number, hazeCol: string, snow: number, order: number) =>
+      layer(r, RIDGE_FRAG, { uSeed: { value: seed }, uScale: { value: scale }, uHeight: { value: height }, uColor: { value: C(rock) }, uHazeCol: { value: C(hazeCol) }, uHaze: { value: haze }, uSnow: { value: snow } }, order);
+    ridge(520, 1, 2.3, 0.3, '#2c3b85', 0.5, '#3a3f86', 1.0, 1);
+    ridge(380, 7, 3.1, 0.2, '#131d52', 0.32, '#202768', 0.8, 2);
+    ridge(260, 13, 4.2, 0.12, '#040a20', 0.16, '#0b1230', 0.3, 3);
+    layer(170, FOREST_FRAG, { uSeed: { value: 3 }, uHeight: { value: 0.2 }, uColor: { value: C('#02070f') } }, 4);
+    this.terrain = mats;
+    // mist between the ranges
+    for (const [r, amt, col, seed] of [[450, 0.62, '#6a75bd', 1], [320, 0.5, '#434e96', 5], [215, 0.38, '#1f2a5a', 9]] as [number, number, string, number][]) {
+      const mist = new THREE.Mesh(
+        cyl(r),
         new THREE.ShaderMaterial({
-          vertexShader: PASS_VERT,
-          fragmentShader: RIDGE_FRAG,
-          uniforms: { uSeed: { value: seed }, uColor: { value: new THREE.Color(col) }, uHeight: { value: hgt }, uHaze: { value: haze } },
+          vertexShader: TERRAIN_VERT,
+          fragmentShader: MIST_FRAG,
+          uniforms: { uTime: { value: 0 }, uCol: { value: C(col) }, uAmt: { value: amt }, uSeed: { value: seed } },
           side: THREE.BackSide,
+          transparent: true,
           depthWrite: false,
         }),
       );
-      m.position.y = r * 0.45;
-      this.scene.add(m);
+      mist.position.y = r * 0.45;
+      mist.renderOrder = 10;
+      this.scene.add(mist);
+      this.mists.push(mist);
     }
 
     // textures
@@ -586,7 +772,7 @@ export class MeteorCinema {
     mk(
       [new THREE.Vector3(-230, 190, -330), new THREE.Vector3(-120, 130, -260), new THREE.Vector3(-40, 60, -170), new THREE.Vector3(-6, 14, -75), this.IMPACT.clone()],
       1.0,
-      T_IMPACT,
+      L_IMPACT,
       true,
       tiers[0],
     );
@@ -619,7 +805,7 @@ export class MeteorCinema {
       new THREE.ShaderMaterial({
         vertexShader: PASS_VERT,
         fragmentShader: AURORA_FRAG,
-        uniforms: { uTime: { value: 0 }, uAmt: { value: 0.55 } },
+        uniforms: { uTime: { value: 0 }, uAmt: { value: 0.4 } },
         side: THREE.BackSide,
         transparent: true,
         depthWrite: false,
@@ -630,81 +816,71 @@ export class MeteorCinema {
     this.aurora.rotation.y = 1.2;
     this.scene.add(this.aurora);
 
-    // moon
+    // moon: the disc and its halo are painted in the sky shader (so clouds drift across it);
+    // these sprites only add the soft bloom around it
     this.moon = new THREE.Group();
-    const moonTex = (() => {
-      const c = document.createElement('canvas');
-      c.width = c.height = 256;
-      const g = c.getContext('2d')!;
-      const grad = g.createRadialGradient(110, 100, 10, 128, 128, 120);
-      grad.addColorStop(0, '#fffdf4');
-      grad.addColorStop(0.7, '#e9e6dc');
-      grad.addColorStop(1, '#c9c5bb');
-      g.fillStyle = grad;
-      g.beginPath();
-      g.arc(128, 128, 118, 0, Math.PI * 2);
-      g.fill();
-      for (let k = 0; k < 26; k++) {
-        g.fillStyle = `rgba(150,150,160,${0.08 + Math.random() * 0.12})`;
-        g.beginPath();
-        g.arc(60 + Math.random() * 140, 60 + Math.random() * 140, 6 + Math.random() * 20, 0, Math.PI * 2);
-        g.fill();
-      }
-      const t = new THREE.CanvasTexture(c);
-      t.colorSpace = THREE.SRGBColorSpace;
-      return t;
-    })();
-    this.textures.push(moonTex);
-    const moonDisc = new THREE.Sprite(new THREE.SpriteMaterial({ map: moonTex, transparent: true, depthWrite: false, color: 0xeef2ff }));
-    moonDisc.scale.setScalar(26);
-    const moonHalo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: 0x9fb4ff, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.55 }));
-    moonHalo.scale.setScalar(150);
-    this.moon.add(moonHalo, moonDisc);
-    this.moon.position.copy(new THREE.Vector3(0.5, 0.36, -0.79).normalize().multiplyScalar(700));
+    const moonHalo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: 0x9fb4ff, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.4 }));
+    moonHalo.scale.setScalar(210);
+    const ringTexM = radialTexture([
+      [0, 'rgba(0,0,0,0)'],
+      [0.6, 'rgba(150,175,255,0)'],
+      [0.68, 'rgba(175,195,255,0.22)'],
+      [0.76, 'rgba(150,175,255,0)'],
+      [1, 'rgba(0,0,0,0)'],
+    ], 256);
+    this.textures.push(ringTexM);
+    const moonRing = new THREE.Sprite(new THREE.SpriteMaterial({ map: ringTexM, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.8 }));
+    moonRing.scale.setScalar(160);
+    this.moon.add(moonHalo, moonRing);
+    this.moon.position.copy(MOON_DIR.clone().multiplyScalar(700));
     this.scene.add(this.moon);
 
-    // fireflies over the water
-    const FN = lite ? 50 : 140;
-    const fp = new Float32Array(FN * 3);
-    const fa = new Float32Array(FN);
-    const fc = new Float32Array(FN * 3);
-    for (let k = 0; k < FN; k++) {
-      fp.set([rnd(-40, 40), rnd(-1.2, 4), rnd(-70, -9)], k * 3);
-      fa[k] = Math.random();
-      const c = new THREE.Color().setHSL(rnd(0.14, 0.2), 0.9, 0.7);
-      fc.set([c.r, c.g, c.b], k * 3);
-    }
-    const fg = new THREE.BufferGeometry();
-    fg.setAttribute('position', new THREE.BufferAttribute(fp, 3));
-    fg.setAttribute('aAlpha', new THREE.BufferAttribute(fa, 1));
-    fg.setAttribute('aColor', new THREE.BufferAttribute(fc, 3));
-    this.flies = new THREE.Points(
-      fg,
-      new THREE.ShaderMaterial({
-        vertexShader: /* glsl */ `
-          attribute float aAlpha; attribute vec3 aColor; uniform float uTime; uniform float uPx;
+    // fireflies over the water, and a few big soft out-of-focus lights close to the lens
+    const flyPoints = (count: number, area: { x: number; y: [number, number]; z: [number, number] }, size: number, max: number, hue: [number, number], light: number, alpha: number) => {
+      const fp = new Float32Array(count * 3);
+      const fa = new Float32Array(count);
+      const fc = new Float32Array(count * 3);
+      for (let k = 0; k < count; k++) {
+        fp.set([rnd(-area.x, area.x), rnd(area.y[0], area.y[1]), rnd(area.z[0], area.z[1])], k * 3);
+        fa[k] = Math.random();
+        const c = new THREE.Color().setHSL(rnd(hue[0], hue[1]), 0.9, light);
+        fc.set([c.r, c.g, c.b], k * 3);
+      }
+      const fg = new THREE.BufferGeometry();
+      fg.setAttribute('position', new THREE.BufferAttribute(fp, 3));
+      fg.setAttribute('aAlpha', new THREE.BufferAttribute(fa, 1));
+      fg.setAttribute('aColor', new THREE.BufferAttribute(fc, 3));
+      const pts = new THREE.Points(
+        fg,
+        new THREE.ShaderMaterial({
+          vertexShader: /* glsl */ `
+          attribute float aAlpha; attribute vec3 aColor; uniform float uTime; uniform float uPx; uniform float uSize; uniform float uMax; uniform float uBase;
           varying float vA; varying vec3 vC;
           void main(){
             vec3 p = position;
             p.x += sin(uTime * 0.4 + aAlpha * 30.0) * 0.8;
-            p.y += sin(uTime * 0.6 + aAlpha * 17.0) * 0.4;
-            vA = pow(0.5 + 0.5 * sin(uTime * (1.0 + aAlpha) + aAlpha * 50.0), 3.0);
+            p.y += sin(uTime * 0.6 + aAlpha * 17.0) * 0.4 + mod(uTime * 0.05 * (0.3 + aAlpha), 1.0) * 0.6;
+            vA = pow(0.5 + 0.5 * sin(uTime * (1.0 + aAlpha) + aAlpha * 50.0), 3.0) * uBase + (1.0 - uBase) * 0.55;
             vC = aColor;
             vec4 mv = modelViewMatrix * vec4(p, 1.0);
-            gl_PointSize = uPx * clamp(70.0 / -mv.z, 1.5, 7.0);
+            gl_PointSize = uPx * clamp(uSize / -mv.z, 1.5, uMax);
             gl_Position = projectionMatrix * mv;
           }`,
-        fragmentShader: /* glsl */ `
+          fragmentShader: /* glsl */ `
           varying float vA; varying vec3 vC;
-          void main(){ vec2 c = gl_PointCoord - 0.5; float a = exp(-dot(c, c) * 20.0) * vA; if (a < 0.01) discard; gl_FragColor = vec4(vC * a, a); }`,
-        uniforms: { uTime: { value: 0 }, uPx: { value: 1 } },
-        transparent: true,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending,
-      }),
-    );
-    this.flies.frustumCulled = false;
-    this.scene.add(this.flies);
+          void main(){ vec2 c = gl_PointCoord - 0.5; float r = dot(c, c); float a = (exp(-r * 20.0) + smoothstep(0.25, 0.2, r) * 0.0) * vA * ${alpha.toFixed(2)}; if (a < 0.01) discard; gl_FragColor = vec4(vC * a, a); }`,
+          uniforms: { uTime: { value: 0 }, uPx: { value: this.renderer.getPixelRatio() }, uSize: { value: size }, uMax: { value: max }, uBase: { value: alpha > 0.5 ? 1 : 0 } },
+          transparent: true,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending,
+        }),
+      );
+      pts.frustumCulled = false;
+      this.scene.add(pts);
+      return pts;
+    };
+    this.flies = flyPoints(lite ? 90 : 300, { x: 40, y: [-0.8, 5], z: [-70, -7] }, 190, 16, [0.13, 0.2], 0.72, 1);
+    this.bokeh = flyPoints(lite ? 8 : 22, { x: 16, y: [0, 9], z: [-34, -7] }, 380, 70, [0.5, 0.62], 0.62, 0.3);
 
     // sparks
     const MAXS = 600;
@@ -791,6 +967,8 @@ export class MeteorCinema {
 
     this.resize();
     window.addEventListener('resize', this.resize);
+    // development only: jump the timeline (for screenshots)
+    if (import.meta.env.DEV) (window as unknown as { __cine?: unknown }).__cine = { seek: (x: number) => void (this.offset += x - this.time()) };
   }
 
   // -------------------------------------------------------------------------
@@ -918,7 +1096,9 @@ export class MeteorCinema {
     }
     const t = this.time();
     (window as unknown as { __cineT?: number }).__cineT = t;
-    const T = Math.min(t, T_DONE);
+    const Tr = Math.min(t, T_DONE);
+    /** time relative to the first meteor (negative during the quiet opening) */
+    const T = Tr - T0;
 
     const skyU = (this.sky.material as THREE.ShaderMaterial).uniforms;
     skyU.uTime.value = t;
@@ -926,20 +1106,25 @@ export class MeteorCinema {
     (this.starsMirror.material as THREE.ShaderMaterial).uniforms.uTime.value = t;
     (this.aurora.material as THREE.ShaderMaterial).uniforms.uTime.value = t;
     (this.flies.material as THREE.ShaderMaterial).uniforms.uTime.value = t;
+    (this.bokeh.material as THREE.ShaderMaterial).uniforms.uTime.value = t;
+    for (const m of this.terrain) m.uniforms.uTime.value = t;
+    for (const m of this.mists) (m.material as THREE.ShaderMaterial).uniforms.uTime.value = t;
     this.grade.uniforms.uTime.value = t;
     const camPos = this.camera.position;
 
     // ---------------- camera ----------------
     const look = new THREE.Vector3();
     const up1 = easeInOut(smooth(0, 1.6, T));
-    look.set(-30 * up1, 4 + 150 * up1, -300);
+    // the opening: begin just above the water and lift the gaze to the horizon
+    const intro = 1 - easeInOut(smooth(0, T0, Tr));
+    look.set(-30 * up1 + intro * 14, 4 + 150 * up1 - intro * 20, -300);
     const main = this.meteors[0];
     const follow = smooth(1.7, 2.35, T);
     if (follow > 0) look.lerp(main.path.getPointAt(this.meteorS(main, Math.min(T, main.t1))), follow * 0.8);
-    const settle = smooth(T_IMPACT - 0.05, T_IMPACT + 0.9, T);
+    const settle = smooth(L_IMPACT - 0.05, L_IMPACT + 0.9, T);
     if (settle > 0) look.lerp(new THREE.Vector3(0, 1.2, -60), easeInOut(settle));
-    camPos.set(Math.sin(t * 0.37) * 0.08, 1.4 + Math.sin(t * 0.53) * 0.05, 6 - 1.2 * smooth(0, 4.4, T));
-    const sinceImpact = T - T_IMPACT;
+    camPos.set(Math.sin(t * 0.37) * 0.08 - intro * 0.5, 1.4 + Math.sin(t * 0.53) * 0.05 - intro * 0.35, 7.8 - 3.0 * smooth(0, T_DONE, Tr));
+    const sinceImpact = T - L_IMPACT;
     const shake = sinceImpact >= 0 ? Math.max(0, 1 - sinceImpact / 0.5) : 0;
     if (shake > 0) {
       const s = this.shakeSeed + t * 55;
@@ -967,7 +1152,7 @@ export class MeteorCinema {
       }
       const head = pts[0];
       const dist = head.distanceTo(camPos);
-      const dive = m.main ? smooth(1.9, T_IMPACT, T) : 0;
+      const dive = m.main ? smooth(1.9, L_IMPACT, T) : 0;
       // angular sizes, so nothing balloons when it comes close
       const ang = (m.main ? 0.0045 : 0.0032) * (1 + dive * 1.6);
       const fade = (m.main ? 1 - smooth(m.t1, m.t1 + 0.12, T) : 1 - smooth(m.t1 - 0.1, m.t1 + m.span, T)) * smooth(m.t0, m.t0 + 0.1, T);
@@ -983,22 +1168,23 @@ export class MeteorCinema {
     this.reflection.visible = main.ribbon.mesh.visible;
     (this.reflection.material as THREE.ShaderMaterial).uniforms.uTime.value = t;
     // sky tint while the meteors are out; glow on the horizon where it lands
-    skyU.uTintAmt.value = smooth(1.0, 1.8, T) * (1 - smooth(T_IMPACT, T_IMPACT + 1.4, T)) * (0.5 + this.opts.tier * 0.35);
+    skyU.uTintAmt.value = smooth(1.0, 1.8, T) * (1 - smooth(L_IMPACT, L_IMPACT + 1.4, T)) * (0.5 + this.opts.tier * 0.35);
     const toImpact = this.IMPACT.clone().sub(camPos).normalize();
     skyU.uGlowDir.value.copy(toImpact);
-    skyU.uGlowAmt.value = smooth(2.2, T_IMPACT, T) * (1 - smooth(T_IMPACT + 0.3, T_IMPACT + 1.4, T)) * 1.2;
+    skyU.uGlowAmt.value = smooth(2.2, L_IMPACT, T) * (1 - smooth(L_IMPACT + 0.3, L_IMPACT + 1.4, T)) * 1.2;
     // god pack: night turns to dawn after the impact (and stays while the pack waits)
     if (this.opts.god) {
       const dawn = easeInOut(smooth(T_IMPACT + 0.15, T_IMPACT + 2.1, t));
       skyU.uDawn.value = dawn;
       (this.stars.material as THREE.ShaderMaterial).uniforms.uDim.value = 1 - dawn * 0.9;
       (this.starsMirror.material as THREE.ShaderMaterial).uniforms.uDim.value = 0.22 * (1 - dawn * 0.9);
-      (this.aurora.material as THREE.ShaderMaterial).uniforms.uAmt.value = 0.55 * (1 - dawn);
-      this.moon.children.forEach((c, k) => (((c as THREE.Sprite).material as THREE.SpriteMaterial).opacity = (k === 0 ? 0.55 : 1) * (1 - dawn * 0.85)));
+      (this.aurora.material as THREE.ShaderMaterial).uniforms.uAmt.value = 0.4 * (1 - dawn);
+      for (const m of this.terrain) m.uniforms.uDawn.value = dawn;
+      this.moon.children.forEach((c, k) => (((c as THREE.Sprite).material as THREE.SpriteMaterial).opacity = (k === 0 ? 0.4 : 0.8) * (1 - dawn * 0.85)));
     }
 
     // ---------------- impact ----------------
-    if (T >= T_IMPACT && !this.beats.has('impact')) {
+    if (T >= L_IMPACT && !this.beats.has('impact')) {
       this.beat('impact');
       this.emit(this.IMPACT, 220, 12, 0.7);
     }
@@ -1020,14 +1206,14 @@ export class MeteorCinema {
     const haloMat = this.orbHalo.material as THREE.SpriteMaterial;
     if (sinceImpact >= 0.08) {
       this.beat('orb');
-      const rise = easeInOut(smooth(T_IMPACT + 0.08, T_IMPACT + 1.0, T));
+      const rise = easeInOut(smooth(L_IMPACT + 0.08, L_IMPACT + 1.0, T));
       const pos = this.IMPACT.clone().lerp(this.camera.localToWorld(orbCam.clone()), rise);
       const d = pos.distanceTo(camPos);
       const pulse = 1 + Math.sin(t * 7) * 0.05;
       this.orbCore.position.copy(pos);
       this.orbHalo.position.copy(pos);
       const vanish = smooth(3.7, 4.0, T);
-      coreMat.opacity = smooth(T_IMPACT + 0.05, T_IMPACT + 0.3, T) * (1 - vanish);
+      coreMat.opacity = smooth(L_IMPACT + 0.05, L_IMPACT + 0.3, T) * (1 - vanish);
       haloMat.opacity = coreMat.opacity * 0.8;
       this.orbCore.scale.setScalar(d * 0.05 * pulse);
       this.orbHalo.scale.setScalar(d * 0.22 * pulse);
@@ -1090,9 +1276,10 @@ export class MeteorCinema {
     this.sparkPts.geometry.attributes.position.needsUpdate = true;
     this.sparkPts.geometry.attributes.aAlpha.needsUpdate = true;
 
+    this.renderer.toneMappingExposure += ((this.done && this.idle ? 0.78 : 0.9) - this.renderer.toneMappingExposure) * Math.min(1, dt * 3);
     this.bloom.strength = 0.8 + (sinceImpact >= 0 ? Math.max(0, 0.9 * (1 - sinceImpact / 0.6)) : 0) + smooth(3.85, 4.3, T) * (1 - smooth(T_DONE, T_DONE + 0.5, t)) * 0.15;
 
-    if (T >= T_DONE && !this.done) {
+    if (Tr >= T_DONE && !this.done) {
       this.done = true;
       // remember slow devices so the next opening starts light (auto mode)
       if (this.frames > 20) reportFrameTime((this.frameSum / this.frames) * 1000);

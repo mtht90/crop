@@ -1,0 +1,13 @@
+# Render Blueprint: New → Blueprint → choose this repository.
+services:
+  - type: web
+    name: arcane-beasts
+    runtime: node
+    plan: free
+    # the build needs the dev dependencies (vite, TypeScript), so ask npm for them explicitly
+    buildCommand: npm ci --include=dev && npm run build:web
+    startCommand: npm run server
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_VERSION
+        value: 22

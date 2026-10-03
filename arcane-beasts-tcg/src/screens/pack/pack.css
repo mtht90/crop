@@ -737,3 +737,14 @@
 }
 .bp.theme:not(.premium) .bp-logo .b { color: color-mix(in srgb, var(--hue) 35%, #fff); letter-spacing: 0.3em; }
 .bp.theme:not(.premium) .bp-foot .t { color: color-mix(in srgb, var(--hue) 35%, #fff); }
+
+/* 10連: which pack is being turned over */
+.po-packno { position: absolute; left: 50%; top: calc(var(--u) * 2); translate: -50% 0; z-index: 50; text-align: center; color: #fff; text-shadow: 0 2px 8px #000; pointer-events: none; }
+.po-packno > div { display: flex; align-items: baseline; justify-content: center; gap: calc(var(--u) * 0.5); }
+.po-packno small { font-family: var(--font-latin); font-weight: 900; letter-spacing: 0.3em; font-size: calc(var(--u) * 1); color: var(--gold); }
+.po-packno b { font-family: var(--font-display); font-weight: 400; font-size: calc(var(--u) * 3.2); }
+.po-packno span { font-size: calc(var(--u) * 1.3); color: var(--ink-dim); font-weight: 800; }
+.po-pips { display: flex; justify-content: center; gap: calc(var(--u) * 0.6); margin-top: calc(var(--u) * 0.3); }
+.po-pips i { width: calc(var(--u) * 0.8); height: calc(var(--u) * 0.8); border-radius: 50%; background: rgba(255, 255, 255, 0.25); transition: background 0.2s, transform 0.2s; }
+.po-pips i.done { background: rgba(233, 196, 106, 0.7); }
+.po-pips i.on { background: #fff; transform: scale(1.35); box-shadow: 0 0 8px #fff; }
