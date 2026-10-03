@@ -5,7 +5,9 @@ import { useEffect, useState } from 'react';
 import { activeDeck, collectionPct, extCtx, useStore, RIVALS, SHARD_COST, SHARD_RARITIES } from '../state/store';
 import { canClaimLogin, claimableCount, currentPickup, expToNext } from '../state/progress';
 import { LoginTrack } from './Missions';
-import { RankEmblem } from '../ui/RankEmblem';
+import { isSignedUp, onlineSupported, useOnline } from '../online/client';
+import { isRegistered } from '../online/protocol';
+import { AccountSheet } from './AccountBox';
 import { artUrl } from '../lib/assets';
 import { CardFace } from '../ui/Card';
 import { Icon } from '../ui/Icon';
@@ -37,6 +39,10 @@ export function Home() {
   const missionN = claimableCount(save.progress, extCtx(save));
   const pickup = currentPickup();
   const p = save.progress;
+  // not signed up yet: a small chip that opens the sign-up sheet
+  const [acctOpen, setAcctOpen] = useState(false);
+  const liveProfile = useOnline((s) => s.profile);
+  const askAcct = onlineSupported() && !(liveProfile ? isRegistered(liveProfile) : isSignedUp());
   const [loginOpen, setLoginOpen] = useState(() => {
     // pop the login bonus once per session; afterwards it lives in ミッション
     const open = canClaimLogin(save.progress) && !loginShown;
@@ -74,6 +80,11 @@ export function Home() {
               </div>
             </div>
           </div>
+          {askAcct && (
+            <button className="ac-chip" onClick={() => setAcctOpen(true)}>
+              <Icon name="pendant-key" /> ログイン / 新規登録
+            </button>
+          )}
           <button className="icon-btn" title="ミッション" onClick={() => go('missions')}>
             <Icon name="trophy" />
             {missionN > 0 && <i className="dot">{missionN}</i>}
@@ -160,6 +171,7 @@ export function Home() {
       </div>
       <AnimatePresence>
         {loginOpen && <LoginModal onClose={() => setLoginOpen(false)} />}
+        {acctOpen && <AccountSheet key="acct" onClose={() => setAcctOpen(false)} />}
       </AnimatePresence>
     </div>
   );

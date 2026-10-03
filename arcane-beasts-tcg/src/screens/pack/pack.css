@@ -706,14 +706,6 @@
 }
 
 /* ------------------------------- Pack pick ------------------------------ */
-.picker { position: absolute; inset: 0; z-index: 12; }
-.pick-title { position: absolute; left: 0; right: 0; top: calc(var(--u) * 6); text-align: center; font-weight: 800; font-size: calc(var(--u) * 1.3); letter-spacing: 0.16em; color: rgba(255, 255, 255, 0.85); text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6); }
-.pick-row { position: absolute; left: 0; right: 0; top: calc(var(--u) * 13.5); height: calc(var(--u) * 29); perspective: 1400px; transform-style: preserve-3d; cursor: grab; touch-action: pan-y; }
-.pick-row:active { cursor: grabbing; }
-.pick-slot { position: absolute; top: 0; width: calc(var(--u) * 17); margin-left: calc(var(--u) * -8.5); transform-style: preserve-3d; }
-.pick-pack { position: relative; width: 100%; aspect-ratio: 60 / 100; cursor: pointer; }
-.pick-pack > .bp { position: absolute; inset: 0; }
-.pick-glow { position: absolute; inset: -30%; border-radius: 50%; background: radial-gradient(closest-side, rgba(255, 250, 230, 0.9), rgba(255, 240, 200, 0.25) 45%, transparent 70%); mix-blend-mode: screen; pointer-events: none; }
 
 .torn-pile { position: absolute; left: 50%; top: calc(var(--u) * 42); width: 0; height: 0; z-index: 4; pointer-events: none; }
 .torn-piece { position: absolute; width: calc(var(--u) * 11); margin-left: calc(var(--u) * -5.5); aspect-ratio: 60 / 100; filter: brightness(0.7) drop-shadow(0 6px 10px rgba(0, 0, 0, 0.5)); }
@@ -754,3 +746,22 @@
 .multi-flip .sc-back { visibility: hidden; transition: visibility 0s linear 0.3s; }
 .multi-flip.down .sc-face { visibility: hidden; }
 .multi-flip.down .sc-back { visibility: visible; }
+
+/* launch: one pack (or a bundle) over the night lake, swiped up into the sky */
+.launch { position: absolute; inset: 0; z-index: 12; }
+.launch-title { position: absolute; left: 0; right: 0; top: calc(var(--u) * 2.4); text-align: center; font-family: var(--font-latin); font-size: calc(var(--u) * 1.15); letter-spacing: 0.4em; color: rgba(230, 238, 255, 0.85); text-shadow: 0 2px 14px rgba(0, 0, 0, 0.8); }
+.launch-wrap { pointer-events: none; }
+.launch-pack { position: relative; width: 100%; aspect-ratio: 60 / 100; cursor: grab; touch-action: none; pointer-events: auto; animation: launch-bob 4.2s ease-in-out infinite; }
+.launch-pack:active { cursor: grabbing; }
+.launch-one { position: absolute; inset: 0; }
+.launch-one > .bp { position: absolute; inset: 0; }
+.launch-glow { position: absolute; inset: -35% -45%; border-radius: 50%; background: radial-gradient(closest-side, rgba(220, 235, 255, 0.55), rgba(160, 190, 255, 0.18) 45%, transparent 72%); mix-blend-mode: screen; pointer-events: none; z-index: -1; }
+.launch-shadow { position: absolute; left: 10%; right: 10%; bottom: calc(var(--u) * -3.2); height: calc(var(--u) * 2.4); border-radius: 50%; background: radial-gradient(closest-side, rgba(180, 210, 255, 0.35), transparent); filter: blur(4px); animation: launch-shadow 4.2s ease-in-out infinite; }
+.launch-cue { position: absolute; left: 0; right: 0; bottom: calc(var(--u) * 2.2); display: flex; flex-direction: column; align-items: center; gap: calc(var(--u) * 0.6); font-weight: 800; font-size: calc(var(--u) * 1.15); letter-spacing: 0.12em; color: #eaf1ff; text-shadow: 0 2px 10px rgba(0, 0, 0, 0.9); pointer-events: none; }
+.launch-chev { display: flex; flex-direction: column-reverse; align-items: center; height: calc(var(--u) * 3); }
+.launch-chev i { width: calc(var(--u) * 1.4); height: calc(var(--u) * 1.4); margin-top: calc(var(--u) * -0.6); border-left: 3px solid #fff; border-top: 3px solid #fff; transform: rotate(45deg); opacity: 0; animation: launch-chev 1.5s ease-in-out infinite; }
+.launch-chev i:nth-child(2) { animation-delay: 0.18s; }
+.launch-chev i:nth-child(3) { animation-delay: 0.36s; }
+@keyframes launch-chev { 0% { opacity: 0; translate: 0 6px; } 40% { opacity: 1; } 100% { opacity: 0; translate: 0 -6px; } }
+@keyframes launch-bob { 0%, 100% { translate: 0 0; } 50% { translate: 0 calc(var(--u) * -0.7); } }
+@keyframes launch-shadow { 0%, 100% { transform: scaleX(1); } 50% { transform: scaleX(0.86); } }

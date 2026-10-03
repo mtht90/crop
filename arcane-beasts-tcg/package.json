@@ -19,6 +19,8 @@
   "author": "",
   "license": "GPL-2.0-or-later",
   "dependencies": {
+    "@simplewebauthn/browser": "^14.0.0",
+    "@simplewebauthn/server": "^14.0.3",
     "@types/three": "^0.169.0",
     "howler": "^2.2.4",
     "motion": "^13.4.4",

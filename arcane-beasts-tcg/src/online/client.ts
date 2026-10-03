@@ -4,7 +4,7 @@
 // the lobby reads. Game messages are handed to the battle controller.
 // ============================================================================
 import { create } from 'zustand';
-import { PROTOCOL, type ClientMsg, type LiveGame, type MatchKind, type OnlineProfile, type OppInfo, type RoomInfo, type ServerMsg } from './protocol';
+import { isRegistered, PROTOCOL, type ClientMsg, type LiveGame, type MatchKind, type OnlineProfile, type OppInfo, type RoomInfo, type ServerMsg } from './protocol';
 
 const KEY = 'arcane-beasts-online-v1';
 const SERVER_KEY = 'arcane-beasts-server';
@@ -14,6 +14,8 @@ interface Creds {
   secret?: string;
   name?: string;
   portrait?: string;
+  /** signed up with Google or a passkey (the home screen stops nagging) */
+  registered?: boolean;
 }
 
 function loadCreds(): Creds {
@@ -23,6 +25,9 @@ function loadCreds(): Creds {
     return {};
   }
 }
+/** has this device's player signed up? (read without connecting) */
+export const isSignedUp = () => !!loadCreds().registered;
+
 function saveCreds(c: Creds) {
   try {
     localStorage.setItem(KEY, JSON.stringify(c));
@@ -209,7 +214,7 @@ class OnlineClient {
     switch (m.t) {
       case 'welcome': {
         const c = loadCreds();
-        saveCreds({ ...c, id: m.profile.id, secret: m.secret, name: m.profile.name, portrait: m.profile.portrait });
+        saveCreds({ ...c, id: m.profile.id, secret: m.secret, name: m.profile.name, portrait: m.profile.portrait, registered: isRegistered(m.profile) });
         set({ status: 'open', failed: false, profile: m.profile, googleClientId: m.googleClientId ?? null, online: m.online, waiting: m.waiting });
         return;
       }
@@ -218,16 +223,20 @@ class OnlineClient {
         set({ profile: m.profile });
         return;
       case 'linked':
-        saveCreds({ ...loadCreds(), id: m.profile.id, secret: m.secret, name: m.profile.name, portrait: m.profile.portrait });
+        saveCreds({ ...loadCreds(), id: m.profile.id, secret: m.secret, name: m.profile.name, portrait: m.profile.portrait, registered: isRegistered(m.profile) });
         set({ profile: m.profile, error: null });
         // log in again as the transferred identity
         this.ws?.close();
         return;
       case 'account':
-        saveCreds({ ...loadCreds(), id: m.profile.id, ...(m.secret ? { secret: m.secret } : {}), name: m.profile.name, portrait: m.profile.portrait });
+        saveCreds({ ...loadCreds(), id: m.profile.id, ...(m.secret ? { secret: m.secret } : {}), name: m.profile.name, portrait: m.profile.portrait, registered: isRegistered(m.profile) });
         set({ profile: m.profile, error: null });
         // switched to another account: log in again as it
         if (m.mode === 'login') this.ws?.close();
+        return;
+      case 'passkeyOptions':
+        this.pkWait?.(m);
+        this.pkWait = null;
         return;
       case 'transferCode':
         set({ transfer: { code: m.code, expires: m.expires } });
@@ -302,6 +311,29 @@ class OnlineClient {
   }
   rename(name: string, portrait?: string) {
     this.send({ t: 'rename', name, portrait });
+  }
+  private pkWait: ((m: Extract<ServerMsg, { t: 'passkeyOptions' }>) => void) | null = null;
+  /** sign up (register) or log in with a passkey; resolves when the browser part is done */
+  async passkey(mode: 'register' | 'login'): Promise<void> {
+    const { startAuthentication, startRegistration } = await import('@simplewebauthn/browser');
+    const opts = await new Promise<Extract<ServerMsg, { t: 'passkeyOptions' }> | null>((resolve) => {
+      this.pkWait = resolve;
+      this.send({ t: 'passkeyBegin', mode });
+      setTimeout(() => resolve(null), 10_000);
+    });
+    if (!opts) return void useOnline.setState({ error: 'サーバーから応答がありません' });
+    try {
+      const response =
+        mode === 'register'
+          ? await startRegistration({ optionsJSON: opts.options as Parameters<typeof startRegistration>[0]['optionsJSON'] })
+          : await startAuthentication({ optionsJSON: opts.options as Parameters<typeof startAuthentication>[0]['optionsJSON'] });
+      this.send({ t: 'passkeyFinish', mode, response });
+    } catch (e) {
+      const name = (e as { name?: string })?.name;
+      // the player closed the system sheet: nothing to report
+      if (name === 'NotAllowedError' || name === 'AbortError') return;
+      useOnline.setState({ error: name === 'InvalidStateError' ? 'この端末のパスキーはすでに登録されています' : 'この端末ではパスキーを使えませんでした' });
+    }
   }
   googleSignIn(credential: string) {
     this.send({ t: 'google', credential });

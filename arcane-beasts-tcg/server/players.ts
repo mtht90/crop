@@ -12,6 +12,7 @@ import { PORTRAITS, type OnlineProfile } from '../src/online/protocol';
 import { judgeName } from '../src/online/names';
 import { validAvatar } from '../src/online/avatar';
 import { maskEmail, type GoogleIdentity } from './google';
+import type { StoredPasskey } from './passkey';
 import type { PlayerBackend } from './remote';
 
 export interface PlayerRecord {
@@ -29,6 +30,8 @@ export interface PlayerRecord {
   google?: string;
   /** the e-mail, masked, for display only */
   googleMail?: string;
+  /** passkeys that log in as this player */
+  passkeys?: StoredPasskey[];
 }
 
 const hash = (s: string) => createHash('sha256').update(s).digest('hex');
@@ -133,7 +136,7 @@ export class PlayerStore {
   }
 
   profile(p: PlayerRecord): OnlineProfile {
-    return { id: p.id, name: p.name, portrait: p.portrait, rank: p.rank, games: p.games, google: p.googleMail };
+    return { id: p.id, name: p.name, portrait: p.portrait, rank: p.rank, games: p.games, google: p.googleMail, passkeys: p.passkeys?.length ?? 0 };
   }
 
   rankLabel(p: PlayerRecord) {
@@ -173,18 +176,41 @@ export class PlayerStore {
       return { mode: 'same', player: p };
     }
     if (owner) {
-      const secret = randomBytes(24).toString('base64url');
-      owner.secrets.push(hash(secret));
-      if (owner.secrets.length > 5) owner.secrets.shift();
       owner.googleMail = maskEmail(who.email);
-      this.save(owner);
-      return { mode: 'login', player: owner, secret };
+      return { mode: 'login', player: owner, secret: this.newSecret(owner) };
     }
     if (p.google) return null;
     p.google = key;
     p.googleMail = maskEmail(who.email);
     this.save(p);
     return { mode: 'new', player: p };
+  }
+
+  /** a fresh secret for another device of `p` (the oldest of more than 5 stops working) */
+  newSecret(p: PlayerRecord): string {
+    const secret = randomBytes(24).toString('base64url');
+    p.secrets.push(hash(secret));
+    if (p.secrets.length > 5) p.secrets.shift();
+    this.save(p);
+    return secret;
+  }
+
+  // ---- passkeys -----------------------------------------------------------
+  addPasskey(p: PlayerRecord, pk: Omit<StoredPasskey, 'createdAt'>) {
+    p.passkeys = [...(p.passkeys ?? []).filter((x) => x.id !== pk.id), { ...pk, createdAt: this.now() }].slice(-10);
+    this.save(p);
+  }
+  findPasskey(id: string): { player: PlayerRecord; passkey: StoredPasskey } | null {
+    for (const p of this.players.values()) {
+      const pk = p.passkeys?.find((x) => x.id === id);
+      if (pk) return { player: p, passkey: pk };
+    }
+    return null;
+  }
+  touchPasskey(p: PlayerRecord, id: string, counter: number) {
+    const pk = p.passkeys?.find((x) => x.id === id);
+    if (pk) pk.counter = counter;
+    this.save(p);
   }
 
   // ---- transfer codes -----------------------------------------------------
@@ -207,11 +233,7 @@ export class PlayerStore {
     this.transfers.delete(key);
     const p = this.players.get(t.id);
     if (!p) return null;
-    const secret = randomBytes(24).toString('base64url');
-    p.secrets.push(hash(secret));
-    if (p.secrets.length > 5) p.secrets.shift();
-    this.save(p);
-    return { player: p, secret };
+    return { player: p, secret: this.newSecret(p) };
   }
 
   // ---- persistence --------------------------------------------------------

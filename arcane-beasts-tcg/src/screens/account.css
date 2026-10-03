@@ -1,0 +1,32 @@
+/* sign up / log in (AccountBox, AccountSheet, the home chip) */
+.ac-box { display: flex; flex-direction: column; gap: calc(var(--u) * 0.8); align-items: stretch; }
+.ac-main { display: flex; align-items: center; gap: calc(var(--u) * 1); padding: calc(var(--u) * 0.9) calc(var(--u) * 1.4); border-radius: 999px; border: 1px solid rgba(255, 220, 140, 0.55); background: linear-gradient(180deg, #f6d27a, #c99a3c); color: #2a1a00; cursor: pointer; text-align: left; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35); transition: transform 0.15s, filter 0.15s; }
+.ac-main:hover { transform: translateY(-1px); filter: brightness(1.06); }
+.ac-main:disabled { filter: grayscale(0.6) brightness(0.8); cursor: wait; }
+.ac-main svg { width: calc(var(--u) * 2.2); height: calc(var(--u) * 2.2); flex: none; }
+.ac-main b { display: block; font-size: calc(var(--u) * 1.35); font-weight: 900; }
+.ac-main small { display: block; font-size: calc(var(--u) * 0.85); font-weight: 700; opacity: 0.8; }
+.ac-google { display: flex; justify-content: center; min-height: 44px; color-scheme: light; }
+.ac-sub { background: none; border: none; color: var(--ink-dim); font-weight: 700; font-size: calc(var(--u) * 1); cursor: pointer; padding: calc(var(--u) * 0.3); }
+.ac-sub b { color: #fff; text-decoration: underline; text-underline-offset: 3px; }
+.ac-sub:hover { color: #fff; }
+.ac-done { display: flex; align-items: center; gap: calc(var(--u) * 1); padding: calc(var(--u) * 0.8) calc(var(--u) * 1.1); border-radius: 12px; background: rgba(120, 220, 140, 0.1); border: 1px solid rgba(120, 220, 140, 0.4); }
+.ac-done svg { width: calc(var(--u) * 2); height: calc(var(--u) * 2); color: #8be28c; flex: none; }
+.ac-done b { display: block; color: #bff5c0; font-size: calc(var(--u) * 1.2); }
+.ac-done small { display: block; color: var(--ink-dim); font-weight: 700; font-size: calc(var(--u) * 0.9); }
+.ac-wait { margin: 0; text-align: center; color: var(--ink-dim); font-weight: 700; }
+.ac-err { margin: 0; text-align: center; color: #ffb4a0; font-weight: 800; font-size: calc(var(--u) * 1); }
+
+.ac-back { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; background: rgba(4, 8, 22, 0.72); backdrop-filter: blur(4px); }
+.ac-sheet { position: relative; width: min(calc(var(--u) * 40), 92vw); padding: calc(var(--u) * 2.6) calc(var(--u) * 2.6) calc(var(--u) * 1.8); display: flex; flex-direction: column; gap: calc(var(--u) * 1.2); text-align: center; }
+.ac-sheet .close { position: absolute; right: calc(var(--u) * 1); top: calc(var(--u) * 1); }
+.ac-kick { font-family: var(--font-latin); letter-spacing: 0.3em; font-size: calc(var(--u) * 0.9); color: var(--gold); }
+.ac-sheet h3 { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: calc(var(--u) * 2.6); }
+.ac-lead { margin: 0 0 calc(var(--u) * 0.4); color: var(--ink-dim); font-weight: 700; line-height: 1.6; font-size: calc(var(--u) * 1.05); }
+.ac-later { align-self: center; background: none; border: none; color: var(--ink-dim); font-weight: 800; cursor: pointer; padding: calc(var(--u) * 0.4) calc(var(--u) * 1.2); }
+.ac-later:hover { color: #fff; }
+
+/* the small reminder on the home screen */
+.ac-chip { display: inline-flex; align-items: center; gap: 6px; height: calc(var(--u) * 3.2); padding: 0 calc(var(--u) * 1.1); border-radius: 999px; border: 1px solid rgba(255, 210, 120, 0.55); background: rgba(40, 28, 6, 0.6); color: #ffe3a3; font-weight: 900; font-size: calc(var(--u) * 1); cursor: pointer; white-space: nowrap; }
+.ac-chip svg { width: 1.2em; height: 1.2em; }
+.ac-chip:hover { background: rgba(80, 56, 12, 0.7); }

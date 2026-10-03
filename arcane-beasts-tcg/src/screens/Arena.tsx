@@ -1,5 +1,6 @@
 // バトル: the battle menu opened from the home screen. Laid out like home —
-// a big story tile and smaller tiles for free battles and online play (friends, random, ranked).
+// four tall mode cards in a row (story, free battles, online play, deck) and a
+// band underneath with the deck in use and the player's record.
 import { motion } from 'motion/react';
 import { useEffect } from 'react';
 import { onlineSupported } from '../online/client';
@@ -20,8 +21,6 @@ interface Tile {
   bg: string;
   fig: string;
   icon: string;
-  big?: boolean;
-  tall?: boolean;
   badge?: string;
   off?: boolean;
 }
@@ -43,7 +42,6 @@ export function Arena() {
       bg: 'story/landscape-lava',
       fig: 'monsters/fire-dragon',
       icon: 'book',
-      big: true,
       badge: save.story.started ? undefined : 'NEW',
     },
     { to: 'rivals', title: 'フリー対戦', sub: `強敵とバトル（${save.beaten.length}/${RIVALS.length} 撃破）`, bg: 'story/p-mountains', fig: 'humans/duelist', icon: 'swords' },
@@ -54,7 +52,6 @@ export function Arena() {
       bg: 'story/p-summer',
       fig: 'humans/cavalier',
       icon: 'person',
-      tall: true,
       off: !online,
     },
     { to: 'deck', title: 'デッキ編集', sub: deck ? `使用中「${deck.name}」` : 'デッキを組もう', bg: 'story/grim-altar', fig: 'woses/ancient-wose', icon: 'deck' },
@@ -66,11 +63,11 @@ export function Arena() {
       <div className="screen-shade" />
       <div className="stage">
         <TopBar title="バトル" />
-        <div className="home-grid arena-grid">
+        <div className="arena-cards">
           {tiles.map((t, i) => (
             <motion.div
               key={t.to}
-              className={`tile ${t.big ? 'big' : ''} ${t.tall ? 'tall' : ''} ${t.off ? 'off' : ''}`}
+              className={`tile ${t.off ? 'off' : ''}`}
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.05 * i, type: 'spring', stiffness: 220, damping: 24 }}
@@ -96,36 +93,37 @@ export function Arena() {
           ))}
         </div>
 
-        <div className="home-side arena-side">
-          <motion.div className="panel deck-box" initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }}>
+        {/* the bottom band: your deck in the middle, your record either side */}
+        <motion.div className="panel arena-band" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2, duration: 0.5 }}>
+          <div className="ab-stat">
+            <b>{save.wins}</b>
+            <span>勝利</span>
+          </div>
+          <div className="ab-stat">
+            <b>{save.losses}</b>
+            <span>敗北</span>
+          </div>
+          <div className="ab-deck" onClick={() => go('deck')}>
             {deck && <CardFace cid={deck.cover} />}
             <div>
-              <h3>使用中のデッキ</h3>
-              <div className="dname">{deck?.name ?? '―'}</div>
-              <div style={{ marginTop: 8 }}>
-                <button className="btn small" onClick={() => go('deck')}>
-                  変更する
-                </button>
-              </div>
+              <small>使用中のデッキ</small>
+              <b>{deck?.name ?? '―'}</b>
             </div>
-          </motion.div>
-          <motion.div className="panel stat-box" initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.15 }}>
-            <div>
-              <b>{save.wins}</b>
-              <span>勝利</span>
-            </div>
-            <div>
-              <b>{save.losses}</b>
-              <span>敗北</span>
-            </div>
-            <div>
-              <b>
-                {save.story.cleared.length}/{CHAPTERS.length}
-              </b>
-              <span>ストーリー</span>
-            </div>
-          </motion.div>
-        </div>
+            <span className="btn small">変更</span>
+          </div>
+          <div className="ab-stat">
+            <b>
+              {save.story.cleared.length}/{CHAPTERS.length}
+            </b>
+            <span>ストーリー</span>
+          </div>
+          <div className="ab-stat">
+            <b>
+              {save.beaten.length}/{RIVALS.length}
+            </b>
+            <span>強敵撃破</span>
+          </div>
+        </motion.div>
       </div>
     </div>
   );

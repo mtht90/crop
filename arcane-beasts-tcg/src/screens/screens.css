@@ -599,3 +599,21 @@
 .dev-badge { padding: 2px calc(var(--u) * 1); border-radius: 999px; background: #1f9d55; color: #fff; font-size: calc(var(--u) * 0.9); letter-spacing: 0.1em; }
 .dev-on .btn.small { margin-left: auto; }
 .dev-on .btn.ghost.small { margin-left: 0; }
+
+/* バトル: four tall mode cards in a centred row and a band underneath (Hearthstone-like) */
+.arena-cards { position: absolute; left: calc(var(--u) * 4); right: calc(var(--u) * 4); top: calc(var(--u) * 8.6); height: calc(var(--u) * 33); display: grid; grid-template-columns: repeat(4, 1fr); gap: calc(var(--u) * 1.6); }
+.arena-cards .tile .fig { right: auto; left: 50%; bottom: 0; height: 74%; translate: -50% 0; }
+.arena-cards .tile:hover .fig { transform: scale(1.04); }
+.arena-cards .tile .shade { background: linear-gradient(0deg, rgba(0, 0, 0, 0.92), rgba(0, 0, 0, 0.3) 40%, transparent 65%); }
+.arena-cards .tile .label { left: 50%; bottom: calc(var(--u) * 1.6); translate: -50% 0; width: 88%; text-align: center; display: flex; flex-direction: column; align-items: center; }
+.arena-cards .tile .label h2 { font-size: calc(var(--u) * 2.6); }
+.arena-cards .tile .label p { color: #e3e8f5; font-weight: 700; text-shadow: 0 2px 6px #000; min-height: 2.6em; }
+.arena-cards .tile .label .ico { margin-bottom: 4px; }
+.arena-band { position: absolute; left: calc(var(--u) * 4); right: calc(var(--u) * 4); top: calc(var(--u) * 43.6); height: calc(var(--u) * 9); display: grid; grid-template-columns: 1fr 1fr 2.6fr 1fr 1fr; align-items: center; padding: 0 calc(var(--u) * 1.4); }
+.ab-stat { text-align: center; }
+.ab-stat b { display: block; font-family: var(--font-display); font-weight: 400; font-size: calc(var(--u) * 2.2); color: var(--gold-2); line-height: 1.1; }
+.ab-stat span { font-size: calc(var(--u) * 0.9); color: var(--ink-dim); font-weight: 700; }
+.ab-deck { display: flex; align-items: center; justify-content: center; gap: calc(var(--u) * 1.2); height: 100%; border-left: 1px solid var(--line); border-right: 1px solid var(--line); cursor: pointer; }
+.ab-deck .tcg { width: calc(var(--u) * 4.6); flex: none; }
+.ab-deck small { display: block; color: var(--ink-dim); font-weight: 700; font-size: calc(var(--u) * 0.85); }
+.ab-deck b { display: block; font-family: var(--font-display); font-weight: 400; font-size: calc(var(--u) * 1.7); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: calc(var(--u) * 16); }

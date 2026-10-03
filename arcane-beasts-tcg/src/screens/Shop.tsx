@@ -22,7 +22,7 @@ import { MeteorCinema, OMEN_COLORS, type OmenTier } from './pack/cinema';
 import './pack/pack.css';
 import { vibrate } from '../lib/fx';
 
-type Phase = 'pick' | 'cinema' | 'tear' | 'reveal' | 'results' | 'multi';
+type Phase = 'launch' | 'cinema' | 'tear' | 'reveal' | 'results' | 'multi';
 
 const EASE_OUT = [0.16, 1, 0.3, 1] as const;
 const EASE_IN = [0.7, 0, 0.84, 0] as const;
@@ -365,7 +365,10 @@ interface OpeningProps extends Omit<OpeningState, 'key'> {
 
 function Opening({ booster, cards, god, fresh, shards, packs, onClose, onAgain }: OpeningProps) {
   const u = useUnit();
-  const [phase, setPhase] = useState<Phase>('pick');
+  const [phase, setPhase] = useState<Phase>('launch');
+  const cineApi = useRef<CinemaApi | null>(null);
+  /** WebGL failed: after the launch go straight to the pack */
+  const noCine = useRef(false);
   const omen = useMemo(() => makeOmen(cards, god), [cards, god]);
   const [aura, setAura] = useState<AuraState>({ tier: omen.shown, visible: false, hot: false });
   const packSlot = useRef<HTMLDivElement>(null);
@@ -403,15 +406,20 @@ function Opening({ booster, cards, god, fresh, shards, packs, onClose, onAgain }
     <motion.div ref={root} className="po" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.45, ease: EASE_IN_OUT }}>
       <Backdrop hue={booster.hue} dim={dim} />
       <AnimatePresence>
-        {(phase === 'cinema' || phase === 'tear') && (
+        {(phase === 'launch' || phase === 'cinema' || phase === 'tear') && (
           <CinemaLayer
             key="cinema"
             omen={omen}
             god={god && packs === 1}
             aura={aura}
+            held={phase === 'launch'}
             playing={phase === 'cinema'}
+            api={cineApi}
             target={() => packSlot.current?.getBoundingClientRect() ?? null}
-            onDone={() => setPhase('tear')}
+            onDone={() => {
+              if (phase === 'launch') noCine.current = true;
+              else setPhase('tear');
+            }}
           />
         )}
       </AnimatePresence>
@@ -454,9 +462,17 @@ function Opening({ booster, cards, god, fresh, shards, packs, onClose, onAgain }
 
       <div className="stage">
         {/* where the pack will be: the cinematic's light (and later the aura) aims here */}
-        {phase === 'pick' && <PackPicker booster={booster} u={u} onPicked={() => setPhase('cinema')} />}
+        {phase === 'launch' && (
+          <PackLaunch
+            booster={booster}
+            packs={packs}
+            u={u}
+            onLaunch={(x, y) => cineApi.current?.release(x, y, packs)}
+            onGone={() => setPhase(noCine.current ? 'tear' : 'cinema')}
+          />
+        )}
 
-        {(phase === 'cinema' || phase === 'tear') && (
+        {(phase === 'launch' || phase === 'cinema' || phase === 'tear') && (
           <div className="tear-wrap" style={{ visibility: 'hidden', pointerEvents: 'none' }}>
             <div className="tear-float" ref={packSlot} />
           </div>
@@ -544,101 +560,92 @@ function Opening({ booster, cards, god, fresh, shards, packs, onClose, onAgain }
 // 流星降臨: the live-rendered cinematic that delivers the pack
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
-// Pack pick: a few packs drift in a row; swipe through them and tap one
-// (every pack holds the same pull — choosing is for the feel of it)
+// Launch: the pack (or a bundle of them) floats over the night lake. Swipe it
+// up and it flies into the sky, becomes a star, and falls back as the meteor.
 // ---------------------------------------------------------------------------
-const PICK_N = 5;
+/** where the cinematic waits (seconds into its opening): the lake, the far peaks, the moon */
+const LAUNCH_HOLD = 1.5;
 
-function PickPack({ booster, i, x, sp, u, chosen, onPick }: { booster: Booster; i: number; x: MotionValue<number>; sp: number; u: number; chosen: number | null; onPick: (i: number) => void }) {
-  const base = (i - (PICK_N - 1) / 2) * sp;
-  const d = useTransform(x, (v) => (base + v) / sp); // distance from centre, in slots
-  const rotateY = useTransform(d, (v) => Math.max(-1, Math.min(1, v)) * -28);
-  const scale = useTransform(d, (v) => 1 - Math.min(1, Math.abs(v)) * 0.16);
-  const z = useTransform(d, (v) => -Math.min(2, Math.abs(v)) * u * 4);
-  const bright = useTransform(d, (v) => `brightness(${1 - Math.min(1, Math.abs(v)) * 0.35})`);
-  const me = chosen === i;
-  const other = chosen !== null && !me;
-  return (
-    <motion.div className="pick-slot" style={{ left: `calc(50% + ${base}px)`, zIndex: me ? 20 : 10 - Math.abs(i - 2) }}>
-      <motion.div
-        className="pick-pack"
-        style={{ rotateY: me ? 0 : rotateY, scale: me ? 1 : scale, z: me ? 0 : z, filter: me ? 'none' : bright }}
-        initial={{ opacity: 0, y: u * 6 }}
-        animate={
-          me
-            ? { opacity: [1, 1, 0], y: [0, -u * 2, -u * 26], scale: [1, 1.12, 0.35], transition: { duration: 1.25, times: [0, 0.35, 1], ease: EASE_IN_OUT } }
-            : other
-              ? { opacity: 0, y: u * 10, transition: { duration: 0.5, ease: EASE_IN } }
-              : { opacity: 1, y: [0, -u * 0.5, 0], transition: { opacity: { duration: 0.5, delay: 0.1 + i * 0.07 }, y: { duration: 3.6 + i * 0.3, repeat: Infinity, ease: 'easeInOut' } } }
-        }
-        onTap={() => chosen === null && onPick(i)}
-      >
-        <BoosterPack booster={booster} still={!me} />
-        {me && <motion.div className="pick-glow" initial={{ opacity: 0 }} animate={{ opacity: [0, 1, 1] }} transition={{ duration: 1.2, times: [0, 0.3, 1] }} />}
-      </motion.div>
-    </motion.div>
-  );
-}
+function PackLaunch({ booster, packs, u, onLaunch, onGone }: { booster: Booster; packs: number; u: number; onLaunch: (x: number, y: number) => void; onGone: () => void }) {
+  const n = Math.min(packs, 10);
+  const y = useMotionValue(0);
+  const box = useRef<HTMLDivElement>(null);
+  const [gone, setGone] = useState(false);
+  const [hint, hideHint] = useIdleHint('launch', 900);
+  const lift = useTransform(y, [-u * 14, 0], [1, 0]);
+  const tilt = useTransform(y, [-u * 14, 0, u * 4], [-6, 0, 2]);
+  const glow = useTransform(lift, (v) => 0.25 + v * 0.75);
+  const shadow = useTransform(lift, [0, 1], [0.7, 0]);
 
-function PackPicker({ booster, u, onPicked }: { booster: Booster; u: number; onPicked: () => void }) {
-  const sp = u * 19;
-  const x = useMotionValue(0);
-  const [chosen, setChosen] = useState<number | null>(null);
-  const [hint, hideHint] = useIdleHint('pick', 1200);
-  const lastSlot = useRef(0);
-  // a soft tick as each pack passes the centre
-  useEffect(
-    () =>
-      x.on('change', (v) => {
-        const slot = Math.round(-v / sp);
-        if (slot !== lastSlot.current) {
-          lastSlot.current = slot;
-          foley.tick();
-          vibrate(4);
-        }
-      }),
-    [x, sp],
-  );
-  const pick = (i: number) => {
+  const launch = () => {
+    if (gone) return;
     hideHint();
-    const centre = -(i - (PICK_N - 1) / 2) * sp;
-    // bring the chosen pack to the centre first, then lift it into the sky
-    animate(x, centre, { type: 'spring', stiffness: 260, damping: 30 });
-    setTimeout(
-      () => {
-        setChosen(i);
-        foley.pop();
-        sfx('magic-holy-2', 0.35);
-        vibrate(14);
-        setTimeout(() => foley.whoosh(), 380);
-        setTimeout(onPicked, 1150);
-      },
-      Math.abs(x.get() - centre) > 4 ? 280 : 0,
-    );
+    setGone(true);
+    const r = box.current?.getBoundingClientRect();
+    if (r) onLaunch(r.left + r.width / 2, r.top + r.height * 0.3);
+    foley.whoosh();
+    sfx('magic-holy-2', 0.3);
+    vibrate(18);
+    animate(y, -(window.innerHeight + u * 20), { duration: 0.7, ease: [0.55, 0, 0.85, 0.35] });
+    setTimeout(onGone, 650);
   };
-  const lim = ((PICK_N - 1) / 2) * sp;
+
   return (
-    <div className="picker">
-      <motion.div className="pick-title" initial={{ opacity: 0, y: -8 }} animate={{ opacity: chosen === null ? 1 : 0, y: 0 }} transition={{ duration: 0.5 }}>
-        パックを1つ選んでください
+    <div className="launch">
+      <motion.div className="launch-title" initial={{ opacity: 0, y: -8 }} animate={{ opacity: gone ? 0 : 1, y: 0 }} transition={{ duration: 0.6, delay: gone ? 0 : 0.4 }}>
+        {packs > 1 ? `${packs}パックを空へ` : 'パックを空へ'}
       </motion.div>
-      <motion.div
-        className="pick-row"
-        style={{ x }}
-        drag={chosen === null ? 'x' : false}
-        dragConstraints={{ left: -lim, right: lim }}
-        dragElastic={0.18}
-        dragTransition={{ power: 0.25, timeConstant: 180, modifyTarget: (t) => Math.round(t / sp) * sp }}
-        onDragStart={hideHint}
-      >
-        {Array.from({ length: PICK_N }, (_, i) => (
-          <PickPack key={i} booster={booster} i={i} x={x} sp={sp} u={u} chosen={chosen} onPick={pick} />
-        ))}
-      </motion.div>
+      <div className="tear-wrap launch-wrap">
+        <motion.div
+          ref={box}
+          className="launch-pack"
+          style={{ y, rotate: tilt }}
+          drag={gone ? false : 'y'}
+          dragConstraints={{ top: 0, bottom: 0 }}
+          dragElastic={{ top: 0.75, bottom: 0.12 }}
+          dragTransition={{ bounceStiffness: 380, bounceDamping: 24 }}
+          onDragStart={hideHint}
+          onDragEnd={(_, info) => {
+            if (info.offset.y < -u * 5 || info.velocity.y < -550) launch();
+          }}
+          onTap={() => !gone && animate(y, [0, -u * 2.2, 0], { duration: 0.55, ease: 'easeOut' })}
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={gone ? { opacity: [1, 1, 0], scale: [1, 0.7, 0.08], filter: ['brightness(1)', 'brightness(1.8)', 'brightness(3)'] } : { opacity: 1, scale: 1 }}
+          transition={gone ? { duration: 0.62, times: [0, 0.5, 1], ease: 'easeIn' } : { duration: 0.8, ease: EASE_OUT }}
+        >
+          {/* the light it leaves behind as it rises */}
+          <motion.div className="launch-glow" style={{ opacity: glow }} />
+          {Array.from({ length: n }, (_, k) => {
+            const back = n - 1 - k; // 0 = the front pack
+            const spread = (k - (n - 1) / 2) / Math.max(1, (n - 1) / 2);
+            return (
+              <motion.div
+                key={k}
+                className="launch-one"
+                style={{ zIndex: k }}
+                initial={false}
+                animate={
+                  gone && n > 1
+                    ? { x: spread * u * 9, rotate: spread * 22, y: -Math.abs(spread) * u * 2, transition: { duration: 0.45, ease: EASE_OUT, delay: back * 0.015 } }
+                    : { x: back * u * 0.32, y: back * u * 0.26, rotate: n > 1 ? (back % 2 ? 1.2 : -1.2) * Math.min(1, back) : 0 }
+                }
+              >
+                <BoosterPack booster={booster} still={k !== n - 1} />
+              </motion.div>
+            );
+          })}
+        </motion.div>
+        <motion.div className="launch-shadow" style={{ opacity: shadow }} />
+      </div>
       <AnimatePresence>
-        {hint && chosen === null && (
-          <motion.div className="po-hint" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            スワイプして選び、タップで決定
+        {!gone && (
+          <motion.div className="launch-cue" initial={{ opacity: 0 }} animate={{ opacity: hint ? 1 : 0.55 }} exit={{ opacity: 0 }} transition={{ duration: 0.5 }}>
+            <div className="launch-chev">
+              <i />
+              <i />
+              <i />
+            </div>
+            上にスワイプして、空へ
           </motion.div>
         )}
       </AnimatePresence>
@@ -652,7 +659,11 @@ interface AuraState {
   hot: boolean;
 }
 
-function CinemaLayer({ omen, god, aura, playing, target, onDone }: { omen: Omen; god: boolean; aura: AuraState; playing: boolean; target: () => DOMRect | null; onDone: () => void }) {
+interface CinemaApi {
+  release: (x: number, y: number, count: number) => void;
+}
+
+function CinemaLayer({ omen, god, aura, held, playing, api, target, onDone }: { omen: Omen; god: boolean; aura: AuraState; held: boolean; playing: boolean; api: React.MutableRefObject<CinemaApi | null>; target: () => DOMRect | null; onDone: () => void }) {
   const host = useRef<HTMLDivElement>(null);
   const cine = useRef<MeteorCinema | null>(null);
   const doneRef = useRef(onDone);
@@ -667,8 +678,12 @@ function CinemaLayer({ omen, god, aura, playing, target, onDone }: { omen: Omen;
         god,
         meteors: omen.meteors,
         target,
+        holdAt: LAUNCH_HOLD,
         onBeat: (b) => {
-          if (b === 'enter') {
+          if (b === 'twinkle') {
+            foley.chime(4 + omen.shown);
+            foley.sparkle();
+          } else if (b === 'enter') {
             foley.whoosh();
             if (omen.shown >= 2) setTimeout(() => foley.sparkle(), 250);
             if (god) setTimeout(() => foley.rarity(5), 700);
@@ -687,10 +702,12 @@ function CinemaLayer({ omen, god, aura, playing, target, onDone }: { omen: Omen;
       return;
     }
     cine.current = c;
+    api.current = { release: (x, y, n) => c.release(x, y, n) };
     c.play();
     return () => {
       c.dispose();
       cine.current = null;
+      api.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -704,7 +721,7 @@ function CinemaLayer({ omen, god, aura, playing, target, onDone }: { omen: Omen;
         <div ref={host} className="cine-host" />
       </motion.div>
       {/* tap anywhere to skip; lives outside .cine so it sits above the stage */}
-      {playing && (
+      {playing && !held && (
         <>
           <div className="cine-tap" onPointerDown={() => cine.current?.skip()} />
           <button className="textbtn po-skip cine-skip" onClick={() => cine.current?.skip()}>

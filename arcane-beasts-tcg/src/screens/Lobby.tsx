@@ -12,11 +12,11 @@ import { CardFace } from '../ui/Card';
 import { judgeName } from '../online/names';
 import { fileToAvatar } from '../online/avatarFile';
 import { isAvatarUrl } from '../online/avatar';
-import { GoogleBox } from './GoogleBox';
+import { AccountBox, AccountSheet, markAskedToSignUp, shouldAskToSignUp } from './AccountBox';
 import { RankEmblem } from '../ui/RankEmblem';
 import { Icon } from '../ui/Icon';
 import { RANKS } from '../state/ranked';
-import { PORTRAITS, type MatchKind } from '../online/protocol';
+import { isRegistered, PORTRAITS, type MatchKind } from '../online/protocol';
 import { online, onlineSupported, serverUrl, setServerAddress, useOnline } from '../online/client';
 import { foley, playMusic, sfx } from '../audio/audio';
 import './lobby.css';
@@ -108,6 +108,8 @@ export function Lobby() {
   const [showXfer, setShowXfer] = useState(false);
   const invite = useRef<{ room?: string; watch?: string }>({});
   const pick = useRef<HTMLInputElement>(null);
+  // the first time the lobby opens, offer to sign up (once per device)
+  const [askSignUp, setAskSignUp] = useState(false);
   const flash = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(null), 2600);
@@ -128,6 +130,10 @@ export function Lobby() {
 
   useEffect(() => {
     if (st.profile) setName((n) => n || st.profile!.name);
+    if (st.profile && !isRegistered(st.profile) && shouldAskToSignUp()) {
+      markAskedToSignUp();
+      setAskSignUp(true);
+    }
   }, [st.profile]);
 
   // invitation links (?room=ABCD joins, ?watch=ABCD spectates) are used once the profile is ready
@@ -332,9 +338,9 @@ export function Lobby() {
               <button className="btn small" onClick={() => go('deck')}>
                 変更
               </button>
+              {deckErr && <div className="warn">{deckErr}</div>}
             </div>
           </motion.div>
-          {deckErr && <div className="warn">{deckErr}</div>}
 
           <motion.button className="btn lb-watch-btn" initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, ease: EASE_OUT, delay: 0.12 }} onClick={() => setSheet('watch')}>
             <Icon name="crystal-ball" /> 観戦
@@ -346,7 +352,7 @@ export function Lobby() {
         <AnimatePresence>
           {sheet && !busy && (
             <motion.div className="lb-back" key="sheet" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={close}>
-              <motion.div className="panel lb-sheet" initial={{ opacity: 0, y: 24, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 12 }} transition={{ duration: 0.35, ease: EASE_OUT }} onClick={(e) => e.stopPropagation()}>
+              <motion.div className={`panel lb-sheet ${sheet === 'profile' ? 'wide' : ''}`} initial={{ opacity: 0, y: 24, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 12 }} transition={{ duration: 0.35, ease: EASE_OUT }} onClick={(e) => e.stopPropagation()}>
                 <button className="icon-btn close" title="閉じる" onClick={close}>
                   <Icon name="close" />
                 </button>
@@ -408,6 +414,9 @@ export function Lobby() {
                 {sheet === 'profile' && st.profile && (
                   <>
                     <h3>プロフィール</h3>
+                    <div className="lb-prof">
+                    <div className="lb-prof-left">
+                    <img className="lb-prof-av" src={artUrl(st.profile.portrait)} alt="" />
                     <input
                       className="lb-name"
                       value={name}
@@ -427,6 +436,18 @@ export function Lobby() {
                       }}
                       onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
                     />
+                    {rank && (
+                      <div className="lb-prof-rank">
+                        <RankEmblem rank={rank.rank} size="calc(var(--u) * 2.6)" />
+                        <b>{RANKS[rank.rank]}</b>
+                        <small>
+                          今月 {rank.wins}勝 {rank.losses}敗
+                        </small>
+                      </div>
+                    )}
+                    </div>
+                    <div className="lb-prof-right">
+                    <h4>アイコン</h4>
                     <div className="lb-portraits">
                       {isAvatarUrl(st.profile.portrait) && (
                         <button className="on" title="いまのアイコン">
@@ -438,7 +459,7 @@ export function Lobby() {
                         title="自分の画像をアイコンにする"
                         onClick={() => pick.current?.click()}
                       >
-                        <Icon name="plus" />
+                        <i className="lb-plus">＋</i>
                         <span>自分の画像</span>
                       </button>
                       <input
@@ -462,7 +483,12 @@ export function Lobby() {
                         </button>
                       ))}
                     </div>
-                    <GoogleBox />
+                    <div className="lb-acct">
+                      <h4>アカウント</h4>
+                      <AccountBox />
+                    </div>
+                    </div>
+                    </div>
                     <button className="lb-link" onClick={() => setShowXfer((v) => !v)}>
                       {showXfer ? '▾' : '▸'} 引き継ぎ・サーバー
                     </button>
@@ -561,6 +587,7 @@ export function Lobby() {
           )}
         </AnimatePresence>
       </div>
+      <AnimatePresence>{askSignUp && <AccountSheet first onClose={() => setAskSignUp(false)} />}</AnimatePresence>
     </div>
   );
 }

@@ -90,8 +90,8 @@ function serve(req: IncomingMessage, res: ServerResponse) {
 
 const server = createServer(serve);
 const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 64 * 1024 });
-wss.on('connection', (ws) => {
-  const conn = hub.connect({ send: (d) => ws.send(d), close: () => ws.close() });
+wss.on('connection', (ws, req) => {
+  const conn = hub.connect({ send: (d) => ws.send(d), close: () => ws.close() }, req.headers.origin);
   ws.on('message', (data) => hub.message(conn, data.toString()));
   ws.on('close', () => hub.disconnect(conn));
   ws.on('error', () => ws.close());

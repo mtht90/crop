@@ -12,6 +12,7 @@ import { PROTOCOL, type ClientMsg, type ErrorCode, type LiveGame, type MatchKind
 import { judgeName } from '../src/online/names';
 import { isAvatarUrl } from '../src/online/avatar';
 import type { GoogleVerifier } from './google';
+import { passkeyOrigin, webauthn, type PasskeyService } from './passkey';
 import { PlayerStore, portraitOk, type PlayerRecord } from './players';
 import { randomInt } from 'node:crypto';
 
@@ -31,6 +32,8 @@ export interface HubOptions {
   log?: (msg: string) => void;
   /** Google sign-in, when the server has an OAuth client id */
   google?: { clientId: string; verify: GoogleVerifier };
+  /** passkey checks (tests replace them) */
+  passkeys?: PasskeyService;
 }
 
 interface Seat {
@@ -63,9 +66,13 @@ class Conn {
   windowCount = 0;
   lastStamp = 0;
   badCodes = 0;
+  /** the passkey challenge this connection is answering */
+  challenge: { mode: 'register' | 'login'; value: string; expires: number } | null = null;
   constructor(
     readonly sock: Socket,
     readonly id: number,
+    /** the page's address (the WebSocket Origin header) */
+    readonly origin?: string,
   ) {}
 }
 
@@ -113,8 +120,8 @@ export class Hub {
   // ------------------------------------------------------------------------
   // connections
   // ------------------------------------------------------------------------
-  connect(sock: Socket): Conn {
-    const c = new Conn(sock, this.nextId++);
+  connect(sock: Socket, origin?: string): Conn {
+    const c = new Conn(sock, this.nextId++, origin);
     this.conns.add(c);
     return c;
   }
@@ -181,7 +188,13 @@ export class Hub {
         return this.send(c, { t: 'renamed', profile: this.store.profile(c.player) });
       }
       case 'google':
-        void this.googleSignIn(c, m.credential);
+        void this.googleSignIn(c, m.credential).catch((e) => this.authFailed(c, e));
+        return;
+      case 'passkeyBegin':
+        void this.passkeyBegin(c, m.mode).catch((e) => this.authFailed(c, e));
+        return;
+      case 'passkeyFinish':
+        void this.passkeyFinish(c, m.mode, m.response).catch((e) => this.authFailed(c, e));
         return;
       case 'transfer': {
         const { code, expires } = this.store.createTransfer(c.player);
@@ -290,6 +303,61 @@ export class Hub {
     if (!r) return this.error(c, 'busy', 'このアカウントはすでに別のGoogleアカウントとつながっています');
     this.log(`google ${r.mode} ${r.player.name}`);
     this.send(c, { t: 'account', mode: r.mode, profile: this.store.profile(r.player), secret: r.secret });
+  }
+
+  private authFailed(c: Conn, e: unknown) {
+    this.log(`sign-in error: ${e instanceof Error ? e.message : String(e)}`);
+    this.error(c, 'bad_request', 'ログインの処理に失敗しました。もう一度お試しください');
+  }
+
+  private get passkeys() {
+    return this.opts.passkeys ?? webauthn;
+  }
+
+  /** `passkeyBegin`: hand out a challenge for creating or using a passkey */
+  private async passkeyBegin(c: Conn, mode: 'register' | 'login') {
+    const p = c.player;
+    const at = passkeyOrigin(c.origin);
+    if (!p) return;
+    if (!at) return this.error(c, 'bad_request', 'パスキーは https のページでのみ使えます');
+    if (mode !== 'register' && mode !== 'login') return this.error(c, 'bad_request', 'invalid message');
+    if (mode === 'login' && (c.room || c.queued)) return this.error(c, 'busy', '対戦中・待機中はアカウントを切り替えられません');
+    const options =
+      mode === 'register'
+        ? await this.passkeys.registrationOptions({ rpID: at.rpID, userId: p.id, userName: p.name, exclude: (p.passkeys ?? []).map((x) => x.id) })
+        : await this.passkeys.authenticationOptions({ rpID: at.rpID });
+    c.challenge = { mode, value: options.challenge, expires: Date.now() + 3 * 60_000 };
+    this.send(c, { t: 'passkeyOptions', mode, options });
+  }
+
+  /** `passkeyFinish`: check what the authenticator signed */
+  private async passkeyFinish(c: Conn, mode: 'register' | 'login', response: unknown) {
+    const p = c.player;
+    const at = passkeyOrigin(c.origin);
+    const ch = c.challenge;
+    c.challenge = null;
+    if (!p || !at) return;
+    if (!ch || ch.mode !== mode || ch.expires < Date.now()) return this.error(c, 'bad_code', '時間切れです。もう一度お試しください');
+    if (mode === 'register') {
+      const pk = await this.passkeys.verifyRegistration({ response, challenge: ch.value, origin: at.origin, rpID: at.rpID });
+      if (!pk) return this.error(c, 'bad_code', 'パスキーを登録できませんでした');
+      if (c.player !== p) return;
+      const taken = this.store.findPasskey(pk.id);
+      if (taken && taken.player.id !== p.id) return this.error(c, 'busy', 'このパスキーは別のプレイヤーで使われています');
+      this.store.addPasskey(p, pk);
+      this.log(`passkey new ${p.name}`);
+      return this.send(c, { t: 'account', mode: 'new', profile: this.store.profile(p) });
+    }
+    const id = typeof response === 'object' && response && typeof (response as { id?: unknown }).id === 'string' ? (response as { id: string }).id : '';
+    const found = id ? this.store.findPasskey(id) : null;
+    if (!found) return this.error(c, 'bad_code', 'このパスキーは登録されていません');
+    const ok = await this.passkeys.verifyAuthentication({ response, challenge: ch.value, origin: at.origin, rpID: at.rpID, passkey: found.passkey });
+    if (!ok) return this.error(c, 'bad_code', 'パスキーでの確認に失敗しました');
+    if (c.player !== p || c.room || c.queued) return;
+    this.store.touchPasskey(found.player, found.passkey.id, ok.counter);
+    if (found.player.id === p.id) return this.send(c, { t: 'account', mode: 'same', profile: this.store.profile(p) });
+    this.log(`passkey login ${found.player.name}`);
+    this.send(c, { t: 'account', mode: 'login', profile: this.store.profile(found.player), secret: this.store.newSecret(found.player) });
   }
 
   /** `link`: a new device presents a transfer code instead of an id */

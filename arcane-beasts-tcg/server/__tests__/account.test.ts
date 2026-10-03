@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from 'vitest';
 import { PROTOCOL, type ClientMsg, type ServerMsg } from '../../src/online/protocol';
 import { AVATAR_MAX_CHARS, validAvatar } from '../../src/online/avatar';
 import { googleVerifier, maskEmail, type GoogleIdentity } from '../google';
+import { passkeyOrigin, type PasskeyService } from '../passkey';
 import { Hub } from '../hub';
 import { PlayerStore } from '../players';
 
@@ -12,8 +13,8 @@ const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJA
 class Client {
   msgs: ServerMsg[] = [];
   conn;
-  constructor(hub: Hub) {
-    this.conn = hub.connect({ send: (d) => this.msgs.push(JSON.parse(d)), close: () => undefined });
+  constructor(hub: Hub, origin = 'https://game.example') {
+    this.conn = hub.connect({ send: (d) => this.msgs.push(JSON.parse(d)), close: () => undefined }, origin);
     this.hub = hub;
   }
   hub: Hub;
@@ -32,9 +33,25 @@ const identities: Record<string, GoogleIdentity> = {
 const verify = async (c: string) => identities[c] ?? null;
 
 const hubs: Hub[] = [];
+// a stand-in authenticator: the "response" is { id, challenge, ok }
+const seen: { rpID?: string; origin?: string } = {};
+const fakePasskeys: PasskeyService = {
+  registrationOptions: async ({ rpID }) => ((seen.rpID = rpID), { challenge: 'reg-' + Math.random() }) as never,
+  authenticationOptions: async () => ({ challenge: 'auth-' + Math.random() }) as never,
+  verifyRegistration: async ({ response, challenge, origin }) => {
+    seen.origin = origin;
+    const r = response as { id: string; challenge: string; ok: boolean };
+    return r.ok && r.challenge === challenge ? { id: r.id, publicKey: 'pk', counter: 0 } : null;
+  },
+  verifyAuthentication: async ({ response, challenge, passkey }) => {
+    const r = response as { id: string; challenge: string; ok: boolean };
+    return r.ok && r.challenge === challenge && r.id === passkey.id ? { counter: 5 } : null;
+  },
+};
+
 function setup(withGoogle = true) {
   const store = new PlayerStore(null);
-  const hub = new Hub({ store, google: withGoogle ? { clientId: 'cid.apps.googleusercontent.com', verify } : undefined });
+  const hub = new Hub({ store, passkeys: fakePasskeys, google: withGoogle ? { clientId: 'cid.apps.googleusercontent.com', verify } : undefined });
   hubs.push(hub);
   return { store, hub };
 }
@@ -132,6 +149,71 @@ describe('google sign-in', () => {
     off.say({ t: 'google', credential: 'tokA' });
     await settle();
     expect(off.last('error')).toMatchObject({ code: 'bad_request' });
+  });
+});
+
+describe('passkeys', () => {
+  const register = async (c: Client, id: string, ok = true) => {
+    c.say({ t: 'passkeyBegin', mode: 'register' });
+    await settle();
+    const ch = (c.last('passkeyOptions')!.options as { challenge: string }).challenge;
+    c.say({ t: 'passkeyFinish', mode: 'register', response: { id, challenge: ch, ok } });
+    await settle();
+  };
+  const login = async (c: Client, id: string) => {
+    c.say({ t: 'passkeyBegin', mode: 'login' });
+    await settle();
+    const ch = (c.last('passkeyOptions')!.options as { challenge: string }).challenge;
+    c.say({ t: 'passkeyFinish', mode: 'login', response: { id, challenge: ch, ok: true } });
+    await settle();
+  };
+
+  test('register on one device, log in on another', async () => {
+    const { hub } = setup();
+    const a = new Client(hub);
+    const w = hello(a, 'アリス');
+    await register(a, 'cred-1');
+    expect(seen).toEqual({ rpID: 'game.example', origin: 'https://game.example' });
+    const made = a.last('account')!;
+    expect(made.mode).toBe('new');
+    expect(made.profile.passkeys).toBe(1);
+
+    const b = new Client(hub);
+    hello(b, 'べつ');
+    await login(b, 'cred-1');
+    const got = b.last('account')!;
+    expect(got.mode).toBe('login');
+    expect(got.profile.id).toBe(w.profile.id);
+    expect(got.secret).toBeTruthy();
+  });
+
+  test('a wrong answer, an unknown passkey or a reused challenge is refused', async () => {
+    const { hub } = setup();
+    const a = new Client(hub);
+    hello(a);
+    await register(a, 'cred-x', false);
+    expect(a.last('error')).toMatchObject({ code: 'bad_code' });
+    const b = new Client(hub);
+    hello(b);
+    await login(b, 'nobody');
+    expect(b.last('error')).toMatchObject({ code: 'bad_code' });
+    // finishing without a fresh challenge
+    b.say({ t: 'passkeyFinish', mode: 'login', response: { id: 'nobody', challenge: 'x', ok: true } });
+    await settle();
+    expect(b.last('error')!.message).toContain('時間切れ');
+  });
+
+  test('passkeys need an https page (or localhost)', async () => {
+    expect(passkeyOrigin('https://arcane-beasts.onrender.com')).toEqual({ origin: 'https://arcane-beasts.onrender.com', rpID: 'arcane-beasts.onrender.com' });
+    expect(passkeyOrigin('http://localhost:5173')?.rpID).toBe('localhost');
+    expect(passkeyOrigin('http://192.168.0.5:8787')).toBeNull();
+    expect(passkeyOrigin(undefined)).toBeNull();
+    const { hub } = setup();
+    const c = new Client(hub, 'http://192.168.0.5:8787');
+    hello(c);
+    c.say({ t: 'passkeyBegin', mode: 'register' });
+    await settle();
+    expect(c.last('error')).toMatchObject({ code: 'bad_request' });
   });
 });
 

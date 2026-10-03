@@ -42,7 +42,7 @@ export const T_IMPACT = T0 + L_IMPACT;
 export const T_DONE = T0 + L_DONE;
 const MOON_DIR = new THREE.Vector3(0.5, 0.3, -0.81).normalize();
 
-type Beat = 'enter' | 'dive' | 'impact' | 'orb' | 'morph';
+type Beat = 'twinkle' | 'enter' | 'dive' | 'impact' | 'orb' | 'morph';
 
 export interface CinemaOptions {
   tier: OmenTier;
@@ -54,6 +54,8 @@ export interface CinemaOptions {
   target: () => DOMRect | null;
   onBeat?: (beat: Beat) => void;
   onDone: () => void;
+  /** wait at this point of the opening until `release()` (the pack is swiped up) */
+  holdAt?: number;
 }
 
 const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
@@ -583,6 +585,15 @@ export class MeteorCinema {
   private shakeSeed = Math.random() * 100;
   // aura state (driven by the tear stage)
   private auraTier: OmenTier;
+  /** timeline position the cinema waits at until the pack is launched (null = running) */
+  private hold: number | null = null;
+  /** the launched pack, climbing as a star */
+  private rise: { from: THREE.Vector3; t0: number } | null = null;
+  private riseCore!: THREE.Sprite;
+  private riseHalo!: THREE.Sprite;
+  private riseExtra: { to: THREE.Vector3; delay: number; core: THREE.Sprite; halo: THREE.Sprite }[] = [];
+  private headTex!: THREE.Texture;
+  private glowTex!: THREE.Texture;
   private auraAmt = 0;
   private auraTarget = 0;
   private auraHot = 0;
@@ -760,6 +771,9 @@ export class MeteorCinema {
       [1, 'rgba(255,255,255,0)'],
     ], 256);
     this.textures.push(headTex, glowTex, ringTex);
+    this.headTex = headTex;
+    this.glowTex = glowTex;
+    this.hold = opts.holdAt ?? null;
 
     // meteors: one per card. The main one (best card) dives; the rest fall
     // away from a shared radiant like a real meteor shower.
@@ -798,6 +812,10 @@ export class MeteorCinema {
       mk([start, mid, end], t0, t0 + rnd(0.45, 0.8) * (many ? 0.8 : 1), false, tier);
     });
     this.color = new THREE.Color(god ? OMEN_COLORS[2] : OMEN_COLORS[tiers[0]]);
+
+    // the launched pack as a climbing star (and, for a bundle, its companions)
+    this.riseCore = this.riseSprite(1, false);
+    this.riseHalo = this.riseSprite(0.8, true);
 
     // the main meteor mirrored in the lake
     this.reflection = new THREE.Mesh(this.meteors[0].ribbon.mesh.geometry, this.meteors[0].ribbon.mat.clone());
@@ -989,8 +1007,27 @@ export class MeteorCinema {
 
   /** jump straight to the end of the cinematic */
   skip() {
-    if (this.done) return;
+    if (this.done || this.hold !== null) return;
     this.offset += T_DONE - this.time();
+  }
+
+  /**
+   * the pack has been swiped up from (x, y): the timeline runs on, and the pack
+   * becomes a star that climbs into the sky — and comes back as the meteor.
+   * `count` > 1 (a bundle) sends extra lights up toward the shower's radiant.
+   */
+  release(x: number, y: number, count = 1) {
+    if (this.hold === null) return;
+    this.camera.updateMatrixWorld();
+    const from = this.camera.localToWorld(this.screenToCamera(x, y, 9));
+    this.rise = { from, t0: this.hold };
+    const rnd = (a: number, b: number) => a + Math.random() * (b - a);
+    for (let k = 1; k < Math.min(count, 10); k++) {
+      const to = new THREE.Vector3(240, 300, -420).add(new THREE.Vector3(rnd(-200, 40), rnd(-120, 20), rnd(-30, 50)));
+      this.riseExtra.push({ to, delay: k * 0.06 + rnd(0, 0.05), core: this.riseSprite(0.55, false), halo: this.riseSprite(0.3, true) });
+    }
+    this.offset += this.hold - this.time();
+    this.hold = null;
   }
 
   /** keep the starry sky running quietly behind the tear stage */
@@ -1045,6 +1082,16 @@ export class MeteorCinema {
     if (this.beats.has(b)) return;
     this.beats.add(b);
     this.opts.onBeat?.(b);
+  }
+
+  private riseSprite(opacity: number, halo: boolean) {
+    const sp = new THREE.Sprite(
+      new THREE.SpriteMaterial({ map: halo ? this.glowTex : this.headTex, color: halo ? this.color : 0xffffff, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0 }),
+    );
+    sp.userData.max = opacity;
+    sp.visible = false;
+    this.scene.add(sp);
+    return sp;
   }
 
   /** camera-space point at distance d under a screen position */
@@ -1102,22 +1149,26 @@ export class MeteorCinema {
       this.frameSum += raw;
       this.frames++;
     }
+    // while held, the timeline stands still but the night keeps moving
+    if (this.hold !== null) this.offset -= dt;
     const t = this.time();
+    /** ambient clock: clouds, stars, fireflies — never held, never skipped */
+    const amb = this.clock;
     (window as unknown as { __cineT?: number }).__cineT = t;
     const Tr = Math.min(t, T_DONE);
     /** time relative to the first meteor (negative during the quiet opening) */
     const T = Tr - T0;
 
     const skyU = (this.sky.material as THREE.ShaderMaterial).uniforms;
-    skyU.uTime.value = t;
-    (this.stars.material as THREE.ShaderMaterial).uniforms.uTime.value = t;
-    (this.starsMirror.material as THREE.ShaderMaterial).uniforms.uTime.value = t;
-    (this.aurora.material as THREE.ShaderMaterial).uniforms.uTime.value = t;
-    (this.flies.material as THREE.ShaderMaterial).uniforms.uTime.value = t;
-    (this.bokeh.material as THREE.ShaderMaterial).uniforms.uTime.value = t;
-    for (const m of this.terrain) m.uniforms.uTime.value = t;
-    for (const m of this.mists) (m.material as THREE.ShaderMaterial).uniforms.uTime.value = t;
-    this.grade.uniforms.uTime.value = t;
+    skyU.uTime.value = amb;
+    (this.stars.material as THREE.ShaderMaterial).uniforms.uTime.value = amb;
+    (this.starsMirror.material as THREE.ShaderMaterial).uniforms.uTime.value = amb;
+    (this.aurora.material as THREE.ShaderMaterial).uniforms.uTime.value = amb;
+    (this.flies.material as THREE.ShaderMaterial).uniforms.uTime.value = amb;
+    (this.bokeh.material as THREE.ShaderMaterial).uniforms.uTime.value = amb;
+    for (const m of this.terrain) m.uniforms.uTime.value = amb;
+    for (const m of this.mists) (m.material as THREE.ShaderMaterial).uniforms.uTime.value = amb;
+    this.grade.uniforms.uTime.value = amb;
     const camPos = this.camera.position;
 
     // ---------------- camera ----------------
@@ -1131,7 +1182,7 @@ export class MeteorCinema {
     if (follow > 0) look.lerp(main.path.getPointAt(this.meteorS(main, Math.min(T, main.t1))), follow * 0.8);
     const settle = smooth(L_IMPACT - 0.05, L_IMPACT + 0.9, T);
     if (settle > 0) look.lerp(new THREE.Vector3(0, 1.2, -60), easeInOut(settle));
-    camPos.set(Math.sin(t * 0.37) * 0.08 - intro * 0.5, 1.4 + Math.sin(t * 0.53) * 0.05 - intro * 0.35, 7.8 - 3.0 * smooth(0, T_DONE, Tr));
+    camPos.set(Math.sin(amb * 0.37) * 0.08 - intro * 0.5, 1.4 + Math.sin(amb * 0.53) * 0.05 - intro * 0.35, 7.8 - 3.0 * smooth(0, T_DONE, Tr));
     const sinceImpact = T - L_IMPACT;
     const shake = sinceImpact >= 0 ? Math.max(0, 1 - sinceImpact / 0.5) : 0;
     if (shake > 0) {
@@ -1139,6 +1190,49 @@ export class MeteorCinema {
       camPos.x += Math.sin(s * 1.7) * 0.12 * shake;
       camPos.y += Math.sin(s * 2.3) * 0.09 * shake;
     }
+    // ---------------- the launched pack climbs as a star ----------------
+    const sky = this.meteors[0].path.getPointAt(0);
+    if (this.rise) {
+      const { from, t0 } = this.rise;
+      const climb = easeOutCubic(smooth(t0, t0 + 1.7, t));
+      // an arc: up first, then out toward its place in the sky
+      const ctl = new THREE.Vector3(from.x * 0.5 + sky.x * 0.15, sky.y * 0.55, from.z * 0.4 + sky.z * 0.6);
+      const a = from.clone().lerp(ctl, climb);
+      const pos = a.lerp(ctl.clone().lerp(sky, climb), climb);
+      const d = pos.distanceTo(camPos);
+      const arrived = smooth(t0 + 1.5, t0 + 1.8, t);
+      // "kira": the star flares once in place before it falls
+      const flareAt = Math.max(t0 + 2.0, T0 + 0.45);
+      if (t >= flareAt) this.beat('twinkle');
+      const flare = Math.exp(-Math.pow((t - flareAt - 0.12) * 5.5, 2));
+      const vis = smooth(t0 + 0.12, t0 + 0.4, t) * (1 - smooth(T0 + 0.95, T0 + 1.05, t));
+      const tw = 1 + Math.sin(amb * 9) * 0.12 * arrived;
+      this.riseCore.visible = this.riseHalo.visible = vis > 0.001;
+      this.riseCore.position.copy(pos);
+      this.riseHalo.position.copy(pos);
+      this.riseCore.scale.setScalar(d * (0.05 - 0.026 * climb) * tw * (1 + flare * 1.6));
+      this.riseHalo.scale.setScalar(d * (0.22 - 0.11 * climb) * tw * (1 + flare * 2.2));
+      (this.riseCore.material as THREE.SpriteMaterial).opacity = vis;
+      (this.riseHalo.material as THREE.SpriteMaterial).opacity = vis * 0.85;
+      if (vis > 0 && climb < 0.98 && Math.random() < 0.8) this.emit(pos, 1, d * 0.012, -0.6);
+      // the camera lifts its gaze after it
+      const seek = smooth(t0, t0 + 0.6, t) * (1 - smooth(T0 + 1.6, T0 + 2.2, t));
+      look.lerp(pos.clone().lerp(new THREE.Vector3(-30, 60, -300), 0.35), seek * 0.75);
+      for (const e of this.riseExtra) {
+        const k = easeOutCubic(smooth(t0 + e.delay, t0 + e.delay + 1.5, t));
+        const p = from.clone().lerp(new THREE.Vector3(from.x, e.to.y * 0.5, (from.z + e.to.z) / 2), k).lerp(e.to, k * k);
+        const ev = smooth(t0 + e.delay + 0.1, t0 + e.delay + 0.35, t) * (1 - smooth(T0 + 0.7, T0 + 1.0, t));
+        const dd = p.distanceTo(camPos);
+        e.core.visible = e.halo.visible = ev > 0.001;
+        e.core.position.copy(p);
+        e.halo.position.copy(p);
+        e.core.scale.setScalar(dd * (0.03 - 0.02 * k));
+        e.halo.scale.setScalar(dd * (0.11 - 0.07 * k));
+        (e.core.material as THREE.SpriteMaterial).opacity = ev * (e.core.userData.max as number);
+        (e.halo.material as THREE.SpriteMaterial).opacity = ev * (e.halo.userData.max as number);
+      }
+    }
+
     this.camera.lookAt(look);
     this.camera.updateMatrixWorld();
 

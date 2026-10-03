@@ -52,7 +52,12 @@ export interface OnlineProfile {
   games: number;
   /** the linked Google account, masked (a***@gmail.com) */
   google?: string;
+  /** how many passkeys can log in to this player */
+  passkeys?: number;
 }
+
+/** signed up (Google or a passkey), so the player can be recovered on another device */
+export const isRegistered = (p: OnlineProfile | null | undefined) => !!p && (!!p.google || (p.passkeys ?? 0) > 0);
 
 // ---------------------------------------------------------------------------
 // client → server
@@ -63,6 +68,9 @@ export type ClientMsg =
   | { t: 'rename'; name: string; portrait?: string }
   /** sign in / sign up with Google: the ID token from Google Identity Services */
   | { t: 'google'; credential: string }
+  /** passkeys: ask for a challenge, then send what the browser made from it */
+  | { t: 'passkeyBegin'; mode: 'register' | 'login' }
+  | { t: 'passkeyFinish'; mode: 'register' | 'login'; response: unknown }
   | { t: 'transfer' } // ask for a transfer code
   | { t: 'link'; code: string } // take over another identity with a transfer code
   | { t: 'create'; deck: string[] } // friend room
@@ -86,6 +94,7 @@ export type ServerMsg =
   | { t: 'transferCode'; code: string; expires: number }
   | { t: 'linked'; profile: OnlineProfile; secret: string }
   /** Google sign-in worked: `new` joined this player to the account, `login` switched to an existing one (a new secret comes with it) */
+  | { t: 'passkeyOptions'; mode: 'register' | 'login'; options: unknown }
   | { t: 'account'; mode: 'new' | 'same' | 'login'; profile: OnlineProfile; secret?: string }
   | { t: 'room'; room: RoomInfo; you?: 0 | 1 | 'spectator' }
   | { t: 'queued'; kind: 'random' | 'ranked'; waiting: number }
