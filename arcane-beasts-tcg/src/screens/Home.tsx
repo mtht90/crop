@@ -6,7 +6,6 @@ import { activeDeck, collectionPct, extCtx, useStore, RIVALS, SHARD_COST, SHARD_
 import { canClaimLogin, claimableCount, currentPickup, expToNext } from '../state/progress';
 import { LoginTrack } from './Missions';
 import { RankEmblem } from '../ui/RankEmblem';
-import { RANKS } from '../state/ranked';
 import { artUrl } from '../lib/assets';
 import { CardFace } from '../ui/Card';
 import { Icon } from '../ui/Icon';
@@ -45,7 +44,7 @@ export function Home() {
     return open;
   });
   const tiles: TileDef[] = [
-    { to: 'arena', title: 'バトル', sub: save.story.started ? `ストーリー 第${nextIdx + 1}章「${nextCh.title}」・ランク ${RANKS[save.ranked.rank]}` : 'ストーリー・ランクマッチ・フリー対戦', bg: 'story/landscape-lava', fig: 'monsters/fire-dragon', icon: 'swords', big: true },
+    { to: 'arena', title: 'バトル', sub: save.story.started ? `ストーリー 第${nextIdx + 1}章「${nextCh.title}」・ランクマッチ` : 'ストーリー・ランクマッチ・フリー対戦', bg: 'story/landscape-lava', fig: 'monsters/fire-dragon', icon: 'swords', big: true },
     { to: 'deck', title: 'デッキ編集', sub: '60枚のデッキを組もう', bg: 'story/grim-altar', fig: 'woses/ancient-wose', icon: 'deck' },
     { to: 'shop', title: 'パック開封', sub: pickup ? `ピックアップ開催中！` : `第2弾「覇者の降臨」登場`, bg: 'story/swamp-02', fig: 'monsters/jinn', icon: 'chest', badge: pickup ? 'PICK UP' : 'NEW' },
     { to: 'collection', title: 'コレクション', sub: `収集率 ${pct}%`, bg: 'story/landscape-mountains-01', fig: 'monsters/sea-serpent', icon: 'cards', badge: save.newCards.length ? `NEW ${save.newCards.length}` : shardReady ? '交換可' : undefined },
@@ -75,10 +74,6 @@ export function Home() {
               </div>
             </div>
           </div>
-          <button className="rank-chip" title="ランクマッチ" onClick={() => go('ranked')}>
-            <RankEmblem rank={save.ranked.rank} size="calc(var(--u) * 2.8)" />
-            <span>{RANKS[save.ranked.rank]}</span>
-          </button>
           <button className="icon-btn" title="ミッション" onClick={() => go('missions')}>
             <Icon name="trophy" />
             {missionN > 0 && <i className="dot">{missionN}</i>}

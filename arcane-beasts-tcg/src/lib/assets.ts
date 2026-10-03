@@ -3,7 +3,7 @@ import type { EType } from '../engine/types';
 const BASE = import.meta.env.BASE_URL;
 
 export const asset = (p: string) => `${BASE}assets/${p}`;
-export const artUrl = (key: string) => (key.startsWith('story/') ? asset(`${key}.webp`) : asset(`art/${key}.webp`));
+export const artUrl = (key: string) => (key.startsWith('data:') ? key : key.startsWith('story/') ? asset(`${key}.webp`) : asset(`art/${key}.webp`));
 
 export const TYPE_SCENE: Record<EType, string> = {
   fire: 'story/landscape-lava',

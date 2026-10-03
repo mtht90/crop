@@ -15,6 +15,7 @@ import { WebSocketServer } from 'ws';
 import { Hub } from './hub';
 import { PlayerStore } from './players';
 import { backendFromEnv } from './remote';
+import { googleVerifier } from './google';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 const root = resolve(process.env.WEB_DIR ?? join(here, '..', 'dist'));
@@ -45,7 +46,12 @@ await store.init().catch((e) => {
   process.exit(1);
 });
 const stamp = () => new Date().toISOString().slice(11, 19);
-const hub = new Hub({ store, log: (m) => console.log(`[${stamp()}] ${m}`) });
+const googleClientId = process.env.GOOGLE_CLIENT_ID?.trim();
+const hub = new Hub({
+  store,
+  log: (m) => console.log(`[${stamp()}] ${m}`),
+  google: googleClientId ? { clientId: googleClientId, verify: googleVerifier(googleClientId) } : undefined,
+});
 
 function serve(req: IncomingMessage, res: ServerResponse) {
   const url = new URL(req.url ?? '/', 'http://x');
@@ -109,6 +115,7 @@ server.listen(port, '0.0.0.0', () => {
   console.log(`ARCANE BEASTS server  http://localhost:${port}`);
   console.log(`  game files : ${root}${existsSync(root) ? '' : '  (not built yet: run npm run build)'}`);
   console.log(backend ? '  player data: hosted database (Supabase)' : `  player data: ${dataDir}`);
+  console.log(googleClientId ? '  Google login: on' : '  Google login: off (set GOOGLE_CLIENT_ID to turn it on)');
   const lan = Object.values(networkInterfaces())
     .flat()
     .filter((n) => n && n.family === 'IPv4' && !n.internal)

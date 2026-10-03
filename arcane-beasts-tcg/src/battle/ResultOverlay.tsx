@@ -57,6 +57,8 @@ export function ResultOverlay() {
       if (win && kind === 'ranked') update((s) => bump(s.progress, { rankedWins: 1 }));
       if (or && or.t === 'over' && or.rank) {
         useStore.getState().grantRankRewards(or.rank.rewards);
+        const a = or.rank.after;
+        useStore.getState().syncOnlineRank({ rank: a.rank, pts: a.pts, best: a.rank });
         setRank(or.rank);
       }
       const after0 = claimableCount(useStore.getState().save.progress, extCtx(useStore.getState().save));
@@ -73,7 +75,6 @@ export function ResultOverlay() {
       { kos: st.kos, damage: st.damage, prizes: st.prizes, evolves: st.evolves, trainers: st.trainers },
     );
     setRes(r);
-    if (cfg.ranked && !draw0(result.winner)) setRank(useStore.getState().recordRanked(win));
     const after = claimableCount(useStore.getState().save.progress, extCtx(useStore.getState().save));
     setMissionsReady(Math.max(0, after - before));
   }, [result, cfg, update, recordBattle]);
@@ -146,11 +147,10 @@ export function ResultOverlay() {
             } else if (cfg.online) {
               online.clearMatch();
               go('lobby');
-            } else if (cfg.ranked) go('ranked');
-            else startBattle({ ...cfg });
+            } else startBattle({ ...cfg });
           }}
         >
-          {cfg.story ? (win ? '物語をつづける' : 'もう一度挑む') : cfg.online ? 'ロビーへ' : cfg.ranked ? '次の対戦へ' : 'もう一度'}
+          {cfg.story ? (win ? '物語をつづける' : 'もう一度挑む') : cfg.online ? 'ロビーへ' : 'もう一度'}
         </button>
         {missionsReady > 0 && !(cfg.story && win) && (
           <button
@@ -172,10 +172,10 @@ export function ResultOverlay() {
             sfx('button');
             useBattle.setState({ result: null, view: null, prompt: null });
             if (cfg.online) online.clearMatch();
-            go(cfg.story ? 'story' : cfg.ranked || cfg.online ? 'arena' : cfg.rival ? 'rivals' : 'home');
+            go(cfg.story ? 'story' : cfg.online ? 'arena' : cfg.rival ? 'rivals' : 'home');
           }}
         >
-          {cfg.story ? 'ストーリーへ' : cfg.ranked || cfg.online ? 'バトルメニューへ' : cfg.rival ? '対戦相手を選ぶ' : 'ホームへ'}
+          {cfg.story ? 'ストーリーへ' : cfg.online ? 'バトルメニューへ' : cfg.rival ? '対戦相手を選ぶ' : 'ホームへ'}
         </button>
         )}
       </motion.div>

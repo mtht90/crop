@@ -10,6 +10,8 @@ import { dirname } from 'node:path';
 import { applyRanked, ensureSeason, freshRank, RANKS, type RankChange, type RankState } from '../src/state/ranked';
 import { PORTRAITS, type OnlineProfile } from '../src/online/protocol';
 import { judgeName } from '../src/online/names';
+import { validAvatar } from '../src/online/avatar';
+import { maskEmail, type GoogleIdentity } from './google';
 import type { PlayerBackend } from './remote';
 
 export interface PlayerRecord {
@@ -23,10 +25,17 @@ export interface PlayerRecord {
   losses: number;
   createdAt: number;
   lastSeen: number;
+  /** sha256 of the Google account id, once signed up with Google */
+  google?: string;
+  /** the e-mail, masked, for display only */
+  googleMail?: string;
 }
 
 const hash = (s: string) => createHash('sha256').update(s).digest('hex');
 const CODE_ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+
+/** a built-in portrait key or an uploaded picture that passed the check */
+export const portraitOk = (s: unknown): s is string => typeof s === 'string' && (PORTRAITS.includes(s) || validAvatar(s));
 
 export const cleanName = (s: unknown) => {
   const t = String(s ?? '')
@@ -119,12 +128,12 @@ export class PlayerStore {
 
   rename(p: PlayerRecord, name: string, portrait?: string) {
     p.name = cleanName(name);
-    if (portrait && PORTRAITS.includes(portrait)) p.portrait = portrait;
+    if (portrait && portraitOk(portrait)) p.portrait = portrait;
     this.save(p);
   }
 
   profile(p: PlayerRecord): OnlineProfile {
-    return { id: p.id, name: p.name, portrait: p.portrait, rank: p.rank, games: p.games };
+    return { id: p.id, name: p.name, portrait: p.portrait, rank: p.rank, games: p.games, google: p.googleMail };
   }
 
   rankLabel(p: PlayerRecord) {
@@ -145,6 +154,37 @@ export class PlayerStore {
     if (win) p.wins++;
     else p.losses++;
     this.save(p);
+  }
+
+  // ---- Google accounts ----------------------------------------------------
+  /**
+   * Google sign-in for the player on this connection.
+   *   new   — nobody used this Google account yet: it is joined to `p`
+   *   same  — `p` already belongs to it
+   *   login — it belongs to another player: the device switches to that one (new secret)
+   *   null  — `p` already belongs to a different Google account
+   */
+  googleSignIn(p: PlayerRecord, who: GoogleIdentity): { mode: 'new' | 'same' | 'login'; player: PlayerRecord; secret?: string } | null {
+    const key = hash(`google:${who.sub}`);
+    const owner = [...this.players.values()].find((x) => x.google === key);
+    if (owner && owner.id === p.id) {
+      p.googleMail = maskEmail(who.email);
+      this.save(p);
+      return { mode: 'same', player: p };
+    }
+    if (owner) {
+      const secret = randomBytes(24).toString('base64url');
+      owner.secrets.push(hash(secret));
+      if (owner.secrets.length > 5) owner.secrets.shift();
+      owner.googleMail = maskEmail(who.email);
+      this.save(owner);
+      return { mode: 'login', player: owner, secret };
+    }
+    if (p.google) return null;
+    p.google = key;
+    p.googleMail = maskEmail(who.email);
+    this.save(p);
+    return { mode: 'new', player: p };
   }
 
   // ---- transfer codes -----------------------------------------------------

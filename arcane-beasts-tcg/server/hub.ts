@@ -10,7 +10,9 @@ import { RANKS } from '../src/state/ranked';
 import { GameSession, promptMs, type Outgoing } from '../src/online/session';
 import { PROTOCOL, type ClientMsg, type ErrorCode, type LiveGame, type MatchKind, type OppInfo, type RoomInfo, type ServerMsg } from '../src/online/protocol';
 import { judgeName } from '../src/online/names';
-import { PlayerStore, type PlayerRecord } from './players';
+import { isAvatarUrl } from '../src/online/avatar';
+import type { GoogleVerifier } from './google';
+import { PlayerStore, portraitOk, type PlayerRecord } from './players';
 import { randomInt } from 'node:crypto';
 
 export interface Socket {
@@ -27,6 +29,8 @@ export interface HubOptions {
   /** messages per second one connection may send before it is dropped */
   rateLimit?: number;
   log?: (msg: string) => void;
+  /** Google sign-in, when the server has an OAuth client id */
+  google?: { clientId: string; verify: GoogleVerifier };
 }
 
 interface Seat {
@@ -82,7 +86,10 @@ export class Hub {
   private tick: ReturnType<typeof setInterval>;
   private log: (m: string) => void;
 
+  private opts: HubOptions;
+
   constructor(opts: HubOptions) {
+    this.opts = opts;
     this.store = opts.store;
     this.scale = opts.timeScale ?? 1;
     this.grace = opts.graceMs ?? 60_000;
@@ -169,9 +176,13 @@ export class Hub {
       case 'rename': {
         const verdict = judgeName(m.name);
         if (!verdict.ok) return this.error(c, 'bad_name', verdict.message);
+        if (m.portrait !== undefined && !portraitOk(m.portrait)) return this.error(c, 'bad_image', isAvatarUrl(m.portrait) ? '画像が大きすぎるか、形式が違います' : 'その絵は選べません');
         this.store.rename(c.player, verdict.name, m.portrait);
         return this.send(c, { t: 'renamed', profile: this.store.profile(c.player) });
       }
+      case 'google':
+        void this.googleSignIn(c, m.credential);
+        return;
       case 'transfer': {
         const { code, expires } = this.store.createTransfer(c.player);
         return this.send(c, { t: 'transferCode', code, expires });
@@ -242,7 +253,7 @@ export class Hub {
       }
     }
     const s = this.stats();
-    this.send(c, { t: 'welcome', v: PROTOCOL, profile: this.store.profile(player), secret, online: s.online, waiting: s.waiting, resume: c.room && c.room.state !== 'over' ? c.room.code : undefined });
+    this.send(c, { t: 'welcome', v: PROTOCOL, profile: this.store.profile(player), secret, online: s.online, waiting: s.waiting, resume: c.room && c.room.state !== 'over' ? c.room.code : undefined, googleClientId: this.opts.google?.clientId });
     // rejoin a running game
     const room = this.findActiveRoom(player.id);
     if (room && c.seat === null) {
@@ -263,6 +274,22 @@ export class Hub {
       this.send(room.seats[c.seat === 0 ? 1 : 0]?.conn ?? null, { t: 'peer', connected: true, until: null });
       this.broadcastRoom(room);
     }
+  }
+
+  /** `google`: sign up / sign in with a Google ID token */
+  private async googleSignIn(c: Conn, credential: string) {
+    const g = this.opts.google;
+    const p = c.player;
+    if (!g) return this.error(c, 'bad_request', 'Googleログインはまだ準備中です');
+    if (!p) return;
+    if (c.room || c.queued) return this.error(c, 'busy', '対戦中・待機中はアカウントを切り替えられません');
+    const who = await g.verify(String(credential ?? ''));
+    if (!who) return this.error(c, 'bad_code', 'Googleでの確認に失敗しました。もう一度お試しください');
+    if (c.player !== p || c.room || c.queued) return;
+    const r = this.store.googleSignIn(p, who);
+    if (!r) return this.error(c, 'busy', 'このアカウントはすでに別のGoogleアカウントとつながっています');
+    this.log(`google ${r.mode} ${r.player.name}`);
+    this.send(c, { t: 'account', mode: r.mode, profile: this.store.profile(r.player), secret: r.secret });
   }
 
   /** `link`: a new device presents a transfer code instead of an id */

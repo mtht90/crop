@@ -10,7 +10,7 @@ const EASE_OUT = [0.16, 1, 0.3, 1] as const;
 
 export function HeroCreate({ initial, onDone, onCancel }: { initial?: { name: string; look: string }; onDone: (h: { name: string; look: string }) => void; onCancel: () => void }) {
   const [name, setName] = useState(initial?.name ?? '');
-  const [look, setLook] = useState(initial?.look ?? HERO_LOOKS[0].id);
+  const [look, setLook] = useState(HERO_LOOKS.some((h) => h.id === initial?.look) ? initial!.look : HERO_LOOKS[0].id);
   const sel = HERO_LOOKS.find((h) => h.id === look) ?? HERO_LOOKS[0];
   const ok = name.trim().length > 0;
   return (

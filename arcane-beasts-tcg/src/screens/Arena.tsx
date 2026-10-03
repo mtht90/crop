@@ -1,16 +1,14 @@
 // バトル: the battle menu opened from the home screen. Laid out like home —
-// a big story tile and smaller tiles for ranked, free battles and online play.
+// a big story tile and smaller tiles for free battles and online play (friends, random, ranked).
 import { motion } from 'motion/react';
 import { useEffect } from 'react';
 import { onlineSupported } from '../online/client';
 import { CHAPTERS } from '../story';
 import { nextChapterIndex, isCleared } from '../story/flow';
 import { activeDeck, useStore, RIVALS } from '../state/store';
-import { RANKS } from '../state/ranked';
 import { artUrl } from '../lib/assets';
 import { CardFace } from '../ui/Card';
 import { Icon } from '../ui/Icon';
-import { RankEmblem } from '../ui/RankEmblem';
 import { TopBar } from '../ui/TopBar';
 import { foley, playMusic, sfx } from '../audio/audio';
 import type { Screen } from '../state/store';
@@ -23,6 +21,7 @@ interface Tile {
   fig: string;
   icon: string;
   big?: boolean;
+  tall?: boolean;
   badge?: string;
   off?: boolean;
 }
@@ -47,15 +46,15 @@ export function Arena() {
       big: true,
       badge: save.story.started ? undefined : 'NEW',
     },
-    { to: 'ranked', title: 'ランクマッチ', sub: `いま ${RANKS[save.ranked.rank]}・10級から名人をめざす`, bg: 'story/landscape-castle', fig: 'humans/marshal', icon: 'crown' },
     { to: 'rivals', title: 'フリー対戦', sub: `強敵とバトル（${save.beaten.length}/${RIVALS.length} 撃破）`, bg: 'story/p-mountains', fig: 'humans/duelist', icon: 'swords' },
     {
       to: 'lobby',
       title: 'フレンド対戦',
-      sub: online ? '友達と対戦・ランダムマッチ・観戦' : 'オンライン版でのみ遊べます',
+      sub: online ? 'フレンド・ランダム・ランク'  : 'オンライン版でのみ遊べます',
       bg: 'story/p-summer',
       fig: 'humans/cavalier',
       icon: 'person',
+      tall: true,
       off: !online,
     },
     { to: 'deck', title: 'デッキ編集', sub: deck ? `使用中「${deck.name}」` : 'デッキを組もう', bg: 'story/grim-altar', fig: 'woses/ancient-wose', icon: 'deck' },
@@ -71,7 +70,7 @@ export function Arena() {
           {tiles.map((t, i) => (
             <motion.div
               key={t.to}
-              className={`tile ${t.big ? 'big' : ''} ${t.off ? 'off' : ''}`}
+              className={`tile ${t.big ? 'big' : ''} ${t.tall ? 'tall' : ''} ${t.off ? 'off' : ''}`}
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.05 * i, type: 'spring', stiffness: 220, damping: 24 }}
@@ -108,13 +107,6 @@ export function Arena() {
                   変更する
                 </button>
               </div>
-            </div>
-          </motion.div>
-          <motion.div className="panel arena-rank" initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }} onClick={() => go('ranked')}>
-            <RankEmblem rank={save.ranked.rank} size="calc(var(--u) * 5)" />
-            <div>
-              <h3>いまのランク</h3>
-              <div className="dname">{RANKS[save.ranked.rank]}</div>
             </div>
           </motion.div>
           <motion.div className="panel stat-box" initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.15 }}>

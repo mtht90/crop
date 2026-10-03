@@ -17,3 +17,6 @@ services:
         sync: false
       - key: SUPABASE_SERVICE_KEY
         sync: false
+      # Google login (see docs/ONLINE.md): the OAuth client id from Google Cloud Console. Leave unset to keep it off.
+      - key: GOOGLE_CLIENT_ID
+        sync: false

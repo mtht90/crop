@@ -13,7 +13,6 @@ import { Collection } from './screens/Collection';
 import { Shop } from './screens/Shop';
 import { Missions } from './screens/Missions';
 import { Exchange } from './screens/Exchange';
-import { Ranked } from './screens/Ranked';
 import { Lobby } from './screens/Lobby';
 import { StoryMap } from './screens/StoryMap';
 import { Scene } from './screens/Scene';
@@ -60,7 +59,6 @@ const SCREENS = {
   shop: Shop,
   missions: Missions,
   exchange: Exchange,
-  ranked: Ranked,
   lobby: Lobby,
   story: StoryMap,
   scene: Scene,

@@ -3,7 +3,7 @@ import type { MatchInfo } from '../online/client';
 import type { Beat } from '../story/types';
 import { create } from 'zustand';
 import { ALL_CARDS, card, CARDS, SET_INFO } from '../engine/cards';
-import { applyRanked, ensureSeason, freshRank, type RankChange, type RankState } from './ranked';
+import { ensureSeason, freshRank, type RankChange, type RankState } from './ranked';
 import { expand, RIVALS, STARTER_DECKS, type Rival } from '../engine/decks';
 import type { Difficulty } from '../engine/ai';
 import type { CardDef, EType, Rarity, SetCode } from '../engine/types';
@@ -49,7 +49,7 @@ const isBasicEnergy = (cid: string) => {
   return c.kind === 'energy' && c.basic;
 };
 
-export type Screen = 'arena' | 'story' | 'scene' | 'lobby' | 'title' | 'starter' | 'home' | 'rivals' | 'battle' | 'deck' | 'collection' | 'shop' | 'missions' | 'exchange' | 'ranked' | 'settings' | 'credits' | 'rules' | 'gallery';
+export type Screen = 'arena' | 'story' | 'scene' | 'lobby' | 'title' | 'starter' | 'home' | 'rivals' | 'battle' | 'deck' | 'collection' | 'shop' | 'missions' | 'exchange' | 'settings' | 'credits' | 'rules' | 'gallery';
 
 export interface SavedDeck {
   id: string;
@@ -119,8 +119,6 @@ export interface BattleConfig {
   scene: string;
   reward: number;
   spectate?: boolean;
-  /** ranked match: the opponent's rank index */
-  ranked?: { oppRank: number };
   /** an online match (the rules run on the server) */
   online?: MatchInfo;
   /** a story chapter's duel */
@@ -239,7 +237,8 @@ interface Store {
   /** adds cards; returns, per card, whether it became a shard instead */
   addCards: (cids: string[]) => boolean[];
   exchange: (cid: string) => boolean;
-  recordRanked: (win: boolean) => RankChange;
+  /** keep the saved rank in step with the online one (it feeds the rank missions) */
+  syncOnlineRank: (r: Pick<RankState, 'rank' | 'pts' | 'best'>) => void;
   /** play a scene full-screen, then call `then` */
   playScene: (id: string, beats: Beat[], then: () => void) => void;
   markScene: (id: string) => void;
@@ -318,18 +317,12 @@ export const useStore = create<Store>((set, get) => ({
     get().update((s) => {
       if (!s.story.cleared.includes(chapterId)) s.story.cleared.push(chapterId);
     }),
-  recordRanked: (win) => {
-    let res!: RankChange;
+  syncOnlineRank: (r) =>
     get().update((s) => {
-      res = applyRanked(s.ranked, win);
-      if (win) bump(s.progress, { rankedWins: 1 });
-      for (const { reward } of res.rewards) {
-        s.coins += reward.coins;
-        for (const [r, n] of Object.entries(reward.shards ?? {}) as [Rarity, number][]) s.shards[r] = (s.shards[r] ?? 0) + n;
-      }
-    });
-    return res;
-  },
+      s.ranked.rank = r.rank;
+      s.ranked.pts = r.pts;
+      s.ranked.best = Math.max(s.ranked.best, r.best, r.rank);
+    }),
   grantRankRewards: (rewards) =>
     get().update((s) => {
       for (const { reward } of rewards) {

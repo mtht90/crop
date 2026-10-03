@@ -10,6 +10,9 @@ import { artUrl } from '../lib/assets';
 import { TopBar } from '../ui/TopBar';
 import { CardFace } from '../ui/Card';
 import { judgeName } from '../online/names';
+import { fileToAvatar } from '../online/avatarFile';
+import { isAvatarUrl } from '../online/avatar';
+import { GoogleBox } from './GoogleBox';
 import { RankEmblem } from '../ui/RankEmblem';
 import { Icon } from '../ui/Icon';
 import { RANKS } from '../state/ranked';
@@ -104,6 +107,11 @@ export function Lobby() {
   const [link, setLink] = useState('');
   const [showXfer, setShowXfer] = useState(false);
   const invite = useRef<{ room?: string; watch?: string }>({});
+  const pick = useRef<HTMLInputElement>(null);
+  const flash = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 2600);
+  };
 
   useEffect(() => playMusic('menu'), []);
 
@@ -161,6 +169,10 @@ export function Lobby() {
   const ready = st.status === 'open' && !!deck && !deckErr;
   const busy = !!st.queued || !!waitingRoom;
   const rank = st.profile?.rank;
+  const syncRank = useStore((s) => s.syncOnlineRank);
+  useEffect(() => {
+    if (rank) syncRank({ rank: rank.rank, pts: rank.pts, best: rank.best });
+  }, [rank?.rank, rank?.pts, rank?.best, syncRank]); // eslint-disable-line react-hooks/exhaustive-deps
   /** the small panels opened from the main screen */
   const [sheet, setSheet] = useState<null | 'friend' | 'watch' | 'profile'>(null);
   const [mode, setMode] = useState<'make' | 'join'>('make');
@@ -226,6 +238,17 @@ export function Lobby() {
       icon: 'crown',
       onClick: () => online.queue('ranked', deck!.cards),
     },
+    // a slot kept for a mode that does not exist yet
+    {
+      key: 'soon',
+      title: 'いつか空く',
+      sub: '近日解放',
+      bg: 'story/landscape-lava',
+      fig: 'monsters/fire-dragon',
+      icon: 'lock',
+      soon: true,
+      onClick: () => {},
+    },
   ];
 
   return (
@@ -244,17 +267,17 @@ export function Lobby() {
           }
         />
 
-        {/* ------------------------------ the three ways to play ------------------------------ */}
+        {/* ------------------------------ the ways to play ------------------------------ */}
         <div className="lb-tiles">
           {tiles.map((t, i) => (
             <motion.div
               key={t.key}
-              className={`tile ${ready ? '' : 'off'}`}
+              className={`tile ${t.soon ? 'soon' : ready ? '' : 'off'}`}
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.06 * i, type: 'spring', stiffness: 220, damping: 24 }}
-              onMouseEnter={() => ready && foley.hover()}
-              onClick={() => ready && play(t.onClick)}
+              onMouseEnter={() => ready && !t.soon && foley.hover()}
+              onClick={() => ready && !t.soon && play(t.onClick)}
             >
               <img className="bg" src={artUrl(t.bg)} alt="" />
               <div className="shade" />
@@ -405,12 +428,41 @@ export function Lobby() {
                       onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
                     />
                     <div className="lb-portraits">
+                      {isAvatarUrl(st.profile.portrait) && (
+                        <button className="on" title="いまのアイコン">
+                          <img src={st.profile.portrait} alt="" />
+                        </button>
+                      )}
+                      <button
+                        className="lb-upload"
+                        title="自分の画像をアイコンにする"
+                        onClick={() => pick.current?.click()}
+                      >
+                        <Icon name="plus" />
+                        <span>自分の画像</span>
+                      </button>
+                      <input
+                        ref={pick}
+                        type="file"
+                        accept="image/*"
+                        hidden
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          e.target.value = '';
+                          if (!f) return;
+                          fileToAvatar(f).then(
+                            (url) => online.rename(name.trim() && judgeName(name).ok ? name : st.profile!.name, url),
+                            (err: Error) => flash(err.message),
+                          );
+                        }}
+                      />
                       {PORTRAITS.map((p) => (
                         <button key={p} className={p === st.profile!.portrait ? 'on' : ''} onClick={() => online.rename(name || st.profile!.name, p)}>
                           <img src={artUrl(p)} alt="" />
                         </button>
                       ))}
                     </div>
+                    <GoogleBox />
                     <button className="lb-link" onClick={() => setShowXfer((v) => !v)}>
                       {showXfer ? '▾' : '▸'} 引き継ぎ・サーバー
                     </button>

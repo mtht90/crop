@@ -86,6 +86,8 @@ interface OnlineStore {
   /** a connection attempt failed (server unreachable) */
   failed: boolean;
   profile: OnlineProfile | null;
+  /** the OAuth client id for the Google button (null: Google login is not set up on the server) */
+  googleClientId: string | null;
   online: number;
   waiting: number;
   room: RoomInfo | null;
@@ -102,6 +104,7 @@ export const useOnline = create<OnlineStore>(() => ({
   status: 'idle',
   failed: false,
   profile: null,
+  googleClientId: null,
   online: 0,
   waiting: 0,
   room: null,
@@ -207,7 +210,7 @@ class OnlineClient {
       case 'welcome': {
         const c = loadCreds();
         saveCreds({ ...c, id: m.profile.id, secret: m.secret, name: m.profile.name, portrait: m.profile.portrait });
-        set({ status: 'open', failed: false, profile: m.profile, online: m.online, waiting: m.waiting });
+        set({ status: 'open', failed: false, profile: m.profile, googleClientId: m.googleClientId ?? null, online: m.online, waiting: m.waiting });
         return;
       }
       case 'renamed':
@@ -219,6 +222,12 @@ class OnlineClient {
         set({ profile: m.profile, error: null });
         // log in again as the transferred identity
         this.ws?.close();
+        return;
+      case 'account':
+        saveCreds({ ...loadCreds(), id: m.profile.id, ...(m.secret ? { secret: m.secret } : {}), name: m.profile.name, portrait: m.profile.portrait });
+        set({ profile: m.profile, error: null });
+        // switched to another account: log in again as it
+        if (m.mode === 'login') this.ws?.close();
         return;
       case 'transferCode':
         set({ transfer: { code: m.code, expires: m.expires } });
@@ -293,6 +302,9 @@ class OnlineClient {
   }
   rename(name: string, portrait?: string) {
     this.send({ t: 'rename', name, portrait });
+  }
+  googleSignIn(credential: string) {
+    this.send({ t: 'google', credential });
   }
   requestTransfer() {
     this.send({ t: 'transfer' });

@@ -29,11 +29,7 @@ const TYPE_COLOR: Record<string, string> = {
 /** looks the player can choose for their character */
 export const HERO_LOOKS: { id: string; label: string; look: Record<string, string> }[] = [
   { id: 'konrad', label: '若き剣士', look: { normal: 'camp/konrad', glad: 'camp/konrad-glad', mad: 'camp/konrad-mad', worry: 'camp/konrad-concerned' } },
-  { id: 'fencer', label: '細剣の使い手', look: { normal: 'humans/fencer' } },
-  { id: 'huntsman', label: '森の狩人', look: { normal: 'humans/huntsman' } },
-  { id: 'mage-f', label: '見習い魔導士', look: { normal: 'humans/mage+female' } },
-  { id: 'outlaw-f', label: '旅の弓手', look: { normal: 'humans/outlaw+female' } },
-  { id: 'ranger-f', label: 'エルフの野伏', look: { normal: 'elves/ranger+female' } },
+  { id: 'lady', label: 'エルフの姫', look: { normal: 'elves/lady' } },
 ];
 export const DEFAULT_HERO = { name: 'あなた', look: 'konrad' };
 

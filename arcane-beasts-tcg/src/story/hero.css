@@ -13,8 +13,8 @@
 .hc-label { margin-top: calc(var(--u) * 0.6); font-weight: 800; letter-spacing: 0.3em; color: var(--gold-2); font-size: calc(var(--u) * 1); }
 .hc-name { height: calc(var(--u) * 4); padding: 0 calc(var(--u) * 1.4); font-family: var(--font-ui); font-weight: 800; font-size: calc(var(--u) * 1.8); color: #fff; background: rgba(0, 0, 0, 0.55); border: 1px solid var(--line); border-radius: calc(var(--u) * 0.8); outline: none; transition: border-color 0.2s, box-shadow 0.2s; }
 .hc-name:focus { border-color: var(--gold); box-shadow: 0 0 0 3px rgba(233, 196, 106, 0.25); }
-.hc-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: calc(var(--u) * 0.8); }
-.hc-look { position: relative; height: calc(var(--u) * 10.5); padding: 0; overflow: hidden; cursor: pointer; background: rgba(0, 0, 0, 0.45); border: 2px solid rgba(255, 255, 255, 0.16); border-radius: calc(var(--u) * 0.8); transition: transform 0.2s, filter 0.2s; filter: brightness(0.75); }
+.hc-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: calc(var(--u) * 0.8); }
+.hc-look { position: relative; height: calc(var(--u) * 14); padding: 0; overflow: hidden; cursor: pointer; background: rgba(0, 0, 0, 0.45); border: 2px solid rgba(255, 255, 255, 0.16); border-radius: calc(var(--u) * 0.8); transition: transform 0.2s, filter 0.2s; filter: brightness(0.75); }
 .hc-look img { position: absolute; left: 50%; top: 0; height: 160%; translate: -50% 0; object-fit: cover; object-position: top; }
 .hc-look span { position: absolute; left: 0; right: 0; bottom: 0; padding: 3px 0; font-weight: 800; font-size: calc(var(--u) * 0.95); color: #fff; background: linear-gradient(transparent, rgba(0, 0, 0, 0.85)); }
 .hc-look:hover { filter: brightness(0.95); }

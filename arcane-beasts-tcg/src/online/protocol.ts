@@ -50,6 +50,8 @@ export interface OnlineProfile {
   rank: RankState;
   /** online-only record */
   games: number;
+  /** the linked Google account, masked (a***@gmail.com) */
+  google?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -57,7 +59,10 @@ export interface OnlineProfile {
 // ---------------------------------------------------------------------------
 export type ClientMsg =
   | { t: 'hello'; v: number; id?: string; secret?: string; name?: string; portrait?: string }
+  /** `portrait` is a built-in key or an uploaded picture (see avatar.ts) */
   | { t: 'rename'; name: string; portrait?: string }
+  /** sign in / sign up with Google: the ID token from Google Identity Services */
+  | { t: 'google'; credential: string }
   | { t: 'transfer' } // ask for a transfer code
   | { t: 'link'; code: string } // take over another identity with a transfer code
   | { t: 'create'; deck: string[] } // friend room
@@ -76,10 +81,12 @@ export type ClientMsg =
 // server → client
 // ---------------------------------------------------------------------------
 export type ServerMsg =
-  | { t: 'welcome'; v: number; profile: OnlineProfile; secret: string; online: number; waiting: number; resume?: string }
+  | { t: 'welcome'; v: number; profile: OnlineProfile; secret: string; online: number; waiting: number; resume?: string; googleClientId?: string }
   | { t: 'renamed'; profile: OnlineProfile }
   | { t: 'transferCode'; code: string; expires: number }
   | { t: 'linked'; profile: OnlineProfile; secret: string }
+  /** Google sign-in worked: `new` joined this player to the account, `login` switched to an existing one (a new secret comes with it) */
+  | { t: 'account'; mode: 'new' | 'same' | 'login'; profile: OnlineProfile; secret?: string }
   | { t: 'room'; room: RoomInfo; you?: 0 | 1 | 'spectator' }
   | { t: 'queued'; kind: 'random' | 'ranked'; waiting: number }
   | { t: 'live'; games: LiveGame[] }
@@ -99,6 +106,6 @@ export type ServerMsg =
   | { t: 'error'; code: ErrorCode; message: string }
   | { t: 'pong'; n: number; online: number; waiting: number };
 
-export type ErrorCode = 'version' | 'bad_name' | 'bad_request' | 'bad_deck' | 'no_room' | 'room_full' | 'busy' | 'bad_answer' | 'bad_code' | 'not_in_game' | 'rate';
+export type ErrorCode = 'version' | 'bad_name' | 'bad_image' | 'bad_request' | 'bad_deck' | 'no_room' | 'room_full' | 'busy' | 'bad_answer' | 'bad_code' | 'not_in_game' | 'rate';
 
 export type ActionLike = Action;
