@@ -467,7 +467,7 @@ function Opening({ booster, cards, god, fresh, shards, packs, onClose, onAgain }
             booster={booster}
             packs={packs}
             u={u}
-            onLaunch={(x, y) => cineApi.current?.release(x, y, packs)}
+            onLaunch={(pts) => cineApi.current?.release(pts)}
             onGone={() => setPhase(noCine.current ? 'tear' : 'cinema')}
           />
         )}
@@ -566,7 +566,36 @@ function Opening({ booster, cards, god, fresh, shards, packs, onClose, onAgain }
 /** where the cinematic waits (seconds into its opening): the lake, the far peaks, the moon */
 const LAUNCH_HOLD = 1.5;
 
-function PackLaunch({ booster, packs, u, onLaunch, onGone }: { booster: Booster; packs: number; u: number; onLaunch: (x: number, y: number) => void; onGone: () => void }) {
+/** seconds between packs of a bundle leaving one after another */
+const LAUNCH_GAP = 0.11;
+const LAUNCH_FLIGHT = 0.62;
+
+/** a thrown arc: straight up at first, bending over to the side as it climbs */
+function flightPath(dir: number, w: number, h: number, seed: number) {
+  const spanX = (0.34 + seed * 0.12) * w * dir;
+  const spanY = (0.4 + (1 - seed) * 0.08) * h;
+  const N = 9;
+  const x: number[] = [];
+  const y: number[] = [];
+  const rotate: number[] = [];
+  const scale: number[] = [];
+  const opacity: number[] = [];
+  for (let i = 0; i <= N; i++) {
+    const t = i / N;
+    const s = Math.pow(t, 1.6); // shoots off: slow out of the hand, fast into the sky
+    x.push(spanX * Math.pow(s, 1.7));
+    y.push(-spanY * (1 - Math.pow(1 - s, 2.2)));
+    // face along the path
+    const dx = spanX * 1.7 * Math.pow(Math.max(s, 0.001), 0.7);
+    const dy = -spanY * 2.2 * Math.pow(1 - s, 1.2);
+    rotate.push((Math.atan2(dx, -dy) * 180) / Math.PI);
+    scale.push(1 - 0.95 * Math.pow(s, 0.75));
+    opacity.push(t < 0.85 ? 1 : 1 - (t - 0.85) / 0.15);
+  }
+  return { x, y, rotate, scale, opacity };
+}
+
+function PackLaunch({ booster, packs, u, onLaunch, onGone }: { booster: Booster; packs: number; u: number; onLaunch: (points: { x: number; y: number; delay: number }[]) => void; onGone: () => void }) {
   const n = Math.min(packs, 10);
   const y = useMotionValue(0);
   const box = useRef<HTMLDivElement>(null);
@@ -576,18 +605,33 @@ function PackLaunch({ booster, packs, u, onLaunch, onGone }: { booster: Booster;
   const tilt = useTransform(y, [-u * 14, 0, u * 4], [-6, 0, 2]);
   const glow = useTransform(lift, (v) => 0.25 + v * 0.75);
   const shadow = useTransform(lift, [0, 1], [0.7, 0]);
+  const W = typeof window !== 'undefined' ? window.innerWidth : 1000;
+  const H = typeof window !== 'undefined' ? window.innerHeight : 600;
+  /** one flight per pack, by launch order (0 = the front pack, first to go) */
+  const paths = useMemo(() => Array.from({ length: n }, (_, o) => flightPath(-1, W, H, o === 0 ? 0.5 : Math.random())), [n, W, H]);
+  const restOf = (o: number) => ({ x: o * u * 0.32, y: o * u * 0.26, rotate: n > 1 ? (o % 2 ? 1.2 : -1.2) * Math.min(1, o) : 0, scale: 1, opacity: 1 });
 
   const launch = () => {
     if (gone) return;
     hideHint();
     setGone(true);
     const r = box.current?.getBoundingClientRect();
-    if (r) onLaunch(r.left + r.width / 2, r.top + r.height * 0.3);
-    foley.whoosh();
+    if (r) {
+      // where each pack ends as a point of light; the 3D star carries on from there
+      const cx = r.left + r.width / 2;
+      const cy = r.top + r.height / 2;
+      onLaunch(
+        paths.map((p, o) => ({ x: cx + restOf(o).x + p.x[p.x.length - 1], y: cy + restOf(o).y + p.y[p.y.length - 1], delay: o * LAUNCH_GAP + LAUNCH_FLIGHT * 0.88 })),
+      );
+    }
     sfx('magic-holy-2', 0.3);
-    vibrate(18);
-    animate(y, -(window.innerHeight + u * 20), { duration: 0.7, ease: [0.55, 0, 0.85, 0.35] });
-    setTimeout(onGone, 650);
+    // one whoosh per pack: shun, shun, shun…
+    for (let o = 0; o < n; o++)
+      setTimeout(() => {
+        foley.whoosh();
+        vibrate(o === 0 ? 18 : 8);
+      }, o * LAUNCH_GAP * 1000);
+    setTimeout(onGone, ((n - 1) * LAUNCH_GAP + LAUNCH_FLIGHT * 0.85) * 1000);
   };
 
   return (
@@ -598,7 +642,7 @@ function PackLaunch({ booster, packs, u, onLaunch, onGone }: { booster: Booster;
       <div className="tear-wrap launch-wrap">
         <motion.div
           ref={box}
-          className="launch-pack"
+          className={`launch-pack ${gone ? 'gone' : ''}`}
           style={{ y, rotate: tilt }}
           drag={gone ? false : 'y'}
           dragConstraints={{ top: 0, bottom: 0 }}
@@ -610,14 +654,15 @@ function PackLaunch({ booster, packs, u, onLaunch, onGone }: { booster: Booster;
           }}
           onTap={() => !gone && animate(y, [0, -u * 2.2, 0], { duration: 0.55, ease: 'easeOut' })}
           initial={{ opacity: 0, scale: 0.9 }}
-          animate={gone ? { opacity: [1, 1, 0], scale: [1, 0.7, 0.08], filter: ['brightness(1)', 'brightness(1.8)', 'brightness(3)'] } : { opacity: 1, scale: 1 }}
-          transition={gone ? { duration: 0.62, times: [0, 0.5, 1], ease: 'easeIn' } : { duration: 0.8, ease: EASE_OUT }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.8, ease: EASE_OUT }}
         >
           {/* the light it leaves behind as it rises */}
-          <motion.div className="launch-glow" style={{ opacity: glow }} />
+          <motion.div className="launch-glow" style={{ opacity: glow }} animate={gone ? { opacity: 0 } : undefined} transition={{ duration: 0.4 }} />
           {Array.from({ length: n }, (_, k) => {
-            const back = n - 1 - k; // 0 = the front pack
-            const spread = (k - (n - 1) / 2) / Math.max(1, (n - 1) / 2);
+            const order = n - 1 - k; // 0 = the front pack, which leaves first
+            const rest = restOf(order);
+            const path = paths[order];
             return (
               <motion.div
                 key={k}
@@ -625,17 +670,19 @@ function PackLaunch({ booster, packs, u, onLaunch, onGone }: { booster: Booster;
                 style={{ zIndex: k }}
                 initial={false}
                 animate={
-                  gone && n > 1
-                    ? { x: spread * u * 9, rotate: spread * 22, y: -Math.abs(spread) * u * 2, transition: { duration: 0.45, ease: EASE_OUT, delay: back * 0.015 } }
-                    : { x: back * u * 0.32, y: back * u * 0.26, rotate: n > 1 ? (back % 2 ? 1.2 : -1.2) * Math.min(1, back) : 0 }
+                  gone
+                    ? { x: path.x.map((v) => v + rest.x), y: path.y.map((v) => v + rest.y), rotate: path.rotate, scale: path.scale, opacity: path.opacity, filter: ['brightness(1)', 'brightness(1.6)', 'brightness(2.6)'] }
+                    : rest
                 }
+                transition={gone ? { duration: LAUNCH_FLIGHT, delay: order * LAUNCH_GAP, ease: 'linear' } : { duration: 0.3 }}
               >
                 <BoosterPack booster={booster} still={k !== n - 1} />
+                {gone && <motion.i className="launch-trail" initial={{ opacity: 0, scaleY: 0.2 }} animate={{ opacity: [0, 1, 0.9, 0], scaleY: [0.2, 1, 1.4, 1.6] }} transition={{ duration: LAUNCH_FLIGHT, delay: order * LAUNCH_GAP, times: [0, 0.3, 0.8, 1] }} />}
               </motion.div>
             );
           })}
         </motion.div>
-        <motion.div className="launch-shadow" style={{ opacity: shadow }} />
+        <motion.div className="launch-shadow" style={{ opacity: shadow }} animate={gone ? { opacity: 0 } : undefined} />
       </div>
       <AnimatePresence>
         {!gone && (
@@ -660,7 +707,7 @@ interface AuraState {
 }
 
 interface CinemaApi {
-  release: (x: number, y: number, count: number) => void;
+  release: (points: { x: number; y: number; delay: number }[]) => void;
 }
 
 function CinemaLayer({ omen, god, aura, held, playing, api, target, onDone }: { omen: Omen; god: boolean; aura: AuraState; held: boolean; playing: boolean; api: React.MutableRefObject<CinemaApi | null>; target: () => DOMRect | null; onDone: () => void }) {
@@ -702,7 +749,7 @@ function CinemaLayer({ omen, god, aura, held, playing, api, target, onDone }: { 
       return;
     }
     cine.current = c;
-    api.current = { release: (x, y, n) => c.release(x, y, n) };
+    api.current = { release: (pts) => c.release(pts) };
     c.play();
     return () => {
       c.dispose();

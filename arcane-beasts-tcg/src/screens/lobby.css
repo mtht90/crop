@@ -73,7 +73,7 @@
 .lb-portraits .lb-upload { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; border: 2px dashed var(--line); background: rgba(255, 255, 255, 0.05); color: #fff; opacity: 0.85; }
 .lb-portraits .lb-upload span { font-size: calc(var(--u) * 0.75); font-weight: 800; line-height: 1.1; }
 .lb-portraits .lb-upload .lb-plus { font-style: normal; font-size: calc(var(--u) * 2); line-height: 1; font-weight: 900; color: var(--gold); }
-.lb-acct { display: flex; flex-direction: column; gap: calc(var(--u) * 0.7); padding: calc(var(--u) * 1) calc(var(--u) * 1.1); border-radius: 12px; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--line); }
+.lb-acct { display: flex; flex-direction: column; gap: calc(var(--u) * 0.7); }
 .lb-acct h4 { margin: 0; font-size: calc(var(--u) * 1.05); color: var(--ink-dim); font-weight: 800; letter-spacing: 0.08em; }
 .lb-link { background: none; border: none; color: var(--ink-dim); font-weight: 800; font-size: calc(var(--u) * 1.05); cursor: pointer; text-align: left; padding: 0; }
 .lb-link:hover { color: #fff; }

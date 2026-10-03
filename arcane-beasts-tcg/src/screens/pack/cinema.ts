@@ -40,6 +40,8 @@ const L_IMPACT = 2.55;
 const L_DONE = 4.45;
 export const T_IMPACT = T0 + L_IMPACT;
 export const T_DONE = T0 + L_DONE;
+/** where the shower radiates from: up and to the left, where the launched packs went */
+const RADIANT = new THREE.Vector3(-250, 300, -420);
 const MOON_DIR = new THREE.Vector3(0.5, 0.3, -0.81).normalize();
 
 type Beat = 'twinkle' | 'enter' | 'dive' | 'impact' | 'orb' | 'morph';
@@ -588,10 +590,10 @@ export class MeteorCinema {
   /** timeline position the cinema waits at until the pack is launched (null = running) */
   private hold: number | null = null;
   /** the launched pack, climbing as a star */
-  private rise: { from: THREE.Vector3; t0: number } | null = null;
+  private rise: { screen: { x: number; y: number }; from: THREE.Vector3 | null; t0: number; base: number } | null = null;
   private riseCore!: THREE.Sprite;
   private riseHalo!: THREE.Sprite;
-  private riseExtra: { to: THREE.Vector3; delay: number; core: THREE.Sprite; halo: THREE.Sprite }[] = [];
+  private riseExtra: { to: THREE.Vector3; screen: { x: number; y: number }; from: THREE.Vector3 | null; delay: number; core: THREE.Sprite; halo: THREE.Sprite }[] = [];
   private headTex!: THREE.Texture;
   private glowTex!: THREE.Texture;
   private auraAmt = 0;
@@ -798,14 +800,14 @@ export class MeteorCinema {
       true,
       tiers[0],
     );
-    const radiant = new THREE.Vector3(240, 300, -420);
+    const radiant = RADIANT.clone();
     const rnd = (a: number, b: number) => a + Math.random() * (b - a);
     const rest = tiers.slice(1);
     rest.forEach((tier, k) => {
       const f = rest.length > 1 ? k / (rest.length - 1) : 0.5;
       const t0 = 0.85 + f * 1.45 + rnd(-0.08, 0.08);
-      const start = radiant.clone().add(new THREE.Vector3(rnd(-160, 60), rnd(-90, 30), rnd(-40, 60)));
-      const dir = start.clone().sub(radiant).add(new THREE.Vector3(-120, -70, 0)).normalize();
+      const start = radiant.clone().add(new THREE.Vector3(rnd(-60, 160), rnd(-90, 30), rnd(-40, 60)));
+      const dir = start.clone().sub(radiant).add(new THREE.Vector3(140, -80, 0)).normalize();
       const len = rnd(90, 190);
       const end = start.clone().addScaledVector(dir, len);
       const mid = start.clone().lerp(end, 0.5);
@@ -1012,22 +1014,28 @@ export class MeteorCinema {
   }
 
   /**
-   * the pack has been swiped up from (x, y): the timeline runs on, and the pack
-   * becomes a star that climbs into the sky — and comes back as the meteor.
-   * `count` > 1 (a bundle) sends extra lights up toward the shower's radiant.
+   * the pack has been swiped up. Each launched pack shrinks to a point of light
+   * on screen at `x, y` after `delay` seconds; from there it climbs on as a star.
+   * The first one is the main star — it comes back as the meteor.
    */
-  release(x: number, y: number, count = 1) {
-    if (this.hold === null) return;
-    this.camera.updateMatrixWorld();
-    const from = this.camera.localToWorld(this.screenToCamera(x, y, 9));
-    this.rise = { from, t0: this.hold };
+  release(points: { x: number; y: number; delay: number }[]) {
+    if (this.hold === null || !points.length) return;
+    const t0 = this.hold;
+    const [main, ...rest] = points;
+    this.rise = { screen: main, from: null, t0: t0 + main.delay, base: t0 };
     const rnd = (a: number, b: number) => a + Math.random() * (b - a);
-    for (let k = 1; k < Math.min(count, 10); k++) {
-      const to = new THREE.Vector3(240, 300, -420).add(new THREE.Vector3(rnd(-200, 40), rnd(-120, 20), rnd(-30, 50)));
-      this.riseExtra.push({ to, delay: k * 0.06 + rnd(0, 0.05), core: this.riseSprite(0.55, false), halo: this.riseSprite(0.3, true) });
+    for (const p of rest.slice(0, 9)) {
+      const to = RADIANT.clone().add(new THREE.Vector3(rnd(-40, 200), rnd(-120, 20), rnd(-30, 50)));
+      this.riseExtra.push({ to, screen: p, from: null, delay: p.delay, core: this.riseSprite(0.55, false), halo: this.riseSprite(0.3, true) });
     }
     this.offset += this.hold - this.time();
     this.hold = null;
+  }
+
+  /** where a screen point is, in the world, right now (a little way in front of the camera) */
+  private worldAt(p: { x: number; y: number }) {
+    this.camera.updateMatrixWorld();
+    return this.camera.localToWorld(this.screenToCamera(p.x, p.y, 9));
   }
 
   /** keep the starry sky running quietly behind the tear stage */
@@ -1192,11 +1200,15 @@ export class MeteorCinema {
     }
     // ---------------- the launched pack climbs as a star ----------------
     const sky = this.meteors[0].path.getPointAt(0);
-    if (this.rise) {
-      const { from, t0 } = this.rise;
+    if (this.rise && t >= this.rise.t0 - 0.02) {
+      // the star picks up where the pack became a point of light on screen
+      this.rise.from ??= this.worldAt(this.rise.screen);
+      const { t0 } = this.rise;
+      const from = this.rise.from;
       const climb = easeOutCubic(smooth(t0, t0 + 1.7, t));
       // an arc: up first, then out toward its place in the sky
-      const ctl = new THREE.Vector3(from.x * 0.5 + sky.x * 0.15, sky.y * 0.55, from.z * 0.4 + sky.z * 0.6);
+      // a thrown arc lying on its side: straight up first, then over to the left
+      const ctl = new THREE.Vector3(from.x + (sky.x - from.x) * 0.12, sky.y * 0.92, from.z * 0.3 + sky.z * 0.7);
       const a = from.clone().lerp(ctl, climb);
       const pos = a.lerp(ctl.clone().lerp(sky, climb), climb);
       const d = pos.distanceTo(camPos);
@@ -1205,7 +1217,7 @@ export class MeteorCinema {
       const flareAt = Math.max(t0 + 2.0, T0 + 0.45);
       if (t >= flareAt) this.beat('twinkle');
       const flare = Math.exp(-Math.pow((t - flareAt - 0.12) * 5.5, 2));
-      const vis = smooth(t0 + 0.12, t0 + 0.4, t) * (1 - smooth(T0 + 0.95, T0 + 1.05, t));
+      const vis = smooth(t0 - 0.02, t0 + 0.12, t) * (1 - smooth(T0 + 0.95, T0 + 1.05, t));
       const tw = 1 + Math.sin(amb * 9) * 0.12 * arrived;
       this.riseCore.visible = this.riseHalo.visible = vis > 0.001;
       this.riseCore.position.copy(pos);
@@ -1218,10 +1230,18 @@ export class MeteorCinema {
       // the camera lifts its gaze after it
       const seek = smooth(t0, t0 + 0.6, t) * (1 - smooth(T0 + 1.6, T0 + 2.2, t));
       look.lerp(pos.clone().lerp(new THREE.Vector3(-30, 60, -300), 0.35), seek * 0.75);
+    }
+    if (this.rise) {
+      const base = this.rise.base;
       for (const e of this.riseExtra) {
-        const k = easeOutCubic(smooth(t0 + e.delay, t0 + e.delay + 1.5, t));
-        const p = from.clone().lerp(new THREE.Vector3(from.x, e.to.y * 0.5, (from.z + e.to.z) / 2), k).lerp(e.to, k * k);
-        const ev = smooth(t0 + e.delay + 0.1, t0 + e.delay + 0.35, t) * (1 - smooth(T0 + 0.7, T0 + 1.0, t));
+        const s0 = base + e.delay;
+        if (t < s0 - 0.02) continue;
+        e.from ??= this.worldAt(e.screen);
+        const from = e.from;
+        const k = easeOutCubic(smooth(s0, s0 + 1.5, t));
+        const c2 = new THREE.Vector3(from.x + (e.to.x - from.x) * 0.12, e.to.y * 0.92, from.z * 0.3 + e.to.z * 0.7);
+        const p = from.clone().lerp(c2, k).lerp(c2.clone().lerp(e.to, k), k);
+        const ev = smooth(s0 - 0.02, s0 + 0.12, t) * (1 - smooth(T0 + 1.3, T0 + 1.7, t));
         const dd = p.distanceTo(camPos);
         e.core.visible = e.halo.visible = ev > 0.001;
         e.core.position.copy(p);

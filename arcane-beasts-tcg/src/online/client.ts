@@ -4,6 +4,7 @@
 // the lobby reads. Game messages are handed to the battle controller.
 // ============================================================================
 import { create } from 'zustand';
+import { startAuthentication, startRegistration } from '@simplewebauthn/browser';
 import { isRegistered, PROTOCOL, type ClientMsg, type LiveGame, type MatchKind, type OnlineProfile, type OppInfo, type RoomInfo, type ServerMsg } from './protocol';
 
 const KEY = 'arcane-beasts-online-v1';
@@ -235,8 +236,8 @@ class OnlineClient {
         if (m.mode === 'login') this.ws?.close();
         return;
       case 'passkeyOptions':
+        this.pkOptions[m.mode] = { options: m.options, at: Date.now() };
         this.pkWait?.(m);
-        this.pkWait = null;
         return;
       case 'transferCode':
         set({ transfer: { code: m.code, expires: m.expires } });
@@ -312,27 +313,55 @@ class OnlineClient {
   rename(name: string, portrait?: string) {
     this.send({ t: 'rename', name, portrait });
   }
+  /** passkey challenges fetched ahead of time: Safari only opens the passkey sheet if it is asked right in the tap */
+  private pkOptions: Partial<Record<'register' | 'login', { options: unknown; at: number }>> = {};
   private pkWait: ((m: Extract<ServerMsg, { t: 'passkeyOptions' }>) => void) | null = null;
-  /** sign up (register) or log in with a passkey; resolves when the browser part is done */
+
+  /** fetch fresh challenges for both buttons (call when the sign-in UI shows, and again every few minutes) */
+  preparePasskeys() {
+    this.send({ t: 'passkeyBegin', mode: 'register' });
+    this.send({ t: 'passkeyBegin', mode: 'login' });
+  }
+
+  /**
+   * sign up (register) or log in with a passkey. Call it straight from the click
+   * handler: with a prepared challenge the browser's sheet opens without any wait.
+   */
   async passkey(mode: 'register' | 'login'): Promise<void> {
-    const { startAuthentication, startRegistration } = await import('@simplewebauthn/browser');
-    const opts = await new Promise<Extract<ServerMsg, { t: 'passkeyOptions' }> | null>((resolve) => {
-      this.pkWait = resolve;
-      this.send({ t: 'passkeyBegin', mode });
-      setTimeout(() => resolve(null), 10_000);
-    });
-    if (!opts) return void useOnline.setState({ error: 'サーバーから応答がありません' });
+    const ready = this.pkOptions[mode];
+    delete this.pkOptions[mode];
+    let options = ready && Date.now() - ready.at < 4 * 60_000 ? ready.options : null;
+    if (!options) {
+      // no challenge yet (slow connection): ask now — Chrome and Android still accept the late call
+      const m = await new Promise<Extract<ServerMsg, { t: 'passkeyOptions' }> | null>((resolve) => {
+        this.pkWait = (x) => x.mode === mode && resolve(x);
+        this.send({ t: 'passkeyBegin', mode });
+        setTimeout(() => resolve(null), 10_000);
+      });
+      this.pkWait = null;
+      if (!m) return void useOnline.setState({ error: 'サーバーから応答がありません' });
+      delete this.pkOptions[mode];
+      options = m.options;
+    }
     try {
       const response =
         mode === 'register'
-          ? await startRegistration({ optionsJSON: opts.options as Parameters<typeof startRegistration>[0]['optionsJSON'] })
-          : await startAuthentication({ optionsJSON: opts.options as Parameters<typeof startAuthentication>[0]['optionsJSON'] });
+          ? await startRegistration({ optionsJSON: options as Parameters<typeof startRegistration>[0]['optionsJSON'] })
+          : await startAuthentication({ optionsJSON: options as Parameters<typeof startAuthentication>[0]['optionsJSON'] });
       this.send({ t: 'passkeyFinish', mode, response });
     } catch (e) {
       const name = (e as { name?: string })?.name;
-      // the player closed the system sheet: nothing to report
-      if (name === 'NotAllowedError' || name === 'AbortError') return;
-      useOnline.setState({ error: name === 'InvalidStateError' ? 'この端末のパスキーはすでに登録されています' : 'この端末ではパスキーを使えませんでした' });
+      useOnline.setState({
+        error:
+          name === 'NotAllowedError' || name === 'AbortError'
+            ? 'パスキーの操作がキャンセルされました'
+            : name === 'InvalidStateError'
+              ? 'この端末のパスキーはすでに登録されています'
+              : 'この端末ではパスキーを使えませんでした',
+      });
+    } finally {
+      // a used challenge is gone: get the next one ready
+      this.send({ t: 'passkeyBegin', mode });
     }
   }
   googleSignIn(credential: string) {

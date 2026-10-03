@@ -67,7 +67,7 @@ class Conn {
   lastStamp = 0;
   badCodes = 0;
   /** the passkey challenge this connection is answering */
-  challenge: { mode: 'register' | 'login'; value: string; expires: number } | null = null;
+  challenges: Partial<Record<'register' | 'login', { value: string; expires: number }>> = {};
   constructor(
     readonly sock: Socket,
     readonly id: number,
@@ -321,12 +321,11 @@ export class Hub {
     if (!p) return;
     if (!at) return this.error(c, 'bad_request', 'パスキーは https のページでのみ使えます');
     if (mode !== 'register' && mode !== 'login') return this.error(c, 'bad_request', 'invalid message');
-    if (mode === 'login' && (c.room || c.queued)) return this.error(c, 'busy', '対戦中・待機中はアカウントを切り替えられません');
     const options =
       mode === 'register'
         ? await this.passkeys.registrationOptions({ rpID: at.rpID, userId: p.id, userName: p.name, exclude: (p.passkeys ?? []).map((x) => x.id) })
         : await this.passkeys.authenticationOptions({ rpID: at.rpID });
-    c.challenge = { mode, value: options.challenge, expires: Date.now() + 3 * 60_000 };
+    c.challenges[mode] = { value: options.challenge, expires: Date.now() + 5 * 60_000 };
     this.send(c, { t: 'passkeyOptions', mode, options });
   }
 
@@ -334,10 +333,10 @@ export class Hub {
   private async passkeyFinish(c: Conn, mode: 'register' | 'login', response: unknown) {
     const p = c.player;
     const at = passkeyOrigin(c.origin);
-    const ch = c.challenge;
-    c.challenge = null;
+    const ch = mode === 'register' || mode === 'login' ? c.challenges[mode] : undefined;
+    if (ch) delete c.challenges[mode];
     if (!p || !at) return;
-    if (!ch || ch.mode !== mode || ch.expires < Date.now()) return this.error(c, 'bad_code', '時間切れです。もう一度お試しください');
+    if (!ch || ch.expires < Date.now()) return this.error(c, 'bad_code', '時間切れです。もう一度お試しください');
     if (mode === 'register') {
       const pk = await this.passkeys.verifyRegistration({ response, challenge: ch.value, origin: at.origin, rpID: at.rpID });
       if (!pk) return this.error(c, 'bad_code', 'パスキーを登録できませんでした');
@@ -351,6 +350,7 @@ export class Hub {
     const id = typeof response === 'object' && response && typeof (response as { id?: unknown }).id === 'string' ? (response as { id: string }).id : '';
     const found = id ? this.store.findPasskey(id) : null;
     if (!found) return this.error(c, 'bad_code', 'このパスキーは登録されていません');
+    if (c.room || c.queued) return this.error(c, 'busy', '対戦中・待機中はアカウントを切り替えられません');
     const ok = await this.passkeys.verifyAuthentication({ response, challenge: ch.value, origin: at.origin, rpID: at.rpID, passkey: found.passkey });
     if (!ok) return this.error(c, 'bad_code', 'パスキーでの確認に失敗しました');
     if (c.player !== p || c.room || c.queued) return;

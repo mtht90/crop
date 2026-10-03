@@ -1,32 +1,32 @@
-/* sign up / log in (AccountBox, AccountSheet, the home chip) */
-.ac-box { display: flex; flex-direction: column; gap: calc(var(--u) * 0.8); align-items: stretch; }
-.ac-main { display: flex; align-items: center; gap: calc(var(--u) * 1); padding: calc(var(--u) * 0.9) calc(var(--u) * 1.4); border-radius: 999px; border: 1px solid rgba(255, 220, 140, 0.55); background: linear-gradient(180deg, #f6d27a, #c99a3c); color: #2a1a00; cursor: pointer; text-align: left; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35); transition: transform 0.15s, filter 0.15s; }
-.ac-main:hover { transform: translateY(-1px); filter: brightness(1.06); }
-.ac-main:disabled { filter: grayscale(0.6) brightness(0.8); cursor: wait; }
-.ac-main svg { width: calc(var(--u) * 2.2); height: calc(var(--u) * 2.2); flex: none; }
-.ac-main b { display: block; font-size: calc(var(--u) * 1.35); font-weight: 900; }
-.ac-main small { display: block; font-size: calc(var(--u) * 0.85); font-weight: 700; opacity: 0.8; }
+/* sign up / log in — deliberately plain: a white card with standard buttons */
+.ac-card, .ac-sheet { font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Noto Sans JP', 'Segoe UI', Roboto, sans-serif; }
+.ac-card { display: flex; flex-direction: column; gap: 10px; padding: 16px; border-radius: 14px; background: #fff; color: #1f1f1f; text-align: left; }
+.ac-sec { font-size: 13px; font-weight: 700; color: #5f6368; }
+.ac-btn { display: flex; align-items: center; justify-content: center; gap: 10px; height: 44px; padding: 0 16px; border-radius: 6px; font: 600 15px/1 inherit; font-family: inherit; cursor: pointer; transition: background 0.15s; }
+.ac-btn.dark { background: #1f1f1f; color: #fff; border: 1px solid #1f1f1f; }
+.ac-btn.dark:hover { background: #3c3c3c; }
+.ac-btn.outline { background: #fff; color: #1f1f1f; border: 1px solid #dadce0; }
+.ac-btn.outline:hover { background: #f6f8fa; }
 .ac-google { display: flex; justify-content: center; min-height: 44px; color-scheme: light; }
-.ac-sub { background: none; border: none; color: var(--ink-dim); font-weight: 700; font-size: calc(var(--u) * 1); cursor: pointer; padding: calc(var(--u) * 0.3); }
-.ac-sub b { color: #fff; text-decoration: underline; text-underline-offset: 3px; }
-.ac-sub:hover { color: #fff; }
-.ac-done { display: flex; align-items: center; gap: calc(var(--u) * 1); padding: calc(var(--u) * 0.8) calc(var(--u) * 1.1); border-radius: 12px; background: rgba(120, 220, 140, 0.1); border: 1px solid rgba(120, 220, 140, 0.4); }
-.ac-done svg { width: calc(var(--u) * 2); height: calc(var(--u) * 2); color: #8be28c; flex: none; }
-.ac-done b { display: block; color: #bff5c0; font-size: calc(var(--u) * 1.2); }
-.ac-done small { display: block; color: var(--ink-dim); font-weight: 700; font-size: calc(var(--u) * 0.9); }
-.ac-wait { margin: 0; text-align: center; color: var(--ink-dim); font-weight: 700; }
-.ac-err { margin: 0; text-align: center; color: #ffb4a0; font-weight: 800; font-size: calc(var(--u) * 1); }
+.ac-note { margin: 0; font-size: 12px; line-height: 1.5; color: #5f6368; text-align: center; }
+.ac-note.err { color: #d93025; font-weight: 600; }
+.ac-or { display: flex; align-items: center; gap: 10px; margin: 6px 0 2px; color: #5f6368; font-size: 12px; }
+.ac-or::before, .ac-or::after { content: ''; flex: 1; height: 1px; background: #e0e0e0; }
+.ac-done { display: flex; align-items: center; gap: 12px; }
+.ac-check { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: #e6f4ea; color: #137333; font-weight: 900; flex: none; }
+.ac-done b { display: block; font-size: 15px; }
+.ac-done small { display: block; font-size: 12px; color: #5f6368; }
 
-.ac-back { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; background: rgba(4, 8, 22, 0.72); backdrop-filter: blur(4px); }
-.ac-sheet { position: relative; width: min(calc(var(--u) * 40), 92vw); padding: calc(var(--u) * 2.6) calc(var(--u) * 2.6) calc(var(--u) * 1.8); display: flex; flex-direction: column; gap: calc(var(--u) * 1.2); text-align: center; }
-.ac-sheet .close { position: absolute; right: calc(var(--u) * 1); top: calc(var(--u) * 1); }
-.ac-kick { font-family: var(--font-latin); letter-spacing: 0.3em; font-size: calc(var(--u) * 0.9); color: var(--gold); }
-.ac-sheet h3 { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: calc(var(--u) * 2.6); }
-.ac-lead { margin: 0 0 calc(var(--u) * 0.4); color: var(--ink-dim); font-weight: 700; line-height: 1.6; font-size: calc(var(--u) * 1.05); }
-.ac-later { align-self: center; background: none; border: none; color: var(--ink-dim); font-weight: 800; cursor: pointer; padding: calc(var(--u) * 0.4) calc(var(--u) * 1.2); }
-.ac-later:hover { color: #fff; }
+.ac-back { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: 16px; background: rgba(0, 0, 0, 0.55); }
+.ac-sheet { position: relative; width: min(380px, 100%); max-height: calc(100vh - 32px); overflow: auto; padding: 20px 20px 12px; border-radius: 16px; background: #fff; color: #1f1f1f; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4); }
+.ac-sheet .ac-card { padding: 0; }
+.ac-sheet h3 { margin: 0; font-size: 20px; font-weight: 700; }
+.ac-lead { margin: 0; font-size: 13px; line-height: 1.6; color: #5f6368; }
+.ac-x { position: absolute; right: 10px; top: 8px; width: 32px; height: 32px; border: none; background: none; font-size: 22px; color: #5f6368; cursor: pointer; border-radius: 50%; }
+.ac-x:hover { background: #f1f3f4; }
+.ac-later { align-self: center; border: none; background: none; color: #1a73e8; font-weight: 600; font-size: 14px; padding: 8px 16px; cursor: pointer; font-family: inherit; }
 
 /* the small reminder on the home screen */
-.ac-chip { display: inline-flex; align-items: center; gap: 6px; height: calc(var(--u) * 3.2); padding: 0 calc(var(--u) * 1.1); border-radius: 999px; border: 1px solid rgba(255, 210, 120, 0.55); background: rgba(40, 28, 6, 0.6); color: #ffe3a3; font-weight: 900; font-size: calc(var(--u) * 1); cursor: pointer; white-space: nowrap; }
+.ac-chip { display: inline-flex; align-items: center; gap: 6px; height: calc(var(--u) * 3.2); padding: 0 calc(var(--u) * 1.1); border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.35); background: rgba(255, 255, 255, 0.92); color: #1f1f1f; font-weight: 700; font-size: calc(var(--u) * 1); cursor: pointer; white-space: nowrap; font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Noto Sans JP', sans-serif; }
 .ac-chip svg { width: 1.2em; height: 1.2em; }
-.ac-chip:hover { background: rgba(80, 56, 12, 0.7); }
+.ac-chip:hover { background: #fff; }

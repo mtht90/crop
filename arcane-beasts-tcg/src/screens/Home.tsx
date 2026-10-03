@@ -82,7 +82,7 @@ export function Home() {
           </div>
           {askAcct && (
             <button className="ac-chip" onClick={() => setAcctOpen(true)}>
-              <Icon name="pendant-key" /> ログイン / 新規登録
+              ログイン / 新規登録
             </button>
           )}
           <button className="icon-btn" title="ミッション" onClick={() => go('missions')}>
