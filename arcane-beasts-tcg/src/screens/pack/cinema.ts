@@ -90,7 +90,7 @@ varying vec3 vDir;
 void main(){ vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
 `;
 const SKY_FRAG = /* glsl */ `
-uniform float uTime; uniform vec3 uTint; uniform float uTintAmt; uniform float uGlowAmt; uniform vec3 uGlowDir; uniform vec3 uMoonDir; uniform float uDawn; uniform vec3 uSunDir; uniform float uLite;
+uniform float uDim; uniform float uTime; uniform vec3 uTint; uniform float uTintAmt; uniform float uGlowAmt; uniform vec3 uGlowDir; uniform vec3 uMoonDir; uniform float uDawn; uniform vec3 uSunDir; uniform float uLite;
 varying vec3 vDir;
 ${NOISE}
 
@@ -178,14 +178,16 @@ vec3 skyCol(vec3 d, float detail){
 }
 void main(){
   vec3 d = normalize(vDir);
-  if (d.y >= 0.0) { gl_FragColor = vec4(skyCol(d, 1.0), 1.0); return; }
+  if (d.y >= 0.0) { gl_FragColor = vec4(skyCol(d, 1.0) * (1.0 - uDim), 1.0); return; }
   // still lake: the sky mirrored and broken up by slow ripples, darker toward the viewer
   float depth = -d.y;
   float k = 1.0 / max(depth, 0.015);
   float rip = noise(vec3(d.x * k * 0.9, d.z * k * 0.12, uTime * 0.45)) - 0.5;
   float rip2 = noise(vec3(d.x * k * 4.0, d.z * k * 0.5, uTime * 0.8)) - 0.5;
-  vec3 r = normalize(vec3(d.x + rip * 0.035 + rip2 * 0.012, max(0.0, depth + rip * 0.01), d.z));
-  vec3 col = skyCol(r, 0.0) * 0.62;
+  // horizontal slices drift sideways, so reflections (the moon above all) break up like real water
+  float slice = (noise(vec3(depth * 130.0, 0.0, uTime * 0.7)) - 0.5) * 0.026 * smoothstep(0.02, 0.25, depth);
+  vec3 r = normalize(vec3(d.x + rip * 0.035 + rip2 * 0.012 + slice, max(0.0, depth + rip * 0.01), d.z));
+  vec3 col = skyCol(r, 0.0) * mix(1.0, 0.62, smoothstep(0.0, 0.05, depth));
   col = mix(col, mix(vec3(0.006, 0.02, 0.06), vec3(0.02, 0.012, 0.018), uDawn), smoothstep(0.03, 0.45, depth) * 0.9);
   // the sun's path on the water
   float saz = d.x / -d.z - uSunDir.x / -uSunDir.z;
@@ -198,7 +200,7 @@ void main(){
   // shimmering reflection of the glow on the water
   float streak = exp(-abs(d.x - uGlowDir.x * 0.9) * 22.0) * smoothstep(0.35, 0.0, depth) * (0.6 + 0.4 * rip);
   col += uTint * uGlowAmt * streak * 0.5;
-  gl_FragColor = vec4(col, 1.0);
+  gl_FragColor = vec4(col * (1.0 - uDim), 1.0);
 }
 `;
 
@@ -234,7 +236,7 @@ void main(){ vUv = uv; vAz = atan(position.x, -position.z); gl_Position = projec
 
 // snow mountains: sharp ridged peaks, snow caps, moonlit faces and a soft haze at the foot
 const RIDGE_FRAG = /* glsl */ `
-uniform float uSeed; uniform float uScale; uniform vec3 uColor; uniform vec3 uHazeCol; uniform float uHeight; uniform float uHaze; uniform float uSnow; uniform float uMirror; uniform float uTime; uniform float uDawn;
+uniform float uDim; uniform float uSeed; uniform float uScale; uniform vec3 uColor; uniform vec3 uHazeCol; uniform float uHeight; uniform float uHaze; uniform float uSnow; uniform float uMirror; uniform float uTime; uniform float uDawn;
 varying vec2 vUv; varying float vAz;
 ${NOISE}
 float ridgeAt(float a){
@@ -274,13 +276,13 @@ void main(){
   col = mix(col, col * vec3(1.5, 1.0, 0.7) + vec3(0.1, 0.03, 0.0), uDawn * 0.4);
   float alpha = 1.0;
   if (uMirror > 0.5) { col = mix(col, vec3(0.01, 0.03, 0.08), 0.25) * 0.8; alpha = 0.8 * (1.0 - smoothstep(0.0, 0.2, y)); }
-  gl_FragColor = vec4(col, alpha);
+  gl_FragColor = vec4(col * (1.0 - uDim), alpha);
 }
 `;
 
 // a line of pines along the shore, taller toward both sides so they frame the view
 const FOREST_FRAG = /* glsl */ `
-uniform float uSeed; uniform float uHeight; uniform vec3 uColor; uniform float uMirror; uniform float uTime; uniform float uDawn;
+uniform float uDim; uniform float uSeed; uniform float uHeight; uniform vec3 uColor; uniform float uMirror; uniform float uTime; uniform float uDawn;
 varying vec2 vUv; varying float vAz;
 ${NOISE}
 float h1(float n){ return fract(sin(n * 91.3458) * 47453.5453); }
@@ -308,13 +310,13 @@ void main(){
   vec3 col = uColor + vec3(0.03, 0.06, 0.12) * rim * 0.6 * (1.0 - uDawn);
   float alpha = 1.0;
   if (uMirror > 0.5) { col *= 0.9; alpha = 0.85 * (1.0 - smoothstep(0.0, 0.25, y)); }
-  gl_FragColor = vec4(col, alpha);
+  gl_FragColor = vec4(col * (1.0 - uDim), alpha);
 }
 `;
 
 // low mist lying on the water between the ranges
 const MIST_FRAG = /* glsl */ `
-uniform float uTime; uniform vec3 uCol; uniform float uAmt; uniform float uSeed;
+uniform float uDim; uniform float uTime; uniform vec3 uCol; uniform float uAmt; uniform float uSeed;
 varying vec2 vUv; varying float vAz;
 ${NOISE}
 void main(){
@@ -323,7 +325,7 @@ void main(){
   float n2 = fbm(vec3(vAz * 17.0 - uTime * 0.035, y * 9.0, uSeed + 4.0));
   float band = smoothstep(0.0, 0.012, y) * exp(-y * 20.0);
   float a = uAmt * band * smoothstep(0.25, 0.75, n) * (0.5 + 0.9 * n2);
-  gl_FragColor = vec4(uCol, clamp(a, 0.0, 1.0));
+  gl_FragColor = vec4(uCol * (1.0 - uDim), clamp(a, 0.0, 1.0));
 }
 `;
 
@@ -557,6 +559,9 @@ export class MeteorCinema {
   private aurora: THREE.Mesh;
   private moon: THREE.Group;
   private terrain: THREE.ShaderMaterial[] = [];
+  /** how far the scenery is darkened while the light gathers into the pack (shared by every scenery shader) */
+  private dimU = { value: 0 };
+  private dim = 0;
   private mists: THREE.Mesh[] = [];
   private bokeh: THREE.Points;
   private flies: THREE.Points;
@@ -625,6 +630,7 @@ export class MeteorCinema {
           uTintAmt: { value: 0 },
           uGlowAmt: { value: 0 },
           uGlowDir: { value: new THREE.Vector3(0, 0, -1) },
+          uDim: this.dimU,
           uMoonDir: { value: MOON_DIR.clone() },
           uLite: { value: lite ? 1 : 0 },
           uDawn: { value: 0 },
@@ -679,6 +685,7 @@ export class MeteorCinema {
     this.starsMirror = new THREE.Points(sg, starMat.clone());
     (this.starsMirror.material as THREE.ShaderMaterial).uniforms.uDim.value = 0.22;
     this.starsMirror.scale.y = -1;
+    this.starsMirror.renderOrder = -30;
     this.scene.add(this.starsMirror);
 
     // terrain wraps the lake: snow ranges far → near, then a shore of pines. Each layer is
@@ -691,7 +698,7 @@ export class MeteorCinema {
         const mat = new THREE.ShaderMaterial({
           vertexShader: TERRAIN_VERT,
           fragmentShader: frag,
-          uniforms: { ...Object.fromEntries(Object.entries(uniforms).map(([k, v]) => [k, { value: (v.value as { clone?: () => unknown }).clone ? (v.value as { clone: () => unknown }).clone() : v.value }])), uMirror: { value: mirror ? 1 : 0 }, uTime: { value: 0 }, uDawn: { value: 0 } },
+          uniforms: { ...Object.fromEntries(Object.entries(uniforms).map(([k, v]) => [k, { value: (v.value as { clone?: () => unknown }).clone ? (v.value as { clone: () => unknown }).clone() : v.value }])), uMirror: { value: mirror ? 1 : 0 }, uTime: { value: 0 }, uDawn: { value: 0 }, uDim: this.dimU },
           side: mirror ? THREE.DoubleSide : THREE.BackSide,
           transparent: mirror,
           depthWrite: !mirror,
@@ -700,7 +707,8 @@ export class MeteorCinema {
         const m = new THREE.Mesh(cyl(r), mat);
         m.position.y = mirror ? -r * 0.45 : r * 0.45;
         if (mirror) m.scale.y = -1;
-        m.renderOrder = order + (mirror ? 20 : 0);
+        // scenery is drawn first: the mirrored layers, then the mist; light effects (default order) always land on top
+        m.renderOrder = mirror ? order - 20 : order;
         this.scene.add(m);
       };
       make(false);
@@ -721,14 +729,14 @@ export class MeteorCinema {
         new THREE.ShaderMaterial({
           vertexShader: TERRAIN_VERT,
           fragmentShader: MIST_FRAG,
-          uniforms: { uTime: { value: 0 }, uCol: { value: C(col) }, uAmt: { value: amt }, uSeed: { value: seed } },
+          uniforms: { uTime: { value: 0 }, uCol: { value: C(col) }, uAmt: { value: amt }, uSeed: { value: seed }, uDim: this.dimU },
           side: THREE.BackSide,
           transparent: true,
           depthWrite: false,
         }),
       );
       mist.position.y = r * 0.45;
-      mist.renderOrder = 10;
+      mist.renderOrder = -5;
       this.scene.add(mist);
       this.mists.push(mist);
     }
@@ -1176,11 +1184,7 @@ export class MeteorCinema {
     if (this.opts.god) {
       const dawn = easeInOut(smooth(T_IMPACT + 0.15, T_IMPACT + 2.1, t));
       skyU.uDawn.value = dawn;
-      (this.stars.material as THREE.ShaderMaterial).uniforms.uDim.value = 1 - dawn * 0.9;
-      (this.starsMirror.material as THREE.ShaderMaterial).uniforms.uDim.value = 0.22 * (1 - dawn * 0.9);
-      (this.aurora.material as THREE.ShaderMaterial).uniforms.uAmt.value = 0.4 * (1 - dawn);
       for (const m of this.terrain) m.uniforms.uDawn.value = dawn;
-      this.moon.children.forEach((c, k) => (((c as THREE.Sprite).material as THREE.SpriteMaterial).opacity = (k === 0 ? 0.4 : 0.8) * (1 - dawn * 0.85)));
     }
 
     // ---------------- impact ----------------
@@ -1276,7 +1280,19 @@ export class MeteorCinema {
     this.sparkPts.geometry.attributes.position.needsUpdate = true;
     this.sparkPts.geometry.attributes.aAlpha.needsUpdate = true;
 
-    this.renderer.toneMappingExposure += ((this.done && this.idle ? 0.78 : 0.9) - this.renderer.toneMappingExposure) * Math.min(1, dt * 3);
+    {
+      // the scenery darkens as the light gathers, so the pack's light stays clean against it
+      const target = this.done && this.idle ? (this.opts.god ? 0.25 : 0.5) : 0.72 * smooth(L_IMPACT + 0.5, L_IMPACT + 1.6, T);
+      this.dim += (target - this.dim) * Math.min(1, dt * 4);
+      this.dimU.value = this.dim;
+      const k = 1 - this.dim * 0.85;
+      const dawnV = this.opts.god ? easeInOut(smooth(T_IMPACT + 0.15, T_IMPACT + 2.1, t)) : 0;
+      const dawnK = 1 - dawnV * 0.9;
+      (this.aurora.material as THREE.ShaderMaterial).uniforms.uAmt.value = 0.4 * (1 - dawnV) * (1 - this.dim);
+      this.moon.children.forEach((c, i) => (((c as THREE.Sprite).material as THREE.SpriteMaterial).opacity = (i === 0 ? 0.4 : 0.8) * (1 - dawnV * 0.85) * (1 - this.dim * 0.85)));
+      (this.stars.material as THREE.ShaderMaterial).uniforms.uDim.value = dawnK * k;
+      (this.starsMirror.material as THREE.ShaderMaterial).uniforms.uDim.value = 0.22 * dawnK * k;
+    }
     this.bloom.strength = 0.8 + (sinceImpact >= 0 ? Math.max(0, 0.9 * (1 - sinceImpact / 0.6)) : 0) + smooth(3.85, 4.3, T) * (1 - smooth(T_DONE, T_DONE + 0.5, t)) * 0.15;
 
     if (Tr >= T_DONE && !this.done) {
