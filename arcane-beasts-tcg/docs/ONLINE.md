@@ -79,6 +79,33 @@ PCをつけっぱなしにしたくないときは、Render の無料枠に置�
 4. 無料枠は15分アクセスがないと眠るので、UptimeRobot などで `https://（サービス名）.onrender.com/healthz` を5分おきに見に行く
 5. ランクなどの保存先 `data/` は、Render の無料枠では再起動で消えます（カードやコインは各端末に保存されているので消えません）
 
+### ランクを消さない（Supabase の無料データベース）
+
+Render の無料枠は、再起動や更新のたびにサーバーのファイルが消えます。オンラインのランクとプレイヤー情報を残すには、Supabase（無料）を使います。
+
+1. https://supabase.com に登録し、**New project** でプロジェクトを作る（地域は Tokyo、パスワードは何でも）
+2. 左メニューの **SQL Editor** を開き、次の3行を貼って **Run**
+
+   ```sql
+   create table if not exists public.players (id text primary key, data jsonb not null, updated_at timestamptz not null default now());
+   alter table public.players enable row level security;
+   ```
+
+3. 左下の **Project Settings → API**（または **API Keys**）を開き、次の2つを控える
+   - **Project URL**（`https://xxxx.supabase.co`）
+   - **service_role** の秘密キー（新しい画面では **secret** キー。`eyJ…` か `sb_secret_…` で始まる。**公開しない**こと）
+4. Render のサービスの **Environment** に、次の2つを追加して保存（自動で再デプロイされます）
+   - `SUPABASE_URL` = Project URL
+   - `SUPABASE_SERVICE_KEY` = 秘密キー
+5. Render の **Logs** に `player data: hosted database (Supabase)` と出れば成功です
+
+- 2つとも設定したときだけデータベースを使います。どちらかがないときは、今までどおりサーバーのファイル（`data/players.json`）を使います。
+- データベースの読み書きに失敗しても、ゲームは止まりません（書き込みは15秒ごとにやり直します）。
+
+### プレイヤー名の制限
+
+暴言・性的な言葉・差別的な言葉・運営になりすます名前（「運営」「admin」など）は使えません。全角/半角、カタカナ/ひらがな、記号や数字での言い換え（`sh1t`、`し.ね`）も見抜きます。足したい言葉は、環境変数 `NG_WORDS` にカンマ区切りで入れてください。
+
 ## 設定（環境変数）
 
 | 名前 | 既定値 | 内容 |
@@ -87,6 +114,8 @@ PCをつけっぱなしにしたくないときは、Render の無料枠に置�
 | `DATA_DIR` | `./data` | プレイヤー情報の保存先 |
 | `WEB_DIR` | `./dist` | 配信するゲームのフォルダ |
 | `PUBLIC_URL` | なし | QRコードに入れる公開URL |
+| `SUPABASE_URL` / `SUPABASE_SERVICE_KEY` | なし | プレイヤー情報の保存先（上の説明） |
+| `NG_WORDS` | なし | 名前に使えない言葉を足す（カンマ区切り） |
 
 ## 運用メモ
 

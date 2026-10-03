@@ -14,6 +14,7 @@ import { networkInterfaces } from 'node:os';
 import { WebSocketServer } from 'ws';
 import { Hub } from './hub';
 import { PlayerStore } from './players';
+import { backendFromEnv } from './remote';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 const root = resolve(process.env.WEB_DIR ?? join(here, '..', 'dist'));
@@ -36,7 +37,13 @@ const MIME: Record<string, string> = {
   '.ico': 'image/x-icon',
 };
 
-const store = new PlayerStore(join(dataDir, 'players.json'));
+const backend = backendFromEnv();
+const store = new PlayerStore(join(dataDir, 'players.json'), Date.now, backend);
+// with a database, load it before taking connections
+await store.init().catch((e) => {
+  console.error('could not read the player database:', e instanceof Error ? e.message : e);
+  process.exit(1);
+});
 const stamp = () => new Date().toISOString().slice(11, 19);
 const hub = new Hub({ store, log: (m) => console.log(`[${stamp()}] ${m}`) });
 
@@ -101,7 +108,7 @@ setInterval(() => {
 server.listen(port, '0.0.0.0', () => {
   console.log(`ARCANE BEASTS server  http://localhost:${port}`);
   console.log(`  game files : ${root}${existsSync(root) ? '' : '  (not built yet: run npm run build)'}`);
-  console.log(`  player data: ${dataDir}`);
+  console.log(backend ? '  player data: hosted database (Supabase)' : `  player data: ${dataDir}`);
   const lan = Object.values(networkInterfaces())
     .flat()
     .filter((n) => n && n.family === 'IPv4' && !n.internal)
@@ -110,8 +117,9 @@ server.listen(port, '0.0.0.0', () => {
   console.log(process.env.PUBLIC_URL ? `  public URL : ${process.env.PUBLIC_URL}` : '  public URL : (not set) open the game through your tunnel address so QR codes work');
 });
 
-const quit = () => {
+const quit = async () => {
   hub.close();
+  await store.close().catch(() => {});
   process.exit(0);
 };
 process.on('SIGINT', quit);

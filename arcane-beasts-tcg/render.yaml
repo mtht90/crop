@@ -11,3 +11,9 @@ services:
     envVars:
       - key: NODE_VERSION
         value: 22
+      # where player records are kept (see docs/ONLINE.md); without them the server's own disk is used,
+      # which Render's free plan wipes on every restart
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false

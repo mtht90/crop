@@ -9,6 +9,8 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from '
 import { dirname } from 'node:path';
 import { applyRanked, ensureSeason, freshRank, RANKS, type RankChange, type RankState } from '../src/state/ranked';
 import { PORTRAITS, type OnlineProfile } from '../src/online/protocol';
+import { judgeName } from '../src/online/names';
+import type { PlayerBackend } from './remote';
 
 export interface PlayerRecord {
   id: string;
@@ -38,10 +40,14 @@ export class PlayerStore {
   private players = new Map<string, PlayerRecord>();
   private transfers = new Map<string, { id: string; expires: number }>();
   private timer: ReturnType<typeof setTimeout> | null = null;
+  /** players changed since the last successful write to the database */
+  private dirty = new Set<string>();
+  private remoteBusy: Promise<void> | null = null;
 
   constructor(
     private readonly file: string | null,
     private readonly now: () => number = Date.now,
+    private readonly backend: PlayerBackend | null = null,
   ) {
     if (file && existsSync(file)) {
       try {
@@ -60,12 +66,25 @@ export class PlayerStore {
     return this.players.size;
   }
 
+  /** load the hosted database (if one is set up) and merge it over the local file */
+  async init() {
+    if (!this.backend) return;
+    const list = await this.backend.loadAll();
+    for (const p of list) {
+      p.rank = { ...freshRank(), ...p.rank };
+      this.players.set(p.id, p);
+    }
+    // anything only the local file knew (an earlier run without a database) moves up
+    for (const p of this.players.values()) if (!list.some((x) => x.id === p.id)) this.dirty.add(p.id);
+    if (this.dirty.size) this.save();
+  }
+
   create(name?: string, portrait?: string): { player: PlayerRecord; secret: string } {
     const secret = randomBytes(24).toString('base64url');
     const player: PlayerRecord = {
       id: randomUUID(),
       secrets: [hash(secret)],
-      name: String(name ?? '').trim() ? cleanName(name) : `ななし${randomInt(100, 1000)}`,
+      name: ((v) => (v.ok ? cleanName(v.name) : `ななし${randomInt(100, 1000)}`))(judgeName(name)),
       portrait: portrait && PORTRAITS.includes(portrait) ? portrait : PORTRAITS[0],
       rank: freshRank(),
       games: 0,
@@ -75,7 +94,7 @@ export class PlayerStore {
       lastSeen: this.now(),
     };
     this.players.set(player.id, player);
-    this.save();
+    this.save(player);
     return { player, secret };
   }
 
@@ -85,7 +104,12 @@ export class PlayerStore {
     const p = this.players.get(id);
     if (!p || !p.secrets.includes(hash(secret))) return null;
     p.lastSeen = this.now();
-    if (ensureSeason(p.rank)) this.save();
+    // names saved before the filter existed
+    if (!judgeName(p.name).ok) {
+      p.name = `ななし${randomInt(100, 1000)}`;
+      this.save(p);
+    }
+    if (ensureSeason(p.rank)) this.save(p);
     return p;
   }
 
@@ -96,7 +120,7 @@ export class PlayerStore {
   rename(p: PlayerRecord, name: string, portrait?: string) {
     p.name = cleanName(name);
     if (portrait && PORTRAITS.includes(portrait)) p.portrait = portrait;
-    this.save();
+    this.save(p);
   }
 
   profile(p: PlayerRecord): OnlineProfile {
@@ -113,14 +137,14 @@ export class PlayerStore {
     p.games++;
     if (win) p.wins++;
     else p.losses++;
-    this.save();
+    this.save(p);
     return change;
   }
   recordCasual(p: PlayerRecord, win: boolean) {
     p.games++;
     if (win) p.wins++;
     else p.losses++;
-    this.save();
+    this.save(p);
   }
 
   // ---- transfer codes -----------------------------------------------------
@@ -146,31 +170,64 @@ export class PlayerStore {
     const secret = randomBytes(24).toString('base64url');
     p.secrets.push(hash(secret));
     if (p.secrets.length > 5) p.secrets.shift();
-    this.save();
+    this.save(p);
     return { player: p, secret };
   }
 
   // ---- persistence --------------------------------------------------------
-  save() {
-    if (!this.file || this.timer) return;
+  save(changed?: PlayerRecord) {
+    if (changed) this.dirty.add(changed.id);
+    if ((!this.file && !this.backend) || this.timer) return;
     this.timer = setTimeout(() => {
       this.timer = null;
       this.flush();
     }, 400);
   }
+  /** write everything now (the file at once; the database in the background — await `close()` to wait for it) */
   flush() {
-    if (!this.file) return;
     if (this.timer) {
       clearTimeout(this.timer);
       this.timer = null;
     }
-    try {
-      mkdirSync(dirname(this.file), { recursive: true });
-      const tmp = this.file + '.tmp';
-      writeFileSync(tmp, JSON.stringify([...this.players.values()]));
-      renameSync(tmp, this.file);
-    } catch (e) {
-      console.error('could not save players:', e);
+    if (this.file) {
+      try {
+        mkdirSync(dirname(this.file), { recursive: true });
+        const tmp = this.file + '.tmp';
+        writeFileSync(tmp, JSON.stringify([...this.players.values()]));
+        renameSync(tmp, this.file);
+      } catch (e) {
+        console.error('could not save players:', e);
+      }
+    }
+    if (this.backend) void this.flushRemote();
+  }
+  /** push the changed players to the database; a failed write is retried later */
+  flushRemote(): Promise<void> {
+    if (!this.backend) return Promise.resolve();
+    if (this.remoteBusy) return this.remoteBusy;
+    const ids = [...this.dirty];
+    if (!ids.length) return Promise.resolve();
+    this.dirty.clear();
+    const backend = this.backend;
+    this.remoteBusy = backend
+      .saveMany(ids.map((id) => this.players.get(id)).filter((p): p is PlayerRecord => !!p))
+      .catch((e) => {
+        console.error('could not save players to the database (will retry):', e instanceof Error ? e.message : e);
+        for (const id of ids) this.dirty.add(id);
+        setTimeout(() => this.save(), 15_000).unref?.();
+      })
+      .finally(() => {
+        this.remoteBusy = null;
+        // changes that arrived while writing
+        if (this.dirty.size && !this.timer) this.save();
+      });
+    return this.remoteBusy;
+  }
+  /** everything written, including the database (used when the server is shutting down) */
+  async close() {
+    this.flush();
+    for (let i = 0; i < 3 && (this.remoteBusy || this.dirty.size); i++) {
+      await (this.remoteBusy ?? this.flushRemote());
     }
   }
 }

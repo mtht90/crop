@@ -8,6 +8,7 @@ import { activeDeck, useStore } from '../state/store';
 import { validateDeck } from '../engine/decks';
 import { artUrl } from '../lib/assets';
 import { TopBar } from '../ui/TopBar';
+import { judgeName } from '../online/names';
 import { RankEmblem } from '../ui/RankEmblem';
 import { Icon } from '../ui/Icon';
 import { RANKS } from '../state/ranked';
@@ -222,7 +223,17 @@ export function Lobby() {
                     value={name}
                     maxLength={12}
                     onChange={(e) => setName(e.target.value)}
-                    onBlur={() => name.trim() && name !== st.profile!.name && online.rename(name)}
+                    onBlur={() => {
+                      if (!name.trim() || name === st.profile!.name) return;
+                      const v = judgeName(name);
+                      if (!v.ok) {
+                        setToast(v.message);
+                        setTimeout(() => setToast(null), 2600);
+                        setName(st.profile!.name);
+                        return;
+                      }
+                      online.rename(v.name);
+                    }}
                     onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
                   />
                   <div className="lb-rank">

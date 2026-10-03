@@ -9,6 +9,7 @@ import { card } from '../src/engine/cards';
 import { RANKS } from '../src/state/ranked';
 import { GameSession, promptMs, type Outgoing } from '../src/online/session';
 import { PROTOCOL, type ClientMsg, type ErrorCode, type LiveGame, type MatchKind, type OppInfo, type RoomInfo, type ServerMsg } from '../src/online/protocol';
+import { judgeName } from '../src/online/names';
 import { PlayerStore, type PlayerRecord } from './players';
 import { randomInt } from 'node:crypto';
 
@@ -165,9 +166,12 @@ export class Hub {
     }
     if (!c.player) return this.error(c, 'bad_request', 'say hello first');
     switch (m.t) {
-      case 'rename':
-        this.store.rename(c.player, m.name, m.portrait);
+      case 'rename': {
+        const verdict = judgeName(m.name);
+        if (!verdict.ok) return this.error(c, 'bad_name', verdict.message);
+        this.store.rename(c.player, verdict.name, m.portrait);
         return this.send(c, { t: 'renamed', profile: this.store.profile(c.player) });
+      }
       case 'transfer': {
         const { code, expires } = this.store.createTransfer(c.player);
         return this.send(c, { t: 'transferCode', code, expires });

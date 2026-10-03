@@ -419,4 +419,19 @@ describe('online hub', () => {
     a2.say({ t: 'rename', name: '勇者' });
     expect(a2.last('renamed')!.profile.name).toBe('勇者');
   });
+
+  test('names that are not allowed are refused; a new player with one gets a plain name', () => {
+    const hub = makeHub();
+    const a = new Bot(hub, 'アリス');
+    a.hello();
+    a.say({ t: 'rename', name: 'ｓｈ１ｔ' });
+    expect(a.errors().at(-1)?.code).toBe('bad_name');
+    a.say({ t: 'rename', name: '運営' });
+    expect(a.errors().at(-1)?.code).toBe('bad_name');
+    a.say({ t: 'rename', name: 'ボブ' });
+    expect(a.last('renamed')!.profile.name).toBe('ボブ');
+    const rude = new Bot(hub, 'ちんこ');
+    rude.hello();
+    expect(rude.last('welcome')!.profile.name).toMatch(/^ななし\d+$/);
+  });
 });

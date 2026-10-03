@@ -99,6 +99,6 @@ export type ServerMsg =
   | { t: 'error'; code: ErrorCode; message: string }
   | { t: 'pong'; n: number; online: number; waiting: number };
 
-export type ErrorCode = 'version' | 'bad_request' | 'bad_deck' | 'no_room' | 'room_full' | 'busy' | 'bad_answer' | 'bad_code' | 'not_in_game' | 'rate';
+export type ErrorCode = 'version' | 'bad_name' | 'bad_request' | 'bad_deck' | 'no_room' | 'room_full' | 'busy' | 'bad_answer' | 'bad_code' | 'not_in_game' | 'rate';
 
 export type ActionLike = Action;
