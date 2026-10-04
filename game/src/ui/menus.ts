@@ -18,8 +18,16 @@ export interface Selection {
   difficulty: Difficulty;
 }
 
-const controlsHtml = `
-<div class="controls">
+const touchHelp = `
+<div class="touch-only" style="font-weight:800;font-size:14px;line-height:1.7">
+  左側をドラッグ：移動 ／ 右側をドラッグ：視点<br>
+  攻撃ボタン：押す・押しっぱなし（押したまま動かすと狙える。弓は離すと発射）<br>
+  ジャンプ（空中でもう一度：上昇技）／ ダッシュ ／ ガード（攻撃の瞬間に出すとジャストガード）<br>
+  スキル・必殺はボタンが光ったら使える。遠距離キャラは床や浮島を撃つと反動で戻れる
+</div>`;
+
+const controlsHtml = touchHelp + `
+<div class="controls kbd-only">
   <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span><span>移動</span>
   <span><kbd>マウス</kbd></span><span>視点</span>
   <span><kbd>左クリック</kbd></span><span>攻撃（長押し連射）</span>
@@ -31,7 +39,7 @@ const controlsHtml = `
   <span><kbd>R</kbd></span><span>リロード</span>
   <span><kbd>Esc</kbd></span><span>ポーズ</span>
 </div>
-<p style="margin-top:8px;font-size:13px">※上昇技はブレイズ・ピコのみ。場外に飛ばされても縁まで戻れば登れる。弓は長押しで溜め撃ち。着地の瞬間に <kbd>Shift</kbd> で受け身。</p>`;
+<p class="kbd-only" style="margin-top:8px;font-size:13px">※上昇技はブレイズ・ピコのみ。場外に飛ばされても縁まで戻れば登れる。弓は長押しで溜め撃ち。攻撃の瞬間に右クリックでジャストガード。着地の瞬間に <kbd>Shift</kbd> で受け身。</p>`;
 
 /** DOM menus: title, character select, pause and result screens. */
 export class Menus {
@@ -51,7 +59,7 @@ export class Menus {
     this.el.innerHTML = `
       <div class="screen">
         <div class="logo">STAR ARENA<small>スター・アリーナ</small></div>
-        <div class="blink">クリックでスタート</div>
+        <div class="blink">クリック / タップでスタート</div>
       </div>`;
     this.el.querySelector('.screen')!.addEventListener('click', () => {
       audio.unlock();

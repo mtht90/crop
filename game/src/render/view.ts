@@ -58,7 +58,9 @@ export class GameView {
 
   constructor(container: HTMLElement) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    // Phones/tablets: cap the resolution to keep the frame rate up.
+    const coarse = window.matchMedia?.('(pointer: coarse)').matches;
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, coarse ? 1.5 : 2));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.05;
@@ -227,6 +229,18 @@ export class GameView {
         case 'ringout':
           audio.play('ringout');
           break;
+        case 'justGuard': {
+          const facing = e.target.forward();
+          this.effects.guard(e.target.pos, facing, false);
+          this.effects.hit(e.pos, facing, 0x6fe8ff, 0xffffff, 0.8, true, 0.8);
+          audio.play('guard');
+          audio.play('go');
+          if (e.target === pov) {
+            this.feedback.flash = { color: '#6fe8ff', a: 0.45 };
+            this.fovKick.impulse(-18);
+          } else if (e.attacker === pov) this.addTrauma(0.4);
+          break;
+        }
         case 'recoil': {
           this.effects.dust(e.pos.clone(), 5, 0.5 + e.strength * 0.06);
           this.effects.fizzle(e.pos.clone(), e.fighter.def.element.color2);

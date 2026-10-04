@@ -8,6 +8,7 @@ import { PlayerInput } from './core/input';
 import { Match } from './game/match';
 import { GameView } from './render/view';
 import { Hud } from './ui/hud';
+import { TouchControls } from './ui/touch';
 import { Menus, type Selection, type Settings } from './ui/menus';
 
 type Screen = 'title' | 'select' | 'match' | 'paused' | 'result';
@@ -42,16 +43,24 @@ export class App {
     this.input = new PlayerInput(this.view.renderer.domElement);
     this.hud = new Hud(root);
     this.menus = new Menus(root);
+    this.touch = new TouchControls(root, this.input, () => this.pause());
     this.applySettings();
 
     // Attract mode behind the menus: two CPUs sparring.
     this.idleMatch = this.makeDemo();
 
     document.addEventListener('pointerlockchange', () => {
-      if (!this.input.locked && this.screen === 'match' && !this.match?.finished) this.pause();
+      if (!this.touch.active && !this.input.locked && this.screen === 'match' && !this.match?.finished) this.pause();
     });
     this.view.renderer.domElement.addEventListener('click', () => {
-      if (this.screen === 'match') this.input.requestLock();
+      if (this.screen === 'match') this.lock();
+    });
+    // A real mouse click on the canvas switches back from touch controls.
+    this.view.renderer.domElement.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'mouse' && this.touch.active && !window.matchMedia?.('(pointer: coarse)').matches) {
+        this.touch.setActive(false);
+        this.touch.show(false);
+      }
     });
     window.addEventListener('keydown', (e) => {
       if (e.code === 'Escape' && this.screen === 'paused') this.resume();
@@ -75,6 +84,7 @@ export class App {
   }
 
   private demoAi: CpuController | null = null;
+  private touch: TouchControls;
 
   private applySettings() {
     this.input.sensitivity = this.settings.sensitivity;
@@ -87,7 +97,13 @@ export class App {
     }
   }
 
+  /** Pointer lock only for mouse play. */
+  private lock() {
+    if (!this.touch.active) this.input.requestLock();
+  }
+
   private toTitle() {
+    this.touch.show(false);
     this.screen = 'title';
     this.match = null;
     this.hud.show(false);
@@ -100,6 +116,7 @@ export class App {
   }
 
   private toSelect() {
+    this.touch.show(false);
     this.screen = 'select';
     this.hud.show(false);
     this.input.releaseLock();
@@ -132,7 +149,8 @@ export class App {
     m.start();
     this.screen = 'match';
     this.input.enabled = true;
-    this.input.requestLock();
+    this.lock();
+    this.touch.show(true);
     audio.startMusic('battle');
   }
 
@@ -140,6 +158,7 @@ export class App {
     if (this.screen !== 'match') return;
     this.screen = 'paused';
     this.input.enabled = false;
+    this.touch.show(false);
     this.menus.pause(
       this.settings,
       () => this.resume(),
@@ -153,12 +172,14 @@ export class App {
     this.menus.hide();
     this.screen = 'match';
     this.input.enabled = true;
-    this.input.requestLock();
+    this.lock();
+    this.touch.show(true);
   }
 
   private showResult() {
     const m = this.match!;
     this.screen = 'result';
+    this.touch.show(false);
     this.input.enabled = false;
     this.input.releaseLock();
     this.hud.setBanner(null);
@@ -184,7 +205,13 @@ export class App {
           this.acc -= TICK;
           this.aimAssist(m);
           m.step(this.input.sample());
-          this.view.handleEvents(m.world.drainEvents());
+          const events = m.world.drainEvents();
+          for (const e of events) {
+            if (e.type !== 'justGuard') continue;
+            if (e.target === m.player) this.hud.toast('JUST GUARD!');
+            else if (e.attacker === m.player) this.hud.toast(e.pushed ? 'はじかれた！' : 'JUST GUARD', '#ffb0a0');
+          }
+          this.view.handleEvents(events);
           if (m.finished && this.screen === 'match') this.showResult();
         }
       }
@@ -197,6 +224,7 @@ export class App {
       }
       this.view.render(dt * (this.screen === 'paused' ? 0 : m.timeScale), this.acc / TICK, look, this.input.consumeSway(), true);
       this.hud.update(dt, m, this.view.feedback, this.view.camera);
+      this.touch.update(m.player);
     } else {
       this.stepDemo(dt);
     }
@@ -210,12 +238,14 @@ export class App {
   private aimAssist(m: Match) {
     const p = m.player;
     const c = m.cpu;
-    if (!this.settings.aimAssist || m.phase !== 'fight' || p.def.archetype !== 'melee') return;
+    // Melee always; ranged only on touch (thumb aiming is coarse), and weaker.
+    const ranged = p.def.archetype !== 'melee';
+    if (!this.settings.aimAssist || m.phase !== 'fight' || (ranged && !this.touch.active)) return;
     if (!(p.state === 'free' || p.state === 'action' || p.state === 'dash') || !c.isAlive()) return;
     const dx = c.pos.x - p.pos.x;
     const dz = c.pos.z - p.pos.z;
     const dist = Math.hypot(dx, dz);
-    if (dist > 9 || dist < 0.3) return;
+    if (dist > (ranged ? 22 : 9) || dist < 0.3) return;
     const yawTo = Math.atan2(-dx, -dz);
     const pitchTo = Math.atan2(c.pos.y + 1.1 - (p.pos.y + EYE_HEIGHT), dist);
     const dy = wrapAngle(yawTo - this.input.yaw);
@@ -223,8 +253,8 @@ export class App {
     const angle = Math.hypot(dy, dp);
     const cone = 0.45;
     if (angle > cone) return;
-    const w = (1 - angle / cone) * (dist < 4 ? 1 : 1 - (dist - 4) / 5);
-    const rate = (p.state === 'action' ? 3.2 : 1.4) * w * TICK;
+    const w = (1 - angle / cone) * (ranged ? 1 : dist < 4 ? 1 : 1 - (dist - 4) / 5);
+    const rate = (p.state === 'action' ? 3.2 : 1.4) * (ranged ? 0.6 : 1) * w * TICK;
     this.input.yaw += clamp(dy, -rate, rate);
     this.input.pitch += clamp(dp, -rate * 0.5, rate * 0.5);
   }

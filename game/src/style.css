@@ -400,7 +400,7 @@ canvas {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 14px;
   padding: 16px;
   overflow-y: auto;
@@ -620,4 +620,311 @@ canvas {
   height: 100%;
   background: var(--gold);
   transition: width 0.2s;
+}
+
+.toast-pop {
+  position: absolute;
+  left: 50%;
+  top: 30%;
+  transform: translate(-50%, -50%);
+  font-size: clamp(28px, 5vw, 56px);
+  font-weight: 900;
+  font-style: italic;
+  -webkit-text-stroke: 8px var(--ink);
+  paint-order: stroke fill;
+  white-space: nowrap;
+  animation: toastpop 0.9s ease-out forwards;
+}
+@keyframes toastpop {
+  0% { transform: translate(-50%, -50%) scale(2); opacity: 0; }
+  15% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  75% { opacity: 1; }
+  100% { transform: translate(-50%, -80%) scale(1); opacity: 0; }
+}
+
+/* ---------- Touch controller ---------- */
+body.touch,
+body.touch canvas {
+  touch-action: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+}
+.touch-ui {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+.touch-ui[hidden] {
+  display: none !important;
+}
+.touch-zone {
+  position: absolute;
+  pointer-events: auto;
+  touch-action: none;
+}
+.touch-left {
+  left: 0;
+  top: 18%;
+  width: 45%;
+  bottom: 0;
+}
+.touch-right {
+  left: 45%;
+  top: 12%;
+  right: 0;
+  bottom: 0;
+}
+.stick-base {
+  position: absolute;
+  width: 128px;
+  height: 128px;
+  margin: -64px 0 0 -64px;
+  border-radius: 50%;
+  border: 4px solid rgba(255, 255, 255, 0.7);
+  background: rgba(29, 27, 46, 0.25);
+  pointer-events: none;
+}
+.stick-knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 60px;
+  height: 60px;
+  margin: -30px 0 0 -30px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  border: 4px solid var(--ink);
+}
+.tbtn {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: var(--s, 72px);
+  height: var(--s, 72px);
+  border-radius: 50%;
+  border: 4px solid var(--ink);
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--ink);
+  font-weight: 900;
+  font-size: 13px;
+  pointer-events: auto;
+  touch-action: none;
+  box-shadow: 0 4px 0 rgba(29, 27, 46, 0.4);
+  user-select: none;
+}
+.tbtn.down {
+  transform: scale(0.92);
+  filter: brightness(0.9);
+}
+.tbtn span {
+  position: relative;
+  z-index: 1;
+}
+.tbtn-attack {
+  --s: 124px;
+  right: calc(36px + env(safe-area-inset-right, 0px));
+  bottom: 40px;
+  font-size: 18px;
+  color: #fff;
+  -webkit-text-stroke: 4px var(--ink);
+  paint-order: stroke fill;
+  background: radial-gradient(circle at 35% 30%, #fff8, transparent 40%), var(--el, #ff5a3c);
+}
+.tbtn-attack::after {
+  content: attr(data-ammo);
+  position: absolute;
+  bottom: 14px;
+  font-size: 14px;
+}
+.tbtn-jump {
+  right: calc(176px + env(safe-area-inset-right, 0px));
+  bottom: 28px;
+}
+.tbtn-guard {
+  right: calc(186px + env(safe-area-inset-right, 0px));
+  bottom: 118px;
+  background: rgba(111, 232, 255, 0.85);
+}
+.tbtn-dash {
+  right: calc(30px + env(safe-area-inset-right, 0px));
+  bottom: 182px;
+}
+.tbtn-dash::after {
+  content: attr(data-pips);
+  position: absolute;
+  bottom: 6px;
+  font-size: 10px;
+}
+.tbtn-skill,
+.tbtn-ult {
+  background: conic-gradient(var(--gold) calc(var(--v, 0) * 1turn), rgba(29, 27, 46, 0.55) 0);
+  color: #fff;
+  -webkit-text-stroke: 3px var(--ink);
+  paint-order: stroke fill;
+}
+.tbtn-skill {
+  --s: 66px;
+  right: calc(120px + env(safe-area-inset-right, 0px));
+  bottom: 196px;
+}
+.tbtn-ult {
+  --s: 86px;
+  right: calc(196px + env(safe-area-inset-right, 0px));
+  bottom: 206px;
+  font-size: 15px;
+}
+.tbtn-skill.ready,
+.tbtn-ult.ready {
+  background: var(--gold);
+}
+.tbtn-ult.ready {
+  animation: pulse 0.6s ease-in-out infinite alternate;
+  --el: var(--gold);
+}
+.tbtn-reload {
+  --s: 50px;
+  right: calc(300px + env(safe-area-inset-right, 0px));
+  bottom: 32px;
+}
+.tbtn-reload[hidden] {
+  display: none;
+}
+.tbtn-pause {
+  position: absolute;
+  left: calc(14px + env(safe-area-inset-left, 0px));
+  top: 104px;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  border: 3px solid var(--ink);
+  background: rgba(255, 255, 255, 0.85);
+  display: grid;
+  place-items: center;
+  font-weight: 900;
+  pointer-events: auto;
+}
+body.touch .hud-bottom {
+  display: none;
+}
+body.touch .kbd-only {
+  display: none;
+}
+body:not(.touch) .touch-only {
+  display: none;
+}
+.rotate-hint {
+  display: none;
+}
+@media (orientation: portrait) {
+  body.touch .rotate-hint {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: grid;
+    place-items: center;
+    background: rgba(29, 27, 46, 0.85);
+    color: #fff;
+    font-weight: 900;
+    font-size: 22px;
+    text-align: center;
+    padding: 24px;
+  }
+}
+/* Small landscape phones: shrink HUD and menus. */
+@media (max-height: 480px) {
+  .hpbar {
+    height: 20px;
+    width: min(34vw, 420px);
+  }
+  .timer {
+    font-size: 34px;
+    min-width: 70px;
+  }
+  .nameplate {
+    font-size: 15px;
+  }
+  .grid {
+    grid-template-columns: repeat(4, 104px);
+  }
+  .card {
+    height: 108px;
+    padding-bottom: 6px;
+  }
+  .card .emblem {
+    top: 5px;
+    width: 40px;
+    height: 40px;
+    font-size: 20px;
+  }
+  .card .nm {
+    font-size: 14px;
+  }
+  .card .wp {
+    font-size: 10px;
+    line-height: 1.2;
+  }
+  .logo {
+    font-size: 54px;
+  }
+  .btn {
+    font-size: 15px;
+    padding: 5px 14px;
+  }
+}
+
+/* Center tall menus without clipping their top when they overflow. */
+.screen > :first-child {
+  margin-top: auto;
+}
+.screen > :last-child {
+  margin-bottom: auto;
+}
+@media (max-height: 480px) {
+  .tbtn {
+    --s: 58px;
+    font-size: 11px;
+    border-width: 3px;
+  }
+  .tbtn-attack {
+    --s: 96px;
+    right: calc(24px + env(safe-area-inset-right, 0px));
+    bottom: 24px;
+    font-size: 15px;
+  }
+  .tbtn-jump {
+    right: calc(134px + env(safe-area-inset-right, 0px));
+    bottom: 14px;
+  }
+  .tbtn-guard {
+    right: calc(140px + env(safe-area-inset-right, 0px));
+    bottom: 86px;
+  }
+  .tbtn-dash {
+    right: calc(20px + env(safe-area-inset-right, 0px));
+    bottom: 132px;
+  }
+  .tbtn-skill {
+    --s: 54px;
+    right: calc(88px + env(safe-area-inset-right, 0px));
+    bottom: 150px;
+  }
+  .tbtn-ult {
+    --s: 70px;
+    right: calc(150px + env(safe-area-inset-right, 0px));
+    bottom: 156px;
+    font-size: 13px;
+  }
+  .tbtn-reload {
+    --s: 44px;
+    right: calc(212px + env(safe-area-inset-right, 0px));
+    bottom: 18px;
+  }
+  .tbtn-pause {
+    top: 78px;
+  }
+  .stick-base {
+    width: 104px;
+    height: 104px;
+    margin: -52px 0 0 -52px;
+  }
 }

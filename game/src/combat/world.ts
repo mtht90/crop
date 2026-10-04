@@ -38,6 +38,7 @@ export type CombatEvent =
   | { type: 'land'; fighter: Fighter; strength: number }
   | { type: 'shockwave'; attacker: Fighter; pos: Vector3; radius: number }
   | { type: 'recoil'; fighter: Fighter; pos: Vector3; strength: number }
+  | { type: 'justGuard'; attacker: Fighter; target: Fighter; pos: Vector3; pushed: boolean }
   | { type: 'ringout'; fighter: Fighter };
 
 let projectileId = 0;
@@ -207,7 +208,9 @@ export class CombatWorld {
     const toT = tgt.pos.clone().setY(tgt.pos.y + 1).sub(eye);
     const along = toT.dot(dir);
     if (along > 0 && along < hit.dist && toT.addScaledVector(dir, -along).length() < 0.8) return;
-    const strength = base * Math.sqrt(size) * speedK * (1 - (hit.dist / RANGE) * 0.6);
+    // Shooting the ground while airborne kicks harder (a real rocket jump).
+    const airK = att.grounded ? 1 : 1.7;
+    const strength = base * airK * Math.sqrt(size) * speedK * (1 - (hit.dist / RANGE) * 0.6);
     // Upward kicks cancel the current fall first (rocket-jump feel), then add.
     const imp = dir.clone().multiplyScalar(-strength);
     att.vel.x += imp.x;
@@ -254,6 +257,21 @@ export class CombatWorld {
     const guarded = tgt.guarding && tgt.state === 'free' && facing;
     // Lower HP -> bigger launches, so ring-outs become a threat late in the round.
     const hpScale = 1 + (1 - tgt.hp / tgt.def.maxHp) * 1.2;
+
+    if (guarded && tgt.isJustGuard()) {
+      // Just guard: no chip damage, guard refills a bit, and a melee attacker is bounced away.
+      tgt.guardHp = Math.min(GUARD_MAX, tgt.guardHp + 20);
+      tgt.gainUlt(8);
+      tgt.lastHitDir.copy(dir);
+      tgt.lastHitStrength = 0.2;
+      tgt.hitCounter++;
+      const near = att.pos.distanceTo(tgt.pos) < 4.5;
+      const pushed = near && att.isAlive() && !att.isInvulnerable() && !(att.action?.def.armor && att.state === 'action');
+      if (pushed) att.receiveHit(dir.clone().multiplyScalar(-1), 8, 4, 24, 0.5);
+      this.hitstop = Math.max(this.hitstop, 10);
+      this.events.push({ type: 'justGuard', attacker: att, target: tgt, pos: point, pushed });
+      return;
+    }
 
     if (guarded) {
       tgt.hp = Math.max(1, tgt.hp - props.damage * 0.15);

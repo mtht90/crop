@@ -43,12 +43,27 @@ export class PlayerInput {
         this.skipMoves = Math.max(0, this.skipMoves - 1);
         return;
       }
-      const s = 0.0022 * this.sensitivity;
-      this.yaw -= e.movementX * s;
-      this.pitch = clamp(this.pitch - e.movementY * s, -1.2, 1.2);
-      this.swayX += e.movementX;
-      this.swayY += e.movementY;
+      this.look(e.movementX, e.movementY, 0.0022);
     });
+  }
+
+  /** Touch controller state, merged into each sampled intent. */
+  readonly touch = {
+    moveX: 0,
+    moveZ: 0,
+    attack: false,
+    guard: false,
+    pressed: new Set<'attack' | 'jump' | 'dash' | 'skill' | 'ult' | 'reload'>(),
+  };
+
+  /** Applies a look delta in pixels (mouse or touch drag). */
+  look(dx: number, dy: number, radPerPx: number) {
+    if (!this.enabled) return;
+    const s = radPerPx * this.sensitivity;
+    this.yaw -= dx * s;
+    this.pitch = clamp(this.pitch - dy * s, -1.2, 1.2);
+    this.swayX += dx;
+    this.swayY += dy;
   }
 
   get locked() {
@@ -76,8 +91,10 @@ export class PlayerInput {
     const i = emptyIntent();
     i.yaw = this.yaw;
     i.pitch = this.pitch;
+    const t = this.touch;
     if (!this.enabled) {
       this.pressed.clear();
+      t.pressed.clear();
       return i;
     }
     const k = this.keys;
@@ -93,6 +110,20 @@ export class PlayerInput {
     i.ultPressed = p.has('KeyQ');
     i.reloadPressed = p.has('KeyR');
     p.clear();
+    // Touch controls add on top of keyboard/mouse.
+    if (Math.hypot(t.moveX, t.moveZ) > Math.hypot(i.moveX, i.moveZ)) {
+      i.moveX = t.moveX;
+      i.moveZ = t.moveZ;
+    }
+    i.attack ||= t.attack;
+    i.guard ||= t.guard;
+    i.attackPressed ||= t.pressed.has('attack');
+    i.jumpPressed ||= t.pressed.has('jump');
+    i.dashPressed ||= t.pressed.has('dash');
+    i.skillPressed ||= t.pressed.has('skill');
+    i.ultPressed ||= t.pressed.has('ult');
+    i.reloadPressed ||= t.pressed.has('reload');
+    t.pressed.clear();
     return i;
   }
 

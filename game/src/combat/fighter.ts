@@ -41,6 +41,9 @@ export interface ActionInstance {
 }
 
 const BUFFER_FRAMES = 8;
+/** Guard pressed this many frames (or fewer) before the hit counts as a just guard. */
+export const JUST_GUARD_FRAMES = 10;
+const JUST_GUARD_COOLDOWN = 24;
 
 export class Fighter {
   readonly pos = new Vector3();
@@ -61,6 +64,9 @@ export class Fighter {
   grounded = true;
   guarding = false;
   guardT = 0;
+  /** Frames since the guard was last released (anti-mash for just guard). */
+  private sinceGuardEnd = 999;
+  private justEligible = false;
   state: FighterState = 'locked';
   stateT = 0;
   stateDur = 0;
@@ -123,6 +129,11 @@ export class Fighter {
     if (this.state === 'getup' || this.state === 'knockdown' || this.state === 'ko' || this.state === 'ringout') return true;
     const inv = this.action?.def.invuln;
     return !!(inv && this.action && this.action.frame >= inv[0] && this.action.frame < inv[1]);
+  }
+
+  /** Guard raised within the last few frames (and not mashed): a just guard. */
+  isJustGuard() {
+    return this.guarding && this.justEligible && this.guardT <= JUST_GUARD_FRAMES;
   }
 
   isAlive() {
@@ -296,8 +307,12 @@ export class Fighter {
         this.stamina++;
       }
     }
-    if (this.guarding) this.guardT++;
-    else {
+    if (this.guarding) {
+      if (this.guardT === 0) this.justEligible = this.sinceGuardEnd >= JUST_GUARD_COOLDOWN;
+      this.guardT++;
+      this.sinceGuardEnd = 0;
+    } else {
+      this.sinceGuardEnd++;
       this.guardT = 0;
       if (this.state !== 'guardbreak') this.guardHp = Math.min(GUARD_MAX, this.guardHp + 0.35);
     }

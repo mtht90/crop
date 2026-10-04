@@ -108,6 +108,13 @@ export class Hud {
     this.bannerTimer = b.style === 'count' ? 0.7 : b.style === 'fight' ? 0.9 : 99;
   }
 
+  /** Short popup in the middle of the screen (just guard, etc.). */
+  toast(text: string, color = '#6fe8ff') {
+    const t = el('div', 'toast-pop', this.root, text);
+    t.style.color = color;
+    setTimeout(() => t.remove(), 900);
+  }
+
   pingHit() {
     this.crosshair.classList.remove('hit');
     void this.crosshair.offsetWidth;
