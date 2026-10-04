@@ -22,6 +22,13 @@ A strobe tuner that runs in the browser. Built for iPad Safari.
 - The cent readout comes from a least-squares fit of the unwrapped phase over the last 0.35 s.
 - Automatic note selection uses YIN pitch detection, with hysteresis.
 
+## Beyond the strobe
+- **Harmonic fusion + inharmonicity correction**: fits each partial's deviation c_k with c_k = c0 + 865.6·B·(k²−1) (weighted least squares), estimating the fundamental's tuning c0 and the string's stiffness B separately. Stops the higher partials of piano or bass strings from pulling the reading sharp.
+- **Kalman filter**: smooths each measurement weighted by its standard error. A large jump (a peg turn) resets the filter, so the reading follows it immediately.
+- **Adaptive bandwidth**: once within ±6¢ for 0.5 s, the demodulation filter narrows from 0.2·f0 to 0.07·f0 and the analysis window lengthens from 0.35 s to 0.6 s, lowering noise.
+- **Attack rejection**: ignores the first 0.12 s after a pluck (sharp and noisy).
+- **Display**: cents per harmonic, stability (spread over 1 s), an 8-second history graph, and ♯/♭ notation (tap the note name to switch).
+
 ## Publishing (other than GitHub)
 Upload `index.html` and `strobe-worklet.js` together to any static host that serves HTTPS.
 - Netlify Drop (https://app.netlify.com/drop): drag the folder or zip onto the page

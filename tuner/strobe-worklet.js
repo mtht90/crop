@@ -22,21 +22,34 @@ class StrobeProcessor extends AudioWorkletProcessor {
     this.theta = 0;
     // [partial][I/Q][pole]
     this.state = new Float64Array(PARTIALS * 2 * POLES);
+    this.narrow = false;
     this.setTarget(440);
     this.port.onmessage = (e) => {
-      if (e.data && e.data.f0 && e.data.f0 !== this.f0) this.setTarget(e.data.f0);
+      const d = e.data || {};
+      if (d.f0 && d.f0 !== this.f0) this.setTarget(d.f0);
+      if (typeof d.narrow === 'boolean' && d.narrow !== this.narrow) {
+        this.narrow = d.narrow;
+        this.updateAlpha();
+        this.port.postMessage({ type: 'bandwidth', narrow: d.narrow, frame: currentFrame });
+      }
     };
   }
 
   setTarget(f0) {
     this.f0 = f0;
     this.dtheta = (2 * Math.PI * f0) / sampleRate;
-    // Neighbouring partials sit f0 away; 4 poles at 0.2*f0 gives ~55 dB
-    // rejection there while passing a +-30 cent error on the 8th partial.
-    const fc = Math.min(0.2 * f0, 200);
-    this.alpha = 1 - Math.exp((-2 * Math.PI * fc) / sampleRate);
+    this.updateAlpha();
     this.state.fill(0);
     this.port.postMessage({ type: 'retarget', f0, frame: currentFrame });
+  }
+
+  // Neighbouring partials sit f0 away. Wide: 4 poles at 0.2*f0 gives ~55 dB
+  // rejection there while passing a +-30 cent error on the 8th partial.
+  // Narrow (used once the note is close): 0.07*f0 cuts the noise bandwidth
+  // about 3x, so the phase - and the cents reading - gets steadier.
+  updateAlpha() {
+    const fc = this.narrow ? Math.max(Math.min(0.07 * this.f0, 60), 3) : Math.min(0.2 * this.f0, 200);
+    this.alpha = 1 - Math.exp((-2 * Math.PI * fc) / sampleRate);
   }
 
   process(inputs) {

@@ -44,6 +44,8 @@
     text-align: center; color: var(--muted); font-size: 17px; line-height: 1.6; pointer-events: none;
   }
 
+  .trace-wrap { position: relative; flex: 0 0 auto; height: clamp(56px, 10vh, 120px); border-top: 1px solid var(--line); }
+  .trace-wrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
   .display {
     flex: 0 0 auto;
     height: clamp(120px, 26vh, 300px);
@@ -57,6 +59,8 @@
   .note .oct { font-size: clamp(30px, 6.5vh, 72px); margin-left: .35em; margin-bottom: .05em; font-weight: 600; }
   .readout { display: flex; flex-direction: column; align-items: center; font-variant-numeric: tabular-nums; transition: opacity .3s; }
   .readout .num { font-size: clamp(30px, 6.5vh, 72px); font-weight: 600; line-height: 1; min-width: 3.4ch; text-align: center; }
+  .readout .stab { font-size: clamp(12px, 2vh, 18px); color: var(--muted); margin-top: .3em; min-height: 1.2em; }
+  .note { cursor: pointer; }
   .readout .unit { font-size: clamp(13px, 2.4vh, 24px); color: var(--text); margin-top: .25em; letter-spacing: .02em; }
   .idle { opacity: .3; }
 
@@ -90,6 +94,10 @@
   .row input[type=range] { flex: 1; accent-color: var(--accent); min-width: 0; }
   .row select { font: inherit; font-size: 15px; color: var(--text); background: #16191e; border: 1px solid var(--line); border-radius: 8px; min-height: 36px; padding: 0 8px; }
   .row button { padding: 0 10px; color: var(--text); }
+  .seg { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .seg button { min-height: 36px; min-width: 44px; color: var(--muted); }
+  .seg button.on { background: #1b2028; color: var(--accent); }
+  .panel { max-height: calc(100% - 80px); overflow-y: auto; }
   .swatches { display: flex; gap: 8px; }
   .swatch { width: 28px; height: 28px; min-width: 28px; min-height: 28px; padding: 0; border-radius: 50%; border: 2px solid transparent; }
   .swatch.on { border-color: var(--text); }
@@ -102,9 +110,11 @@
     <div class="hint" id="hint">マイクをタップして楽器を鳴らしてください<br>縞が右へ流れる＝高い ／ 左へ流れる＝低い ／ 止まる＝合っている</div>
   </section>
 
+  <section class="trace-wrap" id="traceWrap"><canvas id="trace"></canvas></section>
+
   <section class="display">
     <div class="note idle" id="note"><span class="name" id="noteName">A</span><span class="acc" id="noteAcc"></span><span class="oct" id="noteOct">4</span></div>
-    <div class="readout idle" id="readout"><span class="num" id="cents">0.0</span><span class="unit">cents</span></div>
+    <div class="readout idle" id="readout"><span class="num" id="cents">0.0</span><span class="unit">cents</span><span class="stab" id="stab"></span></div>
   </section>
 
   <nav class="toolbar">
@@ -137,6 +147,15 @@
       </div>
     </div>
     <div class="row"><span class="lab">目標 / 入力</span><span class="val" id="freqInfo">440.00 / --- Hz</span></div>
+    <div class="row">
+      <span class="lab">表記</span>
+      <div class="seg"><button data-acc="sharp">♯ シャープ</button><button data-acc="flat">♭ フラット</button></div>
+    </div>
+    <div class="row"><span class="lab">インハーモニシティ B</span><span class="val" id="inharmInfo">---</span></div>
+    <div class="row"><span class="lab">倍音補正（弦の硬さ）</span><div class="seg"><button data-opt="inharm" data-v="1">オン</button><button data-opt="inharm" data-v="0">オフ</button></div></div>
+    <div class="row"><span class="lab">アタック除外</span><div class="seg"><button data-opt="attack" data-v="1">オン</button><button data-opt="attack" data-v="0">オフ</button></div></div>
+    <div class="row"><span class="lab">倍音ごとの値</span><div class="seg"><button data-opt="showPartials" data-v="1">表示</button><button data-opt="showPartials" data-v="0">非表示</button></div></div>
+    <div class="row"><span class="lab">履歴グラフ</span><div class="seg"><button data-opt="showTrace" data-v="1">表示</button><button data-opt="showTrace" data-v="0">非表示</button></div></div>
     <div class="row"><label for="sens">感度</label><input type="range" id="sens" min="0" max="100" value="60"></div>
     <div class="row"><label for="vol">基準音量</label><input type="range" id="vol" min="0" max="100" value="50"></div>
     <div class="row">
@@ -158,8 +177,10 @@
   // ---------- constants ----------
   const MULT = [1, 2, 4, 8]; // partial shown on each band (octaves)
   const PARTIALS = MULT.length;
-  const NAMES = ['C', 'C', 'D', 'D', 'E', 'F', 'F', 'G', 'G', 'A', 'A', 'B'];
-  const SHARP = [0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0];
+  const NAMES_SHARP = ['C', 'C', 'D', 'D', 'E', 'F', 'F', 'G', 'G', 'A', 'A', 'B'];
+  const NAMES_FLAT  = ['C', 'D', 'D', 'E', 'E', 'F', 'G', 'G', 'A', 'A', 'B', 'B'];
+  const ACCIDENTAL  = [0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0];
+  const INHARM_K = 1200 / Math.LN2 / 2; // cents per unit B*k^2 (f_k = k f0 sqrt(1 + B k^2))
   const MIDI_MIN = 23;  // B0
   const MIDI_MAX = 100; // E7
   // [lit segment, unlit segment]
@@ -172,7 +193,7 @@
   };
 
   // ---------- persisted settings ----------
-  const settings = { a4: 440, mode: 'auto', manualMidi: 69, sens: 60, vol: 50, wave: 'sine', theme: 'blue' };
+  const settings = { a4: 440, mode: 'auto', manualMidi: 69, sens: 60, vol: 50, wave: 'sine', theme: 'blue', flat: false, showPartials: true, showTrace: true, attack: true, inharm: true };
   try { Object.assign(settings, JSON.parse(localStorage.getItem('strobe-tuner') || '{}')); } catch (_) {}
   const save = () => { try { localStorage.setItem('strobe-tuner', JSON.stringify(settings)); } catch (_) {} };
 
@@ -209,10 +230,24 @@
       hist: [],         // [{t, p}] for slope (frequency) estimation
     });
   }
-  let centsSmooth = null;
+  // fused estimate (Kalman), per-partial readings and history
+  const kal = { x: null, P: 0 };
+  const partial = new Array(PARTIALS).fill(null); // {c, sd} cents per partial
+  let inharmB = null;
+  let trace = [];          // [{t, c}] for the history graph and stability
+  let narrow = false, lockSince = 0;
+  let rmsSlow = 0;
 
   const midiToFreq = (m) => settings.a4 * Math.pow(2, (m - 69) / 12);
-  const noteLabel = (m) => NAMES[m % 12] + (SHARP[m % 12] ? '♯' : '') + (Math.floor(m / 12) - 1);
+  function noteParts(m) {
+    const pc = m % 12;
+    return {
+      name: (settings.flat ? NAMES_FLAT : NAMES_SHARP)[pc],
+      acc: ACCIDENTAL[pc] ? (settings.flat ? '♭' : '♯') : '',
+      oct: Math.floor(m / 12) - 1,
+    };
+  }
+  const noteLabel = (m) => { const n = noteParts(m); return n.name + n.acc + n.oct; };
 
   // ---------- target handling ----------
   function setTarget(m) {
@@ -222,7 +257,8 @@
       f0 = f;
       if (strobeNode) strobeNode.port.postMessage({ f0 });
       for (const b of band) { b.raw = null; b.hist.length = 0; b.pending.length = 0; }
-      centsSmooth = null;
+      kal.x = null; inharmB = null; trace = [];
+      setNarrow(false);
     }
     if (refOsc) refOsc.frequency.setTargetAtTime(f0, ac.currentTime, 0.01);
     renderNote();
@@ -230,24 +266,47 @@
 
   function renderNote() {
     const m = targetMidi ?? 69;
-    $('noteName').textContent = NAMES[m % 12];
-    $('noteAcc').textContent = SHARP[m % 12] ? '♯' : '';
-    $('noteOct').textContent = Math.floor(m / 12) - 1;
+    const n = noteParts(m);
+    $('noteName').textContent = n.name;
+    $('noteAcc').textContent = n.acc;
+    $('noteOct').textContent = n.oct;
     $('noteSel').textContent = noteLabel(m);
     for (const b of document.querySelectorAll('[data-mode]')) b.classList.toggle('on', b.dataset.mode === settings.mode);
     $('calVal').textContent = settings.a4.toFixed(1) + ' Hz';
   }
 
   // ---------- worklet messages ----------
+  function clearHistory() {
+    for (const b of band) { b.raw = null; b.hist.length = 0; }
+  }
+
+  function setNarrow(on) {
+    if (on === narrow) return;
+    narrow = on;
+    if (strobeNode) strobeNode.port.postMessage({ narrow: on });
+  }
+
   function onBlock(msg) {
-    if (msg.type === 'retarget') {
-      // filters were reset; let them settle before trusting the phase slope
-      settleUntilFrame = msg.frame + Math.round(ac.sampleRate * 0.08);
+    if (msg.type === 'retarget' || msg.type === 'bandwidth') {
+      // filters were reset or retuned; their phase delay changes, so let them
+      // settle and restart the phase history before trusting the slope again
+      settleUntilFrame = msg.frame + Math.round(ac.sampleRate * (msg.type === 'bandwidth' ? 0.15 : 0.08));
+      clearHistory();
       return;
     }
     lastRms = msg.rms;
+    // a new pluck: the attack is sharp and noisy, so drop it from the estimate
+    if (settings.attack && msg.rms > gateLevels()[1] && msg.rms > 2.5 * rmsSlow + 1e-4) {
+      settleUntilFrame = Math.max(settleUntilFrame, msg.frame + Math.round(ac.sampleRate * 0.12));
+      clearHistory();
+      setNarrow(false);
+      kal.P += 4;
+    }
+    rmsSlow += (msg.rms - rmsSlow) * (msg.rms > rmsSlow ? 0.01 : 0.003);
+
     const t = msg.frame / ac.sampleRate;
     const settled = msg.frame >= settleUntilFrame;
+    const win = narrow ? 0.6 : 0.35;
     for (let k = 0; k < PARTIALS; k++) {
       const b = band[k];
       const p = msg.phase[k];
@@ -263,19 +322,93 @@
       }
       b.raw = p;
       b.hist.push({ t, p: b.unwrapped });
-      while (b.hist.length && t - b.hist[0].t > 0.35) b.hist.shift();
+      while (b.hist.length && t - b.hist[0].t > win) b.hist.shift();
     }
   }
 
-  // least-squares slope of unwrapped phase -> frequency error of that partial
-  function slope(hist) {
+  // least-squares line through unwrapped phase: slope = 2*pi*(frequency error)
+  // of that partial, se = its standard error (how much to trust it)
+  function slopeStats(hist) {
     const n = hist.length;
-    if (n < 12) return null;
-    let st = 0, sp = 0, stt = 0, stp = 0;
+    if (n < 16) return null;
     const t0 = hist[0].t;
-    for (const h of hist) { const t = h.t - t0; st += t; sp += h.p; stt += t * t; stp += t * h.p; }
-    const den = n * stt - st * st;
-    return den > 0 ? (n * stp - st * sp) / den : null;
+    let st = 0, sp = 0;
+    for (const h of hist) { st += h.t - t0; sp += h.p; }
+    const mt = st / n, mp = sp / n;
+    let stt = 0, stp = 0;
+    for (const h of hist) { const dt = h.t - t0 - mt; stt += dt * dt; stp += dt * (h.p - mp); }
+    if (stt <= 0) return null;
+    const slope = stp / stt;
+    let ssr = 0;
+    for (const h of hist) { const r = h.p - mp - slope * (h.t - t0 - mt); ssr += r * r; }
+    return { slope, se: Math.sqrt(ssr / (n - 2) / stt) };
+  }
+
+  // Combine every partial into one reading of the fundamental.
+  // Real strings are stiff: partial k sits at k*f0*sqrt(1 + B k^2), so higher
+  // partials read sharp. With three or more partials a weighted fit of
+  // c_k = c0 + INHARM_K*B*(k^2 - 1) separates the tuning (c0) from the
+  // stiffness (B); otherwise the readings are averaged by their precision.
+  function fuse() {
+    const m = [];
+    for (let k = 0; k < PARTIALS; k++) {
+      partial[k] = null;
+      const b = band[k];
+      if (b.clarity < 0.12) continue;
+      const st = slopeStats(b.hist);
+      if (!st) continue;
+      const fk = MULT[k] * f0;
+      const c = 1200 * Math.log2(Math.max(1e-6, 1 + st.slope / (2 * Math.PI) / fk));
+      const sd = Math.max(0.01, (1200 / Math.LN2) * st.se / (2 * Math.PI * fk));
+      if (Math.abs(c) > 80) continue;
+      partial[k] = { c, sd };
+      m.push({ g: MULT[k] * MULT[k] - 1, c, w: 1 / (sd * sd) });
+    }
+    if (!m.length) return null;
+    let sw = 0, swc = 0;
+    for (const e of m) { sw += e.w; swc += e.w * e.c; }
+    let c0 = swc / sw, v0 = 1 / sw;
+    inharmB = null;
+    if (settings.inharm && m.length >= 3) {
+      let sg = 0, sgg = 0, sgc = 0;
+      for (const e of m) { sg += e.w * e.g; sgg += e.w * e.g * e.g; sgc += e.w * e.g * e.c; }
+      const det = sw * sgg - sg * sg;
+      if (det > 0) {
+        const beta = (sw * sgc - sg * swc) / det;
+        const B = beta / INHARM_K;
+        if (B > 0 && B < 0.02) {
+          c0 = (swc - beta * sg) / sw;
+          v0 = sgg / det;
+          inharmB = B;
+        }
+      }
+    }
+    return { c: c0, v: v0 };
+  }
+
+  // 1-D Kalman filter over the fused reading. Consecutive readings share most
+  // of their window, so their variance is inflated; a jump far outside the
+  // expected spread (a peg turn) resets the filter instead of being smoothed.
+  function track(z, now) {
+    if (!z) return kal.x;
+    const R = z.v * 8 + 0.004 * 0.004;
+    if (kal.x === null || Math.abs(z.c - kal.x) > 4 * Math.sqrt(kal.P + R) + 1) {
+      kal.x = z.c; kal.P = R;
+    } else {
+      kal.P += 0.03 * 0.03;
+      const K = kal.P / (kal.P + R);
+      kal.x += K * (z.c - kal.x);
+      kal.P *= 1 - K;
+    }
+    // narrow the demodulator once the note is close and steady
+    if (Math.abs(kal.x) < 6) {
+      if (!lockSince) lockSince = now;
+      if (now - lockSince > 500) setNarrow(true);
+    } else {
+      lockSince = 0;
+      if (Math.abs(kal.x) > 12) setNarrow(false);
+    }
+    return kal.x;
   }
 
   function gateLevels() {
@@ -421,38 +554,90 @@
     for (let k = 0; k < PARTIALS; k++) {
       g.drawImage(rowCanvas, 0, k, W, 1, 0, Math.round(k * (bh + gap)), W, Math.round(bh));
     }
+    if (settings.showPartials && running) {
+      const fs = Math.round(Math.min(15 * dpr, bh * 0.22));
+      g.font = `600 ${fs}px "Helvetica Neue", Arial, sans-serif`;
+      g.textAlign = 'right';
+      g.textBaseline = 'top';
+      for (let k = 0; k < PARTIALS; k++) {
+        const pk = partial[k];
+        const y0 = Math.round(k * (bh + gap)) + 6 * dpr;
+        const label = '×' + MULT[k] + (pk ? '  ' + (pk.c >= 0 ? '+' : '−') + Math.abs(pk.c).toFixed(1) + '¢' : '');
+        const tw = g.measureText(label).width;
+        g.fillStyle = 'rgba(0,0,0,0.55)';
+        g.fillRect(W - tw - 16 * dpr, y0 - 3 * dpr, tw + 10 * dpr, fs + 6 * dpr);
+        g.fillStyle = pk ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.4)';
+        g.fillText(label, W - 11 * dpr, y0);
+      }
+      g.textAlign = 'left';
+    }
 
     updateReadout(gate);
   }
 
   function updateReadout(gate) {
+    const now = performance.now();
     const active = running && gate > 0.3;
     $('note').classList.toggle('idle', !active || targetMidi === null);
-    let best = -1, bestAmp = 0;
-    for (let k = 0; k < PARTIALS; k++) {
-      if (band[k].hist.length >= 12 && band[k].amp > bestAmp * 1.2) { best = k; bestAmp = band[k].amp; }
-    }
-    let cents = null;
-    if (active && best >= 0) {
-      const sl = slope(band[best].hist);
-      if (sl !== null) {
-        const df = sl / (2 * Math.PI) / MULT[best];
-        const c = 1200 * Math.log2(Math.max(1e-6, 1 + df / f0));
-        if (Math.abs(c) < 80) {
-          centsSmooth = centsSmooth === null ? c : centsSmooth + (c - centsSmooth) * 0.25;
-          cents = centsSmooth;
-        }
-      }
-    }
+    const cents = active ? track(fuse(), now) : null;
+    if (!active) { lockSince = 0; for (let k = 0; k < PARTIALS; k++) partial[k] = null; }
+    if (cents !== null) trace.push({ t: now, c: cents });
+    while (trace.length && now - trace[0].t > 8000) trace.shift();
+
     $('readout').classList.toggle('idle', cents === null);
     if (cents === null) {
       $('cents').textContent = '0.0';
+      $('stab').textContent = '';
       $('freqInfo').textContent = f0.toFixed(2) + ' / --- Hz';
     } else {
       const r = Math.round(cents * 10) / 10;
       $('cents').textContent = (r > 0 ? '+' : r < 0 ? '−' : '') + Math.abs(r).toFixed(1);
-      $('freqInfo').textContent = f0.toFixed(2) + ' / ' + (f0 * Math.pow(2, cents / 1200)).toFixed(2) + ' Hz';
+      $('freqInfo').textContent = f0.toFixed(2) + ' / ' + (f0 * Math.pow(2, cents / 1200)).toFixed(3) + ' Hz';
+      // stability: spread of the reading over the last second
+      let n = 0, s = 0, ss = 0;
+      for (let i = trace.length - 1; i >= 0 && now - trace[i].t < 1000; i--) { n++; s += trace[i].c; ss += trace[i].c * trace[i].c; }
+      const sd = n > 10 ? Math.sqrt(Math.max(0, ss / n - (s / n) * (s / n))) : null;
+      $('stab').textContent = sd === null ? '' : '±' + (sd < 0.1 ? sd.toFixed(2) : sd.toFixed(1));
     }
+    $('inharmInfo').textContent = inharmB === null ? '---' : (inharmB * 1e4).toFixed(2) + ' ×10⁻⁴';
+    drawTrace(now);
+  }
+
+  // ---------- history graph ----------
+  const tCanvas = $('trace');
+  const tg = tCanvas.getContext('2d');
+  function drawTrace(now) {
+    if (!settings.showTrace) return;
+    const r = tCanvas.getBoundingClientRect();
+    const w = Math.max(1, Math.round(r.width * dpr)), h = Math.max(1, Math.round(r.height * dpr));
+    if (tCanvas.width !== w || tCanvas.height !== h) { tCanvas.width = w; tCanvas.height = h; }
+    tg.clearRect(0, 0, w, h);
+    // compressed scale: fine detail near zero, still shows +-25 cents
+    const y = (c) => h / 2 - Math.sign(c) * Math.sqrt(Math.min(Math.abs(c), 25) / 25) * (h / 2 - 3 * dpr);
+    tg.font = `${Math.round(10 * dpr)}px "Helvetica Neue", Arial, sans-serif`;
+    tg.textBaseline = 'middle';
+    for (const c of [-10, -2, 2, 10]) {
+      tg.fillStyle = 'rgba(255,255,255,0.08)';
+      tg.fillRect(0, Math.round(y(c)), w, Math.max(1, dpr | 0));
+      tg.fillStyle = 'rgba(255,255,255,0.35)';
+      tg.fillText((c > 0 ? '+' : '−') + Math.abs(c), 4 * dpr, y(c));
+    }
+    tg.fillStyle = 'rgba(255,255,255,0.3)';
+    tg.fillRect(0, Math.round(h / 2), w, Math.max(1, dpr | 0));
+    if (trace.length < 2) return;
+    const accent = (THEMES[settings.theme] || THEMES.blue)[0];
+    tg.strokeStyle = `rgb(${accent})`;
+    tg.lineWidth = 2 * dpr;
+    tg.lineJoin = 'round';
+    tg.beginPath();
+    let prev = null;
+    for (const p of trace) {
+      const x = w - ((now - p.t) / 8000) * w;
+      if (prev && p.t - prev.t > 200) { tg.stroke(); tg.beginPath(); prev = null; }
+      if (prev) tg.lineTo(x, y(p.c)); else tg.moveTo(x, y(p.c));
+      prev = p;
+    }
+    tg.stroke();
   }
 
   // ---------- audio setup ----------
@@ -650,6 +835,22 @@
     settings.wave = wave.value; save();
     if (refOsc) { refOsc.type = settings.wave; refGain.gain.setTargetAtTime(refLevel(), ac.currentTime, 0.02); }
   });
+
+  function renderOptions() {
+    for (const b of document.querySelectorAll('[data-acc]')) b.classList.toggle('on', (b.dataset.acc === 'flat') === settings.flat);
+    for (const b of document.querySelectorAll('[data-opt]')) b.classList.toggle('on', !!settings[b.dataset.opt] === (b.dataset.v === '1'));
+    $('traceWrap').hidden = !settings.showTrace;
+  }
+  function setFlat(on) { settings.flat = on; save(); renderOptions(); renderNote(); }
+  for (const b of document.querySelectorAll('[data-acc]')) b.addEventListener('click', () => setFlat(b.dataset.acc === 'flat'));
+  $('note').addEventListener('click', () => setFlat(!settings.flat));
+  for (const b of document.querySelectorAll('[data-opt]')) {
+    b.addEventListener('click', () => {
+      settings[b.dataset.opt] = b.dataset.v === '1';
+      save(); renderOptions();
+    });
+  }
+  renderOptions();
 
   const colors = $('colors');
   for (const [name, rgb] of Object.entries(THEMES)) {
