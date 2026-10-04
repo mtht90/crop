@@ -1,7 +1,7 @@
 /**
- * Synthesized placeholder sound (WebAudio). No external files, so there are no
- * licensing concerns; every cue goes through `play()` so CC0 samples can replace
- * them later by name.
+ * Sound effects: CC0 samples by Kenney (kenney.nl) where available, with a
+ * synthesized fallback for cues without a sample (or if decoding fails).
+ * BGM is still synthesized.
  */
 export type Sfx =
   | 'punch'
@@ -22,7 +22,25 @@ export type Sfx =
   | 'reload'
   | 'select';
 
+const SAMPLES: Partial<Record<Sfx, { files: string[]; layer?: boolean; gain?: number }>> = {
+  punch: { files: ['impactPunch_medium_000', 'impactPunch_medium_001', 'impactPunch_medium_002', 'impactPunch_medium_003'] },
+  heavy: { files: ['impactPunch_heavy_000', 'impactPunch_heavy_001', 'impactPunch_heavy_002'], gain: 1.2 },
+  shot: { files: ['laserSmall_000', 'laserSmall_001', 'laserSmall_002'], gain: 0.5 },
+  bigshot: { files: ['laserLarge_000', 'laserLarge_001'], gain: 0.8 },
+  guard: { files: ['forceField_000', 'forceField_001'], gain: 0.7 },
+  guardbreak: { files: ['impactGlass_heavy_000'] },
+  land: { files: ['impactSoft_heavy_000', 'impactSoft_heavy_001'], gain: 0.6 },
+  ko: { files: ['lowFrequency_explosion_000', 'explosionCrunch_000'], layer: true, gain: 1.2 },
+  ringout: { files: ['phaserDown1'], gain: 0.7 },
+  ult: { files: ['powerUp7'], gain: 0.8 },
+  select: { files: ['select_001'], gain: 0.7 },
+  beep: { files: ['tick_002'], gain: 0.8 },
+  go: { files: ['confirmation_001'] },
+  reload: { files: ['impactMetal_light_000'], gain: 0.6 },
+};
+
 export class AudioEngine {
+  private buffers = new Map<string, AudioBuffer>();
   private ctx: AudioContext | null = null;
   private master!: GainNode;
   private sfxBus!: GainNode;
@@ -56,6 +74,41 @@ export class AudioEngine {
     this.noise = ctx.createBuffer(1, len, ctx.sampleRate);
     const d = this.noise.getChannelData(0);
     for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    void this.loadSamples();
+  }
+
+  private async loadSamples() {
+    const ctx = this.ctx!;
+    const names = new Set(Object.values(SAMPLES).flatMap((s) => s!.files));
+    await Promise.all(
+      [...names].map(async (n) => {
+        try {
+          const res = await fetch(`${import.meta.env.BASE_URL}assets/audio/${n}.ogg`);
+          this.buffers.set(n, await ctx.decodeAudioData(await res.arrayBuffer()));
+        } catch {
+          /* fall back to the synthesized cue */
+        }
+      }),
+    );
+  }
+
+  private playSample(name: Sfx, intensity: number) {
+    const spec = SAMPLES[name];
+    if (!spec) return false;
+    const files = spec.layer ? spec.files : [spec.files[Math.floor(Math.random() * spec.files.length)]];
+    const bufs = files.map((f) => this.buffers.get(f)).filter((b): b is AudioBuffer => !!b);
+    if (!bufs.length) return false;
+    const ctx = this.ctx!;
+    for (const b of bufs) {
+      const src = ctx.createBufferSource();
+      src.buffer = b;
+      src.playbackRate.value = 0.94 + Math.random() * 0.12;
+      const g = ctx.createGain();
+      g.gain.value = (spec.gain ?? 1) * Math.min(1.4, intensity);
+      src.connect(g).connect(this.sfxBus);
+      src.start();
+    }
+    return true;
   }
 
   setVolume(v: number) {
@@ -102,6 +155,7 @@ export class AudioEngine {
 
   play(name: Sfx, intensity = 1) {
     if (!this.ctx) return;
+    if (this.playSample(name, intensity)) return;
     const k = intensity;
     switch (name) {
       case 'punch':

@@ -126,5 +126,7 @@ export const star: CharacterDef = {
     glove: 0x2b2b3d,
     eyes: 0x2a7fe0,
     hairStyle: 'spiky',
+    body: 'male',
+    hairModel: 'hairBuzzed',
   },
 };

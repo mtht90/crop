@@ -1,6 +1,18 @@
 import * as THREE from 'three';
 
 let gradient: THREE.DataTexture | null = null;
+let softGradient: THREE.DataTexture | null = null;
+
+/** Gentler ramp for textured skin so faces don't go muddy in shadow. */
+function softGradientMap() {
+  if (softGradient) return softGradient;
+  const data = new Uint8Array([150, 150, 150, 255, 210, 210, 210, 255, 255, 255, 255, 255]);
+  softGradient = new THREE.DataTexture(data, 3, 1, THREE.RGBAFormat);
+  softGradient.minFilter = THREE.NearestFilter;
+  softGradient.magFilter = THREE.NearestFilter;
+  softGradient.needsUpdate = true;
+  return softGradient;
+}
 
 /** 3-step ramp for cel shading. */
 function gradientMap() {
@@ -16,11 +28,11 @@ function gradientMap() {
 const cache = new Map<string, THREE.Material>();
 
 /** Toon material with a soft rim light that lifts characters off the background. */
-export function toon(color: number, opts: { rim?: number; emissive?: number; map?: THREE.Texture } = {}) {
-  const key = `${color}-${opts.rim ?? 0.35}-${opts.emissive ?? 0}-${opts.map?.uuid ?? ''}`;
+export function toon(color: number, opts: { rim?: number; emissive?: number; map?: THREE.Texture; soft?: boolean } = {}) {
+  const key = `${color}-${opts.rim ?? 0.35}-${opts.emissive ?? 0}-${opts.map?.uuid ?? ''}-${opts.soft ? 1 : 0}`;
   const hit = cache.get(key);
   if (hit) return hit as THREE.MeshToonMaterial;
-  const m = new THREE.MeshToonMaterial({ color, gradientMap: gradientMap(), map: opts.map ?? null });
+  const m = new THREE.MeshToonMaterial({ color, gradientMap: opts.soft ? softGradientMap() : gradientMap(), map: opts.map ?? null });
   if (opts.emissive) m.emissive = new THREE.Color(opts.emissive);
   const rim = opts.rim ?? 0.35;
   if (rim > 0) {

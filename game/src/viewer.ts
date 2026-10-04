@@ -24,7 +24,7 @@ export class AnimViewer {
   private paused = false;
   private stepOnce = false;
   private loopAction: string | null = null;
-  private showHitboxes = true;
+  private showHitboxes = !new URLSearchParams(location.search).has('nohit');
   private dummyGuard = false;
   private pending: Partial<Intent> = {};
   private acc = 0;
@@ -40,6 +40,9 @@ export class AnimViewer {
     this.view.camera.position.set(2.8, 1.7, 1.6);
     this.controls = new OrbitControls(this.view.camera, this.view.renderer.domElement);
     this.controls.target.set(0, 1, -1.1);
+    const qs = new URLSearchParams(location.search);
+    const cam = qs.get('cam')?.split(',').map(Number);
+    if (cam?.length === 3) this.view.camera.position.set(cam[0], cam[1], cam[2]);
     this.controls.update();
 
     this.panel = document.createElement('div');
@@ -50,6 +53,7 @@ export class AnimViewer {
     this.info.className = 'panel';
     Object.assign(this.info.style, { position: 'fixed', right: '12px', top: '12px', fontFamily: 'monospace', fontSize: '13px', whiteSpace: 'pre', pointerEvents: 'none' });
     root.appendChild(this.info);
+    if (qs.has('clean')) this.panel.style.display = this.info.style.display = 'none';
 
     window.addEventListener('pointerdown', () => audio.unlock(), { once: true });
     window.addEventListener('keydown', (e) => {

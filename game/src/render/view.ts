@@ -5,10 +5,10 @@ import { phaseOf } from '../combat/phase';
 import type { CombatEvent, CombatWorld } from '../combat/world';
 import { ARENA_RADIUS, EYE_HEIGHT } from '../config';
 import { clamp, damp, Spring } from '../core/math';
-import { Animator } from './animator';
 import { Arena } from './arena';
 import { Effects, Trail } from './effects';
-import { Rig } from './rig';
+import { ModelRig } from './charModel';
+import { ModelAnimator } from './modelAnimator';
 import { tex } from './textures';
 import { ViewModel } from './viewmodel';
 
@@ -25,8 +25,8 @@ export interface ViewFeedback {
 
 interface RigBundle {
   fighter: Fighter;
-  rig: Rig;
-  anim: Animator;
+  rig: ModelRig;
+  anim: ModelAnimator;
   trails: { L: Trail; R: Trail };
   ghostT: number;
   aura: THREE.Sprite[];
@@ -109,7 +109,7 @@ export class GameView {
     this.world = world;
     this.pov = pov;
     this.rigs = world.fighters.map((f) => {
-      const rig = new Rig(f.def);
+      const rig = new ModelRig(f.def);
       rig.root.visible = f !== pov;
       this.scene.add(rig.root);
       const trails = { L: new Trail(f.def.element.color, 0.22, 0.12), R: new Trail(f.def.element.color, 0.22, 0.12) };
@@ -121,7 +121,7 @@ export class GameView {
         this.scene.add(s);
         aura.push(s);
       }
-      return { fighter: f, rig, anim: new Animator(rig, f), trails, ghostT: 0, aura };
+      return { fighter: f, rig, anim: new ModelAnimator(rig, f), trails, ghostT: 0, aura };
     });
     if (pov) {
       this.viewmodel.setFighter(pov);
@@ -334,7 +334,7 @@ export class GameView {
       b.ghostT -= dt;
       if (b.ghostT <= 0) {
         b.ghostT = 0.035;
-        this.effects.afterimage(rig.joints.body, f.def.element.color);
+        this.effects.afterimage(rig.body, f.def.element.color);
       }
     } else b.ghostT = 0;
 

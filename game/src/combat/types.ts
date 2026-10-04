@@ -89,6 +89,9 @@ export interface Look {
   glove: number;
   eyes: number;
   hairStyle: 'ponytail' | 'spiky';
+  /** Base body model and hairstyle from the CC0 character kit. */
+  body: 'female' | 'male';
+  hairModel: 'hairBuns' | 'hairLong' | 'hairParted' | 'hairBuzzed' | 'hairBuzzedF';
 }
 
 export interface CharacterDef {

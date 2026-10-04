@@ -121,5 +121,7 @@ export const blaze: CharacterDef = {
     glove: 0x2b2b3d,
     eyes: 0x6b3a1e,
     hairStyle: 'ponytail',
+    body: 'female',
+    hairModel: 'hairParted',
   },
 };

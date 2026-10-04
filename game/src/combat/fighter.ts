@@ -242,7 +242,7 @@ export class Fighter {
         break;
       case 'knockdown':
         this.applyFriction(6);
-        if (this.stateT >= this.stateDur) this.setState('getup', 22);
+        if (this.stateT >= this.stateDur) this.setState('getup', 30);
         break;
       case 'getup':
         this.applyFriction(10);

@@ -3,7 +3,7 @@ import type { Fighter } from '../combat/fighter';
 import { phaseOf } from '../combat/phase';
 import { clamp, damp, ease, lerp, rand, Spring } from '../core/math';
 import { Trail } from './effects';
-import { buildBlaster } from './rig';
+import { buildBlaster } from './blaster';
 import { tex } from './textures';
 import { part } from './toon';
 
