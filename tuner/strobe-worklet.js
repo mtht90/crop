@@ -10,10 +10,11 @@
 // that phase makes every band drift at the same speed, just like the bands
 // on a real strobe disc.
 
-// partial numbers shown on the bands; octaves, like the segment counts on a
-// strobe disc (each band has twice the segments of the one above)
-const MULT = [1, 2, 4, 8];
-const PARTIALS = MULT.length;
+// Partials 1..8 are all demodulated. The page draws 1, 2, 4 and 8 as strobe
+// bands (octaves, like the segment counts on a disc) and fuses all eight into
+// one reading, which matters for low brass whose fundamental a phone or
+// tablet mic barely picks up.
+const PARTIALS = 8;
 const POLES = 4;
 
 class StrobeProcessor extends AudioWorkletProcessor {
@@ -68,10 +69,15 @@ class StrobeProcessor extends AudioWorkletProcessor {
       sumSq += x * x;
       theta += this.dtheta;
       if (theta >= twoPi) theta -= twoPi;
+      // e^{-i k theta} for k = 1..8 by repeated complex multiplication
+      const c1 = Math.cos(theta), s1 = Math.sin(theta);
+      let ck = 1, sk = 0;
       for (let k = 0; k < PARTIALS; k++) {
-        const ph = MULT[k] * theta;
-        let vi = x * Math.cos(ph);
-        let vq = -x * Math.sin(ph);
+        const cn = ck * c1 - sk * s1;
+        sk = sk * c1 + ck * s1;
+        ck = cn;
+        let vi = x * ck;
+        let vq = -x * sk;
         const base = k * 2 * POLES;
         for (let p = 0; p < POLES; p++) {
           const ii = base + p;
@@ -92,7 +98,7 @@ class StrobeProcessor extends AudioWorkletProcessor {
       const I = st[base + POLES - 1];
       const Q = st[base + 2 * POLES - 1];
       phase[k] = Math.atan2(Q, I);
-      amp[k] = MULT[k] * this.f0 < nyq ? 2 * Math.hypot(I, Q) : 0;
+      amp[k] = (k + 1) * this.f0 < nyq ? 2 * Math.hypot(I, Q) : 0;
     }
     this.port.postMessage({
       type: 'block',

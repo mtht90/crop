@@ -61,6 +61,11 @@
   .readout .num { font-size: clamp(30px, 6.5vh, 72px); font-weight: 600; line-height: 1; min-width: 3.4ch; text-align: center; }
   .readout .stab { font-size: clamp(12px, 2vh, 18px); color: var(--muted); margin-top: .3em; min-height: 1.2em; }
   .note { cursor: pointer; }
+  .guide { font-size: clamp(13px, 2vh, 17px); color: var(--accent); margin-top: .5em; text-align: center; white-space: pre-line; line-height: 1.5; min-height: 1.5em; }
+  .row input[type=number] { width: 4.5em; font: inherit; font-size: 15px; color: var(--text); background: #16191e; border: 1px solid var(--line); border-radius: 8px; min-height: 36px; padding: 0 6px; }
+  .calib { flex-wrap: wrap; padding-block: 6px; }
+  .calib .lab { white-space: normal; flex: 1 1 12em; line-height: 1.4; }
+  .calib .tool-group { gap: 4px; }
   .readout .unit { font-size: clamp(13px, 2.4vh, 24px); color: var(--text); margin-top: .25em; letter-spacing: .02em; }
   .idle { opacity: .3; }
 
@@ -114,7 +119,7 @@
 
   <section class="display">
     <div class="note idle" id="note"><span class="name" id="noteName">A</span><span class="acc" id="noteAcc"></span><span class="oct" id="noteOct">4</span></div>
-    <div class="readout idle" id="readout"><span class="num" id="cents">0.0</span><span class="unit">cents</span><span class="stab" id="stab"></span></div>
+    <div class="readout idle" id="readout"><span class="num" id="cents">0.0</span><span class="unit">cents</span><span class="stab" id="stab"></span><span class="guide" id="guide"></span></div>
   </section>
 
   <nav class="toolbar">
@@ -148,11 +153,29 @@
     </div>
     <div class="row"><span class="lab">目標 / 入力</span><span class="val" id="freqInfo">440.00 / --- Hz</span></div>
     <div class="row">
-      <span class="lab">表記</span>
-      <div class="seg"><button data-acc="sharp">♯ シャープ</button><button data-acc="flat">♭ フラット</button></div>
+      <span class="lab">楽器</span>
+      <div class="seg"><button data-inst="general">汎用</button><button data-inst="tuba">チューバ</button></div>
     </div>
-    <div class="row"><span class="lab">インハーモニシティ B</span><span class="val" id="inharmInfo">---</span></div>
-    <div class="row"><span class="lab">倍音補正（弦の硬さ）</span><div class="seg"><button data-opt="inharm" data-v="1">オン</button><button data-opt="inharm" data-v="0">オフ</button></div></div>
+    <div class="row tuba-only">
+      <span class="lab">管の調</span>
+      <div class="seg"><button data-key="Bb">B♭</button><button data-key="C">C</button><button data-key="Eb">E♭</button><button data-key="F">F</button></div>
+    </div>
+    <div class="row tuba-only"><span class="lab">管の感度</span><span class="val" id="slideK">---</span></div>
+    <div class="row tuba-only calib">
+      <span class="lab" id="calibText">実測：チューニング音を吹いて「記録」</span>
+      <div class="tool-group">
+        <input type="number" id="calibMm" value="10" min="2" max="60" aria-label="抜く長さ (mm)"><span class="lab">mm</span>
+        <button id="calibBtn">記録</button>
+        <button id="calibReset">理論値</button>
+      </div>
+    </div>
+    <div class="row tuba-only"><span class="lab">響きの中心で補正（試験的）</span><div class="seg"><button data-opt="centerCorrect" data-v="1">オン</button><button data-opt="centerCorrect" data-v="0">オフ</button></div></div>
+    <div class="row">
+      <span class="lab">表記</span>
+      <div class="seg"><button data-acc="sharp">♯</button><button data-acc="flat">♭</button><button data-acc="german">ドイツ</button></div>
+    </div>
+    <div class="row general-only"><span class="lab">インハーモニシティ B</span><span class="val" id="inharmInfo">---</span></div>
+    <div class="row general-only"><span class="lab">倍音補正（弦の硬さ）</span><div class="seg"><button data-opt="inharm" data-v="1">オン</button><button data-opt="inharm" data-v="0">オフ</button></div></div>
     <div class="row"><span class="lab">アタック除外</span><div class="seg"><button data-opt="attack" data-v="1">オン</button><button data-opt="attack" data-v="0">オフ</button></div></div>
     <div class="row"><span class="lab">倍音ごとの値</span><div class="seg"><button data-opt="showPartials" data-v="1">表示</button><button data-opt="showPartials" data-v="0">非表示</button></div></div>
     <div class="row"><span class="lab">履歴グラフ</span><div class="seg"><button data-opt="showTrace" data-v="1">表示</button><button data-opt="showTrace" data-v="0">非表示</button></div></div>
@@ -175,13 +198,21 @@
   'use strict';
 
   // ---------- constants ----------
-  const MULT = [1, 2, 4, 8]; // partial shown on each band (octaves)
-  const PARTIALS = MULT.length;
+  const PARTIALS = 8;                       // partials 1..8 are measured
+  const MULT = [1, 2, 3, 4, 5, 6, 7, 8];
+  const SHOW = [0, 1, 3, 7];                // drawn as bands: x1 x2 x4 x8 (octaves)
+  const BANDS = SHOW.length;
   const NAMES_SHARP = ['C', 'C', 'D', 'D', 'E', 'F', 'F', 'G', 'G', 'A', 'A', 'B'];
   const NAMES_FLAT  = ['C', 'D', 'D', 'E', 'E', 'F', 'G', 'G', 'A', 'A', 'B', 'B'];
+  // German names, as used in Japanese wind bands (B = B-flat, H = B natural)
+  const NAMES_GERMAN = ['C', 'Cis', 'D', 'Es', 'E', 'F', 'Fis', 'G', 'As', 'A', 'B', 'H'];
+  // tuba: concert pitch of the pedal (open fundamental) for each key
+  const TUBA_PEDAL = { Bb: 22, C: 24, Eb: 27, F: 29 };
+  const TUBA_KEY_LABEL = { Bb: 'B♭', C: 'C', Eb: 'E♭', F: 'F' };
+  const CENTER_WIDTH = 35; // cents; curvature of an air-column resonance peak (see centerEstimate)
   const ACCIDENTAL  = [0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0];
   const INHARM_K = 1200 / Math.LN2 / 2; // cents per unit B*k^2 (f_k = k f0 sqrt(1 + B k^2))
-  const MIDI_MIN = 23;  // B0
+  const MIDI_MIN = 21;  // A0 (below the B-flat tuba pedal)
   const MIDI_MAX = 100; // E7
   // [lit segment, unlit segment]
   const THEMES = {
@@ -193,8 +224,11 @@
   };
 
   // ---------- persisted settings ----------
-  const settings = { a4: 440, mode: 'auto', manualMidi: 69, sens: 60, vol: 50, wave: 'sine', theme: 'blue', flat: false, showPartials: true, showTrace: true, attack: true, inharm: true };
+  const settings = { a4: 440, mode: 'auto', manualMidi: 69, sens: 60, vol: 50, wave: 'sine', theme: 'blue', notation: 'sharp', instrument: 'general', tubaKey: 'Bb', slideK: null, centerCorrect: true, showPartials: true, showTrace: true, attack: true, inharm: true };
   try { Object.assign(settings, JSON.parse(localStorage.getItem('strobe-tuner') || '{}')); } catch (_) {}
+  if (settings.flat === true && settings.notation === 'sharp') settings.notation = 'flat'; // older saved setting
+  delete settings.flat;
+  const isTuba = () => settings.instrument === 'tuba';
   const save = () => { try { localStorage.setItem('strobe-tuner', JSON.stringify(settings)); } catch (_) {} };
 
   // ---------- dom ----------
@@ -237,14 +271,19 @@
   let trace = [];          // [{t, c}] for the history graph and stability
   let narrow = false, lockSince = 0;
   let rmsSlow = 0;
+  let rmsHist = [];        // [{t, a}] ln(input rms) per block
+  let wob = [];            // [{t, c, a}] short-time pitch and level, for resonance-center detection
+  let center = null;       // {d, se}: played pitch minus resonance center, cents
 
   const midiToFreq = (m) => settings.a4 * Math.pow(2, (m - 69) / 12);
   function noteParts(m) {
-    const pc = m % 12;
+    const pc = m % 12, oct = Math.floor(m / 12) - 1;
+    if (settings.notation === 'german') return { name: NAMES_GERMAN[pc], acc: '', oct };
+    const flat = settings.notation === 'flat';
     return {
-      name: (settings.flat ? NAMES_FLAT : NAMES_SHARP)[pc],
-      acc: ACCIDENTAL[pc] ? (settings.flat ? '♭' : '♯') : '',
-      oct: Math.floor(m / 12) - 1,
+      name: (flat ? NAMES_FLAT : NAMES_SHARP)[pc],
+      acc: ACCIDENTAL[pc] ? (flat ? '♭' : '♯') : '',
+      oct,
     };
   }
   const noteLabel = (m) => { const n = noteParts(m); return n.name + n.acc + n.oct; };
@@ -257,7 +296,7 @@
       f0 = f;
       if (strobeNode) strobeNode.port.postMessage({ f0 });
       for (const b of band) { b.raw = null; b.hist.length = 0; b.pending.length = 0; }
-      kal.x = null; inharmB = null; trace = [];
+      kal.x = null; inharmB = null; trace = []; wob = []; center = null;
       setNarrow(false);
     }
     if (refOsc) refOsc.frequency.setTargetAtTime(f0, ac.currentTime, 0.01);
@@ -301,7 +340,10 @@
       clearHistory();
       setNarrow(false);
       kal.P += 4;
+      wob = [];
     }
+    rmsHist.push({ t: msg.frame / ac.sampleRate, a: Math.log(msg.rms + 1e-9) });
+    if (rmsHist.length > 1200) rmsHist.splice(0, rmsHist.length - 1100);
     rmsSlow += (msg.rms - rmsSlow) * (msg.rms > rmsSlow ? 0.01 : 0.003);
 
     const t = msg.frame / ac.sampleRate;
@@ -369,7 +411,7 @@
     for (const e of m) { sw += e.w; swc += e.w * e.c; }
     let c0 = swc / sw, v0 = 1 / sw;
     inharmB = null;
-    if (settings.inharm && m.length >= 3) {
+    if (settings.inharm && !isTuba() && m.length >= 3) {
       let sg = 0, sgg = 0, sgc = 0;
       for (const e of m) { sg += e.w * e.g; sgg += e.w * e.g * e.g; sgc += e.w * e.g * e.c; }
       const det = sw * sgg - sg * sg;
@@ -384,6 +426,100 @@
       }
     }
     return { c: c0, v: v0 };
+  }
+
+  // ---------- resonance-center detection (tuba mode, experimental) ----------
+  // A brass player can bend a note away from where the air column resonates.
+  // The column's response peaks at its resonance, so while the note wobbles
+  // naturally (breath, lips), the level rises when the pitch moves toward the
+  // peak and falls when it moves away. Near the peak ln(level) ~ a - (c - c_r)^2 / w^2,
+  // so the slope s = d ln(level) / d cents gives the offset c - c_r = -s w^2 / 2.
+  // The level comes from the raw input, not the demodulated partials: the
+  // demodulator's own low-pass would otherwise lower the level whenever the
+  // pitch leaves the target, faking a resonance at the target note. The raw
+  // level is read over the same window as the pitch, shifted by the filter's
+  // group delay (4 poles: 4 / (2 pi fc)), so the two line up in time.
+  function shortPitch() {
+    let best = -1, bestA = 0;
+    for (let k = 0; k < PARTIALS; k++) {
+      if (band[k].hist.length >= 30 && band[k].amp > bestA) { best = k; bestA = band[k].amp; }
+    }
+    if (best < 0) return null;
+    const h = band[best].hist.slice(-26);
+    const st = slopeStats(h);
+    if (!st) return null;
+    // a glitch (pop, tongue noise) shows up as a poor line fit: skip it
+    if ((1200 / Math.LN2) * st.se / (2 * Math.PI * MULT[best] * f0) > 2) return null;
+    const c = 1200 * Math.log2(Math.max(1e-6, 1 + st.slope / (2 * Math.PI) / (MULT[best] * f0)));
+    const delay = 4 / (2 * Math.PI * Math.min(0.2 * f0, 200));
+    const t1 = h[0].t - delay, t2 = h[h.length - 1].t - delay;
+    let sa = 0, n = 0;
+    for (let i = rmsHist.length - 1; i >= 0 && rmsHist[i].t >= t1; i--) {
+      if (rmsHist[i].t <= t2) { sa += rmsHist[i].a; n++; }
+    }
+    return n ? { c, a: sa / n } : null;
+  }
+
+  function centerEstimate(now) {
+    const sp = shortPitch();
+    if (sp && Math.abs(sp.c) < 60) wob.push({ t: now / 1000, c: sp.c, a: sp.a });
+    while (wob.length && now / 1000 - wob[0].t > 4) wob.shift();
+    const n = wob.length;
+    if (n < 90) return;
+    // high-pass both series (subtract a 0.7 s moving average): breath swells
+    // are slow, while the resonance acts on every fast wobble as well
+    const half = 0.35;
+    const cs = [0], as = [0];
+    for (const w of wob) { cs.push(cs[cs.length - 1] + w.c); as.push(as[as.length - 1] + w.a); }
+    let lo = 0, hi = 0, scc = 0, sca = 0, saa = 0, m = 0;
+    for (let i = 0; i < n; i++) {
+      const t = wob[i].t;
+      if (t - wob[0].t < half || wob[n - 1].t - t < half) continue;
+      while (wob[lo].t < t - half) lo++;
+      while (hi < n && wob[hi].t <= t + half) hi++;
+      const cnt = hi - lo;
+      const dc = wob[i].c - (cs[hi] - cs[lo]) / cnt;
+      const da = wob[i].a - (as[hi] - as[lo]) / cnt;
+      if (Math.abs(dc) > 10 || Math.abs(da) > 1) continue; // outlier
+      scc += dc * dc; sca += dc * da; saa += da * da; m++;
+    }
+    // need the pitch to have actually wobbled
+    if (m < 40 || scc / m < 0.4) return;
+    const slope = sca / scc;
+    // neighbouring samples overlap (70 ms windows at ~60 fps), so count the
+    // effective number of independent samples as about a fifth
+    const se2 = Math.sqrt(Math.max(0, saa - slope * sca) / (m / 5 - 1) / scc);
+    const d = Math.max(-40, Math.min(40, -slope * CENTER_WIDTH * CENTER_WIDTH / 2));
+    const se = se2 * CENTER_WIDTH * CENTER_WIDTH / 2;
+    if (se > 6) return; // not enough evidence yet
+    center = center ? { d: center.d + (d - center.d) * 0.015, se } : { d, se };
+  }
+
+  // ---------- tuning-slide guide (tuba mode) ----------
+  // Pulling the main slide out by x lengthens the tube by 2x. With an acoustic
+  // length L = v / (2 f_pedal), the pitch drops by 1200*log2(1 + 2x/L) cents,
+  // about 0.6 cents per mm on a B-flat tuba. A measured value replaces it.
+  function slideSensitivity() {
+    if (settings.slideK) return { k: settings.slideK, measured: true };
+    const L = 344 / (2 * midiToFreq(TUBA_PEDAL[settings.tubaKey] || 22));
+    return { k: (1200 / Math.LN2) * (2 / (L * 1000)), measured: false };
+  }
+
+  function guideText(cents) {
+    if (!isTuba() || cents === null) return '';
+    let c = cents, note = '';
+    if (center && settings.centerCorrect) {
+      if (Math.abs(center.d) >= 3) {
+        note = '響きの中心より ' + Math.abs(center.d).toFixed(0) + '¢ ' + (center.d < 0 ? '低く' : '高く') + '吹いています';
+        c = cents - center.d; // the horn's own pitch, not the lipped one
+      } else {
+        note = '響きの中心で鳴っています';
+      }
+    }
+    const mm = c / slideSensitivity().k;
+    const slide = Math.abs(mm) < 1 ? 'チューニング管：このままでOK'
+      : 'チューニング管を ' + Math.abs(mm).toFixed(0) + ' mm ' + (mm > 0 ? '抜く' : '入れる');
+    return note ? slide + '\n' + note : slide;
   }
 
   // 1-D Kalman filter over the fused reading. Consecutive readings share most
@@ -403,7 +539,8 @@
     // narrow the demodulator once the note is close and steady
     if (Math.abs(kal.x) < 6) {
       if (!lockSince) lockSince = now;
-      if (now - lockSince > 500) setNarrow(true);
+      // tuba mode stays wide so the short-time pitch can follow the natural wobble
+      if (now - lockSince > 500 && !isTuba()) setNarrow(true);
     } else {
       lockSince = 0;
       if (Math.abs(kal.x) > 12) setNarrow(false);
@@ -421,7 +558,7 @@
   // ---------- coarse pitch (YIN) for automatic note selection ----------
   let yinBuf = null, yinDiff = null;
   function yin(buf, sr) {
-    const tauMax = Math.min(Math.floor(sr / 29), buf.length >> 1);
+    const tauMax = Math.min(Math.floor(sr / 26), buf.length >> 1);
     const tauMin = Math.floor(sr / 4500);
     const W = buf.length - tauMax;
     if (!yinDiff || yinDiff.length < tauMax + 1) yinDiff = new Float32Array(tauMax + 1);
@@ -461,6 +598,7 @@
     const m = 69 + 12 * Math.log2(f / settings.a4);
     const cand = Math.round(m);
     if (cand < MIDI_MIN || cand > MIDI_MAX) return;
+    if (isTuba() && f > 800) return; // above any tuba note: a stray harmonic or noise
     const silentFor = now - lastSignalTime;
     lastSignalTime = now;
     if (targetMidi === null || silentFor > 600) { switchCount = 0; setTarget(cand); return; }
@@ -490,8 +628,8 @@
     W = Math.max(1, Math.round(r.width * dpr));
     H = Math.max(1, Math.round(r.height * dpr));
     canvas.width = W; canvas.height = H;
-    rowCanvas.width = W; rowCanvas.height = PARTIALS;
-    rowImg = rowCtx.createImageData(W, PARTIALS);
+    rowCanvas.width = W; rowCanvas.height = BANDS;
+    rowImg = rowCtx.createImageData(W, BANDS);
   }
   new ResizeObserver(resize).observe(canvas);
 
@@ -510,6 +648,11 @@
       const b = band[k];
       const target = gate * Math.min(1, Math.pow((b.amp / total) * 4, 0.5));
       b.clarity += (target - b.clarity) * 0.2;
+    }
+
+    for (let row = 0; row < BANDS; row++) {
+      const k = SHOW[row];
+      const b = band[k];
 
       // all phases seen this frame are averaged, which reproduces the smear
       // a real strobe shows when the pattern moves faster than the eye follows
@@ -520,13 +663,12 @@
         ph = pick;
       }
       const offs = ph.map((p) => p / (2 * Math.PI));
-      b.pending = [];
 
       const L = W / (basePeriods * MULT[k]);
       const invL = 1 / L;
       const n = offs.length;
       const c = b.clarity;
-      let o = k * W * 4;
+      let o = row * W * 4;
       for (let x = 0; x < W; x++) {
         let s = 0;
         const ux = x * invL;
@@ -544,24 +686,26 @@
         o += 4;
       }
     }
+    for (const b of band) b.pending = [];
     rowCtx.putImageData(rowImg, 0, 0);
 
     g.fillStyle = '#000';
     g.fillRect(0, 0, W, H);
     g.imageSmoothingEnabled = false;
     const gap = Math.max(1, Math.round(2 * dpr));
-    const bh = (H - gap * (PARTIALS - 1)) / PARTIALS;
-    for (let k = 0; k < PARTIALS; k++) {
-      g.drawImage(rowCanvas, 0, k, W, 1, 0, Math.round(k * (bh + gap)), W, Math.round(bh));
+    const bh = (H - gap * (BANDS - 1)) / BANDS;
+    for (let row = 0; row < BANDS; row++) {
+      g.drawImage(rowCanvas, 0, row, W, 1, 0, Math.round(row * (bh + gap)), W, Math.round(bh));
     }
     if (settings.showPartials && running) {
       const fs = Math.round(Math.min(15 * dpr, bh * 0.22));
       g.font = `600 ${fs}px "Helvetica Neue", Arial, sans-serif`;
       g.textAlign = 'right';
       g.textBaseline = 'top';
-      for (let k = 0; k < PARTIALS; k++) {
+      for (let row = 0; row < BANDS; row++) {
+        const k = SHOW[row];
         const pk = partial[k];
-        const y0 = Math.round(k * (bh + gap)) + 6 * dpr;
+        const y0 = Math.round(row * (bh + gap)) + 6 * dpr;
         const label = '×' + MULT[k] + (pk ? '  ' + (pk.c >= 0 ? '+' : '−') + Math.abs(pk.c).toFixed(1) + '¢' : '');
         const tw = g.measureText(label).width;
         g.fillStyle = 'rgba(0,0,0,0.55)';
@@ -580,7 +724,9 @@
     const active = running && gate > 0.3;
     $('note').classList.toggle('idle', !active || targetMidi === null);
     const cents = active ? track(fuse(), now) : null;
-    if (!active) { lockSince = 0; for (let k = 0; k < PARTIALS; k++) partial[k] = null; }
+    if (!active) { lockSince = 0; for (let k = 0; k < PARTIALS; k++) partial[k] = null; wob = []; }
+    else if (isTuba()) centerEstimate(now);
+    $('guide').textContent = guideText(cents);
     if (cents !== null) trace.push({ t: now, c: cents });
     while (trace.length && now - trace[0].t > 8000) trace.shift();
 
@@ -599,6 +745,8 @@
       const sd = n > 10 ? Math.sqrt(Math.max(0, ss / n - (s / n) * (s / n))) : null;
       $('stab').textContent = sd === null ? '' : '±' + (sd < 0.1 ? sd.toFixed(2) : sd.toFixed(1));
     }
+    const sk = slideSensitivity();
+    $('slideK').textContent = sk.k.toFixed(2) + ' ¢/mm（' + (sk.measured ? '実測' : '理論値') + '）';
     $('inharmInfo').textContent = inharmB === null ? '---' : (inharmB * 1e4).toFixed(2) + ' ×10⁻⁴';
     drawTrace(now);
   }
@@ -683,7 +831,7 @@
         });
         node = ac.createMediaStreamSource(micStream);
       } else if (kind === 'demo') {
-        node = makeDemo();
+        node = isTuba() ? makeTubaDemo() : makeDemo();
       } else {
         const buf = await ac.decodeAudioData(await file.arrayBuffer());
         const src = ac.createBufferSource();
@@ -731,6 +879,40 @@
     osc.start(); lfo.start();
     extraNodes.push(osc, lfo, depth, level);
     return level;
+  }
+
+  // Synthetic B-flat tuba note (concert B-flat 1): the fundamental is weak, as
+  // a small mic hears it; the player sits 10 cents below the horn's resonance
+  // (played at +5, horn centred at +15) and the note wobbles naturally, so
+  // the level follows the resonance curve as the pitch moves.
+  function makeTubaDemo() {
+    const sr = ac.sampleRate, dur = 10, n = sr * dur;
+    const buf = ac.createBuffer(1, n, sr);
+    const out = buf.getChannelData(0);
+    const fBase = midiToFreq(34);
+    const amps = [0.06, 0.5, 0.6, 0.45, 0.35, 0.25, 0.18, 0.12];
+    const cents = (t) => 5 + 2.5 * Math.sin(2 * Math.PI * 4.3 * t) + 1.2 * Math.sin(2 * Math.PI * 1.7 * t + 1);
+    // total phase over the loop, rounded to whole cycles so the loop is seamless
+    let total = 0;
+    for (let i = 0; i < n; i++) total += 2 * Math.PI * fBase * Math.pow(2, cents(i / sr) / 1200) / sr;
+    const fix = (Math.round(total / (2 * Math.PI)) * 2 * Math.PI) / total;
+    let phase = 0;
+    for (let i = 0; i < n; i++) {
+      const t = i / sr;
+      const c = cents(t);
+      const u = (c - 15) / 25;
+      const level = (0.8 + 0.2 * Math.sin(2 * Math.PI * 0.1 * t)) / Math.sqrt(1 + u * u);
+      let v = 0;
+      for (let k = 0; k < amps.length; k++) v += amps[k] * Math.sin((k + 1) * phase + k);
+      out[i] = 0.25 * level * v;
+      phase += fix * 2 * Math.PI * fBase * Math.pow(2, c / 1200) / sr;
+    }
+    const src = ac.createBufferSource();
+    src.buffer = buf;
+    src.loop = true;
+    src.start();
+    extraNodes.push(src);
+    return src;
   }
 
   function stopInput() {
@@ -837,13 +1019,61 @@
   });
 
   function renderOptions() {
-    for (const b of document.querySelectorAll('[data-acc]')) b.classList.toggle('on', (b.dataset.acc === 'flat') === settings.flat);
+    for (const b of document.querySelectorAll('[data-acc]')) b.classList.toggle('on', b.dataset.acc === settings.notation);
+    for (const b of document.querySelectorAll('[data-inst]')) b.classList.toggle('on', b.dataset.inst === settings.instrument);
+    for (const b of document.querySelectorAll('[data-key]')) b.classList.toggle('on', b.dataset.key === settings.tubaKey);
+    for (const el of document.querySelectorAll('.tuba-only')) el.hidden = !isTuba();
+    for (const el of document.querySelectorAll('.general-only')) el.hidden = isTuba();
     for (const b of document.querySelectorAll('[data-opt]')) b.classList.toggle('on', !!settings[b.dataset.opt] === (b.dataset.v === '1'));
     $('traceWrap').hidden = !settings.showTrace;
   }
-  function setFlat(on) { settings.flat = on; save(); renderOptions(); renderNote(); }
-  for (const b of document.querySelectorAll('[data-acc]')) b.addEventListener('click', () => setFlat(b.dataset.acc === 'flat'));
-  $('note').addEventListener('click', () => setFlat(!settings.flat));
+  const NOTATIONS = ['sharp', 'flat', 'german'];
+  function setNotation(n) { settings.notation = n; save(); renderOptions(); renderNote(); }
+  for (const b of document.querySelectorAll('[data-acc]')) b.addEventListener('click', () => setNotation(b.dataset.acc));
+  $('note').addEventListener('click', () => setNotation(NOTATIONS[(NOTATIONS.indexOf(settings.notation) + 1) % 3]));
+  for (const b of document.querySelectorAll('[data-inst]')) {
+    b.addEventListener('click', () => {
+      settings.instrument = b.dataset.inst;
+      setNarrow(false);
+      if (isTuba() && settings.notation === 'sharp') settings.notation = 'german';
+      wob = []; center = null;
+      save(); renderOptions(); renderNote();
+    });
+  }
+  for (const b of document.querySelectorAll('[data-key]')) {
+    b.addEventListener('click', () => { settings.tubaKey = b.dataset.key; settings.slideK = null; save(); renderOptions(); });
+  }
+
+  // measure the slide: same note before and after pulling the slide a known amount
+  let calib = null;
+  function currentSteady() {
+    const now = performance.now();
+    const recent = trace.filter((p) => now - p.t < 1000);
+    if (recent.length < 20 || kal.x === null) return null;
+    const m = recent.reduce((a, p) => a + p.c, 0) / recent.length;
+    const sd = Math.sqrt(recent.reduce((a, p) => a + (p.c - m) * (p.c - m), 0) / recent.length);
+    return sd < 2 ? m : null;
+  }
+  $('calibBtn').addEventListener('click', () => {
+    const c = currentSteady();
+    if (c === null) { $('calibText').textContent = '音が安定してから押してください'; return; }
+    if (!calib) {
+      calib = { c1: c, midi: targetMidi };
+      $('calibText').textContent = '管を ' + (+$('calibMm').value || 10) + ' mm 抜いて、同じ音を吹いて「記録」';
+      return;
+    }
+    const mm = +$('calibMm').value || 10;
+    if (targetMidi !== calib.midi) { $('calibText').textContent = '1回目と同じ音で吹いてください'; return; }
+    const k = (calib.c1 - c) / mm;
+    calib = null;
+    if (k < 0.05 || k > 5) { $('calibText').textContent = '変化がはっきりしませんでした。もう一度「記録」から'; return; }
+    settings.slideK = k; save();
+    $('calibText').textContent = '測定しました：' + k.toFixed(2) + ' ¢/mm';
+  });
+  $('calibReset').addEventListener('click', () => {
+    settings.slideK = null; calib = null; save();
+    $('calibText').textContent = '理論値に戻しました';
+  });
   for (const b of document.querySelectorAll('[data-opt]')) {
     b.addEventListener('click', () => {
       settings[b.dataset.opt] = b.dataset.v === '1';

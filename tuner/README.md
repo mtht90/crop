@@ -29,6 +29,14 @@ A strobe tuner that runs in the browser. Built for iPad Safari.
 - **Attack rejection**: ignores the first 0.12 s after a pluck (sharp and noisy).
 - **Display**: cents per harmonic, stability (spread over 1 s), an 8-second history graph, and ♯/♭ notation (tap the note name to switch).
 
+## Tuba mode (Settings → Instrument → Tuba)
+- **8-harmonic fusion**: measures harmonics 1–8 and combines them by precision, so it reads accurately even when the fundamental barely reaches a small mic (B♭1 = 58 Hz and below). Wind instruments sustain their tone, so the harmonics are exactly harmonic and no inharmonicity correction is applied.
+- **Tuning-slide guide**: pulling the main slide out by x lengthens the tube by 2x. With the acoustic length L = v / (2·f_pedal), shows in mm how far to pull out or push in (theoretical value ≈ 0.59 ¢/mm on a B♭ tuba). "管の感度 → 記録" (slide sensitivity → record) measures it on your instrument: record the same note before and after pulling the slide a known distance.
+- **Resonance-center detection (experimental)**: uses the natural pitch wobble while playing. Pitch (from phase over 70 ms) and level (input RMS, aligned by the filter's group delay) are high-passed at about 0.7 s to remove breath swells, then the slope s of ln(level) against pitch is measured. Since ln A ≈ a − (c − c_r)²/w² near the resonance peak, the offset from the center is estimated as c − c_r = −s·w²/2 (w = 35¢). With this correction on, the slide guide uses the instrument's own pitch rather than the pitch forced with the lips.
+- German note names (C, Cis, D, Es … B, H); the demo produces a synthetic B♭1 tuba tone.
+
+Synthetic-signal check (weak fundamental, noise added): true −10¢ → about −10 average (varies ±4–5), +8¢ → +7 to +9, 0¢ → reported as "at the center".
+
 ## Publishing (other than GitHub)
 Upload `index.html` and `strobe-worklet.js` together to any static host that serves HTTPS.
 - Netlify Drop (https://app.netlify.com/drop): drag the folder or zip onto the page
