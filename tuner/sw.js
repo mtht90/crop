@@ -1,7 +1,7 @@
 // Offline support: once opened (or added to the home screen) the tuner keeps
 // working without a network. Cached copy first, refreshed in the background,
 // so a new version shows up on the next launch.
-const CACHE = 'strobe-tuner-v3';
+const CACHE = 'strobe-tuner-v4';
 const FILES = ['./', './index.html', './manifest.webmanifest', './icon-180.png', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', (e) => {

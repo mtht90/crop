@@ -1292,19 +1292,38 @@ registerProcessor('strobe-processor', StrobeProcessor);
   function micBroken() {
     if (running !== 'mic') return false;
     if (!ac || ac.state !== 'running') return true;
-    if (!micStream || micStream.getAudioTracks().some((t) => t.readyState === 'ended')) return true;
+    if (!micStream || micStream.getAudioTracks().some((t) => t.readyState === 'ended' || t.muted)) return true;
     return performance.now() - lastBlockAt > 1500; // audio thread stopped delivering
+  }
+
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  // Throw the whole audio graph away. After backgrounding, iOS can leave the
+  // old AudioContext "interrupted" for good, so it is never reused.
+  function closeAudio() {
+    if (refOsc) { try { refOsc.stop(); } catch (_) {} refOsc = null; refGain = null; $('refBtn').classList.remove('on'); }
+    if (strobeNode) strobeNode.port.onmessage = null; // late messages from the old graph
+    const old = ac;
+    ac = null; strobeNode = null; analyser = null;
+    narrow = false; lockSince = 0;
+    if (old) old.close().catch(() => {});
+  }
+
+  function showResume(text) {
+    $('resumeBtn').textContent = text || 'タップしてマイクを再開';
+    $('resumeBtn').hidden = false;
+    $('hint').hidden = true;
   }
 
   async function recoverMic() {
     if (recovering) return;
     recovering = true;
     try {
-      try { if (ac) await resumeContext(); } catch (_) {}
-      if (micBroken()) await startInput('mic');
-      lastBlockAt = Math.max(lastBlockAt, performance.now() - 500);
-      await new Promise((r) => setTimeout(r, 1200));
-      $('resumeBtn').hidden = !micBroken() && running === 'mic';
+      stopInput();
+      closeAudio();
+      try { await startInput('mic'); } catch (_) {}
+      await sleep(1500);
+      if (running !== 'mic' || micBroken()) { stopInput(); closeAudio(); showResume(); }
     } finally {
       recovering = false;
     }
@@ -1313,11 +1332,34 @@ registerProcessor('strobe-processor', StrobeProcessor);
   $('resumeBtn').addEventListener('click', async () => {
     $('resumeBtn').hidden = true;
     wantMic = true;
-    await ensureContext().catch(() => {});
+    stopInput();
+    closeAudio();
+    // the new context must be created inside the tap for iOS to let it run
+    const AC = window.AudioContext || window.webkitAudioContext;
+    ac = new AC({ latencyHint: 'interactive' });
+    ac.resume().catch(() => {});
     await startInput('mic');
-    await new Promise((r) => setTimeout(r, 1200));
-    if (micBroken() || running !== 'mic') $('resumeBtn').hidden = false;
+    await sleep(1500);
+    if (running === 'mic' && !micBroken()) { try { sessionStorage.removeItem('strobe-reload'); } catch (_) {} return; }
+    // iOS sometimes keeps the mic dead until the page itself is reloaded.
+    // Reload once and start again from a fresh page (like a first launch).
+    let reloaded = false;
+    try { reloaded = sessionStorage.getItem('strobe-reload') === '1'; } catch (_) {}
+    if (!reloaded) {
+      try { sessionStorage.setItem('strobe-reload', '1'); } catch (_) {}
+      location.reload();
+      return;
+    }
+    try { sessionStorage.removeItem('strobe-reload'); } catch (_) {}
+    stopInput(); closeAudio();
+    $('err').textContent = 'マイクを再開できませんでした。アプリを完全に終了して開き直してください。';
+    showResume();
   });
+
+  // after the automatic reload: one tap starts the mic on the fresh page
+  try {
+    if (sessionStorage.getItem('strobe-reload') === '1') showResume('タップしてマイクを開始');
+  } catch (_) {}
 
   setInterval(() => {
     if (document.visibilityState === 'visible' && wantMic && running === 'mic' && micBroken()) recoverMic();
@@ -1325,19 +1367,18 @@ registerProcessor('strobe-processor', StrobeProcessor);
 
   async function onShow() {
     if (running && !wakeLock) { try { wakeLock = await navigator.wakeLock?.request('screen'); } catch (_) {} }
-    if (ac && ac.state !== 'running') { try { await resumeContext(); } catch (_) {} }
-    if (wantMic && running !== 'mic') {
-      try { await startInput('mic'); } catch (_) {}
-      await new Promise((r) => setTimeout(r, 1200));
-      if (running !== 'mic' || micBroken()) $('resumeBtn').hidden = false;
-    } else if (wantMic) {
-      recoverMic();
-    }
+    if (!wantMic) return;
+    try { await startInput('mic'); } catch (_) {}
+    await sleep(1500);
+    if (running !== 'mic' || micBroken()) { stopInput(); closeAudio(); showResume(); }
   }
 
   function onHide() {
     wakeLock = null;
-    if (running === 'mic') { stopInput(); wantMic = true; $('hint').hidden = true; }
+    if (running === 'mic') wantMic = true;
+    if (running) stopInput();
+    closeAudio();
+    $('hint').hidden = wantMic;
   }
 
   document.addEventListener('visibilitychange', () => (document.visibilityState === 'visible' ? onShow() : onHide()));
