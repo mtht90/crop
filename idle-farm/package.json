@@ -8,7 +8,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "build:artifact": "npm run build && node scripts/artifact.mjs"
+    "build:artifact": "tsc --noEmit && vite build --mode artifact && node scripts/artifact.mjs"
   },
   "dependencies": {
     "three": "^0.186.1"
