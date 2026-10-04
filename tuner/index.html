@@ -1,0 +1,704 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#08090b">
+<title>Strobe Tuner</title>
+<style>
+  :root {
+    --bg: #08090b;
+    --panel: #121418;
+    --panel-2: #1a1d23;
+    --line: #2a2e36;
+    --text: #e9ebef;
+    --muted: #8a909c;
+    --accent: #ffb23f;
+    --good: #5be39a;
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Helvetica Neue", sans-serif;
+    touch-action: manipulation;
+    -webkit-user-select: none;
+    user-select: none;
+    overflow: hidden;
+  }
+  .app {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: max(14px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+             max(14px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+  header {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  }
+  .brand { font-weight: 700; letter-spacing: .32em; font-size: 15px; color: var(--muted); }
+  .brand b { color: var(--accent); font-weight: 800; }
+  .status { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: #444a55; }
+  .dot.on { background: var(--good); box-shadow: 0 0 10px var(--good); }
+
+  .readout {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    background: linear-gradient(180deg, var(--panel-2), var(--panel));
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 10px 24px;
+    min-height: 150px;
+  }
+  .side { font-variant-numeric: tabular-nums; }
+  .side.right { text-align: right; }
+  .label { font-size: 12px; letter-spacing: .12em; color: var(--muted); margin-bottom: 4px; }
+  .big-num { font-size: clamp(30px, 4.6vw, 52px); font-weight: 600; line-height: 1.05; }
+  .small-num { font-size: clamp(15px, 1.8vw, 20px); color: var(--muted); margin-top: 6px; }
+  .note {
+    display: flex; align-items: flex-start; justify-content: center;
+    font-weight: 700; line-height: 1;
+    color: var(--accent);
+    text-shadow: 0 0 28px color-mix(in srgb, var(--accent) 45%, transparent);
+    transition: color .2s, opacity .3s;
+    min-width: 3.2ch;
+  }
+  .note .name { font-size: clamp(96px, 14vw, 150px); }
+  .note .acc { font-size: clamp(40px, 6vw, 64px); margin-top: .2em; }
+  .note .oct { font-size: clamp(32px, 4.5vw, 48px); align-self: flex-end; margin-bottom: .2em; color: var(--muted); text-shadow: none; }
+  .note.idle { opacity: .35; }
+  .in-tune .note { color: var(--good); text-shadow: 0 0 28px color-mix(in srgb, var(--good) 50%, transparent); }
+  .in-tune #cents { color: var(--good); }
+
+  .strobe-wrap {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 220px;
+    border-radius: var(--radius);
+    border: 1px solid var(--line);
+    background: #000;
+    overflow: hidden;
+    box-shadow: inset 0 0 0 6px #0d0f12, inset 0 0 40px rgba(0,0,0,.9);
+  }
+  .strobe-wrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .hint {
+    position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%);
+    text-align: center; color: var(--muted); font-size: 18px; pointer-events: none;
+    padding: 0 16px;
+  }
+  .hint[hidden] { display: none; }
+
+  .controls {
+    display: flex; flex-wrap: wrap; gap: 10px; align-items: stretch;
+  }
+  .group {
+    display: flex; align-items: center; gap: 4px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 4px;
+  }
+  .group .cap { font-size: 12px; color: var(--muted); padding: 0 8px; letter-spacing: .08em; white-space: nowrap; }
+  button {
+    font: inherit; color: var(--text);
+    background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px;
+    min-height: 48px; min-width: 48px; padding: 0 16px;
+    font-size: 17px; cursor: pointer;
+  }
+  button:active { transform: scale(.97); }
+  button.primary { background: var(--accent); color: #1a1205; border-color: transparent; font-weight: 700; padding: 0 22px; }
+  button.primary.stop { background: var(--panel-2); color: var(--text); border-color: var(--line); }
+  button.on { background: color-mix(in srgb, var(--accent) 22%, var(--panel-2)); border-color: var(--accent); color: var(--accent); }
+  .group button { border: none; background: transparent; }
+  .group button.on { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+  .val { min-width: 4.5ch; text-align: center; font-variant-numeric: tabular-nums; font-size: 18px; font-weight: 600; }
+  .val.wide { min-width: 7.5ch; }
+  input[type=range] { width: 130px; accent-color: var(--accent); margin: 0 8px; }
+  select {
+    font: inherit; font-size: 16px; color: var(--text); background: var(--panel-2);
+    border: 1px solid var(--line); border-radius: 10px; min-height: 40px; padding: 0 10px;
+  }
+  .swatch { width: 34px; height: 34px; min-width: 34px; min-height: 34px; padding: 0; border-radius: 50%; border: 2px solid transparent !important; }
+  .swatch.on { border-color: var(--text) !important; }
+  .spacer { flex: 1 1 0; }
+  .error { color: #ff7a7a; font-size: 14px; }
+
+  @media (max-width: 700px) {
+    .readout { grid-template-columns: 1fr; text-align: center; gap: 4px; }
+    .side.right { text-align: center; }
+  }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <header>
+    <div class="brand"><b>STROBE</b> TUNER</div>
+    <div class="status"><span class="dot" id="dot"></span><span id="statusText">マイク停止中</span></div>
+  </header>
+
+  <section class="readout">
+    <div class="side">
+      <div class="label">ずれ</div>
+      <div class="big-num" id="cents">--.-¢</div>
+      <div class="small-num" id="freq">--- Hz</div>
+    </div>
+    <div class="note idle" id="note"><span class="name" id="noteName">A</span><span class="acc" id="noteAcc"></span><span class="oct" id="noteOct">4</span></div>
+    <div class="side right">
+      <div class="label">目標</div>
+      <div class="big-num" id="targetFreq">440.00</div>
+      <div class="small-num">Hz · <span id="modeText">自動</span></div>
+    </div>
+  </section>
+
+  <section class="strobe-wrap" id="strobeWrap">
+    <canvas id="strobe"></canvas>
+    <div class="hint" id="hint">「マイク開始」をタップして音を鳴らしてください<br><small>縞が右へ流れる＝高い ／ 左へ流れる＝低い ／ 止まる＝ピッタリ</small></div>
+  </section>
+
+  <section class="controls">
+    <button class="primary" id="micBtn">マイク開始</button>
+
+    <div class="group">
+      <button data-mode="auto" class="on">自動</button>
+      <button data-mode="manual">手動</button>
+    </div>
+
+    <div class="group">
+      <span class="cap">音名</span>
+      <button id="noteDown" aria-label="半音下げる">◀</button>
+      <span class="val" id="noteSel">A4</span>
+      <button id="noteUp" aria-label="半音上げる">▶</button>
+    </div>
+
+    <button id="refBtn">基準音 ♪</button>
+
+    <div class="group">
+      <span class="cap">A4</span>
+      <button id="calDown" aria-label="基準周波数を下げる">−</button>
+      <span class="val wide" id="calVal">440.0 Hz</span>
+      <button id="calUp" aria-label="基準周波数を上げる">＋</button>
+    </div>
+  </section>
+
+  <section class="controls">
+    <div class="group">
+      <span class="cap">感度</span>
+      <input type="range" id="sens" min="0" max="100" value="60">
+    </div>
+    <div class="group">
+      <span class="cap">基準音量</span>
+      <input type="range" id="vol" min="0" max="100" value="50">
+      <select id="wave" aria-label="基準音の波形">
+        <option value="sine">サイン</option>
+        <option value="triangle">三角</option>
+        <option value="sawtooth">ノコギリ</option>
+      </select>
+    </div>
+    <div class="group" id="colors">
+      <span class="cap">色</span>
+    </div>
+    <div class="spacer"></div>
+    <div class="error" id="err"></div>
+  </section>
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  // ---------- constants ----------
+  const PARTIALS = 4;
+  const NAMES = ['C', 'C', 'D', 'D', 'E', 'F', 'F', 'G', 'G', 'A', 'A', 'B'];
+  const SHARP = [0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0];
+  const MIDI_MIN = 23;  // B0
+  const MIDI_MAX = 100; // E7
+  const THEMES = {
+    amber: [255, 178, 63],
+    red:   [255, 70, 52],
+    cyan:  [70, 220, 255],
+    green: [110, 255, 140],
+    white: [235, 238, 245],
+  };
+
+  // ---------- persisted settings ----------
+  const settings = { a4: 440, mode: 'auto', manualMidi: 69, sens: 60, vol: 50, wave: 'sine', theme: 'amber' };
+  try { Object.assign(settings, JSON.parse(localStorage.getItem('strobe-tuner') || '{}')); } catch (_) {}
+  const save = () => { try { localStorage.setItem('strobe-tuner', JSON.stringify(settings)); } catch (_) {} };
+
+  // ---------- dom ----------
+  const $ = (id) => document.getElementById(id);
+  const app = $('app');
+  const canvas = $('strobe');
+  const g = canvas.getContext('2d');
+
+  // ---------- audio state ----------
+  let ac = null, micStream = null, micSource = null, analyser = null, strobeNode = null;
+  let refOsc = null, refGain = null;
+  let running = false;
+  let wakeLock = null;
+
+  // ---------- tuning state ----------
+  let targetMidi = settings.mode === 'manual' ? settings.manualMidi : null;
+  let f0 = 440;
+  let settleUntilFrame = 0;
+  let lastRms = 0;
+  let lastSignalTime = 0;
+  let switchCount = 0;
+
+  const band = [];
+  for (let k = 0; k < PARTIALS; k++) {
+    band.push({
+      pending: [],      // phases received since the last frame
+      last: 0,          // most recent phase
+      amp: 0,
+      clarity: 0,
+      raw: null,        // for unwrapping
+      unwrapped: 0,
+      hist: [],         // [{t, p}] for slope (frequency) estimation
+    });
+  }
+  let centsSmooth = null;
+
+  const midiToFreq = (m) => settings.a4 * Math.pow(2, (m - 69) / 12);
+  const noteLabel = (m) => NAMES[m % 12] + (SHARP[m % 12] ? '♯' : '') + (Math.floor(m / 12) - 1);
+
+  // ---------- target handling ----------
+  function setTarget(m) {
+    targetMidi = Math.max(MIDI_MIN, Math.min(MIDI_MAX, m));
+    const f = midiToFreq(targetMidi);
+    if (f !== f0) {
+      f0 = f;
+      if (strobeNode) strobeNode.port.postMessage({ f0 });
+      for (const b of band) { b.raw = null; b.hist.length = 0; b.pending.length = 0; }
+      centsSmooth = null;
+    }
+    if (refOsc) refOsc.frequency.setTargetAtTime(f0, ac.currentTime, 0.01);
+    renderNote();
+  }
+
+  function renderNote() {
+    const m = targetMidi ?? 69;
+    $('noteName').textContent = NAMES[m % 12];
+    $('noteAcc').textContent = SHARP[m % 12] ? '♯' : '';
+    $('noteOct').textContent = Math.floor(m / 12) - 1;
+    $('noteSel').textContent = noteLabel(m);
+    $('targetFreq').textContent = midiToFreq(m).toFixed(2);
+    $('modeText').textContent = settings.mode === 'auto' ? '自動' : '手動';
+    for (const b of document.querySelectorAll('[data-mode]')) b.classList.toggle('on', b.dataset.mode === settings.mode);
+    $('calVal').textContent = settings.a4.toFixed(1) + ' Hz';
+  }
+
+  // ---------- worklet messages ----------
+  function onBlock(msg) {
+    if (msg.type === 'retarget') {
+      // filters were reset; let them settle before trusting the phase slope
+      settleUntilFrame = msg.frame + Math.round(ac.sampleRate * 0.08);
+      return;
+    }
+    lastRms = msg.rms;
+    const t = msg.frame / ac.sampleRate;
+    const settled = msg.frame >= settleUntilFrame;
+    for (let k = 0; k < PARTIALS; k++) {
+      const b = band[k];
+      const p = msg.phase[k];
+      b.last = p;
+      b.amp = msg.amp[k];
+      if (b.pending.length < 64) b.pending.push(p);
+      if (!settled) continue;
+      if (b.raw === null) { b.unwrapped = p; }
+      else {
+        let d = p - b.raw;
+        if (d > Math.PI) d -= 2 * Math.PI; else if (d < -Math.PI) d += 2 * Math.PI;
+        b.unwrapped += d;
+      }
+      b.raw = p;
+      b.hist.push({ t, p: b.unwrapped });
+      while (b.hist.length && t - b.hist[0].t > 0.35) b.hist.shift();
+    }
+  }
+
+  // least-squares slope of unwrapped phase -> frequency error of that partial
+  function slope(hist) {
+    const n = hist.length;
+    if (n < 12) return null;
+    let st = 0, sp = 0, stt = 0, stp = 0;
+    const t0 = hist[0].t;
+    for (const h of hist) { const t = h.t - t0; st += t; sp += h.p; stt += t * t; stp += t * h.p; }
+    const den = n * stt - st * st;
+    return den > 0 ? (n * stp - st * sp) / den : null;
+  }
+
+  function gateLevels() {
+    // sensitivity 0..100 -> rms gate ~0.03 .. ~0.0005
+    const s = settings.sens / 100;
+    const hi = 0.03 * Math.pow(0.0167, s);
+    return [hi * 0.35, hi];
+  }
+
+  // ---------- coarse pitch (YIN) for automatic note selection ----------
+  let yinBuf = null, yinDiff = null;
+  function yin(buf, sr) {
+    const tauMax = Math.min(Math.floor(sr / 29), buf.length >> 1);
+    const tauMin = Math.floor(sr / 4500);
+    const W = buf.length - tauMax;
+    if (!yinDiff || yinDiff.length < tauMax + 1) yinDiff = new Float32Array(tauMax + 1);
+    const d = yinDiff;
+    d[0] = 1;
+    let running = 0;
+    for (let tau = 1; tau <= tauMax; tau++) {
+      let s = 0;
+      for (let i = 0; i < W; i++) { const v = buf[i] - buf[i + tau]; s += v * v; }
+      running += s;
+      d[tau] = running > 0 ? (s * tau) / running : 1;
+    }
+    const thr = 0.15;
+    for (let tau = Math.max(2, tauMin); tau < tauMax; tau++) {
+      if (d[tau] < thr) {
+        while (tau + 1 < tauMax && d[tau + 1] < d[tau]) tau++;
+        const a = d[tau - 1], b = d[tau], c = d[tau + 1];
+        const den = a - 2 * b + c;
+        const shift = den !== 0 ? 0.5 * (a - c) / den : 0;
+        return sr / (tau + shift);
+      }
+    }
+    return null;
+  }
+
+  function detectNote() {
+    if (!running || settings.mode !== 'auto') return;
+    if (!yinBuf) yinBuf = new Float32Array(analyser.fftSize);
+    analyser.getFloatTimeDomainData(yinBuf);
+    let s = 0;
+    for (let i = 0; i < yinBuf.length; i++) s += yinBuf[i] * yinBuf[i];
+    const rms = Math.sqrt(s / yinBuf.length);
+    const now = performance.now();
+    if (rms < gateLevels()[1]) return;
+    const f = yin(yinBuf, ac.sampleRate);
+    if (!f) return;
+    const m = 69 + 12 * Math.log2(f / settings.a4);
+    const cand = Math.round(m);
+    if (cand < MIDI_MIN || cand > MIDI_MAX) return;
+    const silentFor = now - lastSignalTime;
+    lastSignalTime = now;
+    if (targetMidi === null || silentFor > 600) { switchCount = 0; setTarget(cand); return; }
+    if (cand !== targetMidi && Math.abs(m - targetMidi) > 0.65) {
+      if (++switchCount >= 2) { switchCount = 0; setTarget(cand); }
+    } else {
+      switchCount = 0;
+    }
+  }
+
+  // ---------- strobe rendering ----------
+  const LUT_N = 1024;
+  const lut = new Float32Array(LUT_N);
+  for (let i = 0; i < LUT_N; i++) {
+    // soft-edged square wave: lit segment / dark gap like a printed disc
+    lut[i] = 0.5 + 0.5 * Math.tanh(4.5 * Math.cos((2 * Math.PI * i) / LUT_N));
+  }
+
+  const rowCanvas = document.createElement('canvas');
+  const rowCtx = rowCanvas.getContext('2d');
+  let rowImg = null;
+  let W = 0, H = 0, dpr = 1;
+
+  function resize() {
+    const r = canvas.getBoundingClientRect();
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = Math.max(1, Math.round(r.width * dpr));
+    H = Math.max(1, Math.round(r.height * dpr));
+    canvas.width = W; canvas.height = H;
+    rowCanvas.width = W; rowCanvas.height = PARTIALS;
+    rowImg = rowCtx.createImageData(W, PARTIALS);
+  }
+  new ResizeObserver(resize).observe(canvas);
+
+  function frame() {
+    requestAnimationFrame(frame);
+    if (!rowImg) return;
+
+    const [gLo, gHi] = gateLevels();
+    const gate = running ? Math.max(0, Math.min(1, (lastRms - gLo) / (gHi - gLo))) : 0;
+    const total = Math.SQRT2 * Math.max(lastRms, 1e-9);
+    const col = THEMES[settings.theme] || THEMES.amber;
+    const bg = [6, 6, 8];
+    const data = rowImg.data;
+    const basePeriods = 5;
+
+    for (let k = 0; k < PARTIALS; k++) {
+      const b = band[k];
+      const target = gate * Math.min(1, Math.pow((b.amp / total) * 2.2, 0.7));
+      b.clarity += (target - b.clarity) * 0.2;
+
+      // all phases seen this frame are averaged, which reproduces the smear
+      // a real strobe shows when the pattern moves faster than the eye follows
+      let ph = b.pending.length ? b.pending : [b.last];
+      if (ph.length > 10) {
+        const step = ph.length / 10, pick = [];
+        for (let i = 0; i < 10; i++) pick.push(ph[Math.floor(i * step)]);
+        ph = pick;
+      }
+      const offs = ph.map((p) => p / (2 * Math.PI));
+      b.pending = [];
+
+      const L = W / (basePeriods * (k + 1));
+      const invL = 1 / L;
+      const n = offs.length;
+      const c = b.clarity;
+      let o = k * W * 4;
+      for (let x = 0; x < W; x++) {
+        let s = 0;
+        const ux = x * invL;
+        for (let j = 0; j < n; j++) {
+          let u = ux - offs[j];
+          u -= Math.floor(u);
+          s += lut[(u * LUT_N) | 0];
+        }
+        const v = (s / n) * c;
+        data[o]     = bg[0] + (col[0] - bg[0]) * v;
+        data[o + 1] = bg[1] + (col[1] - bg[1]) * v;
+        data[o + 2] = bg[2] + (col[2] - bg[2]) * v;
+        data[o + 3] = 255;
+        o += 4;
+      }
+    }
+    rowCtx.putImageData(rowImg, 0, 0);
+
+    g.fillStyle = '#000';
+    g.fillRect(0, 0, W, H);
+    g.imageSmoothingEnabled = false;
+    const pad = Math.round(10 * dpr);
+    const gap = Math.round(6 * dpr);
+    const bh = (H - pad * 2 - gap * (PARTIALS - 1)) / PARTIALS;
+    for (let k = 0; k < PARTIALS; k++) {
+      const y = pad + k * (bh + gap);
+      g.drawImage(rowCanvas, 0, k, W, 1, 0, y, W, bh);
+      // curved-glass shading
+      const grad = g.createLinearGradient(0, y, 0, y + bh);
+      grad.addColorStop(0, 'rgba(0,0,0,0.55)');
+      grad.addColorStop(0.18, 'rgba(255,255,255,0.06)');
+      grad.addColorStop(0.5, 'rgba(255,255,255,0)');
+      grad.addColorStop(1, 'rgba(0,0,0,0.6)');
+      g.fillStyle = grad;
+      g.fillRect(0, y, W, bh);
+      g.fillStyle = 'rgba(255,255,255,0.35)';
+      g.font = `${Math.round(11 * dpr)}px -apple-system, sans-serif`;
+      g.textBaseline = 'top';
+      g.fillText('×' + (k + 1), Math.round(8 * dpr), y + Math.round(5 * dpr));
+    }
+    // side vignette
+    const vg = g.createLinearGradient(0, 0, W, 0);
+    vg.addColorStop(0, 'rgba(0,0,0,0.7)');
+    vg.addColorStop(0.08, 'rgba(0,0,0,0)');
+    vg.addColorStop(0.92, 'rgba(0,0,0,0)');
+    vg.addColorStop(1, 'rgba(0,0,0,0.7)');
+    g.fillStyle = vg;
+    g.fillRect(0, 0, W, H);
+
+    updateReadout(gate);
+  }
+
+  function updateReadout(gate) {
+    const active = running && gate > 0.3;
+    $('note').classList.toggle('idle', !active || targetMidi === null);
+    let best = -1, bestAmp = 0;
+    for (let k = 0; k < PARTIALS; k++) {
+      if (band[k].hist.length >= 12 && band[k].amp > bestAmp * 1.2) { best = k; bestAmp = band[k].amp; }
+    }
+    let cents = null;
+    if (active && best >= 0) {
+      const sl = slope(band[best].hist);
+      if (sl !== null) {
+        const df = sl / (2 * Math.PI) / (best + 1);
+        const c = 1200 * Math.log2(Math.max(1e-6, 1 + df / f0));
+        if (Math.abs(c) < 80) {
+          centsSmooth = centsSmooth === null ? c : centsSmooth + (c - centsSmooth) * 0.25;
+          cents = centsSmooth;
+        }
+      }
+    }
+    if (cents === null) {
+      $('cents').textContent = '--.-¢';
+      $('freq').textContent = '--- Hz';
+      app.classList.remove('in-tune');
+    } else {
+      $('cents').textContent = (cents >= 0 ? '+' : '−') + Math.abs(cents).toFixed(1) + '¢';
+      $('freq').textContent = (f0 * Math.pow(2, cents / 1200)).toFixed(2) + ' Hz';
+      app.classList.toggle('in-tune', Math.abs(cents) < 0.5);
+    }
+  }
+
+  // ---------- audio setup ----------
+  async function ensureContext() {
+    if (!ac) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      ac = new AC({ latencyHint: 'interactive' });
+    }
+    if (ac.state !== 'running') await ac.resume();
+    return ac;
+  }
+
+  async function startMic() {
+    $('err').textContent = '';
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      $('err').textContent = 'マイクが使えません。HTTPS で開いてください。';
+      return;
+    }
+    try {
+      await ensureContext();
+      micStream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+      });
+      if (!strobeNode) {
+        await ac.audioWorklet.addModule('strobe-worklet.js');
+        strobeNode = new AudioWorkletNode(ac, 'strobe-processor', { numberOfInputs: 1, numberOfOutputs: 0 });
+        strobeNode.port.onmessage = (e) => onBlock(e.data);
+      }
+      strobeNode.port.postMessage({ f0 });
+      analyser = ac.createAnalyser();
+      analyser.fftSize = 4096;
+      micSource = ac.createMediaStreamSource(micStream);
+      micSource.connect(strobeNode);
+      micSource.connect(analyser);
+      running = true;
+      $('hint').hidden = true;
+      $('micBtn').textContent = 'マイク停止';
+      $('micBtn').classList.add('stop');
+      $('dot').classList.add('on');
+      $('statusText').textContent = '計測中';
+      try { wakeLock = await navigator.wakeLock?.request('screen'); } catch (_) {}
+    } catch (e) {
+      $('err').textContent = 'マイクを開始できませんでした: ' + (e.message || e.name);
+      stopMic();
+    }
+  }
+
+  function stopMic() {
+    running = false;
+    if (micSource) { micSource.disconnect(); micSource = null; }
+    if (micStream) { micStream.getTracks().forEach((t) => t.stop()); micStream = null; }
+    $('hint').hidden = false;
+    $('micBtn').textContent = 'マイク開始';
+    $('micBtn').classList.remove('stop');
+    $('dot').classList.remove('on');
+    $('statusText').textContent = 'マイク停止中';
+    try { wakeLock?.release(); } catch (_) {}
+    wakeLock = null;
+  }
+
+  async function toggleRef() {
+    if (refOsc) {
+      const o = refOsc, gn = refGain;
+      refOsc = null; refGain = null;
+      gn.gain.setTargetAtTime(0, ac.currentTime, 0.03);
+      setTimeout(() => { o.stop(); o.disconnect(); gn.disconnect(); }, 250);
+      $('refBtn').classList.remove('on');
+      return;
+    }
+    await ensureContext();
+    if (targetMidi === null) setTarget(69);
+    refOsc = ac.createOscillator();
+    refOsc.type = settings.wave;
+    refOsc.frequency.value = f0;
+    refGain = ac.createGain();
+    refGain.gain.value = 0;
+    refOsc.connect(refGain).connect(ac.destination);
+    refOsc.start();
+    refGain.gain.setTargetAtTime(refLevel(), ac.currentTime, 0.03);
+    $('refBtn').classList.add('on');
+  }
+  const refLevel = () => Math.pow(settings.vol / 100, 2) * (settings.wave === 'sine' ? 0.6 : 0.3);
+
+  // ---------- controls ----------
+  $('micBtn').addEventListener('click', () => (running ? stopMic() : startMic()));
+  $('refBtn').addEventListener('click', toggleRef);
+
+  for (const b of document.querySelectorAll('[data-mode]')) {
+    b.addEventListener('click', () => {
+      settings.mode = b.dataset.mode;
+      if (settings.mode === 'manual') setTarget(targetMidi ?? settings.manualMidi);
+      save(); renderNote();
+    });
+  }
+
+  function stepNote(d) {
+    settings.mode = 'manual';
+    setTarget((targetMidi ?? settings.manualMidi) + d);
+    settings.manualMidi = targetMidi;
+    save(); renderNote();
+  }
+
+  function stepCal(d) {
+    settings.a4 = Math.round(Math.max(400, Math.min(480, settings.a4 + d)) * 10) / 10;
+    save();
+    if (targetMidi !== null) setTarget(targetMidi); else renderNote();
+  }
+
+  // press-and-hold repeat for steppers
+  function holdRepeat(el, fn) {
+    let timer = null, count = 0;
+    const stop = () => { clearTimeout(timer); timer = null; };
+    const tick = () => { fn(count++); timer = setTimeout(tick, count > 8 ? 50 : 140); };
+    el.addEventListener('pointerdown', (e) => { e.preventDefault(); count = 0; fn(count++); timer = setTimeout(tick, 400); });
+    ['pointerup', 'pointerleave', 'pointercancel'].forEach((ev) => el.addEventListener(ev, stop));
+  }
+  holdRepeat($('noteDown'), () => stepNote(-1));
+  holdRepeat($('noteUp'), () => stepNote(1));
+  holdRepeat($('calDown'), (n) => stepCal(n > 15 ? -1 : -0.1));
+  holdRepeat($('calUp'), (n) => stepCal(n > 15 ? 1 : 0.1));
+  $('calVal').addEventListener('dblclick', () => stepCal(440 - settings.a4));
+
+  const sens = $('sens'), vol = $('vol'), wave = $('wave');
+  sens.value = settings.sens; vol.value = settings.vol; wave.value = settings.wave;
+  sens.addEventListener('input', () => { settings.sens = +sens.value; save(); });
+  vol.addEventListener('input', () => {
+    settings.vol = +vol.value; save();
+    if (refGain) refGain.gain.setTargetAtTime(refLevel(), ac.currentTime, 0.02);
+  });
+  wave.addEventListener('change', () => {
+    settings.wave = wave.value; save();
+    if (refOsc) { refOsc.type = settings.wave; refGain.gain.setTargetAtTime(refLevel(), ac.currentTime, 0.02); }
+  });
+
+  const colors = $('colors');
+  for (const [name, rgb] of Object.entries(THEMES)) {
+    const s = document.createElement('button');
+    s.className = 'swatch' + (settings.theme === name ? ' on' : '');
+    s.style.background = `rgb(${rgb})`;
+    s.setAttribute('aria-label', name);
+    s.addEventListener('click', () => {
+      settings.theme = name; save();
+      for (const el of colors.querySelectorAll('.swatch')) el.classList.toggle('on', el === s);
+      applyTheme();
+    });
+    colors.appendChild(s);
+  }
+  function applyTheme() {
+    document.documentElement.style.setProperty('--accent', `rgb(${THEMES[settings.theme] || THEMES.amber})`);
+  }
+
+  // iOS suspends audio when the page is backgrounded
+  document.addEventListener('visibilitychange', async () => {
+    if (document.visibilityState === 'visible') {
+      if (ac && ac.state !== 'running') { try { await ac.resume(); } catch (_) {} }
+      if (running && !wakeLock) { try { wakeLock = await navigator.wakeLock?.request('screen'); } catch (_) {} }
+    } else {
+      wakeLock = null;
+    }
+  });
+
+  applyTheme();
+  if (targetMidi !== null) setTarget(targetMidi); else renderNote();
+  setInterval(detectNote, 90);
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
