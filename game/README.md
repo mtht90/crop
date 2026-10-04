@@ -11,6 +11,8 @@ npm run dev        # http://localhost:5173/
 npm run build      # 型チェック + dist/ へ本番ビルド
 ```
 
+- 公開先が `.glb` を配信できない場合は `VITE_MODEL_EXT=json npm run build && node tools/embed-gltf.mjs dist` でモデルを埋め込みJSONに変換
+- 素材のクレジットとモデル再生成手順は [CREDITS.md](./CREDITS.md)
 - `http://localhost:5173/?viewer` … アニメーションビューア（技の再生・スロー・コマ送り・当たり判定表示）
   - `&speed=0.25` で初期再生速度を指定
 

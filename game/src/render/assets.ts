@@ -25,6 +25,9 @@ export const assets = {
 };
 
 const base = () => `${import.meta.env.BASE_URL}assets/models/`;
+/** Hosts that can't serve .glb get embedded-glTF .json copies (see tools/embed-gltf.mjs). */
+const EXT = (import.meta.env.VITE_MODEL_EXT as string | undefined) ?? 'glb';
+const file = (f: string) => f.replace(/\.glb$/, `.${EXT}`);
 
 export async function loadAssets(onProgress?: (p: number) => void) {
   if (assets.ready) return;
@@ -32,7 +35,7 @@ export async function loadAssets(onProgress?: (p: number) => void) {
   const files = [...Object.values(MODEL_FILES), ...ANIM_FILES];
   let done = 0;
   const load = async (f: string) => {
-    const g = await loader.loadAsync(base() + f);
+    const g = await loader.loadAsync(base() + file(f));
     done++;
     onProgress?.(done / files.length);
     return g;
