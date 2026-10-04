@@ -224,7 +224,7 @@
   };
 
   // ---------- persisted settings ----------
-  const settings = { a4: 440, mode: 'auto', manualMidi: 69, sens: 60, vol: 50, wave: 'sine', theme: 'blue', notation: 'sharp', instrument: 'general', tubaKey: 'Bb', slideK: null, centerCorrect: true, showPartials: true, showTrace: true, attack: true, inharm: true };
+  const settings = { a4: 440, mode: 'auto', manualMidi: 69, sens: 60, vol: 50, wave: 'sine', theme: 'blue', notation: 'flat', instrument: 'general', tubaKey: 'Bb', slideK: null, centerCorrect: true, showPartials: true, showTrace: true, attack: true, inharm: true };
   try { Object.assign(settings, JSON.parse(localStorage.getItem('strobe-tuner') || '{}')); } catch (_) {}
   if (settings.flat === true && settings.notation === 'sharp') settings.notation = 'flat'; // older saved setting
   delete settings.flat;
@@ -598,7 +598,6 @@
     const m = 69 + 12 * Math.log2(f / settings.a4);
     const cand = Math.round(m);
     if (cand < MIDI_MIN || cand > MIDI_MAX) return;
-    if (isTuba() && f > 800) return; // above any tuba note: a stray harmonic or noise
     const silentFor = now - lastSignalTime;
     lastSignalTime = now;
     if (targetMidi === null || silentFor > 600) { switchCount = 0; setTarget(cand); return; }
