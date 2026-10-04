@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>はたけ日和</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Kiwi+Maru:wght@500&family=Zen+Maru+Gothic:wght@500;700&display=swap"
+    />
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="scene" aria-label="農場の3Dビュー"></canvas>
+
+      <header class="hud">
+        <div class="money"><span id="money">0</span><small>円</small></div>
+        <div class="rate" id="rate">毎分 +0円</div>
+        <div class="meter" id="meter">
+          <div class="meter-label"><span>倉庫</span><span id="stock">0 / 40</span></div>
+          <div class="meter-track"><div class="meter-fill" id="stock-fill"></div></div>
+        </div>
+      </header>
+
+      <div class="hint" id="hint" hidden></div>
+
+      <nav class="seedbar" id="seedbar" aria-label="植える作物"></nav>
+
+      <aside class="panel">
+        <div class="tabs" role="tablist">
+          <button role="tab" data-tab="warehouse" aria-selected="true">倉庫</button>
+          <button role="tab" data-tab="upgrades" aria-selected="false">強化</button>
+          <button role="tab" data-tab="record" aria-selected="false">記録</button>
+        </div>
+        <div class="tab-body" id="tab-body"></div>
+      </aside>
+
+      <div class="toasts" id="toasts" aria-live="polite"></div>
+      <div class="floaters" id="floaters"></div>
+
+      <div class="loading" id="loading">
+        <div class="loading-title">はたけ日和</div>
+        <div class="loading-sub" id="loading-sub">畑を準備しています…</div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
