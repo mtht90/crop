@@ -19,6 +19,7 @@
     --accent: #ffb23f;
     --good: #5be39a;
     --radius: 14px;
+    color-scheme: dark;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { height: 100%; margin: 0; }
@@ -141,7 +142,7 @@
 <div class="app" id="app">
   <header>
     <div class="brand"><b>STROBE</b> TUNER</div>
-    <div class="status"><span class="dot" id="dot"></span><span id="statusText">マイク停止中</span></div>
+    <div class="status"><span class="dot" id="dot"></span><span id="statusText">停止中</span></div>
   </header>
 
   <section class="readout">
@@ -160,11 +161,14 @@
 
   <section class="strobe-wrap" id="strobeWrap">
     <canvas id="strobe"></canvas>
-    <div class="hint" id="hint">「マイク開始」をタップして音を鳴らしてください<br><small>縞が右へ流れる＝高い ／ 左へ流れる＝低い ／ 止まる＝ピッタリ</small></div>
+    <div class="hint" id="hint">「マイク開始」で楽器を鳴らすか、「デモ」で動きを確認できます<br><small>縞が右へ流れる＝高い ／ 左へ流れる＝低い ／ 止まる＝ピッタリ</small></div>
   </section>
 
   <section class="controls">
     <button class="primary" id="micBtn">マイク開始</button>
+    <button id="demoBtn">デモ</button>
+    <button id="fileBtn">音声ファイル</button>
+    <input type="file" id="fileIn" accept="audio/*" hidden>
 
     <div class="group">
       <button data-mode="auto" class="on">自動</button>
@@ -240,7 +244,8 @@
   const g = canvas.getContext('2d');
 
   // ---------- audio state ----------
-  let ac = null, micStream = null, micSource = null, analyser = null, strobeNode = null;
+  let ac = null, micStream = null, inputNode = null, analyser = null, strobeNode = null;
+  let extraNodes = [];
   let refOsc = null, refGain = null;
   let running = false;
   let wakeLock = null;
@@ -545,52 +550,110 @@
     return ac;
   }
 
-  async function startMic() {
-    $('err').textContent = '';
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      $('err').textContent = 'マイクが使えません。HTTPS で開いてください。';
-      return;
+  async function ensureStrobe() {
+    if (strobeNode) return;
+    try {
+      await ac.audioWorklet.addModule('strobe-worklet.js');
+    } catch (_) {
+      // some sandboxed hosts refuse a direct module URL; retry through a blob
+      const src = await (await fetch('strobe-worklet.js')).text();
+      await ac.audioWorklet.addModule(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
     }
+    strobeNode = new AudioWorkletNode(ac, 'strobe-processor', { numberOfInputs: 1, numberOfOutputs: 0 });
+    strobeNode.port.onmessage = (e) => onBlock(e.data);
+  }
+
+  // kind: 'mic' | 'demo' | 'file'
+  async function startInput(kind, file) {
+    $('err').textContent = '';
+    stopInput();
     try {
       await ensureContext();
-      micStream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
-      });
-      if (!strobeNode) {
-        await ac.audioWorklet.addModule('strobe-worklet.js');
-        strobeNode = new AudioWorkletNode(ac, 'strobe-processor', { numberOfInputs: 1, numberOfOutputs: 0 });
-        strobeNode.port.onmessage = (e) => onBlock(e.data);
-      }
+      await ensureStrobe();
       strobeNode.port.postMessage({ f0 });
       analyser = ac.createAnalyser();
       analyser.fftSize = 4096;
-      micSource = ac.createMediaStreamSource(micStream);
-      micSource.connect(strobeNode);
-      micSource.connect(analyser);
-      running = true;
+      let node;
+      if (kind === 'mic') {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          throw new Error('このページではマイクが使えません。HTTPS で開いてください。');
+        }
+        micStream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+        });
+        node = ac.createMediaStreamSource(micStream);
+      } else if (kind === 'demo') {
+        node = makeDemo();
+      } else {
+        const buf = await ac.decodeAudioData(await file.arrayBuffer());
+        const src = ac.createBufferSource();
+        src.buffer = buf;
+        src.loop = true;
+        src.start();
+        const out = ac.createGain();
+        out.gain.value = 0.8;
+        src.connect(out).connect(ac.destination);
+        extraNodes.push(src, out);
+        node = src;
+      }
+      inputNode = node;
+      node.connect(strobeNode);
+      node.connect(analyser);
+      running = kind;
       $('hint').hidden = true;
-      $('micBtn').textContent = 'マイク停止';
-      $('micBtn').classList.add('stop');
       $('dot').classList.add('on');
-      $('statusText').textContent = '計測中';
+      $('statusText').textContent = { mic: 'マイク計測中', demo: 'デモ信号', file: 'ファイル再生中' }[kind];
+      updateInputButtons();
       try { wakeLock = await navigator.wakeLock?.request('screen'); } catch (_) {}
     } catch (e) {
-      $('err').textContent = 'マイクを開始できませんでした: ' + (e.message || e.name);
-      stopMic();
+      const denied = e && (e.name === 'NotAllowedError' || e.name === 'SecurityError');
+      $('err').textContent = denied
+        ? 'マイクの使用が許可されていません。デモかファイルで試せます。'
+        : '開始できませんでした: ' + (e.message || e.name);
+      stopInput();
     }
   }
 
-  function stopMic() {
+  // a plucked-string-like tone whose pitch drifts slowly around A2,
+  // so the bands speed up, slow down, stop and reverse
+  function makeDemo() {
+    const osc = ac.createOscillator();
+    const n = 9, re = new Float32Array(n), im = new Float32Array(n);
+    for (let h = 1; h < n; h++) im[h] = 1 / Math.pow(h, 1.3);
+    osc.setPeriodicWave(ac.createPeriodicWave(re, im));
+    osc.frequency.value = 110;
+    const lfo = ac.createOscillator();
+    lfo.frequency.value = 0.07;
+    const depth = ac.createGain();
+    depth.gain.value = 14; // cents
+    lfo.connect(depth).connect(osc.detune);
+    const level = ac.createGain();
+    level.gain.value = 0.3;
+    osc.connect(level);
+    osc.start(); lfo.start();
+    extraNodes.push(osc, lfo, depth, level);
+    return level;
+  }
+
+  function stopInput() {
     running = false;
-    if (micSource) { micSource.disconnect(); micSource = null; }
+    if (inputNode) { try { inputNode.disconnect(); } catch (_) {} inputNode = null; }
+    for (const n of extraNodes) { try { n.stop?.(); } catch (_) {} try { n.disconnect(); } catch (_) {} }
+    extraNodes = [];
     if (micStream) { micStream.getTracks().forEach((t) => t.stop()); micStream = null; }
     $('hint').hidden = false;
-    $('micBtn').textContent = 'マイク開始';
-    $('micBtn').classList.remove('stop');
     $('dot').classList.remove('on');
-    $('statusText').textContent = 'マイク停止中';
+    $('statusText').textContent = '停止中';
+    updateInputButtons();
     try { wakeLock?.release(); } catch (_) {}
     wakeLock = null;
+  }
+
+  function updateInputButtons() {
+    $('micBtn').textContent = running === 'mic' ? 'マイク停止' : 'マイク開始';
+    $('micBtn').classList.toggle('stop', running === 'mic');
+    $('demoBtn').classList.toggle('on', running === 'demo');
+    $('fileBtn').classList.toggle('on', running === 'file');
   }
 
   async function toggleRef() {
@@ -617,7 +680,14 @@
   const refLevel = () => Math.pow(settings.vol / 100, 2) * (settings.wave === 'sine' ? 0.6 : 0.3);
 
   // ---------- controls ----------
-  $('micBtn').addEventListener('click', () => (running ? stopMic() : startMic()));
+  $('micBtn').addEventListener('click', () => (running === 'mic' ? stopInput() : startInput('mic')));
+  $('demoBtn').addEventListener('click', () => (running === 'demo' ? stopInput() : startInput('demo')));
+  $('fileBtn').addEventListener('click', () => (running === 'file' ? stopInput() : $('fileIn').click()));
+  $('fileIn').addEventListener('change', () => {
+    const f = $('fileIn').files[0];
+    if (f) startInput('file', f);
+    $('fileIn').value = '';
+  });
   $('refBtn').addEventListener('click', toggleRef);
 
   for (const b of document.querySelectorAll('[data-mode]')) {
