@@ -35,7 +35,7 @@ export async function loadAssets(onProgress?: (p: number) => void) {
   const files = [...Object.values(MODEL_FILES), ...ANIM_FILES];
   let done = 0;
   const load = async (f: string) => {
-    const g = await loader.loadAsync(base() + file(f));
+    const g = EXT === 'json' ? await loadWrapped(loader, base() + file(f)) : await loader.loadAsync(base() + file(f));
     done++;
     onProgress?.(done / files.length);
     return g;
@@ -44,4 +44,25 @@ export async function loadAssets(onProgress?: (p: number) => void) {
   for (const [k, g] of entries) assets.models[k as ModelKey] = g;
   for (const g of await Promise.all(ANIM_FILES.map(load))) for (const c of g.animations) assets.clips[c.name] = c;
   assets.ready = true;
+}
+
+/** Loads a GLB wrapped as base64 JSON without any data: or blob: fetches. */
+async function loadWrapped(loader: GLTFLoader, url: string) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`${url}: ${res.status}`);
+  const { glb } = (await res.json()) as { glb: string };
+  const bin = atob(glb);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  // Embedded textures: use <img> + blob URL (allowed) instead of fetch()-based ImageBitmapLoader.
+  const g = globalThis as { createImageBitmap?: unknown };
+  const cib = g.createImageBitmap;
+  g.createImageBitmap = undefined;
+  try {
+    const p = loader.parseAsync(bytes.buffer, '');
+    g.createImageBitmap = cib;
+    return await p;
+  } finally {
+    g.createImageBitmap = cib;
+  }
 }
