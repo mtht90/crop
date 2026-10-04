@@ -13,7 +13,7 @@ A strobe tuner that runs in the browser. Built for iPad Safari.
 - **感度 (Sensitivity)**: the input level at which the display starts reacting.
 
 ## How it works
-`strobe-worklet.js` takes the place of the spinning disc in a mechanical strobe tuner:
+The AudioWorklet inside `index.html` (`script#worklet-src`) takes the place of the spinning disc in a mechanical strobe tuner:
 
 - It mixes the input with a reference oscillator at the target frequency f0 and its multiples 2f0, 4f0, 8f0 (octaves) (quadrature heterodyne), then low-pass filters the result.
 - The phase of the resulting baseband signal rotates at 2π·k·(f − f0), which is the same as the "disc position".
@@ -37,7 +37,10 @@ A strobe tuner that runs in the browser. Built for iPad Safari.
 
 Synthetic-signal check (weak fundamental, noise added): true −10¢ → about −10 average (varies ±4–5), +8¢ → +7 to +9, 0¢ → reported as "at the center".
 
-## Publishing (other than GitHub)
-Upload `index.html` and `strobe-worklet.js` together to any static host that serves HTTPS.
-- Netlify Drop (https://app.netlify.com/drop): drag the folder or zip onto the page
-- Cloudflare Pages: Workers & Pages → Create → Pages → Upload assets
+## Files and publishing
+- `index.html`: the whole tuner in one file (works on its own, including the audio processing)
+- `sw.js`, `manifest.webmanifest`, `icon-*.png`: for offline use and adding to the home screen (optional)
+
+Upload these files to any static host that serves HTTPS: GitHub Pages, Cloudflare Pages (`*.pages.dev`), Netlify, and so on.
+Once you open it on a site and add it to the home screen, it keeps working with no network.
+On a PC, `index.html` can also be opened directly in Chrome or Edge (the mic works).
