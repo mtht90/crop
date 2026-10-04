@@ -991,12 +991,8 @@ registerProcessor('strobe-processor', StrobeProcessor);
     $('err').textContent = '';
     stopInput();
     try {
-      await ensureContext();
-      await ensureStrobe();
-      strobeNode.port.postMessage({ f0 });
-      analyser = ac.createAnalyser();
-      analyser.fftSize = 4096;
-      let node;
+      // Mic first: WebKit lets a page that is capturing from the mic run its
+      // AudioContext without a tap, so the tuner can (re)start on its own.
       if (kind === 'mic') {
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
           throw new Error('このページではマイクが使えません。HTTPS で開いてください。');
@@ -1004,6 +1000,14 @@ registerProcessor('strobe-processor', StrobeProcessor);
         micStream = await navigator.mediaDevices.getUserMedia({
           audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
         });
+      }
+      await ensureContext();
+      await ensureStrobe();
+      strobeNode.port.postMessage({ f0 });
+      analyser = ac.createAnalyser();
+      analyser.fftSize = 4096;
+      let node;
+      if (kind === 'mic') {
         node = ac.createMediaStreamSource(micStream);
       } else if (kind === 'demo') {
         node = isTuba() ? makeTubaDemo() : makeDemo();
@@ -1134,10 +1138,10 @@ registerProcessor('strobe-processor', StrobeProcessor);
   // ---------- controls ----------
   $('micBtn').addEventListener('click', () => {
     $('resumeBtn').hidden = true;
-    if (running === 'mic') { wantMic = false; stopInput(); } else { wantMic = true; startInput('mic'); }
+    if (running === 'mic') { setWantMic(false); stopInput(); } else { setWantMic(true); startInput('mic'); }
   });
-  $('demoBtn').addEventListener('click', () => { wantMic = false; $('resumeBtn').hidden = true; running === 'demo' ? stopInput() : startInput('demo'); });
-  $('fileBtn').addEventListener('click', () => { wantMic = false; $('resumeBtn').hidden = true; running === 'file' ? stopInput() : $('fileIn').click(); });
+  $('demoBtn').addEventListener('click', () => { setWantMic(false); $('resumeBtn').hidden = true; running === 'demo' ? stopInput() : startInput('demo'); });
+  $('fileBtn').addEventListener('click', () => { setWantMic(false); $('resumeBtn').hidden = true; running === 'file' ? stopInput() : $('fileIn').click(); });
   $('fileIn').addEventListener('change', () => {
     const f = $('fileIn').files[0];
     if (f) startInput('file', f);
@@ -1287,7 +1291,38 @@ registerProcessor('strobe-processor', StrobeProcessor);
   // the background, and does not always give them back on return. So: release
   // the mic when hidden, restart it when visible, and watch for silence from
   // the audio thread. If iOS insists on a tap first, ask for one.
-  let wantMic = false, recovering = false;
+  let wantMic = !!settings.micOn, recovering = false;
+  function setWantMic(on) { wantMic = on; settings.micOn = on; save(); }
+
+  // Reload the page at most once per 30 s; iOS sometimes keeps the mic dead
+  // until the page itself is reloaded. Returns false when it just did.
+  function reloadOnce() {
+    let last = 0;
+    try { last = +sessionStorage.getItem('strobe-reloaded-at') || 0; } catch (_) {}
+    if (Date.now() - last < 30000) return false;
+    try { sessionStorage.setItem('strobe-reloaded-at', String(Date.now())); } catch (_) {}
+    location.reload();
+    return true;
+  }
+
+  // Start the mic without a tap; reload once if it stays dead; ask for a tap
+  // only as the last resort.
+  async function autoStartMic() {
+    if (recovering) return;
+    recovering = true;
+    try {
+      stopInput();
+      closeAudio();
+      try { await startInput('mic'); } catch (_) {}
+      await sleep(1500);
+      if (running === 'mic' && !micBroken()) { $('resumeBtn').hidden = true; return; }
+      stopInput(); closeAudio();
+      if (document.visibilityState === 'visible' && reloadOnce()) return;
+      showResume(running ? undefined : 'タップしてマイクを開始');
+    } finally {
+      recovering = false;
+    }
+  }
 
   function micBroken() {
     if (running !== 'mic') return false;
@@ -1315,23 +1350,9 @@ registerProcessor('strobe-processor', StrobeProcessor);
     $('hint').hidden = true;
   }
 
-  async function recoverMic() {
-    if (recovering) return;
-    recovering = true;
-    try {
-      stopInput();
-      closeAudio();
-      try { await startInput('mic'); } catch (_) {}
-      await sleep(1500);
-      if (running !== 'mic' || micBroken()) { stopInput(); closeAudio(); showResume(); }
-    } finally {
-      recovering = false;
-    }
-  }
-
   $('resumeBtn').addEventListener('click', async () => {
     $('resumeBtn').hidden = true;
-    wantMic = true;
+    setWantMic(true);
     stopInput();
     closeAudio();
     // the new context must be created inside the tap for iOS to let it run
@@ -1340,37 +1361,22 @@ registerProcessor('strobe-processor', StrobeProcessor);
     ac.resume().catch(() => {});
     await startInput('mic');
     await sleep(1500);
-    if (running === 'mic' && !micBroken()) { try { sessionStorage.removeItem('strobe-reload'); } catch (_) {} return; }
-    // iOS sometimes keeps the mic dead until the page itself is reloaded.
-    // Reload once and start again from a fresh page (like a first launch).
-    let reloaded = false;
-    try { reloaded = sessionStorage.getItem('strobe-reload') === '1'; } catch (_) {}
-    if (!reloaded) {
-      try { sessionStorage.setItem('strobe-reload', '1'); } catch (_) {}
-      location.reload();
-      return;
-    }
-    try { sessionStorage.removeItem('strobe-reload'); } catch (_) {}
+    if (running === 'mic' && !micBroken()) return;
     stopInput(); closeAudio();
-    $('err').textContent = 'マイクを再開できませんでした。アプリを完全に終了して開き直してください。';
+    $('err').textContent = 'マイクを開始できませんでした。設定 → アプリ → Safari → マイク が「許可」になっているか確認して、アプリを開き直してください。';
     showResume();
   });
 
-  // after the automatic reload: one tap starts the mic on the fresh page
-  try {
-    if (sessionStorage.getItem('strobe-reload') === '1') showResume('タップしてマイクを開始');
-  } catch (_) {}
+  // open the app and the mic starts by itself if it was on last time
+  if (wantMic && document.visibilityState === 'visible') { $('hint').hidden = true; autoStartMic(); }
 
   setInterval(() => {
-    if (document.visibilityState === 'visible' && wantMic && running === 'mic' && micBroken()) recoverMic();
+    if (document.visibilityState === 'visible' && wantMic && running === 'mic' && micBroken()) autoStartMic();
   }, 1000);
 
   async function onShow() {
     if (running && !wakeLock) { try { wakeLock = await navigator.wakeLock?.request('screen'); } catch (_) {} }
-    if (!wantMic) return;
-    try { await startInput('mic'); } catch (_) {}
-    await sleep(1500);
-    if (running !== 'mic' || micBroken()) { stopInput(); closeAudio(); showResume(); }
+    if (wantMic) autoStartMic();
   }
 
   function onHide() {
