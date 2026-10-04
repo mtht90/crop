@@ -27,6 +27,7 @@ The AudioWorklet inside `index.html` (`script#worklet-src`) takes the place of t
 - **Kalman filter**: smooths each measurement weighted by its standard error. A large jump (a peg turn) resets the filter, so the reading follows it immediately.
 - **Adaptive bandwidth**: once within ±6¢ for 0.5 s, the demodulation filter narrows from 0.2·f0 to 0.07·f0 and the analysis window lengthens from 0.35 s to 0.6 s, lowering noise.
 - **Attack rejection**: ignores the first 0.12 s after a pluck (sharp and noisy).
+- **Even band brightness (default)**: the disc angle is advanced by the phase step of the strongest harmonic, and all four bands are rotated from it. Every band stays lit as long as there is sound ("倍音の強さ" in Settings switches to the old display, where brightness shows each harmonic's strength).
 - **Display**: cents per harmonic, stability (spread over 1 s), an 8-second history graph, and ♯/♭ notation (tap the note name to switch).
 
 ## Tuba mode (Settings → Instrument → Tuba)

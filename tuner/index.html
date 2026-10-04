@@ -179,6 +179,7 @@
     <div class="row general-only"><span class="lab">インハーモニシティ B</span><span class="val" id="inharmInfo">---</span></div>
     <div class="row general-only"><span class="lab">倍音補正（弦の硬さ）</span><div class="seg"><button data-opt="inharm" data-v="1">オン</button><button data-opt="inharm" data-v="0">オフ</button></div></div>
     <div class="row"><span class="lab">アタック除外</span><div class="seg"><button data-opt="attack" data-v="1">オン</button><button data-opt="attack" data-v="0">オフ</button></div></div>
+    <div class="row"><span class="lab">縞の明るさ</span><div class="seg"><button data-band="even">そろえる</button><button data-band="partial">倍音の強さ</button></div></div>
     <div class="row"><span class="lab">倍音ごとの値</span><div class="seg"><button data-opt="showPartials" data-v="1">表示</button><button data-opt="showPartials" data-v="0">非表示</button></div></div>
     <div class="row"><span class="lab">履歴グラフ</span><div class="seg"><button data-opt="showTrace" data-v="1">表示</button><button data-opt="showTrace" data-v="0">非表示</button></div></div>
     <div class="row"><label for="sens">感度</label><input type="range" id="sens" min="0" max="100" value="60"></div>
@@ -342,7 +343,7 @@ registerProcessor('strobe-processor', StrobeProcessor);
   };
 
   // ---------- persisted settings ----------
-  const settings = { a4: 440, mode: 'auto', manualMidi: 69, sens: 60, vol: 50, wave: 'sine', theme: 'blue', notation: 'flat', instrument: 'general', tubaKey: 'Bb', slideK: null, centerCorrect: true, showPartials: true, showTrace: true, attack: true, inharm: true };
+  const settings = { a4: 440, mode: 'auto', manualMidi: 69, sens: 60, vol: 50, wave: 'sine', theme: 'blue', notation: 'flat', instrument: 'general', tubaKey: 'Bb', slideK: null, centerCorrect: true, bandMode: 'even', showPartials: true, showTrace: true, attack: true, inharm: true };
   try { Object.assign(settings, JSON.parse(localStorage.getItem('strobe-tuner') || '{}')); } catch (_) {}
   if (settings.flat === true && settings.notation === 'sharp') settings.notation = 'flat'; // older saved setting
   delete settings.flat;
@@ -389,6 +390,9 @@ registerProcessor('strobe-processor', StrobeProcessor);
   let trace = [];          // [{t, c}] for the history graph and stability
   let narrow = false, lockSince = 0;
   let rmsSlow = 0;
+  // "even" band display: one virtual disc driven by the strongest partial
+  let psi = 0, psiPending = [], refK = -1, evenClarity = 0;
+  const prevRaw = new Array(PARTIALS).fill(null);
   let rmsHist = [];        // [{t, a}] ln(input rms) per block
   let wob = [];            // [{t, c, a}] short-time pitch and level, for resonance-center detection
   let center = null;       // {d, se}: played pitch minus resonance center, cents
@@ -445,6 +449,7 @@ registerProcessor('strobe-processor', StrobeProcessor);
 
   function onBlock(msg) {
     if (msg.type === 'retarget' || msg.type === 'bandwidth') {
+      prevRaw.fill(null);
       // filters were reset or retuned; their phase delay changes, so let them
       // settle and restart the phase history before trusting the slope again
       settleUntilFrame = msg.frame + Math.round(ac.sampleRate * (msg.type === 'bandwidth' ? 0.15 : 0.08));
@@ -452,6 +457,7 @@ registerProcessor('strobe-processor', StrobeProcessor);
       return;
     }
     lastRms = msg.rms;
+    advanceDisc(msg);
     // a new pluck: the attack is sharp and noisy, so drop it from the estimate
     if (settings.attack && msg.rms > gateLevels()[1] && msg.rms > 2.5 * rmsSlow + 1e-4) {
       settleUntilFrame = Math.max(settleUntilFrame, msg.frame + Math.round(ac.sampleRate * 0.12));
@@ -483,6 +489,31 @@ registerProcessor('strobe-processor', StrobeProcessor);
       b.raw = p;
       b.hist.push({ t, p: b.unwrapped });
       while (b.hist.length && t - b.hist[0].t > win) b.hist.shift();
+    }
+  }
+
+  // Even display: the disc angle psi (in fundamental cycles) advances by the
+  // phase step of the strongest partial divided by its number. Every band then
+  // draws M*psi, so all four bands are lit and move exactly as the real
+  // partials do, even when the partials 1, 2, 4 and 8 themselves are weak
+  // (a tuba often puts most energy in partials 3, 5 and 6).
+  function advanceDisc(msg) {
+    let best = refK, bestA = refK >= 0 ? msg.amp[refK] * 1.5 : 0; // switch only on a clear margin
+    for (let k = 0; k < PARTIALS; k++) if (msg.amp[k] > bestA) { best = k; bestA = msg.amp[k]; }
+    refK = best;
+    let step = null;
+    for (let k = 0; k < PARTIALS; k++) {
+      const p = msg.phase[k];
+      if (k === refK && prevRaw[k] !== null) {
+        let d = p - prevRaw[k];
+        if (d > Math.PI) d -= 2 * Math.PI; else if (d < -Math.PI) d += 2 * Math.PI;
+        step = d / MULT[k];
+      }
+      prevRaw[k] = p;
+    }
+    if (step !== null) {
+      psi = (psi + step) % (2 * Math.PI);
+      if (psiPending.length < 64) psiPending.push(psi);
     }
   }
 
@@ -766,6 +797,7 @@ registerProcessor('strobe-processor', StrobeProcessor);
       const target = gate * Math.min(1, Math.pow((b.amp / total) * 4, 0.5));
       b.clarity += (target - b.clarity) * 0.2;
     }
+    evenClarity += (gate - evenClarity) * 0.2;
 
     for (let row = 0; row < BANDS; row++) {
       const k = SHOW[row];
@@ -773,7 +805,9 @@ registerProcessor('strobe-processor', StrobeProcessor);
 
       // all phases seen this frame are averaged, which reproduces the smear
       // a real strobe shows when the pattern moves faster than the eye follows
-      let ph = b.pending.length ? b.pending : [b.last];
+      const even = settings.bandMode === 'even';
+      let ph = even ? (psiPending.length ? psiPending : [psi]).map((p) => p * MULT[k])
+        : (b.pending.length ? b.pending : [b.last]);
       if (ph.length > 10) {
         const step = ph.length / 10, pick = [];
         for (let i = 0; i < 10; i++) pick.push(ph[Math.floor(i * step)]);
@@ -784,7 +818,7 @@ registerProcessor('strobe-processor', StrobeProcessor);
       const L = W / (basePeriods * MULT[k]);
       const invL = 1 / L;
       const n = offs.length;
-      const c = b.clarity;
+      const c = even ? evenClarity : b.clarity;
       let o = row * W * 4;
       for (let x = 0; x < W; x++) {
         let s = 0;
@@ -804,6 +838,7 @@ registerProcessor('strobe-processor', StrobeProcessor);
       }
     }
     for (const b of band) b.pending = [];
+    psiPending = [];
     rowCtx.putImageData(rowImg, 0, 0);
 
     g.fillStyle = '#000';
@@ -1144,6 +1179,7 @@ registerProcessor('strobe-processor', StrobeProcessor);
   function renderOptions() {
     for (const b of document.querySelectorAll('[data-acc]')) b.classList.toggle('on', b.dataset.acc === settings.notation);
     for (const b of document.querySelectorAll('[data-inst]')) b.classList.toggle('on', b.dataset.inst === settings.instrument);
+    for (const b of document.querySelectorAll('[data-band]')) b.classList.toggle('on', b.dataset.band === settings.bandMode);
     for (const b of document.querySelectorAll('[data-key]')) b.classList.toggle('on', b.dataset.key === settings.tubaKey);
     for (const el of document.querySelectorAll('.tuba-only')) el.hidden = !isTuba();
     for (const el of document.querySelectorAll('.general-only')) el.hidden = isTuba();
@@ -1162,6 +1198,9 @@ registerProcessor('strobe-processor', StrobeProcessor);
       wob = []; center = null;
       save(); renderOptions(); renderNote();
     });
+  }
+  for (const b of document.querySelectorAll('[data-band]')) {
+    b.addEventListener('click', () => { settings.bandMode = b.dataset.band; save(); renderOptions(); });
   }
   for (const b of document.querySelectorAll('[data-key]')) {
     b.addEventListener('click', () => { settings.tubaKey = b.dataset.key; settings.slideK = null; save(); renderOptions(); });
