@@ -10,7 +10,10 @@
 // that phase makes every band drift at the same speed, just like the bands
 // on a real strobe disc.
 
-const PARTIALS = 4;
+// partial numbers shown on the bands; octaves, like the segment counts on a
+// strobe disc (each band has twice the segments of the one above)
+const MULT = [1, 2, 4, 8];
+const PARTIALS = MULT.length;
 const POLES = 4;
 
 class StrobeProcessor extends AudioWorkletProcessor {
@@ -28,9 +31,9 @@ class StrobeProcessor extends AudioWorkletProcessor {
   setTarget(f0) {
     this.f0 = f0;
     this.dtheta = (2 * Math.PI * f0) / sampleRate;
-    // Neighbouring partials sit f0 away; 4 poles at 0.15*f0 gives >50 dB
-    // rejection there while passing a +-50 cent error on the 4th partial.
-    const fc = Math.min(0.15 * f0, 150);
+    // Neighbouring partials sit f0 away; 4 poles at 0.2*f0 gives ~55 dB
+    // rejection there while passing a +-30 cent error on the 8th partial.
+    const fc = Math.min(0.2 * f0, 200);
     this.alpha = 1 - Math.exp((-2 * Math.PI * fc) / sampleRate);
     this.state.fill(0);
     this.port.postMessage({ type: 'retarget', f0, frame: currentFrame });
@@ -53,7 +56,7 @@ class StrobeProcessor extends AudioWorkletProcessor {
       theta += this.dtheta;
       if (theta >= twoPi) theta -= twoPi;
       for (let k = 0; k < PARTIALS; k++) {
-        const ph = (k + 1) * theta;
+        const ph = MULT[k] * theta;
         let vi = x * Math.cos(ph);
         let vq = -x * Math.sin(ph);
         const base = k * 2 * POLES;
@@ -76,7 +79,7 @@ class StrobeProcessor extends AudioWorkletProcessor {
       const I = st[base + POLES - 1];
       const Q = st[base + 2 * POLES - 1];
       phase[k] = Math.atan2(Q, I);
-      amp[k] = (k + 1) * this.f0 < nyq ? 2 * Math.hypot(I, Q) : 0;
+      amp[k] = MULT[k] * this.f0 < nyq ? 2 * Math.hypot(I, Q) : 0;
     }
     this.port.postMessage({
       type: 'block',
