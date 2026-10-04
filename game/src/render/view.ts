@@ -227,6 +227,15 @@ export class GameView {
         case 'ringout':
           audio.play('ringout');
           break;
+        case 'recoil': {
+          this.effects.dust(e.pos.clone(), 5, 0.5 + e.strength * 0.06);
+          this.effects.fizzle(e.pos.clone(), e.fighter.def.element.color2);
+          if (e.fighter === pov) {
+            audio.play('dash');
+            this.fovKick.impulse(8 + e.strength * 2);
+          }
+          break;
+        }
         case 'shockwave': {
           const el = e.attacker.def.element;
           this.effects.shockwave(e.pos, e.radius, el.color, el.color2);

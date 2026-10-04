@@ -56,8 +56,7 @@ const ATTACKS: Record<string, AttackSpec> = {
   pikoDash: { clip: 'Sword_Dash' },
   groundPound: { clip: 'OverhandThrow' },
   gigaPiko: { clip: 'Sword_Attack' },
-  shotL: { clip: 'Pistol_Shoot', upper: true, contact: 0.03, end: 0.4 },
-  shotR: { clip: 'Pistol_Shoot', upper: true, contact: 0.03, end: 0.4 },
+  burst: { clip: 'Pistol_Shoot', upper: true, contact: 0.04, end: 0.6 },
 };
 
 /** Maps an action frame to clip time with the anticipation/strike/recovery curve. */

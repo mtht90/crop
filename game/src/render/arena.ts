@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { ARENA_RADIUS } from '../config';
+import { PADS, ROCKS } from '../combat/terrain';
 import { part, toon } from './toon';
 import { tex } from './textures';
 
@@ -12,6 +13,7 @@ export class Arena {
   private waterfalls: THREE.Texture[] = [];
   private clouds: THREE.Group[] = [];
   private flags: THREE.Mesh[] = [];
+  private rocks: THREE.Group[] = [];
   private blimp: THREE.Group;
   private t = 0;
 
@@ -56,11 +58,7 @@ export class Arena {
     g.add(this.edgeRing);
 
     // Floating hover pads (decor, outside the arena).
-    for (const [x, y, z, r] of [
-      [-24, 3, -12, 4],
-      [26, 2, -8, 4.5],
-      [-20, 1, 18, 3.5],
-    ]) {
+    for (const [x, y, z, r] of PADS) {
       const pad = part(new THREE.CylinderGeometry(r, r * 0.9, 0.9, 32), 0xffc93c, 0.05);
       pad.position.set(x, y, z);
       const top = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.82, r * 0.82, 0.92, 32), toon(0x5a6fd8));
@@ -68,10 +66,31 @@ export class Arena {
       g.add(pad);
     }
 
+    this.buildRocks();
     this.buildIslands();
     this.crowd = this.buildCrowd();
     this.buildClouds();
     this.blimp = this.buildBlimp();
+  }
+
+  /** Small floating rocks near the edge (also collision: shoot them to recoil back). */
+  private buildRocks() {
+    for (const [x, y, z, r] of ROCKS) {
+      const rock = new THREE.Group();
+      rock.position.set(x, y, z);
+      const top = part(new THREE.CylinderGeometry(r * 1.02, r, 0.5, 10), 0x7bc950, 0.05);
+      top.position.y = -0.25;
+      rock.add(top);
+      const mid = part(new THREE.ConeGeometry(r * 0.95, r * 1.5, 9, 2), 0xb08c6a, 0.06);
+      mid.rotation.x = Math.PI;
+      mid.position.y = -0.5 - r * 0.75;
+      rock.add(mid);
+      const tuft = part(new THREE.ConeGeometry(r * 0.18, r * 0.5, 6), 0x3f8f4a, 0.03);
+      tuft.position.set(r * 0.3, r * 0.25, -r * 0.2);
+      rock.add(tuft);
+      this.rocks.push(rock);
+      this.group.add(rock);
+    }
   }
 
   private buildIslands() {
@@ -232,6 +251,8 @@ export class Arena {
     });
     this.crowd.instanceMatrix.needsUpdate = true;
     this.clouds.forEach((c, i) => (c.position.y += Math.sin(this.t * 0.2 + i) * dt * 0.3));
+    // Rocks bob very slightly (visual only; collision stays put).
+    this.rocks.forEach((r, i) => (r.rotation.y = Math.sin(this.t * 0.3 + i) * 0.05));
     this.flags.forEach((f, i) => (f.rotation.y = Math.sin(this.t * 2.2 + i) * 0.25));
     const ba = this.t * 0.03;
     this.blimp.position.set(Math.cos(ba) * 90, 42 + Math.sin(this.t * 0.5) * 1.5, Math.sin(ba) * 90);

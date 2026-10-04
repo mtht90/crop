@@ -136,6 +136,8 @@ export interface CharacterDef {
   recovery?: string;
   /** Attack performed when clicking during a dash; optional. */
   dashAttack?: string;
+  /** Push-back (m/s) per shot that hits the floor or a floating rock nearby (not the opponent). */
+  recoil?: number;
   maxHp: number;
   walkSpeed: number;
   jumpSpeed: number;

@@ -2,6 +2,8 @@ import { CpuController } from './ai/cpu';
 import { audio } from './audio/audio';
 import { characters } from './characters';
 import { TICK } from './combat/types';
+import { EYE_HEIGHT } from './config';
+import { clamp, wrapAngle } from './core/math';
 import { PlayerInput } from './core/input';
 import { Match } from './game/match';
 import { GameView } from './render/view';
@@ -13,7 +15,7 @@ type Screen = 'title' | 'select' | 'match' | 'paused' | 'result';
 const SETTINGS_KEY = 'star-arena-settings';
 
 function loadSettings(): Settings {
-  const d: Settings = { sensitivity: 1, volume: 0.7, shake: true };
+  const d: Settings = { sensitivity: 1, volume: 0.7, shake: true, aimAssist: true };
   try {
     return { ...d, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? '{}') };
   } catch {
@@ -180,6 +182,7 @@ export class App {
         this.acc += dt * m.timeScale;
         while (this.acc >= TICK) {
           this.acc -= TICK;
+          this.aimAssist(m);
           m.step(this.input.sample());
           this.view.handleEvents(m.world.drainEvents());
           if (m.finished && this.screen === 'match') this.showResult();
@@ -198,6 +201,32 @@ export class App {
       this.stepDemo(dt);
     }
     requestAnimationFrame((t) => this.frame(t));
+  }
+
+  /**
+   * Melee fighters: when the opponent is near the crosshair and close, the view
+   * is pulled gently toward them (stronger while attacking). Mouse input always wins.
+   */
+  private aimAssist(m: Match) {
+    const p = m.player;
+    const c = m.cpu;
+    if (!this.settings.aimAssist || m.phase !== 'fight' || p.def.archetype !== 'melee') return;
+    if (!(p.state === 'free' || p.state === 'action' || p.state === 'dash') || !c.isAlive()) return;
+    const dx = c.pos.x - p.pos.x;
+    const dz = c.pos.z - p.pos.z;
+    const dist = Math.hypot(dx, dz);
+    if (dist > 9 || dist < 0.3) return;
+    const yawTo = Math.atan2(-dx, -dz);
+    const pitchTo = Math.atan2(c.pos.y + 1.1 - (p.pos.y + EYE_HEIGHT), dist);
+    const dy = wrapAngle(yawTo - this.input.yaw);
+    const dp = pitchTo - this.input.pitch;
+    const angle = Math.hypot(dy, dp);
+    const cone = 0.45;
+    if (angle > cone) return;
+    const w = (1 - angle / cone) * (dist < 4 ? 1 : 1 - (dist - 4) / 5);
+    const rate = (p.state === 'action' ? 3.2 : 1.4) * w * TICK;
+    this.input.yaw += clamp(dy, -rate, rate);
+    this.input.pitch += clamp(dp, -rate * 0.5, rate * 0.5);
   }
 
   /** Background sparring match with an orbiting camera. */

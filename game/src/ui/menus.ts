@@ -8,6 +8,8 @@ export interface Settings {
   sensitivity: number;
   volume: number;
   shake: boolean;
+  /** Gentle aim pull toward the opponent for melee fighters. */
+  aimAssist: boolean;
 }
 
 export interface Selection {
@@ -125,6 +127,7 @@ export class Menus {
           <label>マウス感度 <input type="range" min="0.3" max="2.5" step="0.05" value="${settings.sensitivity}" data-k="sensitivity"></label>
           <label>音量 <input type="range" min="0" max="1" step="0.05" value="${settings.volume}" data-k="volume"></label>
           <label>画面の揺れ <input type="checkbox" ${settings.shake ? 'checked' : ''} data-k="shake"></label>
+          <label>近距離キャラの視点吸着 <input type="checkbox" ${settings.aimAssist ? 'checked' : ''} data-k="aimAssist"></label>
         </div>
         <div class="panel">${controlsHtml}</div>
         <div class="row">
@@ -136,7 +139,7 @@ export class Menus {
       inp.addEventListener('input', () => {
         const k = inp.dataset.k as keyof Settings;
         const next = { ...settings };
-        if (k === 'shake') next.shake = inp.checked;
+        if (k === 'shake' || k === 'aimAssist') next[k] = inp.checked;
         else next[k] = Number(inp.value);
         Object.assign(settings, next);
         onChange(settings);

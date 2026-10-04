@@ -1,6 +1,7 @@
 import { Vector3 } from 'three';
-import { ARENA_RADIUS, BODY_HEIGHT, BODY_RADIUS, EYE_HEIGHT, GUARD_MAX } from '../config';
+import { BODY_HEIGHT, BODY_RADIUS, EYE_HEIGHT, GUARD_MAX } from '../config';
 import { Fighter } from './fighter';
+import { raycastTerrain, segmentHitsTerrain } from './terrain';
 import { TICK, type ActionDef, type HitProps, type Intent, type Spawn } from './types';
 
 /** Applies the hold-to-charge multipliers to a hit or projectile. */
@@ -36,6 +37,7 @@ export type CombatEvent =
   | { type: 'jump'; fighter: Fighter }
   | { type: 'land'; fighter: Fighter; strength: number }
   | { type: 'shockwave'; attacker: Fighter; pos: Vector3; radius: number }
+  | { type: 'recoil'; fighter: Fighter; pos: Vector3; strength: number }
   | { type: 'ringout'; fighter: Fighter };
 
 let projectileId = 0;
@@ -183,8 +185,41 @@ export class CombatWorld {
       if (base.gravity) v.y += (base.gravity * 20) / (2 * s.speed * speedK);
       this.projectiles.push({ ...base, pos: origin.clone(), prev: origin.clone(), vel: v, id: projectileId++ });
     }
+    this.applyRecoil(att, tgt, (s.size ?? 1) * sizeK, speedK);
     att.shotCounter[s.hand]++;
     this.events.push({ type: 'shoot', attacker: att, hand: s.hand, pos: origin, big: (s.size ?? 1) > 1.2 });
+  }
+
+  /**
+   * Shooting the floor or a floating rock (not the opponent) pushes the shooter
+   * away from the impact, stronger when close: lets ranged fighters "rocket
+   * jump" back to the stage.
+   */
+  private applyRecoil(att: Fighter, tgt: Fighter, size: number, speedK: number) {
+    const base = att.def.recoil;
+    if (!base) return;
+    const RANGE = 16;
+    const eye = att.eye;
+    const dir = att.aimDir();
+    const hit = raycastTerrain(eye, dir, RANGE);
+    if (!hit) return;
+    // The opponent in the way absorbs the shot instead.
+    const toT = tgt.pos.clone().setY(tgt.pos.y + 1).sub(eye);
+    const along = toT.dot(dir);
+    if (along > 0 && along < hit.dist && toT.addScaledVector(dir, -along).length() < 0.8) return;
+    const strength = base * Math.sqrt(size) * speedK * (1 - (hit.dist / RANGE) * 0.6);
+    // Upward kicks cancel the current fall first (rocket-jump feel), then add.
+    const imp = dir.clone().multiplyScalar(-strength);
+    att.vel.x += imp.x;
+    att.vel.z += imp.z;
+    att.vel.y = imp.y > 0 ? Math.max(att.vel.y, 0) + imp.y : att.vel.y + imp.y;
+    if (att.vel.y > 0.5) {
+      att.grounded = false;
+      att.pos.y = Math.max(att.pos.y, 0.02);
+    }
+    const sp = att.vel.length();
+    if (sp > 20) att.vel.multiplyScalar(20 / sp);
+    this.events.push({ type: 'recoil', fighter: att, pos: hit.point, strength });
   }
 
   private updateProjectiles() {
@@ -194,8 +229,12 @@ export class CombatWorld {
       if (p.gravity) p.vel.y -= p.gravity * TICK;
       p.pos.addScaledVector(p.vel, TICK);
       p.life--;
-      // Projectiles stop when they hit the arena floor.
-      if (p.pos.y < 0 && Math.hypot(p.pos.x, p.pos.z) < ARENA_RADIUS) p.life = 0;
+      // Projectiles stop on the arena and floating rocks.
+      const ground = segmentHitsTerrain(p.prev, p.pos);
+      if (ground) {
+        p.pos.copy(ground);
+        p.life = 0;
+      }
       const tgt = this.fighters[0] === p.owner ? this.fighters[1] : this.fighters[0];
       let alive = p.life > 0 && p.pos.y > -20;
       if (alive && tgt.isAlive() && !tgt.isInvulnerable() && segmentCapsule(p.prev, p.pos, p.radius, tgt.pos)) {

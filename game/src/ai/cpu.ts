@@ -4,6 +4,7 @@ import { clamp, wrapAngle } from '../core/math';
 import type { Fighter } from '../combat/fighter';
 import { emptyIntent, type Intent } from '../combat/types';
 import type { CombatWorld } from '../combat/world';
+import { PADS, ROCKS } from '../combat/terrain';
 
 export type Difficulty = 'easy' | 'normal' | 'hard';
 
@@ -105,6 +106,7 @@ export class CpuController {
     const horiz = Math.hypot(self.pos.x, self.pos.z);
     if (!self.grounded && (horiz > ARENA_RADIUS - 0.5 || self.pos.y < -0.2) && (self.state === 'free' || self.state === 'action' || self.state === 'dash')) {
       const home = Math.atan2(self.pos.x, self.pos.z); // yaw that faces the center
+      if (self.def.recoil && this.recoilAim(i)) return i;
       i.yaw = home;
       i.pitch = 0;
       this.yaw = home;
@@ -261,6 +263,49 @@ export class CpuController {
       i.jumpPressed = true;
     }
     return i;
+  }
+
+  /**
+   * Ranged recovery: aim at a floating rock (or pad) that lies outward/below and
+   * shoot it so the recoil pushes back toward the stage. Returns false if none fits.
+   */
+  private recoilAim(i: Intent) {
+    const self = this.self;
+    const eye = self.eye;
+    const out = new Vector3(self.pos.x, 0, self.pos.z).normalize();
+    let best: Vector3 | null = null;
+    let bestScore = -Infinity;
+    for (const [x, y, z, r] of [...ROCKS, ...PADS]) {
+      const top = new Vector3(x, y + (PADS.some((p) => p[0] === x && p[2] === z) ? 0.45 : 0), z);
+      const d = top.clone().sub(eye);
+      const dist = d.length();
+      if (dist > 15) continue;
+      d.normalize();
+      const outward = d.x * out.x + d.z * out.z;
+      // Recoil goes opposite to the shot: want the shot outward and/or downward.
+      const score = outward * 1.2 - d.y * 1.5 - dist * 0.05 + r * 0.05;
+      if ((outward > 0.1 || d.y < -0.6) && score > bestScore) {
+        bestScore = score;
+        best = top;
+      }
+    }
+    if (!best) return false;
+    const d = best.clone().sub(eye);
+    const yaw = Math.atan2(-d.x, -d.z);
+    const pitch = Math.atan2(d.y, Math.hypot(d.x, d.z));
+    i.yaw = yaw;
+    i.pitch = pitch;
+    this.yaw = yaw;
+    this.pitch = pitch;
+    // Drift toward the stage while shooting away from it.
+    const toCenter = out.clone().multiplyScalar(-1);
+    const f = new Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
+    const r = new Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
+    i.moveX = toCenter.dot(r);
+    i.moveZ = toCenter.dot(f);
+    i.attackPressed = Math.random() < 0.5 + this.p.edgeAware * 0.4;
+    i.attack = self.def.autoFire === true;
+    return true;
   }
 
   private detectThreat(seen: Snapshot, dist: number): unknown {
