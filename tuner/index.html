@@ -41,6 +41,11 @@
 
   .strobe-wrap { position: relative; flex: 1 1 62%; min-height: 160px; background: #000; }
   .strobe-wrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .resume {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    background: rgba(0,0,0,.72); color: var(--text); font-size: 20px; font-weight: 600;
+    border: 0; width: 100%; cursor: pointer; z-index: 2;
+  }
   .hint {
     position: absolute; left: 16px; right: 16px; top: 50%; transform: translateY(-50%);
     text-align: center; color: var(--muted); font-size: 17px; line-height: 1.6; pointer-events: none;
@@ -114,6 +119,7 @@
 <div class="app" id="app">
   <section class="strobe-wrap">
     <canvas id="strobe"></canvas>
+    <button class="resume" id="resumeBtn" hidden>タップしてマイクを再開</button>
     <div class="hint" id="hint">マイクをタップして楽器を鳴らしてください<br>縞が右へ流れる＝高い ／ 左へ流れる＝低い ／ 止まる＝合っている</div>
   </section>
 
@@ -447,7 +453,9 @@ registerProcessor('strobe-processor', StrobeProcessor);
     if (strobeNode) strobeNode.port.postMessage({ narrow: on });
   }
 
+  let lastBlockAt = 0;
   function onBlock(msg) {
+    lastBlockAt = performance.now();
     if (msg.type === 'retarget' || msg.type === 'bandwidth') {
       prevRaw.fill(null);
       // filters were reset or retuned; their phase delay changes, so let them
@@ -942,12 +950,21 @@ registerProcessor('strobe-processor', StrobeProcessor);
 
   // ---------- audio setup ----------
   async function ensureContext() {
+    if (ac && ac.state === 'closed') { ac = null; strobeNode = null; }
     if (!ac) {
       const AC = window.AudioContext || window.webkitAudioContext;
       ac = new AC({ latencyHint: 'interactive' });
     }
-    if (ac.state !== 'running') await ac.resume();
+    if (ac.state !== 'running') await resumeContext();
     return ac;
+  }
+
+  // iOS can leave resume() pending until the next tap; never wait on it forever
+  function resumeContext() {
+    return Promise.race([
+      ac.resume(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('音声を再開できませんでした。画面をタップしてください。')), 1500)),
+    ]);
   }
 
   // The worklet's source lives in this page (script#worklet-src) so the whole
@@ -1115,9 +1132,12 @@ registerProcessor('strobe-processor', StrobeProcessor);
   const refLevel = () => Math.pow(settings.vol / 100, 2) * (settings.wave === 'sine' ? 0.6 : 0.3);
 
   // ---------- controls ----------
-  $('micBtn').addEventListener('click', () => (running === 'mic' ? stopInput() : startInput('mic')));
-  $('demoBtn').addEventListener('click', () => (running === 'demo' ? stopInput() : startInput('demo')));
-  $('fileBtn').addEventListener('click', () => (running === 'file' ? stopInput() : $('fileIn').click()));
+  $('micBtn').addEventListener('click', () => {
+    $('resumeBtn').hidden = true;
+    if (running === 'mic') { wantMic = false; stopInput(); } else { wantMic = true; startInput('mic'); }
+  });
+  $('demoBtn').addEventListener('click', () => { wantMic = false; $('resumeBtn').hidden = true; running === 'demo' ? stopInput() : startInput('demo'); });
+  $('fileBtn').addEventListener('click', () => { wantMic = false; $('resumeBtn').hidden = true; running === 'file' ? stopInput() : $('fileIn').click(); });
   $('fileIn').addEventListener('change', () => {
     const f = $('fileIn').files[0];
     if (f) startInput('file', f);
@@ -1262,14 +1282,67 @@ registerProcessor('strobe-processor', StrobeProcessor);
   }
 
   // iOS suspends audio when the page is backgrounded
-  document.addEventListener('visibilitychange', async () => {
-    if (document.visibilityState === 'visible') {
-      if (ac && ac.state !== 'running') { try { await ac.resume(); } catch (_) {} }
-      if (running && !wakeLock) { try { wakeLock = await navigator.wakeLock?.request('screen'); } catch (_) {} }
-    } else {
-      wakeLock = null;
+  // ---------- keeping the mic alive (iOS home-screen apps) ----------
+  // iOS suspends the audio context and ends the mic track when the app goes to
+  // the background, and does not always give them back on return. So: release
+  // the mic when hidden, restart it when visible, and watch for silence from
+  // the audio thread. If iOS insists on a tap first, ask for one.
+  let wantMic = false, recovering = false;
+
+  function micBroken() {
+    if (running !== 'mic') return false;
+    if (!ac || ac.state !== 'running') return true;
+    if (!micStream || micStream.getAudioTracks().some((t) => t.readyState === 'ended')) return true;
+    return performance.now() - lastBlockAt > 1500; // audio thread stopped delivering
+  }
+
+  async function recoverMic() {
+    if (recovering) return;
+    recovering = true;
+    try {
+      try { if (ac) await resumeContext(); } catch (_) {}
+      if (micBroken()) await startInput('mic');
+      lastBlockAt = Math.max(lastBlockAt, performance.now() - 500);
+      await new Promise((r) => setTimeout(r, 1200));
+      $('resumeBtn').hidden = !micBroken() && running === 'mic';
+    } finally {
+      recovering = false;
     }
+  }
+
+  $('resumeBtn').addEventListener('click', async () => {
+    $('resumeBtn').hidden = true;
+    wantMic = true;
+    await ensureContext().catch(() => {});
+    await startInput('mic');
+    await new Promise((r) => setTimeout(r, 1200));
+    if (micBroken() || running !== 'mic') $('resumeBtn').hidden = false;
   });
+
+  setInterval(() => {
+    if (document.visibilityState === 'visible' && wantMic && running === 'mic' && micBroken()) recoverMic();
+  }, 1000);
+
+  async function onShow() {
+    if (running && !wakeLock) { try { wakeLock = await navigator.wakeLock?.request('screen'); } catch (_) {} }
+    if (ac && ac.state !== 'running') { try { await resumeContext(); } catch (_) {} }
+    if (wantMic && running !== 'mic') {
+      try { await startInput('mic'); } catch (_) {}
+      await new Promise((r) => setTimeout(r, 1200));
+      if (running !== 'mic' || micBroken()) $('resumeBtn').hidden = false;
+    } else if (wantMic) {
+      recoverMic();
+    }
+  }
+
+  function onHide() {
+    wakeLock = null;
+    if (running === 'mic') { stopInput(); wantMic = true; $('hint').hidden = true; }
+  }
+
+  document.addEventListener('visibilitychange', () => (document.visibilityState === 'visible' ? onShow() : onHide()));
+  window.addEventListener('pageshow', (e) => { if (e.persisted) onShow(); });
+  window.addEventListener('pagehide', onHide);
 
   // offline support where the page is served from a site (not from a file or a preview)
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {

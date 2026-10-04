@@ -44,4 +44,5 @@ Synthetic-signal check (weak fundamental, noise added): true −10¢ → about �
 
 Upload these files to any static host that serves HTTPS: GitHub Pages, Cloudflare Pages (`*.pages.dev`), Netlify, and so on.
 Once you open it on a site and add it to the home screen, it keeps working with no network.
+On iOS the mic and audio processing stop when the app is backgrounded, so the tuner releases the mic when hidden and restarts it automatically on return. It also watches for silence from the audio thread and restarts the mic. If a restart needs a tap, it shows "タップしてマイクを再開".
 On a PC, `index.html` can also be opened directly in Chrome or Edge (the mic works).
