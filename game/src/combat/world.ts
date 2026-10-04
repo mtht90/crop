@@ -1,7 +1,15 @@
 import { Vector3 } from 'three';
-import { BODY_HEIGHT, BODY_RADIUS, EYE_HEIGHT, GUARD_MAX } from '../config';
+import { ARENA_RADIUS, BODY_HEIGHT, BODY_RADIUS, EYE_HEIGHT, GUARD_MAX } from '../config';
 import { Fighter } from './fighter';
-import { TICK, type HitProps, type Intent, type Spawn } from './types';
+import { TICK, type ActionDef, type HitProps, type Intent, type Spawn } from './types';
+
+/** Applies the hold-to-charge multipliers to a hit or projectile. */
+function charged<T extends HitProps>(props: T, def: ActionDef, level: number): T {
+  const c = def.charge;
+  if (!c || level <= 0) return props;
+  const k = (m = 1) => 1 + (m - 1) * level;
+  return { ...props, damage: props.damage * k(c.damage), knockback: props.knockback * k(c.knockback), knockUp: props.knockUp * k(c.knockback), hitstop: Math.round(props.hitstop * k(1.6)), heavy: props.heavy || level > 0.8 };
+}
 
 export interface Projectile {
   owner: Fighter;
@@ -13,6 +21,8 @@ export interface Projectile {
   size: number;
   props: HitProps;
   id: number;
+  gravity: number;
+  visual: 'star' | 'arrow';
 }
 
 export type CombatEvent =
@@ -25,6 +35,7 @@ export type CombatEvent =
   | { type: 'dash'; fighter: Fighter }
   | { type: 'jump'; fighter: Fighter }
   | { type: 'land'; fighter: Fighter; strength: number }
+  | { type: 'shockwave'; attacker: Fighter; pos: Vector3; radius: number }
   | { type: 'ringout'; fighter: Fighter };
 
 let projectileId = 0;
@@ -105,8 +116,15 @@ export class CombatWorld {
         this.events.push({ type: 'whiff', attacker: att, hand: w.hand ?? 'R', heavy: !!w.heavy });
         return;
       }
-      const center = att.eye.addScaledVector(att.aimDir(), w.range);
-      center.y = Math.min(center.y, att.pos.y + EYE_HEIGHT);
+      let center: Vector3;
+      if (w.area) {
+        center = att.pos.clone().addScaledVector(att.forward(), w.range);
+        center.y += 0.6;
+        if (a.frame === w.start) this.events.push({ type: 'shockwave', attacker: att, pos: center.clone(), radius: w.radius });
+      } else {
+        center = att.eye.addScaledVector(att.aimDir(), w.range);
+        center.y = Math.min(center.y, att.pos.y + EYE_HEIGHT);
+      }
       this.debugHitSpheres.push({ pos: center.clone(), radius: w.radius });
       if (!tgt.isAlive() || tgt.isInvulnerable()) return;
       if (sphereCapsule(center, w.radius, tgt.pos)) {
@@ -118,7 +136,7 @@ export class CombatWorld {
         if (dir.lengthSq() < 1e-6) att.forward(dir);
         dir.normalize();
         const point = closestOnCapsule(center, tgt.pos);
-        this.applyHit(att, tgt, w, dir, point, false);
+        this.applyHit(att, tgt, charged(w, def, a.chargeLevel), dir, point, false);
       }
     });
 
@@ -129,11 +147,20 @@ export class CombatWorld {
         if (att.ammo <= 0) return;
         att.ammo--;
       }
-      this.spawnProjectile(att, s);
+      this.spawnProjectile(att, charged(s, def, a.chargeLevel), tgt, def.charge ? 1 + ((def.charge.speed ?? 1) - 1) * a.chargeLevel : 1, def.charge ? 1 + ((def.charge.size ?? 1) - 1) * a.chargeLevel : 1);
     });
   }
 
-  private spawnProjectile(att: Fighter, s: Spawn) {
+  private spawnProjectile(att: Fighter, s: Spawn, tgt: Fighter, speedK = 1, sizeK = 1) {
+    const base = { owner: att, radius: s.radius * sizeK, life: s.life, size: (s.size ?? 1) * sizeK, props: s, gravity: s.gravity ?? 0, visual: s.visual ?? 'star' } as const;
+    if (s.from === 'sky') {
+      // Rain: drop from above the opponent with a little scatter.
+      const a = Math.random() * Math.PI * 2;
+      const r = Math.random() * 2.4;
+      const p = new Vector3(tgt.pos.x + Math.cos(a) * r + tgt.vel.x * 0.3, 13 + Math.random() * 3, tgt.pos.z + Math.sin(a) * r + tgt.vel.z * 0.3);
+      this.projectiles.push({ ...base, pos: p.clone(), prev: p.clone(), vel: new Vector3((Math.random() - 0.5) * 2, -s.speed, (Math.random() - 0.5) * 2), id: projectileId++ });
+      return;
+    }
     const fwd = att.aimDir();
     const right = att.right();
     const side = s.hand === 'L' ? -0.3 : 0.3;
@@ -142,6 +169,7 @@ export class CombatWorld {
     const count = s.count ?? 1;
     for (let k = 0; k < count; k++) {
       const dir = fwd.clone();
+      if (s.fan) dir.applyAxisAngle(new Vector3(0, 1, 0), (k - (count - 1) / 2) * s.fan);
       if (s.spread) {
         dir.x += (Math.random() - 0.5) * s.spread * 2;
         dir.y += (Math.random() - 0.5) * s.spread * 2;
@@ -150,18 +178,10 @@ export class CombatWorld {
       }
       // Converge bullets from the gun barrels onto the crosshair at ~20m.
       const aimPoint = att.eye.addScaledVector(dir, 20);
-      const v = aimPoint.sub(origin).normalize().multiplyScalar(s.speed);
-      this.projectiles.push({
-        owner: att,
-        pos: origin.clone(),
-        prev: origin.clone(),
-        vel: v,
-        radius: s.radius,
-        life: s.life,
-        size: s.size ?? 1,
-        props: s,
-        id: projectileId++,
-      });
+      const v = aimPoint.sub(origin).normalize().multiplyScalar(s.speed * speedK);
+      // Arcing shots aim slightly up to compensate for gravity over ~20m.
+      if (base.gravity) v.y += (base.gravity * 20) / (2 * s.speed * speedK);
+      this.projectiles.push({ ...base, pos: origin.clone(), prev: origin.clone(), vel: v, id: projectileId++ });
     }
     att.shotCounter[s.hand]++;
     this.events.push({ type: 'shoot', attacker: att, hand: s.hand, pos: origin, big: (s.size ?? 1) > 1.2 });
@@ -171,8 +191,11 @@ export class CombatWorld {
     const keep: Projectile[] = [];
     for (const p of this.projectiles) {
       p.prev.copy(p.pos);
+      if (p.gravity) p.vel.y -= p.gravity * TICK;
       p.pos.addScaledVector(p.vel, TICK);
       p.life--;
+      // Projectiles stop when they hit the arena floor.
+      if (p.pos.y < 0 && Math.hypot(p.pos.x, p.pos.z) < ARENA_RADIUS) p.life = 0;
       const tgt = this.fighters[0] === p.owner ? this.fighters[1] : this.fighters[0];
       let alive = p.life > 0 && p.pos.y > -20;
       if (alive && tgt.isAlive() && !tgt.isInvulnerable() && segmentCapsule(p.prev, p.pos, p.radius, tgt.pos)) {

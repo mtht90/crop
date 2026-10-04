@@ -105,10 +105,31 @@ export class Trail {
 }
 
 interface ProjectileVis {
-  core: THREE.Sprite;
+  core: THREE.Object3D;
   glow: THREE.Sprite;
   trail: Trail;
   spin: number;
+  arrow: boolean;
+}
+
+function buildArrow(color: number, size: number) {
+  const g = new THREE.Group();
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.9, 6), new THREE.MeshBasicMaterial({ color: 0x8a5a32 }));
+  shaft.rotation.x = Math.PI / 2;
+  g.add(shaft);
+  const tip = new THREE.Mesh(new THREE.ConeGeometry(0.045, 0.14, 6), new THREE.MeshBasicMaterial({ color: 0xe8eef8 }));
+  tip.rotation.x = Math.PI / 2;
+  tip.position.z = 0.5;
+  g.add(tip);
+  for (const r of [0, Math.PI / 2]) {
+    const fl = new THREE.Mesh(new THREE.PlaneGeometry(0.1, 0.18), new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide }));
+    fl.rotation.set(Math.PI / 2, r, 0);
+    fl.rotation.order = 'YXZ';
+    fl.position.z = -0.4;
+    g.add(fl);
+  }
+  g.scale.setScalar(size);
+  return g;
 }
 
 /** World-space VFX: comic hit sparks, guard barriers, dust, projectiles, afterimages. */
@@ -266,30 +287,50 @@ export class Effects {
       let v = this.projectiles.get(p.id);
       if (!v) {
         const [c1, c2] = colorOf(p);
-        const core = new THREE.Sprite(spriteMat(tex.star(), 0xffffff));
+        const arrow = p.visual === 'arrow';
+        const core: THREE.Object3D = arrow ? buildArrow(c1, p.size) : new THREE.Sprite(spriteMat(tex.star(), 0xffffff));
         const glow = new THREE.Sprite(spriteMat(tex.soft(), c1));
         core.renderOrder = glow.renderOrder = 6;
-        const trail = new Trail(c2, 0.12 * p.size, 0.09, 10);
+        const trail = new Trail(c2, (arrow ? 0.06 : 0.12) * p.size, arrow ? 0.12 : 0.09, 10);
         trail.emitting = true;
         this.group.add(glow, core, trail.mesh);
-        v = { core, glow, trail, spin: rand(-12, 12) };
+        v = { core, glow, trail, spin: rand(-12, 12), arrow };
         this.projectiles.set(p.id, v);
       }
       const pos = new THREE.Vector3().lerpVectors(p.prev, p.pos, alpha);
       v.core.position.copy(pos);
       v.glow.position.copy(pos);
-      v.core.scale.setScalar(0.42 * p.size);
-      v.glow.scale.setScalar(1.0 * p.size);
-      (v.core.material as THREE.SpriteMaterial).rotation += v.spin * 0.016;
+      v.glow.scale.setScalar((v.arrow ? 0.5 : 1.0) * p.size);
+      if (v.arrow) v.core.lookAt(pos.clone().add(p.vel));
+      else {
+        v.core.scale.setScalar(0.42 * p.size);
+        ((v.core as THREE.Sprite).material as THREE.SpriteMaterial).rotation += v.spin * 0.016;
+      }
       v.trail.update(1 / 60, pos, this.camera.position);
     }
     for (const [id, v] of this.projectiles) {
       if (seen.has(id)) continue;
       this.group.remove(v.core, v.glow, v.trail.mesh);
-      v.core.material.dispose();
       v.glow.material.dispose();
       this.projectiles.delete(id);
     }
+  }
+
+  /** Ground shockwave ring + dust for area attacks. */
+  shockwave(pos: THREE.Vector3, radius: number, color: number, color2: number) {
+    for (const [c, life, k] of [
+      [color2, 0.35, 1],
+      [color, 0.5, 1.25],
+    ] as const) {
+      const ring = new THREE.Mesh(
+        new THREE.RingGeometry(0.85, 1, 48),
+        new THREE.MeshBasicMaterial({ color: c, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }),
+      );
+      ring.position.set(pos.x, 0.06, pos.z);
+      ring.rotation.x = -Math.PI / 2;
+      this.add(ring, ring.material as Particle['mat'], { life, scale0: 0.3, scale1: radius * k });
+    }
+    this.dust(new THREE.Vector3(pos.x, 0.05, pos.z), Math.round(4 + radius * 2), 0.6 + radius * 0.25);
   }
 
   /** Small pop where a projectile expired. */

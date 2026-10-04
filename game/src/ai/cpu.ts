@@ -46,6 +46,8 @@ export class CpuController {
   private noise = { yaw: 0, pitch: 0, t: 0 };
   private techRolled = false;
   private wantJump = 0;
+  private chargeHold = 0;
+  private dashAttackIn = 0;
 
   constructor(
     private self: Fighter,
@@ -83,7 +85,7 @@ export class CpuController {
       this.noise.pitch = (Math.random() - 0.5) * 2 * this.p.aimError * 0.6;
     }
     // Lead moving targets a little for projectiles.
-    const lead = self.def.weapon === 'guns' ? dist / 62 : 0;
+    const lead = self.def.archetype === 'ranged' ? dist / 55 : 0;
     const aimAt = foe.pos.clone().addScaledVector(foe.vel, lead * (1 - this.p.aimError * 3));
     const ax = aimAt.x - self.pos.x;
     const az = aimAt.z - self.pos.z;
@@ -98,6 +100,19 @@ export class CpuController {
     const aimed = Math.abs(dy) < 0.18;
 
     if (!active) return i;
+
+    // --- Edge recovery: off the stage and falling -> head home, use the rising move.
+    const horiz = Math.hypot(self.pos.x, self.pos.z);
+    if (!self.grounded && (horiz > ARENA_RADIUS - 0.5 || self.pos.y < -0.2) && (self.state === 'free' || self.state === 'action' || self.state === 'dash')) {
+      const home = Math.atan2(self.pos.x, self.pos.z); // yaw that faces the center
+      i.yaw = home;
+      i.pitch = 0;
+      this.yaw = home;
+      i.moveZ = 1;
+      if (self.def.recovery && !self.airMoveUsed && self.vel.y < 2 && Math.random() < 0.3 + this.p.edgeAware * 0.6) i.jumpPressed = true;
+      else if (self.stamina >= 1 && self.vel.y < -2 && Math.random() < this.p.edgeAware * 0.3) i.dashPressed = true;
+      return i;
+    }
 
     // --- Recovery --------------------------------------------------------
     if (self.state === 'tumble') {
@@ -143,7 +158,8 @@ export class CpuController {
       if (Math.random() < 0.5) this.strafeDir *= -1;
     }
     const strafe = new Vector3(-toDir.z, 0, toDir.x).multiplyScalar(this.strafeDir);
-    if (self.def.weapon === 'fists') {
+    const melee = self.def.archetype === 'melee';
+    if (melee) {
       if (dist > far) {
         move.add(toDir).addScaledVector(strafe, dist > 6 ? 0.45 : 0.15);
         if (this.p.pushToEdge) {
@@ -182,21 +198,54 @@ export class CpuController {
     if (i.guard || !foeVulnerable) return i;
 
     if (self.ult >= ULT_MAX) {
-      const ok = self.def.weapon === 'fists' ? dist < 3.5 : dist < 14 && aimed;
+      const ok = melee ? dist < 3.8 : dist < 16 && aimed;
       if (ok && Math.random() < 0.05 + this.p.aggression * 0.05) i.ultPressed = true;
     }
     if (self.skillCd === 0 && Math.random() < this.p.skillUse * 0.03) {
-      // The shooter's skill jumps backwards: never use it with the edge behind.
-      const ok = self.def.weapon === 'fists' ? dist > 2.5 && dist < 8 && aimed : dist < 5 && edgeRoom > 6;
+      const sk = self.def.actions[self.def.skill];
+      const area = sk.hits?.find((h) => h.area);
+      let ok: boolean;
+      if (area) ok = dist < area.radius * 0.9;
+      else if (sk.motion?.some((m) => m.forward > 10)) ok = dist > 2.5 && dist < 8 && aimed;
+      // Skills that jump backwards: never with the edge behind.
+      else if (sk.motion?.some((m) => m.forward < 0)) ok = dist < 5 && edgeRoom > 6;
+      else ok = aimed && dist < 18;
       if (ok) i.skillPressed = true;
     }
 
-    if (self.def.weapon === 'fists') {
-      if (dist < 2.3 && aimed && this.attackCooldown === 0) {
+    if (this.dashAttackIn > 0) {
+      this.dashAttackIn--;
+      if (this.dashAttackIn === 0) i.attackPressed = true;
+    }
+    if (melee) {
+      const reach = Math.max(...(self.def.actions[self.def.basic].hits ?? []).map((h) => h.range + h.radius * 0.6), 2);
+      if (dist < reach && aimed && this.attackCooldown === 0) {
         i.attackPressed = Math.random() < 0.3 + this.p.aggression * 0.5;
-        if (self.action?.def.id === 'hook') this.attackCooldown = Math.floor(30 * (1.2 - this.p.aggression));
+        const def = self.action?.def;
+        if (def && !def.comboNext && def.kind === 'attack') this.attackCooldown = Math.floor(30 * (1.2 - this.p.aggression));
       }
       if (dist < 6 && dist > 3 && Math.random() < 0.004 * this.p.aggression) this.wantJump = 1;
+      if (self.def.dashAttack && dist > 3.2 && dist < 6.5 && aimed && self.stamina >= 1 && edgeRoom > 3 && Math.random() < 0.012 * this.p.aggression) {
+        i.dashPressed = true;
+        i.moveZ = 1;
+        i.moveX = 0;
+        this.dashAttackIn = 4;
+      }
+    } else if (self.def.actions[self.def.basic].charge) {
+      // Bow: draw for a while, then release.
+      if (this.chargeHold > 0) {
+        this.chargeHold--;
+        i.attack = true;
+        if (this.chargeHold === 0) {
+          i.attack = false;
+          this.attackCooldown = Math.floor(10 + 40 * (1 - this.p.aggression));
+        }
+      } else if (this.attackCooldown === 0 && aimed && dist < 26) {
+        this.chargeHold = 8 + Math.floor(Math.random() * (20 + 40 * this.p.aggression));
+        i.attack = true;
+        i.attackPressed = true;
+      }
+      if (Math.random() < 0.004) this.wantJump = 1;
     } else {
       if (this.burst > 0) {
         this.burst--;

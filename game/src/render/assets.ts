@@ -35,7 +35,7 @@ export async function loadAssets(onProgress?: (p: number) => void) {
   const files = [...Object.values(MODEL_FILES), ...ANIM_FILES];
   let done = 0;
   const load = async (f: string) => {
-    const g = EXT === 'json' ? await loadWrapped(loader, base() + file(f)) : await loader.loadAsync(base() + file(f));
+    const g = await loadModel(loader, base() + file(f));
     done++;
     onProgress?.(done / files.length);
     return g;
@@ -46,20 +46,26 @@ export async function loadAssets(onProgress?: (p: number) => void) {
   assets.ready = true;
 }
 
-/** Loads a GLB wrapped as base64 JSON without any data: or blob: fetches. */
-async function loadWrapped(loader: GLTFLoader, url: string) {
+/**
+ * Fetches a GLB (or a GLB wrapped as base64 JSON) and parses it without any
+ * data: or blob: fetches, so it also works under strict CSP hosts.
+ */
+async function loadModel(loader: GLTFLoader, url: string) {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`${url}: ${res.status}`);
-  const { glb } = (await res.json()) as { glb: string };
-  const bin = atob(glb);
-  const bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  let bytes: Uint8Array;
+  if (EXT === 'json') {
+    const { glb } = (await res.json()) as { glb: string };
+    const bin = atob(glb);
+    bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  } else bytes = new Uint8Array(await res.arrayBuffer());
   // Embedded textures: use <img> + blob URL (allowed) instead of fetch()-based ImageBitmapLoader.
   const g = globalThis as { createImageBitmap?: unknown };
   const cib = g.createImageBitmap;
   g.createImageBitmap = undefined;
   try {
-    const p = loader.parseAsync(bytes.buffer, '');
+    const p = loader.parseAsync(bytes.buffer as ArrayBuffer, '');
     g.createImageBitmap = cib;
     return await p;
   } finally {

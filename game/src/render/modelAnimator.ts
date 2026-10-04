@@ -1,10 +1,10 @@
 import * as THREE from 'three';
-import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import type { Fighter } from '../combat/fighter';
 import { phaseOf } from '../combat/phase';
 import type { ActionDef } from '../combat/types';
 import { clamp, damp, ease, Spring, wrapAngle } from '../core/math';
 import { assets } from './assets';
+import { contactTime } from './clipInfo';
 import type { BoneName, ModelRig } from './charModel';
 
 // ---------------------------------------------------------------------------
@@ -23,40 +23,6 @@ function upperClip(name: string) {
     upperCache.set(name, c);
   }
   return c;
-}
-
-const contactCache = new Map<string, number>();
-/** Finds the moment of maximum hand reach in a clip (the "contact" frame). */
-export function contactTime(name: string) {
-  const hit = contactCache.get(name);
-  if (hit !== undefined) return hit;
-  const m = clone(assets.models.female.scene);
-  const mixer = new THREE.AnimationMixer(m);
-  const clip = assets.clips[name];
-  mixer.clipAction(clip).play();
-  const hl = m.getObjectByName('hand_l')!;
-  const hr = m.getObjectByName('hand_r')!;
-  const pv = m.getObjectByName('pelvis')!;
-  let best = 0;
-  let bestT = clip.duration * 0.4;
-  const a = new THREE.Vector3();
-  const b = new THREE.Vector3();
-  for (let i = 0; i <= 60; i++) {
-    const t = (clip.duration * i) / 60;
-    mixer.setTime(t);
-    m.updateMatrixWorld(true);
-    pv.getWorldPosition(b);
-    for (const h of [hl, hr]) {
-      h.getWorldPosition(a);
-      const reach = a.z - b.z;
-      if (reach > best) {
-        best = reach;
-        bestT = t;
-      }
-    }
-  }
-  contactCache.set(name, bestT);
-  return bestT;
 }
 
 interface AttackSpec {
@@ -78,6 +44,18 @@ const ATTACKS: Record<string, AttackSpec> = {
   hook: { clip: 'Melee_Hook', end: 0.38 },
   airPunch: { clip: 'Punch_Cross' },
   rocketStraight: { clip: 'Punch_Cross', hold: true },
+  risingUpper: { clip: 'Melee_Hook' },
+  dashStraight: { clip: 'Shield_Dash' },
+  drawShot: { clip: 'Spell_Simple_Shoot', upper: true },
+  triShot: { clip: 'Spell_Simple_Shoot', upper: true },
+  rollShot: { clip: 'Roll', contact: 0.85, end: 1.3 },
+  swingA: { clip: 'Sword_Regular_A' },
+  swingB: { clip: 'Sword_Regular_B' },
+  smash: { clip: 'Sword_Attack' },
+  airSmash: { clip: 'OverhandThrow' },
+  pikoDash: { clip: 'Sword_Dash' },
+  groundPound: { clip: 'OverhandThrow' },
+  gigaPiko: { clip: 'Sword_Attack' },
   shotL: { clip: 'Pistol_Shoot', upper: true, contact: 0.03, end: 0.4 },
   shotR: { clip: 'Pistol_Shoot', upper: true, contact: 0.03, end: 0.4 },
 };
@@ -169,13 +147,18 @@ export class ModelAnimator {
     return a;
   }
 
-  private get guns() {
-    return this.fighter.def.weapon === 'guns';
-  }
-
-  /** Base stance: boxer guard (first frame of the jab) or two-handed aim. */
+  /** Base stance per weapon: boxer guard, two-handed aim, bow arm out, sword-style ready. */
   private stance(): Layer {
-    return this.guns ? { clip: 'Pistol_Aim_Neutral', time: 0.05, weight: 1 } : { clip: 'Punch_Jab', time: 0, weight: 1 };
+    switch (this.fighter.def.weapon) {
+      case 'guns':
+        return { clip: 'Pistol_Aim_Neutral', time: 0.05, weight: 1 };
+      case 'bow':
+        return { clip: 'Spell_Simple_Idle_Loop', time: this.time % assets.clips.Spell_Simple_Idle_Loop.duration, weight: 1 };
+      case 'hammer':
+        return { clip: 'Sword_Idle', time: this.time % assets.clips.Sword_Idle.duration, weight: 1 };
+      default:
+        return { clip: 'Punch_Jab', time: 0, weight: 1 };
+    }
   }
 
   private locomotion(dt: number): Layer[] {
@@ -208,7 +191,7 @@ export class ModelAnimator {
   private overlayFor(): { layers: Layer[]; key: string; fade: number } | null {
     const f = this.fighter;
     if (this.outcome === 'win' && f.grounded) {
-      const clip = this.guns ? 'Yes' : 'Dance_Loop';
+      const clip = { fists: 'Dance_Loop', guns: 'Yes', bow: 'Idle_FoldArms_Loop', hammer: 'Dance_Loop' }[this.fighter.def.weapon];
       return { layers: [{ clip, time: this.time % assets.clips[clip].duration, weight: 1 }], key: 'win', fade: 0.3 };
     }
     if (this.outcome === 'lose' && f.grounded && f.state !== 'ko' && f.state !== 'knockdown') {
@@ -288,6 +271,21 @@ export class ModelAnimator {
           key,
           fade: 0.05,
         };
+      }
+      case 'slideShot': {
+        const d = assets.clips.Slide_Loop.duration;
+        const layers: Layer[] = fr < 6 ? [{ clip: 'Slide_Start', time: (fr / 6) * assets.clips.Slide_Start.duration * 0.9, weight: 1 }] : fr < 22 ? [{ clip: 'Slide_Loop', time: ((fr - 6) / 60) % d, weight: 1 }] : [{ clip: 'Slide_Exit', time: Math.min(0.49, ((fr - 22) / 10) * 0.5), weight: 1 }];
+        layers.push({ clip: 'Pistol_Aim_Neutral', time: 0.05, weight: 4, upper: true });
+        return { layers, key, fade: 0.04 };
+      }
+      case 'heliSpin': {
+        const d = assets.clips.NinjaJump_Start.duration;
+        return { layers: [{ clip: 'NinjaJump_Start', time: Math.min(d * 0.6, (fr / 60) * 1.4), weight: 1 }], key, fade: 0.05 };
+      }
+      case 'arrowRain': {
+        const shoot = assets.clips.Spell_Simple_Shoot.duration;
+        const t = fr < 20 ? (fr / 20) * shoot * 0.3 : fr < 84 ? shoot * 0.3 + ((fr % 5) / 5) * 0.1 : fr < 92 ? shoot * 0.3 : Math.min(shoot, shoot * 0.3 + ((fr - 92) / 30) * shoot);
+        return { layers: [{ ...this.stance(), weight: 1 }, { clip: 'Spell_Simple_Shoot', time: t, weight: 3, upper: true }], key, fade: 0.06 };
       }
       case 'starStorm': {
         const shoot = assets.clips.Pistol_Shoot.duration;
@@ -419,17 +417,50 @@ export class ModelAnimator {
       this.rot('pelvis', AZ, -d.x * 0.4);
     }
     if (f.action?.def.id === 'rocketStraight' && phaseOf(f.action.def, f.action.frame).stage === 'strike') this.rot('pelvis', AX, 0.45);
-    if (f.action?.def.anim === 'airPunch') {
+    const anim = f.action?.def.anim;
+    if (anim === 'risingUpper') {
+      this.rot('pelvis', AX, -0.25);
+      this.rot('spine_03', AX, -0.3);
+    }
+    if (anim === 'arrowRain' && f.action!.frame >= 12 && f.action!.frame < 86) this.rot('spine_03', AX, -0.7);
+    if (anim === 'airPunch') {
       for (const s of ['l', 'r'] as const) this.rot(`thigh_${s}`, AX, -0.9);
     }
 
-    // Spin when launched hard (ARMS-style), flip for the backflip skill.
+    // Bow string follows the drawing hand; giant hammer for the ult.
+    if (f.def.weapon === 'bow') {
+      rig.root.updateMatrixWorld(true);
+      rig.alignBow();
+      rig.root.updateMatrixWorld(true);
+      const act = f.action;
+      let draw = 0;
+      if (act && (act.def.anim === 'drawShot' || act.def.anim === 'triShot' || act.def.anim === 'arrowRain')) {
+        const ph = phaseOf(act.def, act.frame);
+        draw = ph.stage === 'windup' ? ph.t : 0;
+        if (act.def.anim === 'arrowRain') draw = (act.frame % 5) / 5;
+      }
+      rig.setBowDraw(draw);
+    }
+    if (f.def.weapon === 'hammer') {
+      const act = f.action;
+      let k = 1;
+      if (act?.def.anim === 'gigaPiko') {
+        const fr = act.frame;
+        k = fr < 10 ? 1 : fr < 32 ? 1 + 2.2 * ease.outBack((fr - 10) / 22) : fr < 70 ? 3.2 : 3.2 - 2.2 * ease.inOutQuad(Math.min(1, (fr - 70) / 15));
+      }
+      rig.weaponRoot.scale.setScalar(k);
+    }
+
+    // Spin when launched hard (ARMS-style), flip for the backflip skill, helicopter for the hammer.
     this.spin = 0;
+    let spinY = 0;
+    if (anim === 'heliSpin') spinY = (f.action!.frame / 60) * Math.PI * 2 * 2.5;
     if (f.state === 'tumble' && f.lastHitStrength > 0.6) this.spin = (f.stateT / 60) * 10;
     if (f.action?.def.anim === 'backflipShot') {
       const u = clamp((f.action.frame - 4) / 26, 0, 1);
       this.spin = ease.inOutQuad(u) * Math.PI * 2;
     }
+
 
     // Hit-stop shake.
     let shakeX = 0;
@@ -445,7 +476,7 @@ export class ModelAnimator {
     const body = rig.body;
     body.scale.set(1 - sq * 0.5, 1 + sq, 1 - sq * 0.5);
     body.position.set(shakeX, this.spin ? 0.9 : 0, shakeZ);
-    body.rotation.set(-this.spin, 0, 0);
+    body.rotation.set(-this.spin, spinY, 0);
     rig.model.position.y = this.spin ? -0.9 : 0;
 
     this.updateSecondary(dt, la);

@@ -153,6 +153,7 @@ export class GameView {
             this.effects.hit(eye.addScaledVector(toward, 1.4).setY(eye.y - 0.35), e.dir, el.color, el.color2, power * 0.4, false, 0.35);
           } else this.effects.hit(e.pos, e.dir, el.color, el.color2, power, !!e.props.heavy || e.ko);
           audio.play(e.props.heavy || e.ko ? 'heavy' : 'punch', 0.6 + power * 0.5);
+          if (e.attacker.def.weapon === 'hammer' && !e.projectile) audio.play('squeak', 0.8 + power * 0.4);
           if (e.target === pov) {
             this.addTrauma(0.25 + power * 0.6);
             this.feedback.hurt = Math.min(1, 0.4 + power);
@@ -226,6 +227,15 @@ export class GameView {
         case 'ringout':
           audio.play('ringout');
           break;
+        case 'shockwave': {
+          const el = e.attacker.def.element;
+          this.effects.shockwave(e.pos, e.radius, el.color, el.color2);
+          if (e.radius > 2.5) {
+            audio.play('heavy', 0.8);
+            if (e.attacker === pov || pov && pov.pos.distanceTo(e.pos) < e.radius + 3) this.addTrauma(0.35);
+          }
+          break;
+        }
       }
     }
   }
@@ -305,7 +315,8 @@ export class GameView {
     fb.edgeWarn = damp(fb.edgeWarn, edge, 10, dt);
     this.arena.update(dt, fb.edgeWarn);
 
-    this.viewmodel.update(dt, sway, showViewmodel && !!pov && pov.state !== 'ringout');
+    const lyingOrFlying = !!pov && ['ringout', 'tumble', 'knockdown', 'ko', 'getup'].includes(pov.state);
+    this.viewmodel.update(dt, sway, showViewmodel && !!pov && !lyingOrFlying);
 
     this.renderer.clear();
     this.renderer.render(this.scene, this.camera);
@@ -320,7 +331,7 @@ export class GameView {
     const rig = b.rig;
     const visible = rig.root.visible;
     const act = f.action;
-    const strike = !!act && f.state === 'action' && phaseOf(act.def, act.frame).stage === 'strike' && f.def.weapon === 'fists';
+    const strike = !!act && f.state === 'action' && phaseOf(act.def, act.frame).stage === 'strike' && (f.def.weapon === 'fists' || f.def.weapon === 'hammer');
     const hitHand = act?.def.hits?.find((h) => act.frame >= h.start - 1 && act.frame < h.end + 1)?.hand ?? 'R';
     b.trails.L.emitting = visible && strike && (hitHand === 'L' || hitHand === 'B');
     b.trails.R.emitting = visible && strike && (hitHand === 'R' || hitHand === 'B');

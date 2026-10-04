@@ -7,9 +7,10 @@ All third-party assets are CC0 1.0 (public domain). Credit is not required but g
 | [Universal Base Characters](https://quaternius.itch.io/universal-base-characters) (Standard) | Quaternius | CC0 | Character bodies and hairstyles (`public/assets/models/Superhero_*.glb`, `Hair_*.glb`) |
 | [Universal Animation Library](https://quaternius.itch.io/universal-animation-library) (Standard) | Quaternius | CC0 | Animations (`anims1.glb`) |
 | [Universal Animation Library 2](https://quaternius.itch.io/universal-animation-library-2) (Standard) | Quaternius | CC0 | Animations (`anims2.glb`) |
+| [5 Chiptunes (Action)](https://opengameart.org/content/5-chiptunes-action) | Juhani Junkala (SubspaceAudio) | CC0 | BGM (`bgm_menu.mp3` = Title Screen, `bgm_battle.mp3` = Level 1) |
 | [Impact Sounds](https://kenney.nl/assets/impact-sounds), [Sci-fi Sounds](https://kenney.nl/assets/sci-fi-sounds), [Interface Sounds](https://kenney.nl/assets/interface-sounds), [Digital Audio](https://kenney.nl/assets/digital-audio) | Kenney | CC0 | Sound effects (`public/assets/audio`) |
 
-Outfits (jacket, pants, gauntlets, blasters, sneakers), the arena, effects and BGM are made in code for this project.
+Outfits (jacket, pants, gauntlets, blasters, bow, toy hammer, sneakers), the arena, effects and the fallback synth sounds are made in code for this project. Kenney sounds were converted from OGG to MP3 for wider browser support.
 
 ## Rebuilding the models
 

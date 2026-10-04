@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import type { CharacterDef } from '../combat/types';
 import { assets, type ModelKey } from './assets';
-import { buildBlaster } from './blaster';
+import { leadHand } from './clipInfo';
+import { buildBlaster, buildBowMesh, buildToyHammer } from './weapons';
 import { part, toon } from './toon';
 
 const OUTLINE = new THREE.Color(0x1d1b2e);
@@ -69,6 +70,11 @@ export class ModelRig {
   readonly tipR = new THREE.Object3D();
   readonly ponytail: THREE.Group[] = [];
   readonly coatTails: THREE.Group[] = [];
+  /** Scalable weapon (giant hammer ult). */
+  readonly weaponRoot = new THREE.Group();
+  private bow: ReturnType<typeof buildBowMesh> | null = null;
+  private bowHolder: THREE.Group | null = null;
+  readonly bowHand: 'l' | 'r';
 
   constructor(readonly def: CharacterDef) {
     const L = def.look;
@@ -101,9 +107,47 @@ export class ModelRig {
       if (!isEyes && !isBrows) skinnedOutline(m, 0.008);
     }
 
+    this.bowHand = def.weapon === 'bow' ? leadHand('Spell_Simple_Idle_Loop', 0) : 'l';
     this.buildHair();
     this.buildOutfit();
   }
+
+  /** Bow: back toward the hand's forward, limbs along the thumb axis. */
+  private buildBow(holder: THREE.Group) {
+    const bow = buildBowMesh();
+    // Map bow X -> hand forward (Z), Y -> thumb (Y).
+    bow.group.rotation.y = -Math.PI / 2;
+    holder.add(bow.group);
+    this.bow = bow;
+    this.bowHolder = holder;
+  }
+
+  /** Keeps the bow upright and facing forward regardless of the wrist pose. */
+  alignBow() {
+    const h = this.bowHolder;
+    if (!h?.parent) return;
+    const parentQ = h.parent.getWorldQuaternion(new THREE.Quaternion());
+    const want = this.model.getWorldQuaternion(new THREE.Quaternion()).multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, 0.15)));
+    h.quaternion.copy(parentQ.invert().multiply(want));
+  }
+
+  /** Pulls the string toward the other hand while drawing (0 = rest, 1 = fully drawn). */
+  setBowDraw(k: number) {
+    const bow = this.bow;
+    if (!bow) return;
+    if (k <= 0.01) return bow.setNock(null);
+    const other = this.bones[this.bowHand === 'l' ? 'hand_r' : 'hand_l'].getWorldPosition(new THREE.Vector3());
+    bow.group.worldToLocal(other);
+    bow.setNock(bow.rest.clone().lerp(other, Math.min(1, k)));
+  }
+
+
+  /** Squeaky toy hammer (shared builder) on a scalable root for the giant-hammer ult. */
+  private buildHammer(holder: THREE.Group) {
+    holder.add(this.weaponRoot);
+    this.weaponRoot.add(buildToyHammer(this.def.look.topAccent));
+  }
+
 
   private wp(n: BoneName) {
     return this.bones[n].getWorldPosition(new THREE.Vector3());
@@ -237,20 +281,45 @@ export class ModelRig {
       } else {
         const glove = part(new THREE.SphereGeometry(0.06, 12, 10), L.glove, 0.01);
         this.at(`hand_${side}`, glove, ha.clone().lerp(mid, 0.5));
-        // Blaster: barrel along the metacarpals, top toward the thumb.
+        // Hand frame: forward along the metacarpals, up toward the thumb.
         const fwd = mid.clone().sub(ha).normalize();
         const th = P(`thumb_01_${side}`).sub(ha);
         const up = th.sub(fwd.clone().multiplyScalar(th.dot(fwd))).normalize();
         const right = new THREE.Vector3().crossVectors(up, fwd).normalize();
         const basis = new THREE.Matrix4().makeBasis(right, up, fwd);
-        const gun = buildBlaster(0.85);
         const holder = new THREE.Group();
-        holder.add(gun);
-        gun.position.set(0, 0.035, 0.0);
         holder.quaternion.setFromRotationMatrix(basis);
-        this.at(`hand_${side}`, holder, ha.clone().lerp(mid, 0.55));
-        tip.position.set(0, 0.04, 0.3);
-        holder.add(tip);
+        const grip = ha.clone().lerp(mid, 0.55);
+        if (this.def.weapon === 'guns') {
+          const gun = buildBlaster(0.85);
+          holder.add(gun);
+          gun.position.set(0, 0.035, 0.0);
+          this.at(`hand_${side}`, holder, grip);
+          tip.position.set(0, 0.04, 0.3);
+          holder.add(tip);
+        } else if (this.def.weapon === 'bow' && side === this.bowHand) {
+          this.buildBow(holder);
+          this.at(`hand_${side}`, holder, grip);
+          tip.position.set(0, 0, 0.1);
+          holder.add(tip);
+        } else if (this.def.weapon === 'hammer' && side === 'r') {
+          this.buildHammer(holder);
+          this.at(`hand_${side}`, holder, grip);
+          tip.position.set(0, 0.78, 0);
+          this.weaponRoot.add(tip);
+        } else {
+          this.at(`hand_${side}`, tip, grip);
+        }
+      }
+    }
+    if (this.def.weapon === 'bow') {
+      // Quiver on the back.
+      const sp3 = P('spine_03');
+      const q = this.seg('spine_03', sp3.clone().add(new THREE.Vector3(0.12, -0.25, -0.2)), sp3.clone().add(new THREE.Vector3(-0.08, 0.2, -0.2)), (len) => new THREE.CylinderGeometry(0.07, 0.06, len, 12), 0x6b4a2e, 0.01);
+      for (let i = 0; i < 3; i++) {
+        const fl = part(new THREE.ConeGeometry(0.035, 0.1, 4), this.def.element.color2, 0.006);
+        fl.position.set((i - 1) * 0.03, 0.27, 0);
+        q.add(fl);
       }
     }
 

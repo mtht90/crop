@@ -3,7 +3,7 @@ import type { Fighter } from '../combat/fighter';
 import { phaseOf } from '../combat/phase';
 import { clamp, damp, ease, lerp, rand, Spring } from '../core/math';
 import { Trail } from './effects';
-import { buildBlaster } from './blaster';
+import { buildBlaster, buildToyHammer, buildBowMesh } from './weapons';
 import { tex } from './textures';
 import { part } from './toon';
 
@@ -20,6 +20,14 @@ interface ArmState {
 
 type Offset = { p: THREE.Vector3; r: THREE.Euler };
 const off = (): Offset => ({ p: new THREE.Vector3(), r: new THREE.Euler() });
+
+/** Rest positions of the first-person hands per weapon (camera space). */
+const BASE: Record<string, { L: [number, number, number]; R: [number, number, number] }> = {
+  fists: { L: [-0.3, -0.3, -0.62], R: [0.3, -0.3, -0.62] },
+  guns: { L: [-0.27, -0.29, -0.66], R: [0.27, -0.29, -0.66] },
+  bow: { L: [-0.2, -0.24, -0.7], R: [0.2, -0.3, -0.5] },
+  hammer: { L: [0.22, -0.48, -0.56], R: [0.4, -0.44, -0.62] },
+};
 
 /**
  * First-person arms/weapons rendered in their own scene on top of the world.
@@ -44,6 +52,9 @@ export class ViewModel {
   private aura: THREE.Sprite[] = [];
   private fighter: Fighter | null = null;
   private auraColor = new THREE.Color();
+  private bow: ReturnType<typeof buildBowMesh> | null = null;
+  private nocked: THREE.Group | null = null;
+  private hammer: THREE.Group | null = null;
 
   constructor() {
     this.scene.add(new THREE.HemisphereLight(0xffffff, 0x8899cc, 1.6));
@@ -81,7 +92,6 @@ export class ViewModel {
     for (const side of ['L', 'R'] as const) {
       const a = this.arms[side];
       a.root.clear();
-      const s = side === 'L' ? -1 : 1;
       a.trail.setColor(f.def.element.color);
       const sleeve = part(new THREE.CylinderGeometry(0.075, 0.09, 0.42, 14), L.top, 0.008);
       sleeve.rotation.x = Math.PI / 2;
@@ -91,7 +101,33 @@ export class ViewModel {
       cuff.rotation.x = Math.PI / 2;
       cuff.position.set(0, -0.02, 0.1);
       a.root.add(cuff);
-      if (f.def.weapon === 'fists') {
+      const w = f.def.weapon;
+      if (w === 'bow' || w === 'hammer') {
+        const glove = part(new THREE.SphereGeometry(0.07, 12, 10), L.glove, 0.006);
+        glove.position.set(0, -0.02, -0.02);
+        a.root.add(glove);
+        if (w === 'bow' && side === 'L') {
+          const bow = buildBowMesh(0.7);
+          // Back of the bow faces away from the camera, limbs vertical with a slight cant.
+          bow.group.rotation.set(0, Math.PI / 2, 0.18);
+          bow.group.position.set(0, 0, -0.04);
+          a.root.add(bow.group);
+          this.bow = bow;
+          a.tip.position.set(0, 0, -0.1);
+        } else if (w === 'hammer' && side === 'R') {
+          const h = buildToyHammer(L.topAccent);
+          h.position.set(0, -0.06, 0);
+          // Show the bellows in profile rather than the cap face.
+          h.rotation.y = -1.25;
+          h.scale.setScalar(0.62);
+          a.root.add(h);
+          this.hammer = h;
+          a.tip.position.set(0, 0.72, 0);
+          h.add(a.tip);
+        } else {
+          a.tip.position.set(0, 0, -0.08);
+        }
+      } else if (f.def.weapon === 'fists') {
         const fore = part(new THREE.CylinderGeometry(0.058, 0.065, 0.16, 12), L.skin, 0.006);
         fore.rotation.x = Math.PI / 2;
         fore.position.set(0, -0.02, 0.02);
@@ -125,14 +161,31 @@ export class ViewModel {
         a.root.add(gun);
         a.tip.position.set(0, 0.02, -0.3);
       }
-      a.root.add(a.tip);
+      if (!a.tip.parent) a.root.add(a.tip);
       a.flash.position.copy(a.tip.position);
       a.flash.scale.setScalar(0.25);
       a.root.add(a.flash);
+      const b = BASE[f.def.weapon][side];
+      a.base.set(b[0], b[1], b[2]);
       a.root.position.copy(a.base);
-      a.base.x = (f.def.weapon === 'fists' ? 0.3 : 0.27) * s;
-      a.base.y = f.def.weapon === 'fists' ? -0.3 : -0.29;
-      a.base.z = f.def.weapon === 'fists' ? -0.62 : -0.66;
+    }
+    if (f.def.weapon !== 'bow') this.bow = null;
+    if (f.def.weapon !== 'hammer') this.hammer = null;
+    if (this.nocked) this.camera.remove(this.nocked);
+    this.nocked = null;
+    if (f.def.weapon === 'bow') {
+      // Arrow shown on the string while drawing.
+      const g = new THREE.Group();
+      const shaft = part(new THREE.CylinderGeometry(0.008, 0.008, 1, 6), 0x8a5a32, 0);
+      shaft.rotation.x = Math.PI / 2;
+      g.add(shaft);
+      const tipM = part(new THREE.ConeGeometry(0.02, 0.07, 6), 0xe8eef8, 0.004);
+      tipM.rotation.x = -Math.PI / 2;
+      tipM.position.z = -0.52;
+      g.add(tipM);
+      g.visible = false;
+      this.camera.add(g);
+      this.nocked = g;
     }
     this.aura.forEach((s) => this.camera.remove(s));
     this.aura = [];
@@ -267,18 +320,34 @@ export class ViewModel {
         a.base.y + o.p.y + this.swayY.value + this.landDip.value * 0.03,
         a.base.z + o.p.z,
       );
-      a.root.rotation.set(o.r.x + this.swayY.value * 2, o.r.y + this.swayX.value * 2 + (f.def.weapon === 'guns' ? 0.07 * s : 0.12 * s), o.r.z);
+      const yawBias = { fists: 0.12, guns: 0.07, bow: 0.05, hammer: 0.0 }[f.def.weapon] * s;
+      // Hammer held at the lower right, head leaning forward and inward.
+      const restX = f.def.weapon === 'hammer' && side === 'R' ? -0.2 : 0;
+      const restZ = f.def.weapon === 'hammer' && side === 'R' ? 0.22 : 0;
+      a.root.rotation.set(o.r.x + restX + this.swayY.value * 2, o.r.y + this.swayX.value * 2 + yawBias, o.r.z + restZ);
 
       a.flashT -= dt;
       a.flash.visible = a.flashT > 0;
       if (a.flash.visible) a.flash.scale.setScalar(0.22 + Math.random() * 0.12);
 
       // Trail from the fist tip while striking.
-      const strike = f.action && phaseOf(f.action.def, f.action.frame).stage === 'strike' && f.def.weapon === 'fists';
+      const strike = f.action && phaseOf(f.action.def, f.action.frame).stage === 'strike' && (f.def.weapon === 'fists' || (f.def.weapon === 'hammer' && side === 'R'));
       a.trail.emitting = !!strike;
       const tipPos = a.tip.getWorldPosition(new THREE.Vector3());
       this.camera.worldToLocal(tipPos);
       a.trail.update(dt, tipPos, new THREE.Vector3(0, 0, 0));
+    }
+
+    this.updateBow(f);
+    if (this.hammer) {
+      // Giant hammer for the ult.
+      const act = f.action;
+      let k = 1;
+      if (act?.def.anim === 'gigaPiko') {
+        const fr = act.frame;
+        k = fr < 10 ? 1 : fr < 32 ? 1 + 1.6 * ease.outBack((fr - 10) / 22) : fr < 70 ? 2.6 : 2.6 - 1.6 * ease.inOutQuad(Math.min(1, (fr - 70) / 15));
+      }
+      this.hammer.scale.setScalar(k * 0.62);
     }
 
     // Ult ready aura swirling around both hands.
@@ -292,6 +361,35 @@ export class ViewModel {
       sp.position.set(arm.root.position.x + Math.cos(a) * r, arm.root.position.y + Math.sin(a * 1.3) * r, arm.root.position.z - 0.08 + Math.sin(a) * r);
       sp.scale.setScalar(0.04 + Math.abs(Math.sin(a * 2)) * 0.05);
     });
+  }
+
+  /** Bow string follows the right hand while drawing; the arrow sits on the string. */
+  private updateBow(f: Fighter) {
+    const bow = this.bow;
+    if (!bow) return;
+    const act = f.action;
+    let drawing = false;
+    if (act && f.state === 'action' && (act.def.anim === 'drawShot' || act.def.anim === 'triShot' || act.def.anim === 'arrowRain')) {
+      const ph = phaseOf(act.def, act.frame);
+      drawing = ph.stage === 'windup' || (act.def.anim === 'arrowRain' && act.frame < 90 && act.frame % 5 < 3);
+    }
+    this.camera.updateMatrixWorld(true);
+    const hand = this.arms.R.root.getWorldPosition(new THREE.Vector3());
+    if (drawing) {
+      const local = bow.group.worldToLocal(hand.clone());
+      bow.setNock(local);
+    } else bow.setNock(null);
+    if (this.nocked) {
+      this.nocked.visible = drawing;
+      if (drawing) {
+        const grip = bow.group.getWorldPosition(new THREE.Vector3());
+        const a = this.camera.worldToLocal(hand.clone());
+        const b = this.camera.worldToLocal(grip);
+        this.nocked.position.copy(a);
+        this.nocked.lookAt(a.clone().multiplyScalar(2).sub(b));
+        this.nocked.translateZ(-0.45);
+      }
+    }
   }
 
   /** Per-move procedural curves, keyed by animation id. */
@@ -309,7 +407,98 @@ export class ViewModel {
       return lerp(1, 0, ease.inOutQuad(ph.t)) * amt;
     };
 
+    // Hammer swing helper: rotates the arm from a windup angle to a strike angle.
+    const swing = (wind: [number, number, number], hit: [number, number, number], push = 0) => {
+      let k: [number, number, number];
+      let fwd = 0;
+      if (ph.stage === 'windup') {
+        const t = ease.outCubic(ph.t);
+        k = [wind[0] * t, wind[1] * t, wind[2] * t];
+      } else if (ph.stage === 'strike') {
+        const t = ease.outExpo(Math.min(1, ph.t * 1.5));
+        k = [lerp(wind[0], hit[0], t), lerp(wind[1], hit[1], t), lerp(wind[2], hit[2], t)];
+        fwd = push * t;
+      } else {
+        const t = ease.inOutQuad(ph.t);
+        k = [lerp(hit[0], 0, t), lerp(hit[1], 0, t), lerp(hit[2], 0, t)];
+        fwd = push * (1 - t);
+      }
+      o.r.x += k[0];
+      o.r.y += k[1];
+      o.r.z += k[2];
+      o.p.z -= fwd;
+      o.p.y += Math.max(0, k[0]) * 0.08;
+    };
+
     switch (id) {
+      case 'swingA':
+        swing([0.2, 0.9, -0.4], [-0.9, -1.1, -0.5], 0.15);
+        if (side === 'L') o.p.x += o.r.y * 0.1;
+        break;
+      case 'swingB':
+        swing([0.2, -0.8, 0.3], [-0.9, 1.0, 0.2], 0.15);
+        break;
+      case 'smash':
+      case 'airSmash':
+      case 'groundPound':
+      case 'gigaPiko':
+        swing([1.1, -0.2, -0.3], [-1.5, -0.1, -0.35], 0.18);
+        o.p.x += side === 'R' ? -0.08 : 0.04;
+        break;
+      case 'pikoDash':
+        swing([0.5, 0.3, 0], [-1.2, -0.2, -0.3], 0.3);
+        break;
+      case 'heliSpin': {
+        const a = (act.frame / 60) * Math.PI * 2 * 2.5;
+        o.r.z += -1.3;
+        o.p.x += Math.sin(a) * 0.12 - 0.05;
+        o.p.y += 0.12 + Math.cos(a) * 0.05;
+        break;
+      }
+      case 'drawShot':
+      case 'triShot': {
+        if (side === 'R') {
+          let k = 0;
+          if (ph.stage === 'windup') k = ease.outCubic(ph.t);
+          else if (ph.stage === 'strike') k = 1 - ease.outExpo(ph.t);
+          // Full draw toward the cheek, trembling a little while held.
+          o.p.z += 0.2 * k;
+          o.p.x += -0.22 * k;
+          o.p.y += 0.12 * k;
+          if (act.chargeT > 0 && ph.stage === 'windup') o.p.x += (Math.random() - 0.5) * 0.004 * act.chargeLevel;
+          if (ph.stage !== 'windup') o.p.z += 0.05 * Math.sin(Math.min(1, ph.t * 2) * Math.PI);
+        } else if (ph.stage === 'strike') {
+          o.r.x += 0.08 * (1 - ph.t);
+        }
+        break;
+      }
+      case 'arrowRain': {
+        const up = act.frame < 12 ? act.frame / 12 : act.frame < 86 ? 1 : Math.max(0, 1 - (act.frame - 86) / 8);
+        o.r.x += 0.9 * up;
+        o.p.y += 0.18 * up;
+        if (side === 'R') {
+          const k = act.frame < 90 ? ((act.frame % 5) / 5) : 0;
+          o.p.z += 0.15 * (1 - k) * up;
+          o.p.x += -0.18 * up;
+        }
+        break;
+      }
+      case 'rollShot':
+        o.p.y -= 0.1 * Math.sin(Math.min(1, act.frame / 14) * Math.PI);
+        o.r.x += -0.6 * Math.sin(Math.min(1, act.frame / 14) * Math.PI);
+        break;
+      case 'risingUpper':
+        if (side === 'R') swing([-0.3, 0, 0], [1.2, 0, 0], 0.1);
+        break;
+      case 'dashStraight':
+        if (side === 'R') {
+          o.p.z -= 0.3 * Math.max(0, punch(1));
+          o.p.x -= 0.12 * Math.max(0, punch(1));
+        }
+        break;
+      case 'slideShot':
+        o.p.y -= 0.06;
+        break;
       case 'jabL':
       case 'jabR': {
         const lead = id === 'jabL' ? 'L' : 'R';

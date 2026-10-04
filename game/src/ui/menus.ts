@@ -22,14 +22,14 @@ const controlsHtml = `
   <span><kbd>マウス</kbd></span><span>視点</span>
   <span><kbd>左クリック</kbd></span><span>攻撃（長押し連射）</span>
   <span><kbd>右クリック</kbd></span><span>ガード</span>
-  <span><kbd>Space</kbd></span><span>ジャンプ</span>
-  <span><kbd>Shift</kbd></span><span>ダッシュ/回避（攻撃をキャンセル可）</span>
+  <span><kbd>Space</kbd></span><span>ジャンプ（空中でもう一度：上昇技※）</span>
+  <span><kbd>Shift</kbd></span><span>ダッシュ/回避（中にクリックでダッシュ攻撃）</span>
   <span><kbd>E</kbd></span><span>固有スキル</span>
   <span><kbd>Q</kbd></span><span>必殺技（ゲージMAX）</span>
   <span><kbd>R</kbd></span><span>リロード</span>
   <span><kbd>Esc</kbd></span><span>ポーズ</span>
 </div>
-<p style="margin-top:8px;font-size:13px">ふっとばされて着地する瞬間に <kbd>Shift</kbd> で受け身。HPが減るほど吹っ飛びやすくなる！</p>`;
+<p style="margin-top:8px;font-size:13px">※上昇技はブレイズ・ピコのみ。場外に飛ばされても縁まで戻れば登れる。弓は長押しで溜め撃ち。着地の瞬間に <kbd>Shift</kbd> で受け身。</p>`;
 
 /** DOM menus: title, character select, pause and result screens. */
 export class Menus {
@@ -63,7 +63,7 @@ export class Menus {
     const card = (id: string | null, label: string, weapon: string, which: 'player' | 'cpu') => {
       const def = id ? characters[id] : null;
       const color = def ? hex(def.element.color) : '#999';
-      const icon = !def ? '?' : def.weapon === 'fists' ? '✊' : '★';
+      const icon = !def ? '?' : { fists: '✊', guns: '★', bow: '➶', hammer: '♪' }[def.weapon];
       const sel = id && s[which] === id ? 'sel' : '';
       return `<div class="card ${def ? '' : 'locked'} ${sel}" data-id="${id ?? ''}" data-which="${which}">
         <div class="emblem" style="background:${color}">${icon}</div>

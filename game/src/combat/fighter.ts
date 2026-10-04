@@ -35,6 +35,9 @@ export interface ActionInstance {
   /** Set when a melee hit connects so lunges stop on contact. */
   connected?: boolean;
   spawnDone: boolean[];
+  /** Frames spent charging and the resulting 0..1 level. */
+  chargeT: number;
+  chargeLevel: number;
 }
 
 const BUFFER_FRAMES = 8;
@@ -82,6 +85,10 @@ export class Fighter {
   /** Local-space move direction used for locomotion blending. */
   localMove = { x: 0, z: 0 };
   shotCounter = { L: 0, R: 0 };
+
+  /** The air move (recovery) has been used since the last landing. */
+  airMoveUsed = false;
+  attackHeld = false;
 
   private buffer = { attack: 0, dash: 0, jump: 0, skill: 0, ult: 0 };
   private comboChain: string | null = null;
@@ -139,6 +146,7 @@ export class Fighter {
     this.action = null;
     this.invuln = 0;
     this.dead = false;
+    this.airMoveUsed = false;
     this.setState('locked');
     this.buffer = { attack: 0, dash: 0, jump: 0, skill: 0, ult: 0 };
   }
@@ -158,6 +166,8 @@ export class Fighter {
       frame: 0,
       hitDone: (def.hits ?? []).map(() => false),
       spawnDone: (def.spawns ?? []).map(() => false),
+      chargeT: 0,
+      chargeLevel: 0,
     };
     this.actionSerial++;
     this.state = 'action';
@@ -202,6 +212,11 @@ export class Fighter {
         this.updateAction(desired, opponent);
         break;
       case 'dash': {
+        if (this.def.dashAttack && this.buffer.attack > 0 && this.stateT >= 3) {
+          this.buffer.attack = 0;
+          this.startAction(this.def.dashAttack);
+          break;
+        }
         const t = this.stateT / DASH_FRAMES;
         const speed = DASH_SPEED * (1 - t * t * 0.7);
         this.vel.x = this.dashDir.x * speed;
@@ -222,6 +237,11 @@ export class Fighter {
           const drag = Math.exp(-1.2 * TICK);
           this.vel.x *= drag;
           this.vel.z *= drag;
+        }
+        // Launched off the stage (or a long flight): regain control so the fighter can try to recover.
+        if (!this.grounded && !this.dead && this.stateT >= 18 && this.vel.y < 0 && (Math.hypot(this.pos.x, this.pos.z) > ARENA_RADIUS || this.stateT > 45)) {
+          this.setState('free');
+          break;
         }
         if (this.grounded && this.stateT > 3) {
           this.landCounter++;
@@ -290,9 +310,10 @@ export class Fighter {
   private readBuffers(intent: Intent) {
     const b = this.buffer;
     for (const k of Object.keys(b) as (keyof typeof b)[]) if (b[k] > 0) b[k]--;
+    this.attackHeld = intent.attack;
     if (intent.attackPressed) b.attack = BUFFER_FRAMES;
     // Shooters auto-fire while held.
-    if (intent.attack && this.def.weapon === 'guns') b.attack = Math.max(b.attack, 1);
+    if (intent.attack && this.def.autoFire) b.attack = Math.max(b.attack, 1);
     if (intent.dashPressed) b.dash = BUFFER_FRAMES;
     if (intent.jumpPressed) b.jump = BUFFER_FRAMES;
     if (intent.skillPressed) b.skill = BUFFER_FRAMES;
@@ -355,6 +376,7 @@ export class Fighter {
     this.guarding = intent.guard && this.grounded && this.guardHp > 0;
 
     if (this.tryStartSpecial()) return;
+    if (this.tryAirMove()) return;
     if (b.jump > 0 && this.grounded) {
       b.jump = 0;
       this.vel.y = this.def.jumpSpeed;
@@ -370,7 +392,7 @@ export class Fighter {
         b.attack = 0;
         const id = !this.grounded && this.def.airBasic ? this.def.airBasic : this.def.basic;
         // Keep alternating hands for shooters.
-        const next = this.def.weapon === 'guns' && this.comboChain ? this.comboChain : id;
+        const next = this.def.autoFire && this.comboChain ? this.comboChain : id;
         this.startAction(next);
         return;
       }
@@ -380,16 +402,33 @@ export class Fighter {
     else this.applyAirControl(desired, 22);
   }
 
+  /** Air Space: the character's rising move, once per airtime. */
+  private tryAirMove() {
+    if (this.grounded || !this.def.recovery || this.airMoveUsed || this.buffer.jump <= 0) return false;
+    this.buffer.jump = 0;
+    this.airMoveUsed = true;
+    this.startAction(this.def.recovery);
+    return true;
+  }
+
   private updateAction(desired: Vector3, opponent: Fighter) {
     const a = this.action!;
     const def = a.def;
-    a.frame++;
+    // Hold-to-charge: pause on the charge frame while the button stays down.
+    const ch = def.charge;
+    if (ch && a.frame === ch.at && this.attackHeld && a.chargeT < ch.max) {
+      a.chargeT++;
+      a.chargeLevel = a.chargeT / ch.max;
+    } else {
+      a.frame++;
+    }
 
     // Cancels: almost anything can be cancelled into dash/skill/ult.
     if (!def.committed) {
       if (def.kind === 'attack' && this.tryStartSpecial()) return;
       if (def.kind === 'skill' && this.tryStartSpecial(true)) return;
-      if (def.kind === 'attack' && this.buffer.jump > 0 && this.grounded && this.def.weapon === 'guns') {
+      if (def.id !== this.def.recovery && this.tryAirMove()) return;
+      if (def.kind === 'attack' && this.buffer.jump > 0 && this.grounded && this.def.autoFire) {
         // Shooters can jump mid-fire.
         this.buffer.jump = 0;
         this.vel.y = this.def.jumpSpeed;
@@ -435,13 +474,17 @@ export class Fighter {
         this.vel.y = motion.up;
         this.grounded = false;
       }
+      if (motion.lift !== undefined) {
+        this.vel.y = Math.max(this.vel.y, motion.lift);
+        this.grounded = false;
+      }
     } else if (this.grounded) {
       this.applyGroundControl(desired.multiplyScalar(scale), 50);
     } else {
       this.applyAirControl(desired.multiplyScalar(Math.max(scale, 0.4)), 12);
     }
 
-    if (a.frame >= def.total) {
+    if (a.frame >= def.total || (def.landCancel && this.grounded && a.frame > 4)) {
       this.setState('free');
     }
   }
@@ -489,7 +532,28 @@ export class Fighter {
 
     this.pos.addScaledVector(this.vel, TICK);
 
-    const horiz = Math.hypot(this.pos.x, this.pos.z);
+    let horiz = Math.hypot(this.pos.x, this.pos.z);
+    const prevHoriz = Math.hypot(this.prevPos.x, this.prevPos.z);
+    // Below the lip and coming back from outside: climb up if close, otherwise hit the wall.
+    if (horiz <= ARENA_RADIUS && this.pos.y < -0.3 && prevHoriz > ARENA_RADIUS - 0.05) {
+      if (this.pos.y > -1.5) {
+        this.pos.y = 0;
+        this.prevPos.y = 0;
+        this.vel.y = Math.max(this.vel.y, 0);
+      } else {
+        const k = (ARENA_RADIUS + 0.02) / horiz;
+        this.pos.x *= k;
+        this.pos.z *= k;
+        const nx = this.pos.x / (ARENA_RADIUS + 0.02);
+        const nz = this.pos.z / (ARENA_RADIUS + 0.02);
+        const radial = this.vel.x * nx + this.vel.z * nz;
+        if (radial < 0) {
+          this.vel.x -= radial * nx;
+          this.vel.z -= radial * nz;
+        }
+        horiz = ARENA_RADIUS + 0.02;
+      }
+    }
     const onFloor = horiz <= ARENA_RADIUS;
     if (onFloor && this.pos.y <= 0 && this.prevPos.y >= -0.3) {
       if (!wasGrounded && this.vel.y < -4) {
@@ -499,6 +563,7 @@ export class Fighter {
       this.pos.y = 0;
       if (this.vel.y < 0) this.vel.y = 0;
       this.grounded = true;
+      this.airMoveUsed = false;
     } else if (this.pos.y > 0.001 || !onFloor) {
       this.grounded = false;
     }
@@ -517,6 +582,8 @@ export class Fighter {
     this.lastHitStrength = strength;
     this.hitCounter++;
     this.guarding = false;
+    // Getting hit refreshes the air move so launched fighters can try to recover.
+    this.airMoveUsed = false;
     const launch = kb >= 9 || up >= 6 || this.hp <= 0;
     this.vel.set(dir.x * kb, up, dir.z * kb);
     if (launch) {

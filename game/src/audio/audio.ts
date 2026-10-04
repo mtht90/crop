@@ -1,7 +1,7 @@
 /**
  * Sound effects: CC0 samples by Kenney (kenney.nl) where available, with a
  * synthesized fallback for cues without a sample (or if decoding fails).
- * BGM is still synthesized.
+ * BGM: CC0 chiptunes by Juhani Junkala (synthesized loop until they load).
  */
 export type Sfx =
   | 'punch'
@@ -20,7 +20,8 @@ export type Sfx =
   | 'ringout'
   | 'ult'
   | 'reload'
-  | 'select';
+  | 'select'
+  | 'squeak';
 
 const SAMPLES: Partial<Record<Sfx, { files: string[]; layer?: boolean; gain?: number }>> = {
   punch: { files: ['impactPunch_medium_000', 'impactPunch_medium_001', 'impactPunch_medium_002', 'impactPunch_medium_003'] },
@@ -47,6 +48,8 @@ export class AudioEngine {
   private musicBus!: GainNode;
   private noise!: AudioBuffer;
   private musicTimer: number | null = null;
+  private musicSource: AudioBufferSourceNode | null = null;
+  private musicKind: 'menu' | 'battle' | null = null;
   private nextNote = 0;
   private step = 0;
   volume = 0.7;
@@ -79,12 +82,14 @@ export class AudioEngine {
 
   private async loadSamples() {
     const ctx = this.ctx!;
-    const names = new Set(Object.values(SAMPLES).flatMap((s) => s!.files));
+    const names = new Set([...Object.values(SAMPLES).flatMap((s) => s!.files), 'bgm_menu', 'bgm_battle']);
     await Promise.all(
       [...names].map(async (n) => {
         try {
-          const res = await fetch(`${import.meta.env.BASE_URL}assets/audio/${n}.ogg`);
+          const res = await fetch(`${import.meta.env.BASE_URL}assets/audio/${n}.mp3`);
           this.buffers.set(n, await ctx.decodeAudioData(await res.arrayBuffer()));
+          // Swap the synthesized placeholder for the real track once it arrives.
+          if (n === `bgm_${this.musicKind}` && this.musicTimer !== null) this.startMusic(this.musicKind!);
         } catch {
           /* fall back to the synthesized cue */
         }
@@ -221,6 +226,11 @@ export class AudioEngine {
         this.tone('square', 600, 600, 0.03, 0.15);
         this.tone('square', 900, 900, 0.03, 0.15, 0.12);
         break;
+      case 'squeak':
+        // Toy hammer "piko!": two quick rising chirps.
+        this.tone('square', 900, 1800, 0.06, 0.25 * k);
+        this.tone('sine', 1300, 2600, 0.08, 0.3 * k, 0.05);
+        break;
       case 'select':
         this.tone('triangle', 660, 990, 0.1, 0.25);
         break;
@@ -229,6 +239,23 @@ export class AudioEngine {
 
   /** Simple upbeat chiptune-ish loop as placeholder BGM. */
   startMusic(kind: 'menu' | 'battle') {
+    this.musicKind = kind;
+    if (!this.ctx) return;
+    const track = this.buffers.get(`bgm_${kind}`);
+    if (track) {
+      // CC0 chiptune by Juhani Junkala, looped.
+      this.stopMusic();
+      const src = this.ctx.createBufferSource();
+      src.buffer = track;
+      src.loop = true;
+      // Skip MP3 encoder padding at the edges for a cleaner loop.
+      src.loopStart = 0.05;
+      src.loopEnd = Math.max(0.1, track.duration - 0.05);
+      src.connect(this.musicBus);
+      src.start(0, 0.05);
+      this.musicSource = src;
+      return;
+    }
     if (!this.ctx) return;
     this.stopMusic();
     const ctx = this.ctx;
@@ -268,6 +295,14 @@ export class AudioEngine {
   stopMusic() {
     if (this.musicTimer !== null) window.clearInterval(this.musicTimer);
     this.musicTimer = null;
+    if (this.musicSource) {
+      try {
+        this.musicSource.stop();
+      } catch {
+        /* already stopped */
+      }
+      this.musicSource = null;
+    }
   }
 }
 
