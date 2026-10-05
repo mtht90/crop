@@ -267,7 +267,7 @@ export class CombatWorld {
           this.events.push({ type: 'projectileEnd', projectile: p });
           continue;
         }
-        p.vel.copy(home.multiplyScalar(Math.min(34, d / TICK) / d));
+        p.vel.copy(home.multiplyScalar(Math.min(52, d / TICK) / d));
         p.pos.addScaledVector(p.vel, TICK);
         keep.push(p);
         continue;

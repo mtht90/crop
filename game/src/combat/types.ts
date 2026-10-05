@@ -149,6 +149,8 @@ export interface Look {
   hairModel: 'hairBuns' | 'hairLong' | 'hairParted' | 'hairBuzzed' | 'hairBuzzedF';
   /** CC0 outfit (Quaternius Modular Character Outfits) tinted with the colors above; replaces the code-built clothes. */
   outfit?: { set: 'ranger' | 'peasant'; parts: OutfitPart[]; mix?: { set: 'ranger' | 'peasant'; parts: OutfitPart[] } };
+  /** Painted face details (see render/face.ts). */
+  face?: FaceLook;
   /** CC0 beard from the base-character kit. */
   beard?: boolean;
   /** Code-built head accessories. */
@@ -229,3 +231,17 @@ export const emptyIntent = (): Intent => ({
   ultPressed: false,
   reloadPressed: false,
 });
+
+/** Details painted onto the base face texture so the shared head reads as different people. */
+export interface FaceLook {
+  /** Paint over the baked stubble (male head). */
+  shave?: boolean;
+  freckles?: boolean;
+  /** Cheek blush strength 0..1. */
+  blush?: number;
+  lips?: number;
+  /** Dark upper-lid liner. */
+  liner?: boolean;
+  mole?: boolean;
+  marks?: { kind: 'scar' | 'plaster' | 'stripes' | 'star' | 'heart' | 'noseBand'; color: number; side?: 1 | -1 }[];
+}

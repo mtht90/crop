@@ -125,7 +125,7 @@ export const star: CharacterDef = {
   ult: 'starStorm',
   airBasic: 'burst',
   look: {
-    skin: 0xf7cfae,
+    skin: 0xf7d3b8,
     hair: 0xffcf4a,
     top: 0x2f6fe0,
     topAccent: 0xffffff,
@@ -134,6 +134,7 @@ export const star: CharacterDef = {
     glove: 0x2b2b3d,
     eyes: 0x2a7fe0,
     hairStyle: 'spiky',
+    face: { shave: true, marks: [{ kind: 'star', color: 0xffd22e, side: 1 }] },
     body: 'male',
     hairModel: 'hairBuzzed',
     outfit: { set: 'peasant', parts: ['body', 'arms', 'legs', 'feet'] },

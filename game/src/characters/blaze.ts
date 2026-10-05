@@ -137,7 +137,7 @@ export const blaze: CharacterDef = {
   ult: 'burstRush',
   airBasic: 'airPunch',
   look: {
-    skin: 0xffd2b0,
+    skin: 0xd9a27c,
     hair: 0x7a4426,
     top: 0xe8463c,
     topAccent: 0xffffff,
@@ -146,6 +146,7 @@ export const blaze: CharacterDef = {
     glove: 0x2b2b3d,
     eyes: 0x6b3a1e,
     hairStyle: 'ponytail',
+    face: { blush: 0.3, marks: [{ kind: 'plaster', color: 0xf2e6d0, side: 1 }] },
     body: 'female',
     hairModel: 'hairParted',
     outfit: { set: 'peasant', parts: ['body', 'arms', 'legs', 'feet'] },

@@ -90,7 +90,7 @@ export const arrowChar: CharacterDef = {
   ult: 'arrowRain',
   airBasic: 'drawShot',
   look: {
-    skin: 0xf3c9a4,
+    skin: 0xc58f66,
     hair: 0x5a3a24,
     top: 0x2f9e5e,
     topAccent: 0xf2e6c9,
@@ -99,6 +99,7 @@ export const arrowChar: CharacterDef = {
     glove: 0x6b4a2e,
     eyes: 0x2f9e5e,
     hairStyle: 'spiky',
+    face: { marks: [{ kind: 'stripes', color: 0x2f6e3c }] },
     body: 'male',
     hairModel: 'hairParted',
     outfit: { set: 'ranger', parts: ['body', 'arms', 'bracer', 'belt', 'legs', 'feet', 'hood', 'pauldron'] },

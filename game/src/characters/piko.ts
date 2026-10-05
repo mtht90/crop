@@ -133,7 +133,7 @@ export const piko: CharacterDef = {
   ult: 'gigaPiko',
   airBasic: 'airSmash',
   look: {
-    skin: 0xffd9c0,
+    skin: 0xffe4d2,
     hair: 0xff8fb8,
     top: 0xffd84a,
     topAccent: 0xff4f8b,
@@ -142,6 +142,7 @@ export const piko: CharacterDef = {
     glove: 0xffffff,
     eyes: 0xff4f8b,
     hairStyle: 'spiky',
+    face: { freckles: true, blush: 0.9, lips: 0xff7fa0 },
     body: 'female',
     hairModel: 'hairBuns',
     outfit: { set: 'peasant', parts: ['body', 'arms', 'legs', 'feet'] },

@@ -3,6 +3,7 @@ import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import type { CharacterDef } from '../combat/types';
 import { assets, type ModelKey } from './assets';
 import { skinnedOutline } from './charModel';
+import { skinTint } from './face';
 import { keepTriangles } from './skinUtil';
 import { toon } from './toon';
 
@@ -39,7 +40,7 @@ export function buildFpHand(def: CharacterDef, side: 'L' | 'R', grip: number) {
     keepTriangles(m, (n) => keep.has(n));
     const src = m.material as THREE.MeshStandardMaterial;
     const mat = toon(0xffffff, { map: src.map ?? undefined, rim: 0.3, soft: true }).clone();
-    mat.color.setRGB(1.35, 1.22, 1.15);
+    mat.color.copy(skinTint(def.look.skin));
     m.material = mat;
     m.frustumCulled = false;
     m.renderOrder = 1;

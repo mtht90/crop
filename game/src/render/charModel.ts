@@ -4,6 +4,7 @@ import type { CharacterDef, OutfitPart } from '../combat/types';
 import { assets, type ModelKey } from './assets';
 import { leadHand } from './clipInfo';
 import { buildBlaster, buildBowMesh, buildBoxingGlove, buildHookGun, buildKatana, buildSaya, buildToyHammer, buildUmbrella, buildYoyo, KATANA_TIP_Y } from './weapons';
+import { eyeTexture, faceTexture, skinTint } from './face';
 import { keepTriangles, rebindToBones } from './skinUtil';
 import { addOutline, part, toon } from './toon';
 
@@ -108,9 +109,10 @@ export class ModelRig {
       const isEyes = /eye/i.test(m.name) && !/brow/i.test(m.name);
       const isBrows = /brow/i.test(m.name);
       const color = isBrows ? L.hair : 0xffffff;
-      const mat = toon(color, { map: isBrows ? undefined : (src.map ?? undefined), rim: isEyes ? 0 : 0.3, soft: !isBrows }).clone();
-      // The CC0 skin texture is fairly dark under toon shading; brighten it a bit.
-      if (!isEyes && !isBrows) mat.color.setRGB(1.35, 1.22, 1.15);
+      // Per-character skin: painted face details on a copy of the texture, tinted to the skin tone.
+      const map = isBrows || !src.map ? undefined : isEyes ? eyeTexture(def, src.map) : faceTexture(def, src.map);
+      const mat = toon(color, { map, rim: isEyes ? 0 : 0.3, soft: !isBrows }).clone();
+      if (!isEyes && !isBrows) mat.color.copy(skinTint(L.skin));
       m.material = mat;
       m.castShadow = true;
       m.frustumCulled = false;

@@ -122,7 +122,7 @@ export const zip: CharacterDef = {
   ult: 'reelIn',
   airBasic: 'hookShot',
   look: {
-    skin: 0xc98d62,
+    skin: 0x7c4e33,
     hair: 0x2b1d14,
     top: 0xff8a1f,
     topAccent: 0x2fd0ff,
@@ -131,6 +131,7 @@ export const zip: CharacterDef = {
     glove: 0x2b2b3d,
     eyes: 0x2b1d14,
     hairStyle: 'spiky',
+    face: { marks: [{ kind: 'noseBand', color: 0xf2e6d0 }] },
     body: 'male',
     hairModel: 'hairBuzzed',
     outfit: { set: 'ranger', parts: ['body', 'arms', 'bracer', 'belt', 'legs', 'feet', 'pauldron'] },

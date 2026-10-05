@@ -121,7 +121,7 @@ export const lala: CharacterDef = {
   ult: 'giantYoyo',
   airBasic: 'airYoyo',
   look: {
-    skin: 0xffdcc4,
+    skin: 0x9c6644,
     hair: 0x7a3cff,
     top: 0x19c9b8,
     topAccent: 0xff5fd2,
@@ -130,6 +130,7 @@ export const lala: CharacterDef = {
     glove: 0xffffff,
     eyes: 0xff5fd2,
     hairStyle: 'spiky',
+    face: { blush: 0.5, lips: 0xd0508f, liner: true, marks: [{ kind: 'heart', color: 0xff5fd2, side: 1 }] },
     body: 'female',
     hairModel: 'hairLong',
     outfit: { set: 'peasant', parts: ['body', 'arms', 'legs', 'feet'] },

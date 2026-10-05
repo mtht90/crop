@@ -79,7 +79,7 @@ const actions: Record<string, ActionDef> = {
     kind: 'skill',
     anim: 'umbrellaToss',
     total: 26,
-    spawns: [{ frame: 9, hand: 'R', speed: 21, radius: 0.75, life: 100, visual: 'umbrella', homing: 2.6, returns: true, damage: 72, knockback: 10, knockUp: 6, hitstun: 28, hitstop: 9, heavy: true, guardDamage: 35 }],
+    spawns: [{ frame: 9, hand: 'R', speed: 26, radius: 0.75, life: 42, visual: 'umbrella', homing: 3.2, returns: true, damage: 72, knockback: 10, knockUp: 6, hitstun: 28, hitstop: 9, heavy: true, guardDamage: 35 }],
     moveScale: 0.5,
   },
   // (Former E) hop straight up, then float down under the open umbrella (a little steering).
@@ -130,7 +130,7 @@ export const ameri: CharacterDef = {
   skill: 'umbrellaToss',
   ult: 'shieldFire',
   look: {
-    skin: 0xffe0cc,
+    skin: 0xfff0e6,
     hair: 0xffe08a,
     top: 0xb9a3ff,
     topAccent: 0xffffff,
@@ -139,6 +139,7 @@ export const ameri: CharacterDef = {
     glove: 0xffffff,
     eyes: 0x6b4ad6,
     hairStyle: 'spiky',
+    face: { liner: true, mole: true, lips: 0xb0304f, blush: 0.35 },
     body: 'female',
     hairModel: 'hairBuns',
     outfit: { set: 'peasant', parts: ['body', 'arms', 'legs', 'feet'] },

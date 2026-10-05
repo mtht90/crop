@@ -127,7 +127,7 @@ export const kagetsu: CharacterDef = {
   ult: 'getsuei',
   airBasic: 'airSlash',
   look: {
-    skin: 0xf2d0b4,
+    skin: 0xeec7a6,
     hair: 0x1d1d2b,
     top: 0x2a3566,
     topAccent: 0xf2f4ff,
@@ -136,6 +136,7 @@ export const kagetsu: CharacterDef = {
     glove: 0x1b1b26,
     eyes: 0x3b4cc0,
     hairStyle: 'ponytail',
+    face: { shave: true, liner: true, marks: [{ kind: 'scar', color: 0x8e3f3c, side: 1 }] },
     body: 'male',
     hairModel: 'hairParted',
     // Ranger jacket as a haori, peasant trousers as hakama, an obi sash on top.
