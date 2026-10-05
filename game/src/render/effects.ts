@@ -344,7 +344,7 @@ export class Effects {
         const hookVis = p.visual === 'hook';
         // Arrows and hooks are oriented meshes; everything else is a spinning star sprite.
         const arrow = p.visual === 'arrow' || hookVis;
-        const core: THREE.Object3D = hookVis ? buildHookHead(1.2 * p.size) : arrow ? buildArrow(c1, p.size) : new THREE.Sprite(spriteMat(tex.star(), 0xffffff));
+        const core: THREE.Object3D = hookVis ? buildHookHead(2.4 * p.size) : arrow ? buildArrow(c1, p.size) : new THREE.Sprite(spriteMat(tex.star(), 0xffffff));
         const glow = new THREE.Sprite(spriteMat(fx('soft'), c1));
         core.renderOrder = glow.renderOrder = 6;
         const trail = new Trail(c2, (arrow ? 0.06 : 0.12) * p.size, arrow ? 0.12 : 0.09, 10);
@@ -380,6 +380,18 @@ export class Effects {
     this.groundRing(ground.clone().setY(0.1), 0xfff6e6, 0.6, radius * 1.3, fx('smokeRing'), false);
     if (radius > 2.5) this.debris(ground, Math.round(radius * 1.5));
     this.dust(ground, Math.round(4 + radius * 2), 0.6 + radius * 0.25);
+  }
+
+  /** Suction cup sticking: a quick ring and a flash at the contact point. */
+  stick(pos: THREE.Vector3, color: number) {
+    {
+      const { s, mat } = this.sprite(fx('ring'), color, pos);
+      this.add(s, mat, { life: 0.3, scale0: 0.3, scale1: 2.2 });
+    }
+    {
+      const { s, mat } = this.sprite(fx('flash'), 0xffffff, pos);
+      this.add(s, mat, { life: 0.14, scale0: 0.5, scale1: 1.4, scaleEase: 'pop' });
+    }
   }
 
   /** Small pop where a projectile expired. */

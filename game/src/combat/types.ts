@@ -153,6 +153,8 @@ export interface CharacterDef {
   dashAttack?: string;
   /** Push-back (m/s) per shot that hits the floor or a floating rock nearby (not the opponent). */
   recoil?: number;
+  /** Attack performed when clicking while guarding (fires through the umbrella shield); optional. */
+  guardAttack?: string;
   /** Holding jump in the air caps the fall speed at this value (umbrella glide). */
   glide?: number;
   maxHp: number;

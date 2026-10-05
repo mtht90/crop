@@ -10,6 +10,7 @@ import { Effects, Trail } from './effects';
 import { ModelRig } from './charModel';
 import { ModelAnimator } from './modelAnimator';
 import { tex } from './textures';
+import { buildHookHead } from './weapons';
 import { ViewModel } from './viewmodel';
 
 export interface ViewFeedback {
@@ -31,8 +32,10 @@ interface RigBundle {
   ghostT: number;
   twirlT: number;
   aura: THREE.Sprite[];
-  /** Grappling rope (Zip). */
-  rope: THREE.Line;
+  /** Grappling cord (Zip): a thick tube between the launcher and the cup. */
+  rope: THREE.Mesh;
+  /** Suction cup stuck where the grapple latched. */
+  cup: THREE.Object3D;
 }
 
 /** Owns the Three.js renderer: world scene, first-person camera and viewmodel. */
@@ -107,7 +110,7 @@ export class GameView {
   /** Attach a combat world. `pov` is the first-person fighter (its rig is hidden). */
   bind(world: CombatWorld, pov: Fighter | null) {
     for (const r of this.rigs) {
-      this.scene.remove(r.rig.root, r.trails.L.mesh, r.trails.R.mesh, r.rope);
+      this.scene.remove(r.rig.root, r.trails.L.mesh, r.trails.R.mesh, r.rope, r.cup);
       r.aura.forEach((s) => this.scene.remove(s));
     }
     this.effects.clear();
@@ -126,11 +129,16 @@ export class GameView {
         this.scene.add(s);
         aura.push(s);
       }
-      const rope = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineBasicMaterial({ color: 0x2b2b3d }));
+      const ropeGeo = new THREE.CylinderGeometry(1, 1, 1, 8, 1, true);
+      ropeGeo.translate(0, 0.5, 0);
+      const rope = new THREE.Mesh(ropeGeo, new THREE.MeshBasicMaterial({ color: 0x23233a }));
       rope.frustumCulled = false;
       rope.visible = false;
       this.scene.add(rope);
-      return { fighter: f, rig, anim: new ModelAnimator(rig, f), trails, ghostT: 0, twirlT: 0, aura, rope };
+      const cup = buildHookHead(1.3);
+      cup.visible = false;
+      this.scene.add(cup);
+      return { fighter: f, rig, anim: new ModelAnimator(rig, f), trails, ghostT: 0, twirlT: 0, aura, rope, cup };
     });
     if (pov) {
       this.viewmodel.setFighter(pov);
@@ -268,7 +276,8 @@ export class GameView {
           break;
         }
         case 'grapple': {
-          this.effects.fizzle(e.pos.clone(), e.fighter.def.element.color2);
+          // "Thwock": the cup sticks.
+          this.effects.stick(e.pos.clone(), e.fighter.def.element.color2);
           this.effects.dust(e.pos.clone(), 3, 0.5);
           audio.play(e.onFighter ? 'punch' : 'land', 0.6);
           if (e.fighter === pov) this.fovKick.impulse(22);
@@ -358,7 +367,7 @@ export class GameView {
       const n = (o: number) => Math.sin(this.time * 47 + o) * Math.sin(this.time * 31 + o * 2);
       this.camera.rotation.order = 'YXZ';
       this.camera.rotation.set(look.pitch + extraPitch + n(1) * 0.05 * shake, look.yaw + n(2) * 0.05 * shake, extraRoll + n(3) * 0.06 * shake);
-      const speedK = pov.state === 'dash' ? 1 : pov.action?.def.motion?.some((m) => m.forward > 10 && pov.action!.frame >= m.start && pov.action!.frame < m.end) ? 0.8 : 0;
+      const speedK = pov.state === 'dash' || (pov.grapple && !pov.grapple.forced) ? 1 : pov.action?.def.motion?.some((m) => m.forward > 10 && pov.action!.frame >= m.start && pov.action!.frame < m.end) ? 0.8 : 0;
       fb.speed = damp(fb.speed, speedK, speedK > fb.speed ? 30 : 6, dt);
       this.camera.fov = 78 + this.fovKick.value * 0.25 + fb.speed * 6;
       this.camera.updateProjectionMatrix();
@@ -396,6 +405,8 @@ export class GameView {
     b.rope.visible = !!target;
     b.anim.hookOut = !!target;
     if (f === this.pov) this.viewmodel.hookOut = !!target;
+    // The cup stays stuck on the surface (or the opponent) while reeling in.
+    b.cup.visible = !proj && !!target;
     if (!target) return;
     let start: THREE.Vector3;
     if (f === this.pov) {
@@ -403,10 +414,18 @@ export class GameView {
       start = f.eye.addScaledVector(right, 0.3).addScaledVector(f.aimDir(), 0.6);
       start.y -= 0.3;
     } else start = b.rig.tipR.getWorldPosition(new THREE.Vector3());
-    const pos = b.rope.geometry.attributes.position as THREE.BufferAttribute;
-    pos.setXYZ(0, start.x, start.y, start.z);
-    pos.setXYZ(1, target.x, target.y, target.z);
-    pos.needsUpdate = true;
+    const dir = target.clone().sub(start);
+    const len = Math.max(0.01, dir.length());
+    dir.divideScalar(len);
+    const thick = f === this.pov ? 0.03 : 0.05;
+    b.rope.position.copy(start);
+    b.rope.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+    b.rope.scale.set(thick, len, thick);
+    if (b.cup.visible) {
+      // Mouth against the surface, stem pointing back along the cord.
+      b.cup.position.copy(target).addScaledVector(dir, -0.05);
+      b.cup.lookAt(target.clone().add(dir));
+    }
   }
 
   private updateRigFx(b: RigBundle, dt: number) {
@@ -425,7 +444,7 @@ export class GameView {
     b.trails.R.update(dt, rig.tipR.getWorldPosition(new THREE.Vector3()), cam);
 
     // Dash / lunge afterimages.
-    const lunging = !!act?.def.motion?.some((m) => m.forward > 10 && act.frame >= m.start && act.frame < m.end);
+    const lunging = !!f.grapple || !!act?.def.motion?.some((m) => m.forward > 10 && act.frame >= m.start && act.frame < m.end);
     if (visible && (f.state === 'dash' || lunging)) {
       b.ghostT -= dt;
       if (b.ghostT <= 0) {
@@ -435,7 +454,7 @@ export class GameView {
     } else b.ghostT = 0;
 
     // Swirl rings around spinning attacks.
-    if (visible && (act?.def.anim === 'heliSpin' || act?.def.anim === 'typhoon' || act?.def.anim === 'aroundWorld')) {
+    if (visible && (act?.def.anim === 'heliSpin' || act?.def.anim === 'aroundWorld')) {
       b.twirlT -= dt;
       if (b.twirlT <= 0) {
         b.twirlT = 0.07;

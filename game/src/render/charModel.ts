@@ -326,7 +326,7 @@ export class ModelRig {
           this.weaponRoot.add(u.group);
           this.setUmbrellaOpen = u.setOpen;
           this.at(`hand_${side}`, holder, grip);
-          tip.position.set(0, 1.0, 0);
+          tip.position.set(0, u.tipY, 0);
           this.weaponRoot.add(tip);
         } else if (this.def.weapon === 'grapple' && side === 'r') {
           const gun = buildHookGun(0.85);

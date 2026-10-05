@@ -232,6 +232,17 @@ export class ModelAnimator {
     if (this.outcome === 'lose' && f.grounded && f.state !== 'ko' && f.state !== 'knockdown') {
       return { layers: [{ clip: 'Idle_No_Loop', time: this.time % 2.5, weight: 1 }], key: 'lose', fade: 0.4 };
     }
+    if (f.grapple && !f.grapple.forced && f.state === 'free') {
+      // Reeling in: launcher arm locked forward, legs tucked like a zip-line ride.
+      return {
+        layers: [
+          { clip: 'Jump_Loop', time: 0.3, weight: 1 },
+          { clip: 'Pistol_Aim_Neutral', time: 0.05, weight: 3, upper: true },
+        ],
+        key: 'grapple',
+        fade: 0.05,
+      };
+    }
     switch (f.state) {
       case 'action':
         return this.actionOverlay();
@@ -336,8 +347,7 @@ export class ModelAnimator {
         const t = fr < 66 ? c * 0.5 * ((fr - 62) / 4) : fr < 71 ? c * 0.5 + c * 0.5 * ease.outExpo((fr - 66) / 5) : Math.min(d, c + ((fr - 71) / 60) * 0.8);
         return { layers: [{ clip: 'Sword_Regular_C', time: t, weight: 1 }], key: `${key}-fin`, fade: 0.03 };
       }
-      case 'aroundWorld':
-      case 'typhoon': {
+      case 'aroundWorld': {
         const d = assets.clips.Sword_Regular_A.duration;
         return { layers: [{ clip: 'Sword_Regular_A', time: d * 0.45, weight: 1 }], key, fade: 0.06 };
       }
@@ -363,7 +373,9 @@ export class ModelAnimator {
         const t = hitAt < 0 ? hc * 0.45 : Math.min(assets.clips.Melee_Hook.duration, hc + ((fr - hitAt) / 60) * 0.7);
         return { layers: [{ clip: 'Melee_Hook', time: t, weight: 1 }], key, fade: 0.05 };
       }
-      case 'parasol': {
+      case 'parasol':
+      case 'shieldShot':
+      case 'shieldFire': {
         const d = assets.clips.Idle_Shield_Loop.duration;
         return { layers: [{ clip: 'Idle_Shield_Loop', time: (fr / 60) % d, weight: 1, upper: true }], key, fade: 0.04 };
       }
@@ -556,7 +568,6 @@ export class ModelAnimator {
     this.spin = 0;
     let spinY = 0;
     if (anim === 'heliSpin') spinY = (f.action!.frame / 60) * Math.PI * 2 * 2.5;
-    if (anim === 'typhoon') spinY = (f.action!.frame / 60) * Math.PI * 2 * 3;
     if (anim === 'aroundWorld' && f.action!.frame >= 5 && f.action!.frame < 24) spinY = ((f.action!.frame - 5) / 19) * Math.PI * 2;
     if (f.state === 'tumble' && f.lastHitStrength > 0.6) this.spin = (f.stateT / 60) * 10;
     if (f.action?.def.anim === 'backflipShot') {
@@ -594,13 +605,25 @@ export class ModelAnimator {
   private updateUmbrella(dt: number) {
     const f = this.fighter;
     const anim = f.state === 'action' ? f.action?.def.anim : undefined;
-    const open = f.guarding || f.gliding || anim === 'parasol' || anim === 'umbrellaRush' || anim === 'updraft' || anim === 'typhoon';
+    const open = f.guarding || f.gliding || anim === 'parasol' || anim === 'umbrellaRush' || anim === 'updraft' || anim === 'shieldFire' || anim === 'shieldShot';
     this.umbrellaOpen = damp(this.umbrellaOpen, open ? 1 : 0, open ? 30 : 12, dt);
     this.rig.setUmbrellaOpen?.(this.umbrellaOpen);
     // Thrusts and the parry hold it point-first.
-    const thrust = !!anim && (UMBRELLA_THRUST.has(anim) || anim === 'parasol');
+    const thrust = f.guarding || (!!anim && (UMBRELLA_THRUST.has(anim) || anim === 'parasol' || anim === 'shieldFire' || anim === 'shieldShot'));
     this.umbrellaTilt = damp(this.umbrellaTilt, thrust ? 1 : 0, 25, dt);
-    this.rig.weaponRoot.rotation.x = this.umbrellaTilt * Math.PI * 0.5;
+    // Point the shaft along the aim (canopy toward the opponent) regardless of the wrist pose.
+    const wr = this.rig.weaponRoot;
+    wr.quaternion.identity();
+    if (this.umbrellaTilt > 0.001 && wr.parent) {
+      this.rig.root.updateMatrixWorld(true);
+      const parentQ = wr.parent.getWorldQuaternion(new THREE.Quaternion());
+      const want = this.rig.model
+        .getWorldQuaternion(new THREE.Quaternion())
+        .multiply(new THREE.Quaternion().setFromAxisAngle(AX, -f.pitch))
+        .multiply(new THREE.Quaternion().setFromAxisAngle(AX, Math.PI / 2));
+      const local = parentQ.invert().multiply(want);
+      wr.quaternion.slerp(local, this.umbrellaTilt);
+    }
   }
 
   private updateYoyo() {

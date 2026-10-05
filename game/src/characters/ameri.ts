@@ -1,11 +1,11 @@
-import type { ActionDef, CharacterDef, HitWindow } from '../combat/types';
+import type { ActionDef, CharacterDef, Spawn } from '../combat/types';
 
-// Ult: a spinning typhoon that drags the opponent in, then flings them away.
-const typhoon: HitWindow[] = [];
-for (let i = 0; i < 7; i++) {
-  typhoon.push({ start: 14 + i * 8, end: 18 + i * 8, area: true, range: 0, radius: 3.6, damage: 16, knockback: -6, knockUp: 2, hitstun: 24, hitstop: 2, hand: 'R', guardDamage: 10 });
+// Ult: canopy open as a bullet-proof shield while the tip fires, then a stun round.
+const barrage: Spawn[] = [];
+for (let i = 0; i < 10; i++) {
+  barrage.push({ frame: 16 + i * 5, hand: 'R', speed: 72, radius: 0.25, life: 40, damage: 14, knockback: 1.5, knockUp: 0.5, hitstun: 18, hitstop: 2, guardDamage: 5 });
 }
-typhoon.push({ start: 74, end: 79, area: true, range: 0, radius: 4.2, damage: 130, knockback: 19, knockUp: 12, hitstun: 40, hitstop: 15, heavy: true, hand: 'R', guardDamage: 100 });
+barrage.push({ frame: 76, hand: 'R', speed: 64, radius: 0.5, life: 50, size: 1.7, damage: 120, knockback: 18, knockUp: 10, hitstun: 40, hitstop: 15, heavy: true, guardDamage: 90 });
 
 const actions: Record<string, ActionDef> = {
   // Click x3: two quick thrusts with the closed umbrella, then a wide swing.
@@ -72,6 +72,16 @@ const actions: Record<string, ActionDef> = {
     reflect: [0, 13],
     moveScale: 0,
   },
+  // Click while guarding: a light shot from the tip, umbrella still up as a shield.
+  shieldShot: {
+    id: 'shieldShot',
+    kind: 'attack',
+    anim: 'shieldShot',
+    total: 18,
+    spawns: [{ frame: 3, hand: 'R', speed: 62, radius: 0.22, life: 34, damage: 12, knockback: 1.5, knockUp: 0.3, hitstun: 10, hitstop: 1, guardDamage: 4 }],
+    reflect: [0, 18],
+    moveScale: 0.3,
+  },
   // E: pop the umbrella open - parry window that sends shots back and bounces melee attackers.
   parasol: {
     id: 'parasol',
@@ -81,17 +91,18 @@ const actions: Record<string, ActionDef> = {
     reflect: [3, 24],
     moveScale: 0.25,
   },
-  // Q: Typhoon.
-  typhoon: {
-    id: 'typhoon',
+  // Q: open the umbrella as a shield and fire from the tip.
+  shieldFire: {
+    id: 'shieldFire',
     kind: 'ult',
-    anim: 'typhoon',
-    total: 92,
-    hits: typhoon,
-    moveScale: 0.45,
+    anim: 'shieldFire',
+    total: 96,
+    spawns: barrage,
+    reflect: [4, 86],
+    moveScale: 0.3,
     committed: true,
     armor: true,
-    invuln: [0, 14],
+    invuln: [0, 10],
   },
 };
 
@@ -104,6 +115,7 @@ export const ameri: CharacterDef = {
   element: { color: 0x9b7bff, color2: 0x7fd8ff },
   recovery: 'updraft',
   dashAttack: 'umbrellaRush',
+  guardAttack: 'shieldShot',
   glide: 3.2,
   maxHp: 950,
   walkSpeed: 7.2,
@@ -113,7 +125,7 @@ export const ameri: CharacterDef = {
   actions,
   basic: 'pokeA',
   skill: 'parasol',
-  ult: 'typhoon',
+  ult: 'shieldFire',
   airBasic: 'airPoke',
   look: {
     skin: 0xffe0cc,

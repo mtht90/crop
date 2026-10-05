@@ -35,7 +35,7 @@ function toonClone(src: THREE.Object3D) {
 }
 
 /**
- * Zip's hook launcher: Kenney "blaster-h" with a three-prong hook on the muzzle.
+ * Zip's hook launcher: Kenney "blaster-h" with a suction cup on the muzzle.
  * Barrel along +Z, grip at the origin. `claw` is hidden while the hook is out.
  */
 export function buildHookGun(scale = 1) {
@@ -54,30 +54,41 @@ export function buildHookGun(scale = 1) {
     grip.position.set(0, -0.11, -0.02);
     g.add(grip);
   }
-  const claw = buildHookHead(0.7);
-  claw.position.set(0, 0.01, 0.27);
+  const claw = buildHookHead(0.75);
+  claw.position.set(0, 0.01, 0.34);
   g.add(claw);
   g.scale.setScalar(scale);
   return { group: g, claw };
 }
 
-/** Grappling hook head pointing along +Z: a cone with three curved prongs. */
+/**
+ * Grappling head: a big rubber suction cup on a short stem, cup mouth facing +Z
+ * (the direction of travel), so it reads clearly as "it sticks".
+ */
 export function buildHookHead(scale = 1) {
   const g = new THREE.Group();
-  const tip = part(new THREE.ConeGeometry(0.05, 0.14, 8), 0xdfe6f2, 0.008);
-  tip.rotation.x = Math.PI / 2;
-  tip.position.z = 0.06;
-  g.add(tip);
-  for (let i = 0; i < 3; i++) {
-    const prong = part(new THREE.TorusGeometry(0.06, 0.012, 5, 10, Math.PI * 0.8), 0xdfe6f2, 0.006);
-    const a = (i / 3) * Math.PI * 2;
-    prong.rotation.set(0, Math.PI / 2, 0);
-    const holder = new THREE.Group();
-    holder.rotation.z = a;
-    prong.position.set(0, 0.05, -0.02);
-    holder.add(prong);
-    g.add(holder);
+  const cupPts: THREE.Vector2[] = [];
+  for (let i = 0; i <= 8; i++) {
+    const t = i / 8;
+    cupPts.push(new THREE.Vector2(0.03 + 0.1 * Math.sin((t * Math.PI) / 2), -0.075 * Math.cos((t * Math.PI) / 2)));
   }
+  const cupGeo = new THREE.LatheGeometry(cupPts, 18);
+  cupGeo.rotateX(-Math.PI / 2);
+  const cup = new THREE.Mesh(cupGeo, toon(0xff3b5c, { rim: 0.5 }).clone());
+  (cup.material as THREE.MeshToonMaterial).side = THREE.DoubleSide;
+  addOutline(cup, 0.008);
+  cup.position.z = 0.05;
+  g.add(cup);
+  const lip = part(new THREE.TorusGeometry(0.13, 0.014, 6, 20), 0xff7a90, 0.004);
+  lip.position.z = 0.05;
+  g.add(lip);
+  const stem = part(new THREE.CylinderGeometry(0.022, 0.026, 0.14, 10), 0xffd23a, 0.006);
+  stem.rotation.x = Math.PI / 2;
+  stem.position.z = -0.06;
+  g.add(stem);
+  const knob = part(new THREE.SphereGeometry(0.032, 10, 8), 0x2b2b3d, 0.004);
+  knob.position.z = -0.13;
+  g.add(knob);
   g.scale.setScalar(scale);
   return g;
 }
@@ -139,43 +150,71 @@ export function buildYoyo(color: number, accent: number, scale = 1) {
 }
 
 /**
- * Umbrella: handle at the origin, shaft along +Y. `setOpen(k)` spreads the
- * canopy (0 = furled point, 1 = fully open).
+ * Umbrella: OpenGameArt "Cute umbrella" (CC0) tinted with the character color.
+ * Handle at the origin, shaft along +Y. `setOpen(k)` spreads the canopy from a
+ * furled roll (0) to a full dome (1) that doubles as a shield; the tip is a
+ * small barrel that fires shots.
  */
 export function buildUmbrella(color: number, accent: number, scale = 1) {
   const g = new THREE.Group();
-  const hook = part(new THREE.TorusGeometry(0.05, 0.016, 6, 14, Math.PI), 0x6b4a2e, 0.006);
-  hook.rotation.z = Math.PI;
-  hook.position.set(0.05, -0.06, 0);
-  g.add(hook);
-  const shaft = part(new THREE.CylinderGeometry(0.014, 0.014, 1.0, 8), 0xf2f2f2, 0.004);
-  shaft.position.y = 0.44;
-  g.add(shaft);
-  const ferrule = part(new THREE.ConeGeometry(0.018, 0.1, 8), 0xc9a24a, 0.004);
-  ferrule.position.y = 0.98;
-  g.add(ferrule);
-  // Canopy: 8 alternating-color panels around the shaft, apex near the tip.
+  const src = assets.models.umbrella?.scene;
   const canopy = new THREE.Group();
-  canopy.position.y = 0.92;
-  g.add(canopy);
-  const panels: THREE.Mesh[] = [];
-  for (let i = 0; i < 8; i++) {
-    const geo = new THREE.ConeGeometry(0.62, 0.32, 3, 1, true, 0, (Math.PI * 2) / 8);
-    geo.translate(0, -0.16, 0);
-    const m = part(geo, i % 2 ? color : accent, 0);
-    (m.material as THREE.Material).side = THREE.DoubleSide;
-    m.rotation.y = (i / 8) * Math.PI * 2;
-    canopy.add(m);
-    panels.push(m);
+  if (src) {
+    // Source units: stick y -0.245..1.0 (hook at the bottom), canopy apex at y 1.186.
+    const k = 0.78;
+    const APEX = 1.186;
+    src.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh) return;
+      const map = (m.material as THREE.MeshStandardMaterial).map ?? undefined;
+      if (map) map.colorSpace = THREE.SRGBColorSpace;
+      const isCanopy = m.name === 'canopy';
+      const mesh = new THREE.Mesh(m.geometry, toon(isCanopy ? color : accent, { map, rim: 0.4 }).clone());
+      (mesh.material as THREE.MeshToonMaterial).side = THREE.DoubleSide;
+      mesh.castShadow = true;
+      addOutline(mesh, 0.01);
+      if (isCanopy) {
+        // Pivot at the apex so furling pulls the cloth in around the shaft.
+        mesh.position.y = -APEX;
+        canopy.add(mesh);
+      } else {
+        mesh.position.y = 0.05;
+        mesh.scale.setScalar(1);
+        const stick = new THREE.Group();
+        stick.add(mesh);
+        stick.scale.setScalar(k);
+        g.add(stick);
+      }
+    });
+    canopy.position.y = (APEX + 0.05) * k;
+    canopy.scale.setScalar(k);
+  } else {
+    const shaft = part(new THREE.CylinderGeometry(0.014, 0.014, 1.0, 8), accent, 0.004);
+    shaft.position.y = 0.44;
+    g.add(shaft);
+    const cone = part(new THREE.ConeGeometry(0.7, 0.3, 8, 1, true), color, 0.006);
+    (cone.material as THREE.Material).side = THREE.DoubleSide;
+    cone.position.y = -0.15;
+    canopy.add(cone);
+    canopy.position.y = 0.98;
   }
+  const inner = new THREE.Group();
+  inner.add(...canopy.children);
+  canopy.add(inner);
+  g.add(canopy);
+  // Barrel at the tip.
+  const barrel = part(new THREE.CylinderGeometry(0.016, 0.02, 0.1, 8), 0x3a3b44, 0.004);
+  barrel.position.y = canopy.position.y + 0.04;
+  g.add(barrel);
+  const tipY = barrel.position.y + 0.05;
   const setOpen = (k: number) => {
     const o = Math.max(0, Math.min(1, k));
-    // Furled: thin and long along the shaft; open: wide and shallow.
-    canopy.scale.set(0.09 + 0.91 * o, 2.4 - 1.4 * o, 0.09 + 0.91 * o);
+    // Furled: thin and long along the shaft; open: the full dome.
+    inner.scale.set(0.09 + 0.91 * o, 2.6 - 1.6 * o, 0.09 + 0.91 * o);
   };
   setOpen(0);
   g.scale.setScalar(scale);
-  return { group: g, setOpen };
+  return { group: g, setOpen, tipY: tipY * scale };
 }
 
 /** Chunky toy-like blaster built from primitives (white/blue/orange with a star). */

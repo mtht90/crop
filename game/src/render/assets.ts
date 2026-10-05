@@ -18,6 +18,8 @@ const MODEL_FILES = {
   blaster: 'Blaster.glb',
   /** Kenney Blaster Kit (CC0) "blaster-h", Zip's hook launcher. */
   hookGun: 'HookGun.glb',
+  /** "Cute umbrella" by ege (OpenGameArt, CC0), Ameri's umbrella. */
+  umbrella: 'Umbrella.glb',
 } as const;
 const ANIM_FILES = ['anims1.glb', 'anims2.glb'];
 

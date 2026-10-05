@@ -155,6 +155,8 @@ export class CpuController {
     if (this.guardHold > 0) {
       this.guardHold--;
       i.guard = true;
+      // Umbrella: shoot from behind the shield.
+      if (self.def.guardAttack && dist > 3 && Math.abs(wrapAngle(Math.atan2(-to.x, -to.z) - this.yaw)) < 0.2 && Math.random() < 0.3) i.attack = true;
     }
     const edgeRoom = ARENA_RADIUS - Math.hypot(self.pos.x, self.pos.z);
     const threat = this.detectThreat(seen, dist);
@@ -229,7 +231,11 @@ export class CpuController {
       const ok = ud.spawns?.some((sp) => sp.hook) ? dist < 18 && aimed : uReach ? dist < uReach && aimed : melee ? dist < 3.8 : dist < 16 && aimed;
       if (ok && Math.random() < 0.05 + this.p.aggression * 0.05) i.ultPressed = true;
     }
-    if (self.skillCd === 0 && Math.random() < this.p.skillUse * 0.03) {
+    const hookSkill = self.def.actions[self.def.skill].spawns?.some((sp) => sp.hook === 'self');
+    if (hookSkill && self.skillCd === 0 && aimed && dist > 5 && dist < 24 && Math.random() < 0.02 + this.p.skillUse * 0.05) {
+      // Grappler: close the gap by hooking onto the opponent.
+      i.skillPressed = true;
+    } else if (self.skillCd === 0 && Math.random() < this.p.skillUse * 0.03) {
       const sk = self.def.actions[self.def.skill];
       const area = sk.hits?.find((h) => h.area);
       const reach = sk.hits?.find((h) => h.reach);

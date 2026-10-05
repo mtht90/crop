@@ -1,12 +1,12 @@
 import type { ActionDef, CharacterDef, Spawn } from '../combat/types';
 
-/** Grappling hook: latches onto terrain or the opponent and reels Zip in. */
+/** Suction-cup grapple: sticks to terrain or the opponent and reels Zip in. */
 const hook = (frame: number, extra: Partial<Spawn> = {}): Spawn => ({
   frame,
   hand: 'R',
-  speed: 64,
-  radius: 0.4,
-  life: 26,
+  speed: 44,
+  radius: 0.45,
+  life: 38,
   visual: 'hook',
   hook: 'self',
   damage: 22,
@@ -95,7 +95,7 @@ const actions: Record<string, ActionDef> = {
     kind: 'ult',
     anim: 'reelIn',
     total: 44,
-    spawns: [hook(12, { hook: 'yank', onHit: 'reelFinisher', speed: 70, life: 30, radius: 0.75, size: 1.8, damage: 40, hitstun: 50, hitstop: 10, guardDamage: 40 })],
+    spawns: [hook(12, { hook: 'yank', onHit: 'reelFinisher', speed: 52, life: 42, radius: 0.75, size: 1.8, damage: 40, hitstun: 50, hitstop: 10, guardDamage: 40 })],
     committed: true,
     invuln: [0, 12],
     moveScale: 0,

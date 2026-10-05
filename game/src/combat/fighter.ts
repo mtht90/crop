@@ -356,7 +356,7 @@ export class Fighter {
       this.grapple = null;
       return;
     }
-    const speed = Math.min(30, 12 + g.t * 2.2);
+    const speed = Math.min(32, 20 + g.t * 2.5);
     this.vel.copy(to.multiplyScalar(speed / d));
     this.vel.y += 1.5;
     if (this.vel.y > 0.5) {
@@ -477,6 +477,12 @@ export class Fighter {
       this.grounded = false;
       this.guarding = false;
       this.jumpCounter++;
+    }
+    if (this.guarding && this.def.guardAttack && (b.attack > 0 || this.attackHeld)) {
+      // Shield up and shoot from the tip; holding repeats.
+      b.attack = 0;
+      this.startAction(this.def.guardAttack);
+      return;
     }
     if (b.attack > 0 && !this.guarding) {
       const usesAmmo = this.def.ammo !== undefined;
