@@ -3,7 +3,7 @@ import type { Fighter } from '../combat/fighter';
 import { phaseOf } from '../combat/phase';
 import { clamp, damp, ease, lerp, rand, Spring } from '../core/math';
 import { Trail } from './effects';
-import { buildBlaster, buildBowMesh, buildHookGun, buildKatana, buildToyHammer, buildUmbrella, buildYoyo } from './weapons';
+import { buildBlaster, buildBowMesh, buildBoxingGlove, buildHookGun, buildKatana, buildToyHammer, buildUmbrella, buildYoyo, KATANA_TIP_Y } from './weapons';
 import { yoyoPose, yoyoScale } from './yoyo';
 import { buildFpHand } from './fpHand';
 import { tex } from './textures';
@@ -131,7 +131,7 @@ export class ViewModel {
           const k = buildKatana(0.85);
           k.position.set(0, -0.03, -0.02);
           a.root.add(k);
-          a.tip.position.set(0, 0.95, -0.03);
+          a.tip.position.set(0, KATANA_TIP_Y, -0.03);
           k.add(a.tip);
         } else if (w === 'umbrella' && side === 'R') {
           const u = buildUmbrella(L.top, L.topAccent, 0.75);
@@ -177,16 +177,12 @@ export class ViewModel {
           a.tip.position.set(0, 0, -0.08);
         }
       } else if (f.def.weapon === 'fists') {
-        addHand(1, -0.01);
-        // Fingerless fighter's wrap: wrist band, knuckle guard and studs over the real fist.
-        const band = part(new THREE.CylinderGeometry(0.047, 0.05, 0.07, 14), 0xe8463c, 0.005);
-        band.rotation.x = Math.PI / 2;
-        band.position.set(0, -0.02, 0.05);
-        a.root.add(band);
-        const plate = part(new THREE.BoxGeometry(0.085, 0.022, 0.07), 0xe8463c, 0.005);
-        plate.position.set(0, 0.006, -0.04);
-        plate.rotation.x = -0.12;
-        a.root.add(plate);
+        // Boxing gloves, knuckles forward.
+        const glove = buildBoxingGlove(f.def.element.color, 0xffffff, 1.15);
+        glove.rotation.y = Math.PI;
+        if (side === 'L') glove.scale.x *= -1;
+        glove.position.set(0, -0.02, 0.02);
+        a.root.add(glove);
         a.tip.position.set(0, 0, -0.18);
       } else {
         addHand(0.9, 0.07, -0.03);

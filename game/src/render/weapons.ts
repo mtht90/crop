@@ -19,17 +19,19 @@ export function buildBlaster(scale = 1) {
   return g;
 }
 
-/** Clone of a Kenney model with toon materials and thin outlines. */
-function toonClone(src: THREE.Object3D) {
+/** Clone of an external model with toon materials and thin outlines. */
+function toonClone(src: THREE.Object3D, outline = 0.012) {
   const m = src.clone(true);
   const meshes: THREE.Mesh[] = [];
   m.traverse((o) => (o as THREE.Mesh).isMesh && meshes.push(o as THREE.Mesh));
   for (const mesh of meshes) {
-    const map = (mesh.material as THREE.MeshStandardMaterial).map ?? undefined;
+    const srcMat = mesh.material as THREE.MeshStandardMaterial;
+    const map = srcMat.map ?? undefined;
     if (map) map.colorSpace = THREE.SRGBColorSpace;
-    mesh.material = toon(0xffffff, { map, rim: 0.3 });
+    // Untextured parts keep their own color (lacquer, gold fittings).
+    mesh.material = toon(map ? 0xffffff : srcMat.color.getHex(), { map, rim: 0.3 });
     mesh.castShadow = true;
-    addOutline(mesh, 0.012);
+    addOutline(mesh, outline);
   }
   return m;
 }
@@ -93,37 +95,70 @@ export function buildHookHead(scale = 1) {
   return g;
 }
 
-/** Katana: grip at the origin, blade along +Y with a slight curve, edge toward +Z. */
+/** Height of the katana tip above the grip (for trails). */
+export const KATANA_TIP_Y = 0.86;
+
+/**
+ * Katana: "Katana" by pfunked (OpenGameArt, CC0) - red-wrapped tsuka, open-work
+ * tsuba and a curved blade. Grip at the origin, blade along +Y, edge toward +Z.
+ */
 export function buildKatana(scale = 1) {
   const g = new THREE.Group();
-  const grip = part(new THREE.CylinderGeometry(0.022, 0.024, 0.26, 8), 0x1d1d2b, 0.006);
-  grip.position.y = -0.02;
-  g.add(grip);
-  for (let i = 0; i < 4; i++) {
-    const wrap = part(new THREE.BoxGeometry(0.05, 0.012, 0.05), 0xf2f4ff, 0);
-    wrap.position.y = -0.12 + i * 0.065;
-    wrap.rotation.y = i % 2 ? 0.8 : -0.8;
-    g.add(wrap);
+  const src = assets.models.katana?.scene;
+  if (src) {
+    const m = toonClone(src, 0.006);
+    // Source: tsuba 0.24 below the center, tsuka down to -0.54; hold it just under the guard.
+    m.position.y = 0.33;
+    g.add(m);
+  } else {
+    const blade = part(new THREE.BoxGeometry(0.012, 0.9, 0.04), 0xe9eef7, 0.006);
+    blade.position.y = 0.55;
+    g.add(blade);
+    const grip = part(new THREE.CylinderGeometry(0.022, 0.024, 0.26, 8), 0x1d1d2b, 0.006);
+    g.add(grip);
   }
-  const tsuba = part(new THREE.CylinderGeometry(0.06, 0.06, 0.018, 16), 0xc9a24a, 0.006);
-  tsuba.position.y = 0.12;
-  g.add(tsuba);
-  // Curved blade: bend a thin box along an arc.
-  const len = 0.95;
-  const geo = new THREE.BoxGeometry(0.012, len, 0.042, 1, 16, 1);
-  const pos = geo.attributes.position as THREE.BufferAttribute;
-  for (let i = 0; i < pos.count; i++) {
-    const y = pos.getY(i) + len / 2;
-    const taper = 1 - Math.max(0, y - len * 0.82) / (len * 0.18);
-    pos.setZ(i, pos.getZ(i) * Math.max(0.05, taper) - 0.04 * (y / len) ** 2);
-    pos.setY(i, y + 0.13);
-  }
-  geo.computeVertexNormals();
-  const blade = part(geo, 0xe9eef7, 0.006, { rim: 0.6 });
-  g.add(blade);
-  const hamon = new THREE.Mesh(new THREE.BoxGeometry(0.014, len * 0.8, 0.006), new THREE.MeshBasicMaterial({ color: 0xbcd0ff }));
-  hamon.position.set(0, 0.13 + len * 0.42, 0.012);
-  g.add(hamon);
+  g.scale.setScalar(scale);
+  return g;
+}
+
+/** Lacquered sheath (from "Katana" by Clint Bellanger, CC0) scaled to `length`, lying along +X. */
+export function buildSaya(length: number) {
+  const src = assets.models.saya?.scene;
+  if (!src) return null;
+  const m = toonClone(src, 0.005);
+  const box = new THREE.Box3().setFromObject(m);
+  const size = box.getSize(new THREE.Vector3());
+  const k = length / size.x;
+  const c = box.getCenter(new THREE.Vector3());
+  const g = new THREE.Group();
+  m.position.copy(c).multiplyScalar(-k);
+  m.scale.multiplyScalar(k);
+  g.add(m);
+  return g;
+}
+
+/** Boxing glove around a fist: padded mitt along +Z with a thumb on +X and a laced cuff. */
+export function buildBoxingGlove(color: number, cuffColor: number, scale = 1) {
+  const g = new THREE.Group();
+  const mitt = part(new THREE.SphereGeometry(1, 18, 14), color, 0.01, { rim: 0.45 });
+  mitt.scale.set(0.072, 0.068, 0.095);
+  mitt.position.z = 0.055;
+  g.add(mitt);
+  const knuckle = part(new THREE.SphereGeometry(1, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2), color, 0.006, { rim: 0.45 });
+  knuckle.scale.set(0.068, 0.03, 0.07);
+  knuckle.position.set(0, 0.045, 0.07);
+  g.add(knuckle);
+  const thumb = part(new THREE.CapsuleGeometry(0.022, 0.05, 4, 10), color, 0.006, { rim: 0.45 });
+  thumb.rotation.x = Math.PI / 2 - 0.35;
+  thumb.position.set(0.058, -0.01, 0.04);
+  g.add(thumb);
+  const cuff = part(new THREE.CylinderGeometry(0.055, 0.06, 0.075, 16), cuffColor, 0.006);
+  cuff.rotation.x = Math.PI / 2;
+  cuff.position.z = -0.03;
+  g.add(cuff);
+  const lace = part(new THREE.BoxGeometry(0.012, 0.004, 0.07), color, 0);
+  lace.position.set(0, 0.058, -0.03);
+  g.add(lace);
   g.scale.setScalar(scale);
   return g;
 }

@@ -131,5 +131,6 @@ export const lala: CharacterDef = {
     hairStyle: 'spiky',
     body: 'female',
     hairModel: 'hairLong',
+    outfit: { set: 'peasant', parts: ['body', 'arms', 'legs', 'feet'] },
   },
 };

@@ -3,6 +3,7 @@ import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import type { CharacterDef } from '../combat/types';
 import { assets, type ModelKey } from './assets';
 import { skinnedOutline } from './charModel';
+import { keepTriangles } from './skinUtil';
 import { toon } from './toon';
 
 const FINGERS = ['index', 'middle', 'ring', 'pinky'] as const;
@@ -34,35 +35,8 @@ export function buildFpHand(def: CharacterDef, side: 'L' | 'R', grip: number) {
       m.visible = false;
       continue;
     }
-    // Keep only triangles whose vertices are driven mostly by the forearm / hand / finger bones.
-    const g = m.geometry;
-    const idx = g.index!;
-    const si = g.attributes.skinIndex as THREE.BufferAttribute;
-    const sw = g.attributes.skinWeight as THREE.BufferAttribute;
-    const names = m.skeleton.bones.map((b) => b.name);
-    const ok = (v: number) => {
-      let best = 0;
-      let bi = 0;
-      for (let k = 0; k < 4; k++) {
-        const w = sw.getComponent(v, k);
-        if (w > best) {
-          best = w;
-          bi = si.getComponent(v, k);
-        }
-      }
-      return keep.has(names[bi]);
-    };
-    const out: number[] = [];
-    for (let t = 0; t < idx.count; t += 3) {
-      const a = idx.getX(t);
-      const b = idx.getX(t + 1);
-      const c = idx.getX(t + 2);
-      if (ok(a) && ok(b) && ok(c)) out.push(a, b, c);
-    }
-    const ng = new THREE.BufferGeometry();
-    for (const [k, v] of Object.entries(g.attributes)) ng.setAttribute(k, v);
-    ng.setIndex(out);
-    m.geometry = ng;
+    // Keep only triangles driven mostly by the forearm / hand / finger bones.
+    keepTriangles(m, (n) => keep.has(n));
     const src = m.material as THREE.MeshStandardMaterial;
     const mat = toon(0xffffff, { map: src.map ?? undefined, rim: 0.3, soft: true }).clone();
     mat.color.setRGB(1.35, 1.22, 1.15);

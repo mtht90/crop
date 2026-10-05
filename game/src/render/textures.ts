@@ -27,7 +27,9 @@ function starPath(g: CanvasRenderingContext2D, cx: number, cy: number, points: n
 const cache: Record<string, THREE.Texture> = {};
 
 /** Kenney Particle Pack sprites (CC0), packed by tools/build-fx.mjs into public/assets/fx. */
-const FX_NAMES = ['flash', 'burst', 'ring', 'spark', 'glint', 'soft', 'puff', 'dirt', 'slash', 'twirl', 'magic', 'halo', 'smokeRing', 'bolt'] as const;
+const FX_NAMES = ['flash', 'burst', 'ring', 'spark', 'glint', 'soft', 'puff', 'dirt', 'slash', 'twirl', 'magic', 'halo', 'smokeRing', 'bolt', 'slashArc', 'slashWide', 'slashStreak', 'impactBurst', 'impactRing', 'impactDebris'] as const;
+/** Flipbook strips (CC0, Cethiel): frame count per horizontal strip. */
+export const FX_FRAMES: Partial<Record<FxName, number>> = { slashArc: 6, slashWide: 6, slashStreak: 6, impactBurst: 5, impactRing: 5, impactDebris: 5 };
 export type FxName = (typeof FX_NAMES)[number];
 const fxTex: Partial<Record<FxName, THREE.Texture>> = {};
 
@@ -52,6 +54,11 @@ export async function loadFx() {
       }
     }),
   );
+}
+
+/** True when the real sprite (not the fallback) is available. */
+export function hasFx(n: FxName) {
+  return !!fxTex[n];
 }
 
 /** Sprite from the particle pack, or a procedural stand-in until/unless it loads. */

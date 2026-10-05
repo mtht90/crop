@@ -1,9 +1,10 @@
 import * as THREE from 'three';
 import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js';
-import type { CharacterDef } from '../combat/types';
+import type { CharacterDef, OutfitPart } from '../combat/types';
 import { assets, type ModelKey } from './assets';
 import { leadHand } from './clipInfo';
-import { buildBlaster, buildBowMesh, buildHookGun, buildKatana, buildToyHammer, buildUmbrella, buildYoyo } from './weapons';
+import { buildBlaster, buildBowMesh, buildBoxingGlove, buildHookGun, buildKatana, buildSaya, buildToyHammer, buildUmbrella, buildYoyo, KATANA_TIP_Y } from './weapons';
+import { keepTriangles, rebindToBones } from './skinUtil';
 import { part, toon } from './toon';
 
 const OUTLINE = new THREE.Color(0x1d1b2e);
@@ -82,6 +83,8 @@ export class ModelRig {
   setUmbrellaOpen: ((k: number) => void) | null = null;
   /** Hook head on the launcher (hidden while the hook is out). */
   hookClaw: THREE.Object3D | null = null;
+  private skinMat: THREE.Material | null = null;
+  private hairScene: THREE.Object3D | null = null;
 
   constructor(readonly def: CharacterDef) {
     const L = def.look;
@@ -111,7 +114,12 @@ export class ModelRig {
       m.material = mat;
       m.castShadow = true;
       m.frustumCulled = false;
-      if (!isEyes && !isBrows) skinnedOutline(m, 0.008);
+      if (!isEyes && !isBrows) {
+        // Dressed in a modular outfit: only the head, neck and hands of the body show.
+        if (L.outfit) keepTriangles(m, (n) => /^(Head|neck_01|hand_|index_|middle_|ring_|pinky_|thumb_)/.test(n));
+        this.skinMat ??= mat;
+        skinnedOutline(m, 0.008);
+      }
     }
 
     this.bowHand = def.weapon === 'bow' ? leadHand('Spell_Simple_Idle_Loop', 0) : 'l';
@@ -196,6 +204,7 @@ export class ModelRig {
     // "Origin at 0" hair is authored in bind-pose space; keep that while parenting to the head.
     this.model.add(hairScene);
     this.bones.Head.attach(hairScene);
+    this.hairScene = hairScene;
 
     if (L.hairStyle === 'ponytail') {
       const head = this.wp('Head');
@@ -222,8 +231,51 @@ export class ModelRig {
     }
   }
 
+  /** Quaternius modular outfit pieces, re-bound to this rig's skeleton and tinted per piece. */
+  private attachOutfit() {
+    const L = this.def.look;
+    const o = L.outfit!;
+    const key = `outfit${L.body === 'male' ? 'Male' : 'Female'}${o.set === 'ranger' ? 'Ranger' : 'Peasant'}` as ModelKey;
+    const src = assets.models[key]?.scene;
+    if (!src) return false;
+    const scene = clone(src);
+    const bones = new Map<string, THREE.Bone>();
+    this.model.traverse((b) => (b as THREE.Bone).isBone && bones.set(b.name, b as THREE.Bone));
+    const meshes: THREE.SkinnedMesh[] = [];
+    scene.traverse((m) => (m as THREE.SkinnedMesh).isSkinnedMesh && meshes.push(m as THREE.SkinnedMesh));
+    const host = (() => {
+      let h: THREE.Object3D | null = null;
+      this.model.traverse((m) => {
+        if (!h && (m as THREE.SkinnedMesh).isSkinnedMesh) h = m.parent;
+      });
+      return h ?? this.model;
+    })();
+    const partOf = (n: string): OutfitPart => (/Pauldron/.test(n) ? 'pauldron' : /Hood/.test(n) ? 'hood' : /Bracer/.test(n) ? 'bracer' : /Belt/.test(n) ? 'belt' : /Arms/.test(n) ? 'arms' : /Body/.test(n) ? 'body' : /Legs/.test(n) ? 'legs' : 'feet');
+    const tint: Record<OutfitPart, number> = { body: L.top, arms: L.top, legs: L.pants, feet: L.shoes, hood: L.topAccent, pauldron: L.topAccent, bracer: L.glove, belt: L.glove };
+    for (const m of meshes) {
+      const part = partOf(m.name);
+      if (!o.parts.includes(part)) continue;
+      const srcMat = m.material as THREE.MeshStandardMaterial;
+      const skin = /Regular/.test(srcMat.name);
+      if (skin) m.material = this.skinMat ?? srcMat;
+      else {
+        const map = srcMat.map ?? undefined;
+        if (map) map.colorSpace = THREE.SRGBColorSpace;
+        m.material = toon(tint[part], { map, rim: 0.3 });
+      }
+      rebindToBones(m, bones);
+      m.castShadow = true;
+      m.frustumCulled = false;
+      host.add(m);
+      skinnedOutline(m, 0.008);
+    }
+    if (o.parts.includes('hood') && this.hairScene) this.hairScene.visible = false;
+    return true;
+  }
+
   private buildOutfit() {
     const L = this.def.look;
+    const dressed = !!L.outfit && this.attachOutfit();
     const cap = (r: number, k = 1) => (len: number) => new THREE.CapsuleGeometry(r, Math.max(0.01, len * k), 6, 12);
     const P = (n: BoneName) => this.wp(n);
     const female = L.body === 'female';
@@ -234,6 +286,7 @@ export class ModelRig {
     const sp1 = P('spine_01');
     const sp3 = P('spine_03');
     const neck = P('neck_01');
+    if (!dressed) {
     const tank = this.seg('spine_02', sp1.clone().lerp(pelvis, female ? 0 : 0.6), neck.clone().lerp(sp3, 0.35), cap(female ? 0.13 : 0.155, 0.75), 0x26263a, 0.01);
     tank.scale.set(1.05, 1, 0.72);
     const jacketLow = this.seg('spine_01', sp1.clone().lerp(pelvis, 0.3), sp3, (len) => openShell(0.165 * s, 0.17 * s, len), L.top, 0.012);
@@ -262,23 +315,29 @@ export class ModelRig {
       this.at('pelvis', pivot, new THREE.Vector3(pelvis.x + side * 0.1, pelvis.y + 0.02, pelvis.z - 0.1));
       this.coatTails.push(pivot);
     }
+    }
 
     // --- Arms -----------------------------------------------------------------
     for (const side of ['l', 'r'] as const) {
       const ua = P(`upperarm_${side}`);
       const la = P(`lowerarm_${side}`);
       const ha = P(`hand_${side}`);
-      const pad = part(new THREE.SphereGeometry(0.085 * s, 12, 10), L.top, 0.01);
-      this.at(`upperarm_${side}`, pad, ua.clone().lerp(la, 0.08));
-      this.seg(`upperarm_${side}`, ua, la, cap(0.068 * s, 0.85), L.top, 0.01);
-      const cuff = this.seg(`lowerarm_${side}`, la, la.clone().lerp(ha, 0.15), (len) => new THREE.CylinderGeometry(0.072 * s, 0.07 * s, len, 12), L.topAccent, 0.008);
-      void cuff;
+      if (!dressed) {
+        const pad = part(new THREE.SphereGeometry(0.085 * s, 12, 10), L.top, 0.01);
+        this.at(`upperarm_${side}`, pad, ua.clone().lerp(la, 0.08));
+        this.seg(`upperarm_${side}`, ua, la, cap(0.068 * s, 0.85), L.top, 0.01);
+        this.seg(`lowerarm_${side}`, la, la.clone().lerp(ha, 0.15), (len) => new THREE.CylinderGeometry(0.072 * s, 0.07 * s, len, 12), L.topAccent, 0.008);
+      }
       const tip = side === 'l' ? this.tipL : this.tipR;
       const mid = P(`middle_01_${side}`);
       if (this.def.weapon === 'fists') {
-        // Fighter's wraps over the bare hands: bracer and a knuckle guard.
-        this.seg(`lowerarm_${side}`, la.clone().lerp(ha, 0.55), ha, (len) => new THREE.CylinderGeometry(0.055, 0.05, len * 1.05, 12), 0xe8463c, 0.008);
-        this.at(`hand_${side}`, tip, ha.clone().lerp(mid, 1.2));
+        // Boxing glove: padded mitt with a thumb and a laced cuff.
+        const glove = buildBoxingGlove(this.def.element.color, 0xffffff);
+        const fwd = mid.clone().sub(ha).normalize();
+        glove.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), fwd);
+        this.at(`hand_${side}`, glove, ha.clone().lerp(mid, 0.25));
+        if (side === 'l') glove.scale.x = -1;
+        this.at(`hand_${side}`, tip, ha.clone().lerp(mid, 1.6));
       } else {
         // Hand frame: forward along the metacarpals, up toward the thumb.
         const fwd = mid.clone().sub(ha).normalize();
@@ -310,7 +369,7 @@ export class ModelRig {
           holder.add(this.weaponRoot);
           this.weaponRoot.add(buildKatana());
           this.at(`hand_${side}`, holder, grip);
-          tip.position.set(0, 1.0, -0.03);
+          tip.position.set(0, KATANA_TIP_Y, -0.03);
           this.weaponRoot.add(tip);
         } else if (this.def.weapon === 'umbrella' && side === 'r') {
           holder.add(this.weaponRoot);
@@ -345,7 +404,15 @@ export class ModelRig {
     if (this.def.weapon === 'katana') {
       // Scabbard on the left hip.
       const pl = P('pelvis');
-      this.seg('pelvis', pl.clone().add(new THREE.Vector3(0.18, 0.05, 0.12)), pl.clone().add(new THREE.Vector3(0.22, -0.42, -0.3)), (len) => new THREE.CylinderGeometry(0.03, 0.026, len, 8), 0x1d1d2b, 0.008);
+      const a = pl.clone().add(new THREE.Vector3(0.18, 0.05, 0.12));
+      const b = pl.clone().add(new THREE.Vector3(0.22, -0.42, -0.3));
+      const saya = buildSaya(a.distanceTo(b) * 1.25);
+      if (saya) {
+        saya.position.lerpVectors(a, b, 0.5);
+        saya.quaternion.setFromUnitVectors(new THREE.Vector3(1, 0, 0), b.clone().sub(a).normalize());
+        this.model.add(saya);
+        this.bones.pelvis.attach(saya);
+      } else this.seg('pelvis', a, b, (len) => new THREE.CylinderGeometry(0.03, 0.026, len, 8), 0x1d1d2b, 0.008);
     }
     if (this.def.weapon === 'bow') {
       // Quiver on the back.
@@ -359,6 +426,7 @@ export class ModelRig {
     }
 
     // --- Legs -----------------------------------------------------------------
+    if (dressed) return;
     const shorts = this.seg('pelvis', pelvis.clone().add(new THREE.Vector3(0, 0.09, 0)), pelvis.clone().add(new THREE.Vector3(0, -0.12, 0)), (len) => new THREE.CylinderGeometry(0.185, 0.2, len, 16), L.pants, 0.012);
     shorts.scale.z = 0.78;
     const belt = part(new THREE.TorusGeometry(0.168 * s, 0.025, 6, 20), 0x2b2b3d, 0.006);

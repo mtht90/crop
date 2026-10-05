@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { Projectile } from '../combat/world';
 import { rand } from '../core/math';
-import { fx, tex } from './textures';
+import { fx, FX_FRAMES, hasFx, tex, type FxName } from './textures';
 import { buildHookHead } from './weapons';
 
 interface Particle {
@@ -17,6 +17,8 @@ interface Particle {
   fade: 'linear' | 'late';
   scaleEase: 'out' | 'pop';
   drag: number;
+  /** Flipbook strip: frame count (the material owns a cloned texture). */
+  frames?: number;
 }
 
 function spriteMat(map: THREE.Texture, color: number, additive = true) {
@@ -170,34 +172,69 @@ export class Effects {
     return { s, mat };
   }
 
+  /**
+   * Animated sprite from a flipbook strip (CC0 slash / impact sheets). Falls back to
+   * `fallback` as a plain sprite when the strip isn't loaded.
+   */
+  flipbook(name: FxName, color: number, pos: THREE.Vector3, size: number, life: number, rotation = 0, fallback: FxName = 'spark') {
+    const frames = FX_FRAMES[name] ?? 1;
+    if (!hasFx(name)) {
+      const { s, mat } = this.sprite(fx(fallback), color, pos);
+      mat.rotation = rotation;
+      this.add(s, mat, { life, scale0: size * 0.6, scale1: size });
+      return;
+    }
+    const map = fx(name).clone();
+    map.repeat.set(1 / frames, 1);
+    map.wrapS = THREE.ClampToEdgeWrapping;
+    map.needsUpdate = true;
+    // Solid (not additive) so the cut keeps its color against the bright stage.
+    const { s, mat } = this.sprite(map, color, pos, false);
+    mat.rotation = rotation;
+    this.add(s, mat, { life, scale0: size, scale1: size * 1.08, fade: 'late', frames });
+  }
+
+  /** Swing streak in front of a melee attacker at the start of the strike. */
+  swing(pos: THREE.Vector3, color: number, kind: 'blade' | 'blunt' | 'thrust' | 'punch', mirror: boolean, size = 1) {
+    const name: FxName = kind === 'blade' ? 'slashWide' : kind === 'blunt' ? 'slashArc' : 'slashStreak';
+    const base = kind === 'thrust' || kind === 'punch' ? -0.6 : 0.25;
+    const rot = (mirror ? Math.PI - base : base) + rand(-0.25, 0.25);
+    const sz = (kind === 'blade' ? 2.6 : kind === 'blunt' ? 2.4 : kind === 'thrust' ? 1.8 : 1.3) * size;
+    this.flipbook(name, color, pos, sz, kind === 'punch' ? 0.16 : 0.22, rot, 'slash');
+  }
+
   /** Comic-style impact: flash burst, radial speed lines, shock ring, slash arc and star debris. */
   hit(pos: THREE.Vector3, dir: THREE.Vector3, color: number, color2: number, power: number, heavy: boolean, scale = 1, slash = false) {
     const k = (0.7 + power * 0.9 + (heavy ? 0.6 : 0)) * scale;
     {
       const { s, mat } = this.sprite(fx('flash'), 0xffffff, pos);
       mat.rotation = Math.random() * Math.PI;
-      this.add(s, mat, { life: 0.1 + power * 0.04, scale0: 0.4 * k, scale1: 1.5 * k, scaleEase: 'pop', fade: 'linear' });
+      this.add(s, mat, { life: 0.08 + power * 0.03, scale0: 0.3 * k, scale1: 0.9 * k, scaleEase: 'pop', fade: 'linear' });
     }
     {
       const { s, mat } = this.sprite(fx('burst'), color, pos);
       mat.rotation = Math.random() * Math.PI;
-      this.add(s, mat, { life: 0.22 + power * 0.08, scale0: 0.6 * k, scale1: 2.3 * k, scaleEase: 'pop', spin: rand(-4, 4) });
+      this.add(s, mat, { life: 0.2 + power * 0.06, scale0: 0.5 * k, scale1: 1.5 * k, scaleEase: 'pop', spin: rand(-4, 4) });
     }
-    {
+    if (heavy) {
+      // Comic speed lines only for the big hits.
       const { s, mat } = this.sprite(tex.lines(), color2, pos);
       mat.rotation = Math.random() * Math.PI;
-      this.add(s, mat, { life: 0.2 + power * 0.1, scale0: 1.2 * k, scale1: 3.6 * k });
+      mat.opacity = 0.7;
+      this.add(s, mat, { life: 0.2 + power * 0.1, scale0: 1.2 * k, scale1: 3.2 * k });
     }
     {
       const { s, mat } = this.sprite(fx('ring'), color2, pos);
       this.add(s, mat, { life: 0.25 + power * 0.1, scale0: 0.3 * k, scale1: 3.2 * k });
     }
     if (slash) {
-      // Melee: a swipe arc across the impact, angled along the blow.
-      const { s, mat } = this.sprite(fx('slash'), color2, pos);
-      mat.rotation = Math.atan2(dir.y, Math.abs(dir.x) + Math.abs(dir.z)) + rand(-0.9, 0.9) + (Math.random() < 0.5 ? 0 : Math.PI);
-      this.add(s, mat, { life: 0.18 + power * 0.06, scale0: 1.4 * k, scale1: 2.6 * k, scaleEase: 'pop', fade: 'late' });
+      // Melee: an animated cut across the impact, angled along the blow.
+      const rot = Math.atan2(dir.y, Math.abs(dir.x) + Math.abs(dir.z)) + rand(-0.9, 0.9) + (Math.random() < 0.5 ? 0 : Math.PI);
+      this.flipbook('slashArc', color, pos, 2.2 * k, 0.2 + power * 0.06, rot, 'slash');
     }
+    // Animated impact burst (and flying debris on heavy blows).
+    this.flipbook('impactBurst', color, pos, 1.8 * k, 0.24 + power * 0.08, Math.random() * 6, 'burst');
+    if (heavy) this.flipbook('impactDebris', 0x8a6a4a, pos, 2.8 * k, 0.4, Math.random() * 6, 'dirt');
     const n = Math.floor(5 + power * 10 + (heavy ? 6 : 0));
     for (let i = 0; i < n; i++) {
       const map = i % 3 === 0 ? tex.star() : i % 3 === 1 ? fx('spark') : fx('glint');
@@ -415,6 +452,7 @@ export class Effects {
       const u = p.age / p.life;
       if (u >= 1) {
         this.group.remove(p.obj);
+        if (p.frames) (p.mat as THREE.SpriteMaterial).map?.dispose();
         p.mat.dispose();
         continue;
       }
@@ -425,6 +463,10 @@ export class Effects {
       const sc = p.scale0 + (p.scale1 - p.scale0) * su;
       p.obj.scale.set(sc, sc, sc);
       if ((p.obj as THREE.Sprite).isSprite) (p.mat as THREE.SpriteMaterial).rotation += p.spin * dt;
+      if (p.frames) {
+        const map = (p.mat as THREE.SpriteMaterial).map!;
+        map.offset.x = Math.min(p.frames - 1, Math.floor(u * p.frames)) / p.frames;
+      }
       p.mat.opacity = p.fade === 'late' ? (u < 0.5 ? 1 : 1 - (u - 0.5) * 2) : 1 - u;
       keep.push(p);
     }

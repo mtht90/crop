@@ -124,6 +124,9 @@ export interface ActionDef {
   reflect?: [number, number];
 }
 
+/** Pieces of the Quaternius modular outfits. */
+export type OutfitPart = 'body' | 'arms' | 'legs' | 'feet' | 'hood' | 'pauldron' | 'bracer' | 'belt';
+
 export interface Look {
   skin: number;
   hair: number;
@@ -137,6 +140,8 @@ export interface Look {
   /** Base body model and hairstyle from the CC0 character kit. */
   body: 'female' | 'male';
   hairModel: 'hairBuns' | 'hairLong' | 'hairParted' | 'hairBuzzed' | 'hairBuzzedF';
+  /** CC0 outfit (Quaternius Modular Character Outfits) tinted with the colors above; replaces the code-built clothes. */
+  outfit?: { set: 'ranger' | 'peasant'; parts: OutfitPart[] };
 }
 
 export interface CharacterDef {

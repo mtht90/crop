@@ -100,5 +100,6 @@ export const arrowChar: CharacterDef = {
     hairStyle: 'spiky',
     body: 'male',
     hairModel: 'hairParted',
+    outfit: { set: 'ranger', parts: ['body', 'arms', 'bracer', 'belt', 'legs', 'feet', 'hood', 'pauldron'] },
   },
 };

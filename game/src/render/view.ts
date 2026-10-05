@@ -36,6 +36,8 @@ interface RigBundle {
   rope: THREE.Mesh;
   /** Suction cup stuck where the grapple latched. */
   cup: THREE.Object3D;
+  /** Action serial that already got its swing streak. */
+  swingSerial: number;
 }
 
 /** Owns the Three.js renderer: world scene, first-person camera and viewmodel. */
@@ -138,7 +140,7 @@ export class GameView {
       const cup = buildHookHead(1.3);
       cup.visible = false;
       this.scene.add(cup);
-      return { fighter: f, rig, anim: new ModelAnimator(rig, f), trails, ghostT: 0, twirlT: 0, aura, rope, cup };
+      return { fighter: f, rig, anim: new ModelAnimator(rig, f), trails, ghostT: 0, twirlT: 0, aura, rope, cup, swingSerial: -1 };
     });
     if (pov) {
       this.viewmodel.setFighter(pov);
@@ -443,6 +445,15 @@ export class GameView {
     const w = f.def.weapon;
     const strike = !!act && f.state === 'action' && phaseOf(act.def, act.frame).stage === 'strike' && (w === 'fists' || w === 'hammer' || w === 'katana' || w === 'umbrella' || (w === 'grapple' && !act.def.spawns));
     const hitHand = act?.def.hits?.find((h) => act.frame >= h.start - 1 && act.frame < h.end + 1)?.hand ?? 'R';
+    // Animated swing streak once per melee action, at the start of its strike.
+    if (strike && act && b.swingSerial !== f.actionSerial && !act.def.hits?.every((h) => h.area)) {
+      b.swingSerial = f.actionSerial;
+      const anim = act.def.anim;
+      const kind = w === 'katana' ? 'blade' : w === 'hammer' ? 'blunt' : w === 'umbrella' ? (anim === 'sweep' ? 'blunt' : 'thrust') : 'punch';
+      const pov = f === this.pov;
+      const pos = pov ? f.eye.addScaledVector(f.aimDir(), 1.7).add(new THREE.Vector3(0, -0.25, 0)) : f.pos.clone().addScaledVector(f.forward(), 0.9).setY(f.pos.y + 1.2);
+      this.effects.swing(pos, f.def.element.color, kind, hitHand === 'L', pov ? 0.75 : 1);
+    }
     b.trails.L.emitting = visible && strike && (hitHand === 'L' || hitHand === 'B');
     b.trails.R.emitting = visible && strike && (hitHand === 'R' || hitHand === 'B');
     const cam = this.camera.position;

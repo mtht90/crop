@@ -143,5 +143,6 @@ export const zip: CharacterDef = {
     hairStyle: 'spiky',
     body: 'male',
     hairModel: 'hairBuzzed',
+    outfit: { set: 'ranger', parts: ['body', 'arms', 'bracer', 'belt', 'legs', 'feet', 'pauldron'] },
   },
 };

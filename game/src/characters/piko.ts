@@ -143,5 +143,6 @@ export const piko: CharacterDef = {
     hairStyle: 'spiky',
     body: 'female',
     hairModel: 'hairBuns',
+    outfit: { set: 'peasant', parts: ['body', 'arms', 'legs', 'feet'] },
   },
 };

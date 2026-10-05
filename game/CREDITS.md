@@ -10,10 +10,15 @@ All third-party assets are CC0 1.0 (public domain). Credit is not required but g
 | [Particle Pack](https://kenney.nl/assets/particle-pack) | Kenney | CC0 | Hit flashes, sparks, slash arcs, smoke, debris, rings, just-guard seal, spin swirl (`public/assets/fx`) |
 | [Blaster Kit](https://kenney.nl/assets/blaster-kit) | Kenney | CC0 | Star's pistols (`blaster-j` → `Blaster.glb`), Zip's hook launcher (`blaster-h` → `HookGun.glb`) |
 | [Cute umbrella](https://opengameart.org/content/cute-umbrella) | ege | CC0 | Ameri's umbrella (`public/assets/models/Umbrella.glb`, converted from .blend with `tools/umbrella-export.py`, texture greyed for tinting) |
+| [Katana](https://opengameart.org/content/katana-3) | pfunked | CC0 | Kagetsu's katana (`Katana.glb`, converted from FBX with `tools/katana-export.py`) |
+| [Katana](https://opengameart.org/content/katana) | Clint Bellanger | CC0 | Kagetsu's sheath (`Saya.glb`) |
+| [Modular Character Outfits - Fantasy](https://quaternius.itch.io/modular-character-outfits-fantasy) (Standard) | Quaternius | CC0 | All outfits (`Outfit_*.glb`, textures greyed and tinted per character in game) |
+| [Weapon Slash Effect](https://opengameart.org/content/weapon-slash-effect) (Classic) | Cethiel | CC0 | Animated slash arcs (`fx/slashArc.png`, `slashWide.png`, `slashStreak.png`) |
+| [Earth Impact - Magic Effect](https://opengameart.org/content/earth-impact-magic-effect) | Cethiel | CC0 | Animated hit bursts and debris (`fx/impactBurst.png`, `impactRing.png`, `impactDebris.png`) |
 | [5 Chiptunes (Action)](https://opengameart.org/content/5-chiptunes-action) | Juhani Junkala (SubspaceAudio) | CC0 | BGM (`bgm_menu.mp3` = Title Screen, `bgm_battle.mp3` = Level 1) |
 | [Impact Sounds](https://kenney.nl/assets/impact-sounds), [Sci-fi Sounds](https://kenney.nl/assets/sci-fi-sounds), [Interface Sounds](https://kenney.nl/assets/interface-sounds), [Digital Audio](https://kenney.nl/assets/digital-audio) | Kenney | CC0 | Sound effects (`public/assets/audio`) |
 
-Outfits (jacket, pants, gauntlets, bow, toy hammer, katana, yo-yo, suction-cup grapple head, sneakers), the arena, the comic speed lines / hex barrier / trails and the fallback synth sounds are made in code for this project; the blaster and sprite effects fall back to code-built versions if their files are missing. Kenney sounds were converted from OGG to MP3 for wider browser support.
+Boxing gloves, bow, toy hammer, yo-yo, suction-cup grapple head (and the fallback jacket/pants outfit), the arena, the comic speed lines / hex barrier / trails and the fallback synth sounds are made in code for this project; the blaster and sprite effects fall back to code-built versions if their files are missing. Kenney sounds were converted from OGG to MP3 for wider browser support.
 
 ## Rebuilding the models
 

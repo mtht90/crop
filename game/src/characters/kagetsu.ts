@@ -137,5 +137,6 @@ export const kagetsu: CharacterDef = {
     hairStyle: 'ponytail',
     body: 'male',
     hairModel: 'hairParted',
+    outfit: { set: 'ranger', parts: ['body', 'arms', 'bracer', 'belt', 'legs', 'feet'] },
   },
 };

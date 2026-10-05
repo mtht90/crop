@@ -20,6 +20,14 @@ const MODEL_FILES = {
   hookGun: 'HookGun.glb',
   /** "Cute umbrella" by ege (OpenGameArt, CC0), Ameri's umbrella. */
   umbrella: 'Umbrella.glb',
+  /** "Katana" by pfunked and the sheath from "Katana" by Clint Bellanger (OpenGameArt, CC0). */
+  katana: 'Katana.glb',
+  saya: 'Saya.glb',
+  /** Quaternius Modular Character Outfits - Fantasy (CC0), textures greyed for tinting. */
+  outfitMaleRanger: 'Outfit_Male_Ranger.glb',
+  outfitFemaleRanger: 'Outfit_Female_Ranger.glb',
+  outfitMalePeasant: 'Outfit_Male_Peasant.glb',
+  outfitFemalePeasant: 'Outfit_Female_Peasant.glb',
 } as const;
 const ANIM_FILES = ['anims1.glb', 'anims2.glb'];
 
