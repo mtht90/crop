@@ -4,9 +4,9 @@ import type { ActionDef, CharacterDef, Spawn } from '../combat/types';
 const hook = (frame: number, extra: Partial<Spawn> = {}): Spawn => ({
   frame,
   hand: 'R',
-  speed: 44,
+  speed: 54,
   radius: 0.45,
-  life: 38,
+  life: 32,
   visual: 'hook',
   hook: 'self',
   damage: 22,

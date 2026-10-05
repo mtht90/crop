@@ -449,11 +449,11 @@ export class ViewModel {
   private updateExtras(f: Fighter, dt: number) {
     const anim = f.state === 'action' ? f.action?.def.anim : undefined;
     if (this.umbrella) {
-      const open = f.guarding || f.gliding || anim === 'parasol' || anim === 'umbrellaRush' || anim === 'updraft' || anim === 'shieldFire' || anim === 'shieldShot';
+      const open = f.canopyBroken === 0 && (f.guarding || f.gliding || anim === 'parasol' || anim === 'umbrellaRush' || anim === 'updraft' || anim === 'shieldFire' || anim === 'shieldShot');
       this.umbrellaOpen = damp(this.umbrellaOpen, open ? 1 : 0, open ? 30 : 12, dt);
       this.umbrella.setOpen(this.umbrellaOpen);
       // Shield: swing the canopy round to face forward like a round shield.
-      const shield = f.guarding || anim === 'parasol' || anim === 'shieldShot' || anim === 'shieldFire' || anim === 'umbrellaRush';
+      const shield = f.canopyBroken === 0 && (f.guarding || anim === 'parasol' || anim === 'shieldShot' || anim === 'shieldFire' || anim === 'umbrellaRush');
       this.umbrellaShield = damp(this.umbrellaShield, shield ? 1 : 0, 25, dt);
       this.umbrella.group.rotation.set(-1.2 * this.umbrellaShield, 0, -0.45 * this.umbrellaShield);
     }

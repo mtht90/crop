@@ -164,10 +164,16 @@ export class CpuController {
       this.reactedTo = threat;
       const r = Math.random();
       const sk = self.def.actions[self.def.skill];
-      if ((sk.counter || sk.reflect) && self.skillCd === 0 && Math.random() < this.p.guardChance + 0.15) {
+      // An umbrella can't stop melee: dodge those instead of raising it.
+      const melee = typeof threat === 'object' && !!(threat as { hits?: unknown[] }).hits?.length;
+      const canopyUseless = !!self.def.canopy && (melee || self.canopyBroken > 0);
+      const dodge = canopyUseless ? this.p.dodgeChance + this.p.guardChance : this.p.dodgeChance;
+      if ((sk.counter || (sk.reflect && !canopyUseless)) && self.skillCd === 0 && Math.random() < this.p.guardChance + 0.15) {
         // Iai counter / umbrella parry instead of guarding.
         i.skillPressed = true;
-      } else if (r < this.p.dodgeChance && self.stamina >= 1 && edgeRoom > 3.5) {
+      } else if (canopyUseless && r >= dodge) {
+        // Nothing to do but take it.
+      } else if (r < dodge && self.stamina >= 1 && edgeRoom > 3.5) {
         i.dashPressed = true;
         move.addScaledVector(right, this.strafeDir);
         this.strafeDir *= -1;

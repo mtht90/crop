@@ -264,6 +264,14 @@ export class CombatWorld {
           p.life = Math.max(p.life, 50);
           this.events.push({ type: 'parry', attacker: p.owner, target: tgt, pos: p.pos.clone(), reflected: true });
           tgt.gainUlt(6);
+          if (tgt.def.canopy) {
+            // Each deflected shot wears the canopy down.
+            tgt.guardHp -= p.props.guardDamage ?? p.props.damage * 0.3;
+            if (tgt.guardHp <= 0) {
+              tgt.breakCanopy();
+              this.events.push({ type: 'guard', attacker: p.owner, target: tgt, pos: p.pos.clone(), props: p.props, broke: true });
+            }
+          }
           p.owner = tgt;
           keep.push(p);
           continue;
@@ -292,7 +300,8 @@ export class CombatWorld {
   applyHit(att: Fighter, tgt: Fighter, props: HitProps, dir: Vector3, point: Vector3, projectile: boolean): HitResult {
     const toAttacker = dir.clone().multiplyScalar(-1);
     const facing = tgt.forward().dot(toAttacker) > 0.1;
-    const guarded = tgt.guarding && tgt.state === 'free' && facing;
+    // An umbrella only stops shots; melee goes straight through it.
+    const guarded = tgt.guarding && tgt.state === 'free' && facing && (!tgt.def.canopy || projectile);
 
     const counter = tgt.counterActive();
     if (counter) {
@@ -319,7 +328,7 @@ export class CombatWorld {
       this.events.push({ type: 'counter', attacker: att, target: tgt, pos: point });
       return 'counter';
     }
-    if (!projectile && tgt.reflectActive() && facing) {
+    if (!projectile && tgt.reflectActive() && facing && !tgt.def.canopy) {
       // Umbrella parry vs melee: blocked cleanly and the attacker bounces off.
       if (!(att.action?.def.armor && att.state === 'action')) att.receiveHit(dir.clone().multiplyScalar(-1), 9, 4, 26, 0.5);
       tgt.gainUlt(8);
@@ -353,7 +362,8 @@ export class CombatWorld {
       const broke = tgt.guardHp <= 0;
       if (broke) {
         tgt.guardHp = 0;
-        tgt.setState('guardbreak', 70);
+        if (tgt.def.canopy) tgt.breakCanopy();
+        else tgt.setState('guardbreak', 70);
       }
       tgt.lastHitDir.copy(dir);
       tgt.lastHitStrength = 0.3;

@@ -605,7 +605,7 @@ export class ModelAnimator {
   private updateUmbrella(dt: number) {
     const f = this.fighter;
     const anim = f.state === 'action' ? f.action?.def.anim : undefined;
-    const open = f.guarding || f.gliding || anim === 'parasol' || anim === 'umbrellaRush' || anim === 'updraft' || anim === 'shieldFire' || anim === 'shieldShot';
+    const open = f.canopyBroken === 0 && (f.guarding || f.gliding || anim === 'parasol' || anim === 'umbrellaRush' || anim === 'updraft' || anim === 'shieldFire' || anim === 'shieldShot');
     this.umbrellaOpen = damp(this.umbrellaOpen, open ? 1 : 0, open ? 30 : 12, dt);
     this.rig.setUmbrellaOpen?.(this.umbrellaOpen);
     // Thrusts and the parry hold it point-first.

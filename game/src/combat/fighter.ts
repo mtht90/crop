@@ -102,6 +102,8 @@ export class Fighter {
   gliding = false;
   /** Active grappling-hook pull toward a terrain point or the opponent. */
   grapple: { point: Vector3; target: Fighter | null; t: number; stuck: number; forced: boolean; lastD: number } | null = null;
+  /** Frames left before a broken umbrella can be opened again. */
+  canopyBroken = 0;
   /** Set when the simulation turns the fighter (counter teleport); controllers adopt it. */
   yawOverride: number | null = null;
 
@@ -149,7 +151,15 @@ export class Fighter {
   /** Parry window active this frame. */
   reflectActive() {
     const r = this.state === 'action' ? this.action?.def.reflect : undefined;
-    return !!r && this.action!.frame >= r[0] && this.action!.frame < r[1];
+    return !!r && this.canopyBroken === 0 && this.action!.frame >= r[0] && this.action!.frame < r[1];
+  }
+
+  /** Umbrella HP ran out: it stays shut for a while (no stun). */
+  breakCanopy() {
+    this.guardHp = 0;
+    this.guarding = false;
+    this.canopyBroken = this.def.canopy?.breakFrames ?? 0;
+    if (this.state === 'action' && this.action?.def.reflect && this.action.def.kind !== 'ult') this.setState('free');
   }
 
   /** Starts a grappling pull toward a point (or the opponent when `target` is set). */
@@ -188,6 +198,7 @@ export class Fighter {
     this.grapple = null;
     this.gliding = false;
     this.yawOverride = null;
+    this.canopyBroken = 0;
     this.setState('locked');
     this.buffer = { attack: 0, dash: 0, jump: 0, skill: 0, ult: 0 };
   }
@@ -368,7 +379,7 @@ export class Fighter {
   /** Umbrella: holding jump while falling floats down slowly. */
   private updateGlide() {
     const cap = this.def.glide;
-    const can = !!cap && !this.grounded && this.jumpHeld && (this.state === 'free' || this.state === 'action') && this.vel.y < 0;
+    const can = !!cap && this.canopyBroken === 0 && !this.grounded && this.jumpHeld && (this.state === 'free' || this.state === 'action') && this.vel.y < 0;
     this.gliding = can;
     if (can) {
       this.vel.y = Math.max(this.vel.y, -cap!);
@@ -385,6 +396,10 @@ export class Fighter {
         this.stamina++;
       }
     }
+    if (this.canopyBroken > 0) {
+      this.canopyBroken--;
+      if (this.canopyBroken === 0) this.guardHp = GUARD_MAX * 0.5;
+    }
     if (this.guarding) {
       if (this.guardT === 0) this.justEligible = this.sinceGuardEnd >= JUST_GUARD_COOLDOWN;
       this.guardT++;
@@ -392,7 +407,7 @@ export class Fighter {
     } else {
       this.sinceGuardEnd++;
       this.guardT = 0;
-      if (this.state !== 'guardbreak') this.guardHp = Math.min(GUARD_MAX, this.guardHp + 0.35);
+      if (this.state !== 'guardbreak' && this.canopyBroken === 0) this.guardHp = Math.min(GUARD_MAX, this.guardHp + 0.35);
     }
     if (this.reloadT > 0) {
       this.reloadT--;
@@ -438,7 +453,7 @@ export class Fighter {
       this.startAction(this.def.ult);
       return true;
     }
-    if (b.skill > 0 && this.skillCd === 0) {
+    if (b.skill > 0 && this.skillCd === 0 && !(this.canopyBroken > 0 && this.def.actions[this.def.skill].reflect)) {
       b.skill = 0;
       this.startAction(this.def.skill);
       return true;
@@ -467,7 +482,7 @@ export class Fighter {
 
   private updateFree(intent: Intent, desired: Vector3) {
     const b = this.buffer;
-    this.guarding = intent.guard && this.grounded && this.guardHp > 0;
+    this.guarding = intent.guard && this.grounded && this.guardHp > 0 && this.canopyBroken === 0;
 
     if (this.tryStartSpecial()) return;
     if (this.tryAirMove()) return;
@@ -497,7 +512,7 @@ export class Fighter {
         return;
       }
     }
-    const scale = this.guarding ? 0.35 : 1;
+    const scale = this.guarding ? (this.def.canopy?.moveScale ?? 0.35) : 1;
     if (this.grounded) this.applyGroundControl(desired.multiplyScalar(scale), 70);
     else this.applyAirControl(desired, 22);
   }

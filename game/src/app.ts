@@ -218,6 +218,9 @@ export class App {
             } else if (e.type === 'counter') {
               if (e.target === m.player) this.hud.toast('居合カウンター！', '#dfe8ff');
               else if (e.attacker === m.player) this.hud.toast('カウンターされた！', '#ffb0a0');
+            } else if (e.type === 'guard' && e.broke && e.target.def.canopy) {
+              if (e.target === m.player) this.hud.toast('傘が壊れた！ しばらく開けない', '#ffb0a0');
+              else if (e.attacker === m.player) this.hud.toast('傘を壊した！');
             } else if (e.type === 'parry' && e.target === m.player) this.hud.toast(e.reflected ? 'はね返した！' : 'パリィ！', '#c9b8ff');
           }
           this.view.handleEvents(events);

@@ -80,7 +80,7 @@ const actions: Record<string, ActionDef> = {
     total: 18,
     spawns: [{ frame: 3, hand: 'R', speed: 62, radius: 0.22, life: 34, damage: 12, knockback: 1.5, knockUp: 0.3, hitstun: 10, hitstop: 1, guardDamage: 4 }],
     reflect: [0, 18],
-    moveScale: 0.3,
+    moveScale: 0.5,
   },
   // E: pop the umbrella open - parry window that sends shots back and bounces melee attackers.
   parasol: {
@@ -89,7 +89,7 @@ const actions: Record<string, ActionDef> = {
     anim: 'parasol',
     total: 40,
     reflect: [3, 24],
-    moveScale: 0.25,
+    moveScale: 0.5,
   },
   // Q: open the umbrella as a shield and fire from the tip.
   shieldFire: {
@@ -99,7 +99,7 @@ const actions: Record<string, ActionDef> = {
     total: 96,
     spawns: barrage,
     reflect: [4, 86],
-    moveScale: 0.3,
+    moveScale: 0.5,
     committed: true,
     armor: true,
     invuln: [0, 10],
@@ -116,6 +116,7 @@ export const ameri: CharacterDef = {
   recovery: 'updraft',
   dashAttack: 'umbrellaRush',
   guardAttack: 'shieldShot',
+  canopy: { breakFrames: 300, moveScale: 0.5 },
   glide: 3.2,
   maxHp: 950,
   walkSpeed: 7.2,

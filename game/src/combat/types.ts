@@ -155,6 +155,12 @@ export interface CharacterDef {
   recoil?: number;
   /** Attack performed when clicking while guarding (fires through the umbrella shield); optional. */
   guardAttack?: string;
+  /**
+   * Umbrella guard: guarding/parrying only stops projectiles (melee goes through),
+   * the guard meter is the canopy's HP, and breaking it keeps the umbrella shut
+   * for `canopyBreakFrames` instead of stunning.
+   */
+  canopy?: { breakFrames: number; moveScale: number };
   /** Holding jump in the air caps the fall speed at this value (umbrella glide). */
   glide?: number;
   maxHp: number;
