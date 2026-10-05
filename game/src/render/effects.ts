@@ -111,6 +111,7 @@ interface ProjectileVis {
   trail: Trail;
   spin: number;
   arrow: boolean;
+  wave?: boolean;
 }
 
 function buildArrow(color: number, size: number) {
@@ -342,23 +343,29 @@ export class Effects {
       if (!v) {
         const [c1, c2] = colorOf(p);
         const hookVis = p.visual === 'hook';
+        const wave = p.visual === 'wave';
         // Arrows and hooks are oriented meshes; everything else is a spinning star sprite.
         const arrow = p.visual === 'arrow' || hookVis;
-        const core: THREE.Object3D = hookVis ? buildHookHead(2.4 * p.size) : arrow ? buildArrow(c1, p.size) : new THREE.Sprite(spriteMat(tex.star(), 0xffffff));
+        const core: THREE.Object3D = hookVis ? buildHookHead(2.4 * p.size) : arrow ? buildArrow(c1, p.size) : new THREE.Sprite(spriteMat(wave ? fx('burst') : tex.star(), wave ? c2 : 0xffffff));
         const glow = new THREE.Sprite(spriteMat(fx('soft'), c1));
         core.renderOrder = glow.renderOrder = 6;
         const trail = new Trail(c2, (arrow ? 0.06 : 0.12) * p.size, arrow ? 0.12 : 0.09, 10);
         trail.emitting = true;
         this.group.add(glow, core, trail.mesh);
-        v = { core, glow, trail, spin: rand(-12, 12), arrow };
+        v = { core, glow, trail, spin: rand(-12, 12), arrow, wave };
         this.projectiles.set(p.id, v);
       }
       const pos = new THREE.Vector3().lerpVectors(p.prev, p.pos, alpha);
       v.core.position.copy(pos);
       v.glow.position.copy(pos);
-      v.glow.scale.setScalar((v.arrow ? 0.5 : 1.0) * p.size);
+      v.glow.scale.setScalar((v.arrow ? 0.5 : v.wave ? 2.2 : 1.0) * p.size);
+      if (v.wave) {
+        // Shockwave running along the floor: a flickering burst kicking up dust.
+        v.core.scale.setScalar(1.3 + Math.random() * 0.4);
+        if (Math.random() < 0.5) this.dust(new THREE.Vector3(pos.x, pos.y - 0.4, pos.z), 1, 0.7);
+      }
       if (v.arrow) v.core.lookAt(pos.clone().add(p.vel));
-      else {
+      else if (!v.wave) {
         v.core.scale.setScalar(0.42 * p.size);
         ((v.core as THREE.Sprite).material as THREE.SpriteMaterial).rotation += v.spin * 0.016;
       }

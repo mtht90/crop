@@ -1,5 +1,5 @@
 import { Vector3 } from 'three';
-import { BODY_HEIGHT, BODY_RADIUS, EYE_HEIGHT, GUARD_MAX } from '../config';
+import { ARENA_RADIUS, BODY_HEIGHT, BODY_RADIUS, EYE_HEIGHT, GUARD_MAX } from '../config';
 import { Fighter } from './fighter';
 import { raycastTerrain, segmentHitsTerrain } from './terrain';
 import { TICK, type ActionDef, type HitProps, type Intent, type Spawn } from './types';
@@ -9,7 +9,7 @@ function charged<T extends HitProps>(props: T, def: ActionDef, level: number): T
   const c = def.charge;
   if (!c || level <= 0) return props;
   const k = (m = 1) => 1 + (m - 1) * level;
-  return { ...props, damage: props.damage * k(c.damage), knockback: props.knockback * k(c.knockback), knockUp: props.knockUp * k(c.knockback), hitstop: Math.round(props.hitstop * k(1.6)), heavy: props.heavy || level > 0.8 };
+  return { ...props, damage: props.damage * k(c.damage), knockback: props.knockback * k(c.knockback), knockUp: props.knockUp * k(c.knockback), hitstop: Math.round(props.hitstop * k(1.6)), heavy: props.heavy || level > 0.8, guardDamage: props.guardDamage === undefined ? undefined : props.guardDamage * k(c.guard) };
 }
 
 export interface Projectile {
@@ -23,7 +23,9 @@ export interface Projectile {
   props: HitProps;
   id: number;
   gravity: number;
-  visual: 'star' | 'arrow' | 'hook';
+  visual: 'star' | 'arrow' | 'hook' | 'wave';
+  /** Runs along the floor and dies off the arena edge. */
+  ground?: boolean;
   hook?: 'self' | 'yank';
   onHit?: string;
 }
@@ -47,6 +49,7 @@ export type CombatEvent =
   | { type: 'counter'; attacker: Fighter; target: Fighter; pos: Vector3 }
   | { type: 'parry'; attacker: Fighter; target: Fighter; pos: Vector3; reflected: boolean }
   | { type: 'grapple'; fighter: Fighter; pos: Vector3; onFighter: boolean }
+  | { type: 'canopyBreak'; fighter: Fighter; attacker: Fighter; pos: Vector3 }
   | { type: 'ringout'; fighter: Fighter };
 
 let projectileId = 0;
@@ -165,6 +168,17 @@ export class CombatWorld {
 
   private spawnProjectile(att: Fighter, s: Spawn, tgt: Fighter, speedK = 1, sizeK = 1) {
     const base = { owner: att, radius: s.radius * sizeK, life: s.life, size: (s.size ?? 1) * sizeK, props: s, gravity: s.gravity ?? 0, visual: s.visual ?? 'star', hook: s.hook, onHit: s.onHit } as const;
+    if (s.from === 'ground') {
+      // Shockwaves racing along the floor from the feet, fanned around the facing.
+      const f = att.forward();
+      const count = s.count ?? 1;
+      for (let k = 0; k < count; k++) {
+        const dir = f.clone().applyAxisAngle(new Vector3(0, 1, 0), (k - (count - 1) / 2) * (s.fan ?? 0));
+        const p = att.pos.clone().addScaledVector(dir, 0.8).setY(att.pos.y + 0.45);
+        this.projectiles.push({ ...base, pos: p.clone(), prev: p.clone(), vel: dir.multiplyScalar(s.speed), id: projectileId++, ground: true });
+      }
+      return;
+    }
     if (s.from === 'sky') {
       // Rain: drop from above the opponent with a little scatter.
       const a = Math.random() * Math.PI * 2;
@@ -241,6 +255,7 @@ export class CombatWorld {
       if (p.gravity) p.vel.y -= p.gravity * TICK;
       p.pos.addScaledVector(p.vel, TICK);
       p.life--;
+      if (p.ground && Math.hypot(p.pos.x, p.pos.z) > ARENA_RADIUS + 0.3) p.life = 0;
       // Projectiles stop on the arena and floating rocks.
       const ground = segmentHitsTerrain(p.prev, p.pos);
       if (ground) {
@@ -264,14 +279,8 @@ export class CombatWorld {
           p.life = Math.max(p.life, 50);
           this.events.push({ type: 'parry', attacker: p.owner, target: tgt, pos: p.pos.clone(), reflected: true });
           tgt.gainUlt(6);
-          if (tgt.def.canopy) {
-            // Each deflected shot wears the canopy down.
-            tgt.guardHp -= p.props.guardDamage ?? p.props.damage * 0.3;
-            if (tgt.guardHp <= 0) {
-              tgt.breakCanopy();
-              this.events.push({ type: 'guard', attacker: p.owner, target: tgt, pos: p.pos.clone(), props: p.props, broke: true });
-            }
-          }
+          // Each deflected shot wears an umbrella down.
+          if (tgt.damageCanopy(Math.max(p.props.guardDamage ?? 0, p.props.damage * 0.5))) this.events.push({ type: 'canopyBreak', fighter: tgt, attacker: p.owner, pos: p.pos.clone() });
           p.owner = tgt;
           keep.push(p);
           continue;
@@ -301,7 +310,7 @@ export class CombatWorld {
     const toAttacker = dir.clone().multiplyScalar(-1);
     const facing = tgt.forward().dot(toAttacker) > 0.1;
     // An umbrella only stops shots; melee goes straight through it.
-    const guarded = tgt.guarding && tgt.state === 'free' && facing && (!tgt.def.canopy || projectile);
+    const guarded = tgt.guarding && tgt.state === 'free' && facing;
 
     const counter = tgt.counterActive();
     if (counter) {
@@ -362,8 +371,7 @@ export class CombatWorld {
       const broke = tgt.guardHp <= 0;
       if (broke) {
         tgt.guardHp = 0;
-        if (tgt.def.canopy) tgt.breakCanopy();
-        else tgt.setState('guardbreak', 70);
+        tgt.setState('guardbreak', 70);
       }
       tgt.lastHitDir.copy(dir);
       tgt.lastHitStrength = 0.3;

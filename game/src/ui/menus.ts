@@ -25,7 +25,7 @@ const touchHelp = `
   攻撃ボタン：押す・押しっぱなし（押したまま動かすと狙える。弓は離すと発射）<br>
   ジャンプ（空中でもう一度：上昇技）／ ダッシュ ／ ガード（攻撃の瞬間に出すとジャストガード）<br>
   スキル・必殺はボタンが光ったら使える。遠距離キャラは床や浮島を撃つと反動で戻れる<br>
-  ジップのフックは壁や浮島・相手に刺さって飛びつく。アメリはジャンプ長押しで滑空、ガード中に攻撃で傘の先から射撃
+  ジップのフックは壁や浮島・相手に刺さって飛びつく。アメリは攻撃で傘を開いて盾＋射撃（弾だけ防ぐ）、スキルで中ジャンプしてふわふわ降下
 </div>`;
 
 const controlsHtml = touchHelp + `
@@ -41,7 +41,7 @@ const controlsHtml = touchHelp + `
   <span><kbd>R</kbd></span><span>リロード</span>
   <span><kbd>Esc</kbd></span><span>ポーズ</span>
 </div>
-<p class="kbd-only" style="margin-top:8px;font-size:13px">※上昇技はスター・アロー以外（ジップはフック、アメリは傘で上昇し Space 長押しで滑空。アメリはガード中に左クリックで傘の先から射撃）。場外に飛ばされても縁まで戻れば登れる。弓は長押しで溜め撃ち。攻撃の瞬間に右クリックでジャストガード。着地の瞬間に <kbd>Shift</kbd> で受け身。</p>`;
+<p class="kbd-only" style="margin-top:8px;font-size:13px">※上昇技はスター・アロー以外（ジップはフック、アメリは傘で上昇し Space 長押しで滑空）。アメリは左クリック長押しで傘を開いて盾にしつつ先端から射撃（弾だけ防ぐ・傘は壊れると5秒開けない）、E で中ジャンプしてふわふわ降下。場外に飛ばされても縁まで戻れば登れる。弓は長押しで溜め撃ち。攻撃の瞬間に右クリックでジャストガード。着地の瞬間に <kbd>Shift</kbd> で受け身。</p>`;
 
 /** DOM menus: title, character select, pause and result screens. */
 export class Menus {

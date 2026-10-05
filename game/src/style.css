@@ -1175,3 +1175,11 @@ body:not(.touch) .touch-only {
     height: 150px;
   }
 }
+
+/* Umbrella HP (Ameri) reuses the guard bar. */
+.guardbar.canopy div {
+  background: #b9a3ff;
+}
+.guardbar.broken div {
+  background: #ff6b6b;
+}

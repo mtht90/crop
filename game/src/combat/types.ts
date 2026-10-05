@@ -48,9 +48,9 @@ export interface Spawn extends HitProps {
   size?: number;
   /** Downward acceleration (m/s^2) for arcing projectiles. */
   gravity?: number;
-  visual?: 'star' | 'arrow' | 'hook';
-  /** Rain down from above the opponent instead of leaving the hand. */
-  from?: 'hand' | 'sky';
+  visual?: 'star' | 'arrow' | 'hook' | 'wave';
+  /** Rain down from above the opponent, or run along the floor from the feet (shockwaves). */
+  from?: 'hand' | 'sky' | 'ground';
   /**
    * Grappling hook: 'self' pulls the shooter to whatever it latches onto
    * (terrain or the opponent); 'yank' reels the opponent in instead.
@@ -77,11 +77,12 @@ export interface Charge {
   at: number;
   /** Frames to reach full charge. */
   max: number;
-  /** Multipliers at full charge. */
+  /** Multipliers at full charge (`guard` scales guard damage). */
   damage?: number;
   knockback?: number;
   speed?: number;
   size?: number;
+  guard?: number;
 }
 
 export type ActionKind = 'attack' | 'skill' | 'ult';
@@ -115,6 +116,8 @@ export interface ActionDef {
   landCancel?: boolean;
   /** Counter stance: a hit landing in [start, end) is negated and `follow` starts behind the attacker. */
   counter?: { start: number; end: number; follow: string };
+  /** After this action, fall no faster than this (m/s) until landing, with light air steering (umbrella float). */
+  float?: number;
   /** Bodies don't collide during the action (pass-through slashes). */
   passThrough?: boolean;
   /** Parry: frontal projectiles in [start, end) are sent back, melee is blocked and bounced. */
@@ -153,14 +156,12 @@ export interface CharacterDef {
   dashAttack?: string;
   /** Push-back (m/s) per shot that hits the floor or a floating rock nearby (not the opponent). */
   recoil?: number;
-  /** Attack performed when clicking while guarding (fires through the umbrella shield); optional. */
-  guardAttack?: string;
   /**
-   * Umbrella guard: guarding/parrying only stops projectiles (melee goes through),
-   * the guard meter is the canopy's HP, and breaking it keeps the umbrella shut
-   * for `canopyBreakFrames` instead of stunning.
+   * Umbrella: reflect windows only stop projectiles (melee goes through) and wear
+   * down the canopy's HP; at zero it stays shut for `breakFrames` (no stun),
+   * during which `brokenBasic` replaces the basic attack and canopy moves are off.
    */
-  canopy?: { breakFrames: number; moveScale: number };
+  canopy?: { breakFrames: number; brokenBasic: string };
   /** Holding jump in the air caps the fall speed at this value (umbrella glide). */
   glide?: number;
   maxHp: number;

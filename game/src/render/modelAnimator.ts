@@ -84,12 +84,11 @@ const ATTACKS: Record<string, AttackSpec> = {
   pokeA: { clip: 'Punch_Cross' },
   pokeB: { clip: 'Punch_Cross' },
   sweep: { clip: 'Sword_Regular_B' },
-  airPoke: { clip: 'Sword_Attack' },
   umbrellaRush: { clip: 'Shield_Dash' },
 };
 
 /** Moves where the umbrella is held point-first (thrusts). */
-const UMBRELLA_THRUST = new Set(['pokeA', 'pokeB', 'airPoke', 'umbrellaRush']);
+const UMBRELLA_THRUST = new Set(['pokeA', 'pokeB', 'umbrellaRush']);
 
 /** Maps an action frame to clip time with the anticipation/strike/recovery curve. */
 function attackTime(spec: AttackSpec, def: ActionDef, frame: number) {
@@ -232,6 +231,17 @@ export class ModelAnimator {
     if (this.outcome === 'lose' && f.grounded && f.state !== 'ko' && f.state !== 'knockdown') {
       return { layers: [{ clip: 'Idle_No_Loop', time: this.time % 2.5, weight: 1 }], key: 'lose', fade: 0.4 };
     }
+    if (f.gliding && f.state === 'free' && f.def.weapon === 'umbrella') {
+      // Floating down: umbrella held overhead, legs dangling.
+      return {
+        layers: [
+          { clip: 'Jump_Loop', time: 0.5, weight: 1 },
+          { clip: 'Spell_Simple_Shoot', time: 0.35, weight: 3, upper: true },
+        ],
+        key: 'float',
+        fade: 0.1,
+      };
+    }
     if (f.grapple && !f.grapple.forced && f.state === 'free') {
       // Reeling in: launcher arm locked forward, legs tucked like a zip-line ride.
       return {
@@ -352,6 +362,7 @@ export class ModelAnimator {
         return { layers: [{ clip: 'Sword_Regular_A', time: d * 0.45, weight: 1 }], key, fade: 0.06 };
       }
       case 'loopUp':
+      case 'hopFloat':
       case 'updraft': {
         const d = assets.clips.NinjaJump_Start.duration;
         return { layers: [{ clip: 'NinjaJump_Start', time: Math.min(d * 0.6, (fr / 60) * 1.4), weight: 1 }, { clip: 'Spell_Simple_Shoot', time: 0.35, weight: 2, upper: true }], key, fade: 0.05 };
@@ -373,8 +384,7 @@ export class ModelAnimator {
         const t = hitAt < 0 ? hc * 0.45 : Math.min(assets.clips.Melee_Hook.duration, hc + ((fr - hitAt) / 60) * 0.7);
         return { layers: [{ clip: 'Melee_Hook', time: t, weight: 1 }], key, fade: 0.05 };
       }
-      case 'parasol':
-      case 'shieldShot':
+      case 'umbrellaOpen':
       case 'shieldFire': {
         const d = assets.clips.Idle_Shield_Loop.duration;
         return { layers: [{ clip: 'Idle_Shield_Loop', time: (fr / 60) % d, weight: 1, upper: true }], key, fade: 0.04 };
@@ -600,27 +610,31 @@ export class ModelAnimator {
   hookOut = false;
   private umbrellaOpen = 0;
   private umbrellaTilt = 0;
+  private umbrellaMode: 'forward' | 'up' = 'forward';
   private yoyoSpin = 0;
 
   private updateUmbrella(dt: number) {
     const f = this.fighter;
     const anim = f.state === 'action' ? f.action?.def.anim : undefined;
-    const open = f.canopyBroken === 0 && (f.guarding || f.gliding || anim === 'parasol' || anim === 'umbrellaRush' || anim === 'updraft' || anim === 'shieldFire' || anim === 'shieldShot');
+    const open = f.canopyBroken === 0 && (f.gliding || anim === 'umbrellaOpen' || anim === 'umbrellaRush' || anim === 'updraft' || anim === 'shieldFire');
     this.umbrellaOpen = damp(this.umbrellaOpen, open ? 1 : 0, open ? 30 : 12, dt);
     this.rig.setUmbrellaOpen?.(this.umbrellaOpen);
-    // Thrusts and the parry hold it point-first.
-    const thrust = f.guarding || (!!anim && (UMBRELLA_THRUST.has(anim) || anim === 'parasol' || anim === 'shieldFire' || anim === 'shieldShot'));
-    this.umbrellaTilt = damp(this.umbrellaTilt, thrust ? 1 : 0, 25, dt);
-    // Point the shaft along the aim (canopy toward the opponent) regardless of the wrist pose.
+    // Thrusts and the shield hold it point-first; floating holds it straight overhead.
+    const thrust = !!anim && (UMBRELLA_THRUST.has(anim) || anim === 'umbrellaOpen' || anim === 'shieldFire');
+    const overhead = !thrust && this.umbrellaOpen > 0.05 && (f.gliding || anim === 'updraft' || anim === 'hopFloat');
+    if (thrust) this.umbrellaMode = 'forward';
+    else if (overhead) this.umbrellaMode = 'up';
+    this.umbrellaTilt = damp(this.umbrellaTilt, thrust || overhead ? 1 : 0, 25, dt);
+    // Orient the shaft in model space regardless of the wrist pose.
     const wr = this.rig.weaponRoot;
     wr.quaternion.identity();
     if (this.umbrellaTilt > 0.001 && wr.parent) {
       this.rig.root.updateMatrixWorld(true);
       const parentQ = wr.parent.getWorldQuaternion(new THREE.Quaternion());
-      const want = this.rig.model
-        .getWorldQuaternion(new THREE.Quaternion())
-        .multiply(new THREE.Quaternion().setFromAxisAngle(AX, -f.pitch))
-        .multiply(new THREE.Quaternion().setFromAxisAngle(AX, Math.PI / 2));
+      const want = this.rig.model.getWorldQuaternion(new THREE.Quaternion());
+      if (this.umbrellaMode === 'forward') {
+        want.multiply(new THREE.Quaternion().setFromAxisAngle(AX, -f.pitch)).multiply(new THREE.Quaternion().setFromAxisAngle(AX, Math.PI / 2));
+      } else want.multiply(new THREE.Quaternion().setFromAxisAngle(AX, 0.12));
       const local = parentQ.invert().multiply(want);
       wr.quaternion.slerp(local, this.umbrellaTilt);
     }

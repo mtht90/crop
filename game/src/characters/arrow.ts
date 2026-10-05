@@ -30,7 +30,7 @@ const actions: Record<string, ActionDef> = {
     anim: 'drawShot',
     total: 18,
     spawns: [arrow(7)],
-    charge: { at: 6, max: 48, damage: 2.6, knockback: 2.8, speed: 1.6, size: 1.4 },
+    charge: { at: 6, max: 36, damage: 2.6, knockback: 2.8, speed: 1.6, size: 1.4, guard: 6 },
     upperBody: true,
     moveScale: 0.45,
   },

@@ -155,8 +155,6 @@ export class CpuController {
     if (this.guardHold > 0) {
       this.guardHold--;
       i.guard = true;
-      // Umbrella: shoot from behind the shield.
-      if (self.def.guardAttack && dist > 3 && Math.abs(wrapAngle(Math.atan2(-to.x, -to.z) - this.yaw)) < 0.2 && Math.random() < 0.3) i.attack = true;
     }
     const edgeRoom = ARENA_RADIUS - Math.hypot(self.pos.x, self.pos.z);
     const threat = this.detectThreat(seen, dist);
@@ -170,6 +168,9 @@ export class CpuController {
       const dodge = canopyUseless ? this.p.dodgeChance + this.p.guardChance : this.p.dodgeChance;
       if ((sk.counter || (sk.reflect && !canopyUseless)) && self.skillCd === 0 && Math.random() < this.p.guardChance + 0.15) {
         // Iai counter / umbrella parry instead of guarding.
+        i.skillPressed = true;
+      } else if (canopyUseless && melee && sk.float && self.skillCd === 0 && Math.random() < 0.6) {
+        // Umbrella: hop up out of reach and float down.
         i.skillPressed = true;
       } else if (canopyUseless && r >= dodge) {
         // Nothing to do but take it.

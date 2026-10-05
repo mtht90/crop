@@ -329,6 +329,13 @@ export class ViewModel {
       }
 
       this.actionOffset(f, side, o);
+      if (f.gliding && f.def.weapon === 'umbrella' && f.state === 'free' && side === 'R') {
+        // Umbrella overhead while floating down.
+        o.r.x += 0.3;
+        o.r.z += -0.35;
+        o.p.x -= 0.22;
+        o.p.y += 0.1;
+      }
       if (f.grapple && !f.grapple.forced) {
         // Reeling in: launcher thrust forward, the free hand braced.
         if (side === 'R') {
@@ -342,14 +349,7 @@ export class ViewModel {
         }
       }
 
-      // Umbrella guard: canopy straight ahead instead of crossed arms.
-      if (this.guardW > 0.001 && f.def.weapon === 'umbrella') {
-        const g = this.guardW;
-        if (side === 'R') {
-          o.p.x += -0.1 * g;
-          o.p.y += -0.06 * g;
-        } else o.p.y -= 0.1 * g;
-      } else if (this.guardW > 0.001) {
+      if (this.guardW > 0.001) {
       // Guard: cross the arms in front of the face.
         const g = this.guardW;
         o.p.x += lerp(0, -0.17 * s, g);
@@ -449,11 +449,11 @@ export class ViewModel {
   private updateExtras(f: Fighter, dt: number) {
     const anim = f.state === 'action' ? f.action?.def.anim : undefined;
     if (this.umbrella) {
-      const open = f.canopyBroken === 0 && (f.guarding || f.gliding || anim === 'parasol' || anim === 'umbrellaRush' || anim === 'updraft' || anim === 'shieldFire' || anim === 'shieldShot');
+      const open = f.canopyBroken === 0 && (f.gliding || anim === 'umbrellaOpen' || anim === 'umbrellaRush' || anim === 'updraft' || anim === 'shieldFire');
       this.umbrellaOpen = damp(this.umbrellaOpen, open ? 1 : 0, open ? 30 : 12, dt);
       this.umbrella.setOpen(this.umbrellaOpen);
       // Shield: swing the canopy round to face forward like a round shield.
-      const shield = f.canopyBroken === 0 && (f.guarding || anim === 'parasol' || anim === 'shieldShot' || anim === 'shieldFire' || anim === 'umbrellaRush');
+      const shield = f.canopyBroken === 0 && (anim === 'umbrellaOpen' || anim === 'shieldFire' || anim === 'umbrellaRush');
       this.umbrellaShield = damp(this.umbrellaShield, shield ? 1 : 0, 25, dt);
       this.umbrella.group.rotation.set(-1.2 * this.umbrellaShield, 0, -0.45 * this.umbrellaShield);
     }
@@ -661,7 +661,6 @@ export class ViewModel {
       case 'pokeA':
       case 'pokeB':
       case 'umbrellaRush':
-      case 'airPoke':
         if (side === 'R') {
           const k = punch(1);
           // Point the tip forward, then thrust.
@@ -669,20 +668,19 @@ export class ViewModel {
           o.r.z += -0.35;
           o.p.x -= 0.12;
           o.p.z -= 0.35 * k;
-          if (id === 'airPoke') o.r.x += -0.5;
         }
         break;
       case 'sweep':
         if (side === 'R') swing([0.3, 0.9, 0.5], [-0.8, -1.2, -0.7], 0.15);
         break;
-      case 'parasol':
-      case 'shieldShot':
+      case 'umbrellaOpen':
       case 'shieldFire':
+      case 'hopFloat':
       case 'updraft':
         if (side === 'R') {
           // Canopy straight ahead like a shield (or overhead for the updraft).
           // The umbrella itself turns to face forward (see updateExtras); the arm only shifts.
-          const up = id === 'updraft';
+          const up = id === 'updraft' || id === 'hopFloat';
           o.r.x += up ? 0.3 : 0;
           o.r.z += up ? -0.35 : 0;
           o.p.x -= up ? 0.22 : 0.1;

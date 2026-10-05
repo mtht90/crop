@@ -275,6 +275,12 @@ export class GameView {
           if (e.target === pov) this.fovKick.impulse(-10);
           break;
         }
+        case 'canopyBreak': {
+          this.effects.guard(e.fighter.pos, e.fighter.forward(), true);
+          audio.play('guardbreak');
+          if (e.fighter === pov) this.addTrauma(0.3);
+          break;
+        }
         case 'grapple': {
           // "Thwock": the cup sticks.
           this.effects.stick(e.pos.clone(), e.fighter.def.element.color2);

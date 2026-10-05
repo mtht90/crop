@@ -82,13 +82,15 @@ const actions: Record<string, ActionDef> = {
     motion: [{ start: 0, end: 12, forward: 15, magnet: true }],
     moveScale: 0,
   },
-  // E: ground pound shockwave all around.
+  // E: ground pound: a shockwave around Piko plus three waves running along the floor.
   groundPound: {
     id: 'groundPound',
     kind: 'skill',
     anim: 'groundPound',
     total: 50,
-    hits: [{ start: 18, end: 22, area: true, range: 0.8, radius: 3.8, damage: 70, knockback: 13, knockUp: 10, hitstun: 30, hitstop: 12, heavy: true, guardDamage: 50 }],
+    hits: [{ start: 18, end: 22, area: true, range: 0.8, radius: 2.6, damage: 60, knockback: 12, knockUp: 10, hitstun: 30, hitstop: 12, heavy: true, guardDamage: 40 }],
+    // Three shockwaves race forward along the floor and pop the target up.
+    spawns: [{ frame: 20, hand: 'R', from: 'ground', visual: 'wave', count: 3, fan: 0.45, speed: 16, radius: 0.9, life: 45, damage: 45, knockback: 6, knockUp: 9, hitstun: 24, hitstop: 6, guardDamage: 20 }],
     armor: true,
     moveScale: 0,
   },

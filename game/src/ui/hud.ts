@@ -146,8 +146,13 @@ export class Hud {
     this.skill.classList.toggle('ready', cd === 0);
     this.stamina.innerHTML = Array.from({ length: STAMINA_MAX }, (_, i) => `<i class="${i < p.stamina ? '' : 'off'}"></i>`).join('');
     if (p.def.ammo) this.ammo.innerHTML = p.reloadT > 0 ? '<b>RELOAD</b><small>リロード中</small>' : `<b>${p.ammo}/${p.def.ammo}</b><small>R リロード</small>`;
-    this.guard.classList.toggle('show', p.guarding || p.guardHp < GUARD_MAX - 1);
-    this.guardFill.style.transform = `scaleX(${p.guardHp / GUARD_MAX})`;
+    // Umbrella fighters: the bar shows the canopy's HP while it is open or recovering.
+    const canopy = !!p.def.canopy && !p.guarding && (p.reflectActive() || p.canopyHp < 99 || p.canopyBroken > 0);
+    const gv = canopy ? p.canopyHp / 100 : p.guardHp / GUARD_MAX;
+    this.guard.classList.toggle('show', canopy || p.guarding || p.guardHp < GUARD_MAX - 1);
+    this.guard.classList.toggle('canopy', canopy);
+    this.guard.classList.toggle('broken', canopy && p.canopyBroken > 0);
+    this.guardFill.style.transform = `scaleX(${p.canopyBroken > 0 && canopy ? 1 - p.canopyBroken / (p.def.canopy!.breakFrames || 1) : gv})`;
 
     // Name tag above the opponent.
     const head = match.cpu.pos.clone();

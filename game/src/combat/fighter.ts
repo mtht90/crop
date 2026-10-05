@@ -104,6 +104,10 @@ export class Fighter {
   grapple: { point: Vector3; target: Fighter | null; t: number; stuck: number; forced: boolean; lastD: number } | null = null;
   /** Frames left before a broken umbrella can be opened again. */
   canopyBroken = 0;
+  /** Umbrella HP (0..100). */
+  canopyHp = 100;
+  /** Floating down under the umbrella after a float move (fall-speed cap), until landing. */
+  floatCap = 0;
   /** Set when the simulation turns the fighter (counter teleport); controllers adopt it. */
   yawOverride: number | null = null;
 
@@ -150,16 +154,22 @@ export class Fighter {
 
   /** Parry window active this frame. */
   reflectActive() {
+    // Holding the umbrella open: no gap between repeated open/fire cycles.
+    if (this.def.canopy && this.state === 'free' && this.attackHeld && this.canopyBroken === 0) return true;
     const r = this.state === 'action' ? this.action?.def.reflect : undefined;
     return !!r && this.canopyBroken === 0 && this.action!.frame >= r[0] && this.action!.frame < r[1];
   }
 
-  /** Umbrella HP ran out: it stays shut for a while (no stun). */
-  breakCanopy() {
-    this.guardHp = 0;
-    this.guarding = false;
-    this.canopyBroken = this.def.canopy?.breakFrames ?? 0;
+  /** Wears the umbrella down; returns true when this breaks it (it then stays shut for a while, no stun). */
+  damageCanopy(v: number) {
+    if (!this.def.canopy || this.canopyBroken > 0) return false;
+    this.canopyHp -= v;
+    if (this.canopyHp > 0) return false;
+    this.canopyHp = 0;
+    this.canopyBroken = this.def.canopy.breakFrames;
+    this.floatCap = 0;
     if (this.state === 'action' && this.action?.def.reflect && this.action.def.kind !== 'ult') this.setState('free');
+    return true;
   }
 
   /** Starts a grappling pull toward a point (or the opponent when `target` is set). */
@@ -199,6 +209,8 @@ export class Fighter {
     this.gliding = false;
     this.yawOverride = null;
     this.canopyBroken = 0;
+    this.canopyHp = 100;
+    this.floatCap = 0;
     this.setState('locked');
     this.buffer = { attack: 0, dash: 0, jump: 0, skill: 0, ult: 0 };
   }
@@ -227,6 +239,7 @@ export class Fighter {
     this.guarding = false;
     this.comboChain = def.comboNext ?? null;
     if (def.kind === 'skill') this.skillCd = this.def.skillCooldown;
+    if (def.float) this.floatCap = def.float;
     if (def.kind === 'ult') this.ult = 0;
   }
 
@@ -378,8 +391,9 @@ export class Fighter {
 
   /** Umbrella: holding jump while falling floats down slowly. */
   private updateGlide() {
-    const cap = this.def.glide;
-    const can = !!cap && this.canopyBroken === 0 && !this.grounded && this.jumpHeld && (this.state === 'free' || this.state === 'action') && this.vel.y < 0;
+    if (this.grounded || !(this.state === 'free' || this.state === 'action')) this.floatCap = 0;
+    const cap = this.floatCap || (this.jumpHeld ? this.def.glide : 0);
+    const can = !!cap && this.canopyBroken === 0 && !this.grounded && (this.state === 'free' || this.state === 'action') && this.vel.y < 0;
     this.gliding = can;
     if (can) {
       this.vel.y = Math.max(this.vel.y, -cap!);
@@ -398,8 +412,8 @@ export class Fighter {
     }
     if (this.canopyBroken > 0) {
       this.canopyBroken--;
-      if (this.canopyBroken === 0) this.guardHp = GUARD_MAX * 0.5;
-    }
+      if (this.canopyBroken === 0) this.canopyHp = 50;
+    } else if (this.def.canopy && !this.reflectActive()) this.canopyHp = Math.min(100, this.canopyHp + 0.3);
     if (this.guarding) {
       if (this.guardT === 0) this.justEligible = this.sinceGuardEnd >= JUST_GUARD_COOLDOWN;
       this.guardT++;
@@ -407,7 +421,7 @@ export class Fighter {
     } else {
       this.sinceGuardEnd++;
       this.guardT = 0;
-      if (this.state !== 'guardbreak' && this.canopyBroken === 0) this.guardHp = Math.min(GUARD_MAX, this.guardHp + 0.35);
+      if (this.state !== 'guardbreak') this.guardHp = Math.min(GUARD_MAX, this.guardHp + 0.35);
     }
     if (this.reloadT > 0) {
       this.reloadT--;
@@ -453,7 +467,8 @@ export class Fighter {
       this.startAction(this.def.ult);
       return true;
     }
-    if (b.skill > 0 && this.skillCd === 0 && !(this.canopyBroken > 0 && this.def.actions[this.def.skill].reflect)) {
+    const skillDef = this.def.actions[this.def.skill];
+    if (b.skill > 0 && this.skillCd === 0 && !(this.canopyBroken > 0 && (skillDef.reflect || skillDef.float))) {
       b.skill = 0;
       this.startAction(this.def.skill);
       return true;
@@ -482,7 +497,7 @@ export class Fighter {
 
   private updateFree(intent: Intent, desired: Vector3) {
     const b = this.buffer;
-    this.guarding = intent.guard && this.grounded && this.guardHp > 0 && this.canopyBroken === 0;
+    this.guarding = intent.guard && this.grounded && this.guardHp > 0;
 
     if (this.tryStartSpecial()) return;
     if (this.tryAirMove()) return;
@@ -493,27 +508,24 @@ export class Fighter {
       this.guarding = false;
       this.jumpCounter++;
     }
-    if (this.guarding && this.def.guardAttack && (b.attack > 0 || this.attackHeld)) {
-      // Shield up and shoot from the tip; holding repeats.
-      b.attack = 0;
-      this.startAction(this.def.guardAttack);
-      return;
-    }
     if (b.attack > 0 && !this.guarding) {
       const usesAmmo = this.def.ammo !== undefined;
       if (usesAmmo && (this.ammo <= 0 || this.reloadT > 0)) {
         if (this.ammo <= 0) this.startReload();
       } else {
         b.attack = 0;
-        const id = !this.grounded && this.def.airBasic ? this.def.airBasic : this.def.basic;
+        const basic = this.canopyBroken > 0 && this.def.canopy ? this.def.canopy.brokenBasic : this.def.basic;
+        const id = !this.grounded && this.def.airBasic ? this.def.airBasic : basic;
         // Keep alternating hands for shooters.
         const next = this.def.autoFire && this.comboChain ? this.comboChain : id;
         this.startAction(next);
         return;
       }
     }
-    const scale = this.guarding ? (this.def.canopy?.moveScale ?? 0.35) : 1;
+    const scale = this.guarding ? 0.35 : 1;
     if (this.grounded) this.applyGroundControl(desired.multiplyScalar(scale), 70);
+    // Floating under the umbrella: only a little steering.
+    else if (this.floatCap && this.gliding) this.applyAirControl(desired.multiplyScalar(0.35), 8);
     else this.applyAirControl(desired, 22);
   }
 
