@@ -48,14 +48,19 @@ export interface Spawn extends HitProps {
   size?: number;
   /** Downward acceleration (m/s^2) for arcing projectiles. */
   gravity?: number;
-  visual?: 'star' | 'arrow' | 'hook' | 'wave';
+  visual?: 'star' | 'arrow' | 'hook' | 'wave' | 'umbrella';
   /** Rain down from above the opponent, or run along the floor from the feet (shockwaves). */
   from?: 'hand' | 'sky' | 'ground';
   /**
    * Grappling hook: 'self' pulls the shooter to whatever it latches onto
-   * (terrain or the opponent); 'yank' reels the opponent in instead.
+   * (terrain or the opponent); 'yank' reels the opponent in instead;
+   * 'anchor' only marks where it stops (two anchors = slingshot launch).
    */
-  hook?: 'self' | 'yank';
+  hook?: 'self' | 'yank' | 'anchor';
+  /** Steers toward the opponent at this turn rate (rad/s). */
+  homing?: number;
+  /** After hitting or expiring, flies back to the owner (harmless) instead of vanishing. */
+  returns?: boolean;
   /** Action the shooter starts when this projectile connects with the opponent. */
   onHit?: string;
 }

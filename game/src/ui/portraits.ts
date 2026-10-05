@@ -12,6 +12,8 @@ import { ModelRig } from '../render/charModel';
 export interface Portrait {
   face: HTMLCanvasElement;
   bust: HTMLCanvasElement;
+  /** Wide eye-level strip for the ult cut-in. */
+  eyes: HTMLCanvasElement;
 }
 
 const cache = new Map<string, Portrait>();
@@ -69,11 +71,11 @@ export function buildPortraits() {
     rig.root.updateMatrixWorld(true);
     const head = rig.bones.Head.getWorldPosition(new THREE.Vector3());
 
-    const shot = (w: number, h: number, dist: number, lookY: number) => {
+    const shot = (w: number, h: number, dist: number, lookY: number, camY = 0.04, side = 0.28) => {
       renderer.setSize(w, h, false);
       cam.aspect = w / h;
       cam.updateProjectionMatrix();
-      cam.position.set(head.x + dist * 0.28, head.y + 0.04, head.z + dist);
+      cam.position.set(head.x + dist * side, head.y + camY, head.z + dist);
       cam.lookAt(head.x, head.y + lookY, head.z);
       renderer.clear();
       renderer.render(scene, cam);
@@ -85,7 +87,10 @@ export function buildPortraits() {
     };
     const face = shot(256, 256, 1.15, 0.06);
     const bust = shot(W, H, 3.0, -0.35);
-    cache.set(id, { face, bust });
+    cam.fov = 14;
+    const eyes = shot(640, 160, 0.85, 0.085, 0.09, 0.12);
+    cam.fov = 24;
+    cache.set(id, { face, bust, eyes });
     scene.remove(rig.root);
     mixer.stopAllAction();
   }

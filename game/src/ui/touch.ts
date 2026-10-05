@@ -161,6 +161,11 @@ export class TouchControls {
     this.input.touch.moveZ = (-dy / STICK_RADIUS) * dead;
   }
 
+  /** A look drag is in progress (aim assist backs off). */
+  get looking() {
+    return this.lookIds.size > 0;
+  }
+
   setActive(v: boolean) {
     if (this.active === v) return;
     this.active = v;

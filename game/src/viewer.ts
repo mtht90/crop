@@ -76,7 +76,7 @@ export class AnimViewer {
     this.dummy = new Fighter(other, 1);
     this.world = new CombatWorld(this.subject, this.dummy);
     this.subject.reset(0, 0, 0);
-    this.dummy.reset(0, -2.2, Math.PI);
+    this.dummy.reset(0, -Number(new URLSearchParams(location.search).get('dummy') ?? 2.2), Math.PI);
     this.subject.setState('free');
     this.dummy.setState('free');
     this.view.bind(this.world, null);

@@ -20,13 +20,15 @@ export interface Projectile {
   radius: number;
   life: number;
   size: number;
-  props: HitProps;
+  props: Spawn;
   id: number;
   gravity: number;
-  visual: 'star' | 'arrow' | 'hook' | 'wave';
+  visual: 'star' | 'arrow' | 'hook' | 'wave' | 'umbrella';
+  /** Flying back to the owner after a returning shot (no hits, no terrain). */
+  returning?: boolean;
   /** Runs along the floor and dies off the arena edge. */
   ground?: boolean;
-  hook?: 'self' | 'yank';
+  hook?: 'self' | 'yank' | 'anchor';
   onHit?: string;
 }
 
@@ -49,6 +51,7 @@ export type CombatEvent =
   | { type: 'counter'; attacker: Fighter; target: Fighter; pos: Vector3 }
   | { type: 'parry'; attacker: Fighter; target: Fighter; pos: Vector3; reflected: boolean }
   | { type: 'grapple'; fighter: Fighter; pos: Vector3; onFighter: boolean }
+  | { type: 'projectileBounce'; projectile: Projectile; pos: Vector3 }
   | { type: 'canopyBreak'; fighter: Fighter; attacker: Fighter; pos: Vector3 }
   | { type: 'ringout'; fighter: Fighter };
 
@@ -83,6 +86,7 @@ export class CombatWorld {
     this.processAttacks(a, b);
     this.processAttacks(b, a);
     this.updateProjectiles();
+    for (const f of this.fighters) f.umbrellaOut = this.projectiles.some((p) => p.owner === f && p.visual === 'umbrella');
     this.emitStateEvents(a);
     this.emitStateEvents(b);
   }
@@ -187,6 +191,8 @@ export class CombatWorld {
       this.projectiles.push({ ...base, pos: p.clone(), prev: p.clone(), vel: new Vector3((Math.random() - 0.5) * 2, -s.speed, (Math.random() - 0.5) * 2), id: projectileId++ });
       return;
     }
+    // Double hook: the shooter waits for both anchors, then slingshots between them.
+    if (s.hook === 'anchor') att.sling = { anchors: [], t: 0, launched: -1 };
     const fwd = att.aimDir();
     const right = att.right();
     const side = s.hand === 'L' ? -0.3 : 0.3;
@@ -252,6 +258,31 @@ export class CombatWorld {
     const keep: Projectile[] = [];
     for (const p of this.projectiles) {
       p.prev.copy(p.pos);
+      if (p.returning) {
+        // Harmless flight home; caught when it reaches the owner.
+        const home = p.owner.pos.clone().setY(p.owner.pos.y + 1.2).sub(p.pos);
+        const d = home.length();
+        p.life--;
+        if (d < 0.9 || p.life <= 0 || !p.owner.isAlive()) {
+          this.events.push({ type: 'projectileEnd', projectile: p });
+          continue;
+        }
+        p.vel.copy(home.multiplyScalar(Math.min(34, d / TICK) / d));
+        p.pos.addScaledVector(p.vel, TICK);
+        keep.push(p);
+        continue;
+      }
+      const foe = this.fighters[0] === p.owner ? this.fighters[1] : this.fighters[0];
+      if (p.props.homing && foe.isAlive()) {
+        // Turn toward the opponent's chest at a limited rate.
+        const want = foe.pos.clone().setY(foe.pos.y + 1).sub(p.pos).normalize();
+        const sp = p.vel.length();
+        const cur = p.vel.clone().divideScalar(sp);
+        const ang = Math.acos(Math.min(1, Math.max(-1, cur.dot(want))));
+        const max = p.props.homing * TICK;
+        if (ang > 1e-4) cur.lerp(want, Math.min(1, max / ang)).normalize();
+        p.vel.copy(cur.multiplyScalar(sp));
+      }
       if (p.gravity) p.vel.y -= p.gravity * TICK;
       p.pos.addScaledVector(p.vel, TICK);
       p.life--;
@@ -262,7 +293,7 @@ export class CombatWorld {
         p.pos.copy(ground);
         p.life = 0;
         // A hook that bites into terrain reels its owner in.
-        if (p.hook && canGrapple(p.owner)) {
+        if (p.hook && p.hook !== 'anchor' && canGrapple(p.owner)) {
           p.owner.startGrapple(ground);
           this.events.push({ type: 'grapple', fighter: p.owner, pos: ground.clone(), onFighter: false });
         }
@@ -301,7 +332,18 @@ export class CombatWorld {
         }
       }
       if (alive) keep.push(p);
-      else this.events.push({ type: 'projectileEnd', projectile: p });
+      else if (p.props.returns && p.owner.isAlive()) {
+        p.returning = true;
+        p.life = 90;
+        this.events.push({ type: 'projectileBounce', projectile: p, pos: p.pos.clone() });
+        keep.push(p);
+      } else {
+        if (p.hook === 'anchor') {
+          p.owner.addAnchor(p.pos);
+          this.events.push({ type: 'grapple', fighter: p.owner, pos: p.pos.clone(), onFighter: false });
+        }
+        this.events.push({ type: 'projectileEnd', projectile: p });
+      }
     }
     this.projectiles = keep;
   }

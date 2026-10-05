@@ -131,8 +131,7 @@ export const lala: CharacterDef = {
     eyes: 0xff5fd2,
     hairStyle: 'spiky',
     body: 'female',
-    hairModel: 'hairBuzzedF',
+    hairModel: 'hairLong',
     outfit: { set: 'peasant', parts: ['body', 'arms', 'legs', 'feet'] },
-    accessories: [{ kind: 'twinTails', color: 0xff5fd2 }],
   },
 };

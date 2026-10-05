@@ -137,6 +137,5 @@ export const star: CharacterDef = {
     body: 'male',
     hairModel: 'hairBuzzed',
     outfit: { set: 'peasant', parts: ['body', 'arms', 'legs', 'feet'] },
-    accessories: [{ kind: 'cap', color: 0xffd22e }],
   },
 };

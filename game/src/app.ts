@@ -3,7 +3,7 @@ import { audio } from './audio/audio';
 import { characters } from './characters';
 import { TICK } from './combat/types';
 import { EYE_HEIGHT } from './config';
-import { clamp, wrapAngle } from './core/math';
+import { wrapAngle } from './core/math';
 import { PlayerInput } from './core/input';
 import { Match } from './game/match';
 import { GameView } from './render/view';
@@ -251,31 +251,33 @@ export class App {
   }
 
   /**
-   * Melee fighters: when the opponent is near the crosshair and close, the view
-   * is pulled gently toward them (stronger while attacking). Mouse input always wins.
+   * Touch only (mouse aiming gets no help at all): thumbs aim coarsely, so the
+   * view is pulled hard toward the opponent whenever they are roughly in view,
+   * nearly locking on while attacking. A deliberate look drag still wins.
    */
   private aimAssist(m: Match) {
+    if (!this.settings.aimAssist || !this.touch.active || m.phase !== 'fight') return;
     const p = m.player;
     const c = m.cpu;
-    // Melee always; ranged only on touch (thumb aiming is coarse), and weaker.
-    const ranged = p.def.archetype !== 'melee';
-    if (!this.settings.aimAssist || m.phase !== 'fight' || (ranged && !this.touch.active)) return;
     if (!(p.state === 'free' || p.state === 'action' || p.state === 'dash') || !c.isAlive()) return;
     const dx = c.pos.x - p.pos.x;
     const dz = c.pos.z - p.pos.z;
     const dist = Math.hypot(dx, dz);
-    if (dist > (ranged ? 22 : 9) || dist < 0.3) return;
+    if (dist > 32 || dist < 0.3) return;
     const yawTo = Math.atan2(-dx, -dz);
-    const pitchTo = Math.atan2(c.pos.y + 1.1 - (p.pos.y + EYE_HEIGHT), dist);
+    const pitchTo = Math.atan2(c.pos.y + 1.0 - (p.pos.y + EYE_HEIGHT), dist);
     const dy = wrapAngle(yawTo - this.input.yaw);
     const dp = pitchTo - this.input.pitch;
     const angle = Math.hypot(dy, dp);
-    const cone = 0.45;
+    const cone = 1.2;
     if (angle > cone) return;
-    const w = (1 - angle / cone) * (ranged ? 1 : dist < 4 ? 1 : 1 - (dist - 4) / 5);
-    const rate = (p.state === 'action' ? 3.2 : 1.4) * (ranged ? 0.6 : 1) * w * TICK;
-    this.input.yaw += clamp(dy, -rate, rate);
-    this.input.pitch += clamp(dp, -rate * 0.5, rate * 0.5);
+    const attacking = p.state === 'action' || this.input.touch.attack;
+    // Exponential approach (fraction of the error closed per second), softer near the cone edge.
+    let k = (attacking ? 16 : 7) * (1 - 0.5 * (angle / cone));
+    if (this.touch.looking) k *= 0.3;
+    const f = Math.min(1, k * TICK);
+    this.input.yaw += dy * f;
+    this.input.pitch += dp * f * 0.8;
   }
 
   /** Background sparring match with an orbiting camera. */

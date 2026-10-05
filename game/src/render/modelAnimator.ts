@@ -74,11 +74,9 @@ const ATTACKS: Record<string, AttackSpec> = {
   snare: { clip: 'OverhandThrow' },
   walkDog: { clip: 'Sword_Dash' },
   // Grappler
-  zJab: { clip: 'Punch_Jab' },
   kneeStrike: { clip: 'NinjaJump_Idle_Loop', hold: true },
-  zCross: { clip: 'Punch_Cross' },
-  zUpper: { clip: 'Melee_Hook' },
-  zAirPunch: { clip: 'Punch_Jab' },
+  slingShot: { clip: 'Spell_Simple_Shoot', upper: true },
+  slingRush: { clip: 'NinjaJump_Idle_Loop', hold: true },
   hookShot: { clip: 'Pistol_Shoot', upper: true, contact: 0.04, end: 0.6 },
   reelIn: { clip: 'Pistol_Shoot', upper: true, contact: 0.04, end: 0.6 },
   // Umbrella
@@ -86,6 +84,7 @@ const ATTACKS: Record<string, AttackSpec> = {
   pokeB: { clip: 'Punch_Cross' },
   sweep: { clip: 'Sword_Regular_B' },
   umbrellaRush: { clip: 'Shield_Dash' },
+  umbrellaToss: { clip: 'OverhandThrow' },
 };
 
 /** Moves where the umbrella is held point-first (thrusts). */
@@ -567,7 +566,7 @@ export class ModelAnimator {
       this.rot('pelvis', AX, -0.3);
       this.rot('spine_03', AX, -0.35);
     }
-    if (anim === 'kneeStrike') {
+    if (anim === 'kneeStrike' || anim === 'slingRush') {
       // Flying knee: right knee driven up and forward, left leg trailing.
       this.rot('thigh_r', AX, -1.7);
       this.rot('calf_r', AX, 2.0);
@@ -627,6 +626,8 @@ export class ModelAnimator {
     const open = f.canopyBroken === 0 && (f.gliding || anim === 'umbrellaOpen' || anim === 'umbrellaRush' || anim === 'updraft' || anim === 'shieldFire');
     this.umbrellaOpen = damp(this.umbrellaOpen, open ? 1 : 0, open ? 30 : 12, dt);
     this.rig.setUmbrellaOpen?.(this.umbrellaOpen);
+    // Thrown away: nothing in hand until it flies back.
+    this.rig.weaponRoot.visible = !f.umbrellaOut;
     // Thrusts and the shield hold it point-first; floating holds it straight overhead.
     const thrust = !!anim && (UMBRELLA_THRUST.has(anim) || anim === 'umbrellaOpen' || anim === 'shieldFire');
     const overhead = !thrust && this.umbrellaOpen > 0.05 && (f.gliding || anim === 'updraft' || anim === 'hopFloat');

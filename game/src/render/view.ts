@@ -32,12 +32,14 @@ interface RigBundle {
   ghostT: number;
   twirlT: number;
   aura: THREE.Sprite[];
-  /** Grappling cord (Zip): a thick tube between the launcher and the cup. */
-  rope: THREE.Mesh;
-  /** Suction cup stuck where the grapple latched. */
-  cup: THREE.Object3D;
+  /** Grappling cords (Zip; two for the double hook): tubes between the launcher and the cups. */
+  ropes: THREE.Mesh[];
+  /** Suction cups stuck where the grapple latched. */
+  cups: THREE.Object3D[];
   /** Action serial that already got its swing streak. */
   swingSerial: number;
+  /** Last slingshot launch seen (for the snap effect). */
+  slingSerial: number;
 }
 
 /** Owns the Three.js renderer: world scene, first-person camera and viewmodel. */
@@ -137,7 +139,7 @@ export class GameView {
   /** Attach a combat world. `pov` is the first-person fighter (its rig is hidden). */
   bind(world: CombatWorld, pov: Fighter | null) {
     for (const r of this.rigs) {
-      this.scene.remove(r.rig.root, r.trails.L.mesh, r.trails.R.mesh, r.rope, r.cup);
+      this.scene.remove(r.rig.root, r.trails.L.mesh, r.trails.R.mesh, ...r.ropes, ...r.cups);
       r.aura.forEach((s) => this.scene.remove(s));
     }
     this.effects.clear();
@@ -158,14 +160,20 @@ export class GameView {
       }
       const ropeGeo = new THREE.CylinderGeometry(1, 1, 1, 8, 1, true);
       ropeGeo.translate(0, 0.5, 0);
-      const rope = new THREE.Mesh(ropeGeo, new THREE.MeshBasicMaterial({ color: 0x23233a }));
-      rope.frustumCulled = false;
-      rope.visible = false;
-      this.scene.add(rope);
-      const cup = buildHookHead(1.3);
-      cup.visible = false;
-      this.scene.add(cup);
-      return { fighter: f, rig, anim: new ModelAnimator(rig, f), trails, ghostT: 0, twirlT: 0, aura, rope, cup, swingSerial: -1 };
+      const ropeMat = new THREE.MeshBasicMaterial({ color: 0x23233a });
+      const ropes: THREE.Mesh[] = [];
+      const cups: THREE.Object3D[] = [];
+      for (let k = 0; k < 2; k++) {
+        const rope = new THREE.Mesh(ropeGeo, ropeMat);
+        rope.frustumCulled = false;
+        rope.visible = false;
+        const cup = buildHookHead(1.3);
+        cup.visible = false;
+        this.scene.add(rope, cup);
+        ropes.push(rope);
+        cups.push(cup);
+      }
+      return { fighter: f, rig, anim: new ModelAnimator(rig, f), trails, ghostT: 0, twirlT: 0, aura, ropes, cups, swingSerial: -1, slingSerial: 0 };
     });
     if (pov) {
       this.viewmodel.setFighter(pov);
@@ -235,6 +243,11 @@ export class GameView {
           }
           break;
         }
+        case 'projectileBounce':
+          // The thrown umbrella bounces off and heads home.
+          this.effects.stick(e.pos.clone(), e.projectile.owner.def.element.color2);
+          audio.play('guard', 0.5);
+          break;
         case 'projectileEnd':
           this.effects.fizzle(e.projectile.pos, e.projectile.owner.def.element.color2);
           break;
@@ -483,40 +496,59 @@ export class GameView {
     }
   }
 
-  /** Rope from Zip's launcher to the flying hook or the latched point. */
+  /** Cords from Zip's launcher to the flying hooks, the latched point or the double-hook anchors. */
   private updateRope(b: RigBundle) {
     const f = b.fighter;
     if (f.def.weapon !== 'grapple' || !this.world) return;
-    const proj = this.world.projectiles.find((p) => p.owner === f && p.visual === 'hook');
+    const ends: { pos: THREE.Vector3; cup: boolean }[] = [];
+    for (const p of this.world.projectiles) if (p.owner === f && p.visual === 'hook') ends.push({ pos: p.pos.clone(), cup: false });
     const g = f.grapple;
-    const end = proj ? proj.pos.clone() : g ? (g.target ? g.target.pos.clone().setY(g.target.pos.y + 0.9) : g.point.clone()) : null;
+    if (g) ends.push({ pos: g.target ? g.target.pos.clone().setY(g.target.pos.y + 0.9) : g.point.clone(), cup: true });
     // A yank hook keeps the rope taut while the opponent is reeled in.
     const other = this.world.fighters.find((o) => o !== f);
-    const yank = !end && other?.grapple?.forced && other.grapple.target === f ? other.pos.clone().setY(other.pos.y + 0.9) : null;
-    const target = end ?? yank;
-    b.rope.visible = !!target;
-    b.anim.hookOut = !!target;
-    if (f === this.pov) this.viewmodel.hookOut = !!target;
-    // The cup stays stuck on the surface (or the opponent) while reeling in.
-    b.cup.visible = !proj && !!target;
-    if (!target) return;
-    let start: THREE.Vector3;
-    if (f === this.pov) {
-      const right = f.right();
-      start = f.eye.addScaledVector(right, 0.3).addScaledVector(f.aimDir(), 0.6);
-      start.y -= 0.3;
-    } else start = b.rig.tipR.getWorldPosition(new THREE.Vector3());
-    const dir = target.clone().sub(start);
-    const len = Math.max(0.01, dir.length());
-    dir.divideScalar(len);
-    const thick = f === this.pov ? 0.03 : 0.05;
-    b.rope.position.copy(start);
-    b.rope.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
-    b.rope.scale.set(thick, len, thick);
-    if (b.cup.visible) {
-      // Mouth against the surface, stem pointing back along the cord.
-      b.cup.position.copy(target).addScaledVector(dir, -0.05);
-      b.cup.lookAt(target.clone().add(dir));
+    if (!ends.length && other?.grapple?.forced && other.grapple.target === f) ends.push({ pos: other.pos.clone().setY(other.pos.y + 0.9), cup: false });
+    // Double hook: anchors stay stuck until the launch, and the cords stay a moment after it (the snap).
+    if (f.sling) for (const a of f.sling.anchors) ends.push({ pos: a.clone(), cup: true });
+    if (f.slingCounter !== b.slingSerial) {
+      b.slingSerial = f.slingCounter;
+      const el = f.def.element;
+      this.effects.swing(f.pos.clone().setY(f.pos.y + 1), el.color2, 'blunt', false, 1.4);
+      if (this.pov) sfx.play('dash');
+      if (f === this.pov) {
+        this.fovKick.impulse(30);
+        this.addTrauma(0.15);
+      }
+    }
+    const out = ends.length > 0;
+    b.anim.hookOut = out;
+    if (f === this.pov) this.viewmodel.hookOut = out;
+    let start: THREE.Vector3 | null = null;
+    if (out) {
+      if (f === this.pov) {
+        const right = f.right();
+        start = f.eye.addScaledVector(right, 0.3).addScaledVector(f.aimDir(), 0.6);
+        start.y -= 0.3;
+      } else start = b.rig.tipR.getWorldPosition(new THREE.Vector3());
+    }
+    for (let k = 0; k < b.ropes.length; k++) {
+      const rope = b.ropes[k];
+      const cup = b.cups[k];
+      const e = ends[k];
+      rope.visible = !!e;
+      cup.visible = !!e && e.cup;
+      if (!e || !start) continue;
+      const dir = e.pos.clone().sub(start);
+      const len = Math.max(0.01, dir.length());
+      dir.divideScalar(len);
+      const thick = f === this.pov ? 0.03 : 0.05;
+      rope.position.copy(start);
+      rope.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+      rope.scale.set(thick, len, thick);
+      if (cup.visible) {
+        // Mouth against the surface, stem pointing back along the cord.
+        cup.position.copy(e.pos).addScaledVector(dir, -0.05);
+        cup.lookAt(e.pos.clone().add(dir));
+      }
     }
   }
 

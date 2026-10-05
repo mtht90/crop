@@ -72,7 +72,17 @@ const actions: Record<string, ActionDef> = {
     reflect: [0, 22],
     moveScale: 0.5,
   },
-  // E: hop straight up, then float down under the open umbrella (a little steering).
+  // E: fling the open umbrella; it spins after the opponent and comes back.
+  // Until it returns there is no shield and no click attack.
+  umbrellaToss: {
+    id: 'umbrellaToss',
+    kind: 'skill',
+    anim: 'umbrellaToss',
+    total: 26,
+    spawns: [{ frame: 9, hand: 'R', speed: 21, radius: 0.75, life: 100, visual: 'umbrella', homing: 2.6, returns: true, damage: 72, knockback: 10, knockUp: 6, hitstun: 28, hitstop: 9, heavy: true, guardDamage: 35 }],
+    moveScale: 0.5,
+  },
+  // (Former E) hop straight up, then float down under the open umbrella (a little steering).
   hopFloat: {
     id: 'hopFloat',
     kind: 'skill',
@@ -114,10 +124,10 @@ export const ameri: CharacterDef = {
   walkSpeed: 7.2,
   jumpSpeed: 11.5,
   preferredRange: [5, 12],
-  skillCooldown: 150,
+  skillCooldown: 240,
   actions,
   basic: 'umbrellaOpen',
-  skill: 'hopFloat',
+  skill: 'umbrellaToss',
   ult: 'shieldFire',
   look: {
     skin: 0xffe0cc,

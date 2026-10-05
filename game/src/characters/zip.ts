@@ -19,26 +19,6 @@ const hook = (frame: number, extra: Partial<Spawn> = {}): Spawn => ({
 });
 
 const actions: Record<string, ActionDef> = {
-  zCross: {
-    id: 'zCross',
-    kind: 'attack',
-    anim: 'zCross',
-    total: 22,
-    hits: [{ start: 5, end: 9, damage: 40, knockback: 3.5, knockUp: 1, hitstun: 17, hitstop: 5, range: 1.5, radius: 0.9, hand: 'R', guardDamage: 10 }],
-    motion: [{ start: 0, end: 7, forward: 4.5, magnet: true }],
-    comboNext: 'zUpper',
-    comboFrom: 10,
-    moveScale: 0.35,
-  },
-  zUpper: {
-    id: 'zUpper',
-    kind: 'attack',
-    anim: 'zUpper',
-    total: 34,
-    hits: [{ start: 9, end: 14, damage: 75, knockback: 8, knockUp: 10, hitstun: 26, hitstop: 9, range: 1.5, radius: 1.0, hand: 'L', heavy: true, guardDamage: 28 }],
-    motion: [{ start: 5, end: 13, forward: 6, magnet: true }],
-    moveScale: 0.15,
-  },
   // Click (ground or air): fire the hook where you aim. On terrain it reels Zip in;
   // on the opponent it reels Zip in knee-first.
   hookShot: {
@@ -59,17 +39,24 @@ const actions: Record<string, ActionDef> = {
     hits: [{ start: 1, end: 30, damage: 40, knockback: 8, knockUp: 6, hitstun: 26, hitstop: 11, range: 0.7, radius: 1.1, hand: 'B', heavy: true, guardDamage: 30 }],
     moveScale: 0,
   },
-  // E: close-range punches (jab -> cross -> rising hook).
-  zRush: {
-    id: 'zRush',
+  // E: double hook. Two cords fan out left and right; once both bite (terrain,
+  // the opponent, or the end of the line) Zip is slingshot through the midpoint.
+  slingShot: {
+    id: 'slingShot',
     kind: 'skill',
-    anim: 'zJab',
-    total: 18,
-    hits: [{ start: 4, end: 7, damage: 32, knockback: 2.5, knockUp: 0.5, hitstun: 15, hitstop: 4, range: 1.4, radius: 0.85, hand: 'L', guardDamage: 8 }],
-    motion: [{ start: 0, end: 6, forward: 4, magnet: true }],
-    comboNext: 'zCross',
-    comboFrom: 8,
-    moveScale: 0.4,
+    anim: 'slingShot',
+    total: 40,
+    spawns: [hook(6, { hook: 'anchor', count: 2, fan: 0.62, speed: 62, life: 15, damage: 12, hitstun: 18, knockUp: 0.5 })],
+    moveScale: 0.25,
+  },
+  // The slingshot flight: Zip's whole body is the hitbox.
+  slingRush: {
+    id: 'slingRush',
+    kind: 'attack',
+    anim: 'slingRush',
+    total: 30,
+    hits: [{ start: 1, end: 24, area: true, range: 0, radius: 1.35, damage: 66, knockback: 13, knockUp: 7, hitstun: 26, hitstop: 10, hand: 'B', heavy: true, guardDamage: 30 }],
+    moveScale: 0,
   },
   // Air Space: the same hook as an edge recovery (once per airtime).
   hookAir: {
@@ -127,11 +114,11 @@ export const zip: CharacterDef = {
   walkSpeed: 7.5,
   jumpSpeed: 11.5,
   preferredRange: [3, 12],
-  skillCooldown: 30,
+  skillCooldown: 150,
   autoFire: true,
   actions,
   basic: 'hookShot',
-  skill: 'zRush',
+  skill: 'slingShot',
   ult: 'reelIn',
   airBasic: 'hookShot',
   look: {

@@ -141,7 +141,6 @@ export const kagetsu: CharacterDef = {
     // Ranger jacket as a haori, peasant trousers as hakama, an obi sash on top.
     outfit: { set: 'ranger', parts: ['body', 'arms', 'bracer', 'feet'], mix: { set: 'peasant', parts: ['legs'] } },
     accessories: [
-      { kind: 'hachimaki', color: 0xf2f4ff },
       { kind: 'obi', color: 0x7a1f2b },
     ],
   },

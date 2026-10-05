@@ -123,12 +123,16 @@ export class Hud {
     const c = el('div', `cutin ${opponent ? 'foe' : ''}`, this.root);
     c.style.setProperty('--el', hex(def.element.color));
     c.style.setProperty('--el2', hex(def.element.color2));
-    el('div', 'cutin-band', c);
-    el('div', 'cutin-lines', c);
+    // Letterbox bars, a white flash, then a thin dark strip with the user's eyes and the move name.
+    el('div', 'cutin-bar top', c);
+    el('div', 'cutin-bar bottom', c);
+    el('div', 'cutin-flash', c);
+    const band = el('div', 'cutin-band', c);
     const img = document.createElement('canvas');
-    img.className = 'cutin-img';
-    c.appendChild(img);
-    paint(img, getPortrait(def.id)?.bust);
+    img.className = 'cutin-eyes';
+    band.appendChild(img);
+    paint(img, getPortrait(def.id)?.eyes);
+    el('div', 'cutin-lines', band);
     el('div', 'cutin-text', c, `<small>${def.name}</small><b>${moveName}</b>`);
     setTimeout(() => c.remove(), 1300);
   }

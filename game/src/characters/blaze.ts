@@ -149,6 +149,5 @@ export const blaze: CharacterDef = {
     body: 'female',
     hairModel: 'hairParted',
     outfit: { set: 'peasant', parts: ['body', 'arms', 'legs', 'feet'] },
-    accessories: [{ kind: 'headband', color: 0xffffff }],
   },
 };

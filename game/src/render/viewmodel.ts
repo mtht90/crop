@@ -435,6 +435,7 @@ export class ViewModel {
       const open = f.canopyBroken === 0 && (f.gliding || anim === 'umbrellaOpen' || anim === 'umbrellaRush' || anim === 'updraft' || anim === 'shieldFire');
       this.umbrellaOpen = damp(this.umbrellaOpen, open ? 1 : 0, open ? 30 : 12, dt);
       this.umbrella.setOpen(this.umbrellaOpen);
+      this.umbrella.group.visible = !f.umbrellaOut;
       // Shield: swing the canopy round to face forward like a round shield.
       const shield = f.canopyBroken === 0 && (anim === 'umbrellaOpen' || anim === 'shieldFire' || anim === 'umbrellaRush');
       this.umbrellaShield = damp(this.umbrellaShield, shield ? 1 : 0, 25, dt);
@@ -608,22 +609,8 @@ export class ViewModel {
         }
         break;
       // --- Grappler -----------------------------------------------------
-      case 'zJab':
-      case 'zAirPunch':
-      case 'zCross': {
-        const lead = id === 'zCross' ? 'R' : 'L';
-        if (side === lead) {
-          const k = punch(1);
-          o.p.z -= 0.34 * k;
-          o.p.x += -s * 0.14 * Math.max(0, k);
-          o.p.y += 0.06 * Math.max(0, k);
-        }
-        break;
-      }
-      case 'zUpper':
-        if (side === 'L') swing([-0.3, 0, 0], [1.2, 0, 0], 0.1);
-        break;
       case 'hookShot':
+      case 'slingShot':
       case 'reelIn':
         if (side === 'R') {
           o.p.x -= 0.1;
@@ -637,6 +624,7 @@ export class ViewModel {
         }
         break;
       case 'dropKick':
+      case 'slingRush':
       case 'kneeStrike':
         // Arms flung wide for balance.
         o.p.y += 0.08;
@@ -657,6 +645,10 @@ export class ViewModel {
         break;
       case 'sweep':
         if (side === 'R') swing([0.3, 0.9, 0.5], [-0.8, -1.2, -0.7], 0.15);
+        break;
+      case 'umbrellaToss':
+        // Overhand fling: wind back over the shoulder, then whip forward.
+        if (side === 'R') swing([0.9, 0, -0.2], [-0.9, 0, 0.1], 0.2);
         break;
       case 'umbrellaOpen':
       case 'shieldFire':

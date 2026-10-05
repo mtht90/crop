@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type { Projectile } from '../combat/world';
 import { rand } from '../core/math';
 import { fx, FX_FRAMES, hasFx, tex, type FxName } from './textures';
-import { buildHookHead } from './weapons';
+import { buildHookHead, buildUmbrella } from './weapons';
 
 interface Particle {
   obj: THREE.Object3D;
@@ -114,6 +114,24 @@ interface ProjectileVis {
   spin: number;
   arrow: boolean;
   wave?: boolean;
+  /** Thrown umbrella: the inner group spins about its shaft. */
+  spinner?: THREE.Object3D;
+}
+
+/** Ameri's thrown umbrella: canopy leading, shaft along the flight path. */
+function buildThrownUmbrella(color: number, accent: number) {
+  const outer = new THREE.Group();
+  const spinner = new THREE.Group();
+  const u = buildUmbrella(color, accent, 1.25);
+  u.setOpen(1);
+  // Shaft (+Y) along +Z so lookAt() points the canopy where it flies.
+  u.group.position.y = -0.75;
+  spinner.add(u.group);
+  spinner.rotation.x = Math.PI / 2;
+  const roll = new THREE.Group();
+  roll.add(spinner);
+  outer.add(roll);
+  return { outer, spinner: roll };
 }
 
 function buildArrow(color: number, size: number) {
@@ -395,14 +413,21 @@ export class Effects {
         const hookVis = p.visual === 'hook';
         const wave = p.visual === 'wave';
         // Arrows and hooks are oriented meshes; everything else is a spinning star sprite.
-        const arrow = p.visual === 'arrow' || hookVis;
-        const core: THREE.Object3D = hookVis ? buildHookHead(2.4 * p.size) : arrow ? buildArrow(c1, p.size) : new THREE.Sprite(spriteMat(wave ? fx('burst') : tex.star(), wave ? c2 : 0xffffff));
+        const arrow = p.visual === 'arrow' || hookVis || p.visual === 'umbrella';
+        let spinner: THREE.Object3D | undefined;
+        let thrown: THREE.Object3D | undefined;
+        if (p.visual === 'umbrella') {
+          const t = buildThrownUmbrella(p.owner.def.look.top, p.owner.def.look.topAccent);
+          thrown = t.outer;
+          spinner = t.spinner;
+        }
+        const core: THREE.Object3D = thrown ? thrown : hookVis ? buildHookHead(2.4 * p.size) : arrow ? buildArrow(c1, p.size) : new THREE.Sprite(spriteMat(wave ? fx('burst') : tex.star(), wave ? c2 : 0xffffff));
         const glow = new THREE.Sprite(spriteMat(fx('soft'), c1));
         core.renderOrder = glow.renderOrder = 6;
         const trail = new Trail(c2, (arrow ? 0.06 : 0.12) * p.size, arrow ? 0.12 : 0.09, 10);
         trail.emitting = true;
         this.group.add(glow, core, trail.mesh);
-        v = { core, glow, trail, spin: rand(-12, 12), arrow, wave };
+        v = { core, glow, trail, spin: rand(-12, 12), arrow, wave, spinner };
         this.projectiles.set(p.id, v);
       }
       const pos = new THREE.Vector3().lerpVectors(p.prev, p.pos, alpha);
@@ -414,6 +439,7 @@ export class Effects {
         v.core.scale.setScalar(1.3 + Math.random() * 0.4);
         if (Math.random() < 0.5) this.dust(new THREE.Vector3(pos.x, pos.y - 0.4, pos.z), 1, 0.7);
       }
+      if (v.spinner) v.spinner.rotation.z += 0.35;
       if (v.arrow) v.core.lookAt(pos.clone().add(p.vel));
       else if (!v.wave) {
         v.core.scale.setScalar(0.42 * p.size);
