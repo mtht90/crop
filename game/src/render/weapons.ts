@@ -204,7 +204,7 @@ export function buildUmbrella(color: number, accent: number, scale = 1) {
       const map = (m.material as THREE.MeshStandardMaterial).map ?? undefined;
       if (map) map.colorSpace = THREE.SRGBColorSpace;
       const isCanopy = m.name === 'canopy';
-      const mesh = new THREE.Mesh(m.geometry, toon(isCanopy ? color : accent, { map, rim: 0.4 }).clone());
+      const mesh = new THREE.Mesh(m.geometry, isCanopy ? stripedCanopy(color, accent, map) : toon(0x8a5a3c, { map, rim: 0.4 }).clone());
       (mesh.material as THREE.MeshToonMaterial).side = THREE.DoubleSide;
       mesh.castShadow = true;
       addOutline(mesh, 0.01);
@@ -237,15 +237,25 @@ export function buildUmbrella(color: number, accent: number, scale = 1) {
   inner.add(...canopy.children);
   canopy.add(inner);
   g.add(canopy);
-  // Barrel at the tip.
-  const barrel = part(new THREE.CylinderGeometry(0.016, 0.02, 0.1, 8), 0x3a3b44, 0.004);
-  barrel.position.y = canopy.position.y + 0.04;
+  // Gold fittings: a collar above the grip, the top notch and a ferrule that doubles as the barrel.
+  const gold = 0xe0b84a;
+  const collar = part(new THREE.CylinderGeometry(0.022, 0.022, 0.035, 12), gold, 0.004, { rim: 0.7 });
+  collar.position.y = 0.06;
+  g.add(collar);
+  const notch = part(new THREE.SphereGeometry(0.026, 10, 8), gold, 0.004, { rim: 0.7 });
+  notch.position.y = canopy.position.y - 0.005;
+  g.add(notch);
+  const barrel = part(new THREE.ConeGeometry(0.02, 0.12, 10), gold, 0.004, { rim: 0.7 });
+  barrel.position.y = canopy.position.y + 0.06;
   g.add(barrel);
-  const tipY = barrel.position.y + 0.05;
+  const tipY = barrel.position.y + 0.06;
   const setOpen = (k: number) => {
     const o = Math.max(0, Math.min(1, k));
-    // Furled: thin and long along the shaft; open: the full dome.
-    inner.scale.set(0.09 + 0.91 * o, 2.6 - 1.6 * o, 0.09 + 0.91 * o);
+    // Furled: thin and long along the shaft; open: the full dome with a little overshoot
+    // and a quarter turn, like a canopy snapping open.
+    const pop = o < 1 ? o + Math.sin(o * Math.PI) * 0.12 : 1;
+    inner.scale.set(0.09 + 0.91 * pop, 2.6 - 1.6 * o, 0.09 + 0.91 * pop);
+    inner.rotation.y = (1 - o) * 0.8;
   };
   setOpen(0);
   g.scale.setScalar(scale);
@@ -354,4 +364,35 @@ export function buildBowMesh(scale = 1) {
     pos.needsUpdate = true;
   };
   return { group, string, rest, setNock };
+}
+
+/**
+ * Toon canopy with alternating panels (main / accent) and a lighter lining on the
+ * inside, computed from the object-space angle around the shaft.
+ */
+function stripedCanopy(color: number, accent: number, map?: THREE.Texture) {
+  const base = toon(0xffffff, { map, rim: 0.4 });
+  const m = base.clone();
+  m.side = THREE.DoubleSide;
+  const baseCompile = base.onBeforeCompile;
+  m.onBeforeCompile = (shader, renderer) => {
+    baseCompile.call(base, shader, renderer);
+    shader.uniforms.panelA = { value: new THREE.Color(color) };
+    shader.uniforms.panelB = { value: new THREE.Color(accent) };
+    shader.vertexShader = shader.vertexShader
+      .replace('void main() {', 'varying vec3 vCanopy;\nvoid main() {')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\n vCanopy = position;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('void main() {', 'uniform vec3 panelA;\nuniform vec3 panelB;\nvarying vec3 vCanopy;\nvoid main() {')
+      .replace(
+        '#include <color_fragment>',
+        `#include <color_fragment>
+         float ang = atan(vCanopy.z, vCanopy.x);
+         float panel = floor((ang + 3.14159265) / 6.2831853 * 8.0 + 0.5);
+         vec3 tint = mod(panel, 2.0) < 0.5 ? panelA : panelB;
+         diffuseColor.rgb *= tint * (gl_FrontFacing ? 1.0 : 1.25);`,
+      );
+  };
+  m.customProgramCacheKey = () => `canopy-${color}-${accent}`;
+  return m;
 }

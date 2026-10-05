@@ -4,7 +4,7 @@ All third-party assets are CC0 1.0 (public domain). Credit is not required but g
 
 | Asset | Author | License | Used for |
 |---|---|---|---|
-| [Universal Base Characters](https://quaternius.itch.io/universal-base-characters) (Standard) | Quaternius | CC0 | Character bodies and hairstyles (`public/assets/models/Superhero_*.glb`, `Hair_*.glb`) |
+| [Universal Base Characters](https://quaternius.itch.io/universal-base-characters) (Standard) | Quaternius | CC0 | Character bodies, hairstyles and the beard (`public/assets/models/Superhero_*.glb`, `Hair_*.glb`) |
 | [Universal Animation Library](https://quaternius.itch.io/universal-animation-library) (Standard) | Quaternius | CC0 | Animations (`anims1.glb`) |
 | [Universal Animation Library 2](https://quaternius.itch.io/universal-animation-library-2) (Standard) | Quaternius | CC0 | Animations (`anims2.glb`) |
 | [Particle Pack](https://kenney.nl/assets/particle-pack) | Kenney | CC0 | Hit flashes, sparks, slash arcs, smoke, debris, rings, just-guard seal, spin swirl (`public/assets/fx`) |

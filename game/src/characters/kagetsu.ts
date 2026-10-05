@@ -95,6 +95,7 @@ const actions: Record<string, ActionDef> = {
   getsuei: {
     id: 'getsuei',
     kind: 'ult',
+    name: '月影一閃',
     anim: 'getsuei',
     total: 100,
     hits: [{ start: 12, end: 24, damage: 30, knockback: 0, knockUp: 1, hitstun: 40, hitstop: 8, range: 1.2, radius: 1.3, pull: true, hand: 'R', guardDamage: 20 }, ...flurry],
@@ -137,6 +138,11 @@ export const kagetsu: CharacterDef = {
     hairStyle: 'ponytail',
     body: 'male',
     hairModel: 'hairParted',
-    outfit: { set: 'ranger', parts: ['body', 'arms', 'bracer', 'belt', 'legs', 'feet'] },
+    // Ranger jacket as a haori, peasant trousers as hakama, an obi sash on top.
+    outfit: { set: 'ranger', parts: ['body', 'arms', 'bracer', 'feet'], mix: { set: 'peasant', parts: ['legs'] } },
+    accessories: [
+      { kind: 'hachimaki', color: 0xf2f4ff },
+      { kind: 'obi', color: 0x7a1f2b },
+    ],
   },
 };

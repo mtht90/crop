@@ -86,6 +86,7 @@ const actions: Record<string, ActionDef> = {
   shieldFire: {
     id: 'shieldFire',
     kind: 'ult',
+    name: 'パラソル・バレット',
     anim: 'shieldFire',
     total: 96,
     spawns: barrage,
@@ -131,5 +132,6 @@ export const ameri: CharacterDef = {
     body: 'female',
     hairModel: 'hairBuns',
     outfit: { set: 'peasant', parts: ['body', 'arms', 'legs', 'feet'] },
+    accessories: [{ kind: 'ribbon', color: 0xffffff }],
   },
 };

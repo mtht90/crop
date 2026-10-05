@@ -91,6 +91,7 @@ const actions: Record<string, ActionDef> = {
   starStorm: {
     id: 'starStorm',
     kind: 'ult',
+    name: 'スターストーム',
     anim: 'starStorm',
     total: 112,
     spawns: storm,
@@ -136,5 +137,6 @@ export const star: CharacterDef = {
     body: 'male',
     hairModel: 'hairBuzzed',
     outfit: { set: 'peasant', parts: ['body', 'arms', 'legs', 'feet'] },
+    accessories: [{ kind: 'cap', color: 0xffd22e }],
   },
 };

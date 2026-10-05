@@ -34,7 +34,7 @@ for (const name of ['Superhero_Female_FullBody', 'Superhero_Male_FullBody']) {
   console.log(name, fs.statSync(`${OUT}/${name}.glb`).size);
 }
 
-for (const name of ['Hair_Buns', 'Hair_Long', 'Hair_SimpleParted', 'Hair_Buzzed', 'Hair_BuzzedFemale']) {
+for (const name of ['Hair_Buns', 'Hair_Long', 'Hair_SimpleParted', 'Hair_Buzzed', 'Hair_BuzzedFemale', 'Hair_Beard']) {
   const doc = await io.read(`${UBC}/Hairstyles/Origin at 0/glTF (Godot)/${name}.gltf`);
   await slimTextures(doc, 512);
   await io.write(`${OUT}/${name}.glb`, doc);

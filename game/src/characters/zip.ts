@@ -94,6 +94,7 @@ const actions: Record<string, ActionDef> = {
   reelIn: {
     id: 'reelIn',
     kind: 'ult',
+    name: 'リール・アンド・アッパー',
     anim: 'reelIn',
     total: 44,
     spawns: [hook(12, { hook: 'yank', onHit: 'reelFinisher', speed: 52, life: 42, radius: 0.75, size: 1.8, damage: 40, hitstun: 50, hitstop: 10, guardDamage: 40 })],
@@ -146,5 +147,6 @@ export const zip: CharacterDef = {
     body: 'male',
     hairModel: 'hairBuzzed',
     outfit: { set: 'ranger', parts: ['body', 'arms', 'bracer', 'belt', 'legs', 'feet', 'pauldron'] },
+    beard: true,
   },
 };

@@ -63,6 +63,31 @@ export class GameView {
   /** Third-person orbit for the animation viewer. */
   freeCamera = false;
   readonly feedback: ViewFeedback = { edgeWarn: 0, hurt: 0, speed: 0, flash: { color: '#fff', a: 0 } };
+  /** Cinematic shot (ult activation or the finishing blow), timed in real seconds. */
+  private cine: { kind: 'ult' | 'ko'; fighter: Fighter; t: number; dur: number; side: number } | null = null;
+  private cineRealDt = 0;
+
+  /** Starts a cinematic camera shot on `fighter`. */
+  startCinematic(kind: 'ult' | 'ko', fighter: Fighter) {
+    this.cine = { kind, fighter, t: 0, dur: kind === 'ult' ? 1.25 : 2.3, side: Math.random() < 0.5 ? -1 : 1 };
+  }
+
+  /** Extra slow motion while an ult shot plays (1 = normal speed). */
+  cinematicTimeScale() {
+    const c = this.cine;
+    if (!c || c.kind !== 'ult') return 1;
+    const u = c.t / c.dur;
+    return u < 0.55 ? 0.22 : 0.22 + 0.78 * Math.min(1, (u - 0.55) / 0.35);
+  }
+
+  get cinematicActive() {
+    return !!this.cine;
+  }
+
+  /** Feeds real (unscaled) frame time so cinematics keep their pace during slow motion. */
+  setRealDt(dt: number) {
+    this.cineRealDt = dt;
+  }
 
   constructor(container: HTMLElement) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -313,6 +338,60 @@ export class GameView {
     }
   }
 
+  /** 0..1 how far the camera is pulled out of first person by the current shot. */
+  private cineWeight() {
+    const c = this.cine;
+    if (!c) return 0;
+    const u = c.t / c.dur;
+    const ease = (x: number) => x * x * (3 - 2 * x);
+    return u < 0.12 ? ease(u / 0.12) : u > 0.82 ? ease(Math.max(0, (1 - u) / 0.18)) : 1;
+  }
+
+  /**
+   * Third-person shots: an ult gets a low orbiting close-up of its user, the
+   * finishing blow a trailing camera on the fighter flying away. Blends from and
+   * back to the first-person camera.
+   */
+  private applyCinematic(alpha: number) {
+    const c = this.cine;
+    if (!c) return;
+    c.t += this.cineRealDt;
+    if (c.t >= c.dur) {
+      this.cine = null;
+      return;
+    }
+    const f = c.fighter;
+    const u = c.t / c.dur;
+    const p = new THREE.Vector3().lerpVectors(f.prevPos, f.pos, alpha);
+    const fw = f.forward();
+    const right = f.right();
+    const target = p.clone().setY(p.y + (c.kind === 'ult' ? 1.15 : 0.9));
+    const camPos = new THREE.Vector3();
+    if (c.kind === 'ult') {
+      // Low 3/4 front shot that slowly swings round and pushes in.
+      const ang = c.side * (0.55 + u * 0.5);
+      const dist = 3.1 - u * 0.8;
+      camPos.copy(target).addScaledVector(fw, Math.cos(ang) * dist).addScaledVector(right, Math.sin(ang) * dist);
+      camPos.y = p.y + 0.75 + u * 0.25;
+    } else {
+      // Trail the launched fighter from the side, a little above.
+      const flight = f.vel.clone().setY(0);
+      const dir = flight.lengthSq() > 0.5 ? flight.normalize() : fw.clone().multiplyScalar(-1);
+      const side = new THREE.Vector3(-dir.z, 0, dir.x).multiplyScalar(c.side);
+      camPos.copy(target).addScaledVector(side, 5.5).addScaledVector(dir, -2.5);
+      camPos.y = target.y + 1.6;
+    }
+    const w = this.cineWeight();
+    const fromPos = this.camera.position.clone();
+    const fromQ = this.camera.quaternion.clone();
+    const look = new THREE.Matrix4().lookAt(camPos, target, new THREE.Vector3(0, 1, 0));
+    const toQ = new THREE.Quaternion().setFromRotationMatrix(look);
+    this.camera.position.lerpVectors(fromPos, camPos, w);
+    this.camera.quaternion.copy(fromQ).slerp(toQ, w);
+    this.camera.fov += ((c.kind === 'ult' ? 52 : 55) - this.camera.fov) * w;
+    this.camera.updateProjectionMatrix();
+  }
+
   addTrauma(v: number) {
     this.trauma = Math.min(1, this.trauma + v);
   }
@@ -380,6 +459,8 @@ export class GameView {
       this.camera.fov = 78 + this.fovKick.value * 0.25 + fb.speed * 6;
       this.camera.updateProjectionMatrix();
 
+      this.applyCinematic(alpha);
+
       const horiz = Math.hypot(pov.pos.x, pov.pos.z);
       edge = clamp((horiz - (ARENA_RADIUS - 4)) / 4, 0, 1);
       if (pov.pos.y < -0.5) edge = 1;
@@ -389,11 +470,14 @@ export class GameView {
     this.arena.update(dt, fb.edgeWarn);
 
     const lyingOrFlying = !!pov && ['ringout', 'tumble', 'knockdown', 'ko', 'getup'].includes(pov.state);
-    this.viewmodel.update(dt, sway, showViewmodel && !!pov && !lyingOrFlying);
+    const cineOut = !!this.cine && this.cineWeight() > 0.5;
+    // In a cinematic the first-person body is shown and the arms are hidden.
+    for (const b of this.rigs) if (b.fighter === pov) b.rig.root.visible = cineOut;
+    this.viewmodel.update(dt, sway, showViewmodel && !!pov && !lyingOrFlying && !cineOut);
 
     this.renderer.clear();
     this.renderer.render(this.scene, this.camera);
-    if (showViewmodel && pov && !this.freeCamera) {
+    if (showViewmodel && pov && !this.freeCamera && !cineOut) {
       this.renderer.clearDepth();
       this.renderer.render(this.viewmodel.scene, this.viewmodel.camera);
     }

@@ -200,7 +200,7 @@ export class App {
     if (this.screen === 'match' || this.screen === 'result' || this.screen === 'paused') {
       const m = this.match!;
       if (this.screen !== 'paused') {
-        this.acc += dt * m.timeScale;
+        this.acc += dt * m.timeScale * this.view.cinematicTimeScale();
         while (this.acc >= TICK) {
           this.acc -= TICK;
           this.aimAssist(m);
@@ -212,6 +212,11 @@ export class App {
           }
           const events = m.world.drainEvents();
           for (const e of events) {
+            if (e.type === 'action' && e.kind === 'ult') {
+              // Super flash: slow motion, a third-person shot of the user and a cut-in.
+              this.view.startCinematic('ult', e.fighter);
+              this.hud.cutIn(e.fighter.def, e.fighter.def.actions[e.id].name ?? '', e.fighter !== m.player);
+            } else if (e.type === 'hit' && e.ko) this.view.startCinematic('ko', e.target);
             if (e.type === 'justGuard') {
               if (e.target === m.player) this.hud.toast('JUST GUARD!');
               else if (e.attacker === m.player) this.hud.toast(e.pushed ? 'はじかれた！' : 'JUST GUARD', '#ffb0a0');
@@ -234,7 +239,9 @@ export class App {
         look.pitch = m.player.pitch;
         this.input.setView(m.player.yaw, m.player.pitch);
       }
-      this.view.render(dt * (this.screen === 'paused' ? 0 : m.timeScale), this.acc / TICK, look, this.input.consumeSway(), true);
+      const paused = this.screen === 'paused';
+      this.view.setRealDt(paused ? 0 : dt);
+      this.view.render(dt * (paused ? 0 : m.timeScale * this.view.cinematicTimeScale()), this.acc / TICK, look, this.input.consumeSway(), true);
       this.hud.update(dt, m, this.view.feedback, this.view.camera);
       this.touch.update(m.player);
     } else {

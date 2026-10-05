@@ -90,6 +90,7 @@ const actions: Record<string, ActionDef> = {
   giantYoyo: {
     id: 'giantYoyo',
     kind: 'ult',
+    name: 'ジャイアント・ヨーヨー',
     anim: 'giantYoyo',
     total: 76,
     hits: giant,
@@ -130,7 +131,8 @@ export const lala: CharacterDef = {
     eyes: 0xff5fd2,
     hairStyle: 'spiky',
     body: 'female',
-    hairModel: 'hairLong',
+    hairModel: 'hairBuzzedF',
     outfit: { set: 'peasant', parts: ['body', 'arms', 'legs', 'feet'] },
+    accessories: [{ kind: 'twinTails', color: 0xff5fd2 }],
   },
 };

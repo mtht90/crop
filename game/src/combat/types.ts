@@ -90,6 +90,8 @@ export type ActionKind = 'attack' | 'skill' | 'ult';
 export interface ActionDef {
   id: string;
   kind: ActionKind;
+  /** Display name (ult cut-ins). */
+  name?: string;
   /** Animation clip id for the full-body rig and viewmodel. */
   anim: string;
   total: number;
@@ -141,7 +143,11 @@ export interface Look {
   body: 'female' | 'male';
   hairModel: 'hairBuns' | 'hairLong' | 'hairParted' | 'hairBuzzed' | 'hairBuzzedF';
   /** CC0 outfit (Quaternius Modular Character Outfits) tinted with the colors above; replaces the code-built clothes. */
-  outfit?: { set: 'ranger' | 'peasant'; parts: OutfitPart[] };
+  outfit?: { set: 'ranger' | 'peasant'; parts: OutfitPart[]; mix?: { set: 'ranger' | 'peasant'; parts: OutfitPart[] } };
+  /** CC0 beard from the base-character kit. */
+  beard?: boolean;
+  /** Code-built head accessories. */
+  accessories?: { kind: 'headband' | 'hachimaki' | 'twinTails' | 'cap' | 'ribbon' | 'obi'; color: number }[];
 }
 
 export interface CharacterDef {

@@ -98,6 +98,7 @@ const actions: Record<string, ActionDef> = {
   gigaPiko: {
     id: 'gigaPiko',
     kind: 'ult',
+    name: 'ギガピコハンマー',
     anim: 'gigaPiko',
     total: 92,
     hits: [
@@ -144,5 +145,6 @@ export const piko: CharacterDef = {
     body: 'female',
     hairModel: 'hairBuns',
     outfit: { set: 'peasant', parts: ['body', 'arms', 'legs', 'feet'] },
+    accessories: [{ kind: 'ribbon', color: 0xff4f8b }],
   },
 };

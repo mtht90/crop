@@ -1,3 +1,5 @@
+import type { CharacterDef } from '../combat/types';
+import { getPortrait, paint } from './portraits';
 import * as THREE from 'three';
 import { GUARD_MAX, ROUNDS_TO_WIN, STAMINA_MAX, ULT_MAX } from '../config';
 import type { Fighter } from '../combat/fighter';
@@ -113,6 +115,22 @@ export class Hud {
     const t = el('div', 'toast-pop', this.root, text);
     t.style.color = color;
     setTimeout(() => t.remove(), 900);
+  }
+
+  /** Anime-style super cut-in: a slanted band in the fighter's colors with portrait and move name. */
+  cutIn(def: CharacterDef, moveName: string, opponent: boolean) {
+    const hex = (c: number) => `#${c.toString(16).padStart(6, '0')}`;
+    const c = el('div', `cutin ${opponent ? 'foe' : ''}`, this.root);
+    c.style.setProperty('--el', hex(def.element.color));
+    c.style.setProperty('--el2', hex(def.element.color2));
+    el('div', 'cutin-band', c);
+    el('div', 'cutin-lines', c);
+    const img = document.createElement('canvas');
+    img.className = 'cutin-img';
+    c.appendChild(img);
+    paint(img, getPortrait(def.id)?.bust);
+    el('div', 'cutin-text', c, `<small>${def.name}</small><b>${moveName}</b>`);
+    setTimeout(() => c.remove(), 1300);
   }
 
   pingHit() {

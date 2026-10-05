@@ -59,6 +59,7 @@ const actions: Record<string, ActionDef> = {
   arrowRain: {
     id: 'arrowRain',
     kind: 'ult',
+    name: 'アローレイン',
     anim: 'arrowRain',
     total: 110,
     spawns: rain,

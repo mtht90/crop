@@ -718,6 +718,12 @@ export class ModelAnimator {
     const speed = Math.hypot(f.vel.x, f.vel.z);
     this.tailSpring.target = clamp(speed * 0.07, 0, 1.1) + (f.grounded ? 0 : 0.4);
     this.tailSpring.update(dt);
+    // Twin tails and headband ends swing with movement.
+    rig.swayers.forEach((sw, i) => {
+      const k = sw.amp;
+      sw.obj.rotation.x = sw.base.x + this.hairX[0].value * k * 2 + Math.sin(this.time * 3 + i) * k * 0.15;
+      sw.obj.rotation.z = sw.base.z + this.hairZ[0].value * k * 2;
+    });
     rig.coatTails.forEach((t, i) => (t.rotation.x = -this.tailSpring.value + Math.sin(this.time * 9 + i) * 0.04 * speed * 0.1));
     void damp;
   }

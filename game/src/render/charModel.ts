@@ -205,6 +205,19 @@ export class ModelRig {
     this.bones.Head.attach(hairScene);
     this.hairScene = hairScene;
 
+    if (L.beard && assets.models.hairBeard) {
+      const beard = clone(assets.models.hairBeard.scene);
+      const ms: THREE.Mesh[] = [];
+      beard.traverse((o) => (o as THREE.Mesh).isMesh && ms.push(o as THREE.Mesh));
+      for (const m of ms) {
+        m.material = toon(L.hair, { rim: 0.3 });
+        addOutline(m, 0.004);
+      }
+      this.model.add(beard);
+      this.bones.Head.attach(beard);
+    }
+    this.buildAccessories();
+
     if (L.hairStyle === 'ponytail') {
       const head = this.wp('Head');
       let parent: THREE.Object3D = this.bones.Head;
@@ -232,8 +245,15 @@ export class ModelRig {
 
   /** Quaternius modular outfit pieces, re-bound to this rig's skeleton and tinted per piece. */
   private attachOutfit() {
+    const o = this.def.look.outfit!;
+    const ok = this.attachOutfitSet(o.set, o.parts);
+    if (ok && o.mix) this.attachOutfitSet(o.mix.set, o.mix.parts);
+    return ok;
+  }
+
+  private attachOutfitSet(set: 'ranger' | 'peasant', parts: OutfitPart[]) {
     const L = this.def.look;
-    const o = L.outfit!;
+    const o = { set, parts };
     const key = `outfit${L.body === 'male' ? 'Male' : 'Female'}${o.set === 'ranger' ? 'Ranger' : 'Peasant'}` as ModelKey;
     const src = assets.models[key]?.scene;
     if (!src) return false;
@@ -270,6 +290,99 @@ export class ModelRig {
     }
     if (o.parts.includes('hood') && this.hairScene) this.hairScene.visible = false;
     return true;
+  }
+
+  /** Swaying head pieces (twin tails, headband tails), animated by the ModelAnimator. */
+  readonly swayers: { obj: THREE.Object3D; base: THREE.Euler; amp: number }[] = [];
+
+  /** Code-built accessories: headbands, twin tails, a cap, a ribbon, an obi sash. */
+  private buildAccessories() {
+    const L = this.def.look;
+    if (!L.accessories?.length) return;
+    const head = this.wp('Head');
+    const female = L.body === 'female';
+    const hr = female ? 0.1 : 0.106;
+    for (const a of L.accessories) {
+      switch (a.kind) {
+        case 'headband':
+        case 'hachimaki': {
+          const band = part(new THREE.TorusGeometry(hr + 0.02, 0.017, 6, 24), a.color, 0.005);
+          band.scale.set(1, 1.15, 1);
+          band.rotation.x = Math.PI / 2 - 0.25;
+          this.at('Head', band, head.clone().add(new THREE.Vector3(0, 0.175, -0.02)));
+          if (a.kind === 'hachimaki') {
+            // Knot at the back with two trailing ends.
+            const knot = part(new THREE.SphereGeometry(0.022, 8, 6), a.color, 0.004);
+            this.at('Head', knot, head.clone().add(new THREE.Vector3(0, 0.2, -hr - 0.02)));
+            for (const sx of [-1, 1]) {
+              const pivot = new THREE.Group();
+              const tail = part(new THREE.BoxGeometry(0.035, 0.2, 0.008), a.color, 0.004);
+              tail.position.y = -0.1;
+              pivot.add(tail);
+              pivot.rotation.set(0.5, 0, sx * 0.25);
+              this.at('Head', pivot, head.clone().add(new THREE.Vector3(sx * 0.02, 0.19, -hr - 0.03)));
+              this.swayers.push({ obj: pivot, base: pivot.rotation.clone(), amp: 0.25 });
+            }
+          }
+          break;
+        }
+        case 'twinTails': {
+          for (const sx of [-1, 1]) {
+            const pivot = new THREE.Group();
+            for (let i = 0; i < 3; i++) {
+              const r = [0.055, 0.05, 0.035][i];
+              const seg = part(new THREE.ConeGeometry(r, 0.17, 8), L.hair, 0.006);
+              seg.rotation.x = Math.PI;
+              seg.position.y = -0.07 - i * 0.12;
+              pivot.add(seg);
+            }
+            const tie = part(new THREE.TorusGeometry(0.03, 0.012, 6, 12), a.color, 0.004);
+            tie.rotation.x = Math.PI / 2;
+            pivot.add(tie);
+            pivot.rotation.set(0.15, 0, sx * 0.35);
+            this.at('Head', pivot, head.clone().add(new THREE.Vector3(sx * (hr + 0.01), 0.22, -0.035)));
+            this.swayers.push({ obj: pivot, base: pivot.rotation.clone(), amp: 0.18 });
+          }
+          break;
+        }
+        case 'cap': {
+          // Backwards cap: dome + brim at the back.
+          const dome = part(new THREE.SphereGeometry(hr + 0.018, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), a.color, 0.006);
+          dome.scale.set(1, 0.85, 1.05);
+          this.at('Head', dome, head.clone().add(new THREE.Vector3(0, 0.17, -0.015)));
+          const brim = part(new THREE.CylinderGeometry(0.08, 0.08, 0.012, 16, 1, false, -Math.PI / 2, Math.PI), a.color, 0.004);
+          brim.scale.set(1, 1, 1.2);
+          this.at('Head', brim, head.clone().add(new THREE.Vector3(0, 0.18, -hr - 0.03)));
+          const button = part(new THREE.SphereGeometry(0.014, 6, 6), 0xffffff, 0);
+          this.at('Head', button, head.clone().add(new THREE.Vector3(0, 0.17 + (hr + 0.018) * 0.85, -0.015)));
+          break;
+        }
+        case 'ribbon': {
+          const g = new THREE.Group();
+          for (const sx of [-1, 1]) {
+            const loop = part(new THREE.ConeGeometry(0.045, 0.09, 4), a.color, 0.004);
+            loop.rotation.z = (sx * Math.PI) / 2;
+            loop.position.x = sx * 0.045;
+            g.add(loop);
+          }
+          g.add(part(new THREE.SphereGeometry(0.02, 8, 6), a.color, 0.004));
+          this.at('Head', g, head.clone().add(new THREE.Vector3(0.07, 0.24, -0.07)));
+          break;
+        }
+        case 'obi': {
+          // Wide sash with a knot at the back (worn over the outfit).
+          const pelvis = this.wp('pelvis');
+          const s1 = this.wp('spine_01');
+          const obi = part(new THREE.CylinderGeometry(0.17, 0.175, 0.13, 20, 1, true), a.color, 0.006);
+          (obi.material as THREE.Material).side = THREE.DoubleSide;
+          obi.scale.z = 0.8;
+          this.at('spine_01', obi, pelvis.clone().lerp(s1, 0.75).add(new THREE.Vector3(0, 0, 0.005)));
+          const knot = part(new THREE.BoxGeometry(0.12, 0.07, 0.05), a.color, 0.005);
+          this.at('spine_01', knot, pelvis.clone().lerp(s1, 0.75).add(new THREE.Vector3(0, 0, -0.15)));
+          break;
+        }
+      }
+    }
   }
 
   private buildOutfit() {

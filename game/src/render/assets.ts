@@ -14,6 +14,7 @@ const MODEL_FILES = {
   hairParted: 'Hair_SimpleParted.glb',
   hairBuzzed: 'Hair_Buzzed.glb',
   hairBuzzedF: 'Hair_BuzzedFemale.glb',
+  hairBeard: 'Hair_Beard.glb',
   /** Kenney Blaster Kit (CC0) "blaster-j", Star's twin pistols. */
   blaster: 'Blaster.glb',
   /** Kenney Blaster Kit (CC0) "blaster-h", Zip's hook launcher. */

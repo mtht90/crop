@@ -105,6 +105,7 @@ const actions: Record<string, ActionDef> = {
   burstRush: {
     id: 'burstRush',
     kind: 'ult',
+    name: 'バーストラッシュ',
     anim: 'burstRush',
     total: 96,
     hits: rushHits,
@@ -148,5 +149,6 @@ export const blaze: CharacterDef = {
     body: 'female',
     hairModel: 'hairParted',
     outfit: { set: 'peasant', parts: ['body', 'arms', 'legs', 'feet'] },
+    accessories: [{ kind: 'headband', color: 0xffffff }],
   },
 };

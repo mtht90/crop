@@ -335,8 +335,21 @@ export class Effects {
     this.add(g.s, g.mat, { life: 0.06 * k, scale0: 0.5 * k, scale1: 0.8 * k });
   }
 
-  /** Sparkle ring used for ult activation. */
+  /** Sparkle ring used for ult activation, with a column of light around the user. */
   ultBurst(pos: THREE.Vector3, color: number, color2: number) {
+    for (const [c, r, life] of [
+      [color, 1.0, 0.9],
+      [color2, 0.6, 0.7],
+    ] as const) {
+      const geo = new THREE.CylinderGeometry(r, r * 1.3, 9, 28, 1, true);
+      geo.translate(0, 3.5, 0);
+      const mat = new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
+      const pillar = new THREE.Mesh(geo, mat);
+      pillar.position.set(pos.x, pos.y - 1, pos.z);
+      this.add(pillar, mat, { life, scale0: 0.4, scale1: 1.3, fade: 'late' });
+    }
+    this.groundRing(new THREE.Vector3(pos.x, pos.y - 0.95, pos.z), color2, 0.6, 5);
+    this.flipbook('impactRing', color, pos, 4.5, 0.6, 0, 'ring');
     for (let i = 0; i < 3; i++) {
       const { s, mat } = this.sprite(fx('ring'), i === 1 ? color2 : color, pos);
       this.add(s, mat, { life: 0.5 + i * 0.12, scale0: 0.5, scale1: 6 + i * 2 });
