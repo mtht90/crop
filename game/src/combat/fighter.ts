@@ -38,6 +38,8 @@ export interface ActionInstance {
   /** Frames spent charging and the resulting 0..1 level. */
   chargeT: number;
   chargeLevel: number;
+  /** Frame the first hit connected (renderers use it for "wait, then strike" moves). */
+  hitT?: number;
 }
 
 const BUFFER_FRAMES = 8;
@@ -95,6 +97,13 @@ export class Fighter {
   /** The air move (recovery) has been used since the last landing. */
   airMoveUsed = false;
   attackHeld = false;
+  jumpHeld = false;
+  /** Falling slowly with the umbrella open. */
+  gliding = false;
+  /** Active grappling-hook pull toward a terrain point or the opponent. */
+  grapple: { point: Vector3; target: Fighter | null; t: number; stuck: number; forced: boolean; lastD: number } | null = null;
+  /** Set when the simulation turns the fighter (counter teleport); controllers adopt it. */
+  yawOverride: number | null = null;
 
   private buffer = { attack: 0, dash: 0, jump: 0, skill: 0, ult: 0 };
   private comboChain: string | null = null;
@@ -131,6 +140,24 @@ export class Fighter {
     return !!(inv && this.action && this.action.frame >= inv[0] && this.action.frame < inv[1]);
   }
 
+  /** Counter stance active this frame. */
+  counterActive() {
+    const c = this.state === 'action' ? this.action?.def.counter : undefined;
+    return c && this.action!.frame >= c.start && this.action!.frame < c.end ? c : null;
+  }
+
+  /** Parry window active this frame. */
+  reflectActive() {
+    const r = this.state === 'action' ? this.action?.def.reflect : undefined;
+    return !!r && this.action!.frame >= r[0] && this.action!.frame < r[1];
+  }
+
+  /** Starts a grappling pull toward a point (or the opponent when `target` is set). */
+  startGrapple(point: Vector3, target: Fighter | null = null, forced = false) {
+    this.grapple = { point: point.clone(), target, t: 0, stuck: 0, forced, lastD: Infinity };
+    if (!forced) this.airMoveUsed = false;
+  }
+
   /** Guard raised within the last few frames (and not mashed): a just guard. */
   isJustGuard() {
     return this.guarding && this.justEligible && this.guardT <= JUST_GUARD_FRAMES;
@@ -158,6 +185,9 @@ export class Fighter {
     this.invuln = 0;
     this.dead = false;
     this.airMoveUsed = false;
+    this.grapple = null;
+    this.gliding = false;
+    this.yawOverride = null;
     this.setState('locked');
     this.buffer = { attack: 0, dash: 0, jump: 0, skill: 0, ult: 0 };
   }
@@ -296,7 +326,55 @@ export class Fighter {
         break;
     }
 
+    this.updateGrapple();
+    this.updateGlide();
     this.integrate();
+  }
+
+  /** Reels the fighter toward the hook point; ends on arrival, timeout or when stuck on a wall. */
+  private updateGrapple() {
+    const g = this.grapple;
+    if (!g) return;
+    const ok = this.state === 'free' || this.state === 'action' || this.state === 'dash' || (g.forced && this.state === 'hitstun');
+    if (!ok || g.t > 55) {
+      this.grapple = null;
+      return;
+    }
+    g.t++;
+    const goal = g.target ? g.target.pos.clone().setY(g.target.pos.y + 0.9) : g.point;
+    const chest = this.pos.clone().setY(this.pos.y + 0.9);
+    const to = goal.sub(chest);
+    const d = to.length();
+    // Stuck = not getting closer (pressed against a wall).
+    g.stuck = g.t > 3 && g.lastD - d < 0.05 ? g.stuck + 1 : 0;
+    g.lastD = d;
+    if (d < (g.target ? 1.9 : 1.3) || g.stuck > 3) {
+      // Arrive with a hop so wall hooks turn into a climb.
+      this.vel.multiplyScalar(g.target ? 0.25 : 0.55);
+      this.vel.y = g.forced ? 2 : Math.max(this.vel.y, g.stuck > 3 ? 13 : 6);
+      this.grounded = false;
+      this.grapple = null;
+      return;
+    }
+    const speed = Math.min(30, 12 + g.t * 2.2);
+    this.vel.copy(to.multiplyScalar(speed / d));
+    this.vel.y += 1.5;
+    if (this.vel.y > 0.5) {
+      this.grounded = false;
+      this.pos.y = Math.max(this.pos.y, 0.02);
+    }
+  }
+
+  /** Umbrella: holding jump while falling floats down slowly. */
+  private updateGlide() {
+    const cap = this.def.glide;
+    const can = !!cap && !this.grounded && this.jumpHeld && (this.state === 'free' || this.state === 'action') && this.vel.y < 0;
+    this.gliding = can;
+    if (can) {
+      this.vel.y = Math.max(this.vel.y, -cap!);
+      // A light counter-gravity so the cap feels like a parachute, not a wall.
+      this.vel.y += GRAVITY * TICK * 0.6;
+    }
   }
 
   private tickMeters() {
@@ -326,6 +404,7 @@ export class Fighter {
     const b = this.buffer;
     for (const k of Object.keys(b) as (keyof typeof b)[]) if (b[k] > 0) b[k]--;
     this.attackHeld = intent.attack;
+    this.jumpHeld = intent.jump;
     if (intent.attackPressed) b.attack = BUFFER_FRAMES;
     // Shooters auto-fire while held.
     if (intent.attack && this.def.autoFire) b.attack = Math.max(b.attack, 1);

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { Projectile } from '../combat/world';
 import { rand } from '../core/math';
 import { fx, tex } from './textures';
+import { buildHookHead } from './weapons';
 
 interface Particle {
   obj: THREE.Object3D;
@@ -340,8 +341,10 @@ export class Effects {
       let v = this.projectiles.get(p.id);
       if (!v) {
         const [c1, c2] = colorOf(p);
-        const arrow = p.visual === 'arrow';
-        const core: THREE.Object3D = arrow ? buildArrow(c1, p.size) : new THREE.Sprite(spriteMat(tex.star(), 0xffffff));
+        const hookVis = p.visual === 'hook';
+        // Arrows and hooks are oriented meshes; everything else is a spinning star sprite.
+        const arrow = p.visual === 'arrow' || hookVis;
+        const core: THREE.Object3D = hookVis ? buildHookHead(1.2 * p.size) : arrow ? buildArrow(c1, p.size) : new THREE.Sprite(spriteMat(tex.star(), 0xffffff));
         const glow = new THREE.Sprite(spriteMat(fx('soft'), c1));
         core.renderOrder = glow.renderOrder = 6;
         const trail = new Trail(c2, (arrow ? 0.06 : 0.12) * p.size, arrow ? 0.12 : 0.09, 10);

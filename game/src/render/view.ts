@@ -31,6 +31,8 @@ interface RigBundle {
   ghostT: number;
   twirlT: number;
   aura: THREE.Sprite[];
+  /** Grappling rope (Zip). */
+  rope: THREE.Line;
 }
 
 /** Owns the Three.js renderer: world scene, first-person camera and viewmodel. */
@@ -105,7 +107,7 @@ export class GameView {
   /** Attach a combat world. `pov` is the first-person fighter (its rig is hidden). */
   bind(world: CombatWorld, pov: Fighter | null) {
     for (const r of this.rigs) {
-      this.scene.remove(r.rig.root, r.trails.L.mesh, r.trails.R.mesh);
+      this.scene.remove(r.rig.root, r.trails.L.mesh, r.trails.R.mesh, r.rope);
       r.aura.forEach((s) => this.scene.remove(s));
     }
     this.effects.clear();
@@ -124,7 +126,11 @@ export class GameView {
         this.scene.add(s);
         aura.push(s);
       }
-      return { fighter: f, rig, anim: new ModelAnimator(rig, f), trails, ghostT: 0, twirlT: 0, aura };
+      const rope = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineBasicMaterial({ color: 0x2b2b3d }));
+      rope.frustumCulled = false;
+      rope.visible = false;
+      this.scene.add(rope);
+      return { fighter: f, rig, anim: new ModelAnimator(rig, f), trails, ghostT: 0, twirlT: 0, aura, rope };
     });
     if (pov) {
       this.viewmodel.setFighter(pov);
@@ -243,6 +249,31 @@ export class GameView {
           } else if (e.attacker === pov) this.addTrauma(0.4);
           break;
         }
+        case 'counter': {
+          const el = e.target.def.element;
+          this.effects.hit(e.pos, e.target.forward(), el.color, el.color2, 0.9, true, 0.9, true);
+          audio.play('heavy', 1.1);
+          audio.play('whoosh', 1.4);
+          if (e.target === pov) {
+            this.feedback.flash = { color: '#dfe8ff', a: 0.5 };
+            this.fovKick.impulse(-20);
+          } else if (e.attacker === pov) this.addTrauma(0.4);
+          break;
+        }
+        case 'parry': {
+          this.effects.justGuard(e.pos);
+          audio.play('guard');
+          if (e.reflected) audio.play('shot');
+          if (e.target === pov) this.fovKick.impulse(-10);
+          break;
+        }
+        case 'grapple': {
+          this.effects.fizzle(e.pos.clone(), e.fighter.def.element.color2);
+          this.effects.dust(e.pos.clone(), 3, 0.5);
+          audio.play(e.onFighter ? 'punch' : 'land', 0.6);
+          if (e.fighter === pov) this.fovKick.impulse(22);
+          break;
+        }
         case 'recoil': {
           this.effects.dust(e.pos.clone(), 5, 0.5 + e.strength * 0.06);
           this.effects.fizzle(e.pos.clone(), e.fighter.def.element.color2);
@@ -351,12 +382,41 @@ export class GameView {
     }
   }
 
+  /** Rope from Zip's launcher to the flying hook or the latched point. */
+  private updateRope(b: RigBundle) {
+    const f = b.fighter;
+    if (f.def.weapon !== 'grapple' || !this.world) return;
+    const proj = this.world.projectiles.find((p) => p.owner === f && p.visual === 'hook');
+    const g = f.grapple;
+    const end = proj ? proj.pos.clone() : g ? (g.target ? g.target.pos.clone().setY(g.target.pos.y + 0.9) : g.point.clone()) : null;
+    // A yank hook keeps the rope taut while the opponent is reeled in.
+    const other = this.world.fighters.find((o) => o !== f);
+    const yank = !end && other?.grapple?.forced && other.grapple.target === f ? other.pos.clone().setY(other.pos.y + 0.9) : null;
+    const target = end ?? yank;
+    b.rope.visible = !!target;
+    b.anim.hookOut = !!target;
+    if (f === this.pov) this.viewmodel.hookOut = !!target;
+    if (!target) return;
+    let start: THREE.Vector3;
+    if (f === this.pov) {
+      const right = f.right();
+      start = f.eye.addScaledVector(right, 0.3).addScaledVector(f.aimDir(), 0.6);
+      start.y -= 0.3;
+    } else start = b.rig.tipR.getWorldPosition(new THREE.Vector3());
+    const pos = b.rope.geometry.attributes.position as THREE.BufferAttribute;
+    pos.setXYZ(0, start.x, start.y, start.z);
+    pos.setXYZ(1, target.x, target.y, target.z);
+    pos.needsUpdate = true;
+  }
+
   private updateRigFx(b: RigBundle, dt: number) {
     const f = b.fighter;
     const rig = b.rig;
     const visible = rig.root.visible;
     const act = f.action;
-    const strike = !!act && f.state === 'action' && phaseOf(act.def, act.frame).stage === 'strike' && (f.def.weapon === 'fists' || f.def.weapon === 'hammer');
+    this.updateRope(b);
+    const w = f.def.weapon;
+    const strike = !!act && f.state === 'action' && phaseOf(act.def, act.frame).stage === 'strike' && (w === 'fists' || w === 'hammer' || w === 'katana' || w === 'umbrella' || (w === 'grapple' && !act.def.spawns));
     const hitHand = act?.def.hits?.find((h) => act.frame >= h.start - 1 && act.frame < h.end + 1)?.hand ?? 'R';
     b.trails.L.emitting = visible && strike && (hitHand === 'L' || hitHand === 'B');
     b.trails.R.emitting = visible && strike && (hitHand === 'R' || hitHand === 'B');
@@ -375,7 +435,7 @@ export class GameView {
     } else b.ghostT = 0;
 
     // Swirl rings around spinning attacks.
-    if (visible && act?.def.anim === 'heliSpin') {
+    if (visible && (act?.def.anim === 'heliSpin' || act?.def.anim === 'typhoon' || act?.def.anim === 'aroundWorld')) {
       b.twirlT -= dt;
       if (b.twirlT <= 0) {
         b.twirlT = 0.07;

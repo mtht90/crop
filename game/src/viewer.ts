@@ -34,6 +34,8 @@ export class AnimViewer {
   private panel: HTMLDivElement;
 
   constructor(root: HTMLElement) {
+    // Handle for automated frame-exact captures.
+    (window as unknown as { __viewer: AnimViewer }).__viewer = this;
     this.view = new GameView(root);
     this.view.freeCamera = true;
     this.view.scene.add(this.debug);

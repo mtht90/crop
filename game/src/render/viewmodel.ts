@@ -3,7 +3,8 @@ import type { Fighter } from '../combat/fighter';
 import { phaseOf } from '../combat/phase';
 import { clamp, damp, ease, lerp, rand, Spring } from '../core/math';
 import { Trail } from './effects';
-import { buildBlaster, buildToyHammer, buildBowMesh } from './weapons';
+import { buildBlaster, buildBowMesh, buildHookGun, buildKatana, buildToyHammer, buildUmbrella, buildYoyo } from './weapons';
+import { yoyoPose, yoyoScale } from './yoyo';
 import { tex } from './textures';
 import { part } from './toon';
 
@@ -27,7 +28,12 @@ const BASE: Record<string, { L: [number, number, number]; R: [number, number, nu
   guns: { L: [-0.27, -0.29, -0.66], R: [0.27, -0.29, -0.66] },
   bow: { L: [-0.2, -0.24, -0.7], R: [0.2, -0.3, -0.5] },
   hammer: { L: [0.22, -0.48, -0.56], R: [0.4, -0.44, -0.62] },
+  katana: { L: [-0.3, -0.42, -0.5], R: [0.3, -0.36, -0.58] },
+  yoyo: { L: [-0.3, -0.32, -0.6], R: [0.28, -0.3, -0.6] },
+  grapple: { L: [-0.3, -0.3, -0.62], R: [0.27, -0.29, -0.66] },
+  umbrella: { L: [-0.3, -0.42, -0.5], R: [0.3, -0.4, -0.6] },
 };
+const YAW_BIAS: Record<string, number> = { fists: 0.12, guns: 0.07, bow: 0.05, hammer: 0, katana: 0.04, yoyo: 0.08, grapple: 0.09, umbrella: 0.04 };
 
 /**
  * First-person arms/weapons rendered in their own scene on top of the world.
@@ -55,6 +61,14 @@ export class ViewModel {
   private bow: ReturnType<typeof buildBowMesh> | null = null;
   private nocked: THREE.Group | null = null;
   private hammer: THREE.Group | null = null;
+  private umbrella: ReturnType<typeof buildUmbrella> | null = null;
+  private umbrellaOpen = 0;
+  private yoyo: THREE.Group | null = null;
+  private yoyoString: THREE.Line | null = null;
+  private yoyoSpin = 0;
+  private hookClaw: THREE.Object3D | null = null;
+  /** Set by the view while the hook is out. */
+  hookOut = false;
 
   constructor() {
     this.scene.add(new THREE.HemisphereLight(0xffffff, 0x8899cc, 1.6));
@@ -102,7 +116,40 @@ export class ViewModel {
       cuff.position.set(0, -0.02, 0.1);
       a.root.add(cuff);
       const w = f.def.weapon;
-      if (w === 'bow' || w === 'hammer') {
+      if (w === 'katana' || w === 'umbrella' || w === 'yoyo' || (w === 'grapple' && side === 'R')) {
+        const glove = part(new THREE.SphereGeometry(0.07, 12, 10), L.glove, 0.006);
+        glove.position.set(0, -0.02, -0.02);
+        a.root.add(glove);
+        if (w === 'katana' && side === 'R') {
+          const k = buildKatana(0.85);
+          k.position.set(0, -0.03, -0.02);
+          a.root.add(k);
+          a.tip.position.set(0, 0.95, -0.03);
+          k.add(a.tip);
+        } else if (w === 'umbrella' && side === 'R') {
+          const u = buildUmbrella(L.top, L.topAccent, 0.75);
+          u.group.position.set(0, -0.03, -0.02);
+          a.root.add(u.group);
+          this.umbrella = u;
+          a.tip.position.set(0, 1.0, 0);
+          u.group.add(a.tip);
+        } else if (w === 'grapple') {
+          const g = buildHookGun(0.85);
+          g.group.rotation.y = Math.PI;
+          g.group.position.set(0, 0.02, -0.04);
+          a.root.add(g.group);
+          this.hookClaw = g.claw;
+          a.tip.position.set(0, 0.02, -0.3);
+        } else {
+          a.tip.position.set(0, 0, -0.08);
+        }
+      } else if (w === 'grapple') {
+        const glove = part(new THREE.SphereGeometry(0.095, 16, 12), L.topAccent, 0.008);
+        glove.scale.set(1, 0.95, 1.15);
+        glove.position.set(0, -0.01, -0.09);
+        a.root.add(glove);
+        a.tip.position.set(0, 0, -0.18);
+      } else if (w === 'bow' || w === 'hammer') {
         const glove = part(new THREE.SphereGeometry(0.07, 12, 10), L.glove, 0.006);
         glove.position.set(0, -0.02, -0.02);
         a.root.add(glove);
@@ -171,6 +218,18 @@ export class ViewModel {
     }
     if (f.def.weapon !== 'bow') this.bow = null;
     if (f.def.weapon !== 'hammer') this.hammer = null;
+    if (f.def.weapon !== 'umbrella') this.umbrella = null;
+    if (f.def.weapon !== 'grapple') this.hookClaw = null;
+    if (this.yoyo) this.camera.remove(this.yoyo);
+    if (this.yoyoString) this.camera.remove(this.yoyoString);
+    this.yoyo = this.yoyoString = null;
+    if (f.def.weapon === 'yoyo') {
+      this.yoyo = buildYoyo(f.def.element.color, f.def.element.color2, 0.8);
+      this.camera.add(this.yoyo);
+      this.yoyoString = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineBasicMaterial({ color: 0xffffff }));
+      this.yoyoString.frustumCulled = false;
+      this.camera.add(this.yoyoString);
+    }
     if (this.nocked) this.camera.remove(this.nocked);
     this.nocked = null;
     if (f.def.weapon === 'bow') {
@@ -270,8 +329,17 @@ export class ViewModel {
 
       this.actionOffset(f, side, o);
 
+      // Umbrella guard: canopy straight ahead instead of crossed arms.
+      if (this.guardW > 0.001 && f.def.weapon === 'umbrella') {
+        const g = this.guardW;
+        if (side === 'R') {
+          o.r.x += -1.05 * g;
+          o.r.z += -0.15 * g;
+          o.p.x += -0.08 * g;
+          o.p.y += -0.02 * g;
+        } else o.p.y -= 0.1 * g;
+      } else if (this.guardW > 0.001) {
       // Guard: cross the arms in front of the face.
-      if (this.guardW > 0.001) {
         const g = this.guardW;
         o.p.x += lerp(0, -0.17 * s, g);
         o.p.y += lerp(0, 0.12, g);
@@ -320,10 +388,11 @@ export class ViewModel {
         a.base.y + o.p.y + this.swayY.value + this.landDip.value * 0.03,
         a.base.z + o.p.z,
       );
-      const yawBias = { fists: 0.12, guns: 0.07, bow: 0.05, hammer: 0.0 }[f.def.weapon] * s;
+      const yawBias = (YAW_BIAS[f.def.weapon] ?? 0) * s;
       // Hammer held at the lower right, head leaning forward and inward.
-      const restX = f.def.weapon === 'hammer' && side === 'R' ? -0.2 : 0;
-      const restZ = f.def.weapon === 'hammer' && side === 'R' ? 0.22 : 0;
+      const blade = (f.def.weapon === 'katana' || f.def.weapon === 'umbrella') && side === 'R';
+      const restX = f.def.weapon === 'hammer' && side === 'R' ? -0.2 : blade ? -0.55 : 0;
+      const restZ = f.def.weapon === 'hammer' && side === 'R' ? 0.22 : blade ? 0.35 : 0;
       a.root.rotation.set(o.r.x + restX + this.swayY.value * 2, o.r.y + this.swayX.value * 2 + yawBias, o.r.z + restZ);
 
       a.flashT -= dt;
@@ -331,7 +400,8 @@ export class ViewModel {
       if (a.flash.visible) a.flash.scale.setScalar(0.22 + Math.random() * 0.12);
 
       // Trail from the fist tip while striking.
-      const strike = f.action && phaseOf(f.action.def, f.action.frame).stage === 'strike' && (f.def.weapon === 'fists' || (f.def.weapon === 'hammer' && side === 'R'));
+      const w = f.def.weapon;
+      const strike = f.action && phaseOf(f.action.def, f.action.frame).stage === 'strike' && (w === 'fists' || (w === 'grapple' && !f.action.def.spawns) || ((w === 'hammer' || w === 'katana' || w === 'umbrella') && side === 'R'));
       a.trail.emitting = !!strike;
       const tipPos = a.tip.getWorldPosition(new THREE.Vector3());
       this.camera.worldToLocal(tipPos);
@@ -339,6 +409,7 @@ export class ViewModel {
     }
 
     this.updateBow(f);
+    this.updateExtras(f, dt);
     if (this.hammer) {
       // Giant hammer for the ult.
       const act = f.action;
@@ -361,6 +432,38 @@ export class ViewModel {
       sp.position.set(arm.root.position.x + Math.cos(a) * r, arm.root.position.y + Math.sin(a * 1.3) * r, arm.root.position.z - 0.08 + Math.sin(a) * r);
       sp.scale.setScalar(0.04 + Math.abs(Math.sin(a * 2)) * 0.05);
     });
+  }
+
+  /** Umbrella canopy, yo-yo flight and the hook launcher's claw. */
+  private updateExtras(f: Fighter, dt: number) {
+    const anim = f.state === 'action' ? f.action?.def.anim : undefined;
+    if (this.umbrella) {
+      const open = f.guarding || f.gliding || anim === 'parasol' || anim === 'umbrellaRush' || anim === 'updraft' || anim === 'typhoon';
+      this.umbrellaOpen = damp(this.umbrellaOpen, open ? 1 : 0, open ? 30 : 12, dt);
+      this.umbrella.setOpen(this.umbrellaOpen);
+    }
+    if (this.hookClaw) this.hookClaw.visible = !this.hookOut;
+    const yo = this.yoyo;
+    if (yo && this.yoyoString) {
+      this.camera.updateMatrixWorld(true);
+      const hand = this.arms.R.root.position.clone().add(new THREE.Vector3(0, 0, -0.08));
+      const pose = yoyoPose(f);
+      if (pose.mode === 'line') {
+        const u = clamp(pose.dist / 2, 0, 1);
+        yo.position.set(hand.x * (1 - u), hand.y * (1 - u) + 0.02 * u, -0.1 - pose.dist);
+      } else if (pose.mode === 'orbit') {
+        yo.position.set(Math.sin(pose.angle) * 1.4, -0.25 + (pose.height - 0.9) * 0.3, -Math.cos(pose.angle) * 1.4 - 0.2);
+      } else {
+        yo.position.copy(hand).add(new THREE.Vector3(-0.04, -0.13 + Math.sin(this.t * 4) * 0.02, -0.05));
+      }
+      this.yoyoSpin += pose.mode === 'hand' ? 0.1 : 0.6;
+      yo.rotation.set(this.yoyoSpin, 0, 0);
+      yo.scale.setScalar(0.8 * yoyoScale(f));
+      const pos = this.yoyoString.geometry.attributes.position as THREE.BufferAttribute;
+      pos.setXYZ(0, hand.x, hand.y, hand.z);
+      pos.setXYZ(1, yo.position.x, yo.position.y, yo.position.z);
+      pos.needsUpdate = true;
+    }
   }
 
   /** Bow string follows the right hand while drawing; the arrow sits on the string. */
@@ -447,6 +550,132 @@ export class ViewModel {
         break;
       case 'pikoDash':
         swing([0.5, 0.3, 0], [-1.2, -0.2, -0.3], 0.3);
+        break;
+      // --- Katana -------------------------------------------------------
+      case 'slashA':
+      case 'iaiStrike':
+        if (side === 'R') swing([0.5, 0.6, 0.6], [-1.0, -1.2, -0.9], 0.18);
+        break;
+      case 'slashB':
+        if (side === 'R') swing([0.3, -1.0, -0.6], [-0.7, 1.1, 0.8], 0.18);
+        break;
+      case 'slashC':
+      case 'passSlash':
+        if (side === 'R') swing([0.4, 0.3, 0], [-1.3, 0.1, -0.2], 0.32);
+        break;
+      case 'airSlash':
+        if (side === 'R') swing([0.9, 0.2, 0.2], [-1.4, -0.3, -0.3], 0.15);
+        break;
+      case 'tsubame':
+        if (side === 'R') swing([-0.6, 0.2, 0], [1.2, -0.2, 0.3], 0.1);
+        break;
+      case 'iai':
+        // Low ready stance, blade drawn back to the hip.
+        o.p.y -= 0.08;
+        o.p.x += side === 'R' ? -0.1 : 0.1;
+        if (side === 'R') o.r.x += -0.6;
+        break;
+      case 'getsuei': {
+        const fr = act.frame;
+        if (side !== 'R') break;
+        if (fr < 26) o.p.z += 0.08;
+        else if (fr < 62) {
+          const p = ((fr - 26) % 5) / 5;
+          const dir = Math.floor((fr - 26) / 5) % 2 ? 1 : -1;
+          o.r.y += dir * lerp(1.0, -1.0, p);
+          o.r.x += -0.6;
+          o.p.z -= 0.15;
+        } else swing([0.6, 0.4, 0], [-1.5, -0.2, -0.3], 0.3);
+        break;
+      }
+      // --- Yo-yo --------------------------------------------------------
+      case 'yoyoShot':
+      case 'yoyoShot2':
+      case 'airYoyo':
+      case 'snare':
+      case 'walkDog':
+      case 'giantYoyo':
+        if (side === 'R') {
+          const k = punch(1);
+          o.p.z -= 0.25 * k;
+          o.p.x -= 0.08 * Math.max(0, k);
+          o.r.x += id === 'walkDog' ? -0.5 * Math.max(0, k) : 0;
+        }
+        break;
+      case 'aroundWorld':
+      case 'loopUp':
+        if (side === 'R') {
+          o.p.y += 0.1;
+          o.r.z += -0.5;
+        }
+        break;
+      // --- Grappler -----------------------------------------------------
+      case 'zJab':
+      case 'zAirPunch':
+      case 'zCross': {
+        const lead = id === 'zCross' ? 'R' : 'L';
+        if (side === lead) {
+          const k = punch(1);
+          o.p.z -= 0.34 * k;
+          o.p.x += -s * 0.14 * Math.max(0, k);
+          o.p.y += 0.06 * Math.max(0, k);
+        }
+        break;
+      }
+      case 'zUpper':
+        if (side === 'L') swing([-0.3, 0, 0], [1.2, 0, 0], 0.1);
+        break;
+      case 'hookShot':
+      case 'reelIn':
+        if (side === 'R') {
+          o.p.x -= 0.1;
+          o.p.y += 0.03;
+        }
+        break;
+      case 'reelFinisher':
+        if (side === 'L') {
+          if (act.connected) swing([-0.3, 0, 0], [1.4, 0, 0], 0.15);
+          else o.p.y -= 0.08;
+        }
+        break;
+      case 'dropKick':
+        o.p.y += 0.08;
+        o.p.x += 0.08 * s;
+        break;
+      // --- Umbrella -----------------------------------------------------
+      case 'pokeA':
+      case 'pokeB':
+      case 'umbrellaRush':
+      case 'airPoke':
+        if (side === 'R') {
+          const k = punch(1);
+          // Point the tip forward, then thrust.
+          o.r.x += -0.95;
+          o.r.z += -0.35;
+          o.p.x -= 0.12;
+          o.p.z -= 0.35 * k;
+          if (id === 'airPoke') o.r.x += -0.5;
+        }
+        break;
+      case 'sweep':
+        if (side === 'R') swing([0.3, 0.9, 0.5], [-0.8, -1.2, -0.7], 0.15);
+        break;
+      case 'parasol':
+      case 'updraft':
+        if (side === 'R') {
+          // Canopy straight ahead like a shield (or overhead for the updraft).
+          const up = id === 'updraft';
+          o.r.x += up ? 0.3 : -1.05;
+          o.r.z += up ? -0.35 : -0.15;
+          o.p.x -= up ? 0.22 : 0.08;
+          o.p.y += up ? 0.1 : -0.02;
+        }
+        break;
+      case 'typhoon':
+        if (side === 'R') {
+          o.r.z += -1.0;
+          o.p.y += 0.1;
+        }
         break;
       case 'heliSpin': {
         const a = (act.frame / 60) * Math.PI * 2 * 2.5;

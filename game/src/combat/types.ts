@@ -29,6 +29,8 @@ export interface HitWindow extends HitProps {
   hand?: 'L' | 'R' | 'B';
   /** Area hit centered on the attacker's body (shockwaves, spins) instead of the aim line. */
   area?: boolean;
+  /** Range grows/shrinks linearly over the window (yo-yo throws): [range at start, range at end]. */
+  reach?: [number, number];
 }
 
 /** Projectile emission at a given frame. */
@@ -46,9 +48,16 @@ export interface Spawn extends HitProps {
   size?: number;
   /** Downward acceleration (m/s^2) for arcing projectiles. */
   gravity?: number;
-  visual?: 'star' | 'arrow';
+  visual?: 'star' | 'arrow' | 'hook';
   /** Rain down from above the opponent instead of leaving the hand. */
   from?: 'hand' | 'sky';
+  /**
+   * Grappling hook: 'self' pulls the shooter to whatever it latches onto
+   * (terrain or the opponent); 'yank' reels the opponent in instead.
+   */
+  hook?: 'self' | 'yank';
+  /** Action the shooter starts when this projectile connects with the opponent. */
+  onHit?: string;
 }
 
 /** Self velocity applied during frames [start, end). Relative to facing. */
@@ -104,6 +113,12 @@ export interface ActionDef {
   charge?: Charge;
   /** Ends the action on landing (air slams). */
   landCancel?: boolean;
+  /** Counter stance: a hit landing in [start, end) is negated and `follow` starts behind the attacker. */
+  counter?: { start: number; end: number; follow: string };
+  /** Bodies don't collide during the action (pass-through slashes). */
+  passThrough?: boolean;
+  /** Parry: frontal projectiles in [start, end) are sent back, melee is blocked and bounced. */
+  reflect?: [number, number];
 }
 
 export interface Look {
@@ -125,7 +140,7 @@ export interface CharacterDef {
   id: string;
   name: string;
   title: string;
-  weapon: 'fists' | 'guns' | 'bow' | 'hammer';
+  weapon: 'fists' | 'guns' | 'bow' | 'hammer' | 'katana' | 'yoyo' | 'grapple' | 'umbrella';
   /** CPU play style. */
   archetype: 'melee' | 'ranged';
   /** Theme colors for trails, sparks and auras. */
@@ -138,6 +153,8 @@ export interface CharacterDef {
   dashAttack?: string;
   /** Push-back (m/s) per shot that hits the floor or a floating rock nearby (not the opponent). */
   recoil?: number;
+  /** Holding jump in the air caps the fall speed at this value (umbrella glide). */
+  glide?: number;
   maxHp: number;
   walkSpeed: number;
   jumpSpeed: number;
@@ -164,6 +181,8 @@ export interface Intent {
   attackPressed: boolean;
   guard: boolean;
   jumpPressed: boolean;
+  /** Jump held (gliding). */
+  jump: boolean;
   dashPressed: boolean;
   skillPressed: boolean;
   ultPressed: boolean;
@@ -179,6 +198,7 @@ export const emptyIntent = (): Intent => ({
   attackPressed: false,
   guard: false,
   jumpPressed: false,
+  jump: false,
   dashPressed: false,
   skillPressed: false,
   ultPressed: false,

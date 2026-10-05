@@ -53,6 +53,7 @@ export class PlayerInput {
     moveZ: 0,
     attack: false,
     guard: false,
+    jump: false,
     pressed: new Set<'attack' | 'jump' | 'dash' | 'skill' | 'ult' | 'reload'>(),
   };
 
@@ -105,6 +106,7 @@ export class PlayerInput {
     const p = this.pressed;
     i.attackPressed = p.has('Mouse0');
     i.jumpPressed = p.has('Space');
+    i.jump = k.has('Space');
     i.dashPressed = p.has('ShiftLeft') || p.has('ShiftRight');
     i.skillPressed = p.has('KeyE');
     i.ultPressed = p.has('KeyQ');
@@ -117,6 +119,7 @@ export class PlayerInput {
     }
     i.attack ||= t.attack;
     i.guard ||= t.guard;
+    i.jump ||= t.jump;
     i.attackPressed ||= t.pressed.has('attack');
     i.jumpPressed ||= t.pressed.has('jump');
     i.dashPressed ||= t.pressed.has('dash');

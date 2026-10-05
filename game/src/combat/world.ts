@@ -23,8 +23,13 @@ export interface Projectile {
   props: HitProps;
   id: number;
   gravity: number;
-  visual: 'star' | 'arrow';
+  visual: 'star' | 'arrow' | 'hook';
+  hook?: 'self' | 'yank';
+  onHit?: string;
 }
+
+/** Outcome of an attack reaching a fighter. */
+export type HitResult = 'hit' | 'guard' | 'justGuard' | 'counter' | 'parry';
 
 export type CombatEvent =
   | { type: 'hit'; attacker: Fighter; target: Fighter; pos: Vector3; dir: Vector3; props: HitProps; ko: boolean; projectile: boolean }
@@ -39,6 +44,9 @@ export type CombatEvent =
   | { type: 'shockwave'; attacker: Fighter; pos: Vector3; radius: number }
   | { type: 'recoil'; fighter: Fighter; pos: Vector3; strength: number }
   | { type: 'justGuard'; attacker: Fighter; target: Fighter; pos: Vector3; pushed: boolean }
+  | { type: 'counter'; attacker: Fighter; target: Fighter; pos: Vector3 }
+  | { type: 'parry'; attacker: Fighter; target: Fighter; pos: Vector3; reflected: boolean }
+  | { type: 'grapple'; fighter: Fighter; pos: Vector3; onFighter: boolean }
   | { type: 'ringout'; fighter: Fighter };
 
 let projectileId = 0;
@@ -68,7 +76,7 @@ export class CombatWorld {
     const [a, b] = this.fighters;
     a.update(intents[0], b);
     b.update(intents[1], a);
-    this.separate(a, b);
+    if (!a.action?.def.passThrough && !b.action?.def.passThrough) this.separate(a, b);
     this.processAttacks(a, b);
     this.processAttacks(b, a);
     this.updateProjectiles();
@@ -125,7 +133,8 @@ export class CombatWorld {
         center.y += 0.6;
         if (a.frame === w.start) this.events.push({ type: 'shockwave', attacker: att, pos: center.clone(), radius: w.radius });
       } else {
-        center = att.eye.addScaledVector(att.aimDir(), w.range);
+        const range = w.reach ? w.reach[0] + (w.reach[1] - w.reach[0]) * ((a.frame - w.start) / Math.max(1, w.end - w.start - 1)) : w.range;
+        center = att.eye.addScaledVector(att.aimDir(), range);
         center.y = Math.min(center.y, att.pos.y + EYE_HEIGHT);
       }
       this.debugHitSpheres.push({ pos: center.clone(), radius: w.radius });
@@ -155,7 +164,7 @@ export class CombatWorld {
   }
 
   private spawnProjectile(att: Fighter, s: Spawn, tgt: Fighter, speedK = 1, sizeK = 1) {
-    const base = { owner: att, radius: s.radius * sizeK, life: s.life, size: (s.size ?? 1) * sizeK, props: s, gravity: s.gravity ?? 0, visual: s.visual ?? 'star' } as const;
+    const base = { owner: att, radius: s.radius * sizeK, life: s.life, size: (s.size ?? 1) * sizeK, props: s, gravity: s.gravity ?? 0, visual: s.visual ?? 'star', hook: s.hook, onHit: s.onHit } as const;
     if (s.from === 'sky') {
       // Rain: drop from above the opponent with a little scatter.
       const a = Math.random() * Math.PI * 2;
@@ -237,13 +246,42 @@ export class CombatWorld {
       if (ground) {
         p.pos.copy(ground);
         p.life = 0;
+        // A hook that bites into terrain reels its owner in.
+        if (p.hook && canGrapple(p.owner)) {
+          p.owner.startGrapple(ground);
+          this.events.push({ type: 'grapple', fighter: p.owner, pos: ground.clone(), onFighter: false });
+        }
       }
       const tgt = this.fighters[0] === p.owner ? this.fighters[1] : this.fighters[0];
       let alive = p.life > 0 && p.pos.y > -20;
       if (alive && tgt.isAlive() && !tgt.isInvulnerable() && segmentCapsule(p.prev, p.pos, p.radius, tgt.pos)) {
         const dir = p.vel.clone().setY(0).normalize();
-        this.applyHit(p.owner, tgt, p.props, dir, closestOnCapsule(p.pos, tgt.pos), true);
+        if (tgt.reflectActive() && !p.hook && tgt.forward().dot(dir) < -0.2) {
+          // Parried: the shot flies back at its owner, a little faster.
+          const back = p.owner.pos.clone().setY(p.owner.pos.y + 1.1).sub(p.pos).normalize();
+          p.vel.copy(back.multiplyScalar(p.vel.length() * 1.2));
+          p.gravity = 0;
+          p.life = Math.max(p.life, 50);
+          this.events.push({ type: 'parry', attacker: p.owner, target: tgt, pos: p.pos.clone(), reflected: true });
+          tgt.gainUlt(6);
+          p.owner = tgt;
+          keep.push(p);
+          continue;
+        }
+        const res = this.applyHit(p.owner, tgt, p.props, dir, closestOnCapsule(p.pos, tgt.pos), true);
         alive = false;
+        if (res === 'hit' && tgt.isAlive()) {
+          if (p.hook === 'self' && canGrapple(p.owner)) {
+            p.owner.startGrapple(tgt.pos, tgt);
+            this.events.push({ type: 'grapple', fighter: p.owner, pos: p.pos.clone(), onFighter: true });
+          } else if (p.hook === 'yank') {
+            // Reel the target in toward the shooter.
+            tgt.setState('hitstun', 50);
+            tgt.startGrapple(p.owner.pos, p.owner, true);
+            this.events.push({ type: 'grapple', fighter: p.owner, pos: p.pos.clone(), onFighter: true });
+          }
+          if (p.onHit && canGrapple(p.owner)) p.owner.startAction(p.onHit);
+        }
       }
       if (alive) keep.push(p);
       else this.events.push({ type: 'projectileEnd', projectile: p });
@@ -251,10 +289,44 @@ export class CombatWorld {
     this.projectiles = keep;
   }
 
-  applyHit(att: Fighter, tgt: Fighter, props: HitProps, dir: Vector3, point: Vector3, projectile: boolean) {
+  applyHit(att: Fighter, tgt: Fighter, props: HitProps, dir: Vector3, point: Vector3, projectile: boolean): HitResult {
     const toAttacker = dir.clone().multiplyScalar(-1);
     const facing = tgt.forward().dot(toAttacker) > 0.1;
     const guarded = tgt.guarding && tgt.state === 'free' && facing;
+
+    const counter = tgt.counterActive();
+    if (counter) {
+      // Iai counter: vanish and reappear behind the attacker, who is frozen for a moment.
+      const dist = att.pos.distanceTo(tgt.pos);
+      if (dist < 14) {
+        const behind = att.forward().multiplyScalar(-1.4);
+        tgt.pos.set(att.pos.x + behind.x, Math.max(att.pos.y, tgt.pos.y > 0 ? att.pos.y : 0), att.pos.z + behind.z);
+        tgt.prevPos.copy(tgt.pos);
+        tgt.vel.set(0, 0, 0);
+        const to = att.pos.clone().sub(tgt.pos);
+        tgt.yaw = Math.atan2(-to.x, -to.z);
+        tgt.pitch = 0;
+        tgt.yawOverride = tgt.yaw;
+        if (!(att.action?.def.armor && att.state === 'action')) {
+          att.vel.set(0, att.vel.y, 0);
+          att.setState('hitstun', 26);
+        }
+      }
+      tgt.startAction(counter.follow);
+      tgt.invuln = Math.max(tgt.invuln, 12);
+      tgt.gainUlt(10);
+      this.hitstop = Math.max(this.hitstop, 12);
+      this.events.push({ type: 'counter', attacker: att, target: tgt, pos: point });
+      return 'counter';
+    }
+    if (!projectile && tgt.reflectActive() && facing) {
+      // Umbrella parry vs melee: blocked cleanly and the attacker bounces off.
+      if (!(att.action?.def.armor && att.state === 'action')) att.receiveHit(dir.clone().multiplyScalar(-1), 9, 4, 26, 0.5);
+      tgt.gainUlt(8);
+      this.hitstop = Math.max(this.hitstop, 9);
+      this.events.push({ type: 'parry', attacker: att, target: tgt, pos: point, reflected: false });
+      return 'parry';
+    }
     // Lower HP -> bigger launches, so ring-outs become a threat late in the round.
     const hpScale = 1 + (1 - tgt.hp / tgt.def.maxHp) * 1.2;
 
@@ -270,7 +342,7 @@ export class CombatWorld {
       if (pushed) att.receiveHit(dir.clone().multiplyScalar(-1), 8, 4, 24, 0.5);
       this.hitstop = Math.max(this.hitstop, 10);
       this.events.push({ type: 'justGuard', attacker: att, target: tgt, pos: point, pushed });
-      return;
+      return 'justGuard';
     }
 
     if (guarded) {
@@ -289,7 +361,7 @@ export class CombatWorld {
       att.gainUlt(props.damage * 0.05);
       this.hitstop = Math.max(this.hitstop, Math.ceil(props.hitstop * 0.6));
       this.events.push({ type: 'guard', attacker: att, target: tgt, pos: point, props, broke });
-      return;
+      return 'guard';
     }
 
     tgt.hp = Math.max(0, tgt.hp - props.damage);
@@ -318,6 +390,7 @@ export class CombatWorld {
     }
     this.hitstop = Math.max(this.hitstop, ko ? props.hitstop + 10 : props.hitstop);
     this.events.push({ type: 'hit', attacker: att, target: tgt, pos: point, dir, props, ko, projectile });
+    return 'hit';
   }
 
   drainEvents() {
@@ -329,6 +402,10 @@ export class CombatWorld {
   get guardMax() {
     return GUARD_MAX;
   }
+}
+
+function canGrapple(f: Fighter) {
+  return f.isAlive() && (f.state === 'free' || f.state === 'action' || f.state === 'dash');
 }
 
 /** Fighter capsule: vertical segment from y+R to y+H-R. */

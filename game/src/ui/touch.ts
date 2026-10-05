@@ -81,12 +81,14 @@ export class TouchControls {
           t.pressed.add('attack');
         } else if (id === 'guard') t.guard = true;
         else t.pressed.add(id);
+        if (id === 'jump') t.jump = true;
         if (hold) this.lookIds.set(e.pointerId, { x: e.clientX, y: e.clientY });
       });
       const up = (e: PointerEvent) => {
         b.classList.remove('down');
         if (id === 'attack') this.input.touch.attack = false;
         if (id === 'guard') this.input.touch.guard = false;
+        if (id === 'jump') this.input.touch.jump = false;
         this.lookIds.delete(e.pointerId);
       };
       b.addEventListener('pointerup', up);
@@ -172,7 +174,7 @@ export class TouchControls {
     if (!v) {
       const t = this.input.touch;
       t.moveX = t.moveZ = 0;
-      t.attack = t.guard = false;
+      t.attack = t.guard = t.jump = false;
       this.stickId = null;
       this.stickBase.hidden = true;
       this.lookIds.clear();

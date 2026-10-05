@@ -71,6 +71,10 @@ export class CpuController {
     const i = emptyIntent();
     const self = this.self;
     const foe = this.foe;
+    if (self.yawOverride !== null) {
+      this.yaw = self.yawOverride;
+      self.yawOverride = null;
+    }
 
     this.history.push({ actionId: foe.action?.def.id ?? null, actionFrame: foe.action?.frame ?? 0, state: foe.state });
     if (this.history.length > 60) this.history.shift();
@@ -106,7 +110,23 @@ export class CpuController {
     const horiz = Math.hypot(self.pos.x, self.pos.z);
     if (!self.grounded && (horiz > ARENA_RADIUS - 0.5 || self.pos.y < -0.2) && (self.state === 'free' || self.state === 'action' || self.state === 'dash')) {
       const home = Math.atan2(self.pos.x, self.pos.z); // yaw that faces the center
+      i.jump = true; // umbrella: keep gliding
       if (self.def.recoil && this.recoilAim(i)) return i;
+      const rec = self.def.recovery ? self.def.actions[self.def.recovery] : null;
+      if (rec?.spawns?.some((s) => s.hook) && !self.grapple) {
+        // Grappler: aim the hook at the lip of the arena.
+        const eye = self.eye;
+        const rimR = ARENA_RADIUS - 0.4;
+        const out = new Vector3(self.pos.x, 0, self.pos.z).normalize();
+        const lip = out.multiplyScalar(rimR).setY(-0.15);
+        const d = lip.sub(eye);
+        i.yaw = this.yaw = Math.atan2(-d.x, -d.z);
+        i.pitch = this.pitch = Math.atan2(d.y, Math.hypot(d.x, d.z));
+        i.moveZ = 1;
+        if (!self.airMoveUsed && self.vel.y < 4) i.jumpPressed = true;
+        else if (self.skillCd === 0) i.skillPressed = true;
+        return i;
+      }
       i.yaw = home;
       i.pitch = 0;
       this.yaw = home;
@@ -141,7 +161,11 @@ export class CpuController {
     if (threat && this.reactedTo !== threat) {
       this.reactedTo = threat;
       const r = Math.random();
-      if (r < this.p.dodgeChance && self.stamina >= 1 && edgeRoom > 3.5) {
+      const sk = self.def.actions[self.def.skill];
+      if ((sk.counter || sk.reflect) && self.skillCd === 0 && Math.random() < this.p.guardChance + 0.15) {
+        // Iai counter / umbrella parry instead of guarding.
+        i.skillPressed = true;
+      } else if (r < this.p.dodgeChance && self.stamina >= 1 && edgeRoom > 3.5) {
         i.dashPressed = true;
         move.addScaledVector(right, this.strafeDir);
         this.strafeDir *= -1;
@@ -200,14 +224,19 @@ export class CpuController {
     if (i.guard || !foeVulnerable) return i;
 
     if (self.ult >= ULT_MAX) {
-      const ok = melee ? dist < 3.8 : dist < 16 && aimed;
+      const ud = self.def.actions[self.def.ult];
+      const uReach = Math.max(0, ...(ud.hits ?? []).filter((h) => h.reach).map((h) => h.range));
+      const ok = ud.spawns?.some((sp) => sp.hook) ? dist < 18 && aimed : uReach ? dist < uReach && aimed : melee ? dist < 3.8 : dist < 16 && aimed;
       if (ok && Math.random() < 0.05 + this.p.aggression * 0.05) i.ultPressed = true;
     }
     if (self.skillCd === 0 && Math.random() < this.p.skillUse * 0.03) {
       const sk = self.def.actions[self.def.skill];
       const area = sk.hits?.find((h) => h.area);
+      const reach = sk.hits?.find((h) => h.reach);
       let ok: boolean;
-      if (area) ok = dist < area.radius * 0.9;
+      if (sk.counter || sk.reflect) ok = false; // reactive only (see threat handling)
+      else if (area) ok = dist < area.radius * 0.9;
+      else if (reach) ok = aimed && dist < reach.range + 0.4 && dist > 3;
       else if (sk.motion?.some((m) => m.forward > 10)) ok = dist > 2.5 && dist < 8 && aimed;
       // Skills that jump backwards: never with the edge behind.
       else if (sk.motion?.some((m) => m.forward < 0)) ok = dist < 5 && edgeRoom > 6;

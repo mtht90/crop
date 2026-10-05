@@ -6,6 +6,8 @@ import { clamp, damp, ease, Spring, wrapAngle } from '../core/math';
 import { assets } from './assets';
 import { contactTime } from './clipInfo';
 import type { BoneName, ModelRig } from './charModel';
+import { yoyoPose, yoyoScale } from './yoyo';
+import { EYE_HEIGHT } from '../config';
 
 // ---------------------------------------------------------------------------
 // Clip helpers
@@ -57,7 +59,37 @@ const ATTACKS: Record<string, AttackSpec> = {
   groundPound: { clip: 'OverhandThrow' },
   gigaPiko: { clip: 'Sword_Attack' },
   burst: { clip: 'Pistol_Shoot', upper: true, contact: 0.04, end: 0.6 },
+  // Katana
+  slashA: { clip: 'Sword_Regular_A' },
+  slashB: { clip: 'Sword_Regular_B' },
+  slashC: { clip: 'Sword_Regular_C' },
+  airSlash: { clip: 'Sword_Attack' },
+  tsubame: { clip: 'Sword_Regular_C' },
+  passSlash: { clip: 'Sword_Dash' },
+  iaiStrike: { clip: 'Sword_Regular_C' },
+  // Yo-yo
+  yoyoShot: { clip: 'Punch_Cross', upper: true },
+  yoyoShot2: { clip: 'OverhandThrow', upper: true },
+  airYoyo: { clip: 'Punch_Cross' },
+  snare: { clip: 'OverhandThrow' },
+  walkDog: { clip: 'Sword_Dash' },
+  // Grappler
+  zJab: { clip: 'Punch_Jab' },
+  zCross: { clip: 'Punch_Cross' },
+  zUpper: { clip: 'Melee_Hook' },
+  zAirPunch: { clip: 'Punch_Jab' },
+  hookShot: { clip: 'Pistol_Shoot', upper: true, contact: 0.04, end: 0.6 },
+  reelIn: { clip: 'Pistol_Shoot', upper: true, contact: 0.04, end: 0.6 },
+  // Umbrella
+  pokeA: { clip: 'Punch_Cross' },
+  pokeB: { clip: 'Punch_Cross' },
+  sweep: { clip: 'Sword_Regular_B' },
+  airPoke: { clip: 'Sword_Attack' },
+  umbrellaRush: { clip: 'Shield_Dash' },
 };
+
+/** Moves where the umbrella is held point-first (thrusts). */
+const UMBRELLA_THRUST = new Set(['pokeA', 'pokeB', 'airPoke', 'umbrellaRush']);
 
 /** Maps an action frame to clip time with the anticipation/strike/recovery curve. */
 function attackTime(spec: AttackSpec, def: ActionDef, frame: number) {
@@ -154,7 +186,11 @@ export class ModelAnimator {
       case 'bow':
         return { clip: 'Spell_Simple_Idle_Loop', time: this.time % assets.clips.Spell_Simple_Idle_Loop.duration, weight: 1 };
       case 'hammer':
+      case 'katana':
+      case 'umbrella':
         return { clip: 'Sword_Idle', time: this.time % assets.clips.Sword_Idle.duration, weight: 1 };
+      case 'yoyo':
+        return { clip: 'Spell_Simple_Idle_Loop', time: this.time % assets.clips.Spell_Simple_Idle_Loop.duration, weight: 1 };
       default:
         return { clip: 'Punch_Jab', time: 0, weight: 1 };
     }
@@ -190,7 +226,7 @@ export class ModelAnimator {
   private overlayFor(): { layers: Layer[]; key: string; fade: number } | null {
     const f = this.fighter;
     if (this.outcome === 'win' && f.grounded) {
-      const clip = { fists: 'Dance_Loop', guns: 'Yes', bow: 'Idle_FoldArms_Loop', hammer: 'Dance_Loop' }[this.fighter.def.weapon];
+      const clip = { fists: 'Dance_Loop', guns: 'Yes', bow: 'Idle_FoldArms_Loop', hammer: 'Dance_Loop', katana: 'Sword_Idle', yoyo: 'Dance_Loop', grapple: 'Yes', umbrella: 'Idle_FoldArms_Loop' }[this.fighter.def.weapon];
       return { layers: [{ clip, time: this.time % assets.clips[clip].duration, weight: 1 }], key: 'win', fade: 0.3 };
     }
     if (this.outcome === 'lose' && f.grounded && f.state !== 'ko' && f.state !== 'knockdown') {
@@ -276,6 +312,60 @@ export class ModelAnimator {
         const layers: Layer[] = fr < 6 ? [{ clip: 'Slide_Start', time: (fr / 6) * assets.clips.Slide_Start.duration * 0.9, weight: 1 }] : fr < 22 ? [{ clip: 'Slide_Loop', time: ((fr - 6) / 60) % d, weight: 1 }] : [{ clip: 'Slide_Exit', time: Math.min(0.49, ((fr - 22) / 10) * 0.5), weight: 1 }];
         layers.push({ clip: 'Pistol_Aim_Neutral', time: 0.05, weight: 4, upper: true });
         return { layers, key, fade: 0.04 };
+      }
+      case 'iai': {
+        // Hold a low ready stance (blade sheathed-ish) while the counter window is open.
+        const d = assets.clips.Sword_Block.duration;
+        return { layers: [{ clip: 'Sword_Block', time: Math.min(d * 0.5, (fr / 8) * d * 0.5), weight: 1 }], key, fade: 0.05 };
+      }
+      case 'getsuei': {
+        if (fr < 26) {
+          const d = assets.clips.Sword_Dash.duration;
+          return { layers: [{ clip: 'Sword_Dash', time: Math.min(d * 0.6, (fr / 26) * d * 0.6), weight: 1 }], key, fade: 0.05 };
+        }
+        if (fr < 62) {
+          // Rapid alternating cuts.
+          const idx = Math.floor((fr - 26) / 5);
+          const clip = idx % 2 ? 'Sword_Regular_B' : 'Sword_Regular_A';
+          const c = contactTime(clip);
+          const p = ((fr - 26) % 5) / 5;
+          return { layers: [{ clip, time: c * (0.6 + 0.5 * p), weight: 1 }], key: `${key}-${idx}`, fade: 0.02 };
+        }
+        const d = assets.clips.Sword_Regular_C.duration;
+        const c = contactTime('Sword_Regular_C');
+        const t = fr < 66 ? c * 0.5 * ((fr - 62) / 4) : fr < 71 ? c * 0.5 + c * 0.5 * ease.outExpo((fr - 66) / 5) : Math.min(d, c + ((fr - 71) / 60) * 0.8);
+        return { layers: [{ clip: 'Sword_Regular_C', time: t, weight: 1 }], key: `${key}-fin`, fade: 0.03 };
+      }
+      case 'aroundWorld':
+      case 'typhoon': {
+        const d = assets.clips.Sword_Regular_A.duration;
+        return { layers: [{ clip: 'Sword_Regular_A', time: d * 0.45, weight: 1 }], key, fade: 0.06 };
+      }
+      case 'loopUp':
+      case 'updraft': {
+        const d = assets.clips.NinjaJump_Start.duration;
+        return { layers: [{ clip: 'NinjaJump_Start', time: Math.min(d * 0.6, (fr / 60) * 1.4), weight: 1 }, { clip: 'Spell_Simple_Shoot', time: 0.35, weight: 2, upper: true }], key, fade: 0.05 };
+      }
+      case 'giantYoyo': {
+        const d = assets.clips.OverhandThrow.duration;
+        const c = contactTime('OverhandThrow');
+        const t = fr < 20 ? c * 0.6 * (fr / 20) : fr < 26 ? c * 0.6 + c * 0.4 * ease.outExpo((fr - 20) / 6) : fr < 50 ? c : Math.min(d, c + ((fr - 50) / 60) * 0.9);
+        return { layers: [{ clip: 'OverhandThrow', time: t, weight: 1 }], key, fade: 0.05 };
+      }
+      case 'dropKick': {
+        const d = assets.clips.NinjaJump_Idle_Loop.duration;
+        return { layers: [{ clip: 'NinjaJump_Idle_Loop', time: (fr / 60) % d, weight: 1 }], key, fade: 0.04 };
+      }
+      case 'reelFinisher': {
+        // Wait in a crouched windup until the target arrives, then launch the uppercut.
+        const hc = contactTime('Melee_Hook');
+        const hitAt = a.connected ? (a.hitT ??= fr) : -1;
+        const t = hitAt < 0 ? hc * 0.45 : Math.min(assets.clips.Melee_Hook.duration, hc + ((fr - hitAt) / 60) * 0.7);
+        return { layers: [{ clip: 'Melee_Hook', time: t, weight: 1 }], key, fade: 0.05 };
+      }
+      case 'parasol': {
+        const d = assets.clips.Idle_Shield_Loop.duration;
+        return { layers: [{ clip: 'Idle_Shield_Loop', time: (fr / 60) % d, weight: 1, upper: true }], key, fade: 0.04 };
       }
       case 'heliSpin': {
         const d = assets.clips.NinjaJump_Start.duration;
@@ -450,10 +540,24 @@ export class ModelAnimator {
       rig.weaponRoot.scale.setScalar(k);
     }
 
+    if (anim === 'tsubame') {
+      this.rot('pelvis', AX, -0.3);
+      this.rot('spine_03', AX, -0.35);
+    }
+    if (anim === 'dropKick') {
+      for (const s of ['l', 'r'] as const) this.rot(`thigh_${s}`, AX, -1.3);
+      this.rot('pelvis', AX, -0.5);
+    }
+    if (f.def.weapon === 'umbrella') this.updateUmbrella(dt);
+    if (f.def.weapon === 'yoyo') this.updateYoyo();
+    if (f.def.weapon === 'grapple' && rig.hookClaw) rig.hookClaw.visible = !this.hookOut;
+
     // Spin when launched hard (ARMS-style), flip for the backflip skill, helicopter for the hammer.
     this.spin = 0;
     let spinY = 0;
     if (anim === 'heliSpin') spinY = (f.action!.frame / 60) * Math.PI * 2 * 2.5;
+    if (anim === 'typhoon') spinY = (f.action!.frame / 60) * Math.PI * 2 * 3;
+    if (anim === 'aroundWorld' && f.action!.frame >= 5 && f.action!.frame < 24) spinY = ((f.action!.frame - 5) / 19) * Math.PI * 2;
     if (f.state === 'tumble' && f.lastHitStrength > 0.6) this.spin = (f.stateT / 60) * 10;
     if (f.action?.def.anim === 'backflipShot') {
       const u = clamp((f.action.frame - 4) / 26, 0, 1);
@@ -479,6 +583,57 @@ export class ModelAnimator {
     rig.model.position.y = this.spin ? -0.9 : 0;
 
     this.updateSecondary(dt, la);
+  }
+
+  /** Set by the view while Zip's hook is flying or reeling. */
+  hookOut = false;
+  private umbrellaOpen = 0;
+  private umbrellaTilt = 0;
+  private yoyoSpin = 0;
+
+  private updateUmbrella(dt: number) {
+    const f = this.fighter;
+    const anim = f.state === 'action' ? f.action?.def.anim : undefined;
+    const open = f.guarding || f.gliding || anim === 'parasol' || anim === 'umbrellaRush' || anim === 'updraft' || anim === 'typhoon';
+    this.umbrellaOpen = damp(this.umbrellaOpen, open ? 1 : 0, open ? 30 : 12, dt);
+    this.rig.setUmbrellaOpen?.(this.umbrellaOpen);
+    // Thrusts and the parry hold it point-first.
+    const thrust = !!anim && (UMBRELLA_THRUST.has(anim) || anim === 'parasol');
+    this.umbrellaTilt = damp(this.umbrellaTilt, thrust ? 1 : 0, 25, dt);
+    this.rig.weaponRoot.rotation.x = this.umbrellaTilt * Math.PI * 0.5;
+  }
+
+  private updateYoyo() {
+    const rig = this.rig;
+    const f = this.fighter;
+    const yo = rig.yoyo;
+    const str = rig.yoyoString;
+    if (!yo || !str) return;
+    rig.root.updateMatrixWorld(true);
+    const hand = rig.tipR.getWorldPosition(new THREE.Vector3());
+    const pose = yoyoPose(f);
+    const world = new THREE.Vector3();
+    const base = rig.root.position;
+    if (pose.mode === 'line') {
+      const eye = new THREE.Vector3(base.x, base.y + EYE_HEIGHT, base.z);
+      world.copy(eye).addScaledVector(f.aimDir(), pose.dist);
+      world.y = Math.max(base.y + 0.15, Math.min(world.y, eye.y));
+      if (f.def.actions.walkDog && f.action?.def.anim === 'walkDog') world.y = base.y + 0.12;
+    } else if (pose.mode === 'orbit') {
+      const a = f.yaw + pose.angle;
+      world.set(base.x + Math.sin(a) * pose.radius, base.y + pose.height, base.z + Math.cos(a) * pose.radius);
+    } else {
+      world.copy(hand).add(new THREE.Vector3(0, -0.32 + Math.sin(this.time * 4) * 0.03, 0));
+    }
+    this.yoyoSpin += pose.mode === 'hand' ? 0.1 : 0.6;
+    yo.position.copy(rig.root.worldToLocal(world.clone()));
+    yo.rotation.set(this.yoyoSpin, 0, 0);
+    yo.scale.setScalar(yoyoScale(f));
+    const pos = str.geometry.attributes.position as THREE.BufferAttribute;
+    const h = rig.root.worldToLocal(hand.clone());
+    pos.setXYZ(0, h.x, h.y, h.z);
+    pos.setXYZ(1, yo.position.x, yo.position.y, yo.position.z);
+    pos.needsUpdate = true;
   }
 
   /** Rotates a bone about a model-space axis (independent of bone-local axes). */

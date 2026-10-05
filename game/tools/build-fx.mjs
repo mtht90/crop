@@ -1,6 +1,6 @@
 // Packs Kenney CC0 assets (see CREDITS.md) into public/assets:
 //  - Particle Pack sprites -> public/assets/fx/*.png (white + alpha, downsized)
-//  - Blaster Kit pistol    -> public/assets/models/Blaster.glb (texture embedded)
+//  - Blaster Kit models    -> public/assets/models/Blaster.glb, HookGun.glb (texture embedded)
 // Usage: ASSET_SRC=./asset-src node tools/build-fx.mjs
 // with kenney_particle-pack.zip unzipped to asset-src/particle and
 // kenney_blaster-kit_2.1.zip unzipped to asset-src/blaster.
@@ -42,7 +42,10 @@ for (const [name, [file, size]] of Object.entries(FX)) {
 }
 
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
-const doc = await io.read(`${SRC}/blaster/Models/GLB format/blaster-j.glb`);
-await doc.transform(prune(), dedup());
-await io.write(`${ROOT}models/Blaster.glb`, doc);
-console.log('Blaster.glb', fs.statSync(`${ROOT}models/Blaster.glb`).size);
+// blaster-j: Star's pistols; blaster-h: Zip's hook launcher.
+for (const [src, out] of [['blaster-j', 'Blaster'], ['blaster-h', 'HookGun']]) {
+  const doc = await io.read(`${SRC}/blaster/Models/GLB format/${src}.glb`);
+  await doc.transform(prune(), dedup());
+  await io.write(`${ROOT}models/${out}.glb`, doc);
+  console.log(`${out}.glb`, fs.statSync(`${ROOT}models/${out}.glb`).size);
+}

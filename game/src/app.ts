@@ -205,11 +205,20 @@ export class App {
           this.acc -= TICK;
           this.aimAssist(m);
           m.step(this.input.sample());
+          if (m.player.yawOverride !== null) {
+            // The simulation turned the player (counter teleport): follow with the camera.
+            this.input.setView(m.player.yawOverride, m.player.pitch);
+            m.player.yawOverride = null;
+          }
           const events = m.world.drainEvents();
           for (const e of events) {
-            if (e.type !== 'justGuard') continue;
-            if (e.target === m.player) this.hud.toast('JUST GUARD!');
-            else if (e.attacker === m.player) this.hud.toast(e.pushed ? 'はじかれた！' : 'JUST GUARD', '#ffb0a0');
+            if (e.type === 'justGuard') {
+              if (e.target === m.player) this.hud.toast('JUST GUARD!');
+              else if (e.attacker === m.player) this.hud.toast(e.pushed ? 'はじかれた！' : 'JUST GUARD', '#ffb0a0');
+            } else if (e.type === 'counter') {
+              if (e.target === m.player) this.hud.toast('居合カウンター！', '#dfe8ff');
+              else if (e.attacker === m.player) this.hud.toast('カウンターされた！', '#ffb0a0');
+            } else if (e.type === 'parry' && e.target === m.player) this.hud.toast(e.reflected ? 'はね返した！' : 'パリィ！', '#c9b8ff');
           }
           this.view.handleEvents(events);
           if (m.finished && this.screen === 'match') this.showResult();

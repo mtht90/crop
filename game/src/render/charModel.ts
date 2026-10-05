@@ -3,7 +3,7 @@ import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import type { CharacterDef } from '../combat/types';
 import { assets, type ModelKey } from './assets';
 import { leadHand } from './clipInfo';
-import { buildBlaster, buildBowMesh, buildToyHammer } from './weapons';
+import { buildBlaster, buildBowMesh, buildHookGun, buildKatana, buildToyHammer, buildUmbrella, buildYoyo } from './weapons';
 import { part, toon } from './toon';
 
 const OUTLINE = new THREE.Color(0x1d1b2e);
@@ -75,6 +75,13 @@ export class ModelRig {
   private bow: ReturnType<typeof buildBowMesh> | null = null;
   private bowHolder: THREE.Group | null = null;
   readonly bowHand: 'l' | 'r';
+  /** Yo-yo body and its string (world-positioned by the animator). */
+  yoyo: THREE.Group | null = null;
+  yoyoString: THREE.Line | null = null;
+  /** Spreads the umbrella canopy (0..1). */
+  setUmbrellaOpen: ((k: number) => void) | null = null;
+  /** Hook head on the launcher (hidden while the hook is out). */
+  hookClaw: THREE.Object3D | null = null;
 
   constructor(readonly def: CharacterDef) {
     const L = def.look;
@@ -307,10 +314,50 @@ export class ModelRig {
           this.at(`hand_${side}`, holder, grip);
           tip.position.set(0, 0.78, 0);
           this.weaponRoot.add(tip);
+        } else if (this.def.weapon === 'katana' && side === 'r') {
+          holder.add(this.weaponRoot);
+          this.weaponRoot.add(buildKatana());
+          this.at(`hand_${side}`, holder, grip);
+          tip.position.set(0, 1.0, -0.03);
+          this.weaponRoot.add(tip);
+        } else if (this.def.weapon === 'umbrella' && side === 'r') {
+          holder.add(this.weaponRoot);
+          const u = buildUmbrella(this.def.look.top, this.def.look.topAccent);
+          this.weaponRoot.add(u.group);
+          this.setUmbrellaOpen = u.setOpen;
+          this.at(`hand_${side}`, holder, grip);
+          tip.position.set(0, 1.0, 0);
+          this.weaponRoot.add(tip);
+        } else if (this.def.weapon === 'grapple' && side === 'r') {
+          const gun = buildHookGun(0.85);
+          holder.add(gun.group);
+          gun.group.position.set(0, 0.035, 0);
+          this.hookClaw = gun.claw;
+          this.at(`hand_${side}`, holder, grip);
+          tip.position.set(0, 0.04, 0.3);
+          holder.add(tip);
+        } else if (this.def.weapon === 'grapple') {
+          // Left hand: a padded fighting glove.
+          const big = part(new THREE.SphereGeometry(0.08, 12, 10), L.topAccent, 0.01);
+          big.scale.set(1, 1, 1.15);
+          this.at(`hand_${side}`, big, ha.clone().lerp(mid, 0.6));
+          this.at(`hand_${side}`, tip, ha.clone().lerp(mid, 1.2));
+        } else if (this.def.weapon === 'yoyo' && side === 'r') {
+          this.at(`hand_${side}`, tip, grip);
+          this.yoyo = buildYoyo(this.def.element.color, this.def.element.color2);
+          this.root.add(this.yoyo);
+          this.yoyoString = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineBasicMaterial({ color: 0xffffff }));
+          this.yoyoString.frustumCulled = false;
+          this.root.add(this.yoyoString);
         } else {
           this.at(`hand_${side}`, tip, grip);
         }
       }
+    }
+    if (this.def.weapon === 'katana') {
+      // Scabbard on the left hip.
+      const pl = P('pelvis');
+      this.seg('pelvis', pl.clone().add(new THREE.Vector3(0.18, 0.05, 0.12)), pl.clone().add(new THREE.Vector3(0.22, -0.42, -0.3)), (len) => new THREE.CylinderGeometry(0.03, 0.026, len, 8), 0x1d1d2b, 0.008);
     }
     if (this.def.weapon === 'bow') {
       // Quiver on the back.

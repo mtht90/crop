@@ -928,3 +928,250 @@ body:not(.touch) .touch-only {
     margin: -52px 0 0 -52px;
   }
 }
+
+/* ---------- Character select (Smash-style) ---------- */
+.select-screen {
+  gap: 10px;
+}
+.vs-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.vs {
+  font-size: 54px;
+  font-weight: 900;
+  font-style: italic;
+  color: var(--gold);
+  -webkit-text-stroke: 10px var(--ink);
+  paint-order: stroke fill;
+}
+.slot {
+  position: relative;
+  width: 300px;
+  height: 250px;
+  border: 6px solid var(--ink);
+  border-radius: 22px;
+  overflow: hidden;
+  cursor: pointer;
+  background: radial-gradient(circle at 50% 35%, var(--el2) 0%, var(--el) 70%);
+  box-shadow: 0 8px 0 rgba(29, 27, 46, 0.4);
+  transition: transform 0.12s;
+}
+.slot.active {
+  outline: 6px solid var(--gold);
+  transform: translateY(-4px);
+}
+.slot.cpu .slot-img {
+  transform: scaleX(-1);
+}
+.slot-img {
+  position: absolute;
+  left: 50%;
+  bottom: -10px;
+  height: 118%;
+  translate: -50% 0;
+}
+.slot-tag {
+  position: absolute;
+  top: 8px;
+  left: 10px;
+  z-index: 2;
+  font-size: 26px;
+  font-weight: 900;
+  font-style: italic;
+  color: #fff;
+  -webkit-text-stroke: 7px var(--ink);
+  paint-order: stroke fill;
+}
+.slot.player .slot-tag {
+  color: var(--p1);
+}
+.slot.cpu .slot-tag {
+  color: #8ab4ff;
+}
+.slot-info {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  padding: 6px 12px 8px;
+  background: linear-gradient(transparent, rgba(29, 27, 46, 0.85) 45%);
+  color: #fff;
+}
+.slot.cpu .slot-info {
+  padding-bottom: 42px;
+}
+.slot-name {
+  font-size: 30px;
+  font-weight: 900;
+  -webkit-text-stroke: 6px var(--ink);
+  paint-order: stroke fill;
+  line-height: 1.1;
+}
+.slot-title {
+  font-size: 13px;
+  font-weight: 800;
+  opacity: 0.9;
+}
+.slot-diff {
+  position: absolute;
+  bottom: 6px;
+  left: 0;
+  right: 0;
+  z-index: 3;
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+}
+.slot-diff .btn {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-width: 3px;
+  box-shadow: none;
+}
+.pick-hint {
+  font-weight: 900;
+  color: #fff;
+  -webkit-text-stroke: 5px var(--ink);
+  paint-order: stroke fill;
+  font-size: 16px;
+}
+.pick-hint .p1c {
+  color: var(--p1);
+}
+.pick-hint .cpuc {
+  color: #8ab4ff;
+}
+.roster {
+  display: grid;
+  grid-template-columns: repeat(9, 92px);
+  gap: 8px;
+}
+.tile {
+  position: relative;
+  height: 104px;
+  padding: 0;
+  border: 5px solid var(--ink);
+  border-radius: 14px;
+  overflow: hidden;
+  cursor: pointer;
+  font-family: var(--font);
+  background: linear-gradient(170deg, var(--el2, #fff) -30%, var(--el, #c9d4ee) 90%);
+  box-shadow: 0 5px 0 rgba(29, 27, 46, 0.4);
+  transition: transform 0.1s;
+}
+.tile:hover {
+  transform: translateY(-4px) scale(1.04);
+}
+.tile.sel {
+  outline: 5px solid var(--gold);
+}
+.tile canvas {
+  position: absolute;
+  inset: -4px 0 auto;
+  width: 100%;
+}
+.tile-name {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 2px 0 3px;
+  background: var(--ink);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 900;
+}
+.tile.rand {
+  background: linear-gradient(160deg, #fff, #c9d4ee);
+}
+.tile .q {
+  position: absolute;
+  inset: 0 0 22px;
+  display: grid;
+  place-items: center;
+  font-size: 46px;
+  font-weight: 900;
+  color: var(--ink);
+}
+.toks {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.tok {
+  font-size: 11px;
+  font-weight: 900;
+  padding: 1px 5px;
+  border-radius: 999px;
+  border: 2px solid var(--ink);
+  color: #fff;
+}
+.tok.p1 {
+  background: var(--p1);
+}
+.tok.cpu {
+  background: var(--p2);
+}
+.btn.fight {
+  font-size: 26px;
+  padding: 8px 34px;
+}
+@media (max-width: 900px), (max-height: 560px) {
+  .slot {
+    width: 220px;
+    height: 170px;
+  }
+  .slot-name {
+    font-size: 22px;
+  }
+  .vs {
+    font-size: 34px;
+  }
+  .roster {
+    grid-template-columns: repeat(9, 64px);
+    gap: 5px;
+  }
+  .tile {
+    height: 74px;
+    border-width: 4px;
+  }
+  .tile-name {
+    font-size: 11px;
+  }
+  .select-screen .title-h {
+    font-size: 24px;
+  }
+  .slot-diff .btn {
+    font-size: 10px;
+    padding: 1px 5px;
+    white-space: nowrap;
+  }
+  .slot-title {
+    font-size: 11px;
+  }
+  .slot.cpu .slot-info {
+    padding-bottom: 30px;
+  }
+  .btn.fight {
+    font-size: 18px;
+    padding: 4px 22px;
+  }
+  .select-screen {
+    gap: 6px;
+  }
+}
+@media (max-width: 640px) {
+  .roster {
+    grid-template-columns: repeat(5, 64px);
+  }
+  .slot {
+    width: 160px;
+    height: 150px;
+  }
+}
