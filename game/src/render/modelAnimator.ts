@@ -75,6 +75,7 @@ const ATTACKS: Record<string, AttackSpec> = {
   walkDog: { clip: 'Sword_Dash' },
   // Grappler
   zJab: { clip: 'Punch_Jab' },
+  kneeStrike: { clip: 'NinjaJump_Idle_Loop', hold: true },
   zCross: { clip: 'Punch_Cross' },
   zUpper: { clip: 'Melee_Hook' },
   zAirPunch: { clip: 'Punch_Jab' },
@@ -565,6 +566,13 @@ export class ModelAnimator {
     if (anim === 'tsubame') {
       this.rot('pelvis', AX, -0.3);
       this.rot('spine_03', AX, -0.35);
+    }
+    if (anim === 'kneeStrike') {
+      // Flying knee: right knee driven up and forward, left leg trailing.
+      this.rot('thigh_r', AX, -1.7);
+      this.rot('calf_r', AX, 2.0);
+      this.rot('thigh_l', AX, 0.35);
+      this.rot('spine_03', AX, 0.25);
     }
     if (anim === 'dropKick') {
       for (const s of ['l', 'r'] as const) this.rot(`thigh_${s}`, AX, -1.3);

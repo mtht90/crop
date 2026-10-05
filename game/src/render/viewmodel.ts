@@ -637,6 +637,8 @@ export class ViewModel {
         }
         break;
       case 'dropKick':
+      case 'kneeStrike':
+        // Arms flung wide for balance.
         o.p.y += 0.08;
         o.p.x += 0.08 * s;
         break;

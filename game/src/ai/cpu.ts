@@ -124,7 +124,7 @@ export class CpuController {
         i.pitch = this.pitch = Math.atan2(d.y, Math.hypot(d.x, d.z));
         i.moveZ = 1;
         if (!self.airMoveUsed && self.vel.y < 4) i.jumpPressed = true;
-        else if (self.skillCd === 0) i.skillPressed = true;
+        else if (self.def.actions[self.def.basic].spawns?.some((s) => s.hook)) i.attackPressed = true;
         return i;
       }
       i.yaw = home;
@@ -250,6 +250,8 @@ export class CpuController {
       if (sk.counter || sk.reflect) ok = false; // reactive only (see threat handling)
       else if (area) ok = dist < area.radius * 0.9;
       else if (reach) ok = aimed && dist < reach.range + 0.4 && dist > 3;
+      // Close-range strike skills (Zip's punches).
+      else if (sk.hits?.length && Math.max(...sk.hits.map((h) => h.range)) < 2 && !sk.motion?.some((m) => m.forward > 10)) ok = aimed && dist < 2.4;
       else if (sk.motion?.some((m) => m.forward > 10)) ok = dist > 2.5 && dist < 8 && aimed;
       // Skills that jump backwards: never with the edge behind.
       else if (sk.motion?.some((m) => m.forward < 0)) ok = dist < 5 && edgeRoom > 6;

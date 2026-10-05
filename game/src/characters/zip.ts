@@ -19,18 +19,6 @@ const hook = (frame: number, extra: Partial<Spawn> = {}): Spawn => ({
 });
 
 const actions: Record<string, ActionDef> = {
-  // Click x3: left jab, launcher-butt cross, rising left hook.
-  zJab: {
-    id: 'zJab',
-    kind: 'attack',
-    anim: 'zJab',
-    total: 18,
-    hits: [{ start: 4, end: 7, damage: 32, knockback: 2.5, knockUp: 0.5, hitstun: 15, hitstop: 4, range: 1.4, radius: 0.85, hand: 'L', guardDamage: 8 }],
-    motion: [{ start: 0, end: 6, forward: 4, magnet: true }],
-    comboNext: 'zCross',
-    comboFrom: 8,
-    moveScale: 0.4,
-  },
   zCross: {
     id: 'zCross',
     kind: 'attack',
@@ -51,24 +39,37 @@ const actions: Record<string, ActionDef> = {
     motion: [{ start: 5, end: 13, forward: 6, magnet: true }],
     moveScale: 0.15,
   },
-  zAirPunch: {
-    id: 'zAirPunch',
-    kind: 'attack',
-    anim: 'zAirPunch',
-    total: 26,
-    hits: [{ start: 6, end: 11, damage: 52, knockback: 7, knockUp: 2, hitstun: 20, hitstop: 6, range: 1.5, radius: 0.95, hand: 'L', guardDamage: 18 }],
-    motion: [{ start: 3, end: 11, forward: 6, magnet: true }],
-    moveScale: 0.5,
-  },
-  // E (ground or air): fire the hook where you aim.
+  // Click (ground or air): fire the hook where you aim. On terrain it reels Zip in;
+  // on the opponent it reels Zip in knee-first.
   hookShot: {
     id: 'hookShot',
-    kind: 'skill',
+    kind: 'attack',
     anim: 'hookShot',
-    total: 22,
-    spawns: [hook(5)],
+    total: 48,
+    spawns: [hook(5, { onHit: 'kneeStrike', damage: 8, hitstun: 16, life: 17 })],
     moveScale: 0.6,
     upperBody: true,
+  },
+  // Flying knee: active for the whole reel-in, lands on arrival.
+  kneeStrike: {
+    id: 'kneeStrike',
+    kind: 'attack',
+    anim: 'kneeStrike',
+    total: 34,
+    hits: [{ start: 1, end: 30, damage: 40, knockback: 8, knockUp: 6, hitstun: 26, hitstop: 11, range: 0.7, radius: 1.1, hand: 'B', heavy: true, guardDamage: 30 }],
+    moveScale: 0,
+  },
+  // E: close-range punches (jab -> cross -> rising hook).
+  zRush: {
+    id: 'zRush',
+    kind: 'skill',
+    anim: 'zJab',
+    total: 18,
+    hits: [{ start: 4, end: 7, damage: 32, knockback: 2.5, knockUp: 0.5, hitstun: 15, hitstop: 4, range: 1.4, radius: 0.85, hand: 'L', guardDamage: 8 }],
+    motion: [{ start: 0, end: 6, forward: 4, magnet: true }],
+    comboNext: 'zCross',
+    comboFrom: 8,
+    moveScale: 0.4,
   },
   // Air Space: the same hook as an edge recovery (once per airtime).
   hookAir: {
@@ -117,20 +118,21 @@ export const zip: CharacterDef = {
   name: 'ジップ',
   title: '空翔けるフック使い',
   weapon: 'grapple',
-  archetype: 'melee',
+  archetype: 'ranged',
   element: { color: 0xff8a1f, color2: 0x2fd0ff },
   recovery: 'hookAir',
   dashAttack: 'dropKick',
-  maxHp: 1000,
+  maxHp: 920,
   walkSpeed: 7.5,
   jumpSpeed: 11.5,
-  preferredRange: [0, 1.9],
-  skillCooldown: 110,
+  preferredRange: [3, 12],
+  skillCooldown: 30,
+  autoFire: true,
   actions,
-  basic: 'zJab',
-  skill: 'hookShot',
+  basic: 'hookShot',
+  skill: 'zRush',
   ult: 'reelIn',
-  airBasic: 'zAirPunch',
+  airBasic: 'hookShot',
   look: {
     skin: 0xc98d62,
     hair: 0x2b1d14,

@@ -5,7 +5,7 @@ import { assets, type ModelKey } from './assets';
 import { leadHand } from './clipInfo';
 import { buildBlaster, buildBowMesh, buildBoxingGlove, buildHookGun, buildKatana, buildSaya, buildToyHammer, buildUmbrella, buildYoyo, KATANA_TIP_Y } from './weapons';
 import { keepTriangles, rebindToBones } from './skinUtil';
-import { part, toon } from './toon';
+import { addOutline, part, toon } from './toon';
 
 const OUTLINE = new THREE.Color(0x1d1b2e);
 
@@ -196,10 +196,9 @@ export class ModelRig {
     for (const m of hairMeshes) {
       m.material = toon(L.hair, { rim: 0.35 });
       m.castShadow = true;
-      const out = new THREE.Mesh(m.geometry, new THREE.MeshBasicMaterial({ color: OUTLINE, side: THREE.BackSide }));
-      out.name = 'outline';
-      out.scale.setScalar(1.03);
-      m.add(out);
+      // Normal-extruded hull (a uniform scale would grow from the model origin at the feet
+      // and float a dark copy of the hair above the head).
+      addOutline(m, 0.006);
     }
     // "Origin at 0" hair is authored in bind-pose space; keep that while parenting to the head.
     this.model.add(hairScene);
