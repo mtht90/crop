@@ -5,6 +5,7 @@ import { clamp, damp, ease, lerp, rand, Spring } from '../core/math';
 import { Trail } from './effects';
 import { buildBlaster, buildBowMesh, buildHookGun, buildKatana, buildToyHammer, buildUmbrella, buildYoyo } from './weapons';
 import { yoyoPose, yoyoScale } from './yoyo';
+import { buildFpHand } from './fpHand';
 import { tex } from './textures';
 import { part } from './toon';
 
@@ -108,19 +109,24 @@ export class ViewModel {
       const a = this.arms[side];
       a.root.clear();
       a.trail.setColor(f.def.element.color);
-      const sleeve = part(new THREE.CylinderGeometry(0.075, 0.09, 0.42, 14), L.top, 0.008);
+      // Rolled-up sleeve behind the bare forearm (the hand and forearm come from the body model).
+      const sleeve = part(new THREE.CylinderGeometry(0.058, 0.066, 0.34, 14), L.top, 0.006);
       sleeve.rotation.x = Math.PI / 2;
-      sleeve.position.set(0, -0.02, 0.3);
+      sleeve.position.set(0, -0.025, 0.47);
       a.root.add(sleeve);
-      const cuff = part(new THREE.CylinderGeometry(0.08, 0.08, 0.06, 14), L.topAccent, 0.006);
-      cuff.rotation.x = Math.PI / 2;
-      cuff.position.set(0, -0.02, 0.1);
+      const cuff = part(new THREE.TorusGeometry(0.058, 0.014, 8, 18), L.topAccent, 0.004);
+      cuff.position.set(0, -0.025, 0.3);
       a.root.add(cuff);
       const w = f.def.weapon;
+      // Real hands cut from the character model; fingers curled to fit the weapon.
+      const addHand = (grip: number, z = 0.06, y = -0.02) => {
+        const h = buildFpHand(f.def, side, grip);
+        h.position.set(0, y, z);
+        a.root.add(h);
+        return h;
+      };
       if (w === 'katana' || w === 'umbrella' || w === 'yoyo' || (w === 'grapple' && side === 'R')) {
-        const glove = part(new THREE.SphereGeometry(0.07, 12, 10), L.glove, 0.006);
-        glove.position.set(0, -0.02, -0.02);
-        a.root.add(glove);
+        addHand(w === 'yoyo' ? 0.45 : side === 'R' ? 0.9 : 0.5);
         if (w === 'katana' && side === 'R') {
           const k = buildKatana(0.85);
           k.position.set(0, -0.03, -0.02);
@@ -145,15 +151,10 @@ export class ViewModel {
           a.tip.position.set(0, 0, -0.08);
         }
       } else if (w === 'grapple') {
-        const glove = part(new THREE.SphereGeometry(0.095, 16, 12), L.topAccent, 0.008);
-        glove.scale.set(1, 0.95, 1.15);
-        glove.position.set(0, -0.01, -0.09);
-        a.root.add(glove);
+        addHand(1, -0.01);
         a.tip.position.set(0, 0, -0.18);
       } else if (w === 'bow' || w === 'hammer') {
-        const glove = part(new THREE.SphereGeometry(0.07, 12, 10), L.glove, 0.006);
-        glove.position.set(0, -0.02, -0.02);
-        a.root.add(glove);
+        addHand(w === 'bow' ? (side === 'L' ? 0.85 : 0.35) : side === 'R' ? 0.9 : 0.6);
         if (w === 'bow' && side === 'L') {
           const bow = buildBowMesh(0.7);
           // Back of the bow faces away from the camera, limbs vertical with a slight cant.
@@ -176,33 +177,19 @@ export class ViewModel {
           a.tip.position.set(0, 0, -0.08);
         }
       } else if (f.def.weapon === 'fists') {
-        const fore = part(new THREE.CylinderGeometry(0.058, 0.065, 0.16, 12), L.skin, 0.006);
-        fore.rotation.x = Math.PI / 2;
-        fore.position.set(0, -0.02, 0.02);
-        a.root.add(fore);
-        const glove = part(new THREE.SphereGeometry(0.095, 16, 12), L.glove, 0.008);
-        glove.scale.set(1, 0.95, 1.15);
-        glove.position.set(0, -0.01, -0.09);
-        a.root.add(glove);
-        const plate = part(new THREE.SphereGeometry(0.07, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), 0xe8463c, 0.006);
-        plate.scale.set(1.1, 0.5, 1.3);
-        plate.position.set(0, 0.055, -0.085);
-        a.root.add(plate);
-        const band = part(new THREE.CylinderGeometry(0.085, 0.08, 0.06, 14), 0xe8463c, 0.006);
+        addHand(1, -0.01);
+        // Fingerless fighter's wrap: wrist band, knuckle guard and studs over the real fist.
+        const band = part(new THREE.CylinderGeometry(0.047, 0.05, 0.07, 14), 0xe8463c, 0.005);
         band.rotation.x = Math.PI / 2;
-        band.position.set(0, -0.02, -0.01);
+        band.position.set(0, -0.02, 0.05);
         a.root.add(band);
-        // Knuckle studs.
-        for (let i = -1; i <= 1; i++) {
-          const stud = part(new THREE.SphereGeometry(0.018, 8, 6), 0xffc93c, 0);
-          stud.position.set(i * 0.035, 0.05, -0.17);
-          a.root.add(stud);
-        }
+        const plate = part(new THREE.BoxGeometry(0.085, 0.022, 0.07), 0xe8463c, 0.005);
+        plate.position.set(0, 0.006, -0.04);
+        plate.rotation.x = -0.12;
+        a.root.add(plate);
         a.tip.position.set(0, 0, -0.18);
       } else {
-        const glove = part(new THREE.SphereGeometry(0.07, 12, 10), L.glove, 0.006);
-        glove.position.set(0, -0.03, 0.0);
-        a.root.add(glove);
+        addHand(0.9, 0.07, -0.03);
         const gun = buildBlaster(0.85);
         gun.rotation.y = Math.PI;
         gun.position.set(0, 0.02, -0.04);

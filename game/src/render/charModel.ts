@@ -9,7 +9,7 @@ import { part, toon } from './toon';
 const OUTLINE = new THREE.Color(0x1d1b2e);
 
 /** Back-face hull outline that follows skinning. */
-function skinnedOutline(mesh: THREE.SkinnedMesh, thickness: number) {
+export function skinnedOutline(mesh: THREE.SkinnedMesh, thickness: number) {
   const mat = new THREE.MeshBasicMaterial({ color: OUTLINE, side: THREE.BackSide });
   mat.onBeforeCompile = (s) => {
     s.vertexShader = s.vertexShader.replace('#include <skinning_vertex>', `#include <skinning_vertex>\n transformed += normalize(objectNormal) * ${thickness.toFixed(4)};`);
@@ -276,18 +276,10 @@ export class ModelRig {
       const tip = side === 'l' ? this.tipL : this.tipR;
       const mid = P(`middle_01_${side}`);
       if (this.def.weapon === 'fists') {
-        // Chunky gauntlet: bracer + oversized glove.
-        this.seg(`lowerarm_${side}`, la.clone().lerp(ha, 0.45), ha, (len) => new THREE.CylinderGeometry(0.07, 0.06, len * 1.1, 12), 0xe8463c, 0.01);
-        const glove = part(new THREE.SphereGeometry(0.085, 14, 12), L.glove, 0.012);
-        glove.scale.set(1, 1, 1.15);
-        this.at(`hand_${side}`, glove, ha.clone().lerp(mid, 0.6));
-        const plate = part(new THREE.SphereGeometry(0.06, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), 0xe8463c, 0.008);
-        plate.scale.set(1.1, 0.5, 1.2);
-        this.at(`hand_${side}`, plate, ha.clone().lerp(mid, 0.7).add(new THREE.Vector3(0, 0.05, 0)));
+        // Fighter's wraps over the bare hands: bracer and a knuckle guard.
+        this.seg(`lowerarm_${side}`, la.clone().lerp(ha, 0.55), ha, (len) => new THREE.CylinderGeometry(0.055, 0.05, len * 1.05, 12), 0xe8463c, 0.008);
         this.at(`hand_${side}`, tip, ha.clone().lerp(mid, 1.2));
       } else {
-        const glove = part(new THREE.SphereGeometry(0.06, 12, 10), L.glove, 0.01);
-        this.at(`hand_${side}`, glove, ha.clone().lerp(mid, 0.5));
         // Hand frame: forward along the metacarpals, up toward the thumb.
         const fwd = mid.clone().sub(ha).normalize();
         const th = P(`thumb_01_${side}`).sub(ha);
@@ -337,10 +329,6 @@ export class ModelRig {
           tip.position.set(0, 0.04, 0.3);
           holder.add(tip);
         } else if (this.def.weapon === 'grapple') {
-          // Left hand: a padded fighting glove.
-          const big = part(new THREE.SphereGeometry(0.08, 12, 10), L.topAccent, 0.01);
-          big.scale.set(1, 1, 1.15);
-          this.at(`hand_${side}`, big, ha.clone().lerp(mid, 0.6));
           this.at(`hand_${side}`, tip, ha.clone().lerp(mid, 1.2));
         } else if (this.def.weapon === 'yoyo' && side === 'r') {
           this.at(`hand_${side}`, tip, grip);
