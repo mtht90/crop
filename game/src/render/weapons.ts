@@ -1,8 +1,35 @@
 import * as THREE from 'three';
-import { part, toon } from './toon';
+import { assets } from './assets';
+import { addOutline, part, toon } from './toon';
 
-/** Chunky toy-like blaster matching the reference image (white/blue/orange with a star). */
+/**
+ * Star's pistol: Kenney Blaster Kit "blaster-j" (CC0) with toon shading, or the
+ * code-built blaster when the model isn't loaded. Barrel along +Z, grip at the origin.
+ */
 export function buildBlaster(scale = 1) {
+  const src = assets.models.blaster?.scene;
+  if (!src) return buildBlasterFallback(scale);
+  const g = new THREE.Group();
+  const m = src.clone(true);
+  const meshes: THREE.Mesh[] = [];
+  m.traverse((o) => (o as THREE.Mesh).isMesh && meshes.push(o as THREE.Mesh));
+  for (const mesh of meshes) {
+    const map = (mesh.material as THREE.MeshStandardMaterial).map ?? undefined;
+    if (map) map.colorSpace = THREE.SRGBColorSpace;
+    mesh.material = toon(0xffffff, { map, rim: 0.3 });
+    mesh.castShadow = true;
+    addOutline(mesh, 0.012);
+  }
+  // The model is 0.61 m long with its grip (magazine) 8 cm behind center.
+  m.scale.setScalar(0.62);
+  m.position.set(0, 0.0, 0.08 * 0.62);
+  g.add(m);
+  g.scale.setScalar(scale);
+  return g;
+}
+
+/** Chunky toy-like blaster built from primitives (white/blue/orange with a star). */
+function buildBlasterFallback(scale = 1) {
   const g = new THREE.Group();
   const body = part(new THREE.BoxGeometry(0.1, 0.12, 0.3), 0xf4f6fb, 0.012);
   body.position.z = 0.08;

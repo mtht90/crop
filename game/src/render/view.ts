@@ -29,6 +29,7 @@ interface RigBundle {
   anim: ModelAnimator;
   trails: { L: Trail; R: Trail };
   ghostT: number;
+  twirlT: number;
   aura: THREE.Sprite[];
 }
 
@@ -123,7 +124,7 @@ export class GameView {
         this.scene.add(s);
         aura.push(s);
       }
-      return { fighter: f, rig, anim: new ModelAnimator(rig, f), trails, ghostT: 0, aura };
+      return { fighter: f, rig, anim: new ModelAnimator(rig, f), trails, ghostT: 0, twirlT: 0, aura };
     });
     if (pov) {
       this.viewmodel.setFighter(pov);
@@ -153,7 +154,7 @@ export class GameView {
             const eye = pov.eye;
             const toward = e.attacker.pos.clone().sub(pov.pos).setY(0).normalize();
             this.effects.hit(eye.addScaledVector(toward, 1.4).setY(eye.y - 0.35), e.dir, el.color, el.color2, power * 0.4, false, 0.35);
-          } else this.effects.hit(e.pos, e.dir, el.color, el.color2, power, !!e.props.heavy || e.ko);
+          } else this.effects.hit(e.pos, e.dir, el.color, el.color2, power, !!e.props.heavy || e.ko, 1, !e.projectile);
           audio.play(e.props.heavy || e.ko ? 'heavy' : 'punch', 0.6 + power * 0.5);
           if (e.attacker.def.weapon === 'hammer' && !e.projectile) audio.play('squeak', 0.8 + power * 0.4);
           if (e.target === pov) {
@@ -233,6 +234,7 @@ export class GameView {
           const facing = e.target.forward();
           this.effects.guard(e.target.pos, facing, false);
           this.effects.hit(e.pos, facing, 0x6fe8ff, 0xffffff, 0.8, true, 0.8);
+          this.effects.justGuard(e.pos);
           audio.play('guard');
           audio.play('go');
           if (e.target === pov) {
@@ -371,6 +373,15 @@ export class GameView {
         this.effects.afterimage(rig.body, f.def.element.color);
       }
     } else b.ghostT = 0;
+
+    // Swirl rings around spinning attacks.
+    if (visible && act?.def.anim === 'heliSpin') {
+      b.twirlT -= dt;
+      if (b.twirlT <= 0) {
+        b.twirlT = 0.07;
+        this.effects.twirl(f.pos.clone().setY(f.pos.y + 1.1), f.def.element.color2);
+      }
+    } else b.twirlT = 0;
 
     // Element aura when the ult is ready or active.
     const ready = f.ult >= 100 || act?.def.kind === 'ult';

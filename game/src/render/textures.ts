@@ -25,6 +25,59 @@ function starPath(g: CanvasRenderingContext2D, cx: number, cy: number, points: n
 }
 
 const cache: Record<string, THREE.Texture> = {};
+
+/** Kenney Particle Pack sprites (CC0), packed by tools/build-fx.mjs into public/assets/fx. */
+const FX_NAMES = ['flash', 'burst', 'ring', 'spark', 'glint', 'soft', 'puff', 'dirt', 'slash', 'twirl', 'magic', 'halo', 'smokeRing', 'bolt'] as const;
+export type FxName = (typeof FX_NAMES)[number];
+const fxTex: Partial<Record<FxName, THREE.Texture>> = {};
+
+/** Loads the sprite set via fetch + blob URL (CSP-friendly). Missing files fall back to procedural textures. */
+export async function loadFx() {
+  const base = `${import.meta.env.BASE_URL}assets/fx/`;
+  await Promise.all(
+    FX_NAMES.map(async (n) => {
+      try {
+        const res = await fetch(`${base}${n}.png`);
+        if (!res.ok) return;
+        const url = URL.createObjectURL(await res.blob());
+        const img = new Image();
+        img.src = url;
+        await img.decode();
+        const t = new THREE.Texture(img);
+        t.colorSpace = THREE.SRGBColorSpace;
+        t.needsUpdate = true;
+        fxTex[n] = t;
+      } catch {
+        /* keep the procedural fallback */
+      }
+    }),
+  );
+}
+
+/** Sprite from the particle pack, or a procedural stand-in until/unless it loads. */
+export function fx(n: FxName): THREE.Texture {
+  const t = fxTex[n];
+  if (t) return t;
+  switch (n) {
+    case 'flash':
+    case 'burst':
+      return tex.burst();
+    case 'ring':
+    case 'twirl':
+    case 'smokeRing':
+      return tex.ring();
+    case 'soft':
+    case 'halo':
+      return tex.soft();
+    case 'puff':
+    case 'dirt':
+      return tex.puff();
+    case 'slash':
+      return tex.lines();
+    default:
+      return tex.spark();
+  }
+}
 const once = (k: string, f: () => THREE.Texture) => (cache[k] ??= f());
 
 export const tex = {

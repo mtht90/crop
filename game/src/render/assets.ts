@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { loadFx } from './textures';
 
 /**
  * CC0 assets by Quaternius (Universal Base Characters, Universal Animation
@@ -13,6 +14,8 @@ const MODEL_FILES = {
   hairParted: 'Hair_SimpleParted.glb',
   hairBuzzed: 'Hair_Buzzed.glb',
   hairBuzzedF: 'Hair_BuzzedFemale.glb',
+  /** Kenney Blaster Kit (CC0) "blaster-j", Star's twin pistols. */
+  blaster: 'Blaster.glb',
 } as const;
 const ANIM_FILES = ['anims1.glb', 'anims2.glb'];
 
@@ -40,9 +43,11 @@ export async function loadAssets(onProgress?: (p: number) => void) {
     onProgress?.(done / files.length);
     return g;
   };
+  const fxDone = loadFx();
   const entries = await Promise.all(Object.entries(MODEL_FILES).map(async ([k, f]) => [k, await load(f)] as const));
   for (const [k, g] of entries) assets.models[k as ModelKey] = g;
   for (const g of await Promise.all(ANIM_FILES.map(load))) for (const c of g.animations) assets.clips[c.name] = c;
+  await fxDone;
   assets.ready = true;
 }
 
