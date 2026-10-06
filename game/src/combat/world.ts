@@ -77,6 +77,9 @@ export interface Decoy {
   /** Ring decoys face and shoot at this fighter. */
   aimAt: Fighter | null;
   fire?: { every: number; spawn: Spawn; t: number };
+  /** HP for copies that take hits like the real one (otherwise any hit pops it). */
+  hp: number | null;
+  chase?: number;
 }
 
 export class CombatWorld {
@@ -124,7 +127,8 @@ export class CombatWorld {
       body.pos.y = Math.max(0, att.pos.y);
       body.prevPos.copy(body.pos);
       body.setState('free');
-      this.decoys.push({ id: decoyId++, owner: att, body, life: d.life, dir, speed, burst: d.burst, aimAt, fire: d.fire ? { ...d.fire, t: Math.floor(d.fire.every * 0.5) } : undefined });
+      body.hp = att.hp;
+      this.decoys.push({ id: decoyId++, owner: att, body, life: d.life, dir, speed, burst: d.burst, aimAt, fire: d.fire ? { ...d.fire, t: Math.floor(d.fire.every * 0.5) } : undefined, hp: d.sameHp ? att.hp : null, chase: d.chase });
     };
     if (d.around) {
       for (let k = 0; k < d.around.count; k++) {
@@ -141,7 +145,7 @@ export class CombatWorld {
       }
     } else {
       const f = att.forward();
-      make(att.pos.x, att.pos.z, att.yaw, f, d.speed, null);
+      make(att.pos.x, att.pos.z, att.yaw, f, d.speed, d.chase !== undefined || d.fire ? tgt : null);
     }
     if (d.cloak) att.cloak = d.cloak;
     this.events.push({ type: 'decoySpawn', owner: att });
@@ -157,16 +161,25 @@ export class CombatWorld {
       if (d.aimAt) {
         const to = d.aimAt.pos.clone().sub(b.pos).setY(0);
         if (to.lengthSq() > 1e-4) b.yaw = Math.atan2(-to.x, -to.z);
+        // Walk at the opponent like the real one would, then hold the distance.
+        if (d.chase !== undefined) {
+          const dist = to.length();
+          d.dir.copy(to.normalize());
+          d.speed = dist > d.chase ? 3.4 : 0;
+        }
       }
+      // Flinch after taking a hit.
+      const stunned = b.state === 'hitstun' && b.stateT < b.stateDur;
+      if (b.state === 'hitstun' && !stunned) b.setState('free');
       // Run along the floor, stopping short of the edge.
-      const next = b.pos.clone().addScaledVector(d.dir, d.speed * TICK);
+      const next = b.pos.clone().addScaledVector(d.dir, (stunned ? 0 : d.speed) * TICK);
       if (Math.hypot(next.x, next.z) < ARENA_RADIUS - 1.2) b.pos.copy(next);
       else d.speed = 0;
-      b.vel.copy(d.dir).multiplyScalar(d.speed);
+      b.vel.copy(d.dir).multiplyScalar(stunned ? 0 : d.speed);
       b.grounded = b.pos.y <= 0.01;
       if (!b.grounded) b.pos.y = Math.max(0, b.pos.y - 6 * TICK);
       b.stateT++;
-      if (d.fire && foe.isAlive()) {
+      if (d.fire && foe.isAlive() && !stunned) {
         d.fire.t--;
         if (d.fire.t <= 0) {
           d.fire.t = d.fire.every;
@@ -181,9 +194,28 @@ export class CombatWorld {
         }
       }
       // A running decoy bursts when it reaches the opponent.
-      const touch = !d.aimAt && foe.isAlive() && Math.hypot(foe.pos.x - b.pos.x, foe.pos.z - b.pos.z) < 1.1 && Math.abs(foe.pos.y - b.pos.y) < 1.6;
+      const touch = !d.aimAt && d.hp === null && foe.isAlive() && Math.hypot(foe.pos.x - b.pos.x, foe.pos.z - b.pos.z) < 1.1 && Math.abs(foe.pos.y - b.pos.y) < 1.6;
       if (d.life <= 0 || touch) this.popDecoy(d, false);
     }
+  }
+
+  /** Damage a decoy: copies with HP flinch like the real fighter until it runs out. */
+  private hitDecoy(d: Decoy, att: Fighter, props: HitProps, point: Vector3) {
+    if (d.hp === null) {
+      this.popDecoy(d, true);
+      return;
+    }
+    d.hp -= props.damage;
+    d.body.hp = Math.max(0, d.hp);
+    const dir = d.body.pos.clone().sub(att.pos).setY(0);
+    if (dir.lengthSq() < 1e-4) dir.set(0, 0, 1);
+    dir.normalize();
+    // Looks exactly like a hit on the real one (sparks, sound, flinch).
+    this.events.push({ type: 'hit', attacker: att, target: d.body, pos: point, dir, props, ko: false, projectile: false });
+    d.body.receiveHit(dir, 0, 0, Math.min(props.hitstun, 24), Math.min(1, props.damage / 60));
+    d.body.vel.set(0, 0, 0);
+    this.hitstop = Math.max(this.hitstop, Math.min(props.hitstop, 6));
+    if (d.hp <= 0) this.popDecoy(d, true);
   }
 
   /** A decoy bursts: smoke and confetti, and a blast that catches whoever is next to it. */
@@ -323,7 +355,8 @@ export class CombatWorld {
       const fake = this.decoys.find((d) => d.owner !== att && sphereCapsule(center, w.radius, d.body.pos));
       if (fake) {
         a.hitDone[i] = true;
-        this.popDecoy(fake, true);
+        a.connected = true;
+        this.hitDecoy(fake, att, charged(w, def, a.chargeLevel), center);
         return;
       }
       if (!tgt.isAlive() || tgt.isInvulnerable()) return;
@@ -493,7 +526,7 @@ export class CombatWorld {
       const fake = alive ? this.decoys.find((d) => d.owner !== p.owner && segmentCapsule(p.prev, p.pos, p.radius, d.body.pos)) : undefined;
       if (fake) {
         // Shot the decoy instead.
-        this.popDecoy(fake, true);
+        this.hitDecoy(fake, p.owner, p.props, p.pos.clone());
         if (p.props.blast) this.explode(p, tgt);
         this.events.push({ type: 'projectileEnd', projectile: p });
         continue;

@@ -17,7 +17,7 @@ const card = (frame: number, extra: Partial<Spawn> = {}): Spawn => ({
   ...extra,
 });
 
-const pop: Blast = { radius: 2.4, damage: 48, knockback: 10, knockUp: 8, hitstun: 26, hitstop: 8, guardDamage: 25 };
+const pop: Blast = { radius: 2.4, damage: 36, knockback: 10, knockUp: 8, hitstun: 26, hitstop: 8, guardDamage: 25 };
 
 const actions: Record<string, ActionDef> = {
   // Click (hold to keep throwing): a fan of three cards.
@@ -30,14 +30,15 @@ const actions: Record<string, ActionDef> = {
     upperBody: true,
     moveScale: 0.7,
   },
-  // E: "Mirage" - a copy of Trick keeps running forward while the real one
-  // sidesteps nearly invisible. The copy bursts when hit or after a while.
+  // E: "Mirage" - a copy of Trick appears on the spot with the same HP, walks at
+  // the opponent and throws cards, while the real one sidesteps nearly invisible.
+  // The copy flinches like the real one and bursts once its HP runs out (or after 6 s).
   mirage: {
     id: 'mirage',
     kind: 'skill',
     anim: 'mirage',
     total: 18,
-    decoy: { frame: 2, life: 210, speed: 7.5, burst: pop, cloak: 100 },
+    decoy: { frame: 2, life: 360, speed: 0, burst: pop, cloak: 100, sameHp: true, chase: 6, fire: { every: 42, spawn: card(0, { count: 3, fan: 0.1, damage: 10 }) } },
     motion: [{ start: 2, end: 12, forward: -2, side: 13 }],
     invuln: [0, 8],
     moveScale: 0.6,

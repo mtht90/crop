@@ -109,10 +109,9 @@ export const rei: CharacterDef = {
     glove: 0x22261e,
     eyes: 0x3fd0c8,
     hairStyle: 'spiky',
-    face: { liner: true, lips: 0xb0505a, marks: [{ kind: 'plaster', color: 0x2b2b33, side: -1 }] },
+    face: { liner: true, lips: 0xb0505a, mole: true },
     body: 'female',
-    hairModel: 'hairBuzzedF',
+    hairModel: 'hairLong',
     outfit: { set: 'ranger', parts: ['body', 'arms', 'bracer', 'belt', 'legs', 'feet'] },
-    accessories: [{ kind: 'beret', color: 0x2f3b2a }],
   },
 };

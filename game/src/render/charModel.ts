@@ -371,7 +371,7 @@ export class ModelRig {
           band.position.y = 0.025;
           g.add(band);
           g.rotation.x = -0.12;
-          this.at('Head', g, head.clone().add(new THREE.Vector3(0, 0.205, -0.02)));
+          this.at('Head', g, head.clone().add(new THREE.Vector3(0, 0.18, -0.02)));
           break;
         }
         case 'beret': {

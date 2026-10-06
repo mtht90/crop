@@ -155,7 +155,19 @@ export interface ActionDef {
    * pops (with `burst`) when anything hits it or its time runs out. `cloak`
    * turns the user nearly invisible for that many frames.
    */
-  decoy?: { frame: number; life: number; speed: number; burst: Blast; cloak?: number; around?: { count: number; radius: number }; fire?: { every: number; spawn: Spawn } };
+  decoy?: {
+    frame: number;
+    life: number;
+    speed: number;
+    burst: Blast;
+    cloak?: number;
+    around?: { count: number; radius: number };
+    fire?: { every: number; spawn: Spawn };
+    /** The copy has the user's current HP and only bursts once that is used up. */
+    sameHp?: boolean;
+    /** Walk toward the opponent, stopping at this distance. */
+    chase?: number;
+  };
   /** After this action, fall no faster than this (m/s) until landing, with light air steering (umbrella float). */
   float?: number;
   /** Bodies don't collide during the action (pass-through slashes). */

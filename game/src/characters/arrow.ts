@@ -8,7 +8,7 @@ const arrow = (frame: number): Spawn => ({
   life: 80,
   gravity: 7,
   visual: 'arrow',
-  damage: 56,
+  damage: 60,
   knockback: 4,
   knockUp: 1.5,
   hitstun: 14,

@@ -1076,7 +1076,7 @@ body:not(.touch) .touch-only {
 }
 .roster {
   display: grid;
-  grid-template-columns: repeat(12, 84px);
+  grid-template-columns: repeat(6, 88px);
   gap: 8px;
 }
 .tile {
@@ -1155,7 +1155,10 @@ body:not(.touch) .touch-only {
 @media (max-width: 900px), (max-height: 560px) {
   .slot {
     width: 220px;
-    height: 150px;
+    height: 124px;
+  }
+  .pick-hint {
+    display: none;
   }
   .stage-row {
     font-size: 12px;
@@ -1179,12 +1182,12 @@ body:not(.touch) .touch-only {
     font-size: 34px;
   }
   .roster {
-    grid-template-columns: repeat(12, 58px);
+    grid-template-columns: repeat(6, 60px);
     gap: 5px;
   }
   .tile {
-    height: 74px;
-    border-width: 4px;
+    height: 56px;
+    border-width: 3px;
   }
   .tile-name {
     font-size: 11px;

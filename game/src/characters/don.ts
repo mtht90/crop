@@ -20,7 +20,7 @@ const shell = (frame: number, extra: Partial<Spawn> = {}): Spawn => ({
   hitstun: 20,
   hitstop: 6,
   guardDamage: 14,
-  blast: { radius: 2.8, damage: 34, knockback: 7, knockUp: 6, hitstun: 20 },
+  blast: { radius: 2.8, damage: 30, knockback: 7, knockUp: 6, hitstun: 20 },
   ...extra,
 });
 
