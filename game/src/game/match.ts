@@ -60,6 +60,7 @@ export class Match {
     this.cpu.reset(0, -9, Math.PI);
     this.ai.resetView(Math.PI);
     this.world.projectiles = [];
+    this.world.decoys = [];
     this.world.hitstop = 0;
     this.timer = ROUND_SECONDS * 60;
     this.timeScale = 1;

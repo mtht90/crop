@@ -68,7 +68,7 @@ const actions: Record<string, ActionDef> = {
     kind: 'attack',
     anim: 'umbrellaOpen',
     total: 22,
-    spawns: [{ frame: 10, hand: 'R', speed: 62, radius: 0.22, life: 34, damage: 16, knockback: 1.8, knockUp: 0.3, hitstun: 12, hitstop: 1, guardDamage: 5 }],
+    spawns: [{ frame: 10, hand: 'R', speed: 62, radius: 0.22, life: 34, damage: 14, knockback: 1.8, knockUp: 0.3, hitstun: 12, hitstop: 1, guardDamage: 5 }],
     reflect: [0, 22],
     moveScale: 0.5,
   },

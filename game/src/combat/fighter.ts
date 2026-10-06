@@ -107,6 +107,10 @@ export class Fighter {
   grapple: { point: Vector3; target: Fighter | null; t: number; stuck: number; forced: boolean; lastD: number } | null = null;
   /** Tether throw: the opponent caught on the cord and where they were caught. */
   tether: { target: Fighter; from: Vector3 } | null = null;
+  /** Frames left marked by a sniper's dart (their shots home in). */
+  marked = 0;
+  /** Frames left nearly invisible (decoy trick); attacking ends it. */
+  cloak = 0;
   /** The umbrella has been thrown and isn't back yet (no shield, no basic). */
   umbrellaOut = false;
   /** Frames left before a broken umbrella can be opened again. */
@@ -224,6 +228,8 @@ export class Fighter {
     this.airMoveUsed = false;
     this.grapple = null;
     this.tether = null;
+    this.cloak = 0;
+    this.marked = 0;
     this.umbrellaOut = false;
     this.gliding = false;
     this.yawOverride = null;
@@ -244,6 +250,8 @@ export class Fighter {
 
   startAction(id: string) {
     const def = this.def.actions[id];
+    // Striking from stealth gives away the position.
+    if (def.kind !== 'skill' && !def.decoy) this.cloak = 0;
     this.action = {
       def,
       frame: 0,
@@ -422,6 +430,8 @@ export class Fighter {
   }
 
   private tickMeters() {
+    if (this.cloak > 0) this.cloak--;
+    if (this.marked > 0) this.marked--;
     this.reflectT = this.reflectActive() ? this.reflectT + 1 : 0;
     if (this.stamina < STAMINA_MAX) {
       this.staminaRegen++;
@@ -617,6 +627,12 @@ export class Fighter {
       } else {
         this.vel.x = dir.x * motion.forward;
         this.vel.z = dir.z * motion.forward;
+      }
+      if (motion.side) {
+        const r = this.right();
+        const sgn = this.localMove.x < -0.1 ? -1 : 1;
+        this.vel.x += r.x * motion.side * sgn;
+        this.vel.z += r.z * motion.side * sgn;
       }
       if (motion.up !== undefined && a.frame === motion.start) {
         this.vel.y = motion.up;

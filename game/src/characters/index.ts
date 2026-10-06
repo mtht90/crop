@@ -6,10 +6,12 @@ import { don } from './don';
 import { kagetsu } from './kagetsu';
 import { lala } from './lala';
 import { piko } from './piko';
+import { rei } from './rei';
 import { star } from './star';
+import { trick } from './trick';
 import { zip } from './zip';
 
-export const characters: Record<string, CharacterDef> = { blaze, star, arrow: arrowChar, piko, kagetsu, lala, zip, ameri, don };
+export const characters: Record<string, CharacterDef> = { blaze, star, arrow: arrowChar, piko, kagetsu, lala, zip, ameri, don, trick, rei };
 
 /** Roster order on the select screen. */
 export const roster: { id: string; label: string; weapon: string }[] = [
@@ -22,4 +24,6 @@ export const roster: { id: string; label: string; weapon: string }[] = [
   { id: 'zip', label: 'ジップ', weapon: 'グラップラー' },
   { id: 'ameri', label: 'アメリ', weapon: '傘' },
   { id: 'don', label: 'ドン', weapon: '腕キャノン' },
+  { id: 'trick', label: 'トリック', weapon: 'トランプ' },
+  { id: 'rei', label: 'レイ', weapon: '狙撃銃' },
 ];

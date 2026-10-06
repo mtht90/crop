@@ -3,7 +3,7 @@ import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import type { CharacterDef, OutfitPart } from '../combat/types';
 import { assets, type ModelKey } from './assets';
 import { leadHand } from './clipInfo';
-import { buildArmCannon, buildBlaster, buildBowMesh, buildBoxingGlove, buildHookGun, buildKatana, buildSaya, buildToyHammer, buildUmbrella, buildYoyo, KATANA_TIP_Y } from './weapons';
+import { buildArmCannon, buildBlaster, buildCardFan, buildRifle, buildBowMesh, buildBoxingGlove, buildHookGun, buildKatana, buildSaya, buildToyHammer, buildUmbrella, buildYoyo, KATANA_TIP_Y } from './weapons';
 import { eyeTexture, faceTexture, skinTint } from './face';
 import { keepTriangles, rebindToBones } from './skinUtil';
 import { addOutline, part, toon } from './toon';
@@ -359,6 +359,28 @@ export class ModelRig {
           this.at('Head', button, head.clone().add(new THREE.Vector3(0, 0.17 + (hr + 0.018) * 0.85, -0.015)));
           break;
         }
+        case 'topHat': {
+          // Magician's top hat with a coloured band, tipped slightly back.
+          const g = new THREE.Group();
+          const brim = part(new THREE.CylinderGeometry(hr + 0.06, hr + 0.06, 0.012, 24), a.color, 0.005);
+          g.add(brim);
+          const crown = part(new THREE.CylinderGeometry(hr - 0.005, hr - 0.015, 0.2, 20), a.color, 0.006);
+          crown.position.y = 0.1;
+          g.add(crown);
+          const band = part(new THREE.CylinderGeometry(hr - 0.008, hr - 0.004, 0.035, 20), this.def.element.color, 0.003);
+          band.position.y = 0.025;
+          g.add(band);
+          g.rotation.x = -0.12;
+          this.at('Head', g, head.clone().add(new THREE.Vector3(0, 0.205, -0.02)));
+          break;
+        }
+        case 'beret': {
+          const b = part(new THREE.SphereGeometry(hr + 0.03, 16, 10), a.color, 0.005);
+          b.scale.set(1.05, 0.35, 1.05);
+          b.rotation.z = 0.25;
+          this.at('Head', b, head.clone().add(new THREE.Vector3(0.02, 0.2, -0.01)));
+          break;
+        }
         case 'ribbon': {
           const g = new THREE.Group();
           for (const sx of [-1, 1]) {
@@ -493,6 +515,19 @@ export class ModelRig {
           this.at(`hand_${side}`, holder, grip);
           tip.position.set(0, u.tipY, 0);
           this.weaponRoot.add(tip);
+        } else if (this.def.weapon === 'rifle' && side === 'r') {
+          const r = buildRifle(1);
+          holder.add(r.group);
+          this.at(`hand_${side}`, holder, grip);
+          tip.position.set(0, 0.06, r.muzzleZ);
+          holder.add(tip);
+        } else if (this.def.weapon === 'cards' && side === 'r') {
+          const fan = buildCardFan(this.def.element.color, 1.1);
+          fan.position.set(0, 0.02, 0.04);
+          holder.add(fan);
+          this.at(`hand_${side}`, holder, grip);
+          tip.position.set(0, 0.04, 0.12);
+          holder.add(tip);
         } else if (this.def.weapon === 'cannon' && side === 'r') {
           // Arm cannon strapped over the right forearm, muzzle past the knuckles.
           const cannon = buildArmCannon(0.9);

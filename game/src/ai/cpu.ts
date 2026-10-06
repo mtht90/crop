@@ -48,6 +48,8 @@ export class CpuController {
   private techRolled = false;
   private wantJump = 0;
   private chargeHold = 0;
+  /** Where a cloaked opponent was last seen. */
+  private lastSeen = new Vector3();
   private dashAttackIn = 0;
 
   constructor(
@@ -81,7 +83,15 @@ export class CpuController {
     const seen = this.history[Math.max(0, this.history.length - 1 - this.p.reaction)];
 
     // --- Aim -------------------------------------------------------------
-    const to = foe.pos.clone().sub(self.pos);
+    // A cloaked opponent is lost from sight: chase the nearest decoy instead.
+    const decoys = foe.cloak > 0 ? this.world.decoys.filter((d) => d.owner === foe) : [];
+    if (foe.cloak <= 0) this.lastSeen.copy(foe.pos);
+    const mark = decoys.length
+      ? decoys.reduce((a, b) => (a.body.pos.distanceTo(self.pos) < b.body.pos.distanceTo(self.pos) ? a : b)).body
+      : foe.cloak > 0
+        ? { pos: this.lastSeen, vel: new Vector3() }
+        : foe;
+    const to = mark.pos.clone().sub(self.pos);
     const dist = Math.hypot(to.x, to.z);
     this.noise.t--;
     if (this.noise.t <= 0) {
@@ -92,7 +102,7 @@ export class CpuController {
     // Lead moving targets a little for projectiles.
     const shot = self.def.actions[self.def.basic].spawns?.[0];
     const lead = self.def.archetype === 'ranged' ? dist / (shot?.speed ?? 55) : 0;
-    const aimAt = foe.pos.clone().addScaledVector(foe.vel, lead * (1 - this.p.aimError * 3));
+    const aimAt = mark.pos.clone().addScaledVector(mark.vel, lead * (1 - this.p.aimError * 3));
     const ax = aimAt.x - self.pos.x;
     const az = aimAt.z - self.pos.z;
     const desiredYaw = Math.atan2(-ax, -az) + this.noise.yaw;
@@ -287,15 +297,20 @@ export class CpuController {
         i.attack = true;
         if (this.chargeHold === 0) {
           i.attack = false;
-          const heavy = !!self.def.actions[self.def.basic].charge?.gravity;
+          const heavy = !!self.def.actions[self.def.basic].charge?.gravity || !!self.def.ammo;
           this.attackCooldown = Math.floor((heavy ? 4 : 10) + (heavy ? 14 : 40) * (1 - this.p.aggression));
         }
       } else if (this.attackCooldown === 0 && aimed && dist < 26) {
         const ch = self.def.actions[self.def.basic].charge!;
         // Heavy shells fly shorter the longer they are loaded: load to fit the distance.
         // Point blank: snap shots. Mid range: a full heavy shell. Far: lighter loads that carry.
-        const load = dist < 7 ? 0 : dist < 13 ? 1 : Math.min(1, Math.max(0, (24 - dist) / 11));
-        this.chargeHold = ch.gravity ? 2 + Math.round(load * ch.max * (0.75 + Math.random() * 0.25)) : 8 + Math.floor(Math.random() * (20 + 40 * this.p.aggression));
+        const load = (dist < 7 ? 0 : dist < 13 ? 1 : Math.min(1, Math.max(0, (24 - dist) / 11))) * 0.6;
+        this.chargeHold = ch.gravity
+          ? 2 + Math.round(load * ch.max * (0.75 + Math.random() * 0.25))
+          : self.def.ammo
+            ? // Rifle: brief scope-ins, longer only for far targets.
+              6 + Math.floor(Math.random() * (10 + Math.max(0, dist - 8) * 2))
+            : 8 + Math.floor(Math.random() * (20 + 40 * this.p.aggression));
         i.attack = true;
         i.attackPressed = true;
       }

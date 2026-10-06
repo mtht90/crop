@@ -36,7 +36,7 @@ const actions: Record<string, ActionDef> = {
     kind: 'attack',
     anim: 'kneeStrike',
     total: 34,
-    hits: [{ start: 1, end: 30, damage: 34, knockback: 8, knockUp: 6, hitstun: 26, hitstop: 11, range: 0.7, radius: 1.1, hand: 'B', heavy: true, guardDamage: 30 }],
+    hits: [{ start: 1, end: 30, damage: 30, knockback: 8, knockUp: 6, hitstun: 26, hitstop: 11, range: 0.7, radius: 1.1, hand: 'B', heavy: true, guardDamage: 30 }],
     moveScale: 0,
   },
   // E: glowing tether cup. Catch the opponent and Zip hauls them overhead in a big
@@ -111,7 +111,7 @@ export const zip: CharacterDef = {
   element: { color: 0xff8a1f, color2: 0x2fd0ff },
   recovery: 'hookAir',
   dashAttack: 'dropKick',
-  maxHp: 920,
+  maxHp: 880,
   walkSpeed: 7.5,
   jumpSpeed: 11.5,
   preferredRange: [3, 12],

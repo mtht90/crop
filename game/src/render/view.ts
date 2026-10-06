@@ -7,6 +7,7 @@ import { ARENA_RADIUS, EYE_HEIGHT } from '../config';
 import { clamp, damp, Spring } from '../core/math';
 import { Arena } from './arena';
 import { STAGES } from './stages';
+import { raycastTerrain } from '../combat/terrain';
 import { Effects, Trail } from './effects';
 import { ModelRig } from './charModel';
 import { ModelAnimator } from './modelAnimator';
@@ -23,6 +24,10 @@ export interface ViewFeedback {
   speed: number;
   /** Full-screen color flash. */
   flash: { color: string; a: number };
+  /** Sniper scope overlay 0..1. */
+  scope: number;
+  /** Own cloak (decoy trick) 0..1. */
+  cloak: number;
 }
 
 interface RigBundle {
@@ -65,7 +70,11 @@ export class GameView {
   shakeEnabled = true;
   /** Third-person orbit for the animation viewer. */
   freeCamera = false;
-  readonly feedback: ViewFeedback = { edgeWarn: 0, hurt: 0, speed: 0, flash: { color: '#fff', a: 0 } };
+  readonly feedback: ViewFeedback = { edgeWarn: 0, hurt: 0, speed: 0, flash: { color: '#fff', a: 0 }, scope: 0, cloak: 0 };
+  /** Rendered copies for the decoy trick, keyed by decoy id. */
+  private decoyRigs = new Map<number, { rig: ModelRig; anim: ModelAnimator }>();
+  /** Laser sights of scoped rifles, one per fighter. */
+  private lasers = new Map<Fighter, THREE.Mesh>();
   /** Cinematic shot (ult activation or the finishing blow), timed in real seconds. */
   private cine: { kind: 'ult' | 'ko'; fighter: Fighter; t: number; dur: number; side: number } | null = null;
   private cineRealDt = 0;
@@ -161,6 +170,10 @@ export class GameView {
       r.aura.forEach((s) => this.scene.remove(s));
     }
     this.effects.clear();
+    for (const d of this.decoyRigs.values()) this.scene.remove(d.rig.root);
+    this.decoyRigs.clear();
+    for (const l of this.lasers.values()) this.scene.remove(l);
+    this.lasers.clear();
     this.world = world;
     this.pov = pov;
     this.rigs = world.fighters.map((f) => {
@@ -269,6 +282,20 @@ export class GameView {
             const d = pov.pos.distanceTo(e.pos);
             if (d < 10) this.addTrauma((0.35 + e.radius * 0.05) * (1 - d / 10));
           }
+          break;
+        }
+        case 'decoySpawn': {
+          const p = e.owner.pos.clone().setY(e.owner.pos.y + 1);
+          this.effects.dust(p, 8, 1.2);
+          this.effects.twirl(p, e.owner.def.element.color);
+          audio.play('dash', 0.8);
+          break;
+        }
+        case 'decoyPop': {
+          const el = e.decoy.owner.def.element;
+          this.effects.explosion(e.pos.clone(), e.decoy.burst.radius * 0.7, el.color, el.color2);
+          this.effects.twirl(e.pos.clone(), el.color2);
+          audio.play('heavy', 0.6);
           break;
         }
         case 'projectileBounce':
@@ -450,7 +477,12 @@ export class GameView {
         const opp = world.fighters[0] === b.fighter ? world.fighters[1] : world.fighters[0];
         b.anim.update(dt, alpha, opp, frozen);
         this.updateRigFx(b, dt);
+        // Cloaked: gone from sight, flickering back in at the end.
+        const f = b.fighter;
+        if (f !== this.pov) b.rig.root.visible = f.cloak <= 0 || (f.cloak < 24 && Math.floor(f.cloak / 3) % 2 === 0);
+        this.updateLaser(f);
       }
+      this.syncDecoys(dt, alpha, frozen);
       this.effects.syncProjectiles(
         world.projectiles,
         (p) => [p.owner.def.element.color, p.owner.def.element.color2],
@@ -497,7 +529,12 @@ export class GameView {
       this.camera.rotation.set(look.pitch + extraPitch + n(1) * 0.05 * shake, look.yaw + n(2) * 0.05 * shake, extraRoll + n(3) * 0.06 * shake);
       const speedK = pov.state === 'dash' || (pov.grapple && !pov.grapple.forced) ? 1 : pov.action?.def.motion?.some((m) => m.forward > 10 && pov.action!.frame >= m.start && pov.action!.frame < m.end) ? 0.8 : 0;
       fb.speed = damp(fb.speed, speedK, speedK > fb.speed ? 30 : 6, dt);
-      this.camera.fov = 78 + this.fovKick.value * 0.25 + fb.speed * 6;
+      // Rifle scope: zoom in while loading a shot.
+      const a = pov.action;
+      const scoped = pov.def.weapon === 'rifle' && pov.state === 'action' && a?.def.charge && a.frame >= a.def.charge.at && a.frame <= a.def.charge.at + 1 ? 0.35 + 0.65 * a.chargeLevel : 0;
+      fb.scope = damp(fb.scope, scoped, 14, dt);
+      fb.cloak = damp(fb.cloak, pov.cloak > 0 ? 1 : 0, 10, dt);
+      this.camera.fov = (78 + this.fovKick.value * 0.25 + fb.speed * 6) * (1 - fb.scope * 0.55);
       this.camera.updateProjectionMatrix();
 
       this.applyCinematic(alpha);
@@ -514,7 +551,7 @@ export class GameView {
     const cineOut = !!this.cine && this.cineWeight() > 0.5;
     // In a cinematic the first-person body is shown and the arms are hidden.
     for (const b of this.rigs) if (b.fighter === pov) b.rig.root.visible = cineOut;
-    this.viewmodel.update(dt, sway, showViewmodel && !!pov && !lyingOrFlying && !cineOut);
+    this.viewmodel.update(dt, sway, showViewmodel && !!pov && !lyingOrFlying && !cineOut && fb.scope < 0.5);
 
     this.renderer.clear();
     this.renderer.render(this.scene, this.camera);
@@ -522,6 +559,64 @@ export class GameView {
       this.renderer.clearDepth();
       this.renderer.render(this.viewmodel.scene, this.viewmodel.camera);
     }
+  }
+
+  /** Decoys are drawn as full copies of their owner (same model and animation). */
+  private syncDecoys(dt: number, alpha: number, frozen: boolean) {
+    const world = this.world!;
+    const live = new Set<number>();
+    for (const d of world.decoys) {
+      live.add(d.id);
+      let r = this.decoyRigs.get(d.id);
+      if (!r) {
+        const rig = new ModelRig(d.owner.def);
+        this.scene.add(rig.root);
+        r = { rig, anim: new ModelAnimator(rig, d.body) };
+        this.decoyRigs.set(d.id, r);
+      }
+      const opp = world.fighters[0] === d.owner ? world.fighters[1] : world.fighters[0];
+      r.anim.update(dt, alpha, opp, frozen);
+    }
+    for (const [id, r] of this.decoyRigs) {
+      if (live.has(id)) continue;
+      this.scene.remove(r.rig.root);
+      this.decoyRigs.delete(id);
+    }
+  }
+
+  /** Red laser from a scoped rifle to whatever it points at (both players see it). */
+  private updateLaser(f: Fighter) {
+    const a = f.action;
+    const on = f.def.weapon === 'rifle' && f.state === 'action' && !!a?.def.charge && a.frame >= a.def.charge.at && a.frame <= a.def.charge.at + 1;
+    let beam = this.lasers.get(f);
+    if (!on) {
+      if (beam) beam.visible = false;
+      return;
+    }
+    if (!beam) {
+      const geo = new THREE.CylinderGeometry(1, 1, 1, 6, 1, true);
+      geo.translate(0, 0.5, 0);
+      beam = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xff3048, transparent: true, opacity: 0.75, blending: THREE.AdditiveBlending, depthWrite: false }));
+      beam.frustumCulled = false;
+      this.scene.add(beam);
+      this.lasers.set(f, beam);
+    }
+    const dir = f.aimDir();
+    const start = f.eye.addScaledVector(f.right(), 0.22).addScaledVector(dir, 0.7);
+    start.y -= 0.18;
+    let len = 60;
+    const hit = raycastTerrain(start, dir, len);
+    if (hit) len = hit.dist;
+    const opp = this.world!.fighters.find((o) => o !== f)!;
+    const to = opp.pos.clone().setY(opp.pos.y + 1).sub(start);
+    const along = to.dot(dir);
+    if (along > 0 && along < len && to.addScaledVector(dir, -along).length() < 0.5) len = along;
+    beam.visible = true;
+    beam.position.copy(start);
+    beam.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+    const thick = f === this.pov ? 0.006 : 0.014;
+    beam.scale.set(thick, len, thick);
+    (beam.material as THREE.MeshBasicMaterial).opacity = 0.35 + 0.5 * (a?.chargeLevel ?? 0);
   }
 
   /** Cords from Zip's launcher to the flying hooks, the latched point or the opponent caught by the tether. */

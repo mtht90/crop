@@ -43,6 +43,8 @@ export class Hud {
   private edge: HTMLDivElement;
   private hurt: HTMLDivElement;
   private speed: HTMLDivElement;
+  private scope: HTMLDivElement;
+  private cloakLayer: HTMLDivElement;
   private flash: HTMLDivElement;
   private bannerTimer = 0;
 
@@ -50,6 +52,8 @@ export class Hud {
     this.edge = el('div', 'layer edge-warn', container);
     this.hurt = el('div', 'layer hurt', container);
     this.speed = el('div', 'layer speedlines', container);
+    this.scope = el('div', 'layer scope', container);
+    this.cloakLayer = el('div', 'layer cloak', container);
     this.flash = el('div', 'layer flash', container);
     this.root = el('div', 'layer hud hidden', container);
     const top = el('div', 'hud-top', this.root);
@@ -180,7 +184,8 @@ export class Hud {
     const head = match.cpu.pos.clone();
     head.y += 2.25;
     head.project(camera);
-    const vis = head.z < 1 && Math.abs(head.x) < 1.1 && Math.abs(head.y) < 1.1;
+    // A cloaked opponent has no tag (the decoys don't either, so nothing gives them away).
+    const vis = head.z < 1 && Math.abs(head.x) < 1.1 && Math.abs(head.y) < 1.1 && match.cpu.cloak <= 0;
     this.foeTag.style.display = vis ? '' : 'none';
     if (vis) {
       this.foeTag.style.left = `${((head.x + 1) / 2) * window.innerWidth}px`;
@@ -196,6 +201,8 @@ export class Hud {
     this.edge.style.opacity = String(fb.edgeWarn * (0.75 + Math.sin(performance.now() / 90) * 0.25));
     this.hurt.style.opacity = String(fb.hurt);
     this.speed.style.opacity = String(fb.speed * 0.55);
+    this.scope.style.opacity = String(Math.max(0, (fb.scope - 0.3) / 0.7));
+    this.cloakLayer.style.opacity = String(fb.cloak);
     this.flash.style.background = fb.flash.color;
     this.flash.style.opacity = String(fb.flash.a);
   }

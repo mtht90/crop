@@ -333,6 +333,19 @@ canvas {
   opacity: 0;
   mix-blend-mode: screen;
 }
+/* Sniper scope: dark surround, thin reticle. */
+.scope {
+  opacity: 0;
+  background:
+    linear-gradient(rgba(255, 60, 80, 0.8), rgba(255, 60, 80, 0.8)) center / 2px 38vmin no-repeat,
+    linear-gradient(rgba(255, 60, 80, 0.8), rgba(255, 60, 80, 0.8)) center / 38vmin 2px no-repeat,
+    radial-gradient(circle at center, transparent 0 33vmin, rgba(0, 0, 0, 0.9) 33.5vmin 35vmin, #07090c 35.5vmin);
+}
+/* Own cloak: shimmering violet edges. */
+.cloak {
+  opacity: 0;
+  background: radial-gradient(ellipse at center, transparent 45%, rgba(150, 80, 255, 0.35) 100%);
+}
 
 /* ---------- Banners ---------- */
 .banner {
@@ -1063,7 +1076,7 @@ body:not(.touch) .touch-only {
 }
 .roster {
   display: grid;
-  grid-template-columns: repeat(10, 88px);
+  grid-template-columns: repeat(12, 84px);
   gap: 8px;
 }
 .tile {
@@ -1166,7 +1179,7 @@ body:not(.touch) .touch-only {
     font-size: 34px;
   }
   .roster {
-    grid-template-columns: repeat(10, 62px);
+    grid-template-columns: repeat(12, 58px);
     gap: 5px;
   }
   .tile {

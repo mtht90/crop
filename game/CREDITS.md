@@ -8,7 +8,7 @@ All third-party assets are CC0 1.0 (public domain). Credit is not required but g
 | [Universal Animation Library](https://quaternius.itch.io/universal-animation-library) (Standard) | Quaternius | CC0 | Animations (`anims1.glb`) |
 | [Universal Animation Library 2](https://quaternius.itch.io/universal-animation-library-2) (Standard) | Quaternius | CC0 | Animations (`anims2.glb`) |
 | [Particle Pack](https://kenney.nl/assets/particle-pack) | Kenney | CC0 | Hit flashes, sparks, slash arcs, smoke, debris, rings, just-guard seal, spin swirl (`public/assets/fx`) |
-| [Blaster Kit](https://kenney.nl/assets/blaster-kit) | Kenney | CC0 | Star's pistols (`blaster-j` → `Blaster.glb`), Zip's hook launcher (`blaster-h` → `HookGun.glb`), Don's arm cannon (`blaster-b` → `ArmCannon.glb`) |
+| [Blaster Kit](https://kenney.nl/assets/blaster-kit) | Kenney | CC0 | Star's pistols (`blaster-j` → `Blaster.glb`), Zip's hook launcher (`blaster-h` → `HookGun.glb`), Don's arm cannon (`blaster-b` → `ArmCannon.glb`), Rei's rifle (`blaster-e` → `Rifle.glb`) |
 | [Pirate Kit](https://kenney.nl/assets/pirate-kit) | Kenney | CC0 | Don's cannonball shells; pirate cove stage (ships, palms, forts, masts and flags, cannons, barrels, crates, chests, rocks) bundled by `tools/build-pirate.mjs` → `Pirate.glb` |
 | [Cute umbrella](https://opengameart.org/content/cute-umbrella) | ege | CC0 | Ameri's umbrella (`public/assets/models/Umbrella.glb`, converted from .blend with `tools/umbrella-export.py`, texture greyed for tinting) |
 | [Katana](https://opengameart.org/content/katana-3) | pfunked | CC0 | Kagetsu's katana (`Katana.glb`, converted from FBX with `tools/katana-export.py`) |

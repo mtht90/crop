@@ -450,3 +450,72 @@ export function buildShell(scale = 1) {
   const b = part(new THREE.SphereGeometry(0.32 * scale, 14, 12), 0x2d2f38, 0.03);
   return b;
 }
+
+/**
+ * Rei's sniper rifle: Kenney "blaster-e" (long barrel with a scope).
+ * Grip at the origin, muzzle along +Z; `muzzleZ` is the barrel end in local units.
+ */
+export function buildRifle(scale = 1) {
+  const g = new THREE.Group();
+  const src = assets.models.rifle?.scene;
+  if (src) {
+    const m = toonClone(src, 0.01);
+    m.scale.setScalar(0.62);
+    // The model runs z 0..1.39 from the muzzle back to the stock: flip it so the muzzle leads.
+    m.rotation.y = Math.PI;
+    m.position.set(0.03, 0.03, 0.62);
+    g.add(m);
+  } else {
+    const barrel = part(new THREE.CylinderGeometry(0.02, 0.025, 0.8, 8), 0x3a3f45, 0.01);
+    barrel.rotation.x = Math.PI / 2;
+    barrel.position.z = 0.25;
+    g.add(barrel);
+  }
+  g.scale.setScalar(scale);
+  return { group: g, muzzleZ: 0.66 };
+}
+
+let cardTex: THREE.Texture | null = null;
+/** Playing card (two-sided), about 9 x 13 cm at scale 1. */
+export function buildCard(back: number, scale = 1) {
+  if (!cardTex) {
+    const c = document.createElement('canvas');
+    c.width = 64;
+    c.height = 96;
+    const g = c.getContext('2d')!;
+    g.fillStyle = '#fffaf0';
+    g.fillRect(0, 0, 64, 96);
+    g.strokeStyle = '#1d1b2e';
+    g.lineWidth = 3;
+    g.strokeRect(2, 2, 60, 92);
+    g.fillStyle = '#d32f4a';
+    g.font = 'bold 40px serif';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText('♥', 32, 50);
+    g.font = 'bold 16px sans-serif';
+    g.fillText('A', 12, 14);
+    cardTex = new THREE.CanvasTexture(c);
+    cardTex.colorSpace = THREE.SRGBColorSpace;
+  }
+  const g = new THREE.Group();
+  const face = new THREE.Mesh(new THREE.PlaneGeometry(0.09, 0.13), new THREE.MeshBasicMaterial({ map: cardTex }));
+  const rear = new THREE.Mesh(new THREE.PlaneGeometry(0.09, 0.13), new THREE.MeshBasicMaterial({ color: back }));
+  rear.rotation.y = Math.PI;
+  g.add(face, rear);
+  g.scale.setScalar(scale);
+  return g;
+}
+
+/** A small fan of cards held between the fingers. */
+export function buildCardFan(back: number, scale = 1) {
+  const g = new THREE.Group();
+  for (let i = 0; i < 3; i++) {
+    const c = buildCard(back);
+    c.rotation.z = (i - 1) * 0.35;
+    c.position.set((i - 1) * 0.02, 0.06, i * 0.002);
+    g.add(c);
+  }
+  g.scale.setScalar(scale);
+  return g;
+}

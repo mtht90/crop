@@ -76,8 +76,8 @@ for (const [name, [dir]] of Object.entries(STRIPS)) {
 }
 
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
-// blaster-j: Star's pistols; blaster-h: Zip's hook launcher; blaster-b: Don's arm cannon.
-for (const [src, out] of [['blaster-j', 'Blaster'], ['blaster-h', 'HookGun'], ['blaster-b', 'ArmCannon']]) {
+// blaster-j: Star's pistols; blaster-h: Zip's hook launcher; blaster-b: Don's arm cannon; blaster-e: Rei's rifle.
+for (const [src, out] of [['blaster-j', 'Blaster'], ['blaster-h', 'HookGun'], ['blaster-b', 'ArmCannon'], ['blaster-e', 'Rifle']]) {
   const doc = await io.read(`${SRC}/blaster/Models/GLB format/${src}.glb`);
   await doc.transform(prune(), dedup());
   await io.write(`${ROOT}models/${out}.glb`, doc);

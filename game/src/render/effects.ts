@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type { Projectile } from '../combat/world';
 import { rand } from '../core/math';
 import { fx, FX_FRAMES, hasFx, tex, type FxName } from './textures';
-import { buildHookHead, buildShell, buildUmbrella } from './weapons';
+import { buildCard, buildHookHead, buildShell, buildUmbrella } from './weapons';
 
 interface Particle {
   obj: THREE.Object3D;
@@ -415,7 +415,7 @@ export class Effects {
         const hookVis = p.visual === 'hook';
         const wave = p.visual === 'wave';
         // Arrows and hooks are oriented meshes; everything else is a spinning star sprite.
-        const arrow = p.visual === 'arrow' || hookVis || p.visual === 'umbrella' || p.visual === 'shell';
+        const arrow = p.visual === 'arrow' || hookVis || p.visual === 'umbrella' || p.visual === 'shell' || p.visual === 'card' || p.visual === 'bullet';
         let spinner: THREE.Object3D | undefined;
         let thrown: THREE.Object3D | undefined;
         if (p.visual === 'umbrella') {
@@ -424,6 +424,24 @@ export class Effects {
           spinner = t.spinner;
         }
         if (p.visual === 'shell') thrown = buildShell(0.6 * p.size);
+        if (p.visual === 'card') {
+          // Card spinning flat like a shuriken.
+          const outer = new THREE.Group();
+          const c = buildCard(c1, 1.6 * p.size);
+          c.rotation.x = -Math.PI / 2;
+          const roll = new THREE.Group();
+          roll.add(c);
+          outer.add(roll);
+          thrown = outer;
+          spinner = c;
+        }
+        if (p.visual === 'bullet') {
+          // Bright tracer streak along the flight path.
+          const t = new THREE.Mesh(new THREE.CylinderGeometry(0.025 * p.size, 0.025 * p.size, 0.9, 6), new THREE.MeshBasicMaterial({ color: 0xfff6d0 }));
+          t.rotation.x = Math.PI / 2;
+          thrown = new THREE.Group();
+          thrown.add(t);
+        }
         const core: THREE.Object3D = thrown ? thrown : hookVis ? buildHookHead(2.4 * p.size) : arrow ? buildArrow(c1, p.size) : new THREE.Sprite(spriteMat(wave ? fx('burst') : tex.star(), wave ? c2 : 0xffffff));
         const glow = new THREE.Sprite(spriteMat(fx('soft'), c1));
         core.renderOrder = glow.renderOrder = 6;

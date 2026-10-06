@@ -21,6 +21,8 @@ const MODEL_FILES = {
   hookGun: 'HookGun.glb',
   /** Kenney Blaster Kit (CC0) "blaster-b", Don's arm cannon. */
   armCannon: 'ArmCannon.glb',
+  /** Kenney Blaster Kit (CC0) "blaster-e" (long, scoped), Rei's rifle. */
+  rifle: 'Rifle.glb',
   /** "Cute umbrella" by ege (OpenGameArt, CC0), Ameri's umbrella. */
   umbrella: 'Umbrella.glb',
   /** "Katana" by pfunked and the sheath from "Katana" by Clint Bellanger (OpenGameArt, CC0). */

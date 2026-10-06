@@ -48,7 +48,7 @@ export interface Spawn extends HitProps {
   size?: number;
   /** Downward acceleration (m/s^2) for arcing projectiles. */
   gravity?: number;
-  visual?: 'star' | 'arrow' | 'hook' | 'wave' | 'umbrella' | 'shell';
+  visual?: 'star' | 'arrow' | 'hook' | 'wave' | 'umbrella' | 'shell' | 'card' | 'bullet';
   /** Blows up where it stops; the splash hits the opponent unless the shell itself already did. */
   blast?: Blast;
   /** Rain down from above the opponent, or run along the floor from the feet (shockwaves). */
@@ -59,6 +59,10 @@ export interface Spawn extends HitProps {
    * 'tether' only catches the opponent (then `onHit` swings them), and does nothing on a miss.
    */
   hook?: 'self' | 'yank' | 'tether';
+  /** On hit, marks the target for this many frames (see `seekMarked`). */
+  mark?: number;
+  /** Steers toward a target marked by the shooter at this turn rate (rad/s). */
+  seekMarked?: number;
   /** Steers toward the opponent at this turn rate (rad/s). */
   homing?: number;
   /** After hitting or expiring, flies back to the owner (harmless) instead of vanishing. */
@@ -77,6 +81,8 @@ export interface Motion {
   magnet?: boolean;
   /** Keeps vertical speed at least this high during the window (hover / rising spins). */
   lift?: number;
+  /** Sidestep speed (toward the held strafe direction, right by default). */
+  side?: number;
 }
 
 /** Hold-to-charge: the action pauses at frame `at` while the button is held. */
@@ -143,6 +149,13 @@ export interface ActionDef {
    * and slung forward; `hit` lands on them at `release`.
    */
   tether?: { release: number; hit: HitProps };
+  /**
+   * Decoys: copies of the user appear at `frame`. Without `around` one copy runs
+   * straight ahead from the user's spot; with it they ring the opponent. A decoy
+   * pops (with `burst`) when anything hits it or its time runs out. `cloak`
+   * turns the user nearly invisible for that many frames.
+   */
+  decoy?: { frame: number; life: number; speed: number; burst: Blast; cloak?: number; around?: { count: number; radius: number }; fire?: { every: number; spawn: Spawn } };
   /** After this action, fall no faster than this (m/s) until landing, with light air steering (umbrella float). */
   float?: number;
   /** Bodies don't collide during the action (pass-through slashes). */
@@ -174,14 +187,14 @@ export interface Look {
   /** CC0 beard from the base-character kit. */
   beard?: boolean;
   /** Code-built head accessories. */
-  accessories?: { kind: 'headband' | 'hachimaki' | 'twinTails' | 'cap' | 'ribbon' | 'obi'; color: number }[];
+  accessories?: { kind: 'headband' | 'hachimaki' | 'twinTails' | 'cap' | 'ribbon' | 'obi' | 'topHat' | 'beret'; color: number }[];
 }
 
 export interface CharacterDef {
   id: string;
   name: string;
   title: string;
-  weapon: 'fists' | 'guns' | 'bow' | 'hammer' | 'katana' | 'yoyo' | 'grapple' | 'umbrella' | 'cannon';
+  weapon: 'fists' | 'guns' | 'bow' | 'hammer' | 'katana' | 'yoyo' | 'grapple' | 'umbrella' | 'cannon' | 'cards' | 'rifle';
   /** CPU play style. */
   archetype: 'melee' | 'ranged';
   /** Theme colors for trails, sparks and auras. */

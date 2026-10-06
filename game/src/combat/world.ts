@@ -2,7 +2,7 @@ import { Vector3 } from 'three';
 import { ARENA_RADIUS, BODY_HEIGHT, BODY_RADIUS, EYE_HEIGHT, GUARD_MAX } from '../config';
 import { Fighter } from './fighter';
 import { raycastTerrain, segmentHitsTerrain } from './terrain';
-import { TICK, type ActionDef, type HitProps, type Intent, type Spawn } from './types';
+import { TICK, type ActionDef, type Blast, type HitProps, type Intent, type Spawn } from './types';
 
 /** Applies the hold-to-charge multipliers to a hit or projectile. */
 function charged<T extends HitProps>(props: T, def: ActionDef, level: number): T {
@@ -57,14 +57,32 @@ export type CombatEvent =
   | { type: 'grapple'; fighter: Fighter; pos: Vector3; onFighter: boolean }
   | { type: 'projectileBounce'; projectile: Projectile; pos: Vector3 }
   | { type: 'explosion'; attacker: Fighter; pos: Vector3; radius: number }
+  | { type: 'decoyPop'; decoy: Decoy; pos: Vector3; byHit: boolean }
+  | { type: 'decoySpawn'; owner: Fighter }
   | { type: 'canopyBreak'; fighter: Fighter; attacker: Fighter; pos: Vector3 }
   | { type: 'ringout'; fighter: Fighter };
 
 let projectileId = 0;
+let decoyId = 0;
+
+/** A stand-in copy of a fighter (decoy trick). `body` only drives position and animation. */
+export interface Decoy {
+  id: number;
+  owner: Fighter;
+  body: Fighter;
+  life: number;
+  dir: Vector3;
+  speed: number;
+  burst: Blast;
+  /** Ring decoys face and shoot at this fighter. */
+  aimAt: Fighter | null;
+  fire?: { every: number; spawn: Spawn; t: number };
+}
 
 export class CombatWorld {
   readonly fighters: [Fighter, Fighter];
   projectiles: Projectile[] = [];
+  decoys: Decoy[] = [];
   events: CombatEvent[] = [];
   hitstop = 0;
   frame = 0;
@@ -91,11 +109,99 @@ export class CombatWorld {
     this.processAttacks(a, b);
     this.processAttacks(b, a);
     this.updateProjectiles();
+    this.updateDecoys();
     this.updateTether(a);
     this.updateTether(b);
     for (const f of this.fighters) f.umbrellaOut = this.projectiles.some((p) => p.owner === f && p.visual === 'umbrella');
     this.emitStateEvents(a);
     this.emitStateEvents(b);
+  }
+
+  private spawnDecoys(att: Fighter, tgt: Fighter, d: NonNullable<ActionDef['decoy']>) {
+    const make = (x: number, z: number, yaw: number, dir: Vector3, speed: number, aimAt: Fighter | null) => {
+      const body = new Fighter(att.def, att.index);
+      body.reset(x, z, yaw);
+      body.pos.y = Math.max(0, att.pos.y);
+      body.prevPos.copy(body.pos);
+      body.setState('free');
+      this.decoys.push({ id: decoyId++, owner: att, body, life: d.life, dir, speed, burst: d.burst, aimAt, fire: d.fire ? { ...d.fire, t: Math.floor(d.fire.every * 0.5) } : undefined });
+    };
+    if (d.around) {
+      for (let k = 0; k < d.around.count; k++) {
+        const ang = (k / d.around.count) * Math.PI * 2 + att.yaw;
+        let x = tgt.pos.x + Math.cos(ang) * d.around.radius;
+        let z = tgt.pos.z + Math.sin(ang) * d.around.radius;
+        const r = Math.hypot(x, z);
+        if (r > ARENA_RADIUS - 2) {
+          x *= (ARENA_RADIUS - 2) / r;
+          z *= (ARENA_RADIUS - 2) / r;
+        }
+        const to = tgt.pos.clone().sub(new Vector3(x, 0, z)).setY(0).normalize();
+        make(x, z, Math.atan2(-to.x, -to.z), to, d.speed, tgt);
+      }
+    } else {
+      const f = att.forward();
+      make(att.pos.x, att.pos.z, att.yaw, f, d.speed, null);
+    }
+    if (d.cloak) att.cloak = d.cloak;
+    this.events.push({ type: 'decoySpawn', owner: att });
+  }
+
+  private updateDecoys() {
+    if (!this.decoys.length) return;
+    for (const d of [...this.decoys]) {
+      const b = d.body;
+      d.life--;
+      b.prevPos.copy(b.pos);
+      const foe = this.fighters[0] === d.owner ? this.fighters[1] : this.fighters[0];
+      if (d.aimAt) {
+        const to = d.aimAt.pos.clone().sub(b.pos).setY(0);
+        if (to.lengthSq() > 1e-4) b.yaw = Math.atan2(-to.x, -to.z);
+      }
+      // Run along the floor, stopping short of the edge.
+      const next = b.pos.clone().addScaledVector(d.dir, d.speed * TICK);
+      if (Math.hypot(next.x, next.z) < ARENA_RADIUS - 1.2) b.pos.copy(next);
+      else d.speed = 0;
+      b.vel.copy(d.dir).multiplyScalar(d.speed);
+      b.grounded = b.pos.y <= 0.01;
+      if (!b.grounded) b.pos.y = Math.max(0, b.pos.y - 6 * TICK);
+      b.stateT++;
+      if (d.fire && foe.isAlive()) {
+        d.fire.t--;
+        if (d.fire.t <= 0) {
+          d.fire.t = d.fire.every;
+          const s = d.fire.spawn;
+          const origin = b.pos.clone().setY(b.pos.y + 1.3);
+          const dir = foe.pos.clone().setY(foe.pos.y + 1.0).sub(origin).normalize();
+          for (let k = 0; k < (s.count ?? 1); k++) {
+            const v = dir.clone().applyAxisAngle(new Vector3(0, 1, 0), (k - ((s.count ?? 1) - 1) / 2) * (s.fan ?? 0)).multiplyScalar(s.speed);
+            this.projectiles.push({ owner: d.owner, radius: s.radius, life: s.life, size: s.size ?? 1, props: s, gravity: 0, visual: s.visual ?? 'star', pos: origin.clone(), prev: origin.clone(), vel: v, id: projectileId++ });
+          }
+          b.shotCounter.R++;
+        }
+      }
+      // A running decoy bursts when it reaches the opponent.
+      const touch = !d.aimAt && foe.isAlive() && Math.hypot(foe.pos.x - b.pos.x, foe.pos.z - b.pos.z) < 1.1 && Math.abs(foe.pos.y - b.pos.y) < 1.6;
+      if (d.life <= 0 || touch) this.popDecoy(d, false);
+    }
+  }
+
+  /** A decoy bursts: smoke and confetti, and a blast that catches whoever is next to it. */
+  private popDecoy(d: Decoy, byHit: boolean) {
+    const i = this.decoys.indexOf(d);
+    if (i < 0) return;
+    this.decoys.splice(i, 1);
+    const pos = d.body.pos.clone().setY(d.body.pos.y + 1);
+    this.events.push({ type: 'decoyPop', decoy: d, pos, byHit });
+    const foe = this.fighters[0] === d.owner ? this.fighters[1] : this.fighters[0];
+    if (!foe.isAlive() || foe.isInvulnerable()) return;
+    const chest = foe.pos.clone().setY(foe.pos.y + 0.9);
+    if (chest.distanceTo(pos) > d.burst.radius + 0.4) return;
+    const dir = foe.pos.clone().sub(pos).setY(0);
+    if (dir.lengthSq() < 1e-4) dir.set(0, 0, 1);
+    dir.normalize();
+    const b = d.burst;
+    this.applyHit(d.owner, foe, { damage: b.damage, knockback: b.knockback, knockUp: b.knockUp, hitstun: b.hitstun, hitstop: b.hitstop ?? 6, guardDamage: b.guardDamage ?? b.damage * 0.5 }, dir, chest, true);
   }
 
   /** Shell blast: splash damage around where it stopped (never the shooter). */
@@ -213,6 +319,13 @@ export class CombatWorld {
         center.y = Math.min(center.y, att.pos.y + EYE_HEIGHT);
       }
       this.debugHitSpheres.push({ pos: center.clone(), radius: w.radius });
+      // Swinging into a decoy pops it (and uses up this hit).
+      const fake = this.decoys.find((d) => d.owner !== att && sphereCapsule(center, w.radius, d.body.pos));
+      if (fake) {
+        a.hitDone[i] = true;
+        this.popDecoy(fake, true);
+        return;
+      }
       if (!tgt.isAlive() || tgt.isInvulnerable()) return;
       if (sphereCapsule(center, w.radius, tgt.pos)) {
         a.hitDone[i] = true;
@@ -226,6 +339,8 @@ export class CombatWorld {
         this.applyHit(att, tgt, charged(w, def, a.chargeLevel), dir, point, false);
       }
     });
+
+    if (def.decoy && a.frame === def.decoy.frame) this.spawnDecoys(att, tgt, def.decoy);
 
     def.spawns?.forEach((s, i) => {
       if (a.spawnDone[i] || a.frame < s.frame) return;
@@ -302,7 +417,8 @@ export class CombatWorld {
    */
   private applyRecoil(att: Fighter, tgt: Fighter, size: number, speedK: number) {
     const base = att.def.recoil;
-    if (!base) return;
+    // Only a rocket jump in the air; standing shots don't shove the shooter (off the edge).
+    if (!base || att.grounded) return;
     const RANGE = 16;
     const eye = att.eye;
     const dir = att.aimDir();
@@ -312,9 +428,7 @@ export class CombatWorld {
     const toT = tgt.pos.clone().setY(tgt.pos.y + 1).sub(eye);
     const along = toT.dot(dir);
     if (along > 0 && along < hit.dist && toT.addScaledVector(dir, -along).length() < 0.8) return;
-    // Shooting the ground while airborne kicks harder (a real rocket jump).
-    const airK = att.grounded ? 1 : 1.7;
-    const strength = base * airK * Math.sqrt(size) * speedK * (1 - (hit.dist / RANGE) * 0.6);
+    const strength = base * 1.7 * Math.sqrt(size) * speedK * (1 - (hit.dist / RANGE) * 0.6);
     // Upward kicks cancel the current fall first (rocket-jump feel), then add.
     const imp = dir.clone().multiplyScalar(-strength);
     att.vel.x += imp.x;
@@ -348,13 +462,14 @@ export class CombatWorld {
         continue;
       }
       const foe = this.fighters[0] === p.owner ? this.fighters[1] : this.fighters[0];
-      if (p.props.homing && foe.isAlive()) {
+      const turn = p.props.homing ?? (p.props.seekMarked && foe.marked > 0 ? p.props.seekMarked : 0);
+      if (turn && foe.isAlive()) {
         // Turn toward the opponent's chest at a limited rate.
         const want = foe.pos.clone().setY(foe.pos.y + 1).sub(p.pos).normalize();
         const sp = p.vel.length();
         const cur = p.vel.clone().divideScalar(sp);
         const ang = Math.acos(Math.min(1, Math.max(-1, cur.dot(want))));
-        const max = p.props.homing * TICK;
+        const max = turn * TICK;
         if (ang > 1e-4) cur.lerp(want, Math.min(1, max / ang)).normalize();
         p.vel.copy(cur.multiplyScalar(sp));
       }
@@ -375,6 +490,14 @@ export class CombatWorld {
       }
       const tgt = this.fighters[0] === p.owner ? this.fighters[1] : this.fighters[0];
       let alive = p.life > 0 && p.pos.y > -20;
+      const fake = alive ? this.decoys.find((d) => d.owner !== p.owner && segmentCapsule(p.prev, p.pos, p.radius, d.body.pos)) : undefined;
+      if (fake) {
+        // Shot the decoy instead.
+        this.popDecoy(fake, true);
+        if (p.props.blast) this.explode(p, tgt);
+        this.events.push({ type: 'projectileEnd', projectile: p });
+        continue;
+      }
       if (alive && tgt.isAlive() && !tgt.isInvulnerable() && segmentCapsule(p.prev, p.pos, p.radius, tgt.pos)) {
         const dir = p.vel.clone().setY(0).normalize();
         if (tgt.reflectActive() && !p.hook && tgt.forward().dot(dir) < -0.2 && !tgt.justReflect()) {
@@ -401,6 +524,7 @@ export class CombatWorld {
         const res = this.applyHit(p.owner, tgt, p.props, dir, closestOnCapsule(p.pos, tgt.pos), true);
         alive = false;
         p.struck = true;
+        if ((res === 'hit' || res === 'guard') && p.props.mark) tgt.marked = p.props.mark;
         if (res === 'hit' && tgt.isAlive()) {
           if (p.hook === 'self' && canGrapple(p.owner)) {
             p.owner.startGrapple(tgt.pos, tgt);
