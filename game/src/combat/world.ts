@@ -28,7 +28,7 @@ export interface Projectile {
   returning?: boolean;
   /** Runs along the floor and dies off the arena edge. */
   ground?: boolean;
-  hook?: 'self' | 'yank' | 'anchor';
+  hook?: 'self' | 'yank' | 'tether';
   onHit?: string;
 }
 
@@ -86,9 +86,54 @@ export class CombatWorld {
     this.processAttacks(a, b);
     this.processAttacks(b, a);
     this.updateProjectiles();
+    this.updateTether(a);
+    this.updateTether(b);
     for (const f of this.fighters) f.umbrellaOut = this.projectiles.some((p) => p.owner === f && p.visual === 'umbrella');
     this.emitStateEvents(a);
     this.emitStateEvents(b);
+  }
+
+  /**
+   * Tether throw: haul the caught opponent up behind and over the thrower's head
+   * in a big arc, then let go with the action's hit at the release frame.
+   */
+  private updateTether(f: Fighter) {
+    const t = f.tether;
+    if (!t) return;
+    const a = f.action;
+    const def = a?.def.tether;
+    const tgt = t.target;
+    if (!a || !def || f.state !== 'action' || !tgt.isAlive() || tgt.state !== 'hitstun') {
+      f.tether = null;
+      return;
+    }
+    const fwd = f.forward();
+    const R = 2.4;
+    const arc = (th: number) => f.pos.clone().addScaledVector(fwd, R * Math.cos(th)).setY(f.pos.y + 1.0 + R * Math.sin(th));
+    const PULL = Math.min(12, def.release - 6);
+    let goal: Vector3;
+    if (a.frame < PULL) {
+      // Reel in toward the start of the swing (behind, at shoulder height).
+      const k = a.frame / PULL;
+      goal = t.from.clone().lerp(arc(Math.PI * 0.95), k * k * (3 - 2 * k));
+    } else {
+      // Accelerating swing over the top to the front.
+      const k = Math.min(1, (a.frame - PULL) / (def.release - PULL));
+      goal = arc(Math.PI * 0.95 - (Math.PI * 0.95 - 0.25) * k * k);
+    }
+    goal.y = Math.max(goal.y, 0);
+    tgt.vel.copy(goal.clone().sub(tgt.pos).divideScalar(TICK));
+    tgt.pos.copy(goal);
+    tgt.prevPos.copy(goal);
+    tgt.grounded = false;
+    tgt.setState('hitstun', 30);
+    if (a.frame >= def.release) {
+      f.tether = null;
+      tgt.vel.set(0, 0, 0);
+      const dir = fwd.clone();
+      const res = this.applyHit(f, tgt, def.hit, dir, tgt.pos.clone().setY(tgt.pos.y + 1), false);
+      if (res === 'hit') f.gainUlt(4);
+    }
   }
 
   private separate(a: Fighter, b: Fighter) {
@@ -191,8 +236,6 @@ export class CombatWorld {
       this.projectiles.push({ ...base, pos: p.clone(), prev: p.clone(), vel: new Vector3((Math.random() - 0.5) * 2, -s.speed, (Math.random() - 0.5) * 2), id: projectileId++ });
       return;
     }
-    // Double hook: the shooter waits for both anchors, then slingshots between them.
-    if (s.hook === 'anchor') att.sling = { anchors: [], t: 0, launched: -1 };
     const fwd = att.aimDir();
     const right = att.right();
     const side = s.hand === 'L' ? -0.3 : 0.3;
@@ -293,7 +336,7 @@ export class CombatWorld {
         p.pos.copy(ground);
         p.life = 0;
         // A hook that bites into terrain reels its owner in.
-        if (p.hook && p.hook !== 'anchor' && canGrapple(p.owner)) {
+        if ((p.hook === 'self' || p.hook === 'yank') && canGrapple(p.owner)) {
           p.owner.startGrapple(ground);
           this.events.push({ type: 'grapple', fighter: p.owner, pos: ground.clone(), onFighter: false });
         }
@@ -322,6 +365,12 @@ export class CombatWorld {
           if (p.hook === 'self' && canGrapple(p.owner)) {
             p.owner.startGrapple(tgt.pos, tgt);
             this.events.push({ type: 'grapple', fighter: p.owner, pos: p.pos.clone(), onFighter: true });
+          } else if (p.hook === 'tether' && canGrapple(p.owner)) {
+            // Caught: the opponent is held on the cord for the swing.
+            tgt.setState('hitstun', 60);
+            tgt.vel.set(0, 0, 0);
+            p.owner.tether = { target: tgt, from: tgt.pos.clone() };
+            this.events.push({ type: 'grapple', fighter: p.owner, pos: p.pos.clone(), onFighter: true });
           } else if (p.hook === 'yank') {
             // Reel the target in toward the shooter.
             tgt.setState('hitstun', 50);
@@ -338,10 +387,6 @@ export class CombatWorld {
         this.events.push({ type: 'projectileBounce', projectile: p, pos: p.pos.clone() });
         keep.push(p);
       } else {
-        if (p.hook === 'anchor') {
-          p.owner.addAnchor(p.pos);
-          this.events.push({ type: 'grapple', fighter: p.owner, pos: p.pos.clone(), onFighter: false });
-        }
         this.events.push({ type: 'projectileEnd', projectile: p });
       }
     }

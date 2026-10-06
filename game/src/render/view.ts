@@ -38,8 +38,6 @@ interface RigBundle {
   cups: THREE.Object3D[];
   /** Action serial that already got its swing streak. */
   swingSerial: number;
-  /** Last slingshot launch seen (for the snap effect). */
-  slingSerial: number;
 }
 
 /** Owns the Three.js renderer: world scene, first-person camera and viewmodel. */
@@ -173,7 +171,7 @@ export class GameView {
         ropes.push(rope);
         cups.push(cup);
       }
-      return { fighter: f, rig, anim: new ModelAnimator(rig, f), trails, ghostT: 0, twirlT: 0, aura, ropes, cups, swingSerial: -1, slingSerial: 0 };
+      return { fighter: f, rig, anim: new ModelAnimator(rig, f), trails, ghostT: 0, twirlT: 0, aura, ropes, cups, swingSerial: -1 };
     });
     if (pov) {
       this.viewmodel.setFighter(pov);
@@ -496,7 +494,7 @@ export class GameView {
     }
   }
 
-  /** Cords from Zip's launcher to the flying hooks, the latched point or the double-hook anchors. */
+  /** Cords from Zip's launcher to the flying hooks, the latched point or the opponent caught by the tether. */
   private updateRope(b: RigBundle) {
     const f = b.fighter;
     if (f.def.weapon !== 'grapple' || !this.world) return;
@@ -507,18 +505,8 @@ export class GameView {
     // A yank hook keeps the rope taut while the opponent is reeled in.
     const other = this.world.fighters.find((o) => o !== f);
     if (!ends.length && other?.grapple?.forced && other.grapple.target === f) ends.push({ pos: other.pos.clone().setY(other.pos.y + 0.9), cup: false });
-    // Double hook: anchors stay stuck until the launch, and the cords stay a moment after it (the snap).
-    if (f.sling) for (const a of f.sling.anchors) ends.push({ pos: a.clone(), cup: true });
-    if (f.slingCounter !== b.slingSerial) {
-      b.slingSerial = f.slingCounter;
-      const el = f.def.element;
-      this.effects.swing(f.pos.clone().setY(f.pos.y + 1), el.color2, 'blunt', false, 1.4);
-      if (this.pov) sfx.play('dash');
-      if (f === this.pov) {
-        this.fovKick.impulse(30);
-        this.addTrauma(0.15);
-      }
-    }
+    // Tether throw: the cord stays on the opponent through the swing.
+    if (f.tether) ends.push({ pos: f.tether.target.pos.clone().setY(f.tether.target.pos.y + 0.9), cup: true });
     const out = ends.length > 0;
     b.anim.hookOut = out;
     if (f === this.pov) this.viewmodel.hookOut = out;

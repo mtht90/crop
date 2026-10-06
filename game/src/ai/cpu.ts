@@ -238,7 +238,7 @@ export class CpuController {
       const ok = ud.spawns?.some((sp) => sp.hook) ? dist < 18 && aimed : uReach ? dist < uReach && aimed : melee ? dist < 3.8 : dist < 16 && aimed;
       if (ok && Math.random() < 0.05 + this.p.aggression * 0.05) i.ultPressed = true;
     }
-    const hookSkill = self.def.actions[self.def.skill].spawns?.some((sp) => sp.hook === 'self' || sp.hook === 'anchor');
+    const hookSkill = self.def.actions[self.def.skill].spawns?.some((sp) => sp.hook === 'self' || sp.hook === 'tether');
     if (hookSkill && self.skillCd === 0 && aimed && dist > 5 && dist < 16 && Math.random() < 0.02 + this.p.skillUse * 0.05) {
       // Grappler: close the gap by hooking onto the opponent.
       i.skillPressed = true;

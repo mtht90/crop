@@ -25,8 +25,8 @@ const actions: Record<string, ActionDef> = {
     id: 'hookShot',
     kind: 'attack',
     anim: 'hookShot',
-    total: 48,
-    spawns: [hook(5, { onHit: 'kneeStrike', damage: 8, hitstun: 16, life: 17 })],
+    total: 58,
+    spawns: [hook(5, { onHit: 'kneeStrike', damage: 8, hitstun: 16, life: 14 })],
     moveScale: 0.6,
     upperBody: true,
   },
@@ -36,26 +36,27 @@ const actions: Record<string, ActionDef> = {
     kind: 'attack',
     anim: 'kneeStrike',
     total: 34,
-    hits: [{ start: 1, end: 30, damage: 40, knockback: 8, knockUp: 6, hitstun: 26, hitstop: 11, range: 0.7, radius: 1.1, hand: 'B', heavy: true, guardDamage: 30 }],
+    hits: [{ start: 1, end: 30, damage: 34, knockback: 8, knockUp: 6, hitstun: 26, hitstop: 11, range: 0.7, radius: 1.1, hand: 'B', heavy: true, guardDamage: 30 }],
     moveScale: 0,
   },
-  // E: double hook. Two cords fan out left and right; once both bite (terrain,
-  // the opponent, or the end of the line) Zip is slingshot through the midpoint.
-  slingShot: {
-    id: 'slingShot',
+  // E: glowing tether cup. Catch the opponent and Zip hauls them overhead in a big
+  // swing and slings them away; a miss (or a guard) does nothing.
+  tetherShot: {
+    id: 'tetherShot',
     kind: 'skill',
-    anim: 'slingShot',
+    anim: 'tetherShot',
     total: 40,
-    spawns: [hook(6, { hook: 'anchor', count: 2, fan: 0.62, speed: 62, life: 15, damage: 12, hitstun: 18, knockUp: 0.5 })],
-    moveScale: 0.25,
+    spawns: [hook(7, { hook: 'tether', onHit: 'flingThrow', speed: 50, life: 18, size: 1.5, radius: 0.55, damage: 10, hitstun: 60, knockUp: 0, hitstop: 6, guardDamage: 8 })],
+    moveScale: 0.3,
   },
-  // The slingshot flight: Zip's whole body is the hitbox.
-  slingRush: {
-    id: 'slingRush',
+  flingThrow: {
+    id: 'flingThrow',
     kind: 'attack',
-    anim: 'slingRush',
-    total: 30,
-    hits: [{ start: 1, end: 24, area: true, range: 0, radius: 1.35, damage: 66, knockback: 13, knockUp: 7, hitstun: 26, hitstop: 10, hand: 'B', heavy: true, guardDamage: 30 }],
+    anim: 'flingThrow',
+    total: 46,
+    tether: { release: 28, hit: { damage: 80, knockback: 20, knockUp: 11, hitstun: 40, hitstop: 14, heavy: true, guardDamage: 0 } },
+    committed: true,
+    armor: true,
     moveScale: 0,
   },
   // Air Space: the same hook as an edge recovery (once per airtime).
@@ -114,11 +115,11 @@ export const zip: CharacterDef = {
   walkSpeed: 7.5,
   jumpSpeed: 11.5,
   preferredRange: [3, 12],
-  skillCooldown: 150,
+  skillCooldown: 300,
   autoFire: true,
   actions,
   basic: 'hookShot',
-  skill: 'slingShot',
+  skill: 'tetherShot',
   ult: 'reelIn',
   airBasic: 'hookShot',
   look: {

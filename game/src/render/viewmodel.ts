@@ -610,7 +610,7 @@ export class ViewModel {
         break;
       // --- Grappler -----------------------------------------------------
       case 'hookShot':
-      case 'slingShot':
+      case 'tetherShot':
       case 'reelIn':
         if (side === 'R') {
           o.p.x -= 0.1;
@@ -624,7 +624,6 @@ export class ViewModel {
         }
         break;
       case 'dropKick':
-      case 'slingRush':
       case 'kneeStrike':
         // Arms flung wide for balance.
         o.p.y += 0.08;
@@ -645,6 +644,11 @@ export class ViewModel {
         break;
       case 'sweep':
         if (side === 'R') swing([0.3, 0.9, 0.5], [-0.8, -1.2, -0.7], 0.15);
+        break;
+      case 'flingThrow':
+        // Both arms haul the cord back over the shoulder, then whip it forward.
+        swing([0.9, 0, -0.3], [-1.1, 0, 0.2], 0.25);
+        o.p.y += side === 'L' ? 0.05 : 0;
         break;
       case 'umbrellaToss':
         // Overhand fling: wind back over the shoulder, then whip forward.

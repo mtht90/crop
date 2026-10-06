@@ -54,9 +54,9 @@ export interface Spawn extends HitProps {
   /**
    * Grappling hook: 'self' pulls the shooter to whatever it latches onto
    * (terrain or the opponent); 'yank' reels the opponent in instead;
-   * 'anchor' only marks where it stops (two anchors = slingshot launch).
+   * 'tether' only catches the opponent (then `onHit` swings them), and does nothing on a miss.
    */
-  hook?: 'self' | 'yank' | 'anchor';
+  hook?: 'self' | 'yank' | 'tether';
   /** Steers toward the opponent at this turn rate (rad/s). */
   homing?: number;
   /** After hitting or expiring, flies back to the owner (harmless) instead of vanishing. */
@@ -123,6 +123,11 @@ export interface ActionDef {
   landCancel?: boolean;
   /** Counter stance: a hit landing in [start, end) is negated and `follow` starts behind the attacker. */
   counter?: { start: number; end: number; follow: string };
+  /**
+   * Tether throw: while a tether hook holds the opponent, they are hauled overhead
+   * and slung forward; `hit` lands on them at `release`.
+   */
+  tether?: { release: number; hit: HitProps };
   /** After this action, fall no faster than this (m/s) until landing, with light air steering (umbrella float). */
   float?: number;
   /** Bodies don't collide during the action (pass-through slashes). */

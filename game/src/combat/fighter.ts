@@ -87,7 +87,6 @@ export class Fighter {
   landCounter = 0;
   landStrength = 0;
   dashCounter = 0;
-  slingCounter = 0;
   jumpCounter = 0;
   /** Accumulated distance on the ground (drives the run cycle). */
   stride = 0;
@@ -103,8 +102,8 @@ export class Fighter {
   gliding = false;
   /** Active grappling-hook pull toward a terrain point or the opponent. */
   grapple: { point: Vector3; target: Fighter | null; t: number; stuck: number; forced: boolean; lastD: number } | null = null;
-  /** Double hook in flight: anchors collected so far, then the launch (kept a few frames for the visuals). */
-  sling: { anchors: Vector3[]; t: number; launched: number } | null = null;
+  /** Tether throw: the opponent caught on the cord and where they were caught. */
+  tether: { target: Fighter; from: Vector3 } | null = null;
   /** The umbrella has been thrown and isn't back yet (no shield, no basic). */
   umbrellaOut = false;
   /** Frames left before a broken umbrella can be opened again. */
@@ -184,11 +183,6 @@ export class Fighter {
     if (!forced) this.airMoveUsed = false;
   }
 
-  /** A double-hook anchor landed (terrain, the opponent, or end of the line). */
-  addAnchor(p: Vector3) {
-    if (this.sling && this.sling.launched < 0) this.sling.anchors.push(p.clone());
-  }
-
   /** Guard raised within the last few frames (and not mashed): a just guard. */
   isJustGuard() {
     return this.guarding && this.justEligible && this.guardT <= JUST_GUARD_FRAMES;
@@ -217,7 +211,7 @@ export class Fighter {
     this.dead = false;
     this.airMoveUsed = false;
     this.grapple = null;
-    this.sling = null;
+    this.tether = null;
     this.umbrellaOut = false;
     this.gliding = false;
     this.yawOverride = null;
@@ -364,7 +358,6 @@ export class Fighter {
     }
 
     this.updateGrapple();
-    this.updateSling();
     this.updateGlide();
     this.integrate();
   }
@@ -401,46 +394,6 @@ export class Fighter {
       this.grounded = false;
       this.pos.y = Math.max(this.pos.y, 0.02);
     }
-  }
-
-  /**
-   * Double hook: once both anchors are set (or one, after a short wait) the cords
-   * snap taut and fling the fighter through the midpoint between them.
-   */
-  private updateSling() {
-    const s = this.sling;
-    if (!s) return;
-    s.t++;
-    if (s.launched >= 0) {
-      if (s.t - s.launched > 9) this.sling = null;
-      return;
-    }
-    const ok = this.state === 'free' || this.state === 'action' || this.state === 'dash';
-    if (!ok || s.t > 45) {
-      this.sling = null;
-      return;
-    }
-    if (s.anchors.length < 2 && !(s.anchors.length > 0 && s.t > 28)) return;
-    const mid = new Vector3();
-    for (const a of s.anchors) mid.add(a);
-    mid.divideScalar(s.anchors.length);
-    const to = mid.sub(this.pos.clone().setY(this.pos.y + 0.9));
-    const h = Math.hypot(to.x, to.z);
-    const f = this.forward();
-    const dx = h > 0.5 ? to.x / h : f.x;
-    const dz = h > 0.5 ? to.z / h : f.z;
-    // Arc that lands a little past the midpoint (the slingshot overshoots).
-    const vy = clamp(to.y * 1.5 + 8, 7, 19);
-    const air = (2 * vy) / GRAVITY;
-    const speed = clamp((h * 1.25) / air, 14, 30);
-    this.vel.set(dx * speed, vy, dz * speed);
-    this.grounded = false;
-    this.pos.y = Math.max(this.pos.y, 0.02);
-    this.airMoveUsed = false;
-    this.grapple = null;
-    s.launched = s.t;
-    this.slingCounter++;
-    if (this.def.actions.slingRush) this.startAction('slingRush');
   }
 
   /** Umbrella: holding jump while falling floats down slowly. */

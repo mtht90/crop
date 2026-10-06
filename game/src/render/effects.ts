@@ -116,6 +116,8 @@ interface ProjectileVis {
   wave?: boolean;
   /** Thrown umbrella: the inner group spins about its shaft. */
   spinner?: THREE.Object3D;
+  /** Glowing tether cup: big pulsing halo. */
+  shine?: boolean;
 }
 
 /** Ameri's thrown umbrella: canopy leading, shaft along the flight path. */
@@ -427,13 +429,14 @@ export class Effects {
         const trail = new Trail(c2, (arrow ? 0.06 : 0.12) * p.size, arrow ? 0.12 : 0.09, 10);
         trail.emitting = true;
         this.group.add(glow, core, trail.mesh);
-        v = { core, glow, trail, spin: rand(-12, 12), arrow, wave, spinner };
+        v = { core, glow, trail, spin: rand(-12, 12), arrow, wave, spinner, shine: p.hook === 'tether' };
+        if (v.shine) glow.material.color.setHex(c2);
         this.projectiles.set(p.id, v);
       }
       const pos = new THREE.Vector3().lerpVectors(p.prev, p.pos, alpha);
       v.core.position.copy(pos);
       v.glow.position.copy(pos);
-      v.glow.scale.setScalar((v.arrow ? 0.5 : v.wave ? 2.2 : 1.0) * p.size);
+      v.glow.scale.setScalar((v.shine ? 1.6 + Math.sin(performance.now() / 40) * 0.3 : v.arrow ? 0.5 : v.wave ? 2.2 : 1.0) * p.size);
       if (v.wave) {
         // Shockwave running along the floor: a flickering burst kicking up dust.
         v.core.scale.setScalar(1.3 + Math.random() * 0.4);

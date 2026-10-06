@@ -75,8 +75,8 @@ const ATTACKS: Record<string, AttackSpec> = {
   walkDog: { clip: 'Sword_Dash' },
   // Grappler
   kneeStrike: { clip: 'NinjaJump_Idle_Loop', hold: true },
-  slingShot: { clip: 'Spell_Simple_Shoot', upper: true },
-  slingRush: { clip: 'NinjaJump_Idle_Loop', hold: true },
+  tetherShot: { clip: 'Pistol_Shoot', upper: true, contact: 0.04, end: 0.6 },
+  flingThrow: { clip: 'OverhandThrow' },
   hookShot: { clip: 'Pistol_Shoot', upper: true, contact: 0.04, end: 0.6 },
   reelIn: { clip: 'Pistol_Shoot', upper: true, contact: 0.04, end: 0.6 },
   // Umbrella
@@ -566,7 +566,7 @@ export class ModelAnimator {
       this.rot('pelvis', AX, -0.3);
       this.rot('spine_03', AX, -0.35);
     }
-    if (anim === 'kneeStrike' || anim === 'slingRush') {
+    if (anim === 'kneeStrike') {
       // Flying knee: right knee driven up and forward, left leg trailing.
       this.rot('thigh_r', AX, -1.7);
       this.rot('calf_r', AX, 2.0);
