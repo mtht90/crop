@@ -48,9 +48,11 @@ export interface Spawn extends HitProps {
   size?: number;
   /** Downward acceleration (m/s^2) for arcing projectiles. */
   gravity?: number;
-  visual?: 'star' | 'arrow' | 'hook' | 'wave' | 'umbrella';
+  visual?: 'star' | 'arrow' | 'hook' | 'wave' | 'umbrella' | 'shell';
+  /** Blows up where it stops; the splash hits the opponent unless the shell itself already did. */
+  blast?: Blast;
   /** Rain down from above the opponent, or run along the floor from the feet (shockwaves). */
-  from?: 'hand' | 'sky' | 'ground';
+  from?: 'hand' | 'sky' | 'ground' | 'down';
   /**
    * Grappling hook: 'self' pulls the shooter to whatever it latches onto
    * (terrain or the opponent); 'yank' reels the opponent in instead;
@@ -88,6 +90,19 @@ export interface Charge {
   speed?: number;
   size?: number;
   guard?: number;
+  /** Gravity multiplier at full charge (heavier shells drop sooner). */
+  gravity?: number;
+}
+
+/** Explosion when a projectile stops (terrain, the opponent, or end of life). */
+export interface Blast {
+  radius: number;
+  damage: number;
+  knockback: number;
+  knockUp: number;
+  hitstun: number;
+  hitstop?: number;
+  guardDamage?: number;
 }
 
 export type ActionKind = 'attack' | 'skill' | 'ult';
@@ -166,7 +181,7 @@ export interface CharacterDef {
   id: string;
   name: string;
   title: string;
-  weapon: 'fists' | 'guns' | 'bow' | 'hammer' | 'katana' | 'yoyo' | 'grapple' | 'umbrella';
+  weapon: 'fists' | 'guns' | 'bow' | 'hammer' | 'katana' | 'yoyo' | 'grapple' | 'umbrella' | 'cannon';
   /** CPU play style. */
   archetype: 'melee' | 'ranged';
   /** Theme colors for trails, sparks and auras. */
@@ -179,6 +194,8 @@ export interface CharacterDef {
   dashAttack?: string;
   /** Push-back (m/s) per shot that hits the floor or a floating rock nearby (not the opponent). */
   recoil?: number;
+  /** Knockback taken is divided by this (heavyweights > 1). */
+  weight?: number;
   /**
    * Umbrella: reflect windows only stop projectiles (melee goes through) and wear
    * down the canopy's HP; at zero it stays shut for `breakFrames` (no stun),

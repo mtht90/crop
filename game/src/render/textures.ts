@@ -359,4 +359,89 @@ export const tex = {
       t.anisotropy = 8;
       return t;
     }),
+  /** Ship deck: planks, a rope ring, and a compass rose in the middle. */
+  floorDeck: () =>
+    once('floorDeck', () => {
+      const t = canvasTex(2048, (g, s) => {
+        const c = s / 2;
+        const disc = (r: number, fill: string) => {
+          g.fillStyle = fill;
+          g.beginPath();
+          g.arc(c, c, r * c, 0, Math.PI * 2);
+          g.fill();
+        };
+        disc(1, '#5a3a22');
+        g.save();
+        g.beginPath();
+        g.arc(c, c, 0.95 * c, 0, Math.PI * 2);
+        g.clip();
+        const plank = s / 26;
+        for (let i = 0; i < 26; i++) {
+          g.fillStyle = ['#b07a4a', '#a8723f', '#b98552'][i % 3];
+          g.fillRect(0, i * plank, s, plank);
+          g.fillStyle = 'rgba(50,28,14,0.55)';
+          g.fillRect(0, i * plank, s, 5);
+          for (let x = (i % 4) * 170; x < s; x += 520) {
+            g.fillRect(x, i * plank, 5, plank);
+            // Nail heads at the joints.
+            g.fillStyle = 'rgba(40,30,25,0.7)';
+            g.beginPath();
+            g.arc(x + 14, i * plank + plank * 0.3, 5, 0, Math.PI * 2);
+            g.arc(x + 14, i * plank + plank * 0.7, 5, 0, Math.PI * 2);
+            g.fill();
+            g.fillStyle = 'rgba(50,28,14,0.55)';
+          }
+          g.strokeStyle = 'rgba(80,45,20,0.18)';
+          g.lineWidth = 2;
+          for (let k = 0; k < 3; k++) {
+            const y = i * plank + plank * (0.25 + k * 0.25);
+            g.beginPath();
+            g.moveTo(0, y);
+            g.bezierCurveTo(s * 0.3, y + 5, s * 0.6, y - 5, s, y + 2);
+            g.stroke();
+          }
+        }
+        g.restore();
+        // Rope ring.
+        for (const [r, w, col] of [[0.93, 26, '#d9b77a'], [0.93, 26, 'rgba(120,80,40,0.6)']] as const) {
+          g.strokeStyle = col;
+          g.lineWidth = w;
+          if (col.startsWith('rgba')) g.setLineDash([18, 22]);
+          g.beginPath();
+          g.arc(c, c, r * c, 0, Math.PI * 2);
+          g.stroke();
+          g.setLineDash([]);
+        }
+        // Compass rose.
+        disc(0.42, 'rgba(240,225,190,0.85)');
+        g.strokeStyle = '#5a3a22';
+        g.lineWidth = 8;
+        g.beginPath();
+        g.arc(c, c, 0.42 * c, 0, Math.PI * 2);
+        g.stroke();
+        g.beginPath();
+        g.arc(c, c, 0.36 * c, 0, Math.PI * 2);
+        g.stroke();
+        for (let i = 0; i < 8; i++) {
+          const a = (i / 8) * Math.PI * 2 - Math.PI / 2;
+          const len = (i % 2 ? 0.24 : 0.38) * c;
+          const w = (i % 2 ? 0.05 : 0.07) * c;
+          for (const side of [-1, 1]) {
+            g.fillStyle = side < 0 ? (i === 0 ? '#c0392b' : '#2d3e50') : '#f2e6c9';
+            g.beginPath();
+            g.moveTo(c, c);
+            g.lineTo(c + Math.cos(a) * len, c + Math.sin(a) * len);
+            g.lineTo(c + Math.cos(a + side * Math.PI / 2) * w, c + Math.sin(a + side * Math.PI / 2) * w);
+            g.closePath();
+            g.fill();
+            g.strokeStyle = '#2d3e50';
+            g.lineWidth = 3;
+            g.stroke();
+          }
+        }
+        disc(0.035, '#d9a441');
+      });
+      t.anisotropy = 8;
+      return t;
+    }),
 };

@@ -3,7 +3,7 @@ import type { Fighter } from '../combat/fighter';
 import { phaseOf } from '../combat/phase';
 import { clamp, damp, ease, lerp, rand, Spring } from '../core/math';
 import { Trail } from './effects';
-import { buildBlaster, buildBowMesh, buildBoxingGlove, buildHookGun, buildKatana, buildToyHammer, buildUmbrella, buildYoyo, KATANA_TIP_Y } from './weapons';
+import { buildArmCannon, buildBlaster, buildBowMesh, buildBoxingGlove, buildHookGun, buildKatana, buildToyHammer, buildUmbrella, buildYoyo, KATANA_TIP_Y } from './weapons';
 import { yoyoPose, yoyoScale } from './yoyo';
 import { buildFpHand } from './fpHand';
 import { tex } from './textures';
@@ -33,8 +33,9 @@ const BASE: Record<string, { L: [number, number, number]; R: [number, number, nu
   yoyo: { L: [-0.3, -0.32, -0.6], R: [0.28, -0.3, -0.6] },
   grapple: { L: [-0.3, -0.3, -0.62], R: [0.27, -0.29, -0.66] },
   umbrella: { L: [-0.3, -0.42, -0.5], R: [0.3, -0.4, -0.6] },
+  cannon: { L: [-0.32, -0.32, -0.6], R: [0.3, -0.36, -0.58] },
 };
-const YAW_BIAS: Record<string, number> = { fists: 0.12, guns: 0.07, bow: 0.05, hammer: 0, katana: 0.04, yoyo: 0.08, grapple: 0.09, umbrella: 0.04 };
+const YAW_BIAS: Record<string, number> = { fists: 0.12, guns: 0.07, bow: 0.05, hammer: 0, katana: 0.04, yoyo: 0.08, grapple: 0.09, umbrella: 0.04, cannon: 0.08 };
 
 /**
  * First-person arms/weapons rendered in their own scene on top of the world.
@@ -150,6 +151,15 @@ export class ViewModel {
         } else {
           a.tip.position.set(0, 0, -0.08);
         }
+      } else if (w === 'cannon') {
+        addHand(1, -0.01);
+        if (side === 'R') {
+          // Arm cannon over the forearm, muzzle forward (-Z).
+          const c = buildArmCannon(0.5);
+          c.position.set(0, 0.05, 0.04);
+          a.root.add(c);
+          a.tip.position.set(0, 0.06, -0.3);
+        } else a.tip.position.set(0, 0, -0.18);
       } else if (w === 'grapple') {
         addHand(1, -0.01);
         a.tip.position.set(0, 0, -0.18);
@@ -609,6 +619,29 @@ export class ViewModel {
         }
         break;
       // --- Grappler -----------------------------------------------------
+      case 'cannonShot':
+      case 'fullBurst':
+        if (side === 'R') {
+          // Brace and kick back with each shot.
+          const k = ph.stage === 'strike' ? 1 - ph.t : ph.stage === 'windup' ? ph.t * 0.3 : 0;
+          o.p.z += 0.12 * k;
+          o.r.x += 0.25 * k;
+          o.p.x -= 0.06;
+        }
+        break;
+      case 'groundSlam':
+        if (side === 'R') swing([-1.0, 0, 0], [1.1, 0, 0], 0.1);
+        break;
+      case 'cannonJump':
+        if (side === 'R') {
+          o.r.x += 1.2;
+          o.p.y -= 0.12;
+        }
+        break;
+      case 'shoulderTackle':
+        o.p.x += side === 'L' ? 0.12 : 0.04;
+        o.p.y -= 0.06;
+        break;
       case 'hookShot':
       case 'tetherShot':
       case 'reelIn':

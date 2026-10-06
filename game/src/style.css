@@ -1063,7 +1063,7 @@ body:not(.touch) .touch-only {
 }
 .roster {
   display: grid;
-  grid-template-columns: repeat(9, 92px);
+  grid-template-columns: repeat(10, 88px);
   gap: 8px;
 }
 .tile {
@@ -1142,7 +1142,22 @@ body:not(.touch) .touch-only {
 @media (max-width: 900px), (max-height: 560px) {
   .slot {
     width: 220px;
-    height: 170px;
+    height: 150px;
+  }
+  .stage-row {
+    font-size: 12px;
+  }
+  .stage-row .btn {
+    font-size: 11px;
+    padding: 1px 8px;
+  }
+  .select-screen .btn.fight {
+    font-size: 20px;
+    padding: 4px 24px;
+  }
+  .select-screen .row .btn {
+    padding-top: 4px;
+    padding-bottom: 4px;
   }
   .slot-name {
     font-size: 22px;
@@ -1151,7 +1166,7 @@ body:not(.touch) .touch-only {
     font-size: 34px;
   }
   .roster {
-    grid-template-columns: repeat(9, 64px);
+    grid-template-columns: repeat(10, 62px);
     gap: 5px;
   }
   .tile {

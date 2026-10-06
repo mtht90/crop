@@ -732,6 +732,10 @@ export class Fighter {
     this.guarding = false;
     // Getting hit refreshes the air move so launched fighters can try to recover.
     this.airMoveUsed = false;
+    // Heavyweights are pushed around less.
+    const w = this.def.weight ?? 1;
+    kb /= w;
+    up /= w;
     const launch = kb >= 9 || up >= 6 || this.hp <= 0;
     this.vel.set(dir.x * kb, up, dir.z * kb);
     if (launch) {

@@ -11,18 +11,20 @@ export interface StageTheme {
   fog: number;
   hemi: [number, number, number];
   sun: [number, number];
-  floor: 'star' | 'sakura';
+  floor: 'star' | 'sakura' | 'deck';
   rim: [number, number];
   rockSide: number;
   grass: number;
   tree: number;
-  foliage: 'pine' | 'sakura';
-  tower: 'castle' | 'pagoda';
+  foliage: 'pine' | 'sakura' | 'palm';
+  tower: 'castle' | 'pagoda' | 'fort';
   waterfall: string;
   cloud: number;
   pads: [number, number];
   /** Banner poles (sky) or torii gates (sakura). */
-  gates: 'banners' | 'torii';
+  gates: 'banners' | 'torii' | 'pirate';
+  /** Ocean far below with ships sailing around (CC0 Pirate Kit). */
+  sea?: boolean;
   blimp: boolean;
   moon: boolean;
   petals: boolean;
@@ -75,6 +77,30 @@ export const STAGES: Record<string, StageTheme> = {
     moon: true,
     petals: true,
     crowd: [0xffb7c5, 0xffe2a8, 0xf2f2f2, 0xd99ad0, 0xff8f8f, 0xc7b2ff],
+  },
+  pirate: {
+    id: 'pirate',
+    name: '海賊の入り江',
+    sky: [[0, '#1477d6'], [0.4, '#3fb0f0'], [0.6, '#a8e6ff'], [1, '#e6fbff']],
+    fog: 0xbfeaff,
+    hemi: [0xe6f6ff, 0xc9a77a, 1.55],
+    sun: [0xfff2d6, 2.8],
+    floor: 'deck',
+    rim: [0x8a5a34, 0x3a5f8a],
+    rockSide: 0xc8925a,
+    grass: 0xf2d59a,
+    tree: 0x3f9f4a,
+    foliage: 'palm',
+    tower: 'fort',
+    waterfall: 'rgba(120,220,255,0.85)',
+    cloud: 0xffffff,
+    pads: [0x8a5a34, 0xc8a070],
+    gates: 'pirate',
+    sea: true,
+    blimp: false,
+    moon: false,
+    petals: false,
+    crowd: [0xff6b5a, 0xffd166, 0x5ac8fa, 0xf2f2f2, 0x7be0a0, 0xffa36c],
   },
 };
 

@@ -19,6 +19,8 @@ const MODEL_FILES = {
   blaster: 'Blaster.glb',
   /** Kenney Blaster Kit (CC0) "blaster-h", Zip's hook launcher. */
   hookGun: 'HookGun.glb',
+  /** Kenney Blaster Kit (CC0) "blaster-b", Don's arm cannon. */
+  armCannon: 'ArmCannon.glb',
   /** "Cute umbrella" by ege (OpenGameArt, CC0), Ameri's umbrella. */
   umbrella: 'Umbrella.glb',
   /** "Katana" by pfunked and the sheath from "Katana" by Clint Bellanger (OpenGameArt, CC0). */
@@ -29,6 +31,8 @@ const MODEL_FILES = {
   outfitFemaleRanger: 'Outfit_Female_Ranger.glb',
   outfitMalePeasant: 'Outfit_Male_Peasant.glb',
   outfitFemalePeasant: 'Outfit_Female_Peasant.glb',
+  /** Kenney Pirate Kit (CC0): Don's arm cannon and shells, pirate cove decor (one node per model). */
+  pirate: 'Pirate.glb',
 } as const;
 const ANIM_FILES = ['anims1.glb', 'anims2.glb'];
 

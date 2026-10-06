@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type { Projectile } from '../combat/world';
 import { rand } from '../core/math';
 import { fx, FX_FRAMES, hasFx, tex, type FxName } from './textures';
-import { buildHookHead, buildUmbrella } from './weapons';
+import { buildHookHead, buildShell, buildUmbrella } from './weapons';
 
 interface Particle {
   obj: THREE.Object3D;
@@ -415,7 +415,7 @@ export class Effects {
         const hookVis = p.visual === 'hook';
         const wave = p.visual === 'wave';
         // Arrows and hooks are oriented meshes; everything else is a spinning star sprite.
-        const arrow = p.visual === 'arrow' || hookVis || p.visual === 'umbrella';
+        const arrow = p.visual === 'arrow' || hookVis || p.visual === 'umbrella' || p.visual === 'shell';
         let spinner: THREE.Object3D | undefined;
         let thrown: THREE.Object3D | undefined;
         if (p.visual === 'umbrella') {
@@ -423,6 +423,7 @@ export class Effects {
           thrown = t.outer;
           spinner = t.spinner;
         }
+        if (p.visual === 'shell') thrown = buildShell(0.6 * p.size);
         const core: THREE.Object3D = thrown ? thrown : hookVis ? buildHookHead(2.4 * p.size) : arrow ? buildArrow(c1, p.size) : new THREE.Sprite(spriteMat(wave ? fx('burst') : tex.star(), wave ? c2 : 0xffffff));
         const glow = new THREE.Sprite(spriteMat(fx('soft'), c1));
         core.renderOrder = glow.renderOrder = 6;
@@ -466,6 +467,29 @@ export class Effects {
     this.groundRing(ground.clone().setY(0.1), 0xfff6e6, 0.6, radius * 1.3, fx('smokeRing'), false);
     if (radius > 2.5) this.debris(ground, Math.round(radius * 1.5));
     this.dust(ground, Math.round(4 + radius * 2), 0.6 + radius * 0.25);
+  }
+
+  /** Shell explosion: fireball, flash, smoke ring on the floor, debris. */
+  explosion(pos: THREE.Vector3, radius: number, color: number, color2: number) {
+    this.flipbook('impactBurst', 0xff7a2a, pos, radius * 2.0, 0.45, Math.random() * 6);
+    this.flipbook('impactBurst', 0xffd060, pos, radius * 1.2, 0.32, Math.random() * 6);
+    this.flipbook('impactDebris', 0x5a4a44, pos, radius * 1.8, 0.5, Math.random() * 6);
+    {
+      const { s, mat } = this.sprite(fx('flash'), 0xffd08a, pos);
+      this.add(s, mat, { life: 0.08, scale0: radius * 0.6, scale1: radius * 1.4, scaleEase: 'pop' });
+    }
+    {
+      const { s, mat } = this.sprite(fx('soft'), color, pos);
+      mat.opacity = 0.5;
+      this.add(s, mat, { life: 0.3, scale0: radius * 1.2, scale1: radius * 2.2 });
+    }
+    if (pos.y < 1.5) {
+      const ground = new THREE.Vector3(pos.x, 0.06, pos.z);
+      this.groundRing(ground, color2, 0.4, radius * 1.3);
+      this.groundRing(ground.clone().setY(0.08), 0x6b5a50, 0.7, radius * 1.6, fx('smokeRing'), false);
+      this.debris(ground, Math.round(3 + radius * 2));
+    }
+    this.dust(pos.clone(), Math.round(4 + radius * 2), 0.6 + radius * 0.3);
   }
 
   /** Suction cup sticking: a quick ring and a flash at the contact point. */

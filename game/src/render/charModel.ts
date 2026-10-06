@@ -3,7 +3,7 @@ import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import type { CharacterDef, OutfitPart } from '../combat/types';
 import { assets, type ModelKey } from './assets';
 import { leadHand } from './clipInfo';
-import { buildBlaster, buildBowMesh, buildBoxingGlove, buildHookGun, buildKatana, buildSaya, buildToyHammer, buildUmbrella, buildYoyo, KATANA_TIP_Y } from './weapons';
+import { buildArmCannon, buildBlaster, buildBowMesh, buildBoxingGlove, buildHookGun, buildKatana, buildSaya, buildToyHammer, buildUmbrella, buildYoyo, KATANA_TIP_Y } from './weapons';
 import { eyeTexture, faceTexture, skinTint } from './face';
 import { keepTriangles, rebindToBones } from './skinUtil';
 import { addOutline, part, toon } from './toon';
@@ -493,6 +493,14 @@ export class ModelRig {
           this.at(`hand_${side}`, holder, grip);
           tip.position.set(0, u.tipY, 0);
           this.weaponRoot.add(tip);
+        } else if (this.def.weapon === 'cannon' && side === 'r') {
+          // Arm cannon strapped over the right forearm, muzzle past the knuckles.
+          const cannon = buildArmCannon(0.9);
+          holder.add(cannon);
+          cannon.position.set(0, 0.05, -0.08);
+          this.at(`hand_${side}`, holder, grip);
+          tip.position.set(0, 0.05, 0.42);
+          holder.add(tip);
         } else if (this.def.weapon === 'grapple' && side === 'r') {
           const gun = buildHookGun(0.85);
           holder.add(gun.group);

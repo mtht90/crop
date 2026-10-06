@@ -90,14 +90,17 @@ export class CpuController {
       this.noise.pitch = (Math.random() - 0.5) * 2 * this.p.aimError * 0.6;
     }
     // Lead moving targets a little for projectiles.
-    const lead = self.def.archetype === 'ranged' ? dist / 55 : 0;
+    const shot = self.def.actions[self.def.basic].spawns?.[0];
+    const lead = self.def.archetype === 'ranged' ? dist / (shot?.speed ?? 55) : 0;
     const aimAt = foe.pos.clone().addScaledVector(foe.vel, lead * (1 - this.p.aimError * 3));
     const ax = aimAt.x - self.pos.x;
     const az = aimAt.z - self.pos.z;
     const desiredYaw = Math.atan2(-ax, -az) + this.noise.yaw;
     const dy = wrapAngle(desiredYaw - this.yaw);
     this.yaw += clamp(dy, -this.p.turnRate, this.p.turnRate);
-    const chestY = aimAt.y + 1.1 - (self.pos.y + EYE_HEIGHT);
+    let chestY = aimAt.y + 1.1 - (self.pos.y + EYE_HEIGHT);
+    // Arcing shots are tuned to meet the crosshair at 20 m: correct for other distances.
+    if (shot?.gravity) chestY -= (shot.gravity * dist * (20 - dist)) / (2 * shot.speed * shot.speed);
     const desiredPitch = Math.atan2(chestY, Math.max(0.5, Math.hypot(ax, az))) + this.noise.pitch;
     this.pitch += clamp(desiredPitch - this.pitch, -this.p.turnRate, this.p.turnRate);
     i.yaw = this.yaw;
@@ -284,10 +287,15 @@ export class CpuController {
         i.attack = true;
         if (this.chargeHold === 0) {
           i.attack = false;
-          this.attackCooldown = Math.floor(10 + 40 * (1 - this.p.aggression));
+          const heavy = !!self.def.actions[self.def.basic].charge?.gravity;
+          this.attackCooldown = Math.floor((heavy ? 4 : 10) + (heavy ? 14 : 40) * (1 - this.p.aggression));
         }
       } else if (this.attackCooldown === 0 && aimed && dist < 26) {
-        this.chargeHold = 8 + Math.floor(Math.random() * (20 + 40 * this.p.aggression));
+        const ch = self.def.actions[self.def.basic].charge!;
+        // Heavy shells fly shorter the longer they are loaded: load to fit the distance.
+        // Point blank: snap shots. Mid range: a full heavy shell. Far: lighter loads that carry.
+        const load = dist < 7 ? 0 : dist < 13 ? 1 : Math.min(1, Math.max(0, (24 - dist) / 11));
+        this.chargeHold = ch.gravity ? 2 + Math.round(load * ch.max * (0.75 + Math.random() * 0.25)) : 8 + Math.floor(Math.random() * (20 + 40 * this.p.aggression));
         i.attack = true;
         i.attackPressed = true;
       }

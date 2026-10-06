@@ -4,6 +4,7 @@ import { PADS, ROCKS } from '../combat/terrain';
 import { part, toon } from './toon';
 import { STAGES, type StageTheme } from './stages';
 import { tex } from './textures';
+import { pirateModel } from './weapons';
 
 /** Circular arena plus decorative background (no collision outside the floor). */
 export class Arena {
@@ -17,6 +18,8 @@ export class Arena {
   private rocks: THREE.Group[] = [];
   private blimp: THREE.Group | null = null;
   private petals: THREE.Points | null = null;
+  private ships: { obj: THREE.Object3D; r: number; a: number; speed: number; phase: number }[] = [];
+  private sea: THREE.Texture | null = null;
   private t = 0;
 
   constructor(readonly theme: StageTheme = STAGES.sky) {
@@ -32,7 +35,7 @@ export class Arena {
     g.add(sky);
 
     // Floor.
-    const floorMat = new THREE.MeshToonMaterial({ map: T.floor === 'sakura' ? tex.floorSakura() : tex.floor(), gradientMap: (toon(0xffffff) as THREE.MeshToonMaterial).gradientMap });
+    const floorMat = new THREE.MeshToonMaterial({ map: T.floor === 'sakura' ? tex.floorSakura() : T.floor === 'deck' ? tex.floorDeck() : tex.floor(), gradientMap: (toon(0xffffff) as THREE.MeshToonMaterial).gradientMap });
     const floor = new THREE.Mesh(new THREE.CircleGeometry(ARENA_RADIUS, 96), floorMat);
     floor.rotation.x = -Math.PI / 2;
     floor.receiveShadow = true;
@@ -76,6 +79,63 @@ export class Arena {
     if (T.blimp) this.blimp = this.buildBlimp();
     if (T.moon) this.buildMoon();
     if (T.petals) this.petals = this.buildPetals();
+    if (T.sea) this.buildSea();
+  }
+
+  /** Ocean far below with pirate ships sailing slow circles (Kenney Pirate Kit, CC0). */
+  private buildSea() {
+    const c = document.createElement('canvas');
+    c.width = c.height = 256;
+    const g = c.getContext('2d')!;
+    g.fillStyle = '#1f8fd0';
+    g.fillRect(0, 0, 256, 256);
+    g.strokeStyle = 'rgba(255,255,255,0.35)';
+    g.lineWidth = 3;
+    for (let i = 0; i < 40; i++) {
+      const x = Math.random() * 256;
+      const y = Math.random() * 256;
+      g.beginPath();
+      g.arc(x, y, 6 + Math.random() * 10, Math.PI * 1.1, Math.PI * 1.9);
+      g.stroke();
+    }
+    const t = new THREE.CanvasTexture(c);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.repeat.set(40, 40);
+    t.colorSpace = THREE.SRGBColorSpace;
+    this.sea = t;
+    const sea = new THREE.Mesh(new THREE.CircleGeometry(700, 64), new THREE.MeshBasicMaterial({ map: t }));
+    sea.rotation.x = -Math.PI / 2;
+    sea.position.y = -34;
+    this.group.add(sea);
+    const fleet: [string, number, number][] = [
+      ['ship-pirate-large', 90, 2.2],
+      ['ship-pirate-medium', 120, 2.4],
+      ['ship-large', 150, 2.6],
+      ['ship-pirate-medium', 75, 2.0],
+      ['ship-wreck', 110, 2.2],
+      ['boat-row-small', 60, 2.4],
+      ['ship-pirate-large', 170, 2.8],
+    ];
+    fleet.forEach(([name, r, s], i) => {
+      const m = pirateModel(name, 0.05);
+      if (!m) return;
+      m.scale.setScalar(s);
+      const holder = new THREE.Group();
+      holder.add(m);
+      this.group.add(holder);
+      this.ships.push({ obj: holder, r, a: (i / fleet.length) * Math.PI * 2, speed: (i % 2 ? 1 : -1) * (0.015 + (i % 3) * 0.006), phase: i });
+    });
+    // Sandbars and rocks poking out of the water.
+    for (let i = 0; i < 10; i++) {
+      const m = pirateModel(['rocks-sand-a', 'rocks-sand-b', 'rocks-b'][i % 3], 0.05);
+      if (!m) continue;
+      const a = (i / 10) * Math.PI * 2 + 0.3;
+      const r = 80 + (i % 4) * 25;
+      m.scale.setScalar(4 + (i % 3));
+      m.position.set(Math.cos(a) * r, -34, Math.sin(a) * r);
+      m.rotation.y = a * 3;
+      this.group.add(m);
+    }
   }
 
   private buildMoon() {
@@ -153,12 +213,20 @@ export class Arena {
       for (let i = 0; i < trees; i++) {
         const a = rng() * Math.PI * 2;
         const d = rng() * r * 0.7;
-        const tree = this.theme.foliage === 'sakura' ? sakuraTree(r * 0.5, rng) : part(new THREE.ConeGeometry(r * 0.13, r * 0.6, 7), this.theme.tree, 0.06);
-        tree.position.set(Math.cos(a) * d, this.theme.foliage === 'sakura' ? r * 0.12 : r * 0.4, Math.sin(a) * d);
+        const palm = this.theme.foliage === 'palm' ? pirateModel(rng() < 0.5 ? 'palm-detailed-bend' : 'palm-detailed-straight', 0.03) : null;
+        if (palm) palm.scale.setScalar(r * 0.13);
+        const tree = palm ?? (this.theme.foliage === 'sakura' ? sakuraTree(r * 0.5, rng) : part(new THREE.ConeGeometry(r * 0.13, r * 0.6, 7), this.theme.tree, 0.06));
+        if (palm) palm.rotation.y = rng() * Math.PI * 2;
+        tree.position.set(Math.cos(a) * d, palm || this.theme.foliage === 'sakura' ? r * 0.12 : r * 0.4, Math.sin(a) * d);
         island.add(tree);
       }
       const towerRoll = rng() < 0.6;
-      if (towerRoll && this.theme.tower === 'pagoda') {
+      const fort = towerRoll && this.theme.tower === 'fort' ? pirateModel(rng() < 0.5 ? 'tower-complete-large' : 'tower-watch', 0.04) : null;
+      if (fort) {
+        fort.scale.setScalar(r * 0.07);
+        fort.position.set(r * 0.25, r * 0.12, -r * 0.2);
+        island.add(fort);
+      } else if (towerRoll && this.theme.tower === 'pagoda') {
         const pg = pagoda(r * 0.5);
         pg.position.set(r * 0.2, r * 0.12, -r * 0.2);
         island.add(pg);
@@ -189,6 +257,10 @@ export class Arena {
       this.buildTorii();
       return;
     }
+    if (this.theme.gates === 'pirate') {
+      this.buildPirateRing();
+      return;
+    }
     // Banners on poles around the arena.
     const colors = ['#3e6fd8', '#e8463c'];
     for (let i = 0; i < 8; i++) {
@@ -206,6 +278,31 @@ export class Arena {
       pole.rotateY(Math.PI / 2);
       this.flags.push(banner);
       this.group.add(pole);
+    }
+  }
+
+  /** Pirate flags on masts, cannons aimed at the ring, and piles of barrels, crates and chests. */
+  private buildPirateRing() {
+    const place = (name: string, a: number, R: number, y: number, s: number, face = true) => {
+      const m = pirateModel(name, 0.03);
+      if (!m) return null;
+      m.scale.setScalar(s);
+      m.position.set(Math.cos(a) * R, y, Math.sin(a) * R);
+      if (face) m.lookAt(0, y, 0);
+      this.group.add(m);
+      return m;
+    };
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+      place('mast-ropes', a, ARENA_RADIUS + 10, -1, 1.4);
+      place('flag-pirate-high', a + 0.08, ARENA_RADIUS + 10, -1, 1.6);
+      place('cannon', a + Math.PI / 4, ARENA_RADIUS + 6, -0.6, 1.6);
+    }
+    const props = ['barrel', 'crate', 'chest', 'barrel'];
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2 + Math.PI / 8 + 0.2;
+      place(props[i % 4], a, ARENA_RADIUS + 7.5, -0.8, 1.2, false);
+      place('barrel', a + 0.06, ARENA_RADIUS + 8.6, -0.8, 1.0, false);
     }
   }
 
@@ -341,6 +438,13 @@ export class Arena {
       const ba = this.t * 0.03;
       this.blimp.position.set(Math.cos(ba) * 90, 42 + Math.sin(this.t * 0.5) * 1.5, Math.sin(ba) * 90);
       this.blimp.rotation.y = -ba;
+    }
+    if (this.sea) this.sea.offset.x += dt * 0.004;
+    for (const s of this.ships) {
+      s.a += s.speed * dt;
+      s.obj.position.set(Math.cos(s.a) * s.r, -34 + Math.sin(this.t * 0.8 + s.phase) * 0.3, Math.sin(s.a) * s.r);
+      // Bow along the direction of travel, rocking a little.
+      s.obj.rotation.set(Math.sin(this.t * 0.9 + s.phase) * 0.04, -s.a + (s.speed > 0 ? Math.PI : 0), Math.sin(this.t * 0.7 + s.phase) * 0.05);
     }
     if (this.petals) {
       const a = this.petals.geometry.attributes.position as THREE.BufferAttribute;

@@ -261,6 +261,16 @@ export class GameView {
           }
           break;
         }
+        case 'explosion': {
+          const el = e.attacker.def.element;
+          this.effects.explosion(e.pos.clone(), e.radius, el.color, el.color2);
+          audio.play('heavy', 0.5 + Math.min(0.5, e.radius * 0.15));
+          if (pov) {
+            const d = pov.pos.distanceTo(e.pos);
+            if (d < 10) this.addTrauma((0.35 + e.radius * 0.05) * (1 - d / 10));
+          }
+          break;
+        }
         case 'projectileBounce':
           // The thrown umbrella bounces off and heads home.
           this.effects.stick(e.pos.clone(), e.projectile.owner.def.element.color2);
@@ -567,7 +577,7 @@ export class GameView {
     const act = f.action;
     this.updateRope(b);
     const w = f.def.weapon;
-    const strike = !!act && f.state === 'action' && phaseOf(act.def, act.frame).stage === 'strike' && (w === 'fists' || w === 'hammer' || w === 'katana' || w === 'umbrella' || (w === 'grapple' && !act.def.spawns));
+    const strike = !!act && f.state === 'action' && phaseOf(act.def, act.frame).stage === 'strike' && (w === 'fists' || w === 'hammer' || w === 'katana' || w === 'umbrella' || ((w === 'grapple' || w === 'cannon') && !act.def.spawns));
     const hitHand = act?.def.hits?.find((h) => act.frame >= h.start - 1 && act.frame < h.end + 1)?.hand ?? 'R';
     // Animated swing streak once per melee action, at the start of its strike.
     if (strike && act && b.swingSerial !== f.actionSerial && !act.def.hits?.every((h) => h.area)) {

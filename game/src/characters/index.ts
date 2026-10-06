@@ -2,13 +2,14 @@ import type { CharacterDef } from '../combat/types';
 import { ameri } from './ameri';
 import { arrowChar } from './arrow';
 import { blaze } from './blaze';
+import { don } from './don';
 import { kagetsu } from './kagetsu';
 import { lala } from './lala';
 import { piko } from './piko';
 import { star } from './star';
 import { zip } from './zip';
 
-export const characters: Record<string, CharacterDef> = { blaze, star, arrow: arrowChar, piko, kagetsu, lala, zip, ameri };
+export const characters: Record<string, CharacterDef> = { blaze, star, arrow: arrowChar, piko, kagetsu, lala, zip, ameri, don };
 
 /** Roster order on the select screen. */
 export const roster: { id: string; label: string; weapon: string }[] = [
@@ -20,4 +21,5 @@ export const roster: { id: string; label: string; weapon: string }[] = [
   { id: 'lala', label: 'ララ', weapon: 'ヨーヨー' },
   { id: 'zip', label: 'ジップ', weapon: 'グラップラー' },
   { id: 'ameri', label: 'アメリ', weapon: '傘' },
+  { id: 'don', label: 'ドン', weapon: '腕キャノン' },
 ];

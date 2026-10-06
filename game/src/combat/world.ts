@@ -9,7 +9,9 @@ function charged<T extends HitProps>(props: T, def: ActionDef, level: number): T
   const c = def.charge;
   if (!c || level <= 0) return props;
   const k = (m = 1) => 1 + (m - 1) * level;
-  return { ...props, damage: props.damage * k(c.damage), knockback: props.knockback * k(c.knockback), knockUp: props.knockUp * k(c.knockback), hitstop: Math.round(props.hitstop * k(1.6)), heavy: props.heavy || level > 0.8, guardDamage: props.guardDamage === undefined ? undefined : props.guardDamage * k(c.guard) };
+  const blast = (props as Partial<Spawn>).blast;
+  const extra = blast ? { blast: { ...blast, radius: blast.radius * k(c.size), damage: blast.damage * k(c.damage), knockback: blast.knockback * k(c.knockback) } } : {};
+  return { ...props, ...extra, damage: props.damage * k(c.damage), knockback: props.knockback * k(c.knockback), knockUp: props.knockUp * k(c.knockback), hitstop: Math.round(props.hitstop * k(1.6)), heavy: props.heavy || level > 0.8, guardDamage: props.guardDamage === undefined ? undefined : props.guardDamage * k(c.guard) };
 }
 
 export interface Projectile {
@@ -23,7 +25,9 @@ export interface Projectile {
   props: Spawn;
   id: number;
   gravity: number;
-  visual: 'star' | 'arrow' | 'hook' | 'wave' | 'umbrella';
+  visual: NonNullable<Spawn['visual']>;
+  /** Already hit the opponent directly (its blast then spares them). */
+  struck?: boolean;
   /** Flying back to the owner after a returning shot (no hits, no terrain). */
   returning?: boolean;
   /** Runs along the floor and dies off the arena edge. */
@@ -52,6 +56,7 @@ export type CombatEvent =
   | { type: 'parry'; attacker: Fighter; target: Fighter; pos: Vector3; reflected: boolean }
   | { type: 'grapple'; fighter: Fighter; pos: Vector3; onFighter: boolean }
   | { type: 'projectileBounce'; projectile: Projectile; pos: Vector3 }
+  | { type: 'explosion'; attacker: Fighter; pos: Vector3; radius: number }
   | { type: 'canopyBreak'; fighter: Fighter; attacker: Fighter; pos: Vector3 }
   | { type: 'ringout'; fighter: Fighter };
 
@@ -91,6 +96,24 @@ export class CombatWorld {
     for (const f of this.fighters) f.umbrellaOut = this.projectiles.some((p) => p.owner === f && p.visual === 'umbrella');
     this.emitStateEvents(a);
     this.emitStateEvents(b);
+  }
+
+  /** Shell blast: splash damage around where it stopped (never the shooter). */
+  private explode(p: Projectile, tgt: Fighter) {
+    const b = p.props.blast!;
+    const pos = p.pos.clone();
+    this.events.push({ type: 'explosion', attacker: p.owner, pos, radius: b.radius });
+    if (p.struck || !tgt.isAlive() || tgt.isInvulnerable()) return;
+    const chest = tgt.pos.clone().setY(tgt.pos.y + 0.9);
+    const d = chest.distanceTo(pos);
+    if (d > b.radius + 0.4) return;
+    const dir = tgt.pos.clone().sub(pos).setY(0);
+    if (dir.lengthSq() < 1e-4) dir.copy(p.vel).setY(0);
+    dir.normalize();
+    // Full strength in the middle, a little weaker at the rim.
+    const k = 1 - 0.4 * Math.min(1, d / (b.radius + 0.4));
+    const props = { damage: b.damage * k, knockback: b.knockback * k, knockUp: b.knockUp * k, hitstun: b.hitstun, hitstop: b.hitstop ?? 6, guardDamage: b.guardDamage ?? b.damage * 0.5, heavy: b.radius > 2.6 };
+    this.applyHit(p.owner, tgt, props, dir, chest, true);
   }
 
   /**
@@ -211,12 +234,13 @@ export class CombatWorld {
         if (att.ammo <= 0) return;
         att.ammo--;
       }
-      this.spawnProjectile(att, charged(s, def, a.chargeLevel), tgt, def.charge ? 1 + ((def.charge.speed ?? 1) - 1) * a.chargeLevel : 1, def.charge ? 1 + ((def.charge.size ?? 1) - 1) * a.chargeLevel : 1);
+      const ck = (m?: number) => (def.charge ? 1 + ((m ?? 1) - 1) * a.chargeLevel : 1);
+      this.spawnProjectile(att, charged(s, def, a.chargeLevel), tgt, ck(def.charge?.speed), ck(def.charge?.size), ck(def.charge?.gravity));
     });
   }
 
-  private spawnProjectile(att: Fighter, s: Spawn, tgt: Fighter, speedK = 1, sizeK = 1) {
-    const base = { owner: att, radius: s.radius * sizeK, life: s.life, size: (s.size ?? 1) * sizeK, props: s, gravity: s.gravity ?? 0, visual: s.visual ?? 'star', hook: s.hook, onHit: s.onHit } as const;
+  private spawnProjectile(att: Fighter, s: Spawn, tgt: Fighter, speedK = 1, sizeK = 1, gravityK = 1) {
+    const base = { owner: att, radius: s.radius * sizeK, life: s.life, size: (s.size ?? 1) * sizeK, props: s, gravity: (s.gravity ?? 0) * gravityK, visual: s.visual ?? 'star', hook: s.hook, onHit: s.onHit } as const;
     if (s.from === 'ground') {
       // Shockwaves racing along the floor from the feet, fanned around the facing.
       const f = att.forward();
@@ -226,6 +250,13 @@ export class CombatWorld {
         const p = att.pos.clone().addScaledVector(dir, 0.8).setY(att.pos.y + 0.45);
         this.projectiles.push({ ...base, pos: p.clone(), prev: p.clone(), vel: dir.multiplyScalar(s.speed), id: projectileId++, ground: true });
       }
+      return;
+    }
+    if (s.from === 'down') {
+      // Straight down at the feet (cannon-jump recovery).
+      const p = att.pos.clone().addScaledVector(att.forward(), 0.3).setY(att.pos.y + 0.4);
+      this.projectiles.push({ ...base, pos: p.clone(), prev: p.clone(), vel: new Vector3(0, -s.speed, 0), id: projectileId++ });
+      this.events.push({ type: 'shoot', attacker: att, hand: s.hand, pos: p, big: true });
       return;
     }
     if (s.from === 'sky') {
@@ -254,8 +285,9 @@ export class CombatWorld {
       // Converge bullets from the gun barrels onto the crosshair at ~20m.
       const aimPoint = att.eye.addScaledVector(dir, 20);
       const v = aimPoint.sub(origin).normalize().multiplyScalar(s.speed * speedK);
-      // Arcing shots aim slightly up to compensate for gravity over ~20m.
-      if (base.gravity) v.y += (base.gravity * 20) / (2 * s.speed * speedK);
+      // Arcing shots aim slightly up to compensate for (base) gravity over ~20m;
+      // heavier charged shells drop short of that.
+      if (s.gravity) v.y += (s.gravity * 20) / (2 * s.speed * speedK);
       this.projectiles.push({ ...base, pos: origin.clone(), prev: origin.clone(), vel: v, id: projectileId++ });
     }
     this.applyRecoil(att, tgt, (s.size ?? 1) * sizeK, speedK);
@@ -368,6 +400,7 @@ export class CombatWorld {
         }
         const res = this.applyHit(p.owner, tgt, p.props, dir, closestOnCapsule(p.pos, tgt.pos), true);
         alive = false;
+        p.struck = true;
         if (res === 'hit' && tgt.isAlive()) {
           if (p.hook === 'self' && canGrapple(p.owner)) {
             p.owner.startGrapple(tgt.pos, tgt);
@@ -394,6 +427,7 @@ export class CombatWorld {
         this.events.push({ type: 'projectileBounce', projectile: p, pos: p.pos.clone() });
         keep.push(p);
       } else {
+        if (p.props.blast) this.explode(p, tgt);
         this.events.push({ type: 'projectileEnd', projectile: p });
       }
     }

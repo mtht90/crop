@@ -28,6 +28,7 @@ const POSE: Record<string, [string, number]> = {
   yoyo: ['Spell_Simple_Idle_Loop', 0.8],
   grapple: ['Pistol_Idle_Loop', 0.6],
   umbrella: ['Sword_Idle', 0.9],
+  cannon: ['Idle_FoldArms_Loop', 0.5],
 };
 
 export function portraitsReady() {

@@ -396,3 +396,57 @@ function stripedCanopy(color: number, accent: number, map?: THREE.Texture) {
   m.customProgramCacheKey = () => `canopy-${color}-${accent}`;
   return m;
 }
+
+/** A named model from the Kenney Pirate Kit bundle (toon-shaded clone), or null before load. */
+export function pirateModel(name: string, outline = 0.012) {
+  // Top-level nodes only (the bundle's scene itself carries a model's name).
+  const src = assets.models.pirate?.scene.children.find((c) => c.name === name);
+  return src ? toonClone(src, outline) : null;
+}
+
+/**
+ * Don's arm cannon: Kenney "blaster-b" (big bore, ring muzzle) scaled up and
+ * strapped to a riveted iron gauntlet. Muzzle along +Z, mount at the origin (the forearm).
+ */
+export function buildArmCannon(scale = 1) {
+  const g = new THREE.Group();
+  const src = assets.models.armCannon?.scene;
+  if (src) {
+    const c = toonClone(src, 0.012);
+    c.scale.setScalar(1.7);
+    c.position.set(0, 0.02, 0.12);
+    g.add(c);
+  } else {
+    const barrel = part(new THREE.CylinderGeometry(0.11, 0.13, 0.62, 14), 0x3b3f4a, 0.02);
+    barrel.rotation.x = Math.PI / 2;
+    barrel.position.z = 0.12;
+    g.add(barrel);
+  }
+  // Iron gauntlet around the forearm with rivets and a brass band.
+  const sleeve = part(new THREE.CylinderGeometry(0.085, 0.095, 0.3, 12), 0x5a5f6b, 0.02);
+  sleeve.rotation.x = Math.PI / 2;
+  sleeve.position.z = -0.22;
+  g.add(sleeve);
+  const band = part(new THREE.TorusGeometry(0.09, 0.02, 8, 16), 0xd9a441, 0.01);
+  band.position.z = -0.1;
+  g.add(band);
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2;
+    const r = part(new THREE.SphereGeometry(0.013, 6, 6), 0xd9a441, 0);
+    r.position.set(Math.cos(a) * 0.09, Math.sin(a) * 0.09, -0.32);
+    g.add(r);
+  }
+  g.scale.setScalar(scale);
+  return g;
+}
+
+/** Cannonball shell (Pirate Kit), about 0.64 m across at scale 1. */
+export function buildShell(scale = 1) {
+  const m = pirateModel('cannon-ball', 0.03);
+  if (m) {
+    m.scale.setScalar(scale);
+    return m;
+  }
+  const b = part(new THREE.SphereGeometry(0.32 * scale, 14, 12), 0x2d2f38, 0.03);
+  return b;
+}

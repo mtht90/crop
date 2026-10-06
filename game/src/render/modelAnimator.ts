@@ -85,6 +85,12 @@ const ATTACKS: Record<string, AttackSpec> = {
   sweep: { clip: 'Sword_Regular_B' },
   umbrellaRush: { clip: 'Shield_Dash' },
   umbrellaToss: { clip: 'OverhandThrow' },
+  // Arm cannon
+  cannonShot: { clip: 'Pistol_Shoot', upper: true, contact: 0.04, end: 0.6 },
+  groundSlam: { clip: 'Sword_Attack' },
+  cannonJump: { clip: 'NinjaJump_Start' },
+  shoulderTackle: { clip: 'Shield_Dash' },
+  fullBurst: { clip: 'Pistol_Shoot', upper: true, contact: 0.04, end: 0.6 },
 };
 
 /** Moves where the umbrella is held point-first (thrusts). */
@@ -182,6 +188,8 @@ export class ModelAnimator {
     switch (this.fighter.def.weapon) {
       case 'guns':
         return { clip: 'Pistol_Aim_Neutral', time: 0.05, weight: 1 };
+      case 'cannon':
+        return { clip: 'Pistol_Idle_Loop', time: this.time % assets.clips.Pistol_Idle_Loop.duration, weight: 1 };
       case 'bow':
         return { clip: 'Spell_Simple_Idle_Loop', time: this.time % assets.clips.Spell_Simple_Idle_Loop.duration, weight: 1 };
       case 'hammer':
@@ -225,7 +233,7 @@ export class ModelAnimator {
   private overlayFor(): { layers: Layer[]; key: string; fade: number } | null {
     const f = this.fighter;
     if (this.outcome === 'win' && f.grounded) {
-      const clip = { fists: 'Dance_Loop', guns: 'Yes', bow: 'Idle_FoldArms_Loop', hammer: 'Dance_Loop', katana: 'Sword_Idle', yoyo: 'Dance_Loop', grapple: 'Yes', umbrella: 'Idle_FoldArms_Loop' }[this.fighter.def.weapon];
+      const clip = { fists: 'Dance_Loop', guns: 'Yes', bow: 'Idle_FoldArms_Loop', hammer: 'Dance_Loop', katana: 'Sword_Idle', yoyo: 'Dance_Loop', grapple: 'Yes', umbrella: 'Idle_FoldArms_Loop', cannon: 'Idle_FoldArms_Loop' }[this.fighter.def.weapon];
       return { layers: [{ clip, time: this.time % assets.clips[clip].duration, weight: 1 }], key: 'win', fade: 0.3 };
     }
     if (this.outcome === 'lose' && f.grounded && f.state !== 'ko' && f.state !== 'knockdown') {
