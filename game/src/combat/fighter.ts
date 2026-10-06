@@ -47,6 +47,9 @@ const BUFFER_FRAMES = 8;
 export const JUST_GUARD_FRAMES = 10;
 const JUST_GUARD_COOLDOWN = 24;
 
+/** Opening the umbrella within this many frames of a shot sends it back (otherwise it is only stopped). */
+const JUST_REFLECT_FRAMES = 10;
+
 export class Fighter {
   readonly pos = new Vector3();
   readonly prevPos = new Vector3();
@@ -154,6 +157,15 @@ export class Fighter {
   counterActive() {
     const c = this.state === 'action' ? this.action?.def.counter : undefined;
     return c && this.action!.frame >= c.start && this.action!.frame < c.end ? c : null;
+  }
+
+  /** Frames the umbrella has been continuously open (0 when shut). */
+  reflectT = 0;
+
+  /** Opened just now (or the ult barrier): shots bounce back instead of only being stopped. */
+  justReflect() {
+    if (this.state === 'action' && this.action?.def.kind === 'ult') return true;
+    return this.reflectT > 0 && this.reflectT <= JUST_REFLECT_FRAMES;
   }
 
   /** Parry window active this frame. */
@@ -410,6 +422,7 @@ export class Fighter {
   }
 
   private tickMeters() {
+    this.reflectT = this.reflectActive() ? this.reflectT + 1 : 0;
     if (this.stamina < STAMINA_MAX) {
       this.staminaRegen++;
       if (this.staminaRegen >= STAMINA_REGEN) {

@@ -6,6 +6,7 @@ import type { CombatEvent, CombatWorld } from '../combat/world';
 import { ARENA_RADIUS, EYE_HEIGHT } from '../config';
 import { clamp, damp, Spring } from '../core/math';
 import { Arena } from './arena';
+import { STAGES } from './stages';
 import { Effects, Trail } from './effects';
 import { ModelRig } from './charModel';
 import { ModelAnimator } from './modelAnimator';
@@ -45,7 +46,9 @@ export class GameView {
   readonly renderer: THREE.WebGLRenderer;
   readonly scene = new THREE.Scene();
   readonly camera = new THREE.PerspectiveCamera(78, 1, 0.05, 1200);
-  readonly arena = new Arena();
+  arena = new Arena();
+  private hemi!: THREE.HemisphereLight;
+  private sun!: THREE.DirectionalLight;
   readonly effects: Effects;
   readonly viewmodel = new ViewModel();
   private rigs: RigBundle[] = [];
@@ -103,8 +106,10 @@ export class GameView {
     container.appendChild(this.renderer.domElement);
 
     this.scene.fog = new THREE.Fog(0xcde8ff, 120, 420);
-    this.scene.add(new THREE.HemisphereLight(0xdff1ff, 0xb3a58c, 1.5));
+    this.hemi = new THREE.HemisphereLight(0xdff1ff, 0xb3a58c, 1.5);
+    this.scene.add(this.hemi);
     const sun = new THREE.DirectionalLight(0xfff4e0, 2.6);
+    this.sun = sun;
     sun.position.set(18, 30, 12);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
@@ -132,6 +137,21 @@ export class GameView {
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
     this.viewmodel.resize(w / h);
+  }
+
+  /** Swap the stage look (same layout): arena decor, sky, fog and light colours. */
+  setStage(id: string) {
+    const theme = STAGES[id] ?? STAGES.sky;
+    if (this.arena.theme.id === theme.id) return;
+    this.scene.remove(this.arena.group);
+    this.arena = new Arena(theme);
+    this.scene.add(this.arena.group);
+    (this.scene.fog as THREE.Fog).color.setHex(theme.fog);
+    this.hemi.color.setHex(theme.hemi[0]);
+    this.hemi.groundColor.setHex(theme.hemi[1]);
+    this.hemi.intensity = theme.hemi[2];
+    this.sun.color.setHex(theme.sun[0]);
+    this.sun.intensity = theme.sun[1];
   }
 
   /** Attach a combat world. `pov` is the first-person fighter (its rig is hidden). */

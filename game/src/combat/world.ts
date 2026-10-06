@@ -345,8 +345,15 @@ export class CombatWorld {
       let alive = p.life > 0 && p.pos.y > -20;
       if (alive && tgt.isAlive() && !tgt.isInvulnerable() && segmentCapsule(p.prev, p.pos, p.radius, tgt.pos)) {
         const dir = p.vel.clone().setY(0).normalize();
-        if (tgt.reflectActive() && !p.hook && tgt.forward().dot(dir) < -0.2) {
-          // Parried: the shot flies back at its owner, a little faster.
+        if (tgt.reflectActive() && !p.hook && tgt.forward().dot(dir) < -0.2 && !tgt.justReflect()) {
+          // Held open: the canopy just stops the shot (and takes the wear).
+          this.events.push({ type: 'parry', attacker: p.owner, target: tgt, pos: p.pos.clone(), reflected: false });
+          tgt.gainUlt(2);
+          if (tgt.damageCanopy(Math.max(p.props.guardDamage ?? 0, p.props.damage * 0.5))) this.events.push({ type: 'canopyBreak', fighter: tgt, attacker: p.owner, pos: p.pos.clone() });
+          this.events.push({ type: 'projectileEnd', projectile: p });
+          continue;
+        } else if (tgt.reflectActive() && !p.hook && tgt.forward().dot(dir) < -0.2) {
+          // Opened just in time: the shot flies back at its owner, a little faster.
           const back = p.owner.pos.clone().setY(p.owner.pos.y + 1.1).sub(p.pos).normalize();
           p.vel.copy(back.multiplyScalar(p.vel.length() * 1.2));
           p.gravity = 0;

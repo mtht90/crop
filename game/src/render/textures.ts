@@ -275,16 +275,88 @@ export const tex = {
         128,
       ),
     ),
-  sky: () =>
-    once('sky', () =>
+  sky: (id: string, stops: [number, string][]) =>
+    once(`sky-${id}`, () =>
       canvasTex(512, (g, s) => {
         const gr = g.createLinearGradient(0, 0, 0, s);
-        gr.addColorStop(0, '#2f7ff0');
-        gr.addColorStop(0.45, '#69b4ff');
-        gr.addColorStop(0.62, '#bfe3ff');
-        gr.addColorStop(1, '#e8f6ff');
+        for (const [k, c] of stops) gr.addColorStop(k, c);
         g.fillStyle = gr;
         g.fillRect(0, 0, 4, s);
       }, 4),
     ),
+  /** Dojo-style ring: lacquered rim, wooden planks, raked sand and a cherry-blossom crest. */
+  floorSakura: () =>
+    once('floorSakura', () => {
+      const t = canvasTex(2048, (g, s) => {
+        const c = s / 2;
+        const disc = (r: number, fill: string | CanvasGradient) => {
+          g.fillStyle = fill;
+          g.beginPath();
+          g.arc(c, c, r * c, 0, Math.PI * 2);
+          g.fill();
+        };
+        disc(1, '#8e2a32');
+        disc(0.95, '#e8c46a');
+        disc(0.93, '#d6ad80');
+        // Planks.
+        g.save();
+        g.beginPath();
+        g.arc(c, c, 0.93 * c, 0, Math.PI * 2);
+        g.clip();
+        const plank = s / 22;
+        for (let i = 0; i < 22; i++) {
+          g.fillStyle = i % 2 ? '#d2a87c' : '#dcb68c';
+          g.fillRect(0, i * plank, s, plank);
+          g.fillStyle = 'rgba(90,50,30,0.35)';
+          g.fillRect(0, i * plank, s, 4);
+          // Butt joints, staggered.
+          for (let x = (i % 3) * 230; x < s; x += 690) g.fillRect(x, i * plank, 4, plank);
+          g.strokeStyle = 'rgba(120,70,40,0.12)';
+          g.lineWidth = 2;
+          for (let k = 0; k < 4; k++) {
+            const y = i * plank + plank * (0.2 + k * 0.2);
+            g.beginPath();
+            g.moveTo(0, y);
+            g.bezierCurveTo(s * 0.3, y + 6, s * 0.6, y - 6, s, y + 3);
+            g.stroke();
+          }
+        }
+        g.restore();
+        // Raked sand circle with concentric lines.
+        disc(0.5, '#8e2a32');
+        disc(0.48, '#efe6d6');
+        g.strokeStyle = 'rgba(150,130,110,0.35)';
+        g.lineWidth = 5;
+        for (let r = 0.44; r > 0.2; r -= 0.04) {
+          g.beginPath();
+          g.arc(c, c, r * c, 0, Math.PI * 2);
+          g.stroke();
+        }
+        // Sakura crest.
+        const petal = (a: number) => {
+          g.save();
+          g.translate(c, c);
+          g.rotate(a);
+          g.beginPath();
+          g.moveTo(0, 0);
+          g.bezierCurveTo(-c * 0.13, -c * 0.06, -c * 0.11, -c * 0.2, -c * 0.03, -c * 0.21);
+          g.lineTo(0, -c * 0.18);
+          g.lineTo(c * 0.03, -c * 0.21);
+          g.bezierCurveTo(c * 0.11, -c * 0.2, c * 0.13, -c * 0.06, 0, 0);
+          g.closePath();
+          g.restore();
+        };
+        for (let i = 0; i < 5; i++) {
+          petal((i / 5) * Math.PI * 2);
+          g.fillStyle = '#ffb7c5';
+          g.fill();
+          g.strokeStyle = '#b8323a';
+          g.lineWidth = 8;
+          g.stroke();
+        }
+        disc(0.035, '#ffe08a');
+      });
+      t.anisotropy = 8;
+      return t;
+    }),
 };

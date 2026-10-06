@@ -1,4 +1,5 @@
 import type { Difficulty } from '../ai/cpu';
+import { STAGES, STAGE_IDS } from '../render/stages';
 import { audio } from '../audio/audio';
 import { characters, roster } from '../characters';
 import { buildPortraits, getPortrait, paint } from './portraits';
@@ -17,6 +18,7 @@ export interface Selection {
   player: string;
   cpu: string;
   difficulty: Difficulty;
+  stage: string;
 }
 
 const touchHelp = `
@@ -41,12 +43,12 @@ const controlsHtml = touchHelp + `
   <span><kbd>R</kbd></span><span>リロード</span>
   <span><kbd>Esc</kbd></span><span>ポーズ</span>
 </div>
-<p class="kbd-only" style="margin-top:8px;font-size:13px">※上昇技はスター・アロー以外（ジップはフック、アメリは傘で上昇し Space 長押しで滑空）。アメリは左クリック長押しで傘を開いて盾にしつつ先端から射撃（弾だけ防ぐ・傘は壊れると5秒開けない）、E で開いた傘を投げると相手を追尾して戻ってくる（戻るまで盾・攻撃なし）。ジップは E の光る吸盤が相手に当たると、頭上へ大きく振り回して投げ飛ばす（外れ・ガードは不発）。場外に飛ばされても縁まで戻れば登れる。弓は長押しで溜め撃ち。攻撃の瞬間に右クリックでジャストガード。着地の瞬間に <kbd>Shift</kbd> で受け身。</p>`;
+<p class="kbd-only" style="margin-top:8px;font-size:13px">※上昇技はスター・アロー以外（ジップはフック、アメリは傘で上昇し Space 長押しで滑空）。アメリは左クリック長押しで傘を開いて盾にしつつ先端から射撃（弾だけ防ぐ・開いた瞬間ならはね返す・傘は壊れると5秒開けない）、E で開いた傘を投げると相手を追尾して戻ってくる（戻るまで盾・攻撃なし）。ジップは E の光る吸盤が相手に当たると、頭上へ大きく振り回して投げ飛ばす（外れ・ガードは不発）。場外に飛ばされても縁まで戻れば登れる。弓は長押しで溜め撃ち。攻撃の瞬間に右クリックでジャストガード。着地の瞬間に <kbd>Shift</kbd> で受け身。</p>`;
 
 /** DOM menus: title, character select, pause and result screens. */
 export class Menus {
   private el: HTMLDivElement;
-  selection: Selection = { player: 'blaze', cpu: 'star', difficulty: 'normal' };
+  selection: Selection = { player: 'blaze', cpu: 'star', difficulty: 'normal', stage: 'sky' };
 
   constructor(container: HTMLElement) {
     this.el = document.createElement('div');
@@ -75,7 +77,7 @@ export class Menus {
    * tiles. Clicking a tile assigns it to the active side; clicking a panel
    * switches which side you are choosing for.
    */
-  select(onFight: (s: Selection) => void, onBack: () => void) {
+  select(onFight: (s: Selection) => void, onBack: () => void, onStage?: (id: string) => void) {
     const s = this.selection;
     buildPortraits();
     let side: 'player' | 'cpu' = 'player';
@@ -106,6 +108,7 @@ export class Menus {
         <div class="vs-row">${slot('player')}<div class="vs">VS</div>${slot('cpu')}</div>
         <div class="pick-hint">${side === 'player' ? '<b class="p1c">1P</b> のキャラを選んでください' : '<b class="cpuc">CPU</b> のキャラを選んでください'}（上のパネルをクリックで切り替え）</div>
         <div class="roster">${roster.map((r) => tile(r.id)).join('')}<button class="tile rand" data-id="?"><span class="q">?</span><span class="tile-name">おまかせ</span></button></div>
+        <div class="stage-row">ステージ ${STAGE_IDS.map((id) => `<button class="btn ${s.stage === id ? 'on' : ''}" data-stage="${id}">${STAGES[id].name}</button>`).join('')}</div>
         <div class="row">
           <button class="btn" data-act="back">もどる</button>
           <button class="btn" data-act="help">操作説明</button>
@@ -138,6 +141,14 @@ export class Menus {
         b.addEventListener('click', () => {
           s.difficulty = b.dataset.diff as Difficulty;
           audio.play('select');
+          render();
+        }),
+      );
+      this.el.querySelectorAll<HTMLElement>('[data-stage]').forEach((b) =>
+        b.addEventListener('click', () => {
+          s.stage = b.dataset.stage!;
+          audio.play('select');
+          onStage?.(s.stage);
           render();
         }),
       );

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { ARENA_RADIUS } from '../config';
 import { PADS, ROCKS } from '../combat/terrain';
 import { part, toon } from './toon';
+import { STAGES, type StageTheme } from './stages';
 import { tex } from './textures';
 
 /** Circular arena plus decorative background (no collision outside the floor). */
@@ -14,36 +15,38 @@ export class Arena {
   private clouds: THREE.Group[] = [];
   private flags: THREE.Mesh[] = [];
   private rocks: THREE.Group[] = [];
-  private blimp: THREE.Group;
+  private blimp: THREE.Group | null = null;
+  private petals: THREE.Points | null = null;
   private t = 0;
 
-  constructor() {
+  constructor(readonly theme: StageTheme = STAGES.sky) {
     const g = this.group;
+    const T = theme;
 
     // Sky dome.
     const sky = new THREE.Mesh(
       new THREE.SphereGeometry(400, 32, 16),
-      new THREE.MeshBasicMaterial({ map: tex.sky(), side: THREE.BackSide, fog: false, depthWrite: false }),
+      new THREE.MeshBasicMaterial({ map: tex.sky(T.id, T.sky), side: THREE.BackSide, fog: false, depthWrite: false }),
     );
     sky.renderOrder = -10;
     g.add(sky);
 
     // Floor.
-    const floorMat = new THREE.MeshToonMaterial({ map: tex.floor(), gradientMap: (toon(0xffffff) as THREE.MeshToonMaterial).gradientMap });
+    const floorMat = new THREE.MeshToonMaterial({ map: T.floor === 'sakura' ? tex.floorSakura() : tex.floor(), gradientMap: (toon(0xffffff) as THREE.MeshToonMaterial).gradientMap });
     const floor = new THREE.Mesh(new THREE.CircleGeometry(ARENA_RADIUS, 96), floorMat);
     floor.rotation.x = -Math.PI / 2;
     floor.receiveShadow = true;
     g.add(floor);
 
     // Rim band (yellow / blue like the reference).
-    const rim = part(new THREE.CylinderGeometry(ARENA_RADIUS, ARENA_RADIUS - 0.2, 0.6, 96, 1, true), 0xffc93c, 0.04);
+    const rim = part(new THREE.CylinderGeometry(ARENA_RADIUS, ARENA_RADIUS - 0.2, 0.6, 96, 1, true), T.rim[0], 0.04);
     rim.position.y = -0.3;
     g.add(rim);
-    const rim2 = part(new THREE.CylinderGeometry(ARENA_RADIUS - 0.2, ARENA_RADIUS - 1.5, 1.6, 96, 1, true), 0x4a5fc8, 0.04);
+    const rim2 = part(new THREE.CylinderGeometry(ARENA_RADIUS - 0.2, ARENA_RADIUS - 1.5, 1.6, 96, 1, true), T.rim[1], 0.04);
     rim2.position.y = -1.4;
     g.add(rim2);
     // Rocky underside.
-    const rock = part(new THREE.ConeGeometry(ARENA_RADIUS - 1.5, 14, 12, 3), 0x9a7f66, 0.06);
+    const rock = part(new THREE.ConeGeometry(ARENA_RADIUS - 1.5, 14, 12, 3), T.rockSide, 0.06);
     rock.rotation.x = Math.PI;
     rock.position.y = -2.2 - 7;
     g.add(rock);
@@ -59,9 +62,9 @@ export class Arena {
 
     // Floating hover pads (decor, outside the arena).
     for (const [x, y, z, r] of PADS) {
-      const pad = part(new THREE.CylinderGeometry(r, r * 0.9, 0.9, 32), 0xffc93c, 0.05);
+      const pad = part(new THREE.CylinderGeometry(r, r * 0.9, 0.9, 32), T.pads[0], 0.05);
       pad.position.set(x, y, z);
-      const top = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.82, r * 0.82, 0.92, 32), toon(0x5a6fd8));
+      const top = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.82, r * 0.82, 0.92, 32), toon(T.pads[1]));
       pad.add(top);
       g.add(pad);
     }
@@ -70,7 +73,37 @@ export class Arena {
     this.buildIslands();
     this.crowd = this.buildCrowd();
     this.buildClouds();
-    this.blimp = this.buildBlimp();
+    if (T.blimp) this.blimp = this.buildBlimp();
+    if (T.moon) this.buildMoon();
+    if (T.petals) this.petals = this.buildPetals();
+  }
+
+  private buildMoon() {
+    const moon = new THREE.Mesh(new THREE.CircleGeometry(26, 48), new THREE.MeshBasicMaterial({ color: 0xfff1d0, fog: false }));
+    moon.position.set(-150, 70, -260);
+    moon.lookAt(0, 20, 0);
+    const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex.soft(), color: 0xffd9a0, transparent: true, opacity: 0.55, depthWrite: false, fog: false }));
+    halo.scale.setScalar(150);
+    halo.position.copy(moon.position).multiplyScalar(1.01);
+    moon.renderOrder = halo.renderOrder = -9;
+    this.group.add(halo, moon);
+  }
+
+  /** Cherry petals drifting down over the ring. */
+  private buildPetals() {
+    const n = 420;
+    const pos = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) {
+      pos[i * 3] = (Math.random() - 0.5) * 80;
+      pos[i * 3 + 1] = Math.random() * 30;
+      pos[i * 3 + 2] = (Math.random() - 0.5) * 80;
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    const pts = new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xffc2d1, size: 0.22, map: tex.soft(), transparent: true, depthWrite: false }));
+    pts.frustumCulled = false;
+    this.group.add(pts);
+    return pts;
   }
 
   /** Small floating rocks near the edge (also collision: shoot them to recoil back). */
@@ -78,14 +111,14 @@ export class Arena {
     for (const [x, y, z, r] of ROCKS) {
       const rock = new THREE.Group();
       rock.position.set(x, y, z);
-      const top = part(new THREE.CylinderGeometry(r * 1.02, r, 0.5, 10), 0x7bc950, 0.05);
+      const top = part(new THREE.CylinderGeometry(r * 1.02, r, 0.5, 10), this.theme.grass, 0.05);
       top.position.y = -0.25;
       rock.add(top);
-      const mid = part(new THREE.ConeGeometry(r * 0.95, r * 1.5, 9, 2), 0xb08c6a, 0.06);
+      const mid = part(new THREE.ConeGeometry(r * 0.95, r * 1.5, 9, 2), this.theme.rockSide, 0.06);
       mid.rotation.x = Math.PI;
       mid.position.y = -0.5 - r * 0.75;
       rock.add(mid);
-      const tuft = part(new THREE.ConeGeometry(r * 0.18, r * 0.5, 6), 0x3f8f4a, 0.03);
+      const tuft = part(new THREE.ConeGeometry(r * 0.18, r * 0.5, 6), this.theme.foliage === 'sakura' ? 0xffb7c5 : this.theme.tree, 0.03);
       tuft.position.set(r * 0.3, r * 0.25, -r * 0.2);
       rock.add(tuft);
       this.rocks.push(rock);
@@ -110,21 +143,26 @@ export class Arena {
     for (const [x, y, z, r] of spots) {
       const island = new THREE.Group();
       island.position.set(x, y, z);
-      const rockMesh = part(new THREE.ConeGeometry(r, r * 1.6, 9, 2), 0xb08c6a, 0.12);
+      const rockMesh = part(new THREE.ConeGeometry(r, r * 1.6, 9, 2), this.theme.rockSide, 0.12);
       rockMesh.rotation.x = Math.PI;
       rockMesh.position.y = -r * 0.8;
       island.add(rockMesh);
-      const grass = part(new THREE.CylinderGeometry(r * 1.02, r, r * 0.25, 9), 0x7bc950, 0.12);
+      const grass = part(new THREE.CylinderGeometry(r * 1.02, r, r * 0.25, 9), this.theme.grass, 0.12);
       island.add(grass);
       const trees = 2 + Math.floor(rng() * 4);
       for (let i = 0; i < trees; i++) {
         const a = rng() * Math.PI * 2;
         const d = rng() * r * 0.7;
-        const tree = part(new THREE.ConeGeometry(r * 0.13, r * 0.6, 7), 0x3f8f4a, 0.06);
-        tree.position.set(Math.cos(a) * d, r * 0.4, Math.sin(a) * d);
+        const tree = this.theme.foliage === 'sakura' ? sakuraTree(r * 0.5, rng) : part(new THREE.ConeGeometry(r * 0.13, r * 0.6, 7), this.theme.tree, 0.06);
+        tree.position.set(Math.cos(a) * d, this.theme.foliage === 'sakura' ? r * 0.12 : r * 0.4, Math.sin(a) * d);
         island.add(tree);
       }
-      if (rng() < 0.6) {
+      const towerRoll = rng() < 0.6;
+      if (towerRoll && this.theme.tower === 'pagoda') {
+        const pg = pagoda(r * 0.5);
+        pg.position.set(r * 0.2, r * 0.12, -r * 0.2);
+        island.add(pg);
+      } else if (towerRoll) {
         // Castle-ish tower like the reference background.
         const tower = part(new THREE.CylinderGeometry(r * 0.12, r * 0.14, r * 0.8, 8), 0xf2efe6, 0.06);
         tower.position.set(r * 0.2, r * 0.45, -r * 0.2);
@@ -135,7 +173,7 @@ export class Arena {
       }
       if (rng() < 0.7) {
         // Waterfall.
-        const wtex = makeWaterTex();
+        const wtex = makeWaterTex(this.theme.waterfall);
         this.waterfalls.push(wtex);
         const fall = new THREE.Mesh(
           new THREE.PlaneGeometry(r * 0.35, r * 2.2),
@@ -147,6 +185,10 @@ export class Arena {
       g.add(island);
     }
 
+    if (this.theme.gates === 'torii') {
+      this.buildTorii();
+      return;
+    }
     // Banners on poles around the arena.
     const colors = ['#3e6fd8', '#e8463c'];
     for (let i = 0; i < 8; i++) {
@@ -167,6 +209,47 @@ export class Arena {
     }
   }
 
+  /** Vermilion torii gates on the diagonals with stone lanterns between them. */
+  private buildTorii() {
+    const red = 0xd23a2e;
+    const black = 0x2a2230;
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+      const R = ARENA_RADIUS + 10;
+      const gate = new THREE.Group();
+      for (const sx of [-1, 1]) {
+        const post = part(new THREE.CylinderGeometry(0.32, 0.38, 8, 10), red, 0.04);
+        post.position.set(sx * 2.6, 1, 0);
+        gate.add(post);
+        const foot = part(new THREE.CylinderGeometry(0.45, 0.45, 0.6, 10), black, 0.03);
+        foot.position.set(sx * 2.6, -2.7, 0);
+        gate.add(foot);
+      }
+      const kasagi = part(new THREE.BoxGeometry(7.6, 0.55, 0.8), black, 0.04);
+      kasagi.position.y = 5.2;
+      gate.add(kasagi);
+      const shimaki = part(new THREE.BoxGeometry(7, 0.4, 0.65), red, 0.04);
+      shimaki.position.y = 4.75;
+      gate.add(shimaki);
+      const nuki = part(new THREE.BoxGeometry(6.4, 0.35, 0.45), red, 0.04);
+      nuki.position.y = 3.6;
+      gate.add(nuki);
+      const plaque = part(new THREE.BoxGeometry(0.8, 1, 0.2), black, 0.02);
+      plaque.position.y = 4.15;
+      gate.add(plaque);
+      gate.position.set(Math.cos(a) * R, 0, Math.sin(a) * R);
+      gate.lookAt(0, 0, 0);
+      this.group.add(gate);
+    }
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2 + Math.PI / 8;
+      const R = ARENA_RADIUS + 7;
+      const l = stoneLantern();
+      l.position.set(Math.cos(a) * R, -0.8, Math.sin(a) * R);
+      this.group.add(l);
+    }
+  }
+
   private buildCrowd() {
     // Stands on two sides, filled with bouncing mascot blobs.
     const g = this.group;
@@ -174,7 +257,7 @@ export class Arena {
     const blob = new THREE.SphereGeometry(0.55, 12, 10);
     const count = 220;
     const crowd = new THREE.InstancedMesh(blob, toon(0xffffff, { rim: 0.2 }), count);
-    const palette = [0xff8fb1, 0xffd166, 0x7fd4ff, 0x9be37a, 0xc49bff, 0xffa36c, 0xffffff];
+    const palette = this.theme.crowd;
     let n = 0;
     for (const side of [0, 1]) {
       const baseA = side === 0 ? Math.PI * 0.85 : -Math.PI * 0.15;
@@ -200,7 +283,7 @@ export class Arena {
 
   private buildClouds() {
     const rng = mulberry(3);
-    const mat = toon(0xffffff, { rim: 0.15 });
+    const mat = toon(this.theme.cloud, { rim: 0.15 });
     for (let i = 0; i < 16; i++) {
       const c = new THREE.Group();
       const parts = 3 + Math.floor(rng() * 4);
@@ -254,20 +337,92 @@ export class Arena {
     // Rocks bob very slightly (visual only; collision stays put).
     this.rocks.forEach((r, i) => (r.rotation.y = Math.sin(this.t * 0.3 + i) * 0.05));
     this.flags.forEach((f, i) => (f.rotation.y = Math.sin(this.t * 2.2 + i) * 0.25));
-    const ba = this.t * 0.03;
-    this.blimp.position.set(Math.cos(ba) * 90, 42 + Math.sin(this.t * 0.5) * 1.5, Math.sin(ba) * 90);
-    this.blimp.rotation.y = -ba;
+    if (this.blimp) {
+      const ba = this.t * 0.03;
+      this.blimp.position.set(Math.cos(ba) * 90, 42 + Math.sin(this.t * 0.5) * 1.5, Math.sin(ba) * 90);
+      this.blimp.rotation.y = -ba;
+    }
+    if (this.petals) {
+      const a = this.petals.geometry.attributes.position as THREE.BufferAttribute;
+      for (let i = 0; i < a.count; i++) {
+        let y = a.getY(i) - dt * (1.2 + (i % 5) * 0.25);
+        let x = a.getX(i) + Math.sin(this.t * 1.3 + i) * dt * 0.8 + dt * 0.6;
+        if (y < -2) {
+          y = 28;
+          x = (Math.random() - 0.5) * 80;
+        }
+        if (x > 40) x -= 80;
+        a.setXY(i, x, y);
+      }
+      a.needsUpdate = true;
+    }
     const mat = this.edgeRing.material as THREE.MeshBasicMaterial;
     mat.opacity = 0.25 + edgeWarn * (0.45 + Math.sin(this.t * 14) * 0.25);
   }
 }
 
-function makeWaterTex() {
+function sakuraTree(h: number, rng: () => number) {
+  const t = new THREE.Group();
+  const trunk = part(new THREE.CylinderGeometry(h * 0.06, h * 0.1, h * 0.7, 6), 0x5a3a2e, 0.04);
+  trunk.position.y = h * 0.35;
+  trunk.rotation.z = (rng() - 0.5) * 0.3;
+  t.add(trunk);
+  const pinks = [0xffb7c5, 0xffc9d6, 0xff9fb6];
+  for (let i = 0; i < 4; i++) {
+    const b = part(new THREE.IcosahedronGeometry(h * (0.28 + rng() * 0.12), 1), pinks[i % 3], 0.05);
+    b.position.set((rng() - 0.5) * h * 0.5, h * (0.75 + rng() * 0.25), (rng() - 0.5) * h * 0.5);
+    t.add(b);
+  }
+  return t;
+}
+
+/** Three-tier pagoda for the islands. */
+function pagoda(h: number) {
+  const g = new THREE.Group();
+  let y = 0;
+  for (let i = 0; i < 3; i++) {
+    const w = h * (0.42 - i * 0.08);
+    const body = part(new THREE.BoxGeometry(w, h * 0.22, w), 0xf2e6d6, 0.04);
+    body.position.y = y + h * 0.11;
+    g.add(body);
+    const roof = part(new THREE.ConeGeometry(w * 1.05, h * 0.16, 4), 0x2d2a3a, 0.04);
+    roof.rotation.y = Math.PI / 4;
+    roof.position.y = y + h * 0.3;
+    g.add(roof);
+    y += h * 0.3;
+  }
+  const spire = part(new THREE.CylinderGeometry(h * 0.015, h * 0.015, h * 0.25, 6), 0xe8c46a, 0.02);
+  spire.position.y = y + h * 0.12;
+  g.add(spire);
+  return g;
+}
+
+function stoneLantern() {
+  const g = new THREE.Group();
+  const stone = 0xb8b0a8;
+  const base = part(new THREE.CylinderGeometry(0.5, 0.6, 0.4, 6), stone, 0.03);
+  g.add(base);
+  const post = part(new THREE.CylinderGeometry(0.18, 0.22, 1.4, 6), stone, 0.03);
+  post.position.y = 0.9;
+  g.add(post);
+  const box = part(new THREE.BoxGeometry(0.75, 0.6, 0.75), stone, 0.03);
+  box.position.y = 1.9;
+  g.add(box);
+  const light = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.36, 0.78), new THREE.MeshBasicMaterial({ color: 0xffc46a }));
+  light.position.y = 1.9;
+  g.add(light);
+  const roof = part(new THREE.ConeGeometry(0.75, 0.55, 6), stone, 0.03);
+  roof.position.y = 2.45;
+  g.add(roof);
+  return g;
+}
+
+function makeWaterTex(color = 'rgba(120,200,255,0.85)') {
   const c = document.createElement('canvas');
   c.width = 32;
   c.height = 128;
   const g = c.getContext('2d')!;
-  g.fillStyle = 'rgba(120,200,255,0.85)';
+  g.fillStyle = color;
   g.fillRect(0, 0, 32, 128);
   g.fillStyle = 'rgba(255,255,255,0.8)';
   for (let i = 0; i < 18; i++) g.fillRect(Math.random() * 28, Math.random() * 128, 2 + Math.random() * 3, 10 + Math.random() * 20);

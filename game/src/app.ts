@@ -125,6 +125,7 @@ export class App {
     this.menus.select(
       (sel) => this.startMatch(sel),
       () => this.toTitle(),
+      (id) => this.view.setStage(id),
     );
   }
 
@@ -134,6 +135,7 @@ export class App {
     const m = new Match(characters[sel.player], characters[sel.cpu], sel.difficulty);
     this.match = m;
     this.view.freeCamera = false;
+    this.view.setStage(sel.stage);
     this.view.bind(m.world, m.player);
     this.hud.setup(m);
     this.hud.show(true);
@@ -226,7 +228,7 @@ export class App {
             } else if (e.type === 'canopyBreak') {
               if (e.fighter === m.player) this.hud.toast('傘が壊れた！ しばらく開けない', '#ffb0a0');
               else if (e.attacker === m.player) this.hud.toast('傘を壊した！');
-            } else if (e.type === 'parry' && e.target === m.player) this.hud.toast(e.reflected ? 'はね返した！' : 'パリィ！', '#c9b8ff');
+            } else if (e.type === 'parry' && e.reflected && e.target === m.player) this.hud.toast('ジャスト！ はね返した！', '#c9b8ff');
           }
           this.view.handleEvents(events);
           if (m.finished && this.screen === 'match') this.showResult();
