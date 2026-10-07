@@ -38,10 +38,11 @@ export class Match {
     playerDef: CharacterDef,
     cpuDef: CharacterDef,
     readonly difficulty: Difficulty,
+    seed = Math.floor(Math.random() * 2 ** 31),
   ) {
     this.player = new Fighter(playerDef, 0);
     this.cpu = new Fighter(cpuDef, 1);
-    this.world = new CombatWorld(this.player, this.cpu);
+    this.world = new CombatWorld(this.player, this.cpu, seed);
     this.ai = new CpuController(this.cpu, this.player, this.world, difficulty);
   }
 
@@ -75,10 +76,14 @@ export class Match {
     return this.lastWinner === 0 ? ['win', 'lose'] : ['lose', 'win'];
   }
 
-  step(playerIntent: Intent) {
+  /**
+   * One simulation tick. The second fighter is driven by the built-in CPU unless
+   * its input is supplied (online: the remote player's input for this frame).
+   */
+  step(playerIntent: Intent, remoteIntent?: Intent) {
     this.phaseT++;
     const fighting = this.phase === 'fight';
-    const cpuIntent = this.ai.think(fighting);
+    const cpuIntent = remoteIntent ?? this.ai.think(fighting);
     this.world.step([playerIntent, cpuIntent]);
 
     switch (this.phase) {

@@ -1,8 +1,10 @@
-import type { Difficulty } from '../ai/cpu';
+import { DIFFICULTIES, DIFFICULTY_LABEL, type Difficulty } from '../ai/cpu';
 import { STAGES, STAGE_IDS } from '../render/stages';
 import { audio } from '../audio/audio';
 import { characters, roster } from '../characters';
 import { buildPortraits, getPortrait, paint } from './portraits';
+import { pingBars, type OnlineRecord } from '../net/online';
+import type { PlayerProfile } from '../net/protocol';
 
 const hex = (c: number) => `#${c.toString(16).padStart(6, '0')}`;
 
@@ -59,17 +61,88 @@ export class Menus {
     this.el.innerHTML = '';
   }
 
-  title(onStart: () => void) {
+  title(onCpu: () => void, onOnline: () => void) {
     this.el.innerHTML = `
       <div class="screen">
         <div class="logo">STAR ARENA<small>スター・アリーナ</small></div>
-        <div class="blink">クリック / タップでスタート</div>
+        <div class="mode-row">
+          <button class="btn primary mode" data-act="cpu">CPU対戦<small>レベル1〜5のCPUと練習</small></button>
+          <button class="btn primary mode online" data-act="online">オンライン対戦<small>レート戦・自動マッチング</small></button>
+        </div>
+        <div class="blink">モードを選んでください</div>
       </div>`;
-    this.el.querySelector('.screen')!.addEventListener('click', () => {
+    const go = (f: () => void) => () => {
       audio.unlock();
       audio.play('select');
-      onStart();
+      f();
+    };
+    this.el.querySelector('[data-act="cpu"]')!.addEventListener('click', go(onCpu));
+    this.el.querySelector('[data-act="online"]')!.addEventListener('click', go(onOnline));
+  }
+
+  /** Online lobby: looking for an opponent (cancel returns to the select screen). */
+  matchmaking(me: OnlineRecord, onCancel: () => void) {
+    const start = performance.now();
+    this.el.innerHTML = `
+      <div class="screen dim">
+        <h2 class="title-h">対戦相手を探しています</h2>
+        <div class="mm-spinner"></div>
+        <div class="mm-info"><b>${esc(me.name)}</b>　レート ${me.rating}　${me.wins}勝${me.losses}敗</div>
+        <div class="mm-time">0:00</div>
+        <div class="row"><button class="btn" data-act="cancel">キャンセル</button></div>
+      </div>`;
+    const t = this.el.querySelector<HTMLElement>('.mm-time')!;
+    const timer = window.setInterval(() => {
+      const s = Math.floor((performance.now() - start) / 1000);
+      t.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+    }, 250);
+    this.el.querySelector('[data-act="cancel"]')!.addEventListener('click', () => {
+      window.clearInterval(timer);
+      onCancel();
     });
+    return () => window.clearInterval(timer);
+  }
+
+  /** Match found: both players' cards with rating, region and ping. */
+  versus(me: PlayerProfile, foe: PlayerProfile, ping: number) {
+    const card = (p: PlayerProfile, side: string) => {
+      const def = characters[p.character];
+      return `<div class="vs-card ${side}" style="--el:${hex(def.element.color)};--el2:${hex(def.element.color2)}">
+        <canvas data-bust="${def.id}"></canvas>
+        <div class="vs-name">${esc(p.name)}</div>
+        <div class="vs-meta">${def.name}・レート ${p.rating}<br>${p.region}</div>
+      </div>`;
+    };
+    this.el.innerHTML = `
+      <div class="screen dim versus-screen">
+        <div class="mm-found">対戦相手が見つかりました！</div>
+        <div class="vs-row">${card(me, 'me')}<div class="vs">VS</div>${card(foe, 'foe')}</div>
+        <div class="mm-ping">通信状態 <b>${pingBars(ping)}</b> ${Math.round(ping)}ms</div>
+      </div>`;
+    this.el.querySelectorAll<HTMLCanvasElement>('canvas[data-bust]').forEach((c) => paint(c, getPortrait(c.dataset.bust!)?.bust));
+  }
+
+  /** Online result: rating change and what to do next. */
+  onlineResult(won: boolean, score: string, before: number, after: number, onRematch: () => void, onNext: () => void, onSelect: () => void, onTitle: () => void) {
+    const d = after - before;
+    this.el.innerHTML = `
+      <div class="screen dim">
+        <div class="logo" style="color:${won ? 'var(--gold)' : '#8ab4ff'}">${won ? 'VICTORY!' : 'DEFEAT'}<small>${score}</small></div>
+        <div class="rate-change">レート ${before} → <b>${after}</b> <span class="${d >= 0 ? 'up' : 'down'}">(${d >= 0 ? '+' : ''}${d})</span></div>
+        <div class="row">
+          <button class="btn primary" data-act="rematch">再戦を申し込む</button>
+          <button class="btn primary" data-act="next">次の相手を探す</button>
+          <button class="btn" data-act="select">キャラ変更</button>
+          <button class="btn" data-act="title">タイトルへ</button>
+        </div>
+      </div>`;
+    this.el.querySelector('[data-act="rematch"]')!.addEventListener('click', (e) => {
+      (e.currentTarget as HTMLButtonElement).textContent = '相手の返事を待っています…';
+      onRematch();
+    });
+    this.el.querySelector('[data-act="next"]')!.addEventListener('click', onNext);
+    this.el.querySelector('[data-act="select"]')!.addEventListener('click', onSelect);
+    this.el.querySelector('[data-act="title"]')!.addEventListener('click', onTitle);
   }
 
   /**
@@ -77,16 +150,20 @@ export class Menus {
    * tiles. Clicking a tile assigns it to the active side; clicking a panel
    * switches which side you are choosing for.
    */
-  select(onFight: (s: Selection) => void, onBack: () => void, onStage?: (id: string) => void) {
+  select(onFight: (s: Selection) => void, onBack: () => void, onStage?: (id: string) => void, online: OnlineRecord | null = null) {
     const s = this.selection;
     buildPortraits();
     let side: 'player' | 'cpu' = 'player';
     const weaponOf = (id: string) => roster.find((r) => r.id === id)?.weapon ?? '';
     const slot = (which: 'player' | 'cpu') => {
+      if (which === 'cpu' && online) {
+        return `<div class="slot cpu online-slot"><div class="slot-tag">ONLINE</div><div class="q">?</div>
+          <div class="slot-info"><div class="slot-name">オンラインの相手</div><div class="slot-title">レート ${online.rating} 前後の相手と対戦</div></div></div>`;
+      }
       const def = characters[s[which]];
       const active = side === which ? 'active' : '';
       const diff = which === 'cpu'
-        ? `<div class="slot-diff">${(['easy', 'normal', 'hard'] as Difficulty[]).map((d) => `<button class="btn ${s.difficulty === d ? 'on' : ''}" data-diff="${d}">${{ easy: 'かんたん', normal: 'ふつう', hard: 'むずかしい' }[d]}</button>`).join('')}</div>`
+        ? `<div class="slot-diff">${DIFFICULTIES.map((d, k) => `<button class="btn ${s.difficulty === d ? 'on' : ''}" data-diff="${d}" title="${DIFFICULTY_LABEL[d]}">Lv${k + 1}</button>`).join('')}</div><div class="slot-diff-name">${DIFFICULTY_LABEL[s.difficulty]}</div>`
         : '';
       return `<div class="slot ${which} ${active}" data-slot="${which}" style="--el:${hex(def.element.color)};--el2:${hex(def.element.color2)}">
         <div class="slot-tag">${which === 'player' ? '1P' : 'CPU'}</div>
@@ -97,7 +174,7 @@ export class Menus {
     };
     const tile = (id: string) => {
       const def = characters[id];
-      const tags = `${s.player === id ? '<span class="tok p1">1P</span>' : ''}${s.cpu === id ? '<span class="tok cpu">CPU</span>' : ''}`;
+      const tags = `${s.player === id ? '<span class="tok p1">1P</span>' : ''}${s.cpu === id && !online ? '<span class="tok cpu">CPU</span>' : ''}`;
       return `<button class="tile ${s[side] === id ? 'sel' : ''}" data-id="${id}" style="--el:${hex(def.element.color)};--el2:${hex(def.element.color2)}">
         <canvas data-face="${id}"></canvas><span class="tile-name">${def.name}</span><span class="toks">${tags}</span></button>`;
     };
@@ -108,11 +185,13 @@ export class Menus {
         <div class="vs-row">${slot('player')}<div class="vs">VS</div>${slot('cpu')}</div>
         <div class="pick-hint">${side === 'player' ? '<b class="p1c">1P</b> のキャラを選んでください' : '<b class="cpuc">CPU</b> のキャラを選んでください'}（上のパネルをクリックで切り替え）</div>
         <div class="roster">${roster.map((r) => tile(r.id)).join('')}<button class="tile rand" data-id="?"><span class="q">?</span><span class="tile-name">おまかせ</span></button></div>
-        <div class="stage-row">ステージ ${STAGE_IDS.map((id) => `<button class="btn ${s.stage === id ? 'on' : ''}" data-stage="${id}">${STAGES[id].name}</button>`).join('')}</div>
+        ${online
+          ? `<div class="stage-row">プレイヤー名 <input class="name-input" maxlength="12" value="${esc(online.name)}"> レート ${online.rating}（${online.wins}勝${online.losses}敗）</div>`
+          : `<div class="stage-row">ステージ ${STAGE_IDS.map((id) => `<button class="btn ${s.stage === id ? 'on' : ''}" data-stage="${id}">${STAGES[id].name}</button>`).join('')}</div>`}
         <div class="row">
           <button class="btn" data-act="back">もどる</button>
           <button class="btn" data-act="help">操作説明</button>
-          <button class="btn primary fight" data-act="fight">FIGHT!</button>
+          <button class="btn primary fight" data-act="fight">${online ? '対戦相手を探す' : 'FIGHT!'}</button>
         </div>
         <div class="panel help" hidden>${controlsHtml}</div>
       </div>`;
@@ -125,10 +204,13 @@ export class Menus {
           s[side] = id;
           audio.play('select');
           // After choosing your own fighter, move on to the opponent.
-          if (side === 'player') side = 'cpu';
+          if (side === 'player' && !online) side = 'cpu';
           render();
         }),
       );
+      this.el.querySelector<HTMLInputElement>('.name-input')?.addEventListener('change', (e) => {
+        if (online) online.name = (e.target as HTMLInputElement).value.trim().slice(0, 12) || 'プレイヤー';
+      });
       this.el.querySelectorAll<HTMLElement>('[data-slot]').forEach((p) =>
         p.addEventListener('click', (e) => {
           if ((e.target as HTMLElement).closest('[data-diff]')) return;
@@ -209,4 +291,8 @@ export class Menus {
     this.el.querySelector('[data-act="select"]')!.addEventListener('click', onSelect);
     this.el.querySelector('[data-act="title"]')!.addEventListener('click', onTitle);
   }
+}
+
+function esc(s: string) {
+  return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 }

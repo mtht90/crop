@@ -6,7 +6,11 @@ import { emptyIntent, type Intent } from '../combat/types';
 import type { CombatWorld } from '../combat/world';
 import { PADS, ROCKS } from '../combat/terrain';
 
-export type Difficulty = 'easy' | 'normal' | 'hard';
+export type Difficulty = 'beginner' | 'easy' | 'normal' | 'hard' | 'expert';
+
+/** Difficulty ladder, weakest first (CPU levels 1-5). */
+export const DIFFICULTIES: Difficulty[] = ['beginner', 'easy', 'normal', 'hard', 'expert'];
+export const DIFFICULTY_LABEL: Record<Difficulty, string> = { beginner: 'Lv1 はじめて', easy: 'Lv2 かんたん', normal: 'Lv3 ふつう', hard: 'Lv4 むずかしい', expert: 'Lv5 達人' };
 
 interface Params {
   reaction: number; // frames of perception delay
@@ -22,9 +26,11 @@ interface Params {
 }
 
 export const difficultyParams: Record<Difficulty, Params> = {
+  beginner: { reaction: 36, turnRate: 0.05, aimError: 0.24, guardChance: 0.05, dodgeChance: 0.03, aggression: 0.2, edgeAware: 0.2, skillUse: 0.06, techChance: 0, pushToEdge: false },
   easy: { reaction: 26, turnRate: 0.07, aimError: 0.16, guardChance: 0.15, dodgeChance: 0.08, aggression: 0.35, edgeAware: 0.35, skillUse: 0.15, techChance: 0.1, pushToEdge: false },
   normal: { reaction: 15, turnRate: 0.14, aimError: 0.07, guardChance: 0.38, dodgeChance: 0.25, aggression: 0.6, edgeAware: 0.75, skillUse: 0.4, techChance: 0.4, pushToEdge: false },
   hard: { reaction: 8, turnRate: 0.24, aimError: 0.025, guardChance: 0.6, dodgeChance: 0.5, aggression: 0.85, edgeAware: 1, skillUse: 0.75, techChance: 0.8, pushToEdge: true },
+  expert: { reaction: 4, turnRate: 0.34, aimError: 0.01, guardChance: 0.74, dodgeChance: 0.64, aggression: 0.95, edgeAware: 1, skillUse: 0.9, techChance: 0.95, pushToEdge: true },
 };
 
 interface Snapshot {

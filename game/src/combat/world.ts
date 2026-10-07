@@ -1,6 +1,7 @@
 import { Vector3 } from 'three';
 import { ARENA_RADIUS, BODY_HEIGHT, BODY_RADIUS, EYE_HEIGHT, GUARD_MAX } from '../config';
 import { Fighter } from './fighter';
+import { seededRandom } from '../core/rng';
 import { raycastTerrain, segmentHitsTerrain } from './terrain';
 import { TICK, type ActionDef, type Blast, type HitProps, type Intent, type Spawn } from './types';
 
@@ -94,8 +95,12 @@ export class CombatWorld {
 
   private seen = new Map<Fighter, { action: unknown; dash: number; jump: number; land: number; state: string }>();
 
-  constructor(a: Fighter, b: Fighter) {
+  /** Seeded randomness (deterministic replays / lockstep online play). */
+  rng: () => number;
+
+  constructor(a: Fighter, b: Fighter, seed = 1) {
     this.fighters = [a, b];
+    this.rng = seededRandom(seed);
   }
 
   step(intents: [Intent, Intent]) {
@@ -409,10 +414,10 @@ export class CombatWorld {
     }
     if (s.from === 'sky') {
       // Rain: drop from above the opponent with a little scatter.
-      const a = Math.random() * Math.PI * 2;
-      const r = Math.random() * 2.4;
-      const p = new Vector3(tgt.pos.x + Math.cos(a) * r + tgt.vel.x * 0.3, 13 + Math.random() * 3, tgt.pos.z + Math.sin(a) * r + tgt.vel.z * 0.3);
-      this.projectiles.push({ ...base, pos: p.clone(), prev: p.clone(), vel: new Vector3((Math.random() - 0.5) * 2, -s.speed, (Math.random() - 0.5) * 2), id: projectileId++ });
+      const a = this.rng() * Math.PI * 2;
+      const r = this.rng() * 2.4;
+      const p = new Vector3(tgt.pos.x + Math.cos(a) * r + tgt.vel.x * 0.3, 13 + this.rng() * 3, tgt.pos.z + Math.sin(a) * r + tgt.vel.z * 0.3);
+      this.projectiles.push({ ...base, pos: p.clone(), prev: p.clone(), vel: new Vector3((this.rng() - 0.5) * 2, -s.speed, (this.rng() - 0.5) * 2), id: projectileId++ });
       return;
     }
     const fwd = att.aimDir();
@@ -425,9 +430,9 @@ export class CombatWorld {
       const dir = fwd.clone();
       if (s.fan) dir.applyAxisAngle(new Vector3(0, 1, 0), (k - (count - 1) / 2) * s.fan);
       if (s.spread) {
-        dir.x += (Math.random() - 0.5) * s.spread * 2;
-        dir.y += (Math.random() - 0.5) * s.spread * 2;
-        dir.z += (Math.random() - 0.5) * s.spread * 2;
+        dir.x += (this.rng() - 0.5) * s.spread * 2;
+        dir.y += (this.rng() - 0.5) * s.spread * 2;
+        dir.z += (this.rng() - 0.5) * s.spread * 2;
         dir.normalize();
       }
       // Converge bullets from the gun barrels onto the crosshair at ~20m.

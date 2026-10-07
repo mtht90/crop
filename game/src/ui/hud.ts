@@ -1,3 +1,4 @@
+import { pingBars } from '../net/online';
 import type { CharacterDef } from '../combat/types';
 import { getPortrait, paint } from './portraits';
 import * as THREE from 'three';
@@ -95,6 +96,26 @@ export class Hud {
     this.ult.style.setProperty('--el', hex(match.player.def.element.color));
     this.ammo.style.display = match.player.def.ammo ? '' : 'none';
     this.foeTag.textContent = match.cpu.def.name;
+  }
+
+  private netEl: HTMLDivElement | null = null;
+
+  /** Online match: show the opponent's name (instead of "CPU") and the connection panel. */
+  setOnline(foeName: string | null) {
+    if (!foeName) {
+      this.netEl?.remove();
+      this.netEl = null;
+      return;
+    }
+    const tag = this.names[1].querySelector('small');
+    if (tag) tag.textContent = foeName;
+    this.netEl ??= el('div', 'net-status', this.root);
+  }
+
+  setNetStatus(rtt: number, waiting: boolean) {
+    if (!this.netEl) return;
+    this.netEl.innerHTML = `${pingBars(rtt)} ${Math.round(rtt)}ms${waiting ? '<b>通信待機中…</b>' : ''}`;
+    this.netEl.classList.toggle('waiting', waiting);
   }
 
   show(v: boolean) {
