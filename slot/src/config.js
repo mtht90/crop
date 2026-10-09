@@ -104,9 +104,14 @@ export const CONFIG = {
       peka: 'assets/audio/sfx/peka.mp3',
       bill: 'assets/audio/sfx/bill.mp3',
       maxbet: 'assets/audio/sfx/maxbet.mp3',
+      p_pin: 'assets/audio/sfx/p_pin.mp3',
+      p_launch: 'assets/audio/sfx/p_launch.mp3',
+      p_pocket: 'assets/audio/sfx/p_pocket.mp3',
+      p_attacker: 'assets/audio/sfx/p_attacker.mp3',
     },
     bgm: {
-      normal: 'assets/audio/bgm/head_in_the_sand.mp3', // 通常時 (ゲーセンらしい明るいチップチューン。実機のジャグラーは無音)
+      normal: 'assets/audio/bgm/head_in_the_sand.mp3',
+      p_normal: 'assets/audio/bgm/the_arplands.mp3',  // パチンコ通常時 // 通常時 (ゲーセンらしい明るいチップチューン。実機のジャグラーは無音)
       big: 'assets/audio/bgm/level3.mp3',
       reg: 'assets/audio/bgm/level1.mp3',
       sp1: 'assets/audio/bgm/level2.mp3',          // ボーナス後 3G 以内の BIG (実機の「軍艦マーチ」枠)
@@ -209,6 +214,8 @@ export const CONFIG = {
     lendYen: 1000,        // 1回の貸出 (円)
     lendMedals: 46,       // 1000円で借りられるメダル (実ホールの 46 枚貸し)
     exchangeYen: 20,      // 換金レート (1 枚あたりの円。20 = 等価)
+    lendBalls: 250,       // パチンコ: 1000 円で借りられる玉 (4 円パチンコ)
+    ballYen: 3.57,        // パチンコ: 換金レート (1 玉あたり円。28 玉交換)
   },
 
   // ---------------------------------------------------------------

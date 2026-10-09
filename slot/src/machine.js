@@ -29,6 +29,8 @@ export class Machine {
     this.wallet = M.wallet;
     this.invested = 0;
     this.medals = this.cfg.play.startMedals;
+    this.balls = 0;           // パチンコの持ち玉
+    this.pach = null;         // パチンコの状態 (保留・ST など)
     this.credit = 0;
     this.replayPending = false;
     this.mode = 'normal';
@@ -60,14 +62,14 @@ export class Machine {
   }
 
   // 今換金したらいくらになるか (円)
-  cashValue() { return Math.floor(this.medals * this.cfg.money.exchangeYen); }
+  cashValue() { return Math.floor(this.medals * this.cfg.money.exchangeYen + (this.balls || 0) * (this.cfg.money.ballYen || 0)); }
   balance() { return this.cashValue() - this.invested; }
 
   cashout() {
     const rec = {
       date: new Date().toISOString().slice(0, 16).replace('T', ' '),
       invested: this.invested, cash: this.cashValue(), balance: this.balance(),
-      games: this.stats.games, big: this.stats.big, reg: this.stats.reg, setting: this.daySetting, medals: this.medals,
+      games: this.stats.games, big: this.stats.big, reg: this.stats.reg, setting: this.daySetting, medals: this.medals, balls: this.balls || 0,
     };
     this.records.unshift(rec);
     this.records = this.records.slice(0, 30);
@@ -180,7 +182,7 @@ export class Machine {
   }
 
   serialize() {
-    return JSON.stringify({ medals: this.medals, stats: this.stats, carried: this.carried, noticed: this.noticed, mode: this.mode, bonusPaid: this.bonusPaid, bonusGames: this.bonusGames, replayPending: this.replayPending, zone: this.zone, chain: this.chain, wallet: this.wallet, invested: this.invested, daySetting: this.daySetting, records: this.records });
+    return JSON.stringify({ medals: this.medals, stats: this.stats, carried: this.carried, noticed: this.noticed, mode: this.mode, bonusPaid: this.bonusPaid, bonusGames: this.bonusGames, replayPending: this.replayPending, zone: this.zone, chain: this.chain, balls: this.balls, pach: this.pach, wallet: this.wallet, invested: this.invested, daySetting: this.daySetting, records: this.records });
   }
 
   restore(json) {
@@ -189,7 +191,7 @@ export class Machine {
       Object.assign(this, {
         medals: d.medals ?? this.medals, stats: { ...this.stats, ...d.stats }, carried: d.carried ?? null,
         noticed: !!d.noticed, mode: d.mode || 'normal', bonusPaid: d.bonusPaid || 0, bonusGames: d.bonusGames || 0,
-        replayPending: !!d.replayPending, zone: d.zone || 0, chain: d.chain || 0,
+        replayPending: !!d.replayPending, zone: d.zone || 0, chain: d.chain || 0, balls: d.balls || 0, pach: d.pach || null,
         wallet: d.wallet ?? this.wallet, invested: d.invested ?? 0, daySetting: d.daySetting ?? this.daySetting, records: d.records || [],
       });
       this.cfg.setting = this.daySetting;

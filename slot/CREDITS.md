@@ -6,7 +6,7 @@ SLOT で使う素材は、テキストを描画する Canvas の演出コード�
 
 | 区分 | ライセンス | 商用 | 帰属表示 |
 |---|---|---|---|
-| Poly Haven / ambientCG / Kenney / Juhani Junkala / congusbongus | CC0 1.0 | ✅ | 不要 (推奨) |
+| Poly Haven / ambientCG / Kenney / Juhani Junkala / congusbongus / lordzintick | CC0 1.0 | ✅ | 不要 (推奨) |
 | Twemoji グラフィック | CC-BY 4.0 | ✅ | **必要** |
 | Openclipart (ピエロ) | CC0 1.0 | ✅ | 不要 |
 | EZduzziteh | CC0 1.0 | ✅ | 不要 |
@@ -116,6 +116,10 @@ OGG を MP3 に変換しただけで、音そのものには手を加えてい�
 | `rumble.mp3` (告知・ボーナス開始の低音) | lowFrequency_explosion_001.ogg | Sci-Fi Sounds |
 | `bill.mp3` (千円札を入れる音) | scroll_003.ogg | Interface Sounds |
 | `maxbet.mp3` (MAX BET ボタン) | switch-a.ogg | UI Pack — https://kenney.nl/assets/ui-pack |
+| `p_pin.mp3` (パチンコ: 釘に当たる音) | impactGlass_light_002.ogg | Impact Sounds |
+| `p_launch.mp3` (パチンコ: 発射) | impactMetal_light_001.ogg | Impact Sounds |
+| `p_pocket.mp3` (パチンコ: 入賞・貸し玉) | impactPlate_light_003.ogg | Impact Sounds |
+| `p_attacker.mp3` (パチンコ: アタッカー入賞) | impactGeneric_light_002.ogg | Impact Sounds |
 
 ### その他の効果音
 
@@ -131,7 +135,8 @@ OGG を MP3 に変換しただけで、音そのものには手を加えてい�
 | `assets/audio/bgm/level1.mp3` (REG 中) | 5 Chiptunes (Action) — "Level 1" | Juhani Junkala | 同上 | CC0 1.0 |
 | `assets/audio/bgm/level2.mp3` (スペシャル BGM 1) | 5 Chiptunes (Action) — "Level 2" | Juhani Junkala | 同上 | CC0 1.0 |
 | `assets/audio/bgm/ending.mp3` (スペシャル BGM 2) | 5 Chiptunes (Action) — "Ending" | Juhani Junkala | 同上 | CC0 1.0 |
-| `assets/audio/bgm/heckin_crows.mp3` (通常時) | Heckin Crows (OGG を MP3 に変換) | congusbongus | https://opengameart.org/content/heckin-crows | CC0 1.0 |
+| `assets/audio/bgm/head_in_the_sand.mp3` (スロット通常時) | Head in the Sand (seamless loop) (OGG を MP3 に変換) | congusbongus | https://opengameart.org/content/head-in-the-sand-seamless-loop | CC0 1.0 |
+| `assets/audio/bgm/the_arplands.mp3` (パチンコ通常時) | The Arplands (OGG を MP3 に変換) | lordzintick | https://opengameart.org/content/the-arplands | CC0 1.0 |
 | `assets/audio/bgm/title_screen.mp3` (プレミアム BGM) | 5 Chiptunes (Action) — "Title Screen" | Juhani Junkala | 同上 | CC0 1.0 |
 
 
