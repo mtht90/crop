@@ -55,6 +55,9 @@ export class Director {
 
   async onLever() {
     const L = this.cab.lights;
+    // 連チャンゾーンが尽きた
+    if (this.prevZone > 0 && this.machine.zone === 0 && this.machine.mode === 'normal' && !this.machine.carried) this.audio.play('lose', { gain: 0.3, rate: 0.8 });
+    this.prevZone = this.machine.zone;
     L.mode = this.machine.mode !== 'normal' ? 'rainbow' : (this.machine.noticed ? 'rainbow' : 'idle');
     L.ledMode = 'chase';
     const pv = this.plan?.preview;
@@ -123,6 +126,7 @@ export class Director {
     L.lampFlash = 1;
     L.lampPremium = premium;
     this.cab.screen.set('lit', { premium });
+    this.noticePremium = premium;
     this.audio.play('peka', { gain: 1.0, rate: 1.25 });
     this.haptics.vibrate('peka');
     this.bloomKick(0.5);
@@ -163,6 +167,7 @@ export class Director {
     if (this.machine.mode !== 'normal' && this.cab.screen.scene === 'bonus') this.cab.screen.bonus.paid = this.machine.bonusPaid - res.pay;
     if (res.bonusStart) { await this.bonusStart(res.bonusStart, res); return; }
     if (res.wins.length) this.cab.flashLines(res.wins.filter((w) => w.line >= 0).map((w) => w.line), 1.2);
+    if (this.machine.mode === 'normal' && !this.plan?.lit && !res.bonusEnd) this.smallRoleFx(res);
     if (res.replay) this.audio.play('replay', { gain: 0.7 });
     if (res.pay > 0) {
       const name = res.roleNames.find((n) => n !== 'REPLAY');
@@ -172,6 +177,25 @@ export class Director {
       await this.payout(res.pay);
     }
     if (res.bonusEnd) await this.bonusEnd(res.bonusEnd);
+  }
+
+  // 小役のリアクション (液晶 + 音 + 振動)
+  smallRoleFx(res) {
+    const scr = this.cab.screen;
+    const n = res.roleNames;
+    const kind = ['BELL', 'CLOWN', 'CHERRY', 'GRAPE', 'REPLAY'].find((k) => n.includes(k));
+    if (!kind) return;
+    scr.react(kind);
+    if (kind === 'BELL' || kind === 'CLOWN') {
+      this.audio.play('flash', { gain: 0.9 });
+      this.audio.gyuin(1, { gain: 0.6 });
+      this.haptics.vibrate([60, 40, 60, 40, 120]);
+      this.cab.reelFlash('strobe', 1.0);
+      this.bloomKick(0.5);
+    } else if (kind === 'CHERRY') {
+      this.audio.play('yokoku', { gain: 0.5, rate: 1.2 });
+      this.haptics.vibrate([30, 30, 30]);
+    }
   }
 
   async payout(n) {
@@ -192,7 +216,11 @@ export class Director {
     const L = this.cab.lights;
     const big = type === 'BIG';
     if (!this.plan?.lit) { L.lampFlash = 1; this.cab.ripple(); } // 告知前に揃えた (ブラインド)
-    this.cab.screen.set('bonus', { type, max: this.cfg.bonus[type].maxPay });
+    if ((res.chain || 1) === 1) this.chainTotal = 0;
+    const sp = big ? (res.sp || (this.noticePremium ? 'premium' : null)) : null;
+    this.noticePremium = false;
+    this.bonusBgm = sp || this.cfg.bonus[type].bgm;
+    this.cab.screen.set('bonus', { type, max: this.cfg.bonus[type].maxPay, chain: res.chain || 1, sp });
     this.cab.screen.bonus.paid = this.machine.bonusPaid;
     this.cab.flashLines(res.wins.filter((w) => w.line >= 0).map((w) => w.line), 3);
     this.cab.reelFlash('strobe', 2.6);
@@ -223,7 +251,7 @@ export class Director {
     this.rig.zoom = 0;
     L.ledMode = 'chase';
     L.reelRainbow = 0;
-    this.audio.bgm(this.cfg.bonus[type].bgm);
+    this.audio.bgm(this.bonusBgm);
   }
 
   async bonusEnd(info) {
@@ -234,7 +262,8 @@ export class Director {
     this.bloomKick(0.6);
     L.rainbow = 0;
     L.mode = 'idle';
-    this.cab.screen.set('result', { type: info.type, paid: info.paid });
+    this.chainTotal = (this.chainTotal || 0) + info.paid;
+    this.cab.screen.set('result', { type: info.type, paid: info.paid, chain: this.machine.chain, total: this.chainTotal });
     this.onBonusEnd?.(info);
     await wait(1200);
   }

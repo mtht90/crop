@@ -17,7 +17,6 @@ export class Machine {
     this.bonusPaid = 0;
     this.bonusGames = 0;
     this.flag = null;
-    this.stats = { games: 0, big: 0, reg: 0, in: 0, out: 0, sinceBonus: 0, history: [] };
     this.records = [];        // 過去の日の戦績
     this.newDay();
   }
@@ -37,7 +36,9 @@ export class Machine {
     this.noticed = false;
     this.bonusPaid = 0;
     this.bonusGames = 0;
-    this.stats = { games: 0, big: 0, reg: 0, in: 0, out: 0, sinceBonus: 0, history: [], graph: [0] };
+    this.stats = { games: 0, big: 0, reg: 0, in: 0, out: 0, sinceBonus: 0, history: [], graph: [0], normalGames: 0, grape: 0, cherry: 0, maxHamari: 0 };
+    this.zone = 0;          // 連チャンゾーン残り G
+    this.chain = 0;         // 現在の連チャン数
     // 本日の設定 (隠し設定)。換金時に答え合わせ
     const odds = this.cfg.settingOdds;
     const tot = Object.values(odds).reduce((a, b) => a + b, 0);
@@ -93,11 +94,17 @@ export class Machine {
     if (this.credit < this.cfg.bet) return null;
     const wasReplay = this.replayPending;
     this.replayPending = false;
-    const flag = this.logic.draw(this.mode, this.carried, this.setting, forced);
+    const boost = this.zone > 0 ? (this.cfg.chain?.boost || 1) : 1;
+    const flag = this.logic.draw(this.mode, this.carried, this.setting, forced, boost);
     if (flag.newBonus) { this.carried = flag.newBonus; this.noticed = false; }
     this.flag = { small: flag.small, bonus: this.mode === 'normal' ? this.carried : null, newBonus: flag.newBonus };
     this.stats.games++;
-    if (this.mode === 'normal') this.stats.sinceBonus++;
+    if (this.mode === 'normal') {
+      this.stats.sinceBonus++;
+      this.stats.normalGames = (this.stats.normalGames || 0) + 1;
+      if (this.zone > 0) this.zone--;
+      this.stats.maxHamari = Math.max(this.stats.maxHamari || 0, this.stats.sinceBonus);
+    }
     return { ...this.flag, wasReplay };
   }
 
@@ -123,6 +130,10 @@ export class Machine {
       if (r.bonus) res.bonusStart = r.bonus;
     }
     this.credit = 0;
+    if (this.mode === 'normal') {
+      if (res.roleNames.includes('GRAPE')) this.stats.grape = (this.stats.grape || 0) + 1;
+      if (res.roleNames.includes('CHERRY')) this.stats.cherry = (this.stats.cherry || 0) + 1;
+    }
     this.medals += res.pay;
     this.stats.out += res.pay;
     if (res.replay) this.replayPending = true;
@@ -142,8 +153,20 @@ export class Machine {
         this.stats.history.unshift({ type: this.mode, at: this.stats.sinceBonusAtStart, paid: this.bonusPaid });
         this.stats.history = this.stats.history.slice(0, 20);
         this.mode = 'normal';
+        this.zone = this.cfg.chain?.zoneGames || 100;
       }
     } else if (res.bonusStart) {
+      // 連チャン判定 (前回ボーナスから 100G 以内) とスペシャル BGM の条件
+      const C = this.cfg.chain || {};
+      const hadBonus = this.stats.big + this.stats.reg > 0;
+      const g = this.stats.sinceBonus;
+      this.chain = hadBonus && g <= (C.zoneGames || 100) ? this.chain + 1 : 1;
+      res.chain = this.chain;
+      res.sinceBonus = g;
+      res.sp = res.bonusStart !== 'BIG' || !hadBonus ? null
+        : g <= (C.sp1Within || 3) ? 'sp1'
+        : g <= (C.zoneGames || 100) && g >= 11 && g % 11 === 0 ? 'sp2' : null;
+      this.zone = 0;
       this.mode = res.bonusStart;
       this.carried = null;
       this.noticed = false;
@@ -157,7 +180,7 @@ export class Machine {
   }
 
   serialize() {
-    return JSON.stringify({ medals: this.medals, stats: this.stats, carried: this.carried, noticed: this.noticed, mode: this.mode, bonusPaid: this.bonusPaid, bonusGames: this.bonusGames, replayPending: this.replayPending, wallet: this.wallet, invested: this.invested, daySetting: this.daySetting, records: this.records });
+    return JSON.stringify({ medals: this.medals, stats: this.stats, carried: this.carried, noticed: this.noticed, mode: this.mode, bonusPaid: this.bonusPaid, bonusGames: this.bonusGames, replayPending: this.replayPending, zone: this.zone, chain: this.chain, wallet: this.wallet, invested: this.invested, daySetting: this.daySetting, records: this.records });
   }
 
   restore(json) {
@@ -166,7 +189,7 @@ export class Machine {
       Object.assign(this, {
         medals: d.medals ?? this.medals, stats: { ...this.stats, ...d.stats }, carried: d.carried ?? null,
         noticed: !!d.noticed, mode: d.mode || 'normal', bonusPaid: d.bonusPaid || 0, bonusGames: d.bonusGames || 0,
-        replayPending: !!d.replayPending,
+        replayPending: !!d.replayPending, zone: d.zone || 0, chain: d.chain || 0,
         wallet: d.wallet ?? this.wallet, invested: d.invested ?? 0, daySetting: d.daySetting ?? this.daySetting, records: d.records || [],
       });
       this.cfg.setting = this.daySetting;

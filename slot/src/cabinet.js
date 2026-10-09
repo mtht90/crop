@@ -691,11 +691,20 @@ export class Cabinet {
     };
     seg('BIG', st.big, 110, blink === 'BIG' ? '#ffffff' : '#ff3b4b');
     seg('REG', st.reg, 290, blink === 'REG' ? '#ffffff' : '#3b9bff');
-    seg('START', st.since ?? st.sinceBonus ?? 0, 490, '#ffd23f');
+    const since = st.since ?? st.sinceBonus ?? 0;
+    seg('START', since, 490, since >= 500 ? '#ff5a3a' : '#ffd23f');
     x.font = '500 18px Orbitron'; x.fillStyle = '#8fa0b8'; x.textAlign = 'right';
     x.fillText(`TOTAL ${st.games}`, W - 24, 34);
+    // 設定推測データ (通常時の回転数で割る)
+    const ng = st.normalGames || 0;
+    const rate = (n) => (n > 0 && ng > 0 ? `1/${(ng / n).toFixed(n >= 10 ? 1 : 0)}` : '---');
+    x.font = `500 21px ${this.cfg.assets.jpFonts.gothic}`; x.textAlign = 'left'; x.fillStyle = '#c9d4e4';
+    x.fillText(`合算 ${rate((st.big || 0) + (st.reg || 0))}`, 24, 134);
+    x.fillStyle = '#c9a0ff'; x.fillText(`ぶどう ${st.grape || 0}回 ${ng && st.grape ? '1/' + (ng / st.grape).toFixed(2) : '---'}`, 220, 134);
+    x.fillStyle = '#ff8aa0'; x.fillText(`チェリー ${rate(st.cherry || 0)}`, 480, 134);
+    x.fillStyle = '#8fa0b8'; x.textAlign = 'right'; x.fillText(`最大ハマり ${st.maxHamari || 0}`, W - 24, 134);
     // スランプグラフ (差枚の推移)
-    const gx = 24, gy = 130, gw = W - 48, gh = 170;
+    const gx = 24, gy = 150, gw = W - 48, gh = 152;
     x.strokeStyle = '#1e2a3a'; x.lineWidth = 1; x.strokeRect(gx, gy, gw, gh);
     const gr = st.graph && st.graph.length > 1 ? st.graph : [0, 0];
     const mx = Math.max(500, ...gr.map(Math.abs));

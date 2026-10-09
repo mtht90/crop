@@ -28,7 +28,7 @@ export class SlotLogic {
   //   forced: デバッグ用強制フラグ
   // 戻り値: { small, bonus, newBonus }
   // ---------------------------------------------------------------
-  draw(mode, carried, setting, forced = null) {
+  draw(mode, carried, setting, forced = null, bonusBoost = 1) {
     if (mode !== 'normal') {
       const t = this.cfg.bonusTable;
       let r = this.rng(), acc = 0;
@@ -44,7 +44,7 @@ export class SlotLogic {
       let r = this.rng(), acc = 0;
       key = 'NONE';
       for (const [k, denom] of Object.entries(table)) {
-        acc += 1 / denom;
+        acc += (/BIG|REG/.test(k) ? bonusBoost : 1) / denom;
         if (r < acc) { key = k; break; }
       }
     }

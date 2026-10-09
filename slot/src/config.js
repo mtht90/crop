@@ -107,6 +107,9 @@ export const CONFIG = {
     bgm: {
       big: 'assets/audio/bgm/level3.mp3',
       reg: 'assets/audio/bgm/level1.mp3',
+      sp1: 'assets/audio/bgm/level2.mp3',          // ボーナス後 3G 以内の BIG (実機の「軍艦マーチ」枠)
+      sp2: 'assets/audio/bgm/ending.mp3',          // 連チャンゾーン中のゾロ目 G の BIG (実機のクラシック曲枠)
+      premium: 'assets/audio/bgm/title_screen.mp3', // プレミアム告知からの BIG
     },
   },
 
@@ -166,7 +169,8 @@ export const CONFIG = {
   // ---------------------------------------------------------------
   setting: 1, // 遊技開始時に「本日の設定」を抽選して上書きする (隠し設定)
   // 本日の設定の抽選比率 (ホールの実情に近く低設定が多い)
-  settingOdds: { 1: 40, 2: 22, 3: 15, 4: 12, 5: 7, 6: 4 },
+  // 本日の設定の出やすさ。実際のホールに近く、ほとんどが低設定 (設定 1 が 6 割)
+  settingOdds: { 1: 60, 2: 16, 3: 10, 4: 8, 5: 4, 6: 2 },
   probability: {
     1: { BIG: 353.6, REG: 785.1, 'CHERRY+BIG': 1200, 'CHERRY+REG': 1000, REPLAY: 7.3, GRAPE: 6.02, CHERRY: 35.6, BELL: 1092, CLOWN: 1092 }, // 合算 BIG 1/273.1 REG 1/439.8
     2: { BIG: 347.9, REG: 665.6, 'CHERRY+BIG': 1200, 'CHERRY+REG': 1000, REPLAY: 7.3, GRAPE: 6.02, CHERRY: 35.6, BELL: 1092, CLOWN: 1092 }, // 合算 BIG 1/269.7 REG 1/399.6
@@ -213,6 +217,14 @@ export const CONFIG = {
     release: 75,          // 後ペカ: 第3停止ボタンを離した瞬間に点灯
     premium: 1 / 8,       // プレミア点灯 (虹色に脈動) の割合
     silenceMs: 140,       // 点灯直前の“無音”
+  },
+
+  // 連チャンゾーン: ボーナス終了後 100G は液晶が専用ステージになり、残り G 数と連チャン数を出す
+  //  実機のジャグラーに確変はないので boost は 1 (確率は変わらない)。1 より大きくすると確変風にボーナス確率が上がる
+  chain: {
+    zoneGames: 100,
+    boost: 1,
+    sp1Within: 3,         // この G 数以内の BIG はスペシャル BGM 1
   },
 
   // 液晶の予告演出。レバーON で始まり停止ごとに昇格、第3停止ボタンを離した瞬間に決着する

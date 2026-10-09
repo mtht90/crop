@@ -188,6 +188,7 @@ function buildRoom(assets) {
     });
     n.position.x = x;
     scene.add(n);
+    addNeighborScreen(x);
   }
   if (!assets.hall.length) return;
   // 奥のアーケードホール (Kenney Mini Arcade)
@@ -578,6 +579,48 @@ async function toggleGui() {
 // ------------------------------------------------------------------
 const clock = new THREE.Clock();
 let frameErr = 0;
+// 隣の台もときどき当たる (ホールの空気感)。確率は自台と同じ合算 1/168 前後
+const neighbors = [];
+let neighborTex = null;
+function addNeighborScreen(x) {
+  if (!neighborTex) {
+    const c = document.createElement('canvas'); c.width = 256; c.height = 128;
+    const g = c.getContext('2d');
+    const gr = g.createRadialGradient(128, 64, 4, 128, 64, 140);
+    gr.addColorStop(0, '#ffd0f0'); gr.addColorStop(0.5, '#ff3fa8'); gr.addColorStop(1, '#5a0030');
+    g.fillStyle = gr; g.fillRect(0, 0, 256, 128);
+    g.font = '64px Bungee'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.lineWidth = 10; g.strokeStyle = '#3a0026'; g.strokeText('LUCKY!!', 128, 66);
+    g.fillStyle = '#ffe14d'; g.fillText('LUCKY!!', 128, 66);
+    neighborTex = new THREE.CanvasTexture(c); neighborTex.colorSpace = THREE.SRGBColorSpace;
+  }
+  const mat = new THREE.MeshBasicMaterial({ map: neighborTex, transparent: true, opacity: 0, toneMapped: false, depthWrite: false });
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(0.66, 0.34), mat);
+  m.position.set(x, DIM.lcdY, DIM.front + 0.02);
+  scene.add(m);
+  neighbors.push({ m, mat, x, state: 'idle', t: 0 });
+}
+function updateNeighbors(dt) {
+  for (const n of neighbors) {
+    n.t += dt;
+    if (n.state === 'idle') {
+      n.mat.opacity = 0;
+      if (Math.random() < dt / (168 * 4.6)) {
+        n.state = 'lit'; n.t = 0; n.dur = 4 + Math.random() * 10;
+        audio.play('peka', { gain: 0.12, rate: 1.2 + Math.random() * 0.1 });
+      }
+    } else if (n.state === 'lit') {
+      n.mat.opacity = 0.85;
+      n.mat.color.setRGB(1, 1, 1);
+      if (n.t > n.dur) { n.state = 'bonus'; n.t = 0; audio.play('fanfare_big', { gain: 0.07 }); }
+    } else {
+      n.mat.opacity = 0.5 + 0.4 * (Math.sin(n.t * 9) > 0 ? 1 : 0);
+      n.mat.color.setHSL((n.t * 0.4) % 1, 0.8, 0.7);
+      if (n.t > 45) { n.state = 'idle'; n.t = 0; }
+    }
+  }
+}
+
 function frame() {
   try { frameBody(); } catch (e) { if (frameErr++ < 3) report(e); }
 }
@@ -590,6 +633,9 @@ function frameBody() {
   bloomPass.strength = cfg.effects.bloom.strength + bloom.kick * 0.45;
   bloomPass.threshold = cfg.effects.bloom.threshold;
   if (cab.lights.rainbow > 0 && machine.mode === 'normal' && !machine.carried) cab.lights.rainbow = 0;
+  cab.screen.status.zone = machine.mode === 'normal' && !machine.noticed ? machine.zone : 0;
+  cab.screen.status.chain = machine.chain;
+  updateNeighbors(dt);
   updateRig(dt);
   composer.render();
 }

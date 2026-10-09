@@ -27,6 +27,15 @@ export class Screen {
     this.premium = false;
     this.bonus = { type: 'BIG', paid: 0, max: 312 };
     this.flash = 0;
+    this.status = { zone: 0, chain: 0 }; // 毎フレーム呼び出し側が更新
+    this.reactKind = null;
+    this.reactT = -9;
+  }
+
+  // 小役成立時のリアクション (通常時の画面に重ねて 1.4 秒)
+  react(kind) {
+    this.reactKind = kind;
+    this.reactT = this.now;
   }
 
   // ---------------- 外部 API ----------------
@@ -34,8 +43,8 @@ export class Screen {
     this.scene = scene;
     this.t0 = this.now;
     if (scene === 'lit') { this.premium = !!opts.premium; this.flash = 0.55; this.pv = null; }
-    if (scene === 'bonus') { this.bonus = { type: opts.type, paid: 0, max: opts.max }; this.pv = null; }
-    if (scene === 'result') this.result = { type: opts.type, paid: opts.paid };
+    if (scene === 'bonus') { this.bonus = { type: opts.type, paid: 0, max: opts.max, chain: opts.chain || 1, sp: opts.sp || null }; this.pv = null; }
+    if (scene === 'result') this.result = { type: opts.type, paid: opts.paid, chain: opts.chain || 1, total: opts.total || opts.paid };
     if (scene === 'idle') this.pv = null;
   }
 
@@ -76,11 +85,12 @@ export class Screen {
     switch (this.scene) {
       case 'lit': this.drawLit(t, st); break;
       case 'bonus': this.drawBonus(t, st); break;
-      case 'result': this.drawResult(t, st); if (st > 3) this.set('idle'); break;
+      case 'result': this.drawResult(t, st); if (st > 3.5) this.set('idle'); break;
       case 'preview': this.drawPreview(t); break;
       default: this.drawIdle(t, 1);
     }
     x.restore();
+    if (t - this.reactT < 1.4 && (this.scene === 'idle' || this.scene === 'preview')) this.drawReact(t, t - this.reactT);
     this.drawFrame(t);
   }
 
@@ -177,12 +187,65 @@ export class Screen {
 
   // ---------------- シーン ----------------
   drawIdle(t, speed) {
+    if (this.status.zone > 0) { this.drawZone(t, speed); return; }
     this.bg(t, '#2b3fb0', '#05061a');
     const bob = Math.sin(t * 2.2) * 8;
     this.juggle(W * 0.27, H * 0.42, t, 0.55 * speed, 3);
     this.clown(W * 0.27, H * 0.58 + bob, H * 0.74, Math.sin(t * 1.3) * 0.05);
     this.logo(W * 0.71, H * 0.42, 1, t);
     for (let i = 0; i < 3; i++) this.seven(W * 0.59 + i * 120, H * 0.78 + Math.sin(t * 3 + i) * 4, 0.55);
+  }
+
+  // 連チャンゾーン (ボーナス後 100G)。夜のステージ + 残り G 数 + 連チャン数
+  drawZone(t, speed) {
+    const x = this.x;
+    const { zone, chain } = this.status;
+    const urgent = zone <= 10;
+    this.bg(t, urgent ? '#7a0a3a' : '#4a1a8a', '#07021a', 0.25, 'rgba(255,120,220,0.10)');
+    this.juggle(W * 0.22, H * 0.46, t, 0.9 * speed, 3, 'seven', 0.85);
+    this.clown(W * 0.22, H * 0.62 + Math.sin(t * 3) * 8, H * 0.62, Math.sin(t * 2) * 0.06);
+    const pulse = 1 + Math.sin(t * (urgent ? 10 : 4)) * 0.03;
+    x.save(); x.translate(W * 0.66, H * 0.24); x.scale(pulse, pulse);
+    this.text('連チャンゾーン', 0, 0, 72, this.rainbowFill(-300, 300, t), '#1a0030', this.gothic);
+    x.restore();
+    this.text(`残り`, W * 0.5, H * 0.56, 44, '#fff', '#1a0030', this.gothic);
+    this.text(`${zone}`, W * 0.66, H * 0.55, 130, urgent ? '#ff6a8a' : '#ffe14d');
+    this.text('G', W * 0.82, H * 0.58, 60, '#fff');
+    if (chain > 0) this.text(`${chain} 連中`, W * 0.66, H * 0.84, 60, '#fff', '#1a0030', this.gothic);
+  }
+
+  // 小役リアクション
+  drawReact(t, k) {
+    const x = this.x;
+    const a = k < 0.15 ? k / 0.15 : k > 1.1 ? (1.4 - k) / 0.3 : 1;
+    const pop = 1 + (1 - ease(k / 0.25)) * 0.6;
+    x.save(); x.globalAlpha = Math.max(0, a);
+    const kind = this.reactKind;
+    const cx = W * 0.5, cy = H * 0.5;
+    if (kind === 'GRAPE') {
+      const im = this.img.grape;
+      x.translate(W * 0.84, H * 0.3 - ease(k / 0.5) * 30); x.scale(pop, pop);
+      if (im) x.drawImage(im, -60, -60, 120, 120);
+      this.text('+8', 0, 90, 56, '#c9a0ff');
+    } else if (kind === 'REPLAY') {
+      x.translate(W * 0.84, H * 0.3); x.scale(pop, pop);
+      this.text('REPLAY', 0, 0, 50, '#7ad0ff');
+    } else if (kind === 'CHERRY') {
+      // チェリーはボーナス重複のチャンス
+      x.fillStyle = 'rgba(80,0,20,0.45)'; x.fillRect(0, cy - 90, W, 180);
+      x.translate(cx, cy); x.scale(pop, pop);
+      const im = this.img.cherry;
+      if (im) { x.drawImage(im, -330, -70, 140, 140); x.drawImage(im, 190, -70, 140, 140); }
+      this.text('チャンス!?', 0, 4, 100, '#ff5a7a', '#2a0008', this.gothic);
+    } else if (kind === 'BELL' || kind === 'CLOWN') {
+      // 1/1092 のレア小役
+      x.fillStyle = `rgba(255,220,80,${0.25 + 0.2 * Math.sin(t * 30)})`; x.fillRect(0, 0, W, H);
+      x.translate(cx, cy); x.scale(pop, pop); x.rotate(Math.sin(t * 8) * 0.04);
+      const im = this.img[kind === 'BELL' ? 'bell' : 'clown'];
+      if (im) { const h = 200, w = im.width * (h / im.height); x.drawImage(im, -w / 2 - 300, -h / 2, w, h); }
+      this.text('レア役!!', 60, 0, 130, this.rainbowFill(-400, 400, t), '#2a0008', this.gothic);
+    }
+    x.restore();
   }
 
   drawPreview(t) {
@@ -289,10 +352,23 @@ export class Screen {
     this.clown(W * 0.25, H * 0.62 + Math.sin(t * 6) * 8, H * 0.66, Math.sin(t * 3) * 0.06);
     const pop = 1 + (1 - ease(st / 0.4)) * 0.8;
     const x = this.x;
-    x.save(); x.translate(W * 0.68, H * 0.3); x.scale(pop, pop);
-    this.text(big ? 'BIG BONUS' : 'REG BONUS', 0, 0, 92, this.rainbowFill(-300, 300, t));
+    x.save(); x.translate(W * 0.64, H * 0.26); x.scale(pop, pop);
+    this.text(big ? 'BIG BONUS' : 'REG BONUS', 0, 0, 74, this.rainbowFill(-300, 300, t));
     x.restore();
-    const { paid, max } = this.bonus;
+    const { paid, max, chain, sp } = this.bonus;
+    if (chain > 1) {
+      x.save(); x.translate(W * 0.09, H * 0.15); x.rotate(-0.12);
+      x.fillStyle = '#ffe14d'; x.beginPath(); x.arc(0, 0, 62, 0, Math.PI * 2); x.fill();
+      this.text(`${chain}連`, 0, 4, 52, '#c0102a', '#fff', this.gothic);
+      x.restore();
+    }
+    if (sp && st < 4) {
+      const a = Math.min(1, st * 3) * (st > 3.4 ? (4 - st) / 0.6 : 1);
+      x.save(); x.globalAlpha = a;
+      x.fillStyle = 'rgba(0,0,0,0.65)'; x.fillRect(0, H * 0.06, W, 70);
+      this.text(sp === 'premium' ? 'PREMIUM BGM' : 'SPECIAL BGM', W / 2, H * 0.06 + 36, 50, this.rainbowFill(0, W, t));
+      x.restore();
+    }
     this.text(`${paid}`, W * 0.64, H * 0.64, 130, '#fff');
     this.text(`/ ${max} 枚`, W * 0.86, H * 0.68, 56, '#ffe14d', '#120018', this.gothic);
     // ゲージ
@@ -304,8 +380,10 @@ export class Screen {
     const r = this.result;
     this.bg(t, '#d0a000', '#2a1600', 0.3, 'rgba(255,255,255,0.12)');
     this.clown(W * 0.2, H * 0.58, H * 0.7, Math.sin(t * 5) * 0.1);
-    this.text(`${r.type} 終了`, W * 0.62, H * 0.32, 80, '#fff', '#120018', this.gothic);
-    this.text(`${r.paid} 枚 GET!`, W * 0.62, H * 0.62, 110, '#ffe14d', '#120018', this.gothic);
+    this.text(`${r.type} 終了`, W * 0.62, H * 0.24, 72, '#fff', '#120018', this.gothic);
+    this.text(`${r.paid} 枚 GET!`, W * 0.62, H * 0.5, 110, '#ffe14d', '#120018', this.gothic);
+    if (r.chain > 1) this.text(`${r.chain} 連 合計 ${r.total} 枚`, W * 0.62, H * 0.78, 60, this.rainbowFill(0, W, t), '#120018', this.gothic);
+    else this.text('連チャンゾーン 100G へ', W * 0.62, H * 0.78, 52, '#fff', '#120018', this.gothic);
   }
 
   // 縁の電球 (チェイス)

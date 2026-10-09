@@ -129,6 +129,9 @@ OGG を MP3 に変換しただけで、音そのものには手を加えてい�
 |---|---|---|---|---|
 | `assets/audio/bgm/level3.mp3` (BIG 中) | 5 Chiptunes (Action) — "Level 3" | Juhani Junkala | https://opengameart.org/content/5-chiptunes-action | CC0 1.0 |
 | `assets/audio/bgm/level1.mp3` (REG 中) | 5 Chiptunes (Action) — "Level 1" | Juhani Junkala | 同上 | CC0 1.0 |
+| `assets/audio/bgm/level2.mp3` (スペシャル BGM 1) | 5 Chiptunes (Action) — "Level 2" | Juhani Junkala | 同上 | CC0 1.0 |
+| `assets/audio/bgm/ending.mp3` (スペシャル BGM 2) | 5 Chiptunes (Action) — "Ending" | Juhani Junkala | 同上 | CC0 1.0 |
+| `assets/audio/bgm/title_screen.mp3` (プレミアム BGM) | 5 Chiptunes (Action) — "Title Screen" | Juhani Junkala | 同上 | CC0 1.0 |
 
 
 ## フォント (Fontsource 経由で取得)
