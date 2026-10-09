@@ -28,45 +28,15 @@ export const CONFIG = {
         'assets/models/arcade/vending-machine.gltf.json',
         'assets/models/arcade/prize-wheel.gltf.json',
       ],
-      // 液晶内の 3D 舞台: 海賊の宝探し (Quaternius Pirate Kit / Kenney Pirate Kit)
-      story: {
-        captain: 'assets/models/pirate/Characters_Captain_Barbarossa.gltf.json',
-        anne: 'assets/models/pirate/Characters_Anne.gltf.json',
-        henry: 'assets/models/pirate/Characters_Henry.gltf.json',
-        skeleton: 'assets/models/pirate/Characters_Skeleton.gltf.json',
-        tentacle: 'assets/models/pirate/Characters_Tentacle.gltf.json',
-        ship: 'assets/models/pirate/Ship_Large.gltf.json',
-        ghostShip: 'assets/models/kenney-pirate/ship-ghost.gltf.json',
-        chestClosed: 'assets/models/pirate/Prop_Chest_Closed.gltf.json',
-        chestGold: 'assets/models/pirate/Prop_Chest_Gold.gltf.json',
-        coins: 'assets/models/pirate/Prop_Coins.gltf.json',
-        cannon: 'assets/models/pirate/Prop_Cannon.gltf.json',
-        ball: 'assets/models/pirate/Prop_CannonBall.gltf.json',
-        skull: 'assets/models/pirate/Prop_Skull.gltf.json',
-        gemBlue: 'assets/models/pirate/UI_Gem_Blue.gltf.json',
-        gemPink: 'assets/models/pirate/UI_Gem_Pink.gltf.json',
-        palm1: 'assets/models/pirate/Environment_PalmTree_1.gltf.json',
-        palm2: 'assets/models/pirate/Environment_PalmTree_2.gltf.json',
-        rock1: 'assets/models/pirate/Environment_Rock_1.gltf.json',
-        rock3: 'assets/models/pirate/Environment_Rock_3.gltf.json',
-        cliff: 'assets/models/pirate/Environment_Cliff1.gltf.json',
-        barrel: 'assets/models/pirate/Prop_Barrel.gltf.json',
-        paper: 'assets/models/pirate/UI_Paper.gltf.json',
-      },
-      // 空 (Poly Haven の puresky を縮小 JPG 化したもの)
-      skies: {
-        day: 'assets/images/sky/kloofendal_48d_partly_cloudy_puresky.jpg',
-        sunset: 'assets/images/sky/belfast_sunset_puresky.jpg',
-        night: 'assets/images/sky/qwantani_night_puresky.jpg',
-        storm: 'assets/images/sky/kloofendal_overcast_puresky.jpg',
-      },
     },
     // リール図柄スキン。'twemoji' (高解像度ベクター) / 'pixel' (Cougarmint ドット絵)
     symbolSkin: 'twemoji',
     symbolImages: {
       twemoji: {
         bell: 'assets/images/twemoji/bell.svg',
-        suika: 'assets/images/twemoji/watermelon.svg',
+        grape: 'assets/images/twemoji/grapes.svg',
+        clown: 'assets/images/twemoji/clown.svg',
+        coin: 'assets/images/twemoji/coin.svg',
         cherry: 'assets/images/twemoji/cherry.svg',
         replay: 'assets/images/twemoji/replay.svg',
         star: 'assets/images/twemoji/star.svg',
@@ -77,10 +47,8 @@ export const CONFIG = {
       },
       pixel: {
         red7: 'assets/images/cougarmint/Lucky7.png',
-        blue7: 'assets/images/cougarmint/Lucky7_rainbow.png',
         bar: 'assets/images/cougarmint/Bar3.png',
         bell: 'assets/images/cougarmint/bell.png',
-        suika: 'assets/images/cougarmint/melon.png',
         cherry: 'assets/images/cougarmint/cherries.png',
         replay: 'assets/images/cougarmint/clover.png',
       },
@@ -126,14 +94,14 @@ export const CONFIG = {
       cutin: 'assets/audio/sfx/cutin.mp3',
       computer: 'assets/audio/sfx/computer.mp3',
       window: 'assets/audio/sfx/window.mp3',
-      cannon: 'assets/audio/sfx/cannon.mp3',
-      cannon_hit: 'assets/audio/sfx/cannon_hit.mp3',
-      splash: 'assets/audio/sfx/splash.mp3',
-      ocean: 'assets/audio/sfx/ocean.mp3',
+      buiin: 'assets/audio/sfx/buiin.mp3',
+      rumble: 'assets/audio/sfx/rumble.mp3',
+      peka: 'assets/audio/sfx/peka.mp3',
+      bill: 'assets/audio/sfx/bill.mp3',
     },
     bgm: {
-      big: 'assets/audio/bgm/blackmoor_tides.mp3',
-      reg: 'assets/audio/bgm/chest_of_adventure.mp3',
+      big: 'assets/audio/bgm/level3.mp3',
+      reg: 'assets/audio/bgm/level1.mp3',
     },
   },
 
@@ -141,20 +109,21 @@ export const CONFIG = {
   // 図柄・リール配列 (21コマ / 下から上へ index が増える = 上段が index+1)
   //   R=赤7 B=青7 A=BAR L=ベル S=スイカ C=チェリー P=リプレイ
   // ---------------------------------------------------------------
+  // ジャグラー型 (告知ランプ機) の図柄。名前と絵はオリジナル
   symbols: {
-    R: { name: 'red7', label: '赤7' },
-    B: { name: 'blue7', label: '青7' },
+    R: { name: 'red7', label: '7' },
     A: { name: 'bar', label: 'BAR' },
-    L: { name: 'bell', label: 'ベル' },
-    S: { name: 'suika', label: 'スイカ' },
+    G: { name: 'grape', label: 'ぶどう' },
     C: { name: 'cherry', label: 'チェリー' },
+    L: { name: 'bell', label: 'ベル' },
+    J: { name: 'clown', label: 'ピエロ' },
     P: { name: 'replay', label: 'リプレイ' },
   },
   reels: {
     strips: [
-      'PLRCPLSAPLBCPLSRPLACL', // 左
-      'LPRSLPABLPSRLPASLPBRP', // 中
-      'LSPRLAPSLBPRLSPALRPBS', // 右
+      'PGRCPGLAPGJCPGLRPGACG', // 左
+      'GPRLGPAJGPLRGPALGPJRP', // 中
+      'GLPRGAPJGJPRGLPAGRPJL', // 右
     ],
     maxSlip: 4,             // 引き込み最大コマ数 (実機準拠: 190ms 以内に 4 コマ)
     rpm: 80,                // 回転速度
@@ -175,13 +144,14 @@ export const CONFIG = {
   // 役と配当
   // ---------------------------------------------------------------
   roles: {
-    BIG: { combos: ['RRR', 'BBB', 'RRB', 'RBR', 'BRR', 'BBR', 'BRB', 'RBB'], pay: 0, bonus: 'BIG' }, // 異色7揃いも BIG
-    REG: { combos: ['RRA', 'BBA'], pay: 0, bonus: 'REG' },
-    SUIKA: { combos: ['SSS'], pay: 10 },
-    BELL: { combos: ['LLL'], pay: 8 },
+    BIG: { combos: ['RRR'], pay: 0, bonus: 'BIG' },          // 7・7・7
+    REG: { combos: ['RRA'], pay: 0, bonus: 'REG' },          // 7・7・BAR
+    GRAPE: { combos: ['GGG'], pay: 8 },                      // ぶどう
+    BELL: { combos: ['LLL'], pay: 14 },
+    CLOWN: { combos: ['JJJ'], pay: 10 },                     // ピエロ
     REPLAY: { combos: ['PPP'], pay: 0, replay: true },
-    CHERRY: { leftAny: 'C', pay: 2 }, // 左リール枠内チェリーで成立
-    BONUS_BELL: { combos: ['LLL'], pay: 15 }, // ボーナス中の特別ベル
+    CHERRY: { leftAny: 'C', pay: 2 },                        // 左リール枠内チェリー
+    BONUS_GRAPE: { combos: ['GGG'], pay: 15 },               // ボーナス中のぶどう
   },
   bet: 3,
 
@@ -189,19 +159,21 @@ export const CONFIG = {
   // 内部抽選テーブル (分母表記)。設定 1-6
   //   キーは「成立フラグ」。'+' は重複当選 (小役 + ボーナス)
   // ---------------------------------------------------------------
-  setting: 4,
+  setting: 1, // 遊技開始時に「本日の設定」を抽選して上書きする (隠し設定)
+  // 本日の設定の抽選比率 (ホールの実情に近く低設定が多い)
+  settingOdds: { 1: 40, 2: 22, 3: 15, 4: 12, 5: 7, 6: 4 },
   probability: {
-    1: { BIG: 300, REG: 480, 'CHERRY+BIG': 1600, 'SUIKA+BIG': 2400, 'CHERRY+REG': 2400, REPLAY: 7.3, BELL: 7.6, SUIKA: 64, CHERRY: 36 },
-    2: { BIG: 290, REG: 440, 'CHERRY+BIG': 1500, 'SUIKA+BIG': 2300, 'CHERRY+REG': 2200, REPLAY: 7.3, BELL: 7.5, SUIKA: 64, CHERRY: 36 },
-    3: { BIG: 280, REG: 400, 'CHERRY+BIG': 1400, 'SUIKA+BIG': 2200, 'CHERRY+REG': 2000, REPLAY: 7.3, BELL: 7.4, SUIKA: 62, CHERRY: 35 },
-    4: { BIG: 268, REG: 360, 'CHERRY+BIG': 1300, 'SUIKA+BIG': 2000, 'CHERRY+REG': 1800, REPLAY: 7.3, BELL: 7.2, SUIKA: 60, CHERRY: 35 },
-    5: { BIG: 255, REG: 320, 'CHERRY+BIG': 1200, 'SUIKA+BIG': 1800, 'CHERRY+REG': 1600, REPLAY: 7.3, BELL: 7.1, SUIKA: 58, CHERRY: 34 },
-    6: { BIG: 240, REG: 280, 'CHERRY+BIG': 1000, 'SUIKA+BIG': 1600, 'CHERRY+REG': 1400, REPLAY: 7.3, BELL: 7.0, SUIKA: 56, CHERRY: 33 },
+    1: { BIG: 353.6, REG: 785.1, 'CHERRY+BIG': 1200, 'CHERRY+REG': 1000, REPLAY: 7.3, GRAPE: 6.02, CHERRY: 35.6, BELL: 1092, CLOWN: 1092 }, // 合算 BIG 1/273.1 REG 1/439.8
+    2: { BIG: 347.9, REG: 665.6, 'CHERRY+BIG': 1200, 'CHERRY+REG': 1000, REPLAY: 7.3, GRAPE: 6.02, CHERRY: 35.6, BELL: 1092, CLOWN: 1092 }, // 合算 BIG 1/269.7 REG 1/399.6
+    3: { BIG: 347.9, REG: 494.8, 'CHERRY+BIG': 1200, 'CHERRY+REG': 1000, REPLAY: 7.3, GRAPE: 6.02, CHERRY: 35.6, BELL: 1092, CLOWN: 1092 }, // 合算 BIG 1/269.7 REG 1/331.0
+    4: { BIG: 330.3, REG: 460.1, 'CHERRY+BIG': 1200, 'CHERRY+REG': 1000, REPLAY: 7.3, GRAPE: 5.95, CHERRY: 35.6, BELL: 1092, CLOWN: 1092 }, // 合算 BIG 1/259.0 REG 1/315.1
+    5: { BIG: 330.3, REG: 374.3, 'CHERRY+BIG': 1200, 'CHERRY+REG': 800, REPLAY: 7.3, GRAPE: 5.9, CHERRY: 35.6, BELL: 1092, CLOWN: 1092 }, // 合算 BIG 1/259.0 REG 1/255.0
+    6: { BIG: 323.8, REG: 374.3, 'CHERRY+BIG': 1200, 'CHERRY+REG': 800, REPLAY: 7.3, GRAPE: 5.78, CHERRY: 35.6, BELL: 1092, CLOWN: 1092 }, // 合算 BIG 1/255.0 REG 1/255.0
   },
   // ボーナス中の抽選 (比率)
-  bonusTable: { BONUS_BELL: 0.86, REPLAY: 0.09, NONE: 0.05 },
+  bonusTable: { BONUS_GRAPE: 0.86, REPLAY: 0.09, NONE: 0.05 },
   bonus: {
-    BIG: { maxPay: 300, maxGames: 60, bgm: 'big' },
+    BIG: { maxPay: 312, maxGames: 60, bgm: 'big' },
     REG: { maxPay: 104, maxGames: 12, bgm: 'reg' },
   },
 
@@ -209,8 +181,7 @@ export const CONFIG = {
   // 遊技設定
   // ---------------------------------------------------------------
   play: {
-    startMedals: 500,
-    lendAmount: 500,
+    startMedals: 0,
     autoBet: true,           // 前回ベットを自動で掛ける
     assistAlignAfterNotice: true, // 告知後はボーナス図柄を自動で引き込む (目押しアシスト)
     persist: true,           // 持ちメダル・履歴を localStorage に保存
@@ -220,68 +191,23 @@ export const CONFIG = {
   // 演出 (予告・告知・フリーズ)
   // ---------------------------------------------------------------
   // ---------------------------------------------------------------
-  // 物語演出 (液晶)
-  //   1ゲーム = レバーON → 第1停止 → 第2停止 → 第3停止 の4拍で昇格していく
+  // お金 (ハラハラ感)
   // ---------------------------------------------------------------
-  story: {
-    // 船のクルー (3D モデルから起動時に顔アップを描き出してカットインに使う)
-    cast: {
-      captain: { name: '船長', full: 'バルバロッサ船長', color: '#ff9a6a' },
-      anne: { name: '航海士', full: '航海士アン', color: '#ffd36a' },
-      henry: { name: '砲手', full: '砲手ヘンリー', color: '#8fd0ff' },
-    },
-    // 台詞。色 = 期待度 (blue < green < red < gold < rainbow)
-    lines: {
-      blue: [
-        ['anne', '風向き良好。のんびり行きましょ'],
-        ['henry', '今日も異常なし、っと'],
-        ['captain', '焦るな。海は逃げん'],
-        ['anne', '波が穏やかね'],
-      ],
-      green: [
-        ['anne', '何か見えるわ!'],
-        ['henry', '大砲の準備はできてるぜ'],
-        ['captain', '舵を切れ!'],
-        ['anne', '地図の印に近いわ'],
-      ],
-      red: [
-        ['captain', '野郎ども、行くぞ!'],
-        ['henry', 'ぶっ放すぜ!'],
-        ['anne', 'お宝の匂いがする!'],
-        ['captain', 'ここが勝負どころだ'],
-      ],
-      gold: [
-        ['captain', 'お宝はもう目の前だ'],
-        ['anne', '間違いない、ここよ!'],
-        ['henry', '一発で決めてやる!'],
-      ],
-      rainbow: [['captain', '伝説の宝島だ…!']],
-    },
-    lineColor: {
-      win: { blue: 4, green: 14, red: 40, gold: 32, rainbow: 10 },
-      lose: { blue: 58, green: 30, red: 11.5, gold: 0.5, rainbow: 0 },
-    },
-    // シナリオの振り分け (フラグ別の重み)
-    //   none    : 何もなし
-    //   cutin   : クルーのカットイン (停止毎に台詞色が昇格しうる)
-    //   barrels : 樽が大量に流れてくる (群予告) → 第2停止でカットイン
-    //   chest   : 宝箱 (木→銀→金→虹 に停止毎で昇格) → PUSH で開封
-    //   battle  : SP「骸骨船との砲撃戦」 敵船接近 → 装填 → 照準 → PUSH で発射
-    //   final   : 最終決戦「クラーケン」 触手が出現 → 3,2,1 → PUSH
-    //   map     : 伝説の宝の地図 (プレミア / 確定)
-    //   freeze  : フリーズ (確定)
-    //   zone    : 嵐の前兆 2〜4G (嵐ステージ) → 最終ゲームで battle / final
-    scenarios: {
-      NONE:   { none: 87, cutin: 9, barrels: 2.4, chest: 0.8, battle: 0.35, final: 0.04, zone: 0.4 },
-      REPLAY: { none: 80, cutin: 14, barrels: 4, chest: 2 },
-      BELL:   { none: 82, cutin: 13, barrels: 4, chest: 1 },
-      CHERRY: { none: 35, cutin: 37, barrels: 15, chest: 8, battle: 5 },
-      SUIKA:  { none: 30, cutin: 33, barrels: 20, chest: 10, battle: 7 },
-      BONUS:  { cutin: 8, barrels: 6, chest: 16, battle: 22, final: 16, map: 4, freeze: 8, zone: 20 },
-    },
-    zoneLength: [2, 4],
-    revival: 0.18,         // ボーナス当選時、一度「撤退」を見せてから逆転する確率
-    stageChange: 0.05,     // 通常時のステージチェンジ率 (ボーナス持ち越し中は 0.3)
+  money: {
+    wallet: 30000,        // 1日の所持金 (円)
+    lendYen: 1000,        // 1回の貸出 (円)
+    lendMedals: 46,       // 1000円で借りられるメダル (実ホールの 46 枚貸し)
+    exchangeYen: 20,      // 換金レート (1 枚あたりの円。20 = 等価)
+  },
+
+  // ---------------------------------------------------------------
+  // 告知 (ジャグラー型: ランプが光ればボーナス確定)
+  // ---------------------------------------------------------------
+  notice: {
+    lever: 25,            // 先ペカ: レバーを叩いた瞬間に点灯
+    release: 75,          // 後ペカ: 第3停止ボタンを離した瞬間に点灯
+    premium: 1 / 8,       // プレミア点灯 (虹色に脈動) の割合
+    silenceMs: 140,       // 点灯直前の“無音”
   },
 
   effects: {
@@ -289,24 +215,19 @@ export const CONFIG = {
     bloom: { strength: 0.42, radius: 0.4, threshold: 0.92 },
     shake: { decay: 2.2, maxOffset: 0.06, maxRoll: 0.025 },
     // navigator.vibrate パターン (ms)
+    // navigator.vibrate パターン (ms)。iPhone はタップ連打で近似
     vibrate: {
       button: [8],
       lever: [14],
       stop: [12],
-      yokokuWeak: [20],
-      yokokuMid: [30, 40, 30],
-      yokokuStrong: [60, 40, 60, 40, 120],
-      cutin: [18, 30, 18],
-      title: [90],
-      win: [120, 40, 120, 40, 260],
-      lose: [40],
+      peka: [35],                                        // ランプ点灯の“コツッ”
+      buiin: [1500],                                     // 点灯後の「ブイーン」
+      premium: [120, 60, 120, 60, 1600],
+      bonusStart: [250, 70, 250, 70, 250, 70, 1400],     // 7 揃い
       reach: [25, 25, 25, 25, 25],
-      notice: [90, 50, 90, 50, 90, 50, 120, 40, 420],
-      push: [20, 30, 20],
-      pushHit: [70],
       freeze: [600, 120, 120, 80, 120, 80, 800],
-      bonusStart: [160, 50, 160, 50, 160, 50, 160, 50, 260, 60, 900],
       payout: [6],
+      lend: [20, 40, 20],
     },
     haptics: true,
   },

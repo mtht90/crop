@@ -8,11 +8,8 @@ import { Machine } from './machine.js';
 import { AudioEngine } from './audio.js';
 import { loadAssets } from './assets.js';
 import { Cabinet, DIM } from './cabinet.js';
-import { Lcd } from './lcd.js';
 import { Haptics, Shaker, Coins, Sparks } from './fx.js';
 import { Director } from './director.js';
-import { Story } from './story.js';
-import { LcdStage } from './lcd3d.js';
 import { hapticTrigger } from '../assets/lib/ios-haptics/ios-haptics.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
@@ -23,7 +20,7 @@ if (HASH.has('lite')) { cfg.render.hall = false; cfg.render.neighbors = false; c
 const TOUCH = matchMedia('(hover: none)').matches;
 if (TOUCH) { cfg.render.pixelRatioMax = Math.min(cfg.render.pixelRatioMax, 1.5); cfg.render.neighbors = cfg.render.neighbors && 'near'; cfg.render.mobile = true; }
 const $ = (id) => document.getElementById(id);
-const STORE = 'slot.v2';
+const STORE = 'slot.juggler.v1';
 
 // ------------------------------------------------------------------
 // renderer / scene
@@ -64,15 +61,16 @@ if (window.claude?.hot?.data?.machine) machine.restore(window.claude.hot.data.ma
 window.claude?.hot?.snapshot?.(() => ({ machine: machine.serialize() }));
 
 // カメラリグ (画面比に合わせて筐体をフィット + ポインタ視差 + 演出ズーム)
-const rig = { zoom: 0, z: 0, px: 0, py: 0, tx: 0, ty: 0, base: { pos: new THREE.Vector3(), target: new THREE.Vector3() } };
+const rig = { cx: 0, zoom: 0, z: 0, px: 0, py: 0, tx: 0, ty: 0, base: { pos: new THREE.Vector3(), target: new THREE.Vector3() } };
 function fitCamera() {
   const c = cfg.render.camera;
   const aspect = innerWidth / innerHeight;
   const tanH = Math.tan(THREE.MathUtils.degToRad(c.fov / 2));
   const portrait = aspect < 0.9;
-  const halfH = portrait ? 0.7 : 0.82, halfW = portrait ? 0.47 : 0.75;
+  const halfH = portrait ? 0.74 : 0.9, halfW = portrait ? 0.57 : 0.8;
+  rig.cx = portrait ? 0.07 : 0; // 縦画面は右の千円入れ機まで収める
   const d = Math.max(halfH / tanH, halfW / (tanH * aspect));
-  const ty = portrait ? 1.42 : c.target[1] + 0.24;
+  const ty = portrait ? 1.5 : c.target[1] + 0.33;
   rig.touch = matchMedia('(hover: none)').matches;
 
   rig.dist = d;
@@ -87,15 +85,15 @@ function updateRig(dt) {
   const par = cfg.render.camera.parallax;
   const d = rig.dist * (1 - rig.z * 0.45);
   const focusY = THREE.MathUtils.lerp(rig.ty0, DIM.reelY, Math.max(0, rig.z));
-  rig.base.target.set(0, focusY, 0);
-  rig.base.pos.set(rig.px * par, focusY + 0.12 + rig.py * par * 0.6, d);
+  rig.base.target.set(rig.cx, focusY, 0);
+  rig.base.pos.set(rig.cx + rig.px * par, focusY + 0.12 + rig.py * par * 0.6, d);
   shaker.apply(camera, rig.base, dt);
 }
 
 // ------------------------------------------------------------------
 // boot
 // ------------------------------------------------------------------
-let cab, lcd, coins, sparks, director, story, stage;
+let cab, coins, sparks, director;
 const loadBar = $('loadbar');
 async function boot() {
   let pA = 0, pB = 0;
@@ -110,18 +108,15 @@ async function boot() {
   cab = new Cabinet(cfg, assets, machine.logic);
   scene.add(cab.group);
   buildRoom(assets);
-  stage = new LcdStage(renderer, cfg, assets.story);
-  cab.setLcdStage(stage.texture);
-  lcd = new Lcd(cab.lcdCanvas, cab.lcdTex, assets.images, cfg);
   coins = new Coins(scene, assets.models.coin, cab.tray);
   sparks = new Sparks(scene);
-  director = new Director({ cfg, cab, lcd, audio, haptics, shaker, coins, sparks, machine, rig, bloom });
-  story = new Story({ cfg, lcd, stage, audio, haptics, shaker, machine, director });
-  director.story = story;
+  director = new Director({ cfg, cab, audio, haptics, shaker, coins, sparks, machine, rig, bloom });
   director.onPayTick = (n) => { payShown = n; refreshHud(); };
+  director.onNotice = () => toast('7 を狙え!', 'hot');
+  director.onBonusStart = (type) => { cab.setCounter({ ...machine.stats, graph: machine.stats.graph }, type); toast(type === 'BIG' ? 'BIG BONUS' : 'REG BONUS', 'hot'); };
+  // 告知済み・ボーナス中で再開したときの状態復元
   if (machine.carried && machine.noticed) { cab.lights.lampTarget = 1; cab.lights.rainbow = 1; }
-  if (machine.mode !== 'normal') { lcd.base = 'bonus'; cab.lights.mode = 'rainbow'; story.bonusScene(true); }
-  if (machine.carried && machine.noticed) lcd.prompt = '7 を狙え';
+  if (machine.mode !== 'normal') { cab.lights.mode = 'rainbow'; cab.lights.artMode = 'bonus'; cab.bonusLabel = machine.mode + ' BONUS'; }
   if (HASH.has('zoom')) rig.zoom = 0.6;
   fitCamera();
   refreshHud();
@@ -131,12 +126,11 @@ async function boot() {
     $('loading').classList.add('gone');
     haptics.vibrate([30]);
     audio.resume().then(() => {
-      audio.play('ocean', { loop: true, gain: 0.12 }); // 波音 (環境音)
       if (machine.mode !== 'normal') audio.bgm(cfg.bonus[machine.mode].bgm);
     }).catch((e) => console.warn('audio resume', e));
   };
   renderer.setAnimationLoop(frame);
-  window.__slot = { THREE, cab, lcd, machine, director, story, stage, scene, camera, rig, cfg, force: (f) => { forcedFlag = f; }, get state() { return state; } };
+  window.__slot = { THREE, cab, machine, director, scene, camera, rig, cfg, cashout, lend, force: (f) => { forcedFlag = f; }, get state() { return state; } };
 }
 
 function buildRoom(assets) {
@@ -169,15 +163,10 @@ function buildRoom(assets) {
   scene.add(counter);
   // 隣台: 自台のクローンを暗く (照明演出は自台のみ)
   const dimMats = new Map();
-  const lcdSnap = document.createElement('canvas');
-  lcdSnap.width = cab.lcdCanvas.width; lcdSnap.height = cab.lcdCanvas.height;
-  const snapTex = new THREE.CanvasTexture(lcdSnap);
-  snapTex.colorSpace = THREE.SRGBColorSpace;
   const reelMats = new Set(cab.reels.map((r) => r.mat));
   const dim = (m) => {
     if (!dimMats.has(m)) {
       const c = m.clone();
-      if (m.map === cab.lcdTex) c.map = snapTex;
       if (c.color) c.color.multiplyScalar(0.4);
       if ('emissiveIntensity' in c) c.emissiveIntensity = Math.min(c.emissiveIntensity, 0.22);
       if (reelMats.has(m)) c.emissiveIntensity = 0.5;
@@ -185,8 +174,6 @@ function buildRoom(assets) {
     }
     return dimMats.get(m);
   };
-  // 隣台の液晶は待機画面の静止画
-  setTimeout(() => { lcdSnap.getContext('2d').drawImage(cab.lcdCanvas, 0, 0); snapTex.needsUpdate = true; }, 300);
   for (const x of cfg.render.neighbors === false ? [] : cfg.render.neighbors === 'near' ? [-0.98, 0.98] : [-0.98, 0.98, -1.96, 1.96]) {
     const n = cab.group.clone(true);
     n.traverse((o) => {
@@ -235,29 +222,58 @@ function save() {
   try { localStorage.setItem(STORE, machine.serialize()); } catch { /* storage blocked */ }
 }
 
+const yen = (v) => `${v < 0 ? '-' : ''}¥${Math.abs(v).toLocaleString('ja-JP')}`;
+
 function refreshHud() {
   const s = machine.stats;
-  const diff = machine.medals - cfg.play.startMedals - (s.lent || 0);
+  const bal = machine.balance();
+  $('h-wallet').textContent = yen(machine.wallet);
+  $('h-invest').textContent = yen(machine.invested);
   $('h-medals').textContent = machine.medals;
-  $('h-diff').textContent = (diff >= 0 ? '+' : '') + diff;
-  $('h-diff').className = diff >= 0 ? 'pos' : 'neg';
-  $('h-games').textContent = s.sinceBonus;
-  $('h-big').textContent = s.big;
-  $('h-reg').textContent = s.reg;
-  $('h-total').textContent = s.games;
-  if (lcd) Object.assign(lcd.info, { games: s.games, big: s.big, reg: s.reg, since: s.sinceBonus, medals: machine.medals, diff });
-  if (lcd && lcd.bonus && machine.mode !== 'normal') Object.assign(lcd.bonus, { paid: machine.bonusPaid, games: machine.bonusGames });
-  if (cab) cab.setSegments(Math.min(machine.medals, 99999), payShown, s.sinceBonus);
+  $('h-cash').textContent = yen(machine.cashValue());
+  $('h-bal').textContent = (bal >= 0 ? '+' : '') + yen(bal).replace('¥', '¥');
+  $('h-bal').className = bal >= 0 ? 'pos' : 'neg';
+  $('hud').classList.toggle('broke', machine.wallet < cfg.money.lendYen && machine.medals < cfg.bet && machine.mode === 'normal');
+  if (cab) {
+    cab.setSegments(Math.min(machine.medals, 99999), payShown, s.sinceBonus);
+    cab.setCounter(s);
+    const need = machine.medals < cfg.bet && !machine.replayPending && machine.credit < cfg.bet && machine.mode === 'normal';
+    cab.setChanger(machine.wallet, need && machine.canLend());
+  }
+  const needLend = machine.medals < cfg.bet && !machine.replayPending && machine.credit < cfg.bet && machine.mode === 'normal';
+  $('btn-lend').disabled = !machine.canLend();
+  $('hud').classList.toggle('need', needLend && machine.canLend());
+}
+
+// 画面上部の短い通知
+function toast(text, kind = '') {
+  const el = $('toast');
+  el.textContent = text;
+  el.className = `on ${kind}`;
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.className = ''; }, 1800);
+}
+
+// 千円でメダルを借りる (台間サンド)
+function lend() {
+  if (!cab || state === 'settling') return false;
+  if (!machine.lend()) { toast('所持金が足りません', 'warn'); audio.play('lose', { gain: 0.6 }); return false; }
+  audio.play('bill', { gain: 0.9 });
+  for (let i = 0; i < 8; i++) audio.play('medal_in', { delay: 0.25 + i * 0.07, gain: 0.45, rate: 0.95 + Math.random() * 0.2 });
+  haptics.vibrate('lend');
+  toast(`千円札 → メダル ${cfg.money.lendMedals} 枚`, '');
+  refreshHud();
+  save();
+  return true;
 }
 
 function doBet() {
   if (state !== 'idle' || machine.credit >= cfg.bet) return false;
   if (!machine.canBet()) {
-    // 貸出 (フリープレイ)
-    machine.medals += cfg.play.lendAmount;
-    machine.stats.lent = (machine.stats.lent || 0) + cfg.play.lendAmount;
-    lcd.play('win', { text: `メダル貸出 +${cfg.play.lendAmount}`, color: '#9fd8ff', dur: 1.4 });
-    audio.play('medal_out', { gain: 0.7 });
+    // メダル切れ: サンドの貸出ボタンが点滅して催促する
+    toast(machine.canLend() ? 'メダルがありません — 右の貸出機で千円を入れてください' : '所持金がありません。換金して終了しましょう', 'warn');
+    refreshHud();
+    return false;
   }
   const wasReplay = machine.replayPending;
   machine.bet();
@@ -270,6 +286,34 @@ function doBet() {
   haptics.vibrate('button');
   refreshHud();
   return true;
+}
+
+// 換金して終了 → 戦績を表示して次の日へ
+function cashout() {
+  if (state !== 'idle' || machine.mode !== 'normal') { toast('ボーナス中・回転中は換金できません', 'warn'); return; }
+  if (machine.credit > 0) { machine.medals += machine.credit; machine.credit = 0; }
+  const r = machine.cashout();
+  const tot = machine.records.reduce((a, x) => a + x.balance, 0);
+  $('m-title').textContent = r.balance >= 0 ? '勝ち' : '負け';
+  $('m-title').className = r.balance >= 0 ? 'pos' : 'neg';
+  $('m-body').innerHTML = `
+    <dl>
+      <dt>投資</dt><dd>${yen(r.invested)}</dd>
+      <dt>換金 (${r.medals} 枚)</dt><dd>${yen(r.cash)}</dd>
+      <dt>収支</dt><dd class="${r.balance >= 0 ? 'pos' : 'neg'}">${r.balance >= 0 ? '+' : ''}${yen(r.balance)}</dd>
+      <dt>回転数</dt><dd>${r.games} G</dd>
+      <dt>BIG / REG</dt><dd>${r.big} / ${r.reg}</dd>
+      <dt>本日の設定</dt><dd class="setting">設定 ${r.setting}</dd>
+      <dt>通算収支 (${machine.records.length} 日)</dt><dd class="${tot >= 0 ? 'pos' : 'neg'}">${tot >= 0 ? '+' : ''}${yen(tot)}</dd>
+    </dl>`;
+  $('modal').hidden = false;
+  audio.stopBgm(0.2);
+  audio.play(r.balance >= 0 ? 'bonus_end' : 'lose', { gain: 0.8 });
+  const L = cab.lights;
+  L.lampTarget = 0; L.lampPremium = false; L.rainbow = 0; L.mode = 'idle'; L.artMode = 'idle';
+  payShown = 0;
+  save();
+  refreshHud();
 }
 
 let stateSince = performance.now();
@@ -288,16 +332,15 @@ async function pullLever() {
     setTimeout(() => { cab.lever.held = false; }, 140);
     // ウェイト (1G 最短時間)
     const remain = cfg.reels.minGameMs - (performance.now() - lastStart);
-    if (remain > 0) { lcd.play('win', { text: 'WAIT', color: '#888', dur: remain / 1000 }); await sleep(remain); }
+    if (remain > 0) await sleep(remain);
     lastStart = performance.now();
 
     flag = machine.start(forcedFlag);
     forcedFlag = null;
     if (gui) { guiState.force = 'none'; gui.controllersRecursive().forEach((c) => c.updateDisplay()); }
-    plan = director.plan(flag);
+    plan = director.planGame(flag);
     stops = [null, null, null];
-    if (machine.mode !== 'normal' && lcd.bonus) lcd.bonus.games = machine.bonusGames + 1;
-    if (machine.mode !== 'normal' && !lcd.bonus) lcd.bonus = { type: machine.mode, paid: 0, max: cfg.bonus[machine.mode].maxPay, games: 1 };
+    awaitRelease = false;
     try { await director.onLever(flag, plan); } catch (e) { report(e); }
   } catch (e) {
     report(e);
@@ -308,12 +351,14 @@ async function pullLever() {
   setState('spinning');
   refreshHud();
   setTimeout(() => {
-    cab.lights.stopLed = [plan?.stopLed || '#3cf', plan?.stopLed || '#3cf', plan?.stopLed || '#3cf'];
+    cab.lights.stopLed = ['#3cf', '#3cf', '#3cf'];
     cab.lights.stopLedOn = [true, true, true];
   }, cfg.reels.spinUpMs);
 }
 
 let lastStopAt = 0;
+let awaitRelease = false;
+function releaseStop() { if (awaitRelease) { awaitRelease = false; director.onThirdRelease(); } }
 function pressStop(i) {
   if (state !== 'spinning' || stops[i] != null || !cab.canStop(i)) return;
   const press = cab.pressPos(i);
@@ -326,6 +371,7 @@ function pressStop(i) {
   audio.play('button', { gain: 0.7, rate: 0.95 + i * 0.05 });
   haptics.vibrate('stop');
   const stoppedNow = stops.filter((s) => s != null).length;
+  if (stoppedNow === 3) awaitRelease = true; // 後ペカは第3停止ボタンを“離した”瞬間
   cab.stopReel(i, target, () => {
     // ここは描画ループ内で呼ばれる。例外でループを止めないよう必ず握る
     lastStopAt = performance.now();
@@ -333,7 +379,6 @@ function pressStop(i) {
       audio.play('reel_stop', { gain: 1.0, rate: 0.92 + Math.random() * 0.12 });
       shaker.punch(0, -0.0035, 0);
       director.onStop(stoppedNow);
-      if (stoppedNow === 2) director.onSecondStop(stops, flag);
     } catch (e) { report(e); }
     if (stoppedNow === 3) settle();
   });
@@ -347,13 +392,9 @@ async function settle() {
   let res = null;
   try {
     res = machine.settle(stops);
-    if (res.bonusStart) {
-      lcd.bonus = { type: res.bonusStart, paid: 0, max: cfg.bonus[res.bonusStart].maxPay, games: 0 };
-    }
     refreshHud();
     await director.onSettle(res, flag);
   } catch (e) { report(e); }
-  if (res?.bonusEnd) lcd.bonus = null;
   save();
   refreshHud();
   setState('idle');
@@ -368,9 +409,6 @@ setInterval(() => {
   if (state === 'spinning' && stops.every((v) => v != null) && cab.reels.every((r) => r.state === 'stopped') && now - lastStopAt > 2500) settle();
   if ((state === 'busy' || state === 'settling') && now - stateSince > 30000) {
     report(new Error(`進行が ${state} のまま止まったため復帰しました`));
-    director.pushResolve?.();
-    cab.lights.pushLed = 0;
-    lcd.kill('push');
     setState('idle');
     cab.lights.betLed = true;
   }
@@ -407,13 +445,13 @@ function act(a) {
   if (!cab || !$('loading').classList.contains('gone')) return;
   if (a === 'lever') pullLever();
   else if (a === 'bet') doBet();
-  else if (a === 'push') { if (director.pressPush()) { cab.push.down = true; setTimeout(() => { cab.push.down = false; }, 140); } }
+  else if (a === 'lend') { cab.lendBtn.position.z = 0.098; setTimeout(() => { cab.lendBtn.position.z = 0.105; }, 120); lend(); }
   else if (a.startsWith('stop')) pressStop(+a[4]);
 }
 addEventListener('keydown', (e) => {
   if (e.repeat) return;
   if (e.code === 'KeyG') { toggleGui(); return; }
-  if (e.code === 'KeyP' || ((e.code === 'Space' || e.code === 'Enter') && director?.pushResolve)) { e.preventDefault(); act('push'); return; }
+  if (e.code === 'KeyM') { act('lend'); return; }
   const a = keyMap[e.code];
   if (a) { e.preventDefault(); act(a); }
 });
@@ -450,6 +488,8 @@ const endLever = (e) => {
   leverDrag = null;
 };
 addEventListener('pointerup', endLever);
+addEventListener('pointerup', releaseStop);
+addEventListener('keyup', (e) => { if ((keyMap[e.code] || '').startsWith('stop')) releaseStop(); });
 addEventListener('pointercancel', endLever);
 addEventListener('pointermove', (e) => {
   rig.tx = (e.clientX / innerWidth) * 2 - 1;
@@ -472,6 +512,9 @@ $('btn-vib').onclick = () => {
 };
 $('btn-gear').onclick = () => toggleGui();
 $('btn-reload').onclick = () => location.reload();
+$('btn-cash').onclick = () => cashout();
+$('btn-lend').onclick = (e) => { e.currentTarget.blur(); lend(); };
+$('m-next').onclick = () => { $('modal').hidden = true; toast(`新しい日 — 所持金 ${yen(machine.wallet)}`); };
 
 // ------------------------------------------------------------------
 // デバッグ / チューニングパネル (lil-gui)
@@ -479,6 +522,7 @@ $('btn-reload').onclick = () => location.reload();
 let gui = null;
 const guiState = { force: 'none' };
 async function setupDebug() {
+  void 0;
   if (HASH.has('debug')) await toggleGui();
 }
 async function toggleGui() {
@@ -486,16 +530,16 @@ async function toggleGui() {
   const { GUI } = await import('../assets/lib/lil-gui/lil-gui.esm.min.js');
   gui = new GUI({ title: 'SLOT — TUNING' });
   const g1 = gui.addFolder('抽選');
-  g1.add(cfg, 'setting', [1, 2, 3, 4, 5, 6]).name('設定');
-  g1.add(guiState, 'force', ['none', 'BIG', 'REG', 'CHERRY+BIG', 'SUIKA+BIG', 'CHERRY+REG', 'BELL', 'REPLAY', 'SUIKA', 'CHERRY', 'NONE']).name('次G 強制フラグ')
+  g1.add(cfg, 'setting', [1, 2, 3, 4, 5, 6]).name('設定 (本日・隠し)').onChange((v) => { machine.daySetting = +v; });
+  g1.add(guiState, 'force', ['none', 'BIG', 'REG', 'CHERRY+BIG', 'CHERRY+REG', 'GRAPE', 'BELL', 'CLOWN', 'REPLAY', 'CHERRY', 'NONE']).name('次G 強制フラグ')
     .onChange((v) => { forcedFlag = v === 'none' ? null : v; });
   g1.add(cfg.play, 'assistAlignAfterNotice').name('告知後 目押しアシスト');
   g1.add(cfg.reels, 'maxSlip', 0, 4, 1).name('最大滑りコマ').onChange(() => { machine.logic._ctx = new Map(); });
   const g2 = gui.addFolder('演出');
-  g2.add(story, 'force', ['auto', 'none', 'cutin', 'barrels', 'chest', 'battle', 'final', 'map', 'freeze', 'zone']).name('シナリオ 強制');
-  g2.add(director.debugForce, 'freeze').name('ボーナス時 必ずフリーズ');
-  g2.add(cfg.story, 'revival', 0, 1, 0.01).name('逆転 発生率');
-  g2.add(cfg.effects, 'reachSlowFactor', 0.1, 1, 0.05).name('テンパイ時 減速');
+  g2.add(director.debugForce, 'notice', ['auto', 'lever', 'release']).name('告知 (先ペカ/後ペカ)');
+  g2.add(director.debugForce, 'premium').name('プレミア点灯');
+  g2.add(cfg.notice, 'premium', 0, 1, 0.01).name('プレミア率');
+  g2.add(cfg.notice, 'silenceMs', 0, 600, 10).name('点灯前の静寂 ms');
   g2.add(cfg.effects, 'haptics').name('振動');
   const g3 = gui.addFolder('リール');
   g3.add(cfg.reels, 'rpm', 30, 140, 1);
@@ -511,7 +555,9 @@ async function toggleGui() {
   for (const k of ['master', 'sfx', 'bgm']) g4.add(cfg.audio, k, 0, 1, 0.01).onChange(() => audio.setVolumes(cfg.audio));
   const g5 = gui.addFolder('データ');
   g5.add({ reset: () => { try { localStorage.removeItem(STORE); } catch { /* noop */ } location.reload(); } }, 'reset').name('データリセット');
-  g5.add({ add: () => { machine.medals += 1000; refreshHud(); } }, 'add').name('+1000 枚');
+  g5.add({ add: () => { machine.wallet += 10000; refreshHud(); } }, 'add').name('所持金 +1万円');
+  g5.add(cfg.money, 'lendMedals', 40, 50, 1).name('千円あたり枚数');
+  g5.add(cfg.money, 'exchangeYen', 15, 20, 0.1).name('換金 円/枚');
   g1.open(); g2.open();
 }
 
@@ -526,9 +572,6 @@ function frame() {
 function frameBody() {
   const dt = Math.min(0.05, clock.getDelta());
   cab.update(dt);
-  lcd.update(dt);
-  stage.update(dt);
-  stage.render();
   coins.update(dt);
   sparks.update(dt);
   bloom.kick = Math.max(0, bloom.kick - dt * 1.4);

@@ -18,6 +18,60 @@ export class Machine {
     this.bonusGames = 0;
     this.flag = null;
     this.stats = { games: 0, big: 0, reg: 0, in: 0, out: 0, sinceBonus: 0, history: [] };
+    this.records = [];        // 過去の日の戦績
+    this.newDay();
+  }
+
+  // ------------------------------------------------------------
+  //  お金: 1日 = 所持金を持って台に座り、換金して帰るまで
+  // ------------------------------------------------------------
+  newDay() {
+    const M = this.cfg.money;
+    this.wallet = M.wallet;
+    this.invested = 0;
+    this.medals = this.cfg.play.startMedals;
+    this.credit = 0;
+    this.replayPending = false;
+    this.mode = 'normal';
+    this.carried = null;
+    this.noticed = false;
+    this.bonusPaid = 0;
+    this.bonusGames = 0;
+    this.stats = { games: 0, big: 0, reg: 0, in: 0, out: 0, sinceBonus: 0, history: [], graph: [0] };
+    // 本日の設定 (隠し設定)。換金時に答え合わせ
+    const odds = this.cfg.settingOdds;
+    const tot = Object.values(odds).reduce((a, b) => a + b, 0);
+    let r = this.rng() * tot;
+    this.daySetting = 1;
+    for (const [k, w] of Object.entries(odds)) { r -= w; if (r < 0) { this.daySetting = +k; break; } }
+    this.cfg.setting = this.daySetting;
+  }
+
+  canLend() { return this.wallet >= this.cfg.money.lendYen; }
+
+  lend() {
+    const M = this.cfg.money;
+    if (!this.canLend()) return false;
+    this.wallet -= M.lendYen;
+    this.invested += M.lendYen;
+    this.medals += M.lendMedals;
+    return true;
+  }
+
+  // 今換金したらいくらになるか (円)
+  cashValue() { return Math.floor(this.medals * this.cfg.money.exchangeYen); }
+  balance() { return this.cashValue() - this.invested; }
+
+  cashout() {
+    const rec = {
+      date: new Date().toISOString().slice(0, 16).replace('T', ' '),
+      invested: this.invested, cash: this.cashValue(), balance: this.balance(),
+      games: this.stats.games, big: this.stats.big, reg: this.stats.reg, setting: this.daySetting, medals: this.medals,
+    };
+    this.records.unshift(rec);
+    this.records = this.records.slice(0, 30);
+    this.newDay();
+    return rec;
   }
 
   get setting() { return this.cfg.setting; }
@@ -73,6 +127,12 @@ export class Machine {
     this.stats.out += res.pay;
     if (res.replay) this.replayPending = true;
 
+    // スランプグラフ用 (差枚推移を 10G ごとに記録)
+    if (this.stats.games % 10 === 0) {
+      this.stats.graph = this.stats.graph || [0];
+      this.stats.graph.push(this.stats.out - this.stats.in);
+      if (this.stats.graph.length > 400) this.stats.graph = this.stats.graph.filter((_, i) => i % 2 === 0);
+    }
     if (this.mode !== 'normal') {
       this.bonusPaid += res.pay;
       this.bonusGames++;
@@ -97,7 +157,7 @@ export class Machine {
   }
 
   serialize() {
-    return JSON.stringify({ medals: this.medals, stats: this.stats, carried: this.carried, noticed: this.noticed, mode: this.mode, bonusPaid: this.bonusPaid, bonusGames: this.bonusGames, replayPending: this.replayPending });
+    return JSON.stringify({ medals: this.medals, stats: this.stats, carried: this.carried, noticed: this.noticed, mode: this.mode, bonusPaid: this.bonusPaid, bonusGames: this.bonusGames, replayPending: this.replayPending, wallet: this.wallet, invested: this.invested, daySetting: this.daySetting, records: this.records });
   }
 
   restore(json) {
@@ -107,7 +167,9 @@ export class Machine {
         medals: d.medals ?? this.medals, stats: { ...this.stats, ...d.stats }, carried: d.carried ?? null,
         noticed: !!d.noticed, mode: d.mode || 'normal', bonusPaid: d.bonusPaid || 0, bonusGames: d.bonusGames || 0,
         replayPending: !!d.replayPending,
+        wallet: d.wallet ?? this.wallet, invested: d.invested ?? 0, daySetting: d.daySetting ?? this.daySetting, records: d.records || [],
       });
+      this.cfg.setting = this.daySetting;
     } catch { /* 破損データは無視 */ }
   }
 }

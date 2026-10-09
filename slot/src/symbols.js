@@ -17,21 +17,21 @@ export function drawSymbol(ctx, key, cx, cy, size, images, pixel = false) {
   const usePixel = pixel && img(nameOf(key));
   if (usePixel) {
     drawImg(img(nameOf(key)), 0.86);
-  } else if (key === 'R' || key === 'B') {
-    seven(ctx, size, key === 'R');
+  } else if (key === 'R') {
+    seven(ctx, size, true);
   } else if (key === 'A') {
     bar(ctx, size);
   } else if (key === 'P') {
     replay(ctx, size, img('replay'));
   } else {
     const im = img(nameOf(key));
-    if (im) drawImg(im, key === 'C' ? 0.8 : 0.78);
+    if (im) drawImg(im, key === 'G' ? 0.84 : key === 'J' ? 0.8 : 0.78);
   }
   ctx.restore();
 }
 
 function nameOf(k) {
-  return { R: 'red7', B: 'blue7', A: 'bar', L: 'bell', S: 'suika', C: 'cherry', P: 'replay' }[k];
+  return { R: 'red7', A: 'bar', G: 'grape', L: 'bell', J: 'clown', C: 'cherry', P: 'replay' }[k];
 }
 
 function seven(ctx, size, red) {

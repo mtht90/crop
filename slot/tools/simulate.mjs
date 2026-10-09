@@ -12,6 +12,7 @@ function run(setting) {
   cfg.setting = setting;
   cfg.play.assistAlignAfterNotice = false;
   const m = new Machine(cfg);
+  cfg.setting = setting; // newDay() の隠し設定を上書き
   m.medals = 1e9;
   const N = m.logic.N;
   const flagCount = {}, hitCount = {};
@@ -52,6 +53,6 @@ for (let s = 1; s <= 6; s++) {
       const n = Object.entries(f).filter(([k]) => k.startsWith(fl + '/')).reduce((a, [, v]) => a + v, 0);
       return n ? ((h[role] || 0) / n * 100).toFixed(1) + '%' : '-';
     };
-    console.log('   引き込み率 BELL', pull('BELL', 'BELL'), 'REPLAY', pull('REPLAY', 'REPLAY'), 'SUIKA', pull('SUIKA', 'SUIKA'), 'CHERRY', pull('CHERRY', 'CHERRY'), 'BONUS_BELL', pull('BONUS_BELL', 'BONUS_BELL'));
+    console.log('   引き込み率 ぶどう', pull('GRAPE', 'GRAPE'), 'REPLAY', pull('REPLAY', 'REPLAY'), 'ベル', pull('BELL', 'BELL'), 'ピエロ', pull('CLOWN', 'CLOWN'), 'CHERRY', pull('CHERRY', 'CHERRY'), 'BONUS', pull('BONUS_GRAPE', 'BONUS_GRAPE'));
   }
 }

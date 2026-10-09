@@ -6,10 +6,9 @@ SLOT で使う素材は、テキストを描画する Canvas の演出コード�
 
 | 区分 | ライセンス | 商用 | 帰属表示 |
 |---|---|---|---|
-| Poly Haven / ambientCG / Kenney | CC0 1.0 | ✅ | 不要 (推奨) |
+| Poly Haven / ambientCG / Kenney / Juhani Junkala | CC0 1.0 | ✅ | 不要 (推奨) |
 | Twemoji グラフィック | CC-BY 4.0 | ✅ | **必要** |
-| Blackmoor Tides (BIG 中 BGM) / Matthew Pablo | CC-BY 3.0 | ✅ | **必要** |
-| Quaternius / EZduzziteh / Thimras / qubodup / Eldritch Grim | CC0 1.0 | ✅ | 不要 |
+| EZduzziteh | CC0 1.0 | ✅ | 不要 |
 | Cougarmint Slot Machine Resource Pack (図柄) | CC-BY 3.0 | ✅ | **必要** |
 | Bungee / Orbitron / DSEG7 / Shippori Mincho B1 / Zen Kaku Gothic New | SIL OFL 1.1 | ✅ | フォント単体の販売は禁止 |
 | three.js / lil-gui / ios-haptics | MIT | ✅ | 著作権表示を同梱 |
@@ -29,7 +28,7 @@ SLOT で使う素材は、テキストを描画する Canvas の演出コード�
 | ファイル | 素材 | 用途 | 入手先 | ライセンス |
 |---|---|---|---|---|
 | `assets/textures/Metal009/*` | Metal 009 (ヘアライン金属) | 筐体サイドパネル・看板 | https://ambientcg.com/view?id=Metal009 | CC0 1.0 |
-| `assets/textures/Metal032/*` | Metal 032 (傷入り金属) | 液晶枠・カウンター・受け皿 | https://ambientcg.com/view?id=Metal032 | CC0 1.0 |
+| `assets/textures/Metal032/*` | Metal 032 (傷入り金属) | パネル枠・データカウンター・受け皿 | https://ambientcg.com/view?id=Metal032 | CC0 1.0 |
 | `assets/textures/Carpet016/*` | Carpet 016 | ホールの床 (ワインレッドに着色) | https://ambientcg.com/view?id=Carpet016 | CC0 1.0 |
 | `assets/textures/Leather037/*` | Leather 037 (Normal/Roughness のみ) | 島カウンターの側面 | https://ambientcg.com/view?id=Leather037 | CC0 1.0 |
 
@@ -41,10 +40,8 @@ SLOT で使う素材は、テキストを描画する Canvas の演出コード�
 | `assets/models/platformer/coin-gold.glb`, `Textures/colormap.png` | Platformer Kit | 払い出しメダル (物理演算) | https://kenney.nl/assets/platformer-kit | CC0 1.0 |
 
 
-| `assets/models/pirate/*.gltf.json` | Pirate Kit / Quaternius (船長バルバロッサ・アン・ヘンリー・骸骨・クラーケンの触手・帆船・宝箱・金貨・宝石・大砲・ヤシ・岩・崖・樽・地図) | 液晶の海賊の物語 (フルカラー・アニメーション付き) | https://quaternius.com/packs/piratekit.html | CC0 1.0 |
-| `assets/models/kenney-pirate/ship-ghost.gltf.json`, `Textures/colormap.png` | Pirate Kit / Kenney | 骸骨船 (SP 砲撃戦の敵) | https://kenney.nl/assets/pirate-kit | CC0 1.0 |
 
-各フォルダの `License*.txt` はパック同梱のものです。カットインの顔アップは、Quaternius のキャラクターモデルを起動時にその場で描画したものです。
+各フォルダの `License*.txt` はパック同梱のものです。
 
 > **主役筐体のジオメトリについて**: パチスロ筐体の 3D モデルで、商用可のままダウンロードできて、
 > リール・ボタン・レバーを個別に動かせるものは見つかりませんでした (Sketchfab 等はログインが必要で、自動取得はできません)。
@@ -55,25 +52,14 @@ SLOT で使う素材は、テキストを描画する Canvas の演出コード�
 
 | ファイル | 素材 | 作者 | 入手先 | ライセンス |
 |---|---|---|---|---|
-| `assets/images/twemoji/*.svg` | Twemoji 15.1 (🔔 🍉 🍒 🔁 ⭐ 🔥 ⚡ 💎 🍀) | Twitter, Inc. / X Corp. および jdecked/twemoji コントリビューター | https://github.com/jdecked/twemoji | CC-BY 4.0 (`LICENSE-GRAPHICS.txt` を同梱) |
+| `assets/images/twemoji/*.svg` | Twemoji 15.1 (🍇 ぶどう / 🤡 ピエロ / 🔔 ベル / 🍒 チェリー / 🔁 リプレイ / 🪙 💴 ⭐ 🔥 ⚡ 💎 🍀) | Twitter, Inc. / X Corp. および jdecked/twemoji コントリビューター | https://github.com/jdecked/twemoji | CC-BY 4.0 (`LICENSE-GRAPHICS.txt` を同梱) |
 | `assets/images/cougarmint/*.png` | Slot Machine Resource Pack (ドット絵スキン `symbolSkin: 'pixel'`) | Molly "Cougarmint" Willits | https://opengameart.org/content/slot-machine-resource-pack | CC-BY 3.0 / OGA-BY 3.0 (`SMRP-ReadMe.txt` を同梱) |
 
-赤7・青7・BAR・REPLAY の文字は、Bungee フォントを Canvas に描画して作っています。
+赤7・BAR・REPLAY の文字は、Bungee フォントを Canvas に描画して作っています。
 
 **必要な帰属表示 (ゲーム内クレジット等に記載):**
 - Emoji graphics by Twemoji (https://github.com/jdecked/twemoji), licensed under CC-BY 4.0.
 - Pixel slot symbols by Molly "Cougarmint" Willits (https://opengameart.org/content/slot-machine-resource-pack), licensed under CC-BY 3.0.
-
-## 空 (液晶の背景)
-
-| ファイル | 素材 | 作者 | 入手先 | ライセンス |
-|---|---|---|---|---|
-| `assets/images/sky/kloofendal_48d_partly_cloudy_puresky.jpg` | Kloofendal 48d Partly Cloudy (Pure Sky) | Greg Zaal / Jarod Guest | https://polyhaven.com/a/kloofendal_48d_partly_cloudy_puresky | CC0 1.0 |
-| `assets/images/sky/belfast_sunset_puresky.jpg` | Belfast Sunset (Pure Sky) | Greg Zaal / Dimitrios Savva / Jarod Guest | https://polyhaven.com/a/belfast_sunset_puresky | CC0 1.0 |
-| `assets/images/sky/qwantani_night_puresky.jpg` | Qwantani Night (Pure Sky) | Greg Zaal / Jarod Guest | https://polyhaven.com/a/qwantani_night_puresky | CC0 1.0 |
-| `assets/images/sky/kloofendal_overcast_puresky.jpg` | Kloofendal Overcast (Pure Sky) | Greg Zaal | https://polyhaven.com/a/kloofendal_overcast_puresky | CC0 1.0 |
-
-Poly Haven 配布のトーンマップ済み JPG (8K) を 2048×1024 に縮小しています。
 
 ## 形式変換について
 
@@ -118,25 +104,24 @@ OGG を MP3 に変換しただけで、音そのものには手を加えてい�
 | `lose.mp3` | lowDown.ogg | Digital Audio |
 | `cutin.mp3` | phaseJump2.ogg | Digital Audio |
 | `window.mp3` | threeTone2.ogg | Digital Audio |
+| `peka.mp3` (告知ランプ点灯の「ペカッ」) | impactBell_heavy_004.ogg | Impact Sounds |
+| `buiin.mp3` (告知の「ブイーン」。再生速度を上げながら鳴らす) | spaceEngineLow_002.ogg | Sci-Fi Sounds |
+| `rumble.mp3` (告知・ボーナス開始の低音) | lowFrequency_explosion_001.ogg | Sci-Fi Sounds |
+| `bill.mp3` (千円札を入れる音) | scroll_003.ogg | Interface Sounds |
 
 ### その他の効果音
 
 | ファイル | 素材 | 作者 | 入手先 | ライセンス |
 |---|---|---|---|---|
 | `assets/audio/sfx/alarm.mp3` | Alarm (alarm_2.ogg) | EZduzziteh | https://opengameart.org/content/alarm-1 | CC0 1.0 |
-| `assets/audio/sfx/cannon.mp3` | Cannon Fire (cannon_fire.ogg) | Thimras | https://opengameart.org/content/cannon-fire | CC0 1.0 |
-| `assets/audio/sfx/cannon_hit.mp3` | Battle at Sea (cannon_hit_ship_short.ogg) | Thimras | https://opengameart.org/content/battle-at-sea | CC0 1.0 |
-| `assets/audio/sfx/splash.mp3` | 6 Short Water Splashes (ws.mp3 の 1 つ目を切り出し) | qubodup | https://opengameart.org/content/6-short-water-splashes | CC0 1.0 |
-| `assets/audio/sfx/ocean.mp3` | Beach Ocean Waves (wave_01) | qubodup (原音 jasinski) | https://opengameart.org/content/beach-ocean-waves | CC0 1.0 |
 
 ## BGM
 
 | ファイル | 曲 | 作者 | 入手先 | ライセンス |
 |---|---|---|---|---|
-| `assets/audio/bgm/blackmoor_tides.mp3` (BIG 中) | Blackmoor Tides (Epic Pirate Battle Theme) | Matthew Pablo (http://www.matthewpablo.com) | https://opengameart.org/content/blackmoor-tides-epic-pirate-battle-theme | CC-BY 3.0 |
-| `assets/audio/bgm/chest_of_adventure.mp3` (REG 中) | Chest of Adventure | Eldritch Grim | https://opengameart.org/content/chest-of-adventure | CC0 1.0 |
+| `assets/audio/bgm/level3.mp3` (BIG 中) | 5 Chiptunes (Action) — "Level 3" | Juhani Junkala | https://opengameart.org/content/5-chiptunes-action | CC0 1.0 |
+| `assets/audio/bgm/level1.mp3` (REG 中) | 5 Chiptunes (Action) — "Level 1" | Juhani Junkala | 同上 | CC0 1.0 |
 
-**必要な帰属表示:** "Blackmoor Tides" by Matthew Pablo (http://www.matthewpablo.com), licensed under CC-BY 3.0.
 
 ## フォント (Fontsource 経由で取得)
 
@@ -145,8 +130,8 @@ OGG を MP3 に変換しただけで、音そのものには手を加えてい�
 | `assets/fonts/bungee-400.woff2` | Bungee | David Jonathan Ross | https://fontsource.org/fonts/bungee | SIL OFL 1.1 |
 | `assets/fonts/orbitron-500.woff2`, `orbitron-900.woff2` | Orbitron | Matt McInerney | https://fontsource.org/fonts/orbitron | SIL OFL 1.1 |
 | `assets/fonts/dseg7-700.woff2` | DSEG7 Classic | keshikan | https://fontsource.org/fonts/dseg7-classic | SIL OFL 1.1 |
-| (Google Fonts から配信) | Shippori Mincho B1 (タイトル・結果) | FONTDASU | https://fonts.google.com/specimen/Shippori+Mincho+B1 | SIL OFL 1.1 |
-| (Google Fonts から配信) | Zen Kaku Gothic New (台詞) | Yoshimichi Ohira | https://fonts.google.com/specimen/Zen+Kaku+Gothic+New | SIL OFL 1.1 |
+| (Google Fonts から配信) | Shippori Mincho B1 (見出し) | FONTDASU | https://fonts.google.com/specimen/Shippori+Mincho+B1 | SIL OFL 1.1 |
+| (Google Fonts から配信) | Zen Kaku Gothic New (画面の文字) | Yoshimichi Ohira | https://fonts.google.com/specimen/Zen+Kaku+Gothic+New | SIL OFL 1.1 |
 
 日本語フォントは文字数が多く、使う文字だけを分割配信できる Google Fonts から読み込んでいます。
 

@@ -63,8 +63,8 @@ export class SlotLogic {
   roleSet(mode) {
     const r = this.cfg.roles;
     const names = mode === 'normal'
-      ? ['BIG', 'REG', 'SUIKA', 'BELL', 'REPLAY', 'CHERRY']
-      : ['BONUS_BELL', 'REPLAY', 'SUIKA', 'CHERRY', 'BIG', 'REG'];
+      ? ['BIG', 'REG', 'GRAPE', 'BELL', 'CLOWN', 'REPLAY', 'CHERRY']
+      : ['BONUS_GRAPE', 'REPLAY', 'CHERRY', 'BELL', 'CLOWN', 'BIG', 'REG'];
     return names.map((n) => ({ name: n, ...r[n] }));
   }
 

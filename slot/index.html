@@ -28,6 +28,7 @@
   .big { color: #ff4a5a; } .reg { color: #4ab0ff; }
   .tools { display: flex; gap: 6px; pointer-events: auto; }
   .tools button { width: 40px; height: 40px; border-radius: 10px; border: 1px solid rgba(255,255,255,.18); background: rgba(10,4,20,.62); color: #fff; font-size: 18px; cursor: pointer; }
+  @media (max-width: 440px) { .tools { gap: 4px; } .tools button { width: 34px; height: 34px; font-size: 15px; } #btn-cash { padding: 0 8px; } #toast { top: max(178px, calc(env(safe-area-inset-top) + 170px)) !important; } }
   .tools button.off { opacity: .4; text-decoration: line-through; }
 
 
@@ -45,6 +46,34 @@
   .keys { margin-top: 18px; font-size: 11px; color: rgba(255,255,255,.5); line-height: 1.8; }
   .credits { margin-top: 14px; font-size: 10px; line-height: 1.6; color: rgba(255,255,255,.35); font-family: system-ui, sans-serif; }
   .credits summary { cursor: pointer; letter-spacing: .1em; }
+  .money { min-width: 190px; }
+  .money .row { display: flex; align-items: baseline; gap: 8px; justify-content: space-between; font-family: "Zen Kaku Gothic New", system-ui, sans-serif; font-variant-numeric: tabular-nums; }
+  .money .k { color: #a9a0c8; font-size: 11px; }
+  .money b { font-family: Orbitron, sans-serif; }
+  .money .sub { color: #a9a0c8; font-size: 11px; }
+  .money .row.big b { font-size: 18px; }
+  #hud.broke .money { border-color: #ff3b5c; animation: broke 1s infinite; }
+  @keyframes broke { 50% { box-shadow: 0 0 18px rgba(255,59,92,.7); } }
+  #btn-lend { display: block; width: 100%; margin-top: 8px; padding: 7px 0; border-radius: 10px; border: 1px solid #ffd23f66; background: linear-gradient(#5a4a10, #32280a); color: #ffe27a; font: 700 13px "Zen Kaku Gothic New", sans-serif; cursor: pointer; }
+  #btn-lend small { opacity: .7; font-weight: 400; }
+  #btn-lend:disabled { opacity: .35; cursor: default; }
+  #hud.need #btn-lend { animation: lendPulse 1s ease-in-out infinite; }
+  @keyframes lendPulse { 50% { box-shadow: 0 0 0 3px #ffd23f88; } }
+  #btn-cash { white-space: nowrap; width: auto; padding: 0 12px; font: 700 13px "Zen Kaku Gothic New", sans-serif; background: linear-gradient(#2a6a3a, #144a22); border-color: #3bff8a55; }
+  #toast { position: fixed; top: max(118px, calc(env(safe-area-inset-top) + 110px)); left: 50%; transform: translate(-50%, -8px); z-index: 7; pointer-events: none; opacity: 0; transition: opacity .2s, transform .2s;
+    background: rgba(10,4,20,.82); border: 1px solid rgba(255,255,255,.18); color: #fff; padding: 8px 16px; border-radius: 999px; font: 700 13px "Zen Kaku Gothic New", system-ui, sans-serif; white-space: nowrap; max-width: calc(100vw - 32px); overflow: hidden; text-overflow: ellipsis; }
+  #toast.on { opacity: 1; transform: translate(-50%, 0); }
+  #toast.hot { background: linear-gradient(90deg, #ff2f8a, #ffb02f); border-color: transparent; font-size: 15px; }
+  #toast.warn { background: rgba(120,20,30,.9); border-color: #ff5a7a; }
+  #modal { position: fixed; inset: 0; z-index: 25; display: grid; place-items: center; overflow-y: auto; background: rgba(5,3,12,.72); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); padding: 16px; }
+  #modal .card { width: min(380px, 100%); background: #120a24; border: 1px solid rgba(255,255,255,.14); border-radius: 18px; padding: 22px 22px 18px; font-family: "Zen Kaku Gothic New", system-ui, sans-serif; }
+  #modal .eyebrow { margin: 0; color: #a9a0c8; font-size: 12px; letter-spacing: .12em; }
+  #modal h2 { margin: 4px 0 14px; font-size: 40px; font-weight: 900; }
+  #modal dl { display: grid; grid-template-columns: 1fr auto; gap: 8px 16px; margin: 0 0 18px; font-variant-numeric: tabular-nums; }
+  #modal dt { color: #a9a0c8; font-size: 13px; }
+  #modal dd { margin: 0; text-align: right; font-weight: 700; }
+  #modal dd.setting { color: #ffd23f; font-size: 18px; }
+  #modal button { width: 100%; padding: 12px; border: none; border-radius: 12px; font: 900 15px "Zen Kaku Gothic New", sans-serif; color: #3a1a00; background: linear-gradient(#fff2a0, #ffbe1a); cursor: pointer; }
   .lil-gui.root { z-index: 30 !important; position: fixed; top: 60px; right: 8px; }
 </style>
 <script type="importmap">
@@ -57,30 +86,42 @@
 <div id="flash"></div>
 
 <div id="hud">
-  <div class="panel">
-    <div>MEDALS <b id="h-medals">0</b> <span id="h-diff" class="pos">+0</span></div>
-    <div>GAME <b id="h-games">0</b> / TOTAL <span id="h-total">0</span></div>
-    <div><span class="big">BIG <b id="h-big">0</b></span> &nbsp; <span class="reg">REG <b id="h-reg">0</b></span></div>
+  <div class="panel money">
+    <div class="row"><span class="k">所持金</span><b id="h-wallet">¥0</b></div>
+    <div class="row"><span class="k">投資</span><span id="h-invest">¥0</span></div>
+    <div class="row"><span class="k">持ちメダル</span><b id="h-medals">0</b><span class="sub">枚 = <span id="h-cash">¥0</span></span></div>
+    <div class="row big"><span class="k">収支</span><b id="h-bal" class="pos">+¥0</b></div>
+    <button id="btn-lend" title="千円入れる (M)">千円入れる <small>+46枚</small></button>
   </div>
   <div class="tools">
+    <button id="btn-cash" title="換金して終了">換金</button>
     <button id="btn-sound" title="サウンド">♪</button>
     <button id="btn-vib" title="振動">≋</button>
     <button id="btn-gear" title="チューニング (G)">⚙</button>
     <button id="btn-reload" title="再読み込み" hidden>↻</button>
   </div>
 </div>
+<div id="toast"></div>
+<div id="modal" hidden>
+  <div class="card">
+    <p class="eyebrow">本日の結果</p>
+    <h2 id="m-title">—</h2>
+    <div id="m-body"></div>
+    <button id="m-next">次の日へ (所持金 ¥30,000)</button>
+  </div>
+</div>
 
-<div class="help">SPACE=レバー &nbsp; ← ↓ → / 1 2 3 = 停止 &nbsp; B=BET &nbsp; P=PUSH &nbsp; G=設定 &nbsp;/&nbsp; 筐体のボタンとレバーはクリックでも操作できます</div>
+<div class="help">SPACE=レバー &nbsp; ← ↓ → / 1 2 3 = 停止 &nbsp; B=BET &nbsp; M=千円貸出 &nbsp; G=設定 &nbsp;/&nbsp; 筐体のボタン・レバー・右の貸出機はクリックでも操作できます</div>
 <div id="err" hidden></div>
 <div id="rainbow"></div>
 
 <div id="loading">
   <div class="box">
     <h1>SLOT</h1>
-    <p id="loadmsg">出航準備中…</p>
+    <p id="loadmsg">LOADING…</p>
     <div class="bar"><div id="loadbar"></div></div>
     <button id="startbtn">TAP TO PLAY</button>
-    <div class="keys">宝の地図を追う海賊船の物語。宝箱は 木 → 銀 → 金 → 虹 の順に熱い。<br>「PUSH!」が出たら筐体の赤いボタン。BONUS ランプが光ったら 7 を狙え。</div>
+    <div class="keys">所持金 3 万円で勝負。右の貸出機で千円 = 46 枚。<br>左下のランプが「ペカッ」と光ればボーナス確定。7 を揃えよう。<br>やめるときは「換金」。本日の設定がわかります。</div>
     <details class="credits"><summary>CREDITS</summary>
       Emoji: Twemoji (CC-BY 4.0) · Pixel symbols: Molly "Cougarmint" Willits (CC-BY 3.0) · BGM "Blackmoor Tides": Matthew Pablo (CC-BY 3.0)<br>
       CC0: Poly Haven (HDRI) · ambientCG (textures) · Kenney (models, SFX) · Quaternius (pirate kit) · Eldritch Grim (BGM) · Thimras, qubodup, EZduzziteh (SFX)<br>
