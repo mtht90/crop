@@ -13,7 +13,7 @@ SLOT で使う素材は、テキストを描画する Canvas の演出コード�
 | Quaternius / EZduzziteh | CC0 1.0 | ✅ | 不要 |
 | Cougarmint Slot Machine Resource Pack (図柄) | CC-BY 3.0 | ✅ | **必要** |
 | Bungee / Orbitron / DSEG7 / Shippori Mincho B1 / Zen Kaku Gothic New | SIL OFL 1.1 | ✅ | フォント単体の販売は禁止 |
-| three.js / lil-gui | MIT | ✅ | 著作権表示を同梱 |
+| three.js / lil-gui / ios-haptics | MIT | ✅ | 著作権表示を同梱 |
 
 ---
 
@@ -78,6 +78,15 @@ SLOT で使う素材は、テキストを描画する Canvas の演出コード�
 役名と台詞はこのゲームのオリジナルです。画像は無改変で使い、Canvas 上で切り抜き・配置しているだけです。
 
 **必要な帰属表示:** Character portraits by Justin Nichols (https://opengameart.org/users/justin-nichol), licensed under CC-BY-SA 3.0.
+
+## 形式変換について
+
+アーティファクト (claude.ai) で配信できる形式に合わせ、次の変換だけを行っています (`tools/pack_web_formats.py`)。中身は無改変です。
+- `.glb` → バイナリを埋め込んだ glTF JSON (`.gltf.json`)、`.gltf` → `.gltf.json` (名前のみ)
+- `.hdr` → base64 テキスト (`.hdr.b64.txt`)
+- 効果音の OGG → MP3
+
+「ギュイン」音は Digital Audio の `phaserUp4.ogg` (`reach.mp3`) を再生時にピッチを急上昇させて連打したものです。
 
 ## 効果音 (Kenney / CC0)
 
@@ -148,4 +157,5 @@ OGG を MP3 に変換しただけで、音そのものには手を加えてい�
 | ファイル | ライブラリ | 入手先 | ライセンス |
 |---|---|---|---|
 | `assets/lib/three/three.module.js`, `assets/lib/three/addons/**` (GLTFLoader, SkeletonUtils ほか) | three.js r170 (npm `three@0.170.0`) | https://github.com/mrdoob/three.js | MIT (`assets/lib/three/LICENSE`) |
+| `assets/lib/ios-haptics/ios-haptics.js` | ios-haptics 3.2.0 (iPhone の Safari でタップ時に本体を振動させる) | https://github.com/tijnjh/ios-haptics | MIT (`assets/lib/ios-haptics/LICENSE.txt`) |
 | `assets/lib/lil-gui/lil-gui.esm.min.js` | lil-gui 0.20.0 | https://github.com/georgealways/lil-gui | MIT (`assets/lib/lil-gui/LICENSE.md`) |

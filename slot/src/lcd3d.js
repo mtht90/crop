@@ -18,7 +18,10 @@ export class LcdStage {
   constructor(renderer, cfg, story) {
     this.renderer = renderer;
     this.cfg = cfg;
-    this.rt = new THREE.WebGLRenderTarget(1024, 512, { samples: 4, type: THREE.HalfFloatType });
+    // スマホはメモリ節約 (MSAA なし・8bit)
+    this.rt = cfg.render.mobile
+      ? new THREE.WebGLRenderTarget(768, 384)
+      : new THREE.WebGLRenderTarget(1024, 512, { samples: 4, type: THREE.HalfFloatType });
     this.texture = this.rt.texture;
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(38, 2, 0.5, 400);

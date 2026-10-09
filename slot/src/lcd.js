@@ -48,7 +48,7 @@ export class Lcd {
     if (this.base === 'bonus' && this.bonus) this.drawBonus(x, W, H);
     else this.drawStageHud(x, W, H);
     // 描画順: 背面系 → 人物 → 文字 → 全面系
-    const order = ['band', 'windows', 'lockon', 'cutin', 'count', 'telop', 'text', 'icons', 'win', 'title', 'result', 'static', 'crack', 'rainbow', 'flash'];
+    const order = ['band', 'windows', 'lockon', 'cutin', 'count', 'telop', 'push', 'text', 'icons', 'win', 'title', 'result', 'static', 'crack', 'rainbow', 'flash'];
     this.fx.sort((a, b) => order.indexOf(a.type) - order.indexOf(b.type));
     for (const e of this.fx) { e.t += dt; x.save(); this.drawFx(x, e, W, H); x.restore(); }
     this.fx = this.fx.filter((e) => e.hold || e.t < e.dur);
@@ -184,6 +184,27 @@ export class Lcd {
         break;
       }
       case 'result': this.drawResult(x, e, W, H, fadeOut); break;
+      case 'push': {
+        // 実機の「PUSH!」: 脈動するボタンと波紋
+        const cx = W / 2, cy = H / 2 - 10, pulse = 1 + 0.08 * Math.sin(e.t * 14);
+        x.fillStyle = 'rgba(0,0,0,0.45)'; x.fillRect(0, 0, W, H);
+        for (let k = 0; k < 3; k++) {
+          const r = ((e.t * 160 + k * 60) % 180) + 90;
+          x.globalAlpha = Math.max(0, 1 - (r - 90) / 180);
+          x.strokeStyle = e.level === 2 ? `hsl(${(e.t * 300 + k * 90) % 360},100%,60%)` : '#ff3050';
+          x.lineWidth = 8; x.beginPath(); x.arc(cx, cy, r, 0, Math.PI * 2); x.stroke();
+        }
+        x.globalAlpha = 1;
+        const g = x.createRadialGradient(cx - 20, cy - 25, 8, cx, cy, 95 * pulse);
+        if (e.level === 2) { g.addColorStop(0, '#fff'); g.addColorStop(0.5, `hsl(${(e.t * 300) % 360},100%,60%)`); g.addColorStop(1, `hsl(${(e.t * 300 + 120) % 360},100%,30%)`); }
+        else { g.addColorStop(0, '#fff'); g.addColorStop(0.45, '#ff3050'); g.addColorStop(1, '#5a0010'); }
+        x.fillStyle = g; x.beginPath(); x.arc(cx, cy, 90 * pulse, 0, Math.PI * 2); x.fill();
+        x.font = `78px ${F.d}`; x.textAlign = 'center'; x.textBaseline = 'middle';
+        x.lineWidth = 10; x.strokeStyle = '#000'; x.strokeText('PUSH!', cx, cy + 4);
+        x.fillStyle = '#fff'; x.fillText('PUSH!', cx, cy + 4);
+        x.textBaseline = 'alphabetic'; x.textAlign = 'left';
+        break;
+      }
       case 'static': {
         x.globalAlpha = (e.alpha ?? 0.6) * fadeOut;
         for (let i = 0; i < 260; i++) {

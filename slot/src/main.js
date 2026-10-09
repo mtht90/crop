@@ -13,12 +13,15 @@ import { Haptics, Shaker, Coins, Sparks } from './fx.js';
 import { Director } from './director.js';
 import { Story } from './story.js';
 import { LcdStage } from './lcd3d.js';
+import { hapticTrigger } from '../assets/lib/ios-haptics/ios-haptics.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
 const cfg = CONFIG;
 // URL ハッシュのトークン (#lite / #debug / #zoom / 組み合わせは #debug-lite)
 const HASH = new Set(location.hash.slice(1).split(/[-_.]/).filter(Boolean));
 if (HASH.has('lite')) { cfg.render.hall = false; cfg.render.neighbors = false; cfg.render.pixelRatioMax = 1; }
+const TOUCH = matchMedia('(hover: none)').matches;
+if (TOUCH) { cfg.render.pixelRatioMax = Math.min(cfg.render.pixelRatioMax, 1.5); cfg.render.neighbors = cfg.render.neighbors && 'near'; cfg.render.mobile = true; }
 const $ = (id) => document.getElementById(id);
 const STORE = 'slot.v1';
 
@@ -32,6 +35,12 @@ renderer.toneMapping = THREE.NeutralToneMapping;
 renderer.toneMappingExposure = cfg.render.exposure;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 $('app').appendChild(renderer.domElement);
+hapticTrigger($('app'));
+renderer.domElement.addEventListener('webglcontextlost', (e) => {
+  e.preventDefault();
+  report(new Error('描画が中断されました (メモリ不足の可能性)。画面右上の ↻ で再読み込みしてください'));
+  $('btn-reload').hidden = false;
+}); // iPhone: 筐体のボタンを押した瞬間に本体が“コツッ”と鳴る
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x07030d);
@@ -61,7 +70,7 @@ function fitCamera() {
   const aspect = innerWidth / innerHeight;
   const tanH = Math.tan(THREE.MathUtils.degToRad(c.fov / 2));
   const portrait = aspect < 0.9;
-  const halfH = portrait ? 0.7 : 0.82, halfW = portrait ? 0.53 : 0.75;
+  const halfH = portrait ? 0.7 : 0.82, halfW = portrait ? 0.47 : 0.75;
   const d = Math.max(halfH / tanH, halfW / (tanH * aspect));
   const ty = portrait ? 1.42 : c.target[1] + 0.24;
   rig.touch = matchMedia('(hover: none)').matches;
@@ -177,7 +186,7 @@ function buildRoom(assets) {
   };
   // 隣台の液晶は待機画面の静止画
   setTimeout(() => { lcdSnap.getContext('2d').drawImage(cab.lcdCanvas, 0, 0); snapTex.needsUpdate = true; }, 300);
-  for (const x of cfg.render.neighbors === false ? [] : [-0.98, 0.98, -1.96, 1.96]) {
+  for (const x of cfg.render.neighbors === false ? [] : cfg.render.neighbors === 'near' ? [-0.98, 0.98] : [-0.98, 0.98, -1.96, 1.96]) {
     const n = cab.group.clone(true);
     n.traverse((o) => {
       if (o.isLight) o.visible = false;
@@ -262,40 +271,48 @@ function doBet() {
   return true;
 }
 
+let stateSince = performance.now();
+function setState(v) { state = v; stateSince = performance.now(); }
+
 async function pullLever() {
   if (state !== 'idle') return;
   if (machine.credit < cfg.bet && !doBet()) return;
-  state = 'busy';
-  cab.lever.held = true;
-  audio.play('lever', { gain: 0.9 });
-  audio.play('lever_click', { gain: 0.6 });
-  haptics.vibrate('lever');
-  shaker.punch(0, -0.004, 0);
-  setTimeout(() => { cab.lever.held = false; }, 140);
-  // ウェイト (1G 最短時間)
-  const remain = cfg.reels.minGameMs - (performance.now() - lastStart);
-  if (remain > 0) { lcd.play('win', { text: 'WAIT', color: '#888', dur: remain / 1000 }); await sleep(remain); }
-  lastStart = performance.now();
+  setState('busy');
+  try {
+    cab.lever.held = true;
+    audio.play('lever', { gain: 0.9 });
+    audio.play('lever_click', { gain: 0.6 });
+    haptics.vibrate('lever');
+    shaker.punch(0, -0.004, 0);
+    setTimeout(() => { cab.lever.held = false; }, 140);
+    // ウェイト (1G 最短時間)
+    const remain = cfg.reels.minGameMs - (performance.now() - lastStart);
+    if (remain > 0) { lcd.play('win', { text: 'WAIT', color: '#888', dur: remain / 1000 }); await sleep(remain); }
+    lastStart = performance.now();
 
-  flag = machine.start(forcedFlag);
-  forcedFlag = null;
-  if (gui) { guiState.force = 'none'; gui.controllersRecursive().forEach((c) => c.updateDisplay()); }
-  plan = director.plan(flag);
-  stops = [null, null, null];
-  if (machine.mode !== 'normal' && lcd.bonus) lcd.bonus.games = machine.bonusGames + 1;
-  if (machine.mode !== 'normal' && !lcd.bonus) lcd.bonus = { type: machine.mode, paid: 0, max: cfg.bonus[machine.mode].maxPay, games: 1 };
-  await director.onLever(flag, plan);
-
+    flag = machine.start(forcedFlag);
+    forcedFlag = null;
+    if (gui) { guiState.force = 'none'; gui.controllersRecursive().forEach((c) => c.updateDisplay()); }
+    plan = director.plan(flag);
+    stops = [null, null, null];
+    if (machine.mode !== 'normal' && lcd.bonus) lcd.bonus.games = machine.bonusGames + 1;
+    if (machine.mode !== 'normal' && !lcd.bonus) lcd.bonus = { type: machine.mode, paid: 0, max: cfg.bonus[machine.mode].maxPay, games: 1 };
+    try { await director.onLever(flag, plan); } catch (e) { report(e); }
+  } catch (e) {
+    report(e);
+    if (!flag) { setState('idle'); return; }
+  }
   cab.startReels();
   spinSnd = audio.play('reel_spin', { loop: true, gain: 0.22 });
-  state = 'spinning';
+  setState('spinning');
   refreshHud();
   setTimeout(() => {
-    cab.lights.stopLed = [plan.stopLed, plan.stopLed, plan.stopLed];
+    cab.lights.stopLed = [plan?.stopLed || '#3cf', plan?.stopLed || '#3cf', plan?.stopLed || '#3cf'];
     cab.lights.stopLedOn = [true, true, true];
   }, cfg.reels.spinUpMs);
 }
 
+let lastStopAt = 0;
 function pressStop(i) {
   if (state !== 'spinning' || stops[i] != null || !cab.canStop(i)) return;
   const press = cab.pressPos(i);
@@ -309,31 +326,68 @@ function pressStop(i) {
   haptics.vibrate('stop');
   const stoppedNow = stops.filter((s) => s != null).length;
   cab.stopReel(i, target, () => {
-    audio.play('reel_stop', { gain: 1.0, rate: 0.92 + Math.random() * 0.12 });
-    shaker.punch(0, -0.0035, 0);
-    director.onStop(stoppedNow);
-    if (stoppedNow === 2) director.onSecondStop(stops, flag);
+    // ここは描画ループ内で呼ばれる。例外でループを止めないよう必ず握る
+    lastStopAt = performance.now();
+    try {
+      audio.play('reel_stop', { gain: 1.0, rate: 0.92 + Math.random() * 0.12 });
+      shaker.punch(0, -0.0035, 0);
+      director.onStop(stoppedNow);
+      if (stoppedNow === 2) director.onSecondStop(stops, flag);
+    } catch (e) { report(e); }
     if (stoppedNow === 3) settle();
   });
 }
 
 async function settle() {
-  state = 'settling';
+  if (state === 'settling') return;
+  setState('settling');
   spinSnd?.stop(0.08);
   spinSnd = null;
-  const res = machine.settle(stops);
-  if (res.bonusStart) {
-    lcd.bonus = { type: res.bonusStart, paid: 0, max: cfg.bonus[res.bonusStart].maxPay, games: 0 };
-  }
-  refreshHud();
-  await director.onSettle(res, flag);
-  if (res.bonusEnd) lcd.bonus = null;
+  let res = null;
+  try {
+    res = machine.settle(stops);
+    if (res.bonusStart) {
+      lcd.bonus = { type: res.bonusStart, paid: 0, max: cfg.bonus[res.bonusStart].maxPay, games: 0 };
+    }
+    refreshHud();
+    await director.onSettle(res, flag);
+  } catch (e) { report(e); }
+  if (res?.bonusEnd) lcd.bonus = null;
   save();
   refreshHud();
-  state = 'idle';
+  setState('idle');
   cab.lights.betLed = true;
   if (machine.replayPending || cfg.play.autoBet) doBet();
 }
+
+// 進行が止まったときの保険 (例外・取りこぼしたコールバック)
+setInterval(() => {
+  if (!cab) return;
+  const now = performance.now();
+  if (state === 'spinning' && stops.every((v) => v != null) && cab.reels.every((r) => r.state === 'stopped') && now - lastStopAt > 2500) settle();
+  if ((state === 'busy' || state === 'settling') && now - stateSince > 30000) {
+    report(new Error(`進行が ${state} のまま止まったため復帰しました`));
+    director.pushResolve?.();
+    cab.lights.pushLed = 0;
+    lcd.kill('push');
+    setState('idle');
+    cab.lights.betLed = true;
+  }
+}, 1000);
+
+// 画面にエラーを表示 (不具合報告用。スクリーンショットで内容が分かるように)
+function report(e) {
+  console.error(e);
+  const el = $('err');
+  if (!el) return;
+  const msg = (e && (e.message || e.reason?.message || String(e))) || 'unknown';
+  el.textContent = `⚠ ${msg}`.slice(0, 180);
+  el.hidden = false;
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.hidden = true; }, 8000);
+}
+addEventListener('error', (e) => report(e.error || e.message));
+addEventListener('unhandledrejection', (e) => report(e.reason));
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -352,27 +406,50 @@ function act(a) {
   if (!cab || !$('loading').classList.contains('gone')) return;
   if (a === 'lever') pullLever();
   else if (a === 'bet') doBet();
+  else if (a === 'push') { if (director.pressPush()) { cab.push.down = true; setTimeout(() => { cab.push.down = false; }, 140); } }
   else if (a.startsWith('stop')) pressStop(+a[4]);
 }
 addEventListener('keydown', (e) => {
   if (e.repeat) return;
   if (e.code === 'KeyG') { toggleGui(); return; }
+  if (e.code === 'KeyP' || ((e.code === 'Space' || e.code === 'Enter') && director?.pushResolve)) { e.preventDefault(); act('push'); return; }
   const a = keyMap[e.code];
   if (a) { e.preventDefault(); act(a); }
 });
-document.querySelectorAll('[data-act]').forEach((el) => {
-  el.addEventListener('pointerdown', (e) => { e.preventDefault(); act(el.dataset.act); el.classList.add('down'); });
-  el.addEventListener('pointerup', () => el.classList.remove('down'));
-  el.addEventListener('pointerleave', () => el.classList.remove('down'));
-});
+
+// 筐体のボタン・レバーを直接タップ / クリック。レバーは下へドラッグしても引ける
 const ray = new THREE.Raycaster();
-renderer.domElement.addEventListener('pointerdown', (e) => {
-  if (!cab) return;
+const pick = (e) => {
   const v = new THREE.Vector2((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
   ray.setFromCamera(v, camera);
-  const hit = ray.intersectObjects(cab.pickables, false)[0];
-  if (hit) act(hit.object.userData.action);
+  return ray.intersectObjects(cab.pickables, false)[0]?.object.userData.action;
+};
+let leverDrag = null;
+const appEl = $('app');
+appEl.addEventListener('pointerdown', (e) => {
+  if (!cab) return;
+  const a = pick(e);
+  if (!a) return;
+  if (a === 'lever') {
+    leverDrag = { id: e.pointerId, y0: e.clientY, t0: performance.now(), fired: false };
+    return;
+  }
+  act(a);
 });
+addEventListener('pointermove', (e) => {
+  if (!leverDrag || e.pointerId !== leverDrag.id) return;
+  const d = Math.max(0, Math.min(1, (e.clientY - leverDrag.y0) / 70));
+  cab.lever.drag = d;
+  if (d > 0.65 && !leverDrag.fired) { leverDrag.fired = true; pullLever(); }
+});
+const endLever = (e) => {
+  if (!leverDrag || e.pointerId !== leverDrag.id) return;
+  if (!leverDrag.fired) pullLever(); // タップでも引ける
+  cab.lever.drag = 0;
+  leverDrag = null;
+};
+addEventListener('pointerup', endLever);
+addEventListener('pointercancel', endLever);
 addEventListener('pointermove', (e) => {
   rig.tx = (e.clientX / innerWidth) * 2 - 1;
   rig.ty = -((e.clientY / innerHeight) * 2 - 1);
@@ -393,6 +470,7 @@ $('btn-vib').onclick = () => {
   $('btn-vib').classList.toggle('off', !cfg.effects.haptics);
 };
 $('btn-gear').onclick = () => toggleGui();
+$('btn-reload').onclick = () => location.reload();
 
 // ------------------------------------------------------------------
 // デバッグ / チューニングパネル (lil-gui)
@@ -440,7 +518,11 @@ async function toggleGui() {
 // loop
 // ------------------------------------------------------------------
 const clock = new THREE.Clock();
+let frameErr = 0;
 function frame() {
+  try { frameBody(); } catch (e) { if (frameErr++ < 3) report(e); }
+}
+function frameBody() {
   const dt = Math.min(0.05, clock.getDelta());
   cab.update(dt);
   lcd.update(dt);

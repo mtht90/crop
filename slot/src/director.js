@@ -3,7 +3,7 @@
 //  筐体側 (ランプ・ネオン・振動・メダル) の演出と、液晶の物語をつなぐ
 // =====================================================================
 import * as THREE from 'three';
-import { screenFlash } from './fx.js';
+import { screenFlash, screenRainbow } from './fx.js';
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -39,6 +39,16 @@ export class Director {
     L.flicker = 0;
     const t = plan.cur.type;
     if (['battle', 'final', 'caution'].includes(t)) { L.mode = 'chance'; L.ledMode = t === 'final' ? 'flash' : 'rise'; }
+    // 実機の「遅れ」: レバー音が変わり、リール始動が一瞬遅れる (ボーナス期待)
+    const pending = flag.bonus && !this.machine.noticed && this.machine.mode === 'normal';
+    if (this.machine.mode === 'normal' && Math.random() < (pending ? 0.12 : 0.004)) {
+      this.audio.play('lever', { rate: 0.6, gain: 1.1 });
+      this.audio.play('glitch', { gain: 0.4, rate: 0.7 });
+      this.haptics.vibrate([60]);
+      L.backlightTarget = [0.15, 0.15, 0.15];
+      await wait(750);
+      L.backlightTarget = [1, 1, 1];
+    }
     await this.story.lever();
   }
 
@@ -99,7 +109,7 @@ export class Director {
   // 2 リール停止時: テンパイ (=ボーナス確定のリーチ目)
   // ------------------------------------------------------------
   onSecondStop(stops, flag) {
-    const tp = this.machine.logic.tenpai(stops).filter((t) => t.combo[0] === t.combo[1] || t.combo[1] === t.combo[0]);
+    const tp = this.machine.logic.tenpai(stops);
     const seven = tp.find((t) => 'RB'.includes(t.need) || t.need === 'A');
     if (!seven || this.machine.mode !== 'normal') return false;
     const L = this.cab.lights;
@@ -126,23 +136,57 @@ export class Director {
     if (this.machine.noticed && !fromFreeze) return;
     this.machine.noticed = true;
     const L = this.cab.lights;
+    // ペカッ → ギュインギュインギュイン + 虹
     L.lampTarget = 1;
-    this.audio.duck(0.3, 1600);
-    this.audio.play('flash', { gain: 1.2 });
-    this.audio.play('bell', { gain: 0.5, delay: 0.08 });
-    this.haptics.vibrate('notice');
-    this.shaker.add(0.45);
-    this.bloomKick(1.1);
-    screenFlash('#ff3fa8', 420, 0.55);
-    this.sparks.emit(new THREE.Vector3(-0.377, 1.37, 0.33), 120, { color: '#ff5fc0', speed: 1.6, life: 1.3 });
-    this.lcd.play('rainbow', { dur: 1.4 });
-    this.lcd.play('icons', { icon: 'star', dur: 1.6, count: 30 });
-    this.lcd.play('text', { text: 'BONUS 確定', font: `800 120px ${this.cfg.assets.jpFonts.mincho}`, rainbow: true, dur: 2.4, stroke: '#20002a', sub: label });
-    this.lcd.prompt = '7 を狙え';
-    L.ledMode = 'flash';
     L.rainbow = 1;
-    setTimeout(() => { L.ledMode = 'chase'; }, 1600);
-    await wait(400);
+    L.reelRainbow = 1;
+    L.ledMode = 'flash';
+    this.cab.reelFlash('strobe', 1.2);
+    this.audio.duck(0.15, 2200);
+    this.audio.play('flash', { gain: 1.2 });
+    this.audio.gyuin(3, { gain: 1.15 });
+    this.audio.play('bell', { gain: 0.45, delay: 1.1 });
+    this.haptics.vibrate('notice');
+    this.shaker.add(0.6);
+    this.bloomKick(1.4);
+    screenRainbow(1400);
+    this.sparks.emit(new THREE.Vector3(-0.377, 1.37, 0.33), 160, { speed: 1.8, life: 1.4 });
+    this.lcd.play('rainbow', { dur: 1.6 });
+    this.lcd.play('icons', { icon: 'star', dur: 1.6, count: 30 });
+    this.lcd.play('text', { text: 'BONUS 確定', font: `800 120px ${this.cfg.assets.jpFonts.mincho}`, rainbow: true, dur: 2.6, stroke: '#20002a', sub: label, shake: 6 });
+    this.lcd.prompt = '7 を狙え';
+    setTimeout(() => { L.ledMode = 'chase'; L.reelRainbow = 0; }, 1700);
+    await wait(1100);
+  }
+
+  // PUSH ボタン待ち (押すか一定時間で自動)。level 2 = 虹色ボタン
+  waitPush(level = 1, timeout = 6000) {
+    const L = this.cab.lights;
+    L.pushLed = level;
+    this.lcd.play('push', { dur: 99, hold: true, level });
+    this.audio.play('computer', { gain: 0.5 });
+    this.haptics.vibrate('push');
+    return new Promise((ok) => {
+      const done = () => {
+        clearTimeout(timer);
+        this.pushResolve = null;
+        L.pushLed = 0;
+        this.lcd.kill('push');
+        ok();
+      };
+      const timer = setTimeout(done, timeout);
+      this.pushResolve = () => {
+        this.audio.play('title_hit', { gain: 0.9, rate: 1.2 });
+        this.haptics.vibrate('pushHit');
+        this.shaker.add(0.35);
+        done();
+      };
+    });
+  }
+
+  pressPush() {
+    if (this.pushResolve) { this.pushResolve(); return true; }
+    return false;
   }
 
   // ------------------------------------------------------------
@@ -166,7 +210,7 @@ export class Director {
       const label = { BELL: 'ベル', BONUS_BELL: 'ベル', SUIKA: 'スイカ', CHERRY: 'チェリー' }[name] || name;
       const col = { SUIKA: '#3bff7a', CHERRY: '#ff4a6a' }[name] || '#ffe14d';
       this.lcd.play('win', { text: `${label}  ${res.pay}枚`, color: col, dur: 1.2 });
-      if (name === 'SUIKA' || name === 'CHERRY') this.audio.play('small_win', { gain: 0.9 });
+      if (name === 'SUIKA' || name === 'CHERRY') { this.audio.play('small_win', { gain: 0.9 }); this.cab.reelFlash('blink', 0.6); }
       else this.audio.play('small_win', { gain: 0.6, rate: 1.2 });
       await this.payout(res.pay);
     }
@@ -175,12 +219,14 @@ export class Director {
 
   async payout(n) {
     const origin = new THREE.Vector3(0, 0.875, this.cab.tray.z0 + 0.03);
+    // 実機と同じく 1 枚ずつカウントアップ (払い出し音 + 7セグ PAY 表示)
     for (let i = 0; i < n; i++) {
       this.coins.spawn(1, origin, 0.5);
-      if (i % 2 === 0) this.audio.play('medal_pay', { gain: 0.35, rate: 1 + Math.random() * 0.15 });
-      this.haptics.vibrate('payout');
+      this.audio.play('tick', { gain: 0.45, rate: 1.6 });
+      if (i % 3 === 0) this.audio.play('medal_pay', { gain: 0.3, rate: 1 + Math.random() * 0.15 });
+      if (i % 4 === 0) this.haptics.vibrate('payout');
       this.onPayTick?.(i + 1);
-      await wait(55);
+      await wait(70);
     }
   }
 
@@ -191,9 +237,13 @@ export class Director {
     L.rainbow = 1;
     L.mode = 'rainbow';
     L.ledMode = 'flash';
+    L.reelRainbow = 1;
+    this.cab.reelFlash('strobe', 2.6);
     this.audio.stopBgm(0.1);
-    this.audio.play(big ? 'fanfare_big' : 'fanfare_reg', { gain: 1.2 });
+    this.audio.gyuin(big ? 4 : 2, { gain: 1.2, gap: 0.3 });
+    this.audio.play(big ? 'fanfare_big' : 'fanfare_reg', { gain: 1.25, delay: big ? 1.2 : 0.6 });
     this.audio.play('shatter', { gain: 0.5, rate: 1.4 });
+    screenRainbow(2200);
     this.haptics.vibrate('bonusStart');
     this.shaker.add(1.0);
     this.bloomKick(1.8);
@@ -220,6 +270,7 @@ export class Director {
     this.lcd.base = 'bonus';
     this.lcd.prompt = '';
     L.ledMode = 'chase';
+    L.reelRainbow = 0;
     this.audio.bgm(this.cfg.bonus[type].bgm);
   }
 

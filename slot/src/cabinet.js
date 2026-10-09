@@ -26,6 +26,7 @@ export class Cabinet {
       mode: 'idle', neonHue: 0.9, neonBoost: 1, ledMode: 'chase', lamp: 0, lampTarget: 0,
       backlight: [1, 1, 1], backlightTarget: [1, 1, 1], flicker: 0, rainbow: 0,
       stopLed: ['#3cf', '#3cf', '#3cf'], stopLedOn: [false, false, false], betLed: true, leverLed: false,
+      reelFlash: null, reelRainbow: 0, pushLed: 0,
     };
     this.buildMaterials();
     this.buildBody();
@@ -309,8 +310,9 @@ export class Cabinet {
       cap.position.z = 0.006;
       cap.userData.action = 'stop' + i;
       grp.add(cap);
-      const hit = new THREE.Mesh(new THREE.CircleGeometry(0.05, 16), new THREE.MeshBasicMaterial({ visible: false }));
-      hit.position.z = 0.03; hit.userData.action = 'stop' + i;
+      // 指で押しやすいように、ボタン列の下 (配当表) まで含めた大きな当たり判定
+      const hit = new THREE.Mesh(new THREE.PlaneGeometry(0.195, 0.24), new THREE.MeshBasicMaterial({ visible: false }));
+      hit.position.set(0, -0.07, 0.03); hit.userData.action = 'stop' + i;
       grp.add(hit);
       g.add(grp);
       this.pickables.push(cap, hit);
@@ -335,7 +337,37 @@ export class Cabinet {
     bet.add(betTop);
     g.add(bet);
     this.betButton = bet;
-    this.pickables.push(bet, betTop);
+    const betHit = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.07, 0.13), new THREE.MeshBasicMaterial({ visible: false }));
+    betHit.position.copy(bet.position); betHit.userData.action = 'bet';
+    g.add(betHit);
+    this.pickables.push(bet, betTop, betHit);
+
+    // PUSH ボタン (演出用チャンスボタン)
+    const pc = document.createElement('canvas'); pc.width = pc.height = 256;
+    const px = pc.getContext('2d');
+    const pg = px.createRadialGradient(128, 110, 10, 128, 128, 128);
+    pg.addColorStop(0, '#fff'); pg.addColorStop(0.45, '#ff3050'); pg.addColorStop(1, '#5a0010');
+    px.fillStyle = pg; px.fillRect(0, 0, 256, 256);
+    px.font = '64px Bungee'; px.textAlign = 'center'; px.textBaseline = 'middle';
+    px.lineWidth = 8; px.strokeStyle = '#3a0008'; px.strokeText('PUSH', 128, 132);
+    px.fillStyle = '#fff'; px.fillText('PUSH', 128, 132);
+    const ptex = new THREE.CanvasTexture(pc); ptex.colorSpace = THREE.SRGBColorSpace;
+    this.pushMat = new THREE.MeshPhysicalMaterial({ map: ptex, emissiveMap: ptex, emissive: 0xffffff, emissiveIntensity: 0.05, roughness: 0.1, clearcoat: 1 });
+    const push = new THREE.Group();
+    push.position.set(0.075, deckY + 0.038, DIM.front + 0.105);
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(0.042, 48, 24, 0, Math.PI * 2, 0, Math.PI / 2), this.pushMat);
+    dome.scale.set(1, 0.55, 1);
+    dome.rotation.y = Math.PI;
+    push.add(dome);
+    const pring = new THREE.Mesh(new THREE.TorusGeometry(0.044, 0.006, 12, 48), this.m.chrome);
+    pring.rotation.x = Math.PI / 2;
+    push.add(pring);
+    const pushHit = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.08, 0.14), new THREE.MeshBasicMaterial({ visible: false }));
+    pushHit.userData.action = 'push'; dome.userData.action = 'push';
+    push.add(pushHit);
+    g.add(push);
+    this.push = { grp: push, dome, press: 0, down: false };
+    this.pickables.push(dome, pushHit);
 
     // メダル投入口
     const slot = new THREE.Mesh(new RoundedBoxGeometry(0.1, 0.012, 0.06, 2, 0.004), this.m.chrome);
@@ -412,12 +444,18 @@ export class Cabinet {
     knob.position.y = 0.125;
     knob.userData.action = 'lever';
     arm.add(knob);
-    const hit = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 8), new THREE.MeshBasicMaterial({ visible: false }));
+    const hit = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 8), new THREE.MeshBasicMaterial({ visible: false }));
     hit.position.y = 0.1; hit.userData.action = 'lever';
     arm.add(hit);
     pivot.add(arm);
     this.group.add(pivot);
-    this.lever = { pivot, arm, angle: 0.95, pull: 0, vel: 0 };
+    this.lever = { pivot, arm, angle: 0.95, pull: 0, vel: 0, drag: 0 };
+    // 画面端でも掴みやすいよう、デッキ左側一帯をレバーの当たり判定にする
+    const zone = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.24), new THREE.MeshBasicMaterial({ visible: false }));
+    zone.position.set(-0.34, DIM.deckY + 0.07, DIM.front + 0.12);
+    zone.userData.action = 'lever';
+    this.group.add(zone);
+    this.pickables.push(zone);
     this.pickables.push(knob, hit);
   }
 
@@ -556,7 +594,21 @@ export class Cabinet {
       L.backlight[i] += (L.backlightTarget[i] - L.backlight[i]) * Math.min(1, dt * 18);
       let b = L.backlight[i] * this.cfg.reels.backlight;
       if (L.flicker > 0) b *= 0.5 + 0.5 * Math.sin(t * 50 + i * 2);
-      this.reels[i].mat.emissiveIntensity = Math.max(0.04, b);
+      // リールフラッシュ (実機の消灯・点滅パターン)
+      const F = L.reelFlash;
+      if (F) {
+        const ft = t - F.t0;
+        if (ft > F.dur) L.reelFlash = null;
+        else if (F.mode === 'strobe') b *= Math.sin(ft * 42) > 0 ? 1.7 : 0.08;
+        else if (F.mode === 'blink') b *= Math.sin(ft * 14) > 0 ? 1.35 : 0.25;
+        else if (F.mode === 'wave') b *= Math.sin(ft * 12 - i * 1.6) > 0.2 ? 1.6 : 0.1;
+        else if (F.mode === 'off') b *= 0.05;
+        else if (F.mode === 'lineup') b *= ft < 0.12 * (i + 1) ? 0.05 : 1.6;
+      }
+      const mat = this.reels[i].mat;
+      mat.emissiveIntensity = Math.max(0.04, b);
+      if (L.reelRainbow > 0) mat.emissive.setHSL((t * 0.9 + i * 0.18) % 1, 0.85, 0.62);
+      else mat.emissive.setRGB(1, 1, 1);
     }
     // ネオン
     let hue = L.neonHue, inten = 1.6 * L.neonBoost;
@@ -597,10 +649,16 @@ export class Cabinet {
       b.mat.emissiveIntensity = on ? 1.1 : 0.04;
     });
     this.betMat.emissiveIntensity = L.betLed ? 0.5 + 0.35 * Math.sin(t * 7) : 0.08;
+    const P = this.push;
+    P.press += ((P.down ? 1 : 0) - P.press) * Math.min(1, dt * 30);
+    P.dome.position.y = -P.press * 0.012;
+    this.pushMat.emissiveIntensity = L.pushLed ? (Math.sin(t * 18) > 0 ? 1.6 : 0.35) : 0.05;
+    if (L.pushLed) this.pushMat.emissive.setHSL(L.pushLed === 2 ? (t * 1.2) % 1 : 0, L.pushLed === 2 ? 1 : 0, 1);
+    else this.pushMat.emissive.setRGB(1, 1, 1);
     // レバー (バネ)
     const lv = this.lever;
     const k = 260, d = 18;
-    const target = lv.held ? 0.42 : 0;
+    const target = Math.max(lv.held ? 0.42 : 0, lv.drag * 0.46);
     lv.vel += (k * (target - lv.pull) - d * lv.vel) * dt;
     lv.pull += lv.vel * dt;
     lv.arm.rotation.x = lv.angle + lv.pull;
@@ -617,6 +675,8 @@ export class Cabinet {
     this.signMat.emissiveIntensity = L.mode === 'off' ? 0.05 : 1.0;
     this.panelMat.emissiveIntensity = L.mode === 'off' ? 0.0 : 0.18;
   }
+
+  reelFlash(mode, dur) { this.lights.reelFlash = { mode, dur, t0: this.time }; }
 
   flashLines(lineIdx, sec = 2.4) {
     for (const i of lineIdx) if (this.lineMeshes[i]) this.lineMeshes[i].userData.flash = sec;
@@ -663,8 +723,7 @@ export class Cabinet {
       if (r.state === 'spinup') {
         r.t += dt * 1000;
         const k = Math.min(1, r.t / cfgR.spinUpMs);
-        // 起動時に一瞬逆方向へ“溜め”る
-        const v = k < 0.12 ? -0.25 * V : V * k * k;
+        const v = V * Math.min(1, k * 1.15);
         r.s += v * dt * (r.dir || 1);
         if (k >= 1) r.state = 'spin';
       } else if (r.state === 'spin') {

@@ -31,7 +31,7 @@ function run(setting) {
         press = (idx - Math.floor(Math.random() * 4) + N) % N;
       }
       stops[r] = m.decideStop(r, press, stops);
-      if (m.logic.tenpai(stops).some((t) => t.combo[0] === t.combo[1]) && !flag.bonus && m.mode === 'normal') tenpaiNoBonus++;
+      if (m.logic.tenpai(stops).length && !flag.bonus && m.mode === 'normal') tenpaiNoBonus++;
     }
     const allowed = new Set([flag.small, flag.bonus].filter(Boolean));
     const res = m.settle(stops);

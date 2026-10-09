@@ -1,4 +1,5 @@
 <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>SLOT</title>
 <meta name="theme-color" content="#07030d" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -9,7 +10,15 @@
   :root { --bg: #07030d; --fg: #fff; --accent: #ff2f8a; --gold: #ffd23f; color-scheme: dark; }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); overflow: hidden; font-family: Orbitron, system-ui, sans-serif; touch-action: none; user-select: none; -webkit-user-select: none; }
+  [hidden] { display: none !important; }
+  #app { position: fixed; inset: 0; }
   #app canvas { display: block; }
+  #err { position: fixed; left: 12px; right: 12px; bottom: max(14px, env(safe-area-inset-bottom)); z-index: 40; background: rgba(120,0,20,.92); color: #fff; font: 12px/1.5 system-ui, sans-serif; padding: 8px 12px; border-radius: 10px; }
+  #rainbow { position: fixed; inset: -50%; z-index: 5; pointer-events: none; opacity: 0; mix-blend-mode: screen;
+    background: conic-gradient(from 0deg, #ff0040, #ff8a00, #ffe600, #34ff6a, #00c8ff, #6a4bff, #ff2ad4, #ff0040); }
+  #rainbow.on { animation: rainbow var(--dur, 1400ms) ease-out forwards; }
+  @keyframes rainbow { 0% { opacity: .85; transform: rotate(0deg) scale(1); } 15% { opacity: .55; } 30% { opacity: .75; } 100% { opacity: 0; transform: rotate(540deg) scale(1.2); } }
+  @media (prefers-reduced-motion: reduce) { #rainbow.on { animation-duration: 1ms; } }
   #flash { position: fixed; inset: 0; pointer-events: none; opacity: 0; mix-blend-mode: screen; z-index: 5; }
 
   #hud { position: fixed; top: max(10px, env(safe-area-inset-top)); left: 12px; right: 12px; display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; z-index: 6; pointer-events: none; }
@@ -21,16 +30,6 @@
   .tools button { width: 40px; height: 40px; border-radius: 10px; border: 1px solid rgba(255,255,255,.18); background: rgba(10,4,20,.62); color: #fff; font-size: 18px; cursor: pointer; }
   .tools button.off { opacity: .4; text-decoration: line-through; }
 
-  #controls { position: fixed; left: 0; right: 0; bottom: max(12px, env(safe-area-inset-bottom)); display: flex; justify-content: center; align-items: flex-end; gap: 10px; z-index: 6; padding: 0 12px; }
-  #controls .btn { font-family: Bungee, sans-serif; border: none; cursor: pointer; color: #fff; display: grid; place-items: center; transition: transform .06s; }
-  #controls .btn.down { transform: scale(.92) translateY(2px); filter: brightness(1.3); }
-  .bet { width: 64px; height: 52px; border-radius: 12px; background: linear-gradient(#ffe066, #e0a000); color: #3a1a00 !important; font-size: 14px; box-shadow: 0 4px 0 #8a5a00; }
-  .lever { width: 72px; height: 72px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #ff6b7a, #c4001b 60%, #5a000c); font-size: 13px; box-shadow: 0 5px 0 #4a0008, 0 0 24px rgba(255,40,80,.5); }
-  .stop { width: 62px; height: 62px; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #8fe8ff, #0a88c8 60%, #023a5a); font-size: 16px; box-shadow: 0 5px 0 #022a40, 0 0 18px rgba(60,200,255,.45); }
-  .help { position: fixed; bottom: max(96px, calc(env(safe-area-inset-bottom) + 90px)); left: 0; right: 0; text-align: center; font-size: 11px; color: rgba(255,255,255,.45); z-index: 6; pointer-events: none; }
-  @media (hover: hover) and (pointer: fine) { #controls { display: none; } .help { bottom: 14px; } }
-  @media (hover: none) { .help { display: none; } }
-  @media (max-width: 420px) { .stop { width: 56px; height: 56px; } .lever { width: 64px; height: 64px; } .bet { width: 54px; } #controls { gap: 7px; } }
 
   #loading { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; background: radial-gradient(ellipse at center, #2a0640 0%, #07030d 70%); transition: opacity .5s; }
   #loading.gone { opacity: 0; pointer-events: none; }
@@ -67,17 +66,13 @@
     <button id="btn-sound" title="サウンド">♪</button>
     <button id="btn-vib" title="振動">≋</button>
     <button id="btn-gear" title="チューニング (G)">⚙</button>
+    <button id="btn-reload" title="再読み込み" hidden>↻</button>
   </div>
 </div>
 
-<div class="help">SPACE=レバー &nbsp; ← ↓ → / 1 2 3 = 停止 &nbsp; B=BET &nbsp; G=設定</div>
-<div id="controls">
-  <button class="btn bet" data-act="bet">MAX<br>BET</button>
-  <button class="btn lever" data-act="lever">START</button>
-  <button class="btn stop" data-act="stop0">1</button>
-  <button class="btn stop" data-act="stop1">2</button>
-  <button class="btn stop" data-act="stop2">3</button>
-</div>
+<div class="help">SPACE=レバー &nbsp; ← ↓ → / 1 2 3 = 停止 &nbsp; B=BET &nbsp; P=PUSH &nbsp; G=設定 &nbsp;/&nbsp; 筐体のボタンとレバーはクリックでも操作できます</div>
+<div id="err" hidden></div>
+<div id="rainbow"></div>
 
 <div id="loading">
   <div class="box">

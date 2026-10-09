@@ -263,6 +263,12 @@ export class Story {
     if (c.outcome === 'pending') return false;
     const win = c.outcome === 'win';
     let shown = false;
+    // 決着前に PUSH ボタン (実機のチャンスボタン)
+    if (['battle', 'final', 'caution'].includes(c.type)) {
+      this.lcd.play('telop', { text: c.type === 'final' ? '最後の一撃を' : 'ボタンを押せ', dur: 6, color: '#ffd84a' });
+      await this.director.waitPush(win && COLOR_RANK.indexOf(c.color) >= 3 ? 2 : 1);
+      this.lcd.kill('telop');
+    }
     if (c.type === 'battle' || c.type === 'final') {
       shown = true;
       if (win && !c.revival) await this.winScene();

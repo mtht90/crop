@@ -1,12 +1,50 @@
 // 画面シェイク / 端末振動 / メダル物理 / 火花パーティクル / 画面フラッシュ
 import * as THREE from 'three';
 
+// 端末振動
+//   Android など: navigator.vibrate のパターンをそのまま再生
+//   iPhone (Safari): navigator.vibrate が無いので <input type="checkbox" switch> の
+//   トグル時ハプティクス (ios-haptics と同じ仕組み) をパターンに合わせて連打する
 export class Haptics {
-  constructor(cfg) { this.cfg = cfg; }
+  constructor(cfg) {
+    this.cfg = cfg;
+    this.native = typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function';
+    this.ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    this.timers = [];
+    if (!this.native && this.ios) {
+      const label = document.createElement('label');
+      label.setAttribute('aria-hidden', 'true');
+      label.style.cssText = 'position:fixed;left:-100px;top:-100px;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none';
+      const sw = document.createElement('input');
+      sw.type = 'checkbox';
+      sw.setAttribute('switch', '');
+      sw.tabIndex = -1;
+      label.appendChild(sw);
+      document.body.appendChild(label);
+      this.label = label;
+    }
+  }
+
+  tick() { try { this.label?.click(); } catch { /* unsupported */ } }
+
   vibrate(name) {
     if (!this.cfg.effects.haptics) return;
-    const pat = this.cfg.effects.vibrate[name] || name;
-    try { navigator.vibrate?.(pat); } catch { /* unsupported */ }
+    const pat = Array.isArray(name) ? name : this.cfg.effects.vibrate[name];
+    if (!pat) return;
+    if (this.native) { try { navigator.vibrate(pat); } catch { /* blocked */ } return; }
+    if (!this.label) return;
+    // iOS: 振動区間の頭と、長い区間は 70ms ごとにタップを打って“ブルブル”を近似
+    this.timers.forEach(clearTimeout);
+    this.timers = [];
+    let at = 0;
+    pat.forEach((ms, i) => {
+      if (i % 2 === 0) {
+        for (let k = 0; k < Math.max(1, Math.min(12, Math.round(ms / 70))); k++) {
+          this.timers.push(setTimeout(() => this.tick(), at + k * 70));
+        }
+      }
+      at += ms;
+    });
   }
 }
 
@@ -167,4 +205,16 @@ export function screenFlash(color = '#fff', ms = 220, alpha = 0.8) {
     el.style.transition = `opacity ${ms}ms ease-out`;
     el.style.opacity = 0;
   });
+}
+
+// DOM の虹色フラッシュ (告知・ボーナス確定)
+export function screenRainbow(ms = 1400) {
+  const el = document.getElementById('rainbow');
+  if (!el) return;
+  el.classList.remove('on');
+  void el.offsetWidth;
+  el.style.setProperty('--dur', `${ms}ms`);
+  el.classList.add('on');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('on'), ms);
 }

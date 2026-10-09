@@ -190,7 +190,7 @@ export class SlotLogic {
 
   tenpaiPref(st, ctx) {
     if (ctx.mode !== 'normal') return 0;
-    const tp = this.tenpai(st).some((t) => t.combo[0] === t.combo[1]);
+    const tp = this.tenpai(st).length > 0;
     if (!tp) return 0;
     if (!ctx.flag.bonus) return -1;
     return ctx.flag.small ? 0 : 1;

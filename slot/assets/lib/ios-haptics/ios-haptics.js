@@ -1,0 +1,6 @@
+/**
+* ios-haptics v3.1.1
+* tijn.dev
+* @license MIT
+**/
+function e(){return typeof navigator>`u`?!1:/iPad|iPhone|iPod/.test(navigator.userAgent)||navigator.platform===`MacIntel`&&navigator.maxTouchPoints>1}function t(t){if(!t||typeof window>`u`||!e()||t.querySelector(`[data-haptic-trigger]`))return;let n=document.createElement(`input`);n.type=`checkbox`,n.setAttribute(`switch`,``),n.setAttribute(`data-haptic-trigger`,``),n.setAttribute(`aria-hidden`,`true`),n.tabIndex=-1,Object.assign(n.style,{position:`absolute`,inset:`0`,width:`100%`,height:`100%`,margin:`0`,opacity:`0`,clipPath:`inset(0 round 999px)`,touchAction:`pan-x pan-y`}),n.style.setProperty(`-webkit-tap-highlight-color`,`transparent`),getComputedStyle(t).position===`static`&&(t.style.position=`relative`);let r=0,i=!1;n.addEventListener(`pointerdown`,e=>{r=e.clientY,i=!1},{passive:!0}),n.addEventListener(`pointermove`,e=>{Math.abs(e.clientY-r)>10&&(i=!0,n.checked=!1)},{passive:!0}),n.addEventListener(`pointerup`,()=>{i&&(n.checked=!1),i=!1},{passive:!0}),n.addEventListener(`pointercancel`,()=>{i=!1,n.checked=!1},{passive:!0}),t.insertAdjacentElement(`beforeend`,n)}export{t as hapticTrigger};

@@ -147,10 +147,10 @@ export const CONFIG = {
     ],
     maxSlip: 4,             // 引き込み最大コマ数 (実機準拠: 190ms 以内に 4 コマ)
     rpm: 80,                // 回転速度
-    spinUpMs: 260,          // 加速時間
+    spinUpMs: 180,          // 加速時間 (実機はほぼ即座に定速)
     stopMs: 120,            // 停止までの減速時間
-    bounce: 0.18,           // 停止時のオーバーシュート量 (コマ)
-    bounceMs: 230,          // バウンド収束時間
+    bounce: 0.05,           // 停止時のオーバーシュート量 (コマ)。実機はわずかに“カクッ”
+    bounceMs: 110,          // バウンド収束時間
     minGameMs: 4100,        // ウェイト (1G 最短時間 / 実機 4.1 秒)
     backlight: 1.0,         // バックライト標準輝度 (1=素材色そのまま)
   },
@@ -164,7 +164,7 @@ export const CONFIG = {
   // 役と配当
   // ---------------------------------------------------------------
   roles: {
-    BIG: { combos: ['RRR', 'BBB'], pay: 0, bonus: 'BIG' },
+    BIG: { combos: ['RRR', 'BBB', 'RRB', 'RBR', 'BRR', 'BBR', 'BRB', 'RBB'], pay: 0, bonus: 'BIG' }, // 異色7揃いも BIG
     REG: { combos: ['RRA', 'BBA'], pay: 0, bonus: 'REG' },
     SUIKA: { combos: ['SSS'], pay: 10 },
     BELL: { combos: ['LLL'], pay: 8 },
@@ -293,9 +293,11 @@ export const CONFIG = {
       win: [120, 40, 120, 40, 260],
       lose: [40],
       reach: [25, 25, 25, 25, 25],
-      notice: [200, 60, 200],
+      notice: [90, 50, 90, 50, 90, 50, 120, 40, 420],
+      push: [20, 30, 20],
+      pushHit: [70],
       freeze: [600, 120, 120, 80, 120, 80, 800],
-      bonusStart: [100, 50, 100, 50, 300],
+      bonusStart: [160, 50, 160, 50, 160, 50, 160, 50, 260, 60, 900],
       payout: [6],
     },
     haptics: true,

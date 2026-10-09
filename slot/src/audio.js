@@ -64,7 +64,7 @@ export class AudioEngine {
     const src = this.ctx.createBufferSource();
     src.buffer = buf;
     src.playbackRate.value = rate;
-    src.detune.value = detune;
+    if (src.detune) src.detune.value = detune;
     src.loop = loop;
     const g = this.ctx.createGain();
     g.gain.value = gain;
@@ -81,6 +81,29 @@ export class AudioEngine {
       },
       rate: (r) => src.playbackRate.setTargetAtTime(r, this.ctx.currentTime, 0.05),
     };
+  }
+
+  // 「ギュイン!」: 上昇系の効果音を急激にピッチアップさせて連打する (告知・確定用)
+  gyuin(times = 3, { gap = 0.36, gain = 1.1, name = 'reach' } = {}) {
+    if (!this.ctx || !this.enabled) return;
+    const buf = this.buffers.get(name);
+    if (!buf) return;
+    const t0 = this.ctx.currentTime + 0.02;
+    for (let k = 0; k < times; k++) {
+      const t = t0 + k * gap;
+      const src = this.ctx.createBufferSource();
+      src.buffer = buf;
+      src.playbackRate.setValueAtTime(0.55, t);
+      src.playbackRate.exponentialRampToValueAtTime(2.1 + k * 0.15, t + gap * 0.85);
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(gain, t + 0.03);
+      g.gain.setValueAtTime(gain, t + gap * 0.7);
+      g.gain.linearRampToValueAtTime(0, t + gap * 0.98);
+      src.connect(g).connect(this.sfxBus);
+      src.start(t);
+      src.stop(t + gap);
+    }
   }
 
   bgm(name, { fade = 0.6, gain = 1 } = {}) {
