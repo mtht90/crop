@@ -240,7 +240,7 @@ export class Cabinet {
     x.restore();
     // 左右の装飾文字
     x.font = '38px Bungee'; x.textAlign = 'center'; x.fillStyle = '#ffd34d';
-    x.save(); x.translate(c.width - 60, c.height / 2); x.rotate(Math.PI / 2); x.fillText('DOPAMINE', 0, 12); x.restore();
+    x.save(); x.translate(c.width - 60, c.height / 2); x.rotate(Math.PI / 2); x.fillText('SLOT', 0, 12); x.restore();
     // ライン番号
     x.font = '22px Orbitron'; x.fillStyle = '#9fd8ff';
     const py = (yy) => c.height - (yy - y0) / H * c.height;
@@ -249,7 +249,7 @@ export class Cabinet {
     return Object.assign(new THREE.CanvasTexture(c), { colorSpace: THREE.SRGBColorSpace, anisotropy: 8 });
   }
 
-  // ---------------- DOPA lamp (告知ランプ) ----------------
+  // ---------------- BONUS lamp (告知ランプ) ----------------
   buildLamp() {
     const c = document.createElement('canvas'); c.width = 256; c.height = 256;
     const x = c.getContext('2d');
@@ -257,8 +257,8 @@ export class Cabinet {
     g.addColorStop(0, '#fff'); g.addColorStop(0.5, '#ff3fa8'); g.addColorStop(1, '#5a003a');
     x.fillStyle = g; x.fillRect(0, 0, 256, 256);
     x.font = '64px Bungee'; x.textAlign = 'center'; x.textBaseline = 'middle';
-    x.lineWidth = 8; x.strokeStyle = '#4a0030'; x.strokeText('DOPA!', 128, 132);
-    x.fillStyle = '#fff8d0'; x.fillText('DOPA!', 128, 132);
+    x.font = '54px Bungee'; x.lineWidth = 8; x.strokeStyle = '#4a0030'; x.strokeText('BONUS', 128, 132);
+    x.fillStyle = '#fff8d0'; x.fillText('BONUS', 128, 132);
     const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
     this.lampMat = new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.02, roughness: 0.15, transparent: true, opacity: 0.95 });
     const dome = new THREE.Mesh(new THREE.SphereGeometry(0.052, 48, 24, 0, Math.PI * 2, 0, Math.PI / 2), this.lampMat);
@@ -439,20 +439,33 @@ export class Cabinet {
   }
 
   buildLcd() {
+    // 奥: 3D 舞台 (RenderTarget を後から setLcdStage で貼る) / 手前: Canvas オーバーレイ
     const c = document.createElement('canvas'); c.width = 1024; c.height = 512;
     this.lcdCanvas = c;
     this.lcdTex = new THREE.CanvasTexture(c);
     this.lcdTex.colorSpace = THREE.SRGBColorSpace;
-    const lcd = new THREE.Mesh(new THREE.PlaneGeometry(DIM.lcdW, DIM.lcdH), new THREE.MeshBasicMaterial({ map: this.lcdTex, toneMapped: false, color: 0xdddddd }));
-    lcd.position.set(0, DIM.lcdY, DIM.front + 0.012);
+    this.lcdBaseMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+    const base = new THREE.Mesh(new THREE.PlaneGeometry(DIM.lcdW, DIM.lcdH), this.lcdBaseMat);
+    base.position.set(0, DIM.lcdY, DIM.front + 0.011);
+    this.group.add(base);
+    const lcd = new THREE.Mesh(new THREE.PlaneGeometry(DIM.lcdW, DIM.lcdH), new THREE.MeshBasicMaterial({ map: this.lcdTex, transparent: true, depthWrite: false }));
+    lcd.position.set(0, DIM.lcdY, DIM.front + 0.0125);
+    lcd.renderOrder = 2;
     this.group.add(lcd);
     this.lcdMesh = lcd;
     const frame = new THREE.Mesh(new RoundedBoxGeometry(DIM.lcdW + 0.04, DIM.lcdH + 0.04, 0.02, 3, 0.008), this.m.darkMetal);
     frame.position.set(0, DIM.lcdY, DIM.front + 0.0);
     this.group.add(frame);
-    const glass = new THREE.Mesh(new THREE.PlaneGeometry(DIM.lcdW, DIM.lcdH), new THREE.MeshPhysicalMaterial({ transparent: true, opacity: 0.025, roughness: 0, clearcoat: 1, envMapIntensity: 1, depthWrite: false }));
+    const glass = new THREE.Mesh(new THREE.PlaneGeometry(DIM.lcdW, DIM.lcdH), new THREE.MeshPhysicalMaterial({ transparent: true, opacity: 0.02, roughness: 0, clearcoat: 1, envMapIntensity: 0.15, depthWrite: false }));
     glass.position.set(0, DIM.lcdY, DIM.front + 0.014);
+    glass.renderOrder = 3;
     this.group.add(glass);
+  }
+
+  setLcdStage(texture) {
+    this.lcdBaseMat.map = texture;
+    this.lcdBaseMat.color.set(0xffffff);
+    this.lcdBaseMat.needsUpdate = true;
   }
 
   buildSign() {
@@ -483,13 +496,13 @@ export class Cabinet {
       x.beginPath(); x.arc(14 + i * 25.4, 12, 6, 0, Math.PI * 2); x.fill();
       x.beginPath(); x.arc(14 + i * 25.4, 188, 6, 0, Math.PI * 2); x.fill();
     }
-    x.font = '108px Bungee'; x.textAlign = 'center'; x.textBaseline = 'middle';
+    x.font = '120px Bungee'; x.textAlign = 'center'; x.textBaseline = 'middle';
     x.lineWidth = 14; x.strokeStyle = '#ff1f6b'; x.shadowColor = '#ff1f6b'; x.shadowBlur = 30;
-    x.strokeText('DOPAMINE 7', 512, 108);
+    x.strokeText('SLOT', 512, 108);
     x.shadowBlur = 0;
     const tg = x.createLinearGradient(0, 50, 0, 160);
     tg.addColorStop(0, '#fffbe0'); tg.addColorStop(0.5, '#ffd23f'); tg.addColorStop(1, '#ff8a00');
-    x.fillStyle = tg; x.fillText('DOPAMINE 7', 512, 108);
+    x.fillStyle = tg; x.fillText('SLOT', 512, 108);
     this.signTex.needsUpdate = true;
   }
 

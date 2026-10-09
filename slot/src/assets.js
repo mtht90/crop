@@ -14,23 +14,40 @@ export async function loadAssets(cfg, renderer, onProgress) {
   for (const f of Object.values(A.fonts)) {
     track((async () => {
       try {
-        const ff = new FontFace(f.family, `url(${f.url})`, { weight: String(f.weight) });
+        const buf = await (await fetch(f.url)).arrayBuffer();
+        const ff = new FontFace(f.family, buf, { weight: String(f.weight) });
         await ff.load();
         document.fonts.add(ff);
       } catch (e) { console.warn('font', f.url, e); }
     })());
   }
 
-  // HDRI → PMREM
-  track(new Promise((ok) => {
-    new RGBELoader().load(A.hdri, (tex) => {
+  // HDRI → PMREM (.hdr そのもの、または配信用の base64 テキスト .hdr.b64.txt)
+  track((async () => {
+    try {
+      const res = await fetch(A.hdri);
+      let buf;
+      if (A.hdri.endsWith('.b64.txt')) {
+        const bin = atob((await res.text()).trim());
+        buf = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+        buf = buf.buffer;
+      } else buf = await res.arrayBuffer();
+      const loader = new RGBELoader();
+      const data = loader.parse(buf);
+      const tex = new THREE.DataTexture(data.data, data.width, data.height, THREE.RGBAFormat, data.type);
+      tex.colorSpace = THREE.LinearSRGBColorSpace;
+      tex.mapping = THREE.EquirectangularReflectionMapping;
+      tex.minFilter = tex.magFilter = THREE.LinearFilter;
+      tex.flipY = true;
+      tex.generateMipmaps = false;
+      tex.needsUpdate = true;
       const pmrem = new THREE.PMREMGenerator(renderer);
       out.env = pmrem.fromEquirectangular(tex).texture;
       tex.dispose();
       pmrem.dispose();
-      ok();
-    }, undefined, (e) => { console.warn('hdri', e); ok(); });
-  }));
+    } catch (e) { console.warn('hdri', e); }
+  })());
 
   // PBR テクスチャセット
   const tl = new THREE.TextureLoader();
@@ -55,6 +72,17 @@ export async function loadAssets(cfg, renderer, onProgress) {
   const gl = new GLTFLoader();
   const loadGlb = (url) => new Promise((ok) => gl.load(url, (g) => ok(g.scene), undefined, (e) => { console.warn('glb', url, e); ok(null); }));
   track(loadGlb(A.models.coin).then((s) => { out.models.coin = s; }));
+  // 液晶 3D 舞台 (アニメーション付きで保持)
+  const loadGltf = (url) => new Promise((ok) => gl.load(url, (g) => ok(g), undefined, (e) => { console.warn('gltf', url, e); ok(null); }));
+  const SM = A.models.story;
+  out.story = { city: [] };
+  for (const k of ['mech', 'enemy', 'flyer']) track(loadGltf(SM[k]).then((g) => { out.story[k] = g; }));
+  SM.city.forEach((u, i) => track(loadGlb(u).then((s) => { if (s) out.story.city[i] = s; })));
+  // 登場人物の立ち絵
+  out.images.cast = {};
+  for (const [k, url] of Object.entries(A.cast)) {
+    track(new Promise((ok) => { const img = new Image(); img.onload = () => { out.images.cast[k] = img; ok(); }; img.onerror = () => ok(); img.src = url; }));
+  }
   if (cfg.render.hall) {
     A.models.hall.forEach((u, i) => track(loadGlb(u).then((s) => { if (s) out.hall[i] = s; })));
   }
@@ -71,7 +99,29 @@ export async function loadAssets(cfg, renderer, onProgress) {
     }));
   }
 
+  // 日本語フォント (Google Fonts) は使う文字だけ先読みしておく
+  track((async () => {
+    const txt = jpText(cfg);
+    try {
+      await Promise.all([
+        document.fonts.load(`800 100px ${A.jpFonts.mincho}`, txt),
+        document.fonts.load(`700 40px ${A.jpFonts.gothic}`, txt),
+        document.fonts.load(`900 40px ${A.jpFonts.gothic}`, txt),
+      ]);
+    } catch { /* フォールバックで描画 */ }
+  })());
+
   await Promise.all(jobs);
   out.hall = out.hall.filter(Boolean);
+  out.story.city = out.story.city.filter(Boolean);
   return out;
+}
+
+// 演出で使う日本語をまとめる (フォントのサブセット読み込み用)
+function jpText(cfg) {
+  const S = cfg.story;
+  let t = '前兆侵蝕体観測圏内入迎撃第七防衛線突破接近最終決戦撤退機損傷帰投獲得枚成功作戦警戒態勢夜間司令室緊急注意事態承認残りテンパイを狙えまだ終わってない確定出撃します行きます準備完了目標市街地へ攻中移行ベルスイカチェリーリプレイメダル貸出0123456789';
+  for (const c of Object.values(S.cast)) t += c.name + c.full;
+  for (const arr of Object.values(S.lines)) for (const [, l] of arr) t += l;
+  return [...new Set(t)].join('');
 }

@@ -11,13 +11,16 @@ import { Cabinet, DIM } from './cabinet.js';
 import { Lcd } from './lcd.js';
 import { Haptics, Shaker, Coins, Sparks } from './fx.js';
 import { Director } from './director.js';
+import { Story } from './story.js';
+import { LcdStage } from './lcd3d.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
 const cfg = CONFIG;
-const QS = new URLSearchParams(location.search);
-if (QS.has('lite')) { cfg.render.hall = false; cfg.render.neighbors = false; cfg.render.pixelRatioMax = 1; }
+// URL ハッシュのトークン (#lite / #debug / #zoom / 組み合わせは #debug-lite)
+const HASH = new Set(location.hash.slice(1).split(/[-_.]/).filter(Boolean));
+if (HASH.has('lite')) { cfg.render.hall = false; cfg.render.neighbors = false; cfg.render.pixelRatioMax = 1; }
 const $ = (id) => document.getElementById(id);
-const STORE = 'dopamine7.v1';
+const STORE = 'slot.v1';
 
 // ------------------------------------------------------------------
 // renderer / scene
@@ -25,7 +28,7 @@ const STORE = 'dopamine7.v1';
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(devicePixelRatio, cfg.render.pixelRatioMax));
 renderer.setSize(innerWidth, innerHeight);
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMapping = THREE.NeutralToneMapping;
 renderer.toneMappingExposure = cfg.render.exposure;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 $('app').appendChild(renderer.domElement);
@@ -47,6 +50,9 @@ const haptics = new Haptics(cfg);
 const shaker = new Shaker(cfg);
 const machine = new Machine(cfg);
 if (cfg.play.persist) { try { const s = localStorage.getItem(STORE); if (s) machine.restore(s); } catch { /* storage blocked */ } }
+// アーティファクトのビューアで再公開されたときに持ちメダル等を引き継ぐ
+if (window.claude?.hot?.data?.machine) machine.restore(window.claude.hot.data.machine);
+window.claude?.hot?.snapshot?.(() => ({ machine: machine.serialize() }));
 
 // カメラリグ (画面比に合わせて筐体をフィット + ポインタ視差 + 演出ズーム)
 const rig = { zoom: 0, z: 0, px: 0, py: 0, tx: 0, ty: 0, base: { pos: new THREE.Vector3(), target: new THREE.Vector3() } };
@@ -80,7 +86,7 @@ function updateRig(dt) {
 // ------------------------------------------------------------------
 // boot
 // ------------------------------------------------------------------
-let cab, lcd, coins, sparks, director;
+let cab, lcd, coins, sparks, director, story, stage;
 const loadBar = $('loadbar');
 async function boot() {
   let pA = 0, pB = 0;
@@ -95,16 +101,19 @@ async function boot() {
   cab = new Cabinet(cfg, assets, machine.logic);
   scene.add(cab.group);
   buildRoom(assets);
-  lcd = new Lcd(cab.lcdCanvas, cab.lcdTex, assets.images);
+  stage = new LcdStage(renderer, cfg, assets.story);
+  cab.setLcdStage(stage.texture);
+  lcd = new Lcd(cab.lcdCanvas, cab.lcdTex, assets.images, cfg);
   coins = new Coins(scene, assets.models.coin, cab.tray);
   sparks = new Sparks(scene);
   director = new Director({ cfg, cab, lcd, audio, haptics, shaker, coins, sparks, machine, rig, bloom });
+  story = new Story({ cfg, lcd, stage, audio, haptics, shaker, machine, director });
+  director.story = story;
   director.onPayTick = (n) => { payShown = n; refreshHud(); };
   if (machine.carried && machine.noticed) { cab.lights.lampTarget = 1; cab.lights.rainbow = 1; }
-  if (machine.mode !== 'normal') { lcd.base = 'bonus'; cab.lights.mode = 'rainbow'; }
-  lcd.prompt = 'PULL THE LEVER';
-  const qz = new URLSearchParams(location.search).get('zoom');
-  if (qz) rig.zoom = +qz;
+  if (machine.mode !== 'normal') { lcd.base = 'bonus'; cab.lights.mode = 'rainbow'; story.bonusScene(true); }
+  if (machine.carried && machine.noticed) lcd.prompt = '7 を狙え';
+  if (HASH.has('zoom')) rig.zoom = 0.6;
   fitCamera();
   refreshHud();
   setupDebug();
@@ -117,7 +126,7 @@ async function boot() {
     }).catch((e) => console.warn('audio resume', e));
   };
   renderer.setAnimationLoop(frame);
-  window.__slot = { cab, lcd, machine, director, scene, camera, rig, cfg, force: (f) => { forcedFlag = f; }, get state() { return state; } };
+  window.__slot = { cab, lcd, machine, director, story, stage, scene, camera, rig, cfg, force: (f) => { forcedFlag = f; }, get state() { return state; } };
 }
 
 function buildRoom(assets) {
@@ -302,6 +311,7 @@ function pressStop(i) {
   cab.stopReel(i, target, () => {
     audio.play('reel_stop', { gain: 1.0, rate: 0.92 + Math.random() * 0.12 });
     shaker.punch(0, -0.0035, 0);
+    director.onStop(stoppedNow);
     if (stoppedNow === 2) director.onSecondStop(stops, flag);
     if (stoppedNow === 3) settle();
   });
@@ -316,7 +326,7 @@ async function settle() {
     lcd.bonus = { type: res.bonusStart, paid: 0, max: cfg.bonus[res.bonusStart].maxPay, games: 0 };
   }
   refreshHud();
-  await director.onSettle(res, flag, plan);
+  await director.onSettle(res, flag);
   if (res.bonusEnd) lcd.bonus = null;
   save();
   refreshHud();
@@ -390,12 +400,12 @@ $('btn-gear').onclick = () => toggleGui();
 let gui = null;
 const guiState = { force: 'none' };
 async function setupDebug() {
-  if (new URLSearchParams(location.search).has('debug')) await toggleGui();
+  if (HASH.has('debug')) await toggleGui();
 }
 async function toggleGui() {
   if (gui) { gui.domElement.style.display = gui.domElement.style.display === 'none' ? '' : 'none'; return; }
   const { GUI } = await import('../assets/lib/lil-gui/lil-gui.esm.min.js');
-  gui = new GUI({ title: 'DOPAMINE 7 — TUNING' });
+  gui = new GUI({ title: 'SLOT — TUNING' });
   const g1 = gui.addFolder('抽選');
   g1.add(cfg, 'setting', [1, 2, 3, 4, 5, 6]).name('設定');
   g1.add(guiState, 'force', ['none', 'BIG', 'REG', 'CHERRY+BIG', 'SUIKA+BIG', 'CHERRY+REG', 'BELL', 'REPLAY', 'SUIKA', 'CHERRY', 'NONE']).name('次G 強制フラグ')
@@ -403,10 +413,9 @@ async function toggleGui() {
   g1.add(cfg.play, 'assistAlignAfterNotice').name('告知後 目押しアシスト');
   g1.add(cfg.reels, 'maxSlip', 0, 4, 1).name('最大滑りコマ').onChange(() => { machine.logic._ctx = new Map(); });
   const g2 = gui.addFolder('演出');
-  g2.add(director.debugForce, 'yokoku', ['auto', 'none', 'weak', 'mid', 'strong']).name('予告 強制');
+  g2.add(story, 'force', ['auto', 'none', 'cutin', 'group', 'caution', 'battle', 'final', 'girl', 'freeze', 'zone']).name('シナリオ 強制');
   g2.add(director.debugForce, 'freeze').name('ボーナス時 必ずフリーズ');
-  g2.add(director.debugForce, 'notice', ['auto', 'lever', 'thirdStop', 'nextLever']).name('告知タイミング');
-  g2.add(cfg.effects.freeze, 'BIG', 0, 1, 0.01).name('フリーズ率 BIG');
+  g2.add(cfg.story, 'revival', 0, 1, 0.01).name('逆転 発生率');
   g2.add(cfg.effects, 'reachSlowFactor', 0.1, 1, 0.05).name('テンパイ時 減速');
   g2.add(cfg.effects, 'haptics').name('振動');
   const g3 = gui.addFolder('リール');
@@ -435,6 +444,8 @@ function frame() {
   const dt = Math.min(0.05, clock.getDelta());
   cab.update(dt);
   lcd.update(dt);
+  stage.update(dt);
+  stage.render();
   coins.update(dt);
   sparks.update(dt);
   bloom.kick = Math.max(0, bloom.kick - dt * 1.4);

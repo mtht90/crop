@@ -1,7 +1,7 @@
 // =====================================================================
-//  DOPAMINE 7 — 全チューニング項目
-//  演出・確率・素材パスはここだけ触れば磨き込めるようにしてある。
-//  ?debug を URL に付けるか G キーで lil-gui パネルが開き、ライブ調整できる。
+//  SLOT — 全チューニング項目
+//  演出・確率・素材パス・物語 (台詞/演出の振り分け) はここだけ触れば磨き込めるようにしてある。
+//  URL に #debug を付けるか G キーで lil-gui パネルが開き、ライブ調整できる。
 // =====================================================================
 
 export const CONFIG = {
@@ -9,7 +9,7 @@ export const CONFIG = {
   // 素材パス (すべて外部素材。出典は CREDITS.md)
   // ---------------------------------------------------------------
   assets: {
-    hdri: 'assets/hdri/neon_photostudio_2k.hdr',
+    hdri: 'assets/hdri/neon_photostudio_2k.hdr.b64.txt',
     textures: {
       // ambientCG の PBR セット。maps に列挙したファイル (<名前>.jpg) だけ読む
       brushedMetal: { dir: 'assets/textures/Metal009/', maps: ['Color', 'NormalGL', 'Roughness', 'Metalness'] },
@@ -18,16 +18,37 @@ export const CONFIG = {
       leather: { dir: 'assets/textures/Leather037/', maps: ['NormalGL', 'Roughness'] },
     },
     models: {
-      coin: 'assets/models/platformer/coin-gold.glb',
+      coin: 'assets/models/platformer/coin-gold.gltf.json',
       hall: [ // 背景のアーケードホールに並べる筐体
-        'assets/models/arcade/gambling-machine.glb',
-        'assets/models/arcade/arcade-machine.glb',
-        'assets/models/arcade/claw-machine.glb',
-        'assets/models/arcade/pinball.glb',
-        'assets/models/arcade/dance-machine.glb',
-        'assets/models/arcade/vending-machine.glb',
-        'assets/models/arcade/prize-wheel.glb',
+        'assets/models/arcade/gambling-machine.gltf.json',
+        'assets/models/arcade/arcade-machine.gltf.json',
+        'assets/models/arcade/claw-machine.gltf.json',
+        'assets/models/arcade/pinball.gltf.json',
+        'assets/models/arcade/dance-machine.gltf.json',
+        'assets/models/arcade/vending-machine.gltf.json',
+        'assets/models/arcade/prize-wheel.gltf.json',
       ],
+      // 液晶内の 3D 舞台 (シルエット表示)
+      story: {
+        mech: 'assets/models/story/Mech_Frog.gltf.json',
+        enemy: 'assets/models/story/Enemy_Large.gltf.json',
+        flyer: 'assets/models/story/Enemy_Flying.gltf.json',
+        city: [
+          'assets/models/city/building-skyscraper-a.gltf.json', 'assets/models/city/building-skyscraper-b.gltf.json',
+          'assets/models/city/building-skyscraper-c.gltf.json', 'assets/models/city/building-skyscraper-d.gltf.json',
+          'assets/models/city/building-skyscraper-e.gltf.json', 'assets/models/city/low-detail-building-a.gltf.json',
+          'assets/models/city/low-detail-building-c.gltf.json', 'assets/models/city/low-detail-building-e.gltf.json',
+          'assets/models/city/low-detail-building-g.gltf.json', 'assets/models/city/low-detail-building-wide-a.gltf.json',
+        ],
+      },
+    },
+    // 登場人物の立ち絵 (Justin Nichols / CC-BY-SA 3.0)
+    cast: {
+      commander: 'assets/images/cast/commander.png',
+      vice: 'assets/images/cast/securityofficer.png',
+      operator: 'assets/images/cast/husk.png',
+      pilot: 'assets/images/cast/pilot.png',
+      girl: 'assets/images/cast/psion.png',
     },
     // リール図柄スキン。'twemoji' (高解像度ベクター) / 'pixel' (Cougarmint ドット絵)
     symbolSkin: 'twemoji',
@@ -59,6 +80,11 @@ export const CONFIG = {
       uiLight: { family: 'Orbitron', url: 'assets/fonts/orbitron-500.woff2', weight: 500 },
       seg: { family: 'DSEG7', url: 'assets/fonts/dseg7-700.woff2', weight: 700 },
     },
+    // 日本語フォント (Google Fonts から配信。index.html の <link> で読み込む)
+    jpFonts: {
+      mincho: '"Shippori Mincho B1", "Hiragino Mincho ProN", "Yu Mincho", serif', // タイトルカード
+      gothic: '"Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", sans-serif',   // 台詞
+    },
     sfx: {
       medal_in: 'assets/audio/sfx/medal_in.mp3',
       medal_out: 'assets/audio/sfx/medal_out.mp3',
@@ -80,6 +106,19 @@ export const CONFIG = {
       bell: 'assets/audio/sfx/bell.mp3',
       replay: 'assets/audio/sfx/replay.mp3',
       small_win: 'assets/audio/sfx/small_win.mp3',
+      alarm: 'assets/audio/sfx/alarm.mp3',
+      siren: 'assets/audio/sfx/siren.mp3',
+      tick: 'assets/audio/sfx/tick.mp3',
+      glitch: 'assets/audio/sfx/glitch.mp3',
+      title_hit: 'assets/audio/sfx/title_hit.mp3',
+      explosion: 'assets/audio/sfx/explosion.mp3',
+      lose: 'assets/audio/sfx/lose.mp3',
+      cutin: 'assets/audio/sfx/cutin.mp3',
+      beam: 'assets/audio/sfx/beam.mp3',
+      launch: 'assets/audio/sfx/launch.mp3',
+      hangar: 'assets/audio/sfx/hangar.mp3',
+      computer: 'assets/audio/sfx/computer.mp3',
+      window: 'assets/audio/sfx/window.mp3',
     },
     bgm: {
       big: 'assets/audio/bgm/level3.mp3',
@@ -169,21 +208,75 @@ export const CONFIG = {
   // ---------------------------------------------------------------
   // 演出 (予告・告知・フリーズ)
   // ---------------------------------------------------------------
-  effects: {
-    // レバーON 予告の選択率 (フラグ毎、重み)
-    yokoku: {
-      NONE:   { none: 86, weak: 11, mid: 2.6, strong: 0.4 },
-      REPLAY: { none: 78, weak: 16, mid: 5, strong: 1 },
-      BELL:   { none: 80, weak: 15, mid: 4.5, strong: 0.5 },
-      CHERRY: { none: 20, weak: 40, mid: 32, strong: 8 },
-      SUIKA:  { none: 15, weak: 35, mid: 38, strong: 12 },
-      BONUS:  { none: 30, weak: 18, mid: 24, strong: 28 }, // ボーナス成立ゲーム
+  // ---------------------------------------------------------------
+  // 物語演出 (液晶)
+  //   1ゲーム = レバーON → 第1停止 → 第2停止 → 第3停止 の4拍で昇格していく
+  // ---------------------------------------------------------------
+  story: {
+    // 登場人物 (立ち絵キーは assets.cast)
+    cast: {
+      commander: { name: '司令', full: 'クロガネ司令', color: '#e8c070' },
+      vice: { name: '副司令', full: 'ハヤセ副司令', color: '#9fb8d0' },
+      operator: { name: '管制官', full: '管制官 シオン', color: '#8fe0ff' },
+      pilot: { name: 'パイロット', full: 'ミナト', color: '#ff9a7a' },
+      girl: { name: '???', full: '???', color: '#ffffff' },
     },
-    // ボーナス成立時のフリーズ確率 (BIG / REG)
-    freeze: { BIG: 1 / 10, REG: 1 / 40 },
-    // ボーナス告知タイミング (重み)
-    notice: { lever: 22, thirdStop: 58, nextLever: 20 },
-    // 告知の当該ゲーム以外の“ガセ”連続演出は無し: 告知=100% 確定
+    // 台詞。色 = 期待度 (blue < green < red < gold < rainbow)
+    lines: {
+      blue: [
+        ['operator', '第三区画に微弱な反応。確認します'],
+        ['vice', '警戒を怠るな'],
+        ['operator', '観測データ、異常なし'],
+        ['pilot', '待機中。いつでも出られます'],
+      ],
+      green: [
+        ['operator', '未確認反応、市街地へ接近中!'],
+        ['vice', 'この数値は…ありえん'],
+        ['commander', '迎撃準備を'],
+        ['pilot', '機体の調子は悪くない'],
+      ],
+      red: [
+        ['operator', '反応増大! パターン赤です!'],
+        ['commander', '全機、出撃せよ'],
+        ['pilot', '私がやる!'],
+        ['vice', '第七防衛線まで後退させるな!'],
+      ],
+      gold: [
+        ['commander', '…勝てる'],
+        ['pilot', 'これで終わりにする!'],
+        ['commander', '作戦を最終段階へ移行する'],
+      ],
+      rainbow: [['girl', '…来るよ']],
+    },
+    // 結果に応じた台詞色の振り分け (重み)
+    lineColor: {
+      win: { blue: 4, green: 14, red: 40, gold: 32, rainbow: 10 },
+      lose: { blue: 58, green: 30, red: 11.5, gold: 0.5, rainbow: 0 },
+    },
+    // シナリオの振り分け (フラグ別の重み)
+    //   none     : 何もなし
+    //   cutin    : 人物カットイン (停止毎に色が昇格しうる)
+    //   group    : 群予告 (警告ウィンドウ乱舞) → カットイン
+    //   caution  : CAUTION帯 → EMERGENCY帯 → タイトルカード → 結果
+    //   battle   : SPリーチ「迎撃戦」(侵蝕体接近 → 兵器出撃 → ロックオン → 決着)
+    //   final    : 最終決戦 (暗転 → 3,2,1 カウント → 決着)
+    //   girl     : 謎の少女 (プレミア / 確定)
+    //   freeze   : フリーズ (確定)
+    //   zone     : 前兆ゾーン 2〜5G (警戒態勢ステージ) → 最終ゲームで battle / final
+    scenarios: {
+      NONE:   { none: 87, cutin: 9, group: 2.4, caution: 0.8, battle: 0.35, final: 0.04, zone: 0.4 },
+      REPLAY: { none: 80, cutin: 14, group: 4, caution: 2 },
+      BELL:   { none: 82, cutin: 13, group: 4, caution: 1 },
+      CHERRY: { none: 35, cutin: 37, group: 15, caution: 8, battle: 5 },
+      SUIKA:  { none: 30, cutin: 33, group: 20, caution: 10, battle: 7 },
+      BONUS:  { cutin: 8, group: 6, caution: 16, battle: 22, final: 16, girl: 4, freeze: 8, zone: 20 },
+    },
+    zoneLength: [2, 5],    // 前兆ゾーンのゲーム数
+    revival: 0.18,         // ボーナス当選時、一度「撤退」を見せてから逆転する確率
+    stageChange: 0.04,     // 通常時のステージチェンジ率 (ボーナス持ち越し中は 0.3)
+  },
+
+  effects: {
     reachSlowFactor: 0.55,  // 7テンパイ時の第3リール回転速度係数 (演出)
     bloom: { strength: 0.42, radius: 0.4, threshold: 0.92 },
     shake: { decay: 2.2, maxOffset: 0.06, maxRoll: 0.025 },
@@ -195,6 +288,10 @@ export const CONFIG = {
       yokokuWeak: [20],
       yokokuMid: [30, 40, 30],
       yokokuStrong: [60, 40, 60, 40, 120],
+      cutin: [18, 30, 18],
+      title: [90],
+      win: [120, 40, 120, 40, 260],
+      lose: [40],
       reach: [25, 25, 25, 25, 25],
       notice: [200, 60, 200],
       freeze: [600, 120, 120, 80, 120, 80, 800],
@@ -208,12 +305,13 @@ export const CONFIG = {
   // カメラ・レンダリング
   // ---------------------------------------------------------------
   render: {
-    exposure: 0.8,
+    exposure: 0.9,
     pixelRatioMax: 2,
     envIntensity: 0.45,
     camera: { fov: 34, pos: [0, 1.38, 3.05], target: [0, 1.18, 0], parallax: 0.12 },
     hall: true,      // 背景のアーケードホール (Kenney GLB)
-    neighbors: true, // 島の隣台 (自台クローン)。?lite で両方オフ
+    neighbors: true, // 島の隣台 (自台クローン)。#lite で両方オフ
+    lcdFps: 60,      // 液晶 3D 舞台の描画レート
   },
   audio: { master: 0.85, sfx: 1.0, bgm: 0.45 },
 };

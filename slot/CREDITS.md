@@ -1,6 +1,6 @@
 # CREDITS — 外部素材の出典とライセンス
 
-DOPAMINE 7 で使う素材は、テキストを描画する Canvas の演出コードを除いてすべて外部から入手したものです。
+SLOT で使う素材は、テキストを描画する Canvas の演出コードを除いてすべて外部から入手したものです。
 選定では **商用利用可** を条件にし、その中でも CC0 / パブリックドメインを優先しました。
 帰属表示が必要な素材 (CC-BY / OFL / MIT) は、下の表の表記をそのまま再配布物に含めてください。
 
@@ -8,8 +8,11 @@ DOPAMINE 7 で使う素材は、テキストを描画する Canvas の演出コ�
 |---|---|---|---|
 | Poly Haven / ambientCG / Kenney / Juhani Junkala | CC0 1.0 | ✅ | 不要 (推奨) |
 | Twemoji グラフィック | CC-BY 4.0 | ✅ | **必要** |
+| Justin Nichols SF 人物画 (液晶の登場人物) | CC-BY-SA 3.0 | ✅ | **必要** (画像を改変して配布する場合は同ライセンスで) |
+| Facility Alert Siren | CC-BY 4.0 | ✅ | **必要** |
+| Quaternius / EZduzziteh | CC0 1.0 | ✅ | 不要 |
 | Cougarmint Slot Machine Resource Pack (図柄) | CC-BY 3.0 | ✅ | **必要** |
-| Bungee / Orbitron / DSEG7 フォント | SIL OFL 1.1 | ✅ | フォント単体の販売は禁止 |
+| Bungee / Orbitron / DSEG7 / Shippori Mincho B1 / Zen Kaku Gothic New | SIL OFL 1.1 | ✅ | フォント単体の販売は禁止 |
 | three.js / lil-gui | MIT | ✅ | 著作権表示を同梱 |
 
 ---
@@ -38,7 +41,11 @@ DOPAMINE 7 で使う素材は、テキストを描画する Canvas の演出コ�
 | `assets/models/arcade/*.glb`, `Textures/colormap.png` | Mini Arcade 1.2 (gambling-machine, arcade-machine, claw-machine, pinball, dance-machine, vending-machine, prize-wheel) | 奥のアーケードホール | https://kenney.nl/assets/mini-arcade | CC0 1.0 |
 | `assets/models/platformer/coin-gold.glb`, `Textures/colormap.png` | Platformer Kit | 払い出しメダル (物理演算) | https://kenney.nl/assets/platformer-kit | CC0 1.0 |
 
-各フォルダの `License.txt` はパック同梱のものです。
+| `assets/models/city/*.glb`, `Textures/colormap.png` | City Kit (Commercial) 2.1 | 液晶内の夜の街 (影絵として描画) | https://kenney.nl/assets/city-kit-commercial | CC0 1.0 |
+| `assets/models/story/Mech_Frog.gltf` | Ultimate Space Kit — Mech (FinnTheFrog) / Quaternius | 液晶内の人型兵器 (影絵 + 発光) | https://quaternius.com/packs/ultimatespacekit.html | CC0 1.0 |
+| `assets/models/story/Enemy_Large.gltf`, `Enemy_Flying.gltf` | Ultimate Space Kit — Enemies / Quaternius | 液晶内の侵蝕体 (影絵 + 発光) | 同上 | CC0 1.0 |
+
+各フォルダの `License.txt` はパック同梱のものです。Quaternius の兵器・敵は元々かわいい絵柄なので、液晶では光を受けない黒の影絵にして目とコアだけを発光させています。
 
 > **主役筐体のジオメトリについて**: パチスロ筐体の 3D モデルで、商用可のままダウンロードできて、
 > リール・ボタン・レバーを個別に動かせるものは見つかりませんでした (Sketchfab 等はログインが必要で、自動取得はできません)。
@@ -57,6 +64,20 @@ DOPAMINE 7 で使う素材は、テキストを描画する Canvas の演出コ�
 **必要な帰属表示 (ゲーム内クレジット等に記載):**
 - Emoji graphics by Twemoji (https://github.com/jdecked/twemoji), licensed under CC-BY 4.0.
 - Pixel slot symbols by Molly "Cougarmint" Willits (https://opengameart.org/content/slot-machine-resource-pack), licensed under CC-BY 3.0.
+
+## 登場人物 (液晶カットイン)
+
+| ファイル | 役 | 元画像 | 作者 | 入手先 | ライセンス |
+|---|---|---|---|---|---|
+| `assets/images/cast/commander.png` | クロガネ司令 | commander.png | Justin Nichols (soreCactus 投稿) | https://opengameart.org/content/justin-nichols-sci-fi-portraits-png-psd-transparency | CC-BY-SA 3.0 |
+| `assets/images/cast/pilot.png` | パイロット ミナト | Pilot.png | 同上 | 同上 | CC-BY-SA 3.0 |
+| `assets/images/cast/husk.png` | 管制官 シオン | Husk.png | 同上 | 同上 | CC-BY-SA 3.0 |
+| `assets/images/cast/psion.png` | 謎の少女 (プレミア) | Psion.png | 同上 | 同上 | CC-BY-SA 3.0 |
+| `assets/images/cast/securityofficer.png` | ハヤセ副司令 | SecurityOfficer.png | Justin Nichols | https://opengameart.org/content/starship-security-officer | CC-BY-SA 3.0 |
+
+役名と台詞はこのゲームのオリジナルです。画像は無改変で使い、Canvas 上で切り抜き・配置しているだけです。
+
+**必要な帰属表示:** Character portraits by Justin Nichols (https://opengameart.org/users/justin-nichol), licensed under CC-BY-SA 3.0.
 
 ## 効果音 (Kenney / CC0)
 
@@ -84,6 +105,24 @@ OGG を MP3 に変換しただけで、音そのものには手を加えてい�
 | `fanfare_reg.mp3` | jingles_NES09.ogg | Music Jingles — https://kenney.nl/assets/music-jingles |
 | `fanfare_big.mp3` | jingles_HIT06.ogg | Music Jingles |
 | `bonus_end.mp3` | jingles_SAX03.ogg | Music Jingles |
+| `tick.mp3` | tick_002.ogg | Interface Sounds — https://kenney.nl/assets/interface-sounds |
+| `glitch.mp3` | glitch_002.ogg | Interface Sounds |
+| `title_hit.mp3` | impactMetal_heavy_001.ogg | Impact Sounds |
+| `explosion.mp3` | explosionCrunch_002.ogg | Sci-Fi Sounds |
+| `beam.mp3` | laserLarge_001.ogg | Sci-Fi Sounds |
+| `launch.mp3` | thrusterFire_002.ogg | Sci-Fi Sounds |
+| `hangar.mp3` | doorOpen_001.ogg | Sci-Fi Sounds |
+| `computer.mp3` | computerNoise_001.ogg | Sci-Fi Sounds |
+| `lose.mp3` | lowDown.ogg | Digital Audio |
+| `cutin.mp3` | phaseJump2.ogg | Digital Audio |
+| `window.mp3` | threeTone2.ogg | Digital Audio |
+
+### その他の効果音
+
+| ファイル | 素材 | 作者 | 入手先 | ライセンス |
+|---|---|---|---|---|
+| `assets/audio/sfx/alarm.mp3` | Alarm (alarm_2.ogg) | EZduzziteh | https://opengameart.org/content/alarm-1 | CC0 1.0 |
+| `assets/audio/sfx/siren.mp3` | Facility Alert Siren | FiveBrosStopMosYT | https://opengameart.org/content/facility-alert-siren | CC-BY 4.0 (CC-BY 3.0 / OGA-BY 3.0 も選択可) |
 
 ## BGM
 
@@ -99,10 +138,14 @@ OGG を MP3 に変換しただけで、音そのものには手を加えてい�
 | `assets/fonts/bungee-400.woff2` | Bungee | David Jonathan Ross | https://fontsource.org/fonts/bungee | SIL OFL 1.1 |
 | `assets/fonts/orbitron-500.woff2`, `orbitron-900.woff2` | Orbitron | Matt McInerney | https://fontsource.org/fonts/orbitron | SIL OFL 1.1 |
 | `assets/fonts/dseg7-700.woff2` | DSEG7 Classic | keshikan | https://fontsource.org/fonts/dseg7-classic | SIL OFL 1.1 |
+| (Google Fonts から配信) | Shippori Mincho B1 (タイトルカード) | FONTDASU | https://fonts.google.com/specimen/Shippori+Mincho+B1 | SIL OFL 1.1 |
+| (Google Fonts から配信) | Zen Kaku Gothic New (台詞) | Yoshimichi Ohira | https://fonts.google.com/specimen/Zen+Kaku+Gothic+New | SIL OFL 1.1 |
+
+日本語フォントは文字数が多く、使う文字だけを分割配信できる Google Fonts から読み込んでいます。
 
 ## ライブラリ
 
 | ファイル | ライブラリ | 入手先 | ライセンス |
 |---|---|---|---|
-| `assets/lib/three/three.module.js`, `assets/lib/three/addons/**` | three.js r170 (npm `three@0.170.0`) | https://github.com/mrdoob/three.js | MIT (`assets/lib/three/LICENSE`) |
+| `assets/lib/three/three.module.js`, `assets/lib/three/addons/**` (GLTFLoader, SkeletonUtils ほか) | three.js r170 (npm `three@0.170.0`) | https://github.com/mrdoob/three.js | MIT (`assets/lib/three/LICENSE`) |
 | `assets/lib/lil-gui/lil-gui.esm.min.js` | lil-gui 0.20.0 | https://github.com/georgealways/lil-gui | MIT (`assets/lib/lil-gui/LICENSE.md`) |
