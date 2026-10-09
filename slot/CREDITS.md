@@ -6,11 +6,10 @@ SLOT で使う素材は、テキストを描画する Canvas の演出コード�
 
 | 区分 | ライセンス | 商用 | 帰属表示 |
 |---|---|---|---|
-| Poly Haven / ambientCG / Kenney / Juhani Junkala | CC0 1.0 | ✅ | 不要 (推奨) |
+| Poly Haven / ambientCG / Kenney | CC0 1.0 | ✅ | 不要 (推奨) |
 | Twemoji グラフィック | CC-BY 4.0 | ✅ | **必要** |
-| Justin Nichols SF 人物画 (液晶の登場人物) | CC-BY-SA 3.0 | ✅ | **必要** (画像を改変して配布する場合は同ライセンスで) |
-| Facility Alert Siren | CC-BY 4.0 | ✅ | **必要** |
-| Quaternius / EZduzziteh | CC0 1.0 | ✅ | 不要 |
+| Blackmoor Tides (BIG 中 BGM) / Matthew Pablo | CC-BY 3.0 | ✅ | **必要** |
+| Quaternius / EZduzziteh / Thimras / qubodup / Eldritch Grim | CC0 1.0 | ✅ | 不要 |
 | Cougarmint Slot Machine Resource Pack (図柄) | CC-BY 3.0 | ✅ | **必要** |
 | Bungee / Orbitron / DSEG7 / Shippori Mincho B1 / Zen Kaku Gothic New | SIL OFL 1.1 | ✅ | フォント単体の販売は禁止 |
 | three.js / lil-gui / ios-haptics | MIT | ✅ | 著作権表示を同梱 |
@@ -41,11 +40,11 @@ SLOT で使う素材は、テキストを描画する Canvas の演出コード�
 | `assets/models/arcade/*.glb`, `Textures/colormap.png` | Mini Arcade 1.2 (gambling-machine, arcade-machine, claw-machine, pinball, dance-machine, vending-machine, prize-wheel) | 奥のアーケードホール | https://kenney.nl/assets/mini-arcade | CC0 1.0 |
 | `assets/models/platformer/coin-gold.glb`, `Textures/colormap.png` | Platformer Kit | 払い出しメダル (物理演算) | https://kenney.nl/assets/platformer-kit | CC0 1.0 |
 
-| `assets/models/city/*.glb`, `Textures/colormap.png` | City Kit (Commercial) 2.1 | 液晶内の夜の街 (影絵として描画) | https://kenney.nl/assets/city-kit-commercial | CC0 1.0 |
-| `assets/models/story/Mech_Frog.gltf` | Ultimate Space Kit — Mech (FinnTheFrog) / Quaternius | 液晶内の人型兵器 (影絵 + 発光) | https://quaternius.com/packs/ultimatespacekit.html | CC0 1.0 |
-| `assets/models/story/Enemy_Large.gltf`, `Enemy_Flying.gltf` | Ultimate Space Kit — Enemies / Quaternius | 液晶内の侵蝕体 (影絵 + 発光) | 同上 | CC0 1.0 |
 
-各フォルダの `License.txt` はパック同梱のものです。Quaternius の兵器・敵は元々かわいい絵柄なので、液晶では光を受けない黒の影絵にして目とコアだけを発光させています。
+| `assets/models/pirate/*.gltf.json` | Pirate Kit / Quaternius (船長バルバロッサ・アン・ヘンリー・骸骨・クラーケンの触手・帆船・宝箱・金貨・宝石・大砲・ヤシ・岩・崖・樽・地図) | 液晶の海賊の物語 (フルカラー・アニメーション付き) | https://quaternius.com/packs/piratekit.html | CC0 1.0 |
+| `assets/models/kenney-pirate/ship-ghost.gltf.json`, `Textures/colormap.png` | Pirate Kit / Kenney | 骸骨船 (SP 砲撃戦の敵) | https://kenney.nl/assets/pirate-kit | CC0 1.0 |
+
+各フォルダの `License*.txt` はパック同梱のものです。カットインの顔アップは、Quaternius のキャラクターモデルを起動時にその場で描画したものです。
 
 > **主役筐体のジオメトリについて**: パチスロ筐体の 3D モデルで、商用可のままダウンロードできて、
 > リール・ボタン・レバーを個別に動かせるものは見つかりませんでした (Sketchfab 等はログインが必要で、自動取得はできません)。
@@ -65,19 +64,16 @@ SLOT で使う素材は、テキストを描画する Canvas の演出コード�
 - Emoji graphics by Twemoji (https://github.com/jdecked/twemoji), licensed under CC-BY 4.0.
 - Pixel slot symbols by Molly "Cougarmint" Willits (https://opengameart.org/content/slot-machine-resource-pack), licensed under CC-BY 3.0.
 
-## 登場人物 (液晶カットイン)
+## 空 (液晶の背景)
 
-| ファイル | 役 | 元画像 | 作者 | 入手先 | ライセンス |
-|---|---|---|---|---|---|
-| `assets/images/cast/commander.png` | クロガネ司令 | commander.png | Justin Nichols (soreCactus 投稿) | https://opengameart.org/content/justin-nichols-sci-fi-portraits-png-psd-transparency | CC-BY-SA 3.0 |
-| `assets/images/cast/pilot.png` | パイロット ミナト | Pilot.png | 同上 | 同上 | CC-BY-SA 3.0 |
-| `assets/images/cast/husk.png` | 管制官 シオン | Husk.png | 同上 | 同上 | CC-BY-SA 3.0 |
-| `assets/images/cast/psion.png` | 謎の少女 (プレミア) | Psion.png | 同上 | 同上 | CC-BY-SA 3.0 |
-| `assets/images/cast/securityofficer.png` | ハヤセ副司令 | SecurityOfficer.png | Justin Nichols | https://opengameart.org/content/starship-security-officer | CC-BY-SA 3.0 |
+| ファイル | 素材 | 作者 | 入手先 | ライセンス |
+|---|---|---|---|---|
+| `assets/images/sky/kloofendal_48d_partly_cloudy_puresky.jpg` | Kloofendal 48d Partly Cloudy (Pure Sky) | Greg Zaal / Jarod Guest | https://polyhaven.com/a/kloofendal_48d_partly_cloudy_puresky | CC0 1.0 |
+| `assets/images/sky/belfast_sunset_puresky.jpg` | Belfast Sunset (Pure Sky) | Greg Zaal / Dimitrios Savva / Jarod Guest | https://polyhaven.com/a/belfast_sunset_puresky | CC0 1.0 |
+| `assets/images/sky/qwantani_night_puresky.jpg` | Qwantani Night (Pure Sky) | Greg Zaal / Jarod Guest | https://polyhaven.com/a/qwantani_night_puresky | CC0 1.0 |
+| `assets/images/sky/kloofendal_overcast_puresky.jpg` | Kloofendal Overcast (Pure Sky) | Greg Zaal | https://polyhaven.com/a/kloofendal_overcast_puresky | CC0 1.0 |
 
-役名と台詞はこのゲームのオリジナルです。画像は無改変で使い、Canvas 上で切り抜き・配置しているだけです。
-
-**必要な帰属表示:** Character portraits by Justin Nichols (https://opengameart.org/users/justin-nichol), licensed under CC-BY-SA 3.0.
+Poly Haven 配布のトーンマップ済み JPG (8K) を 2048×1024 に縮小しています。
 
 ## 形式変換について
 
@@ -118,9 +114,6 @@ OGG を MP3 に変換しただけで、音そのものには手を加えてい�
 | `glitch.mp3` | glitch_002.ogg | Interface Sounds |
 | `title_hit.mp3` | impactMetal_heavy_001.ogg | Impact Sounds |
 | `explosion.mp3` | explosionCrunch_002.ogg | Sci-Fi Sounds |
-| `beam.mp3` | laserLarge_001.ogg | Sci-Fi Sounds |
-| `launch.mp3` | thrusterFire_002.ogg | Sci-Fi Sounds |
-| `hangar.mp3` | doorOpen_001.ogg | Sci-Fi Sounds |
 | `computer.mp3` | computerNoise_001.ogg | Sci-Fi Sounds |
 | `lose.mp3` | lowDown.ogg | Digital Audio |
 | `cutin.mp3` | phaseJump2.ogg | Digital Audio |
@@ -131,14 +124,19 @@ OGG を MP3 に変換しただけで、音そのものには手を加えてい�
 | ファイル | 素材 | 作者 | 入手先 | ライセンス |
 |---|---|---|---|---|
 | `assets/audio/sfx/alarm.mp3` | Alarm (alarm_2.ogg) | EZduzziteh | https://opengameart.org/content/alarm-1 | CC0 1.0 |
-| `assets/audio/sfx/siren.mp3` | Facility Alert Siren | FiveBrosStopMosYT | https://opengameart.org/content/facility-alert-siren | CC-BY 4.0 (CC-BY 3.0 / OGA-BY 3.0 も選択可) |
+| `assets/audio/sfx/cannon.mp3` | Cannon Fire (cannon_fire.ogg) | Thimras | https://opengameart.org/content/cannon-fire | CC0 1.0 |
+| `assets/audio/sfx/cannon_hit.mp3` | Battle at Sea (cannon_hit_ship_short.ogg) | Thimras | https://opengameart.org/content/battle-at-sea | CC0 1.0 |
+| `assets/audio/sfx/splash.mp3` | 6 Short Water Splashes (ws.mp3 の 1 つ目を切り出し) | qubodup | https://opengameart.org/content/6-short-water-splashes | CC0 1.0 |
+| `assets/audio/sfx/ocean.mp3` | Beach Ocean Waves (wave_01) | qubodup (原音 jasinski) | https://opengameart.org/content/beach-ocean-waves | CC0 1.0 |
 
 ## BGM
 
 | ファイル | 曲 | 作者 | 入手先 | ライセンス |
 |---|---|---|---|---|
-| `assets/audio/bgm/level3.mp3` (BIG 中) | 5 Chiptunes (Action) — "Level 3" | Juhani Junkala | https://opengameart.org/content/5-chiptunes-action | CC0 1.0 |
-| `assets/audio/bgm/level1.mp3` (REG 中) | 5 Chiptunes (Action) — "Level 1" | Juhani Junkala | 同上 | CC0 1.0 |
+| `assets/audio/bgm/blackmoor_tides.mp3` (BIG 中) | Blackmoor Tides (Epic Pirate Battle Theme) | Matthew Pablo (http://www.matthewpablo.com) | https://opengameart.org/content/blackmoor-tides-epic-pirate-battle-theme | CC-BY 3.0 |
+| `assets/audio/bgm/chest_of_adventure.mp3` (REG 中) | Chest of Adventure | Eldritch Grim | https://opengameart.org/content/chest-of-adventure | CC0 1.0 |
+
+**必要な帰属表示:** "Blackmoor Tides" by Matthew Pablo (http://www.matthewpablo.com), licensed under CC-BY 3.0.
 
 ## フォント (Fontsource 経由で取得)
 
@@ -147,7 +145,7 @@ OGG を MP3 に変換しただけで、音そのものには手を加えてい�
 | `assets/fonts/bungee-400.woff2` | Bungee | David Jonathan Ross | https://fontsource.org/fonts/bungee | SIL OFL 1.1 |
 | `assets/fonts/orbitron-500.woff2`, `orbitron-900.woff2` | Orbitron | Matt McInerney | https://fontsource.org/fonts/orbitron | SIL OFL 1.1 |
 | `assets/fonts/dseg7-700.woff2` | DSEG7 Classic | keshikan | https://fontsource.org/fonts/dseg7-classic | SIL OFL 1.1 |
-| (Google Fonts から配信) | Shippori Mincho B1 (タイトルカード) | FONTDASU | https://fonts.google.com/specimen/Shippori+Mincho+B1 | SIL OFL 1.1 |
+| (Google Fonts から配信) | Shippori Mincho B1 (タイトル・結果) | FONTDASU | https://fonts.google.com/specimen/Shippori+Mincho+B1 | SIL OFL 1.1 |
 | (Google Fonts から配信) | Zen Kaku Gothic New (台詞) | Yoshimichi Ohira | https://fonts.google.com/specimen/Zen+Kaku+Gothic+New | SIL OFL 1.1 |
 
 日本語フォントは文字数が多く、使う文字だけを分割配信できる Google Fonts から読み込んでいます。

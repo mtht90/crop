@@ -1,5 +1,5 @@
 // =====================================================================
-//  SLOT — 全チューニング項目
+//  SLOT — 全チューニング項目 (液晶: 海賊の宝探し)
 //  演出・確率・素材パス・物語 (台詞/演出の振り分け) はここだけ触れば磨き込めるようにしてある。
 //  URL に #debug を付けるか G キーで lil-gui パネルが開き、ライブ調整できる。
 // =====================================================================
@@ -28,27 +28,38 @@ export const CONFIG = {
         'assets/models/arcade/vending-machine.gltf.json',
         'assets/models/arcade/prize-wheel.gltf.json',
       ],
-      // 液晶内の 3D 舞台 (シルエット表示)
+      // 液晶内の 3D 舞台: 海賊の宝探し (Quaternius Pirate Kit / Kenney Pirate Kit)
       story: {
-        mech: 'assets/models/story/Mech_Frog.gltf.json',
-        enemy: 'assets/models/story/Enemy_Large.gltf.json',
-        flyer: 'assets/models/story/Enemy_Flying.gltf.json',
-        city: [
-          'assets/models/city/building-skyscraper-a.gltf.json', 'assets/models/city/building-skyscraper-b.gltf.json',
-          'assets/models/city/building-skyscraper-c.gltf.json', 'assets/models/city/building-skyscraper-d.gltf.json',
-          'assets/models/city/building-skyscraper-e.gltf.json', 'assets/models/city/low-detail-building-a.gltf.json',
-          'assets/models/city/low-detail-building-c.gltf.json', 'assets/models/city/low-detail-building-e.gltf.json',
-          'assets/models/city/low-detail-building-g.gltf.json', 'assets/models/city/low-detail-building-wide-a.gltf.json',
-        ],
+        captain: 'assets/models/pirate/Characters_Captain_Barbarossa.gltf.json',
+        anne: 'assets/models/pirate/Characters_Anne.gltf.json',
+        henry: 'assets/models/pirate/Characters_Henry.gltf.json',
+        skeleton: 'assets/models/pirate/Characters_Skeleton.gltf.json',
+        tentacle: 'assets/models/pirate/Characters_Tentacle.gltf.json',
+        ship: 'assets/models/pirate/Ship_Large.gltf.json',
+        ghostShip: 'assets/models/kenney-pirate/ship-ghost.gltf.json',
+        chestClosed: 'assets/models/pirate/Prop_Chest_Closed.gltf.json',
+        chestGold: 'assets/models/pirate/Prop_Chest_Gold.gltf.json',
+        coins: 'assets/models/pirate/Prop_Coins.gltf.json',
+        cannon: 'assets/models/pirate/Prop_Cannon.gltf.json',
+        ball: 'assets/models/pirate/Prop_CannonBall.gltf.json',
+        skull: 'assets/models/pirate/Prop_Skull.gltf.json',
+        gemBlue: 'assets/models/pirate/UI_Gem_Blue.gltf.json',
+        gemPink: 'assets/models/pirate/UI_Gem_Pink.gltf.json',
+        palm1: 'assets/models/pirate/Environment_PalmTree_1.gltf.json',
+        palm2: 'assets/models/pirate/Environment_PalmTree_2.gltf.json',
+        rock1: 'assets/models/pirate/Environment_Rock_1.gltf.json',
+        rock3: 'assets/models/pirate/Environment_Rock_3.gltf.json',
+        cliff: 'assets/models/pirate/Environment_Cliff1.gltf.json',
+        barrel: 'assets/models/pirate/Prop_Barrel.gltf.json',
+        paper: 'assets/models/pirate/UI_Paper.gltf.json',
       },
-    },
-    // 登場人物の立ち絵 (Justin Nichols / CC-BY-SA 3.0)
-    cast: {
-      commander: 'assets/images/cast/commander.png',
-      vice: 'assets/images/cast/securityofficer.png',
-      operator: 'assets/images/cast/husk.png',
-      pilot: 'assets/images/cast/pilot.png',
-      girl: 'assets/images/cast/psion.png',
+      // 空 (Poly Haven の puresky を縮小 JPG 化したもの)
+      skies: {
+        day: 'assets/images/sky/kloofendal_48d_partly_cloudy_puresky.jpg',
+        sunset: 'assets/images/sky/belfast_sunset_puresky.jpg',
+        night: 'assets/images/sky/qwantani_night_puresky.jpg',
+        storm: 'assets/images/sky/kloofendal_overcast_puresky.jpg',
+      },
     },
     // リール図柄スキン。'twemoji' (高解像度ベクター) / 'pixel' (Cougarmint ドット絵)
     symbolSkin: 'twemoji',
@@ -107,22 +118,22 @@ export const CONFIG = {
       replay: 'assets/audio/sfx/replay.mp3',
       small_win: 'assets/audio/sfx/small_win.mp3',
       alarm: 'assets/audio/sfx/alarm.mp3',
-      siren: 'assets/audio/sfx/siren.mp3',
       tick: 'assets/audio/sfx/tick.mp3',
       glitch: 'assets/audio/sfx/glitch.mp3',
       title_hit: 'assets/audio/sfx/title_hit.mp3',
       explosion: 'assets/audio/sfx/explosion.mp3',
       lose: 'assets/audio/sfx/lose.mp3',
       cutin: 'assets/audio/sfx/cutin.mp3',
-      beam: 'assets/audio/sfx/beam.mp3',
-      launch: 'assets/audio/sfx/launch.mp3',
-      hangar: 'assets/audio/sfx/hangar.mp3',
       computer: 'assets/audio/sfx/computer.mp3',
       window: 'assets/audio/sfx/window.mp3',
+      cannon: 'assets/audio/sfx/cannon.mp3',
+      cannon_hit: 'assets/audio/sfx/cannon_hit.mp3',
+      splash: 'assets/audio/sfx/splash.mp3',
+      ocean: 'assets/audio/sfx/ocean.mp3',
     },
     bgm: {
-      big: 'assets/audio/bgm/level3.mp3',
-      reg: 'assets/audio/bgm/level1.mp3',
+      big: 'assets/audio/bgm/blackmoor_tides.mp3',
+      reg: 'assets/audio/bgm/chest_of_adventure.mp3',
     },
   },
 
@@ -213,67 +224,64 @@ export const CONFIG = {
   //   1ゲーム = レバーON → 第1停止 → 第2停止 → 第3停止 の4拍で昇格していく
   // ---------------------------------------------------------------
   story: {
-    // 登場人物 (立ち絵キーは assets.cast)
+    // 船のクルー (3D モデルから起動時に顔アップを描き出してカットインに使う)
     cast: {
-      commander: { name: '司令', full: 'クロガネ司令', color: '#e8c070' },
-      vice: { name: '副司令', full: 'ハヤセ副司令', color: '#9fb8d0' },
-      operator: { name: '管制官', full: '管制官 シオン', color: '#8fe0ff' },
-      pilot: { name: 'パイロット', full: 'ミナト', color: '#ff9a7a' },
-      girl: { name: '???', full: '???', color: '#ffffff' },
+      captain: { name: '船長', full: 'バルバロッサ船長', color: '#ff9a6a' },
+      anne: { name: '航海士', full: '航海士アン', color: '#ffd36a' },
+      henry: { name: '砲手', full: '砲手ヘンリー', color: '#8fd0ff' },
     },
     // 台詞。色 = 期待度 (blue < green < red < gold < rainbow)
     lines: {
       blue: [
-        ['operator', '第三区画に微弱な反応。確認します'],
-        ['vice', '警戒を怠るな'],
-        ['operator', '観測データ、異常なし'],
-        ['pilot', '待機中。いつでも出られます'],
+        ['anne', '風向き良好。のんびり行きましょ'],
+        ['henry', '今日も異常なし、っと'],
+        ['captain', '焦るな。海は逃げん'],
+        ['anne', '波が穏やかね'],
       ],
       green: [
-        ['operator', '未確認反応、市街地へ接近中!'],
-        ['vice', 'この数値は…ありえん'],
-        ['commander', '迎撃準備を'],
-        ['pilot', '機体の調子は悪くない'],
+        ['anne', '何か見えるわ!'],
+        ['henry', '大砲の準備はできてるぜ'],
+        ['captain', '舵を切れ!'],
+        ['anne', '地図の印に近いわ'],
       ],
       red: [
-        ['operator', '反応増大! パターン赤です!'],
-        ['commander', '全機、出撃せよ'],
-        ['pilot', '私がやる!'],
-        ['vice', '第七防衛線まで後退させるな!'],
+        ['captain', '野郎ども、行くぞ!'],
+        ['henry', 'ぶっ放すぜ!'],
+        ['anne', 'お宝の匂いがする!'],
+        ['captain', 'ここが勝負どころだ'],
       ],
       gold: [
-        ['commander', '…勝てる'],
-        ['pilot', 'これで終わりにする!'],
-        ['commander', '作戦を最終段階へ移行する'],
+        ['captain', 'お宝はもう目の前だ'],
+        ['anne', '間違いない、ここよ!'],
+        ['henry', '一発で決めてやる!'],
       ],
-      rainbow: [['girl', '…来るよ']],
+      rainbow: [['captain', '伝説の宝島だ…!']],
     },
-    // 結果に応じた台詞色の振り分け (重み)
     lineColor: {
       win: { blue: 4, green: 14, red: 40, gold: 32, rainbow: 10 },
       lose: { blue: 58, green: 30, red: 11.5, gold: 0.5, rainbow: 0 },
     },
     // シナリオの振り分け (フラグ別の重み)
-    //   none     : 何もなし
-    //   cutin    : 人物カットイン (停止毎に色が昇格しうる)
-    //   group    : 群予告 (警告ウィンドウ乱舞) → カットイン
-    //   caution  : CAUTION帯 → EMERGENCY帯 → タイトルカード → 結果
-    //   battle   : SPリーチ「迎撃戦」(侵蝕体接近 → 兵器出撃 → ロックオン → 決着)
-    //   final    : 最終決戦 (暗転 → 3,2,1 カウント → 決着)
-    //   girl     : 謎の少女 (プレミア / 確定)
-    //   freeze   : フリーズ (確定)
-    //   zone     : 前兆ゾーン 2〜5G (警戒態勢ステージ) → 最終ゲームで battle / final
+    //   none    : 何もなし
+    //   cutin   : クルーのカットイン (停止毎に台詞色が昇格しうる)
+    //   barrels : 樽が大量に流れてくる (群予告) → 第2停止でカットイン
+    //   chest   : 宝箱 (木→銀→金→虹 に停止毎で昇格) → PUSH で開封
+    //   battle  : SP「骸骨船との砲撃戦」 敵船接近 → 装填 → 照準 → PUSH で発射
+    //   final   : 最終決戦「クラーケン」 触手が出現 → 3,2,1 → PUSH
+    //   map     : 伝説の宝の地図 (プレミア / 確定)
+    //   freeze  : フリーズ (確定)
+    //   zone    : 嵐の前兆 2〜4G (嵐ステージ) → 最終ゲームで battle / final
     scenarios: {
-      NONE:   { none: 87, cutin: 9, group: 2.4, caution: 0.8, battle: 0.35, final: 0.04, zone: 0.4 },
-      REPLAY: { none: 80, cutin: 14, group: 4, caution: 2 },
-      BELL:   { none: 82, cutin: 13, group: 4, caution: 1 },
-      CHERRY: { none: 35, cutin: 37, group: 15, caution: 8, battle: 5 },
-      SUIKA:  { none: 30, cutin: 33, group: 20, caution: 10, battle: 7 },
-      BONUS:  { cutin: 8, group: 6, caution: 16, battle: 22, final: 16, girl: 4, freeze: 8, zone: 20 },
+      NONE:   { none: 87, cutin: 9, barrels: 2.4, chest: 0.8, battle: 0.35, final: 0.04, zone: 0.4 },
+      REPLAY: { none: 80, cutin: 14, barrels: 4, chest: 2 },
+      BELL:   { none: 82, cutin: 13, barrels: 4, chest: 1 },
+      CHERRY: { none: 35, cutin: 37, barrels: 15, chest: 8, battle: 5 },
+      SUIKA:  { none: 30, cutin: 33, barrels: 20, chest: 10, battle: 7 },
+      BONUS:  { cutin: 8, barrels: 6, chest: 16, battle: 22, final: 16, map: 4, freeze: 8, zone: 20 },
     },
-    zoneLength: [2, 5],    // 前兆ゾーンのゲーム数
+    zoneLength: [2, 4],
     revival: 0.18,         // ボーナス当選時、一度「撤退」を見せてから逆転する確率
-    stageChange: 0.04,     // 通常時のステージチェンジ率 (ボーナス持ち越し中は 0.3)
+    stageChange: 0.05,     // 通常時のステージチェンジ率 (ボーナス持ち越し中は 0.3)
   },
 
   effects: {

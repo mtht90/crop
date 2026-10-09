@@ -23,7 +23,7 @@ if (HASH.has('lite')) { cfg.render.hall = false; cfg.render.neighbors = false; c
 const TOUCH = matchMedia('(hover: none)').matches;
 if (TOUCH) { cfg.render.pixelRatioMax = Math.min(cfg.render.pixelRatioMax, 1.5); cfg.render.neighbors = cfg.render.neighbors && 'near'; cfg.render.mobile = true; }
 const $ = (id) => document.getElementById(id);
-const STORE = 'slot.v1';
+const STORE = 'slot.v2';
 
 // ------------------------------------------------------------------
 // renderer / scene
@@ -131,11 +131,12 @@ async function boot() {
     $('loading').classList.add('gone');
     haptics.vibrate([30]);
     audio.resume().then(() => {
+      audio.play('ocean', { loop: true, gain: 0.12 }); // 波音 (環境音)
       if (machine.mode !== 'normal') audio.bgm(cfg.bonus[machine.mode].bgm);
     }).catch((e) => console.warn('audio resume', e));
   };
   renderer.setAnimationLoop(frame);
-  window.__slot = { cab, lcd, machine, director, story, stage, scene, camera, rig, cfg, force: (f) => { forcedFlag = f; }, get state() { return state; } };
+  window.__slot = { THREE, cab, lcd, machine, director, story, stage, scene, camera, rig, cfg, force: (f) => { forcedFlag = f; }, get state() { return state; } };
 }
 
 function buildRoom(assets) {
@@ -491,7 +492,7 @@ async function toggleGui() {
   g1.add(cfg.play, 'assistAlignAfterNotice').name('告知後 目押しアシスト');
   g1.add(cfg.reels, 'maxSlip', 0, 4, 1).name('最大滑りコマ').onChange(() => { machine.logic._ctx = new Map(); });
   const g2 = gui.addFolder('演出');
-  g2.add(story, 'force', ['auto', 'none', 'cutin', 'group', 'caution', 'battle', 'final', 'girl', 'freeze', 'zone']).name('シナリオ 強制');
+  g2.add(story, 'force', ['auto', 'none', 'cutin', 'barrels', 'chest', 'battle', 'final', 'map', 'freeze', 'zone']).name('シナリオ 強制');
   g2.add(director.debugForce, 'freeze').name('ボーナス時 必ずフリーズ');
   g2.add(cfg.story, 'revival', 0, 1, 0.01).name('逆転 発生率');
   g2.add(cfg.effects, 'reachSlowFactor', 0.1, 1, 0.05).name('テンパイ時 減速');

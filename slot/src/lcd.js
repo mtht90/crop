@@ -14,13 +14,13 @@ export class Lcd {
     this.x = canvas.getContext('2d');
     this.tex = texture;
     this.images = images;
-    this.cast = images.cast || {};
+    this.cast = {}; // story.js が 3D クルーの顔アップを差し込む
     this.cfg = cfg;
     this.mincho = cfg.assets.jpFonts.mincho;
     this.gothic = cfg.assets.jpFonts.gothic;
     this.t = 0;
     this.base = 'stage';
-    this.stage = { name: '夜間警戒', mood: 'night' };
+    this.stage = { name: '昼の海', mood: 'day' };
     this.info = { games: 0, big: 0, reg: 0, since: 0, medals: 0, diff: 0 };
     this.bonus = null;
     this.fx = [];
@@ -67,8 +67,8 @@ export class Lcd {
   // ------------------------------------------------------------
   drawStageHud(x, W, H) {
     const t = this.t;
-    const alert = this.stage.mood === 'alert';
-    const c = alert ? '#ff4a4a' : this.stage.mood === 'command' ? '#5fffe0' : '#9fc8ff';
+    const alert = this.stage.mood === 'storm';
+    const c = alert ? '#c8d8ff' : this.stage.mood === 'sunset' ? '#ffd0a0' : this.stage.mood === 'night' ? '#9fc8ff' : '#ffffff';
     x.strokeStyle = c; x.lineWidth = 3; x.globalAlpha = 0.85;
     // コーナーブラケット
     for (const [cx, cy, sx, sy] of [[16, 16, 1, 1], [W - 16, 16, -1, 1], [16, H - 16, 1, -1], [W - 16, H - 16, -1, -1]]) {
@@ -78,7 +78,7 @@ export class Lcd {
     x.font = `700 26px ${this.gothic}`; x.fillStyle = c; x.textBaseline = 'top';
     x.fillText(this.stage.name, 34, 30);
     x.font = `500 14px ${F.u}`; x.globalAlpha = 0.7;
-    x.fillText(alert ? 'CONDITION RED' : this.stage.mood === 'command' ? 'COMMAND CENTER' : 'NIGHT WATCH', 36, 62);
+    x.fillText({ day: 'CALM SEA', sunset: 'SUNSET', night: 'NIGHT SEA', storm: 'STORM' }[this.stage.mood] || '', 36, 62);
     // 右上: ゲーム数
     const i = this.info;
     x.textAlign = 'right'; x.globalAlpha = 0.85;
@@ -89,23 +89,10 @@ export class Lcd {
     x.textAlign = 'left';
     if (alert) {
       // 警戒態勢: 外周の赤い脈動
-      const a = 0.35 + 0.35 * Math.sin(t * 6);
-      x.globalAlpha = a; x.lineWidth = 14; x.strokeStyle = '#ff1a1a';
-      x.strokeRect(7, 7, W - 14, H - 14);
-      if (Math.sin(t * 6) > 0) {
-        x.globalAlpha = 0.9; x.font = `900 20px ${F.u}`; x.fillStyle = '#ff3030';
-        x.textAlign = 'center'; x.fillText('ALERT', W / 2, 26); x.textAlign = 'left';
-      }
-    }
-    if (this.stage.mood === 'command') {
-      // 司令室: 作戦図
-      x.globalAlpha = 0.35; x.strokeStyle = '#5fffe0'; x.lineWidth = 1;
-      for (let gx = 620; gx <= 980; gx += 30) { x.beginPath(); x.moveTo(gx, 300); x.lineTo(gx, 470); x.stroke(); }
-      for (let gy = 300; gy <= 470; gy += 30) { x.beginPath(); x.moveTo(620, gy); x.lineTo(980, gy); x.stroke(); }
-      const sweep = t * 1.4;
-      x.globalAlpha = 0.6; x.beginPath(); x.moveTo(800, 385); x.lineTo(800 + Math.cos(sweep) * 85, 385 + Math.sin(sweep) * 85); x.stroke();
-      x.fillStyle = '#ff5050'; x.globalAlpha = 0.5 + 0.5 * Math.sin(t * 4);
-      x.beginPath(); x.arc(870, 340, 5, 0, Math.PI * 2); x.fill();
+      // 嵐: 稲光
+      if (Math.random() < 0.012) this.play('flash', { color: '#dfe8ff', dur: 0.25, alpha: 0.7 });
+      x.globalAlpha = 0.25; x.fillStyle = '#9ab';
+      for (let i = 0; i < 60; i++) { const rx = (i * 97 + t * 900) % W, ry = (i * 53 + t * 1400) % H; x.fillRect(rx, ry, 2, 18); }
     }
     x.globalAlpha = 1;
     if (this.prompt && Math.sin(t * 4) > -0.3) {
@@ -120,10 +107,10 @@ export class Lcd {
   drawBonus(x, W, H) {
     const b = this.bonus, t = this.t;
     const big = b.type === 'BIG';
-    x.fillStyle = big ? 'rgba(40,0,6,0.35)' : 'rgba(0,10,40,0.35)'; x.fillRect(0, 0, W, H);
+    x.fillStyle = 'rgba(30,14,0,0.28)'; x.fillRect(0, 0, W, H);
     x.font = `800 64px ${this.mincho}`; x.textAlign = 'center'; x.textBaseline = 'middle';
     x.shadowColor = big ? '#ff2040' : '#2080ff'; x.shadowBlur = 30; x.fillStyle = '#fff';
-    x.fillText(big ? '迎撃作戦 成功' : '防衛 成功', W / 2, 92);
+    x.fillText(big ? 'お宝ざくざく' : '小さなお宝', W / 2, 92);
     x.shadowBlur = 0;
     x.font = `22px ${F.d}`; x.fillStyle = big ? '#ffb0b8' : '#b0d0ff';
     x.fillText(big ? 'BIG BONUS' : 'REGULAR BONUS', W / 2, 140);
@@ -271,8 +258,14 @@ export class Lcd {
   // エヴァ風タイトルカード: 黒地に極太明朝。行ごとにサイズ・位置を指定
   drawTitle(x, e, W, H, fade) {
     x.globalAlpha = fade;
-    x.fillStyle = e.bg || '#000'; x.fillRect(0, 0, W, H);
-    const lines = e.lines || [{ text: e.text, size: 150 }];
+    const parch = e.style === 'parchment';
+    if (parch) {
+      // 古い羊皮紙 (焦げた縁)
+      const g = x.createRadialGradient(W / 2, H / 2, 60, W / 2, H / 2, W * 0.62);
+      g.addColorStop(0, '#f6e2b4'); g.addColorStop(0.7, '#d9b277'); g.addColorStop(1, '#5a3410');
+      x.fillStyle = g; x.fillRect(0, 0, W, H);
+    } else { x.fillStyle = e.bg || '#000'; x.fillRect(0, 0, W, H); }
+    const lines = (e.lines || [{ text: e.text, size: 150 }]).map((ln) => (parch ? { align: 'center', x: W / 2, squash: 0.92, color: ln.color === '#ffd84a' ? '#8a1a00' : '#3a1c04', ...ln, ...(ln.color === '#ffd84a' ? { color: '#8a1a00' } : {}) } : ln));
     const jitter = e.t < 0.08 ? (Math.random() - 0.5) * 30 : 0;
     x.textBaseline = 'alphabetic';
     for (const ln of lines) {
@@ -287,8 +280,9 @@ export class Lcd {
       x.restore();
     }
     if (e.sub) {
-      x.font = `500 18px ${F.u}`; x.fillStyle = '#c8c0b0'; x.textAlign = 'left';
-      x.fillText(e.sub, 74, H - 40);
+      x.font = `500 18px ${F.u}`; x.fillStyle = parch ? '#5a3410' : '#c8c0b0'; x.textAlign = parch ? 'center' : 'left';
+      x.fillText(e.sub, parch ? W / 2 : 74, H - 40);
+      x.textAlign = 'left';
     }
   }
 

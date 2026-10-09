@@ -74,17 +74,10 @@ export async function loadAssets(cfg, renderer, onProgress) {
   track(loadGlb(A.models.coin).then((s) => { out.models.coin = s; }));
   // 液晶 3D 舞台 (アニメーション付きで保持)
   const loadGltf = (url) => new Promise((ok) => gl.load(url, (g) => ok(g), undefined, (e) => { console.warn('gltf', url, e); ok(null); }));
-  const SM = A.models.story;
-  out.story = { city: [] };
-  for (const k of ['mech', 'enemy', 'flyer']) track(loadGltf(SM[k]).then((g) => { out.story[k] = g; }));
-  SM.city.forEach((u, i) => track(loadGlb(u).then((s) => { if (s) out.story.city[i] = s; })));
-  // 登場人物の立ち絵
-  out.images.cast = {};
-  for (const [k, url] of Object.entries(A.cast)) {
-    track(new Promise((ok) => { const img = new Image(); img.onload = () => { out.images.cast[k] = img; ok(); }; img.onerror = () => ok(); img.src = url; }));
-  }
-  if (cfg.render.hall) {
-    A.models.hall.forEach((u, i) => track(loadGlb(u).then((s) => { if (s) out.hall[i] = s; })));
+  out.story = { skies: {} };
+  for (const [k, url] of Object.entries(A.models.story)) track(loadGltf(url).then((g) => { out.story[k] = g; }));
+  for (const [k, url] of Object.entries(A.models.skies)) {
+    track(new Promise((ok) => tl.load(url, (t) => { out.story.skies[k] = t; ok(); }, undefined, () => ok())));
   }
 
   // 図柄画像 (Canvas 描画用)
@@ -113,14 +106,13 @@ export async function loadAssets(cfg, renderer, onProgress) {
 
   await Promise.all(jobs);
   out.hall = out.hall.filter(Boolean);
-  out.story.city = out.story.city.filter(Boolean);
   return out;
 }
 
 // 演出で使う日本語をまとめる (フォントのサブセット読み込み用)
 function jpText(cfg) {
   const S = cfg.story;
-  let t = '前兆侵蝕体観測圏内入迎撃第七防衛線突破接近最終決戦撤退機損傷帰投獲得枚成功作戦警戒態勢夜間司令室緊急注意事態承認残りテンパイを狙えまだ終わってない確定出撃します行きます準備完了目標市街地へ攻中移行ベルスイカチェリーリプレイメダル貸出0123456789';
+  let t = '敵襲骸骨船クラーケン嵐の予感宝島発見上陸撤退出航獲得枚お宝箱開封伝説地図昼夕暮れ夜海前兆ボタンを押せ最後一撃テンパイ7狙え確定まだ終わっちゃいない大砲発射命中外れたドクロハズレ小さな財宝ベルスイカチェリーリプレイメダル貸出残り0123456789!?…';
   for (const c of Object.values(S.cast)) t += c.name + c.full;
   for (const arr of Object.values(S.lines)) for (const [, l] of arr) t += l;
   return [...new Set(t)].join('');

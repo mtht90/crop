@@ -22,7 +22,7 @@ export class Director {
     if (this.debugForce.freeze && flag.newBonus) cur.type = 'freeze';
     const plan = { cur, stopLed: '#3cf' };
     const rank = { blue: '#3cf', green: '#3cf', red: '#ffd400', gold: '#ff2a2a', rainbow: 'rainbow' };
-    if (['battle', 'final', 'caution'].includes(cur.type)) plan.stopLed = rank[cur.color] === '#3cf' ? '#ffd400' : rank[cur.color];
+    if (['battle', 'final', 'chest'].includes(cur.type)) plan.stopLed = rank[cur.color] === '#3cf' ? '#ffd400' : rank[cur.color];
     else if (cur.color === 'gold' || cur.color === 'rainbow') plan.stopLed = rank[cur.color];
     if (flag.bonus && !this.machine.noticed && Math.random() < 0.08) plan.stopLed = 'rainbow';
     this.current = plan;
@@ -38,7 +38,7 @@ export class Director {
     L.ledMode = 'chase';
     L.flicker = 0;
     const t = plan.cur.type;
-    if (['battle', 'final', 'caution'].includes(t)) { L.mode = 'chance'; L.ledMode = t === 'final' ? 'flash' : 'rise'; }
+    if (['battle', 'final', 'chest'].includes(t)) { L.mode = 'chance'; L.ledMode = t === 'final' ? 'flash' : 'rise'; }
     // 実機の「遅れ」: レバー音が変わり、リール始動が一瞬遅れる (ボーナス期待)
     const pending = flag.bonus && !this.machine.noticed && this.machine.mode === 'normal';
     if (this.machine.mode === 'normal' && Math.random() < (pending ? 0.12 : 0.004)) {
@@ -254,8 +254,8 @@ export class Director {
     this.lcd.play('icons', { icon: big ? 'gem' : 'bolt', dur: 2.6, count: 40 });
     this.story.bonusScene(true);
     this.lcd.play('title', { lines: big
-      ? [{ text: '迎撃作戦', size: 120, y: 230 }, { text: '成功', size: 200, y: 430, color: '#ffd84a' }]
-      : [{ text: '防衛', size: 180, y: 300 }, { text: '成功', size: 120, y: 450, color: '#7fc4ff' }], dur: 1.5, sub: big ? 'BIG BONUS' : 'REGULAR BONUS' });
+      ? [{ text: '宝島', size: 150, y: 250 }, { text: '上陸!!', size: 170, y: 440, color: '#ffd84a' }]
+      : [{ text: 'お宝', size: 170, y: 300 }, { text: '発見', size: 120, y: 450 }], dur: 1.4, sub: big ? 'BIG BONUS' : 'REGULAR BONUS', style: 'parchment' });
     setTimeout(() => this.lcd.play('text', { text: big ? 'BIG BONUS' : 'REG BONUS', rainbow: big, color: '#7fc4ff', size: 110, dur: 1.6, shake: 10 }), 1500);
     for (let k = 0; k < 4; k++) {
       setTimeout(() => {
@@ -280,7 +280,7 @@ export class Director {
     this.audio.play('bonus_end', { gain: 1 });
     this.lcd.base = 'stage';
     this.story.bonusScene(false);
-    this.lcd.play('title', { lines: [{ text: '帰投', size: 190, y: 290 }, { text: `獲得 ${info.paid} 枚`, size: 54, y: 400, x: 80, squash: 1, color: '#ffd84a' }], dur: 2.6, sub: `${info.type} BONUS  ${info.games} GAMES` });
+    this.lcd.play('title', { lines: [{ text: '出航', size: 190, y: 290 }, { text: `獲得 ${info.paid} 枚`, size: 54, y: 400, squash: 1 }], dur: 2.2, sub: `${info.type} BONUS  ${info.games} GAMES`, style: 'parchment' });
     this.haptics.vibrate([80, 40, 80]);
     this.bloomKick(0.8);
     L.rainbow = 0;
