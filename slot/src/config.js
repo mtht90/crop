@@ -106,7 +106,7 @@ export const CONFIG = {
       maxbet: 'assets/audio/sfx/maxbet.mp3',
     },
     bgm: {
-      normal: 'assets/audio/bgm/bossa_nova.mp3',   // 通常時 (実機のジャグラーは無音だが、ゲームとして流す)
+      normal: 'assets/audio/bgm/heckin_crows.mp3', // 通常時 (ゲーセンらしい明るいチップチューン。実機のジャグラーは無音)
       big: 'assets/audio/bgm/level3.mp3',
       reg: 'assets/audio/bgm/level1.mp3',
       sp1: 'assets/audio/bgm/level2.mp3',          // ボーナス後 3G 以内の BIG (実機の「軍艦マーチ」枠)
@@ -281,6 +281,7 @@ export const CONFIG = {
     camera: { fov: 34, pos: [0, 1.38, 3.05], target: [0, 1.18, 0], parallax: 0.12 },
     hall: true,      // 背景のアーケードホール (Kenney GLB)
     neighbors: true, // 島の隣台 (自台クローン)。#lite で両方オフ
+    portraitHalfW: 0.92, // 縦画面で見せる横幅の半分 (m)。0.98 で隣台がちょうど半分見える
     lcdFps: 60,      // 液晶 3D 舞台の描画レート
   },
   audio: { master: 0.85, sfx: 1.0, bgm: 0.45, normalBgm: 0.45 },

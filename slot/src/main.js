@@ -67,8 +67,8 @@ function fitCamera() {
   const aspect = innerWidth / innerHeight;
   const tanH = Math.tan(THREE.MathUtils.degToRad(c.fov / 2));
   const portrait = aspect < 0.9;
-  const halfH = portrait ? 0.74 : 0.98, halfW = portrait ? 0.57 : 0.8; // 台上のデータカウンターまで収める
-  rig.cx = portrait ? 0.07 : 0; // 縦画面は右の千円入れ機まで収める
+  const halfH = portrait ? 0.74 : 0.98, halfW = portrait ? (cfg.render.neighbors ? cfg.render.portraitHalfW : 0.57) : 0.8; // 台上のデータカウンターまで収める
+  rig.cx = portrait && !cfg.render.neighbors ? 0.07 : 0; // 縦画面は右の千円入れ機まで収める
   const d = Math.max(halfH / tanH, halfW / (tanH * aspect));
   const ty = portrait ? 1.8 : c.target[1] + 0.48; // 縦画面は HUD の下にカウンターが来るように
   rig.touch = matchMedia('(hover: none)').matches;
@@ -155,7 +155,7 @@ function buildRoom(assets) {
   rim.position.set(-2.4, 2.8, -0.6);
   rim.target.position.set(0, 1.4, 0);
   scene.add(rim, rim.target);
-  if (!assets.hall.length) return;
+  if (cfg.render.neighbors === false && !assets.hall.length) return;
   // 島 (台下カウンター)
   const leather = cab.m.leather;
   const island = new THREE.Mesh(new RoundedBoxGeometry(7.2, DIM.bodyBottom, 0.8, 4, 0.02), leather);
@@ -170,8 +170,8 @@ function buildRoom(assets) {
   const dim = (m) => {
     if (!dimMats.has(m)) {
       const c = m.clone();
-      if (c.color) c.color.multiplyScalar(0.4);
-      if ('emissiveIntensity' in c) c.emissiveIntensity = Math.min(c.emissiveIntensity, 0.22);
+      if (c.color) c.color.multiplyScalar(0.55);
+      if ('emissiveIntensity' in c) c.emissiveIntensity = Math.min(c.emissiveIntensity, 0.3);
       if (reelMats.has(m)) c.emissiveIntensity = 0.5;
       dimMats.set(m, c);
     }

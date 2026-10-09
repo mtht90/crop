@@ -6,7 +6,7 @@ SLOT で使う素材は、テキストを描画する Canvas の演出コード�
 
 | 区分 | ライセンス | 商用 | 帰属表示 |
 |---|---|---|---|
-| Poly Haven / ambientCG / Kenney / Juhani Junkala | CC0 1.0 | ✅ | 不要 (推奨) |
+| Poly Haven / ambientCG / Kenney / Juhani Junkala / congusbongus | CC0 1.0 | ✅ | 不要 (推奨) |
 | Twemoji グラフィック | CC-BY 4.0 | ✅ | **必要** |
 | Openclipart (ピエロ) | CC0 1.0 | ✅ | 不要 |
 | EZduzziteh | CC0 1.0 | ✅ | 不要 |
@@ -60,7 +60,7 @@ SLOT で使う素材は、テキストを描画する Canvas の演出コード�
 | `assets/images/kenney-ui/button_yellow_gloss.png` | UI Pack — `PNG/Yellow/Default/button_rectangle_depth_gloss.png` (MAX BET ボタンの面) | Kenney | https://kenney.nl/assets/ui-pack | CC0 1.0 (`License.txt` を同梱) |
 
 ピエロの PNG は Openclipart が配布する 800px PNG の余白を切り落として 512px に縮小したものです。
-北電子「ジャグラー」シリーズのピエロ (GOGO! ランプや図柄の公式イラスト) は同社の著作物のため使っていません。
+北電子「ジャグラー」シリーズのピエロ (GOGO! ランプや図柄の公式イラスト) と、ネット上にある実機の音声 (実機から抜き出したもの) は同社の著作物のため使っていません。
 
 赤7・BAR・REPLAY の文字は、Bungee フォントを Canvas に描画して作っています。
 
@@ -131,7 +131,7 @@ OGG を MP3 に変換しただけで、音そのものには手を加えてい�
 | `assets/audio/bgm/level1.mp3` (REG 中) | 5 Chiptunes (Action) — "Level 1" | Juhani Junkala | 同上 | CC0 1.0 |
 | `assets/audio/bgm/level2.mp3` (スペシャル BGM 1) | 5 Chiptunes (Action) — "Level 2" | Juhani Junkala | 同上 | CC0 1.0 |
 | `assets/audio/bgm/ending.mp3` (スペシャル BGM 2) | 5 Chiptunes (Action) — "Ending" | Juhani Junkala | 同上 | CC0 1.0 |
-| `assets/audio/bgm/bossa_nova.mp3` (通常時) | Bossa Nova (8bit Bossa) | Joth | https://opengameart.org/content/bossa-nova | CC0 1.0 |
+| `assets/audio/bgm/heckin_crows.mp3` (通常時) | Heckin Crows (OGG を MP3 に変換) | congusbongus | https://opengameart.org/content/heckin-crows | CC0 1.0 |
 | `assets/audio/bgm/title_screen.mp3` (プレミアム BGM) | 5 Chiptunes (Action) — "Title Screen" | Juhani Junkala | 同上 | CC0 1.0 |
 
 

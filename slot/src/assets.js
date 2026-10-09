@@ -72,6 +72,9 @@ export async function loadAssets(cfg, renderer, onProgress) {
   const gl = new GLTFLoader();
   const loadGlb = (url) => new Promise((ok) => gl.load(url, (g) => ok(g.scene), undefined, (e) => { console.warn('glb', url, e); ok(null); }));
   track(loadGlb(A.models.coin).then((s) => { out.models.coin = s; }));
+  if (cfg.render.hall) {
+    A.models.hall.forEach((u, i) => track(loadGlb(u).then((s) => { if (s) out.hall[i] = s; })));
+  }
   // 図柄画像 (Canvas 描画用)
   const skin = A.symbolImages[A.symbolSkin] || {};
   const allImgs = { ...A.symbolImages.twemoji, ...skin, ...(A.uiImages || {}) };
