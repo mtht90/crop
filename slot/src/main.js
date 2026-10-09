@@ -10,6 +10,7 @@ import { loadAssets } from './assets.js';
 import { Cabinet, DIM } from './cabinet.js';
 import { Haptics, Shaker, Coins, Sparks } from './fx.js';
 import { Director } from './director.js';
+import { Neighbor } from './neighbors.js';
 import { hapticTrigger } from '../assets/lib/ios-haptics/ios-haptics.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
@@ -67,10 +68,10 @@ function fitCamera() {
   const aspect = innerWidth / innerHeight;
   const tanH = Math.tan(THREE.MathUtils.degToRad(c.fov / 2));
   const portrait = aspect < 0.9;
-  const halfH = portrait ? 0.74 : 0.98, halfW = portrait ? (cfg.render.neighbors ? cfg.render.portraitHalfW : 0.57) : 0.8; // 台上のデータカウンターまで収める
+  const halfH = portrait ? 0.74 : 0.9, halfW = portrait ? (cfg.render.neighbors ? cfg.render.portraitHalfW : 0.57) : 0.8; // 台上のデータカウンターまで収める
   rig.cx = portrait && !cfg.render.neighbors ? 0.07 : 0; // 縦画面は右の千円入れ機まで収める
   const d = Math.max(halfH / tanH, halfW / (tanH * aspect));
-  const ty = portrait ? 1.8 : c.target[1] + 0.48; // 縦画面は HUD の下にカウンターが来るように
+  const ty = portrait ? 1.8 : c.target[1] + 0.52; // 縦画面は HUD の下にカウンターが来るように
   rig.touch = matchMedia('(hover: none)').matches;
 
   rig.dist = d;
@@ -177,18 +178,18 @@ function buildRoom(assets) {
     }
     return dimMats.get(m);
   };
-  for (const x of cfg.render.neighbors === false ? [] : cfg.render.neighbors === 'near' ? [-0.98, 0.98] : [-0.98, 0.98, -1.96, 1.96]) {
+  const gap = cfg.render.neighborGap; // 台どうしの間隔 (中心間 m)
+  for (const x of cfg.render.neighbors === false ? [] : cfg.render.neighbors === 'near' ? [-gap, gap] : [-gap, gap, -gap * 2, gap * 2]) {
     const n = cab.group.clone(true);
     n.traverse((o) => {
       if (o.isLight) o.visible = false;
-      if (o.isMesh && reelMats.has(o.material)) o.rotation.x = Math.floor(Math.random() * 21) * (Math.PI * 2 / 21) + Math.PI * 2 / 42;
       if (o.isMesh || o.isPoints) o.material = Array.isArray(o.material) ? o.material.map(dim) : dim(o.material);
       if (o.isInstancedMesh) o.visible = false;
       o.userData = {};
     });
     n.position.x = x;
     scene.add(n);
-    addNeighborScreen(x);
+    neighbors.push(new Neighbor({ cab, clone: n, x, cfg, audio }));
   }
   if (!assets.hall.length) return;
   // 奥のアーケードホール (Kenney Mini Arcade)
@@ -579,53 +580,17 @@ async function toggleGui() {
 // ------------------------------------------------------------------
 const clock = new THREE.Clock();
 let frameErr = 0;
-// 隣の台もときどき当たる (ホールの空気感)。確率は自台と同じ合算 1/168 前後
+// 隣の台 (オートプレイ。自台とは連動しない)
 const neighbors = [];
-let neighborTex = null;
-function addNeighborScreen(x) {
-  if (!neighborTex) {
-    const c = document.createElement('canvas'); c.width = 256; c.height = 128;
-    const g = c.getContext('2d');
-    const gr = g.createRadialGradient(128, 64, 4, 128, 64, 140);
-    gr.addColorStop(0, '#ffd0f0'); gr.addColorStop(0.5, '#ff3fa8'); gr.addColorStop(1, '#5a0030');
-    g.fillStyle = gr; g.fillRect(0, 0, 256, 128);
-    g.font = `400 58px ${cfg.assets.jpFonts.display}`; g.textAlign = 'center'; g.textBaseline = 'middle';
-    g.lineWidth = 10; g.strokeStyle = '#3a0026'; g.strokeText('LUCKY!!', 128, 66);
-    g.fillStyle = '#ffe14d'; g.fillText('LUCKY!!', 128, 66);
-    neighborTex = new THREE.CanvasTexture(c); neighborTex.colorSpace = THREE.SRGBColorSpace;
-  }
-  const mat = new THREE.MeshBasicMaterial({ map: neighborTex, transparent: true, opacity: 0, toneMapped: false, depthWrite: false });
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(0.66, 0.34), mat);
-  m.position.set(x, DIM.lcdY, DIM.front + 0.02);
-  scene.add(m);
-  neighbors.push({ m, mat, x, state: 'idle', t: 0 });
-}
 function updateNeighbors(dt) {
   // 画面外の隣台が当たっていたら、その側の画面端をほんのり光らせる
   const edge = { l: 0, r: 0 };
-  for (const n of neighbors) if (n.state !== 'idle') edge[n.x < 0 ? 'l' : 'r'] = n.state === 'lit' ? 1 : 0.6;
+  for (const n of neighbors) if (n.active) edge[n.x < 0 ? 'l' : 'r'] = n.mode === 'lit' ? 1 : 0.6;
   for (const k of ['l', 'r']) {
     const el = $('edge-' + k);
     if (el) el.style.opacity = edge[k] ? String(edge[k] * (0.55 + 0.45 * Math.sin(performance.now() / 160))) : '0';
   }
-  for (const n of neighbors) {
-    n.t += dt;
-    if (n.state === 'idle') {
-      n.mat.opacity = 0;
-      if (Math.random() < dt / (168 * 4.6)) {
-        n.state = 'lit'; n.t = 0; n.dur = 4 + Math.random() * 10;
-        audio.play('peka', { gain: 0.12, rate: 1.2 + Math.random() * 0.1 });
-      }
-    } else if (n.state === 'lit') {
-      n.mat.opacity = 0.85;
-      n.mat.color.setRGB(1, 1, 1);
-      if (n.t > n.dur) { n.state = 'bonus'; n.t = 0; audio.play('fanfare_big', { gain: 0.07 }); }
-    } else {
-      n.mat.opacity = 0.5 + 0.4 * (Math.sin(n.t * 9) > 0 ? 1 : 0);
-      n.mat.color.setHSL((n.t * 0.4) % 1, 0.8, 0.7);
-      if (n.t > 45) { n.state = 'idle'; n.t = 0; }
-    }
-  }
+  for (const n of neighbors) n.update(dt);
 }
 
 function frame() {
