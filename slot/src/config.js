@@ -31,11 +31,15 @@ export const CONFIG = {
     },
     // リール図柄スキン。'twemoji' (高解像度ベクター) / 'pixel' (Cougarmint ドット絵)
     symbolSkin: 'twemoji',
+    // 筐体パーツの画像 (MAX BET ボタン面: Kenney UI Pack)
+    uiImages: {
+      maxbet: 'assets/images/kenney-ui/button_yellow_gloss.png',
+    },
     symbolImages: {
       twemoji: {
         bell: 'assets/images/twemoji/bell.svg',
         grape: 'assets/images/twemoji/grapes.svg',
-        clown: 'assets/images/twemoji/clown.svg',
+        clown: 'assets/images/openclipart/clown-face.png',
         coin: 'assets/images/twemoji/coin.svg',
         cherry: 'assets/images/twemoji/cherry.svg',
         replay: 'assets/images/twemoji/replay.svg',
@@ -98,6 +102,7 @@ export const CONFIG = {
       rumble: 'assets/audio/sfx/rumble.mp3',
       peka: 'assets/audio/sfx/peka.mp3',
       bill: 'assets/audio/sfx/bill.mp3',
+      maxbet: 'assets/audio/sfx/maxbet.mp3',
     },
     bgm: {
       big: 'assets/audio/bgm/level3.mp3',

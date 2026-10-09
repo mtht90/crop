@@ -358,27 +358,39 @@ export class Cabinet {
       this.stopButtons.push({ grp, cap, mat, press: 0 });
     }
 
-    // MAX BET
-    const bc = document.createElement('canvas'); bc.width = 256; bc.height = 128;
+    // MAX BET (ボタン面は Kenney UI Pack の光沢ボタン画像に文字を刷ったもの)
+    const bc = document.createElement('canvas'); bc.width = 384; bc.height = 160;
     const bx = bc.getContext('2d');
-    bx.fillStyle = '#ffcf33'; bx.fillRect(0, 0, 256, 128);
-    bx.font = '44px Bungee'; bx.textAlign = 'center'; bx.textBaseline = 'middle'; bx.fillStyle = '#3a1a00';
-    bx.fillText('MAX', 128, 44); bx.fillText('BET', 128, 92);
-    const btex = new THREE.CanvasTexture(bc); btex.colorSpace = THREE.SRGBColorSpace;
-    this.betMat = new THREE.MeshPhysicalMaterial({ map: btex, emissiveMap: btex, emissive: 0xffffff, emissiveIntensity: 0.4, roughness: 0.2, clearcoat: 1 });
-    // RoundedBoxGeometry は多マテリアル非対応 → 上面ラベル板を重ねる
-    const bet = new THREE.Mesh(new RoundedBoxGeometry(0.09, 0.02, 0.05, 3, 0.006), this.m.gold);
-    bet.position.set(-0.2, deckY + 0.045, DIM.front + 0.1);
+    const face = this.assets.images.maxbet;
+    if (face) bx.drawImage(face, 0, 0, 384, 160);
+    else { bx.fillStyle = '#ffcf33'; bx.fillRect(0, 0, 384, 160); }
+    bx.font = '80px Bungee'; bx.textAlign = 'center'; bx.textBaseline = 'middle';
+    bx.lineWidth = 8; bx.strokeStyle = 'rgba(255,250,220,0.9)'; bx.strokeText('MAX BET', 192, 72);
+    bx.fillStyle = '#7a2a00'; bx.fillText('MAX BET', 192, 72);
+    const btex = new THREE.CanvasTexture(bc); btex.colorSpace = THREE.SRGBColorSpace; btex.anisotropy = 4;
+    this.betMat = new THREE.MeshPhysicalMaterial({ map: btex, emissiveMap: btex, emissive: 0xffffff, emissiveIntensity: 0.4, roughness: 0.15, clearcoat: 1, clearcoatRoughness: 0.05 });
+    // 台座 (クロームの枠) + 押し込める本体
+    // 実機同様、手前に少し傾けて正面から文字が読めるようにする
+    const betGrp = new THREE.Group();
+    betGrp.position.set(-0.19, deckY + 0.034, DIM.front + 0.1);
+    betGrp.rotation.x = 0.6;
+    g.add(betGrp);
+    const betBase = new THREE.Mesh(new RoundedBoxGeometry(0.15, 0.012, 0.075, 3, 0.005), this.m.chrome);
+    betGrp.add(betBase);
+    const bet = new THREE.Mesh(new RoundedBoxGeometry(0.134, 0.022, 0.058, 3, 0.007), new THREE.MeshPhysicalMaterial({ color: 0xffc81a, roughness: 0.25, clearcoat: 1, emissive: 0x6a4400, emissiveIntensity: 0.3 }));
+    bet.position.set(0, 0.013, 0);
     bet.userData.action = 'bet';
-    const betTop = new THREE.Mesh(new THREE.PlaneGeometry(0.078, 0.04), this.betMat);
-    betTop.rotation.x = -Math.PI / 2; betTop.position.set(0, 0.0105, 0);
+    bet.userData.baseY = bet.position.y;
+    const betTop = new THREE.Mesh(new THREE.PlaneGeometry(0.124, 0.051), this.betMat);
+    betTop.rotation.x = -Math.PI / 2; betTop.position.set(0, 0.0112, 0);
     betTop.userData.action = 'bet';
     bet.add(betTop);
-    g.add(bet);
+    betGrp.add(bet);
     this.betButton = bet;
-    const betHit = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.07, 0.13), new THREE.MeshBasicMaterial({ visible: false }));
-    betHit.position.copy(bet.position); betHit.userData.action = 'bet';
-    g.add(betHit);
+    this.betPress = 0;
+    const betHit = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.08, 0.14), new THREE.MeshBasicMaterial({ visible: false }));
+    betHit.userData.action = 'bet';
+    betGrp.add(betHit);
     this.pickables.push(bet, betTop, betHit);
 
 
@@ -490,7 +502,7 @@ export class Cabinet {
     this.tray = { y: y + 0.006, z0, z1, x0: -0.3, x1: 0.3 };
   }
 
-  // 液晶の代わりに、ジャグラー型らしい電飾パネル (バックライト付きアート)
+  // 液晶の代わりに、ジャグラー型らしい上部パネル (バックライト付きの印刷アート)
   buildLcd() {
     const c = document.createElement('canvas'); c.width = 1024; c.height = 512;
     this.artCanvas = c;
@@ -504,66 +516,63 @@ export class Cabinet {
     glass.position.set(0, DIM.lcdY, DIM.front + 0.016);
     glass.renderOrder = 3;
     this.group.add(glass);
-    this.drawArt(0, 'idle');
+    this.drawArt();
   }
 
-  drawArt(t, mode) {
+  // ジャグラー型の上部パネルは液晶ではなく「裏から照らす印刷アート」。絵は動かさず、明るさだけ演出で変える
+  drawArt() {
     const x = this.artCanvas.getContext('2d'), W = 1024, H = 512;
-    const bonus = mode === 'bonus', hot = mode === 'notice' || bonus;
-    const g = x.createRadialGradient(W / 2, H * 0.55, 30, W / 2, H / 2, W * 0.7);
-    g.addColorStop(0, bonus ? '#3a1060' : '#1a2a80'); g.addColorStop(1, '#05061a');
+    const g = x.createRadialGradient(W * 0.3, H * 0.5, 20, W * 0.5, H * 0.5, W * 0.75);
+    g.addColorStop(0, '#2b3fb0'); g.addColorStop(0.55, '#121a5c'); g.addColorStop(1, '#05061a');
     x.fillStyle = g; x.fillRect(0, 0, W, H);
-    // 放射光
-    x.save(); x.translate(W / 2, H * 0.52); x.rotate(t * (hot ? 0.8 : 0.08));
+    // 放射状の印刷パターン
+    x.save(); x.translate(W * 0.3, H * 0.52);
     for (let i = 0; i < 36; i++) {
       x.rotate(Math.PI / 18);
-      x.fillStyle = hot ? `hsla(${(i * 20 + t * 120) % 360},90%,60%,0.16)` : (i % 2 ? 'rgba(120,160,255,0.08)' : 'rgba(255,220,120,0.06)');
-      x.beginPath(); x.moveTo(0, 0); x.lineTo(900, -60); x.lineTo(900, 60); x.fill();
+      x.fillStyle = i % 2 ? 'rgba(120,170,255,0.10)' : 'rgba(255,220,120,0.07)';
+      x.beginPath(); x.moveTo(0, 0); x.lineTo(1100, -70); x.lineTo(1100, 70); x.fill();
     }
     x.restore();
-    // 星
     const star = (cx, cy, r, col) => {
       x.beginPath();
       for (let k = 0; k < 10; k++) { const a = -Math.PI / 2 + k * Math.PI / 5, rr = k % 2 ? r * 0.45 : r; x.lineTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr); }
       x.closePath(); x.fillStyle = col; x.fill();
     };
-    for (let i = 0; i < 14; i++) {
-      const tw = 0.5 + 0.5 * Math.sin(t * (hot ? 9 : 2) + i * 1.7);
-      star(60 + ((i * 173) % 900), 40 + ((i * 97) % 420), 10 + (i % 4) * 6, `rgba(255,${200 + (i % 3) * 20},${80 + (i % 5) * 30},${0.35 + tw * 0.65})`);
+    for (let i = 0; i < 16; i++) star(40 + ((i * 173) % 960), 30 + ((i * 97) % 450), 8 + (i % 4) * 6, `rgba(255,${200 + (i % 3) * 20},${90 + (i % 5) * 30},0.85)`);
+    // ピエロ (外部素材: Openclipart "Clown Face")
+    const im = this.assets.images.clown;
+    if (im) {
+      const h = H * 0.9, w = im.width * (h / im.height);
+      x.save();
+      x.shadowColor = 'rgba(0,0,0,0.55)'; x.shadowBlur = 24; x.shadowOffsetY = 10;
+      x.drawImage(im, W * 0.27 - w / 2, H * 0.53 - h / 2, w, h);
+      x.restore();
     }
-    // 7 の両脇
-    for (const [sx, rot] of [[150, -0.15], [W - 150, 0.15]]) {
-      x.save(); x.translate(sx, H * 0.55); x.rotate(rot + (hot ? Math.sin(t * 6) * 0.06 : 0)); x.scale(1.4, 1.4);
+    // ロゴ
+    x.save(); x.translate(W * 0.71, H * 0.44); x.rotate(-0.06);
+    x.font = '170px Bungee'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.lineJoin = 'round';
+    for (let k = 5; k >= 0; k--) { x.lineWidth = 16 + k * 8; x.strokeStyle = `hsl(${k * 55},95%,${45 + k * 3}%)`; x.strokeText('SLOT', 0, 6); }
+    const lg = x.createLinearGradient(0, -80, 0, 90); lg.addColorStop(0, '#fffbe6'); lg.addColorStop(0.5, '#ffe14d'); lg.addColorStop(1, '#ff9a00');
+    x.fillStyle = lg; x.fillText('SLOT', 0, 6);
+    x.restore();
+    // 7 7 7
+    for (let i = 0; i < 3; i++) {
+      x.save(); x.translate(W * 0.59 + i * 120, H * 0.78); x.scale(0.62, 0.62);
       x.font = '150px Bungee'; x.textAlign = 'center'; x.textBaseline = 'middle';
       x.lineWidth = 16; x.strokeStyle = '#2a0008'; x.strokeText('7', 0, 0);
       const sg = x.createLinearGradient(0, -70, 0, 70); sg.addColorStop(0, '#ff8a7a'); sg.addColorStop(0.5, '#e3001b'); sg.addColorStop(1, '#6a0010');
       x.fillStyle = sg; x.fillText('7', 0, 0);
       x.restore();
     }
-    // ロゴ (虹色の縁取り)
-    x.save(); x.translate(W / 2, H * 0.5);
-    const sc = 1 + (hot ? 0.04 * Math.sin(t * 10) : 0.01 * Math.sin(t * 2));
-    x.scale(sc, sc);
-    x.font = '200px Bungee'; x.textAlign = 'center'; x.textBaseline = 'middle';
-    x.lineJoin = 'round';
-    for (let k = 5; k >= 0; k--) { x.lineWidth = 18 + k * 9; x.strokeStyle = `hsl(${(k * 55 + (hot ? t * 200 : 0)) % 360},95%,${45 + k * 3}%)`; x.strokeText('SLOT', 0, 8); }
-    const lg = x.createLinearGradient(0, -90, 0, 100); lg.addColorStop(0, '#fffbe6'); lg.addColorStop(0.5, '#ffe14d'); lg.addColorStop(1, '#ff9a00');
-    x.fillStyle = lg; x.fillText('SLOT', 0, 8);
-    x.restore();
-    // 電球の縁取り (チェイス)
+    // 縁の印刷電球
     const n = 46;
     for (let i = 0; i < n; i++) {
       const p = i / n;
       let bx, by;
       if (p < 0.35) { bx = 20 + (p / 0.35) * (W - 40); by = 18; } else if (p < 0.5) { bx = W - 18; by = 18 + ((p - 0.35) / 0.15) * (H - 36); }
       else if (p < 0.85) { bx = W - 20 - ((p - 0.5) / 0.35) * (W - 40); by = H - 18; } else { bx = 18; by = H - 18 - ((p - 0.85) / 0.15) * (H - 36); }
-      const on = hot ? Math.sin(t * 24 + i) > 0 : (Math.floor(t * 8) + i) % 5 === 0;
-      x.fillStyle = on ? (hot ? `hsl(${(i * 30 + t * 300) % 360},100%,70%)` : '#fff2a8') : '#4a3410';
-      x.beginPath(); x.arc(bx, by, 8, 0, Math.PI * 2); x.fill();
-    }
-    if (bonus) {
-      x.font = '70px Bungee'; x.textAlign = 'center'; x.fillStyle = '#fff';
-      x.fillText(this.bonusLabel || 'BONUS', W / 2, H - 70);
+      x.fillStyle = i % 2 ? '#fff2a8' : '#ffb24a';
+      x.beginPath(); x.arc(bx, by, 7, 0, Math.PI * 2); x.fill();
     }
     this.artTex.needsUpdate = true;
   }
@@ -725,7 +734,9 @@ export class Cabinet {
       b.mat.emissive.copy(c);
       b.mat.emissiveIntensity = on ? 1.1 : 0.04;
     });
-    this.betMat.emissiveIntensity = L.betLed ? 0.5 + 0.35 * Math.sin(t * 7) : 0.08;
+    this.betMat.emissiveIntensity = L.betLed ? 0.55 + 0.4 * (Math.sin(t * 7) * 0.5 + 0.5) : 0.1;
+    this.betPress = Math.max(0, this.betPress - dt * 7);
+    this.betButton.position.y = this.betButton.userData.baseY - 0.008 * Math.min(1, this.betPress * 2);
     // 貸出ボタン (メダル切れで点滅して催促)
     this.lendMat.emissiveIntensity = this.lendPrompt ? (Math.sin(t * 10) > 0 ? 1.8 : 0.2) : 0.35;
     // レバー (バネ)
@@ -747,10 +758,12 @@ export class Cabinet {
     if (this._signT > 1 / 20) { this._signT = 0; this.drawSign(t * (L.rainbow > 0 ? 3 : 1)); }
     this.signMat.emissiveIntensity = L.mode === 'off' ? 0.05 : 1.0;
     // 電飾パネル: 平常時はゆっくり、告知・ボーナス中は高速で
+    // パネルの絵は固定。告知・ボーナス中はバックライトだけが明滅する
     const artMode = L.artMode || 'idle';
-    this._artT = (this._artT || 0) + dt;
-    if (this._artT > (artMode === 'idle' ? 1 / 8 : 1 / 24)) { this._artT = 0; this.drawArt(t, artMode); }
-    this.artMat.emissiveIntensity = L.mode === 'off' ? 0.05 : artMode === 'idle' ? 0.8 : 1.1;
+    this.artMat.emissiveIntensity = L.mode === 'off' ? 0.05
+      : artMode === 'idle' ? 0.55
+      : artMode === 'notice' ? 0.75 + 0.45 * (Math.sin(t * 7) * 0.5 + 0.5)
+      : 0.8 + 0.5 * (Math.sin(t * 14) > 0 ? 1 : 0);
     this.panelMat.emissiveIntensity = L.mode === 'off' ? 0.0 : 0.18;
   }
 

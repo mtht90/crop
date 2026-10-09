@@ -74,7 +74,7 @@ export async function loadAssets(cfg, renderer, onProgress) {
   track(loadGlb(A.models.coin).then((s) => { out.models.coin = s; }));
   // 図柄画像 (Canvas 描画用)
   const skin = A.symbolImages[A.symbolSkin] || {};
-  const allImgs = { ...A.symbolImages.twemoji, ...skin };
+  const allImgs = { ...A.symbolImages.twemoji, ...skin, ...(A.uiImages || {}) };
   for (const [name, url] of Object.entries(allImgs)) {
     track(new Promise((ok) => {
       const img = new Image();

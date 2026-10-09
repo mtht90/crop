@@ -282,7 +282,8 @@ function doBet() {
   if (!wasReplay) {
     for (let i = 0; i < 3; i++) audio.play('medal_in', { delay: i * 0.06, gain: 0.5, rate: 1.05 + i * 0.05 });
   }
-  audio.play('button', { gain: 0.6 });
+  audio.play('maxbet', { gain: 0.8 });
+  cab.betPress = 1;
   haptics.vibrate('button');
   refreshHud();
   return true;

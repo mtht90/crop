@@ -8,6 +8,7 @@ SLOT で使う素材は、テキストを描画する Canvas の演出コード�
 |---|---|---|---|
 | Poly Haven / ambientCG / Kenney / Juhani Junkala | CC0 1.0 | ✅ | 不要 (推奨) |
 | Twemoji グラフィック | CC-BY 4.0 | ✅ | **必要** |
+| Openclipart (ピエロ) | CC0 1.0 | ✅ | 不要 |
 | EZduzziteh | CC0 1.0 | ✅ | 不要 |
 | Cougarmint Slot Machine Resource Pack (図柄) | CC-BY 3.0 | ✅ | **必要** |
 | Bungee / Orbitron / DSEG7 / Shippori Mincho B1 / Zen Kaku Gothic New | SIL OFL 1.1 | ✅ | フォント単体の販売は禁止 |
@@ -52,8 +53,14 @@ SLOT で使う素材は、テキストを描画する Canvas の演出コード�
 
 | ファイル | 素材 | 作者 | 入手先 | ライセンス |
 |---|---|---|---|---|
-| `assets/images/twemoji/*.svg` | Twemoji 15.1 (🍇 ぶどう / 🤡 ピエロ / 🔔 ベル / 🍒 チェリー / 🔁 リプレイ / 🪙 💴 ⭐ 🔥 ⚡ 💎 🍀) | Twitter, Inc. / X Corp. および jdecked/twemoji コントリビューター | https://github.com/jdecked/twemoji | CC-BY 4.0 (`LICENSE-GRAPHICS.txt` を同梱) |
+| `assets/images/twemoji/*.svg` | Twemoji 15.1 (🍇 ぶどう / 🔔 ベル / 🍒 チェリー / 🔁 リプレイ / 🪙 💴 ⭐ 🔥 ⚡ 💎 🍀) | Twitter, Inc. / X Corp. および jdecked/twemoji コントリビューター | https://github.com/jdecked/twemoji | CC-BY 4.0 (`LICENSE-GRAPHICS.txt` を同梱) |
 | `assets/images/cougarmint/*.png` | Slot Machine Resource Pack (ドット絵スキン `symbolSkin: 'pixel'`) | Molly "Cougarmint" Willits | https://opengameart.org/content/slot-machine-resource-pack | CC-BY 3.0 / OGA-BY 3.0 (`SMRP-ReadMe.txt` を同梱) |
+
+| `assets/images/openclipart/clown-face.png` | Clown Face (リールのピエロ図柄・上部パネルのイラスト) | ksly4ever | https://openclipart.org/detail/193921/clown-face | CC0 1.0 (Openclipart は全作品 CC0) |
+| `assets/images/kenney-ui/button_yellow_gloss.png` | UI Pack — `PNG/Yellow/Default/button_rectangle_depth_gloss.png` (MAX BET ボタンの面) | Kenney | https://kenney.nl/assets/ui-pack | CC0 1.0 (`License.txt` を同梱) |
+
+ピエロの PNG は Openclipart が配布する 800px PNG の余白を切り落として 512px に縮小したものです。
+北電子「ジャグラー」シリーズのピエロ (GOGO! ランプや図柄の公式イラスト) は同社の著作物のため使っていません。
 
 赤7・BAR・REPLAY の文字は、Bungee フォントを Canvas に描画して作っています。
 
@@ -108,6 +115,7 @@ OGG を MP3 に変換しただけで、音そのものには手を加えてい�
 | `buiin.mp3` (告知の「ブイーン」。再生速度を上げながら鳴らす) | spaceEngineLow_002.ogg | Sci-Fi Sounds |
 | `rumble.mp3` (告知・ボーナス開始の低音) | lowFrequency_explosion_001.ogg | Sci-Fi Sounds |
 | `bill.mp3` (千円札を入れる音) | scroll_003.ogg | Interface Sounds |
+| `maxbet.mp3` (MAX BET ボタン) | switch-a.ogg | UI Pack — https://kenney.nl/assets/ui-pack |
 
 ### その他の効果音
 
