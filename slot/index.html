@@ -4,7 +4,7 @@
 <meta name="theme-color" content="#07030d" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@800&family=Zen+Kaku+Gothic+New:wght@700;900&display=swap" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Shippori+Mincho+B1:wght@800&family=Zen+Kaku+Gothic+New:wght@700;900&display=swap" />
 <style>
   /* 単一のダーク世界 (ホールの夜) に固定したデザイン。フォントは assets.js が読み込む */
   :root { --bg: #07030d; --fg: #fff; --accent: #ff2f8a; --gold: #ffd23f; color-scheme: dark; }
@@ -35,11 +35,11 @@
   #loading { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; background: radial-gradient(ellipse at center, #2a0640 0%, #07030d 70%); transition: opacity .5s; }
   #loading.gone { opacity: 0; pointer-events: none; }
   #loading .box { width: min(420px, 86vw); text-align: center; }
-  #loading h1 { font-family: Bungee, Impact, sans-serif; font-weight: 400; font-size: clamp(30px, 9vw, 64px); white-space: nowrap; margin: 0 0 8px; background: linear-gradient(#fff6c8, #ffcc33 50%, #ff6a00); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 0 18px #ff2a8a); }
+  #loading h1 { font-family: "Dela Gothic One", Impact, sans-serif; font-weight: 400; font-size: clamp(30px, 9vw, 64px); white-space: nowrap; margin: 0 0 8px; background: linear-gradient(#fff6c8, #ffcc33 50%, #ff6a00); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 0 18px #ff2a8a); }
   #loading p { color: #c9b8ff; font-size: 12px; letter-spacing: .1em; margin: 0 0 22px; }
   .bar { height: 6px; background: rgba(255,255,255,.12); border-radius: 3px; overflow: hidden; }
   #loadbar { height: 100%; width: 0; background: linear-gradient(90deg, #ff2f8a, #ffd23f); transition: width .2s; }
-  #startbtn { display: none; margin: 26px auto 0; font-family: Bungee, sans-serif; font-size: 22px; padding: 14px 34px; border-radius: 40px; border: none; color: #3a1a00; background: linear-gradient(#fff2a0, #ffbe1a); box-shadow: 0 0 30px rgba(255,200,40,.6); cursor: pointer; animation: pulse 1.1s infinite; }
+  #startbtn { display: none; margin: 26px auto 0; font-family: "Dela Gothic One", sans-serif; font-size: 22px; padding: 14px 34px; border-radius: 40px; border: none; color: #3a1a00; background: linear-gradient(#fff2a0, #ffbe1a); box-shadow: 0 0 30px rgba(255,200,40,.6); cursor: pointer; animation: pulse 1.1s infinite; }
   #loading.ready #startbtn { display: block; }
   #loading.ready .bar { display: none; }
   @keyframes pulse { 50% { transform: scale(1.06); box-shadow: 0 0 50px rgba(255,200,40,.9); } }
@@ -54,26 +54,30 @@
   .money .row.big b { font-size: 18px; }
   #hud.broke .money { border-color: #ff3b5c; animation: broke 1s infinite; }
   @keyframes broke { 50% { box-shadow: 0 0 18px rgba(255,59,92,.7); } }
-  #btn-lend { display: block; width: 100%; margin-top: 8px; padding: 7px 0; border-radius: 10px; border: 1px solid #ffd23f66; background: linear-gradient(#5a4a10, #32280a); color: #ffe27a; font: 700 13px "Zen Kaku Gothic New", sans-serif; cursor: pointer; }
+  #btn-lend { display: block; width: 100%; margin-top: 8px; padding: 7px 0; border-radius: 10px; border: 1px solid #ffd23f66; background: linear-gradient(#5a4a10, #32280a); color: #ffe27a; font: 400 13px "Dela Gothic One", sans-serif; cursor: pointer; }
   #btn-lend small { opacity: .7; font-weight: 400; }
   #btn-lend:disabled { opacity: .35; cursor: default; }
   #hud.need #btn-lend { animation: lendPulse 1s ease-in-out infinite; }
   @keyframes lendPulse { 50% { box-shadow: 0 0 0 3px #ffd23f88; } }
-  #btn-cash { white-space: nowrap; width: auto; padding: 0 12px; font: 700 13px "Zen Kaku Gothic New", sans-serif; background: linear-gradient(#2a6a3a, #144a22); border-color: #3bff8a55; }
+  #btn-cash { white-space: nowrap; width: auto; padding: 0 12px; font: 400 14px "Dela Gothic One", sans-serif; background: linear-gradient(#2a6a3a, #144a22); border-color: #3bff8a55; }
+  .edge { position: fixed; top: 0; bottom: 0; width: 28px; z-index: 4; pointer-events: none; opacity: 0; transition: opacity .2s; }
+  #edge-l { left: 0; background: linear-gradient(90deg, rgba(255,63,168,.75), transparent); }
+  #edge-r { right: 0; background: linear-gradient(270deg, rgba(255,63,168,.75), transparent); }
   #toast { position: fixed; top: max(118px, calc(env(safe-area-inset-top) + 110px)); left: 50%; transform: translate(-50%, -8px); z-index: 7; pointer-events: none; opacity: 0; transition: opacity .2s, transform .2s;
-    background: rgba(10,4,20,.82); border: 1px solid rgba(255,255,255,.18); color: #fff; padding: 8px 16px; border-radius: 999px; font: 700 13px "Zen Kaku Gothic New", system-ui, sans-serif; white-space: nowrap; max-width: calc(100vw - 32px); overflow: hidden; text-overflow: ellipsis; }
+    background: rgba(10,4,20,.82); border: 1px solid rgba(255,255,255,.18); color: #fff; padding: 8px 16px; border-radius: 999px; font: 400 14px "Dela Gothic One", sans-serif; white-space: nowrap; max-width: calc(100vw - 32px); overflow: hidden; text-overflow: ellipsis; }
   #toast.on { opacity: 1; transform: translate(-50%, 0); }
   #toast.hot { background: linear-gradient(90deg, #ff2f8a, #ffb02f); border-color: transparent; font-size: 15px; }
   #toast.warn { background: rgba(120,20,30,.9); border-color: #ff5a7a; }
   #modal { position: fixed; inset: 0; z-index: 25; display: grid; place-items: center; overflow-y: auto; background: rgba(5,3,12,.72); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); padding: 16px; }
-  #modal .card { width: min(380px, 100%); background: #120a24; border: 1px solid rgba(255,255,255,.14); border-radius: 18px; padding: 22px 22px 18px; font-family: "Zen Kaku Gothic New", system-ui, sans-serif; }
+  #modal .card { width: min(380px, 100%); background: #120a24; border: 1px solid rgba(255,255,255,.14); border-radius: 18px; padding: 22px 22px 18px; font-family: "Dela Gothic One", system-ui, sans-serif; }
   #modal .eyebrow { margin: 0; color: #a9a0c8; font-size: 12px; letter-spacing: .12em; }
-  #modal h2 { margin: 4px 0 14px; font-size: 40px; font-weight: 900; }
+  #modal h2 { margin: 4px 0 14px; font-size: 40px; font-weight: 400; }
+  #modal dd { font-family: DSEG7, "Dela Gothic One", sans-serif; letter-spacing: .02em; }
   #modal dl { display: grid; grid-template-columns: 1fr auto; gap: 8px 16px; margin: 0 0 18px; font-variant-numeric: tabular-nums; }
   #modal dt { color: #a9a0c8; font-size: 13px; }
   #modal dd { margin: 0; text-align: right; font-weight: 700; }
   #modal dd.setting { color: #ffd23f; font-size: 18px; }
-  #modal button { width: 100%; padding: 12px; border: none; border-radius: 12px; font: 900 15px "Zen Kaku Gothic New", sans-serif; color: #3a1a00; background: linear-gradient(#fff2a0, #ffbe1a); cursor: pointer; }
+  #modal button { width: 100%; padding: 12px; border: none; border-radius: 12px; font: 400 16px "Dela Gothic One", sans-serif; color: #3a1a00; background: linear-gradient(#fff2a0, #ffbe1a); cursor: pointer; }
   .lil-gui.root { z-index: 30 !important; position: fixed; top: 60px; right: 8px; }
 </style>
 <script type="importmap">
@@ -102,6 +106,7 @@
   </div>
 </div>
 <div id="toast"></div>
+<div id="edge-l" class="edge"></div><div id="edge-r" class="edge"></div>
 <div id="modal" hidden>
   <div class="card">
     <p class="eyebrow">本日の結果</p>
@@ -125,7 +130,7 @@
     <details class="credits"><summary>CREDITS</summary>
       Emoji: Twemoji (CC-BY 4.0) · Pixel symbols: Molly "Cougarmint" Willits (CC-BY 3.0) · BGM "Blackmoor Tides": Matthew Pablo (CC-BY 3.0)<br>
       CC0: Poly Haven (HDRI) · ambientCG (textures) · Kenney (models, SFX) · Quaternius (pirate kit) · Eldritch Grim (BGM) · Thimras, qubodup, EZduzziteh (SFX)<br>
-      Fonts (OFL): Bungee, Orbitron, DSEG7, Shippori Mincho B1, Zen Kaku Gothic New · three.js, lil-gui (MIT)
+      Fonts (OFL): Dela Gothic One, Bungee, Orbitron, DSEG7, Shippori Mincho B1, Zen Kaku Gothic New · three.js, lil-gui (MIT)
     </details>
   </div>
 </div>

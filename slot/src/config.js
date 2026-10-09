@@ -66,7 +66,8 @@ export const CONFIG = {
     // 日本語フォント (Google Fonts から配信。index.html の <link> で読み込む)
     jpFonts: {
       mincho: '"Shippori Mincho B1", "Hiragino Mincho ProN", "Yu Mincho", serif', // タイトルカード
-      gothic: '"Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", sans-serif',   // 台詞
+      gothic: '"Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", sans-serif',   // 画面左上の HUD
+      display: '"Dela Gothic One", "Hiragino Sans", sans-serif',                // 液晶・筐体・ボタン (パチスロ実機風の極太)
     },
     sfx: {
       medal_in: 'assets/audio/sfx/medal_in.mp3',
@@ -105,6 +106,7 @@ export const CONFIG = {
       maxbet: 'assets/audio/sfx/maxbet.mp3',
     },
     bgm: {
+      normal: 'assets/audio/bgm/bossa_nova.mp3',   // 通常時 (実機のジャグラーは無音だが、ゲームとして流す)
       big: 'assets/audio/bgm/level3.mp3',
       reg: 'assets/audio/bgm/level1.mp3',
       sp1: 'assets/audio/bgm/level2.mp3',          // ボーナス後 3G 以内の BIG (実機の「軍艦マーチ」枠)
@@ -154,7 +156,7 @@ export const CONFIG = {
   roles: {
     BIG: { combos: ['RRR'], pay: 0, bonus: 'BIG' },          // 7・7・7
     REG: { combos: ['RRA'], pay: 0, bonus: 'REG' },          // 7・7・BAR
-    GRAPE: { combos: ['GGG'], pay: 8 },                      // ぶどう
+    GRAPE: { combos: ['GGG'], pay: 10 },                     // ぶどう (実機より出にくく 1/7.5、そのぶん 10 枚)
     BELL: { combos: ['LLL'], pay: 14 },
     CLOWN: { combos: ['JJJ'], pay: 10 },                     // ピエロ
     REPLAY: { combos: ['PPP'], pay: 0, replay: true },
@@ -172,18 +174,18 @@ export const CONFIG = {
   // 本日の設定の出やすさ。実際のホールに近く、ほとんどが低設定 (設定 1 が 6 割)
   settingOdds: { 1: 60, 2: 16, 3: 10, 4: 8, 5: 4, 6: 2 },
   probability: {
-    1: { BIG: 353.6, REG: 785.1, 'CHERRY+BIG': 1200, 'CHERRY+REG': 1000, REPLAY: 7.3, GRAPE: 6.02, CHERRY: 35.6, BELL: 1092, CLOWN: 1092 }, // 合算 BIG 1/273.1 REG 1/439.8
-    2: { BIG: 347.9, REG: 665.6, 'CHERRY+BIG': 1200, 'CHERRY+REG': 1000, REPLAY: 7.3, GRAPE: 6.02, CHERRY: 35.6, BELL: 1092, CLOWN: 1092 }, // 合算 BIG 1/269.7 REG 1/399.6
-    3: { BIG: 347.9, REG: 494.8, 'CHERRY+BIG': 1200, 'CHERRY+REG': 1000, REPLAY: 7.3, GRAPE: 6.02, CHERRY: 35.6, BELL: 1092, CLOWN: 1092 }, // 合算 BIG 1/269.7 REG 1/331.0
-    4: { BIG: 330.3, REG: 460.1, 'CHERRY+BIG': 1200, 'CHERRY+REG': 1000, REPLAY: 7.3, GRAPE: 5.95, CHERRY: 35.6, BELL: 1092, CLOWN: 1092 }, // 合算 BIG 1/259.0 REG 1/315.1
-    5: { BIG: 330.3, REG: 374.3, 'CHERRY+BIG': 1200, 'CHERRY+REG': 800, REPLAY: 7.3, GRAPE: 5.9, CHERRY: 35.6, BELL: 1092, CLOWN: 1092 }, // 合算 BIG 1/259.0 REG 1/255.0
-    6: { BIG: 323.8, REG: 374.3, 'CHERRY+BIG': 1200, 'CHERRY+REG': 800, REPLAY: 7.3, GRAPE: 5.78, CHERRY: 35.6, BELL: 1092, CLOWN: 1092 }, // 合算 BIG 1/255.0 REG 1/255.0
+    1: { BIG: 353.6, REG: 785.1, 'CHERRY+BIG': 1200, 'CHERRY+REG': 1000, REPLAY: 9, GRAPE: 7.5, CHERRY: 35.6, BELL: 1092, CLOWN: 1092 }, // 合算 BIG 1/273.1 REG 1/439.8
+    2: { BIG: 347.9, REG: 665.6, 'CHERRY+BIG': 1200, 'CHERRY+REG': 1000, REPLAY: 9, GRAPE: 7.5, CHERRY: 35.6, BELL: 1092, CLOWN: 1092 }, // 合算 BIG 1/269.7 REG 1/399.6
+    3: { BIG: 347.9, REG: 494.8, 'CHERRY+BIG': 1200, 'CHERRY+REG': 1000, REPLAY: 9, GRAPE: 7.5, CHERRY: 35.6, BELL: 1092, CLOWN: 1092 }, // 合算 BIG 1/269.7 REG 1/331.0
+    4: { BIG: 330.3, REG: 460.1, 'CHERRY+BIG': 1200, 'CHERRY+REG': 1000, REPLAY: 9, GRAPE: 7.41, CHERRY: 35.6, BELL: 1092, CLOWN: 1092 }, // 合算 BIG 1/259.0 REG 1/315.1
+    5: { BIG: 330.3, REG: 374.3, 'CHERRY+BIG': 1200, 'CHERRY+REG': 800, REPLAY: 9, GRAPE: 7.35, CHERRY: 35.6, BELL: 1092, CLOWN: 1092 }, // 合算 BIG 1/259.0 REG 1/255.0
+    6: { BIG: 323.8, REG: 374.3, 'CHERRY+BIG': 1200, 'CHERRY+REG': 800, REPLAY: 9, GRAPE: 7.2, CHERRY: 35.6, BELL: 1092, CLOWN: 1092 }, // 合算 BIG 1/255.0 REG 1/255.0
   },
   // ボーナス中の抽選 (比率)
-  bonusTable: { BONUS_GRAPE: 0.86, REPLAY: 0.09, NONE: 0.05 },
+  bonusTable: { BONUS_GRAPE: 0.68, REPLAY: 0.12, NONE: 0.2 },   // ボーナス中もハズレのゲームがある
   bonus: {
-    BIG: { maxPay: 312, maxGames: 60, bgm: 'big' },
-    REG: { maxPay: 104, maxGames: 12, bgm: 'reg' },
+    BIG: { maxPay: 360, maxGames: 70, bgm: 'big' },
+    REG: { maxPay: 112, maxGames: 16, bgm: 'reg' },
   },
 
   // ---------------------------------------------------------------
@@ -281,7 +283,7 @@ export const CONFIG = {
     neighbors: true, // 島の隣台 (自台クローン)。#lite で両方オフ
     lcdFps: 60,      // 液晶 3D 舞台の描画レート
   },
-  audio: { master: 0.85, sfx: 1.0, bgm: 0.45 },
+  audio: { master: 0.85, sfx: 1.0, bgm: 0.45, normalBgm: 0.45 },
 };
 
 // ラベル → 図柄キー

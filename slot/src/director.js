@@ -266,6 +266,7 @@ export class Director {
     this.cab.screen.set('result', { type: info.type, paid: info.paid, chain: this.machine.chain, total: this.chainTotal });
     this.onBonusEnd?.(info);
     await wait(1200);
+    setTimeout(() => { if (this.machine.mode === 'normal' && !this.machine.noticed) this.audio.bgm('normal', { gain: this.cfg.audio.normalBgm, fade: 2 }); }, 2500);
   }
 
   // フリーズは使わない (ジャグラー型)。ただしデバッグ用に呼ばれても安全に

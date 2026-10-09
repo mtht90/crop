@@ -243,10 +243,10 @@ export class Cabinet {
     }
     x.restore();
     // 左右の装飾文字
-    x.font = '38px Bungee'; x.textAlign = 'center'; x.fillStyle = '#ffd34d';
+    x.font = `400 38px ${this.cfg.assets.jpFonts.display}`; x.textAlign = 'center'; x.fillStyle = '#ffd34d';
     x.save(); x.translate(c.width - 60, c.height / 2); x.rotate(Math.PI / 2); x.fillText('SLOT', 0, 12); x.restore();
     // ライン番号
-    x.font = '22px Orbitron'; x.fillStyle = '#9fd8ff';
+    x.font = `400 22px ${this.cfg.assets.jpFonts.display}`; x.fillStyle = '#9fd8ff';
     const py = (yy) => c.height - (yy - y0) / H * c.height;
     const cy = py(DIM.reelY), ch = this.cellH / H * c.height;
     for (const [lbl, dy] of [['3', -1], ['1', 0], ['2', 1]]) x.fillText(lbl, 140, cy + dy * ch + 8);
@@ -323,7 +323,7 @@ export class Cabinet {
     const face = this.assets.images.maxbet;
     if (face) bx.drawImage(face, 0, 0, 384, 160);
     else { bx.fillStyle = '#ffcf33'; bx.fillRect(0, 0, 384, 160); }
-    bx.font = '58px Bungee'; bx.textAlign = 'center'; bx.textBaseline = 'middle';
+    bx.font = `400 50px ${this.cfg.assets.jpFonts.display}`; bx.textAlign = 'center'; bx.textBaseline = 'middle';
     bx.lineWidth = 8; bx.strokeStyle = 'rgba(255,250,220,0.9)'; bx.strokeText('MAX BET', 192, 74);
     bx.fillStyle = '#7a2a00'; bx.fillText('MAX BET', 192, 74);
     const btex = new THREE.CanvasTexture(bc); btex.colorSpace = THREE.SRGBColorSpace; btex.anisotropy = 4;
@@ -383,7 +383,7 @@ export class Cabinet {
       x.fillStyle = '#ff2a2a'; x.shadowColor = '#ff2a2a'; x.shadowBlur = 14;
       x.fillText(String(Math.max(0, Math.floor(val))).padStart(digits, ' ').replace(/ /g, '!'), cx, 70);
       x.shadowBlur = 0;
-      x.font = '500 13px Orbitron'; x.fillStyle = '#ffb0b0'; x.textAlign = 'left';
+      x.font = `400 13px ${this.cfg.assets.jpFonts.display}`; x.fillStyle = '#ffb0b0'; x.textAlign = 'left';
       x.fillText(label, cx - digits * 40, 90);
     };
     draw(games, 4, 175, 'GAME');
@@ -402,14 +402,14 @@ export class Cabinet {
     const imgs = this.assets.images;
     const pixel = this.cfg.assets.symbolSkin === 'pixel';
     const items = [
-      ['RRR', 'BIG'], ['RRA', 'REG'], ['GGG', '8'], ['LLL', '14'], ['JJJ', '10'], ['PPP', 'REPLAY'], ['C', '2'],
+      ['RRR', 'BIG'], ['RRA', 'REG'], ['GGG', String(this.cfg.roles.GRAPE.pay)], ['LLL', String(this.cfg.roles.BELL.pay)], ['JJJ', String(this.cfg.roles.CLOWN.pay)], ['PPP', 'REPLAY'], ['C', String(this.cfg.roles.CHERRY.pay)],
     ];
     const colW = 1024 / items.length;
     items.forEach(([sy, txt], i) => {
       const cx = colW * i + colW / 2;
       const n = sy.length;
       for (let k = 0; k < n; k++) drawSymbol(x, sy[k], cx + (k - (n - 1) / 2) * 42, 62, 42, imgs, pixel);
-      x.font = '30px Bungee'; x.textAlign = 'center'; x.fillStyle = txt === 'BIG' ? '#ff4a5a' : txt === 'REG' ? '#4ab0ff' : '#ffe9a0';
+      x.font = `400 28px ${this.cfg.assets.jpFonts.display}`; x.textAlign = 'center'; x.fillStyle = txt === 'BIG' ? '#ff4a5a' : txt === 'REG' ? '#4ab0ff' : '#ffe9a0';
       x.fillText(txt, cx, 132);
     });
     return Object.assign(new THREE.CanvasTexture(c), { colorSpace: THREE.SRGBColorSpace, anisotropy: 8 });
@@ -475,7 +475,8 @@ export class Cabinet {
     glass.position.set(0, DIM.lcdY, DIM.front + 0.016);
     glass.renderOrder = 3;
     this.group.add(glass);
-    this.screen = new Screen(c, this.assets.images, this.cfg.assets.jpFonts.gothic);
+    this.screen = new Screen(c, this.assets.images, this.cfg.assets.jpFonts.display);
+    this.screen.grapePay = this.cfg.roles.GRAPE.pay;
     this.screen.draw(0);
     this.artTex.needsUpdate = true;
   }
@@ -509,7 +510,7 @@ export class Cabinet {
       x.beginPath(); x.arc(14 + i * 25.4, 12, 6, 0, Math.PI * 2); x.fill();
       x.beginPath(); x.arc(14 + i * 25.4, 188, 6, 0, Math.PI * 2); x.fill();
     }
-    x.font = '120px Bungee'; x.textAlign = 'center'; x.textBaseline = 'middle';
+    x.font = `400 112px ${this.cfg.assets.jpFonts.display}`; x.textAlign = 'center'; x.textBaseline = 'middle';
     x.lineWidth = 14; x.strokeStyle = '#ff1f6b'; x.shadowColor = '#ff1f6b'; x.shadowBlur = 30;
     x.strokeText('SLOT', 512, 108);
     x.shadowBlur = 0;
@@ -685,7 +686,7 @@ export class Cabinet {
     const x = this.counterCanvas.getContext('2d'), W = 768, H = 320;
     x.fillStyle = '#05070c'; x.fillRect(0, 0, W, H);
     const seg = (label, v, cx, col) => {
-      x.font = '500 22px Orbitron'; x.fillStyle = '#8fa0b8'; x.textAlign = 'center'; x.fillText(label, cx, 34);
+      x.font = `400 22px ${this.cfg.assets.jpFonts.display}`; x.fillStyle = '#8fa0b8'; x.textAlign = 'center'; x.fillText(label, cx, 34);
       x.font = '700 58px DSEG7'; x.fillStyle = 'rgba(255,255,255,0.06)'; x.fillText('888', cx, 98);
       x.fillStyle = col; x.shadowColor = col; x.shadowBlur = 12; x.fillText(String(v).padStart(3, '!'), cx, 98); x.shadowBlur = 0;
     };
@@ -693,12 +694,12 @@ export class Cabinet {
     seg('REG', st.reg, 290, blink === 'REG' ? '#ffffff' : '#3b9bff');
     const since = st.since ?? st.sinceBonus ?? 0;
     seg('START', since, 490, since >= 500 ? '#ff5a3a' : '#ffd23f');
-    x.font = '500 18px Orbitron'; x.fillStyle = '#8fa0b8'; x.textAlign = 'right';
+    x.font = `400 18px ${this.cfg.assets.jpFonts.display}`; x.fillStyle = '#8fa0b8'; x.textAlign = 'right';
     x.fillText(`TOTAL ${st.games}`, W - 24, 34);
     // 設定推測データ (通常時の回転数で割る)
     const ng = st.normalGames || 0;
     const rate = (n) => (n > 0 && ng > 0 ? `1/${(ng / n).toFixed(n >= 10 ? 1 : 0)}` : '---');
-    x.font = `500 21px ${this.cfg.assets.jpFonts.gothic}`; x.textAlign = 'left'; x.fillStyle = '#c9d4e4';
+    x.font = `400 20px ${this.cfg.assets.jpFonts.display}`; x.textAlign = 'left'; x.fillStyle = '#c9d4e4';
     x.fillText(`合算 ${rate((st.big || 0) + (st.reg || 0))}`, 24, 134);
     x.fillStyle = '#c9a0ff'; x.fillText(`ぶどう ${st.grape || 0}回 ${ng && st.grape ? '1/' + (ng / st.grape).toFixed(2) : '---'}`, 220, 134);
     x.fillStyle = '#ff8aa0'; x.fillText(`チェリー ${rate(st.cherry || 0)}`, 480, 134);
@@ -713,7 +714,7 @@ export class Cabinet {
     x.strokeStyle = '#ffd23f'; x.lineWidth = 3; x.beginPath();
     gr.forEach((v, i) => { const px = gx + (i / (gr.length - 1)) * gw, py = mid - (v / mx) * (gh / 2 - 6); if (i) x.lineTo(px, py); else x.moveTo(px, py); });
     x.stroke();
-    x.textAlign = 'left'; x.font = '500 15px Orbitron'; x.fillStyle = '#6a7a90';
+    x.textAlign = 'left'; x.font = `400 15px ${this.cfg.assets.jpFonts.display}`; x.fillStyle = '#6a7a90';
     x.fillText(`+${mx}`, gx + 6, gy + 18); x.fillText(`-${mx}`, gx + 6, gy + gh - 8);
     this.counterTex.needsUpdate = true;
   }
@@ -754,16 +755,16 @@ export class Cabinet {
     const x = this.changerCanvas.getContext('2d');
     x.fillStyle = '#0a0d14'; x.fillRect(0, 0, 256, 512);
     x.textAlign = 'center';
-    x.font = '700 30px "Zen Kaku Gothic New", sans-serif'; x.fillStyle = '#9fd8ff';
+    x.font = `400 30px ${this.cfg.assets.jpFonts.display}`; x.fillStyle = '#9fd8ff';
     x.fillText('残高', 128, 60);
     x.font = '700 40px DSEG7'; x.fillStyle = '#3bff8a'; x.shadowColor = '#3bff8a'; x.shadowBlur = 10;
     x.fillText(String(wallet).padStart(5, '!'), 128, 130); x.shadowBlur = 0;
-    x.font = '700 28px "Zen Kaku Gothic New", sans-serif'; x.fillStyle = '#fff';
+    x.font = `400 28px ${this.cfg.assets.jpFonts.display}`; x.fillStyle = '#fff';
     x.fillText('円', 128, 172);
     x.fillStyle = prompt ? '#ffd23f' : '#4a5a70';
-    x.font = '900 34px "Zen Kaku Gothic New", sans-serif';
+    x.font = `400 34px ${this.cfg.assets.jpFonts.display}`;
     x.fillText('千円で', 128, 300); x.fillText('46枚', 128, 345);
-    x.font = '700 24px "Zen Kaku Gothic New", sans-serif'; x.fillStyle = prompt ? '#fff' : '#6a7a90';
+    x.font = `400 24px ${this.cfg.assets.jpFonts.display}`; x.fillStyle = prompt ? '#fff' : '#6a7a90';
     x.fillText('↓ 貸出ボタン', 128, 430);
     this.changerTex.needsUpdate = true;
     this.lendPrompt = prompt;

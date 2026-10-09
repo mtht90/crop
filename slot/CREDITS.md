@@ -11,7 +11,7 @@ SLOT で使う素材は、テキストを描画する Canvas の演出コード�
 | Openclipart (ピエロ) | CC0 1.0 | ✅ | 不要 |
 | EZduzziteh | CC0 1.0 | ✅ | 不要 |
 | Cougarmint Slot Machine Resource Pack (図柄) | CC-BY 3.0 | ✅ | **必要** |
-| Bungee / Orbitron / DSEG7 / Shippori Mincho B1 / Zen Kaku Gothic New | SIL OFL 1.1 | ✅ | フォント単体の販売は禁止 |
+| Dela Gothic One / Bungee / Orbitron / DSEG7 / Shippori Mincho B1 / Zen Kaku Gothic New | SIL OFL 1.1 | ✅ | フォント単体の販売は禁止 |
 | three.js / lil-gui / ios-haptics | MIT | ✅ | 著作権表示を同梱 |
 
 ---
@@ -131,6 +131,7 @@ OGG を MP3 に変換しただけで、音そのものには手を加えてい�
 | `assets/audio/bgm/level1.mp3` (REG 中) | 5 Chiptunes (Action) — "Level 1" | Juhani Junkala | 同上 | CC0 1.0 |
 | `assets/audio/bgm/level2.mp3` (スペシャル BGM 1) | 5 Chiptunes (Action) — "Level 2" | Juhani Junkala | 同上 | CC0 1.0 |
 | `assets/audio/bgm/ending.mp3` (スペシャル BGM 2) | 5 Chiptunes (Action) — "Ending" | Juhani Junkala | 同上 | CC0 1.0 |
+| `assets/audio/bgm/bossa_nova.mp3` (通常時) | Bossa Nova (8bit Bossa) | Joth | https://opengameart.org/content/bossa-nova | CC0 1.0 |
 | `assets/audio/bgm/title_screen.mp3` (プレミアム BGM) | 5 Chiptunes (Action) — "Title Screen" | Juhani Junkala | 同上 | CC0 1.0 |
 
 
@@ -142,7 +143,8 @@ OGG を MP3 に変換しただけで、音そのものには手を加えてい�
 | `assets/fonts/orbitron-500.woff2`, `orbitron-900.woff2` | Orbitron | Matt McInerney | https://fontsource.org/fonts/orbitron | SIL OFL 1.1 |
 | `assets/fonts/dseg7-700.woff2` | DSEG7 Classic | keshikan | https://fontsource.org/fonts/dseg7-classic | SIL OFL 1.1 |
 | (Google Fonts から配信) | Shippori Mincho B1 (見出し) | FONTDASU | https://fonts.google.com/specimen/Shippori+Mincho+B1 | SIL OFL 1.1 |
-| (Google Fonts から配信) | Zen Kaku Gothic New (画面の文字) | Yoshimichi Ohira | https://fonts.google.com/specimen/Zen+Kaku+Gothic+New | SIL OFL 1.1 |
+| (Google Fonts から配信) | Dela Gothic One (液晶・筐体・ボタン・換金画面) | artakana | https://fonts.google.com/specimen/Dela+Gothic+One | SIL OFL 1.1 |
+| (Google Fonts から配信) | Zen Kaku Gothic New (左上の所持金表示) | Yoshimichi Ohira | https://fonts.google.com/specimen/Zen+Kaku+Gothic+New | SIL OFL 1.1 |
 
 日本語フォントは文字数が多く、使う文字だけを分割配信できる Google Fonts から読み込んでいます。
 

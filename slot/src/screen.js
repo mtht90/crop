@@ -20,6 +20,7 @@ export class Screen {
     this.x = canvas.getContext('2d');
     this.img = images;
     this.gothic = gothic || 'sans-serif';
+    this.display = this.gothic;
     this.scene = 'idle';
     this.t0 = 0;            // シーン開始時刻
     this.now = 0;
@@ -164,7 +165,7 @@ export class Screen {
   logo(cx, cy, s, t, hot = 0) {
     const x = this.x;
     x.save(); x.translate(cx, cy); x.rotate(-0.06); x.scale(s, s);
-    x.font = '170px Bungee'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.lineJoin = 'round';
+    x.font = `400 170px ${this.display}`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.lineJoin = 'round';
     for (let k = 5; k >= 0; k--) { x.lineWidth = 16 + k * 8; x.strokeStyle = `hsl(${(k * 55 + t * 200 * hot) % 360},95%,${45 + k * 3}%)`; x.strokeText('SLOT', 0, 6); }
     const lg = x.createLinearGradient(0, -80, 0, 90); lg.addColorStop(0, '#fffbe6'); lg.addColorStop(0.5, '#ffe14d'); lg.addColorStop(1, '#ff9a00');
     x.fillStyle = lg; x.fillText('SLOT', 0, 6);
@@ -172,9 +173,9 @@ export class Screen {
   }
 
   // 縁取り付きの文字
-  text(str, cx, cy, size, fill, stroke = '#120018', font = 'Bungee') {
+  text(str, cx, cy, size, fill, stroke = '#120018', font = this.display) {
     const x = this.x;
-    x.font = `900 ${size}px ${font}`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.lineJoin = 'round';
+    x.font = `${font === 'DSEG7' ? 700 : 400} ${size}px ${font}`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.lineJoin = 'round';
     x.lineWidth = size * 0.16; x.strokeStyle = stroke; x.strokeText(str, cx, cy);
     x.fillStyle = fill; x.fillText(str, cx, cy);
   }
@@ -209,7 +210,7 @@ export class Screen {
     this.text('連チャンゾーン', 0, 0, 72, this.rainbowFill(-300, 300, t), '#1a0030', this.gothic);
     x.restore();
     this.text(`残り`, W * 0.5, H * 0.56, 44, '#fff', '#1a0030', this.gothic);
-    this.text(`${zone}`, W * 0.66, H * 0.55, 130, urgent ? '#ff6a8a' : '#ffe14d');
+    this.text(`${zone}`, W * 0.66, H * 0.55, 110, urgent ? '#ff6a8a' : '#ffe14d', '#1a0030', 'DSEG7');
     this.text('G', W * 0.82, H * 0.58, 60, '#fff');
     if (chain > 0) this.text(`${chain} 連中`, W * 0.66, H * 0.84, 60, '#fff', '#1a0030', this.gothic);
   }
@@ -226,7 +227,7 @@ export class Screen {
       const im = this.img.grape;
       x.translate(W * 0.84, H * 0.3 - ease(k / 0.5) * 30); x.scale(pop, pop);
       if (im) x.drawImage(im, -60, -60, 120, 120);
-      this.text('+8', 0, 90, 56, '#c9a0ff');
+      this.text(`+${this.grapePay || 10}`, 0, 90, 56, '#c9a0ff');
     } else if (kind === 'REPLAY') {
       x.translate(W * 0.84, H * 0.3); x.scale(pop, pop);
       this.text('REPLAY', 0, 0, 50, '#7ad0ff');
@@ -285,7 +286,7 @@ export class Screen {
         this.clown(W * 0.16, y, 230, -0.15);
         const label = { blue: 'CHANCE', green: 'CHANCE!', red: 'BIG CHANCE!', gold: '激アツ!!', rainbow: 'LUCKY!?' }[col];
         const jp = col === 'gold';
-        this.text(label, W * 0.6, y + 4, jp ? 120 : 100, '#fff', '#120018', jp ? this.gothic : 'Bungee');
+        this.text(label, W * 0.6, y + 4, jp ? 120 : 100, '#fff', '#120018', this.display);
         x.restore();
       }
     } else if (p.type === 'seven') {
@@ -333,7 +334,7 @@ export class Screen {
     this.bg(t, c0, prem ? '#200030' : '#3a0026', 0.5, 'rgba(255,255,255,0.14)');
     const pop = 1 + (1 - ease(st / 0.35)) * 0.6 + Math.sin(t * 6) * 0.02;
     x.save(); x.translate(W / 2, H * 0.43); x.scale(pop, pop);
-    x.font = '210px Bungee'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.lineJoin = 'round';
+    x.font = `400 190px ${this.display}`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.lineJoin = 'round';
     x.lineWidth = 34; x.strokeStyle = '#3a0026'; x.strokeText('LUCKY!!', 0, 0);
     x.fillStyle = prem ? this.rainbowFill(-300, 300, t) : (() => { const g = x.createLinearGradient(0, -90, 0, 90); g.addColorStop(0, '#fffbe0'); g.addColorStop(0.5, '#ffe14d'); g.addColorStop(1, '#ff8a00'); return g; })();
     x.fillText('LUCKY!!', 0, 0);
@@ -369,7 +370,7 @@ export class Screen {
       this.text(sp === 'premium' ? 'PREMIUM BGM' : 'SPECIAL BGM', W / 2, H * 0.06 + 36, 50, this.rainbowFill(0, W, t));
       x.restore();
     }
-    this.text(`${paid}`, W * 0.64, H * 0.64, 130, '#fff');
+    this.text(`${paid}`, W * 0.64, H * 0.64, 110, '#fff', '#120018', 'DSEG7');
     this.text(`/ ${max} 枚`, W * 0.86, H * 0.68, 56, '#ffe14d', '#120018', this.gothic);
     // ゲージ
     x.fillStyle = 'rgba(0,0,0,0.5)'; x.fillRect(W * 0.46, H * 0.84, W * 0.48, 26);

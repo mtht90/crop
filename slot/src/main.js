@@ -67,10 +67,10 @@ function fitCamera() {
   const aspect = innerWidth / innerHeight;
   const tanH = Math.tan(THREE.MathUtils.degToRad(c.fov / 2));
   const portrait = aspect < 0.9;
-  const halfH = portrait ? 0.74 : 0.9, halfW = portrait ? 0.57 : 0.8;
+  const halfH = portrait ? 0.74 : 0.98, halfW = portrait ? 0.57 : 0.8; // 台上のデータカウンターまで収める
   rig.cx = portrait ? 0.07 : 0; // 縦画面は右の千円入れ機まで収める
   const d = Math.max(halfH / tanH, halfW / (tanH * aspect));
-  const ty = portrait ? 1.5 : c.target[1] + 0.33;
+  const ty = portrait ? 1.8 : c.target[1] + 0.48; // 縦画面は HUD の下にカウンターが来るように
   rig.touch = matchMedia('(hover: none)').matches;
 
   rig.dist = d;
@@ -129,7 +129,7 @@ async function boot() {
     $('loading').classList.add('gone');
     haptics.vibrate([30]);
     audio.resume().then(() => {
-      if (machine.mode !== 'normal') audio.bgm(cfg.bonus[machine.mode].bgm);
+      audio.bgm(machine.mode !== 'normal' ? cfg.bonus[machine.mode].bgm : 'normal', { gain: machine.mode !== 'normal' ? 1 : cfg.audio.normalBgm });
     }).catch((e) => console.warn('audio resume', e));
   };
   renderer.setAnimationLoop(frame);
@@ -515,7 +515,7 @@ addEventListener('resize', () => {
 });
 $('btn-sound').onclick = () => {
   audio.enabled = !audio.enabled;
-  if (!audio.enabled) audio.stopBgm(0.1); else if (machine.mode !== 'normal') audio.bgm(cfg.bonus[machine.mode].bgm);
+  if (!audio.enabled) audio.stopBgm(0.1); else audio.bgm(machine.mode !== 'normal' ? cfg.bonus[machine.mode].bgm : 'normal', { gain: machine.mode !== 'normal' ? 1 : cfg.audio.normalBgm });
   $('btn-sound').classList.toggle('off', !audio.enabled);
 };
 $('btn-vib').onclick = () => {
@@ -526,7 +526,7 @@ $('btn-gear').onclick = () => toggleGui();
 $('btn-reload').onclick = () => location.reload();
 $('btn-cash').onclick = () => cashout();
 $('btn-lend').onclick = (e) => { e.currentTarget.blur(); lend(); };
-$('m-next').onclick = () => { $('modal').hidden = true; toast(`新しい日 — 所持金 ${yen(machine.wallet)}`); };
+$('m-next').onclick = () => { $('modal').hidden = true; audio.bgm('normal', { gain: cfg.audio.normalBgm }); toast(`新しい日 — 所持金 ${yen(machine.wallet)}`); };
 
 // ------------------------------------------------------------------
 // デバッグ / チューニングパネル (lil-gui)
@@ -589,7 +589,7 @@ function addNeighborScreen(x) {
     const gr = g.createRadialGradient(128, 64, 4, 128, 64, 140);
     gr.addColorStop(0, '#ffd0f0'); gr.addColorStop(0.5, '#ff3fa8'); gr.addColorStop(1, '#5a0030');
     g.fillStyle = gr; g.fillRect(0, 0, 256, 128);
-    g.font = '64px Bungee'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.font = `400 58px ${cfg.assets.jpFonts.display}`; g.textAlign = 'center'; g.textBaseline = 'middle';
     g.lineWidth = 10; g.strokeStyle = '#3a0026'; g.strokeText('LUCKY!!', 128, 66);
     g.fillStyle = '#ffe14d'; g.fillText('LUCKY!!', 128, 66);
     neighborTex = new THREE.CanvasTexture(c); neighborTex.colorSpace = THREE.SRGBColorSpace;
@@ -601,6 +601,13 @@ function addNeighborScreen(x) {
   neighbors.push({ m, mat, x, state: 'idle', t: 0 });
 }
 function updateNeighbors(dt) {
+  // 画面外の隣台が当たっていたら、その側の画面端をほんのり光らせる
+  const edge = { l: 0, r: 0 };
+  for (const n of neighbors) if (n.state !== 'idle') edge[n.x < 0 ? 'l' : 'r'] = n.state === 'lit' ? 1 : 0.6;
+  for (const k of ['l', 'r']) {
+    const el = $('edge-' + k);
+    if (el) el.style.opacity = edge[k] ? String(edge[k] * (0.55 + 0.45 * Math.sin(performance.now() / 160))) : '0';
+  }
   for (const n of neighbors) {
     n.t += dt;
     if (n.state === 'idle') {

@@ -92,6 +92,7 @@ export async function loadAssets(cfg, renderer, onProgress) {
         document.fonts.load(`800 100px ${A.jpFonts.mincho}`, txt),
         document.fonts.load(`700 40px ${A.jpFonts.gothic}`, txt),
         document.fonts.load(`900 40px ${A.jpFonts.gothic}`, txt),
+        document.fonts.load(`400 40px ${A.jpFonts.display}`, txt + 'ABCDEFGHIJKLMNOPQRSTUVWXYZ/!?'),
       ]);
     } catch { /* フォールバックで描画 */ }
   })());
