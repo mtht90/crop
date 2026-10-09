@@ -112,11 +112,14 @@ async function boot() {
   sparks = new Sparks(scene);
   director = new Director({ cfg, cab, audio, haptics, shaker, coins, sparks, machine, rig, bloom });
   director.onPayTick = (n) => { payShown = n; refreshHud(); };
-  director.onNotice = () => toast('7 を狙え!', 'hot');
-  director.onBonusStart = (type) => { cab.setCounter({ ...machine.stats, graph: machine.stats.graph }, type); toast(type === 'BIG' ? 'BIG BONUS' : 'REG BONUS', 'hot'); };
+  director.onBonusStart = (type) => { cab.setCounter({ ...machine.stats, graph: machine.stats.graph }, type); };
   // 告知済み・ボーナス中で再開したときの状態復元
-  if (machine.carried && machine.noticed) { cab.lights.lampTarget = 1; cab.lights.rainbow = 1; }
-  if (machine.mode !== 'normal') { cab.lights.mode = 'rainbow'; cab.lights.artMode = 'bonus'; cab.bonusLabel = machine.mode + ' BONUS'; }
+  if (machine.carried && machine.noticed) { cab.lights.lampTarget = 1; cab.lights.rainbow = 1; cab.screen.set('lit'); }
+  if (machine.mode !== 'normal') {
+    cab.lights.mode = 'rainbow';
+    cab.screen.set('bonus', { type: machine.mode, max: cfg.bonus[machine.mode].maxPay });
+    cab.screen.bonus.paid = machine.bonusPaid;
+  }
   if (HASH.has('zoom')) rig.zoom = 0.6;
   fitCamera();
   refreshHud();
@@ -311,7 +314,7 @@ function cashout() {
   audio.stopBgm(0.2);
   audio.play(r.balance >= 0 ? 'bonus_end' : 'lose', { gain: 0.8 });
   const L = cab.lights;
-  L.lampTarget = 0; L.lampPremium = false; L.rainbow = 0; L.mode = 'idle'; L.artMode = 'idle';
+  L.lampTarget = 0; L.lampPremium = false; L.rainbow = 0; L.mode = 'idle'; cab.screen.set('idle');
   payShown = 0;
   save();
   refreshHud();
@@ -322,7 +325,14 @@ function setState(v) { state = v; stateSince = performance.now(); }
 
 async function pullLever() {
   if (state !== 'idle') return;
-  if (machine.credit < cfg.bet && !doBet()) return;
+  // 実機どおり、MAX BET を押してからでないとレバーは効かない (リプレイ時だけ自動でベット済み)
+  if (machine.credit < cfg.bet) {
+    if (!machine.replayPending || !doBet()) {
+      cab.lights.betNudge = 1;
+      if (!machine.canBet()) doBet(); // メダル切れの案内を出す
+      return;
+    }
+  }
   setState('busy');
   try {
     cab.lever.held = true;
@@ -539,6 +549,7 @@ async function toggleGui() {
   const g2 = gui.addFolder('演出');
   g2.add(director.debugForce, 'notice', ['auto', 'lever', 'release']).name('告知 (先ペカ/後ペカ)');
   g2.add(director.debugForce, 'premium').name('プレミア点灯');
+  g2.add(director.debugForce, 'preview', ['auto', 'none', 'balls', 'face', 'cutin', 'seven', 'blackout']).name('予告 (強制)');
   g2.add(cfg.notice, 'premium', 0, 1, 0.01).name('プレミア率');
   g2.add(cfg.notice, 'silenceMs', 0, 600, 10).name('点灯前の静寂 ms');
   g2.add(cfg.effects, 'haptics').name('振動');

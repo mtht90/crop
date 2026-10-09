@@ -1,6 +1,7 @@
 // =====================================================================
-//  演出ディレクター (ジャグラー型: 告知ランプのみ)
-//   ボーナス成立ゲームで「先ペカ (レバーON)」か「後ペカ (第3停止ボタンを離した瞬間)」。
+//  演出ディレクター
+//   ボーナス成立ゲームで「先ペカ (レバーON)」か「後ペカ (第3停止ボタンを離した瞬間)」に液晶が LUCKY!! で光る。
+//   後ペカ・ガセのゲームでは液晶の予告がレバーON から停止ごとに昇格する。
 //   ペカッ → 一瞬の静寂 → ブイーン (重低音 + 長い振動) → 光の波紋 → 7 を揃えてファンファーレ
 // =====================================================================
 import * as THREE from 'three';
@@ -10,7 +11,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 export class Director {
   constructor(ctx) {
     Object.assign(this, ctx); // cfg, cab, audio, haptics, shaker, coins, sparks, machine, rig, bloom
-    this.debugForce = { notice: 'auto', premium: false };
+    this.debugForce = { notice: 'auto', premium: false, preview: 'auto' };
     this.plan = null;
   }
 
@@ -25,22 +26,84 @@ export class Director {
       if (this.debugForce.notice !== 'auto') plan.notice = this.debugForce.notice;
       plan.premium = this.debugForce.premium || Math.random() < N.premium;
     }
+    plan.preview = this.pickPreview(flag, plan);
     this.plan = plan;
     return plan;
+  }
+
+  // 予告の抽選
+  pickPreview(flag, plan) {
+    const Y = this.cfg.yokoku;
+    if (this.machine.mode !== 'normal' || this.machine.noticed || plan.notice === 'lever') return null;
+    const hit = plan.notice === 'release';
+    const f = this.debugForce.preview;
+    if (f === 'none') return null;
+    const rate = hit ? Y.rateHit : flag.small === 'CHERRY' ? Y.rateCherry : Y.rateMiss;
+    if (f === 'auto' && Math.random() >= rate) return null;
+    const col = hit ? 0 : 1;
+    const pick = (table) => {
+      const ent = Object.entries(table).filter(([, w]) => w[col] > 0);
+      let r = Math.random() * ent.reduce((a, [, w]) => a + w[col], 0);
+      for (const [k, w] of ent) { r -= w[col]; if (r < 0) return k; }
+      return ent[0][0];
+    };
+    const type = f !== 'auto' ? f : pick(Y.types);
+    const color = pick(Y.cutinColor);
+    const sevens = hit ? 3 : (Math.random() * (Y.missSevens[0] + Y.missSevens[1]) < Y.missSevens[0] ? 1 : 2);
+    return { type, color, sevens, hit };
   }
 
   async onLever() {
     const L = this.cab.lights;
     L.mode = this.machine.mode !== 'normal' ? 'rainbow' : (this.machine.noticed ? 'rainbow' : 'idle');
     L.ledMode = 'chase';
+    const pv = this.plan?.preview;
+    if (pv) {
+      this.cab.screen.preview(pv);
+      if (pv.type === 'blackout') { this.audio.play('freeze', { gain: 0.8 }); this.haptics.vibrate([60]); L.mode = 'off'; }
+      else this.audio.play('yokoku', { gain: 0.8 });
+    }
     if (this.plan?.notice === 'lever') this.peka();
   }
 
-  onStop() {}
+  // 第 n 停止: 予告の昇格
+  onStop(n) {
+    const pv = this.plan?.preview;
+    if (!pv || this.plan.lit) return;
+    const scr = this.cab.screen;
+    scr.step(n);
+    const a = this.audio;
+    if (pv.type === 'cutin') {
+      const c = scr.colorAt(n);
+      a.play('cutin', { gain: 0.9, rate: 0.9 + ['blue', 'green', 'red', 'gold', 'rainbow'].indexOf(c) * 0.08 });
+      if (c === 'gold' || c === 'rainbow') { a.play('flash', { gain: 0.8 }); this.haptics.vibrate([30, 30, 60]); }
+    } else if (pv.type === 'seven') {
+      if (n <= pv.sevens) { a.play('title_hit', { gain: 0.9, rate: 0.9 + n * 0.12 }); this.haptics.vibrate([25 * n]); }
+      if (n <= pv.sevens && n >= 2) this.shaker.add(0.15 * n);
+    } else if (pv.type === 'face') {
+      a.play('window', { gain: 0.8, rate: 0.9 + n * 0.1 });
+    } else if (pv.type === 'balls') {
+      a.play('tick', { gain: 0.7, rate: 1 + n * 0.25 });
+    } else if (pv.type === 'blackout') {
+      a.play('charge', { gain: 0.5 + n * 0.15, rate: 0.8 + n * 0.1 });
+      this.haptics.vibrate([20]);
+    }
+  }
 
-  // 第3停止ボタンを離した瞬間 (後ペカ)
+  // 第3停止ボタンを離した瞬間: 後ペカ、または予告のはずれ
   onThirdRelease() {
-    if (this.plan?.notice === 'release' && !this.plan.lit) this.peka();
+    if (this.plan?.notice === 'release' && !this.plan.lit) { this.peka(); return; }
+    this.previewFail();
+  }
+
+  previewFail() {
+    const pv = this.plan?.preview;
+    if (!pv || pv.failed) return;
+    pv.failed = true;
+    this.cab.screen.fail();
+    const L = this.cab.lights;
+    if (L.mode === 'off') L.mode = 'idle';
+    if (pv.type !== 'balls') this.audio.play('lose', { gain: 0.45 });
   }
 
   // ------------------------------------------------------------
@@ -59,9 +122,10 @@ export class Director {
     L.lampTarget = 1;
     L.lampFlash = 1;
     L.lampPremium = premium;
+    this.cab.screen.set('lit', { premium });
     this.audio.play('peka', { gain: 1.0, rate: 1.25 });
     this.haptics.vibrate('peka');
-    this.bloomKick(0.9);
+    this.bloomKick(0.5);
     this.cab.ripple(premium ? 0xffffff : 0xff5fc0);
     this.rig.zoom = 0.12;
     await wait(130);
@@ -76,8 +140,7 @@ export class Director {
     L.rainbow = 1;
     L.mode = 'rainbow';
     L.ledMode = 'flash';
-    L.artMode = 'notice';
-    this.sparks.emit(new THREE.Vector3(-0.375, 1.3, 0.34), premium ? 260 : 140, { color: premium ? null : '#ff7fd0', speed: 1.8, life: 1.4 });
+    this.sparks.emit(new THREE.Vector3(0, 1.775, 0.34), premium ? 260 : 140, { color: premium ? null : '#ff7fd0', speed: 1.8, life: 1.4 });
     if (premium) {
       this.audio.gyuin(3, { gain: 1.0 });
       setTimeout(() => this.cab.ripple(0xffffff), 400);
@@ -85,7 +148,6 @@ export class Director {
     }
     this.onNotice?.(premium);
     setTimeout(() => { L.ledMode = 'chase'; this.rig.zoom = 0; }, 1400);
-    setTimeout(() => { if (this.machine.mode === 'normal') L.artMode = 'idle'; }, 2500);
   }
 
   // ------------------------------------------------------------
@@ -97,6 +159,8 @@ export class Director {
     L.backlightTarget = [1, 1, 1];
     // 後ペカのボタン離しを取り逃した場合の保険
     if (this.plan?.notice === 'release' && !this.plan.lit && !res.bonusStart) await this.peka();
+    if (!this.plan?.lit) this.previewFail();
+    if (this.machine.mode !== 'normal' && this.cab.screen.scene === 'bonus') this.cab.screen.bonus.paid = this.machine.bonusPaid - res.pay;
     if (res.bonusStart) { await this.bonusStart(res.bonusStart, res); return; }
     if (res.wins.length) this.cab.flashLines(res.wins.filter((w) => w.line >= 0).map((w) => w.line), 1.2);
     if (res.replay) this.audio.play('replay', { gain: 0.7 });
@@ -118,6 +182,7 @@ export class Director {
       if (i % 3 === 0) this.audio.play('medal_pay', { gain: 0.3, rate: 1 + Math.random() * 0.15 });
       if (i % 4 === 0) this.haptics.vibrate('payout');
       this.onPayTick?.(i + 1);
+      if (this.cab.screen.scene === 'bonus') this.cab.screen.bonus.paid++;
       await wait(65);
     }
   }
@@ -126,7 +191,9 @@ export class Director {
   async bonusStart(type, res) {
     const L = this.cab.lights;
     const big = type === 'BIG';
-    if (!this.plan?.lit) { L.lampTarget = 1; L.lampFlash = 1; this.cab.ripple(); } // 告知前に揃えた (ブラインド)
+    if (!this.plan?.lit) { L.lampFlash = 1; this.cab.ripple(); } // 告知前に揃えた (ブラインド)
+    this.cab.screen.set('bonus', { type, max: this.cfg.bonus[type].maxPay });
+    this.cab.screen.bonus.paid = this.machine.bonusPaid;
     this.cab.flashLines(res.wins.filter((w) => w.line >= 0).map((w) => w.line), 3);
     this.cab.reelFlash('strobe', 2.6);
     L.reelRainbow = 1;
@@ -136,9 +203,7 @@ export class Director {
     this.audio.play(big ? 'fanfare_big' : 'fanfare_reg', { gain: 1.3, delay: 0.15 });
     this.haptics.vibrate('bonusStart');
     this.shaker.add(0.9);
-    this.bloomKick(1.6);
-    this.cab.bonusLabel = big ? 'BIG BONUS' : 'REG BONUS';
-    L.artMode = 'bonus';
+    this.bloomKick(1.0);
     L.mode = 'rainbow';
     L.ledMode = 'flash';
     this.onBonusStart?.(type);
@@ -169,7 +234,7 @@ export class Director {
     this.bloomKick(0.6);
     L.rainbow = 0;
     L.mode = 'idle';
-    L.artMode = 'idle';
+    this.cab.screen.set('result', { type: info.type, paid: info.paid });
     this.onBonusEnd?.(info);
     await wait(1200);
   }

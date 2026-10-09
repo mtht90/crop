@@ -2,6 +2,7 @@
 //  筐体 (外部PBRテクスチャ + HDRI 反射) / リール / ボタン / レバー / ランプ
 // =====================================================================
 import * as THREE from 'three';
+import { Screen } from './screen.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { makeReelCanvas, drawSymbol, roundRect } from './symbols.js';
 
@@ -252,59 +253,17 @@ export class Cabinet {
     return Object.assign(new THREE.CanvasTexture(c), { colorSpace: THREE.SRGBColorSpace, anisotropy: 8 });
   }
 
-  // ---------------- 告知ランプ (ジャグラー型の大型ランプ) ----------------
+  // ---------------- 告知 (液晶全体が光る。独立したランプは置かない) ----------------
   buildLamp() {
-    const c = document.createElement('canvas'); c.width = c.height = 512;
-    const x = c.getContext('2d');
-    const g = x.createRadialGradient(256, 230, 20, 256, 256, 256);
-    g.addColorStop(0, '#fff6fb'); g.addColorStop(0.45, '#ff4fb0'); g.addColorStop(0.8, '#a0006a'); g.addColorStop(1, '#3a0026');
-    x.fillStyle = g; x.fillRect(0, 0, 512, 512);
-    // 放射状の光線
-    x.save(); x.translate(256, 256);
-    for (let i = 0; i < 24; i++) { x.rotate(Math.PI / 12); x.fillStyle = i % 2 ? 'rgba(255,255,255,0.12)' : 'rgba(255,220,120,0.10)'; x.beginPath(); x.moveTo(0, 0); x.lineTo(260, -26); x.lineTo(260, 26); x.fill(); }
-    x.restore();
-    x.font = '118px Bungee'; x.textAlign = 'center'; x.textBaseline = 'middle';
-    x.lineJoin = 'round'; x.lineWidth = 22; x.strokeStyle = '#3a0026'; x.strokeText('LUCKY', 256, 222);
-    const tg = x.createLinearGradient(0, 160, 0, 290);
-    tg.addColorStop(0, '#fffbe0'); tg.addColorStop(0.5, '#ffe14d'); tg.addColorStop(1, '#ff8a00');
-    x.fillStyle = tg; x.fillText('LUCKY', 256, 222);
-    x.font = '150px Bungee'; x.lineWidth = 22; x.strokeText('!!', 256, 350); x.fillText('!!', 256, 350);
-    const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
-    this.lampMat = new THREE.MeshPhysicalMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.02, roughness: 0.08, clearcoat: 1, color: 0x8a6a7a });
-    const r = 0.07;
-    // ランプ面 (印刷された文字が消灯時も透けて見える) + 透明なドームカバー
-    const face = new THREE.Mesh(new THREE.CircleGeometry(r, 64), this.lampMat);
-    face.position.set(-0.375, 1.3, DIM.front + 0.003);
-    this.group.add(face);
-    const dome = new THREE.Mesh(new THREE.SphereGeometry(r, 48, 24, 0, Math.PI * 2, 0, Math.PI / 2),
-      new THREE.MeshPhysicalMaterial({ color: 0xffffff, transparent: true, opacity: 0.18, roughness: 0.02, clearcoat: 1, envMapIntensity: 1.6, depthWrite: false }));
-    dome.rotation.x = Math.PI / 2;
-    dome.scale.set(1, 0.42, 1);
-    dome.position.set(-0.375, 1.3, DIM.front + 0.004);
-    dome.renderOrder = 4;
-    this.group.add(dome);
-    this.lampDome = face;
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(r + 0.003, 0.008, 16, 64), this.m.chrome);
-    ring.position.copy(dome.position);
-    this.group.add(ring);
-    // 点灯時に周囲へ広がる光 (加算スプライト)
-    const gc = document.createElement('canvas'); gc.width = gc.height = 128;
-    const gx = gc.getContext('2d');
-    const gg = gx.createRadialGradient(64, 64, 0, 64, 64, 64);
-    gg.addColorStop(0, 'rgba(255,255,255,1)'); gg.addColorStop(0.25, 'rgba(255,120,200,0.6)'); gg.addColorStop(1, 'rgba(255,60,160,0)');
-    gx.fillStyle = gg; gx.fillRect(0, 0, 128, 128);
-    this.lampGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(gc), color: 0xffffff, blending: THREE.AdditiveBlending, transparent: true, opacity: 0, depthWrite: false, toneMapped: false }));
-    this.lampGlow.position.set(-0.375, 1.3, DIM.front + 0.04);
-    this.lampGlow.scale.setScalar(0.5);
-    this.group.add(this.lampGlow);
-    this.lampLight = new THREE.PointLight(0xff3fa8, 0, 2.2, 2);
-    this.lampLight.position.set(-0.375, 1.3, DIM.front + 0.12);
+    // 液晶の光が筐体と手元を照らす
+    this.lampLight = new THREE.PointLight(0xff3fa8, 0, 2.6, 2);
+    this.lampLight.position.set(0, DIM.lcdY, DIM.front + 0.2);
     this.group.add(this.lampLight);
     // 点灯の瞬間に広がる光の波紋
     this.ripples = [0, 1, 2].map(() => {
       const m = new THREE.Mesh(new THREE.RingGeometry(0.9, 1, 64), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
-      m.position.set(-0.375, 1.3, DIM.front + 0.03);
-      m.userData.t = -1;
+      m.position.set(0, DIM.lcdY, DIM.front + 0.03);
+      m.userData.t = 99; // 待機中 (起動直後に勝手に広がらないように)
       this.group.add(m);
       return m;
     });
@@ -364,16 +323,16 @@ export class Cabinet {
     const face = this.assets.images.maxbet;
     if (face) bx.drawImage(face, 0, 0, 384, 160);
     else { bx.fillStyle = '#ffcf33'; bx.fillRect(0, 0, 384, 160); }
-    bx.font = '80px Bungee'; bx.textAlign = 'center'; bx.textBaseline = 'middle';
-    bx.lineWidth = 8; bx.strokeStyle = 'rgba(255,250,220,0.9)'; bx.strokeText('MAX BET', 192, 72);
-    bx.fillStyle = '#7a2a00'; bx.fillText('MAX BET', 192, 72);
+    bx.font = '58px Bungee'; bx.textAlign = 'center'; bx.textBaseline = 'middle';
+    bx.lineWidth = 8; bx.strokeStyle = 'rgba(255,250,220,0.9)'; bx.strokeText('MAX BET', 192, 74);
+    bx.fillStyle = '#7a2a00'; bx.fillText('MAX BET', 192, 74);
     const btex = new THREE.CanvasTexture(bc); btex.colorSpace = THREE.SRGBColorSpace; btex.anisotropy = 4;
     this.betMat = new THREE.MeshPhysicalMaterial({ map: btex, emissiveMap: btex, emissive: 0xffffff, emissiveIntensity: 0.4, roughness: 0.15, clearcoat: 1, clearcoatRoughness: 0.05 });
     // 台座 (クロームの枠) + 押し込める本体
     // 実機同様、手前に少し傾けて正面から文字が読めるようにする
     const betGrp = new THREE.Group();
     betGrp.position.set(-0.19, deckY + 0.034, DIM.front + 0.1);
-    betGrp.rotation.x = 0.6;
+    betGrp.rotation.x = 0.42;
     g.add(betGrp);
     const betBase = new THREE.Mesh(new RoundedBoxGeometry(0.15, 0.012, 0.075, 3, 0.005), this.m.chrome);
     betGrp.add(betBase);
@@ -502,7 +461,7 @@ export class Cabinet {
     this.tray = { y: y + 0.006, z0, z1, x0: -0.3, x1: 0.3 };
   }
 
-  // 液晶の代わりに、ジャグラー型らしい上部パネル (バックライト付きの印刷アート)
+  // 上部液晶 (中身は screen.js)
   buildLcd() {
     const c = document.createElement('canvas'); c.width = 1024; c.height = 512;
     this.artCanvas = c;
@@ -516,66 +475,11 @@ export class Cabinet {
     glass.position.set(0, DIM.lcdY, DIM.front + 0.016);
     glass.renderOrder = 3;
     this.group.add(glass);
-    this.drawArt();
-  }
-
-  // ジャグラー型の上部パネルは液晶ではなく「裏から照らす印刷アート」。絵は動かさず、明るさだけ演出で変える
-  drawArt() {
-    const x = this.artCanvas.getContext('2d'), W = 1024, H = 512;
-    const g = x.createRadialGradient(W * 0.3, H * 0.5, 20, W * 0.5, H * 0.5, W * 0.75);
-    g.addColorStop(0, '#2b3fb0'); g.addColorStop(0.55, '#121a5c'); g.addColorStop(1, '#05061a');
-    x.fillStyle = g; x.fillRect(0, 0, W, H);
-    // 放射状の印刷パターン
-    x.save(); x.translate(W * 0.3, H * 0.52);
-    for (let i = 0; i < 36; i++) {
-      x.rotate(Math.PI / 18);
-      x.fillStyle = i % 2 ? 'rgba(120,170,255,0.10)' : 'rgba(255,220,120,0.07)';
-      x.beginPath(); x.moveTo(0, 0); x.lineTo(1100, -70); x.lineTo(1100, 70); x.fill();
-    }
-    x.restore();
-    const star = (cx, cy, r, col) => {
-      x.beginPath();
-      for (let k = 0; k < 10; k++) { const a = -Math.PI / 2 + k * Math.PI / 5, rr = k % 2 ? r * 0.45 : r; x.lineTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr); }
-      x.closePath(); x.fillStyle = col; x.fill();
-    };
-    for (let i = 0; i < 16; i++) star(40 + ((i * 173) % 960), 30 + ((i * 97) % 450), 8 + (i % 4) * 6, `rgba(255,${200 + (i % 3) * 20},${90 + (i % 5) * 30},0.85)`);
-    // ピエロ (外部素材: Openclipart "Clown Face")
-    const im = this.assets.images.clown;
-    if (im) {
-      const h = H * 0.9, w = im.width * (h / im.height);
-      x.save();
-      x.shadowColor = 'rgba(0,0,0,0.55)'; x.shadowBlur = 24; x.shadowOffsetY = 10;
-      x.drawImage(im, W * 0.27 - w / 2, H * 0.53 - h / 2, w, h);
-      x.restore();
-    }
-    // ロゴ
-    x.save(); x.translate(W * 0.71, H * 0.44); x.rotate(-0.06);
-    x.font = '170px Bungee'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.lineJoin = 'round';
-    for (let k = 5; k >= 0; k--) { x.lineWidth = 16 + k * 8; x.strokeStyle = `hsl(${k * 55},95%,${45 + k * 3}%)`; x.strokeText('SLOT', 0, 6); }
-    const lg = x.createLinearGradient(0, -80, 0, 90); lg.addColorStop(0, '#fffbe6'); lg.addColorStop(0.5, '#ffe14d'); lg.addColorStop(1, '#ff9a00');
-    x.fillStyle = lg; x.fillText('SLOT', 0, 6);
-    x.restore();
-    // 7 7 7
-    for (let i = 0; i < 3; i++) {
-      x.save(); x.translate(W * 0.59 + i * 120, H * 0.78); x.scale(0.62, 0.62);
-      x.font = '150px Bungee'; x.textAlign = 'center'; x.textBaseline = 'middle';
-      x.lineWidth = 16; x.strokeStyle = '#2a0008'; x.strokeText('7', 0, 0);
-      const sg = x.createLinearGradient(0, -70, 0, 70); sg.addColorStop(0, '#ff8a7a'); sg.addColorStop(0.5, '#e3001b'); sg.addColorStop(1, '#6a0010');
-      x.fillStyle = sg; x.fillText('7', 0, 0);
-      x.restore();
-    }
-    // 縁の印刷電球
-    const n = 46;
-    for (let i = 0; i < n; i++) {
-      const p = i / n;
-      let bx, by;
-      if (p < 0.35) { bx = 20 + (p / 0.35) * (W - 40); by = 18; } else if (p < 0.5) { bx = W - 18; by = 18 + ((p - 0.35) / 0.15) * (H - 36); }
-      else if (p < 0.85) { bx = W - 20 - ((p - 0.5) / 0.35) * (W - 40); by = H - 18; } else { bx = 18; by = H - 18 - ((p - 0.85) / 0.15) * (H - 36); }
-      x.fillStyle = i % 2 ? '#fff2a8' : '#ffb24a';
-      x.beginPath(); x.arc(bx, by, 7, 0, Math.PI * 2); x.fill();
-    }
+    this.screen = new Screen(c, this.assets.images, this.cfg.assets.jpFonts.gothic);
+    this.screen.draw(0);
     this.artTex.needsUpdate = true;
   }
+
 
   buildSign() {
     const c = document.createElement('canvas'); c.width = 1024; c.height = 200;
@@ -709,20 +613,15 @@ export class Cabinet {
     // ペカッ: 点灯は一瞬で、消灯はゆっくり
     L.lamp = L.lampTarget > L.lamp ? L.lampTarget : L.lamp + (L.lampTarget - L.lamp) * Math.min(1, dt * 4);
     L.lampFlash = Math.max(0, (L.lampFlash || 0) - dt * 2.2);
-    const pulse = L.lampTarget > 0 ? 0.92 + 0.08 * Math.sin(t * 5) : 1;
-    this.lampMat.emissiveIntensity = 0.03 + L.lamp * 1.25 * pulse + L.lampFlash * 2.5;
-    if (L.lampPremium) this.lampMat.emissive.setHSL((t * 0.9) % 1, 1, 0.6); else this.lampMat.emissive.setRGB(1, 1, 1);
-    this.lampLight.intensity = L.lamp * 0.9 * pulse + L.lampFlash * 3;
+    const pulse = L.lampTarget > 0 ? 0.85 + 0.15 * Math.sin(t * 5) : 1;
+    this.lampLight.intensity = L.lamp * 0.25 * pulse + L.lampFlash * 0.8;
     if (L.lampPremium) this.lampLight.color.setHSL((t * 0.9) % 1, 1, 0.55); else this.lampLight.color.set(0xff3fa8);
-    this.lampGlow.material.opacity = Math.min(1, L.lamp * 0.55 + L.lampFlash);
-    this.lampGlow.scale.setScalar(0.32 + L.lamp * 0.12 + L.lampFlash * 0.9);
-    if (L.lampPremium) this.lampGlow.material.color.setHSL((t * 0.9) % 1, 1, 0.7); else this.lampGlow.material.color.set(0xffffff);
     for (const m of this.ripples) {
       if (m.userData.t > 1.2) { m.material.opacity = 0; continue; }
       m.userData.t += dt;
       const k = Math.max(0, m.userData.t);
-      m.scale.setScalar(0.02 + k * 1.1);
-      m.material.opacity = m.userData.t < 0 ? 0 : Math.max(0, 0.9 * (1 - k / 1.2));
+      m.scale.setScalar(0.12 + k * 0.4);
+      m.material.opacity = m.userData.t < 0 ? 0 : Math.max(0, 0.45 * (1 - k / 1.2));
       if (L.lampPremium) m.material.color.setHSL((t + k) % 1, 1, 0.6);
     }
     // ストップボタン LED / 押し込み
@@ -734,7 +633,9 @@ export class Cabinet {
       b.mat.emissive.copy(c);
       b.mat.emissiveIntensity = on ? 1.1 : 0.04;
     });
-    this.betMat.emissiveIntensity = L.betLed ? 0.55 + 0.4 * (Math.sin(t * 7) * 0.5 + 0.5) : 0.1;
+    L.betNudge = Math.max(0, (L.betNudge || 0) - dt * 1.5);
+    this.betMat.emissiveIntensity = L.betNudge > 0 ? 0.4 + 1.4 * (Math.sin(t * 30) > 0 ? 1 : 0)
+      : L.betLed ? 0.55 + 0.4 * (Math.sin(t * 7) * 0.5 + 0.5) : 0.1;
     this.betPress = Math.max(0, this.betPress - dt * 7);
     this.betButton.position.y = this.betButton.userData.baseY - 0.008 * Math.min(1, this.betPress * 2);
     // 貸出ボタン (メダル切れで点滅して催促)
@@ -758,12 +659,10 @@ export class Cabinet {
     if (this._signT > 1 / 20) { this._signT = 0; this.drawSign(t * (L.rainbow > 0 ? 3 : 1)); }
     this.signMat.emissiveIntensity = L.mode === 'off' ? 0.05 : 1.0;
     // 電飾パネル: 平常時はゆっくり、告知・ボーナス中は高速で
-    // パネルの絵は固定。告知・ボーナス中はバックライトだけが明滅する
-    const artMode = L.artMode || 'idle';
-    this.artMat.emissiveIntensity = L.mode === 'off' ? 0.05
-      : artMode === 'idle' ? 0.55
-      : artMode === 'notice' ? 0.75 + 0.45 * (Math.sin(t * 7) * 0.5 + 0.5)
-      : 0.8 + 0.5 * (Math.sin(t * 14) > 0 ? 1 : 0);
+    // 液晶 (30fps で描き直す)
+    this._artT = (this._artT || 0) + dt;
+    if (this._artT > 1 / 30) { this._artT = 0; this.screen.draw(t); this.artTex.needsUpdate = true; }
+    this.artMat.emissiveIntensity = this.screen.scene === 'preview' ? 0.85 : L.mode === 'off' ? 0.05 : this.screen.scene === 'lit' ? 0.6 : 0.8;
     this.panelMat.emissiveIntensity = L.mode === 'off' ? 0.0 : 0.18;
   }
 
