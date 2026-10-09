@@ -43,26 +43,32 @@ export class PachinkoGame {
     floor.rotation.x = -Math.PI / 2;
     this.scene.add(floor);
     // 隣の台 (暗いクローン。玉は飛ばない)
-    for (const x of [-0.78, 0.78]) {
+    for (const x of [-0.68, 0.68]) {
       const n = this.board.group.clone(true);
       // 液晶と看板は自台と連動しないよう、その時点の絵を写した静止画にする
       const still = (tex) => { const c = document.createElement('canvas'); c.width = tex.image.width; c.height = tex.image.height; c.getContext('2d').drawImage(tex.image, 0, 0); const s = new THREE.CanvasTexture(c); s.colorSpace = THREE.SRGBColorSpace; return s; };
       this.screen.draw(Math.random() * 10);
       this.board.drawTray(Math.floor(Math.random() * 3000), 0.5, true);
-      const lcdStill = still(this.board.lcdTex), signStill = still(this.board.signTex), trayStill = still(this.board.trayTex);
+      const lcdStill = still(this.board.lcdTex), signStill = still(this.board.signTex), trayStill = still(this.board.trayTex), dataStill = still(this.board.dataTex);
       n.traverse((o) => {
         if (!o.isMesh || !o.material) return;
         if (o.isInstancedMesh && o.geometry.type === 'SphereGeometry') { o.visible = false; return; }
         const m = o.material.clone();
         if (m.map === this.board.lcdTex) m.map = lcdStill;
         if (m.map === this.board.trayTex) m.map = trayStill;
-        if (m.map === this.board.signTex) { m.map = signStill; m.emissiveMap = signStill; }
-        if (m.color) m.color.multiplyScalar(0.5);
-        if ('emissiveIntensity' in m) m.emissiveIntensity *= 0.4;
+        if (m.map === this.board.dataTex) m.map = dataStill;
+        if (m.map === this.board.signTex) { m.map = signStill; if (m.emissiveMap) m.emissiveMap = signStill; }
+        if (m.color) m.color.multiplyScalar(0.22);
+        if ('emissiveIntensity' in m) m.emissiveIntensity *= 0.12;
         o.material = m;
       });
       n.position.x = x;
       this.scene.add(n);
+      // さらに手前に半透明の暗幕を置いて、隣の台の存在感を消す
+      const veil = new THREE.Mesh(new THREE.PlaneGeometry(0.62, 2), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.85, depthWrite: false }));
+      veil.position.set(x, 1.3, 0.3);
+      veil.renderOrder = 10;
+      this.scene.add(veil);
     }
     // 状態
     this.firing = false;
@@ -111,7 +117,7 @@ export class PachinkoGame {
   setPower(p) { this.power = Math.max(0, Math.min(1, p)); this.refreshTray(); }
 
   push() {
-    this.board.pushBtn.position.y = 0.912; setTimeout(() => { this.board.pushBtn.position.y = 0.92; }, 120);
+    this.board.pushBtn.userData.press = 1;
     this.haptics.vibrate('button');
     if (this.board.lights.pushPrompt) {
       this.board.lights.pushPrompt = false;
@@ -170,6 +176,7 @@ export class PachinkoGame {
     const bl = this.board.lights;
     bl.frameMode = L.round ? 'round' : L.mode === 'st' ? 'rainbow' : 'idle';
     bl.frameHue = L.mode === 'jitan' ? 0.4 : 0.9;
+    bl.firing = this.firing;
     this.board.update(dt, t, this.world, this.power);
     this.glow.intensity = 0.05 + bl.flash * 0.8 + (L.round ? 0.25 : 0);
     // カメラ
@@ -281,6 +288,7 @@ export class PachinkoGame {
       this.audio.play('lose', { gain: 0.35, rate: 1.1 });
     }
     this.save();
+    this.refreshData();
     this.onChange();
   }
 
@@ -306,6 +314,14 @@ export class PachinkoGame {
   refreshTray() {
     this.board.drawTray(this.balls, this.power, this.firing);
     this.board.setTrayBalls(this.balls);
+    this.refreshData();
+  }
+
+  // 台上のデータ表示機
+  refreshData() {
+    const S = this.logic.stats;
+    const k = S.ballsIn / this.cfg.money.lendBalls;
+    this.board.drawData({ ...S, perK: k > 0.5 ? S.heso / k : 0 }, this.t);
   }
 
   // カメラ: 縦画面は盤面と上皿・ハンドルが収まるように
@@ -315,9 +331,9 @@ export class PachinkoGame {
     this.camera.updateProjectionMatrix();
     const tanH = Math.tan(THREE.MathUtils.degToRad(17));
     const portrait = aspect < 0.9;
-    const halfH = portrait ? 0.5 : 0.44, halfW = portrait ? 0.29 : 0.5;
+    const halfH = portrait ? 0.62 : 0.72, halfW = portrait ? 0.32 : 0.5; // 台上のデータ表示機から下皿まで
     this.dist = Math.max(halfH / tanH, halfW / (tanH * aspect));
-    this.ty = portrait ? 1.27 : 1.15;
+    this.ty = portrait ? 1.38 : 1.4;
   }
 
   save() { this.machine.pach = this.logic.serialize(); }

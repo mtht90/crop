@@ -43,10 +43,10 @@ export class Neighbor {
       const o = orig[i], c = cl[i];
       if (!c || !o.isMesh) continue;
       const map = o.material && o.material.map;
-      if (map && map === cab.artTex) c.material = new THREE.MeshStandardMaterial({ map: this.lcdTex, emissiveMap: this.lcdTex, emissive: 0xffffff, emissiveIntensity: 0.5, roughness: 0.3 });
-      else if (map && map === cab.counterTex) c.material = new THREE.MeshBasicMaterial({ map: this.counterTex, toneMapped: false, color: 0xbbbbbb });
-      else if (map && map === cab.segTex) c.material = new THREE.MeshBasicMaterial({ map: this.segTex, toneMapped: false, color: 0xbbbbbb });
-      else if (map && map === cab.changerTex) c.material = new THREE.MeshBasicMaterial({ map: this.changerTex, toneMapped: false, color: 0x999999 });
+      if (map && map === cab.artTex) c.material = new THREE.MeshStandardMaterial({ map: this.lcdTex, emissiveMap: this.lcdTex, emissive: 0xffffff, emissiveIntensity: 0.16, roughness: 0.3, color: 0x555555 });
+      else if (map && map === cab.counterTex) c.material = new THREE.MeshBasicMaterial({ map: this.counterTex, toneMapped: false, color: 0x4a4a4a });
+      else if (map && map === cab.segTex) c.material = new THREE.MeshBasicMaterial({ map: this.segTex, toneMapped: false, color: 0x4a4a4a });
+      else if (map && map === cab.changerTex) c.material = new THREE.MeshBasicMaterial({ map: this.changerTex, toneMapped: false, color: 0x3a3a3a });
       const ri = reelMeshes.indexOf(o);
       if (ri >= 0) this.reels[ri] = { mesh: c, s: Math.floor(Math.random() * 21), state: 'stopped', target: 0, v: 0 };
     }
@@ -115,7 +115,7 @@ export class Neighbor {
     this.mode = 'lit';
     this.pending = this.result.bonus;
     this.screen.set('lit', { premium: Math.random() < 0.1 });
-    this.audio.play('peka', { gain: 0.1, rate: 1.15 + Math.random() * 0.1 });
+    this.audio.play('peka', { gain: 0.06, rate: 1.15 + Math.random() * 0.1 });
   }
 
   endGame() {

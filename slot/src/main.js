@@ -179,8 +179,8 @@ function buildRoom(assets) {
   const dim = (m) => {
     if (!dimMats.has(m)) {
       const c = m.clone();
-      if (c.color) c.color.multiplyScalar(0.55);
-      if ('emissiveIntensity' in c) c.emissiveIntensity = Math.min(c.emissiveIntensity, 0.3);
+      if (c.color) c.color.multiplyScalar(0.3);
+      if ('emissiveIntensity' in c) c.emissiveIntensity = Math.min(c.emissiveIntensity, 0.1);
       if (reelMats.has(m)) c.emissiveIntensity = 0.5;
       dimMats.set(m, c);
     }
@@ -198,6 +198,11 @@ function buildRoom(assets) {
     n.position.x = x;
     scene.add(n);
     neighbors.push(new Neighbor({ cab, clone: n, x, cfg, audio }));
+    // 手前に半透明の暗幕を置いて、隣の台の存在感を薄くする
+    const veil = new THREE.Mesh(new THREE.PlaneGeometry(0.98, 2.4), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.88, depthWrite: false }));
+    veil.position.set(x, 1.4, 0.75);
+    veil.renderOrder = 10;
+    scene.add(veil);
   }
   if (!assets.hall.length) return;
   // 奥のアーケードホール (Kenney Mini Arcade)
