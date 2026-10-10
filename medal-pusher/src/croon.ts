@@ -1,151 +1,142 @@
-// 筐体上部の「クルーン」抽選ステージ（物理・ルーレット型）。
-// ボールを外周の傾斜レーンに打ち出すと、壁沿いに何周も回りながら減速し、
-// 内側へ転がり落ちて回転する皿の10個のポケットのどれかに収まる。
+// 筐体上部の多段「クルーン抽選機」（物理）。
+// すり鉢状の皿に穴が開いていて、ボールは縁を回りながら内側へ転がり、穴の縁で粘って落ちる。
+// 周りの穴＝メダル配当、中央の穴＝次の段へ（最終段の中央は JACKPOT）。
 import RAPIER from '@dimforge/rapier3d-compat';
-import { CROON, PHYSICS } from './config.ts';
+import { CROON, PHYSICS, type CroonLabel, type CroonStageDef } from './config.ts';
 
 export type CroonPrize = number | 'JP';
-
-export type CroonState = 'idle' | 'spinning' | 'settled';
+export type CroonState = 'idle' | 'rolling' | 'transfer' | 'settled';
 
 type Quat = { x: number; y: number; z: number; w: number };
 
-/** 外周レーン（すり鉢状の傾斜）の高さ */
-export function trackY(r: number): number {
-  const t = (r - CROON.trackInner) / (CROON.radius - CROON.trackInner);
-  return CROON.trackInnerY + (CROON.trackOuterY - CROON.trackInnerY) * Math.max(0, Math.min(1, t));
+/** 皿の高さ（中心が一番低い、ゆるいすり鉢） */
+export function plateY(stage: CroonStageDef, r: number): number {
+  // 縁は急（バンク）で、中ほどはほぼ平ら → 縁を何周も回ってから内側へ降りてくる
+  const t = Math.min(1, r / stage.radius);
+  // 縁だけ急なバンク（t^4）で、内側はほぼ平ら＋中心へわずかに下る。
+  // 内側では周回を保てないので、ボールは穴の並ぶ輪を素早く横切る
+  return -stage.depth * (1 - t ** 4) - (stage.cone ?? CROON.coneDepth) * (1 - t);
 }
 
-/** 外周レーンの減速用の突起（ディフレクター）の位置 */
-export function deflectors(): { x: number; z: number; a: number }[] {
-  const out = [];
-  const r = CROON.trackInner + 0.06;
-  for (let i = 0; i < CROON.deflectorCount; i++) {
-    const a = (i / CROON.deflectorCount) * Math.PI * 2 + 0.2;
-    out.push({ x: Math.cos(a) * r, z: -Math.sin(a) * r, a });
-  }
+/** 皿のローカル座標での穴の位置（0〜5: 周り、6: 中央） */
+export function holeCenters(stage: CroonStageDef): { x: number; z: number; r: number; label: CroonLabel }[] {
+  const out = stage.holes.map((label, i) => {
+    const a = (i / stage.holes.length) * Math.PI * 2;
+    const rr = stage.radius * stage.holeRing;
+    return { x: Math.cos(a) * rr, z: -Math.sin(a) * rr, r: stage.holeRadius, label };
+  });
+  out.push({ x: 0, z: 0, r: stage.centerRadius, label: stage.center });
   return out;
+}
+
+/** 穴を開けた皿の三角形メッシュ（物理と描画で共用） */
+export function plateMesh(
+  stage: CroonStageDef,
+  part: 'all' | 'bank' | 'inner' = 'all',
+): { vertices: Float32Array; indices: Uint32Array; uvs: Float32Array } {
+  const nr = 56, na = 160;
+  const R = stage.radius;
+  const holes = holeCenters(stage);
+  const verts: number[] = [];
+  const uvs: number[] = [];
+  for (let i = 0; i <= nr; i++) {
+    const r = (i / nr) * R;
+    for (let j = 0; j <= na; j++) {
+      const a = (j / na) * Math.PI * 2;
+      const x = Math.cos(a) * r, z = -Math.sin(a) * r;
+      verts.push(x, plateY(stage, r), z);
+      uvs.push(0.5 + x / (2 * R), 0.5 - z / (2 * R));
+    }
+  }
+  const idx: number[] = [];
+  const v = (i: number, j: number) => i * (na + 1) + j;
+  const inHole = (x: number, z: number) => holes.some((h) => (x - h.x) ** 2 + (z - h.z) ** 2 < h.r * h.r);
+  const split = Math.round(nr * CROON.bankStart);
+  for (let i = 0; i < nr; i++) {
+    if (part === 'bank' && i < split) continue;
+    if (part === 'inner' && i >= split) continue;
+    for (let j = 0; j < na; j++) {
+      const r = ((i + 0.5) / nr) * R;
+      const a = ((j + 0.5) / na) * Math.PI * 2;
+      if (inHole(Math.cos(a) * r, -Math.sin(a) * r)) continue;
+      // 上向きの法線になる巻き順
+      idx.push(v(i, j), v(i + 1, j), v(i, j + 1), v(i + 1, j), v(i + 1, j + 1), v(i, j + 1));
+    }
+  }
+  return { vertices: new Float32Array(verts), indices: new Uint32Array(idx), uvs: new Float32Array(uvs) };
+}
+
+interface Stage {
+  def: CroonStageDef;
+  body: RAPIER.RigidBody;
+  angle: number;
 }
 
 export class CroonPhysics {
   readonly world: RAPIER.World;
   state: CroonState = 'idle';
-  angle = 0; // 皿の回転角
-  result: { index: number; prize: CroonPrize } | null = null;
-  onSettle?: (index: number, prize: CroonPrize) => void;
+  stageIndex = 0;
+  result: { stage: number; hole: number; prize: CroonPrize } | null = null;
+  /** 直前に落ちた穴（演出用） */
+  lastHole: { stage: number; hole: number } | null = null;
+  onSettle?: (prize: CroonPrize) => void;
+  onNext?: (toStage: number) => void;
   onBounce?: (strength: number) => void;
-  /** ボールが外周レーンを回っている間 true（効果音用） */
-  rolling = false;
+  onRim?: () => void;
 
-  private wheel: RAPIER.RigidBody;
+  private stages: Stage[] = [];
   private ball: RAPIER.RigidBody | null = null;
-  private spinTime = 0;
-  private stillTime = 0;
   private accumulator = 0;
+  private stageTime = 0;
+  private transferTime = 0;
   private lastSpeed = 0;
+  private stillTime = 0;
 
   constructor() {
-    this.world = new RAPIER.World({ x: 0, y: PHYSICS.gravity, z: 0 });
+    this.world = new RAPIER.World({ x: 0, y: CROON.gravity, z: 0 });
     this.world.timestep = PHYSICS.dt;
-    const W = CROON.wheelRadius;
-
-    // 回転する皿（床・中央の円錐・仕切り）
-    this.wheel = this.world.createRigidBody(RAPIER.RigidBodyDesc.kinematicPositionBased());
-    const col = (d: RAPIER.ColliderDesc, friction = 0.4, rest = 0.35) =>
-      this.world.createCollider(d.setFriction(friction).setRestitution(rest), this.wheel);
-    col(RAPIER.ColliderDesc.cylinder(0.15, W).setTranslation(0, -0.15, 0), 0.6, 0.2);
-    col(RAPIER.ColliderDesc.cone(CROON.coneHeight / 2, CROON.coneRadius).setTranslation(0, CROON.coneHeight / 2, 0), 0.0, 0.3);
-    const n = CROON.pockets.length;
-    const inner = CROON.coneRadius - 0.05;
-    const len = W - 0.04 - inner;
-    for (let i = 0; i < n; i++) {
-      const a = (i / n) * Math.PI * 2;
-      const mid = inner + len / 2;
-      col(
-        RAPIER.ColliderDesc.cuboid(len / 2, CROON.dividerHeight / 2, 0.05)
-          .setTranslation(Math.cos(a) * mid, CROON.dividerHeight / 2, -Math.sin(a) * mid)
-          .setRotation(yRot(a)),
-        0.1,
-        0.5,
+    for (const def of CROON.stages) {
+      const body = this.world.createRigidBody(
+        RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(def.x, def.y, def.z),
       );
+      // 外周のバンクはよく滑り（何周も回る）、内側は摩擦で周回が止まって穴へ向かう
+      for (const [part, friction] of [['bank', CROON.bankFriction], ['inner', CROON.plateFriction]] as const) {
+        const m = plateMesh(def, part);
+        this.world.createCollider(
+          RAPIER.ColliderDesc.trimesh(m.vertices, m.indices, RAPIER.TriMeshFlags.FIX_INTERNAL_EDGES)
+            .setFriction(friction)
+            .setFrictionCombineRule(RAPIER.CoefficientCombineRule.Min)
+            .setRestitution(0.15),
+          body,
+        );
+      }
+      this.addWall(def);
+      this.stages.push({ def, body, angle: 0 });
     }
+  }
 
-    // 外周レーン（回転しない、すり鉢状の傾斜面）。なめらかに回れるよう三角形メッシュで作る
-    const segs = 256;
-    const verts: number[] = [];
+  /** 外周の壁（なめらかな円筒、法線は内向き）と天井 */
+  private addWall(def: CroonStageDef): void {
+    const segs = 160;
+    const R = def.radius + 0.02;
+    const v: number[] = [];
     const idx: number[] = [];
-    const r0 = CROON.trackInner, r1 = CROON.radius + 0.05;
     for (let i = 0; i <= segs; i++) {
       const a = (i / segs) * Math.PI * 2;
-      const c = Math.cos(a), s = -Math.sin(a);
-      verts.push(c * r0, trackY(r0), s * r0, c * r1, trackY(r1), s * r1);
+      const x = def.x + Math.cos(a) * R, z = def.z - Math.sin(a) * R;
+      v.push(x, def.y - 0.3, z, x, def.y + 1.2, z);
       if (i < segs) {
         const k = i * 2;
         idx.push(k, k + 1, k + 2, k + 1, k + 3, k + 2);
       }
     }
     this.world.createCollider(
-      RAPIER.ColliderDesc.trimesh(new Float32Array(verts), new Uint32Array(idx), RAPIER.TriMeshFlags.FIX_INTERNAL_EDGES)
-        .setFriction(0.02)
-        .setFrictionCombineRule(RAPIER.CoefficientCombineRule.Min)
-        .setRestitution(0)
-        .setRestitutionCombineRule(RAPIER.CoefficientCombineRule.Min),
-    );
-    // レーン上の突起（ボールを弾いて落ちる場所をばらけさせる）
-    for (const d of deflectors()) {
-      this.world.createCollider(
-        RAPIER.ColliderDesc.cuboid(0.14, 0.09, 0.14)
-          .setTranslation(d.x, trackY(CROON.trackInner + 0.06) + 0.04, d.z)
-          .setRotation(yRot(d.a + Math.PI / 4))
-          .setFriction(0.1)
-          .setRestitution(0.6),
-      );
-    }
-
-    // 外周の壁（回転しない）。継ぎ目で減速しないよう、なめらかな円筒メッシュ
-    const R = CROON.radius;
-    const wv: number[] = [];
-    const wi: number[] = [];
-    for (let i = 0; i <= segs; i++) {
-      const a = (i / segs) * Math.PI * 2;
-      const c = Math.cos(a) * R, s = -Math.sin(a) * R;
-      wv.push(c, 0, s, c, 2.4, s);
-      if (i < segs) {
-        const k = i * 2;
-        wi.push(k, k + 1, k + 2, k + 1, k + 3, k + 2); // 法線が内向きになる巻き順
-      }
-    }
-    this.world.createCollider(
-      RAPIER.ColliderDesc.trimesh(new Float32Array(wv), new Uint32Array(wi), RAPIER.TriMeshFlags.FIX_INTERNAL_EDGES)
+      RAPIER.ColliderDesc.trimesh(new Float32Array(v), new Uint32Array(idx), RAPIER.TriMeshFlags.FIX_INTERNAL_EDGES)
         .setFriction(0)
         .setFrictionCombineRule(RAPIER.CoefficientCombineRule.Min)
-        .setRestitution(0)
-        .setRestitutionCombineRule(RAPIER.CoefficientCombineRule.Min),
+        .setRestitution(0.1),
     );
-    // レーン内側の縁から下へのスカート（レーンの下にボールが潜り込まないように）
-    const sv: number[] = [];
-    const si: number[] = [];
-    const rs = CROON.trackInner;
-    for (let i = 0; i <= segs; i++) {
-      const a = (i / segs) * Math.PI * 2;
-      const c = Math.cos(a) * rs, s = -Math.sin(a) * rs;
-      sv.push(c, -0.3, s, c, CROON.trackInnerY, s);
-      if (i < segs) {
-        const k = i * 2;
-        // 法線が内向き（皿の側）
-        si.push(k, k + 1, k + 2, k + 1, k + 3, k + 2);
-      }
-    }
-    this.world.createCollider(
-      RAPIER.ColliderDesc.trimesh(new Float32Array(sv), new Uint32Array(si), RAPIER.TriMeshFlags.FIX_INTERNAL_EDGES)
-        .setFriction(0.1)
-        .setRestitution(0.4),
-    );
-    // 万一抜けても落ちきらない床
-    this.world.createCollider(RAPIER.ColliderDesc.cylinder(0.1, R + 0.2).setTranslation(0, -0.5, 0));
-
-    // ガラスの天井（ボールが飛び出さないように）
-    this.world.createCollider(RAPIER.ColliderDesc.cylinder(0.05, R + 0.3).setTranslation(0, 2.4, 0));
+    this.world.createCollider(RAPIER.ColliderDesc.cylinder(0.05, R + 0.2).setTranslation(def.x, def.y + 1.25, def.z));
   }
 
   get busy(): boolean {
@@ -160,31 +151,47 @@ export class CroonPhysics {
     return this.ball ? this.ball.rotation() : null;
   }
 
-  /** ボールを外周レーンに打ち出して抽選開始 */
+  /** 次の段へ移動中の進み具合（0→1） */
+  get transferProgress(): number {
+    return 1 - Math.max(0, this.transferTime) / CROON.transferSeconds;
+  }
+
+  stageAngle(i: number): number {
+    return this.stages[i].angle;
+  }
+
+  /** 1段目から抽選開始 */
   start(): void {
-    if (this.ball) this.world.removeRigidBody(this.ball);
-    this.state = 'spinning';
     this.result = null;
-    this.spinTime = 0;
+    this.lastHole = null;
+    this.launch(0);
+  }
+
+  private launch(stageIndex: number): void {
+    if (this.ball) this.world.removeRigidBody(this.ball);
+    this.stageIndex = stageIndex;
+    this.state = 'rolling';
+    this.stageTime = 0;
     this.stillTime = 0;
-    const a = Math.random() * Math.PI * 2;
-    const r = CROON.radius - CROON.ballRadius - 0.05;
-    // 皿と逆向き（時計回り）に打ち出す。接線方向 = (sin a, 0, cos a)
-    const speed = CROON.launchSpeed * (0.9 + Math.random() * 0.2);
+    const def = CROON.stages[stageIndex];
+    // シュートの出口（固定位置）から打ち出す。皿は回っているので穴との位置関係は毎回変わる
+    const a = def.launchAngle + (Math.random() - 0.5) * 0.3;
+    const r = def.radius - CROON.ballRadius - 0.04;
+    // 皿の縁に沿って（時計回りに）打ち出す。接線方向 = (sin a, 0, cos a)
+    const speed = def.launchSpeed * (0.85 + Math.random() * 0.3);
     this.ball = this.world.createRigidBody(
       RAPIER.RigidBodyDesc.dynamic()
-        .setTranslation(Math.cos(a) * r, trackY(r) + CROON.ballRadius + 0.2, -Math.sin(a) * r)
+        .setTranslation(def.x + Math.cos(a) * r, def.y + plateY(def, r) + CROON.ballRadius + 0.08, def.z - Math.sin(a) * r)
         .setLinvel(Math.sin(a) * speed, 0, Math.cos(a) * speed)
         .setCcdEnabled(true)
         .setCanSleep(false)
         .setLinearDamping(CROON.ballDamping)
-        .setAngularDamping(0.8),
+        .setAngularDamping(CROON.ballSpinDamping),
     );
     this.world.createCollider(
-      RAPIER.ColliderDesc.ball(CROON.ballRadius).setDensity(1).setFriction(0.3).setRestitution(0.35),
+      RAPIER.ColliderDesc.ball(CROON.ballRadius).setDensity(1).setFriction(0.4).setRestitution(0.3),
       this.ball,
     );
-    this.rolling = true;
   }
 
   /** 結果表示が終わったら呼ぶ */
@@ -192,13 +199,7 @@ export class CroonPhysics {
     if (this.ball) this.world.removeRigidBody(this.ball);
     this.ball = null;
     this.state = 'idle';
-    this.rolling = false;
-  }
-
-  private omega(): number {
-    // 最初は速く、だんだん遅く（止まりはしない）
-    const t = this.state === 'idle' ? 99 : this.spinTime;
-    return CROON.idleSpeed + (CROON.startSpeed - CROON.idleSpeed) * Math.exp(-t / CROON.spinDecay);
+    this.stageIndex = 0;
   }
 
   update(frameDt: number): void {
@@ -214,53 +215,76 @@ export class CroonPhysics {
 
   step(): void {
     const dt = PHYSICS.dt;
-    if (this.state !== 'idle') this.spinTime += dt;
-    const w = this.omega();
-    this.angle = (this.angle + w * dt) % (Math.PI * 2);
-    this.wheel.setNextKinematicRotation(yRot(this.angle));
+    for (const s of this.stages) {
+      s.angle = (s.angle + s.def.spin * dt) % (Math.PI * 2);
+      s.body.setNextKinematicRotation(yRot(s.angle));
+    }
     this.world.step();
-    if (this.state !== 'spinning' || !this.ball) return;
 
+    if (this.state === 'transfer') {
+      this.transferTime -= dt;
+      if (this.transferTime <= 0) this.launch(this.stageIndex + 1);
+      return;
+    }
+    if (this.state !== 'rolling' || !this.ball) return;
+    this.stageTime += dt;
+    const def = CROON.stages[this.stageIndex];
+    const stage = this.stages[this.stageIndex];
     const p = this.ball.translation();
     const v = this.ball.linvel();
     const speed = Math.hypot(v.x, v.y, v.z);
-    if (this.lastSpeed - speed > 2.5) this.onBounce?.(Math.min(1, (this.lastSpeed - speed) / 8));
+    if (this.lastSpeed - speed > 2) this.onBounce?.(Math.min(1, (this.lastSpeed - speed) / 6));
     this.lastSpeed = speed;
-    const r = Math.hypot(p.x, p.z);
-    // まれに高速で壁を抜けたら打ち直す
-    if (r > CROON.radius + 0.3 || p.y < -0.3) {
-      this.start();
+
+    // 皿のローカル座標（皿は y 軸まわりに angle だけ回っている）
+    const dx = p.x - def.x, dz = p.z - def.z;
+    const c = Math.cos(stage.angle), s = Math.sin(stage.angle);
+    // ワールド→ローカル: 角度を -angle 回す（ローカル角 = atan2(-z, x)）
+    const lx = dx * c - dz * s;
+    const lz = dx * s + dz * c;
+    const r = Math.hypot(lx, lz);
+    const below = p.y - def.y - plateY(def, Math.min(r, def.radius));
+
+    // 穴に落ちた（皿面よりボール1個ぶん以上下がった）
+    if (below < -CROON.ballRadius * 1.2 || p.y < def.y - 1.5) {
+      const holes = holeCenters(def);
+      let best = 0, bestD = Infinity;
+      holes.forEach((h, i) => {
+        const d = (lx - h.x) ** 2 + (lz - h.z) ** 2;
+        if (d < bestD) {
+          bestD = d;
+          best = i;
+        }
+      });
+      this.lastHole = { stage: this.stageIndex, hole: best };
+      const label = holes[best].label;
+      if (label === 'NEXT' && this.stageIndex < CROON.stages.length - 1) {
+        this.state = 'transfer';
+        this.transferTime = CROON.transferSeconds;
+        this.world.removeRigidBody(this.ball);
+        this.ball = null;
+        this.onNext?.(this.stageIndex + 1);
+      } else {
+        const prize: CroonPrize = label === 'NEXT' ? 'JP' : label;
+        this.result = { stage: this.stageIndex, hole: best, prize };
+        this.state = 'settled';
+        this.onSettle?.(prize);
+      }
       return;
     }
-    this.rolling = r > CROON.trackInner;
-    // 皿と一緒に回っている（相対速度が小さい）かどうか
-    // y軸まわり角速度 w の回転で、点 (x, z) の速度は (w*z, -w*x)
-    const rel = Math.hypot(v.x - w * p.z, v.z + w * p.x, v.y);
-    // 円錐の上で止まりかけたら外へ押し出す
-    if (r < CROON.coneRadius && speed < 0.5) {
-      const k = 0.08 / Math.max(r, 0.01);
-      this.ball.applyImpulse({ x: (p.x || 0.01) * k, y: 0, z: p.z * k }, true);
-    }
-    const inPocket = r > CROON.coneRadius + 0.05 && r < CROON.wheelRadius && p.y < CROON.ballRadius + 0.25;
-    if (inPocket && rel < 0.6) this.stillTime += dt;
-    else this.stillTime = 0;
-    if (this.stillTime > 0.8 || this.spinTime > CROON.timeout) {
-      const index = this.pocketAt(p.x, p.z);
-      const prize = CROON.pockets[index];
-      this.result = { index, prize };
-      this.state = 'settled';
-      this.rolling = false;
-      this.onSettle?.(index, prize);
-    }
-  }
+    // 穴の縁で粘っている（ゆっくり）ときの音
+    if (speed < 1.2 && speed > 0.2 && Math.random() < 0.02) this.onRim?.();
 
-  /** 皿の上の (x, z) がどのポケットか */
-  pocketAt(x: number, z: number): number {
-    const n = CROON.pockets.length;
-    // 皿のローカル角度（setRotation と同じ向き: atan2(-z, x)）
-    let a = Math.atan2(-z, x) - this.angle;
-    a = ((a % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
-    return Math.floor(a / ((Math.PI * 2) / n)) % n;
+    // 皿の上で完全に止まってしまったら軽く揺らす（皿が回っているので通常は起きない）
+    // 皿上の点の速度は (spin*dz, -spin*dx)
+    const rel = Math.hypot(v.x - stage.def.spin * dz, v.z + stage.def.spin * dx);
+    this.stillTime = rel < 0.15 ? this.stillTime + dt : 0;
+    if (this.stillTime > 1.5) {
+      this.stillTime = 0;
+      this.ball.applyImpulse({ x: (Math.random() - 0.5) * 0.4, y: 0.05, z: (Math.random() - 0.5) * 0.4 }, true);
+    }
+    // 万一の飛び出し
+    if (r > def.radius + 0.5 || p.y > def.y + 2) this.launch(this.stageIndex);
   }
 }
 

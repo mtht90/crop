@@ -398,6 +398,6 @@ export class SlotScreen {
     c.fillText('▲  CROON  ▲', W / 2, 420);
     c.font = '700 30px Orbitron, sans-serif';
     c.fillStyle = '#9ff';
-    c.fillText('JP ×1   100 ×1   30 ×2   20 ×2   10 ×4', W / 2, 490);
+    c.fillText('STAGE 1  →  STAGE 2  →  FINAL : 中央で JACKPOT', W / 2, 490);
   }
 }

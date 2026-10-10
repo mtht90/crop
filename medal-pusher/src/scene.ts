@@ -3,8 +3,8 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
-import { BALL, BOARD, COIN, CROON, FIELD, GAME, PAYOUT, PUSHER, TRAY } from './config.ts';
-import { trackY, type CroonPhysics } from './croon.ts';
+import { BALL, BOARD, COIN, CROON, FIELD, GAME, PAYOUT, PUSHER, TRAY, type CroonStageDef } from './config.ts';
+import { holeCenters, plateMesh, plateY, type CroonPhysics } from './croon.ts';
 import { loadHDR, loadModel, pbrMaterial } from './assets.ts';
 import { boardPins, laneDividers, WALL_DOWN_Y, WALL_UP_Y, type PusherPhysics } from './physics.ts';
 
@@ -15,7 +15,7 @@ const GLASS_TOP = 9.2;
 const SCREEN = { y: 13.1, w: 10.4, h: 6.5 };
 const ROOF_TOP = SCREEN.y + SCREEN.h / 2 + 1.75;
 // 上部クルーンの位置（台座の上に皿を置く）
-const CROON_POS = new THREE.Vector3(0, ROOF_TOP + 1.3, BOARD.backZ + 1.2);
+const CROON_POS = new THREE.Vector3(0, ROOF_TOP + 1.0, BOARD.backZ + 1.0);
 
 export class PusherScene {
   readonly renderer: THREE.WebGLRenderer;
@@ -41,10 +41,14 @@ export class PusherScene {
   private cameraBase = new THREE.Vector3(0, 18.5, 32.5);
   parallax = new THREE.Vector2();
   private croonGroup!: THREE.Group;
-  private croonWheel!: THREE.Group;
+  private croonPlates: THREE.Group[] = [];
+  private croonRings: THREE.Mesh[][] = [];
+  private croonTubes: THREE.CatmullRomCurve3[] = [];
+  private croonStageTarget = new THREE.Vector3();
+  private croonStageCam = new THREE.Vector3();
+  private croonFlash = 0;
   private croonBall!: THREE.Mesh;
   private croonFocus = 0;
-  private croonHighlight!: THREE.Mesh;
   private croonFocusTarget = 0;
   private croonCamPos = new THREE.Vector3(0, CROON_POS.y + 11.5, CROON_POS.z + 5.5);
   private croonCamTarget = CROON_POS.clone();
@@ -446,7 +450,7 @@ export class PusherScene {
 
     // 上部の看板
     const sign = this.textPlane('MEDAL PUSHER', 7.4, 1.1, '#ffffff', '#ff2a8a', 'italic 900');
-    sign.position.set(0, ROOF_TOP + 0.65, CROON_POS.z + CROON.radius + 0.75);
+    sign.position.set(0, ROOF_TOP + 0.3, CROON_POS.z + 5.4);
     this.scene.add(sign);
   }
 
@@ -510,14 +514,15 @@ export class PusherScene {
       });
       const box = new THREE.Box3().setFromObject(chest);
       const size = box.getSize(new THREE.Vector3());
-      const s = 2.2 / Math.max(size.x, size.z);
+      const s = 6 / Math.max(size.x, size.z);
       chest.scale.setScalar(s);
       chest.position.set(-(box.min.x + size.x / 2) * s, -box.min.y * s, -(box.min.z + size.z / 2) * s);
       // 天板の左右に宝箱を飾る（フィーバー時に回転）
       for (const sx of [-1, 1]) {
         const holder = new THREE.Group();
         holder.add(sx < 0 ? chest : chest.clone());
-        holder.position.set(sx * (CAB_HW - 0.9), SCREEN.y + SCREEN.h / 2 + 1.75, BOARD.backZ + 1.0);
+        holder.position.set(sx * (CAB_HW + 3.2), FLOOR_Y, -2);
+        holder.userData.baseY = FLOOR_Y;
         holder.rotation.y = -sx * 0.35;
         holder.userData.baseRot = holder.rotation.y;
         this.chests.push(holder);
@@ -527,193 +532,253 @@ export class PusherScene {
   }
 
   private buildCroon(m: Awaited<ReturnType<PusherScene['loadMaterials']>>): void {
-    const R = CROON.radius;
     const g = new THREE.Group();
     g.position.copy(CROON_POS);
     this.scene.add(g);
     this.croonGroup = g;
-    // 台座の下の天板（筐体の上に張り出す）
-    const base = new THREE.Mesh(new THREE.BoxGeometry(CAB_HW * 2 + 0.2, 0.5, R * 2 + 1.6), m.body);
-    base.position.set(0, ROOF_TOP - CROON_POS.y - 0.25 + 0.01, 0);
+    const roofY = ROOF_TOP - CROON_POS.y;
+    // 筐体の上に張り出す土台
+    const base = new THREE.Mesh(new THREE.BoxGeometry(CAB_HW * 2 + 2.6, 0.5, 9.4), m.body);
+    base.position.set(0, roofY - 0.25 + 0.01, 0.6);
     base.castShadow = true;
     base.receiveShadow = true;
     g.add(base);
-    // 台座
-    const ped = new THREE.Mesh(new THREE.CylinderGeometry(R + 0.6, R + 0.9, 1.3, 48), m.bodyRed);
-    ped.position.y = -0.65 - 0.3;
-    ped.castShadow = true;
-    ped.receiveShadow = true;
-    g.add(ped);
-    // 外周（下部はクローム、上はガラス）とネオンリング
-    const band = new THREE.Mesh(new THREE.CylinderGeometry(R + 0.3, R + 0.3, 0.6, 48, 1, true), m.chrome);
-    band.position.y = 0;
-    g.add(band);
-    const rim = new THREE.Mesh(
-      new THREE.CylinderGeometry(R + 0.3, R + 0.3, 2.0, 48, 1, true),
-      new THREE.MeshPhysicalMaterial({ color: 0xddeeff, transparent: true, opacity: 0.1, roughness: 0.05, side: THREE.DoubleSide, depthWrite: false }),
-    );
-    rim.position.y = 1.3;
-    g.add(rim);
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(R + 0.32, 0.08, 8, 64), this.neonMat(new THREE.Color(3, 0.4, 2.2), 0.4));
-    ring.rotation.x = Math.PI / 2;
-    ring.position.y = 2.2;
-    g.add(ring);
-    // ガラスの蓋
-    const lid = new THREE.Mesh(
-      new THREE.CircleGeometry(R + 0.3, 48),
-      new THREE.MeshPhysicalMaterial({ color: 0xffffff, transparent: true, opacity: 0.06, roughness: 0.05, depthWrite: false }),
-    );
-    lid.rotation.x = -Math.PI / 2;
-    lid.position.y = 2.45;
-    g.add(lid);
 
-    // 回転する皿
-    const wheel = new THREE.Group();
-    g.add(wheel);
-    this.croonWheel = wheel;
-    const n = CROON.pockets.length;
-    const canvas = document.createElement('canvas');
-    canvas.width = canvas.height = 1024;
-    const c = canvas.getContext('2d')!;
-    const cx = 512, rr = 512;
-    for (let i = 0; i < n; i++) {
-      const prize = CROON.pockets[i];
-      // 皿のローカル角 θ（atan2(-z, x)）はキャンバス上では -θ
-      const a0 = -((i + 1) / n) * Math.PI * 2, a1 = -(i / n) * Math.PI * 2;
-      c.beginPath();
-      c.moveTo(cx, cx);
-      c.arc(cx, cx, rr, a0, a1);
-      c.closePath();
-      c.fillStyle = prize === 'JP' ? '#d0168a' : (prize as number) >= 30 ? '#c98a12' : i % 2 ? '#1d2a8a' : '#13206a';
-      c.fill();
-      c.strokeStyle = '#fff3';
-      c.lineWidth = 4;
-      c.stroke();
-      const mid = (a0 + a1) / 2;
-      c.save();
-      c.translate(cx + Math.cos(mid) * rr * 0.75, cx + Math.sin(mid) * rr * 0.75);
-      c.rotate(mid + Math.PI / 2);
-      c.fillStyle = '#fff';
-      c.textAlign = 'center';
-      c.textBaseline = 'middle';
-      c.font = prize === 'JP' ? '900 92px Orbitron, sans-serif' : '900 84px Orbitron, sans-serif';
-      c.shadowColor = '#000';
-      c.shadowBlur = 10;
-      c.fillText(String(prize), 0, 0);
-      c.restore();
-    }
-    const tex = new THREE.CanvasTexture(canvas);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    tex.anisotropy = 8;
-    const W = CROON.wheelRadius;
-    const disc = new THREE.Mesh(
-      new THREE.CircleGeometry(W, 64),
-      new THREE.MeshStandardMaterial({ map: tex, roughness: 0.35, metalness: 0.1, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.12 }),
-    );
-    disc.rotation.x = -Math.PI / 2;
-    disc.receiveShadow = true;
-    wheel.add(disc);
-    const cone = new THREE.Mesh(new THREE.ConeGeometry(CROON.coneRadius, CROON.coneHeight, 40), m.gold);
-    cone.position.y = CROON.coneHeight / 2;
-    cone.castShadow = true;
-    wheel.add(cone);
-    const inner = CROON.coneRadius - 0.05;
-    const len = W - 0.04 - inner;
-    for (let i = 0; i < n; i++) {
-      const a = (i / n) * Math.PI * 2;
-      const d = new THREE.Mesh(new THREE.BoxGeometry(len, CROON.dividerHeight, 0.1), m.chrome);
-      const mid = inner + len / 2;
-      d.position.set(Math.cos(a) * mid, CROON.dividerHeight / 2, -Math.sin(a) * mid);
-      d.rotation.y = a;
-      d.castShadow = true;
-      wheel.add(d);
-    }
-    // 結果のハイライト（ポケット1つ分の扇形）
-    const hl = new THREE.Mesh(
-      new THREE.RingGeometry(CROON.coneRadius, W, 24, 1, 0, (Math.PI * 2) / n),
-      new THREE.MeshBasicMaterial({ color: 0xffdd33, transparent: true, opacity: 0.55, toneMapped: false, depthWrite: false, side: THREE.DoubleSide }),
-    );
-    const hlPivot = new THREE.Group();
-    hlPivot.rotation.x = -Math.PI / 2;
-    hlPivot.position.y = 0.02;
-    hlPivot.add(hl);
-    wheel.add(hlPivot);
-    this.croonHighlight = hl;
-    hl.visible = false;
-
-    // 外周の傾斜レーン（すり鉢）と内側のスカート
-    const segs = 128;
-    const pos: number[] = [];
-    const uv: number[] = [];
-    const index: number[] = [];
-    const r0 = CROON.trackInner, r1 = R;
-    for (let i = 0; i <= segs; i++) {
-      const a = (i / segs) * Math.PI * 2;
-      const c = Math.cos(a), sn = -Math.sin(a);
-      pos.push(c * r0, trackY(r0), sn * r0, c * r1, trackY(r1), sn * r1);
-      uv.push(i / segs * 12, 0, i / segs * 12, 1);
-      if (i < segs) {
-        const k = i * 2;
-        index.push(k, k + 1, k + 2, k + 1, k + 3, k + 2);
+    CROON.stages.forEach((def, si) => {
+      const stage = new THREE.Group();
+      stage.position.set(def.x, def.y, def.z);
+      g.add(stage);
+      const R = def.radius;
+      // 支柱
+      const colH = def.y - roofY - def.depth - 0.77;
+      if (colH > 0.05) {
+        const col = new THREE.Mesh(new THREE.CylinderGeometry(R * 0.35, R * 0.5, colH, 32), m.chrome);
+        col.position.y = -def.depth - 0.77 - colH / 2;
+        col.castShadow = true;
+        stage.add(col);
       }
+      // 皿の裏（台座）
+      // 皿の面より下に置く（皿の上に重ならないように）
+      const under = new THREE.Mesh(new THREE.CylinderGeometry(R + 0.12, R * 0.8, 0.3, 64), m.bodyRed);
+      under.position.y = -def.depth - 0.62;
+      stage.add(under);
+
+      // 回転する皿（穴あき）
+      const plate = new THREE.Group();
+      stage.add(plate);
+      this.croonPlates.push(plate);
+      const mesh = plateMesh(def, 'all');
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(mesh.vertices, 3));
+      geo.setAttribute('uv', new THREE.BufferAttribute(mesh.uvs, 2));
+      geo.setIndex(new THREE.BufferAttribute(mesh.indices, 1));
+      geo.computeVertexNormals();
+      const tex = this.plateTexture(def, si);
+      const plateMat = new THREE.MeshPhysicalMaterial({
+        map: tex,
+        roughness: 0.25,
+        clearcoat: 1,
+        clearcoatRoughness: 0.08,
+        emissiveMap: tex,
+        emissive: 0xffffff,
+        emissiveIntensity: 0.18,
+        side: THREE.DoubleSide,
+      });
+      const pm = new THREE.Mesh(geo, plateMat);
+      pm.receiveShadow = true;
+      plate.add(pm);
+      // 穴の縁（クロームのリング）と穴の中の暗い筒
+      const rings: THREE.Mesh[] = [];
+      holeCenters(def).forEach((h) => {
+        const y = plateY(def, Math.hypot(h.x, h.z));
+        const ring = new THREE.Mesh(
+          new THREE.TorusGeometry(h.r + 0.02, 0.035, 8, 32),
+          new THREE.MeshStandardMaterial({ color: 0xdddddd, metalness: 1, roughness: 0.25, emissive: 0x000000 }),
+        );
+        ring.rotation.x = Math.PI / 2;
+        ring.position.set(h.x, y + 0.01, h.z);
+        plate.add(ring);
+        rings.push(ring);
+        const pit = new THREE.Mesh(
+          new THREE.CylinderGeometry(h.r, h.r, 0.3, 24, 1, true),
+          new THREE.MeshBasicMaterial({ color: 0x050208, side: THREE.BackSide }),
+        );
+        pit.position.set(h.x, y - 0.15, h.z);
+        plate.add(pit);
+      });
+      this.croonRings.push(rings);
+
+      // 外周：クロームの帯＋ガラスの壁＋ステージ色のネオン
+      const band = new THREE.Mesh(new THREE.CylinderGeometry(R + 0.12, R + 0.12, 0.35, 64, 1, true), m.chrome);
+      band.position.y = 0.05;
+      stage.add(band);
+      const glass = new THREE.Mesh(
+        new THREE.CylinderGeometry(R + 0.1, R + 0.1, 1.1, 64, 1, true),
+        new THREE.MeshPhysicalMaterial({ color: 0xffffff, transparent: true, opacity: 0.08, roughness: 0.05, side: THREE.DoubleSide, depthWrite: false }),
+      );
+      glass.position.y = 0.75;
+      stage.add(glass);
+      const c = new THREE.Color(def.color);
+      const neon = new THREE.Mesh(
+        new THREE.TorusGeometry(R + 0.13, 0.05, 8, 96),
+        this.neonMat(new THREE.Color(c.r * 2.6, c.g * 2.6, c.b * 2.6), si * 0.3),
+      );
+      neon.rotation.x = Math.PI / 2;
+      neon.position.y = 1.3;
+      stage.add(neon);
+      // 段の名前
+      const label = this.textPlane(si === CROON.stages.length - 1 ? 'FINAL' : `STAGE ${si + 1}`, 1.8, 0.38, '#ffffff', def.color);
+      // 外周の帯の正面に貼る（皿の上に重ならないように）
+      label.position.set(0, -0.55, R + 0.2);
+      stage.add(label);
+      // 照明
+      const spot = new THREE.SpotLight(0xffffff, 60 + R * 20, 14, 0.8, 0.5, 2);
+      spot.position.set(0, 6, 2);
+      spot.target = plate;
+      stage.add(spot);
+    });
+
+    // 段と段をつなぐ透明なシュート（NEXT に入ったボールが通る）
+    const tubeMat = new THREE.MeshPhysicalMaterial({ color: 0xddeeff, transparent: true, opacity: 0.18, roughness: 0.05, depthWrite: false });
+    for (let i = 0; i < CROON.stages.length - 1; i++) {
+      const a = CROON.stages[i], b = CROON.stages[i + 1];
+      const exit = new THREE.Vector3(a.x, a.y - a.depth - 0.6, a.z);
+      const rb = b.radius - CROON.ballRadius - 0.04;
+      const entry = new THREE.Vector3(b.x + Math.cos(b.launchAngle) * rb, b.y + 0.35, b.z - Math.sin(b.launchAngle) * rb);
+      const mid = exit.clone().lerp(entry, 0.5);
+      mid.z -= 2.2;
+      mid.y = Math.min(exit.y, entry.y + 1.2);
+      const curve = new THREE.CatmullRomCurve3([exit, exit.clone().add(new THREE.Vector3(0, -0.6, -0.6)), mid, entry.clone().add(new THREE.Vector3(0, 0.6, 0)), entry]);
+      this.croonTubes.push(curve);
+      const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, 48, CROON.ballRadius + 0.08, 12, false), tubeMat);
+      g.add(tube);
     }
-    const railGeo = new THREE.BufferGeometry();
-    railGeo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-    railGeo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
-    railGeo.setIndex(index);
-    railGeo.computeVertexNormals();
-    const railMat = m.pusherTop.clone();
-    railMat.color.set(0x8a6a3a);
-    railMat.side = THREE.DoubleSide;
-    const rail = new THREE.Mesh(railGeo, railMat);
-    rail.receiveShadow = true;
-    g.add(rail);
-    const skirt = new THREE.Mesh(new THREE.CylinderGeometry(r0, r0, CROON.trackInnerY + 0.3, 64, 1, true), m.chrome.clone());
-    skirt.position.y = (CROON.trackInnerY - 0.3) / 2;
-    (skirt.material as THREE.Material).side = THREE.DoubleSide;
-    g.add(skirt);
-    const lane = new THREE.Mesh(new THREE.TorusGeometry(r0 + 0.02, 0.04, 6, 96), this.neonMat(new THREE.Color(0.3, 2.0, 3.0), 0.7));
-    lane.rotation.x = Math.PI / 2;
-    lane.position.y = CROON.trackInnerY + 0.02;
-    g.add(lane);
 
     // ボール
     const ballMat = m.chrome.clone();
-    ballMat.emissive = new THREE.Color(0.6, 0.5, 0.1);
+    ballMat.emissive = new THREE.Color(0.4, 0.35, 0.1);
     ballMat.emissiveIntensity = 0.5;
     this.croonBall = new THREE.Mesh(new THREE.SphereGeometry(CROON.ballRadius, 32, 20), ballMat);
     this.croonBall.castShadow = true;
     this.croonBall.visible = false;
     g.add(this.croonBall);
-    // クルーンを照らすライト
-    const spot = new THREE.SpotLight(0xffffff, 140, 20, 0.7, 0.5, 2);
-    spot.position.set(0, 9, 3);
-    spot.target = wheel;
-    g.add(spot);
+  }
+
+  /** 皿の模様（ステージ色の放射ストライプ＋穴の配当） */
+  private plateTexture(def: CroonStageDef, si: number): THREE.CanvasTexture {
+    const S = 1024;
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = S;
+    const c = canvas.getContext('2d')!;
+    const R = def.radius;
+    const toPx = (v: number) => S / 2 + (v / (2 * R)) * S;
+    const base = new THREE.Color(def.color);
+    const g = c.createRadialGradient(S / 2, S / 2, 0, S / 2, S / 2, S / 2);
+    g.addColorStop(0, '#' + base.clone().offsetHSL(0, 0, 0.12).getHexString());
+    g.addColorStop(0.7, def.color);
+    g.addColorStop(1, '#' + base.clone().offsetHSL(0, 0, -0.18).getHexString());
+    c.fillStyle = g;
+    c.fillRect(0, 0, S, S);
+    // 放射ストライプ
+    c.save();
+    c.translate(S / 2, S / 2);
+    for (let i = 0; i < 24; i++) {
+      c.rotate((Math.PI * 2) / 24);
+      c.fillStyle = i % 2 ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)';
+      c.beginPath();
+      c.moveTo(0, 0);
+      c.arc(0, 0, S / 2, 0, (Math.PI * 2) / 24);
+      c.fill();
+    }
+    c.restore();
+    // バンクの境目のライン
+    c.strokeStyle = 'rgba(255,255,255,0.55)';
+    c.lineWidth = 6;
+    c.beginPath();
+    c.arc(S / 2, S / 2, (S / 2) * CROON.bankStart, 0, Math.PI * 2);
+    c.stroke();
+    // 穴の配当
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    holeCenters(def).forEach((h, i) => {
+      const isCenter = i === holeCenters(def).length - 1;
+      const text = h.label === 'NEXT' ? 'NEXT' : String(h.label);
+      // 穴の外側（中心から離れる方向）に文字を置く
+      const rr = Math.hypot(h.x, h.z);
+      const off = isCenter ? 0 : h.r + 0.32;
+      const lx = isCenter ? 0 : h.x + (h.x / rr) * off;
+      const lz = isCenter ? -(h.r + 0.3) : h.z + (h.z / rr) * off;
+      c.save();
+      c.translate(toPx(lx), toPx(lz));
+      c.font = `900 ${isCenter ? 74 : 64}px Orbitron, sans-serif`;
+      c.lineWidth = 10;
+      c.strokeStyle = 'rgba(40,0,30,0.85)';
+      c.strokeText(text, 0, 0);
+      c.fillStyle = h.label === 'JP' ? '#fff27a' : h.label === 'NEXT' ? '#ffffff' : '#ffe9a8';
+      c.fillText(text, 0, 0);
+      c.restore();
+    });
+    // 中央の穴のまわりの輪
+    c.strokeStyle = def.center === 'JP' ? '#fff27a' : '#ffffff';
+    c.lineWidth = 8;
+    c.beginPath();
+    c.arc(S / 2, S / 2, toPx(def.centerRadius + 0.14) - S / 2, 0, Math.PI * 2);
+    c.stroke();
+    void si;
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 8;
+    return tex;
   }
 
   focusCroon(on: boolean): void {
     this.croonFocusTarget = on ? 1 : 0;
   }
 
+  /** カメラを指定の段へ */
+  focusCroonStage(i: number): void {
+    const def = CROON.stages[i];
+    const target = CROON_POS.clone().add(new THREE.Vector3(def.x, def.y - 0.2, def.z));
+    this.croonStageTarget.copy(target);
+    this.croonStageCam.copy(target).add(new THREE.Vector3(def.x * 0.15, 4.2 + def.radius * 1.6, 3.2 + def.radius * 1.3));
+    // まだ寄っていないときは、寄り先をいきなり合わせる
+    if (this.croonFocus < 0.05) {
+      this.croonCamTarget.copy(this.croonStageTarget);
+      this.croonCamPos.copy(this.croonStageCam);
+    }
+  }
+
+  flashCroonHole(): void {
+    this.croonFlash = 3;
+  }
+
   updateCroon(croon: CroonPhysics): void {
-    this.croonWheel.rotation.y = croon.angle;
-    // 入ったポケットを点滅させる
+    // カメラの寄り先をなめらかに移動
+    this.croonCamTarget.lerp(this.croonStageTarget, 0.06);
+    this.croonCamPos.lerp(this.croonStageCam, 0.06);
+    CROON.stages.forEach((_, i) => {
+      this.croonPlates[i].rotation.y = croon.stageAngle(i);
+      this.croonRings[i].forEach((ring) => (ring.material as THREE.MeshStandardMaterial).emissive.setRGB(0, 0, 0));
+    });
+    // 入った穴を光らせる
     const res = croon.state === 'settled' ? croon.result : null;
-    this.croonHighlight.visible = !!res;
     if (res) {
-      const n = CROON.pockets.length;
-      this.croonHighlight.rotation.z = (res.index / n) * Math.PI * 2;
-      const m = this.croonHighlight.material as THREE.MeshBasicMaterial;
-      m.opacity = 0.45 + 0.35 * Math.sin(this.time * 12);
-      m.color.set(res.prize === 'JP' ? 0xff33cc : 0xffdd33).multiplyScalar(2.2);
+      const k = 0.5 + 0.5 * Math.sin(this.time * 14);
+      const col = res.prize === 'JP' ? [3, 0.6, 2.4] : [3, 2.4, 0.4];
+      (this.croonRings[res.stage][res.hole].material as THREE.MeshStandardMaterial).emissive.setRGB(col[0] * k, col[1] * k, col[2] * k);
     }
     const p = croon.ballPosition;
     const r = croon.ballRotation;
-    this.croonBall.visible = !!p;
-    if (p && r) {
-      this.croonBall.position.set(p.x, p.y, p.z);
-      this.croonBall.quaternion.set(r.x, r.y, r.z, r.w);
+    if (croon.state === 'transfer' && croon.stageIndex < this.croonTubes.length) {
+      // シュートの中を通って次の段へ
+      this.croonBall.visible = true;
+      this.croonBall.position.copy(this.croonTubes[croon.stageIndex].getPoint(Math.min(1, croon.transferProgress)));
+    } else {
+      this.croonBall.visible = !!p;
+      if (p && r) {
+        this.croonBall.position.set(p.x, p.y, p.z);
+        this.croonBall.quaternion.set(r.x, r.y, r.z, r.w);
+      }
     }
   }
 
@@ -825,7 +890,7 @@ export class PusherScene {
     this.chests.forEach((c, i) => {
       if (this.chestSpin > 0) c.rotation.y += dt * 6 * (i === 0 ? 1 : -1);
       else c.rotation.y += (c.userData.baseRot - c.rotation.y) * 0.08;
-      c.position.y = SCREEN.y + SCREEN.h / 2 + 1.75 + Math.sin(this.time * 1.5 + i) * 0.08;
+      c.position.y = c.userData.baseY + (this.chestSpin > 0 ? Math.abs(Math.sin(this.time * 6 + i)) * 0.8 : 0);
     });
 
     // カメラ（クルーン抽選中はクルーンへ寄る）

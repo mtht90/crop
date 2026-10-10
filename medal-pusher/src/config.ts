@@ -81,26 +81,50 @@ export const PHYSICS = {
   maxSubSteps: 4,
 };
 
-// 上部クルーン（ローカル座標。scene 側で筐体上に配置）。ルーレット型
+// 上部の多段クルーン抽選機（scene 側で筐体上に配置する、グループ内のローカル座標）
+export type CroonLabel = number | 'JP' | 'NEXT';
+export interface CroonStageDef {
+  x: number;
+  y: number;
+  z: number;
+  radius: number;
+  depth: number; // すり鉢の深さ
+  cone?: number; // 内側の中心へ向かう傾き（省略時は CROON.coneDepth）
+  holeRing: number; // 周りの穴の位置（半径に対する比）
+  holeRadius: number;
+  centerRadius: number;
+  spin: number; // 皿の回転 rad/s
+  launchAngle: number; // ボールが打ち出される外周の位置（ローカル角 atan2(-z, x)）
+  launchSpeed: number;
+  holes: CroonLabel[]; // 周りの穴（反時計回り）
+  center: CroonLabel;
+  color: string;
+}
+
 export const CROON = {
-  radius: 3.3, // 外周の壁の内側
-  wheelRadius: 2.5, // 回転する皿（ポケット）の半径
-  trackInner: 2.5, // 外周レーンの内側の縁
-  trackInnerY: 0.42,
-  trackOuterY: 0.95,
-  deflectorCount: 0, // 斜面の突起はボールが引っかかるので無し
-  coneRadius: 1.0,
-  coneHeight: 0.7,
-  dividerHeight: 0.42,
-  ballRadius: 0.38,
-  launchSpeed: 13,
-  ballDamping: 0.05, // 大きいほど早く減速して落ちる
-  startSpeed: 2.2, // 皿の回転 rad/s
-  idleSpeed: 0.6,
-  spinDecay: 5,
-  timeout: 25,
-  // 反時計回りに並ぶポケット。どれも同じ広さなので確率は各1/10
-  pockets: ['JP', 10, 30, 10, 20, 100, 10, 20, 10, 30] as (number | 'JP')[],
+  ballRadius: 0.22,
+  gravity: -14, // 盤面より弱い重力で、ふわっと転がって穴を飛び越えたりする
+  ballDamping: 0.05,
+  plateFriction: 0.5,
+  bankFriction: 0.02, // 外周のバンク（よく滑る）
+  bankStart: 0.72, // バンクが始まる位置（半径に対する比） // 皿の摩擦。逆回転の皿がボールの周回を止めて内側へ落とす
+  coneDepth: 0.1,
+  ballSpinDamping: 8, // ボールの回転の減衰。大きいと滑り摩擦が効き、逆回転の皿で周回が止まる // 皿の内側の中心へ向かう傾き（大きいほど中央の穴に入りやすい）
+  transferSeconds: 0.9, // NEXT に入ってから次の段に打ち出されるまで
+  stages: [
+    {
+      x: -4.0, y: 2.2, z: -1.2, radius: 2.0, depth: 0.6, holeRing: 0.5, holeRadius: 0.235, centerRadius: 0.245,
+      spin: 0.35, launchAngle: 1.2, launchSpeed: 4.6, holes: [10, 10, 20, 10, 10, 20], center: 'NEXT', color: '#ff3d8b',
+    },
+    {
+      x: 4.0, y: 1.2, z: -1.2, radius: 2.0, depth: 0.6, holeRing: 0.5, holeRadius: 0.245, centerRadius: 0.24,
+      spin: -0.4, launchAngle: Math.PI, launchSpeed: 4.6, holes: [20, 30, 20, 30, 20, 50], center: 'NEXT', color: '#3d8bff',
+    },
+    {
+      x: 0, y: 0, z: 2.0, radius: 2.6, depth: 0.7, cone: 0.074, holeRing: 0.5, holeRadius: 0.265, centerRadius: 0.228,
+      spin: 0.3, launchAngle: 0.67, launchSpeed: 5.2, holes: [50, 100, 50, 200, 50, 100], center: 'JP', color: '#ffb000',
+    },
+  ] as CroonStageDef[],
 };
 
 // 疑似課金のメダル購入プラン（実際の支払いは発生しない）

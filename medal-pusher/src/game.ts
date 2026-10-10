@@ -1,4 +1,4 @@
-import { BOARD, FIELD, GAME, PAYOUT, SHOP } from './config.ts';
+import { BOARD, CROON, FIELD, GAME, PAYOUT, SHOP } from './config.ts';
 import { CroonPhysics, type CroonPrize } from './croon.ts';
 import { PusherPhysics, type SavedField } from './physics.ts';
 import { SlotScreen, type SpinResult } from './slot.ts';
@@ -89,7 +89,15 @@ export class Game {
       },
       onResult: (r) => this.onSpinResult(r),
     };
-    this.croon.onSettle = (_i, prize) => this.onCroonResult(prize);
+    this.croon.onSettle = (prize) => this.onCroonResult(prize);
+    this.croon.onNext = (stage) => {
+      this.view.focusCroonStage(stage);
+      this.audio.play(stage === 2 ? 'bigWin' : 'checker');
+      this.audio.duckBgm(10);
+      this.slot.showMessage(stage === 2 ? 'FINAL STAGE!!' : 'NEXT STAGE!', '#f6f', 999);
+      this.onToast?.(stage === 2 ? 'FINAL STAGE！ 中央に入れば JACKPOT' : 'NEXT！ 2段目へ', 'jp');
+    };
+    this.croon.onRim = () => this.audio.play('reelTick', { volume: 0.3, minInterval: 0.1, rate: 0.8 });
     this.croon.onBounce = (k) => this.audio.play('reelStop', { volume: 0.2 + k * 0.6, minInterval: 0.06, rate: 1.2 });
   }
 
@@ -198,12 +206,14 @@ export class Game {
       this.audio.duckBgm(6);
       this.view.fever(8);
       this.slot.showMessage(`JACKPOT!! ${amount}`, '#f6f', 5);
+      this.view.flashCroonHole();
       this.onToast?.(`★ JACKPOT ★  ${amount} 枚獲得！`, 'jp');
     } else {
       // クルーンの配当は直接クレジットへ
       this.addCredit(prize);
       this.audio.play(prize >= 50 ? 'bigWin' : 'smallWin');
       this.slot.showMessage(`CROON +${prize}`, '#ff6', 4);
+      this.view.flashCroonHole();
       this.onToast?.(`クルーン  +${prize} 枚`, 'win');
     }
     this.onChange?.();
@@ -264,6 +274,7 @@ export class Game {
         this.croonTimer = 0;
         this.slot.setChance(true);
         this.view.focusCroon(true);
+        this.view.focusCroonStage(0);
         this.audio.play('jpChance');
         this.audio.play('ballRelease');
         this.audio.duckBgm(12);
@@ -274,20 +285,24 @@ export class Game {
       return;
     }
     this.croonTimer += dt;
-    // 外周を転がる音（ボールが一定角度進むごとにカラカラ）
+    // 転がる音（ボールが一定角度進むごとにカラカラ）
     const p = this.croon.ballPosition;
-    if (p && this.croon.rolling) {
-      const a = Math.atan2(p.z, p.x);
+    if (p && this.croon.state === 'rolling') {
+      const st = this.croon.stageIndex;
+      const def = CROON.stages[st];
+      const a = Math.atan2(p.z - def.z, p.x - def.x);
       if (this.lastBallAngle !== null) {
         let d = Math.abs(a - this.lastBallAngle);
         if (d > Math.PI) d = Math.PI * 2 - d;
         this.rollAccum += d;
-        if (this.rollAccum > 0.45) {
+        if (this.rollAccum > 0.6) {
           this.rollAccum = 0;
-          this.audio.play('reelTick', { volume: 0.35, minInterval: 0.03, rate: 1.3 });
+          this.audio.play('reelTick', { volume: 0.3, minInterval: 0.04, rate: 1.3 });
         }
       }
       this.lastBallAngle = a;
+    } else {
+      this.lastBallAngle = null;
     }
     if (this.croonPhase === 'result' && this.croonTimer > 3.2) {
       this.croon.finish();
