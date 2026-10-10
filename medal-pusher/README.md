@@ -33,8 +33,6 @@ npm run build    # dist/ に静的ファイルを出力（どこにでも置け�
 ```bash
 node --experimental-strip-types scripts/sim.ts 300          # 300秒ぶん投入し続けて獲得/ロスト/チェッカー回数を表示
 AIM=1 node --experimental-strip-types scripts/sim.ts 300    # 中央付近を狙った場合
-```
-
 node --experimental-strip-types scripts/croon-sim.ts 400     # クルーンの出目の偏りを確認
 ```
 
