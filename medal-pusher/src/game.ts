@@ -40,8 +40,8 @@ export class Game {
   private pendingJpChance = 0;
   private saveTimer = 0;
   private jackpotFrac = 0;
-  /** クルーン演出の段階: 'none' → 'intro'（カメラ移動） → 'spin' → 'result' */
-  private croonPhase: 'none' | 'intro' | 'spin' | 'result' = 'none';
+  /** クルーン演出の段階: 'none' → 'spin' → 'result' */
+  private croonPhase: 'none' | 'spin' | 'result' = 'none';
   private croonTimer = 0;
   readonly croon = new CroonPhysics();
 
@@ -225,30 +225,48 @@ export class Game {
   private updateCroon(dt: number): void {
     this.croon.update(dt);
     if (this.croonPhase === 'none') {
-      if (this.pendingJpChance > 0 && !this.slot.busy) {
+      // ボールが落ちたら待たずにすぐ打ち出す。カメラは回っている間に寄っていく
+      if (this.pendingJpChance > 0) {
         this.pendingJpChance--;
-        this.croonPhase = 'intro';
+        this.croonPhase = 'spin';
         this.croonTimer = 0;
         this.slot.setChance(true);
         this.view.focusCroon(true);
         this.audio.play('jpChance');
-        this.audio.duckBgm(8);
+        this.audio.play('ballRelease');
+        this.audio.duckBgm(12);
+        this.croon.start();
+        this.lastBallAngle = null;
         this.onToast?.('JP CHANCE！ クルーン抽選', 'jp');
       }
       return;
     }
     this.croonTimer += dt;
-    if (this.croonPhase === 'intro' && this.croonTimer > 1.4) {
-      this.croonPhase = 'spin';
-      this.audio.play('ballRelease');
-      this.croon.start();
-    } else if (this.croonPhase === 'result' && this.croonTimer > 3.2) {
+    // 外周を転がる音（ボールが一定角度進むごとにカラカラ）
+    const p = this.croon.ballPosition;
+    if (p && this.croon.rolling) {
+      const a = Math.atan2(p.z, p.x);
+      if (this.lastBallAngle !== null) {
+        let d = Math.abs(a - this.lastBallAngle);
+        if (d > Math.PI) d = Math.PI * 2 - d;
+        this.rollAccum += d;
+        if (this.rollAccum > 0.45) {
+          this.rollAccum = 0;
+          this.audio.play('reelTick', { volume: 0.35, minInterval: 0.03, rate: 1.3 });
+        }
+      }
+      this.lastBallAngle = a;
+    }
+    if (this.croonPhase === 'result' && this.croonTimer > 3.2) {
       this.croon.finish();
       this.croonPhase = 'none';
       this.slot.setChance(false);
       this.view.focusCroon(false);
     }
   }
+
+  private lastBallAngle: number | null = null;
+  private rollAccum = 0;
 
   update(dt: number): void {
     // JPチャンス（クルーン）はスロットが空いたら開始
@@ -293,7 +311,7 @@ export class Game {
       // 盤面にいる投入中のメダルはセーブ対象外なので、その分はクレジットに戻す
       payoutQueue: this.payoutQueue,
       // 抽選中のJPチャンスは再開時にやり直す
-      jpChances: this.pendingJpChance + (this.croonPhase === 'intro' || this.croonPhase === 'spin' ? 1 : 0),
+      jpChances: this.pendingJpChance + (this.croonPhase === 'spin' ? 1 : 0),
       stats: this.stats,
       field: this.physics.serialize(),
     };

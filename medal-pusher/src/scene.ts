@@ -4,7 +4,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { BALL, BOARD, COIN, CROON, FIELD, GAME, PAYOUT, PUSHER, TRAY } from './config.ts';
-import type { CroonPhysics } from './croon.ts';
+import { trackY, type CroonPhysics } from './croon.ts';
 import { loadHDR, loadModel, pbrMaterial } from './assets.ts';
 import { boardPins, laneDividers, type PusherPhysics } from './physics.ts';
 
@@ -532,7 +532,7 @@ export class PusherScene {
       new THREE.MeshPhysicalMaterial({ color: 0xffffff, transparent: true, opacity: 0.06, roughness: 0.05, depthWrite: false }),
     );
     lid.rotation.x = -Math.PI / 2;
-    lid.position.y = 2.55;
+    lid.position.y = 2.45;
     g.add(lid);
 
     // 回転する皿
@@ -573,8 +573,9 @@ export class PusherScene {
     const tex = new THREE.CanvasTexture(canvas);
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.anisotropy = 8;
+    const W = CROON.wheelRadius;
     const disc = new THREE.Mesh(
-      new THREE.CircleGeometry(R, 64),
+      new THREE.CircleGeometry(W, 64),
       new THREE.MeshStandardMaterial({ map: tex, roughness: 0.35, metalness: 0.1, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.12 }),
     );
     disc.rotation.x = -Math.PI / 2;
@@ -585,7 +586,7 @@ export class PusherScene {
     cone.castShadow = true;
     wheel.add(cone);
     const inner = CROON.coneRadius - 0.05;
-    const len = R - inner;
+    const len = W - 0.04 - inner;
     for (let i = 0; i < n; i++) {
       const a = (i / n) * Math.PI * 2;
       const d = new THREE.Mesh(new THREE.BoxGeometry(len, CROON.dividerHeight, 0.1), m.chrome);
@@ -595,6 +596,42 @@ export class PusherScene {
       d.castShadow = true;
       wheel.add(d);
     }
+    // 外周の傾斜レーン（すり鉢）と内側のスカート
+    const segs = 128;
+    const pos: number[] = [];
+    const uv: number[] = [];
+    const index: number[] = [];
+    const r0 = CROON.trackInner, r1 = R;
+    for (let i = 0; i <= segs; i++) {
+      const a = (i / segs) * Math.PI * 2;
+      const c = Math.cos(a), sn = -Math.sin(a);
+      pos.push(c * r0, trackY(r0), sn * r0, c * r1, trackY(r1), sn * r1);
+      uv.push(i / segs * 12, 0, i / segs * 12, 1);
+      if (i < segs) {
+        const k = i * 2;
+        index.push(k, k + 1, k + 2, k + 1, k + 3, k + 2);
+      }
+    }
+    const railGeo = new THREE.BufferGeometry();
+    railGeo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    railGeo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    railGeo.setIndex(index);
+    railGeo.computeVertexNormals();
+    const railMat = m.pusherTop.clone();
+    railMat.color.set(0x8a6a3a);
+    railMat.side = THREE.DoubleSide;
+    const rail = new THREE.Mesh(railGeo, railMat);
+    rail.receiveShadow = true;
+    g.add(rail);
+    const skirt = new THREE.Mesh(new THREE.CylinderGeometry(r0, r0, CROON.trackInnerY + 0.3, 64, 1, true), m.chrome.clone());
+    skirt.position.y = (CROON.trackInnerY - 0.3) / 2;
+    (skirt.material as THREE.Material).side = THREE.DoubleSide;
+    g.add(skirt);
+    const lane = new THREE.Mesh(new THREE.TorusGeometry(r0 + 0.02, 0.04, 6, 96), this.neonMat(new THREE.Color(0.3, 2.0, 3.0), 0.7));
+    lane.rotation.x = Math.PI / 2;
+    lane.position.y = CROON.trackInnerY + 0.02;
+    g.add(lane);
+
     // ボール
     const ballMat = m.chrome.clone();
     ballMat.emissive = new THREE.Color(0.6, 0.5, 0.1);

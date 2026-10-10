@@ -78,16 +78,24 @@ export const PHYSICS = {
   maxSubSteps: 4,
 };
 
-// 上部クルーン（ローカル座標。scene 側で筐体上に配置）
+// 上部クルーン（ローカル座標。scene 側で筐体上に配置）。ルーレット型
 export const CROON = {
-  radius: 3.0,
-  coneRadius: 1.35,
-  coneHeight: 1.1,
-  dividerHeight: 0.55,
-  ballRadius: 0.5,
-  startSpeed: 3.2, // rad/s
-  idleSpeed: 0.5,
-  spinDecay: 3,
+  radius: 3.3, // 外周の壁の内側
+  wheelRadius: 2.5, // 回転する皿（ポケット）の半径
+  trackInner: 2.5, // 外周レーンの内側の縁
+  trackInnerY: 0.42,
+  trackOuterY: 0.95,
+  deflectorCount: 0, // 斜面の突起はボールが引っかかるので無し
+  coneRadius: 1.0,
+  coneHeight: 0.7,
+  dividerHeight: 0.42,
+  ballRadius: 0.38,
+  launchSpeed: 13,
+  ballDamping: 0.05, // 大きいほど早く減速して落ちる
+  startSpeed: 2.2, // 皿の回転 rad/s
+  idleSpeed: 0.6,
+  spinDecay: 5,
+  timeout: 25,
   // 反時計回りに並ぶポケット。どれも同じ広さなので確率は各1/10
   pockets: ['JP', 10, 30, 10, 20, 100, 10, 20, 10, 30] as (number | 'JP')[],
 };

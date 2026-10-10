@@ -38,7 +38,7 @@ const STRIP: SymbolKey[] = [
 export type SpinResult = { kind: 'lose' } | { kind: 'win'; symbol: SymbolKey; payout: number; ball: boolean; fever: boolean };
 
 
-type Mode = 'idle' | 'spinning' | 'jp';
+type Mode = 'idle' | 'spinning';
 
 interface Reel {
   pos: number; // ストリップ上の位置（小数）
@@ -114,16 +114,19 @@ export class SlotScreen {
 
   /** JP抽選の結果がまだ出ていない */
   get jpInProgress(): boolean {
-    return this.mode === 'jp';
+    return this.chance;
   }
 
   /** クルーン抽選中はスロットを止めて「JP CHANCE」を表示 */
   setChance(on: boolean): void {
-    this.mode = on ? 'jp' : 'idle';
+    // スロットの回転はそのまま続け、新しい回転だけ止めて画面を「JP CHANCE」にする
+    this.chance = on;
     if (on) this.showMessage('JP CHANCE!!', '#f6f', 999);
     else this.showMessage('', '#9ff', 0);
     this.dirty = true;
   }
+
+  private chance = false;
 
   get busy(): boolean {
     return this.mode !== 'idle';
@@ -208,8 +211,8 @@ export class SlotScreen {
       this.dirty = true;
     }
     if (this.mode === 'spinning') this.updateReels(dt);
-    if (this.mode === 'jp') this.dirty = true;
-    if (this.mode === 'idle' && this.pending > 0) this.startSpin();
+    if (this.chance) this.dirty = true;
+    else if (this.mode === 'idle' && this.pending > 0) this.startSpin();
     if (this.time < this.flashUntil) this.dirty = true;
   }
 
@@ -297,7 +300,7 @@ export class SlotScreen {
     c.fillText(String(this.jackpot).padStart(4, '0'), W / 2, 118);
     c.shadowBlur = 0;
 
-    if (this.mode === 'jp') {
+    if (this.chance) {
       this.drawJp(c, W);
     } else {
       this.drawReels(c, W);
