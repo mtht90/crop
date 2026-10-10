@@ -118,6 +118,13 @@ export const CROON = {
   postHeight: 0.35,
   tensionRange: 0.75, // 中央の穴からこの距離以内でスロー演出
   tensionSpeed: 2.2, // この速さより遅いほどスローが強くなる
+  capDepth: 0.08, // 狙い以外の穴のフタの深さ（ボールが少し沈んで転がり出る）
+  steerStart: 2.5, // 打ち出してから狙いへ導き始めるまでの秒数
+  steerRamp: 4, // 導く力が最大になるまでの秒数
+  steerForce: 3.5, // 導く力（加速度）
+  reviveSink: 1.1, // 復活演出：沈んでから飛び出すまで
+  centerRates: [0.46, 0.46, 0.32], // 各段で中央（NEXT/JP）に入る率。JP ≒ 0.46×0.46×0.32 ≒ 1/15
+  reviveChance: 0.12, // 中央へ進むときに復活演出になる率
   slowAmount: 0.7, // スローの強さ（0.7 = 30% の速さ）
   slowBudget: 3, // 1段あたりのスロー時間の上限（秒）
   stages: [
@@ -128,12 +135,12 @@ export const CROON = {
     },
     {
       x: 4.8, y: 1.9, z: -1.4, radius: 2.6, depth: 0.7, cone: 0.1, holeRing: 0.5, holeRadius: 0.245, centerRadius: 0.24,
-      spin: -0.35, launchAngle: Math.PI, launchSpeed: 5.2, holes: [20, 30, 20, 30, 20, 50], center: 'NEXT', color: '#3d8bff',
+      spin: -0.35, launchAngle: Math.PI, launchSpeed: 5.2, holes: [20, 30, 20, 30, 20, 50], center: 'NEXT', color: '#2456d6',
       posts: { count: 4, ring: 0.24 },
     },
     {
       x: 0, y: 0, z: 2.4, radius: 3.2, depth: 0.8, cone: 0.06, holeRing: 0.5, holeRadius: 0.265, centerRadius: 0.228,
-      spin: 0.25, launchAngle: 0.7, launchSpeed: 5.8, holes: [50, 100, 50, 200, 50, 100], center: 'JP', color: '#ffb000',
+      spin: 0.25, launchAngle: 0.7, launchSpeed: 5.8, holes: [50, 100, 50, 200, 50, 100], center: 'JP', color: '#4a1a8a',
       posts: { count: 5, ring: 0.2 },
     },
   ] as CroonStageDef[],

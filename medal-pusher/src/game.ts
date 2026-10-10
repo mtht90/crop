@@ -1,5 +1,5 @@
 import { BOARD, CROON, FIELD, GAME, PAYOUT, SHOP } from './config.ts';
-import { CroonPhysics, type CroonPrize } from './croon.ts';
+import { CroonPhysics, holeCenters, rarityColor, type CroonBallColor, type CroonPlan, type CroonPrize } from './croon.ts';
 import { PusherPhysics, type SavedField } from './physics.ts';
 import { SlotScreen, type SpinResult } from './slot.ts';
 import type { AudioManager } from './audio.ts';
@@ -35,6 +35,8 @@ export class Game {
   stats: Stats = { inserted: 0, won: 0, jackpots: 0, bestCredit: GAME.startCredit };
   onChange?: () => void;
   onToast?: (text: string, kind?: 'win' | 'jp' | 'info') => void;
+  /** クルーン演出（画面フラッシュ・シェイク・大きな文字）。main 側で DOM 演出する */
+  onFx?: (fx: { flash?: string; shake?: number; text?: string; color?: string; sub?: string }) => void;
 
   private payoutQueue = 0;
   private payoutTimer = 0;
@@ -95,10 +97,33 @@ export class Game {
     this.croon.onNext = (stage) => {
       this.slowUsed = 0;
       this.view.focusCroonStage(stage);
-      this.audio.play(stage === 2 ? 'bigWin' : 'checker');
+      const final = stage === CROON.stages.length - 1;
+      this.audio.play(final ? 'bigWin' : 'checker');
       this.audio.duckBgm(10);
-      this.slot.showMessage(stage === 2 ? 'FINAL STAGE!!' : 'NEXT STAGE!', '#f6f', 999);
-      this.onToast?.(stage === 2 ? 'FINAL STAGE！ 中央に入れば JACKPOT' : 'NEXT！ 2段目へ', 'jp');
+      this.slot.showMessage(final ? 'FINAL STAGE!!' : 'NEXT STAGE!', '#f6f', 999);
+      // 3段目到達は赤以上確定
+      this.onFx?.(
+        final
+          ? { text: 'FINAL', sub: '赤以上確定', color: '#ff3355', flash: this.croonTier >= 3 && Math.random() < 0.7 ? '#ff2040' : '#ffffff', shake: 0.5 }
+          : { text: 'NEXT!!', color: '#7af', flash: '#ffffff' },
+      );
+    };
+    this.croon.onRevive = () => {
+      this.audio.play('reach', { volume: 1 });
+      this.audio.duckBgm(4);
+      // 沈んで…一拍おいて復活
+      setTimeout(() => {
+        this.audio.play('fanfare', { volume: 0.9 });
+        this.onFx?.({ text: '復活!!', color: '#ff3355', flash: '#ff2040', shake: 1 });
+      }, 650);
+    };
+    this.croon.onNearCenter = () => {
+      // 中央の穴（NEXT/JP）に近づいた：本当に入るときほどシェイクが出やすい
+      const going = this.croon.target === 6;
+      if (Math.random() < (going ? 0.65 : 0.15)) {
+        this.audio.play('ballDrop', { volume: 0.8 });
+        this.onFx?.({ shake: 0.6 });
+      }
     };
     this.croon.onRim = () => this.audio.play('reelTick', { volume: 0.3, minInterval: 0.1, rate: 0.8 });
     this.croon.onBounce = (k) => this.audio.play('reelStop', { volume: 0.2 + k * 0.6, minInterval: 0.06, rate: 1.2 });
@@ -207,6 +232,7 @@ export class Game {
       this.audio.duckBgm(6);
       this.view.fever(8);
       this.slot.showMessage(`JACKPOT!! ${amount}`, '#f6f', 5);
+      this.onFx?.({ text: 'JACKPOT!!', sub: `${amount} 枚`, color: '#ff66ff', flash: '#ffffff', shake: 1.2 });
       this.view.flashCroonHole();
       this.onToast?.(`★ JACKPOT ★  ${amount} 枚 払い出し！`, 'jp');
     } else {
@@ -214,6 +240,8 @@ export class Game {
       this.croonReward += prize;
       this.audio.play(prize >= 50 ? 'bigWin' : 'smallWin');
       this.slot.showMessage(`CROON +${prize}`, '#ff6', 4);
+      const rc = rarityColor(prize);
+      this.onFx?.({ text: `${prize} 枚`, sub: rc.name, color: rc.css, flash: prize >= 50 ? rc.css : undefined, shake: prize >= 100 ? 0.6 : 0 });
       this.view.flashCroonHole();
       this.onToast?.(`クルーン ${prize} 枚 払い出し`, 'win');
     }
@@ -279,8 +307,12 @@ export class Game {
         this.audio.play('jpChance');
         this.audio.play('ballRelease');
         this.audio.duckBgm(12);
-        this.croon.start();
+        const plan = this.makeCroonPlan();
+        this.croonTier = this.planTier(plan);
+        this.view.setCroonBall(plan.ballColor);
+        this.croon.start(plan);
         this.slowUsed = 0;
+        this.croonOpeningFx(plan);
         this.lastBallAngle = null;
         this.onToast?.('JP CHANCE！ クルーン抽選', 'jp');
       }
@@ -322,6 +354,78 @@ export class Game {
       this.slot.setChance(false);
       this.view.focusCroon(false);
     }
+  }
+
+  private croonTier = 1;
+
+  /**
+   * クルーンの結果を先に決める（オリパと同じ）。物理演出はこの結果へ導かれる。
+   * 中央（NEXT）へ進む率は 46% / 46%、FINAL の中央（JP）は 32%（JP ≒ 1/15）。
+   */
+  private makeCroonPlan(): CroonPlan {
+    const n = CROON.stages.length;
+    const holes: number[] = [];
+    for (let i = 0; i < n; i++) {
+      const pNext = CROON.centerRates[i];
+      if (Math.random() < pNext) holes.push(6);
+      else {
+        holes.push(Math.floor(Math.random() * 6));
+        break;
+      }
+    }
+    // 復活演出：次の段へ進む（または JP）ときに、まれに一度ハズレ穴へ落としてから飛び出す
+    let revive = -1;
+    for (let i = 0; i < holes.length; i++) {
+      if (holes[i] === 6 && Math.random() < CROON.reviveChance) {
+        revive = i;
+        break;
+      }
+    }
+    // 復活の「沈む穴」は安い穴（白・緑）を選ぶ
+    const def = CROON.stages[Math.max(0, revive)];
+    const cheap = holeCenters(def)
+      .slice(0, 6)
+      .map((h, i) => ({ v: typeof h.label === 'number' ? h.label : 999, i }))
+      .sort((a, b) => a.v - b.v)
+      .slice(0, 3);
+    const reviveHole = cheap[Math.floor(Math.random() * cheap.length)].i;
+    const plan: CroonPlan = { holes, revive, reviveHole, ballColor: 'white' };
+    plan.ballColor = this.pickBallColor(this.planTier(plan));
+    return plan;
+  }
+
+  /** 結果の格（1: 1段目の配当 … 4: JACKPOT） */
+  private planTier(plan: CroonPlan): number {
+    const last = plan.holes.length - 1;
+    if (last === CROON.stages.length - 1 && plan.holes[last] === 6) return 4;
+    return last + 1;
+  }
+
+  /** 開幕の球の色。良い結果ほど赤・金・虹が出やすい（ハズレでも赤が出る「ガセ」もある） */
+  private pickBallColor(tier: number): CroonBallColor {
+    const table: Record<number, [CroonBallColor, number][]> = {
+      1: [['white', 0.8], ['blue', 0.17], ['red', 0.03]],
+      2: [['white', 0.5], ['blue', 0.35], ['red', 0.15]],
+      3: [['blue', 0.3], ['red', 0.55], ['gold', 0.15]],
+      4: [['red', 0.45], ['gold', 0.4], ['rainbow', 0.15]],
+    };
+    let r = Math.random();
+    for (const [c, w] of table[tier]) {
+      r -= w;
+      if (r < 0) return c;
+    }
+    return 'white';
+  }
+
+  private croonOpeningFx(plan: CroonPlan): void {
+    const c = plan.ballColor;
+    if (c === 'white') return;
+    const color = { blue: '#4aa8ff', red: '#ff2040', gold: '#ffc23a', rainbow: '#ff66ff' }[c];
+    const text = { blue: '青球', red: '赤球!', gold: '金球!!', rainbow: '虹球!!!' }[c];
+    setTimeout(() => {
+      this.audio.play(c === 'blue' ? 'checker' : 'bigWin', { volume: 0.8 });
+      this.onFx?.({ text, color, flash: c === 'blue' ? undefined : color, shake: c === 'gold' || c === 'rainbow' ? 0.8 : 0 });
+    }, 500);
   }
 
   private lastBallAngle: number | null = null;
@@ -428,3 +532,4 @@ export class Game {
     }
   }
 }
+

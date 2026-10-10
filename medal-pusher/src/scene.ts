@@ -4,7 +4,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { BALL, BOARD, COIN, CROON, FIELD, GAME, PAYOUT, PUSHER, TRAY, type CroonStageDef } from './config.ts';
-import { holeCenters, plateMesh, plateY, postCenters, type CroonPhysics } from './croon.ts';
+import { holeCenters, plateMesh, plateY, postCenters, rarityColor, type CroonBallColor, type CroonPhysics } from './croon.ts';
 import { loadHDR, loadModel, pbrMaterial } from './assets.ts';
 import { boardPins, laneDividers, WALL_DOWN_Y, WALL_UP_Y, type PusherPhysics } from './physics.ts';
 
@@ -605,10 +605,12 @@ export class PusherScene {
       const rings: THREE.Mesh[] = [];
       holeCenters(def).forEach((h) => {
         const y = plateY(def, Math.hypot(h.x, h.z));
+        const rc = new THREE.Color(rarityColor(h.label).css);
         const ring = new THREE.Mesh(
-          new THREE.TorusGeometry(h.r + 0.02, 0.035, 8, 32),
-          new THREE.MeshStandardMaterial({ color: 0xdddddd, metalness: 1, roughness: 0.25, emissive: 0x000000 }),
+          new THREE.TorusGeometry(h.r + 0.03, 0.05, 8, 32),
+          new THREE.MeshStandardMaterial({ color: rc, metalness: 0.6, roughness: 0.25, emissive: rc, emissiveIntensity: 0.6 }),
         );
+        ring.userData.base = rc;
         ring.rotation.x = Math.PI / 2;
         ring.position.set(h.x, y + 0.01, h.z);
         plate.add(ring);
@@ -656,7 +658,7 @@ export class PusherScene {
       label.position.set(0, -0.55, R + 0.2);
       stage.add(label);
       // 照明
-      const spot = new THREE.SpotLight(0xffffff, 60 + R * 20, 14, 0.8, 0.5, 2);
+      const spot = new THREE.SpotLight(0xffffff, 35 + R * 12, 14, 0.8, 0.5, 2);
       spot.position.set(0, 6, 2);
       spot.target = plate;
       stage.add(spot);
@@ -775,6 +777,18 @@ export class PusherScene {
     // 穴の配当
     c.textAlign = 'center';
     c.textBaseline = 'middle';
+    holeCenters(def).forEach((h) => {
+      // 穴のまわりをレアリティ色の光の輪で囲む
+      const rc = rarityColor(h.label).css;
+      const g2 = c.createRadialGradient(toPx(h.x), toPx(h.z), 0, toPx(h.x), toPx(h.z), toPx(h.r + 0.32) - S / 2);
+      g2.addColorStop(0, rc);
+      g2.addColorStop(0.55, rc);
+      g2.addColorStop(1, 'rgba(0,0,0,0)');
+      c.fillStyle = g2;
+      c.beginPath();
+      c.arc(toPx(h.x), toPx(h.z), toPx(h.r + 0.32) - S / 2, 0, Math.PI * 2);
+      c.fill();
+    });
     holeCenters(def).forEach((h, i) => {
       const isCenter = i === holeCenters(def).length - 1;
       const text = h.label === 'NEXT' ? 'NEXT' : String(h.label);
@@ -789,7 +803,7 @@ export class PusherScene {
       c.lineWidth = 10;
       c.strokeStyle = 'rgba(40,0,30,0.85)';
       c.strokeText(text, 0, 0);
-      c.fillStyle = h.label === 'JP' ? '#fff27a' : h.label === 'NEXT' ? '#ffffff' : '#ffe9a8';
+      c.fillStyle = rarityColor(h.label).css;
       c.fillText(text, 0, 0);
       c.restore();
     });
@@ -815,7 +829,7 @@ export class PusherScene {
     const def = CROON.stages[i];
     const target = CROON_POS.clone().add(new THREE.Vector3(def.x, def.y - 0.2, def.z));
     this.croonStageTarget.copy(target);
-    this.croonStageCam.copy(target).add(new THREE.Vector3(def.x * 0.15, 4.2 + def.radius * 1.6, 3.2 + def.radius * 1.3));
+    this.croonStageCam.copy(target).add(new THREE.Vector3(0, 3.0 + def.radius * 2.2, 1.6 + def.radius * 1.15));
     // まだ寄っていないときは、寄り先をいきなり合わせる
     if (this.croonFocus < 0.05) {
       this.croonCamTarget.copy(this.croonStageTarget);
@@ -823,34 +837,46 @@ export class PusherScene {
     }
   }
 
+  private croonBallColor: CroonBallColor = 'white';
+
+  /** 開幕の球の色（白・青・赤・金・虹） */
+  setCroonBall(color: CroonBallColor): void {
+    this.croonBallColor = color;
+    const m = this.croonBall.material as THREE.MeshStandardMaterial;
+    const tint = { white: 0xffffff, blue: 0x4aa8ff, red: 0xff2a44, gold: 0xffc23a, rainbow: 0xffffff }[color];
+    m.color.set(tint);
+    m.emissive.set(color === 'white' ? 0x332a10 : tint);
+    m.emissiveIntensity = color === 'white' ? 0.5 : 0.8;
+  }
+
   /** 0〜1：スロー演出の強さ（ゲーム側から設定） */
   croonTension = 0;
-  private chaseDir = new THREE.Vector3(0, 0, 1);
 
-  /** ボールを低い角度から追いかけるカメラ。穴の縁で粘るとぐっと寄る */
+  /** オリパ風の固定カメラ：段ごとに皿全体を斜め上から映し、粘る場面だけボールへぐっと寄る */
   private updateCroonCamera(croon: CroonPhysics): void {
     let wantPos = this.croonStageCam;
     let wantTarget = this.croonStageTarget;
-    let k = 0.06;
+    let k = 0.07;
     const ball = this.croonBall.visible ? this.croonBall.position.clone().add(CROON_POS) : null;
-    if (ball && croon.state === 'rolling') {
-      const def = CROON.stages[croon.stageIndex];
-      const center = CROON_POS.clone().add(new THREE.Vector3(def.x, def.y, def.z));
-      const radial = ball.clone().sub(center).setY(0);
-      if (radial.length() > 0.3) this.chaseDir.lerp(radial.normalize(), 0.08).normalize();
-      const t = this.croonTension;
-      // 皿の外側・少し上から、ボール越しに中央の穴を見る
-      wantPos = ball.clone().addScaledVector(this.chaseDir, 2.6 - 1.3 * t).add(new THREE.Vector3(0, 2.0 - 0.8 * t, 0));
-      wantTarget = ball.clone().lerp(center, 0.45 - 0.25 * t);
-      k = 0.05 + 0.08 * t;
+    const t = this.croonTension;
+    if (ball && t > 0.05 && croon.state === 'rolling') {
+      wantPos = this.croonStageCam.clone().lerp(ball.clone().add(new THREE.Vector3(0, 2.6, 2.4)), t * 0.6);
+      wantTarget = this.croonStageTarget.clone().lerp(ball, t * 0.7);
+      k = 0.1;
     } else if (ball && croon.state === 'transfer') {
       // シュートの中を転がるボールを追う
       wantTarget = ball;
-      wantPos = ball.clone().add(new THREE.Vector3(0, 2.4, 3.6));
-      k = 0.08;
+      wantPos = ball.clone().add(new THREE.Vector3(0, 3.2, 4.2));
+      k = 0.09;
     }
     this.croonCamPos.lerp(wantPos, k);
     this.croonCamTarget.lerp(wantTarget, Math.min(1, k * 1.6));
+    // 虹球は色が流れる
+    if (this.croonBallColor === 'rainbow') {
+      const m = this.croonBall.material as THREE.MeshStandardMaterial;
+      m.emissive.setHSL((this.time * 0.6) % 1, 1, 0.55);
+      m.color.copy(m.emissive);
+    }
   }
 
   flashCroonHole(): void {
@@ -861,14 +887,20 @@ export class PusherScene {
     this.updateCroonCamera(croon);
     CROON.stages.forEach((_, i) => {
       this.croonPlates[i].rotation.y = croon.stageAngle(i);
-      this.croonRings[i].forEach((ring) => (ring.material as THREE.MeshStandardMaterial).emissive.setRGB(0, 0, 0));
+      this.croonRings[i].forEach((ring) => {
+        const mm = ring.material as THREE.MeshStandardMaterial;
+        mm.emissive.copy(ring.userData.base);
+        mm.emissiveIntensity = 0.6;
+      });
     });
     // 入った穴を光らせる
     const res = croon.state === 'settled' ? croon.result : null;
     if (res) {
       const k = 0.5 + 0.5 * Math.sin(this.time * 14);
       const col = res.prize === 'JP' ? [3, 0.6, 2.4] : [3, 2.4, 0.4];
-      (this.croonRings[res.stage][res.hole].material as THREE.MeshStandardMaterial).emissive.setRGB(col[0] * k, col[1] * k, col[2] * k);
+      const mm = this.croonRings[res.stage][res.hole].material as THREE.MeshStandardMaterial;
+      mm.emissive.setRGB(col[0] * k, col[1] * k, col[2] * k);
+      mm.emissiveIntensity = 1;
     }
     // ボールの位置：シュート内 / 穴に吸い込まれ中 / 皿の上（物理）
     let pos: { x: number; y: number; z: number } | null = null;

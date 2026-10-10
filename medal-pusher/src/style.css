@@ -446,3 +446,138 @@ button {
 .plans button:active {
   transform: scale(0.96);
 }
+
+/* クルーン演出（オリパ風）：暗転・フラッシュ・大きな文字・画面揺れ */
+#fx-vignette {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse at 50% 45%, rgba(0, 0, 0, 0) 35%, rgba(5, 0, 12, 0.85) 100%);
+  opacity: 0;
+  transition: opacity 0.6s;
+}
+
+#fx-vignette.on {
+  opacity: 1;
+}
+
+#fx-flash {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  mix-blend-mode: screen;
+}
+
+#fx-flash.go {
+  animation: fxflash 0.7s ease-out;
+}
+
+@keyframes fxflash {
+  0% {
+    opacity: 0.95;
+  }
+  25% {
+    opacity: 0.2;
+  }
+  40% {
+    opacity: 0.75;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+#fx-text {
+  position: fixed;
+  left: 50%;
+  top: 42%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  pointer-events: none;
+  opacity: 0;
+  width: 100%;
+}
+
+#fx-text .main {
+  font-family: Orbitron, 'M PLUS Rounded 1c', sans-serif;
+  font-weight: 900;
+  font-style: italic;
+  font-size: clamp(48px, 12vw, 120px);
+  letter-spacing: 0.04em;
+  -webkit-text-stroke: 3px rgba(20, 0, 20, 0.9);
+  paint-order: stroke fill;
+}
+
+#fx-text .sub {
+  font-weight: 800;
+  font-size: clamp(18px, 4vw, 34px);
+  color: #fff;
+  text-shadow: 0 0 10px rgba(0, 0, 0, 0.9);
+}
+
+#fx-text.go {
+  animation: fxtext 1.6s cubic-bezier(0.2, 1.4, 0.4, 1) forwards;
+}
+
+@keyframes fxtext {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(2.4);
+  }
+  14% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(0.92);
+  }
+  22% {
+    transform: translate(-50%, -50%) scale(1.04);
+  }
+  30% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.08);
+  }
+}
+
+#app.shake {
+  animation: shake var(--shake-dur, 0.5s) linear;
+}
+
+@keyframes shake {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  10% {
+    transform: translate(calc(var(--shake) * -14px), calc(var(--shake) * 8px));
+  }
+  20% {
+    transform: translate(calc(var(--shake) * 12px), calc(var(--shake) * -10px));
+  }
+  30% {
+    transform: translate(calc(var(--shake) * -10px), calc(var(--shake) * -6px));
+  }
+  40% {
+    transform: translate(calc(var(--shake) * 9px), calc(var(--shake) * 9px));
+  }
+  55% {
+    transform: translate(calc(var(--shake) * -6px), calc(var(--shake) * 4px));
+  }
+  70% {
+    transform: translate(calc(var(--shake) * 4px), calc(var(--shake) * -3px));
+  }
+  85% {
+    transform: translate(calc(var(--shake) * -2px), calc(var(--shake) * 2px));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #app.shake {
+    animation: none;
+  }
+}

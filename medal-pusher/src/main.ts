@@ -75,11 +75,40 @@ async function main(): Promise<void> {
     setTimeout(() => el.remove(), 2700);
   };
 
+  const app = $('app');
+  // --- クルーン演出（フラッシュ・シェイク・大きな文字） ---
+  const fxFlash = $('fx-flash');
+  const fxText = $('fx-text');
+  const fxVignette = $('fx-vignette');
+  const restart = (el: HTMLElement, cls: string) => {
+    el.classList.remove(cls);
+    void el.offsetWidth;
+    el.classList.add(cls);
+  };
+  game.onFx = (fx) => {
+    if (fx.flash) {
+      fxFlash.style.background = `radial-gradient(circle at 50% 45%, ${fx.flash}, ${fx.flash}aa 45%, ${fx.flash}33 100%)`;
+      restart(fxFlash, 'go');
+    }
+    if (fx.shake) {
+      app.style.setProperty('--shake', String(fx.shake));
+      app.style.setProperty('--shake-dur', `${0.35 + fx.shake * 0.35}s`);
+      restart(app, 'shake');
+    }
+    if (fx.text) {
+      const main = fxText.querySelector('.main') as HTMLElement;
+      main.textContent = fx.text;
+      main.style.color = fx.color ?? '#fff';
+      main.style.textShadow = `0 0 18px ${fx.color ?? '#fff'}, 0 0 40px ${fx.color ?? '#fff'}`;
+      (fxText.querySelector('.sub') as HTMLElement).textContent = fx.sub ?? '';
+      restart(fxText, 'go');
+    }
+  };
+
   // --- 入力 ---
   let firing = false;
   let fireTimer = 0;
   let auto = false;
-  const app = $('app');
   const setAim = (clientX: number, clientY: number) => {
     const nx = (clientX / window.innerWidth) * 2 - 1;
     const ny = (clientY / window.innerHeight) * 2 - 1;
@@ -251,6 +280,7 @@ async function main(): Promise<void> {
     game.update(dt);
     view.setLauncherX(game.launcherX);
     view.updateCroon(game.croon);
+    fxVignette.classList.toggle('on', game.croonActive);
     const dirty = slot.draw();
     view.render(dt, physics, dirty);
     refreshHud();

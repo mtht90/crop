@@ -6,7 +6,22 @@ import { CROON, PHYSICS, type CroonLabel, type CroonStageDef } from './config.ts
 
 
 export type CroonPrize = number | 'JP';
-export type CroonState = 'idle' | 'transfer' | 'rolling' | 'sinking' | 'settled';
+export type CroonState = 'idle' | 'transfer' | 'rolling' | 'sinking' | 'reviving' | 'settled';
+
+/** 開幕の球の色（オリパの「球色」予告） */
+export type CroonBallColor = 'white' | 'blue' | 'red' | 'gold' | 'rainbow';
+
+/**
+ * 抽選結果は投入時に決めておき（オリパと同じく内部で確定）、物理演出をそこへ導く。
+ * holes[i] = i段目で最終的に入る穴（0〜5: 周り、6: 中央）。
+ * revive = 復活演出をする段（その段で一度 reviveHole に落ちてから飛び出して中央へ）。-1 で無し。
+ */
+export interface CroonPlan {
+  holes: number[];
+  revive: number;
+  reviveHole: number;
+  ballColor: CroonBallColor;
+}
 
 type Quat = { x: number; y: number; z: number; w: number };
 
@@ -84,6 +99,8 @@ interface Stage {
   def: CroonStageDef;
   body: RAPIER.RigidBody;
   angle: number;
+  /** 穴ごとの見えないフタ（少し凹んだ位置）。狙い以外の穴はフタをして、縁で粘っても転がり出るようにする */
+  caps: RAPIER.Collider[];
 }
 
 export class CroonPhysics {
@@ -104,8 +121,17 @@ export class CroonPhysics {
   private stageTime = 0;
   private transferTime = 0;
   private lastSpeed = 0;
-  /** 0〜1：ボールが中央の穴（NEXT/JP）の近くで粘っている度合い */
+  /** 0〜1：ボールが狙いの穴か中央の穴の近くで粘っている度合い */
   tension = 0;
+  plan: CroonPlan = { holes: [0], revive: -1, reviveHole: 0, ballColor: 'white' };
+  /** いまの段で狙っている穴 */
+  target = 0;
+  private revived = false;
+  private reviveT = 0;
+  onRevive?: () => void;
+  /** ボールが中央の穴の縁に来た（シェイク演出などのきっかけ） */
+  onNearCenter?: () => void;
+  private nearCenterFired = false;
   private stillTime = 0;
 
   constructor() {
@@ -136,8 +162,17 @@ export class CroonPhysics {
           body,
         );
       }
+      const caps = holeCenters(def).map((h) =>
+        this.world.createCollider(
+          RAPIER.ColliderDesc.cylinder(0.03, h.r + 0.02)
+            .setTranslation(h.x, plateY(def, Math.hypot(h.x, h.z)) - CROON.capDepth - 0.03, h.z)
+            .setFriction(0.3)
+            .setRestitution(0.1),
+          body,
+        ),
+      );
       this.addWall(def);
-      this.stages.push({ def, body, angle: 0 });
+      this.stages.push({ def, body, angle: 0, caps });
     }
   }
 
@@ -210,7 +245,9 @@ export class CroonPhysics {
   }
 
   /** 抽選開始：ボールは投入シュートを転がって1段目に入る */
-  start(): void {
+  start(plan: CroonPlan): void {
+    this.plan = plan;
+    this.revived = false;
     this.result = null;
     this.lastHole = null;
     this.sink = null;
@@ -224,6 +261,9 @@ export class CroonPhysics {
     this.state = 'rolling';
     this.stageTime = 0;
     this.stillTime = 0;
+    this.nearCenterFired = false;
+    const reviveHere = this.plan.revive === stageIndex && !this.revived;
+    this.setTarget(stageIndex, reviveHere ? this.plan.reviveHole : this.plan.holes[stageIndex] ?? 6);
     const def = CROON.stages[stageIndex];
     // シュートの出口（固定位置）から打ち出す。皿は回っているので穴との位置関係は毎回変わる
     const a = def.launchAngle + (Math.random() - 0.5) * 0.3;
@@ -243,6 +283,11 @@ export class CroonPhysics {
       RAPIER.ColliderDesc.ball(CROON.ballRadius).setDensity(1).setFriction(0.4).setRestitution(0.3),
       this.ball,
     );
+  }
+
+  private setTarget(stage: number, hole: number): void {
+    this.target = hole;
+    this.stages.forEach((st, si) => st.caps.forEach((c, hi) => c.setEnabled(!(si === stage && hi === hole))));
   }
 
   /** 結果表示が終わったら呼ぶ */
@@ -277,6 +322,40 @@ export class CroonPhysics {
     if (this.state === 'transfer') {
       this.transferTime -= dt;
       if (this.transferTime <= 0) this.launch(this.transferTo);
+      return;
+    }
+    if (this.state === 'reviving' && this.sink) {
+      // 一度ハズレ穴に沈んで…飛び出して中央へ（復活）
+      this.reviveT += dt;
+      const hole = this.holeWorld(this.sink.stage, this.sink.hole);
+      if (this.reviveT < CROON.reviveSink) {
+        const d = Math.min(1, this.reviveT / 0.25);
+        this.sinkPosition = { x: hole.x, y: hole.y - CROON.ballRadius * (0.3 + 0.9 * d), z: hole.z };
+      } else {
+        this.sinkPosition = null;
+        this.revived = true;
+        const st = this.sink.stage;
+        const def = CROON.stages[st];
+        this.setTarget(st, 6);
+        this.state = 'rolling';
+        this.stageTime = CROON.steerStart; // すぐに中央へ向かう
+        const toC = { x: def.x - hole.x, z: def.z - hole.z };
+        const len = Math.hypot(toC.x, toC.z) || 1;
+        this.ball = this.world.createRigidBody(
+          RAPIER.RigidBodyDesc.dynamic()
+            .setTranslation(hole.x, hole.y + CROON.ballRadius + 0.05, hole.z)
+            .setLinvel((toC.x / len) * 1.6, 3.2, (toC.z / len) * 1.6)
+            .setCcdEnabled(true)
+            .setCanSleep(false)
+            .setLinearDamping(CROON.ballDamping)
+            .setAngularDamping(CROON.ballSpinDamping),
+        );
+        this.world.createCollider(
+          RAPIER.ColliderDesc.ball(CROON.ballRadius).setDensity(1).setFriction(0.4).setRestitution(0.3),
+          this.ball,
+        );
+        this.sink = null;
+      }
       return;
     }
     if (this.state === 'sinking' && this.sink) {
@@ -340,14 +419,42 @@ export class CroonPhysics {
       this.lastHole = { stage: this.stageIndex, hole: best };
       const label = holes[best].label;
       this.sink = { stage: this.stageIndex, hole: best, from: { x: p.x, y: p.y, z: p.z }, t: 0, label };
+      if (this.plan.revive === this.stageIndex && !this.revived) {
+        // 復活演出：沈んだように見せてから飛び出す
+        this.state = 'reviving';
+        this.reviveT = 0;
+        this.world.removeRigidBody(this.ball);
+        this.ball = null;
+        this.onRevive?.();
+        return;
+      }
       this.state = 'sinking';
       this.world.removeRigidBody(this.ball);
       this.ball = null;
       if (label === 'NEXT' && this.stageIndex < CROON.stages.length - 1) this.onNext?.(this.stageIndex + 1);
       return;
     }
-    // NEXT / JP の穴（中央）の近くでゆっくりになったら「ハラハラ」度を上げる（スロー演出用）
-    const near = Math.max(0, 1 - (r - def.centerRadius) / CROON.tensionRange);
+    // 狙いの穴へ少しずつ導く（最初は自由に転がし、時間とともに強く）
+    const tw = this.holeWorld(this.stageIndex, this.target);
+    const tdx = tw.x - p.x, tdz = tw.z - p.z;
+    const tdist = Math.hypot(tdx, tdz) || 1;
+    const ramp = Math.max(0, Math.min(1, (this.stageTime - CROON.steerStart) / CROON.steerRamp));
+    if (ramp > 0) {
+      const mass = this.ball.mass();
+      const a = CROON.steerForce * ramp * Math.min(1, tdist / 0.3);
+      this.ball.applyImpulse({ x: (tdx / tdist) * a * mass * dt, y: 0, z: (tdz / tdist) * a * mass * dt }, true);
+      // 狙いの穴のすぐそばでは少し減速して、縁で粘ってから落ちる
+      if (tdist < 0.45 && speed > 1.2) {
+        this.ball.setLinvel({ x: v.x * 0.985, y: v.y, z: v.z * 0.985 }, true);
+      }
+    }
+    if (!this.nearCenterFired && r < def.centerRadius + 0.55) {
+      this.nearCenterFired = true;
+      this.onNearCenter?.();
+    }
+
+    // 狙いの穴か中央の穴の近くでゆっくりになったら「ハラハラ」度を上げる（スロー演出用）
+    const near = Math.max(0, 1 - (Math.min(r, tdist) - def.centerRadius) / CROON.tensionRange);
     const slow = Math.max(0, Math.min(1, (CROON.tensionSpeed - speed) / CROON.tensionSpeed));
     this.tension = near * (0.4 + 0.6 * slow);
 
@@ -369,4 +476,14 @@ export class CroonPhysics {
 
 function yRot(a: number): Quat {
   return { x: 0, y: Math.sin(a / 2), z: 0, w: Math.cos(a / 2) };
+}
+
+/** 配当の色（オリパのレアリティ色：白 < 緑 < 青 < 赤 < 金 < 虹） */
+export function rarityColor(v: number | 'JP' | 'NEXT'): { name: string; css: string } {
+  if (v === 'JP' || v === 'NEXT') return { name: '虹', css: '#ff66ff' };
+  if (v >= 100) return { name: '金', css: '#ffc23a' };
+  if (v >= 50) return { name: '赤', css: '#ff3355' };
+  if (v >= 30) return { name: '青', css: '#4aa8ff' };
+  if (v >= 20) return { name: '緑', css: '#3ddc84' };
+  return { name: '白', css: '#f4f4f4' };
 }
