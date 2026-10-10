@@ -14,6 +14,8 @@ interface SaveData {
   pending: number;
   payoutQueue: number;
   jpChances?: number;
+  wallTimer?: number;
+  goldQueue?: number;
   stats: Stats;
   field: SavedField;
 }
@@ -40,6 +42,9 @@ export class Game {
   private pendingJpChance = 0;
   private saveTimer = 0;
   private jackpotFrac = 0;
+  /** サイドウォールの残り秒数 */
+  wallTimer = 0;
+  private goldQueue = 0;
   /** クルーン演出の段階: 'none' → 'spin' → 'result' */
   private croonPhase: 'none' | 'spin' | 'result' = 'none';
   private croonTimer = 0;
@@ -56,7 +61,8 @@ export class Game {
         this.view.pulseChecker();
         if (this.slot.addPending()) this.audio.play('checker', { volume: 0.8 });
       },
-      onCoinGone: (_c, outcome) => {
+      onCoinGone: (c, outcome) => {
+        if (outcome === 'win' && c.gold) this.onGoldMedal();
         if (outcome === 'win') {
           this.credit++;
           this.stats.won++;
@@ -104,6 +110,9 @@ export class Game {
     this.slot.pending = 0;
     this.payoutQueue = 0;
     this.pendingJpChance = 0;
+    this.goldQueue = 0;
+    this.wallTimer = 0;
+    this.physics.wallTarget = 0;
     this.stats = { inserted: 0, won: 0, jackpots: 0, bestCredit: GAME.startCredit };
   }
 
@@ -158,6 +167,8 @@ export class Game {
       return;
     }
     this.payoutQueue += r.payout;
+    if (Math.random() < GAME.goldChance) this.goldQueue++;
+    if (r.symbol === 'bar') this.startWall();
     if (r.fever) {
       this.audio.play('bigWin');
       this.audio.duckBgm(4);
@@ -196,6 +207,27 @@ export class Game {
       this.onToast?.(`クルーン  +${prize} 枚`, 'win');
     }
     this.onChange?.();
+  }
+
+  private startWall(): void {
+    this.wallTimer = GAME.wallSeconds;
+    this.physics.wallTarget = 1;
+    this.view.fever(2);
+    this.audio.play('reach');
+    this.slot.showMessage('SIDE WALL!!', '#6ff', 4);
+    this.onToast?.(`サイドウォール・チャンス ${GAME.wallSeconds}秒！ 手前の全幅が獲得口`, 'jp');
+  }
+
+  private onGoldMedal(): void {
+    this.audio.play('ballDrop');
+    if (!this.physics.ball && this.croonPhase === 'none' && this.pendingJpChance === 0) {
+      this.audio.play('ballRelease');
+      this.physics.spawnBall((Math.random() - 0.5) * 4, PAYOUT.dropY + 1, -5.0);
+      this.onToast?.('黄金メダル GET！ JPボール投入', 'jp');
+    } else {
+      this.addCredit(GAME.goldBonus);
+      this.onToast?.(`黄金メダル GET！ +${GAME.goldBonus} 枚`, 'win');
+    }
   }
 
   private addCredit(n: number): void {
@@ -272,6 +304,13 @@ export class Game {
     // JPチャンス（クルーン）はスロットが空いたら開始
     this.updateCroon(dt);
     this.slot.update(dt);
+    if (this.wallTimer > 0) {
+      this.wallTimer = Math.max(0, this.wallTimer - dt);
+      if (this.wallTimer === 0) {
+        this.physics.wallTarget = 0;
+        this.onToast?.('サイドウォール終了', 'info');
+      }
+    }
 
     // 払い出し（左右のシュートから交互にプッシャー上へ）
     if (this.payoutQueue > 0) {
@@ -283,7 +322,9 @@ export class Game {
         // シュートの出口から内側へ飛ばす
         const x = this.payoutSide * (FIELD.halfWidth - 1.1) + (Math.random() - 0.5) * 0.3;
         const z = PAYOUT.dropZ + 0.6 + (Math.random() - 0.5) * 0.5;
-        const c = this.physics.dropPayoutCoin(x, PAYOUT.dropY, z);
+        const gold = this.goldQueue > 0;
+        if (gold) this.goldQueue--;
+        const c = this.physics.dropPayoutCoin(x, PAYOUT.dropY, z, gold);
         c.body.setLinvel({ x: -this.payoutSide * (1.5 + Math.random() * 4), y: -1, z: Math.random() }, true);
         this.audio.play('stack', { volume: 0.3, minInterval: 0.08 });
       }
@@ -312,6 +353,8 @@ export class Game {
       payoutQueue: this.payoutQueue,
       // 抽選中のJPチャンスは再開時にやり直す
       jpChances: this.pendingJpChance + (this.croonPhase === 'spin' ? 1 : 0),
+      wallTimer: this.wallTimer,
+      goldQueue: this.goldQueue,
       stats: this.stats,
       field: this.physics.serialize(),
     };
@@ -335,6 +378,9 @@ export class Game {
       this.slot.pending = Math.min(d.pending, GAME.maxPendingSpins);
       this.payoutQueue = d.payoutQueue;
       this.pendingJpChance = d.jpChances ?? 0;
+      this.goldQueue = d.goldQueue ?? 0;
+      this.wallTimer = d.wallTimer ?? 0;
+      if (this.wallTimer > 0) this.physics.wallTarget = 1;
       this.stats = d.stats;
       this.physics.restore(d.field);
       this.physics.settle(0.3);

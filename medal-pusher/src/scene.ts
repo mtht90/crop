@@ -6,7 +6,7 @@ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { BALL, BOARD, COIN, CROON, FIELD, GAME, PAYOUT, PUSHER, TRAY } from './config.ts';
 import { trackY, type CroonPhysics } from './croon.ts';
 import { loadHDR, loadModel, pbrMaterial } from './assets.ts';
-import { boardPins, laneDividers, type PusherPhysics } from './physics.ts';
+import { boardPins, laneDividers, WALL_DOWN_Y, WALL_UP_Y, type PusherPhysics } from './physics.ts';
 
 const FLOOR_Y = -16;
 const CAB_HW = TRAY.halfWidth + 0.4; // 筐体外寸の半幅
@@ -44,6 +44,7 @@ export class PusherScene {
   private croonWheel!: THREE.Group;
   private croonBall!: THREE.Mesh;
   private croonFocus = 0;
+  private croonHighlight!: THREE.Mesh;
   private croonFocusTarget = 0;
   private croonCamPos = new THREE.Vector3(0, CROON_POS.y + 11.5, CROON_POS.z + 5.5);
   private croonCamTarget = CROON_POS.clone();
@@ -390,7 +391,38 @@ export class PusherScene {
     this.coinMesh.count = 0;
     this.coinMesh.frustumCulled = false;
     this.scene.add(this.coinMesh);
+    // 黄金メダル（光る金色）
+    const goldFace = m.gold.clone();
+    goldFace.emissive = new THREE.Color(0.9, 0.55, 0.05);
+    goldFace.emissiveIntensity = 0.6;
+    this.goldMesh = new THREE.InstancedMesh(geo, goldFace, 32);
+    this.goldMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    this.goldMesh.castShadow = true;
+    this.goldMesh.count = 0;
+    this.goldMesh.frustumCulled = false;
+    this.scene.add(this.goldMesh);
+
+    // サイドウォール（BAR 揃いでせり上がる）
+    const len = FIELD.front - FIELD.sideWallEnd + 0.4;
+    for (const sx of [-1, 1]) {
+      const wall = new THREE.Group();
+      const glass = new THREE.Mesh(
+        new THREE.BoxGeometry(0.15, 6, len),
+        new THREE.MeshPhysicalMaterial({ color: 0x66ddff, transparent: true, opacity: 0.25, roughness: 0.1, emissive: 0x115566, depthWrite: false }),
+      );
+      wall.add(glass);
+      const edge = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.12, len), this.neonMat(new THREE.Color(0.4, 2.4, 3.0), sx * 0.2));
+      edge.position.y = 3;
+      wall.add(edge);
+      wall.position.set(sx * (FIELD.halfWidth + 0.2), WALL_DOWN_Y, FIELD.sideWallEnd + len / 2 - 0.2);
+      wall.visible = false;
+      this.wallMeshes.push(wall);
+      this.scene.add(wall);
+    }
   }
+
+  private goldMesh!: THREE.InstancedMesh;
+  private wallMeshes: THREE.Group[] = [];
 
   private buildBall(m: Awaited<ReturnType<PusherScene['loadMaterials']>>): void {
     const mat = m.gold.clone();
@@ -596,6 +628,19 @@ export class PusherScene {
       d.castShadow = true;
       wheel.add(d);
     }
+    // 結果のハイライト（ポケット1つ分の扇形）
+    const hl = new THREE.Mesh(
+      new THREE.RingGeometry(CROON.coneRadius, W, 24, 1, 0, (Math.PI * 2) / n),
+      new THREE.MeshBasicMaterial({ color: 0xffdd33, transparent: true, opacity: 0.55, toneMapped: false, depthWrite: false, side: THREE.DoubleSide }),
+    );
+    const hlPivot = new THREE.Group();
+    hlPivot.rotation.x = -Math.PI / 2;
+    hlPivot.position.y = 0.02;
+    hlPivot.add(hl);
+    wheel.add(hlPivot);
+    this.croonHighlight = hl;
+    hl.visible = false;
+
     // 外周の傾斜レーン（すり鉢）と内側のスカート
     const segs = 128;
     const pos: number[] = [];
@@ -653,6 +698,16 @@ export class PusherScene {
 
   updateCroon(croon: CroonPhysics): void {
     this.croonWheel.rotation.y = croon.angle;
+    // 入ったポケットを点滅させる
+    const res = croon.state === 'settled' ? croon.result : null;
+    this.croonHighlight.visible = !!res;
+    if (res) {
+      const n = CROON.pockets.length;
+      this.croonHighlight.rotation.z = (res.index / n) * Math.PI * 2;
+      const m = this.croonHighlight.material as THREE.MeshBasicMaterial;
+      m.opacity = 0.45 + 0.35 * Math.sin(this.time * 12);
+      m.color.set(res.prize === 'JP' ? 0xff33cc : 0xffdd33).multiplyScalar(2.2);
+    }
     const p = croon.ballPosition;
     const r = croon.ballRotation;
     this.croonBall.visible = !!p;
@@ -714,6 +769,7 @@ export class PusherScene {
     this.time += dt;
     // メダル
     let i = 0;
+    let gi = 0;
     for (const coin of physics.coins.values()) {
       if (i >= GAME.maxCoins) break;
       const p = coin.body.translation();
@@ -722,10 +778,19 @@ export class PusherScene {
       this.dummy.quaternion.set(r.x, r.y, r.z, r.w);
       this.dummy.scale.set(1, 1, 1);
       this.dummy.updateMatrix();
-      this.coinMesh.setMatrixAt(i++, this.dummy.matrix);
+      if (coin.gold && gi < 32) this.goldMesh.setMatrixAt(gi++, this.dummy.matrix);
+      else this.coinMesh.setMatrixAt(i++, this.dummy.matrix);
     }
     this.coinMesh.count = i;
     this.coinMesh.instanceMatrix.needsUpdate = true;
+    this.goldMesh.count = gi;
+    this.goldMesh.instanceMatrix.needsUpdate = true;
+    // サイドウォール
+    const wy = WALL_DOWN_Y + (WALL_UP_Y - WALL_DOWN_Y) * physics.wallLevel;
+    for (const w of this.wallMeshes) {
+      w.position.y = wy;
+      w.visible = physics.wallLevel > 0.01;
+    }
 
     // プッシャー
     const t = physics.pusherTranslation;

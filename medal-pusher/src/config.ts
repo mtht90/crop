@@ -70,6 +70,9 @@ export const GAME = {
   initialFieldCoins: 260,
   maxCoins: 900,
   autoFireInterval: 0.28,
+  wallSeconds: 20, // BAR 揃いで上がるサイドウォールの時間
+  goldChance: 0.25, // スロット当選の払い出しに黄金メダルが混ざる確率
+  goldBonus: 20, // ボールが盤面に残っているときに黄金メダルを落とした場合の枚数
 };
 
 export const PHYSICS = {

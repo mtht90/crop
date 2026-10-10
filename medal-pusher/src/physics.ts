@@ -14,6 +14,7 @@ export interface Coin {
   outcome: CoinOutcome | null;
   countedAt: number; // 受け皿で獲得カウントした時刻（-1=未カウント）
   stillTime: number; // ボード内で止まっている時間
+  gold: boolean; // 黄金メダル
 }
 
 export interface Ball {
@@ -27,6 +28,10 @@ export interface PhysicsEvents {
   onBallGone?: (outcome: CoinOutcome) => void;
   onCoinLanded?: (coin: Coin) => void;
 }
+
+/** サイドウォールの中心の高さ（下げたとき / 上げたとき） */
+export const WALL_DOWN_Y = -8;
+export const WALL_UP_Y = 2.5;
 
 const HALF_PI_X: Quat = { x: Math.SQRT1_2, y: 0, z: 0, w: Math.SQRT1_2 };
 
@@ -52,6 +57,24 @@ export class PusherPhysics {
     this.world.integrationParameters.numSolverIterations = 6;
     this.buildStatic();
     this.pusher = this.buildPusher();
+    this.walls = [-1, 1].map((sx) => {
+      const len = FIELD.front - FIELD.sideWallEnd + 0.4;
+      const body = this.world.createRigidBody(
+        RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(sx * (FIELD.halfWidth + 0.2), WALL_DOWN_Y, FIELD.sideWallEnd + len / 2 - 0.2),
+      );
+      this.world.createCollider(RAPIER.ColliderDesc.cuboid(0.2, 3, len / 2).setFriction(0.1).setRestitution(0.1), body);
+      return body;
+    });
+  }
+
+  /** サイドウォール（0=下がっている, 1=上がりきり） */
+  wallLevel = 0;
+  wallTarget = 0;
+  private walls: RAPIER.RigidBody[];
+
+  /** サイドウォールが上がっていて、手前の全幅が獲得口になっているか */
+  get wallActive(): boolean {
+    return this.wallLevel > 0.5;
   }
 
   /** 前面 z を返す（0..1 の位相から） */
@@ -172,7 +195,7 @@ export class PusherPhysics {
         .setDensity(COIN.density),
       body,
     );
-    const coin: Coin = { id: this.nextId++, body, inBoard, checked: false, outcome: null, countedAt: -1, stillTime: 0 };
+    const coin: Coin = { id: this.nextId++, body, inBoard, checked: false, outcome: null, countedAt: -1, stillTime: 0, gold: false };
     this.coins.set(coin.id, coin);
     return coin;
   }
@@ -195,11 +218,13 @@ export class PusherPhysics {
   }
 
   /** 払い出し（プッシャー上へ降らせる） */
-  dropPayoutCoin(x: number, y: number, z: number): Coin {
+  dropPayoutCoin(x: number, y: number, z: number, gold = false): Coin {
     const a = Math.random() * Math.PI;
     const tilt = (Math.random() - 0.5) * 0.6;
     const rot = quatFromEuler(tilt, a, tilt * 0.5);
-    return this.addCoin({ x, y, z }, rot, { x: 0, y: -1, z: 0.5 });
+    const coin = this.addCoin({ x, y, z }, rot, { x: 0, y: -1, z: 0.5 });
+    coin.gold = gold;
+    return coin;
   }
 
   spawnBall(x: number, y: number, z: number): Ball {
@@ -248,6 +273,15 @@ export class PusherPhysics {
     this.time += PHYSICS.dt;
     const front = PusherPhysics.pusherFrontAt(this.time);
     this.pusher.setNextKinematicTranslation({ x: 0, y: PUSHER.height / 2 + 0.01, z: front - PUSHER.depth / 2 });
+    if (this.wallLevel !== this.wallTarget) {
+      const d = PHYSICS.dt * 1.2;
+      this.wallLevel = this.wallTarget > this.wallLevel ? Math.min(this.wallTarget, this.wallLevel + d) : Math.max(this.wallTarget, this.wallLevel - d);
+      const y = WALL_DOWN_Y + (WALL_UP_Y - WALL_DOWN_Y) * this.wallLevel;
+      for (const w of this.walls) {
+        const t = w.translation();
+        w.setNextKinematicTranslation({ x: t.x, y, z: t.z });
+      }
+    }
     this.world.step();
     this.checkZones();
   }
@@ -312,7 +346,8 @@ export class PusherPhysics {
       }
       if (coin.outcome === null && p.y < -0.6) {
         // 手前の中央だけが獲得口。手前の両端と左右はロスト
-        coin.outcome = p.z > FIELD.front - 0.1 && Math.abs(p.x) < FIELD.winHalfWidth ? 'win' : 'lost';
+        const winHalf = this.wallActive ? hw + 0.5 : FIELD.winHalfWidth;
+        coin.outcome = p.z > FIELD.front - 0.1 && Math.abs(p.x) < winHalf ? 'win' : 'lost';
       }
       if (coin.outcome === 'win') {
         if (coin.countedAt < 0 && p.y < TRAY.countY) {
@@ -395,8 +430,10 @@ export class PusherPhysics {
 
   serialize(): SavedField {
     const coins: number[] = [];
+    const gold: number[] = [];
     for (const c of this.coins.values()) {
       if (c.inBoard || c.outcome) continue;
+      if (c.gold) gold.push(coins.length / 7);
       const p = c.body.translation();
       const r = c.body.rotation();
       coins.push(...[p.x, p.y, p.z, r.x, r.y, r.z, r.w].map((v) => Math.round(v * 1000) / 1000));
@@ -406,7 +443,7 @@ export class PusherPhysics {
       const p = this.ball.body.translation();
       ball = [p.x, p.y, p.z];
     }
-    return { time: this.time % PUSHER.period, coins, ball };
+    return { time: this.time % PUSHER.period, coins, ball, gold };
   }
 
   restore(data: SavedField): void {
@@ -417,9 +454,11 @@ export class PusherPhysics {
       { x: 0, y: PUSHER.height / 2 + 0.01, z: PusherPhysics.pusherFrontAt(this.time) - PUSHER.depth / 2 },
       true,
     );
+    const goldSet = new Set(data.gold ?? []);
     for (let i = 0; i + 6 < data.coins.length; i += 7) {
       const d = data.coins;
-      this.addCoin({ x: d[i], y: d[i + 1] + 0.005, z: d[i + 2] }, { x: d[i + 3], y: d[i + 4], z: d[i + 5], w: d[i + 6] });
+      const c = this.addCoin({ x: d[i], y: d[i + 1] + 0.005, z: d[i + 2] }, { x: d[i + 3], y: d[i + 4], z: d[i + 5], w: d[i + 6] });
+      if (goldSet.has(i / 7)) c.gold = true;
     }
     if (data.ball) this.spawnBall(data.ball[0], data.ball[1] + 0.01, data.ball[2]);
   }
@@ -433,6 +472,7 @@ export interface SavedField {
   time: number;
   coins: number[];
   ball: number[] | null;
+  gold?: number[]; // coins の中で黄金メダルの番号
 }
 
 export function boardPins(): { x: number; y: number }[] {

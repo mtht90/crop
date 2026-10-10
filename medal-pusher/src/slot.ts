@@ -21,8 +21,8 @@ const SYMBOLS: SymbolDef[] = [
   { key: 'melon', file: 'melon', payout: 0, weight: 0, label: '' },
   { key: 'bell', file: 'bell', payout: 20, weight: 30, label: 'BELL' },
   { key: 'clover', file: 'clover', payout: 0, weight: 0, label: '' },
-  { key: 'bar', file: 'Bar1', payout: 40, weight: 12, label: 'BAR' },
-  { key: 'horseshoe', file: 'horseshoe', payout: 0, weight: 45, label: 'BALL' },
+  { key: 'bar', file: 'Bar1', payout: 30, weight: 12, label: 'BAR' }, // ＋サイドウォール・チャンス
+  { key: 'horseshoe', file: 'horseshoe', payout: 0, weight: 30, label: 'BALL' },
   { key: 'seven', file: 'Lucky7_rainbow', payout: 100, weight: 4, label: 'SEVEN' },
   { key: 'heart', file: 'heart', payout: 0, weight: 0, label: '' },
 ];
