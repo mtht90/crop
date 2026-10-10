@@ -48,6 +48,14 @@ export class PusherScene {
   private croonStageCam = new THREE.Vector3();
   private croonFlash = 0;
   private croonBallPrev: THREE.Vector3 | null = null;
+  private chuteRims: THREE.MeshBasicMaterial[] = [];
+  private payoutActive = false;
+  private payoutLight!: THREE.PointLight;
+
+  /** 払い出し中はシュートの口をチカチカ光らせる */
+  setPayoutActive(on: boolean): void {
+    this.payoutActive = on;
+  }
   private croonBall!: THREE.Mesh;
   private croonFocus = 0;
   private croonFocusTarget = 0;
@@ -150,6 +158,9 @@ export class PusherScene {
     const cyan = new THREE.PointLight(0x33ccff, 80, 25, 2);
     cyan.position.set(CAB_HW + 2, 6, 3);
     this.scene.add(pink, cyan);
+    this.payoutLight = new THREE.PointLight(0xffc040, 0, 14, 2);
+    this.payoutLight.position.set(0, PAYOUT.dropY + 1.5, PAYOUT.dropZ + 1.5);
+    this.scene.add(this.payoutLight);
   }
 
   private box(
@@ -337,7 +348,9 @@ export class PusherScene {
       chute.position.set(sx * (hw - 0.35), PAYOUT.dropY + 0.55, PAYOUT.dropZ + 0.6);
       chute.castShadow = true;
       this.scene.add(chute);
-      const rim = new THREE.Mesh(new THREE.TorusGeometry(0.6, 0.06, 8, 24), this.neonMat(new THREE.Color(3, 1.6, 0.3), sx * 0.3));
+      const rimMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(3, 1.6, 0.3), toneMapped: false });
+      this.chuteRims.push(rimMat);
+      const rim = new THREE.Mesh(new THREE.TorusGeometry(0.6, 0.06, 8, 24), rimMat);
       rim.rotation.copy(chute.rotation);
       rim.rotateX(Math.PI / 2);
       rim.position.copy(chute.position).add(new THREE.Vector3(-sx * 0.72, -0.33, 0));
@@ -950,6 +963,10 @@ export class PusherScene {
         : 0.85 + 0.15 * Math.sin((this.time * 0.8 + n.phase) * Math.PI * 2);
       n.mat.color.copy(n.base).multiplyScalar(k);
     }
+    // 払い出し中の演出
+    const flick = this.payoutActive ? (Math.floor(this.time * 16) % 2 ? 1.8 : 0.6) : 1;
+    this.chuteRims.forEach((m, i) => m.color.setRGB(3 * flick, (1.6 + (i ? 0.3 : 0)) * flick, 0.3 * flick));
+    this.payoutLight.intensity += ((this.payoutActive ? 30 + Math.sin(this.time * 30) * 10 : 0) - this.payoutLight.intensity) * 0.3;
     this.checkerGlow = Math.max(0, this.checkerGlow - dt * 1.5);
     const cg = 0.6 + this.checkerGlow * 3 + (fever ? Math.sin(this.time * 20) * 0.5 + 0.5 : 0);
     this.checkerLamp.color.setRGB(1 * cg, 0.75 * cg, 0.1 * cg);

@@ -58,8 +58,8 @@ export const TRAY = {
 export const PAYOUT = {
   dropY: 3.2,
   dropZ: -5.6,
-  rate: 14, // 払い出し 枚/秒
-  maxRate: 40, // 払い出しが大量に溜まったときの最大速度 枚/秒
+  rate: 28, // 払い出し 枚/秒
+  maxRate: 70, // 払い出しが大量に溜まったときの最大速度 枚/秒
 };
 
 export const GAME = {
