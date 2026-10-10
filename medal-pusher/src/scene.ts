@@ -58,8 +58,8 @@ export class PusherScene {
     const tick = <T>(p: Promise<T>) => p.then((v) => (onProgress(++done / total), v));
 
     const [hdr, studio, mats, chair, chest] = await Promise.all([
-      tick(loadHDR('warm_bar_1k.hdr')),
-      loadHDR('studio_small_09_1k.hdr'),
+      tick(loadHDR('warm_bar_1k.hdr').catch(() => null)),
+      loadHDR('studio_small_09_1k.hdr').catch(() => null),
       tick(this.loadMaterials()),
       tick(loadModel('bar_chair_round_01').catch(() => null)),
       tick(loadModel('treasure_chest').catch(() => null)),
@@ -67,11 +67,11 @@ export class PusherScene {
 
     // 背景はバー、映り込みはスタジオ（どちらも Poly Haven HDRI）
     const pmrem = new THREE.PMREMGenerator(this.renderer);
-    const envMap = pmrem.fromEquirectangular(studio).texture;
-    studio.dispose();
-    this.scene.environment = envMap;
+    const envSource = studio ?? hdr;
+    if (envSource) this.scene.environment = pmrem.fromEquirectangular(envSource).texture;
+    studio?.dispose();
     this.scene.environmentIntensity = 0.55;
-    this.scene.background = hdr;
+    this.scene.background = hdr ?? new THREE.Color(0x120a1c);
     this.scene.backgroundBlurriness = 0.35;
     this.scene.backgroundIntensity = 0.14;
 
