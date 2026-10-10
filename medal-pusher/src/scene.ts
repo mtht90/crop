@@ -47,6 +47,7 @@ export class PusherScene {
   private croonStageTarget = new THREE.Vector3();
   private croonStageCam = new THREE.Vector3();
   private croonFlash = 0;
+  private croonBallPrev: THREE.Vector3 | null = null;
   private croonBall!: THREE.Mesh;
   private croonFocus = 0;
   private croonFocusTarget = 0;
@@ -638,20 +639,71 @@ export class PusherScene {
       stage.add(spot);
     });
 
-    // 段と段をつなぐ透明なシュート（NEXT に入ったボールが通る）
-    const tubeMat = new THREE.MeshPhysicalMaterial({ color: 0xddeeff, transparent: true, opacity: 0.18, roughness: 0.05, depthWrite: false });
-    for (let i = 0; i < CROON.stages.length - 1; i++) {
-      const a = CROON.stages[i], b = CROON.stages[i + 1];
-      const exit = new THREE.Vector3(a.x, a.y - a.depth - 0.6, a.z);
+    // 透明なシュート。0番は投入シュート（上から1段目へ）、i番は (i-1)段目の中央の穴 → i段目。
+    // どれも常に下り坂で、最後は皿の縁に沿う向き（ボールが打ち出される向き）で入る
+    const tubeMat = new THREE.MeshPhysicalMaterial({
+      color: 0xe8f4ff,
+      transparent: true,
+      opacity: 0.22,
+      roughness: 0.04,
+      metalness: 0,
+      clearcoat: 1,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    const collarMat = m.chrome;
+    const ballY = (def: CroonStageDef, r: number) => def.y + plateY(def, r) + CROON.ballRadius + 0.08;
+    for (let i = 0; i < CROON.stages.length; i++) {
+      const b = CROON.stages[i];
       const rb = b.radius - CROON.ballRadius - 0.04;
-      const entry = new THREE.Vector3(b.x + Math.cos(b.launchAngle) * rb, b.y + 0.35, b.z - Math.sin(b.launchAngle) * rb);
-      const mid = exit.clone().lerp(entry, 0.5);
-      mid.z -= 2.2;
-      mid.y = Math.min(exit.y, entry.y + 1.2);
-      const curve = new THREE.CatmullRomCurve3([exit, exit.clone().add(new THREE.Vector3(0, -0.6, -0.6)), mid, entry.clone().add(new THREE.Vector3(0, 0.6, 0)), entry]);
+      const a = b.launchAngle;
+      const dir = new THREE.Vector3(Math.sin(a), 0, Math.cos(a)); // 打ち出し方向（接線）
+      const entry = new THREE.Vector3(b.x + Math.cos(a) * rb, ballY(b, rb), b.z - Math.sin(a) * rb);
+      const in1 = entry.clone().addScaledVector(dir, -0.7).add(new THREE.Vector3(0, 0.08, 0));
+      const in2 = entry.clone().addScaledVector(dir, -1.6).add(new THREE.Vector3(0, 0.3, 0));
+      let pts: THREE.Vector3[];
+      if (i === 0) {
+        // 投入シュート：後ろの高いところから螺旋ぎみに降りてくる
+        const top = new THREE.Vector3(b.x - 1.2, b.y + 3.2, b.z - 2.8);
+        const mid = new THREE.Vector3(b.x - 2.6, b.y + 1.6, b.z - 1.2);
+        pts = [top, top.clone().add(new THREE.Vector3(-0.4, -0.8, 0.3)), mid, in2, in1, entry];
+      } else {
+        const p = CROON.stages[i - 1];
+        const e0 = new THREE.Vector3(p.x, p.y - p.depth - 0.15, p.z);
+        const e1 = e0.clone().add(new THREE.Vector3(0, -0.35, -0.35));
+        // 途中は奥側を回り、高さは出口→入口へ単調に下げる
+        const m1 = e1.clone().lerp(in2, 0.35);
+        m1.z = Math.min(e1.z, in2.z) - 1.4;
+        m1.y = e1.y + (in2.y - e1.y) * 0.35;
+        const m2 = e1.clone().lerp(in2, 0.7);
+        m2.z = Math.min(e1.z, in2.z) - 1.1;
+        m2.y = e1.y + (in2.y - e1.y) * 0.7;
+        pts = [e0, e1, m1, m2, in2, in1, entry];
+      }
+      const curve = new THREE.CatmullRomCurve3(pts, false, 'centripetal');
       this.croonTubes.push(curve);
-      const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, 48, CROON.ballRadius + 0.08, 12, false), tubeMat);
-      g.add(tube);
+      const tubeR = CROON.ballRadius + 0.07;
+      g.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 96, tubeR, 16, false), tubeMat));
+      // クロームの継ぎ手と支柱
+      const len = curve.getLength();
+      const n = Math.max(2, Math.round(len / 1.1));
+      for (let k = 0; k <= n; k++) {
+        const t = k / n;
+        const pos = curve.getPointAt(t);
+        const tan = curve.getTangentAt(t);
+        const collar = new THREE.Mesh(new THREE.TorusGeometry(tubeR + 0.02, 0.035, 8, 24), collarMat);
+        collar.position.copy(pos);
+        collar.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), tan);
+        g.add(collar);
+        if (k > 0 && k < n && k % 2 === 1) {
+          const h = pos.y - (roofY + 0.0);
+          if (h > 0.3) {
+            const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, h, 8), collarMat);
+            rod.position.set(pos.x, pos.y - h / 2 - tubeR, pos.z);
+            g.add(rod);
+          }
+        }
+      }
     }
 
     // ボール
@@ -767,18 +819,34 @@ export class PusherScene {
       const col = res.prize === 'JP' ? [3, 0.6, 2.4] : [3, 2.4, 0.4];
       (this.croonRings[res.stage][res.hole].material as THREE.MeshStandardMaterial).emissive.setRGB(col[0] * k, col[1] * k, col[2] * k);
     }
-    const p = croon.ballPosition;
-    const r = croon.ballRotation;
-    if (croon.state === 'transfer' && croon.stageIndex < this.croonTubes.length) {
-      // シュートの中を通って次の段へ
-      this.croonBall.visible = true;
-      this.croonBall.position.copy(this.croonTubes[croon.stageIndex].getPoint(Math.min(1, croon.transferProgress)));
+    // ボールの位置：シュート内 / 穴に吸い込まれ中 / 皿の上（物理）
+    let pos: { x: number; y: number; z: number } | null = null;
+    if (croon.state === 'transfer') {
+      const tp = Math.min(1, croon.transferProgress);
+      // 重力で加速していくように（進み = t^2）
+      pos = this.croonTubes[croon.transferTo].getPointAt(tp * tp);
+    } else if (croon.state === 'sinking') {
+      pos = croon.sinkPosition;
     } else {
-      this.croonBall.visible = !!p;
-      if (p && r) {
-        this.croonBall.position.set(p.x, p.y, p.z);
-        this.croonBall.quaternion.set(r.x, r.y, r.z, r.w);
+      pos = croon.ballPosition;
+    }
+    this.croonBall.visible = !!pos;
+    if (pos) {
+      // 物理では滑らせているので、見た目は移動量から転がりを計算する
+      const next = new THREE.Vector3(pos.x, pos.y, pos.z);
+      if (this.croonBallPrev) {
+        const d = next.clone().sub(this.croonBallPrev);
+        d.y = 0;
+        const dist = d.length();
+        if (dist > 1e-5 && dist < 1) {
+          const axis = new THREE.Vector3(0, 1, 0).cross(d).normalize();
+          this.croonBall.quaternion.premultiply(new THREE.Quaternion().setFromAxisAngle(axis, dist / CROON.ballRadius));
+        }
       }
+      this.croonBallPrev = next;
+      this.croonBall.position.copy(next);
+    } else {
+      this.croonBallPrev = null;
     }
   }
 

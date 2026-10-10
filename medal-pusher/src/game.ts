@@ -194,10 +194,8 @@ export class Game {
     this.slot.flash(prize === 'JP' ? 4 : 1.5);
     if (prize === 'JP') {
       const amount = this.slot.jackpot;
-      // 一部は盤面に降らせ、残りは直接クレジットへ
-      const physical = Math.min(amount, PAYOUT.maxPhysicalJackpot);
-      this.payoutQueue += physical;
-      this.addCredit(amount - physical);
+      // JP も全部プッシャー上に払い出す（量が多いほど払い出しが速くなる）
+      this.payoutQueue += amount;
       this.stats.jackpots++;
       this.slot.jackpot = GAME.startJackpot;
       this.jackpotFrac = 0;
@@ -207,14 +205,14 @@ export class Game {
       this.view.fever(8);
       this.slot.showMessage(`JACKPOT!! ${amount}`, '#f6f', 5);
       this.view.flashCroonHole();
-      this.onToast?.(`★ JACKPOT ★  ${amount} 枚獲得！`, 'jp');
+      this.onToast?.(`★ JACKPOT ★  ${amount} 枚 払い出し！`, 'jp');
     } else {
-      // クルーンの配当は直接クレジットへ
-      this.addCredit(prize);
+      // クルーンの配当もプッシャー上に払い出す
+      this.payoutQueue += prize;
       this.audio.play(prize >= 50 ? 'bigWin' : 'smallWin');
       this.slot.showMessage(`CROON +${prize}`, '#ff6', 4);
       this.view.flashCroonHole();
-      this.onToast?.(`クルーン  +${prize} 枚`, 'win');
+      this.onToast?.(`クルーン ${prize} 枚 払い出し`, 'win');
     }
     this.onChange?.();
   }
@@ -235,17 +233,11 @@ export class Game {
       this.physics.spawnBall((Math.random() - 0.5) * 4, PAYOUT.dropY + 1, -5.0);
       this.onToast?.('黄金メダル GET！ JPボール投入', 'jp');
     } else {
-      this.addCredit(GAME.goldBonus);
-      this.onToast?.(`黄金メダル GET！ +${GAME.goldBonus} 枚`, 'win');
+      this.payoutQueue += GAME.goldBonus;
+      this.onToast?.(`黄金メダル GET！ ${GAME.goldBonus} 枚払い出し`, 'win');
     }
   }
 
-  private addCredit(n: number): void {
-    if (n <= 0) return;
-    this.credit += n;
-    this.stats.won += n;
-    this.stats.bestCredit = Math.max(this.stats.bestCredit, this.credit);
-  }
 
   /** 疑似課金でメダルを買う（実際の支払いは発生しない） */
   buy(index: number): void {
@@ -331,7 +323,8 @@ export class Game {
     if (this.payoutQueue > 0) {
       this.payoutTimer -= dt;
       while (this.payoutTimer <= 0 && this.payoutQueue > 0 && this.physics.coins.size < GAME.maxCoins - 5) {
-        this.payoutTimer += 1 / PAYOUT.rate;
+        // 払い出しが溜まっているほど速く（JP の大量払い出し）
+        this.payoutTimer += 1 / Math.min(PAYOUT.maxRate, PAYOUT.rate + this.payoutQueue / 8);
         this.payoutQueue--;
         this.payoutSide *= -1;
         // シュートの出口から内側へ飛ばす

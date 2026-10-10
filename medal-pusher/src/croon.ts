@@ -4,8 +4,9 @@
 import RAPIER from '@dimforge/rapier3d-compat';
 import { CROON, PHYSICS, type CroonLabel, type CroonStageDef } from './config.ts';
 
+
 export type CroonPrize = number | 'JP';
-export type CroonState = 'idle' | 'rolling' | 'transfer' | 'settled';
+export type CroonState = 'idle' | 'transfer' | 'rolling' | 'sinking' | 'settled';
 
 type Quat = { x: number; y: number; z: number; w: number };
 
@@ -151,20 +152,45 @@ export class CroonPhysics {
     return this.ball ? this.ball.rotation() : null;
   }
 
-  /** 次の段へ移動中の進み具合（0→1） */
+  /** シュートの中を移動中の進み具合（0→1）と行き先の段 */
   get transferProgress(): number {
-    return 1 - Math.max(0, this.transferTime) / CROON.transferSeconds;
+    return 1 - Math.max(0, this.transferTime) / this.transferDuration;
+  }
+  transferTo = 0;
+  private transferDuration = 1;
+
+  /** 穴に吸い込まれている途中のボール位置（グループ内座標） */
+  sinkPosition: { x: number; y: number; z: number } | null = null;
+  private sink: { stage: number; hole: number; from: { x: number; y: number; z: number }; t: number; label: CroonLabel } | null = null;
+
+  private beginTransfer(to: number, seconds: number): void {
+    this.state = 'transfer';
+    this.transferTo = to;
+    this.transferDuration = seconds;
+    this.transferTime = seconds;
+    this.stageIndex = to;
+  }
+
+  /** 穴の中心のいまの位置（皿の回転込み、グループ内座標） */
+  holeWorld(stage: number, hole: number): { x: number; y: number; z: number } {
+    const def = CROON.stages[stage];
+    const h = holeCenters(def)[hole];
+    const a = this.stages[stage].angle;
+    const c = Math.cos(a), s = Math.sin(a);
+    return { x: def.x + h.x * c + h.z * s, y: def.y + plateY(def, Math.hypot(h.x, h.z)), z: def.z - h.x * s + h.z * c };
   }
 
   stageAngle(i: number): number {
     return this.stages[i].angle;
   }
 
-  /** 1段目から抽選開始 */
+  /** 抽選開始：ボールは投入シュートを転がって1段目に入る */
   start(): void {
     this.result = null;
     this.lastHole = null;
-    this.launch(0);
+    this.sink = null;
+    this.sinkPosition = null;
+    this.beginTransfer(0, CROON.intakeSeconds);
   }
 
   private launch(stageIndex: number): void {
@@ -200,6 +226,8 @@ export class CroonPhysics {
     this.ball = null;
     this.state = 'idle';
     this.stageIndex = 0;
+    this.sink = null;
+    this.sinkPosition = null;
   }
 
   update(frameDt: number): void {
@@ -223,7 +251,32 @@ export class CroonPhysics {
 
     if (this.state === 'transfer') {
       this.transferTime -= dt;
-      if (this.transferTime <= 0) this.launch(this.stageIndex + 1);
+      if (this.transferTime <= 0) this.launch(this.transferTo);
+      return;
+    }
+    if (this.state === 'sinking' && this.sink) {
+      // 穴の縁からすっと吸い込まれて沈む（皿と一緒に回る）
+      const k = this.sink;
+      k.t += dt;
+      const hole = this.holeWorld(k.stage, k.hole);
+      const u = Math.min(1, k.t / 0.18);
+      const down = Math.max(0, k.t - 0.12) * 2.2;
+      this.sinkPosition = {
+        x: k.from.x + (hole.x - k.from.x) * u,
+        y: k.from.y + (hole.y - CROON.ballRadius * 0.6 - k.from.y) * u - down,
+        z: k.from.z + (hole.z - k.from.z) * u,
+      };
+      if (k.t >= CROON.sinkSeconds) {
+        this.sinkPosition = null;
+        if (k.label === 'NEXT' && k.stage < CROON.stages.length - 1) {
+          this.beginTransfer(k.stage + 1, CROON.transferSeconds);
+        } else {
+          const prize: CroonPrize = k.label === 'NEXT' ? 'JP' : k.label;
+          this.result = { stage: k.stage, hole: k.hole, prize };
+          this.state = 'settled';
+          this.onSettle?.(prize);
+        }
+      }
       return;
     }
     if (this.state !== 'rolling' || !this.ball) return;
@@ -258,18 +311,11 @@ export class CroonPhysics {
       });
       this.lastHole = { stage: this.stageIndex, hole: best };
       const label = holes[best].label;
-      if (label === 'NEXT' && this.stageIndex < CROON.stages.length - 1) {
-        this.state = 'transfer';
-        this.transferTime = CROON.transferSeconds;
-        this.world.removeRigidBody(this.ball);
-        this.ball = null;
-        this.onNext?.(this.stageIndex + 1);
-      } else {
-        const prize: CroonPrize = label === 'NEXT' ? 'JP' : label;
-        this.result = { stage: this.stageIndex, hole: best, prize };
-        this.state = 'settled';
-        this.onSettle?.(prize);
-      }
+      this.sink = { stage: this.stageIndex, hole: best, from: { x: p.x, y: p.y, z: p.z }, t: 0, label };
+      this.state = 'sinking';
+      this.world.removeRigidBody(this.ball);
+      this.ball = null;
+      if (label === 'NEXT' && this.stageIndex < CROON.stages.length - 1) this.onNext?.(this.stageIndex + 1);
       return;
     }
     // 穴の縁で粘っている（ゆっくり）ときの音

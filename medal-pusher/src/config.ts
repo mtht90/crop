@@ -19,7 +19,7 @@ export const FIELD = {
   front: 3.5, // この z より手前に落ちたら獲得
   back: -12,
   sideWallEnd: -0.5, // サイドの壁はここまで。以降は左右に落ちるとロスト
-  winHalfWidth: 3.4, // 手前の獲得口の半幅（外側はロスト）
+  winHalfWidth: 4.4, // 手前の獲得口の半幅（外側はロスト）
 };
 
 export const PUSHER = {
@@ -59,7 +59,7 @@ export const PAYOUT = {
   dropY: 3.2,
   dropZ: -5.6,
   rate: 14, // 払い出し 枚/秒
-  maxPhysicalJackpot: 150, // JPで物理的に降らせる上限（超過分は直接クレジット）
+  maxRate: 40, // 払い出しが大量に溜まったときの最大速度 枚/秒
 };
 
 export const GAME = {
@@ -110,14 +110,16 @@ export const CROON = {
   bankStart: 0.72, // バンクが始まる位置（半径に対する比） // 皿の摩擦。逆回転の皿がボールの周回を止めて内側へ落とす
   coneDepth: 0.1,
   ballSpinDamping: 8, // ボールの回転の減衰。大きいと滑り摩擦が効き、逆回転の皿で周回が止まる // 皿の内側の中心へ向かう傾き（大きいほど中央の穴に入りやすい）
-  transferSeconds: 0.9, // NEXT に入ってから次の段に打ち出されるまで
+  transferSeconds: 1.3, // NEXT に入ってからシュートを通って次の段に出るまで
+  intakeSeconds: 1.4, // 抽選開始時、投入シュートを通って1段目に出るまで
+  sinkSeconds: 0.45, // 穴に吸い込まれる演出の時間
   stages: [
     {
-      x: -4.0, y: 2.2, z: -1.2, radius: 2.0, depth: 0.6, holeRing: 0.5, holeRadius: 0.235, centerRadius: 0.245,
+      x: -4.0, y: 3.6, z: -1.2, radius: 2.0, depth: 0.6, holeRing: 0.5, holeRadius: 0.235, centerRadius: 0.245,
       spin: 0.35, launchAngle: 1.2, launchSpeed: 4.6, holes: [10, 10, 20, 10, 10, 20], center: 'NEXT', color: '#ff3d8b',
     },
     {
-      x: 4.0, y: 1.2, z: -1.2, radius: 2.0, depth: 0.6, holeRing: 0.5, holeRadius: 0.245, centerRadius: 0.24,
+      x: 4.0, y: 1.7, z: -1.2, radius: 2.0, depth: 0.6, holeRing: 0.5, holeRadius: 0.245, centerRadius: 0.24,
       spin: -0.4, launchAngle: Math.PI, launchSpeed: 4.6, holes: [20, 30, 20, 30, 20, 50], center: 'NEXT', color: '#3d8bff',
     },
     {
