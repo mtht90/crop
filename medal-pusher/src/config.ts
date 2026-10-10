@@ -131,17 +131,14 @@ export const CROON = {
     {
       x: -4.8, y: 3.8, z: -1.4, radius: 2.6, depth: 0.7, cone: 0.1, holeRing: 0.5, holeRadius: 0.235, centerRadius: 0.245,
       spin: 0.3, launchAngle: 1.2, launchSpeed: 5.2, holes: [10, 10, 20, 10, 10, 20], center: 'NEXT', color: '#ff3d8b',
-      posts: { count: 4, ring: 0.24 },
     },
     {
       x: 4.8, y: 1.9, z: -1.4, radius: 2.6, depth: 0.7, cone: 0.1, holeRing: 0.5, holeRadius: 0.245, centerRadius: 0.24,
       spin: -0.35, launchAngle: Math.PI, launchSpeed: 5.2, holes: [20, 30, 20, 30, 20, 50], center: 'NEXT', color: '#2456d6',
-      posts: { count: 4, ring: 0.24 },
     },
     {
       x: 0, y: 0, z: 2.4, radius: 3.2, depth: 0.8, cone: 0.06, holeRing: 0.5, holeRadius: 0.265, centerRadius: 0.228,
       spin: 0.25, launchAngle: 0.7, launchSpeed: 5.8, holes: [50, 100, 50, 200, 50, 100], center: 'JP', color: '#4a1a8a',
-      posts: { count: 5, ring: 0.2 },
     },
   ] as CroonStageDef[],
 };
