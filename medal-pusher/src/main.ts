@@ -153,12 +153,23 @@ async function main(): Promise<void> {
   };
   $('btn-info').addEventListener('click', openInfo);
   $('btn-close').addEventListener('click', () => info.classList.add('hidden'));
-  $('btn-reset').addEventListener('click', () => {
-    if (confirm(`データを消して最初（${GAME.startCredit}枚）からやり直しますか？`)) {
-      game.reset();
-      info.classList.add('hidden');
-      game.onToast?.('リセットしました', 'info');
+  // confirm() が使えない環境もあるので、2回押しで確定する
+  const resetBtn = $('btn-reset');
+  let resetArmed = 0;
+  resetBtn.addEventListener('click', () => {
+    if (Date.now() - resetArmed > 3000) {
+      resetArmed = Date.now();
+      resetBtn.textContent = `もう一度押すと ${GAME.startCredit} 枚からやり直し`;
+      setTimeout(() => {
+        if (Date.now() - resetArmed >= 3000) resetBtn.textContent = 'データをリセット';
+      }, 3100);
+      return;
     }
+    resetArmed = 0;
+    resetBtn.textContent = 'データをリセット';
+    game.reset();
+    info.classList.add('hidden');
+    game.onToast?.('リセットしました', 'info');
   });
   window.addEventListener('pagehide', () => game.save());
   document.addEventListener('visibilitychange', () => {

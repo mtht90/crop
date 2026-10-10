@@ -61,8 +61,16 @@ export async function pbrMaterial(name: string, o: PBROptions = {}): Promise<THR
   });
 }
 
+// .hdr を配信できないホスト向けに、data URI で埋め込んだ HDRI を使えるようにする
+declare global {
+  interface Window {
+    __EMBEDDED_HDR?: Record<string, string>;
+  }
+}
+
 export function loadHDR(name: string): Promise<THREE.DataTexture> {
-  return new HDRLoader().loadAsync(`${BASE}assets/hdri/${name}`).then((t) => {
+  const url = window.__EMBEDDED_HDR?.[name] ?? `${BASE}assets/hdri/${name}`;
+  return new HDRLoader().loadAsync(url).then((t) => {
     t.mapping = THREE.EquirectangularReflectionMapping;
     return t;
   });

@@ -100,7 +100,11 @@ export class Game {
   }
 
   reset(): void {
-    localStorage.removeItem(SAVE_KEY);
+    try {
+      localStorage.removeItem(SAVE_KEY);
+    } catch {
+      // ストレージが使えない環境
+    }
     this.newField();
     this.save();
     this.onChange?.();
