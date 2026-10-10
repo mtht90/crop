@@ -28,7 +28,7 @@
   .big { color: #ff4a5a; } .reg { color: #4ab0ff; }
   .tools { display: flex; gap: 6px; pointer-events: auto; }
   .tools button { width: 40px; height: 40px; border-radius: 10px; border: 1px solid rgba(255,255,255,.18); background: rgba(10,4,20,.62); color: #fff; font-size: 18px; cursor: pointer; }
-  @media (max-width: 440px) { .tools { gap: 4px; } .tools button { width: 34px; height: 34px; font-size: 15px; } #btn-cash, #btn-mode { padding: 0 6px; font-size: 12px; } .tools { flex-wrap: wrap; justify-content: flex-end; max-width: 46vw; } #toast { top: max(178px, calc(env(safe-area-inset-top) + 170px)) !important; } }
+  @media (max-width: 440px) { .tools { gap: 4px; } .tools button { width: 34px; height: 34px; font-size: 15px; } #btn-cash { padding: 0 6px; font-size: 12px; } .tools { flex-wrap: wrap; justify-content: flex-end; max-width: 46vw; } #toast { top: max(178px, calc(env(safe-area-inset-top) + 170px)) !important; } }
   .tools button.off { opacity: .4; text-decoration: line-through; }
 
 
@@ -59,9 +59,6 @@
   #btn-lend:disabled { opacity: .35; cursor: default; }
   #hud.need #btn-lend { animation: lendPulse 1s ease-in-out infinite; }
   @keyframes lendPulse { 50% { box-shadow: 0 0 0 3px #ffd23f88; } }
-  #fade { position: fixed; inset: 0; z-index: 20; background: #000; opacity: 0; pointer-events: none; transition: opacity .3s; }
-  #fade.on { opacity: 1; }
-  #btn-mode { white-space: nowrap; width: auto; padding: 0 10px; font: 400 13px "Dela Gothic One", sans-serif; background: linear-gradient(#6a2a8a, #3a1050); border-color: #d07aff55; }
   #btn-cash { white-space: nowrap; width: auto; padding: 0 12px; font: 400 14px "Dela Gothic One", sans-serif; background: linear-gradient(#2a6a3a, #144a22); border-color: #3bff8a55; }
   .edge { position: fixed; top: 0; bottom: 0; width: 28px; z-index: 4; pointer-events: none; opacity: 0; transition: opacity .2s; }
   #edge-l { left: 0; background: linear-gradient(90deg, rgba(255,63,168,.75), transparent); }
@@ -101,7 +98,6 @@
     <button id="btn-lend" title="千円入れる (M)">千円入れる <small>+46枚</small></button>
   </div>
   <div class="tools">
-    <button id="btn-mode" title="スロット / パチンコ (Tab)">パチンコ</button>
     <button id="btn-cash" title="換金して終了">換金</button>
     <button id="btn-sound" title="サウンド">♪</button>
     <button id="btn-vib" title="振動">≋</button>
@@ -110,7 +106,6 @@
   </div>
 </div>
 <div id="toast"></div>
-<div id="fade"></div>
 <div id="edge-l" class="edge"></div><div id="edge-r" class="edge"></div>
 <div id="modal" hidden>
   <div class="card">

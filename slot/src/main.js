@@ -11,7 +11,6 @@ import { Cabinet, DIM } from './cabinet.js';
 import { Haptics, Shaker, Coins, Sparks } from './fx.js';
 import { Director } from './director.js';
 import { Neighbor } from './neighbors.js';
-import { PachinkoGame } from './pachinko/game.js';
 import { hapticTrigger } from '../assets/lib/ios-haptics/ios-haptics.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
@@ -97,11 +96,7 @@ function updateRig(dt) {
 // boot
 // ------------------------------------------------------------------
 let cab, coins, sparks, director;
-let bootAssets = null;
-// スロット / パチンコの切り替え
-let mode = 'slot';
-let pgame = null;
-const curBgm = () => (mode === 'pachinko' ? [pgame.bgmName(), cfg.audio.normalBgm] : machine.mode !== 'normal' ? [cfg.bonus[machine.mode].bgm, 1] : ['normal', cfg.audio.normalBgm]);
+const curBgm = () => (machine.mode !== 'normal' ? [cfg.bonus[machine.mode].bgm, 1] : ['normal', cfg.audio.normalBgm]);
 function playBgm() { const [n, g] = curBgm(); audio.bgm(n, { gain: g }); }
 const loadBar = $('loadbar');
 async function boot() {
@@ -114,7 +109,6 @@ async function boot() {
   scene.environment = assets.env || null;
   scene.environmentIntensity = cfg.render.envIntensity;
 
-  bootAssets = assets;
   cab = new Cabinet(cfg, assets, machine.logic);
   scene.add(cab.group);
   buildRoom(assets);
@@ -141,8 +135,7 @@ async function boot() {
     audio.resume().then(() => playBgm()).catch((e) => console.warn('audio resume', e));
   };
   renderer.setAnimationLoop(frame);
-  try { if (localStorage.getItem(STORE + '.mode') === 'pachinko') switchMode('pachinko'); } catch { /* noop */ }
-  window.__slot = { THREE, cab, machine, director, scene, camera, rig, cfg, cashout, lend, switchMode, get pgame() { return pgame; }, get mode() { return mode; }, force: (f) => { forcedFlag = f; }, get state() { return state; } };
+  window.__slot = { THREE, cab, machine, director, scene, camera, rig, cfg, cashout, lend, force: (f) => { forcedFlag = f; }, get state() { return state; } };
 }
 
 function buildRoom(assets) {
@@ -258,14 +251,7 @@ function refreshHud() {
     const need = machine.medals < cfg.bet && !machine.replayPending && machine.credit < cfg.bet && machine.mode === 'normal';
     cab.setChanger(machine.wallet, need && machine.canLend());
   }
-  let needLend = machine.medals < cfg.bet && !machine.replayPending && machine.credit < cfg.bet && machine.mode === 'normal';
-  if (mode === 'pachinko') {
-    $('h-medals').textContent = machine.balls;
-    needLend = machine.balls <= 0 && !pgame?.world.balls.length;
-  }
-  $('h-medals-k').textContent = mode === 'pachinko' ? '持ち玉' : '持ちメダル';
-  $('h-medals-u').textContent = mode === 'pachinko' ? '玉 =' : '枚 =';
-  $('btn-lend').innerHTML = mode === 'pachinko' ? `千円入れる <small>+${cfg.money.lendBalls}玉</small>` : `千円入れる <small>+${cfg.money.lendMedals}枚</small>`;
+  const needLend = machine.medals < cfg.bet && !machine.replayPending && machine.credit < cfg.bet && machine.mode === 'normal';
   $('btn-lend').disabled = !machine.canLend();
   $('hud').classList.toggle('need', needLend && machine.canLend());
 }
@@ -317,8 +303,6 @@ function doBet() {
 // 換金して終了 → 戦績を表示して次の日へ
 function cashout() {
   if (state !== 'idle' || machine.mode !== 'normal') { toast('ボーナス中・回転中は換金できません', 'warn'); return; }
-  if (pgame && (pgame.logic.round || pgame.world.balls.length || pgame.logic.current)) { toast('大当たり中・玉が動いている間・変動中は換金できません', 'warn'); return; }
-  if (pgame) { pgame.firing = false; }
   if (machine.credit > 0) { machine.medals += machine.credit; machine.credit = 0; }
   const r = machine.cashout();
   const tot = machine.records.reduce((a, x) => a + x.balance, 0);
@@ -327,7 +311,7 @@ function cashout() {
   $('m-body').innerHTML = `
     <dl>
       <dt>投資</dt><dd>${yen(r.invested)}</dd>
-      <dt>換金 (${r.medals} 枚${r.balls ? ` + ${r.balls} 玉` : ''})</dt><dd>${yen(r.cash)}</dd>
+      <dt>換金 (${r.medals} 枚)</dt><dd>${yen(r.cash)}</dd>
       <dt>収支</dt><dd class="${r.balance >= 0 ? 'pos' : 'neg'}">${r.balance >= 0 ? '+' : ''}${yen(r.balance)}</dd>
       <dt>回転数</dt><dd>${r.games} G</dd>
       <dt>BIG / REG</dt><dd>${r.big} / ${r.reg}</dd>
@@ -339,7 +323,6 @@ function cashout() {
   audio.play(r.balance >= 0 ? 'bonus_end' : 'lose', { gain: 0.8 });
   const L = cab.lights;
   L.lampTarget = 0; L.lampPremium = false; L.rainbow = 0; L.mode = 'idle'; cab.screen.set('idle');
-  if (pgame) { pgame.logic.reset(); pgame.save(); pgame.refreshTray(); }
   payShown = 0;
   save();
   refreshHud();
@@ -487,8 +470,6 @@ function act(a) {
 addEventListener('keydown', (e) => {
   if (e.repeat) return;
   if (e.code === 'KeyG') { toggleGui(); return; }
-  if (e.code === 'Tab') { e.preventDefault(); switchMode(mode === 'slot' ? 'pachinko' : 'slot'); return; }
-  if (mode === 'pachinko') { pachKey(e); return; }
   if (e.code === 'KeyM') { act('lend'); return; }
   const a = keyMap[e.code];
   if (a) { e.preventDefault(); act(a); }
@@ -505,7 +486,6 @@ let leverDrag = null;
 const appEl = $('app');
 appEl.addEventListener('pointerdown', (e) => {
   if (!cab) return;
-  if (mode === 'pachinko') { pachDown(e); return; }
   const a = pick(e);
   if (!a) return;
   if (a === 'lever') {
@@ -515,24 +495,12 @@ appEl.addEventListener('pointerdown', (e) => {
   act(a);
 });
 addEventListener('pointermove', (e) => {
-  if (handleDrag && e.pointerId === handleDrag.id) {
-    const dy = handleDrag.y0 - e.clientY;
-    if (Math.abs(dy) > 6) handleDrag.moved = true;
-    if (handleDrag.moved) pgame.setPower(handleDrag.p0 + dy / 220);
-    return;
-  }
   if (!leverDrag || e.pointerId !== leverDrag.id) return;
   const d = Math.max(0, Math.min(1, (e.clientY - leverDrag.y0) / 70));
   cab.lever.drag = d;
   if (d > 0.65 && !leverDrag.fired) { leverDrag.fired = true; pullLever(); }
 });
 const endLever = (e) => {
-  if (handleDrag && e.pointerId === handleDrag.id) {
-    if (!handleDrag.moved) pgame.setFiring(!pgame.firing); // タップで発射 ON/OFF
-    else if (!pgame.firing) pgame.setFiring(true);         // 回したら発射も始める
-    handleDrag = null;
-    return;
-  }
   if (!leverDrag || e.pointerId !== leverDrag.id) return;
   if (!leverDrag.fired) pullLever(); // タップでも引ける
   cab.lever.drag = 0;
@@ -546,59 +514,7 @@ addEventListener('pointermove', (e) => {
   rig.tx = (e.clientX / innerWidth) * 2 - 1;
   rig.ty = -((e.clientY / innerHeight) * 2 - 1);
 });
-// ---------------- パチンコの操作 ----------------
-let handleDrag = null;
-function pachDown(e) {
-  const a = pgame.pick(e);
-  if (a === 'handle') handleDrag = { id: e.pointerId, y0: e.clientY, p0: pgame.power, moved: false };
-  else if (a === 'push') pgame.push();
-  else if (a === 'plend') pgame.lend();
-}
-function pachKey(e) {
-  const k = e.code;
-  if (k === 'Space' || k === 'Enter') { e.preventDefault(); pgame.setFiring(!pgame.firing); }
-  else if (k === 'ArrowUp') { e.preventDefault(); pgame.setPower(pgame.power + 0.03); }
-  else if (k === 'ArrowDown') { e.preventDefault(); pgame.setPower(pgame.power - 0.03); }
-  else if (k === 'ArrowRight') { e.preventDefault(); pgame.setPower(0.97); }   // 右打ち
-  else if (k === 'ArrowLeft') { e.preventDefault(); pgame.setPower(0.48); }    // 左打ち
-  else if (k === 'KeyP' || k === 'KeyB') pgame.push();
-  else if (k === 'KeyM') pgame.lend();
-}
-
-// スロット ⇄ パチンコ (暗転して島を移る)
-let switching = false;
-const helpSlot = document.getElementById('help')?.textContent || '';
-async function switchMode(to) {
-  if (switching || to === mode || !bootAssets) return;
-  if (to === 'pachinko' && (state !== 'idle' || machine.mode !== 'normal' || (machine.carried && machine.noticed))) { toast('ボーナス中・回転中・告知中は移動できません', 'warn'); return; }
-  if (to === 'slot' && pgame && (pgame.logic.round || pgame.world.balls.length)) { toast('大当たり中・玉が動いている間は移動できません', 'warn'); return; }
-  switching = true;
-  const fade = $('fade');
-  fade.classList.add('on');
-  audio.stopBgm(0.3);
-  await sleep(350);
-  try {
-    if (to === 'pachinko' && !pgame) pgame = new PachinkoGame({ cfg, assets: bootAssets, audio, haptics, shaker, machine, toast, onChange: () => { refreshHud(); save(); } });
-    if (pgame) pgame.firing = false;
-    mode = to;
-    renderPass.scene = to === 'pachinko' ? pgame.scene : scene;
-    renderPass.camera = to === 'pachinko' ? pgame.camera : camera;
-    $('btn-mode').textContent = to === 'pachinko' ? 'スロット' : 'パチンコ';
-    document.body.dataset.mode = to;
-    $('help').textContent = to === 'pachinko'
-      ? 'ハンドルをタップで発射 / 上下になぞって強さ  ·  キー: Space 発射  ↑↓ 強さ  → 右打ち  ← 左打ち  P PUSH  M 千円  Tab スロットへ'
-      : helpSlot;
-    try { localStorage.setItem(STORE + '.mode', to); } catch { /* noop */ }
-    refreshHud();
-    playBgm();
-  } catch (e) { report(e); }
-  await sleep(100);
-  fade.classList.remove('on');
-  switching = false;
-}
-
 addEventListener('resize', () => {
-  pgame?.fit();
   renderer.setSize(innerWidth, innerHeight);
   composer.setSize(innerWidth, innerHeight);
   bloomPass.resolution.set(innerWidth / 2, innerHeight / 2);
@@ -616,8 +532,7 @@ $('btn-vib').onclick = () => {
 $('btn-gear').onclick = () => toggleGui();
 $('btn-reload').onclick = () => location.reload();
 $('btn-cash').onclick = () => cashout();
-$('btn-lend').onclick = (e) => { e.currentTarget.blur(); if (mode === 'pachinko') pgame.lend(); else lend(); };
-$('btn-mode').onclick = (e) => { e.currentTarget.blur(); switchMode(mode === 'slot' ? 'pachinko' : 'slot'); };
+$('btn-lend').onclick = (e) => { e.currentTarget.blur(); lend(); };
 $('m-next').onclick = () => { $('modal').hidden = true; playBgm(); toast(`新しい日 — 所持金 ${yen(machine.wallet)}`); };
 
 // ------------------------------------------------------------------
@@ -689,15 +604,6 @@ function frame() {
 }
 function frameBody() {
   const dt = Math.min(0.05, clock.getDelta());
-  if (mode === 'pachinko' && pgame) {
-    pgame.update(dt);
-    bloom.kick = Math.max(0, bloom.kick - dt * 1.4);
-    // 盤面は明るい面が多いので、ブルームは控えめに
-    bloomPass.strength = cfg.effects.bloom.strength * 0.45 + bloom.kick * 0.3;
-    bloomPass.threshold = Math.max(cfg.effects.bloom.threshold, 0.88);
-    composer.render();
-    return;
-  }
   cab.update(dt);
   coins.update(dt);
   sparks.update(dt);
