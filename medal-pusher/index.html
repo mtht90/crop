@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Medal Pusher 3D</title>
+    <link rel="icon" href="data:," />
+  </head>
+  <body>
+    <div id="app"></div>
+
+    <div id="hud" class="hidden">
+      <div class="panel credit">
+        <div class="label">CREDIT</div>
+        <div class="value" id="credit">100</div>
+      </div>
+      <div class="panel jp">
+        <div class="label">JACKPOT</div>
+        <div class="value" id="jackpot">300</div>
+      </div>
+      <div class="menu">
+        <button id="btn-sound" title="サウンド">🔊</button>
+        <button id="btn-info" title="遊び方 / クレジット">？</button>
+      </div>
+    </div>
+
+    <div id="controls" class="hidden">
+      <button id="btn-auto" class="ctrl">AUTO<br /><small>OFF</small></button>
+      <button id="btn-insert" class="ctrl big">投入<br /><small>SPACE</small></button>
+    </div>
+
+    <div id="toasts"></div>
+
+    <div id="loading" class="overlay">
+      <div class="card">
+        <h1>MEDAL PUSHER</h1>
+        <div class="bar"><div id="load-bar"></div></div>
+        <p id="load-text">素材を読み込み中…</p>
+        <button id="btn-start" class="primary hidden">タップしてスタート</button>
+      </div>
+    </div>
+
+    <div id="info" class="overlay hidden">
+      <div class="card wide">
+        <h2>遊び方</h2>
+        <ul class="howto">
+          <li><b>マウスを左右</b>（スマホは画面をドラッグ）で投入位置を動かし、<b>クリック / スペース / 投入ボタン</b>でメダルを1枚投入。長押しで連射。</li>
+          <li>メダルが中央の <b>START</b> レーンを通るとスロット抽選（最大4つまで保留）。</li>
+          <li>3つ揃いでメダル払い出し。<b>蹄鉄</b>が揃うと JP ボールが落ちてきます。</li>
+          <li>JP ボールを手前に押し出すと <b>JACKPOT チャンス</b>！JP を引けば貯まったメダルを総取り。</li>
+          <li>手前に落ちたメダルが獲得、左右に落ちるとハズレ。進行は自動でブラウザに保存されます。</li>
+        </ul>
+        <div class="stats" id="stats"></div>
+        <h2>クレジット（使用素材）</h2>
+        <div id="credits-list" class="credits"></div>
+        <div class="row">
+          <button id="btn-reset" class="danger">データをリセット</button>
+          <button id="btn-close" class="primary">閉じる</button>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
