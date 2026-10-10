@@ -5,6 +5,10 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { CONFIG } from './config.js';
 import { Machine } from './machine.js';
+import { DCONFIG } from './dark/config.js';
+import { DarkMachine } from './dark/machine.js';
+import { DarkCabinet } from './dark/cabinet.js';
+import { DarkDirector } from './dark/director.js';
 import { AudioEngine } from './audio.js';
 import { loadAssets } from './assets.js';
 import { Cabinet, DIM } from './cabinet.js';
@@ -14,14 +18,21 @@ import { Neighbor } from './neighbors.js';
 import { hapticTrigger } from '../assets/lib/ios-haptics/ios-haptics.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
-const cfg = CONFIG;
-// URL ハッシュのトークン (#lite / #debug / #zoom / 組み合わせは #debug-lite)
+// URL ハッシュのトークン (#lite / #debug / #zoom / #dark / #juggler。組み合わせは #debug-lite)
 const HASH = new Set(location.hash.slice(1).split(/[-_.]/).filter(Boolean));
+// 機種: ハッシュで指定 > 前回座った台 > ジャグラー型
+const MACHINE_KEY = 'slot.machine';
+let lastMachine = null;
+try { lastMachine = localStorage.getItem(MACHINE_KEY); } catch { /* storage blocked */ }
+const DARK = HASH.has('dark') || (!HASH.has('juggler') && lastMachine === 'dark');
+const cfg = DARK ? DCONFIG : CONFIG;
 if (HASH.has('lite')) { cfg.render.hall = false; cfg.render.neighbors = false; cfg.render.pixelRatioMax = 1; }
 const TOUCH = matchMedia('(hover: none)').matches;
 if (TOUCH) { cfg.render.pixelRatioMax = Math.min(cfg.render.pixelRatioMax, 1.5); cfg.render.neighbors = cfg.render.neighbors && 'near'; cfg.render.mobile = true; }
 const $ = (id) => document.getElementById(id);
-const STORE = 'slot.juggler.v1';
+const STORE = DARK ? DCONFIG.store : 'slot.juggler.v1';
+// 財布 (所持金・投資・持ちメダル・戦績) は 2 台で共有する。台を移ってもメダルは持ち歩ける
+const POCKET = 'slot.pocket.v1';
 
 // ------------------------------------------------------------------
 // renderer / scene
@@ -56,8 +67,19 @@ const bloom = { kick: 0 };
 const audio = new AudioEngine(cfg);
 const haptics = new Haptics(cfg);
 const shaker = new Shaker(cfg);
-const machine = new Machine(cfg);
-if (cfg.play.persist) { try { const s = localStorage.getItem(STORE); if (s) machine.restore(s); } catch { /* storage blocked */ } }
+const machine = DARK ? new DarkMachine(cfg) : new Machine(cfg);
+if (cfg.play.persist) {
+  try {
+    const s = localStorage.getItem(STORE); if (s) machine.restore(s);
+    const p = JSON.parse(localStorage.getItem(POCKET) || 'null');
+    if (p) {
+      // 別の台で換金して日が変わっていたら、この台も新しい日にする
+      if (p.day !== machine.day && machine.day != null) machine.newDay();
+      Object.assign(machine, { wallet: p.wallet, invested: p.invested, medals: p.medals, records: p.records || [], day: p.day });
+    }
+  } catch { /* storage blocked */ }
+}
+machine.day = machine.day ?? 0;
 // アーティファクトのビューアで再公開されたときに持ちメダル等を引き継ぐ
 if (window.claude?.hot?.data?.machine) machine.restore(window.claude.hot.data.machine);
 window.claude?.hot?.snapshot?.(() => ({ machine: machine.serialize() }));
@@ -69,10 +91,11 @@ function fitCamera() {
   const aspect = innerWidth / innerHeight;
   const tanH = Math.tan(THREE.MathUtils.degToRad(c.fov / 2));
   const portrait = aspect < 0.9;
-  const halfH = portrait ? 0.74 : 0.9, halfW = portrait ? (cfg.render.neighbors ? cfg.render.portraitHalfW : 0.57) : 0.8; // 台上のデータカウンターまで収める
+  const F = cfg.render.frame || {};
+  const halfH = portrait ? (F.halfHPortrait ?? 0.74) : (F.halfH ?? 0.9), halfW = portrait ? (cfg.render.neighbors ? cfg.render.portraitHalfW : 0.57) : 0.8; // 台上のデータカウンターまで収める
   rig.cx = portrait && !cfg.render.neighbors ? 0.07 : 0; // 縦画面は右の千円入れ機まで収める
   const d = Math.max(halfH / tanH, halfW / (tanH * aspect));
-  const ty = portrait ? 1.8 : c.target[1] + 0.52; // 縦画面は HUD の下にカウンターが来るように
+  const ty = portrait ? (F.tyPortrait ?? 1.8) : (F.ty ?? c.target[1] + 0.52); // 縦画面は HUD の下にカウンターが来るように
   rig.touch = matchMedia('(hover: none)').matches;
 
   rig.dist = d;
@@ -96,7 +119,9 @@ function updateRig(dt) {
 // boot
 // ------------------------------------------------------------------
 let cab, coins, sparks, director;
-const curBgm = () => (machine.mode !== 'normal' ? [cfg.bonus[machine.mode].bgm, 1] : ['normal', cfg.audio.normalBgm]);
+const curBgm = () => (DARK ? director.bgmFor() : machine.mode !== 'normal' ? [cfg.bonus[machine.mode].bgm, 1] : ['normal', cfg.audio.normalBgm]);
+// ボーナス・AT・CZ の途中か (換金や台移動をさせない)
+const busyBonus = () => (DARK ? !['normal', 'zen'].includes(machine.at.state) : machine.mode !== 'normal' || !!machine.carried);
 function playBgm() { const [n, g] = curBgm(); audio.bgm(n, { gain: g }); }
 const loadBar = $('loadbar');
 async function boot() {
@@ -109,17 +134,25 @@ async function boot() {
   scene.environment = assets.env || null;
   scene.environmentIntensity = cfg.render.envIntensity;
 
-  cab = new Cabinet(cfg, assets, machine.logic);
+  cab = DARK ? new DarkCabinet(cfg, assets, machine.logic) : new Cabinet(cfg, assets, machine.logic);
+  if (DARK) {
+    $('loadmsg').textContent = 'LOADING CHARACTERS…';
+    await cab.stage.load(cfg.assets.characters);
+    // 液晶で使う文字のグリフを先に読む (Google Fonts は文字単位で分割配信)
+    await document.fonts.load(`400 40px ${cfg.assets.jpFonts.display}`, 'DARKNIGHT RUSH GATE LIMIT BREAK BATTLE FINAL WIN LOSE COMPLETE RESULT STEP PUSH 0123456789+G!…—夜の城赤い月嵐の丘紫霧ステージチェンジ天井到達確定上乗せ特化ゾーン突入チャンス押し順ナビ残り獲得枚継続気配がする来るぞ闇を斬り裂け我が剣に懸けてボタンを押せ強チェリー目終了スタート狙えナイトバットポイズンスライムスケルトンロードカオスドラゴン現れた').catch(() => {});
+    cab.attachSword(cab.stage.swordSrc);
+  }
   scene.add(cab.group);
   buildRoom(assets);
   coins = new Coins(scene, assets.models.coin, cab.tray);
   sparks = new Sparks(scene);
-  director = new Director({ cfg, cab, audio, haptics, shaker, coins, sparks, machine, rig, bloom });
+  director = new (DARK ? DarkDirector : Director)({ cfg, cab, audio, haptics, shaker, coins, sparks, machine, rig, bloom });
+  if (DARK) director.restoreScene();
   director.onPayTick = (n) => { payShown = n; refreshHud(); };
   director.onBonusStart = (type) => { cab.setCounter({ ...machine.stats, graph: machine.stats.graph }, type); };
   // 告知済み・ボーナス中で再開したときの状態復元
-  if (machine.carried && machine.noticed) { cab.lights.lampTarget = 1; cab.lights.rainbow = 1; cab.screen.set('lit'); }
-  if (machine.mode !== 'normal') {
+  if (!DARK && machine.carried && machine.noticed) { cab.lights.lampTarget = 1; cab.lights.rainbow = 1; cab.screen.set('lit'); }
+  if (!DARK && machine.mode !== 'normal') {
     cab.lights.mode = 'rainbow';
     cab.screen.set('bonus', { type: machine.mode, max: cfg.bonus[machine.mode].maxPay });
     cab.screen.bonus.paid = machine.bonusPaid;
@@ -135,7 +168,7 @@ async function boot() {
     audio.resume().then(() => playBgm()).catch((e) => console.warn('audio resume', e));
   };
   renderer.setAnimationLoop(frame);
-  window.__slot = { THREE, cab, machine, director, scene, camera, rig, cfg, cashout, lend, force: (f) => { forcedFlag = f; }, get state() { return state; } };
+  window.__slot = { THREE, renderer, cab, machine, director, scene, camera, rig, cfg, cashout, lend, force: (f) => { forcedFlag = f; }, get state() { return state; } };
 }
 
 function buildRoom(assets) {
@@ -230,7 +263,10 @@ let forcedFlag = null;
 
 function save() {
   if (!cfg.play.persist) return;
-  try { localStorage.setItem(STORE, machine.serialize()); } catch { /* storage blocked */ }
+  try {
+    localStorage.setItem(STORE, machine.serialize());
+    localStorage.setItem(POCKET, JSON.stringify({ wallet: machine.wallet, invested: machine.invested, medals: machine.medals, records: machine.records, day: machine.day }));
+  } catch { /* storage blocked */ }
 }
 
 const yen = (v) => `${v < 0 ? '-' : ''}¥${Math.abs(v).toLocaleString('ja-JP')}`;
@@ -302,9 +338,10 @@ function doBet() {
 
 // 換金して終了 → 戦績を表示して次の日へ
 function cashout() {
-  if (state !== 'idle' || machine.mode !== 'normal') { toast('ボーナス中・回転中は換金できません', 'warn'); return; }
+  if (state !== 'idle' || busyBonus()) { toast(DARK ? 'CZ・AT 中・回転中は換金できません' : 'ボーナス中・回転中は換金できません', 'warn'); return; }
   if (machine.credit > 0) { machine.medals += machine.credit; machine.credit = 0; }
   const r = machine.cashout();
+  machine.day = (machine.day || 0) + 1; // もう一方の台も次に座ったとき新しい日になる
   const tot = machine.records.reduce((a, x) => a + x.balance, 0);
   $('m-title').textContent = r.balance >= 0 ? '勝ち' : '負け';
   $('m-title').className = r.balance >= 0 ? 'pos' : 'neg';
@@ -314,7 +351,7 @@ function cashout() {
       <dt>換金 (${r.medals} 枚)</dt><dd>${yen(r.cash)}</dd>
       <dt>収支</dt><dd class="${r.balance >= 0 ? 'pos' : 'neg'}">${r.balance >= 0 ? '+' : ''}${yen(r.balance)}</dd>
       <dt>回転数</dt><dd>${r.games} G</dd>
-      <dt>BIG / REG</dt><dd>${r.big} / ${r.reg}</dd>
+      <dt>${DARK ? 'AT / CZ' : 'BIG / REG'}</dt><dd>${r.big} / ${r.reg}</dd>
       <dt>本日の設定</dt><dd class="setting">設定 ${r.setting}</dd>
       <dt>通算収支 (${machine.records.length} 日)</dt><dd class="${tot >= 0 ? 'pos' : 'neg'}">${tot >= 0 ? '+' : ''}${yen(tot)}</dd>
     </dl>`;
@@ -323,6 +360,7 @@ function cashout() {
   audio.play(r.balance >= 0 ? 'bonus_end' : 'lose', { gain: 0.8 });
   const L = cab.lights;
   L.lampTarget = 0; L.lampPremium = false; L.rainbow = 0; L.mode = 'idle'; cab.screen.set('idle');
+  if (DARK) director.restoreScene();
   payShown = 0;
   save();
   refreshHud();
@@ -370,6 +408,7 @@ async function pullLever() {
   setState('spinning');
   refreshHud();
   setTimeout(() => {
+    if (director.spinLeds) { director.spinLeds(); return; }
     cab.lights.stopLed = ['#3cf', '#3cf', '#3cf'];
     cab.lights.stopLedOn = [true, true, true];
   }, cfg.reels.spinUpMs);
@@ -397,7 +436,7 @@ function pressStop(i) {
     try {
       audio.play('reel_stop', { gain: 1.0, rate: 0.92 + Math.random() * 0.12 });
       shaker.punch(0, -0.0035, 0);
-      director.onStop(stoppedNow);
+      director.onStop(stoppedNow, i);
     } catch (e) { report(e); }
     if (stoppedNow === 3) settle();
   });
@@ -458,10 +497,14 @@ const keyMap = {
   Digit1: 'stop0', Digit2: 'stop1', Digit3: 'stop2',
   KeyZ: 'stop0', KeyX: 'stop1', KeyC: 'stop2',
   KeyJ: 'stop0', KeyK: 'stop1', KeyL: 'stop2',
+  KeyP: 'push',
   ArrowLeft: 'stop0', ArrowDown: 'stop1', ArrowRight: 'stop2',
 };
 function act(a) {
   if (!cab || !$('loading').classList.contains('gone')) return;
+  // PUSH ボタン待ちのあいだはレバー・スペースキーでも押せる
+  if (director.awaitingPush && (a === 'lever' || a === 'push')) { director.push(); return; }
+  if (a === 'push') return;
   if (a === 'lever') pullLever();
   else if (a === 'bet') doBet();
   else if (a === 'lend') { cab.lendBtn.position.z = 0.098; setTimeout(() => { cab.lendBtn.position.z = 0.105; }, 120); lend(); }
@@ -531,6 +574,22 @@ $('btn-vib').onclick = () => {
 };
 $('btn-gear').onclick = () => toggleGui();
 $('btn-reload').onclick = () => location.reload();
+// 台を移る (島は後日。いまはボタンで 2 台を行き来する)
+$('btn-machine').textContent = DARK ? '⇄ ジャグラー' : '⇄ DARKNIGHT';
+$('btn-machine').onclick = () => {
+  if (state !== 'idle' || busyBonus()) { toast(DARK ? 'CZ・AT 中は台を移れません' : 'ボーナス中・告知中は台を移れません', 'warn'); return; }
+  if (machine.credit > 0) { machine.medals += machine.credit; machine.credit = 0; }
+  save();
+  const to = DARK ? 'juggler' : 'dark';
+  try { localStorage.setItem(MACHINE_KEY, to); } catch { /* storage blocked */ }
+  const h = [...HASH].filter((k) => k !== 'dark' && k !== 'juggler');
+  h.push(to);
+  location.hash = h.join('-');
+  location.reload();
+};
+document.title = DARK ? 'DARKNIGHT — SLOT' : 'SLOT';
+$('title').textContent = DARK ? 'DARKNIGHT' : 'SLOT';
+if (DARK) $('keys').innerHTML = '液晶 AT 機。CZ「DARK GATE」→ バトルに勝てば AT「DARKNIGHT RUSH」。<br>AT 中は液晶の数字とボタンの色が押し順を教えてくれる。PUSH ボタンが出たら押せ (P / スペース)。<br>右上の「⇄」でジャグラーの台へ移れます。';
 $('btn-cash').onclick = () => cashout();
 $('btn-lend').onclick = (e) => { e.currentTarget.blur(); lend(); };
 $('m-next').onclick = () => { $('modal').hidden = true; playBgm(); toast(`新しい日 — 所持金 ${yen(machine.wallet)}`); };
@@ -547,19 +606,26 @@ async function setupDebug() {
 async function toggleGui() {
   if (gui) { gui.domElement.style.display = gui.domElement.style.display === 'none' ? '' : 'none'; return; }
   const { GUI } = await import('../assets/lib/lil-gui/lil-gui.esm.min.js');
-  gui = new GUI({ title: 'SLOT — TUNING' });
+  gui = new GUI({ title: `${cfg.title || 'SLOT'} — TUNING` });
   const g1 = gui.addFolder('抽選');
   g1.add(cfg, 'setting', [1, 2, 3, 4, 5, 6]).name('設定 (本日・隠し)').onChange((v) => { machine.daySetting = +v; });
-  g1.add(guiState, 'force', ['none', 'BIG', 'REG', 'CHERRY+BIG', 'CHERRY+REG', 'GRAPE', 'BELL', 'CLOWN', 'REPLAY', 'CHERRY', 'NONE']).name('次G 強制フラグ')
+  const forces = DARK ? ['none', 'CZ', 'AT', 'LB', 'W_CHERRY', 'S_CHERRY', 'SUIKA', 'CHANCE', 'REPLAY', 'N_LCR', 'N_CRL', 'N_RLC']
+    : ['none', 'BIG', 'REG', 'CHERRY+BIG', 'CHERRY+REG', 'GRAPE', 'BELL', 'CLOWN', 'REPLAY', 'CHERRY', 'NONE'];
+  g1.add(guiState, 'force', forces).name('次G 強制フラグ')
     .onChange((v) => { forcedFlag = v === 'none' ? null : v; });
-  g1.add(cfg.play, 'assistAlignAfterNotice').name('告知後 目押しアシスト');
+  if (!DARK) g1.add(cfg.play, 'assistAlignAfterNotice').name('告知後 目押しアシスト');
   g1.add(cfg.reels, 'maxSlip', 0, 4, 1).name('最大滑りコマ').onChange(() => { machine.logic._ctx = new Map(); });
   const g2 = gui.addFolder('演出');
-  g2.add(director.debugForce, 'notice', ['auto', 'lever', 'release']).name('告知 (先ペカ/後ペカ)');
-  g2.add(director.debugForce, 'premium').name('プレミア点灯');
-  g2.add(director.debugForce, 'preview', ['auto', 'none', 'balls', 'face', 'cutin', 'seven', 'blackout']).name('予告 (強制)');
-  g2.add(cfg.notice, 'premium', 0, 1, 0.01).name('プレミア率');
-  g2.add(cfg.notice, 'silenceMs', 0, 600, 10).name('点灯前の静寂 ms');
+  if (DARK) {
+    g2.add(director.debugForce, 'preview', ['auto', 'none', 'step', 'cutin', 'enemy', 'blackout']).name('予告 (強制)');
+    g2.add(director.debugForce, 'push', ['auto', 'none', 'red', 'gold', 'rainbow']).name('PUSH ボタン (強制)');
+  } else {
+    g2.add(director.debugForce, 'notice', ['auto', 'lever', 'release']).name('告知 (先ペカ/後ペカ)');
+    g2.add(director.debugForce, 'premium').name('プレミア点灯');
+    g2.add(director.debugForce, 'preview', ['auto', 'none', 'balls', 'face', 'cutin', 'seven', 'blackout']).name('予告 (強制)');
+    g2.add(cfg.notice, 'premium', 0, 1, 0.01).name('プレミア率');
+    g2.add(cfg.notice, 'silenceMs', 0, 600, 10).name('点灯前の静寂 ms');
+  }
   g2.add(cfg.effects, 'haptics').name('振動');
   const g3 = gui.addFolder('リール');
   g3.add(cfg.reels, 'rpm', 30, 140, 1);
@@ -610,9 +676,12 @@ function frameBody() {
   bloom.kick = Math.max(0, bloom.kick - dt * 1.4);
   bloomPass.strength = cfg.effects.bloom.strength + bloom.kick * 0.45;
   bloomPass.threshold = cfg.effects.bloom.threshold;
-  if (cab.lights.rainbow > 0 && machine.mode === 'normal' && !machine.carried) cab.lights.rainbow = 0;
-  cab.screen.status.zone = machine.mode === 'normal' && !machine.noticed ? machine.zone : 0;
-  cab.screen.status.chain = machine.chain;
+  if (DARK) cab.renderLcd(renderer, dt);
+  else {
+    if (cab.lights.rainbow > 0 && machine.mode === 'normal' && !machine.carried) cab.lights.rainbow = 0;
+    cab.screen.status.zone = machine.mode === 'normal' && !machine.noticed ? machine.zone : 0;
+    cab.screen.status.chain = machine.chain;
+  }
   updateNeighbors(dt);
   updateRig(dt);
   composer.render();

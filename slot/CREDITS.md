@@ -155,3 +155,35 @@ OGG を MP3 に変換しただけで、音そのものには手を加えてい�
 | `assets/lib/three/three.module.js`, `assets/lib/three/addons/**` (GLTFLoader, SkeletonUtils ほか) | three.js r170 (npm `three@0.170.0`) | https://github.com/mrdoob/three.js | MIT (`assets/lib/three/LICENSE`) |
 | `assets/lib/ios-haptics/ios-haptics.js` | ios-haptics 3.2.0 (iPhone の Safari でタップ時に本体を振動させる) | https://github.com/tijnjh/ios-haptics | MIT (`assets/lib/ios-haptics/LICENSE.txt`) |
 | `assets/lib/lil-gui/lil-gui.esm.min.js` | lil-gui 0.20.0 | https://github.com/georgealways/lil-gui | MIT (`assets/lib/lil-gui/LICENSE.md`) |
+
+---
+
+## DARKNIGHT (液晶 AT 機) の素材
+
+### 3D キャラクター (Quaternius / CC0)
+
+FBX 版を three.js の FBXLoader → GLTFExporter で glTF に変換しています (骨・アニメーションはそのまま。不透明度だけ読み込み時に直しています)。
+
+| ファイル | 素材 | 用途 | 入手先 | ライセンス |
+|---|---|---|---|---|
+| `assets/models/darknight/KnightCharacter.gltf.json`, `Sword`, `Helmet1`, `ShoulderPads` | Lowpoly Animated Knight | 主人公の騎士 (黒く塗り替え) と筐体の剣の役物 | https://opengameart.org/content/lowpoly-animated-knight | CC0 1.0 |
+| `assets/models/darknight/Bat`, `Slime`, `Skeleton`, `Dragon` (`.gltf.json`) | Lowpoly Animated Monsters | 敵 4 体 | https://opengameart.org/content/lowpoly-animated-monsters | CC0 1.0 (`License-Monsters.txt` を同梱) |
+
+### BGM (CC0)
+
+| ファイル | 曲名 | 作者 | 入手先 |
+|---|---|---|---|
+| `assets/audio/bgm/dk_normal.mp3` | Battle RPG Theme (先頭 120 秒) | CleytonRX | https://opengameart.org/content/boss-battle-theme |
+| `assets/audio/bgm/dk_battle.mp3` | Battle Theme A | cynicmusic | https://opengameart.org/content/battle-theme-a |
+| `assets/audio/bgm/dk_at.mp3` | Epic Boss Battle | Juhani Junkala | https://opengameart.org/content/boss-battle-music |
+
+### 効果音・ボイス・PUSH ボタン (Kenney / CC0)
+
+| ファイル | パック | 入手先 |
+|---|---|---|
+| `assets/audio/sfx/dkv_*.mp3` (fight / ready / you win / you lose / final round など) | Voiceover Pack: Fighter | https://kenney.nl/assets/voiceover-pack-fighter |
+| `assets/audio/sfx/dk_knifeSlice*`, `dk_drawKnife1`, `dk_chop`, `dk_metalPot2` | RPG Audio | https://kenney.nl/assets/rpg-audio |
+| `assets/audio/sfx/dk_push_click_a`, `dk_push_switch_b` | UI Pack (Sounds) | https://kenney.nl/assets/ui-pack |
+| `assets/images/kenney-ui/button_red_round_gloss.png` | UI Pack — `PNG/Red/Default/button_round_depth_gloss.png` (PUSH ボタンの面) | https://kenney.nl/assets/ui-pack |
+
+OGG は MP3 (モノラル 96kbps) に変換しています。

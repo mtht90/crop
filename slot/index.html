@@ -59,6 +59,7 @@
   #btn-lend:disabled { opacity: .35; cursor: default; }
   #hud.need #btn-lend { animation: lendPulse 1s ease-in-out infinite; }
   @keyframes lendPulse { 50% { box-shadow: 0 0 0 3px #ffd23f88; } }
+  #btn-machine { white-space: nowrap; width: auto; padding: 0 10px; font: 400 13px "Dela Gothic One", sans-serif; background: linear-gradient(#3a1060, #1a0630); border-color: #a040ff66; }
   #btn-cash { white-space: nowrap; width: auto; padding: 0 12px; font: 400 14px "Dela Gothic One", sans-serif; background: linear-gradient(#2a6a3a, #144a22); border-color: #3bff8a55; }
   .edge { position: fixed; top: 0; bottom: 0; width: 28px; z-index: 4; pointer-events: none; opacity: 0; transition: opacity .2s; }
   #edge-l { left: 0; background: linear-gradient(90deg, rgba(255,63,168,.75), transparent); }
@@ -98,6 +99,7 @@
     <button id="btn-lend" title="千円入れる (M)">千円入れる <small>+46枚</small></button>
   </div>
   <div class="tools">
+    <button id="btn-machine" title="台を移る">⇄</button>
     <button id="btn-cash" title="換金して終了">換金</button>
     <button id="btn-sound" title="サウンド">♪</button>
     <button id="btn-vib" title="振動">≋</button>
@@ -122,14 +124,14 @@
 
 <div id="loading">
   <div class="box">
-    <h1>SLOT</h1>
+    <h1 id="title">SLOT</h1>
     <p id="loadmsg">LOADING…</p>
     <div class="bar"><div id="loadbar"></div></div>
     <button id="startbtn">TAP TO PLAY</button>
-    <div class="keys">所持金 3 万円で勝負。右の貸出機で千円 = 46 枚。<br>左下のランプが「ペカッ」と光ればボーナス確定。7 を揃えよう。<br>やめるときは「換金」。本日の設定がわかります。</div>
+    <div class="keys" id="keys">所持金 3 万円で勝負。右の貸出機で千円 = 46 枚。<br>左下のランプが「ペカッ」と光ればボーナス確定。7 を揃えよう。<br>やめるときは「換金」。本日の設定がわかります。</div>
     <details class="credits"><summary>CREDITS</summary>
       Emoji: Twemoji (CC-BY 4.0) · Pixel symbols: Molly "Cougarmint" Willits (CC-BY 3.0) · BGM "Blackmoor Tides": Matthew Pablo (CC-BY 3.0)<br>
-      CC0: Poly Haven (HDRI) · ambientCG (textures) · Kenney (models, SFX) · Quaternius (pirate kit) · Eldritch Grim (BGM) · Thimras, qubodup, EZduzziteh (SFX)<br>
+      CC0: Poly Haven (HDRI) · ambientCG (textures) · Kenney (models, SFX) · Quaternius (knight &amp; monsters) · CleytonRX, cynicmusic, Juhani Junkala (BGM) · Thimras, qubodup, EZduzziteh (SFX)<br>
       Fonts (OFL): Dela Gothic One, Bungee, Orbitron, DSEG7, Shippori Mincho B1, Zen Kaku Gothic New · three.js, lil-gui (MIT)
     </details>
   </div>

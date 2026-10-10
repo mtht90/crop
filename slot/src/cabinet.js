@@ -20,6 +20,9 @@ export class Cabinet {
     this.cfg = cfg;
     this.assets = assets;
     this.logic = logic;
+    // 寸法は台ごとに上書きできる (DARKNIGHT は液晶が大きく、筐体が高い)
+    this.D = { ...DIM, ...(cfg.dim || {}) };
+    this.lift = this.D.top - DIM.top;
     this.group = new THREE.Group();
     this.pickables = [];
     this.time = 0;
@@ -73,7 +76,7 @@ export class Cabinet {
 
   // ---------------- body ----------------
   buildBody() {
-    const { W, bodyBottom, top, front, back } = DIM;
+    const { W, bodyBottom, top, front, back } = this.D;
     const g = this.group;
     const H = top - bodyBottom, D = front - back;
     // 内部シェル: 背板 + 下部ボックス + 天板 (リール室は空洞)
@@ -92,14 +95,14 @@ export class Cabinet {
       g.add(trim);
     }
     // 上部パネル (LCD 周り) — 黒鏡面
-    const upper = new THREE.Mesh(new RoundedBoxGeometry(W - 0.03, 0.4, 0.04, 4, 0.015), this.m.piano);
-    upper.position.set(0, 1.79, front - 0.01);
+    const upper = new THREE.Mesh(new RoundedBoxGeometry(W - 0.03, 0.4 + this.lift, 0.04, 4, 0.015), this.m.piano);
+    upper.position.set(0, 1.79 + this.lift / 2, front - 0.01);
     g.add(upper);
   }
 
   // ---------------- reels ----------------
   buildReels() {
-    const { reelR, reelW, reelGap, reelY } = DIM;
+    const { reelR, reelW, reelGap, reelY } = this.D;
     const N = this.logic.N;
     const pixel = this.cfg.assets.symbolSkin === 'pixel';
     this.reels = [];
@@ -125,7 +128,7 @@ export class Cabinet {
       });
       const mesh = new THREE.Mesh(geo, mat);
       const holder = new THREE.Group();
-      holder.position.set((i - 1) * reelGap, reelY, DIM.front - 0.035 - reelR);
+      holder.position.set((i - 1) * reelGap, reelY, this.D.front - 0.035 - reelR);
       holder.add(mesh);
       // リール間の仕切り (黒)
       this.group.add(holder);
@@ -134,11 +137,11 @@ export class Cabinet {
     }
     // リール奥の暗幕
     const back = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.4), new THREE.MeshBasicMaterial({ color: 0x000000 }));
-    back.position.set(0, reelY, DIM.front - 0.035 - reelR * 1.1);
+    back.position.set(0, reelY, this.D.front - 0.035 - reelR * 1.1);
     this.group.add(back);
     for (const x of [-0.1, 0.1]) {
       const div = new THREE.Mesh(new THREE.BoxGeometry(0.022, 0.34, 0.06), new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 0.7 }));
-      div.position.set(x, reelY, DIM.front - 0.06);
+      div.position.set(x, reelY, this.D.front - 0.06);
       this.group.add(div);
     }
   }
@@ -155,8 +158,8 @@ export class Cabinet {
 
   // ---------------- window / panel ----------------
   buildWindow() {
-    const { W, front, reelY, winW } = DIM;
-    const cellH = DIM.reelR * (Math.PI * 2) / this.logic.N;
+    const { W, front, reelY, winW } = this.D;
+    const cellH = this.D.reelR * (Math.PI * 2) / this.logic.N;
     this.cellH = cellH;
     const winH = cellH * 3 + 0.03;
     this.winH = winH;
@@ -215,7 +218,7 @@ export class Cabinet {
     // 有効ライン表示 (当選時に光る)
     this.lineMeshes = this.cfg.lines.map((ln) => {
       const ys = ln.map((row) => reelY + (row - 1) * cellH);
-      const x0 = -DIM.reelGap - 0.11, x1 = DIM.reelGap + 0.11;
+      const x0 = -this.D.reelGap - 0.11, x1 = this.D.reelGap + 0.11;
       const ya = ys[0] + (ys[0] - ys[1]) * 0.55, yb = ys[2] + (ys[2] - ys[1]) * 0.55;
       const len = Math.hypot(x1 - x0, yb - ya);
       const m = new THREE.Mesh(new THREE.PlaneGeometry(len, 0.007), new THREE.MeshBasicMaterial({ color: hdr(0xffd84a, 4), transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
@@ -248,7 +251,7 @@ export class Cabinet {
     // ライン番号
     x.font = `400 22px ${this.cfg.assets.jpFonts.display}`; x.fillStyle = '#9fd8ff';
     const py = (yy) => c.height - (yy - y0) / H * c.height;
-    const cy = py(DIM.reelY), ch = this.cellH / H * c.height;
+    const cy = py(this.D.reelY), ch = this.cellH / H * c.height;
     for (const [lbl, dy] of [['3', -1], ['1', 0], ['2', 1]]) x.fillText(lbl, 140, cy + dy * ch + 8);
     return Object.assign(new THREE.CanvasTexture(c), { colorSpace: THREE.SRGBColorSpace, anisotropy: 8 });
   }
@@ -257,12 +260,12 @@ export class Cabinet {
   buildLamp() {
     // 液晶の光が筐体と手元を照らす
     this.lampLight = new THREE.PointLight(0xff3fa8, 0, 2.6, 2);
-    this.lampLight.position.set(0, DIM.lcdY, DIM.front + 0.2);
+    this.lampLight.position.set(0, this.D.lcdY, this.D.front + 0.2);
     this.group.add(this.lampLight);
     // 点灯の瞬間に広がる光の波紋
     this.ripples = [0, 1, 2].map(() => {
       const m = new THREE.Mesh(new THREE.RingGeometry(0.9, 1, 64), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
-      m.position.set(0, DIM.lcdY, DIM.front + 0.03);
+      m.position.set(0, this.D.lcdY, this.D.front + 0.03);
       m.userData.t = 99; // 待機中 (起動直後に勝手に広がらないように)
       this.group.add(m);
       return m;
@@ -275,7 +278,7 @@ export class Cabinet {
 
   // ---------------- 操作部 ----------------
   buildDeck() {
-    const { W, front, deckY, deckZ } = DIM;
+    const { W, front, deckY, deckZ } = this.D;
     const g = this.group;
     // 下パネル (配当表)
     const payTex = this.makePayTable();
@@ -299,7 +302,7 @@ export class Cabinet {
     this.stopButtons = [];
     for (let i = 0; i < 3; i++) {
       const grp = new THREE.Group();
-      grp.position.set((i - 1) * DIM.reelGap, deckY, deckZ + 0.002);
+      grp.position.set((i - 1) * this.D.reelGap, deckY, deckZ + 0.002);
       const bezel = new THREE.Mesh(new THREE.TorusGeometry(0.03, 0.006, 16, 48), this.m.chrome);
       grp.add(bezel);
       const mat = new THREE.MeshPhysicalMaterial({ color: 0x223344, emissive: new THREE.Color('#3cf'), emissiveIntensity: 0, roughness: 0.15, clearcoat: 1, transmission: 0, thickness: 0.01 });
@@ -331,7 +334,7 @@ export class Cabinet {
     // 台座 (クロームの枠) + 押し込める本体
     // 実機同様、手前に少し傾けて正面から文字が読めるようにする
     const betGrp = new THREE.Group();
-    betGrp.position.set(-0.19, deckY + 0.034, DIM.front + 0.1);
+    betGrp.position.set(-0.19, deckY + 0.034, this.D.front + 0.1);
     betGrp.rotation.x = 0.42;
     g.add(betGrp);
     const betBase = new THREE.Mesh(new RoundedBoxGeometry(0.15, 0.012, 0.075, 3, 0.005), this.m.chrome);
@@ -356,10 +359,10 @@ export class Cabinet {
 
     // メダル投入口
     const slot = new THREE.Mesh(new RoundedBoxGeometry(0.1, 0.012, 0.06, 2, 0.004), this.m.chrome);
-    slot.position.set(0.3, deckY + 0.042, DIM.front + 0.1);
+    slot.position.set(this.D.slotX ?? 0.3, deckY + 0.042, this.D.front + 0.1);
     g.add(slot);
     const slit = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.002, 0.006), new THREE.MeshBasicMaterial({ color: 0x000000 }));
-    slit.position.set(0.3, deckY + 0.0485, DIM.front + 0.1);
+    slit.position.set(this.D.slotX ?? 0.3, deckY + 0.0485, this.D.front + 0.1);
     g.add(slit);
 
     // 7セグ表示 (クレジット / 払い出し)
@@ -368,7 +371,7 @@ export class Cabinet {
     this.segTex = new THREE.CanvasTexture(this.segCanvas);
     this.segTex.colorSpace = THREE.SRGBColorSpace;
     const seg = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.0788), new THREE.MeshBasicMaterial({ map: this.segTex, toneMapped: false }));
-    seg.position.set(0.02, 1.19, DIM.front + 0.013);
+    seg.position.set(0.02, 1.19, this.D.front + 0.013);
     seg.scale.setScalar(0.85);
     g.add(seg);
     this.setSegments(0, 0, 0);
@@ -417,7 +420,7 @@ export class Cabinet {
 
   buildLever() {
     const pivot = new THREE.Group();
-    pivot.position.set(-0.36, DIM.deckY + 0.02, DIM.front + 0.1);
+    pivot.position.set(-0.36, this.D.deckY + 0.02, this.D.front + 0.1);
     const base = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.034, 0.02, 32), this.m.chrome);
     pivot.add(base);
     const arm = new THREE.Group();
@@ -437,7 +440,7 @@ export class Cabinet {
     this.lever = { pivot, arm, angle: 0.95, pull: 0, vel: 0, drag: 0 };
     // 画面端でも掴みやすいよう、デッキ左側一帯をレバーの当たり判定にする
     const zone = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.24), new THREE.MeshBasicMaterial({ visible: false }));
-    zone.position.set(-0.34, DIM.deckY + 0.07, DIM.front + 0.12);
+    zone.position.set(-0.34, this.D.deckY + 0.07, this.D.front + 0.12);
     zone.userData.action = 'lever';
     this.group.add(zone);
     this.pickables.push(zone);
@@ -446,7 +449,7 @@ export class Cabinet {
 
   buildTray() {
     const g = this.group;
-    const y = 0.81, z0 = DIM.front - 0.02, z1 = DIM.front + 0.14;
+    const y = 0.81, z0 = this.D.front - 0.02, z1 = this.D.front + 0.14;
     const bottom = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.01, z1 - z0), this.m.darkMetal);
     bottom.position.set(0, y, (z0 + z1) / 2);
     g.add(bottom);
@@ -456,7 +459,7 @@ export class Cabinet {
     mk(0.012, 0.07, z1 - z0, 0.31, y + 0.03, (z0 + z1) / 2);
     // 払い出し口
     const chute = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.04, 0.01), new THREE.MeshBasicMaterial({ color: 0x000000 }));
-    chute.position.set(0, 0.875, DIM.front + 0.001);
+    chute.position.set(0, 0.875, this.D.front + 0.001);
     g.add(chute);
     this.tray = { y: y + 0.006, z0, z1, x0: -0.3, x1: 0.3 };
   }
@@ -468,11 +471,11 @@ export class Cabinet {
     this.artTex = new THREE.CanvasTexture(c);
     this.artTex.colorSpace = THREE.SRGBColorSpace;
     this.artMat = new THREE.MeshStandardMaterial({ map: this.artTex, emissiveMap: this.artTex, emissive: 0xffffff, emissiveIntensity: 0.9, roughness: 0.25 });
-    const art = new THREE.Mesh(new THREE.PlaneGeometry(DIM.lcdW + 0.04, DIM.lcdH + 0.04), this.artMat);
-    art.position.set(0, DIM.lcdY, DIM.front + 0.012);
+    const art = new THREE.Mesh(new THREE.PlaneGeometry(this.D.lcdW + 0.04, this.D.lcdH + 0.04), this.artMat);
+    art.position.set(0, this.D.lcdY, this.D.front + 0.012);
     this.group.add(art);
-    const glass = new THREE.Mesh(new THREE.PlaneGeometry(DIM.lcdW + 0.04, DIM.lcdH + 0.04), new THREE.MeshPhysicalMaterial({ transparent: true, opacity: 0.05, roughness: 0, clearcoat: 1, envMapIntensity: 1.2, depthWrite: false }));
-    glass.position.set(0, DIM.lcdY, DIM.front + 0.016);
+    const glass = new THREE.Mesh(new THREE.PlaneGeometry(this.D.lcdW + 0.04, this.D.lcdH + 0.04), new THREE.MeshPhysicalMaterial({ transparent: true, opacity: 0.05, roughness: 0, clearcoat: 1, envMapIntensity: 1.2, depthWrite: false }));
+    glass.position.set(0, this.D.lcdY, this.D.front + 0.016);
     glass.renderOrder = 3;
     this.group.add(glass);
     this.screen = new Screen(c, this.assets.images, this.cfg.assets.jpFonts.display);
@@ -488,12 +491,12 @@ export class Cabinet {
     this.signTex = new THREE.CanvasTexture(c);
     this.signTex.colorSpace = THREE.SRGBColorSpace;
     this.drawSign(0);
-    const box = new THREE.Mesh(new RoundedBoxGeometry(DIM.W + 0.02, 0.18, 0.16, 4, 0.03), this.m.side);
-    box.position.set(0, 2.05, DIM.front - 0.06);
+    const box = new THREE.Mesh(new RoundedBoxGeometry(this.D.W + 0.02, 0.18, 0.16, 4, 0.03), this.m.side);
+    box.position.set(0, 2.05 + this.lift, this.D.front - 0.06);
     this.group.add(box);
     this.signMat = new THREE.MeshStandardMaterial({ map: this.signTex, emissiveMap: this.signTex, emissive: 0xffffff, emissiveIntensity: 1.0, roughness: 0.3 });
-    const face = new THREE.Mesh(new THREE.PlaneGeometry(DIM.W - 0.06, 0.15), this.signMat);
-    face.position.set(0, 2.05, DIM.front + 0.022);
+    const face = new THREE.Mesh(new THREE.PlaneGeometry(this.D.W - 0.06, 0.15), this.signMat);
+    face.position.set(0, 2.05 + this.lift, this.D.front + 0.022);
     this.group.add(face);
   }
 
@@ -522,9 +525,9 @@ export class Cabinet {
 
   buildNeon() {
     // 前面外周のネオン管
-    const { W, front } = DIM;
+    const { W, front } = this.D;
     const pts = [];
-    const x = W / 2 - 0.028, yb = 1.18, yt = 1.97;
+    const x = W / 2 - 0.028, yb = 1.18, yt = 1.97 + this.lift;
     pts.push(new THREE.Vector3(-x, yb, front + 0.03));
     pts.push(new THREE.Vector3(-x, yt - 0.06, front + 0.03));
     pts.push(new THREE.Vector3(-x + 0.06, yt, front + 0.03));
@@ -632,7 +635,7 @@ export class Cabinet {
       const on = L.stopLedOn[i];
       const c = L.stopLed[i] === 'rainbow' ? new THREE.Color().setHSL((t * 1.5 + i * 0.2) % 1, 1, 0.5) : new THREE.Color(L.stopLed[i]);
       b.mat.emissive.copy(c);
-      b.mat.emissiveIntensity = on ? 1.1 : 0.04;
+      b.mat.emissiveIntensity = on === true ? 1.1 : on || 0.04; // 数値なら減光 (押し順ナビの「押すな」)
     });
     L.betNudge = Math.max(0, (L.betNudge || 0) - dt * 1.5);
     this.betMat.emissiveIntensity = L.betNudge > 0 ? 0.4 + 1.4 * (Math.sin(t * 30) > 0 ? 1 : 0)
@@ -674,10 +677,10 @@ export class Cabinet {
     this.counterTex = new THREE.CanvasTexture(c);
     this.counterTex.colorSpace = THREE.SRGBColorSpace;
     const box = new THREE.Mesh(new RoundedBoxGeometry(0.62, 0.27, 0.12, 3, 0.012), this.m.darkMetal);
-    box.position.set(0, 2.34, -0.05);
+    box.position.set(0, 2.34 + this.lift, -0.05);
     this.group.add(box);
     const face = new THREE.Mesh(new THREE.PlaneGeometry(0.58, 0.24), new THREE.MeshBasicMaterial({ map: this.counterTex, toneMapped: false }));
-    face.position.set(0, 2.34, 0.012);
+    face.position.set(0, 2.34 + this.lift, 0.012);
     this.group.add(face);
     this.setCounter({ big: 0, reg: 0, since: 0, games: 0, graph: [0], history: [] });
   }
@@ -722,7 +725,7 @@ export class Cabinet {
   // ---------------- 台間サンド (千円札でメダルを借りる) ----------------
   buildChanger() {
     const g = new THREE.Group();
-    g.position.set(DIM.W / 2 + 0.085, 1.28, DIM.front - 0.06);
+    g.position.set(this.D.W / 2 + 0.085, 1.28, this.D.front - 0.06);
     const body = new THREE.Mesh(new RoundedBoxGeometry(0.13, 0.6, 0.2, 3, 0.012), this.m.darkMetal);
     g.add(body);
     const c = document.createElement('canvas'); c.width = 256; c.height = 512;

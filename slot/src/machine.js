@@ -180,7 +180,7 @@ export class Machine {
   }
 
   serialize() {
-    return JSON.stringify({ medals: this.medals, stats: this.stats, carried: this.carried, noticed: this.noticed, mode: this.mode, bonusPaid: this.bonusPaid, bonusGames: this.bonusGames, replayPending: this.replayPending, zone: this.zone, chain: this.chain, wallet: this.wallet, invested: this.invested, daySetting: this.daySetting, records: this.records });
+    return JSON.stringify({ medals: this.medals, stats: this.stats, carried: this.carried, noticed: this.noticed, mode: this.mode, bonusPaid: this.bonusPaid, bonusGames: this.bonusGames, replayPending: this.replayPending, zone: this.zone, chain: this.chain, wallet: this.wallet, invested: this.invested, daySetting: this.daySetting, records: this.records, day: this.day });
   }
 
   restore(json) {
@@ -190,7 +190,7 @@ export class Machine {
         medals: d.medals ?? this.medals, stats: { ...this.stats, ...d.stats }, carried: d.carried ?? null,
         noticed: !!d.noticed, mode: d.mode || 'normal', bonusPaid: d.bonusPaid || 0, bonusGames: d.bonusGames || 0,
         replayPending: !!d.replayPending, zone: d.zone || 0, chain: d.chain || 0,
-        wallet: d.wallet ?? this.wallet, invested: d.invested ?? 0, daySetting: d.daySetting ?? this.daySetting, records: d.records || [],
+        wallet: d.wallet ?? this.wallet, invested: d.invested ?? 0, daySetting: d.daySetting ?? this.daySetting, records: d.records || [], day: d.day ?? this.day,
       });
       this.cfg.setting = this.daySetting;
     } catch { /* 破損データは無視 */ }

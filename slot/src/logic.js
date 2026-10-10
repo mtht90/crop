@@ -62,9 +62,11 @@ export class SlotLogic {
 
   roleSet(mode) {
     const r = this.cfg.roles;
-    const names = mode === 'normal'
-      ? ['BIG', 'REG', 'GRAPE', 'BELL', 'CLOWN', 'REPLAY', 'CHERRY']
-      : ['BONUS_GRAPE', 'REPLAY', 'CHERRY', 'BELL', 'CLOWN', 'BIG', 'REG'];
+    const sets = this.cfg.roleSets || {
+      normal: ['BIG', 'REG', 'GRAPE', 'BELL', 'CLOWN', 'REPLAY', 'CHERRY'],
+      bonus: ['BONUS_GRAPE', 'REPLAY', 'CHERRY', 'BELL', 'CLOWN', 'BIG', 'REG'],
+    };
+    const names = mode === 'normal' ? sets.normal : sets.bonus;
     return names.map((n) => ({ name: n, ...r[n] }));
   }
 
@@ -95,7 +97,9 @@ export class SlotLogic {
     const stopped = stops.map((s) => s != null);
     if (stopped.filter(Boolean).length !== 2) return [];
     const open = stopped.indexOf(false);
-    const combos = [...this.cfg.roles.BIG.combos, ...this.cfg.roles.REG.combos];
+    const tc = this.cfg.tenpaiRoles || ['BIG', 'REG'];
+    const combos = tc.filter((n) => this.cfg.roles[n]).flatMap((n) => this.cfg.roles[n].combos);
+    if (!combos.length) return [];
     const out = [];
     this.lines.forEach((ln, li) => {
       for (const combo of combos) {

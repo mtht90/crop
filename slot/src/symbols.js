@@ -31,7 +31,7 @@ export function drawSymbol(ctx, key, cx, cy, size, images, pixel = false) {
 }
 
 function nameOf(k) {
-  return { R: 'red7', A: 'bar', G: 'grape', L: 'bell', J: 'clown', C: 'cherry', P: 'replay' }[k];
+  return { R: 'red7', A: 'bar', G: 'grape', L: 'bell', J: 'clown', C: 'cherry', P: 'replay', S: 'gem' }[k];
 }
 
 function seven(ctx, size, red) {
