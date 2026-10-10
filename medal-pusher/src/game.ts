@@ -1,4 +1,5 @@
-import { BOARD, FIELD, GAME, PAYOUT } from './config.ts';
+import { BOARD, FIELD, GAME, PAYOUT, SHOP } from './config.ts';
+import { CroonPhysics, type CroonPrize } from './croon.ts';
 import { PusherPhysics, type SavedField } from './physics.ts';
 import { SlotScreen, type SpinResult } from './slot.ts';
 import type { AudioManager } from './audio.ts';
@@ -22,6 +23,8 @@ export interface Stats {
   won: number;
   jackpots: number;
   bestCredit: number;
+  spentYen?: number; // 疑似課金の累計（実際の支払いは無し）
+  bought?: number;
 }
 
 export class Game {
@@ -36,6 +39,11 @@ export class Game {
   private payoutSide = 1;
   private pendingJpChance = 0;
   private saveTimer = 0;
+  private jackpotFrac = 0;
+  /** クルーン演出の段階: 'none' → 'intro'（カメラ移動） → 'spin' → 'result' */
+  private croonPhase: 'none' | 'intro' | 'spin' | 'result' = 'none';
+  private croonTimer = 0;
+  readonly croon = new CroonPhysics();
 
   constructor(
     readonly physics: PusherPhysics,
@@ -74,9 +82,9 @@ export class Game {
         this.audio.play('reach', { volume: 0.8 });
       },
       onResult: (r) => this.onSpinResult(r),
-      onJpTick: () => this.audio.play('jpTick', { volume: 0.4, minInterval: 0.04 }),
-      onJpResult: (v) => this.onJpResult(v),
     };
+    this.croon.onSettle = (_i, prize) => this.onCroonResult(prize);
+    this.croon.onBounce = (k) => this.audio.play('reelStop', { volume: 0.2 + k * 0.6, minInterval: 0.06, rate: 1.2 });
   }
 
   /** 新規ゲーム or セーブから復元 */
@@ -121,8 +129,13 @@ export class Game {
     if (!this.physics.canLaunch(x)) return false;
     this.credit--;
     this.stats.inserted++;
-    this.slot.jackpot += GAME.jackpotPerCoin;
-    this.slot.dirty = true;
+    // JP は投入 1 枚ごとに少しずつ積み上がる
+    this.jackpotFrac += GAME.jackpotPerCoin;
+    if (this.jackpotFrac >= 1) {
+      this.slot.jackpot += Math.floor(this.jackpotFrac);
+      this.jackpotFrac -= Math.floor(this.jackpotFrac);
+      this.slot.dirty = true;
+    }
     this.physics.launchCoin(x);
     this.audio.play('launch', { volume: 0.6, rate: 0.95 + Math.random() * 0.1 });
     this.onChange?.();
@@ -139,7 +152,7 @@ export class Game {
       } else {
         this.audio.play('ballRelease');
         this.physics.spawnBall((Math.random() - 0.5) * 4, PAYOUT.dropY + 1, -5.0);
-        this.onToast?.('JPボール投入！手前に落とせばJPチャンス', 'jp');
+        this.onToast?.('JPボール投入！手前に落とせばクルーンでJPチャンス', 'jp');
       }
       this.audio.play('smallWin');
       return;
@@ -149,46 +162,97 @@ export class Game {
       this.audio.play('bigWin');
       this.audio.duckBgm(4);
       this.view.fever(5);
-      this.onToast?.(`777 FEVER!! +${r.payout} 枚`, 'jp');
+      this.onToast?.(`777 FEVER!! +${r.payout} 枚  次の5回は当たり確定`, 'jp');
     } else {
       this.audio.play('smallWin');
       this.onToast?.(`+${r.payout} 枚 払い出し`, 'win');
     }
   }
 
-  private onJpResult(v: number | 'JP'): void {
-    if (v === 'JP') {
+  private onCroonResult(prize: CroonPrize): void {
+    this.croonPhase = 'result';
+    this.croonTimer = 0;
+    this.slot.flash(prize === 'JP' ? 4 : 1.5);
+    if (prize === 'JP') {
       const amount = this.slot.jackpot;
+      // 一部は盤面に降らせ、残りは直接クレジットへ
       const physical = Math.min(amount, PAYOUT.maxPhysicalJackpot);
       this.payoutQueue += physical;
-      const direct = amount - physical;
-      if (direct > 0) {
-        this.credit += direct;
-        this.stats.won += direct;
-      }
+      this.addCredit(amount - physical);
       this.stats.jackpots++;
       this.slot.jackpot = GAME.startJackpot;
+      this.jackpotFrac = 0;
       this.audio.play('jpWin');
       this.audio.play('fanfare');
       this.audio.duckBgm(6);
       this.view.fever(8);
+      this.slot.showMessage(`JACKPOT!! ${amount}`, '#f6f', 5);
       this.onToast?.(`★ JACKPOT ★  ${amount} 枚獲得！`, 'jp');
     } else {
-      this.payoutQueue += v;
-      this.audio.play('smallWin');
-      this.onToast?.(`JPチャンス  +${v} 枚`, 'win');
+      // クルーンの配当は直接クレジットへ
+      this.addCredit(prize);
+      this.audio.play(prize >= 50 ? 'bigWin' : 'smallWin');
+      this.slot.showMessage(`CROON +${prize}`, '#ff6', 4);
+      this.onToast?.(`クルーン  +${prize} 枚`, 'win');
     }
     this.onChange?.();
   }
 
-  update(dt: number): void {
-    // JPチャンスはスロットが空いたら開始
-    if (this.pendingJpChance > 0 && !this.slot.busy) {
-      this.pendingJpChance--;
-      this.audio.play('jpChance');
-      this.audio.duckBgm(5);
-      this.slot.startJackpotChance();
+  private addCredit(n: number): void {
+    if (n <= 0) return;
+    this.credit += n;
+    this.stats.won += n;
+    this.stats.bestCredit = Math.max(this.stats.bestCredit, this.credit);
+  }
+
+  /** 疑似課金でメダルを買う（実際の支払いは発生しない） */
+  buy(index: number): void {
+    const plan = SHOP[index];
+    if (!plan) return;
+    this.credit += plan.medals;
+    this.stats.spentYen = (this.stats.spentYen ?? 0) + plan.yen;
+    this.stats.bought = (this.stats.bought ?? 0) + plan.medals;
+    this.audio.play('stack', { volume: 0.8 });
+    this.audio.play('checker');
+    this.save();
+    this.onChange?.();
+  }
+
+  get croonActive(): boolean {
+    return this.croonPhase !== 'none';
+  }
+
+  private updateCroon(dt: number): void {
+    this.croon.update(dt);
+    if (this.croonPhase === 'none') {
+      if (this.pendingJpChance > 0 && !this.slot.busy) {
+        this.pendingJpChance--;
+        this.croonPhase = 'intro';
+        this.croonTimer = 0;
+        this.slot.setChance(true);
+        this.view.focusCroon(true);
+        this.audio.play('jpChance');
+        this.audio.duckBgm(8);
+        this.onToast?.('JP CHANCE！ クルーン抽選', 'jp');
+      }
+      return;
     }
+    this.croonTimer += dt;
+    if (this.croonPhase === 'intro' && this.croonTimer > 1.4) {
+      this.croonPhase = 'spin';
+      this.audio.play('ballRelease');
+      this.croon.start();
+    } else if (this.croonPhase === 'result' && this.croonTimer > 3.2) {
+      this.croon.finish();
+      this.croonPhase = 'none';
+      this.slot.setChance(false);
+      this.view.focusCroon(false);
+    }
+  }
+
+  update(dt: number): void {
+    // JPチャンス（クルーン）はスロットが空いたら開始
+    this.updateCroon(dt);
     this.slot.update(dt);
 
     // 払い出し（左右のシュートから交互にプッシャー上へ）
@@ -229,7 +293,7 @@ export class Game {
       // 盤面にいる投入中のメダルはセーブ対象外なので、その分はクレジットに戻す
       payoutQueue: this.payoutQueue,
       // 抽選中のJPチャンスは再開時にやり直す
-      jpChances: this.pendingJpChance + (this.slot.jpInProgress ? 1 : 0),
+      jpChances: this.pendingJpChance + (this.croonPhase === 'intro' || this.croonPhase === 'spin' ? 1 : 0),
       stats: this.stats,
       field: this.physics.serialize(),
     };

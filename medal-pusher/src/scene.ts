@@ -3,7 +3,8 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
-import { BALL, BOARD, COIN, FIELD, GAME, PAYOUT, PUSHER, TRAY } from './config.ts';
+import { BALL, BOARD, COIN, CROON, FIELD, GAME, PAYOUT, PUSHER, TRAY } from './config.ts';
+import type { CroonPhysics } from './croon.ts';
 import { loadHDR, loadModel, pbrMaterial } from './assets.ts';
 import { boardPins, laneDividers, type PusherPhysics } from './physics.ts';
 
@@ -12,6 +13,9 @@ const CAB_HW = TRAY.halfWidth + 0.4; // 筐体外寸の半幅
 const CAB_BACK = -11;
 const GLASS_TOP = 9.2;
 const SCREEN = { y: 13.1, w: 10.4, h: 6.5 };
+const ROOF_TOP = SCREEN.y + SCREEN.h / 2 + 1.75;
+// 上部クルーンの位置（台座の上に皿を置く）
+const CROON_POS = new THREE.Vector3(0, ROOF_TOP + 1.3, BOARD.backZ + 1.2);
 
 export class PusherScene {
   readonly renderer: THREE.WebGLRenderer;
@@ -36,6 +40,13 @@ export class PusherScene {
   private cameraTarget = new THREE.Vector3(0, 7.4, -2.5);
   private cameraBase = new THREE.Vector3(0, 18.5, 32.5);
   parallax = new THREE.Vector2();
+  private croonGroup!: THREE.Group;
+  private croonWheel!: THREE.Group;
+  private croonBall!: THREE.Mesh;
+  private croonFocus = 0;
+  private croonFocusTarget = 0;
+  private croonCamPos = new THREE.Vector3(0, CROON_POS.y + 11.5, CROON_POS.z + 5.5);
+  private croonCamTarget = CROON_POS.clone();
 
   constructor(private container: HTMLElement) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -85,6 +96,7 @@ export class PusherScene {
     this.buildScreen(screenCanvas);
     this.buildNeon();
     this.buildProps(chair?.scene ?? null, chest?.scene ?? null);
+    this.buildCroon(mats);
     tick(Promise.resolve());
 
     this.composer = new EffectComposer(this.renderer);
@@ -165,6 +177,24 @@ export class PusherScene {
     // フィールド床
     const fieldLen = FIELD.front - BOARD.backZ + 0.5;
     this.box(m.field, hw * 2, 0.5, fieldLen, 0, -0.25, FIELD.front - fieldLen / 2, false);
+    // 手前両端のロストゾーン（ここから落ちたメダルはハズレ）
+    for (const sx of [-1, 1]) {
+      const w = hw - FIELD.winHalfWidth;
+      const lost = this.textPlane('LOST', w, 0.9, '#ffb0b0', '#ff2020');
+      lost.rotation.x = -Math.PI / 2;
+      lost.position.set(sx * (FIELD.winHalfWidth + w / 2), 0.012, FIELD.front - 0.55);
+      this.scene.add(lost);
+      const zone = new THREE.Mesh(
+        new THREE.PlaneGeometry(w, 1.1),
+        new THREE.MeshStandardMaterial({ color: 0x3a0610, roughness: 0.6 }),
+      );
+      zone.rotation.x = -Math.PI / 2;
+      zone.position.set(sx * (FIELD.winHalfWidth + w / 2), 0.006, FIELD.front - 0.55);
+      zone.receiveShadow = true;
+      this.scene.add(zone);
+      // 落下路の仕切り
+      this.box(m.chrome, 0.08, -TRAY.y - 0.5, TRAY.shieldZ - FIELD.front, sx * FIELD.winHalfWidth, (TRAY.y - 0.5) / 2, (FIELD.front + TRAY.shieldZ) / 2, false);
+    }
     // フィールド手前のクロームエッジ
     this.box(m.chrome, hw * 2, 0.12, 0.12, 0, -0.06, FIELD.front - 0.06, false);
 
@@ -383,8 +413,8 @@ export class PusherScene {
     this.scene.add(screen);
 
     // 上部の看板
-    const sign = this.textPlane('MEDAL PUSHER', 8.2, 1.3, '#ffffff', '#ff2a8a', 'italic 900');
-    sign.position.set(0, SCREEN.y + SCREEN.h / 2 + 2.45, BOARD.backZ + 1.1);
+    const sign = this.textPlane('MEDAL PUSHER', 7.4, 1.1, '#ffffff', '#ff2a8a', 'italic 900');
+    sign.position.set(0, ROOF_TOP + 0.65, CROON_POS.z + CROON.radius + 0.75);
     this.scene.add(sign);
   }
 
@@ -461,6 +491,137 @@ export class PusherScene {
         this.chests.push(holder);
         this.scene.add(holder);
       }
+    }
+  }
+
+  private buildCroon(m: Awaited<ReturnType<PusherScene['loadMaterials']>>): void {
+    const R = CROON.radius;
+    const g = new THREE.Group();
+    g.position.copy(CROON_POS);
+    this.scene.add(g);
+    this.croonGroup = g;
+    // 台座の下の天板（筐体の上に張り出す）
+    const base = new THREE.Mesh(new THREE.BoxGeometry(CAB_HW * 2 + 0.2, 0.5, R * 2 + 1.6), m.body);
+    base.position.set(0, ROOF_TOP - CROON_POS.y - 0.25 + 0.01, 0);
+    base.castShadow = true;
+    base.receiveShadow = true;
+    g.add(base);
+    // 台座
+    const ped = new THREE.Mesh(new THREE.CylinderGeometry(R + 0.6, R + 0.9, 1.3, 48), m.bodyRed);
+    ped.position.y = -0.65 - 0.3;
+    ped.castShadow = true;
+    ped.receiveShadow = true;
+    g.add(ped);
+    // 外周（下部はクローム、上はガラス）とネオンリング
+    const band = new THREE.Mesh(new THREE.CylinderGeometry(R + 0.3, R + 0.3, 0.6, 48, 1, true), m.chrome);
+    band.position.y = 0;
+    g.add(band);
+    const rim = new THREE.Mesh(
+      new THREE.CylinderGeometry(R + 0.3, R + 0.3, 2.0, 48, 1, true),
+      new THREE.MeshPhysicalMaterial({ color: 0xddeeff, transparent: true, opacity: 0.1, roughness: 0.05, side: THREE.DoubleSide, depthWrite: false }),
+    );
+    rim.position.y = 1.3;
+    g.add(rim);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(R + 0.32, 0.08, 8, 64), this.neonMat(new THREE.Color(3, 0.4, 2.2), 0.4));
+    ring.rotation.x = Math.PI / 2;
+    ring.position.y = 2.2;
+    g.add(ring);
+    // ガラスの蓋
+    const lid = new THREE.Mesh(
+      new THREE.CircleGeometry(R + 0.3, 48),
+      new THREE.MeshPhysicalMaterial({ color: 0xffffff, transparent: true, opacity: 0.06, roughness: 0.05, depthWrite: false }),
+    );
+    lid.rotation.x = -Math.PI / 2;
+    lid.position.y = 2.55;
+    g.add(lid);
+
+    // 回転する皿
+    const wheel = new THREE.Group();
+    g.add(wheel);
+    this.croonWheel = wheel;
+    const n = CROON.pockets.length;
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 1024;
+    const c = canvas.getContext('2d')!;
+    const cx = 512, rr = 512;
+    for (let i = 0; i < n; i++) {
+      const prize = CROON.pockets[i];
+      // 皿のローカル角 θ（atan2(-z, x)）はキャンバス上では -θ
+      const a0 = -((i + 1) / n) * Math.PI * 2, a1 = -(i / n) * Math.PI * 2;
+      c.beginPath();
+      c.moveTo(cx, cx);
+      c.arc(cx, cx, rr, a0, a1);
+      c.closePath();
+      c.fillStyle = prize === 'JP' ? '#d0168a' : (prize as number) >= 30 ? '#c98a12' : i % 2 ? '#1d2a8a' : '#13206a';
+      c.fill();
+      c.strokeStyle = '#fff3';
+      c.lineWidth = 4;
+      c.stroke();
+      const mid = (a0 + a1) / 2;
+      c.save();
+      c.translate(cx + Math.cos(mid) * rr * 0.75, cx + Math.sin(mid) * rr * 0.75);
+      c.rotate(mid + Math.PI / 2);
+      c.fillStyle = '#fff';
+      c.textAlign = 'center';
+      c.textBaseline = 'middle';
+      c.font = prize === 'JP' ? '900 92px Orbitron, sans-serif' : '900 84px Orbitron, sans-serif';
+      c.shadowColor = '#000';
+      c.shadowBlur = 10;
+      c.fillText(String(prize), 0, 0);
+      c.restore();
+    }
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 8;
+    const disc = new THREE.Mesh(
+      new THREE.CircleGeometry(R, 64),
+      new THREE.MeshStandardMaterial({ map: tex, roughness: 0.35, metalness: 0.1, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.12 }),
+    );
+    disc.rotation.x = -Math.PI / 2;
+    disc.receiveShadow = true;
+    wheel.add(disc);
+    const cone = new THREE.Mesh(new THREE.ConeGeometry(CROON.coneRadius, CROON.coneHeight, 40), m.gold);
+    cone.position.y = CROON.coneHeight / 2;
+    cone.castShadow = true;
+    wheel.add(cone);
+    const inner = CROON.coneRadius - 0.05;
+    const len = R - inner;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2;
+      const d = new THREE.Mesh(new THREE.BoxGeometry(len, CROON.dividerHeight, 0.1), m.chrome);
+      const mid = inner + len / 2;
+      d.position.set(Math.cos(a) * mid, CROON.dividerHeight / 2, -Math.sin(a) * mid);
+      d.rotation.y = a;
+      d.castShadow = true;
+      wheel.add(d);
+    }
+    // ボール
+    const ballMat = m.chrome.clone();
+    ballMat.emissive = new THREE.Color(0.6, 0.5, 0.1);
+    ballMat.emissiveIntensity = 0.5;
+    this.croonBall = new THREE.Mesh(new THREE.SphereGeometry(CROON.ballRadius, 32, 20), ballMat);
+    this.croonBall.castShadow = true;
+    this.croonBall.visible = false;
+    g.add(this.croonBall);
+    // クルーンを照らすライト
+    const spot = new THREE.SpotLight(0xffffff, 140, 20, 0.7, 0.5, 2);
+    spot.position.set(0, 9, 3);
+    spot.target = wheel;
+    g.add(spot);
+  }
+
+  focusCroon(on: boolean): void {
+    this.croonFocusTarget = on ? 1 : 0;
+  }
+
+  updateCroon(croon: CroonPhysics): void {
+    this.croonWheel.rotation.y = croon.angle;
+    const p = croon.ballPosition;
+    const r = croon.ballRotation;
+    this.croonBall.visible = !!p;
+    if (p && r) {
+      this.croonBall.position.set(p.x, p.y, p.z);
+      this.croonBall.quaternion.set(r.x, r.y, r.z, r.w);
     }
   }
 
@@ -565,13 +726,17 @@ export class PusherScene {
       c.position.y = SCREEN.y + SCREEN.h / 2 + 1.75 + Math.sin(this.time * 1.5 + i) * 0.08;
     });
 
-    // カメラの微妙な視差
-    this.camera.position.set(
+    // カメラ（クルーン抽選中はクルーンへ寄る）
+    const k = 1 - Math.exp(-dt * 3);
+    this.croonFocus += (this.croonFocusTarget - this.croonFocus) * k;
+    const f = this.croonFocus * this.croonFocus * (3 - 2 * this.croonFocus);
+    const pos = new THREE.Vector3(
       this.cameraBase.x + this.parallax.x * 2.0,
       this.cameraBase.y + this.parallax.y * 1.2,
       this.cameraBase.z,
-    );
-    this.camera.lookAt(this.cameraTarget);
+    ).lerp(this.croonCamPos, f);
+    this.camera.position.copy(pos);
+    this.camera.lookAt(this.cameraTarget.clone().lerp(this.croonCamTarget, f));
     this.composer.render(dt);
   }
 }

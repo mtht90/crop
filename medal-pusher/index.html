@@ -13,12 +13,14 @@
       <div class="panel credit">
         <div class="label">CREDIT</div>
         <div class="value" id="credit">100</div>
+        <div class="spent" id="spent"></div>
       </div>
       <div class="panel jp">
         <div class="label">JACKPOT</div>
         <div class="value" id="jackpot">300</div>
       </div>
       <div class="menu">
+        <button id="btn-shop" title="メダルを買う">¥</button>
         <button id="btn-sound" title="サウンド">🔊</button>
         <button id="btn-info" title="遊び方 / クレジット">？</button>
       </div>
@@ -40,6 +42,19 @@
       </div>
     </div>
 
+    <div id="shop" class="overlay hidden">
+      <div class="card">
+        <h2>メダル貸出機</h2>
+        <p class="note">疑似課金です。実際のお金は動きません。使った金額は記録されます。</p>
+        <div id="shop-plans" class="plans"></div>
+        <p class="note" id="shop-spent"></p>
+        <div class="row">
+          <span></span>
+          <button id="btn-shop-close" class="primary">閉じる</button>
+        </div>
+      </div>
+    </div>
+
     <div id="info" class="overlay hidden">
       <div class="card wide">
         <h2>遊び方</h2>
@@ -47,8 +62,11 @@
           <li><b>マウスを左右</b>（スマホは画面をドラッグ）で投入位置を動かし、<b>クリック / スペース / 投入ボタン</b>でメダルを1枚投入。長押しで連射。</li>
           <li>メダルが中央の <b>START</b> レーンを通るとスロット抽選（最大4つまで保留）。</li>
           <li>3つ揃いでメダル払い出し。<b>蹄鉄</b>が揃うと JP ボールが落ちてきます。</li>
-          <li>JP ボールを手前に押し出すと <b>JACKPOT チャンス</b>！JP を引けば貯まったメダルを総取り。</li>
-          <li>手前に落ちたメダルが獲得、左右に落ちるとハズレ。進行は自動でブラウザに保存されます。</li>
+          <li>JP ボールを手前に押し出すと筐体上部の <b>クルーン</b> で JP チャンス！ボールが JP のポケットに入れば貯まったメダルを総取り。</li>
+          <li><b>7</b> が揃うと 100 枚＋次の 5 回は当たり確定のフィーバー。</li>
+          <li>手前は中央の獲得口だけが当たり。両端や左右に落ちたメダルはハズレ。</li>
+          <li>メダルが無くなったら「¥」ボタンで買い足せます（疑似課金・実際の支払いはありません）。</li>
+          <li>進行は自動でブラウザに保存されます。</li>
         </ul>
         <div class="stats" id="stats"></div>
         <h2>クレジット（使用素材）</h2>

@@ -13,18 +13,22 @@ interface SymbolDef {
   label: string;
 }
 
+// 荒めの配分：小当たりを減らし、当たったときの払い出しを大きくしている。
+// weight は 1000 スピンあたりの当選数。
 const SYMBOLS: SymbolDef[] = [
-  { key: 'cherries', file: 'cherries', payout: 5, weight: 100, label: 'CHERRY' },
-  { key: 'lemon', file: 'lemon', payout: 8, weight: 60, label: 'LEMON' },
-  { key: 'melon', file: 'melon', payout: 10, weight: 40, label: 'MELON' },
-  { key: 'bell', file: 'bell', payout: 15, weight: 30, label: 'BELL' },
-  { key: 'clover', file: 'clover', payout: 20, weight: 20, label: 'CLOVER' },
-  { key: 'bar', file: 'Bar1', payout: 30, weight: 14, label: 'BAR' },
-  { key: 'horseshoe', file: 'horseshoe', payout: 0, weight: 14, label: 'BALL' },
-  { key: 'seven', file: 'Lucky7_rainbow', payout: 77, weight: 6, label: 'SEVEN' },
-  { key: 'heart', file: 'heart', payout: 0, weight: 0, label: '' }, // ハズレ用
+  { key: 'cherries', file: 'cherries', payout: 10, weight: 75, label: 'CHERRY' },
+  { key: 'lemon', file: 'lemon', payout: 0, weight: 0, label: '' }, // ハズレ目用
+  { key: 'melon', file: 'melon', payout: 0, weight: 0, label: '' },
+  { key: 'bell', file: 'bell', payout: 20, weight: 30, label: 'BELL' },
+  { key: 'clover', file: 'clover', payout: 0, weight: 0, label: '' },
+  { key: 'bar', file: 'Bar1', payout: 40, weight: 12, label: 'BAR' },
+  { key: 'horseshoe', file: 'horseshoe', payout: 0, weight: 45, label: 'BALL' },
+  { key: 'seven', file: 'Lucky7_rainbow', payout: 100, weight: 4, label: 'SEVEN' },
+  { key: 'heart', file: 'heart', payout: 0, weight: 0, label: '' },
 ];
-const LOSE_WEIGHT = 716; // 合計1000に対するハズレの重み
+const LOSE_WEIGHT = 1000 - SYMBOLS.reduce((a, s) => a + s.weight, 0);
+/** 777 の後に続く確定当たりの回数 */
+export const FEVER_SPINS = 5;
 
 const STRIP: SymbolKey[] = [
   'seven', 'cherries', 'bell', 'lemon', 'heart', 'melon', 'horseshoe', 'cherries',
@@ -33,8 +37,6 @@ const STRIP: SymbolKey[] = [
 
 export type SpinResult = { kind: 'lose' } | { kind: 'win'; symbol: SymbolKey; payout: number; ball: boolean; fever: boolean };
 
-export const JP_SEGMENTS: (number | 'JP')[] = ['JP', 20, 50, 30, 100, 20, 30, 50];
-const JP_WEIGHTS = [1, 4, 2, 3, 1, 4, 3, 2];
 
 type Mode = 'idle' | 'spinning' | 'jp';
 
@@ -53,8 +55,6 @@ export interface SlotCallbacks {
   onReach?: () => void;
   onTick?: () => void;
   onResult?: (r: SpinResult) => void;
-  onJpTick?: () => void;
-  onJpResult?: (v: number | 'JP') => void;
 }
 
 export class SlotScreen {
@@ -78,13 +78,6 @@ export class SlotScreen {
   private messageUntil = Infinity;
   private flashUntil = 0;
 
-  // JP抽選
-  private jpPos = 0;
-  private jpSpeed = 0;
-  private jpTarget = 0;
-  private jpStart = 0;
-  private jpDone = false;
-  private jpLastIndex = -1;
 
   constructor() {
     this.canvas = document.createElement('canvas');
@@ -121,7 +114,15 @@ export class SlotScreen {
 
   /** JP抽選の結果がまだ出ていない */
   get jpInProgress(): boolean {
-    return this.mode === 'jp' && !this.jpDone;
+    return this.mode === 'jp';
+  }
+
+  /** クルーン抽選中はスロットを止めて「JP CHANCE」を表示 */
+  setChance(on: boolean): void {
+    this.mode = on ? 'jp' : 'idle';
+    if (on) this.showMessage('JP CHANCE!!', '#f6f', 999);
+    else this.showMessage('', '#9ff', 0);
+    this.dirty = true;
   }
 
   get busy(): boolean {
@@ -140,15 +141,24 @@ export class SlotScreen {
   }
 
   private decide(): SpinResult {
-    const total = LOSE_WEIGHT + SYMBOLS.reduce((a, s) => a + s.weight, 0);
+    const fever = this.feverSpins > 0;
+    if (fever) this.feverSpins--;
+    // フィーバー中はハズレ無し（7 は出ない）
+    const table = fever ? SYMBOLS.filter((s) => s.weight > 0 && s.key !== 'seven') : SYMBOLS.filter((s) => s.weight > 0);
+    const total = (fever ? 0 : LOSE_WEIGHT) + table.reduce((a, s) => a + s.weight, 0);
     let r = Math.random() * total;
-    for (const s of SYMBOLS) {
-      if (s.weight === 0) continue;
+    for (const s of table) {
       r -= s.weight;
-      if (r < 0) return { kind: 'win', symbol: s.key, payout: s.payout, ball: s.key === 'horseshoe', fever: s.key === 'seven' };
+      if (r < 0) {
+        if (s.key === 'seven') this.feverSpins = FEVER_SPINS;
+        return { kind: 'win', symbol: s.key, payout: s.payout, ball: s.key === 'horseshoe', fever: s.key === 'seven' };
+      }
     }
     return { kind: 'lose' };
   }
+
+  /** フィーバー（確定当たり）の残り回数 */
+  feverSpins = 0;
 
   private indexOf(sym: SymbolKey): number {
     const idx = STRIP.map((s, i) => (s === sym ? i : -1)).filter((i) => i >= 0);
@@ -189,24 +199,6 @@ export class SlotScreen {
     return true;
   }
 
-  startJackpotChance(): void {
-    this.mode = 'jp';
-    const total = JP_WEIGHTS.reduce((a, b) => a + b, 0);
-    let r = Math.random() * total;
-    this.jpTarget = 0;
-    for (let i = 0; i < JP_WEIGHTS.length; i++) {
-      r -= JP_WEIGHTS[i];
-      if (r < 0) {
-        this.jpTarget = i;
-        break;
-      }
-    }
-    this.jpStart = this.time;
-    this.jpSpeed = 18;
-    this.jpDone = false;
-    this.showMessage('JACKPOT CHANCE!!', '#f6f', 999);
-  }
-
   update(dt: number): void {
     this.time += dt;
     if (this.time > this.messageUntil) {
@@ -216,7 +208,7 @@ export class SlotScreen {
       this.dirty = true;
     }
     if (this.mode === 'spinning') this.updateReels(dt);
-    if (this.mode === 'jp') this.updateJp(dt);
+    if (this.mode === 'jp') this.dirty = true;
     if (this.mode === 'idle' && this.pending > 0) this.startSpin();
     if (this.time < this.flashUntil) this.dirty = true;
   }
@@ -269,39 +261,6 @@ export class SlotScreen {
     }
   }
 
-  private updateJp(dt: number): void {
-    const n = JP_SEGMENTS.length;
-    const elapsed = this.time - this.jpStart;
-    if (!this.jpDone) {
-      const spinTime = 4.5;
-      if (elapsed < spinTime - 2) {
-        this.jpPos = (this.jpPos + this.jpSpeed * dt) % n;
-      } else {
-        // 目標セグメントにぴったり止まるよう減速
-        const remaining = Math.max(0, spinTime - elapsed);
-        const dist = remaining * remaining * 3.2;
-        this.jpPos = (((this.jpTarget - dist) % n) + n) % n;
-        if (remaining <= 0) {
-          this.jpPos = this.jpTarget;
-          this.jpDone = true;
-          this.jpStart = this.time;
-          const v = JP_SEGMENTS[this.jpTarget];
-          this.flash(v === 'JP' ? 4 : 1.5);
-          this.showMessage(v === 'JP' ? `JACKPOT!! ${this.jackpot}` : `+${v} MEDALS`, v === 'JP' ? '#f6f' : '#ff6', 4);
-          this.cb.onJpResult?.(v);
-        }
-      }
-      const idx = Math.round(this.jpPos) % n;
-      if (idx !== this.jpLastIndex) {
-        this.jpLastIndex = idx;
-        this.cb.onJpTick?.();
-      }
-    } else if (elapsed > 2.5) {
-      this.mode = 'idle';
-    }
-    this.dirty = true;
-  }
-
   draw(): boolean {
     if (!this.dirty) return false;
     this.dirty = false;
@@ -338,7 +297,7 @@ export class SlotScreen {
     c.fillText(String(this.jackpot).padStart(4, '0'), W / 2, 118);
     c.shadowBlur = 0;
 
-    if (this.mode === 'jp' || (this.mode === 'idle' && this.jpDone && this.time - this.jpStart < 2.5)) {
+    if (this.mode === 'jp') {
       this.drawJp(c, W);
     } else {
       this.drawReels(c, W);
@@ -422,32 +381,20 @@ export class SlotScreen {
   }
 
   private drawJp(c: CanvasRenderingContext2D, W: number): void {
-    const n = JP_SEGMENTS.length;
-    const cols = 4;
-    const bw = 200, bh = 150, gap = 20;
-    const x0 = (W - (bw * cols + gap * (cols - 1))) / 2;
-    const y0 = 185;
-    const active = Math.round(this.jpPos) % n;
-    // 時計回りに並べる（上段左→右、下段右→左）
-    for (let i = 0; i < n; i++) {
-      const row = i < cols ? 0 : 1;
-      const col = row === 0 ? i : n - 1 - i;
-      const x = x0 + col * (bw + gap);
-      const y = y0 + row * (bh + gap);
-      const on = i === active && (Math.floor(this.time * 10) % 2 === 0 || !this.jpDone);
-      const v = JP_SEGMENTS[i];
-      c.fillStyle = on ? (v === 'JP' ? '#f3c' : '#fd3') : '#1c1430';
-      c.shadowColor = on ? '#fff' : 'transparent';
-      c.shadowBlur = on ? 30 : 0;
-      c.fillRect(x, y, bw, bh);
-      c.shadowBlur = 0;
-      c.strokeStyle = v === 'JP' ? '#f6c' : '#c9a23a';
-      c.lineWidth = 5;
-      c.strokeRect(x, y, bw, bh);
-      c.fillStyle = on ? '#200' : v === 'JP' ? '#f8d' : '#fe9';
-      c.textAlign = 'center';
-      c.font = v === 'JP' ? '900 64px Orbitron, sans-serif' : '900 70px Orbitron, sans-serif';
-      c.fillText(String(v), x + bw / 2, y + bh / 2 + 4);
-    }
+    // 上のクルーンを見上げるよう促す表示
+    const pulse = 0.6 + 0.4 * Math.sin(this.time * 8);
+    c.textAlign = 'center';
+    c.font = 'italic 900 120px Orbitron, sans-serif';
+    c.fillStyle = `rgba(255, 90, 220, ${pulse})`;
+    c.shadowColor = '#f0f';
+    c.shadowBlur = 40;
+    c.fillText('JP CHANCE', W / 2, 300);
+    c.shadowBlur = 0;
+    c.font = '700 40px Orbitron, sans-serif';
+    c.fillStyle = '#fe9';
+    c.fillText('▲  CROON  ▲', W / 2, 420);
+    c.font = '700 30px Orbitron, sans-serif';
+    c.fillStyle = '#9ff';
+    c.fillText('JP ×1   100 ×1   30 ×2   20 ×2   10 ×4', W / 2, 490);
   }
 }

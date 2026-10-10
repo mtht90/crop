@@ -4,7 +4,7 @@ import './style.css';
 
 import { AudioManager } from './audio.ts';
 import { BASE } from './assets.ts';
-import { BOARD, GAME } from './config.ts';
+import { BOARD, GAME, SHOP } from './config.ts';
 import { CREDITS } from './credits.ts';
 import { Game } from './game.ts';
 import { initPhysics, PusherPhysics } from './physics.ts';
@@ -38,6 +38,8 @@ async function main(): Promise<void> {
 
   // --- HUD ---
   const creditEl = $('credit');
+  const spentEl = $('spent');
+  let lastSpent = -1;
   const jpEl = $('jackpot');
   let lastCredit = -1;
   let lastJp = -1;
@@ -50,6 +52,11 @@ async function main(): Promise<void> {
         creditEl.classList.add('bump');
       }
       lastCredit = game.credit;
+    }
+    const spent = game.stats.spentYen ?? 0;
+    if (spent !== lastSpent) {
+      spentEl.textContent = spent > 0 ? `課金 ¥${spent.toLocaleString()}` : '';
+      lastSpent = spent;
     }
     if (slot.jackpot !== lastJp) {
       jpEl.textContent = String(slot.jackpot);
@@ -130,6 +137,32 @@ async function main(): Promise<void> {
     keys.delete(e.code);
   });
 
+  // --- 疑似課金 ---
+  const shop = $('shop');
+  $('shop-plans').innerHTML = SHOP.map((p, i) => {
+    const bonus = p.medals - (p.yen / 100) * 10; // ¥100 = 10枚 を基準にしたおまけ
+    return `<button data-plan="${i}"><b>${p.medals}枚</b><span>¥${p.yen.toLocaleString()}</span><em>${bonus > 0 ? `+${bonus}枚おまけ` : ''}</em></button>`;
+  }).join('');
+  const refreshShop = () => {
+    const s = game.stats;
+    $('shop-spent').textContent = `これまでの課金: ¥${(s.spentYen ?? 0).toLocaleString()}（購入 ${s.bought ?? 0} 枚）`;
+  };
+  const openShop = () => {
+    refreshShop();
+    shop.classList.remove('hidden');
+    firing = false;
+    setAuto(false);
+  };
+  $('shop-plans').addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement).closest('button');
+    if (!btn) return;
+    game.buy(Number(btn.dataset.plan));
+    refreshShop();
+    game.onToast?.(`${SHOP[Number(btn.dataset.plan)].medals} 枚 購入しました`, 'win');
+  });
+  $('btn-shop').addEventListener('click', openShop);
+  $('btn-shop-close').addEventListener('click', () => shop.classList.add('hidden'));
+
   // --- メニュー ---
   const soundBtn = $('btn-sound');
   soundBtn.addEventListener('click', () => {
@@ -201,9 +234,13 @@ async function main(): Promise<void> {
     if (keys.has('ArrowLeft') || keys.has('KeyA')) game.launcherX = Math.max(-BOARD.launcherRange, game.launcherX - dt * 8);
     if (keys.has('ArrowRight') || keys.has('KeyD')) game.launcherX = Math.min(BOARD.launcherRange, game.launcherX + dt * 8);
 
-    if ((firing || auto) && info.classList.contains('hidden')) {
+    if ((firing || auto) && info.classList.contains('hidden') && shop.classList.contains('hidden')) {
       fireTimer -= dt;
-      if (fireTimer <= 0) {
+      if (game.credit <= 0) {
+        // メダル切れ → 貸出機を開く
+        firing = false;
+        openShop();
+      } else if (fireTimer <= 0) {
         if (game.insert()) fireTimer = GAME.autoFireInterval;
         else fireTimer = 0.05;
         if (auto && game.credit <= 0) setAuto(false);
@@ -213,6 +250,7 @@ async function main(): Promise<void> {
     physics.update(dt);
     game.update(dt);
     view.setLauncherX(game.launcherX);
+    view.updateCroon(game.croon);
     const dirty = slot.draw();
     view.render(dt, physics, dirty);
     refreshHud();

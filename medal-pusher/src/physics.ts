@@ -311,7 +311,8 @@ export class PusherPhysics {
         continue;
       }
       if (coin.outcome === null && p.y < -0.6) {
-        coin.outcome = p.z > FIELD.front - 0.1 && Math.abs(p.x) < hw + 0.5 ? 'win' : 'lost';
+        // 手前の中央だけが獲得口。手前の両端と左右はロスト
+        coin.outcome = p.z > FIELD.front - 0.1 && Math.abs(p.x) < FIELD.winHalfWidth ? 'win' : 'lost';
       }
       if (coin.outcome === 'win') {
         if (coin.countedAt < 0 && p.y < TRAY.countY) {

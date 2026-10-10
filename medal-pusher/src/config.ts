@@ -19,6 +19,7 @@ export const FIELD = {
   front: 3.5, // この z より手前に落ちたら獲得
   back: -12,
   sideWallEnd: -0.5, // サイドの壁はここまで。以降は左右に落ちるとロスト
+  winHalfWidth: 3.4, // 手前の獲得口の半幅（外側はロスト）
 };
 
 export const PUSHER = {
@@ -64,7 +65,7 @@ export const PAYOUT = {
 export const GAME = {
   startCredit: 100,
   startJackpot: 300,
-  jackpotPerCoin: 1,
+  jackpotPerCoin: 0.08, // 投入1枚あたりJPに積まれる枚数
   maxPendingSpins: 4,
   initialFieldCoins: 260,
   maxCoins: 900,
@@ -76,3 +77,25 @@ export const PHYSICS = {
   dt: 1 / 120,
   maxSubSteps: 4,
 };
+
+// 上部クルーン（ローカル座標。scene 側で筐体上に配置）
+export const CROON = {
+  radius: 3.0,
+  coneRadius: 1.35,
+  coneHeight: 1.1,
+  dividerHeight: 0.55,
+  ballRadius: 0.5,
+  startSpeed: 3.2, // rad/s
+  idleSpeed: 0.5,
+  spinDecay: 3,
+  // 反時計回りに並ぶポケット。どれも同じ広さなので確率は各1/10
+  pockets: ['JP', 10, 30, 10, 20, 100, 10, 20, 10, 30] as (number | 'JP')[],
+};
+
+// 疑似課金のメダル購入プラン（実際の支払いは発生しない）
+export const SHOP = [
+  { yen: 500, medals: 50 },
+  { yen: 1000, medals: 110 },
+  { yen: 3000, medals: 360 },
+  { yen: 5000, medals: 650 },
+];
