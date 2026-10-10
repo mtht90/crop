@@ -312,7 +312,6 @@ export class Game {
         this.view.setCroonBall(plan.ballColor);
         this.croon.start(plan);
         this.slowUsed = 0;
-        this.croonOpeningFx(plan);
         this.lastBallAngle = null;
         this.onToast?.('JP CHANCE！ クルーン抽選', 'jp');
       }
@@ -415,17 +414,6 @@ export class Game {
       if (r < 0) return c;
     }
     return 'white';
-  }
-
-  private croonOpeningFx(plan: CroonPlan): void {
-    const c = plan.ballColor;
-    if (c === 'white') return;
-    const color = { blue: '#4aa8ff', red: '#ff2040', gold: '#ffc23a', rainbow: '#ff66ff' }[c];
-    const text = { blue: '青球', red: '赤球!', gold: '金球!!', rainbow: '虹球!!!' }[c];
-    setTimeout(() => {
-      this.audio.play(c === 'blue' ? 'checker' : 'bigWin', { volume: 0.8 });
-      this.onFx?.({ text, color, flash: c === 'blue' ? undefined : color, shake: c === 'gold' || c === 'rainbow' ? 0.8 : 0 });
-    }, 500);
   }
 
   private lastBallAngle: number | null = null;

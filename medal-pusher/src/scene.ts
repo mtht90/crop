@@ -739,6 +739,8 @@ export class PusherScene {
     this.croonBall.castShadow = true;
     this.croonBall.visible = false;
     g.add(this.croonBall);
+    this.croonBallLight = new THREE.PointLight(0xffffff, 0, 2.5, 2);
+    this.croonBall.add(this.croonBallLight);
   }
 
   /** 皿の模様（ステージ色の放射ストライプ＋穴の配当） */
@@ -838,6 +840,7 @@ export class PusherScene {
   }
 
   private croonBallColor: CroonBallColor = 'white';
+  private croonBallLight!: THREE.PointLight;
 
   /** 開幕の球の色（白・青・赤・金・虹） */
   setCroonBall(color: CroonBallColor): void {
@@ -846,7 +849,10 @@ export class PusherScene {
     const tint = { white: 0xffffff, blue: 0x4aa8ff, red: 0xff2a44, gold: 0xffc23a, rainbow: 0xffffff }[color];
     m.color.set(tint);
     m.emissive.set(color === 'white' ? 0x332a10 : tint);
-    m.emissiveIntensity = color === 'white' ? 0.5 : 0.8;
+    // 青以上はボール自体が光る（ブルームでにじむ）＋周りを照らす
+    m.emissiveIntensity = color === 'white' ? 0.5 : 2.2;
+    this.croonBallLight.color.set(tint);
+    this.croonBallLight.intensity = color === 'white' ? 0 : 6;
   }
 
   /** 0〜1：スロー演出の強さ（ゲーム側から設定） */
@@ -876,6 +882,7 @@ export class PusherScene {
       const m = this.croonBall.material as THREE.MeshStandardMaterial;
       m.emissive.setHSL((this.time * 0.6) % 1, 1, 0.55);
       m.color.copy(m.emissive);
+      this.croonBallLight.color.copy(m.emissive);
     }
   }
 

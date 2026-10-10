@@ -19,7 +19,7 @@ export const FIELD = {
   front: 3.5, // この z より手前に落ちたら獲得
   back: -12,
   sideWallEnd: -0.5, // サイドの壁はここまで。以降は左右に落ちるとロスト
-  winHalfWidth: 4.4, // 手前の獲得口の半幅（外側はロスト）
+  winHalfWidth: 3.6, // 手前の獲得口の半幅（外側はロスト）
 };
 
 export const PUSHER = {
