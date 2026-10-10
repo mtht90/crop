@@ -30,6 +30,19 @@ export function holeCenters(stage: CroonStageDef): { x: number; z: number; r: nu
   return out;
 }
 
+/** 中央の穴のまわりに立つ柱（ボールが弾かれて「入りそうで入らない」） */
+export function postCenters(stage: CroonStageDef): { x: number; z: number; y: number }[] {
+  if (!stage.posts) return [];
+  const out = [];
+  const { count, ring, offset } = stage.posts;
+  for (let i = 0; i < count; i++) {
+    const a = ((i + (offset ?? 0.5)) / count) * Math.PI * 2;
+    const r = ring * stage.radius;
+    out.push({ x: Math.cos(a) * r, z: -Math.sin(a) * r, y: plateY(stage, r) });
+  }
+  return out;
+}
+
 /** 穴を開けた皿の三角形メッシュ（物理と描画で共用） */
 export function plateMesh(
   stage: CroonStageDef,
@@ -91,6 +104,8 @@ export class CroonPhysics {
   private stageTime = 0;
   private transferTime = 0;
   private lastSpeed = 0;
+  /** 0〜1：ボールが中央の穴（NEXT/JP）の近くで粘っている度合い */
+  tension = 0;
   private stillTime = 0;
 
   constructor() {
@@ -108,6 +123,16 @@ export class CroonPhysics {
             .setFriction(friction)
             .setFrictionCombineRule(RAPIER.CoefficientCombineRule.Min)
             .setRestitution(0.15),
+          body,
+        );
+      }
+      // 中央の穴を守る柱（皿と一緒に回る）
+      for (const pc of postCenters(def)) {
+        this.world.createCollider(
+          RAPIER.ColliderDesc.cylinder(CROON.postHeight / 2, CROON.postRadius)
+            .setTranslation(pc.x, pc.y + CROON.postHeight / 2, pc.z)
+            .setFriction(0.1)
+            .setRestitution(0.55),
           body,
         );
       }
@@ -279,7 +304,10 @@ export class CroonPhysics {
       }
       return;
     }
-    if (this.state !== 'rolling' || !this.ball) return;
+    if (this.state !== 'rolling' || !this.ball) {
+      this.tension = 0;
+      return;
+    }
     this.stageTime += dt;
     const def = CROON.stages[this.stageIndex];
     const stage = this.stages[this.stageIndex];
@@ -318,6 +346,11 @@ export class CroonPhysics {
       if (label === 'NEXT' && this.stageIndex < CROON.stages.length - 1) this.onNext?.(this.stageIndex + 1);
       return;
     }
+    // NEXT / JP の穴（中央）の近くでゆっくりになったら「ハラハラ」度を上げる（スロー演出用）
+    const near = Math.max(0, 1 - (r - def.centerRadius) / CROON.tensionRange);
+    const slow = Math.max(0, Math.min(1, (CROON.tensionSpeed - speed) / CROON.tensionSpeed));
+    this.tension = near * (0.4 + 0.6 * slow);
+
     // 穴の縁で粘っている（ゆっくり）ときの音
     if (speed < 1.2 && speed > 0.2 && Math.random() < 0.02) this.onRim?.();
 

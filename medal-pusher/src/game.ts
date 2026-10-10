@@ -93,6 +93,7 @@ export class Game {
     };
     this.croon.onSettle = (prize) => this.onCroonResult(prize);
     this.croon.onNext = (stage) => {
+      this.slowUsed = 0;
       this.view.focusCroonStage(stage);
       this.audio.play(stage === 2 ? 'bigWin' : 'checker');
       this.audio.duckBgm(10);
@@ -259,7 +260,13 @@ export class Game {
   }
 
   private updateCroon(dt: number): void {
-    this.croon.update(dt);
+    // 中央の穴の縁で粘ったらスローモーション（1段につき合計数秒まで）
+    const want = this.croon.state === 'rolling' && this.slowUsed < CROON.slowBudget ? this.croon.tension : 0;
+    this.slowMix += (want - this.slowMix) * Math.min(1, dt * 6);
+    const scale = 1 - CROON.slowAmount * this.slowMix;
+    if (scale < 0.9) this.slowUsed += dt;
+    this.view.croonTension = this.slowMix;
+    this.croon.update(dt * scale);
     if (this.croonPhase === 'none') {
       // ボールが落ちたら待たずにすぐ打ち出す。カメラは回っている間に寄っていく
       if (this.pendingJpChance > 0) {
@@ -273,6 +280,7 @@ export class Game {
         this.audio.play('ballRelease');
         this.audio.duckBgm(12);
         this.croon.start();
+        this.slowUsed = 0;
         this.lastBallAngle = null;
         this.onToast?.('JP CHANCE！ クルーン抽選', 'jp');
       }
@@ -317,6 +325,8 @@ export class Game {
   }
 
   private lastBallAngle: number | null = null;
+  private slowMix = 0;
+  private slowUsed = 0;
   private rollAccum = 0;
 
   update(dt: number): void {

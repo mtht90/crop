@@ -99,6 +99,7 @@ export interface CroonStageDef {
   holes: CroonLabel[]; // 周りの穴（反時計回り）
   center: CroonLabel;
   color: string;
+  posts?: { count: number; ring: number; offset?: number }; // 中央の穴のまわりの柱
 }
 
 export const CROON = {
@@ -113,18 +114,27 @@ export const CROON = {
   transferSeconds: 1.3, // NEXT に入ってからシュートを通って次の段に出るまで
   intakeSeconds: 1.4, // 抽選開始時、投入シュートを通って1段目に出るまで
   sinkSeconds: 0.45, // 穴に吸い込まれる演出の時間
+  postRadius: 0.07,
+  postHeight: 0.35,
+  tensionRange: 0.75, // 中央の穴からこの距離以内でスロー演出
+  tensionSpeed: 2.2, // この速さより遅いほどスローが強くなる
+  slowAmount: 0.7, // スローの強さ（0.7 = 30% の速さ）
+  slowBudget: 3, // 1段あたりのスロー時間の上限（秒）
   stages: [
     {
-      x: -4.0, y: 3.6, z: -1.2, radius: 2.0, depth: 0.6, holeRing: 0.5, holeRadius: 0.235, centerRadius: 0.245,
-      spin: 0.35, launchAngle: 1.2, launchSpeed: 4.6, holes: [10, 10, 20, 10, 10, 20], center: 'NEXT', color: '#ff3d8b',
+      x: -4.8, y: 3.8, z: -1.4, radius: 2.6, depth: 0.7, cone: 0.1, holeRing: 0.5, holeRadius: 0.235, centerRadius: 0.245,
+      spin: 0.3, launchAngle: 1.2, launchSpeed: 5.2, holes: [10, 10, 20, 10, 10, 20], center: 'NEXT', color: '#ff3d8b',
+      posts: { count: 4, ring: 0.24 },
     },
     {
-      x: 4.0, y: 1.7, z: -1.2, radius: 2.0, depth: 0.6, holeRing: 0.5, holeRadius: 0.245, centerRadius: 0.24,
-      spin: -0.4, launchAngle: Math.PI, launchSpeed: 4.6, holes: [20, 30, 20, 30, 20, 50], center: 'NEXT', color: '#3d8bff',
+      x: 4.8, y: 1.9, z: -1.4, radius: 2.6, depth: 0.7, cone: 0.1, holeRing: 0.5, holeRadius: 0.245, centerRadius: 0.24,
+      spin: -0.35, launchAngle: Math.PI, launchSpeed: 5.2, holes: [20, 30, 20, 30, 20, 50], center: 'NEXT', color: '#3d8bff',
+      posts: { count: 4, ring: 0.24 },
     },
     {
-      x: 0, y: 0, z: 2.0, radius: 2.6, depth: 0.7, cone: 0.074, holeRing: 0.5, holeRadius: 0.265, centerRadius: 0.228,
-      spin: 0.3, launchAngle: 0.67, launchSpeed: 5.2, holes: [50, 100, 50, 200, 50, 100], center: 'JP', color: '#ffb000',
+      x: 0, y: 0, z: 2.4, radius: 3.2, depth: 0.8, cone: 0.06, holeRing: 0.5, holeRadius: 0.265, centerRadius: 0.228,
+      spin: 0.25, launchAngle: 0.7, launchSpeed: 5.8, holes: [50, 100, 50, 200, 50, 100], center: 'JP', color: '#ffb000',
+      posts: { count: 5, ring: 0.2 },
     },
   ] as CroonStageDef[],
 };
