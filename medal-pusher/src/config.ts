@@ -51,10 +51,10 @@ export const BOARD = {
     { x: 3.4, y: 4.8 },
   ],
   pocketRadius: 0.28,
-  pocketPayout: 5,
+  pocketPayout: 2,
   pocketCycle: 4, // ポケット（チューリップ）が開閉する周期（秒）
   pocketOpen: 1.2, // そのうち開いている秒数（左右で交互）
-  wideSeconds: 6, // ポケット入賞後に START が広がる秒数
+  wideSeconds: 3, // ポケット入賞後に START が広がる秒数
   wideHalfWidth: 2.49, // 広がった START の半幅（隣のレーンまで）
 };
 
