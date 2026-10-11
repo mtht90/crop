@@ -17,8 +17,17 @@ let croons = 0, jps = 0;
 const orig = game.croon.start.bind(game.croon);
 game.croon.start = (p) => { croons++; if (p.holes.length === 3 && p.holes[2] === 6) jps++; return orig(p); };
 const run = (sec: number) => { let f = 0; for (let t = 0; t < sec; t += 1 / 60) { f -= 1 / 60; if (f <= 0) { game.launcherX = (Math.random() * 2 - 1) * aim; game.insert(); f = 0.28; } game.physics.update(1 / 60); game.update(1 / 60); } };
-run(150); // 最初は盤面に初期メダルが多いので捨てる
+const src = { slot: 0, croon: 0, pocket: 0, other: 0, spins: 0 };
+const g = game as any;
+const origAdd = g.addPayout.bind(g);
+g.addPayout = (n: number) => { (g.croonPhase === 'back' ? (src.croon += n) : (src.slot += n)); return origAdd(n); };
+const origPocket = game.physics.events.onPocket!;
+game.physics.events.onPocket = (i: number) => { src.pocket += 2; origPocket(i); };
+const origChecker = game.physics.events.onChecker!;
+game.physics.events.onChecker = (c: any) => { src.spins++; origChecker(c); };
+run(150);
+for (const k of Object.keys(src)) (src as any)[k] = 0; // 最初は盤面に初期メダルが多いので捨てる
 const a = { ins: game.stats.inserted, won: game.stats.won, c: croons, j: jps };
 for (let t = 0; t < measure; t += 60) { run(60); process.stderr.write('.'); }
 const ins = game.stats.inserted - a.ins, won = game.stats.won - a.won;
-console.log(`\nreturn ${(won / ins * 100).toFixed(1)}%  inserted ${ins} won ${won} croons ${croons - a.c} JP ${jps - a.j} jackpotNow ${game.slot.jackpot}`);
+console.log(`\nreturn ${(won / ins * 100).toFixed(1)}%  inserted ${ins} won ${won} croons ${croons - a.c} JP ${jps - a.j} jackpotNow ${game.slot.jackpot}`, JSON.stringify(src));
