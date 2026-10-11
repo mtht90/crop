@@ -1,6 +1,7 @@
 // 配送用の軽バン：見た目・荷台・運転の挙動
 import * as THREE from 'three';
-import { A, box, textTexture, JP_FONT, Batch } from './assets.js';
+import { A, box, Batch } from './assets.js';
+import { buildVanModel, poseArms } from './vanmodel.js';
 import { resolveCircle } from './town.js';
 
 // ローカル座標：+z が前、+x が車の左側（助手席・歩道側）、右ハンドル
@@ -22,6 +23,8 @@ export class Van {
     this.wheelSpin = 0;
     this.thr = 0; this.brk = 0; this.kbSteer = 0; this.gear = 'P'; this.gearIdx = 0; this.rpm = 0; this.engineOn = false;
     this.parkingBrake = true; this.cruise = 0; this.stoppedT = 0; this.signalHeading = 0; this.pbWarn = 0;
+    this.accPedal = 0; this.brkPedal = 0; this.wiperMode = 0; this.wipePhase = 0; this.wipeWait = 0;
+    this.head = { x: 0, y: 0, z: 0 }; this.odo = 12840 * 1000; this.fuel = 0.72; this.t = 0; this.pbT = 1;
     this.build();
     this.slots = [];
     for (const side of ['L', 'R']) for (let d = 0; d < 3; d++) for (const level of ['floor', 'shelf']) {
@@ -31,192 +34,7 @@ export class Van {
     this.cooler = { capacity: 2, items: [] };
   }
 
-  build() {
-    const m = A.mats;
-    const paint = new THREE.MeshPhysicalMaterial({ color: 0xf4f4f2, roughness: 0.32, metalness: 0.05, clearcoat: 1, clearcoatRoughness: 0.12 });
-    this.paint = paint;
-    const add = (mesh, parent = this.body) => { mesh.castShadow = true; mesh.receiveShadow = true; parent.add(mesh); return mesh; };
-
-    // 下半分の車体（側面形状を押し出し）
-    const sh = new THREE.Shape();
-    sh.moveTo(-1.7, 0.3); sh.lineTo(1.55, 0.3); sh.quadraticCurveTo(1.7, 0.3, 1.7, 0.48); sh.lineTo(1.7, 0.96);
-    sh.quadraticCurveTo(1.69, 1.06, 1.6, 1.07); sh.lineTo(-1.7, 1.07); sh.lineTo(-1.7, 0.3);
-    const eg = new THREE.ExtrudeGeometry(sh, { depth: WD, bevelEnabled: true, bevelThickness: 0.02, bevelSize: 0.02, bevelSegments: 2, curveSegments: 8 });
-    eg.rotateY(-Math.PI / 2); eg.translate(WD / 2, 0, 0);
-    add(new THREE.Mesh(eg, paint));
-    // ホイールハウスの黒い部分
-    for (const z of [-1.2, 1.2]) for (const s of [-1, 1]) {
-      const arch = new THREE.Mesh(new THREE.CircleGeometry(0.34, 20, 0, Math.PI), m.black);
-      arch.position.set(s * (WD / 2 + 0.025), 0.3, z); arch.rotation.y = s * Math.PI / 2;
-      this.body.add(arch);
-    }
-    // バンパー
-    add(new THREE.Mesh(box(WD + 0.04, 0.16, 0.1), m.plastic)).position.set(0, 0.38, 1.71);
-    add(new THREE.Mesh(box(WD + 0.04, 0.16, 0.1), m.plastic)).position.set(0, 0.36, -1.71);
-
-    // 屋根
-    add(new THREE.Mesh(box(WD, 0.06, 2.92), paint)).position.set(0, 1.86, -0.24);
-    // 屋根の内張り
-    const inner = new THREE.MeshStandardMaterial({ color: 0x6b6e70, roughness: 0.9, side: THREE.DoubleSide });
-    const ceil = new THREE.Mesh(new THREE.PlaneGeometry(WD - 0.08, 2.9), inner); ceil.rotation.x = Math.PI / 2; ceil.position.set(0, 1.82, -0.24); this.body.add(ceil);
-
-    const mirrorMat = new THREE.MeshStandardMaterial({ color: 0x9aa4ad, metalness: 1, roughness: 0.05, envMapIntensity: 1.2 });
-    // フロントガラス（斜め）
-    const wsLen = Math.hypot(0.4, 0.78);
-    const ws = new THREE.Mesh(new THREE.PlaneGeometry(WD - 0.1, wsLen), m.glassClear);
-    ws.position.set(0, 1.46, 1.42); ws.rotation.x = -Math.atan2(0.4, 0.78); this.body.add(ws);
-    for (const s of [-1, 1]) {
-      const p = add(new THREE.Mesh(box(0.07, wsLen, 0.07), paint)); p.position.set(s * (WD / 2 - 0.035), 1.46, 1.42); p.rotation.x = -Math.atan2(0.4, 0.78);
-      // ドアの窓
-      const dw = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 0.72), m.glassClear);
-      dw.position.set(s * (WD / 2 + 0.005), 1.45, 0.92); dw.rotation.y = s * Math.PI / 2; this.body.add(dw);
-      // Bピラー
-      add(new THREE.Mesh(box(0.06, 0.8, 0.1), paint)).position.set(s * (WD / 2 - 0.03), 1.46, 0.38);
-      // ドアミラー
-      const mir = add(new THREE.Mesh(box(0.06, 0.13, 0.17), paint)); mir.position.set(s * (WD / 2 + 0.12), 1.24, 1.3);
-      // ドアミラー：後ろ向きのカメラの映像を左右反転して映す
-      const rt = new THREE.WebGLRenderTarget(320, 232, { samples: 0 });
-      rt.texture.colorSpace = THREE.SRGBColorSpace;
-      rt.texture.wrapS = THREE.RepeatWrapping; rt.texture.repeat.x = -1; rt.texture.offset.x = 1;
-      const mcam = new THREE.PerspectiveCamera(30, 320 / 232, 0.3, 320);
-      mcam.position.set(s * (WD / 2 + 0.12), 1.24, 1.2);
-      mcam.lookAt(new THREE.Vector3(s * (WD / 2 + 1.6), 1.0, -12));
-      this.body.add(mcam);
-      const mg = new THREE.Mesh(new THREE.PlaneGeometry(0.15, 0.11), new THREE.MeshBasicMaterial({ map: rt.texture }));
-      mg.position.set(s * (WD / 2 + 0.12), 1.24, 1.3 - 0.031); mg.rotation.y = Math.PI; this.body.add(mg);
-      (this.mirrors = this.mirrors || []).push({ rt, cam: mcam });
-      add(new THREE.Mesh(box(0.1, 0.025, 0.03), m.plastic)).position.set(s * (WD / 2 + 0.05), 1.2, 1.34);
-    }
-    // 荷室の側面（右側は固定パネル、左側はスライドドア）
-    const sideMat = new THREE.MeshStandardMaterial({
-      map: textTexture(1024, 384, (c, w, h) => {
-        c.fillStyle = '#f4f4f2'; c.fillRect(0, 0, w, h);
-        c.fillStyle = '#2f7d4f'; c.fillRect(0, h - 90, w, 34);
-        c.fillStyle = '#e0a92a'; c.fillRect(0, h - 52, w, 10);
-        c.fillStyle = '#2f7d4f'; c.font = `bold 96px ${JP_FONT}`; c.textAlign = 'center'; c.textBaseline = 'middle';
-        c.fillText('あおば運輸', w / 2, h * 0.4);
-        c.font = `36px ${JP_FONT}`; c.fillStyle = '#5d6672'; c.fillText('まちの宅配便　0120-XX-XXXX', w / 2, h * 0.62);
-      }), roughness: 0.35,
-    });
-    const rp = add(new THREE.Mesh(box(0.04, 0.8, 2.08), paint)); rp.position.set(-(WD / 2 - 0.02), 1.46, -0.64);
-    const rd = new THREE.Mesh(new THREE.PlaneGeometry(2.0, 0.75), sideMat); rd.position.set(-(WD / 2 + 0.005), 1.46, -0.64); rd.rotation.y = -Math.PI / 2; this.body.add(rd);
-    // 右側の下側にも帯（押し出しの車体に貼る）
-    // 左：後ろの固定部分とスライドドア
-    const lp = add(new THREE.Mesh(box(0.04, 0.8, 1.2), paint)); lp.position.set(WD / 2 - 0.02, 1.46, -1.08);
-    const ld = new THREE.Mesh(new THREE.PlaneGeometry(1.15, 0.75), sideMat); ld.position.set(WD / 2 + 0.005, 1.46, -1.08); ld.rotation.y = Math.PI / 2; this.body.add(ld);
-    this.slide = new THREE.Group();
-    const sd = add(new THREE.Mesh(box(0.04, 1.5, 0.86), paint), this.slide); sd.position.set(0, 1.1, 0);
-    const sw = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.45), m.glassClear); sw.position.set(0.025, 1.5, 0.05); sw.rotation.y = Math.PI / 2; this.slide.add(sw);
-    add(new THREE.Mesh(box(0.03, 0.04, 0.2), m.plastic), this.slide).position.set(0.03, 1.0, -0.3);
-    this.slide.position.set(WD / 2 - 0.0, 0, -0.06);
-    this.body.add(this.slide);
-
-    // リアハッチ（上ヒンジ）
-    this.hatch = new THREE.Group();
-    this.hatch.position.set(0, 1.86, -1.7);
-    const hp = add(new THREE.Mesh(box(WD - 0.02, 0.78, 0.04), paint), this.hatch); hp.position.set(0, -1.15, 0);
-    const hg = new THREE.Mesh(new THREE.PlaneGeometry(WD - 0.25, 0.6), m.glassClear); hg.position.set(0, -0.42, -0.025); hg.rotation.y = Math.PI; this.hatch.add(hg);
-    for (const s of [-1, 1]) add(new THREE.Mesh(box(0.1, 0.78, 0.04), paint), this.hatch).position.set(s * (WD / 2 - 0.06), -0.42, 0);
-    add(new THREE.Mesh(box(WD - 0.02, 0.08, 0.04), paint), this.hatch).position.set(0, -0.04, 0);
-    this.body.add(this.hatch);
-    // テールランプ
-    this.brakeMat = new THREE.MeshStandardMaterial({ color: 0x5a0a08, emissive: 0xff2010, emissiveIntensity: 0.15 });
-    this.blinkMatL = new THREE.MeshStandardMaterial({ color: 0x5a3a08, emissive: 0xffa020, emissiveIntensity: 0 });
-    this.blinkMatR = this.blinkMatL.clone();
-    for (const s of [-1, 1]) {
-      const t = new THREE.Mesh(box(0.12, 0.28, 0.03), this.brakeMat); t.position.set(s * (WD / 2 - 0.08), 0.85, -1.74); this.body.add(t);
-      const bm = s > 0 ? this.blinkMatL : this.blinkMatR; // +x が車の左
-      const b = new THREE.Mesh(box(0.12, 0.1, 0.03), bm); b.position.set(s * (WD / 2 - 0.08), 0.64, -1.74); this.body.add(b);
-      const fb = new THREE.Mesh(box(0.14, 0.06, 0.03), bm); fb.position.set(s * (WD / 2 - 0.12), 0.62, 1.715); this.body.add(fb);
-    }
-    // ヘッドライト
-    this.headMat = new THREE.MeshStandardMaterial({ color: 0xdddddd, emissive: 0xfff4e0, emissiveIntensity: 0.05, roughness: 0.1 });
-    for (const s of [-1, 1]) { const h = new THREE.Mesh(box(0.3, 0.16, 0.03), this.headMat); h.position.set(s * (WD / 2 - 0.22), 0.82, 1.715); this.body.add(h); }
-    add(new THREE.Mesh(box(0.7, 0.12, 0.03), m.plastic)).position.set(0, 0.7, 1.715); // グリル
-    // ナンバープレート（事業用の軽自動車は黒地に黄色）
-    const plate = new THREE.MeshStandardMaterial({
-      map: textTexture(330, 165, (c, w, h) => {
-        c.fillStyle = '#16181a'; c.fillRect(0, 0, w, h);
-        c.strokeStyle = '#d8b440'; c.lineWidth = 6; c.strokeRect(5, 5, w - 10, h - 10);
-        c.fillStyle = '#e5c247'; c.textAlign = 'center';
-        c.font = `bold 34px ${JP_FONT}`; c.fillText('あおば 480', w / 2, 52);
-        c.font = `bold 30px ${JP_FONT}`; c.fillText('あ', 40, 128);
-        c.font = `bold 78px ${JP_FONT}`; c.fillText('12-34', w / 2 + 22, 140);
-      }), roughness: 0.4,
-    });
-    for (const [z, y, r] of [[1.725, 0.52, 0], [-1.725, 0.5, Math.PI]]) {
-      const p = new THREE.Mesh(new THREE.PlaneGeometry(0.33, 0.165), plate); p.position.set(0, y, z); p.rotation.y = r; this.body.add(p);
-    }
-
-    // タイヤ
-    this.wheels = [];
-    const tireG = new THREE.CylinderGeometry(WHEEL_R, WHEEL_R, 0.17, 24); tireG.rotateZ(Math.PI / 2);
-    const rimG = new THREE.CylinderGeometry(0.17, 0.17, 0.18, 16); rimG.rotateZ(Math.PI / 2);
-    const hubG = new THREE.BoxGeometry(0.19, 0.05, 0.3);
-    for (const z of [-WB / 2, WB / 2]) for (const s of [-1, 1]) {
-      const pivot = new THREE.Group(); pivot.position.set(s * (WD / 2 - 0.1), WHEEL_R, z);
-      const spin = new THREE.Group();
-      spin.add(add(new THREE.Mesh(tireG, m.rubber), spin), add(new THREE.Mesh(rimG, m.chrome), spin), add(new THREE.Mesh(hubG, m.frameDark), spin));
-      pivot.add(spin); this.group.add(pivot);
-      this.wheels.push({ pivot, spin, front: z > 0 });
-    }
-
-    // ---------------- 車内 ----------------
-    const dark = new THREE.MeshStandardMaterial({ color: 0x3a3d40, roughness: 0.85 });
-    const floor = new THREE.Mesh(box(WD - 0.1, 0.04, 2.05), new THREE.MeshStandardMaterial({ color: 0x4a4c4e, roughness: 0.6, metalness: 0.3 }));
-    floor.position.set(0, 0.48, -0.66); floor.receiveShadow = true; this.body.add(floor);
-    for (const s of [-1, 1]) {
-      const w = new THREE.Mesh(new THREE.PlaneGeometry(2.05, 0.78), dark); w.position.set(s * (WD / 2 - 0.05), 0.88, -0.66); w.rotation.y = -s * Math.PI / 2; this.body.add(w);
-      // 棚板と支柱
-      const sb = new THREE.Mesh(box(0.56, 0.035, 1.95), m.frame); sb.position.set(s * 0.42, 1.1, -0.67); sb.castShadow = true; sb.receiveShadow = true; this.body.add(sb);
-      for (const z of [-1.62, -1.0, -0.35, 0.28]) { const p = new THREE.Mesh(box(0.03, 0.62, 0.03), m.frame); p.position.set(s * 0.69, 0.8, z); this.body.add(p); }
-    }
-    // 保冷ボックス（左・前寄り・床）
-    const cooler = new THREE.Group();
-    const cb = new THREE.Mesh(box(0.56, 0.5, 0.58), new THREE.MeshStandardMaterial({ color: 0x3f7fa8, roughness: 0.55 })); cb.position.y = 0.25; cb.castShadow = true;
-    const cl = new THREE.Mesh(box(0.58, 0.05, 0.6), new THREE.MeshStandardMaterial({ color: 0xe8eef0, roughness: 0.5 })); cl.position.y = 0.52;
-    cooler.add(cb, cl); cooler.position.set(SIDE_X.L, 0.5, DEPTH_Z[2]);
-    this.body.add(cooler); this.coolerMesh = cooler;
-    // 運転席まわり
-    const seatMat = A.mats.fabric;
-    for (const s of [-1, 1]) {
-      const seat = new THREE.Mesh(box(0.5, 0.14, 0.5), seatMat); seat.position.set(s * 0.36, 0.86, 0.75); this.body.add(seat);
-      const back = new THREE.Mesh(box(0.5, 0.65, 0.12), seatMat); back.position.set(s * 0.36, 1.2, 0.48); back.rotation.x = -0.12; this.body.add(back);
-      const rest = new THREE.Mesh(box(0.28, 0.18, 0.1), seatMat); rest.position.set(s * 0.36, 1.62, 0.44); this.body.add(rest);
-    }
-    const dash = new THREE.Mesh(box(WD - 0.06, 0.22, 0.32), A.mats.plastic); dash.position.set(0, 1.04, 1.42); this.body.add(dash);
-    const dashTop = new THREE.Mesh(box(WD - 0.06, 0.04, 0.42), A.mats.plastic); dashTop.position.set(0, 1.16, 1.36); this.body.add(dashTop);
-    // ハンドル（右ハンドル）
-    this.wheel = new THREE.Group();
-    const rim = new THREE.Mesh(new THREE.TorusGeometry(0.18, 0.018, 8, 32), A.mats.plastic);
-    const spoke = new THREE.Mesh(box(0.34, 0.03, 0.02), A.mats.plastic);
-    const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.04, 16).rotateX(Math.PI / 2), A.mats.frameDark);
-    this.wheel.add(rim, spoke, hub);
-    this.wheel.position.set(-0.36, 1.12, 1.2); this.wheel.rotation.x = -0.45;
-    const col = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.35, 8), A.mats.plastic); col.position.set(-0.36, 1.05, 1.33); col.rotation.x = Math.PI / 2 - 0.45;
-    this.body.add(this.wheel, col);
-    // メーター
-    this.meterCanvas = document.createElement('canvas'); this.meterCanvas.width = 512; this.meterCanvas.height = 256;
-    this.meterTex = new THREE.CanvasTexture(this.meterCanvas); this.meterTex.colorSpace = THREE.SRGBColorSpace;
-    const meter = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.15), new THREE.MeshBasicMaterial({ map: this.meterTex }));
-    // ダッシュボード中央のナビ画面
-    this.navCanvas = document.createElement('canvas'); this.navCanvas.width = 320; this.navCanvas.height = 200;
-    this.navTex = new THREE.CanvasTexture(this.navCanvas); this.navTex.colorSpace = THREE.SRGBColorSpace;
-    const navBezel = new THREE.Mesh(box(0.25, 0.165, 0.03), A.mats.plastic); navBezel.position.set(0.12, 1.25, 1.39); navBezel.rotation.x = -0.32; this.body.add(navBezel);
-    const nav = new THREE.Mesh(new THREE.PlaneGeometry(0.22, 0.1375), new THREE.MeshBasicMaterial({ map: this.navTex }));
-    nav.position.set(0.12, 1.25, 1.372); nav.rotation.set(0.32, Math.PI, 0); this.body.add(nav);
-    meter.position.set(-0.36, 1.2, 1.31); meter.rotation.set(0.5, Math.PI, 0); this.body.add(meter);
-    // ルームミラー
-    const rm = new THREE.Mesh(box(0.2, 0.055, 0.025), A.mats.plastic); rm.position.set(0.05, 1.76, 1.36); this.body.add(rm);
-    const rmg = new THREE.Mesh(new THREE.PlaneGeometry(0.18, 0.045), mirrorMat); rmg.position.set(0.05, 1.76, 1.346); rmg.rotation.y = Math.PI; this.body.add(rmg);
-    // 運転席側のヘッドライト（暗いとき）
-    this.headLights = [];
-    for (const s of [-1, 1]) {
-      const l = new THREE.SpotLight(0xfff1dc, 0, 40, 0.5, 0.5, 1.5);
-      l.position.set(s * 0.5, 0.8, 1.8); l.target.position.set(s * 0.6, 0, 12);
-      this.body.add(l, l.target); this.headLights.push(l);
-    }
-  }
+  build() { buildVanModel(this); }
 
   // ---------------- 荷台の位置 ----------------
   slotLocal(slot) { return new THREE.Vector3(SIDE_X[slot.side], LEVEL_Y[slot.level], DEPTH_Z[slot.depth]); }
@@ -258,7 +76,7 @@ export class Van {
   setPose(x, z, h) { this.x = x; this.z = z; this.heading = h; this.speed = 0; this.steer = 0; this.kbSteer = 0; this.sync(0); }
 
   // 運転席・外からのカメラ位置
-  cabEye() { return this.body.localToWorld(new THREE.Vector3(-0.36, 1.5, 0.72)); }
+  cabEye() { return this.body.localToWorld(new THREE.Vector3(-0.36 + this.head.x, 1.5 + this.head.y, 0.66 + this.head.z)); }
   driverDoor() { return this.worldPoint(-1.25, 0.9); }
   passengerSide() { return this.worldPoint(1.3, -0.2); }
   rearPoint() { return this.worldPoint(0, -2.4); }
@@ -272,8 +90,11 @@ export class Van {
   // inp: { throttle 0..1, brake 0..1, steer -1..1, mouseSteer: null または -1..1 }
   update(dt, inp, otherCars = []) {
     let v = this.speed;
-    this.thr += ((inp.throttle || 0) - this.thr) * Math.min(1, dt * 7);
-    this.brk += ((inp.brake || 0) - this.brk) * Math.min(1, dt * 9);
+    // ペダルは踏み込むのに時間がかかる（キーを押した瞬間に全開にはならない）。踏み込み量に対して効きは緩やかに立ち上がる
+    this.accPedal += THREE.MathUtils.clamp((inp.throttle || 0) - this.accPedal, -5 * dt, 2.2 * dt);
+    this.brkPedal += THREE.MathUtils.clamp((inp.brake || 0) - this.brkPedal, -6 * dt, 3.5 * dt);
+    this.thr = Math.pow(this.accPedal, 1.5);
+    this.brk = Math.pow(this.brkPedal, 1.2);
     // ---- クルーズコントロール ----
     if (this.cruise) {
       if (inp.brake > 0 || this.gear !== 'D' || this.parkingBrake) this.cruise = 0;
@@ -329,6 +150,8 @@ export class Van {
     if (this.gear === 'P') nv = 0;
     this.speed = nv;
     this.accel = (nv - v) / Math.max(dt, 1e-4);
+    this.odo += Math.abs(nv) * dt;
+    this.fuel = Math.max(0.05, this.fuel - Math.abs(nv) * dt / 360000);
 
     // ---- ハンドル（速いほど切れ角を小さく、ゆっくり）----
     const sp = Math.abs(nv);
@@ -409,48 +232,117 @@ export class Van {
       w.pivot.rotation.y = w.front ? this.steer : 0;
     }
     this.wheel.rotation.z = -this.steer * 12;
+    this.t += dt;
+    // 頭の揺れ：曲がると外へ、加速で後ろ、減速で前へ。速度に応じて路面の細かな振動
+    const lat = this.speed * this.yawRate;
+    const k = Math.min(1, dt * 5);
+    this.head.x += (THREE.MathUtils.clamp(-lat * 0.007, -0.05, 0.05) - this.head.x) * k;
+    this.head.z += (THREE.MathUtils.clamp(-this.accel * 0.0045, -0.04, 0.04) - this.head.z) * k;
+    const vib = Math.min(1, Math.abs(this.speed) / 12);
+    this.head.y = vib * (Math.sin(this.t * 29) * 0.0012 + Math.sin(this.t * 13.7) * 0.0016) + (this.engineOn ? Math.sin(this.t * 52) * 0.00035 : 0);
+    // ペダル・サイドブレーキ・シフト・レバー
+    this.pedals.acc.rotation.x = -this.accPedal * 0.3;
+    this.pedals.brk.rotation.x = this.brkPedal * 0.32;
+    this.pbT += ((this.parkingBrake ? 1 : 0) - this.pbT) * Math.min(1, dt * 10);
+    this.pbLever.rotation.x = -this.pbT * 0.45;
+    const gi = { P: 0, R: 1, N: 2, D: 3 }[this.gear] ?? 0;
+    const gy = 0.059 - gi * 0.0225;
+    this.shifter.position.x = -0.008;
+    this.shifter.position.y += (gy - this.shifter.position.y) * Math.min(1, dt * 14);
+    this.stalks.signal.rotation.z += ((this.signal === 1 ? 0.13 : this.signal === -1 ? -0.13 : 0) - this.stalks.signal.rotation.z) * Math.min(1, dt * 14);
+    this.stalks.wiper.rotation.z = -this.wiperMode * 0.08;
+    // ワイパー（1 = 間欠、2 = 連続）
+    if (this.wiperMode || this.wipePhase > 0) {
+      if (this.wipeWait > 0) this.wipeWait -= dt;
+      else {
+        this.wipePhase += dt / 1.15;
+        if (this.wipePhase >= 1) { this.wipePhase = this.wiperMode ? 0.0001 : 0; if (this.wiperMode === 1) this.wipeWait = 2.6; }
+      }
+    }
+    const wa = (1 - Math.cos(this.wipePhase * Math.PI * 2)) / 2 * 1.72;
+    for (const w of this.wipers) w.rotation.z = wa;
+    poseArms(this);
     // ドア
     this.hatchT += ((this.hatchOpen ? 1 : 0) - this.hatchT) * Math.min(1, dt * 4);
     this.slideT += ((this.slideOpen ? 1 : 0) - this.slideT) * Math.min(1, dt * 4);
     this.hatch.rotation.x = this.hatchT * 1.45;
-    this.slide.position.x = WD / 2 + 0.05 * Math.min(1, this.slideT * 3);
-    this.slide.position.z = -0.06 - this.slideT * 0.82;
+    // スライドドア：少し外に出てから後ろへ滑る
+    this.slide.position.x = 0.05 * Math.min(1, this.slideT * 3);
+    this.slide.position.z = -this.slideT * 0.82;
     // 灯火
     this.brakeMat.emissiveIntensity = this.brakeOn ? 2.2 : (this.lightsOn ? 0.6 : 0.1);
     this.headMat.emissiveIntensity = this.lightsOn ? 2.5 : 0.05;
     for (const l of this.headLights) l.intensity = this.lightsOn ? 35 : 0;
     this.blinkMatL.emissiveIntensity = this.blinkOn && (this.signal === 1 || this.hazard) ? 2.5 : 0;
     this.blinkMatR.emissiveIntensity = this.blinkOn && (this.signal === -1 || this.hazard) ? 2.5 : 0;
+    this.reverseMat.emissiveIntensity = this.gear === 'R' && this.engineOn ? 2.2 : 0;
+    this.hazardMat.emissiveIntensity = this.hazard ? (this.blinkOn ? 2.5 : 0.4) : 0;
   }
 
-  // メーター（速度計・回転計・シフト位置）
-  drawMeter() {
+  // メーター：中央に速度計、左に回転計、右に燃料計。下の液晶に積算距離・シフト位置・時計
+  drawMeter(clock) {
     const c = this.meterCanvas.getContext('2d'), W = 512, H = 256;
-    c.fillStyle = '#07090b'; c.fillRect(0, 0, W, H);
-    const dial = (cx, val, max, label, ticks, warn) => {
-      const R = 96, a0 = Math.PI * 0.75, a1 = Math.PI * 2.25;
-      c.lineWidth = 3; c.strokeStyle = '#2a3036'; c.beginPath(); c.arc(cx, 132, R, a0, a1); c.stroke();
-      for (let i = 0; i <= ticks; i++) {
-        const t = i / ticks, ang = a0 + (a1 - a0) * t;
-        c.strokeStyle = warn && t > warn ? '#e5534b' : '#c9d1d8'; c.lineWidth = i % 2 ? 2 : 3;
-        c.beginPath(); c.moveTo(cx + Math.cos(ang) * (R - 4), 132 + Math.sin(ang) * (R - 4)); c.lineTo(cx + Math.cos(ang) * (R - (i % 2 ? 12 : 18)), 132 + Math.sin(ang) * (R - (i % 2 ? 12 : 18))); c.stroke();
+    const on = this.engineOn;
+    c.fillStyle = '#050607'; c.fillRect(0, 0, W, H);
+    const glow = (col, blur) => { c.shadowColor = col; c.shadowBlur = blur; };
+    const dial = (cx, cy, R, a0, a1, val, max, major, minor, labels, redFrom) => {
+      // 文字盤の縁
+      c.shadowBlur = 0;
+      c.strokeStyle = '#1c2024'; c.lineWidth = 6; c.beginPath(); c.arc(cx, cy, R + 6, 0, 7); c.stroke();
+      for (let i = 0; i <= major * minor; i++) {
+        const t = i / (major * minor), ang = a0 + (a1 - a0) * t, big = i % minor === 0;
+        const red = redFrom != null && t >= redFrom;
+        c.strokeStyle = red ? '#e5463e' : on ? '#e9edf0' : '#7d8489'; c.lineWidth = big ? 3 : 1.5;
+        if (on) glow(red ? '#ff4030' : '#bfe6ff', 4);
+        c.beginPath(); c.moveTo(cx + Math.cos(ang) * R, cy + Math.sin(ang) * R); c.lineTo(cx + Math.cos(ang) * (R - (big ? 13 : 7)), cy + Math.sin(ang) * (R - (big ? 13 : 7))); c.stroke();
+        if (big && labels) {
+          c.fillStyle = red ? '#e5463e' : on ? '#e9edf0' : '#7d8489'; c.font = `600 ${R > 80 ? 17 : 13}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
+          c.fillText(labels[i / minor], cx + Math.cos(ang) * (R - (R > 80 ? 29 : 23)), cy + Math.sin(ang) * (R - (R > 80 ? 29 : 23)));
+        }
       }
-      const ang = a0 + (a1 - a0) * Math.min(1, val / max);
-      c.strokeStyle = '#f2a93b'; c.lineWidth = 4; c.beginPath(); c.moveTo(cx, 132); c.lineTo(cx + Math.cos(ang) * (R - 10), 132 + Math.sin(ang) * (R - 10)); c.stroke();
-      c.fillStyle = '#1b2025'; c.beginPath(); c.arc(cx, 132, 12, 0, 7); c.fill();
-      c.fillStyle = '#8a949c'; c.font = '600 15px sans-serif'; c.textAlign = 'center'; c.fillText(label, cx, 196);
+      c.shadowBlur = 0;
+      const ang = a0 + (a1 - a0) * THREE.MathUtils.clamp(val / max, 0, 1);
+      if (on) glow('#ff7a30', 8);
+      c.strokeStyle = '#ff6a2a'; c.lineWidth = 3.5; c.beginPath(); c.moveTo(cx - Math.cos(ang) * 12, cy - Math.sin(ang) * 12); c.lineTo(cx + Math.cos(ang) * (R - 6), cy + Math.sin(ang) * (R - 6)); c.stroke();
+      c.shadowBlur = 0;
+      c.fillStyle = '#1a1d20'; c.beginPath(); c.arc(cx, cy, 9, 0, 7); c.fill();
     };
-    dial(120, this.kmh, 140, 'km/h', 14);
-    dial(392, this.rpm, 7000, '×1000 r/min', 14, 0.86);
-    c.fillStyle = '#eef1f3'; c.font = '700 44px sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
-    c.fillText(String(Math.round(this.kmh)), 120, 150);
-    c.fillStyle = '#f2a93b'; c.font = '700 54px sans-serif'; c.fillText(this.gearLabel, 256, 120);
-    c.font = '600 16px sans-serif'; c.fillStyle = '#8a949c';
-    c.fillText(['P', 'R', 'N', 'D'].map(g => g === this.gear ? `[${g}]` : g).join(' '), 256, 170);
+    const A0 = Math.PI * 0.75, A1 = Math.PI * 2.25;
+    // 速度計
+    dial(256, 128, 104, A0, A1, this.kmh, 140, 7, 4, ['0', '20', '40', '60', '80', '100', '120', '140']);
+    c.fillStyle = on ? '#9aa4ab' : '#4b5157'; c.font = '600 12px sans-serif'; c.textAlign = 'center'; c.fillText('km/h', 256, 92);
+    // 回転計
+    dial(86, 140, 62, Math.PI * 0.8, Math.PI * 2.0, this.rpm, 7000, 7, 2, ['0', '1', '2', '3', '4', '5', '6', '7'], 0.86);
+    c.fillStyle = on ? '#9aa4ab' : '#4b5157'; c.font = '600 10px sans-serif'; c.fillText('×1000r/min', 86, 182);
+    // 燃料計
+    const fa0 = Math.PI * 1.05, fa1 = Math.PI * 1.95;
+    dial(426, 150, 58, fa0, fa1, this.fuel, 1, 2, 2, ['E', '½', 'F'], null);
+    c.fillStyle = on ? '#9aa4ab' : '#4b5157'; c.font = '600 18px sans-serif'; c.fillText('⛽', 426, 128);
+    // 液晶（積算距離・シフト位置・時計）
+    c.fillStyle = on ? '#0f1a14' : '#0a0d0b'; c.fillRect(196, 176, 120, 52);
+    if (on) {
+      c.fillStyle = '#9fe8b8'; glow('#7fffb0', 6); c.font = '600 13px monospace'; c.textAlign = 'center';
+      c.fillText(`ODO ${String(Math.floor(this.odo / 1000)).padStart(6, '0')}km`, 256, 194);
+      c.font = '700 15px monospace';
+      const gs = ['P', 'R', 'N', 'D'].map(g => g === this.gear ? `[${g}]` : ` ${g} `).join('');
+      c.fillText(gs, 256, 215);
+      c.shadowBlur = 0;
+      if (clock) { c.font = '600 12px monospace'; c.fillStyle = '#9fe8b8'; c.fillText(clock, 360, 232); }
+    }
+    // 警告灯・表示灯
+    const lamp = (txt, x, y, col, lit, size = 15) => {
+      c.font = `700 ${size}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
+      c.fillStyle = lit ? col : '#15181a'; if (lit) glow(col, 10); c.fillText(txt, x, y); c.shadowBlur = 0;
+    };
+    const left = this.blinkOn && (this.signal === 1 || this.hazard), right = this.blinkOn && (this.signal === -1 || this.hazard);
+    lamp('◀', 196, 30, '#3dff7a', left, 24); lamp('▶', 316, 30, '#3dff7a', right, 24);
+    lamp('(P)', 160, 228, '#ff3b30', this.parkingBrake);
+    lamp('BRAKE', 116, 228, '#ff3b30', !on);
+    lamp('🔋', 60, 228, '#ff3b30', !on, 14);
+    lamp('≡D', 352, 30, '#3dff7a', this.lightsOn, 16);
+    lamp('CRUISE', 256, 158, '#3dff7a', !!this.cruise, 11);
+    lamp('⚠', 256, 30, '#ff3b30', this.hazard && this.blinkOn, 18);
     c.textBaseline = 'alphabetic';
-    if (this.blinkOn) { c.fillStyle = '#4fdc7f'; c.font = '700 30px sans-serif'; if (this.signal > 0 || this.hazard) c.fillText('◀', 210, 40); if (this.signal < 0 || this.hazard) c.fillText('▶', 302, 40); }
-    if (this.parkingBrake) { c.fillStyle = '#e5534b'; c.font = '700 22px sans-serif'; c.fillText('(P)', 256, 230); }
-    if (this.lightsOn) { c.fillStyle = '#5aa9e6'; c.font = '700 18px sans-serif'; c.fillText('ライト', 256, 210); }
     this.meterTex.needsUpdate = true;
   }
 

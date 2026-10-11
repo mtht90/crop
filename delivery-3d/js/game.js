@@ -806,7 +806,7 @@ function enterVan() {
   if (G.carrying.length) { toast('荷物を持ったままでは乗れません。荷台に積むか、置いてから乗りましょう。', 'info'); return; }
   const van = ctx.van;
   G.mode = 'drive';
-  G.look = { yaw: 0, pitch: -0.05 };
+  G.look = { yaw: 0, pitch: -0.15 };
   G.mouseSteer = 0;
   sfx('door', 0.35);
   startEngine();
@@ -835,7 +835,8 @@ function exitVan() {
 function driveInput() {
   const k = G.keys;
   return {
-    throttle: (k.KeyW || k.ArrowUp) ? 1 : 0,
+    // Shift を押しながらだと半分だけ踏む
+    throttle: (k.KeyW || k.ArrowUp) ? (k.ShiftLeft || k.ShiftRight ? 0.45 : 1) : 0,
     brake: (k.KeyS || k.ArrowDown) ? 1 : 0,
     steer: ((k.KeyA || k.ArrowLeft) ? 1 : 0) - ((k.KeyD || k.ArrowRight) ? 1 : 0),
     mouseSteer: G.save.settings.mouseSteer ? G.mouseSteer : null,
@@ -1290,6 +1291,7 @@ export function onKey(code, down) {
     if (code === 'KeyG') van.hazard = !van.hazard;
     if (code === 'KeyL') van.lightsOn = !van.lightsOn;
     if (code === 'KeyH') horn();
+    if (code === 'KeyK') { van.wiperMode = (van.wiperMode + 1) % 3; sfx('click', 0.25); toast(['ワイパー：切', 'ワイパー：間欠', 'ワイパー：連続'][van.wiperMode], 'info', 1500); }
     if (code === 'Space') { van.parkingBrake = !van.parkingBrake; van.pbWarn = 0; sfx('click', 0.3); }
     if (code === 'KeyC') {
       if (van.cruise) { van.cruise = 0; toast('クルーズコントロールを解除しました。', 'info', 2000); }
@@ -1365,7 +1367,7 @@ export function update(dt) {
       if (Math.abs(G.mouseSteer) > 0 && !G.save.settings.mouseSteer) G.mouseSteer = 0;
       checkDeparture();
       checkDriving(dt);
-      van.drawMeter();
+      van.drawMeter(fmt(d.time));
     } else {
       van.update(dt, { throttle: 0, brake: 0, steer: 0 }, []);
       ctx.player.update(dt, G.keys, van, G.carrying.some(id => P(id).weight >= 3) && !hasUp('cart') ? 0.75 : 1);
@@ -1383,12 +1385,16 @@ export function update(dt) {
   // 会話中も人のアニメーションは止めない
   if (G.overlay !== 'menu') updatePeople(dt, !paused);
   updateSignals(G.realT);
-  // カメラ
+  // カメラ（運転手の腕は運転席視点のときだけ見せる）
+  van.driver.visible = G.mode === 'drive' && G.view === 'cab';
+  const fov = G.mode === 'drive' && G.view === 'cab' ? 58 : 72;
+  if (cam.fov !== fov) { cam.fov = fov; cam.updateProjectionMatrix(); }
   if (G.mode === 'drive') {
     if (G.view === 'cab') {
       cam.position.copy(van.cabEye());
       if (!G.save.settings.mouseSteer && !G.keys.mouseRight) { G.look.yaw *= Math.max(0, 1 - dt * 0.6); }
-      cam.rotation.set(G.look.pitch, van.heading + Math.PI + G.look.yaw, 0, 'YXZ');
+      // 車体の傾きに合わせて視点も傾く
+      cam.rotation.set(G.look.pitch - van.body.rotation.x, van.heading + Math.PI + G.look.yaw, -van.body.rotation.z, 'YXZ');
     } else if (G.view === 'hood') {
       const p = van.worldPoint(0, 1.35);
       cam.position.set(p.x, 1.55, p.z);
@@ -1418,6 +1424,8 @@ export function update(dt) {
   } else marker.mesh.visible = false;
   pickFocus();
   updateNav(dt);
+  // 動作確認用のカメラ
+  if (G.dbgCam) { cam.position.copy(G.dbgCam.pos); cam.up.set(0, 1, 0); cam.lookAt(G.dbgCam.look); }
   updateHud();
 }
 

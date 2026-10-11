@@ -55,7 +55,7 @@ async function boot() {
   const traffic = new Traffic(scene);
   initGame({ scene, camera, van, player, traffic, renderer, sun, hemi });
   document.getElementById('loading').classList.add('done');
-  window.__aoba = { G, T, van, player, camera, scene, renderer }; // 動作確認用
+  window.__aoba = { G, T, van, player, camera, scene, renderer, THREE }; // 動作確認用
   let last = performance.now();
   const loop = (now) => {
     const dt = Math.min(0.05, (now - last) / 1000);
