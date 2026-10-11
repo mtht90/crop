@@ -49,6 +49,20 @@ export class PusherScene {
   private croonFlash = 0;
   private croonBallPrev: THREE.Vector3 | null = null;
   private chuteRims: THREE.MeshBasicMaterial[] = [];
+  private lostLamps: { mat: THREE.MeshBasicMaterial; light: THREE.PointLight; flash: number }[] = [];
+  private getLampMat!: THREE.MeshBasicMaterial;
+  private getLight!: THREE.PointLight;
+  private getFlash = 0;
+
+  /** ロストしたメダル（x で左右どちらのランプを光らせるか決める） */
+  coinLost(x: number): void {
+    const l = this.lostLamps[x < 0 ? 0 : 1];
+    if (l) l.flash = 1;
+  }
+
+  coinWon(): void {
+    this.getFlash = Math.min(1.6, this.getFlash + 0.5);
+  }
   private payoutActive = false;
   private payoutLight!: THREE.PointLight;
 
@@ -194,24 +208,51 @@ export class PusherScene {
     // フィールド床
     const fieldLen = FIELD.front - BOARD.backZ + 0.5;
     this.box(m.field, hw * 2, 0.5, fieldLen, 0, -0.25, FIELD.front - fieldLen / 2, false);
-    // 手前両端のロストゾーン（ここから落ちたメダルはハズレ）
+    // 手前両端のロストゾーン（ここから落ちたメダルはハズレ）：警告の縞＋暗い穴に吸い込まれる
+    const lw = hw - FIELD.winHalfWidth;
+    const binW = TRAY.halfWidth - FIELD.winHalfWidth;
+    const smoke = new THREE.MeshStandardMaterial({ color: 0x0a0204, roughness: 0.35, metalness: 0.2 });
     for (const sx of [-1, 1]) {
-      const w = hw - FIELD.winHalfWidth;
-      const lost = this.textPlane('LOST', w, 0.9, '#ffb0b0', '#ff2020');
-      lost.rotation.x = -Math.PI / 2;
-      lost.position.set(sx * (FIELD.winHalfWidth + w / 2), 0.012, FIELD.front - 0.55);
-      this.scene.add(lost);
-      const zone = new THREE.Mesh(
-        new THREE.PlaneGeometry(w, 1.1),
-        new THREE.MeshStandardMaterial({ color: 0x3a0610, roughness: 0.6 }),
-      );
+      const zone = new THREE.Mesh(new THREE.PlaneGeometry(lw, 1.1), new THREE.MeshBasicMaterial({ map: this.lostTexture(), toneMapped: false }));
       zone.rotation.x = -Math.PI / 2;
-      zone.position.set(sx * (FIELD.winHalfWidth + w / 2), 0.006, FIELD.front - 0.55);
-      zone.receiveShadow = true;
+      zone.position.set(sx * (FIELD.winHalfWidth + lw / 2), 0.008, FIELD.front - 0.55);
       this.scene.add(zone);
       // 落下路の仕切り
       this.box(m.chrome, 0.08, -TRAY.y - 0.5, TRAY.shieldZ - FIELD.front, sx * FIELD.winHalfWidth, (TRAY.y - 0.5) / 2, (FIELD.front + TRAY.shieldZ) / 2, false);
+      // ロストの回収箱（中が見えない黒いボックス。受け皿には届かない）
+      const bx = sx * (FIELD.winHalfWidth + binW / 2);
+      const binZ = (FIELD.front + TRAY.shieldZ) / 2;
+      this.box(smoke, binW, 0.12, TRAY.shieldZ - FIELD.front, bx, -0.75, binZ, false); // 天井のすぐ下の暗い床
+      const face = this.box(smoke, binW, -0.7 - TRAY.y, 0.06, bx, (-0.7 + TRAY.y) / 2, TRAY.shieldZ - 0.08, false);
+      face.castShadow = false;
+      const sx2 = sx * (FIELD.winHalfWidth + lw / 2 + 0.2);
+      const sign = this.textPlane('✕ LOST', 1.6, 0.55, '#ffb0b0', '#ff1020');
+      sign.position.set(sx2, -2.4, TRAY.shieldZ - 0.04);
+      this.scene.add(sign);
+      const signSub = this.textPlane('ハズレ', 1.1, 0.4, '#ff8080', '#aa0010', '900');
+      signSub.position.set(sx2, -3.05, TRAY.shieldZ - 0.04);
+      this.scene.add(signSub);
+      // 赤ランプ（ロストしたときに光る）
+      const lampMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.5, 0.02, 0.02), toneMapped: false });
+      const lamp = new THREE.Mesh(new THREE.BoxGeometry(lw - 0.1, 0.1, 0.16), lampMat);
+      lamp.position.set(sx * (FIELD.winHalfWidth + lw / 2), 0.03, FIELD.front - 0.06);
+      this.scene.add(lamp);
+      const light = new THREE.PointLight(0xff1010, 0, 7, 2);
+      light.position.set(sx * (FIELD.winHalfWidth + lw / 2), 0.8, FIELD.front + 0.6);
+      this.scene.add(light);
+      this.lostLamps.push({ mat: lampMat, light, flash: 0 });
     }
+    // 中央の獲得口：光る縁と GET の看板
+    this.getLampMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.3, 2, 0.6), toneMapped: false });
+    const getLamp = new THREE.Mesh(new THREE.BoxGeometry(FIELD.winHalfWidth * 2 - 0.1, 0.1, 0.16), this.getLampMat);
+    getLamp.position.set(0, 0.03, FIELD.front - 0.06);
+    this.scene.add(getLamp);
+    const getSign = this.textPlane('▼ GET ▼', 3.6, 0.8, '#eaffea', '#20ff60');
+    getSign.position.set(0, -1.35, FIELD.front - 0.04);
+    this.scene.add(getSign);
+    this.getLight = new THREE.PointLight(0x40ff80, 0, 9, 2);
+    this.getLight.position.set(0, -1.6, FIELD.front + 1.2);
+    this.scene.add(this.getLight);
     // フィールド手前のクロームエッジ
     this.box(m.chrome, hw * 2, 0.12, 0.12, 0, -0.06, FIELD.front - 0.06, false);
 
@@ -869,11 +910,6 @@ export class PusherScene {
       wantPos = this.croonStageCam.clone().lerp(ball.clone().add(new THREE.Vector3(0, 2.6, 2.4)), t * 0.6);
       wantTarget = this.croonStageTarget.clone().lerp(ball, t * 0.7);
       k = 0.1;
-    } else if (ball && croon.state === 'transfer') {
-      // シュートの中を転がるボールを追う
-      wantTarget = ball;
-      wantPos = ball.clone().add(new THREE.Vector3(0, 3.2, 4.2));
-      k = 0.09;
     }
     this.croonCamPos.lerp(wantPos, k);
     this.croonCamTarget.lerp(wantTarget, Math.min(1, k * 1.6));
@@ -938,6 +974,37 @@ export class PusherScene {
     } else {
       this.croonBallPrev = null;
     }
+  }
+
+  /** 黒と赤の警告縞にLOSTの文字 */
+  private lostTexture(): THREE.CanvasTexture {
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 410;
+    const c = canvas.getContext('2d')!;
+    c.fillStyle = '#120002';
+    c.fillRect(0, 0, 512, 410);
+    c.fillStyle = '#b00014';
+    for (let i = -410; i < 512; i += 64) {
+      c.beginPath();
+      c.moveTo(i, 410);
+      c.lineTo(i + 32, 410);
+      c.lineTo(i + 32 + 410, 0);
+      c.lineTo(i + 410, 0);
+      c.fill();
+    }
+    c.fillStyle = 'rgba(0,0,0,0.82)';
+    c.fillRect(30, 120, 452, 170);
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    c.font = '900 110px Orbitron, sans-serif';
+    c.shadowColor = '#ff2020';
+    c.shadowBlur = 24;
+    c.fillStyle = '#ff5050';
+    c.fillText('LOST', 256, 210);
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
   }
 
   private textPlane(text: string, w: number, h: number, fill: string, glow: string, weight = '900'): THREE.Mesh {
@@ -1044,6 +1111,19 @@ export class PusherScene {
     const flick = this.payoutActive ? (Math.floor(this.time * 16) % 2 ? 1.8 : 0.6) : 1;
     this.chuteRims.forEach((m, i) => m.color.setRGB(3 * flick, (1.6 + (i ? 0.3 : 0)) * flick, 0.3 * flick));
     this.payoutLight.intensity += ((this.payoutActive ? 30 + Math.sin(this.time * 30) * 10 : 0) - this.payoutLight.intensity) * 0.3;
+    // 獲得口とロストのランプ（サイドウォール中は全幅が獲得口なのでロストは消灯）
+    const allWin = physics.wallActive;
+    for (const l of this.lostLamps) {
+      l.flash = Math.max(0, l.flash - dt * 2.5);
+      const v = allWin ? 0 : 0.35 + l.flash * 4 * (Math.floor(this.time * 20) % 2 ? 1 : 0.4);
+      l.mat.color.setRGB(allWin ? 0.3 : v, allWin ? 2 : v * 0.05, allWin ? 0.6 : v * 0.05);
+      l.light.color.setHex(allWin ? 0x40ff80 : 0xff1010);
+      l.light.intensity = allWin ? 6 : l.flash * 25;
+    }
+    this.getFlash = Math.max(0, this.getFlash - dt * 2);
+    const gv = 0.8 + 0.25 * Math.sin(this.time * 3) + this.getFlash * 2.5;
+    this.getLampMat.color.setRGB(0.3 * gv, 2 * gv, 0.6 * gv);
+    this.getLight.intensity = 3 + this.getFlash * 18;
     this.checkerGlow = Math.max(0, this.checkerGlow - dt * 1.5);
     const cg = 0.6 + this.checkerGlow * 3 + (fever ? Math.sin(this.time * 20) * 0.5 + 0.5 : 0);
     this.checkerLamp.color.setRGB(1 * cg, 0.75 * cg, 0.1 * cg);

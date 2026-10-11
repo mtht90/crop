@@ -65,9 +65,14 @@ export class Game {
         this.view.pulseChecker();
         if (this.slot.addPending()) this.audio.play('checker', { volume: 0.8 });
       },
-      onCoinGone: (c, outcome) => {
+      onCoinGone: (c, outcome, x) => {
         if (outcome === 'win' && c.gold) this.onGoldMedal();
+        if (outcome === 'lost' && Math.abs(x) < 20) {
+          this.view.coinLost(x);
+          this.audio.play('lost', { volume: 0.45, minInterval: 0.12, rate: 0.55 + Math.random() * 0.1 });
+        }
         if (outcome === 'win') {
+          this.view.coinWon();
           this.credit++;
           this.stats.won++;
           this.stats.bestCredit = Math.max(this.stats.bestCredit, this.credit);

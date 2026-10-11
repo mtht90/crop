@@ -24,7 +24,7 @@ export interface Ball {
 
 export interface PhysicsEvents {
   onChecker?: (coin: Coin) => void;
-  onCoinGone?: (coin: Coin, outcome: CoinOutcome) => void;
+  onCoinGone?: (coin: Coin, outcome: CoinOutcome, x: number) => void;
   onBallGone?: (outcome: CoinOutcome) => void;
   onCoinLanded?: (coin: Coin) => void;
 }
@@ -327,7 +327,7 @@ export class PusherPhysics {
       if (Math.abs(p.x) > 30 || p.y > 30 || Math.abs(p.z) > 40) {
         // 万一の飛び出し
         this.removeCoin(coin);
-        this.events.onCoinGone?.(coin, 'lost');
+        this.events.onCoinGone?.(coin, 'lost', p.x);
         continue;
       }
       if (coin.inBoard) {
@@ -353,11 +353,11 @@ export class PusherPhysics {
         if (coin.countedAt < 0 && p.y < TRAY.countY) {
           coin.countedAt = this.time;
           this.trayCoins.push(coin);
-          this.events.onCoinGone?.(coin, 'win');
+          this.events.onCoinGone?.(coin, 'win', p.x);
         }
       } else if (coin.outcome === 'lost' && p.y < -2.5) {
         this.removeCoin(coin);
-        this.events.onCoinGone?.(coin, 'lost');
+        this.events.onCoinGone?.(coin, 'lost', p.x);
       }
     }
     // 受け皿のメダルは一定時間 or 一定枚数で片付ける（見た目用）

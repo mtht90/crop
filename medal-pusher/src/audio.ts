@@ -10,6 +10,7 @@ const SFX = {
   reelStop: ['impactMetal_light_001'],
   click: ['click_002'],
   error: ['switch_002'],
+  lost: ['impactPlate_light_000'],
   reach: ['phaserUp3'],
   smallWin: ['jingles_PIZZI01'],
   bigWin: ['jingles_SAX02'],
