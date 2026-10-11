@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>あおば町 宅配日誌 3D</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="css/style.css">
+  <script type="importmap">
+    { "imports": { "three": "./lib/three.module.js", "three/addons/": "./lib/addons/" } }
+  </script>
+</head>
+<body>
+  <canvas id="c"></canvas>
+
+  <div id="hud">
+    <div id="hud-top">
+      <div class="clock"><span id="hud-day">1日目</span><b id="hud-time">8:30</b><small id="hud-clock-note"></small></div>
+      <div id="hud-progress"></div>
+    </div>
+    <div id="hud-goal"></div>
+    <div id="crosshair"></div>
+    <div id="prompt"></div>
+    <div id="slip-preview"></div>
+    <div id="speedo"><div class="lim"><span id="spd-lim">30</span></div><div class="spd"><b id="spd">0</b><small>km/h</small></div><div id="spd-ind"></div></div>
+    <canvas id="minimap" width="230" height="230"></canvas>
+    <div id="hud-keys"><kbd>Tab</kbd> タブレット　<kbd>E</kbd> 調べる　<kbd>F</kbd> 乗り降り</div>
+    <div id="toasts"></div>
+  </div>
+
+  <div id="dialog"></div>
+  <div id="tablet"></div>
+  <div id="screen"></div>
+  <div id="paused"><div>一時停止中<br><small>クリックで再開</small></div></div>
+  <div id="fade"></div>
+
+  <div id="loading">
+    <div class="load-card">
+      <div class="load-title">あおば町 宅配日誌</div>
+      <div class="load-track"><div id="load-bar"></div></div>
+      <div id="load-label">読み込み中…</div>
+    </div>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
