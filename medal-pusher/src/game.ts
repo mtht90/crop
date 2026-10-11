@@ -39,6 +39,7 @@ export class Game {
   onFx?: (fx: { flash?: string; shake?: number; text?: string; color?: string; sub?: string }) => void;
 
   private payoutQueue = 0;
+  private showerQueue = 0;
   private payoutTimer = 0;
   private payoutSide = 1;
   private pendingJpChance = 0;
@@ -81,6 +82,15 @@ export class Game {
         }
       },
       onCoinLanded: () => this.audio.play('clink', { volume: 0.35, minInterval: 0.05, rate: 0.9 + Math.random() * 0.3 }),
+      onPocket: (i) => {
+        this.payoutQueue += BOARD.pocketPayout;
+        const wasWide = this.physics.wideTimer > 0;
+        this.physics.wideTimer = BOARD.wideSeconds;
+        this.view.pocketHit(i);
+        this.audio.play('checker', { volume: 0.8, rate: 1.25 });
+        this.audio.play('smallWin', { volume: 0.5, minInterval: 0.5 });
+        this.onToast?.(`POCKET +${BOARD.pocketPayout}${wasWide ? '' : '　START 拡大！'}`, 'win');
+      },
       onBallGone: (outcome) => {
         if (outcome === 'win') {
           this.audio.play('ballDrop');
@@ -207,7 +217,7 @@ export class Game {
       this.audio.play('smallWin');
       return;
     }
-    this.payoutQueue += r.payout;
+    this.addPayout(r.payout);
     if (Math.random() < GAME.goldChance) this.goldQueue++;
     if (r.symbol === 'bar') this.startWall();
     if (r.fever) {
@@ -260,6 +270,16 @@ export class Game {
     this.audio.play('reach');
     this.slot.showMessage('SIDE WALL!!', '#6ff', 4);
     this.onToast?.(`サイドウォール・チャンス ${GAME.wallSeconds}秒！ 手前の全幅が獲得口`, 'jp');
+  }
+
+  /** 払い出しを積む。大きい配当は天井からのメダルシャワーも混ぜる */
+  private addPayout(n: number): void {
+    this.payoutQueue += n;
+    if (n >= PAYOUT.showerFrom) {
+      this.showerQueue += Math.round(n * PAYOUT.showerShare);
+      this.view.medalShower(true);
+      this.onFx?.({ text: 'MEDAL SHOWER!!', color: '#ffd23a', flash: '#ffd23a', shake: 0.6 });
+    }
   }
 
   private onGoldMedal(): void {
@@ -346,7 +366,7 @@ export class Game {
       // カメラが盤面に戻りきったところで、まとめて勢いよく払い出す
       this.croonPhase = 'none';
       if (this.croonReward > 0) {
-        this.payoutQueue += this.croonReward;
+        this.addPayout(this.croonReward);
         this.croonReward = 0;
         this.audio.play('win', { volume: 1 });
       }
@@ -446,11 +466,20 @@ export class Game {
         // 溜まっているほど速く（JP の大量払い出し）
         this.payoutTimer += 1 / Math.min(PAYOUT.maxRate, PAYOUT.rate + this.payoutQueue / 4);
         this.payoutQueue--;
+        const gold = this.goldQueue > 0;
+        if (gold) this.goldQueue--;
+        if (this.showerQueue > 0 && this.payoutQueue % 2 === 0) {
+          // メダルシャワー：天井から盤面全体に降らせる
+          this.showerQueue--;
+          const c = this.physics.dropPayoutCoin((Math.random() * 2 - 1) * (FIELD.halfWidth - 0.8), PAYOUT.showerY, -5 + Math.random() * 4.5, gold);
+          c.body.setLinvel({ x: (Math.random() - 0.5) * 2, y: -2 - Math.random() * 3, z: (Math.random() - 0.5) * 1.5 }, true);
+          c.body.setAngvel({ x: (Math.random() - 0.5) * 20, y: (Math.random() - 0.5) * 20, z: (Math.random() - 0.5) * 20 }, true);
+          this.audio.play('stack', { volume: 0.45, minInterval: 0.06, rate: 0.9 + Math.random() * 0.3 });
+          continue;
+        }
         this.payoutSide *= -1;
         const x = this.payoutSide * (FIELD.halfWidth - 1.1) + (Math.random() - 0.5) * 0.3;
         const z = PAYOUT.dropZ + 0.6 + (Math.random() - 0.5) * 0.5;
-        const gold = this.goldQueue > 0;
-        if (gold) this.goldQueue--;
         const c = this.physics.dropPayoutCoin(x, PAYOUT.dropY, z, gold);
         // シュートの口から内側・上向きに弾き出す
         c.body.setLinvel(
@@ -463,7 +492,9 @@ export class Game {
       }
     } else {
       this.payoutTimer = 0;
+      this.showerQueue = 0;
       this.view.setPayoutActive(false);
+      this.view.medalShower(false);
     }
 
     this.saveTimer += dt;

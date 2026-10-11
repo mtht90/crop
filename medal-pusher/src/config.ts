@@ -43,6 +43,19 @@ export const BOARD = {
   laneDividerTop: 3.0,
   checkerHalfWidth: 0.79, // 中央チェッカーの半幅
   launcherRange: 4.2,
+  // 中央の風車（回転する羽根でメダルを左右に弾く）
+  windmill: { x: 0, y: 5.7, radius: 0.62, blades: 3, speed: 2.6, clear: 1.75 },
+  // 左右端のポケット（入るとメダル払い出し＋START拡大）
+  pockets: [
+    { x: -3.4, y: 4.8 },
+    { x: 3.4, y: 4.8 },
+  ],
+  pocketRadius: 0.28,
+  pocketPayout: 5,
+  pocketCycle: 4, // ポケット（チューリップ）が開閉する周期（秒）
+  pocketOpen: 1.2, // そのうち開いている秒数（左右で交互）
+  wideSeconds: 6, // ポケット入賞後に START が広がる秒数
+  wideHalfWidth: 2.49, // 広がった START の半幅（隣のレーンまで）
 };
 
 // 獲得メダルの受け皿
@@ -60,6 +73,9 @@ export const PAYOUT = {
   dropZ: -5.6,
   rate: 28, // 払い出し 枚/秒
   maxRate: 70, // 払い出しが大量に溜まったときの最大速度 枚/秒
+  showerFrom: 100, // 1回でこの枚数以上の配当は、天井からもメダルシャワーで降らせる
+  showerShare: 0.5, // そのうちシャワーで降らせる割合
+  showerY: 6.4,
 };
 
 export const GAME = {

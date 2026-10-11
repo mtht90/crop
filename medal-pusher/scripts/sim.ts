@@ -14,7 +14,9 @@ let win = 0, lost = 0, checker = 0, launched = 0;
 sim.events = {
   onCoinGone: (_c, o) => (o === 'win' ? win++ : lost++),
   onChecker: () => checker++,
+  onPocket: () => pocket++,
 };
+let pocket = 0;
 const seconds = Number(process.argv[2] ?? 120);
 t0 = performance.now();
 const steps = seconds * 120;
@@ -27,7 +29,7 @@ console.log('2nd half', { launched: launched - half.launched, win: win - half.wi
 const ms = performance.now() - t0;
 let stuck = 0;
 for (const c of sim.coins.values()) if (c.inBoard) stuck++;
-console.log({ seconds, launched, win, lost, checker, coins: sim.coins.size, stuckInBoard: stuck, msPerStep: (ms / steps).toFixed(3) });
+console.log({ pocket, seconds, launched, win, lost, checker, coins: sim.coins.size, stuckInBoard: stuck, msPerStep: (ms / steps).toFixed(3) });
 let standing = 0;
 for (const c of sim.coins.values()) {
   if (c.inBoard) continue;

@@ -49,6 +49,25 @@ export class PusherScene {
   private croonFlash = 0;
   private croonBallPrev: THREE.Vector3 | null = null;
   private chuteRims: THREE.MeshBasicMaterial[] = [];
+  private wideLamps: THREE.MeshBasicMaterial[] = [];
+  private wideLabel!: THREE.Mesh;
+  private windmillMesh!: THREE.Group;
+  private pockets: { mat: THREE.MeshBasicMaterial; petals: THREE.Mesh[]; flash: number }[] = [];
+  private showerLight!: THREE.PointLight;
+  private showerBar!: THREE.MeshBasicMaterial;
+  private showerOn = false;
+  private showerBarMesh!: THREE.Mesh;
+
+  pocketHit(i: number): void {
+    const p = this.pockets[i];
+    if (p) p.flash = 1.5;
+    this.checkerGlow = 1;
+  }
+
+  medalShower(on: boolean): void {
+    this.showerOn = on;
+  }
+
   private lostLamps: { mat: THREE.MeshBasicMaterial; light: THREE.PointLight; flash: number }[] = [];
   private getLampMat!: THREE.MeshBasicMaterial;
   private getLight!: THREE.PointLight;
@@ -175,6 +194,16 @@ export class PusherScene {
     this.payoutLight = new THREE.PointLight(0xffc040, 0, 14, 2);
     this.payoutLight.position.set(0, PAYOUT.dropY + 1.5, PAYOUT.dropZ + 1.5);
     this.scene.add(this.payoutLight);
+    // メダルシャワーの天井ライト
+    this.showerLight = new THREE.PointLight(0xffd040, 0, 18, 2);
+    this.showerLight.position.set(0, PAYOUT.showerY + 1, 0.5);
+    this.scene.add(this.showerLight);
+    this.showerBar = new THREE.MeshBasicMaterial({ color: 0x000000, toneMapped: false });
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(FIELD.halfWidth * 2 - 0.6, 0.12, 0.3), this.showerBar);
+    bar.position.set(0, PAYOUT.showerY + 0.4, -2.5);
+    bar.visible = false;
+    this.showerBarMesh = bar;
+    this.scene.add(bar);
   }
 
   private box(
@@ -226,7 +255,7 @@ export class PusherScene {
       const face = this.box(smoke, binW, -0.7 - TRAY.y, 0.06, bx, (-0.7 + TRAY.y) / 2, TRAY.shieldZ - 0.08, false);
       face.castShadow = false;
       const sx2 = sx * (FIELD.winHalfWidth + lw / 2 + 0.2);
-      const sign = this.textPlane('✕ LOST', 1.6, 0.55, '#ffb0b0', '#ff1020');
+      const sign = this.textPlane('LOST ZONE', 1.6, 0.42, '#ffb0b0', '#ff1020');
       sign.position.set(sx2, -2.4, TRAY.shieldZ - 0.04);
       this.scene.add(sign);
       const signSub = this.textPlane('ハズレ', 1.1, 0.4, '#ff8080', '#aa0010', '900');
@@ -368,6 +397,69 @@ export class PusherScene {
     const label = this.textPlane('START', w * 1.1, 0.5, '#ffe14a', '#ff8800');
     label.position.set(0, BOARD.laneDividerTop + 0.15, BOARD.backZ + 0.02);
     this.scene.add(label);
+    // 広がった START のときに光る両隣のレーン
+    for (const sx of [-1, 1]) {
+      const mat = new THREE.MeshBasicMaterial({ color: 0x000000, toneMapped: false, transparent: true, opacity: 0.9 });
+      const lw = BOARD.wideHalfWidth - BOARD.checkerHalfWidth - 0.12;
+      const l = new THREE.Mesh(new THREE.PlaneGeometry(lw, 0.35), mat);
+      l.position.set(sx * (BOARD.checkerHalfWidth + 0.06 + lw / 2), BOARD.bottom + 0.3, BOARD.backZ + 0.01);
+      this.scene.add(l);
+      this.wideLamps.push(mat);
+    }
+    this.wideLabel = this.textPlane('START WIDE', 4.6, 0.42, '#ffe14a', '#ff5500');
+    this.wideLabel.position.set(0, BOARD.laneDividerTop + 0.55, BOARD.backZ + 0.03);
+    this.wideLabel.visible = false;
+    this.scene.add(this.wideLabel);
+
+    // 中央の風車
+    const wm = BOARD.windmill;
+    this.windmillMesh = new THREE.Group();
+    this.windmillMesh.position.set(wm.x, wm.y, midZ);
+    const bladeMat = new THREE.MeshStandardMaterial({ color: 0xff3d8b, emissive: 0x801040, roughness: 0.3, metalness: 0.3 });
+    for (let i = 0; i < wm.blades; i++) {
+      const a = (i / wm.blades) * Math.PI * 2;
+      const b = new THREE.Mesh(new THREE.BoxGeometry(wm.radius, 0.1, depth - 0.06), bladeMat);
+      b.position.set((Math.cos(a) * wm.radius) / 2, (Math.sin(a) * wm.radius) / 2, 0);
+      b.rotation.z = a;
+      b.castShadow = true;
+      this.windmillMesh.add(b);
+    }
+    const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, depth, 16), m.chrome);
+    hub.rotation.x = Math.PI / 2;
+    this.windmillMesh.add(hub);
+    this.scene.add(this.windmillMesh);
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(wm.radius + 0.05, wm.radius + 0.12, 48),
+      new THREE.MeshBasicMaterial({ color: new THREE.Color(2, 0.4, 1.2), toneMapped: false }),
+    );
+    ring.position.set(wm.x, wm.y, BOARD.backZ + 0.01);
+    this.scene.add(ring);
+
+    // 左右のポケット（チューリップ）
+    for (const k of BOARD.pockets) {
+      const g = new THREE.Group();
+      g.position.set(k.x, k.y, BOARD.backZ + 0.02);
+      const mat = new THREE.MeshBasicMaterial({ color: 0x000000, toneMapped: false });
+      const cup = new THREE.Mesh(new THREE.RingGeometry(BOARD.pocketRadius + 0.08, BOARD.pocketRadius + 0.2, 32), mat);
+      g.add(cup);
+      const hole = new THREE.Mesh(new THREE.CircleGeometry(BOARD.pocketRadius + 0.08, 32), new THREE.MeshBasicMaterial({ color: 0x050008 }));
+      hole.position.z = -0.005;
+      g.add(hole);
+      const txt = this.textPlane(`+${BOARD.pocketPayout}`, 0.9, 0.36, '#ffffff', '#00e0ff');
+      txt.position.set(0, 0.65, 0);
+      g.add(txt);
+      // 開閉する羽根（チューリップ）
+      const petals: THREE.Mesh[] = [];
+      for (const sx of [-1, 1]) {
+        const p = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.07, 0.05), new THREE.MeshStandardMaterial({ color: 0x00c8ff, emissive: 0x004466 }));
+        p.geometry.translate(sx * 0.21, 0, 0);
+        p.position.set(sx * (BOARD.pocketRadius + 0.05), 0.15, 0.05);
+        g.add(p);
+        petals.push(p);
+      }
+      this.scene.add(g);
+      this.pockets.push({ mat, petals, flash: 0 });
+    }
 
     // 手前ガラス
     const glass = new THREE.MeshPhysicalMaterial({
@@ -997,11 +1089,13 @@ export class PusherScene {
     c.fillRect(30, 120, 452, 170);
     c.textAlign = 'center';
     c.textBaseline = 'middle';
-    c.font = '900 110px Orbitron, sans-serif';
     c.shadowColor = '#ff2020';
     c.shadowBlur = 24;
     c.fillStyle = '#ff5050';
-    c.fillText('LOST', 256, 210);
+    c.font = '900 92px Orbitron, sans-serif';
+    c.fillText('LOST', 256, 168);
+    c.font = '900 64px Orbitron, sans-serif';
+    c.fillText('ZONE', 256, 250);
     const tex = new THREE.CanvasTexture(canvas);
     tex.colorSpace = THREE.SRGBColorSpace;
     return tex;
@@ -1124,6 +1218,24 @@ export class PusherScene {
     const gv = 0.8 + 0.25 * Math.sin(this.time * 3) + this.getFlash * 2.5;
     this.getLampMat.color.setRGB(0.3 * gv, 2 * gv, 0.6 * gv);
     this.getLight.intensity = 3 + this.getFlash * 18;
+    // パチンコ部分のギミック
+    this.windmillMesh.rotation.z = physics.windmillAngle;
+    this.pockets.forEach((p, i) => {
+      const open = physics.pocketOpen(i);
+      p.flash = Math.max(0, p.flash - dt * 2);
+      const v = (open ? 1.6 : 0.25) + p.flash * (Math.floor(this.time * 18) % 2 ? 4 : 1);
+      p.mat.color.setRGB(0.1 * v, 0.9 * v, 1.4 * v);
+      const ang = open ? 0.9 : 0;
+      p.petals.forEach((m, j) => (m.rotation.z += ((j ? ang : -ang) - m.rotation.z) * 0.3));
+    });
+    const wide = physics.wideTimer > 0;
+    const wb = wide ? (physics.wideTimer < 1.5 && Math.floor(this.time * 8) % 2 ? 0.3 : 1.6 + Math.sin(this.time * 12) * 0.4) : 0;
+    for (const w of this.wideLamps) w.color.setRGB(wb, wb * 0.7, wb * 0.08);
+    this.wideLabel.visible = wide;
+    const sb = this.showerOn ? 2 + Math.sin(this.time * 25) * 1 : 0;
+    this.showerBar.color.setRGB(sb, sb * 0.75, sb * 0.2);
+    this.showerBarMesh.visible = this.showerOn;
+    this.showerLight.intensity += ((this.showerOn ? 14 : 0) - this.showerLight.intensity) * 0.2;
     this.checkerGlow = Math.max(0, this.checkerGlow - dt * 1.5);
     const cg = 0.6 + this.checkerGlow * 3 + (fever ? Math.sin(this.time * 20) * 0.5 + 0.5 : 0);
     this.checkerLamp.color.setRGB(1 * cg, 0.75 * cg, 0.1 * cg);

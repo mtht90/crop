@@ -26,6 +26,7 @@ export interface PhysicsEvents {
   onChecker?: (coin: Coin) => void;
   onCoinGone?: (coin: Coin, outcome: CoinOutcome, x: number) => void;
   onBallGone?: (outcome: CoinOutcome) => void;
+  onPocket?: (index: number) => void;
   onCoinLanded?: (coin: Coin) => void;
 }
 
@@ -45,6 +46,10 @@ export class PusherPhysics {
   ball: Ball | null = null;
   trayCoins: Coin[] = [];
   events: PhysicsEvents = {};
+  private windmill!: RAPIER.RigidBody;
+  windmillAngle = 0;
+  /** START が広がっている残り秒数（ポケット入賞で延長） */
+  wideTimer = 0;
   time = 0;
 
   private pusher: RAPIER.RigidBody;
@@ -151,6 +156,21 @@ export class PusherPhysics {
         0.05,
       );
     }
+    // 中央の風車（キネマティックに回る羽根）
+    const wm = BOARD.windmill;
+    this.windmill = this.world.createRigidBody(RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(wm.x, wm.y, (BOARD.frontZ + BOARD.backZ) / 2));
+    for (let i = 0; i < wm.blades; i++) {
+      const a = (i / wm.blades) * Math.PI * 2;
+      this.world.createCollider(
+        RAPIER.ColliderDesc.cuboid(wm.radius / 2, 0.05, (BOARD.frontZ - BOARD.backZ) / 2 - 0.02)
+          .setTranslation((Math.cos(a) * wm.radius) / 2, (Math.sin(a) * wm.radius) / 2, 0)
+          .setRotation({ x: 0, y: 0, z: Math.sin(a / 2), w: Math.cos(a / 2) })
+          .setFriction(0.1)
+          .setRestitution(0.5),
+        this.windmill,
+      );
+    }
+    this.world.createCollider(RAPIER.ColliderDesc.cylinder((BOARD.frontZ - BOARD.backZ) / 2 - 0.02, 0.12).setRotation(HALF_PI_X), this.windmill);
     // 外側パネル（左右に落ちたメダルを外へ飛ばさない）
     for (const s of [-1, 1]) {
       this.fixed(RAPIER.ColliderDesc.cuboid(0.2, 8, 9).setTranslation(s * (TRAY.halfWidth + 0.2), 0, 0), 0.1);
@@ -273,6 +293,12 @@ export class PusherPhysics {
     this.time += PHYSICS.dt;
     const front = PusherPhysics.pusherFrontAt(this.time);
     this.pusher.setNextKinematicTranslation({ x: 0, y: PUSHER.height / 2 + 0.01, z: front - PUSHER.depth / 2 });
+    // 風車は時々逆回転する
+    const dir = Math.floor(this.time / 9) % 2 === 0 ? 1 : -1;
+    this.windmillAngle += BOARD.windmill.speed * dir * PHYSICS.dt;
+    const ha = this.windmillAngle / 2;
+    this.windmill.setNextKinematicRotation({ x: 0, y: 0, z: Math.sin(ha), w: Math.cos(ha) });
+    if (this.wideTimer > 0) this.wideTimer = Math.max(0, this.wideTimer - PHYSICS.dt);
     if (this.wallLevel !== this.wallTarget) {
       const d = PHYSICS.dt * 1.2;
       this.wallLevel = this.wallTarget > this.wallLevel ? Math.min(this.wallTarget, this.wallLevel + d) : Math.max(this.wallTarget, this.wallLevel - d);
@@ -284,6 +310,12 @@ export class PusherPhysics {
     }
     this.world.step();
     this.checkZones();
+  }
+
+  /** ポケット（チューリップ）が開いているか。左右で半周期ずらして交互に開く */
+  pocketOpen(i: number): boolean {
+    const t = (this.time + i * BOARD.pocketCycle * 0.5) % BOARD.pocketCycle;
+    return t < BOARD.pocketOpen;
   }
 
   private releaseFromBoard(coin: Coin): void {
@@ -321,7 +353,8 @@ export class PusherPhysics {
   private checkZones(): void {
     if (Math.round(this.time / PHYSICS.dt) % 30 === 0) this.tipStandingCoins();
     const hw = FIELD.halfWidth;
-    const checker = BOARD.checkerHalfWidth;
+    const checker = this.wideTimer > 0 ? BOARD.wideHalfWidth : BOARD.checkerHalfWidth;
+    const pr2 = BOARD.pocketRadius * BOARD.pocketRadius;
     for (const coin of this.coins.values()) {
       const p = coin.body.translation();
       if (Math.abs(p.x) > 30 || p.y > 30 || Math.abs(p.z) > 40) {
@@ -331,6 +364,13 @@ export class PusherPhysics {
         continue;
       }
       if (coin.inBoard) {
+        // 左右のポケット：入ったメダルは盤面に落ちず、払い出しになる
+        const pi = BOARD.pockets.findIndex((k, i) => this.pocketOpen(i) && (p.x - k.x) ** 2 + (p.y - k.y) ** 2 < pr2);
+        if (pi >= 0) {
+          this.removeCoin(coin);
+          this.events.onPocket?.(pi);
+          continue;
+        }
         if (!coin.checked && p.y < BOARD.laneDividerTop && p.y > BOARD.bottom && Math.abs(p.x) < checker) {
           coin.checked = true;
           this.events.onChecker?.(coin);
@@ -483,6 +523,9 @@ export function boardPins(): { x: number; y: number }[] {
     for (let x = -hw + 0.75 + offset; x < hw - 0.5; x += BOARD.pinSpacing) {
       // 壁との隙間がメダル径より狭くなるピンは置かない（噛み込み防止）
       if (Math.abs(x) > hw - 1.2) continue;
+      // 風車のまわり（羽根とピンの間に挟まらないだけ空ける）とポケットの位置
+      const wm = BOARD.windmill;
+      if (Math.hypot(x - wm.x, y - wm.y) < wm.clear) continue;
       pins.push({ x, y });
     }
   });
