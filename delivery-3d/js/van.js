@@ -58,6 +58,7 @@ export class Van {
     const inner = new THREE.MeshStandardMaterial({ color: 0x6b6e70, roughness: 0.9, side: THREE.DoubleSide });
     const ceil = new THREE.Mesh(new THREE.PlaneGeometry(WD - 0.08, 2.9), inner); ceil.rotation.x = Math.PI / 2; ceil.position.set(0, 1.82, -0.24); this.body.add(ceil);
 
+    const mirrorMat = new THREE.MeshStandardMaterial({ color: 0x9aa4ad, metalness: 1, roughness: 0.05, envMapIntensity: 1.2 });
     // フロントガラス（斜め）
     const wsLen = Math.hypot(0.4, 0.78);
     const ws = new THREE.Mesh(new THREE.PlaneGeometry(WD - 0.1, wsLen), m.glassClear);
@@ -70,8 +71,9 @@ export class Van {
       // Bピラー
       add(new THREE.Mesh(box(0.06, 0.8, 0.1), paint)).position.set(s * (WD / 2 - 0.03), 1.46, 0.38);
       // ドアミラー
-      const mir = add(new THREE.Mesh(box(0.08, 0.16, 0.12), m.plastic)); mir.position.set(s * (WD / 2 + 0.1), 1.2, 1.32);
-      add(new THREE.Mesh(box(0.12, 0.03, 0.03), m.plastic)).position.set(s * (WD / 2 + 0.04), 1.2, 1.32);
+      const mir = add(new THREE.Mesh(box(0.06, 0.13, 0.17), paint)); mir.position.set(s * (WD / 2 + 0.12), 1.24, 1.3);
+      const mg = new THREE.Mesh(new THREE.PlaneGeometry(0.15, 0.11), mirrorMat); mg.position.set(s * (WD / 2 + 0.12), 1.24, 1.3 - 0.031); mg.rotation.y = Math.PI; this.body.add(mg);
+      add(new THREE.Mesh(box(0.1, 0.025, 0.03), m.plastic)).position.set(s * (WD / 2 + 0.05), 1.2, 1.34);
     }
     // 荷室の側面（右側は固定パネル、左側はスライドドア）
     const sideMat = new THREE.MeshStandardMaterial({
@@ -104,12 +106,13 @@ export class Van {
     const hg = new THREE.Mesh(new THREE.PlaneGeometry(WD - 0.25, 0.6), m.glassClear); hg.position.set(0, -0.42, -0.025); hg.rotation.y = Math.PI; this.hatch.add(hg);
     for (const s of [-1, 1]) add(new THREE.Mesh(box(0.1, 0.78, 0.04), paint), this.hatch).position.set(s * (WD / 2 - 0.06), -0.42, 0);
     add(new THREE.Mesh(box(WD - 0.02, 0.08, 0.04), paint), this.hatch).position.set(0, -0.04, 0);
+    this.body.add(this.hatch);
     // テールランプ
     this.brakeMat = new THREE.MeshStandardMaterial({ color: 0x5a0a08, emissive: 0xff2010, emissiveIntensity: 0.15 });
     this.blinkMat = new THREE.MeshStandardMaterial({ color: 0x5a3a08, emissive: 0xffa020, emissiveIntensity: 0 });
     for (const s of [-1, 1]) {
-      const t = new THREE.Mesh(box(0.12, 0.28, 0.03), this.brakeMat); t.position.set(s * (WD / 2 - 0.08), 0.85, -1.725); this.body.add(t);
-      const b = new THREE.Mesh(box(0.12, 0.1, 0.03), this.blinkMat); b.position.set(s * (WD / 2 - 0.08), 0.64, -1.725); this.body.add(b);
+      const t = new THREE.Mesh(box(0.12, 0.28, 0.03), this.brakeMat); t.position.set(s * (WD / 2 - 0.08), 0.85, -1.74); this.body.add(t);
+      const b = new THREE.Mesh(box(0.12, 0.1, 0.03), this.blinkMat); b.position.set(s * (WD / 2 - 0.08), 0.64, -1.74); this.body.add(b);
       const fb = new THREE.Mesh(box(0.14, 0.06, 0.03), this.blinkMat); fb.position.set(s * (WD / 2 - 0.12), 0.62, 1.715); this.body.add(fb);
     }
     // ヘッドライト
@@ -182,9 +185,10 @@ export class Van {
     this.meterCanvas = document.createElement('canvas'); this.meterCanvas.width = 256; this.meterCanvas.height = 128;
     this.meterTex = new THREE.CanvasTexture(this.meterCanvas); this.meterTex.colorSpace = THREE.SRGBColorSpace;
     const meter = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.15), new THREE.MeshBasicMaterial({ map: this.meterTex }));
-    meter.position.set(-0.36, 1.13, 1.40); meter.rotation.set(0.35, Math.PI, 0); this.body.add(meter);
+    meter.position.set(-0.36, 1.2, 1.31); meter.rotation.set(0.5, Math.PI, 0); this.body.add(meter);
     // ルームミラー
-    const rm = new THREE.Mesh(box(0.2, 0.05, 0.02), A.mats.plastic); rm.position.set(0.05, 1.76, 1.36); this.body.add(rm);
+    const rm = new THREE.Mesh(box(0.2, 0.055, 0.025), A.mats.plastic); rm.position.set(0.05, 1.76, 1.36); this.body.add(rm);
+    const rmg = new THREE.Mesh(new THREE.PlaneGeometry(0.18, 0.045), mirrorMat); rmg.position.set(0.05, 1.76, 1.346); rmg.rotation.y = Math.PI; this.body.add(rmg);
     // 運転席側のヘッドライト（暗いとき）
     this.headLights = [];
     for (const s of [-1, 1]) {
