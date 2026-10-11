@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>あおば町 宅配日誌</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/png" href="assets/img/favicon.png">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header id="topbar">
+    <div class="brand">
+      <canvas class="brand-mark" id="brand-icon" width="32" height="32"></canvas>
+      <div>
+        <div class="brand-title">あおば町 宅配日誌</div>
+        <div class="brand-sub" id="hud-sub">あおば運輸 あおば町営業所</div>
+      </div>
+    </div>
+    <ol id="steps">
+      <li data-step="check"><span>1</span>荷物確認</li>
+      <li data-step="load"><span>2</span>積み込み</li>
+      <li data-step="route"><span>3</span>ルート計画</li>
+      <li data-step="drive"><span>4</span>配達</li>
+      <li data-step="result"><span>5</span>結果</li>
+    </ol>
+    <div id="hud">
+      <div class="hud-item"><div class="hud-label">日</div><div class="hud-val" id="hud-day">1日目</div></div>
+      <div class="hud-item clock"><div class="hud-label">時刻</div><div class="hud-val" id="hud-time">9:00</div></div>
+      <div class="hud-item"><div class="hud-label">所持金</div><div class="hud-val" id="hud-money">¥0</div></div>
+      <div class="hud-item"><div class="hud-label">Lv</div><div class="hud-val" id="hud-level">1</div><div class="xpbar"><div id="hud-xp"></div></div></div>
+      <button class="icon-btn" id="btn-sound" title="音のオン/オフ"><img src="assets/icons/audioOn.png" alt="音"></button>
+    </div>
+  </header>
+
+  <main id="screen"></main>
+
+  <div id="modal-root"></div>
+  <div id="toast-root"></div>
+
+  <footer id="credits">
+    素材：<a href="https://kenney.nl" target="_blank" rel="noopener">Kenney</a>（Roguelike Modern City / Roguelike Characters / Interface Sounds / Music Jingles / Game Icons, CC0）・
+    フォント：<a href="https://fonts.google.com/specimen/Zen+Maru+Gothic" target="_blank" rel="noopener">Zen Maru Gothic</a>（OFL）
+  </footer>
+
+  <script src="js/data.js"></script>
+  <script src="js/map.js"></script>
+  <script src="js/game.js"></script>
+</body>
+</html>
