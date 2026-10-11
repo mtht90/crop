@@ -2,49 +2,85 @@
 <html lang="ja">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>あおば町 宅配日誌 3D</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>あおば町 宅配日誌</title>
+  <link rel="icon" href="data:,">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700&display=swap" rel="stylesheet">
-  <link rel="icon" href="data:,">
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@400;500;600;700&family=Zen+Kaku+Gothic+New:wght@400;500;700;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
   <script type="importmap">
     { "imports": { "three": "./lib/three.module.js", "three/addons/": "./lib/addons/" } }
   </script>
 </head>
 <body>
+<!--GAME-BODY-START-->
   <canvas id="c"></canvas>
 
-  <div id="hud">
-    <div id="hud-top">
-      <div class="clock"><span id="hud-day">1日目</span><b id="hud-time">8:30</b><small id="hud-clock-note"></small></div>
-      <div id="hud-progress"></div>
-    </div>
-    <div id="hud-goal"></div>
-    <div id="crosshair"></div>
-    <div id="prompt"></div>
-    <div id="slip-preview"></div>
-    <div id="speedo"><div class="lim"><span id="spd-lim">30</span></div><div class="spd"><b id="spd">0</b><small>km/h</small></div><div id="spd-ind"></div></div>
-    <canvas id="minimap" width="230" height="230"></canvas>
-    <div id="hud-keys"><kbd>Tab</kbd> タブレット　<kbd>E</kbd> 調べる　<kbd>F</kbd> 乗り降り</div>
+  <div id="hud" class="hidden-ui">
+    <section class="hud-clock panel">
+      <div class="hc-time" id="hud-time">8:30</div>
+      <div class="hc-meta">
+        <span id="hud-day">1日目</span>
+        <span id="hud-shift">定時 19:00</span>
+      </div>
+      <div class="hc-note" id="hud-clock-note"></div>
+      <div class="hud-count" id="hud-count"></div>
+    </section>
+
+    <section class="hud-job panel" id="hud-job">
+      <div class="hj-label" id="job-label">今日の仕事</div>
+      <div class="hj-main" id="job-main"></div>
+      <div class="hj-meta" id="job-meta"></div>
+    </section>
+
     <div id="toasts"></div>
+
+    <div id="crosshair"></div>
+    <div id="prompt"><kbd>E</kbd><span id="prompt-text"></span></div>
+    <div id="slip-preview"></div>
+    <div id="carry-info"></div>
+
+    <section id="cluster" class="panel">
+      <canvas id="gauge" width="460" height="230"></canvas>
+      <div id="cluster-ind"></div>
+    </section>
+    <div id="limit-sign"><span id="limit-val">30</span></div>
+    <div id="steer-ind"><i></i></div>
+    <div id="backcam-label">バックカメラ</div>
+
+    <section id="navpanel" class="panel">
+      <div class="np-head"><span>ナビ</span><span id="nav-dist"></span></div>
+      <canvas id="minimap" width="360" height="250"></canvas>
+      <div class="np-foot" id="nav-info"></div>
+    </section>
+
+    <div id="keyhint"></div>
   </div>
 
-  <div id="dialog"></div>
-  <div id="tablet"></div>
-  <div id="screen"></div>
-  <div id="paused"><div>一時停止中<br><small>クリックで再開</small></div></div>
-  <div id="fade"></div>
+  <div id="dialog" class="ov"></div>
+  <div id="tablet" class="ov"></div>
+  <div id="menu" class="ov"></div>
+  <div id="report" class="ov"></div>
+  <div id="fade"><span id="fade-text"></span></div>
 
   <div id="loading">
-    <div class="load-card">
-      <div class="load-title">あおば町 宅配日誌</div>
-      <div class="load-track"><div id="load-bar"></div></div>
+    <div class="ld">
+      <div class="ld-brand"><span class="mark">あ</span><span>あおば運輸</span></div>
+      <h1 class="ld-title">あおば町 宅配日誌</h1>
+      <div class="ld-track"><div id="load-bar"></div></div>
       <div id="load-label">読み込み中…</div>
+      <p class="ld-tip" id="load-tip">先に配る荷物は、扉のそばに積むと取り出しが早くなります。</p>
     </div>
   </div>
 
+  <div id="narrow">
+    <div>
+      <b>あおば町 宅配日誌</b>
+      <p>キーボードとマウスで遊ぶ3Dゲームです。パソコンの広い画面で開いてください。</p>
+    </div>
+  </div>
+<!--GAME-BODY-END-->
   <script type="module" src="js/main.js"></script>
 </body>
 </html>

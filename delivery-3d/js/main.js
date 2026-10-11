@@ -5,7 +5,8 @@ import { buildTown, T } from './town.js';
 import { Van } from './van.js';
 import { Player } from './player.js';
 import { Traffic } from './traffic.js';
-import { G, initGame, update, onKey, onMouse, requestLock } from './game.js';
+import { G, initGame, update, onKey, onMouse, requestLock, onPointerUnlock } from './game.js';
+import { loadPeople } from './people.js';
 
 const canvas = document.getElementById('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
@@ -40,9 +41,10 @@ function setLoading(p, label) {
 
 async function boot() {
   try {
-    await Promise.race([document.fonts.load('bold 40px "Zen Maru Gothic"'), new Promise(r => setTimeout(r, 2500))]);
+    await Promise.race([Promise.all([document.fonts.load('700 40px "Zen Kaku Gothic New"'), document.fonts.load('600 40px "Barlow Semi Condensed"')]), new Promise(r => setTimeout(r, 2500))]);
   } catch (e) { /* フォントがなくても続行 */ }
-  await loadAll(renderer, (p, l) => setLoading(p * 0.9, '読み込み中… ' + l));
+  await loadAll(renderer, (p, l) => setLoading(p * 0.7, '町の素材 ' + l));
+  await loadPeople((p) => setLoading(0.7 + p * 0.22, '町の人たち'));
   scene.environment = A.envMap;
   scene.background = A.sky;
   setLoading(0.95, '町を組み立てています…');
@@ -53,7 +55,7 @@ async function boot() {
   const traffic = new Traffic(scene);
   initGame({ scene, camera, van, player, traffic, renderer, sun, hemi });
   document.getElementById('loading').classList.add('done');
-  window.__aoba = { G, T, van, player, camera, scene, renderer }; // デバッグ用
+  window.__aoba = { G, T, van, player, camera, scene, renderer }; // 動作確認用
   let last = performance.now();
   const loop = (now) => {
     const dt = Math.min(0.05, (now - last) / 1000);
@@ -87,7 +89,11 @@ function applyDaylight(van, player) {
   scene.fog.color.copy(_c1.set(0xc9d6e2).lerp(_c2.set(0xd8a37e), dusk * (1 - night)).lerp(_c2.set(0x1b2230), night));
 }
 
+let frame = 0;
 function render(van) {
+  frame++;
+  // ドアミラー（運転席視点のときだけ、2フレームに1回）
+  if (G.mode === 'drive' && G.view === 'cab' && G.save.settings.mirrors && frame % 2 === 0) van.renderMirrors(renderer, scene);
   renderer.setScissorTest(false);
   renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
   renderer.render(scene, camera);
@@ -108,7 +114,7 @@ function render(van) {
 }
 
 // ---------------- 入力 ----------------
-const block = new Set(['Tab', 'Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
+const block = new Set(['Tab', 'Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyQ']);
 window.addEventListener('keydown', (e) => {
   if (block.has(e.code)) e.preventDefault();
   if (e.repeat) { G.keys[e.code] = true; return; }
@@ -117,14 +123,15 @@ window.addEventListener('keydown', (e) => {
 window.addEventListener('keyup', (e) => { onKey(e.code, false); });
 window.addEventListener('blur', () => { for (const k of Object.keys(G.keys)) G.keys[k] = false; });
 document.addEventListener('mousemove', (e) => {
-  if (document.pointerLockElement === canvas) onMouse(e.movementX, e.movementY);
+  if (document.pointerLockElement === canvas) onMouse(e.movementX, e.movementY, e.buttons);
 });
+canvas.addEventListener('mousedown', (e) => { if (e.button === 2) G.keys.mouseRight = true; });
+window.addEventListener('mouseup', (e) => { if (e.button === 2) G.keys.mouseRight = false; });
+canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 canvas.addEventListener('click', () => { if (!G.overlay) requestLock(); });
 document.addEventListener('pointerlockchange', () => {
-  const locked = document.pointerLockElement === canvas;
-  document.getElementById('paused').classList.toggle('show', !locked && !G.overlay && G.mode !== 'title' && G.mode !== 'ui');
+  if (document.pointerLockElement !== canvas) setTimeout(onPointerUnlock, 60);
 });
-document.getElementById('paused').addEventListener('click', () => requestLock());
 window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
   camera.aspect = window.innerWidth / window.innerHeight;

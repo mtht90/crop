@@ -20,6 +20,8 @@ export class Van {
     this.hatchOpen = false; this.slideOpen = false; this.hatchT = 0; this.slideT = 0;
     this.blink = 0; this.signal = 0; this.hazard = false; this.lightsOn = false; this.brakeOn = false;
     this.wheelSpin = 0;
+    this.thr = 0; this.brk = 0; this.kbSteer = 0; this.gear = 'P'; this.gearIdx = 0; this.rpm = 0; this.engineOn = false;
+    this.parkingBrake = true; this.cruise = 0; this.stoppedT = 0; this.signalHeading = 0; this.pbWarn = 0;
     this.build();
     this.slots = [];
     for (const side of ['L', 'R']) for (let d = 0; d < 3; d++) for (const level of ['floor', 'shelf']) {
@@ -72,7 +74,17 @@ export class Van {
       add(new THREE.Mesh(box(0.06, 0.8, 0.1), paint)).position.set(s * (WD / 2 - 0.03), 1.46, 0.38);
       // ドアミラー
       const mir = add(new THREE.Mesh(box(0.06, 0.13, 0.17), paint)); mir.position.set(s * (WD / 2 + 0.12), 1.24, 1.3);
-      const mg = new THREE.Mesh(new THREE.PlaneGeometry(0.15, 0.11), mirrorMat); mg.position.set(s * (WD / 2 + 0.12), 1.24, 1.3 - 0.031); mg.rotation.y = Math.PI; this.body.add(mg);
+      // ドアミラー：後ろ向きのカメラの映像を左右反転して映す
+      const rt = new THREE.WebGLRenderTarget(320, 232, { samples: 0 });
+      rt.texture.colorSpace = THREE.SRGBColorSpace;
+      rt.texture.wrapS = THREE.RepeatWrapping; rt.texture.repeat.x = -1; rt.texture.offset.x = 1;
+      const mcam = new THREE.PerspectiveCamera(30, 320 / 232, 0.3, 320);
+      mcam.position.set(s * (WD / 2 + 0.12), 1.24, 1.2);
+      mcam.lookAt(new THREE.Vector3(s * (WD / 2 + 1.6), 1.0, -12));
+      this.body.add(mcam);
+      const mg = new THREE.Mesh(new THREE.PlaneGeometry(0.15, 0.11), new THREE.MeshBasicMaterial({ map: rt.texture }));
+      mg.position.set(s * (WD / 2 + 0.12), 1.24, 1.3 - 0.031); mg.rotation.y = Math.PI; this.body.add(mg);
+      (this.mirrors = this.mirrors || []).push({ rt, cam: mcam });
       add(new THREE.Mesh(box(0.1, 0.025, 0.03), m.plastic)).position.set(s * (WD / 2 + 0.05), 1.2, 1.34);
     }
     // 荷室の側面（右側は固定パネル、左側はスライドドア）
@@ -109,11 +121,13 @@ export class Van {
     this.body.add(this.hatch);
     // テールランプ
     this.brakeMat = new THREE.MeshStandardMaterial({ color: 0x5a0a08, emissive: 0xff2010, emissiveIntensity: 0.15 });
-    this.blinkMat = new THREE.MeshStandardMaterial({ color: 0x5a3a08, emissive: 0xffa020, emissiveIntensity: 0 });
+    this.blinkMatL = new THREE.MeshStandardMaterial({ color: 0x5a3a08, emissive: 0xffa020, emissiveIntensity: 0 });
+    this.blinkMatR = this.blinkMatL.clone();
     for (const s of [-1, 1]) {
       const t = new THREE.Mesh(box(0.12, 0.28, 0.03), this.brakeMat); t.position.set(s * (WD / 2 - 0.08), 0.85, -1.74); this.body.add(t);
-      const b = new THREE.Mesh(box(0.12, 0.1, 0.03), this.blinkMat); b.position.set(s * (WD / 2 - 0.08), 0.64, -1.74); this.body.add(b);
-      const fb = new THREE.Mesh(box(0.14, 0.06, 0.03), this.blinkMat); fb.position.set(s * (WD / 2 - 0.12), 0.62, 1.715); this.body.add(fb);
+      const bm = s > 0 ? this.blinkMatL : this.blinkMatR; // +x が車の左
+      const b = new THREE.Mesh(box(0.12, 0.1, 0.03), bm); b.position.set(s * (WD / 2 - 0.08), 0.64, -1.74); this.body.add(b);
+      const fb = new THREE.Mesh(box(0.14, 0.06, 0.03), bm); fb.position.set(s * (WD / 2 - 0.12), 0.62, 1.715); this.body.add(fb);
     }
     // ヘッドライト
     this.headMat = new THREE.MeshStandardMaterial({ color: 0xdddddd, emissive: 0xfff4e0, emissiveIntensity: 0.05, roughness: 0.1 });
@@ -182,9 +196,15 @@ export class Van {
     const col = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.35, 8), A.mats.plastic); col.position.set(-0.36, 1.05, 1.33); col.rotation.x = Math.PI / 2 - 0.45;
     this.body.add(this.wheel, col);
     // メーター
-    this.meterCanvas = document.createElement('canvas'); this.meterCanvas.width = 256; this.meterCanvas.height = 128;
+    this.meterCanvas = document.createElement('canvas'); this.meterCanvas.width = 512; this.meterCanvas.height = 256;
     this.meterTex = new THREE.CanvasTexture(this.meterCanvas); this.meterTex.colorSpace = THREE.SRGBColorSpace;
     const meter = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.15), new THREE.MeshBasicMaterial({ map: this.meterTex }));
+    // ダッシュボード中央のナビ画面
+    this.navCanvas = document.createElement('canvas'); this.navCanvas.width = 320; this.navCanvas.height = 200;
+    this.navTex = new THREE.CanvasTexture(this.navCanvas); this.navTex.colorSpace = THREE.SRGBColorSpace;
+    const navBezel = new THREE.Mesh(box(0.25, 0.165, 0.03), A.mats.plastic); navBezel.position.set(0.12, 1.25, 1.39); navBezel.rotation.x = -0.32; this.body.add(navBezel);
+    const nav = new THREE.Mesh(new THREE.PlaneGeometry(0.22, 0.1375), new THREE.MeshBasicMaterial({ map: this.navTex }));
+    nav.position.set(0.12, 1.25, 1.372); nav.rotation.set(0.32, Math.PI, 0); this.body.add(nav);
     meter.position.set(-0.36, 1.2, 1.31); meter.rotation.set(0.5, Math.PI, 0); this.body.add(meter);
     // ルームミラー
     const rm = new THREE.Mesh(box(0.2, 0.055, 0.025), A.mats.plastic); rm.position.set(0.05, 1.76, 1.36); this.body.add(rm);
@@ -235,7 +255,7 @@ export class Van {
   get forward() { return { x: Math.sin(this.heading), z: Math.cos(this.heading) }; }
   get kmh() { return Math.abs(this.speed) * 3.6; }
 
-  setPose(x, z, h) { this.x = x; this.z = z; this.heading = h; this.speed = 0; this.steer = 0; this.sync(0); }
+  setPose(x, z, h) { this.x = x; this.z = z; this.heading = h; this.speed = 0; this.steer = 0; this.kbSteer = 0; this.sync(0); }
 
   // 運転席・外からのカメラ位置
   cabEye() { return this.body.localToWorld(new THREE.Vector3(-0.36, 1.5, 0.72)); }
@@ -249,37 +269,82 @@ export class Van {
     return [-1.15, 0, 1.15].map(o => ({ x: this.x + f.x * o, z: this.z + f.z * o, r: 0.76 }));
   }
 
+  // inp: { throttle 0..1, brake 0..1, steer -1..1, mouseSteer: null または -1..1 }
   update(dt, inp, otherCars = []) {
-    // ---- 入力 ----
     let v = this.speed;
-    let a = 0;
-    this.brakeOn = false;
-    if (inp.throttle > 0) {
-      if (v < -0.3) { a = 7; this.brakeOn = true; }
-      else a = 2.7 * inp.throttle * Math.max(0, 1 - v / 27);
+    this.thr += ((inp.throttle || 0) - this.thr) * Math.min(1, dt * 7);
+    this.brk += ((inp.brake || 0) - this.brk) * Math.min(1, dt * 9);
+    // ---- クルーズコントロール ----
+    if (this.cruise) {
+      if (inp.brake > 0 || this.gear !== 'D' || this.parkingBrake) this.cruise = 0;
+      else this.thr = Math.max(this.thr, THREE.MathUtils.clamp((this.cruise - v) * 0.7, 0, 1));
     }
-    // ブレーキで止まったあとは、一度キーを離してから押すとバックする
+    // ---- シフト（AT）：止まった状態でブレーキを押し直すと R、アクセルで D ----
     if (!inp.brake) this.holdStop = false;
-    if (inp.brake > 0) {
-      if (v > 0.3) { a = -7.5 * inp.brake; this.brakeOn = true; this.holdStop = true; }
-      else if (this.holdStop) { this.brakeOn = true; if (v > 0) { a = -7.5; } else { v = Math.min(0, v + 3 * 1 / 60); } }
-      else a = -2.0 * Math.max(0, 1 + v / 5); // 後退
+    if (inp.brake > 0 && Math.abs(v) > 0.4) this.holdStop = true;
+    if (Math.abs(v) < 0.25) {
+      this.stoppedT += dt;
+      if (this.gear === 'D' && inp.brake > 0 && !inp.throttle && !this.holdStop && this.stoppedT > 0.2) this.gear = 'R';
+      else if (this.gear === 'R' && inp.throttle > 0 && !inp.brake) this.gear = 'D';
+      else if ((this.gear === 'P' || this.gear === 'N') && (inp.throttle > 0 || inp.brake > 0) && this.engineOn) this.gear = inp.throttle > 0 ? 'D' : 'R';
+    } else this.stoppedT = 0;
+    let drive = 0, braking = 0;
+    if (this.gear === 'D') { drive = this.thr; braking = this.brk; }
+    else if (this.gear === 'R') { drive = this.brk; braking = this.thr; }
+    else braking = Math.max(this.thr, this.brk) * 0;
+    if (this.parkingBrake && drive > 0.2) this.pbWarn = 1;
+    // ---- エンジンと変速 ----
+    const RATIOS = [3.55, 2.05, 1.38, 1.0], FINAL = 4.7, REV = 3.2;
+    const wheelRpm = Math.abs(v) / (2 * Math.PI * WHEEL_R) * 60;
+    if (this.gear === 'D') {
+      const r = wheelRpm * RATIOS[this.gearIdx] * FINAL;
+      if (r > 3500 + drive * 1300 && this.gearIdx < 3) { this.gearIdx++; this.shiftT = 0.25; }
+      else if (r < 1350 && this.gearIdx > 0) this.gearIdx--;
+    } else this.gearIdx = 0;
+    const ratio = this.gear === 'R' ? REV : RATIOS[this.gearIdx];
+    let rpm = wheelRpm * ratio * FINAL;
+    // トルクコンバーターのすべり（低速で回転が上がる）
+    rpm = Math.max(rpm, 780 + drive * 2400 * (1 - Math.min(1, Math.abs(v) / 7)));
+    if (!this.engineOn) rpm = 0;
+    if (this.gear === 'P' || this.gear === 'N') rpm = this.engineOn ? 780 + this.thr * 4500 : 0;
+    this.rpm += (rpm - this.rpm) * Math.min(1, dt * 7);
+    this.shiftT = Math.max(0, (this.shiftT || 0) - dt);
+    const torque = Math.max(35, 98 * (1 - Math.pow((this.rpm - 3600) / 4300, 2)));
+    let a = 0;
+    if (this.engineOn && (this.gear === 'D' || this.gear === 'R') && this.rpm < 6300 && !this.parkingBrake) {
+      a += (this.gear === 'R' ? -1 : 1) * torque * ratio * FINAL / WHEEL_R / 1250 * drive * (this.shiftT > 0 ? 0.45 : 1);
     }
-    if (inp.handbrake) { this.brakeOn = true; if (Math.abs(v) < 0.6) { v = 0; a = 0; } else a += v > 0 ? -5 : 5; }
-    // 転がり抵抗・空気抵抗
-    if (v !== 0) a -= Math.sign(v) * (0.25 + 0.0028 * v * v);
+    // エンジンブレーキ
+    if (this.gear === 'D' && drive < 0.05 && v > 0.8) a -= 0.12 + this.rpm / 6000 * 0.4;
+    // ブレーキ
+    const bdec = 8.2 * braking;
+    this.brakeOn = braking > 0.05 || (this.gear !== 'P' && this.gear !== 'N' && Math.abs(v) < 0.3 && inp.brake > 0);
+    // 抵抗
+    const res = 0.12 + 0.0011 * v * v;
     let nv = v + a * dt;
-    if (Math.sign(nv) !== Math.sign(v) && v !== 0 && !(inp.brake > 0 && v <= 0.3) && !(inp.throttle > 0 && v >= -0.3)) nv = 0;
-    if (Math.abs(nv) < 0.02 && !inp.throttle && !inp.brake) nv = 0;
+    const stop = (bdec + res) * dt;
+    if (Math.abs(nv) <= stop) nv = (Math.abs(a) > bdec + res) ? nv : 0;
+    else nv -= Math.sign(nv) * stop;
+    if (this.parkingBrake) { if (Math.abs(nv) < 1.2) nv = 0; else nv -= Math.sign(nv) * 5 * dt; }
+    if (this.gear === 'P') nv = 0;
     this.speed = nv;
-    this.accel = a;
+    this.accel = (nv - v) / Math.max(dt, 1e-4);
 
-    // ---- ハンドル ----
-    const maxSteer = 0.62 / (1 + Math.abs(nv) / 9);
-    const target = inp.steer * maxSteer;
-    const rate = (Math.abs(target) > Math.abs(this.steer) ? 1.6 : 2.6) * dt;
-    this.steer += Math.max(-rate, Math.min(rate, target - this.steer));
-    this.yawRate = nv / WB * Math.tan(this.steer);
+    // ---- ハンドル（速いほど切れ角を小さく、ゆっくり）----
+    const sp = Math.abs(nv);
+    const maxAng = 0.62 / (1 + sp / 11);
+    let targetAng;
+    if (inp.mouseSteer != null) {
+      targetAng = inp.mouseSteer * 0.62;
+      this.kbSteer = inp.mouseSteer;
+    } else {
+      const want = inp.steer || 0;
+      const rate = (Math.abs(want) > Math.abs(this.kbSteer) && Math.sign(want) === Math.sign(this.kbSteer || want) ? 1.9 / (1 + sp / 14) : 2.8) * dt;
+      this.kbSteer += THREE.MathUtils.clamp(want - this.kbSteer, -rate, rate);
+      targetAng = this.kbSteer * maxAng;
+    }
+    this.steer += THREE.MathUtils.clamp(targetAng - this.steer, -3.2 * dt, 3.2 * dt);
+    this.yawRate = nv / WB * Math.tan(this.steer) / (1 + 0.0011 * nv * nv);
     this.heading += this.yawRate * dt;
 
     const f = this.forward;
@@ -311,12 +376,24 @@ export class Van {
       this.lastImpact = impact;
     } else this.lastImpact = 0;
 
-    // ---- ウインカー ----
+    // ---- ウインカー（曲がり終えたら自動で戻る）----
     this.blink += dt;
-    const on = (this.signal || this.hazard) && (this.blink % 0.8) < 0.4;
-    this.blinkOn = on;
+    if (this.signal) {
+      const turned = Math.abs(Math.atan2(Math.sin(this.heading - this.signalHeading), Math.cos(this.heading - this.signalHeading)));
+      if (turned > 0.9) this.signalTurned = true;
+      if (this.signalTurned && Math.abs(this.kbSteer) < 0.12) { this.signal = 0; this.signalTurned = false; }
+    }
+    const was = this.blinkOn;
+    this.blinkOn = (this.signal || this.hazard) && (this.blink % 0.76) < 0.38;
+    this.blinkTick = was !== this.blinkOn;
     this.sync(dt);
   }
+
+  setSignal(dir) {
+    this.signal = this.signal === dir ? 0 : dir;
+    this.signalHeading = this.heading; this.signalTurned = false; this.blink = 0;
+  }
+  get gearLabel() { return this.gear === 'D' ? `D${this.gearIdx + 1}` : this.gear; }
 
   sync(dt) {
     this.group.position.set(this.x, 0, this.z);
@@ -331,7 +408,7 @@ export class Van {
       w.spin.rotation.x = this.wheelSpin;
       w.pivot.rotation.y = w.front ? this.steer : 0;
     }
-    this.wheel.rotation.z = -this.steer * 6;
+    this.wheel.rotation.z = -this.steer * 12;
     // ドア
     this.hatchT += ((this.hatchOpen ? 1 : 0) - this.hatchT) * Math.min(1, dt * 4);
     this.slideT += ((this.slideOpen ? 1 : 0) - this.slideT) * Math.min(1, dt * 4);
@@ -342,19 +419,50 @@ export class Van {
     this.brakeMat.emissiveIntensity = this.brakeOn ? 2.2 : (this.lightsOn ? 0.6 : 0.1);
     this.headMat.emissiveIntensity = this.lightsOn ? 2.5 : 0.05;
     for (const l of this.headLights) l.intensity = this.lightsOn ? 35 : 0;
-    const bl = this.blinkOn ? 2.5 : 0;
-    this.blinkMat.emissiveIntensity = bl;
+    this.blinkMatL.emissiveIntensity = this.blinkOn && (this.signal === 1 || this.hazard) ? 2.5 : 0;
+    this.blinkMatR.emissiveIntensity = this.blinkOn && (this.signal === -1 || this.hazard) ? 2.5 : 0;
   }
 
-  drawMeter(limit) {
-    const c = this.meterCanvas.getContext('2d');
-    c.fillStyle = '#0d0f12'; c.fillRect(0, 0, 256, 128);
-    c.fillStyle = '#7fd4ff'; c.font = 'bold 64px sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
-    c.fillText(String(Math.round(this.kmh)), 128, 58);
-    c.font = '20px sans-serif'; c.fillStyle = '#9aa'; c.fillText('km/h', 128, 104);
-    if (this.speed < -0.1) { c.fillStyle = '#ffb020'; c.fillText('R', 30, 30); }
-    if (this.blinkOn) { c.fillStyle = '#4f4'; if (this.signal < 0 || this.hazard) c.fillText('◀', 30, 100); if (this.signal > 0 || this.hazard) c.fillText('▶', 226, 100); }
+  // メーター（速度計・回転計・シフト位置）
+  drawMeter() {
+    const c = this.meterCanvas.getContext('2d'), W = 512, H = 256;
+    c.fillStyle = '#07090b'; c.fillRect(0, 0, W, H);
+    const dial = (cx, val, max, label, ticks, warn) => {
+      const R = 96, a0 = Math.PI * 0.75, a1 = Math.PI * 2.25;
+      c.lineWidth = 3; c.strokeStyle = '#2a3036'; c.beginPath(); c.arc(cx, 132, R, a0, a1); c.stroke();
+      for (let i = 0; i <= ticks; i++) {
+        const t = i / ticks, ang = a0 + (a1 - a0) * t;
+        c.strokeStyle = warn && t > warn ? '#e5534b' : '#c9d1d8'; c.lineWidth = i % 2 ? 2 : 3;
+        c.beginPath(); c.moveTo(cx + Math.cos(ang) * (R - 4), 132 + Math.sin(ang) * (R - 4)); c.lineTo(cx + Math.cos(ang) * (R - (i % 2 ? 12 : 18)), 132 + Math.sin(ang) * (R - (i % 2 ? 12 : 18))); c.stroke();
+      }
+      const ang = a0 + (a1 - a0) * Math.min(1, val / max);
+      c.strokeStyle = '#f2a93b'; c.lineWidth = 4; c.beginPath(); c.moveTo(cx, 132); c.lineTo(cx + Math.cos(ang) * (R - 10), 132 + Math.sin(ang) * (R - 10)); c.stroke();
+      c.fillStyle = '#1b2025'; c.beginPath(); c.arc(cx, 132, 12, 0, 7); c.fill();
+      c.fillStyle = '#8a949c'; c.font = '600 15px sans-serif'; c.textAlign = 'center'; c.fillText(label, cx, 196);
+    };
+    dial(120, this.kmh, 140, 'km/h', 14);
+    dial(392, this.rpm, 7000, '×1000 r/min', 14, 0.86);
+    c.fillStyle = '#eef1f3'; c.font = '700 44px sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.fillText(String(Math.round(this.kmh)), 120, 150);
+    c.fillStyle = '#f2a93b'; c.font = '700 54px sans-serif'; c.fillText(this.gearLabel, 256, 120);
+    c.font = '600 16px sans-serif'; c.fillStyle = '#8a949c';
+    c.fillText(['P', 'R', 'N', 'D'].map(g => g === this.gear ? `[${g}]` : g).join(' '), 256, 170);
+    c.textBaseline = 'alphabetic';
+    if (this.blinkOn) { c.fillStyle = '#4fdc7f'; c.font = '700 30px sans-serif'; if (this.signal > 0 || this.hazard) c.fillText('◀', 210, 40); if (this.signal < 0 || this.hazard) c.fillText('▶', 302, 40); }
+    if (this.parkingBrake) { c.fillStyle = '#e5534b'; c.font = '700 22px sans-serif'; c.fillText('(P)', 256, 230); }
+    if (this.lightsOn) { c.fillStyle = '#5aa9e6'; c.font = '700 18px sans-serif'; c.fillText('ライト', 256, 210); }
     this.meterTex.needsUpdate = true;
+  }
+
+  renderMirrors(renderer, scene) {
+    if (!this.mirrors) return;
+    const prev = renderer.getRenderTarget();
+    for (const m of this.mirrors) {
+      m.cam.updateMatrixWorld(true);
+      renderer.setRenderTarget(m.rt);
+      renderer.render(scene, m.cam);
+    }
+    renderer.setRenderTarget(prev);
   }
 }
 

@@ -3,10 +3,11 @@ import * as THREE from 'three';
 import { A, model, textTexture, JP_FONT } from './assets.js';
 import { T, NAT_Z, NAT_HALF, routePath, speedLimitAt, updateLights, resolveCircle } from './town.js';
 import { updateSignals } from './traffic.js';
+import { Person, spawnDog, hasPeople } from './people.js';
+import { bindUI, toast, dialog, dialogKey, closeDialog, slipHtml, updateHud, drawNav, updateNavFoot, openTablet, closeTablet, renderTablet, showMenu, closeMenu, showReport } from './ui.js';
 import { TIME, WINDOWS, OKIHAI_PLACES, RESIDENTS, ITEMS, FAVORITES, SENDERS, FLAG_LABEL, BOX_DIMS, UPGRADES, LEVELS, parcelsForLevel } from './data.js';
 
 const $ = (s, el = document) => el.querySelector(s);
-const $$ = (s, el = document) => Array.from(el.querySelectorAll(s));
 const fmt = (m) => `${Math.floor(m / 60)}:${String(Math.floor(m % 60)).padStart(2, '0')}`;
 const yen = (n) => '¥' + Math.round(n).toLocaleString('ja-JP');
 const esc = (s) => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -33,48 +34,79 @@ export function sfx(name, vol = 0.5) {
   if (!soundOn || !SFX[name]) return;
   try {
     const a = new Audio('assets/sfx/' + SFX[name] + '.ogg');
-    a.volume = vol; a.play().catch(() => {});
+    a.volume = Math.min(1, vol * (G.save ? G.save.settings.vol : 0.7) * 1.4); a.play().catch(() => {});
     audioPool[name] = a;
   } catch (e) { /* 音が出せない環境 */ }
 }
-// エンジン音（WebAudio で合成）
-const engine = { ctx: null, osc: null, osc2: null, gain: null, filt: null };
+// エンジン音（WebAudio で合成：3気筒の爆発音の周波数＋吸気の音）
+const engine = { ctx: null };
 function startEngine() {
   if (engine.ctx || !window.AudioContext) return;
   try {
     const c = engine.ctx = new AudioContext();
-    engine.osc = c.createOscillator(); engine.osc.type = 'sawtooth';
-    engine.osc2 = c.createOscillator(); engine.osc2.type = 'square';
-    engine.filt = c.createBiquadFilter(); engine.filt.type = 'lowpass'; engine.filt.frequency.value = 380;
-    engine.gain = c.createGain(); engine.gain.gain.value = 0;
-    engine.osc.connect(engine.filt); engine.osc2.connect(engine.filt); engine.filt.connect(engine.gain); engine.gain.connect(c.destination);
-    engine.osc.start(); engine.osc2.start();
+    const master = engine.master = c.createGain(); master.gain.value = 0; master.connect(c.destination);
+    const filt = engine.filt = c.createBiquadFilter(); filt.type = 'lowpass'; filt.frequency.value = 500; filt.Q.value = 0.8; filt.connect(master);
+    engine.o1 = c.createOscillator(); engine.o1.type = 'sawtooth';
+    engine.o2 = c.createOscillator(); engine.o2.type = 'square';
+    engine.o3 = c.createOscillator(); engine.o3.type = 'triangle';
+    const g1 = c.createGain(); g1.gain.value = 0.55; const g2 = c.createGain(); g2.gain.value = 0.22; const g3 = c.createGain(); g3.gain.value = 0.5;
+    engine.o1.connect(g1).connect(filt); engine.o2.connect(g2).connect(filt); engine.o3.connect(g3).connect(filt);
+    // 吸気・ロードノイズ
+    const buf = c.createBuffer(1, c.sampleRate * 2, c.sampleRate); const ch = buf.getChannelData(0);
+    for (let i = 0; i < ch.length; i++) ch[i] = Math.random() * 2 - 1;
+    const noise = c.createBufferSource(); noise.buffer = buf; noise.loop = true;
+    const nf = engine.nf = c.createBiquadFilter(); nf.type = 'bandpass'; nf.frequency.value = 700; nf.Q.value = 0.7;
+    const ng = engine.ng = c.createGain(); ng.gain.value = 0;
+    noise.connect(nf).connect(ng).connect(master);
+    engine.o1.start(); engine.o2.start(); engine.o3.start(); noise.start();
   } catch (e) { engine.ctx = null; }
 }
-function updateEngine(running, speed, throttle) {
+function updateEngine(on, rpm, throttle, speed) {
   if (!engine.ctx) return;
-  const v = Math.abs(speed);
-  const gear = v < 4 ? v / 4 : v < 9 ? (v - 4) / 5 : v < 15 ? (v - 9) / 6 : (v - 15) / 12;
-  const rpm = 0.25 + Math.min(1, gear) * 0.6 + throttle * 0.15;
-  const f = 32 + rpm * 70;
   const t = engine.ctx.currentTime;
-  engine.osc.frequency.setTargetAtTime(f, t, 0.05);
-  engine.osc2.frequency.setTargetAtTime(f * 0.5, t, 0.05);
-  engine.gain.gain.setTargetAtTime(running && soundOn ? 0.035 + throttle * 0.03 : 0, t, 0.1);
+  const f = Math.max(10, rpm / 60 * 1.5);
+  engine.o1.frequency.setTargetAtTime(f, t, 0.04);
+  engine.o2.frequency.setTargetAtTime(f * 0.5, t, 0.04);
+  engine.o3.frequency.setTargetAtTime(f * 2, t, 0.04);
+  engine.filt.frequency.setTargetAtTime(260 + throttle * 900 + rpm * 0.08, t, 0.06);
+  const vol = (G.save ? G.save.settings.engineVol : 0.6) * (soundOn ? 1 : 0);
+  engine.master.gain.setTargetAtTime(on && rpm > 100 ? (0.05 + throttle * 0.05) * vol : 0, t, 0.12);
+  engine.ng.gain.setTargetAtTime(on ? (Math.min(1, Math.abs(speed) / 20) * 0.05 + throttle * 0.02) * vol : 0, t, 0.2);
+}
+function horn() {
+  startEngine();
+  const c = engine.ctx; if (!c) return;
+  const g = c.createGain(); g.gain.value = 0.0001; g.connect(c.destination);
+  const vol = 0.09 * (G.save ? G.save.settings.vol : 0.7);
+  g.gain.setTargetAtTime(vol, c.currentTime, 0.01); g.gain.setTargetAtTime(0.0001, c.currentTime + 0.35, 0.04);
+  for (const fr of [415, 520]) { const o = c.createOscillator(); o.type = 'square'; o.frequency.value = fr; const lp = c.createBiquadFilter(); lp.frequency.value = 1800; o.connect(lp).connect(g); o.start(); o.stop(c.currentTime + 0.6); }
 }
 
 // =========================================================
 // 状態
 // =========================================================
 const SAVE_KEY = 'aoba3d-save-v1';
-const defaultSave = () => ({ day: 1, money: 0, exp: 0, level: 1, upgrades: {}, visits: {}, history: [], seed: Math.floor(Math.random() * 1e9), sens: 1 });
-function loadSave() { try { const s = JSON.parse(localStorage.getItem(SAVE_KEY)); if (s && s.day) return Object.assign(defaultSave(), s); } catch (e) { /* 新規 */ } return null; }
+const defaultSettings = () => ({ sens: 1, mouseSteer: false, mouseSteerSens: 1, vol: 0.7, engineVol: 0.6, quality: 'high', mirrors: true });
+const defaultSave = () => ({ day: 1, money: 0, exp: 0, level: 1, upgrades: {}, visits: {}, history: [], seed: Math.floor(Math.random() * 1e9), settings: defaultSettings() });
+const SETTINGS_KEY = 'aoba3d-settings-v1';
+function loadSettings() {
+  try { return Object.assign(defaultSettings(), JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}); } catch (e) { return defaultSettings(); }
+}
+function writeSettings() { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(G.save.settings)); } catch (e) { /* 保存不可 */ } }
+function loadSave() {
+  try {
+    const s = JSON.parse(localStorage.getItem(SAVE_KEY));
+    if (s && s.day) { const o = Object.assign(defaultSave(), s); o.settings = loadSettings(); return o; }
+  } catch (e) { /* 新規 */ }
+  return null;
+}
 function writeSave() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(G.save)); } catch (e) { /* 保存不可 */ } }
 const hasUp = (id) => !!G.save.upgrades[id];
 
 export const G = {
-  save: null, day: null, mode: 'title', view: 'cab', overlay: null, keys: {}, carrying: [],
-  timers: [], realT: 0, look: { yaw: 0, pitch: 0 }, prompt: null, focus: null,
+  day: null, mode: 'title', view: 'cab', overlay: null, keys: {}, carrying: [],
+  timers: [], realT: 0, look: { yaw: 0, pitch: 0 }, prompt: null, focus: null, mouseSteer: 0, waiting: false,
+  save: defaultSave(),
 };
 let ctx = null; // { scene, camera, van, player, traffic, renderer, sun, hemi }
 
@@ -255,6 +287,7 @@ function newDay() {
   const sp = T.depot.vanSpawn;
   van.setPose(sp.x, sp.z, sp.heading);
   van.hatchOpen = true; van.slideOpen = false; van.lightsOn = false; van.signal = 0; van.hazard = false;
+  van.gear = 'P'; van.parkingBrake = true; van.engineOn = false; van.cruise = 0; van.rpm = 0;
   // 作業台に並べる
   const spots = [];
   for (const t of T.depot.tables) for (const dz of [-0.28, 0.28]) for (const dx of [-1.0, 0, 1.0]) spots.push({ x: t.x + dx, z: t.z + dz, y: t.y });
@@ -493,6 +526,7 @@ function windowState(p, t) {
 function ring(lot, room, retry = false) {
   const d = G.day;
   if (lot.visit && lot.visit.stage === 'calling') return;
+  if (lot.visit) removeVisitor(lot.visit);
   sfx('bell', 0.5);
   lot.visit = { stage: 'calling', room, lotId: lot.id, retry };
   G.timers.push({ t: G.realT + 1.6, fn: () => answer(lot, room) });
@@ -550,6 +584,7 @@ function answer(lot, room) {
     return;
   }
   v.stage = 'home';
+  setTimeout(() => { if (lot.visit === v && v.stage === 'home') spawnVisitor(lot, v); }, lot.kind === 'mansion' ? 600 : 1200);
   if (lot.kind === 'mansion') {
     v.handPos = lot.points.intercom;
     d.time += 2;
@@ -558,7 +593,7 @@ function answer(lot, room) {
     const unit = lot.rooms ? lot.rooms.find(x => x.room === room) : null;
     v.handPos = unit ? unit.door : lot.points.door;
     if (!lot.rooms && lot.doors[0]) lot.doors[0].target = 1;
-    dialog({ title: speaker.name, text: line, choices: [{ label: lot.kind === 'shop' || lot.kind === 'conbini' ? '店の入口で渡す' : '玄関へ向かう', use: closeDialog }] });
+    dialog({ title: speaker.name, role: speaker.role, text: line, choices: [{ label: lot.kind === 'shop' || lot.kind === 'conbini' ? '店の入口で渡す' : '玄関へ向かう', use: closeDialog }] });
   }
   v.expires = G.realT + 240;
 }
@@ -620,7 +655,7 @@ function handOver(lot, v) {
   const sp = v.speaker;
   const sameName = (p) => p.name.split(' ')[0] === sp.surname;
   dialog({
-    title: sp.name, text: `「${v.line}」`,
+    title: sp.name, role: sp.role, text: `「${v.line}」`,
     choices: [
       { label: `荷物を渡してサインをもらう（${hand.length}個）`, use: () => { closeDialog(); doHandOver(lot, v, hand); } },
       { label: `「${hand[0].name}様ですね？」と確認する`, use: () => {
@@ -649,7 +684,9 @@ function doHandOver(lot, v, hand) {
   relayoutHand();
   d.time += 1;
   sfx('ok', 0.5);
-  setTimeout(() => endVisit(lot), 1500);
+  if (v.person) v.person.play('wave');
+  v.stage = 'done';
+  setTimeout(() => { if (lot.visit === v) endVisit(lot); }, 3200);
 }
 
 function deliver(p, method, lot, silent) {
@@ -707,6 +744,7 @@ function leaveSlip(lot, v) {
 }
 
 function endVisit(lot) {
+  if (lot.visit) removeVisitor(lot.visit);
   lot.visit = null;
   for (const dd of lot.doors) dd.target = 0;
 }
@@ -716,15 +754,22 @@ function endVisit(lot) {
 // =========================================================
 function enterVan() {
   if (G.carrying.length) { toast('荷物を持ったままでは乗れません。荷台に積むか、置いてから乗りましょう。', 'info'); return; }
+  const van = ctx.van;
   G.mode = 'drive';
   G.look = { yaw: 0, pitch: -0.05 };
+  G.mouseSteer = 0;
   sfx('door', 0.35);
   startEngine();
-  if (!G.day.departed) toast('W/S でアクセル・ブレーキ、A/D でハンドル。C で視点切り替え。', 'info', 5000);
+  van.engineOn = true; if (van.gear === 'P') van.gear = 'N';
+  if (!G.day.departed && !G.day.driveHint) {
+    G.day.driveHint = true;
+    toast('<kbd>Space</kbd> でサイドブレーキを解除して、<kbd>W</kbd> で発進します。', 'info', 7000);
+  }
 }
 function exitVan() {
   const van = ctx.van;
   if (Math.abs(van.speed) > 0.5) { toast('止まってから降りましょう。', 'info'); return; }
+  van.speed = 0; van.gear = 'P'; van.parkingBrake = true; van.engineOn = false; van.cruise = 0;
   const pl = ctx.player;
   let p = van.driverDoor();
   pl.x = p.x; pl.z = p.z; pl.y = 0; pl.zone = null;
@@ -733,7 +778,7 @@ function exitVan() {
   const q = { x: pl.x, z: pl.z };
   if (resolveCircle(q, 0.3) > 0.2) { p = van.passengerSide(); pl.x = p.x; pl.z = p.z; }
   G.mode = 'walk';
-  updateEngine(false, 0, 0);
+  updateEngine(false, 0, 0, 0);
   sfx('door', 0.35);
 }
 
@@ -743,7 +788,7 @@ function driveInput() {
     throttle: (k.KeyW || k.ArrowUp) ? 1 : 0,
     brake: (k.KeyS || k.ArrowDown) ? 1 : 0,
     steer: ((k.KeyA || k.ArrowLeft) ? 1 : 0) - ((k.KeyD || k.ArrowRight) ? 1 : 0),
-    handbrake: !!k.Space,
+    mouseSteer: G.save.settings.mouseSteer ? G.mouseSteer : null,
   };
 }
 
@@ -865,7 +910,8 @@ function updateTime(dt) {
   const d = G.day;
   if (!d.clock || G.overlay) return;
   let scale = TIME.SCALE;
-  if (G.keys.KeyT && G.mode === 'drive' && Math.abs(ctx.van.speed) < 0.3) scale *= 20;
+  G.waiting = !!(G.keys.KeyT && G.mode === 'drive' && Math.abs(ctx.van.speed) < 0.3);
+  if (G.waiting) scale *= 20;
   d.time += dt * scale / 60;
   for (const c of d.calls) {
     if (c.fired || d.time < c.at) continue;
@@ -883,301 +929,24 @@ function updateTime(dt) {
 }
 
 // =========================================================
-// 表示
+// 表示まわりで使う関数
 // =========================================================
-export function toast(msg, kind = '', ms = 4000) {
-  const el = document.createElement('div');
-  el.className = 'toast ' + kind; el.innerHTML = msg;
-  $('#toasts').appendChild(el);
-  setTimeout(() => el.classList.add('out'), ms);
-  setTimeout(() => el.remove(), ms + 400);
-}
-
-function dialog({ title, text, choices = [], grid }) {
-  G.overlay = 'dialog';
-  document.exitPointerLock && document.exitPointerLock();
-  const el = $('#dialog');
-  el.innerHTML = `<div class="dlg"><div class="dlg-title">${esc(title)}</div><div class="dlg-text">${esc(text).replace(/\n/g, '<br>')}</div>
-    ${grid ? `<div class="dlg-grid">${grid.map((c, i) => `<button class="btn" data-g="${i}">${esc(c.label)}</button>`).join('')}</div>` : ''}
-    <div class="dlg-choices">${choices.map((c, i) => `<button class="btn ${i === 0 ? 'primary' : ''}" data-c="${i}" ${c.disabled ? 'disabled' : ''}>${esc(c.label)}</button>`).join('')}</div></div>`;
-  el.classList.add('show');
-  $$('[data-c]', el).forEach(b => b.onclick = () => { sfx('click', 0.3); choices[+b.dataset.c].use(); });
-  $$('[data-g]', el).forEach(b => b.onclick = () => { sfx('click', 0.3); grid[+b.dataset.g].use(); });
-}
-function closeDialog() {
-  $('#dialog').classList.remove('show');
-  if (G.overlay === 'dialog') G.overlay = null;
-  requestLock();
-}
 export function requestLock() {
-  if (G.overlay || G.mode === 'title') return;
+  if (G.overlay || G.mode === 'title' || G.mode === 'ui') return;
   const c = ctx.renderer.domElement;
   try { const r = c.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (e) { /* 失敗しても続行 */ }
 }
-
-function slipHtml(p) {
-  const w = WINDOWS[p.window];
-  const r = p.rid ? resident(p.rid) : null;
-  const flags = p.flags.map(f => `<span class="tag ${FLAG_LABEL[f].cls}">${FLAG_LABEL[f].label}</span>`).join(' ');
-  return `<div class="slip">
-    <div class="slip-h">お届け伝票 <span>${p.no}</span></div>
-    <div class="slip-name">${esc(p.name)} 様</div>
-    <div class="slip-addr ${p.misrouted ? 'warn' : ''}">${esc(p.addr)}</div>
-    <div class="slip-row"><span class="tag time">${w.label}</span> <span class="tag">${p.size}サイズ</span> ${flags}</div>
-    <div class="slip-row small">品名：${esc(p.item)}　ご依頼主：${esc(p.sender)}</div>
-    <div class="slip-row small">${p.okihai ? `置き配：<b>可（${p.okihai}）</b>` : `置き配：<b>不可</b> ${esc(p.okihaiReason || '')}`}</div>
-    ${r && hasUp('notify') ? `<div class="slip-row small">在宅予定：${homeHint(r)}</div>` : ''}
-    ${p.damaged && p.damageNoticed ? '<div class="slip-row small warn">中身が破損しているかもしれない</div>' : ''}
-  </div>`;
-}
-function homeHint(r) {
-  if (r.awayRate >= 0.8) return 'ほぼ在宅';
-  return r.home.filter(h => h[2] >= 0.8).map(([a, b]) => (a <= 0 ? '' : fmt(a * 60)) + '〜' + (b >= 24 ? '' : fmt(b * 60))).join('・') || '不定';
-}
-
-let hudCache = '';
-function updateHud() {
-  const d = G.day, van = ctx.van;
-  $('#hud-time').textContent = fmt(d.time);
-  $('#hud-time').classList.toggle('over', d.time >= TIME.SHIFT_END);
-  $('#hud-clock-note').textContent = d.clock ? (G.keys.KeyT && G.mode === 'drive' && Math.abs(van.speed) < 0.3 ? '待機中 ▶▶' : '') : '出発前（時計は止まっています）';
-  $('#hud-day').textContent = `${G.save.day}日目`;
-  const done = d.parcels.filter(p => p.status === 'delivered').length;
-  const total = d.parcels.filter(p => !p.misrouted).length;
-  $('#hud-progress').textContent = `配達 ${done} / ${total}`;
-  // 目標
-  $('#hud-goal').innerHTML = goalText();
-  // 操作のヒント
-  const f = G.focus;
-  const pr = $('#prompt');
-  if (G.mode === 'walk' && f && f.label) { pr.innerHTML = `<kbd>E</kbd> ${esc(f.label)}`; pr.classList.add('show'); }
-  else pr.classList.remove('show');
-  // 伝票のプレビュー
-  const sp = $('#slip-preview');
-  const look = G.mode === 'walk' && f && f.parcel ? f.parcel : (G.mode === 'walk' && G.carrying.length ? carried()[G.carrying.length - 1] : null);
-  const key = look ? look.id + look.status + look.okihai + look.window : '';
-  if (key !== hudCache) { hudCache = key; sp.innerHTML = look ? slipHtml(look) : ''; sp.classList.toggle('show', !!look); }
-  // スピードメーター
-  const sd = $('#speedo');
-  if (G.mode === 'drive') {
-    sd.classList.add('show');
-    const lim = speedLimitAt(van.x, van.z);
-    $('#spd').textContent = Math.round(van.kmh);
-    $('#spd-lim').textContent = lim;
-    sd.classList.toggle('over', van.kmh > lim + 5);
-    $('#spd-ind').innerHTML = `${van.speed < -0.1 ? '<span class="r">R</span>' : ''}${van.blinkOn && (van.signal < 0 || van.hazard) ? '<span class="bl">◀</span>' : ''}${van.blinkOn && (van.signal > 0 || van.hazard) ? '<span class="bl">▶</span>' : ''}${van.lightsOn ? '<span class="li">ライト</span>' : ''}${(van.hatchT > 0.5 || van.slideT > 0.5) ? '<span class="dw">ドア開</span>' : ''}`;
-  } else sd.classList.remove('show');
-  $('#crosshair').classList.toggle('show', G.mode === 'walk');
-}
-
-function goalText() {
-  const d = G.day;
-  if (!d.departed) {
-    const unchecked = d.parcels.filter(p => !p.checked).length;
-    const onTable = d.parcels.filter(p => p.status === 'depot' && p.loc && p.loc.type === 'world').length;
-    if (unchecked) return `作業台の荷物を確認して、車に積み込もう（未確認 ${unchecked}個）`;
-    if (onTable || G.carrying.length) return `荷物を車に積み込もう（残り ${onTable + G.carrying.length}個）。Tab でルートを決められる`;
-    return 'ドアを閉めて、運転席に乗って（F）出発しよう';
-  }
-  if (d.ended) return '';
-  const next = nextStop();
-  if (!next) return '全部回った。営業所に戻って、事務机で日報を書こう';
-  const lot = T.lots[next];
-  const ps = pendingFor(next, null).concat(lot.rooms ? d.parcels.filter(p => p.lotId === next && p.room && ['loaded', 'redeliver', 'carry', 'hand'].includes(p.status)) : []);
-  const w = ps.find(p => p.window !== 'none');
-  return `次：${esc(lot.name || lot.surname + 'さん宅')}（${lot.address}）${w ? `　<span class="tag time">${WINDOWS[w.window].label}</span>` : ''}`;
-}
-
 function nextStop() {
   const d = G.day;
-  const pend = new Set(d.parcels.filter(p => p.lotId && ['loaded', 'redeliver', 'hand'].includes(p.status)).map(p => p.lotId));
+  const pend = new Set(d.parcels.filter(p => p.lotId && ['loaded', 'redeliver'].includes(p.status) || (p.lotId && p.loc && p.loc.type === 'hand' && p.status !== 'delivered')).map(p => p.lotId));
   for (const id of d.route) if (pend.has(id)) return id;
   return [...pend][0] || null;
 }
-
-// ミニマップ
-function drawMinimap() {
-  const c = $('#minimap'), g = c.getContext('2d');
-  const W = c.width, H = c.height, S = 1.15;
-  const pl = G.mode === 'drive' ? { x: ctx.van.x, z: ctx.van.z } : { x: ctx.player.x, z: ctx.player.z };
-  const fwd = G.mode === 'drive' ? ctx.van.forward : { x: -Math.sin(ctx.player.yaw), z: -Math.cos(ctx.player.yaw) };
-  const ang = Math.atan2(fwd.x, -fwd.z);
-  g.save();
-  g.fillStyle = '#c9cfbf'; g.fillRect(0, 0, W, H);
-  g.translate(W / 2, H * 0.62); g.rotate(-ang); g.scale(S, S); g.translate(-pl.x, -pl.z);
-  g.fillStyle = '#e6e2d8';
-  for (const lot of T.lotList) g.fillRect(lot.cx - lot.w / 2 + 0.5, lot.cz - lot.d / 2 + 0.5, lot.w - 1, lot.d - 1);
-  const dp = T.depot.area; g.fillStyle = '#d8dce2'; g.fillRect(dp.x0, dp.z0, dp.x1 - dp.x0, dp.z1 - dp.z0);
-  for (const r of T.roads) { g.fillStyle = r.kind === 'national' ? '#5d6470' : '#7b818b'; g.fillRect(r.x0, r.z0, r.x1 - r.x0, r.z1 - r.z0); }
-  // ルート
-  const next = nextStop();
-  const nav = next && hasUp('navi') ? routePath(pl, T.lots[next].points.front || { x: T.lots[next].cx, z: T.lots[next].cz }) : null;
-  if (nav) {
-    const path = nav.points;
-    g.strokeStyle = '#2e9be0'; g.lineWidth = 3.2; g.lineJoin = 'round';
-    g.beginPath(); g.moveTo(pl.x, pl.z); for (const p of path) g.lineTo(p.x, p.z); g.stroke();
-  }
-  // 配達先
-  const stops = stopLots();
-  for (const id of stops) {
-    const lot = T.lots[id];
-    const idx = G.day.route.indexOf(id);
-    const done = G.day.parcels.filter(p => p.lotId === id).every(p => p.status === 'delivered');
-    g.save(); g.translate(lot.cx, lot.cz); g.rotate(ang);
-    g.fillStyle = done ? '#3f7d5a' : id === next ? '#2e6eaa' : '#2d4a66';
-    g.beginPath(); g.arc(0, 0, 6, 0, 7); g.fill();
-    g.fillStyle = '#fff'; g.font = 'bold 8px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
-    g.fillText(done ? '✓' : idx >= 0 ? String(idx + 1) : '・', 0, 0.5);
-    g.restore();
-  }
-  g.save(); g.translate(-68, 200); g.rotate(ang); g.fillStyle = '#5b5f66'; g.beginPath(); g.arc(0, 0, 6, 0, 7); g.fill(); g.fillStyle = '#fff'; g.font = 'bold 8px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('営', 0, 0.5); g.restore();
-  g.restore();
-  // 自分
-  g.fillStyle = '#e8762c'; g.strokeStyle = '#fff'; g.lineWidth = 1.5;
-  g.beginPath(); g.moveTo(W / 2, H * 0.62 - 9); g.lineTo(W / 2 + 6, H * 0.62 + 6); g.lineTo(W / 2, H * 0.62 + 3); g.lineTo(W / 2 - 6, H * 0.62 + 6); g.closePath(); g.fill(); g.stroke();
-  // 北の向き
-  g.save(); g.translate(W - 16, 16); g.rotate(-ang); g.fillStyle = '#c8281e'; g.font = 'bold 12px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('N', 0, -1); g.restore();
-  if (nav) {
-    const len = nav.length;
-    const eta = G.day.time + len / 8.5 / 60 * TIME.SCALE;
-    g.fillStyle = 'rgba(20,28,36,.75)'; g.fillRect(0, H - 22, W, 22);
-    g.fillStyle = '#fff'; g.font = '12px sans-serif'; g.textAlign = 'left'; g.fillText(`あと ${Math.round(len)}m　到着予想 ${fmt(eta)}`, 8, H - 7);
-  }
-}
-
 function stopLots() {
   const ids = [];
   for (const p of G.day.parcels) if (p.lotId && !['left', 'aside', 'asideWrong'].includes(p.status) && !ids.includes(p.lotId)) ids.push(p.lotId);
   return ids;
 }
-
-// =========================================================
-// タブレット
-// =========================================================
-function openTablet(tab = 'list') {
-  G.overlay = 'tablet';
-  G.tab = tab;
-  document.exitPointerLock && document.exitPointerLock();
-  renderTablet();
-  $('#tablet').classList.add('show');
-}
-function closeTablet() { $('#tablet').classList.remove('show'); G.overlay = null; requestLock(); }
-
-function renderTablet() {
-  const d = G.day, el = $('#tablet');
-  const tabs = [['list', '伝票一覧'], ['map', '地図・ルート'], ['cargo', '荷台'], ['work', '業務']];
-  let body = '';
-  if (G.tab === 'list') {
-    body = `<div class="tb-list">${d.parcels.map(p => {
-      const st = { depot: p.checked ? '確認済み・未積載' : '未確認', loaded: '積載中', hand: '手に持っている', delivered: '配達済み', carry: '持ち戻り', redeliver: '再配達依頼', aside: '仕分け戻し', left: '積み残し', asideWrong: '仕分け戻し' }[p.status] || p.status;
-      return `<div class="tb-item ${p.status}">${slipHtml(p)}<div class="tb-st">${st}${p.loc && p.loc.type === 'slot' ? `<br><small>${slotName(ctx.van.slots.find(s => s.id === p.loc.slot))}</small>` : p.loc && p.loc.type === 'cooler' ? '<br><small>保冷ボックス</small>' : ''}</div></div>`;
-    }).join('')}</div>`;
-  } else if (G.tab === 'map') {
-    body = `<div class="tb-map"><canvas id="tb-canvas" width="900" height="640"></canvas>
-      <div class="tb-route"><h4>配達順</h4><p class="muted">地図の配達先をクリックして順番を決めます。</p><ol>${d.route.map((id, i) => {
-        const lot = T.lots[id]; const ps = d.parcels.filter(p => p.lotId === id && p.status !== 'delivered');
-        return `<li><span>${i + 1}. ${esc(lot.name || lot.surname + 'さん宅')}</span><span class="muted">${ps.map(p => WINDOWS[p.window].short).filter(x => x !== '指定なし').join(' ')}</span><span><button data-up="${i}">▲</button><button data-del="${i}">✕</button></span></li>`;
-      }).join('')}</ol>
-      <button class="btn" id="tb-clear">順番をクリア</button></div></div>`;
-  } else if (G.tab === 'cargo') {
-    const van = ctx.van;
-    const cell = (side, depth, level) => {
-      if (side === 'L' && depth === 2 && level === 'floor') {
-        return `<div class="cg cooler">保冷ボックス<br>${van.cooler.items.map(id => esc(P(id).name.split(' ')[0])).join('、') || '空'}（${van.cooler.items.length}/${van.cooler.capacity}）</div>`;
-      }
-      const s = van.slots.find(x => x.side === side && x.depth === depth && x.level === level);
-      const p = s.parcel ? P(s.parcel) : null;
-      const warn = p && ((p.weight >= 3 || p.flags.includes('fragile') || p.flags.includes('upright')) && level === 'shelf' || p.flags.includes('cool'));
-      return `<div class="cg ${p ? 'full' : ''} ${warn ? 'warn' : ''}">${p ? `<b>${esc(p.name.split(' ')[0])}</b><br><small>${esc(p.item)}</small>${d.route.indexOf(p.lotId) >= 0 ? `<i>${d.route.indexOf(p.lotId) + 1}</i>` : ''}` : '<small>空き</small>'}</div>`;
-    };
-    body = `<div class="tb-cargo"><p class="muted">上から見た荷台（右が車の前）。後ろのハッチからは「後ろ」、左のスライドドアからは「前・中央」が取り出しやすい。</p>
-      ${['shelf', 'floor'].map(level => `<h4>${level === 'shelf' ? '棚（上段）' : '床（下段）'}</h4><div class="cg-grid"><div class="cg-row cg-headrow"><div></div><div>後ろ（ハッチ側）</div><div>中央</div><div>前（運転席側）</div></div>${['L', 'R'].map(side => `<div class="cg-row"><div class="cg-side">${side === 'L' ? '左（歩道側）' : '右'}</div>${[0, 1, 2].map(dep => cell(side, dep, level)).join('')}</div>`).join('')}</div>`).join('')}
-      <ul class="issues">${cargoIssues().map(t => `<li>${esc(t)}</li>`).join('') || '<li class="ok">積み方に問題はありません。</li>'}</ul></div>`;
-  } else {
-    const parked = Math.abs(ctx.van.speed) < 0.3;
-    body = `<div class="tb-work">
-      <p>現在 <b>${fmt(d.time)}</b>　定時 ${fmt(TIME.SHIFT_END)}</p>
-      <p class="muted">時間指定より早く着いたときは、車の中で待機できます（運転中に T キーを押し続けても時間が早く進みます）。</p>
-      <div class="row"><button class="btn" data-wait="10" ${!d.clock || !parked ? 'disabled' : ''}>10分待つ</button><button class="btn" data-wait="30" ${!d.clock || !parked ? 'disabled' : ''}>30分待つ</button></div>
-      <h4>操作</h4>
-      <table class="keys">
-        <tr><td>歩く</td><td><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>　走る <kbd>Shift</kbd>　見回す マウス</td></tr>
-        <tr><td>調べる・持つ・置く</td><td><kbd>E</kbd>（画面中央で狙う）</td></tr>
-        <tr><td>乗る・降りる</td><td><kbd>F</kbd></td></tr>
-        <tr><td>運転</td><td><kbd>W</kbd> アクセル　<kbd>S</kbd> ブレーキ／バック　<kbd>A</kbd><kbd>D</kbd> ハンドル　<kbd>Space</kbd> サイドブレーキ</td></tr>
-        <tr><td>運転中</td><td><kbd>C</kbd> 視点　<kbd>Q</kbd><kbd>E</kbd> ウインカー　<kbd>H</kbd> ハザード　<kbd>L</kbd> ライト　<kbd>T</kbd>（停車中）待機</td></tr>
-        <tr><td>タブレット</td><td><kbd>Tab</kbd>　一時停止 <kbd>Esc</kbd></td></tr>
-      </table>
-      <div class="row"><label>マウス感度 <input type="range" id="sens" min="0.3" max="2" step="0.1" value="${G.save.sens}"></label>
-      <label><input type="checkbox" id="snd" ${soundOn ? 'checked' : ''}> 音</label></div>
-    </div>`;
-  }
-  el.innerHTML = `<div class="tablet"><div class="tb-head">${tabs.map(([k, l]) => `<button class="tb-tab ${G.tab === k ? 'on' : ''}" data-tab="${k}">${l}</button>`).join('')}<span class="spacer"></span><span class="muted">${fmt(d.time)}</span><button class="btn" id="tb-close">閉じる（Tab）</button></div><div class="tb-body">${body}</div></div>`;
-  $$('[data-tab]', el).forEach(b => b.onclick = () => { G.tab = b.dataset.tab; sfx('click', 0.3); renderTablet(); });
-  $('#tb-close', el).onclick = closeTablet;
-  if (G.tab === 'map') {
-    drawTabletMap();
-    const cv = $('#tb-canvas');
-    cv.onclick = (e) => {
-      const r = cv.getBoundingClientRect();
-      const mx = (e.clientX - r.left) / r.width * cv.width, my = (e.clientY - r.top) / r.height * cv.height;
-      const w = mapToWorld(mx, my);
-      let best = null, bd = 12;
-      for (const id of stopLots()) { const l = T.lots[id]; const dd = Math.hypot(l.cx - w.x, l.cz - w.z); if (dd < bd) { bd = dd; best = id; } }
-      if (best) { const i = d.route.indexOf(best); if (i >= 0) d.route.splice(i, 1); else d.route.push(best); sfx('select', 0.3); renderTablet(); }
-    };
-    $$('[data-up]', el).forEach(b => b.onclick = () => { const i = +b.dataset.up; if (i > 0) { [d.route[i - 1], d.route[i]] = [d.route[i], d.route[i - 1]]; renderTablet(); } });
-    $$('[data-del]', el).forEach(b => b.onclick = () => { d.route.splice(+b.dataset.del, 1); renderTablet(); });
-    $('#tb-clear').onclick = () => { d.route = []; renderTablet(); };
-  }
-  $$('[data-wait]', el).forEach(b => b.onclick = () => { d.time += +b.dataset.wait; updateTime(0); sfx('tick', 0.4); renderTablet(); });
-  const sens = $('#sens'); if (sens) sens.oninput = () => { G.save.sens = +sens.value; writeSave(); };
-  const snd = $('#snd'); if (snd) snd.onchange = () => { soundOn = snd.checked; };
-}
-
-const MAP_VIEW = { x0: -140, z0: -20, x1: 260, z1: 240 };
-function worldToMap(x, z, W = 900, H = 640) { const s = Math.min(W / (MAP_VIEW.x1 - MAP_VIEW.x0), H / (MAP_VIEW.z1 - MAP_VIEW.z0)); return { x: (x - MAP_VIEW.x0) * s, y: (z - MAP_VIEW.z0) * s, s }; }
-function mapToWorld(mx, my, W = 900, H = 640) { const s = Math.min(W / (MAP_VIEW.x1 - MAP_VIEW.x0), H / (MAP_VIEW.z1 - MAP_VIEW.z0)); return { x: mx / s + MAP_VIEW.x0, z: my / s + MAP_VIEW.z0 }; }
-function drawTabletMap() {
-  const c = $('#tb-canvas'), g = c.getContext('2d'), d = G.day;
-  g.fillStyle = '#cfd6c4'; g.fillRect(0, 0, c.width, c.height);
-  const rect = (x0, z0, x1, z1, col) => { const a = worldToMap(x0, z0), b = worldToMap(x1, z1); g.fillStyle = col; g.fillRect(a.x, a.y, b.x - a.x, b.y - a.y); };
-  for (const lot of T.lotList) rect(lot.cx - lot.w / 2 + 0.5, lot.cz - lot.d / 2 + 0.5, lot.cx + lot.w / 2 - 0.5, lot.cz + lot.d / 2 - 0.5, lot.kind === 'shop' || lot.kind === 'conbini' ? '#e9dcc8' : '#ecebe6');
-  const dp = T.depot.area; rect(dp.x0, dp.z0, dp.x1, dp.z1, '#d8dce2');
-  for (const r of T.roads) rect(r.x0, r.z0, r.x1, r.z1, r.kind === 'national' ? '#5d6470' : '#8a9099');
-  g.fillStyle = '#334'; g.font = 'bold 13px sans-serif';
-  const lbl = worldToMap(-120, NAT_Z - 7); g.fillText('国道', lbl.x, lbl.y);
-  // ルート線
-  let prev = { x: -60, z: 190 };
-  g.strokeStyle = 'rgba(46,110,170,.8)'; g.lineWidth = 3; g.setLineDash([6, 4]);
-  for (const id of d.route) {
-    const lot = T.lots[id];
-    const path = routePath(prev, lot.points.front || { x: lot.cx, z: lot.cz }).points;
-    g.beginPath(); path.forEach((p, i) => { const m = worldToMap(p.x, p.z); if (i) g.lineTo(m.x, m.y); else g.moveTo(m.x, m.y); }); g.stroke();
-    prev = lot.points.front || { x: lot.cx, z: lot.cz };
-  }
-  g.setLineDash([]);
-  // 自分の位置
-  const me = worldToMap(G.mode === 'drive' ? ctx.van.x : ctx.player.x, G.mode === 'drive' ? ctx.van.z : ctx.player.z);
-  g.fillStyle = '#e8762c'; g.beginPath(); g.arc(me.x, me.y, 6, 0, 7); g.fill();
-  // 配達先
-  for (const id of stopLots()) {
-    const lot = T.lots[id], m = worldToMap(lot.cx, lot.cz);
-    const idx = d.route.indexOf(id);
-    const ps = d.parcels.filter(p => p.lotId === id);
-    const done = ps.every(p => p.status === 'delivered');
-    g.fillStyle = done ? '#3f7d5a' : ps.some(p => p.status === 'redeliver') ? '#8a5aa8' : ps.some(p => p.status === 'carry') ? '#c27a2c' : '#2d4a66';
-    g.beginPath(); g.arc(m.x, m.y, 11, 0, 7); g.fill();
-    g.fillStyle = '#fff'; g.font = 'bold 12px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
-    g.fillText(done ? '✓' : idx >= 0 ? String(idx + 1) : '・', m.x, m.y + 1);
-    const ws = ps.filter(p => p.window !== 'none' && p.status !== 'delivered').map(p => WINDOWS[p.window].short);
-    g.fillStyle = '#223'; g.font = '11px sans-serif'; g.textAlign = 'left';
-    g.fillText((lot.name || lot.surname) + (ws.length ? ` ${ws.join(' ')}` : ''), m.x + 13, m.y + 1);
-  }
-  const off = worldToMap(-68, 200); g.fillStyle = '#5b5f66'; g.beginPath(); g.arc(off.x, off.y, 11, 0, 7); g.fill(); g.fillStyle = '#fff'; g.textAlign = 'center'; g.fillText('営', off.x, off.y + 1);
-  g.textAlign = 'left';
-}
-
 function cargoIssues() {
   const van = ctx.van, out = [];
   for (const s of van.slots) {
@@ -1188,6 +957,33 @@ function cargoIssues() {
     if (p.flags.includes('cool')) out.push(`クール便「${p.item}」が保冷ボックスに入っていません`);
   }
   return out;
+}
+
+// ナビの経路（少し間隔をあけて計算する）
+const UI = {};
+let navTimer = 0;
+function updateNav(dt) {
+  navTimer -= dt;
+  if (navTimer > 0) return;
+  navTimer = 0.35;
+  const d = G.day;
+  const from = G.mode === 'drive' ? { x: ctx.van.x, z: ctx.van.z } : { x: ctx.player.x, z: ctx.player.z };
+  const next = nextStop();
+  let to = null;
+  if (next) { const lot = T.lots[next]; to = lot.points.front || { x: lot.cx, z: lot.cz }; }
+  else if (d.departed && !d.ended) to = { x: -60, z: 188 };
+  UI.navPath = to ? routePath(from, to) : null;
+  UI.navDist = UI.navPath && isFinite(UI.navPath.length) ? UI.navPath.length : null;
+  drawNav($('#minimap'));
+  if (G.mode === 'drive' && G.view === 'cab') { drawNav(ctx.van.navCanvas, { scale: 1.05 }); ctx.van.navTex.needsUpdate = true; }
+  updateNavFoot();
+}
+
+function waitMinutes(m) {
+  if (!G.day.clock) return;
+  G.day.time += m;
+  sfx('tick', 0.4);
+  updateTime(0);
 }
 
 // =========================================================
@@ -1243,100 +1039,171 @@ function finishDay() {
   s.history.push({ day: s.day, rank, score, delivered: delivered.length, total: real.length, wage: net });
   writeSave();
   d.result = { rows, score, max, rank, wage, net, exp, levelUp: s.level > prevLv, delivered, real, winOk, windowed, notDelivered, overtime, bonus };
-  showResult();
-}
-
-function showResult() {
-  const d = G.day, s = G.save, R = d.result;
-  G.overlay = 'result'; G.mode = 'ui';
-  document.exitPointerLock && document.exitPointerLock();
-  updateEngine(false, 0, 0);
-  const comment = { S: '完璧な段取り！', A: 'とても良い仕事でした。', B: 'まずまずの一日。', C: '少し慌ただしい一日でした。', D: '大変な一日でした。明日は落ち着いていきましょう。' }[R.rank];
-  const el = $('#screen');
-  el.innerHTML = `<div class="screen-card wide">
-    <h2>${s.day}日目の業務報告</h2>
-    <div class="res-grid">
-      <div>
-        <div class="rank-row"><div class="rank">${R.rank}</div><div>${comment}<div class="muted">スコア ${R.score} / ${R.max}　帰着 ${fmt(d.time)}</div></div></div>
-        <div class="stats">
-          <div><span>配達完了</span><b>${R.delivered.length}/${R.real.length}</b></div>
-          <div><span>時間指定</span><b>${R.winOk.length}/${R.windowed.length}</b></div>
-          <div><span>持ち戻り</span><b>${R.notDelivered.length}</b></div>
-          <div><span>誤配</span><b>${d.stats.misdelivery}</b></div>
-          <div><span>破損</span><b>${d.stats.damaged}</b></div>
-          <div><span>違反</span><b>${d.stats.violations.length}</b></div>
-        </div>
-        <table class="score">${R.rows.map(r => `<tr class="${r.kind}"><td>${esc(r.label)}</td><td>${r.pts > 0 ? '+' : ''}${r.pts}</td></tr>`).join('')}<tr class="total"><td>合計</td><td>${R.score}</td></tr></table>
-      </div>
-      <div>
-        <table class="score">
-          <tr><td>基本日給</td><td>${yen(6000)}</td></tr>
-          <tr><td>配達手当（${R.delivered.length}個）</td><td>${yen(R.delivered.length * 250)}</td></tr>
-          <tr><td>時間指定手当（${R.winOk.length}個）</td><td>${yen(R.winOk.length * 150)}</td></tr>
-          <tr><td>評価ボーナス（${R.rank}）</td><td>${yen(R.bonus)}</td></tr>
-          ${R.overtime ? `<tr><td>残業手当</td><td>${yen(R.overtime * 20)}</td></tr>` : ''}
-          ${d.stats.fines ? `<tr class="minus"><td>反則金・修理代</td><td>-${yen(d.stats.fines)}</td></tr>` : ''}
-          <tr class="total"><td>受け取り</td><td>${yen(R.net)}</td></tr>
-        </table>
-        <p>経験値 +${R.exp}（Lv${s.level}${R.levelUp ? '　レベルアップ！ 明日から荷物が増えます' : ''}）　所持金 ${yen(s.money)}</p>
-        <h4>今日、町で聞いた言葉</h4>
-        <div class="memories">${d.memories.map(m => { const r = resident(m.rid); return `<div class="memo"><b>${esc(r.name)}</b><span class="muted">（${esc(r.role)}）</span><br>「${esc(m.line)}」</div>`; }).join('') || '<p class="muted">今日は手渡しで話せた人がいませんでした。</p>'}</div>
-      </div>
-    </div>
-    <h3>改善ショップ</h3>
-    <div class="shop">${UPGRADES.map(u => `<div class="shop-item ${hasUp(u.id) ? 'owned' : ''}"><h4>${u.name}<span>${hasUp(u.id) ? '購入済み' : yen(u.price)}</span></h4><p>${u.desc}</p>${hasUp(u.id) ? '' : `<button class="btn primary small" data-buy="${u.id}" ${s.money < u.price ? 'disabled' : ''}>買う</button>`}</div>`).join('')}</div>
-    <div class="row end"><button class="btn" id="to-title">タイトルへ</button><button class="btn go big" id="next-day">${s.day + 1}日目へ</button></div>
-  </div>`;
-  el.classList.add('show');
-  $$('[data-buy]', el).forEach(b => b.onclick = () => { const u = UPGRADES.find(x => x.id === b.dataset.buy); if (s.money < u.price) return; s.money -= u.price; s.upgrades[u.id] = true; writeSave(); sfx('ok'); showResult(); });
-  $('#next-day').onclick = () => { s.day++; writeSave(); el.classList.remove('show'); startDay(); };
-  $('#to-title').onclick = () => { el.classList.remove('show'); showTitle(); };
-  if (R.levelUp) setTimeout(() => sfx('levelup', 0.4), 800);
+  clearPeople();
+  showReport();
+  if (d.result.levelUp) setTimeout(() => sfx('levelup', 0.4), 800);
 }
 
 // =========================================================
-// タイトル・朝礼
+// タイトル・1日の開始
 // =========================================================
-export function showTitle() {
-  G.mode = 'title'; G.overlay = 'title';
-  ctx.camera.position.set(-28.2, 1.75, 146);
-  ctx.camera.lookAt(-31, 2.4, 96);
-  const saved = loadSave();
-  const el = $('#screen');
-  el.innerHTML = `<div class="screen-card title">
-    <div class="kicker">宅配ドライバー・シミュレーター</div>
-    <h1>あおば町 宅配日誌</h1>
-    <p>地方の町「あおば町」の営業所に配属された新人ドライバーとして、荷物を確認し、軽バンに積み込み、町を走って届けよう。</p>
-    <div class="row"><button class="btn go big" id="t-start">${saved ? `続きから（${saved.day}日目）` : '仕事をはじめる'}</button>${saved ? '<button class="btn" id="t-new">はじめから</button>' : ''}</div>
-    <table class="keys">
-      <tr><td>歩く・見回す</td><td><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> ＋ マウス、走る <kbd>Shift</kbd></td></tr>
-      <tr><td>調べる・持つ・置く</td><td><kbd>E</kbd></td></tr>
-      <tr><td>車に乗る・降りる</td><td><kbd>F</kbd></td></tr>
-      <tr><td>運転</td><td><kbd>W</kbd> アクセル <kbd>S</kbd> ブレーキ <kbd>A</kbd><kbd>D</kbd> ハンドル <kbd>Space</kbd> サイドブレーキ <kbd>C</kbd> 視点</td></tr>
-      <tr><td>タブレット（伝票・地図・荷台）</td><td><kbd>Tab</kbd></td></tr>
-    </table>
-    <p class="muted small">画面をクリックするとマウスで視点を動かせます（Esc で解除）。</p>
-  </div>`;
-  el.classList.add('show');
-  $('#t-start').onclick = () => { G.save = saved || defaultSave(); writeSave(); el.classList.remove('show'); startDay(); };
-  const n = $('#t-new'); if (n) n.onclick = () => { if (!confirm('セーブデータを消して、はじめからにしますか？')) return; G.save = defaultSave(); writeSave(); el.classList.remove('show'); startDay(); };
+export function toTitle() {
+  G.mode = 'title';
+  clearPeople();
+  updateEngine(false, 0, 0, 0);
+  showMenu('title');
+}
+function startGame(fresh) {
+  const settings = G.save.settings;
+  G.save = fresh ? defaultSave() : (loadSave() || defaultSave());
+  G.save.settings = settings;
+  writeSave();
+  applySettings();
+  startDay();
+}
+function nextDay() { G.save.day++; writeSave(); startDay(); }
+function buy(id) {
+  const u = UPGRADES.find(x => x.id === id);
+  if (!u || G.save.money < u.price || hasUp(id)) return false;
+  G.save.money -= u.price; G.save.upgrades[id] = true; writeSave(); sfx('ok');
+  return true;
 }
 
 function startDay() {
   G.overlay = null;
   newDay();
+  spawnDayPeople();
   sfx('morning', 0.35);
   const d = G.day, s = G.save;
+  if (boss) boss.play('talk');
   dialog({
-    title: `朝礼　${s.day}日目`,
-    text: (s.day === 1 ? '所長の大野だ。今日からよろしく頼むよ。\n' : 'おはよう。今日も安全運転でいこう。\n') +
-      `今日の荷物は${d.parcels.length}個、天気は${d.weather}。\n\n` +
-      '① 作業台の荷物を見て伝票を確認（E で持つ）。わかば町の荷物は「仕分け戻し」のカゴへ。\n' +
-      '② 車の後ろ（リアハッチ）か左のスライドドアから、荷台の棚や床に積む。先に配る物は扉の近く、重い物とワレモノは床、クール便は保冷ボックス。\n' +
-      '③ Tab のタブレットで配達順を決めて、運転席（F）から出発。\n' +
-      '④ 配達先ではインターホンを押して、出てきた人に手渡し。留守なら置き配か不在票。',
-    choices: [{ label: '仕事をはじめる', use: closeDialog }],
+    title: '所長　大野', role: '朝礼',
+    text: (s.day === 1 ? '今日からよろしく頼むよ。この町は道が狭いから、焦らずにな。\n' : 'おはよう。今日も安全運転でいこう。\n') +
+      `今日の荷物は${d.parcels.length}個、天気は${d.weather}だ。\n` +
+      (s.day === 1 ? '作業台の荷物の伝票をよく見て、車に積んでくれ。わかば町宛ての荷物が紛れていたら、そこの「仕分け戻し」のカゴへ。積み終わったら、業務端末（Tab）で回る順番を決めて出発だ。' : 'ホワイトボードの注意事項も見ておいてくれ。'),
+    choices: [{ label: '行ってきます', use: () => { if (boss) boss.play('idle'); closeDialog(); } }],
   });
+}
+
+// =========================================================
+// 人（住民・所長・通行人・犬）
+// =========================================================
+const AVATAR_OF = {
+  tanaka: ['Business_Female_03'], sato_k: ['Business_Male_02'], sato_m: ['Female_Adult_03'], komorebi: ['Male_Adult_09'],
+  yamamoto: ['Male_Adult_10'], okada: ['Medical_Female_01'], suzuki: ['Female_Adult_05'], ito: ['Male_Adult_03', 0x8c9aa8],
+  takahashi: ['Female_Adult_11'], ishii: ['Business_Male_02', 0x9aa0a8], yoshida: ['Male_Adult_03'], hanamaru: ['Female_Adult_03', 0xa8c79a],
+  watanabe: ['Male_Adult_09', 0x9aa8b8], kato: ['Male_Adult_10', 0xb0a090], kobayashi: ['Gardener_Male_01'], matsumoto: ['Chef_Female_01'],
+  nakamura: ['Business_Female_03', 0xc0b0b8], ogawa: ['Male_Adult_10', 0x8fa8c8],
+};
+const GENERIC = ['Female_Adult_05', 'Male_Adult_09', 'Business_Female_03', 'Male_Adult_03', 'Female_Adult_11', 'Business_Male_02'];
+let boss = null;
+const walkers = [];
+let dog = null;
+
+function spawnVisitor(lot, v) {
+  if (!hasPeople() || !v.handPos) return;
+  const pick2 = v.speaker.rid ? AVATAR_OF[v.speaker.rid] : [GENERIC[Math.floor(Math.random() * GENERIC.length)]];
+  const per = new Person(ctx.scene, pick2[0], { tint: pick2[1] });
+  const c = Math.cos(lot.rot), sn = Math.sin(lot.rot);
+  const off = lot.kind === 'mansion' ? { x: 1.1, z: 1.4 } : { x: 0, z: 0.55 };
+  // ローカル +z が建物側
+  const x = v.handPos.x + off.x * c + off.z * sn, z = v.handPos.z - off.x * sn + off.z * c;
+  const y = v.handPos.y > 2 ? 3.0 : (lot.kind === 'house' || lot.kind === 'farmhouse' ? 0.18 : 0.02);
+  per.place(x, y, z, lot.rot + Math.PI);
+  v.person = per;
+}
+function removeVisitor(v) { if (v && v.person) { v.person.dispose(); v.person = null; } }
+
+function spawnDayPeople() {
+  clearPeople();
+  if (!hasPeople()) return;
+  boss = new Person(ctx.scene, 'Business_Male_07');
+  boss.place(-61.5, 0.03, 226.6, Math.PI);
+  // 生活道路を歩く人
+  const loops = [
+    [[-107.6, 18.6], [-32.4, 18.6], [-32.4, 61.4], [-107.6, 61.4]],
+    [[-27.6, 66.6], [47.6, 66.6], [47.6, 109.4], [-27.6, 109.4]],
+    [[52.4, 18.6], [127.6, 18.6], [127.6, 61.4], [52.4, 61.4]],
+    [[-107.6, 109.4], [-32.4, 109.4], [-32.4, 66.6], [-107.6, 66.6]],
+    [[-27.6, 18.6], [47.6, 18.6], [47.6, 61.4], [-27.6, 61.4]],
+  ];
+  const names = ['Female_Adult_05', 'Male_Adult_09', 'Female_Adult_11', 'Male_Adult_03', 'Business_Female_03'];
+  loops.forEach((pts, i) => {
+    const per = new Person(ctx.scene, names[i], { tint: [0x9fb0c0, null, 0xc9b8a0, 0xa0b090, null][i] });
+    const w = { per, pts, seg: i % 4, t: (i * 0.37) % 1, speed: 1.15 + (i % 3) * 0.12, wait: 0, x: 0, z: 0 };
+    per.play('walk', 0);
+    walkers.push(w);
+  });
+  const ito = T.lots['3-B1-2'];
+  if (ito) {
+    dog = spawnDog(ctx.scene);
+    if (dog) {
+      const c = Math.cos(ito.rot), sn = Math.sin(ito.rot), lx = 3.6, lz = -ito.d / 2 + 2.6;
+      dog.position.set(ito.cx + lx * c + lz * sn, 0, ito.cz - lx * sn + lz * c);
+      dog.rotation.y = ito.rot + Math.PI + 0.5;
+    }
+  }
+}
+function clearPeople() {
+  if (boss) { boss.dispose(); boss = null; }
+  for (const w of walkers) w.per.dispose();
+  walkers.length = 0;
+  if (dog) { dog.removeFromParent(); dog = null; }
+  for (const lot of T.lotList) if (lot.visit) removeVisitor(lot.visit);
+}
+
+function updatePeople(dt, moving) {
+  if (boss) boss.update(dt);
+  const van = ctx.van;
+  for (const w of walkers) {
+    if (!moving) { w.per.update(dt); continue; }
+    const a = w.pts[w.seg], b = w.pts[(w.seg + 1) % w.pts.length];
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    const dx = (b[0] - a[0]) / len, dz = (b[1] - a[1]) / len;
+    w.x = a[0] + (b[0] - a[0]) * w.t; w.z = a[1] + (b[1] - a[1]) * w.t;
+    // 車が近づいてきたら立ち止まる
+    const vx = van.x - w.x, vz = van.z - w.z, vd = Math.hypot(vx, vz);
+    const ahead = (vx * dx + vz * dz) > 0;
+    const danger = vd < 7 && Math.abs(van.speed) > 0.5 && ahead;
+    if (w.wait > 0) w.wait -= dt;
+    if (danger || w.wait > 0) { if (w.per.kind !== 'idle') w.per.play('idle'); }
+    else {
+      if (w.per.kind !== 'walk') w.per.play('walk');
+      w.t += w.speed * dt / len;
+      if (w.t >= 1) { w.t = 0; w.seg = (w.seg + 1) % w.pts.length; }
+    }
+    // 車との接触
+    if (vd < 1.6 && Math.abs(van.speed) > 1.5 && G.mode === 'drive' && G.realT - (w.hitT || -99) > 4) {
+      w.hitT = G.realT; w.wait = 4;
+      violation('歩行者との接触事故', 10000, 30);
+      sfx('crash', 0.6);
+    }
+    w.per.place(w.x, 0.02, w.z, Math.atan2(dx, dz));
+    w.per.update(dt);
+  }
+  for (const lot of T.lotList) {
+    const v = lot.visit;
+    if (!v || !v.person) continue;
+    v.person.update(dt);
+    // 近づいたら話しかけるしぐさ
+    const pd = Math.hypot(ctx.player.x - v.person.group.position.x, ctx.player.z - v.person.group.position.z);
+    if (v.stage === 'home' && v.person.kind === 'idle' && pd < 2.6 && G.overlay === 'dialog') v.person.play('talk');
+    if (v.stage === 'home' && v.person.kind === 'talk' && G.overlay !== 'dialog') v.person.play('idle');
+  }
+}
+
+// =========================================================
+// 設定
+// =========================================================
+function applySettings() {
+  const st = G.save.settings;
+  const r = ctx.renderer;
+  r.setPixelRatio(Math.min(window.devicePixelRatio, st.quality === 'low' ? 1 : 1.5));
+  r.setSize(window.innerWidth, window.innerHeight);
+  r.shadowMap.enabled = true;
+  ctx.sun.shadow.mapSize.set(st.quality === 'low' ? 1024 : 2048, st.quality === 'low' ? 1024 : 2048);
+  if (ctx.sun.shadow.map) { ctx.sun.shadow.map.dispose(); ctx.sun.shadow.map = null; }
+  writeSettings();
 }
 
 // =========================================================
@@ -1344,33 +1211,58 @@ function startDay() {
 // =========================================================
 export function onKey(code, down) {
   G.keys[code] = down;
-  if (!down || !G.day || G.mode === 'title' || G.mode === 'ui') return;
-  if (code === 'Tab') { if (G.overlay === 'tablet') closeTablet(); else if (!G.overlay) openTablet(G.tab || 'list'); return; }
+  if (!down || G.mode === 'title' || G.mode === 'ui') return;
+  if (G.overlay === 'dialog') { dialogKey(code); return; }
+  if (code === 'Tab') { if (G.overlay === 'tablet') closeTablet(); else if (!G.overlay) openTablet(); return; }
+  if (code === 'Escape') {
+    if (G.overlay === 'tablet') closeTablet();
+    else if (G.overlay === 'menu') { closeMenu(); requestLock(); }
+    else if (!G.overlay) showMenu('pause');
+    return;
+  }
   if (G.overlay) return;
   const van = ctx.van;
   if (G.mode === 'walk') {
-    if (code === 'KeyE' && G.focus && G.focus.label && G.focus.use) { G.focus.use(); }
+    if (code === 'KeyE' && G.focus && G.focus.label && G.focus.use) G.focus.use();
     if (code === 'KeyF') {
       const dd = van.driverDoor();
       if (Math.hypot(dd.x - ctx.player.x, dd.z - ctx.player.z) < 2.2) enterVan();
+      else toast('運転席のドアの近くで F を押すと乗れます。', 'info', 2500);
     }
   } else if (G.mode === 'drive') {
     if (code === 'KeyF') exitVan();
-    if (code === 'KeyC') G.view = G.view === 'cab' ? 'chase' : 'cab';
-    if (code === 'KeyQ') { van.signal = van.signal === 1 ? 0 : 1; sfx('tick', 0.3); }
-    if (code === 'KeyE') { van.signal = van.signal === -1 ? 0 : -1; sfx('tick', 0.3); }
-    if (code === 'KeyH') van.hazard = !van.hazard;
+    if (code === 'Digit1') G.view = 'cab';
+    if (code === 'Digit2') G.view = 'chase';
+    if (code === 'Digit3') G.view = 'hood';
+    if (code === 'KeyV') G.view = { cab: 'chase', chase: 'hood', hood: 'cab' }[G.view];
+    if (code === 'KeyQ') { van.setSignal(1); sfx('tick', 0.25); }
+    if (code === 'KeyE') { van.setSignal(-1); sfx('tick', 0.25); }
+    if (code === 'KeyG') van.hazard = !van.hazard;
     if (code === 'KeyL') van.lightsOn = !van.lightsOn;
+    if (code === 'KeyH') horn();
+    if (code === 'Space') { van.parkingBrake = !van.parkingBrake; van.pbWarn = 0; sfx('click', 0.3); }
+    if (code === 'KeyC') {
+      if (van.cruise) { van.cruise = 0; toast('クルーズコントロールを解除しました。', 'info', 2000); }
+      else if (van.gear === 'D' && van.kmh > 15) { van.cruise = van.speed; toast(`クルーズコントロール：${Math.round(van.kmh)} km/h で走行します。`, 'info', 2500); }
+    }
   }
 }
-export function onMouse(dx, dy) {
-  if (G.overlay || !G.day) return;
-  const sens = G.save ? G.save.sens : 1;
-  if (G.mode === 'walk') ctx.player.look(dx, dy, sens);
+export function onMouse(dx, dy, buttons = 0) {
+  if (G.overlay || !G.day || G.mode === 'title' || G.mode === 'ui') return;
+  const st = G.save.settings;
+  if (G.mode === 'walk') ctx.player.look(dx, dy, st.sens);
   else if (G.mode === 'drive') {
-    G.look.yaw = THREE.MathUtils.clamp(G.look.yaw - dx * 0.002 * sens, -1.9, 1.9);
-    G.look.pitch = THREE.MathUtils.clamp(G.look.pitch - dy * 0.002 * sens, -0.7, 0.5);
+    if (st.mouseSteer && !(buttons & 2)) {
+      G.mouseSteer = THREE.MathUtils.clamp(G.mouseSteer - dx * 0.0019 * st.mouseSteerSens, -1, 1);
+    } else {
+      G.look.yaw = THREE.MathUtils.clamp(G.look.yaw - dx * 0.002 * st.sens, -2.2, 2.2);
+      G.look.pitch = THREE.MathUtils.clamp(G.look.pitch - dy * 0.002 * st.sens, -0.7, 0.5);
+    }
   }
+}
+// マウスの固定が外れたら一時停止メニュー
+export function onPointerUnlock() {
+  if (!G.overlay && G.day && (G.mode === 'walk' || G.mode === 'drive')) showMenu('pause');
 }
 
 // =========================================================
@@ -1379,74 +1271,104 @@ export function onMouse(dx, dy) {
 const marker = { mesh: null };
 export function initGame(c) {
   ctx = c;
-  // 動作確認用（ブラウザのコンソールから呼べる）
-  G.dbg = { candidates, pickUp, putInVan, takeFromVan, dropToCrate, ring, handOver, okihai, leaveSlip, finishDay, enterVan, exitVan, P, nextStop, cargoIssues };
   ctx.player.onStep = () => sfx('step' + Math.floor(Math.random() * 4), 0.18);
-  const m = new THREE.Mesh(new THREE.OctahedronGeometry(0.35, 0), new THREE.MeshStandardMaterial({ color: 0x3fbf6a, emissive: 0x1f7f3a, emissiveIntensity: 0.8, transparent: true, opacity: 0.85 }));
-  m.scale.y = 1.6;
+  const m = new THREE.Mesh(new THREE.ConeGeometry(0.32, 0.7, 4), new THREE.MeshStandardMaterial({ color: 0xf2a93b, emissive: 0xb86f10, emissiveIntensity: 0.7, roughness: 0.4 }));
+  m.rotation.x = Math.PI;
   ctx.scene.add(m); marker.mesh = m;
-  showTitle();
+  Object.assign(UI, {
+    G, ctx: () => ctx, P, carried, nextStop, stopLots, cargoIssues, hasUp, slotName, sfx, requestLock, waitMinutes,
+    applySettings, peekSave: loadSave, startGame, toTitle, nextDay, buy,
+  });
+  bindUI(UI);
+  G.save.settings = loadSettings();
+  applySettings();
+  // 動作確認用
+  G.dbg = { candidates, pickUp, putInVan, takeFromVan, dropToCrate, ring, handOver, okihai, leaveSlip, finishDay, enterVan, exitVan, P, nextStop, cargoIssues, spawnVisitor };
+  toTitle();
 }
 
+let titleT = 0;
 export function update(dt) {
   G.realT += dt;
   const d = G.day;
-  if (!d) return;
   const van = ctx.van;
+  const cam = ctx.camera;
+  if (G.mode === 'title' || !d) {
+    // タイトル画面：町の上をゆっくり回るカメラ
+    titleT += dt * 0.03;
+    const cx = 10 + Math.cos(titleT) * 70, cz = 95 + Math.sin(titleT) * 55;
+    cam.position.set(cx, 24, cz);
+    cam.lookAt(10 + Math.cos(titleT + 0.9) * 20, 2, 95 + Math.sin(titleT + 0.9) * 15);
+    ctx.traffic.update(dt, van, 0);
+    updateSignals(G.realT);
+    updateHud();
+    return;
+  }
   for (const t of G.timers.slice()) if (G.realT >= t.t) { G.timers.splice(G.timers.indexOf(t), 1); t.fn(); }
   const paused = !!G.overlay;
   if (!paused) {
     if (G.mode === 'drive') {
       van.update(dt, driveInput(), ctx.traffic.cars);
-      if (G.day.time >= 17.5 * 60 && !van.lightsOn && !d.autoLight) { d.autoLight = true; van.lightsOn = true; }
+      if (van.blinkTick && van.blinkOn) sfx('tick', 0.12);
+      if (van.pbWarn > 0) van.pbWarn = Math.max(0, van.pbWarn - dt * 0.4);
+      if (G.day.time >= 17.6 * 60 && !van.lightsOn && !d.autoLight) { d.autoLight = true; van.lightsOn = true; toast('暗くなってきたのでライトをつけました（L）。', 'info'); }
+      if (Math.abs(G.mouseSteer) > 0 && !G.save.settings.mouseSteer) G.mouseSteer = 0;
       checkDeparture();
       checkDriving(dt);
       van.drawMeter();
     } else {
-      van.update(dt, { throttle: 0, brake: 0, steer: 0, handbrake: true }, []);
+      van.update(dt, { throttle: 0, brake: 0, steer: 0 }, []);
       ctx.player.update(dt, G.keys, van, G.carrying.some(id => P(id).weight >= 3) && !hasUp('cart') ? 0.75 : 1);
     }
     ctx.traffic.update(dt, van, updateLights(d.time / 60));
     updateTime(dt);
-    // 玄関のドア
     for (const lot of T.lotList) {
       for (const dd of lot.doors) {
         dd.open += (dd.target - dd.open) * Math.min(1, dt * 3);
         dd.obj.rotation.y = lot.rot + dd.sign * dd.open * 1.3;
       }
-      if (lot.visit && lot.visit.expires && G.realT > lot.visit.expires && lot.visit.stage === 'home') { lot.visit = null; for (const dd of lot.doors) dd.target = 0; }
+      if (lot.visit && lot.visit.expires && G.realT > lot.visit.expires && lot.visit.stage === 'home') endVisit(lot);
     }
   }
+  // 会話中も人のアニメーションは止めない
+  if (G.overlay !== 'menu') updatePeople(dt, !paused);
   updateSignals(G.realT);
   // カメラ
   if (G.mode === 'drive') {
-    const cam = ctx.camera;
     if (G.view === 'cab') {
       cam.position.copy(van.cabEye());
-      // 車の前は +z、カメラは -z を向くので heading + π
+      if (!G.save.settings.mouseSteer && !G.keys.mouseRight) { G.look.yaw *= Math.max(0, 1 - dt * 0.6); }
       cam.rotation.set(G.look.pitch, van.heading + Math.PI + G.look.yaw, 0, 'YXZ');
+    } else if (G.view === 'hood') {
+      const p = van.worldPoint(0, 1.35);
+      cam.position.set(p.x, 1.55, p.z);
+      cam.rotation.set(-0.04, van.heading + Math.PI + G.look.yaw * 0.3, 0, 'YXZ');
     } else {
-      const f = van.forward;
+      G.look.yaw *= Math.max(0, 1 - dt * 0.8);
       const ang = van.heading + G.look.yaw;
       const fx = Math.sin(ang), fz = Math.cos(ang);
-      const target = new THREE.Vector3(van.x - fx * 7.5, 3.3, van.z - fz * 7.5);
-      cam.position.lerp(target, Math.min(1, dt * 5));
-      cam.lookAt(van.x + f.x * 2, 1.2, van.z + f.z * 2);
+      const back = van.speed < -0.3 ? -1 : 1;
+      const target = new THREE.Vector3(van.x - fx * 7.2 * back, 3.1, van.z - fz * 7.2 * back);
+      cam.position.lerp(target, Math.min(1, dt * 4));
+      const f = van.forward;
+      cam.lookAt(van.x + f.x * 2 * back, 1.2, van.z + f.z * 2 * back);
     }
-    updateEngine(true, van.speed, driveInput().throttle);
-  } else if (G.mode === 'walk') ctx.player.apply();
-  // 目的地のマーカー
+    updateEngine(true, van.rpm, van.thr, van.speed);
+  } else if (G.mode === 'walk') { ctx.player.apply(); updateEngine(false, 0, 0, 0); }
+  // 目的地の目印
   const next = nextStop();
   if (next && d.departed) {
     const lot = T.lots[next];
-    const pt = lot.points.intercom || lot.points.front;
+    const ps = d.parcels.filter(p => p.lotId === next && p.status !== 'delivered');
+    const unit = lot.rooms && ps[0] ? lot.rooms.find(r => r.room === ps[0].room) : null;
+    const pt = unit ? unit.intercom : (lot.points.intercom || lot.points.front);
     marker.mesh.visible = true;
-    marker.mesh.position.set(pt.x, (pt.y > 2 ? 3 : 0) + 3.2 + Math.sin(G.realT * 2) * 0.15, pt.z);
-    marker.mesh.rotation.y = G.realT;
+    marker.mesh.position.set(pt.x, (pt.y > 2 ? 3 : 0) + 2.9 + Math.sin(G.realT * 2.2) * 0.12, pt.z);
+    marker.mesh.rotation.y = G.realT * 1.2;
   } else marker.mesh.visible = false;
   pickFocus();
+  updateNav(dt);
   updateHud();
-  drawMinimap();
 }
 
-export { closeTablet, openTablet };
+export { G as GAME };

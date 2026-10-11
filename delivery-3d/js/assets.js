@@ -2,6 +2,20 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
+import { loadB64, loadGLTFB64 } from './b64.js';
+
+// RGBELoader.load() と同じ設定の DataTexture を ArrayBuffer から作る
+function rgbeTexture(buf) {
+  const L = new RGBELoader();
+  const d = L.parse(buf);
+  const t = new THREE.DataTexture(d.data, d.width, d.height, THREE.RGBAFormat, d.type);
+  t.colorSpace = THREE.LinearSRGBColorSpace;
+  t.minFilter = t.magFilter = THREE.LinearFilter;
+  t.generateMipmaps = false;
+  t.flipY = true;
+  t.needsUpdate = true;
+  return t;
+}
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 // [フォルダ名, テクスチャ1枚が覆う大きさ(m)]
@@ -135,13 +149,13 @@ export async function loadAll(renderer, onProgress) {
 
   const gltf = new GLTFLoader();
   await Promise.all(MODELS.map(name => new Promise((res) => {
-    gltf.load(`assets/models/${name}/${name}.gltf`, (g) => {
+    loadGLTFB64(gltf, `assets/models/${name}/${name}.glb.txt`).then((g) => {
       g.scene.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
       A.models[name] = g.scene; tick(name); res();
-    }, undefined, () => { console.warn('model load failed', name); tick(name); res(); });
+    }, (e) => { console.warn('model load failed', name, e); tick(name); res(); });
   })));
 
-  const hdr = await new Promise((res, rej) => new RGBELoader().load('assets/hdri/sky_1k.hdr', res, undefined, rej));
+  const hdr = await rgbeTexture(await loadB64('assets/hdri/sky_1k.hdr.txt'));
   hdr.mapping = THREE.EquirectangularReflectionMapping;
   const pm = new THREE.PMREMGenerator(renderer);
   A.envMap = pm.fromEquirectangular(hdr).texture;
@@ -262,7 +276,7 @@ export function textTexture(w, h, draw) {
   t.anisotropy = A.maxAniso;
   return t;
 }
-export const JP_FONT = '"Zen Maru Gothic","Hiragino Sans","Yu Gothic","Noto Sans JP","Noto Sans CJK JP",sans-serif';
+export const JP_FONT = '"Zen Kaku Gothic New","Hiragino Sans","Yu Gothic","Noto Sans JP","Noto Sans CJK JP",sans-serif';
 
 // 同じモデルをたくさん置くときはインスタンス描画にする
 export class Instancer {
