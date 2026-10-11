@@ -533,23 +533,55 @@ function ring(lot, room, retry = false) {
   d.time += 0.5;
 }
 
+// 在宅かどうかは「30分ごとの時間帯」で決まる。押し直しても留守が在宅に変わることはない
+function hash01(str) {
+  let h = 2166136261 ^ (G.save.seed || 1);
+  for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
+  h ^= h >>> 13; h = Math.imul(h, 1274126177); h ^= h >>> 16;
+  return (h >>> 0) / 4294967296;
+}
+function presence(lot, room, t) {
+  const r = unitResident(lot.id, room);
+  const shop = lot.kind === 'shop' || lot.kind === 'conbini';
+  const block = Math.floor(t / 30);
+  const until = G.day.homeUntil && G.day.homeUntil[unitKey(lot.id, room)];
+  if (until && t < until) return { home: true, closed: false, sure: true };
+  const u = hash01(`${G.save.day}|${unitKey(lot.id, room)}|${block}`);
+  if (!r) return { home: shop ? true : u < 0.5, closed: false };
+  // 店は営業時間外なら閉まっている
+  if (r.business) {
+    const open = r.home.some(([a, b]) => t / 60 >= a && t / 60 < b);
+    if (!open) return { home: false, closed: true };
+  }
+  let prob = presenceAt(r, t);
+  const mine = pendingFor(lot.id, room);
+  // 時間指定の時間内は在宅していることが多く、再配達の約束の時間内は必ずいる
+  if (mine.some(p => p.redeliver && windowState(p, t) === 'ok')) prob = 1;
+  else if (mine.some(p => windowState(p, t) === 'ok')) prob = Math.max(prob, 0.93);
+  return { home: u < prob, closed: false };
+}
+
 function answer(lot, room) {
   const d = G.day, v = lot.visit;
   if (!v) return;
   const r = unitResident(lot.id, room);
   const shop = lot.kind === 'shop' || lot.kind === 'conbini';
-  let speaker, home;
-  if (r) {
-    let prob = presenceAt(r, d.time);
-    const mine = pendingFor(lot.id, room);
-    if (mine.some(p => windowState(p, d.time) === 'ok')) prob = Math.max(prob, mine.some(p => p.redeliver) ? 0.97 : 0.93);
-    if (r.sleeper && d.time < 13 * 60) prob *= 0.5;
-    if (v.retry) prob *= 0.35;
-    home = rand() < prob;
-    speaker = { name: r.name, role: r.role, rid: r.id, surname: r.name.split(' ')[0] };
-  } else {
-    home = shop ? true : rand() < 0.5;
-    speaker = { name: shop ? `${lot.name}の店員` : (lot.rooms ? `${room}号室の住人` : `${lot.surname}さん`), role: '', rid: null, surname: shop ? '' : lot.surname };
+  const pr = presence(lot, room, d.time);
+  let home = pr.home;
+  // 在宅でも1回目は聞こえていないことがある（寝ている・手が離せない）
+  let missed = false;
+  if (home && !pr.sure && !v.retry && !shop && !(r && r.business)) {
+    const missRate = r && r.sleeper && d.time < 13 * 60 ? 0.6 : 0.12;
+    if (hash01(`${G.save.day}|miss|${unitKey(lot.id, room)}|${Math.floor(d.time / 30)}`) < missRate) { home = false; missed = true; }
+  }
+  const speaker = r ? { name: r.name, role: r.role, rid: r.id, surname: r.name.split(' ')[0] }
+    : { name: shop ? `${lot.name}の店員` : (lot.rooms ? `${room}号室の住人` : `${lot.surname}さん`), role: '', rid: null, surname: shop ? '' : lot.surname };
+  if (pr.closed) {
+    v.speaker = speaker; v.stage = 'absent';
+    sfx('tick', 0.3);
+    dialog({ title: lot.name || speaker.name, text: `入口に「準備中」の札がかかっている。\n（営業時間：${r.home.map(([a, b]) => `${fmt(a * 60)}〜${fmt(b * 60)}`).join('、')}）`,
+      choices: [{ label: '閉じる', use: closeDialog }] });
+    return;
   }
   v.speaker = speaker;
   if (!home) {
@@ -557,7 +589,7 @@ function answer(lot, room) {
     sfx('tick', 0.3);
     dialog({
       title: room ? `${room}号室` : (lot.kind === 'shop' ? lot.name : `${lot.surname}さん宅`),
-      text: lot.kind === 'mansion' ? 'インターホンに応答がない。' : (r && r.sleeper && d.time < 13 * 60 ? '反応がない。中で人の気配はするが…寝ているのかもしれない。' : '応答がない。留守のようだ。'),
+      text: lot.kind === 'mansion' ? 'インターホンに応答がない。' : (missed ? '反応がない。中で人の気配はするが…聞こえていないのかもしれない。' : v.retry ? 'やはり応答がない。留守のようだ。' : '応答がない。留守のようだ。'),
       choices: [
         { label: 'もう一度押して少し待つ（2分）', use: () => { d.time += 1.5; closeDialog(); ring(lot, room, true); }, disabled: v.retry },
         { label: r && r.phone ? '伝票の番号に電話する（2分）' : '伝票に電話番号がない', disabled: !r || !r.phone || v.phoned, use: () => phoneCall(lot, v, r) },
@@ -571,12 +603,13 @@ function answer(lot, room) {
   let line;
   if (r) {
     line = r.lines[visits === 0 ? 0 : visits < 3 ? 1 : 2];
-    if (r.meeting && pendingFor(lot.id, room).some(p => p.okihai) && chance(0.5)) {
+    if (r.meeting && pendingFor(lot.id, room).some(p => p.okihai) && hash01(`${G.save.day}|meet|${Math.floor(d.time / 60)}`) < 0.5) {
       v.meeting = true; line = r.lines[0];
     } else if (r.meeting) line = r.lines[visits < 3 ? 1 : 2];
   } else if (shop) line = 'はい、いらっしゃいませ…あ、配達ですか？';
   else line = pick(['はい？', 'はーい、どちら様ですか？', 'はい、なんでしょう？']);
   v.line = line;
+  markHome(lot, room, 30);
   sfx('ok2', 0.4);
   if (v.meeting) {
     v.stage = 'absent'; v.authorized = true;
@@ -612,7 +645,10 @@ function phoneCall(lot, v, r) {
     v.handPos = lot.rooms ? lot.rooms.find(x => x.room === v.room).door : (lot.kind === 'mansion' ? lot.points.intercom : lot.points.door);
     if (!lot.rooms && lot.doors[0]) lot.doors[0].target = 1;
     v.expires = G.realT + 240;
-    dialog({ title: '電話', text: '「あと5分で戻ります！」\n（5分待って、受取人が戻ってきた）', choices: [{ label: '玄関で渡す', use: closeDialog }] });
+    v.speaker = v.speaker || { name: r.name, role: r.role, rid: r.id, surname: r.name.split(' ')[0] };
+    markHome(lot, v.room, 90);
+    spawnVisitor(lot, v);
+    dialog({ title: '電話', text: '「あと5分で戻ります！」\n（5分待って、受取人が戻ってきた）', choices: [{ label: lot.kind === 'mansion' ? 'エントランスで渡す' : '玄関で渡す', use: closeDialog }] });
   } else if (roll < 0.45 && r.okihai && mine.some(p => !p.flags.includes('cool') && !p.senderNoOkihai)) {
     for (const p of mine) if (!p.flags.includes('cool') && !p.senderNoOkihai) { p.okihai = r.okihai; p.phoneOk = true; }
     dialog({ title: '電話', text: `「すみません、${r.okihai}に置いておいてください」`, choices: [{ label: 'わかりました', use: closeDialog }] });
@@ -661,7 +697,7 @@ function handOver(lot, v) {
       { label: `「${hand[0].name}様ですね？」と確認する`, use: () => {
         d.time += 0.3;
         if (sp.rid && hand.every(p => p.rid === sp.rid)) { dialog({ title: sp.name, text: '「はい、そうです」', choices: [{ label: '荷物を渡してサインをもらう', use: () => { closeDialog(); doHandOver(lot, v, hand); } }] }); return; }
-        const wrong = hand.find(p => p.rid !== sp.rid);
+        const wrong = hand.find(p => !p.rid || p.rid !== sp.rid);
         dialog({ title: sp.name, text: sameName(wrong) ? `「いえ、うちは${sp.name}です。${wrong.name}さんならお隣ですよ」` : `「${wrong.name}さん？ うちじゃないですね」`,
           choices: [{ label: '失礼しました（家をまちがえていた）', use: () => { closeDialog(); endVisit(lot); } }] });
       } },
@@ -673,8 +709,8 @@ function handOver(lot, v) {
 function doHandOver(lot, v, hand) {
   const d = G.day, sp = v.speaker;
   for (const p of hand) {
-    if (p.rid === sp.rid) { deliver(p, 'hand', lot); continue; }
-    if (p.name.split(' ')[0] === sp.surname && sp.surname) { p.misdelivered = true; d.stats.misdelivery++; deliver(p, 'hand', lot, true); continue; }
+    if (p.rid && p.rid === sp.rid) { deliver(p, 'hand', lot); continue; }
+    if (!p.misrouted && p.name.split(' ')[0] === sp.surname && sp.surname) { p.misdelivered = true; d.stats.misdelivery++; deliver(p, 'hand', lot, true); continue; }
     toast(`「${esc(p.name)}さん宛てですか？ うちじゃないですよ」`, 'bad');
   }
   if (sp.rid && hand.some(p => p.rid === sp.rid)) {
@@ -684,6 +720,15 @@ function doHandOver(lot, v, hand) {
   relayoutHand();
   d.time += 1;
   sfx('ok', 0.5);
+  markHome(lot, v.room, 60);
+  const rest = pendingFor(lot.id, v.room).filter(p => p.rid && p.rid === sp.rid && !G.carrying.includes(p.id));
+  if (rest.length) {
+    // 同じ宛先の荷物がまだ車にある：玄関で待っていてもらう
+    v.line = 'あら、まだあるの？ ここで待ってますね。';
+    v.expires = G.realT + 240;
+    toast(`${esc(sp.name)}さん宛ての荷物がまだ${rest.length}個あります。車から持ってきましょう。`, 'info', 5000);
+    return;
+  }
   if (v.person) v.person.play('wave');
   v.stage = 'done';
   setTimeout(() => { if (lot.visit === v) endVisit(lot); }, 3200);
@@ -743,6 +788,11 @@ function leaveSlip(lot, v) {
   toast('不在票を郵便受けに入れました。荷物は車に戻しておこう。', 'info', 5000);
 }
 
+function markHome(lot, room, min) {
+  const d = G.day;
+  d.homeUntil = d.homeUntil || {};
+  d.homeUntil[unitKey(lot.id, room)] = Math.max(d.homeUntil[unitKey(lot.id, room)] || 0, d.time + min);
+}
 function endVisit(lot) {
   if (lot.visit) removeVisitor(lot.visit);
   lot.visit = null;
@@ -1283,7 +1333,7 @@ export function initGame(c) {
   G.save.settings = loadSettings();
   applySettings();
   // 動作確認用
-  G.dbg = { candidates, pickUp, putInVan, takeFromVan, dropToCrate, ring, handOver, okihai, leaveSlip, finishDay, enterVan, exitVan, P, nextStop, cargoIssues, spawnVisitor };
+  G.dbg = { candidates, pickUp, putInVan, takeFromVan, dropToCrate, ring, handOver, okihai, leaveSlip, finishDay, enterVan, exitVan, P, nextStop, cargoIssues, spawnVisitor, presence, answer };
   toTitle();
 }
 
