@@ -20,7 +20,7 @@ const run = (sec: number) => { let f = 0; for (let t = 0; t < sec; t += 1 / 60) 
 const src = { slot: 0, croon: 0, pocket: 0, other: 0, spins: 0 };
 const g = game as any;
 const origAdd = g.addPayout.bind(g);
-g.addPayout = (n: number) => { (g.croonPhase === 'back' ? (src.croon += n) : (src.slot += n)); return origAdd(n); };
+g.addPayout = (n: number) => { (n > 0 && g.croonReward === n ? (src.croon += n) : (src.slot += n)); return origAdd(n); };
 const origPocket = game.physics.events.onPocket!;
 game.physics.events.onPocket = (i: number) => { src.pocket += 2; origPocket(i); };
 const origChecker = game.physics.events.onChecker!;
