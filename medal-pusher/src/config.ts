@@ -44,7 +44,7 @@ export const BOARD = {
   checkerHalfWidth: 0.79, // 中央チェッカーの半幅
   launcherRange: 4.2,
   // 中央の風車（回転する羽根でメダルを左右に弾く）
-  windmill: { x: 0, y: 5.7, radius: 0.62, blades: 3, speed: 2.6, clear: 1.75 },
+  windmill: { x: 0, y: 5.7, radius: 0.5, blades: 3, speed: 2.6, clear: 1.5 },
   // 左右端のポケット（入るとメダル払い出し＋START拡大）
   pockets: [
     { x: -3.4, y: 4.8 },
