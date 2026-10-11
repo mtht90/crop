@@ -16,14 +16,14 @@ interface SymbolDef {
 // 荒めの配分：小当たりを減らし、当たったときの払い出しを大きくしている。
 // weight は 1000 スピンあたりの当選数。
 const SYMBOLS: SymbolDef[] = [
-  { key: 'cherries', file: 'cherries', payout: 10, weight: 75, label: 'CHERRY' },
+  { key: 'cherries', file: 'cherries', payout: 10, weight: 40, label: 'CHERRY' },
   { key: 'lemon', file: 'lemon', payout: 0, weight: 0, label: '' }, // ハズレ目用
   { key: 'melon', file: 'melon', payout: 0, weight: 0, label: '' },
-  { key: 'bell', file: 'bell', payout: 20, weight: 30, label: 'BELL' },
+  { key: 'bell', file: 'bell', payout: 20, weight: 16, label: 'BELL' },
   { key: 'clover', file: 'clover', payout: 0, weight: 0, label: '' },
-  { key: 'bar', file: 'Bar1', payout: 30, weight: 12, label: 'BAR' }, // ＋サイドウォール・チャンス
-  { key: 'horseshoe', file: 'horseshoe', payout: 0, weight: 30, label: 'BALL' },
-  { key: 'seven', file: 'Lucky7_rainbow', payout: 100, weight: 4, label: 'SEVEN' },
+  { key: 'bar', file: 'Bar1', payout: 30, weight: 7, label: 'BAR' }, // ＋サイドウォール・チャンス
+  { key: 'horseshoe', file: 'horseshoe', payout: 0, weight: 18, label: 'BALL' },
+  { key: 'seven', file: 'Lucky7_rainbow', payout: 100, weight: 3, label: 'SEVEN' },
   { key: 'heart', file: 'heart', payout: 0, weight: 0, label: '' },
 ];
 const LOSE_WEIGHT = 1000 - SYMBOLS.reduce((a, s) => a + s.weight, 0);
