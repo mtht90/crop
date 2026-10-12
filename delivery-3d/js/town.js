@@ -432,13 +432,13 @@ function buildGround(root) {
   const gm = MATS.m.grass.clone(); gm.polygonOffset = true; gm.polygonOffsetFactor = 2; gm.polygonOffsetUnits = 4;
   const ground = new THREE.Mesh(g, gm); ground.position.set((x0 + x1) / 2, -0.04, (z0 + z1) / 2); ground.receiveShadow = true; root.add(ground);
   // 遠くの山並み（カメラについてくる。霧でかすんだ影絵）
-  const mtn = new THREE.MeshBasicMaterial({ color: 0x4f5f66 });
+  const mtn = new THREE.MeshBasicMaterial({ color: 0x74858c });
   const B = new Batch(100000);
   for (let k = 0; k < 64; k++) {
     const a = k / 64 * Math.PI * 2, R = 2050 + (k % 3) * 90;
     const north = Math.max(0, -Math.sin(a)); // 北（日光・那須の方）は高い山
-    const h = 60 + ((k * 37) % 7) * 18 + north * north * 260 + ((k * 13) % 5) * 10;
-    const g = new THREE.ConeGeometry(260 + (k % 4) * 70, h, 6, 1, true);
+    const h = 25 + ((k * 37) % 7) * 8 + north * north * 110 + ((k * 13) % 5) * 5;
+    const g = new THREE.ConeGeometry(320 + (k % 4) * 80, h, 7, 1, true);
     B.add(g, mtn, M(Math.cos(a) * R, h / 2 - 8, Math.sin(a) * R, k * 1.7, 1, 1, 0.6 + (k % 3) * 0.2), { noShadow: true });
   }
   const far = new THREE.Group(); B.build(far); far.traverse(o => { o.castShadow = false; o.receiveShadow = false; }); root.add(far);
@@ -1106,7 +1106,7 @@ function buildPolesTile(key) {
       }
     }
   }
-  if (lines.length) { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(lines, 3)); BB.extra(new THREE.LineSegments(g, m.wire)); }
+  if (lines.length) { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(lines, 3)); if (!MATS.wire) MATS.wire = new THREE.LineBasicMaterial({ color: 0x222222, transparent: true, opacity: 0.55 }); BB.extra(new THREE.LineSegments(g, MATS.wire)); }
 }
 
 // ---------------- 信号機（タイルの分だけ見た目を作る） ----------------
