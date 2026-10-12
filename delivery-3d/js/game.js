@@ -1,7 +1,7 @@
 // ゲーム進行：荷物・営業所・積み込み・配達先でのやりとり・運転のルール・時間・画面表示
 import * as THREE from 'three';
 import { A, model, textTexture, JP_FONT } from './assets.js';
-import { T, NAT_Z, NAT_HALF, routePath, speedLimitAt, updateLights, resolveCircle } from './town.js';
+import { T, routePath, speedLimitAt, updateLights, resolveCircle, edgeAt } from './town.js';
 import { updateSignals } from './traffic.js';
 import { Person, spawnDog, hasPeople } from './people.js';
 import { bindUI, toast, dialog, dialogKey, closeDialog, slipHtml, updateHud, drawNav, updateNavFoot, openTablet, closeTablet, renderTablet, showMenu, closeMenu, showReport } from './ui.js';
@@ -290,11 +290,15 @@ function newDay() {
   van.gear = 'P'; van.parkingBrake = true; van.engineOn = false; van.cruise = 0; van.rpm = 0;
   // 作業台に並べる
   const spots = [];
-  for (const t of T.depot.tables) for (const dz of [-0.28, 0.28]) for (const dx of [-1.0, 0, 1.0]) spots.push({ x: t.x + dx, z: t.z + dz, y: t.y });
+  // 作業台は営業所の向きに合わせて回っている
+  for (const t of T.depot.tables) for (const dz of [-0.28, 0.28]) for (const dx of [-1.0, 0, 1.0]) {
+    const c = Math.cos(t.rot), s = Math.sin(t.rot);
+    spots.push({ x: t.x + dx * c + dz * s, z: t.z - dx * s + dz * c, y: t.y, rot: t.rot });
+  }
   parcels.forEach((p, i) => {
     p.mesh = parcelMesh(p);
     const sp2 = spots[i % spots.length];
-    attachParcel(p, { type: 'world', pos: new THREE.Vector3(sp2.x, sp2.y, sp2.z), rotY: (i % 3 - 1) * 0.15, where: 'table' });
+    attachParcel(p, { type: 'world', pos: new THREE.Vector3(sp2.x, sp2.y, sp2.z), rotY: (sp2.rot || 0) + (i % 3 - 1) * 0.15, where: 'table' });
   });
   const ps = T.depot.playerSpawn;
   ctx.player.x = ps.x; ctx.player.z = ps.z; ctx.player.y = 0; ctx.player.yaw = ps.yaw; ctx.player.pitch = -0.35; ctx.player.zone = null;
@@ -674,8 +678,7 @@ function apartStairs(lot, up) {
   setTimeout(() => {
     if (up) {
       const p = lot.points.stairsTop; pl.x = p.x; pl.z = p.z; pl.y = 3.0;
-      const a = lot.corridor.a, b = lot.corridor.b;
-      pl.zone = { x0: Math.min(a.x, b.x) + 0.3, x1: Math.max(a.x, b.x) - 0.3, z0: Math.min(a.z, b.z) + 0.3, z1: Math.max(a.z, b.z) - 0.3 };
+      pl.zone = lot.corridorZone;
     } else {
       const p = lot.points.stairs; pl.x = p.x; pl.z = p.z; pl.y = 0; pl.zone = null;
     }
@@ -859,23 +862,13 @@ function checkDriving(dt) {
       violation(`速度超過（${Math.round(kmh)}km/h／制限${lim}km/h）`, 3000, 5);
     }
   } else d.speeding = 0;
-  // 信号無視
-  for (const s of T.signals) {
-    const lines = [
-      { ax: 'x', at: s.x - 10, dir: 1, z0: NAT_Z - NAT_HALF, z1: NAT_Z, col: s.state.ew },
-      { ax: 'x', at: s.x + 4.5, dir: -1, z0: NAT_Z, z1: NAT_Z + NAT_HALF, col: s.state.ew },
-      { ax: 'z', at: 150.5, dir: 1, x0: s.x - 3, x1: s.x + 3, col: s.state.ns },
-    ];
-    for (const L of lines) {
-      if (L.col !== 'r') continue;
-      if (L.ax === 'x') {
-        if (front.z < L.z0 || front.z > L.z1) continue;
-        if ((prevFront.x - L.at) * L.dir < 0 && (front.x - L.at) * L.dir >= 0) violation('信号無視', 5000, 10);
-      } else {
-        if (front.x < L.x0 || front.x > L.x1) continue;
-        if ((prevFront.z - L.at) * L.dir < 0 && (front.z - L.at) * L.dir >= 0) violation('信号無視', 5000, 10);
-      }
-    }
+  // 信号無視：赤信号のときに停止線を越えた
+  for (const s of T.signals) for (const ap of s.approaches) {
+    if (s.state[ap.group] !== 'r') continue;
+    const dx = front.x - ap.stop.x, dz = front.z - ap.stop.z, px = prevFront.x - ap.stop.x, pz = prevFront.z - ap.stop.z;
+    const now = dx * ap.d[0] + dz * ap.d[1], before = px * ap.d[0] + pz * ap.d[1];
+    const lat = dx * ap.d[1] - dz * ap.d[0]; // 左が正
+    if (before < 0 && now >= 0 && lat > (ap.e.ow ? -ap.half - 0.5 : -0.5) && lat < ap.half + 0.5) violation('信号無視', 5000, 10);
   }
   prevFront.x = front.x; prevFront.z = front.z;
   // 衝突
@@ -931,7 +924,7 @@ function violation(text, fine, pts) {
 
 function checkDeparture() {
   const d = G.day, van = ctx.van;
-  if (!d.departed && van.z < T.depot.gateZ && Math.abs(van.speed) > 0.1) {
+  if (!d.departed && !T.depot.contains(van.x, van.z) && Math.abs(van.speed) > 0.1) {
     d.departed = true;
     d.clock = true;
     d.time = Math.max(d.time, TIME.START);
@@ -1022,7 +1015,7 @@ function updateNav(dt) {
   const next = nextStop();
   let to = null;
   if (next) { const lot = T.lots[next]; to = lot.points.front || { x: lot.cx, z: lot.cz }; }
-  else if (d.departed && !d.ended) to = { x: -60, z: 188 };
+  else if (d.departed && !d.ended) to = T.depot.front;
   UI.navPath = to ? routePath(from, to) : null;
   UI.navDist = UI.navPath && isFinite(UI.navPath.length) ? UI.navPath.length : null;
   drawNav($('#minimap'));
@@ -1155,12 +1148,20 @@ function spawnVisitor(lot, v) {
   if (!hasPeople() || !v.handPos) return;
   const pick2 = v.speaker.rid ? AVATAR_OF[v.speaker.rid] : [GENERIC[Math.floor(Math.random() * GENERIC.length)]];
   const per = new Person(ctx.scene, pick2[0], { tint: pick2[1] });
-  const c = Math.cos(lot.rot), sn = Math.sin(lot.rot);
-  const off = lot.kind === 'mansion' ? { x: 1.1, z: 1.4 } : { x: 0, z: 0.55 };
-  // ローカル +z が建物側
-  const x = v.handPos.x + off.x * c + off.z * sn, z = v.handPos.z - off.x * sn + off.z * c;
-  const y = v.handPos.y > 2 ? 3.0 : (lot.kind === 'house' || lot.kind === 'farmhouse' ? 0.18 : 0.02);
-  per.place(x, y, z, lot.rot + Math.PI);
+  let x, z, face;
+  const unit = lot.rooms ? lot.rooms.find(r => r.room === v.room) : null;
+  if (lot.doorN && !unit && lot.kind !== 'mansion') {
+    // 玄関の前（扉から 0.55m）に、外を向いて立つ
+    // 開いた扉（蝶番の側）にかからないよう、少し取っ手の側に寄る
+    const n = lot.doorN, dd = lot.doorD || [0, 0];
+    x = v.handPos.x - n[0] * 0.6 + dd[0] * 0.22; z = v.handPos.z - n[1] * 0.6 + dd[1] * 0.22; face = Math.atan2(n[0], n[1]);
+  } else {
+    const c = Math.cos(lot.rot), sn = Math.sin(lot.rot);
+    const off = lot.kind === 'mansion' ? { x: 1.1, z: 1.4 } : { x: 0, z: 0.55 };
+    x = v.handPos.x + off.x * c + off.z * sn; z = v.handPos.z - off.x * sn + off.z * c; face = lot.rot + Math.PI;
+  }
+  const y = v.handPos.y > 2 ? 3.0 : (lot.kind === 'house' || lot.kind === 'farmhouse' ? 0.4 : 0.02);
+  per.place(x, y, z, face);
   v.person = per;
 }
 function removeVisitor(v) { if (v && v.person) { v.person.dispose(); v.person = null; } }
@@ -1169,19 +1170,14 @@ function spawnDayPeople() {
   clearPeople();
   if (!hasPeople()) return;
   boss = new Person(ctx.scene, 'Business_Male_07');
-  boss.place(-61.5, 0.03, 226.6, Math.PI);
-  // 生活道路を歩く人
-  const loops = [
-    [[-107.6, 18.6], [-32.4, 18.6], [-32.4, 61.4], [-107.6, 61.4]],
-    [[-27.6, 66.6], [47.6, 66.6], [47.6, 109.4], [-27.6, 109.4]],
-    [[52.4, 18.6], [127.6, 18.6], [127.6, 61.4], [52.4, 61.4]],
-    [[-107.6, 109.4], [-32.4, 109.4], [-32.4, 66.6], [-107.6, 66.6]],
-    [[-27.6, 18.6], [47.6, 18.6], [47.6, 61.4], [-27.6, 61.4]],
-  ];
-  const names = ['Female_Adult_05', 'Male_Adult_09', 'Female_Adult_11', 'Male_Adult_03', 'Business_Female_03'];
-  loops.forEach((pts, i) => {
-    const per = new Person(ctx.scene, names[i], { tint: [0x9fb0c0, null, 0xc9b8a0, 0xa0b090, null][i] });
-    const w = { per, pts, seg: i % 4, t: (i * 0.37) % 1, speed: 1.15 + (i % 3) * 0.12, wait: 0, x: 0, z: 0 };
+  boss.place(T.depot.boss.x, 0.03, T.depot.boss.z, T.depot.boss.rotY);
+  // 生活道路を歩く人（道の左端を歩き、交差点で行き先を選ぶ）
+  const names = ['Female_Adult_05', 'Male_Adult_09', 'Female_Adult_11', 'Male_Adult_03', 'Business_Female_03', 'Female_Adult_03', 'Gardener_Male_01'];
+  const streets = T.edges.filter(e => e.rank >= 1 && e.rank <= 2 && e.len > 25);
+  names.forEach((nm, i) => {
+    const per = new Person(ctx.scene, nm, { tint: [0x9fb0c0, null, 0xc9b8a0, 0xa0b090, null, 0xb0a0a8, null][i] });
+    const e = streets[(i * 37 + 11) % streets.length];
+    const w = { per, e, s: e.len * (0.2 + (i % 5) * 0.15), dir: i % 2 ? 1 : -1, speed: 1.1 + (i % 3) * 0.12, wait: 0, x: 0, z: 0 };
     per.play('walk', 0);
     walkers.push(w);
   });
@@ -1189,8 +1185,8 @@ function spawnDayPeople() {
   if (ito) {
     dog = spawnDog(ctx.scene);
     if (dog) {
-      const c = Math.cos(ito.rot), sn = Math.sin(ito.rot), lx = 3.6, lz = -ito.d / 2 + 2.6;
-      dog.position.set(ito.cx + lx * c + lz * sn, 0, ito.cz - lx * sn + lz * c);
+      const p = new THREE.Vector3(-2.2, 0, 1.6).applyMatrix4(ito.base);
+      dog.position.set(p.x, 0, p.z);
       dog.rotation.y = ito.rot + Math.PI + 0.5;
     }
   }
@@ -1208,20 +1204,25 @@ function updatePeople(dt, moving) {
   const van = ctx.van;
   for (const w of walkers) {
     if (!moving) { w.per.update(dt); continue; }
-    const a = w.pts[w.seg], b = w.pts[(w.seg + 1) % w.pts.length];
-    const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
-    const dx = (b[0] - a[0]) / len, dz = (b[1] - a[1]) / len;
-    w.x = a[0] + (b[0] - a[0]) * w.t; w.z = a[1] + (b[1] - a[1]) * w.t;
+    const at = edgeAt(w.e, w.s);
+    const d = w.dir > 0 ? at.d : [-at.d[0], -at.d[1]];
+    const left = [d[1], -d[0]];
+    w.x = at.p[0] + left[0] * (w.e.w / 2 - 0.35); w.z = at.p[1] + left[1] * (w.e.w / 2 - 0.35);
     // 車が近づいてきたら立ち止まる
     const vx = van.x - w.x, vz = van.z - w.z, vd = Math.hypot(vx, vz);
-    const ahead = (vx * dx + vz * dz) > 0;
+    const ahead = (vx * d[0] + vz * d[1]) > 0;
     const danger = vd < 7 && Math.abs(van.speed) > 0.5 && ahead;
     if (w.wait > 0) w.wait -= dt;
     if (danger || w.wait > 0) { if (w.per.kind !== 'idle') w.per.play('idle'); }
     else {
       if (w.per.kind !== 'walk') w.per.play('walk');
-      w.t += w.speed * dt / len;
-      if (w.t >= 1) { w.t = 0; w.seg = (w.seg + 1) % w.pts.length; }
+      w.s += w.dir * w.speed * dt;
+      if (w.s > w.e.len || w.s < 0) {
+        const node = T.nodes[w.s > w.e.len ? w.e.b : w.e.a];
+        const opts = node.ends.filter(x => x.e !== w.e && x.e.rank <= 2);
+        if (opts.length) { const o = opts[Math.floor(Math.random() * opts.length)]; w.e = o.e; w.dir = o.end === 'a' ? 1 : -1; w.s = o.end === 'a' ? 0 : o.e.len; }
+        else { w.dir = -w.dir; w.s = Math.max(0, Math.min(w.e.len, w.s)); }
+      }
     }
     // 車との接触
     if (vd < 1.6 && Math.abs(van.speed) > 1.5 && G.mode === 'drive' && G.realT - (w.hitT || -99) > 4) {
@@ -1229,7 +1230,7 @@ function updatePeople(dt, moving) {
       violation('歩行者との接触事故', 10000, 30);
       sfx('crash', 0.6);
     }
-    w.per.place(w.x, 0.02, w.z, Math.atan2(dx, dz));
+    w.per.place(w.x, 0.02, w.z, Math.atan2(d[0], d[1]));
     w.per.update(dt);
   }
   for (const lot of T.lotList) {
@@ -1348,9 +1349,10 @@ export function update(dt) {
   if (G.mode === 'title' || !d) {
     // タイトル画面：町の上をゆっくり回るカメラ
     titleT += dt * 0.03;
-    const cx = 10 + Math.cos(titleT) * 70, cz = 95 + Math.sin(titleT) * 55;
+    const oc = T.depot.center;
+    const cx = oc.x + Math.cos(titleT) * 70, cz = oc.z + Math.sin(titleT) * 55;
     cam.position.set(cx, 24, cz);
-    cam.lookAt(10 + Math.cos(titleT + 0.9) * 20, 2, 95 + Math.sin(titleT + 0.9) * 15);
+    cam.lookAt(oc.x + Math.cos(titleT + 0.9) * 20, 2, oc.z + Math.sin(titleT + 0.9) * 15);
     ctx.traffic.update(dt, van, 0);
     updateSignals(G.realT);
     updateHud();
@@ -1377,7 +1379,7 @@ export function update(dt) {
     for (const lot of T.lotList) {
       for (const dd of lot.doors) {
         dd.open += (dd.target - dd.open) * Math.min(1, dt * 3);
-        dd.obj.rotation.y = lot.rot + dd.sign * dd.open * 1.3;
+        dd.obj.rotation.y = (dd.base ?? lot.rot) + dd.sign * dd.open * 1.3;
       }
       if (lot.visit && lot.visit.expires && G.realT > lot.visit.expires && lot.visit.stage === 'home') endVisit(lot);
     }

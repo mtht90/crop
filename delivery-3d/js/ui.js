@@ -1,5 +1,5 @@
 // 画面表示：HUD・メーター・ナビ・会話・業務端末・メニュー・業務報告
-import { T, NAT_Z, routePath, speedLimitAt } from './town.js';
+import { T, routePath, speedLimitAt } from './town.js';
 import { TIME, WINDOWS, RESIDENTS, FLAG_LABEL, UPGRADES } from './data.js';
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -223,6 +223,32 @@ function drawGauge(van) {
   if (van.pbWarn > 0) { g.fillStyle = '#e8584f'; g.font = '700 14px "Zen Kaku Gothic New", sans-serif'; g.fillText('サイドブレーキ解除：Space', bx, by + 148); }
 }
 
+// ---------------- 地図の下絵（町のデータから一度だけ描く） ----------------
+const BASE = { canvas: null, k: 1.6 };
+function baseMap() {
+  if (BASE.canvas) return BASE.canvas;
+  const [x0, z0, x1, z1] = T.bounds, k = BASE.k;
+  const c = document.createElement('canvas'); c.width = Math.ceil((x1 - x0) * k); c.height = Math.ceil((z1 - z0) * k);
+  const g = c.getContext('2d');
+  g.fillStyle = '#121920'; g.fillRect(0, 0, c.width, c.height);
+  g.scale(k, k); g.translate(-x0, -z0);
+  const poly = (pts, col) => { g.fillStyle = col; g.beginPath(); pts.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1])); g.closePath(); g.fill(); };
+  const AC = { farmland: '#1c2a1d', grass: '#18261c', park: '#1a2c1e', meadow: '#18261c', heath: '#18261c', parking: '#1d2228', retail: '#211f22', commercial: '#211f22', construction: '#221f1a', water: '#1a3346' };
+  for (const a of T.areas) if (AC[a.k]) poly(a.pts, AC[a.k]);
+  g.lineCap = 'round'; g.lineJoin = 'round';
+  for (const w of T.water) { g.strokeStyle = '#24506e'; g.lineWidth = w.w + 1; g.beginPath(); w.pts.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1])); g.stroke(); }
+  for (const b of T.buildingsMap || []) poly(b, '#26303a');
+  poly(T.depot.poly, '#1f3328');
+  for (const pass of [0, 1]) for (const e of T.edges) {
+    g.strokeStyle = pass ? (e.rank >= 3 ? '#5f6e7c' : '#45515d') : '#0d1216';
+    g.lineWidth = e.w + (pass ? 0 : 1.6);
+    g.beginPath(); e.pts.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1])); g.stroke();
+  }
+  BASE.canvas = c;
+  return c;
+}
+function drawBase(g) { const [x0, z0, x1, z1] = T.bounds; g.drawImage(baseMap(), x0, z0, x1 - x0, z1 - z0); }
+
 // ---------------- ナビ（進行方向が上） ----------------
 export function drawNav(c, opts = {}) {
   const G = api.G, ctx = api.ctx();
@@ -236,13 +262,10 @@ export function drawNav(c, opts = {}) {
   g.save();
   g.fillStyle = '#10161b'; g.fillRect(0, 0, W, H);
   g.translate(W / 2, cy); g.rotate(-ang); g.scale(S, S); g.translate(-pl.x, -pl.z);
-  g.fillStyle = '#18212a';
-  for (const lot of T.lotList) g.fillRect(lot.cx - lot.w / 2 + 0.6, lot.cz - lot.d / 2 + 0.6, lot.w - 1.2, lot.d - 1.2);
-  const dp = T.depot.area; g.fillStyle = '#1d2832'; g.fillRect(dp.x0, dp.z0, dp.x1 - dp.x0, dp.z1 - dp.z0);
-  for (const r of T.roads) { g.fillStyle = r.kind === 'national' ? '#4b5866' : '#36424e'; g.fillRect(r.x0, r.z0, r.x1 - r.x0, r.z1 - r.z0); }
+  drawBase(g);
   // 信号の位置
   g.fillStyle = 'rgba(232,88,79,.9)';
-  for (const s of T.signals) g.fillRect(s.x - 1.5, NAT_Z - 1.5, 3, 3);
+  for (const s of T.signals) { g.beginPath(); g.arc(s.x, s.z, 2.2, 0, 7); g.fill(); }
   const next = api.nextStop();
   const nav = api.navPath;
   if (nav && nav.points.length) {
@@ -263,7 +286,8 @@ export function drawNav(c, opts = {}) {
     g.fillText(done ? '✓' : idx >= 0 ? String(idx + 1) : '', 0, 0.5);
     g.restore();
   }
-  g.save(); g.translate(-68, 200); g.rotate(ang); g.fillStyle = '#4fbf7f'; g.fillRect(-5, -5, 10, 10); g.fillStyle = '#10161b'; g.font = '700 7px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('営', 0, 0.5); g.restore();
+  const dc = T.depot.center;
+  g.save(); g.translate(dc.x, dc.z); g.rotate(ang); g.fillStyle = '#4fbf7f'; g.fillRect(-5, -5, 10, 10); g.fillStyle = '#10161b'; g.font = '700 7px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('営', 0, 0.5); g.restore();
   g.restore();
   // 自車
   g.fillStyle = '#f2a93b'; g.strokeStyle = '#10161b'; g.lineWidth = 2;
@@ -382,7 +406,8 @@ export function renderTablet() {
   bindSettings(el, renderTablet);
 }
 
-const MAP_VIEW = { x0: -140, z0: -20, x1: 260, z1: 240 };
+const MAP_VIEW = { x0: -440, z0: -380, x1: 440, z1: 380 };
+export function setMapView() { const [x0, z0, x1, z1] = T.bounds; Object.assign(MAP_VIEW, { x0, z0, x1, z1 }); }
 const mapScale = (W = 900, H = 620) => Math.min(W / (MAP_VIEW.x1 - MAP_VIEW.x0), H / (MAP_VIEW.z1 - MAP_VIEW.z0));
 const worldToMap = (x, z) => { const s = mapScale(); return { x: (x - MAP_VIEW.x0) * s, y: (z - MAP_VIEW.z0) * s }; };
 const mapToWorld = (mx, my) => { const s = mapScale(); return { x: mx / s + MAP_VIEW.x0, z: my / s + MAP_VIEW.z0 }; };
@@ -390,13 +415,10 @@ function drawTabletMap() {
   const G = api.G, d = G.day, ctx = api.ctx();
   const c = $('#tb-canvas'), g = c.getContext('2d');
   g.fillStyle = '#121920'; g.fillRect(0, 0, c.width, c.height);
-  const rect = (x0, z0, x1, z1, col) => { const a = worldToMap(x0, z0), b = worldToMap(x1, z1); g.fillStyle = col; g.fillRect(a.x, a.y, b.x - a.x, b.y - a.y); };
-  for (const lot of T.lotList) rect(lot.cx - lot.w / 2 + 0.6, lot.cz - lot.d / 2 + 0.6, lot.cx + lot.w / 2 - 0.6, lot.cz + lot.d / 2 - 0.6, lot.kind === 'shop' || lot.kind === 'conbini' ? '#2a2620' : '#1b242c');
-  const dp = T.depot.area; rect(dp.x0, dp.z0, dp.x1, dp.z1, '#1d2b24');
-  for (const r of T.roads) rect(r.x0, r.z0, r.x1, r.z1, r.kind === 'national' ? '#566473' : '#3a4652');
-  g.fillStyle = '#6c7782'; g.font = '600 13px "Zen Kaku Gothic New", sans-serif';
-  const lbl = worldToMap(-128, NAT_Z - 7); g.fillText('国道', lbl.x, lbl.y);
-  let prev = { x: -60, z: 190 };
+  { const a = worldToMap(MAP_VIEW.x0, MAP_VIEW.z0), b = worldToMap(MAP_VIEW.x1, MAP_VIEW.z1); g.drawImage(baseMap(), a.x, a.y, b.x - a.x, b.y - a.y); }
+  g.fillStyle = 'rgba(232,88,79,.9)';
+  for (const s of T.signals) { const p = worldToMap(s.x, s.z); g.beginPath(); g.arc(p.x, p.y, 3, 0, 7); g.fill(); }
+  let prev = T.depot.front;
   g.strokeStyle = 'rgba(90,169,230,.85)'; g.lineWidth = 3; g.setLineDash([7, 5]);
   for (const id of d.route) {
     const lot = T.lots[id];
@@ -421,7 +443,7 @@ function drawTabletMap() {
     g.fillStyle = '#c9d1d8'; g.font = '500 12px "Zen Kaku Gothic New", sans-serif'; g.textAlign = 'left';
     g.fillText((lot.name || lot.surname) + (ws.length ? `  ${ws.join(' ')}` : ''), m.x + 15, m.y + 1);
   }
-  const off = worldToMap(-68, 200); g.fillStyle = '#4fbf7f'; g.fillRect(off.x - 10, off.y - 10, 20, 20); g.fillStyle = '#10161b'; g.textAlign = 'center'; g.font = '700 12px "Zen Kaku Gothic New", sans-serif'; g.fillText('営', off.x, off.y + 1);
+  const off = worldToMap(T.depot.center.x, T.depot.center.z); g.fillStyle = '#4fbf7f'; g.fillRect(off.x - 10, off.y - 10, 20, 20); g.fillStyle = '#10161b'; g.textAlign = 'center'; g.font = '700 12px "Zen Kaku Gothic New", sans-serif'; g.fillText('営', off.x, off.y + 1);
   g.textAlign = 'left'; g.textBaseline = 'alphabetic';
 }
 
@@ -514,6 +536,7 @@ function creditsHtml() {
   return `<table class="keys">
     <tr><td>3D素材（地面・建物の質感、段ボール、室外機など）・空</td><td><a href="https://polyhaven.com" target="_blank" rel="noopener">Poly Haven</a>（CC0）</td></tr>
     <tr><td>人物・犬・動き</td><td><a href="https://github.com/microsoft/Microsoft-Rocketbox" target="_blank" rel="noopener">Microsoft Rocketbox</a>（MIT）</td></tr>
+    <tr><td>町の道路・建物の配置（実在する地方都市の郊外がもと。名前は架空）</td><td>地図データ © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>（ODbL）</td></tr>
     <tr><td>効果音</td><td><a href="https://kenney.nl" target="_blank" rel="noopener">Kenney</a>（CC0）</td></tr>
     <tr><td>3D描画</td><td><a href="https://threejs.org" target="_blank" rel="noopener">three.js</a>（MIT）</td></tr>
     <tr><td>フォント</td><td>Zen Kaku Gothic New・Barlow Semi Condensed（OFL）</td></tr></table>

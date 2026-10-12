@@ -40,8 +40,12 @@ export class Player {
         }
       }
       if (this.zone) {
-        p.x = THREE.MathUtils.clamp(p.x, this.zone.x0, this.zone.x1);
-        p.z = THREE.MathUtils.clamp(p.z, this.zone.z0, this.zone.z1);
+        // 動ける範囲は建物の向きに合わせた長方形（ローカル座標で制限する）
+        const z = this.zone, c = Math.cos(z.rot || 0), s = Math.sin(z.rot || 0);
+        const dx = p.x - (z.cx || 0), dz = p.z - (z.cz || 0);
+        let lx = dx * c - dz * s, lz = dx * s + dz * c;
+        lx = THREE.MathUtils.clamp(lx, z.x0, z.x1); lz = THREE.MathUtils.clamp(lz, z.z0, z.z1);
+        p.x = (z.cx || 0) + lx * c + lz * s; p.z = (z.cz || 0) - lx * s + lz * c;
       }
       const moved = Math.hypot(p.x - this.x, p.z - this.z);
       this.x = p.x; this.z = p.z;

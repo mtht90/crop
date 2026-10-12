@@ -3,6 +3,12 @@
 地方都市〜郊外の町「あおば町」を舞台にした、宅配ドライバーの仕事シミュレーターです。
 Euro Truck Simulator のように自分で軽バンを運転しつつ、営業所での荷物確認・積み込み、配達先でのインターホン・手渡し・置き配・不在票まで、体を動かして段取りよく仕事を進めることを楽しむゲームです。
 
+## 町について
+
+町の形は、実在する地方都市の郊外（栃木県宇都宮市東部の約 880m × 740m）を OpenStreetMap の地図データから取り込んでいます。
+曲がった道・T字路・袋小路・一方通行の分離帯つきの通り・川・畑・信号の位置は実際のままで、家の見た目・塀・門・表札などはデータからプログラムで作っています。
+町名・住所・人の名前・店の名前は架空です。地図データの作り直しは `python3 tools/osm_to_town.py <地図.osm> assets/town/town.json` で行えます。
+
 ## 起動方法
 
 ES モジュールを使うため、**ローカルサーバー経由**で開いてください（`index.html` を直接開くと動きません）。
@@ -61,16 +67,16 @@ delivery-3d/
 ├── js/
 │   ├── main.js     描画ループ・入力・時刻による太陽と空の変化
 │   ├── assets.js   素材の読み込み、色の自動補正、まとめ描画・インスタンス描画・文字アトラス
-│   ├── town.js     町の生成（道路・区画線・家・アパート・マンション・店・営業所・電柱・信号・標識・畑）、道路網の経路探索
+│   ├── town.js     地図データから町を組み立てる（道路・白線・側溝・歩道・家・塀と門・アパート・店・川・電柱・信号・標識）、当たり判定、道路網の経路探索
 │   ├── van.js      軽バン（右ハンドル・リアハッチ・スライドドア・荷台・保冷箱・メーター）と運転の挙動、他の車の見た目
-│   ├── traffic.js  国道の他の車（車間距離を保って走り、信号で止まる）と信号の周期
+│   ├── traffic.js  他の車（道路網の上を左側通行で走り、信号・一時停止を守り、車間距離を保つ）と信号の周期
 │   ├── player.js   一人称で歩くプレイヤー
 │   ├── game.js     荷物・積み込み・配達先のやりとり・交通違反・時間・人の配置・設定・セーブ
 │   ├── ui.js       HUD・ナビ・会話・業務端末・メニュー・業務報告（車載ディスプレイ調）
 │   ├── people.js   人物（Rocketbox）と犬の読み込み・アニメーション
 │   ├── b64.js      base64 化したモデル／HDRI の読み込み
 │   └── data.js     住民18人・荷物の種類・改善アイテム
-├── tools/          Artifact 用の変換・ページ生成スクリプト
+├── tools/          地図データの変換（osm_to_town.py）・Artifact 用の変換とページ生成
 ├── lib/            Three.js（MIT）
 └── assets/         外部素材（下記）
 ```
@@ -84,6 +90,7 @@ delivery-3d/
 | Poly Haven HDRI：kloofendal_48d_partly_cloudy_puresky | 空と環境光 | CC0 |
 | [Kenney](https://kenney.nl)：Impact Sounds / Interface Sounds / Music Jingles | 足音・衝突音・操作音・ジングル | CC0 |
 | [Microsoft Rocketbox Avatar Library](https://github.com/microsoft/Microsoft-Rocketbox)：Business_Female_03, Female_Adult_03/05/11, Medical_Female_01, Chef_Female_01, Business_Male_02/07, Male_Adult_03/09/10, Gardener_Male_01, Dog_Beagle_01 と idle / talk / wave / walk のアニメーション | 住民・所長・通行人・犬（FBX から GLB に変換、テクスチャを縮小） | MIT |
+| 地図データ © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright)（栃木県宇都宮市東部の一部） | 町の道路網・建物の輪郭・土地利用・川・信号の位置（`assets/town/town.json`。店名などは架空の名前に置き換え） | ODbL |
 | [Three.js](https://threejs.org) | 3D描画 | MIT |
 | [Zen Kaku Gothic New](https://fonts.google.com/specimen/Zen+Kaku+Gothic+New) / [Barlow Semi Condensed](https://fonts.google.com/specimen/Barlow+Semi+Condensed) | 文字／数字のフォント | OFL |
 

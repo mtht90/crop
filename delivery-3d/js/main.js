@@ -1,11 +1,12 @@
 // 起動・描画ループ・入力・時刻による光の変化
 import * as THREE from 'three';
 import { A, loadAll } from './assets.js';
-import { buildTown, T } from './town.js';
+import { buildTown, loadTownData, T } from './town.js';
 import { Van } from './van.js';
 import { Player } from './player.js';
 import { Traffic } from './traffic.js';
 import { G, initGame, update, onKey, onMouse, requestLock, onPointerUnlock } from './game.js';
+import { setMapView } from './ui.js';
 import { loadPeople } from './people.js';
 
 const canvas = document.getElementById('c');
@@ -43,6 +44,7 @@ async function boot() {
   try {
     await Promise.race([Promise.all([document.fonts.load('700 40px "Zen Kaku Gothic New"'), document.fonts.load('600 40px "Barlow Semi Condensed"')]), new Promise(r => setTimeout(r, 2500))]);
   } catch (e) { /* フォントがなくても続行 */ }
+  await loadTownData();
   await loadAll(renderer, (p, l) => setLoading(p * 0.7, '町の素材 ' + l));
   await loadPeople((p) => setLoading(0.7 + p * 0.22, '町の人たち'));
   scene.environment = A.envMap;
@@ -50,6 +52,7 @@ async function boot() {
   setLoading(0.95, '町を組み立てています…');
   await new Promise(r => setTimeout(r, 30));
   buildTown(scene);
+  setMapView();
   const van = new Van(scene);
   const player = new Player(camera);
   const traffic = new Traffic(scene);

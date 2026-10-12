@@ -235,7 +235,7 @@ export function gableWall(d, h) {
 const CHUNK = 70;
 // 同じ素材のジオメトリをまとめて描画回数を減らす
 export class Batch {
-  constructor() { this.groups = new Map(); }
+  constructor(chunk = CHUNK) { this.groups = new Map(); this.chunk = chunk; }
   add(geo, mat, matrix, opts = {}) {
     let g = geo.index ? geo.toNonIndexed() : geo.clone();
     for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'uv'].includes(k)) g.deleteAttribute(k);
@@ -245,8 +245,9 @@ export class Batch {
     // 位置ごとに区切って、画面外の部分を描かないようにする
     g.computeBoundingBox();
     const bb = g.boundingBox, cx = (bb.min.x + bb.max.x) / 2, cz = (bb.min.z + bb.max.z) / 2;
-    const big = bb.max.x - bb.min.x > CHUNK || bb.max.z - bb.min.z > CHUNK;
-    const chunk = big ? 'big' : `${Math.floor(cx / CHUNK)},${Math.floor(cz / CHUNK)}`;
+    const C = this.chunk;
+    const big = bb.max.x - bb.min.x > C || bb.max.z - bb.min.z > C;
+    const chunk = big ? 'big' : `${Math.floor(cx / C)},${Math.floor(cz / C)}`;
     const key = mat.uuid + (opts.noShadow ? ':ns' : '') + '@' + chunk;
     if (!this.groups.has(key)) this.groups.set(key, { mat, list: [], opts });
     this.groups.get(key).list.push(g);
