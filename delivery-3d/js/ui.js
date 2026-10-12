@@ -400,7 +400,8 @@ export function renderTablet() {
     cv.onclick = (e) => {
       const r = cv.getBoundingClientRect();
       const w = mapToWorld((e.clientX - r.left) / r.width * cv.width, (e.clientY - r.top) / r.height * cv.height);
-      let best = null, bd = 13;
+      // 当たりの半径は画面上で約 20px（地図の縮尺に合わせる）
+      let best = null, bd = 20 * (cv.width / r.width) / mapScale();
       for (const id of api.stopLots()) { const l = T.lots[id]; const dd = Math.hypot(l.cx - w.x, l.cz - w.z); if (dd < bd) { bd = dd; best = id; } }
       if (best) { const i = d.route.indexOf(best); if (i >= 0) d.route.splice(i, 1); else d.route.push(best); api.sfx('select', 0.3); renderTablet(); }
     };
@@ -485,6 +486,20 @@ function bindSettings(el, rerender) {
   });
 }
 function helpHtml() {
+  if (document.body.classList.contains('touch')) {
+    const t = [
+      ['歩く', '左下のスティック（倒した分だけ速く）　「走る」で小走り'],
+      ['見回す', 'ボタンのない場所を指でドラッグ'],
+      ['調べる・持つ・積む・置く', '画面中央で狙って「操作」、または出てきた案内をタップ'],
+      ['車に乗る・降りる', '運転席のドアの近くで「乗る」／運転中は「降りる」'],
+      ['アクセル・ブレーキ', '右下のペダル（下の方を押すほど強く踏む）。止まってからブレーキを押し続けるとバック'],
+      ['ハンドル', '左下のスティックを左右に'],
+      ['サイドブレーキ・ウインカー', '「サイド」「◀」「▶」「ハザード」「ホーン」'],
+      ['視点', '「視点」で 運転席 → 後ろから → ボンネット'],
+      ['業務端末・メニュー', '右上の「端末」「メニュー」'],
+    ];
+    return `<table class="keys">${t.map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join('')}</table><p class="muted">スマホは画面を横向きにして遊んでください。重いときは設定で「画質：軽量」に。</p>`;
+  }
   const rows = [
     ['歩く', '<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>　走る <kbd>Shift</kbd>　見回す マウス'],
     ['調べる・持つ・積む・置く', '画面中央で狙って <kbd>E</kbd>'],
@@ -526,7 +541,7 @@ export function showMenu(kind, side) {
       <p class="tag-line">${kind === 'title' ? '地方の町の新人ドライバーとして、荷物を確かめ、軽バンに積み、町を走って届ける。' : '一時停止中'}</p>
       ${kind === 'title' && saved ? `<div class="save">${saved.day}日目　Lv${saved.level}　${yen(saved.money)}</div>` : ''}
       ${items.map(([k, l, s, primary]) => `<button class="mi ${primary ? 'primary' : ''} ${side === k ? 'on' : ''}" data-m="${k}"><span>${l}</span>${s ? `<small>${s}</small>` : ''}</button>`).join('')}
-      <div class="mm-foot">${kind === 'title' ? 'キーボードとマウスで遊びます。画面をクリックするとマウスで見回せます（Esc で解除）。' : ''}</div>
+      <div class="mm-foot">${kind === 'title' ? (document.body.classList.contains('touch') ? 'タッチ操作で遊べます。左下のスティックで移動、画面のドラッグで見回し。' : 'キーボードとマウスで遊びます。画面をクリックするとマウスで見回せます（Esc で解除）。') : ''}</div>
     </div>
     <div class="mm-side">${sideHtml ? `<div class="panel">${sideHtml}</div>` : ''}</div>`;
   el.classList.add('show');

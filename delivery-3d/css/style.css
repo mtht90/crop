@@ -329,9 +329,87 @@ table.score tr.total td { border-top: 1px solid var(--line-2); border-bottom: 0;
 .ld-tip { margin-top: 26px; font-size: 13.5px; color: var(--tx-2); }
 
 #narrow { display: none; }
-@media (max-width: 720px), (pointer: coarse) and (hover: none) {
+/* スマホを縦にしているときだけ、横向きにしてもらう */
+@media (orientation: portrait) and (pointer: coarse) and (hover: none) {
   #narrow { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; background: var(--bg); padding: 24px 20px; text-align: center; }
   #narrow b { font-size: 22px; }
   #narrow p { color: var(--tx-2); }
 }
+
+/* ---------------- タッチ操作 ---------------- */
+#touch { position: absolute; inset: 0; pointer-events: none; display: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+body.touch #touch { display: block; }
+body.touch #touch[data-mode="title"], body.touch #touch[data-mode="ui"] { display: none; }
+#touch button { pointer-events: auto; touch-action: none; font: inherit; font-size: 13px; font-weight: 700; color: var(--tx); background: rgba(16,22,27,.62); border: 1px solid var(--line-2); border-radius: 10px; min-width: 54px; min-height: 44px; padding: 0 10px; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+#touch button.on { background: var(--amber); color: #1a1206; border-color: #c9862a; }
+.t-top { position: absolute; top: calc(10px + env(safe-area-inset-top, 0px)); right: calc(10px + env(safe-area-inset-right, 0px)); display: flex; gap: 8px; }
+.t-top button { min-height: 36px !important; font-size: 12px !important; }
+.t-stick { position: absolute; left: calc(18px + env(safe-area-inset-left, 0px)); bottom: calc(18px + env(safe-area-inset-bottom, 0px)); width: 150px; height: 150px; pointer-events: auto; touch-action: none; }
+.t-base { position: absolute; inset: 0; border-radius: 50%; background: rgba(16,22,27,.35); border: 1px solid var(--line-2); }
+.t-knob { position: absolute; left: 50%; top: 50%; width: 64px; height: 64px; margin: -32px 0 0 -32px; border-radius: 50%; background: rgba(232,236,239,.85); box-shadow: 0 2px 8px rgba(0,0,0,.4); }
+.t-pad { position: absolute; right: calc(16px + env(safe-area-inset-right, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); display: none; gap: 8px; }
+#touch[data-mode="walk"] .t-walk { display: grid; grid-template-columns: auto auto; align-items: end; }
+#touch[data-mode="drive"] .t-drive { display: flex; flex-direction: column; align-items: flex-end; }
+.t-walk .t-big { grid-row: span 2; width: 92px; height: 92px; border-radius: 50% !important; font-size: 16px !important; background: rgba(242,169,59,.82) !important; color: #1a1206 !important; border-color: #c9862a !important; }
+.t-walk { grid-template-rows: auto auto; }
+.t-row { display: flex; gap: 6px; }
+.t-pedals { display: flex; gap: 10px; align-items: flex-end; margin-top: 4px; }
+.t-pedal { width: 74px; height: 110px; border-radius: 12px !important; }
+.t-acc { height: 140px !important; background: rgba(79,191,127,.35) !important; }
+.t-brake { background: rgba(232,88,79,.35) !important; }
+.t-acc.on { background: var(--green) !important; color: #0e1a12 !important; }
+.t-brake.on { background: var(--red) !important; color: #fff !important; }
+
+/* タッチ：HUD をボタンと重ならない位置・大きさに */
+body.touch #keyhint { display: none !important; }
+body.touch #prompt { pointer-events: auto; top: auto; bottom: 120px; padding: 10px 16px 10px 10px; font-size: 15px; }
+body.touch #prompt kbd::after { content: ''; }
+body.touch #cluster { left: 50%; bottom: 8px; transform: translateX(-50%) scale(.72); transform-origin: bottom center; }
+body.touch #limit-sign { left: auto; right: 50%; margin-right: 120px; bottom: 14px; transform: scale(.8); }
+body.touch #steer-ind { display: none !important; }
+body.touch #navpanel { top: 56px; bottom: auto; right: 10px; width: 230px; }
+body.touch #carry-info { left: 190px; bottom: 16px; }
+body.touch #slip-preview { top: 56px; transform: scale(.85); transform-origin: top right; }
+@media (max-height: 520px) {
+  .hud-clock { left: 10px; top: 8px; padding: 6px 10px; min-width: 0; }
+  .hc-time { font-size: 24px; }
+  .hud-job { top: 8px; min-width: 0; max-width: 46vw; padding: 5px 12px 6px; }
+  .hj-main { font-size: 14px; }
+  .hj-meta { font-size: 11px; }
+  #toasts { width: 260px; top: 56px; }
+  .toast { font-size: 12px; padding: 7px 10px; }
+  body.touch #navpanel { width: 190px; }
+  body.touch #navpanel .np-foot { display: none; }
+  .t-stick { width: 128px; height: 128px; }
+  .t-pedal { width: 64px; height: 92px; }
+  .t-acc { height: 118px !important; }
+  .t-walk .t-big { width: 80px; height: 80px; }
+  #touch button { min-height: 40px; min-width: 48px; font-size: 12px; }
+}
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+/* 小さな画面（スマホの横向き）：端末・メニュー・報告を詰める */
+@media (max-height: 520px), (max-width: 760px) {
+  .term { width: 98vw; height: 96vh; grid-template-columns: 132px minmax(0, 1fr); }
+  .tb-nav { padding: 8px 6px; }
+  .tb-brand { display: none; }
+  .tb-nav button { padding: 7px 8px; font-size: 12.5px; }
+  .tb-nav .clock { font-size: 16px; }
+  .tb-top { padding: 8px 12px; }
+  .tb-top .sub { display: none; }
+  .tb-body { padding: 10px 12px 12px; }
+  .tb-map { grid-template-columns: minmax(0, 1fr) 210px; gap: 10px; }
+  #menu.show { grid-template-columns: minmax(260px, 340px) minmax(0, 1fr); }
+  .mm { padding: 4vh 22px 3vh; }
+  .mm h1 { font-size: 26px; }
+  .mm .tag-line { margin: 6px 0 12px; font-size: 12.5px; }
+  .mi { padding: 9px 12px; font-size: 15px; }
+  .mm-foot { display: none; }
+  .dlg-text { font-size: 14.5px; line-height: 1.6; padding-bottom: 8px; }
+  #dialog.show { padding-bottom: 2vh; }
+  #report.show { padding: 6px; }
+  .rep { max-height: 98vh; }
+  .rep-head { padding: 12px 16px; }
+  .rank { font-size: 54px; }
+  .rep-col { padding: 12px 16px; }
+}

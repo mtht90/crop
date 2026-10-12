@@ -1,7 +1,7 @@
 // ゲーム進行：荷物・営業所・積み込み・配達先でのやりとり・運転のルール・時間・画面表示
 import * as THREE from 'three';
 import { A, model, textTexture, JP_FONT } from './assets.js';
-import { T, routePath, speedLimitAt, updateLights, resolveCircle, edgeAt, edgesNear } from './town.js';
+import { T, routePath, speedLimitAt, updateLights, resolveCircle, edgeAt, edgesNear, setDetail } from './town.js';
 import { updateSignals } from './traffic.js';
 import { Person, spawnDog, hasPeople } from './people.js';
 import { bindUI, toast, dialog, dialogKey, closeDialog, slipHtml, updateHud, drawNav, updateNavFoot, openTablet, closeTablet, renderTablet, showMenu, closeMenu, showReport } from './ui.js';
@@ -86,7 +86,9 @@ function horn() {
 // 状態
 // =========================================================
 const SAVE_KEY = 'aoba3d-save-v1';
-const defaultSettings = () => ({ sens: 1, mouseSteer: false, mouseSteerSens: 1, vol: 0.7, engineVol: 0.6, quality: 'high', mirrors: true });
+// タッチの端末（スマホ・タブレット）は、最初から軽量の画質にする
+const touchDevice = () => { try { return matchMedia('(pointer: coarse)').matches && !matchMedia('(hover: hover)').matches; } catch (e) { return false; } };
+const defaultSettings = () => ({ sens: 1, mouseSteer: false, mouseSteerSens: 1, vol: 0.7, engineVol: 0.6, quality: touchDevice() ? 'low' : 'high', mirrors: !touchDevice() });
 const defaultSave = () => ({ day: 1, money: 0, exp: 0, level: 1, upgrades: {}, visits: {}, history: [], seed: Math.floor(Math.random() * 1e9), settings: defaultSettings() });
 const SETTINGS_KEY = 'aoba3d-settings-v1';
 function loadSettings() {
@@ -839,9 +841,9 @@ function driveInput() {
   const k = G.keys;
   return {
     // Shift を押しながらだと半分だけ踏む
-    throttle: (k.KeyW || k.ArrowUp) ? (k.ShiftLeft || k.ShiftRight ? 0.45 : 1) : 0,
-    brake: (k.KeyS || k.ArrowDown) ? 1 : 0,
-    steer: ((k.KeyA || k.ArrowLeft) ? 1 : 0) - ((k.KeyD || k.ArrowRight) ? 1 : 0),
+    throttle: (k.KeyW || k.ArrowUp) ? (k.ShiftLeft || k.ShiftRight ? 0.45 : 1) : (k._thr || 0),
+    brake: (k.KeyS || k.ArrowDown) ? 1 : (k._brk || 0),
+    steer: ((k.KeyA || k.ArrowLeft) ? 1 : 0) - ((k.KeyD || k.ArrowRight) ? 1 : 0) || (k._steer || 0),
     mouseSteer: G.save.settings.mouseSteer ? G.mouseSteer : null,
   };
 }
@@ -1263,6 +1265,7 @@ function applySettings() {
   r.shadowMap.enabled = true;
   ctx.sun.shadow.mapSize.set(st.quality === 'low' ? 1024 : 2048, st.quality === 'low' ? 1024 : 2048);
   if (ctx.sun.shadow.map) { ctx.sun.shadow.map.dispose(); ctx.sun.shadow.map = null; }
+  setDetail(st.quality === 'low' ? 'low' : 'high');
   writeSettings();
 }
 
@@ -1341,6 +1344,8 @@ export function initGame(c) {
     applySettings, peekSave: loadSave, startGame, toTitle, nextDay, buy,
   });
   bindUI(UI);
+  // 遠ざかって敷地が片付けられるときは、玄関先のやりとりも終える
+  T.onLotUnload = (lot) => { if (lot.visit) endVisit(lot); };
   G.save.settings = loadSettings();
   applySettings();
   // 動作確認用

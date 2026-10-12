@@ -11,7 +11,12 @@ export const T = {
   nodes: [], edges: [], lampMats: [], bounds: null, plans: [], areas: [], water: [], buildingsMap: [], root: null,
   stats: { near: 0, far: 0, queue: 0 },
 };
-const NEAR = 260, FAR = 1300, UNLOAD_NEAR = 380, UNLOAD_FAR = 1500;
+let NEAR = 260, FAR = 1300, UNLOAD_NEAR = 380, UNLOAD_FAR = 1500;
+// 画質：軽量では細かく作る範囲と、遠くを見せる範囲を狭くする
+export function setDetail(level) {
+  if (level === 'low') { NEAR = 170; UNLOAD_NEAR = 280; FAR = 850; UNLOAD_FAR = 1000; }
+  else { NEAR = 260; UNLOAD_NEAR = 380; FAR = 1300; UNLOAD_FAR = 1500; }
+}
 
 // ---------------- 読み込み ----------------
 export async function loadTownData(onProgress) {
@@ -728,7 +733,7 @@ function unloadNear(t) {
   if (t.near) { disposeGroup(t.near); t.near = null; }
   for (const c of t.colliders) CG.remove(c);
   t.colliders = [];
-  for (const lot of t.lots) { lot.built = false; lot.doors = []; lot.rooms = null; const i = T.lotList.indexOf(lot); if (i >= 0) T.lotList.splice(i, 1); }
+  for (const lot of t.lots) { if (T.onLotUnload) T.onLotUnload(lot); lot.built = false; lot.doors = []; lot.rooms = null; const i = T.lotList.indexOf(lot); if (i >= 0) T.lotList.splice(i, 1); }
   t.lots = [];
   if (t.plates) { t.plates.dispose(); t.plates = null; }
   t.nearQueued = false;

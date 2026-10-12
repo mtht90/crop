@@ -24,10 +24,13 @@ export class Player {
     if (keys.KeyS || keys.ArrowDown) fz += 1;
     if (keys.KeyA || keys.ArrowLeft) fx -= 1;
     if (keys.KeyD || keys.ArrowRight) fx += 1;
+    // タッチのスティック（倒した量で速さが変わる）
+    let analog = 1;
+    if (!fx && !fz && (keys._mx || keys._my)) { fx = keys._mx; fz = keys._my; analog = Math.min(1, Math.hypot(fx, fz)); }
     const len = Math.hypot(fx, fz);
     const run = keys.ShiftLeft || keys.ShiftRight;
-    const sp = (run ? 3.8 : 1.7) * speedMul;
-    if (len > 0) {
+    const sp = (run ? 3.8 : 1.7) * speedMul * analog;
+    if (len > 0.08) {
       fx /= len; fz /= len;
       const s = Math.sin(this.yaw), c = Math.cos(this.yaw);
       const mx = (fx * c + fz * s) * sp * dt, mz = (-fx * s + fz * c) * sp * dt;

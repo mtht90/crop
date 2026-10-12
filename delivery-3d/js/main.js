@@ -1,17 +1,18 @@
 // 起動・描画ループ・入力・時刻による光の変化
 import * as THREE from 'three';
 import { A, loadAll } from './assets.js';
-import { buildTown, loadTownData, T, updateWorld, preloadAround } from './town.js';
+import { buildTown, loadTownData, T, updateWorld, preloadAround, setDetail } from './town.js';
 import { Van } from './van.js';
 import { Player } from './player.js';
 import { Traffic } from './traffic.js';
 import { G, initGame, update, onKey, onMouse, requestLock, onPointerUnlock } from './game.js';
 import { setMapView } from './ui.js';
 import { loadPeople } from './people.js';
+import { initTouch, IS_TOUCH } from './touch.js';
 
 const canvas = document.getElementById('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.25));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -53,11 +54,13 @@ async function boot() {
   await new Promise(r => setTimeout(r, 30));
   buildTown(scene);
   setMapView();
+  setDetail(IS_TOUCH ? 'low' : 'high');
   await preloadAround(T.depot.center.x, T.depot.center.z, (p) => setLoading(0.95 + p * 0.05, '町を組み立てています… ' + Math.round(p * 100) + '%'));
   const van = new Van(scene);
   const player = new Player(camera);
   const traffic = new Traffic(scene);
   initGame({ scene, camera, van, player, traffic, renderer, sun, hemi });
+  initTouch();
   document.getElementById('loading').classList.add('done');
   window.__aoba = { G, T, van, player, camera, scene, renderer, THREE }; // 動作確認用
   let last = performance.now();
@@ -136,7 +139,7 @@ document.addEventListener('mousemove', (e) => {
 canvas.addEventListener('mousedown', (e) => { if (e.button === 2) G.keys.mouseRight = true; });
 window.addEventListener('mouseup', (e) => { if (e.button === 2) G.keys.mouseRight = false; });
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
-canvas.addEventListener('click', () => { if (!G.overlay) requestLock(); });
+canvas.addEventListener('click', () => { if (!G.overlay && !IS_TOUCH) requestLock(); });
 document.addEventListener('pointerlockchange', () => {
   if (document.pointerLockElement !== canvas) setTimeout(onPointerUnlock, 60);
 });
