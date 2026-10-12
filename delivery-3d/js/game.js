@@ -343,7 +343,7 @@ function pendingFor(lotId, room) {
 function candidates() {
   const out = [];
   const pl = ctx.player, van = ctx.van, d = G.day;
-  const near = (pos, r = 6) => Math.hypot(pos.x - pl.x, pos.z - pl.z) < r && Math.abs(pos.y - (pl.y + 1)) < 2.5;
+  const near = (pos, r = 6) => !!pos && Math.hypot(pos.x - pl.x, pos.z - pl.z) < r && Math.abs(pos.y - (pl.y + 1)) < 2.5;
   const full = G.carrying.length >= carryMax();
 
   // 置いてある荷物
