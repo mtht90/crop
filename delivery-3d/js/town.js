@@ -19,15 +19,11 @@ export async function loadTownData(onProgress) {
   if (!r.ok) throw new Error('world.json: ' + r.status);
   const w = await r.json();
   T.data = w;
-  const list = w.tiles;
-  let done = 0;
-  const tileData = {};
-  const one = async (key) => {
-    const res = await fetch(`assets/world/tiles/t_${key}.json`);
-    tileData[key] = res.ok ? await res.json() : { b: [], a: [], w: [], p: [] };
-    onProgress && onProgress(++done / list.length);
-  };
-  for (let i = 0; i < list.length; i += 12) await Promise.all(list.slice(i, i + 12).map(one));
+  const t = await fetch('assets/world/tiles.json');
+  if (!t.ok) throw new Error('tiles.json: ' + t.status);
+  const tileData = await t.json();
+  for (const key of w.tiles) if (!tileData[key]) tileData[key] = { b: [], a: [], w: [], p: [] };
+  onProgress && onProgress(1);
   T.tileData = tileData;
 }
 

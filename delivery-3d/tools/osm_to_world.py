@@ -3,7 +3,7 @@
 使い方: python3 tools/osm_to_world.py <osmタイルのフォルダ> <出力フォルダ>
 出力:
   world.json          … 範囲・道路網（交差点と辺）・鉄道・信号・横断歩道・バス停・大きな土地利用
-  tiles/t_<i>_<j>.json … 400m 四方ごとの建物・土地利用・川（近づいたときに読み込む）
+  tiles.json … 400m 四方ごとの建物・土地利用・川（キーは "i_j"）
 座標は範囲の中心を原点に x = 東、z = 南（m）。地図データ © OpenStreetMap contributors（ODbL）
 """
 import glob
@@ -257,10 +257,8 @@ for e in edges:
             s += wfront + 2.5 + random.random() * 3
 print('generated houses', added)
 
-os.makedirs(os.path.join(dst, 'tiles'), exist_ok=True)
-for f in glob.glob(os.path.join(dst, 'tiles', '*.json')): os.remove(f)
-for key, data in tiles.items():
-    json.dump(data, open(os.path.join(dst, 'tiles', f't_{key}.json'), 'w'), ensure_ascii=False, separators=(',', ':'))
+# 全タイルを1つのファイルにまとめる（配信するファイル数を減らす）
+json.dump(tiles, open(os.path.join(dst, 'tiles.json'), 'w'), ensure_ascii=False, separators=(',', ':'))
 world = {
     'meta': {'source': 'OpenStreetMap', 'attribution': '© OpenStreetMap contributors (ODbL)', 'center': [clat, clon], 'tile': TILE, 'ni': NI, 'nj': NJ},
     'bounds': [r1(-HX), r1(-HZ), r1(HX), r1(HZ)], 'tiles': sorted(tiles.keys()),
