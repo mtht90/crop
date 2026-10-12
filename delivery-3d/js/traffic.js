@@ -1,5 +1,5 @@
 // 町を走る他の車と信号機（道路網のグラフの上を走る）
-import { T, edgeAt } from './town.js';
+import { T, edgeAt, edgesNear } from './town.js';
 import { buildCar } from './van.js';
 
 // 信号の周期：A（主な道）→ B（交差する道）
@@ -40,9 +40,8 @@ export class Traffic {
       const end = st.e.a === n.id ? 'a' : 'b';
       this.stops.set(st.e.id + end, st);
     }
-    this.major = T.edges.filter(e => e.rank >= 3 && e.len > 30);
-    this.minor = T.edges.filter(e => e.rank === 2 && e.len > 30);
-    const N = 18;
+    const N = 30;
+    this.focus = T.depot.center;
     for (let i = 0; i < N; i++) {
       const kind = KINDS[i % KINDS.length];
       const mesh = buildCar(COLORS[(i * 5) % COLORS.length], kind);
@@ -53,19 +52,26 @@ export class Traffic {
       this.cars.push(car);
     }
   }
+  // プレイヤーのまわり（見えないくらいの距離）に車を出す
   spawn(car, van, i = Math.random() * 100) {
+    const f = van ? { x: van.x, z: van.z } : this.focus;
+    const near = edgesNear(f.x, f.z, 420);
+    const major = near.filter(e => e.rank >= 3 && e.len > 30), minor = near.filter(e => e.rank === 2 && e.len > 30);
     for (let tries = 0; tries < 30; tries++) {
-      const list = (i % 3 === 2 && this.minor.length) ? this.minor : this.major;
+      const list = (i % 3 === 2 && minor.length) || !major.length ? minor : major;
+      if (!list.length) break;
       const e = list[Math.floor(Math.random() * list.length)];
       const dir = e.ow ? 1 : (Math.random() < 0.5 ? 1 : -1);
       const s = 10 + Math.random() * Math.max(1, e.len - 20);
       const p = edgeAt(e, s);
-      if (van && Math.hypot(p.p[0] - van.x, p.p[1] - van.z) < 70) continue;
+      const dv = Math.hypot(p.p[0] - f.x, p.p[1] - f.z);
+      if (dv > 400 || (van && dv < 90)) continue;
       if (this.cars.some(c => c !== car && Math.hypot(c.x - p.p[0], c.z - p.p[1]) < 14)) continue;
       Object.assign(car, { e, s, dir, speed: 5, stopT: 0, stopDone: null });
       this.place(car, 1);
       return;
     }
+    if (!car.e) { const e = near[0] || T.edges[0]; Object.assign(car, { e, s: e.len / 2, dir: e.ow ? 1 : 1, speed: 0, stopT: 0, stopDone: null }); this.place(car, 1); }
   }
   laneOffset(e) { return e.ow ? 0 : e.w / 4; }
   place(car, k) {
@@ -96,6 +102,8 @@ export class Traffic {
   }
   update(dt, van, dark) {
     for (const car of this.cars) {
+      // 遠く離れた車は、まわりに出し直す
+      if (Math.hypot(car.x - van.x, car.z - van.z) > 480) { this.spawn(car, van); continue; }
       const e = car.e, d = car.d || [0, 1];
       const toEnd = car.dir > 0 ? e.len - car.s : car.s;
       const v0 = (e.rank >= 3 ? 11 : 7.5) * (toEnd < 14 ? 0.7 : 1);

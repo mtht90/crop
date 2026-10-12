@@ -223,31 +223,37 @@ function drawGauge(van) {
   if (van.pbWarn > 0) { g.fillStyle = '#e8584f'; g.font = '700 14px "Zen Kaku Gothic New", sans-serif'; g.fillText('サイドブレーキ解除：Space', bx, by + 148); }
 }
 
-// ---------------- 地図の下絵（町のデータから一度だけ描く） ----------------
-const BASE = { canvas: null, k: 1.6 };
-function baseMap() {
-  if (BASE.canvas) return BASE.canvas;
-  const [x0, z0, x1, z1] = T.bounds, k = BASE.k;
+// ---------------- 地図の下絵（範囲を決めて描き、使い回す） ----------------
+const inBox = (pts, x0, z0, x1, z1) => { const p = pts[0]; return p[0] > x0 - 300 && p[0] < x1 + 300 && p[1] > z0 - 300 && p[1] < z1 + 300; };
+function makeBase(x0, z0, x1, z1, k) {
   const c = document.createElement('canvas'); c.width = Math.ceil((x1 - x0) * k); c.height = Math.ceil((z1 - z0) * k);
   const g = c.getContext('2d');
   g.fillStyle = '#121920'; g.fillRect(0, 0, c.width, c.height);
   g.scale(k, k); g.translate(-x0, -z0);
   const poly = (pts, col) => { g.fillStyle = col; g.beginPath(); pts.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1])); g.closePath(); g.fill(); };
-  const AC = { farmland: '#1c2a1d', grass: '#18261c', park: '#1a2c1e', meadow: '#18261c', heath: '#18261c', parking: '#1d2228', retail: '#211f22', commercial: '#211f22', construction: '#221f1a', water: '#1a3346' };
-  for (const a of T.areas) if (AC[a.k]) poly(a.pts, AC[a.k]);
+  const AC = { farmland: '#1c2a1d', grass: '#18261c', park: '#1a2c1e', meadow: '#18261c', heath: '#18261c', wood: '#16261a', forest: '#16261a', parking: '#1d2228', retail: '#211f22', commercial: '#211f22', construction: '#221f1a', water: '#1a3346' };
+  for (const a of T.areas) if (AC[a.k] && inBox(a.pts, x0, z0, x1, z1)) poly(a.pts, AC[a.k]);
   g.lineCap = 'round'; g.lineJoin = 'round';
-  for (const w of T.water) { g.strokeStyle = '#24506e'; g.lineWidth = w.w + 1; g.beginPath(); w.pts.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1])); g.stroke(); }
-  for (const b of T.buildingsMap || []) poly(b, '#26303a');
+  for (const w of T.water) { if (!inBox(w.pts, x0, z0, x1, z1)) continue; g.strokeStyle = '#24506e'; g.lineWidth = w.w + 1; g.beginPath(); w.pts.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1])); g.stroke(); }
+  for (const b of T.buildingsMap || []) if (inBox(b, x0, z0, x1, z1)) poly(b, '#26303a');
   poly(T.depot.poly, '#1f3328');
   for (const pass of [0, 1]) for (const e of T.edges) {
+    if (!inBox(e.pts, x0, z0, x1, z1) && !inBox([e.pts[e.pts.length - 1]], x0, z0, x1, z1)) continue;
     g.strokeStyle = pass ? (e.rank >= 3 ? '#5f6e7c' : '#45515d') : '#0d1216';
     g.lineWidth = e.w + (pass ? 0 : 1.6);
     g.beginPath(); e.pts.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1])); g.stroke();
   }
-  BASE.canvas = c;
-  return c;
+  return { c, x0, z0, x1, z1 };
 }
-function drawBase(g) { const [x0, z0, x1, z1] = T.bounds; g.drawImage(baseMap(), x0, z0, x1 - x0, z1 - z0); }
+// タブレットの地図：担当区域ぜんぶ
+let TAB_BASE = null;
+function tabletBase() { if (!TAB_BASE) TAB_BASE = makeBase(MAP_VIEW.x0, MAP_VIEW.z0, MAP_VIEW.x1, MAP_VIEW.z1, 1.4); return TAB_BASE; }
+// ナビ：いる場所のまわりだけを細かく描き、離れたら描き直す
+let NAV_BASE = null;
+function drawBase(g, x, z) {
+  if (!NAV_BASE || Math.abs(x - (NAV_BASE.x0 + 450)) > 220 || Math.abs(z - (NAV_BASE.z0 + 450)) > 220) NAV_BASE = makeBase(x - 450, z - 450, x + 450, z + 450, 2);
+  const b = NAV_BASE; g.drawImage(b.c, b.x0, b.z0, b.x1 - b.x0, b.z1 - b.z0);
+}
 
 // ---------------- ナビ（進行方向が上） ----------------
 export function drawNav(c, opts = {}) {
@@ -262,7 +268,7 @@ export function drawNav(c, opts = {}) {
   g.save();
   g.fillStyle = '#10161b'; g.fillRect(0, 0, W, H);
   g.translate(W / 2, cy); g.rotate(-ang); g.scale(S, S); g.translate(-pl.x, -pl.z);
-  drawBase(g);
+  drawBase(g, pl.x, pl.z);
   // 信号の位置
   g.fillStyle = 'rgba(232,88,79,.9)';
   for (const s of T.signals) { g.beginPath(); g.arc(s.x, s.z, 2.2, 0, 7); g.fill(); }
@@ -407,7 +413,14 @@ export function renderTablet() {
 }
 
 const MAP_VIEW = { x0: -440, z0: -380, x1: 440, z1: 380 };
-export function setMapView() { const [x0, z0, x1, z1] = T.bounds; Object.assign(MAP_VIEW, { x0, z0, x1, z1 }); }
+// 担当区域（配達先と営業所を囲む範囲）を地図の範囲にする
+export function setMapView() {
+  const pts = Object.values(T.lots).filter(l => l.residents && l.residents.length).map(l => [l.cx, l.cz]).concat([[T.depot.center.x, T.depot.center.z]]);
+  let x0 = Math.min(...pts.map(p => p[0])) - 140, x1 = Math.max(...pts.map(p => p[0])) + 140, z0 = Math.min(...pts.map(p => p[1])) - 140, z1 = Math.max(...pts.map(p => p[1])) + 140;
+  const want = 900 / 620, w = x1 - x0, h = z1 - z0;
+  if (w / h < want) { const add = (h * want - w) / 2; x0 -= add; x1 += add; } else { const add = (w / want - h) / 2; z0 -= add; z1 += add; }
+  Object.assign(MAP_VIEW, { x0, z0, x1, z1 }); TAB_BASE = null;
+}
 const mapScale = (W = 900, H = 620) => Math.min(W / (MAP_VIEW.x1 - MAP_VIEW.x0), H / (MAP_VIEW.z1 - MAP_VIEW.z0));
 const worldToMap = (x, z) => { const s = mapScale(); return { x: (x - MAP_VIEW.x0) * s, y: (z - MAP_VIEW.z0) * s }; };
 const mapToWorld = (mx, my) => { const s = mapScale(); return { x: mx / s + MAP_VIEW.x0, z: my / s + MAP_VIEW.z0 }; };
@@ -415,7 +428,7 @@ function drawTabletMap() {
   const G = api.G, d = G.day, ctx = api.ctx();
   const c = $('#tb-canvas'), g = c.getContext('2d');
   g.fillStyle = '#121920'; g.fillRect(0, 0, c.width, c.height);
-  { const a = worldToMap(MAP_VIEW.x0, MAP_VIEW.z0), b = worldToMap(MAP_VIEW.x1, MAP_VIEW.z1); g.drawImage(baseMap(), a.x, a.y, b.x - a.x, b.y - a.y); }
+  { const a = worldToMap(MAP_VIEW.x0, MAP_VIEW.z0), b = worldToMap(MAP_VIEW.x1, MAP_VIEW.z1); g.drawImage(tabletBase().c, a.x, a.y, b.x - a.x, b.y - a.y); }
   g.fillStyle = 'rgba(232,88,79,.9)';
   for (const s of T.signals) { const p = worldToMap(s.x, s.z); g.beginPath(); g.arc(p.x, p.y, 3, 0, 7); g.fill(); }
   let prev = T.depot.front;

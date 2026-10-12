@@ -1,7 +1,7 @@
 // 起動・描画ループ・入力・時刻による光の変化
 import * as THREE from 'three';
 import { A, loadAll } from './assets.js';
-import { buildTown, loadTownData, T } from './town.js';
+import { buildTown, loadTownData, T, updateWorld, preloadAround } from './town.js';
 import { Van } from './van.js';
 import { Player } from './player.js';
 import { Traffic } from './traffic.js';
@@ -20,7 +20,7 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(72, window.innerWidth / window.innerHeight, 0.1, 900);
+const camera = new THREE.PerspectiveCamera(72, window.innerWidth / window.innerHeight, 0.1, 6500);
 scene.add(camera);
 const backCam = new THREE.PerspectiveCamera(100, 16 / 9, 0.1, 80);
 
@@ -33,7 +33,7 @@ sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.03;
 scene.add(sun, sun.target);
 const hemi = new THREE.HemisphereLight(0xcfe0ff, 0x5a5a48, 0.35);
 scene.add(hemi);
-scene.fog = new THREE.Fog(0xc9d6e2, 120, 620);
+scene.fog = new THREE.Fog(0xc9d6e2, 250, 3000);
 
 function setLoading(p, label) {
   document.getElementById('load-bar').style.width = Math.round(p * 100) + '%';
@@ -44,7 +44,7 @@ async function boot() {
   try {
     await Promise.race([Promise.all([document.fonts.load('700 40px "Zen Kaku Gothic New"'), document.fonts.load('600 40px "Barlow Semi Condensed"')]), new Promise(r => setTimeout(r, 2500))]);
   } catch (e) { /* フォントがなくても続行 */ }
-  await loadTownData();
+  await loadTownData((p) => setLoading(p * 0.1, '地図データ'));
   await loadAll(renderer, (p, l) => setLoading(p * 0.7, '町の素材 ' + l));
   await loadPeople((p) => setLoading(0.7 + p * 0.22, '町の人たち'));
   scene.environment = A.envMap;
@@ -53,6 +53,7 @@ async function boot() {
   await new Promise(r => setTimeout(r, 30));
   buildTown(scene);
   setMapView();
+  await preloadAround(T.depot.center.x, T.depot.center.z, (p) => setLoading(0.95 + p * 0.05, '町を組み立てています… ' + Math.round(p * 100) + '%'));
   const van = new Van(scene);
   const player = new Player(camera);
   const traffic = new Traffic(scene);
@@ -64,6 +65,10 @@ async function boot() {
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
     update(dt);
+    // 作る範囲の中心はカメラ（運転中は少し先読み）
+    const ahead = G.mode === 'drive' ? van.speed * 2.5 : 0;
+    const fx = camera.position.x + van.forward.x * ahead, fz = camera.position.z + van.forward.z * ahead;
+    updateWorld(fx, fz, 6);
     applyDaylight(van, player);
     render(van);
     requestAnimationFrame(loop);

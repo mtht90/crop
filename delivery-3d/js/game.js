@@ -1,7 +1,7 @@
 // ゲーム進行：荷物・営業所・積み込み・配達先でのやりとり・運転のルール・時間・画面表示
 import * as THREE from 'three';
 import { A, model, textTexture, JP_FONT } from './assets.js';
-import { T, routePath, speedLimitAt, updateLights, resolveCircle, edgeAt } from './town.js';
+import { T, routePath, speedLimitAt, updateLights, resolveCircle, edgeAt, edgesNear } from './town.js';
 import { updateSignals } from './traffic.js';
 import { Person, spawnDog, hasPeople } from './people.js';
 import { bindUI, toast, dialog, dialogKey, closeDialog, slipHtml, updateHud, drawNav, updateNavFoot, openTablet, closeTablet, renderTablet, showMenu, closeMenu, showReport } from './ui.js';
@@ -1173,7 +1173,8 @@ function spawnDayPeople() {
   boss.place(T.depot.boss.x, 0.03, T.depot.boss.z, T.depot.boss.rotY);
   // 生活道路を歩く人（道の左端を歩き、交差点で行き先を選ぶ）
   const names = ['Female_Adult_05', 'Male_Adult_09', 'Female_Adult_11', 'Male_Adult_03', 'Business_Female_03', 'Female_Adult_03', 'Gardener_Male_01'];
-  const streets = T.edges.filter(e => e.rank >= 1 && e.rank <= 2 && e.len > 25);
+  const c = T.depot.center;
+  const streets = edgesNear(c.x, c.z, 200).filter(e => e.rank >= 1 && e.rank <= 2 && e.len > 25);
   names.forEach((nm, i) => {
     const per = new Person(ctx.scene, nm, { tint: [0x9fb0c0, null, 0xc9b8a0, 0xa0b090, null, 0xb0a0a8, null][i] });
     const e = streets[(i * 37 + 11) % streets.length];
@@ -1202,8 +1203,15 @@ function clearPeople() {
 function updatePeople(dt, moving) {
   if (boss) boss.update(dt);
   const van = ctx.van;
+  const me = G.mode === 'drive' ? van : ctx.player;
   for (const w of walkers) {
     if (!moving) { w.per.update(dt); continue; }
+    // 遠く離れた人は、近くの道に移す
+    if (Math.hypot(w.x - me.x, w.z - me.z) > 260) {
+      const list = edgesNear(me.x, me.z, 200).filter(e => e.rank >= 1 && e.rank <= 2 && e.len > 25);
+      const e = list[Math.floor(Math.random() * list.length)];
+      if (e) { const p = edgeAt(e, e.len / 2).p; if (Math.hypot(p[0] - me.x, p[1] - me.z) > 70) { w.e = e; w.s = e.len / 2; w.x = p[0]; w.z = p[1]; } }
+    }
     const at = edgeAt(w.e, w.s);
     const d = w.dir > 0 ? at.d : [-at.d[0], -at.d[1]];
     const left = [d[1], -d[0]];
@@ -1355,6 +1363,7 @@ export function update(dt) {
     cam.lookAt(oc.x + Math.cos(titleT + 0.9) * 20, 2, oc.z + Math.sin(titleT + 0.9) * 15);
     ctx.traffic.update(dt, van, 0);
     updateSignals(G.realT);
+    if (G.dbgCam) { cam.position.copy(G.dbgCam.pos); cam.up.set(0, 1, 0); cam.lookAt(G.dbgCam.look); }
     updateHud();
     return;
   }

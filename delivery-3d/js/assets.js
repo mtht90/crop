@@ -233,14 +233,25 @@ export function gableWall(d, h) {
 }
 
 const CHUNK = 70;
+const WHITE = new THREE.Color(1, 1, 1);
+// 色違いの素材：{ isTint, base(頂点カラーの素材), color }
+export function tintOf(base, color) { return { isTint: true, base, color: new THREE.Color(color) }; }
 // 同じ素材のジオメトリをまとめて描画回数を減らす
 export class Batch {
   constructor(chunk = CHUNK) { this.groups = new Map(); this.chunk = chunk; }
   add(geo, mat, matrix, opts = {}) {
+    // 色違いの素材は、共通の素材＋頂点の色にして描画回数を減らす
+    let tint = null;
+    if (mat.isTint) { tint = mat.color; mat = mat.base; }
     let g = geo.index ? geo.toNonIndexed() : geo.clone();
     for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'uv'].includes(k)) g.deleteAttribute(k);
     if (!g.attributes.normal) g.computeVertexNormals();
     if (!g.attributes.uv) g.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(g.attributes.position.count * 2), 2));
+    if (mat.vertexColors) {
+      const n = g.attributes.position.count, arr = new Float32Array(n * 3), c = tint || WHITE;
+      for (let i = 0; i < n; i++) { arr[i * 3] = c.r; arr[i * 3 + 1] = c.g; arr[i * 3 + 2] = c.b; }
+      g.setAttribute('color', new THREE.BufferAttribute(arr, 3));
+    }
     g.applyMatrix4(matrix);
     // 位置ごとに区切って、画面外の部分を描かないようにする
     g.computeBoundingBox();
@@ -252,17 +263,30 @@ export class Batch {
     if (!this.groups.has(key)) this.groups.set(key, { mat, list: [], opts });
     this.groups.get(key).list.push(g);
   }
-  build(parent) {
+  // まとめられないもの（線・個別のメッシュ）
+  extra(obj) { (this.extras = this.extras || []).push(obj); }
+  build(parent) { for (const _ of this.steps(parent, Infinity)) { /* 一度に全部 */ } }
+  // 少しずつまとめる（フレームの途中で区切れるように）
+  *steps(parent, every = 8) {
+    let k = 0;
     for (const { mat, list, opts } of this.groups.values()) {
-      for (let i = 0; i < list.length; i += 400) {
-        const merged = mergeGeometries(list.slice(i, i + 400), false);
+      // 頂点数でまとめる単位を区切る
+      for (let i = 0; i < list.length;) {
+        let j = i, n = 0;
+        while (j < list.length && (j === i || n + list[j].attributes.position.count < 400000)) n += list[j++].attributes.position.count;
+        const part = list.slice(i, j);
+        const merged = mergeGeometries(part, false);
         const m = new THREE.Mesh(merged, mat);
         m.castShadow = !opts.noShadow; m.receiveShadow = true;
         m.matrixAutoUpdate = false;
         parent.add(m);
+        for (const g of part) g.dispose();
+        i = j;
+        if (++k % every === 0) yield;
       }
     }
     this.groups.clear();
+    if (this.extras) { for (const o of this.extras) parent.add(o); this.extras = null; }
   }
 }
 
@@ -281,10 +305,10 @@ export const JP_FONT = '"Zen Kaku Gothic New","Hiragino Sans","Yu Gothic","Noto 
 
 // 同じモデルをたくさん置くときはインスタンス描画にする
 export class Instancer {
-  constructor() { this.items = new Map(); }
+  constructor(chunk = CHUNK) { this.items = new Map(); this.chunk = chunk; }
   add(name, matrix, part) {
     const p = new THREE.Vector3().setFromMatrixPosition(matrix);
-    const key = name + '|' + (part || '') + '@' + Math.floor(p.x / CHUNK) + ',' + Math.floor(p.z / CHUNK);
+    const key = name + '|' + (part || '') + '@' + Math.floor(p.x / this.chunk) + ',' + Math.floor(p.z / this.chunk);
     if (!this.items.has(key)) this.items.set(key, { name, part, list: [] });
     this.items.get(key).list.push(matrix.clone());
   }

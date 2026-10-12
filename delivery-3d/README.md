@@ -5,9 +5,17 @@ Euro Truck Simulator のように自分で軽バンを運転しつつ、営業�
 
 ## 町について
 
-町の形は、実在する地方都市の郊外（栃木県宇都宮市東部の約 880m × 740m）を OpenStreetMap の地図データから取り込んでいます。
-曲がった道・T字路・袋小路・一方通行の分離帯つきの通り・川・畑・信号の位置は実際のままで、家の見た目・塀・門・表札などはデータからプログラムで作っています。
-町名・住所・人の名前・店の名前は架空です。地図データの作り直しは `python3 tools/osm_to_town.py <地図.osm> assets/town/town.json` で行えます。
+ワールドは、実在する地方都市（栃木県宇都宮市の駅周辺〜東部の郊外、**約 4.5km × 5.0km**）を OpenStreetMap の地図データから取り込んでいます。
+大通り・国道・路面電車（LRT）・新幹線の高架・住宅街の細い道・袋小路・一方通行・川・畑・信号の位置は実際のままで、
+地図に建物が描かれていない住宅地は、道に沿って家を並べて補っています（約 2.8 万棟）。配達の担当区域は営業所のまわり（半径約 1km）です。
+
+- 走れる範囲はワールド全体。ETS のように、近く（約 260m）は細部まで、遠く（約 1.3km まで）は簡単な形で、走りながら少しずつ組み立て・片付けをします
+- 家は 1 軒ずつ「基礎・換気口・サイディングやタイルの外壁・コーナー材・幕板・瓦／スレート／金属の屋根（切妻・寄棟・片流れ）・破風・雨樋・縦樋・玄関ポーチと庇・
+  ベランダ（物干し・洗濯物）・サッシと網戸・シャッターボックス・雨戸の戸袋・面格子・室外機と配管カバー・エコキュートやガス給湯器・電気メーター・換気フード・太陽光パネル」まで組み立てています
+- 敷地にはブロック塀・フェンス・生け垣・門柱（表札・住所・インターホン）・郵便受け・カーポート・物置・自転車・植木鉢を置きます
+- 町名・住所・人の名前・店の名前は架空です
+
+地図データの作り直しは、OSM のタイル（`.osm`）を集めたフォルダから `python3 tools/osm_to_world.py <タイルのフォルダ> assets/world` で行えます。
 
 ## 起動方法
 
@@ -67,7 +75,8 @@ delivery-3d/
 ├── js/
 │   ├── main.js     描画ループ・入力・時刻による太陽と空の変化
 │   ├── assets.js   素材の読み込み、色の自動補正、まとめ描画・インスタンス描画・文字アトラス
-│   ├── town.js     地図データから町を組み立てる（道路・白線・側溝・歩道・家・塀と門・アパート・店・川・電柱・信号・標識）、当たり判定、道路網の経路探索
+│   ├── town.js     ワールドの読み込みと、近く／遠くのタイルの組み立て・片付け（道路・白線・歩道・街路樹・案内標識・線路と高架・川・電柱・信号・敷地）、当たり判定、道路網の経路探索（A*）
+│   ├── house.js    日本の住宅の組み立て（一戸建て・木造アパート・マンション・店舗・コンビニ・倉庫、遠景用の簡単な形）
 │   ├── van.js      軽バン（右ハンドル・リアハッチ・スライドドア・荷台・保冷箱・メーター）と運転の挙動、他の車の見た目
 │   ├── traffic.js  他の車（道路網の上を左側通行で走り、信号・一時停止を守り、車間距離を保つ）と信号の周期
 │   ├── player.js   一人称で歩くプレイヤー
@@ -76,7 +85,7 @@ delivery-3d/
 │   ├── people.js   人物（Rocketbox）と犬の読み込み・アニメーション
 │   ├── b64.js      base64 化したモデル／HDRI の読み込み
 │   └── data.js     住民18人・荷物の種類・改善アイテム
-├── tools/          地図データの変換（osm_to_town.py）・Artifact 用の変換とページ生成
+├── tools/          地図データの変換（osm_to_world.py）・Artifact 用の変換とページ生成
 ├── lib/            Three.js（MIT）
 └── assets/         外部素材（下記）
 ```
@@ -90,7 +99,7 @@ delivery-3d/
 | Poly Haven HDRI：kloofendal_48d_partly_cloudy_puresky | 空と環境光 | CC0 |
 | [Kenney](https://kenney.nl)：Impact Sounds / Interface Sounds / Music Jingles | 足音・衝突音・操作音・ジングル | CC0 |
 | [Microsoft Rocketbox Avatar Library](https://github.com/microsoft/Microsoft-Rocketbox)：Business_Female_03, Female_Adult_03/05/11, Medical_Female_01, Chef_Female_01, Business_Male_02/07, Male_Adult_03/09/10, Gardener_Male_01, Dog_Beagle_01 と idle / talk / wave / walk のアニメーション | 住民・所長・通行人・犬（FBX から GLB に変換、テクスチャを縮小） | MIT |
-| 地図データ © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright)（栃木県宇都宮市東部の一部） | 町の道路網・建物の輪郭・土地利用・川・信号の位置（`assets/town/town.json`。店名などは架空の名前に置き換え） | ODbL |
+| 地図データ © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright)（栃木県宇都宮市の一部） | ワールドの道路網・鉄道・建物の輪郭・土地利用・川・信号の位置（`assets/world/`。店名などは架空の名前に置き換え） | ODbL |
 | [Three.js](https://threejs.org) | 3D描画 | MIT |
 | [Zen Kaku Gothic New](https://fonts.google.com/specimen/Zen+Kaku+Gothic+New) / [Barlow Semi Condensed](https://fonts.google.com/specimen/Barlow+Semi+Condensed) | 文字／数字のフォント | OFL |
 
