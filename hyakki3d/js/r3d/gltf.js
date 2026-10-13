@@ -42,9 +42,19 @@ function toGLB(json) {
 }
 
 export async function loadGLTF(url) {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`${url}: ${res.status}`);
-  const json = await res.json();
+  // 応答が返らないまま読み込みが止まらないよう、時間切れで原因のファイル名を出して失敗させる
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), 30000);
+  let json;
+  try {
+    const res = await fetch(url, { signal: ac.signal });
+    if (!res.ok) throw new Error(`${url}: ${res.status}`);
+    json = await res.json();
+  } catch (e) {
+    throw new Error(`${url} を読み込めません（${e.name === 'AbortError' ? '時間切れ' : e.message}）`);
+  } finally {
+    clearTimeout(timer);
+  }
   // GLTFLoader は createImageBitmap があると埋め込み画像を blob: へ fetch する。
   // fetch は connect-src で拒否されうるので、<img> 経由の TextureLoader を使わせる
   const cib = self.createImageBitmap;
