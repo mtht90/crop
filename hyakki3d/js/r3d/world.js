@@ -1,6 +1,6 @@
 // 背景：夜空・月・地面・木々（チャンク配置で無限に続く）・石灯籠・鳥居・蛍・桜の花びら
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { loadGLTF } from './gltf.js';
 
 const ENV = 'assets/env/';
 const CELL = 14;          // チャンク一辺(m)
@@ -64,10 +64,9 @@ export class World {
   }
 
   async load(onProgress) {
-    const loader = new GLTFLoader();
     let done = 0;
     await Promise.all(PROPS.map(async (p) => {
-      const g = await loader.loadAsync(ENV + p.f + '.json');
+      const g = await loadGLTF(ENV + p.f + '.json');
       g.scene.updateMatrixWorld(true);
       p.parts = [];
       g.scene.traverse((o) => {

@@ -2,7 +2,7 @@
 // 大群は SkinnedMesh を何百体も動かすと重いので、歩行などのアニメを数フレーム分の静的ジオメトリに焼き込み、
 // フレームごとの InstancedMesh で描く（描画呼び出し = 種類 × フレーム数 で一定）。
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { loadGLTF } from './gltf.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 
 const DIR = 'assets/models/';
@@ -24,7 +24,6 @@ export const MODELS = {
   karasu: { file: 'dragon', height: 1.1, walk: 'Dragon_Flying', atk: 'Dragon_Attack', frames: 8, spectral: '#ff7a3d', lift: 2.4 },
 };
 
-const loader = new GLTFLoader();
 const gltfs = {};
 
 export async function loadModels(onProgress) {
@@ -32,7 +31,7 @@ export async function loadModels(onProgress) {
   for (const m of Object.values(MODELS)) { files.add(m.file); if (m.clipsFrom) files.add(m.clipsFrom); }
   let done = 0;
   await Promise.all([...files].map(async (f) => {
-    gltfs[f] = await loader.loadAsync(DIR + f + '.json');
+    gltfs[f] = await loadGLTF(DIR + f + '.json');
     onProgress && onProgress(++done / files.size);
   }));
   return gltfs;

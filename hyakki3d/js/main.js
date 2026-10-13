@@ -58,6 +58,10 @@ startBtn.disabled = true;
     startBtn.disabled = false;
   } catch (err) {
     startBtn.textContent = '読み込み失敗';
+    const m = document.createElement('p');
+    m.className = 'credit';
+    m.textContent = String(err && err.message || err).slice(0, 200);
+    startBtn.after(m);
     console.error(err);
   }
 })();
