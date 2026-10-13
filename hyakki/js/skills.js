@@ -1,7 +1,7 @@
 // スキル（攻撃・召喚）と式神の行動
 import { G, hurtEnemy, spawnProj, spawnAlly, addShake } from './game.js';
 import { FX } from './fx.js';
-import { SPR } from './sprites.js';
+import { SPR, draw, dirOf } from './sprites.js';
 import { sfx } from './audio.js';
 
 const TAU = Math.PI * 2;
@@ -103,8 +103,8 @@ export const SKILL_IMPL = {
     },
     glow(ctx, s) {
       if (!s.orbs) return;
-      const sp = SPR.foxfire;
-      for (const o of s.orbs) ctx.drawImage(sp.img, o.x - sp.w / 2, o.y - sp.h / 2, sp.w, sp.h);
+      const f = (G.time * 12) | 0;
+      for (let i = 0; i < s.orbs.length; i++) draw(ctx, SPR.foxfire, s.orbs[i].x, s.orbs[i].y, f + i);
     },
   },
 
@@ -140,14 +140,14 @@ export const SKILL_IMPL = {
       });
     },
     ground(ctx, s, L) {
-      const P = G.player, sp = SPR.seal, r = L.radius;
-      ctx.globalAlpha = 0.35 + (s.pulse || 0) * 0.35;
-      ctx.save();
-      ctx.translate(P.x, P.y);
-      ctx.rotate(s.rot || 0);
-      ctx.drawImage(sp.img, -r, -r, r * 2, r * 2);
-      ctx.restore();
+      const P = G.player, r = L.radius;
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 0.14 + (s.pulse || 0) * 0.22;
+      draw(ctx, SPR.circle, P.x, P.y, 3, 0, false, (r * 2.2) / 32);
+      ctx.globalAlpha = 0.22;
+      draw(ctx, SPR.aura, P.x, P.y + 4, (G.time * 8) | 0, 0, false, (r * 0.9) / 25);
       ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = 'source-over';
     },
   },
 
@@ -161,7 +161,7 @@ export const SKILL_IMPL = {
         const a = base + (i - (L.count - 1) / 2) * 0.16;
         spawnProj('arrow', P.x, P.y - 6, Math.cos(a) * 640, Math.sin(a) * 640, L.dmg, 9999, 1.1, 10, { kb: 110 });
       }
-      sfx.shoot();
+      sfx.arrow();
     },
   },
 
@@ -173,7 +173,8 @@ export const SKILL_IMPL = {
 
 function strike(x, y, L) {
   FX.bolt(x, y, y - G.view.h * 0.6);
-  FX.ring(x, y, 8, L.aoe, 0.35, '#c9b0ff', 6);
+  FX.anim('thunder', x, y - 30, { scale: 1.2, dur: 0.35 });
+  FX.anim('explosion', x, y, { scale: L.aoe / 55, dur: 0.4, alpha: 0.85 });
   FX.burst(x, y, 14, 4, 240, 9, 0.5);
   FX.burst(x, y, 6, 3, 160, 7, 0.3);
   forEachInRadius(x, y, L.aoe, (e) => {
@@ -199,16 +200,15 @@ function summonUpdate(s, L, dt) {
     al.idx = i;
     FX.burst(x, y, 5, s.id === 'karasu' ? 4 : 7, 110, 6, 0.5);
     if (s.id === 'zenki') {
-      FX.seal(x, y, 60, 0.9, 'sealBlue');
-      FX.ring(x, y, 10, 90, 0.5, '#8ec5ff', 6);
+      FX.seal(x, y, 70, 0.9, null, true);
     }
   }
   if (!made) return;
-  FX.seal(P.x, P.y, 46 + Math.min(cnt, 16) * 4, 0.8, 'seal', P);
-  FX.ring(P.x, P.y, 10, 100 + cnt * 4, 0.5, '#ffe9b0', 5);
-  FX.text(P.x, P.y - 40, `${def.name} ×${made}`, def.color, 20);
+  FX.seal(P.x, P.y, 50 + Math.min(cnt, 16) * 4, 0.7, P);
+  FX.ring(P.x, P.y, 10, 100 + cnt * 4, 0.5, '#ffe9b0', 4);
+  FX.text(P.x, P.y - 44, `${def.name} ×${made}`, def.color, 20, true);
   if (s.id === 'zenki') addShake(0.25);
-  sfx.summon();
+  sfx.summon(s.id);
 }
 
 // 標的の取得（生存確認つき、一定間隔で再探索）
@@ -234,6 +234,7 @@ function moveTo(a, x, y, sp, dt) {
   const dx = x - a.x, dy = y - a.y, d = Math.hypot(dx, dy) || 1;
   const m = Math.min(d, sp * dt);
   a.x += dx / d * m; a.y += dy / d * m;
+  if (m > 0.2) { a.dir = dirOf(dx, dy); a.at += dt * 8; }
   return d;
 }
 
@@ -276,7 +277,7 @@ export const ALLY_IMPL = {
           a.atkT = 0.45;
           const nx = (t.x - a.x) / (d || 1), ny = (t.y - a.y) / (d || 1);
           hurtEnemy(t, a.dmg, nx, ny, 40, true);
-          FX.burst((a.x + t.x) / 2, (a.y + t.y) / 2, 2, 3, 120, 5, 0.2);
+          FX.anim('cut', (a.x + t.x) / 2, (a.y + t.y) / 2, { scale: 0.7, dur: 0.16, rot: Math.atan2(ny, nx) });
           a.squash = 0.08;
         }
       } else follow(a, dt, 50);
@@ -298,6 +299,7 @@ export const ALLY_IMPL = {
       a.vx += (dx / d * a.speed - a.vx) * k;
       a.vy += (dy / d * a.speed - a.vy) * k;
       a.x += a.vx * dt; a.y += a.vy * dt;
+      a.at += dt * 10;
       if (t && d < 18) a.retT = 0;   // 通り抜けたら次の獲物へ
       const sp = Math.hypot(a.vx, a.vy) || 1;
       forEachInRadius(a.x, a.y, a.r, (e) => {
@@ -326,11 +328,15 @@ export const ALLY_IMPL = {
             const dd = Math.hypot(e.x - a.x, e.y - a.y) || 1;
             hurtEnemy(e, a.dmg, (e.x - a.x) / dd, (e.y - a.y) / dd, 300, true);
           });
-          FX.ring(a.x, a.y + 10, 10, a.aoe, 0.4, '#8ec5ff', 8);
+          FX.anim('explosion', a.x, a.y + 10, { scale: a.aoe / 40, dur: 0.45, alpha: 0.85 });
+          FX.anim('cut', a.x, a.y, { scale: a.aoe / 22, dur: 0.2, rot: Math.random() * 6 });
+          a.atk = 0.36;
+          a.flip = t.x < a.x;
           FX.burst(a.x, a.y + 10, 18, 8, 260, 9, 0.5);
           FX.burst(a.x, a.y + 10, 8, 0, 200, 7, 0.4);
           addShake(0.1);
           sfx.slam();
+          sfx.slash();
         }
       } else follow(a, dt, 70);
     },
@@ -345,6 +351,8 @@ export const ALLY_IMPL = {
       const R = 80 + (a.idx % 3) * 22;
       const tx = P.x + Math.cos(a.ang) * R, ty = P.y + Math.sin(a.ang) * R * 0.7 - 10;
       const k = Math.min(1, dt * 6);
+      a.dir = dirOf(tx - a.x, ty - a.y);
+      a.at += dt * 8;
       a.x += (tx - a.x) * k; a.y += (ty - a.y) * k;
       a.atkT -= dt;
       if (a.atkT <= 0) {

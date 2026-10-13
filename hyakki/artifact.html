@@ -1,0 +1,87 @@
+<meta name="theme-color" content="#0b0c1a">
+  <title>百鬼祓い</title>
+  <link rel="icon" href="data:,">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Yuji+Boku&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/fonts.css">
+  <link rel="stylesheet" href="css/style.css">
+<canvas id="game"></canvas>
+
+  <div id="hud" class="hidden">
+    <div id="xpbar"><div id="xpfill"></div><span id="lv">LV 1</span></div>
+    <div id="status" class="pxpanel dark">
+      <div id="faceIcon"></div>
+      <div class="col">
+        <div id="hpbar"><div id="hpfill"></div></div>
+        <div id="stats">
+          <span><i id="icoKills"></i><b id="kills">0</b></span>
+          <span class="ally"><i id="icoAllies"></i><b id="allies">0</b></span>
+          <span class="foe"><i id="icoFoes"></i><b id="foes">0</b></span>
+        </div>
+      </div>
+    </div>
+    <div id="timer">00:00</div>
+    <div id="skills"></div>
+    <div id="streak"><b id="streakNum">0</b><span>連祓</span></div>
+    <button id="pauseBtn" class="pxbtn" aria-label="一時停止">II</button>
+    <div id="bossbar" class="hidden pxpanel dark">
+      <div id="bossFace"></div>
+      <div class="col">
+        <div class="name">大天狗</div>
+        <div class="bar"><div id="bossfill"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="banners"></div>
+  <div id="debug" class="hidden"></div>
+
+  <div id="levelup" class="hidden">
+    <h2><span class="en">LEVEL UP</span><span class="lvnum">LV <b id="lvNum">2</b></span></h2>
+    <p class="hint">術をひとつ選べ</p>
+    <div id="cards"></div>
+  </div>
+
+  <div id="title" class="screen">
+    <div class="moon"></div>
+    <div class="titlebox">
+      <div class="kicker">陰陽師サバイバー</div>
+      <h1>百鬼祓い</h1>
+      <canvas id="parade" aria-hidden="true"></canvas>
+      <p class="lead">押し寄せる百鬼夜行を、式神の数で迎え撃て。<br>夜明け（14:00）まで生き延びるか、大天狗を討て。</p>
+      <button id="startBtn" class="pxbtn big">読込中</button>
+      <ul class="howto pxpanel dark">
+        <li><b>移動</b>PC は WASD / 矢印キー、スマホは画面をドラッグ</li>
+        <li><b>攻撃</b>自動。レベルアップで術を選ぶ（1・2・3 キーかタップ）</li>
+        <li><b>式神</b>召喚の術は一定間隔で自動召喚。数・威力・持続が伸びる</li>
+      </ul>
+      <div class="row">
+        <button id="muteBtn" class="mute pxbtn small"></button>
+      </div>
+      <p class="credit">Art &amp; Sound: Ninja Adventure Asset Pack by Pixel-boy &amp; AAA (CC0)</p>
+    </div>
+  </div>
+
+  <div id="pause" class="screen hidden">
+    <div class="panel pxpanel red">
+      <h1 class="mid">一時停止</h1>
+      <button id="resumeBtn" class="pxbtn big">再開</button>
+      <div class="row">
+        <button id="muteBtn2" class="mute pxbtn small"></button>
+        <button id="quitBtn" class="pxbtn small">タイトルへ</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="result" class="screen hidden">
+    <div class="panel pxpanel red">
+      <h1 id="resTitle" class="mid"></h1>
+      <p id="resSub" class="lead"></p>
+      <div id="resStats"></div>
+      <button id="retryBtn" class="pxbtn big">もう一度</button>
+      <div class="row"><button id="titleBtn" class="pxbtn small">タイトルへ</button></div>
+    </div>
+  </div>
+
+  <script type="module" src="js/main.js"></script>

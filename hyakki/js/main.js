@@ -1,9 +1,8 @@
 // エントリポイント：キャンバス・ループ・画面遷移
-import { ASSETS } from './config.js';
-import { buildSprites, buildGroundTile, applyAssetOverrides } from './sprites.js';
+import { loadAssets, loadTiles, buildGround } from './sprites.js';
 import { G, initGame, newRun, step, render, resize, setGround } from './game.js';
 import { initInput, input, resetInput } from './input.js';
-import { initAudio, music, setMuted, isMuted } from './audio.js';
+import { initAudio, preloadAudio, music, setMuted, isMuted, sfx } from './audio.js';
 import { FX } from './fx.js';
 import { UI } from './ui.js';
 
@@ -29,10 +28,8 @@ function onResize() {
   resize(W, H);
 }
 
-buildSprites();
-setGround(buildGroundTile());
-applyAssetOverrides(ASSETS);
 initGame({ debug, mobile });
+preloadAudio();
 initInput(canvas);
 addEventListener('resize', onResize);
 onResize();
@@ -51,7 +48,30 @@ function setPaused(p) {
   else if (!p && G.state === 'paused') { G.state = 'play'; UI.showPause(false); }
 }
 
-document.getElementById('startBtn').addEventListener('click', start);
+// 素材とフォントを読み込んでから出陣ボタンを有効化
+const startBtn = document.getElementById('startBtn');
+startBtn.disabled = true;
+(async () => {
+  try {
+    const fonts = document.fonts ? Promise.all([
+      document.fonts.load('16px "NinjaAdventure"', '0123456789'),
+      document.fonts.load('16px "DotGothic16"', '式霊猫又鎧武者烏天狗連祓体'),
+      document.fonts.load('48px "Yuji Boku"', '百鬼祓い'),
+    ]).catch(() => {}) : Promise.resolve();
+    await loadAssets((k) => { startBtn.textContent = `読込中 ${Math.round(k * 100)}%`; });
+    await loadTiles();
+    setGround(buildGround());
+    await Promise.race([fonts, new Promise((r) => setTimeout(r, 2500))]);
+    startBtn.textContent = '出陣';
+    startBtn.disabled = false;
+    UI.titleArt();
+    if (G.state === 'title') UI.showTitle();
+  } catch (err) {
+    startBtn.textContent = '読み込み失敗';
+    console.error(err);
+  }
+})();
+startBtn.addEventListener('click', () => { if (!startBtn.disabled) start(); });
 document.getElementById('retryBtn').addEventListener('click', start);
 document.getElementById('titleBtn').addEventListener('click', () => { G.state = 'title'; UI.showTitle(); });
 document.getElementById('pauseBtn').addEventListener('click', () => setPaused(true));
@@ -63,6 +83,8 @@ for (const id of ['muteBtn', 'muteBtn2']) {
   b.addEventListener('click', () => { initAudio(); setMuted(!isMuted()); sync(); });
   sync();
 }
+// タイトルで最初に触れたときにタイトル曲を流す
+addEventListener('pointerdown', () => { initAudio(); if (G.state === 'title') music.title(); }, { once: true });
 document.addEventListener('visibilitychange', () => { if (document.hidden) setPaused(true); });
 
 input.onKey = (e) => {
@@ -71,7 +93,7 @@ input.onKey = (e) => {
     if (n !== undefined) UI.pick(n);
   } else if (e.code === 'Escape' || e.code === 'KeyP') {
     setPaused(G.state === 'play');
-  } else if ((e.code === 'Enter' || e.code === 'Space') && (G.state === 'title' || G.state === 'result')) {
+  } else if ((e.code === 'Enter' || e.code === 'Space') && (G.state === 'title' || G.state === 'result') && !startBtn.disabled) {
     start();
   }
 };

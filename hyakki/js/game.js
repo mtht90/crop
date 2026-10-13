@@ -4,7 +4,7 @@ import {
   PICK_WEIGHT, START_SKILLS, hpScale, speedScale, xpNeed,
 } from './config.js';
 import { Grid } from './grid.js';
-import { SPR } from './sprites.js';
+import { SPR, draw, drawRot, dirOf } from './sprites.js';
 import { FX } from './fx.js';
 import { sfx, music } from './audio.js';
 import { input, pollInput } from './input.js';
@@ -63,7 +63,7 @@ export function newRun() {
   FX.clear();
   G.player = {
     x: 0, y: 0, hp: PLAYER.hp, maxHp: PLAYER.hp, r: PLAYER.r,
-    fx: 1, fy: 0, moving: false, hurtT: 0, walk: 0,
+    fx: 1, fy: 0, moving: false, hurtT: 0, walk: 0, dir: 0,
   };
   G.cam.x = 0; G.cam.y = 0;
   G.time = Number(G.debug.t) || 0;
@@ -165,7 +165,7 @@ function newEnemy() {
   return {
     uid: 0, alive: false, def: null, type: '', spr: null, x: 0, y: 0, vx: 0, vy: 0, hp: 0, maxHp: 0,
     r: 0, speed: 0, dmg: 0, xp: 0, mass: 1, flash: 0, slowT: 0, march: false, mdx: 0, mdy: 0,
-    wob: 0, hopT: 0, last: new Float32Array(8), elite: false, boss: false, ai: null,
+    wob: 0, hopT: 0, last: new Float32Array(8), elite: false, boss: false, ai: null, dir: 0, at: 0,
   };
 }
 
@@ -180,7 +180,7 @@ export function spawnEnemy(type, x, y, force = false) {
   e.speed = d.speed * speedScale(G.time) * (0.88 + Math.random() * 0.24);
   e.flash = 0; e.slowT = 0; e.march = false; e.wob = Math.random() * TAU; e.hopT = Math.random();
   e.last.fill(-99);
-  e.elite = !!d.elite; e.boss = !!d.boss; e.ai = null;
+  e.elite = !!d.elite; e.boss = !!d.boss; e.ai = null; e.dir = 0; e.at = Math.random() * 4;
   G.enemies.push(e);
   return e;
 }
@@ -196,7 +196,7 @@ export function spawnAlly(type, x, y, L) {
   a.hp = a.maxHp = L.hp || 1e9;
   a.target = null; a.tuid = 0; a.retT = Math.random() * 0.2;
   a.atkT = Math.random() * 0.3; a.spawnT = 0; a.squash = 0;
-  a.ang = Math.random() * TAU; a.idx = (Math.random() * 1000) | 0;
+  a.ang = Math.random() * TAU; a.idx = (Math.random() * 1000) | 0; a.dir = 0; a.at = Math.random() * 4; a.atk = 0;
   a.aoe = L.aoe || 0; a.fire = L.fire || 0;
   a.blocks = type === 'kami' || type === 'zenki';
   const impl = ALLY_IMPL[type];
@@ -277,13 +277,14 @@ export function killEnemy(e) {
   if (e.elite) {
     FX.burst(e.x, e.y, 50, col, 320, 12, 0.8);
     FX.burst(e.x, e.y, 30, 0, 220, 9, 0.9);
-    FX.ring(e.x, e.y, 10, 140, 0.5, '#ffd35a', 6);
+    FX.anim('explosion', e.x, e.y, { scale: 2.2, force: true });
     addShake(0.35);
     G.hitstop = 0.06;
     sfx.slam();
     dropPickup('chest', e.x, e.y);
   } else {
-    FX.burst(e.x, e.y, 7, col, 150, 6, 0.4);
+    FX.burst(e.x, e.y, 5, col, 150, 9, 0.4);
+    FX.anim('smoke', e.x, e.y, { scale: 0.9 + e.r / 30, dur: 0.32 });
     const r = Math.random();
     if (r < DROPS.bomb) dropPickup('bomb', e.x, e.y);
     else if (r < DROPS.bomb + DROPS.magnet) dropPickup('magnet', e.x, e.y);
@@ -312,7 +313,7 @@ function healPlayer(v) {
   const P = G.player;
   P.hp = Math.min(P.maxHp, P.hp + v);
   FX.burst(P.x, P.y, 24, 5, 160, 8, 0.7);
-  FX.ring(P.x, P.y, 10, 70, 0.5, '#7dffb0', 4);
+  FX.anim('boost', P.x, P.y - 6, { scale: 1, follow: P, add: true, force: true });
   sfx.heal();
 }
 
@@ -326,6 +327,7 @@ function purge() {
   G.hitstop = 0.08;
   sfx.boom();
   FX.ring(G.player.x, G.player.y, 20, Math.max(v.w, v.h) * 0.7, 0.8, '#ffe9b0', 14);
+  FX.anim('explosion', G.player.x, G.player.y, { scale: 6, force: true, dur: 0.7, alpha: 0.9 });
   for (const e of G.enemies) {
     if (!e.alive) continue;
     if (e.boss) { hurtEnemy(e, e.maxHp * 0.04 / G.st.dmgMul, 0, 0, 0); continue; }
@@ -452,7 +454,7 @@ function startEvent(ev) {
     else music.intensity = Math.max(music.intensity, 0.5);
   } else if (ev.type === 'boss') {
     edgePos(120);
-    const e = spawnEnemy('shuten', RX, RY, true);
+    const e = spawnEnemy('tengu', RX, RY, true);
     e.ai = { state: 'walk', t: 3, dx: 0, dy: 0, n: 0, shot: 0 };
     G.boss = e;
     UI.banner(ev.banner, 'huge');
@@ -460,7 +462,7 @@ function startEvent(ev) {
     sfx.alarm();
     addShake(0.6);
     G.redPulse = 2;
-    music.intensity = 1;
+    music.boss();
   }
 }
 
@@ -469,6 +471,7 @@ function updateBoss(e, dt) {
   const P = G.player, ai = e.ai;
   const dx = P.x - e.x, dy = P.y - e.y, d = Math.hypot(dx, dy) || 1;
   ai.t -= dt;
+  e.at += dt * 12;
   if (e.flash > 0) e.flash -= dt;
   switch (ai.state) {
     case 'walk': {
@@ -480,7 +483,7 @@ function updateBoss(e, dt) {
         else if (r < 0.75) { ai.state = 'barrage'; ai.t = 0; ai.n = 4; }
         else {
           ai.state = 'walk'; ai.t = 3;
-          FX.seal(e.x, e.y, 120, 1.2, 'sealRed');
+          FX.seal(e.x, e.y, 120, 1.2);
           for (let i = 0; i < 22; i++) {
             const a = (i / 22) * TAU, R = 260;
             spawnEnemy(i & 1 ? 'onibi' : 'kooni', P.x + Math.cos(a) * R, P.y + Math.sin(a) * R, true);
@@ -536,7 +539,8 @@ function bossDefeated(e) {
   G.hitstop = 0.25;
   addShake(1);
   sfx.boom();
-  UI.banner('酒呑童子 討伐!', 'huge');
+  UI.banner('大天狗 討伐!', 'huge');
+  FX.anim('explosion', e.x, e.y, { scale: 6, force: true, dur: 1.0 });
   beginEnding(true, e);
 }
 
@@ -569,7 +573,8 @@ function updateEnding(rdt) {
 
 function endRun(win) {
   G.state = 'result';
-  music.intensity = 0;
+  if (win) sfx.win(); else sfx.gameover();
+  music.title();
   UI.showResult(win, {
     time: G.time, kills: G.kills, level: G.level, maxAllies: G.maxAllies, dmg: G.dmgDealt,
   });
@@ -644,7 +649,8 @@ function updatePlayer(dt) {
   if (P.moving) {
     const l = Math.hypot(input.x, input.y);
     P.fx = input.x / l; P.fy = input.y / l;
-    P.walk += dt * 10 * l;
+    P.walk += dt * 8 * l;
+    P.dir = dirOf(input.x, input.y);
   }
   P.x += input.x * sp * dt;
   P.y += input.y * sp * dt;
@@ -678,6 +684,8 @@ function updateEnemies(dt) {
     if (e.def.hop) { e.hopT += dt * 2.2; sp *= (e.hopT % 1) < 0.5 ? 1.8 : 0.2; }
     e.x += (mx * sp + e.vx) * dt;
     e.y += (my * sp + e.vy) * dt;
+    e.dir = dirOf(mx, my);
+    e.at += dt * (3 + sp / 25);
     e.vx *= kd; e.vy *= kd;
     if (e.flash > 0) e.flash -= dt;
 
@@ -733,6 +741,7 @@ function updateAllies(dt) {
     a.life -= dt;
     a.spawnT += dt;
     if (a.squash > 0) a.squash -= dt;
+    if (a.atk > 0) a.atk -= dt;
     if (a.life <= 0 || a.hp <= 0) {
       a.alive = false;
       FX.burst(a.x, a.y, a.type === 'zenki' ? 26 : 6, a.type === 'karasu' ? 4 : 3, 130, 6, 0.45);
@@ -886,7 +895,8 @@ function startLevelUp() {
   FX.ring(P.x, P.y, 10, 220, 0.7, '#ffe9b0', 10);
   FX.ring(P.x, P.y, 10, 150, 0.5, '#ffd35a', 5);
   FX.burst(P.x, P.y, 50, 0, 340, 10, 0.9);
-  FX.seal(P.x, P.y, 90, 1.2, 'seal', P);
+  FX.seal(P.x, P.y, 120, 0.9, null, true);
+  FX.anim('boost', P.x, P.y - 10, { scale: 1.4, follow: P, add: true, force: true, dur: 0.6 });
   G.flash = 0.35;
   sfx.level();
   UI.showLevelUp(G, rollOptions(), (id) => {
@@ -920,7 +930,8 @@ export function resize(W, H) {
 export function render(ctx, W, H, dpr) {
   const v = G.view, P = G.player;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.fillStyle = '#0d0e16';
+  ctx.imageSmoothingEnabled = false;
+  ctx.fillStyle = '#0b0c1a';
   ctx.fillRect(0, 0, W, H);
   if (!P) return;
 
@@ -933,36 +944,37 @@ export function render(ctx, W, H, dpr) {
   const z = v.zoom;
   v.x0 = cx - v.w / 2 - 30; v.x1 = cx + v.w / 2 + 30;
   v.y0 = cy - v.h / 2 - 40; v.y1 = cy + v.h / 2 + 40;
-  ctx.setTransform(dpr * z, 0, 0, dpr * z, dpr * (W / 2 - cx * z), dpr * (H / 2 - cy * z));
+  // ドット絵がにじまないよう、平行移動は画面ピクセル単位に丸める
+  const tx = Math.round(dpr * (W / 2 - cx * z)), ty = Math.round(dpr * (H / 2 - cy * z));
+  ctx.setTransform(dpr * z, 0, 0, dpr * z, tx, ty);
 
   // 地面
   if (ground) {
-    const T = 512;
+    const T = ground.width;
     const tx0 = Math.floor(v.x0 / T), tx1 = Math.floor(v.x1 / T);
     const ty0 = Math.floor(v.y0 / T), ty1 = Math.floor(v.y1 / T);
-    for (let ty = ty0; ty <= ty1; ty++) for (let tx = tx0; tx <= tx1; tx++) ctx.drawImage(ground, tx * T, ty * T, T + 1, T + 1);
+    for (let gy = ty0; gy <= ty1; gy++) for (let gx = tx0; gx <= tx1; gx++) ctx.drawImage(ground, gx * T, gy * T, T + 0.5, T + 0.5);
   }
 
-  FX.drawGround(ctx, v);
+  FX.drawAnims(ctx, v, true);
   drawSkillsGround(ctx);
 
-  // 経験値
+  const t = G.time;
+  // 経験値（魂の欠片）
   for (const g of G.gems) {
     if (g.x < v.x0 || g.x > v.x1 || g.y < v.y0 || g.y > v.y1) continue;
-    const s = SPR['gem' + g.tier];
-    ctx.drawImage(s.img, g.x - s.w / 2, g.y - s.h / 2, s.w, s.h);
+    draw(ctx, SPR['gem' + g.tier], g.x, g.y + Math.sin(t * 4 + g.x) * 1.5);
   }
   for (const k of G.pickups) {
-    const s = SPR[k.kind];
     const b = Math.sin(k.t * 5) * 3;
-    ctx.drawImage(s.img, k.x - s.w / 2, k.y - s.h / 2 + b, s.w, s.h);
+    draw(ctx, SPR[k.kind], k.x, k.y + b, 0);
   }
 
   // ボスの突進予告
   const boss = G.boss;
   if (boss && boss.ai && boss.ai.state === 'tele') {
     const l = Math.hypot(boss.ai.dx, boss.ai.dy) || 1;
-    ctx.globalAlpha = 0.25 + 0.25 * Math.sin(G.time * 40);
+    ctx.globalAlpha = 0.22 + 0.22 * Math.sin(G.time * 40);
     ctx.strokeStyle = '#ff2a2a';
     ctx.lineWidth = boss.r * 1.6;
     ctx.beginPath();
@@ -972,21 +984,29 @@ export function render(ctx, W, H, dpr) {
     ctx.globalAlpha = 1;
   }
 
+  // 影（足元）
+  ctx.fillStyle = 'rgba(0,0,10,0.35)';
+  ctx.beginPath();
+  for (const e of G.enemies) {
+    if (!e.alive || e.x < v.x0 || e.x > v.x1 || e.y < v.y0 || e.y > v.y1) continue;
+    const r = e.r * 0.9;
+    ctx.moveTo(e.x + r, e.y + e.r * 0.8);
+    ctx.ellipse(e.x, e.y + e.r * 0.8, r, r * 0.35, 0, 0, TAU);
+  }
+  ctx.fill();
+
   // 妖怪
-  const t = G.time;
   for (const e of G.enemies) {
     if (!e.alive) continue;
     const s = e.spr;
     if (e.x < v.x0 - s.w || e.x > v.x1 + s.w || e.y < v.y0 - s.h || e.y > v.y1 + s.h) continue;
-    const w8 = Math.sin(t * 9 + e.wob);
-    let sx = 1 - w8 * 0.05, sy = 1 + w8 * 0.07;
-    if (e.def.hop) { const h = e.hopT % 1; sy *= h < 0.5 ? 1.1 : 0.9; }
-    const w = s.w * sx, h = s.h * sy;
-    const lift = e.def.hop && (e.hopT % 1) < 0.5 ? Math.sin((e.hopT % 1) * 2 * Math.PI) * 6 : 0;
-    ctx.drawImage(e.flash > 0 ? s.white : s.img, e.x - w / 2, e.y + s.h / 2 - h - lift, w, h);
+    if (e.boss) { drawBoss(ctx, e); continue; }
+    let lift = 0, sy = 1;
+    if (e.def.hop) { const h = e.hopT % 1; lift = h < 0.5 ? Math.sin(h * 2 * Math.PI) * 7 : 0; sy = h < 0.5 ? 1.08 : 0.94; }
+    draw(ctx, s, e.x, e.y - lift, e.at | 0, e.dir, e.flash > 0, 1, false, 1, sy);
     if (e.elite && e.hp < e.maxHp) {
-      ctx.fillStyle = '#000'; ctx.fillRect(e.x - 18, e.y + e.r + 6, 36, 4);
-      ctx.fillStyle = '#ff5a3d'; ctx.fillRect(e.x - 18, e.y + e.r + 6, 36 * Math.max(0, e.hp / e.maxHp), 4);
+      ctx.fillStyle = '#120a12'; ctx.fillRect(e.x - 20, e.y + e.r + 6, 40, 5);
+      ctx.fillStyle = '#ff5a3d'; ctx.fillRect(e.x - 19, e.y + e.r + 7, 38 * Math.max(0, e.hp / e.maxHp), 3);
     }
   }
 
@@ -996,56 +1016,52 @@ export function render(ctx, W, H, dpr) {
     const s = a.spr;
     if (a.x < v.x0 - s.w || a.x > v.x1 + s.w || a.y < v.y0 - s.h || a.y > v.y1 + s.h) continue;
     const pop = a.spawnT < 0.2 ? 0.3 + a.spawnT * 3.5 : 1;
-    const w8 = Math.sin(t * 12 + a.idx);
-    let sx = pop * (1 - w8 * 0.05), sy = pop * (1 + w8 * 0.06);
-    if (a.squash > 0) { sx *= 1.25; sy *= 0.8; }
-    const w = s.w * sx, h = s.h * sy;
     const fly = a.type === 'karasu' ? -14 + Math.sin(t * 6 + a.idx) * 3 : 0;
-    ctx.globalAlpha = a.life < 1.5 ? (Math.sin(a.life * 30) > 0 ? 0.9 : 0.35) : 1;
-    ctx.drawImage(s.img, a.x - w / 2, a.y + s.h / 2 - h + fly, w, h);
+    ctx.globalAlpha = a.life < 1.5 ? (Math.sin(a.life * 30) > 0 ? 0.95 : 0.4) : 1;
+    if (a.type === 'zenki') {
+      const atk = a.atk > 0;
+      const sp = atk ? SPR.zenkiAtk : s;
+      const f = atk ? Math.floor((1 - a.atk / 0.36) * sp.n) : a.at | 0;
+      draw(ctx, sp, a.x, a.y - (atk ? 18 : 0), f, 0, false, pop, a.flip);
+    } else if (a.type === 'byakko') {
+      draw(ctx, s, a.x, a.y, a.at | 0, 0, false, pop, a.vx > 0);
+    } else {
+      draw(ctx, s, a.x, a.y + fly, a.at | 0, a.dir, false, pop);
+    }
   }
   ctx.globalAlpha = 1;
 
-  // プレイヤー（足元の光で群れの中でも見失わないように）
+  // プレイヤー
   {
-    const sl = SPR.foxfire;
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.globalAlpha = 0.55;
-    ctx.drawImage(sl.img, P.x - 34, P.y - 4, 68, 30);
-    ctx.globalAlpha = 1;
-    ctx.globalCompositeOperation = 'source-over';
-    const s = SPR.player;
-    const bob = P.moving ? Math.abs(Math.sin(P.walk)) * 3 : Math.sin(t * 3) * 1;
+    ctx.fillStyle = 'rgba(0,0,10,0.4)';
+    ctx.beginPath(); ctx.ellipse(P.x, P.y + 15, 12, 4, 0, 0, TAU); ctx.fill();
     const blink = P.hurtT > 0 && Math.sin(t * 60) > 0;
-    ctx.drawImage(blink ? s.white : s.img, P.x - s.w / 2, P.y - s.h / 2 - 4 - bob, s.w, s.h);
-    const hw = 30;
-    ctx.fillStyle = 'rgba(0,0,0,0.6)';
-    ctx.fillRect(P.x - hw / 2 - 1, P.y + 22, hw + 2, 5);
+    draw(ctx, SPR.player, P.x, P.y - 2, P.moving ? (P.walk | 0) : 0, P.dir, blink);
+    const hw = 34;
+    ctx.fillStyle = '#120a12';
+    ctx.fillRect(P.x - hw / 2 - 1, P.y + 21, hw + 2, 6);
     ctx.fillStyle = P.hp / P.maxHp < 0.3 ? '#ff3d4e' : '#e8344a';
-    ctx.fillRect(P.x - hw / 2, P.y + 23, hw * (P.hp / P.maxHp), 3);
+    ctx.fillRect(P.x - hw / 2, P.y + 22, hw * (P.hp / P.maxHp), 4);
   }
 
   // 弾
   for (const p of G.projs) {
     if (!p.alive) continue;
     if (p.x < v.x0 || p.x > v.x1 || p.y < v.y0 || p.y > v.y1) continue;
-    const s = p.spr;
-    ctx.save();
-    ctx.translate(p.x, p.y);
-    ctx.rotate(p.rot);
-    ctx.drawImage(s.img, -s.w / 2, -s.h / 2, s.w, s.h);
-    ctx.restore();
+    drawRot(ctx, p.spr, p.x, p.y, p.rot, 0);
   }
   ctx.globalCompositeOperation = 'lighter';
-  const fb = SPR.fireball;
-  for (const u of G.bullets) ctx.drawImage(fb.img, u.x - fb.w / 2, u.y - fb.h / 2, fb.w, fb.h);
+  const fb = SPR.fireball, ff = (t * 12) | 0;
+  for (const u of G.bullets) drawRot(ctx, fb, u.x, u.y, Math.atan2(u.vy, u.vx), ff);
   drawSkillsGlow(ctx);
   ctx.globalCompositeOperation = 'source-over';
+  FX.drawAnims(ctx, v, false);
   FX.drawGlow(ctx, v);
   FX.drawTexts(ctx, v);
 
   // ---- スクリーン座標 ----
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.imageSmoothingEnabled = true;
   if (vignette) ctx.drawImage(vignette, -W * 0.1, -H * 0.1, W * 1.2, H * 1.2);
   const red = Math.max(G.hurtFlash * 0.5, G.redPulse > 0 ? (Math.sin(G.time * 10) * 0.5 + 0.5) * Math.min(1, G.redPulse) * 0.22 : 0,
     P.hp / P.maxHp < 0.25 ? 0.12 + Math.sin(G.time * 6) * 0.06 : 0);
@@ -1061,14 +1077,26 @@ export function render(ctx, W, H, dpr) {
   // 仮想スティック
   const st = input.stick;
   if (st.active && G.state === 'play') {
-    ctx.globalAlpha = 0.35;
-    ctx.strokeStyle = '#fff';
-    ctx.lineWidth = 2;
+    ctx.globalAlpha = 0.4;
+    ctx.strokeStyle = '#ffe9b0';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([6, 6]);
     ctx.beginPath(); ctx.arc(st.ox, st.oy, input.stickRadius, 0, TAU); ctx.stroke();
-    ctx.globalAlpha = 0.55;
-    ctx.fillStyle = '#ffe9b0';
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 0.6;
+    ctx.fillStyle = '#e8344a';
     const dx = st.x - st.ox, dy = st.y - st.oy, d = Math.hypot(dx, dy), m = Math.min(d, input.stickRadius);
     ctx.beginPath(); ctx.arc(st.ox + (d ? dx / d * m : 0), st.oy + (d ? dy / d * m : 0), 22, 0, TAU); ctx.fill();
     ctx.globalAlpha = 1;
   }
+}
+
+function drawBoss(ctx, e) {
+  const ai = e.ai || {};
+  let s = SPR.tengu, f = e.at | 0;
+  if (e.flash > 0.05) { s = SPR.tenguHit; f = ((G.time * 16) | 0); }
+  else if (ai.state === 'tele' || ai.state === 'barrage') { s = SPR.tenguAtk; f = 4 + (((G.time * 10) | 0) % 6); }
+  ctx.fillStyle = 'rgba(0,0,10,0.4)';
+  ctx.beginPath(); ctx.ellipse(e.x, e.y + 70, 56, 14, 0, 0, TAU); ctx.fill();
+  draw(ctx, s, e.x, e.y, f, 0, false);
 }
