@@ -114,6 +114,11 @@ const texts = [];
 const textFree = [];
 let MAXT = 100;
 
+// アイコン描画などで使う魔法陣マテリアル
+export function sealMaterial(color) {
+  return shaderMat(SEAL_FS, { uColor: { value: new THREE.Color(color) }, uAlpha: { value: 1 }, uRot: { value: 0.3 }, uTime: { value: 0 } });
+}
+
 export const FX = {
   init(maxParticles, maxTexts) {
     MAXP = Math.max(2000, maxParticles * 2);

@@ -4,7 +4,16 @@ import { SKILLS, RUN } from './config.js';
 const $ = (id) => document.getElementById(id);
 const TYPE_LABEL = { attack: '攻撃', summon: '式神', passive: '補助' };
 
+let ICONS = {};
 function icon(id, size) {
+  if (ICONS[id]) {
+    const im = new Image();
+    im.src = ICONS[id];
+    im.width = im.height = size;
+    im.className = 'icon3d';
+    im.alt = '';
+    return im;
+  }
   const def = SKILLS[id];
   const el = document.createElement('span');
   el.className = 'kanji';
@@ -21,6 +30,7 @@ let currentOpts = [];
 let lastStreak = 0;
 
 export const UI = {
+  setIcons(map) { ICONS = map || {}; },
   showTitle() {
     $('title').classList.remove('hidden');
     $('hud').classList.add('hidden');

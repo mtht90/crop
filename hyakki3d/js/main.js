@@ -6,6 +6,7 @@ import { FX } from './fx.js';
 import { UI } from './ui.js';
 import { R } from './r3d/render.js';
 import { loadModels } from './r3d/models.js';
+import { makeIcons } from './r3d/icons.js';
 
 const params = new URLSearchParams(location.search);
 const debug = {
@@ -50,6 +51,8 @@ startBtn.disabled = true;
     const prog = () => { startBtn.textContent = `読込中 ${Math.round((a * 0.7 + b * 0.3) * 100)}%`; };
     await Promise.all([loadModels((k) => { a = k; prog(); }), R.load((k) => { b = k; prog(); })]);
     R.build(G.limits);
+    window.__ICONS = makeIcons(R);
+    UI.setIcons(window.__ICONS);
     G.onKill = (e) => R.onKill(e);
     await Promise.race([fonts, new Promise((r) => setTimeout(r, 2500))]);
     G.player = titleDummy;

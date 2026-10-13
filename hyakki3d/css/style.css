@@ -230,3 +230,10 @@ h1.mid { font-size: clamp(38px, 9vw, 64px); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition: none !important; }
 }
+
+/* 3D から描き出したアイコン */
+.icon3d { display: block; filter: drop-shadow(0 0 6px rgba(255, 220, 160, 0.35)); }
+.sk .icon3d { width: 34px; height: 34px; }
+.card .icon .icon3d { width: 74px; height: 74px; }
+.card .icon { width: 84px; height: 84px; }
+@media (max-width: 640px), (max-height: 520px) { .card .icon { width: 68px; height: 68px; } .card .icon .icon3d { width: 62px; height: 62px; } }

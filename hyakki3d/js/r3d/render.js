@@ -43,7 +43,7 @@ const FinalShader = {
 const ENEMY_SCALE = { oni: 1 };
 const tmpM = new THREE.Matrix4(), tmpQ = new THREE.Quaternion(), tmpV = new THREE.Vector3(), tmpS = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0);
 
-function talismanTexture() {
+export function talismanTexture() {
   const c = document.createElement('canvas');
   c.width = 64; c.height = 128;
   const g = c.getContext('2d');
