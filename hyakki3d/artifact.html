@@ -13,6 +13,7 @@
   </script>
 <canvas id="game"></canvas>
   <div id="dmgLayer"></div>
+  <div id="markers"></div>
 
   <div id="hud" class="hidden">
     <div id="xpbar"><div id="xpfill"></div><span id="lv">Lv 1</span></div>
@@ -44,11 +45,20 @@
     <div id="cards"></div>
   </div>
 
+  <div id="chest" class="hidden">
+    <div class="rays"></div>
+    <div class="chestTitle">宝箱</div>
+    <div id="reels"></div>
+    <p class="hint" id="chestHint">タップ／スペースで続ける</p>
+  </div>
+
   <div id="title" class="screen title">
     <div class="titlebox">
       <div class="kicker">陰陽師サバイバー</div>
       <h1>百鬼祓い</h1>
       <p class="lead">押し寄せる百鬼夜行を、式神の数で迎え撃て。<br>夜明け（14:00）まで生き延びるか、がしゃどくろを討て。</p>
+      <div id="chars"></div>
+      <div id="charInfo"></div>
       <button id="startBtn" class="btn big">読込中</button>
       <ul class="howto frame">
         <li><b>移動</b>WASD・矢印キー／スマホは画面の左側をドラッグ</li>
@@ -77,6 +87,7 @@
       <h1 id="resTitle" class="mid"></h1>
       <p id="resSub" class="lead"></p>
       <div id="resStats"></div>
+      <div id="resUnlock"></div>
       <button id="retryBtn" class="btn big">もう一度</button>
       <div class="row"><button id="titleBtn" class="btn small">タイトルへ</button></div>
     </div>

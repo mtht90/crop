@@ -227,7 +227,38 @@ export const SKILLS = {
 // レベルアップ時の選択肢の出やすさ
 export const PICK_WEIGHT = { upgrade: 1.2, attack: 1.0, summon: 1.35, passive: 0.75 };
 
-// 開始時に持っているスキル（式神の楽しさを最初から体験できるよう召喚も持たせる）
-export const START_SKILLS = ['ofuda', 'kami'];
 
 
+
+// ---- 進化（最大 Lv の術 ＋ 指定の補助を持った状態で宝箱を開けると上位の術に化ける） ----
+export const EVOLUTIONS = [
+  { from: 'ofuda', need: 'reiryoku', to: 'tenpu' },
+  { from: 'kitsunebi', need: 'sokuei', to: 'kyubi' },
+  { from: 'raifu', need: 'kyukon', to: 'raijin' },
+  { from: 'kekkai', need: 'chomei', to: 'daikekkai' },
+  { from: 'hamaya', need: 'idaten', to: 'tenkyu' },
+  { from: 'kami', need: 'shikiko', to: 'hyakki' },
+  { from: 'byakko', need: 'idaten', to: 'kagebunshin' },
+  { from: 'zenki', need: 'reiryoku', to: 'kishin' },
+  { from: 'karasu', need: 'sokuei', to: 'karyu' },
+];
+Object.assign(SKILLS, {
+  tenpu:       { type: 'attack', base: 'ofuda', name: '八方天符', icon: '天', color: '#ffe9a0', desc: '八方へ天符を放ち、着弾で炸裂する', levels: [{ dmg: 36, count: 8, pierce: 5, cd: 0.42, omni: true, boom: 48 }], up: [''] },
+  kyubi:       { type: 'attack', base: 'kitsunebi', name: '九尾の狐火', icon: '尾', color: '#9fe8ff', desc: '九つの狐火が呼吸するように広がり、群れを焼き払う', levels: [{ dmg: 34, count: 9, radius: 112, spin: 4.4, breathe: 44 }], up: [''] },
+  raijin:      { type: 'attack', base: 'raifu', name: '雷神招来', icon: '神', color: '#e2d0ff', desc: '雷が降り注ぎ、周りの妖怪へ連鎖する', levels: [{ dmg: 95, strikes: 8, aoe: 84, cd: 1.0, chain: 3 }], up: [''] },
+  daikekkai:   { type: 'attack', base: 'kekkai', name: '大結界・不動', icon: '不', color: '#fff0b0', desc: '巨大な結界で焼き払い、押し返し、傷を癒やす', levels: [{ dmg: 26, radius: 170, tick: 0.32, heal: 1.5, push: true }], up: [''] },
+  tenkyu:      { type: 'attack', base: 'hamaya', name: '天弓・破魔', icon: '弓', color: '#ffc59a', desc: '十の光の矢が扇状に全てを貫く', levels: [{ dmg: 60, count: 10, cd: 0.55, spread: 0.2, big: true }], up: [''] },
+  hyakki:      { type: 'summon', base: 'kami', ally: 'kami', name: '百鬼返し', icon: '百', color: '#8fe3ff', desc: '画面を埋め尽くす式霊の軍勢を呼ぶ', levels: [{ count: 28, hp: 40, dmg: 20, dur: 15, cd: 5.5 }], up: [''] },
+  kagebunshin: { type: 'summon', base: 'byakko', ally: 'byakko', name: '影分身', icon: '分', color: '#d2a8ff', desc: '十二の影忍が嵐のように駆け抜ける', levels: [{ count: 12, dmg: 52, dur: 16, cd: 6 }], up: [''] },
+  kishin:      { type: 'summon', base: 'zenki', ally: 'zenki', name: '前鬼・後鬼', icon: '神', color: '#ffd77a', desc: '四体の鬼神が大地を砕く', levels: [{ count: 4, hp: 700, dmg: 130, aoe: 135, dur: 20, cd: 9 }], up: [''] },
+  karyu:       { type: 'summon', base: 'karasu', ally: 'karasu', name: '火龍の群れ', icon: '炎', color: '#ff8a4a', desc: '九匹の龍が炸裂する火球を降らせる', levels: [{ count: 9, dmg: 28, fire: 0.3, dur: 17, cd: 7, boom: 42 }], up: [''] },
+});
+
+// ---- 陰陽師（キャラクター）。unlock を満たすと解放される ----
+export const CHARACTERS = [
+  { id: 'seimei', name: '安倍晴明', title: '陰陽頭', model: 'player', start: ['ofuda', 'kami'], desc: '札と式霊で戦う、癖のない万能型', mods: {}, unlock: null },
+  { id: 'raiko', name: '雷光', title: '雷を呼ぶ陰陽師', model: 'ally_rogue', start: ['raifu', 'byakko'], desc: '落雷と影忍で切り込む。術の間隔 -10%', mods: { cd: 0.9 }, unlock: { type: 'time', v: 300, text: '5分生き延びる' } },
+  { id: 'kuzunoha', name: '葛の葉', title: '白狐の母', model: 'ally_hooded', start: ['kitsunebi', 'kami'], desc: '狐火と式霊。式神の持続 +25%', mods: { shikiDur: 1.25 }, unlock: { type: 'kills', v: 1500, text: '1回で 1500 体祓う' } },
+  { id: 'kiichi', name: '鬼一法眼', title: '鬼を従える者', model: 'ally_barbarian', start: ['hamaya', 'zenki'], desc: '破魔矢と前鬼。HP +50・移動 -5%', mods: { hp: 50, speed: 0.95 }, unlock: { type: 'chests', v: 5, text: '宝箱を通算 5 個開ける' } },
+  { id: 'shikibu', name: '式部', title: '百鬼使い', model: 'player', tint: '#5fd8ff', start: ['kami', 'byakko', 'karasu'], desc: '攻撃術なし・式神三種で開始。召喚数 +1', mods: { shikiCount: 1 }, unlock: { type: 'win', text: '夜明けを迎える（勝利）' } },
+];

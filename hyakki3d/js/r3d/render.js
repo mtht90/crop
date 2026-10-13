@@ -56,6 +56,30 @@ export function talismanTexture() {
   return t;
 }
 
+function radialTex(stops) {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext('2d');
+  const gr = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  for (const [o, col] of stops) gr.addColorStop(o, col);
+  g.fillStyle = gr;
+  g.fillRect(0, 0, 128, 128);
+  return new THREE.CanvasTexture(c);
+}
+function beamTex() {
+  const c = document.createElement('canvas');
+  c.width = 4; c.height = 128;
+  const g = c.getContext('2d');
+  const gr = g.createLinearGradient(0, 128, 0, 0);
+  gr.addColorStop(0, 'rgba(255,255,255,0.9)');
+  gr.addColorStop(0.3, 'rgba(255,255,255,0.35)');
+  gr.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = gr;
+  g.fillRect(0, 0, 4, 128);
+  return new THREE.CanvasTexture(c);
+}
+const BEAM_COL = { chest: 0xffc94a, heal: 0x7dffb0, magnet: 0x6fd8ff, bomb: 0xfff2c0 };
+
 export const R = {
   init(canvas, mobile) {
     this.mobile = mobile;
@@ -66,7 +90,7 @@ export const R = {
     r.shadowMap.type = THREE.PCFSoftShadowMap;
     this.r = r;
     const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x120c22, 0.03);
+    scene.fog = new THREE.FogExp2(0x120c22, 0.024);
     this.scene = scene;
     const cam = new THREE.PerspectiveCamera(52, 1, 0.1, 900);
     this.cam = cam;
@@ -115,6 +139,7 @@ export const R = {
 
     // プレイヤー（陰陽師）
     this.player = new Rig('player', 'player', 1.75, ['Spellbook', 'Spellbook_open', '1H_Wand']);
+    this.charId = 'seimei';
     sc.add(this.player.root);
     this.player.play('Idle');
     // ボス（がしゃどくろ）
@@ -155,8 +180,40 @@ export const R = {
       bomb: this.mkPick(new THREE.CylinderGeometry(0.12, 0.12, 0.5, 10), 0xffe066, 0x664400),
       chest: this.mkPick(new THREE.BoxGeometry(0.6, 0.42, 0.42), 0xb3141c, 0x400000),
     };
-    // 影：敵の足元の丸影（影マップを使わないスマホ用）
     this.dying = [];
+    // ---- 視認性：光の柱・地面の光輪・警告 ----
+    const add = { transparent: true, depthWrite: false, blending: THREE.AdditiveBlending };
+    const beamGeo = new THREE.CylinderGeometry(1, 1, 1, 16, 1, true); beamGeo.translate(0, 0.5, 0);
+    this.beam = new THREE.InstancedMesh(beamGeo, new THREE.MeshBasicMaterial({ map: beamTex(), side: THREE.DoubleSide, ...add }), 32);
+    this.beam.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(32 * 3), 3);
+    const decalGeo = new THREE.PlaneGeometry(2, 2); decalGeo.rotateX(-Math.PI / 2);
+    const halo = radialTex([[0, 'rgba(255,255,255,0.9)'], [0.35, 'rgba(255,255,255,0.35)'], [1, 'rgba(255,255,255,0)']]);
+    const ringT = radialTex([[0, 'rgba(255,255,255,0)'], [0.82, 'rgba(255,255,255,0)'], [0.9, 'rgba(255,255,255,0.9)'], [0.97, 'rgba(255,255,255,0)'], [1, 'rgba(255,255,255,0)']]);
+    this.halo = new THREE.InstancedMesh(decalGeo, new THREE.MeshBasicMaterial({ map: halo, ...add }), 96);
+    this.halo.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(96 * 3), 3);
+    this.ringD = new THREE.InstancedMesh(decalGeo, new THREE.MeshBasicMaterial({ map: ringT, ...add }), 64);
+    this.ringD.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(64 * 3), 3);
+    for (const m of [this.beam, this.halo, this.ringD]) { m.count = 0; m.frustumCulled = false; m.renderOrder = 2; sc.add(m); }
+    // ボス突進の予告帯
+    const tg = new THREE.PlaneGeometry(1, 1); tg.rotateX(-Math.PI / 2); tg.translate(0, 0, -0.5);
+    this.tele = new THREE.Mesh(tg, new THREE.MeshBasicMaterial({ color: 0xff2030, ...add, opacity: 0.5 }));
+    this.tele.visible = false;
+    sc.add(this.tele);
+    // 画面外マーカー（DOM）
+    this.markLayer = document.getElementById('markers');
+    this.marks = [];
+  },
+
+  // 陰陽師の見た目を切り替える
+  setCharacter(ch) {
+    if (this.player && this.charId === ch.id) return;
+    if (this.player) this.scene.remove(this.player.root);
+    const hide = ch.model === 'player' ? ['Spellbook', 'Spellbook_open', '1H_Wand'] : [];
+    this.player = new Rig(ch.model, 'player', 1.75, hide);
+    if (ch.tint) for (const m of this.player.materials()) { m.emissive = new THREE.Color(ch.tint); m.emissiveIntensity = 0.25; }
+    this.scene.add(this.player.root);
+    this.player.play('Idle');
+    this.charId = ch.id;
   },
 
   mkPick(geo, c, e) {
@@ -303,12 +360,14 @@ export const R = {
       const x = p.x * S, z = p.y * S;
       if (p.kind === 'ofuda') {
         tmpQ.setFromAxisAngle(UP, p.rot);
-        tmpM.compose(tmpV.set(x, 1.1, z), tmpQ, tmpS.set(1, 1, 1));
+        const kb = p.big ? 1.5 : 1;
+        tmpM.compose(tmpV.set(x, 1.1, z), tmpQ, tmpS.set(kb, kb, kb));
         this.ofuda.setMatrixAt(no++, tmpM);
         if (G.frame % 2 === 0) FX.p3(x, 1.1, z, 0, 0.2, 0, 0.3, 0.18, 0, 3, 0);
       } else if (p.kind === 'arrow') {
         tmpQ.setFromAxisAngle(UP, Math.atan2(p.vx, p.vy));
-        tmpM.compose(tmpV.set(x, 1.0, z), tmpQ, tmpS.set(1, 1, 1));
+        const ka = p.big ? 1.8 : 1;
+        tmpM.compose(tmpV.set(x, 1.0, z), tmpQ, tmpS.set(ka, ka, ka * 1.3));
         this.arrow.setMatrixAt(na++, tmpM);
         if (G.frame % 2 === 0) FX.p3(x, 1.0, z, 0, 0, 0, 0.22, 0.2, 7, 0, 0);
       } else {
@@ -359,16 +418,17 @@ export const R = {
     // ---- 狐火・結界 ----
     let nf = 0;
     for (const s of G.skills) {
-      if (s.id === 'kitsunebi' && s.orbs) {
+      const sid = s.def.base || s.id;
+      if (sid === 'kitsunebi' && s.orbs) {
         for (const o of s.orbs) {
           tmpM.makeTranslation(o.x * S, 1.0 + Math.sin(t * 6 + nf) * 0.15, o.y * S);
           this.fox.setMatrixAt(nf++, tmpM);
           if ((G.frame + nf) % 2 === 0) FX.p3(o.x * S, 1.0, o.y * S, 0, 1.2, 0, 0.3, 0.26, 2, 2, 0);
         }
       }
-      if (s.id === 'kekkai') {
+      if (sid === 'kekkai') {
         const L = s.def.levels[s.lv - 1];
-        if (!this.ward) this.ward = FX.seal(P.x, P.y, L.radius, 1e9, P, false, '#ffd77a');
+        if (!this.ward) this.ward = FX.seal(P.x, P.y, L.radius, 1e9, P, false, s.def.base ? '#fff0b0' : '#ffd77a');
         this.ward.r = L.radius * S;
         this.ward.alpha = 0.22 + (s.pulse || 0) * 0.3;
         if (s.pulse > 0.95) FX.ring(P.x, P.y, L.radius * 0.3, L.radius, 0.35, '#ffd77a', 3);
@@ -376,6 +436,58 @@ export const R = {
     }
     this.fox.count = nf;
     for (const m of [this.ofuda, this.arrow, this.orb, this.bullet, this.gem, this.fox]) m.instanceMatrix.needsUpdate = true;
+
+    // ---- 視認性：アイテムの光柱・足元の光輪・エリートの警告輪・画面外マーカー ----
+    let nb2 = 0, nh = 0, nr = 0;
+    const col = new THREE.Color();
+    const setC = (im, i, hex, k = 1) => { col.set(hex).multiplyScalar(k); im.instanceColor.setXYZ(i, col.r, col.g, col.b); };
+    const marks = [];
+    for (const k of G.pickups) {
+      const x = k.x * S, z = k.y * S, big = k.kind === 'chest';
+      const w = big ? 0.55 : 0.28, h = big ? 14 : 6;
+      tmpM.compose(tmpV.set(x, 0, z), tmpQ.identity(), tmpS.set(w * (1 + Math.sin(t * 4) * 0.1), h, w * (1 + Math.sin(t * 4) * 0.1)));
+      if (nb2 < 32) { this.beam.setMatrixAt(nb2, tmpM); setC(this.beam, nb2++, BEAM_COL[k.kind], big ? 1.1 : 0.7); }
+      const r = big ? 1.6 : 0.8;
+      tmpM.compose(tmpV.set(x, 0.04, z), tmpQ.identity(), tmpS.set(r, 1, r));
+      if (nh < 96) { this.halo.setMatrixAt(nh, tmpM); setC(this.halo, nh++, BEAM_COL[k.kind], 0.8); }
+      if (big) marks.push({ x, z, color: '#ffc94a', label: '宝' });
+    }
+    // プレイヤーの足元と吸引範囲
+    tmpM.compose(tmpV.set(px, 0.035, pz), tmpQ.identity(), tmpS.set(0.75, 1, 0.75));
+    this.halo.setMatrixAt(nh, tmpM); setC(this.halo, nh++, 0xffd77a, 0.55);
+    const pkr = (G.st.pickup || 90) * S;
+    tmpM.compose(tmpV.set(px, 0.03, pz), tmpQ.identity(), tmpS.set(pkr, 1, pkr));
+    this.ringD.setMatrixAt(nr, tmpM); setC(this.ringD, nr++, 0x6fd8ff, 0.18);
+    tmpM.compose(tmpV.set(px, 0.035, pz), tmpQ.identity(), tmpS.set(0.95, 1, 0.95));
+    this.ringD.setMatrixAt(nr, tmpM); setC(this.ringD, nr++, 0xffd77a, 0.9);
+    // エリートは赤い警告輪
+    for (const e of G.enemies) {
+      if (!e.alive || !e.elite) continue;
+      const r = e.r * S * 1.6 * (1 + Math.sin(t * 6) * 0.08);
+      tmpM.compose(tmpV.set(e.x * S, 0.04, e.y * S), tmpQ.identity(), tmpS.set(r, 1, r));
+      if (nr < 64) { this.ringD.setMatrixAt(nr, tmpM); setC(this.ringD, nr++, 0xff3030, 1.2); }
+      if (nh < 96) { tmpS.set(r * 1.1, 1, r * 1.1); tmpM.compose(tmpV, tmpQ, tmpS); this.halo.setMatrixAt(nh, tmpM); setC(this.halo, nh++, 0xff2020, 0.5); }
+      marks.push({ x: e.x * S, z: e.y * S, color: '#ff6a4a', label: '蜘' });
+    }
+    // 敵弾の足元に影（避けやすく）
+    for (const u of G.bullets) {
+      if (nh >= 96) break;
+      tmpM.compose(tmpV.set(u.x * S, 0.04, u.y * S), tmpQ.identity(), tmpS.set(0.5, 1, 0.5));
+      this.halo.setMatrixAt(nh, tmpM); setC(this.halo, nh++, 0xd84aff, 0.9);
+    }
+    if (b) marks.push({ x: b.x * S, z: b.y * S, color: '#ff3040', label: '骸', boss: true });
+    this.beam.count = nb2; this.halo.count = nh; this.ringD.count = nr;
+    for (const m of [this.beam, this.halo, this.ringD]) { m.instanceMatrix.needsUpdate = true; m.instanceColor.needsUpdate = true; }
+    // ボス突進の予告帯
+    if (b && b.ai && b.ai.state === 'tele') {
+      const l = Math.hypot(b.ai.dx, b.ai.dy) || 1;
+      this.tele.visible = true;
+      this.tele.position.set(b.x * S, 0.05, b.y * S);
+      this.tele.rotation.y = Math.atan2(-b.ai.dx / l, -b.ai.dy / l);
+      this.tele.scale.set(b.r * S * 2.2, 1, 15);
+      this.tele.material.opacity = 0.3 + 0.3 * Math.abs(Math.sin(t * 14));
+    } else this.tele.visible = false;
+    this.updateMarkers(marks);
 
     // ---- 仕上げ ----
     const u = this.final.uniforms;
@@ -386,6 +498,41 @@ export const R = {
     u.uFlash.value = Math.min(0.8, G.flash);
     FX.drawTexts(rdt, this.w, this.h);
     this.comp.render(rdt);
+  },
+
+  // 画面外の重要目標（宝箱・エリート・ボス）を画面端の矢印で示す
+  updateMarkers(list) {
+    if (!this.markLayer) return;
+    const W = this.w, H = this.h, m = 34;
+    while (this.marks.length < list.length) {
+      const el = document.createElement('div');
+      el.className = 'mark';
+      el.innerHTML = '<i></i><b></b>';
+      this.markLayer.appendChild(el);
+      this.marks.push(el);
+    }
+    const v = new THREE.Vector3();
+    this.marks.forEach((el, i) => {
+      const it = list[i];
+      if (!it || G_STATE() !== 'play') { el.style.display = 'none'; return; }
+      v.set(it.x, 1.2, it.z).project(this.cam);
+      const behind = v.z > 1;
+      let sx = (v.x * 0.5 + 0.5) * W, sy = (-v.y * 0.5 + 0.5) * H;
+      if (behind) { sx = W - sx; sy = H - sy; }
+      const on = !behind && sx > m && sx < W - m && sy > m && sy < H - m;
+      if (on) { el.style.display = 'none'; return; }
+      const cx = W / 2, cy = H / 2;
+      let dx = sx - cx, dy = sy - cy;
+      if (behind && Math.abs(dy) < 1) dy = 1;
+      const k = Math.min((W / 2 - m) / Math.max(1e-3, Math.abs(dx)), (H / 2 - m) / Math.max(1e-3, Math.abs(dy)));
+      const ex = cx + dx * k, ey = cy + dy * k;
+      el.style.display = '';
+      el.style.setProperty('--c', it.color);
+      el.style.transform = `translate(${ex.toFixed(0)}px, ${ey.toFixed(0)}px)`;
+      el.firstChild.style.transform = `rotate(${Math.atan2(dy, dx).toFixed(2)}rad)`;
+      el.lastChild.textContent = it.label;
+      el.classList.toggle('boss', !!it.boss);
+    });
   },
 
   // ゲーム側からの通知：撃破した妖怪を「跳ねて消える」演出用に記録
@@ -403,6 +550,9 @@ export const R = {
     this.camPos.set(0, 8, 10);
   },
 };
+
+let G_STATE = () => 'play';
+export function setStateGetter(f) { G_STATE = f; }
 
 function lerpAngle(a, b, k) {
   let d = b - a;

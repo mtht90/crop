@@ -65,6 +65,18 @@ export const SKILL_IMPL = {
     update(s, L, dt) {
       if ((s.t -= dt) > 0) return;
       const P = G.player;
+      if (L.omni) {
+        // 八方天符：全方位へ一斉に放つ（少しずつ回転）
+        s.t = L.cd * G.st.cdMul;
+        s.rot = (s.rot || 0) + 0.37;
+        for (let i = 0; i < L.count; i++) {
+          const a = s.rot + (i / L.count) * TAU;
+          spawnProj('ofuda', P.x, P.y - 6, Math.cos(a) * 470, Math.sin(a) * 470, L.dmg, L.pierce, 1.2, 11, { spin: 16, kb: 90, boom: L.boom, big: true });
+        }
+        FX.ring(P.x, P.y, 10, 90, 0.3, '#ffe9a0', 4);
+        sfx.shoot();
+        return;
+      }
       const n = nearest(P.x, P.y, 420, L.count);
       if (!n) { s.t = 0.1; return; }
       s.t = L.cd * G.st.cdMul;
@@ -88,14 +100,15 @@ export const SKILL_IMPL = {
       for (let i = 0; i < L.count; i++) {
         const a = s.ang + (i / L.count) * TAU;
         const o = s.orbs[i];
-        o.x = P.x + Math.cos(a) * L.radius;
-        o.y = P.y + Math.sin(a) * L.radius;
+        const rad = L.radius + (L.breathe ? Math.sin(G.time * 2.2) * L.breathe : 0);
+        o.x = P.x + Math.cos(a) * rad;
+        o.y = P.y + Math.sin(a) * rad;
         forEachInRadius(o.x, o.y, 14, (e, dx, dy) => {
           if (G.time - e.last[SLOT.kitsunebi] < 0.4) return;
           e.last[SLOT.kitsunebi] = G.time;
           const d = Math.hypot(e.x - P.x, e.y - P.y) || 1;
           hurtEnemy(e, L.dmg, (e.x - P.x) / d, (e.y - P.y) / d, 160);
-          FX.burst(e.x, e.y, 3, 2, 120, 6, 0.3);
+          FX.burst(e.x, e.y, 6, 2, 220, 7, 0.4, 1.0);
         });
         if (Math.random() < 0.5) FX.particle(o.x, o.y, 0, -20, 0.35, 6, 2, 1);
       }
@@ -130,8 +143,9 @@ export const SKILL_IMPL = {
       forEachInRadius(P.x, P.y, L.radius, (e) => {
         e.slowT = 0.5;
         const d = Math.hypot(e.x - P.x, e.y - P.y) || 1;
-        hurtEnemy(e, L.dmg, (e.x - P.x) / d, (e.y - P.y) / d, 25);
+        hurtEnemy(e, L.dmg, (e.x - P.x) / d, (e.y - P.y) / d, L.push ? 150 : 25);
       });
+      if (L.heal && P.hp < P.maxHp) P.hp = Math.min(P.maxHp, P.hp + L.heal);
     },
   },
 
@@ -142,8 +156,8 @@ export const SKILL_IMPL = {
       const P = G.player;
       const base = Math.atan2(P.fy, P.fx);
       for (let i = 0; i < L.count; i++) {
-        const a = base + (i - (L.count - 1) / 2) * 0.16;
-        spawnProj('arrow', P.x, P.y - 6, Math.cos(a) * 640, Math.sin(a) * 640, L.dmg, 9999, 1.1, 10, { kb: 110 });
+        const a = base + (i - (L.count - 1) / 2) * (L.spread || 0.16);
+        spawnProj('arrow', P.x, P.y - 6, Math.cos(a) * 680, Math.sin(a) * 680, L.dmg, 9999, 1.1, L.big ? 16 : 10, { kb: 110, big: !!L.big });
       }
       sfx.arrow();
     },
@@ -154,17 +168,37 @@ export const SKILL_IMPL = {
   zenki: { update: summonUpdate },
   karasu: { update: summonUpdate },
 };
+// 進化した術は元の術の処理を、強化された数値（と追加効果）で使う
+Object.assign(SKILL_IMPL, {
+  tenpu: SKILL_IMPL.ofuda, kyubi: SKILL_IMPL.kitsunebi, raijin: SKILL_IMPL.raifu, daikekkai: SKILL_IMPL.kekkai, tenkyu: SKILL_IMPL.hamaya,
+  hyakki: { update: summonUpdate }, kagebunshin: { update: summonUpdate }, kishin: { update: summonUpdate }, karyu: { update: summonUpdate },
+});
 
-function strike(x, y, L) {
-  FX.bolt(x, y, y - G.view.h * 0.6);
-  FX.anim('thunder', x, y - 30, { scale: 1.2, dur: 0.35 });
+function strike(x, y, L, depth = 0) {
+  FX.bolt(x, y);
   FX.anim('explosion', x, y, { scale: L.aoe / 90, dur: 0.4, alpha: 0.85 });
-  FX.burst(x, y, 14, 4, 240, 9, 0.5);
-  FX.burst(x, y, 6, 3, 160, 7, 0.3);
+  FX.ring(x, y, 6, L.aoe * 1.3, 0.35, '#c9b0ff', 6);
+  FX.burst(x, y, 14, 4, 300, 9, 0.5);
+  FX.burst(x, y, 6, 3, 200, 7, 0.3);
+  const hit = [];
   forEachInRadius(x, y, L.aoe, (e) => {
     const d = Math.hypot(e.x - x, e.y - y) || 1;
     hurtEnemy(e, L.dmg, (e.x - x) / d, (e.y - y) / d, 140);
+    hit.push(e);
   });
+  // 雷神招来：近くの妖怪へ連鎖する
+  if (L.chain && depth === 0) {
+    const n = nearest(x, y, 260, L.chain + hit.length + 1);
+    let c = 0;
+    for (let k = 0; k < n && c < L.chain; k++) {
+      const e = NE[k];
+      if (!e.alive || hit.includes(e)) continue;
+      FX.arc(x, y, e.x, e.y);
+      hurtEnemy(e, L.dmg * 0.7, 0, 0, 80);
+      FX.burst(e.x, e.y, 8, 4, 260, 8, 0.35, 1.0);
+      c++;
+    }
+  }
 }
 
 // ================================================================ 召喚
@@ -176,14 +210,15 @@ function summonUpdate(s, L, dt) {
   let made = 0;
   for (let i = 0; i < cnt; i++) {
     const a = (i / cnt) * TAU + Math.random() * 0.3;
-    const r = 30 + Math.random() * 40;
+    const r = 30 + Math.random() * 40 + cnt * 2.5;
     const x = P.x + Math.cos(a) * r, y = P.y + Math.sin(a) * r;
-    const al = spawnAlly(s.id, x, y, L);
+    const al = spawnAlly(def.ally || s.id, x, y, L);
     if (!al) break;
     made++;
     al.idx = i;
-    FX.burst(x, y, 5, s.id === 'karasu' ? 4 : 7, 110, 6, 0.5);
-    if (s.id === 'zenki') {
+    FX.burst(x, y, 6, (def.ally || s.id) === 'karasu' ? 1 : 2, 160, 7, 0.6, 0.3);
+    if ((def.ally || s.id) === 'zenki') {
+      FX.anim('explosion', x, y, { scale: 0.9 });
       FX.seal(x, y, 70, 0.9, null, true);
     }
   }
@@ -191,9 +226,10 @@ function summonUpdate(s, L, dt) {
   FX.seal(P.x, P.y, 50 + Math.min(cnt, 16) * 4, 0.7, P);
   FX.ring(P.x, P.y, 10, 100 + cnt * 4, 0.5, '#ffe9b0', 4);
   FX.text(P.x, P.y - 44, `${def.name} ×${made}`, def.color, 20, true);
-  if (s.id === 'zenki') addShake(0.25);
+  FX.pillar(P.x, P.y, 40, 0.6, def.color, P);
+  if ((def.ally || s.id) === 'zenki') addShake(0.25);
   G.castT = 1;
-  sfx.summon(s.id);
+  sfx.summon(def.ally || s.id);
 }
 
 // 標的の取得（生存確認つき、一定間隔で再探索）
@@ -347,7 +383,7 @@ export const ALLY_IMPL = {
           const e = NE[0];
           const ang = Math.atan2(e.y - a.y, e.x - a.x);
           a.atk = 0.36;
-          spawnProj('feather', a.x, a.y - 12, Math.cos(ang) * 560, Math.sin(ang) * 560, a.dmg, 2, 0.8, 7, { ally: true, kb: 50 });
+          spawnProj('feather', a.x, a.y - 12, Math.cos(ang) * 560, Math.sin(ang) * 560, a.dmg, 2, 0.8, 7, { ally: true, kb: 50, boom: a.boom });
           a.atkT = a.fire;
         } else a.atkT = 0.15;
       }

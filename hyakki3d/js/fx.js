@@ -119,6 +119,27 @@ export function sealMaterial(color) {
   return shaderMat(SEAL_FS, { uColor: { value: new THREE.Color(color) }, uAlpha: { value: 1 }, uRot: { value: 0.3 }, uTime: { value: 0 } });
 }
 
+// カメラへ向けた帯状メッシュ（稲妻）
+function ribbon(pts3, w, col, a, life) {
+  const pos = [];
+  const camPos = camera.position;
+  for (let i = 0; i < pts3.length; i++) {
+    const p = pts3[i], q = pts3[Math.min(i + 1, pts3.length - 1)], o = pts3[Math.max(i - 1, 0)];
+    const dir = q.clone().sub(o).normalize();
+    const side = dir.clone().cross(camPos.clone().sub(p)).normalize().multiplyScalar(w * (1 - (i / pts3.length) * 0.4));
+    pos.push(p.x - side.x, p.y - side.y, p.z - side.z, p.x + side.x, p.y + side.y, p.z + side.z);
+  }
+  const idx = [];
+  for (let i = 0; i < pts3.length - 1; i++) { const a0 = i * 2; idx.push(a0, a0 + 1, a0 + 2, a0 + 1, a0 + 3, a0 + 2); }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setIndex(idx);
+  const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: a, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+  m.frustumCulled = false;
+  scene.add(m);
+  bolts.push({ mesh: m, t: 0, life, a });
+}
+
 export const FX = {
   init(maxParticles, maxTexts) {
     MAXP = Math.max(2000, maxParticles * 2);
@@ -266,25 +287,7 @@ export const FX = {
       const j = i && i < steps ? 0.9 * (1 - k * 0.5) : 0;
       pts3.push(new THREE.Vector3(cx + (gx - cx) * k + (Math.random() - 0.5) * j, top * (1 - k), cz + (gz - cz) * k + (Math.random() - 0.5) * j));
     }
-    const mk = (w, col, a) => {
-      const pos = [];
-      const camPos = camera.position;
-      for (let i = 0; i < pts3.length; i++) {
-        const p = pts3[i], q = pts3[Math.min(i + 1, pts3.length - 1)], o = pts3[Math.max(i - 1, 0)];
-        const dir = q.clone().sub(o).normalize();
-        const side = dir.clone().cross(camPos.clone().sub(p)).normalize().multiplyScalar(w * (1 - i / pts3.length * 0.4));
-        pos.push(p.x - side.x, p.y - side.y, p.z - side.z, p.x + side.x, p.y + side.y, p.z + side.z);
-      }
-      const idx = [];
-      for (let i = 0; i < pts3.length - 1; i++) { const a0 = i * 2; idx.push(a0, a0 + 1, a0 + 2, a0 + 1, a0 + 3, a0 + 2); }
-      const geo = new THREE.BufferGeometry();
-      geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-      geo.setIndex(idx);
-      const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: a, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
-      m.frustumCulled = false;
-      scene.add(m);
-      bolts.push({ mesh: m, t: 0, life: 0.28, a });
-    };
+    const mk = (w, col, a) => ribbon(pts3, w, col, a, 0.28);
     mk(0.55, 0x8a6bff, 0.55);
     mk(0.12, 0xffffff, 1);
     this.flash(x, y, '#b9a2ff', 16, 0.3, 3);
@@ -292,6 +295,20 @@ export const FX = {
       const a = Math.random() * Math.PI * 2, s = 3 + Math.random() * 6;
       this.p3(gx, 0.2, gz, Math.cos(a) * s, 2 + Math.random() * 5, Math.sin(a) * s, 0.4 + Math.random() * 0.3, 0.22, i % 3 ? 4 : 3, 2, -14);
     }
+  },
+
+  // 連鎖する稲妻（地表付近を水平に走る）
+  arc(x1, y1, x2, y2) {
+    const a = new THREE.Vector3(x1 * S, 1.0, y1 * S), b = new THREE.Vector3(x2 * S, 1.0, y2 * S);
+    const pts3 = [];
+    const n = 8;
+    for (let i = 0; i <= n; i++) {
+      const p = a.clone().lerp(b, i / n);
+      if (i && i < n) p.add(new THREE.Vector3((Math.random() - 0.5) * 0.6, (Math.random() - 0.5) * 0.6, (Math.random() - 0.5) * 0.6));
+      pts3.push(p);
+    }
+    ribbon(pts3, 0.32, 0x8a6bff, 0.6, 0.22);
+    ribbon(pts3, 0.08, 0xffffff, 1, 0.22);
   },
 
   // ---- ダメージ数字（DOM を 3D 位置に投影） ----

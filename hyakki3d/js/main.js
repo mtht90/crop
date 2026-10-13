@@ -1,10 +1,12 @@
 // エントリポイント：読み込み・画面遷移・メインループ
-import { G, initGame, newRun, step, resize } from './game.js';
+import { G, initGame, newRun, step, resize, addOrUpgrade } from './game.js';
 import { initInput, input, resetInput } from './input.js';
 import { initAudio, preloadAudio, music, setMuted, isMuted } from './audio.js';
 import { FX } from './fx.js';
 import { UI } from './ui.js';
-import { R } from './r3d/render.js';
+import { R, setStateGetter } from './r3d/render.js';
+import { Progress } from './progress.js';
+import { CHARACTERS } from './config.js';
 import { loadModels } from './r3d/models.js';
 import { makeIcons } from './r3d/icons.js';
 
@@ -53,6 +55,10 @@ startBtn.disabled = true;
     R.build(G.limits);
     window.__ICONS = makeIcons(R);
     UI.setIcons(window.__ICONS);
+    setStateGetter(() => G.state);
+    R.setCharacter(Progress.selected());
+    const pick = (ch) => { Progress.select(ch.id); R.setCharacter(ch); sfxSelect(); };
+    UI.renderChars(CHARACTERS, Progress, pick);
     G.onKill = (e) => R.onKill(e);
     await Promise.race([fonts, new Promise((r) => setTimeout(r, 2500))]);
     G.player = titleDummy;
@@ -69,14 +75,18 @@ startBtn.disabled = true;
   }
 })();
 
+function sfxSelect() { initAudio(); }
+
 function start() {
   if (!ready) return;
+  const ch = Progress.selected();
+  R.setCharacter(ch);
   initAudio();
   music.start();
   resetInput();
   FX.clear();
   R.resetRun();
-  newRun();
+  newRun(ch);
 }
 function setPaused(p) {
   if (p && G.state === 'play') { G.state = 'paused'; UI.showPause(true); resetInput(); }
@@ -97,6 +107,7 @@ function toTitle() {
   G.boss = null;
   G.player = titleDummy;
   UI.showTitle();
+  UI.renderChars(CHARACTERS, Progress, (c) => { Progress.select(c.id); R.setCharacter(c); });
   music.title();
 }
 for (const id of ['muteBtn', 'muteBtn2']) {
@@ -109,7 +120,9 @@ addEventListener('pointerdown', () => { initAudio(); if (G.state === 'title') mu
 document.addEventListener('visibilitychange', () => { if (document.hidden) setPaused(true); });
 
 input.onKey = (e) => {
-  if (G.state === 'levelup' && UI.levelUpOpen()) {
+  if (G.state === 'chest') {
+    if (e.code === 'Space' || e.code === 'Enter') UI.chestContinue();
+  } else if (G.state === 'levelup' && UI.levelUpOpen()) {
     const n = { Digit1: 0, Digit2: 1, Digit3: 2, Numpad1: 0, Numpad2: 1, Numpad3: 2 }[e.code];
     if (n !== undefined) UI.pick(n);
   } else if (e.code === 'Escape' || e.code === 'KeyP') {
@@ -127,7 +140,7 @@ function frame(now) {
   const t0 = performance.now();
   if (G.state === 'play') { for (let i = 0; i < debug.speed && G.state === 'play'; i++) step(rdt); }
   else {
-    FX.update(rdt * (G.state === 'levelup' ? 0.5 : 1));
+    FX.update(rdt * (G.state === 'levelup' || G.state === 'chest' ? 0.5 : 1));
     if (G.state === 'title') { input.camYaw += rdt * 0.12; G.time += rdt; }
   }
   if (ready) R.render(G, rdt);
@@ -147,3 +160,4 @@ requestAnimationFrame(frame);
 window.__G = G;
 window.__UI = UI;
 window.__R = R;
+window.__dbg = { addOrUpgrade };

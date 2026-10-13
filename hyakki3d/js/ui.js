@@ -1,5 +1,6 @@
 // DOM の UI（HUD・レベルアップカード・バナー・各画面）
-import { SKILLS, RUN } from './config.js';
+import { SKILLS, RUN, EVOLUTIONS } from './config.js';
+import { sfx } from './audio.js';
 
 const $ = (id) => document.getElementById(id);
 const TYPE_LABEL = { attack: '攻撃', summon: '式神', passive: '補助' };
@@ -122,7 +123,13 @@ export const UI = {
         if (owned) {
           lvTxt = `Lv${owned.lv} → ${owned.lv + 1}`;
           desc = def.type === 'passive' ? def.desc : def.up[owned.lv] || def.desc;
-        } else { lvTxt = 'NEW'; isNew = true; desc = def.desc; }
+          const ev = EVOLUTIONS.find((e) => e.from === id || e.need === id);
+          if (ev && owned.lv + 1 >= def.levels.length && def.type !== 'passive') desc += `<br><small class="evoHint">最大Lv＋「${SKILLS[ev.need].name}」で宝箱から進化</small>`;
+        } else {
+          lvTxt = 'NEW'; isNew = true; desc = def.desc;
+          const ev = EVOLUTIONS.find((e) => e.need === id && G.skills.some((k) => k.id === e.from));
+          if (ev) desc += `<br><small class="evoHint">「${SKILLS[ev.from].name}」の進化に必要</small>`;
+        }
       }
       c.classList.add(type);
       if (isNew) c.classList.add('new');
@@ -167,5 +174,84 @@ export const UI = {
       <div><span>到達レベル</span><b>${s.level}</b></div>
       <div><span>最大同時式神</span><b>${s.maxAllies}</b></div>
       <div><span>総ダメージ</span><b>${Math.round(s.dmg)}</b></div>`;
+    $('resUnlock').innerHTML = (s.unlocked || []).map((c) => `<div class="unlock"><img alt="" src="${ICONS['char_' + c.id] || ''}"><span>新たな陰陽師が解放された<br><b>${c.name}</b>（${c.title}）</span></div>`).join('');
   },
+};
+
+// ================================================================ 宝箱ルーレット
+let chestDone = null, chestReady = 0, chestTimers = [];
+const REEL_POOL = Object.keys(SKILLS).filter((k) => !SKILLS[k].base);
+UI.showChest = (rewards, onDone) => {
+  const box = $('reels');
+  box.innerHTML = '';
+  $('chest').classList.remove('hidden');
+  $('chest').classList.toggle('evo', rewards.some((r) => r.evo));
+  $('chestHint').classList.remove('show');
+  chestDone = onDone;
+  chestReady = Infinity;
+  chestTimers.forEach(clearTimeout);
+  chestTimers = [];
+  let stopped = 0;
+  rewards.forEach((r, i) => {
+    const el = document.createElement('div');
+    el.className = 'reel spin';
+    el.innerHTML = '<div class="win"><img alt=""></div><b></b><small></small>';
+    box.appendChild(el);
+    const img = el.querySelector('img');
+    let k = 0;
+    const spin = setInterval(() => {
+      const id = REEL_POOL[(k++ * 7 + i * 3) % REEL_POOL.length];
+      if (ICONS[id]) img.src = ICONS[id];
+      sfx.tick(i * 0.2);
+    }, 70);
+    const stopAt = 900 + i * 450 + (r.evo ? 600 : 0);
+    chestTimers.push(setTimeout(() => {
+      clearInterval(spin);
+      if (ICONS[r.id]) img.src = ICONS[r.id];
+      el.classList.remove('spin');
+      el.classList.add('stop');
+      if (r.evo) el.classList.add('evo');
+      el.querySelector('b').textContent = r.name;
+      el.querySelector('small').textContent = r.evo ? `進化！ ${r.sub}` : r.sub;
+      sfx.reelStop(i);
+      if (r.evo) sfx.chest();
+      if (++stopped === rewards.length) {
+        chestReady = performance.now() + 350;
+        chestTimers.push(setTimeout(() => $('chestHint').classList.add('show'), 350));
+        chestTimers.push(setTimeout(() => UI.chestContinue(true), 6000));
+      }
+    }, stopAt));
+    chestTimers.push(spin);
+  });
+};
+UI.chestContinue = (force = false) => {
+  if (!chestDone || (!force && performance.now() < chestReady)) return;
+  const f = chestDone;
+  chestDone = null;
+  chestTimers.forEach((t) => { clearTimeout(t); clearInterval(t); });
+  $('chest').classList.add('hidden');
+  f();
+};
+document.getElementById('chest').addEventListener('click', () => UI.chestContinue());
+
+// ================================================================ 陰陽師選択
+UI.renderChars = (chars, progress, onSelect) => {
+  const box = $('chars');
+  box.innerHTML = '';
+  const sel = progress.selected().id;
+  for (const ch of chars) {
+    const open = progress.isUnlocked(ch.id);
+    const b = document.createElement('button');
+    b.className = 'char' + (open ? '' : ' locked') + (ch.id === sel ? ' sel' : '');
+    b.innerHTML = `<img alt="" src="${ICONS['char_' + ch.id] || ''}"><span>${open ? ch.name : '？？？'}</span>`;
+    b.addEventListener('click', () => { if (open) { onSelect(ch); UI.renderChars(chars, progress, onSelect); } else UI.charInfo(ch, false); });
+    box.appendChild(b);
+  }
+  UI.charInfo(progress.selected(), true);
+};
+UI.charInfo = (ch, open) => {
+  const info = $('charInfo');
+  if (!open) { info.innerHTML = `<b>？？？</b><span class="lock">解放条件：${ch.unlock.text}</span>`; return; }
+  const icons = ch.start.map((id) => `<img alt="${SKILLS[id].name}" title="${SKILLS[id].name}" src="${ICONS[id] || ''}">`).join('');
+  info.innerHTML = `<b>${ch.name}</b><em>${ch.title}</em><span>${ch.desc}</span><span class="start">${icons}</span>`;
 };

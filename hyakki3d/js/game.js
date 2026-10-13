@@ -1,7 +1,7 @@
 // ゲーム本体：状態・更新・描画
 import {
   RUN, LIMITS, PLAYER, ENEMIES, SPAWN, EVENTS, ELITE, DROPS, SKILLS, SLOTS,
-  PICK_WEIGHT, START_SKILLS, hpScale, speedScale, xpNeed,
+  PICK_WEIGHT, hpScale, speedScale, xpNeed, CHARACTERS, EVOLUTIONS,
 } from './config.js';
 import { Grid } from './grid.js';
 import { FX } from './fx.js';
@@ -9,6 +9,7 @@ import { sfx, music } from './audio.js';
 import { input, pollInput } from './input.js';
 import { SKILL_IMPL, ALLY_IMPL } from './skills.js';
 import { UI } from './ui.js';
+import { Progress } from './progress.js';
 
 const TAU = Math.PI * 2;
 
@@ -52,7 +53,12 @@ export function initGame(opts) {
 }
 
 // ================================================================ ラン開始
-export function newRun() {
+export function newRun(char = CHARACTERS[0]) {
+  G.char = char;
+  G.evolved = new Set();
+  G.chests = 0;
+  G.critFxT = 0;
+  G.streakMark = 0;
   for (const e of G.enemies) epool.push(e);
   for (const a of G.allies) apool.push(a);
   for (const p of G.projs) ppool.push(p);
@@ -76,7 +82,7 @@ export function newRun() {
   while (G.eventIdx < EVENTS.length && EVENTS[G.eventIdx].t < G.time) G.eventIdx++;
   G.nextElite = ELITE.first;
   while (G.nextElite < G.time) G.nextElite += ELITE.every;
-  for (const id of START_SKILLS) addOrUpgrade(id);
+  for (const id of char.start) addOrUpgrade(id);
   const extra = Number(G.debug.lv) || 0;          // デバッグ: ランダムにレベルを上げた状態で開始
   for (let i = 0; i < extra; i++) {
     const o = rollOptions().filter((x) => !x.startsWith('_'));
@@ -122,11 +128,16 @@ function recalcStats() {
   st.shikiDmg = 1 + 0.12 * sk;
   st.shikiDur = 1 + 0.1 * sk;
   st.shikiCount = Math.floor(sk / 2);
+  const md = (G.char && G.char.mods) || {};
+  if (md.cd) st.cdMul *= md.cd;
+  if (md.shikiDur) st.shikiDur *= md.shikiDur;
+  if (md.speed) st.speedMul *= md.speed;
+  if (md.shikiCount) st.shikiCount += md.shikiCount;
   const c = skillLv('chomei');
   st.regen = 0.4 * c;
   const P = G.player;
   if (P) {
-    const newMax = PLAYER.hp + 20 * c;
+    const newMax = PLAYER.hp + 20 * c + (md.hp || 0);
     if (newMax > P.maxHp) P.hp += newMax - P.maxHp;
     P.maxHp = newMax;
   }
@@ -138,6 +149,7 @@ export function rollOptions() {
   const cand = [];
   for (const id in SKILLS) {
     const def = SKILLS[id];
+    if (def.base || G.evolved.has(id)) continue;   // 進化した術は宝箱でのみ
     const owned = G.skills.find((s) => s.id === id);
     if (owned) {
       if (owned.lv < def.levels.length) cand.push({ id, w: PICK_WEIGHT.upgrade });
@@ -196,7 +208,7 @@ export function spawnAlly(type, x, y, L) {
   a.target = null; a.tuid = 0; a.retT = Math.random() * 0.2;
   a.atkT = Math.random() * 0.3; a.spawnT = 0; a.squash = 0;
   a.ang = Math.random() * TAU; a.idx = (Math.random() * 1000) | 0; a.dir = 0; a.at = Math.random() * 4; a.atk = 0;
-  a.aoe = L.aoe || 0; a.fire = L.fire || 0;
+  a.aoe = L.aoe || 0; a.fire = L.fire || 0; a.boom = L.boom || 0;
   a.blocks = type === 'kami' || type === 'zenki';
   const impl = ALLY_IMPL[type];
   a.r = impl.r; a.speed = impl.speed;
@@ -212,7 +224,7 @@ export function spawnProj(kind, x, y, vx, vy, dmg, pierce, life, r, opt = {}) {
   p.hits.length = 0;
   p.target = opt.target || null; p.tuid = p.target ? p.target.uid : 0;
   p.turn = opt.turn || 0; p.spin = opt.spin || 0; p.rot = Math.atan2(vy, vx);
-  p.face = !!opt.face; p.kb = opt.kb ?? 60; p.ally = !!opt.ally;
+  p.face = !!opt.face; p.kb = opt.kb ?? 60; p.ally = !!opt.ally; p.boom = opt.boom || 0; p.big = !!opt.big;
   G.projs.push(p);
   return p;
 }
@@ -254,7 +266,10 @@ export function hurtEnemy(e, base, nx, ny, kb, ally = false) {
     e.vx += nx * k; e.vy += ny * k;
   }
   G.dmgDealt += dmg;
-  if (crit) FX.text(e.x, e.y - e.r, dmg + '!', '#ffd35a', 22);
+  if (crit) {
+    FX.text(e.x, e.y - e.r, dmg + '!', '#ffd35a', 22);
+    if (G.critFxT <= G.time) { G.critFxT = G.time + 0.12; FX.ring(e.x, e.y, 4, 40, 0.18, '#ffffff', 5); FX.burst(e.x, e.y, 5, 3, 260, 6, 0.25, 1.0); }
+  }
   else FX.text(e.x, e.y - e.r, '' + dmg, ally ? '#bfe6ff' : '#ffffff', e.boss ? 18 : 14);
   sfx.hit();
   if (e.hp <= 0) killEnemy(e);
@@ -336,28 +351,71 @@ function purge() {
   UI.banner('大祓', 'white');
 }
 
+// 進化できる組み合わせ（最大 Lv の術 ＋ 補助）を探す
+function findEvolution() {
+  for (const ev of EVOLUTIONS) {
+    const base = G.skills.find((k) => k.id === ev.from);
+    if (base && base.lv >= base.def.levels.length && skillLv(ev.need) > 0) return ev;
+  }
+  return null;
+}
+
+function evolve(ev) {
+  const s = G.skills.find((k) => k.id === ev.from);
+  if (!s) return;
+  s.id = ev.to; s.def = SKILLS[ev.to]; s.lv = 1; s.t = 0.2;
+  G.evolved.add(ev.from);
+  recalcStats();
+  UI.refreshSkills(G);
+}
+
+// 宝箱：ルーレット演出（UI 側）を出し、閉じたら再開。中身はここで確定・適用する
 function openChest() {
   const roll = Math.random();
-  const n = roll < 0.05 ? 3 : roll < 0.3 ? 2 : 1;
-  const names = [];
-  for (let i = 0; i < n; i++) {
+  const n = roll < 0.07 ? 5 : roll < 0.32 ? 3 : 1;
+  const rewards = [];
+  const ev = findEvolution();
+  if (ev) {
+    rewards.push({ id: ev.to, evo: true, name: SKILLS[ev.to].name, sub: `${SKILLS[ev.from].name} ＋ ${SKILLS[ev.need].name}` });
+    evolve(ev);
+  }
+  while (rewards.length < n) {
     const up = G.skills.filter((s) => s.lv < s.def.levels.length);
-    if (!up.length) { healPlayer(G.player.maxHp); names.push('霊薬'); continue; }
-    const s = up[(Math.random() * up.length) | 0];
-    addOrUpgrade(s.id);
-    names.push(`${s.def.name} Lv${s.lv}`);
+    if (!up.length) { healPlayer(G.player.maxHp * 0.5); rewards.push({ id: '_heal', name: '霊薬', sub: 'HP 回復' }); continue; }
+    const s2 = up[(Math.random() * up.length) | 0];
+    addOrUpgrade(s2.id);
+    rewards.push({ id: s2.id, name: s2.def.name, sub: s2.lv >= s2.def.levels.length ? 'MAX' : `Lv ${s2.lv}` });
   }
+  G.chests++;
+  Progress.addChest();
   const P = G.player;
-  for (let i = 0; i < 60; i++) {
-    const a = -Math.PI / 2 + (Math.random() - 0.5) * 1.6;
-    const s = 200 + Math.random() * 380;
-    FX.particle(P.x, P.y, Math.cos(a) * s, Math.sin(a) * s, 0.9 + Math.random() * 0.5, 7 + Math.random() * 5, Math.random() < 0.7 ? 0 : 7, 2);
-  }
-  FX.ring(P.x, P.y, 10, 160, 0.6, '#ffd35a', 8);
-  G.slowT = 0.5;
-  G.fovKick = 0.6;
+  FX.pillar(P.x, P.y, 60, 1.4, '#ffd35a', P);
+  FX.ring(P.x, P.y, 10, 260, 0.8, '#ffd35a', 10);
+  FX.burst(P.x, P.y, 60, 0, 520, 10, 1.2, 0.6);
+  G.flash = 0.5;
+  G.fovKick = 1;
   sfx.chest();
-  UI.banner(`宝箱! ${names.join(' / ')}`, n >= 3 ? 'rainbow' : 'gold');
+  G.state = 'chest';
+  UI.showChest(rewards, () => {
+    G.state = 'play';
+    G.slowT = 0.5;
+    for (let i = 0; i < 80; i++) {
+      const a = Math.random() * TAU, sp = 200 + Math.random() * 500;
+      FX.particle(P.x, P.y, Math.cos(a) * sp, Math.sin(a) * sp, 0.9 + Math.random() * 0.6, 8 + Math.random() * 6, Math.random() < 0.6 ? 0 : 7, 2);
+    }
+    FX.ring(P.x, P.y, 20, 400, 0.7, '#ffe9b0', 12);
+    if (ev) { purgeNear(320); UI.banner(`進化！ ${SKILLS[ev.to].name}`, 'rainbow'); addShake(0.6); sfx.boom(); }
+  });
+}
+
+// 進化の瞬間：周囲の雑魚を吹き飛ばして祓う
+function purgeNear(R) {
+  const P = G.player;
+  for (const e of G.enemies) {
+    if (!e.alive || e.boss) continue;
+    const dx = e.x - P.x, dy = e.y - P.y;
+    if (dx * dx + dy * dy < R * R) killEnemy(e);
+  }
 }
 
 // ================================================================ 位置
@@ -574,10 +632,11 @@ function updateEnding(rdt) {
 
 function endRun(win) {
   G.state = 'result';
+  const fresh = Progress.check({ time: G.time, kills: G.kills, win });
   if (win) sfx.win(); else sfx.gameover();
   music.title();
   UI.showResult(win, {
-    time: G.time, kills: G.kills, level: G.level, maxAllies: G.maxAllies, dmg: G.dmgDealt,
+    time: G.time, kills: G.kills, level: G.level, maxAllies: G.maxAllies, dmg: G.dmgDealt, unlocked: fresh,
   });
 }
 
@@ -628,6 +687,13 @@ export function step(rdt) {
   G.maxAllies = Math.max(G.maxAllies, G.allies.length);
 
   if (G.streakT > 0) { G.streakT -= dt; if (G.streakT <= 0) G.streak = 0; }
+  // 連続撃破の節目で周囲に衝撃波
+  if (G.streak >= 50 && Math.floor(G.streak / 50) > (G.streakMark || 0)) {
+    G.streakMark = Math.floor(G.streak / 50);
+    FX.ring(P.x, P.y, 10, 200, 0.5, '#ffd35a', 6);
+    sfx.gem(30);
+  } else if (G.streak < 50) G.streakMark = 0;
+  if (G.frame % 60 === 0) for (const c of Progress.check({ time: G.time, kills: G.kills })) UI.banner(`陰陽師解放：${c.name}`, 'rainbow');
 
   if (G.pending > 0 && G.state === 'play' && !G.ending) startLevelUp();
   UI.updateHUD(G);
@@ -788,6 +854,7 @@ function updateProjectiles(dt) {
       if (p.hits.includes(e.uid)) continue;
       p.hits.push(e.uid);
       hurtEnemy(e, p.dmg, nx, ny, p.kb, p.ally);
+      hitFx(p, e);
       if (--p.pierce <= 0) { p.alive = false; break; }
     }
     if (p.alive && boss && boss.alive && !p.hits.includes(boss.uid)) {
@@ -799,6 +866,24 @@ function updateProjectiles(dt) {
       }
     }
     if (!p.alive) FX.burst(p.x, p.y, 3, p.kind === 'arrow' ? 1 : 0, 90, 5, 0.25);
+  }
+}
+
+// 弾が当たった瞬間の演出（種類ごと）と炸裂
+function hitFx(p, e) {
+  if (p.kind === 'ofuda') { FX.burst(e.x, e.y, 4, 0, 220, 6, 0.3, 1.0); }
+  else if (p.kind === 'arrow') { FX.burst(e.x, e.y, 3, 7, 300, 5, 0.25, 1.0); FX.slash(e.x, e.y, 22, Math.atan2(p.vy, p.vx), '#ffe9c0', 0.14); }
+  else FX.burst(e.x, e.y, 4, 1, 200, 7, 0.3, 1.4);
+  if (p.boom) {
+    const R = p.boom;
+    FX.anim('explosion', e.x, e.y, { scale: R / 60 });
+    const q = G.egrid.query(e.x, e.y, R + 26, G.egrid.out2);
+    for (let k = 0; k < q; k++) {
+      const o = G.enemies[G.egrid.out2[k]];
+      if (!o || !o.alive || o === e || o.boss) continue;
+      const dx = o.x - e.x, dy = o.y - e.y, d = Math.hypot(dx, dy) || 1;
+      if (d < R + o.r) hurtEnemy(o, p.dmg * 0.6, dx / d, dy / d, 120, p.ally);
+    }
   }
 }
 

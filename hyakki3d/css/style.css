@@ -237,3 +237,74 @@ h1.mid { font-size: clamp(38px, 9vw, 64px); }
 .card .icon .icon3d { width: 74px; height: 74px; }
 .card .icon { width: 84px; height: 84px; }
 @media (max-width: 640px), (max-height: 520px) { .card .icon { width: 68px; height: 68px; } .card .icon .icon3d { width: 62px; height: 62px; } }
+
+/* ---------------- 画面外マーカー ---------------- */
+#markers { position: fixed; inset: 0; pointer-events: none; z-index: 6; }
+.mark { position: absolute; left: 0; top: 0; width: 0; height: 0; display: none; }
+.mark i {
+  position: absolute; left: -14px; top: -14px; width: 28px; height: 28px;
+  background: conic-gradient(from 60deg, transparent 0 0deg, var(--c) 0 60deg, transparent 0); clip-path: polygon(100% 50%, 20% 0, 40% 50%, 20% 100%);
+  filter: drop-shadow(0 0 6px var(--c));
+}
+.mark b {
+  position: absolute; left: -13px; top: -13px; width: 26px; height: 26px; display: grid; place-items: center; border-radius: 50%;
+  font: 13px var(--f-brush); color: #fff; background: rgba(8, 4, 14, 0.75); border: 1px solid var(--c); box-shadow: 0 0 10px var(--c);
+}
+.mark.boss b { width: 34px; height: 34px; left: -17px; top: -17px; font-size: 17px; animation: blink 0.5s steps(2) infinite; }
+
+/* ---------------- 宝箱ルーレット ---------------- */
+#chest {
+  position: fixed; inset: 0; z-index: 32; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 16px;
+  background: radial-gradient(circle, rgba(80, 50, 0, 0.55), rgba(3, 2, 10, 0.85)); overflow: hidden; animation: fadeIn 0.2s;
+}
+#chest .rays {
+  position: absolute; left: 50%; top: 50%; width: 200vmax; height: 200vmax; margin: -100vmax 0 0 -100vmax; pointer-events: none;
+  background: repeating-conic-gradient(rgba(255, 210, 110, 0.16) 0 8deg, transparent 8deg 20deg); animation: spinRays 9s linear infinite;
+  mask: radial-gradient(circle, #000 0, transparent 45%); -webkit-mask: radial-gradient(circle, #000 0, transparent 45%);
+}
+#chest.evo .rays { background: repeating-conic-gradient(rgba(255, 120, 220, 0.2) 0 8deg, rgba(120, 220, 255, 0.12) 8deg 14deg, transparent 14deg 20deg); animation-duration: 4s; }
+@keyframes spinRays { to { transform: rotate(360deg); } }
+.chestTitle { position: relative; font: clamp(44px, 10vw, 76px) var(--f-brush); color: #fff3c4; text-shadow: 0 0 30px var(--gold), 0 5px 0 #6a3000; animation: lvPop 0.45s cubic-bezier(.2, 1.6, .4, 1); }
+#reels { position: relative; display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; max-width: 900px; }
+.reel { width: 140px; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; animation: cardIn 0.4s both; }
+.reel .win {
+  width: 120px; height: 120px; border-radius: 12px; display: grid; place-items: center; overflow: hidden;
+  background: radial-gradient(circle at 45% 40%, rgba(80, 50, 100, 0.95), rgba(10, 6, 20, 0.95)); border: 2px solid var(--gold-dim);
+}
+.reel .win img { width: 104px; height: 104px; }
+.reel.spin .win img { filter: blur(1.5px) brightness(1.2); animation: reelJit 0.07s linear infinite; }
+@keyframes reelJit { 50% { transform: translateY(-8px); } }
+.reel.stop .win { border-color: var(--gold); box-shadow: 0 0 26px rgba(255, 200, 80, 0.75); animation: reelPop 0.35s cubic-bezier(.2, 1.8, .4, 1); }
+.reel.evo .win { border-color: #fff; box-shadow: 0 0 30px #ff7ae0, 0 0 60px #7ad8ff; animation: reelPop 0.4s cubic-bezier(.2, 1.8, .4, 1), hue 1.2s linear infinite; }
+@keyframes reelPop { from { transform: scale(1.5); } to { transform: scale(1); } }
+.reel b { font: 20px var(--f-brush); color: #fff; min-height: 1.2em; }
+.reel small { font-size: 12px; color: var(--gold); min-height: 1.2em; }
+.reel.evo b { font-size: 24px; color: #fff; text-shadow: 0 0 14px #ff7ae0; }
+#chestHint { opacity: 0; transition: opacity 0.3s; position: relative; font: 18px var(--f-brush); color: var(--paper); }
+#chestHint.show { opacity: 1; animation: blink 1s steps(2) infinite; }
+
+/* ---------------- 陰陽師選択 ---------------- */
+#chars { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+.char {
+  width: 76px; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 2px 6px; border-radius: 6px;
+  background: rgba(10, 6, 20, 0.65); border: 1px solid var(--gold-dim); font-size: 12px; color: var(--paper);
+}
+.char img { width: 64px; height: 64px; }
+.char.sel { border-color: var(--gold); box-shadow: 0 0 16px rgba(242, 196, 90, 0.6); background: rgba(60, 30, 20, 0.75); }
+.char.locked img { filter: brightness(0) drop-shadow(0 0 2px rgba(143, 227, 255, 0.6)); }
+.char.locked span { color: var(--dim); }
+#charInfo { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; justify-content: center; min-height: 34px; font-size: 13px; font-weight: 500; max-width: 560px; }
+#charInfo b { font: 20px var(--f-brush); color: #fff; }
+#charInfo em { font-style: normal; color: var(--gold); font-size: 12px; }
+#charInfo .start { display: inline-flex; gap: 2px; }
+#charInfo .start img { width: 30px; height: 30px; }
+#charInfo .lock { color: var(--spirit); }
+.evoHint { color: #ffb8ee; font-size: 12px; }
+#resUnlock .unlock { display: flex; gap: 10px; align-items: center; text-align: left; padding: 8px 12px; border: 1px solid var(--gold); border-radius: 6px; background: rgba(60, 30, 10, 0.6); animation: lvPop 0.5s cubic-bezier(.2, 1.6, .4, 1); }
+#resUnlock img { width: 64px; height: 64px; }
+#resUnlock b { font: 22px var(--f-brush); color: var(--gold); }
+@media (max-width: 640px) {
+  .reel { width: 104px; } .reel .win { width: 92px; height: 92px; } .reel .win img { width: 80px; height: 80px; }
+  .char { width: 62px; } .char img { width: 52px; height: 52px; }
+  .titlebox { gap: 8px; } h1 { font-size: clamp(56px, 16vw, 100px); } .howto { display: none; }
+}

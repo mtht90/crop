@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { sealMaterial } from '../fx.js';
 import { Rig } from './models.js';
 import { talismanTexture } from './render.js';
+import { SKILLS, CHARACTERS } from '../config.js';
 
 const SIZE = 128;
 
@@ -175,6 +176,39 @@ export function makeIcons(R) {
     _purge: () => { const g = new THREE.Group(); g.add(seal('#fff0b0'), glowSprite('rgba(255,240,180,0.6)', 3)); return g; },
   };
 
+  // 進化した術：元の術の絵に金の光輪をまとわせる
+  for (const [id, def] of Object.entries(SKILLS)) {
+    if (!def.base || !MAKERS[def.base]) continue;
+    const baseMake = MAKERS[def.base];
+    MAKERS[id] = () => {
+      const g = new THREE.Group();
+      const inner = baseMake();
+      g.add(inner);
+      const box = new THREE.Box3();
+      inner.updateMatrixWorld(true);
+      inner.traverse((o) => { if (o.isMesh && !o.isSprite) box.expandByObject(o); });
+      const c = box.getCenter(new THREE.Vector3()), sz = box.getSize(new THREE.Vector3());
+      const r = Math.max(sz.x, sz.y) * 0.62;
+      const halo = new THREE.Mesh(new THREE.TorusGeometry(r, r * 0.05, 8, 64), new THREE.MeshBasicMaterial({ color: 0xffd35a }));
+      halo.position.copy(c); halo.position.z -= sz.z * 0.5;
+      const glow = glowSprite('rgba(255,200,80,0.55)', r * 3.2);
+      glow.position.copy(c); glow.position.z -= sz.z;
+      g.add(glow, halo);
+      return g;
+    };
+  }
+  // 陰陽師の肖像
+  for (const ch of CHARACTERS) {
+    MAKERS['char_' + ch.id] = () => {
+      const rig = new Rig(ch.model, 'player', 1.75, ch.model === 'player' ? ['Spellbook', 'Spellbook_open', '1H_Wand'] : []);
+      rig.play('Idle');
+      rig.update(0.5);
+      rig.root.rotation.y = 0.35;
+      if (ch.tint) for (const m of rig.materials()) { m.emissive = new THREE.Color(ch.tint); m.emissiveIntensity = 0.35; }
+      return rig.root;
+    };
+  }
+
   const pixels = new Uint8Array(SIZE * SIZE * 4);
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = SIZE;
@@ -188,7 +222,8 @@ export function makeIcons(R) {
       const obj = make();
       holder.add(obj);
       holder.updateMatrixWorld(true);
-      fit(obj, id === 'idaten' ? 1.05 : 1.2);
+      const isChar = id.startsWith('char_');
+      fit(obj, id === 'idaten' || isChar ? 1.05 : 1.2, isChar ? new THREE.Vector3(0.15, 0.12, 1).normalize() : null);
       renderer.setRenderTarget(rt);
       renderer.setClearColor(0x000000, 0);
       renderer.clear();

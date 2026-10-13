@@ -90,6 +90,8 @@ export const sfx = {
   boom() { play('boom', { vol: 0.8 }); },
   chest() { play('chest', { vol: 0.8 }); play('success', { vol: 0.5, delay: 0.15 }); },
   select() { play('select', { vol: 0.6 }); },
+  tick(k = 1) { play('move', { vol: 0.22, rate: 0.9 + k * 0.5, gap: 0.035 }); },
+  reelStop(k = 0) { play('gem', { vol: 0.5, rate: 1 + k * 0.15 }); play('slam', { vol: 0.25, rate: 1.6 }); },
   move() { play('move', { vol: 0.4, gap: 0.05 }); },
   heal() { play('heal', { vol: 0.6 }); },
   gameover() { play('gameover', { vol: 0.8 }); },
