@@ -28,7 +28,6 @@ let hudT = 0;
 let pickHandler = null;
 let cardsReadyAt = 0;
 let currentOpts = [];
-let lastStreak = 0;
 
 export const UI = {
   setIcons(map) { ICONS = map || {}; },
@@ -59,16 +58,6 @@ export const UI = {
     $('allies').textContent = G.allies.length;
     $('foes').textContent = G.enemies.length;
     $('hpfill').style.width = `${Math.max(0, (G.player.hp / G.player.maxHp) * 100)}%`;
-    const sk = $('streak');
-    if (G.streak >= 15) {
-      $('streakNum').textContent = G.streak;
-      sk.style.setProperty('--s', Math.min(2.2, 1 + Math.sqrt(G.streak) / 25).toFixed(2));
-      sk.classList.add('on');
-      if (Math.floor(G.streak / 100) !== Math.floor(lastStreak / 100)) {
-        sk.classList.remove('bump'); void sk.offsetWidth; sk.classList.add('bump');
-      }
-    } else sk.classList.remove('on');
-    lastStreak = G.streak;
     if (G.boss) UI.bossBar(true, G.boss.hp / G.boss.maxHp);
     if (G.debug.fps) $('debug').textContent = G.debugText || '';
   },

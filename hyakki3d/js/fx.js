@@ -332,7 +332,11 @@ export const FX = {
     t.el.className = jp ? 'dmg jp' : size >= 20 ? 'dmg crit' : 'dmg';
     t.el.style.color = color;
     t.el.style.display = '';
-    t.v.set(x * S + (Math.random() - 0.5) * 0.4, h + Math.random() * 0.3, y * S);
+    // 召喚名などの文字は、出たばかりの文字と重ならないよう一段ずつ上へ積む
+    let stack = 0;
+    if (jp) for (const o of texts) if (o.jp && o.t < 0.7) stack++;
+    t.jp = jp;
+    t.v.set(x * S + (jp ? 0 : (Math.random() - 0.5) * 0.4), h + (jp ? stack * 0.42 : Math.random() * 0.3), y * S);
     t.t = 0; t.life = jp ? 1.1 : 0.75; t.size = size;
     texts.push(t);
   },

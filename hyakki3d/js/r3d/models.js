@@ -3,6 +3,7 @@
 // フレームごとの InstancedMesh で描く（描画呼び出し = 種類 × フレーム数 で一定）。
 import * as THREE from 'three';
 import { loadGLTF } from './gltf.js';
+import { XRAY } from './world.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 
 const DIR = 'assets/models/';
@@ -121,13 +122,15 @@ export function unitMaterial({ map, spectral }) {
     sh.uniforms.uSpec = { value: spec || new THREE.Color(0, 0, 0) };
     sh.uniforms.uSpecOn = { value: spectral ? 1 : 0 };
     sh.uniforms.uTime = { value: 0 };
+    sh.uniforms.uCam = { value: XRAY.cam };
+    sh.uniforms.uPl = { value: XRAY.player };
     mat.userData.shader = sh;
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', '#include <common>\nattribute float aEmis;\nattribute float iFlash;\nvarying float vEmis;\nvarying float vFlash;\nvarying vec3 vWPos;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvEmis = aEmis;\nvFlash = iFlash;')
       .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWPos = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;');
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform vec3 uSpec;\nuniform float uSpecOn;\nuniform float uTime;\nvarying float vEmis;\nvarying float vFlash;\nvarying vec3 vWPos;')
+      .replace('#include <common>', '#include <common>\nuniform vec3 uSpec;\nuniform float uSpecOn;\nuniform float uTime;\nuniform vec3 uCam;\nuniform vec3 uPl;\nvarying float vEmis;\nvarying float vFlash;\nvarying vec3 vWPos;')
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
         float rim = pow(1.0 - abs(dot(normal, normalize(vViewPosition))), 2.2);
         totalEmissiveRadiance += vec3(1.0, 0.3, 0.2) * vEmis * 1.4;
@@ -138,6 +141,16 @@ export function unitMaterial({ map, spectral }) {
           totalEmissiveRadiance += uSpec * (0.12 + rim * 1.6 + band * 0.15);
           diffuseColor.rgb = mix(diffuseColor.rgb, uSpec * 0.6, 0.5);
           diffuseColor.a *= 0.55 + rim * 0.45;
+        }
+        // 陰陽師を隠さない：カメラと陰陽師を結ぶ線の上にいる体は透かす。式神は陰陽師の周りでも薄くなる
+        vec3 ab = uPl - uCam; float h = dot(vWPos - uCam, ab) / dot(ab, ab);
+        float occ = h < 0.97 ? smoothstep(1.8, 0.6, length(vWPos - (uCam + ab * clamp(h, 0.0, 1.0)))) : 0.0;
+        if (uSpecOn > 0.5) {
+          float f = max(occ, smoothstep(2.6, 1.0, length(vWPos.xz - uPl.xz)) * 0.8);
+          diffuseColor.a *= 1.0 - f * 0.85;
+        } else if (occ > 0.0) {
+          vec2 q = mod(floor(gl_FragCoord.xy), 4.0);
+          if ((q.x * 4.0 + q.y + mod(q.x + q.y, 2.0) * 8.0) / 16.0 < occ * 0.7) discard;
         }`);
   };
   return mat;
@@ -230,6 +243,25 @@ export class Rig {
     this.cur = a;
   }
   update(dt) { this.mixer.update(dt); }
+  // 敵や木の陰に入っても位置が分かるよう、遮られた部分だけを光る影絵で描く。
+  // 本体より先（renderOrder が小さい）に描くので、本体自身の重なりでは光らない
+  silhouette(color) {
+    const mat = new THREE.MeshBasicMaterial({
+      color, opacity: 0.75, blending: THREE.AdditiveBlending, depthFunc: THREE.GreaterDepth, depthWrite: false, fog: false,
+    });
+    const list = [];
+    this.root.traverse((o) => { if (o.isMesh && o.visible) list.push(o); });
+    for (const o of list) {
+      o.renderOrder = 10;
+      // 帽子・杖などは骨に付いた普通のメッシュなので、そのまま複製して同じ骨へ付ける
+      const s = o.isSkinnedMesh ? new THREE.SkinnedMesh(o.geometry, mat) : new THREE.Mesh(o.geometry, mat);
+      if (o.isSkinnedMesh) s.bind(o.skeleton, o.bindMatrix);
+      s.position.copy(o.position); s.quaternion.copy(o.quaternion); s.scale.copy(o.scale);
+      s.renderOrder = 9; s.frustumCulled = false;
+      o.parent.add(s);
+    }
+    return mat;
+  }
   // 発光・フラッシュ用に全マテリアルへアクセス
   materials() {
     const out = [];

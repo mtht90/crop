@@ -80,19 +80,10 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
 .sk.passive { border-style: dashed; }
 .sk i { position: absolute; right: -4px; bottom: -6px; font: 11px var(--f-num); font-style: normal; color: #fff; background: var(--lacquer); padding: 0 4px; border-radius: 6px; }
 .kanji { font-family: var(--f-brush); color: var(--c); text-shadow: 0 0 10px var(--c); line-height: 1; }
-#pauseBtn { position: absolute; top: calc(var(--safe-t) + 20px); right: 12px; pointer-events: auto; width: 42px; height: 42px; font: 18px var(--f-num); }
+#pauseBtn { position: absolute; top: calc(var(--safe-t) + 20px); right: 12px; pointer-events: auto; width: 42px; height: 42px; font: 18px var(--f-ui); }
 #camHint { position: absolute; right: 14px; bottom: calc(var(--safe-b) + 12px); font-size: 12px; color: var(--dim); opacity: 0.7; }
 body.mobile #camHint { display: none; }
 
-#streak {
-  position: absolute; right: 22px; top: 30%; display: flex; flex-direction: column; align-items: flex-end; line-height: 1;
-  opacity: 0; transform: scale(calc(var(--s, 1) * 0.6)) rotate(-5deg); transform-origin: right center; transition: opacity 0.15s, transform 0.12s;
-}
-#streak.on { opacity: 1; transform: scale(var(--s, 1)) rotate(-5deg); }
-#streak.bump { animation: bump 0.35s; }
-#streak b { font: 54px var(--f-num); color: var(--gold); text-shadow: 0 4px 0 #6a1a00, 0 0 24px rgba(255, 140, 0, 0.8); }
-#streak span { font: 30px var(--f-brush); color: #fff; text-shadow: 0 0 14px var(--lacquer), 0 3px 0 #000; }
-@keyframes bump { 40% { transform: scale(calc(var(--s, 1) * 1.35)) rotate(-9deg); } }
 
 #bossbar { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(var(--safe-b) + 18px); width: min(620px, 90vw); padding: 6px 14px 10px; }
 #bossbar .name { font: 22px var(--f-brush); color: #ffcfc0; text-shadow: 0 0 12px var(--lacquer); text-align: center; }
@@ -224,8 +215,6 @@ h1.mid { font-size: clamp(38px, 9vw, 64px); }
   .sk { width: 32px; height: 32px; }
   #hpbar { width: 130px; }
   #stats { gap: 10px; font-size: 14px; }
-  #streak { top: 36%; }
-  #streak b { font-size: 40px; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition: none !important; }

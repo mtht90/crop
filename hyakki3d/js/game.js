@@ -270,7 +270,8 @@ export function hurtEnemy(e, base, nx, ny, kb, ally = false) {
     FX.text(e.x, e.y - e.r, dmg + '!', '#ffd35a', 22);
     if (G.critFxT <= G.time) { G.critFxT = G.time + 0.12; FX.ring(e.x, e.y, 4, 40, 0.18, '#ffffff', 5); FX.burst(e.x, e.y, 5, 3, 260, 6, 0.25, 1.0); }
   }
-  else FX.text(e.x, e.y - e.r, '' + dmg, ally ? '#bfe6ff' : '#ffffff', e.boss ? 18 : 14);
+  // 群れが濃い終盤は、式神の通常ダメージ数字を出さず、自分の数字も間引いて画面を空ける
+  else if (!G.dense || (!ally && Math.random() < 0.4) || e.boss) FX.text(e.x, e.y - e.r, '' + dmg, ally ? '#bfe6ff' : '#ffffff', e.boss ? 18 : 14);
   sfx.hit();
   if (e.hp <= 0) killEnemy(e);
 }
@@ -352,6 +353,9 @@ function purge() {
 }
 
 // 進化できる組み合わせ（最大 Lv の術 ＋ 補助）を探す
+// デバッグ開始（途中の時刻・レベルから始める）では解放の記録を付けない
+const cheat = () => !!(G.debug.t || G.debug.lv || G.debug.god);
+
 function findEvolution() {
   for (const ev of EVOLUTIONS) {
     const base = G.skills.find((k) => k.id === ev.from);
@@ -387,7 +391,7 @@ function openChest() {
     rewards.push({ id: s2.id, name: s2.def.name, sub: s2.lv >= s2.def.levels.length ? 'MAX' : `Lv ${s2.lv}` });
   }
   G.chests++;
-  Progress.addChest();
+  if (!cheat()) Progress.addChest();
   const P = G.player;
   FX.pillar(P.x, P.y, 60, 1.4, '#ffd35a', P);
   FX.ring(P.x, P.y, 10, 260, 0.8, '#ffd35a', 10);
@@ -632,7 +636,7 @@ function updateEnding(rdt) {
 
 function endRun(win) {
   G.state = 'result';
-  const fresh = Progress.check({ time: G.time, kills: G.kills, win });
+  const fresh = cheat() ? [] : Progress.check({ time: G.time, kills: G.kills, win });
   if (win) sfx.win(); else sfx.gameover();
   music.title();
   UI.showResult(win, {
@@ -685,6 +689,7 @@ export function step(rdt) {
   compact(G.gems, gpool);
   compact(G.pickups, null);
   G.maxAllies = Math.max(G.maxAllies, G.allies.length);
+  G.dense = G.enemies.length > 220;
 
   if (G.streakT > 0) { G.streakT -= dt; if (G.streakT <= 0) G.streak = 0; }
   // 連続撃破の節目で周囲に衝撃波
@@ -693,7 +698,7 @@ export function step(rdt) {
     FX.ring(P.x, P.y, 10, 200, 0.5, '#ffd35a', 6);
     sfx.gem(30);
   } else if (G.streak < 50) G.streakMark = 0;
-  if (G.frame % 60 === 0) for (const c of Progress.check({ time: G.time, kills: G.kills })) UI.banner(`陰陽師解放：${c.name}`, 'rainbow');
+  if (G.frame % 60 === 0 && !cheat()) for (const c of Progress.check({ time: G.time, kills: G.kills })) UI.banner(`陰陽師解放：${c.name}`, 'rainbow');
 
   if (G.pending > 0 && G.state === 'play' && !G.ending) startLevelUp();
   UI.updateHUD(G);

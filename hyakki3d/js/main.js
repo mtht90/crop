@@ -47,11 +47,14 @@ startBtn.disabled = true;
     const fonts = document.fonts ? Promise.all([
       document.fonts.load('48px "Yuji Boku"', '百鬼祓い'),
       document.fonts.load('16px "Zen Maru Gothic"', '式霊影忍前鬼飛龍'),
-      document.fonts.load('16px "Dela Gothic One"', '0123456789連祓'),
+      document.fonts.load('16px "Dela Gothic One"', '0123456789'),
+      document.fonts.load('900 16px "Zen Maru Gothic"', '会心'),
     ]).catch(() => {}) : Promise.resolve();
     let a = 0, b = 0;
     const prog = () => { startBtn.textContent = `読込中 ${Math.round((a * 0.7 + b * 0.3) * 100)}%`; };
     await Promise.all([loadModels((k) => { a = k; prog(); }), R.load((k) => { b = k; prog(); })]);
+    // 札の文字（急・令）をキャンバスに筆文字で描くため、書体を待ってから組み立てる
+    await Promise.race([fonts, new Promise((r) => setTimeout(r, 2500))]);
     R.build(G.limits);
     window.__ICONS = makeIcons(R);
     UI.setIcons(window.__ICONS);
@@ -60,7 +63,6 @@ startBtn.disabled = true;
     const pick = (ch) => { Progress.select(ch.id); R.setCharacter(ch); sfxSelect(); };
     UI.renderChars(CHARACTERS, Progress, pick);
     G.onKill = (e) => R.onKill(e);
-    await Promise.race([fonts, new Promise((r) => setTimeout(r, 2500))]);
     G.player = titleDummy;
     ready = true;
     startBtn.textContent = '出陣';

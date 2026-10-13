@@ -41,6 +41,7 @@ const FinalShader = {
 };
 
 const ENEMY_SCALE = { oni: 1 };
+const tmpC = new THREE.Color();
 const tmpM = new THREE.Matrix4(), tmpQ = new THREE.Quaternion(), tmpV = new THREE.Vector3(), tmpS = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0);
 
 export function talismanTexture() {
@@ -49,7 +50,7 @@ export function talismanTexture() {
   const g = c.getContext('2d');
   g.fillStyle = '#fff6dc'; g.fillRect(4, 4, 56, 120);
   g.strokeStyle = '#c3202a'; g.lineWidth = 4; g.strokeRect(8, 8, 48, 112);
-  g.fillStyle = '#c3202a'; g.font = 'bold 34px serif'; g.textAlign = 'center';
+  g.fillStyle = '#c3202a'; g.font = '34px "Yuji Boku", serif'; g.textAlign = 'center';
   g.fillText('急', 32, 50); g.fillText('令', 32, 92);
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
@@ -139,6 +140,7 @@ export const R = {
 
     // プレイヤー（陰陽師）
     this.player = new Rig('player', 'player', 1.75, ['Spellbook', 'Spellbook_open', '1H_Wand']);
+    this.player.silhouette(0xfff4dc);
     this.charId = 'seimei';
     sc.add(this.player.root);
     this.player.play('Idle');
@@ -210,6 +212,7 @@ export const R = {
     if (this.player) this.scene.remove(this.player.root);
     const hide = ch.model === 'player' ? ['Spellbook', 'Spellbook_open', '1H_Wand'] : [];
     this.player = new Rig(ch.model, 'player', 1.75, hide);
+    this.player.silhouette(0xfff4dc);
     if (ch.tint) for (const m of this.player.materials()) { m.emissive = new THREE.Color(ch.tint); m.emissiveIntensity = 0.25; }
     this.scene.add(this.player.root);
     this.player.play('Idle');
@@ -459,7 +462,11 @@ export const R = {
     tmpM.compose(tmpV.set(px, 0.03, pz), tmpQ.identity(), tmpS.set(pkr, 1, pkr));
     this.ringD.setMatrixAt(nr, tmpM); setC(this.ringD, nr++, 0x6fd8ff, 0.18);
     tmpM.compose(tmpV.set(px, 0.035, pz), tmpQ.identity(), tmpS.set(0.95, 1, 0.95));
-    this.ringD.setMatrixAt(nr, tmpM); setC(this.ringD, nr++, 0xffd77a, 0.9);
+    // 足元の輪は体力で色が変わる（金 → 朱）。危険域では脈打つ
+    const hpK = Math.max(0, P.hp / P.maxHp);
+    col.set(0xffd77a).lerp(tmpC.set(0xff2a2a), Math.min(1, Math.max(0, (0.6 - hpK) / 0.4)));
+    col.multiplyScalar(hpK < 0.35 ? 1.2 + Math.sin(t * 12) * 0.6 : 0.9);
+    this.ringD.setMatrixAt(nr, tmpM); this.ringD.instanceColor.setXYZ(nr++, col.r, col.g, col.b);
     // エリートは赤い警告輪
     for (const e of G.enemies) {
       if (!e.alive || !e.elite) continue;
