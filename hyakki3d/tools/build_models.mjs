@@ -24,6 +24,7 @@ const JOBS = [
   ['ally_hooded', kayAdv('Rogue_Hooded'), [], []],
   ['ally_rogue', kayAdv('Rogue'), [], []],
   ['ally_barbarian', kayAdv('Barbarian'), [], []],
+  ['ally_knight', kayAdv('Knight'), [], []],
   ['sk_minion', kaySk('Skeleton_Minion'), SK, []],
   ['sk_warrior', kaySk('Skeleton_Warrior'), [], []],
   ['sk_rogue', kaySk('Skeleton_Rogue'), [], []],
@@ -39,7 +40,10 @@ const JOBS = [
 ];
 
 await MeshoptSimplifier.ready;
+// ONLY=名前,名前 で一部だけ作り直せる
+const only = process.env.ONLY ? process.env.ONLY.split(',') : null;
 for (const [name, src, keep, hide, ratio] of JOBS) {
+  if (only && !only.includes(name)) continue;
   const doc = await io.read(src);
   const root = doc.getRoot();
   for (const a of root.listAnimations()) {

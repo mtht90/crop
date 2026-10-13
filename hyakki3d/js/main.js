@@ -1,5 +1,5 @@
 // エントリポイント：読み込み・画面遷移・メインループ
-import { G, initGame, newRun, step, resize, addOrUpgrade } from './game.js';
+import { G, initGame, newRun, step, resize, addOrUpgrade, castUlt } from './game.js';
 import { initInput, input, resetInput } from './input.js';
 import { initAudio, preloadAudio, music, setMuted, isMuted } from './audio.js';
 import { FX } from './fx.js';
@@ -12,7 +12,7 @@ import { makeIcons } from './r3d/icons.js';
 
 const params = new URLSearchParams(location.search);
 const debug = {
-  t: params.get('t'), lv: params.get('lv'), god: params.has('god'), fps: params.has('debug'),
+  t: params.get('t'), lv: params.get('lv'), god: params.has('god'), fps: params.has('debug'), nr: params.has('nr'),
   speed: Math.max(1, Math.min(8, Number(params.get('speed')) || 1)),
 };
 const mobile = matchMedia('(pointer: coarse)').matches;
@@ -62,6 +62,7 @@ startBtn.disabled = true;
     R.setCharacter(Progress.selected());
     const pick = (ch) => { Progress.select(ch.id); R.setCharacter(ch); sfxSelect(); };
     UI.renderChars(CHARACTERS, Progress, pick);
+    UI.renderModes(Progress, () => sfxSelect());
     G.onKill = (e) => R.onKill(e);
     G.player = titleDummy;
     ready = true;
@@ -88,7 +89,7 @@ function start() {
   resetInput();
   FX.clear();
   R.resetRun();
-  newRun(ch);
+  newRun(ch, Progress.mode());
 }
 function setPaused(p) {
   if (p && G.state === 'play') { G.state = 'paused'; UI.showPause(true); resetInput(); }
@@ -96,6 +97,10 @@ function setPaused(p) {
 }
 
 startBtn.addEventListener('click', start);
+document.getElementById('ult').addEventListener('pointerdown', (e) => { e.preventDefault(); castUlt(); });
+document.getElementById('codexBtn').addEventListener('click', () => UI.openCodex(Progress));
+document.getElementById('codexClose').addEventListener('click', () => UI.closeCodex());
+document.querySelectorAll('#codexTabs button').forEach((b) => b.addEventListener('click', () => UI.codexTab(Progress, b.dataset.tab)));
 document.getElementById('retryBtn').addEventListener('click', start);
 document.getElementById('titleBtn').addEventListener('click', toTitle);
 document.getElementById('pauseBtn').addEventListener('click', () => setPaused(true));
@@ -110,6 +115,7 @@ function toTitle() {
   G.player = titleDummy;
   UI.showTitle();
   UI.renderChars(CHARACTERS, Progress, (c) => { Progress.select(c.id); R.setCharacter(c); });
+  UI.renderModes(Progress, () => {});
   music.title();
 }
 for (const id of ['muteBtn', 'muteBtn2']) {
@@ -122,14 +128,18 @@ addEventListener('pointerdown', () => { initAudio(); if (G.state === 'title') mu
 document.addEventListener('visibilitychange', () => { if (document.hidden) setPaused(true); });
 
 input.onKey = (e) => {
-  if (G.state === 'chest') {
+  if (G.state === 'play' && e.code === 'Space') {
+    castUlt();
+  } else if (G.state === 'chest') {
     if (e.code === 'Space' || e.code === 'Enter') UI.chestContinue();
   } else if (G.state === 'levelup' && UI.levelUpOpen()) {
     const n = { Digit1: 0, Digit2: 1, Digit3: 2, Numpad1: 0, Numpad2: 1, Numpad3: 2 }[e.code];
     if (n !== undefined) UI.pick(n);
+  } else if (e.code === 'Escape' && !document.getElementById('codex').classList.contains('hidden')) {
+    UI.closeCodex();
   } else if (e.code === 'Escape' || e.code === 'KeyP') {
     setPaused(G.state === 'play');
-  } else if ((e.code === 'Enter' || e.code === 'Space') && (G.state === 'title' || G.state === 'result')) {
+  } else if ((e.code === 'Enter' || e.code === 'Space') && (G.state === 'title' || G.state === 'result') && document.getElementById('codex').classList.contains('hidden')) {
     start();
   }
 };
@@ -145,7 +155,7 @@ function frame(now) {
     FX.update(rdt * (G.state === 'levelup' || G.state === 'chest' ? 0.5 : 1));
     if (G.state === 'title') { input.camYaw += rdt * 0.12; G.time += rdt; }
   }
-  if (ready) R.render(G, rdt);
+  if (ready && !debug.nr) R.render(G, rdt);   // nr: 描画を省いて進行だけ速く回す（バランス確認用）
   if (debug.fps) {
     fpsAcc += rdt; fpsN++;
     if (fpsAcc > 0.5) {

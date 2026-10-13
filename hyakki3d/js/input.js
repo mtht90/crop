@@ -18,17 +18,23 @@ export function initInput(canvas, mobile) {
     if (input.onKey) input.onKey(e);
     if (e.code.startsWith('Arrow') || e.code === 'Space') e.preventDefault();
   });
-  addEventListener('keyup', (e) => keys.delete(e.code));
+  addEventListener('keyup', (e) => {
+    keys.delete(e.code);
+    // Mac は ⌘ を押している間の keyup が来ないことがあり、キーが押しっぱなし扱いで残る
+    if (e.key === 'Meta' || e.key === 'Control' || e.key === 'Alt') keys.clear();
+  });
   addEventListener('blur', () => { keys.clear(); release(); });
+  document.addEventListener('visibilitychange', () => { keys.clear(); release(); });
 
   const st = input.stick, lk = input.look;
   canvas.addEventListener('pointerdown', (e) => {
     const touch = e.pointerType === 'touch';
     // タッチ：左半分＝移動スティック、右半分＝カメラ。マウス：ドラッグでカメラ
-    if (touch && e.clientX < innerWidth * 0.5 && !st.active) {
+    // 前の指やドラッグの終わりを取りこぼしていても、新しく触れた方を優先して操作を取り戻す
+    if (touch && e.clientX < innerWidth * 0.5) {
       st.active = true; st.id = e.pointerId;
       st.ox = st.x = e.clientX; st.oy = st.y = e.clientY;
-    } else if (lk.id === -1) {
+    } else if (lk.id === -1 || !touch || e.clientX >= innerWidth * 0.5) {
       lk.id = e.pointerId; lk.lx = e.clientX; input.camDragging = true;
     }
     canvas.setPointerCapture?.(e.pointerId);
@@ -40,6 +46,8 @@ export function initInput(canvas, mobile) {
       const dx = st.x - st.ox, dy = st.y - st.oy, d = Math.hypot(dx, dy), R = input.stickRadius * 1.4;
       if (d > R) { st.ox = st.x - dx / d * R; st.oy = st.y - dy / d * R; }
     } else if (e.pointerId === lk.id) {
+      // ボタンを離した通知を取りこぼしたマウスは、ここでドラッグを終える
+      if (e.pointerType === 'mouse' && e.buttons === 0) { lk.id = -1; input.camDragging = false; return; }
       input.camYaw -= (e.clientX - lk.lx) * input.sens * (e.pointerType === 'touch' ? 1.3 : 1);
       lk.lx = e.clientX;
     }
@@ -51,6 +59,10 @@ export function initInput(canvas, mobile) {
   };
   canvas.addEventListener('pointerup', end);
   canvas.addEventListener('pointercancel', end);
+  canvas.addEventListener('lostpointercapture', end);
+  // レベルアップ画面などの上で指やボタンを離しても終わらせる
+  addEventListener('pointerup', end);
+  addEventListener('pointercancel', end);
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 }
 

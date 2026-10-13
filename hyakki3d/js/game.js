@@ -1,7 +1,7 @@
 // ゲーム本体：状態・更新・描画
 import {
   RUN, LIMITS, PLAYER, ENEMIES, SPAWN, EVENTS, ELITE, DROPS, SKILLS, SLOTS,
-  PICK_WEIGHT, hpScale, speedScale, xpNeed, CHARACTERS, EVOLUTIONS,
+  PICK_WEIGHT, hpScale, speedScale, xpNeed, CHARACTERS, EVOLUTIONS, MODES,
 } from './config.js';
 import { Grid } from './grid.js';
 import { FX } from './fx.js';
@@ -53,8 +53,12 @@ export function initGame(opts) {
 }
 
 // ================================================================ ラン開始
-export function newRun(char = CHARACTERS[0]) {
+export function newRun(char = CHARACTERS[0], mode = MODES[0]) {
   G.char = char;
+  G.mode = mode;
+  G.adapt = 1; G.adaptT = 0; G.lastHurt = -99;
+  G.mids = []; G.midBoss = null; G.enraged = false;
+  G.ult = 0; G.ultT = 0; G.ultKind = null; G.ultTick = 0; G.ultReady = false;
   G.evolved = new Set();
   G.chests = 0;
   G.critFxT = 0;
@@ -72,6 +76,7 @@ export function newRun(char = CHARACTERS[0]) {
   };
   G.cam.x = 0; G.cam.y = 0;
   G.time = Number(G.debug.t) || 0;
+  G.sched = G.time * mode.k;
   G.frame = 0;
   G.skills = [];
   G.level = 1; G.xp = 0; G.xpNext = xpNeed(1); G.pending = 0;
@@ -79,9 +84,10 @@ export function newRun(char = CHARACTERS[0]) {
   G.shake = G.flash = G.hurtFlash = G.redPulse = G.slowT = G.hitstop = 0;
   G.boss = null; G.ending = null; G.spawnAcc = 0; G.milestoneIdx = 0;
   G.eventIdx = 0;
-  while (G.eventIdx < EVENTS.length && EVENTS[G.eventIdx].t < G.time) G.eventIdx++;
+  while (G.eventIdx < EVENTS.length && EVENTS[G.eventIdx].t < G.sched) G.eventIdx++;
   G.nextElite = ELITE.first;
-  while (G.nextElite < G.time) G.nextElite += ELITE.every;
+  while (G.nextElite < G.sched) G.nextElite += ELITE.every;
+  if (!cheat()) Progress.startRun();
   for (const id of char.start) addOrUpgrade(id);
   const extra = Number(G.debug.lv) || 0;          // デバッグ: ランダムにレベルを上げた状態で開始
   for (let i = 0; i < extra; i++) {
@@ -119,22 +125,28 @@ export function addOrUpgrade(id) {
 
 function recalcStats() {
   const st = G.st;
-  st.dmgMul = 1 + 0.12 * skillLv('reiryoku');
-  st.cdMul = 1 - 0.07 * skillLv('sokuei');
+  st.dmgMul = 1 + 0.09 * skillLv('reiryoku');
+  st.cdMul = 1 - 0.06 * skillLv('sokuei');
   st.speedMul = 1 + 0.08 * skillLv('idaten');
   st.pickup = PLAYER.pickup * (1 + 0.3 * skillLv('kyukon'));
   st.xpMul = 1 + 0.05 * skillLv('kyukon');
   const sk = skillLv('shikiko');
-  st.shikiDmg = 1 + 0.12 * sk;
-  st.shikiDur = 1 + 0.1 * sk;
+  st.shikiDmg = 1 + 0.09 * sk;
+  st.shikiDur = 1 + 0.08 * sk;
   st.shikiCount = Math.floor(sk / 2);
   const md = (G.char && G.char.mods) || {};
   if (md.cd) st.cdMul *= md.cd;
   if (md.shikiDur) st.shikiDur *= md.shikiDur;
   if (md.speed) st.speedMul *= md.speed;
   if (md.shikiCount) st.shikiCount += md.shikiCount;
+  st.crit = PLAYER.crit + (md.crit || 0);
+  st.critMul = PLAYER.critMul + (md.critMul || 0);
+  st.taken = md.taken || 1;
+  st.heal = md.heal || 1;
+  st.drain = md.drain || 0;
+  if (md.dmg) st.dmgMul *= md.dmg;
   const c = skillLv('chomei');
-  st.regen = 0.4 * c;
+  st.regen = 0.4 * c + (md.regen || 0);
   const P = G.player;
   if (P) {
     const newMax = PLAYER.hp + 20 * c + (md.hp || 0);
@@ -186,12 +198,12 @@ export function spawnEnemy(type, x, y, force = false) {
   const e = epool.pop() || newEnemy();
   e.uid = uidSeq++; e.alive = true; e.def = d; e.type = type; e.spr = null;
   e.x = x; e.y = y; e.vx = 0; e.vy = 0;
-  e.maxHp = e.hp = d.boss ? d.hp : d.hp * hpScale(G.time);
-  e.r = d.r; e.dmg = d.dmg; e.xp = d.xp; e.mass = d.mass;
-  e.speed = d.speed * speedScale(G.time) * (0.88 + Math.random() * 0.24);
+  e.maxHp = e.hp = d.boss || d.mid ? d.hp : d.hp * hpScale(G.sched) * G.adapt * G.mode.hp;
+  e.r = d.r; e.dmg = d.boss || d.mid ? d.dmg : d.dmg * G.adapt ** 0.35; e.xp = d.xp; e.mass = d.mass;
+  e.speed = d.speed * speedScale(G.sched) * (d.mid ? 1 : 0.88 + Math.random() * 0.24);
   e.flash = 0; e.slowT = 0; e.march = false; e.wob = Math.random() * TAU; e.hopT = Math.random();
   e.last.fill(-99);
-  e.elite = !!d.elite; e.boss = !!d.boss; e.ai = null; e.dir = 0; e.at = Math.random() * 4;
+  e.elite = !!d.elite; e.boss = !!d.boss; e.mid = !!d.mid; e.ai = null; e.dir = 0; e.at = Math.random() * 4;
   G.enemies.push(e);
   return e;
 }
@@ -255,13 +267,13 @@ function dropPickup(kind, x, y) {
 // ================================================================ ダメージ
 export function hurtEnemy(e, base, nx, ny, kb, ally = false) {
   if (!e.alive) return;
-  let dmg = base * G.st.dmgMul;
-  const crit = Math.random() < PLAYER.crit;
-  if (crit) dmg *= PLAYER.critMul;
+  let dmg = base * G.st.dmgMul * (G.ultKind === 'youka' ? 2 : 1);
+  const crit = Math.random() < G.st.crit;
+  if (crit) dmg *= G.st.critMul;
   dmg = Math.max(1, Math.round(dmg * (0.9 + Math.random() * 0.2)));
   e.hp -= dmg;
   e.flash = 0.1;
-  if (kb && !e.boss) {
+  if (kb && !e.boss && !e.mid) {
     const k = kb / e.mass;
     e.vx += nx * k; e.vy += ny * k;
   }
@@ -271,7 +283,7 @@ export function hurtEnemy(e, base, nx, ny, kb, ally = false) {
     if (G.critFxT <= G.time) { G.critFxT = G.time + 0.12; FX.ring(e.x, e.y, 4, 40, 0.18, '#ffffff', 5); FX.burst(e.x, e.y, 5, 3, 260, 6, 0.25, 1.0); }
   }
   // 群れが濃い終盤は、式神の通常ダメージ数字を出さず、自分の数字も間引いて画面を空ける
-  else if (!G.dense || (!ally && Math.random() < 0.4) || e.boss) FX.text(e.x, e.y - e.r, '' + dmg, ally ? '#bfe6ff' : '#ffffff', e.boss ? 18 : 14);
+  else if (!G.dense || (!ally && Math.random() < 0.4) || e.boss || e.mid) FX.text(e.x, e.y - e.r, '' + dmg, ally ? '#bfe6ff' : '#ffffff', e.boss ? 18 : 14);
   sfx.hit();
   if (e.hp <= 0) killEnemy(e);
 }
@@ -280,8 +292,17 @@ export function killEnemy(e) {
   if (!e.alive) return;
   e.alive = false;
   if (e.boss) { bossDefeated(e); return; }
+  if (e.mid) { midDefeated(e); return; }
   if (G.onKill) G.onKill(e);
   G.kills++;
+  if (!cheat()) Progress.addKill(e.type);
+  const P = G.player;
+  if (G.st.drain || G.ultKind === 'youka') P.hp = Math.min(P.maxHp, P.hp + G.st.drain + (G.ultKind === 'youka' ? 1.2 : 0));
+  // 奥義のゲージは祓うほど貯まる
+  if (!G.ultKind && G.ult < 1) {
+    G.ult = Math.min(1, G.ult + 1 / 160);
+    if (G.ult >= 1) { UI.banner(`奥義「${G.char.ult.name}」 準備完了 ─ スペース`, 'gold'); sfx.chest(); }
+  }
   G.streak++;
   G.streakT = 2.2;
   if (G.milestoneIdx < MILESTONES.length && G.kills >= MILESTONES[G.milestoneIdx]) {
@@ -313,6 +334,9 @@ export function killEnemy(e) {
 function hurtPlayer(dmg) {
   const P = G.player;
   if (P.hurtT > 0 || G.state !== 'play' || G.ending || G.debug.god) return;
+  if (G.ultKind === 'kongo' || G.ultKind === 'kagenui') return;
+  dmg = Math.max(1, Math.round(dmg * G.st.taken));
+  G.lastHurt = G.time;
   P.hp -= dmg;
   P.hurtT = PLAYER.hurtCd;
   G.hurtFlash = 0.4;
@@ -327,7 +351,7 @@ function hurtPlayer(dmg) {
 
 function healPlayer(v) {
   const P = G.player;
-  P.hp = Math.min(P.maxHp, P.hp + v);
+  P.hp = Math.min(P.maxHp, P.hp + v * (G.st.heal || 1));
   FX.burst(P.x, P.y, 24, 5, 160, 8, 0.7);
   FX.anim('boost', P.x, P.y - 6, { scale: 1, follow: P, add: true, force: true });
   sfx.heal();
@@ -346,7 +370,7 @@ function purge() {
   FX.anim('explosion', G.player.x, G.player.y, { scale: 6, force: true, dur: 0.7, alpha: 0.9 });
   for (const e of G.enemies) {
     if (!e.alive) continue;
-    if (e.boss) { hurtEnemy(e, e.maxHp * 0.04 / G.st.dmgMul, 0, 0, 0); continue; }
+    if (e.boss || e.mid) { hurtEnemy(e, e.maxHp * 0.04 / G.st.dmgMul, 0, 0, 0); continue; }
     if (e.x > v.x0 && e.x < v.x1 && e.y > v.y0 && e.y < v.y1) killEnemy(e);
   }
   UI.banner('大祓', 'white');
@@ -354,7 +378,7 @@ function purge() {
 
 // 進化できる組み合わせ（最大 Lv の術 ＋ 補助）を探す
 // デバッグ開始（途中の時刻・レベルから始める）では解放の記録を付けない
-const cheat = () => !!(G.debug.t || G.debug.lv || G.debug.god);
+const cheat = () => !!(G.debug.t || G.debug.lv || G.debug.god || G.debug.nr || G.debug.speed > 1);
 
 function findEvolution() {
   for (const ev of EVOLUTIONS) {
@@ -369,14 +393,15 @@ function evolve(ev) {
   if (!s) return;
   s.id = ev.to; s.def = SKILLS[ev.to]; s.lv = 1; s.t = 0.2;
   G.evolved.add(ev.from);
+  if (!cheat()) Progress.addEvo(ev.to);
   recalcStats();
   UI.refreshSkills(G);
 }
 
 // 宝箱：ルーレット演出（UI 側）を出し、閉じたら再開。中身はここで確定・適用する
-function openChest() {
+function openChest(big = false) {
   const roll = Math.random();
-  const n = roll < 0.07 ? 5 : roll < 0.32 ? 3 : 1;
+  const n = big ? (roll < 0.35 ? 5 : 3) : roll < 0.07 ? 5 : roll < 0.32 ? 3 : 1;
   const rewards = [];
   const ev = findEvolution();
   if (ev) {
@@ -416,10 +441,99 @@ function openChest() {
 function purgeNear(R) {
   const P = G.player;
   for (const e of G.enemies) {
-    if (!e.alive || e.boss) continue;
+    if (!e.alive || e.boss || e.mid) continue;
     const dx = e.x - P.x, dy = e.y - P.y;
     if (dx * dx + dy * dy < R * R) killEnemy(e);
   }
+}
+
+// ================================================================ 奥義（退魔師ごとの固有技。ゲージが満ちたらスペース／ボタン）
+export function castUlt() {
+  if (G.state !== 'play' || G.ending || G.ult < 1 || G.ultKind) return;
+  const P = G.player, u = G.char.ult, pow = 1 + G.level * 0.06;
+  G.ult = 0;
+  if (!cheat()) Progress.addUlt();
+  G.flash = 0.3; G.fovKick = 1.2; G.hitstop = 0.08; addShake(0.5);
+  FX.seal(P.x, P.y, 160, 1.2, null, true);
+  UI.banner(`奥義 ${u.name}`, 'rainbow');
+  sfx.boom();
+  switch (u.id) {
+    case 'hyakki': {
+      const L = { hp: 40 * pow, dmg: 14 * pow, dur: 14 };
+      for (let i = 0; i < 18; i++) {
+        const a = (i / 18) * TAU;
+        spawnAlly('kami', P.x + Math.cos(a) * 70, P.y + Math.sin(a) * 70, L);
+      }
+      purgeNear(220);
+      FX.ring(P.x, P.y, 20, 300, 0.8, '#8fe3ff', 12);
+      sfx.summon();
+      break;
+    }
+    case 'harae':
+      healPlayer(P.maxHp * 0.35);
+      G.bullets.length = 0;
+      purge();
+      break;
+    case 'kagenui': G.ultKind = 'kagenui'; G.ultT = 3; G.ultTick = 0; break;
+    case 'kongo': G.ultKind = 'kongo'; G.ultT = 6; G.ultTick = 0; break;
+    case 'youka': G.ultKind = 'youka'; G.ultT = 8; FX.ring(P.x, P.y, 20, 260, 0.7, '#b05cff', 12); break;
+    case 'issen': {
+      // 向いている方向へ長さ 1100・幅 170 の帯を一太刀で斬る
+      const fx = P.fx, fy = P.fy, L = 1100, W = 85, dmg = 220 * pow;
+      for (const e of G.enemies) {
+        if (!e.alive) continue;
+        const ox = e.x - P.x, oy = e.y - P.y;
+        const along = ox * fx + oy * fy, side = Math.abs(-ox * fy + oy * fx);
+        if (along < -40 || along > L || side > W + e.r) continue;
+        if (e.boss || e.mid) hurtEnemy(e, e.maxHp * 0.06 / G.st.dmgMul + dmg, fx, fy, 0);
+        else hurtEnemy(e, dmg, fx, fy, 400);
+      }
+      for (let k = 0; k < 7; k++) FX.slash(P.x + fx * (k + 1) * 140, P.y + fy * (k + 1) * 140, 110, Math.atan2(fy, fx), '#ffd9a0', 0.3);
+      for (let k = 0; k < 40; k++) {
+        const t = Math.random() * L;
+        FX.particle(P.x + fx * t, P.y + fy * t, (Math.random() - 0.5) * 200, (Math.random() - 0.5) * 200, 0.6, 9, 0, 2);
+      }
+      G.hitstop = 0.18; addShake(0.9); G.flash = 0.45;
+      break;
+    }
+  }
+}
+
+function updateUlt(dt) {
+  if (!G.ultKind) return;
+  const P = G.player, pow = 1 + G.level * 0.06;
+  G.ultT -= dt;
+  G.ultTick -= dt;
+  if (G.ultKind === 'kagenui' && G.ultTick <= 0) {
+    // 近い順に 4 体を斬る
+    G.ultTick = 0.08;
+    const near = [];
+    for (const e of G.enemies) {
+      if (!e.alive) continue;
+      const d = Math.hypot(e.x - P.x, e.y - P.y);
+      if (d < 280) near.push([d, e]);
+    }
+    near.sort((a, b) => a[0] - b[0]);
+    for (let i = 0; i < Math.min(4, near.length); i++) {
+      const e = near[i][1];
+      const a = Math.random() * TAU;
+      FX.slash(e.x, e.y, 46, a, '#d2a8ff', 0.16);
+      hurtEnemy(e, 34 * pow, Math.cos(a), Math.sin(a), 180);
+    }
+    FX.burst(P.x, P.y, 3, 4, 120, 6, 0.3);
+  } else if (G.ultKind === 'kongo' && G.ultTick <= 0) {
+    G.ultTick = 0.5;
+    FX.ring(P.x, P.y, 20, 220, 0.4, '#ffd35a', 10);
+    addShake(0.2); sfx.slam();
+    for (const e of G.enemies) {
+      if (!e.alive) continue;
+      const dx = e.x - P.x, dy = e.y - P.y, d = Math.hypot(dx, dy) || 1;
+      if (d < 220 + e.r) hurtEnemy(e, 26 * pow, dx / d, dy / d, 420);
+    }
+  } else if (G.ultKind === 'youka' && G.frame % 3 === 0) {
+    FX.burst(P.x, P.y, 2, 4, 90, 7, 0.4);
+  }
+  if (G.ultT <= 0) G.ultKind = null;
 }
 
 // ================================================================ 位置
@@ -451,12 +565,18 @@ function pickMix(mix) {
 
 // ================================================================ 出現管理
 function updateDirector(dt) {
-  const t = G.time;
   if (G.ending) return;
+  G.sched += dt * G.mode.k;
+  const t = G.sched;
   let i = 0;
   while (i < SPAWN.length - 1 && SPAWN[i + 1].t <= t) i++;
   const a = SPAWN[i], b = SPAWN[i + 1];
-  const rate = b ? a.rate + (b.rate - a.rate) * ((t - a.t) / (b.t - a.t)) : a.rate;
+  let rate = b ? a.rate + (b.rate - a.rate) * ((t - a.t) / (b.t - a.t)) : a.rate;
+  if (G.enraged) rate = Math.max(rate, 60);
+  updateAdapt(dt);
+  // 時計を詰めたモードは育つ時間が短いので、湧く量を √k で割って釣り合わせる
+  rate *= (0.7 + 0.3 * G.adapt) / Math.sqrt(G.mode.k);
+  if (G.midBoss) rate *= 0.5;   // 中ボス戦は雑魚を減らして一騎打ちに寄せる
   G.spawnAcc += rate * dt;
   while (G.spawnAcc >= 1) {
     G.spawnAcc -= 1;
@@ -468,7 +588,7 @@ function updateDirector(dt) {
     G.nextElite += ELITE.every;
     const n = 1 + Math.floor(t / 300);
     for (let k = 0; k < n; k++) { edgePos(80); spawnEnemy('oni', RX, RY, true); }
-    UI.banner('赤鬼 出現 ─ 宝箱を落とす', 'small');
+    UI.banner('土蜘蛛 出現 ─ 宝箱を落とす', 'small');
   }
 
   while (G.eventIdx < EVENTS.length && t >= EVENTS[G.eventIdx].t) startEvent(EVENTS[G.eventIdx++]);
@@ -488,7 +608,26 @@ function updateDirector(dt) {
     if (m.left <= 0) G.marches.splice(k, 1);
   }
 
-  if (t >= RUN.winAt && !G.ending) beginEnding(true);
+  // 制限時間を過ぎてもボスが残っていれば激昂。時間切れでの勝利はない
+  if (G.time >= G.mode.len && !G.enraged) {
+    G.enraged = true;
+    UI.banner('夜明けは来ない ─ がしゃどくろ 激昂', 'huge');
+    sfx.alarm(); addShake(0.6); G.redPulse = 2;
+    if (G.boss) { G.boss.speed *= 1.6; G.boss.dmg *= 1.6; }
+  }
+}
+
+// 敵の強さを自分の強さに合わせる：しばらく無傷なら硬く・強く・多くし、押し込まれて体力が減ると緩める。
+// 上限は時間とともに上がる（序盤から急に硬くはならない）
+function updateAdapt(dt) {
+  G.adaptT += dt;
+  if (G.adaptT < 1) return;
+  G.adaptT = 0;
+  const P = G.player, calm = G.time - G.lastHurt;
+  const cap = 1 + Math.max(0, G.sched - 120) / 220;
+  if (calm > 8 && !G.midBoss) G.adapt += 0.03;
+  else if (calm < 2 && P.hp < P.maxHp * 0.7) G.adapt -= 0.1;
+  G.adapt = Math.max(1, Math.min(cap, G.adapt));
 }
 
 function startEvent(ev) {
@@ -515,13 +654,27 @@ function startEvent(ev) {
     G.redPulse = 1.5;
     if (ev.big) { addShake(0.5); music.intensity = 1; }
     else music.intensity = Math.max(music.intensity, 0.5);
+  } else if (ev.type === 'mid') {
+    edgePos(120);
+    const e = spawnEnemy(ev.enemy, RX, RY, true);
+    e.maxHp = e.hp = e.def.hp * (0.7 + 0.3 * G.adapt) * (G.mode.k > 2 ? 0.6 : 1);
+    e.ai = { state: 'walk', t: 2.5, dx: 0, dy: 0, n: 0, a: 0 };
+    G.midBoss = e;
+    UI.banner(ev.banner, 'huge');
+    UI.bossBar(true, 1, e.def.name);
+    sfx.alarm();
+    addShake(0.5);
+    G.redPulse = 1.5;
+    music.intensity = 1;
   } else if (ev.type === 'boss') {
     edgePos(120);
     const e = spawnEnemy('tengu', RX, RY, true);
+    // 自分の強さ（追従係数）に合わせて硬くする。短期決戦は育つ時間が短いぶん控えめ
+    e.maxHp = e.hp = e.def.hp * (0.6 + 0.4 * G.adapt) * (G.mode.k > 2 ? 0.7 : 1);
     e.ai = { state: 'walk', t: 3, dx: 0, dy: 0, n: 0, shot: 0 };
     G.boss = e;
     UI.banner(ev.banner, 'huge');
-    UI.bossBar(true, 1);
+    UI.bossBar(true, 1, e.def.name);
     sfx.alarm();
     addShake(0.6);
     G.redPulse = 2;
@@ -533,9 +686,14 @@ function startEvent(ev) {
 function updateBoss(e, dt) {
   const P = G.player, ai = e.ai;
   const dx = P.x - e.x, dy = P.y - e.y, d = Math.hypot(dx, dy) || 1;
-  ai.t -= dt;
+  ai.t -= dt * (ai.rage ? 1.5 : 1);
   e.at += dt * 12;
   if (e.flash > 0) e.flash -= dt;
+  if (!ai.rage && e.hp < e.maxHp * 0.5) {
+    ai.rage = true;
+    UI.banner('がしゃどくろ 怒り狂う', 'red');
+    FX.ring(e.x, e.y, 30, 300, 0.7, '#ff3040', 12); sfx.alarm(); addShake(0.5); G.redPulse = 1.5;
+  }
   switch (ai.state) {
     case 'walk': {
       const sp = d > 500 ? e.speed * 2.5 : e.speed;
@@ -569,10 +727,10 @@ function updateBoss(e, dt) {
     }
     case 'barrage':
       if (ai.t <= 0) {
-        const n = 18, off = ai.n * 0.17;
+        const n = ai.rage ? 26 : 18, off = ai.n * 0.17, bs = ai.rage ? 230 : 190;
         for (let i = 0; i < n; i++) {
           const a = off + (i / n) * TAU;
-          spawnBullet(e.x, e.y, Math.cos(a) * 190, Math.sin(a) * 190, 16);
+          spawnBullet(e.x, e.y, Math.cos(a) * bs, Math.sin(a) * bs, 16);
         }
         FX.ring(e.x, e.y, 30, 90, 0.3, '#ff7a3a', 6);
         sfx.shoot();
@@ -592,6 +750,108 @@ function updateBoss(e, dt) {
   }
 }
 
+// ================================================================ 中ボス AI
+// 大蛇：突進（地面に予告）と毒液の扇撃ち。骸法師：渦巻く呪弾・瞬間移動・骸骨兵の召喚
+function updateMid(e, dt) {
+  const P = G.player, ai = e.ai;
+  const dx = P.x - e.x, dy = P.y - e.y, d = Math.hypot(dx, dy) || 1;
+  ai.t -= dt;
+  e.at += dt * 8;
+  if (e.flash > 0) e.flash -= dt;
+  const snake = e.type === 'orochi';
+  switch (ai.state) {
+    case 'walk': {
+      const sp = d > 520 ? e.speed * 2.5 : e.speed;
+      e.x += dx / d * sp * dt; e.y += dy / d * sp * dt;
+      e.yaw = Math.atan2(dx, dy);
+      if (ai.t <= 0) {
+        const r = Math.random();
+        if (snake) {
+          if (r < 0.5) { ai.state = 'tele'; ai.t = 0.9; ai.dx = dx / d; ai.dy = dy / d; }
+          else { ai.state = 'spit'; ai.t = 0; ai.n = 3; }
+        } else if (r < 0.4) { ai.state = 'spiral'; ai.t = 2.6; ai.a = Math.random() * TAU; ai.shot = 0; }
+        else if (r < 0.7) {
+          ai.state = 'walk'; ai.t = 2.2;
+          FX.seal(e.x, e.y, 90, 0.6);
+          const a = Math.random() * TAU;
+          e.x = P.x + Math.cos(a) * 300; e.y = P.y + Math.sin(a) * 300;
+          FX.seal(e.x, e.y, 90, 0.8); FX.burst(e.x, e.y, 30, 3, 260, 10, 0.6); sfx.summon();
+        } else {
+          ai.state = 'walk'; ai.t = 2.6;
+          FX.seal(e.x, e.y, 120, 1.0);
+          for (let i = 0; i < 16; i++) {
+            const a = (i / 16) * TAU;
+            spawnEnemy('kooni', P.x + Math.cos(a) * 250, P.y + Math.sin(a) * 250, true);
+          }
+          sfx.alarm();
+        }
+      }
+      break;
+    }
+    case 'tele':
+      ai.dx = ai.dx * 0.9 + (dx / d) * 0.1; ai.dy = ai.dy * 0.9 + (dy / d) * 0.1;
+      e.yaw = Math.atan2(ai.dx, ai.dy);
+      if (ai.t <= 0) { ai.state = 'charge'; ai.t = 0.65; sfx.slam(); addShake(0.2); }
+      break;
+    case 'charge': {
+      const l = Math.hypot(ai.dx, ai.dy) || 1;
+      e.x += ai.dx / l * 520 * dt; e.y += ai.dy / l * 520 * dt;
+      if (G.frame % 2 === 0) FX.burst(e.x, e.y, 2, 6, 80, 12, 0.5);
+      if (ai.t <= 0) { ai.state = 'walk'; ai.t = 2.2; }
+      break;
+    }
+    case 'spit':
+      e.yaw = Math.atan2(dx, dy);
+      if (ai.t <= 0) {
+        const base = Math.atan2(dy, dx);
+        for (let i = -2; i <= 2; i++) {
+          const a = base + i * 0.2;
+          spawnBullet(e.x, e.y, Math.cos(a) * 220, Math.sin(a) * 220, 12);
+        }
+        FX.ring(e.x, e.y, 20, 70, 0.3, '#9dff6a', 5);
+        sfx.shoot();
+        ai.n--; ai.t = 0.5;
+        if (ai.n <= 0) { ai.state = 'walk'; ai.t = 2.4; }
+      }
+      break;
+    case 'spiral':
+      ai.shot -= dt;
+      if (ai.shot <= 0) {
+        ai.shot = 0.09; ai.a += 0.33;
+        for (let k = 0; k < 3; k++) {
+          const a = ai.a + (k / 3) * TAU;
+          spawnBullet(e.x, e.y, Math.cos(a) * 170, Math.sin(a) * 170, 13);
+        }
+      }
+      if (ai.t <= 0) { ai.state = 'walk'; ai.t = 2.0; }
+      break;
+  }
+  if (d < e.r + P.r) hurtPlayer(e.dmg);
+  const q = G.agrid.query(e.x, e.y, e.r + 30);
+  for (let k = 0; k < q; k++) {
+    const a = G.blockers[G.agrid.out[k]];
+    if (!a || !a.alive) continue;
+    const ox = a.x - e.x, oy = a.y - e.y, rr = e.r + a.r;
+    if (ox * ox + oy * oy < rr * rr) { a.hp -= 160 * dt; a.x += ox * 0.1; a.y += oy * 0.1; }
+  }
+}
+
+function midDefeated(e) {
+  if (G.midBoss === e) { G.midBoss = null; UI.bossBar(false); }
+  G.mids.push(e.type);
+  if (!cheat()) Progress.addMid(e.type);
+  if (G.onKill) G.onKill(e);
+  G.kills++;
+  FX.burst(e.x, e.y, 90, e.def.color, 460, 14, 1.2);
+  FX.ring(e.x, e.y, 20, 320, 0.8, '#ffd35a', 12);
+  FX.anim('explosion', e.x, e.y, { scale: 4, force: true, dur: 0.8 });
+  G.flash = 0.7; G.hitstop = 0.15; addShake(0.8);
+  sfx.boom();
+  UI.banner(`${e.def.name} 討伐! ─ 大宝箱`, 'huge');
+  dropGem(e.x, e.y, e.xp);
+  G.pickups.push({ kind: 'chest', big: true, x: e.x, y: e.y, alive: true, t: 0, mag: false, spd: 0 });
+}
+
 function bossDefeated(e) {
   G.boss = null;
   UI.bossBar(false);
@@ -602,7 +862,7 @@ function bossDefeated(e) {
   G.hitstop = 0.25;
   addShake(1);
   sfx.boom();
-  UI.banner('大天狗 討伐!', 'huge');
+  UI.banner('がしゃどくろ 討伐!', 'huge');
   FX.anim('explosion', e.x, e.y, { scale: 6, force: true, dur: 1.0 });
   beginEnding(true, e);
 }
@@ -636,11 +896,13 @@ function updateEnding(rdt) {
 
 function endRun(win) {
   G.state = 'result';
-  const fresh = cheat() ? [] : Progress.check({ time: G.time, kills: G.kills, win });
+  const res = cheat() ? { chars: [], achs: [] } : Progress.check({ mode: G.mode.id, char: G.char.id, time: G.time, kills: G.kills, win, mids: G.mids, final: true });
+  const fresh = res.chars;
   if (win) sfx.win(); else sfx.gameover();
   music.title();
   UI.showResult(win, {
-    time: G.time, kills: G.kills, level: G.level, maxAllies: G.maxAllies, dmg: G.dmgDealt, unlocked: fresh,
+    time: G.time, kills: G.kills, level: G.level, maxAllies: G.maxAllies, dmg: G.dmgDealt, unlocked: fresh, achs: res.achs,
+    mode: G.mode, char: G.char, best: Progress.get().best[`${G.mode.id}:${G.char.id}`],
   });
 }
 
@@ -698,7 +960,13 @@ export function step(rdt) {
     FX.ring(P.x, P.y, 10, 200, 0.5, '#ffd35a', 6);
     sfx.gem(30);
   } else if (G.streak < 50) G.streakMark = 0;
-  if (G.frame % 60 === 0 && !cheat()) for (const c of Progress.check({ time: G.time, kills: G.kills })) UI.banner(`陰陽師解放：${c.name}`, 'rainbow');
+  if (G.frame % 90 === 0 && !cheat()) {
+    const r = Progress.check({ mode: G.mode.id, char: G.char.id, time: G.time, kills: G.kills, mids: G.mids });
+    for (const c of r.chars) UI.banner(`退魔師 解放：${c.job} ${c.name}`, 'rainbow');
+    for (const a of r.achs) UI.banner(`実績：${a.name}`, 'gold');
+  }
+  if (G.midBoss && !G.boss) UI.bossBar(true, G.midBoss.hp / G.midBoss.maxHp, G.midBoss.def.name);
+  updateUlt(dt);
 
   if (G.pending > 0 && G.state === 'play' && !G.ending) startLevelUp();
   UI.updateHUD(G);
@@ -717,7 +985,7 @@ function compact(arr, pool) {
 function updatePlayer(dt) {
   pollInput();
   const P = G.player;
-  const sp = PLAYER.speed * G.st.speedMul;
+  const sp = PLAYER.speed * G.st.speedMul * (G.ultKind === 'kagenui' ? 1.8 : G.ultKind === 'youka' ? 1.3 : 1);
   P.moving = input.x !== 0 || input.y !== 0;
   if (P.moving) {
     const l = Math.hypot(input.x, input.y);
@@ -744,6 +1012,7 @@ function updateEnemies(dt) {
     const e = en[i];
     if (!e.alive) continue;
     if (e.boss) { updateBoss(e, dt); continue; }
+    if (e.mid) { updateMid(e, dt); continue; }
     const dx = P.x - e.x, dy = P.y - e.y;
     const d2 = dx * dx + dy * dy;
     const d = Math.sqrt(d2) || 1;
@@ -936,7 +1205,7 @@ function updateGems(dt) {
 }
 
 function gainXp(v) {
-  G.xp += v * G.st.xpMul;
+  G.xp += v * G.st.xpMul * G.mode.xp;
   G.gemChain = Math.min(G.gemChain + 1, 40);
   G.gemT = 0.35;
   sfx.gem(Math.floor(G.gemChain / 3));
@@ -968,7 +1237,7 @@ function updatePickups(dt) {
         UI.banner('魂寄せ', 'green');
         sfx.summon();
       } else if (k.kind === 'bomb') purge();
-      else if (k.kind === 'chest') openChest();
+      else if (k.kind === 'chest') openChest(!!k.big);
     }
   }
 }
@@ -980,7 +1249,7 @@ function startLevelUp() {
   const P = G.player;
   // 霊波：周囲の妖怪を吹き飛ばして一息つかせる
   for (const e of G.enemies) {
-    if (!e.alive || e.boss) continue;
+    if (!e.alive || e.boss || e.mid) continue;
     const dx = e.x - P.x, dy = e.y - P.y, d = Math.hypot(dx, dy) || 1;
     if (d < 220) { e.vx += dx / d * 520 / e.mass; e.vy += dy / d * 520 / e.mass; }
   }

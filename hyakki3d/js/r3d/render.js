@@ -133,7 +133,7 @@ export const R = {
   build(limits) {
     const sc = this.scene;
     this.units = {};
-    for (const k of ['bat', 'skMinion', 'slime', 'frog', 'rat', 'skRogue', 'spiderBig']) this.units[k] = new UnitSet(sc, k, k === 'spiderBig' ? 40 : limits.enemies);
+    for (const k of ['bat', 'skMinion', 'slime', 'frog', 'rat', 'skRogue', 'spiderBig', 'orochi', 'mukuro']) this.units[k] = new UnitSet(sc, k, k === 'spiderBig' ? 40 : k === 'orochi' || k === 'mukuro' ? 4 : limits.enemies);
     this.allies = {};
     for (const k of ['kami', 'byakko', 'zenki', 'karasu']) this.allies[k] = new UnitSet(sc, k, limits.allies);
     for (const u of [...Object.values(this.units), ...Object.values(this.allies)]) for (const im of [...u.walk, ...(u.atk || [])]) { im.castShadow = !this.mobile; }
@@ -210,10 +210,9 @@ export const R = {
   setCharacter(ch) {
     if (this.player && this.charId === ch.id) return;
     if (this.player) this.scene.remove(this.player.root);
-    const hide = ch.model === 'player' ? ['Spellbook', 'Spellbook_open', '1H_Wand'] : [];
-    this.player = new Rig(ch.model, 'player', 1.75, hide);
+    this.player = new Rig(ch.model, 'player', 1.75, ch.hide || []);
+    if (ch.tint) for (const m of this.player.materials()) if (m.isMeshStandardMaterial) { m.emissive = new THREE.Color(ch.tint); m.emissiveIntensity = 0.25; }
     this.player.silhouette(0xfff4dc);
-    if (ch.tint) for (const m of this.player.materials()) { m.emissive = new THREE.Color(ch.tint); m.emissiveIntensity = 0.25; }
     this.scene.add(this.player.root);
     this.player.play('Idle');
     this.charId = ch.id;
@@ -483,10 +482,19 @@ export const R = {
       this.halo.setMatrixAt(nh, tmpM); setC(this.halo, nh++, 0xd84aff, 0.9);
     }
     if (b) marks.push({ x: b.x * S, z: b.y * S, color: '#ff3040', label: '骸', boss: true });
+    const mb = G.midBoss;
+    if (mb && mb.alive) {
+      marks.push({ x: mb.x * S, z: mb.y * S, color: '#ff8a3a', label: mb.type === 'orochi' ? '蛇' : '法', boss: true });
+      const r = mb.r * S * 1.5 * (1 + Math.sin(t * 5) * 0.06);
+      tmpM.compose(tmpV.set(mb.x * S, 0.04, mb.y * S), tmpQ.identity(), tmpS.set(r, 1, r));
+      if (nr < 64) { this.ringD.setMatrixAt(nr, tmpM); setC(this.ringD, nr++, 0xff5020, 1.3); }
+    }
     this.beam.count = nb2; this.halo.count = nh; this.ringD.count = nr;
     for (const m of [this.beam, this.halo, this.ringD]) { m.instanceMatrix.needsUpdate = true; m.instanceColor.needsUpdate = true; }
     // ボス突進の予告帯
-    if (b && b.ai && b.ai.state === 'tele') {
+    const tb = b && b.ai && b.ai.state === 'tele' ? b : mb && mb.alive && mb.ai && mb.ai.state === 'tele' ? mb : null;
+    if (tb) {
+      const b = tb;
       const l = Math.hypot(b.ai.dx, b.ai.dy) || 1;
       this.tele.visible = true;
       this.tele.position.set(b.x * S, 0.05, b.y * S);

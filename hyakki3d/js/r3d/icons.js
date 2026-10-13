@@ -200,7 +200,7 @@ export function makeIcons(R) {
   // 陰陽師の肖像
   for (const ch of CHARACTERS) {
     MAKERS['char_' + ch.id] = () => {
-      const rig = new Rig(ch.model, 'player', 1.75, ch.model === 'player' ? ['Spellbook', 'Spellbook_open', '1H_Wand'] : []);
+      const rig = new Rig(ch.model, 'player', 1.75, ch.hide || []);
       rig.play('Idle');
       rig.update(0.5);
       rig.root.rotation.y = 0.35;

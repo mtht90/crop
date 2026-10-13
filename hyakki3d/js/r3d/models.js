@@ -18,6 +18,9 @@ export const MODELS = {
   rat:       { file: 'rat', height: 0.75, walk: 'Rat_Run', frames: 8 },
   skRogue:   { file: 'sk_rogue', clipsFrom: 'sk_minion', height: 1.75, walk: 'Running_C', frames: 8 },
   spiderBig: { file: 'spider', height: 1.9, walk: 'Spider_Walk', frames: 8 },
+  // ---- 中ボス ----
+  orochi:    { file: 'snake', height: 3.4, walk: 'Snake_Walk', frames: 8 },
+  mukuro:    { file: 'sk_mage', clipsFrom: 'sk_minion', height: 4.4, walk: 'Walking_D_Skeletons', frames: 8 },
   // ---- 式神（霊体として描く） ----
   kami:   { file: 'ally_hooded', clipsFrom: 'player', height: 1.15, walk: 'Running_B', atk: 'Dualwield_Melee_Attack_Slice', frames: 8, spectral: '#6fe0ff' },
   byakko: { file: 'ally_rogue', clipsFrom: 'player', height: 1.6, walk: 'Running_A', atk: 'Dualwield_Melee_Attack_Chop', frames: 8, spectral: '#c08bff' },
@@ -28,7 +31,7 @@ export const MODELS = {
 const gltfs = {};
 
 export async function loadModels(onProgress) {
-  const files = new Set(['player', 'sk_warrior']);
+  const files = new Set(['player', 'sk_warrior', 'ally_knight']);
   for (const m of Object.values(MODELS)) { files.add(m.file); if (m.clipsFrom) files.add(m.clipsFrom); }
   let done = 0;
   await Promise.all([...files].map(async (f) => {
