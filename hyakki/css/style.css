@@ -1,0 +1,234 @@
+:root {
+  --ink: #f4efe2;
+  --dim: #b9b0c9;
+  --gold: #ffd35a;
+  --red: #ff3d4e;
+  --bg: #0d0e16;
+  --panel: rgba(16, 12, 26, 0.88);
+  --font: "Shippori Mincho B1", "Hiragino Mincho ProN", "Yu Mincho", serif;
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body {
+  margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--ink);
+  font-family: var(--font); user-select: none; -webkit-user-select: none; touch-action: none;
+  overscroll-behavior: none;
+}
+canvas { display: block; position: fixed; inset: 0; touch-action: none; }
+.hidden { display: none !important; }
+button { font-family: var(--font); cursor: pointer; }
+
+/* ---------------- HUD ---------------- */
+#hud { position: fixed; inset: 0; pointer-events: none; }
+#xpbar {
+  position: absolute; left: 0; right: 0; top: var(--safe-t); height: 16px;
+  background: rgba(0, 0, 0, 0.6); border-bottom: 1px solid rgba(255, 211, 90, 0.3);
+}
+#xpfill {
+  height: 100%; width: 0; transition: width 0.1s linear;
+  background: linear-gradient(90deg, #36b6ff, #7dffb0 60%, #fff6c0);
+  box-shadow: 0 0 10px #7dffb0;
+}
+#lv {
+  position: absolute; right: 8px; top: 0; font-size: 13px; line-height: 16px; font-weight: 800;
+  text-shadow: 0 0 4px #000, 0 0 2px #000;
+}
+#timer {
+  position: absolute; top: calc(var(--safe-t) + 20px); left: 50%; transform: translateX(-50%);
+  font-size: 30px; font-weight: 800; letter-spacing: 2px; text-shadow: 0 2px 6px #000;
+}
+#timer.dawn { color: #ffd9a0; text-shadow: 0 0 12px #ff9a3d, 0 2px 6px #000; }
+#stats {
+  position: absolute; top: calc(var(--safe-t) + 24px); left: 10px; display: flex; flex-direction: column;
+  gap: 2px; font-size: 14px; text-shadow: 0 1px 3px #000;
+}
+#stats b { font-size: 17px; }
+#stats .ally b { color: #9fe0ff; }
+#stats .foe b { color: #ff8a8a; }
+#skills {
+  position: absolute; top: calc(var(--safe-t) + 24px); right: 54px; display: flex; flex-wrap: wrap;
+  justify-content: flex-end; gap: 4px; max-width: 46vw;
+}
+.sk {
+  width: 32px; height: 32px; border-radius: 6px; position: relative; display: grid; place-items: center;
+  background: rgba(10, 6, 18, 0.75); border: 1.5px solid var(--c); font-size: 17px; font-weight: 800;
+  color: var(--c); box-shadow: 0 0 6px color-mix(in srgb, var(--c) 40%, transparent);
+}
+.sk.summon { border-radius: 50%; }
+.sk.passive { opacity: 0.85; border-style: dashed; }
+.sk i {
+  position: absolute; right: -3px; bottom: -5px; font-style: normal; font-size: 10px; color: #fff;
+  background: #000; border-radius: 4px; padding: 0 3px; line-height: 13px;
+}
+#pauseBtn {
+  position: absolute; top: calc(var(--safe-t) + 22px); right: 8px; pointer-events: auto;
+  width: 40px; height: 36px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(0, 0, 0, 0.5); color: #fff; font-size: 14px;
+}
+#streak {
+  position: absolute; right: 14px; top: 30%; font-weight: 800; color: var(--gold);
+  text-shadow: 0 0 12px #ff7a00, 0 3px 0 #5a1a00; opacity: 0; transform: scale(0.6) rotate(-6deg);
+  transition: opacity 0.2s, transform 0.15s;
+}
+#streak.on { opacity: 1; transform: scale(1) rotate(-6deg); }
+#bossbar {
+  position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(var(--safe-b) + 18px);
+  width: min(560px, 86vw); text-align: center;
+}
+#bossbar .name { font-size: 18px; font-weight: 800; color: #ffb0a0; text-shadow: 0 0 8px #f00, 0 2px 3px #000; }
+#bossbar .bar { height: 14px; background: rgba(0, 0, 0, 0.7); border: 1px solid #ff6a5a; border-radius: 3px; overflow: hidden; }
+#bossfill { height: 100%; width: 100%; background: linear-gradient(90deg, #b3001b, #ff5a3d); transition: width 0.15s; }
+
+#debug {
+  position: fixed; left: 6px; bottom: calc(var(--safe-b) + 4px); font: 12px/1.3 monospace; color: #9f9;
+  background: rgba(0, 0, 0, 0.6); padding: 2px 6px; pointer-events: none; z-index: 50;
+}
+
+/* ---------------- バナー ---------------- */
+#banners {
+  position: fixed; left: 0; right: 0; top: 24%; display: flex; flex-direction: column; align-items: center;
+  gap: 6px; pointer-events: none; z-index: 20;
+}
+.banner {
+  font-weight: 800; font-size: clamp(22px, 5vw, 40px); letter-spacing: 4px; white-space: nowrap;
+  padding: 4px 28px; animation: bannerIn 2.8s ease-out forwards;
+  background: linear-gradient(90deg, transparent, rgba(0, 0, 0, 0.7) 20%, rgba(0, 0, 0, 0.7) 80%, transparent);
+}
+.banner.red { color: #ffd0c8; text-shadow: 0 0 14px #ff1a1a, 0 0 4px #ff1a1a; }
+.banner.huge {
+  font-size: clamp(30px, 8vw, 64px); color: #fff; letter-spacing: 8px;
+  text-shadow: 0 0 20px #ff2a00, 0 0 40px #ff0000, 0 4px 0 #400;
+  background: linear-gradient(90deg, transparent, rgba(60, 0, 0, 0.8) 15%, rgba(60, 0, 0, 0.8) 85%, transparent);
+}
+.banner.gold { color: #fff3c4; text-shadow: 0 0 14px #ffae00, 0 0 4px #ff8a00; }
+.banner.rainbow { color: #fff; animation: bannerIn 2.8s ease-out forwards, hue 0.6s linear infinite; text-shadow: 0 0 16px #f0f, 0 0 6px #0ff; }
+.banner.green { color: #d8ffe8; text-shadow: 0 0 14px #2fd47a; }
+.banner.white { color: #fff; text-shadow: 0 0 24px #fff6c0, 0 0 8px #ffd35a; font-size: clamp(36px, 10vw, 80px); }
+.banner.small { font-size: clamp(16px, 3.6vw, 22px); color: #ffc0a8; animation-duration: 2.2s; }
+@keyframes bannerIn {
+  0% { opacity: 0; transform: scale(2.2); filter: blur(6px); }
+  10% { opacity: 1; transform: scale(0.95); filter: blur(0); }
+  16% { transform: scale(1.03); }
+  22% { transform: scale(1); }
+  80% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-20px); }
+}
+@keyframes hue { to { filter: hue-rotate(360deg); } }
+
+/* ---------------- レベルアップ ---------------- */
+#levelup {
+  position: fixed; inset: 0; z-index: 30; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; padding: 16px; background: radial-gradient(circle, rgba(40, 20, 0, 0.55), rgba(0, 0, 0, 0.75));
+  animation: fadeIn 0.2s;
+}
+#levelup h2 {
+  margin: 0; font-size: clamp(36px, 9vw, 64px); letter-spacing: 6px; color: #fff6c0;
+  text-shadow: 0 0 20px #ffae00, 0 0 40px #ff7a00, 0 4px 0 #6a3000; animation: lvPop 0.5s cubic-bezier(.2, 1.6, .4, 1);
+}
+#levelup .hint { margin: 2px 0 14px; color: var(--dim); }
+#cards { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; width: 100%; max-width: 900px; }
+.card {
+  position: relative; flex: 1 1 240px; max-width: 280px; min-height: 150px; display: flex; flex-direction: column;
+  align-items: center; gap: 8px; padding: 16px 14px 14px; text-align: center; color: var(--ink);
+  background: linear-gradient(180deg, rgba(40, 28, 60, 0.95), rgba(18, 12, 28, 0.95));
+  border: 2px solid var(--c); border-radius: 12px;
+  box-shadow: 0 0 18px color-mix(in srgb, var(--c) 45%, transparent), inset 0 0 22px rgba(0, 0, 0, 0.6);
+  animation: cardIn 0.4s cubic-bezier(.2, 1.4, .4, 1) both; transition: transform 0.1s;
+}
+.card:hover, .card:focus-visible { transform: translateY(-4px) scale(1.03); outline: none; }
+.card:active { transform: scale(0.97); }
+.card.summon {
+  background: linear-gradient(180deg, rgba(20, 50, 70, 0.95), rgba(10, 18, 30, 0.95));
+}
+.card.summon::before {
+  content: ""; position: absolute; inset: -2px; border-radius: 12px; pointer-events: none;
+  background: conic-gradient(from var(--a, 0deg), transparent 0 70%, rgba(255, 255, 255, 0.7) 80%, transparent 90%);
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); mask-composite: exclude;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+  padding: 2px; animation: spinA 2s linear infinite;
+}
+@property --a { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
+@keyframes spinA { to { --a: 360deg; } }
+.card .icon {
+  width: 54px; height: 54px; border-radius: 50%; display: grid; place-items: center; font-size: 30px;
+  font-weight: 800; color: var(--c); border: 2px solid var(--c); background: rgba(0, 0, 0, 0.5);
+  text-shadow: 0 0 10px var(--c);
+}
+.card.attack .icon { border-radius: 10px; }
+.card .row { display: flex; gap: 8px; align-items: baseline; justify-content: center; }
+.card .name { font-size: 22px; }
+.card .tag { font-style: normal; font-size: 12px; padding: 1px 7px; border-radius: 10px; background: var(--c); color: #111; font-weight: 800; }
+.card .lv { font-size: 14px; color: var(--gold); font-weight: 800; }
+.card.new .lv { color: #ff6a8a; animation: blink 0.6s steps(2) infinite; }
+.card .desc { font-size: 14px; color: #ddd3ea; line-height: 1.45; }
+.card kbd {
+  position: absolute; left: 8px; top: 6px; font-family: monospace; font-size: 11px; color: var(--dim);
+  border: 1px solid #555; border-radius: 3px; padding: 0 4px;
+}
+body.mobile .card kbd { display: none; }
+@keyframes cardIn { from { opacity: 0; transform: translateY(40px) scale(0.8) rotateX(50deg); } to { opacity: 1; transform: none; } }
+@keyframes lvPop { from { transform: scale(2.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@keyframes blink { 50% { opacity: 0.4; } }
+@keyframes fadeIn { from { opacity: 0; } }
+
+@media (max-width: 640px), (max-height: 500px) {
+  #cards { flex-direction: column; align-items: center; gap: 8px; }
+  .card { flex: none; width: 100%; max-width: 420px; min-height: 0; flex-direction: row; text-align: left; padding: 10px 12px; }
+  .card .row { justify-content: flex-start; }
+  .card .icon { flex: none; width: 46px; height: 46px; font-size: 24px; }
+  .card .name { font-size: 19px; }
+  .card .desc { font-size: 13px; }
+}
+@media (max-height: 500px) {
+  #levelup h2 { font-size: 30px; }
+  #levelup .hint { margin-bottom: 6px; }
+  #cards { flex-direction: row; flex-wrap: nowrap; }
+  .card { flex: 1 1 0; flex-direction: column; text-align: center; }
+  .card .row { justify-content: center; }
+}
+
+/* ---------------- 画面 ---------------- */
+.screen {
+  position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; padding: 16px;
+  background: radial-gradient(ellipse at center, rgba(40, 10, 30, 0.7), rgba(5, 3, 10, 0.92));
+}
+#title { background: radial-gradient(ellipse at 50% 40%, rgba(70, 20, 30, 0.5), rgba(5, 3, 10, 0.95)); }
+.panel {
+  width: min(560px, 100%); text-align: center; padding: 26px 22px; border-radius: 14px;
+  background: var(--panel); border: 1px solid rgba(255, 211, 90, 0.35); box-shadow: 0 0 40px rgba(255, 60, 30, 0.25);
+  max-height: 100%; overflow: auto;
+}
+.kicker { color: var(--dim); letter-spacing: 6px; font-size: 14px; }
+h1 {
+  margin: 4px 0 8px; font-size: clamp(48px, 13vw, 84px); letter-spacing: 10px; color: #fff;
+  text-shadow: 0 0 18px #ff2a00, 0 0 40px #b00000, 0 5px 0 #3a0000;
+}
+h1.mid { font-size: clamp(32px, 8vw, 52px); letter-spacing: 6px; }
+#result.win h1 { text-shadow: 0 0 18px #ffae00, 0 0 40px #ff7a00, 0 5px 0 #4a2a00; }
+.lead { color: #e6dcef; line-height: 1.7; font-size: 15px; }
+.howto { text-align: left; padding-left: 20px; color: var(--dim); font-size: 13px; line-height: 1.8; }
+.howto b { color: var(--gold); margin-right: 6px; }
+button.big {
+  display: block; margin: 16px auto 8px; padding: 12px 54px; font-size: 24px; font-weight: 800; letter-spacing: 8px;
+  color: #fff; background: linear-gradient(180deg, #c3202a, #6a0a12); border: 2px solid var(--gold); border-radius: 10px;
+  box-shadow: 0 0 20px rgba(255, 60, 30, 0.6); animation: breathe 1.8s ease-in-out infinite;
+}
+button.big:active { transform: scale(0.96); }
+button.small {
+  margin: 6px; padding: 6px 16px; font-size: 14px; color: var(--ink); background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.25); border-radius: 8px;
+}
+@keyframes breathe { 50% { box-shadow: 0 0 34px rgba(255, 90, 40, 0.95); } }
+#resStats { display: grid; gap: 6px; margin: 14px auto; max-width: 320px; }
+#resStats div { display: flex; justify-content: space-between; border-bottom: 1px dashed rgba(255, 255, 255, 0.15); padding: 3px 4px; }
+#resStats span { color: var(--dim); }
+#resStats b { color: var(--gold); font-size: 18px; }
+
+/* 縦長スマホ：スキルアイコンをタイマーの下段へ */
+@media (max-width: 640px) {
+  #timer { font-size: 24px; top: calc(var(--safe-t) + 18px); }
+  #skills { top: calc(var(--safe-t) + 66px); right: 8px; max-width: 70vw; }
+  .sk { width: 28px; height: 28px; font-size: 15px; }
+  #streak { top: 38%; }
+}

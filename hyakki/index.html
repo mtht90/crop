@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+  <meta name="theme-color" content="#0d0e16">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>百鬼祓い</title>
+  <link rel="icon" href="data:,">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <div id="hud" class="hidden">
+    <div id="xpbar"><div id="xpfill"></div><span id="lv">Lv 1</span></div>
+    <div id="timer">00:00</div>
+    <div id="stats">
+      <span>祓 <b id="kills">0</b></span>
+      <span class="ally">式神 <b id="allies">0</b></span>
+      <span class="foe">妖 <b id="foes">0</b></span>
+    </div>
+    <div id="skills"></div>
+    <div id="streak"></div>
+    <button id="pauseBtn" aria-label="一時停止">❚❚</button>
+    <div id="bossbar" class="hidden">
+      <div class="name">酒呑童子</div>
+      <div class="bar"><div id="bossfill"></div></div>
+    </div>
+  </div>
+
+  <div id="banners"></div>
+  <div id="debug" class="hidden"></div>
+
+  <div id="levelup" class="hidden">
+    <h2>LEVEL UP</h2>
+    <p class="hint">術をひとつ選べ</p>
+    <div id="cards"></div>
+  </div>
+
+  <div id="title" class="screen">
+    <div class="panel">
+      <div class="kicker">陰陽師サバイバー</div>
+      <h1>百鬼祓い</h1>
+      <p class="lead">押し寄せる百鬼夜行を、式神の数で迎え撃て。<br>夜明け（14:00）まで生き延びるか、大将・酒呑童子を討て。</p>
+      <ul class="howto">
+        <li><b>移動</b> PC: WASD / 矢印キー　スマホ: 画面をドラッグ</li>
+        <li><b>攻撃</b> 自動。レベルアップで術を選ぶ（1/2/3キー or タップ）</li>
+        <li><b>式神</b> 召喚系の術は一定間隔で自動召喚。数・威力・持続がLvで伸びる</li>
+      </ul>
+      <button id="startBtn" class="big">出陣</button>
+      <button id="muteBtn" class="mute small"></button>
+    </div>
+  </div>
+
+  <div id="pause" class="screen hidden">
+    <div class="panel">
+      <h1 class="mid">一時停止</h1>
+      <button id="resumeBtn" class="big">再開</button>
+      <button id="muteBtn2" class="mute small"></button>
+      <button id="quitBtn" class="small">タイトルへ</button>
+    </div>
+  </div>
+
+  <div id="result" class="screen hidden">
+    <div class="panel">
+      <h1 id="resTitle" class="mid"></h1>
+      <p id="resSub" class="lead"></p>
+      <div id="resStats"></div>
+      <button id="retryBtn" class="big">もう一度</button>
+      <button id="titleBtn" class="small">タイトルへ</button>
+    </div>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
