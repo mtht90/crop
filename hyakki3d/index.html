@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+  <meta name="theme-color" content="#07081a">
+  <title>百鬼祓い 3D</title>
+  <link rel="icon" href="data:,">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Yuji+Boku&family=Zen+Maru+Gothic:wght@500;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <script type="importmap">
+    { "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    } }
+  </script>
+</head>
+<body>
+  <canvas id="game"></canvas>
+  <div id="dmgLayer"></div>
+
+  <div id="hud" class="hidden">
+    <div id="xpbar"><div id="xpfill"></div><span id="lv">Lv 1</span></div>
+    <div id="status" class="frame">
+      <div id="hpbar"><div id="hpfill"></div></div>
+      <div id="stats">
+        <span><i>祓</i><b id="kills">0</b></span>
+        <span class="ally"><i>式</i><b id="allies">0</b></span>
+        <span class="foe"><i>妖</i><b id="foes">0</b></span>
+      </div>
+    </div>
+    <div id="timer">00:00</div>
+    <div id="skills"></div>
+    <div id="streak"><b id="streakNum">0</b><span>連祓</span></div>
+    <button id="pauseBtn" class="btn ghost" aria-label="一時停止">‖</button>
+    <div id="camHint">ドラッグ / Q・E で視点</div>
+    <div id="bossbar" class="hidden frame">
+      <div class="name">がしゃどくろ</div>
+      <div class="bar"><div id="bossfill"></div></div>
+    </div>
+  </div>
+
+  <div id="banners"></div>
+  <div id="debug" class="hidden"></div>
+
+  <div id="levelup" class="hidden">
+    <h2><span class="en">LEVEL UP</span><span class="lvnum">Lv <b id="lvNum">2</b></span></h2>
+    <p class="hint">術をひとつ選べ</p>
+    <div id="cards"></div>
+  </div>
+
+  <div id="title" class="screen title">
+    <div class="titlebox">
+      <div class="kicker">陰陽師サバイバー</div>
+      <h1>百鬼祓い</h1>
+      <p class="lead">押し寄せる百鬼夜行を、式神の数で迎え撃て。<br>夜明け（14:00）まで生き延びるか、がしゃどくろを討て。</p>
+      <button id="startBtn" class="btn big">読込中</button>
+      <ul class="howto frame">
+        <li><b>移動</b>WASD・矢印キー／スマホは画面の左側をドラッグ</li>
+        <li><b>視点</b>マウスでドラッグ・Q／E キー／スマホは右側をドラッグ</li>
+        <li><b>攻撃</b>自動。レベルアップで術を選ぶ（1・2・3 キーかタップ）</li>
+        <li><b>式神</b>召喚の術は一定間隔で自動召喚。数・威力・持続が伸びる</li>
+      </ul>
+      <div class="row"><button id="muteBtn" class="mute btn small"></button></div>
+      <p class="credit">3D: KayKit (Kay Lousberg)・Quaternius ／ Sound: Ninja Adventure (Pixel-boy &amp; AAA)　いずれも CC0</p>
+    </div>
+  </div>
+
+  <div id="pause" class="screen hidden">
+    <div class="panel frame">
+      <h1 class="mid">一時停止</h1>
+      <button id="resumeBtn" class="btn big">再開</button>
+      <div class="row">
+        <button id="muteBtn2" class="mute btn small"></button>
+        <button id="quitBtn" class="btn small">タイトルへ</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="result" class="screen hidden">
+    <div class="panel frame">
+      <h1 id="resTitle" class="mid"></h1>
+      <p id="resSub" class="lead"></p>
+      <div id="resStats"></div>
+      <button id="retryBtn" class="btn big">もう一度</button>
+      <div class="row"><button id="titleBtn" class="btn small">タイトルへ</button></div>
+    </div>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
