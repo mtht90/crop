@@ -33,10 +33,16 @@ function nearest(x, y, R, k) {
     }
     if (n >= k) break;
   }
-  const b = G.boss;
-  if (b && b.alive && n < k) {
+  // 中ボス・ボスが射程内にいれば優先して狙う（雑魚の壁に吸われて削れないのを防ぐ）
+  for (const b of [G.midBoss, G.boss]) {
+    if (!b || !b.alive) continue;
     const dx = b.x - x, dy = b.y - y;
-    if (dx * dx + dy * dy < (R + b.r) * (R + b.r)) NE[n++] = b;
+    if (dx * dx + dy * dy > (R + b.r) * (R + b.r)) continue;
+    let has = false;
+    for (let i = 0; i < n; i++) if (NE[i] === b) has = true;
+    if (has) continue;
+    if (n < k) NE[n++] = b;
+    else if (k > 1 || Math.random() < 0.5) { for (let i = n - 1; i > 0; i--) NE[i] = NE[i - 1]; NE[0] = b; }
   }
   return n;
 }
@@ -123,7 +129,8 @@ export const SKILL_IMPL = {
       s.t = L.cd * G.st.cdMul;
       let done = 0;
       for (let tries = 0; tries < L.strikes * 8 && done < L.strikes; tries++) {
-        const e = (G.boss && Math.random() < 0.3) ? G.boss : en[(Math.random() * en.length) | 0];
+        const big = G.boss || G.midBoss;
+        const e = (big && Math.random() < 0.35) ? big : en[(Math.random() * en.length) | 0];
         if (!e.alive || e.x < v.x0 + 30 || e.x > v.x1 - 30 || e.y < v.y0 + 40 || e.y > v.y1 - 40) continue;
         strike(e.x, e.y, L);
         done++;

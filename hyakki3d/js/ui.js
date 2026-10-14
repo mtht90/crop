@@ -152,6 +152,7 @@ export const UI = {
     h(currentOpts[i]);
   },
   levelUpOpen() { return !!pickHandler; },
+  levelUpOptions() { return currentOpts; },
 
   showPause(show) { $('pause').classList.toggle('hidden', !show); },
 

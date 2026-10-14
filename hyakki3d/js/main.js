@@ -6,7 +6,7 @@ import { FX } from './fx.js';
 import { UI } from './ui.js';
 import { R, setStateGetter } from './r3d/render.js';
 import { Progress } from './progress.js';
-import { CHARACTERS } from './config.js';
+import { CHARACTERS, SKILLS } from './config.js';
 import { loadModels } from './r3d/models.js';
 import { makeIcons } from './r3d/icons.js';
 
@@ -170,6 +170,7 @@ function frame(now) {
 requestAnimationFrame(frame);
 
 window.__G = G;
+window.__SK = SKILLS;
 window.__UI = UI;
 window.__R = R;
 window.__dbg = { addOrUpgrade };

@@ -96,6 +96,8 @@ export function newRun(char = CHARACTERS[0], mode = MODES[0]) {
     G.level++;
   }
   G.xpNext = xpNeed(G.level);
+  // 短期決戦は育つ時間が短いので、開始直後にまとめて術を選ばせる
+  if (mode.bonus) { G.level += mode.bonus; G.pending += mode.bonus; G.xpNext = xpNeed(G.level); }
   G.state = 'play';
   UI.showHUD();
   UI.refreshSkills(G);
@@ -199,7 +201,7 @@ export function spawnEnemy(type, x, y, force = false) {
   e.uid = uidSeq++; e.alive = true; e.def = d; e.type = type; e.spr = null;
   e.x = x; e.y = y; e.vx = 0; e.vy = 0;
   e.maxHp = e.hp = d.boss || d.mid ? d.hp : d.hp * hpScale(G.sched) * G.adapt * G.mode.hp;
-  e.r = d.r; e.dmg = d.boss || d.mid ? d.dmg : d.dmg * G.adapt ** 0.35; e.xp = d.xp; e.mass = d.mass;
+  e.r = d.r; e.dmg = (d.boss || d.mid ? d.dmg : d.dmg * G.adapt ** 0.35) * (G.mode.dmg || 1); e.xp = d.xp; e.mass = d.mass;
   e.speed = d.speed * speedScale(G.sched) * (d.mid ? 1 : 0.88 + Math.random() * 0.24);
   e.flash = 0; e.slowT = 0; e.march = false; e.wob = Math.random() * TAU; e.hopT = Math.random();
   e.last.fill(-99);
@@ -243,7 +245,7 @@ export function spawnProj(kind, x, y, vx, vy, dmg, pierce, life, r, opt = {}) {
 
 function spawnBullet(x, y, vx, vy, dmg) {
   if (G.bullets.length >= G.limits.enemyBullets) return;
-  G.bullets.push({ x, y, vx, vy, dmg, r: 9, life: 4 });
+  G.bullets.push({ x, y, vx, vy, dmg: dmg * (G.mode.dmg || 1), r: 9, life: 4 });
 }
 
 function dropGem(x, y, v) {
@@ -591,7 +593,12 @@ function updateDirector(dt) {
     UI.banner('土蜘蛛 出現 ─ 宝箱を落とす', 'small');
   }
 
-  while (G.eventIdx < EVENTS.length && t >= EVENTS[G.eventIdx].t) startEvent(EVENTS[G.eventIdx++]);
+  while (G.eventIdx < EVENTS.length && t >= EVENTS[G.eventIdx].t) {
+    const ev = EVENTS[G.eventIdx++];
+    // 中ボス戦の最中に来る包囲・行列は見送る（詰めたモードで重なって理不尽になるのを防ぐ）
+    if (G.midBoss && (ev.type === 'ring' || ev.type === 'march')) continue;
+    startEvent(ev);
+  }
 
   const P = G.player, v = G.view;
   for (let k = G.marches.length - 1; k >= 0; k--) {
@@ -627,7 +634,7 @@ function updateAdapt(dt) {
   const cap = 1 + Math.max(0, G.sched - 120) / 220;
   if (calm > 8 && !G.midBoss) G.adapt += 0.03;
   else if (calm < 2 && P.hp < P.maxHp * 0.7) G.adapt -= 0.1;
-  G.adapt = Math.max(1, Math.min(cap, G.adapt));
+  G.adapt = Math.max(0.7, Math.min(cap, G.adapt));
 }
 
 function startEvent(ev) {
@@ -670,7 +677,7 @@ function startEvent(ev) {
     edgePos(120);
     const e = spawnEnemy('tengu', RX, RY, true);
     // 自分の強さ（追従係数）に合わせて硬くする。短期決戦は育つ時間が短いぶん控えめ
-    e.maxHp = e.hp = e.def.hp * (0.6 + 0.4 * G.adapt) * (G.mode.k > 2 ? 0.7 : 1);
+    e.maxHp = e.hp = e.def.hp * (0.6 + 0.4 * G.adapt) * (G.mode.k > 2 ? 0.6 : 1);
     e.ai = { state: 'walk', t: 3, dx: 0, dy: 0, n: 0, shot: 0 };
     G.boss = e;
     UI.banner(ev.banner, 'huge');
@@ -755,10 +762,17 @@ function updateBoss(e, dt) {
 function updateMid(e, dt) {
   const P = G.player, ai = e.ai;
   const dx = P.x - e.x, dy = P.y - e.y, d = Math.hypot(dx, dy) || 1;
-  ai.t -= dt;
+  ai.t -= dt * (ai.rage ? 1.6 : 1);
   e.at += dt * 8;
   if (e.flash > 0) e.flash -= dt;
   const snake = e.type === 'orochi';
+  // 体力が半分を切ると怒る：行動が速く、攻撃が濃くなる
+  if (!ai.rage && e.hp < e.maxHp * 0.5) {
+    ai.rage = true;
+    e.speed *= 1.3;
+    UI.banner(`${e.def.name} 怒り狂う`, 'red');
+    FX.ring(e.x, e.y, 30, 260, 0.6, '#ff3040', 10); sfx.alarm(); addShake(0.4); G.redPulse = 1.2;
+  }
   switch (ai.state) {
     case 'walk': {
       const sp = d > 520 ? e.speed * 2.5 : e.speed;
@@ -768,7 +782,7 @@ function updateMid(e, dt) {
         const r = Math.random();
         if (snake) {
           if (r < 0.5) { ai.state = 'tele'; ai.t = 0.9; ai.dx = dx / d; ai.dy = dy / d; }
-          else { ai.state = 'spit'; ai.t = 0; ai.n = 3; }
+          else { ai.state = 'spit'; ai.t = 0; ai.n = ai.rage ? 5 : 3; }
         } else if (r < 0.4) { ai.state = 'spiral'; ai.t = 2.6; ai.a = Math.random() * TAU; ai.shot = 0; }
         else if (r < 0.7) {
           ai.state = 'walk'; ai.t = 2.2;
@@ -779,9 +793,10 @@ function updateMid(e, dt) {
         } else {
           ai.state = 'walk'; ai.t = 2.6;
           FX.seal(e.x, e.y, 120, 1.0);
-          for (let i = 0; i < 16; i++) {
-            const a = (i / 16) * TAU;
-            spawnEnemy('kooni', P.x + Math.cos(a) * 250, P.y + Math.sin(a) * 250, true);
+          const n = ai.rage ? 26 : 16;
+          for (let i = 0; i < n; i++) {
+            const a = (i / n) * TAU;
+            spawnEnemy(ai.rage ? 'gashadokuro' : 'kooni', P.x + Math.cos(a) * 250, P.y + Math.sin(a) * 250, true);
           }
           sfx.alarm();
         }
@@ -791,13 +806,17 @@ function updateMid(e, dt) {
     case 'tele':
       ai.dx = ai.dx * 0.9 + (dx / d) * 0.1; ai.dy = ai.dy * 0.9 + (dy / d) * 0.1;
       e.yaw = Math.atan2(ai.dx, ai.dy);
-      if (ai.t <= 0) { ai.state = 'charge'; ai.t = 0.65; sfx.slam(); addShake(0.2); }
+      if (ai.t <= 0) { ai.state = 'charge'; ai.t = 0.65; ai.n = ai.rage && ai.n !== -1 ? 1 : 0; sfx.slam(); addShake(0.2); }
       break;
     case 'charge': {
       const l = Math.hypot(ai.dx, ai.dy) || 1;
       e.x += ai.dx / l * 520 * dt; e.y += ai.dy / l * 520 * dt;
       if (G.frame % 2 === 0) FX.burst(e.x, e.y, 2, 6, 80, 12, 0.5);
-      if (ai.t <= 0) { ai.state = 'walk'; ai.t = 2.2; }
+      if (ai.t <= 0) {
+        // 怒り中は二段突進：もう一度狙い直して突っ込む
+        if (ai.n === 1) { ai.state = 'tele'; ai.t = 0.5; ai.n = -1; ai.dx = dx / d; ai.dy = dy / d; }
+        else { ai.state = 'walk'; ai.t = 2.2; ai.n = 0; }
+      }
       break;
     }
     case 'spit':
@@ -818,8 +837,9 @@ function updateMid(e, dt) {
       ai.shot -= dt;
       if (ai.shot <= 0) {
         ai.shot = 0.09; ai.a += 0.33;
-        for (let k = 0; k < 3; k++) {
-          const a = ai.a + (k / 3) * TAU;
+        const arms = ai.rage ? 5 : 3;
+        for (let k = 0; k < arms; k++) {
+          const a = ai.a + (k / arms) * TAU;
           spawnBullet(e.x, e.y, Math.cos(a) * 170, Math.sin(a) * 170, 13);
         }
       }

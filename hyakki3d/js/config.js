@@ -10,7 +10,7 @@
 export const BASE_BOSS = 720;
 export const MODES = [
   { id: 'main',  name: '本編',     sub: '10分', len: 600, k: 1.5, xp: 1.45, hp: 1, desc: '中ボス二体を越え、8分に現れるがしゃどくろを討つ' },
-  { id: 'short', name: '短期決戦', sub: '5分',  len: 300, k: 3,   xp: 2.6,  hp: 0.7, desc: '流れを半分に詰めた腕試し。4分でがしゃどくろ' },
+  { id: 'short', name: '短期決戦', sub: '5分',  len: 300, k: 3,   xp: 4,    hp: 0.55, dmg: 0.7, bonus: 4, desc: '流れを半分に詰めた腕試し。開始時に術を4つ選び、4分でがしゃどくろ' },
 ];
 // 制限時間を過ぎてもボスが生きていると激昂し、雑魚も湧き続ける（時間切れの勝利はない）
 export const RUN = { bossAt: BASE_BOSS };
@@ -47,12 +47,12 @@ export const ENEMIES = {
   chochin:     { name: '鉄鼠',         hp: 22,  speed: 112, dmg: 8, r: 12, xp: 2,  mass: 0.7, color: 7, model: 'rat' },
   gashadokuro: { name: '落ち武者',     hp: 95,  speed: 48, dmg: 14, r: 16, xp: 4,  mass: 2,   color: 3, model: 'skRogue' },
   oni:         { name: '土蜘蛛',       hp: 650, speed: 58, dmg: 20, r: 34, xp: 30, mass: 6,   color: 1, elite: true, model: 'spiderBig' },
-  orochi:      { name: '大蛇',         hp: 7000, speed: 66, dmg: 18, r: 46, xp: 60, mass: 999, color: 6, mid: true, model: 'orochi' },
-  mukuro:      { name: '骸法師',       hp: 12000, speed: 55, dmg: 20, r: 40, xp: 90, mass: 999, color: 3, mid: true, model: 'mukuro' },
-  tengu:       { name: 'がしゃどくろ', hp: 160000, speed: 64, dmg: 34, r: 60, xp: 0, mass: 999, color: 6, boss: true, model: 'boss' },
+  orochi:      { name: '大蛇',         hp: 8000, speed: 70, dmg: 22, r: 46, xp: 60, mass: 999, color: 6, mid: true, model: 'orochi' },
+  mukuro:      { name: '骸法師',       hp: 15000, speed: 58, dmg: 24, r: 40, xp: 90, mass: 999, color: 3, mid: true, model: 'mukuro' },
+  tengu:       { name: 'がしゃどくろ', hp: 300000, speed: 64, dmg: 34, r: 60, xp: 0, mass: 999, color: 6, boss: true, model: 'boss' },
 };
 
-export function hpScale(t) { const m = t / 60; return 1 + m * 0.45 + m * m * 0.025; }  // 5分≈3.9倍, 10分≈8倍
+export function hpScale(t) { const m = t / 60; return 1 + m * 0.3 + m * m * 0.018; }  // 基準時計で 5分≈2.9倍, 12分≈6.2倍
 export function speedScale(t) { return 1 + t / 1800; }
 
 // ---- 通常湧き（時刻 t 以降、rate 体/秒。rate は次の段階へ線形補間） ----
@@ -95,9 +95,10 @@ export const ELITE = { first: 100, every: 70 };
 // レアドロップ（通常の妖怪を倒したとき）
 export const DROPS = { heal: 0.0016, magnet: 0.0009, bomb: 0.0006 };
 
-// 必要経験値
+// 必要経験値：Lv が上がるほど二次的に重くなる。本編のボス到達で Lv40 前後＝全ての術は育ちきらないので、何を取るかで差が出る
 export function xpNeed(lv) {
-  return Math.floor(5 + (lv - 1) * 7 + Math.max(0, lv - 20) * 14 + Math.max(0, lv - 40) * 30);
+  const n = lv - 1;
+  return Math.floor(6 + n * 12 + n * n * 1.6);
 }
 
 // ---- スキル ---------------------------------------------------
