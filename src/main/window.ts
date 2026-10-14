@@ -1,15 +1,28 @@
-import { BrowserWindow, Menu, WebContentsView, clipboard, dialog, shell } from 'electron';
-import type { ContextMenuParams, MenuItemConstructorOptions, WebContents } from 'electron';
+import { BrowserWindow, WebContentsView } from 'electron';
+import type { WebContents } from 'electron';
 import * as path from 'node:path';
-import type { BrowserState, TabState, UiCommand } from '../shared/types';
-import type { Store } from './store';
+import type { BrowserState, Suggestion, TabState, Tier, UiCommand, ViewMode } from '../shared/types';
+import type { SessionTab, Store } from './store';
+import { accentFromThemeColor, hostColor } from './color';
+import { openExternal, showContextMenu } from './contextMenu';
 import { errorPageUrl } from './errorPage';
-import { isAllowedUrl, resolveInput, searchUrl } from './url';
+import { DEFAULT_TIER_OPTIONS, RETURN_MIN_AWAY_MS, WEIGHTS, assignTiers, bump, decay, pageKey } from './frecency';
+import type { Score, TierOptions } from './frecency';
+import { capture } from './thumbnails';
+import type { ThumbnailDisk } from './thumbnails';
+import { isAllowedUrl, resolveInput } from './url';
 
 const ZOOM_STEPS = [25, 33, 50, 67, 75, 80, 90, 100, 110, 125, 150, 175, 200, 250, 300, 400, 500];
 const MAX_CLOSED_TABS = 25;
-// 確認のうえ OS の既定アプリで開いてよい外部スキーム
-const EXTERNAL_SCHEMES = new Set(['mailto:', 'tel:', 'sms:']);
+/** 表示中のタブのプレビューを撮り直す間隔 */
+const RECAPTURE_INTERVAL_MS = 6000;
+/** ティアを定期的に見直す間隔 (時間経過で「あまり見ないページ」になるため) */
+const RETIER_INTERVAL_MS = 15000;
+
+// 開発・デモ用: FOLIO_FAST_TIERS=1 で「あまり見ないページ」になるまでの猶予を短くする
+const TIER_OPTIONS: TierOptions = process.env.FOLIO_FAST_TIERS
+  ? { ...DEFAULT_TIER_OPTIONS, compactGraceMs: 3000 }
+  : DEFAULT_TIER_OPTIONS;
 
 interface Tab {
   id: number;
@@ -17,10 +30,28 @@ interface Tab {
   favicon: string | null;
   /** 読み込み失敗時: 失敗した URL と代わりに表示しているエラーページ */
   error: { url: string; pageUrl: string } | null;
+  pinned: boolean;
+  openedAt: number;
+  /** 一度でも画面に表示されたか */
+  viewed: boolean;
+  /** 最後にこのタブから離れた時刻 */
+  leftAt: number | null;
+  /** このタブ自体のスコア (ページが変わっても引き継ぐ) */
+  score: Score | undefined;
+  returns: number;
+  tier: Tier | null;
+  /** 直前にスコアを付けた URL (再読み込みを二重に数えないため) */
+  scoredKey: string | null;
+  themeAccent: string | null;
+  capturedAccent: string | null;
+  thumb: Buffer | null;
+  thumbVersion: number;
+  captureTimer: NodeJS.Timeout | null;
 }
 
 export interface WindowHooks {
   store: Store;
+  thumbs: ThumbnailDisk;
   openWindow(urls: string[]): void;
   onClose(controller: BrowserWindowController): void;
   onClosed(controller: BrowserWindowController): void;
@@ -33,20 +64,25 @@ export class BrowserWindowController {
   readonly win: BrowserWindow;
   private tabs: Tab[] = [];
   private activeId: number | null = null;
-  private layout = { top: 110, right: 0 };
+  private mode: ViewMode = 'browse';
+  /** オーバービューへ移行中 (UI がスナップショットを表示するのを待っている) */
+  private enteringOverview: NodeJS.Timeout | null = null;
+  private layout = { top: 96, right: 0 };
   private htmlFullscreen = false;
-  private closedTabs: { url: string; index: number }[] = [];
+  private closedTabs: { url: string; index: number; pinned: boolean }[] = [];
   private stateQueued = false;
+  private readonly timers: NodeJS.Timeout[] = [];
 
-  constructor(private readonly hooks: WindowHooks, urls: string[]) {
+  constructor(private readonly hooks: WindowHooks, tabs: Array<SessionTab & { restored?: boolean }>) {
     this.win = new BrowserWindow({
-      width: 1280,
-      height: 840,
-      minWidth: 480,
-      minHeight: 320,
-      title: 'Crop Browser',
+      width: 1320,
+      height: 860,
+      minWidth: 560,
+      minHeight: 400,
+      title: 'Folio',
       autoHideMenuBar: true,
       show: false,
+      backgroundColor: '#f4f3f0',
       webPreferences: {
         preload: path.join(__dirname, '../preload/preload.js'),
         contextIsolation: true,
@@ -57,7 +93,10 @@ export class BrowserWindowController {
 
     const ui = this.win.webContents;
     ui.loadFile(path.join(__dirname, '../renderer/index.html'));
-    ui.on('did-finish-load', () => this.sendState());
+    ui.on('did-finish-load', () => {
+      this.sendState();
+      for (const tab of this.tabs) this.sendThumb(tab);
+    });
     // UI ページ自体が別の場所へ遷移したり、ウィンドウを開いたりしないようにする
     ui.on('will-navigate', (e) => e.preventDefault());
     ui.setWindowOpenHandler(() => ({ action: 'deny' }));
@@ -66,27 +105,37 @@ export class BrowserWindowController {
     for (const event of ['resize', 'maximize', 'unmaximize', 'enter-full-screen', 'leave-full-screen'] as const) {
       this.win.on(event as 'resize', () => this.updateBounds());
     }
-    // マウスの戻る/進むボタン (Windows)
     this.win.on('app-command', (_e, command) => {
       if (command === 'browser-backward') this.goBack();
       if (command === 'browser-forward') this.goForward();
     });
-    // トラックパッドのスワイプ (macOS)
     this.win.on('swipe', (_e, direction) => {
       if (direction === 'left') this.goBack();
       if (direction === 'right') this.goForward();
     });
     this.win.on('close', () => this.hooks.onClose(this));
     this.win.on('closed', () => {
+      this.timers.forEach((t) => clearInterval(t));
       for (const tab of this.tabs) {
+        if (tab.captureTimer) clearTimeout(tab.captureTimer);
         if (!tab.view.webContents.isDestroyed()) tab.view.webContents.close();
       }
       this.tabs = [];
       this.hooks.onClosed(this);
     });
 
-    const initial = urls.length > 0 ? urls : [this.hooks.store.getSettings().homePage];
-    initial.forEach((url, i) => this.createTab(url, { activate: i === 0 }));
+    this.timers.push(
+      setInterval(() => {
+        const tab = this.activeTab();
+        if (tab && this.mode === 'browse' && this.win.isFocused() && !tab.view.webContents.isLoading()) {
+          void this.captureTab(tab);
+        }
+      }, RECAPTURE_INTERVAL_MS),
+      setInterval(() => this.sendState(), RETIER_INTERVAL_MS),
+    );
+
+    const initial = tabs.length > 0 ? tabs : [{ url: this.hooks.store.getSettings().homePage, pinned: false }];
+    initial.forEach((t, i) => this.createTab(t.url, { activate: i === 0, pinned: t.pinned, restored: 'restored' in t && t.restored }));
   }
 
   // ------------------------------------------------------------------
@@ -97,12 +146,18 @@ export class BrowserWindowController {
     return this.win.webContents === wc || this.tabs.some((t) => t.view.webContents === wc);
   }
 
-  tabUrls(): string[] {
-    return this.tabs.map((t) => this.tabUrl(t)).filter((url) => /^(https?|file):/.test(url));
+  sessionTabs(): SessionTab[] {
+    return this.tabs
+      .map((t) => ({ url: this.tabUrl(t), pinned: t.pinned }))
+      .filter((t) => /^(https?|file):/.test(t.url));
   }
 
   private activeTab(): Tab | undefined {
     return this.tabs.find((t) => t.id === this.activeId);
+  }
+
+  private findTab(id: number): Tab | undefined {
+    return this.tabs.find((t) => t.id === id);
   }
 
   private indexOf(id: number): number {
@@ -115,7 +170,34 @@ export class BrowserWindowController {
     return url === 'about:blank' ? '' : url;
   }
 
-  private tabState(tab: Tab): TabState {
+  /** タブのスコア = タブ自体のスコアと、表示中ページの (過去のセッションを含む) スコアの大きい方 */
+  private tabScore(tab: Tab, now: number): number {
+    return Math.max(decay(tab.score, now), this.hooks.store.pageScore(this.tabUrl(tab), now));
+  }
+
+  private tabAccent(tab: Tab): string | null {
+    const url = this.tabUrl(tab);
+    if (!url) return null;
+    return tab.themeAccent ?? tab.capturedAccent ?? this.hooks.store.getPage(url)?.accent ?? hostColor(url);
+  }
+
+  private computeTiers(now: number): void {
+    const tiers = assignTiers(
+      this.tabs.map((t) => ({
+        id: t.id,
+        score: this.tabScore(t, now),
+        pinned: t.pinned,
+        active: t.id === this.activeId,
+        openedAt: t.openedAt,
+        prevTier: t.tier,
+      })),
+      now,
+      TIER_OPTIONS,
+    );
+    for (const t of this.tabs) t.tier = tiers.get(t.id) ?? 'regular';
+  }
+
+  private tabState(tab: Tab, now: number): TabState {
     const wc = tab.view.webContents;
     const url = this.tabUrl(tab);
     return {
@@ -129,7 +211,28 @@ export class BrowserWindowController {
       zoomPercent: Math.round(wc.getZoomFactor() * 100),
       audible: wc.isCurrentlyAudible(),
       muted: wc.isAudioMuted(),
+      pinned: tab.pinned,
+      tier: tab.tier ?? 'regular',
+      score: Math.round(this.tabScore(tab, now) * 100) / 100,
+      returns: tab.returns,
+      accent: this.tabAccent(tab),
+      thumbVersion: tab.thumb ? tab.thumbVersion : 0,
     };
+  }
+
+  private suggestions(now: number): Suggestion[] {
+    const open = new Set(this.tabs.map((t) => pageKey(this.tabUrl(t))));
+    return this.hooks.store
+      .topPages(24, 3, now)
+      .filter((p) => !open.has(p.key))
+      .slice(0, 8)
+      .map((p) => ({
+        url: p.url,
+        title: p.title,
+        favicon: p.favicon,
+        accent: p.accent ?? hostColor(p.url),
+        score: Math.round(p.current * 100) / 100,
+      }));
   }
 
   /** UI に状態を送る (同じイベントループ内の複数の変更はまとめる) */
@@ -139,14 +242,24 @@ export class BrowserWindowController {
     setImmediate(() => {
       this.stateQueued = false;
       if (this.win.isDestroyed()) return;
+      const now = Date.now();
+      const live = this.tabs.filter((t) => !t.view.webContents.isDestroyed());
+      this.computeTiers(now);
       const state: BrowserState = {
-        tabs: this.tabs.filter((t) => !t.view.webContents.isDestroyed()).map((t) => this.tabState(t)),
+        mode: this.mode,
+        tabs: live.map((t) => this.tabState(t, now)),
         activeTabId: this.activeId,
+        suggestions: this.suggestions(now),
       };
       this.win.webContents.send('state', state);
       const active = this.activeTab();
-      this.win.setTitle(active ? `${this.tabState(active).title} - Crop Browser` : 'Crop Browser');
+      this.win.setTitle(active ? `${state.tabs.find((t) => t.id === active.id)?.title ?? ''} — Folio` : 'Folio');
     });
+  }
+
+  private sendThumb(tab: Tab): void {
+    if (!tab.thumb) return;
+    this.send('thumb', { tabId: tab.id, version: tab.thumbVersion, data: tab.thumb });
   }
 
   send(channel: string, payload: unknown): void {
@@ -154,10 +267,38 @@ export class BrowserWindowController {
   }
 
   sendCommand(command: UiCommand): void {
-    if (command === 'focus-address' || command === 'open-find') {
-      this.win.webContents.focus();
-    }
+    if (command === 'focus-address' || command === 'open-find') this.win.webContents.focus();
     this.send('command', command);
+  }
+
+  // ------------------------------------------------------------------
+  // プレビュー画像
+  // ------------------------------------------------------------------
+
+  /** タブを撮影してプレビューを更新する。表示中のタブでのみ成功する */
+  private async captureTab(tab: Tab, withSnapshot = false): Promise<Buffer | null> {
+    if (tab.view.webContents.isDestroyed()) return null;
+    const result = await capture(tab.view.webContents, withSnapshot);
+    if (!result) return null;
+    tab.thumb = result.thumb;
+    tab.thumbVersion++;
+    const url = this.tabUrl(tab);
+    if (result.color && result.color !== tab.capturedAccent) {
+      tab.capturedAccent = result.color;
+      this.hooks.store.updatePage(url, { accent: tab.themeAccent ?? result.color });
+      this.sendState();
+    }
+    if (!tab.error && url) this.hooks.thumbs.save(url, result.thumb);
+    this.sendThumb(tab);
+    return result.snapshot;
+  }
+
+  private scheduleCapture(tab: Tab, delay: number): void {
+    if (tab.captureTimer) clearTimeout(tab.captureTimer);
+    tab.captureTimer = setTimeout(() => {
+      tab.captureTimer = null;
+      if (tab.id === this.activeId && this.mode === 'browse' && !this.win.isMinimized()) void this.captureTab(tab);
+    }, delay);
   }
 
   // ------------------------------------------------------------------
@@ -188,22 +329,88 @@ export class BrowserWindowController {
   }
 
   // ------------------------------------------------------------------
+  // オーバービュー
+  // ------------------------------------------------------------------
+
+  /**
+   * オーバービューを開く。
+   * 1. 表示中のページを撮影して UI に渡す
+   * 2. UI が同じ位置にその画像を表示したら (overviewReady) ページを外す
+   * 3. UI は画像をタイルの位置へ縮めるアニメーションを行う
+   */
+  async openOverview(launcher: boolean): Promise<void> {
+    if (this.mode === 'overview' || this.enteringOverview) {
+      this.send('overview:enter', { tabId: this.activeId, snapshot: null, launcher });
+      return;
+    }
+    const tab = this.activeTab();
+    this.enteringOverview = setTimeout(() => this.overviewReady(), 800);
+    const snapshot = tab ? await this.captureTab(tab, true) : null;
+    this.send('overview:enter', { tabId: tab?.id ?? null, snapshot, launcher });
+    this.win.webContents.focus();
+  }
+
+  overviewReady(): void {
+    if (!this.enteringOverview) return;
+    clearTimeout(this.enteringOverview);
+    this.enteringOverview = null;
+    this.mode = 'overview';
+    const tab = this.activeTab();
+    if (tab) {
+      tab.view.webContents.stopFindInPage('clearSelection');
+      this.win.contentView.removeChildView(tab.view);
+    }
+    this.sendState();
+  }
+
+  closeOverview(tabId: number | null): void {
+    if (this.enteringOverview) {
+      clearTimeout(this.enteringOverview);
+      this.enteringOverview = null;
+    }
+    const target = (tabId !== null ? this.findTab(tabId) : undefined) ?? this.activeTab() ?? this.tabs[0];
+    this.mode = 'browse';
+    if (!target) {
+      this.sendState();
+      return;
+    }
+    this.activateTab(target.id);
+  }
+
+  // ------------------------------------------------------------------
   // タブ操作
   // ------------------------------------------------------------------
 
-  createTab(url: string, opts: { activate?: boolean; afterActive?: boolean } = {}): void {
-    const { activate = true, afterActive = false } = opts;
+  /**
+   * restored: 前回のセッションから復元したタブ。復元時の読み込みは「訪問」として数えず、
+   * 開いた直後の猶予も与えない (あまり見ないページは、再起動後もまとめたままにする)
+   */
+  createTab(url: string, opts: { activate?: boolean; afterActive?: boolean; pinned?: boolean; restored?: boolean } = {}): number {
+    const { activate = true, afterActive = false, pinned = false, restored = false } = opts;
     const view = new WebContentsView({
-      webPreferences: {
-        contextIsolation: true,
-        sandbox: true,
-        nodeIntegration: false,
-        safeDialogs: true,
-      },
+      webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false, safeDialogs: true },
     });
     view.setBackgroundColor('#ffffff');
 
-    const tab: Tab = { id: nextTabId++, view, favicon: null, error: null };
+    const tab: Tab = {
+      id: nextTabId++,
+      view,
+      favicon: this.hooks.store.getPage(url)?.favicon ?? null,
+      error: null,
+      pinned,
+      openedAt: restored ? 0 : Date.now(),
+      viewed: false,
+      leftAt: null,
+      score: undefined,
+      returns: 0,
+      tier: null,
+      scoredKey: restored ? pageKey(url) : null,
+      themeAccent: null,
+      capturedAccent: null,
+      thumb: this.hooks.thumbs.load(url),
+      thumbVersion: 1,
+      captureTimer: null,
+    };
     const activeIndex = this.activeId === null ? -1 : this.indexOf(this.activeId);
     const index = afterActive && activeIndex >= 0 ? activeIndex + 1 : this.tabs.length;
     this.tabs.splice(index, 0, tab);
@@ -211,28 +418,51 @@ export class BrowserWindowController {
 
     if (activate || this.activeId === null) this.activateTab(tab.id);
     this.load(tab, url);
+    this.sendThumb(tab);
     this.sendState();
+    return tab.id;
   }
 
-  newTab(url?: string): void {
+  /**
+   * 入力 (URL または検索語) を新しいタブで開く。
+   * オーバービュー (ランチャー) から開いた場合は、そのままページ表示に戻る。
+   */
+  newTab(input: string): void {
     const settings = this.hooks.store.getSettings();
-    const target = url ? resolveInput(url, settings.searchEngine) : settings.homePage;
-    this.createTab(target);
-    if (!url) this.sendCommand('focus-address');
+    const target = input.trim() ? resolveInput(input, settings.searchEngine) : settings.homePage;
+    const id = this.createTab(target);
+    if (this.mode === 'overview' || this.enteringOverview) this.closeOverview(id);
   }
 
   activateTab(id: number): void {
-    const tab = this.tabs.find((t) => t.id === id);
+    const tab = this.findTab(id);
     if (!tab) return;
+    const now = Date.now();
     const prev = this.activeTab();
-    if (prev && prev !== tab) {
-      this.win.contentView.removeChildView(prev.view);
-      prev.view.webContents.stopFindInPage('clearSelection');
+
+    // しばらく離れていたタブに戻ってきた → 「よく戻るページ」として加点
+    if (prev !== tab && tab.viewed && tab.leftAt !== null && now - tab.leftAt >= RETURN_MIN_AWAY_MS) {
+      tab.score = bump(tab.score, WEIGHTS.return, now);
+      tab.returns++;
+      this.hooks.store.recordReturn(this.tabUrl(tab), now);
     }
+    if (prev && prev !== tab) prev.leftAt = now;
     this.activeId = id;
-    this.win.contentView.addChildView(tab.view);
-    this.updateBounds();
-    tab.view.webContents.focus();
+
+    if (this.mode === 'browse') {
+      // 新しいページを先に重ねてから、隠れた前のページを撮影して外す (撮影は表示中のビューでしかできない)
+      this.win.contentView.addChildView(tab.view);
+      tab.viewed = true;
+      this.updateBounds();
+      tab.view.webContents.focus();
+      if (prev && prev !== tab) {
+        prev.view.webContents.stopFindInPage('clearSelection');
+        void this.captureTab(prev).finally(() => {
+          if (prev.id !== this.activeId && !this.win.isDestroyed()) this.win.contentView.removeChildView(prev.view);
+        });
+      }
+      this.scheduleCapture(tab, 700);
+    }
     this.sendState();
   }
 
@@ -242,20 +472,22 @@ export class BrowserWindowController {
     const tab = this.tabs[index];
     const url = this.tabUrl(tab);
     if (url) {
-      this.closedTabs.push({ url, index });
+      this.closedTabs.push({ url, index, pinned: tab.pinned });
       if (this.closedTabs.length > MAX_CLOSED_TABS) this.closedTabs.shift();
     }
+    if (tab.captureTimer) clearTimeout(tab.captureTimer);
 
     this.tabs.splice(index, 1);
+    this.win.contentView.removeChildView(tab.view);
     if (this.activeId === id) {
-      this.win.contentView.removeChildView(tab.view);
       this.activeId = null;
       const next = this.tabs[index] ?? this.tabs[index - 1];
       if (next) this.activateTab(next.id);
     }
     tab.view.webContents.close();
 
-    if (this.tabs.length === 0) {
+    // ページ表示中に最後のタブを閉じたらウィンドウを閉じる (オーバービューでは空のまま残す)
+    if (this.tabs.length === 0 && this.mode === 'browse') {
       this.win.close();
       return;
     }
@@ -269,9 +501,9 @@ export class BrowserWindowController {
   reopenClosedTab(): void {
     const closed = this.closedTabs.pop();
     if (!closed) return;
-    this.createTab(closed.url);
-    // 元の位置に戻す
-    if (this.activeId !== null) this.moveTab(this.activeId, closed.index);
+    const id = this.createTab(closed.url, { pinned: closed.pinned });
+    this.moveTab(id, closed.index);
+    if (this.mode === 'overview') this.closeOverview(id);
   }
 
   moveTab(id: number, toIndex: number): void {
@@ -283,25 +515,35 @@ export class BrowserWindowController {
     this.sendState();
   }
 
-  /** offset 分だけ隣のタブへ移動 (循環する) */
   cycleTab(offset: number): void {
-    if (this.tabs.length === 0 || this.activeId === null) return;
+    if (this.tabs.length === 0 || this.activeId === null || this.mode !== 'browse') return;
     const index = this.indexOf(this.activeId);
     const next = (index + offset + this.tabs.length) % this.tabs.length;
     this.activateTab(this.tabs[next].id);
   }
 
-  /** 0 始まりの位置のタブへ移動。-1 なら最後のタブ */
   selectTabAt(index: number): void {
+    if (this.mode !== 'browse') return;
     const tab = index < 0 ? this.tabs[this.tabs.length - 1] : this.tabs[index];
     if (tab) this.activateTab(tab.id);
   }
 
   toggleMute(id: number): void {
-    const tab = this.tabs.find((t) => t.id === id);
+    const tab = this.findTab(id);
     if (!tab) return;
     tab.view.webContents.setAudioMuted(!tab.view.webContents.isAudioMuted());
     this.sendState();
+  }
+
+  togglePin(id: number): void {
+    const tab = this.findTab(id);
+    if (!tab) return;
+    tab.pinned = !tab.pinned;
+    this.sendState();
+  }
+
+  togglePinActive(): void {
+    if (this.activeId !== null) this.togglePin(this.activeId);
   }
 
   // ------------------------------------------------------------------
@@ -311,13 +553,15 @@ export class BrowserWindowController {
   private load(tab: Tab, url: string): void {
     if (!isAllowedUrl(url)) return;
     tab.error = null;
-    // 失敗時は did-fail-load で処理するので、ここでの reject は無視する
     tab.view.webContents.loadURL(url).catch(() => undefined);
   }
 
   navigate(input: string): void {
     const tab = this.activeTab();
-    if (!tab) return;
+    if (!tab) {
+      this.newTab(input);
+      return;
+    }
     this.load(tab, resolveInput(input, this.hooks.store.getSettings().searchEngine));
     tab.view.webContents.focus();
   }
@@ -335,22 +579,13 @@ export class BrowserWindowController {
   reload(ignoreCache = false): void {
     const tab = this.activeTab();
     if (!tab) return;
-    if (tab.error) {
-      this.load(tab, tab.error.url);
-    } else if (ignoreCache) {
-      tab.view.webContents.reloadIgnoringCache();
-    } else {
-      tab.view.webContents.reload();
-    }
+    if (tab.error) this.load(tab, tab.error.url);
+    else if (ignoreCache) tab.view.webContents.reloadIgnoringCache();
+    else tab.view.webContents.reload();
   }
 
   stop(): void {
     this.activeTab()?.view.webContents.stop();
-  }
-
-  goHome(): void {
-    const tab = this.activeTab();
-    if (tab) this.load(tab, this.hooks.store.getSettings().homePage);
   }
 
   zoom(direction: 'in' | 'out' | 'reset'): void {
@@ -370,7 +605,7 @@ export class BrowserWindowController {
 
   find(text: string, forward: boolean, findNext: boolean): void {
     const wc = this.activeTab()?.view.webContents;
-    if (!wc) return;
+    if (!wc || this.mode !== 'browse') return;
     if (text === '') {
       wc.stopFindInPage('clearSelection');
       this.send('find:result', { activeMatchOrdinal: 0, matches: 0 });
@@ -395,12 +630,6 @@ export class BrowserWindowController {
     if (/^(https?|file):/.test(url)) this.createTab(`view-source:${url}`, { afterActive: true });
   }
 
-  activeTabInfo(): { url: string; title: string } | null {
-    const tab = this.activeTab();
-    if (!tab) return null;
-    return { url: this.tabUrl(tab), title: tab.view.webContents.getTitle() };
-  }
-
   // ------------------------------------------------------------------
   // タブの WebContents イベント
   // ------------------------------------------------------------------
@@ -412,26 +641,41 @@ export class BrowserWindowController {
 
     wc.on('page-title-updated', (_e, title) => {
       store.updateHistoryTitle(wc.getURL(), title);
+      store.updatePage(wc.getURL(), { title });
       update();
     });
     wc.on('page-favicon-updated', (_e, favicons) => {
       tab.favicon = favicons.find((f) => /^(https?|data):/.test(f)) ?? null;
+      store.updatePage(wc.getURL(), { favicon: tab.favicon });
+      update();
+    });
+    wc.on('did-change-theme-color', (_e, color) => {
+      tab.themeAccent = accentFromThemeColor(color);
+      if (tab.themeAccent) store.updatePage(wc.getURL(), { accent: tab.themeAccent });
       update();
     });
     wc.on('did-start-loading', update);
-    wc.on('did-stop-loading', update);
+    wc.on('did-stop-loading', () => {
+      update();
+      if (tab.id === this.activeId) this.scheduleCapture(tab, 500);
+    });
     wc.on('audio-state-changed', update);
     wc.on('zoom-changed', (_e, direction) => this.zoomTab(tab, direction === 'in' ? 'in' : 'out'));
 
     wc.on('did-navigate', (_e, url) => {
       tab.favicon = null;
+      tab.themeAccent = null;
+      tab.capturedAccent = null;
       if (tab.error && url !== tab.error.pageUrl) tab.error = null;
       store.addHistory(url, wc.getTitle());
+      this.scoreNavigation(tab, url);
       update();
     });
     wc.on('did-navigate-in-page', (_e, url, isMainFrame) => {
       if (!isMainFrame) return;
       store.addHistory(url, wc.getTitle());
+      this.scoreNavigation(tab, url);
+      if (tab.id === this.activeId) this.scheduleCapture(tab, 800);
       update();
     });
     wc.on('did-fail-load', (_e, code, description, url, isMainFrame) => {
@@ -468,108 +712,41 @@ export class BrowserWindowController {
     wc.on('will-navigate', (e) => {
       if (isAllowedUrl(e.url)) return;
       e.preventDefault();
-      this.openExternal(e.url);
+      openExternal(this.win, e.url);
     });
 
     wc.setWindowOpenHandler(({ url, disposition }) => {
       if (!isAllowedUrl(url)) {
-        this.openExternal(url);
+        openExternal(this.win, url);
         return { action: 'deny' };
       }
       // サイズ指定付きの window.open (OAuth ログイン等) はポップアップウィンドウとして開く
       if (disposition === 'new-window') {
-        return {
-          action: 'allow',
-          overrideBrowserWindowOptions: { autoHideMenuBar: true },
-        };
+        return { action: 'allow', overrideBrowserWindowOptions: { autoHideMenuBar: true } };
       }
       this.createTab(url, { activate: disposition !== 'background-tab', afterActive: true });
       return { action: 'deny' };
     });
 
-    wc.on('context-menu', (_e, params) => this.showContextMenu(tab, params));
+    wc.on('context-menu', (_e, params) =>
+      showContextMenu(this.win, wc, params, {
+        openInBackground: (u) => this.createTab(u, { activate: false, afterActive: true }),
+        openInForeground: (u) => this.createTab(u, { afterActive: true }),
+        openInNewWindow: (u) => this.hooks.openWindow([u]),
+        reload: () => (tab.id === this.activeId ? this.reload() : wc.reload()),
+        viewSource: () => this.viewSource(),
+        searchEngine: () => this.hooks.store.getSettings().searchEngine,
+      }),
+    );
   }
 
-  private openExternal(url: string): void {
-    let protocol: string;
-    try {
-      protocol = new URL(url).protocol;
-    } catch {
-      return;
-    }
-    if (!EXTERNAL_SCHEMES.has(protocol)) return;
-    const response = dialog.showMessageBoxSync(this.win, {
-      type: 'question',
-      buttons: ['開く', 'キャンセル'],
-      defaultId: 0,
-      cancelId: 1,
-      message: '外部アプリケーションで開きますか？',
-      detail: url,
-    });
-    if (response === 0) shell.openExternal(url).catch(() => undefined);
-  }
-
-  private showContextMenu(tab: Tab, params: ContextMenuParams): void {
-    const wc = tab.view.webContents;
-    const items: MenuItemConstructorOptions[] = [];
-    const separator: MenuItemConstructorOptions = { type: 'separator' };
-
-    if (params.linkURL && isAllowedUrl(params.linkURL)) {
-      const link = params.linkURL;
-      items.push(
-        { label: 'リンクを新しいタブで開く', click: () => this.createTab(link, { activate: false, afterActive: true }) },
-        { label: 'リンクを新しいウィンドウで開く', click: () => this.hooks.openWindow([link]) },
-        { label: 'リンクのアドレスをコピー', click: () => clipboard.writeText(link) },
-        separator,
-      );
-    }
-
-    if (params.mediaType === 'image' && params.srcURL) {
-      const src = params.srcURL;
-      items.push(
-        { label: '画像を新しいタブで開く', click: () => this.createTab(src, { activate: false, afterActive: true }) },
-        { label: '名前を付けて画像を保存', click: () => wc.downloadURL(src) },
-        { label: '画像をコピー', click: () => wc.copyImageAt(params.x, params.y) },
-        { label: '画像のアドレスをコピー', click: () => clipboard.writeText(src) },
-        separator,
-      );
-    }
-
-    const selection = params.selectionText.trim();
-    if (params.isEditable) {
-      const flags = params.editFlags;
-      items.push(
-        { label: '元に戻す', enabled: flags.canUndo, click: () => wc.undo() },
-        { label: 'やり直す', enabled: flags.canRedo, click: () => wc.redo() },
-        separator,
-        { label: '切り取り', enabled: flags.canCut, click: () => wc.cut() },
-        { label: 'コピー', enabled: flags.canCopy, click: () => wc.copy() },
-        { label: '貼り付け', enabled: flags.canPaste, click: () => wc.paste() },
-        { label: 'すべて選択', enabled: flags.canSelectAll, click: () => wc.selectAll() },
-        separator,
-      );
-    } else if (selection) {
-      const label = selection.length > 20 ? `${selection.slice(0, 20)}…` : selection;
-      const engine = this.hooks.store.getSettings().searchEngine;
-      items.push(
-        { label: 'コピー', click: () => wc.copy() },
-        { label: `「${label}」を検索`, click: () => this.createTab(searchUrl(selection, engine), { afterActive: true }) },
-        separator,
-      );
-    }
-
-    if (items.length === 0) {
-      items.push(
-        { label: '戻る', enabled: wc.navigationHistory.canGoBack(), click: () => wc.navigationHistory.goBack() },
-        { label: '進む', enabled: wc.navigationHistory.canGoForward(), click: () => wc.navigationHistory.goForward() },
-        { label: '再読み込み', click: () => (tab.id === this.activeId ? this.reload() : wc.reload()) },
-        separator,
-        { label: 'ページのソースを表示', click: () => this.viewSource() },
-        separator,
-      );
-    }
-
-    items.push({ label: '検証', click: () => wc.inspectElement(params.x, params.y) });
-    Menu.buildFromTemplate(items).popup({ window: this.win, frame: params.frame ?? undefined });
+  /** ページの読み込み (再読み込みを除く) をスコアに反映する */
+  private scoreNavigation(tab: Tab, url: string): void {
+    const key = pageKey(url);
+    if (!key || key === tab.scoredKey) return;
+    tab.scoredKey = key;
+    const now = Date.now();
+    const isReturn = this.hooks.store.recordVisit(url, tab.view.webContents.getTitle(), now);
+    tab.score = bump(tab.score, isReturn ? WEIGHTS.return : WEIGHTS.visit, now);
   }
 }

@@ -4,6 +4,8 @@ import type { Settings } from '../shared/types';
 import { DownloadManager } from './downloads';
 import { buildAppMenu } from './menu';
 import { Store } from './store';
+import type { SessionTab } from './store';
+import { ThumbnailDisk } from './thumbnails';
 import { isAllowedUrl } from './url';
 import { BrowserWindowController } from './window';
 
@@ -17,6 +19,7 @@ if (!app.requestSingleInstanceLock()) {
 
 const controllers = new Set<BrowserWindowController>();
 let store: Store;
+let thumbs: ThumbnailDisk;
 let downloads: DownloadManager;
 let quitting = false;
 
@@ -24,18 +27,19 @@ function urlsFromArgv(argv: string[]): string[] {
   return argv.slice(1).filter((arg) => /^(https?:\/\/|file:\/\/\/)/i.test(arg) && isAllowedUrl(arg));
 }
 
-function openWindow(urls: string[] = []): BrowserWindowController {
+function openWindow(urls: string[] = [], tabs: SessionTab[] = []): BrowserWindowController {
   const controller = new BrowserWindowController(
     {
       store,
+      thumbs,
       openWindow: (u) => openWindow(u),
       onClose: (c) => {
         // 最後のウィンドウを閉じるときにタブを保存しておき、次回起動時に復元する
-        if (!quitting && controllers.size === 1) store.saveSession(c.tabUrls());
+        if (!quitting && controllers.size === 1) store.saveSession(c.sessionTabs());
       },
       onClosed: (c) => controllers.delete(c),
     },
-    urls,
+    [...tabs.map((t) => ({ ...t, restored: true })), ...urls.map((url) => ({ url, pinned: false }))],
   );
   controllers.add(controller);
   return controller;
@@ -58,12 +62,6 @@ function updateSettings(patch: Partial<Settings>): Settings {
   const settings = store.updateSettings(patch);
   broadcast('settings', settings);
   return settings;
-}
-
-function toggleActiveBookmark(controller: BrowserWindowController | undefined): void {
-  const info = controller?.activeTabInfo();
-  if (!info || !/^(https?|file):/.test(info.url)) return;
-  broadcast('bookmarks', store.toggleBookmark(info.url, info.title));
 }
 
 // ----------------------------------------------------------------------
@@ -152,18 +150,22 @@ const str = (v: unknown): string => (typeof v === 'string' ? v : '');
 const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
 
 function setupIpc(): void {
-  on('tab:new', (c, url) => c.newTab(typeof url === 'string' ? url : undefined));
+  on('tab:new', (c, input) => c.newTab(str(input)));
   on('tab:close', (c, id) => c.closeTab(num(id)));
   on('tab:activate', (c, id) => c.activateTab(num(id)));
   on('tab:move', (c, id, index) => c.moveTab(num(id), num(index)));
   on('tab:mute', (c, id) => c.toggleMute(num(id)));
+  on('tab:pin', (c, id) => c.togglePin(num(id)));
+
+  on('overview:open', (c, launcher) => void c.openOverview(launcher === true));
+  on('overview:ready', (c) => c.overviewReady());
+  on('overview:close', (c, id) => c.closeOverview(typeof id === 'number' ? id : null));
 
   on('nav:go', (c, input) => c.navigate(str(input)));
   on('nav:back', (c) => c.goBack());
   on('nav:forward', (c) => c.goForward());
   on('nav:reload', (c) => c.reload());
   on('nav:stop', (c) => c.stop());
-  on('nav:home', (c) => c.goHome());
   on('nav:zoom', (c, dir) => {
     if (dir === 'in' || dir === 'out' || dir === 'reset') c.zoom(dir);
   });
@@ -173,20 +175,7 @@ function setupIpc(): void {
 
   on('layout', (c, top, right) => c.setLayout(num(top), num(right)));
 
-  handle('bookmarks:get', () => store.getBookmarks());
-  handle('bookmarks:toggle', (url, title) => {
-    const list = isAllowedUrl(str(url)) ? store.toggleBookmark(str(url), str(title)) : store.getBookmarks();
-    broadcast('bookmarks', list);
-    return list;
-  });
-  handle('bookmarks:remove', (id) => {
-    const list = store.removeBookmark(str(id));
-    broadcast('bookmarks', list);
-    return list;
-  });
-
-  handle('history:get', (query) => store.searchHistory(str(query)));
-  handle('history:clear', () => store.clearHistory());
+  handle('history:search', (query) => store.searchHistory(str(query)));
 
   handle('settings:get', () => store.getSettings());
   handle('settings:update', (patch) => {
@@ -196,7 +185,6 @@ function setupIpc(): void {
     if (p.searchEngine === 'google' || p.searchEngine === 'duckduckgo' || p.searchEngine === 'bing' || p.searchEngine === 'yahoo_jp') {
       clean.searchEngine = p.searchEngine;
     }
-    if (typeof p.showBookmarksBar === 'boolean') clean.showBookmarksBar = p.showBookmarksBar;
     if (typeof p.restoreSession === 'boolean') clean.restoreSession = p.restoreSession;
     return updateSettings(clean);
   });
@@ -226,6 +214,7 @@ app.on('second-instance', (_e, argv) => {
 
 app.whenReady().then(() => {
   store = new Store();
+  thumbs = new ThumbnailDisk(store.dir);
   downloads = new DownloadManager((list) => broadcast('downloads', list));
   downloads.attach(session.defaultSession);
   setupPermissions();
@@ -235,15 +224,13 @@ app.whenReady().then(() => {
     buildAppMenu({
       current: currentController,
       openWindow: () => openWindow(),
-      toggleBookmark: () => toggleActiveBookmark(currentController()),
-      toggleBookmarksBar: () => updateSettings({ showBookmarksBar: !store.getSettings().showBookmarksBar }),
     }),
   );
 
   const argvUrls = urlsFromArgv(process.argv);
   const settings = store.getSettings();
   const restored = settings.restoreSession ? store.getSession() : [];
-  openWindow([...restored, ...argvUrls]);
+  openWindow(argvUrls, restored);
 
   app.on('activate', () => {
     if (controllers.size === 0) openWindow();
@@ -253,7 +240,7 @@ app.whenReady().then(() => {
 app.on('before-quit', () => {
   if (!store) return;
   // 終了時は全ウィンドウのタブを保存する (ウィンドウが残っていない場合は onClose で保存済み)
-  if (!quitting && controllers.size > 0) store.saveSession([...controllers].flatMap((c) => c.tabUrls()));
+  if (!quitting && controllers.size > 0) store.saveSession([...controllers].flatMap((c) => c.sessionTabs()));
   quitting = true;
 });
 

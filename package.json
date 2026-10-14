@@ -1,8 +1,8 @@
 {
-  "name": "crop-browser",
-  "productName": "Crop Browser",
+  "name": "folio",
+  "productName": "Folio",
   "version": "1.0.0",
-  "description": "Electron (Chromium) ベースのシンプルなタブ型Webブラウザ",
+  "description": "よく戻るページが、自然と見つかる — 見た目と動きでページを見分けるデスクトップブラウザ",
   "main": "dist/main/main.js",
   "license": "MIT",
   "scripts": {
@@ -19,8 +19,8 @@
     "typescript": "^5.9.0"
   },
   "build": {
-    "appId": "com.nakao.cropbrowser",
-    "productName": "Crop Browser",
+    "appId": "com.nakao.folio",
+    "productName": "Folio",
     "files": [
       "dist/**/*",
       "package.json"

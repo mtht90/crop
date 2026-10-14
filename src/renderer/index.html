@@ -3,33 +3,32 @@
 <head>
   <meta charset="utf-8">
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; img-src 'self' data: http: https:; style-src 'self'; script-src 'self'">
-  <title>Crop Browser</title>
+        content="default-src 'self'; img-src 'self' data: blob: http: https:; style-src 'self'; script-src 'self'">
+  <title>Folio</title>
   <link rel="stylesheet" href="styles.css">
   <script type="module" src="renderer.js"></script>
 </head>
-<body>
+<body data-mode="browse">
   <header id="chrome">
-    <div id="tabstrip">
-      <div id="tabs" role="tablist"></div>
-      <button id="new-tab" class="icon-btn" data-icon="plus" title="新しいタブ (Ctrl+T)"></button>
+    <div id="strip">
+      <button id="overview-btn" class="icon-btn" data-icon="grid" title="オーバービュー (Ctrl+E)"></button>
+      <div id="pills"><div id="glider"></div></div>
+      <button id="new-tab" class="icon-btn" data-icon="plus" title="新しいページ (Ctrl+T)"></button>
     </div>
 
     <div id="toolbar">
       <button id="back" class="icon-btn" data-icon="back" title="戻る (Alt+←)"></button>
       <button id="forward" class="icon-btn" data-icon="forward" title="進む (Alt+→)"></button>
       <button id="reload" class="icon-btn" data-icon="reload" title="再読み込み (Ctrl+R)"></button>
-      <button id="home" class="icon-btn" data-icon="home" title="ホーム"></button>
 
-      <form id="address-form" autocomplete="off">
-        <span id="security" data-icon="search"></span>
+      <form id="omnibox" autocomplete="off">
+        <span id="omni-icon" data-icon="search"></span>
         <input id="address" type="text" spellcheck="false" placeholder="検索するか URL を入力">
+        <span id="omni-hint"></span>
         <button type="button" id="zoom-indicator" hidden title="ズームをリセット"></button>
-        <button type="button" id="bookmark-star" class="icon-btn small" data-icon="star" title="このページをブックマーク (Ctrl+D)"></button>
+        <button type="button" id="pin-btn" class="icon-btn small" data-icon="pin" title="このタブを固定 (Ctrl+D)"></button>
       </form>
 
-      <button id="btn-bookmarks" class="icon-btn" data-icon="bookmarks" title="ブックマーク (Ctrl+Shift+O)"></button>
-      <button id="btn-history" class="icon-btn" data-icon="history" title="履歴 (Ctrl+H)"></button>
       <button id="btn-downloads" class="icon-btn" data-icon="download" title="ダウンロード (Ctrl+J)">
         <span id="download-badge" hidden></span>
       </button>
@@ -43,9 +42,33 @@
       <button id="find-next" class="icon-btn small" data-icon="down" title="次へ (Enter)"></button>
       <button id="find-close" class="icon-btn small" data-icon="close" title="閉じる (Esc)"></button>
     </div>
-
-    <nav id="bookmarks-bar" hidden></nav>
   </header>
+
+  <main id="overview" hidden>
+    <div id="ov-scroll">
+      <div id="ov-content">
+        <div id="ov-summary"></div>
+        <section id="ov-grid"></section>
+        <section id="ov-pile" class="ov-section" hidden>
+          <h3>あまり見ないページ <span class="count"></span></h3>
+          <div class="chips"></div>
+        </section>
+        <section id="ov-suggest" class="ov-section" hidden>
+          <h3>閉じたけれど、よく戻っていたページ</h3>
+          <div class="chips"></div>
+        </section>
+        <section id="ov-history" class="ov-section" hidden>
+          <h3>履歴から</h3>
+          <div class="rows"></div>
+        </section>
+        <div id="ov-empty" hidden></div>
+        <div id="ov-ring"></div>
+        <div id="ov-peek" hidden></div>
+      </div>
+    </div>
+  </main>
+
+  <div id="morph-layer"></div>
 
   <aside id="panel" hidden>
     <div class="panel-header">

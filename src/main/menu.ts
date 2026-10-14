@@ -6,8 +6,6 @@ export interface MenuActions {
   /** フォーカス中のブラウザウィンドウ */
   current(): BrowserWindowController | undefined;
   openWindow(): void;
-  toggleBookmark(): void;
-  toggleBookmarksBar(): void;
 }
 
 export function buildAppMenu(actions: MenuActions): Menu {
@@ -36,7 +34,7 @@ export function buildAppMenu(actions: MenuActions): Menu {
     {
       label: 'ファイル',
       submenu: [
-        { label: '新しいタブ', accelerator: 'CmdOrCtrl+T', click: withWin((c) => c.newTab()) },
+        { label: '新しいページ', accelerator: 'CmdOrCtrl+T', click: withWin((c) => void c.openOverview(true)) },
         { label: '新しいウィンドウ', accelerator: 'CmdOrCtrl+N', click: () => actions.openWindow() },
         { label: '閉じたタブを開く', accelerator: 'CmdOrCtrl+Shift+T', click: withWin((c) => c.reopenClosedTab()) },
         { type: 'separator' },
@@ -76,7 +74,8 @@ export function buildAppMenu(actions: MenuActions): Menu {
         alias('CmdOrCtrl+numsub', withWin((c) => c.zoom('out'))),
         { label: '実際のサイズ', accelerator: 'CmdOrCtrl+0', click: withWin((c) => c.zoom('reset')) },
         { type: 'separator' },
-        { label: 'ブックマークバーを表示', accelerator: 'CmdOrCtrl+Shift+B', click: () => actions.toggleBookmarksBar() },
+        { label: 'オーバービュー', accelerator: 'CmdOrCtrl+E', click: withWin((c) => void c.openOverview(false)) },
+        alias('CmdOrCtrl+Shift+A', withWin((c) => void c.openOverview(false))),
         { label: '全画面表示', role: 'togglefullscreen' },
         { type: 'separator' },
         { label: 'ページのソースを表示', accelerator: 'CmdOrCtrl+U', click: withWin((c) => c.viewSource()) },
@@ -89,7 +88,6 @@ export function buildAppMenu(actions: MenuActions): Menu {
       submenu: [
         { label: '戻る', accelerator: isMac ? 'Cmd+[' : 'Alt+Left', click: withWin((c) => c.goBack()) },
         { label: '進む', accelerator: isMac ? 'Cmd+]' : 'Alt+Right', click: withWin((c) => c.goForward()) },
-        { label: 'ホーム', accelerator: 'Alt+Home', click: withWin((c) => c.goHome()) },
         { label: 'アドレスバーに移動', accelerator: 'CmdOrCtrl+L', click: withWin((c) => c.sendCommand('focus-address')) },
         alias('F6', withWin((c) => c.sendCommand('focus-address'))),
         alias('Alt+D', withWin((c) => c.sendCommand('focus-address'))),
@@ -100,27 +98,25 @@ export function buildAppMenu(actions: MenuActions): Menu {
         alias('CmdOrCtrl+PageUp', withWin((c) => c.cycleTab(-1))),
         { label: 'タブを選択', submenu: tabNumberItems },
         { type: 'separator' },
-        { label: '履歴', accelerator: 'CmdOrCtrl+H', click: withWin((c) => c.sendCommand('toggle-history')) },
         { label: 'ダウンロード', accelerator: 'CmdOrCtrl+J', click: withWin((c) => c.sendCommand('toggle-downloads')) },
         { label: '設定', accelerator: 'CmdOrCtrl+,', click: withWin((c) => c.sendCommand('toggle-settings')) },
       ],
     },
     {
-      label: 'ブックマーク',
+      label: 'タブ',
       submenu: [
-        { label: 'このページをブックマーク', accelerator: 'CmdOrCtrl+D', click: () => actions.toggleBookmark() },
-        { label: 'ブックマーク一覧', accelerator: 'CmdOrCtrl+Shift+O', click: withWin((c) => c.sendCommand('toggle-bookmarks')) },
+        { label: 'このタブを固定 (常に大きく表示)', accelerator: 'CmdOrCtrl+D', click: withWin((c) => c.togglePinActive()) },
       ],
     },
     {
       label: 'ヘルプ',
       submenu: [
         {
-          label: 'Crop Browser について',
+          label: 'Folio について',
           click: () => {
             dialog.showMessageBox({
               type: 'info',
-              message: 'Crop Browser',
+              message: 'Folio',
               detail: `バージョン ${app.getVersion()}\nElectron ${process.versions.electron} / Chromium ${process.versions.chrome}`,
             });
           },

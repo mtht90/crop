@@ -1,4 +1,4 @@
-name: Build Browser
+name: Build Folio
 
 on:
   push:
@@ -53,7 +53,7 @@ jobs:
       - name: Upload installer
         uses: actions/upload-artifact@v4
         with:
-          name: CropBrowser-${{ runner.os }}
+          name: Folio-${{ runner.os }}
           path: |
             release/*.exe
             release/*.dmg
