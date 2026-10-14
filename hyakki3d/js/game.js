@@ -1,7 +1,7 @@
 // ゲーム本体：状態・更新・描画
 import {
   RUN, LIMITS, PLAYER, ENEMIES, SPAWN, EVENTS, ELITE, DROPS, SKILLS, SLOTS,
-  PICK_WEIGHT, hpScale, speedScale, xpNeed, CHARACTERS, EVOLUTIONS, MODES,
+  PICK_WEIGHT, hpScale, speedScale, xpNeed, CHARACTERS, EVOLUTIONS, MODES, DIFF,
 } from './config.js';
 import { Grid } from './grid.js';
 import { FX } from './fx.js';
@@ -200,9 +200,9 @@ export function spawnEnemy(type, x, y, force = false) {
   const e = epool.pop() || newEnemy();
   e.uid = uidSeq++; e.alive = true; e.def = d; e.type = type; e.spr = null;
   e.x = x; e.y = y; e.vx = 0; e.vy = 0;
-  e.maxHp = e.hp = d.boss || d.mid ? d.hp : d.hp * hpScale(G.sched) * G.adapt * G.mode.hp;
-  e.r = d.r; e.dmg = (d.boss || d.mid ? d.dmg : d.dmg * G.adapt ** 0.35) * (G.mode.dmg || 1); e.xp = d.xp; e.mass = d.mass;
-  e.speed = d.speed * speedScale(G.sched) * (d.mid ? 1 : 0.88 + Math.random() * 0.24);
+  e.maxHp = e.hp = d.boss || d.mid ? d.hp : d.hp * hpScale(G.sched) * G.adapt * G.mode.hp * DIFF.hp;
+  e.r = d.r; e.dmg = (d.boss || d.mid ? d.dmg : d.dmg * G.adapt ** 0.35 * DIFF.dmg) * (G.mode.dmg || 1); e.xp = d.xp; e.mass = d.mass;
+  e.speed = d.speed * speedScale(G.sched) * (d.mid || d.boss ? 1 : (0.88 + Math.random() * 0.24) * DIFF.speed);
   e.flash = 0; e.slowT = 0; e.march = false; e.wob = Math.random() * TAU; e.hopT = Math.random();
   e.last.fill(-99);
   e.elite = !!d.elite; e.boss = !!d.boss; e.mid = !!d.mid; e.ai = null; e.dir = 0; e.at = Math.random() * 4;
@@ -245,7 +245,7 @@ export function spawnProj(kind, x, y, vx, vy, dmg, pierce, life, r, opt = {}) {
 
 function spawnBullet(x, y, vx, vy, dmg) {
   if (G.bullets.length >= G.limits.enemyBullets) return;
-  G.bullets.push({ x, y, vx, vy, dmg: dmg * (G.mode.dmg || 1), r: 9, life: 4 });
+  G.bullets.push({ x, y, vx, vy, dmg: dmg * DIFF.bullet * (G.mode.dmg || 1), r: 9, life: 4 });
 }
 
 function dropGem(x, y, v) {
@@ -577,7 +577,7 @@ function updateDirector(dt) {
   if (G.enraged) rate = Math.max(rate, 60);
   updateAdapt(dt);
   // 時計を詰めたモードは育つ時間が短いので、湧く量を √k で割って釣り合わせる
-  rate *= (0.7 + 0.3 * G.adapt) / Math.sqrt(G.mode.k);
+  rate *= (0.7 + 0.3 * G.adapt) / Math.sqrt(G.mode.k) * DIFF.rate;
   if (G.midBoss) rate *= 0.5;   // 中ボス戦は雑魚を減らして一騎打ちに寄せる
   G.spawnAcc += rate * dt;
   while (G.spawnAcc >= 1) {
@@ -631,8 +631,8 @@ function updateAdapt(dt) {
   if (G.adaptT < 1) return;
   G.adaptT = 0;
   const P = G.player, calm = G.time - G.lastHurt;
-  const cap = 1 + Math.max(0, G.sched - 120) / 220;
-  if (calm > 8 && !G.midBoss) G.adapt += 0.03;
+  const cap = 1 + Math.max(0, G.sched - 60) / 160;
+  if (calm > 6 && !G.midBoss) G.adapt += 0.05;
   else if (calm < 2 && P.hp < P.maxHp * 0.7) G.adapt -= 0.1;
   G.adapt = Math.max(0.7, Math.min(cap, G.adapt));
 }
@@ -664,7 +664,7 @@ function startEvent(ev) {
   } else if (ev.type === 'mid') {
     edgePos(120);
     const e = spawnEnemy(ev.enemy, RX, RY, true);
-    e.maxHp = e.hp = e.def.hp * (0.7 + 0.3 * G.adapt) * (G.mode.k > 2 ? 0.6 : 1);
+    e.maxHp = e.hp = e.def.hp * DIFF.mid * (0.7 + 0.3 * G.adapt) * (G.mode.k > 2 ? 0.6 : 1);
     e.ai = { state: 'walk', t: 2.5, dx: 0, dy: 0, n: 0, a: 0 };
     G.midBoss = e;
     UI.banner(ev.banner, 'huge');
@@ -677,7 +677,7 @@ function startEvent(ev) {
     edgePos(120);
     const e = spawnEnemy('tengu', RX, RY, true);
     // 自分の強さ（追従係数）に合わせて硬くする。短期決戦は育つ時間が短いぶん控えめ
-    e.maxHp = e.hp = e.def.hp * (0.6 + 0.4 * G.adapt) * (G.mode.k > 2 ? 0.6 : 1);
+    e.maxHp = e.hp = e.def.hp * DIFF.boss * (0.6 + 0.4 * G.adapt) * (G.mode.k > 2 ? 0.6 : 1);
     e.ai = { state: 'walk', t: 3, dx: 0, dy: 0, n: 0, shot: 0 };
     G.boss = e;
     UI.banner(ev.banner, 'huge');
@@ -696,8 +696,9 @@ function updateBoss(e, dt) {
   ai.t -= dt * (ai.rage ? 1.5 : 1);
   e.at += dt * 12;
   if (e.flash > 0) e.flash -= dt;
-  if (!ai.rage && e.hp < e.maxHp * 0.5) {
+  if (!ai.rage && e.hp < e.maxHp * 0.6) {
     ai.rage = true;
+    e.speed *= 1.25;
     UI.banner('がしゃどくろ 怒り狂う', 'red');
     FX.ring(e.x, e.y, 30, 300, 0.7, '#ff3040', 12); sfx.alarm(); addShake(0.5); G.redPulse = 1.5;
   }
@@ -707,14 +708,15 @@ function updateBoss(e, dt) {
       e.x += dx / d * sp * dt; e.y += dy / d * sp * dt;
       if (ai.t <= 0) {
         const r = Math.random();
-        if (r < 0.4) { ai.state = 'tele'; ai.t = 0.8; ai.dx = dx / d; ai.dy = dy / d; }
-        else if (r < 0.75) { ai.state = 'barrage'; ai.t = 0; ai.n = 4; }
+        if (r < 0.4) { ai.state = 'tele'; ai.t = 0.7; ai.dx = dx / d; ai.dy = dy / d; ai.chain = ai.rage ? 2 : 1; }
+        else if (r < 0.75) { ai.state = 'barrage'; ai.t = 0; ai.n = ai.rage ? 8 : 6; }
         else {
-          ai.state = 'walk'; ai.t = 3;
+          ai.state = 'walk'; ai.t = 2;
           FX.seal(e.x, e.y, 120, 1.2);
-          for (let i = 0; i < 22; i++) {
-            const a = (i / 22) * TAU, R = 260;
-            spawnEnemy(i & 1 ? 'onibi' : 'kooni', P.x + Math.cos(a) * R, P.y + Math.sin(a) * R, true);
+          const n = ai.rage ? 36 : 26;
+          for (let i = 0; i < n; i++) {
+            const a = (i / n) * TAU, R = 260;
+            spawnEnemy(i % 3 === 0 ? 'gashadokuro' : i & 1 ? 'onibi' : 'kooni', P.x + Math.cos(a) * R, P.y + Math.sin(a) * R, true);
           }
           sfx.alarm();
         }
@@ -729,7 +731,11 @@ function updateBoss(e, dt) {
       const l = Math.hypot(ai.dx, ai.dy) || 1;
       e.x += ai.dx / l * 620 * dt; e.y += ai.dy / l * 620 * dt;
       if (G.frame % 2 === 0) FX.burst(e.x, e.y + 30, 2, 1, 80, 14, 0.5);
-      if (ai.t <= 0) { ai.state = 'walk'; ai.t = 2.4; }
+      if (ai.t <= 0) {
+        // 連続突進：狙い直してもう一度
+        if (ai.chain > 0) { ai.chain--; ai.state = 'tele'; ai.t = 0.45; ai.dx = dx / d; ai.dy = dy / d; }
+        else { ai.state = 'walk'; ai.t = 1.6; }
+      }
       break;
     }
     case 'barrage':
@@ -741,8 +747,8 @@ function updateBoss(e, dt) {
         }
         FX.ring(e.x, e.y, 30, 90, 0.3, '#ff7a3a', 6);
         sfx.shoot();
-        ai.n--; ai.t = 0.38;
-        if (ai.n <= 0) { ai.state = 'walk'; ai.t = 2.6; }
+        ai.n--; ai.t = 0.32;
+        if (ai.n <= 0) { ai.state = 'walk'; ai.t = 1.8; }
       }
       break;
   }

@@ -15,6 +15,10 @@ export const MODES = [
 // 制限時間を過ぎてもボスが生きていると激昂し、雑魚も湧き続ける（時間切れの勝利はない）
 export const RUN = { bossAt: BASE_BOSS };
 
+// ---- 難易度の倍率（ここを触れば全体の手応えが変わる） ----
+// hp/dmg/speed: 雑魚・強敵 / rate: 湧く量 / mid・boss: 中ボス・大ボスの体力 / bullet: 敵弾の威力
+export const DIFF = { hp: 1.7, dmg: 1.5, speed: 1.12, rate: 1.35, mid: 1.8, boss: 2.2, bullet: 1.4 };
+
 // 同時存在数の上限（重さ対策）。スマホでは一部を自動で下げる
 export const LIMITS = {
   enemies: 900,
@@ -47,9 +51,9 @@ export const ENEMIES = {
   chochin:     { name: '鉄鼠',         hp: 22,  speed: 112, dmg: 8, r: 12, xp: 2,  mass: 0.7, color: 7, model: 'rat' },
   gashadokuro: { name: '落ち武者',     hp: 95,  speed: 48, dmg: 14, r: 16, xp: 4,  mass: 2,   color: 3, model: 'skRogue' },
   oni:         { name: '土蜘蛛',       hp: 650, speed: 58, dmg: 20, r: 34, xp: 30, mass: 6,   color: 1, elite: true, model: 'spiderBig' },
-  orochi:      { name: '大蛇',         hp: 8000, speed: 70, dmg: 22, r: 46, xp: 60, mass: 999, color: 6, mid: true, model: 'orochi' },
-  mukuro:      { name: '骸法師',       hp: 15000, speed: 58, dmg: 24, r: 40, xp: 90, mass: 999, color: 3, mid: true, model: 'mukuro' },
-  tengu:       { name: 'がしゃどくろ', hp: 300000, speed: 64, dmg: 34, r: 60, xp: 0, mass: 999, color: 6, boss: true, model: 'boss' },
+  orochi:      { name: '大蛇',         hp: 8000, speed: 76, dmg: 30, r: 46, xp: 60, mass: 999, color: 6, mid: true, model: 'orochi' },
+  mukuro:      { name: '骸法師',       hp: 15000, speed: 62, dmg: 32, r: 40, xp: 90, mass: 999, color: 3, mid: true, model: 'mukuro' },
+  tengu:       { name: 'がしゃどくろ', hp: 300000, speed: 80, dmg: 45, r: 60, xp: 0, mass: 999, color: 6, boss: true, model: 'boss' },
 };
 
 export function hpScale(t) { const m = t / 60; return 1 + m * 0.3 + m * m * 0.018; }  // 基準時計で 5分≈2.9倍, 12分≈6.2倍
