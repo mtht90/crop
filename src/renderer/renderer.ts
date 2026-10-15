@@ -1,19 +1,21 @@
-// Folio の UI のエントリーポイント: ツールバー・アドレス欄・ページ内検索・パネル
-import type { DownloadInfo, Settings, UiCommand } from '../shared/types';
+// Folio の UI のエントリーポイント: 上部バー・アドレス欄・ページ内検索・シート・見た目
+import type { Appearance, DownloadInfo, GlassSetting, Settings, ShelfSetting, ThemeSetting, UiCommand } from '../shared/types';
 import { activeTab, api, ctx, dropThumbs, el, setThumb } from './ctx.js';
-import { icon, setIcon } from './icons.js';
+import { icon, iconSvg, setIcon } from './icons.js';
 import { installSpringVariables } from './motion.js';
 import * as overview from './overview.js';
-import { initStrip, renderStrip } from './strip.js';
+import { initShelf, renderShelf } from './shelf.js';
 
 installSpringVariables();
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+const root = document.documentElement;
 
-const chrome = $('chrome');
 const address = $<HTMLInputElement>('address');
 const omnibox = $<HTMLFormElement>('omnibox');
+const omniSite = $('omni-site');
 const omniIcon = $('omni-icon');
+const omniBadge = $('omni-badge');
 const omniHint = $('omni-hint');
 const zoomIndicator = $<HTMLButtonElement>('zoom-indicator');
 const pinBtn = $<HTMLButtonElement>('pin-btn');
@@ -23,9 +25,11 @@ const reloadBtn = $<HTMLButtonElement>('reload');
 const findbar = $('findbar');
 const findInput = $<HTMLInputElement>('find-input');
 const findCount = $('find-count');
-const panel = $('panel');
-const panelTitle = $('panel-title');
-const panelBody = $('panel-body');
+const pageSlot = $('page-slot');
+const pageEmpty = $('page-empty');
+const sheet = $('sheet');
+const sheetTitle = $('sheet-title');
+const sheetBody = $('sheet-body');
 const downloadBadge = $('download-badge');
 
 let settings: Settings | null = null;
@@ -35,39 +39,70 @@ let addressDirty = false;
 document.querySelectorAll<HTMLElement>('[data-icon]').forEach((node) => setIcon(node, node.dataset.icon!));
 
 // ----------------------------------------------------------------------
-// レイアウト: UI が占める領域をメインプロセスに伝え、Web ページの表示位置を決める
+// 見た目 (テーマ・ガラス・プラットフォーム)
 // ----------------------------------------------------------------------
 
-let lastLayout = '';
-function reportLayout(): void {
-  const top = chrome.getBoundingClientRect().height;
-  document.documentElement.style.setProperty('--chrome-h', `${top}px`);
-  const right = panel.hidden ? 0 : panel.getBoundingClientRect().width;
-  document.documentElement.style.setProperty('--panel-w', `${right}px`);
-  const key = `${top}:${right}`;
-  if (key === lastLayout) return;
-  lastLayout = key;
-  api.setLayout(top, right);
+function applyAppearance(look: Appearance): void {
+  root.dataset.theme = look.theme;
+  root.dataset.glass = look.glass;
+  root.dataset.platform = look.platform;
+  // ウィンドウ操作ボタン (最小化・最大化・閉じる) の分だけ上部バーの右端を空ける
+  root.style.setProperty('--wco-w', look.platform === 'darwin' ? '0px' : 'max(0px, calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw)), 138px)');
+  root.style.setProperty('--mac-lights', look.platform === 'darwin' ? '72px' : '0px');
 }
-new ResizeObserver(reportLayout).observe(chrome);
-new ResizeObserver(reportLayout).observe(panel);
+
+// ----------------------------------------------------------------------
+// シェルフの幅 (自動: ウィンドウが狭いときはアイコンだけに)
+// ----------------------------------------------------------------------
+
+function applyShelfMode(): void {
+  const mode: ShelfSetting = settings?.shelf ?? 'auto';
+  const rail = mode === 'rail' || (mode === 'auto' && window.innerWidth < 1060);
+  document.body.dataset.shelf = rail ? 'rail' : 'expanded';
+  setIcon($('shelf-btn'), rail ? 'rail' : 'sidebar');
+}
+
+function toggleShelf(): void {
+  const rail = document.body.dataset.shelf === 'rail';
+  void api.updateSettings({ shelf: rail ? 'expanded' : 'rail' }).then((s) => {
+    settings = s;
+    applyShelfMode();
+  });
+}
+
+// ----------------------------------------------------------------------
+// Web ページの表示領域をメインプロセスへ伝える
+// ----------------------------------------------------------------------
+
+let lastRect = '';
+let rectFrame = 0;
+function reportPageRect(): void {
+  cancelAnimationFrame(rectFrame);
+  rectFrame = requestAnimationFrame(() => {
+    const r = pageSlot.getBoundingClientRect();
+    const rect = { x: r.left, y: r.top, width: r.width, height: r.height };
+    const key = `${Math.round(rect.x)}:${Math.round(rect.y)}:${Math.round(rect.width)}:${Math.round(rect.height)}`;
+    if (key === lastRect) return;
+    lastRect = key;
+    api.setPageRect(rect);
+  });
+}
+new ResizeObserver(reportPageRect).observe(pageSlot);
 window.addEventListener('resize', () => {
-  lastLayout = '';
-  reportLayout();
+  applyShelfMode();
+  reportPageRect();
 });
+// シェルフの幅が変わるアニメーション中も、ページの位置を追従させる
+document.body.addEventListener('transitionend', reportPageRect);
 
 // ----------------------------------------------------------------------
-// タブストリップとオーバービュー
+// シェルフ・スペース
 // ----------------------------------------------------------------------
 
-initStrip({
+initShelf({
   select: (id) => {
     if (overview.isOpen()) void overview.openTab(id);
     else api.activateTab(id);
-  },
-  openStack: () => {
-    overview.focusPile();
-    if (!overview.isOpen()) api.openOverview(false);
   },
   hover: (id) => overview.highlight(id),
 });
@@ -81,14 +116,20 @@ overview.initOverview({
     addressDirty = false;
     address.placeholder = '検索するか URL を入力';
     renderToolbar();
+    renderShelf();
   },
 });
 
-$('overview-btn').addEventListener('click', () => {
+$('space-btn').addEventListener('click', () => {
   if (overview.isOpen()) overview.back();
   else api.openOverview(false);
 });
-$('new-tab').addEventListener('click', () => api.openOverview(true));
+$('new-page').addEventListener('click', () => api.openOverview(true));
+$('shelf-btn').addEventListener('click', toggleShelf);
+$('menu-btn').addEventListener('click', (e) => {
+  const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+  api.openMenu(r.left, r.bottom + 4);
+});
 
 api.onOverviewEnter((enter) => {
   if (overview.isOpen() && !enter.launcher) {
@@ -97,15 +138,17 @@ api.onOverviewEnter((enter) => {
   }
   closeFind();
   address.value = '';
-  address.placeholder = enter.launcher ? 'URL・検索語を入力、または開いているページを探す' : '開いているページを探す、または URL・検索語を入力';
+  address.placeholder = enter.launcher ? 'URL・検索語、または開いているページ' : '開いているページを探す、または URL・検索語';
   setIcon(omniIcon, 'search');
-  omniIcon.classList.remove('insecure');
+  omniSite.classList.remove('insecure');
+  omniBadge.hidden = true;
+  omnibox.classList.remove('loading');
   address.focus();
   void overview.handleEnter(enter);
 });
 
 // ----------------------------------------------------------------------
-// ツールバーとアドレス欄
+// 上部バーとアドレス欄
 // ----------------------------------------------------------------------
 
 function renderToolbar(): void {
@@ -115,9 +158,11 @@ function renderToolbar(): void {
   forwardBtn.disabled = !browsing || !tab?.canGoForward;
   reloadBtn.disabled = !browsing || !tab;
 
-  const loading = tab?.loading ?? false;
+  const loading = !!tab?.loading && browsing;
   setIcon(reloadBtn, loading ? 'stop' : 'reload');
-  reloadBtn.title = loading ? '読み込みを中止' : '再読み込み (Ctrl+R)';
+  reloadBtn.title = loading ? '読み込みを中止 (Esc)' : '再読み込み (Ctrl+R)';
+  reloadBtn.setAttribute('aria-label', loading ? '読み込みを中止' : '再読み込み');
+  omnibox.classList.toggle('loading', loading);
 
   pinBtn.hidden = !browsing || !tab;
   setIcon(pinBtn, tab?.pinned ? 'pinFilled' : 'pin');
@@ -128,23 +173,35 @@ function renderToolbar(): void {
   zoomIndicator.hidden = !browsing || zoom === 100;
   zoomIndicator.textContent = `${zoom}%`;
 
+  // 背景の色味を、表示中のページの色に寄せる
+  if (tab?.accent) root.style.setProperty('--page-accent', tab.accent);
+  if (tab?.accent) omnibox.style.setProperty('--accent', tab.accent);
+  pageEmpty.hidden = !!tab;
+
   if (!browsing) return;
   if (!addressDirty) address.value = tab?.url ?? '';
   const url = tab?.url ?? '';
-  omniIcon.classList.remove('insecure');
-  if (url.startsWith('https:')) {
+  omniSite.classList.remove('insecure');
+  omniBadge.hidden = true;
+  if (tab?.error) {
+    setIcon(omniIcon, 'broken');
+    omniSite.classList.add('insecure');
+    omniSite.title = 'ページを読み込めませんでした';
+  } else if (url.startsWith('https:')) {
     setIcon(omniIcon, 'lock');
-    omniIcon.title = '保護された通信';
+    omniSite.title = '保護された通信';
   } else if (url.startsWith('http:')) {
     setIcon(omniIcon, 'warning');
-    omniIcon.classList.add('insecure');
-    omniIcon.title = '保護されていない通信';
+    omniSite.classList.add('insecure');
+    omniBadge.textContent = '保護なし';
+    omniBadge.hidden = false;
+    omniSite.title = 'この接続は暗号化されていません。パスワードなどを入力しないでください';
   } else if (url.startsWith('file:')) {
     setIcon(omniIcon, 'file');
-    omniIcon.title = 'ローカルファイル';
+    omniSite.title = 'このパソコンのファイル';
   } else {
     setIcon(omniIcon, 'search');
-    omniIcon.title = '';
+    omniSite.title = '';
   }
 }
 
@@ -180,16 +237,16 @@ address.addEventListener('blur', () => {
   renderToolbar();
 });
 
-// オーバービューでは、ボタンなどにフォーカスがあってもキー操作を受け付ける
+// スペースでは、ボタンなどにフォーカスがあってもキー操作を受け付ける
 document.addEventListener('keydown', (e) => {
   if (!overview.isOpen() || e.target === address) return;
   if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if ((e.target as HTMLElement).closest('#shelf, #sheet')) return;
   if (overview.handleKey(e, address)) {
     e.preventDefault();
     address.focus();
   } else if (e.key.length === 1) {
-    // 文字を打ち始めたら入力欄へ (そのまま絞り込みになる)
-    address.focus();
+    address.focus(); // 文字を打ち始めたら入力欄へ (そのまま絞り込みになる)
   }
 });
 
@@ -201,12 +258,11 @@ pinBtn.addEventListener('click', () => {
   const tab = activeTab();
   if (tab) api.togglePin(tab.id);
 });
-$('btn-downloads').addEventListener('click', () => togglePanel('downloads'));
-$('btn-settings').addEventListener('click', () => togglePanel('settings'));
-$('panel-close').addEventListener('click', () => closePanel());
+$('downloads-btn').addEventListener('click', () => toggleSheet('downloads'));
+$('sheet-close').addEventListener('click', () => closeSheet());
 
 // ----------------------------------------------------------------------
-// ページ内検索
+// ページ内検索 (ページのカードの上に浮かぶガラスのバー)
 // ----------------------------------------------------------------------
 
 function openFind(): void {
@@ -249,38 +305,38 @@ api.onFindResult((result) => {
 });
 
 // ----------------------------------------------------------------------
-// サイドパネル (ダウンロード / 設定)
+// シート (設定・ダウンロード): ページのカードが縮んで横に並ぶ
 // ----------------------------------------------------------------------
 
-type PanelKind = 'downloads' | 'settings';
-let openPanelKind: PanelKind | null = null;
+type SheetKind = 'downloads' | 'settings';
+let sheetKind: SheetKind | null = null;
 
-function togglePanel(kind: PanelKind): void {
-  if (openPanelKind === kind) closePanel();
-  else openPanel(kind);
+function toggleSheet(kind: SheetKind): void {
+  if (sheetKind === kind) closeSheet();
+  else openSheet(kind);
 }
 
-function openPanel(kind: PanelKind): void {
-  openPanelKind = kind;
-  panel.hidden = false;
-  panelTitle.textContent = kind === 'downloads' ? 'ダウンロード' : '設定';
-  $('btn-downloads').classList.toggle('active', kind === 'downloads');
-  $('btn-settings').classList.toggle('active', kind === 'settings');
-  renderPanel();
-  reportLayout();
+function openSheet(kind: SheetKind): void {
+  sheetKind = kind;
+  sheet.hidden = false;
+  document.body.classList.add('sheet-open');
+  sheetTitle.textContent = kind === 'downloads' ? 'ダウンロード' : '設定';
+  $('downloads-btn').classList.toggle('active', kind === 'downloads');
+  renderSheet();
+  reportPageRect();
 }
 
-function closePanel(): void {
-  openPanelKind = null;
-  panel.hidden = true;
-  $('btn-downloads').classList.remove('active');
-  $('btn-settings').classList.remove('active');
-  reportLayout();
+function closeSheet(): void {
+  sheetKind = null;
+  sheet.hidden = true;
+  document.body.classList.remove('sheet-open');
+  $('downloads-btn').classList.remove('active');
+  reportPageRect();
 }
 
-function renderPanel(): void {
-  if (openPanelKind === 'downloads') renderDownloads();
-  if (openPanelKind === 'settings') renderSettings();
+function renderSheet(): void {
+  if (sheetKind === 'downloads') renderDownloads();
+  if (sheetKind === 'settings') renderSettings();
 }
 
 function formatBytes(bytes: number): string {
@@ -298,6 +354,7 @@ function formatBytes(bytes: number): string {
 function actionButton(iconName: string, title: string, onClick: () => void): HTMLButtonElement {
   const btn = el('button', 'icon-btn small');
   btn.title = title;
+  btn.setAttribute('aria-label', title);
   setIcon(btn, iconName);
   btn.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -307,9 +364,12 @@ function actionButton(iconName: string, title: string, onClick: () => void): HTM
 }
 
 function renderDownloads(): void {
-  panelBody.replaceChildren();
+  sheetBody.replaceChildren();
   if (downloads.length === 0) {
-    panelBody.append(el('div', 'panel-empty', 'ダウンロードはありません'));
+    const empty = el('div', 'sheet-empty');
+    empty.innerHTML = iconSvg('download');
+    empty.append(el('div', undefined, 'ダウンロードはありません'));
+    sheetBody.append(empty);
     return;
   }
   for (const d of downloads) {
@@ -319,10 +379,10 @@ function renderDownloads(): void {
           ? `${formatBytes(d.receivedBytes)} / ${formatBytes(d.totalBytes)}`
           : formatBytes(d.receivedBytes)
         : d.state === 'completed'
-          ? `完了 · ${formatBytes(d.receivedBytes)}`
+          ? formatBytes(d.receivedBytes)
           : d.state === 'cancelled'
-            ? 'キャンセルされました'
-            : '中断されました';
+            ? 'キャンセル'
+            : '中断';
     const item = el('div', 'item');
     const text = el('div', 'text');
     text.append(el('div', 'primary', d.filename), el('div', 'secondary', status));
@@ -342,22 +402,103 @@ function renderDownloads(): void {
       item.addEventListener('click', () => api.openDownload(d.id));
     }
     item.append(actions);
-    panelBody.append(item);
+    sheetBody.append(item);
   }
+}
+
+/** アイコンで選ぶセグメント */
+function segmented<T extends string>(options: Array<[T, string, string]>, current: T, onPick: (value: T) => void): HTMLElement {
+  const wrap = el('div', 'segmented');
+  wrap.setAttribute('role', 'group');
+  for (const [value, iconName, label] of options) {
+    const btn = el('button');
+    btn.setAttribute('aria-pressed', String(value === current));
+    btn.title = label;
+    btn.innerHTML = iconSvg(iconName);
+    btn.append(el('span', undefined, label));
+    btn.addEventListener('click', () => onPick(value));
+    wrap.append(btn);
+  }
+  return wrap;
+}
+
+function field(label: string, ...children: HTMLElement[]): HTMLElement {
+  const f = el('div', 'field');
+  f.append(el('div', 'field-label', label), ...children);
+  return f;
+}
+
+async function update(patch: Partial<Settings>): Promise<void> {
+  settings = await api.updateSettings(patch);
+  applyShelfMode();
+  renderSettings();
 }
 
 function renderSettings(): void {
   if (!settings) return;
-  const current = settings;
-  panelBody.replaceChildren();
+  const s = settings;
+  const scroll = sheetBody.scrollTop;
+  sheetBody.replaceChildren();
 
-  const home = el('div', 'setting');
-  const homeInput = el('input');
-  homeInput.type = 'text';
-  homeInput.value = current.homePage;
-  const homeHint = el('div', 'hint', '最初のタブで開くページ');
-  const saveHome = async () => {
-    let value = homeInput.value.trim();
+  sheetBody.append(
+    field(
+      'テーマ',
+      segmented<ThemeSetting>(
+        [
+          ['system', 'monitor', '自動'],
+          ['light', 'sun', 'ライト'],
+          ['dark', 'moon', 'ダーク'],
+        ],
+        s.theme,
+        (theme) => void update({ theme }),
+      ),
+    ),
+    field(
+      '透明効果',
+      segmented<GlassSetting>(
+        [
+          ['auto', 'glass', 'ガラス'],
+          ['off', 'opaque', '不透明'],
+        ],
+        s.glass,
+        (glass) => void update({ glass }),
+      ),
+    ),
+    field(
+      'シェルフ',
+      segmented<ShelfSetting>(
+        [
+          ['auto', 'auto', '自動'],
+          ['expanded', 'sidebar', '広い'],
+          ['rail', 'rail', '細い'],
+        ],
+        s.shelf,
+        (shelf) => void update({ shelf }),
+      ),
+    ),
+  );
+
+  const engine = el('select', 'select');
+  for (const [value, label] of [
+    ['google', 'Google'],
+    ['duckduckgo', 'DuckDuckGo'],
+    ['bing', 'Bing'],
+    ['yahoo_jp', 'Yahoo! JAPAN'],
+  ] as const) {
+    const option = el('option', undefined, label);
+    option.value = value;
+    option.selected = value === s.searchEngine;
+    engine.append(option);
+  }
+  engine.addEventListener('change', () => void update({ searchEngine: engine.value as Settings['searchEngine'] }));
+  sheetBody.append(field('検索エンジン', engine));
+
+  const home = el('input', 'text-input');
+  home.type = 'text';
+  home.value = s.homePage;
+  const homeHint = el('p', 'hint');
+  const saveHome = () => {
+    let value = home.value.trim();
     if (value && !/^[a-z]+:/i.test(value)) value = `https://${value}`;
     try {
       new URL(value);
@@ -365,57 +506,44 @@ function renderSettings(): void {
       homeHint.textContent = '有効な URL を入力してください';
       return;
     }
-    settings = await api.updateSettings({ homePage: value });
-    homeInput.value = settings.homePage;
-    homeHint.textContent = '保存しました';
+    void api.updateSettings({ homePage: value }).then((next) => {
+      settings = next;
+      homeHint.textContent = '保存しました';
+    });
   };
-  homeInput.addEventListener('keydown', (e) => e.key === 'Enter' && void saveHome());
-  homeInput.addEventListener('change', () => void saveHome());
-  home.append(el('label', undefined, 'ホームページ'), homeInput, homeHint);
+  home.addEventListener('keydown', (e) => e.key === 'Enter' && saveHome());
+  home.addEventListener('change', saveHome);
+  sheetBody.append(field('ホームページ', home, homeHint));
 
-  const engine = el('div', 'setting');
-  const select = el('select');
-  const engines: [Settings['searchEngine'], string][] = [
-    ['google', 'Google'],
-    ['duckduckgo', 'DuckDuckGo'],
-    ['bing', 'Bing'],
-    ['yahoo_jp', 'Yahoo! JAPAN'],
-  ];
-  for (const [value, label] of engines) {
-    const option = el('option', undefined, label);
-    option.value = value;
-    option.selected = value === current.searchEngine;
-    select.append(option);
-  }
-  select.addEventListener('change', async () => {
-    settings = await api.updateSettings({ searchEngine: select.value as Settings['searchEngine'] });
+  const restoreRow = el('div', 'switch-row');
+  const restore = el('button', 'switch');
+  restore.setAttribute('role', 'switch');
+  restore.setAttribute('aria-checked', String(s.restoreSession));
+  restore.setAttribute('aria-label', '前回のタブを復元');
+  restore.addEventListener('click', () => void update({ restoreSession: !s.restoreSession }));
+  restoreRow.append(el('span', undefined, '起動時に前回のタブを復元'), restore);
+  sheetBody.append(field('起動', restoreRow));
+
+  const clear = el('button', 'text-btn danger', '閲覧データを消去');
+  const clearHint = el(
+    'p',
+    'hint',
+    '履歴・再訪の記録・プレビュー・キャッシュを消します。データはこのパソコンの中だけに保存され、外部へ送信されません。',
+  );
+  clear.addEventListener('click', async () => {
+    if (!confirm('閲覧データ (履歴・再訪の記録・プレビュー・キャッシュ) を消去しますか？')) return;
+    await api.clearBrowsingData();
+    clearHint.textContent = '消去しました';
   });
-  engine.append(el('label', undefined, '検索エンジン'), select);
+  sheetBody.append(field('プライバシー', clear, clearHint));
 
-  const restore = el('div', 'setting checkbox');
-  const label = el('label');
-  const check = el('input');
-  check.type = 'checkbox';
-  check.checked = current.restoreSession;
-  check.addEventListener('change', async () => {
-    settings = await api.updateSettings({ restoreSession: check.checked });
-  });
-  label.append(check, document.createTextNode('起動時に前回のタブを復元する'));
-  restore.append(label);
-
-  const about = el('div', 'setting about');
-  about.append(
-    el('label', undefined, 'ページの大きさについて'),
-    el(
-      'p',
-      'hint',
-      '別のページから戻ってきた回数が多いページほど、オーバービューで大きく表示されます。' +
-        '一度開いたきりのページは、しばらくすると「あまり見ないページ」にまとまります。' +
-        '古い行動の影響は 3 日ごとに半分になります。',
+  sheetBody.append(
+    field(
+      'ページの大きさ',
+      el('p', 'hint', '別のページから戻ってきた回数が多いページほど大きく表示されます。一度開いたきりのページは、しばらくすると「あまり見ない」にまとまります。古い行動の影響は 3 日ごとに半分になります。'),
     ),
   );
-
-  panelBody.append(home, engine, restore, about);
+  sheetBody.scrollTop = scroll;
 }
 
 function applyDownloads(list: DownloadInfo[]): void {
@@ -423,8 +551,8 @@ function applyDownloads(list: DownloadInfo[]): void {
   const started = list.some((d) => !known.has(d.id));
   downloads = list;
   downloadBadge.hidden = !list.some((d) => d.state === 'progressing');
-  if (started && openPanelKind !== 'downloads') openPanel('downloads');
-  else if (openPanelKind === 'downloads') renderDownloads();
+  if (started && sheetKind !== 'downloads') openSheet('downloads');
+  else if (sheetKind === 'downloads') renderDownloads();
 }
 
 // ----------------------------------------------------------------------
@@ -439,12 +567,17 @@ api.onState((next) => {
     closeFind();
   }
   dropThumbs(new Set(next.tabs.map((t) => t.id)));
-  renderStrip();
+  renderShelf();
   overview.onState();
   renderToolbar();
 });
 
-api.onThumb((thumb) => setThumb(thumb));
+api.onThumb((thumb) => {
+  setThumb(thumb);
+  // プレビューが初めて届いたときは、代わりの絵を差し替える
+  renderShelf();
+  overview.refresh();
+});
 
 api.onCommand((command: UiCommand) => {
   switch (command) {
@@ -456,22 +589,31 @@ api.onCommand((command: UiCommand) => {
       openFind();
       break;
     case 'toggle-downloads':
-      togglePanel('downloads');
+      toggleSheet('downloads');
       break;
     case 'toggle-settings':
-      togglePanel('settings');
+      toggleSheet('settings');
+      break;
+    case 'toggle-shelf':
+      toggleShelf();
       break;
   }
 });
 
 api.onSettingsChanged((next) => {
   settings = next;
-  if (openPanelKind === 'settings') renderSettings();
+  applyShelfMode();
+  if (sheetKind === 'settings') renderSettings();
 });
+api.onAppearance(applyAppearance);
 api.onDownloadsChanged(applyDownloads);
 
 void (async () => {
-  [settings, downloads] = await Promise.all([api.getSettings(), api.getDownloads()]);
-  reportLayout();
+  const [s, d, look] = await Promise.all([api.getSettings(), api.getDownloads(), api.getAppearance()]);
+  settings = s;
+  downloads = d;
+  applyAppearance(look);
+  applyShelfMode();
+  reportPageRect();
 })();
-reportLayout();
+reportPageRect();

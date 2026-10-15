@@ -76,6 +76,14 @@ export class ThumbnailDisk {
     }
   }
 
+  clear(): void {
+    try {
+      for (const name of fs.readdirSync(this.dir)) fs.unlinkSync(path.join(this.dir, name));
+    } catch {
+      // 無視
+    }
+  }
+
   /** 古いものから削除して件数を抑える */
   private prune(): void {
     try {

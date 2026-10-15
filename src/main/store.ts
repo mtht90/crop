@@ -12,6 +12,9 @@ export const DEFAULT_SETTINGS: Settings = {
   homePage: 'https://www.google.com/',
   searchEngine: 'google',
   restoreSession: true,
+  theme: 'system',
+  glass: 'auto',
+  shelf: 'auto',
 };
 
 /** ページごとの再閲覧の記録 (セッションをまたいで保存) */
@@ -232,6 +235,13 @@ export class Store {
 
   saveSession(tabs: SessionTab[]): void {
     this.session.set(tabs);
+  }
+
+  /** Folio が保存した閲覧データを消す (設定は残す) */
+  clearBrowsingData(): void {
+    this.history.set([]);
+    this.pages.set({});
+    this.session.set([]);
   }
 
   flush(): void {

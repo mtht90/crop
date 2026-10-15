@@ -2,7 +2,7 @@ name: Build Folio
 
 on:
   push:
-    branches: [ "main", "master" ]
+    branches: [ "main", "master", "claude/**" ]
   pull_request:
   workflow_dispatch: {}
 
@@ -26,13 +26,9 @@ jobs:
       - name: Unit tests
         run: npm test
 
-  package:
+  windows:
     needs: test
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [windows-latest, macos-latest, ubuntu-latest]
-    runs-on: ${{ matrix.os }}
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -44,18 +40,16 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build installer
-        run: npm run dist
+      # インストーラー (Folio-Setup-x.y.z.exe) とポータブル版 (Folio-x.y.z-portable.exe) を作る
+      - name: Build Windows executables
+        run: npm run dist -- --win --x64
         env:
-          # コード署名は行わない
+          # コード署名は行わない (証明書を用意したら CSC_LINK / CSC_KEY_PASSWORD を設定する)
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
 
-      - name: Upload installer
+      - name: Upload executables
         uses: actions/upload-artifact@v4
         with:
-          name: Folio-${{ runner.os }}
-          path: |
-            release/*.exe
-            release/*.dmg
-            release/*.AppImage
+          name: Folio-Windows
+          path: release/*.exe
           if-no-files-found: error

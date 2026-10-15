@@ -1,81 +1,107 @@
 <!doctype html>
-<html lang="ja">
+<html lang="ja" data-theme="light" data-glass="css">
 <head>
   <meta charset="utf-8">
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; img-src 'self' data: blob: http: https:; style-src 'self'; script-src 'self'">
+        content="default-src 'self'; img-src 'self' data: blob:; font-src 'self'; style-src 'self'; script-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <title>Folio</title>
+  <link rel="stylesheet" href="fonts/fonts.css">
   <link rel="stylesheet" href="styles.css">
   <script type="module" src="renderer.js"></script>
 </head>
-<body data-mode="browse">
-  <header id="chrome">
-    <div id="strip">
-      <button id="overview-btn" class="icon-btn" data-icon="grid" title="オーバービュー (Ctrl+E)"></button>
-      <div id="pills"><div id="glider"></div></div>
-      <button id="new-tab" class="icon-btn" data-icon="plus" title="新しいページ (Ctrl+T)"></button>
+<body data-mode="browse" data-shelf="expanded">
+  <div id="ambient" aria-hidden="true"></div>
+
+  <!-- 上部バー: ウィンドウを掴んで動かせる (ボタン・入力欄以外) -->
+  <header id="topbar">
+    <div class="tb-group" id="tb-nav">
+      <button id="shelf-btn" class="icon-btn" data-icon="sidebar" title="シェルフの幅を切り替え (Ctrl+Shift+S)" aria-label="シェルフの幅を切り替え"></button>
+      <button id="back" class="icon-btn" data-icon="back" title="戻る (Alt+←)" aria-label="戻る"></button>
+      <button id="forward" class="icon-btn" data-icon="forward" title="進む (Alt+→)" aria-label="進む"></button>
+      <button id="reload" class="icon-btn" data-icon="reload" title="再読み込み (Ctrl+R)" aria-label="再読み込み"></button>
     </div>
 
-    <div id="toolbar">
-      <button id="back" class="icon-btn" data-icon="back" title="戻る (Alt+←)"></button>
-      <button id="forward" class="icon-btn" data-icon="forward" title="進む (Alt+→)"></button>
-      <button id="reload" class="icon-btn" data-icon="reload" title="再読み込み (Ctrl+R)"></button>
+    <form id="omnibox" autocomplete="off" role="search">
+      <span id="omni-site"><span id="omni-icon" data-icon="search"></span><span id="omni-badge" hidden></span></span>
+      <input id="address" type="text" spellcheck="false" placeholder="検索するか URL を入力" aria-label="アドレスと検索">
+      <span id="omni-hint" hidden></span>
+      <button type="button" id="zoom-indicator" class="chip-btn" hidden title="ズームをリセット"></button>
+      <button type="button" id="pin-btn" class="icon-btn small" data-icon="pin" title="このタブを固定 (Ctrl+D)" aria-label="このタブを固定"></button>
+      <span id="loadbar" aria-hidden="true"></span>
+    </form>
 
-      <form id="omnibox" autocomplete="off">
-        <span id="omni-icon" data-icon="search"></span>
-        <input id="address" type="text" spellcheck="false" placeholder="検索するか URL を入力">
-        <span id="omni-hint"></span>
-        <button type="button" id="zoom-indicator" hidden title="ズームをリセット"></button>
-        <button type="button" id="pin-btn" class="icon-btn small" data-icon="pin" title="このタブを固定 (Ctrl+D)"></button>
-      </form>
-
-      <button id="btn-downloads" class="icon-btn" data-icon="download" title="ダウンロード (Ctrl+J)">
+    <div class="tb-group" id="tb-actions">
+      <button id="space-btn" class="icon-btn" data-icon="grid" title="スペース — 開いているページを一望 (Ctrl+E)" aria-label="スペース"></button>
+      <button id="downloads-btn" class="icon-btn" data-icon="download" title="ダウンロード (Ctrl+J)" aria-label="ダウンロード">
         <span id="download-badge" hidden></span>
       </button>
-      <button id="btn-settings" class="icon-btn" data-icon="settings" title="設定"></button>
-    </div>
-
-    <div id="findbar" hidden>
-      <input id="find-input" type="text" spellcheck="false" placeholder="ページ内を検索">
-      <span id="find-count"></span>
-      <button id="find-prev" class="icon-btn small" data-icon="up" title="前へ (Shift+Enter)"></button>
-      <button id="find-next" class="icon-btn small" data-icon="down" title="次へ (Enter)"></button>
-      <button id="find-close" class="icon-btn small" data-icon="close" title="閉じる (Esc)"></button>
+      <button id="menu-btn" class="icon-btn" data-icon="more" title="メニュー" aria-label="メニュー"></button>
     </div>
   </header>
 
-  <main id="overview" hidden>
-    <div id="ov-scroll">
-      <div id="ov-content">
-        <div id="ov-summary"></div>
-        <section id="ov-grid"></section>
-        <section id="ov-pile" class="ov-section" hidden>
-          <h3>あまり見ないページ <span class="count"></span></h3>
-          <div class="chips"></div>
-        </section>
-        <section id="ov-suggest" class="ov-section" hidden>
-          <h3>閉じたけれど、よく戻っていたページ</h3>
-          <div class="chips"></div>
-        </section>
-        <section id="ov-history" class="ov-section" hidden>
-          <h3>履歴から</h3>
-          <div class="rows"></div>
-        </section>
-        <div id="ov-empty" hidden></div>
-        <div id="ov-ring"></div>
-        <div id="ov-peek" hidden></div>
+  <!-- シェルフ: 開いているページの一覧 -->
+  <aside id="shelf" aria-label="開いているページ">
+    <div id="shelf-scroll">
+      <div id="shelf-list" role="tablist" aria-orientation="vertical">
+        <div id="shelf-glider" aria-hidden="true"></div>
+      </div>
+    </div>
+    <button id="new-page" title="新しいページ (Ctrl+T)" aria-label="新しいページ">
+      <span class="np-icon" data-icon="plus"></span><span class="np-label">新しいページ</span>
+    </button>
+  </aside>
+
+  <!-- ステージ: Web ページを表示するカード -->
+  <main id="stage">
+    <div id="findbar" class="glass-panel" hidden>
+      <span data-icon="search" class="fb-icon"></span>
+      <input id="find-input" type="text" spellcheck="false" placeholder="ページ内を検索" aria-label="ページ内を検索">
+      <span id="find-count"></span>
+      <button id="find-prev" class="icon-btn small" data-icon="up" title="前へ (Shift+Enter)" aria-label="前へ"></button>
+      <button id="find-next" class="icon-btn small" data-icon="down" title="次へ (Enter)" aria-label="次へ"></button>
+      <button id="find-close" class="icon-btn small" data-icon="close" title="閉じる (Esc)" aria-label="閉じる"></button>
+    </div>
+    <div id="page-slot">
+      <div id="page-empty" hidden>
+        <span data-icon="grid" class="pe-icon"></span>
       </div>
     </div>
   </main>
 
-  <div id="morph-layer"></div>
-
-  <aside id="panel" hidden>
-    <div class="panel-header">
-      <h2 id="panel-title"></h2>
-      <button id="panel-close" class="icon-btn small" data-icon="close" title="閉じる"></button>
+  <!-- スペース: 開いているページを見た目で探す -->
+  <section id="space" hidden aria-label="スペース">
+    <div id="space-backdrop" aria-hidden="true"><img id="space-backdrop-img" alt=""></div>
+    <div id="ov-scroll">
+      <div id="ov-content">
+        <section id="ov-grid"></section>
+        <section id="ov-pile" class="ov-section" hidden>
+          <h3><span data-icon="layers" class="sec-icon"></span><span>あまり見ない</span><span class="count"></span></h3>
+          <div class="chips"></div>
+        </section>
+        <section id="ov-suggest" class="ov-section" hidden>
+          <h3><span data-icon="returns" class="sec-icon"></span><span>閉じたページ</span></h3>
+          <div class="chips"></div>
+        </section>
+        <section id="ov-history" class="ov-section" hidden>
+          <h3><span data-icon="history" class="sec-icon"></span><span>履歴</span></h3>
+          <div class="rows"></div>
+        </section>
+        <div id="ov-empty" hidden></div>
+        <div id="ov-ring" aria-hidden="true"></div>
+        <div id="ov-peek" hidden></div>
+      </div>
     </div>
-    <div id="panel-body"></div>
+  </section>
+
+  <!-- シート: 設定・ダウンロード -->
+  <aside id="sheet" class="glass-panel" hidden>
+    <div class="sheet-header">
+      <h2 id="sheet-title"></h2>
+      <button id="sheet-close" class="icon-btn small" data-icon="close" title="閉じる" aria-label="閉じる"></button>
+    </div>
+    <div id="sheet-body"></div>
   </aside>
+
+  <div id="morph-layer" aria-hidden="true"></div>
 </body>
 </html>

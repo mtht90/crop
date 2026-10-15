@@ -1,7 +1,9 @@
 import { BrowserWindow, WebContentsView } from 'electron';
 import type { WebContents } from 'electron';
 import * as path from 'node:path';
-import type { BrowserState, Suggestion, TabState, Tier, UiCommand, ViewMode } from '../shared/types';
+import type { Appearance, BrowserState, Rect, Suggestion, TabState, Tier, UiCommand, ViewMode } from '../shared/types';
+import { APP_ORIGIN, getUiSession } from './appProtocol';
+import { resolveFavicon } from './favicons';
 import type { SessionTab, Store } from './store';
 import { accentFromThemeColor, hostColor } from './color';
 import { openExternal, showContextMenu } from './contextMenu';
@@ -18,6 +20,10 @@ const MAX_CLOSED_TABS = 25;
 const RECAPTURE_INTERVAL_MS = 6000;
 /** ティアを定期的に見直す間隔 (時間経過で「あまり見ないページ」になるため) */
 const RETIER_INTERVAL_MS = 15000;
+/** ページを表示するカードの角丸 (UI の --radius-page と同じ) */
+const PAGE_RADIUS = 12;
+/** 上部バーの高さ (ウィンドウの最小化・最大化・閉じるボタンもこの高さ) */
+export const TOPBAR_HEIGHT = 48;
 
 // 開発・デモ用: FOLIO_FAST_TIERS=1 で「あまり見ないページ」になるまでの猶予を短くする
 const TIER_OPTIONS: TierOptions = process.env.FOLIO_FAST_TIERS
@@ -51,6 +57,7 @@ interface Tab {
 
 export interface WindowHooks {
   store: Store;
+  appearance(): Appearance;
   thumbs: ThumbnailDisk;
   openWindow(urls: string[]): void;
   onClose(controller: BrowserWindowController): void;
@@ -67,32 +74,42 @@ export class BrowserWindowController {
   private mode: ViewMode = 'browse';
   /** オーバービューへ移行中 (UI がスナップショットを表示するのを待っている) */
   private enteringOverview: NodeJS.Timeout | null = null;
-  private layout = { top: 96, right: 0 };
+  /** Web ページを表示する領域 (UI から通知される) */
+  private pageRect: Rect = { x: 0, y: TOPBAR_HEIGHT, width: 800, height: 600 };
   private htmlFullscreen = false;
   private closedTabs: { url: string; index: number; pinned: boolean }[] = [];
   private stateQueued = false;
   private readonly timers: NodeJS.Timeout[] = [];
 
   constructor(private readonly hooks: WindowHooks, tabs: Array<SessionTab & { restored?: boolean }>) {
+    const look = hooks.appearance();
     this.win = new BrowserWindow({
       width: 1320,
       height: 860,
-      minWidth: 560,
-      minHeight: 400,
+      minWidth: 640,
+      minHeight: 420,
       title: 'Folio',
-      autoHideMenuBar: true,
       show: false,
-      backgroundColor: '#f4f3f0',
+      // OS のタイトルバーを消し、上部バーと一体化する (最小化・最大化・閉じるボタンは OS が描く)
+      titleBarStyle: 'hidden',
+      titleBarOverlay: process.platform === 'darwin' ? undefined : titleBarOverlay(look),
+      trafficLightPosition: { x: 16, y: 17 },
+      // Windows 11: 背景に OS のすりガラス (Acrylic) を使う
+      backgroundMaterial: look.glass === 'os' ? 'acrylic' : undefined,
+      backgroundColor: windowBackground(look),
       webPreferences: {
         preload: path.join(__dirname, '../preload/preload.js'),
         contextIsolation: true,
         sandbox: true,
         nodeIntegration: false,
+        // UI は専用のセッションで動かし、Web ページとは Cookie やキャッシュも共有しない
+        session: getUiSession(),
+        spellcheck: false,
       },
     });
 
     const ui = this.win.webContents;
-    ui.loadFile(path.join(__dirname, '../renderer/index.html'));
+    ui.loadURL(`${APP_ORIGIN}/index.html`);
     ui.on('did-finish-load', () => {
       this.sendState();
       for (const tab of this.tabs) this.sendThumb(tab);
@@ -217,6 +234,7 @@ export class BrowserWindowController {
       returns: tab.returns,
       accent: this.tabAccent(tab),
       thumbVersion: tab.thumb ? tab.thumbVersion : 0,
+      error: !!tab.error,
     };
   }
 
@@ -305,9 +323,19 @@ export class BrowserWindowController {
   // レイアウト
   // ------------------------------------------------------------------
 
-  setLayout(top: number, right: number): void {
-    this.layout = { top: Math.max(0, Math.round(top)), right: Math.max(0, Math.round(right)) };
+  setPageRect(rect: Rect): void {
+    const n = (v: number) => (Number.isFinite(v) ? Math.max(0, Math.round(v)) : 0);
+    this.pageRect = { x: n(rect.x), y: n(rect.y), width: n(rect.width), height: n(rect.height) };
     this.updateBounds();
+  }
+
+  /** テーマや透明効果の変更を反映する */
+  applyAppearance(look: Appearance): void {
+    if (this.win.isDestroyed()) return;
+    if (process.platform === 'win32') this.win.setBackgroundMaterial(look.glass === 'os' ? 'acrylic' : 'none');
+    this.win.setBackgroundColor(windowBackground(look));
+    if (process.platform !== 'darwin') this.win.setTitleBarOverlay(titleBarOverlay(look));
+    this.send('appearance', look);
   }
 
   private updateBounds(): void {
@@ -316,15 +344,17 @@ export class BrowserWindowController {
     if (!tab) return;
     const { width, height } = this.win.getContentBounds();
     if (this.htmlFullscreen) {
+      tab.view.setBorderRadius(0);
       tab.view.setBounds({ x: 0, y: 0, width, height });
       return;
     }
-    const top = Math.min(this.layout.top, height);
+    const r = this.pageRect;
+    tab.view.setBorderRadius(PAGE_RADIUS);
     tab.view.setBounds({
-      x: 0,
-      y: top,
-      width: Math.max(0, width - this.layout.right),
-      height: Math.max(0, height - top),
+      x: Math.min(r.x, width),
+      y: Math.min(r.y, height),
+      width: Math.max(0, Math.min(r.width, width - r.x)),
+      height: Math.max(0, Math.min(r.height, height - r.y)),
     });
   }
 
@@ -344,8 +374,12 @@ export class BrowserWindowController {
       return;
     }
     const tab = this.activeTab();
-    this.enteringOverview = setTimeout(() => this.overviewReady(), 800);
+    // 撮影中に二重に呼ばれないよう印を付けておく (UI が応答しないときの保険はスナップショット送信後に始める)
+    this.enteringOverview = setTimeout(() => undefined, 60_000);
     const snapshot = tab ? await this.captureTab(tab, true) : null;
+    if (!this.enteringOverview) return; // 撮影中に閉じられた
+    clearTimeout(this.enteringOverview);
+    this.enteringOverview = setTimeout(() => this.overviewReady(), 1500);
     this.send('overview:enter', { tabId: tab?.id ?? null, snapshot, launcher });
     this.win.webContents.focus();
   }
@@ -395,7 +429,7 @@ export class BrowserWindowController {
     const tab: Tab = {
       id: nextTabId++,
       view,
-      favicon: this.hooks.store.getPage(url)?.favicon ?? null,
+      favicon: this.hooks.store.getPage(url)?.favicon?.startsWith('data:') ? this.hooks.store.getPage(url)!.favicon : null,
       error: null,
       pinned,
       openedAt: restored ? 0 : Date.now(),
@@ -645,9 +679,8 @@ export class BrowserWindowController {
       update();
     });
     wc.on('page-favicon-updated', (_e, favicons) => {
-      tab.favicon = favicons.find((f) => /^(https?|data):/.test(f)) ?? null;
-      store.updatePage(wc.getURL(), { favicon: tab.favicon });
-      update();
+      const raw = favicons.find((f) => /^(https?|data):/.test(f));
+      if (raw) void this.setFavicon(tab, raw, wc.getURL());
     });
     wc.on('did-change-theme-color', (_e, color) => {
       tab.themeAccent = accentFromThemeColor(color);
@@ -740,6 +773,16 @@ export class BrowserWindowController {
     );
   }
 
+  /** ファビコンを data: URL にしてから UI に渡す (UI は外部へ通信しない) */
+  private async setFavicon(tab: Tab, raw: string, pageUrl: string): Promise<void> {
+    const data = await resolveFavicon(raw);
+    if (!data || tab.view.webContents.isDestroyed() || tab.view.webContents.getURL() !== pageUrl) return;
+    tab.favicon = data;
+    // 大きなファビコンは保存しない (保存データを小さく保つ)
+    this.hooks.store.updatePage(pageUrl, { favicon: data.length <= 16_000 ? data : null });
+    this.sendState();
+  }
+
   /** ページの読み込み (再読み込みを除く) をスコアに反映する */
   private scoreNavigation(tab: Tab, url: string): void {
     const key = pageKey(url);
@@ -749,4 +792,19 @@ export class BrowserWindowController {
     const isReturn = this.hooks.store.recordVisit(url, tab.view.webContents.getTitle(), now);
     tab.score = bump(tab.score, isReturn ? WEIGHTS.return : WEIGHTS.visit, now);
   }
+}
+
+/** ウィンドウの背景色。OS のすりガラスを使うときは透明にする */
+function windowBackground(look: Appearance): string {
+  if (look.glass === 'os') return '#00000000';
+  return look.theme === 'dark' ? '#17181b' : '#eceae6';
+}
+
+/** 最小化・最大化・閉じるボタンの見た目 */
+function titleBarOverlay(look: Appearance): Electron.TitleBarOverlayOptions {
+  return {
+    color: '#00000000',
+    symbolColor: look.theme === 'dark' ? '#e9e7e3' : '#2a2825',
+    height: TOPBAR_HEIGHT,
+  };
 }

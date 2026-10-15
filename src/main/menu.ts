@@ -75,6 +75,7 @@ export function buildAppMenu(actions: MenuActions): Menu {
         { label: '実際のサイズ', accelerator: 'CmdOrCtrl+0', click: withWin((c) => c.zoom('reset')) },
         { type: 'separator' },
         { label: 'オーバービュー', accelerator: 'CmdOrCtrl+E', click: withWin((c) => void c.openOverview(false)) },
+        { label: 'シェルフの幅を切り替え', accelerator: 'CmdOrCtrl+Shift+S', click: withWin((c) => c.sendCommand('toggle-shelf')) },
         alias('CmdOrCtrl+Shift+A', withWin((c) => void c.openOverview(false))),
         { label: '全画面表示', role: 'togglefullscreen' },
         { type: 'separator' },
@@ -125,5 +126,41 @@ export function buildAppMenu(actions: MenuActions): Menu {
     },
   ];
 
+  return Menu.buildFromTemplate(template);
+}
+
+/** 上部バーの ⋯ ボタンから開くメニュー (ネイティブメニューなので、Web ページの上にも重なって表示できる) */
+export function buildPageMenu(opts: { controller: BrowserWindowController; openWindow(): void }): Menu {
+  const c = opts.controller;
+  const template: MenuItemConstructorOptions[] = [
+    { label: '新しいページ', accelerator: 'CmdOrCtrl+T', click: () => void c.openOverview(true) },
+    { label: '新しいウィンドウ', accelerator: 'CmdOrCtrl+N', click: () => opts.openWindow() },
+    { label: '閉じたタブを開く', accelerator: 'CmdOrCtrl+Shift+T', click: () => c.reopenClosedTab() },
+    { type: 'separator' },
+    { label: 'ページ内を検索', accelerator: 'CmdOrCtrl+F', click: () => c.sendCommand('open-find') },
+    {
+      label: 'ズーム',
+      submenu: [
+        { label: '拡大', accelerator: 'CmdOrCtrl+Plus', click: () => c.zoom('in') },
+        { label: '縮小', accelerator: 'CmdOrCtrl+-', click: () => c.zoom('out') },
+        { label: '実際のサイズ', accelerator: 'CmdOrCtrl+0', click: () => c.zoom('reset') },
+      ],
+    },
+    { label: 'ページのソースを表示', accelerator: 'CmdOrCtrl+U', click: () => c.viewSource() },
+    { type: 'separator' },
+    { label: 'ダウンロード', accelerator: 'CmdOrCtrl+J', click: () => c.sendCommand('toggle-downloads') },
+    { label: '設定', accelerator: 'CmdOrCtrl+,', click: () => c.sendCommand('toggle-settings') },
+    { type: 'separator' },
+    { label: '開発者ツール', accelerator: 'F12', click: () => c.toggleDevTools() },
+    {
+      label: 'Folio について',
+      click: () =>
+        void dialog.showMessageBox(c.win, {
+          type: 'info',
+          message: 'Folio',
+          detail: `バージョン ${app.getVersion()}\nElectron ${process.versions.electron} / Chromium ${process.versions.chrome}`,
+        }),
+    },
+  ];
   return Menu.buildFromTemplate(template);
 }

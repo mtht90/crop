@@ -1,8 +1,10 @@
-import { BrowserWindow, Menu, app, dialog, ipcMain, session } from 'electron';
+import { BrowserWindow, Menu, app, dialog, ipcMain, nativeTheme, session } from 'electron';
 import type { IpcMainEvent, IpcMainInvokeEvent, WebContents } from 'electron';
-import type { Settings } from '../shared/types';
+import * as os from 'node:os';
+import type { Appearance, Settings } from '../shared/types';
+import { getUiSession, isAppFrameUrl, registerAppScheme } from './appProtocol';
 import { DownloadManager } from './downloads';
-import { buildAppMenu } from './menu';
+import { buildAppMenu, buildPageMenu } from './menu';
 import { Store } from './store';
 import type { SessionTab } from './store';
 import { ThumbnailDisk } from './thumbnails';
@@ -16,6 +18,12 @@ app.userAgentFallback = app.userAgentFallback.replace(appToken, '').replace(/\sE
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 }
+
+// すべてのプロセスをサンドボックスで動かす (セキュリティチェックリスト #4)。
+// 各ページの webPreferences でも sandbox: true にしている。--no-sandbox はコンテナでの自動テスト用
+if (!app.commandLine.hasSwitch('no-sandbox')) app.enableSandbox();
+// UI を配信する folio:// を登録する (ready より前に必要)
+registerAppScheme();
 
 const controllers = new Set<BrowserWindowController>();
 let store: Store;
@@ -32,6 +40,7 @@ function openWindow(urls: string[] = [], tabs: SessionTab[] = []): BrowserWindow
     {
       store,
       thumbs,
+      appearance,
       openWindow: (u) => openWindow(u),
       onClose: (c) => {
         // 最後のウィンドウを閉じるときにタブを保存しておき、次回起動時に復元する
@@ -61,7 +70,34 @@ function broadcast(channel: string, payload: unknown): void {
 function updateSettings(patch: Partial<Settings>): Settings {
   const settings = store.updateSettings(patch);
   broadcast('settings', settings);
+  if ('theme' in patch || 'glass' in patch) applyAppearance();
   return settings;
+}
+
+// ----------------------------------------------------------------------
+// 見た目 (テーマ・透明効果)
+// ----------------------------------------------------------------------
+
+/** Windows 11 22H2 (ビルド 22621) 以降なら OS の Acrylic が使える */
+function supportsOsGlass(): boolean {
+  if (process.platform !== 'win32') return false;
+  const build = Number(os.release().split('.')[2] ?? 0);
+  return build >= 22621;
+}
+
+function appearance(): Appearance {
+  const settings = store.getSettings();
+  if (nativeTheme.themeSource !== settings.theme) nativeTheme.themeSource = settings.theme;
+  const theme = nativeTheme.shouldUseDarkColors ? 'dark' : 'light';
+  let glass: Appearance['glass'] = supportsOsGlass() ? 'os' : 'css';
+  // 設定でオフ・OS の「透明効果」がオフ・ハイコントラスト表示のときは不透明にする
+  if (settings.glass === 'off' || nativeTheme.prefersReducedTransparency || nativeTheme.inForcedColorsMode) glass = 'off';
+  return { theme, glass, platform: process.platform };
+}
+
+function applyAppearance(): void {
+  const look = appearance();
+  for (const c of controllers) c.applyAppearance(look);
 }
 
 // ----------------------------------------------------------------------
@@ -130,19 +166,31 @@ function setupPermissions(): void {
 
 type Handler = (c: BrowserWindowController, ...args: unknown[]) => void;
 
+/**
+ * IPC の送り主を確認する (セキュリティチェックリスト #17)。
+ * Folio の UI ウィンドウの、folio://app から読み込まれたメインフレームだけを受け付ける。
+ */
+function trustedSender(e: IpcMainEvent | IpcMainInvokeEvent): BrowserWindowController | undefined {
+  const c = controllerFor(e.sender);
+  if (!c || c.win.webContents !== e.sender) return undefined;
+  const frame = e.senderFrame;
+  // メインフレーム (iframe ではない) で、folio://app から読み込まれたもの
+  if (!frame || frame.parent !== null || !isAppFrameUrl(frame.url)) return undefined;
+  return c;
+}
+
 function on(channel: string, handler: Handler): void {
   ipcMain.on(channel, (e: IpcMainEvent, ...args: unknown[]) => {
-    const c = controllerFor(e.sender);
-    // タブの中身 (Web ページ) からのメッセージは受け付けない
-    if (c && c.win.webContents === e.sender) handler(c, ...args);
+    const c = trustedSender(e);
+    if (c) handler(c, ...args);
   });
 }
 
-function handle<T>(channel: string, handler: (...args: unknown[]) => T): void {
+function handle<T>(channel: string, handler: (c: BrowserWindowController, ...args: unknown[]) => T): void {
   ipcMain.handle(channel, (e: IpcMainInvokeEvent, ...args: unknown[]) => {
-    const c = controllerFor(e.sender);
-    if (!c || c.win.webContents !== e.sender) throw new Error('forbidden');
-    return handler(...args);
+    const c = trustedSender(e);
+    if (!c) throw new Error('forbidden');
+    return handler(c, ...args);
   });
 }
 
@@ -173,12 +221,25 @@ function setupIpc(): void {
   on('find:start', (c, text, forward, findNext) => c.find(str(text), forward !== false, findNext === true));
   on('find:stop', (c) => c.stopFind());
 
-  on('layout', (c, top, right) => c.setLayout(num(top), num(right)));
+  on('layout', (c, rect) => {
+    const r = (rect ?? {}) as Record<string, unknown>;
+    c.setPageRect({ x: num(r.x), y: num(r.y), width: num(r.width), height: num(r.height) });
+  });
+  on('menu:open', (c, x, y) =>
+    buildPageMenu({ controller: c, openWindow: () => openWindow() }).popup({ window: c.win, x: Math.round(num(x)), y: Math.round(num(y)) }),
+  );
 
-  handle('history:search', (query) => store.searchHistory(str(query)));
+  handle('history:search', (_c, query) => store.searchHistory(str(query)));
 
   handle('settings:get', () => store.getSettings());
-  handle('settings:update', (patch) => {
+  handle('appearance:get', () => appearance());
+  handle('data:clear', async () => {
+    store.clearBrowsingData();
+    thumbs.clear();
+    await session.defaultSession.clearCache();
+    broadcast('settings', store.getSettings());
+  });
+  handle('settings:update', (_c, patch) => {
     const p = (patch ?? {}) as Record<string, unknown>;
     const clean: Partial<Settings> = {};
     if (typeof p.homePage === 'string' && isAllowedUrl(p.homePage)) clean.homePage = p.homePage;
@@ -186,18 +247,26 @@ function setupIpc(): void {
       clean.searchEngine = p.searchEngine;
     }
     if (typeof p.restoreSession === 'boolean') clean.restoreSession = p.restoreSession;
+    if (p.theme === 'system' || p.theme === 'light' || p.theme === 'dark') clean.theme = p.theme;
+    if (p.glass === 'auto' || p.glass === 'off') clean.glass = p.glass;
+    if (p.shelf === 'auto' || p.shelf === 'expanded' || p.shelf === 'rail') clean.shelf = p.shelf;
     return updateSettings(clean);
   });
 
   handle('downloads:get', () => downloads.list());
-  handle('downloads:open', (id) => downloads.open(str(id)));
-  handle('downloads:show', (id) => downloads.showInFolder(str(id)));
-  handle('downloads:cancel', (id) => downloads.cancel(str(id)));
+  handle('downloads:open', (_c, id) => downloads.open(str(id)));
+  handle('downloads:show', (_c, id) => downloads.showInFolder(str(id)));
+  handle('downloads:cancel', (_c, id) => downloads.cancel(str(id)));
 }
 
 // ----------------------------------------------------------------------
 // アプリのライフサイクル
 // ----------------------------------------------------------------------
+
+// <webview> は使わない。ポップアップで開いたウィンドウも含め、あらゆる WebContents で禁止する (チェックリスト #12)
+app.on('web-contents-created', (_e, contents) => {
+  contents.on('will-attach-webview', (event) => event.preventDefault());
+});
 
 app.on('second-instance', (_e, argv) => {
   const urls = urlsFromArgv(argv);
@@ -215,6 +284,8 @@ app.on('second-instance', (_e, argv) => {
 app.whenReady().then(() => {
   store = new Store();
   thumbs = new ThumbnailDisk(store.dir);
+  getUiSession();
+  nativeTheme.on('updated', () => applyAppearance());
   downloads = new DownloadManager((list) => broadcast('downloads', list));
   downloads.attach(session.defaultSession);
   setupPermissions();

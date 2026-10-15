@@ -31,6 +31,8 @@ export interface TabState {
   accent: string | null;
   /** プレビュー画像の版。0 ならまだプレビューが無い */
   thumbVersion: number;
+  /** 読み込みに失敗してエラーページを表示している */
+  error: boolean;
 }
 
 export interface Suggestion {
@@ -57,10 +59,34 @@ export interface HistoryEntry {
 
 export type SearchEngineId = 'google' | 'duckduckgo' | 'bing' | 'yahoo_jp';
 
+export type ThemeSetting = 'system' | 'light' | 'dark';
+export type GlassSetting = 'auto' | 'off';
+export type ShelfSetting = 'auto' | 'expanded' | 'rail';
+
 export interface Settings {
   homePage: string;
   searchEngine: SearchEngineId;
   restoreSession: boolean;
+  theme: ThemeSetting;
+  /** 透明効果 (ガラス)。auto: 使える環境では使う */
+  glass: GlassSetting;
+  /** 左のシェルフ。auto: ウィンドウ幅に応じて幅を変える */
+  shelf: ShelfSetting;
+}
+
+/** 実際に適用されている見た目 */
+export interface Appearance {
+  theme: 'light' | 'dark';
+  /** os: OS のぼかし素材 (Windows 11 の Acrylic) / css: アプリ内で描くガラス / off: 不透明 */
+  glass: 'os' | 'css' | 'off';
+  platform: string;
+}
+
+export interface Rect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
 }
 
 export interface FindResult {
@@ -98,7 +124,8 @@ export type UiCommand =
   | 'focus-address'
   | 'open-find'
   | 'toggle-settings'
-  | 'toggle-downloads';
+  | 'toggle-downloads'
+  | 'toggle-shelf';
 
 /** preload で UI に公開する API */
 export interface BrowserApi {
@@ -130,8 +157,11 @@ export interface BrowserApi {
   find(text: string, forward: boolean, findNext: boolean): void;
   stopFind(): void;
 
-  // レイアウト (UI が占める上端の高さ・右側の幅)
-  setLayout(top: number, right: number): void;
+  // レイアウト (Web ページを表示する領域)
+  setPageRect(rect: Rect): void;
+
+  // ⋯ メニュー (ネイティブメニューを指定位置に出す)
+  openMenu(x: number, y: number): void;
 
   // 履歴
   searchHistory(query: string): Promise<HistoryEntry[]>;
@@ -139,6 +169,9 @@ export interface BrowserApi {
   // 設定
   getSettings(): Promise<Settings>;
   updateSettings(patch: Partial<Settings>): Promise<Settings>;
+  getAppearance(): Promise<Appearance>;
+  /** Folio が保存した閲覧データ (履歴・スコア・プレビュー・セッション) とキャッシュを消す */
+  clearBrowsingData(): Promise<void>;
 
   // ダウンロード
   getDownloads(): Promise<DownloadInfo[]>;
@@ -153,5 +186,6 @@ export interface BrowserApi {
   onCommand(callback: (command: UiCommand) => void): void;
   onFindResult(callback: (result: FindResult) => void): void;
   onSettingsChanged(callback: (settings: Settings) => void): void;
+  onAppearance(callback: (appearance: Appearance) => void): void;
   onDownloadsChanged(callback: (downloads: DownloadInfo[]) => void): void;
 }

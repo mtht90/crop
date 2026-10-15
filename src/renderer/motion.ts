@@ -166,8 +166,10 @@ export function flipGroup<K>(
     ghostLayer?: HTMLElement;
     enter?: (el: HTMLElement, key: K) => void;
     spring?: SpringName;
-    /** 前回の位置が無い要素について、代わりに使う位置 (別の形から移ってきた場合など) */
-    fallbackFrom?: (key: K) => DOMRect | undefined;
+    /** 前回の位置が無い要素について、代わりに使う位置 (まとまりから出てきた場合など) */
+    fallbackFrom?: (key: K, before: Map<K, DOMRect>) => DOMRect | undefined;
+    /** 消える要素の行き先 (まとまりへ吸い込まれる場合など)。無ければその場で消える */
+    ghostTarget?: (key: K, after: Map<K, HTMLElement>) => DOMRect | undefined;
   } = {},
 ): void {
   const before = collect();
@@ -176,7 +178,7 @@ export function flipGroup<K>(
     if (el.isConnected && el.offsetParent !== null) rects.set(key, el.getBoundingClientRect());
   }
   // 消える要素の残像を用意してから DOM を更新する
-  const ghosts: Array<{ el: HTMLElement; rect: DOMRect }> = [];
+  const ghosts: Array<{ el: HTMLElement; rect: DOMRect; key: K }> = [];
 
   mutate();
 
@@ -186,19 +188,19 @@ export function flipGroup<K>(
     const stillThere = after.get(key);
     if (stillThere && stillThere.offsetParent !== null) continue;
     const rect = rects.get(key);
-    if (rect && opts.ghostLayer) ghosts.push({ el, rect });
+    if (rect && opts.ghostLayer) ghosts.push({ el, rect, key });
   }
   for (const [key, el] of after) {
     if (el.offsetParent === null) continue;
-    const from = rects.get(key) ?? opts.fallbackFrom?.(key);
+    const from = rects.get(key) ?? opts.fallbackFrom?.(key, rects);
     if (from) flipFrom(el, from, opts.spring ?? 'reflow');
     else opts.enter?.(el, key);
   }
-  for (const g of ghosts) spawnGhost(g.el, g.rect, opts.ghostLayer!);
+  for (const g of ghosts) spawnGhost(g.el, g.rect, opts.ghostLayer!, opts.ghostTarget?.(g.key, after));
 }
 
 /** 消えた要素のコピーをその場に置き、縮みながらフェードアウトさせる */
-export function spawnGhost(source: HTMLElement, rect: DOMRect, layer: HTMLElement): void {
+export function spawnGhost(source: HTMLElement, rect: DOMRect, layer: HTMLElement, target?: DOMRect): void {
   const ghost = source.cloneNode(true) as HTMLElement;
   ghost.removeAttribute('id');
   ghost.removeAttribute('data-sel');
@@ -215,14 +217,32 @@ export function spawnGhost(source: HTMLElement, rect: DOMRect, layer: HTMLElemen
     pointerEvents: 'none',
   });
   layer.appendChild(ghost);
-  const anim = fade(
-    ghost,
-    [
-      { opacity: 1, transform: 'scale(1)' },
-      { opacity: 0, transform: 'scale(0.92)' },
-    ],
-    180,
-  );
+  let anim: Animation;
+  if (target && !reducedMotion.matches) {
+    // 行き先 (まとまり) へ縮みながら吸い込まれる
+    const dx = target.left - rect.left;
+    const dy = target.top - rect.top;
+    const s = Math.min(target.width / rect.width, target.height / rect.height);
+    ghost.style.transformOrigin = '0 0';
+    anim = animate(
+      ghost,
+      [
+        { opacity: 1, transform: 'none' },
+        { opacity: 0, transform: `translate(${dx}px, ${dy}px) scale(${s})` },
+      ],
+      'reflow',
+      { fill: 'forwards' },
+    );
+  } else {
+    anim = fade(
+      ghost,
+      [
+        { opacity: 1, transform: 'scale(1)' },
+        { opacity: 0, transform: 'scale(0.92)' },
+      ],
+      180,
+    );
+  }
   anim.onfinish = () => ghost.remove();
   anim.oncancel = () => ghost.remove();
 }

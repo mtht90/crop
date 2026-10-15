@@ -27,12 +27,15 @@ const api: BrowserApi = {
   find: (text, forward, findNext) => ipcRenderer.send('find:start', text, forward, findNext),
   stopFind: () => ipcRenderer.send('find:stop'),
 
-  setLayout: (top, right) => ipcRenderer.send('layout', top, right),
+  setPageRect: (rect) => ipcRenderer.send('layout', rect),
+  openMenu: (x, y) => ipcRenderer.send('menu:open', x, y),
 
   searchHistory: (query) => ipcRenderer.invoke('history:search', query),
 
   getSettings: () => ipcRenderer.invoke('settings:get'),
   updateSettings: (patch) => ipcRenderer.invoke('settings:update', patch),
+  getAppearance: () => ipcRenderer.invoke('appearance:get'),
+  clearBrowsingData: () => ipcRenderer.invoke('data:clear'),
 
   getDownloads: () => ipcRenderer.invoke('downloads:get'),
   openDownload: (id) => void ipcRenderer.invoke('downloads:open', id),
@@ -45,6 +48,7 @@ const api: BrowserApi = {
   onCommand: (cb) => listen('command', cb),
   onFindResult: (cb) => listen('find:result', cb),
   onSettingsChanged: (cb) => listen('settings', cb),
+  onAppearance: (cb) => listen('appearance', cb),
   onDownloadsChanged: (cb) => listen('downloads', cb),
 };
 

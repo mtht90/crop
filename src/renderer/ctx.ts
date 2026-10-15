@@ -1,5 +1,6 @@
 // UI 全体で共有する状態
 import type { BrowserApi, BrowserState, TabState, Thumb } from '../shared/types';
+import { iconSvg } from './icons.js';
 
 declare global {
   interface Window {
@@ -79,15 +80,21 @@ export function applyAccent(node: HTMLElement, accent: string | null): void {
   else node.style.removeProperty('--accent');
 }
 
-/** ファビコン (読み込みに失敗したら頭文字) */
-export function faviconEl(favicon: string | null, title: string, className = 'favicon'): HTMLElement {
-  const wrap = el('span', className);
+/**
+ * ファビコンのタイル。ページの色 (--accent) をうっすら敷いた角丸の上に載せる。
+ * 読み込めなければ頭文字、エラー中は警告の印。
+ */
+export function faviconEl(favicon: string | null, title: string, opts: { large?: boolean; error?: boolean } = {}): HTMLElement {
+  const wrap = el('span', opts.large ? 'fav large' : 'fav');
   const letter = () => {
     wrap.replaceChildren();
     wrap.classList.add('letter');
     wrap.textContent = (title.trim()[0] ?? '·').toUpperCase();
   };
-  if (favicon) {
+  if (opts.error) {
+    wrap.classList.add('error');
+    wrap.innerHTML = iconSvg('broken');
+  } else if (favicon) {
     const img = el('img');
     img.src = favicon;
     img.alt = '';
@@ -98,4 +105,34 @@ export function faviconEl(favicon: string | null, title: string, className = 'fa
     letter();
   }
   return wrap;
+}
+
+/** ファビコンの見た目が変わったかを判定するためのキー */
+export function faviconKey(tab: TabState): string {
+  if (tab.error) return 'error';
+  if (tab.loading) return 'loading';
+  return `${tab.favicon ?? ''}|${tab.title.trim()[0] ?? ''}`;
+}
+
+/** タブのアイコン (読み込み中はスピナー、エラー中は警告) */
+export function tabIcon(tab: TabState): HTMLElement {
+  if (tab.loading && !tab.error) {
+    const wrap = el('span', 'fav');
+    wrap.append(el('span', 'spinner'));
+    return wrap;
+  }
+  return faviconEl(tab.favicon, tab.title, { error: tab.error });
+}
+
+/** 要素の位置を ancestor 基準で求める (アニメーション中の transform を含まない、レイアウト上の位置) */
+export function layoutBox(node: HTMLElement, ancestor: HTMLElement): { x: number; y: number; w: number; h: number } {
+  let x = 0;
+  let y = 0;
+  let cur: HTMLElement | null = node;
+  while (cur && cur !== ancestor) {
+    x += cur.offsetLeft;
+    y += cur.offsetTop;
+    cur = cur.offsetParent as HTMLElement | null;
+  }
+  return { x, y, w: node.offsetWidth, h: node.offsetHeight };
 }
