@@ -24,7 +24,8 @@
       "@dimforge/rapier3d-compat": "https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.14.0/rapier.es.js",
       "gsap": "https://cdn.jsdelivr.net/npm/gsap@3.12.5/index.js",
       "lil-gui": "https://cdn.jsdelivr.net/npm/lil-gui@0.19.2/dist/lil-gui.esm.min.js",
-      "simplex-noise": "https://cdn.jsdelivr.net/npm/simplex-noise@4.0.3/dist/esm/simplex-noise.js"
+      "simplex-noise": "https://cdn.jsdelivr.net/npm/simplex-noise@4.0.3/dist/esm/simplex-noise.js",
+      "meshoptimizer/simplifier": "https://cdn.jsdelivr.net/npm/meshoptimizer@0.22.0/meshopt_simplifier.module.js"
     }
   }
   </script>
@@ -77,6 +78,7 @@
     <div class="altbar"><div id="altZones"></div><i id="altBest"></i><i id="altMe"></i></div>
     <div id="banner"><small id="bannerSub"></small><b id="bannerMain"></b></div>
     <div id="toast"></div>
+    <div id="ctxHint" hidden></div>
     <div id="fallMeter" hidden></div>
     <div id="fallBig"></div>
     <div id="bgLoad" hidden></div>
@@ -122,7 +124,8 @@
           <ul>
             <li><kbd>W A S D</kbd> / 矢印 … 移動</li>
             <li><kbd>Shift</kbd> … ダッシュ</li>
-            <li><kbd>Space</kbd> … ジャンプ</li>
+            <li><kbd>Space</kbd> … ジャンプ（長押しで高く）</li>
+            <li>壁に向かって跳ぶ … 縁をつかむ → <kbd>W</kbd>/<kbd>Space</kbd> でよじ登る・<kbd>S</kbd> で離す</li>
             <li>マウス … カメラ（クリックでロック）</li>
             <li>ホイール … ズーム</li>
             <li><kbd>Esc</kbd> / <kbd>P</kbd> … ポーズ</li>
@@ -134,6 +137,7 @@
             <li>左半分ドラッグ … 移動（倒し切るとダッシュ）</li>
             <li>右半分ドラッグ … カメラ</li>
             <li>▲ … ジャンプ ／ DASH … ダッシュ切替</li>
+            <li>縁をつかんだら ▲ か 壁へスティック でよじ登る</li>
           </ul>
           <h3>ゲームパッド</h3>
           <ul>
@@ -146,7 +150,12 @@
       <p class="rule">チェックポイントはありません。落ちたら、着地した場所からまた登ります。海に落ちるとスタートの岩へ。中断しても、最後に立っていた場所から再開できます。</p>
       <h3>ギミック</h3>
       <ul class="gimmicks">
+        <li><b>縁つかみ</b> 届かない段差も、跳んで縁をつかめばよじ登れる</li>
         <li><b>電線・ロープ</b> 細い線の上を綱渡り（ダッシュ不可）</li>
+        <li><b>列車・トロッコ・バス</b> 走る乗り物の屋根に乗って運ばれる</li>
+        <li><b>ベルトコンベア</b> 乗っていると流される</li>
+        <li><b>罠のエレベーター</b> 乗るとしばらく上がり、突然落ちる</li>
+        <li><b>観覧車</b> ゴンドラを乗り継いで上へ</li>
         <li><b>巨大扇風機</b> 上昇気流で一気に舞い上がる</li>
         <li><b>マットレス</b> 乗ると大きく跳ねる</li>
         <li><b>吊られた車</b> 梁から吊られて往復する車に乗って渡る</li>
@@ -169,14 +178,15 @@
         <li>PBRテクスチャ / HDRI: <a href="https://polyhaven.com" target="_blank" rel="noopener">Poly Haven</a>（CC0）— rock_wall_10, coast_sand_rocks_02, weathered_planks, rusty_metal_02, corrugated_iron_02, concrete_wall_008, red_brick_03, snow_02, marble_01, kloofendal_48d_partly_cloudy_puresky</li>
         <li>氷テクスチャ: <a href="https://ambientcg.com" target="_blank" rel="noopener">ambientCG</a> Ice002（CC0, three.js examples 同梱）</li>
         <li>ガラクタの3Dモデル: <a href="https://polyhaven.com/models" target="_blank" rel="noopener">Poly Haven</a>（CC0）— 木箱・ドラム缶・段ボール・テレビ・ソファ・配電盤・工具箱・スチール棚・ガスボンベ・タイヤ・車・事務机・シーリングファン・胸像・馬の像・月の岩ほか</li>
-        <li>追加テクスチャ: Poly Haven（CC0）— blue_painted_planks, painted_metal_shutter, denim_fabric, metal_grate_rusty</li>
+        <li>追加テクスチャ: Poly Haven（CC0）— blue_painted_planks, painted_metal_shutter, denim_fabric, metal_grate_rusty, plastered_wall_03, rusty_corrugated_iron, gravel_floor, box_profile_metal_sheet, square_tiled_wall, terrazzo, raw_plank_wall, rusty_painted_metal, asphalt_02, clay_roof_tiles, concrete_tile_facade, dirty_carpet, metal_plate_02 ほか</li>
+        <li>追加の3Dモデル: Poly Haven（CC0）— ゴミ袋・室外機・デイベッド・シャッター・工業用パイプ・プラスチックコンテナ・セメント袋・街灯・レジ・陳列棚・コーヒーカート・アームチェア・シャンデリア・ノートPC・キャビネット・ゴシック像・宇宙船の計器ほか</li>
         <li>主人公: Soldier（three.js examples、Mixamo）</li>
         <li>地球・星空: three.js examples（planets / MilkyWay）</li>
         <li>水面法線 / 雲スプライト / レンズフレア: three.js examples（レンズフレアは ROME, CC BY-NC-SA 3.0）</li>
         <li>BGM: “Project Utopia” by congusbongus（CC0, OpenGameArt）</li>
         <li>効果音: <a href="https://github.com/romainsimon/uisfx" target="_blank" rel="noopener">uisfx</a>（MIT）</li>
         <li>フォント: Bebas Neue, Zen Kaku Gothic New（Google Fonts, OFL）</li>
-        <li>技術: three.js / Rapier (WASM物理) / GSAP / Howler.js / nipplejs / lil-gui / simplex-noise / Service Worker / Gamepad・Pointer Lock・Fullscreen・Vibration・Wake Lock・Web Share API</li>
+        <li>技術: three.js / Rapier (WASM物理) / meshoptimizer (WASM) / GSAP / Howler.js / nipplejs / lil-gui / simplex-noise / Service Worker / Gamepad・Pointer Lock・Fullscreen・Vibration・Wake Lock・Web Share API</li>
       </ul>
       <button class="btn primary close">閉じる</button>
     </div>

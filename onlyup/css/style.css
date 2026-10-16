@@ -173,3 +173,6 @@ kbd { font: 700 12px var(--font); background: rgba(255, 255, 255, .14); border-r
 .rule { margin: 0; font-size: 14px; line-height: 1.8; color: var(--ink-dim); }
 .panel .result small { font-size: 12px; color: var(--ink-dim); }
 :root { color-scheme: dark; }
+
+#ctxHint { position: absolute; left: 50%; bottom: 13%; transform: translateX(-50%); padding: 7px 16px; border-radius: 10px; background: rgba(10, 14, 20, 0.62); border: 1px solid rgba(255,255,255,0.18); font-size: 14px; letter-spacing: 0.04em; white-space: nowrap; pointer-events: none; }
+@media (max-width: 600px) { #ctxHint { font-size: 12px; white-space: normal; width: 80%; text-align: center; } }

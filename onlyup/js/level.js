@@ -1,9 +1,11 @@
 import * as THREE from 'three';
 import { createNoise3D } from 'simplex-noise';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { boxProjectUV, makeBeamMaterial, makePadMaterial } from './materials.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { boxProjectUV, bakeColor, makeBeamMaterial, makePadMaterial } from './materials.js';
 import { PROPS } from './assets.js';
 import { CHUNK } from './props.js';
+import { Kit, PIECES, buildFerris } from './kit.js';
 
 // ---- プレイヤー物理と同じ定数で「届く距離」を計算し、必ず登れる配置にする ----
 export const PHYS = { G: 26, JUMP_V: 10, RUN: 7.0, SPRINT: 9.2 };
@@ -13,35 +15,54 @@ function reach(dy, g = PHYS.G, speed = PHYS.RUN) {
   return speed * (PHYS.JUMP_V + Math.sqrt(d)) / g;
 }
 
-// 7 ゾーン・標高 約1km。shapes の 'p:' は Poly Haven のガラクタ
+// 本家 Only Up! の流れに沿った 12 エリア。pieces = 大型セットピース、shapes = 間をつなぐ単発の足場
 export const ZONES = [
-  { key: 'shore', name: '潮騒の岩礁', en: 'TIDE ROCKS', count: 24, gap: [1.1, 2.2], rise: [0.4, 1.0], safety: 0.62,
-    shapes: { rock: 5, rockSmall: 2, sandrock: 2 }, behaviors: { static: 10, rope: 1 }, mat: 'rock', filler: ['ocean_buoy'], fillers: 10 },
-  { key: 'alley', name: '路地裏のガラクタ街', en: 'JUNK ALLEY', count: 110, gap: [1.2, 2.5], rise: [0.5, 1.2], safety: 0.64,
-    shapes: { 'p:wooden_crate_01': 3, 'p:Barrel_01': 2, 'p:cardboard_box_01': 2, 'p:utility_box_02': 1.2, 'p:Television_01': 2, plank: 3, shack: 2, beam: 1.5 },
-    behaviors: { static: 10, rope: 2.5, fan: 1, bounce: 1.2, mover: 1, elevator: 0.8, crumble: 0.5 }, mat: 'bluewood',
-    filler: ['wooden_crate_01', 'Barrel_01', 'Television_01', 'Sofa_01', 'ArmChair_01', 'utility_box_02'], fillers: 90 },
-  { key: 'works', name: '錆びた工業区', en: 'RUST WORKS', count: 120, gap: [1.3, 2.7], rise: [0.6, 1.3], safety: 0.66,
-    shapes: { pipe: 4, container: 2, plate: 2, grate: 2, 'p:barrel_03': 2, 'p:steel_frame_shelves_01': 1.5, 'p:old_tyre': 1.5 },
-    behaviors: { static: 9, rotator: 2, sweeper: 1.2, carrier: 1.5, mover: 1, fan: 1, rope: 1.5, elevator: 1 }, mat: 'rust',
-    filler: ['barrel_03', 'metal_tool_chest', 'propane_tank', 'old_tyre', 'steel_frame_shelves_01'], fillers: 90 },
-  { key: 'city', name: '崩れゆく都市', en: 'CRUMBLING CITY', count: 120, gap: [1.4, 2.8], rise: [0.6, 1.35], safety: 0.68,
-    shapes: { slab: 3, brickPillar: 2, 'p:metal_office_desk': 2, 'p:Television_01': 1, road: 2, 'p:cardboard_box_01': 1 },
-    behaviors: { static: 8, crumble: 3, carrier: 2, mover: 1.2, elevator: 1, rope: 1.5, bounce: 0.8 }, mat: 'concrete',
-    filler: ['metal_office_desk', 'Sofa_01', 'ArmChair_01', 'Television_01'], fillers: 80 },
-  { key: 'frost', name: '凍てつく雲海', en: 'FROZEN SKIES', count: 110, gap: [1.4, 2.9], rise: [0.6, 1.35], safety: 0.7, wind: 0.3,
-    shapes: { snowRock: 3, iceSlab: 4, 'p:Barrel_01': 0.6 }, behaviors: { static: 7, fan: 1.5, bounce: 1.5, mover: 1.2, crumble: 1.2, rotator: 0.8, rope: 1.2 }, mat: 'snow',
-    filler: ['Barrel_01', 'wooden_crate_01'], fillers: 30 },
-  { key: 'temple', name: '天空の神殿', en: 'SKY TEMPLE', count: 110, gap: [1.5, 3.0], rise: [0.6, 1.4], safety: 0.72,
-    shapes: { column: 4, marbleSlab: 3 }, behaviors: { static: 6, bounce: 1.5, rotator: 1.2, sweeper: 1, crumble: 1.5, mover: 1, fan: 0.8, rope: 1 }, mat: 'marble',
-    filler: ['marble_bust_01', 'horse_statue_01'], fillers: 24 },
-  { key: 'orbit', name: '静かの軌道', en: 'LOW ORBIT', count: 90, gap: [2.0, 4.2], rise: [1.0, 2.6], safety: 0.62, gravity: 0.45,
-    shapes: { 'p:moon_rock_01': 3, 'p:moon_rock_03': 2, 'p:moon_rock_05': 1.5, satellite: 2, 'p:Television_01': 0.4, 'p:Barrel_01': 0.4 },
-    behaviors: { static: 7, mover: 1.5, rotator: 1.5, crumble: 1, rope: 1 }, mat: 'iron',
+  { key: 'slums', name: 'スラムのゴミ山', en: 'THE SLUMS', count: 26, gap: [1.1, 2.3], rise: [0.4, 1.1], safety: 0.62, mat: 'plaster',
+    shapes: { 'p:wooden_crate_01': 2, 'p:Television_01': 1.5, 'p:Barrel_01': 1.5, 'p:utility_box_02': 1, 'p:old_tyre': 1, shack: 2, plank: 1.5 },
+    behaviors: { static: 8, bed: 1.6, mover: 0.6, crumble: 0.4, rope: 0.3 }, pieces: { shackRow: 3, junkPile: 3, fireEscape: 2 }, pieceRate: 0.32,
+    filler: ['trashbag', 'cardboard_box_01', 'Sofa_01', 'ArmChair_01', 'old_tyre', 'wooden_crate_01', 'Television_01'], fillers: 110 },
+  { key: 'rail', name: '線路と貨物列車', en: 'RAILWAY', count: 22, gap: [1.2, 2.5], rise: [0.5, 1.2], safety: 0.64, mat: 'gravel',
+    shapes: { 'p:barrel_03': 2, sleepers: 2, plate: 1, 'p:wooden_crate_01': 1, freightBlock: 1.5 },
+    behaviors: { static: 7, cart: 2, mover: 0.8 }, pieces: { trackBridge: 2, train: 4 }, pieceRate: 0.36,
+    filler: ['barrel_03', 'wooden_crate_01', 'old_tyre'], fillers: 60 },
+  { key: 'factory', name: '危険物の工場', en: 'THE FACTORY', count: 26, gap: [1.3, 2.6], rise: [0.6, 1.25], safety: 0.66, mat: 'metalplate',
+    shapes: { pipe: 3, plate: 2, grate: 2, 'p:Barrel_01': 2, 'p:steel_frame_shelves_01': 1.2 },
+    behaviors: { static: 7, conveyor: 1.6, rotator: 1.2, sweeper: 0.9, fan: 0.6, elevator: 0.8 }, pieces: { pipeRun: 3, catwalk: 3, tankFarm: 2 }, pieceRate: 0.33,
+    filler: ['Barrel_01', 'propane_tank', 'metal_tool_chest', 'barrel_03', 'modular_industrial_pipes_01'], fillers: 80 },
+  { key: 'subway', name: '地下鉄', en: 'SUBWAY', count: 16, gap: [1.3, 2.6], rise: [0.6, 1.2], safety: 0.66, mat: 'tilewall',
+    shapes: { 'p:plastic_crate_01': 2, tileBlock: 2, bench: 1 }, behaviors: { static: 6, mover: 1.2, crumble: 1 }, pieces: { subway: 4 }, pieceRate: 0.34,
+    filler: ['plastic_crate_01', 'cardboard_box_01'], fillers: 40 },
+  { key: 'construction', name: '工事現場', en: 'CONSTRUCTION SITE', count: 26, gap: [1.3, 2.7], rise: [0.6, 1.3], safety: 0.68, mat: 'paintedmetal',
+    shapes: { 'p:cement_bag': 2, plywoodSheet: 2, rebarSlab: 2, ibeam: 2 },
+    behaviors: { static: 6, crane: 1.4, carrier: 1.4, crumble: 0.8, rope: 0.3 }, pieces: { containers: 4, scaffold: 3 }, pieceRate: 0.36,
+    filler: ['cement_bag', 'plastic_crate_01', 'Barrel_01', 'wooden_crate_01'], fillers: 70 },
+  { key: 'road', name: '崩れた高架道路', en: 'THE HIGHWAY', count: 22, gap: [1.4, 2.8], rise: [0.6, 1.3], safety: 0.68, mat: 'asphalt',
+    shapes: { roadChunk: 3, barrier: 2, 'p:covered_car': 1 }, behaviors: { static: 6, crumble: 2, mover: 1, carrier: 0.8 }, pieces: { highway: 5 }, pieceRate: 0.36,
+    filler: ['covered_car', 'old_tyre', 'cardboard_box_01'], fillers: 50 },
+  { key: 'mall', name: 'ショッピングモール', en: 'SHOPPING MALL', count: 22, gap: [1.4, 2.8], rise: [0.6, 1.3], safety: 0.68, mat: 'marbletile',
+    shapes: { 'p:wooden_display_shelves_01': 2, 'p:CashRegister_01': 1, marbleSlab: 2, glassBox: 1.5 },
+    behaviors: { static: 6, trap: 1.4, elevator: 1, mover: 0.8 }, pieces: { storeFloor: 4, escalator: 3 }, pieceRate: 0.36,
+    filler: ['modern_arm_chair_01', 'CoffeeCart_01', 'wooden_display_shelves_01', 'cardboard_box_01'], fillers: 50 },
+  { key: 'ferris', name: '観覧車', en: 'FERRIS WHEEL', count: 7, gap: [1.4, 2.6], rise: [0.5, 1.1], safety: 0.66, mat: 'asphalt',
+    shapes: { roadChunk: 3, barrier: 1 }, behaviors: { static: 4, crumble: 2 }, pieces: {}, pieceRate: 0, ferrisAt: 4,
+    filler: ['covered_car', 'old_tyre'], fillers: 14 },
+  { key: 'office', name: '金ピカの社長室', en: 'THE BOSS ROOM', count: 22, gap: [1.4, 2.8], rise: [0.6, 1.3], safety: 0.7, mat: 'woodfloor',
+    shapes: { 'p:metal_office_desk': 2, 'p:drawer_cabinet': 2, floorSlab: 2 }, behaviors: { static: 6, elevator: 1.6, mover: 0.8 }, pieces: { officeFloor: 3, goldRoom: 2 }, pieceRate: 0.33,
+    filler: ['metal_office_desk', 'drawer_cabinet', 'modern_arm_chair_01', 'classic_laptop'], fillers: 50 },
+  { key: 'building', name: 'ビルの配管と階段', en: 'THE TOWER', count: 22, gap: [1.4, 2.8], rise: [0.6, 1.3], safety: 0.7, mat: 'facade',
+    shapes: { 'p:exterior_aircon_unit': 2, facadeBlock: 2, duct: 1.5, pipe: 1 }, behaviors: { static: 7, fan: 1, elevator: 0.6 }, pieces: { facadeClimb: 4, fireEscapeFacade: 2 }, pieceRate: 0.36,
+    filler: ['exterior_aircon_unit', 'utility_box_02', 'Barrel_01'], fillers: 50 },
+  { key: 'heaven', name: '天国への階段', en: 'STAIRWAY TO HEAVEN', count: 26, gap: [1.5, 3.0], rise: [0.6, 1.4], safety: 0.72, mat: 'marble',
+    shapes: { marbleSlab: 3, column: 3, cloud: 2 }, behaviors: { static: 6, bounce: 1, rotator: 1, mover: 1, crumble: 1 }, pieces: { stairway: 4, temple: 2 }, pieceRate: 0.33,
+    filler: ['marble_bust_01', 'horse_statue_01', 'gothic_statue'], fillers: 30 },
+  { key: 'space', name: '宇宙とブラックホール', en: 'BEYOND THE SKY', count: 24, gap: [2.0, 4.0], rise: [1.0, 2.4], safety: 0.6, mat: 'spacemetal', gravity: 0.45,
+    shapes: { 'p:moon_rock_01': 3, 'p:moon_rock_03': 2, 'p:moon_rock_05': 1.5, satellite: 2, 'p:vintage_spacecraft_instrument': 1 },
+    behaviors: { static: 7, mover: 1.5, rotator: 1.5, crumble: 1 }, pieces: {}, pieceRate: 0,
     filler: ['moon_rock_01', 'moon_rock_03', 'Television_01', 'Barrel_01', 'covered_car'], fillers: 40 },
 ];
 
-const R_MIN = 7, R_MAX = 21; // 塔の中心軸からの半径（細く高い一本の塔）
+const R_MIN = 14, R_MAX = 44; // 塔の中心軸からの半径
+const KINEMATIC = ['mover', 'elevator', 'rotator', 'crumble', 'carrier', 'cart', 'trap', 'gondola', 'crane'];
 
 function mulberry32(a) {
   return function () {
@@ -52,23 +73,21 @@ function mulberry32(a) {
   };
 }
 
-const KINEMATIC = ['mover', 'elevator', 'rotator', 'crumble', 'carrier'];
-
 export class Level {
   constructor({ RAPIER, world, scene, mats, props, seed = 20261016 }) {
     Object.assign(this, { RAPIER, world, scene, mats, props });
     this.rng = mulberry32(seed);
     this.noise = createNoise3D(mulberry32(seed + 7));
     this.platforms = [];
-    this.path = [];
+    this.route = [];        // 経路の目印（上面中心）
+    this.path = [];         // 単発の足場・セットピースの並び
     this.byCollider = new Map();
-    this.hazards = [];
-    this.winds = [];
-    this.fans = [];
-    this.animated = [];
+    this.hazards = []; this.winds = []; this.fans = []; this.animated = []; this.conveyors = [];
     this.zoneStarts = [];
     this.batches = new Map();
     this.batchMeshes = [];
+    this.occ = new Map();   // 高さ 8m ごとの占有リスト
+    this.hanging = [];
     this.root = new THREE.Group();
     scene.add(this.root);
     this._q = new THREE.Quaternion();
@@ -90,14 +109,35 @@ export class Level {
   }
   zoneGravity(zi) { return ZONES[zi]?.gravity ?? 1; }
 
-  /** 足元の高さ(m)での重力倍率（宇宙へ近づくと徐々に弱まる） */
   gravityAt(height) {
-    const s = this.zoneStarts[6];
+    const s = this.zoneStarts[11];
     if (s === undefined) return 1;
-    return THREE.MathUtils.lerp(1, ZONES[6].gravity, THREE.MathUtils.smoothstep(height, s - 25, s + 5));
+    return THREE.MathUtils.lerp(1, ZONES[11].gravity, THREE.MathUtils.smoothstep(height, s - 25, s + 5));
   }
 
-  // ------------------------------------------------------------------ geometry
+  // ------------------------------------------------------------------ occupancy
+  occupy(c, r, y0, y1, rec) {
+    const e = { x: c.x, z: c.z, r, y0, y1, rec };
+    for (let b = Math.floor(y0 / 8); b <= Math.floor(y1 / 8); b++) {
+      if (!this.occ.has(b)) this.occ.set(b, []);
+      this.occ.get(b).push(e);
+    }
+  }
+  collides(center, outR, minY, maxY, ignore) {
+    const seen = new Set();
+    for (let b = Math.floor(minY / 8); b <= Math.floor(maxY / 8); b++) {
+      const list = this.occ.get(b); if (!list) continue;
+      for (const e of list) {
+        if (seen.has(e)) continue; seen.add(e);
+        if (ignore && e.rec === ignore) continue;
+        if (maxY < e.y0 || minY > e.y1) continue;
+        if (Math.hypot(center.x - e.x, center.z - e.z) < outR + e.r + 1.0) return true;
+      }
+    }
+    return false;
+  }
+
+  // ------------------------------------------------------------------ geometry helpers
   rockGeometry(rTop, rBottom, h, seg = 16, jag = 0.18) {
     const g = new THREE.CylinderGeometry(rTop, rBottom, h, seg, 6, false);
     const pos = g.attributes.position;
@@ -120,13 +160,23 @@ export class Level {
     return g;
   }
 
-  /** shape spec → { parts: [{geo, mat}], descs, footprint, h }（原点＝上面中心） */
+  /** 頂点カラーとUVを付けて結合用に整える */
+  finishGeo(geo, matKey, tint = 1, ao = true) {
+    const g = boxProjectUV(geo, this.mats.tile(matKey), new THREE.Vector3(this.rnd(0, 9), this.rnd(0, 9), this.rnd(0, 9)));
+    return bakeColor(g, typeof tint === 'number' ? tint * this.rnd(0.9, 1.06) : tint, { ao });
+  }
+
+  roundBox(w, h, d, r = 0.06) {
+    const rr = Math.min(r, w / 2 - 0.001, h / 2 - 0.001, d / 2 - 0.001);
+    return rr > 0.005 ? new RoundedBoxGeometry(w, h, d, 2, rr) : new THREE.BoxGeometry(w, h, d);
+  }
+
   buildShape(spec) {
     const R = this.RAPIER;
     const descs = [], parts = [];
     let footprint, h;
-    const box = (w, hh, d, mat, x = 0, y = 0, z = 0) => {
-      parts.push({ geo: new THREE.BoxGeometry(w, hh, d).translate(x, y - hh / 2, z), mat });
+    const box = (w, hh, d, mat, x = 0, y = 0, z = 0, tint = spec.tint ?? 1) => {
+      parts.push({ geo: this.roundBox(w, hh, d, spec.round ?? 0.06).translate(x, y - hh / 2, z), mat, tint });
       descs.push(R.ColliderDesc.cuboid(w / 2, hh / 2, d / 2).setTranslation(x, y - hh / 2, z));
     };
     switch (spec.shape) {
@@ -134,24 +184,31 @@ export class Level {
         h = spec.h; box(spec.w, h, spec.d, spec.mat);
         footprint = { type: 'rect', hw: spec.w / 2, hd: spec.d / 2 };
         break;
-      case 'shack': // トタン屋根の掘っ立て小屋
+      case 'shack':
         h = spec.h;
         box(spec.w, h - 0.25, spec.d, spec.mat, 0, -0.25);
-        box(spec.w + 0.5, 0.25, spec.d + 0.5, 'iron');
+        box(spec.w + 0.5, 0.25, spec.d + 0.5, 'roofiron');
         footprint = { type: 'rect', hw: spec.w / 2 + 0.25, hd: spec.d / 2 + 0.25 };
+        break;
+      case 'ibeam': // H形鋼
+        h = spec.h;
+        box(spec.w, 0.12, spec.d, spec.mat, 0, 0, 0);
+        box(0.12, spec.h - 0.24, spec.d, spec.mat, 0, -0.12, 0);
+        box(spec.w, 0.12, spec.d, spec.mat, 0, -spec.h + 0.12, 0);
+        footprint = { type: 'rect', hw: spec.w / 2, hd: spec.d / 2 };
         break;
       case 'satellite': {
         h = 1.6;
-        box(1.8, 1.6, 1.8, 'iron');
+        box(1.8, 1.6, 1.8, 'spacemetal');
         const span = spec.span;
-        box(span, 0.12, 1.6, 'shutter', -(0.9 + span / 2), -0.55);
-        box(span, 0.12, 1.6, 'shutter', 0.9 + span / 2, -0.55);
+        box(span, 0.12, 1.6, 'bluemetal', -(0.9 + span / 2), -0.55);
+        box(span, 0.12, 1.6, 'bluemetal', 0.9 + span / 2, -0.55);
         footprint = { type: 'rect', hw: 0.9, hd: 0.9 };
         break;
       }
       case 'cyl': {
         const { r } = spec; h = spec.h;
-        parts.push({ geo: new THREE.CylinderGeometry(r, r * (spec.taper ?? 1), h, 28, 1).translate(0, -h / 2, 0), mat: spec.mat });
+        parts.push({ geo: new THREE.CylinderGeometry(r, r * (spec.taper ?? 1), h, 28, 1).translate(0, -h / 2, 0), mat: spec.mat, tint: spec.tint ?? 1 });
         descs.push(R.ColliderDesc.cylinder(h / 2, r).setTranslation(0, -h / 2, 0));
         footprint = { type: 'circle', r };
         break;
@@ -159,7 +216,7 @@ export class Level {
       case 'rock': {
         const { r } = spec; h = spec.h;
         const geo = this.rockGeometry(r, r * this.rnd(0.18, 0.4), h).translate(0, -h / 2, 0);
-        parts.push({ geo, mat: spec.mat });
+        parts.push({ geo, mat: spec.mat, tint: spec.tint ?? 1 });
         const hull = R.ColliderDesc.convexHull(new Float32Array(geo.attributes.position.array));
         descs.push(hull || R.ColliderDesc.cylinder(h / 2, r).setTranslation(0, -h / 2, 0));
         footprint = { type: 'circle', r: r * 0.93 };
@@ -167,7 +224,8 @@ export class Level {
       }
       case 'pipe': {
         const { r, len } = spec; h = r * 2;
-        parts.push({ geo: new THREE.CylinderGeometry(r, r, len, 24, 1).rotateX(Math.PI / 2).translate(0, -r, 0), mat: spec.mat });
+        parts.push({ geo: new THREE.CylinderGeometry(r, r, len, 24, 1).rotateX(Math.PI / 2).translate(0, -r, 0), mat: spec.mat, tint: spec.tint ?? 1 });
+        for (let f = -len / 2 + 0.6; f < len / 2; f += 2.4) parts.push({ geo: new THREE.CylinderGeometry(r + 0.1, r + 0.1, 0.16, 24).rotateX(Math.PI / 2).translate(0, -r, f), mat: 'metalplate', tint: 0.7 });
         const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2);
         descs.push(R.ColliderDesc.cylinder(len / 2, r).setTranslation(0, -r, 0).setRotation(q));
         footprint = { type: 'rect', hw: r * 0.55, hd: len / 2 };
@@ -223,19 +281,16 @@ export class Level {
       const built = this.buildShape(spec);
       footprint = built.footprint; h = built.h; descs = built.descs;
       for (const part of built.parts) {
-        const geo = boxProjectUV(part.geo, this.mats.tile(part.mat), new THREE.Vector3(this.rnd(0, 9), this.rnd(0, 9), this.rnd(0, 9)));
-        if (!kinematic && !spec.noBatch) {
-          this.addToBatch(geo.applyMatrix4(group.matrixWorld), part.mat, spec.pos.y);
-          continue;
-        }
+        const geo = this.finishGeo(part.geo, part.mat, part.tint);
+        if (!kinematic && !spec.noBatch) { this.addToBatch(geo.applyMatrix4(group.matrixWorld), part.mat, spec.pos.y); continue; }
         let mat = this.mats.get(part.mat, spec.matOpts);
-        if (type === 'crumble') {
-          // 崩れる足場は個別に色を変えるので複製（テクスチャは元マテリアルから共有）
+        if (type === 'crumble' || type === 'trap') {
           const src = mat;
-          mat = src.clone(); mat.emissive = new THREE.Color(0); mat.color.setScalar(0.8);
+          mat = src.clone(); mat.emissive = new THREE.Color(0);
+          mat.onBeforeCompile = src.onBeforeCompile; mat.customProgramCacheKey = src.customProgramCacheKey; mat.userData = src.userData;
           this.mats.load(part.mat).then(() => {
             Object.assign(mat, { map: src.map, normalMap: src.normalMap, roughnessMap: src.roughnessMap, aoMap: src.aoMap, metalnessMap: src.metalnessMap, metalness: src.metalness, roughness: src.roughness });
-            mat.needsUpdate = true;
+            mat.color.set(0xd8d0c8); mat.needsUpdate = true;
           }).catch(() => {});
           crumbleMat = mat;
         }
@@ -258,26 +313,28 @@ export class Level {
     return p;
   }
 
-  addToBatch(geo, matKey, y) {
-    const key = `${Math.floor(y / CHUNK)}|${matKey}`;
-    if (!this.batches.has(key)) this.batches.set(key, []);
-    this.batches.get(key).push(geo);
+  /** 静的な部品はチャンク×マテリアル単位で結合（ドローコール削減） */
+  addToBatch(geo, mat, y) {
+    const m = typeof mat === 'string' ? this.mats.get(mat) : mat;
+    if (!geo.attributes.color) bakeColor(geo, 1, { ao: false });
+    const key = `${Math.floor(y / CHUNK)}|${m.uuid}`;
+    if (!this.batches.has(key)) this.batches.set(key, { mat: m, geos: [], chunk: Math.floor(y / CHUNK) });
+    this.batches.get(key).geos.push(geo);
   }
 
-  /** 静的な足場はチャンク×マテリアル単位で1つのメッシュに結合（ドローコール削減） */
   flushBatches() {
-    for (const [key, geos] of this.batches) {
-      const [chunk, matKey] = key.split('|');
+    for (const { mat, geos, chunk } of this.batches.values()) {
       const merged = mergeGeometries(geos.map((g) => {
         const k = g.index ? g.toNonIndexed() : g;
-        for (const a of Object.keys(k.attributes)) if (!['position', 'normal', 'uv'].includes(a)) k.deleteAttribute(a);
+        for (const a of Object.keys(k.attributes)) if (!['position', 'normal', 'uv', 'color'].includes(a)) k.deleteAttribute(a);
+        if (!k.attributes.normal) k.computeVertexNormals();
         return k;
       }), false);
       if (!merged) continue;
       merged.computeBoundingSphere();
-      const mesh = new THREE.Mesh(merged, this.mats.get(matKey));
-      mesh.castShadow = true; mesh.receiveShadow = true;
-      mesh.userData.chunk = +chunk;
+      const mesh = new THREE.Mesh(merged, mat);
+      mesh.castShadow = !mat.transparent; mesh.receiveShadow = true;
+      mesh.userData.chunk = chunk;
       this.root.add(mesh);
       this.batchMeshes.push(mesh);
     }
@@ -287,13 +344,13 @@ export class Level {
   addSupports(p, spec) {
     const R = this.RAPIER;
     const len = this.rnd(3, 7);
-    const matKey = spec.mat === 'grate' || spec.mat === 'rust' ? 'rust' : 'wood';
+    const matKey = spec.mat === 'grate' || spec.mat === 'rust' || spec.mat === 'metalplate' ? 'rust' : 'wood';
     const { hw, hd } = p.footprint;
     const r = 0.11;
     const corners = [[-1, -1], [1, 1], [-1, 1], [1, -1]].slice(0, this.rng() < 0.5 ? 2 : 4);
     for (const [sx, sz] of corners) {
       const x = sx * (hw - 0.15), z = sz * (hd - 0.2);
-      const geo = boxProjectUV(new THREE.CylinderGeometry(r, r, len, 8).translate(x, -len / 2 - p.h, z), 1.2);
+      const geo = this.finishGeo(new THREE.CylinderGeometry(r, r, len, 8).translate(x, -len / 2 - p.h, z), matKey, 0.8, false);
       if (!p.kinematic) this.addToBatch(geo.applyMatrix4(p.group.matrixWorld), matKey, p.top);
       else { const m = new THREE.Mesh(geo, this.mats.get(matKey)); m.castShadow = true; p.visual.add(m); }
       const c = this.world.createCollider(R.ColliderDesc.cylinder(len / 2, r).setTranslation(x, -len / 2 - p.h, z), p.body);
@@ -302,28 +359,39 @@ export class Level {
     p.h += len;
   }
 
+  /** 天井から吊るす飾り（シャンデリアなど） */
+  addHanging(id, pos) {
+    this.props.addStatic(id, pos, this.rnd(0, 6), null);
+    this.hanging.push(pos);
+  }
+
   // ------------------------------------------------------------------ specs
   shapeSpec(kind, zone) {
     const r = (a, b) => this.rnd(a, b);
     if (kind.startsWith('p:')) return { shape: 'prop', id: kind.slice(2), randomYaw: true };
     switch (kind) {
       case 'rock': return { shape: 'rock', r: r(1.5, 2.4), h: r(2.5, 4.5), mat: 'rock' };
-      case 'rockSmall': return { shape: 'rock', r: r(0.95, 1.25), h: r(2, 3), mat: 'rock' };
-      case 'sandrock': return { shape: 'rock', r: r(1.8, 2.8), h: r(3, 5), mat: 'sandrock' };
-      case 'plank': return { shape: 'box', w: r(0.9, 1.3), h: 0.22, d: r(3, 4.5), mat: 'wood', supports: true, align: true };
-      case 'beam': return { shape: 'box', w: 0.55, h: 0.45, d: r(3.5, 5.5), mat: 'wood', align: true };
-      case 'shack': return { shape: 'shack', w: r(2.4, 3.4), h: r(2.4, 3.2), d: r(2.4, 3.4), mat: this.rng() < 0.5 ? 'bluewood' : 'shutter', randomYaw: true };
+      case 'plank': return { shape: 'box', w: r(0.9, 1.3), h: 0.22, d: r(3, 4.5), mat: 'wood', supports: true, align: true, round: 0.03 };
+      case 'shack': return { shape: 'shack', w: r(2.4, 3.4), h: r(2.4, 3.2), d: r(2.4, 3.4), mat: this.rng() < 0.5 ? 'bluewood' : 'plaster', randomYaw: true };
+      case 'sleepers': return { shape: 'box', w: 2.6, h: r(0.8, 1.6), d: r(1.4, 2.2), mat: 'wood', randomYaw: true, tint: 0.75, round: 0.04 };
+      case 'freightBlock': return { shape: 'box', w: 2.6, h: r(2, 2.8), d: r(3, 4), mat: 'freight', randomYaw: true, tint: new THREE.Color(this.rng() < 0.5 ? 0x9c3a2a : 0x2f5a8a) };
       case 'pipe': return { shape: 'pipe', r: r(0.55, 0.8), len: r(3.5, 6), mat: 'rust', align: true };
-      case 'container': return { shape: 'box', w: 2.4, h: 2.6, d: r(4, 6), mat: 'iron', align: true };
-      case 'plate': return { shape: 'box', w: r(1.8, 2.6), h: 0.25, d: r(1.8, 2.6), mat: 'rust', supports: true, randomYaw: true };
-      case 'grate': return { shape: 'box', w: r(1.0, 1.4), h: 0.15, d: r(4, 6), mat: 'grate', supports: true, align: true };
-      case 'slab': return { shape: 'box', w: r(2, 3.2), h: r(0.4, 0.7), d: r(2.4, 3.6), mat: 'concrete', tilt: 0.12, randomYaw: true };
-      case 'road': return { shape: 'box', w: r(2.6, 3.4), h: 0.5, d: r(6, 9), mat: 'concrete', align: true, tilt: 0.05 };
-      case 'brickPillar': return { shape: 'box', w: r(1.3, 1.8), h: r(3, 6), d: r(1.3, 1.8), mat: 'brick', randomYaw: true };
-      case 'snowRock': return { shape: 'rock', r: r(1.4, 2.2), h: r(2.5, 4), mat: 'snow' };
-      case 'iceSlab': return { shape: 'box', w: r(1.6, 2.2), h: 0.5, d: r(2.6, 3.6), mat: 'ice', surface: 'ice', align: true };
+      case 'plate': return { shape: 'box', w: r(1.8, 2.6), h: 0.25, d: r(1.8, 2.6), mat: 'metalplate', supports: true, randomYaw: true, round: 0.03 };
+      case 'grate': return { shape: 'box', w: r(1.0, 1.4), h: 0.15, d: r(4, 6), mat: 'grate', supports: true, align: true, round: 0.02 };
+      case 'tileBlock': return { shape: 'box', w: r(1.6, 2.4), h: r(1.5, 3.5), d: r(1.6, 2.4), mat: 'tilewall', randomYaw: true };
+      case 'bench': return { shape: 'box', w: 0.7, h: 0.5, d: r(2.4, 3.2), mat: 'wood', align: true, round: 0.05 };
+      case 'plywoodSheet': return { shape: 'box', w: r(1.2, 1.5), h: 0.08, d: r(2.4, 3.2), mat: 'plywood', supports: true, align: true, round: 0.01 };
+      case 'rebarSlab': return { shape: 'box', w: r(2.2, 3.2), h: r(0.3, 0.5), d: r(2.6, 3.6), mat: 'rebar', randomYaw: true, tilt: 0.06 };
+      case 'ibeam': return { shape: 'ibeam', w: 0.5, h: 0.6, d: r(4, 7), mat: 'paintedmetal', align: true, tint: new THREE.Color(0.95, 0.6, 0.2) };
+      case 'roadChunk': return { shape: 'box', w: r(3, 5), h: 0.9, d: r(3, 5), mat: 'asphalt', randomYaw: true, tilt: 0.08 };
+      case 'barrier': return { shape: 'box', w: 0.6, h: 1.0, d: 3.6, mat: 'concrete', align: true, round: 0.12 };
+      case 'marbleSlab': return { shape: 'box', w: r(2, 2.8), h: 0.5, d: r(2, 3), mat: zone.key === 'mall' ? 'marbletile' : 'marble', randomYaw: true };
+      case 'glassBox': return { shape: 'box', w: r(1.6, 2.2), h: r(1.2, 2), d: r(1.6, 2.2), mat: 'metalplate', randomYaw: true, matOpts: undefined, tint: 0.9 };
+      case 'floorSlab': return { shape: 'box', w: r(2.4, 3.2), h: 0.4, d: r(2.4, 3.2), mat: this.rng() < 0.5 ? 'woodfloor' : 'carpet', randomYaw: true };
+      case 'facadeBlock': return { shape: 'box', w: r(1.8, 2.6), h: r(2, 4), d: r(1.8, 2.6), mat: 'facade', randomYaw: true };
+      case 'duct': return { shape: 'box', w: 1.2, h: 1.0, d: r(3.5, 5.5), mat: 'metalplate', align: true, tint: 0.85, round: 0.1 };
       case 'column': return { shape: 'cyl', r: r(0.85, 1.2), h: r(5, 12), mat: 'marble' };
-      case 'marbleSlab': return { shape: 'box', w: r(2, 2.8), h: 0.5, d: r(2, 3), mat: 'marble', randomYaw: true };
+      case 'cloud': return { shape: 'rock', r: r(1.6, 2.4), h: r(1.4, 2.2), mat: 'snow', tint: 1.1 };
       case 'satellite': return { shape: 'satellite', span: r(2.2, 3.2), randomYaw: true };
     }
     return { shape: 'box', w: 2, h: 0.5, d: 2, mat: zone.mat };
@@ -332,22 +400,28 @@ export class Level {
   behaviorSpec(type, zone) {
     const m = zone.mat;
     const r = (a, b) => this.rnd(a, b);
-    const slabMat = m === 'snow' ? 'ice' : m === 'bluewood' ? 'wood' : m;
+    const slab = m === 'gravel' ? 'wood' : m === 'tilewall' ? 'terrazzo' : m;
     switch (type) {
-      case 'mover': return { spec: { shape: 'box', w: r(2.0, 2.6), h: 0.45, d: r(2.0, 2.6), mat: slabMat, surface: m === 'snow' ? 'ice' : 'normal', align: true },
+      case 'mover': return { spec: { shape: 'box', w: r(2.0, 2.6), h: 0.45, d: r(2.0, 2.6), mat: slab, align: true },
         behavior: { type, amp: r(2.5, 4), period: r(4.5, 7), phase: r(0, 6.28) } };
-      case 'elevator': return { spec: { shape: 'box', w: 2.6, h: 0.45, d: 2.6, mat: m === 'bluewood' ? 'grate' : slabMat, align: true },
+      case 'elevator': return { spec: { shape: 'box', w: 2.6, h: 0.45, d: 2.6, mat: m === 'woodfloor' ? 'metalplate' : 'grate', align: true },
         behavior: { type, amp: r(2.0, 2.8), period: r(5, 7), phase: r(0, 6.28) } };
-      case 'rotator': { const L = r(8, 10); return { spec: { shape: 'box', w: 1.25, h: 0.5, d: L, mat: m === 'rust' ? 'iron' : slabMat, align: true },
+      case 'rotator': { const L = r(8, 10); return { spec: { shape: 'box', w: 1.25, h: 0.5, d: L, mat: m === 'marble' ? 'marble' : 'metalplate', align: true },
         behavior: { type, speed: r(0.45, 0.8) * (this.rng() < 0.5 ? -1 : 1), L } }; }
-      case 'sweeper': return { spec: { shape: 'cyl', r: 4, h: 0.8, mat: m === 'rust' ? 'iron' : m },
-        behavior: { type, speed: r(1.3, 1.9) * (this.rng() < 0.5 ? -1 : 1) } };
-      case 'bounce': return { spec: { shape: 'box', w: 2.4, h: 0.7, d: 3.0, mat: 'fabric', surface: 'bounce', align: true }, behavior: { type } };
+      case 'crane': { const L = r(12, 16); return { spec: { shape: 'box', w: 1.3, h: 0.6, d: L, mat: 'paintedmetal', align: true, tint: new THREE.Color(1, 0.75, 0.25) },
+        behavior: { type: 'rotator', crane: true, speed: r(0.3, 0.5) * (this.rng() < 0.5 ? -1 : 1), L } }; }
+      case 'sweeper': return { spec: { shape: 'cyl', r: 4, h: 0.8, mat: 'metalplate' }, behavior: { type, speed: r(1.3, 1.9) * (this.rng() < 0.5 ? -1 : 1) } };
+      case 'bounce': return { spec: { shape: 'box', w: 2.4, h: 0.7, d: 3.0, mat: 'fabric', surface: 'bounce', align: true, round: 0.25 }, behavior: { type } };
+      case 'bed': return { spec: { shape: 'prop', id: 'vintage_day_bed', surface: 'bounce', randomYaw: true }, behavior: { type: 'bounce', bed: true } };
       case 'fan': return { spec: { shape: 'cyl', r: 2.3, h: 0.9, mat: 'rust', taper: 1.1 }, behavior: { type } };
-      case 'crumble': return { spec: { shape: 'box', w: r(1.8, 2.4), h: 0.5, d: r(1.8, 2.4), mat: m === 'snow' ? 'ice' : m === 'marble' ? 'marble' : m === 'iron' ? 'iron' : 'concrete', surface: m === 'snow' ? 'ice' : 'normal', randomYaw: true },
+      case 'conveyor': { const L = r(7, 10); return { spec: { shape: 'box', w: 1.6, h: 0.5, d: L, mat: 'metalplate', align: true, tint: 0.45, round: 0.1 }, behavior: { type: 'conveyor', speed: r(2.5, 4) * (this.rng() < 0.35 ? -1 : 1), L } }; }
+      case 'crumble': return { spec: { shape: 'box', w: r(1.8, 2.4), h: 0.5, d: r(1.8, 2.4), mat: m === 'marble' ? 'marble' : m === 'asphalt' ? 'asphalt' : 'concrete', randomYaw: true },
         behavior: { type, state: 'idle', timer: 0 } };
-      case 'rope': return { spec: { shape: 'rope' }, behavior: { type, len: r(6, 11), slope: r(0.02, 0.16) } };
-      case 'carrier': return { spec: { shape: 'prop', id: 'covered_car' }, behavior: { type, dist: r(9, 14), speed: r(2.6, 3.4), phase: r(0, 1) } };
+      case 'trap': return { spec: { shape: 'box', w: 2.4, h: 0.4, d: 2.4, mat: 'metalplate', align: true }, behavior: { type: 'trap', state: 'idle', timer: 0 } };
+      case 'rope': return { spec: { shape: 'rope' }, behavior: { type, len: r(6, 10), slope: r(0.02, 0.14) } };
+      case 'carrier': return { spec: m === 'paintedmetal' ? { shape: 'ibeam', w: 0.9, h: 0.6, d: 5, mat: 'paintedmetal', tint: new THREE.Color(1, 0.6, 0.2) } : { shape: 'prop', id: 'covered_car' },
+        behavior: { type, dist: r(9, 14), speed: r(2.6, 3.4), phase: r(0, 1) } };
+      case 'cart': return { spec: { shape: 'box', w: 1.6, h: 1.0, d: 2.2, mat: 'rust', tint: 0.8, round: 0.08 }, behavior: { type: 'carrier', cart: true, dist: r(14, 22), speed: r(3, 4), phase: r(0, 1) } };
     }
     return null;
   }
@@ -363,7 +437,7 @@ export class Level {
 
   footprintOf(spec) {
     switch (spec.shape) {
-      case 'box': return { type: 'rect', hw: spec.w / 2, hd: spec.d / 2 };
+      case 'box': case 'ibeam': return { type: 'rect', hw: spec.w / 2, hd: spec.d / 2 };
       case 'shack': return { type: 'rect', hw: spec.w / 2 + 0.25, hd: spec.d / 2 + 0.25 };
       case 'satellite': return { type: 'rect', hw: 0.9, hd: 0.9 };
       case 'pipe': return { type: 'rect', hw: spec.r * 0.55, hd: spec.len / 2 };
@@ -381,87 +455,191 @@ export class Level {
 
   // ------------------------------------------------------------------ build
   build() {
-    const start = this.addPlatform({ shape: 'rock', r: 9, h: 7, mat: 'sandrock', pos: new THREE.Vector3(0, 3, 0), zone: 0, noBatch: true });
+    // スタート：海に浮かぶゴミの島
+    const start = this.addPlatform({ shape: 'rock', r: 15, h: 7, mat: 'sandrock', pos: new THREE.Vector3(0, 3, 0), zone: 0, noBatch: true });
     start.isStart = true;
     this.startTop = 3;
-    this.spawnPoint = new THREE.Vector3(-1.5, 4.1, 2.5);
-    for (let i = 0; i < 6; i++) {
-      const a = (i / 6) * Math.PI * 2 + this.rnd(-0.3, 0.3), d = this.rnd(12, 18);
-      this.addPlatform({ shape: 'rock', r: this.rnd(1.5, 3), h: this.rnd(3, 5), mat: 'rock', pos: new THREE.Vector3(Math.cos(a) * d, this.rnd(0.6, 1.8), Math.sin(a) * d), zone: 0 });
-    }
+    this.occupy(start.base, 15, -4, 6, start);
     start.path = 0;
     this.path.push(start);
+    this.route.push({ pos: start.base.clone(), rec: start });
     this.corridors = [];
-    this.buildCores();
+    this.buildCore();
 
-    let cur = start;
-    let curTop = cur.top;
+    let cur = { base: start.base.clone(), top: 3, footprint: { type: 'circle', r: 13.5 }, yaw: 0, surface: 'normal', ref: start };
+    let curTop = 3;
     const ranges = [];
     ZONES.forEach((zone, zi) => {
       this.zoneStarts[zi] = zi === 0 ? 0 : curTop - this.startTop;
       const y0 = curTop;
-      if (zi > 0) {
-        const entryMat = zone.mat === 'bluewood' ? 'brick' : zone.mat;
-        const entry = this.placeNext(cur, curTop, zone, zi, { shape: 'cyl', r: 2.8, h: 1.2, mat: entryMat }, null, { gap: 1.6, rise: 0.8 });
-        cur = entry.next; curTop = cur.top;
-        entry.p.zoneEntry = zi;
-      }
-      const bag = this.behaviorBag(zone);
-      for (let i = 0; i < zone.count; i++) {
-        const t = i / (zone.count - 1);
-        const bType = bag[i];
-        let spec, behavior = null;
-        if (bType === 'static') spec = this.shapeSpec(this.pick(zone.shapes), zone);
-        else { const b = this.behaviorSpec(bType, zone); spec = b.spec; behavior = b.behavior; }
-        const res = this.placeNext(cur, curTop, zone, zi, spec, behavior, { t });
+      const bag = this.courseBag(zone);
+      for (let i = 0; i < bag.length; i++) {
+        const step = bag[i];
+        const t = i / Math.max(1, bag.length - 1);
+        let res;
+        if (step === 'ferris') res = this.placeFerris(cur, curTop, zi);
+        else if (step.startsWith('piece:')) res = this.placePiece(cur, curTop, zone, zi, step.slice(6));
+        if (!res) {
+          let spec, behavior = null;
+          const bType = step.startsWith('piece:') || step === 'ferris' ? 'static' : step;
+          if (bType === 'static') spec = this.shapeSpec(this.pick(zone.shapes), zone);
+          else { const b = this.behaviorSpec(bType, zone); spec = b.spec; behavior = b.behavior; }
+          res = this.placeNext(cur, curTop, zone, zi, spec, behavior, { t });
+        }
         cur = res.next;
-        curTop = cur.top + (behavior?.type === 'elevator' ? behavior.amp : 0);
+        curTop = cur.top + (res.p?.behavior?.type === 'elevator' ? res.p.behavior.amp : 0);
       }
       ranges[zi] = [y0, curTop];
     });
 
-    // スタート地点：最初の足場の方を向いて島の縁寄りに立つ
-    const first = this.path[1].base;
-    const fa = Math.atan2(first.x, first.z);
-    this.spawnPoint = new THREE.Vector3(Math.sin(fa) * 5.5, this.startTop + 1.1, Math.cos(fa) * 5.5);
-    this.spawnYaw = Math.atan2(-(first.x - this.spawnPoint.x), -(first.z - this.spawnPoint.z));
-
-    const goalRes = this.placeNext(cur, curTop, ZONES[6], 6, { shape: 'cyl', r: 6, h: 2.2, mat: 'marble' }, null, { gap: 2.2, rise: 1.5 });
-    this.buildGoal(goalRes.p);
-    this.totalHeight = goalRes.p.top - this.startTop;
+    this.buildGoal(cur, curTop);
+    this.totalHeight = this.goal.top - this.startTop;
     this.ranges = ranges;
 
+    const first = this.route[1]?.pos || new THREE.Vector3(10, 3, 0);
+    const fa = Math.atan2(first.x, first.z);
+    this.spawnPoint = new THREE.Vector3(Math.sin(fa) * 11.5, this.startTop + 1.1, Math.cos(fa) * 11.5);
+    this.spawnYaw = Math.atan2(-(first.x - this.spawnPoint.x), -(first.z - this.spawnPoint.z));
+
     ZONES.forEach((z, zi) => this.addFillers(z, zi, ranges[zi]));
-    this.buildDecor();
+    this.buildSkyline(ranges);
     this.flushBatches();
   }
 
-  behaviorBag(zone) {
-    const n = zone.count - 3;
+  /** ゾーン内の並び：単発の足場・ギミック・セットピースを混ぜる（特殊な足場が続きすぎないように） */
+  courseBag(zone) {
+    const n = Math.round(zone.count * (zone.key === 'ferris' ? 1 : 1.85)); // 本家に近い規模（約1時間・約900 m）
+    const out = ['static', 'static'];
+    const pieceNames = Object.keys(zone.pieces);
     const entries = Object.entries(zone.behaviors);
     const sum = entries.reduce((a, [, w]) => a + w, 0);
-    const bag = [];
-    for (const [k, w] of entries) if (k !== 'static') for (let i = 0; i < Math.max(1, Math.round((w / sum) * n)); i++) bag.push(k);
-    while (bag.length < n) bag.push('static');
-    bag.length = n;
-    for (let i = bag.length - 1; i > 0; i--) { const j = Math.floor(this.rng() * (i + 1)); [bag[i], bag[j]] = [bag[j], bag[i]]; }
-    for (let i = 1; i < bag.length; i++) {
-      if (bag[i] !== 'static' && bag[i - 1] !== 'static') {
-        const j = bag.findIndex((b, k) => k > i + 1 && b === 'static' && bag[k - 1] === 'static' && (bag[k + 1] ?? 'static') === 'static');
-        if (j > 0) [bag[i], bag[j]] = [bag[j], bag[i]];
-      }
+    const pool = [];
+    for (const [k, w] of entries) if (k !== 'static') for (let i = 0; i < Math.max(1, Math.round((w / sum) * n * (1 - zone.pieceRate))); i++) pool.push(k);
+    const nPieces = Math.round(n * zone.pieceRate);
+    for (let i = 0; i < nPieces; i++) pool.push('piece:' + (pieceNames.length ? this.pick(zone.pieces) : 'x'));
+    while (pool.length < n - 2) pool.push('static');
+    pool.length = n - 2;
+    for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(this.rng() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+    // 特殊なものの間には必ず普通の足場を挟む
+    const res = [...out];
+    for (const s of pool) {
+      if (s !== 'static' && res[res.length - 1] !== 'static') res.push('static');
+      res.push(s);
     }
-    return ['static', 'static', 'static', ...bag];
+    if (zone.ferrisAt !== undefined) res.splice(zone.ferrisAt, 0, 'ferris');
+    return res.filter((s) => s !== 'piece:x');
   }
 
-  /** 螺旋の接線方向（塔の周りを回りながら登る） */
   preferredAngle(pos) {
     const r = Math.hypot(pos.x, pos.z);
     const radial = Math.atan2(pos.x, pos.z);
     let ang = radial + this.spin * Math.PI / 2;
-    if (r < R_MIN + 2) ang -= this.spin * 0.6;
-    else if (r > R_MAX - 3) ang += this.spin * 0.6;
+    if (r < R_MIN + 3) ang -= this.spin * 0.7;
+    else if (r > R_MAX - 6) ang += this.spin * 0.7;
     return ang;
+  }
+
+  pushRoute(pos, rec, kind = 'hop') {
+    const prev = this.route[this.route.length - 1];
+    if (prev) this.corridors.push({ ax: prev.pos.x, az: prev.pos.z, bx: pos.x, bz: pos.z, y0: Math.min(prev.pos.y, pos.y) - 1.5, y1: Math.max(prev.pos.y, pos.y) + 3.5 });
+    this.route.push({ pos: pos.clone(), rec, kind });
+  }
+
+  /** 大型セットピースを置く。入口は今の足場から跳べる距離、ぶつかる向きは避ける */
+  placePiece(cur, curTop, zone, zi, name) {
+    if (!PIECES[name] && !['goldRoom', 'fireEscapeFacade'].includes(name)) return null;
+    const pref = this.preferredAngle(cur.base);
+    const log = (this.pieceLog ||= {})[name] ||= { ok: 0, radius: 0, fit: 0, fail: 0 };
+    for (let attempt = 0; attempt < 18; attempt++) {
+      const ang = pref + this.rnd(-1, 1) * Math.min(Math.PI * 0.85, 0.4 + attempt * 0.18);
+      const dir = new THREE.Vector3(Math.sin(ang), 0, Math.cos(ang));
+      const kit = new Kit(this, zi);
+      let exit;
+      if (name === 'goldRoom') exit = PIECES.officeFloor(kit, { gold: true });
+      else if (name === 'fireEscapeFacade') exit = PIECES.fireEscape(kit, { wall: 'facade' });
+      else exit = PIECES[name](kit);
+      const rise = this.rnd(0, 0.8);
+      const gap = this.rnd(1.0, 1.8);
+      const origin = cur.base.clone().addScaledVector(dir, this.rayExtent(cur.footprint, cur.yaw, dir) + gap);
+      origin.y = curTop + rise;
+      const far = origin.clone().addScaledVector(dir, exit.z);
+      const rr = Math.hypot(far.x, far.z), r0 = Math.hypot(origin.x, origin.z);
+      if ((rr > R_MAX + 10 || rr < R_MIN - 4 || r0 < R_MIN - 4) && attempt < 14) { log.radius++; continue; }
+      if (!kit.fits(origin, ang, cur.ref || null)) { log.fit++; continue; }
+      log.ok++;
+      const rec = kit.commit(origin, ang);
+      rec.path = this.path.length; rec.piece = name;
+      this.path.push(rec);
+      for (const w of rec.wps) this.pushRoute(w, rec, 'piece');
+      const M = new THREE.Matrix4().compose(origin, new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), ang), new THREE.Vector3(1, 1, 1));
+      const ex = new THREE.Vector3(exit.x, exit.y, exit.z).applyMatrix4(M);
+      const next = { base: ex, top: ex.y, footprint: exit.fp, yaw: ang + (exit.yaw || 0), surface: 'normal', ref: rec };
+      return { p: rec, next };
+    }
+    log.fail++;
+    return null;
+  }
+
+  /** 観覧車（ゴンドラが回り続ける。一番上で隣の足場へ跳び移る） */
+  placeFerris(cur, curTop, zi) {
+    const R = 18;
+    const pref = this.preferredAngle(cur.base);
+    const radial = Math.atan2(cur.base.x, cur.base.z);
+    for (let attempt = 0; attempt < 40; attempt++) {
+      // 前半は螺旋の向き、後半は塔の外向き（ホイールが塔から張り出す）
+      const ang = (attempt % 2 ? radial : pref) + this.rnd(-1, 1) * (0.3 + attempt * 0.06);
+      const dir = new THREE.Vector3(Math.sin(ang), 0, Math.cos(ang));
+      const origin = cur.base.clone().addScaledVector(dir, this.rayExtent(cur.footprint, cur.yaw, dir) + 1.4);
+      origin.y = curTop + 0.3;
+      const kit = new Kit(this, zi);
+      const { center, R: RR } = buildFerris(kit, R);
+      const qy = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), ang);
+      const C = center.clone().applyQuaternion(qy).add(origin);
+      // ホイールは dir を含む薄い円盤：面に沿って円を並べて判定
+      const slices = [];
+      for (let sx = -RR; sx <= RR + 0.01; sx += 4) {
+        const hy = Math.sqrt(Math.max(0, RR * RR - sx * sx));
+        slices.push({ c: C.clone().addScaledVector(dir, sx), y0: Math.max(C.y - hy - 3, curTop + 3), y1: C.y + hy + 4 });
+      }
+      if (slices.some((q) => this.collides(q.c, 3.2, q.y0, q.y1, cur.ref))) { (this.pieceLog ||= {}).ferrisFit = ((this.pieceLog.ferrisFit) || 0) + 1; continue; }
+      const rec = kit.commit(origin, ang);
+      for (const q of slices) this.occupy(q.c, 3.2, q.y0, q.y1, rec);
+      rec.path = this.path.length; rec.piece = 'ferris';
+      this.path.push(rec);
+      this.pushRoute(rec.wps[0], rec, 'piece');
+      // ゴンドラ（ホイールの面は ローカル yz 平面）
+      const n = 10, speed = 0.09;
+      const fwd = dir.clone(), up = new THREE.Vector3(0, 1, 0);
+      for (let i = 0; i < n; i++) {
+        const a0 = (i / n) * Math.PI * 2;
+        const g = this.addPlatform({ shape: 'box', w: 2.2, h: 0.25, d: 2.2, mat: 'bluemetal', pos: C.clone(), yaw: ang, zone: zi, behavior: { type: 'gondola', a0, speed, R: RR - 1.3, C: C.clone(), fwd, up } });
+        // 屋根と柱（見た目）
+        const roof = new THREE.Mesh(this.finishGeo(this.roundBox(2.4, 0.2, 2.4, 0.08).translate(0, 2.4, 0), 'bluemetal', new THREE.Color(0.9, 0.35, 0.3)), this.mats.get('bluemetal'));
+        g.visual.add(roof);
+        for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+          const post = new THREE.Mesh(this.finishGeo(new THREE.CylinderGeometry(0.05, 0.05, 2.3, 6).translate(sx * 1.05, 1.15, sz * 1.05), 'rust', 0.8, false), this.mats.get('rust'));
+          g.visual.add(post);
+        }
+        roof.castShadow = true;
+        const b = g.behavior;
+        g.update = (time) => {
+          const a = b.a0 + time * b.speed;
+          this._v.copy(b.C).addScaledVector(b.fwd, Math.cos(a) * b.R).addScaledVector(b.up, Math.sin(a) * b.R - 1.2);
+          this.setPose(g, this._v, g.baseQ);
+        };
+        g.top = C.y - RR; g.outR = 2;
+        if (i === 0) this.pushRoute(C.clone().addScaledVector(up, -RR), g, 'ride');
+      }
+      // 頂上の降り場（ホイールの真横）
+      const side = new THREE.Vector3(Math.cos(ang), 0, -Math.sin(ang));
+      const topPos = C.clone().addScaledVector(up, RR - 1.2 + 0.25).addScaledVector(side, 3.2);
+      const land = this.addPlatform({ shape: 'box', w: 3.2, h: 0.5, d: 4, mat: 'bluemetal', pos: topPos, yaw: ang, zone: zi });
+      this.occupy(topPos, 3, topPos.y - 1, topPos.y + 3, land);
+      land.path = this.path.length; this.path.push(land);
+      this.pushRoute(topPos, land, 'hop');
+      return { p: land, next: { base: topPos, top: topPos.y, footprint: land.footprint, yaw: ang, surface: 'normal', ref: land } };
+    }
+    return null;
   }
 
   placeNext(cur, curTop, zone, zi, spec, behavior, opt = {}) {
@@ -471,7 +649,7 @@ export class Level {
     const from = cur.surface;
     let rise = opt.rise ?? this.rnd(zone.rise[0], zone.rise[1]) * THREE.MathUtils.lerp(0.85, 1.1, t);
     let gap = opt.gap ?? this.rnd(zone.gap[0], zone.gap[1]) * THREE.MathUtils.lerp(0.85, 1.05, t) * this.rnd(0.9, 1.05);
-    if (from === 'bounce') { rise = this.rnd(5, 7) * (zi === 6 ? 1.6 : 1); gap = this.rnd(0.6, 1.6); }
+    if (from === 'bounce') { rise = this.rnd(5, 7) * (zi === 11 ? 1.6 : 1); gap = this.rnd(0.6, 1.6); }
     else if (from === 'fan') { rise = this.rnd(7, 10); gap = this.rnd(0.6, 1.4); }
     else if (from === 'rope') { rise = this.rnd(0.0, 0.3); gap = this.rnd(0.3, 0.6); }
     else if (from === 'carrier') { rise = this.rnd(0.1, 0.5); gap = this.rnd(0.4, 0.9); }
@@ -505,21 +683,18 @@ export class Level {
       const center = cur.base.clone().addScaledVector(dir, dist);
       center.y = top;
       let checkCenter = center, checkR = outR;
-      if (bType === 'carrier') {
-        checkCenter = center.clone().addScaledVector(dir, behavior.dist / 2);
-        checkR = behavior.dist / 2 + fp.hd + 0.5;
-      }
+      if (bType === 'carrier') { checkCenter = center.clone().addScaledVector(dir, behavior.dist / 2); checkR = behavior.dist / 2 + fp.hd + 0.5; }
       const rr = Math.hypot(checkCenter.x, checkCenter.z);
-      if ((rr > R_MAX + 4 || rr < 3.5) && attempt < 60) continue;
-      if (this.collides(checkCenter, checkR, top - depth - up - (bType === 'carrier' ? 3 : 0), top + 2.8 + up + (bType === 'fan' ? 11 : 0), cur.ref || cur)) continue;
-      best = { center, yaw, ang };
+      if ((rr > R_MAX + 4 || rr < R_MIN - 3) && attempt < 60) continue;
+      if (this.collides(checkCenter, checkR, top - depth - up - (bType === 'carrier' ? 3 : 0), top + 2.8 + up + (bType === 'fan' ? 11 : 0), cur.ref || null)) continue;
+      best = { center, yaw, ang, checkCenter, checkR };
     }
     if (!best) {
       this.fallbacks = (this.fallbacks || 0) + 1;
       dir.set(Math.sin(pref), 0, Math.cos(pref));
       const center = cur.base.clone().addScaledVector(dir, this.rayExtent(cur.footprint, cur.yaw, dir) + gap + this.outerRadius(fp));
       center.y = curTop + rise;
-      best = { center, yaw: pref, ang: pref };
+      best = { center, yaw: pref, ang: pref, checkCenter: center, checkR: outR };
     }
     if (from === 'bounce') (cur.ref || cur).bounceV = Math.sqrt(2 * g * (best.center.y - cur.top + 3.4));
 
@@ -531,33 +706,26 @@ export class Level {
       if (spec.tilt) { finalSpec.tiltX = this.rnd(-spec.tilt, spec.tilt); finalSpec.tiltZ = this.rnd(-spec.tilt, spec.tilt); }
       p = this.addPlatform(finalSpec);
       if (bType === 'rotator') p.footprint = { type: 'circle', r: behavior.L / 2 };
-      p.outR = outR; p.minY = best.center.y - depth - up; p.maxY = best.center.y + 2.8 + up;
       this.attachBehavior(p, dir);
       next = p;
       if (bType === 'carrier') {
         const b = p.behavior;
         next = { base: b.to.clone(), top: p.top, footprint: p.footprint, yaw: p.yaw, surface: 'carrier', forceDir: best.ang, ref: p };
-        p.minY = best.center.y - 4; p.outR = b.dist / 2 + p.footprint.hd;
-        p.checkCenter = best.center.clone().addScaledVector(dir, b.dist / 2);
       } else if (bType === 'fan') {
-        p.maxY = p.top + 13;
         next = { base: p.base, top: p.top, footprint: p.footprint, yaw: 0, surface: 'fan', ref: p };
       } else if (bType === 'bounce') {
         next = { base: p.base, top: p.top, footprint: p.footprint, yaw: p.yaw, surface: 'bounce', ref: p };
       }
     }
+    this.occupy(best.checkCenter, best.checkR, best.center.y - depth - up - (bType === 'carrier' ? 4 : 0), best.center.y + 2.8 + up + (bType === 'fan' ? 13 : 0), p);
     p.path = this.path.length;
     this.path.push(p);
-    const ca = cur.base, cb = best.center;
-    this.corridors.push({ ax: ca.x, az: ca.z, bx: cb.x, bz: cb.z, y0: Math.min(curTop, cb.y) - 1.5, y1: Math.max(curTop, cb.y) + (from === 'fan' || from === 'bounce' ? 12 : 3.5) });
+    this.pushRoute(bType === 'rope' ? p.rope.a.clone() : best.center, p, bType || 'hop');
 
-    if (zone.wind && !['rope', 'carrier', 'rotator', 'fan'].includes(bType) && from === 'normal' && this.rng() < zone.wind && t > 0.1) {
-      this.addWind(cur.base, best.center, curTop);
-    }
+    if (zone.wind && !['rope', 'carrier', 'rotator', 'fan'].includes(bType) && from === 'normal' && this.rng() < zone.wind && t > 0.1) this.addWind(cur.base, best.center, curTop);
     return { p, next };
   }
 
-  /** 電線・ロープ（細い綱渡り）。終端から次の足場へ続く */
   addRope(curTop, best, behavior, zi) {
     const R = this.RAPIER;
     const dir = new THREE.Vector3(Math.sin(best.ang), 0, Math.cos(best.ang));
@@ -570,33 +738,16 @@ export class Level {
     const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), seg.clone().normalize());
     const cpos = new THREE.Vector3(mid.x, mid.y - 0.09, mid.z);
     const body = this.world.createRigidBody(R.RigidBodyDesc.fixed().setTranslation(cpos.x, cpos.y, cpos.z).setRotation({ x: q.x, y: q.y, z: q.z, w: q.w }));
-    const cable = boxProjectUV(new THREE.CylinderGeometry(0.07, 0.07, len, 10, 1), 1).applyQuaternion(q).translate(cpos.x, cpos.y, cpos.z);
-    this.addToBatch(cable, 'cable', mid.y);
-    for (const [pt, s] of [[a, -1], [b, 1]]) {
-      const pole = boxProjectUV(new THREE.CylinderGeometry(0.16, 0.2, 7, 10), 1.2).translate(pt.x + dir.x * s * 0.12, pt.y - 3.4, pt.z + dir.z * s * 0.12);
-      this.addToBatch(pole, 'wood', pt.y);
-    }
-    const group = new THREE.Group();
+    this.addToBatch(this.finishGeo(new THREE.CylinderGeometry(0.07, 0.07, len, 10, 1), 'cable', 1, false).applyQuaternion(q).translate(cpos.x, cpos.y, cpos.z), 'cable', mid.y);
+    for (const [pt, s] of [[a, -1], [b, 1]]) this.addToBatch(this.finishGeo(new THREE.CylinderGeometry(0.16, 0.2, 7, 10), 'wood', 1, false).translate(pt.x + dir.x * s * 0.12, pt.y - 3.4, pt.z + dir.z * s * 0.12), 'wood', pt.y);
     const spec = { shape: 'rope', pos: mid, yaw: best.ang, zone: zi, behavior, surface: 'rope' };
-    const p = this.record(spec, body, group, { type: 'rect', hw: 0.12, hd: L / 2 }, 0.2);
+    const p = this.record(spec, body, new THREE.Group(), { type: 'rect', hw: 0.12, hd: L / 2 }, 0.2);
     p.rope = { a, b };
     const c = this.world.createCollider(R.ColliderDesc.capsule(len / 2, 0.09).setFriction(0), body);
     p.colliders.push(c); this.byCollider.set(c.handle, p);
-    p.outR = L / 2 + 0.5; p.minY = Math.min(a.y, b.y) - 7; p.maxY = Math.max(a.y, b.y) + 2.8;
+    best.checkR = L / 2 + 0.5;
     const next = { base: b.clone(), top: b.y, footprint: { type: 'circle', r: 0.15 }, yaw: best.ang, surface: 'rope', forceDir: best.ang, ref: p };
     return { p, next };
-  }
-
-  collides(center, outR, minY, maxY, ignore) {
-    for (const p of this.platforms) {
-      if (p === ignore) continue;
-      const pMin = p.minY ?? p.top - p.h, pMax = p.maxY ?? p.top + 2.8;
-      if (maxY < pMin || minY > pMax) continue;
-      const pr = p.outR ?? this.outerRadius(p.footprint);
-      const pc = p.checkCenter || p.base;
-      if (Math.hypot(center.x - pc.x, center.z - pc.z) < outR + pr + 1.0) return true;
-    }
-    return false;
   }
 
   // ------------------------------------------------------------------ behaviors
@@ -604,31 +755,40 @@ export class Level {
     const b = p.behavior;
     if (b.type === 'mover') {
       const side = new THREE.Vector3(Math.cos(p.yaw), 0, -Math.sin(p.yaw));
-      p.update = (time) => {
-        this._v.copy(p.base).addScaledVector(side, Math.sin((time / b.period) * Math.PI * 2 + b.phase) * b.amp);
-        this.setPose(p, this._v, p.baseQ);
-      };
+      p.update = (time) => { this._v.copy(p.base).addScaledVector(side, Math.sin((time / b.period) * Math.PI * 2 + b.phase) * b.amp); this.setPose(p, this._v, p.baseQ); };
     } else if (b.type === 'elevator') {
-      p.update = (time) => {
-        this._v.copy(p.base); this._v.y += Math.sin((time / b.period) * Math.PI * 2 + b.phase) * b.amp;
-        this.setPose(p, this._v, p.baseQ);
-      };
+      // 昇降台：支柱とワイヤー
+      p.update = (time) => { this._v.copy(p.base); this._v.y += Math.sin((time / b.period) * Math.PI * 2 + b.phase) * b.amp; this.setPose(p, this._v, p.baseQ); };
+      for (const [sx, sz] of [[-1.4, -1.4], [1.4, 1.4]]) {
+        const geo = this.finishGeo(new THREE.CylinderGeometry(0.08, 0.08, b.amp * 2 + 6, 8).translate(0, 0, 0), 'rust', 0.8, false);
+        geo.applyMatrix4(new THREE.Matrix4().compose(p.base.clone().add(new THREE.Vector3(sx, b.amp + 1.5, sz).applyQuaternion(p.baseQ)), new THREE.Quaternion(), new THREE.Vector3(1, 1, 1)));
+        this.addToBatch(geo, 'rust', p.base.y);
+      }
     } else if (b.type === 'rotator') {
-      const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.7, 0.9, 16), this.mats.get('rust'));
+      const hub = new THREE.Mesh(this.finishGeo(new THREE.CylinderGeometry(0.5, 0.7, 0.9, 16), 'rust', 0.8, false), this.mats.get('rust'));
       hub.position.y = -0.7; hub.castShadow = true;
       p.visual.add(hub);
-      p.update = (time) => {
-        this._q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), p.yaw + time * b.speed);
-        this.setPose(p, p.base, this._q);
-      };
+      if (b.crane) {
+        // タワークレーンのマスト（静止）とジブのトラス
+        const mastH = 16;
+        for (const [sx, sz] of [[-0.7, -0.7], [0.7, -0.7], [-0.7, 0.7], [0.7, 0.7]]) {
+          this.addToBatch(this.finishGeo(new THREE.CylinderGeometry(0.07, 0.07, mastH, 6).translate(p.base.x + sx, p.base.y - 1.2 - mastH / 2, p.base.z + sz), 'paintedmetal', new THREE.Color(1, 0.72, 0.25), false), 'paintedmetal', p.base.y);
+        }
+        for (let y = 0; y < mastH; y += 1.6) this.addToBatch(this.finishGeo(this.roundBox(1.5, 0.08, 1.5, 0.02).translate(p.base.x, p.base.y - 1.2 - y, p.base.z), 'paintedmetal', new THREE.Color(1, 0.72, 0.25), false), 'paintedmetal', p.base.y);
+        const truss = new THREE.Mesh(this.finishGeo(this.roundBox(0.1, 1.4, b.L, 0.02).translate(0.6, 0.7, 0), 'paintedmetal', new THREE.Color(1, 0.72, 0.25), false), this.mats.get('paintedmetal'));
+        const truss2 = truss.clone(); truss2.position.x = -1.2;
+        const cab = new THREE.Mesh(this.finishGeo(this.roundBox(1.6, 1.6, 1.8, 0.1).translate(0, -0.4, -1.4), 'metalplate', 0.9), this.mats.get('metalplate'));
+        p.visual.add(truss, truss2, cab);
+      }
+      p.update = (time) => { this._q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), p.yaw + time * b.speed); this.setPose(p, p.base, this._q); };
     } else if (b.type === 'sweeper') {
       const len = 7.6;
       const pivot = new THREE.Group();
       pivot.position.copy(p.base);
       const barMat = this.mats.get('rust', { emissive: 0x661100, emissiveIntensity: 0.6 });
-      const bar = new THREE.Mesh(boxProjectUV(new THREE.CylinderGeometry(0.22, 0.22, len, 14).rotateZ(Math.PI / 2), 1.5), barMat);
+      const bar = new THREE.Mesh(this.finishGeo(new THREE.CylinderGeometry(0.22, 0.22, len, 14).rotateZ(Math.PI / 2), 'rust', 1, false), barMat);
       bar.position.y = 0.5; bar.castShadow = true;
-      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.8, 12), barMat);
+      const post = new THREE.Mesh(this.finishGeo(new THREE.CylinderGeometry(0.3, 0.3, 0.8, 12), 'rust', 1, false), barMat);
       post.position.y = 0.3;
       pivot.add(bar, post);
       this.root.add(pivot);
@@ -636,13 +796,14 @@ export class Level {
       this.hazards.push(hz);
       p.update = (time) => { hz.angle = time * b.speed; pivot.rotation.y = hz.angle; };
     } else if (b.type === 'bounce') {
-      const pad = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 2.8).rotateX(-Math.PI / 2), makePadMaterial());
-      const holder = new THREE.Group(); holder.position.copy(p.base); holder.position.y += 0.02; holder.quaternion.copy(p.baseQ); holder.add(pad);
-      this.root.add(holder);
-      p.pad = pad;
-      this.animated.push(pad.material);
+      if (!b.bed) {
+        const pad = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 2.8).rotateX(-Math.PI / 2), makePadMaterial());
+        const holder = new THREE.Group(); holder.position.copy(p.base); holder.position.y += 0.02; holder.quaternion.copy(p.baseQ); holder.add(pad);
+        this.root.add(holder);
+        p.pad = pad;
+        this.animated.push(pad.material);
+      }
     } else if (b.type === 'fan') {
-      // 上向きの巨大扇風機（シーリングファンを逆さに設置）と上昇気流
       const holder = new THREE.Group();
       holder.position.copy(p.base);
       const spinner = new THREE.Group();
@@ -656,18 +817,56 @@ export class Level {
       this.fans.push(f);
       this.addFanStreaks(f);
       p.update = (time, dt) => { spinner.rotation.y += dt * 9; };
+    } else if (b.type === 'conveyor') {
+      // ベルトコンベア：乗ると運ばれる（テクスチャも流れる）
+      b.dir = new THREE.Vector3(Math.sin(p.yaw), 0, Math.cos(p.yaw)).multiplyScalar(Math.sign(b.speed));
+      b.v = Math.abs(b.speed);
+      const beltMat = this.mats.get('rubber_belt', { color: 0x2a2a2a, roughness: 0.7 });
+      const belt = new THREE.Mesh(this.finishGeo(this.roundBox(1.4, 0.06, b.L - 0.2, 0.02).translate(0, 0.01, 0), 'rubber_belt', 0.4, false), beltMat);
+      p.visual.add(belt);
+      for (let z = -b.L / 2 + 0.4; z < b.L / 2; z += 1.2) {
+        const ar = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.4, 3).rotateX(Math.PI / 2 * Math.sign(b.speed)).translate(0, 0.06, z), new THREE.MeshBasicMaterial({ color: 0xd8b030 }));
+        ar.scale.set(1, 0.2, 1);
+        p.visual.add(ar);
+      }
+      if (!p.group.parent) this.root.add(p.group);
+      this.conveyors.push(p);
     } else if (b.type === 'crumble') {
       p.update = (time, dt) => this.updateCrumble(p, dt);
+    } else if (b.type === 'trap') {
+      // 罠のエレベーター：乗ると少し上がってから落ちる（本家のデパートの罠）
+      for (const [sx, sz] of [[-1.3, -1.3], [1.3, -1.3], [-1.3, 1.3], [1.3, 1.3]]) {
+        this.addToBatch(this.finishGeo(new THREE.CylinderGeometry(0.06, 0.06, 9, 6).translate(p.base.x + sx, p.base.y + 4.3, p.base.z + sz), 'metalplate', 0.8, false), 'metalplate', p.base.y);
+      }
+      p.update = (time, dt) => this.updateTrap(p, dt);
     } else if (b.type === 'carrier') {
-      // 梁から吊られた車がケーブルで往復する
       b.from = p.base.clone();
       b.to = p.base.clone().addScaledVector(dir, b.dist);
-      const beamH = 9;
       const mid = b.from.clone().add(b.to).multiplyScalar(0.5);
-      const beam = boxProjectUV(new THREE.BoxGeometry(0.5, 0.7, b.dist + 6), 2.4).rotateY(p.yaw).translate(mid.x, p.top + beamH, mid.z);
-      this.addToBatch(beam, 'rust', p.top);
-      const cable = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, beamH, 6).translate(0, beamH / 2, 0), this.mats.get('cable'));
-      p.visual.add(cable);
+      if (b.cart) {
+        // トロッコ：レールと車輪
+        for (const sx of [-0.55, 0.55]) {
+          const rail = this.finishGeo(this.roundBox(0.1, 0.14, b.dist + 4, 0.02), 'rust', 0.8, false).rotateY(p.yaw);
+          rail.translate(mid.x + Math.cos(p.yaw) * sx, p.top - 1.3, mid.z - Math.sin(p.yaw) * sx);
+          this.addToBatch(rail, 'rust', p.top);
+        }
+        for (let s = -b.dist / 2 - 2; s < b.dist / 2 + 2; s += 0.7) {
+          const sl = this.finishGeo(this.roundBox(1.6, 0.1, 0.22, 0.02), 'wood', 0.7, false).rotateY(p.yaw);
+          sl.translate(mid.x + dir.x * s, p.top - 1.42, mid.z + dir.z * s);
+          this.addToBatch(sl, 'wood', p.top);
+        }
+        for (let s = -b.dist / 2; s <= b.dist / 2; s += 6) this.addToBatch(this.finishGeo(new THREE.CylinderGeometry(0.2, 0.25, 8, 8).translate(mid.x + dir.x * s, p.top - 5.5, mid.z + dir.z * s), 'rust', 0.7, false), 'rust', p.top);
+        for (const [sx, sz] of [[-0.6, -0.7], [0.6, -0.7], [-0.6, 0.7], [0.6, 0.7]]) {
+          const w = new THREE.Mesh(this.finishGeo(new THREE.CylinderGeometry(0.28, 0.28, 0.12, 14).rotateZ(Math.PI / 2).translate(sx, -1.05, sz), 'rust', 0.5, false), this.mats.get('rust'));
+          p.visual.add(w);
+        }
+      } else {
+        const beamH = 9;
+        const beam = this.finishGeo(this.roundBox(0.5, 0.7, b.dist + 6, 0.04), 'rust', 0.8, false).rotateY(p.yaw).translate(mid.x, p.top + beamH, mid.z);
+        this.addToBatch(beam, 'rust', p.top);
+        const cable = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, beamH, 6).translate(0, beamH / 2, 0), this.mats.get('cable'));
+        p.visual.add(cable);
+      }
       const T = b.dist / b.speed;
       p.update = (time) => {
         const cyc = T * 2 + 2.8;
@@ -701,7 +900,24 @@ export class Level {
   }
 
   triggerCrumble(p) {
-    if (p.behavior.state === 'idle') { p.behavior.state = 'shake'; p.behavior.timer = 0; this.onCrumble?.(p); }
+    if (p.behavior.state === 'idle') { p.behavior.state = p.type === 'trap' ? 'rise' : 'shake'; p.behavior.timer = 0; this.onCrumble?.(p); }
+  }
+
+  updateTrap(p, dt) {
+    const b = p.behavior;
+    b.timer += dt;
+    if (b.state === 'rise') {
+      this._v.copy(p.base); this._v.y += Math.min(1, b.timer / 1.2) * 1.6;
+      this.setPose(p, this._v, p.baseQ);
+      if (b.timer > 1.5) { b.state = 'fall'; b.timer = 0; b.vy = 0; b.y = p.base.y + 1.6; }
+    } else if (b.state === 'fall') {
+      b.vy += 28 * dt; b.y -= b.vy * dt;
+      this._v.copy(p.base); this._v.y = b.y;
+      this.setPose(p, this._v, p.baseQ);
+      if (b.timer > 2.2) { b.state = 'gone'; b.timer = 0; p.group.visible = false; p.colliders.forEach((c) => c.setEnabled(false)); }
+    } else if (b.state === 'gone') {
+      if (b.timer > 3.5) { b.state = 'idle'; p.group.visible = true; p.colliders.forEach((c) => c.setEnabled(true)); this.setPose(p, p.base, p.baseQ); }
+    } else this.setPose(p, p.base, p.baseQ);
   }
 
   updateCrumble(p, dt) {
@@ -720,20 +936,12 @@ export class Level {
       if (mat) { mat.transparent = true; mat.opacity = Math.max(0, 1 - b.timer / 1.4); }
       if (b.timer > 1.4) { b.state = 'gone'; b.timer = 0; p.group.visible = false; }
     } else if (b.state === 'gone') {
-      if (b.timer > 4.5) {
-        b.state = 'respawn'; b.timer = 0; p.group.visible = true;
-        this.setPose(p, p.base, p.baseQ);
-        p.colliders.forEach((c) => c.setEnabled(true));
-        mat?.emissive.setRGB(0, 0, 0);
-      }
+      if (b.timer > 4.5) { b.state = 'respawn'; b.timer = 0; p.group.visible = true; this.setPose(p, p.base, p.baseQ); p.colliders.forEach((c) => c.setEnabled(true)); mat?.emissive.setRGB(0, 0, 0); }
     } else if (b.state === 'respawn') {
       if (mat) mat.opacity = Math.min(1, b.timer / 0.6);
       if (b.timer > 0.6) { b.state = 'idle'; if (mat) { mat.transparent = false; mat.opacity = 1; } }
       this.setPose(p, p.base, p.baseQ);
-    } else {
-      p.visual.position.set(0, 0, 0);
-      this.setPose(p, p.base, p.baseQ);
-    }
+    } else { p.visual.position.set(0, 0, 0); this.setPose(p, p.base, p.baseQ); }
   }
 
   addWind(a, b, y0) {
@@ -742,33 +950,24 @@ export class Level {
     const len = along.length(); along.normalize();
     const side = new THREE.Vector3(along.z, 0, -along.x).multiplyScalar(this.rng() < 0.5 ? 1 : -1);
     const yTop = Math.max(a.y, b.y);
-    const w = {
-      center: new THREE.Vector3(mid.x, (y0 + yTop) / 2 + 2, mid.z), along, side, halfLen: len / 2 + 1.5, halfW: 4.5, halfH: (yTop - y0) / 2 + 3.5,
-      strength: this.rnd(7, 11), phase: this.rnd(0, 6.28),
-    };
-    const count = 46;
+    const w = { center: new THREE.Vector3(mid.x, (y0 + yTop) / 2 + 2, mid.z), along, side, halfLen: len / 2 + 1.5, halfW: 4.5, halfH: (yTop - y0) / 2 + 3.5, strength: this.rnd(7, 11), phase: this.rnd(0, 6.28) };
     const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.35, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
-    const inst = new THREE.InstancedMesh(new THREE.PlaneGeometry(1.6, 0.035), mat, count);
+    const inst = new THREE.InstancedMesh(new THREE.PlaneGeometry(1.6, 0.035), mat, 46);
     inst.frustumCulled = false;
-    w.inst = inst; w.seeds = Array.from({ length: count }, () => [Math.random(), Math.random() * 2 - 1, Math.random() * 2 - 1]);
+    w.inst = inst; w.seeds = Array.from({ length: 46 }, () => [Math.random(), Math.random() * 2 - 1, Math.random() * 2 - 1]);
     this.root.add(inst);
     this.winds.push(w);
   }
-
   gust(w, time) { return 0.55 + 0.45 * Math.sin(time * 1.3 + w.phase) * Math.sin(time * 0.37 + w.phase * 2); }
-
   windAt(pos, time, out) {
     out.set(0, 0, 0);
     for (const w of this.winds) {
       const dx = pos.x - w.center.x, dy = pos.y - w.center.y, dz = pos.z - w.center.z;
-      const la = dx * w.along.x + dz * w.along.z;
-      const ls = dx * w.side.x + dz * w.side.z;
+      const la = dx * w.along.x + dz * w.along.z, ls = dx * w.side.x + dz * w.side.z;
       if (Math.abs(la) < w.halfLen && Math.abs(ls) < w.halfW && Math.abs(dy) < w.halfH) out.addScaledVector(w.side, w.strength * this.gust(w, time));
     }
     return out;
   }
-
-  /** 扇風機の上昇気流：柱の中なら目標上昇速度、圏外なら 0 */
   fanLift(pos) {
     for (const f of this.fans) {
       if (pos.y < f.y0 - 0.5 || pos.y > f.y1) continue;
@@ -778,116 +977,159 @@ export class Level {
     return 0;
   }
 
-  // ------------------------------------------------------------------ tower body & fillers
-  /** 塔の芯：海から一本の巨大な構造物として立ち上がる（スラム→工業→都市） */
-  buildCores() {
+  // ------------------------------------------------------------------ tower core / fillers / skyline
+  /** 塔の芯：エリアごとの巨大な構造物を中心に積む（どこから見ても一本の塔に見える） */
+  buildCore() {
     const R = this.RAPIER;
-    const addCore = (geo, mat, pos, desc) => {
-      this.addToBatch(boxProjectUV(geo, this.mats.tile(mat)).translate(pos.x, pos.y, pos.z), mat, pos.y);
-      const body = this.world.createRigidBody(R.RigidBodyDesc.fixed().setTranslation(pos.x, pos.y, pos.z));
-      const c = this.world.createCollider(desc.setFriction(0), body);
-      const p = this.record({ shape: 'core', pos, zone: 0 }, body, new THREE.Group(), { type: 'circle', r: 3 }, 12);
-      p.colliders.push(c); this.byCollider.set(c.handle, p);
-      p.core = true; p.minY = pos.y - 6; p.maxY = pos.y + 6 + 2.8; p.outR = 3.4;
+    const body = this.world.createRigidBody(R.RigidBodyDesc.fixed());
+    const rec = this.record({ shape: 'core', pos: new THREE.Vector3(), zone: 0 }, body, new THREE.Group(), { type: 'circle', r: 8 }, 1);
+    rec.core = true;
+    const add = (geo, mat, desc, x, y, z, tint = 1) => {
+      this.addToBatch(this.finishGeo(geo, mat, tint).translate(x, y, z), mat, y);
+      if (desc) { const c = this.world.createCollider(desc.setTranslation(x, y, z).setFriction(0), body); rec.colliders.push(c); this.byCollider.set(c.handle, rec); }
     };
-    const h = 12;
-    for (let y = 2; y < 430; y += h) {
-      const pos = new THREE.Vector3(0, y + h / 2, 0);
-      if (y < 140) {
-        addCore(new THREE.BoxGeometry(5, h, 5).rotateY(y * 0.13), this.rng() < 0.5 ? 'brick' : 'shutter', pos, R.ColliderDesc.cuboid(2.5, h / 2, 2.5).setRotation(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), y * 0.13)));
-      } else if (y < 290) {
-        addCore(new THREE.CylinderGeometry(2.4, 2.4, h, 20), 'iron', pos, R.ColliderDesc.cylinder(h / 2, 2.4));
-        for (let k = 0; k < 3; k++) {
-          const a = k * 2.1 + y * 0.01;
-          this.addToBatch(boxProjectUV(new THREE.CylinderGeometry(0.6, 0.6, h, 12), 2.5).translate(Math.cos(a) * 2.8, y + h / 2, Math.sin(a) * 2.8), 'rust', y);
+    // 高さごとの主題（推定の高さ。実際のゾーン境界と多少ずれてもよい）
+    const themes = [
+      [1, 80, 'slums'], [80, 150, 'rail'], [150, 240, 'factory'], [240, 290, 'subway'], [290, 380, 'construction'],
+      [380, 450, 'road'], [450, 540, 'mall'], [540, 600, 'ferris'], [600, 680, 'office'], [680, 780, 'building'],
+    ];
+    for (const [y0, y1, th] of themes) {
+      for (let y = y0 + 2; y < y1; ) {
+        const h = this.rnd(5, 10);
+        const w = this.rnd(9, 13), d = this.rnd(9, 13), rot = this.rnd(0, 1.5);
+        const mat = { slums: this.rng() < 0.5 ? 'plaster' : 'bluewood', rail: 'concrete', factory: this.rng() < 0.5 ? 'factorywall' : 'rust', subway: 'tilewall', construction: this.rng() < 0.5 ? 'rebar' : 'freight',
+          road: 'concrete', mall: 'whiteplaster', ferris: 'concrete', office: 'facade', building: 'facade' }[th];
+        const tint = th === 'construction' ? new THREE.Color().setHSL(this.rng(), 0.5, 0.45) : this.rnd(0.75, 1.0);
+        if (th === 'factory' && this.rng() < 0.4) {
+          add(new THREE.CylinderGeometry(w / 2, w / 2, h, 28), mat, R.ColliderDesc.cylinder(h / 2, w / 2), 0, y + h / 2, 0, tint);
+        } else {
+          const geo = this.roundBox(w, h, d, 0.15).rotateY(rot);
+          add(geo, mat, R.ColliderDesc.cuboid(w / 2, h / 2, d / 2).setRotation({ x: 0, y: Math.sin(rot / 2), z: 0, w: Math.cos(rot / 2) }), 0, y + h / 2, 0, tint);
+          if (th === 'slums' || th === 'construction') add(this.roundBox(w + 1, 0.3, d + 1, 0.05).rotateY(rot), 'roofiron', null, 0, y + h + 0.15, 0, 0.9);
         }
-      } else {
-        addCore(new THREE.BoxGeometry(4.4, h, 4.4).rotateY(y * 0.05), 'concrete', pos, R.ColliderDesc.cuboid(2.2, h / 2, 2.2).setRotation(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), y * 0.05)));
+        this.occupy(new THREE.Vector3(0, 0, 0), Math.hypot(w, d) / 2 + 0.5, y, y + h, rec);
+        y += h;
       }
     }
   }
 
-  /** 経路の周りにガラクタを詰め込む（塔の密度感＋落ちたときの受け皿） */
+  /** 経路の周りにガラクタを詰め込む（密度感＋落ちたときの受け皿） */
   addFillers(zone, zi, range) {
     if (!zone.filler?.length || !range) return;
     const [y0, y1] = range;
+    const pts = this.route.filter((r) => r.pos.y >= y0 - 2 && r.pos.y <= y1 + 2);
+    if (!pts.length) return;
     let placed = 0;
-    for (let tries = 0; tries < zone.fillers * 6 && placed < zone.fillers; tries++) {
+    const nF = Math.round(zone.fillers * 1.5); // 塔が高くなった分、ガラクタも増やす
+    for (let tries = 0; tries < nF * 8 && placed < nF; tries++) {
       const id = zone.filler[Math.floor(this.rng() * zone.filler.length)];
       const d = this.props.dims(id);
-      const a = this.rnd(0, Math.PI * 2), r = zi === 0 ? this.rnd(11, 30) : this.rnd(4, R_MAX + 7);
-      const top = zi === 0 ? this.rnd(0.5, 1.4) : this.rnd(y0, y1);
-      const pos = new THREE.Vector3(Math.cos(a) * r, top, Math.sin(a) * r);
+      const anchor = pts[Math.floor(this.rng() * pts.length)].pos;
+      const a = this.rnd(0, Math.PI * 2), r = this.rnd(4, 13);
+      const pos = new THREE.Vector3(anchor.x + Math.cos(a) * r, anchor.y + this.rnd(-7, 2), anchor.z + Math.sin(a) * r);
       const outR = Math.hypot(d.hw, d.hd);
-      if (this.collides(pos, outR, top - d.h - 0.5, top + 3.4, null)) continue;
-      if (this.blocksCorridor(pos, outR, top - d.h, top)) continue;
+      if (this.collides(pos, outR, pos.y - d.h - 0.5, pos.y + 3.4, null)) continue;
+      if (this.blocksCorridor(pos, outR, pos.y - d.h, pos.y)) continue;
       const p = this.addPlatform({ shape: 'prop', id, pos, yaw: this.rnd(0, Math.PI * 2), zone: zi });
-      p.outR = outR; p.minY = top - d.h; p.maxY = top + 2.8; p.filler = true;
+      this.occupy(pos, outR, pos.y - d.h, pos.y + 2.8, p);
+      p.filler = true;
       placed++;
     }
   }
 
-  /** 足場から足場へのジャンプ経路にかぶるか */
   blocksCorridor(pos, r, y0, y1) {
     for (const c of this.corridors) {
       if (y1 < c.y0 || y0 > c.y1) continue;
       const dx = c.bx - c.ax, dz = c.bz - c.az;
       const L2 = dx * dx + dz * dz || 1;
       const t = THREE.MathUtils.clamp(((pos.x - c.ax) * dx + (pos.z - c.az) * dz) / L2, 0, 1);
-      if (Math.hypot(pos.x - (c.ax + dx * t), pos.z - (c.az + dz * t)) < r + 1.6) return true;
+      if (Math.hypot(pos.x - (c.ax + dx * t), pos.z - (c.az + dz * t)) < r + 1.8) return true;
     }
     return false;
   }
 
-  buildGoal(p) {
-    const g = new THREE.Group();
-    g.position.copy(p.base);
-    const gold = new THREE.MeshStandardMaterial({ color: 0xffc35a, metalness: 1, roughness: 0.18, emissive: 0x442200, envMapIntensity: 1.6 });
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(3, 0.28, 24, 96), gold);
-    ring.position.y = 4.5; ring.castShadow = true;
-    const inner = new THREE.Mesh(new THREE.TorusGeometry(2.3, 0.08, 12, 96), gold);
-    inner.position.y = 4.5;
-    const colMat = this.mats.get('marble');
-    for (let i = 0; i < 8; i++) {
-      const a = (i / 8) * Math.PI * 2;
-      const col = new THREE.Mesh(boxProjectUV(new THREE.CylinderGeometry(0.35, 0.42, 5, 16).translate(0, 2.5, 0), 3), colMat);
-      col.position.set(Math.cos(a) * 5.2, 0, Math.sin(a) * 5.2); col.castShadow = true;
-      g.add(col);
-      const c = this.world.createCollider(this.RAPIER.ColliderDesc.cylinder(2.5, 0.4).setTranslation(col.position.x, 2.5, col.position.z), p.body);
-      this.byCollider.set(c.handle, p);
-    }
-    const beamMat = makeBeamMaterial(0xffd27d);
-    beamMat.uniforms.uOpacity.value = 0.5;
-    const beam = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.6, 400, 24, 1, true).translate(0, 208, 0), beamMat);
-    this.animated.push(beamMat);
-    const light = new THREE.PointLight(0xffc35a, 30, 30, 1.6);
-    light.position.y = 4.5;
-    g.add(ring, inner, beam, light);
-    this.root.add(g);
-    this.goal = { pos: p.base.clone(), top: p.top, r: 5, ring, inner };
-  }
-
-  buildDecor() {
+  /** 遠景：エリアの主題に合わせた巨大な建物群（当たり判定なし） */
+  buildSkyline(ranges) {
+    const top = this.totalHeight + this.startTop;
     for (let i = 0; i < 14; i++) {
-      const a = this.rnd(0, Math.PI * 2), d = this.rnd(120, 280);
+      const a = this.rnd(0, Math.PI * 2), d = this.rnd(130, 280);
       const h = this.rnd(30, 110), rb = this.rnd(8, 18);
-      const geo = boxProjectUV(this.rockGeometry(rb * this.rnd(0.25, 0.5), rb, h, 18, 0.25).translate(0, h / 2 - 2, 0), 7);
-      const m = new THREE.Mesh(geo, this.mats.get(i % 2 ? 'rock' : 'sandrock'));
+      const m = new THREE.Mesh(this.finishGeo(this.rockGeometry(rb * this.rnd(0.25, 0.5), rb, h, 18, 0.25).translate(0, h / 2 - 2, 0), i % 2 ? 'rock' : 'sandrock', 0.9), this.mats.get(i % 2 ? 'rock' : 'sandrock'));
       m.position.set(Math.cos(a) * d, 0, Math.sin(a) * d);
-      m.receiveShadow = true;
       this.root.add(m);
     }
-    const top = this.totalHeight + this.startTop;
-    const mats = ['rock', 'sandrock', 'rock', 'concrete', 'snow', 'marble', 'rock'];
-    for (let i = 0; i < 26; i++) {
-      const a = this.rnd(0, Math.PI * 2), d = this.rnd(90, 210);
+    const themed = { slums: ['plaster', 'bluewood', 'brick'], rail: ['concrete', 'freight'], factory: ['factorywall', 'rust', 'metalplate'], subway: ['tilewall', 'concrete'], construction: ['rebar', 'freight', 'concrete'],
+      road: ['concrete', 'asphalt'], mall: ['whiteplaster', 'facade'], ferris: ['concrete'], office: ['facade', 'whiteplaster'], building: ['facade', 'brick'] };
+    ZONES.forEach((z, zi) => {
+      const mats = themed[z.key]; if (!mats || !ranges[zi]) return;
+      const [y0, y1] = ranges[zi];
+      for (let i = 0; i < 9; i++) {
+        const a = this.rnd(0, Math.PI * 2), dist = this.rnd(95, 175);
+        const w = this.rnd(10, 24), d = this.rnd(10, 24), h = this.rnd(12, 36);
+        const y = this.rnd(y0 - 10, y1);
+        const mat = mats[Math.floor(this.rng() * mats.length)];
+        const ry = this.rnd(0, 3), cx = Math.cos(a) * dist, cz = Math.sin(a) * dist;
+        const geo = this.finishGeo(this.roundBox(w, h, d, 0.3), mat, this.rnd(0.85, 1.02));
+        geo.rotateY(ry).translate(cx, y, cz);
+        this.addToBatch(geo, mat, y);
+        // 本家の「宙に浮く街の欠片」：建物の下にえぐれた岩盤
+        const rr = Math.max(w, d) * 0.62, rh = this.rnd(8, 16);
+        const rock = this.finishGeo(this.rockGeometry(rr * 0.25, rr, rh, 14, 0.3).rotateX(Math.PI).translate(cx, y - h / 2 - rh / 2 + 0.6, cz), 'rock', 0.95);
+        this.addToBatch(rock, 'rock', y);
+        // 屋上の看板・タンク
+        if (this.rng() < 0.5) this.addToBatch(this.finishGeo(new THREE.CylinderGeometry(2, 2, 3, 16), 'rust', 0.7).translate(Math.cos(a) * dist, y + h / 2 + 1.5, Math.sin(a) * dist), 'rust', y);
+      }
+    });
+    for (let i = 0; i < 30; i++) {
+      const a = this.rnd(0, Math.PI * 2), d = this.rnd(100, 220);
       const r = this.rnd(5, 13), h = r * this.rnd(1.2, 2);
-      const k = i / 26;
-      const m = new THREE.Mesh(boxProjectUV(this.rockGeometry(r, r * 0.15, h, 18, 0.25), 6), this.mats.get(mats[Math.min(6, Math.floor(k * 7))]));
-      m.position.set(Math.cos(a) * d, 30 + k * (top - 30), Math.sin(a) * d);
+      const k = i / 30;
+      const mat = ['rock', 'sandrock', 'concrete', 'marble', 'snow'][Math.min(4, Math.floor(k * 5))];
+      const m = new THREE.Mesh(this.finishGeo(this.rockGeometry(r, r * 0.15, h, 18, 0.25), mat, 0.9), this.mats.get(mat));
+      m.position.set(Math.cos(a) * d, 40 + k * (top - 40), Math.sin(a) * d);
       m.rotation.y = this.rnd(0, 6);
       this.root.add(m);
     }
+  }
+
+  /** ゴール：宇宙船と宇宙飛行士 */
+  buildGoal(cur, curTop) {
+    const dir = new THREE.Vector3(Math.sin(this.preferredAngle(cur.base)), 0, Math.cos(this.preferredAngle(cur.base)));
+    const pos = cur.base.clone().addScaledVector(dir, this.rayExtent(cur.footprint, cur.yaw, dir) + 2.2 + 7);
+    pos.y = curTop + 1.5;
+    const p = this.addPlatform({ shape: 'cyl', r: 7, h: 2.2, mat: 'spacemetal', pos, zone: 11, noBatch: true });
+    p.path = this.path.length; this.path.push(p);
+    this.pushRoute(pos, p, 'goal');
+    const g = new THREE.Group();
+    g.position.copy(pos);
+    const white = this.mats.get('spacemetal', { color: 0xf2f2f0 });
+    const rocket = new THREE.Group();
+    const body = new THREE.Mesh(this.finishGeo(new THREE.CylinderGeometry(1.6, 1.8, 9, 32).translate(0, 4.5 + 1.2, 0), 'spacemetal', 1, false), white);
+    const nose = new THREE.Mesh(this.finishGeo(new THREE.ConeGeometry(1.6, 4, 32).translate(0, 9 + 1.2 + 2, 0), 'spacemetal', new THREE.Color(0.85, 0.3, 0.25), false), this.mats.get('spacemetal'));
+    const ring = new THREE.Mesh(this.finishGeo(new THREE.CylinderGeometry(1.82, 1.82, 0.5, 32).translate(0, 6, 0), 'spacemetal', new THREE.Color(0.25, 0.3, 0.4), false), this.mats.get('spacemetal'));
+    rocket.add(body, nose, ring);
+    for (let i = 0; i < 4; i++) {
+      const fin = new THREE.Mesh(this.finishGeo(this.roundBox(0.25, 3, 2, 0.05).translate(0, 2.2, 2.2), 'spacemetal', new THREE.Color(0.85, 0.3, 0.25), false), this.mats.get('spacemetal'));
+      fin.rotation.y = (i / 4) * Math.PI * 2;
+      rocket.add(fin);
+    }
+    const win = new THREE.Mesh(new THREE.CircleGeometry(0.55, 24).translate(0, 7.5, 1.62), this.mats.get('glass', { glass: true, color: 0x3a6a9a }));
+    rocket.add(win);
+    rocket.position.set(-3, 0, -2);
+    rocket.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+    const beamMat = makeBeamMaterial(0xffd27d);
+    beamMat.uniforms.uOpacity.value = 0.45;
+    const beam = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.6, 300, 24, 1, true).translate(0, 160, 0), beamMat);
+    beam.position.set(-3, 0, -2);
+    this.animated.push(beamMat);
+    const light = new THREE.PointLight(0xffe2a8, 40, 40, 1.6);
+    light.position.set(0, 6, 0);
+    g.add(rocket, beam, light);
+    this.root.add(g);
+    // 宇宙船の当たり
+    const c = this.world.createCollider(this.RAPIER.ColliderDesc.cylinder(4.5, 1.8).setTranslation(-3, 4.5, -2), p.body);
+    this.byCollider.set(c.handle, p);
+    this.goal = { pos: pos.clone(), top: pos.y, r: 6.5, astronautPos: pos.clone().add(new THREE.Vector3(1.5, 0, -1)) };
   }
 
   // ------------------------------------------------------------------ runtime
@@ -897,10 +1139,9 @@ export class Level {
 
   updateVisuals(time, camera, playerY) {
     for (const m of this.animated) if (m.uniforms?.uTime) m.uniforms.uTime.value = time;
-    if (this.goal) { this.goal.ring.rotation.y = time * 0.6; this.goal.inner.rotation.x = time * 0.9; }
-    // 遠いチャンクは描かない（足場の結合メッシュは広め、ガラクタは近くだけ）
     const lo = Math.floor((playerY - 420) / CHUNK), hi = Math.floor((playerY + 420) / CHUNK);
     for (const m of this.batchMeshes) m.visible = m.userData.chunk >= lo && m.userData.chunk <= hi;
+    for (const p of this.platforms) if (p.kinematic && p.type !== 'crumble' && p.type !== 'trap') p.group.visible = Math.abs(p.top - playerY) < 160;
     const dummy = this._dummy || (this._dummy = new THREE.Object3D());
     for (const w of this.winds) {
       if (camera.position.distanceTo(w.center) > 90) { w.inst.visible = false; continue; }
@@ -919,10 +1160,6 @@ export class Level {
         w.inst.setMatrixAt(i, dummy.matrix);
       });
       w.inst.instanceMatrix.needsUpdate = true;
-    }
-    // 動く足場・扇風機は近くのものだけ描画
-    for (const p of this.platforms) {
-      if (p.kinematic && p.behavior.type !== 'crumble') p.group.visible = Math.abs(p.top - playerY) < 160;
     }
     for (const f of this.fans) {
       f.holder.visible = Math.abs(f.y0 - playerY) < 130;
@@ -950,7 +1187,7 @@ export class Level {
 
   reset() {
     for (const p of this.platforms) {
-      if (p.behavior.type !== 'crumble') continue;
+      if (p.type !== 'crumble' && p.type !== 'trap') continue;
       const b = p.behavior; b.state = 'idle'; b.timer = 0;
       p.group.visible = true;
       if (p.material) { p.material.transparent = false; p.material.opacity = 1; p.material.emissive.setRGB(0, 0, 0); }

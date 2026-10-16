@@ -7,12 +7,13 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
+import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { analyzeHDR } from './assets.js';
 
 export const QUALITY = {
-  low: { pr: 0.85, shadow: 1024, bloom: false, aa: false, water: 'simple', clouds: 70 },
-  medium: { pr: 1.25, shadow: 2048, bloom: true, aa: true, water: 'reflect', clouds: 120 },
-  high: { pr: 2, shadow: 2048, bloom: true, aa: true, water: 'reflect', clouds: 170 },
+  low: { pr: 0.85, shadow: 1024, bloom: false, aa: false, ao: false, water: 'simple', clouds: 70 },
+  medium: { pr: 1.25, shadow: 2048, bloom: true, aa: true, ao: false, water: 'reflect', clouds: 120 },
+  high: { pr: 2, shadow: 2048, bloom: true, aa: true, ao: true, water: 'reflect', clouds: 170 },
 };
 
 // 速度ブラー＋色収差＋カラーグレーディング＋ビネット（自作ポストエフェクト）
@@ -241,6 +242,56 @@ export class FX {
     this.scene.add(earth);
   }
 
+  /** 宇宙の彼方のブラックホール（降着円盤＋重力レンズ風のリング、ビルボード） */
+  setupBlackHole(pos, size = 900) {
+    const mat = new THREE.ShaderMaterial({
+      uniforms: { uTime: { value: 0 }, uOpacity: { value: 0 } },
+      vertexShader: /* glsl */`varying vec2 vUv; void main(){ vUv = uv * 2.0 - 1.0;
+        vec4 mv = modelViewMatrix * vec4(0.0, 0.0, 0.0, 1.0); mv.xy += position.xy * vec2(length(modelMatrix[0].xyz), length(modelMatrix[1].xyz));
+        gl_Position = projectionMatrix * mv; }`,
+      fragmentShader: /* glsl */`uniform float uTime, uOpacity; varying vec2 vUv;
+        float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+        float noise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
+          return mix(mix(hash(i), hash(i+vec2(1,0)), f.x), mix(hash(i+vec2(0,1)), hash(i+vec2(1,1)), f.x), f.y); }
+        vec3 disk(vec2 q){
+          float r = length(q); if (r < 0.26 || r > 1.0) return vec3(0.0);
+          float a = atan(q.y, q.x);
+          float swirl = a + uTime * 0.25 / (r * r) + r * 6.0;
+          float n = noise(vec2(swirl * 3.0, r * 14.0)) * 0.6 + noise(vec2(swirl * 9.0, r * 40.0)) * 0.4;
+          float fall = smoothstep(0.26, 0.32, r) * smoothstep(1.0, 0.45, r);
+          float dop = 1.0 + 0.6 * cos(a);                    // 片側が明るい（ドップラー）
+          vec3 hot = mix(vec3(1.0, 0.55, 0.18), vec3(1.0, 0.92, 0.75), smoothstep(0.6, 0.3, r));
+          return hot * n * fall * dop * 2.2;
+        }
+        void main(){
+          vec2 p = vUv; float r = length(p);
+          // 傾いた降着円盤（手前側）
+          vec2 q = vec2(p.x, p.y / 0.22);
+          vec3 col = disk(q) * step(0.0, -p.y + 0.0) ;
+          // 重力レンズで上下に回り込んだ円盤の裏側
+          float ring = smoothstep(0.03, 0.0, abs(r - 0.3)) * 1.5 + smoothstep(0.12, 0.0, abs(r - 0.33)) * 0.6;
+          vec2 lq = vec2(p.x, (r - 0.28) * 3.0 * sign(p.y + 0.0001));
+          vec3 lens = disk(normalize(p) * (0.3 + abs(r - 0.28) * 2.2)) * smoothstep(0.62, 0.3, r) * 0.8;
+          col += lens + vec3(1.0, 0.8, 0.55) * ring;
+          col += disk(q) * step(0.0, p.y) * smoothstep(0.24, 0.3, r) ;
+          // 事象の地平面
+          float hole = smoothstep(0.255, 0.24, r);
+          col *= 1.0 - hole;
+          float a = max(max(col.r, col.g), col.b);
+          gl_FragColor = vec4(col, clamp(a, 0.0, 1.0) * uOpacity + hole * uOpacity);
+        }`,
+      transparent: true, depthWrite: false, fog: false,
+    });
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), mat);
+    m.scale.setScalar(size);
+    m.position.copy(pos);
+    m.frustumCulled = false;
+    m.renderOrder = -0.5;
+    m.visible = false;
+    this.scene.add(m);
+    this.blackHole = m;
+  }
+
   /** 高度で 空→雲海→宇宙 を切り替える */
   updateAltitude(h, spaceStart) {
     if (this.lastAlt !== undefined && Math.abs(this.lastAlt - h) < 0.2) return;
@@ -250,6 +301,7 @@ export class FX {
     if (this.earth) this.earth.visible = above;
     const k = spaceStart ? THREE.MathUtils.smoothstep(h, spaceStart - 140, spaceStart + 20) : 0;
     if (this.stars) { this.stars.visible = k > 0.01; this.stars.material.uniforms.uOpacity.value = k; }
+    if (this.blackHole) { this.blackHole.visible = k > 0.01; this.blackHole.material.uniforms.uOpacity.value = k; }
     this.scene.backgroundIntensity = 0.95 * (1 - k * 0.85);
     this.scene.fog.density = 0.0018 * (1 - k) * (above ? 0.6 : 1);
     this.sun.intensity = 2.8 + k * 0.8;
@@ -308,6 +360,14 @@ export class FX {
     this.composer?.dispose();
     this.composer = new EffectComposer(r, rt);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
+    // 接地感・奥行きのためのスクリーンスペースAO（高画質のみ）
+    this.ao = new GTAOPass(this.scene, this.camera, size.x, size.y);
+    this.ao.output = GTAOPass.OUTPUT.Default;
+    this.ao.blendIntensity = 0.85;
+    this.ao.updateGtaoMaterial({ radius: 1.2, distanceExponent: 1.4, thickness: 2.5, scale: 1.2, samples: 12, distanceFallOff: 1, screenSpaceRadius: false });
+    this.ao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 12 });
+    this.ao.enabled = this.q.ao;
+    this.composer.addPass(this.ao);
     this.bloom = new UnrealBloomPass(new THREE.Vector2(size.x / 2, size.y / 2), 0.32, 0.55, 1.1);
     this.bloom.enabled = this.q.bloom;
     this.composer.addPass(this.bloom);
@@ -330,6 +390,7 @@ export class FX {
     if (prevWater !== this.q.water) this.setupWater();
     if (prevClouds !== this.q.clouds) this.setupClouds();
     this.smaa.enabled = this.q.aa;
+    if (this.ao) this.ao.enabled = this.q.ao && !this.aoSuspended;
     this.bloom.enabled = this.q.bloom && this.bloomOn !== false;
     this.resize();
   }
@@ -353,6 +414,7 @@ export class FX {
     const avg = this.frameTimes.reduce((a, b) => a + b, 0) / this.frameTimes.length;
     this.frameTimes.length = 0;
     let next = this.resScale;
+    if (avg > 1 / 45 && this.ao?.enabled) { this.ao.enabled = false; this.aoSuspended = true; return; }
     if (avg > 1 / 45) next = Math.max(0.55, this.resScale - 0.12);
     else if (avg < 1 / 58 && this.resScale < 1) next = Math.min(1, this.resScale + 0.06);
     if (next !== this.resScale) { this.resScale = next; this.resize(); }
@@ -367,6 +429,7 @@ export class FX {
     this.cameraY = this.camera.position.y;
     if (this.cloudSea) { this.cloudSea.material.uniforms.uTime.value = this.time; this.cloudSea.material.uniforms.uCam.value.copy(this.camera.position); }
     if (this.stars?.visible) this.stars.position.copy(this.camera.position);
+    if (this.blackHole?.visible) this.blackHole.material.uniforms.uTime.value = this.time;
     if (this.earthClouds && this.earth.visible) this.earthClouds.rotation.y += dt * 0.004;
 
     if (this.water.material.uniforms?.time) {

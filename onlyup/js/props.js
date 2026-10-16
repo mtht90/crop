@@ -1,4 +1,22 @@
 import * as THREE from 'three';
+import { MeshoptSimplifier } from 'meshoptimizer/simplifier';
+
+// 何百個も並べる小物は、読み込み時に meshoptimizer (WASM) で間引いた形状を使う
+const LOD_TRIS = 3000;
+async function simplifyGeometry(geo, target = LOD_TRIS) {
+  const pos = geo.attributes.position;
+  if (!geo.index || !(pos.array instanceof Float32Array) || pos.isInterleavedBufferAttribute) return geo;
+  const tris = geo.index.count / 3;
+  if (tris <= target * 1.2) return geo;
+  await MeshoptSimplifier.ready;
+  const idx = new Uint32Array(geo.index.array);
+  let [out] = MeshoptSimplifier.simplify(idx, pos.array, 3, Math.floor(target) * 3, 0.012, ['LockBorder']);
+  if (out.length > target * 4.5) [out] = MeshoptSimplifier.simplify(idx, pos.array, 3, Math.floor(target) * 3, 0.02, []); // 継ぎ目が多いモデル
+  if (out.length < 3) return geo;
+  const g = geo.clone();
+  g.setIndex(new THREE.BufferAttribute(out, 1));
+  return g;
+}
 import { PROPS, PROP_DIMS } from './assets.js';
 
 export const CHUNK = 60; // 描画をまとめる縦方向の区間(m)
@@ -86,7 +104,7 @@ export class PropManager {
     const worker = async () => {
       while (queue.length) {
         const id = queue.shift();
-        try { this.build(id, await this.loader.phModel(id)); onEach?.(id); } catch (e) { console.warn('model', id, e.message); }
+        try { await this.build(id, await this.loader.phModel(id)); onEach?.(id); } catch (e) { console.warn('model', id, e.message); }
       }
     };
     await Promise.all([worker(), worker(), worker()]);
@@ -96,15 +114,16 @@ export class PropManager {
   async loadZones(maxZone, onEach) {
     const ids = Object.keys(PROPS).filter((id) => PROPS[id].zone <= maxZone && (this.instances.has(id) || this.dynamic.has(id)));
     await Promise.all(ids.map(async (id) => {
-      try { this.build(id, await this.loader.phModel(id)); onEach?.(id); } catch (e) { console.warn('model', id, e.message); }
+      try { await this.build(id, await this.loader.phModel(id)); onEach?.(id); } catch (e) { console.warn('model', id, e.message); }
     }));
   }
 
-  build(id, gltf) {
+  async build(id, gltf) {
     if (this.loadedIds.has(id)) return;
     this.loadedIds.add(id);
-    const scene = gltf.scene;
-    scene.updateMatrixWorld(true);
+    gltf.scene.updateMatrixWorld(true);
+    const node = PROPS[id].node ? gltf.scene.getObjectByName(PROPS[id].node) : null;
+    const scene = node || gltf.scene; // キット内の1パーツだけ使う場合
     const meshes = [];
     scene.traverse((o) => {
       if (o.isMesh) {
@@ -112,6 +131,15 @@ export class PropManager {
         meshes.push(o);
       }
     });
+    // 静的インスタンス用の間引き形状（1モデル全体で LOD_TRIS 程度に）
+    const total = meshes.reduce((n, m) => n + (m.geometry.index ? m.geometry.index.count : m.geometry.attributes.position.count) / 3, 0);
+    const lodGeo = new Map();
+    if (total > LOD_TRIS * 1.2) {
+      for (const m of meshes) {
+        const t = (m.geometry.index ? m.geometry.index.count : m.geometry.attributes.position.count) / 3;
+        lodGeo.set(m, await simplifyGeometry(m.geometry, Math.max(60, (t / total) * LOD_TRIS)));
+      }
+    }
     // 静的インスタンス：チャンクごとに InstancedMesh
     const list = this.instances.get(id) || [];
     const byChunk = new Map();
@@ -122,13 +150,13 @@ export class PropManager {
     const tmp = new THREE.Matrix4();
     for (const [chunk, insts] of byChunk) {
       for (const mesh of meshes) {
-        let geo = mesh.geometry;
+        let geo = lodGeo.get(mesh) || mesh.geometry;
         if (Object.keys(geo.morphAttributes).length) { geo = geo.clone(); geo.morphAttributes = {}; } // インスタンス描画はモーフ非対応
         const im = new THREE.InstancedMesh(geo, mesh.material, insts.length);
         insts.forEach((inst, i) => im.setMatrixAt(i, tmp.multiplyMatrices(inst.matrix, mesh.matrixWorld)));
         im.castShadow = true; im.receiveShadow = true;
         im.layers.set(1); // 水面の反射カメラ(layer0)には映さない＝描画負荷を半減
-        im.userData.chunk = chunk;
+        im.userData.chunk = chunk; im.userData.propId = id;
         im.computeBoundingSphere();
         im.visible = this.visibleChunk ? this.visibleChunk(chunk) : true;
         this.scene.add(im);
@@ -139,6 +167,7 @@ export class PropManager {
     // 動的
     for (const g of this.dynamic.get(id) || []) {
       const c = scene.clone(true);
+      if (node) { c.matrixAutoUpdate = false; c.matrix.copy(node.matrixWorld); }
       const holder = new THREE.Group();
       holder.matrixAutoUpdate = false;
       holder.matrix.copy(this.local.get(id).off);

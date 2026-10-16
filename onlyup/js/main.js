@@ -4,7 +4,8 @@ import gsap from 'gsap';
 import GUI from 'lil-gui';
 import Stats from 'three/addons/libs/stats.module.js';
 import { AssetLoader, URLS, TEXTURE_SETS } from './assets.js';
-import { MaterialLibrary } from './materials.js';
+import { MaterialLibrary, setGrimeTexture } from './materials.js';
+import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import { PropManager } from './props.js';
 import { Level, ZONES } from './level.js';
 import { Player } from './player.js';
@@ -17,7 +18,8 @@ import { Save, fmtTime } from './save.js';
 const $ = (id) => document.getElementById(id);
 const isTouch = matchMedia('(pointer: coarse)').matches || (navigator.maxTouchPoints > 0 && matchMedia('(hover: none)').matches);
 const IS_ARTIFACT = !!window.SKYWARD_ASSETS;
-const ZONE_TINT = [[1, 1, 1], [1.03, 1.0, 0.95], [1.05, 0.98, 0.92], [0.98, 0.98, 1.02], [0.94, 0.99, 1.08], [1.06, 1.02, 0.95], [0.96, 0.98, 1.08]]
+// ゾーンごとの色調（スラム・線路は暖色、工場・地下鉄は青緑、モールは明るく、天国は白く、宇宙は青く）
+const ZONE_TINT = [[1.04, 1.0, 0.94], [1.06, 1.0, 0.92], [0.97, 1.0, 0.98], [0.94, 0.98, 1.04], [1.05, 1.0, 0.93], [1.02, 1.0, 0.97], [1.02, 1.0, 1.02], [1.05, 0.99, 0.96], [1.08, 1.02, 0.9], [0.98, 0.99, 1.03], [1.02, 1.02, 1.03], [0.94, 0.97, 1.1]]
   .map((a) => new THREE.Vector3(...a));
 
 const settings = Object.assign({
@@ -27,7 +29,7 @@ const settings = Object.assign({
 
 let state = 'loading';
 let renderer, scene, camera, world, level, player, rig, input, fx, audio, stats, mats, props, loader;
-let simTime = 0, saveTimer = 0, flash = 0, hadLock = false;
+let simTime = 0, saveTimer = 0, flash = 0, hadLock = false, astronaut = null;
 const game = { time: 0, falls: 0, fallMeters: 0, maxFall: 0, best: 0, zoneSeen: 0, height: 0 };
 
 // ------------------------------------------------------------------ boot
@@ -72,11 +74,15 @@ async function boot() {
   world.step();
 
   const [[hdr, hero]] = await Promise.all([essential, nearTextures]);
+  setGrimeTexture(misc.noise);
   await props.loadZones(1);
 
   setProgress(0.92, '空と海を準備中…');
   fx = new FX(renderer, scene, camera, { hdr, misc }, settings.quality);
-  fx.setupCloudSea(level.zoneStarts[5] + level.startTop - 6);
+  fx.setupCloudSea(level.zoneStarts[10] + level.startTop - 6);
+  const g0 = level.goal;
+  fx.setupBlackHole(new THREE.Vector3(g0.pos.x - 900, g0.top + 380, g0.pos.z - 1500), 1100);
+  addAstronaut(hero);
   player = new Player({ RAPIER, world, scene, gltf: hero, level, events: playerEvents });
   player.spawn(level.spawnPoint);
   rig = new CameraRig(camera, RAPIER, world, player.collider);
@@ -148,6 +154,12 @@ const playerEvents = {
       fallSplash(drop);
     }
   },
+  onGrab() {
+    audio.play('grab', { volume: 0.5, rate: 0.9 + Math.random() * 0.2 });
+    input.rumble(0.15, 0.3, 60);
+    hint('climb');
+  },
+  onClimb() { audio.play('climb', { volume: 0.45, rate: 0.9 + Math.random() * 0.15 }); hideHint('climb'); },
   onStep() { audio.play('step', { volume: 0.12, rate: 0.85 + Math.random() * 0.3, throttle: 0.15 }); },
   onBounce(p) {
     audio.play('bounce', { volume: 0.8 });
@@ -201,6 +213,7 @@ function frame(now) {
   }
 
   player.updateVisual(state === 'paused' ? 0 : dt);
+  if (astronaut && state !== 'paused') astronaut.mixer.update(dt);
   let speedFx = 0;
   let focusY = player.root.position.y;
   if (state === 'title') {
@@ -217,7 +230,7 @@ function frame(now) {
   fx.update(dt, state === 'title' ? new THREE.Vector3(0, 30, 0) : player.root.position, {
     speed: speedFx, flash, tint: ZONE_TINT[level.zoneAt(game.height)] || ZONE_TINT[0],
   });
-  fx.updateAltitude(Math.max(0, camera.position.y - level.startTop), level.zoneStarts[6]);
+  fx.updateAltitude(Math.max(0, camera.position.y - level.startTop), level.zoneStarts[11]);
   fx.adaptResolution(dt);
   fx.render();
   if (state === 'playing') updateHUD();
@@ -276,6 +289,55 @@ function fallSplash(drop) {
   if (drop > 60) toast(`最高 ${Math.floor(game.best)} m から ${drop.toFixed(0)} m 落下…`);
 }
 
+/** ゴールで待つ宇宙飛行士（主人公モデルの複製に白い質感） */
+function addAstronaut(gltf) {
+  const a = cloneSkinned(gltf.scene);
+  a.traverse((o) => {
+    if (o.isMesh) {
+      o.material = o.material.clone();
+      o.material.color = new THREE.Color(0xf2f2f0); o.material.map = null; o.material.roughness = 0.55; o.material.metalness = 0.1;
+      o.castShadow = true; o.frustumCulled = false;
+    }
+  });
+  const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.24, 24, 16), new THREE.MeshStandardMaterial({ color: 0x223344, metalness: 0.9, roughness: 0.08, envMapIntensity: 2 }));
+  const head = a.getObjectByName('mixamorigHead');
+  if (head) { helmet.scale.setScalar(1 / (a.scale.x || 1) / 0.01); helmet.position.y = 10; head.add(helmet); }
+  const g = level.goal;
+  a.position.copy(g.astronautPos); a.position.y = g.top;
+  a.lookAt(g.pos.x, g.top, g.pos.z);
+  a.rotation.y += Math.PI;
+  scene.add(a);
+  const mixer = new THREE.AnimationMixer(a);
+  const idle = gltf.animations.find((c) => c.name === 'Idle');
+  if (idle) mixer.clipAction(idle).play();
+  astronaut = { root: a, mixer };
+}
+
+/** 状況に応じた操作ヒント（初回だけ数回まで） */
+const HINTS = {
+  climb: () => (isTouch ? '▲ / 壁に向かってスティックで よじ登る' : 'W / Space で よじ登る　S で離す'),
+  move: () => (isTouch ? '左でスティック・右でカメラ・▲でジャンプ' : 'WASD 移動　Space ジャンプ（長押しで高く）　Shift ダッシュ'),
+  ledge: () => '高い段差は 跳んで縁をつかむ',
+};
+const hintShown = {};
+let hintKey = null;
+function hint(key) {
+  hintShown[key] = (hintShown[key] || 0) + 1;
+  if (hintShown[key] > 4) return;
+  hintKey = key;
+  const el = $('ctxHint');
+  el.textContent = HINTS[key]();
+  el.hidden = false;
+  gsap.killTweensOf(el);
+  gsap.fromTo(el, { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.25 });
+}
+function hideHint(key) {
+  if (key && hintKey !== key) return;
+  hintKey = null;
+  const el = $('ctxHint');
+  gsap.to(el, { opacity: 0, duration: 0.3, onComplete: () => { el.hidden = true; } });
+}
+
 function respawn(at, msg) {
   if (player.frozen) return;
   player.frozen = true;
@@ -322,7 +384,12 @@ function startGame(fromSave) {
   input.lockPointer();
   audio.startBgm();
   requestWakeLock();
-  if (!sv) setTimeout(() => banner(ZONES[0].en, ZONES[0].name), 400);
+  if (!sv) {
+    setTimeout(() => banner(ZONES[0].en, ZONES[0].name), 400);
+    setTimeout(() => { if (state === 'playing') hint('move'); }, 3800);
+    setTimeout(() => { if (hintKey === 'move') hint('ledge'); }, 10000);
+    setTimeout(() => { if (hintKey === 'ledge') hideHint('ledge'); }, 16000);
+  }
   if (isTouch) goFullscreen();
 }
 
