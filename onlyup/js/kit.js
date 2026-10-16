@@ -480,7 +480,7 @@ export const PIECES = {
   /** 足場（パイプと板）：互い違いの板の縁につかまって登る */
   scaffold(k) {
     const levels = 3 + Math.floor(k.r(0, 1.99));
-    const W = 2.4, D = 4.2, LH = 2.4, step = D - 1.2;
+    const W = 2.4, D = 4.2, LH = 2.4, step = D + 0.5; // 上の段は少し先：真下に潜らず、縁をつかんで登る
     let z0 = 0, last;
     for (let l = 0; l < levels; l++) {
       const y = l * LH;
