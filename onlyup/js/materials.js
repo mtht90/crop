@@ -29,43 +29,63 @@ export function boxProjectUV(geometry, tile = 2, offset = new THREE.Vector3()) {
   return g;
 }
 
+const FALLBACK = {
+  rock: 0x6f6a62, sandrock: 0x8a7a62, wood: 0x7b6650, bluewood: 0x4c6a86, shutter: 0x7d8a86, fabric: 0x3f5f8a,
+  rust: 0x8a5a3a, brick: 0x8c4a3a, iron: 0x80868a, grate: 0x6a5a4a, concrete: 0x8f8e8a, snow: 0xe8edf2, ice: 0xbfe6ff, marble: 0xe6e0d6, cable: 0x2b2826,
+};
+
+/** PBR マテリアル（Poly Haven の ARM = AO/Roughness/Metal パック）。テクスチャは届いた順に差し込む */
 export class MaterialLibrary {
-  constructor(textures) {
-    this.textures = textures;
+  constructor(loader, sets) {
+    this.loader = loader;
+    this.sets = sets;
     this.cache = new Map();
+    this.loaded = new Map(); // key -> Promise<textures>
   }
 
-  /** PBR マテリアル（Poly Haven の ARM = AO/Roughness/Metal パック） */
+  /** テクスチャセットの読み込みを開始（多重呼び出し可） */
+  load(key) {
+    if (this.loaded.has(key)) return this.loaded.get(key);
+    const s = this.sets[key];
+    const L = this.loader;
+    const p = Promise.all([L.texture(s.map, true), L.texture(s.normal), L.texture(s.arm || s.rough)])
+      .then(([map, normal, arm]) => ({ map, normal, arm: s.arm ? arm : null, rough: s.rough ? arm : null }));
+    this.loaded.set(key, p);
+    return p;
+  }
+
   get(key, opts = {}) {
     const id = key + JSON.stringify(opts);
     if (this.cache.has(id)) return this.cache.get(id);
-    const t = this.textures[key];
+    const set = this.sets[key];
+    if (!set) { // テクスチャを持たない素材（ケーブルなど）
+      const plain = new THREE.MeshStandardMaterial({ color: FALLBACK[key] ?? opts.color ?? 0x333333, roughness: 0.55, metalness: 0.2 });
+      this.cache.set(id, plain);
+      return plain;
+    }
     const m = new THREE.MeshStandardMaterial({
-      map: t.map,
-      normalMap: t.normal,
-      normalScale: new THREE.Vector2(1, 1).multiplyScalar(opts.normal ?? 1),
-      color: opts.color ?? 0xffffff,
-      roughness: opts.roughness ?? 1,
-      metalness: t.arm ? (t.metal ? 1 : 0) : 0,
+      color: opts.color ?? FALLBACK[key] ?? 0xffffff,
+      roughness: opts.roughness ?? 0.9,
+      metalness: 0,
       envMapIntensity: opts.env ?? 1,
     });
-    if (t.arm) {
-      m.aoMap = t.arm; m.aoMapIntensity = 0.9;
-      m.roughnessMap = t.arm;
-      if (t.metal) m.metalnessMap = t.arm;
-    } else if (t.rough) {
-      m.roughnessMap = t.rough;
-    }
     if (opts.emissive) { m.emissive = new THREE.Color(opts.emissive); m.emissiveIntensity = opts.emissiveIntensity ?? 1; }
-    if (key === 'ice') {
-      m.roughness = 0.35; m.metalness = 0.05; m.envMapIntensity = 1.6;
-      m.color = new THREE.Color(0xd8f2ff);
-    }
+    if (key === 'ice') { m.roughness = 0.35; m.metalness = 0.05; m.envMapIntensity = 1.6; }
+    this.load(key).then((t) => {
+      m.color.set(opts.color ?? (key === 'ice' ? 0xd8f2ff : 0xffffff));
+      m.map = t.map; m.normalMap = t.normal;
+      m.normalScale.setScalar(opts.normal ?? 1);
+      if (t.arm) {
+        m.aoMap = t.arm; m.aoMapIntensity = 0.9; m.roughnessMap = t.arm; m.roughness = opts.roughness ?? 1;
+        if (set.metal) { m.metalnessMap = t.arm; m.metalness = 1; }
+      } else if (t.rough) m.roughnessMap = t.rough;
+      m.needsUpdate = true;
+    }).catch((e) => console.warn(e.message));
     this.cache.set(id, m);
     return m;
   }
 
-  tile(key) { return this.textures[key].tile; }
+  tile(key) { return this.sets[key]?.tile ?? 1; }
 }
 
 /** 旗をはためかせる：標準マテリアルに頂点シェーダーを注入 */

@@ -3,8 +3,9 @@ import RAPIER from '@dimforge/rapier3d-compat';
 import gsap from 'gsap';
 import GUI from 'lil-gui';
 import Stats from 'three/addons/libs/stats.module.js';
-import { loadAssets } from './assets.js';
+import { AssetLoader, URLS, TEXTURE_SETS } from './assets.js';
 import { MaterialLibrary } from './materials.js';
+import { PropManager } from './props.js';
 import { Level, ZONES } from './level.js';
 import { Player } from './player.js';
 import { CameraRig } from './camera.js';
@@ -14,9 +15,9 @@ import { Audio } from './audio.js';
 import { Save, fmtTime } from './save.js';
 
 const $ = (id) => document.getElementById(id);
-const isTouch = matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0 && matchMedia('(hover: none)').matches;
-const DIFF_NAME = { easy: 'かんたん', normal: 'ふつう', hard: 'ONLY UP' };
-const ZONE_TINT = [[1, 1, 1], [1.03, 1.0, 0.95], [1.05, 0.98, 0.92], [0.98, 0.98, 1.02], [0.94, 0.99, 1.08], [1.06, 1.02, 0.95]]
+const isTouch = matchMedia('(pointer: coarse)').matches || (navigator.maxTouchPoints > 0 && matchMedia('(hover: none)').matches);
+const IS_ARTIFACT = !!window.SKYWARD_ASSETS;
+const ZONE_TINT = [[1, 1, 1], [1.03, 1.0, 0.95], [1.05, 0.98, 0.92], [0.98, 0.98, 1.02], [0.94, 0.99, 1.08], [1.06, 1.02, 0.95], [0.96, 0.98, 1.08]]
   .map((a) => new THREE.Vector3(...a));
 
 const settings = Object.assign({
@@ -25,9 +26,9 @@ const settings = Object.assign({
 }, Save.settings() || {});
 
 let state = 'loading';
-let renderer, scene, camera, world, level, player, rig, input, fx, audio, stats, mats;
-let simTime = 0, saveTimer = 0, flash = 0, wakeLock = null, hadLock = false;
-const game = { difficulty: 'normal', checkpoint: 0, time: 0, falls: 0, best: 0, zoneSeen: 0, height: 0 };
+let renderer, scene, camera, world, level, player, rig, input, fx, audio, stats, mats, props, loader;
+let simTime = 0, saveTimer = 0, flash = 0, hadLock = false;
+const game = { time: 0, falls: 0, fallMeters: 0, maxFall: 0, best: 0, zoneSeen: 0, height: 0 };
 
 // ------------------------------------------------------------------ boot
 function setProgress(p, text) {
@@ -40,41 +41,55 @@ async function boot() {
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   $('app').appendChild(renderer.domElement);
   scene = new THREE.Scene();
-  camera = new THREE.PerspectiveCamera(settings.fov, innerWidth / innerHeight, 0.1, 4000);
+  camera = new THREE.PerspectiveCamera(settings.fov, innerWidth / innerHeight, 0.1, 4200);
 
   setProgress(0.02, '物理エンジン Rapier (WebAssembly) を初期化中…');
   await RAPIER.init();
   world = new RAPIER.World({ x: 0, y: 0, z: 0 }); // 重力はキャラクター側で計算
 
-  setProgress(0.05, 'Poly Haven から PBR テクスチャと HDRI を取得中…');
-  const assets = await loadAssets(renderer, {
-    hdrRes: settings.quality === 'high' ? '2k' : '1k',
-    onProgress: (p) => setProgress(0.05 + p * 0.8, `外部アセットを読み込み中… ${Math.round(p * 100)}%`),
-  });
+  loader = new AssetLoader(renderer);
+  loader.onProgress = (d, t) => { if (state === 'loading') setProgress(0.05 + 0.85 * (d / t), `外部アセットを読み込み中… ${d} / ${t}`); };
 
-  setProgress(0.88, 'ステージを生成中…');
-  await new Promise((r) => setTimeout(r, 0));
-  mats = new MaterialLibrary(assets.textures);
-  level = new Level({ RAPIER, world, scene, mats, misc: assets.misc });
+  // 最初に必要なもの（空・水・主人公・下層の素材）
+  const misc = {};
+  const essential = Promise.all([
+    loader.hdr(URLS.hdr),
+    loader.gltf(URLS.hero),
+    loader.texture(URLS.waterNormals).then((t) => (misc.waterNormals = t)),
+    loader.texture(URLS.smoke, true).then((t) => (misc.smoke = t)),
+    loader.texture(URLS.noise).then((t) => (misc.noise = t)),
+    loader.texture(URLS.spark, true).then((t) => (misc.spark = t)),
+    loader.texture(URLS.flare0, true).then((t) => (misc.flare0 = t)),
+    loader.texture(URLS.flare3, true).then((t) => (misc.flare3 = t)),
+  ]);
+  mats = new MaterialLibrary(loader, TEXTURE_SETS);
+  const nearTextures = Promise.all(Object.entries(TEXTURE_SETS).filter(([, s]) => s.zone <= 1).map(([k]) => mats.load(k)));
+
+  props = new PropManager({ loader, scene, world, RAPIER });
+  level = new Level({ RAPIER, world, scene, mats, props });
   level.build();
   level.onCrumble = () => audio.play('crumble', { volume: 0.6 });
   world.step();
 
-  fx = new FX(renderer, scene, camera, assets, settings.quality);
-  player = new Player({ RAPIER, world, scene, gltf: assets.gltf, level, events: playerEvents });
-  player.spawn(level.checkpoints[0].spawn);
+  const [[hdr, hero]] = await Promise.all([essential, nearTextures]);
+  await props.loadZones(1);
+
+  setProgress(0.92, '空と海を準備中…');
+  fx = new FX(renderer, scene, camera, { hdr, misc }, settings.quality);
+  fx.setupCloudSea(level.zoneStarts[5] + level.startTop - 6);
+  player = new Player({ RAPIER, world, scene, gltf: hero, level, events: playerEvents });
+  player.spawn(level.spawnPoint);
   rig = new CameraRig(camera, RAPIER, world, player.collider);
   input = new Input(renderer.domElement, { touch: isTouch });
   input.onPause = () => (state === 'playing' ? pause() : state === 'paused' ? resume() : null);
-  input.onRespawn = () => { if (state === 'playing') toCheckpoint(); };
-  input.onGamepad = (id) => toast(`🎮 ゲームパッド接続: ${id.slice(0, 28)}`);
+  input.onGamepad = (id) => toast(`ゲームパッド接続: ${id.slice(0, 28)}`);
   audio = new Audio();
 
   applySettings();
   setupUI();
   buildAltBar();
 
-  setProgress(0.95, 'シェーダーをコンパイル中…');
+  setProgress(0.96, 'シェーダーをコンパイル中…');
   try { await renderer.compileAsync(scene, camera); } catch { /* 非対応環境 */ }
   setProgress(1, '準備完了');
 
@@ -83,32 +98,54 @@ async function boot() {
   await gsap.to('#loading', { opacity: 0, duration: 0.6, delay: 0.2 });
   $('loading').hidden = true;
   showTitle();
+  loadRest();
 
-  if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
+  if (!IS_ARTIFACT && 'serviceWorker' in navigator && (location.protocol === 'https:' || ['localhost', '127.0.0.1'].includes(location.hostname))) {
     navigator.serviceWorker.register('sw.js').catch(() => {});
   }
 }
 
+/** 上層の素材はプレイ中に裏で読み込む */
+async function loadRest() {
+  const bg = $('bgLoad');
+  const tick = () => {
+    const left = loader.total - loader.done;
+    bg.hidden = left <= 0;
+    bg.textContent = `上層の素材を読み込み中… 残り ${left}`;
+  };
+  loader.onProgress = tick;
+  const keys = Object.entries(TEXTURE_SETS).sort((a, b) => a[1].zone - b[1].zone).map(([k]) => k);
+  const texJob = (async () => { for (const k of keys) await mats.load(k).catch(() => {}); })();
+  const spaceJob = Promise.all([loader.cubeTexture(URLS.stars), loader.texture(URLS.earth, true), loader.texture(URLS.earthClouds, true)])
+    .then(([s, e, c]) => fx.setupSpace(s, e, c)).catch((e) => console.warn(e));
+  tick();
+  await Promise.all([texJob, props.loadAll(), spaceJob]);
+  bg.hidden = true;
+}
+
 // ------------------------------------------------------------------ player events → 演出
 const playerEvents = {
-  onJump(double) {
-    audio.play(double ? 'doublejump' : 'jump', { volume: 0.5, rate: 0.95 + Math.random() * 0.1 });
+  onJump() {
+    audio.play('jump', { volume: 0.5, rate: 0.95 + Math.random() * 0.1 });
     const p = player.position; p.y -= 0.9;
-    fx.puff(p, double ? 6 : 3, 0.6, double ? 0x9fe8ff : 0xd8c8b0);
+    fx.puff(p, 3, 0.6);
   },
   onLand(drop, ground) {
     if (state !== 'playing') return;
     if (drop > 1.0) {
-      audio.play('land', { volume: Math.min(1, 0.25 + drop * 0.06), rate: 1.1 - Math.min(0.3, drop * 0.02) });
+      audio.play('land', { volume: Math.min(1, 0.25 + drop * 0.05), rate: 1.1 - Math.min(0.3, drop * 0.01) });
       const p = player.position; p.y -= 0.9;
-      fx.puff(p, Math.min(14, 3 + Math.floor(drop)), Math.min(2, 0.6 + drop * 0.08), ground?.surface === 'ice' || ground?.spec.mat === 'snow' ? 0xf2f6ff : 0xd8c8b0);
+      const snowy = ground?.surface === 'ice' || ground?.spec?.mat === 'snow';
+      fx.puff(p, Math.min(14, 3 + Math.floor(drop / 2)), Math.min(2.2, 0.6 + drop * 0.05), snowy ? 0xf2f6ff : 0xd8c8b0);
     }
-    if (drop > 4) input.rumble(Math.min(1, drop / 20), 0.4, 140);
-    if (drop > 8) {
+    if (drop > 4) input.rumble(Math.min(1, drop / 30), 0.4, 140);
+    if (drop > 10) {
       game.falls++;
-      rig.shake = Math.min(1.2, drop / 25);
-      audio.play('fall', { volume: 0.6 });
-      toast(`${drop.toFixed(0)} m 落下…`);
+      game.fallMeters += drop;
+      game.maxFall = Math.max(game.maxFall, drop);
+      rig.shake = Math.min(1.4, drop / 30);
+      audio.play('fall', { volume: Math.min(1, 0.4 + drop / 80) });
+      fallSplash(drop);
     }
   },
   onStep() { audio.play('step', { volume: 0.12, rate: 0.85 + Math.random() * 0.3, throttle: 0.15 }); },
@@ -118,6 +155,7 @@ const playerEvents = {
     input.rumble(0.6, 0.6, 160);
     if (p.pad) gsap.to(p.pad.material.uniforms.uKick, { value: 0, duration: 0.6 });
   },
+  onFan() { audio.play('fan', { volume: 0.6, rate: 0.7, throttle: 1 }); input.rumble(0.2, 0.5, 200); },
   onHit() {
     audio.play('hit', { volume: 0.9 });
     rig.shake = 0.8;
@@ -128,6 +166,20 @@ const playerEvents = {
 // ------------------------------------------------------------------ loop
 let last = performance.now();
 const STEP = 1 / 60;
+const IDLE = { move: { x: 0, y: 0 }, sprint: false, jumpHeld: false, jumpPressed: false, look: { x: 0, y: 0, zoom: 0 } };
+
+function simulate(dt, inp) {
+  const steps = Math.ceil(dt / STEP - 1e-6) || 1;
+  const h = dt / steps;
+  for (let i = 0; i < steps; i++) {
+    simTime += h;
+    level.update(simTime, h);
+    world.timestep = h;
+    world.step();
+    player.step(h, i === 0 ? inp : { ...inp, jumpPressed: false }, rig.yaw, simTime);
+  }
+}
+
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.1, (now - last) / 1000);
@@ -136,40 +188,36 @@ function frame(now) {
 
   const inp = input.poll(dt);
   if (state === 'playing') {
-    const steps = Math.ceil(dt / STEP - 1e-6) || 1;
-    const h = dt / steps;
-    for (let i = 0; i < steps; i++) {
-      simTime += h;
-      level.update(simTime, h);
-      world.timestep = h;
-      world.step();
-      player.step(h, i === 0 ? inp : { ...inp, jumpPressed: false }, rig.yaw, simTime);
-    }
+    simulate(dt, inp);
     game.time += dt;
     gameLogic(dt);
+  } else if (state === 'clear') {
+    simulate(dt, IDLE);
   } else if (state !== 'paused') {
     simTime += dt;
     level.update(simTime, dt);
     world.timestep = dt;
     world.step();
-    if (state === 'clear') player.step(dt, { move: { x: 0, y: 0 }, sprint: false, jumpHeld: false, jumpPressed: false }, rig.yaw, simTime);
   }
 
   player.updateVisual(state === 'paused' ? 0 : dt);
   let speedFx = 0;
+  let focusY = player.root.position.y;
   if (state === 'title') {
-    const a = simTime * 0.05;
-    camera.position.set(Math.cos(a) * 62, 26 + Math.sin(simTime * 0.13) * 8, Math.sin(a) * 62);
-    camera.lookAt(0, 34, 0);
-    camera.fov = settings.fov; camera.updateProjectionMatrix();
+    const a = simTime * 0.04;
+    camera.position.set(Math.cos(a) * 58, 14 + Math.sin(simTime * 0.1) * 4, Math.sin(a) * 58);
+    camera.lookAt(0, 90, 0);
+    camera.fov = settings.fov + 8; camera.updateProjectionMatrix();
+    focusY = 40;
   } else {
     speedFx = rig.update(state === 'paused' ? 0 : dt, inp.look, player.root.position, { vy: player.vy, sprint: inp.sprint && player.hSpeed > 5 });
   }
-  level.updateVisuals(simTime, camera);
+  level.updateVisuals(simTime, camera, focusY);
   flash = Math.max(0, flash - dt * 2.5);
-  fx.update(dt, state === 'title' ? new THREE.Vector3(0, 20, 0) : player.root.position, {
+  fx.update(dt, state === 'title' ? new THREE.Vector3(0, 30, 0) : player.root.position, {
     speed: speedFx, flash, tint: ZONE_TINT[level.zoneAt(game.height)] || ZONE_TINT[0],
   });
+  fx.updateAltitude(Math.max(0, camera.position.y - level.startTop), level.zoneStarts[6]);
   fx.adaptResolution(dt);
   fx.render();
   if (state === 'playing') updateHUD();
@@ -180,9 +228,14 @@ function gameLogic(dt) {
   const pos = player.position;
   const feet = pos.y - 0.9;
   game.height = Math.max(0, feet - level.startTop);
-  if (game.height > game.best) game.best = game.height;
+  if (game.height > game.best + 0.05) {
+    if (Math.floor(game.height / 100) > Math.floor(game.best / 100) && game.best > 1) {
+      toast(`標高 ${Math.floor(game.height / 100) * 100} m`);
+      audio.play('record', { volume: 0.5 });
+    }
+    game.best = game.height;
+  }
 
-  // ゾーン到達
   const z = level.zoneAt(game.height);
   if (z > game.zoneSeen && player.grounded) {
     game.zoneSeen = z;
@@ -190,42 +243,37 @@ function gameLogic(dt) {
     audio.play('zone', { volume: 0.7 });
   }
 
-  // チェックポイント
-  if (game.difficulty !== 'hard' && player.grounded) {
-    for (const cp of level.checkpoints) {
-      if (cp.active || !cp) continue;
-      const dx = pos.x - cp.platform.base.x, dz = pos.z - cp.platform.base.z;
-      if (Math.hypot(dx, dz) < cp.r + 0.5 && Math.abs(feet - cp.top) < 1.5) {
-        cp.activate();
-        game.checkpoint = Math.max(game.checkpoint, cp.index);
-        audio.play('checkpoint', { volume: 0.8 });
-        fx.burst(new THREE.Vector3(cp.platform.base.x, cp.top + 2, cp.platform.base.z), 40, 0x7dff9a, 7);
-        toast('✔ チェックポイント更新');
-        input.rumble(0.3, 0.6, 120);
-        persist();
-      }
-    }
-  }
+  // 落下中は落ちた高さを表示
+  const fd = player.fallDist || 0;
+  const fm = $('fallMeter');
+  if (fd > 12 && !player.grounded) { fm.hidden = false; fm.textContent = `−${fd.toFixed(0)} m`; }
+  else if (!fm.hidden) fm.hidden = true;
 
-  // ゴール
   const g = level.goal;
-  if (player.grounded && feet > g.top - 0.6 && Math.hypot(pos.x - g.pos.x, pos.z - g.pos.z) < g.r) return clearGame();
+  if (player.grounded && feet > g.top - 0.6 && Math.hypot(pos.x - g.pos.x, pos.z - g.pos.z) < g.r) { clearGame(); return; }
 
-  // 海へ落下
+  // 海へ落ちたらスタートの岩から（チェックポイントは無い）
   if (pos.y < -1.5 && !player.frozen) {
     audio.play('splash', { volume: 0.9 });
     game.falls++;
-    const cp = game.difficulty === 'hard' ? level.checkpoints[0] : level.checkpoints[game.checkpoint];
-    respawn(cp.spawn, game.difficulty === 'hard' ? '海に落ちた… 最初から' : '海に落ちた… チェックポイントへ');
+    rig.yaw = level.spawnYaw;
+    respawn(level.spawnPoint, '海に落ちた… 最初の岩から');
     return;
-  }
-  // かんたん：自動救助
-  if (game.difficulty === 'easy' && !player.frozen && !player.grounded && player.lastSafe.y - pos.y > 22) {
-    respawn(player.lastSafe.clone(), '救助しました');
   }
 
   saveTimer -= dt;
   if (saveTimer <= 0) { saveTimer = 3; persist(); }
+}
+
+function fallSplash(drop) {
+  const el = $('fallBig');
+  el.textContent = `−${drop.toFixed(0)} m`;
+  gsap.killTweensOf(el);
+  gsap.timeline()
+    .fromTo(el, { opacity: 0, scale: 1.4, x: 0, y: 0 }, { opacity: 1, scale: 1, duration: 0.25, ease: 'back.out(2)' })
+    .to(el, { x: 6, duration: 0.05, repeat: 5, yoyo: true })
+    .to(el, { opacity: 0, y: 20, duration: 0.8, delay: 1.2 });
+  if (drop > 60) toast(`最高 ${Math.floor(game.best)} m から ${drop.toFixed(0)} m 落下…`);
 }
 
 function respawn(at, msg) {
@@ -241,53 +289,30 @@ function respawn(at, msg) {
   }, 200);
 }
 
-function toCheckpoint() {
-  if (game.difficulty === 'hard') return toast('ONLY UP モードでは戻れません');
-  respawn(level.checkpoints[game.checkpoint].spawn, 'チェックポイントへ戻りました');
-}
-
 function persist() {
   if (state !== 'playing' && state !== 'paused') return;
   const s = player.lastSafe;
-  Save.store({ difficulty: game.difficulty, checkpoint: game.checkpoint, time: game.time, falls: game.falls, best: game.best, zoneSeen: game.zoneSeen, pos: [s.x, s.y, s.z], yaw: rig.yaw });
+  Save.store({ time: game.time, falls: game.falls, fallMeters: game.fallMeters, maxFall: game.maxFall, best: game.best, zoneSeen: game.zoneSeen, pos: [s.x, s.y, s.z], yaw: rig.yaw });
   Save.bestHeight(game.best);
 }
 
 // ------------------------------------------------------------------ flow
-function resetCheckpoints(upTo) {
-  level.checkpoints.forEach((cp, i) => {
-    if (i === 0) return;
-    if (i <= upTo) cp.activate();
-    else {
-      cp.active = false;
-      cp.flagMat.color.set(0xd9483b);
-      cp.beamMat.uniforms.uColor.value.set(0xff7a3a);
-      cp.beamMat.uniforms.uOpacity.value = 0.4;
-    }
-  });
-}
-
 function startGame(fromSave) {
   audio.play('click');
   level.reset();
   player.stopDance();
   const sv = fromSave ? Save.load() : null;
-  if (sv) {
-    Object.assign(game, { difficulty: sv.difficulty, checkpoint: sv.checkpoint, time: sv.time, falls: sv.falls, best: sv.best, zoneSeen: sv.zoneSeen ?? 0, height: 0 });
+  if (sv?.pos) {
+    Object.assign(game, { time: sv.time || 0, falls: sv.falls || 0, fallMeters: sv.fallMeters || 0, maxFall: sv.maxFall || 0, best: sv.best || 0, zoneSeen: sv.zoneSeen ?? 0, height: 0 });
     player.spawn(new THREE.Vector3(...sv.pos));
     rig.yaw = sv.yaw ?? rig.yaw;
   } else {
-    const diff = document.querySelector('input[name=diff]:checked')?.value || 'normal';
-    Object.assign(game, { difficulty: diff, checkpoint: 0, time: 0, falls: 0, best: 0, zoneSeen: 0, height: 0 });
-    player.spawn(level.checkpoints[0].spawn, 0);
-    rig.yaw = Math.PI; rig.pitch = 0.3;
+    Object.assign(game, { time: 0, falls: 0, fallMeters: 0, maxFall: 0, best: 0, zoneSeen: 0, height: 0 });
+    player.spawn(level.spawnPoint, level.spawnYaw + Math.PI);
+    rig.yaw = level.spawnYaw; rig.pitch = 0.3;
     Save.clear();
   }
-  resetCheckpoints(game.difficulty === 'hard' ? 0 : game.checkpoint);
-  player.difficulty = game.difficulty;
   rig.snap(player.position);
-  $('tRespawn').hidden = game.difficulty === 'hard';
-  $('btnToCheckpoint').hidden = game.difficulty === 'hard';
 
   gsap.to('#title', { opacity: 0, duration: 0.4, onComplete: () => { $('title').hidden = true; } });
   $('hud').hidden = false;
@@ -308,6 +333,7 @@ function pause() {
   input.unlockPointer();
   persist();
   audio.duckBgm(true);
+  $('pauseStats').textContent = `最高 ${Math.floor(game.best)} m ・ 落下 ${game.falls} 回（計 ${Math.round(game.fallMeters)} m）`;
   showModal('pause');
 }
 function resume() {
@@ -336,13 +362,13 @@ function clearGame() {
   audio.play('goal', { volume: 1 });
   const g = level.goal;
   for (let i = 0; i < 4; i++) setTimeout(() => fx.burst(new THREE.Vector3(g.pos.x, g.top + 4.5, g.pos.z), 50, [0xffd27d, 0x7dffea, 0xff9ad5, 0xffffff][i], 11), i * 300);
-  const isRecord = Save.storeRecord(game.difficulty, game.time, game.falls);
+  const isRecord = Save.storeRecord('onlyup', game.time, game.falls);
   Save.bestHeight(level.totalHeight);
   Save.clear();
   $('clearStats').innerHTML = `
-    難易度 ${DIFF_NAME[game.difficulty]}<br>
-    タイム <b>${fmtTime(game.time)}</b>${isRecord ? ' 🏆 自己ベスト！' : ''}<br>
-    落下回数 <b>${game.falls}</b> 回 ・ 標高 <b>${level.totalHeight.toFixed(0)}</b> m`;
+    タイム <b>${fmtTime(game.time)}</b>${isRecord ? ' ・ 自己ベスト' : ''}<br>
+    落下 <b>${game.falls}</b> 回 ・ 落ちた距離 合計 <b>${Math.round(game.fallMeters)}</b> m<br>
+    最大の落下 <b>${Math.round(game.maxFall)}</b> m ・ 標高 <b>${level.totalHeight.toFixed(0)}</b> m`;
   setTimeout(() => showModal('clear'), 2200);
 }
 
@@ -350,17 +376,15 @@ function clearGame() {
 function showTitle() {
   $('title').hidden = false;
   gsap.fromTo('#title', { opacity: 0 }, { opacity: 1, duration: 0.6 });
-  gsap.fromTo('#title .logo, #title .tagline, #title .diff, #title .menu', { y: 24, opacity: 0 }, { y: 0, opacity: 1, duration: 0.7, stagger: 0.08, ease: 'power3.out' });
+  gsap.fromTo('#title .logo, #title .tagline, #title .menu', { y: 24, opacity: 0 }, { y: 0, opacity: 1, duration: 0.7, stagger: 0.08, ease: 'power3.out' });
   const sv = Save.load();
-  $('btnContinue').hidden = !sv;
-  if (sv) {
-    $('continueInfo').textContent = `${DIFF_NAME[sv.difficulty]} ・ 最高 ${Math.floor(sv.best)} m ・ ${fmtTime(sv.time)}`;
-    const r = document.querySelector(`input[name=diff][value=${sv.difficulty}]`); if (r) r.checked = true;
-  }
+  $('btnContinue').hidden = !sv?.pos;
+  if (sv?.pos) $('continueInfo').textContent = `最高 ${Math.floor(sv.best)} m ・ ${fmtTime(sv.time)} ・ 落下 ${sv.falls} 回`;
   const rec = Save.records();
-  const parts = Object.entries(DIFF_NAME).filter(([k]) => rec[k]).map(([k, n]) => `${n} ${fmtTime(rec[k].time)}`);
-  $('records').textContent = [rec.bestHeight ? `最高到達 ${Math.floor(rec.bestHeight)} m` : '', parts.length ? `クリアタイム: ${parts.join(' / ')}` : '']
-    .filter(Boolean).join('　・　') || `頂上まで ${level.totalHeight.toFixed(0)} m`;
+  const parts = [];
+  if (rec.bestHeight) parts.push(`最高到達 ${Math.floor(rec.bestHeight)} m`);
+  if (rec.onlyup) parts.push(`クリア最速 ${fmtTime(rec.onlyup.time)}`);
+  $('records').textContent = parts.join('　・　') || `頂上まで ${level.totalHeight.toFixed(0)} m。チェックポイントはありません。`;
   state = 'title';
 }
 
@@ -369,6 +393,18 @@ function showModal(id) {
   gsap.fromTo(`#${id} .panel`, { y: 30, opacity: 0, scale: 0.97 }, { y: 0, opacity: 1, scale: 1, duration: 0.35, ease: 'power3.out' });
 }
 function hideModal(id) { $(id).hidden = true; }
+
+/** confirm() の代わりのページ内ダイアログ */
+function ask(message, okLabel) {
+  return new Promise((resolve) => {
+    $('confirmText').textContent = message;
+    $('confirmOk').textContent = okLabel;
+    showModal('confirm');
+    const done = (v) => { hideModal('confirm'); $('confirmOk').onclick = $('confirmCancel').onclick = null; resolve(v); };
+    $('confirmOk').onclick = () => done(true);
+    $('confirmCancel').onclick = () => done(false);
+  });
+}
 
 function banner(sub, main) {
   $('bannerSub').textContent = sub;
@@ -382,7 +418,7 @@ function toast(msg) {
   const t = $('toast');
   t.textContent = msg;
   gsap.killTweensOf(t);
-  gsap.timeline().fromTo(t, { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.25 }).to(t, { opacity: 0, duration: 0.4, delay: 1.6 });
+  gsap.timeline().fromTo(t, { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.25 }).to(t, { opacity: 0, duration: 0.4, delay: 2 });
 }
 
 function buildAltBar() {
@@ -411,14 +447,13 @@ function updateHUD() {
 }
 
 function setupUI() {
-  $('btnNew').onclick = () => {
-    if (Save.load() && !confirm('現在の進行状況は失われます。はじめからにしますか？')) return;
+  $('btnNew').onclick = async () => {
+    if (Save.load()?.pos && !(await ask('今の登攀記録は消えます。最初から登り直しますか？', '最初から登る'))) return;
     startGame(false);
   };
   $('btnContinue').onclick = () => startGame(true);
   $('btnPause').onclick = () => pause();
   $('btnResume').onclick = () => resume();
-  $('btnToCheckpoint').onclick = () => { resume(); toCheckpoint(); };
   $('btnQuit').onclick = () => quitToTitle();
   $('btnAgain').onclick = () => { hideModal('clear'); startGame(false); };
   $('btnClearTitle').onclick = () => quitToTitle();
@@ -429,14 +464,14 @@ function setupUI() {
   $('btnCredits').onclick = () => showModal('credits');
   document.querySelectorAll('.modal .close').forEach((b) => (b.onclick = () => { audio.play('click'); hideModal(b.closest('.modal').id); }));
   $('btnShare').onclick = async () => {
-    const text = `SKYWARD — 天空登攀を${DIFF_NAME[game.difficulty]}で登頂！ タイム ${fmtTime(game.time)} / 落下 ${game.falls}回`;
+    const text = `SKYWARD を登頂！ タイム ${fmtTime(game.time)} / 落下 ${game.falls} 回（合計 ${Math.round(game.fallMeters)} m）`;
     try {
-      if (navigator.share) await navigator.share({ title: 'SKYWARD', text, url: location.href });
-      else { await navigator.clipboard.writeText(`${text} ${location.href}`); toast('クリップボードにコピーしました'); }
-    } catch { /* キャンセル */ }
+      if (navigator.share) { await navigator.share({ title: 'SKYWARD', text, url: location.href }); return; }
+    } catch { /* 非対応・キャンセル */ }
+    try { await navigator.clipboard.writeText(text); toast('結果をコピーしました'); }
+    catch { $('clearStats').insertAdjacentHTML('beforeend', `<br><small>${text}</small>`); }
   };
-  document.querySelectorAll('.btn, .diff label').forEach((b) => b.addEventListener('pointerenter', () => audio.play('hover', { volume: 0.25, throttle: 0.04 })));
-  document.querySelectorAll('input[name=diff]').forEach((r) => r.addEventListener('change', () => audio.play('click', { volume: 0.6 })));
+  document.querySelectorAll('.btn').forEach((b) => b.addEventListener('pointerenter', () => audio.play('hover', { volume: 0.25, throttle: 0.04 })));
 
   renderer.domElement.addEventListener('click', () => { if (state === 'playing') input.lockPointer(); });
   document.addEventListener('pointerlockchange', () => {
@@ -447,9 +482,8 @@ function setupUI() {
     if (document.hidden) { if (state === 'playing') pause(); persist(); }
     else if (state === 'playing' || state === 'paused') requestWakeLock();
   });
-  addEventListener('beforeunload', persist);
+  addEventListener('pagehide', persist);
 
-  // --- 設定 (lil-gui) ---
   const gui = new GUI({ container: $('guiHost'), title: '設定', width: 400 });
   const gfx = gui.addFolder('グラフィック');
   gfx.add(settings, 'quality', { 低: 'low', 中: 'medium', 高: 'high' }).name('画質').onChange(applySettings);
@@ -465,7 +499,10 @@ function setupUI() {
   snd.add(settings, 'master', 0, 1, 0.01).name('全体').onChange(applySettings);
   snd.add(settings, 'bgm', 0, 1, 0.01).name('BGM').onChange(applySettings);
   snd.add(settings, 'sfx', 0, 1, 0.01).name('効果音').onChange(applySettings);
-  gui.add({ reset: () => { if (confirm('セーブデータと記録を消去しますか？')) { localStorage.clear(); location.reload(); } } }, 'reset').name('データ消去');
+  gui.add({ reset: async () => {
+    hideModal('settings');
+    if (await ask('セーブデータと記録をすべて消去しますか？', '消去する')) { Save.clear(); Save.clearRecords(); quitToTitle(); toast('消去しました'); }
+  } }, 'reset').name('データ消去');
 }
 
 function applySettings() {
@@ -482,16 +519,18 @@ function applySettings() {
   audio.setVolumes({ master: settings.master, bgm: settings.bgm, sfx: settings.sfx });
   if (settings.showFps && !stats) { stats = new Stats(); stats.dom.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:30;'; document.body.appendChild(stats.dom); }
   if (stats) stats.dom.hidden = !settings.showFps;
+  props.range = settings.quality === 'low' ? 70 : settings.quality === 'medium' ? 90 : 110;
+  props.shadows = settings.quality !== 'low';
 }
 
 async function requestWakeLock() {
-  try { if ('wakeLock' in navigator && !document.hidden) wakeLock = await navigator.wakeLock.request('screen'); } catch { /* ignore */ }
+  try { if ('wakeLock' in navigator && !document.hidden) await navigator.wakeLock.request('screen'); } catch { /* ignore */ }
 }
 async function goFullscreen() {
   try {
     if (!document.fullscreenElement) await document.documentElement.requestFullscreen?.({ navigationUI: 'hide' });
     await screen.orientation?.lock?.('landscape');
-  } catch { /* iOS 等は非対応 */ }
+  } catch { /* iOS・アーティファクト内などは非対応 */ }
 }
 
 boot().catch((e) => {
@@ -500,17 +539,17 @@ boot().catch((e) => {
   $('loadError').textContent = `読み込みに失敗しました。\n${e.message}\nネットワーク接続を確認して再読み込みしてください。`;
 });
 
-// デバッグ用
+// テスト・デバッグ用
 window.__skyward = {
   get game() { return game; }, get level() { return level; }, get player() { return player; }, get state() { return state; }, get rig() { return rig; },
+  get props() { return props; }, get loader() { return loader; }, get renderer() { return renderer; },
   startGame,
-  /** テスト用：描画せずに物理だけ進める */
   stepSim(n = 60, inp = {}) {
-    const i0 = { move: { x: 0, y: 0 }, sprint: false, jumpHeld: false, jumpPressed: false, look: { x: 0, y: 0, zoom: 0 }, ...inp };
+    const i0 = { ...IDLE, ...inp };
     for (let i = 0; i < n; i++) {
       simTime += STEP; level.update(simTime, STEP); world.timestep = STEP; world.step();
       player.step(STEP, i === 0 ? i0 : { ...i0, jumpPressed: false }, rig.yaw, simTime);
-      gameLogic(STEP);
+      if (state === 'playing') gameLogic(STEP);
     }
   },
 };

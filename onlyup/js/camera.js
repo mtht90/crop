@@ -6,8 +6,8 @@ export class CameraRig {
     Object.assign(this, { camera, RAPIER, world, excludeCollider });
     this.yaw = Math.PI;
     this.pitch = 0.32;
-    this.dist = 6.5;
-    this.curDist = 6.5;
+    this.dist = 7.5;
+    this.curDist = 7.5;
     this.baseFov = 62;
     this.focus = new THREE.Vector3();
     this.ray = new RAPIER.Ray({ x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 1 });

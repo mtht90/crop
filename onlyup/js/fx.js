@@ -111,6 +111,7 @@ export class FX {
     s.camera.left = -24; s.camera.right = 24; s.camera.top = 24; s.camera.bottom = -24;
     s.camera.near = 1; s.camera.far = 220;
     s.bias = -0.0004; s.normalBias = 0.035;
+    s.camera.layers.enable(1); // ガラクタ(layer1)も影を落とす
     this.scene.add(sun, sun.target);
     this.sun = sun;
 
@@ -157,22 +158,101 @@ export class FX {
     if (this.clouds) this.scene.remove(this.clouds);
     const g = new THREE.Group();
     const smoke = this.assets.misc.smoke;
-    const bands = [[55, 85], [135, 160], [215, 250]];
+    const bands = [[55, 85], [170, 210], [360, 400], [520, 560]];
     const n = this.q.clouds;
     for (let i = 0; i < n; i++) {
       const band = bands[i % bands.length];
       const mat = new THREE.SpriteMaterial({ map: smoke, color: 0xffffff, transparent: true, opacity: 0.0, depthWrite: false, rotation: Math.random() * 6.28, fog: true });
       const sp = new THREE.Sprite(mat);
       const a = Math.random() * Math.PI * 2;
-      const d = 45 + Math.random() * 190;
+      const d = 75 + Math.random() * 200;
       sp.position.set(Math.cos(a) * d, band[0] + Math.random() * (band[1] - band[0]), Math.sin(a) * d);
       const s = 30 + Math.random() * 60;
       sp.scale.set(s, s * 0.6, 1);
-      sp.userData.baseOpacity = 0.25 + Math.random() * 0.3;
+      sp.userData.baseOpacity = 0.16 + Math.random() * 0.24;
       g.add(sp);
     }
     this.clouds = g;
     this.scene.add(g);
+  }
+
+  /** 雲海（下界を隠す巨大な雲の層） */
+  setupCloudSea(y) {
+    const tex = this.assets.misc.noise;
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    const mat = new THREE.ShaderMaterial({
+      uniforms: { uMap: { value: tex }, uTime: { value: 0 }, uCam: { value: new THREE.Vector3() }, uSun: { value: new THREE.Color(1, 0.97, 0.92) } },
+      vertexShader: /* glsl */`varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position,1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
+      fragmentShader: /* glsl */`
+        uniform sampler2D uMap; uniform float uTime; uniform vec3 uCam; uniform vec3 uSun; varying vec3 vW;
+        float fbm(vec2 p){ float v = 0.0, a = 0.5; for (int i = 0; i < 5; i++){ v += a * texture2D(uMap, p).r; p = p * 2.03 + 0.17; a *= 0.5; } return v; }
+        void main(){
+          vec2 p = vW.xz * 0.0016 + vec2(uTime * 0.0015, uTime * 0.0009);
+          float n = fbm(p);
+          float cover = smoothstep(0.42, 0.72, n);
+          float dy = abs(uCam.y - vW.y);
+          float near = smoothstep(4.0, 40.0, dy + length(uCam.xz - vW.xz) * 0.15);
+          float far = uCam.y < vW.y ? 1.0 - smoothstep(120.0, 420.0, dy) : 1.0 - 0.85 * smoothstep(90.0, 260.0, dy);  // 遠くから見ると薄い
+          float edge = 1.0 - smoothstep(1400.0, 2000.0, length(vW.xz));
+          float alpha = cover * 0.95 * near * far * edge;
+          vec3 col = mix(vec3(0.72, 0.78, 0.86), uSun * 1.05, smoothstep(0.5, 0.9, n));
+          gl_FragColor = vec4(col, alpha);
+        }`,
+      transparent: true, depthWrite: false, side: THREE.DoubleSide,
+    });
+    const plane = new THREE.Mesh(new THREE.PlaneGeometry(4200, 4200).rotateX(-Math.PI / 2), mat);
+    plane.position.y = y;
+    plane.renderOrder = 2;
+    this.scene.add(plane);
+    this.cloudSea = plane;
+  }
+
+  /** 宇宙：星空（キューブマップ）と地球 */
+  setupSpace(stars, earthMap, earthClouds) {
+    const starMat = new THREE.ShaderMaterial({
+      uniforms: { uCube: { value: stars }, uOpacity: { value: 0 } },
+      vertexShader: /* glsl */`varying vec3 vDir; void main(){ vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+      fragmentShader: /* glsl */`uniform samplerCube uCube; uniform float uOpacity; varying vec3 vDir;
+        void main(){ vec3 c = textureCube(uCube, vDir).rgb; gl_FragColor = vec4(pow(c, vec3(2.2)) * 2.2, uOpacity); }`,
+      side: THREE.BackSide, transparent: true, depthWrite: false, fog: false,
+    });
+    this.stars = new THREE.Mesh(new THREE.SphereGeometry(3000, 48, 24), starMat);
+    this.stars.renderOrder = -1;
+    this.stars.visible = false;
+    this.scene.add(this.stars);
+
+    const earth = new THREE.Group();
+    const R = 1500;
+    earthMap.colorSpace = THREE.SRGBColorSpace;
+    const globe = new THREE.Mesh(new THREE.SphereGeometry(R, 96, 64), new THREE.MeshStandardMaterial({ map: earthMap, roughness: 0.8, metalness: 0, envMapIntensity: 0.3 }));
+    const clouds = new THREE.Mesh(new THREE.SphereGeometry(R * 1.008, 96, 64), new THREE.MeshStandardMaterial({ map: earthClouds, transparent: true, depthWrite: false, opacity: 0.9, envMapIntensity: 0.3 }));
+    // 大気のリム発光（フレネル）
+    const atm = new THREE.Mesh(new THREE.SphereGeometry(R * 1.05, 64, 48), new THREE.ShaderMaterial({
+      vertexShader: /* glsl */`varying vec3 vN; varying vec3 vV; void main(){ vec4 mv = modelViewMatrix * vec4(position,1.0); vN = normalize(normalMatrix * normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }`,
+      fragmentShader: /* glsl */`varying vec3 vN; varying vec3 vV; void main(){ float f = pow(1.0 - abs(dot(vN, vV)), 3.0); gl_FragColor = vec4(vec3(0.35, 0.65, 1.0) * f * 2.0, f); }`,
+      transparent: true, depthWrite: false, side: THREE.BackSide, blending: THREE.AdditiveBlending, fog: false,
+    }));
+    earth.add(globe, clouds, atm);
+    earth.position.set(0, -R - 260, 0);
+    earth.rotation.z = 0.4;
+    earth.visible = false;
+    globe.material.fog = false; clouds.material.fog = false;
+    this.earth = earth; this.earthClouds = clouds;
+    this.scene.add(earth);
+  }
+
+  /** 高度で 空→雲海→宇宙 を切り替える */
+  updateAltitude(h, spaceStart) {
+    if (this.lastAlt !== undefined && Math.abs(this.lastAlt - h) < 0.2) return;
+    this.lastAlt = h;
+    const above = this.cloudSea && this.cameraY > this.cloudSea.position.y + 5;
+    this.water.visible = !above;
+    if (this.earth) this.earth.visible = above;
+    const k = spaceStart ? THREE.MathUtils.smoothstep(h, spaceStart - 140, spaceStart + 20) : 0;
+    if (this.stars) { this.stars.visible = k > 0.01; this.stars.material.uniforms.uOpacity.value = k; }
+    this.scene.backgroundIntensity = 0.95 * (1 - k * 0.85);
+    this.scene.fog.density = 0.0018 * (1 - k) * (above ? 0.6 : 1);
+    this.sun.intensity = 2.8 + k * 0.8;
   }
 
   setupDust() {
@@ -284,6 +364,10 @@ export class FX {
     this.sun.position.copy(focus).addScaledVector(this.sunDir, 90);
     this.sun.target.position.copy(focus);
     this.flareHolder.position.copy(this.camera.position).addScaledVector(this.sunDir, 1500);
+    this.cameraY = this.camera.position.y;
+    if (this.cloudSea) { this.cloudSea.material.uniforms.uTime.value = this.time; this.cloudSea.material.uniforms.uCam.value.copy(this.camera.position); }
+    if (this.stars?.visible) this.stars.position.copy(this.camera.position);
+    if (this.earthClouds && this.earth.visible) this.earthClouds.rotation.y += dt * 0.004;
 
     if (this.water.material.uniforms?.time) {
       this.water.material.uniforms.time.value += dt * 0.6;
@@ -295,7 +379,7 @@ export class FX {
     this.clouds.rotation.y += dt * 0.004;
     for (const sp of this.clouds.children) {
       const d = sp.getWorldPosition(_v).distanceTo(this.camera.position);
-      sp.material.opacity = sp.userData.baseOpacity * THREE.MathUtils.smoothstep(d, 12, 45);
+      sp.material.opacity = sp.userData.baseOpacity * THREE.MathUtils.smoothstep(d, 30, 90);
     }
 
     for (const d of this.dust) {

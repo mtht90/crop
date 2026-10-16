@@ -1,4 +1,4 @@
-const KEY = 'skyward.save.v1';
+const KEY = 'skyward.save.v2';
 const SKEY = 'skyward.settings.v1';
 const RKEY = 'skyward.records.v1';
 
@@ -20,6 +20,7 @@ export const Save = {
     write(RKEY, r);
     return !prev || time < prev.time;
   },
+  clearRecords() { try { localStorage.removeItem(RKEY); } catch { /* ignore */ } },
   bestHeight(h) {
     const r = this.records();
     if (h !== undefined && h > (r.bestHeight || 0)) { r.bestHeight = h; write(RKEY, r); }

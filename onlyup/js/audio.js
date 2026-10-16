@@ -1,4 +1,4 @@
-import { SOUNDS } from './assets.js';
+import { SOUNDS, resolve } from './assets.js';
 
 /** Howler.js による BGM / SE 管理（外部ホストの音源） */
 export class Audio {
@@ -10,9 +10,9 @@ export class Audio {
     if (!this.ok) return;
     for (const [name, src] of Object.entries(SOUNDS)) {
       if (name === 'bgm') continue;
-      this.sfx[name] = new window.Howl({ src, volume: 1, preload: true, pool: 6 });
+      this.sfx[name] = new window.Howl({ src: src.map(resolve), format: src.map((u) => u.split('.').pop()), volume: 1, preload: true, pool: 6 });
     }
-    this.bgm = new window.Howl({ src: SOUNDS.bgm, loop: true, volume: 0, html5: false, preload: true });
+    this.bgm = new window.Howl({ src: SOUNDS.bgm.map(resolve), format: SOUNDS.bgm.map((u) => u.split('.').pop()), loop: true, volume: 0, html5: false, preload: true });
   }
 
   setVolumes(v) {

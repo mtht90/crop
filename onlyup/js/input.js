@@ -22,7 +22,6 @@ export class Input {
       if (!this.enabled) return;
       if (e.code === 'Space') { this._jumpEdge = true; e.preventDefault(); }
       if (e.code === 'KeyP' || e.code === 'Escape') this.onPause?.();
-      if (e.code === 'KeyR') this.onRespawn?.();
     });
     addEventListener('keyup', (e) => this.keys.delete(e.code));
     addEventListener('blur', () => this.keys.clear());
@@ -86,7 +85,6 @@ export class Input {
       this.sprintToggle = !this.sprintToggle;
       sprint.classList.toggle('on', this.sprintToggle);
     });
-    document.getElementById('tRespawn').addEventListener('pointerdown', (e) => { e.preventDefault(); this.onRespawn?.(); });
   }
 
   rumble(strong = 0.5, weak = 0.5, duration = 120) {
@@ -128,7 +126,6 @@ export class Input {
       if (b(0) && !this._padPrev[0]) jump = true;
       if (b(7) || b(4) || b(10)) sprint = true;
       if (this.enabled && b(9) && !this._padPrev[9]) this.onPause?.();
-      if (this.enabled && b(3) && !this._padPrev[3]) this.onRespawn?.();
       if (b(12)) look.zoom -= dt * 6;
       if (b(13)) look.zoom += dt * 6;
       this._padPrev = gp.buttons.map((bt) => bt.pressed);
