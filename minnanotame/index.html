@@ -1,0 +1,750 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>みんなのため</title>
+<style>
+:root{--chat-bg:rgb(140,171,216);--green:#8de055;--ink:#1d2a3a}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:#0d0d0f;font-family:"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",Meiryo,sans-serif;-webkit-font-smoothing:antialiased;color:#111;overflow:hidden}
+#app{position:relative;max-width:430px;height:100dvh;margin:0 auto;overflow:hidden;background:var(--chat-bg);display:flex;flex-direction:column;transition:background-color 5s ease}
+@media (min-width:520px) and (min-height:700px){
+  #app{height:min(92dvh,880px);margin-top:4dvh;border-radius:30px;box-shadow:0 0 0 9px #1c1c1f,0 0 0 10px #333,0 30px 80px #000}
+}
+button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
+
+/* header */
+header{flex:none;display:flex;align-items:center;gap:6px;padding:calc(10px + env(safe-area-inset-top)) 10px 10px;color:var(--ink);transition:color 5s;background:rgba(255,255,255,.06);border-bottom:1px solid rgba(0,0,0,.06);z-index:2}
+.back{display:flex;align-items:center;gap:2px;font-size:22px;min-width:52px}
+.badge{font-size:12px;font-weight:700;min-width:18px;padding:0 5px;height:18px;line-height:18px;border-radius:9px;background:var(--ink);color:#fff;text-align:center;display:none}
+.title{flex:1;text-align:center;font-weight:700;font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hicons{display:flex;gap:12px;min-width:52px;justify-content:flex-end}
+.hicons button{font-size:15px;opacity:.75;width:22px;height:22px;display:grid;place-items:center}
+.hicons button.on{opacity:1}
+.hicons svg{width:20px;height:20px;stroke:var(--ink);fill:none;stroke-width:1.8}
+
+/* chat */
+#chat{flex:1;overflow-y:auto;overflow-x:hidden;padding:8px 10px 18px;scroll-behavior:smooth;-webkit-overflow-scrolling:touch}
+.pill{width:fit-content;max-width:86%;margin:12px auto;padding:3px 11px;border-radius:12px;background:rgba(0,0,0,.17);color:#fff;font-size:11px;text-align:center;line-height:1.5}
+.row{display:flex;margin-top:9px;animation:pop .22s ease-out}
+.row.cont{margin-top:3px}
+@keyframes pop{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.av{width:38px;height:38px;border-radius:50%;flex:none;display:grid;place-items:center;color:#fff;font-weight:700;font-size:15px;box-shadow:inset 0 0 0 2px rgba(255,255,255,.25)}
+.cont .av{visibility:hidden;height:0}
+.body{margin-left:8px;max-width:74%;min-width:0}
+.name{font-size:11px;color:#2c3b52;margin:1px 0 3px 3px}
+.cont .name{display:none}
+.line{display:flex;align-items:flex-end;gap:5px}
+.bubble{position:relative;background:#fff;border-radius:18px;padding:8px 12px;font-size:15px;line-height:1.5;word-break:break-word;white-space:pre-wrap}
+.other:not(.cont) .bubble::before{content:"";position:absolute;left:-5px;top:2px;width:14px;height:14px;background:#fff;border-bottom-right-radius:14px;clip-path:polygon(0 0,100% 0,100% 100%)}
+.meta{font-size:10px;color:#34445b;white-space:nowrap;line-height:1.25;flex:none}
+.self{justify-content:flex-end}
+.self .body{max-width:76%}
+.self .line{justify-content:flex-end}
+.self .bubble{background:var(--green)}
+.self:not(.cont) .bubble::after{content:"";position:absolute;right:-5px;top:2px;width:14px;height:14px;background:var(--green);border-bottom-left-radius:14px;clip-path:polygon(0 0,100% 0,0 100%)}
+.self .meta{text-align:right}
+.stamp{font-size:66px;line-height:1.05}
+#app.dark .meta,#app.dark .name{color:rgba(255,255,255,.72)}
+#app.dark header{color:#e8ecf2}
+#app.dark .hicons svg{stroke:#e8ecf2}
+
+/* media: screenshot */
+.shot{width:226px;border-radius:12px;overflow:hidden;background:#8ea9cf;border:1px solid rgba(0,0,0,.18);font-size:11px;box-shadow:0 1px 3px rgba(0,0,0,.15)}
+.shot-top{display:flex;justify-content:space-between;padding:3px 8px;background:#f3f3f3;color:#222;font-size:9px;font-weight:700}
+.shot-head{padding:4px 8px 5px;background:#f3f3f3;border-bottom:1px solid #ddd;font-weight:700;color:#222}
+.shot-body{padding:6px 7px 8px}
+.srow{display:flex;gap:5px;margin-top:6px;align-items:flex-start}
+.srow.s{justify-content:flex-end}
+.sav{width:20px;height:20px;border-radius:50%;flex:none;color:#fff;font-size:9px;font-weight:700;display:grid;place-items:center}
+.sname{font-size:8.5px;color:#334;margin-bottom:1px}
+.sb{background:#fff;border-radius:10px;padding:4px 7px;line-height:1.4;white-space:pre-wrap;word-break:break-word;max-width:170px}
+.s .sb{background:var(--green)}
+.srow.hl .sb{box-shadow:0 0 0 2px #e8332a}
+.shot-foot{padding:4px 8px;background:rgba(0,0,0,.55);color:#fff;font-size:9.5px;text-align:right}
+
+/* media: photo / album / story / note */
+.photo{width:220px;height:165px;border-radius:14px;display:flex;flex-direction:column;justify-content:center;align-items:center;position:relative;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.15)}
+.ph-e{font-size:40px;letter-spacing:2px;text-align:center;line-height:1.2;filter:drop-shadow(0 2px 2px rgba(0,0,0,.2))}
+.ph-c{position:absolute;bottom:8px;left:0;right:0;text-align:center;font-size:12px;color:#fff;font-weight:700;text-shadow:0 1px 3px rgba(0,0,0,.5)}
+.album{width:226px;background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.15)}
+.album-h{padding:8px 10px;font-weight:700;font-size:13px;display:flex;justify-content:space-between}
+.album-h span{font-weight:400;color:#888;font-size:11px}
+.album-g{display:grid;grid-template-columns:1fr 1fr;gap:2px}
+.album-g div{height:76px;background:#d9dde4;display:flex;align-items:flex-end;padding:5px;font-size:10px;color:#333;position:relative}
+.album-g div.more{background:#555;color:#fff;font-size:20px;justify-content:center;align-items:center}
+.story{width:180px;height:300px;border-radius:14px;background:linear-gradient(160deg,#3a2f4a,#7a5a6e 60%,#c79a8e);color:#fff;padding:12px;position:relative;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.story-top{font-size:10px;opacity:.85;display:flex;align-items:center;gap:6px}
+.story-top i{display:inline-block;width:18px;height:18px;border-radius:50%;background:#bbb}
+.story-bar{height:2px;background:rgba(255,255,255,.5);border-radius:2px;margin-bottom:8px}
+.story-t{position:absolute;top:45%;left:10px;right:10px;text-align:center;font-weight:700;font-size:15px;line-height:1.5;white-space:pre-wrap;text-shadow:0 1px 4px rgba(0,0,0,.4)}
+.story-tag{position:absolute;bottom:16px;left:0;right:0;text-align:center;font-size:11px;opacity:.8}
+.note{width:236px;background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.15)}
+.note-h{background:#f5f5f5;padding:6px 10px;font-size:11px;color:#666;border-bottom:1px solid #eee}
+.note-t{padding:10px 12px 4px;font-weight:700;font-size:15px}
+.note ol{padding:4px 12px 8px 30px;font-size:13.5px;line-height:1.7}
+.note-f{padding:6px 12px;border-top:1px solid #eee;font-size:10.5px;color:#999}
+
+/* media: sns post */
+.sns{width:262px;background:#fff;border-radius:14px;padding:11px 12px 8px;font-size:13px;color:#0f1419;box-shadow:0 1px 3px rgba(0,0,0,.15)}
+.sns-h{display:flex;gap:8px;align-items:center}
+.sns-av{width:34px;height:34px;border-radius:50%;background:#f0b54d;color:#fff;display:grid;place-items:center;font-weight:700;flex:none}
+.sns-h b{font-size:13.5px}
+.sns-h span{color:#536471;font-size:11.5px;display:block}
+.sns-t{margin:8px 0;line-height:1.55;white-space:pre-wrap;word-break:break-word}
+.sns-q{background:#f7f9f9;border-left:3px solid #cfd9de;padding:6px 8px;margin:6px 0;border-radius:4px}
+.sns-img{height:130px;border-radius:12px;overflow:hidden;position:relative;background:linear-gradient(180deg,#a7b4c4,#6d7887)}
+.sns-img .blur{position:absolute;inset:0;display:flex;justify-content:center;align-items:center;font-size:76px;filter:blur(7px)}
+.sns-img .cap{position:absolute;bottom:6px;left:8px;background:rgba(0,0,0,.6);color:#fff;font-size:11px;padding:2px 6px;border-radius:4px}
+.sns-s{display:flex;justify-content:space-between;color:#536471;font-size:12px;padding:8px 2px 6px;border-bottom:1px solid #eff3f4}
+.sns-s .lk{color:#f91880}
+.rep{display:flex;gap:7px;padding:7px 0 2px;opacity:0;animation:fadein .5s forwards}
+.rep i{width:24px;height:24px;border-radius:50%;flex:none;background:#c4ccd4}
+.rep div{font-size:12px;line-height:1.45}
+.rep b{font-size:11.5px;display:block}
+@keyframes fadein{to{opacity:1}}
+
+/* input bar */
+footer{flex:none;display:flex;align-items:center;gap:9px;padding:8px 10px calc(8px + env(safe-area-inset-bottom));background:#fff;z-index:2}
+footer svg{width:24px;height:24px;stroke:#444;fill:none;stroke-width:1.7;flex:none}
+#msg{flex:1;min-width:0;height:36px;border-radius:18px;border:none;background:#f2f3f5;padding:0 14px;font-size:16px;outline:none;font-family:inherit}
+#msg:disabled{color:#999}
+#send{width:30px;height:30px;display:grid;place-items:center}
+#send svg{stroke:#06c755;stroke-width:2}
+#send:disabled svg{stroke:#bbb}
+
+/* toast */
+#toasts{position:absolute;top:calc(8px + env(safe-area-inset-top));left:0;right:0;z-index:20;pointer-events:none}
+.toast{margin:0 8px 6px;padding:9px 11px;border-radius:16px;background:rgba(246,246,248,.94);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:0 6px 24px rgba(0,0,0,.25);display:flex;gap:10px;align-items:flex-start;animation:tin .35s ease-out;transition:opacity .5s,transform .5s}
+.toast.out{opacity:0;transform:translateY(-14px)}
+@keyframes tin{from{opacity:0;transform:translateY(-24px)}to{opacity:1;transform:none}}
+.toast .ic{width:34px;height:34px;border-radius:8px;flex:none;display:grid;place-items:center;color:#fff;font-weight:800;font-size:13px}
+.toast .tx{flex:1;min-width:0;font-size:13px;line-height:1.4}
+.toast .ap{display:flex;justify-content:space-between;font-size:11px;color:#777}
+.toast b{display:block}
+
+/* overlays */
+.ov{position:absolute;inset:0;z-index:30;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+#title{background:#0b0b0d;color:#ddd;padding:28px;gap:14px}
+#title h1{font-weight:500;font-size:34px;letter-spacing:.12em;color:#f2f2f2}
+#title .sub{font-size:12px;letter-spacing:.3em;color:#888;margin-top:-6px}
+#title .warn{font-size:11.5px;color:#9a8f8f;line-height:1.8;max-width:300px;border:1px solid #2a2a2e;padding:10px 12px;border-radius:8px}
+#title label{font-size:12px;color:#999;margin-top:6px}
+#title input{width:170px;text-align:center;font-size:17px;padding:8px;border-radius:10px;border:1px solid #333;background:#16161a;color:#eee;outline:none;font-family:inherit}
+#start{margin-top:6px;padding:11px 40px;border-radius:24px;background:#06c755;color:#fff;font-weight:700;font-size:15px}
+#title .hint{font-size:11px;color:#666;line-height:1.7}
+#fade{background:#000;opacity:0;pointer-events:none;transition:opacity 1.6s ease;color:#ccc;font-size:15px;letter-spacing:.25em}
+#fade.on{opacity:1;pointer-events:auto}
+#final{background:#000;display:none;color:#fff;gap:30px}
+#finalText{font-size:22px;letter-spacing:.08em;min-height:1.5em}
+#finalSub{opacity:0;transition:opacity 3s;color:#555;font-size:12px;letter-spacing:.3em;display:flex;flex-direction:column;gap:22px;align-items:center}
+#finalSub button{color:#777;border:1px solid #333;padding:7px 22px;border-radius:18px;font-size:12px;letter-spacing:.1em}
+#choice{position:absolute;left:0;right:0;bottom:0;z-index:25;background:rgba(0,0,0,.35);top:0;display:none;flex-direction:column;justify-content:flex-end}
+#choice .sheet{background:#fff;border-radius:18px 18px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom));animation:up .35s ease-out}
+@keyframes up{from{transform:translateY(100%)}to{transform:none}}
+#choice p{text-align:center;font-size:12px;color:#888;margin-bottom:12px}
+#choice button{display:block;width:100%;padding:14px;border-radius:12px;font-size:15px;margin-top:8px;background:#f2f3f5}
+#choice button.leave{color:#e0332c}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="back">‹ <span class="badge" id="badge">0</span></div>
+    <div class="title" id="gtitle">いつめん🌸 (6)</div>
+    <div class="hicons">
+      <button id="speedBtn" title="早送り">⏩</button>
+      <button id="soundBtn" class="on" title="通知音">🔔</button>
+    </div>
+  </header>
+  <div id="chat"></div>
+  <footer>
+    <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+    <svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="14" rx="3"/><circle cx="12" cy="13" r="3.5"/><path d="M8 6l1.5-2h5L16 6"/></svg>
+    <input id="msg" type="text" autocomplete="off" enterkeyhint="send" placeholder="メッセージを入力" maxlength="120">
+    <button id="send" disabled aria-label="送信"><svg viewBox="0 0 24 24"><path d="M4 12l16-8-6 16-2.5-6.5z"/><path d="M11.5 13.5L20 4"/></svg></button>
+  </footer>
+
+  <div id="toasts"></div>
+  <div id="choice"><div class="sheet">
+    <p>いつめん🌸 (6)</p>
+    <button class="leave" id="cLeave">グループを退会する</button>
+    <button id="cStay">何も言わずに残る</button>
+  </div></div>
+
+  <div class="ov" id="title">
+    <h1>『みんなのため』</h1>
+    <div class="sub">グループトーク・ホラー</div>
+    <div class="warn">※ 本作はフィクションです。<br>SNSでの晒し、集団によるいじめ、個人情報の拡散などの描写が含まれます。</div>
+    <label for="pname">あなたの名前</label>
+    <input id="pname" value="ユイ" maxlength="6">
+    <button id="start">トークをひらく</button>
+    <div class="hint">メッセージは自由に入力して送信できます。<br>画面をタップすると少し早く進みます。</div>
+  </div>
+  <div class="ov" id="fade"><div id="fadeText"></div></div>
+  <div class="ov" id="final">
+    <div id="finalText"></div>
+    <div id="finalSub"><span>『みんなのため』</span><button onclick="location.reload()">もう一度ひらく</button></div>
+  </div>
+</div>
+
+<script>
+'use strict';
+/* ===================== state ===================== */
+const S = {
+  name:'ユイ', last:'', lastCat:'', log:[], count:{}, clock:0, unread:0,
+  awaiting:null, speed:1, sound:true, left:false, interject:[], lastInterject:0, readers:5
+};
+const C = {
+  misaki:{n:'ミサキ', c:'#ec8db3'},
+  kana:  {n:'カナ',   c:'#7fb2e6'},
+  rina:  {n:'リナ',   c:'#efb24a'},
+  aya:   {n:'アヤ',   c:'#a68bd6'},
+  sota:  {n:'ソウタ', c:'#63bf86'},
+};
+const PLAYER_COLOR = '#9aa3ad';
+const SCENES = ['rgb(140,171,216)','rgb(128,156,198)','rgb(116,138,172)','rgb(103,119,145)','rgb(88,98,116)','rgb(70,76,88)'];
+
+const $ = id => document.getElementById(id);
+const chat = $('chat'), input = $('msg'), sendBtn = $('send');
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const q = () => { const t = S.last.replace(/\s+/g,' ').trim(); return t.length > 60 ? t.slice(0,60)+'…' : t; };
+const fmt = s => String(s).replace(/\{name\}/g, S.name).replace(/\{q\}/g, q());
+const resolve = v => typeof v === 'function' ? v(S) : v;
+const rnd = (a,b) => a + Math.random()*(b-a);
+
+/* ===================== timing ===================== */
+let skipFn = null;
+function sleep(ms){
+  return new Promise(r => {
+    const done = () => { clearTimeout(id); if (skipFn === done) skipFn = null; r(); };
+    const id = setTimeout(done, ms / S.speed);
+    skipFn = done;
+  });
+}
+chat.addEventListener('click', () => { if (skipFn) skipFn(); });
+const typingDelay = t => Math.min(2800, Math.max(750, 420 + t.length * 60));
+const clockStr = () => { const m = ((S.clock % 1440) + 1440) % 1440; return `${Math.floor(m/60)}:${String(m%60).padStart(2,'0')}`; };
+const tick = () => { if (Math.random() < .35) S.clock++; };
+
+/* ===================== audio ===================== */
+let ac = null;
+function tone(f, d, v, at=0){
+  if (!S.sound) return;
+  try{
+    ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+    const t = ac.currentTime + at, o = ac.createOscillator(), g = ac.createGain();
+    o.type = 'sine'; o.frequency.value = f;
+    g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(.0001, t + d);
+    o.connect(g).connect(ac.destination); o.start(t); o.stop(t + d);
+  }catch(e){}
+}
+const ding = () => { tone(1318,.09,.04); tone(988,.12,.035,.07); };
+const buzz = () => { tone(440,.12,.05); tone(440,.12,.05,.16); };
+
+/* ===================== rendering ===================== */
+let lastSender = null;
+function scrollDown(){ requestAnimationFrame(() => { chat.scrollTop = chat.scrollHeight; }); }
+function addPill(text){
+  const d = document.createElement('div'); d.className = 'pill'; d.textContent = text;
+  chat.appendChild(d); lastSender = null; scrollDown();
+}
+function addOther(who, inner){
+  const c = C[who]; tick();
+  const row = document.createElement('div');
+  row.className = 'row other' + (lastSender === who ? ' cont' : '');
+  row.innerHTML = `<div class="av" style="background:${c.c}">${c.n[0]}</div>
+    <div class="body"><div class="name">${c.n}</div>
+    <div class="line">${inner}<div class="meta">${clockStr()}</div></div></div>`;
+  chat.appendChild(row); lastSender = who; scrollDown();
+  return row;
+}
+function addSelf(text){
+  const row = document.createElement('div');
+  row.className = 'row self' + (lastSender === 'self' ? ' cont' : '');
+  row.innerHTML = `<div class="body"><div class="line"><div class="meta"><span class="rd"></span><br>${clockStr()}</div><div class="bubble">${esc(text)}</div></div></div>`;
+  chat.appendChild(row); lastSender = 'self'; scrollDown();
+  if (!S.left){
+    const rd = row.querySelector('.rd'); let n = 0;
+    const step = () => { n++; rd.textContent = n === 1 ? '既読' : '既読 ' + n; if (n < S.readers) setTimeout(step, rnd(250, 1800)); };
+    rd.textContent = ''; setTimeout(step, rnd(300, 900));
+  }
+}
+function toast({app, title, body, color}){
+  const box = $('toasts');
+  const t = document.createElement('div'); t.className = 'toast';
+  t.innerHTML = `<div class="ic" style="background:${color}">${esc(app[0])}</div>
+    <div class="tx"><div class="ap"><span>${esc(app)}</span><span>今</span></div><b>${esc(fmt(title))}</b>${body ? esc(fmt(body)) : ''}</div>`;
+  box.prepend(t); buzz();
+  while (box.children.length > 3) box.lastChild.remove();
+  S.unread += Math.floor(rnd(3, 24)); const b = $('badge'); b.style.display = 'inline-block'; b.textContent = S.unread > 999 ? '999+' : S.unread;
+  setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 600); }, 4200);
+}
+function animateCounters(root){
+  root.querySelectorAll('[data-n]').forEach(el => {
+    const target = +el.dataset.n, from = +(el.dataset.from || 0), dur = 8000, t0 = performance.now();
+    const f = t => { const p = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - p, 3);
+      el.textContent = Math.floor(from + (target - from) * e).toLocaleString(); if (p < 1) requestAnimationFrame(f); };
+    requestAnimationFrame(f);
+  });
+}
+
+/* ---- media builders ---- */
+function shot(title, rows, opt = {}){
+  return `<div class="shot"><div class="shot-top"><span>${opt.time || '22:47'}</span><span>📶 4G ▮▮▮</span></div>
+  <div class="shot-head">‹ ${esc(title)}</div><div class="shot-body">${rows.map(r =>
+    `<div class="srow ${r.self ? 's' : ''} ${r.hl ? 'hl' : ''}">${r.self ? '' : `<div class="sav" style="background:${r.c || '#b5b5b5'}">${esc(r.name[0])}</div>`}
+     <div>${r.self ? '' : `<div class="sname">${esc(r.name)}</div>`}<div class="sb">${esc(r.text)}</div></div></div>`).join('')}
+  </div>${opt.foot ? `<div class="shot-foot">${esc(opt.foot)}</div>` : ''}</div>`;
+}
+const photo = (emo, bg, cap) => `<div class="photo" style="background:${bg}"><div class="ph-e">${emo}</div>${cap ? `<div class="ph-c">${esc(cap)}</div>` : ''}</div>`;
+const noteCard = (title, items, foot) => `<div class="note"><div class="note-h">📝 ノート</div><div class="note-t">${esc(title)}</div><ol>${items.map(i => `<li>${esc(i)}</li>`).join('')}</ol><div class="note-f">${esc(foot)}</div></div>`;
+function sns(p){
+  return `<div class="sns"><div class="sns-h"><div class="sns-av">り</div><div><b>りな🎾</b><span>@rina_tns_2nd · ${p.ago || '今'}</span></div></div>
+  <div class="sns-t">${p.html}</div>${p.img ? `<div class="sns-img"><div class="blur">🧍‍♀️</div><div class="cap">${esc(p.img)}</div></div>` : ''}
+  <div class="sns-s"><span>💬 <span data-n="${p.rep}">0</span></span><span>🔁 <span data-n="${p.rt}">0</span></span><span class="lk">♥ <span data-n="${p.lk}">0</span></span><span>📊 <span data-n="${p.lk * 31}">0</span></span></div>
+  ${(p.replies || []).map((r, i) => `<div class="rep" style="animation-delay:${1.2 + i * 1.5}s"><i></i><div><b>${esc(r[0])}</b>${esc(r[1])}</div></div>`).join('')}</div>`;
+}
+
+/* ===================== script DSL ===================== */
+const m = (who, text, delay) => ({t:'msg', who, text, delay});
+const D = (text, time) => ({t:'date', text, time});
+const sys = (text, delay) => ({t:'sys', text, delay});
+const img = (who, html, delay) => ({t:'img', who, html, delay});
+const stamp = (who, e, delay) => ({t:'stamp', who, e, delay});
+const wait = ms => ({t:'wait', ms});
+const notify = (app, color, title, body, delay) => ({t:'toast', app, color, title, body, delay});
+const ask = o => ({t:'input', ...o});
+const fn = f => ({t:'fn', f});
+const scene = (i, interject = []) => ({t:'scene', i, interject});
+const blackout = text => ({t:'blackout', text});
+
+/* ===================== classify player text ===================== */
+const RULES = [
+  ['plea',     /やめて|お願い|おねがい|許して|ゆるして|助けて|たすけて|消して|けして|やりすぎ|ひどい|酷い|もう無理|つらい|辛い|勘弁/],
+  ['apology',  /ごめん|ゴメン|すみません|すいません|申し訳|もうしわけ|反省|悪かった|謝/],
+  ['anger',    /うるさい|うざ|ウザ|しつこい|ふざけ|黙れ|だまれ|いい加減|最低|死ね|きも|キモ|は[?？]|はぁ|ムカつ|知るか|関係ない|偽善/],
+  ['deny',     /違う|ちがう|私じゃ|わたしじゃ|俺じゃ|僕じゃ|やってない|してない|知らない|しらない|誤解|嘘じゃ|証拠|勘違い/],
+  ['excuse',   /でも|だって|つい|悪気|わざと|そんなつもり|仕方|しかた|冗談|ノリ|心配で/],
+  ['question', /なんで|何で|どうして|なぜ|[?？]/],
+];
+function classify(t){
+  t = t.trim(); if (!t) return 'silence';
+  for (const [k, re] of RULES) if (re.test(t)) return k;
+  return t.length <= 2 ? 'short' : 'other';
+}
+const YES = /うん|はい|分かっ|わかっ|守る|まもる|了解|りょ|ok|OK|オッケ/;
+
+/* ===================== engine ===================== */
+async function run(steps){ for (const st of steps) await exec(st); }
+async function exec(st){
+  switch (st.t){
+    case 'msg': {
+      const text = fmt(resolve(st.text));
+      await sleep(st.delay ?? typingDelay(text));
+      addOther(st.who, `<div class="bubble">${esc(text)}</div>`); ding(); break;
+    }
+    case 'date': await sleep(700); S.clock = st.time; addPill(st.text); await sleep(900); break;
+    case 'sys': await sleep(st.delay ?? 1000); addPill(fmt(st.text)); break;
+    case 'img': {
+      await sleep(st.delay ?? 1500);
+      const row = addOther(st.who, resolve(st.html)); animateCounters(row); ding(); break;
+    }
+    case 'stamp': await sleep(st.delay ?? 900); addOther(st.who, `<div class="stamp">${st.e}</div>`); ding(); break;
+    case 'wait': await sleep(st.ms); break;
+    case 'toast': await sleep(st.delay ?? 900); toast(st); break;
+    case 'input': { const cat = await waitInput(st); await run(st.branches[cat] || st.branches.default || []); break; }
+    case 'fn': { const r = st.f(S); if (Array.isArray(r)) await run(r); break; }
+    case 'scene': $('app').style.setProperty('--chat-bg', SCENES[st.i]); $('app').classList.toggle('dark', st.i >= 3); S.interject = st.interject; break;
+    case 'blackout': await doBlackout(st.text); break;
+  }
+}
+
+/* ---- player input ---- */
+let collect = null;
+function waitInput(st){
+  return new Promise(res => {
+    S.awaiting = {st, res, elapsed:0, pressured:false, texts:[]};
+    if (matchMedia('(pointer:fine)').matches) input.focus();
+    S.timer = setInterval(() => {
+      const a = S.awaiting; if (!a || a.texts.length || input.value.trim()) return;
+      a.elapsed += S.speed > 1 ? 2 : 1;
+      if (st.pressure && !a.pressured && a.elapsed >= (st.pressureAt || 20)){
+        a.pressured = true; addOther(st.pressure[0], `<div class="bubble">${esc(fmt(st.pressure[1]))}</div>`); ding();
+      }
+      if (a.elapsed >= (st.timeout || 45)) finishInput();
+    }, 1000);
+  });
+}
+function finishInput(){
+  const a = S.awaiting; if (!a) return;
+  clearInterval(S.timer); clearTimeout(collect); S.awaiting = null;
+  S.last = a.texts.join('\n');
+  const cat = (a.st.classify || classify)(S.last);
+  S.lastCat = cat; S.count[cat] = (S.count[cat] || 0) + 1;
+  setTimeout(() => a.res(cat), 500);
+}
+function send(){
+  const text = input.value.trim(); if (!text || input.disabled) return;
+  input.value = ''; sendBtn.disabled = true;
+  addSelf(text); S.log.push(text);
+  if (S.awaiting){
+    // 連投はまとめて1つの返答として扱う
+    S.awaiting.texts.push(text); clearTimeout(collect); collect = setTimeout(finishInput, 2400);
+  } else if (S.interject.length && Date.now() - S.lastInterject > 9000 && Math.random() < .5){
+    S.lastInterject = Date.now();
+    const [who, t] = S.interject[Math.floor(Math.random() * S.interject.length)];
+    setTimeout(() => { addOther(who, `<div class="bubble">${esc(fmt(t))}</div>`); ding(); }, rnd(1500, 3000));
+  }
+}
+input.addEventListener('input', () => { sendBtn.disabled = !input.value.trim(); });
+input.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing && e.keyCode !== 229){ e.preventDefault(); send(); } });
+input.addEventListener('focus', scrollDown);
+sendBtn.addEventListener('click', send);
+$('speedBtn').addEventListener('click', e => { S.speed = S.speed > 1 ? 1 : 2.5; e.currentTarget.classList.toggle('on', S.speed > 1); });
+$('speedBtn').classList.remove('on');
+$('soundBtn').addEventListener('click', e => { S.sound = !S.sound; e.currentTarget.classList.toggle('on', S.sound); e.currentTarget.textContent = S.sound ? '🔔' : '🔕'; });
+
+/* ---- transitions / ending ---- */
+async function doBlackout(text){
+  const f = $('fade'); $('fadeText').textContent = text;
+  f.classList.add('on'); await new Promise(r => setTimeout(r, 4200));
+  f.classList.remove('on'); await new Promise(r => setTimeout(r, 1700));
+}
+function choice(){
+  return new Promise(res => {
+    const box = $('choice'); box.style.display = 'flex'; input.blur();
+    $('cLeave').onclick = () => { box.style.display = 'none'; res('leave'); };
+    $('cStay').onclick  = () => { box.style.display = 'none'; res('stay'); };
+  });
+}
+async function finale(){
+  input.disabled = true;
+  const f = $('fade'); $('fadeText').textContent = ''; f.classList.add('on');
+  await new Promise(r => setTimeout(r, 2600));
+  const fin = $('final'); fin.style.display = 'flex';
+  const line = '今日も楽しかったね！', el = $('finalText');
+  await new Promise(r => setTimeout(r, 1800));
+  tone(1318,.09,.03); tone(988,.12,.025,.07);
+  for (const ch of line){ el.textContent += ch; await new Promise(r => setTimeout(r, 130)); }
+  setTimeout(() => { $('finalSub').style.opacity = 1; }, 5200);
+}
+
+/* ===================== SCRIPT ===================== */
+const OFF_EARLY = [['misaki','順番に話そ？'], ['rina','今それ関係ある？'], ['aya','（スクショした）']];
+const OFF_LATE  = [['rina','必死すぎ笑'], ['aya','保存'], ['misaki','落ち着いて'], ['rina','それも載せとくね〜']];
+
+const PROLOGUE = [
+  scene(0, []),
+  D('10月2日(水)', 21*60+38),
+  m('rina','明日の英語の小テスト、まじむり'),
+  m('sota','範囲どこだっけ'),
+  m('kana','p.45〜60だよ〜\n単語だけ覚えればいけると思う！'),
+  m('misaki','カナ神'),
+  m('rina','カナいつもありがと🙏🙏'),
+  stamp('kana','🙆‍♀️'),
+  m('aya','{name}は勉強した？'),
+  ask({timeout:40, branches:{
+    silence:[ m('rina','寝てる？笑'), m('misaki','既読はついてる笑') ],
+    apology:[ m('rina','なんで謝ってんのww') ],
+    default:[ m('rina','ほんとに〜？笑'), m('misaki','まあ{name}なら大丈夫でしょ') ],
+  }}),
+  m('kana','明日の朝、一緒に単語やろ〜'),
+  m('misaki','じゃ、また明日ね'),
+  stamp('rina','💤'),
+  wait(2200),
+];
+
+const CH1 = [
+  scene(1, OFF_EARLY),
+  D('10月3日(木)', 23*60+12),
+  m('misaki','ちょっといい？'),
+  m('misaki','これ、見た人いる？'),
+  img('misaki', S => shot('テニス部 2年 (14)', [
+    {name:'さき', c:'#d9a', text:'カナ最近元気なくない？'},
+    {name:S.name, c:PLAYER_COLOR, text:'ここだけの話、カナって心療内科通ってるらしいよ笑', hl:true},
+    {name:S.name, c:PLAYER_COLOR, text:'薬も飲んでるって。本人には内緒ね', hl:true},
+    {name:'ゆな', c:'#9bd', text:'え、まじ？'},
+  ], {time:'22:41'})),
+  m('rina','え'),
+  m('rina','は？？？'),
+  m('sota','これ、{name}…？'),
+  m('aya','テニス部のグループ。私のところにも回ってきた'),
+  m('kana','……'),
+  m('kana','なんで'),
+  m('kana','{name}にしか話してないのに'),
+  m('misaki','{name}、説明して'),
+  ask({timeout:50, pressureAt:20, pressure:['misaki','既読ついてるよね'], branches:{
+    apology:[ m('misaki','認めるんだね'), m('rina','ごめんで済むと思ってる？'), m('kana','誰にも言わないでって、言ったよね') ],
+    deny:[ m('misaki','スクショあるのに？'), m('rina','名前もアイコンも{name}じゃん'), m('rina','この期に及んで嘘つくの？') ],
+    excuse:[ m('rina','「{q}」って何？'), m('misaki','言い訳はあとで聞くから'), m('sota','いや、言い訳になってないって…') ],
+    anger:[ m('rina','逆ギレ？？'), m('sota','{name}、それはないわ'), m('misaki','怒りたいのはカナの方だと思うけど') ],
+    plea:[ m('rina','やめてって、何を？'), m('misaki','まだ何もしてないよ。話を聞いてるだけ') ],
+    question:[ m('misaki','質問してるのはこっちなんだけど'), m('rina','ほんとそれ') ],
+    silence:[ m('rina','無視？'), m('misaki','黙ってれば終わると思ってる？') ],
+    default:[ m('misaki','「{q}」'), m('misaki','……それだけ？'), m('rina','意味わかんない') ],
+  }}),
+  m('aya','あと、これも'),
+  img('aya', S => shot('カナ', [
+    {name:'カナ', c:C.kana.c, text:'最近、部活で変な噂されてる気がする…\n{name}なにか知ってる？'.replace('{name}', S.name)},
+    {self:true, name:S.name, text:'え、知らないよ！'},
+    {self:true, name:S.name, text:'誰にも言ってないよ、信じて！', hl:true},
+  ], {time:'19:02', foot:'10月1日'})),
+  m('aya','先週のカナとのトーク。カナに見せてもらった'),
+  m('aya','嘘もついてたんだね'),
+  m('rina','最悪'),
+  m('sota','……'),
+  m('misaki','今日はもう遅いから、続きは明日にしよ'),
+  m('misaki','これ以上、カナが傷つかないように。'),
+  m('rina','賛成'),
+  m('aya','うん'),
+  m('sota','…うん'),
+  m('kana','ごめん、今日はもう寝るね'),
+  wait(2000),
+];
+
+const CH2 = [
+  scene(2, OFF_EARLY),
+  D('10月4日(金)', 20*60+3),
+  m('misaki','昨日のこと、ちゃんと整理したい'),
+  m('misaki','最初に言っとくけど、責めたいわけじゃないの'),
+  m('misaki','{name}に、ちゃんと反省してほしいだけ'),
+  m('rina','うちらが止めないと、また誰かに同じことするでしょ'),
+  m('aya','実際、テニス部はもう全員知ってるし'),
+  m('misaki','まず、カナにここで謝って'),
+  ask({timeout:60, pressureAt:25, pressure:['rina','まだ？'], branches:{
+    apology:[
+      m('misaki','……うん'),
+      fn(S => S.count.apology >= 2 ? [ m('aya','それ、昨日とほぼ同じ文だね') ] : null),
+      m('rina','「{q}」'),
+      m('rina','なんか他人事っぽくない？'),
+      m('misaki','誰に何をしたのか、自分の言葉で言えてないよね'),
+      m('sota','……'),
+    ],
+    silence:[ m('rina','謝ることすらできないの？'), m('misaki','既読つけて黙るの、一番カナに失礼だと思う') ],
+    default:[ m('misaki','謝ることもできないんだ'), m('aya','「{q}」…これが返事？'), m('rina','やばすぎでしょ') ],
+  }}),
+  m('misaki','カナ、どう？'),
+  m('kana','……もういいよ'),
+  m('kana','これ以上広めないでくれたら、それで'),
+  m('misaki','カナは優しすぎるよ'),
+  m('rina','それじゃ{name}のためにならないって'),
+  m('aya','カナがよくても、うちらはよくない'),
+  m('misaki','ちゃんと分かるまで、みんなで向き合お？'),
+  m('misaki','みんなのためだから'),
+  sys('ミサキがノートを作成しました'),
+  img('misaki', S => noteCard(`${S.name}との約束`, [
+    'カナの話を、二度と誰にもしない',
+    '毎日このグループで反省を報告する',
+    '嘘をついたら、みんなに共有する',
+  ], 'ミサキ ・ いいね 4 ・ コメント 0')),
+  m('misaki','守れるよね？'),
+  ask({timeout:40, pressureAt:18, pressure:['misaki','返事は？'], classify: t => YES.test(t) ? 'yes' : classify(t), branches:{
+    yes:[ m('misaki','ありがと。信じてるからね'), m('rina','破ったら知らないよ〜') ],
+    default:[ m('misaki','「はい」か「いいえ」で答えて'), m('rina','返事もまともにできないの？'), m('misaki','……まあいいや。守ってもらうから') ],
+  }}),
+  wait(2000),
+];
+
+const CH3 = [
+  scene(3, OFF_EARLY),
+  D('10月7日(月)', 21*60+40),
+  m('aya','ちょっと思い出したことあって'),
+  m('aya','中2のとき、{name}がマユちゃんの手紙をクラス中に回したことあったよね'),
+  m('rina','あったwww'),
+  m('rina','あれでマユ、学校来なくなったんじゃなかった？'),
+  m('sota','いや、それは今関係なくない…？'),
+  m('misaki','関係あるよ'),
+  m('misaki','前からそういう人だったってことでしょ'),
+  sys('アヤがアルバム「記録」に写真を12枚追加しました'),
+  img('aya', S => `<div class="album"><div class="album-h">記録<span>12枚</span></div><div class="album-g">
+    <div>中2 手紙</div><div>インスタ 2023.8</div><div>テニス部グループ</div><div class="more">+9</div></div></div>`),
+  m('aya','念のため、まとめといた'),
+  m('rina','アヤ仕事はやすぎ'),
+  fn(S => S.log.length ? [
+    m('aya','{name}が前にここで言ってたことも、入れてある'),
+    img('aya', shot('いつめん🌸 (6)', [{name:S.name, c:PLAYER_COLOR, text:S.log[0], hl:true}], {time:'21:43', foot:'10月2日'})),
+  ] : null),
+  m('rina','てか{name}の昔のインスタ、まだ残ってるよ'),
+  img('rina', S => `<div class="story"><div class="story-bar"></div><div class="story-top"><i></i>${esc(S.name)}_0704 ・ 2023/08/14</div>
+    <div class="story-t">部活の空気読めない子\nほんと無理なんだけど笑</div><div class="story-tag">#愚痴</div></div>`),
+  m('rina','これ誰のこと？笑'),
+  m('misaki','{name}、今日の反省報告、まだだよね'),
+  ask({timeout:50, pressureAt:20, pressure:['aya','約束2'], branches:{
+    apology:[ m('aya','保存しとくね'), img('aya', S => shot('いつめん🌸 (6)', [{name:S.name, c:PLAYER_COLOR, text:S.last}], {time:'21:58', foot:'保存しました ✓'})), m('misaki','毎日ちゃんと言えるといいね') ],
+    plea:[ m('rina','「{q}」って、マユも思ってたと思うよ？'), m('misaki','自分がされたら嫌なこと、してきたんだよ') ],
+    anger:[ m('rina','ほら本性出た'), m('aya','スクショした'), m('misaki','反省してないってことでいいんだね') ],
+    deny:[ m('aya','記録、全部あるよ'), m('rina','また嘘？約束3だよね') ],
+    silence:[ m('aya','約束2、守れてないね'), m('rina','約束3も破ったらどうなるかな〜') ],
+    default:[ m('misaki','それ、反省？'), m('aya','一応、保存しとく') ],
+  }}),
+  m('rina','てかさ、これうちらの中だけで終わらせていいの？'),
+  m('rina','{name}みたいな人がいるって、ちゃんと知ってもらった方がよくない？'),
+  m('rina','次の被害者が出る前に'),
+  m('misaki','……被害が広がらないため、ってことなら'),
+  m('sota','いや、さすがにそれは'),
+  m('rina','ソウタって{name}の味方なの？'),
+  m('sota','そういうわけじゃないけど'),
+  m('aya','じゃあ何？'),
+  m('sota','……ごめん、なんでもない'),
+  wait(2200),
+];
+
+const CH4 = [
+  scene(4, OFF_LATE),
+  D('10月9日(水)', 7*60+15),
+  m('rina','投稿した〜'),
+  img('rina', () => sns({ago:'2時間', img:'○○高 2年 テニス部',
+    html: esc('同じ学校の子が、友達が心療内科に通ってることを部活で言いふらして、本人には「言ってない」って嘘ついてた。\n友達は今も学校に来るのがつらそう。\nこういう人、ほんとにいるんだね。\n#拡散希望'),
+    rep:612, rt:3880, lk:9214,
+    replies:[['名無し','特定した。○○高のテニス部でしょ'],['ゆう','最低すぎる'],['匿名希望','インスタこれ？鍵かかってない'],['m','もう名前出していいと思う']] })),
+  m('rina','めっちゃ伸びてるww'),
+  m('aya','引用もすごい。もう特定されてる'),
+  m('misaki','名前は出してないし、事実しか書いてないから'),
+  m('misaki','これで同じ思いをする人が減るなら'),
+  notify('Instagram','#d6249f','メッセージリクエスト','知らないアカウントから23件のリクエストがあります'),
+  notify('LINE','#06c755','友だち追加','知らない人に友だち追加されました（11）', 1400),
+  m('misaki','{name}、何か言いたいことある？'),
+  ask({timeout:50, pressureAt:20, pressure:['rina','見てるでしょ笑'], branches:{
+    silence:[
+      m('rina','黙ってるのが答えってことでいいよね'), m('rina','追記しとく'),
+      img('rina', () => sns({ago:'今', html:esc('【追記】本人、既読無視してます。\nこれが答えみたいです。'), rep:233, rt:1204, lk:5530,
+        replies:[['名無し','逃げてて草'],['k','反省ゼロ'],['あ','被害者の子がかわいそう']] })),
+    ],
+    default:[
+      m('rina','あ、それいいね'), m('rina','本人の言葉、そのまま載せとく'),
+      img('rina', S => sns({ago:'今', html:`${esc('【追記】本人からのコメントです↓')}<div class="sns-q">${esc(S.last)}</div>${esc('これで反省してるつもりらしい笑')}`, rep:947, rt:5102, lk:13870,
+        replies:[['名無し','謝罪(笑)'],['こーへい','被害者ヅラきっつ'],['あ','これで許されると思ってるのがすごい'],['n','友達の子かわいそう']] })),
+    ],
+  }}),
+  m('aya','反応やば'),
+  notify('X','#111','通知','あなたについてのポストに返信がありました（99+）'),
+  m('kana','ねえ'),
+  m('kana','消して'),
+  m('kana','病院のことまで書いてあるじゃん'),
+  m('kana','クラスの子に「心療内科ってカナのこと？」って聞かれた'),
+  m('rina','名前出してないから大丈夫だよ〜'),
+  m('misaki','カナのためにやってるんだよ？'),
+  m('aya','今消したら、{name}の思うつぼだよ'),
+  m('rina','カナは被害者なんだから、堂々としてていいんだよ'),
+  m('kana','……'),
+  m('kana','そっか', 2600),
+  wait(2400),
+];
+
+const CH5 = [
+  scene(5, OFF_LATE),
+  D('10月12日(土)', 22*60+51),
+  m('aya','{name}のバイト先、駅前のカフェだよね'),
+  m('aya','お店のアカウントにDMしといた'),
+  m('aya','「こういう人を雇ってて大丈夫ですか？」って。投稿のリンクつけて'),
+  m('rina','有能すぎ'),
+  m('misaki','私も、テニス部の顧問の先生に報告しといた'),
+  m('misaki','知ってて黙ってるのは、加担してるのと同じだから'),
+  m('rina','あと{name}のお母さんのFacebook見つけた笑'),
+  m('rina','コメント欄に投稿のリンク貼っとく？'),
+  m('misaki','……親には、知っておいてもらうべきかもね'),
+  m('aya','もう貼った'),
+  notify('LINE','#06c755','店長','{name}さん、少しお話があります。明日シフト前に事務所まで来てください'),
+  notify('LINE','#06c755','お母さん','何これ。学校から電話あった。帰ったら話あるから', 1600),
+  notify('LINE','#06c755','テニス部 2年 (14)','さきが{name}を退会させました', 1600),
+  m('misaki','{name}'),
+  m('misaki','これが、自分のしたことの結果だよ'),
+  ask({timeout:60, pressureAt:25, pressure:['aya','既読、ついたね'], branches:{
+    apology:[ m('aya', S => `謝罪、これで${S.count.apology}回目。全部保存してある`), m('rina','何回謝っても変わらないね〜'), m('misaki','言葉じゃなくて、行動で示して') ],
+    plea:[ m('misaki','やめて、って'), m('misaki','カナが言えなかった言葉だよ'), m('rina','ほんとそれ') ],
+    anger:[ m('rina','また逆ギレ'), m('aya','スクショ。これも追記しとく'), m('misaki','反省してないって、みんなにもわかったと思う') ],
+    silence:[ m('rina','既読無視、また〜？'), m('misaki','逃げても何も変わらないよ') ],
+    default:[ m('misaki','「{q}」'), m('misaki','被害者ぶるのは、もうやめよ？'), m('aya','保存') ],
+  }}),
+  wait(2500),
+  m('sota','なあ'),
+  m('sota','もうよくない？'),
+  m('sota','{name}、もう3日学校来てないし'),
+  m('sota','カナも消してって言ってたじゃん'),
+  wait(2200),
+  m('rina','は？'),
+  m('misaki','ソウタ、今それ言う？'),
+  m('aya','ソウタ'),
+  img('aya', () => shot('男テニ 2年 (9)', [
+    {name:'たくみ', c:'#8ab', text:'カナの病院の話きいた？'},
+    {name:'ソウタ', c:C.sota.c, text:'きいたきいた笑', hl:true},
+    {name:'ソウタ', c:C.sota.c, text:'まあ、ちょっとわかるかも笑', hl:true},
+  ], {time:'23:20', foot:'10月3日'})),
+  m('aya','ソウタも、笑ってたよね'),
+  m('sota','……', 2800),
+  m('sota','ごめん'),
+  m('sota','俺が間違ってた'),
+  m('sota','{name}、ちゃんと反省しろよ'),
+  wait(2600),
+  m('misaki','もう、ここまでにしよっか'),
+  m('misaki','{name}も、十分わかったと思うし'),
+  m('misaki','これからは、みんなで前を向こう'),
+  m('rina','うん'),
+  m('aya','うん'),
+  m('sota','うん'),
+  wait(1500),
+  ask({timeout:30, branches:{ default:[] }}),
+  wait(3500),
+];
+
+const EPILOGUE = [
+  blackout('── 5か月後'),
+  scene(0, []),
+  D('3月21日(土)', 20*60+26),
+  img('rina', photo('🧑‍🦰👩👧🧑👩‍🦱', 'linear-gradient(135deg,#ffd1e8,#c8e6ff)', '春休み🌸'), 800),
+  m('rina','今日のプリ、盛れすぎじゃない？'),
+  m('aya','保存した〜'),
+  m('misaki','カナ、誕生日おめでとう🎂'),
+  img('misaki', photo('🎂🕯️', 'linear-gradient(135deg,#fff3c4,#ffc9c9)', 'HAPPY BIRTHDAY KANA')),
+  m('aya','おめでとう〜！'),
+  m('sota','おめでと！'),
+  stamp('rina','🎉'),
+  m('kana','ありがと〜！みんな大好き'),
+  m('rina','来週のディズニー、何時集合にする？'),
+  m('misaki','8時に舞浜でいいんじゃない？'),
+  m('sota','早っ笑'),
+  m('rina','カチューシャおそろいにしよ'),
+  m('kana','5人おそろいね！'),
+  wait(2400),
+  m('rina','てかさ'),
+  m('rina','ほんと、あの頃はみんな大変だったよね笑'),
+  wait(2200),
+  m('misaki','でも、あれがあったから今の私たちがあるんじゃない？'),
+  m('aya','それはほんとにそう'),
+  m('sota','わかる笑'),
+  m('kana','そうだね笑', 2400),
+  stamp('rina','😂', 700),
+  stamp('misaki','🤣', 600),
+  stamp('aya','😂', 600),
+  wait(1800),
+  ask({timeout:25, branches:{ default:[] }}),
+  wait(3500),
+  m('misaki','じゃ、また来週ね〜'),
+  wait(2000),
+];
+
+/* ===================== boot ===================== */
+async function main(){
+  for (const ch of [PROLOGUE, CH1, CH2, CH3, CH4, CH5, EPILOGUE]) await run(ch);
+  const pick = await choice();
+  if (pick === 'leave'){
+    S.left = true; addPill(`${S.name}が退会しました`);
+    input.disabled = true; input.placeholder = 'このグループには参加していません'; sendBtn.disabled = true;
+    await sleep(3200);
+  } else {
+    await run([ m('rina','おやすみ〜'), m('kana','おやすみ🌙'), stamp('aya','💤'), wait(2600) ]);
+  }
+  await finale();
+}
+$('start').addEventListener('click', () => {
+  S.name = ($('pname').value.trim() || 'ユイ').slice(0, 6);
+  tone(1,.01,.0001);                       // iOS向けにAudioContextを起こす
+  $('title').style.display = 'none';
+  main();
+});
+$('pname').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing) $('start').click(); });
+</script>
+</body>
+</html>
