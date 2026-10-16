@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+  <meta name="theme-color" content="#0d1b2a">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="description" content="足場を渡ってひたすら上を目指す、ブラウザ3D高所登りゲーム。">
+  <title>SKYWARD — 天空登攀</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="preconnect" href="https://dl.polyhaven.org" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Zen+Kaku+Gothic+New:wght@400;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
+      "@dimforge/rapier3d-compat": "https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.14.0/rapier.es.js",
+      "gsap": "https://cdn.jsdelivr.net/npm/gsap@3.12.5/index.js",
+      "lil-gui": "https://cdn.jsdelivr.net/npm/lil-gui@0.19.2/dist/lil-gui.esm.min.js",
+      "simplex-noise": "https://cdn.jsdelivr.net/npm/simplex-noise@4.0.3/dist/esm/simplex-noise.js"
+    }
+  }
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/howler@2.2.4/dist/howler.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/nipplejs@0.10.2/dist/nipplejs.js" defer></script>
+</head>
+<body>
+  <div id="app"></div>
+
+  <!-- ===== Loading ===== -->
+  <section id="loading" class="screen">
+    <div class="load-inner">
+      <h1 class="logo">SKYWARD<span>天空登攀</span></h1>
+      <div class="bar"><i id="loadBar"></i></div>
+      <p id="loadText">外部アセットを読み込み中…</p>
+      <p id="loadError" class="err" hidden></p>
+    </div>
+  </section>
+
+  <!-- ===== Title ===== -->
+  <section id="title" class="screen" hidden>
+    <div class="title-inner">
+      <h1 class="logo big">SKYWARD<span>天空登攀 — ONLY UP</span></h1>
+      <p class="tagline">落ちたら、そこからやり直し。足場を渡り、雲の上の神殿を目指せ。</p>
+
+      <div class="diff" role="radiogroup" aria-label="難易度">
+        <label><input type="radio" name="diff" value="easy"><span><b>かんたん</b><small>二段ジャンプ・自動救助・チェックポイント</small></span></label>
+        <label><input type="radio" name="diff" value="normal" checked><span><b>ふつう</b><small>チェックポイントあり</small></span></label>
+        <label><input type="radio" name="diff" value="hard"><span><b>ONLY UP</b><small>チェックポイントなし。海に落ちたら最初から</small></span></label>
+      </div>
+
+      <div class="menu">
+        <button id="btnContinue" class="btn primary" hidden>つづきから <small id="continueInfo"></small></button>
+        <button id="btnNew" class="btn primary">はじめから</button>
+        <div class="row">
+          <button id="btnSettings" class="btn">設定</button>
+          <button id="btnHelp" class="btn">操作方法</button>
+          <button id="btnCredits" class="btn">クレジット</button>
+        </div>
+      </div>
+      <p id="records" class="records"></p>
+    </div>
+  </section>
+
+  <!-- ===== HUD ===== -->
+  <section id="hud" hidden>
+    <div class="hud-left">
+      <div class="alt"><b id="hudHeight">0.0</b><span>m</span></div>
+      <div class="sub">最高 <b id="hudBest">0</b> m ・ <span id="hudZone">—</span></div>
+    </div>
+    <div class="hud-right">
+      <div class="chip"><span>⏱</span><b id="hudTime">00:00</b></div>
+      <div class="chip"><span>↓</span><b id="hudFalls">0</b></div>
+      <button id="btnPause" class="chip btn-icon" aria-label="ポーズ">❚❚</button>
+    </div>
+    <div class="altbar"><div id="altZones"></div><i id="altBest"></i><i id="altMe"></i></div>
+    <div id="banner"><small id="bannerSub"></small><b id="bannerMain"></b></div>
+    <div id="toast"></div>
+    <div id="fade"></div>
+  </section>
+
+  <!-- ===== Touch controls ===== -->
+  <section id="touch" hidden>
+    <div id="joyZone"></div>
+    <div id="lookZone"></div>
+    <button id="tJump" class="tbtn big" aria-label="ジャンプ">▲</button>
+    <button id="tSprint" class="tbtn" aria-label="ダッシュ">DASH</button>
+    <button id="tRespawn" class="tbtn small" aria-label="チェックポイントへ">⟲</button>
+  </section>
+
+  <!-- ===== Pause ===== -->
+  <section id="pause" class="screen modal" hidden>
+    <div class="panel">
+      <h2>PAUSE</h2>
+      <button id="btnResume" class="btn primary">再開</button>
+      <button id="btnToCheckpoint" class="btn">チェックポイントへ戻る</button>
+      <button id="btnPauseSettings" class="btn">設定</button>
+      <button id="btnFullscreen" class="btn">フルスクリーン</button>
+      <button id="btnQuit" class="btn ghost">タイトルへ</button>
+    </div>
+  </section>
+
+  <!-- ===== Settings ===== -->
+  <section id="settings" class="screen modal" hidden>
+    <div class="panel wide">
+      <h2>設定</h2>
+      <div id="guiHost"></div>
+      <button class="btn primary close">閉じる</button>
+    </div>
+  </section>
+
+  <!-- ===== Help ===== -->
+  <section id="help" class="screen modal" hidden>
+    <div class="panel wide">
+      <h2>操作方法</h2>
+      <div class="cols">
+        <div>
+          <h3>PC</h3>
+          <ul>
+            <li><kbd>W A S D</kbd> / 矢印 … 移動</li>
+            <li><kbd>Shift</kbd> … ダッシュ</li>
+            <li><kbd>Space</kbd> … ジャンプ</li>
+            <li>マウス … カメラ（クリックでロック）</li>
+            <li>ホイール … ズーム</li>
+            <li><kbd>R</kbd> … チェックポイントへ</li>
+            <li><kbd>Esc</kbd> / <kbd>P</kbd> … ポーズ</li>
+          </ul>
+        </div>
+        <div>
+          <h3>スマホ</h3>
+          <ul>
+            <li>左半分ドラッグ … 移動（倒し切るとダッシュ）</li>
+            <li>右半分ドラッグ … カメラ</li>
+            <li>▲ … ジャンプ ／ DASH … ダッシュ切替</li>
+            <li>⟲ … チェックポイントへ</li>
+          </ul>
+          <h3>ゲームパッド</h3>
+          <ul>
+            <li>左スティック移動・右スティック視点</li>
+            <li>A ジャンプ ・ RT/LB ダッシュ ・ Start ポーズ</li>
+          </ul>
+        </div>
+      </div>
+      <h3>ギミック</h3>
+      <ul class="gimmicks">
+        <li><b>動く足場</b> 乗ると一緒に運ばれる</li>
+        <li><b>回転梁</b> 回る梁に乗って対岸へ</li>
+        <li><b>崩れる足場</b> 乗ると数秒で落下</li>
+        <li><b>薙ぎ払いバー</b> ジャンプで避けないと吹き飛ばされる</li>
+        <li><b>氷</b> とても滑る</li>
+        <li><b>突風</b> 空中で流される</li>
+        <li><b>ジャンプパッド</b> 大きく跳ね上がる</li>
+        <li><b>ビーコン</b> チェックポイント（ONLY UP以外）</li>
+      </ul>
+      <button class="btn primary close">閉じる</button>
+    </div>
+  </section>
+
+  <!-- ===== Credits ===== -->
+  <section id="credits" class="screen modal" hidden>
+    <div class="panel wide">
+      <h2>クレジット（外部素材）</h2>
+      <ul class="credits">
+        <li>PBRテクスチャ / HDRI: <a href="https://polyhaven.com" target="_blank" rel="noopener">Poly Haven</a>（CC0）— rock_wall_10, coast_sand_rocks_02, weathered_planks, rusty_metal_02, corrugated_iron_02, concrete_wall_008, red_brick_03, snow_02, marble_01, kloofendal_48d_partly_cloudy_puresky</li>
+        <li>氷テクスチャ: <a href="https://ambientcg.com" target="_blank" rel="noopener">ambientCG</a> Ice002（CC0, three.js examples 同梱）</li>
+        <li>キャラクター: RobotExpressive by Tomás Laulhé（CC0, three.js examples）</li>
+        <li>水面法線 / 雲スプライト / レンズフレア: three.js examples（レンズフレアは ROME, CC BY-NC-SA 3.0）</li>
+        <li>BGM: “Project Utopia” by congusbongus（CC0, OpenGameArt）</li>
+        <li>効果音: <a href="https://github.com/romainsimon/uisfx" target="_blank" rel="noopener">uisfx</a>（MIT）</li>
+        <li>フォント: Bebas Neue, Zen Kaku Gothic New（Google Fonts, OFL）</li>
+        <li>技術: three.js / Rapier (WASM物理) / GSAP / Howler.js / nipplejs / lil-gui / simplex-noise / Service Worker / Gamepad・Pointer Lock・Fullscreen・Vibration・Wake Lock・Web Share API</li>
+      </ul>
+      <button class="btn primary close">閉じる</button>
+    </div>
+  </section>
+
+  <!-- ===== Clear ===== -->
+  <section id="clear" class="screen modal" hidden>
+    <div class="panel">
+      <h2 class="gold">登頂！</h2>
+      <p class="result" id="clearStats"></p>
+      <button id="btnShare" class="btn">結果をシェア</button>
+      <button id="btnAgain" class="btn primary">もう一度登る</button>
+      <button id="btnClearTitle" class="btn ghost">タイトルへ</button>
+    </div>
+  </section>
+
+  <div id="lockHint" hidden>クリックでカメラ操作</div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
