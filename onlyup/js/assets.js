@@ -49,6 +49,15 @@ export class AssetLoader {
   }
 
   hdr(url) {
+    if (this.isPacked(url)) {
+      return this.track(this.unpack(url).then((buf) => {
+        const l = new RGBELoader(); l.setDataType(THREE.FloatType);
+        const d = l.parse(buf);
+        const t = new THREE.DataTexture(d.data, d.width, d.height, THREE.RGBAFormat, d.type);
+        t.flipY = true; t.colorSpace = THREE.LinearSRGBColorSpace; t.minFilter = t.magFilter = THREE.LinearFilter; t.generateMipmaps = false; t.needsUpdate = true;
+        return t;
+      }));
+    }
     return this.track(new Promise((res, rej) => {
       const l = new RGBELoader();
       l.setDataType(THREE.FloatType); // 太陽位置の解析のため Float で受け取る
@@ -56,12 +65,32 @@ export class AssetLoader {
     }));
   }
 
-  gltf(url) { return this.track(new GLTFLoader().loadAsync(resolve(url))); }
+  /** アーティファクト版：.json に詰めた GLB / HDR を取り出す */
+  async unpack(url) {
+    const res = await fetch(resolve(url));
+    if (!res.ok) throw new Error('素材取得失敗: ' + url.split('/').pop());
+    const j = await res.json();
+    const bin = atob(j.glb || j.hdr);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return bytes.buffer;
+  }
+  isPacked(url) { return resolve(url).endsWith('.json'); }
+
+  gltf(url) {
+    if (this.isPacked(url)) return this.track(this.unpack(url).then((buf) => new GLTFLoader().parseAsync(buf, '')));
+    return this.track(new GLTFLoader().loadAsync(resolve(url)));
+  }
 
   /** Poly Haven の glTF：相対参照(bin/テクスチャ)を include の実URLに解決して読む */
   phModel(id) {
     if (this.cache.has('ph:' + id)) return this.cache.get('ph:' + id);
     const m = PH_MODELS[id];
+    if (this.isPacked(m.gltf)) {
+      const p = this.track(this.unpack(m.gltf).then((buf) => new GLTFLoader().parseAsync(buf, '')));
+      this.cache.set('ph:' + id, p);
+      return p;
+    }
     const mgr = new THREE.LoadingManager();
     mgr.setURLModifier((u) => {
       const rel = Object.keys(m.include).find((r) => u.endsWith(r) || decodeURIComponent(u).endsWith(r));
