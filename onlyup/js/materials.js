@@ -81,7 +81,10 @@ export class MaterialLibrary {
     if (!s) return Promise.resolve(null);
     const L = this.loader;
     const p = Promise.all([L.texture(s.map, true), L.texture(s.normal), L.texture(s.arm || s.rough)])
-      .then(([map, normal, arm]) => ({ map, normal, arm: s.arm ? arm : null, rough: s.rough ? arm : null }));
+      .then((ts) => {
+        const [map, normal, arm] = ts.map((t) => (t?.userData?.placeholder ? null : t)); // 取得できなかったものは使わない
+        return { map, normal, arm: s.arm ? arm : null, rough: s.rough ? arm : null };
+      });
     this.loaded.set(key, p);
     return p;
   }
@@ -112,7 +115,7 @@ export class MaterialLibrary {
     if (key === 'ice') { m.roughness = 0.35; m.metalness = 0.05; m.envMapIntensity = 1.6; }
     addGrime(m, opts.grime ?? (key === 'ice' || key === 'snow' || key === 'marble' ? 0.35 : 0.85));
     this.load(key).then((t) => {
-      m.color.set(opts.color ?? (key === 'ice' ? 0xd8f2ff : 0xffffff));
+      if (t.map) m.color.set(opts.color ?? (key === 'ice' ? 0xd8f2ff : 0xffffff));
       m.map = t.map; m.normalMap = t.normal;
       m.normalScale.setScalar(opts.normal ?? 1.25);
       if (t.arm) {

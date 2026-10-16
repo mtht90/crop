@@ -50,6 +50,7 @@ async function boot() {
   world = new RAPIER.World({ x: 0, y: 0, z: 0 }); // 重力はキャラクター側で計算
 
   loader = new AssetLoader(renderer);
+  if (isTouch) { loader.maxSize = 512; loader.maxParallel = 4; }
   loader.onProgress = (d, t) => { if (state === 'loading') setProgress(0.05 + 0.85 * (d / t), `外部アセットを読み込み中… ${d} / ${t}`); };
 
   // 最初に必要なもの（空・水・主人公・下層の素材）

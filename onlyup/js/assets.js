@@ -30,16 +30,41 @@ export class AssetLoader {
   texture(url, srgb = false) {
     const key = url + srgb;
     if (this.cache.has(key)) return this.cache.get(key);
-    const p = this.track(new Promise((res, rej) => {
-      this.texLoader.load(resolve(url), (t) => {
-        t.wrapS = t.wrapT = THREE.RepeatWrapping;
-        t.anisotropy = this.maxAniso;
-        if (srgb) t.colorSpace = THREE.SRGBColorSpace;
-        res(t);
-      }, undefined, () => rej(new Error('テクスチャ取得失敗: ' + url.split('/').pop())));
+    // 同時読み込み数を絞り、失敗したら再試行。最後まで駄目なら単色の代用テクスチャで続行（ゲームは止めない）
+    const p = this.track(new Promise((res) => {
+      const attempt = (n) => this.slot(() => new Promise((done) => {
+        const u = resolve(url) + (n > 0 ? (resolve(url).includes('?') ? '&' : '?') + 'r=' + n : '');
+        this.texLoader.load(u, (t) => {
+          t.wrapS = t.wrapT = THREE.RepeatWrapping;
+          t.anisotropy = this.maxAniso;
+          if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+          const img = t.image;
+          if (this.maxSize && img && img.width > this.maxSize) { // スマホ：GPUメモリ節約のため縮小
+            const k = this.maxSize / Math.max(img.width, img.height);
+            const c = document.createElement('canvas');
+            c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+            c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+            t.image = c; t.needsUpdate = true;
+          }
+          done(); res(t);
+        }, undefined, () => {
+          done();
+          if (n < 3) setTimeout(() => attempt(n + 1), 600 * 2 ** n);
+          else { console.warn('テクスチャ取得失敗（代用）:', url.split('/').pop()); this.failed = (this.failed || 0) + 1; res(placeholder(srgb)); }
+        });
+      }));
+      attempt(0);
     }));
     this.cache.set(key, p);
     return p;
+  }
+
+  /** 同時に走らせる読み込みを最大 maxParallel 本に制限する */
+  slot(fn) {
+    this.queue ||= []; this.running ||= 0;
+    const max = this.maxParallel || 8;
+    const run = () => { this.running++; fn().finally(() => { this.running--; const nx = this.queue.shift(); if (nx) nx(); }); };
+    if (this.running < max) run(); else this.queue.push(run);
   }
 
   cubeTexture(urls) {
@@ -67,9 +92,18 @@ export class AssetLoader {
 
   /** アーティファクト版：.json に詰めた GLB / HDR を取り出す */
   async unpack(url) {
-    const res = await fetch(resolve(url));
-    if (!res.ok) throw new Error('素材取得失敗: ' + url.split('/').pop());
-    const j = await res.json();
+    let j;
+    for (let n = 0; ; n++) { // 回線が不安定なスマホ向けに再試行
+      try {
+        const res = await fetch(resolve(url));
+        if (!res.ok) throw new Error(res.status);
+        j = await res.json();
+        break;
+      } catch (e) {
+        if (n >= 3) throw new Error('素材取得失敗: ' + url.split('/').pop());
+        await new Promise((r) => setTimeout(r, 800 * 2 ** n));
+      }
+    }
     const bin = atob(j.glb || j.hdr);
     const bytes = new Uint8Array(bin.length);
     for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
@@ -100,6 +134,14 @@ export class AssetLoader {
     this.cache.set('ph:' + id, p);
     return p;
   }
+}
+
+function placeholder(srgb) {
+  const t = new THREE.DataTexture(new Uint8Array(srgb ? [200, 200, 200, 255] : [128, 128, 255, 255]), 1, 1);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.needsUpdate = true;
+  if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+  t.userData.placeholder = true;
+  return t;
 }
 
 /**
