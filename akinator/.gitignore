@@ -1,0 +1,4 @@
+node_modules/
+data/learned.json
+data/learned.json.tmp
+public/db.json

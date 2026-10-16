@@ -1,0 +1,208 @@
+# 架空キャラクター: 日本のアニメ・マンガ
+@C
+# --- ドラゴンボール
+孫悟空/悟空 | m dragonball human protagonist hero superpower fighter fly classic blackhair orange transform *
+ベジータ | m dragonball fighter superpower fly classic blackhair transform king
+孫悟飯/悟飯 | m dragonball fighter superpower fly classic blackhair transform student
+ピッコロ | m dragonball fighter superpower fly classic green monster
+フリーザ | m dragonball villain superpower fly classic white transform monster
+セル | m dragonball villain superpower fly classic green transform monster
+魔人ブウ | m dragonball villain superpower fly classic pink monster transform
+クリリン | m dragonball human fighter superpower fly classic bald
+ブルマ | f dragonball human classic bluehair ?pinkhair
+トランクス | m dragonball human fighter superpower fly sword classic ?purple transform
+亀仙人 | m dragonball human fighter superpower classic elderly bald beard glasses
+シェンロン/神龍 | m dragonball monster green classic fly big speaks
+ヤムチャ | m dragonball human fighter classic blackhair
+天津飯 | m dragonball human fighter superpower fly classic bald
+# --- ONE PIECE
+モンキー・D・ルフィ/ルフィ | m onepiece human protagonist pirate superpower hat blackhair red classic *
+ロロノア・ゾロ/ゾロ | m onepiece human pirate sword greenhair classic green
+ナミ | f onepiece human pirate orange classic
+ウソップ | m onepiece human pirate gun classic blackhair
+サンジ | m onepiece human pirate blonde classic fighter
+トニートニー・チョッパー/チョッパー | m onepiece beast pirate superpower hat classic small pink transform
+ニコ・ロビン | f onepiece human pirate superpower blackhair classic
+フランキー | m onepiece human pirate robot bluehair classic big
+ブルック | m onepiece pirate sword classic monster blackhair hat
+ジンベエ | m onepiece pirate fighter classic big blue
+シャンクス | m onepiece human pirate sword redhair classic
+エース/ポートガス・D・エース | m onepiece human pirate superpower hat blackhair classic
+トラファルガー・ロー | m onepiece human pirate superpower sword hat classic
+ボア・ハンコック | f onepiece human pirate superpower blackhair classic princess
+黒ひげ/マーシャル・D・ティーチ | m onepiece human pirate villain superpower beard blackhair
+白ひげ/エドワード・ニューゲート | m onepiece human pirate superpower beard elderly big
+# --- NARUTO
+うずまきナルト/ナルト | m naruto human protagonist ninja superpower blonde orange classic transform *
+うちはサスケ/サスケ | m naruto human ninja superpower sword blackhair classic
+春野サクラ | f naruto human ninja superpower pinkhair classic
+はたけカカシ | m naruto human ninja superpower whitehair classic
+うちはイタチ | m naruto human ninja superpower blackhair classic villain
+我愛羅 | m naruto human ninja superpower redhair classic
+自来也 | m naruto human ninja superpower whitehair elderly classic
+日向ヒナタ | f naruto human ninja superpower bluehair ?blackhair classic
+大蛇丸 | m naruto human ninja villain superpower blackhair classic
+# --- 鬼滅の刃
+竈門炭治郎/炭治郎 | m kimetsu human protagonist sword hero redhair recent *
+竈門禰豆子/禰豆子 | f kimetsu monster superpower blackhair pink recent child
+我妻善逸/善逸 | m kimetsu human sword blonde yellow recent
+嘴平伊之助/伊之助 | m kimetsu human sword beast recent
+冨岡義勇 | m kimetsu human sword blackhair recent
+煉獄杏寿郎 | m kimetsu human sword blonde redhair recent
+胡蝶しのぶ | f kimetsu human sword blackhair purple recent
+甘露寺蜜璃 | f kimetsu human sword pinkhair greenhair recent
+宇髄天元 | m kimetsu human sword whitehair recent big
+鬼舞辻無惨/無惨 | m kimetsu monster villain superpower blackhair recent
+猗窩座 | m kimetsu monster villain superpower fighter pinkhair recent
+# --- 呪術廻戦
+虎杖悠仁 | m jujutsu human protagonist student fighter superpower pinkhair recent
+五条悟 | m jujutsu human superpower whitehair recent glasses
+伏黒恵 | m jujutsu human student superpower blackhair recent
+釘崎野薔薇 | f jujutsu human student superpower brownhair recent
+両面宿儺/宿儺 | m jujutsu monster villain superpower pinkhair recent
+# --- ジョジョ
+空条承太郎/承太郎 | m jojo human protagonist superpower hat student blackhair classic
+ジョナサン・ジョースター | m jojo human protagonist classic blackhair
+DIO/ディオ | m jojo human monster villain superpower blonde classic
+東方仗助 | m jojo human protagonist superpower student blackhair classic
+ジョルノ・ジョバァーナ | m jojo human protagonist superpower blonde
+# --- その他ジャンプ
+桜木花道 | m slamdunk human protagonist basketball athlete student redhair classic
+流川楓 | m slamdunk human basketball athlete student blackhair classic
+ゴン・フリークス/ゴン | m hxh human protagonist child superpower blackhair green classic
+キルア・ゾルディック/キルア | m hxh human child superpower whitehair classic
+ヒソカ | m hxh human villain superpower redhair classic
+日向翔陽 | m haikyu human protagonist student athlete orange recent
+影山飛雄 | m haikyu human student athlete blackhair recent
+デンジ | m chainsaw human protagonist monster transform blonde recent
+パワー | f chainsaw monster superpower blonde recent
+マキマ | f chainsaw villain superpower redhair recent
+緑谷出久/デク | m mha human protagonist hero student superpower greenhair recent
+爆豪勝己 | m mha human hero student superpower blonde recent
+オールマイト | m mha human hero superpower blonde big
+坂田銀時/銀さん | m gintama human protagonist sword whitehair
+夜神月/ライト | m deathnote human protagonist villain student brownhair
+L/エル | m deathnote human detective blackhair
+リューク | m deathnote monster fly black
+黒崎一護 | m bleach human protagonist sword superpower orange student
+両津勘吉/両さん | m manga jump human protagonist classic blackhair beard
+こち亀の中川 | m manga jump human classic blackhair
+キン肉マン | m manga jump human hero fighter superpower classic
+ケンシロウ | m manga jump human protagonist fighter classic blackhair
+星矢/ペガサス星矢 | m manga jump anime human protagonist fighter classic brownhair
+浦飯幽助 | m manga jump anime human protagonist fighter superpower student blackhair classic
+緋村剣心 | m manga jump anime human protagonist sword redhair classic
+武藤遊戯/遊戯 | m manga jump anime human protagonist student classic
+アーニャ・フォージャー/アーニャ | f spyfamily human child superpower pinkhair recent
+ロイド・フォージャー | m spyfamily human gun blonde recent
+ヨル・フォージャー | f spyfamily human blackhair recent
+# --- コナン・サンデー・マガジン他
+江戸川コナン/コナン | m conan human protagonist detective child glasses blackhair blue *
+工藤新一 | m conan human detective student blackhair
+毛利蘭 | f conan human student fighter blackhair
+毛利小五郎 | m conan human detective beard
+怪盗キッド | m conan human hat white
+灰原哀 | f conan human child brownhair
+安室透 | m conan human detective blonde
+黒ずくめの組織/ジン | m conan human villain gun blonde black
+フリーレン | f frieren human magic superpower whitehair elderly recent protagonist
+フェルン | f frieren human magic superpower purple recent
+シュタルク | m frieren human sword redhair recent
+ヒンメル | m frieren human sword bluehair recent hero
+星野アイ | f oshinoko human idol singer purple recent
+星野アクア | m oshinoko human student blonde recent
+エレン・イェーガー | m aot human protagonist transform monster brownhair recent
+ミカサ・アッカーマン | f aot human sword blackhair recent
+リヴァイ | m aot human sword blackhair recent
+アルミン・アルレルト | m aot human blonde recent
+エドワード・エルリック | m fma human protagonist superpower blonde red child
+アルフォンス・エルリック | m fma robot big speaks
+犬夜叉 | m manga anime jpwork protagonist monster sword whitehair red classic
+日暮かごめ | f manga anime jpwork human student blackhair classic
+らんま/早乙女乱馬 | m manga anime jpwork human protagonist fighter transform classic
+ラム | f manga anime jpwork monster superpower fly greenhair classic
+越前リョーマ | m manga anime jpwork jump human protagonist athlete student hat classic
+大空翼/キャプテン翼 | m manga anime jpwork human protagonist soccer athlete classic
+星飛雄馬 | m manga anime jpwork human protagonist baseball athlete classic
+あしたのジョー/矢吹丈 | m manga anime jpwork human protagonist fighter athlete classic
+ブラック・ジャック | m manga anime jpwork human protagonist whitehair blackhair classic
+鉄腕アトム/アトム | m manga anime jpwork robot hero fly protagonist child classic black
+ゴルゴ13 | m manga jpwork human protagonist gun classic
+潔世一 | m manga anime jpwork human protagonist soccer athlete recent
+アシタカ | m ghibli human protagonist blackhair
+# --- ドラえもん他
+ドラえもん | m doraemon robot cat blue superpower classic speaks round *
+のび太/野比のび太 | m doraemon human protagonist child glasses student classic blackhair
+しずかちゃん/源静香 | f doraemon human child student classic
+ジャイアン/剛田武 | m doraemon human child student classic
+スネ夫/骨川スネ夫 | m doraemon human child student classic
+ドラミ | f doraemon robot cat yellow classic
+野原しんのすけ/しんちゃん | m shinchan human protagonist child classic red *
+野原みさえ | f shinchan human classic
+野原ひろし | m shinchan human classic beard
+シロ | m shinchan beast dog white classic
+サザエさん/フグ田サザエ | f sazae human protagonist classic
+カツオ/磯野カツオ | m sazae human child student classic
+ワカメ/磯野ワカメ | f sazae human child student classic
+波平/磯野波平 | m sazae human elderly bald classic
+タラちゃん | m sazae human child classic
+まる子/さくらももこ | f chibimaru human protagonist child student classic red
+ルパン三世/ルパン | m lupin human protagonist gun classic red
+次元大介 | m lupin human gun hat beard classic
+石川五ェ門 | m lupin human sword classic
+峰不二子 | f lupin human gun classic
+銭形警部 | m lupin human detective hat classic
+月野うさぎ/セーラームーン | f sailormoon human protagonist student transform superpower blonde classic
+碇シンジ | m eva human protagonist student child brownhair
+綾波レイ | f eva human student bluehair
+アスカ/惣流・アスカ・ラングレー | f eva human student redhair
+初号機/エヴァンゲリオン初号機 | eva robot big purple
+アムロ・レイ | m gundam human protagonist classic brownhair
+シャア・アズナブル | m gundam human villain blonde red classic
+ガンダム/RX-78-2 | gundam robot big white classic hero
+ザク | gundam robot big green classic
+鹿目まどか | f madoka human protagonist student magic transform pinkhair
+暁美ほむら | f madoka human student magic transform blackhair
+キュゥべえ | madoka beast monster white villain small speaks
+キュアブラック | f precure human hero transform fighter student
+アンパンマン | m anpanman hero fly protagonist classic red round speaks *
+ばいきんまん | m anpanman villain monster classic black purple speaks
+ドキンちゃん | f anpanman villain monster classic yellow speaks
+しょくぱんまん | m anpanman hero fly classic speaks
+カレーパンマン | m anpanman hero fly classic speaks
+メロンパンナ | f anpanman hero fly classic speaks
+ジャムおじさん | m anpanman human elderly classic
+# --- ジブリ
+トトロ | ghibli monster beast big classic speaks
+ネコバス | ghibli monster cat big classic
+サツキ | f ghibli human child classic
+メイ | f ghibli human child classic
+キキ | f ghibli human magic fly protagonist classic black
+ジジ | m ghibli beast cat black classic speaks
+千尋/荻野千尋 | f ghibli human protagonist child
+ハク | m ghibli human monster transform fly
+カオナシ | ghibli monster black
+湯婆婆 | f ghibli human magic villain elderly
+ナウシカ | f ghibli human protagonist princess fly classic
+パズー | m ghibli human protagonist child classic
+シータ | f ghibli human princess child classic
+ムスカ | m ghibli human villain glasses classic
+サン/もののけ姫 | f ghibli human protagonist princess
+ポルコ・ロッソ/紅の豚 | m ghibli beast protagonist fly gun classic
+ハウル | m ghibli human magic fly blonde
+ソフィー | f ghibli human protagonist elderly
+ポニョ | f ghibli beast fish transform child red
+ゲゲゲの鬼太郎/鬼太郎 | m manga anime jpwork monster protagonist superpower child classic
+目玉おやじ | m manga anime jpwork monster small classic speaks
+ねずみ男 | m manga anime jpwork monster classic
+ちびまる子のおじいちゃん/友蔵 | m chibimaru human elderly classic bald
+ハム太郎 | m manga anime jpwork beast mouse small orange speaks
+ケロロ軍曹 | m manga anime jpwork monster green speaks
+ポプテピピック/ポプ子 | f manga anime jpwork recent
+しまじろう | m picturebook anime jpwork beast cat stripes speaks yellow
+ちいかわ | jpwork manga anime beast small white recent
+ハチワレ | jpwork manga anime beast cat small white recent speaks
+うさぎ(ちいかわ) | jpwork manga anime beast rabbit small yellow recent
+ウマ娘/スペシャルウィーク | f game anime jpwork recent
+ゆっくり霊夢 | f game jpwork
+初音ミク | f jpwork singer idol greenhair *

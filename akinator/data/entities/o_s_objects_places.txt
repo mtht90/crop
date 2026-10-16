@@ -1,0 +1,185 @@
+# 物
+@O
+# --- 電化製品
+スマートフォン/スマホ | electric screen handheld home daily modern plastic metal sound *
+パソコン/PC | electric screen home daily modern expensive
+テレビ | electric screen home daily modern big sound black
+冷蔵庫 | electric home kitchen daily modern big white metal
+電子レンジ | electric home kitchen daily modern
+洗濯機 | electric home bathroom daily modern big white
+掃除機 | electric home modern sound
+エアコン | electric home daily modern white
+扇風機 | electric home modern
+ドライヤー | electric home bathroom handheld daily modern sound
+炊飯器 | electric home kitchen daily modern
+トースター | electric home kitchen modern
+ゲーム機 | electric screen toy modern home
+カメラ | electric handheld modern
+時計/腕時計 | handheld clothing daily metal small round
+目覚まし時計 | home sound round
+電卓 | electric handheld stationery screen modern school small
+ヘッドホン | electric clothing sound modern
+イヤホン | electric small sound modern daily
+電球 | electric small home round glass
+懐中電灯 | electric handheld outdoor
+ロボット掃除機 | electric home modern round
+プリンター | electric home modern
+マイク | electric handheld sound
+# --- 台所
+包丁 | kitchen home sharp metal handheld daily
+箸/おはし | kitchen home daily wood handheld
+スプーン | kitchen home daily metal handheld small
+フォーク | kitchen home daily metal handheld sharp
+フライパン | kitchen home metal round
+鍋 | kitchen home metal
+やかん | kitchen home metal
+お皿 | kitchen home daily round white
+コップ/グラス | kitchen home daily
+茶碗 | kitchen home daily round
+まな板 | kitchen home wood
+ペットボトル | plastic handheld modern daily
+# --- 文房具・学校
+鉛筆 | stationery school handheld wood daily sharp
+消しゴム | stationery school handheld small white
+ボールペン | stationery handheld plastic daily
+ハサミ | stationery school handheld sharp metal
+定規 | stationery school handheld plastic
+ノート | stationery school paper daily
+のり | stationery school handheld small
+ホッチキス | stationery handheld metal
+セロハンテープ | stationery handheld round
+コンパス | stationery school metal sharp
+ランドセル | school clothing red black
+黒板 | school green big wood
+教科書 | school paper
+本 | paper home handheld
+辞書 | paper school
+地球儀 | school round blue
+# --- 家具・生活
+ベッド | furniture home big daily wood
+机 | furniture home wood school
+椅子/イス | furniture home daily school wood
+ソファ | furniture home big
+こたつ | furniture electric home japanese
+タンス | furniture home wood big
+鏡 | home bathroom daily glass
+傘 | handheld outdoor
+歯ブラシ | bathroom home daily handheld plastic small
+タオル | bathroom home daily white
+石鹸 | bathroom home daily small
+トイレットペーパー | bathroom home daily paper white round
+トイレ | bathroom home daily white big
+お風呂/浴槽 | bathroom home daily big
+鍵/カギ | handheld metal small daily
+財布 | handheld daily clothing
+メガネ | clothing daily small glass
+マスク | clothing daily white small
+カーテン | home
+布団 | home daily
+枕 | home daily
+ろうそく | home white small
+# --- 衣類
+帽子 | clothing outdoor
+靴 | clothing daily outdoor
+靴下 | clothing daily small
+Tシャツ | clothing daily
+ジーンズ/ジーパン | clothing blue
+着物 | clothing japanese
+ネクタイ | clothing
+指輪 | clothing small metal round expensive
+ネックレス | clothing small metal
+リュック | clothing outdoor school
+手袋 | clothing outdoor
+マフラー | clothing outdoor
+# --- おもちゃ・スポーツ
+ボール | toy sports round outdoor
+サッカーボール | toy sports round outdoor white black
+野球のバット | sports wood outdoor
+野球のグローブ | sports clothing brown outdoor
+テニスラケット | sports handheld outdoor
+ゴルフクラブ | sports metal outdoor expensive
+けん玉 | toy wood handheld japanese
+こま | toy wood handheld round
+ヨーヨー | toy handheld round
+ぬいぐるみ | toy home
+人形 | toy home
+ルービックキューブ | toy handheld plastic modern
+トランプ | toy paper handheld
+サイコロ | toy small handheld
+風船 | toy fly round outdoor
+凧/たこ | toy fly outdoor paper
+レゴブロック | toy plastic small modern
+シャボン玉 | toy outdoor round fly
+縄跳び | toy sports school outdoor
+スケートボード | sports wheels outdoor modern
+将棋 | toy wood japanese
+囲碁 | toy wood black white round
+チェス | toy wood black white
+# --- 楽器
+ピアノ | instrument sound big expensive home black white school
+ギター | instrument sound wood
+バイオリン | instrument sound wood handheld expensive
+ドラム/太鼓 | instrument sound round
+トランペット | instrument sound metal handheld yellow
+フルート | instrument sound metal handheld
+リコーダー | instrument sound school plastic handheld
+ハーモニカ | instrument sound small handheld metal
+カスタネット | instrument sound school small red blue round
+三味線 | instrument sound japanese wood
+木琴 | instrument sound wood school
+# --- 乗り物
+自動車/車 | vehicle wheels outdoor metal big modern expensive daily *
+自転車 | vehicle wheels outdoor metal daily
+バイク | vehicle wheels outdoor metal ?electric expensive
+電車 | vehicle wheels electric outdoor big metal daily modern
+新幹線 | vehicle wheels electric outdoor big metal modern white
+バス | vehicle wheels outdoor big daily
+タクシー | vehicle wheels outdoor
+救急車 | vehicle wheels outdoor sound white
+消防車 | vehicle wheels outdoor sound red big
+パトカー | vehicle wheels outdoor sound black white
+トラック | vehicle wheels outdoor big
+飛行機 | vehicle fly wheels outdoor big metal modern expensive
+ヘリコプター | vehicle fly outdoor big metal modern sound
+ロケット | vehicle fly big metal modern expensive
+船 | vehicle onwater outdoor big
+ヨット | vehicle onwater outdoor
+潜水艦 | vehicle onwater big metal modern
+気球 | vehicle fly round outdoor
+ベビーカー | vehicle wheels outdoor
+一輪車 | vehicle wheels outdoor school
+人力車 | vehicle wheels japanese outdoor
+# --- 道具・その他
+ハンマー/金づち | tool handheld metal
+ドライバー(工具) | tool handheld metal sharp
+ノコギリ | tool sharp metal
+はしご | tool big outdoor
+ロープ | tool outdoor
+スコップ | tool outdoor metal
+バケツ | tool outdoor plastic
+懐中時計 | handheld metal round
+刀/日本刀 | weapon sharp metal japanese expensive
+剣 | weapon sharp metal
+弓矢 | weapon wood outdoor
+銃/ピストル | weapon metal handheld sound
+爆弾 | weapon sound round
+盾 | weapon metal
+手裏剣 | weapon sharp metal small japanese
+ダイヤモンド | small expensive white
+金/金塊 | metal yellow expensive
+お金/硬貨 | metal small round daily
+お札/紙幣 | paper daily
+切手 | paper small
+新聞 | paper daily
+手紙 | paper
+地図 | paper outdoor
+カレンダー | paper home
+ろうそく立て | metal
+信号機 | electric outdoor metal red yellow green
+自動販売機 | electric outdoor big modern
+ポスト/郵便ポスト | outdoor metal red
+花火 | outdoor sound fly
+風鈴 | sound japanese glass
+ランプ | home
+ブランコ | toy outdoor
+すべり台 | toy outdoor

@@ -1,0 +1,157 @@
+# 場所
+@S
+# --- 国
+日本 | country inasia island coastal *
+アメリカ | country inamerica coastal *
+中国 | country inasia coastal oldplace
+韓国 | country inasia coastal
+北朝鮮 | country inasia coastal
+台湾 | country inasia island coastal tropical
+インド | country inasia coastal tropical oldplace
+タイ | country inasia coastal tropical
+ベトナム | country inasia coastal tropical
+インドネシア | country inasia island coastal tropical
+フィリピン | country inasia island coastal tropical
+シンガポール | country city inasia island coastal tropical capital
+モンゴル | country inasia cold
+ロシア | country inasia ineurope coastal cold
+イギリス | country ineurope island coastal oldplace
+フランス | country ineurope coastal oldplace
+ドイツ | country ineurope coastal
+イタリア | country ineurope coastal oldplace
+スペイン | country ineurope coastal
+スイス | country ineurope cold
+オランダ | country ineurope coastal
+ギリシャ | country ineurope coastal oldplace
+エジプト | country inafrica coastal tropical oldplace
+南アフリカ | country inafrica coastal
+ケニア | country inafrica tropical
+ブラジル | country inamerica coastal tropical
+アルゼンチン | country inamerica coastal
+メキシコ | country inamerica coastal tropical
+カナダ | country inamerica coastal cold
+オーストラリア | country inoceania island coastal
+ニュージーランド | country inoceania island coastal
+ハワイ | island inamerica coastal tropical tourist
+グアム | island inamerica coastal tropical tourist
+# --- 都市
+東京 | city tokyo capital coastal *
+大阪 | city injp coastal
+京都 | city kyoto tourist oldplace
+奈良 | city injp tourist oldplace
+札幌 | city injp cold
+福岡 | city injp coastal
+沖縄 | island injp coastal tropical tourist
+北海道 | island injp coastal cold tourist
+名古屋 | city injp coastal
+横浜 | city injp coastal
+神戸 | city injp coastal
+広島 | city injp coastal
+鎌倉 | city injp coastal tourist oldplace
+渋谷 | city tokyo
+秋葉原 | city tokyo tourist
+浅草 | city tokyo tourist
+原宿 | city tokyo
+新宿 | city tokyo
+銀座 | city tokyo
+ニューヨーク | city inamerica coastal tourist
+ロサンゼルス | city inamerica coastal
+ラスベガス | city inamerica tourist
+パリ | city ineurope capital tourist oldplace
+ロンドン | city ineurope capital tourist oldplace
+ローマ | city ineurope capital tourist oldplace heritage
+ベネチア | city ineurope coastal tourist heritage oldplace
+ソウル | city inasia capital
+北京 | city inasia capital oldplace
+上海 | city inasia coastal
+香港 | city inasia coastal
+バンコク | city inasia capital tropical
+ドバイ | city inasia coastal tropical tourist
+# --- 建物
+東京タワー | tower tokyo tourist red *
+東京スカイツリー | tower tokyo tourist white
+エッフェル塔 | tower ineurope tourist
+ピサの斜塔 | tower ineurope tourist heritage oldplace
+ビッグ・ベン | tower ineurope tourist oldplace
+自由の女神 | building inamerica tourist heritage coastal
+ホワイトハウス | building inamerica capital
+エンパイア・ステート・ビル | building inamerica tourist
+国会議事堂 | building tokyo
+東京駅 | building tokyo
+姫路城 | castle injp heritage tourist oldplace white
+大阪城 | castle injp tourist
+名古屋城 | castle injp tourist
+熊本城 | castle injp tourist
+シンデレラ城 | castle amusement inamerica tourist
+ノイシュヴァンシュタイン城 | castle ineurope tourist
+金閣寺 | religioussite kyoto heritage tourist oldplace
+清水寺 | religioussite kyoto heritage tourist oldplace
+伏見稲荷大社 | religioussite kyoto tourist oldplace
+東大寺/奈良の大仏 | religioussite injp heritage tourist oldplace
+厳島神社 | religioussite injp heritage tourist oldplace coastal
+伊勢神宮 | religioussite injp tourist oldplace
+浅草寺/雷門 | religioussite tokyo tourist oldplace
+日光東照宮 | religioussite injp heritage tourist
+明治神宮 | religioussite tokyo tourist
+出雲大社 | religioussite injp tourist oldplace
+法隆寺 | religioussite injp heritage oldplace
+サグラダ・ファミリア | religioussite ineurope heritage tourist
+バチカン | religioussite country ineurope capital heritage tourist oldplace
+タージ・マハル | building inasia heritage tourist oldplace white
+ピラミッド | building inafrica heritage tourist oldplace tropical
+スフィンクス | inafrica heritage tourist oldplace
+万里の長城 | building inasia heritage tourist oldplace
+コロッセオ | building ineurope heritage tourist oldplace
+パルテノン神殿 | religioussite ineurope heritage tourist oldplace
+アンコールワット | religioussite inasia heritage tourist oldplace tropical
+モアイ像 | island inamerica heritage tourist oldplace
+マチュピチュ | inamerica heritage tourist oldplace mountain
+ストーンヘンジ | ineurope heritage tourist oldplace
+ルーブル美術館 | building ineurope tourist
+国際宇宙ステーション | building
+# --- テーマパーク
+ディズニーランド/東京ディズニーランド | amusement injp tourist *
+ユニバーサル・スタジオ・ジャパン/USJ | amusement injp tourist
+富士急ハイランド | amusement injp tourist
+としまえん | amusement tokyo
+# --- 自然
+富士山 | mountain injp heritage tourist cold *
+エベレスト | mountain inasia cold
+キリマンジャロ | mountain inafrica
+アルプス山脈 | mountain ineurope cold
+阿蘇山 | mountain injp tourist
+屋久島 | island injp heritage tourist
+宮島 | island injp heritage tourist coastal
+小笠原諸島 | island injp heritage coastal tropical
+琵琶湖 | nature injp
+ナイアガラの滝 | nature inamerica tourist
+グランドキャニオン | nature inamerica heritage tourist
+アマゾン川 | nature inamerica tropical
+ナイル川 | nature inafrica tropical
+サハラ砂漠 | nature inafrica tropical
+南極 | nature cold coastal
+北極 | nature cold
+エアーズロック/ウルル | nature inoceania heritage tourist
+グレートバリアリーフ | nature inoceania heritage tourist coastal tropical
+ガラパゴス諸島 | island inamerica heritage coastal
+月 | nature
+火星 | nature
+太陽 | nature
+宇宙 | nature
+# --- 身近な場所
+学校 | building
+病院 | building
+図書館 | building
+コンビニ | building
+スーパー | building
+動物園 | building tourist
+水族館 | building tourist
+公園 | nature
+海 | nature coastal
+砂浜/ビーチ | nature coastal
+温泉 | nature injp tourist
+駅 | building
+空港 | building
+遊園地 | amusement
+映画館 | building
+銭湯 | building injp

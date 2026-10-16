@@ -1,0 +1,234 @@
+# 植物
+@L
+桜/サクラ | tree flower spring pink *
+梅 | tree flower winter spring pink white red
+桃の花 | tree flower spring pink
+ひまわり | flower summer yellow *
+チューリップ | flower spring red yellow
+バラ | flower ?spring red pink
+アジサイ | flower summer blue purple
+朝顔/アサガオ | flower summer blue purple
+コスモス | flower autumn pink
+菊 | flower autumn yellow white
+ユリ | flower summer white
+カーネーション | flower spring red pink
+タンポポ | flower spring yellow
+菜の花 | flower spring yellow
+ラベンダー | flower summer purple
+蓮/ハス | flower summer pink white
+スイセン | flower winter spring yellow white
+すずらん | flower spring white
+藤 | flower spring purple
+椿/ツバキ | tree flower winter red
+彼岸花 | flower autumn red
+パンジー | flower spring purple yellow
+シロツメクサ/クローバー | flower spring white green
+ポインセチア | winter red
+紅葉/モミジ | tree autumn red
+イチョウ | tree autumn yellow
+松 | tree green
+杉 | tree green
+竹 | tree green
+ヤシの木 | tree green
+もみの木/クリスマスツリー | tree winter green
+サボテン | green
+アロエ | green
+苔/コケ | green
+ススキ | autumn
+ハエトリソウ | green
+食虫植物/ウツボカズラ | green
+# 食べ物
+@F
+# --- 果物
+りんご | fruit sweet red round raw konbini *
+バナナ | fruit sweet yellow raw konbini
+みかん | fruit sweet sour orange round raw japanese
+いちご | fruit sweet red raw
+ぶどう | fruit sweet purple round raw
+メロン | fruit sweet green round raw
+スイカ | fruit sweet red green round raw
+もも/桃 | fruit sweet pink round raw
+さくらんぼ | fruit sweet red round raw
+レモン | fruit sour yellow raw
+キウイ | fruit sweet sour green brown raw
+パイナップル | fruit sweet sour yellow raw
+マンゴー | fruit sweet yellow orange raw
+梨 | fruit sweet round raw yellow
+柿 | fruit sweet orange round raw
+ブルーベリー | fruit sweet sour purple round small raw
+アボカド | fruit green raw
+グレープフルーツ | fruit sour yellow round raw
+# --- 野菜
+トマト | vegetable red round raw
+きゅうり | vegetable green raw
+にんじん | vegetable orange
+たまねぎ | vegetable round
+じゃがいも | vegetable brown round
+キャベツ | vegetable green round raw
+レタス | vegetable green raw
+ほうれん草 | vegetable green
+ブロッコリー | vegetable green
+ナス | vegetable purple
+ピーマン | vegetable green
+かぼちゃ | vegetable sweet orange green round
+大根 | vegetable white
+ねぎ | vegetable green white
+とうもろこし | vegetable sweet yellow yatai
+さつまいも | vegetable sweet purple
+しいたけ | vegetable brown
+ごぼう | vegetable brown
+白菜 | vegetable white green
+枝豆 | vegetable green
+ニンニク | vegetable white seasoning
+しょうが | vegetable seasoning spicy
+# --- 和食
+寿司 | dish japanese rice seafood raw chopsticks coldfood konbini *
+刺身 | dish japanese seafood raw chopsticks coldfood
+天ぷら | dish japanese fried seafood hot chopsticks
+すき焼き | dish japanese meat hot chopsticks egg sweet
+しゃぶしゃぶ | dish japanese meat hot chopsticks
+カツ丼 | dish japanese rice meat fried egg hot chopsticks
+親子丼 | dish japanese rice meat egg hot chopsticks
+牛丼 | dish japanese rice meat hot chopsticks fastfood
+天丼 | dish japanese rice fried seafood hot chopsticks
+うな丼/うな重 | dish japanese rice seafood hot chopsticks
+おにぎり | dish japanese rice konbini round
+お茶漬け | dish japanese rice hot chopsticks soup
+味噌汁 | dish japanese soup hot chopsticks
+うどん | dish japanese noodle hot chopsticks
+そば | dish japanese noodle chopsticks
+そうめん | dish japanese noodle coldfood chopsticks white
+焼きそば | dish japanese noodle meat hot chopsticks yatai
+お好み焼き | dish japanese hot egg yatai round
+たこ焼き | dish japanese seafood hot round yatai
+焼き鳥 | dish japanese meat hot yatai
+唐揚げ | dish japanese meat fried hot konbini
+とんかつ | dish japanese meat fried hot
+おでん | dish japanese hot soup chopsticks konbini egg
+納豆 | japanese chopsticks konbini
+豆腐 | japanese white chopsticks
+卵焼き/玉子焼き | dish japanese egg yellow sweet
+茶碗蒸し | dish japanese egg hot
+肉じゃが | dish japanese meat hot chopsticks
+鍋/鍋料理 | dish japanese hot soup chopsticks
+カレーライス | dish rice meat hot spicy brown *
+オムライス | dish western rice egg hot yellow
+ハヤシライス | dish western rice meat hot brown
+ラーメン | dish japanese ramen hot soup chopsticks *
+つけ麺 | dish japanese ramen chopsticks
+餃子 | dish chinese meat hot chopsticks
+もち/餅 | japanese rice white
+梅干し | japanese sour red
+# --- 中華・韓国・エスニック
+麻婆豆腐 | dish chinese meat spicy hot red
+チャーハン | dish chinese rice egg hot
+春巻き | dish chinese fried hot
+小籠包 | dish chinese meat hot
+エビチリ | dish chinese seafood spicy red hot
+肉まん | chinese meat hot konbini white round
+キムチ | korean spicy red sour vegetable
+ビビンバ | dish korean rice meat egg hot spicy
+焼肉 | dish korean meat hot chopsticks
+チヂミ | dish korean hot
+トッポッキ | dish korean rice spicy red hot
+サムギョプサル | dish korean meat hot
+フォー | dish ethnic noodle hot soup
+トムヤムクン | dish ethnic seafood spicy sour soup hot
+ナン | ethnic bread hot
+タコス | dish western meat hot spicy
+ケバブ | dish ethnic meat hot yatai
+# --- 洋食
+ハンバーガー | dish western bread meat fastfood hot *
+ピザ | dish italian bread hot milk round
+スパゲッティ/パスタ | dish italian noodle hot
+ナポリタン | dish japanese noodle hot red
+ハンバーグ | dish western meat hot brown
+ステーキ | dish western meat hot
+フライドポテト | western fried fastfood hot yellow
+フライドチキン | dish western meat fried fastfood hot
+ホットドッグ | dish western bread meat fastfood hot
+サンドイッチ | dish western bread konbini
+グラタン | dish western milk hot
+シチュー | dish western soup milk hot white
+コーンスープ | western soup milk hot yellow
+サラダ | dish vegetable raw coldfood green
+コロッケ | dish japanese fried hot
+エビフライ | dish japanese seafood fried hot
+リゾット | dish italian rice milk hot
+パエリア | dish western rice seafood hot yellow
+ドリア | dish western rice milk hot
+# --- パン
+食パン | bread western white
+メロンパン | bread sweets sweet konbini round
+カレーパン | bread fried spicy konbini
+あんパン | bread sweets sweet japanese round
+クロワッサン | bread western
+フランスパン | bread western brown
+ベーグル | bread western round
+# --- スイーツ
+ケーキ/ショートケーキ | sweets sweet western milk egg white
+チョコレート | sweets sweet brown snack konbini
+アイスクリーム | sweets sweet coldfood milk konbini
+プリン | sweets sweet coldfood milk egg yellow konbini
+ドーナツ | sweets sweet fried round western
+シュークリーム | sweets sweet milk egg western konbini
+パンケーキ/ホットケーキ | sweets sweet milk egg hot round
+クレープ | sweets sweet milk yatai
+マカロン | sweets sweet round western
+チーズケーキ | sweets sweet milk western
+ティラミス | sweets sweet italian milk
+パフェ | sweets sweet coldfood milk
+ワッフル | sweets sweet western
+タピオカ | sweets sweet drink coldfood milk
+かき氷 | sweets sweet coldfood yatai
+綿あめ/わたあめ | sweets sweet yatai pink white
+りんご飴 | sweets sweet yatai red round
+大福 | sweets sweet japanese white round
+団子/だんご | sweets sweet japanese round chopsticks
+たい焼き | sweets sweet japanese hot yatai
+どら焼き | sweets sweet japanese round brown
+羊羹/ようかん | sweets sweet japanese
+おはぎ | sweets sweet japanese rice
+カステラ | sweets sweet japanese egg yellow
+せんべい | snack japanese rice brown round
+ポテトチップス | snack fried konbini
+ポッキー | snack sweet konbini
+うまい棒 | snack konbini
+グミ | snack sweet konbini
+ガム | snack sweet konbini
+キャラメル | snack sweet milk
+ポップコーン | snack yatai white
+マシュマロ | sweets sweet white
+# --- 飲み物
+水 | drink coldfood konbini
+お茶/緑茶 | drink japanese konbini green
+紅茶 | drink western hot
+コーヒー | drink hot brown konbini
+牛乳 | drink milk white coldfood konbini
+コーラ | drink sweet coldfood konbini black
+オレンジジュース | drink sweet coldfood orange konbini
+ココア | drink sweet milk hot brown
+抹茶 | drink japanese green hot
+ラムネ | drink sweet coldfood yatai
+カルピス | drink sweet milk coldfood white
+ビール | alcohol coldfood yellow konbini
+日本酒 | alcohol japanese
+ワイン | alcohol western red purple
+ウイスキー | alcohol western brown
+エナジードリンク | drink sweet coldfood konbini
+スムージー | drink sweet coldfood fruit
+# --- 調味料・その他
+しょうゆ | seasoning japanese black
+みそ | seasoning japanese brown
+マヨネーズ | seasoning egg white
+ケチャップ | seasoning red sour sweet
+塩 | seasoning white
+砂糖 | seasoning sweet white
+わさび | seasoning japanese spicy green
+カラシ | seasoning spicy yellow
+はちみつ | seasoning sweet yellow
+バター | milk seasoning yellow
+チーズ | milk western yellow
+ヨーグルト | milk sour coldfood white konbini
+卵 | egg white round
+ご飯/白米 | rice japanese white chopsticks hot

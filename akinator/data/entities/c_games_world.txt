@@ -1,0 +1,219 @@
+# 架空キャラクター: ゲーム・海外作品・伝説・マスコット
+@C
+# --- ポケモン
+ピカチュウ | pokemon beast mouse yellow small tail superpower classic *
+イーブイ | pokemon beast brown small tail classic
+ニャース | pokemon beast cat speaks villain classic
+リザードン | pokemon monster fly orange big tail classic superpower
+ゲンガー | pokemon monster purple classic superpower
+カビゴン | pokemon beast big classic ?blue
+ミュウツー | pokemon monster superpower purple classic
+ミュウ | pokemon monster pink small fly classic superpower
+ヒトカゲ | pokemon monster orange small tail classic superpower
+ゼニガメ | pokemon beast blue small tail classic superpower
+フシギダネ | pokemon monster green small classic superpower
+コダック | pokemon beast yellow classic superpower
+ルカリオ | pokemon beast dog blue superpower
+ミミッキュ | pokemon monster yellow small recent
+ピッピ | pokemon monster pink classic
+プリン | pokemon monster pink round small classic singer
+ギャラドス | pokemon monster blue big classic
+メタモン | pokemon monster purple small transform classic
+コイキング | pokemon beast fish red classic
+サトシ | m pokemon human protagonist child hat classic blackhair
+ロケット団/ムサシとコジロウ | pokemon human villain classic
+# --- 任天堂ほか
+マリオ | m mario human protagonist hero hat red beard classic *
+ルイージ | m mario human hat green beard classic
+ピーチ姫 | f mario human princess blonde pink classic
+クッパ | m mario monster villain king big classic
+ヨッシー | m mario monster green classic
+キノピオ | m mario monster small classic hat
+ワリオ | m mario human villain yellow beard hat classic
+ドンキーコング | m mario beast primate big classic brown
+リンク | m zelda human protagonist hero sword green hat blonde classic
+ゼルダ姫 | f zelda human princess blonde
+ガノンドロフ | m zelda villain king redhair big
+カービィ | kirby protagonist pink round small fly classic superpower *
+デデデ大王 | m kirby king villain big blue classic
+メタナイト | m kirby sword small fly
+スライム | dq monster blue small classic round
+勇者(ドラクエ) | m dq human protagonist hero sword classic
+クラウド | m ff human protagonist sword blonde
+セフィロス | m ff human villain sword whitehair
+チョコボ | ff beast yellow classic
+モーグリ | ff monster white small fly
+ソニック | m sonic beast protagonist blue classic
+テイルス | m sonic beast dog orange fly classic
+リュウ | m streetfighter human protagonist fighter classic
+春麗 | f streetfighter human fighter classic
+インクリング | splatoon monster recent gun
+たぬきち | m animalcrossing beast speaks brown
+しずえ | f animalcrossing beast dog yellow speaks
+スティーブ | m minecraft human protagonist
+クリーパー | minecraft monster green villain
+パックマン | game jpwork yellow round classic
+ロックマン | m game jpwork robot hero gun blue classic
+ボンバーマン | m game jpwork robot white classic
+スネーク/ソリッド・スネーク | m game jpwork human protagonist gun
+ピクミン | game jpwork small beast
+アイルー | game jpwork beast cat speaks
+トルネコ | m dq human beard
+# --- ディズニー・ピクサー
+ミッキーマウス/ミッキー | m disney beast mouse protagonist classic black red speaks *
+ミニーマウス/ミニー | f disney beast mouse classic red pink speaks
+ドナルドダック/ドナルド | m disney beast fly classic white blue speaks hat
+グーフィー | m disney beast dog classic speaks hat
+プルート | m disney beast dog classic yellow
+くまのプーさん/プーさん | m disney beast bear classic yellow speaks picturebook
+ティガー | m disney beast cat stripes orange speaks
+スティッチ | m disney monster blue speaks
+シンデレラ | f disney human princess blonde blue classic protagonist
+白雪姫 | f disney human princess blackhair classic protagonist folklore
+アリエル | f disney human princess redhair protagonist transform
+ベル(美女と野獣) | f disney human princess brownhair yellow protagonist
+ラプンツェル | f disney human princess blonde purple protagonist
+アナ | f disney human princess redhair protagonist
+エルサ | f disney human princess magic superpower whitehair blonde blue
+オラフ | m disney monster white speaks
+ジャスミン | f disney human princess blackhair
+アラジン | m disney human protagonist blackhair
+ジーニー | m disney monster magic blue superpower
+シンバ | m disney beast cat protagonist king
+モアナ | f disney human protagonist princess blackhair
+ピノキオ | m disney robot protagonist child classic folklore
+ダンボ | m disney beast fly big classic
+ピーター・パン | m disney human protagonist fly child green hat classic
+ティンカー・ベル | f disney monster fly small blonde green
+キャプテン・フック | m disney human villain pirate classic sword
+マレフィセント | f disney villain magic black
+アースラ | f disney villain magic purple
+ウッディ | m pixar disney protagonist hat brown
+バズ・ライトイヤー | m pixar disney robot white green
+マイク・ワゾウスキ | m pixar disney monster green round
+サリー(モンスターズ) | m pixar disney monster big blue
+ニモ | m pixar disney beast fish orange stripes small child
+ドリー | f pixar disney beast fish blue
+ライトニング・マックィーン | m pixar disney robot red protagonist
+ベイマックス | m disney robot big white
+ミニオン | movie monster yellow small speaks
+シュレック | m movie monster green big protagonist
+スヌーピー | m beast dog white classic picturebook
+チャーリー・ブラウン | m human child protagonist classic yellow
+ムーミン | picturebook novel monster white classic
+リトルミイ | f picturebook novel monster small
+ミッフィー | f picturebook beast rabbit white small classic
+ピーターラビット | m picturebook beast rabbit classic blue
+パディントン | m picturebook beast bear hat classic speaks
+きかんしゃトーマス | m picturebook robot blue classic speaks
+はらぺこあおむし | picturebook green small classic
+# --- 海外映画・アメコミ・小説
+スパイダーマン | m marvel human hero superpower red blue protagonist
+アイアンマン | m marvel human hero robot fly red beard
+キャプテン・アメリカ | m marvel human hero blue blonde
+ハルク | m marvel human hero transform green big
+ソー | m marvel human hero superpower blonde fly
+サノス | m marvel villain monster purple big
+デッドプール | m marvel human red sword gun
+スーパーマン | m dc human hero fly superpower blue red blackhair
+バットマン | m dc human hero black
+ジョーカー | m dc human villain greenhair purple
+ワンダーウーマン | f dc human hero princess blackhair
+ダース・ベイダー | m starwars human villain sword black
+ルーク・スカイウォーカー | m starwars human protagonist sword superpower blonde
+ヨーダ | m starwars monster green small elderly superpower sword
+R2-D2 | starwars robot small white blue
+C-3PO | starwars robot yellow speaks
+チューバッカ | m starwars monster brown big
+ハリー・ポッター | m harrypotter human protagonist magic student glasses blackhair
+ハーマイオニー | f harrypotter human magic student brownhair
+ロン・ウィーズリー | m harrypotter human magic student redhair
+ダンブルドア | m harrypotter human magic elderly beard whitehair glasses
+ヴォルデモート | m harrypotter human villain magic bald
+ドビー | m harrypotter monster small
+シャーロック・ホームズ | m novel human detective protagonist hat classic
+アルセーヌ・ルパン | m novel human protagonist hat classic
+ドラキュラ | m novel monster villain classic black
+フランケンシュタイン | m novel monster big classic green
+ゴジラ | m tokusatsu monster big jpwork classic movie
+ウルトラマン | m tokusatsu hero superpower big fly jpwork classic red
+仮面ライダー | m tokusatsu hero transform jpwork classic
+スーパー戦隊/レッド | m tokusatsu hero transform jpwork red
+バルタン星人 | m tokusatsu monster villain jpwork classic
+モスラ | f tokusatsu monster big fly jpwork classic
+キングコング | m movie beast primate big classic
+E.T. | movie monster small brown classic
+ターミネーター | m movie robot villain gun
+ジェームズ・ボンド/007 | m movie novel human protagonist gun
+インディ・ジョーンズ | m movie human protagonist hat
+ジャック・スパロウ | m movie human pirate protagonist sword hat
+トム(トムとジェリー) | m beast cat classic blue
+ジェリー | m beast mouse classic brown small
+ピンクパンサー | m beast cat pink classic
+バッグス・バニー | m beast rabbit speaks classic
+ホーマー・シンプソン | m human bald yellow
+ミスター・ビーン | m human protagonist classic movie
+アリス(不思議の国のアリス) | f novel disney human protagonist child blonde blue classic
+不思議の国のチェシャ猫 | novel disney beast cat stripes purple
+星の王子さま | m novel human child protagonist blonde classic picturebook
+サンタクロース | m folklore human elderly beard red fly hat *
+# --- 昔話・伝説
+桃太郎 | m folklore jpwork human protagonist hero child sword classic *
+浦島太郎 | m folklore jpwork human protagonist classic
+金太郎 | m folklore jpwork human child protagonist red classic
+一寸法師 | m folklore jpwork human small protagonist sword classic
+かぐや姫 | f folklore jpwork human princess protagonist classic
+鶴の恩返しの鶴 | f folklore jpwork beast transform white classic
+花咲かじいさん | m folklore jpwork human elderly classic
+こぶとりじいさん | m folklore jpwork human elderly classic
+鬼 | folklore jpwork monster villain red classic
+河童/かっぱ | folklore jpwork monster green classic
+天狗 | folklore jpwork monster red fly classic
+雪女 | f folklore jpwork monster white classic
+座敷わらし | folklore jpwork monster child classic
+ろくろ首 | f folklore jpwork monster classic
+ぬらりひょん | m folklore jpwork monster elderly classic
+九尾の狐 | folklore jpwork monster beast dog yellow tail superpower classic
+ヤマタノオロチ | folklore jpwork monster big villain classic
+ドラゴン | folklore monster big fly tail superpower classic
+ユニコーン | folklore beast horns white classic
+ペガサス | folklore beast fly white classic
+人魚/マーメイド | f folklore monster fish classic
+ゼウス | m folklore superpower king beard elderly classic
+赤ずきん | f folklore human child protagonist red classic picturebook
+孫悟空(西遊記) | m folklore novel beast primate protagonist superpower classic
+ロビン・フッド | m folklore human protagonist hero classic green hat
+アーサー王 | m folklore human king sword classic
+魔女 | f folklore magic fly hat black classic
+ゾンビ | monster classic villain
+幽霊/おばけ | folklore monster white classic fly
+宇宙人/エイリアン | monster green
+# --- マスコット
+ハローキティ/キティちゃん | f sanrio mascot beast cat white red small classic *
+マイメロディ | f sanrio mascot beast rabbit pink classic
+シナモロール | m sanrio mascot beast dog white blue
+ポムポムプリン | m sanrio mascot beast dog yellow
+クロミ | f sanrio mascot beast rabbit black villain
+ぐでたま | sanrio mascot yellow
+リラックマ | jpwork mascot beast bear brown
+くまモン | m jpwork mascot beast bear black *
+ふなっしー | jpwork mascot yellow speaks
+ひこにゃん | jpwork mascot beast cat white
+せんとくん | jpwork mascot human
+ガチャピン | jpwork mascot monster green tokusatsu
+ムック | jpwork mascot monster red
+どーもくん | jpwork mascot monster brown
+ペコちゃん | f jpwork mascot human child
+ケンタッキーおじさん/カーネル・サンダース | m mascot human elderly glasses beard white
+ドナルド(マクドナルド) | m mascot human red yellow
+ミャクミャク | jpwork mascot red blue monster recent
+キューピー | jpwork mascot child
+キョロちゃん | jpwork mascot beast fly
+チーバくん | jpwork mascot beast dog red
+バーバパパ | picturebook monster pink transform classic
+ノンタン | picturebook jpwork beast cat white classic
+ぐりとぐら | picturebook jpwork beast mouse small classic
+ウォーリー | m picturebook human glasses hat red
+トーマスの仲間パーシー | picturebook robot green
+兎田ぺこら/ぺこら | f vtuber beast rabbit
+キズナアイ | f vtuber pink

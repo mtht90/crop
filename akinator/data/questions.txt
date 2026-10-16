@@ -1,0 +1,424 @@
+# ============================================================
+#  質問定義
+#  書式:  tag | scope | 質問文 | 匂わせ用ラベル(任意)
+#    scope: 対象ドメインのカンマ区切り (* は全ドメイン)
+#      P=実在の人物 C=架空キャラ A=動物 L=植物 F=食べ物 O=物 S=場所
+#    スコープ外のエンティティは「いいえ」が強く期待される扱いになる
+#
+#  ディレクティブ:
+#    !group 名前 tag tag ...   排他グループ（どれか1つを持てば他は「いいえ」）
+#    !imply tag => tag tag ... 含意（左を持てば右も持つ）
+#    !default D group tag      ドメインDでグループのタグが無ければtagを付与
+#    !alias 短縮 => 正式タグ    エンティティ記述用の短縮名
+# ============================================================
+
+!group domain D:P D:C D:A D:L D:F D:O D:S
+!group gender male female
+!group life alive dead
+!group cls mammal bird fish reptile amphibian insect invert
+!group diet carnivore herbivore omnivore
+!group cuisine japanese chinese korean ethnic western
+!group temp hot coldfood
+!group plantkind flower tree
+
+!alias m => male
+!alias f => female
+!alias * => famous
+
+!default P life alive
+
+!imply D:P => human living
+!imply D:A => living
+!imply D:L => living
+!imply human => living
+!imply ancient => premodern
+!imply premodern => old
+!imply era19 => old
+!imply old => dead
+!imply mlb => baseball
+!imply baseball soccer tennis golf sumo figure track swim racer olympic => athlete
+!imply uk fr de it es ru gr pl se nl dk no ch rs pt ua at be fi ie => europe
+!imply br ar mx co cl pe => samerica
+!imply eg za ng ke et => african
+!tags ca jm au nz
+!imply jp kr cn mn in th tw pk kp vn ph id => asia
+!imply leader => politician
+!imply band rapper kpop composer singer => musician
+!imply hollywood => actor
+# --- 作品 → メディア
+!imply pokemon => game anime jpwork
+!imply mario zelda kirby dq ff sonic streetfighter splatoon animalcrossing => game jpwork
+!imply minecraft => game
+!imply dragonball onepiece naruto kimetsu jujutsu jojo slamdunk hxh haikyu chainsaw mha gintama deathnote bleach => jump manga anime jpwork
+!imply conan frieren oshinoko aot fma spyfamily doraemon shinchan sazae chibimaru lupin sailormoon => manga anime jpwork
+!imply sailormoon => shojo
+!imply eva gundam madoka precure => anime jpwork
+!imply anpanman => picturebook anime jpwork
+!imply ghibli => anime movie jpwork
+!imply sanrio => jpwork
+!imply pixar => movie
+!imply starwars => movie
+!imply marvel dc => amecomi
+!imply harrypotter => novel movie
+!imply jump shojo => manga
+# --- 動物
+!imply dinosaur => reptile extinct
+!imply sea => water
+!imply cat dog bear rabbit mouse primate => mammal
+# --- 食べ物
+!imply alcohol => drink
+!imply italian => western
+!imply ramen => noodle
+# --- 場所
+!imply tokyo kyoto => injp
+!imply injp => inasia
+!imply capital => city
+!imply castle tower => building
+!imply mountain island => nature
+
+# ======================== 大分類 ========================
+D:P | * | 実在する（した）人物ですか？ | 実在の人物
+D:C | * | 架空のキャラクターですか？ | 架空のキャラクター
+D:A | * | 動物（虫や魚も含む）ですか？ | 動物
+D:L | * | 植物ですか？ | 植物
+D:F | * | 食べ物・飲み物ですか？ | 食べ物
+D:O | * | 物・道具・乗り物ですか？ | 物
+D:S | * | 場所・建物・国ですか？ | 場所
+human | * | 人間ですか？
+living | * | 生き物ですか？
+
+# ======================== 人物・キャラ共通 ========================
+male | P,C | 男性（オス）ですか？ | 男性
+female | P,C | 女性（メス）ですか？ | 女性
+glasses | P,C | メガネをかけていますか？
+beard | P,C | ヒゲが特徴的ですか？
+bald | P,C | 髪の毛がない（スキンヘッド等）ですか？
+singer | P,C | 歌手ですか？ | 歌手
+idol | P,C | アイドルですか？ | アイドル
+athlete | P,C | スポーツ選手ですか？ | スポーツ選手
+baseball | P,C | 野球に関係がありますか？ | 野球関係
+soccer | P,C | サッカーに関係がありますか？ | サッカー関係
+basketball | P,C | バスケットボールに関係がありますか？
+fighter | P,C | 格闘技をしますか？
+
+# ======================== 実在の人物 ========================
+alive | P | 現在も存命ですか？
+active | P | 今も第一線で活動していますか？
+era21 | P | 主に21世紀に活躍していますか？
+era20 | P | 主に20世紀に活躍しましたか？
+old | P | 100年以上前の人物ですか？ | 歴史上の人物
+premodern | P | 1800年より前（江戸時代以前）の人物ですか？
+ancient | P | 1000年以上前の人物ですか？
+jp | P | 日本人ですか？ | 日本人
+asia | P | アジアの人ですか？
+kr | P | 韓国人ですか？
+cn | P | 中国人ですか？
+us | P | アメリカ人ですか？ | アメリカ人
+europe | P | ヨーロッパの人ですか？ | ヨーロッパの人
+uk | P | イギリス人ですか？
+fr | P | フランス人ですか？
+de | P | ドイツ人ですか？
+it | P | イタリア人ですか？
+samerica | P | 南米の人ですか？
+african | P | アフリカの人ですか？
+mlb | P | メジャーリーグでプレーしたことがありますか？ | メジャーリーガー
+tennis | P | テニス選手ですか？
+golf | P | ゴルフ選手ですか？
+sumo | P | 力士ですか？
+figure | P | フィギュアスケート選手ですか？
+track | P | 陸上競技の選手ですか？
+swim | P | 水泳選手ですか？
+racer | P | レーサーですか？
+olympic | P | オリンピックでメダルを取ったことがありますか？
+retired | P | 現役を引退していますか？
+musician | P | 音楽活動をしていますか？ | ミュージシャン
+band | P | バンドのメンバーですか？
+kpop | P | K-POPのアーティストですか？
+rapper | P | ラッパーですか？
+composer | P | クラシックの作曲家ですか？
+group | P | グループで活動していますか（いましたか）？
+actor | P | 俳優・女優ですか？ | 俳優
+hollywood | P | ハリウッド映画によく出ますか？
+comedian | P | お笑い芸人ですか？ | お笑い芸人
+tv | P | テレビによく出ていますか？
+youtuber | P | YouTuber・配信者ですか？
+voiceactor | P | 声優ですか？
+model | P | モデルですか？
+announcer | P | アナウンサー・司会者ですか？
+politician | P | 政治家ですか？ | 政治家
+leader | P | 国のトップ（大統領・首相など）になりましたか？
+royal | P | 王族・皇族ですか？
+warlord | P | 武将・武士ですか？ | 武将
+military | P | 軍人ですか？
+scientist | P | 科学者・研究者ですか？ | 科学者
+nobel | P | ノーベル賞を受賞していますか？
+inventor | P | 発明家ですか？
+writer | P | 作家・詩人ですか？ | 作家
+mangaka | P | 漫画家ですか？
+painter | P | 画家・芸術家ですか？ | 芸術家
+director | P | 映画監督ですか？
+founder | P | 企業の創業者・経営者ですか？ | 経営者
+tech | P | IT・テクノロジーに関わる人ですか？
+philosopher | P | 思想家・哲学者ですか？
+religious | P | 宗教に関係する人物ですか？
+explorer | P | 冒険家・探検家ですか？
+chef | P | 料理人ですか？
+gamecreator | P | ゲームクリエイターですか？
+textbook | P | 歴史の教科書に載っていますか？
+banknote | P | お札（紙幣）の肖像になったことがありますか？
+assassinated | P | 暗殺されましたか？
+
+# ======================== 架空のキャラクター ========================
+jpwork | C | 日本の作品のキャラクターですか？
+anime | C | アニメに登場しますか？
+manga | C | マンガが原作ですか？ | マンガのキャラ
+jump | C | 週刊少年ジャンプの作品ですか？ | ジャンプ作品
+shojo | C | 少女マンガの作品ですか？
+game | C | ゲームのキャラクターですか？ | ゲームキャラ
+movie | C | 映画が初登場のキャラクターですか？
+novel | C | 小説が原作ですか？
+disney | C | ディズニーのキャラクターですか？ | ディズニー
+pixar | C | ピクサー作品のキャラクターですか？ | ピクサー
+ghibli | C | ジブリ作品のキャラクターですか？ | ジブリ
+folklore | C | 昔話・伝説・神話に登場しますか？ | 伝説や昔話
+amecomi | C | アメコミのキャラクターですか？ | アメコミ
+tokusatsu | C | 特撮（ヒーロー・怪獣）のキャラクターですか？ | 特撮
+mascot | C | マスコットキャラクター・ゆるキャラですか？ | マスコット
+sanrio | C | サンリオのキャラクターですか？ | サンリオ
+picturebook | C | 絵本や幼児向け作品のキャラクターですか？
+vtuber | C | VTuberですか？
+pokemon | C | ポケモンに関係しますか？ | ポケモン
+mario | C | マリオシリーズのキャラクターですか？ | マリオシリーズ
+zelda | C | ゼルダの伝説のキャラクターですか？
+kirby | C | 星のカービィのキャラクターですか？
+dq | C | ドラゴンクエストのキャラクターですか？ | ドラクエ
+ff | C | ファイナルファンタジーのキャラクターですか？ | FF
+sonic | C | ソニックシリーズのキャラクターですか？
+streetfighter | C | ストリートファイターのキャラクターですか？
+splatoon | C | スプラトゥーンに関係しますか？
+animalcrossing | C | どうぶつの森のキャラクターですか？
+minecraft | C | マインクラフトに関係しますか？
+dragonball | C | ドラゴンボールのキャラクターですか？ | ドラゴンボール
+onepiece | C | ONE PIECEのキャラクターですか？ | ONE PIECE
+naruto | C | NARUTOのキャラクターですか？ | NARUTO
+bleach | C | BLEACHのキャラクターですか？
+kimetsu | C | 鬼滅の刃のキャラクターですか？ | 鬼滅の刃
+jujutsu | C | 呪術廻戦のキャラクターですか？ | 呪術廻戦
+jojo | C | ジョジョの奇妙な冒険のキャラクターですか？ | ジョジョ
+slamdunk | C | SLAM DUNKのキャラクターですか？
+hxh | C | HUNTER×HUNTERのキャラクターですか？
+haikyu | C | ハイキュー!!のキャラクターですか？
+chainsaw | C | チェンソーマンのキャラクターですか？
+mha | C | 僕のヒーローアカデミアのキャラクターですか？
+gintama | C | 銀魂のキャラクターですか？
+deathnote | C | DEATH NOTEのキャラクターですか？
+conan | C | 名探偵コナンのキャラクターですか？ | 名探偵コナン
+frieren | C | 葬送のフリーレンのキャラクターですか？
+oshinoko | C | 【推しの子】のキャラクターですか？
+aot | C | 進撃の巨人のキャラクターですか？ | 進撃の巨人
+fma | C | 鋼の錬金術師のキャラクターですか？
+spyfamily | C | SPY×FAMILYのキャラクターですか？
+doraemon | C | ドラえもんのキャラクターですか？ | ドラえもん
+shinchan | C | クレヨンしんちゃんのキャラクターですか？
+sazae | C | サザエさんのキャラクターですか？
+chibimaru | C | ちびまる子ちゃんのキャラクターですか？
+lupin | C | ルパン三世のキャラクターですか？
+sailormoon | C | セーラームーンのキャラクターですか？
+eva | C | エヴァンゲリオンのキャラクターですか？ | エヴァ
+gundam | C | ガンダムシリーズに関係しますか？ | ガンダム
+madoka | C | まどか☆マギカのキャラクターですか？
+precure | C | プリキュアのキャラクターですか？
+anpanman | C | アンパンマンのキャラクターですか？ | アンパンマン
+starwars | C | スター・ウォーズのキャラクターですか？ | スター・ウォーズ
+marvel | C | マーベルのキャラクターですか？ | マーベル
+dc | C | DCコミックスのキャラクターですか？
+harrypotter | C | ハリー・ポッターのキャラクターですか？ | ハリー・ポッター
+protagonist | C | 主人公ですか？ | 主人公
+villain | C | 悪役・敵キャラですか？ | 悪役
+hero | C | ヒーロー（正義の味方）ですか？
+robot | C | ロボット・機械ですか？ | ロボット
+beast | C | 動物の姿をしていますか？ | 動物っぽいキャラ
+monster | C | 怪物・妖怪・モンスターですか？ | モンスター
+superpower | C | 特殊な能力や魔法を使えますか？
+magic | C | 魔法使い・魔女ですか？
+sword | C | 剣や刀で戦いますか？ | 剣士
+gun | C | 銃を使いますか？
+transform | C | 変身しますか？
+student | C | 学生ですか？ | 学生
+child | C | 子どもですか？ | 子ども
+elderly | C | お年寄りですか？
+ninja | C | 忍者ですか？
+pirate | C | 海賊ですか？
+princess | C | お姫様ですか？ | お姫様
+king | C | 王様・王子ですか？
+detective | C | 探偵ですか？
+speaks | C | 人間の言葉を話しますか？
+hat | C | 帽子をかぶっていますか？
+classic | C | 30年以上前から存在するキャラクターですか？
+recent | C | 2010年以降に生まれたキャラクターですか？
+blonde | C | 金髪ですか？
+blackhair | C | 黒髪ですか？
+redhair | C | 赤い髪ですか？
+bluehair | C | 青い髪ですか？
+greenhair | C | 緑の髪ですか？
+pinkhair | C | ピンクの髪ですか？
+whitehair | C | 白や銀の髪ですか？
+brownhair | C | 茶色の髪ですか？
+
+# ======================== 動物（キャラと一部共通） ========================
+cat | A,C | 猫（ネコ科）ですか？ | 猫
+dog | A,C | 犬（イヌ科）ですか？ | 犬
+bear | A,C | クマですか？
+rabbit | A,C | ウサギですか？
+mouse | A,C | ネズミですか？
+primate | A,C | サルの仲間ですか？
+tail | A,C | しっぽがありますか？
+stripes | A,C | しま模様がありますか？
+fly | A,C,O | 空を飛べますか？
+small | A,C,O | 手のひらに乗るくらい小さいですか？
+big | A,C,O | 人間より大きいですか？
+mammal | A | 哺乳類ですか？ | 哺乳類
+bird | A | 鳥ですか？ | 鳥
+fish | A | 魚ですか？ | 魚
+reptile | A | 爬虫類ですか？ | 爬虫類
+amphibian | A | 両生類ですか？
+insect | A | 昆虫ですか？ | 昆虫
+invert | A | 昆虫以外の虫・貝・タコ・カニなどですか？
+extinct | A | 絶滅していますか？
+dinosaur | A | 恐竜ですか？ | 恐竜
+pet | A | ペットとして飼われることが多いですか？ | ペット
+livestock | A | 家畜ですか？
+zoo | A | 動物園や水族館で見られますか？
+wildjp | A | 日本の野生にいますか？
+africa | A | アフリカに生息していますか？
+water | A | 水中や水辺で暮らしますか？
+sea | A | 海に住んでいますか？ | 海の生き物
+carnivore | A | 肉食ですか？
+herbivore | A | 草食ですか？
+omnivore | A | 雑食ですか？
+dangerous | A | 人間にとって危険ですか？
+venom | A | 毒を持っていますか？
+spots | A | 斑点やまだら模様がありますか？
+horns | A | 角がありますか？
+shell | A | 殻や甲羅がありますか？
+fourlegs | A | 4本足で歩きますか？
+nolegs | A | 足がありませんか？
+manylegs | A | 足が6本以上ありますか？
+edible | A | 日本で食用にされますか？
+nocturnal | A | 夜行性ですか？
+cold | A,S | 寒い地域にいますか（ありますか）？
+tropical | A,S | 暑い地域にいますか（ありますか）？
+
+# ======================== 植物 ========================
+flower | L | 花ですか？
+tree | L | 木ですか？
+spring | L | 春が見頃ですか？
+summer | L | 夏が見頃ですか？
+autumn | L | 秋が見頃ですか？
+winter | L | 冬が見頃ですか？
+
+# ======================== 色・形（複数ドメイン共通） ========================
+red | A,C,L,F,O | 主に赤い色をしていますか？
+blue | A,C,L,F,O | 主に青い色をしていますか？
+yellow | A,C,L,F,O | 主に黄色をしていますか？
+green | A,C,L,F,O | 主に緑色をしていますか？
+pink | A,C,L,F,O | 主にピンク色をしていますか？
+white | A,C,L,F,O | 主に白い色をしていますか？
+black | A,C,L,F,O | 主に黒い色をしていますか？
+brown | A,C,L,F,O | 主に茶色をしていますか？
+orange | A,C,L,F,O | 主にオレンジ色をしていますか？
+purple | A,C,L,F,O | 主に紫色をしていますか？
+gray | A,C,L,F,O | 主に灰色をしていますか？
+round | F,O | 丸い形をしていますか？
+
+# ======================== 食べ物 ========================
+fruit | F | 果物ですか？ | 果物
+vegetable | F | 野菜ですか？ | 野菜
+meat | F | 肉を使っていますか？
+seafood | F | 魚介類を使っていますか？
+noodle | F | 麺類ですか？ | 麺類
+ramen | F | ラーメンですか？
+rice | F | お米を使っていますか？
+bread | F | パンの仲間ですか？
+sweets | F | お菓子・スイーツですか？ | スイーツ
+drink | F | 飲み物ですか？ | 飲み物
+alcohol | F | お酒ですか？
+dish | F | 調理された料理ですか？ | 料理
+japanese | F,O | 和食・和風など、日本発祥のものですか？ | 和風のもの
+western | F | 洋食・欧米の食べ物ですか？
+chinese | F | 中華料理ですか？
+korean | F | 韓国料理ですか？
+italian | F | イタリア料理ですか？
+ethnic | F | エスニック料理（東南アジア・インド等）ですか？
+hot | F | 温かい状態で食べますか？
+coldfood | F | 冷たい状態で食べますか？
+sweet | F | 甘いですか？
+spicy | F | 辛いですか？
+sour | F | 酸っぱいですか？
+fried | F | 揚げ物ですか？
+raw | F | 生で食べますか？
+soup | F | スープ・汁物ですか？
+fastfood | F | ファストフードですか？
+snack | F | スナック菓子・駄菓子ですか？
+chopsticks | F | 箸で食べますか？
+konbini | F | コンビニで買えますか？
+egg | F | 卵を使いますか？
+milk | F | 乳製品を使いますか？
+seasoning | F | 調味料ですか？
+yatai | F | お祭りの屋台でよく見かけますか？
+
+# ======================== 物 ========================
+electric | O | 電気で動きますか？
+screen | O | 画面がついていますか？
+handheld | O | 片手で持てますか？
+home | O | たいていの家にありますか？
+kitchen | O | 台所で使いますか？
+stationery | O | 文房具ですか？ | 文房具
+toy | O | おもちゃ・遊び道具ですか？
+instrument | O | 楽器ですか？ | 楽器
+vehicle | O | 乗り物ですか？ | 乗り物
+wheels | O | 車輪がついていますか？
+clothing | O | 身につけるものですか？ | 身につけるもの
+furniture | O | 家具ですか？
+tool | O | 工具・作業の道具ですか？
+weapon | O | 武器ですか？
+sports | O | スポーツ用品ですか？
+metal | O | 主に金属でできていますか？
+wood | O | 主に木でできていますか？
+paper | O | 主に紙でできていますか？
+plastic | O | 主にプラスチックでできていますか？
+glass | O | 主にガラスでできていますか？
+modern | O | 20世紀以降に発明されましたか？
+daily | O | 毎日のように使いますか？
+outdoor | O | 主に屋外で使いますか？
+sound | O | 音を出すものですか？
+sharp | O | 刃物・とがったものですか？
+bathroom | O | お風呂や洗面所で使いますか？
+school | O | 学校で使いますか？
+onwater | O | 水の上や水中で使いますか？
+expensive | O | 10万円以上するのが普通ですか？
+
+# ======================== 場所 ========================
+country | S | 国ですか？ | 国
+city | S | 都市・町ですか？ | 都市
+building | S | 建物・建造物ですか？ | 建造物
+nature | S | 自然の場所（山・川・島など）ですか？ | 自然の場所
+mountain | S | 山ですか？
+island | S | 島ですか？
+injp | S | 日本にありますか？ | 日本の場所
+tokyo | S | 東京にありますか？
+kyoto | S | 京都にありますか？
+inasia | S | アジアにありますか？
+ineurope | S | ヨーロッパにありますか？
+inamerica | S | 南北アメリカ大陸にありますか？
+inafrica | S | アフリカにありますか？
+inoceania | S | オセアニアにありますか？
+tower | S | 塔・タワーですか？
+castle | S | 城ですか？
+heritage | S | 世界遺産ですか？
+religioussite | S | 寺・神社・教会など宗教の場所ですか？
+tourist | S | 有名な観光地ですか？
+capital | S | 首都ですか？
+coastal | S | 海に面していますか？
+oldplace | S | 500年以上前からありますか？
+amusement | S | テーマパーク・遊園地ですか？

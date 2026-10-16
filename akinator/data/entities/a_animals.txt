@@ -1,0 +1,182 @@
+# 動物
+@A
+# --- 哺乳類（ペット・家畜）
+犬/イヌ | dog pet fourlegs tail omnivore wildjp ?brown *
+猫/ネコ | cat pet fourlegs tail carnivore nocturnal ?small *
+ハムスター | mouse pet fourlegs small omnivore nocturnal
+ウサギ | rabbit pet fourlegs herbivore white zoo wildjp
+モルモット | mouse pet fourlegs small herbivore
+フェレット | mammal pet fourlegs tail carnivore small
+牛/ウシ | mammal livestock fourlegs tail herbivore horns big edible black white spots
+豚/ブタ | mammal livestock fourlegs tail omnivore edible pink
+馬/ウマ | mammal livestock fourlegs tail herbivore big brown
+羊/ヒツジ | mammal livestock fourlegs herbivore white edible zoo
+ヤギ | mammal livestock fourlegs herbivore horns white zoo
+ロバ | mammal livestock fourlegs herbivore tail
+# --- 哺乳類（野生）
+ライオン | cat africa fourlegs tail carnivore big dangerous zoo yellow tropical *
+トラ | cat fourlegs tail carnivore big dangerous zoo stripes orange
+チーター | cat africa fourlegs tail carnivore spots zoo yellow tropical
+ヒョウ | cat africa fourlegs tail carnivore spots dangerous zoo yellow
+ジャガー | cat fourlegs tail carnivore spots dangerous tropical
+ゾウ | mammal africa fourlegs tail herbivore big zoo tropical *
+キリン | mammal africa fourlegs tail herbivore big zoo spots yellow horns tropical
+シマウマ | mammal africa fourlegs tail herbivore stripes zoo white black
+カバ | mammal africa fourlegs herbivore big water dangerous zoo
+サイ | mammal africa fourlegs herbivore big horns zoo
+ゴリラ | primate africa herbivore big zoo black tropical
+チンパンジー | primate africa omnivore zoo black tropical
+オランウータン | primate herbivore zoo orange tropical
+ニホンザル | primate omnivore wildjp zoo tail cold brown
+パンダ/ジャイアントパンダ | bear fourlegs herbivore zoo black white *
+レッサーパンダ | mammal fourlegs tail herbivore zoo stripes orange
+クマ/ヒグマ | bear fourlegs omnivore big dangerous wildjp brown cold
+ツキノワグマ | bear fourlegs omnivore big dangerous wildjp black
+ホッキョクグマ/シロクマ | bear fourlegs carnivore big dangerous zoo white cold water
+コアラ | mammal herbivore zoo nocturnal gray small
+カンガルー | mammal tail herbivore zoo brown
+ナマケモノ | mammal herbivore zoo tropical brown
+キツネ | dog fourlegs tail omnivore wildjp orange
+タヌキ | dog fourlegs tail omnivore wildjp nocturnal brown
+オオカミ | dog fourlegs tail carnivore dangerous zoo
+シカ | mammal fourlegs tail herbivore horns wildjp brown spots edible
+イノシシ | mammal fourlegs tail omnivore wildjp dangerous edible brown
+リス | mammal fourlegs tail omnivore small wildjp brown
+ネズミ | mouse fourlegs tail omnivore small wildjp nocturnal
+コウモリ | mammal fly nocturnal small wildjp black
+モグラ | mammal small wildjp black
+ハリネズミ | mammal pet fourlegs omnivore small nocturnal
+アライグマ | mammal fourlegs tail omnivore stripes nocturnal
+ラクダ | mammal fourlegs tail herbivore big zoo livestock tropical
+アルパカ | mammal fourlegs herbivore zoo white livestock
+トナカイ | mammal fourlegs herbivore horns cold livestock brown
+カピバラ | mouse fourlegs herbivore zoo water brown
+ラッコ | mammal sea carnivore zoo brown cold
+アザラシ | mammal sea carnivore zoo cold gray
+アシカ | mammal sea carnivore zoo
+セイウチ | mammal sea carnivore big cold zoo
+イルカ | mammal sea carnivore nolegs zoo gray tail
+クジラ | mammal sea carnivore nolegs big tail edible
+シャチ | mammal sea carnivore nolegs big dangerous zoo black white tail
+カモノハシ | mammal water venom tail
+アリクイ | mammal fourlegs tail carnivore zoo
+アルマジロ | mammal fourlegs shell tail zoo
+# --- 鳥
+ニワトリ | bird livestock omnivore edible white red
+ハト | bird fly herbivore wildjp gray
+カラス | bird fly omnivore wildjp black
+スズメ | bird fly omnivore small wildjp brown
+ペンギン | bird sea carnivore zoo cold black white *
+フクロウ | bird fly carnivore nocturnal wildjp zoo brown
+ワシ | bird fly carnivore wildjp brown
+タカ | bird fly carnivore wildjp brown
+ツル | bird fly omnivore wildjp water white
+ハクチョウ | bird fly herbivore water white wildjp
+アヒル | bird water omnivore livestock white yellow
+カモ | bird fly water omnivore wildjp edible
+インコ | bird fly pet herbivore small green
+オウム | bird fly pet herbivore zoo tropical
+ダチョウ | bird africa omnivore big zoo
+フラミンゴ | bird fly water zoo pink tropical
+クジャク | bird fly omnivore zoo blue green
+キツツキ | bird fly wildjp small
+ツバメ | bird fly carnivore small wildjp black
+ハチドリ | bird fly small tropical green
+ウグイス | bird fly wildjp small green
+カワセミ | bird fly water carnivore wildjp small blue
+カモメ | bird fly sea omnivore wildjp white
+ペリカン | bird fly water carnivore zoo white
+キジ | bird fly wildjp omnivore green
+シマエナガ | bird fly wildjp small white cold
+# --- 爬虫類・両生類
+ヘビ | reptile nolegs carnivore wildjp ?venom tail
+コブラ | reptile nolegs carnivore venom dangerous tail tropical
+ワニ | reptile water carnivore dangerous big fourlegs tail zoo green tropical
+カメ | reptile shell fourlegs omnivore water pet wildjp green
+ウミガメ | reptile sea shell omnivore zoo big
+トカゲ | reptile fourlegs tail carnivore wildjp small
+ヤモリ | reptile fourlegs tail carnivore wildjp small nocturnal
+カメレオン | reptile fourlegs tail carnivore green tropical
+イグアナ | reptile fourlegs tail herbivore pet green tropical
+コモドドラゴン | reptile fourlegs tail carnivore big dangerous venom zoo
+カエル | amphibian fourlegs water carnivore wildjp green small
+オタマジャクシ | amphibian water small black wildjp tail
+イモリ | amphibian fourlegs tail water wildjp small venom
+サンショウウオ | amphibian fourlegs tail water wildjp
+ウーパールーパー | amphibian fourlegs tail water pet pink
+# --- 恐竜・絶滅
+ティラノサウルス | dinosaur carnivore big dangerous tail *
+トリケラトプス | dinosaur herbivore big horns fourlegs tail
+ステゴサウルス | dinosaur herbivore big fourlegs tail
+ブラキオサウルス | dinosaur herbivore big fourlegs tail
+プテラノドン | reptile extinct fly carnivore big
+マンモス | mammal extinct herbivore big fourlegs cold brown
+ドードー | bird extinct herbivore
+サーベルタイガー | cat extinct carnivore fourlegs big
+# --- 魚
+マグロ | fish sea carnivore edible big
+サケ/シャケ | fish sea water carnivore edible wildjp
+サバ | fish sea carnivore edible
+サンマ | fish sea carnivore edible
+イワシ | fish sea omnivore edible small
+アジ | fish sea carnivore edible
+タイ | fish sea carnivore edible red
+カツオ | fish sea carnivore edible
+ウナギ | fish water carnivore edible nolegs
+フグ | fish sea carnivore edible venom round
+サメ | fish sea carnivore dangerous big zoo gray
+ジンベエザメ | fish sea big zoo spots
+マンボウ | fish sea big zoo
+金魚 | fish water pet small orange red
+メダカ | fish water pet small wildjp
+コイ | fish water omnivore wildjp pet
+ナマズ | fish water carnivore wildjp
+ピラニア | fish water carnivore dangerous tropical
+タツノオトシゴ | fish sea small zoo tail
+クマノミ | fish sea small orange stripes zoo tropical
+チョウチンアンコウ | fish sea carnivore
+アンコウ | fish sea carnivore edible
+アユ | fish water edible wildjp
+エイ | fish sea carnivore zoo ?venom tail
+# --- 昆虫
+カブトムシ | insect manylegs horns wildjp pet herbivore black brown shell
+クワガタ | insect manylegs wildjp pet herbivore black shell
+チョウ | insect manylegs fly wildjp herbivore
+ガ | insect manylegs fly nocturnal wildjp
+ハチ/ミツバチ | insect manylegs fly venom dangerous wildjp yellow stripes
+スズメバチ | insect manylegs fly venom dangerous wildjp yellow stripes
+アリ | insect manylegs small wildjp omnivore black
+カ/蚊 | insect manylegs fly small wildjp dangerous
+ハエ | insect manylegs fly small wildjp
+ゴキブリ | insect manylegs small wildjp omnivore nocturnal brown
+トンボ | insect manylegs fly carnivore wildjp water
+セミ | insect manylegs fly wildjp
+バッタ | insect manylegs herbivore wildjp green
+カマキリ | insect manylegs carnivore wildjp green
+てんとう虫 | insect manylegs fly carnivore small wildjp red spots round
+ホタル | insect manylegs fly nocturnal wildjp water
+コオロギ | insect manylegs wildjp small black nocturnal
+スズムシ | insect manylegs wildjp small black pet
+カイコ | insect manylegs livestock white herbivore
+シロアリ | insect manylegs small wildjp white
+# --- その他の無脊椎
+クモ | invert manylegs carnivore wildjp ?venom small
+サソリ | invert manylegs carnivore venom dangerous tail tropical
+ムカデ | invert manylegs carnivore venom wildjp
+カタツムリ | invert shell nolegs wildjp herbivore small
+ナメクジ | invert nolegs wildjp small
+ミミズ | invert nolegs wildjp small pink
+タコ | invert sea manylegs carnivore edible red
+イカ | invert sea manylegs carnivore edible white
+カニ | invert sea water manylegs shell carnivore edible red
+エビ | invert sea water manylegs shell omnivore edible red
+ザリガニ | invert water manylegs shell omnivore wildjp red pet
+ヤドカリ | invert sea manylegs shell small
+クラゲ | invert sea venom nolegs zoo white
+ヒトデ | invert sea zoo orange
+ウニ | invert sea edible black round
+ホタテ | invert sea shell edible nolegs
+アサリ | invert sea shell edible nolegs small
+カキ/牡蠣 | invert sea shell edible nolegs
+ナマコ | invert sea edible nolegs
+ダンゴムシ | invert manylegs small wildjp gray round

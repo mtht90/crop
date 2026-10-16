@@ -1,0 +1,200 @@
+# 世界の人物（2026年時点）
+@P
+# --- 古代〜近世
+ソクラテス | m gr ancient philosopher textbook beard
+プラトン | m gr ancient philosopher textbook beard
+アリストテレス | m gr ancient philosopher scientist textbook beard
+アルキメデス | m gr ancient scientist inventor textbook beard
+ピタゴラス | m gr ancient scientist philosopher textbook beard
+アレクサンドロス大王 | m gr ancient royal leader military textbook
+ユリウス・カエサル/シーザー | m it ancient military politician leader textbook assassinated
+クレオパトラ | f eg ancient royal leader textbook *
+ツタンカーメン | m eg ancient royal leader textbook
+イエス・キリスト | m ancient religious textbook beard *
+釈迦/ブッダ | m in ancient religious philosopher textbook
+孔子 | m cn ancient philosopher textbook beard
+始皇帝 | m cn ancient royal leader textbook
+劉備 | m cn ancient warlord leader beard
+関羽 | m cn ancient warlord beard
+諸葛亮/孔明 | m cn ancient warlord politician
+曹操 | m cn ancient warlord leader writer
+ムハンマド | m ancient religious textbook
+チンギス・ハン | m mn premodern warlord leader textbook beard
+マルコ・ポーロ | m it premodern explorer writer textbook
+ジャンヌ・ダルク | f fr premodern military religious textbook
+レオナルド・ダ・ヴィンチ | m it premodern painter inventor scientist textbook beard *
+ミケランジェロ | m it premodern painter textbook
+コロンブス | m it premodern explorer textbook
+マゼラン | m es premodern explorer textbook
+ガリレオ・ガリレイ | m it premodern scientist textbook beard
+コペルニクス | m pl premodern scientist textbook
+ルター/マルティン・ルター | m de premodern religious textbook
+シェイクスピア | m uk premodern writer textbook beard *
+ザビエル/フランシスコ・ザビエル | m es premodern religious textbook beard
+ニュートン/アイザック・ニュートン | m uk premodern scientist textbook *
+エリザベス1世 | f uk premodern royal leader textbook
+ルイ14世 | m fr premodern royal leader textbook
+マリー・アントワネット | f fr premodern royal textbook
+ナポレオン | m fr era19 military leader royal textbook *
+バッハ | m de premodern composer textbook
+モーツァルト | m de premodern composer textbook *
+ベートーヴェン | m de premodern era19 composer textbook *
+ショパン | m pl era19 composer textbook
+シューベルト | m de era19 composer
+チャイコフスキー | m ru era19 composer beard
+ワシントン/ジョージ・ワシントン | m us premodern leader military textbook banknote
+リンカーン | m us era19 leader politician textbook banknote assassinated beard *
+ナイチンゲール | f uk era19 textbook
+ダーウィン | m uk era19 scientist textbook beard
+エジソン | m us era19 era20 inventor founder textbook dead *
+ベル/グラハム・ベル | m uk era19 inventor beard textbook
+ノーベル/アルフレッド・ノーベル | m se era19 inventor scientist founder beard
+ゴッホ | m nl era19 painter beard *
+モネ | m fr era19 era20 painter beard dead
+ピカソ | m es era20 painter dead *
+ダリ | m es era20 painter beard dead
+ルノワール | m fr era19 painter beard
+ムンク | m no era19 era20 painter dead
+ベーブ・ルース | m us era20 baseball dead
+ライト兄弟 | m us era20 inventor group dead
+フォード/ヘンリー・フォード | m us era20 founder inventor dead
+キュリー夫人/マリ・キュリー | f pl fr era20 scientist nobel dead
+アインシュタイン | m de us era20 scientist nobel beard dead *
+ガンジー | m in era20 politician religious philosopher assassinated glasses bald dead
+ヘレン・ケラー | f us era20 writer dead
+ヒトラー | m de era20 politician leader military beard dead
+チャーチル | m uk era20 politician leader dead
+レーニン | m ru era20 politician leader beard bald dead
+スターリン | m ru era20 politician leader beard dead
+毛沢東 | m cn era20 politician leader dead
+ケネディ/ジョン・F・ケネディ | m us era20 politician leader assassinated dead
+キング牧師/マーティン・ルーサー・キング | m us era20 religious assassinated dead
+マザー・テレサ | f era20 religious nobel dead
+ネルソン・マンデラ | m za era20 politician leader nobel dead
+チェ・ゲバラ | m ar era20 military politician beard dead
+ウォルト・ディズニー | m us era20 founder director dead
+チャップリン | m uk era20 actor director comedian beard dead
+マリリン・モンロー | f us era20 actor model hollywood dead *
+オードリー・ヘプバーン | f uk era20 actor hollywood dead
+エルヴィス・プレスリー | m us era20 singer dead
+ジョン・レノン | m uk era20 singer band group glasses assassinated dead *
+ポール・マッカートニー | m uk era20 era21 singer band group
+ビートルズ | m uk era20 band group singer
+フレディ・マーキュリー | m uk era20 singer band group beard dead
+マイケル・ジャクソン | m us era20 singer dead *
+マドンナ | f us era20 era21 singer
+ボブ・マーリー | m jm era20 singer dead
+ブルース・リー | m cn us era20 actor fighter dead
+モハメド・アリ | m us era20 fighter dead
+アームストロング/ニール・アームストロング | m us era20 explorer military dead
+ガガーリン | m ru era20 explorer military dead
+スティーブ・ジョブズ | m us era20 era21 founder tech glasses beard dead *
+ホーキング/スティーヴン・ホーキング | m uk era20 era21 scientist glasses dead
+ダイアナ妃 | f uk era20 royal dead
+エリザベス2世 | f uk era20 era21 royal leader dead *
+マイケル・ジョーダン | m us era20 basketball retired bald
+コービー・ブライアント | m us era21 basketball retired dead
+ペレ | m br era20 soccer retired dead
+マラドーナ | m ar era20 soccer retired dead
+アイルトン・セナ | m br era20 racer dead
+ジャッキー・チェン | m cn era20 era21 active actor fighter hollywood
+# --- 現代: 政治・ビジネス
+ドナルド・トランプ | m us era21 active politician leader founder tv *
+バイデン/ジョー・バイデン | m us era21 politician leader
+オバマ/バラク・オバマ | m us era21 politician leader nobel
+プーチン | m ru era21 active politician leader
+習近平 | m cn era21 active politician leader
+ゼレンスキー | m ua era21 active politician leader actor beard
+金正恩 | m kp era21 active politician leader
+マクロン | m fr era21 active politician leader
+メルケル | f de era21 politician leader
+チャールズ3世 | m uk era21 active royal leader
+ウィリアム王子 | m uk era21 active royal bald
+ヘンリー王子 | m uk era21 royal beard
+フランシスコ教皇/ローマ教皇フランシスコ | m it era21 religious leader glasses dead
+ダライ・ラマ14世 | m cn era20 era21 religious glasses bald
+グレタ・トゥーンベリ | f se era21 active
+マララ・ユスフザイ | f pk era21 active nobel writer
+イーロン・マスク | m us era21 active founder tech *
+ビル・ゲイツ | m us era20 era21 founder tech glasses
+マーク・ザッカーバーグ | m us era21 active founder tech
+ジェフ・ベゾス | m us era21 active founder tech bald
+ジェンスン・フアン | m us era21 active founder tech
+サム・アルトマン | m us era21 active founder tech
+ウォーレン・バフェット | m us era20 era21 founder glasses
+# --- 現代: スポーツ
+メッシ/リオネル・メッシ | m ar era21 active soccer beard *
+クリスティアーノ・ロナウド | m pt era21 active soccer *
+ネイマール | m br era21 active soccer
+エムバペ/キリアン・エムバペ | m fr era21 active soccer
+ハーランド/アーリング・ハーランド | m no era21 active soccer
+ベッカム/デビッド・ベッカム | m uk era21 soccer retired beard
+ジダン | m fr era20 era21 soccer retired bald
+ロナウジーニョ | m br era21 soccer retired
+ロジャー・フェデラー | m ch era21 tennis retired
+ナダル/ラファエル・ナダル | m es era21 tennis retired
+ジョコビッチ/ノバク・ジョコビッチ | m rs era21 active tennis olympic
+セリーナ・ウィリアムズ | f us era21 tennis retired
+タイガー・ウッズ | m us era20 era21 active golf bald
+ウサイン・ボルト | m jm era21 track olympic retired
+マイケル・フェルプス | m us era21 swim olympic retired
+レブロン・ジェームズ | m us era21 active basketball olympic beard bald
+ステフィン・カリー | m us era21 active basketball olympic
+ハミルトン/ルイス・ハミルトン | m uk era21 active racer
+シューマッハ/ミハエル・シューマッハ | m de era20 era21 racer retired
+マイク・タイソン | m us era20 fighter retired bald
+ハルク・ホーガン | m us era20 fighter dead beard bald
+アーロン・ジャッジ | m us era21 active mlb
+# --- 現代: エンタメ
+テイラー・スウィフト | f us era21 active singer *
+ビヨンセ | f us era21 active singer
+レディー・ガガ | f us era21 active singer actor
+アリアナ・グランデ | f us era21 active singer actor
+ビリー・アイリッシュ | f us era21 active singer
+ジャスティン・ビーバー | m ca era21 active singer
+エド・シーラン | m uk era21 active singer redhair beard
+ブルーノ・マーズ | m us era21 active singer
+アデル | f uk era21 singer
+エミネム | m us era20 era21 rapper
+カニエ・ウェスト | m us era21 rapper beard
+オジー・オズボーン | m uk era20 singer band dead
+BTS/防弾少年団 | m kr era21 active kpop group idol singer *
+BLACKPINK/ブラックピンク | f kr era21 active kpop group idol singer
+TWICE | f kr era21 active kpop group idol singer
+NewJeans | f kr era21 kpop group idol singer
+ジミン/BTSジミン | m kr era21 active kpop group idol singer
+ジョングク/BTSジョングク | m kr era21 active kpop group idol singer
+ジェニ/JENNIE | f kr era21 active kpop group idol singer
+リサ/LISA | f th era21 active kpop group idol singer
+レオナルド・ディカプリオ | m us era21 active actor hollywood *
+トム・クルーズ | m us era20 era21 active actor hollywood
+ブラッド・ピット | m us era21 active actor hollywood
+ジョニー・デップ | m us era21 actor hollywood beard
+キアヌ・リーブス | m ca era21 active actor hollywood beard
+アーノルド・シュワルツェネッガー | m us era20 era21 actor hollywood politician
+シルヴェスター・スタローン | m us era20 era21 actor hollywood
+ウィル・スミス | m us era21 actor hollywood rapper
+ロバート・ダウニー・Jr | m us era21 active actor hollywood beard
+トム・ハンクス | m us era20 era21 active actor hollywood
+アンジェリーナ・ジョリー | f us era21 actor hollywood
+エマ・ワトソン | f uk era21 actor hollywood
+スカーレット・ヨハンソン | f us era21 active actor hollywood
+ゼンデイヤ | f us era21 active actor hollywood singer
+ティモシー・シャラメ | m us era21 active actor hollywood
+ダニエル・ラドクリフ | m uk era21 actor hollywood
+オードリー・タン | f tw era21 politician tech glasses
+スティーヴン・スピルバーグ | m us era20 era21 active director glasses beard
+クリストファー・ノーラン | m uk era21 active director
+ジェームズ・キャメロン | m ca era20 era21 active director beard
+ミスタービースト/MrBeast | m us era21 active youtuber founder beard
+ピューディパイ/PewDiePie | m se era21 youtuber beard
+J・K・ローリング | f uk era21 writer
+アガサ・クリスティ | f uk era20 writer dead
+コナン・ドイル | m uk era19 era20 writer beard dead
+トルストイ | m ru era19 writer beard
+ゲーテ | m de premodern era19 writer
+アンデルセン | m dk era19 writer
+グリム兄弟 | m de era19 writer group
+カール・マルクス | m de era19 philosopher beard
+ニーチェ | m de era19 philosopher beard
+ゴードン・ラムゼイ | m uk era21 active chef tv

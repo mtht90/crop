@@ -1,0 +1,19 @@
+{
+  "name": "senrigan",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "心を読むアキネーター風ゲーム（データ貯蓄型）",
+  "scripts": {
+    "start": "node server.mjs",
+    "build": "node tools/build-static.mjs",
+    "check": "node tools/check.mjs",
+    "test": "node --test test/engine.test.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "@anthropic-ai/sdk": "^0.135.0"
+  }
+}

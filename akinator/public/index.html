@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>千里眼のシキ</title>
+<meta name="description" content="心に思い浮かべたものを読み当てる、千里眼の占い師。">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="stars" aria-hidden="true"></div>
+<main class="stage">
+  <header class="title">
+    <h1>千里眼のシキ</h1>
+    <p class="sub">― 心に浮かべたものを、読み当てる ―</p>
+  </header>
+
+  <section class="seer" aria-hidden="true">
+    <svg viewBox="0 0 200 220" class="seer-svg">
+      <defs>
+        <radialGradient id="orb" cx="40%" cy="35%" r="70%">
+          <stop offset="0%" stop-color="#f3e8ff"/>
+          <stop offset="35%" stop-color="#a78bfa"/>
+          <stop offset="100%" stop-color="#312e81"/>
+        </radialGradient>
+        <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="#c4b5fd" stop-opacity=".8"/>
+          <stop offset="100%" stop-color="#c4b5fd" stop-opacity="0"/>
+        </radialGradient>
+        <linearGradient id="robe" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#3b2a6b"/>
+          <stop offset="100%" stop-color="#140c2b"/>
+        </linearGradient>
+      </defs>
+      <!-- フード -->
+      <path d="M100 18 C55 20 38 70 40 118 L30 210 L170 210 L160 118 C162 70 145 20 100 18Z" fill="url(#robe)" stroke="#6d5bb5" stroke-width="1.5"/>
+      <path d="M100 40 C72 42 62 72 64 100 C66 124 82 138 100 138 C118 138 134 124 136 100 C138 72 128 42 100 40Z" fill="#0b0716"/>
+      <!-- 目 -->
+      <g class="eyes">
+        <ellipse cx="84" cy="96" rx="9" ry="4" fill="#e9d5ff" class="eye"/>
+        <ellipse cx="116" cy="96" rx="9" ry="4" fill="#e9d5ff" class="eye"/>
+        <circle cx="84" cy="96" r="2.6" fill="#7c3aed" class="pupil"/>
+        <circle cx="116" cy="96" r="2.6" fill="#7c3aed" class="pupil"/>
+      </g>
+      <!-- 額の第三の目 -->
+      <g class="third-eye">
+        <path d="M92 68 Q100 60 108 68 Q100 76 92 68Z" fill="#fbbf24"/>
+        <circle cx="100" cy="68" r="2.4" fill="#78350f"/>
+      </g>
+      <!-- 水晶玉 -->
+      <circle cx="100" cy="176" r="40" fill="url(#glow)" class="orb-glow"/>
+      <circle cx="100" cy="176" r="26" fill="url(#orb)" class="orb"/>
+      <ellipse cx="92" cy="166" rx="7" ry="4" fill="#fff" opacity=".55"/>
+      <path d="M70 200 L130 200 L122 210 L78 210Z" fill="#b45309"/>
+    </svg>
+  </section>
+
+  <section class="bubble" aria-live="polite">
+    <p id="line" class="line"></p>
+  </section>
+
+  <section id="meter" class="meter hidden" aria-label="読心率">
+    <div class="meter-head"><span id="qnum">第1問</span><span>読心率 <b id="conf">0</b>%</span></div>
+    <div class="meter-bar"><div id="meter-fill" class="meter-fill"></div></div>
+  </section>
+
+  <section id="panel" class="panel"></section>
+
+  <footer class="foot">
+    <span id="stats"></span>
+  </footer>
+</main>
+<script type="module" src="app.js"></script>
+</body>
+</html>
