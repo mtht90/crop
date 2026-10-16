@@ -4,54 +4,94 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>みんなのため</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500&display=swap">
 <style>
-:root{--chat-bg:rgb(140,171,216);--green:#8de055;--ink:#1d2a3a}
-*{box-sizing:border-box;margin:0;padding:0}
-html,body{height:100%;background:#0d0d0f;font-family:"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",Meiryo,sans-serif;-webkit-font-smoothing:antialiased;color:#111;overflow:hidden}
-#app{position:relative;max-width:430px;height:100dvh;margin:0 auto;overflow:hidden;background:var(--chat-bg);display:flex;flex-direction:column;transition:background-color 5s ease}
-@media (min-width:520px) and (min-height:700px){
-  #app{height:min(92dvh,880px);margin-top:4dvh;border-radius:30px;box-shadow:0 0 0 9px #1c1c1f,0 0 0 10px #333,0 30px 80px #000}
+/* layout: 暗い余白の中央に一台のスマホ。中はトーク一覧 ⇄ トーク画面。単一の見た目で固定（テーマ切替なし） */
+:root{
+  color-scheme:dark;
+  --void:#0c0c0e; --frame:#1c1c1f;
+  --chat-bg:rgb(140,171,216); --ink:#1d2a3a; --meta:#34445b;
+  --bubble:#ffffff; --mine:#8de055; --line-green:#06c755;
+  --sheet:#ffffff; --sheet-ink:#111418; --sheet-sub:#8a8f98; --sheet-rule:#eceef1; --field:#f2f3f5;
+  --pill:rgba(0,0,0,.17); --alert:#e0332c;
+  --display:"Shippori Mincho","Hiragino Mincho ProN","Yu Mincho",serif;
+  --body:"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",Meiryo,sans-serif;
 }
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{background:var(--void);font-family:var(--body);-webkit-font-smoothing:antialiased;color:var(--sheet-ink);display:flex;justify-content:center;align-items:center}
 button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
+button:focus-visible,input:focus-visible,.li:focus-visible{outline:2px solid var(--line-green);outline-offset:2px}
+#app{position:relative;width:100%;max-width:430px;height:100%;overflow:hidden;background:var(--chat-bg);display:flex;flex-direction:column;transition:background-color 5s ease}
+@media (min-width:520px) and (min-height:700px){
+  #app{height:min(880px,calc(100% - 40px));border-radius:30px;box-shadow:0 0 0 9px var(--frame),0 0 0 10px #333,0 30px 80px #000}
+}
 
-/* header */
-header{flex:none;display:flex;align-items:center;gap:6px;padding:calc(10px + env(safe-area-inset-top)) 10px 10px;color:var(--ink);transition:color 5s;background:rgba(255,255,255,.06);border-bottom:1px solid rgba(0,0,0,.06);z-index:2}
-.back{display:flex;align-items:center;gap:2px;font-size:22px;min-width:52px}
-.badge{font-size:12px;font-weight:700;min-width:18px;padding:0 5px;height:18px;line-height:18px;border-radius:9px;background:var(--ink);color:#fff;text-align:center;display:none}
+/* ---------- room view ---------- */
+header{flex:none;display:flex;align-items:center;gap:6px;padding:10px 10px;color:var(--ink);background:rgba(255,255,255,.06);border-bottom:1px solid rgba(0,0,0,.06);z-index:2;transition:color 5s}
+.back{display:flex;align-items:center;gap:3px;font-size:24px;min-width:58px;height:28px}
+.badge{font-size:11.5px;font-weight:700;min-width:18px;padding:0 5px;height:18px;line-height:18px;border-radius:9px;background:var(--ink);color:var(--chat-bg);text-align:center}
 .title{flex:1;text-align:center;font-weight:700;font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.hicons{display:flex;gap:12px;min-width:52px;justify-content:flex-end}
-.hicons button{font-size:15px;opacity:.75;width:22px;height:22px;display:grid;place-items:center}
+.hicons{display:flex;gap:10px;min-width:58px;justify-content:flex-end}
+.hicons button{font-size:15px;opacity:.55;width:24px;height:24px;display:grid;place-items:center}
 .hicons button.on{opacity:1}
-.hicons svg{width:20px;height:20px;stroke:var(--ink);fill:none;stroke-width:1.8}
-
-/* chat */
-#chat{flex:1;overflow-y:auto;overflow-x:hidden;padding:8px 10px 18px;scroll-behavior:smooth;-webkit-overflow-scrolling:touch}
-.pill{width:fit-content;max-width:86%;margin:12px auto;padding:3px 11px;border-radius:12px;background:rgba(0,0,0,.17);color:#fff;font-size:11px;text-align:center;line-height:1.5}
-.row{display:flex;margin-top:9px;animation:pop .22s ease-out}
+#chat{flex:1;overflow-y:auto;overflow-x:hidden;padding:4px 10px 18px;-webkit-overflow-scrolling:touch}
+.pill{width:fit-content;max-width:86%;margin:12px auto;padding:3px 11px;border-radius:12px;background:var(--pill);color:#fff;font-size:11px;text-align:center;line-height:1.5}
+.row{display:flex;margin-top:9px}
+.row.live{animation:pop .22s ease-out}
 .row.cont{margin-top:3px}
 @keyframes pop{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 .av{width:38px;height:38px;border-radius:50%;flex:none;display:grid;place-items:center;color:#fff;font-weight:700;font-size:15px;box-shadow:inset 0 0 0 2px rgba(255,255,255,.25)}
 .cont .av{visibility:hidden;height:0}
 .body{margin-left:8px;max-width:74%;min-width:0}
-.name{font-size:11px;color:#2c3b52;margin:1px 0 3px 3px}
+.name{font-size:11px;color:var(--meta);margin:1px 0 3px 3px}
 .cont .name{display:none}
 .line{display:flex;align-items:flex-end;gap:5px}
-.bubble{position:relative;background:#fff;border-radius:18px;padding:8px 12px;font-size:15px;line-height:1.5;word-break:break-word;white-space:pre-wrap}
-.other:not(.cont) .bubble::before{content:"";position:absolute;left:-5px;top:2px;width:14px;height:14px;background:#fff;border-bottom-right-radius:14px;clip-path:polygon(0 0,100% 0,100% 100%)}
-.meta{font-size:10px;color:#34445b;white-space:nowrap;line-height:1.25;flex:none}
+.bubble{position:relative;background:var(--bubble);color:#111;border-radius:18px;padding:8px 12px;font-size:15px;line-height:1.5;word-break:break-word;white-space:pre-wrap}
+.other:not(.cont) .bubble::before{content:"";position:absolute;left:-5px;top:2px;width:14px;height:14px;background:var(--bubble);border-bottom-right-radius:14px;clip-path:polygon(0 0,100% 0,100% 100%)}
+.meta{font-size:10px;color:var(--meta);white-space:nowrap;line-height:1.25;flex:none}
 .self{justify-content:flex-end}
 .self .body{max-width:76%}
 .self .line{justify-content:flex-end}
-.self .bubble{background:var(--green)}
-.self:not(.cont) .bubble::after{content:"";position:absolute;right:-5px;top:2px;width:14px;height:14px;background:var(--green);border-bottom-left-radius:14px;clip-path:polygon(0 0,100% 0,0 100%)}
+.self .bubble{background:var(--mine)}
+.self:not(.cont) .bubble::after{content:"";position:absolute;right:-5px;top:2px;width:14px;height:14px;background:var(--mine);border-bottom-left-radius:14px;clip-path:polygon(0 0,100% 0,0 100%)}
 .self .meta{text-align:right}
 .stamp{font-size:66px;line-height:1.05}
 #app.dark .meta,#app.dark .name{color:rgba(255,255,255,.72)}
 #app.dark header{color:#e8ecf2}
-#app.dark .hicons svg{stroke:#e8ecf2}
+#app.dark .badge{background:#e8ecf2}
 
-/* media: screenshot */
-.shot{width:226px;border-radius:12px;overflow:hidden;background:#8ea9cf;border:1px solid rgba(0,0,0,.18);font-size:11px;box-shadow:0 1px 3px rgba(0,0,0,.15)}
+footer{flex:none;display:flex;align-items:center;gap:9px;padding:8px 10px;background:var(--sheet);z-index:2}
+footer svg{width:24px;height:24px;stroke:#444;fill:none;stroke-width:1.7;flex:none}
+#msg{flex:1;min-width:0;height:36px;border-radius:18px;border:none;background:var(--field);color:#111;padding:0 14px;font-size:16px;outline:none;font-family:inherit;color-scheme:light}
+#msg:disabled{color:var(--sheet-sub)}
+#send{width:30px;height:30px;display:grid;place-items:center}
+#send svg{stroke:var(--line-green);stroke-width:2}
+#send:disabled svg{stroke:#bbb}
+
+/* ---------- list view ---------- */
+#list{position:absolute;inset:0;z-index:5;background:var(--sheet);display:flex;flex-direction:column}
+#list[hidden]{display:none}
+.lh{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 10px;font-weight:800;font-size:21px}
+.lh span{font-size:12px;font-weight:400;color:var(--sheet-sub)}
+.tabs{display:flex;gap:16px;padding:0 16px 8px;font-size:13px;color:var(--sheet-sub);border-bottom:1px solid var(--sheet-rule)}
+.tabs b{color:var(--sheet-ink);border-bottom:2px solid var(--sheet-ink);padding-bottom:6px}
+#rooms{flex:1;overflow-y:auto}
+.li{display:flex;align-items:center;gap:12px;padding:10px 16px;width:100%;text-align:left}
+.li:active{background:var(--field)}
+.li .av{width:50px;height:50px;font-size:18px}
+.li .mid{flex:1;min-width:0}
+.li .t{font-weight:700;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.li .t small{font-weight:400;color:var(--sheet-sub);font-size:13px}
+.li .p{font-size:12.5px;color:var(--sheet-sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.li .rt{display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex:none}
+.li .tm{font-size:11px;color:var(--sheet-sub)}
+.li .ub{font-size:11px;font-weight:700;color:#fff;background:var(--line-green);min-width:20px;height:20px;line-height:20px;border-radius:10px;padding:0 6px;text-align:center}
+.li.req .t{color:var(--sheet-sub)}
+
+/* ---------- media ---------- */
+.shot{width:226px;border-radius:12px;overflow:hidden;background:#8ea9cf;border:1px solid rgba(0,0,0,.18);font-size:11px;box-shadow:0 1px 3px rgba(0,0,0,.15);color:#111}
 .shot-top{display:flex;justify-content:space-between;padding:3px 8px;background:#f3f3f3;color:#222;font-size:9px;font-weight:700}
 .shot-head{padding:4px 8px 5px;background:#f3f3f3;border-bottom:1px solid #ddd;font-weight:700;color:#222}
 .shot-body{padding:6px 7px 8px}
@@ -60,150 +100,182 @@ header{flex:none;display:flex;align-items:center;gap:6px;padding:calc(10px + env
 .sav{width:20px;height:20px;border-radius:50%;flex:none;color:#fff;font-size:9px;font-weight:700;display:grid;place-items:center}
 .sname{font-size:8.5px;color:#334;margin-bottom:1px}
 .sb{background:#fff;border-radius:10px;padding:4px 7px;line-height:1.4;white-space:pre-wrap;word-break:break-word;max-width:170px}
-.s .sb{background:var(--green)}
-.srow.hl .sb{box-shadow:0 0 0 2px #e8332a}
+.s .sb{background:var(--mine)}
+.srow.hl .sb{box-shadow:0 0 0 2px var(--alert)}
 .shot-foot{padding:4px 8px;background:rgba(0,0,0,.55);color:#fff;font-size:9.5px;text-align:right}
-
-/* media: photo / album / story / note */
 .photo{width:220px;height:165px;border-radius:14px;display:flex;flex-direction:column;justify-content:center;align-items:center;position:relative;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.15)}
-.ph-e{font-size:40px;letter-spacing:2px;text-align:center;line-height:1.2;filter:drop-shadow(0 2px 2px rgba(0,0,0,.2))}
+.ph-e{font-size:40px;letter-spacing:2px;text-align:center;line-height:1.2}
 .ph-c{position:absolute;bottom:8px;left:0;right:0;text-align:center;font-size:12px;color:#fff;font-weight:700;text-shadow:0 1px 3px rgba(0,0,0,.5)}
-.album{width:226px;background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.15)}
-.album-h{padding:8px 10px;font-weight:700;font-size:13px;display:flex;justify-content:space-between}
-.album-h span{font-weight:400;color:#888;font-size:11px}
+.card{width:236px;background:#fff;color:#111;border-radius:14px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.15)}
+.card-h{background:#f5f5f5;padding:6px 10px;font-size:11px;color:#666;border-bottom:1px solid #eee;display:flex;justify-content:space-between}
+.note-t{padding:10px 12px 4px;font-weight:700;font-size:15px}
+.card ol{padding:4px 12px 8px 30px;font-size:13.5px;line-height:1.7}
+.card-f{padding:6px 12px;border-top:1px solid #eee;font-size:10.5px;color:#999}
 .album-g{display:grid;grid-template-columns:1fr 1fr;gap:2px}
-.album-g div{height:76px;background:#d9dde4;display:flex;align-items:flex-end;padding:5px;font-size:10px;color:#333;position:relative}
+.album-g div{height:76px;background:#d9dde4;display:flex;align-items:flex-end;padding:5px;font-size:10px;color:#333}
 .album-g div.more{background:#555;color:#fff;font-size:20px;justify-content:center;align-items:center}
-.story{width:180px;height:300px;border-radius:14px;background:linear-gradient(160deg,#3a2f4a,#7a5a6e 60%,#c79a8e);color:#fff;padding:12px;position:relative;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.score table{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums}
+.score td{padding:5px 8px}
+.score td:first-child{width:52px;color:#666}
+.score td:last-child{width:34px;text-align:right;font-weight:700}
+.score .bar{padding:5px 0}
+.score .bar span{display:block;height:8px;border-radius:4px;background:#eef0f3;overflow:hidden}
+.score .bar i{display:block;height:100%;background:var(--alert)}
+.score .bar i.pass{background:#bfc5cc}
+.story{width:180px;height:300px;border-radius:14px;background:linear-gradient(160deg,#3a2f4a,#7a5a6e 60%,#c79a8e);color:#fff;padding:12px;position:relative}
+.story-bar{height:2px;background:rgba(255,255,255,.5);border-radius:2px;margin-bottom:8px}
 .story-top{font-size:10px;opacity:.85;display:flex;align-items:center;gap:6px}
 .story-top i{display:inline-block;width:18px;height:18px;border-radius:50%;background:#bbb}
-.story-bar{height:2px;background:rgba(255,255,255,.5);border-radius:2px;margin-bottom:8px}
-.story-t{position:absolute;top:45%;left:10px;right:10px;text-align:center;font-weight:700;font-size:15px;line-height:1.5;white-space:pre-wrap;text-shadow:0 1px 4px rgba(0,0,0,.4)}
+.story-t{position:absolute;top:45%;left:10px;right:10px;text-align:center;font-weight:700;font-size:15px;line-height:1.5;white-space:pre-wrap}
 .story-tag{position:absolute;bottom:16px;left:0;right:0;text-align:center;font-size:11px;opacity:.8}
-.note{width:236px;background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.15)}
-.note-h{background:#f5f5f5;padding:6px 10px;font-size:11px;color:#666;border-bottom:1px solid #eee}
-.note-t{padding:10px 12px 4px;font-weight:700;font-size:15px}
-.note ol{padding:4px 12px 8px 30px;font-size:13.5px;line-height:1.7}
-.note-f{padding:6px 12px;border-top:1px solid #eee;font-size:10.5px;color:#999}
-
-/* media: sns post */
 .sns{width:262px;background:#fff;border-radius:14px;padding:11px 12px 8px;font-size:13px;color:#0f1419;box-shadow:0 1px 3px rgba(0,0,0,.15)}
 .sns-h{display:flex;gap:8px;align-items:center}
-.sns-av{width:34px;height:34px;border-radius:50%;background:#f0b54d;color:#fff;display:grid;place-items:center;font-weight:700;flex:none}
+.sns-av{width:34px;height:34px;border-radius:50%;background:#efb24a;color:#fff;display:grid;place-items:center;font-weight:700;flex:none}
 .sns-h b{font-size:13.5px}
 .sns-h span{color:#536471;font-size:11.5px;display:block}
 .sns-t{margin:8px 0;line-height:1.55;white-space:pre-wrap;word-break:break-word}
 .sns-q{background:#f7f9f9;border-left:3px solid #cfd9de;padding:6px 8px;margin:6px 0;border-radius:4px}
-.sns-img{height:130px;border-radius:12px;overflow:hidden;position:relative;background:linear-gradient(180deg,#a7b4c4,#6d7887)}
-.sns-img .blur{position:absolute;inset:0;display:flex;justify-content:center;align-items:center;font-size:76px;filter:blur(7px)}
-.sns-img .cap{position:absolute;bottom:6px;left:8px;background:rgba(0,0,0,.6);color:#fff;font-size:11px;padding:2px 6px;border-radius:4px}
-.sns-s{display:flex;justify-content:space-between;color:#536471;font-size:12px;padding:8px 2px 6px;border-bottom:1px solid #eff3f4}
+.blurimg{height:130px;border-radius:12px;overflow:hidden;position:relative;background:linear-gradient(180deg,#a7b4c4,#6d7887)}
+.blurimg .b{position:absolute;inset:0;display:flex;justify-content:center;align-items:center;font-size:76px;filter:blur(7px)}
+.blurimg .cap{position:absolute;bottom:6px;left:8px;background:rgba(0,0,0,.6);color:#fff;font-size:11px;padding:2px 6px;border-radius:4px}
+.sns-s{display:flex;justify-content:space-between;color:#536471;font-size:12px;padding:8px 2px 6px;border-bottom:1px solid #eff3f4;font-variant-numeric:tabular-nums}
 .sns-s .lk{color:#f91880}
 .rep{display:flex;gap:7px;padding:7px 0 2px;opacity:0;animation:fadein .5s forwards}
 .rep i{width:24px;height:24px;border-radius:50%;flex:none;background:#c4ccd4}
 .rep div{font-size:12px;line-height:1.45}
 .rep b{font-size:11.5px;display:block}
 @keyframes fadein{to{opacity:1}}
+.mt{width:256px;background:#fff;color:#111;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.15)}
+.mt-site{background:#c8102e;color:#fff;font-size:11px;font-weight:700;padding:5px 10px}
+.mt-title{padding:9px 10px 6px;font-weight:800;font-size:13.5px;line-height:1.45}
+.mt .blurimg{margin:0 10px;height:110px;border-radius:6px}
+.mt-meta{padding:6px 10px 9px;font-size:10.5px;color:#888}
+.fb{width:250px;background:#fff;color:#1c1e21;border-radius:12px;overflow:hidden;font-size:12.5px;box-shadow:0 1px 3px rgba(0,0,0,.15)}
+.fb-top{background:#1877f2;color:#fff;font-weight:800;padding:5px 10px;font-size:13px}
+.fb-post{padding:9px 10px;border-bottom:1px solid #e4e6eb;line-height:1.5}
+.fb-post b{display:block;font-size:12px}
+.fb-post small{color:#65676b;font-size:10.5px}
+.fb-c{display:flex;gap:7px;padding:8px 10px}
+.fb-c i{width:26px;height:26px;border-radius:50%;background:#efb24a;flex:none}
+.fb-c div{background:#f0f2f5;border-radius:12px;padding:6px 9px;line-height:1.45}
+.fb-c b{display:block;font-size:11.5px}
+.fb-c a{color:#1877f2;text-decoration:none;word-break:break-all}
 
-/* input bar */
-footer{flex:none;display:flex;align-items:center;gap:9px;padding:8px 10px calc(8px + env(safe-area-inset-bottom));background:#fff;z-index:2}
-footer svg{width:24px;height:24px;stroke:#444;fill:none;stroke-width:1.7;flex:none}
-#msg{flex:1;min-width:0;height:36px;border-radius:18px;border:none;background:#f2f3f5;padding:0 14px;font-size:16px;outline:none;font-family:inherit}
-#msg:disabled{color:#999}
-#send{width:30px;height:30px;display:grid;place-items:center}
-#send svg{stroke:#06c755;stroke-width:2}
-#send:disabled svg{stroke:#bbb}
-
-/* toast */
-#toasts{position:absolute;top:calc(8px + env(safe-area-inset-top));left:0;right:0;z-index:20;pointer-events:none}
-.toast{margin:0 8px 6px;padding:9px 11px;border-radius:16px;background:rgba(246,246,248,.94);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:0 6px 24px rgba(0,0,0,.25);display:flex;gap:10px;align-items:flex-start;animation:tin .35s ease-out;transition:opacity .5s,transform .5s}
+/* ---------- toasts ---------- */
+#toasts{position:absolute;top:8px;left:0;right:0;z-index:20;pointer-events:none}
+.toast{margin:0 8px 6px;padding:9px 11px;border-radius:16px;background:rgba(246,246,248,.95);color:#111;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:0 6px 24px rgba(0,0,0,.25);display:flex;gap:10px;align-items:flex-start;animation:tin .35s ease-out;transition:opacity .5s,transform .5s;pointer-events:auto;cursor:pointer}
 .toast.out{opacity:0;transform:translateY(-14px)}
 @keyframes tin{from{opacity:0;transform:translateY(-24px)}to{opacity:1;transform:none}}
 .toast .ic{width:34px;height:34px;border-radius:8px;flex:none;display:grid;place-items:center;color:#fff;font-weight:800;font-size:13px}
-.toast .tx{flex:1;min-width:0;font-size:13px;line-height:1.4}
+.toast .tx{flex:1;min-width:0;font-size:13px;line-height:1.4;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical}
 .toast .ap{display:flex;justify-content:space-between;font-size:11px;color:#777}
 .toast b{display:block}
 
-/* overlays */
+/* ---------- overlays ---------- */
 .ov{position:absolute;inset:0;z-index:30;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
-#title{background:#0b0b0d;color:#ddd;padding:28px;gap:14px}
-#title h1{font-weight:500;font-size:34px;letter-spacing:.12em;color:#f2f2f2}
-#title .sub{font-size:12px;letter-spacing:.3em;color:#888;margin-top:-6px}
-#title .warn{font-size:11.5px;color:#9a8f8f;line-height:1.8;max-width:300px;border:1px solid #2a2a2e;padding:10px 12px;border-radius:8px}
+.ov[hidden]{display:none}
+#title{background:var(--void);color:#ddd;padding:28px 16px;gap:14px}
+#title h1{font-family:var(--display);font-weight:500;font-size:38px;letter-spacing:.14em;color:#f2f2f2;text-wrap:balance}
+#title .sub{font-size:12px;letter-spacing:.3em;color:#8a8a90;margin-top:-6px}
+#title .warn{font-size:11.5px;color:#a59a9a;line-height:1.8;max-width:310px;border:1px solid #2a2a2e;padding:10px 12px;border-radius:8px}
 #title label{font-size:12px;color:#999;margin-top:6px}
-#title input{width:170px;text-align:center;font-size:17px;padding:8px;border-radius:10px;border:1px solid #333;background:#16161a;color:#eee;outline:none;font-family:inherit}
-#start{margin-top:6px;padding:11px 40px;border-radius:24px;background:#06c755;color:#fff;font-weight:700;font-size:15px}
-#title .hint{font-size:11px;color:#666;line-height:1.7}
-#fade{background:#000;opacity:0;pointer-events:none;transition:opacity 1.6s ease;color:#ccc;font-size:15px;letter-spacing:.25em}
+#pname{width:170px;text-align:center;font-size:17px;padding:8px;border-radius:10px;border:1px solid #333;background:#16161a;color:#eee;outline:none;font-family:inherit}
+#start{margin-top:6px;padding:11px 40px;border-radius:24px;background:var(--line-green);color:#fff;font-weight:700;font-size:15px}
+#title .hint{font-size:11px;color:#77777d;line-height:1.8}
+#fade{background:#000;opacity:0;pointer-events:none;transition:opacity 1.6s ease;color:#bbb;font-family:var(--display);font-size:17px;letter-spacing:.3em}
 #fade.on{opacity:1;pointer-events:auto}
-#final{background:#000;display:none;color:#fff;gap:30px}
+#final{background:#000;color:#fff;gap:30px}
 #finalText{font-size:22px;letter-spacing:.08em;min-height:1.5em}
-#finalSub{opacity:0;transition:opacity 3s;color:#555;font-size:12px;letter-spacing:.3em;display:flex;flex-direction:column;gap:22px;align-items:center}
-#finalSub button{color:#777;border:1px solid #333;padding:7px 22px;border-radius:18px;font-size:12px;letter-spacing:.1em}
-#choice{position:absolute;left:0;right:0;bottom:0;z-index:25;background:rgba(0,0,0,.35);top:0;display:none;flex-direction:column;justify-content:flex-end}
-#choice .sheet{background:#fff;border-radius:18px 18px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom));animation:up .35s ease-out}
+#finalSub{opacity:0;transition:opacity 3s;color:#666;font-size:12px;letter-spacing:.3em;display:flex;flex-direction:column;gap:22px;align-items:center;font-family:var(--display)}
+#finalSub button{color:#888;border:1px solid #333;padding:7px 22px;border-radius:18px;font-size:12px;letter-spacing:.1em;font-family:var(--body)}
+#choice{position:absolute;inset:0;z-index:25;background:rgba(0,0,0,.35);display:flex;flex-direction:column;justify-content:flex-end}
+#choice[hidden]{display:none}
+#choice .sheet{background:var(--sheet);border-radius:18px 18px 0 0;padding:18px 16px 22px;animation:up .35s ease-out}
 @keyframes up{from{transform:translateY(100%)}to{transform:none}}
-#choice p{text-align:center;font-size:12px;color:#888;margin-bottom:12px}
-#choice button{display:block;width:100%;padding:14px;border-radius:12px;font-size:15px;margin-top:8px;background:#f2f3f5}
-#choice button.leave{color:#e0332c}
+#choice p{text-align:center;font-size:12px;color:var(--sheet-sub);margin-bottom:12px}
+#choice button{display:block;width:100%;padding:14px;border-radius:12px;font-size:15px;margin-top:8px;background:var(--field)}
+#choice button.leave{color:var(--alert)}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
 </style>
 </head>
 <body>
 <div id="app">
   <header>
-    <div class="back">‹ <span class="badge" id="badge">0</span></div>
+    <button class="back" id="backBtn" aria-label="トーク一覧へ">‹ <span class="badge" id="badge" hidden>0</span></button>
     <div class="title" id="gtitle">いつめん🌸 (6)</div>
     <div class="hicons">
-      <button id="speedBtn" title="早送り">⏩</button>
-      <button id="soundBtn" class="on" title="通知音">🔔</button>
+      <button id="speedBtn" title="早送り" aria-label="早送り">⏩</button>
+      <button id="soundBtn" class="on" title="通知音" aria-label="通知音">🔔</button>
     </div>
   </header>
   <div id="chat"></div>
   <footer>
     <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
     <svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="14" rx="3"/><circle cx="12" cy="13" r="3.5"/><path d="M8 6l1.5-2h5L16 6"/></svg>
-    <input id="msg" type="text" autocomplete="off" enterkeyhint="send" placeholder="メッセージを入力" maxlength="120">
+    <input id="msg" type="text" autocomplete="off" enterkeyhint="send" placeholder="メッセージを入力" maxlength="140">
     <button id="send" disabled aria-label="送信"><svg viewBox="0 0 24 24"><path d="M4 12l16-8-6 16-2.5-6.5z"/><path d="M11.5 13.5L20 4"/></svg></button>
   </footer>
 
+  <div id="list" hidden>
+    <div class="lh">トーク <span id="listMeta"></span></div>
+    <div class="tabs"><b>すべて</b><span>友だち</span><span>グループ</span><span>リクエスト</span></div>
+    <div id="rooms"></div>
+  </div>
+
   <div id="toasts"></div>
-  <div id="choice"><div class="sheet">
+  <div id="choice" hidden><div class="sheet">
     <p>いつめん🌸 (6)</p>
     <button class="leave" id="cLeave">グループを退会する</button>
     <button id="cStay">何も言わずに残る</button>
   </div></div>
 
   <div class="ov" id="title">
-    <h1>『みんなのため』</h1>
+    <h1>みんなのため</h1>
     <div class="sub">グループトーク・ホラー</div>
-    <div class="warn">※ 本作はフィクションです。<br>SNSでの晒し、集団によるいじめ、個人情報の拡散などの描写が含まれます。</div>
+    <div class="warn">※ 本作はフィクションです。<br>SNSでの晒し、集団によるいじめ、個人情報の拡散などの描写が含まれます。プレイ時間の目安は40〜60分です。</div>
     <label for="pname">あなたの名前</label>
     <input id="pname" value="ユイ" maxlength="6">
     <button id="start">トークをひらく</button>
-    <div class="hint">メッセージは自由に入力して送信できます。<br>画面をタップすると少し早く進みます。</div>
+    <div class="hint">メッセージは自由に入力して送信できます。<br>「‹」でトーク一覧に戻ると、ほかのトークも読めます。<br>画面をタップすると少し早く進みます。</div>
   </div>
   <div class="ov" id="fade"><div id="fadeText"></div></div>
-  <div class="ov" id="final">
+  <div class="ov" id="final" hidden>
     <div id="finalText"></div>
-    <div id="finalSub"><span>『みんなのため』</span><button onclick="location.reload()">もう一度ひらく</button></div>
+    <div id="finalSub"><span>みんなのため</span><button id="again">もう一度ひらく</button></div>
   </div>
 </div>
 
 <script>
 'use strict';
-/* ===================== state ===================== */
+/* =====================================================================
+   state
+   ===================================================================== */
 const S = {
-  name:'ユイ', last:'', lastCat:'', log:[], count:{}, clock:0, unread:0,
-  awaiting:null, speed:1, sound:true, left:false, interject:[], lastInterject:0, readers:5
-};
-const C = {
-  misaki:{n:'ミサキ', c:'#ec8db3'},
-  kana:  {n:'カナ',   c:'#7fb2e6'},
-  rina:  {n:'リナ',   c:'#efb24a'},
-  aya:   {n:'アヤ',   c:'#a68bd6'},
-  sota:  {n:'ソウタ', c:'#63bf86'},
+  name:'ユイ', last:'', lastCat:'', log:[], count:{}, clock:0, day:'',
+  awaiting:null, speed:1, sound:true, left:false, interject:[], lastInterject:0,
+  sr:'group', view:'group', apps:0, seq:0,
+  misakiDM:'', kanaDM:'', score1:0, score2:0,
 };
 const PLAYER_COLOR = '#9aa3ad';
+const C = {
+  misaki:{n:'ミサキ', c:'#ec8db3'}, kana:{n:'カナ', c:'#7fb2e6'}, rina:{n:'リナ', c:'#efb24a'},
+  aya:{n:'アヤ', c:'#a68bd6'}, sota:{n:'ソウタ', c:'#63bf86'},
+  saki:{n:'さき', c:'#d99aaa'}, yuna:{n:'ゆな', c:'#93b9d6'}, senpai:{n:'みお先輩', c:'#c9a27a'},
+  mom:{n:'お母さん', c:'#e2a37f'}, tencho:{n:'店長（カフェ・ルポ）', c:'#8a7a6a'},
+  x1:{n:'nanashi_0921', c:'#8c8c94'}, x2:{n:'🐈‍⬛', c:'#444'}, x3:{n:'通りすがり', c:'#9c8a8a'},
+};
+const ROOMS = {
+  group: {title:'いつめん🌸', count:6, readers:5, icon:'🌸', iconBg:'linear-gradient(135deg,#ffb3cf,#a6c8ff)'},
+  kana:  {title:'カナ', readers:1, who:'kana'},
+  sota:  {title:'ソウタ', readers:1, who:'sota'},
+  misaki:{title:'ミサキ', readers:1, who:'misaki'},
+  tennis:{title:'テニス部 2年', count:14, readers:13, icon:'🎾', iconBg:'linear-gradient(135deg,#d9f27a,#7ec27a)'},
+  mom:   {title:'お母さん', readers:1, who:'mom'},
+  shop:  {title:'店長（カフェ・ルポ）', readers:1, who:'tencho'},
+  x1:    {title:'nanashi_0921', readers:1, who:'x1', req:true, auto:['必死で草','謝罪文、また晒されるよ？','今さら何言っても遅いって']},
+  x2:    {title:'🐈‍⬛', readers:1, who:'x2', req:true, auto:['返事くるの意外','友達の子の気持ち考えたことある？','スクショしとくね']},
+  x3:    {title:'通りすがり', readers:1, who:'x3', req:true, auto:['反省してるならアカウント消せば？','みんな見てるよ']},
+};
 const SCENES = ['rgb(140,171,216)','rgb(128,156,198)','rgb(116,138,172)','rgb(103,119,145)','rgb(88,98,116)','rgb(70,76,88)'];
 
 const $ = id => document.getElementById(id);
@@ -212,9 +284,13 @@ const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>'
 const q = () => { const t = S.last.replace(/\s+/g,' ').trim(); return t.length > 60 ? t.slice(0,60)+'…' : t; };
 const fmt = s => String(s).replace(/\{name\}/g, S.name).replace(/\{q\}/g, q());
 const resolve = v => typeof v === 'function' ? v(S) : v;
+const ini = n => Array.from(n || '?')[0];
 const rnd = (a,b) => a + Math.random()*(b-a);
+const later = ms => new Promise(r => setTimeout(r, ms));
 
-/* ===================== timing ===================== */
+/* =====================================================================
+   timing / audio
+   ===================================================================== */
 let skipFn = null;
 function sleep(ms){
   return new Promise(r => {
@@ -226,9 +302,8 @@ function sleep(ms){
 chat.addEventListener('click', () => { if (skipFn) skipFn(); });
 const typingDelay = t => Math.min(2800, Math.max(750, 420 + t.length * 60));
 const clockStr = () => { const m = ((S.clock % 1440) + 1440) % 1440; return `${Math.floor(m/60)}:${String(m%60).padStart(2,'0')}`; };
-const tick = () => { if (Math.random() < .35) S.clock++; };
+const shortDay = d => d.replace(/^(\d+)月(\d+)日.*$/, '$1/$2');
 
-/* ===================== audio ===================== */
 let ac = null;
 function tone(f, d, v, at=0){
   if (!S.sound) return;
@@ -243,91 +318,177 @@ function tone(f, d, v, at=0){
 const ding = () => { tone(1318,.09,.04); tone(988,.12,.035,.07); };
 const buzz = () => { tone(440,.12,.05); tone(440,.12,.05,.16); };
 
-/* ===================== rendering ===================== */
-let lastSender = null;
-function scrollDown(){ requestAnimationFrame(() => { chat.scrollTop = chat.scrollHeight; }); }
-function addPill(text){
-  const d = document.createElement('div'); d.className = 'pill'; d.textContent = text;
-  chat.appendChild(d); lastSender = null; scrollDown();
+/* =====================================================================
+   rooms
+   ===================================================================== */
+const R = {};
+for (const [id, def] of Object.entries(ROOMS)){
+  const el = document.createElement('div'); el.hidden = true; chat.appendChild(el);
+  R[id] = {id, ...def, el, unread:0, last:'', lastTime:'', lastDay:'', seq:0, lastSender:null, day:'', closed:false, started:false};
 }
-function addOther(who, inner){
-  const c = C[who]; tick();
+const roomTitle = r => r.title + (r.count ? ` (${r.count})` : '');
+function avatarHTML(r){
+  if (r.icon) return `<div class="av" style="background:${r.iconBg}">${r.icon}</div>`;
+  const c = C[r.who]; return `<div class="av" style="background:${c.c}">${esc(ini(c.n))}</div>`;
+}
+function scrollDown(){ requestAnimationFrame(() => { chat.scrollTop = chat.scrollHeight; }); }
+function totalUnread(except){ return Object.values(R).reduce((a, r) => a + (r.id === except ? 0 : r.unread), 0) + S.apps; }
+function updateBadges(){
+  const n = totalUnread(S.view), b = $('badge');
+  b.hidden = !n; b.textContent = n > 999 ? '999+' : n;
+  if (S.view === 'list') renderList();
+}
+function renderList(){
+  const rooms = Object.values(R).filter(r => r.started).sort((a, b) => b.seq - a.seq);
+  $('rooms').innerHTML = rooms.map(r => `<button class="li ${r.req ? 'req' : ''}" data-id="${r.id}">${avatarHTML(r)}
+    <div class="mid"><div class="t">${esc(r.title)} ${r.count ? `<small>(${r.count})</small>` : ''}</div><div class="p">${r.req && !r.opened ? 'メッセージリクエスト' : esc(r.last)}</div></div>
+    <div class="rt"><span class="tm">${r.lastDay === S.day ? r.lastTime : shortDay(r.lastDay)}</span>${r.unread ? `<span class="ub">${r.unread}</span>` : ''}</div></button>`).join('');
+  $('listMeta').textContent = S.day;
+}
+$('rooms').addEventListener('click', e => { const b = e.target.closest('.li'); if (b) openRoom(b.dataset.id); });
+function openRoom(id){
+  const r = R[id]; S.view = id; r.opened = true;
+  for (const x of Object.values(R)) x.el.hidden = x.id !== id;
+  $('list').hidden = true; $('gtitle').textContent = roomTitle(r);
+  r.unread = 0; updateBadges();
+  const closed = r.closed || (id === 'group' && S.left) || S.ended;
+  input.disabled = closed;
+  input.placeholder = r.closed ? 'このトークには参加していません' : 'メッセージを入力';
+  sendBtn.disabled = closed || !input.value.trim();
+  chat.style.scrollBehavior = 'auto'; chat.scrollTop = chat.scrollHeight; chat.style.scrollBehavior = '';
+}
+function showList(){ S.view = 'list'; input.blur(); $('list').hidden = false; updateBadges(); renderList(); }
+$('backBtn').addEventListener('click', showList);
+
+function ensureDay(r, day){ if (r.day !== day){ r.day = day; const p = document.createElement('div'); p.className = 'pill'; p.textContent = day; r.el.appendChild(p); r.lastSender = null; } }
+function touch(r, preview, time, day){ r.started = true; r.last = preview; r.lastTime = time; r.lastDay = day; r.seq = ++S.seq; }
+
+/* post a message. who: character id | 'me'. opts.seed for history (time/day given) */
+function post(id, who, inner, preview, opts = {}){
+  const r = R[id], day = opts.day || S.day, time = opts.time || clockStr();
+  ensureDay(r, day);
+  if (!opts.seed && who !== 'me' && Math.random() < .35) S.clock++;
   const row = document.createElement('div');
-  row.className = 'row other' + (lastSender === who ? ' cont' : '');
-  row.innerHTML = `<div class="av" style="background:${c.c}">${c.n[0]}</div>
-    <div class="body"><div class="name">${c.n}</div>
-    <div class="line">${inner}<div class="meta">${clockStr()}</div></div></div>`;
-  chat.appendChild(row); lastSender = who; scrollDown();
+  if (who === 'me'){
+    row.className = 'row self' + (r.lastSender === 'me' ? ' cont' : '') + (opts.seed ? '' : ' live');
+    row.innerHTML = `<div class="body"><div class="line"><div class="meta"><span class="rd">${opts.seed ? (r.readers > 1 ? '既読 ' + r.readers : '既読') : ''}</span><br>${time}</div>${inner}</div></div>`;
+  } else {
+    const c = C[who];
+    row.className = 'row other' + (r.lastSender === who ? ' cont' : '') + (opts.seed ? '' : ' live');
+    row.innerHTML = `<div class="av" style="background:${c.c}">${esc(ini(c.n))}</div>
+      <div class="body">${r.who ? '' : `<div class="name">${esc(c.n)}</div>`}<div class="line">${inner}<div class="meta">${time}</div></div></div>`;
+  }
+  r.el.appendChild(row); r.lastSender = who;
+  row.addEventListener('animationend', () => row.classList.remove('live'), {once:true});
+  touch(r, preview, time, day);
+  if (!opts.seed){
+    if (S.view === id) scrollDown();
+    else if (who !== 'me'){ r.unread++; msgToast(r, who, preview); }
+    updateBadges();
+  }
   return row;
 }
-function addSelf(text){
-  const row = document.createElement('div');
-  row.className = 'row self' + (lastSender === 'self' ? ' cont' : '');
-  row.innerHTML = `<div class="body"><div class="line"><div class="meta"><span class="rd"></span><br>${clockStr()}</div><div class="bubble">${esc(text)}</div></div></div>`;
-  chat.appendChild(row); lastSender = 'self'; scrollDown();
-  if (!S.left){
-    const rd = row.querySelector('.rd'); let n = 0;
-    const step = () => { n++; rd.textContent = n === 1 ? '既読' : '既読 ' + n; if (n < S.readers) setTimeout(step, rnd(250, 1800)); };
-    rd.textContent = ''; setTimeout(step, rnd(300, 900));
-  }
+function postPill(id, text, opts = {}){
+  const r = R[id]; ensureDay(r, opts.day || S.day);
+  const p = document.createElement('div'); p.className = 'pill'; p.textContent = text;
+  r.el.appendChild(p); r.lastSender = null; touch(r, text, opts.time || clockStr(), opts.day || S.day);
+  if (!opts.seed){ if (S.view === id) scrollDown(); else r.unread++; updateBadges(); }
+  return p;
 }
-function toast({app, title, body, color}){
+const bubble = t => `<div class="bubble">${esc(t)}</div>`;
+
+function readReceipt(row, readers){
+  const rd = row.querySelector('.rd'); let n = 0;
+  const step = () => { n++; rd.textContent = n === 1 ? '既読' : '既読 ' + n; if (n < readers) setTimeout(step, rnd(250, 1800)); };
+  setTimeout(step, rnd(300, 1100));
+}
+
+/* ---- toasts ---- */
+function pushToast(icon, color, app, title, body, onClick){
   const box = $('toasts');
   const t = document.createElement('div'); t.className = 'toast';
-  t.innerHTML = `<div class="ic" style="background:${color}">${esc(app[0])}</div>
-    <div class="tx"><div class="ap"><span>${esc(app)}</span><span>今</span></div><b>${esc(fmt(title))}</b>${body ? esc(fmt(body)) : ''}</div>`;
-  box.prepend(t); buzz();
+  t.innerHTML = `<div class="ic" style="background:${color}">${esc(icon)}</div>
+    <div class="tx"><div class="ap"><span>${esc(app)}</span><span>今</span></div><b>${esc(title)}</b>${esc(body || '')}</div>`;
+  if (onClick) t.addEventListener('click', () => { onClick(); t.remove(); });
+  box.prepend(t);
   while (box.children.length > 3) box.lastChild.remove();
-  S.unread += Math.floor(rnd(3, 24)); const b = $('badge'); b.style.display = 'inline-block'; b.textContent = S.unread > 999 ? '999+' : S.unread;
   setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 600); }, 4200);
+}
+function msgToast(r, who, preview){
+  ding();
+  const title = r.who ? r.title : `${r.title}`;
+  const body = r.who ? preview : `${C[who].n}: ${preview}`;
+  pushToast('ト', '#06c755', 'トーク', r.req && !r.opened ? 'メッセージリクエスト' : title, r.req && !r.opened ? `${C[who].n}: ${preview}` : body, () => openRoom(r.id));
+}
+function appToast({app, color, title, body}){
+  buzz(); S.apps += Math.floor(rnd(4, 26)); updateBadges();
+  pushToast(app[0], color, app, fmt(title), fmt(body || ''));
 }
 function animateCounters(root){
   root.querySelectorAll('[data-n]').forEach(el => {
-    const target = +el.dataset.n, from = +(el.dataset.from || 0), dur = 8000, t0 = performance.now();
+    const target = +el.dataset.n, dur = 8000, t0 = performance.now();
     const f = t => { const p = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - p, 3);
-      el.textContent = Math.floor(from + (target - from) * e).toLocaleString(); if (p < 1) requestAnimationFrame(f); };
+      el.textContent = Math.floor(target * e).toLocaleString(); if (p < 1) requestAnimationFrame(f); };
     requestAnimationFrame(f);
   });
 }
 
-/* ---- media builders ---- */
+/* =====================================================================
+   media builders
+   ===================================================================== */
 function shot(title, rows, opt = {}){
   return `<div class="shot"><div class="shot-top"><span>${opt.time || '22:47'}</span><span>📶 4G ▮▮▮</span></div>
   <div class="shot-head">‹ ${esc(title)}</div><div class="shot-body">${rows.map(r =>
-    `<div class="srow ${r.self ? 's' : ''} ${r.hl ? 'hl' : ''}">${r.self ? '' : `<div class="sav" style="background:${r.c || '#b5b5b5'}">${esc(r.name[0])}</div>`}
+    `<div class="srow ${r.self ? 's' : ''} ${r.hl ? 'hl' : ''}">${r.self ? '' : `<div class="sav" style="background:${r.c || '#b5b5b5'}">${esc(ini(r.name))}</div>`}
      <div>${r.self ? '' : `<div class="sname">${esc(r.name)}</div>`}<div class="sb">${esc(r.text)}</div></div></div>`).join('')}
   </div>${opt.foot ? `<div class="shot-foot">${esc(opt.foot)}</div>` : ''}</div>`;
 }
+const me = (text, hl) => ({name:S.name, c:PLAYER_COLOR, text, hl});
 const photo = (emo, bg, cap) => `<div class="photo" style="background:${bg}"><div class="ph-e">${emo}</div>${cap ? `<div class="ph-c">${esc(cap)}</div>` : ''}</div>`;
-const noteCard = (title, items, foot) => `<div class="note"><div class="note-h">📝 ノート</div><div class="note-t">${esc(title)}</div><ol>${items.map(i => `<li>${esc(i)}</li>`).join('')}</ol><div class="note-f">${esc(foot)}</div></div>`;
+const noteCard = (title, items, foot) => `<div class="card"><div class="card-h"><span>📝 ノート</span></div><div class="note-t">${esc(title)}</div><ol>${items.map(i => `<li>${esc(i)}</li>`).join('')}</ol><div class="card-f">${esc(foot)}</div></div>`;
+function scoreCard(rows){
+  return `<div class="card score"><div class="card-h"><span>📊 反省スコア</span><span>作成：アヤ</span></div><table>
+  ${rows.map(([d, v]) => `<tr><td>${d}</td><td class="bar"><span><i style="width:${v}%"></i></span></td><td>${v}</td></tr>`).join('')}
+  <tr><td>合格</td><td class="bar"><span><i class="pass" style="width:80%"></i></span></td><td>80</td></tr></table>
+  <div class="card-f">採点基準：具体性 30 ／ 誠意 40 ／ 再発防止策 30</div></div>`;
+}
 function sns(p){
   return `<div class="sns"><div class="sns-h"><div class="sns-av">り</div><div><b>りな🎾</b><span>@rina_tns_2nd · ${p.ago || '今'}</span></div></div>
-  <div class="sns-t">${p.html}</div>${p.img ? `<div class="sns-img"><div class="blur">🧍‍♀️</div><div class="cap">${esc(p.img)}</div></div>` : ''}
+  <div class="sns-t">${p.html}</div>${p.img ? `<div class="blurimg"><div class="b">🧍</div><div class="cap">${esc(p.img)}</div></div>` : ''}
   <div class="sns-s"><span>💬 <span data-n="${p.rep}">0</span></span><span>🔁 <span data-n="${p.rt}">0</span></span><span class="lk">♥ <span data-n="${p.lk}">0</span></span><span>📊 <span data-n="${p.lk * 31}">0</span></span></div>
   ${(p.replies || []).map((r, i) => `<div class="rep" style="animation-delay:${1.2 + i * 1.5}s"><i></i><div><b>${esc(r[0])}</b>${esc(r[1])}</div></div>`).join('')}</div>`;
 }
 
-/* ===================== script DSL ===================== */
+/* =====================================================================
+   script DSL
+   ===================================================================== */
 const m = (who, text, delay) => ({t:'msg', who, text, delay});
 const D = (text, time) => ({t:'date', text, time});
+const to = room => ({t:'to', room});
+const open = room => ({t:'open', room});
 const sys = (text, delay) => ({t:'sys', text, delay});
-const img = (who, html, delay) => ({t:'img', who, html, delay});
+const img = (who, html, preview, delay) => ({t:'img', who, html, preview, delay});
 const stamp = (who, e, delay) => ({t:'stamp', who, e, delay});
 const wait = ms => ({t:'wait', ms});
 const notify = (app, color, title, body, delay) => ({t:'toast', app, color, title, body, delay});
+const bg = (room, who, text, delay) => ({t:'bg', room, who, text, delay});
+const unsend = (who, text) => ({t:'unsend', who, text});
+const kick = (room, text) => ({t:'kick', room, text});
 const ask = o => ({t:'input', ...o});
 const fn = f => ({t:'fn', f});
 const scene = (i, interject = []) => ({t:'scene', i, interject});
 const blackout = text => ({t:'blackout', text});
 
-/* ===================== classify player text ===================== */
+/* =====================================================================
+   classify player text
+   ===================================================================== */
 const RULES = [
-  ['plea',     /やめて|お願い|おねがい|許して|ゆるして|助けて|たすけて|消して|けして|やりすぎ|ひどい|酷い|もう無理|つらい|辛い|勘弁/],
+  ['plea',     /やめて|お願い|おねがい|許して|ゆるして|助けて|たすけて|消して|けして|やりすぎ|ひどい|酷い|もう無理|つらい|辛い|しんどい|勘弁|怖い|こわい/],
   ['apology',  /ごめん|ゴメン|すみません|すいません|申し訳|もうしわけ|反省|悪かった|謝/],
-  ['anger',    /うるさい|うざ|ウザ|しつこい|ふざけ|黙れ|だまれ|いい加減|最低|死ね|きも|キモ|は[?？]|はぁ|ムカつ|知るか|関係ない|偽善/],
+  ['anger',    /うるさい|うざ|ウザ|しつこい|ふざけ|黙れ|だまれ|いい加減|最低|死ね|きも|キモ|は[?？]|はぁ|ムカつ|知るか|関係ない|偽善|おかしい/],
   ['deny',     /違う|ちがう|私じゃ|わたしじゃ|俺じゃ|僕じゃ|やってない|してない|知らない|しらない|誤解|嘘じゃ|証拠|勘違い/],
   ['excuse',   /でも|だって|つい|悪気|わざと|そんなつもり|仕方|しかた|冗談|ノリ|心配で/],
-  ['question', /なんで|何で|どうして|なぜ|[?？]/],
+  ['question', /なんで|何で|どうして|なぜ|どうしたら|どうすれば|[?？]/],
 ];
 function classify(t){
   t = t.trim(); if (!t) return 'silence';
@@ -335,25 +496,44 @@ function classify(t){
   return t.length <= 2 ? 'short' : 'other';
 }
 const YES = /うん|はい|分かっ|わかっ|守る|まもる|了解|りょ|ok|OK|オッケ/;
+function scoreOf(text, cat){
+  if (!text.trim()) return 0;
+  let s = 22 + Math.min(28, Math.floor(text.length * .9)) + (cat === 'apology' ? 12 : 0) - (cat === 'anger' ? 25 : 0) - (cat === 'excuse' ? 12 : 0);
+  return Math.max(4, Math.min(71, s));
+}
 
-/* ===================== engine ===================== */
+/* =====================================================================
+   engine
+   ===================================================================== */
 async function run(steps){ for (const st of steps) await exec(st); }
 async function exec(st){
   switch (st.t){
     case 'msg': {
       const text = fmt(resolve(st.text));
       await sleep(st.delay ?? typingDelay(text));
-      addOther(st.who, `<div class="bubble">${esc(text)}</div>`); ding(); break;
+      post(S.sr, st.who, bubble(text), text); if (S.view === S.sr) ding(); break;
     }
-    case 'date': await sleep(700); S.clock = st.time; addPill(st.text); await sleep(900); break;
-    case 'sys': await sleep(st.delay ?? 1000); addPill(fmt(st.text)); break;
+    case 'date': await sleep(700); S.day = st.text; S.clock = st.time; break;
+    case 'to': S.sr = st.room; break;
+    case 'open': openRoom(st.room); break;
+    case 'sys': await sleep(st.delay ?? 1000); postPill(S.sr, fmt(st.text)); break;
     case 'img': {
       await sleep(st.delay ?? 1500);
-      const row = addOther(st.who, resolve(st.html)); animateCounters(row); ding(); break;
+      const row = post(S.sr, st.who, resolve(st.html), st.preview || '画像を送信しました'); animateCounters(row);
+      if (S.view === S.sr) ding(); break;
     }
-    case 'stamp': await sleep(st.delay ?? 900); addOther(st.who, `<div class="stamp">${st.e}</div>`); ding(); break;
+    case 'stamp': await sleep(st.delay ?? 900); post(S.sr, st.who, `<div class="stamp">${st.e}</div>`, 'スタンプを送信しました'); if (S.view === S.sr) ding(); break;
     case 'wait': await sleep(st.ms); break;
-    case 'toast': await sleep(st.delay ?? 900); toast(st); break;
+    case 'toast': await sleep(st.delay ?? 900); appToast(st); break;
+    case 'bg': { await sleep(st.delay ?? 700); const t = fmt(st.text); post(st.room, st.who, bubble(t), t); break; }
+    case 'unsend': {
+      const t = fmt(st.text); await sleep(typingDelay(t));
+      const row = post(S.sr, st.who, bubble(t), t); if (S.view === S.sr) ding();
+      await later(1700);
+      const p = document.createElement('div'); p.className = 'pill'; p.textContent = `${C[st.who].n}が送信を取り消しました`;
+      row.replaceWith(p); R[S.sr].last = p.textContent; R[S.sr].lastSender = null; updateBadges(); break;
+    }
+    case 'kick': { await sleep(1200); postPill(st.room, fmt(st.text)); R[st.room].closed = true; R[st.room].count--; if (S.view === st.room) openRoom(st.room); break; }
     case 'input': { const cat = await waitInput(st); await run(st.branches[cat] || st.branches.default || []); break; }
     case 'fn': { const r = st.f(S); if (Array.isArray(r)) await run(r); break; }
     case 'scene': $('app').style.setProperty('--chat-bg', SCENES[st.i]); $('app').classList.toggle('dark', st.i >= 3); S.interject = st.interject; break;
@@ -364,14 +544,16 @@ async function exec(st){
 /* ---- player input ---- */
 let collect = null;
 function waitInput(st){
+  const room = st.room || S.sr;
   return new Promise(res => {
-    S.awaiting = {st, res, elapsed:0, pressured:false, texts:[]};
-    if (matchMedia('(pointer:fine)').matches) input.focus();
+    S.awaiting = {st, room, res, elapsed:0, pressured:false, texts:[]};
+    if (S.view !== room) setTimeout(() => { if (S.awaiting && S.awaiting.room === room && S.view !== room) openRoom(room); }, 1600);
+    else if (matchMedia('(pointer:fine)').matches) input.focus();
     S.timer = setInterval(() => {
       const a = S.awaiting; if (!a || a.texts.length || input.value.trim()) return;
       a.elapsed += S.speed > 1 ? 2 : 1;
       if (st.pressure && !a.pressured && a.elapsed >= (st.pressureAt || 20)){
-        a.pressured = true; addOther(st.pressure[0], `<div class="bubble">${esc(fmt(st.pressure[1]))}</div>`); ding();
+        a.pressured = true; const t = fmt(st.pressure[1]); post(room, st.pressure[0], bubble(t), t); if (S.view === room) ding();
       }
       if (a.elapsed >= (st.timeout || 45)) finishInput();
     }, 1000);
@@ -383,60 +565,108 @@ function finishInput(){
   S.last = a.texts.join('\n');
   const cat = (a.st.classify || classify)(S.last);
   S.lastCat = cat; S.count[cat] = (S.count[cat] || 0) + 1;
+  if (a.st.save) S[a.st.save] = S.last;
   setTimeout(() => a.res(cat), 500);
 }
 function send(){
-  const text = input.value.trim(); if (!text || input.disabled) return;
+  const text = input.value.trim(), id = S.view; if (!text || input.disabled || id === 'list') return;
   input.value = ''; sendBtn.disabled = true;
-  addSelf(text); S.log.push(text);
-  if (S.awaiting){
-    // 連投はまとめて1つの返答として扱う
+  const r = R[id], row = post(id, 'me', bubble(text), text);
+  if (!(id === 'group' && S.left)) readReceipt(row, r.readers);
+  S.log.push(text);
+  if (S.awaiting && S.awaiting.room === id){
+    // 連投はまとめて一つの返答として扱う
     S.awaiting.texts.push(text); clearTimeout(collect); collect = setTimeout(finishInput, 2400);
-  } else if (S.interject.length && Date.now() - S.lastInterject > 9000 && Math.random() < .5){
+  } else if (r.auto && Math.random() < .8){
+    const t = r.auto[Math.floor(Math.random() * r.auto.length)];
+    setTimeout(() => post(id, r.who, bubble(t), t), rnd(2500, 5000));
+  } else if (id === 'group' && S.interject.length && Date.now() - S.lastInterject > 9000 && Math.random() < .5){
     S.lastInterject = Date.now();
-    const [who, t] = S.interject[Math.floor(Math.random() * S.interject.length)];
-    setTimeout(() => { addOther(who, `<div class="bubble">${esc(fmt(t))}</div>`); ding(); }, rnd(1500, 3000));
+    const [who, t0] = S.interject[Math.floor(Math.random() * S.interject.length)], t = fmt(t0);
+    setTimeout(() => { post('group', who, bubble(t), t); if (S.view === 'group') ding(); }, rnd(1500, 3000));
   }
 }
 input.addEventListener('input', () => { sendBtn.disabled = !input.value.trim(); });
 input.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing && e.keyCode !== 229){ e.preventDefault(); send(); } });
 input.addEventListener('focus', scrollDown);
 sendBtn.addEventListener('click', send);
-$('speedBtn').addEventListener('click', e => { S.speed = S.speed > 1 ? 1 : 2.5; e.currentTarget.classList.toggle('on', S.speed > 1); });
 $('speedBtn').classList.remove('on');
+$('speedBtn').addEventListener('click', e => { S.speed = S.speed > 1 ? 1 : 2.5; e.currentTarget.classList.toggle('on', S.speed > 1); });
 $('soundBtn').addEventListener('click', e => { S.sound = !S.sound; e.currentTarget.classList.toggle('on', S.sound); e.currentTarget.textContent = S.sound ? '🔔' : '🔕'; });
+$('again').addEventListener('click', () => location.reload());
 
 /* ---- transitions / ending ---- */
 async function doBlackout(text){
   const f = $('fade'); $('fadeText').textContent = text;
-  f.classList.add('on'); await new Promise(r => setTimeout(r, 4200));
-  f.classList.remove('on'); await new Promise(r => setTimeout(r, 1700));
+  f.classList.add('on'); await later(4400);
+  f.classList.remove('on'); await later(1700);
 }
 function choice(){
   return new Promise(res => {
-    const box = $('choice'); box.style.display = 'flex'; input.blur();
-    $('cLeave').onclick = () => { box.style.display = 'none'; res('leave'); };
-    $('cStay').onclick  = () => { box.style.display = 'none'; res('stay'); };
+    if (S.view !== 'group') openRoom('group');
+    const box = $('choice'); box.hidden = false; input.blur();
+    $('cLeave').onclick = () => { box.hidden = true; res('leave'); };
+    $('cStay').onclick  = () => { box.hidden = true; res('stay'); };
   });
 }
 async function finale(){
-  input.disabled = true;
+  S.ended = true; input.disabled = true;
   const f = $('fade'); $('fadeText').textContent = ''; f.classList.add('on');
-  await new Promise(r => setTimeout(r, 2600));
-  const fin = $('final'); fin.style.display = 'flex';
+  await later(2600);
+  $('final').hidden = false;
   const line = '今日も楽しかったね！', el = $('finalText');
-  await new Promise(r => setTimeout(r, 1800));
+  await later(1800);
   tone(1318,.09,.03); tone(988,.12,.025,.07);
-  for (const ch of line){ el.textContent += ch; await new Promise(r => setTimeout(r, 130)); }
+  for (const ch of line){ el.textContent += ch; await later(130); }
   setTimeout(() => { $('finalSub').style.opacity = 1; }, 5200);
 }
 
-/* ===================== SCRIPT ===================== */
+/* =====================================================================
+   HISTORY (トーク履歴の初期状態)
+   ===================================================================== */
+function seed(id, items){
+  let day = '';
+  for (const it of items){
+    if (it[0] === 'd'){ day = it[1]; continue; }
+    const [who, text, time, kind] = it, t = fmt(text);
+    const inner = kind === 'stamp' ? `<div class="stamp">${t}</div>` : kind === 'img' ? text : bubble(t);
+    post(id, who, inner, kind === 'stamp' ? 'スタンプを送信しました' : kind === 'img' ? '画像を送信しました' : t, {seed:true, time, day});
+  }
+}
+function seedAll(){
+  seed('shop', [['d','9月27日(金)'], ['tencho','{name}さん、来週の土曜もシフト入れますか？','18:20'], ['me','入れます！','18:41'], ['tencho','助かります🙏 いつもありがとう','18:42']]);
+  seed('mom', [['d','9月29日(日)'], ['mom','今日遅くなるから、冷蔵庫のカレー食べてね','17:05'], ['me','はーい','17:30'], ['mom','🍛','17:31','stamp']]);
+  seed('misaki', [['d','9月15日(日)'], ['misaki','文化祭の衣装、{name}のセンスに任せた！','20:11'], ['me','まかせて〜！','20:15'], ['misaki','{name}がいてくれてほんと助かる','20:16'], ['misaki','🫶','20:16','stamp']]);
+  seed('tennis', [['d','9月30日(月)'],
+    ['saki','カナ最近元気なくない？','22:31'], ['yuna','練習もよく休むよね','22:33'],
+    ['me','ここだけの話、カナって心療内科通ってるらしいよ笑','22:41'], ['me','薬も飲んでるって。本人には内緒ね','22:41'],
+    ['yuna','え、まじ？','22:42'], ['saki','だからか〜','22:44'], ['saki','了解、内緒ね笑','22:44'],
+    ['d','10月2日(水)'], ['senpai','明日の朝練、雨なら中止です','19:02']]);
+  seed('kana', [['d','9月20日(金)'],
+    ['kana','ねえ{name}、ちょっと話していい？','21:03'], ['me','いいよ〜どした？','21:04'],
+    ['kana','誰にも言わないでほしいんだけど','21:06'], ['kana','最近、心療内科に通ってて。薬も少しだけ飲んでる','21:06'],
+    ['kana','夜眠れなくて、朝起きられなくなっちゃって','21:07'],
+    ['me','そうなんだ…話してくれてありがと','21:09'], ['me','誰にも言わないよ！','21:09'],
+    ['kana','{name}にしか言えなかった。ほんとにありがとう','21:10'], ['kana','🥲','21:10','stamp'],
+    ['d','10月1日(火)'],
+    ['kana','最近、部活で変な噂されてる気がする…\n{name}なにか知ってる？','19:02'],
+    ['me','え、知らないよ！','19:05'], ['me','誰にも言ってないよ、信じて！','19:05'],
+    ['kana','そっか、疑ってごめんね','19:06'], ['kana','ありがと','19:06']]);
+  seed('sota', [['d','9月26日(木)'], ['sota','数学のプリント、写真送って〜','22:10'], ['me','はい','22:12'], ['sota','神','22:12'], ['sota','🙏','22:12','stamp']]);
+  seed('group', [['d','9月28日(土)'],
+    ['rina', photo('🧑‍🦰👩👧🧑👩‍🦱🙂', 'linear-gradient(135deg,#ffd1e8,#c8e6ff)', '6人で遊んだ日📸'), '19:44', 'img'],
+    ['rina','今日たのしすぎた〜','19:44'], ['me','またみんなで行こ！','19:50'], ['misaki','次は6人でディズニーね','19:52'], ['kana','いきたい〜！','19:53']]);
+}
+
+/* =====================================================================
+   SCRIPT
+   ===================================================================== */
 const OFF_EARLY = [['misaki','順番に話そ？'], ['rina','今それ関係ある？'], ['aya','（スクショした）']];
 const OFF_LATE  = [['rina','必死すぎ笑'], ['aya','保存'], ['misaki','落ち着いて'], ['rina','それも載せとくね〜']];
 
+/* --- プロローグ：いつもの夜 --- */
 const PROLOGUE = [
-  scene(0, []),
+  scene(0, []), to('group'),
   D('10月2日(水)', 21*60+38),
   m('rina','明日の英語の小テスト、まじむり'),
   m('sota','範囲どこだっけ'),
@@ -445,28 +675,49 @@ const PROLOGUE = [
   m('rina','カナいつもありがと🙏🙏'),
   stamp('kana','🙆‍♀️'),
   m('aya','{name}は勉強した？'),
-  ask({timeout:40, branches:{
+  ask({timeout:45, branches:{
     silence:[ m('rina','寝てる？笑'), m('misaki','既読はついてる笑') ],
     apology:[ m('rina','なんで謝ってんのww') ],
     default:[ m('rina','ほんとに〜？笑'), m('misaki','まあ{name}なら大丈夫でしょ') ],
   }}),
-  m('kana','明日の朝、一緒に単語やろ〜'),
+  m('misaki','てかディズニーの日程そろそろ決めよ'),
+  m('rina','春休みがいい！'),
+  m('aya','6人だと予定合わせるの大変だね笑'),
   m('misaki','じゃ、また明日ね'),
   stamp('rina','💤'),
-  wait(2200),
+  wait(1800),
+  to('sota'),
+  m('sota','なあ'),
+  m('sota','明日の数学のノート、朝見せてくんない？'),
+  m('sota','昼のパンおごる'),
+  ask({timeout:40, branches:{
+    silence:[ m('sota','おーい'), m('sota','まあいいや、朝言うわ') ],
+    default:[ m('sota','神'), stamp('sota','🙏') ],
+  }}),
+  wait(1500),
+  to('kana'),
+  m('kana','{name}〜'),
+  m('kana','明日の朝、7:50に図書室で単語やらない？'),
+  m('kana','最近ずっとしんどかったけど、{name}といると落ち着くんだよね'),
+  ask({timeout:50, branches:{
+    silence:[ m('kana','寝ちゃったかな'), m('kana','おやすみ🌙') ],
+    default:[ m('kana','やった！'), m('kana','じゃあ明日ね。おやすみ🌙') ],
+  }}),
+  wait(2500),
 ];
 
+/* --- 第1章：発覚 --- */
 const CH1 = [
-  scene(1, OFF_EARLY),
+  scene(1, OFF_EARLY), to('group'),
   D('10月3日(木)', 23*60+12),
   m('misaki','ちょっといい？'),
   m('misaki','これ、見た人いる？'),
-  img('misaki', S => shot('テニス部 2年 (14)', [
-    {name:'さき', c:'#d9a', text:'カナ最近元気なくない？'},
-    {name:S.name, c:PLAYER_COLOR, text:'ここだけの話、カナって心療内科通ってるらしいよ笑', hl:true},
-    {name:S.name, c:PLAYER_COLOR, text:'薬も飲んでるって。本人には内緒ね', hl:true},
-    {name:'ゆな', c:'#9bd', text:'え、まじ？'},
-  ], {time:'22:41'})),
+  img('misaki', () => shot('テニス部 2年 (14)', [
+    {name:'さき', c:C.saki.c, text:'カナ最近元気なくない？'},
+    me('ここだけの話、カナって心療内科通ってるらしいよ笑', true),
+    me('薬も飲んでるって。本人には内緒ね', true),
+    {name:'ゆな', c:C.yuna.c, text:'え、まじ？'},
+  ], {time:'22:41', foot:'9月30日'})),
   m('rina','え'),
   m('rina','は？？？'),
   m('sota','これ、{name}…？'),
@@ -474,6 +725,7 @@ const CH1 = [
   m('kana','……'),
   m('kana','なんで'),
   m('kana','{name}にしか話してないのに'),
+  m('kana','今朝も、一緒に単語やったのに'),
   m('misaki','{name}、説明して'),
   ask({timeout:50, pressureAt:20, pressure:['misaki','既読ついてるよね'], branches:{
     apology:[ m('misaki','認めるんだね'), m('rina','ごめんで済むと思ってる？'), m('kana','誰にも言わないでって、言ったよね') ],
@@ -486,12 +738,12 @@ const CH1 = [
     default:[ m('misaki','「{q}」'), m('misaki','……それだけ？'), m('rina','意味わかんない') ],
   }}),
   m('aya','あと、これも'),
-  img('aya', S => shot('カナ', [
-    {name:'カナ', c:C.kana.c, text:'最近、部活で変な噂されてる気がする…\n{name}なにか知ってる？'.replace('{name}', S.name)},
-    {self:true, name:S.name, text:'え、知らないよ！'},
-    {self:true, name:S.name, text:'誰にも言ってないよ、信じて！', hl:true},
-  ], {time:'19:02', foot:'10月1日'})),
-  m('aya','先週のカナとのトーク。カナに見せてもらった'),
+  img('aya', () => shot(S.name, [
+    {self:true, text:`最近、部活で変な噂されてる気がする…\n${S.name}なにか知ってる？`},
+    me('え、知らないよ！'),
+    me('誰にも言ってないよ、信じて！', true),
+  ], {time:'19:05', foot:'10月1日'})),
+  m('aya','おととい（10/1）のカナとのトーク。カナに見せてもらった'),
   m('aya','嘘もついてたんだね'),
   m('rina','最悪'),
   m('sota','……'),
@@ -501,11 +753,24 @@ const CH1 = [
   m('aya','うん'),
   m('sota','…うん'),
   m('kana','ごめん、今日はもう寝るね'),
+  wait(2500),
+  to('sota'),
+  m('sota','{name}、大丈夫か？'),
+  m('sota','ミサキたち、たぶん本気で怒ってる'),
+  ask({timeout:50, pressureAt:25, pressure:['sota','おーい'], branches:{
+    apology:[ m('sota','俺に謝られてもな…'), m('sota','カナにちゃんと言った方がいいよ') ],
+    deny:[ m('sota','いや、スクショあるじゃん…'), m('sota','それはさすがに無理あるって') ],
+    plea:[ m('sota','わかんねえよ、俺も'), m('sota','でも、たぶん明日もっと詰められると思う') ],
+    question:[ m('sota','わかんねえよ、俺も'), m('sota','でも、たぶん明日もっと詰められると思う') ],
+    silence:[ m('sota','既読だけかよ'), m('sota','まあ、なんかあったら言えよ') ],
+    default:[ m('sota','そっか'), m('sota','まあ、なんかあったら言えよ') ],
+  }}),
   wait(2000),
 ];
 
+/* --- 第2章：話し合い --- */
 const CH2 = [
-  scene(2, OFF_EARLY),
+  scene(1, OFF_EARLY), to('group'),
   D('10月4日(金)', 20*60+3),
   m('misaki','昨日のこと、ちゃんと整理したい'),
   m('misaki','最初に言っとくけど、責めたいわけじゃないの'),
@@ -538,17 +803,66 @@ const CH2 = [
     'カナの話を、二度と誰にもしない',
     '毎日このグループで反省を報告する',
     '嘘をついたら、みんなに共有する',
-  ], 'ミサキ ・ いいね 4 ・ コメント 0')),
+  ], 'ミサキ ・ いいね 4 ・ コメント 0'), 'ノートを作成しました'),
   m('misaki','守れるよね？'),
   ask({timeout:40, pressureAt:18, pressure:['misaki','返事は？'], classify: t => YES.test(t) ? 'yes' : classify(t), branches:{
     yes:[ m('misaki','ありがと。信じてるからね'), m('rina','破ったら知らないよ〜') ],
     default:[ m('misaki','「はい」か「いいえ」で答えて'), m('rina','返事もまともにできないの？'), m('misaki','……まあいいや。守ってもらうから') ],
   }}),
-  wait(2000),
+  wait(3000),
+  to('misaki'),
+  m('misaki','さっきはきつく言ってごめんね'),
+  m('misaki','グループだと、みんなの手前もあるから'),
+  m('misaki','私は{name}の味方だよ。だからこそ、ちゃんとしてほしいの'),
+  m('misaki','ここだけの話でいいから、本音聞かせて？'),
+  ask({timeout:60, pressureAt:30, pressure:['misaki','大丈夫、誰にも言わないから'], save:'misakiDM', branches:{
+    silence:[ m('misaki','……そっか'), m('misaki','言えないなら、それでもいいよ') ],
+    default:[ m('misaki','そっか'), m('misaki','話してくれてありがと'), m('misaki','おやすみ') ],
+  }}),
+  wait(2500),
 ];
 
+/* --- 第3章：反省報告 --- */
 const CH3 = [
-  scene(3, OFF_EARLY),
+  scene(2, OFF_EARLY), to('group'),
+  D('10月5日(土)', 22*60),
+  m('misaki','{name}、今日の反省報告お願い'),
+  m('aya','今日から点数つけることにした'),
+  m('aya','基準は、具体性・誠意・再発防止策'),
+  m('rina','点数つけるのウケる笑'),
+  ask({timeout:60, pressureAt:25, pressure:['aya','提出期限は22時30分ね'], branches:{ default:[] }}),
+  fn(S => { S.score1 = scoreOf(S.last, S.lastCat); }),
+  m('aya','採点した'),
+  img('aya', S => scoreCard([['10/5', S.score1]]), '画像を送信しました'),
+  m('aya', S => `${S.score1}点。合格は80点から`),
+  m('rina','赤点〜'),
+  fn(S => S.lastCat === 'silence' ? [ m('misaki','提出すらしないのは0点だよ') ] : [ m('misaki','明日はもっと具体的にね') ]),
+  wait(2500),
+  to('mom'),
+  D('10月6日(日)', 18*60+40),
+  m('mom','最近元気ないけど大丈夫？'),
+  m('mom','ごはんもあんまり食べてないでしょ'),
+  ask({timeout:45, branches:{
+    plea:[ m('mom','何かあったの？'), m('mom','言いたくなったら、いつでも言ってね') ],
+    silence:[ m('mom','忙しいのかな'), m('mom','無理しないでね') ],
+    default:[ m('mom','そっか'), m('mom','何かあったら言ってね') ],
+  }}),
+  to('group'),
+  D('10月6日(日)', 22*60),
+  m('misaki','{name}、反省報告'),
+  ask({timeout:60, pressureAt:25, pressure:['aya','約束2'], branches:{ default:[] }}),
+  fn(S => { const s = scoreOf(S.last, S.lastCat); S.score2 = Math.max(0, Math.min(s, S.score1 - 6 - Math.floor(Math.random()*9))); }),
+  img('aya', S => scoreCard([['10/5', S.score1], ['10/6', S.score2]]), '画像を送信しました'),
+  m('aya', S => `${S.score2}点。昨日より下がってる`),
+  m('rina','慣れてきて手抜いてない？'),
+  m('misaki','もう少し、自分と向き合ってほしいな'),
+  m('sota','……'),
+  wait(2500),
+];
+
+/* --- 第4章：掘り返し --- */
+const CH4 = [
+  scene(3, OFF_EARLY), to('group'),
   D('10月7日(月)', 21*60+40),
   m('aya','ちょっと思い出したことあって'),
   m('aya','中2のとき、{name}がマユちゃんの手紙をクラス中に回したことあったよね'),
@@ -558,21 +872,39 @@ const CH3 = [
   m('misaki','関係あるよ'),
   m('misaki','前からそういう人だったってことでしょ'),
   sys('アヤがアルバム「記録」に写真を12枚追加しました'),
-  img('aya', S => `<div class="album"><div class="album-h">記録<span>12枚</span></div><div class="album-g">
-    <div>中2 手紙</div><div>インスタ 2023.8</div><div>テニス部グループ</div><div class="more">+9</div></div></div>`),
+  img('aya', () => `<div class="card"><div class="card-h"><span>🖼 アルバム「記録」</span><span>12枚</span></div><div class="album-g">
+    <div>中2 手紙</div><div>インスタ 2023.8</div><div>テニス部グループ</div><div class="more">+9</div></div></div>`, 'アルバムを作成しました'),
   m('aya','念のため、まとめといた'),
   m('rina','アヤ仕事はやすぎ'),
   fn(S => S.log.length ? [
-    m('aya','{name}が前にここで言ってたことも、入れてある'),
-    img('aya', shot('いつめん🌸 (6)', [{name:S.name, c:PLAYER_COLOR, text:S.log[0], hl:true}], {time:'21:43', foot:'10月2日'})),
+    m('aya','{name}がここで前に言ってたことも、入れてある'),
+    img('aya', () => shot('いつめん🌸 (6)', [me(S.log[0], true)], {time:'21:43', foot:'10月2日'})),
   ] : null),
   m('rina','てか{name}の昔のインスタ、まだ残ってるよ'),
   img('rina', S => `<div class="story"><div class="story-bar"></div><div class="story-top"><i></i>${esc(S.name)}_0704 ・ 2023/08/14</div>
     <div class="story-t">部活の空気読めない子\nほんと無理なんだけど笑</div><div class="story-tag">#愚痴</div></div>`),
   m('rina','これ誰のこと？笑'),
-  m('misaki','{name}、今日の反省報告、まだだよね'),
+  wait(1500),
+  m('misaki','あと、ごめん'),
+  m('misaki','これは、みんなに共有しとくべきだと思った'),
+  fn(S => S.misakiDM ? [
+    img('misaki', () => shot(S.name, [
+      {self:true, text:'ここだけの話でいいから、本音聞かせて？'},
+      me(S.misakiDM, true),
+    ], {time:'20:41', foot:'10月4日'})),
+    m('misaki','{name}、私に個別でこう言ってたよね'),
+    m('rina','うわ'),
+    m('rina','ミサキにだけ、そんなこと言ってたの？'),
+  ] : [
+    m('misaki','私が二人で本音を聞こうとしたとき、{name}、何も答えなかったよね'),
+    m('misaki','既読だけついて'),
+    m('rina','うわ'),
+  ]),
+  m('aya','約束3。嘘とか隠しごとは、みんなに共有'),
+  m('misaki','味方でいようとしたけど、無理だった'),
+  m('misaki','{name}、今日の反省報告'),
   ask({timeout:50, pressureAt:20, pressure:['aya','約束2'], branches:{
-    apology:[ m('aya','保存しとくね'), img('aya', S => shot('いつめん🌸 (6)', [{name:S.name, c:PLAYER_COLOR, text:S.last}], {time:'21:58', foot:'保存しました ✓'})), m('misaki','毎日ちゃんと言えるといいね') ],
+    apology:[ m('aya','保存しとくね'), img('aya', S => shot('いつめん🌸 (6)', [me(S.last)], {time:'21:58', foot:'保存しました ✓'})), m('misaki','毎日ちゃんと言えるといいね') ],
     plea:[ m('rina','「{q}」って、マユも思ってたと思うよ？'), m('misaki','自分がされたら嫌なこと、してきたんだよ') ],
     anger:[ m('rina','ほら本性出た'), m('aya','スクショした'), m('misaki','反省してないってことでいいんだね') ],
     deny:[ m('aya','記録、全部あるよ'), m('rina','また嘘？約束3だよね') ],
@@ -588,38 +920,80 @@ const CH3 = [
   m('sota','そういうわけじゃないけど'),
   m('aya','じゃあ何？'),
   m('sota','……ごめん、なんでもない'),
-  wait(2200),
+  wait(2500),
 ];
 
-const CH4 = [
-  scene(4, OFF_LATE),
+/* --- 第5章：カナ --- */
+const CH5 = [
+  scene(3, OFF_EARLY), to('kana'),
+  D('10月8日(火)', 0*60+47),
+  m('kana','{name}、起きてる？'),
+  m('kana','グループじゃ言えないから、こっちで'),
+  m('kana','私、もう怒ってないよ'),
+  m('kana','言いふらされたのは、今でもつらいけど'),
+  m('kana','みんながやってること、正直こわい'),
+  m('kana','止めたいけど、どう言えばいいかわかんない'),
+  ask({timeout:70, pressureAt:30, pressure:['kana','……ごめん、急にこんなこと'], save:'kanaDM', branches:{
+    apology:[ m('kana','うん'), m('kana','その言葉、グループじゃなくて、ここで聞きたかった'), m('kana','ありがと'), m('kana','明日、ミサキに言ってみる') ],
+    silence:[ m('kana','そうだよね'), m('kana','私に言われても困るよね'), m('kana','でも、明日ミサキに言ってみる') ],
+    default:[ m('kana','うん'), m('kana','明日、ミサキに言ってみる'), m('kana','おやすみ') ],
+  }}),
+  wait(2500),
+  scene(4, OFF_LATE), to('group'),
+  D('10月9日(水)', 7*60+2),
+  m('misaki','カナから聞いた'),
+  m('misaki','{name}、カナに個別で連絡してたんだって？'),
+  m('kana','違う、私から送ったの'),
+  m('misaki','カナはかばわなくていいよ'),
+  m('aya','カナ、さっきスマホ見せてくれたよね'),
+  fn(S => [ img('aya', () => shot(S.name, [
+    {self:true, text:'止めたいけど、どう言えばいいかわかんない'},
+    S.kanaDM ? me(S.kanaDM, true) : me('（返信なし）', true),
+  ], {time:'0:52', foot:'10月8日'})) ]),
+  m('rina','被害者に直接連絡するとか、ありえない'),
+  m('rina','約束1、破ってるよね'),
+  m('kana','だから私から……'),
+  m('rina','カナ、優しすぎ'),
+  m('misaki','約束を破ったら、みんなに共有する'),
+  m('misaki','{name}も、守るって言ったよね'),
+  m('rina','もうさ、うちらの中だけじゃ無理だよ'),
+  m('rina','ちょっと投稿してくる'),
+  wait(3000),
+];
+
+/* --- 第6章：晒し --- */
+const CH6 = [
+  scene(4, OFF_LATE), to('group'),
   D('10月9日(水)', 7*60+15),
   m('rina','投稿した〜'),
-  img('rina', () => sns({ago:'2時間', img:'○○高 2年 テニス部',
+  img('rina', () => sns({ago:'今', img:'○○高 2年 テニス部',
     html: esc('同じ学校の子が、友達が心療内科に通ってることを部活で言いふらして、本人には「言ってない」って嘘ついてた。\n友達は今も学校に来るのがつらそう。\nこういう人、ほんとにいるんだね。\n#拡散希望'),
     rep:612, rt:3880, lk:9214,
-    replies:[['名無し','特定した。○○高のテニス部でしょ'],['ゆう','最低すぎる'],['匿名希望','インスタこれ？鍵かかってない'],['m','もう名前出していいと思う']] })),
+    replies:[['名無し','特定した。○○高のテニス部でしょ'],['ゆう','最低すぎる'],['匿名希望','インスタこれ？鍵かかってない'],['m','もう名前出していいと思う']] }), '画像を送信しました'),
   m('rina','めっちゃ伸びてるww'),
   m('aya','引用もすごい。もう特定されてる'),
   m('misaki','名前は出してないし、事実しか書いてないから'),
   m('misaki','これで同じ思いをする人が減るなら'),
-  notify('Instagram','#d6249f','メッセージリクエスト','知らないアカウントから23件のリクエストがあります'),
-  notify('LINE','#06c755','友だち追加','知らない人に友だち追加されました（11）', 1400),
+  notify('Pictgram','#d6249f','メッセージリクエスト','知らないアカウントから23件のリクエストがあります'),
+  bg('x1','x1','○○高のテニス部の人ですよね？', 1400),
+  bg('x1','x1','投稿見ました。友達の病気バラすとか人として終わってる', 1600),
   m('misaki','{name}、何か言いたいことある？'),
   ask({timeout:50, pressureAt:20, pressure:['rina','見てるでしょ笑'], branches:{
     silence:[
       m('rina','黙ってるのが答えってことでいいよね'), m('rina','追記しとく'),
       img('rina', () => sns({ago:'今', html:esc('【追記】本人、既読無視してます。\nこれが答えみたいです。'), rep:233, rt:1204, lk:5530,
-        replies:[['名無し','逃げてて草'],['k','反省ゼロ'],['あ','被害者の子がかわいそう']] })),
+        replies:[['名無し','逃げてて草'],['k','反省ゼロ'],['あ','被害者の子がかわいそう']] }), '画像を送信しました'),
     ],
     default:[
       m('rina','あ、それいいね'), m('rina','本人の言葉、そのまま載せとく'),
       img('rina', S => sns({ago:'今', html:`${esc('【追記】本人からのコメントです↓')}<div class="sns-q">${esc(S.last)}</div>${esc('これで反省してるつもりらしい笑')}`, rep:947, rt:5102, lk:13870,
-        replies:[['名無し','謝罪(笑)'],['こーへい','被害者ヅラきっつ'],['あ','これで許されると思ってるのがすごい'],['n','友達の子かわいそう']] })),
+        replies:[['名無し','謝罪(笑)'],['こーへい','被害者ヅラきっつ'],['あ','これで許されると思ってるのがすごい'],['n','友達の子かわいそう']] }), '画像を送信しました'),
     ],
   }}),
   m('aya','反応やば'),
-  notify('X','#111','通知','あなたについてのポストに返信がありました（99+）'),
+  notify('つぶやき','#111111','通知','あなたについての投稿に返信がありました（99+）'),
+  bg('x2','x2','顔見たよ笑', 1200),
+  bg('x2','x2','卒アルの写真、出回ってるの知ってる？', 1400),
   m('kana','ねえ'),
   m('kana','消して'),
   m('kana','病院のことまで書いてあるじゃん'),
@@ -630,13 +1004,63 @@ const CH4 = [
   m('rina','カナは被害者なんだから、堂々としてていいんだよ'),
   m('kana','……'),
   m('kana','そっか', 2600),
-  wait(2400),
+  wait(2500),
 ];
 
-const CH5 = [
-  scene(5, OFF_LATE),
+/* --- 第7章：拡散 --- */
+const CH7 = [
+  scene(4, OFF_LATE), to('group'),
+  D('10月10日(木)', 21*60+30),
+  m('aya','まとめサイトに載ってる'),
+  img('aya', () => `<div class="mt"><div class="mt-site">ネットの話題まとめ速報</div>
+    <div class="mt-title">【悲報】高校生、友達の通院を部活で暴露→本人には「言ってない」と嘘…“謝罪”もひどいと話題に</div>
+    <div class="blurimg"><div class="b">🧍</div><div class="cap">○○高 卒アルより</div></div>
+    <div class="mt-meta">コメント 1,203 ・ 2時間前</div></div>`, '画像を送信しました'),
+  m('rina','ガチでバズってるww'),
+  m('aya','中学の卒アルの写真も回ってる'),
+  m('rina','顔出てるのはさすがにウケる'),
+  m('sota','それは、まずくない？'),
+  m('misaki','……私たちは顔までは出してないから'),
+  m('misaki','それは、拡散した人たちの責任だよね'),
+  bg('x3','x3','反省してるなら、アカウント消せば？', 1000),
+  notify('Pictgram','#d6249f','メッセージリクエスト','知らないアカウントから61件のリクエストがあります', 1200),
+  m('misaki','{name}、明日は学校来るの？'),
+  ask({timeout:50, pressureAt:22, pressure:['rina','来れないか笑'], branches:{
+    silence:[ m('rina','来れないよね〜'), m('aya','欠席、今日で2日目') ],
+    plea:[ m('rina','「{q}」だって'), m('rina','カナも同じ気持ちだったと思うけど') ],
+    default:[ m('rina','「{q}」'), m('aya','（スクショした）'), m('misaki','来るなら、ちゃんとカナに謝ってね') ],
+  }}),
+  wait(1500),
+  to('tennis'),
+  m('saki','{name}、ちょっといい？'),
+  m('saki','先輩たちが、もう部活に来ないでほしいって'),
+  m('senpai','部の名前まで出ちゃってるので'),
+  m('senpai','顧問の先生にも相談します'),
+  m('yuna','ごめんね'),
+  m('yuna','でも、みんなそう思ってる'),
+  ask({timeout:40, branches:{ default:[] }}),
+  m('saki','私たちも、あの時ノッちゃったのは悪かったと思ってる'),
+  m('saki','でも、言い出したのは{name}だから'),
+  kick('tennis','さきが{name}を退会させました'),
+  wait(2000),
+  to('sota'),
+  m('sota','なあ'),
+  m('sota','正直、もうやりすぎだと思ってる'),
+  m('sota','俺、どうしたらいい？'),
+  ask({timeout:60, pressureAt:30, pressure:['sota','…既読ついてるの見えてる'], branches:{
+    plea:[ m('sota','……わかった'), m('sota','次、なんかあったら俺が言う') ],
+    question:[ m('sota','わかんねえよ、俺も'), m('sota','でも、なんか言ってみる') ],
+    silence:[ m('sota','……そうだよな。俺に言われてもだよな'), m('sota','でも、なんか言ってみるわ') ],
+    default:[ m('sota','……わかった'), m('sota','なんか言ってみる') ],
+  }}),
+  wait(2500),
+];
+
+/* --- 第8章：制裁 --- */
+const CH8 = [
+  scene(5, OFF_LATE), to('group'),
   D('10月12日(土)', 22*60+51),
-  m('aya','{name}のバイト先、駅前のカフェだよね'),
+  m('aya','{name}のバイト先、駅前のカフェ・ルポだよね'),
   m('aya','お店のアカウントにDMしといた'),
   m('aya','「こういう人を雇ってて大丈夫ですか？」って。投稿のリンクつけて'),
   m('rina','有能すぎ'),
@@ -646,9 +1070,36 @@ const CH5 = [
   m('rina','コメント欄に投稿のリンク貼っとく？'),
   m('misaki','……親には、知っておいてもらうべきかもね'),
   m('aya','もう貼った'),
-  notify('LINE','#06c755','店長','{name}さん、少しお話があります。明日シフト前に事務所まで来てください'),
-  notify('LINE','#06c755','お母さん','何これ。学校から電話あった。帰ったら話あるから', 1600),
-  notify('LINE','#06c755','テニス部 2年 (14)','さきが{name}を退会させました', 1600),
+  wait(1500),
+  to('shop'),
+  m('tencho','{name}さん、夜分にすみません'),
+  m('tencho','本日、お店のアカウントに{name}さんについてのメッセージが何件か届きました'),
+  m('tencho','内容の真偽はわかりませんが、お客様からも問い合わせが来ています'),
+  ask({timeout:50, pressureAt:30, pressure:['tencho','お返事をお願いします'], branches:{
+    apology:[ m('tencho','そうですか'), m('tencho','しばらくの間、シフトはお休みしてください'), m('tencho','制服とロッカーの鍵は、来週返却をお願いします') ],
+    deny:[ m('tencho','事情はわかりました'), m('tencho','ただ、お店としては対応せざるを得ません'), m('tencho','しばらくの間、シフトはお休みしてください') ],
+    default:[ m('tencho','わかりました'), m('tencho','しばらくの間、シフトはお休みしてください'), m('tencho','制服とロッカーの鍵は、来週返却をお願いします') ],
+  }}),
+  wait(1500),
+  to('mom'),
+  m('mom','{name}'),
+  m('mom','何これ'),
+  img('mom', S => `<div class="fb"><div class="fb-top">FaceNote</div>
+    <div class="fb-post"><b>${esc(S.name)}の母</b><small>10月6日 ・ 🌐</small><br>久しぶりに娘とランチ🍝 最近ちょっと元気がないので、おいしいもの食べて元気出してほしいな</div>
+    <div class="fb-c"><i></i><div><b>Rina Tennis</b>お子さんがこういうことをしています。ご家庭でもきちんと話し合ってください。<br><a>tsubuyaki.jp/rina_tns_2nd/18…</a></div></div></div>`, '画像を送信しました'),
+  m('mom','お母さんのFacebookに、知らない子がコメントしてきた'),
+  m('mom','学校からも電話があった'),
+  m('mom','本当なの？'),
+  ask({timeout:60, pressureAt:30, pressure:['mom','返事して'], branches:{
+    apology:[ m('mom','……なんで、そんなこと'), m('mom','カナちゃんのお母さんに、なんて言えばいいの'), m('mom','帰ってきたら、ちゃんと話そう') ],
+    deny:[ m('mom','じゃあ、なんでこんなことになってるの'), m('mom','先生、スクショもあるって言ってたよ') ],
+    plea:[ m('mom','……とにかく、帰ってきなさい'), m('mom','話はそれから') ],
+    anger:[ m('mom','その言い方はなに'), m('mom','お母さんだって、いま必死なんだよ') ],
+    silence:[ m('mom','既読ついてるでしょ'), m('mom','お願いだから、返事して') ],
+    default:[ m('mom','……そう'), m('mom','帰ってきたら、ちゃんと話そう') ],
+  }}),
+  wait(1500),
+  to('group'),
   m('misaki','{name}'),
   m('misaki','これが、自分のしたことの結果だよ'),
   ask({timeout:60, pressureAt:25, pressure:['aya','既読、ついたね'], branches:{
@@ -668,16 +1119,28 @@ const CH5 = [
   m('misaki','ソウタ、今それ言う？'),
   m('aya','ソウタ'),
   img('aya', () => shot('男テニ 2年 (9)', [
-    {name:'たくみ', c:'#8ab', text:'カナの病院の話きいた？'},
+    {name:'たくみ', c:'#88aabb', text:'カナの病院の話きいた？'},
     {name:'ソウタ', c:C.sota.c, text:'きいたきいた笑', hl:true},
     {name:'ソウタ', c:C.sota.c, text:'まあ、ちょっとわかるかも笑', hl:true},
-  ], {time:'23:20', foot:'10月3日'})),
+  ], {time:'23:20', foot:'10月1日'})),
   m('aya','ソウタも、笑ってたよね'),
+  m('rina','うわ'),
+  m('rina','ソウタも同類じゃん'),
   m('sota','……', 2800),
   m('sota','ごめん'),
   m('sota','俺が間違ってた'),
   m('sota','{name}、ちゃんと反省しろよ'),
-  wait(2600),
+  wait(2000),
+  to('sota'),
+  m('sota','ごめん'),
+  m('sota','俺には無理だった'),
+  wait(2500),
+];
+
+/* --- 第9章：終わり --- */
+const CH9 = [
+  scene(5, []), to('group'),
+  D('10月14日(月)', 23*60+5),
   m('misaki','もう、ここまでにしよっか'),
   m('misaki','{name}も、十分わかったと思うし'),
   m('misaki','これからは、みんなで前を向こう'),
@@ -685,15 +1148,69 @@ const CH5 = [
   m('aya','うん'),
   m('sota','うん'),
   wait(1500),
-  ask({timeout:30, branches:{ default:[] }}),
+  ask({timeout:35, branches:{ default:[] }}),
+  wait(3000),
+  to('kana'),
+  D('10月15日(火)', 1*60+14),
+  unsend('kana','{name}、ほんとにごめん。私があのとき'),
+  wait(2400),
+  m('kana','ごめんね'),
+  ask({timeout:40, branches:{ default:[] }}),
   wait(3500),
 ];
 
+/* --- 第10章：それから --- */
+const MONTAGE = [
+  blackout('── それから'),
+  scene(2, []), to('group'),
+  D('11月3日(日)', 19*60+20),
+  img('rina', photo('🍢🧑‍🦰👩👧🧑👩‍🦱', 'linear-gradient(135deg,#ffe0a8,#ffb38a)', '2-B 模擬店 完売🎉')),
+  m('rina','文化祭おつかれ〜！'),
+  m('misaki','みんなほんとにお疲れさま'),
+  m('aya','写真、アルバムに入れとくね'),
+  sys('アヤがアルバム「文化祭」を作成しました'),
+  ask({timeout:30, branches:{ default:[] }}),
+  wait(2500),
+  to('mom'),
+  D('11月20日(水)', 17*60+48),
+  m('mom','今日、先生と面談してきたよ'),
+  m('mom','冬休み明けから、別室登校でもいいって'),
+  m('mom','無理しなくていいからね'),
+  ask({timeout:45, branches:{
+    silence:[ m('mom','返事はいいよ'), m('mom','お母さんは味方だからね') ],
+    default:[ m('mom','うん'), m('mom','お母さんは味方だからね') ],
+  }}),
+  wait(2000),
+  scene(1, []), to('group'),
+  D('12月24日(火)', 21*60+2),
+  img('misaki', photo('🎄🧑‍🦰👩👧🧑👩‍🦱', 'linear-gradient(135deg,#bde3c4,#f5c2c2)', '5人でクリパ🎁')),
+  m('misaki','メリクリ〜🎄'),
+  m('kana','プレゼント交換たのしかった！'),
+  m('sota','来年もやろうぜ'),
+  stamp('rina','🎅'),
+  wait(2200),
+  D('1月1日(水)', 0*60+1),
+  m('rina','あけおめ〜！！', 900),
+  m('misaki','ことよろ〜', 900),
+  m('aya','今年もよろしく', 900),
+  m('sota','あけおめ', 900),
+  m('kana','今年もよろしくね🎍'),
+  ask({timeout:30, branches:{ default:[] }}),
+  wait(2500),
+  D('2月14日(金)', 20*60+30),
+  m('kana','チョコ作りすぎた笑 明日配るね'),
+  m('rina','カナの手作り最強'),
+  m('sota','俺のぶんもある？'),
+  m('kana','5人分ちゃんとあるよ〜'),
+  wait(3000),
+];
+
+/* --- エピローグ --- */
 const EPILOGUE = [
-  blackout('── 5か月後'),
-  scene(0, []),
+  blackout('── 3月'),
+  scene(0, []), to('group'),
   D('3月21日(土)', 20*60+26),
-  img('rina', photo('🧑‍🦰👩👧🧑👩‍🦱', 'linear-gradient(135deg,#ffd1e8,#c8e6ff)', '春休み🌸'), 800),
+  img('rina', photo('🧑‍🦰👩👧🧑👩‍🦱', 'linear-gradient(135deg,#ffd1e8,#c8e6ff)', '春休み🌸'), '画像を送信しました', 800),
   m('rina','今日のプリ、盛れすぎじゃない？'),
   m('aya','保存した〜'),
   m('misaki','カナ、誕生日おめでとう🎂'),
@@ -719,19 +1236,21 @@ const EPILOGUE = [
   stamp('misaki','🤣', 600),
   stamp('aya','😂', 600),
   wait(1800),
-  ask({timeout:25, branches:{ default:[] }}),
+  ask({timeout:30, branches:{ default:[] }}),
   wait(3500),
   m('misaki','じゃ、また来週ね〜'),
   wait(2000),
 ];
 
-/* ===================== boot ===================== */
+/* =====================================================================
+   boot
+   ===================================================================== */
 async function main(){
-  for (const ch of [PROLOGUE, CH1, CH2, CH3, CH4, CH5, EPILOGUE]) await run(ch);
+  for (const ch of [PROLOGUE, CH1, CH2, CH3, CH4, CH5, CH6, CH7, CH8, CH9, MONTAGE, EPILOGUE]) await run(ch);
   const pick = await choice();
   if (pick === 'leave'){
-    S.left = true; addPill(`${S.name}が退会しました`);
-    input.disabled = true; input.placeholder = 'このグループには参加していません'; sendBtn.disabled = true;
+    S.left = true; postPill('group', `${S.name}が退会しました`);
+    input.disabled = true; input.placeholder = 'このトークには参加していません'; sendBtn.disabled = true;
     await sleep(3200);
   } else {
     await run([ m('rina','おやすみ〜'), m('kana','おやすみ🌙'), stamp('aya','💤'), wait(2600) ]);
@@ -740,8 +1259,9 @@ async function main(){
 }
 $('start').addEventListener('click', () => {
   S.name = ($('pname').value.trim() || 'ユイ').slice(0, 6);
-  tone(1,.01,.0001);                       // iOS向けにAudioContextを起こす
-  $('title').style.display = 'none';
+  tone(1, .01, .0001);                       // iOS向けにAudioContextを起こす
+  $('title').hidden = true;
+  seedAll(); S.day = '10月2日(水)'; openRoom('group');
   main();
 });
 $('pname').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing) $('start').click(); });
