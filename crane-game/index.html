@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>3D クレーンゲーム</title>
+  <style>
+    :root {
+      --panel: rgba(20, 12, 40, 0.78);
+      --accent: #ff4fa3;
+      --accent2: #46e0ff;
+      --text: #fff;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; height: 100%; overflow: hidden;
+      background: #140c28; color: var(--text);
+      font-family: "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", system-ui, sans-serif;
+      -webkit-user-select: none; user-select: none; touch-action: none;
+    }
+    #app { position: fixed; inset: 0; }
+    #app canvas { display: block; }
+
+    .hud { position: fixed; z-index: 2; }
+
+    #score {
+      top: 12px; left: 12px; display: flex; gap: 8px; flex-wrap: wrap;
+    }
+    .chip {
+      background: var(--panel); border: 1px solid rgba(255,255,255,.15);
+      border-radius: 10px; padding: 6px 12px; font-size: 14px; white-space: nowrap;
+    }
+    .chip b { font-size: 18px; color: var(--accent2); margin-left: 4px; }
+
+    #status {
+      bottom: 40px; left: 50%; transform: translateX(-50%);
+      background: var(--panel); border-radius: 999px; padding: 6px 18px;
+      font-size: 14px; text-align: center; white-space: nowrap; pointer-events: none;
+    }
+
+    #collection {
+      top: 104px; left: 12px; max-width: 46vw;
+      background: var(--panel); border-radius: 10px; padding: 8px 10px; font-size: 12px;
+      display: none;
+    }
+    #collection .title { opacity: .7; margin-bottom: 4px; }
+    #collection .items { display: flex; flex-wrap: wrap; gap: 4px; }
+    #collection .item { background: rgba(255,255,255,.1); border-radius: 6px; padding: 2px 6px; }
+
+    #settingsToggle {
+      top: 12px; right: 12px;
+    }
+    button, select {
+      font: inherit; color: var(--text); background: #3a2a6a; border: 1px solid rgba(255,255,255,.2);
+      border-radius: 8px; padding: 6px 10px; cursor: pointer;
+    }
+    button:hover { background: #4a3a80; }
+    #settings {
+      top: 56px; right: 12px; width: 260px;
+      background: var(--panel); border-radius: 12px; padding: 12px; font-size: 13px;
+      display: none;
+    }
+    #settings.open { display: block; }
+    #settings h3 { margin: 0 0 8px; font-size: 14px; }
+    #settings label { display: block; margin: 10px 0 4px; opacity: .85; }
+    #settings input[type=range] { width: 100%; }
+    #settings .row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+    #settings .note { opacity: .65; font-size: 11px; margin-top: 4px; line-height: 1.5; }
+    #settings .check { display: flex; align-items: center; gap: 6px; margin-top: 10px; }
+    #settings .check label { margin: 0; }
+
+    /* 仮想コントローラ */
+    #pad {
+      left: 16px; bottom: 16px; width: 168px; height: 168px;
+      display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); gap: 4px;
+    }
+    #pad button {
+      font-size: 24px; border-radius: 14px; padding: 0;
+      background: rgba(58, 42, 106, .85); touch-action: none;
+    }
+    #pad button.active, #pad button:active { background: var(--accent); }
+    #pad .up { grid-area: 1 / 2; }
+    #pad .left { grid-area: 2 / 1; }
+    #pad .right { grid-area: 2 / 3; }
+    #pad .down { grid-area: 3 / 2; }
+
+    #drop {
+      right: 20px; bottom: 28px; width: 128px; height: 128px; border-radius: 50%;
+      font-size: 20px; font-weight: bold; line-height: 1.2;
+      background: radial-gradient(circle at 35% 30%, #ff8cc6, var(--accent) 60%, #b0206a);
+      border: 4px solid #fff3; box-shadow: 0 6px 0 #6d0e40, 0 8px 18px rgba(0,0,0,.5);
+      touch-action: none;
+    }
+    #drop:active, #drop.active { transform: translateY(4px); box-shadow: 0 2px 0 #6d0e40; }
+    #drop small { display: block; font-size: 11px; font-weight: normal; opacity: .85; }
+
+    #views { right: 12px; bottom: 170px; display: flex; flex-direction: column; gap: 6px; }
+
+    #help {
+      left: 50%; bottom: 12px; transform: translateX(-50%);
+      font-size: 12px; opacity: .7; text-align: center; pointer-events: none; white-space: nowrap;
+    }
+
+    #popup {
+      position: fixed; left: 50%; top: 40%; transform: translate(-50%, -50%) scale(.5);
+      font-size: 56px; font-weight: 900; color: #fff; opacity: 0; pointer-events: none;
+      text-shadow: 0 0 12px var(--accent), 0 0 30px var(--accent), 0 4px 0 #6d0e40;
+      text-align: center; transition: transform .35s cubic-bezier(.2,1.6,.4,1), opacity .35s;
+    }
+    #popup.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    #popup small { display: block; font-size: 22px; margin-top: 6px; }
+
+    #loading {
+      position: fixed; inset: 0; display: grid; place-items: center; font-size: 18px;
+      background: #140c28; z-index: 10;
+    }
+
+    @media (max-width: 700px) {
+      #help { display: none; }
+      #pad { width: 144px; height: 144px; }
+      #drop { width: 108px; height: 108px; font-size: 17px; }
+      #views { bottom: 150px; }
+      #status { top: 56px; bottom: auto; font-size: 12px; }
+      #popup { font-size: 40px; }
+    }
+  </style>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
+        "cannon-es": "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="app"></div>
+  <div id="loading">読み込み中…</div>
+
+  <div id="score" class="hud">
+    <div class="chip">プレイ<b id="plays">0</b></div>
+    <div class="chip">獲得<b id="wins">0</b></div>
+    <div class="chip">残り景品<b id="remain">0</b></div>
+  </div>
+
+  <div id="status" class="hud">移動してスペースで降下</div>
+
+  <div id="collection" class="hud">
+    <div class="title">獲得した景品</div>
+    <div class="items" id="collectionItems"></div>
+  </div>
+
+  <button id="settingsToggle" class="hud">⚙ 設定</button>
+  <div id="settings" class="hud">
+    <h3>掴みやすさの調整</h3>
+    <label for="difficulty">難易度プリセット</label>
+    <select id="difficulty">
+      <option value="easy">かんたん</option>
+      <option value="normal" selected>ふつう</option>
+      <option value="hard">むずかしい</option>
+    </select>
+    <div class="note" id="difficultyNote"></div>
+
+    <label for="strength">アームの強さ: <span id="strengthValue">60</span>%</label>
+    <input type="range" id="strength" min="0" max="100" step="1" value="60" />
+
+    <label for="fingers">掴み判定に必要な爪の数: <span id="fingersValue">2</span>本</label>
+    <input type="range" id="fingers" min="1" max="3" step="1" value="2" />
+
+    <label for="weak">上昇後にアームが弱まる確率: <span id="weakValue">30</span>%</label>
+    <input type="range" id="weak" min="0" max="100" step="5" value="30" />
+
+    <div class="check">
+      <input type="checkbox" id="guide" checked />
+      <label for="guide">降下ガイド（レーザー）を表示</label>
+    </div>
+    <div class="check">
+      <input type="checkbox" id="sound" checked />
+      <label for="sound">効果音</label>
+    </div>
+
+    <div class="row">
+      <button id="refill">景品を補充</button>
+      <button id="resetScore">記録リセット</button>
+    </div>
+  </div>
+
+  <div id="views" class="hud">
+    <button id="viewFront">正面</button>
+    <button id="viewSide">側面</button>
+  </div>
+
+  <div id="pad" class="hud">
+    <button class="up" data-dir="up" aria-label="奥へ">▲</button>
+    <button class="left" data-dir="left" aria-label="左へ">◀</button>
+    <button class="right" data-dir="right" aria-label="右へ">▶</button>
+    <button class="down" data-dir="down" aria-label="手前へ">▼</button>
+  </div>
+
+  <button id="drop" class="hud">DROP<small>スペース</small></button>
+
+  <div id="help" class="hud">
+    WASD / 矢印キー: 移動 ・ スペース: 降下（降下中にもう一度で停止） ・ C: 視点切替 ・ ドラッグ: カメラ回転
+  </div>
+
+  <div id="popup"></div>
+
+  <script type="module" src="./main.js"></script>
+</body>
+</html>
