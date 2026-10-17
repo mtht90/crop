@@ -151,8 +151,8 @@ folioscore/
 
 ただし、生成した Windows 版 exe を **この環境で実際に起動して確認することはできませんでした**。
 wine 上では Electron（Chromium）のレンダラーが起動せず、インストーラのサイレントインストールも wine では完了しませんでした。
-アプリの動作確認は、同じソースを Linux 版 Electron で実行する E2E テスト（下記）で行っています。
-実 Windows での確認は、GitHub Actions の Windows ランナーで E2E テストとビルドを実行して行います。
+そこで実 Windows での確認は GitHub Actions の Windows ランナー（Windows Server, x64）で行い、
+型チェック・ユニットテスト・E2E テスト（下記の全項目）・インストーラ／ポータブル版のビルドがすべて成功しています。
 
 ### Windows 上で .exe を生成する手順
 
@@ -192,7 +192,7 @@ WINEPREFIX=$HOME/.wine-folio xvfb-run -a npx electron-builder --win --x64 --publ
 
 ## 動作確認の内容
 
-`npm run e2e` は実際の Electron アプリを起動し、レンダラー内で次の操作を自動で行って検証します（Linux 上の Xvfb で全項目成功）。
+`npm run e2e` は実際の Electron アプリを起動し、レンダラー内で次の操作を自動で行って検証します（Linux 上の Xvfb と、GitHub Actions の Windows ランナーの両方で全項目成功）。
 
 - 同梱 SoundFont の読み込み、楽譜ページの描画
 - キーボードによる入力（音名、音価、付点、休符、和音、オクターブ移動、小節をまたぐ音の自動タイ分割、小節の自動追加）
