@@ -1,0 +1,91 @@
+{
+  "name": "folioscore",
+  "productName": "FolioScore",
+  "version": "0.1.0",
+  "description": "鍵盤中心で楽譜を作成・編集・再生できる Windows 向けデスクトップ楽譜制作ソフト",
+  "author": "FolioScore contributors",
+  "license": "MIT",
+  "private": true,
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test test/*.test.ts",
+    "start": "npm run build && electron .",
+    "e2e": "npm run build && node scripts/e2e.mjs",
+    "dist:win": "npm run build && electron-builder --win --x64 --publish never",
+    "dist:dir": "npm run build && electron-builder --win --x64 --dir --publish never",
+    "prebuild": "node scripts/fetch-soundfont.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "electron": "^38.8.6",
+    "electron-builder": "^26.15.3",
+    "esbuild": "^0.28.2",
+    "spessasynth_lib": "^4.3.14",
+    "typescript": "^5.9.3",
+    "vexflow": "^5.0.0"
+  },
+  "build": {
+    "appId": "io.folioscore.app",
+    "productName": "FolioScore",
+    "copyright": "Copyright (c) FolioScore contributors",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "!dist/**/*.map",
+      "package.json",
+      "build/icon.png"
+    ],
+    "extraResources": [
+      {
+        "from": "resources/soundfonts",
+        "to": "soundfonts"
+      },
+      {
+        "from": "THIRD_PARTY_LICENSES.md",
+        "to": "THIRD_PARTY_LICENSES.md"
+      }
+    ],
+    "asar": true,
+    "fileAssociations": [
+      {
+        "ext": "folio",
+        "name": "FolioScore Score",
+        "description": "FolioScore 楽譜",
+        "icon": "build/icon.ico"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "shortcutName": "FolioScore",
+      "artifactName": "FolioScore-Setup-${version}.exe"
+    },
+    "portable": {
+      "artifactName": "FolioScore-${version}-portable.exe"
+    }
+  }
+}

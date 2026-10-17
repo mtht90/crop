@@ -1,0 +1,57 @@
+name: FolioScore Windows build
+
+on:
+  push:
+    paths:
+      - 'folioscore/**'
+      - '.github/workflows/folioscore-windows.yml'
+  workflow_dispatch: {}
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: folioscore
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: folioscore/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Fetch bundled SoundFont (MuseScore General, MIT)
+        run: node scripts/fetch-soundfont.mjs
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      - name: End-to-end test (Electron on Windows)
+        run: npm run e2e
+
+      - name: Build Windows installer and portable exe
+        run: npm run dist:win
+
+      - name: Upload Windows executables
+        uses: actions/upload-artifact@v4
+        with:
+          name: FolioScore-Windows
+          path: |
+            folioscore/release/*.exe
+          if-no-files-found: error
+
+      - name: Upload E2E outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: FolioScore-e2e-output
+          path: folioscore/test-output/
+          if-no-files-found: ignore

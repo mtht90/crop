@@ -1,0 +1,143 @@
+:root {
+  --bg: #e9ecef;
+  --panel: #f8f9fa;
+  --border: #ced4da;
+  --text: #212529;
+  --muted: #6c757d;
+  --accent: #1d6fe0;
+  --input: #e0761d;
+  --toolbar: #2b3036;
+  --toolbar-text: #f1f3f5;
+  font-family: "Yu Gothic UI", "Meiryo UI", "Segoe UI", "Noto Sans CJK JP", sans-serif;
+  font-size: 13px;
+  color: var(--text);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); }
+body { display: flex; flex-direction: column; user-select: none; }
+kbd {
+  font-family: Consolas, monospace; font-size: 10px; padding: 0 3px; margin-left: 3px;
+  border: 1px solid rgba(255, 255, 255, .35); border-radius: 3px; opacity: .8;
+}
+
+/* ---------- toolbar ---------- */
+#toolbar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 8px;
+  background: var(--toolbar); color: var(--toolbar-text);
+}
+#toolbar .group { display: flex; align-items: center; gap: 2px; padding-right: 8px; border-right: 1px solid #454c55; }
+#toolbar .group.right { margin-left: auto; border-right: none; }
+#toolbar button {
+  background: #3b424a; color: var(--toolbar-text); border: 1px solid #4d555f; border-radius: 4px;
+  padding: 4px 9px; min-height: 30px; cursor: pointer; font: inherit; display: inline-flex; align-items: center; gap: 2px;
+}
+#toolbar button:hover { background: #4a525c; }
+#toolbar button.on { background: var(--accent); border-color: #4a8df0; }
+#toolbar button.mode.on { background: var(--input); border-color: #f29a4d; }
+#toolbar button.glyph, #durations button {
+  font-family: "Segoe UI Symbol", "Noto Music", "Bravura", serif; font-size: 17px; padding: 0 7px; height: 30px; overflow: hidden; line-height: 1;
+}
+#toolbar button.play { min-width: 82px; justify-content: center; background: #2f7d32; border-color: #3c9a40; }
+#toolbar button.play.on { background: #b23b3b; border-color: #d05050; }
+#toolbar .tempo { display: flex; align-items: center; gap: 2px; margin-left: 6px; }
+#toolbar input { width: 54px; background: #1f2327; color: #fff; border: 1px solid #4d555f; border-radius: 4px; padding: 4px; font: inherit; }
+#zoomLabel { min-width: 44px; text-align: center; }
+
+/* ---------- layout ---------- */
+#main { flex: 1; display: flex; min-height: 0; }
+#sidebar {
+  width: 250px; background: var(--panel); border-right: 1px solid var(--border); overflow-y: auto; padding: 8px 10px;
+}
+#sidebar h2 { font-size: 12px; color: var(--muted); margin: 10px 0 6px; text-transform: uppercase; letter-spacing: .05em; }
+#sidebar .info { line-height: 1.6; margin-bottom: 6px; user-select: text; }
+#sidebar button, dialog button {
+  font: inherit; padding: 4px 10px; border: 1px solid var(--border); border-radius: 4px; background: #fff; cursor: pointer;
+}
+#sidebar button:hover { background: #eef3fb; }
+#sidebar button.wide { width: 100%; }
+#sidebar button kbd { border-color: #adb5bd; }
+#partList { list-style: none; margin: 0; padding: 0; }
+#partList li { background: #fff; border: 1px solid var(--border); border-radius: 6px; padding: 6px; margin-bottom: 6px; }
+#partList li.current { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+#partList .name { display: flex; gap: 4px; align-items: center; }
+#partList .name input { flex: 1; min-width: 0; font: inherit; font-weight: bold; border: 1px solid transparent; padding: 2px 4px; border-radius: 3px; }
+#partList .name input:hover, #partList .name input:focus { border-color: var(--border); }
+#partList .row { display: flex; gap: 4px; align-items: center; margin-top: 4px; }
+#partList select { flex: 1; min-width: 0; font: inherit; }
+#partList input[type=range] { flex: 1; }
+#partList .icon { padding: 2px 7px; }
+.addPart { display: flex; gap: 4px; }
+.addPart select { flex: 1; min-width: 0; font: inherit; }
+
+#scoreView { flex: 1; overflow: auto; position: relative; outline: none; }
+#pages { padding: 24px; display: flex; flex-direction: column; align-items: center; gap: 24px; width: max-content; min-width: 100%; }
+.page { position: relative; background: #fff; box-shadow: 0 2px 10px rgba(0, 0, 0, .2); cursor: default; }
+.page svg { display: block; }
+.page.input-mode { cursor: crosshair; }
+.cursor {
+  position: absolute; pointer-events: none; border-radius: 3px;
+  background: rgba(224, 118, 29, .22); border: 1.5px solid var(--input);
+}
+.playhead { position: absolute; pointer-events: none; width: 2px; background: rgba(46, 160, 67, .85); }
+.ghost { position: absolute; pointer-events: none; width: 12px; height: 9px; border-radius: 50%; background: rgba(224, 118, 29, .55); }
+
+/* ---------- piano ---------- */
+#pianoWrap { height: 104px; background: #2b3036; overflow-x: auto; overflow-y: hidden; border-top: 2px solid #111; }
+#pianoWrap.hidden { display: none; }
+#piano { position: relative; height: 100%; margin: 0 auto; }
+.key { position: absolute; top: 0; border-radius: 0 0 4px 4px; cursor: pointer; }
+.key.white { background: linear-gradient(#fdfdfd, #eceff1); border: 1px solid #888; height: 100px; z-index: 1; }
+.key.black { background: linear-gradient(#333, #111); height: 62px; z-index: 2; border: 1px solid #000; }
+.key.white:hover { background: #dfe9f8; }
+.key.black:hover { background: #3c4a5c; }
+.key.on.white { background: #ffcf99; }
+.key.on.black { background: #c06010; }
+.key.sel.white { background: #b9d3f7; }
+.key.sel.black { background: #2c6fc0; }
+.key .label { position: absolute; bottom: 4px; width: 100%; text-align: center; font-size: 10px; color: #666; pointer-events: none; }
+
+/* ---------- status ---------- */
+#status {
+  display: flex; gap: 16px; padding: 4px 10px; background: #dee2e6; border-top: 1px solid var(--border); font-size: 12px; white-space: nowrap; overflow: hidden;
+}
+#modeStatus { font-weight: bold; }
+#modeStatus.input { color: var(--input); }
+#hint { color: var(--muted); flex: 1; overflow: hidden; text-overflow: ellipsis; }
+#audioStatus { color: var(--muted); }
+
+/* ---------- dialogs ---------- */
+dialog { border: none; border-radius: 8px; box-shadow: 0 10px 40px rgba(0, 0, 0, .35); padding: 18px 22px; min-width: 420px; }
+dialog::backdrop { background: rgba(0, 0, 0, .35); }
+dialog h3 { margin: 0 0 12px; }
+dialog label { display: block; margin: 8px 0; }
+dialog input, dialog select { font: inherit; padding: 4px 6px; }
+dialog input:not(.short) { width: 100%; }
+dialog .short { width: 70px; }
+dialog .row { display: flex; gap: 20px; }
+dialog menu { display: flex; justify-content: flex-end; gap: 8px; padding: 0; margin: 16px 0 0; }
+dialog button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+#helpDialog { max-width: 980px; }
+.helpGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+.helpGrid h4 { margin: 4px 0; }
+.helpGrid dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; margin: 0; }
+.helpGrid dt { font-family: Consolas, monospace; font-weight: bold; white-space: nowrap; }
+.helpGrid dd { margin: 0; }
+#aboutDialog { max-width: 560px; }
+
+#toast {
+  position: fixed; left: 50%; bottom: 140px; transform: translateX(-50%); background: rgba(33, 37, 41, .92); color: #fff;
+  padding: 8px 16px; border-radius: 6px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 100;
+}
+#toast.show { opacity: 1; }
+
+/* ---------- print (PDF) ---------- */
+@page { size: A4; margin: 0; }
+@media print {
+  html, body { overflow: visible; height: auto; background: #fff; display: block; }
+  #toolbar, #sidebar, #pianoWrap, #status, dialog, #toast, .cursor, .playhead, .ghost { display: none !important; }
+  #main, #scoreView { display: block; overflow: visible; }
+  #pages { padding: 0; gap: 0; display: block; zoom: 1 !important; width: auto; }
+  .page { box-shadow: none; width: 210mm !important; height: 297mm !important; page-break-after: always; break-after: page; overflow: hidden; }
+  .page:last-child { page-break-after: auto; break-after: auto; }
+  .page svg { width: 210mm !important; height: 297mm !important; }
+}

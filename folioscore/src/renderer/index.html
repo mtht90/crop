@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self' blob: 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data:">
+  <title>FolioScore</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header id="toolbar">
+    <div class="group">
+      <button data-cmd="new" title="新規作成 (Ctrl+N)">新規</button>
+      <button data-cmd="open" title="開く (Ctrl+O)">開く</button>
+      <button data-cmd="save" title="保存 (Ctrl+S)">保存</button>
+      <button data-cmd="exportPdf" title="PDF に書き出し (Ctrl+P)">PDF</button>
+    </div>
+    <div class="group">
+      <button data-cmd="toggleInput" id="btnInput" class="mode" title="音符入力モード (N)">✎ 入力 <kbd>N</kbd></button>
+    </div>
+    <div class="group" id="durations"></div>
+    <div class="group">
+      <button data-cmd="dot" id="btnDot" class="glyph" title="付点 (.)">𝅘𝅥.</button>
+      <button data-cmd="rest" class="glyph" title="休符 (0)">𝄽<kbd>0</kbd></button>
+      <button data-cmd="tie" id="btnTie" title="タイ (+)">⁀<kbd>+</kbd></button>
+    </div>
+    <div class="group">
+      <button data-cmd="sharp" title="シャープ（選択音を半音上げる ↑）">♯</button>
+      <button data-cmd="natural" title="ナチュラル">♮</button>
+      <button data-cmd="flat" title="フラット（選択音を半音下げる ↓）">♭</button>
+    </div>
+    <div class="group">
+      <button data-cmd="undo" title="元に戻す (Ctrl+Z)">↶</button>
+      <button data-cmd="redo" title="やり直し (Ctrl+Y)">↷</button>
+    </div>
+    <div class="group">
+      <button data-cmd="rewind" title="先頭へ (Home)">⏮</button>
+      <button data-cmd="play" id="btnPlay" class="play" title="再生 / 一時停止 (Space)">▶ 再生</button>
+      <label class="tempo" title="テンポ (4分音符/分)">♩=<input id="tempo" type="number" min="20" max="300" step="1"></label>
+    </div>
+    <div class="group right">
+      <button data-cmd="zoomOut" title="縮小 (Ctrl+-)">－</button>
+      <span id="zoomLabel">100%</span>
+      <button data-cmd="zoomIn" title="拡大 (Ctrl+=)">＋</button>
+      <button data-cmd="help" title="ショートカット一覧 (F1)">?</button>
+    </div>
+  </header>
+
+  <div id="main">
+    <aside id="sidebar">
+      <section>
+        <h2>楽譜</h2>
+        <div id="scoreInfo" class="info"></div>
+        <button data-cmd="scoreSettings" class="wide">楽譜の設定… <kbd>Ctrl+T</kbd></button>
+      </section>
+      <section>
+        <h2>パートと楽器</h2>
+        <ul id="partList"></ul>
+        <div class="addPart">
+          <select id="addPartSelect"></select>
+          <button id="addPartBtn">＋ 追加</button>
+        </div>
+      </section>
+      <section>
+        <h2>選択中</h2>
+        <div id="selInfo" class="info">—</div>
+      </section>
+    </aside>
+    <section id="scoreView" tabindex="-1">
+      <div id="pages"></div>
+    </section>
+  </div>
+
+  <div id="pianoWrap"><div id="piano"></div></div>
+  <footer id="status">
+    <span id="modeStatus"></span>
+    <span id="hint"></span>
+    <span id="audioStatus"></span>
+  </footer>
+
+  <dialog id="settingsDialog">
+    <form method="dialog">
+      <h3 id="settingsTitle">楽譜の設定</h3>
+      <label>タイトル <input name="title" required></label>
+      <label>作曲者 <input name="composer"></label>
+      <div class="row">
+        <label>拍子 <input name="num" type="number" min="1" max="16" class="short"> / <select name="den"><option>2</option><option selected>4</option><option>8</option><option>16</option></select></label>
+        <label>テンポ ♩= <input name="tempo" type="number" min="20" max="300" class="short"></label>
+      </div>
+      <label>調号 <select name="key"></select></label>
+      <div id="newOnly">
+        <label>編成 <select name="template">
+          <option value="piano">ピアノ</option>
+          <option value="solo-piano">独奏楽器 + ピアノ（ヴァイオリン）</option>
+          <option value="quartet">弦楽四重奏</option>
+          <option value="woodwind">木管三重奏（Fl / Cl / Fg）</option>
+          <option value="choir-piano">合唱 + ピアノ</option>
+          <option value="empty">空（あとでパートを追加）</option>
+        </select></label>
+        <label>小節数 <input name="measures" type="number" min="1" max="500" value="16" class="short"></label>
+      </div>
+      <menu>
+        <button value="cancel" formnovalidate>キャンセル</button>
+        <button value="ok" class="primary">OK</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <dialog id="helpDialog">
+    <form method="dialog">
+      <h3>キーボードショートカット</h3>
+      <div class="helpGrid">
+        <div><h4>入力</h4>
+          <dl>
+            <dt>N</dt><dd>音符入力モードの切替</dd>
+            <dt>A〜G</dt><dd>音名を入力（入力モード外でも選択位置から開始）</dd>
+            <dt>Shift+A〜G</dt><dd>直前の音に和音を追加</dd>
+            <dt>1〜7</dt><dd>音価: 1=64分 2=32分 3=16分 4=8分 5=4分 6=2分 7=全音符</dd>
+            <dt>.</dt><dd>付点</dd>
+            <dt>0</dt><dd>休符</dd>
+            <dt>+</dt><dd>タイ（入力中は同じ音をタイで追加）</dd>
+            <dt>↑ / ↓</dt><dd>半音上げる / 下げる</dd>
+            <dt>Ctrl+↑ / ↓</dt><dd>オクターブ上げる / 下げる</dd>
+            <dt>Backspace</dt><dd>直前の入力を取り消し</dd>
+            <dt>鍵盤クリック</dt><dd>その音を入力（Shift で和音）</dd>
+            <dt>MIDI 鍵盤</dt><dd>接続すると自動で入力に使えます</dd>
+          </dl></div>
+        <div><h4>選択・編集</h4>
+          <dl>
+            <dt>クリック</dt><dd>音符を選択（入力モードでは譜表上の位置に入力）</dd>
+            <dt>← / →</dt><dd>前 / 次の音符</dd>
+            <dt>Shift+← / →</dt><dd>範囲選択</dd>
+            <dt>Ctrl+← / →</dt><dd>前 / 次の小節</dd>
+            <dt>Alt+↑ / ↓</dt><dd>上 / 下の譜表へ</dd>
+            <dt>Delete</dt><dd>休符にする</dd>
+            <dt>Ctrl+C / X / V</dt><dd>コピー / 切り取り / 貼り付け</dd>
+            <dt>Ctrl+Z / Y</dt><dd>元に戻す / やり直し</dd>
+            <dt>Ctrl+B</dt><dd>小節を末尾に追加</dd>
+            <dt>Ctrl+Insert / Delete</dt><dd>小節の挿入 / 削除</dd>
+            <dt>Esc</dt><dd>入力モード終了・選択解除</dd>
+          </dl></div>
+        <div><h4>再生・ファイル</h4>
+          <dl>
+            <dt>Space</dt><dd>選択位置から再生 / 停止</dd>
+            <dt>Home</dt><dd>先頭へ</dd>
+            <dt>Ctrl+S</dt><dd>保存</dd>
+            <dt>Ctrl+O</dt><dd>開く</dd>
+            <dt>Ctrl+N</dt><dd>新規作成</dd>
+            <dt>Ctrl+P</dt><dd>PDF に書き出し</dd>
+            <dt>Ctrl+T</dt><dd>楽譜の設定</dd>
+            <dt>F9</dt><dd>ピアノ鍵盤の表示切替</dd>
+          </dl></div>
+      </div>
+      <menu><button value="ok" class="primary">閉じる</button></menu>
+    </form>
+  </dialog>
+
+  <dialog id="aboutDialog">
+    <form method="dialog">
+      <h3>FolioScore <span id="version"></span></h3>
+      <p>鍵盤中心で楽譜を作成・編集・再生できるデスクトップ楽譜制作ソフト。</p>
+      <h4>同梱音源</h4>
+      <p>MuseScore General SoundFont (v0.2) — S. Christian Collins ほか。MIT License。<br>
+        FluidR3 © 2000-2002, 2008 Frank Wen / FluidR3Mono © 2014-17 Michael Cowgill / Temple Blocks © 2002 Ethan Winer / Drumline Cymbals © 2016 Michael Schorsch</p>
+      <h4>使用ライブラリ</h4>
+      <p>Electron (MIT) / VexFlow 5 (MIT, Bravura フォント: SIL OFL 1.1) / SpessaSynth (Apache-2.0)</p>
+      <menu><button value="ok" class="primary">閉じる</button></menu>
+    </form>
+  </dialog>
+
+  <div id="toast"></div>
+  <script src="app.js"></script>
+</body>
+</html>
