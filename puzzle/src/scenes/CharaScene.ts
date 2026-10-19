@@ -173,7 +173,9 @@ export class CharaScene extends Scene {
       vt.position.set(-110, y);
       box.addChild(vt);
     });
-    const desc = txt(def.catch, { size: 22, color: 0x7a6a9a, weight: '500', wrap: 540 });
+    const desc = def.passive
+      ? txt(`パッシブ★${def.passive.name}\n${def.passive.desc}`, { size: 22, color: 0xd81b60, wrap: 540 })
+      : txt(def.catch, { size: 22, color: 0x7a6a9a, weight: '500', wrap: 540 });
     desc.y = 425;
     box.addChild(desc);
     const selected = Save.data.selected === def.id;

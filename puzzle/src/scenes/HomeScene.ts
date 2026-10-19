@@ -11,6 +11,7 @@ import { Effects } from '../game/Effects';
 import { COLORS, bigTexture, loadCharacterArt, pieceTexture } from '../art/PieceArt';
 import { CHARACTERS, CHAR_BY_ID, RARITY_INFO, charAtk } from '../data/characters';
 import { bossForLevel, bossHp } from '../data/bosses';
+import { GIMMICKS, gimmicksFor } from '../data/gimmicks';
 import { BattleScene } from './BattleScene';
 import { CharaScene } from './CharaScene';
 import { GachaScene } from './GachaScene';
@@ -74,8 +75,13 @@ export class HomeScene extends Scene {
     const bn = txt(`Lv.${bossLv}  ${bdef.name}`, { size: 40, stroke: 0x2a1630, strokeWidth: 8, anchor: [0, 0.5] });
     bn.position.set(-290, -12);
     const bh = txt(`討伐ライン ${fmt(bossHp(bossLv))}`, { size: 26, color: 0xffb8d8, anchor: [0, 0.5] });
-    bh.position.set(-290, 40);
+    bh.position.set(-290, 30);
     card.addChild(bl, bn, bh);
+    const gl = gimmicksFor(bossLv);
+    const gt = txt(gl.length ? `妨害：${gl.map((g) => GIMMICKS[g].name).join('・')}` : '妨害：なし', { size: 21, color: 0xd8c8ff, anchor: [0, 0.5] });
+    gt.position.set(-290, 66);
+    if (gt.width > 370) gt.scale.set(370 / gt.width);
+    card.addChild(gt);
     const bossClip = new Container();
     const bm = new Graphics().roundRect(80, -96, 240, 190, 34).fill(0xffffff);
     this.boss = new BossView(bdef);
@@ -150,6 +156,30 @@ export class HomeScene extends Scene {
       this.col.addChild(tipC);
       gsap.to(tipC, { y: tipC.y - 10, duration: 0.6, yoyo: true, repeat: -1, ease: 'sine.inOut' });
     }
+    if (Save.data.notice) this.showNotice(Save.data.notice);
+  }
+
+  private showNotice(msg: string): void {
+    const ov = new Container();
+    const dim = new Graphics().rect(-App.colX, 0, App.W, App.H).fill({ color: 0x0a0418, alpha: 0.6 });
+    dim.eventMode = 'static';
+    const box = new Container();
+    box.position.set(360, App.H * 0.45);
+    const t = txt(msg, { size: 30, color: 0x4a2f7a });
+    box.addChild(panel(600, t.height + 220), t);
+    t.y = -50;
+    const ok = new Button({
+      w: 280, h: 90, label: 'OK', color: 'pink', onTap: () => {
+        Save.data.notice = undefined;
+        Save.write();
+        ov.destroy({ children: true });
+      },
+    });
+    ok.y = t.height / 2 + 30;
+    box.addChild(ok);
+    ov.addChild(dim, box);
+    this.col.addChild(ov);
+    popIn(box, 0.3, 0.6);
   }
 
   private poke(): void {

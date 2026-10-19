@@ -1,3 +1,5 @@
+import { RETIRED } from '../data/characters';
+
 const KEY = 'punitto-battle-save-v2';
 
 export interface OwnedChar {
@@ -20,6 +22,8 @@ export interface SaveData {
   /** Pulls since the last SSR (used for the pity counter). */
   pity: number;
   tutorialDone: boolean;
+  /** One-time message for the home screen (e.g. refunds for retired characters). */
+  notice?: string;
   settings: { bgm: number; sfx: number; haptics: boolean; colorAssist: boolean; battleBgm: string; autoSkill: boolean };
 }
 
@@ -46,10 +50,33 @@ function load(): SaveData {
     const raw = localStorage.getItem(KEY);
     if (!raw) return d;
     const parsed = JSON.parse(raw) as Partial<SaveData>;
-    return { ...d, ...parsed, settings: { ...d.settings, ...(parsed.settings ?? {}) }, owned: { ...d.owned, ...(parsed.owned ?? {}) } };
+    return migrate({ ...d, ...parsed, settings: { ...d.settings, ...(parsed.settings ?? {}) }, owned: { ...d.owned, ...(parsed.owned ?? {}) } });
   } catch {
     return d;
   }
+}
+
+/** Retired characters turn into coins. */
+function migrate(d: SaveData): SaveData {
+  const lines: string[] = [];
+  for (const [id, r] of Object.entries(RETIRED)) {
+    const o = d.owned[id];
+    if (!o) continue;
+    const coins = r.refund * o.count;
+    d.coins += coins;
+    delete d.owned[id];
+    lines.push(`${r.name} → ${coins}コイン`);
+  }
+  if (!d.owned[d.selected]) d.selected = 'kh_a';
+  if (lines.length) {
+    d.notice = `キャラ整理のおわび\n${lines.join('\n')}`;
+    try {
+      localStorage.setItem(KEY, JSON.stringify(d));
+    } catch {
+      /* ignore */
+    }
+  }
+  return d;
 }
 
 export const Save = {

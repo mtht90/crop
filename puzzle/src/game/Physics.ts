@@ -16,10 +16,14 @@ export interface PBody {
   impact: number;
   nx: number;
   ny: number;
+  /** Pinned bodies don't move (sticky obstructions) but still push others. */
+  pinned?: boolean;
 }
 
 export interface WorldOpts {
   gravity: number;
+  /** Sideways gravity (wind). */
+  gravityX?: number;
   /** Walls: inner bounds; top is open. */
   left: number;
   right: number;
@@ -101,7 +105,14 @@ export class World {
     // integrate
     for (let i = 0; i < n; i++) {
       const b = bs[i];
+      if (b.pinned) {
+        b.velocity.x = b.velocity.y = 0;
+        b.px = b.position.x;
+        b.py = b.position.y;
+        continue;
+      }
       b.velocity.y += o.gravity * dt;
+      b.velocity.x += (o.gravityX ?? 0) * dt;
       b.velocity.x *= drag;
       b.velocity.y *= drag;
       b.px = b.position.x;
@@ -127,6 +138,7 @@ export class World {
           const d = Math.sqrt(d2);
           const pen = (rr - d) / d;
           const w = a.invMass + b.invMass;
+          if (w === 0) continue;
           const ka = (a.invMass / w) * pen * 0.9;
           const kb = (b.invMass / w) * pen * 0.9;
           a.position.x -= dx * ka;
@@ -135,13 +147,14 @@ export class World {
           b.position.y += dy * kb;
         }
       }
-      for (let i = 0; i < n; i++) this.walls(bs[i]);
+      for (let i = 0; i < n; i++) if (!bs[i].pinned) this.walls(bs[i]);
     }
     // derive velocities + contact friction
     const fr = o.friction ?? 0.15;
     const inv = 1 / dt;
     for (let i = 0; i < n; i++) {
       const b = bs[i];
+      if (b.pinned) continue;
       let vx = (b.position.x - b.px) * inv;
       let vy = (b.position.y - b.py) * inv;
       // resting on the floor: kill sideways sliding a bit

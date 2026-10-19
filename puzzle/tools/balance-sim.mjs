@@ -2,7 +2,7 @@
 // usage: node sim.mjs [runs=3] [ids=all] [url=http://localhost:5199]
 import { chromium } from '/opt/node22/lib/node_modules/playwright/index.mjs';
 const runs = +(process.argv[2] ?? 3);
-const ALL = ['kh_a','kh_b','kh_c','rh_a','rh_b','rh_c','mh_a','mh_b','mh_c','bh_a','bh_b','l_knight','l_barbarian','l_mage','skull','skel_minion','knight','barbarian','mage','rogue','hood','skel_warrior','skel_mage','skel_rogue'];
+const ALL = ['kh_a','kh_b','kh_c','rh_a','rh_b','rh_c','mh_a','mh_b','mh_c','bh_a','bh_b','l_knight','l_barbarian','skull','skel_minion','knight','barbarian','rogue','hood','skel_warrior','skel_rogue'];
 const ids = process.argv[3] && process.argv[3] !== 'all' ? process.argv[3].split(',') : ALL;
 const url = process.argv[4] ?? 'http://localhost:5199';
 const b = await chromium.launch({ args: ['--enable-unsafe-swiftshader', '--use-gl=angle', '--use-angle=swiftshader'] });

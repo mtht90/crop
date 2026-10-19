@@ -550,7 +550,7 @@ export class GachaScene extends Scene {
     name.y = 360;
     c.addChild(name);
     popIn(name, 0.4);
-    const sk = txt(`必殺技「${res.def.skill.name}」\n${res.def.skill.desc}`, { size: 24, color: 0xfff27a, stroke: 0x2a1630, strokeWidth: 6, align: 'center', lineHeight: 34 });
+    const sk = txt(`必殺技「${res.def.skill.name}」\n${res.def.skill.desc}${res.def.passive ? `\nパッシブ★${res.def.passive.name}` : ''}`, { size: 24, color: 0xfff27a, stroke: 0x2a1630, strokeWidth: 6, align: 'center', lineHeight: 34 });
     sk.y = 432;
     c.addChild(sk);
     popIn(sk, 0.55);

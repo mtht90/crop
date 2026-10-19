@@ -1,7 +1,9 @@
 import { Container, Graphics, Sprite, Texture } from 'pixi.js';
 import gsap from 'gsap';
 import { ShockwaveFilter } from 'pixi-filters';
-import { ART_CX, ART_CY, ART_R, ART_SIZE, COLORS, PIECE_ART_SCALE, PIECE_CELL, bombTexture, pieceTexture, rockTexture } from '../art/PieceArt';
+import { ColorMatrixFilter } from 'pixi.js';
+import { ART_CX, ART_CY, ART_R, ART_SIZE, COLORS, PIECE_ART_SCALE, PIECE_CELL, bombTexture, pieceTexture, rockTexture, statusTexture, type StatusArt } from '../art/PieceArt';
+import { fx as fxTex } from './Effects';
 import type { CharDef } from '../data/characters';
 import { Effects } from './Effects';
 import { World, type PBody } from './Physics';
@@ -10,6 +12,12 @@ import { txt } from '../core/UI';
 
 export type PieceKind = 'normal' | 'big' | 'bomb' | 'mega' | 'rock';
 type PieceState = 'live' | 'linked' | 'popping' | 'dead';
+/** Boss obstructions stuck on a piece. */
+export type PieceStatus = 'ice' | 'bubble' | 'web' | 'slime' | 'curse' | 'skullBomb' | 'chameleon';
+/** Statuses that block linking until a neighbor pops. */
+const BLOCKING: PieceStatus[] = ['ice', 'web', 'skullBomb'];
+/** Statuses that a neighboring pop clears. */
+const BREAKABLE: PieceStatus[] = ['ice', 'web', 'skullBomb', 'bubble'];
 
 /** Tunables for the feel of the board. */
 export const BOARD_TUNING = {
@@ -44,6 +52,7 @@ export interface PopInfo {
   kind: PieceKind;
   /** Damage weight: big pieces are worth more. */
   weight: number;
+  cursed?: boolean;
 }
 
 export type PopCause = 'chain' | 'bomb' | 'fever' | 'skill' | 'rock';
@@ -80,6 +89,14 @@ export class Piece {
   rot = 0;
   rotV = 0;
   hint = false;
+  status: PieceStatus | null = null;
+  /** Seconds on the status clock (bomb fuse, chameleon flips, slime lifetime). */
+  statusT = 0;
+  deco: Container | null = null;
+  /** Hits a rock still takes. */
+  hp = 1;
+  /** Seconds left of being see-through. */
+  ghost = 0;
   pulse = Math.random() * 10;
   /** Extra scale driven by link state. */
   linkScale = 1;
@@ -107,7 +124,7 @@ export class Piece {
     return this.body.position.y;
   }
   get linkable(): boolean {
-    return (this.kind === 'normal' || this.kind === 'big') && this.state === 'live';
+    return (this.kind === 'normal' || this.kind === 'big') && this.state === 'live' && !(this.status && BLOCKING.includes(this.status));
   }
   get weight(): number {
     return this.kind === 'big' ? 3 : 1;
@@ -137,6 +154,18 @@ export class Board {
   /** Skill mode: tapping pops the whole same-color group under the finger. */
   tapPop = false;
   frozen = false;
+  /** Obstruction state (boss attacks). */
+  sealColor = -1;
+  minExtra = 0;
+  reachMod = 0;
+  private cover = new Container();
+  private coverMask = new Graphics();
+  private darkG = new Graphics();
+  dark = false;
+  private lastTouch = { x: 0, y: 0 };
+  private mono: ColorMatrixFilter | null = null;
+  /** Fired when a skull bomb's fuse runs out. */
+  onSkullBlow?: (x: number, y: number) => void;
   private shock: ShockwaveFilter | null = null;
   private maskG = new Graphics();
   readonly r: number;
@@ -151,6 +180,7 @@ export class Board {
   ) {
     this.r = BOARD_TUNING.radius;
     const R = w / 2;
+    this.lastTouch = { x: R, y: h * 0.6 };
     this.world = new World({
       gravity: BOARD_TUNING.gravity,
       left: 0,
@@ -165,7 +195,10 @@ export class Board {
     else this.maskG.roundRect(-6, -10, w + 12, h + 16, 30).fill(0xffffff);
     this.view.addChild(this.maskG);
     this.pieceLayer.mask = this.maskG;
-    this.view.addChild(this.fx.view, this.pieceLayer, this.lineLayer, this.overFx.view, this.badge);
+    this.coverMask.roundRect(-2, -2, w + 4, h + 4, round ? R + 2 : 30).fill(0xffffff);
+    this.cover.mask = this.coverMask;
+    this.cover.addChild(this.darkG);
+    this.view.addChild(this.fx.view, this.pieceLayer, this.coverMask, this.cover, this.lineLayer, this.overFx.view, this.badge);
     this.badge.addChild(this.badgeBg, this.badgeText);
     this.badge.visible = false;
     const lanes = Math.floor((round ? (R - this.r) * 1.1 : w) / (this.r * 2));
@@ -217,13 +250,14 @@ export class Board {
       p.sprite.anchor.set(ART_CX / ART_SIZE, ART_CY / ART_SIZE);
       p.baseScale = p.r / ART_R;
     }
+    p.sprite.tint = p.kind === 'rock' && p.hp > 1 ? 0x9a8cb8 : 0xffffff;
   }
 
-  addPiece(kind: PieceKind, color: number, x: number, y: number, vy = 0): Piece {
-    const base = kind === 'big' ? this.r * BOARD_TUNING.bigScale : kind === 'mega' ? this.r * 1.2 : this.r;
+  addPiece(kind: PieceKind, color: number, x: number, y: number, vy = 0, scale = 1): Piece {
+    const base = (kind === 'big' ? this.r * BOARD_TUNING.bigScale : kind === 'mega' ? this.r * 1.2 : this.r) * scale;
     // a little size variance keeps the pile from settling into a grid
     const r = base * (0.96 + Math.random() * 0.08);
-    const body = this.world.add(x, y, r * 0.97, kind === 'big' ? 3 : 1);
+    const body = this.world.add(x, y, r * 0.97, kind === 'big' ? 3 : scale > 1 ? scale * scale : 1);
     body.velocity.x = (Math.random() - 0.5) * 36;
     body.velocity.y = vy;
     const p = new Piece(kind, color, body, r);
@@ -292,7 +326,9 @@ export class Board {
       if (n === 4) this.acc = 0;
       this.spawnStep(dt);
     }
+    if (!this.frozen) this.statusStep(dt);
     for (const p of this.pieces) this.syncView(p, dt);
+    this.drawDark();
     this.drawChain();
     this.fx.update(dt);
     this.overFx.update(dt);
@@ -351,6 +387,11 @@ export class Board {
     p.sprite.rotation = -p.axis + p.rot;
     // when squashed against the floor the piece sinks a little instead of floating
     p.view.position.set(b.position.x, b.position.y - Math.sin(p.axis) * p.squash * p.r * 0.35);
+    if (p.deco) p.deco.rotation = p.rot * 0.6;
+    if (p.ghost > 0) p.ghost -= dt;
+    const a = p.ghost > 0 && p.state === 'live' ? 0.06 : 1;
+    p.jelly.alpha += (a - p.jelly.alpha) * Math.min(1, dt * 8);
+    if (p.kind === 'normal' || p.kind === 'big') p.sprite.tint = this.sealColor >= 0 && p.color === this.sealColor ? 0x8c8698 : 0xffffff;
   }
 
   // ---------------------------------------------------------------- input
@@ -380,7 +421,17 @@ export class Board {
   }
 
 
+  /** Linkable right now (obstructions can seal a whole color). */
+  linkOk(p: Piece): boolean {
+    return p.linkable && p.color !== this.sealColor;
+  }
+
+  get minChain(): number {
+    return BOARD_TUNING.minChain + this.minExtra;
+  }
+
   adjacent(a: Piece, b: Piece, slack = BOARD_TUNING.adjacency): boolean {
+    slack += this.reachMod;
     // big pieces reach further so they are easy to work into a chain
     if (a.kind === 'big' || b.kind === 'big') slack += BOARD_TUNING.bigReach;
     if (this.fever) slack += BOARD_TUNING.feverReach;
@@ -391,13 +442,14 @@ export class Board {
     if (!this.inputEnabled) return;
     this.ev.onInteract?.();
     this.clearHint();
+    this.lastTouch = { x, y };
     const p = this.pieceAt(x, y, BOARD_TUNING.touch);
     if (!p) return;
     if (p.kind === 'bomb' || p.kind === 'mega') {
       this.explode(p);
       return;
     }
-    if (p.kind === 'rock') {
+    if (p.kind === 'rock' || !this.linkOk(p)) {
       Sound.play('rock', { vol: 0.5, rate: 1.3 });
       p.poke(7);
       gsap.fromTo(p.view, { x: p.view.x - 6 }, { x: p.view.x, duration: 0.25, ease: 'elastic.out(1.5,0.3)' });
@@ -447,7 +499,7 @@ export class Board {
     const hits: { p: Piece; t: number }[] = [];
     const A = dx * dx + dy * dy;
     for (const p of this.pieces) {
-      if (!p.linkable || p.color !== color || !this.onBoard(p)) continue;
+      if (!this.linkOk(p) || p.color !== color || !this.onBoard(p)) continue;
       const rr = p.r * BOARD_TUNING.touch;
       const fx = from.x - p.x;
       const fy = from.y - p.y;
@@ -469,7 +521,7 @@ export class Board {
     let bd = Infinity;
     let tie = false;
     for (const p of this.pieces) {
-      if (!p.linkable || p.color !== color || !this.onBoard(p) || !this.adjacent(p, last)) continue;
+      if (!this.linkOk(p) || p.color !== color || !this.onBoard(p) || !this.adjacent(p, last)) continue;
       const d = Math.hypot(p.x - x, p.y - y);
       if (d > p.r * BOARD_TUNING.assist) continue;
       if (Math.abs(d - bd) < 2) tie = true;
@@ -514,7 +566,7 @@ export class Board {
     this.badge.visible = false;
     if (chain.length === 0) return;
     const eff = chain.reduce((a, p) => a + p.weight, 0);
-    if (chain.length >= BOARD_TUNING.minChain || (eff >= BOARD_TUNING.minChain && chain.length >= 2)) {
+    if (chain.length >= this.minChain || (eff >= this.minChain && chain.length >= 2)) {
       this.resolveChain(chain);
     } else {
       for (const p of chain) this.unlink(p, true);
@@ -562,7 +614,7 @@ export class Board {
 
   // ------------------------------------------------------------ resolving
   private info(p: Piece): PopInfo {
-    return { x: p.x, y: p.y, color: p.color, kind: p.kind, weight: p.weight };
+    return { x: p.x, y: p.y, color: p.color, kind: p.kind, weight: p.weight, cursed: p.status === 'curse' };
   }
 
   private resolveChain(chain: Piece[]): void {
@@ -601,11 +653,27 @@ export class Board {
     return b;
   }
 
+  /** Neighbors of popped pieces: rocks take a hit (returned when they break), stuck statuses come off. */
   private rocksNear(popped: Piece[]): Piece[] {
     const out: Piece[] = [];
     for (const r of this.pieces) {
-      if (r.kind !== 'rock' || r.state !== 'live') continue;
-      if (popped.some((p) => this.adjacent(p, r, 1.25))) out.push(r);
+      if (r.state !== 'live' || popped.includes(r)) continue;
+      const rock = r.kind === 'rock';
+      const stuck = r.status && BREAKABLE.includes(r.status);
+      if (!rock && !stuck) continue;
+      if (!popped.some((p) => this.adjacent(p, r, 1.25))) continue;
+      if (stuck) {
+        this.clearStatus(r, true);
+        continue;
+      }
+      r.hp--;
+      if (r.hp <= 0) out.push(r);
+      else {
+        r.poke(9);
+        this.setDeco(r, 'crack');
+        Sound.play('rock', { vol: 0.5, rate: 1.4 });
+        this.fx.burst(r.x, r.y, { count: 6, tex: 'smoke_04', tint: 0x9aa0b8, speed: [40, 160], size: [0.1, 0.2], grow: 1.5, gravity: -40, life: [0.3, 0.6] });
+      }
     }
     for (const r of out) r.state = 'popping';
     return out;
@@ -670,7 +738,7 @@ export class Board {
     while (q.length) {
       const cur = q.shift()!;
       for (const p of this.pieces) {
-        if (seen.has(p) || !p.linkable || p.color !== start.color || !this.onBoard(p)) continue;
+        if (seen.has(p) || !this.linkOk(p) || p.color !== start.color || !this.onBoard(p)) continue;
         if (this.adjacent(cur, p)) {
           seen.add(p);
           q.push(p);
@@ -685,7 +753,7 @@ export class Board {
     const done = new Set<Piece>();
     let best: Piece[] = [];
     for (const p of this.pieces) {
-      if (done.has(p) || !p.linkable || !this.onBoard(p)) continue;
+      if (done.has(p) || !this.linkOk(p) || !this.onBoard(p)) continue;
       const g = this.groupOf(p);
       g.forEach((q) => done.add(q));
       const w = g.reduce((a, q) => a + q.weight, 0);
@@ -696,7 +764,7 @@ export class Board {
 
   showHint(): void {
     const g = this.bestGroup();
-    if (g.reduce((a, q) => a + q.weight, 0) < BOARD_TUNING.minChain) return;
+    if (g.reduce((a, q) => a + q.weight, 0) < this.minChain) return;
     for (const p of g) p.hint = true;
   }
 
@@ -829,12 +897,213 @@ export class Board {
   applyRock(p: Piece): void {
     if (p.state === 'dead') return;
     p.state = 'live';
+    if (p.status) this.clearStatus(p, false);
     p.kind = 'rock';
     p.color = -1;
     this.dress(p);
     p.poke(9);
     this.fx.burst(p.x, p.y, { count: 10, tex: 'smoke_04', tint: 0x9aa0b8, speed: [40, 180], size: [0.12, 0.25], grow: 1.6, gravity: -60, life: [0.4, 0.8] });
     Sound.play('rock', { vol: 0.6 });
+  }
+
+  // ------------------------------------------------------- obstructions
+  private setDeco(p: Piece, art: StatusArt | null): void {
+    if (p.deco) {
+      p.deco.destroy();
+      p.deco = null;
+    }
+    if (!art || p.view.destroyed) return;
+    const d = new Container();
+    const sp = new Sprite(statusTexture(art));
+    sp.anchor.set(0.5);
+    sp.scale.set(p.r / (ART_R * 1.5));
+    d.addChild(sp);
+    p.view.addChild(d);
+    p.deco = d;
+  }
+
+  /** Puts an obstruction on a live piece. */
+  setStatus(p: Piece, st: PieceStatus): void {
+    if (p.state === 'dead') return;
+    if (p.state === 'linked') this.cancelChain();
+    if (p.state !== 'live' && p.state !== 'popping') return;
+    p.state = 'live';
+    if (p.status) this.clearStatus(p, false);
+    p.status = st;
+    p.statusT = st === 'skullBomb' ? 10 : st === 'chameleon' ? 1.4 : st === 'slime' ? 12 : 0;
+    this.setDeco(p, st);
+    if (st === 'web' || st === 'slime') {
+      p.body.pinned = true;
+      p.body.invMass = 0;
+    }
+    if (st === 'skullBomb') {
+      const t = txt('10', { size: 30, font: 'dela', color: 0xffffff, stroke: 0x2a1630, strokeWidth: 6 });
+      t.y = p.r * 0.72;
+      p.deco?.addChild(t);
+    }
+    p.poke(9);
+    this.overFx.ring(p.x, p.y, 0xffffff, p.r / 90, 0.3);
+  }
+
+  clearStatus(p: Piece, fx: boolean): void {
+    const st = p.status;
+    if (!st) return;
+    p.status = null;
+    this.setDeco(p, null);
+    if (st === 'web' || st === 'slime') {
+      p.body.pinned = false;
+      p.body.invMass = p.kind === 'big' ? 1 / 3 : 1;
+    }
+    if (!fx) return;
+    p.poke(-8);
+    const tint = st === 'ice' ? 0xbff2ff : st === 'bubble' ? 0xe8dcff : st === 'web' ? 0xffffff : 0x9a8cb8;
+    this.overFx.burst(p.x, p.y, { count: 10, tex: 'star_06', tint: [tint, 0xffffff], add: true, gravity: 200, speed: [80, 260], size: [0.06, 0.12], life: [0.3, 0.5] });
+    Sound.play(st === 'ice' ? 'glass' : 'pep', { vol: 0.4, rate: 1.3 + Math.random() * 0.3 });
+  }
+
+  private statusStep(dt: number): void {
+    for (const p of this.pieces) {
+      if (!p.status || p.state === 'dead') continue;
+      if (p.status === 'curse') continue;
+      if (p.status === 'ice' || p.status === 'web' || p.status === 'bubble') continue;
+      p.statusT -= dt;
+      if (p.status === 'skullBomb') {
+        const t = p.deco?.children[1] as import('pixi.js').Text | undefined;
+        const sec = String(Math.max(0, Math.ceil(p.statusT)));
+        if (t && t.text !== sec) {
+          t.text = sec;
+          if (p.statusT < 3.5) {
+            t.style.fill = 0xff5070;
+            p.poke(5);
+            Sound.play('tick', { vol: 0.35, rate: 1.6 });
+          }
+        }
+        if (p.statusT <= 0) {
+          this.clearStatus(p, false);
+          this.onSkullBlow?.(p.x, p.y);
+          this.shockwave(p.x, p.y, this.r * 3);
+          if (p.state === 'live') this.applyRock(p);
+        }
+      } else if (p.status === 'chameleon') {
+        if (p.statusT <= 0 && p.state === 'live') {
+          p.statusT = 1.4;
+          p.color = (p.color + 1 + Math.floor(Math.random() * 4)) % 5;
+          this.dress(p);
+          p.poke(-5);
+        }
+      } else if (p.status === 'slime' && p.statusT <= 0) this.clearStatus(p, true);
+    }
+  }
+
+  /** Random live pieces for an obstruction to land on. */
+  targets(n: number, ok: (p: Piece) => boolean = (p) => p.kind === 'normal' && !p.status): Piece[] {
+    const cands = this.live().filter((p) => this.onBoard(p) && ok(p));
+    const out: Piece[] = [];
+    while (out.length < n && cands.length) out.push(cands.splice(Math.floor(Math.random() * cands.length), 1)[0]);
+    return out;
+  }
+
+  /** Drops rocks in from the chute (hp = hits needed). */
+  dropRocks(n: number, hp = 1, scale = 1): void {
+    for (let i = 0; i < n; i++) {
+      gsap.delayedCall(i * 0.12, () => {
+        const x = this.w / 2 + (Math.random() - 0.5) * this.w * 0.3;
+        const p = this.addPiece('rock', -1, x, -this.r * 2 * scale, 700, scale);
+        p.hp = hp;
+        this.dress(p);
+      });
+    }
+  }
+
+  /** Every normal piece gets a new random color. */
+  shuffleColors(): void {
+    if (this.chain.length) this.cancelChain();
+    const list = this.live().filter((p) => p.kind === 'normal' || p.kind === 'big');
+    list.forEach((p, i) => {
+      gsap.delayedCall((i % 12) * 0.03, () => {
+        if (p.state !== 'live') return;
+        p.color = Math.floor(Math.random() * 5);
+        this.dress(p);
+        p.poke(-6);
+      });
+    });
+  }
+
+  /** Sends every piece flying a little. */
+  kick(power: number): void {
+    for (const p of this.pieces) {
+      if (p.state === 'dead' || p.body.pinned) continue;
+      p.body.velocity.x += (Math.random() - 0.5) * power;
+      p.body.velocity.y -= power * (0.5 + Math.random() * 0.5);
+      p.poke(6);
+    }
+  }
+
+  setGhosts(n: number, dur: number): void {
+    for (const p of this.targets(n, (q) => q.kind === 'normal' || q.kind === 'big')) p.ghost = dur;
+  }
+
+  setMono(on: boolean): void {
+    if (on && !this.mono) {
+      this.mono = new ColorMatrixFilter();
+      this.mono.desaturate();
+      this.mono.alpha = 0.88;
+      this.pieceLayer.filters = [this.mono];
+    } else if (!on && this.mono) {
+      this.pieceLayer.filters = [];
+      this.mono = null;
+    }
+  }
+
+  /** Ink splats over the bowl; fades them out after `dur`. */
+  ink(n: number, dur: number): void {
+    for (let i = 0; i < n; i++) {
+      const c = new Container();
+      const x = this.w * (0.2 + Math.random() * 0.6);
+      const y = this.h * (0.25 + Math.random() * 0.6);
+      for (let k = 0; k < 6; k++) {
+        const s = new Sprite(fxTex('circle_05'));
+        s.anchor.set(0.5);
+        s.tint = 0x140a1e;
+        const sz = k === 0 ? 1.5 : 0.35 + Math.random() * 0.5;
+        s.scale.set(sz);
+        const a = Math.random() * Math.PI * 2;
+        const d = k === 0 ? 0 : 70 + Math.random() * 60;
+        s.position.set(Math.cos(a) * d, Math.sin(a) * d);
+        c.addChild(s);
+      }
+      c.position.set(x, y);
+      this.cover.addChild(c);
+      c.scale.set(0.2);
+      gsap.to(c.scale, { x: 1, y: 1, duration: 0.3, delay: i * 0.12, ease: 'back.out(2)' });
+      gsap.to(c, { alpha: 0, duration: 0.8, delay: dur, onComplete: () => c.destroy({ children: true }) });
+      gsap.delayedCall(i * 0.12, () => Sound.play('drop', { vol: 0.5, rate: 0.6 }));
+    }
+  }
+
+  private drawDark(): void {
+    const g = this.darkG;
+    g.clear();
+    if (!this.dark) return;
+    const tail = this.chain[this.chain.length - 1];
+    const fx0 = this.pointer?.x ?? tail?.x ?? this.lastTouch.x;
+    const fy0 = this.pointer?.y ?? tail?.y ?? this.lastTouch.y;
+    const rr = this.r * 3.4;
+    g.rect(-10, -10, this.w + 20, this.h + 20).fill({ color: 0x05020c, alpha: 0.93 });
+    g.circle(fx0, fy0, rr).cut();
+    g.circle(fx0, fy0, rr).stroke({ width: 18, color: 0x05020c, alpha: 0.5 });
+  }
+
+  /** Removes every timed board effect (time up). */
+  clearEffects(): void {
+    this.dark = false;
+    this.setMono(false);
+    this.sealColor = -1;
+    this.minExtra = 0;
+    this.reachMod = 0;
+    this.frozen = false;
+    this.world.o.gravityX = 0;
+    this.world.o.gravity = BOARD_TUNING.gravity;
   }
 
   /** Badge that follows the finger showing the chain length. */

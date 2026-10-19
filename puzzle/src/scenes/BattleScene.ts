@@ -17,6 +17,9 @@ import { bossAttackCount, bossAttackInterval, bossForLevel, bossHp, type BossDef
 import { ResultScene, type BattleResult } from './ResultScene';
 import { HomeScene } from './HomeScene';
 import { battleTrack } from '../data/music';
+import { GIMMICKS, gimmicksFor, type GimmickId } from '../data/gimmicks';
+import { statusTexture } from '../art/PieceArt';
+import type { Texture } from 'pixi.js';
 
 export const BATTLE_TIME = 90;
 /** Diameter of the round board in design px. */
@@ -65,6 +68,7 @@ interface Projectile {
   x0: number;
   y0: number;
   target: import('../game/Board').Piece;
+  onLand: (p: import('../game/Board').Piece) => void;
 }
 
 export class BattleScene extends Scene {
@@ -133,6 +137,14 @@ export class BattleScene extends Scene {
   private orbs: Orb[] = [];
   private projectiles: Projectile[] = [];
   private pointerId: number | null = null;
+  /** This boss's obstruction lineup and the timed ones currently running (seconds left). */
+  private gimmicks: GimmickId[] = [];
+  private effects = new Map<GimmickId, number>();
+  private effectLabel = txt('', { size: 24, color: 0xffb8d8, stroke: 0x2a1630, strokeWidth: 6, anchor: [0, 0.5] });
+  private seenGimmicks = new Set<GimmickId>();
+  /** SSR passive: obstructions it can still bounce. */
+  private guards = 0;
+  private quakeT = 0;
   private lastSecond = 99;
   private t = 0;
   private domHandlers: [string, EventListener][] = [];
@@ -154,7 +166,9 @@ export class BattleScene extends Scene {
     this.boss = new BossView(this.bossDef);
     this.scoreW = new ScoreLine(this.hp);
     this.skillBtn = new SkillButton(this.def);
-    this.bossAtkT = bossAttackInterval(this.bossLv) || Infinity;
+    this.gimmicks = gimmicksFor(this.bossLv);
+    this.bossAtkT = this.gimmicks.length ? bossAttackInterval(this.bossLv) || Infinity : Infinity;
+    if (this.def.passive?.kind === 'guard') this.guards = 3;
   }
 
   async preload(): Promise<void> {
@@ -185,7 +199,10 @@ export class BattleScene extends Scene {
         this.hintShown = false;
       },
     }, true);
-    this.board.view.position.set(this.boardX, this.boardY);
+    // pivot on the bowl center so the "tilt" obstruction can rotate it
+    this.board.view.pivot.set(D / 2, D / 2);
+    this.board.view.position.set(this.boardX + D / 2, this.boardY + D / 2);
+    this.board.onSkullBlow = (x, y) => this.skullBlow(x, y);
     this.col.addChild(this.board.view, this.feverFrame, this.orbLayer, this.fxTop.view, this.hud, this.vignette, this.overlay);
     this.drawBoardFrame();
     // hud
@@ -200,6 +217,18 @@ export class BattleScene extends Scene {
     const nameTag = txt(`Lv.${this.bossLv} ${this.bossDef.name}`, { size: 26, color: 0xffffff, stroke: 0x3b2412, strokeWidth: 7, anchor: [0, 0.5] });
     nameTag.position.set(24, top + 140);
     this.hud.addChild(nameTag);
+    if (this.gimmicks.length) {
+      const lineup = txt(`妨害：${this.gimmicks.map((g) => GIMMICKS[g].name).join('・')}`, { size: 20, color: 0xd8c8ff, stroke: 0x2a1630, strokeWidth: 5, anchor: [0, 0.5] });
+      lineup.position.set(24, top + 172);
+      this.hud.addChild(lineup);
+    }
+    this.effectLabel.position.set(24, top + 204);
+    this.hud.addChild(this.effectLabel);
+    if (this.def.passive) {
+      const ps = txt(`★${this.def.passive.name}`, { size: 20, color: 0xffe36f, stroke: 0x2a1630, strokeWidth: 5, anchor: [1, 0.5] });
+      ps.position.set(696, top + 140);
+      this.hud.addChild(ps);
+    }
     this.skillBtn.position.set(84, this.stageH + 34);
     this.feverG.position.set(420, this.stageH + 58);
     this.comboL.position.set(590, this.stageH - 70);
@@ -335,7 +364,7 @@ export class BattleScene extends Scene {
     const playing = this.phase === 'play';
     if (playing) {
       // the clock stops during fever
-      if (!this.feverOn) this.timeLeft -= dt;
+      if (!this.feverOn) this.timeLeft -= dt * (this.effects.has('timeFast') ? 2 : 1);
       const sec = Math.ceil(this.timeLeft);
       if (sec !== this.lastSecond) {
         this.lastSecond = sec;
@@ -372,8 +401,9 @@ export class BattleScene extends Scene {
         this.feverT -= dt;
         if (this.feverT <= 0) this.endFever();
       }
-      // boss attack
-      this.bossAtkT -= dt;
+      this.updateEffects(dt);
+      // boss attack (the boss holds off during fever)
+      if (!this.feverOn) this.bossAtkT -= dt;
       if (this.bossAtkT <= 0) {
         this.bossAtkT = bossAttackInterval(this.bossLv);
         void this.bossAttack();
@@ -415,7 +445,7 @@ export class BattleScene extends Scene {
     this.feverG.active = this.feverOn;
     this.feverG.activeP = this.feverT / FEVER_TIME;
     this.feverG.update(dt);
-    this.comboL.set(this.combo, Math.max(0, this.comboT / COMBO_WINDOW));
+    this.comboL.set(this.combo, Math.min(1, Math.max(0, this.comboT / COMBO_WINDOW)));
     this.drawFeverFrame();
   }
 
@@ -438,7 +468,13 @@ export class BattleScene extends Scene {
     const canvas = App.pixi.canvas;
     const local = (e: PointerEvent) => {
       const d = App.toDesign(e.clientX, e.clientY);
-      return { x: d.x - App.colX - this.boardX, y: d.y - this.boardY };
+      const bv = this.board.view;
+      // undo the tilt: rotate around the bowl center
+      const x = d.x - App.colX - bv.x;
+      const y = d.y - bv.y;
+      const c = Math.cos(-bv.rotation);
+      const sn = Math.sin(-bv.rotation);
+      return { x: x * c - y * sn + bv.pivot.x, y: x * sn + y * c + bv.pivot.y };
     };
     const inBoard = (p: { x: number; y: number }) => p.x > -20 && p.x < this.board.w + 20 && p.y > -10 && p.y < this.board.h + 20;
     const down = (ev: Event) => {
@@ -519,9 +555,15 @@ export class BattleScene extends Scene {
     } else if (cause === 'bomb') mult *= 1.15;
     else if (cause === 'skill') mult *= this.def.skill.power * 0.6;
     else if (cause === 'rock') weight = pops.length * 2;
+    if ((cause === 'chain' || cause === 'fever') && pops.some((p) => p.cursed)) {
+      mult *= 0.5;
+      this.floatText('のろわれた…', this.boardX + meta.x, this.boardY + meta.y - 40, 0xc58cff, 30);
+    }
+    if (this.def.passive?.kind === 'guard' && cause === 'chain' && meta.chain >= 7) mult *= 1.3;
+    if (this.effects.has('barrier')) mult *= 0.5;
     if (cause !== 'rock') {
       this.combo++;
-      this.comboT = COMBO_WINDOW;
+      this.comboT = COMBO_WINDOW * (this.def.passive?.kind === 'shadow' ? 2 : 1);
       this.maxCombo = Math.max(this.maxCombo, this.combo);
     }
     mult *= this.comboMult();
@@ -725,7 +767,7 @@ export class BattleScene extends Scene {
 
   // ----------------------------------------------------------------- skill
   private async activateSkill(): Promise<void> {
-    if (this.phase !== 'play' || this.paused || this.skillCharge < this.chargeNeed) return;
+    if (this.phase !== 'play' || this.paused || this.skillCharge < this.chargeNeed || this.effects.has('skillSeal')) return;
     this.phase = 'cutin';
     this.board.forceRelease();
     this.board.inputEnabled = false;
@@ -983,25 +1025,287 @@ export class BattleScene extends Scene {
 
   // ----------------------------------------------------------- boss attack
   private async bossAttack(): Promise<void> {
-    if (this.phase !== 'play') return;
+    if (this.phase !== 'play' || !this.gimmicks.length) return;
+    // timed effects don't stack: prefer something that isn't already running
+    const fresh = this.gimmicks.filter((g) => !this.effects.has(g));
+    const pool = fresh.length ? fresh : this.gimmicks;
+    const id = pool[Math.floor(Math.random() * pool.length)];
+    const g = GIMMICKS[id];
     this.emote('emote_exclamation', 0.9);
     this.boss.shout(1.0);
     Sound.play('laser', { vol: 0.5, rate: 0.6 });
     Sound.play('phaserUp', { vol: 0.5, rate: 0.8 });
-    this.floatText('おじゃまが来るぞ！', 360, this.boardY - 40, 0xc0c4d8, 30);
+    const first = !this.seenGimmicks.has(id);
+    this.seenGimmicks.add(id);
+    this.gimmickCallout(g.name, first ? g.desc : '');
     await wait(0.9);
     if (this.phase !== 'play' && this.phase !== 'cutin') return;
-    const targets = this.board.petrify(bossAttackCount(this.bossLv));
+    if (this.guards > 0) {
+      this.guards--;
+      this.guardBounce();
+      return;
+    }
+    this.applyGimmick(id);
+  }
+
+  /** Big name card for the incoming obstruction (with its explanation the first time). */
+  private gimmickCallout(name: string, desc: string): void {
+    const c = new Container();
+    c.position.set(360, Math.max(App.safeTop + 250, this.stageH * 0.55));
+    const t = txt(`${name}！`, { size: 40, font: 'dela', color: 0xd8c8ff, stroke: 0x2a1630, strokeWidth: 10 });
+    c.addChild(t);
+    if (desc) {
+      const d = txt(desc, { size: 22, color: 0xffffff, stroke: 0x2a1630, strokeWidth: 6 });
+      d.y = 40;
+      c.addChild(d);
+    }
+    this.overlay.addChild(c);
+    c.scale.set(0.3);
+    gsap.to(c.scale, { x: 1, y: 1, duration: 0.35, ease: 'back.out(3)' });
+    gsap.to(c, { alpha: 0, duration: 0.3, delay: desc ? 2.2 : 1.1, onComplete: () => c.destroy({ children: true }) });
+  }
+
+  /** SSR passive: the obstruction bounces off a shield. */
+  private guardBounce(): void {
+    const x = 360;
+    const y = this.boardY - 10;
+    this.fxTop.ring(x, y, 0xffe36f, 2.2, 0.4);
+    this.fxTop.burst(x, y, { count: 16, tex: 'star_06', tint: [0xffe36f, 0xffffff], add: true, speed: [200, 500], size: [0.08, 0.16], gravity: 300 });
+    Sound.play('glass', { vol: 0.7, rate: 1.2 });
+    Sound.play('powerUp2', { vol: 0.5 });
+    this.floatText(`ホネのよろい！はじいた！（のこり${this.guards}）`, 360, this.boardY + 30, 0xffe36f, 30);
+  }
+
+  /** Throws something at each target piece; `land` runs when it hits. */
+  private throwAt(targets: import('../game/Board').Piece[], tex: Texture, land: (p: import('../game/Board').Piece) => void): void {
     targets.forEach((target, i) => {
+      target.state = 'popping'; // reserved until the projectile lands
       gsap.delayedCall(i * 0.08, () => {
-        const s = new Sprite(rockTexture());
+        const s = new Sprite(tex);
         s.anchor.set(0.5);
         s.scale.set(0.35);
         this.orbLayer.addChild(s);
-        this.projectiles.push({ s, t: 0, dur: 0.55, x0: this.boss.x + (Math.random() - 0.5) * 80, y0: this.boss.y - this.bossH * 0.4, target });
+        this.projectiles.push({ s, t: 0, dur: 0.55, x0: this.boss.x + (Math.random() - 0.5) * 80, y0: this.boss.y - this.bossH * 0.4, target, onLand: land });
         Sound.play('drop', { vol: 0.5, rate: 0.7 + i * 0.05 });
       });
     });
+  }
+
+  private applyGimmick(id: GimmickId): void {
+    const b = this.board;
+    const n = bossAttackCount(this.bossLv);
+    const g = GIMMICKS[id];
+    const status = (st: import('../game/Board').PieceStatus, count: number) =>
+      this.throwAt(b.targets(count), statusTexture(st), (p) => {
+        p.state = 'live';
+        b.setStatus(p, st);
+      });
+    if (g.dur) this.effects.set(id, g.dur * (this.def.passive?.kind === 'shadow' ? 0.5 : 1));
+    switch (id) {
+      case 'rock':
+        this.throwAt(b.targets(n), rockTexture(), (p) => b.applyRock(p));
+        break;
+      case 'hardRock':
+        this.throwAt(b.targets(Math.max(2, n - 1)), rockTexture(), (p) => {
+          b.applyRock(p);
+          p.hp = 2;
+          p.sprite.tint = 0x9a8cb8;
+        });
+        break;
+      case 'bigRock':
+        b.dropRocks(1 + Math.floor(n / 4), 3, 1.7);
+        break;
+      case 'junk':
+        b.dropRocks(n + 1);
+        break;
+      case 'ice':
+        status('ice', n + 2);
+        break;
+      case 'bubble':
+        status('bubble', n + 4);
+        break;
+      case 'skullBomb':
+        status('skullBomb', Math.max(1, Math.floor(n / 3)));
+        break;
+      case 'curse':
+        status('curse', n + 2);
+        break;
+      case 'web':
+        status('web', n + 1);
+        break;
+      case 'slime':
+        status('slime', n + 4);
+        break;
+      case 'chameleon':
+        status('chameleon', n + 2);
+        break;
+      case 'shuffle':
+        b.shuffleColors();
+        Sound.play('cardShuffle', { vol: 0.7 });
+        break;
+      case 'dark':
+        b.dark = true;
+        break;
+      case 'mono':
+        b.setMono(true);
+        break;
+      case 'ink':
+        b.ink(2 + Math.floor(n / 2), this.effects.get('ink') ?? 8);
+        break;
+      case 'invisible':
+        b.setGhosts(n * 3, this.effects.get('invisible') ?? 8);
+        break;
+      case 'seal': {
+        const counts = b.colorCounts();
+        b.sealColor = counts.indexOf(Math.max(...counts));
+        if (b.chain.some((p) => p.color === b.sealColor)) b.cancelChain();
+        break;
+      }
+      case 'min4':
+        b.minExtra = 1;
+        break;
+      case 'weak':
+        b.reachMod = -0.22;
+        break;
+      case 'quake':
+        this.quakeT = 0;
+        break;
+      case 'wind':
+        b.world.o.gravityX = (Math.random() < 0.5 ? -1 : 1) * 1700;
+        break;
+      case 'float':
+        b.world.o.gravity = BOARD_TUNING.gravity * 0.18;
+        b.kick(500);
+        break;
+      case 'tilt': {
+        const a = (Math.random() < 0.5 ? -1 : 1) * 0.42;
+        gsap.to(b.view, { rotation: a, duration: 0.8, ease: 'back.out(1.5)' });
+        break;
+      }
+      case 'freeze':
+        b.frozen = true;
+        this.flashBoard(0x9fe8ff);
+        Sound.play('glass', { vol: 0.6, rate: 0.7 });
+        break;
+      case 'timeSteal':
+        this.timeLeft = Math.max(1, this.timeLeft - 5);
+        this.timerHit('−5秒');
+        break;
+      case 'timeFast':
+        this.timerHit('2倍速！');
+        break;
+      case 'skillDrain':
+        this.skillCharge = Math.max(0, this.skillCharge - this.chargeNeed * 0.4);
+        this.skillBtn.scale.set(0.8);
+        gsap.to(this.skillBtn.scale, { x: 1, y: 1, duration: 0.4, ease: 'back.out(3)' });
+        break;
+      case 'feverDrain':
+        this.fever *= 0.5;
+        break;
+      case 'barrier':
+        this.boss.alpha = 1;
+        break;
+      case 'skillSeal':
+        break;
+      case 'comboBreak':
+        this.combo = 0;
+        this.comboT = 0;
+        break;
+    }
+  }
+
+  /** Ticks timed obstructions and undoes them when they run out. */
+  private updateEffects(dt: number): void {
+    if (this.effects.has('quake')) {
+      this.quakeT -= dt;
+      if (this.quakeT <= 0) {
+        this.quakeT = 0.9;
+        this.board.kick(380);
+        this.shake(7, 0.25);
+        Sound.play('hitHeavy', { vol: 0.35, rate: 0.6 });
+      }
+    }
+    if (this.effects.has('barrier')) {
+      // a pulsing bubble around the boss
+      const k = 0.5 + Math.sin(this.t * 6) * 0.2;
+      this.boss.tint = 0xb8a0ff;
+      this.boss.alpha = 0.75 + k * 0.25;
+    }
+    const parts: string[] = [];
+    for (const [id, left] of this.effects) {
+      const t = left - dt;
+      if (t <= 0) {
+        this.effects.delete(id);
+        this.endEffect(id);
+      } else {
+        this.effects.set(id, t);
+        parts.push(`${GIMMICKS[id].name} ${Math.ceil(t)}`);
+      }
+    }
+    const label = parts.length ? `⚠ ${parts.join('  ')}` : '';
+    if (this.effectLabel.text !== label) this.effectLabel.text = label;
+  }
+
+  private endEffect(id: GimmickId): void {
+    const b = this.board;
+    switch (id) {
+      case 'dark':
+        b.dark = false;
+        break;
+      case 'mono':
+        b.setMono(false);
+        break;
+      case 'seal':
+        b.sealColor = -1;
+        break;
+      case 'min4':
+        b.minExtra = 0;
+        break;
+      case 'weak':
+        b.reachMod = 0;
+        break;
+      case 'wind':
+        b.world.o.gravityX = 0;
+        break;
+      case 'float':
+        b.world.o.gravity = BOARD_TUNING.gravity;
+        break;
+      case 'tilt':
+        gsap.to(b.view, { rotation: 0, duration: 0.6, ease: 'back.out(1.5)' });
+        break;
+      case 'freeze':
+        b.frozen = false;
+        break;
+      case 'barrier':
+        this.boss.tint = 0xffffff;
+        this.boss.alpha = 1;
+        break;
+    }
+  }
+
+  private clearAllEffects(): void {
+    for (const id of [...this.effects.keys()]) this.endEffect(id);
+    this.effects.clear();
+    this.board.clearEffects();
+    this.board.view.rotation = 0;
+    this.effectLabel.text = '';
+  }
+
+  private timerHit(label: string): void {
+    this.floatText(label, this.timer.x + 40, this.timer.y + 60, 0xff8aa0, 36);
+    this.timer.scale.set(1.3);
+    gsap.to(this.timer.scale, { x: 1, y: 1, duration: 0.4, ease: 'back.out(3)' });
+    Sound.play('tick', { vol: 1, rate: 0.8 });
+    haptic(20);
+  }
+
+  /** A skull bomb went off: the clock pays for it. */
+  private skullBlow(x: number, y: number): void {
+    this.timeLeft = Math.max(1, this.timeLeft - 5);
+    this.timerHit('ドクロばくだん！ −5秒');
+    Sound.explosion(false);
+    this.shake(8, 0.3);
+    this.fxTop.burst(this.boardX + x, this.boardY + y, { count: 16, tex: 'flame_04', tint: [0x9a3aff, 0xff3355], add: true, speed: [150, 450], size: [0.12, 0.25], gravity: -60, life: [0.3, 0.6] });
   }
 
   private updateProjectiles(dt: number): void {
@@ -1019,7 +1323,7 @@ export class BattleScene extends Scene {
       if (k >= 1) {
         this.projectiles.splice(i, 1);
         p.s.destroy();
-        this.board.applyRock(p.target);
+        p.onLand(p.target);
         this.shake(4, 0.15);
       }
     }
@@ -1033,6 +1337,7 @@ export class BattleScene extends Scene {
     if (!wasCutin) this.board.forceRelease();
     this.board.inputEnabled = false;
     if (this.feverOn) this.endFever();
+    this.clearAllEffects();
     Sound.stopMusic(1.0);
     Sound.play('jTimeUp', { vol: 0.8 });
     haptic([30, 50, 30]);

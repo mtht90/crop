@@ -220,3 +220,171 @@ const bombTex: Record<string, Texture> = {};
 export function bombTexture(mega: boolean): Texture {
   return (bombTex[mega ? 'm' : 'n'] ??= canvasTexture(drawBomb(mega)));
 }
+
+// ------------------------------------------------------------ obstruction overlays
+export type StatusArt = 'ice' | 'bubble' | 'web' | 'slime' | 'curse' | 'skullBomb' | 'chameleon' | 'crack';
+
+function drawStatus(kind: StatusArt): HTMLCanvasElement {
+  const [canvas, ctx] = makeCanvas(1.5);
+  // makeCanvas centers on the piece body; overlays are drawn around a unit circle
+  ctx.translate(0, (ART_SIZE / 2 - ART_CY) / ART_R);
+  switch (kind) {
+    case 'ice': {
+      ctx.beginPath();
+      const n = 9;
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * TAU;
+        const rr = i % 2 ? 1.08 : 1.18;
+        ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
+      }
+      ctx.closePath();
+      const g = ctx.createLinearGradient(-1, -1, 1, 1);
+      g.addColorStop(0, 'rgba(230,250,255,0.75)');
+      g.addColorStop(0.5, 'rgba(140,220,255,0.45)');
+      g.addColorStop(1, 'rgba(80,170,240,0.65)');
+      fillStroke(ctx, g, 'rgba(255,255,255,0.95)', 0.07);
+      ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+      ctx.lineWidth = 0.06;
+      ctx.beginPath();
+      ctx.moveTo(-0.6, -0.55);
+      ctx.lineTo(-0.15, -0.8);
+      ctx.moveTo(-0.75, -0.2);
+      ctx.lineTo(-0.45, -0.38);
+      ctx.stroke();
+      break;
+    }
+    case 'bubble': {
+      ellipse(ctx, 0, 0, 1.12, 1.12);
+      const g = ctx.createRadialGradient(-0.35, -0.4, 0.1, 0, 0, 1.2);
+      g.addColorStop(0, '#ffffff');
+      g.addColorStop(0.55, '#e8dcff');
+      g.addColorStop(1, '#a98ae0');
+      fillStroke(ctx, g, '#4a2f7a', 0.08);
+      ellipse(ctx, -0.45, -0.5, 0.25, 0.13, -0.6);
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+      ctx.font = 'bold 1.3px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.lineWidth = 0.14;
+      ctx.strokeStyle = '#4a2f7a';
+      ctx.strokeText('?', 0.03, 0.1);
+      ctx.fillStyle = '#ff7ad9';
+      ctx.fillText('?', 0.03, 0.1);
+      break;
+    }
+    case 'web': {
+      ctx.strokeStyle = 'rgba(255,255,255,0.92)';
+      ctx.lineWidth = 0.05;
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * TAU + 0.2;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(Math.cos(a) * 1.22, Math.sin(a) * 1.22);
+        ctx.stroke();
+      }
+      for (const rr of [0.35, 0.7, 1.05]) {
+        ctx.beginPath();
+        for (let i = 0; i <= 8; i++) {
+          const a = (i / 8) * TAU + 0.2;
+          const m = ((i + 0.5) / 8) * TAU + 0.2;
+          if (i === 0) ctx.moveTo(Math.cos(a) * rr, Math.sin(a) * rr);
+          else ctx.quadraticCurveTo(Math.cos(m - TAU / 16) * rr * 0.8, Math.sin(m - TAU / 16) * rr * 0.8, Math.cos(a) * rr, Math.sin(a) * rr);
+        }
+        ctx.stroke();
+      }
+      break;
+    }
+    case 'slime': {
+      ctx.beginPath();
+      ctx.moveTo(-1.1, -0.2);
+      ctx.bezierCurveTo(-1.1, -1.1, 1.1, -1.1, 1.1, -0.2);
+      ctx.lineTo(1.0, 0.25);
+      for (let i = 0; i < 5; i++) {
+        const x0 = 1.0 - i * 0.42;
+        const drip = i % 2 ? 0.75 : 0.45;
+        ctx.quadraticCurveTo(x0 - 0.1, 0.3 + drip, x0 - 0.21, 0.3 + drip * 0.5);
+        ctx.quadraticCurveTo(x0 - 0.32, 0.2, x0 - 0.42, 0.25);
+      }
+      ctx.closePath();
+      fillStroke(ctx, 'rgba(120,230,90,0.72)', 'rgba(30,110,30,0.9)', 0.06);
+      ellipse(ctx, -0.4, -0.55, 0.22, 0.11, -0.4);
+      ctx.fillStyle = 'rgba(255,255,255,0.8)';
+      ctx.fill();
+      break;
+    }
+    case 'curse': {
+      ellipse(ctx, 0, 0, 1.18, 1.18);
+      ctx.lineWidth = 0.12;
+      ctx.strokeStyle = 'rgba(170,60,255,0.9)';
+      ctx.setLineDash([0.25, 0.14]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      // little skull mark in the corner
+      ctx.translate(0.72, -0.72);
+      ellipse(ctx, 0, 0, 0.36, 0.34);
+      fillStroke(ctx, '#f4ecff', '#3b0f7a', 0.07);
+      for (const s of [-1, 1]) {
+        ellipse(ctx, s * 0.13, 0, 0.08, 0.1);
+        ctx.fillStyle = '#3b0f7a';
+        ctx.fill();
+      }
+      break;
+    }
+    case 'skullBomb': {
+      ellipse(ctx, 0, 0.05, 1.05, 1.02);
+      const g = ctx.createRadialGradient(-0.35, -0.4, 0.05, 0, 0, 1.2);
+      g.addColorStop(0, '#6a5a7a');
+      g.addColorStop(0.5, '#2a1f38');
+      g.addColorStop(1, '#0d0814');
+      fillStroke(ctx, g, '#07050c', 0.08);
+      ellipse(ctx, 0, -0.05, 0.62, 0.56);
+      fillStroke(ctx, '#f2ead8', '#2a1f38', 0.06);
+      for (const s of [-1, 1]) {
+        ellipse(ctx, s * 0.22, -0.08, 0.14, 0.16);
+        ctx.fillStyle = '#ff3355';
+        ctx.fill();
+      }
+      ctx.beginPath();
+      ctx.moveTo(0.4, -0.9);
+      ctx.quadraticCurveTo(0.7, -1.3, 1.0, -1.15);
+      ctx.lineWidth = 0.09;
+      ctx.strokeStyle = '#8a6a3a';
+      ctx.stroke();
+      star(ctx, 1.02, -1.16, 0.28, '#ff9a3a');
+      break;
+    }
+    case 'chameleon': {
+      for (let i = 0; i < 5; i++) {
+        ctx.beginPath();
+        ctx.arc(0, 0, 1.14, (i / 5) * TAU, ((i + 1) / 5) * TAU);
+        ctx.lineWidth = 0.13;
+        ctx.strokeStyle = COLORS[i].base;
+        ctx.stroke();
+      }
+      break;
+    }
+    case 'crack': {
+      ctx.strokeStyle = '#1e2133';
+      ctx.lineWidth = 0.08;
+      ctx.beginPath();
+      ctx.moveTo(-0.7, -0.6);
+      ctx.lineTo(-0.25, -0.1);
+      ctx.lineTo(-0.45, 0.3);
+      ctx.moveTo(-0.25, -0.1);
+      ctx.lineTo(0.2, 0.05);
+      ctx.lineTo(0.6, -0.4);
+      ctx.moveTo(0.2, 0.05);
+      ctx.lineTo(0.35, 0.6);
+      ctx.stroke();
+      break;
+    }
+  }
+  return canvas;
+}
+
+const statusTex: Partial<Record<StatusArt, Texture>> = {};
+/** Overlay textures are 1.5x the piece art and centered (anchor 0.5). Scale = r / (ART_R * 1.5). */
+export function statusTexture(kind: StatusArt): Texture {
+  return (statusTex[kind] ??= canvasTexture(drawStatus(kind)));
+}

@@ -33,6 +33,15 @@ export interface Skill {
   dur?: number;
 }
 
+export type PassiveKind = 'guard' | 'shadow';
+
+/** Always-on bonus (SSR only). */
+export interface Passive {
+  kind: PassiveKind;
+  name: string;
+  desc: string;
+}
+
 export interface CharDef {
   id: string;
   name: string;
@@ -40,12 +49,13 @@ export interface CharDef {
   atk: number;
   skill: Skill;
   catch: string;
+  passive?: Passive;
 }
 
 type Row = [id: string, name: string, rarity: Rarity, atk: number, skill: Skill, catchCopy: string];
 
 // Every character has its own skill. Strength (power, size, amount) grows with rarity:
-// N ≈ power 1.6–2, R ≈ 2.4–2.8, SR ≈ 3.2–3.6, SSR ≈ 4.5–5.
+// SR land around 2x an N in play, SSR around 3x (plus a passive).
 const ROWS: Row[] = [
   // N
   ['kh_a', 'キリッと', 'N', 100, { kind: 'bombs', name: 'ころころボム', desc: 'ボムを1個おとす', charge: 24, power: 1.8, amount: 1 }, 'まゆげに自信あり。毎朝ととのえている。'],
@@ -62,22 +72,31 @@ const ROWS: Row[] = [
   // R
   ['l_knight', '見習い騎士', 'R', 115, { kind: 'circle', name: 'たてのいちげき', desc: 'まんなかを大きく丸く消す', charge: 30, power: 3.2, amount: 1, size: 4.3 }, 'かぶとが大きくてちょっと前が見えない。'],
   ['l_barbarian', 'クマかぶり', 'R', 119, { kind: 'bombs', name: 'ダブルボム', desc: 'ボムを2個おとす', charge: 30, power: 2.6, amount: 2 }, 'クマの毛皮がお気に入りの戦士。'],
-  ['l_mage', 'とんがり帽', 'R', 113, { kind: 'paint', name: 'いろぬり', desc: '12個を多い色にぬりかえる', charge: 28, power: 1.2, amount: 12 }, '帽子のつばで顔がかくれがち。'],
   ['skull', 'ドクロ', 'R', 121, { kind: 'random', name: 'カラカラわらい', desc: 'ランダムに14個消す', charge: 30, power: 2.1, amount: 14 }, 'カラカラ笑うおちゃめなドクロ。'],
   ['skel_minion', 'ホネっこ', 'R', 117, { kind: 'tapPop', name: 'ホネまわし', desc: '5秒間タップでまとめて消せる', charge: 30, power: 2.4, dur: 5 }, 'ホネだけど元気いっぱい。'],
   // SR
-  ['knight', 'ナイト', 'SR', 144, { kind: 'colorBlast', name: 'いっせい攻撃', desc: 'いちばん多い色を全部消す', charge: 34, power: 2.9 }, '王国を守る正義の騎士。'],
-  ['barbarian', 'バーバリアン', 'SR', 147, { kind: 'bottom', name: 'じならし', desc: 'ボウルの下半分をまとめて消す', charge: 34, power: 2.4, size: 3.8 }, 'クマの頭をかぶった豪快な戦士。'],
-  ['mage', 'メイジ', 'SR', 138, { kind: 'circle', name: 'メテオ', desc: '4か所を丸く消す', charge: 34, power: 3.3, amount: 4, size: 2.6 }, '大きな帽子の天才魔法使い。'],
-  ['rogue', 'ローグ', 'SR', 142, { kind: 'random', name: 'れんぞくアロー', desc: 'ランダムに22個消す', charge: 34, power: 2.1, amount: 22 }, '身軽な弓の名手。'],
-  ['hood', 'フードローグ', 'SR', 140, { kind: 'tapPop', name: 'フードの手品', desc: '10.5秒間タップでまとめて消せる', charge: 34, power: 3.2, dur: 10.5 }, 'フードの奥で何を考えているのかな？'],
+  ['knight', 'ナイト', 'SR', 190, { kind: 'colorBlast', name: 'いっせい攻撃', desc: 'いちばん多い色を全部消す', charge: 30, power: 3.8 }, '王国を守る正義の騎士。'],
+  ['barbarian', 'バーバリアン', 'SR', 192, { kind: 'bottom', name: 'じならし', desc: 'ボウルの下半分をまとめて消す', charge: 30, power: 3.3, size: 4.4 }, 'クマの頭をかぶった豪快な戦士。'],
+  ['rogue', 'ローグ', 'SR', 188, { kind: 'random', name: 'れんぞくアロー', desc: 'ランダムに26個消す', charge: 30, power: 2.8, amount: 26 }, '身軽な弓の名手。'],
+  ['hood', 'フードローグ', 'SR', 186, { kind: 'tapPop', name: 'フードの手品', desc: '12秒間タップでまとめて消せる', charge: 32, power: 3.8, dur: 12 }, 'フードの奥で何を考えているのかな？'],
   // SSR
-  ['skel_warrior', 'ホネ戦士', 'SSR', 176, { kind: 'twoColor', name: 'ダブルブレイク', desc: '多い2色を全部消す', charge: 40, power: 3.2 }, '角かぶとのスケルトン戦士。'],
-  ['skel_mage', 'ホネ魔導士', 'SSR', 171, { kind: 'allClear', name: 'ぜんぶ消し', desc: 'ボウルの中を全部消す', charge: 44, power: 2.6 }, 'いにしえの魔法をあやつるスケルトン。'],
-  ['skel_rogue', 'ホネ盗賊', 'SSR', 172, { kind: 'feverTap', name: 'かげのうたげ', desc: 'フィーバー突入＋その間タップでまとめて消せる', charge: 62, power: 2.6 }, '赤いフードの神出鬼没なスケルトン。'],
+  ['skel_warrior', 'ホネ戦士', 'SSR', 250, { kind: 'twoColor', name: 'ダブルブレイク', desc: '多い2色を全部消す', charge: 36, power: 4.6 }, '角かぶとのスケルトン戦士。'],
+  ['skel_rogue', 'ホネ盗賊', 'SSR', 245, { kind: 'feverTap', name: 'かげのうたげ', desc: 'フィーバー突入＋その間タップでまとめて消せる', charge: 75, power: 2.8 }, '赤いフードの神出鬼没なスケルトン。'],
 ];
 
-export const CHARACTERS: CharDef[] = ROWS.map(([id, name, rarity, atk, skill, catchCopy]) => ({ id, name, rarity, atk, skill, catch: catchCopy }));
+const PASSIVES: Record<string, Passive> = {
+  skel_warrior: { kind: 'guard', name: 'ホネのよろい', desc: 'ボスの妨害を3回まではじく＆7つ以上つなぐとダメージ1.3倍' },
+  skel_rogue: { kind: 'shadow', name: 'かげのしのび', desc: 'ボスの妨害がすぐおわる（時間半分）＆コンボがきれにくい' },
+};
+
+export const CHARACTERS: CharDef[] = ROWS.map(([id, name, rarity, atk, skill, catchCopy]) => ({ id, name, rarity, atk, skill, catch: catchCopy, passive: PASSIVES[id] }));
+
+/** Characters taken out of the roster (pointy hats don't fit a round piece); copies are refunded. */
+export const RETIRED: Record<string, { name: string; refund: number }> = {
+  l_mage: { name: 'とんがり帽', refund: 150 },
+  mage: { name: 'メイジ', refund: 500 },
+  skel_mage: { name: 'ホネ魔導士', refund: 1500 },
+};
 
 export const STARTER_ID = 'kh_a';
 
