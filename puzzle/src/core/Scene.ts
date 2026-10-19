@@ -23,6 +23,7 @@ class SceneManagerImpl {
   private layer = new Container();
   private wipe = new Container();
   private busy = false;
+  private pruneT = 3;
 
   init(): void {
     App.root.addChild(this.layer);
@@ -31,6 +32,13 @@ class SceneManagerImpl {
     App.pixi.ticker.add((t) => {
       const dt = Math.min(t.deltaMS / 1000, 1 / 20);
       this.current?.update(dt);
+      // the scene's context remembers every tween it ever made; drop the finished ones now and then
+      this.pruneT -= dt;
+      if (this.pruneT <= 0 && this.current) {
+        this.pruneT = 3;
+        const ctx = this.current.anims as unknown as { data: { totalProgress?: () => number }[] };
+        ctx.data = ctx.data.filter((d) => typeof d.totalProgress !== 'function' || d.totalProgress() < 1);
+      }
     });
   }
 
@@ -53,6 +61,8 @@ class SceneManagerImpl {
 
   private async transition(make: () => Scene, instant: boolean): Promise<void> {
     const state = { p: 0 };
+    // the outgoing scene must not take taps while the wipe covers it
+    this.layer.interactiveChildren = false;
     try {
       gsap.globalTimeline.resume();
       if (!instant) await this.tween(state, 1, 0.38, 'power2.in');
@@ -66,6 +76,7 @@ class SceneManagerImpl {
     } finally {
       if (!instant) await this.tween(state, 0, 0.42, 'power2.out');
       this.drawWipe(0);
+      this.layer.interactiveChildren = true;
       this.busy = false;
     }
   }
@@ -144,6 +155,21 @@ const origDestroy = Container.prototype.destroy;
 Container.prototype.destroy = function (this: Container, options?: Parameters<Container['destroy']>[0]) {
   if (!this.destroyed) gsap.killTweensOf([this, this.position, this.scale, this.pivot, this.skew]);
   origDestroy.call(this, options);
+};
+
+// Last line of defense: a tween that throws (e.g. it starts on an object destroyed in
+// the meantime) is killed quietly. Uncaught, it would throw on every tick and stall
+// every animation queued after it, which is what froze the screen.
+const TweenProto = gsap.core.Tween.prototype as unknown as { render: (...a: unknown[]) => unknown; kill: () => void };
+const origRender = TweenProto.render;
+TweenProto.render = function (this: typeof TweenProto, ...a: unknown[]) {
+  try {
+    return origRender.apply(this, a);
+  } catch (e) {
+    this.kill();
+    if (import.meta.env.DEV) console.warn('tween killed after error', e, (this as unknown as { __st?: string }).__st);
+    return this;
+  }
 };
 
 // Route tweens and delayed calls into the current scene's context so a scene

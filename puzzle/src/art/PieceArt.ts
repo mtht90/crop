@@ -169,9 +169,9 @@ export function drawBomb(mega: boolean): HTMLCanvasElement {
 // ------------------------------------------------------------ character pieces
 // Each character ships as a 5-cell strip (red, blue, green, yellow, purple) of
 // pre-rendered KayKit heads, plus a portrait in its original colors.
-export const PIECE_CELL = 256;
+export const PIECE_CELL = 320;
 /** How large the art is drawn relative to the physics circle (heads overlap a little). */
-export const PIECE_ART_SCALE = 1.2;
+export const PIECE_ART_SCALE = 1.5;
 
 const atlasCache = new Map<string, Texture>();
 

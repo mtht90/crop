@@ -1,16 +1,16 @@
 import { Assets, Texture } from 'pixi.js';
+import { ALL_TRACKS, SCENE_TRACKS } from '../data/music';
 import { Sound } from './Audio';
 import { BOSSES, BOSS_POSES, bossAlias } from '../data/bosses';
 import { CHARACTERS } from '../data/characters';
 import { loadCharacterArt } from '../art/PieceArt';
 
 const A = './assets';
-const JUNGLE = ['topbar', 'band', 'plank', 'plank_s', 'barbg', 'barfill', 'clock', 'paper', 'wood', 'pause', 'play', 'restart', 'menu', 'close', 'settings', 'prize', 'shop', 'ok', 'sound', 'sound_off', 'music', 'music_off', 'next', 'prev', 'circle', 'star', 'heart', 'leaf', 'win', 'lose', 'stars3', 'lock', 'btn_green', 'btn_red', 'btn_yellow', 'off', 'on'];
+const JUNGLE = ['topbar', 'band', 'plank', 'plank_s', 'barbg', 'barfill', 'clock', 'paper', 'wood', 'pause', 'play', 'restart', 'menu', 'close', 'settings', 'prize', 'shop', 'ok', 'sound', 'sound_off', 'music', 'music_off', 'next', 'prev', 'circle', 'star', 'heart', 'leaf', 'win', 'lose', 'stars3', 'lock', 'btn_green', 'btn_red', 'btn_yellow', 'btn_blue', 'btn_purple', 'btn_pink', 'off', 'on'];
 
 const SFX = [
   'ui_tap', 'ui_back', 'ui_ok', 'ui_open', 'ui_error', 'tick', 'pluck1', 'drop', 'glass', 'bong', 'hit1', 'hit2', 'hit3', 'hitHeavy', 'bell', 'soft', 'rock', 'powerUp', 'powerUp2', 'phaserUp', 'zap', 'laser', 'highUp', 'lowDown', 'pep', 'cardShuffle', 'cardSlide', 'cardFan', 'chips', 'packOpen', 'diceShake', 'coins', 'switch', 'jWin', 'jLose', 'jFever', 'jStart', 'jSSR', 'jSR', 'jR', 'jN', 'jLevel', 'jTimeUp', 'ko', 'rollEnd',
 ];
-const BGM = ['title', 'battle', 'battle2', 'result', 'gacha'];
 
 export function tex(alias: string): Texture {
   return Assets.get<Texture>(alias) ?? Texture.WHITE;
@@ -26,7 +26,10 @@ export async function loadAll(onProgress: (p: number) => void): Promise<void> {
   const report = () => onProgress(texP * 0.5 + sndP * 0.5);
   const sounds: Record<string, string> = {};
   for (const n of SFX) sounds[n] = `${A}/sfx/${n}.mp3`;
-  Sound.registerMusic(Object.fromEntries(BGM.map((n) => [n, `${A}/bgm/${n}.mp3`])));
+  Sound.registerMusic({
+    ...Object.fromEntries(ALL_TRACKS.map((n) => [n, `${A}/bgm/${n}.mp3`])),
+    ...Object.fromEntries(Object.entries(SCENE_TRACKS).map(([k, n]) => [k, `${A}/bgm/${n}.mp3`])),
+  });
   await Promise.all([
     Assets.load(list.map((a) => a.alias), (p) => {
       texP = p;
@@ -50,8 +53,13 @@ function fairyAliases(set: number): { alias: string; src: string }[] {
   return FAIRY_LAYERS.map((l) => ({ alias: `fairy:${set}_${l}`, src: `${A}/fairy/${set}_${l}.webp` }));
 }
 
+// Reference counts: the next scene preloads before the previous one exits, so a
+// set shared by both (e.g. retrying a battle) must not be unloaded under it.
+const fairyRefs = new Map<number, number>();
+
 /** Loads one Fairy-Tale background set (8 layers). */
 export async function loadFairy(set: number): Promise<void> {
+  fairyRefs.set(set, (fairyRefs.get(set) ?? 0) + 1);
   const list = fairyAliases(set);
   for (const a of list) if (!Assets.resolver.hasKey(a.alias)) Assets.add(a);
   await Assets.load(list.map((a) => a.alias));
@@ -59,5 +67,8 @@ export async function loadFairy(set: number): Promise<void> {
 
 /** Frees a background set's GPU memory. */
 export async function unloadFairy(set: number): Promise<void> {
+  const n = (fairyRefs.get(set) ?? 1) - 1;
+  fairyRefs.set(set, Math.max(0, n));
+  if (n > 0) return;
   await Assets.unload(fairyAliases(set).map((a) => a.alias)).catch(() => {});
 }

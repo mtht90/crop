@@ -1,8 +1,8 @@
 import { Save } from '../core/Save';
 import { CHARACTERS, MAX_LV, RARITY_INFO, levelFromCount, type CharDef, type Rarity } from './characters';
 
-export const COST_SINGLE = 100;
-export const COST_TEN = 1000;
+export const COST_SINGLE = 300;
+export const COST_TEN = 3000;
 /** Pulls without an SSR before one is guaranteed. */
 export const PITY = 80;
 

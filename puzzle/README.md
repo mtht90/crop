@@ -28,13 +28,13 @@ npm run fonts    # ゲーム内の日本語を追加・変更したらフォン�
 - 操作の手触り調整は `src/game/Board.ts` の `BOARD_TUNING`（隣接判定・吸着距離・ボム閾値など）
 - バランスは `src/data/characters.ts` / `bosses.ts` / `gacha.ts`
 
-## キャラ素材の差し替え
-ピースは現在プロシージャル描画の仮キャラです。差し替える場合：
-1. `public/assets/characters/<キャラID>/red.png`（blue / green / yellow / purple も）を置く
-   - 正方形・透過PNG・キャラを中央に。横幅がピースの直径に合わせて自動フィットします
-2. `src/data/characters.ts` の該当キャラに `customArt: true` を追加
+## 素材パイプライン
+- ピース・ボス: KayKit の3Dモデルを three.js でレンダリングした画像（5色ストリップ＋ポートレート）。
+  ピースは肌まで各色に着色し、全キャラ同じ見た目サイズ・重心中心にそろえています（`tools/mkpieces.py`）。
 
 ## クレジット
-- Music: Juhani Junkala (CC0) — OpenGameArt
-- Art / SFX: Kenney.nl (CC0) — Monster Builder, Particle, Game Icons, Emotes, Background Elements, Interface/Impact/Digital/Casino/RPG/UI Audio, Music Jingles
-- Fonts: M PLUS Rounded 1c, Dela Gothic One (SIL OFL) — Google Fonts サブセット
+- キャラ・ボス: KayKit (CC0) — Adventurers / Skeletons / Dungeon
+- 背景・UI: CraftPix — Fairy-Tale 2D Backgrounds / Jungle GUI
+- 効果音: 効果音ラボ
+- 音楽: 魔王魂 (CC BY 4.0) — https://maou.audio/ 「音楽：魔王魂」
+- フォント: めもかっち / やっちゃん (SIL OFL 1.1) — `public/fonts/OFL-Memokatchi.txt`。サブセット化には `fonts-src/Memokatchi.ttf` を置いて `npm run fonts`

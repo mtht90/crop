@@ -33,7 +33,7 @@ export class HomeScene extends Scene {
 
   enter(): void {
     this.view.addChild(this.bg, this.col);
-    Sound.music('title', 0.8);
+    Sound.music('home', 0.8);
     const H = App.H;
     const top = App.safeTop + 16;
     const def = CHAR_BY_ID[Save.data.selected] ?? CHARACTERS[0];

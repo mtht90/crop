@@ -8,6 +8,8 @@ export interface OwnedChar {
 
 export interface SaveData {
   coins: number;
+  /** Single-pull gacha tickets (one is handed out on first launch). */
+  tickets: number;
   owned: Record<string, OwnedChar>;
   selected: string;
   bossLv: number;
@@ -18,12 +20,13 @@ export interface SaveData {
   /** Pulls since the last SSR (used for the pity counter). */
   pity: number;
   tutorialDone: boolean;
-  settings: { bgm: number; sfx: number; haptics: boolean; colorAssist: boolean };
+  settings: { bgm: number; sfx: number; haptics: boolean; colorAssist: boolean; battleBgm: string };
 }
 
 function defaults(): SaveData {
   return {
-    coins: 1000,
+    coins: 0,
+    tickets: 1,
     owned: { kh_a: { lv: 1, count: 1 } },
     selected: 'kh_a',
     bossLv: 1,
@@ -33,7 +36,7 @@ function defaults(): SaveData {
     totalPulls: 0,
     pity: 0,
     tutorialDone: false,
-    settings: { bgm: 0.7, sfx: 0.9, haptics: true, colorAssist: false },
+    settings: { bgm: 0.7, sfx: 0.9, haptics: true, colorAssist: false, battleBgm: 'auto' },
   };
 }
 

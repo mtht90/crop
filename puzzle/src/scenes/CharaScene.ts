@@ -21,7 +21,7 @@ export class CharaScene extends Scene {
 
   enter(): void {
     this.view.addChild(this.bg, this.col);
-    Sound.music('title', 0.8);
+    Sound.music('home', 0.8);
     const top = App.safeTop + 16;
     const title = txt('キャラ', { size: 56, font: 'dela', stroke: 0x2a1630, strokeWidth: 12 });
     title.position.set(360, top + 46);
@@ -88,7 +88,10 @@ export class CharaScene extends Scene {
         Sound.play('ui_tap', { vol: 0.7 });
         haptic(5);
         gsap.fromTo(c.scale, { x: 0.9, y: 0.9 }, { x: 1, y: 1, duration: 0.4, ease: 'elastic.out(1.2,0.4)' });
-        if (owned) void loadCharacterArt([def.id], { strips: true }).then(() => this.openDetail(def));
+        if (owned)
+          loadCharacterArt([def.id], { strips: true })
+            .then(() => !this.view.destroyed && this.openDetail(def))
+            .catch(() => !this.view.destroyed && this.toast('読み込みに失敗しました。通信を確認してね'));
         else this.toast('ガチャで手に入れよう！');
       });
       grid.addChild(c);

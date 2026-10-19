@@ -183,7 +183,7 @@ export class SkillButton extends Container {
     this.portrait.scale.set(96 / Math.max(1, this.portrait.texture.width));
     const mask = new Graphics().circle(0, 0, 51).fill(0xffffff);
     this.portrait.mask = mask;
-    this.readyLabel = txt('SKILL!', { size: 22, font: 'dela', color: 0xfff27a, stroke: 0x8a1f00, strokeWidth: 6 });
+    this.readyLabel = txt('ボウルの中！', { size: 20, font: 'dela', color: 0xfff27a, stroke: 0x8a1f00, strokeWidth: 6 });
     this.readyLabel.y = 48;
     this.readyLabel.visible = false;
     this.nameLabel = txt(def.skill.name, { size: 18, stroke: 0x2a1630, strokeWidth: 5 });
@@ -194,9 +194,8 @@ export class SkillButton extends Container {
     this.glow.circle(0, 0, 76).fill({ color: 0xfff27a, alpha: 0.35 });
     this.glow.visible = false;
     this.addChild(this.glow, bg, this.portrait, mask, this.ring, this.readyLabel, this.nameLabel);
-    this.eventMode = 'static';
-    this.cursor = 'pointer';
-    this.hitArea = { contains: (x: number, y: number) => x * x + y * y < 72 * 72 };
+    // display only: the skill fires from the glowing piece it drops into the bowl
+    this.eventMode = 'none';
   }
   get isReady(): boolean {
     return this.ready;

@@ -29,12 +29,15 @@ export interface BattleResult {
   charId: string;
 }
 
+/** Rank by absolute score: E <10万, D <50万, C <100万, B <200万, A <400万, S above. */
 function rankOf(r: BattleResult): { rank: string; color: number } {
-  const k = r.score / r.hp;
-  if (k >= 2.6) return { rank: 'S', color: 0xff4fd8 };
-  if (k >= 1.9) return { rank: 'A', color: 0xffb020 };
-  if (k >= 1.35) return { rank: 'B', color: 0x4fc3ff };
-  return { rank: 'C', color: 0x9aa7b8 };
+  const v = r.score;
+  if (v >= 4_000_000) return { rank: 'S', color: 0xff4fd8 };
+  if (v >= 2_000_000) return { rank: 'A', color: 0xffb020 };
+  if (v >= 1_000_000) return { rank: 'B', color: 0x4fc3ff };
+  if (v >= 500_000) return { rank: 'C', color: 0x5fd068 };
+  if (v >= 100_000) return { rank: 'D', color: 0x9aa7b8 };
+  return { rank: 'E', color: 0x7a7f90 };
 }
 
 export class ResultScene extends Scene {

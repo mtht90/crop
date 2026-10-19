@@ -26,6 +26,8 @@ export class TitleScene extends Scene {
   }
 
   enter(): void {
+    // starts once the first tap unlocks audio
+    Sound.music('title', 0.8);
     this.view.addChild(this.bg, this.col);
     const owned = CHARACTERS.filter((c) => Save.data.owned[c.id]);
     const def = CHAR_BY_ID[Save.data.selected] ?? owned[0];
@@ -63,7 +65,7 @@ export class TitleScene extends Scene {
     tap.position.set(360, logo.y + 300);
     gsap.to(tap, { alpha: 0.25, duration: 0.7, yoyo: true, repeat: -1, ease: 'sine.inOut' });
     this.col.addChild(tap);
-    const credit = txt('KayKit / CraftPix / 効果音ラボ / Juhani Junkala', { size: 18, weight: '500', color: 0xffffff });
+    const credit = txt('KayKit / CraftPix / 効果音ラボ / 魔王魂', { size: 18, weight: '500', color: 0xffffff });
     credit.alpha = 0.7;
     credit.position.set(360, App.H - App.safeBottom - 8);
     credit.anchor.set(0.5, 1);

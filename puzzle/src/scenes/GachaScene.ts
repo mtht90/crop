@@ -5,11 +5,13 @@ import { Scene, Scenes } from '../core/Scene';
 import { Save } from '../core/Save';
 import { Sound, haptic } from '../core/Audio';
 import { Button, grad, panel, popIn, txt } from '../core/UI';
-import { MenuBackground } from '../game/Backdrop';
+import { FairyBackdrop } from '../game/Backdrop';
+import { jungle, jungleSlice } from '../game/Hud';
+import { loadFairy, tex, unloadFairy } from '../core/Loader';
 import { Effects } from '../game/Effects';
 import { World, type PBody } from '../game/Physics';
-import { bigTexture } from '../art/PieceArt';
-import { RARITY_INFO, type Rarity } from '../data/characters';
+import { bigTexture, loadCharacterArt } from '../art/PieceArt';
+import { CHARACTERS, RARITY_INFO, type Rarity } from '../data/characters';
 import { COST_SINGLE, COST_TEN, PITY, pull, rarityRank, type PullResult } from '../data/gacha';
 import { HomeScene } from './HomeScene';
 import { CoinCounter, stars } from './common';
@@ -37,41 +39,78 @@ function drawCapsule(g: Graphics, r: number, rarity: Rarity | 'mix', color?: num
   g.ellipse(-r * 0.38, -r * 0.5, r * 0.28, r * 0.16).fill({ color: 0xffffff, alpha: 0.75 });
 }
 
+const BG_SET = 2;
+
 export class GachaScene extends Scene {
-  private bg = new MenuBackground(0x26124f, 0x6a2a9a);
+  private bg!: FairyBackdrop;
+  private shade = new Graphics();
   private col = new Container();
   private rays = new Graphics();
   private fx = new Effects();
   private machine = new Container();
   private dome = new Container();
   private handle = new Container();
+  private bulbs: Graphics[] = [];
+  private pickup = new Container();
+  private pickArts: Sprite[] = [];
   private caps: { g: Graphics; b: PBody; a: number }[] = [];
   private world = new World({ gravity: 1800, left: -1e4, right: 1e4, bottom: 1e4, iterations: 4, drag: 0.6, circle: { x: 0, y: 0, r: 196 } });
   private shaking = 0;
   private coins!: CoinCounter;
+  private ticketLabel!: ReturnType<typeof txt>;
   private ui = new Container();
   private stageLayer = new Container();
   private busy = false;
   private t = 0;
+  private sparkT = 0;
   private tapResolver: (() => void) | null = null;
   private skipAll = false;
   private lastDim: Graphics | null = null;
 
+  async preload(): Promise<void> {
+    await loadFairy(BG_SET);
+    this.bg = new FairyBackdrop(BG_SET);
+  }
+
   enter(): void {
-    this.view.addChild(this.bg, this.col);
+    this.view.addChild(this.bg, this.shade, this.col);
     Sound.music('gacha', 0.8);
-    const top = App.safeTop + 16;
-    this.col.addChild(this.rays, this.machine, this.fx.view, this.ui, this.stageLayer);
+    const top = App.safeTop;
+    this.col.addChild(this.rays, this.pickup, this.machine, this.fx.view, this.ui, this.stageLayer);
+    // header: wooden bar with back, coins and tickets
+    const bar = jungle('topbar');
+    bar.anchor.set(0.5, 0);
+    bar.width = App.W + 40;
+    bar.height = top + 112;
+    bar.position.set(360, -6);
+    this.ui.addChild(bar);
+    const back = jungle('prev');
+    back.anchor.set(0.5);
+    back.scale.set(70 / back.texture.width);
+    back.position.set(56, top + 52);
+    back.eventMode = 'static';
+    back.cursor = 'pointer';
+    back.on('pointertap', () => {
+      if (this.busy) return;
+      Sound.play('ui_back');
+      Scenes.go(() => new HomeScene());
+    });
     this.coins = new CoinCounter();
-    this.coins.position.set(470, top + 40);
-    const back = new Button({ w: 150, h: 76, label: 'もどる', color: 'grey', size: 28, sound: 'ui_back', onTap: () => !this.busy && Scenes.go(() => new HomeScene()) });
-    back.position.set(100, top + 40);
-    this.ui.addChild(this.coins, back);
-    const title = txt('ぷにガチャ', { size: 64, font: 'dela', color: 0xfff27a, stroke: 0x8a1f00, strokeWidth: 14, shadow: true });
-    title.position.set(360, top + 140);
+    this.coins.position.set(490, top + 54);
+    const tk = new Graphics();
+    tk.roundRect(-20, -26, 150, 52, 26).fill({ color: 0x2a1630, alpha: 0.85 });
+    tk.roundRect(-4, -16, 44, 28, 6).fill(0xff7ab8).stroke({ width: 3, color: 0xffffff });
+    tk.circle(18, -2, 6).fill(0xffffff);
+    tk.position.set(150, top + 50);
+    this.ticketLabel = txt(`×${Save.data.tickets}`, { size: 30, stroke: 0x2a1630, strokeWidth: 6, anchor: [0, 0.5] });
+    this.ticketLabel.position.set(198, top + 47);
+    this.ui.addChild(back, this.coins, tk, this.ticketLabel);
+    const title = txt('ぷにガチャ', { size: 70, font: 'dela', color: 0xfff27a, stroke: 0x6a2a00, strokeWidth: 14, shadow: true });
+    title.position.set(360, top + 160);
     gsap.to(title.scale, { x: 1.05, y: 1.05, duration: 0.7, yoyo: true, repeat: -1, ease: 'sine.inOut' });
     this.ui.addChild(title);
-    this.buildMachine(top + 230);
+    this.buildPickup(top + 296);
+    this.buildMachine(top + 470);
     this.buildButtons();
     this.stageLayer.eventMode = 'static';
     this.stageLayer.on('pointertap', () => {
@@ -81,86 +120,150 @@ export class GachaScene extends Scene {
     });
   }
 
+  /** "PICK UP" plaque showing the SSR lineup. */
+  private buildPickup(y: number): void {
+    const p = this.pickup;
+    p.position.set(360, y);
+    const board = jungleSlice('paper', 600, 170, 60);
+    board.position.set(-300, -85);
+    const tag = new Graphics().roundRect(-110, -22, 220, 44, 22).fill(grad([[0, '#ff7ab8'], [1, '#d81b60']]));
+    tag.roundRect(-110, -22, 220, 44, 22).stroke({ width: 4, color: 0xffffff });
+    tag.position.set(-170, -84);
+    tag.rotation = -0.06;
+    const tl = txt('PICK UP SSR', { size: 24, font: 'dela', stroke: 0x5a0a2a, strokeWidth: 5 });
+    tl.position.copyFrom(tag.position);
+    tl.rotation = tag.rotation;
+    p.addChild(board);
+    const ssr = CHARACTERS.filter((c) => c.rarity === 'SSR');
+    ssr.forEach((c, i) => {
+      const x = (i - (ssr.length - 1) / 2) * 180;
+      const halo = new Graphics().circle(0, 0, 66).fill(grad([[0, '#fff6c0'], [1, '#ffb020']]));
+      halo.circle(0, 0, 66).stroke({ width: 5, color: 0xffffff });
+      halo.position.set(x, 2);
+      const art = new Sprite(bigTexture(c));
+      art.anchor.set(0.5, 0.55);
+      art.scale.set(130 / Math.max(1, art.texture.width));
+      art.position.set(x, 2);
+      const nm = txt(c.name, { size: 20, stroke: 0x2a1630, strokeWidth: 5 });
+      nm.position.set(x, 70);
+      p.addChild(halo, art, nm);
+      this.pickArts.push(art);
+    });
+    p.addChild(tag, tl);
+  }
+
   private buildMachine(y0: number): void {
     const R = 210;
     const H = App.H;
-    const space = H - App.safeBottom - 260 - y0;
-    const s = Math.min(1, space / 640);
+    const space = H - App.safeBottom - 300 - y0;
+    const s = Math.min(1, space / 650);
     this.machine.scale.set(s);
-    this.machine.position.set(360, y0 + R * s);
-    // rays behind
+    this.machine.position.set(360, y0 + (R + 20) * s);
+    // golden rays behind
     this.rays.position.set(360, this.machine.y + 40 * s);
-    for (let i = 0; i < 16; i++) {
-      const a0 = (i / 16) * Math.PI * 2;
-      const a1 = a0 + Math.PI / 16;
-      this.rays.moveTo(0, 0).lineTo(Math.cos(a0) * 900, Math.sin(a0) * 900).lineTo(Math.cos(a1) * 900, Math.sin(a1) * 900).closePath().fill({ color: 0xffffff, alpha: 0.06 });
+    for (let i = 0; i < 18; i++) {
+      const a0 = (i / 18) * Math.PI * 2;
+      const a1 = a0 + Math.PI / 18;
+      this.rays.moveTo(0, 0).lineTo(Math.cos(a0) * 1000, Math.sin(a0) * 1000).lineTo(Math.cos(a1) * 1000, Math.sin(a1) * 1000).closePath().fill({ color: 0xfff0a0, alpha: 0.1 });
     }
-    // base
+    this.rays.blendMode = 'add';
+    // wooden base with gold trim
     const base = new Graphics();
-    base.roundRect(-200, R - 40 + 10, 400, 300, 50).fill({ color: 0x000000, alpha: 0.3 });
-    base.roundRect(-200, R - 40, 400, 300, 50).fill(grad([[0, '#ff7ab8'], [1, '#c2186b']]));
-    base.roundRect(-200, R - 40, 400, 300, 50).stroke({ width: 8, color: 0x5a0a33 });
-    base.roundRect(-180, R - 25, 360, 60, 30).fill({ color: 0xffffff, alpha: 0.25 });
+    const bw = 440;
+    const bt = R - 30;
+    base.roundRect(-bw / 2, bt + 14, bw, 300, 46).fill({ color: 0x000000, alpha: 0.35 });
+    base.roundRect(-bw / 2, bt, bw, 300, 46).fill({ texture: tex('jungle:wood'), textureSpace: 'local' });
+    base.roundRect(-bw / 2, bt, bw, 300, 46).stroke({ width: 10, color: 0xffc94a });
+    base.roundRect(-bw / 2, bt, bw, 300, 46).stroke({ width: 3, color: 0x6a3a00, alignment: 1 });
+    // name plate
+    base.roundRect(-150, bt + 30, 300, 64, 32).fill(grad([[0, '#fff3b0'], [1, '#ffb020']]));
+    base.roundRect(-150, bt + 30, 300, 64, 32).stroke({ width: 5, color: 0x6a3a00 });
     // chute
-    base.roundRect(-80, R + 140, 160, 90, 30).fill(0x2a0a1e);
-    base.roundRect(-80, R + 140, 160, 90, 30).stroke({ width: 6, color: 0x5a0a33 });
-    // coin slot
-    base.roundRect(-140, R + 70, 60, 60, 14).fill(0xffd23f);
-    base.roundRect(-140, R + 70, 60, 60, 14).stroke({ width: 5, color: 0x8a4f00 });
-    base.roundRect(-114, R + 82, 8, 36, 4).fill(0x8a4f00);
-    const label = txt('PUNI', { size: 30, font: 'dela', color: 0xffffff, stroke: 0x5a0a33, strokeWidth: 6 });
-    label.position.set(0, R + 34);
+    base.roundRect(-84, bt + 160, 168, 100, 34).fill(0x1a0a06);
+    base.roundRect(-84, bt + 160, 168, 100, 34).stroke({ width: 8, color: 0xffc94a });
+    base.roundRect(-64, bt + 172, 128, 30, 15).fill({ color: 0xfff0a0, alpha: 0.15 });
+    const label = txt('ぷにガチャ', { size: 34, font: 'dela', color: 0x8a3a00 });
+    label.position.set(0, bt + 62);
+    // marquee bulbs along the base top
+    for (let i = 0; i < 9; i++) {
+      const b = new Graphics();
+      b.circle(0, 0, 11).fill(0xffffff);
+      b.position.set(-bw / 2 + 40 + i * ((bw - 80) / 8), bt + 128);
+      this.bulbs.push(b);
+    }
     // dome
-    const back = new Graphics().circle(0, 0, R).fill({ color: 0xbfe6ff, alpha: 0.25 });
+    const back = new Graphics().circle(0, 0, R).fill({ color: 0xcfeeff, alpha: 0.22 });
     const front = new Graphics();
-    front.circle(0, 0, R).stroke({ width: 12, color: 0xffffff, alpha: 0.85 });
-    front.circle(0, 0, R).stroke({ width: 4, color: 0x5a4a9a, alpha: 0.9 });
-    front.ellipse(-R * 0.45, -R * 0.5, R * 0.22, R * 0.12).fill({ color: 0xffffff, alpha: 0.6 });
-    front.ellipse(R * 0.5, R * 0.2, R * 0.05, R * 0.22).fill({ color: 0xffffff, alpha: 0.25 });
-    const cap = new Graphics().roundRect(-70, -R - 30, 140, 50, 20).fill(grad([[0, '#ffe680'], [1, '#e0a000']]));
-    cap.roundRect(-70, -R - 30, 140, 50, 20).stroke({ width: 6, color: 0x8a4f00 });
-    // handle
+    front.circle(0, 0, R + 6).stroke({ width: 16, color: 0xffc94a });
+    front.circle(0, 0, R + 6).stroke({ width: 4, color: 0x6a3a00, alignment: 1 });
+    front.circle(0, 0, R - 4).stroke({ width: 6, color: 0xffffff, alpha: 0.6 });
+    front.ellipse(-R * 0.45, -R * 0.5, R * 0.24, R * 0.12).fill({ color: 0xffffff, alpha: 0.65 });
+    front.ellipse(R * 0.52, R * 0.15, R * 0.05, R * 0.24).fill({ color: 0xffffff, alpha: 0.25 });
+    const cap = new Graphics();
+    cap.roundRect(-80, -R - 40, 160, 58, 26).fill(grad([[0, '#fff3b0'], [1, '#e09000']]));
+    cap.roundRect(-80, -R - 40, 160, 58, 26).stroke({ width: 6, color: 0x6a3a00 });
+    const crown = new Graphics().poly(starPts(30)).fill(0xffd23f).stroke({ width: 5, color: 0x6a3a00 });
+    crown.position.set(0, -R - 54);
+    // crank: big gold star knob
     const hg = new Graphics();
-    hg.circle(0, 0, 46).fill(grad([[0, '#ffffff'], [1, '#c8c0e8']]));
-    hg.circle(0, 0, 46).stroke({ width: 6, color: 0x4a3a7a });
-    hg.roundRect(-12, -80, 24, 160, 12).fill(0xffd23f);
-    hg.roundRect(-12, -80, 24, 160, 12).stroke({ width: 5, color: 0x8a4f00 });
-    hg.circle(0, 0, 14).fill(0x4a3a7a);
+    hg.roundRect(-14, -86, 28, 172, 14).fill(grad([[0, '#fff3b0'], [1, '#e09000']]));
+    hg.roundRect(-14, -86, 28, 172, 14).stroke({ width: 5, color: 0x6a3a00 });
+    hg.circle(0, 0, 44).fill(grad([[0, '#ffffff'], [1, '#ffd23f']]));
+    hg.circle(0, 0, 44).stroke({ width: 6, color: 0x6a3a00 });
+    hg.poly(starPts(26)).fill(0xff7ab8).stroke({ width: 4, color: 0x6a3a00 });
     this.handle.addChild(hg);
-    this.handle.position.set(118, R + 105);
-    this.machine.addChild(base, label, this.handle, back, this.dome, front, cap);
+    this.handle.position.set(150, bt + 210);
+    this.machine.addChild(base, label, ...this.bulbs, this.handle, back, this.dome, front, cap, crown);
     // capsules physics inside the dome
     const mixes: Rarity[] = ['N', 'N', 'N', 'R', 'R', 'R', 'SR', 'SR', 'SSR'];
-    for (let i = 0; i < 22; i++) {
-      const r = 34;
+    for (let i = 0; i < 24; i++) {
+      const r = 33;
       const b = this.world.add((Math.random() - 0.5) * 200, (Math.random() - 0.5) * 200, r);
       const g = new Graphics();
-      const rr = mixes[i % mixes.length];
-      drawCapsule(g, r, rr);
+      drawCapsule(g, r, mixes[i % mixes.length]);
       this.dome.addChild(g);
       this.caps.push({ g, b, a: Math.random() * 6 });
     }
   }
 
   private buttons: Button[] = [];
+  private ticketBtn: Button | null = null;
   private buildButtons(): void {
-    const by = App.H - App.safeBottom - 110;
-    const one = new Button({ w: 290, h: 120, label: '1回', sub: `${COST_SINGLE} コイン`, color: 'yellow', size: 44, sound: 'ui_ok', onTap: () => void this.doPull(1) });
-    one.position.set(200, by);
-    const ten = new Button({ w: 310, h: 120, label: '10連', sub: `${COST_TEN} コイン`, color: 'pink', size: 44, sound: 'ui_ok', onTap: () => void this.doPull(10) });
+    const by = App.H - App.safeBottom - 100;
+    const one = new Button({ w: 300, h: 116, label: '1回', sub: `${COST_SINGLE} コイン`, color: 'yellow', size: 44, sound: 'ui_ok', onTap: () => void this.doPull(1) });
+    one.position.set(196, by);
+    const ten = new Button({ w: 320, h: 116, label: '10連', sub: `${COST_TEN} コイン`, color: 'pink', size: 44, sound: 'ui_ok', onTap: () => void this.doPull(10) });
     ten.position.set(530, by);
     ten.breathe();
     const note = txt('10連はSR以上1体確定！', { size: 22, color: 0xfff27a, stroke: 0x2a1630, strokeWidth: 6 });
-    note.position.set(530, by - 82);
+    note.position.set(530, by - 78);
     const pity = txt(`SSR確定まで あと${PITY - Save.data.pity}回`, { size: 20, color: 0xffffff, stroke: 0x2a1630, strokeWidth: 5 });
-    pity.position.set(200, by - 82);
-    const rates = new Button({ w: 150, h: 60, label: '提供割合', color: 'purple', size: 22, onTap: () => this.showRates() });
-    rates.position.set(620, App.safeTop + 140);
+    pity.position.set(196, by - 78);
+    const rates = new Button({ w: 150, h: 58, label: '提供割合', color: 'purple', size: 22, onTap: () => this.showRates() });
+    rates.position.set(620, App.safeTop + 160);
     this.buttons = [one, ten, rates];
     this.ui.addChild(one, ten, note, pity, rates);
     this.pityLabel = pity;
+    this.refreshTicket();
   }
   private pityLabel!: ReturnType<typeof txt>;
+
+  /** A free-ticket button floats above the coin buttons while tickets remain. */
+  private refreshTicket(): void {
+    this.ticketLabel.text = `×${Save.data.tickets}`;
+    if (Save.data.tickets > 0 && !this.ticketBtn) {
+      const b = new Button({ w: 380, h: 104, label: 'チケットで1回', sub: `のこり ${Save.data.tickets}枚`, color: 'green', size: 38, sound: 'ui_ok', onTap: () => void this.doPull(1, true) });
+      b.position.set(360, App.H - App.safeBottom - 250);
+      b.breathe();
+      this.ui.addChild(b);
+      this.buttons.push(b);
+      this.ticketBtn = b;
+    } else if (Save.data.tickets <= 0 && this.ticketBtn) {
+      this.buttons = this.buttons.filter((x) => x !== this.ticketBtn);
+      this.ticketBtn.destroy({ children: true });
+      this.ticketBtn = null;
+    }
+  }
 
   private showRates(): void {
     const ov = new Container();
@@ -195,11 +298,14 @@ export class GachaScene extends Scene {
   private setUi(on: boolean): void {
     for (const b of this.buttons) b.enabled = on;
     gsap.to(this.ui, { alpha: on ? 1 : 0, duration: 0.25 });
+    // keep the machine visible while it cranks, then hide everything behind the reveal
+    gsap.to([this.pickup, this.rays], { alpha: on ? 1 : 0, duration: 0.25 });
   }
 
-  private async doPull(n: number): Promise<void> {
+  private async doPull(n: number, ticket = false): Promise<void> {
     if (this.busy) return;
-    const cost = n === 10 ? COST_TEN : COST_SINGLE;
+    const cost = ticket ? 0 : n === 10 ? COST_TEN : COST_SINGLE;
+    if (ticket && Save.data.tickets <= 0) return;
     if (Save.data.coins < cost) {
       Sound.play('ui_error', { vol: 0.7 });
       haptic([10, 30, 10]);
@@ -213,7 +319,10 @@ export class GachaScene extends Scene {
     this.busy = true;
     this.skipAll = false;
     Save.data.coins -= cost;
+    if (ticket) Save.data.tickets--;
     const results = pull(n);
+    // the reveal shows the full-size art of whatever came out
+    await loadCharacterArt(results.map((r) => r.def.id), { portraits: true });
     this.coins.refresh();
     this.setUi(false);
     Sound.play('coins', { vol: 0.8 });
@@ -224,6 +333,7 @@ export class GachaScene extends Scene {
     else await this.grid(results);
     this.clearStage();
     this.pityLabel.text = `SSR確定まで あと${PITY - Save.data.pity}回`;
+    this.refreshTicket();
     this.setUi(true);
     this.busy = false;
   }
@@ -257,7 +367,7 @@ export class GachaScene extends Scene {
 
   private async capsuleOpen(best: Rarity): Promise<void> {
     const layer = this.stageLayer;
-    const dim = new Graphics().rect(-App.colX, 0, App.W, App.H).fill({ color: 0x0a0418, alpha: 0.75 });
+    const dim = new Graphics().rect(-App.colX, 0, App.W, App.H).fill({ color: 0x0a0418, alpha: 0.88 });
     dim.alpha = 0;
     layer.addChild(dim);
     gsap.to(dim, { alpha: 1, duration: 0.4 });
@@ -339,7 +449,8 @@ export class GachaScene extends Scene {
     this.fx.burst(360, cy, { count: 50, tex: 'star_06', tint: [...CAP_COLORS[best], 0xffffff], add: true, speed: [300, 1000], size: [0.08, 0.24], gravity: 400, life: [0.6, 1.2] });
     gsap.to(raysC, { alpha: 0, delay: 0.6, duration: 0.6, onComplete: () => raysC.destroy() });
     await wait(0.35);
-    gsap.to(dim, { alpha: 0.9, duration: 0.3 });
+    gsap.to(dim, { alpha: 1, duration: 0.3 });
+    gsap.to(this.machine, { alpha: 0, duration: 0.3 });
     this.lastDim = dim;
   }
 
@@ -365,7 +476,8 @@ export class GachaScene extends Scene {
     gsap.to(f, { alpha: 0, duration: dur, onComplete: () => f.destroy() });
   }
 
-  private async reveal(res: PullResult): Promise<void> {
+  /** `again`: re-opened from the 10-pull grid (rewards were already paid there). */
+  private async reveal(res: PullResult, again = false): Promise<void> {
     const layer = this.stageLayer;
     const c = new Container();
     const cy = App.H * 0.42;
@@ -414,8 +526,12 @@ export class GachaScene extends Scene {
     name.y = 360;
     c.addChild(name);
     popIn(name, 0.4);
+    const sk = txt(`必殺技「${res.def.skill.name}」\n${res.def.skill.desc}`, { size: 24, color: 0xfff27a, stroke: 0x2a1630, strokeWidth: 6, align: 'center', lineHeight: 34 });
+    sk.y = 432;
+    c.addChild(sk);
+    popIn(sk, 0.55);
     const badgeText = res.isNew ? 'NEW!' : res.maxed ? 'MAX！コイン+50' : res.lvUp ? `Lv.${res.lv} にUP！` : '強化素材ゲット';
-    if (res.maxed) {
+    if (res.maxed && !again) {
       Save.data.coins += 50;
       Save.write();
       this.coins.refresh();
@@ -432,7 +548,7 @@ export class GachaScene extends Scene {
     }
     await wait(1.0);
     const next = txt('タップでつぎへ', { size: 26, stroke: 0x2a1630, strokeWidth: 6 });
-    next.y = 450;
+    next.y = 510;
     c.addChild(next);
     gsap.to(next, { alpha: 0.3, duration: 0.5, yoyo: true, repeat: -1 });
     await this.tap();
@@ -542,7 +658,7 @@ export class GachaScene extends Scene {
         card.cursor = 'pointer';
         card.on('pointertap', async () => {
           c.visible = false;
-          await this.reveal(results[i]);
+          await this.reveal(results[i], true);
           c.visible = true;
         });
       });
@@ -555,10 +671,12 @@ export class GachaScene extends Scene {
     const dim = this.lastDim;
     this.lastDim = null;
     if (dim && !dim.destroyed) gsap.to(dim, { alpha: 0, duration: 0.3, onComplete: () => dim.destroy() });
+    gsap.to(this.machine, { alpha: 1, duration: 0.3 });
   }
 
   resize(): void {
     this.bg.layout(App.W, App.H);
+    this.shade.clear().rect(0, 0, App.W, App.H).fill(grad([[0, 'rgba(30,10,60,0.55)'], [0.5, 'rgba(40,10,70,0.25)'], [1, 'rgba(20,6,40,0.75)']]));
     this.col.x = App.colX;
   }
 
@@ -567,6 +685,19 @@ export class GachaScene extends Scene {
     this.bg.update(dt);
     this.fx.update(dt);
     this.rays.rotation += dt * 0.15;
+    // marquee lights chase around the base
+    this.bulbs.forEach((b, i) => {
+      const on = Math.floor(this.t * (this.busy ? 14 : 5) + i) % 3 === 0;
+      b.tint = on ? 0xfff27a : 0x8a5a20;
+      b.alpha = on ? 1 : 0.7;
+    });
+    this.pickArts.forEach((a, i) => (a.y = 2 + Math.sin(this.t * 2.4 + i * 1.3) * 6));
+    // drifting sparkles
+    this.sparkT -= dt;
+    if (this.sparkT <= 0) {
+      this.sparkT = 0.25;
+      this.fx.burst(Math.random() * 720, App.H * (0.3 + Math.random() * 0.6), { count: 1, tex: 'star_06', tint: [0xfff27a, 0xffffff, 0xff9ad8], add: true, speed: [10, 40], size: [0.05, 0.1], gravity: -30, life: [0.8, 1.6] });
+    }
     if (this.shaking > 0) {
       this.shaking -= dt;
       for (const c of this.caps) {
@@ -586,6 +717,7 @@ export class GachaScene extends Scene {
 
   exit(): void {
     this.world.clear();
+    void unloadFairy(BG_SET);
   }
 }
 

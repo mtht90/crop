@@ -68,9 +68,10 @@ class AudioEngine {
 
   /** Must be called from a user gesture (iOS/Chrome autoplay policy). */
   unlock(): void {
-    if (this.ctx.state !== 'running') void this.ctx.resume();
+    // iOS may reject resume() (not a gesture yet, or after an interruption); just retry on the next tap
+    if (this.ctx.state !== 'running') this.ctx.resume().catch(() => {});
     if (this.bgm?.el.paused) void this.bgm.el.play().catch(() => {});
-    if (this.unlocked) return;
+    if (this.unlocked || this.ctx.state !== 'running') return;
     this.unlocked = true;
     // Play a silent buffer to fully unlock iOS.
     const b = this.ctx.createBuffer(1, 1, 22050);
@@ -145,6 +146,10 @@ class AudioEngine {
 
   registerMusic(map: Record<string, string>): void {
     for (const [k, v] of Object.entries(map)) this.musicUrls.set(k, v);
+  }
+
+  currentMusic(): string | null {
+    return this.bgm?.name ?? null;
   }
 
   music(name: string, fade = 0.8, vol = 1): void {

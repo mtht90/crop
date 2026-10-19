@@ -16,6 +16,7 @@ import { CHARACTERS, CHAR_BY_ID, RARITY_INFO, charAtk, charCharge, type CharDef 
 import { bossAttackCount, bossAttackInterval, bossForLevel, bossHp, type BossDef } from '../data/bosses';
 import { ResultScene, type BattleResult } from './ResultScene';
 import { HomeScene } from './HomeScene';
+import { battleTrack } from '../data/music';
 
 export const BATTLE_TIME = 90;
 /** Diameter of the round board in design px. */
@@ -114,6 +115,8 @@ export class BattleScene extends Scene {
   private feverT = 0;
   private feverCount = 0;
   private skillCharge = 0;
+  /** Seconds left of group-tap mode (skills). */
+  private tapT = 0;
   private skillUses = 0;
   private bossAtkT = 0;
   private idleT = 0;
@@ -169,6 +172,7 @@ export class BattleScene extends Scene {
       onResolve: (pops, cause, meta) => this.onResolve(pops, cause, meta),
       onPiecePop: (p, i, cause, token) => this.onPiecePop(p, i, cause, token),
       onChainChange: (len, eff) => this.onChainChange(len, eff),
+      onSkillTap: () => void this.activateSkill(),
       onInteract: () => {
         this.idleT = 0;
         this.hintShown = false;
@@ -202,12 +206,11 @@ export class BattleScene extends Scene {
     });
     this.pauseBtn.position.set(58, top + 54);
     this.hud.addChild(this.timer, this.scoreW, this.skillBtn, this.feverG, this.comboL, this.pauseBtn);
-    this.skillBtn.on('pointertap', () => this.activateSkill());
     this.timer.set(BATTLE_TIME);
     this.layoutStage();
     this.bindInput();
     document.addEventListener('visibilitychange', this.onVis);
-    Sound.music(Math.random() < 0.5 ? 'battle' : 'battle2', 0.6);
+    Sound.music(battleTrack(), 0.6);
     Sound.musicFilter(20000, 0.01);
     Sound.musicRate(1);
     this.intro();
@@ -335,6 +338,15 @@ export class BattleScene extends Scene {
         this.comboT -= dt;
         if (this.comboT <= 0) this.combo = 0;
       }
+      // a full gauge drops the glowing skill piece into the bowl
+      if (this.skillCharge >= this.chargeNeed && !this.board.hasSkillPiece()) {
+        this.board.spawnSkillPiece();
+        this.floatText('ひっさつピース登場！タップ！', 360, this.boardY + 60, 0xfff27a, 34);
+      }
+      if (this.tapT > 0) {
+        this.tapT -= dt;
+        if (this.tapT <= 0) this.board.tapPop = false;
+      }
       // fever
       if (this.feverOn) {
         this.feverT -= dt;
@@ -401,6 +413,11 @@ export class BattleScene extends Scene {
     const down = (ev: Event) => {
       const e = ev as PointerEvent;
       Sound.unlock();
+      // a primary pointerdown means no other touch is active: a lost pointerup must not lock the board
+      if (e.isPrimary && this.pointerId !== null) {
+        this.board.forceRelease();
+        this.pointerId = null;
+      }
       if (this.pointerId !== null || this.paused || this.phase !== 'play') return;
       const p = local(e);
       if (!inBoard(p)) return;
@@ -464,7 +481,7 @@ export class BattleScene extends Scene {
         mult *= 1.5;
       }
     } else if (cause === 'bomb') mult *= 1.15;
-    else if (cause === 'skill') mult *= this.def.skill.power * 0.45;
+    else if (cause === 'skill') mult *= this.def.skill.power * 0.6;
     else if (cause === 'rock') weight = pops.length * 2;
     if (cause !== 'rock') {
       this.combo++;
@@ -650,7 +667,7 @@ export class BattleScene extends Scene {
     Sound.chord(5);
     Sound.musicRate(this.timeLeft <= 10 ? 1.14 : 1.1);
     haptic([20, 40, 20]);
-    void banner(this.overlay, 'FEVER!!', 360, this.boardY + this.board.h * 0.4, { size: 130, color: 0xff7ad9, stroke: 0x4a0040, hold: 0.4, sub: 'タップでまとめて消せる！' });
+    void banner(this.overlay, 'FEVER!!', 360, this.boardY + this.board.h * 0.4, { size: 130, color: 0xff7ad9, stroke: 0x4a0040, hold: 0.4, sub: 'スコア2倍＆つながりやすい！' });
     for (let i = 0; i < 4; i++) {
       gsap.delayedCall(i * 0.12, () =>
         this.fxTop.burst(this.boardX + Math.random() * 680, this.boardY - 20, { count: 12, tex: 'star_06', tint: COLORS.map((c) => c.glow), add: true, speed: [100, 400], size: [0.08, 0.2], gravity: 400, life: [0.6, 1.1], dir: Math.PI / 2, spread: 2.4 }),
@@ -668,7 +685,7 @@ export class BattleScene extends Scene {
 
   // ----------------------------------------------------------------- skill
   private async activateSkill(): Promise<void> {
-    if (!this.skillBtn.isReady || this.phase !== 'play' || this.paused) return;
+    if (this.phase !== 'play' || this.paused) return;
     this.phase = 'cutin';
     this.board.forceRelease();
     this.board.inputEnabled = false;
@@ -735,10 +752,10 @@ export class BattleScene extends Scene {
         Sound.chord(9);
         Sound.play('zap', { vol: 0.6 });
       }, 0.3);
-      tl.to(lines, { x: -300, duration: 0.9, ease: 'none' }, 0);
-      tl.to(chara.scale, { x: 1.55, y: 1.55, duration: 0.6, ease: 'sine.inOut' }, 0.35);
-      tl.to(bandC.scale, { y: 0, duration: 0.18, ease: 'power2.in' }, 1.05);
-      tl.to(dim, { alpha: 0, duration: 0.2 }, 1.05);
+      tl.to(lines, { x: -300, duration: 0.95, ease: 'none' }, 0);
+      tl.to(chara.scale, { x: 1.55, y: 1.55, duration: 0.45, ease: 'sine.inOut' }, 0.3);
+      tl.to(bandC.scale, { y: 0, duration: 0.16, ease: 'power2.in' }, 0.8);
+      tl.to(dim, { alpha: 0, duration: 0.18 }, 0.8);
     });
   }
 
@@ -746,43 +763,86 @@ export class BattleScene extends Scene {
     const b = this.board;
     const s = this.def.skill;
     const r = b.r;
+    const R = b.w / 2;
+    const size = (s.size ?? 2) * r;
     const counts = b.colorCounts();
     const order = counts.map((c, i) => [c, i]).sort((a, z) => z[0] - a[0]).map(([, i]) => i);
     const bx = this.boardX;
     const by = this.boardY;
     const flash = (color: number) => this.flashBoard(color);
+    // distance from (px,py) to the line through (cx,cy) at angle a
+    const lineDist = (px: number, py: number, cx: number, cy: number, a: number) => Math.abs(-(px - cx) * Math.sin(a) + (py - cy) * Math.cos(a));
+    const band = (cx: number, cy: number, a: number) => {
+      this.beam(bx + cx, by + cy, a, size * 2);
+      b.popWhere((p) => lineDist(p.x, p.y, cx, cy, a) < size, cx, cy);
+    };
     switch (s.kind) {
       case 'bombs':
-        for (let i = 0; i < (s.amount ?? 1); i++) gsap.delayedCall(i * 0.15, () => b.spawnBomb(b.w * (0.25 + Math.random() * 0.5), -r, i >= 1 && this.lv >= 5));
+        for (let i = 0; i < (s.amount ?? 1); i++) gsap.delayedCall(i * 0.15, () => b.spawnBomb(R + (Math.random() - 0.5) * R * 0.6, -r, i >= 1 && this.lv >= 5));
         this.skillHit(10, 0xffd23f);
         break;
-      case 'hline': {
-        const cy = b.h * 0.6;
-        this.beam(bx, by + cy, true);
-        b.popWhere((p) => Math.abs(p.y - cy) < r * 1.9, b.w / 2, cy);
+      case 'hline':
+        band(R, R * 1.2, 0);
         break;
-      }
-      case 'vline': {
-        const cx = b.w * (0.3 + Math.random() * 0.4);
-        this.beam(bx + cx, by + b.h / 2, false);
-        b.popWhere((p) => Math.abs(p.x - cx) < r * 1.9, cx, b.h);
+      case 'vline':
+        band(R + (Math.random() - 0.5) * R * 0.5, R, Math.PI / 2);
+        break;
+      case 'diag':
+        band(R, R * 1.1, Math.random() < 0.5 ? Math.PI / 4 : -Math.PI / 4);
+        break;
+      case 'cross': {
+        const cx = R + (Math.random() - 0.5) * R * 0.4;
+        const cy = R * 1.15;
+        this.beam(bx + cx, by + cy, 0, size * 2);
+        this.beam(bx + cx, by + cy, Math.PI / 2, size * 2);
+        b.popWhere((p) => Math.abs(p.y - cy) < size || Math.abs(p.x - cx) < size, cx, cy);
         break;
       }
       case 'random': {
+        // one after another, like arrows raining in
         const live = b.live().filter((p) => p.kind === 'normal' || p.kind === 'big');
-        const pick = new Set(live.sort(() => Math.random() - 0.5).slice(0, s.amount ?? 8));
-        b.popWhere((p) => pick.has(p), b.w / 2, b.h / 2);
-        flash(0xffffff);
+        const pick = live.sort(() => Math.random() - 0.5).slice(0, s.amount ?? 8);
+        pick.forEach((q, i) =>
+          gsap.delayedCall(i * 0.05, () => {
+            if (q.state !== 'live') return;
+            this.fxTop.burst(bx + q.x, by + q.y, { count: 6, tex: 'star_06', tint: 0xffffff, add: true, speed: [80, 260], size: [0.06, 0.14], life: [0.2, 0.4] });
+            b.popWhere((p) => p === q, q.x, q.y);
+          }),
+        );
+        Sound.play('laser', { vol: 0.5, rate: 1.3 });
         break;
       }
       case 'circle': {
-        const cx = b.w / 2;
-        const cy = b.h * 0.55;
-        b.shockwave(cx, cy, r * 4);
-        b.popWhere((p) => Math.hypot(p.x - cx, p.y - cy) < r * 3.8, cx, cy);
-        Sound.explosion(false);
+        const n = s.amount ?? 1;
+        for (let i = 0; i < n; i++) {
+          gsap.delayedCall(i * 0.28, () => {
+            // first blast in the middle of the pile, the rest anywhere in the bowl
+            const ang = Math.random() * Math.PI * 2;
+            const d = n === 1 ? 0 : Math.random() * (R - size * 0.6);
+            const cx = R + Math.cos(ang) * d;
+            const cy = (n === 1 ? R * 1.15 : R) + Math.sin(ang) * d * 0.8;
+            b.shockwave(cx, cy, size * 1.1);
+            b.popWhere((p) => Math.hypot(p.x - cx, p.y - cy) < size, cx, cy);
+            Sound.explosion(n > 1);
+            this.shake(5, 0.2);
+          });
+        }
         break;
       }
+      case 'bottom': {
+        const top = b.h - size * 2;
+        flash(0xffb070);
+        b.shockwave(R, b.h, size * 2);
+        b.popWhere((p) => p.y > top, R, b.h);
+        Sound.play('hitHeavy', { vol: 0.8, rate: 0.7 });
+        this.shake(10, 0.35);
+        break;
+      }
+      case 'rim':
+        flash(0x9be7ff);
+        b.popWhere((p) => Math.hypot(p.x - R, p.y - R) > R - size * 1.25, R, R);
+        Sound.whoosh(0.6);
+        break;
       case 'paint': {
         const target = order[0];
         const others = b.live().filter((p) => p.kind === 'normal' && p.color !== target);
@@ -791,36 +851,48 @@ export class BattleScene extends Scene {
         flash(COLORS[target].hex);
         break;
       }
-      case 'colorBlast':
-        flash(COLORS[order[0]].hex);
-        b.popWhere((p) => p.color === order[0], b.w / 2, b.h / 2);
-        break;
       case 'bigMaker': {
         const list = b.live().filter((p) => p.kind === 'normal');
         b.makeBig(list.sort(() => Math.random() - 0.5).slice(0, s.amount ?? 6));
         this.skillHit(10, 0x9be7ff);
         break;
       }
-      case 'fever':
+      case 'tapPop':
+        this.startTapPop(s.dur ?? 5);
+        this.skillHit(6, 0xff7ad9);
+        break;
+      case 'feverTap':
         this.fever = 100;
         if (!this.feverOn) this.startFever();
         else this.feverT = FEVER_TIME;
+        this.startTapPop(FEVER_TIME);
         this.skillHit(12, 0xff7ad9);
+        break;
+      case 'colorBlast':
+        flash(COLORS[order[0]].hex);
+        b.popWhere((p) => p.color === order[0], R, R);
         break;
       case 'twoColor':
         flash(0xffd23f);
-        b.shockwave(b.w / 2, b.h / 2, b.h);
-        b.popWhere((p) => p.color === order[0] || p.color === order[1], b.w / 2, b.h);
+        b.shockwave(R, R, b.h);
+        b.popWhere((p) => p.color === order[0] || p.color === order[1], R, b.h);
         Sound.explosion(true);
         break;
       case 'allClear':
         flash(0xffffff);
-        b.shockwave(b.w / 2, b.h / 2, b.h * 1.2);
-        b.popWhere((p) => p.kind !== 'bomb', b.w / 2, b.h / 2);
+        b.shockwave(R, R, b.h * 1.2);
+        b.popWhere(() => true, R, R);
         Sound.explosion(true);
         this.shake(14, 0.5);
         break;
     }
+  }
+
+  /** For a few seconds every tap pops the whole same-color group under the finger. */
+  private startTapPop(dur: number): void {
+    this.tapT = dur;
+    this.board.tapPop = true;
+    void banner(this.overlay, 'タップでまとめて消せる！', 360, this.boardY + this.board.h * 0.45, { size: 56, color: 0xfff27a, stroke: 0x4a0040, hold: 0.5 });
   }
 
   /** Non-popping skills still land a hit on the boss. */
@@ -851,21 +923,17 @@ export class BattleScene extends Scene {
     gsap.to(g, { alpha: 0, duration: 0.5, onComplete: () => g.destroy() });
   }
 
-  private beam(x: number, y: number, horizontal: boolean): void {
+  /** A bright band through (x, y) at `angle` (0 = horizontal), drawn over the bowl. */
+  private beam(x: number, y: number, angle: number, width: number): void {
     const g = new Graphics();
-    const len = horizontal ? this.board.w + 80 : this.board.h + 80;
-    if (horizontal) {
-      g.roundRect(-len / 2, -this.board.r * 1.9, len, this.board.r * 3.8, 40).fill({ color: 0xffffff, alpha: 0.85 });
-      g.position.set(this.boardX + this.board.w / 2, y);
-    } else {
-      g.roundRect(-this.board.r * 1.9, -len / 2, this.board.r * 3.8, len, 40).fill({ color: 0xffffff, alpha: 0.85 });
-      g.position.set(x, this.boardY + this.board.h / 2);
-    }
+    const len = this.board.w + 120;
+    g.roundRect(-len / 2, -width / 2, len, width, width / 2).fill({ color: 0xffffff, alpha: 0.85 });
+    g.position.set(x, y);
+    g.rotation = angle;
     g.blendMode = 'add';
     this.overlay.addChild(g);
-    if (horizontal) g.scale.set(0, 1);
-    else g.scale.set(1, 0);
-    gsap.to(g.scale, { x: 1, y: 1, duration: 0.15, ease: 'power2.out' });
+    g.scale.set(0, 1);
+    gsap.to(g.scale, { x: 1, duration: 0.15, ease: 'power2.out' });
     gsap.to(g, { alpha: 0, duration: 0.4, delay: 0.15, onComplete: () => g.destroy() });
     Sound.play('laser', { vol: 0.7, rate: 0.8 });
     Sound.whoosh(0.4);
@@ -1024,7 +1092,8 @@ export class BattleScene extends Scene {
   private finish(defeated: boolean): void {
     const d = Save.data;
     const score = Math.round(this.landed);
-    const coins = Math.floor(score / 400) + (defeated ? 80 + this.bossLv * 20 : 10);
+    // coins are scarce on purpose: a single pull (300) takes several good rounds
+    const coins = Math.floor(score / 10000) + (defeated ? 30 + this.bossLv * 5 : 5);
     const newBest = score > d.best;
     const result: BattleResult = {
       score,

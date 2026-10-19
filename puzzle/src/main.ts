@@ -47,7 +47,17 @@ async function boot(): Promise<void> {
   draw(0);
   const boot = document.getElementById('boot');
   if (boot) boot.style.opacity = '0';
-  await loadAll(draw);
+  // a flaky connection should offer a retry instead of a black screen
+  for (;;) {
+    try {
+      await loadAll(draw);
+      break;
+    } catch {
+      label.text = '読み込み失敗… タップで再試行';
+      await new Promise<void>((r) => window.addEventListener('pointerdown', () => r(), { once: true }));
+      label.text = 'LOADING';
+    }
+  }
   installBitmapFonts();
   loading.destroy({ children: true });
   boot?.remove();
@@ -55,6 +65,8 @@ async function boot(): Promise<void> {
   // first gesture anywhere unlocks audio
   const unlock = () => Sound.unlock();
   window.addEventListener('pointerdown', unlock, { passive: true });
+  window.addEventListener('pointerup', unlock, { passive: true });
+  window.addEventListener('touchend', unlock, { passive: true });
   window.addEventListener('keydown', unlock);
   // prevent iOS double-tap zoom / pinch
   document.addEventListener('gesturestart', (e) => e.preventDefault());
@@ -70,7 +82,7 @@ async function boot(): Promise<void> {
   };
   Scenes.go(scenes[start ?? ''] ?? (() => new TitleScene()), true);
   // handle for automated playtests
-  (window as unknown as { __game: unknown }).__game = { Scenes, App, scenes };
+  (window as unknown as { __game: unknown }).__game = { Scenes, App, scenes, gsap };
 }
 
 void boot();

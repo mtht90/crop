@@ -1,29 +1,31 @@
 import { Container, Graphics, Sprite, Texture } from 'pixi.js';
 import gsap from 'gsap';
 import { ShockwaveFilter } from 'pixi-filters';
-import { ART_CX, ART_CY, ART_R, ART_SIZE, COLORS, PIECE_ART_SCALE, PIECE_CELL, bombTexture, pieceTexture, rockTexture } from '../art/PieceArt';
+import { ART_CX, ART_CY, ART_R, ART_SIZE, COLORS, PIECE_ART_SCALE, PIECE_CELL, bigTexture, bombTexture, pieceTexture, rockTexture } from '../art/PieceArt';
 import type { CharDef } from '../data/characters';
 import { Effects } from './Effects';
 import { World, type PBody } from './Physics';
 import { Sound, haptic } from '../core/Audio';
 import { txt } from '../core/UI';
 
-export type PieceKind = 'normal' | 'big' | 'bomb' | 'mega' | 'rock';
+export type PieceKind = 'normal' | 'big' | 'bomb' | 'mega' | 'rock' | 'skill';
 type PieceState = 'live' | 'linked' | 'popping' | 'dead';
 
 /** Tunables for the feel of the board. */
 export const BOARD_TUNING = {
-  radius: 47,
+  radius: 39,
   bigScale: 1.55,
   /** Extra adjacency slack when either piece is big. */
   bigReach: 0.25,
+  /** Extra adjacency slack during fever (links reach further). */
+  feverReach: 0.22,
   /** Two pieces are "touching" if their centers are within (ra+rb)*adjacency. */
   adjacency: 1.42,
   /** How close the finger must be to a piece center (in radii) to grab it. */
   grab: 1.0,
   /** Extra reach (in radii) when the candidate is adjacent to the chain tail. */
   magnet: 1.34,
-  fill: 0.76,
+  fill: 0.65,
   minChain: 3,
   bombAt: 7,
   megaAt: 12,
@@ -51,6 +53,8 @@ export interface BoardEvents {
   /** Called when a chain is released short. */
   onCancel?(): void;
   onInteract?(): void;
+  /** The glowing skill piece was tapped. */
+  onSkillTap?(x: number, y: number): void;
 }
 
 let nextId = 1;
@@ -79,6 +83,9 @@ export class Piece {
   linkScale = 1;
   baseScale = 1;
   appear = 0;
+  /** Glow ring under the skill piece. */
+  ring?: Graphics;
+  tag?: Container;
   constructor(
     public kind: PieceKind,
     public color: number,
@@ -128,6 +135,8 @@ export class Board {
   /** When false, input is ignored (countdown, time up, cut-ins). */
   inputEnabled = false;
   fever = false;
+  /** Skill mode: tapping pops the whole same-color group under the finger. */
+  tapPop = false;
   frozen = false;
   private shock: ShockwaveFilter | null = null;
   private maskG = new Graphics();
@@ -194,6 +203,7 @@ export class Board {
 
   textureFor(p: Piece): Texture {
     if (p.kind === 'rock') return rockTexture();
+    if (p.kind === 'skill') return bigTexture(this.def);
     if (p.kind === 'bomb' || p.kind === 'mega') return bombTexture(p.kind === 'mega');
     return pieceTexture(this.def, p.color);
   }
@@ -202,8 +212,12 @@ export class Board {
   private dress(p: Piece): void {
     p.sprite.texture = this.textureFor(p);
     if (p.kind === 'normal' || p.kind === 'big') {
-      p.sprite.anchor.set(0.5, 0.52);
+      // strips are centered on each head's center of mass at a common visible size
+      p.sprite.anchor.set(0.5, 0.5);
       p.baseScale = (p.r * 2 * PIECE_ART_SCALE) / PIECE_CELL;
+    } else if (p.kind === 'skill') {
+      p.sprite.anchor.set(0.5, 0.55);
+      p.baseScale = (p.r * 2.3) / Math.max(1, p.sprite.texture.width);
     } else {
       p.sprite.anchor.set(ART_CX / ART_SIZE, ART_CY / ART_SIZE);
       p.baseScale = p.r / ART_R;
@@ -211,7 +225,7 @@ export class Board {
   }
 
   addPiece(kind: PieceKind, color: number, x: number, y: number, vy = 0): Piece {
-    const base = kind === 'big' ? this.r * BOARD_TUNING.bigScale : kind === 'mega' ? this.r * 1.2 : this.r;
+    const base = kind === 'big' ? this.r * BOARD_TUNING.bigScale : kind === 'mega' ? this.r * 1.2 : kind === 'skill' ? this.r * 1.6 : this.r;
     // a little size variance keeps the pile from settling into a grid
     const r = base * (0.96 + Math.random() * 0.08);
     const body = this.world.add(x, y, r * 0.97, kind === 'big' ? 3 : 1);
@@ -326,6 +340,18 @@ export class Board {
       const w = Math.sin(p.pulse * 18) * 0.04;
       along += w;
       across -= w;
+    } else if (p.kind === 'skill') {
+      const w = Math.sin(p.pulse * 6) * 0.06;
+      along += w;
+      across += w;
+      if (p.ring) {
+        p.ring.alpha = 0.55 + Math.sin(p.pulse * 8) * 0.35;
+        p.ring.scale.set(1 + Math.sin(p.pulse * 6) * 0.08);
+      }
+      if (p.tag) {
+        p.tag.y = -p.r * 1.25 - Math.abs(Math.sin(p.pulse * 5)) * 12;
+        p.tag.rotation = -p.view.rotation;
+      }
     } else if (p.kind === 'bomb' || p.kind === 'mega') {
       const w = Math.sin(p.pulse * 10) * 0.04;
       along += w;
@@ -371,6 +397,7 @@ export class Board {
   adjacent(a: Piece, b: Piece, slack = BOARD_TUNING.adjacency): boolean {
     // big pieces reach further so they are easy to work into a chain
     if (a.kind === 'big' || b.kind === 'big') slack += BOARD_TUNING.bigReach;
+    if (this.fever) slack += BOARD_TUNING.feverReach;
     return Math.hypot(a.x - b.x, a.y - b.y) <= (a.r + b.r) * slack;
   }
 
@@ -390,7 +417,11 @@ export class Board {
       gsap.fromTo(p.view, { x: p.view.x - 6 }, { x: p.view.x, duration: 0.25, ease: 'elastic.out(1.5,0.3)' });
       return;
     }
-    if (this.fever) {
+    if (p.kind === 'skill') {
+      this.takeSkillPiece(p);
+      return;
+    }
+    if (this.tapPop) {
       this.popGroup(p);
       return;
     }
@@ -436,10 +467,12 @@ export class Board {
 
   pointerUp(): void {
     if (this.chain.length === 0) return;
-    const chain = this.chain;
+    // something else (a skill, a bomb) may have taken pieces out of the chain meanwhile
+    const chain = this.chain.filter((p) => p.state === 'linked');
     this.chain = [];
     this.pointer = null;
     this.badge.visible = false;
+    if (chain.length === 0) return;
     const eff = chain.reduce((a, p) => a + p.weight, 0);
     if (chain.length >= BOARD_TUNING.minChain || (eff >= BOARD_TUNING.minChain && chain.length >= 2)) {
       this.resolveChain(chain);
@@ -532,8 +565,10 @@ export class Board {
 
   /** Visually pops a piece after `delay` and removes it from the world. */
   popPiece(p: Piece, delay: number, index: number, cause: PopCause, token: number): void {
+    if (p.state === 'dead') return;
     p.state = 'popping';
     const run = () => {
+      if (p.state === 'dead' || p.view.destroyed) return;
       const info = this.info(p);
       this.kill(p);
       const big = p.kind === 'big';
@@ -621,6 +656,36 @@ export class Board {
     for (const p of this.pieces) p.hint = false;
   }
 
+  /** Drops the glowing skill piece into the bowl. */
+  spawnSkillPiece(): Piece {
+    const p = this.addPiece('skill', -1, this.w / 2 + (Math.random() - 0.5) * this.r * 2, -this.r * 2, 300);
+    const ring = new Graphics();
+    ring.circle(0, 0, p.r * 1.12).fill({ color: 0xfff2a0, alpha: 0.55 });
+    ring.circle(0, 0, p.r * 1.12).stroke({ width: 6, color: 0xffffff });
+    ring.blendMode = 'add';
+    p.view.addChildAt(ring, 0);
+    p.ring = ring;
+    const tap = txt('TAP!', { size: 30, font: 'dela', color: 0xfff27a, stroke: 0x8a1f00, strokeWidth: 7 });
+    tap.y = -p.r * 1.25;
+    p.view.addChild(tap);
+    p.tag = tap;
+    Sound.play('powerUp2', { vol: 0.5 });
+    return p;
+  }
+
+  hasSkillPiece(): boolean {
+    return this.pieces.some((p) => p.kind === 'skill' && p.state === 'live');
+  }
+
+  private takeSkillPiece(p: Piece): void {
+    p.state = 'popping';
+    this.kill(p);
+    this.ev.onSkillTap?.(p.x, p.y);
+    this.overFx.burst(p.x, p.y, { count: 24, tex: 'star_06', tint: [0xfff27a, 0xffffff], add: true, speed: [200, 600], size: [0.1, 0.24], gravity: 300, life: [0.4, 0.8] });
+    gsap.to(p.view.scale, { x: 1.6, y: 1.6, duration: 0.18, ease: 'back.out(2)' });
+    gsap.to(p.view, { alpha: 0, duration: 0.2, delay: 0.08, onComplete: () => p.view.destroy({ children: true }) });
+  }
+
   explode(b: Piece): void {
     if (b.state !== 'live') return;
     b.state = 'popping';
@@ -629,10 +694,10 @@ export class Board {
     const cx = b.x;
     const cy = b.y;
     const victims = this.pieces
-      .filter((p) => p !== b && (p.state === 'live' || p.state === 'linked') && Math.hypot(p.x - cx, p.y - cy) <= radius + p.r * 0.5)
+      .filter((p) => p !== b && p.state === 'live' && Math.hypot(p.x - cx, p.y - cy) <= radius + p.r * 0.5)
       .sort((p, q) => Math.hypot(p.x - cx, p.y - cy) - Math.hypot(q.x - cx, q.y - cy));
     const chained = victims.filter((p) => p.kind === 'bomb' || p.kind === 'mega');
-    const popped = victims.filter((p) => !(p.kind === 'bomb' || p.kind === 'mega'));
+    const popped = victims.filter((p) => !(p.kind === 'bomb' || p.kind === 'mega' || p.kind === 'skill'));
     for (const p of popped) p.state = 'popping';
     const tok = this.ev.onResolve(popped.map((p) => this.info(p)), 'bomb', { chain: popped.length, color: -1, x: cx, y: cy });
     this.kill(b);
@@ -682,7 +747,7 @@ export class Board {
   /** Pops pieces matching a predicate with a wave from (ox,oy). */
   popWhere(pred: (p: Piece) => boolean, ox: number, oy: number, cause: PopCause = 'skill'): PopInfo[] {
     const victims = this.live()
-      .filter((p) => p.kind !== 'bomb' && p.kind !== 'mega' && pred(p))
+      .filter((p) => p.kind !== 'bomb' && p.kind !== 'mega' && p.kind !== 'skill' && pred(p))
       .sort((p, q) => Math.hypot(p.x - ox, p.y - oy) - Math.hypot(q.x - ox, q.y - oy));
     for (const p of victims) p.state = 'popping';
     const infos = victims.map((p) => this.info(p));

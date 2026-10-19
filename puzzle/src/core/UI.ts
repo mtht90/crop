@@ -103,12 +103,12 @@ export interface ButtonOpts {
 
 const SKIN: Record<BtnColor, [string, number, number]> = {
   // jungle texture, nine-slice inset, label stroke
-  pink: ['btn_red', 60, 0x5a0a0a],
+  pink: ['btn_pink', 44, 0x5a0a2a],
   orange: ['btn_red', 60, 0x5a0a0a],
   yellow: ['btn_yellow', 44, 0x6a3a00],
-  green: ['btn_green', 40, 0x1e3a08],
-  blue: ['btn_green', 40, 0x1e3a08],
-  purple: ['btn_green', 40, 0x1e3a08],
+  green: ['btn_green', 44, 0x1e3a08],
+  blue: ['btn_blue', 44, 0x0a2a5a],
+  purple: ['btn_purple', 44, 0x2a0a5a],
   grey: ['plank', 34, 0x2a1608],
 };
 
@@ -163,14 +163,14 @@ export class Button extends Container {
     this.cursor = 'pointer';
     this.hitArea = { contains: (x: number, y: number) => Math.abs(x) <= o.w / 2 + 6 && y >= -o.h / 2 - 6 && y <= o.h / 2 + 12 };
     this.on('pointerdown', () => {
-      if (!this._enabled) return;
+      if (!this._enabled || this.face.destroyed) return;
       this.pressed = true;
       gsap.to(this.face.scale, { x: 1.06, y: 0.9, duration: 0.08, ease: 'power2.out' });
       gsap.to(this.face, { y: 5, duration: 0.08 });
       haptic(6);
     });
     const release = (fire: boolean) => {
-      if (!this.pressed) return;
+      if (!this.pressed || this.face.destroyed) return;
       this.pressed = false;
       gsap.to(this.face.scale, { x: 1, y: 1, duration: 0.5, ease: 'elastic.out(1.2, 0.4)' });
       gsap.to(this.face, { y: 0, duration: 0.3, ease: 'back.out(3)' });
