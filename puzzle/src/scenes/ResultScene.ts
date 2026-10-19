@@ -31,9 +31,9 @@ export interface BattleResult {
 
 function rankOf(r: BattleResult): { rank: string; color: number } {
   const k = r.score / r.hp;
-  if (k >= 2) return { rank: 'S', color: 0xff4fd8 };
-  if (k >= 1.4) return { rank: 'A', color: 0xffb020 };
-  if (k >= 1) return { rank: 'B', color: 0x4fc3ff };
+  if (k >= 2.6) return { rank: 'S', color: 0xff4fd8 };
+  if (k >= 1.9) return { rank: 'A', color: 0xffb020 };
+  if (k >= 1.35) return { rank: 'B', color: 0x4fc3ff };
   return { rank: 'C', color: 0x9aa7b8 };
 }
 

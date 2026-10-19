@@ -15,12 +15,14 @@ type PieceState = 'live' | 'linked' | 'popping' | 'dead';
 export const BOARD_TUNING = {
   radius: 47,
   bigScale: 1.55,
+  /** Extra adjacency slack when either piece is big. */
+  bigReach: 0.25,
   /** Two pieces are "touching" if their centers are within (ra+rb)*adjacency. */
-  adjacency: 1.3,
+  adjacency: 1.42,
   /** How close the finger must be to a piece center (in radii) to grab it. */
   grab: 1.0,
   /** Extra reach (in radii) when the candidate is adjacent to the chain tail. */
-  magnet: 1.22,
+  magnet: 1.34,
   fill: 0.76,
   minChain: 3,
   bombAt: 7,
@@ -136,23 +138,38 @@ export class Board {
     public readonly w: number,
     public readonly h: number,
     private ev: BoardEvents,
+    /** Round Puni Puni-style board: w is the diameter (h must equal w). */
+    readonly round = false,
   ) {
     this.r = BOARD_TUNING.radius;
-    this.world = new World({ gravity: BOARD_TUNING.gravity, left: 0, right: w, bottom: h, iterations: 6, drag: 0.35, friction: 0.12 });
-    this.maskG.roundRect(-6, -10, w + 12, h + 16, 30).fill(0xffffff);
+    const R = w / 2;
+    this.world = new World({
+      gravity: BOARD_TUNING.gravity,
+      left: 0,
+      right: w,
+      bottom: h,
+      iterations: 6,
+      drag: 0.35,
+      friction: 0.12,
+      bowl: round ? { x: R, y: R, r: R, hole: (R - this.r) * 0.55 } : undefined,
+    });
+    if (round) this.maskG.circle(R, R, R + 2).fill(0xffffff);
+    else this.maskG.roundRect(-6, -10, w + 12, h + 16, 30).fill(0xffffff);
     this.view.addChild(this.maskG);
     this.pieceLayer.mask = this.maskG;
     this.view.addChild(this.fx.view, this.pieceLayer, this.lineLayer, this.overFx.view, this.badge);
     this.badge.addChild(this.badgeBg, this.badgeText);
     this.badge.visible = false;
-    const lanes = Math.floor(w / (this.r * 2));
+    const lanes = Math.floor((round ? (R - this.r) * 1.1 : w) / (this.r * 2));
     this.lanes = new Array(lanes).fill(0);
   }
 
   // --------------------------------------------------------------- pieces
   private targetUnits(): number {
-    const area = this.w * this.h;
-    return Math.floor((BOARD_TUNING.fill * area) / (Math.PI * this.r * this.r));
+    const area = this.round ? Math.PI * (this.w / 2) ** 2 : this.w * this.h;
+    // the bowl packs tighter (Puni Puni fills it to the brim)
+    const fill = this.round ? BOARD_TUNING.fill * 1.08 : BOARD_TUNING.fill;
+    return Math.floor((fill * area) / (Math.PI * this.r * this.r));
   }
 
   private units(): number {
@@ -215,7 +232,7 @@ export class Board {
     const cols = this.lanes.length;
     for (let i = 0; i < n; i++) {
       // scattered drop: random x, loosely stacked heights, so the pile settles organically
-      const x = this.r + Math.random() * (this.w - this.r * 2);
+      const x = this.round ? this.w / 2 + (Math.random() - 0.5) * (this.w / 2 - this.r) * 1.1 : this.r + Math.random() * (this.w - this.r * 2);
       const y = -this.r - (i / cols) * this.r * 2.2 - Math.random() * this.r * 1.5;
       this.addPiece('normal', this.pickColor(), x, y, 300 + Math.random() * 200);
     }
@@ -234,8 +251,9 @@ export class Board {
       let lane = 0;
       for (let i = 1; i < this.lanes.length; i++) if (this.lanes[i] < this.lanes[lane]) lane = i;
       // prefer lanes over the lowest stacks so the refill is even
-      const laneW = this.w / this.lanes.length;
-      const x = laneW * (lane + 0.5) + (Math.random() - 0.5) * laneW * 1.1;
+      const spanX = this.round ? (this.w / 2 - this.r) * 1.1 : this.w;
+      const laneW = spanX / this.lanes.length;
+      const x = (this.w - spanX) / 2 + laneW * (lane + 0.5) + (Math.random() - 0.5) * laneW * 1.1;
       const y = -this.r * 1.2 - this.lanes[lane] * this.r * 2.1;
       this.lanes[lane] += 1;
       const big = Math.random() < BOARD_TUNING.bigChance * (this.fever ? 2.5 : 1);
@@ -332,6 +350,7 @@ export class Board {
     let bd = Infinity;
     for (const p of this.pieces) {
       if (p.state === 'dead' || p.state === 'popping') continue;
+      if (!this.onBoard(p)) continue;
       if (filter && !filter(p)) continue;
       const d = Math.hypot(p.x - x, p.y - y);
       if (d <= p.r * reach && d < bd) {
@@ -342,7 +361,16 @@ export class Board {
     return best;
   }
 
+  /** Pieces still dropping in above the bowl can't be touched yet. */
+  onBoard(p: Piece): boolean {
+    if (!this.round) return true;
+    const R = this.w / 2;
+    return Math.hypot(p.x - R, p.y - R) < R - p.r * 0.35;
+  }
+
   adjacent(a: Piece, b: Piece, slack = BOARD_TUNING.adjacency): boolean {
+    // big pieces reach further so they are easy to work into a chain
+    if (a.kind === 'big' || b.kind === 'big') slack += BOARD_TUNING.bigReach;
     return Math.hypot(a.x - b.x, a.y - b.y) <= (a.r + b.r) * slack;
   }
 
@@ -559,7 +587,7 @@ export class Board {
     while (q.length) {
       const cur = q.shift()!;
       for (const p of this.pieces) {
-        if (seen.has(p) || !p.linkable || p.color !== start.color) continue;
+        if (seen.has(p) || !p.linkable || p.color !== start.color || !this.onBoard(p)) continue;
         if (this.adjacent(cur, p)) {
           seen.add(p);
           q.push(p);
@@ -574,7 +602,7 @@ export class Board {
     const done = new Set<Piece>();
     let best: Piece[] = [];
     for (const p of this.pieces) {
-      if (done.has(p) || !p.linkable) continue;
+      if (done.has(p) || !p.linkable || !this.onBoard(p)) continue;
       const g = this.groupOf(p);
       g.forEach((q) => done.add(q));
       const w = g.reduce((a, q) => a + q.weight, 0);

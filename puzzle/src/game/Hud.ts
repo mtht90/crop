@@ -370,15 +370,28 @@ export class JTimer extends Container {
   private digits = num('60', 50);
   private clock = jungle('clock');
   private warn = false;
+  private frozen = false;
+  private stopTag = txt('STOP', { size: 22, color: 0x7fe8ff, stroke: 0x0a2a40, strokeWidth: 6 });
   constructor() {
     super();
+    this.stopTag.position.set(-38, 40);
+    this.stopTag.visible = false;
+    this.addChild(this.stopTag);
     this.clock.scale.set(92 / this.clock.texture.width);
     this.clock.x = -38;
     this.digits.anchor.set(0, 0.5);
     this.digits.x = 4;
     this.addChild(this.clock, this.digits);
   }
-  set(remaining: number): void {
+  /** Fever stops the clock; shown with an icy tint and a STOP tag. */
+  set(remaining: number, frozen = false): void {
+    if (frozen !== this.frozen) {
+      this.frozen = frozen;
+      this.stopTag.visible = frozen;
+      this.clock.tint = frozen ? 0x9fe8ff : 0xffffff;
+      this.digits.tint = frozen ? 0x9fe8ff : this.warn ? 0xff8aa0 : 0xffffff;
+      if (frozen) gsap.fromTo(this.stopTag.scale, { x: 1.6, y: 1.6 }, { x: 1, y: 1, duration: 0.35, ease: 'back.out(3)' });
+    }
     const s = Math.ceil(Math.max(0, remaining));
     const t = String(s);
     if (this.digits.text !== t) {
@@ -392,7 +405,7 @@ export class JTimer extends Container {
     const warn = remaining <= 10;
     if (warn !== this.warn) {
       this.warn = warn;
-      this.digits.tint = warn ? 0xff8aa0 : 0xffffff;
+      this.digits.tint = this.frozen ? 0x9fe8ff : warn ? 0xff8aa0 : 0xffffff;
     }
   }
 }

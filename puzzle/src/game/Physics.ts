@@ -31,6 +31,11 @@ export interface WorldOpts {
   friction?: number;
   /** Optional circular container (gacha dome). */
   circle?: { x: number; y: number; r: number };
+  /**
+   * Optional bowl: a circle whose upper half narrows into an open chute of
+   * half-width `hole`, so pieces can drop in from above (puzzle board).
+   */
+  bowl?: { x: number; y: number; r: number; hole: number };
 }
 
 export class World {
@@ -65,6 +70,17 @@ export class World {
     for (let i = 0; i < n; i++) {
       const a = bs[i];
       if (a.position.y >= o.bottom - a.r - 1 && a.velocity.y > a.impact) this.hit(a, a.velocity.y, 0, 1);
+      if (o.bowl) {
+        // lower rim of the bowl
+        const c = o.bowl;
+        const dx = a.position.x - c.x;
+        const dy = a.position.y - c.y;
+        const d = Math.hypot(dx, dy);
+        if (dy > 0 && d >= c.r - a.r - 1 && d > 0) {
+          const vn = (a.velocity.x * dx + a.velocity.y * dy) / d;
+          if (vn > 0) this.hit(a, vn, dx / d, dy / d);
+        }
+      }
       for (let j = i + 1; j < n; j++) {
         const b = bs[j];
         const rr = (a.r + b.r) * 1.02;
@@ -149,6 +165,25 @@ export class World {
 
   private walls(b: PBody): void {
     const o = this.o;
+    if (o.bowl) {
+      const c = o.bowl;
+      const dx = b.position.x - c.x;
+      const dy = b.position.y - c.y;
+      const max = c.r - b.r;
+      if (dy >= 0) {
+        const d = Math.hypot(dx, dy);
+        if (d > max && d > 0) {
+          b.position.x = c.x + (dx / d) * max;
+          b.position.y = c.y + (dy / d) * max;
+        }
+      } else {
+        // upper half: side walls follow the circle until it narrows to the chute
+        const hw = dy > -max ? Math.max(c.hole, Math.sqrt(max * max - dy * dy)) : c.hole;
+        if (dx > hw) b.position.x = c.x + hw;
+        else if (dx < -hw) b.position.x = c.x - hw;
+      }
+      return;
+    }
     if (o.circle) {
       const c = o.circle;
       const dx = b.position.x - c.x;

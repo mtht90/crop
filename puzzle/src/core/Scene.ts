@@ -138,6 +138,14 @@ function killTweensIn(root: Container): void {
   }
 }
 
+// Destroying a display object also kills tweens aimed at it or its transform points;
+// otherwise a delayed tween would start on a destroyed object and throw in GSAP's ticker.
+const origDestroy = Container.prototype.destroy;
+Container.prototype.destroy = function (this: Container, options?: Parameters<Container['destroy']>[0]) {
+  if (!this.destroyed) gsap.killTweensOf([this, this.position, this.scale, this.pivot, this.skew]);
+  origDestroy.call(this, options);
+};
+
 // Route tweens and delayed calls into the current scene's context so a scene
 // switch can kill them all, including callbacks scheduled from pointer handlers.
 let ownTween = false;

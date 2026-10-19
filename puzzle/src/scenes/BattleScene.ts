@@ -9,15 +9,17 @@ import { Board, BOARD_TUNING, type PopCause, type PopInfo } from '../game/Board'
 import { BossView } from '../game/BossView';
 import { FairyBackdrop } from '../game/Backdrop';
 import { Effects, fx } from '../game/Effects';
-import { ComboLabel, JFever, JTimer, ScoreLine, SkillButton, banner, installBitmapFonts, jungle, jungleSlice, num } from '../game/Hud';
+import { ComboLabel, JFever, JTimer, ScoreLine, SkillButton, banner, installBitmapFonts, jungle, num } from '../game/Hud';
 import { COLORS, bigTexture, loadCharacterArt, rockTexture } from '../art/PieceArt';
-import { loadFairy, unloadFairy } from '../core/Loader';
+import { loadFairy, tex, unloadFairy } from '../core/Loader';
 import { CHARACTERS, CHAR_BY_ID, RARITY_INFO, charAtk, charCharge, type CharDef } from '../data/characters';
 import { bossAttackCount, bossAttackInterval, bossForLevel, bossHp, type BossDef } from '../data/bosses';
 import { ResultScene, type BattleResult } from './ResultScene';
 import { HomeScene } from './HomeScene';
 
-export const BATTLE_TIME = 60;
+export const BATTLE_TIME = 90;
+/** Diameter of the round board in design px. */
+const BOWL_D = 656;
 const COMBO_WINDOW = 2.4;
 const FEVER_TIME = 7.5;
 
@@ -78,7 +80,7 @@ export class BattleScene extends Scene {
   private boardFrame = new Container();
   private feverFrame = new Graphics();
   private board!: Board;
-  private boardX = 20;
+  private boardX = 360 - BOWL_D / 2;
   private boardY = 0;
   private fxTop = new Effects();
   private orbLayer = new Container();
@@ -159,10 +161,11 @@ export class BattleScene extends Scene {
     // layout is decided once from the current viewport; board physics depends on it
     const H = App.H;
     const top = App.safeTop;
-    this.stageH = Math.round(Math.max(420, Math.min(600, H * 0.355)) + top * 0.6);
-    this.boardY = this.stageH + 128;
-    const boardH = Math.round(Math.max(560, Math.min(880, H - this.boardY - 22 - App.safeBottom)));
-    this.board = new Board(this.def, 680, boardH, {
+    // round bowl pinned to the bottom; the boss stage takes whatever is left above it
+    const D = BOWL_D;
+    this.boardY = Math.round(Math.max(top + 540, H - App.safeBottom - 44 - D));
+    this.stageH = this.boardY - 128;
+    this.board = new Board(this.def, D, D, {
       onResolve: (pops, cause, meta) => this.onResolve(pops, cause, meta),
       onPiecePop: (p, i, cause, token) => this.onPiecePop(p, i, cause, token),
       onChainChange: (len, eff) => this.onChainChange(len, eff),
@@ -170,10 +173,10 @@ export class BattleScene extends Scene {
         this.idleT = 0;
         this.hintShown = false;
       },
-    });
+    }, true);
     this.board.view.position.set(this.boardX, this.boardY);
     this.col.addChild(this.board.view, this.feverFrame, this.orbLayer, this.fxTop.view, this.hud, this.vignette, this.overlay);
-    this.drawBoardFrame(boardH);
+    this.drawBoardFrame();
     // hud
     const bar = jungle('topbar');
     bar.anchor.set(0.5, 0);
@@ -210,16 +213,29 @@ export class BattleScene extends Scene {
     this.intro();
   }
 
-  private drawBoardFrame(h: number): void {
-    const x = this.boardX;
-    const y = this.boardY;
-    const w = 680;
-    const frame = jungleSlice('wood', w + 44, h + 44, 120);
-    frame.position.set(x - 22, y - 24);
-    const inner = new Graphics();
-    inner.roundRect(x - 4, y - 6, w + 8, h + 10, 26).fill(grad([[0, '#2f4a1e'], [1, '#1b2b12']]));
-    inner.roundRect(x - 4, y - 6, w + 8, h + 10, 26).stroke({ width: 4, color: 0x1a1008 });
-    this.boardFrame.addChild(frame, inner);
+  /** Wooden bowl rim with a gold edge around a dark felt (Puni Puni-style round board). */
+  private drawBoardFrame(): void {
+    const R = this.board.w / 2;
+    const cx = this.boardX + R;
+    const cy = this.boardY + R;
+    const g = new Graphics();
+    g.circle(cx, cy + 10, R + 34).fill({ color: 0x000000, alpha: 0.35 });
+    g.circle(cx, cy, R + 32).fill({ texture: tex('jungle:wood'), textureSpace: 'local' });
+    g.circle(cx, cy, R + 32).stroke({ width: 5, color: 0x3b2412 });
+    g.circle(cx, cy, R + 12).stroke({ width: 10, color: 0xffc94a });
+    g.circle(cx, cy, R + 12).stroke({ width: 3, color: 0x8a5a10, alignment: 1 });
+    g.circle(cx, cy, R + 7).fill(grad([[0, '#2c4a2a'], [0.6, '#1d3320'], [1, '#132416']]));
+    g.circle(cx, cy, R + 7).stroke({ width: 4, color: 0x0e1a0c });
+    // rivets around the rim
+    for (let i = 0; i < 16; i++) {
+      const a = (i / 16) * Math.PI * 2 + Math.PI / 16;
+      const rx = cx + Math.cos(a) * (R + 23);
+      const ry = cy + Math.sin(a) * (R + 23);
+      g.circle(rx, ry + 2, 7).fill({ color: 0x000000, alpha: 0.35 });
+      g.circle(rx, ry, 7).fill(0xffd96a);
+      g.circle(rx - 2, ry - 2, 2.5).fill(0xfff6d0);
+    }
+    this.boardFrame.addChild(g);
   }
 
   private layoutStage(): void {
@@ -280,7 +296,7 @@ export class BattleScene extends Scene {
 
   private showTutorialHint(): void {
     const t = txt('同じ色のぷにを3つ以上なぞって消そう！', { size: 30, stroke: 0x2a1630, strokeWidth: 8, color: 0xfff27a });
-    t.position.set(360, this.boardY - 40);
+    t.position.set(360, this.boardY + this.board.h * 0.86);
     this.overlay.addChild(t);
     gsap.fromTo(t, { alpha: 0 }, { alpha: 1, duration: 0.3, delay: 0.5 });
     gsap.to(t, { alpha: 0, duration: 0.5, delay: 4.5, onComplete: () => t.destroy() });
@@ -292,7 +308,8 @@ export class BattleScene extends Scene {
     this.t += dt;
     const playing = this.phase === 'play';
     if (playing) {
-      this.timeLeft -= dt;
+      // the clock stops during fever
+      if (!this.feverOn) this.timeLeft -= dt;
       const sec = Math.ceil(this.timeLeft);
       if (sec !== this.lastSecond) {
         this.lastSecond = sec;
@@ -345,7 +362,7 @@ export class BattleScene extends Scene {
     this.updateOrbs(dt);
     this.updateProjectiles(dt);
     this.fxTop.update(dt);
-    this.timer.set(this.timeLeft);
+    this.timer.set(this.timeLeft, this.feverOn);
     this.scoreW.target = this.landed;
     this.scoreW.update(dt);
     this.skillBtn.set(this.skillCharge / this.chargeNeed);
@@ -365,13 +382,12 @@ export class BattleScene extends Scene {
     const hue = (this.t * 240) % 360;
     const c = hslToHex(hue, 1, 0.6);
     const c2 = hslToHex((hue + 120) % 360, 1, 0.6);
-    const x = this.boardX;
-    const y = this.boardY;
-    const w = this.board.w;
-    const h = this.board.h;
+    const R = this.board.w / 2;
+    const cx = this.boardX + R;
+    const cy = this.boardY + R;
     const pulse = 0.6 + Math.sin(this.t * 14) * 0.25;
-    g.roundRect(x - 12, y - 18, w + 24, h + 26, 38).stroke({ width: 10, color: c, alpha: pulse });
-    g.roundRect(x - 2, y - 8, w + 4, h + 6, 30).stroke({ width: 4, color: c2, alpha: pulse });
+    g.circle(cx, cy, R + 34).stroke({ width: 10, color: c, alpha: pulse });
+    g.circle(cx, cy, R + 12).stroke({ width: 6, color: c2, alpha: pulse });
   }
 
   // ----------------------------------------------------------------- input
@@ -828,7 +844,8 @@ export class BattleScene extends Scene {
   }
 
   private flashBoard(color: number): void {
-    const g = new Graphics().roundRect(this.boardX, this.boardY, this.board.w, this.board.h, 30).fill({ color, alpha: 0.6 });
+    const R = this.board.w / 2;
+    const g = new Graphics().circle(this.boardX + R, this.boardY + R, R + 6).fill({ color, alpha: 0.6 });
     g.blendMode = 'add';
     this.overlay.addChild(g);
     gsap.to(g, { alpha: 0, duration: 0.5, onComplete: () => g.destroy() });
