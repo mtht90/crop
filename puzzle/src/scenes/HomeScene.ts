@@ -15,6 +15,9 @@ import { GIMMICKS, gimmicksFor } from '../data/gimmicks';
 import { BattleScene } from './BattleScene';
 import { CharaScene } from './CharaScene';
 import { GachaScene } from './GachaScene';
+import { MissionScene } from './MissionScene';
+import { DressScene } from './DressScene';
+import { claimableCount } from '../data/missions';
 import { CoinCounter, openSettings, stars } from './common';
 
 export class HomeScene extends Scene {
@@ -60,38 +63,24 @@ export class HomeScene extends Scene {
     best.position.set(430, top + 38);
     this.col.addChild(coins, settings, best);
 
-    // boss card
-    const bossLv = Save.data.bossLv;
-    const bdef = bossForLevel(bossLv);
+    // boss card (◀ ▶ picks any boss reached so far)
     const card = new Container();
     card.position.set(360, top + 200);
     const cg = new Graphics();
     cg.roundRect(-320, -90, 640, 190, 34).fill({ color: 0x000000, alpha: 0.25 });
     cg.roundRect(-320, -96, 640, 190, 34).fill(grad([[0, '#3a2470'], [1, '#22164a']]));
     cg.roundRect(-320, -96, 640, 190, 34).stroke({ width: 4, color: 0xffffff, alpha: 0.3 });
-    card.addChild(cg);
-    const bl = txt('いまのボス', { size: 22, color: 0xffd23f, anchor: [0, 0.5] });
-    bl.position.set(-290, -62);
-    const bn = txt(`Lv.${bossLv}  ${bdef.name}`, { size: 40, stroke: 0x2a1630, strokeWidth: 8, anchor: [0, 0.5] });
-    bn.position.set(-290, -12);
-    const bh = txt(`討伐ライン ${fmt(bossHp(bossLv))}`, { size: 26, color: 0xffb8d8, anchor: [0, 0.5] });
-    bh.position.set(-290, 30);
-    card.addChild(bl, bn, bh);
-    const gl = gimmicksFor(bossLv);
-    const gt = txt(gl.length ? `妨害：${gl.map((g) => GIMMICKS[g].name).join('・')}` : '妨害：なし', { size: 21, color: 0xd8c8ff, anchor: [0, 0.5] });
-    gt.position.set(-290, 66);
-    if (gt.width > 370) gt.scale.set(370 / gt.width);
-    card.addChild(gt);
-    const bossClip = new Container();
-    const bm = new Graphics().roundRect(80, -96, 240, 190, 34).fill(0xffffff);
-    this.boss = new BossView(bdef);
-    this.boss.scale.set(0.5);
-    this.boss.position.set(205, 90);
-    bossClip.addChild(this.boss);
-    bossClip.mask = bm;
-    card.addChild(bm, bossClip);
+    card.addChild(cg, this.cardBody);
     this.col.addChild(card);
     popIn(card, 0.05, 0.8);
+    const max = Save.data.bossLv;
+    if (max > 1) {
+      for (const dir of [-1, 1]) {
+        const arrow = new Button({ w: 64, h: 64, label: dir < 0 ? '◀' : '▶', color: 'blue', size: 28, onTap: () => this.pickBoss(dir) });
+        arrow.position.set(dir * 318, 0);
+        card.addChild(arrow);
+      }
+    }
 
     // hero
     const heroY = Math.min(top + 560, H * 0.5);
@@ -129,7 +118,8 @@ export class HomeScene extends Scene {
 
     // buttons
     const by = H - App.safeBottom - 120;
-    const battle = new Button({ w: 520, h: 130, label: 'バトル！', sub: `Lv.${bossLv} ${bdef.name}にちょうせん`, color: 'pink', size: 54, sound: 'ui_ok', onTap: () => this.startBattle() });
+    const battle = new Button({ w: 520, h: 130, label: 'バトル！', sub: ' ', color: 'pink', size: 54, sound: 'ui_ok', onTap: () => this.startBattle() });
+    this.battleBtn = battle;
     battle.position.set(360, by - 150);
     battle.breathe();
     const chara = new Button({ w: 300, h: 100, label: 'キャラ', color: 'blue', size: 38, onTap: () => Scenes.go(() => new CharaScene()) });
@@ -137,6 +127,25 @@ export class HomeScene extends Scene {
     const gacha = new Button({ w: 300, h: 100, label: 'ガチャ', color: 'yellow', size: 38, onTap: () => Scenes.go(() => new GachaScene()) });
     gacha.position.set(525, by);
     this.col.addChild(battle, chara, gacha);
+    // missions / cosmetics on either side of the hero
+    const mission = new Button({ w: 170, h: 84, label: 'ミッション', color: 'orange', size: 26, onTap: () => Scenes.go(() => new MissionScene()) });
+    mission.position.set(100, heroY - 40);
+    const dress = new Button({ w: 170, h: 84, label: 'きせかえ', color: 'green', size: 28, onTap: () => Scenes.go(() => new DressScene()) });
+    dress.position.set(620, heroY - 40);
+    this.col.addChild(mission, dress);
+    popIn(mission, 0.2, 0.6);
+    popIn(dress, 0.25, 0.6);
+    const ready = claimableCount();
+    if (ready > 0) {
+      const badge = new Container();
+      const bg = new Graphics().circle(0, 0, 22).fill(0xff3355).stroke({ width: 4, color: 0xffffff });
+      const bt = txt(String(ready), { size: 24, font: 'dela' });
+      badge.addChild(bg, bt);
+      badge.position.set(175, heroY - 78);
+      this.col.addChild(badge);
+      gsap.to(badge.scale, { x: 1.2, y: 1.2, duration: 0.5, yoyo: true, repeat: -1, ease: 'sine.inOut' });
+    }
+    this.fillBossCard(Save.fightLv());
     if (Save.data.coins >= 100) {
       const badge = new Container();
       const bgB = new Graphics().circle(0, 0, 22).fill(0xff3b5c);
@@ -157,6 +166,44 @@ export class HomeScene extends Scene {
       gsap.to(tipC, { y: tipC.y - 10, duration: 0.6, yoyo: true, repeat: -1, ease: 'sine.inOut' });
     }
     if (Save.data.notice) this.showNotice(Save.data.notice);
+  }
+
+  private cardBody = new Container();
+  private battleBtn?: Button;
+
+  private pickBoss(dir: number): void {
+    const max = Save.data.bossLv;
+    const lv = ((Save.fightLv() - 1 + dir + max) % max) + 1;
+    Save.data.fightLv = lv === max ? 0 : lv;
+    Save.write();
+    this.fillBossCard(lv);
+    Sound.play('ui_tap');
+  }
+
+  private fillBossCard(lv: number): void {
+    const c = this.cardBody;
+    for (const ch of c.removeChildren()) ch.destroy({ children: true });
+    const bdef = bossForLevel(lv);
+    const current = lv === Save.data.bossLv;
+    const bl = txt(current ? 'いまのボス' : 'さいせん（クリアずみ）', { size: 22, color: current ? 0xffd23f : 0x9be7ff, anchor: [0, 0.5] });
+    bl.position.set(-270, -62);
+    const bn = txt(`Lv.${lv}  ${bdef.name}`, { size: 40, stroke: 0x2a1630, strokeWidth: 8, anchor: [0, 0.5] });
+    bn.position.set(-270, -12);
+    const bh = txt(`討伐ライン ${fmt(bossHp(lv))}`, { size: 26, color: 0xffb8d8, anchor: [0, 0.5] });
+    bh.position.set(-270, 30);
+    const gl = gimmicksFor(lv);
+    const gt = txt(gl.length ? `妨害：${gl.map((g) => GIMMICKS[g].name).join('・')}` : '妨害：なし', { size: 21, color: 0xd8c8ff, anchor: [0, 0.5] });
+    gt.position.set(-270, 66);
+    if (gt.width > 350) gt.scale.set(350 / gt.width);
+    const bossClip = new Container();
+    const bm = new Graphics().roundRect(80, -96, 240, 190, 34).fill(0xffffff);
+    this.boss = new BossView(bdef);
+    this.boss.scale.set(0.5);
+    this.boss.position.set(205, 90);
+    bossClip.addChild(this.boss);
+    bossClip.mask = bm;
+    c.addChild(bm, bossClip, bl, bn, bh, gt);
+    this.battleBtn?.setSub(`Lv.${lv} ${bdef.name}に${current ? 'ちょうせん' : 'さいせん'}`);
   }
 
   private showNotice(msg: string): void {

@@ -127,6 +127,10 @@ export class Button extends Container {
   readonly bg = new Container();
   readonly face = new Container();
   caption?: Text;
+  subText?: Text;
+  setSub(t: string): void {
+    if (this.subText && !this.subText.destroyed) this.subText.text = t;
+  }
   private _enabled = true;
   private pressed = false;
 
@@ -157,6 +161,7 @@ export class Button extends Container {
         s.x = lx;
         s.y = o.h * 0.25;
         this.face.addChild(s);
+        this.subText = s;
       }
     }
     this.eventMode = 'static';

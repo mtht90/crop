@@ -2,7 +2,7 @@ import { Container, Graphics, Sprite, Texture } from 'pixi.js';
 import gsap from 'gsap';
 import { ShockwaveFilter } from 'pixi-filters';
 import { ColorMatrixFilter } from 'pixi.js';
-import { ART_CX, ART_CY, ART_R, ART_SIZE, COLORS, PIECE_ART_SCALE, PIECE_CELL, bombTexture, pieceTexture, rockTexture, statusTexture, type StatusArt } from '../art/PieceArt';
+import { ART_CX, ART_CY, ART_R, ART_SIZE, COLORS, PIECE_ART_SCALE, PIECE_CELL, bombTexture, obstacleTexture, OBSTACLE_CELL, pieceTexture, statusTexture, type ObstacleArt, type StatusArt } from '../art/PieceArt';
 import { fx as fxTex } from './Effects';
 import type { CharDef } from '../data/characters';
 import { Effects } from './Effects';
@@ -95,6 +95,8 @@ export class Piece {
   deco: Container | null = null;
   /** Hits a rock still takes. */
   hp = 1;
+  /** Which obstacle sprite a rock uses. */
+  art: ObstacleArt = 'rock';
   /** Seconds left of being see-through. */
   ghost = 0;
   pulse = Math.random() * 10;
@@ -166,6 +168,8 @@ export class Board {
   private mono: ColorMatrixFilter | null = null;
   /** Fired when a skull bomb's fuse runs out. */
   onSkullBlow?: (x: number, y: number) => void;
+  /** Fired when a neighbor's pop frees a stuck piece. */
+  onBroken?: () => void;
   private shock: ShockwaveFilter | null = null;
   private maskG = new Graphics();
   readonly r: number;
@@ -234,7 +238,7 @@ export class Board {
   }
 
   textureFor(p: Piece): Texture {
-    if (p.kind === 'rock') return rockTexture();
+    if (p.kind === 'rock') return obstacleTexture(p.art);
     if (p.kind === 'bomb' || p.kind === 'mega') return bombTexture(p.kind === 'mega');
     return pieceTexture(this.def, p.color);
   }
@@ -242,7 +246,10 @@ export class Board {
   /** Sets texture, anchor and base scale for the piece's kind. */
   private dress(p: Piece): void {
     p.sprite.texture = this.textureFor(p);
-    if (p.kind === 'normal' || p.kind === 'big') {
+    if (p.kind === 'rock') {
+      p.sprite.anchor.set(0.5);
+      p.baseScale = (p.r * 2.3) / OBSTACLE_CELL;
+    } else if (p.kind === 'normal' || p.kind === 'big') {
       // strips are centered on each head's center of mass at a common visible size
       p.sprite.anchor.set(0.5, 0.5);
       p.baseScale = (p.r * 2 * PIECE_ART_SCALE) / PIECE_CELL;
@@ -250,7 +257,6 @@ export class Board {
       p.sprite.anchor.set(ART_CX / ART_SIZE, ART_CY / ART_SIZE);
       p.baseScale = p.r / ART_R;
     }
-    p.sprite.tint = p.kind === 'rock' && p.hp > 1 ? 0x9a8cb8 : 0xffffff;
   }
 
   addPiece(kind: PieceKind, color: number, x: number, y: number, vy = 0, scale = 1): Piece {
@@ -391,7 +397,10 @@ export class Board {
     if (p.ghost > 0) p.ghost -= dt;
     const a = p.ghost > 0 && p.state === 'live' ? 0.06 : 1;
     p.jelly.alpha += (a - p.jelly.alpha) * Math.min(1, dt * 8);
-    if (p.kind === 'normal' || p.kind === 'big') p.sprite.tint = this.sealColor >= 0 && p.color === this.sealColor ? 0x8c8698 : 0xffffff;
+    if (p.kind === 'normal' || p.kind === 'big') {
+      const sealed = this.sealColor >= 0 && p.color === this.sealColor;
+      p.sprite.tint = sealed ? 0x8c8698 : p.status === 'ice' ? 0x9fdcff : p.status === 'curse' ? 0xc9a0ff : 0xffffff;
+    }
   }
 
   // ---------------------------------------------------------------- input
@@ -664,6 +673,7 @@ export class Board {
       if (!popped.some((p) => this.adjacent(p, r, 1.25))) continue;
       if (stuck) {
         this.clearStatus(r, true);
+        this.onBroken?.();
         continue;
       }
       r.hp--;
@@ -894,12 +904,14 @@ export class Board {
     return out;
   }
 
-  applyRock(p: Piece): void {
+  applyRock(p: Piece, art: ObstacleArt = 'rock', hp = 1): void {
     if (p.state === 'dead') return;
     p.state = 'live';
     if (p.status) this.clearStatus(p, false);
     p.kind = 'rock';
     p.color = -1;
+    p.art = art;
+    p.hp = hp;
     this.dress(p);
     p.poke(9);
     this.fx.burst(p.x, p.y, { count: 10, tex: 'smoke_04', tint: 0x9aa0b8, speed: [40, 180], size: [0.12, 0.25], grow: 1.6, gravity: -60, life: [0.4, 0.8] });
@@ -907,17 +919,37 @@ export class Board {
   }
 
   // ------------------------------------------------------- obstructions
-  private setDeco(p: Piece, art: StatusArt | null): void {
+  /** How each status is dressed: an obstacle sprite (size in piece diameters, offset in radii) or a drawn overlay. */
+  private static DECO: Record<PieceStatus | 'crack', { art?: ObstacleArt; draw?: StatusArt; size: number; x?: number; y?: number; alpha?: number }> = {
+    ice: { art: 'crystal', size: 0.62, x: 0.55, y: -0.55 },
+    bubble: { art: 'qbox', size: 1.2 },
+    web: { art: 'shackle', size: 1.05, y: 0.1 },
+    slime: { art: 'anchor', size: 0.7, x: 0.45, y: 0.5 },
+    curse: { art: 'skull', size: 0.62, x: 0.55, y: -0.55 },
+    skullBomb: { art: 'bomb', size: 1.2 },
+    chameleon: { draw: 'chameleon', size: 1 },
+    crack: { draw: 'crack', size: 1 },
+  };
+
+  private setDeco(p: Piece, kind: PieceStatus | 'crack' | null): void {
     if (p.deco) {
-      p.deco.destroy();
+      p.deco.destroy({ children: true });
       p.deco = null;
     }
-    if (!art || p.view.destroyed) return;
+    if (!kind || p.view.destroyed) return;
+    const spec = Board.DECO[kind];
     const d = new Container();
-    const sp = new Sprite(statusTexture(art));
+    const sp = new Sprite(spec.art ? obstacleTexture(spec.art) : statusTexture(spec.draw!));
     sp.anchor.set(0.5);
-    sp.scale.set(p.r / (ART_R * 1.5));
+    sp.scale.set(spec.art ? (p.r * 2 * spec.size) / OBSTACLE_CELL : p.r / (ART_R * 1.5));
+    sp.position.set((spec.x ?? 0) * p.r, (spec.y ?? 0) * p.r);
+    sp.alpha = spec.alpha ?? 1;
     d.addChild(sp);
+    if (kind === 'bubble') {
+      const q = txt('?', { size: 44, font: 'dela', color: 0xffffff, stroke: 0x1b3d8a, strokeWidth: 8 });
+      q.y = 4;
+      d.addChild(q);
+    }
     p.view.addChild(d);
     p.deco = d;
   }
@@ -937,8 +969,8 @@ export class Board {
       p.body.invMass = 0;
     }
     if (st === 'skullBomb') {
-      const t = txt('10', { size: 30, font: 'dela', color: 0xffffff, stroke: 0x2a1630, strokeWidth: 6 });
-      t.y = p.r * 0.72;
+      const t = txt('10', { size: 32, font: 'dela', color: 0xffffff, stroke: 0x2a1630, strokeWidth: 7 });
+      t.y = p.r * 0.2;
       p.deco?.addChild(t);
     }
     p.poke(9);
@@ -1004,12 +1036,13 @@ export class Board {
   }
 
   /** Drops rocks in from the chute (hp = hits needed). */
-  dropRocks(n: number, hp = 1, scale = 1): void {
+  dropRocks(n: number, hp = 1, scale = 1, arts: ObstacleArt[] = ['rock']): void {
     for (let i = 0; i < n; i++) {
       gsap.delayedCall(i * 0.12, () => {
         const x = this.w / 2 + (Math.random() - 0.5) * this.w * 0.3;
         const p = this.addPiece('rock', -1, x, -this.r * 2 * scale, 700, scale);
         p.hp = hp;
+        p.art = arts[Math.floor(Math.random() * arts.length)];
         this.dress(p);
       });
     }

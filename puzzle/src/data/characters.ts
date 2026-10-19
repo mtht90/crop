@@ -81,7 +81,7 @@ const ROWS: Row[] = [
   ['hood', 'フードローグ', 'SR', 186, { kind: 'tapPop', name: 'フードの手品', desc: '12秒間タップでまとめて消せる', charge: 32, power: 3.8, dur: 12 }, 'フードの奥で何を考えているのかな？'],
   // SSR
   ['skel_warrior', 'ホネ戦士', 'SSR', 250, { kind: 'twoColor', name: 'ダブルブレイク', desc: '多い2色を全部消す', charge: 36, power: 4.6 }, '角かぶとのスケルトン戦士。'],
-  ['skel_rogue', 'ホネ盗賊', 'SSR', 245, { kind: 'feverTap', name: 'かげのうたげ', desc: 'フィーバー突入＋その間タップでまとめて消せる', charge: 75, power: 2.8 }, '赤いフードの神出鬼没なスケルトン。'],
+  ['skel_rogue', 'ホネ盗賊', 'SSR', 245, { kind: 'feverTap', name: 'かげのうたげ', desc: 'フィーバー突入＋その間タップでまとめて消せる', charge: 90, power: 2.8 }, '赤いフードの神出鬼没なスケルトン。'],
 ];
 
 const PASSIVES: Record<string, Passive> = {

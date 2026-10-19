@@ -1,0 +1,5 @@
+Obstacle sprites rendered from KayKit 3D models (CC0, Kay Lousberg, www.kaylousberg.com):
+- KayKit Halloween Bits 1.0: gravestone, bone_A, bone_B, ribcage, skull_candle
+- KayKit Dungeon Remastered 1.0: rubble_half
+- KayKit Mini-Game Variety Pack 1.2: rocksB_forest, bomb_teamRed, diamond_teamBlue, powerupBlock_teamBlue
+- KayKit Mixed Bag 1: chain_shackle, chain_anchor

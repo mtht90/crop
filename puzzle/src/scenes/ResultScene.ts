@@ -18,6 +18,7 @@ export interface BattleResult {
   hp: number;
   defeated: boolean;
   bossLv: number;
+  rematch?: boolean;
   bossName: string;
   maxCombo: number;
   maxChain: number;
@@ -194,7 +195,7 @@ export class ResultScene extends Scene {
     await this.countUp(cv, r.coins, 0.8, '+', true);
     if (r.defeated) {
       const next = bossForLevel(r.bossLv + 1);
-      const nt = txt(`つぎのボス：Lv.${r.bossLv + 1} ${next.name}`, { size: 26, color: 0x4a2f7a });
+      const nt = txt(r.rematch ? 'さいせんクリア！' : `つぎのボス：Lv.${r.bossLv + 1} ${next.name}`, { size: 26, color: 0x4a2f7a });
       nt.y = pH / 2 - 45;
       box.addChild(nt);
       popIn(nt);

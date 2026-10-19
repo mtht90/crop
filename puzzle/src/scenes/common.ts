@@ -150,3 +150,88 @@ export function starPath(g: Graphics, r: number): Graphics {
   }
   return g.poly(pts);
 }
+
+/** Vertical drag-to-scroll area; taps on children still work unless the finger moved. */
+export class ScrollBox extends Container {
+  readonly content = new Container();
+  private maskG = new Graphics();
+  private hit = new Graphics();
+  private y0 = 0;
+  private start = 0;
+  private dragging = false;
+  private moved = false;
+  private vel = 0;
+  private lastY = 0;
+  constructor(public readonly w: number, public readonly h: number) {
+    super();
+    this.maskG.rect(-w / 2, 0, w, h).fill(0xffffff);
+    this.hit.rect(-w / 2, 0, w, h).fill({ color: 0xffffff, alpha: 0.001 });
+    this.addChild(this.hit, this.content, this.maskG);
+    this.content.mask = this.maskG;
+    this.eventMode = 'static';
+    this.on('pointerdown', (e) => {
+      this.dragging = true;
+      this.moved = false;
+      this.start = e.global.y;
+      this.lastY = e.global.y;
+      this.y0 = this.content.y;
+      this.vel = 0;
+    });
+    this.on('globalpointermove', (e) => {
+      if (!this.dragging) return;
+      const dy = (e.global.y - this.start) / (this.worldTransform.d || 1);
+      if (Math.abs(dy) > 12 && !this.moved) {
+        this.moved = true;
+        this.content.interactiveChildren = false;
+      }
+      if (this.moved) {
+        this.vel = (e.global.y - this.lastY) / (this.worldTransform.d || 1);
+        this.lastY = e.global.y;
+        this.content.y = this.clamp(this.y0 + dy);
+      }
+    });
+    const end = () => {
+      this.dragging = false;
+      this.content.interactiveChildren = true;
+    };
+    this.on('pointerup', end);
+    this.on('pointerupoutside', end);
+  }
+  private clamp(y: number): number {
+    const min = Math.min(0, this.h - this.content.height - 30);
+    return Math.max(min, Math.min(0, y));
+  }
+  /** Glide after a flick (call every frame). */
+  update(): void {
+    if (this.dragging || Math.abs(this.vel) < 0.3) return;
+    this.vel *= 0.92;
+    this.content.y = this.clamp(this.content.y + this.vel);
+  }
+}
+
+/** Shows what was received from a mission or bonus. */
+export function rewardPopup(parent: Container, title: string, lines: string[], onClose?: () => void): void {
+  const ov = new Container();
+  const dim = new Graphics().rect(-App.colX, 0, App.W, App.H).fill({ color: 0x0a0418, alpha: 0.6 });
+  dim.eventMode = 'static';
+  const box = new Container();
+  box.position.set(360, App.H * 0.45);
+  const body = txt(lines.join('\n'), { size: 32, color: 0x4a2f7a, lineHeight: 46 });
+  const h = body.height + 260;
+  const t = txt(title, { size: 44, font: 'dela', color: 0xff4f8f, stroke: 0xffffff, strokeWidth: 8 });
+  t.y = -h / 2 + 60;
+  body.y = -h / 2 + 120 + body.height / 2;
+  const ok = new Button({
+    w: 260, h: 90, label: 'OK', color: 'pink', onTap: () => {
+      ov.destroy({ children: true });
+      onClose?.();
+    },
+  });
+  ok.y = h / 2 - 70;
+  box.addChild(panel(560, h), t, body, ok);
+  ov.addChild(dim, box);
+  parent.addChild(ov);
+  popIn(box, 0, 0.5);
+  Sound.play('powerUp2', { vol: 0.7 });
+  Sound.sparkle();
+}

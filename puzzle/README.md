@@ -24,7 +24,7 @@ npm run fonts    # ゲーム内の日本語を追加・変更したらフォン�
 
 ## 構成
 - PixiJS v8 (WebGL) + GSAP、物理は円ピース専用の自作PBDソルバー（`src/game/Physics.ts`）
-- 効果音は Web Audio：なぞるたびペンタトニックで音階が上がる合成音＋Kenney素材、リバーブ/ダッキング付き
+- 効果音は Web Audio：なぞるたびペンタトニックで音階が上がる合成音＋効果音ラボの素材、リバーブ/ダッキング付き
 - 操作の手触り調整は `src/game/Board.ts` の `BOARD_TUNING`（隣接判定・吸着距離・ボム閾値など）
 - バランスは `src/data/characters.ts` / `bosses.ts` / `gacha.ts`
 
@@ -34,6 +34,7 @@ npm run fonts    # ゲーム内の日本語を追加・変更したらフォン�
 
 ## クレジット
 - キャラ・ボス: KayKit (CC0) — Adventurers / Skeletons / Dungeon
+- 妨害・かべがみ: KayKit (CC0) — Halloween Bits / Dungeon Remastered / Mini-Game Variety Pack / Mixed Bag 1（three.js でレンダリング。`tools/mkobstacles.py`, `tools/render-wallpapers.mjs`）
 - 背景・UI: CraftPix — Fairy-Tale 2D Backgrounds / Jungle GUI
 - 効果音: 効果音ラボ
 - ガチャ筐体: "gumball machine" by myles_683 (CC BY 4.0) — https://www.thingiverse.com/thing:5385414 （パーツ分割・着色して three.js でレンダリング。`public/assets/gacha/CREDITS.txt`）

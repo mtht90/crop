@@ -11,6 +11,8 @@ import { HomeScene } from './scenes/HomeScene';
 import { BattleScene } from './scenes/BattleScene';
 import { GachaScene } from './scenes/GachaScene';
 import { CharaScene } from './scenes/CharaScene';
+import { MissionScene } from './scenes/MissionScene';
+import { DressScene } from './scenes/DressScene';
 
 async function loadFonts(): Promise<void> {
   const sample = 'ぷにっとバトル討伐0123456789ABC';
@@ -79,6 +81,8 @@ async function boot(): Promise<void> {
     battle: () => new BattleScene(),
     gacha: () => new GachaScene(),
     chara: () => new CharaScene(),
+    mission: () => new MissionScene(),
+    dress: () => new DressScene(),
   };
   Scenes.go(scenes[start ?? ''] ?? (() => new TitleScene()), true);
   // handle for automated playtests

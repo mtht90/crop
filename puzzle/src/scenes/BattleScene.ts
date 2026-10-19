@@ -10,7 +10,7 @@ import { BossView } from '../game/BossView';
 import { FairyBackdrop } from '../game/Backdrop';
 import { Effects, fx } from '../game/Effects';
 import { ComboLabel, JFever, JTimer, ScoreLine, SkillButton, banner, installBitmapFonts, jungle, num } from '../game/Hud';
-import { COLORS, bigTexture, loadCharacterArt, rockTexture } from '../art/PieceArt';
+import { COLORS, bigTexture, loadCharacterArt } from '../art/PieceArt';
 import { loadFairy, tex, unloadFairy } from '../core/Loader';
 import { CHARACTERS, CHAR_BY_ID, RARITY_INFO, charAtk, charCharge, type CharDef } from '../data/characters';
 import { bossAttackCount, bossAttackInterval, bossForLevel, bossHp, type BossDef } from '../data/bosses';
@@ -18,10 +18,16 @@ import { ResultScene, type BattleResult } from './ResultScene';
 import { HomeScene } from './HomeScene';
 import { battleTrack } from '../data/music';
 import { GIMMICKS, gimmicksFor, type GimmickId } from '../data/gimmicks';
-import { statusTexture } from '../art/PieceArt';
+import { currentFrame, currentWallpaper, frameTextures, loadWallpapers, wallpaperAlias } from '../data/cosmetics';
+import { recordRound } from '../data/missions';
+import type { Stats } from '../core/Save';
+import { Assets, type Texture as PTexture } from 'pixi.js';
+import { loadObstacleArt, obstacleTexture } from '../art/PieceArt';
 import type { Texture } from 'pixi.js';
 
 export const BATTLE_TIME = 90;
+/** What the boss throws for each piece status. */
+const THROWN = { ice: 'crystal', bubble: 'qbox', web: 'shackle', slime: 'anchor', curse: 'skull', skullBomb: 'bomb', chameleon: 'qbox' } as const;
 /** Diameter of the round board in design px. */
 const BOWL_D = 696;
 /** Tuned so a normal round lands around 100k–200k (rank D). */
@@ -77,6 +83,8 @@ export class BattleScene extends Scene {
   private atk: number;
   private chargeNeed: number;
   private bossLv: number;
+  /** Fighting a boss that was already beaten (no progression). */
+  private rematch = false;
   private bossDef: BossDef;
   private hp: number;
 
@@ -145,6 +153,8 @@ export class BattleScene extends Scene {
   /** SSR passive: obstructions it can still bounce. */
   private guards = 0;
   private quakeT = 0;
+  /** Counters for missions. */
+  private round = { pops: 0, broken: 0, bombs: 0, chains7: 0 };
   private lastSecond = 99;
   private t = 0;
   private domHandlers: [string, EventListener][] = [];
@@ -160,7 +170,8 @@ export class BattleScene extends Scene {
     this.lv = Save.data.owned[this.def.id]?.lv ?? 1;
     this.atk = charAtk(this.def, this.lv);
     this.chargeNeed = charCharge(this.def, this.lv);
-    this.bossLv = Save.data.bossLv;
+    this.bossLv = Save.fightLv();
+    this.rematch = this.bossLv < Save.data.bossLv;
     this.bossDef = bossForLevel(this.bossLv);
     this.hp = bossHp(this.bossLv);
     this.boss = new BossView(this.bossDef);
@@ -172,7 +183,7 @@ export class BattleScene extends Scene {
   }
 
   async preload(): Promise<void> {
-    await Promise.all([loadFairy(this.bossDef.bg), loadCharacterArt([this.def.id], { strips: true })]);
+    await Promise.all([loadFairy(this.bossDef.bg), loadCharacterArt([this.def.id], { strips: true }), loadObstacleArt(), loadWallpapers([currentWallpaper().id, ...frameTextures(currentFrame())])]);
     this.backdrop = new FairyBackdrop(this.bossDef.bg);
   }
 
@@ -203,6 +214,7 @@ export class BattleScene extends Scene {
     this.board.view.pivot.set(D / 2, D / 2);
     this.board.view.position.set(this.boardX + D / 2, this.boardY + D / 2);
     this.board.onSkullBlow = (x, y) => this.skullBlow(x, y);
+    this.board.onBroken = () => this.round.broken++;
     this.col.addChild(this.board.view, this.feverFrame, this.orbLayer, this.fxTop.view, this.hud, this.vignette, this.overlay);
     this.drawBoardFrame();
     // hud
@@ -262,16 +274,24 @@ export class BattleScene extends Scene {
     const R = w / 2;
     const x = this.boardX;
     const y = this.boardY;
+    const fr = currentFrame();
+    const wp = currentWallpaper();
     const ring = (k: number) => [x - k, y - k, w + k * 2, h + k * 2, R + k] as const;
+    const texOf = (alias: string) => (alias.startsWith('wp:') ? Assets.get<PTexture>(wallpaperAlias(alias.slice(3))) : tex(alias));
     const g = new Graphics();
     g.roundRect(...ring(26)).fill({ color: 0x000000, alpha: 0.35 });
-    g.roundRect(...ring(24)).fill({ texture: tex('jungle:wood'), textureSpace: 'local' });
-    g.roundRect(...ring(24)).stroke({ width: 5, color: 0x3b2412 });
-    g.roundRect(...ring(10)).stroke({ width: 9, color: 0xffc94a });
-    g.roundRect(...ring(10)).stroke({ width: 3, color: 0x8a5a10, alignment: 1 });
-    g.roundRect(...ring(6)).fill(grad([[0, '#2c4a2a'], [0.6, '#1d3320'], [1, '#132416']]));
+    if (fr.rim.tex) g.roundRect(...ring(24)).fill({ texture: texOf(fr.rim.tex), textureSpace: 'local' });
+    else g.roundRect(...ring(24)).fill(grad(fr.rim.stops!));
+    g.roundRect(...ring(24)).stroke({ width: 5, color: fr.line });
+    g.roundRect(...ring(10)).stroke({ width: 9, color: fr.edge });
+    g.roundRect(...ring(10)).stroke({ width: 3, color: fr.line, alignment: 1, alpha: 0.6 });
+    // the floor inside the bowl: plain felt or a wallpaper, darkened so the pieces stay readable
+    if (wp.img) {
+      g.roundRect(...ring(6)).fill({ texture: Assets.get<PTexture>(wallpaperAlias(wp.id)), textureSpace: 'local' });
+      g.roundRect(...ring(6)).fill({ color: 0x0a0618, alpha: 0.38 });
+    } else g.roundRect(...ring(6)).fill(grad([[0, '#2c4a2a'], [0.6, '#1d3320'], [1, '#132416']]));
     g.roundRect(...ring(6)).stroke({ width: 4, color: 0x0e1a0c });
-    // rivets along the rim: around both half-circles and down the straight sides
+    // rivets along the rim
     const rr = R + 17;
     const pts: [number, number][] = [];
     for (let i = 0; i <= 6; i++) {
@@ -279,19 +299,13 @@ export class BattleScene extends Scene {
       pts.push([x + R + Math.cos(a) * rr, y + R + Math.sin(a) * rr]);
       pts.push([x + R + Math.cos(a + Math.PI) * rr, y + h - R + Math.sin(a + Math.PI) * rr]);
     }
-    const sideN = Math.floor((h - w) / 110);
-    for (let i = 1; i <= sideN; i++) {
-      const yy = y + R + ((h - w) * i) / (sideN + 1);
-      pts.push([x - 17, yy], [x + w + 17, yy]);
-    }
     for (const [rx, ry] of pts) {
       g.circle(rx, ry + 2, 6).fill({ color: 0x000000, alpha: 0.35 });
-      g.circle(rx, ry, 6).fill(0xffd96a);
-      g.circle(rx - 2, ry - 2, 2).fill(0xfff6d0);
+      g.circle(rx, ry, 6).fill(fr.rivet);
+      g.circle(rx - 2, ry - 2, 2).fill(0xffffff);
     }
     this.boardFrame.addChild(g);
   }
-
 
   private layoutStage(): void {
     this.col.x = App.colX;
@@ -561,6 +575,12 @@ export class BattleScene extends Scene {
     }
     if (this.def.passive?.kind === 'guard' && cause === 'chain' && meta.chain >= 7) mult *= 1.3;
     if (this.effects.has('barrier')) mult *= 0.5;
+    for (const p of pops) {
+      if (p.kind === 'rock') this.round.broken++;
+      else if (p.kind === 'normal' || p.kind === 'big') this.round.pops++;
+    }
+    if (cause === 'bomb') this.round.bombs++;
+    if (cause === 'chain' && meta.chain >= 7) this.round.chains7++;
     if (cause !== 'rock') {
       this.combo++;
       this.comboT = COMBO_WINDOW * (this.def.passive?.kind === 'shadow' ? 2 : 1);
@@ -577,8 +597,8 @@ export class BattleScene extends Scene {
     // no skill charge during fever / tap mode, or skills would chain into each other
     if (cause !== 'skill' && !this.feverOn && this.tapT <= 0) this.skillCharge = Math.min(this.chargeNeed, this.skillCharge + weight);
     if (!this.feverOn && cause !== 'rock') {
-      // fever stops the clock, so it has to stay rare (~250 pieces per fever)
-      this.fever = Math.min(100, this.fever + weight * (cause === 'skill' ? 0.12 : 0.3));
+      // fever stops the clock; ~200 pieces per fever gives a normal round 2–3 fevers
+      this.fever = Math.min(100, this.fever + weight * (cause === 'skill' ? 0.2 : 0.5));
       if (this.fever >= 100 && this.phase === 'play') this.startFever();
     }
     // callouts
@@ -1096,27 +1116,23 @@ export class BattleScene extends Scene {
     const n = bossAttackCount(this.bossLv);
     const g = GIMMICKS[id];
     const status = (st: import('../game/Board').PieceStatus, count: number) =>
-      this.throwAt(b.targets(count), statusTexture(st), (p) => {
+      this.throwAt(b.targets(count), obstacleTexture(THROWN[st]), (p) => {
         p.state = 'live';
         b.setStatus(p, st);
       });
     if (g.dur) this.effects.set(id, g.dur * (this.def.passive?.kind === 'shadow' ? 0.5 : 1));
     switch (id) {
       case 'rock':
-        this.throwAt(b.targets(n), rockTexture(), (p) => b.applyRock(p));
+        this.throwAt(b.targets(n), obstacleTexture('rock'), (p) => b.applyRock(p));
         break;
       case 'hardRock':
-        this.throwAt(b.targets(Math.max(2, n - 1)), rockTexture(), (p) => {
-          b.applyRock(p);
-          p.hp = 2;
-          p.sprite.tint = 0x9a8cb8;
-        });
+        this.throwAt(b.targets(Math.max(2, n - 1)), obstacleTexture('hardrock'), (p) => b.applyRock(p, 'hardrock', 2));
         break;
       case 'bigRock':
-        b.dropRocks(1 + Math.floor(n / 4), 3, 1.7);
+        b.dropRocks(1 + Math.floor(n / 4), 3, 1.7, ['grave']);
         break;
       case 'junk':
-        b.dropRocks(n + 1);
+        b.dropRocks(n + 1, 1, 1, ['bone_a', 'bone_b', 'ribcage']);
         break;
       case 'ice':
         status('ice', n + 2);
@@ -1440,13 +1456,14 @@ export class BattleScene extends Scene {
     const d = Save.data;
     const score = Math.round(this.landed);
     // coins are scarce on purpose: a single pull (300) takes several good rounds
-    const coins = Math.floor(score / 10000) + (defeated ? 30 + this.bossLv * 5 : 5);
+    const coins = Math.floor(score / 10000) + (defeated ? (this.rematch ? 15 + this.bossLv * 2 : 30 + this.bossLv * 5) : 5);
     const newBest = score > d.best;
     const result: BattleResult = {
       score,
       hp: this.hp,
       defeated,
       bossLv: this.bossLv,
+      rematch: this.rematch,
       bossName: this.bossDef.name,
       maxCombo: this.maxCombo,
       maxChain: this.maxChain,
@@ -1462,9 +1479,14 @@ export class BattleScene extends Scene {
     if (newBest) d.best = score;
     if (defeated) {
       d.defeats++;
-      d.bossLv++;
+      if (!this.rematch) {
+        d.bossLv++;
+        d.fightLv = 0;
+      }
     }
     d.tutorialDone = true;
+    const stats: Stats = { plays: 1, defeats: defeated ? 1 : 0, ...this.round, fevers: this.feverCount, skills: this.skillUses, maxChain: this.maxChain, maxCombo: this.maxCombo };
+    recordRound(stats);
     Save.write();
     Scenes.go(() => new ResultScene(result));
   }

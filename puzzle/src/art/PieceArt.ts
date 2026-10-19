@@ -388,3 +388,19 @@ const statusTex: Partial<Record<StatusArt, Texture>> = {};
 export function statusTexture(kind: StatusArt): Texture {
   return (statusTex[kind] ??= canvasTexture(drawStatus(kind)));
 }
+
+// ------------------------------------------------------------ obstacle sprites
+// KayKit models rendered to 200px cells (tools/mkobstacles.py); the model fills ~90% of the cell.
+export const OBSTACLES = ['rock', 'hardrock', 'grave', 'bone_a', 'bone_b', 'ribcage', 'bomb', 'skull', 'shackle', 'anchor', 'crystal', 'qbox'] as const;
+export type ObstacleArt = (typeof OBSTACLES)[number];
+export const OBSTACLE_CELL = 200;
+
+export async function loadObstacleArt(): Promise<void> {
+  const list = OBSTACLES.map((k) => ({ alias: `obs:${k}`, src: `./assets/obstacles/${k}.webp` }));
+  for (const a of list) if (!Assets.resolver.hasKey(a.alias)) Assets.add(a);
+  await Assets.load(list.map((a) => a.alias));
+}
+
+export function obstacleTexture(k: ObstacleArt): Texture {
+  return Assets.get<Texture>(`obs:${k}`) ?? rockTexture();
+}
