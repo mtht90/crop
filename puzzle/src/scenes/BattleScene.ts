@@ -10,7 +10,8 @@ import { BossView } from '../game/BossView';
 import { FairyBackdrop } from '../game/Backdrop';
 import { Effects, fx } from '../game/Effects';
 import { ComboLabel, JFever, JTimer, ScoreLine, SkillButton, banner, installBitmapFonts, jungle, jungleSlice, num } from '../game/Hud';
-import { COLORS, bigTexture, rockTexture } from '../art/PieceArt';
+import { COLORS, bigTexture, loadCharacterArt, rockTexture } from '../art/PieceArt';
+import { loadFairy, unloadFairy } from '../core/Loader';
 import { CHARACTERS, CHAR_BY_ID, RARITY_INFO, charAtk, charCharge, type CharDef } from '../data/characters';
 import { bossAttackCount, bossAttackInterval, bossForLevel, bossHp, type BossDef } from '../data/bosses';
 import { ResultScene, type BattleResult } from './ResultScene';
@@ -71,7 +72,7 @@ export class BattleScene extends Scene {
   private hp: number;
 
   private col = new Container();
-  private backdrop: FairyBackdrop;
+  private backdrop!: FairyBackdrop;
   private stage = new Container();
   private boss: BossView;
   private boardFrame = new Container();
@@ -139,11 +140,15 @@ export class BattleScene extends Scene {
     this.bossLv = Save.data.bossLv;
     this.bossDef = bossForLevel(this.bossLv);
     this.hp = bossHp(this.bossLv);
-    this.backdrop = new FairyBackdrop(this.bossDef.bg);
     this.boss = new BossView(this.bossDef);
     this.scoreW = new ScoreLine(this.hp);
     this.skillBtn = new SkillButton(this.def);
     this.bossAtkT = bossAttackInterval(this.bossLv) || Infinity;
+  }
+
+  async preload(): Promise<void> {
+    await Promise.all([loadFairy(this.bossDef.bg), loadCharacterArt([this.def.id], { strips: true })]);
+    this.backdrop = new FairyBackdrop(this.bossDef.bg);
   }
 
   enter(): void {
@@ -201,7 +206,7 @@ export class BattleScene extends Scene {
     document.addEventListener('visibilitychange', this.onVis);
     Sound.music(Math.random() < 0.5 ? 'battle' : 'battle2', 0.6);
     Sound.musicFilter(20000, 0.01);
-    Sound.musicRate(1, 0.01);
+    Sound.musicRate(1);
     this.intro();
   }
 
@@ -300,7 +305,7 @@ export class BattleScene extends Scene {
           }
         }
         if (sec === 10) {
-          Sound.musicRate(this.feverOn ? 1.14 : 1.07, 0.5);
+          Sound.musicRate(this.feverOn ? 1.14 : 1.07);
           this.floatText('ラスト10秒！', 360, this.boardY - 50, 0xff8aa0, 34);
         }
       }
@@ -414,6 +419,7 @@ export class BattleScene extends Scene {
     document.removeEventListener('visibilitychange', this.onVis);
     gsap.globalTimeline.resume();
     this.board.destroy();
+    void unloadFairy(this.bossDef.bg);
   }
 
   // --------------------------------------------------------------- scoring
@@ -626,7 +632,7 @@ export class BattleScene extends Scene {
     this.board.forceRelease();
     Sound.play('jFever', { vol: 0.8 });
     Sound.chord(5);
-    Sound.musicRate(this.timeLeft <= 10 ? 1.14 : 1.1, 0.4);
+    Sound.musicRate(this.timeLeft <= 10 ? 1.14 : 1.1);
     haptic([20, 40, 20]);
     void banner(this.overlay, 'FEVER!!', 360, this.boardY + this.board.h * 0.4, { size: 130, color: 0xff7ad9, stroke: 0x4a0040, hold: 0.4, sub: 'タップでまとめて消せる！' });
     for (let i = 0; i < 4; i++) {
@@ -640,7 +646,7 @@ export class BattleScene extends Scene {
     this.feverOn = false;
     this.fever = 0;
     this.board.fever = false;
-    Sound.musicRate(this.timeLeft <= 10 ? 1.07 : 1, 0.6);
+    Sound.musicRate(this.timeLeft <= 10 ? 1.07 : 1);
     Sound.play('lowDown', { vol: 0.4 });
   }
 
@@ -678,7 +684,7 @@ export class BattleScene extends Scene {
       lines.mask = lineMask;
       const chara = new Sprite(bigTexture(this.def));
       chara.anchor.set(0.5, 0.55);
-      chara.scale.set(0.8);
+      chara.scale.set(1.4);
       chara.position.set(W, 0);
       chara.rotation = 0.12;
       const name = txt(this.def.skill.name, { size: 62, font: 'dela', color: 0xffffff, stroke: 0x2a1630, strokeWidth: 12 });
@@ -714,7 +720,7 @@ export class BattleScene extends Scene {
         Sound.play('zap', { vol: 0.6 });
       }, 0.3);
       tl.to(lines, { x: -300, duration: 0.9, ease: 'none' }, 0);
-      tl.to(chara.scale, { x: 0.88, y: 0.88, duration: 0.6, ease: 'sine.inOut' }, 0.35);
+      tl.to(chara.scale, { x: 1.55, y: 1.55, duration: 0.6, ease: 'sine.inOut' }, 0.35);
       tl.to(bandC.scale, { y: 0, duration: 0.18, ease: 'power2.in' }, 1.05);
       tl.to(dim, { alpha: 0, duration: 0.2 }, 1.05);
     });

@@ -89,7 +89,7 @@ export class ResultScene extends Scene {
     const ch = CHAR_BY_ID[r.charId];
     const chara = new Sprite(bigTexture(ch));
     chara.anchor.set(0.5, 0.6);
-    chara.scale.set(0.375);
+    chara.scale.set(0.67);
     chara.position.set(600, top + 110);
     this.col.addChild(chara);
     gsap.to(chara, { y: chara.y - 18, duration: 0.45, yoyo: true, repeat: -1, ease: 'sine.inOut' });

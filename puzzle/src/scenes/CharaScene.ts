@@ -7,7 +7,7 @@ import { Sound, haptic } from '../core/Audio';
 import { Button, grad, panel, popIn, txt } from '../core/UI';
 import { MenuBackground } from '../game/Backdrop';
 import { Effects } from '../game/Effects';
-import { COLORS, bigTexture, pieceTexture } from '../art/PieceArt';
+import { COLORS, bigTexture, loadCharacterArt, pieceTexture } from '../art/PieceArt';
 import { CHARACTERS, MAX_LV, RARITY_INFO, charAtk, charCharge, copiesForLevel, type CharDef } from '../data/characters';
 import { HomeScene } from './HomeScene';
 import { stars } from './common';
@@ -55,9 +55,9 @@ export class CharaScene extends Scene {
       g.roundRect(-cw / 2, -ch / 2, cw, ch, 26).fill(owned ? grad([[0, '#ffffff'], [1, '#e8deff']]) : 0x4a3a7a);
       g.roundRect(-cw / 2, -ch / 2, cw, ch, 26).stroke({ width: 6, color: owned ? r.color : 0x6a5a9a });
       c.addChild(g);
-      const sp = new Sprite(pieceTexture(def, i % 5));
-      sp.anchor.set(0.5, 0.6);
-      sp.scale.set(0.7);
+      const sp = new Sprite(bigTexture(def));
+      sp.anchor.set(0.5, 0.55);
+      sp.scale.set(150 / Math.max(1, sp.texture.width));
       sp.y = -10;
       if (!owned) {
         sp.tint = 0x1a0f30;
@@ -88,7 +88,7 @@ export class CharaScene extends Scene {
         Sound.play('ui_tap', { vol: 0.7 });
         haptic(5);
         gsap.fromTo(c.scale, { x: 0.9, y: 0.9 }, { x: 1, y: 1, duration: 0.4, ease: 'elastic.out(1.2,0.4)' });
-        if (owned) this.openDetail(def);
+        if (owned) void loadCharacterArt([def.id], { strips: true }).then(() => this.openDetail(def));
         else this.toast('ガチャで手に入れよう！');
       });
       grid.addChild(c);
@@ -125,7 +125,7 @@ export class CharaScene extends Scene {
     box.addChild(glow);
     const big = new Sprite(bigTexture(def, 0));
     big.anchor.set(0.5, 0.6);
-    big.scale.set(0.55);
+    big.scale.set(1.0);
     big.y = -250;
     box.addChild(big);
     gsap.to(big, { y: -270, duration: 0.6, yoyo: true, repeat: -1, ease: 'sine.inOut' });

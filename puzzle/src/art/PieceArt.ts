@@ -169,7 +169,7 @@ export function drawBomb(mega: boolean): HTMLCanvasElement {
 // ------------------------------------------------------------ character pieces
 // Each character ships as a 5-cell strip (red, blue, green, yellow, purple) of
 // pre-rendered KayKit heads, plus a portrait in its original colors.
-export const PIECE_CELL = 320;
+export const PIECE_CELL = 256;
 /** How large the art is drawn relative to the physics circle (heads overlap a little). */
 export const PIECE_ART_SCALE = 1.2;
 
@@ -182,14 +182,16 @@ export function portraitAlias(id: string): string {
   return `portrait:${id}`;
 }
 
-/** Loads the strip + portrait for the given characters (no-op when cached). */
-export async function loadCharacterArt(ids: string[]): Promise<void> {
+/** Loads character art on demand. Strips are only needed where pieces are drawn in color. */
+export async function loadCharacterArt(ids: string[], opts: { strips?: boolean; portraits?: boolean } = { strips: true, portraits: true }): Promise<void> {
   const list: { alias: string; src: string }[] = [];
   for (const id of ids) {
-    if (!Assets.cache.has(piecesAlias(id))) list.push({ alias: piecesAlias(id), src: `./assets/pieces/${id}.webp` });
-    if (!Assets.cache.has(portraitAlias(id))) list.push({ alias: portraitAlias(id), src: `./assets/pieces/${id}_portrait.webp` });
+    if (opts.strips && !Assets.cache.has(piecesAlias(id))) list.push({ alias: piecesAlias(id), src: `./assets/pieces/${id}.webp` });
+    if (opts.portraits && !Assets.cache.has(portraitAlias(id))) list.push({ alias: portraitAlias(id), src: `./assets/pieces/${id}_portrait.webp` });
   }
-  if (list.length) await Assets.load(list);
+  if (!list.length) return;
+  for (const a of list) if (!Assets.resolver.hasKey(a.alias)) Assets.add(a);
+  await Assets.load(list.map((a) => a.alias));
 }
 
 export function pieceTexture(def: CharDef, colorIdx: number): Texture {

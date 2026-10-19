@@ -3,8 +3,8 @@ import { tex } from './Loader';
 import gsap from 'gsap';
 import { Sound, haptic } from './Audio';
 
-export const FONT_ROUND = 'Rounded, "Hiragino Maru Gothic ProN", "Arial Rounded MT Bold", sans-serif';
-export const FONT_DELA = 'Dela, Rounded, sans-serif';
+export const FONT_ROUND = 'Memokatchi, "Hiragino Maru Gothic ProN", "Arial Rounded MT Bold", sans-serif';
+export const FONT_DELA = FONT_ROUND;
 
 export interface TxtOpts {
   size: number;
@@ -59,7 +59,16 @@ const BTN: Record<BtnColor, [string, string, string, number]> = {
   orange: ['#ffd29a', '#ff8a1f', '#c95400', 0x7a3000],
 };
 
+const gradCache = new Map<string, FillGradient>();
+/** Shared per stop list: each gradient owns a texture, so don't rebuild it per screen. */
 export function grad(stops: [number, string][], vertical = true): FillGradient {
+  const key = `${vertical}|${stops.join(';')}`;
+  let g = gradCache.get(key);
+  if (!g) gradCache.set(key, (g = makeGrad(stops, vertical)));
+  return g;
+}
+
+function makeGrad(stops: [number, string][], vertical: boolean): FillGradient {
   return new FillGradient({
     type: 'linear',
     start: { x: 0, y: 0 },

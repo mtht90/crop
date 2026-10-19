@@ -19,7 +19,6 @@ export function tex(alias: string): Texture {
 export async function loadAll(onProgress: (p: number) => void): Promise<void> {
   const list: { alias: string; src: string }[] = [];
   for (const b of BOSSES) for (const p of BOSS_POSES) list.push({ alias: bossAlias(b.id, p), src: `${A}/boss/${b.id}_${p}.webp` });
-  for (let i = 1; i <= 4; i++) for (const l of ['background', 1, 2, 3, 4, 5, 6, 7]) list.push({ alias: `fairy:${i}_${l}`, src: `${A}/fairy/${i}_${l}.webp` });
   for (const n of JUNGLE) list.push({ alias: `jungle:${n}`, src: `${A}/jungle/${n}.png` });
   for (const a of list) Assets.add(a);
   let texP = 0;
@@ -27,7 +26,7 @@ export async function loadAll(onProgress: (p: number) => void): Promise<void> {
   const report = () => onProgress(texP * 0.5 + sndP * 0.5);
   const sounds: Record<string, string> = {};
   for (const n of SFX) sounds[n] = `${A}/sfx/${n}.mp3`;
-  for (const n of BGM) sounds[n] = `${A}/bgm/${n}.mp3`;
+  Sound.registerMusic(Object.fromEntries(BGM.map((n) => [n, `${A}/bgm/${n}.mp3`])));
   await Promise.all([
     Assets.load(list.map((a) => a.alias), (p) => {
       texP = p;
@@ -42,5 +41,23 @@ export async function loadAll(onProgress: (p: number) => void): Promise<void> {
 }
 
 async function loadCustomArt(): Promise<void> {
-  await loadCharacterArt(CHARACTERS.map((c) => c.id));
+  // portraits are small; colored strips load per scene
+  await loadCharacterArt(CHARACTERS.map((c) => c.id), { portraits: true });
+}
+
+const FAIRY_LAYERS = ['background', 1, 2, 3, 4, 5, 6, 7];
+function fairyAliases(set: number): { alias: string; src: string }[] {
+  return FAIRY_LAYERS.map((l) => ({ alias: `fairy:${set}_${l}`, src: `${A}/fairy/${set}_${l}.webp` }));
+}
+
+/** Loads one Fairy-Tale background set (8 layers). */
+export async function loadFairy(set: number): Promise<void> {
+  const list = fairyAliases(set);
+  for (const a of list) if (!Assets.resolver.hasKey(a.alias)) Assets.add(a);
+  await Assets.load(list.map((a) => a.alias));
+}
+
+/** Frees a background set's GPU memory. */
+export async function unloadFairy(set: number): Promise<void> {
+  await Assets.unload(fairyAliases(set).map((a) => a.alias)).catch(() => {});
 }

@@ -8,6 +8,7 @@ import { grad, txt } from '../core/UI';
 import { MenuBackground } from '../game/Backdrop';
 import { Board } from '../game/Board';
 import { CHARACTERS, CHAR_BY_ID } from '../data/characters';
+import { loadCharacterArt } from '../art/PieceArt';
 import { HomeScene } from './HomeScene';
 
 /** Title: an auto-playing board under a bouncing logo. */
@@ -19,6 +20,10 @@ export class TitleScene extends Scene {
   private t = 0;
   private autoT = 1.5;
   private started = false;
+
+  async preload(): Promise<void> {
+    await loadCharacterArt([Save.data.selected], { strips: true });
+  }
 
   enter(): void {
     this.view.addChild(this.bg, this.col);

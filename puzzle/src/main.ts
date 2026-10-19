@@ -1,7 +1,7 @@
 import { Container, Graphics, Text } from 'pixi.js';
 import gsap from 'gsap';
 import { App } from './core/App';
-import { Scenes } from './core/Scene';
+import { Scenes, reportError } from './core/Scene';
 import { Sound } from './core/Audio';
 import { loadAll } from './core/Loader';
 import { FONT_ROUND } from './core/UI';
@@ -15,20 +15,20 @@ import { CharaScene } from './scenes/CharaScene';
 async function loadFonts(): Promise<void> {
   const sample = 'ぷにっとバトル討伐0123456789ABC';
   try {
-    await Promise.all([
-      document.fonts.load(`800 32px Rounded`, sample),
-      document.fonts.load(`500 32px Rounded`, sample),
-      document.fonts.load(`32px Dela`, sample),
-    ]);
+    await document.fonts.load(`32px Memokatchi`, sample);
   } catch {
     /* fall back to system fonts */
   }
 }
 
+window.addEventListener('error', (e) => reportError(e.error ?? e.message));
+window.addEventListener('unhandledrejection', (e) => reportError(e.reason));
+
 async function boot(): Promise<void> {
   gsap.ticker.lagSmoothing(200, 33);
   await loadFonts();
   await App.init();
+  App.pixi.canvas.addEventListener('webglcontextlost', () => reportError('画面の描画が止まりました（メモリ不足の可能性）。ページを再読み込みしてください。'));
 
   // simple in-canvas loading bar
   const loading = new Container();
@@ -70,7 +70,7 @@ async function boot(): Promise<void> {
   };
   Scenes.go(scenes[start ?? ''] ?? (() => new TitleScene()), true);
   // handle for automated playtests
-  (window as unknown as { __game: unknown }).__game = { Scenes, App };
+  (window as unknown as { __game: unknown }).__game = { Scenes, App, scenes };
 }
 
 void boot();

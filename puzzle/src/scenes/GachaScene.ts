@@ -8,7 +8,7 @@ import { Button, grad, panel, popIn, txt } from '../core/UI';
 import { MenuBackground } from '../game/Backdrop';
 import { Effects } from '../game/Effects';
 import { World, type PBody } from '../game/Physics';
-import { bigTexture, pieceTexture } from '../art/PieceArt';
+import { bigTexture } from '../art/PieceArt';
 import { RARITY_INFO, type Rarity } from '../data/characters';
 import { COST_SINGLE, COST_TEN, PITY, pull, rarityRank, type PullResult } from '../data/gacha';
 import { HomeScene } from './HomeScene';
@@ -381,7 +381,7 @@ export class GachaScene extends Scene {
     art.anchor.set(0.5, 0.6);
     art.scale.set(0);
     c.addChild(art);
-    gsap.to(art.scale, { x: 0.8, y: 0.8, duration: 0.7, ease: 'elastic.out(1.1,0.45)' });
+    gsap.to(art.scale, { x: 1.4, y: 1.4, duration: 0.7, ease: 'elastic.out(1.1,0.45)' });
     gsap.delayedCall(0.8, () => {
     });
     gsap.to(art, { y: -20, duration: 0.8, yoyo: true, repeat: -1, ease: 'sine.inOut', delay: 0.7 });
@@ -483,9 +483,9 @@ export class GachaScene extends Scene {
             f.roundRect(-cw / 2, -ch / 2, cw, ch, 18).stroke({ width: 6, color: r.color });
             if (res.def.rarity === 'SSR') f.roundRect(-cw / 2 + 6, -ch / 2 + 6, cw - 12, ch - 12, 14).stroke({ width: 3, color: 0xffc71f });
             card.addChild(f);
-            const sp = new Sprite(pieceTexture(res.def, i % 5));
-            sp.anchor.set(0.5, 0.6);
-            sp.scale.set(0.5);
+            const sp = new Sprite(bigTexture(res.def));
+            sp.anchor.set(0.5, 0.55);
+            sp.scale.set(96 / Math.max(1, sp.texture.width));
             sp.y = -12;
             card.addChild(sp);
             const rl = txt(res.def.rarity, { size: 22, font: 'dela', color: r.color, stroke: 0x2a1630, strokeWidth: 5 });

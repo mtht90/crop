@@ -8,7 +8,7 @@ import { Button, fmt, grad, iconButton, panel, popIn, txt } from '../core/UI';
 import { MenuBackground } from '../game/Backdrop';
 import { BossView } from '../game/BossView';
 import { Effects } from '../game/Effects';
-import { COLORS, bigTexture, pieceTexture } from '../art/PieceArt';
+import { COLORS, bigTexture, loadCharacterArt, pieceTexture } from '../art/PieceArt';
 import { CHARACTERS, CHAR_BY_ID, RARITY_INFO, charAtk } from '../data/characters';
 import { bossForLevel, bossHp } from '../data/bosses';
 import { BattleScene } from './BattleScene';
@@ -26,6 +26,10 @@ export class HomeScene extends Scene {
   private boss!: BossView;
   private t = 0;
   private floaters: { s: Sprite; vy: number; vr: number }[] = [];
+
+  async preload(): Promise<void> {
+    await loadCharacterArt([Save.data.selected], { strips: true });
+  }
 
   enter(): void {
     this.view.addChild(this.bg, this.col);
@@ -93,7 +97,7 @@ export class HomeScene extends Scene {
     this.hero.addChild(pedestal);
     this.heroSprite = new Sprite(bigTexture(def));
     this.heroSprite.anchor.set(0.5, 0.75);
-    this.heroSprite.scale.set(0.625);
+    this.heroSprite.scale.set(1.1);
     this.heroSprite.y = 150;
     this.heroSprite.eventMode = 'static';
     this.heroSprite.cursor = 'pointer';
@@ -156,8 +160,8 @@ export class HomeScene extends Scene {
       this.heroSprite.texture = bigTexture(def);
     });
     gsap.killTweensOf(this.heroSprite.scale);
-    this.heroSprite.scale.set(0.75, 0.5);
-    gsap.to(this.heroSprite.scale, { x: 0.625, y: 0.625, duration: 0.7, ease: 'elastic.out(1.4,0.3)' });
+    this.heroSprite.scale.set(1.32, 0.88);
+    gsap.to(this.heroSprite.scale, { x: 1.1, y: 1.1, duration: 0.7, ease: 'elastic.out(1.4,0.3)' });
     Sound.link(this.colorIdx * 2);
     haptic(8);
     this.fx.burst(this.hero.x, this.hero.y + 40, { count: 14, tex: 'star_06', tint: [COLORS[this.colorIdx].glow, 0xffffff], add: true, speed: [150, 400], size: [0.08, 0.16], gravity: 300 });

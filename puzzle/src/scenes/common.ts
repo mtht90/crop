@@ -86,7 +86,7 @@ export function openSettings(parent: Container, onClose?: () => void): void {
     };
     make();
   });
-  const credit = txt('キャラ・ボス: KayKit (CC0)  背景・UI: CraftPix\n効果音: 効果音ラボ  音楽: Juhani Junkala (CC0)\nフォント: M PLUS Rounded 1c, Dela Gothic One (OFL)', { size: 20, weight: '500', color: 0x7a6a9a, lineHeight: 30 });
+  const credit = txt('キャラ・ボス: KayKit (CC0)  背景・UI: CraftPix\n効果音: 効果音ラボ  音楽: Juhani Junkala (CC0)\nフォント: めもかっち / やっちゃん (SIL OFL 1.1)', { size: 20, weight: '500', color: 0x7a6a9a, lineHeight: 30 });
   credit.y = 210;
   box.addChild(credit);
   const close = new Button({

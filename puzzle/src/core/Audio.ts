@@ -27,7 +27,7 @@ class AudioEngine {
   private reverbIn: GainNode;
   private noise: AudioBuffer;
   private buffers = new Map<string, AudioBuffer>();
-  private bgm: { name: string; src: AudioBufferSourceNode; gain: GainNode } | null = null;
+  private bgm: { name: string; el: HTMLAudioElement; node: MediaElementAudioSourceNode; gain: GainNode } | null = null;
   private unlocked = false;
   private lastPlay = new Map<string, number>();
 
@@ -69,6 +69,7 @@ class AudioEngine {
   /** Must be called from a user gesture (iOS/Chrome autoplay policy). */
   unlock(): void {
     if (this.ctx.state !== 'running') void this.ctx.resume();
+    if (this.bgm?.el.paused) void this.bgm.el.play().catch(() => {});
     if (this.unlocked) return;
     this.unlocked = true;
     // Play a silent buffer to fully unlock iOS.
@@ -137,37 +138,59 @@ class AudioEngine {
   }
 
   // ---------------------------------------------------------------- music
+  // Music is streamed through <audio> elements instead of being decoded up front:
+  // a decoded minute of stereo audio costs ~20MB, which is enough to get a mobile
+  // WebView killed.
+  private musicUrls = new Map<string, string>();
+
+  registerMusic(map: Record<string, string>): void {
+    for (const [k, v] of Object.entries(map)) this.musicUrls.set(k, v);
+  }
+
   music(name: string, fade = 0.8, vol = 1): void {
     if (this.bgm?.name === name) return;
-    const buf = this.buffers.get(name);
     this.stopMusic(fade);
-    if (!buf) return;
-    const src = this.ctx.createBufferSource();
-    src.buffer = buf;
-    src.loop = true;
+    const url = this.musicUrls.get(name);
+    if (!url) return;
+    const el = new Audio(url);
+    el.loop = true;
+    el.preload = 'auto';
+    (el as HTMLAudioElement & { preservesPitch?: boolean; webkitPreservesPitch?: boolean }).preservesPitch = false;
+    (el as HTMLAudioElement & { webkitPreservesPitch?: boolean }).webkitPreservesPitch = false;
+    let node: MediaElementAudioSourceNode;
+    try {
+      node = this.ctx.createMediaElementSource(el);
+    } catch {
+      return;
+    }
     const g = this.ctx.createGain();
     g.gain.setValueAtTime(0.0001, this.now);
     g.gain.exponentialRampToValueAtTime(vol, this.now + fade);
-    src.connect(g).connect(this.bgmFilter);
-    src.start();
-    this.bgm = { name, src, gain: g };
+    node.connect(g).connect(this.bgmFilter);
+    void el.play().catch(() => {
+      /* will start on the next user gesture via unlock() */
+    });
+    this.bgm = { name, el, node, gain: g };
   }
 
   stopMusic(fade = 0.6): void {
     if (!this.bgm) return;
-    const { src, gain } = this.bgm;
+    const { el, node, gain } = this.bgm;
     gain.gain.cancelScheduledValues(this.now);
     gain.gain.setValueAtTime(Math.max(gain.gain.value, 0.0001), this.now);
     gain.gain.exponentialRampToValueAtTime(0.0001, this.now + fade);
-    src.stop(this.now + fade + 0.05);
+    window.setTimeout(() => {
+      el.pause();
+      el.removeAttribute('src');
+      el.load();
+      node.disconnect();
+      gain.disconnect();
+    }, (fade + 0.05) * 1000);
     this.bgm = null;
   }
 
-  musicRate(rate: number, time = 0.4): void {
-    if (!this.bgm) return;
-    this.bgm.src.playbackRate.cancelScheduledValues(this.now);
-    this.bgm.src.playbackRate.setValueAtTime(this.bgm.src.playbackRate.value, this.now);
-    this.bgm.src.playbackRate.linearRampToValueAtTime(rate, this.now + time);
+  musicRate(rate: number): void {
+    if (this.bgm) this.bgm.el.playbackRate = rate;
   }
 
   /** Muffles the music (e.g. pause, cut-ins). freq 20000 = open. */
