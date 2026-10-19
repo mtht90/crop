@@ -20,7 +20,7 @@ export const BOARD_TUNING = {
   /** Extra adjacency slack during fever (links reach further). */
   feverReach: 0.22,
   /** Two pieces are "touching" if their centers are within (ra+rb)*adjacency. */
-  adjacency: 1.42,
+  adjacency: 1.5,
   /** How close the finger must be to a piece center (in radii) to grab it. */
   grab: 1.0,
   /** Extra reach (in radii) when the candidate is adjacent to the chain tail. */
@@ -754,6 +754,18 @@ export class Board {
     const tok = this.ev.onResolve(infos, cause, { chain: victims.length, color: -1, x: ox, y: oy });
     victims.forEach((p, i) => this.popPiece(p, i * Math.min(0.03, 0.6 / Math.max(1, victims.length)), i, cause, tok));
     return infos;
+  }
+
+  /** When no group of 3 exists, paints the neighbors of a random piece to its color. */
+  unstick(): void {
+    const live = this.live().filter((p) => p.kind === 'normal' && this.onBoard(p));
+    if (live.length < 4) return;
+    const seed = live[Math.floor(Math.random() * live.length)];
+    const near = live
+      .filter((p) => p !== seed && p.color !== seed.color)
+      .sort((a, b) => Math.hypot(a.x - seed.x, a.y - seed.y) - Math.hypot(b.x - seed.x, b.y - seed.y))
+      .slice(0, 3);
+    this.recolor(near, seed.color);
   }
 
   recolor(list: Piece[], color: number): void {

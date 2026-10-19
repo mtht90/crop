@@ -1,4 +1,4 @@
-import { Container, FillGradient, Graphics, Sprite } from 'pixi.js';
+import { Assets, Container, FillGradient, Graphics, Sprite, Texture } from 'pixi.js';
 import gsap from 'gsap';
 import { App } from '../core/App';
 import { Scene, Scenes } from '../core/Scene';
@@ -7,7 +7,7 @@ import { Sound, haptic } from '../core/Audio';
 import { Button, grad, panel, popIn, txt } from '../core/UI';
 import { FairyBackdrop } from '../game/Backdrop';
 import { jungle, jungleSlice } from '../game/Hud';
-import { loadFairy, tex, unloadFairy } from '../core/Loader';
+import { loadFairy, unloadFairy } from '../core/Loader';
 import { Effects } from '../game/Effects';
 import { World, type PBody } from '../game/Physics';
 import { bigTexture, loadCharacterArt } from '../art/PieceArt';
@@ -27,19 +27,18 @@ function rainbow(): FillGradient {
   return grad([[0, '#ff4d6a'], [0.25, '#ffc71f'], [0.5, '#3fd35c'], [0.75, '#36a2ff'], [1, '#a65cff']], false);
 }
 
-/** Two-tone capsule graphic. */
-function drawCapsule(g: Graphics, r: number, rarity: Rarity | 'mix', color?: number): void {
-  g.clear();
-  const top = rarity === 'SSR' ? rainbow() : color ?? (rarity === 'mix' ? 0x8fd0ff : CAP_COLORS[rarity][0]);
-  g.circle(0, 3, r).fill({ color: 0x000000, alpha: 0.25 });
-  g.arc(0, 0, r, Math.PI, 0).lineTo(-r, 0).fill(top);
-  g.arc(0, 0, r, 0, Math.PI).lineTo(r, 0).fill(0xf6f2ff);
-  g.rect(-r, -r * 0.08, r * 2, r * 0.16).fill({ color: 0x2a1630, alpha: 0.35 });
-  g.circle(0, 0, r).stroke({ width: Math.max(2, r * 0.08), color: 0x2a1630 });
-  g.ellipse(-r * 0.38, -r * 0.5, r * 0.28, r * 0.16).fill({ color: 0xffffff, alpha: 0.75 });
-}
-
 const BG_SET = 2;
+
+/** Pre-rendered 3D gumball machine ("gumball machine" by myles_683, CC BY 4.0), layered so capsules sit inside the glass. */
+const MACHINE = {
+  size: [555, 960],
+  dome: [278, 305],
+  domeR: 225,
+  crank: [202.0, 653.0],
+  chute: [193, 873],
+};
+const MACHINE_PARTS = ['back', 'glass', 'body', 'crank', 'cap_N', 'cap_R', 'cap_SR', 'cap_SSR'];
+const gtex = (n: string): Texture => Assets.get<Texture>(`gacha:${n}`) ?? Texture.WHITE;
 
 export class GachaScene extends Scene {
   private bg!: FairyBackdrop;
@@ -50,11 +49,10 @@ export class GachaScene extends Scene {
   private machine = new Container();
   private dome = new Container();
   private handle = new Container();
-  private bulbs: Graphics[] = [];
   private pickup = new Container();
   private pickArts: Sprite[] = [];
-  private caps: { g: Graphics; b: PBody; a: number }[] = [];
-  private world = new World({ gravity: 1800, left: -1e4, right: 1e4, bottom: 1e4, iterations: 4, drag: 0.6, circle: { x: 0, y: 0, r: 196 } });
+  private caps: { g: Sprite; b: PBody; a: number }[] = [];
+  private world = new World({ gravity: 1800, left: -1e4, right: 1e4, bottom: 1e4, iterations: 4, drag: 0.6, circle: { x: 0, y: 0, r: MACHINE.domeR * 0.93 } });
   private shaking = 0;
   private coins!: CoinCounter;
   private ticketLabel!: ReturnType<typeof txt>;
@@ -68,7 +66,8 @@ export class GachaScene extends Scene {
   private lastDim: Graphics | null = null;
 
   async preload(): Promise<void> {
-    await loadFairy(BG_SET);
+    for (const n of MACHINE_PARTS) if (!Assets.resolver.hasKey(`gacha:${n}`)) Assets.add({ alias: `gacha:${n}`, src: `./assets/gacha/${n}.webp` });
+    await Promise.all([loadFairy(BG_SET), Assets.load(MACHINE_PARTS.map((n) => `gacha:${n}`))]);
     this.bg = new FairyBackdrop(BG_SET);
   }
 
@@ -153,77 +152,58 @@ export class GachaScene extends Scene {
   }
 
   private buildMachine(y0: number): void {
-    const R = 210;
-    const H = App.H;
-    const space = H - App.safeBottom - 300 - y0;
-    const s = Math.min(1, space / 650);
+    const [W, H] = MACHINE.size;
+    const [dx, dy] = MACHINE.dome;
+    // stop above the ticket button
+    const space = App.H - App.safeBottom - 320 - y0;
+    const s = Math.min(0.9, space / H);
     this.machine.scale.set(s);
-    this.machine.position.set(360, y0 + (R + 20) * s);
+    // machine origin = dome center
+    this.machine.position.set(360, y0 + dy * s);
     // golden rays behind
-    this.rays.position.set(360, this.machine.y + 40 * s);
+    this.rays.position.set(360, this.machine.y);
     for (let i = 0; i < 18; i++) {
       const a0 = (i / 18) * Math.PI * 2;
       const a1 = a0 + Math.PI / 18;
       this.rays.moveTo(0, 0).lineTo(Math.cos(a0) * 1000, Math.sin(a0) * 1000).lineTo(Math.cos(a1) * 1000, Math.sin(a1) * 1000).closePath().fill({ color: 0xfff0a0, alpha: 0.1 });
     }
     this.rays.blendMode = 'add';
-    // wooden base with gold trim
-    const base = new Graphics();
-    const bw = 440;
-    const bt = R - 30;
-    base.roundRect(-bw / 2, bt + 14, bw, 300, 46).fill({ color: 0x000000, alpha: 0.35 });
-    base.roundRect(-bw / 2, bt, bw, 300, 46).fill({ texture: tex('jungle:wood'), textureSpace: 'local' });
-    base.roundRect(-bw / 2, bt, bw, 300, 46).stroke({ width: 10, color: 0xffc94a });
-    base.roundRect(-bw / 2, bt, bw, 300, 46).stroke({ width: 3, color: 0x6a3a00, alignment: 1 });
-    // name plate
-    base.roundRect(-150, bt + 30, 300, 64, 32).fill(grad([[0, '#fff3b0'], [1, '#ffb020']]));
-    base.roundRect(-150, bt + 30, 300, 64, 32).stroke({ width: 5, color: 0x6a3a00 });
-    // chute
-    base.roundRect(-84, bt + 160, 168, 100, 34).fill(0x1a0a06);
-    base.roundRect(-84, bt + 160, 168, 100, 34).stroke({ width: 8, color: 0xffc94a });
-    base.roundRect(-64, bt + 172, 128, 30, 15).fill({ color: 0xfff0a0, alpha: 0.15 });
-    const label = txt('ぷにガチャ', { size: 34, font: 'dela', color: 0x8a3a00 });
-    label.position.set(0, bt + 62);
-    // marquee bulbs along the base top
-    for (let i = 0; i < 9; i++) {
-      const b = new Graphics();
-      b.circle(0, 0, 11).fill(0xffffff);
-      b.position.set(-bw / 2 + 40 + i * ((bw - 80) / 8), bt + 128);
-      this.bulbs.push(b);
-    }
-    // dome
-    const back = new Graphics().circle(0, 0, R).fill({ color: 0xcfeeff, alpha: 0.22 });
-    const front = new Graphics();
-    front.circle(0, 0, R + 6).stroke({ width: 16, color: 0xffc94a });
-    front.circle(0, 0, R + 6).stroke({ width: 4, color: 0x6a3a00, alignment: 1 });
-    front.circle(0, 0, R - 4).stroke({ width: 6, color: 0xffffff, alpha: 0.6 });
-    front.ellipse(-R * 0.45, -R * 0.5, R * 0.24, R * 0.12).fill({ color: 0xffffff, alpha: 0.65 });
-    front.ellipse(R * 0.52, R * 0.15, R * 0.05, R * 0.24).fill({ color: 0xffffff, alpha: 0.25 });
-    const cap = new Graphics();
-    cap.roundRect(-80, -R - 40, 160, 58, 26).fill(grad([[0, '#fff3b0'], [1, '#e09000']]));
-    cap.roundRect(-80, -R - 40, 160, 58, 26).stroke({ width: 6, color: 0x6a3a00 });
-    const crown = new Graphics().poly(starPts(30)).fill(0xffd23f).stroke({ width: 5, color: 0x6a3a00 });
-    crown.position.set(0, -R - 54);
-    // crank: big gold star knob
-    const hg = new Graphics();
-    hg.roundRect(-14, -86, 28, 172, 14).fill(grad([[0, '#fff3b0'], [1, '#e09000']]));
-    hg.roundRect(-14, -86, 28, 172, 14).stroke({ width: 5, color: 0x6a3a00 });
-    hg.circle(0, 0, 44).fill(grad([[0, '#ffffff'], [1, '#ffd23f']]));
-    hg.circle(0, 0, 44).stroke({ width: 6, color: 0x6a3a00 });
-    hg.poly(starPts(26)).fill(0xff7ab8).stroke({ width: 4, color: 0x6a3a00 });
-    this.handle.addChild(hg);
-    this.handle.position.set(150, bt + 210);
-    this.machine.addChild(base, label, ...this.bulbs, this.handle, back, this.dome, front, cap, crown);
+    const layer = (n: string) => {
+      const sp = new Sprite(gtex(n));
+      sp.anchor.set(dx / W, dy / H);
+      return sp;
+    };
+    const shadow = new Graphics().ellipse(0, H - dy - 30, W * 0.46, 40).fill({ color: 0x000000, alpha: 0.35 });
+    const crank = new Sprite(gtex('crank'));
+    crank.anchor.set(0.5);
+    this.handle.addChild(crank);
+    this.handle.position.set(MACHINE.crank[0] - dx, MACHINE.crank[1] - dy);
+    // name plate on the base, next to the crank
+    const plate = new Container();
+    const pg = new Graphics();
+    pg.roundRect(-92, -34, 184, 68, 34).fill(grad([[0, '#fff3b0'], [1, '#ffb020']]));
+    pg.roundRect(-92, -34, 184, 68, 34).stroke({ width: 6, color: 0x8a4f00 });
+    const pt = txt('GACHA', { size: 38, font: 'dela', color: 0xd81b60, stroke: 0xffffff, strokeWidth: 6 });
+    plate.addChild(pg, pt);
+    plate.position.set(MACHINE.crank[0] - dx + 150, MACHINE.crank[1] - dy - 40);
+    plate.rotation = -0.04;
+    const star = new Graphics().poly(starPts(30)).fill(0xffd23f).stroke({ width: 5, color: 0x8a4f00 });
+    star.position.set(plate.x + 10, plate.y + 90);
+    this.machine.addChild(shadow, layer('back'), this.dome, layer('glass'), layer('body'), plate, star, this.handle);
     // capsules physics inside the dome
     const mixes: Rarity[] = ['N', 'N', 'N', 'R', 'R', 'R', 'SR', 'SR', 'SSR'];
-    for (let i = 0; i < 24; i++) {
-      const r = 33;
-      const b = this.world.add((Math.random() - 0.5) * 200, (Math.random() - 0.5) * 200, r);
-      const g = new Graphics();
-      drawCapsule(g, r, mixes[i % mixes.length]);
+    const r = MACHINE.domeR * 0.15;
+    for (let i = 0; i < 18; i++) {
+      const b = this.world.add((Math.random() - 0.5) * MACHINE.domeR, (Math.random() - 0.5) * MACHINE.domeR, r);
+      const g = new Sprite(gtex(`cap_${mixes[i % mixes.length]}`));
+      g.anchor.set(0.5);
+      g.scale.set((r * 2.25) / g.texture.width);
       this.dome.addChild(g);
       this.caps.push({ g, b, a: Math.random() * 6 });
     }
+    // settle the pile before the first frame
+    for (let i = 0; i < 360; i++) this.world.step(1 / 120);
+    for (const c of this.caps) c.g.position.set(c.b.position.x, c.b.position.y);
   }
 
   private buttons: Button[] = [];
@@ -374,19 +354,21 @@ export class GachaScene extends Scene {
     // tease: show a lower rarity first sometimes
     const tease = best === 'SSR' ? (Math.random() < 0.5 ? 'SR' : 'SSR') : best === 'SR' && Math.random() < 0.35 ? 'R' : best;
     const capC = new Container();
-    const g = new Graphics();
-    drawCapsule(g, 90, tease);
+    const g = new Sprite(gtex(`cap_${tease}`));
+    g.anchor.set(0.5);
+    g.scale.set(190 / g.texture.width);
     capC.addChild(g);
     const ms = this.machine.scale.x;
-    capC.position.set(360, this.machine.y + (210 + 185) * ms);
-    capC.scale.set(0.4 * ms);
+    capC.position.set(this.machine.x + (MACHINE.chute[0] - MACHINE.dome[0]) * ms, this.machine.y + (MACHINE.chute[1] - MACHINE.dome[1]) * ms);
+    capC.scale.set(0.35);
     layer.addChild(capC);
     Sound.play('drop', { vol: 0.8 });
     // pop out of the chute and bounce to center
     const cy = App.H * 0.45;
     await new Promise<void>((r) => {
       const tl = gsap.timeline({ onComplete: r });
-      tl.to(capC, { y: capC.y + 60, duration: 0.2, ease: 'power2.in' });
+      tl.to(capC, { y: capC.y + 40, duration: 0.2, ease: 'power2.in' });
+      tl.to(capC, { x: 360, duration: 0.5, ease: 'power2.out' });
       tl.to(capC.scale, { x: 1, y: 1, duration: 0.5, ease: 'back.out(2)' });
       tl.to(capC, { y: cy, duration: 0.5, ease: 'bounce.out' }, '<');
       tl.add(() => Sound.play('soft', { vol: 0.6 }), '-=0.3');
@@ -415,7 +397,7 @@ export class GachaScene extends Scene {
       await new Promise<void>((r) => gsap.to(capC, { x: 360 + 8, duration: 0.035, yoyo: true, repeat: 16, onComplete: r }));
       capC.x = 360;
       this.flash(0xffffff, 0.5);
-      drawCapsule(g, 90, best);
+      g.texture = gtex(`cap_${best}`);
       Sound.play('zap', { vol: 0.8 });
       Sound.chord(7);
       haptic([30, 30, 60]);
@@ -685,12 +667,6 @@ export class GachaScene extends Scene {
     this.bg.update(dt);
     this.fx.update(dt);
     this.rays.rotation += dt * 0.15;
-    // marquee lights chase around the base
-    this.bulbs.forEach((b, i) => {
-      const on = Math.floor(this.t * (this.busy ? 14 : 5) + i) % 3 === 0;
-      b.tint = on ? 0xfff27a : 0x8a5a20;
-      b.alpha = on ? 1 : 0.7;
-    });
     this.pickArts.forEach((a, i) => (a.y = 2 + Math.sin(this.t * 2.4 + i * 1.3) * 6));
     // drifting sparkles
     this.sparkT -= dt;

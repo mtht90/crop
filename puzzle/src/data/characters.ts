@@ -49,32 +49,32 @@ type Row = [id: string, name: string, rarity: Rarity, atk: number, skill: Skill,
 const ROWS: Row[] = [
   // N
   ['kh_a', 'キリッと', 'N', 100, { kind: 'bombs', name: 'ころころボム', desc: 'ボムを1個おとす', charge: 24, power: 1.8, amount: 1 }, 'まゆげに自信あり。毎朝ととのえている。'],
-  ['kh_b', 'ツンツン', 'N', 102, { kind: 'hline', name: 'よこなぎ', desc: '横一列をまとめて消す', charge: 26, power: 1.8, size: 1.7 }, 'ツンツン頭の見習い剣士。'],
+  ['kh_b', 'ツンツン', 'N', 102, { kind: 'hline', name: 'よこなぎ', desc: '横一列をまとめて消す', charge: 26, power: 1.75, size: 1.7 }, 'ツンツン頭の見習い剣士。'],
   ['kh_c', 'きりり', 'N', 101, { kind: 'vline', name: 'たてわり', desc: '縦一列をまとめて消す', charge: 26, power: 1.8, size: 1.7 }, 'まじめで几帳面。おかたづけが得意。'],
-  ['rh_a', 'ロングヘア', 'N', 99, { kind: 'random', name: 'かぜのいたずら', desc: 'ランダムに7個消す', charge: 24, power: 1.9, amount: 7 }, 'さらさらの長い髪がじまん。'],
-  ['rh_b', 'ブロンド', 'N', 103, { kind: 'circle', name: 'おひるねドーン', desc: 'まんなかを丸く消す', charge: 27, power: 1.8, amount: 1, size: 2.8 }, 'のんびり屋さん。お昼寝が大好き。'],
-  ['rh_c', 'ボブ', 'N', 100, { kind: 'paint', name: 'おとどけもの', desc: '8個を多い色にぬりかえる', charge: 24, power: 1.6, amount: 8 }, 'すばしっこい村の配達係。'],
-  ['mh_a', 'ひげ長老', 'N', 98, { kind: 'diag', name: 'ながーいおひげ', desc: 'ななめ一列をまとめて消す', charge: 26, power: 1.9, size: 1.7 }, 'ながーいおひげの物知りおじいさん。'],
-  ['mh_b', 'ひげ先生', 'N', 102, { kind: 'cross', name: 'ばってんチェック', desc: '十字にまとめて消す', charge: 28, power: 1.8, size: 1.3 }, '魔法学校の先生。宿題が多い。'],
-  ['mh_c', 'ひげ見習い', 'N', 101, { kind: 'bigMaker', name: 'みならいマジック', desc: '3個をデカピースに変える', charge: 25, power: 1.6, amount: 3 }, 'おひげを伸ばし中の見習い魔法使い。'],
-  ['bh_a', 'ひげ親方', 'N', 104, { kind: 'bottom', name: 'かなづちドン', desc: 'ボウルの底をまとめて消す', charge: 27, power: 1.8, size: 2.2 }, '鍛冶屋の親方。声が大きい。'],
-  ['bh_b', 'ひげ兄貴', 'N', 103, { kind: 'rim', name: 'ぐるっとひとまわり', desc: 'ボウルのふちを一周消す', charge: 28, power: 1.9, size: 1.6 }, '力持ちの兄貴分。面倒見がいい。'],
+  ['rh_a', 'ロングヘア', 'N', 99, { kind: 'random', name: 'かぜのいたずら', desc: 'ランダムに8個消す', charge: 24, power: 2.2, amount: 8 }, 'さらさらの長い髪がじまん。'],
+  ['rh_b', 'ブロンド', 'N', 103, { kind: 'circle', name: 'おひるねドーン', desc: 'まんなかを丸く消す', charge: 27, power: 2.6, amount: 1, size: 3.0 }, 'のんびり屋さん。お昼寝が大好き。'],
+  ['rh_c', 'ボブ', 'N', 100, { kind: 'paint', name: 'おとどけもの', desc: '8個を多い色にぬりかえる', charge: 24, power: 1.25, amount: 8 }, 'すばしっこい村の配達係。'],
+  ['mh_a', 'ひげ長老', 'N', 98, { kind: 'diag', name: 'ながーいおひげ', desc: 'ななめ一列をまとめて消す', charge: 26, power: 2.4, size: 1.7 }, 'ながーいおひげの物知りおじいさん。'],
+  ['mh_b', 'ひげ先生', 'N', 102, { kind: 'cross', name: 'ばってんチェック', desc: '十字にまとめて消す', charge: 28, power: 2.3, size: 1.3 }, '魔法学校の先生。宿題が多い。'],
+  ['mh_c', 'ひげ見習い', 'N', 101, { kind: 'bigMaker', name: 'みならいマジック', desc: '3個をデカピースに変える', charge: 25, power: 1.5, amount: 3 }, 'おひげを伸ばし中の見習い魔法使い。'],
+  ['bh_a', 'ひげ親方', 'N', 104, { kind: 'bottom', name: 'かなづちドン', desc: 'ボウルの底をまとめて消す', charge: 27, power: 1.5, size: 2.2 }, '鍛冶屋の親方。声が大きい。'],
+  ['bh_b', 'ひげ兄貴', 'N', 103, { kind: 'rim', name: 'ぐるっとひとまわり', desc: 'ボウルのふちを一周消す', charge: 28, power: 1.45, size: 1.6 }, '力持ちの兄貴分。面倒見がいい。'],
   // R
-  ['l_knight', '見習い騎士', 'R', 124, { kind: 'circle', name: 'たてのいちげき', desc: 'まんなかを大きく丸く消す', charge: 30, power: 2.6, amount: 1, size: 3.8 }, 'かぶとが大きくてちょっと前が見えない。'],
-  ['l_barbarian', 'クマかぶり', 'R', 128, { kind: 'bombs', name: 'ダブルボム', desc: 'ボムを2個おとす', charge: 30, power: 2.6, amount: 2 }, 'クマの毛皮がお気に入りの戦士。'],
-  ['l_mage', 'とんがり帽', 'R', 122, { kind: 'paint', name: 'いろぬり', desc: '14個を多い色にぬりかえる', charge: 28, power: 2.4, amount: 14 }, '帽子のつばで顔がかくれがち。'],
-  ['skull', 'ドクロ', 'R', 130, { kind: 'random', name: 'カラカラわらい', desc: 'ランダムに14個消す', charge: 30, power: 2.8, amount: 14 }, 'カラカラ笑うおちゃめなドクロ。'],
-  ['skel_minion', 'ホネっこ', 'R', 126, { kind: 'tapPop', name: 'ホネまわし', desc: '4秒間タップでまとめて消せる', charge: 30, power: 2.4, dur: 4 }, 'ホネだけど元気いっぱい。'],
+  ['l_knight', '見習い騎士', 'R', 115, { kind: 'circle', name: 'たてのいちげき', desc: 'まんなかを大きく丸く消す', charge: 30, power: 3.2, amount: 1, size: 4.3 }, 'かぶとが大きくてちょっと前が見えない。'],
+  ['l_barbarian', 'クマかぶり', 'R', 119, { kind: 'bombs', name: 'ダブルボム', desc: 'ボムを2個おとす', charge: 30, power: 2.6, amount: 2 }, 'クマの毛皮がお気に入りの戦士。'],
+  ['l_mage', 'とんがり帽', 'R', 113, { kind: 'paint', name: 'いろぬり', desc: '12個を多い色にぬりかえる', charge: 28, power: 1.2, amount: 12 }, '帽子のつばで顔がかくれがち。'],
+  ['skull', 'ドクロ', 'R', 121, { kind: 'random', name: 'カラカラわらい', desc: 'ランダムに14個消す', charge: 30, power: 2.1, amount: 14 }, 'カラカラ笑うおちゃめなドクロ。'],
+  ['skel_minion', 'ホネっこ', 'R', 117, { kind: 'tapPop', name: 'ホネまわし', desc: '5秒間タップでまとめて消せる', charge: 30, power: 2.4, dur: 5 }, 'ホネだけど元気いっぱい。'],
   // SR
-  ['knight', 'ナイト', 'SR', 156, { kind: 'colorBlast', name: 'いっせい攻撃', desc: 'いちばん多い色を全部消す', charge: 34, power: 3.4 }, '王国を守る正義の騎士。'],
-  ['barbarian', 'バーバリアン', 'SR', 160, { kind: 'bottom', name: 'じならし', desc: 'ボウルの下半分をまとめて消す', charge: 34, power: 3.4, size: 4.2 }, 'クマの頭をかぶった豪快な戦士。'],
-  ['mage', 'メイジ', 'SR', 150, { kind: 'circle', name: 'メテオ', desc: '4か所を丸く消す', charge: 34, power: 3.2, amount: 4, size: 2.6 }, '大きな帽子の天才魔法使い。'],
-  ['rogue', 'ローグ', 'SR', 154, { kind: 'random', name: 'れんぞくアロー', desc: 'ランダムに22個消す', charge: 34, power: 3.4, amount: 22 }, '身軽な弓の名手。'],
-  ['hood', 'フードローグ', 'SR', 152, { kind: 'tapPop', name: 'フードの手品', desc: '7秒間タップでまとめて消せる', charge: 34, power: 3.2, dur: 7 }, 'フードの奥で何を考えているのかな？'],
+  ['knight', 'ナイト', 'SR', 144, { kind: 'colorBlast', name: 'いっせい攻撃', desc: 'いちばん多い色を全部消す', charge: 34, power: 2.9 }, '王国を守る正義の騎士。'],
+  ['barbarian', 'バーバリアン', 'SR', 147, { kind: 'bottom', name: 'じならし', desc: 'ボウルの下半分をまとめて消す', charge: 34, power: 2.4, size: 3.8 }, 'クマの頭をかぶった豪快な戦士。'],
+  ['mage', 'メイジ', 'SR', 138, { kind: 'circle', name: 'メテオ', desc: '4か所を丸く消す', charge: 34, power: 3.3, amount: 4, size: 2.6 }, '大きな帽子の天才魔法使い。'],
+  ['rogue', 'ローグ', 'SR', 142, { kind: 'random', name: 'れんぞくアロー', desc: 'ランダムに22個消す', charge: 34, power: 2.1, amount: 22 }, '身軽な弓の名手。'],
+  ['hood', 'フードローグ', 'SR', 140, { kind: 'tapPop', name: 'フードの手品', desc: '10.5秒間タップでまとめて消せる', charge: 34, power: 3.2, dur: 10.5 }, 'フードの奥で何を考えているのかな？'],
   // SSR
-  ['skel_warrior', 'ホネ戦士', 'SSR', 192, { kind: 'twoColor', name: 'ダブルブレイク', desc: '多い2色を全部消す', charge: 40, power: 4.6 }, '角かぶとのスケルトン戦士。'],
-  ['skel_mage', 'ホネ魔導士', 'SSR', 186, { kind: 'allClear', name: 'ぜんぶ消し', desc: 'ボウルの中を全部消す', charge: 44, power: 5 }, 'いにしえの魔法をあやつるスケルトン。'],
-  ['skel_rogue', 'ホネ盗賊', 'SSR', 188, { kind: 'feverTap', name: 'かげのうたげ', desc: 'フィーバー突入＋その間タップでまとめて消せる', charge: 40, power: 4.5 }, '赤いフードの神出鬼没なスケルトン。'],
+  ['skel_warrior', 'ホネ戦士', 'SSR', 176, { kind: 'twoColor', name: 'ダブルブレイク', desc: '多い2色を全部消す', charge: 40, power: 3.2 }, '角かぶとのスケルトン戦士。'],
+  ['skel_mage', 'ホネ魔導士', 'SSR', 171, { kind: 'allClear', name: 'ぜんぶ消し', desc: 'ボウルの中を全部消す', charge: 44, power: 3.2 }, 'いにしえの魔法をあやつるスケルトン。'],
+  ['skel_rogue', 'ホネ盗賊', 'SSR', 172, { kind: 'feverTap', name: 'かげのうたげ', desc: 'フィーバー突入＋その間タップでまとめて消せる', charge: 62, power: 2.6 }, '赤いフードの神出鬼没なスケルトン。'],
 ];
 
 export const CHARACTERS: CharDef[] = ROWS.map(([id, name, rarity, atk, skill, catchCopy]) => ({ id, name, rarity, atk, skill, catch: catchCopy }));
@@ -98,8 +98,11 @@ export function charAtk(c: CharDef, lv: number): number {
 }
 
 /** Pieces needed to charge the skill (levels shave it down). */
+/** Skills are meant to be a highlight, not a spam button: every gauge is 3x the listed charge. */
+export const CHARGE_SCALE = 3;
+
 export function charCharge(c: CharDef, lv: number): number {
-  return c.skill.charge - Math.floor((lv - 1) / 2);
+  return Math.round(c.skill.charge * CHARGE_SCALE) - Math.floor((lv - 1) / 2);
 }
 
 /** Copies needed to reach the next level. */

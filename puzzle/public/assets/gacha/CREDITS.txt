@@ -1,0 +1,5 @@
+Gacha machine: "gumball machine" by myles_683 (ramyles crittenden)
+https://www.thingiverse.com/thing:5385414 (mirror: https://archive.org/details/thingiverse-5385414)
+License: CC BY 4.0 — https://creativecommons.org/licenses/by/4.0/
+Changes: split into parts, materials/colors added, rendered to 2D layers (body, glass, crank).
+Capsules: rendered with three.js primitives for this game.

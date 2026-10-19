@@ -36,5 +36,6 @@ npm run fonts    # ゲーム内の日本語を追加・変更したらフォン�
 - キャラ・ボス: KayKit (CC0) — Adventurers / Skeletons / Dungeon
 - 背景・UI: CraftPix — Fairy-Tale 2D Backgrounds / Jungle GUI
 - 効果音: 効果音ラボ
+- ガチャ筐体: "gumball machine" by myles_683 (CC BY 4.0) — https://www.thingiverse.com/thing:5385414 （パーツ分割・着色して three.js でレンダリング。`public/assets/gacha/CREDITS.txt`）
 - 音楽: 魔王魂 (CC BY 4.0) — https://maou.audio/ 「音楽：魔王魂」
 - フォント: めもかっち / やっちゃん (SIL OFL 1.1) — `public/fonts/OFL-Memokatchi.txt`。サブセット化には `fonts-src/Memokatchi.ttf` を置いて `npm run fonts`

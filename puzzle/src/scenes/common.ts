@@ -107,8 +107,8 @@ export function openSettings(parent: Container, onClose?: () => void): void {
     box.addChild(mb);
   };
   makeMusic();
-  const credit = txt('キャラ・ボス: KayKit (CC0)  背景・UI: CraftPix\n効果音: 効果音ラボ  音楽: 魔王魂 (CC BY 4.0)\nフォント: めもかっち / やっちゃん (SIL OFL 1.1)', { size: 20, weight: '500', color: 0x7a6a9a, lineHeight: 30 });
-  credit.y = 250;
+  const credit = txt('キャラ・ボス: KayKit (CC0)  背景・UI: CraftPix\n効果音: 効果音ラボ  音楽: 魔王魂 (CC BY 4.0)\nガチャ筐体: gumball machine / myles_683 (CC BY 4.0)\nフォント: めもかっち / やっちゃん (SIL OFL 1.1)', { size: 20, weight: '500', color: 0x7a6a9a, lineHeight: 30 });
+  credit.y = 255;
   box.addChild(credit);
   const close = new Button({
     w: 300, h: 90, label: 'とじる', color: 'pink', sound: 'ui_back', onTap: () => {

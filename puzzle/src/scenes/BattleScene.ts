@@ -117,6 +117,8 @@ export class BattleScene extends Scene {
   private skillCharge = 0;
   /** Seconds left of group-tap mode (skills). */
   private tapT = 0;
+  private stuckCheckT = 0.5;
+  private stuckT = 0;
   private skillUses = 0;
   private bossAtkT = 0;
   private idleT = 0;
@@ -358,6 +360,18 @@ export class BattleScene extends Scene {
         this.bossAtkT = bossAttackInterval(this.bossLv);
         void this.bossAttack();
       }
+      // a board with no group of 3 gets a nudge so play never dead-ends
+      this.stuckCheckT -= dt;
+      if (this.stuckCheckT <= 0 && this.board.chain.length === 0) {
+        this.stuckCheckT = 0.5;
+        this.stuckT = this.board.bestGroup().length < 3 ? this.stuckT + 0.5 : 0;
+        if (this.stuckT >= 1.5) {
+          this.stuckT = 0;
+          this.board.unstick();
+          this.floatText('シャッフル！', 360, this.boardY + this.board.h * 0.5, 0x9be7ff, 40);
+          Sound.play('cardShuffle', { vol: 0.6 });
+        }
+      }
       // hint
       if (this.board.chain.length === 0) {
         this.idleT += dt;
@@ -495,9 +509,11 @@ export class BattleScene extends Scene {
     const orbEvery = Math.max(1, Math.ceil(pops.length / 22));
     this.resolves.set(token, { total, remaining: total, perPiece: total / pops.length, n: pops.length, seen: 0, orbEvery, shown: false, crit, cause, color: meta.color });
     // gauges
-    if (cause !== 'skill') this.skillCharge = Math.min(this.chargeNeed, this.skillCharge + weight);
+    // no skill charge during fever / tap mode, or skills would chain into each other
+    if (cause !== 'skill' && !this.feverOn && this.tapT <= 0) this.skillCharge = Math.min(this.chargeNeed, this.skillCharge + weight);
     if (!this.feverOn && cause !== 'rock') {
-      this.fever = Math.min(100, this.fever + weight * (cause === 'skill' ? 0.8 : 1.6));
+      // fever stops the clock, so it has to stay rare (~250 pieces per fever)
+      this.fever = Math.min(100, this.fever + weight * (cause === 'skill' ? 0.15 : 0.4));
       if (this.fever >= 100 && this.phase === 'play') this.startFever();
     }
     // callouts
