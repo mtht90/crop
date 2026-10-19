@@ -85,8 +85,11 @@ export class Piece {
   /** Secondary wobble so the piece keeps jiggling after a hit. */
   wobble = 0;
   wobbleV = 0;
-  /** Tsum-like tumble: tilts while rolling, springs back upright. */
+  /** Tsum-like tumble: tilts while rolling, springs back to its own resting tilt. */
   rot = 0;
+  /** Each piece rests at its own angle (and some face the other way) so the pile looks natural. */
+  tilt = (Math.random() - 0.5) * 1.5;
+  mirror = Math.random() < 0.5;
   rotV = 0;
   hint = false;
   status: PieceStatus | null = null;
@@ -246,6 +249,7 @@ export class Board {
   /** Sets texture, anchor and base scale for the piece's kind. */
   private dress(p: Piece): void {
     p.sprite.texture = this.textureFor(p);
+    p.sprite.scale.x = (p.kind === 'normal' || p.kind === 'big') && p.mirror ? -1 : 1;
     if (p.kind === 'rock') {
       p.sprite.anchor.set(0.5);
       p.baseScale = (p.r * 2.3) / OBSTACLE_CELL;
@@ -267,7 +271,7 @@ export class Board {
     body.velocity.x = (Math.random() - 0.5) * 36;
     body.velocity.y = vy;
     const p = new Piece(kind, color, body, r);
-    p.rot = (Math.random() - 0.5) * 0.6;
+    p.rot = p.tilt + (Math.random() - 0.5) * 0.6;
     this.dress(p);
     this.pieceLayer.addChild(p.view);
     this.pieces.push(p);
@@ -365,8 +369,8 @@ export class Board {
     p.wobble = Math.max(-0.12, Math.min(0.12, p.wobble + p.wobbleV * dt));
     // tumble: rolling spins the piece, a soft spring stands it back up
     p.rotV += (b.velocity.x / p.r) * dt * 0.9;
-    p.rotV += (-p.rot * 14 - p.rotV * 4.5) * dt;
-    p.rot = Math.max(-0.55, Math.min(0.55, p.rot + p.rotV * dt));
+    p.rotV += ((p.tilt - p.rot) * 14 - p.rotV * 4.5) * dt;
+    p.rot = Math.max(p.tilt - 0.6, Math.min(p.tilt + 0.6, p.rot + p.rotV * dt));
     p.pulse += dt;
     const targetLink = p.state === 'linked' ? 1.14 : p.hint ? 1.05 + Math.sin(p.pulse * 8) * 0.05 : 1;
     p.linkScale += (targetLink - p.linkScale) * Math.min(1, dt * 18);
@@ -393,7 +397,7 @@ export class Board {
     p.sprite.rotation = -p.axis + p.rot;
     // when squashed against the floor the piece sinks a little instead of floating
     p.view.position.set(b.position.x, b.position.y - Math.sin(p.axis) * p.squash * p.r * 0.35);
-    if (p.deco) p.deco.rotation = p.rot * 0.6;
+    if (p.deco) p.deco.rotation = (p.rot - p.tilt) * 0.6;
     if (p.ghost > 0) p.ghost -= dt;
     const a = p.ghost > 0 && p.state === 'live' ? 0.06 : 1;
     p.jelly.alpha += (a - p.jelly.alpha) * Math.min(1, dt * 8);
@@ -566,7 +570,8 @@ export class Board {
     this.ev.onChainChange?.(0, 0, -1);
   }
 
-  pointerUp(): void {
+  /** `short` = a lifted finger may pop 1–2 pieces (weak); forced releases never do. */
+  pointerUp(short = true): void {
     if (this.chain.length === 0) return;
     // something else (a skill, a bomb) may have taken pieces out of the chain meanwhile
     const chain = this.chain.filter((p) => p.state === 'linked');
@@ -576,6 +581,9 @@ export class Board {
     if (chain.length === 0) return;
     const eff = chain.reduce((a, p) => a + p.weight, 0);
     if (chain.length >= this.minChain || (eff >= this.minChain && chain.length >= 2)) {
+      this.resolveChain(chain);
+    } else if (short && this.minExtra === 0) {
+      // taps and pairs pop too, but score little: the chain multiplier does the rest
       this.resolveChain(chain);
     } else {
       for (const p of chain) this.unlink(p, true);
@@ -594,7 +602,7 @@ export class Board {
 
   /** Releases the current chain (e.g. at time up). */
   forceRelease(): void {
-    this.pointerUp();
+    this.pointerUp(false);
   }
 
   private link(p: Piece): void {
@@ -921,11 +929,11 @@ export class Board {
   // ------------------------------------------------------- obstructions
   /** How each status is dressed: an obstacle sprite (size in piece diameters, offset in radii) or a drawn overlay. */
   private static DECO: Record<PieceStatus | 'crack', { art?: ObstacleArt; draw?: StatusArt; size: number; x?: number; y?: number; alpha?: number }> = {
-    ice: { art: 'crystal', size: 0.62, x: 0.55, y: -0.55 },
+    ice: { draw: 'ice', art: 'crystal', size: 0.6, x: 0.58, y: -0.58 },
     bubble: { art: 'qbox', size: 1.2 },
     web: { art: 'shackle', size: 1.05, y: 0.1 },
-    slime: { art: 'anchor', size: 0.7, x: 0.45, y: 0.5 },
-    curse: { art: 'skull', size: 0.62, x: 0.55, y: -0.55 },
+    slime: { art: 'anchor', size: 0.6, x: 0.55, y: 0.55 },
+    curse: { draw: 'curse', art: 'skull', size: 0.6, x: 0.58, y: -0.58 },
     skullBomb: { art: 'bomb', size: 1.2 },
     chameleon: { draw: 'chameleon', size: 1 },
     crack: { draw: 'crack', size: 1 },
@@ -939,12 +947,21 @@ export class Board {
     if (!kind || p.view.destroyed) return;
     const spec = Board.DECO[kind];
     const d = new Container();
-    const sp = new Sprite(spec.art ? obstacleTexture(spec.art) : statusTexture(spec.draw!));
-    sp.anchor.set(0.5);
-    sp.scale.set(spec.art ? (p.r * 2 * spec.size) / OBSTACLE_CELL : p.r / (ART_R * 1.5));
-    sp.position.set((spec.x ?? 0) * p.r, (spec.y ?? 0) * p.r);
-    sp.alpha = spec.alpha ?? 1;
-    d.addChild(sp);
+    // a drawn overlay over the whole piece (ice shell, curse aura), then the model as a badge
+    if (spec.draw) {
+      const under = new Sprite(statusTexture(spec.draw));
+      under.anchor.set(0.5);
+      under.scale.set(p.r / (ART_R * 1.5));
+      d.addChild(under);
+    }
+    if (spec.art) {
+      const sp = new Sprite(obstacleTexture(spec.art));
+      sp.anchor.set(0.5);
+      sp.scale.set((p.r * 2 * spec.size) / OBSTACLE_CELL);
+      sp.position.set((spec.x ?? 0) * p.r, (spec.y ?? 0) * p.r);
+      sp.alpha = spec.alpha ?? 1;
+      d.addChild(sp);
+    }
     if (kind === 'bubble') {
       const q = txt('?', { size: 44, font: 'dela', color: 0xffffff, stroke: 0x1b3d8a, strokeWidth: 8 });
       q.y = 4;

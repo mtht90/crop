@@ -364,7 +364,7 @@ export class BattleScene extends Scene {
   }
 
   private showTutorialHint(): void {
-    const t = txt('同じ色のぷにを3つ以上なぞって消そう！', { size: 30, stroke: 0x2a1630, strokeWidth: 8, color: 0xfff27a });
+    const t = txt('同じ色のぷにをなぞってつなごう！たくさんつなぐほど強い！', { size: 30, stroke: 0x2a1630, strokeWidth: 8, color: 0xfff27a });
     t.position.set(360, this.boardY + this.board.h * 0.86);
     this.overlay.addChild(t);
     gsap.fromTo(t, { alpha: 0 }, { alpha: 1, duration: 0.3, delay: 0.5 });
@@ -560,7 +560,7 @@ export class BattleScene extends Scene {
     let mult = 1;
     let crit = false;
     if (cause === 'chain' || cause === 'fever') {
-      mult *= 1 + 0.12 * Math.max(0, meta.chain - 3) + (meta.chain >= BOARD_TUNING.bombAt ? 0.3 : 0);
+      mult *= chainMult(meta.chain);
       this.maxChain = Math.max(this.maxChain, meta.chain);
       if (cause === 'chain' && meta.chain >= 5 && Math.random() < 0.12) {
         crit = true;
@@ -581,7 +581,9 @@ export class BattleScene extends Scene {
     }
     if (cause === 'bomb') this.round.bombs++;
     if (cause === 'chain' && meta.chain >= 7) this.round.chains7++;
-    if (cause !== 'rock') {
+    // taps and pairs are weak: they don't build combos or charge gauges much
+    const short = cause === 'chain' && meta.chain < BOARD_TUNING.minChain;
+    if (cause !== 'rock' && !short) {
       this.combo++;
       this.comboT = COMBO_WINDOW * (this.def.passive?.kind === 'shadow' ? 2 : 1);
       this.maxCombo = Math.max(this.maxCombo, this.combo);
@@ -595,10 +597,10 @@ export class BattleScene extends Scene {
     this.resolves.set(token, { total, remaining: total, perPiece: total / pops.length, n: pops.length, seen: 0, orbEvery, shown: false, crit, cause, color: meta.color });
     // gauges
     // no skill charge during fever / tap mode, or skills would chain into each other
-    if (cause !== 'skill' && !this.feverOn && this.tapT <= 0) this.skillCharge = Math.min(this.chargeNeed, this.skillCharge + weight);
+    if (cause !== 'skill' && !this.feverOn && this.tapT <= 0) this.skillCharge = Math.min(this.chargeNeed, this.skillCharge + weight * (short ? 0.3 : 1));
     if (!this.feverOn && cause !== 'rock') {
       // fever stops the clock; ~200 pieces per fever gives a normal round 2–3 fevers
-      this.fever = Math.min(100, this.fever + weight * (cause === 'skill' ? 0.2 : 0.5));
+      this.fever = Math.min(100, this.fever + weight * (cause === 'skill' ? 0.2 : short ? 0.15 : 0.5));
       if (this.fever >= 100 && this.phase === 'play') this.startFever();
     }
     // callouts
@@ -1534,6 +1536,17 @@ export class BattleScene extends Scene {
     this.overlay.addChild(ov);
     gsap.globalTimeline.pause();
   }
+}
+
+/**
+ * Damage per piece by chain length: a single tap is weak (×0.25), a pair ×0.45,
+ * and from 3 on it grows faster than linearly, so long traces are what pay.
+ */
+export function chainMult(n: number): number {
+  if (n <= 1) return 0.25;
+  if (n === 2) return 0.45;
+  const k = n - 3;
+  return 1 + 0.15 * k + 0.008 * k * k + (n >= BOARD_TUNING.bombAt ? 0.3 : 0);
 }
 
 function wait(s: number): Promise<void> {
