@@ -1,30 +1,34 @@
 import { Container, Graphics, Sprite, Texture } from 'pixi.js';
 import gsap from 'gsap';
 import { ShockwaveFilter } from 'pixi-filters';
-import { ART_CX, ART_CY, ART_R, ART_SIZE, COLORS, PIECE_ART_SCALE, PIECE_CELL, bigTexture, bombTexture, pieceTexture, rockTexture } from '../art/PieceArt';
+import { ART_CX, ART_CY, ART_R, ART_SIZE, COLORS, PIECE_ART_SCALE, PIECE_CELL, bombTexture, pieceTexture, rockTexture } from '../art/PieceArt';
 import type { CharDef } from '../data/characters';
 import { Effects } from './Effects';
 import { World, type PBody } from './Physics';
 import { Sound, haptic } from '../core/Audio';
 import { txt } from '../core/UI';
 
-export type PieceKind = 'normal' | 'big' | 'bomb' | 'mega' | 'rock' | 'skill';
+export type PieceKind = 'normal' | 'big' | 'bomb' | 'mega' | 'rock';
 type PieceState = 'live' | 'linked' | 'popping' | 'dead';
 
 /** Tunables for the feel of the board. */
 export const BOARD_TUNING = {
-  radius: 39,
+  radius: 46,
   bigScale: 1.55,
   /** Extra adjacency slack when either piece is big. */
   bigReach: 0.25,
   /** Extra adjacency slack during fever (links reach further). */
-  feverReach: 0.22,
+  feverReach: 0.5,
   /** Two pieces are "touching" if their centers are within (ra+rb)*adjacency. */
-  adjacency: 1.5,
+  adjacency: 1.65,
   /** How close the finger must be to a piece center (in radii) to grab it. */
   grab: 1.0,
   /** Extra reach (in radii) when the candidate is adjacent to the chain tail. */
   magnet: 1.34,
+  /** Touch circle radius (in piece radii) swept by the finger. */
+  touch: 1.27,
+  /** End-of-move directional assist reach (in radii). */
+  assist: 1.4,
   fill: 0.65,
   minChain: 3,
   bombAt: 7,
@@ -53,8 +57,6 @@ export interface BoardEvents {
   /** Called when a chain is released short. */
   onCancel?(): void;
   onInteract?(): void;
-  /** The glowing skill piece was tapped. */
-  onSkillTap?(x: number, y: number): void;
 }
 
 let nextId = 1;
@@ -83,9 +85,6 @@ export class Piece {
   linkScale = 1;
   baseScale = 1;
   appear = 0;
-  /** Glow ring under the skill piece. */
-  ring?: Graphics;
-  tag?: Container;
   constructor(
     public kind: PieceKind,
     public color: number,
@@ -147,7 +146,7 @@ export class Board {
     public readonly w: number,
     public readonly h: number,
     private ev: BoardEvents,
-    /** Round Puni Puni-style board: w is the diameter (h must equal w). */
+    /** Puni Puni-style bowl: w is the diameter; h > w stretches it into a stadium (straight sides). */
     readonly round = false,
   ) {
     this.r = BOARD_TUNING.radius;
@@ -160,9 +159,9 @@ export class Board {
       iterations: 6,
       drag: 0.35,
       friction: 0.12,
-      bowl: round ? { x: R, y: R, r: R, hole: (R - this.r) * 0.55 } : undefined,
+      bowl: round ? { x: R, y: R, r: R, hole: (R - this.r) * 0.55, ext: Math.max(0, h - w) } : undefined,
     });
-    if (round) this.maskG.circle(R, R, R + 2).fill(0xffffff);
+    if (round) this.maskG.roundRect(-2, -2, w + 4, h + 4, R + 2).fill(0xffffff);
     else this.maskG.roundRect(-6, -10, w + 12, h + 16, 30).fill(0xffffff);
     this.view.addChild(this.maskG);
     this.pieceLayer.mask = this.maskG;
@@ -175,9 +174,9 @@ export class Board {
 
   // --------------------------------------------------------------- pieces
   private targetUnits(): number {
-    const area = this.round ? Math.PI * (this.w / 2) ** 2 : this.w * this.h;
+    const area = this.round ? Math.PI * (this.w / 2) ** 2 + this.w * Math.max(0, this.h - this.w) : this.w * this.h;
     // the bowl packs tighter (Puni Puni fills it to the brim)
-    const fill = this.round ? BOARD_TUNING.fill * 1.08 : BOARD_TUNING.fill;
+    const fill = this.round ? BOARD_TUNING.fill * 1.25 : BOARD_TUNING.fill;
     return Math.floor((fill * area) / (Math.PI * this.r * this.r));
   }
 
@@ -203,7 +202,6 @@ export class Board {
 
   textureFor(p: Piece): Texture {
     if (p.kind === 'rock') return rockTexture();
-    if (p.kind === 'skill') return bigTexture(this.def);
     if (p.kind === 'bomb' || p.kind === 'mega') return bombTexture(p.kind === 'mega');
     return pieceTexture(this.def, p.color);
   }
@@ -215,9 +213,6 @@ export class Board {
       // strips are centered on each head's center of mass at a common visible size
       p.sprite.anchor.set(0.5, 0.5);
       p.baseScale = (p.r * 2 * PIECE_ART_SCALE) / PIECE_CELL;
-    } else if (p.kind === 'skill') {
-      p.sprite.anchor.set(0.5, 0.55);
-      p.baseScale = (p.r * 2.3) / Math.max(1, p.sprite.texture.width);
     } else {
       p.sprite.anchor.set(ART_CX / ART_SIZE, ART_CY / ART_SIZE);
       p.baseScale = p.r / ART_R;
@@ -225,7 +220,7 @@ export class Board {
   }
 
   addPiece(kind: PieceKind, color: number, x: number, y: number, vy = 0): Piece {
-    const base = kind === 'big' ? this.r * BOARD_TUNING.bigScale : kind === 'mega' ? this.r * 1.2 : kind === 'skill' ? this.r * 1.6 : this.r;
+    const base = kind === 'big' ? this.r * BOARD_TUNING.bigScale : kind === 'mega' ? this.r * 1.2 : this.r;
     // a little size variance keeps the pile from settling into a grid
     const r = base * (0.96 + Math.random() * 0.08);
     const body = this.world.add(x, y, r * 0.97, kind === 'big' ? 3 : 1);
@@ -340,18 +335,6 @@ export class Board {
       const w = Math.sin(p.pulse * 18) * 0.04;
       along += w;
       across -= w;
-    } else if (p.kind === 'skill') {
-      const w = Math.sin(p.pulse * 6) * 0.06;
-      along += w;
-      across += w;
-      if (p.ring) {
-        p.ring.alpha = 0.55 + Math.sin(p.pulse * 8) * 0.35;
-        p.ring.scale.set(1 + Math.sin(p.pulse * 6) * 0.08);
-      }
-      if (p.tag) {
-        p.tag.y = -p.r * 1.25 - Math.abs(Math.sin(p.pulse * 5)) * 12;
-        p.tag.rotation = -p.view.rotation;
-      }
     } else if (p.kind === 'bomb' || p.kind === 'mega') {
       const w = Math.sin(p.pulse * 10) * 0.04;
       along += w;
@@ -391,8 +374,11 @@ export class Board {
   onBoard(p: Piece): boolean {
     if (!this.round) return true;
     const R = this.w / 2;
-    return Math.hypot(p.x - R, p.y - R) < R - p.r * 0.35;
+    // distance to the stadium's center segment (R,R)-(R,h-R)
+    const cy = Math.max(R, Math.min(this.h - R, p.y));
+    return Math.hypot(p.x - R, p.y - cy) < R - p.r * 0.35;
   }
+
 
   adjacent(a: Piece, b: Piece, slack = BOARD_TUNING.adjacency): boolean {
     // big pieces reach further so they are easy to work into a chain
@@ -405,7 +391,7 @@ export class Board {
     if (!this.inputEnabled) return;
     this.ev.onInteract?.();
     this.clearHint();
-    const p = this.pieceAt(x, y, BOARD_TUNING.grab * 1.05);
+    const p = this.pieceAt(x, y, BOARD_TUNING.touch);
     if (!p) return;
     if (p.kind === 'bomb' || p.kind === 'mega') {
       this.explode(p);
@@ -417,10 +403,6 @@ export class Board {
       gsap.fromTo(p.view, { x: p.view.x - 6 }, { x: p.view.x, duration: 0.25, ease: 'elastic.out(1.5,0.3)' });
       return;
     }
-    if (p.kind === 'skill') {
-      this.takeSkillPiece(p);
-      return;
-    }
     if (this.tapPop) {
       this.popGroup(p);
       return;
@@ -428,41 +410,99 @@ export class Board {
     this.chain = [p];
     this.link(p);
     this.pointer = { x, y };
+    this.backArmed = false;
   }
 
+  /**
+   * Tsum Tsum-style tracing: every move is a segment; pieces whose touch circle (1.27R) the
+   * segment crosses are linked in the order the finger reached them, so a fast swipe never
+   * skips one. Backtracking needs the finger to have left the tail first (hysteresis), and the
+   * end of a move gets a small directional assist toward the nearest valid piece.
+   */
   pointerMove(x: number, y: number): void {
     if (!this.pointer || this.chain.length === 0) return;
     const from = this.pointer;
-    const dist = Math.hypot(x - from.x, y - from.y);
-    const steps = Math.max(1, Math.ceil(dist / (this.r * 0.3)));
-    for (let i = 1; i <= steps; i++) {
-      const sx = from.x + ((x - from.x) * i) / steps;
-      const sy = from.y + ((y - from.y) * i) / steps;
-      this.probe(sx, sy);
-    }
+    const dx = x - from.x;
+    const dy = y - from.y;
+    const len = Math.hypot(dx, dy);
+    if (len < 0.5) return;
     this.pointer = { x, y };
-  }
-
-  private probe(x: number, y: number): void {
     const chain = this.chain;
-    const last = chain[chain.length - 1];
-    // backtrack onto the previous piece
-    if (chain.length >= 2) {
+    const color = chain[0].color;
+    // backtrack: arm once the finger is clearly away from the tail, then step back onto the previous piece
+    const tail = chain[chain.length - 1];
+    if (Math.hypot(x - tail.x, y - tail.y) > tail.r * 0.72) this.backArmed = true;
+    if (chain.length >= 2 && this.backArmed) {
       const prev = chain[chain.length - 2];
-      if (Math.hypot(prev.x - x, prev.y - y) <= prev.r * 0.78) {
+      const toPrev = Math.hypot(prev.x - x, prev.y - y);
+      const dirCos = ((prev.x - tail.x) * dx + (prev.y - tail.y) * dy) / (Math.hypot(prev.x - tail.x, prev.y - tail.y) * len || 1);
+      if (toPrev <= prev.r * 0.9 && toPrev < Math.hypot(tail.x - x, tail.y - y) && dirCos >= 0.25) {
         chain.pop();
-        this.unlink(last);
+        this.unlink(tail);
+        this.backArmed = false;
         return;
       }
     }
-    const color = chain[0].color;
-    const cand =
-      this.pieceAt(x, y, BOARD_TUNING.grab * 0.92, (p) => p.linkable && p.color === color) ??
-      this.pieceAt(x, y, BOARD_TUNING.magnet, (p) => p.linkable && p.color === color && this.adjacent(p, last));
-    if (!cand || cand === last) return;
-    if (!this.adjacent(cand, last)) return;
-    chain.push(cand);
-    this.link(cand);
+    // swept hits, ordered by where along the segment the finger entered each piece
+    const hits: { p: Piece; t: number }[] = [];
+    const A = dx * dx + dy * dy;
+    for (const p of this.pieces) {
+      if (!p.linkable || p.color !== color || !this.onBoard(p)) continue;
+      const rr = p.r * BOARD_TUNING.touch;
+      const fx = from.x - p.x;
+      const fy = from.y - p.y;
+      // solve |from + t*d - p| = rr for the entry t
+      const B = 2 * (fx * dx + fy * dy);
+      const C = fx * fx + fy * fy - rr * rr;
+      const disc = B * B - 4 * A * C;
+      if (disc < 0) continue;
+      const t0 = (-B - Math.sqrt(disc)) / (2 * A);
+      const t1 = (-B + Math.sqrt(disc)) / (2 * A);
+      if (t1 < 0 || t0 > 1) continue;
+      hits.push({ p, t: Math.max(0, t0) });
+    }
+    hits.sort((u, v) => u.t - v.t);
+    for (const { p } of hits) this.tryLink(p);
+    // end-of-move assist: the single nearest valid piece the finger is heading for
+    const last = chain[chain.length - 1];
+    let best: Piece | null = null;
+    let bd = Infinity;
+    let tie = false;
+    for (const p of this.pieces) {
+      if (!p.linkable || p.color !== color || !this.onBoard(p) || !this.adjacent(p, last)) continue;
+      const d = Math.hypot(p.x - x, p.y - y);
+      if (d > p.r * BOARD_TUNING.assist) continue;
+      if (Math.abs(d - bd) < 2) tie = true;
+      if (d < bd) {
+        tie = false;
+        bd = d;
+        best = p;
+      }
+    }
+    if (best && !tie) {
+      const cos = ((best.x - x) * dx + (best.y - y) * dy) / ((bd || 1) * len);
+      if (cos >= 0.9 || bd < best.r * 0.5) this.tryLink(best);
+    }
+  }
+
+  private backArmed = false;
+
+  private tryLink(p: Piece): void {
+    const last = this.chain[this.chain.length - 1];
+    if (p === last || p.state !== 'live' || !this.adjacent(p, last)) return;
+    this.chain.push(p);
+    this.link(p);
+    this.backArmed = false;
+  }
+
+  /** Lifts the finger without committing (pointercancel, system gestures). */
+  cancelChain(): void {
+    const chain = this.chain;
+    this.chain = [];
+    this.pointer = null;
+    this.badge.visible = false;
+    for (const p of chain) if (p.state === 'linked') this.unlink(p, true);
+    this.ev.onChainChange?.(0, 0, -1);
   }
 
   pointerUp(): void {
@@ -478,6 +518,13 @@ export class Board {
       this.resolveChain(chain);
     } else {
       for (const p of chain) this.unlink(p, true);
+      // a plain tap makes the piece hop
+      if (chain.length === 1) {
+        const p = chain[0];
+        p.body.velocity.y -= 520;
+        p.body.velocity.x += (Math.random() - 0.5) * 120;
+        p.poke(8);
+      }
       Sound.play('soft', { vol: 0.35, rate: 1.4 });
       this.ev.onCancel?.();
       this.ev.onChainChange?.(0, 0, -1);
@@ -527,7 +574,8 @@ export class Board {
     const infos = chain.map((p) => this.info(p));
     const rocks = this.rocksNear(chain);
     const tok = this.ev.onResolve(infos, 'chain', { chain: eff, color, x: lx, y: ly });
-    const stagger = Math.max(0.018, Math.min(0.05, 0.3 / chain.length));
+    // one-by-one pops with a beat, like Tsum Tsum (faster in fever), finishing within ~1.4s
+    const stagger = Math.min(this.fever ? 0.06 : 0.09, 1.4 / chain.length);
     chain.forEach((p, i) => this.popPiece(p, i * stagger, i, 'chain', tok));
     const end = chain.length * stagger;
     if (rocks.length) {
@@ -656,36 +704,6 @@ export class Board {
     for (const p of this.pieces) p.hint = false;
   }
 
-  /** Drops the glowing skill piece into the bowl. */
-  spawnSkillPiece(): Piece {
-    const p = this.addPiece('skill', -1, this.w / 2 + (Math.random() - 0.5) * this.r * 2, -this.r * 2, 300);
-    const ring = new Graphics();
-    ring.circle(0, 0, p.r * 1.12).fill({ color: 0xfff2a0, alpha: 0.55 });
-    ring.circle(0, 0, p.r * 1.12).stroke({ width: 6, color: 0xffffff });
-    ring.blendMode = 'add';
-    p.view.addChildAt(ring, 0);
-    p.ring = ring;
-    const tap = txt('TAP!', { size: 30, font: 'dela', color: 0xfff27a, stroke: 0x8a1f00, strokeWidth: 7 });
-    tap.y = -p.r * 1.25;
-    p.view.addChild(tap);
-    p.tag = tap;
-    Sound.play('powerUp2', { vol: 0.5 });
-    return p;
-  }
-
-  hasSkillPiece(): boolean {
-    return this.pieces.some((p) => p.kind === 'skill' && p.state === 'live');
-  }
-
-  private takeSkillPiece(p: Piece): void {
-    p.state = 'popping';
-    this.kill(p);
-    this.ev.onSkillTap?.(p.x, p.y);
-    this.overFx.burst(p.x, p.y, { count: 24, tex: 'star_06', tint: [0xfff27a, 0xffffff], add: true, speed: [200, 600], size: [0.1, 0.24], gravity: 300, life: [0.4, 0.8] });
-    gsap.to(p.view.scale, { x: 1.6, y: 1.6, duration: 0.18, ease: 'back.out(2)' });
-    gsap.to(p.view, { alpha: 0, duration: 0.2, delay: 0.08, onComplete: () => p.view.destroy({ children: true }) });
-  }
-
   explode(b: Piece): void {
     if (b.state !== 'live') return;
     b.state = 'popping';
@@ -697,7 +715,7 @@ export class Board {
       .filter((p) => p !== b && p.state === 'live' && Math.hypot(p.x - cx, p.y - cy) <= radius + p.r * 0.5)
       .sort((p, q) => Math.hypot(p.x - cx, p.y - cy) - Math.hypot(q.x - cx, q.y - cy));
     const chained = victims.filter((p) => p.kind === 'bomb' || p.kind === 'mega');
-    const popped = victims.filter((p) => !(p.kind === 'bomb' || p.kind === 'mega' || p.kind === 'skill'));
+    const popped = victims.filter((p) => !(p.kind === 'bomb' || p.kind === 'mega'));
     for (const p of popped) p.state = 'popping';
     const tok = this.ev.onResolve(popped.map((p) => this.info(p)), 'bomb', { chain: popped.length, color: -1, x: cx, y: cy });
     this.kill(b);
@@ -747,7 +765,7 @@ export class Board {
   /** Pops pieces matching a predicate with a wave from (ox,oy). */
   popWhere(pred: (p: Piece) => boolean, ox: number, oy: number, cause: PopCause = 'skill'): PopInfo[] {
     const victims = this.live()
-      .filter((p) => p.kind !== 'bomb' && p.kind !== 'mega' && p.kind !== 'skill' && pred(p))
+      .filter((p) => p.kind !== 'bomb' && p.kind !== 'mega' && pred(p))
       .sort((p, q) => Math.hypot(p.x - ox, p.y - oy) - Math.hypot(q.x - ox, q.y - oy));
     for (const p of victims) p.state = 'popping';
     const infos = victims.map((p) => this.info(p));
@@ -854,6 +872,11 @@ export class Board {
     const chain = this.chain;
     if (chain.length === 0) return;
     const c = COLORS[chain[0].color];
+    // the line heats up and thickens as the chain grows (6 / 10 / 15 / 20)
+    const n = chain.length;
+    const heat = n >= 20 ? 4 : n >= 15 ? 3 : n >= 10 ? 2 : n >= 6 ? 1 : 0;
+    const core = [0xffffff, 0xfff5aa, 0xffe36f, 0xffbd66, 0xff8d78][heat];
+    const thick = 1 + heat * 0.12;
     const pts = chain.map((p) => ({ x: p.x, y: p.y }));
     if (this.pointer) {
       const last = pts[pts.length - 1];
@@ -869,17 +892,18 @@ export class Board {
     };
     if (pts.length > 1) {
       path();
-      g.stroke({ width: 34, color: c.glow, alpha: 0.35, cap: 'round', join: 'round' });
+      g.stroke({ width: 34 * thick, color: heat ? core : c.glow, alpha: 0.35 + heat * 0.06, cap: 'round', join: 'round' });
       path();
-      g.stroke({ width: 20, color: 0x2a1630, alpha: 0.9, cap: 'round', join: 'round' });
+      g.stroke({ width: 20 * thick, color: 0x2a1630, alpha: 0.9, cap: 'round', join: 'round' });
       path();
-      g.stroke({ width: 14, color: c.hex, cap: 'round', join: 'round' });
+      g.stroke({ width: 14 * thick, color: c.hex, cap: 'round', join: 'round' });
       path();
-      g.stroke({ width: 5, color: 0xffffff, alpha: 0.9, cap: 'round', join: 'round' });
+      g.stroke({ width: 5 * thick, color: core, alpha: 0.95, cap: 'round', join: 'round' });
     }
     for (const p of chain) {
+      g.circle(p.x, p.y, p.r + 4).stroke({ width: 3, color: core, alpha: 0.85 });
       g.circle(p.x, p.y, 11).fill(0x2a1630);
-      g.circle(p.x, p.y, 8).fill(0xffffff);
+      g.circle(p.x, p.y, 8).fill(core);
     }
   }
 

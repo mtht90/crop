@@ -27,7 +27,14 @@ class AudioEngine {
   private reverbIn: GainNode;
   private noise: AudioBuffer;
   private buffers = new Map<string, AudioBuffer>();
-  private bgm: { name: string; el: HTMLAudioElement; node: MediaElementAudioSourceNode; gain: GainNode } | null = null;
+  /**
+   * Two reusable <audio> decks: switching tracks swaps the src of an element that a tap has
+   * already unlocked (iOS refuses play() on brand-new elements outside a gesture), and lets
+   * the old and new track crossfade.
+   */
+  private decks: { el: HTMLAudioElement; gain: GainNode; primed: boolean; stopT: number; name: string | null }[] = [];
+  private active = -1;
+  private curMusic: string | null = null;
   private unlocked = false;
   private lastPlay = new Map<string, number>();
 
@@ -70,7 +77,7 @@ class AudioEngine {
   unlock(): void {
     // iOS may reject resume() (not a gesture yet, or after an interruption); just retry on the next tap
     if (this.ctx.state !== 'running') this.ctx.resume().catch(() => {});
-    if (this.bgm?.el.paused) void this.bgm.el.play().catch(() => {});
+    this.primeDecks();
     if (this.unlocked || this.ctx.state !== 'running') return;
     this.unlocked = true;
     // Play a silent buffer to fully unlock iOS.
@@ -149,54 +156,102 @@ class AudioEngine {
   }
 
   currentMusic(): string | null {
-    return this.bgm?.name ?? null;
+    return this.curMusic;
   }
 
-  music(name: string, fade = 0.8, vol = 1): void {
-    if (this.bgm?.name === name) return;
-    this.stopMusic(fade);
+  private deck(i: number) {
+    if (!this.decks[i]) {
+      const el = new Audio();
+      el.loop = true;
+      el.preload = 'auto';
+      (el as HTMLAudioElement & { preservesPitch?: boolean }).preservesPitch = false;
+      (el as HTMLAudioElement & { webkitPreservesPitch?: boolean }).webkitPreservesPitch = false;
+      const gain = this.ctx.createGain();
+      gain.gain.value = 0.0001;
+      try {
+        this.ctx.createMediaElementSource(el).connect(gain).connect(this.bgmFilter);
+      } catch {
+        gain.connect(this.bgmFilter);
+      }
+      this.decks[i] = { el, gain, primed: false, stopT: 0, name: null };
+    }
+    return this.decks[i];
+  }
+
+  /** Called from a gesture: (re)starts the active deck and unlocks the idle one for later switches. */
+  private primeDecks(): void {
+    for (let i = 0; i < 2; i++) {
+      const d = this.deck(i);
+      if (i === this.active) {
+        if (d.el.paused && d.el.src) d.el.play().catch(() => {});
+        d.primed = true;
+      } else if (!d.primed) {
+        const url = this.curMusic ? this.musicUrls.get(this.curMusic) : [...this.musicUrls.values()][0];
+        if (!url) continue;
+        if (!d.el.src) {
+          d.el.src = url;
+          d.name = null;
+        }
+        d.el.play().then(() => {
+          d.primed = true;
+          if (this.active !== i) d.el.pause();
+        }).catch(() => {});
+      }
+    }
+  }
+
+  music(name: string, fade = 0.8, vol = 1, restart = false): void {
+    if (this.curMusic === name) return;
     const url = this.musicUrls.get(name);
     if (!url) return;
-    const el = new Audio(url);
-    el.loop = true;
-    el.preload = 'auto';
-    (el as HTMLAudioElement & { preservesPitch?: boolean; webkitPreservesPitch?: boolean }).preservesPitch = false;
-    (el as HTMLAudioElement & { webkitPreservesPitch?: boolean }).webkitPreservesPitch = false;
-    let node: MediaElementAudioSourceNode;
-    try {
-      node = this.ctx.createMediaElementSource(el);
-    } catch {
-      return;
+    const prev = this.active;
+    const i = prev === 0 ? 1 : 0;
+    const d = this.deck(i);
+    if (prev >= 0) this.fadeDeck(prev, fade);
+    window.clearTimeout(d.stopT);
+    // switching back to the track this deck just played (e.g. after fever) resumes where it left off
+    if (d.name !== name || restart) {
+      d.el.src = url;
+      d.el.currentTime = 0;
+      d.name = name;
     }
-    const g = this.ctx.createGain();
-    g.gain.setValueAtTime(0.0001, this.now);
-    g.gain.exponentialRampToValueAtTime(vol, this.now + fade);
-    node.connect(g).connect(this.bgmFilter);
-    void el.play().catch(() => {
-      /* will start on the next user gesture via unlock() */
+    d.el.playbackRate = 1;
+    const g = d.gain.gain;
+    g.cancelScheduledValues(this.now);
+    g.setValueAtTime(0.0001, this.now);
+    g.exponentialRampToValueAtTime(vol, this.now + fade);
+    d.el.play().catch(() => {
+      /* starts on the next tap via unlock() */
     });
-    this.bgm = { name, el, node, gain: g };
+    this.active = i;
+    this.curMusic = name;
+  }
+
+  private fadeDeck(i: number, fade: number): void {
+    const d = this.decks[i];
+    if (!d) return;
+    const g = d.gain.gain;
+    g.cancelScheduledValues(this.now);
+    g.setValueAtTime(Math.max(g.value, 0.0001), this.now);
+    g.exponentialRampToValueAtTime(0.0001, this.now + fade);
+    window.clearTimeout(d.stopT);
+    d.stopT = window.setTimeout(() => {
+      if (this.active !== i) d.el.pause();
+    }, (fade + 0.05) * 1000);
   }
 
   stopMusic(fade = 0.6): void {
-    if (!this.bgm) return;
-    const { el, node, gain } = this.bgm;
-    gain.gain.cancelScheduledValues(this.now);
-    gain.gain.setValueAtTime(Math.max(gain.gain.value, 0.0001), this.now);
-    gain.gain.exponentialRampToValueAtTime(0.0001, this.now + fade);
-    window.setTimeout(() => {
-      el.pause();
-      el.removeAttribute('src');
-      el.load();
-      node.disconnect();
-      gain.disconnect();
-    }, (fade + 0.05) * 1000);
-    this.bgm = null;
+    if (this.active < 0) return;
+    this.fadeDeck(this.active, fade);
+    this.active = -1;
+    this.curMusic = null;
   }
 
   musicRate(rate: number): void {
-    if (this.bgm) this.bgm.el.playbackRate = rate;
+    const d = this.decks[this.active];
+    if (d) d.el.playbackRate = rate;
   }
+
 
   /** Muffles the music (e.g. pause, cut-ins). freq 20000 = open. */
   musicFilter(freq: number, time = 0.25): void {
@@ -208,8 +263,9 @@ class AudioEngine {
 
   /** Temporarily dips the music so a big moment cuts through. */
   duck(amount = 0.35, hold = 0.4, release = 0.6): void {
-    if (!this.bgm) return;
-    const g = this.bgm.gain.gain;
+    const d = this.decks[this.active];
+    if (!d) return;
+    const g = d.gain.gain;
     g.cancelScheduledValues(this.now);
     g.setValueAtTime(g.value, this.now);
     g.linearRampToValueAtTime(amount, this.now + 0.04);

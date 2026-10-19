@@ -6,6 +6,7 @@ export const SCENE_TRACKS: Record<string, string> = {
   home: 'fantasy14',
   gacha: 'cyber44',
   result: 'cyber40',
+  fever: 'neorock33',
 };
 
 export const BATTLE_TRACKS: { id: string; name: string }[] = [

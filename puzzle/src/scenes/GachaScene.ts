@@ -28,6 +28,7 @@ function rainbow(): FillGradient {
 }
 
 const BG_SET = 2;
+type M3 = import('../gacha/Machine3D').Machine3D;
 
 /** Pre-rendered 3D gumball machine ("gumball machine" by myles_683, CC BY 4.0), layered so capsules sit inside the glass. */
 const MACHINE = {
@@ -64,10 +65,19 @@ export class GachaScene extends Scene {
   private tapResolver: (() => void) | null = null;
   private skipAll = false;
   private lastDim: Graphics | null = null;
+  /** Real-time 3D machine (null → 2D layered fallback). */
+  private m3: M3 | null = null;
+  private m3Rect = { x: 0, y: 0, w: 0, h: 0 };
 
   async preload(): Promise<void> {
     for (const n of MACHINE_PARTS) if (!Assets.resolver.hasKey(`gacha:${n}`)) Assets.add({ alias: `gacha:${n}`, src: `./assets/gacha/${n}.webp` });
     await Promise.all([loadFairy(BG_SET), Assets.load(MACHINE_PARTS.map((n) => `gacha:${n}`))]);
+    try {
+      const { Machine3D } = await import('../gacha/Machine3D');
+      this.m3 = await Machine3D.create('./assets/gacha3d/machine.json');
+    } catch {
+      this.m3 = null;
+    }
     this.bg = new FairyBackdrop(BG_SET);
   }
 
@@ -92,6 +102,7 @@ export class GachaScene extends Scene {
     back.on('pointertap', () => {
       if (this.busy) return;
       Sound.play('ui_back');
+      this.m3?.show(false);
       Scenes.go(() => new HomeScene());
     });
     this.coins = new CoinCounter();
@@ -189,6 +200,12 @@ export class GachaScene extends Scene {
     plate.rotation = -0.04;
     const star = new Graphics().poly(starPts(30)).fill(0xffd23f).stroke({ width: 5, color: 0x8a4f00 });
     star.position.set(plate.x + 10, plate.y + 90);
+    if (this.m3) {
+      // 3D machine lives on its own canvas over this area; keep the container for layout only
+      this.m3Rect = { x: 60, y: y0 - 40, w: 600, h: App.H - App.safeBottom - 300 - (y0 - 40) };
+      gsap.delayedCall(0.45, () => this.m3?.show(true));
+      return;
+    }
     this.machine.addChild(shadow, layer('back'), this.dome, layer('glass'), layer('body'), plate, star, this.handle);
     // capsules physics inside the dome
     const mixes: Rarity[] = ['N', 'N', 'N', 'R', 'R', 'R', 'SR', 'SR', 'SSR'];
@@ -306,9 +323,12 @@ export class GachaScene extends Scene {
     this.coins.refresh();
     this.setUi(false);
     Sound.play('coins', { vol: 0.8 });
-    await this.crank();
     const best = results.reduce((a, r) => (rarityRank(r.def.rarity) > rarityRank(a) ? r.def.rarity : a), 'N' as Rarity);
-    await this.capsuleOpen(best);
+    // tease: the capsule sometimes shows a lower rarity first and upgrades on opening
+    const tease: Rarity = best === 'SSR' ? (Math.random() < 0.5 ? 'SR' : 'SSR') : best === 'SR' && Math.random() < 0.35 ? 'R' : best;
+    await this.crank();
+    if (this.m3) await this.dispense3D(tease);
+    await this.capsuleOpen(best, tease);
     if (n === 1) await this.reveal(results[0]);
     else await this.grid(results);
     this.clearStage();
@@ -332,6 +352,11 @@ export class GachaScene extends Scene {
   }
 
   private crank(): Promise<void> {
+    if (this.m3) {
+      Sound.play('diceShake', { vol: 0.8 });
+      for (let i = 0; i < 8; i++) gsap.delayedCall(i * 0.13, () => Sound.play('switch', { vol: 0.5, rate: 0.8 + i * 0.05 }));
+      return this.m3.turnCrank(1.1);
+    }
     return new Promise((res) => {
       this.shaking = 1.3;
       Sound.play('diceShake', { vol: 0.8 });
@@ -345,14 +370,23 @@ export class GachaScene extends Scene {
     });
   }
 
-  private async capsuleOpen(best: Rarity): Promise<void> {
+  /** Camera pushes in while the capsule rolls out of the chute toward the player. */
+  private async dispense3D(tease: Rarity): Promise<void> {
+    const m3 = this.m3!;
+    const z = { k: 0 };
+    gsap.to(z, { k: 1, duration: 0.9, ease: 'power2.inOut', onUpdate: () => m3.setDolly(z.k) });
+    Sound.play('drop', { vol: 0.8 });
+    gsap.delayedCall(0.55, () => Sound.play('soft', { vol: 0.7 }));
+    await m3.dispense(tease as 'N' | 'R' | 'SR' | 'SSR');
+    await wait(0.15);
+  }
+
+  private async capsuleOpen(best: Rarity, tease: Rarity): Promise<void> {
     const layer = this.stageLayer;
     const dim = new Graphics().rect(-App.colX, 0, App.W, App.H).fill({ color: 0x0a0418, alpha: 0.88 });
     dim.alpha = 0;
     layer.addChild(dim);
     gsap.to(dim, { alpha: 1, duration: 0.4 });
-    // tease: show a lower rarity first sometimes
-    const tease = best === 'SSR' ? (Math.random() < 0.5 ? 'SR' : 'SSR') : best === 'SR' && Math.random() < 0.35 ? 'R' : best;
     const capC = new Container();
     const g = new Sprite(gtex(`cap_${tease}`));
     g.anchor.set(0.5);
@@ -361,6 +395,14 @@ export class GachaScene extends Scene {
     const ms = this.machine.scale.x;
     capC.position.set(this.machine.x + (MACHINE.chute[0] - MACHINE.dome[0]) * ms, this.machine.y + (MACHINE.chute[1] - MACHINE.dome[1]) * ms);
     capC.scale.set(0.35);
+    if (this.m3) {
+      // continue exactly where the 3D capsule came to rest, then hand over to the 2D reveal
+      const c = this.m3.chutePoint();
+      const d = App.toDesign(c.x, c.y);
+      capC.position.set(d.x - App.colX, d.y);
+      capC.scale.set(0.6);
+      this.m3.show(false);
+    }
     layer.addChild(capC);
     Sound.play('drop', { vol: 0.8 });
     // pop out of the chute and bounce to center
@@ -653,10 +695,21 @@ export class GachaScene extends Scene {
     const dim = this.lastDim;
     this.lastDim = null;
     if (dim && !dim.destroyed) gsap.to(dim, { alpha: 0, duration: 0.3, onComplete: () => dim.destroy() });
+    if (this.m3) {
+      this.m3.resetDispensed();
+      this.m3.setDolly(0);
+      this.m3.show(true);
+    }
     gsap.to(this.machine, { alpha: 1, duration: 0.3 });
   }
 
   resize(): void {
+    if (this.m3) {
+      const r = App.pixi.canvas.getBoundingClientRect();
+      const k = App.scale;
+      const m = this.m3Rect;
+      this.m3.setRect(r.left + (App.colX + m.x) * k, r.top + m.y * k, m.w * k, m.h * k);
+    }
     this.bg.layout(App.W, App.H);
     this.shade.clear().rect(0, 0, App.W, App.H).fill(grad([[0, 'rgba(30,10,60,0.55)'], [0.5, 'rgba(40,10,70,0.25)'], [1, 'rgba(20,6,40,0.75)']]));
     this.col.x = App.colX;
@@ -666,6 +719,7 @@ export class GachaScene extends Scene {
     this.t += dt;
     this.bg.update(dt);
     this.fx.update(dt);
+    this.m3?.update(dt);
     this.rays.rotation += dt * 0.15;
     this.pickArts.forEach((a, i) => (a.y = 2 + Math.sin(this.t * 2.4 + i * 1.3) * 6));
     // drifting sparkles
@@ -692,6 +746,8 @@ export class GachaScene extends Scene {
   }
 
   exit(): void {
+    this.m3?.destroy();
+    this.m3 = null;
     this.world.clear();
     void unloadFairy(BG_SET);
   }

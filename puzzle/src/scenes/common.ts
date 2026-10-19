@@ -54,10 +54,10 @@ export function openSettings(parent: Container, onClose?: () => void): void {
   ov.addChild(dim);
   const box = new Container();
   box.position.set(360, App.H / 2);
-  const p = panel(620, 900, { color: 0xfdf7ff });
+  const p = panel(620, 980, { color: 0xfdf7ff });
   box.addChild(p);
   const title = txt('せってい', { size: 48, font: 'dela', color: 0x4a2f7a });
-  title.y = -390;
+  title.y = -430;
   box.addChild(title);
   const s = Save.data.settings;
   const rows: [string, () => boolean, () => void][] = [
@@ -65,9 +65,10 @@ export function openSettings(parent: Container, onClose?: () => void): void {
     ['効果音', () => s.sfx > 0, () => (s.sfx = s.sfx > 0 ? 0 : 0.9)],
     ['振動', () => s.haptics, () => (s.haptics = !s.haptics)],
     ['色覚サポート', () => s.colorAssist, () => (s.colorAssist = !s.colorAssist)],
+    ['必殺技 自動発動', () => s.autoSkill, () => (s.autoSkill = !s.autoSkill)],
   ];
   rows.forEach(([label, get, toggle], i) => {
-    const y = -290 + i * 100;
+    const y = -330 + i * 96;
     const l = txt(label, { size: 30, color: 0x4a2f7a, anchor: [0, 0.5] });
     l.position.set(-250, y);
     box.addChild(l);
@@ -90,7 +91,7 @@ export function openSettings(parent: Container, onClose?: () => void): void {
   // battle BGM: tap to cycle (おまかせ = random each round); plays a preview
   const prevMusic = Sound.currentMusic();
   const ml = txt('バトルBGM', { size: 30, color: 0x4a2f7a, anchor: [0, 0.5] });
-  ml.position.set(-250, 110);
+  ml.position.set(-250, 150);
   box.addChild(ml);
   let mb: Button;
   const makeMusic = () => {
@@ -103,12 +104,12 @@ export function openSettings(parent: Container, onClose?: () => void): void {
         makeMusic();
       },
     });
-    mb.position.set(135, 110);
+    mb.position.set(135, 150);
     box.addChild(mb);
   };
   makeMusic();
   const credit = txt('キャラ・ボス: KayKit (CC0)  背景・UI: CraftPix\n効果音: 効果音ラボ  音楽: 魔王魂 (CC BY 4.0)\nガチャ筐体: gumball machine / myles_683 (CC BY 4.0)\nフォント: めもかっち / やっちゃん (SIL OFL 1.1)', { size: 20, weight: '500', color: 0x7a6a9a, lineHeight: 30 });
-  credit.y = 255;
+  credit.y = 290;
   box.addChild(credit);
   const close = new Button({
     w: 300, h: 90, label: 'とじる', color: 'pink', sound: 'ui_back', onTap: () => {
@@ -117,7 +118,7 @@ export function openSettings(parent: Container, onClose?: () => void): void {
       onClose?.();
     },
   });
-  close.y = 370;
+  close.y = 415;
   box.addChild(close);
   ov.addChild(box);
   parent.addChild(ov);

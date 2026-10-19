@@ -20,7 +20,8 @@ import { battleTrack } from '../data/music';
 
 export const BATTLE_TIME = 90;
 /** Diameter of the round board in design px. */
-const BOWL_D = 656;
+const BOWL_D = 690;
+const SCORE_SCALE = 0.5;
 const COMBO_WINDOW = 2.4;
 const FEVER_TIME = 7.5;
 
@@ -117,6 +118,8 @@ export class BattleScene extends Scene {
   private skillCharge = 0;
   /** Seconds left of group-tap mode (skills). */
   private tapT = 0;
+  /** Battle BGM to return to after fever. */
+  private track = '';
   private stuckCheckT = 0.5;
   private stuckT = 0;
   private skillUses = 0;
@@ -167,14 +170,16 @@ export class BattleScene extends Scene {
     const H = App.H;
     const top = App.safeTop;
     // round bowl pinned to the bottom; the boss stage takes whatever is left above it
-    const D = BOWL_D;
-    this.boardY = Math.round(Math.max(top + 540, H - App.safeBottom - 44 - D));
-    this.stageH = this.boardY - 128;
-    this.board = new Board(this.def, D, D, {
+    // a compact boss stage on top; the bowl stretches into a tall stadium with whatever is left
+    this.stageH = Math.round(Math.max(300, Math.min(400, H * 0.25)) + top * 0.6);
+    this.boardY = this.stageH + 112;
+    const boardH = Math.round(H - App.safeBottom - 30 - this.boardY);
+    const D = Math.min(BOWL_D, boardH);
+    this.boardX = 360 - D / 2;
+    this.board = new Board(this.def, D, Math.max(D, boardH), {
       onResolve: (pops, cause, meta) => this.onResolve(pops, cause, meta),
       onPiecePop: (p, i, cause, token) => this.onPiecePop(p, i, cause, token),
       onChainChange: (len, eff) => this.onChainChange(len, eff),
-      onSkillTap: () => void this.activateSkill(),
       onInteract: () => {
         this.idleT = 0;
         this.hintShown = false;
@@ -208,40 +213,56 @@ export class BattleScene extends Scene {
     });
     this.pauseBtn.position.set(58, top + 54);
     this.hud.addChild(this.timer, this.scoreW, this.skillBtn, this.feverG, this.comboL, this.pauseBtn);
+    // manual mode: tap the gauge when it is full
+    this.skillBtn.on('pointertap', () => void this.activateSkill());
     this.timer.set(BATTLE_TIME);
     this.layoutStage();
     this.bindInput();
     document.addEventListener('visibilitychange', this.onVis);
-    Sound.music(battleTrack(), 0.6);
+    this.track = battleTrack();
+    Sound.music(this.track, 0.6);
     Sound.musicFilter(20000, 0.01);
     Sound.musicRate(1);
     this.intro();
   }
 
   /** Wooden bowl rim with a gold edge around a dark felt (Puni Puni-style round board). */
+  /** Wooden stadium-shaped rim with a gold edge around a dark felt (Puni Puni-style bowl). */
   private drawBoardFrame(): void {
-    const R = this.board.w / 2;
-    const cx = this.boardX + R;
-    const cy = this.boardY + R;
+    const { w, h } = this.board;
+    const R = w / 2;
+    const x = this.boardX;
+    const y = this.boardY;
+    const ring = (k: number) => [x - k, y - k, w + k * 2, h + k * 2, R + k] as const;
     const g = new Graphics();
-    g.circle(cx, cy + 10, R + 34).fill({ color: 0x000000, alpha: 0.35 });
-    g.circle(cx, cy, R + 32).fill({ texture: tex('jungle:wood'), textureSpace: 'local' });
-    g.circle(cx, cy, R + 32).stroke({ width: 5, color: 0x3b2412 });
-    g.circle(cx, cy, R + 12).stroke({ width: 10, color: 0xffc94a });
-    g.circle(cx, cy, R + 12).stroke({ width: 3, color: 0x8a5a10, alignment: 1 });
-    g.circle(cx, cy, R + 7).fill(grad([[0, '#2c4a2a'], [0.6, '#1d3320'], [1, '#132416']]));
-    g.circle(cx, cy, R + 7).stroke({ width: 4, color: 0x0e1a0c });
-    // rivets around the rim
-    for (let i = 0; i < 16; i++) {
-      const a = (i / 16) * Math.PI * 2 + Math.PI / 16;
-      const rx = cx + Math.cos(a) * (R + 23);
-      const ry = cy + Math.sin(a) * (R + 23);
-      g.circle(rx, ry + 2, 7).fill({ color: 0x000000, alpha: 0.35 });
-      g.circle(rx, ry, 7).fill(0xffd96a);
-      g.circle(rx - 2, ry - 2, 2.5).fill(0xfff6d0);
+    g.roundRect(...ring(26)).fill({ color: 0x000000, alpha: 0.35 });
+    g.roundRect(...ring(24)).fill({ texture: tex('jungle:wood'), textureSpace: 'local' });
+    g.roundRect(...ring(24)).stroke({ width: 5, color: 0x3b2412 });
+    g.roundRect(...ring(10)).stroke({ width: 9, color: 0xffc94a });
+    g.roundRect(...ring(10)).stroke({ width: 3, color: 0x8a5a10, alignment: 1 });
+    g.roundRect(...ring(6)).fill(grad([[0, '#2c4a2a'], [0.6, '#1d3320'], [1, '#132416']]));
+    g.roundRect(...ring(6)).stroke({ width: 4, color: 0x0e1a0c });
+    // rivets along the rim: around both half-circles and down the straight sides
+    const rr = R + 17;
+    const pts: [number, number][] = [];
+    for (let i = 0; i <= 6; i++) {
+      const a = Math.PI + (i / 6) * Math.PI;
+      pts.push([x + R + Math.cos(a) * rr, y + R + Math.sin(a) * rr]);
+      pts.push([x + R + Math.cos(a + Math.PI) * rr, y + h - R + Math.sin(a + Math.PI) * rr]);
+    }
+    const sideN = Math.floor((h - w) / 110);
+    for (let i = 1; i <= sideN; i++) {
+      const yy = y + R + ((h - w) * i) / (sideN + 1);
+      pts.push([x - 17, yy], [x + w + 17, yy]);
+    }
+    for (const [rx, ry] of pts) {
+      g.circle(rx, ry + 2, 6).fill({ color: 0x000000, alpha: 0.35 });
+      g.circle(rx, ry, 6).fill(0xffd96a);
+      g.circle(rx - 2, ry - 2, 2).fill(0xfff6d0);
     }
     this.boardFrame.addChild(g);
   }
+
 
   private layoutStage(): void {
     this.col.x = App.colX;
@@ -249,7 +270,7 @@ export class BattleScene extends Scene {
     this.backdrop.position.set(-App.colX, 0);
     this.backdrop.layout(W, this.stageH + 20);
     this.boss.position.set(360, this.stageH - 22);
-    const avail = this.stageH - 22 - (App.safeTop + 205);
+    const avail = this.stageH - 22 - (App.safeTop + 165);
     this.bossScale = Math.min(1, avail / this.boss.height2);
     this.boss.scale.set(this.bossScale);
     // the band below the stage
@@ -340,11 +361,8 @@ export class BattleScene extends Scene {
         this.comboT -= dt;
         if (this.comboT <= 0) this.combo = 0;
       }
-      // a full gauge drops the glowing skill piece into the bowl
-      if (this.skillCharge >= this.chargeNeed && !this.board.hasSkillPiece()) {
-        this.board.spawnSkillPiece();
-        this.floatText('ひっさつピース登場！タップ！', 360, this.boardY + 60, 0xfff27a, 34);
-      }
+            // a full gauge fires the skill by itself (setting), between traces so it never cuts a chain
+      if (this.skillCharge >= this.chargeNeed && Save.data.settings.autoSkill && this.board.chain.length === 0) void this.activateSkill();
       if (this.tapT > 0) {
         this.tapT -= dt;
         if (this.tapT <= 0) this.board.tapPop = false;
@@ -408,12 +426,11 @@ export class BattleScene extends Scene {
     const hue = (this.t * 240) % 360;
     const c = hslToHex(hue, 1, 0.6);
     const c2 = hslToHex((hue + 120) % 360, 1, 0.6);
-    const R = this.board.w / 2;
-    const cx = this.boardX + R;
-    const cy = this.boardY + R;
+    const { w, h } = this.board;
+    const R = w / 2;
     const pulse = 0.6 + Math.sin(this.t * 14) * 0.25;
-    g.circle(cx, cy, R + 34).stroke({ width: 10, color: c, alpha: pulse });
-    g.circle(cx, cy, R + 12).stroke({ width: 6, color: c2, alpha: pulse });
+    g.roundRect(this.boardX - 28, this.boardY - 28, w + 56, h + 56, R + 28).stroke({ width: 10, color: c, alpha: pulse });
+    g.roundRect(this.boardX - 10, this.boardY - 10, w + 20, h + 20, R + 10).stroke({ width: 6, color: c2, alpha: pulse });
   }
 
   // ----------------------------------------------------------------- input
@@ -449,7 +466,12 @@ export class BattleScene extends Scene {
       const e = ev as PointerEvent;
       if (e.pointerId !== this.pointerId) return;
       this.pointerId = null;
-      if (this.phase === 'play') this.board.pointerUp();
+      if (this.phase !== 'play') return;
+      if (e.type === 'pointercancel') return this.board.cancelChain();
+      // take the last stretch of the swipe into account before committing
+      const p = local(e);
+      this.board.pointerMove(p.x, p.y);
+      this.board.pointerUp();
     };
     this.domHandlers = [
       ['pointerdown', down],
@@ -504,7 +526,8 @@ export class BattleScene extends Scene {
     }
     mult *= this.comboMult();
     if (this.feverOn) mult *= 2;
-    const total = Math.round(this.atk * weight * mult);
+    // the big stadium board makes long chains easy; points are scaled so ranks/lines keep their meaning
+    const total = Math.round(this.atk * weight * mult * SCORE_SCALE);
     this.committed += total;
     const orbEvery = Math.max(1, Math.ceil(pops.length / 22));
     this.resolves.set(token, { total, remaining: total, perPiece: total / pops.length, n: pops.length, seen: 0, orbEvery, shown: false, crit, cause, color: meta.color });
@@ -513,7 +536,7 @@ export class BattleScene extends Scene {
     if (cause !== 'skill' && !this.feverOn && this.tapT <= 0) this.skillCharge = Math.min(this.chargeNeed, this.skillCharge + weight);
     if (!this.feverOn && cause !== 'rock') {
       // fever stops the clock, so it has to stay rare (~250 pieces per fever)
-      this.fever = Math.min(100, this.fever + weight * (cause === 'skill' ? 0.15 : 0.4));
+      this.fever = Math.min(100, this.fever + weight * (cause === 'skill' ? 0.12 : 0.3));
       if (this.fever >= 100 && this.phase === 'play') this.startFever();
     }
     // callouts
@@ -681,7 +704,7 @@ export class BattleScene extends Scene {
     this.board.forceRelease();
     Sound.play('jFever', { vol: 0.8 });
     Sound.chord(5);
-    Sound.musicRate(this.timeLeft <= 10 ? 1.14 : 1.1);
+    Sound.music('fever', 0.25, 1, true);
     haptic([20, 40, 20]);
     void banner(this.overlay, 'FEVER!!', 360, this.boardY + this.board.h * 0.4, { size: 130, color: 0xff7ad9, stroke: 0x4a0040, hold: 0.4, sub: 'スコア2倍＆つながりやすい！' });
     for (let i = 0; i < 4; i++) {
@@ -695,13 +718,14 @@ export class BattleScene extends Scene {
     this.feverOn = false;
     this.fever = 0;
     this.board.fever = false;
+    Sound.music(this.track, 0.5);
     Sound.musicRate(this.timeLeft <= 10 ? 1.07 : 1);
     Sound.play('lowDown', { vol: 0.4 });
   }
 
   // ----------------------------------------------------------------- skill
   private async activateSkill(): Promise<void> {
-    if (this.phase !== 'play' || this.paused) return;
+    if (this.phase !== 'play' || this.paused || this.skillCharge < this.chargeNeed) return;
     this.phase = 'cutin';
     this.board.forceRelease();
     this.board.inputEnabled = false;
@@ -780,6 +804,8 @@ export class BattleScene extends Scene {
     const s = this.def.skill;
     const r = b.r;
     const R = b.w / 2;
+    const M = b.h / 2; // vertical middle of the (stadium) bowl
+    const ext = b.h - b.w;
     const size = (s.size ?? 2) * r;
     const counts = b.colorCounts();
     const order = counts.map((c, i) => [c, i]).sort((a, z) => z[0] - a[0]).map(([, i]) => i);
@@ -798,17 +824,17 @@ export class BattleScene extends Scene {
         this.skillHit(10, 0xffd23f);
         break;
       case 'hline':
-        band(R, R * 1.2, 0);
+        band(R, M + R * 0.2, 0);
         break;
       case 'vline':
-        band(R + (Math.random() - 0.5) * R * 0.5, R, Math.PI / 2);
+        band(R + (Math.random() - 0.5) * R * 0.5, M, Math.PI / 2);
         break;
       case 'diag':
-        band(R, R * 1.1, Math.random() < 0.5 ? Math.PI / 4 : -Math.PI / 4);
+        band(R, M + R * 0.1, Math.random() < 0.5 ? Math.PI / 4 : -Math.PI / 4);
         break;
       case 'cross': {
         const cx = R + (Math.random() - 0.5) * R * 0.4;
-        const cy = R * 1.15;
+        const cy = M + R * 0.15;
         this.beam(bx + cx, by + cy, 0, size * 2);
         this.beam(bx + cx, by + cy, Math.PI / 2, size * 2);
         b.popWhere((p) => Math.abs(p.y - cy) < size || Math.abs(p.x - cx) < size, cx, cy);
@@ -836,7 +862,7 @@ export class BattleScene extends Scene {
             const ang = Math.random() * Math.PI * 2;
             const d = n === 1 ? 0 : Math.random() * (R - size * 0.6);
             const cx = R + Math.cos(ang) * d;
-            const cy = (n === 1 ? R * 1.15 : R) + Math.sin(ang) * d * 0.8;
+            const cy = (n === 1 ? M + R * 0.15 : M) + Math.sin(ang) * d * (0.8 + ext / b.w);
             b.shockwave(cx, cy, size * 1.1);
             b.popWhere((p) => Math.hypot(p.x - cx, p.y - cy) < size, cx, cy);
             Sound.explosion(n > 1);
@@ -856,7 +882,7 @@ export class BattleScene extends Scene {
       }
       case 'rim':
         flash(0x9be7ff);
-        b.popWhere((p) => Math.hypot(p.x - R, p.y - R) > R - size * 1.25, R, R);
+        b.popWhere((p) => Math.hypot(p.x - R, p.y - Math.max(R, Math.min(b.h - R, p.y))) > R - size * 1.25, R, M);
         Sound.whoosh(0.6);
         break;
       case 'paint': {
@@ -886,18 +912,18 @@ export class BattleScene extends Scene {
         break;
       case 'colorBlast':
         flash(COLORS[order[0]].hex);
-        b.popWhere((p) => p.color === order[0], R, R);
+        b.popWhere((p) => p.color === order[0], R, M);
         break;
       case 'twoColor':
         flash(0xffd23f);
-        b.shockwave(R, R, b.h);
+        b.shockwave(R, M, b.h);
         b.popWhere((p) => p.color === order[0] || p.color === order[1], R, b.h);
         Sound.explosion(true);
         break;
       case 'allClear':
         flash(0xffffff);
-        b.shockwave(R, R, b.h * 1.2);
-        b.popWhere(() => true, R, R);
+        b.shockwave(R, M, b.h * 1.2);
+        b.popWhere(() => true, R, M);
         Sound.explosion(true);
         this.shake(14, 0.5);
         break;
@@ -913,7 +939,7 @@ export class BattleScene extends Scene {
 
   /** Non-popping skills still land a hit on the boss. */
   private skillHit(weight: number, color: number): void {
-    const total = Math.round(this.atk * weight * this.def.skill.power * 0.35 * this.comboMult() * (this.feverOn ? 2 : 1));
+    const total = Math.round(this.atk * weight * this.def.skill.power * 0.35 * this.comboMult() * (this.feverOn ? 2 : 1) * SCORE_SCALE);
     const r: Resolve = { total, remaining: 0, perPiece: total, n: 1, seen: 1, orbEvery: 1, shown: false, crit: false, cause: 'skill', color: -1 };
     this.committed += total;
     const x = this.skillBtn.x;
@@ -932,8 +958,8 @@ export class BattleScene extends Scene {
   }
 
   private flashBoard(color: number): void {
-    const R = this.board.w / 2;
-    const g = new Graphics().circle(this.boardX + R, this.boardY + R, R + 6).fill({ color, alpha: 0.6 });
+    const { w, h } = this.board;
+    const g = new Graphics().roundRect(this.boardX - 6, this.boardY - 6, w + 12, h + 12, w / 2 + 6).fill({ color, alpha: 0.6 });
     g.blendMode = 'add';
     this.overlay.addChild(g);
     gsap.to(g, { alpha: 0, duration: 0.5, onComplete: () => g.destroy() });

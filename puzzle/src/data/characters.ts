@@ -73,7 +73,7 @@ const ROWS: Row[] = [
   ['hood', 'フードローグ', 'SR', 140, { kind: 'tapPop', name: 'フードの手品', desc: '10.5秒間タップでまとめて消せる', charge: 34, power: 3.2, dur: 10.5 }, 'フードの奥で何を考えているのかな？'],
   // SSR
   ['skel_warrior', 'ホネ戦士', 'SSR', 176, { kind: 'twoColor', name: 'ダブルブレイク', desc: '多い2色を全部消す', charge: 40, power: 3.2 }, '角かぶとのスケルトン戦士。'],
-  ['skel_mage', 'ホネ魔導士', 'SSR', 171, { kind: 'allClear', name: 'ぜんぶ消し', desc: 'ボウルの中を全部消す', charge: 44, power: 3.2 }, 'いにしえの魔法をあやつるスケルトン。'],
+  ['skel_mage', 'ホネ魔導士', 'SSR', 171, { kind: 'allClear', name: 'ぜんぶ消し', desc: 'ボウルの中を全部消す', charge: 44, power: 2.6 }, 'いにしえの魔法をあやつるスケルトン。'],
   ['skel_rogue', 'ホネ盗賊', 'SSR', 172, { kind: 'feverTap', name: 'かげのうたげ', desc: 'フィーバー突入＋その間タップでまとめて消せる', charge: 62, power: 2.6 }, '赤いフードの神出鬼没なスケルトン。'],
 ];
 

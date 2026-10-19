@@ -35,7 +35,7 @@ export interface WorldOpts {
    * Optional bowl: a circle whose upper half narrows into an open chute of
    * half-width `hole`, so pieces can drop in from above (puzzle board).
    */
-  bowl?: { x: number; y: number; r: number; hole: number };
+  bowl?: { x: number; y: number; r: number; hole: number; ext?: number };
 }
 
 export class World {
@@ -74,7 +74,7 @@ export class World {
         // lower rim of the bowl
         const c = o.bowl;
         const dx = a.position.x - c.x;
-        const dy = a.position.y - c.y;
+        const dy = a.position.y - c.y - (c.ext ?? 0);
         const d = Math.hypot(dx, dy);
         if (dy > 0 && d >= c.r - a.r - 1 && d > 0) {
           const vn = (a.velocity.x * dx + a.velocity.y * dy) / d;
@@ -167,15 +167,22 @@ export class World {
     const o = this.o;
     if (o.bowl) {
       const c = o.bowl;
+      const ext = c.ext ?? 0;
       const dx = b.position.x - c.x;
-      const dy = b.position.y - c.y;
+      let dy = b.position.y - c.y;
       const max = c.r - b.r;
-      if (dy >= 0) {
+      if (dy >= ext) {
+        // lower half-circle
+        dy -= ext;
         const d = Math.hypot(dx, dy);
         if (d > max && d > 0) {
           b.position.x = c.x + (dx / d) * max;
-          b.position.y = c.y + (dy / d) * max;
+          b.position.y = c.y + ext + (dy / d) * max;
         }
+      } else if (dy >= 0) {
+        // straight sides of a tall (stadium) bowl
+        if (dx > max) b.position.x = c.x + max;
+        else if (dx < -max) b.position.x = c.x - max;
       } else {
         // upper half: side walls follow the circle until it narrows to the chute
         const hw = dy > -max ? Math.max(c.hole, Math.sqrt(max * max - dy * dy)) : c.hole;

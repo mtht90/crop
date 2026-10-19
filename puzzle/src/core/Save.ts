@@ -20,7 +20,7 @@ export interface SaveData {
   /** Pulls since the last SSR (used for the pity counter). */
   pity: number;
   tutorialDone: boolean;
-  settings: { bgm: number; sfx: number; haptics: boolean; colorAssist: boolean; battleBgm: string };
+  settings: { bgm: number; sfx: number; haptics: boolean; colorAssist: boolean; battleBgm: string; autoSkill: boolean };
 }
 
 function defaults(): SaveData {
@@ -36,7 +36,7 @@ function defaults(): SaveData {
     totalPulls: 0,
     pity: 0,
     tutorialDone: false,
-    settings: { bgm: 0.7, sfx: 0.9, haptics: true, colorAssist: false, battleBgm: 'auto' },
+    settings: { bgm: 0.7, sfx: 0.9, haptics: true, colorAssist: false, battleBgm: 'auto', autoSkill: true },
   };
 }
 
