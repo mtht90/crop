@@ -55,7 +55,7 @@ export class CharaScene extends Scene {
       g.roundRect(-cw / 2, -ch / 2, cw, ch, 26).fill(owned ? grad([[0, '#ffffff'], [1, '#e8deff']]) : 0x4a3a7a);
       g.roundRect(-cw / 2, -ch / 2, cw, ch, 26).stroke({ width: 6, color: owned ? r.color : 0x6a5a9a });
       c.addChild(g);
-      const sp = new Sprite(pieceTexture(def, i % 5, 'normal'));
+      const sp = new Sprite(pieceTexture(def, i % 5));
       sp.anchor.set(0.5, 0.6);
       sp.scale.set(0.7);
       sp.y = -10;
@@ -131,15 +131,15 @@ export class CharaScene extends Scene {
     gsap.to(big, { y: -270, duration: 0.6, yoyo: true, repeat: -1, ease: 'sine.inOut' });
     // five color variants row
     for (let i = 0; i < 5; i++) {
-      const sp = new Sprite(pieceTexture(def, i, 'normal'));
+      const sp = new Sprite(pieceTexture(def, i));
       sp.anchor.set(0.5, 0.6);
       sp.scale.set(0.42);
       sp.position.set(-220 + i * 110, -60);
       sp.eventMode = 'static';
       sp.cursor = 'pointer';
       sp.on('pointertap', () => {
-        big.texture = bigTexture(def, i, 'linked');
-        gsap.delayedCall(0.4, () => (big.texture = bigTexture(def, i)));
+        big.texture = bigTexture(def, i);
+        gsap.delayedCall(0.6, () => (big.texture = bigTexture(def)));
         Sound.link(i * 2);
         gsap.fromTo(sp.scale, { x: 0.55, y: 0.35 }, { x: 0.42, y: 0.42, duration: 0.5, ease: 'elastic.out(1.4,0.3)' });
       });

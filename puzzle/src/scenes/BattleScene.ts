@@ -5,14 +5,13 @@ import { Scene, Scenes } from '../core/Scene';
 import { Save } from '../core/Save';
 import { Sound, haptic } from '../core/Audio';
 import { Button, grad, txt } from '../core/UI';
-import { tex } from '../core/Loader';
 import { Board, BOARD_TUNING, type PopCause, type PopInfo } from '../game/Board';
 import { BossView } from '../game/BossView';
-import { Backdrop } from '../game/Backdrop';
+import { FairyBackdrop } from '../game/Backdrop';
 import { Effects, fx } from '../game/Effects';
-import { ComboLabel, FeverGauge, HpBar, ScoreWidget, SkillButton, TimerWidget, banner, installBitmapFonts, num } from '../game/Hud';
+import { ComboLabel, JFever, JTimer, ScoreLine, SkillButton, banner, installBitmapFonts, jungle, jungleSlice, num } from '../game/Hud';
 import { COLORS, bigTexture, rockTexture } from '../art/PieceArt';
-import { CHAR_BY_ID, RARITY_INFO, charAtk, charCharge, type CharDef } from '../data/characters';
+import { CHARACTERS, CHAR_BY_ID, RARITY_INFO, charAtk, charCharge, type CharDef } from '../data/characters';
 import { bossAttackCount, bossAttackInterval, bossForLevel, bossHp, type BossDef } from '../data/bosses';
 import { ResultScene, type BattleResult } from './ResultScene';
 import { HomeScene } from './HomeScene';
@@ -72,10 +71,10 @@ export class BattleScene extends Scene {
   private hp: number;
 
   private col = new Container();
-  private backdrop: Backdrop;
+  private backdrop: FairyBackdrop;
   private stage = new Container();
   private boss: BossView;
-  private boardFrame = new Graphics();
+  private boardFrame = new Container();
   private feverFrame = new Graphics();
   private board!: Board;
   private boardX = 20;
@@ -91,13 +90,12 @@ export class BattleScene extends Scene {
     return this.boss.height2 * this.bossScale;
   }
 
-  private timer = new TimerWidget();
-  private scoreW = new ScoreWidget(240);
-  private hpBar: HpBar;
+  private timer = new JTimer();
+  private scoreW: ScoreLine;
   private skillBtn: SkillButton;
-  private feverG = new FeverGauge(440);
+  private feverG = new JFever(430);
   private comboL = new ComboLabel();
-  private pauseBtn!: Button;
+  private pauseBtn!: Container;
 
   private phase: Phase = 'intro';
   private paused = false;
@@ -134,16 +132,16 @@ export class BattleScene extends Scene {
     super();
     installBitmapFonts();
     const sel = Save.data.selected;
-    this.def = CHAR_BY_ID[sel] ?? CHAR_BY_ID.punimaru;
+    this.def = CHAR_BY_ID[sel] ?? CHARACTERS[0];
     this.lv = Save.data.owned[this.def.id]?.lv ?? 1;
     this.atk = charAtk(this.def, this.lv);
     this.chargeNeed = charCharge(this.def, this.lv);
     this.bossLv = Save.data.bossLv;
     this.bossDef = bossForLevel(this.bossLv);
     this.hp = bossHp(this.bossLv);
-    this.backdrop = new Backdrop(this.bossDef.bg);
+    this.backdrop = new FairyBackdrop(this.bossDef.bg);
     this.boss = new BossView(this.bossDef);
-    this.hpBar = new HpBar(this.bossDef.name, this.bossLv, 440);
+    this.scoreW = new ScoreLine(this.hp);
     this.skillBtn = new SkillButton(this.def);
     this.bossAtkT = bossAttackInterval(this.bossLv) || Infinity;
   }
@@ -172,18 +170,32 @@ export class BattleScene extends Scene {
     this.col.addChild(this.board.view, this.feverFrame, this.orbLayer, this.fxTop.view, this.hud, this.vignette, this.overlay);
     this.drawBoardFrame(boardH);
     // hud
-    this.timer.position.set(360, top + 66);
-    this.scoreW.position.set(588, top + 52);
-    this.hpBar.position.set(360, top + 170);
+    const bar = jungle('topbar');
+    bar.anchor.set(0.5, 0);
+    bar.width = App.W + 40;
+    bar.height = top + 118;
+    bar.position.set(360, -6);
+    this.hud.addChild(bar);
+    this.timer.position.set(205, top + 54);
+    this.scoreW.position.set(560, top + 52);
+    const nameTag = txt(`Lv.${this.bossLv} ${this.bossDef.name}`, { size: 26, color: 0xffffff, stroke: 0x3b2412, strokeWidth: 7, anchor: [0, 0.5] });
+    nameTag.position.set(24, top + 140);
+    this.hud.addChild(nameTag);
     this.skillBtn.position.set(84, this.stageH + 34);
     this.feverG.position.set(420, this.stageH + 58);
     this.comboL.position.set(590, this.stageH - 70);
-    this.pauseBtn = new Button({ w: 72, h: 72, color: 'purple', icon: tex('icon:pause'), iconScale: 0.5, onTap: () => this.pause() });
-    this.pauseBtn.position.set(58, top + 56);
-    this.hud.addChild(this.timer, this.scoreW, this.hpBar, this.skillBtn, this.feverG, this.comboL, this.pauseBtn);
+    this.pauseBtn = jungle('pause');
+    this.pauseBtn.scale.set(72 / 214);
+    this.pauseBtn.eventMode = 'static';
+    this.pauseBtn.cursor = 'pointer';
+    this.pauseBtn.on('pointertap', () => {
+      Sound.play('ui_tap');
+      this.pause();
+    });
+    this.pauseBtn.position.set(58, top + 54);
+    this.hud.addChild(this.timer, this.scoreW, this.skillBtn, this.feverG, this.comboL, this.pauseBtn);
     this.skillBtn.on('pointertap', () => this.activateSkill());
-    this.hpBar.set(this.hp, this.hp);
-    this.timer.set(BATTLE_TIME, BATTLE_TIME);
+    this.timer.set(BATTLE_TIME);
     this.layoutStage();
     this.bindInput();
     document.addEventListener('visibilitychange', this.onVis);
@@ -194,20 +206,15 @@ export class BattleScene extends Scene {
   }
 
   private drawBoardFrame(h: number): void {
-    const g = this.boardFrame;
     const x = this.boardX;
     const y = this.boardY;
     const w = 680;
-    g.clear();
-    g.roundRect(x - 14, y - 14, w + 28, h + 28, 40).fill({ color: 0x000000, alpha: 0.3 });
-    g.roundRect(x - 12, y - 18, w + 24, h + 26, 38).fill(0x2a1630);
-    g.roundRect(x - 4, y - 8, w + 8, h + 10, 32).fill(grad([[0, '#3d2a78'], [1, '#22164a']]));
-    // subtle polka dots inside the tray
-    for (let yy = y + 30; yy < y + h; yy += 70) {
-      for (let xx = x + 30 + ((yy / 70) % 2) * 35; xx < x + w; xx += 70) g.circle(xx, yy, 6).fill({ color: 0xffffff, alpha: 0.04 });
-    }
-    g.roundRect(x - 12, y - 18, w + 24, h + 26, 38).stroke({ width: 4, color: 0x8a6cff, alpha: 0.7 });
-    // the band between the stage and the board
+    const frame = jungleSlice('wood', w + 44, h + 44, 120);
+    frame.position.set(x - 22, y - 24);
+    const inner = new Graphics();
+    inner.roundRect(x - 4, y - 6, w + 8, h + 10, 26).fill(grad([[0, '#2f4a1e'], [1, '#1b2b12']]));
+    inner.roundRect(x - 4, y - 6, w + 8, h + 10, 26).stroke({ width: 4, color: 0x1a1008 });
+    this.boardFrame.addChild(frame, inner);
   }
 
   private layoutStage(): void {
@@ -220,10 +227,15 @@ export class BattleScene extends Scene {
     this.bossScale = Math.min(1, avail / this.boss.height2);
     this.boss.scale.set(this.bossScale);
     // the band below the stage
-    const band = new Graphics();
-    band.rect(-App.colX, this.stageH, W, App.H - this.stageH).fill(grad([[0, '#3a2470'], [1, '#1d1238']]));
-    band.rect(-App.colX, this.stageH - 4, W, 8).fill(0x2a1630);
-    this.col.addChildAt(band, 1);
+    const ground = new Graphics();
+    ground.rect(-App.colX, this.stageH, W, App.H - this.stageH).fill(grad([[0, '#4a2c14'], [1, '#22140a']]));
+    const band = jungle('band');
+    band.anchor.set(0.5, 0);
+    band.width = W + 40;
+    band.height = 132;
+    band.position.set(360, this.stageH - 26);
+    this.col.addChildAt(ground, 1);
+    this.col.addChildAt(band, 2);
     this.vignette.clear();
     this.vignette.rect(-App.colX, 0, W, App.H).stroke({ width: 60, color: 0xff2040, alpha: 1 });
     this.vignette.alpha = 0;
@@ -244,7 +256,7 @@ export class BattleScene extends Scene {
       Sound.play('bong', { vol: 0.6 });
       this.boss.shout(0.6);
     });
-    for (const [i, o] of [this.timer, this.scoreW, this.hpBar, this.skillBtn, this.feverG].entries()) {
+    for (const [i, o] of [this.timer, this.scoreW, this.skillBtn, this.feverG].entries()) {
       const y = o.y;
       o.y -= 40;
       o.alpha = 0;
@@ -328,11 +340,9 @@ export class BattleScene extends Scene {
     this.updateOrbs(dt);
     this.updateProjectiles(dt);
     this.fxTop.update(dt);
-    this.timer.set(this.timeLeft, BATTLE_TIME);
+    this.timer.set(this.timeLeft);
     this.scoreW.target = this.landed;
     this.scoreW.update(dt);
-    this.hpBar.set(Math.max(0, this.hp - this.landed), this.hp);
-    this.hpBar.update(dt);
     this.skillBtn.set(this.skillCharge / this.chargeNeed);
     this.skillBtn.update(dt);
     this.feverG.value = this.fever;
@@ -591,14 +601,21 @@ export class BattleScene extends Scene {
   }
 
   private emote(name: string, dur = 1.2): void {
-    const s = new Sprite(tex(`emote:${name}`));
-    s.anchor.set(0.5);
-    s.position.set(this.boss.x + 110, this.boss.y - this.bossH * 0.95);
-    this.fxTop.view.addChild(s);
-    s.scale.set(0);
-    gsap.to(s.scale, { x: 0.9, y: 0.9, duration: 0.4, ease: 'back.out(3)' });
-    gsap.to(s, { alpha: 0, duration: 0.3, delay: dur, onComplete: () => s.destroy() });
+    const glyph: Record<string, string> = { emote_exclamation: '！', emote_swirl: '＠', emote_laugh: 'ケケケ', emote_anger: '＃' };
+    const c = new Container();
+    const t = txt(glyph[name] ?? '！', { size: 40, font: 'dela', color: 0x3b2412 });
+    const bg = new Graphics();
+    const w = Math.max(64, t.width + 28);
+    bg.roundRect(-w / 2, -32, w, 64, 32).fill(0xfff8e8).stroke({ width: 5, color: 0x3b2412 });
+    bg.poly([-10, 28, 6, 28, -14, 46]).fill(0xfff8e8);
+    c.addChild(bg, t);
+    c.position.set(this.boss.x + 100, this.boss.y - this.bossH * 0.95);
+    this.fxTop.view.addChild(c);
+    c.scale.set(0);
+    gsap.to(c.scale, { x: 1, y: 1, duration: 0.4, ease: 'back.out(3)' });
+    gsap.to(c, { alpha: 0, duration: 0.3, delay: dur, onComplete: () => c.destroy({ children: true }) });
   }
+
 
   // ----------------------------------------------------------------- fever
   private startFever(): void {
@@ -659,7 +676,7 @@ export class BattleScene extends Scene {
       for (let i = 0; i < 40; i++) lines.rect(-W + Math.random() * W * 2, -125 + Math.random() * 250, 60 + Math.random() * 200, 3 + Math.random() * 4).fill({ color: 0xffffff, alpha: 0.6 });
       const lineMask = new Graphics().rect(-W, -130, W * 2, 260).fill(0xffffff);
       lines.mask = lineMask;
-      const chara = new Sprite(bigTexture(this.def, Math.floor(Math.random() * 5), 'linked'));
+      const chara = new Sprite(bigTexture(this.def));
       chara.anchor.set(0.5, 0.55);
       chara.scale.set(0.8);
       chara.position.set(W, 0);
@@ -940,6 +957,7 @@ export class BattleScene extends Scene {
     this.fxTop.burst(boss.x, boss.y - 120, { count: 40, tex: 'star_06', tint: [0xffffff, 0xfff27a, 0xff7ad9, 0x7cf0ff], add: true, speed: [300, 900], size: [0.1, 0.3], gravity: 500, life: [0.8, 1.5] });
     this.coinBurst(boss.x, boss.y - 100);
     gsap.to(flash, { alpha: 0, duration: 0.6, onComplete: () => flash.destroy() });
+    boss.die();
     // fly away into the sky with a twinkle
     gsap.to(boss, { y: -200, x: boss.x + 140, duration: 0.9, ease: 'power2.in' });
     gsap.to(boss, { rotation: Math.PI * 4, duration: 0.9, ease: 'power1.in' });

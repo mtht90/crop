@@ -12,6 +12,10 @@ export interface PBody {
   /** previous position (internal) */
   px: number;
   py: number;
+  /** Strongest approach speed (px/s) against a neighbor/wall during the last step, and its normal. */
+  impact: number;
+  nx: number;
+  ny: number;
 }
 
 export interface WorldOpts {
@@ -37,7 +41,7 @@ export class World {
   }
 
   add(x: number, y: number, r: number, mass = 1): PBody {
-    const b: PBody = { position: { x, y }, velocity: { x: 0, y: 0 }, r, invMass: 1 / mass, px: x, py: y };
+    const b: PBody = { position: { x, y }, velocity: { x: 0, y: 0 }, r, invMass: 1 / mass, px: x, py: y, impact: 0, nx: 0, ny: 0 };
     this.bodies.push(b);
     return b;
   }
@@ -56,6 +60,28 @@ export class World {
     const bs = this.bodies;
     const n = bs.length;
     const drag = Math.max(0, 1 - (o.drag ?? 0.4) * dt);
+    // record contact impacts from pre-step velocities (drives the jelly squash)
+    for (let i = 0; i < n; i++) bs[i].impact = 0;
+    for (let i = 0; i < n; i++) {
+      const a = bs[i];
+      if (a.position.y >= o.bottom - a.r - 1 && a.velocity.y > a.impact) this.hit(a, a.velocity.y, 0, 1);
+      for (let j = i + 1; j < n; j++) {
+        const b = bs[j];
+        const rr = (a.r + b.r) * 1.02;
+        const dx = b.position.x - a.position.x;
+        const dy = b.position.y - a.position.y;
+        if (dx > rr || dx < -rr || dy > rr || dy < -rr) continue;
+        const d = Math.hypot(dx, dy);
+        if (d >= rr || d === 0) continue;
+        const ux = dx / d;
+        const uy = dy / d;
+        const vn = (a.velocity.x - b.velocity.x) * ux + (a.velocity.y - b.velocity.y) * uy;
+        if (vn > 0) {
+          this.hit(a, vn, ux, uy);
+          this.hit(b, vn, -ux, -uy);
+        }
+      }
+    }
     // integrate
     for (let i = 0; i < n; i++) {
       const b = bs[i];
@@ -112,6 +138,13 @@ export class World {
       b.velocity.x = vx;
       b.velocity.y = vy;
     }
+  }
+
+  private hit(b: PBody, v: number, nx: number, ny: number): void {
+    if (v <= b.impact) return;
+    b.impact = v;
+    b.nx = nx;
+    b.ny = ny;
   }
 
   private walls(b: PBody): void {

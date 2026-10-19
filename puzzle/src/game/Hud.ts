@@ -1,9 +1,9 @@
-import { BitmapFont, BitmapText, Container, Graphics, Sprite, Text } from 'pixi.js';
+import { BitmapFont, BitmapText, Container, Graphics, NineSliceSprite, Sprite, Text } from 'pixi.js';
 import gsap from 'gsap';
 import { FONT_DELA, fmt, grad, txt } from '../core/UI';
-import { canvasTexture, drawPiece } from '../art/PieceArt';
+import { bigTexture } from '../art/PieceArt';
 import type { CharDef } from '../data/characters';
-import { tex } from '../core/Loader';
+import { tex as jtex } from '../core/Loader';
 
 let fontsReady = false;
 /** Bitmap fonts for numbers that change every frame. */
@@ -178,9 +178,9 @@ export class SkillButton extends Container {
     bg.circle(0, 6, 62).fill({ color: 0x000000, alpha: 0.3 });
     bg.circle(0, 0, 62).fill(0x2a1630);
     bg.circle(0, 0, 52).fill(grad([[0, '#ffffff'], [1, '#d7c8ff']]));
-    this.portrait = new Sprite(canvasTexture(drawPiece(def, 3, 'normal')));
-    this.portrait.anchor.set(0.5, 0.56);
-    this.portrait.scale.set(0.42);
+    this.portrait = new Sprite(bigTexture(def));
+    this.portrait.anchor.set(0.5, 0.5);
+    this.portrait.scale.set(96 / Math.max(1, this.portrait.texture.width));
     const mask = new Graphics().circle(0, 0, 51).fill(0xffffff);
     this.portrait.mask = mask;
     this.readyLabel = txt('SKILL!', { size: 22, font: 'dela', color: 0xfff27a, stroke: 0x8a1f00, strokeWidth: 6 });
@@ -349,9 +349,139 @@ export function banner(parent: Container, text: string, x: number, y: number, op
   });
 }
 
-export function icon(name: string, size: number): Sprite {
-  const s = new Sprite(tex(`icon:${name}`));
+
+// ======================================================= Jungle GUI widgets
+
+export function jungle(name: string): Sprite {
+  const s = new Sprite(jtex(`jungle:${name}`));
   s.anchor.set(0.5);
-  s.scale.set(size / s.texture.width);
   return s;
+}
+
+export function jungleSlice(name: string, w: number, h: number, inset: number): NineSliceSprite {
+  const s = new NineSliceSprite({ texture: jtex(`jungle:${name}`), leftWidth: inset, rightWidth: inset, topHeight: inset, bottomHeight: inset });
+  s.width = w;
+  s.height = h;
+  return s;
+}
+
+/** Clock icon + remaining seconds. */
+export class JTimer extends Container {
+  private digits = num('60', 50);
+  private clock = jungle('clock');
+  private warn = false;
+  constructor() {
+    super();
+    this.clock.scale.set(92 / this.clock.texture.width);
+    this.clock.x = -38;
+    this.digits.anchor.set(0, 0.5);
+    this.digits.x = 4;
+    this.addChild(this.clock, this.digits);
+  }
+  set(remaining: number): void {
+    const s = Math.ceil(Math.max(0, remaining));
+    const t = String(s);
+    if (this.digits.text !== t) {
+      this.digits.text = t;
+      if (s <= 10 && s > 0) {
+        this.digits.scale.set(1.4);
+        gsap.to(this.digits.scale, { x: 1, y: 1, duration: 0.35, ease: 'back.out(3)' });
+        gsap.fromTo(this.clock, { rotation: -0.25 }, { rotation: 0, duration: 0.4, ease: 'elastic.out(1.5,0.3)' });
+      }
+    }
+    const warn = remaining <= 10;
+    if (warn !== this.warn) {
+      this.warn = warn;
+      this.digits.tint = warn ? 0xff8aa0 : 0xffffff;
+    }
+  }
+}
+
+/** Score on a wooden plank with the defeat line (討伐ライン) underneath. */
+export class ScoreLine extends Container {
+  private value = num('0', 42);
+  private lineText: Text;
+  private check = jungle('ok');
+  private shown = 0;
+  private cleared = false;
+  target = 0;
+  constructor(private line: number) {
+    super();
+    const plank = jungleSlice('plank_s', 270, 74, 30);
+    plank.position.set(-135, -40);
+    const lbl = txt('SCORE', { size: 18, font: 'dela', color: 0xffd23f, stroke: 0x3b2412, strokeWidth: 5 });
+    lbl.position.set(-96, -3);
+    this.value.anchor.set(1, 0.5);
+    this.value.position.set(120, -2);
+    this.lineText = txt(`討伐ライン ${fmt(line)}`, { size: 22, color: 0xffffff, stroke: 0x3b2412, strokeWidth: 6, anchor: [1, 0.5] });
+    this.lineText.position.set(124, 54);
+    this.check.scale.set(40 / this.check.texture.width);
+    this.check.position.set(-120, 54);
+    this.check.visible = false;
+    this.addChild(plank, lbl, this.value, this.lineText, this.check);
+  }
+  update(dt: number): void {
+    if (this.shown !== this.target) {
+      const diff = this.target - this.shown;
+      this.shown += Math.sign(diff) * Math.max(1, Math.abs(diff) * Math.min(1, dt * 10));
+      if (Math.abs(this.target - this.shown) < 1) this.shown = this.target;
+      this.value.text = fmt(this.shown);
+    }
+    if (!this.cleared && this.shown >= this.line) {
+      this.cleared = true;
+      this.lineText.text = '討伐ライン突破！';
+      this.lineText.style.fill = 0xb6ff6a;
+      this.check.visible = true;
+      gsap.fromTo(this.check.scale, { x: 0, y: 0 }, { x: 40 / this.check.texture.width, y: 40 / this.check.texture.width, duration: 0.5, ease: 'back.out(3)' });
+      gsap.fromTo(this.lineText.scale, { x: 1.4, y: 1.4 }, { x: 1, y: 1, duration: 0.5, ease: 'back.out(3)' });
+    }
+  }
+  bump(): void {
+    gsap.fromTo(this.value.scale, { x: 1.25, y: 1.25 }, { x: 1, y: 1, duration: 0.3, ease: 'back.out(3)' });
+  }
+}
+
+/** Striped Jungle progress bar used for FEVER. */
+export class JFever extends Container {
+  private fill: Sprite;
+  private maskG = new Graphics();
+  private title: Text;
+  private t = 0;
+  private bw: number;
+  value = 0;
+  active = false;
+  activeP = 0;
+  constructor(w = 430) {
+    super();
+    this.bw = w;
+    const bg = jungleSlice('barbg', w + 20, 46, 40);
+    bg.position.set(-w / 2 - 10, -23);
+    this.fill = new Sprite(jtex('jungle:barfill'));
+    this.fill.anchor.set(0, 0.5);
+    this.fill.height = 34;
+    this.fill.width = w - 6;
+    this.fill.x = -w / 2 + 3;
+    this.fill.mask = this.maskG;
+    this.title = txt('FEVER', { size: 24, font: 'dela', color: 0xffffff, stroke: 0x3b2412, strokeWidth: 7 });
+    this.addChild(bg, this.fill, this.maskG, this.title);
+  }
+  update(dt: number): void {
+    this.t += dt;
+    const p = this.active ? this.activeP : Math.min(1, this.value / 100);
+    const w = this.bw - 6;
+    this.maskG.clear();
+    if (p > 0.005) this.maskG.roundRect(-this.bw / 2 + 3, -17, w * p, 34, 17).fill(0xffffff);
+    this.fill.tint = this.active ? hsl(this.t * 300) : p >= 1 ? 0xfff27a : 0xffffff;
+    this.title.scale.set(this.active ? 1 + Math.sin(this.t * 14) * 0.08 : 1);
+  }
+}
+
+function hsl(h: number): number {
+  const l = 0.62;
+  const a = Math.min(l, 1 - l);
+  const f = (n: number) => {
+    const k = (n + h / 30) % 12;
+    return l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1));
+  };
+  return (Math.round(f(0) * 255) << 16) | (Math.round(f(8) * 255) << 8) | Math.round(f(4) * 255);
 }

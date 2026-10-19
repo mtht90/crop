@@ -1,4 +1,4 @@
-import { Container, Sprite, Texture, Assets } from 'pixi.js';
+import { Container, Sprite, Texture } from 'pixi.js';
 
 interface Particle {
   s: Sprite;
@@ -34,8 +34,75 @@ export interface BurstOpts {
   spread?: number;
 }
 
+const fxCache = new Map<string, Texture>();
+
+/** Particle textures are drawn procedurally (white, tinted at runtime). */
 export function fx(name: string): Texture {
-  return Assets.get<Texture>(`fx:${name}`) ?? Texture.WHITE;
+  let t = fxCache.get(name);
+  if (t) return t;
+  const size = 128;
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const g = c.getContext('2d')!;
+  const m = size / 2;
+  const radial = (stops: [number, number][]) => {
+    const gr = g.createRadialGradient(m, m, 0, m, m, m);
+    for (const [o, a] of stops) gr.addColorStop(o, `rgba(255,255,255,${a})`);
+    g.fillStyle = gr;
+    g.fillRect(0, 0, size, size);
+  };
+  const sparkle = (arms: number, inner: number) => {
+    g.translate(m, m);
+    g.beginPath();
+    for (let i = 0; i < arms * 2; i++) {
+      const a = (i / (arms * 2)) * Math.PI * 2 - Math.PI / 2;
+      const r = i % 2 === 0 ? m * 0.95 : m * inner;
+      g.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+    }
+    g.closePath();
+    g.fillStyle = '#fff';
+    g.shadowColor = '#fff';
+    g.shadowBlur = 10;
+    g.fill();
+    g.setTransform(1, 0, 0, 1, 0, 0);
+  };
+  switch (name) {
+    case 'star_06':
+    case 'star_04':
+      sparkle(4, 0.16);
+      break;
+    case 'light_03':
+      g.lineWidth = 9;
+      g.strokeStyle = '#fff';
+      g.shadowColor = '#fff';
+      g.shadowBlur = 14;
+      g.beginPath();
+      g.arc(m, m, m * 0.72, 0, Math.PI * 2);
+      g.stroke();
+      break;
+    case 'light_01':
+      radial([[0, 1], [0.25, 0.8], [1, 0]]);
+      break;
+    case 'smoke_04':
+      for (let i = 0; i < 7; i++) {
+        const a = (i / 7) * Math.PI * 2;
+        const gr = g.createRadialGradient(m + Math.cos(a) * 22, m + Math.sin(a) * 22, 0, m + Math.cos(a) * 22, m + Math.sin(a) * 22, 34);
+        gr.addColorStop(0, 'rgba(255,255,255,0.55)');
+        gr.addColorStop(1, 'rgba(255,255,255,0)');
+        g.fillStyle = gr;
+        g.fillRect(0, 0, size, size);
+      }
+      break;
+    case 'flame_04':
+    case 'muzzle_02':
+      sparkle(8, 0.45);
+      break;
+    default:
+      radial([[0, 1], [0.45, 0.7], [1, 0]]);
+  }
+  t = Texture.from(c);
+  fxCache.set(name, t);
+  return t;
 }
 
 /** Lightweight pooled sprite particle system. Coordinates are local to `view`. */
@@ -77,7 +144,8 @@ export class Effects {
       p.drag = o.drag ?? 2.5;
       p.spin = (Math.random() - 0.5) * (o.spin ?? 6);
       const [z0, z1] = o.size ?? [0.08, 0.18];
-      p.s0 = z0 + Math.random() * (z1 - z0);
+      // sizes were tuned for 256px sprites; the procedural textures are 128px
+      p.s0 = (z0 + Math.random() * (z1 - z0)) * 2;
       p.s1 = p.s0 * (o.grow ?? 0.2);
       p.a0 = o.alpha ?? 1;
       p.s.position.set(x, y);

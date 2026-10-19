@@ -87,7 +87,7 @@ export class ResultScene extends Scene {
     this.col.addChild(sub);
     // character
     const ch = CHAR_BY_ID[r.charId];
-    const chara = new Sprite(bigTexture(ch, r.defeated ? 2 : 1, r.defeated ? 'linked' : 'normal'));
+    const chara = new Sprite(bigTexture(ch));
     chara.anchor.set(0.5, 0.6);
     chara.scale.set(0.375);
     chara.position.set(600, top + 110);

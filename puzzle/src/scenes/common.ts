@@ -1,10 +1,9 @@
-import { Container, Graphics, Sprite } from 'pixi.js';
+import { Container, Graphics } from 'pixi.js';
 import gsap from 'gsap';
 import { App } from '../core/App';
 import { Save } from '../core/Save';
 import { Sound } from '../core/Audio';
 import { Button, coinIcon, fmt, panel, popIn, txt } from '../core/UI';
-import { tex } from '../core/Loader';
 import { num, installBitmapFonts } from '../game/Hud';
 
 /** Coins counter shown at the top of menu screens. */
@@ -87,7 +86,7 @@ export function openSettings(parent: Container, onClose?: () => void): void {
     };
     make();
   });
-  const credit = txt('Music: Juhani Junkala (CC0)\nArt / SFX: Kenney.nl (CC0)\nFonts: M PLUS Rounded 1c, Dela Gothic One (OFL)', { size: 20, weight: '500', color: 0x7a6a9a, lineHeight: 30 });
+  const credit = txt('キャラ・ボス: KayKit (CC0)  背景・UI: CraftPix\n効果音: 効果音ラボ  音楽: Juhani Junkala (CC0)\nフォント: M PLUS Rounded 1c, Dela Gothic One (OFL)', { size: 20, weight: '500', color: 0x7a6a9a, lineHeight: 30 });
   credit.y = 210;
   box.addChild(credit);
   const close = new Button({
@@ -104,12 +103,6 @@ export function openSettings(parent: Container, onClose?: () => void): void {
   Sound.play('ui_open', { vol: 0.6 });
 }
 
-export function iconSprite(name: string, size: number): Sprite {
-  const s = new Sprite(tex(`icon:${name}`));
-  s.anchor.set(0.5);
-  s.scale.set(size / s.texture.width);
-  return s;
-}
 
 /** Rarity stars row. */
 export function stars(n: number, size = 28, total = n): Container {

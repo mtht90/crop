@@ -377,13 +377,12 @@ export class GachaScene extends Scene {
     c.addChild(rays);
     const glow = new Graphics().circle(0, 0, 230).fill({ color: r.color, alpha: 0.35 });
     c.addChild(glow);
-    const art = new Sprite(bigTexture(res.def, Math.floor(Math.random() * 5), 'linked'));
+    const art = new Sprite(bigTexture(res.def));
     art.anchor.set(0.5, 0.6);
     art.scale.set(0);
     c.addChild(art);
     gsap.to(art.scale, { x: 0.8, y: 0.8, duration: 0.7, ease: 'elastic.out(1.1,0.45)' });
     gsap.delayedCall(0.8, () => {
-      art.texture = bigTexture(res.def, 0);
     });
     gsap.to(art, { y: -20, duration: 0.8, yoyo: true, repeat: -1, ease: 'sine.inOut', delay: 0.7 });
     Sound.play('powerUp2', { vol: 0.7 });
@@ -484,7 +483,7 @@ export class GachaScene extends Scene {
             f.roundRect(-cw / 2, -ch / 2, cw, ch, 18).stroke({ width: 6, color: r.color });
             if (res.def.rarity === 'SSR') f.roundRect(-cw / 2 + 6, -ch / 2 + 6, cw - 12, ch - 12, 14).stroke({ width: 3, color: 0xffc71f });
             card.addChild(f);
-            const sp = new Sprite(pieceTexture(res.def, i % 5, 'normal'));
+            const sp = new Sprite(pieceTexture(res.def, i % 5));
             sp.anchor.set(0.5, 0.6);
             sp.scale.set(0.5);
             sp.y = -12;

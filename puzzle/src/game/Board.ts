@@ -1,12 +1,11 @@
 import { Container, Graphics, Sprite, Texture } from 'pixi.js';
 import gsap from 'gsap';
 import { ShockwaveFilter } from 'pixi-filters';
-import { ART_CX, ART_CY, ART_R, ART_SIZE, COLORS, bombTexture, pieceTexture, rockTexture } from '../art/PieceArt';
+import { ART_CX, ART_CY, ART_R, ART_SIZE, COLORS, PIECE_ART_SCALE, PIECE_CELL, bombTexture, pieceTexture, rockTexture } from '../art/PieceArt';
 import type { CharDef } from '../data/characters';
 import { Effects } from './Effects';
 import { World, type PBody } from './Physics';
 import { Sound, haptic } from '../core/Audio';
-import { Save } from '../core/Save';
 import { txt } from '../core/UI';
 
 export type PieceKind = 'normal' | 'big' | 'bomb' | 'mega' | 'rock';
@@ -56,19 +55,27 @@ let nextId = 1;
 
 export class Piece {
   readonly id = nextId++;
+  /** Positioned at the body center. */
   readonly view = new Container();
+  /** Rotated to the deformation axis and scaled along it (directional jelly squash). */
+  readonly jelly = new Container();
   readonly sprite = new Sprite();
   state: PieceState = 'live';
+  /** Deformation along `axis`: <0 compressed, >0 stretched. */
   squash = 0;
   squashV = 0;
-  prevVy = 0;
-  lean = 0;
-  blinkT = 1 + Math.random() * 5;
-  blinking = 0;
+  axis = Math.PI / 2;
+  /** Secondary wobble so the piece keeps jiggling after a hit. */
+  wobble = 0;
+  wobbleV = 0;
+  /** Tsum-like tumble: tilts while rolling, springs back upright. */
+  rot = 0;
+  rotV = 0;
   hint = false;
   pulse = Math.random() * 10;
   /** Extra scale driven by link state. */
   linkScale = 1;
+  baseScale = 1;
   appear = 0;
   constructor(
     public kind: PieceKind,
@@ -76,8 +83,14 @@ export class Piece {
     public body: PBody,
     public r: number,
   ) {
-    this.sprite.anchor.set(ART_CX / ART_SIZE, ART_CY / ART_SIZE);
-    this.view.addChild(this.sprite);
+    this.view.addChild(this.jelly);
+    this.jelly.addChild(this.sprite);
+  }
+  /** Pushes the jelly: dir = direction the force comes from (radians), amount in "squash units". */
+  poke(amount: number, dir = Math.PI / 2): void {
+    this.axis = dir;
+    this.squashV -= amount;
+    this.wobbleV += amount * 0.6 * (Math.random() < 0.5 ? -1 : 1);
   }
   get x(): number {
     return this.body.position.x;
@@ -162,20 +175,34 @@ export class Board {
     return 0;
   }
 
-  textureFor(p: Piece, face: 'normal' | 'blink' | 'linked' = 'normal'): Texture {
+  textureFor(p: Piece): Texture {
     if (p.kind === 'rock') return rockTexture();
     if (p.kind === 'bomb' || p.kind === 'mega') return bombTexture(p.kind === 'mega');
-    return pieceTexture(this.def, p.color, face, Save.data.settings.colorAssist);
+    return pieceTexture(this.def, p.color);
+  }
+
+  /** Sets texture, anchor and base scale for the piece's kind. */
+  private dress(p: Piece): void {
+    p.sprite.texture = this.textureFor(p);
+    if (p.kind === 'normal' || p.kind === 'big') {
+      p.sprite.anchor.set(0.5, 0.52);
+      p.baseScale = (p.r * 2 * PIECE_ART_SCALE) / PIECE_CELL;
+    } else {
+      p.sprite.anchor.set(ART_CX / ART_SIZE, ART_CY / ART_SIZE);
+      p.baseScale = p.r / ART_R;
+    }
   }
 
   addPiece(kind: PieceKind, color: number, x: number, y: number, vy = 0): Piece {
-    const r = kind === 'big' ? this.r * BOARD_TUNING.bigScale : kind === 'mega' ? this.r * 1.2 : this.r;
-    const body = this.world.add(x, y, r * 0.98, kind === 'big' ? 3 : 1);
+    const base = kind === 'big' ? this.r * BOARD_TUNING.bigScale : kind === 'mega' ? this.r * 1.2 : this.r;
+    // a little size variance keeps the pile from settling into a grid
+    const r = base * (0.96 + Math.random() * 0.08);
+    const body = this.world.add(x, y, r * 0.97, kind === 'big' ? 3 : 1);
     body.velocity.x = (Math.random() - 0.5) * 36;
     body.velocity.y = vy;
     const p = new Piece(kind, color, body, r);
-    p.sprite.texture = this.textureFor(p);
-    p.sprite.scale.set(r / ART_R);
+    p.rot = (Math.random() - 0.5) * 0.6;
+    this.dress(p);
     this.pieceLayer.addChild(p.view);
     this.pieces.push(p);
     this.syncView(p, 0);
@@ -187,11 +214,10 @@ export class Board {
     const n = this.targetUnits();
     const cols = this.lanes.length;
     for (let i = 0; i < n; i++) {
-      const c = i % cols;
-      const row = Math.floor(i / cols);
-      const x = this.r + c * ((this.w - this.r * 2) / (cols - 1)) + (Math.random() - 0.5) * 6;
-      const y = -this.r - row * this.r * 2.05 - (c % 2) * this.r;
-      this.addPiece('normal', this.pickColor(), x, y, 360);
+      // scattered drop: random x, loosely stacked heights, so the pile settles organically
+      const x = this.r + Math.random() * (this.w - this.r * 2);
+      const y = -this.r - (i / cols) * this.r * 2.2 - Math.random() * this.r * 1.5;
+      this.addPiece('normal', this.pickColor(), x, y, 300 + Math.random() * 200);
     }
   }
 
@@ -209,7 +235,7 @@ export class Board {
       for (let i = 1; i < this.lanes.length; i++) if (this.lanes[i] < this.lanes[lane]) lane = i;
       // prefer lanes over the lowest stacks so the refill is even
       const laneW = this.w / this.lanes.length;
-      const x = laneW * (lane + 0.5) + (Math.random() - 0.5) * (laneW - this.r * 2) * 0.8;
+      const x = laneW * (lane + 0.5) + (Math.random() - 0.5) * laneW * 1.1;
       const y = -this.r * 1.2 - this.lanes[lane] * this.r * 2.1;
       this.lanes[lane] += 1;
       const big = Math.random() < BOARD_TUNING.bigChance * (this.fever ? 2.5 : 1);
@@ -254,57 +280,50 @@ export class Board {
 
   private syncView(p: Piece, dt: number): void {
     const b = p.body;
-    // landing squash: detect sudden loss of downward speed
-    const vy = b.velocity.y;
-    const impact = p.prevVy - vy;
-    if (impact > 130 && p.prevVy > 150) p.squashV -= Math.min(impact / 60, 14) * 0.9;
-    p.prevVy = vy;
-    // spring
-    const k = 260;
-    const c = 14;
-    p.squashV += (-k * p.squash - c * p.squashV) * dt;
-    p.squash += p.squashV * dt;
-    p.squash = Math.max(-0.3, Math.min(0.3, p.squash));
-    p.lean += (Math.max(-0.16, Math.min(0.16, b.velocity.x * 0.0005)) - p.lean) * Math.min(1, dt * 10);
-    p.pulse += dt;
-    const targetLink = p.state === 'linked' ? 1.16 : p.hint ? 1.05 + Math.sin(p.pulse * 8) * 0.05 : 1;
-    p.linkScale += (targetLink - p.linkScale) * Math.min(1, dt * 18);
-    p.appear = Math.min(1, p.appear + dt * 6);
-    const base = p.r / ART_R;
-    let sx = base * p.linkScale * (1 - p.squash * 0.7);
-    let sy = base * p.linkScale * (1 + p.squash);
-    if (p.state === 'linked') {
-      const w = Math.sin(p.pulse * 16) * 0.025;
-      sx *= 1 + w;
-      sy *= 1 - w;
-    } else if (p.kind === 'bomb' || p.kind === 'mega') {
-      const w = Math.sin(p.pulse * 10) * 0.04;
-      sx *= 1 + w;
-      sy *= 1 + w;
-    } else {
-      // idle breathing keeps the board alive
-      const w = Math.sin(p.pulse * 2.4 + p.id) * 0.012;
-      sx *= 1 + w;
-      sy *= 1 - w;
-    }
-    p.sprite.scale.set(sx, sy);
-    // keep the bottom planted when squashing
-    p.view.position.set(b.position.x, b.position.y + p.squash * p.r * -0.55);
-    p.view.rotation = p.lean;
-    // blink
-    if (p.state === 'live' && (p.kind === 'normal' || p.kind === 'big') && dt > 0) {
-      if (p.blinking > 0) {
-        p.blinking -= dt;
-        if (p.blinking <= 0) p.sprite.texture = this.textureFor(p);
-      } else {
-        p.blinkT -= dt;
-        if (p.blinkT <= 0) {
-          p.blinkT = 2 + Math.random() * 6;
-          p.blinking = 0.13;
-          p.sprite.texture = this.textureFor(p, 'blink');
-        }
+    // jelly: every contact pushes the piece in along the contact normal
+    if (b.impact > 90 && dt > 0) {
+      const k = Math.min(b.impact / 900, 1.2);
+      if (k * 9 > Math.abs(p.squashV) * 0.6) {
+        p.axis = Math.atan2(b.ny, b.nx);
+        p.squashV -= k * 9;
+        p.wobbleV += k * 5 * (b.nx >= 0 ? 1 : -1);
       }
     }
+    // springs (soft, under-damped = puni-puni)
+    p.squashV += (-300 * p.squash - 9 * p.squashV) * dt;
+    p.squash = Math.max(-0.32, Math.min(0.3, p.squash + p.squashV * dt));
+    p.wobbleV += (-420 * p.wobble - 7 * p.wobbleV) * dt;
+    p.wobble = Math.max(-0.12, Math.min(0.12, p.wobble + p.wobbleV * dt));
+    // tumble: rolling spins the piece, a soft spring stands it back up
+    p.rotV += (b.velocity.x / p.r) * dt * 0.9;
+    p.rotV += (-p.rot * 14 - p.rotV * 4.5) * dt;
+    p.rot = Math.max(-0.55, Math.min(0.55, p.rot + p.rotV * dt));
+    p.pulse += dt;
+    const targetLink = p.state === 'linked' ? 1.14 : p.hint ? 1.05 + Math.sin(p.pulse * 8) * 0.05 : 1;
+    p.linkScale += (targetLink - p.linkScale) * Math.min(1, dt * 18);
+    p.appear = Math.min(1, p.appear + dt * 6);
+    let along = 1 + p.squash;
+    let across = 1 - p.squash * 0.75;
+    if (p.state === 'linked') {
+      const w = Math.sin(p.pulse * 18) * 0.04;
+      along += w;
+      across -= w;
+    } else if (p.kind === 'bomb' || p.kind === 'mega') {
+      const w = Math.sin(p.pulse * 10) * 0.04;
+      along += w;
+      across += w;
+    } else {
+      // idle breathing keeps the board alive
+      const w = Math.sin(p.pulse * 2.4 + p.id) * 0.015;
+      along += w;
+      across -= w;
+    }
+    const s = p.baseScale * p.linkScale;
+    p.jelly.rotation = p.axis;
+    p.jelly.scale.set(s * along, s * across * (1 + p.wobble));
+    p.sprite.rotation = -p.axis + p.rot;
+    // when squashed against the floor the piece sinks a little instead of floating
+    p.view.position.set(b.position.x, b.position.y - Math.sin(p.axis) * p.squash * p.r * 0.35);
   }
 
   // ---------------------------------------------------------------- input
@@ -339,7 +358,7 @@ export class Board {
     }
     if (p.kind === 'rock') {
       Sound.play('rock', { vol: 0.5, rate: 1.3 });
-      p.squashV -= 6;
+      p.poke(7);
       gsap.fromTo(p.view, { x: p.view.x - 6 }, { x: p.view.x, duration: 0.25, ease: 'elastic.out(1.5,0.3)' });
       return;
     }
@@ -411,8 +430,7 @@ export class Board {
 
   private link(p: Piece): void {
     p.state = 'linked';
-    p.sprite.texture = this.textureFor(p, 'linked');
-    p.squashV += 5;
+    p.poke(-6);
     const i = this.chain.length - 1;
     Sound.link(i, (p.x / this.w - 0.5) * 0.6);
     haptic(5);
@@ -426,8 +444,7 @@ export class Board {
 
   private unlink(p: Piece, quiet = false): void {
     if (p.state === 'linked') p.state = 'live';
-    p.sprite.texture = this.textureFor(p);
-    p.squashV -= 3;
+    p.poke(4);
     if (!quiet) {
       Sound.unlink();
       const eff = this.chain.reduce((a, q) => a + q.weight, 0);
@@ -651,8 +668,8 @@ export class Board {
       gsap.delayedCall(i * 0.05, () => {
         if (p.state === 'dead') return;
         p.color = color;
-        p.sprite.texture = this.textureFor(p);
-        p.squashV += 6;
+        this.dress(p);
+        p.poke(-7);
         this.overFx.ring(p.x, p.y, COLORS[color].glow, 0.6, 0.35);
         this.overFx.burst(p.x, p.y, { count: 6, tex: 'star_06', tint: 0xffffff, add: true, gravity: 0, speed: [60, 200], size: [0.06, 0.12] });
         Sound.link(i);
@@ -691,8 +708,8 @@ export class Board {
     p.state = 'live';
     p.kind = 'rock';
     p.color = -1;
-    p.sprite.texture = rockTexture();
-    p.squashV -= 8;
+    this.dress(p);
+    p.poke(9);
     this.fx.burst(p.x, p.y, { count: 10, tex: 'smoke_04', tint: 0x9aa0b8, speed: [40, 180], size: [0.12, 0.25], grow: 1.6, gravity: -60, life: [0.4, 0.8] });
     Sound.play('rock', { vol: 0.6 });
   }

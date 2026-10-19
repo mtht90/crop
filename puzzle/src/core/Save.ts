@@ -1,4 +1,4 @@
-const KEY = 'punitto-battle-save-v1';
+const KEY = 'punitto-battle-save-v2';
 
 export interface OwnedChar {
   lv: number;
@@ -24,8 +24,8 @@ export interface SaveData {
 function defaults(): SaveData {
   return {
     coins: 1000,
-    owned: { punimaru: { lv: 1, count: 1 } },
-    selected: 'punimaru',
+    owned: { kh_a: { lv: 1, count: 1 } },
+    selected: 'kh_a',
     bossLv: 1,
     best: 0,
     plays: 0,

@@ -13,49 +13,34 @@ function dotTexture(): Texture {
   return dotTex;
 }
 
-/** Parallax sky + scenery backdrop with drifting clouds. */
-export class Backdrop extends Container {
-  private bg: Sprite;
-  private clouds: { s: Sprite; v: number }[] = [];
+/** Fairy-Tale (CraftPix) parallax: background plus 7 layers, 7 = farthest, 1 = nearest. */
+export class FairyBackdrop extends Container {
+  private layers: Sprite[] = [];
+  private t = 0;
   private w = 720;
-  readonly shade = new Graphics();
-
-  constructor(bgName: string) {
+  constructor(set: number) {
     super();
-    this.bg = new Sprite(tex(`bg:${bgName}`));
-    this.bg.anchor.set(0.5, 1);
-    this.addChild(this.bg);
-    const names = ['cloud1', 'cloud3', 'cloud5', 'cloud7'];
-    for (let i = 0; i < 5; i++) {
-      const s = new Sprite(tex(`deco:${names[i % names.length]}`));
-      s.anchor.set(0.5);
-      s.alpha = 0.85;
-      s.scale.set(0.35 + Math.random() * 0.35);
-      this.clouds.push({ s, v: 8 + Math.random() * 16 });
+    for (const l of ['background', 7, 6, 5, 4, 3, 2, 1]) {
+      const s = new Sprite(tex(`fairy:${set}_${l}`));
+      s.anchor.set(0.5, 1);
+      this.layers.push(s);
       this.addChild(s);
     }
-    this.addChild(this.shade);
   }
-
   layout(w: number, h: number): void {
     this.w = w;
-    const s = Math.max(w / this.bg.texture.width, (h * 1.35) / this.bg.texture.height);
-    this.bg.scale.set(s);
-    // keep the horizon around the bottom third of the stage
-    this.bg.position.set(w / 2, h + this.bg.texture.height * s * 0.18);
-    this.clouds.forEach((c, i) => {
-      c.s.x = (i / this.clouds.length) * w + Math.random() * 80;
-      c.s.y = 60 + (i % 3) * 55 + Math.random() * 20;
-    });
-    this.shade.clear();
-    this.shade.rect(0, 0, w, h).fill({ color: 0x000000, alpha: 0 });
-  }
-
-  update(dt: number, speed = 1): void {
-    for (const c of this.clouds) {
-      c.s.x += c.v * dt * speed;
-      if (c.s.x - c.s.width / 2 > this.w) c.s.x = -c.s.width / 2;
+    for (const s of this.layers) {
+      const k = Math.max((w * 1.08) / s.texture.width, (h * 1.05) / s.texture.height);
+      s.scale.set(k);
+      s.position.set(w / 2, h + 6);
     }
+  }
+  update(dt: number, speed = 1): void {
+    this.t += dt * speed;
+    this.layers.forEach((s, i) => {
+      // nearer layers sway further for a gentle sense of depth
+      s.x = this.w / 2 + Math.sin(this.t * 0.25) * i * 2.2;
+    });
   }
 }
 

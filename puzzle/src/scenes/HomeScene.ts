@@ -4,8 +4,7 @@ import { App } from '../core/App';
 import { Scene, Scenes } from '../core/Scene';
 import { Save } from '../core/Save';
 import { Sound, haptic } from '../core/Audio';
-import { Button, fmt, grad, panel, popIn, txt } from '../core/UI';
-import { tex } from '../core/Loader';
+import { Button, fmt, grad, iconButton, panel, popIn, txt } from '../core/UI';
 import { MenuBackground } from '../game/Backdrop';
 import { BossView } from '../game/BossView';
 import { Effects } from '../game/Effects';
@@ -38,7 +37,7 @@ export class HomeScene extends Scene {
 
     // floating background pieces
     for (let i = 0; i < 9; i++) {
-      const s = new Sprite(pieceTexture(def, i % 5, 'normal'));
+      const s = new Sprite(pieceTexture(def, i % 5));
       s.anchor.set(0.5);
       s.scale.set(0.25 + Math.random() * 0.25);
       s.alpha = 0.22;
@@ -50,7 +49,7 @@ export class HomeScene extends Scene {
     // top bar
     const coins = new CoinCounter();
     coins.position.set(40, top + 40);
-    const settings = new Button({ w: 76, h: 76, color: 'purple', icon: tex('icon:gear'), iconScale: 0.55, onTap: () => openSettings(this.col) });
+    const settings = iconButton('settings', 80, () => openSettings(this.col));
     settings.position.set(650, top + 38);
     const best = txt(`ベスト ${fmt(Save.data.best)}`, { size: 24, stroke: 0x2a1630, strokeWidth: 6 });
     best.position.set(430, top + 38);
@@ -92,7 +91,7 @@ export class HomeScene extends Scene {
     pedestal.ellipse(0, 140, 200, 44).fill(grad([[0, '#ffffff'], [1, '#e2d4ff']]));
     pedestal.ellipse(0, 140, 200, 44).stroke({ width: 5, color: 0x8a6cff });
     this.hero.addChild(pedestal);
-    this.heroSprite = new Sprite(bigTexture(def, 0));
+    this.heroSprite = new Sprite(bigTexture(def));
     this.heroSprite.anchor.set(0.5, 0.75);
     this.heroSprite.scale.set(0.625);
     this.heroSprite.y = 150;
@@ -152,9 +151,9 @@ export class HomeScene extends Scene {
   private poke(): void {
     this.colorIdx = (this.colorIdx + 1) % 5;
     const def = CHAR_BY_ID[Save.data.selected] ?? CHARACTERS[0];
-    this.heroSprite.texture = bigTexture(def, this.colorIdx, 'linked');
+    this.heroSprite.texture = bigTexture(def, this.colorIdx);
     gsap.delayedCall(0.5, () => {
-      this.heroSprite.texture = bigTexture(def, this.colorIdx);
+      this.heroSprite.texture = bigTexture(def);
     });
     gsap.killTweensOf(this.heroSprite.scale);
     this.heroSprite.scale.set(0.75, 0.5);

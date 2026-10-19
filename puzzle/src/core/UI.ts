@@ -1,4 +1,5 @@
-import { Container, FillGradient, Graphics, Sprite, Text, TextStyle, Texture, type TextStyleOptions } from 'pixi.js';
+import { Container, FillGradient, Graphics, NineSliceSprite, Sprite, Text, TextStyle, Texture, type TextStyleOptions } from 'pixi.js';
+import { tex } from './Loader';
 import gsap from 'gsap';
 import { Sound, haptic } from './Audio';
 
@@ -91,9 +92,30 @@ export interface ButtonOpts {
   onTap: () => void;
 }
 
-/** Candy-style button with squash feedback on press. */
+const SKIN: Record<BtnColor, [string, number, number]> = {
+  // jungle texture, nine-slice inset, label stroke
+  pink: ['btn_red', 60, 0x5a0a0a],
+  orange: ['btn_red', 60, 0x5a0a0a],
+  yellow: ['btn_yellow', 44, 0x6a3a00],
+  green: ['btn_green', 40, 0x1e3a08],
+  blue: ['btn_green', 40, 0x1e3a08],
+  purple: ['btn_green', 40, 0x1e3a08],
+  grey: ['plank', 34, 0x2a1608],
+};
+
+/** Jungle GUI (CraftPix) button art stretched with a nine-slice. */
+function buttonSkin(w: number, h: number, color: BtnColor): Container {
+  const [name, inset] = SKIN[color];
+  const s = new NineSliceSprite({ texture: tex(`jungle:${name}`), leftWidth: inset, rightWidth: inset, topHeight: inset, bottomHeight: inset });
+  s.width = w;
+  s.height = h + 8;
+  s.position.set(-w / 2, -h / 2);
+  return s;
+}
+
+/** Button with squash feedback on press. */
 export class Button extends Container {
-  readonly bg = new Graphics();
+  readonly bg = new Container();
   readonly face = new Container();
   caption?: Text;
   private _enabled = true;
@@ -103,7 +125,7 @@ export class Button extends Container {
     super();
     this.addChild(this.face);
     this.face.addChild(this.bg);
-    drawPill(this.bg, o.w, o.h, o.color ?? 'pink');
+    this.bg.addChild(buttonSkin(o.w, o.h, o.color ?? 'pink'));
     let lx = 0;
     if (o.icon) {
       const ic = new Sprite(o.icon);
@@ -116,7 +138,7 @@ export class Button extends Container {
       if (o.label) lx = o.h * 0.25;
     }
     if (o.label) {
-      const [, , , line] = BTN[o.color ?? 'pink'];
+      const line = SKIN[o.color ?? 'pink'][2];
       this.caption = txt(o.label, { size: o.size ?? Math.min(40, o.h * 0.4), stroke: line, strokeWidth: 6 });
       this.caption.x = lx;
       this.caption.y = o.sub ? -o.h * 0.14 : -2;
@@ -197,4 +219,25 @@ export function coinIcon(r = 18): Graphics {
   g.roundRect(-r * 0.12, -r * 0.38, r * 0.24, r * 0.76, r * 0.1).fill(0xd98a00);
   g.ellipse(-r * 0.35, -r * 0.4, r * 0.25, r * 0.14).fill({ color: 0xffffff, alpha: 0.7 });
   return g;
+}
+
+/** A Jungle GUI round icon button (the art already includes the button body). */
+export function iconButton(name: string, size: number, onTap: () => void): Container {
+  const c = new Container();
+  const s = new Sprite(tex(`jungle:${name}`));
+  s.anchor.set(0.5);
+  s.scale.set(size / s.texture.width);
+  c.addChild(s);
+  c.eventMode = 'static';
+  c.cursor = 'pointer';
+  c.on('pointerdown', () => gsap.to(s.scale, { x: (size / s.texture.width) * 1.08, y: (size / s.texture.width) * 0.9, duration: 0.08 }));
+  const up = () => gsap.to(s.scale, { x: size / s.texture.width, y: size / s.texture.width, duration: 0.45, ease: 'elastic.out(1.2,0.4)' });
+  c.on('pointerupoutside', up);
+  c.on('pointerup', () => {
+    up();
+    Sound.play('ui_tap', { vol: 0.8 });
+    haptic(6);
+    onTap();
+  });
+  return c;
 }
