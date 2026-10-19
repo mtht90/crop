@@ -24,6 +24,38 @@ interface Cap {
   free: boolean;
 }
 
+/**
+ * The model ships as glTF JSON with the binary embedded as base64 (the artifact host doesn't
+ * serve .glb). GLTFLoader would fetch() that data: URI, which strict CSPs block, so the JSON is
+ * repacked into a GLB in memory and parsed directly.
+ */
+async function fetchGlb(url: string): Promise<ArrayBuffer> {
+  const json = await (await fetch(url)).json();
+  const uri: string = json.buffers[0].uri;
+  const bin = Uint8Array.from(atob(uri.slice(uri.indexOf(',') + 1)), (c) => c.charCodeAt(0));
+  delete json.buffers[0].uri;
+  json.buffers[0].byteLength = bin.length;
+  let js = new TextEncoder().encode(JSON.stringify(json));
+  const pad = (n: number) => (4 - (n % 4)) % 4;
+  const jsPadded = new Uint8Array(js.length + pad(js.length)).fill(0x20);
+  jsPadded.set(js);
+  js = jsPadded;
+  const binLen = bin.length + pad(bin.length);
+  const out = new ArrayBuffer(12 + 8 + js.length + 8 + binLen);
+  const v = new DataView(out);
+  v.setUint32(0, 0x46546c67, true);
+  v.setUint32(4, 2, true);
+  v.setUint32(8, out.byteLength, true);
+  v.setUint32(12, js.length, true);
+  v.setUint32(16, 0x4e4f534a, true);
+  new Uint8Array(out, 20, js.length).set(js);
+  const o = 20 + js.length;
+  v.setUint32(o, binLen, true);
+  v.setUint32(o + 4, 0x004e4942, true);
+  new Uint8Array(out, o + 8, bin.length).set(bin);
+  return out;
+}
+
 export class Machine3D {
   readonly canvas: HTMLCanvasElement;
   private renderer: THREE.WebGLRenderer;
@@ -65,6 +97,7 @@ export class Machine3D {
       await m.build(url);
     } catch (e) {
       console.warn('3D gacha unavailable', e);
+      (window as unknown as { __gacha3dError?: string }).__gacha3dError = String(e);
       m.destroy();
       return null;
     }
@@ -86,7 +119,7 @@ export class Machine3D {
     this.flash.position.set(0, -0.2, 1.6);
     this.scene.add(this.flash);
 
-    const gltf = await new GLTFLoader().loadAsync(url);
+    const gltf = await new GLTFLoader().parseAsync(await fetchGlb(url), '');
     const mats: Record<string, THREE.Material> = {
       body: new THREE.MeshPhysicalMaterial({ color: 0xff3d86, roughness: 0.3, clearcoat: 0.8, clearcoatRoughness: 0.15 }),
       lid: new THREE.MeshStandardMaterial({ color: 0xffc94a, roughness: 0.22, metalness: 0.75 }),

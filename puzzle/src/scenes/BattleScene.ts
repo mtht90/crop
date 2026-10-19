@@ -20,8 +20,9 @@ import { battleTrack } from '../data/music';
 
 export const BATTLE_TIME = 90;
 /** Diameter of the round board in design px. */
-const BOWL_D = 690;
-const SCORE_SCALE = 0.5;
+const BOWL_D = 696;
+/** Tuned so a normal round lands around 100k–200k (rank D). */
+const SCORE_SCALE = 3;
 const COMBO_WINDOW = 2.4;
 const FEVER_TIME = 7.5;
 
@@ -170,13 +171,12 @@ export class BattleScene extends Scene {
     const H = App.H;
     const top = App.safeTop;
     // round bowl pinned to the bottom; the boss stage takes whatever is left above it
-    // a compact boss stage on top; the bowl stretches into a tall stadium with whatever is left
-    this.stageH = Math.round(Math.max(300, Math.min(400, H * 0.25)) + top * 0.6);
-    this.boardY = this.stageH + 112;
-    const boardH = Math.round(H - App.safeBottom - 30 - this.boardY);
-    const D = Math.min(BOWL_D, boardH);
+    // a round bowl as wide as the screen allows, pinned to the bottom; the boss stage gets the rest
+    const D = Math.min(BOWL_D, Math.round(H - App.safeBottom - 30 - (top + 412)));
+    this.boardY = Math.round(H - App.safeBottom - 30 - D);
+    this.stageH = this.boardY - 112;
     this.boardX = 360 - D / 2;
-    this.board = new Board(this.def, D, Math.max(D, boardH), {
+    this.board = new Board(this.def, D, D, {
       onResolve: (pops, cause, meta) => this.onResolve(pops, cause, meta),
       onPiecePop: (p, i, cause, token) => this.onPiecePop(p, i, cause, token),
       onChainChange: (len, eff) => this.onChainChange(len, eff),
