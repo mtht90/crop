@@ -56,6 +56,8 @@ export interface SaveData {
   lifeAt: number;
   /** Items paid for on the home screen, used by the next round. */
   pendingItems: ItemId[];
+  /** Online ranking: anonymous player id, nickname, local weekly best, weeks already rewarded. */
+  rank: { id: string; name: string; best: Record<string, number>; claimed: string[] };
   /** Login bonus: last day claimed and the streak (1–7). */
   login: { day: string; streak: number };
   /** Lifetime counters for achievements. */
@@ -87,6 +89,7 @@ function defaults(): SaveData {
     lives: 5,
     lifeAt: 0,
     pendingItems: [],
+    rank: { id: '', name: '', best: {}, claimed: [] },
     login: { day: '', streak: 0 },
     stats: {},
     daily: { date: '', ids: [], stats: {}, claimed: [], bonus: false },

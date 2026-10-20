@@ -21,6 +21,8 @@ import { GIMMICKS, gimmicksFor, type GimmickId } from '../data/gimmicks';
 import { currentFrame, currentLine, currentWallpaper, frameTextures, loadWallpapers, wallpaperAlias } from '../data/cosmetics';
 import { recordRound } from '../data/missions';
 import type { Stats } from '../core/Save';
+import { Dev, devFab } from '../core/Dev';
+import { submitScore } from '../core/Ranking';
 import { ITEM_BY_ID, rollCoinBoost, spendLife, type ItemId } from '../data/play';
 import { Assets, type Texture as PTexture } from 'pixi.js';
 import { loadObstacleArt, obstacleTexture, type ObstacleArt } from '../art/PieceArt';
@@ -34,7 +36,7 @@ const BOWL_D = 696;
 /** Tuned so a normal round lands around 100k–200k (rank D). */
 const SCORE_SCALE = 3;
 const COMBO_WINDOW = 2.4;
-const FEVER_TIME = 7.5;
+const FEVER_TIME = 6.5;
 
 type Phase = 'intro' | 'play' | 'cutin' | 'timeup' | 'end';
 
@@ -159,6 +161,8 @@ export class BattleScene extends Scene {
   private quakeT = 0;
   /** Coins picked up during the round. */
   private coinsEarned = 0;
+  private devClockStopped = false;
+  private removeFab = (): void => {};
   private fiveToFour = false;
   private coinLabel = txt('0', { size: 26, color: 0xffe36f, stroke: 0x2a1630, strokeWidth: 6, anchor: [1, 0.5] });
   /** Counters for missions. */
@@ -286,6 +290,23 @@ export class BattleScene extends Scene {
     this.layoutStage();
     this.bindInput();
     document.addEventListener('visibilitychange', this.onVis);
+    // developer mode hooks (obstruction tester, clock)
+    if (Dev.on) {
+      this.removeFab = devFab();
+      Dev.battle = {
+        gimmick: (id) => this.applyGimmick(id),
+        setTime: (sec) => (this.timeLeft = Math.max(1, sec)),
+        toggleClock: () => (this.devClockStopped = !this.devClockStopped),
+        fillGauges: () => {
+          this.skillCharge = this.chargeNeed;
+          this.fever = 99.9;
+        },
+        win: () => {
+          this.committed = Math.max(this.committed, this.hp);
+          this.landed = Math.max(this.landed, this.hp);
+        },
+      };
+    }
     this.track = battleTrack();
     Sound.music(this.track, 0.6);
     Sound.musicFilter(20000, 0.01);
@@ -404,7 +425,7 @@ export class BattleScene extends Scene {
     const playing = this.phase === 'play';
     if (playing) {
       // the clock stops during fever
-      if (!this.feverOn) this.timeLeft -= dt * (this.effects.has('timeFast') ? 2 : 1);
+      if (!this.feverOn && !this.devClockStopped) this.timeLeft -= dt * (this.effects.has('timeFast') ? 2 : 1);
       const sec = Math.ceil(this.timeLeft);
       if (sec !== this.lastSecond) {
         this.lastSecond = sec;
@@ -562,6 +583,8 @@ export class BattleScene extends Scene {
     const canvas = App.pixi.canvas;
     for (const [n, h] of this.domHandlers) (n === 'pointerdown' ? canvas : window).removeEventListener(n, h);
     document.removeEventListener('visibilitychange', this.onVis);
+    this.removeFab();
+    Dev.battle = null;
     gsap.globalTimeline.resume();
     this.board.destroy();
     void unloadFairy(this.bossDef.bg);
@@ -631,7 +654,7 @@ export class BattleScene extends Scene {
     if (cause !== 'skill' && !this.feverOn && this.tapT <= 0) this.skillCharge = Math.min(this.chargeNeed, this.skillCharge + weight);
     if (!this.feverOn && cause !== 'rock') {
       // fever stops the clock; ~200 pieces per fever gives a normal round 2–3 fevers
-      this.fever = Math.min(100, this.fever + weight * (cause === 'skill' ? 0.25 : 0.65));
+      this.fever = Math.min(100, this.fever + weight * (cause === 'skill' ? 0.28 : 0.72));
       if (this.fever >= 100 && this.phase === 'play') this.startFever();
     }
     // callouts
@@ -1742,6 +1765,7 @@ export class BattleScene extends Scene {
     d.tutorialDone = true;
     const stats: Stats = { plays: 1, defeats: defeated ? 1 : 0, ...this.round, fevers: this.feverCount, skills: this.skillUses, maxChain: this.maxChain, maxCombo: this.maxCombo };
     recordRound(stats);
+    void submitScore(score, this.def.id);
     Save.write();
     Scenes.go(() => new ResultScene(result));
   }

@@ -13,6 +13,7 @@ import { GachaScene } from './scenes/GachaScene';
 import { CharaScene } from './scenes/CharaScene';
 import { MissionScene } from './scenes/MissionScene';
 import { DressScene } from './scenes/DressScene';
+import { RankingScene } from './scenes/RankingScene';
 
 async function loadFonts(): Promise<void> {
   const sample = 'ぷにっとバトル討伐0123456789ABC';
@@ -83,6 +84,7 @@ async function boot(): Promise<void> {
     chara: () => new CharaScene(),
     mission: () => new MissionScene(),
     dress: () => new DressScene(),
+    ranking: () => new RankingScene(),
   };
   Scenes.go(scenes[start ?? ''] ?? (() => new TitleScene()), true);
   // handle for automated playtests

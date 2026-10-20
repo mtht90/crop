@@ -9,6 +9,11 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "22"
+      # online ranking (Supabase → Project Settings → API); set these in the Render dashboard
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_SUPABASE_ANON_KEY
+        sync: false
     headers:
       # hashed bundles never change; everything else is revalidated daily
       - path: /assets/*.js

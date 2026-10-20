@@ -22,6 +22,8 @@ import { ITEMS, MAX_LIVES, fmtTime, lives, nextLifeIn, spendLife, type ItemId } 
 import { tex } from '../core/Loader';
 import { CoinCounter, loginPopup, openSettings, rewardPopup, stars } from './common';
 import { claimLogin } from '../data/login';
+import { claimWeekly } from '../core/Ranking';
+import { RankingScene } from './RankingScene';
 import { COST_SINGLE } from '../data/gacha';
 
 export class HomeScene extends Scene {
@@ -154,7 +156,10 @@ export class HomeScene extends Scene {
     mission.position.set(100, heroY - 40);
     const dress = new Button({ w: 170, h: 84, label: 'きせかえ', color: 'green', size: 28, onTap: () => Scenes.go(() => new DressScene()) });
     dress.position.set(620, heroY - 40);
-    this.col.addChild(mission, dress);
+    const ranking = new Button({ w: 170, h: 84, label: 'ランキング', color: 'purple', size: 24, onTap: () => Scenes.go(() => new RankingScene()) });
+    ranking.position.set(100, heroY + 60);
+    this.col.addChild(mission, dress, ranking);
+    popIn(ranking, 0.3, 0.6);
     popIn(mission, 0.2, 0.6);
     popIn(dress, 0.25, 0.6);
     const ready = claimableCount();
@@ -195,6 +200,12 @@ export class HomeScene extends Scene {
       notice();
     });
     else notice();
+    // last week's ranking reward (async; shows once per week)
+    void claimWeekly().then((res) => {
+      if (!res || this.view.destroyed) return;
+      this.coinCounter?.refresh();
+      rewardPopup(this.col, 'しゅうかんランキング', [`せんしゅうは ${res.rank}位 / ${res.total}人！`, ...res.got]);
+    });
   }
 
   private cardBody = new Container();

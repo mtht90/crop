@@ -168,9 +168,9 @@ export function charAtk(c: CharDef, g: Growth): number {
  */
 export const COIN_SKILL: Record<Rarity, { perPiece: number; flat: number }> = {
   N: { perPiece: 0, flat: 0 },
-  R: { perPiece: 2, flat: 60 },
-  SR: { perPiece: 9, flat: 300 },
-  SSR: { perPiece: 14, flat: 600 },
+  R: { perPiece: 1.6, flat: 50 },
+  SR: { perPiece: 7.2, flat: 240 },
+  SSR: { perPiece: 11.2, flat: 480 },
 };
 
 /** Coins dropped by an n-chain: none below 4, then fast growth (4→1, 10→17, 30→195). */
@@ -180,8 +180,8 @@ export function chainCoins(n: number): number {
   return Math.round(0.75 * k + 0.24 * k * k);
 }
 
-/** Skills are meant to be a highlight, not a spam button: every gauge is 3x the listed charge. */
-export const CHARGE_SCALE = 3;
+/** Skills are meant to be a highlight, not a spam button: every gauge is 2.4x the listed charge. */
+export const CHARGE_SCALE = 2.4;
 
 /** Pieces needed to charge the skill (each skill level shaves 5% off). */
 export function charCharge(c: CharDef, g: Growth): number {
@@ -194,7 +194,8 @@ export function skillAt(c: CharDef, sl: number): Skill {
   const s = c.skill;
   return {
     ...s,
-    power: s.power * (1 + k * 0.1),
+    // gauges fill 20% faster than they used to, so each use hits a bit softer
+    power: s.power * 0.8 * (1 + k * 0.1),
     amount: s.amount && (s.kind === 'bombs' || s.kind === 'circle' ? s.amount + Math.floor(k / 2) : Math.round(s.amount * (1 + k * 0.1))),
     size: s.size && s.size * (1 + k * 0.05),
     dur: s.dur && s.dur + k * 0.6,

@@ -4,6 +4,7 @@ import gsap from 'gsap';
 import { App } from '../core/App';
 import { Save, exportSave, importSave } from '../core/Save';
 import { LOGIN_REWARDS } from '../data/login';
+import { openDevLogin } from '../core/Dev';
 import { Sound } from '../core/Audio';
 import { Button, coinIcon, fmt, panel, popIn, txt } from '../core/UI';
 import { jungle, num, installBitmapFonts } from '../game/Hud';
@@ -112,9 +113,11 @@ export function openSettings(parent: Container, onClose?: () => void): void {
   const credit = txt('キャラ・ボス: KayKit (CC0)  背景・UI: CraftPix\n効果音: 効果音ラボ  音楽: 魔王魂 (CC BY 4.0)\nガチャ筐体: gumball machine / myles_683 (CC BY 4.0)\nフォント: めもかっち / やっちゃん (SIL OFL 1.1)', { size: 20, weight: '500', color: 0x7a6a9a, lineHeight: 30 });
   credit.y = 322;
   box.addChild(credit);
-  const backup = new Button({ w: 320, h: 64, label: 'データのひきつぎ', color: 'green', size: 24, onTap: () => openBackup() });
-  backup.y = 228;
-  box.addChild(backup);
+  const backup = new Button({ w: 300, h: 64, label: 'データのひきつぎ', color: 'green', size: 24, onTap: () => openBackup() });
+  backup.position.set(-90, 228);
+  const dev = new Button({ w: 170, h: 64, label: 'かいはつ', color: 'grey', size: 22, onTap: () => openDevLogin() });
+  dev.position.set(170, 228);
+  box.addChild(backup, dev);
   const close = new Button({
     w: 300, h: 90, label: 'とじる', color: 'pink', sound: 'ui_back', onTap: () => {
       ov.destroy({ children: true });

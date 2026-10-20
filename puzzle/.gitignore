@@ -4,3 +4,4 @@ fonts-src/*.ttf
 fonts-src/.glyphs.txt
 gim/
 *.log
+.env.local

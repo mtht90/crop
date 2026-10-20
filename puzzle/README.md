@@ -29,6 +29,22 @@ npm run fonts    # ゲーム内の日本語を追加・変更したらフォン�
 3. `render.yaml` の内容（`puzzle/` で `npm ci && npm run build`、`dist/` を公開）で自動作成されます
 以後はブランチに push するたびに自動で再デプロイされます。
 
+## オンラインランキング（Supabase）
+1. https://supabase.com で無料プロジェクトを作成
+2. 「SQL Editor」で `puzzle/supabase/ranking.sql` の中身を貼り付けて Run
+3. 「Project Settings → API」の **Project URL** と **anon public key** を、Render の環境変数
+   `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` に設定して再デプロイ
+   （ローカルなら `puzzle/.env.local` に同じ2行を書く）
+- 週は日本時間の月曜0時に切り替わり、各プレイヤーの週ベストだけが残ります
+- 書き込みは `submit_score()` 経由のみ（あり得ない点数・30秒以内の連続送信は拒否）
+- 未設定のときはランキング画面に「準備中」と出るだけで、ゲームは普通に遊べます
+
+## 開発者モード
+設定 →「かいはつ」→ パスワード。コードにはソルト付き SHA-256 だけを入れています
+（`src/core/Dev.ts` の `HASH`）。パスワードを変えるときは
+`node -e "console.log(require('crypto').createHash('sha256').update('punitto-dev:'+'新しいパスワード').digest('hex'))"`
+の結果で `HASH` を置き換えてください。
+
 ## 構成
 - PixiJS v8 (WebGL) + GSAP、物理は円ピース専用の自作PBDソルバー（`src/game/Physics.ts`）
 - 効果音は Web Audio：なぞるたびペンタトニックで音階が上がる合成音＋効果音ラボの素材、リバーブ/ダッキング付き
