@@ -112,6 +112,7 @@ export function openSettings(parent: Container, onClose?: () => void): void {
   makeMusic();
   const credit = txt('キャラ・ボス: KayKit (CC0)  背景・UI: CraftPix\n効果音: 効果音ラボ  音楽: 魔王魂 (CC BY 4.0)\nガチャ筐体: gumball machine / myles_683 (CC BY 4.0)\nフォント: めもかっち / やっちゃん (SIL OFL 1.1)', { size: 20, weight: '500', color: 0x7a6a9a, lineHeight: 30 });
   credit.y = 322;
+  if (credit.width > 540) credit.scale.set(540 / credit.width);
   box.addChild(credit);
   const backup = new Button({ w: 300, h: 64, label: 'データのひきつぎ', color: 'green', size: 24, onTap: () => openBackup() });
   backup.position.set(-90, 228);
@@ -269,6 +270,8 @@ export function rewardPopup(parent: Container, title: string, lines: string[], o
   const box = new Container();
   box.position.set(360, App.H * 0.45);
   const body = txt(lines.join('\n'), { size: 32, color: 0x4a2f7a, lineHeight: 46 });
+  // long lines shrink to fit the box instead of running past its edges
+  if (body.width > 500) body.scale.set(500 / body.width);
   const h = body.height + 260;
   const t = txt(title, { size: 44, font: 'dela', color: 0xff4f8f, stroke: 0xffffff, strokeWidth: 8 });
   t.y = -h / 2 + 60;

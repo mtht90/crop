@@ -275,9 +275,9 @@ export class HomeScene extends Scene {
       gsap.to(c, { x: x + (to ? 6 : -6), duration: 0.6, yoyo: true, repeat: -1, ease: 'sine.inOut' });
       page.addChild(c);
     };
-    arrow('next', 'ランキング', 676, App.H * 0.47, this.page, 1);
-    // on the ranking page, beside the podium so it never covers the list
-    arrow('prev', 'ホーム', 40, top + 370, this.rank, 0);
+    // both at the same height, mid-screen, in the margins beside the content
+    arrow('next', 'ランキング', 684, App.H * 0.5, this.page, 1);
+    arrow('prev', 'ホーム', 36, App.H * 0.5, this.rank, 0);
     this.dots.position.set(360, top + 128);
     this.col.addChild(this.dots);
     this.drawDots();

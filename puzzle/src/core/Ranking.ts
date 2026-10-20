@@ -126,15 +126,26 @@ export async function myRank(week: string): Promise<{ rank: number; total: numbe
   return rpc('my_rank', { p_player: playerId(), p_week: week });
 }
 
+/** Weekly reward tiers, best first: a tier applies within the top `top` places or the top `pct` of players. */
+export const WEEKLY_TIERS: { label: string; top?: number; pct?: number; reward: Reward }[] = [
+  { label: '1位', top: 1, reward: { tickets: 5, coins: 100000 } },
+  { label: '2〜3位', top: 3, reward: { tickets: 3, coins: 50000 } },
+  { label: '上位10%', pct: 0.1, reward: { tickets: 2, coins: 30000 } },
+  { label: '上位30%', pct: 0.3, reward: { tickets: 1, coins: 20000 } },
+  { label: '上位50%', pct: 0.5, reward: { coins: 10000 } },
+  { label: 'さんか賞', reward: { coins: 5000 } },
+];
+
+/** Index into WEEKLY_TIERS for a placing. */
+export function weeklyTier(rank: number, total: number): number {
+  const pct = rank / Math.max(1, total);
+  const i = WEEKLY_TIERS.findIndex((t) => (t.top !== undefined && rank <= t.top) || (t.pct !== undefined && pct <= t.pct));
+  return i < 0 ? WEEKLY_TIERS.length - 1 : i;
+}
+
 /** Rewards for last week's placing (top N or top %). */
 export function weeklyReward(rank: number, total: number): Reward {
-  const pct = rank / Math.max(1, total);
-  if (rank === 1) return { tickets: 5, coins: 100000 };
-  if (rank <= 3) return { tickets: 3, coins: 50000 };
-  if (pct <= 0.1) return { tickets: 2, coins: 30000 };
-  if (pct <= 0.3) return { tickets: 1, coins: 20000 };
-  if (pct <= 0.5) return { coins: 10000 };
-  return { coins: 5000 };
+  return WEEKLY_TIERS[weeklyTier(rank, total)].reward;
 }
 
 /** Once per week: looks up last week's rank and pays the reward. */

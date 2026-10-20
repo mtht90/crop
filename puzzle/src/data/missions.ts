@@ -186,7 +186,7 @@ export function claimDailyBonus(): string[] {
 
 export function rewardText(r: Reward): string {
   const parts: string[] = [];
-  if (r.coins) parts.push(`コイン${r.coins}`);
+  if (r.coins) parts.push(`コイン${r.coins.toLocaleString('en-US')}`);
   if (r.tickets) parts.push(`チケット×${r.tickets}`);
   if (r.skillTickets) parts.push(`スキルチケット×${r.skillTickets}`);
   if (r.wallpaper) parts.push(`かべがみ「${WALLPAPER_BY_ID[r.wallpaper]?.name}」`);

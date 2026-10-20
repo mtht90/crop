@@ -89,18 +89,20 @@ export class ResultScene extends Scene {
     const top = App.safeTop + 20;
     // header
     const head = txt(r.defeated ? '討伐成功！' : '討伐失敗…', { size: 80, font: 'dela', color: r.defeated ? 0xfff27a : 0xd8dcff, stroke: 0x2a1630, strokeWidth: 14, shadow: true });
-    head.position.set(360, top + 70);
+    // left of center so the boss portrait on the right never covers it
+    head.position.set(310, top + 70);
+    if (head.width > 470) head.scale.set(470 / head.width);
     this.col.addChild(head);
     popIn(head);
     const sub = txt(`Lv.${r.bossLv} ${r.bossName}`, { size: 30, stroke: 0x2a1630, strokeWidth: 7 });
-    sub.position.set(360, top + 140);
+    sub.position.set(310, top + 140);
     this.col.addChild(sub);
     // character
     const ch = CHAR_BY_ID[r.charId];
     const chara = new Sprite(bigTexture(ch));
     chara.anchor.set(0.5, 0.6);
     chara.scale.set(0.67);
-    chara.position.set(600, top + 110);
+    chara.position.set(620, top + 110);
     this.col.addChild(chara);
     gsap.to(chara, { y: chara.y - 18, duration: 0.45, yoyo: true, repeat: -1, ease: 'sine.inOut' });
     // panel

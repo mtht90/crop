@@ -3,13 +3,13 @@ import gsap from 'gsap';
 import { App } from '../core/App';
 import { Save } from '../core/Save';
 import { Sound } from '../core/Audio';
-import { Button, fmt, grad, popIn, txt } from '../core/UI';
+import { Button, fmt, grad, panel, popIn, txt } from '../core/UI';
 import { bigTexture, loadCharacterArt } from '../art/PieceArt';
 import { CHARACTERS, CHAR_BY_ID } from '../data/characters';
-import { Ranking, board, playerId, setName, submitScore, weekKey, weeklyReward, type RankRow } from '../core/Ranking';
+import { Ranking, WEEKLY_TIERS, board, playerId, setName, submitScore, weekKey, weeklyTier, type RankRow } from '../core/Ranking';
 import { weekStartMs } from '../data/rankBots';
 import { rewardText } from '../data/missions';
-import { ScrollBox, rewardPopup } from './common';
+import { ScrollBox } from './common';
 
 const WD = ['月', '火', '水', '木', '金', '土', '日'];
 
@@ -165,17 +165,17 @@ export class RankingPanel extends Container {
       r.y = 10 + i * 92 + 42;
       const mine = row.player_id === me;
       const g = new Graphics();
-      g.roundRect(-320, -40, 640, 80, 20).fill(mine ? grad([[0, '#fff6c8'], [1, '#ffc94d']]) : 0xfff4dc);
-      g.roundRect(-320, -40, 640, 80, 20).stroke({ width: mine ? 5 : 3, color: mine ? 0xff9a00 : 0x8a5a2a });
+      g.roundRect(-290, -40, 580, 80, 20).fill(mine ? grad([[0, '#fff6c8'], [1, '#ffc94d']]) : 0xfff4dc);
+      g.roundRect(-290, -40, 580, 80, 20).stroke({ width: mine ? 5 : 3, color: mine ? 0xff9a00 : 0x8a5a2a });
       const rt = txt(String(row.rank), { size: 30, font: 'dela', color: 0x8a5a2a });
-      rt.x = -276;
+      rt.x = -250;
       const pic = this.portrait(row.char_id, 58);
-      pic.x = -205;
+      pic.x = -184;
       const nm = txt(row.name, { size: 28, color: 0x4a2f7a, anchor: [0, 0.5] });
-      nm.x = -162;
-      if (nm.width > 260) nm.scale.set(260 / nm.width);
+      nm.x = -144;
+      if (nm.width > 230) nm.scale.set(230 / nm.width);
       const sc = txt(fmt(row.score), { size: 28, font: 'dela', color: 0xd81b60, anchor: [1, 0.5] });
-      sc.x = 300;
+      sc.x = 272;
       r.addChild(g, rt, pic, nm, sc);
       c.addChild(r);
     });
@@ -214,18 +214,45 @@ export class RankingPanel extends Container {
     this.me.addChild(left, nm, sc, info, edit);
   }
 
+  /** Reward table for this week, with the player's current tier highlighted. */
   private showRewards(rank: number, total: number): void {
-    const t = Math.max(total, 1);
-    const lines = [
-      `1位：${rewardText(weeklyReward(1, t))}`,
-      `2〜3位：${rewardText(weeklyReward(2, t))}`,
-      `上位10%：${rewardText(weeklyReward(Math.max(4, Math.ceil(t * 0.1)), t))}`,
-      `上位30%：${rewardText(weeklyReward(Math.max(4, Math.ceil(t * 0.3)), t))}`,
-      `上位50%：${rewardText(weeklyReward(Math.max(4, Math.ceil(t * 0.5)), t))}`,
-      `さんか賞：${rewardText(weeklyReward(t, t))}`,
-    ];
-    if (rank) lines.push('', `いまのままだと → ${rewardText(weeklyReward(rank, t))}`);
-    rewardPopup(this.parentLayer, '今週のほうしゅう', lines);
+    const cur = rank ? weeklyTier(rank, total) : -1;
+    const ov = new Container();
+    const dim = new Graphics().rect(-App.colX, 0, App.W, App.H).fill({ color: 0x0a0418, alpha: 0.6 });
+    dim.eventMode = 'static';
+    const box = new Container();
+    box.position.set(360, App.H * 0.45);
+    const rowH = 70;
+    const h = 200 + WEEKLY_TIERS.length * rowH + 60;
+    const title = txt('今週のほうしゅう', { size: 44, color: 0xff4f8f, stroke: 0xffffff, strokeWidth: 8 });
+    title.y = -h / 2 + 56;
+    const note = txt(rank ? `いまは ${rank}位 / ${total}人` : 'スコアを出すとさんかできるよ', { size: 24, color: 0x8a5a2a });
+    note.y = title.y + 52;
+    box.addChild(panel(620, h), title, note);
+    WEEKLY_TIERS.forEach((t, i) => {
+      const y = -h / 2 + 170 + i * rowH;
+      const on = i === cur;
+      const g = new Graphics().roundRect(-280, y - 30, 560, 60, 16).fill(on ? grad([[0, '#fff6c8'], [1, '#ffc94d']]) : i % 2 ? 0xfff8ea : 0xf6ead2);
+      if (on) g.roundRect(-280, y - 30, 560, 60, 16).stroke({ width: 4, color: 0xff9a00 });
+      const lb = txt(t.label, { size: 26, color: i < 2 ? 0xd81b60 : 0x4a2f7a, anchor: [0, 0.5] });
+      lb.position.set(-262, y);
+      const rw = txt(rewardText(t.reward), { size: 24, color: 0x4a2f7a, anchor: [1, 0.5] });
+      rw.position.set(262, y);
+      if (rw.width > 360) rw.scale.set(360 / rw.width);
+      box.addChild(g, lb, rw);
+      if (on) {
+        const tag = txt('いまここ！', { size: 18, color: 0xffffff, stroke: 0xd81b60, strokeWidth: 5 });
+        tag.position.set(-262 + lb.width + 54, y - 1);
+        box.addChild(tag);
+      }
+    });
+    const ok = new Button({ w: 240, h: 84, label: 'OK', color: 'pink', onTap: () => ov.destroy({ children: true }) });
+    ok.y = h / 2 - 64;
+    box.addChild(ok);
+    ov.addChild(dim, box);
+    this.parentLayer.addChild(ov);
+    popIn(box, 0, 0.5);
+    Sound.play('ui_tap');
   }
 
   /** Nickname entry (DOM input so phone keyboards work). */

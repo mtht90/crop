@@ -1,7 +1,8 @@
 // Builds a glyph-subset web font of めもかっち (SIL OFL 1.1) containing only the
 // characters the game actually uses. Re-run (`npm run fonts`) whenever new text is added.
 // Needs fonts-src/Memokatchi.ttf (from the official release) and `pip install fonttools brotli`.
-import { readFileSync, readdirSync, statSync, writeFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync, writeFileSync, mkdirSync, renameSync, unlinkSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
@@ -28,6 +29,13 @@ console.log(`glyphs: ${chars.size}`);
 mkdirSync(join(root, 'public/fonts'), { recursive: true });
 const textFile = join(root, 'fonts-src/.glyphs.txt');
 writeFileSync(textFile, [...chars].join(''));
-const out = join(root, 'public/fonts/memokatchi.woff2');
-execFileSync('pyftsubset', [join(root, 'fonts-src/Memokatchi.ttf'), `--text-file=${textFile}`, '--flavor=woff2', '--layout-features=*', `--output-file=${out}`], { stdio: 'inherit' });
-console.log(`memokatchi.woff2: ${(statSync(out).size / 1024).toFixed(1)} KB`);
+const tmp = join(root, 'public/fonts/memokatchi.tmp.woff2');
+execFileSync('pyftsubset', [join(root, 'fonts-src/Memokatchi.ttf'), `--text-file=${textFile}`, '--flavor=woff2', '--layout-features=*', `--output-file=${tmp}`], { stdio: 'inherit' });
+// content-hashed name, so a deploy never pairs new text with a cached older subset
+const hash = createHash('sha256').update(readFileSync(tmp)).digest('hex').slice(0, 8);
+const name = `memokatchi-${hash}.woff2`;
+for (const f of readdirSync(join(root, 'public/fonts'))) if (/^memokatchi.*\.woff2$/.test(f) && f !== 'memokatchi.tmp.woff2') unlinkSync(join(root, 'public/fonts', f));
+renameSync(tmp, join(root, 'public/fonts', name));
+const html = join(root, 'index.html');
+writeFileSync(html, readFileSync(html, 'utf8').replace(/fonts\/memokatchi[^']*\.woff2/, `fonts/${name}`));
+console.log(`${name}: ${(statSync(join(root, 'public/fonts', name)).size / 1024).toFixed(1)} KB`);

@@ -121,26 +121,26 @@ export class CharaScene extends Scene {
     ov.addChild(dim);
     const box = new Container();
     box.position.set(360, App.H / 2);
-    const h = 1180;
+    const h = 1240;
     const s = Math.min(1, (App.H - 60) / h);
     box.scale.set(s);
     box.addChild(panel(640, h, { color: 0xfdf7ff }));
     box.eventMode = 'static';
     const r = RARITY_INFO[def.rarity];
-    const glow = new Graphics().circle(0, -260, 170).fill({ color: r.color, alpha: 0.25 });
+    const glow = new Graphics().circle(0, -300, 170).fill({ color: r.color, alpha: 0.25 });
     box.addChild(glow);
     const big = new Sprite(bigTexture(def, 0));
     big.anchor.set(0.5, 0.6);
     big.scale.set(1.0);
-    big.y = -250;
+    big.y = -290;
     box.addChild(big);
-    gsap.to(big, { y: -270, duration: 0.6, yoyo: true, repeat: -1, ease: 'sine.inOut' });
+    gsap.to(big, { y: -310, duration: 0.6, yoyo: true, repeat: -1, ease: 'sine.inOut' });
     // five color variants row
     for (let i = 0; i < 5; i++) {
       const sp = new Sprite(pieceTexture(def, i));
       sp.anchor.set(0.5, 0.6);
       sp.scale.set(0.42);
-      sp.position.set(-220 + i * 110, -60);
+      sp.position.set(-220 + i * 110, -100);
       sp.eventMode = 'static';
       sp.cursor = 'pointer';
       sp.on('pointertap', () => {
@@ -152,9 +152,9 @@ export class CharaScene extends Scene {
       box.addChild(sp);
     }
     const name = txt(def.name, { size: 52, font: 'dela', color: 0x4a2f7a });
-    name.y = 30;
+    name.y = -10;
     const st = stars(r.stars, 32, 4);
-    st.y = 86;
+    st.y = 46;
     box.addChild(name, st);
     const g = growthOf(owned);
     const cap = MAX_LV[def.rarity];
@@ -168,7 +168,7 @@ export class CharaScene extends Scene {
       ['ゲージ', `${charCharge(def, g)} 個で発動`],
     ];
     rows.forEach(([k, v], i) => {
-      const y = 140 + i * 48;
+      const y = 100 + i * 48;
       if (k) {
         const kt = txt(k, { size: 26, color: 0x8a6cff, anchor: [0, 0.5] });
         kt.position.set(-270, y);
@@ -182,8 +182,8 @@ export class CharaScene extends Scene {
     // EXP bar under the level
     if (g.lv < cap) {
       const bar = new Graphics();
-      bar.roundRect(70, 176, 200, 14, 7).fill(0xe2d8f4);
-      bar.roundRect(70, 176, Math.max(14, (200 * g.exp) / expToNext(g.lv)), 14, 7).fill(0x8a6cff);
+      bar.roundRect(70, 136, 200, 14, 7).fill(0xe2d8f4);
+      bar.roundRect(70, 136, Math.max(14, (200 * g.exp) / expToNext(g.lv)), 14, 7).fill(0x8a6cff);
       box.addChild(bar);
     }
     // skill level up with skill tickets (cost grows each level)
@@ -202,13 +202,14 @@ export class CharaScene extends Scene {
           this.openDetail(def);
         },
       });
-      up.position.set(170, 140 + 5 * 48);
+      up.position.set(170, 100 + 5 * 48);
       box.addChild(up);
     }
     const desc = def.passive
       ? txt(`パッシブ★${def.passive.name}\n${def.passive.desc}`, { size: 22, color: 0xd81b60, wrap: 540 })
       : txt(def.catch, { size: 22, color: 0x7a6a9a, weight: '500', wrap: 540 });
-    desc.y = 485;
+    // below the stat rows, clear of the button
+    desc.y = 100 + 6 * 48 + 36 + desc.height / 2;
     box.addChild(desc);
     const selected = Save.data.selected === def.id;
     const btn = new Button({
@@ -223,7 +224,7 @@ export class CharaScene extends Scene {
         close();
       },
     });
-    btn.y = h / 2 - 75;
+    btn.y = h / 2 - 70;
     box.addChild(btn);
     const x = new Button({ w: 70, h: 70, label: '×', color: 'grey', size: 40, sound: 'ui_back', onTap: () => close() });
     x.position.set(280, -h / 2 + 50);

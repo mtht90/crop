@@ -85,8 +85,8 @@ const ROWS: Row[] = [
 ];
 
 const PASSIVES: Record<string, Passive> = {
-  skel_warrior: { kind: 'guard', name: 'ホネのよろい', desc: 'ボスの妨害を3回まではじく＆7つ以上つなぐとダメージ1.3倍' },
-  skel_rogue: { kind: 'shadow', name: 'かげのしのび', desc: 'ボスの妨害がすぐおわる（時間半分）＆コンボがきれにくい' },
+  skel_warrior: { kind: 'guard', name: 'ホネのよろい', desc: 'ボスの妨害を3回まではじく\n7つ以上つなぐとダメージ1.3倍' },
+  skel_rogue: { kind: 'shadow', name: 'かげのしのび', desc: 'ボスの妨害がすぐおわる（時間半分）\nコンボがきれにくい' },
 };
 
 export const CHARACTERS: CharDef[] = ROWS.map(([id, name, rarity, atk, skill, catchCopy]) => ({ id, name, rarity, atk, skill, catch: catchCopy, passive: PASSIVES[id] }));
