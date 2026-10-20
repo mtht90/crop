@@ -4,7 +4,7 @@ import { App } from '../core/App';
 import { Scene, Scenes } from '../core/Scene';
 import { Save } from '../core/Save';
 import { Sound, haptic } from '../core/Audio';
-import { Button, grad, txt } from '../core/UI';
+import { Button, coinIcon, grad, txt } from '../core/UI';
 import { Board, BOARD_TUNING, type PopCause, type PopInfo } from '../game/Board';
 import { BossView } from '../game/BossView';
 import { FairyBackdrop } from '../game/Backdrop';
@@ -12,17 +12,17 @@ import { Effects, fx } from '../game/Effects';
 import { ComboLabel, JFever, JTimer, ScoreLine, SkillButton, banner, installBitmapFonts, jungle, num } from '../game/Hud';
 import { COLORS, bigTexture, loadCharacterArt } from '../art/PieceArt';
 import { loadFairy, tex, unloadFairy } from '../core/Loader';
-import { CHARACTERS, CHAR_BY_ID, RARITY_INFO, charAtk, charCharge, type CharDef } from '../data/characters';
+import { CHARACTERS, CHAR_BY_ID, RARITY_INFO, addExp, charAtk, charCharge, expForRound, growthOf, skillAt, type CharDef, type Growth, type Skill } from '../data/characters';
 import { bossAttackCount, bossAttackInterval, bossForLevel, bossHp, type BossDef } from '../data/bosses';
 import { ResultScene, type BattleResult } from './ResultScene';
 import { HomeScene } from './HomeScene';
 import { battleTrack } from '../data/music';
 import { GIMMICKS, gimmicksFor, type GimmickId } from '../data/gimmicks';
-import { currentFrame, currentWallpaper, frameTextures, loadWallpapers, wallpaperAlias } from '../data/cosmetics';
+import { currentFrame, currentLine, currentWallpaper, frameTextures, loadWallpapers, wallpaperAlias } from '../data/cosmetics';
 import { recordRound } from '../data/missions';
 import type { Stats } from '../core/Save';
 import { Assets, type Texture as PTexture } from 'pixi.js';
-import { loadObstacleArt, obstacleTexture } from '../art/PieceArt';
+import { loadObstacleArt, obstacleTexture, type ObstacleArt } from '../art/PieceArt';
 import type { Texture } from 'pixi.js';
 
 export const BATTLE_TIME = 90;
@@ -79,7 +79,9 @@ interface Projectile {
 
 export class BattleScene extends Scene {
   private def: CharDef;
-  private lv: number;
+  private growth: Growth;
+  /** The character's skill at its skill level. */
+  private skill: Skill;
   private atk: number;
   private chargeNeed: number;
   private bossLv: number;
@@ -153,6 +155,9 @@ export class BattleScene extends Scene {
   /** SSR passive: obstructions it can still bounce. */
   private guards = 0;
   private quakeT = 0;
+  /** Coins picked up during the round. */
+  private coinsEarned = 0;
+  private coinLabel = txt('0', { size: 26, color: 0xffe36f, stroke: 0x2a1630, strokeWidth: 6, anchor: [1, 0.5] });
   /** Counters for missions. */
   private round = { pops: 0, broken: 0, bombs: 0, chains7: 0 };
   private lastSecond = 99;
@@ -167,9 +172,10 @@ export class BattleScene extends Scene {
     installBitmapFonts();
     const sel = Save.data.selected;
     this.def = CHAR_BY_ID[sel] ?? CHARACTERS[0];
-    this.lv = Save.data.owned[this.def.id]?.lv ?? 1;
-    this.atk = charAtk(this.def, this.lv);
-    this.chargeNeed = charCharge(this.def, this.lv);
+    this.growth = growthOf(Save.data.owned[this.def.id]);
+    this.atk = charAtk(this.def, this.growth);
+    this.chargeNeed = charCharge(this.def, this.growth);
+    this.skill = skillAt(this.def, this.growth.skill);
     this.bossLv = Save.fightLv();
     this.rematch = this.bossLv < Save.data.bossLv;
     this.bossDef = bossForLevel(this.bossLv);
@@ -183,7 +189,7 @@ export class BattleScene extends Scene {
   }
 
   async preload(): Promise<void> {
-    await Promise.all([loadFairy(this.bossDef.bg), loadCharacterArt([this.def.id], { strips: true }), loadObstacleArt(), loadWallpapers([currentWallpaper().id, ...frameTextures(currentFrame())])]);
+    await Promise.all([loadFairy(this.bossDef.bg), loadCharacterArt([this.def.id], { strips: true }), loadObstacleArt(), loadSkillProps(), loadWallpapers([currentWallpaper().id, ...frameTextures(currentFrame())])]);
     this.backdrop = new FairyBackdrop(this.bossDef.bg);
   }
 
@@ -214,6 +220,7 @@ export class BattleScene extends Scene {
     this.board.view.pivot.set(D / 2, D / 2);
     this.board.view.position.set(this.boardX + D / 2, this.boardY + D / 2);
     this.board.onSkullBlow = (x, y) => this.skullBlow(x, y);
+    this.board.lineStyle = currentLine();
     this.board.onBroken = () => this.round.broken++;
     this.col.addChild(this.board.view, this.feverFrame, this.orbLayer, this.fxTop.view, this.hud, this.vignette, this.overlay);
     this.drawBoardFrame();
@@ -235,10 +242,14 @@ export class BattleScene extends Scene {
       this.hud.addChild(lineup);
     }
     this.effectLabel.position.set(24, top + 204);
+    const coinIco = coinIcon(13);
+    coinIco.position.set(600, top + 140);
+    this.coinLabel.position.set(696, top + 140);
+    this.hud.addChild(coinIco, this.coinLabel);
     this.hud.addChild(this.effectLabel);
     if (this.def.passive) {
       const ps = txt(`★${this.def.passive.name}`, { size: 20, color: 0xffe36f, stroke: 0x2a1630, strokeWidth: 5, anchor: [1, 0.5] });
-      ps.position.set(696, top + 140);
+      ps.position.set(696, top + 172);
       this.hud.addChild(ps);
     }
     this.skillBtn.position.set(84, this.stageH + 34);
@@ -364,7 +375,7 @@ export class BattleScene extends Scene {
   }
 
   private showTutorialHint(): void {
-    const t = txt('同じ色のぷにをなぞってつなごう！たくさんつなぐほど強い！', { size: 30, stroke: 0x2a1630, strokeWidth: 8, color: 0xfff27a });
+    const t = txt('同じ色のぷにを3つ以上なぞろう！たくさんつなぐほど強い！', { size: 30, stroke: 0x2a1630, strokeWidth: 8, color: 0xfff27a });
     t.position.set(360, this.boardY + this.board.h * 0.86);
     this.overlay.addChild(t);
     gsap.fromTo(t, { alpha: 0 }, { alpha: 1, duration: 0.3, delay: 0.5 });
@@ -567,7 +578,7 @@ export class BattleScene extends Scene {
         mult *= 1.5;
       }
     } else if (cause === 'bomb') mult *= 1.15;
-    else if (cause === 'skill') mult *= this.def.skill.power * 0.6;
+    else if (cause === 'skill') mult *= this.skill.power * 0.6;
     else if (cause === 'rock') weight = pops.length * 2;
     if ((cause === 'chain' || cause === 'fever') && pops.some((p) => p.cursed)) {
       mult *= 0.5;
@@ -581,9 +592,12 @@ export class BattleScene extends Scene {
     }
     if (cause === 'bomb') this.round.bombs++;
     if (cause === 'chain' && meta.chain >= 7) this.round.chains7++;
-    // taps and pairs are weak: they don't build combos or charge gauges much
-    const short = cause === 'chain' && meta.chain < BOARD_TUNING.minChain;
-    if (cause !== 'rock' && !short) {
+    // coins drop from long chains (6+) and bombs, doubled in fever
+    let drop = 0;
+    if ((cause === 'chain' || cause === 'fever') && meta.chain >= 6) drop = Math.floor((meta.chain - 4) / 2);
+    else if (cause === 'bomb') drop = 1;
+    if (drop > 0) this.dropCoins(drop * (this.feverOn ? 2 : 1), meta.x, meta.y);
+    if (cause !== 'rock') {
       this.combo++;
       this.comboT = COMBO_WINDOW * (this.def.passive?.kind === 'shadow' ? 2 : 1);
       this.maxCombo = Math.max(this.maxCombo, this.combo);
@@ -597,10 +611,10 @@ export class BattleScene extends Scene {
     this.resolves.set(token, { total, remaining: total, perPiece: total / pops.length, n: pops.length, seen: 0, orbEvery, shown: false, crit, cause, color: meta.color });
     // gauges
     // no skill charge during fever / tap mode, or skills would chain into each other
-    if (cause !== 'skill' && !this.feverOn && this.tapT <= 0) this.skillCharge = Math.min(this.chargeNeed, this.skillCharge + weight * (short ? 0.3 : 1));
+    if (cause !== 'skill' && !this.feverOn && this.tapT <= 0) this.skillCharge = Math.min(this.chargeNeed, this.skillCharge + weight);
     if (!this.feverOn && cause !== 'rock') {
       // fever stops the clock; ~200 pieces per fever gives a normal round 2–3 fevers
-      this.fever = Math.min(100, this.fever + weight * (cause === 'skill' ? 0.2 : short ? 0.15 : 0.5));
+      this.fever = Math.min(100, this.fever + weight * (cause === 'skill' ? 0.25 : 0.65));
       if (this.fever >= 100 && this.phase === 'play') this.startFever();
     }
     // callouts
@@ -696,6 +710,28 @@ export class BattleScene extends Scene {
     if (before < this.hp && this.landed >= this.hp && !this.brokeLine) {
       this.brokeLine = true;
       this.onLineBroken();
+    }
+  }
+
+  /** Coins pop out of the board and fly to the counter. */
+  private dropCoins(n: number, x: number, y: number): void {
+    this.coinsEarned += n;
+    const tx = this.coinLabel.x - 70;
+    const ty = this.coinLabel.y;
+    for (let i = 0; i < Math.min(n, 6); i++) {
+      const c = coinIcon(14);
+      c.position.set(this.boardX + x + (Math.random() - 0.5) * 40, this.boardY + y);
+      this.fxTop.view.addChild(c);
+      gsap.to(c, { y: c.y - 60 - Math.random() * 40, duration: 0.25, delay: i * 0.05, ease: 'power2.out' });
+      gsap.to(c, {
+        x: tx, y: ty, duration: 0.45, delay: 0.25 + i * 0.05, ease: 'power2.in', onComplete: () => {
+          c.destroy();
+          Sound.coin(i);
+          this.coinLabel.text = String(this.coinsEarned);
+          this.coinLabel.scale.set(1.3);
+          gsap.to(this.coinLabel.scale, { x: 1, y: 1, duration: 0.25 });
+        },
+      });
     }
   }
 
@@ -832,7 +868,19 @@ export class BattleScene extends Scene {
       who.position.set(-W, -40);
       who.rotation = 0.12;
       bandC.addChild(band, lines, lineMask, chara, who, name);
-      ov.addChild(dim, bandC);
+      // Puni Puni-style burst of rays behind the band
+      const rays = new Graphics();
+      for (let i = 0; i < 24; i++) {
+        const a0 = (i / 24) * Math.PI * 2;
+        rays.poly([0, 0, Math.cos(a0) * 1400, Math.sin(a0) * 1400, Math.cos(a0 + 0.12) * 1400, Math.sin(a0 + 0.12) * 1400]).fill({ color: i % 2 ? rc : 0xffffff, alpha: 0.35 });
+      }
+      rays.position.set(360, cy);
+      rays.alpha = 0;
+      const tag = txt('必殺技！', { size: 34, font: 'dela', color: rc, stroke: 0xffffff, strokeWidth: 8 });
+      tag.position.set(-W, -96);
+      tag.rotation = -0.05;
+      bandC.addChild(tag);
+      ov.addChild(dim, rays, bandC);
       dim.alpha = 0;
       bandC.scale.set(1, 0);
       Sound.whoosh(0.5);
@@ -852,6 +900,11 @@ export class BattleScene extends Scene {
       tl.to(chara, { x: 170, duration: 0.35, ease: 'power3.out' }, 0.05);
       tl.to(who, { x: -150, duration: 0.3, ease: 'power3.out' }, 0.1);
       tl.to(name, { x: -110, duration: 0.35, ease: 'power3.out' }, 0.14);
+      tl.to(tag, { x: -200, duration: 0.3, ease: 'back.out(2)' }, 0.2);
+      tl.to(rays, { alpha: 1, duration: 0.2 }, 0.05);
+      tl.to(rays, { rotation: 0.8, duration: 1.0, ease: 'none' }, 0);
+      tl.fromTo(name.scale, { x: 1.6, y: 1.6 }, { x: 1, y: 1, duration: 0.3, ease: 'back.out(3)' }, 0.3);
+      tl.to(rays, { alpha: 0, duration: 0.15 }, 0.8);
       tl.add(() => {
         Sound.chord(9);
         Sound.play('zap', { vol: 0.6 });
@@ -859,133 +912,293 @@ export class BattleScene extends Scene {
       tl.to(lines, { x: -300, duration: 0.95, ease: 'none' }, 0);
       tl.to(chara.scale, { x: 1.55, y: 1.55, duration: 0.45, ease: 'sine.inOut' }, 0.3);
       tl.to(bandC.scale, { y: 0, duration: 0.16, ease: 'power2.in' }, 0.8);
+      // white flash as the move fires
+      const flash = new Graphics().rect(-App.colX, 0, W, App.H).fill(0xffffff);
+      flash.alpha = 0;
+      ov.addChild(flash);
+      tl.to(flash, { alpha: 0.8, duration: 0.06 }, 0.86);
+      tl.to(flash, { alpha: 0, duration: 0.14 }, 0.92);
       tl.to(dim, { alpha: 0, duration: 0.18 }, 0.8);
     });
   }
 
+  // ----------------------------------------------------------- skill moves
+  /** A rendered 3D prop (sword, axe…) sized to `h` px tall, on the overlay. */
+  private prop(k: string, h: number): Sprite {
+    const t = k.startsWith('obs:') ? obstacleTexture(k.slice(4) as ObstacleArt) : Assets.get<PTexture>(`fx3d:${k}`) ?? fx('star_06');
+    const s = new Sprite(t);
+    s.anchor.set(0.5);
+    s.scale.set(h / Math.max(1, t.height));
+    this.overlay.addChild(s);
+    return s;
+  }
+
+  /** Glittering trail behind a moving prop. */
+  private trail(s: Sprite, color: number, dur: number): void {
+    const o = { t: 0 };
+    gsap.to(o, {
+      t: 1, duration: dur, onUpdate: () => {
+        if (s.destroyed) return;
+        this.fxTop.burst(s.x, s.y, { count: 2, tex: 'star_06', tint: [color, 0xffffff], add: true, speed: [20, 120], size: [0.08, 0.16], gravity: 0, life: [0.2, 0.4] });
+      },
+    });
+  }
+
+  /** A big prop sweeps along a line through the bowl; pieces pop in a wave behind it. */
+  private slash(k: string, cx: number, cy: number, a: number, width: number, color: number): void {
+    const b = this.board;
+    const L = b.w * 0.62;
+    const x0 = this.boardX + cx - Math.cos(a) * L;
+    const y0 = this.boardY + cy - Math.sin(a) * L;
+    const x1 = this.boardX + cx + Math.cos(a) * L;
+    const y1 = this.boardY + cy + Math.sin(a) * L;
+    const s = this.prop(k, Math.max(260, width * 2.6));
+    s.position.set(x0, y0);
+    s.rotation = a + Math.PI / 2 - 0.5;
+    this.trail(s, color, 0.34);
+    gsap.to(s, { x: x1, y: y1, rotation: a + Math.PI / 2 + 0.5, duration: 0.34, ease: 'power2.inOut' });
+    gsap.to(s, { alpha: 0, duration: 0.15, delay: 0.32, onComplete: () => s.destroy() });
+    Sound.whoosh(0.6);
+    Sound.play('laser', { vol: 0.6, rate: 0.7 });
+    // the beam and the wave start from where the prop enters
+    gsap.delayedCall(0.08, () => {
+      this.beam(this.boardX + cx, this.boardY + cy, a, width * 2);
+      const sx = cx - Math.cos(a) * L;
+      const sy = cy - Math.sin(a) * L;
+      b.popWhere((p) => Math.abs(-(p.x - cx) * Math.sin(a) + (p.y - cy) * Math.cos(a)) < width, sx, sy);
+    });
+  }
+
+  /** A big prop drops onto (x, y) and blasts a circle. */
+  private slam(k: string, x: number, y: number, radius: number, h: number, pop: () => void): void {
+    const s = this.prop(k, h);
+    const tx = this.boardX + x;
+    const ty = this.boardY + y;
+    s.position.set(tx, -h);
+    s.rotation = -0.6;
+    s.scale.set(s.scale.x * 1.6);
+    const sc = s.scale.x / 1.6;
+    Sound.whoosh(0.7, true);
+    gsap.to(s, { y: ty, rotation: 0, duration: 0.38, ease: 'power3.in' });
+    gsap.to(s.scale, {
+      x: sc, y: sc, duration: 0.38, ease: 'power3.in', onComplete: () => {
+        this.board.shockwave(x, y, radius * 1.2);
+        this.fxTop.ring(tx, ty, 0xffffff, radius / 70, 0.4);
+        this.fxTop.burst(tx, ty, { count: 24, tex: 'star_06', tint: [0xffffff, 0xfff27a], add: true, speed: [200, 700], size: [0.1, 0.22], gravity: 400 });
+        Sound.explosion(true);
+        Sound.play('hitHeavy', { vol: 0.9, rate: 0.7 });
+        this.shake(12, 0.35);
+        haptic([30, 20, 40]);
+        pop();
+        gsap.to(s.scale, { x: sc * 1.15, y: sc * 0.85, duration: 0.08, yoyo: true, repeat: 1 });
+        gsap.to(s, { alpha: 0, duration: 0.3, delay: 0.25, onComplete: () => s.destroy() });
+      },
+    });
+  }
+
+  /** Props fly from the character gauge to each target; each target pops on arrival. */
+  private volley(k: string, targets: import('../game/Board').Piece[], h: number, spin: boolean, gap = 0.05): void {
+    const b = this.board;
+    targets.forEach((q, i) => {
+      gsap.delayedCall(i * gap, () => {
+        if (q.state !== 'live') return;
+        q.state = 'popping';
+        const s = this.prop(k, h);
+        const x0 = this.skillBtn.x + (Math.random() - 0.5) * 60;
+        const y0 = this.skillBtn.y;
+        s.position.set(x0, y0);
+        const tx = this.boardX + q.x;
+        const ty = this.boardY + q.y;
+        s.rotation = Math.atan2(ty - y0, tx - x0) + Math.PI / 2;
+        if (i % 3 === 0) Sound.play('laser', { vol: 0.35, rate: 1.4 + Math.random() * 0.4 });
+        gsap.to(s, { x: tx, y: ty, rotation: spin ? s.rotation + 6 : s.rotation, duration: 0.24, ease: 'power1.in', onComplete: () => {
+          s.destroy();
+          q.state = 'live';
+          this.fxTop.burst(tx, ty, { count: 6, tex: 'star_06', tint: 0xffffff, add: true, speed: [80, 260], size: [0.06, 0.14], life: [0.2, 0.4] });
+          b.popWhere((p) => p === q, q.x, q.y);
+        } });
+      });
+    });
+  }
+
+  /** Lightning (or any prop) flashes down onto each target. */
+  private strikes(k: string, targets: import('../game/Board').Piece[], pop: () => void): void {
+    const n = Math.min(targets.length, 14);
+    for (let i = 0; i < n; i++) {
+      const q = targets[Math.floor((i / n) * targets.length)];
+      gsap.delayedCall(i * 0.04, () => {
+        const s = this.prop(k, 150);
+        s.position.set(this.boardX + q.x, this.boardY + q.y - 60);
+        s.alpha = 0;
+        gsap.to(s, { alpha: 1, duration: 0.05, yoyo: true, repeat: 3, onComplete: () => s.destroy() });
+        if (i % 3 === 0) Sound.play('zap', { vol: 0.5, rate: 0.9 + Math.random() * 0.4 });
+      });
+    }
+    gsap.delayedCall(n * 0.04 + 0.12, () => {
+      this.flashBoard(0xffffff);
+      this.shake(8, 0.3);
+      pop();
+    });
+  }
+
+  /** Props run once around the bowl's rim. */
+  private orbit(k: string, count: number, dur: number): void {
+    const b = this.board;
+    const R = b.w / 2;
+    for (let i = 0; i < count; i++) {
+      const s = this.prop(k, 70);
+      const o = { a: (i / count) * Math.PI * 2 };
+      const place = () => s.position.set(this.boardX + R + Math.cos(o.a) * (R - 10), this.boardY + R + Math.sin(o.a) * (R - 10));
+      place();
+      gsap.to(o, { a: o.a + Math.PI * 2, duration: dur, ease: 'power1.inOut', onUpdate: () => {
+        place();
+        s.rotation += 0.3;
+        this.fxTop.burst(s.x, s.y, { count: 1, tex: 'star_06', tint: 0xfff27a, add: true, speed: [0, 40], size: [0.1, 0.16], gravity: 0, life: [0.2, 0.3] });
+      }, onComplete: () => s.destroy() });
+    }
+  }
+
+  /** Which prop each character's move uses (rendered KayKit models). */
+  private static PROPS: Record<string, string> = {
+    kh_a: 'obs:bomb', kh_b: 'sword', kh_c: 'axe', rh_a: 'star', rh_b: 'star', rh_c: 'star', mh_a: 'staff', mh_b: 'sword', mh_c: 'staff',
+    bh_a: 'hammer', bh_b: 'star', l_knight: 'shield', l_barbarian: 'obs:bomb', skull: 'obs:skull', skel_minion: 'obs:bone_a',
+    knight: 'lightning', barbarian: 'hammer', rogue: 'dagger', hood: 'dagger', skel_warrior: 'sword', skel_rogue: 'dagger',
+  };
+
   private runSkill(): void {
     const b = this.board;
-    const s = this.def.skill;
+    const s = this.skill;
     const r = b.r;
     const R = b.w / 2;
-    const M = b.h / 2; // vertical middle of the (stadium) bowl
-    const ext = b.h - b.w;
+    const M = b.h / 2;
     const size = (s.size ?? 2) * r;
     const counts = b.colorCounts();
     const order = counts.map((c, i) => [c, i]).sort((a, z) => z[0] - a[0]).map(([, i]) => i);
-    const bx = this.boardX;
-    const by = this.boardY;
-    const flash = (color: number) => this.flashBoard(color);
-    // distance from (px,py) to the line through (cx,cy) at angle a
-    const lineDist = (px: number, py: number, cx: number, cy: number, a: number) => Math.abs(-(px - cx) * Math.sin(a) + (py - cy) * Math.cos(a));
-    const band = (cx: number, cy: number, a: number) => {
-      this.beam(bx + cx, by + cy, a, size * 2);
-      b.popWhere((p) => lineDist(p.x, p.y, cx, cy, a) < size, cx, cy);
-    };
+    const prop = BattleScene.PROPS[this.def.id] ?? 'star';
+    const glow = RARITY_INFO[this.def.rarity].color;
+    const pieces = () => b.live().filter((p) => (p.kind === 'normal' || p.kind === 'big') && b.onBoard(p));
     switch (s.kind) {
       case 'bombs':
-        for (let i = 0; i < (s.amount ?? 1); i++) gsap.delayedCall(i * 0.15, () => b.spawnBomb(R + (Math.random() - 0.5) * R * 0.6, -r, i >= 1 && this.lv >= 5));
+        for (let i = 0; i < (s.amount ?? 1); i++) {
+          gsap.delayedCall(i * 0.18, () => {
+            const bomb = b.spawnBomb(R + (Math.random() - 0.5) * R * 0.6, -r, i >= 1 && this.growth.skill >= 3);
+            bomb.body.velocity.y = 900;
+            this.fxTop.ring(this.boardX + bomb.x, this.boardY + 40, 0xfff27a, 1.2, 0.4);
+          });
+        }
         this.skillHit(10, 0xffd23f);
         break;
       case 'hline':
-        band(R, M + R * 0.2, 0);
+        this.slash(prop, R, M + R * 0.2, 0, size, glow);
         break;
-      case 'vline':
-        band(R + (Math.random() - 0.5) * R * 0.5, M, Math.PI / 2);
+      case 'vline': {
+        // the axe chops straight down
+        const cx = R + (Math.random() - 0.5) * R * 0.5;
+        this.slam(prop, cx, M, size, 300, () => {
+          this.beam(this.boardX + cx, this.boardY + M, Math.PI / 2, size * 2);
+          b.popWhere((p) => Math.abs(p.x - cx) < size, cx, 0);
+        });
         break;
+      }
       case 'diag':
-        band(R, M + R * 0.1, Math.random() < 0.5 ? Math.PI / 4 : -Math.PI / 4);
+        this.slash(prop, R, M + R * 0.1, Math.random() < 0.5 ? Math.PI / 4 : -Math.PI / 4, size, 0xcfa3ff);
         break;
       case 'cross': {
-        const cx = R + (Math.random() - 0.5) * R * 0.4;
+        const cx = R + (Math.random() - 0.5) * R * 0.3;
         const cy = M + R * 0.15;
-        this.beam(bx + cx, by + cy, 0, size * 2);
-        this.beam(bx + cx, by + cy, Math.PI / 2, size * 2);
-        b.popWhere((p) => Math.abs(p.y - cy) < size || Math.abs(p.x - cx) < size, cx, cy);
+        this.slash(prop, cx, cy, 0, size, glow);
+        gsap.delayedCall(0.18, () => this.slash(prop, cx, cy, Math.PI / 2, size, glow));
         break;
       }
       case 'random': {
-        // one after another, like arrows raining in
-        const live = b.live().filter((p) => p.kind === 'normal' || p.kind === 'big');
-        const pick = live.sort(() => Math.random() - 0.5).slice(0, s.amount ?? 8);
-        pick.forEach((q, i) =>
-          gsap.delayedCall(i * 0.05, () => {
-            if (q.state !== 'live') return;
-            this.fxTop.burst(bx + q.x, by + q.y, { count: 6, tex: 'star_06', tint: 0xffffff, add: true, speed: [80, 260], size: [0.06, 0.14], life: [0.2, 0.4] });
-            b.popWhere((p) => p === q, q.x, q.y);
-          }),
-        );
-        Sound.play('laser', { vol: 0.5, rate: 1.3 });
+        const pick = pieces().sort(() => Math.random() - 0.5).slice(0, s.amount ?? 8);
+        this.volley(prop, pick, prop === 'dagger' ? 120 : 64, prop !== 'dagger', Math.min(0.05, 1.2 / Math.max(1, pick.length)));
         break;
       }
       case 'circle': {
-        const n = s.amount ?? 1;
-        for (let i = 0; i < n; i++) {
-          gsap.delayedCall(i * 0.28, () => {
-            // first blast in the middle of the pile, the rest anywhere in the bowl
-            const ang = Math.random() * Math.PI * 2;
-            const d = n === 1 ? 0 : Math.random() * (R - size * 0.6);
-            const cx = R + Math.cos(ang) * d;
-            const cy = (n === 1 ? M + R * 0.15 : M) + Math.sin(ang) * d * (0.8 + ext / b.w);
-            b.shockwave(cx, cy, size * 1.1);
-            b.popWhere((p) => Math.hypot(p.x - cx, p.y - cy) < size, cx, cy);
-            Sound.explosion(n > 1);
-            this.shake(5, 0.2);
-          });
-        }
+        const cx = R;
+        const cy = M + R * 0.15;
+        this.slam(prop, cx, cy, size, prop === 'shield' ? 300 : 240, () => b.popWhere((p) => Math.hypot(p.x - cx, p.y - cy) < size, cx, cy));
         break;
       }
       case 'bottom': {
         const top = b.h - size * 2;
-        flash(0xffb070);
-        b.shockwave(R, b.h, size * 2);
-        b.popWhere((p) => p.y > top, R, b.h);
-        Sound.play('hitHeavy', { vol: 0.8, rate: 0.7 });
-        this.shake(10, 0.35);
+        this.slam(prop, R, b.h - size, size * 1.4, 340, () => {
+          this.flashBoard(0xffb070);
+          b.shockwave(R, b.h, size * 2);
+          b.popWhere((p) => p.y > top, R, b.h);
+        });
         break;
       }
       case 'rim':
-        flash(0x9be7ff);
-        b.popWhere((p) => Math.hypot(p.x - R, p.y - Math.max(R, Math.min(b.h - R, p.y))) > R - size * 1.25, R, M);
+        this.orbit(prop, 6, 0.6);
+        gsap.delayedCall(0.1, () => {
+          this.flashBoard(0x9be7ff);
+          b.popWhere((p) => Math.hypot(p.x - R, p.y - Math.max(R, Math.min(b.h - R, p.y))) > R - size * 1.25, R, 0);
+        });
         Sound.whoosh(0.6);
         break;
       case 'paint': {
         const target = order[0];
-        const others = b.live().filter((p) => p.kind === 'normal' && p.color !== target);
-        b.recolor(others.sort(() => Math.random() - 0.5).slice(0, s.amount ?? 10), target);
+        const others = b.live().filter((p) => p.kind === 'normal' && p.color !== target).sort(() => Math.random() - 0.5).slice(0, s.amount ?? 10);
+        // colored splashes fly to each piece before it turns
+        others.forEach((q, i) => gsap.delayedCall(i * 0.04, () => {
+          const d = new Sprite(fx('circle_05'));
+          d.anchor.set(0.5);
+          d.tint = COLORS[target].hex;
+          d.scale.set(0.25);
+          d.position.set(this.skillBtn.x, this.skillBtn.y);
+          this.overlay.addChild(d);
+          gsap.to(d, { x: this.boardX + q.x, y: this.boardY + q.y, duration: 0.25, ease: 'power1.in', onComplete: () => d.destroy() });
+        }));
+        gsap.delayedCall(0.28, () => b.recolor(others, target));
         this.skillHit(10, COLORS[target].glow);
-        flash(COLORS[target].hex);
         break;
       }
       case 'bigMaker': {
-        const list = b.live().filter((p) => p.kind === 'normal');
-        b.makeBig(list.sort(() => Math.random() - 0.5).slice(0, s.amount ?? 6));
+        const list = b.live().filter((p) => p.kind === 'normal').sort(() => Math.random() - 0.5).slice(0, s.amount ?? 6);
+        list.forEach((q, i) => gsap.delayedCall(i * 0.1, () => {
+          const st = this.prop('star', 90);
+          st.position.set(this.boardX + q.x, this.boardY + q.y - 160);
+          gsap.to(st, { y: this.boardY + q.y, rotation: 3, duration: 0.25, ease: 'power2.in', onComplete: () => st.destroy() });
+        }));
+        gsap.delayedCall(0.25, () => b.makeBig(list));
         this.skillHit(10, 0x9be7ff);
         break;
       }
       case 'tapPop':
+        this.orbit(prop, 4, 1.2);
         this.startTapPop(s.dur ?? 5);
         this.skillHit(6, 0xff7ad9);
         break;
       case 'feverTap':
+        this.orbit(prop, 6, 1);
         this.fever = 100;
         if (!this.feverOn) this.startFever();
         else this.feverT = FEVER_TIME;
         this.startTapPop(FEVER_TIME);
         this.skillHit(12, 0xff7ad9);
         break;
-      case 'colorBlast':
-        flash(COLORS[order[0]].hex);
-        b.popWhere((p) => p.color === order[0], R, M);
+      case 'colorBlast': {
+        const c = order[0];
+        this.strikes(prop, pieces().filter((p) => p.color === c), () => b.popWhere((p) => p.color === c, R, M));
         break;
-      case 'twoColor':
-        flash(0xffd23f);
-        b.shockwave(R, M, b.h);
-        b.popWhere((p) => p.color === order[0] || p.color === order[1], R, b.h);
-        Sound.explosion(true);
+      }
+      case 'twoColor': {
+        // two giant swords cross the whole bowl, then both colors shatter
+        this.slash(prop, R, M, Math.PI / 4, 1, 0xffd23f);
+        gsap.delayedCall(0.12, () => this.slash(prop, R, M, -Math.PI / 4, 1, 0xffd23f));
+        gsap.delayedCall(0.4, () => {
+          this.flashBoard(0xffd23f);
+          b.shockwave(R, M, b.h);
+          b.popWhere((p) => p.color === order[0] || p.color === order[1], R, M);
+          Sound.explosion(true);
+          this.shake(12, 0.4);
+        });
         break;
+      }
       case 'allClear':
-        flash(0xffffff);
+        this.flashBoard(0xffffff);
         b.shockwave(R, M, b.h * 1.2);
         b.popWhere(() => true, R, M);
         Sound.explosion(true);
@@ -1003,7 +1216,7 @@ export class BattleScene extends Scene {
 
   /** Non-popping skills still land a hit on the boss. */
   private skillHit(weight: number, color: number): void {
-    const total = Math.round(this.atk * weight * this.def.skill.power * 0.35 * this.comboMult() * (this.feverOn ? 2 : 1) * SCORE_SCALE);
+    const total = Math.round(this.atk * weight * this.skill.power * 0.35 * this.comboMult() * (this.feverOn ? 2 : 1) * SCORE_SCALE);
     const r: Resolve = { total, remaining: 0, perPiece: total, n: 1, seen: 1, orbEvery: 1, shown: false, crit: false, cause: 'skill', color: -1 };
     this.committed += total;
     const x = this.skillBtn.x;
@@ -1457,8 +1670,19 @@ export class BattleScene extends Scene {
   private finish(defeated: boolean): void {
     const d = Save.data;
     const score = Math.round(this.landed);
-    // coins are scarce on purpose: a single pull (300) takes several good rounds
-    const coins = Math.floor(score / 10000) + (defeated ? (this.rematch ? 15 + this.bossLv * 2 : 30 + this.bossLv * 5) : 5);
+    // Tsum Tsum-style: most coins drop during play (long chains, bombs); a small bonus on top.
+    // Tuned so ~6 normal rounds pay for a single pull (300).
+    const bonus = 5 + (defeated ? (this.rematch ? 5 : 10) + Math.min(this.bossLv, 30) : 0);
+    const coins = this.coinsEarned + bonus;
+    // character growth: EXP from playing, rare skill tickets from bosses
+    const owned = d.owned[this.def.id];
+    const exp = expForRound(score, defeated);
+    const before = owned ? owned.lv : 1;
+    const ups = owned ? addExp(this.def, owned, exp) : 0;
+    let skillTickets = 0;
+    if (defeated && !this.rematch && this.bossLv % 5 === 0) skillTickets++;
+    if (defeated && Math.random() < (this.rematch ? 0.03 : 0.1)) skillTickets++;
+    d.skillTickets += skillTickets;
     const newBest = score > d.best;
     const result: BattleResult = {
       score,
@@ -1475,6 +1699,11 @@ export class BattleScene extends Scene {
       newBest,
       prevBest: d.best,
       charId: this.def.id,
+      exp,
+      lvBefore: before,
+      lvAfter: before + ups,
+      skillTickets,
+      coinBonus: bonus,
     };
     d.plays++;
     d.coins += coins;
@@ -1538,15 +1767,17 @@ export class BattleScene extends Scene {
   }
 }
 
-/**
- * Damage per piece by chain length: a single tap is weak (×0.25), a pair ×0.45,
- * and from 3 on it grows faster than linearly, so long traces are what pay.
- */
+/** Damage per piece by chain length: grows faster than linearly, so long traces are what pay. */
 export function chainMult(n: number): number {
-  if (n <= 1) return 0.25;
-  if (n === 2) return 0.45;
-  const k = n - 3;
+  const k = Math.max(0, n - 3);
   return 1 + 0.15 * k + 0.008 * k * k + (n >= BOARD_TUNING.bombAt ? 0.3 : 0);
+}
+
+/** Rendered KayKit props used by the special moves (public/assets/fx3d). */
+async function loadSkillProps(): Promise<void> {
+  const list = ['sword', 'axe', 'hammer', 'shield', 'staff', 'dagger', 'lightning', 'star'].map((k) => ({ alias: `fx3d:${k}`, src: `./assets/fx3d/${k}.webp` }));
+  for (const a of list) if (!Assets.resolver.hasKey(a.alias)) Assets.add(a);
+  await Assets.load(list.map((a) => a.alias));
 }
 
 function wait(s: number): Promise<void> {

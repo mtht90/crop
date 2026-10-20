@@ -3,7 +3,13 @@ import { RETIRED } from '../data/characters';
 const KEY = 'punitto-battle-save-v2';
 
 export interface OwnedChar {
+  /** Level from playing (cap by rarity) and EXP toward the next one. */
   lv: number;
+  exp: number;
+  /** Skill level 1–6 (raised with skill tickets). */
+  skill: number;
+  /** Limit break (+1 per duplicate, up to 99). */
+  plus: number;
   /** Total copies obtained (including the first). */
   count: number;
 }
@@ -26,6 +32,8 @@ export interface SaveData {
   coins: number;
   /** Single-pull gacha tickets (one is handed out on first launch). */
   tickets: number;
+  /** Skill-up tickets (one kind for every character; rare). */
+  skillTickets: number;
   owned: Record<string, OwnedChar>;
   selected: string;
   bossLv: number;
@@ -46,7 +54,7 @@ export interface SaveData {
   /** Achievement ids already collected. */
   claimed: string[];
   /** Puzzle wallpaper and board frame: equipped and unlocked. */
-  look: { wallpaper: string; frame: string; wallpapers: string[]; frames: string[] };
+  look: { wallpaper: string; frame: string; line: string; wallpapers: string[]; frames: string[]; lines: string[] };
   settings: { bgm: number; sfx: number; haptics: boolean; colorAssist: boolean; battleBgm: string; autoSkill: boolean };
 }
 
@@ -54,7 +62,8 @@ function defaults(): SaveData {
   return {
     coins: 0,
     tickets: 1,
-    owned: { kh_a: { lv: 1, count: 1 } },
+    skillTickets: 0,
+    owned: { kh_a: { lv: 1, exp: 0, skill: 1, plus: 0, count: 1 } },
     selected: 'kh_a',
     bossLv: 1,
     fightLv: 0,
@@ -67,7 +76,7 @@ function defaults(): SaveData {
     stats: {},
     daily: { date: '', ids: [], stats: {}, claimed: [], bonus: false },
     claimed: [],
-    look: { wallpaper: 'felt', frame: 'wood', wallpapers: ['felt'], frames: ['wood'] },
+    look: { wallpaper: 'felt', frame: 'wood', line: 'basic', wallpapers: ['felt'], frames: ['wood'], lines: ['basic'] },
     settings: { bgm: 0.7, sfx: 0.9, haptics: true, colorAssist: false, battleBgm: 'auto', autoSkill: true },
   };
 }
@@ -96,6 +105,16 @@ function migrate(d: SaveData): SaveData {
     lines.push(`${r.name} → ${coins}コイン`);
   }
   if (!d.owned[d.selected]) d.selected = 'kh_a';
+  // v1 characters leveled up from duplicates (Lv1–10); now levels come from play and duplicates are limit breaks
+  for (const o of Object.values(d.owned) as Partial<OwnedChar>[]) {
+    if (o.skill !== undefined) continue;
+    const count = o.count ?? 1;
+    o.lv = 1 + ((o.lv ?? 1) - 1) * 4;
+    o.exp = 0;
+    o.skill = 1;
+    o.plus = Math.min(99, count - 1);
+    o.count = count;
+  }
   if (lines.length) {
     d.notice = `キャラ整理のおわび\n${lines.join('\n')}`;
     try {

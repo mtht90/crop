@@ -554,7 +554,7 @@ export class GachaScene extends Scene {
     sk.y = 432;
     c.addChild(sk);
     popIn(sk, 0.55);
-    const badgeText = res.isNew ? 'NEW!' : res.maxed ? 'MAX！コイン+50' : res.lvUp ? `Lv.${res.lv} にUP！` : '強化素材ゲット';
+    const badgeText = res.isNew ? 'NEW!' : res.maxed ? 'MAX！コイン+50' : `限界突破 +${res.plus}！`;
     if (res.maxed && !again) {
       Save.data.coins += 50;
       Save.write();
@@ -633,8 +633,8 @@ export class GachaScene extends Scene {
             const nm = txt(res.def.name, { size: 20, color: 0x4a2f7a });
             nm.y = ch / 2 - 22;
             card.addChild(rl, nm);
-            if (res.isNew || res.lvUp) {
-              const b = txt(res.isNew ? 'NEW' : 'UP', { size: 20, font: 'dela', color: res.isNew ? 0xff4f8f : 0x36a2ff, stroke: 0xffffff, strokeWidth: 5 });
+            if (res.isNew || res.plusUp) {
+              const b = txt(res.isNew ? 'NEW' : `+${res.plus}`, { size: 20, font: 'dela', color: res.isNew ? 0xff4f8f : 0x36a2ff, stroke: 0xffffff, strokeWidth: 5 });
               b.position.set(cw / 2 - 18, -ch / 2 + 4);
               b.rotation = 0.3;
               card.addChild(b);

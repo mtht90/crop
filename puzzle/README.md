@@ -35,6 +35,8 @@ npm run fonts    # ゲーム内の日本語を追加・変更したらフォン�
 ## クレジット
 - キャラ・ボス: KayKit (CC0) — Adventurers / Skeletons / Dungeon
 - 妨害・かべがみ: KayKit (CC0) — Halloween Bits / Dungeon Remastered / Mini-Game Variety Pack / Mixed Bag 1（three.js でレンダリング。`tools/mkobstacles.py`, `tools/render-wallpapers.mjs`）
+- 必殺技の小道具: KayKit (CC0) — Dungeon Pack / Mini-Game Variety Pack（`public/assets/fx3d/CREDITS.txt`）
+- かべがみ「まほうのもり」ほか4種: CraftPix — Fairy-Tale 2D Backgrounds
 - 背景・UI: CraftPix — Fairy-Tale 2D Backgrounds / Jungle GUI
 - 効果音: 効果音ラボ
 - ガチャ筐体: "gumball machine" by myles_683 (CC BY 4.0) — https://www.thingiverse.com/thing:5385414 （パーツ分割・着色して three.js でレンダリング。`public/assets/gacha/CREDITS.txt`）

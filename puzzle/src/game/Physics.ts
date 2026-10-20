@@ -160,9 +160,9 @@ export class World {
       // resting on the floor: kill sideways sliding a bit
       if (b.position.y >= o.bottom - b.r - 0.5) vx *= 1 - fr;
       // resting pieces lose tiny jitter
-      if (vx * vx + vy * vy < 25) {
-        vx *= 0.6;
-        vy *= 0.6;
+      if (vx * vx + vy * vy < 100) {
+        vx *= 0.35;
+        vy *= 0.35;
       }
       b.velocity.x = vx;
       b.velocity.y = vy;

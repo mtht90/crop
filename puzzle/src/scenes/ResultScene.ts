@@ -19,6 +19,11 @@ export interface BattleResult {
   defeated: boolean;
   bossLv: number;
   rematch?: boolean;
+  exp: number;
+  lvBefore: number;
+  lvAfter: number;
+  skillTickets: number;
+  coinBonus: number;
   bossName: string;
   maxCombo: number;
   maxChain: number;
@@ -177,6 +182,26 @@ export class ResultScene extends Scene {
       this.fx.burst(360 + 200, box.y - pH / 2 + 340, { count: 24, tex: 'star_06', tint: [color, 0xffffff], add: true, speed: [200, 500], size: [0.08, 0.18] });
     });
     await this.wait(0.6);
+    // character EXP
+    const expRow = new Container();
+    expRow.y = pH / 2 - 200;
+    const up = r.lvAfter > r.lvBefore;
+    const et = txt(`${ch.name}  EXP +${r.exp}`, { size: 26, color: 0x4a2f7a, anchor: [0, 0.5] });
+    et.x = -260;
+    const lt = txt(up ? `Lv.${r.lvBefore} → Lv.${r.lvAfter}` : `Lv.${r.lvAfter}`, { size: 28, font: 'dela', color: up ? 0xff4f8f : 0x8a6cff, anchor: [1, 0.5] });
+    lt.x = 260;
+    expRow.addChild(et, lt);
+    box.addChild(expRow);
+    popIn(expRow);
+    if (up) {
+      Sound.play('jLevel', { vol: 0.7 });
+      const lu = txt('レベルアップ！', { size: 30, font: 'dela', color: 0xff4f8f, stroke: 0xffffff, strokeWidth: 8 });
+      lu.position.set(150, -40);
+      lu.rotation = -0.08;
+      expRow.addChild(lu);
+      popIn(lu, 0.1);
+    }
+    await this.wait(0.3);
     // coins
     const coinRow = new Container();
     coinRow.y = pH / 2 - 120;
@@ -195,7 +220,9 @@ export class ResultScene extends Scene {
     await this.countUp(cv, r.coins, 0.8, '+', true);
     if (r.defeated) {
       const next = bossForLevel(r.bossLv + 1);
-      const nt = txt(r.rematch ? 'さいせんクリア！' : `つぎのボス：Lv.${r.bossLv + 1} ${next.name}`, { size: 26, color: 0x4a2f7a });
+      const msg = r.rematch ? 'さいせんクリア！' : `つぎのボス：Lv.${r.bossLv + 1} ${next.name}`;
+      const nt = txt(r.skillTickets ? `${msg}  スキルチケット×${r.skillTickets}ゲット！` : msg, { size: 24, color: r.skillTickets ? 0xd81b60 : 0x4a2f7a });
+      if (nt.width > 600) nt.scale.set(600 / nt.width);
       nt.y = pH / 2 - 45;
       box.addChild(nt);
       popIn(nt);

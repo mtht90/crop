@@ -5,6 +5,7 @@ import { ColorMatrixFilter } from 'pixi.js';
 import { ART_CX, ART_CY, ART_R, ART_SIZE, COLORS, PIECE_ART_SCALE, PIECE_CELL, bombTexture, obstacleTexture, OBSTACLE_CELL, pieceTexture, statusTexture, type ObstacleArt, type StatusArt } from '../art/PieceArt';
 import { fx as fxTex } from './Effects';
 import type { CharDef } from '../data/characters';
+import type { LineStyle } from '../data/cosmetics';
 import { Effects } from './Effects';
 import { World, type PBody } from './Physics';
 import { Sound, haptic } from '../core/Audio';
@@ -167,7 +168,10 @@ export class Board {
   private coverMask = new Graphics();
   private darkG = new Graphics();
   dark = false;
+  /** Trace line look (cosmetic). */
+  lineStyle: LineStyle | null = null;
   private lastTouch = { x: 0, y: 0 };
+  private rainbowT = 0;
   private mono: ColorMatrixFilter | null = null;
   /** Fired when a skull bomb's fuse runs out. */
   onSkullBlow?: (x: number, y: number) => void;
@@ -338,6 +342,7 @@ export class Board {
     }
     if (!this.frozen) this.statusStep(dt);
     for (const p of this.pieces) this.syncView(p, dt);
+    this.rainbowT += dt;
     this.drawDark();
     this.drawChain();
     this.fx.update(dt);
@@ -354,22 +359,23 @@ export class Board {
   private syncView(p: Piece, dt: number): void {
     const b = p.body;
     // jelly: every contact pushes the piece in along the contact normal
-    if (b.impact > 90 && dt > 0) {
-      const k = Math.min(b.impact / 900, 1.2);
-      if (k * 9 > Math.abs(p.squashV) * 0.6) {
+    // only real hits squash (a settled pile stays still)
+    if (b.impact > 200 && dt > 0) {
+      const k = Math.min(b.impact / 1500, 1);
+      if (k * 6 > Math.abs(p.squashV) * 0.6) {
         p.axis = Math.atan2(b.ny, b.nx);
-        p.squashV -= k * 9;
-        p.wobbleV += k * 5 * (b.nx >= 0 ? 1 : -1);
+        p.squashV -= k * 6;
+        p.wobbleV += k * 2 * (b.nx >= 0 ? 1 : -1);
       }
     }
     // springs (soft, under-damped = puni-puni)
-    p.squashV += (-300 * p.squash - 9 * p.squashV) * dt;
+    p.squashV += (-320 * p.squash - 16 * p.squashV) * dt;
     p.squash = Math.max(-0.32, Math.min(0.3, p.squash + p.squashV * dt));
-    p.wobbleV += (-420 * p.wobble - 7 * p.wobbleV) * dt;
+    p.wobbleV += (-420 * p.wobble - 14 * p.wobbleV) * dt;
     p.wobble = Math.max(-0.12, Math.min(0.12, p.wobble + p.wobbleV * dt));
     // tumble: rolling spins the piece, a soft spring stands it back up
-    p.rotV += (b.velocity.x / p.r) * dt * 0.9;
-    p.rotV += ((p.tilt - p.rot) * 14 - p.rotV * 4.5) * dt;
+    p.rotV += (b.velocity.x / p.r) * dt * 0.35;
+    p.rotV += ((p.tilt - p.rot) * 14 - p.rotV * 7) * dt;
     p.rot = Math.max(p.tilt - 0.6, Math.min(p.tilt + 0.6, p.rot + p.rotV * dt));
     p.pulse += dt;
     const targetLink = p.state === 'linked' ? 1.14 : p.hint ? 1.05 + Math.sin(p.pulse * 8) * 0.05 : 1;
@@ -387,7 +393,7 @@ export class Board {
       across += w;
     } else {
       // idle breathing keeps the board alive
-      const w = Math.sin(p.pulse * 2.4 + p.id) * 0.015;
+      const w = Math.sin(p.pulse * 2.4 + p.id) * 0.005;
       along += w;
       across -= w;
     }
@@ -570,8 +576,7 @@ export class Board {
     this.ev.onChainChange?.(0, 0, -1);
   }
 
-  /** `short` = a lifted finger may pop 1–2 pieces (weak); forced releases never do. */
-  pointerUp(short = true): void {
+  pointerUp(): void {
     if (this.chain.length === 0) return;
     // something else (a skill, a bomb) may have taken pieces out of the chain meanwhile
     const chain = this.chain.filter((p) => p.state === 'linked');
@@ -581,9 +586,6 @@ export class Board {
     if (chain.length === 0) return;
     const eff = chain.reduce((a, p) => a + p.weight, 0);
     if (chain.length >= this.minChain || (eff >= this.minChain && chain.length >= 2)) {
-      this.resolveChain(chain);
-    } else if (short && this.minExtra === 0) {
-      // taps and pairs pop too, but score little: the chain multiplier does the rest
       this.resolveChain(chain);
     } else {
       for (const p of chain) this.unlink(p, true);
@@ -602,7 +604,7 @@ export class Board {
 
   /** Releases the current chain (e.g. at time up). */
   forceRelease(): void {
-    this.pointerUp(false);
+    this.pointerUp();
   }
 
   private link(p: Piece): void {
@@ -1209,24 +1211,52 @@ export class Board {
       g.moveTo(pts[0].x, pts[0].y);
       for (let i = 1; i < pts.length; i++) g.lineTo(pts[i].x, pts[i].y);
     };
+    const st = this.lineStyle;
+    const pick = (v: number | 'piece' | 'rainbow' | undefined, piece: number, i: number) =>
+      v === undefined || v === 'piece' ? piece : v === 'rainbow' ? rainbow(i * 40 + this.rainbowT * 240) : v;
+    const glow = heat && (!st || st.glow === 'piece') ? core : c.glow;
+    const lineCore = st && st.id !== 'basic' ? st.core : core;
     if (pts.length > 1) {
+      const rb = st?.body === 'rainbow' || st?.glow === 'rainbow';
+      if (rb) {
+        // per-segment colors for the rainbow line
+        for (let i = 1; i < pts.length; i++) {
+          const seg = () => g.moveTo(pts[i - 1].x, pts[i - 1].y).lineTo(pts[i].x, pts[i].y);
+          seg();
+          g.stroke({ width: 34 * thick, color: pick(st?.glow, glow, i), alpha: 0.4, cap: 'round' });
+        }
+        path();
+        g.stroke({ width: 20 * thick, color: 0x2a1630, alpha: 0.9, cap: 'round', join: 'round' });
+        for (let i = 1; i < pts.length; i++) {
+          g.moveTo(pts[i - 1].x, pts[i - 1].y).lineTo(pts[i].x, pts[i].y);
+          g.stroke({ width: 14 * thick, color: pick(st?.body, c.hex, i), cap: 'round' });
+        }
+      } else {
+        path();
+        g.stroke({ width: 34 * thick, color: pick(st?.glow, glow, 0), alpha: 0.35 + heat * 0.06, cap: 'round', join: 'round' });
+        path();
+        g.stroke({ width: 20 * thick, color: 0x2a1630, alpha: 0.9, cap: 'round', join: 'round' });
+        path();
+        g.stroke({ width: 14 * thick, color: pick(st?.body, c.hex, 0), cap: 'round', join: 'round' });
+      }
       path();
-      g.stroke({ width: 34 * thick, color: heat ? core : c.glow, alpha: 0.35 + heat * 0.06, cap: 'round', join: 'round' });
-      path();
-      g.stroke({ width: 20 * thick, color: 0x2a1630, alpha: 0.9, cap: 'round', join: 'round' });
-      path();
-      g.stroke({ width: 14 * thick, color: c.hex, cap: 'round', join: 'round' });
-      path();
-      g.stroke({ width: 5 * thick, color: core, alpha: 0.95, cap: 'round', join: 'round' });
+      g.stroke({ width: 5 * thick, color: lineCore, alpha: 0.95, cap: 'round', join: 'round' });
     }
     for (const p of chain) {
-      g.circle(p.x, p.y, p.r + 4).stroke({ width: 3, color: core, alpha: 0.85 });
+      g.circle(p.x, p.y, p.r + 4).stroke({ width: 3, color: lineCore, alpha: 0.85 });
       g.circle(p.x, p.y, 11).fill(0x2a1630);
-      g.circle(p.x, p.y, 8).fill(core);
+      g.circle(p.x, p.y, 8).fill(lineCore);
     }
   }
 
   destroy(): void {
     this.world.clear();
   }
+}
+
+/** Hue in degrees → color, for the rainbow trace line. */
+function rainbow(h: number): number {
+  const k = (n: number) => (n + h / 30) % 12;
+  const f = (n: number) => 0.62 - 0.38 * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+  return (Math.round(f(0) * 255) << 16) | (Math.round(f(8) * 255) << 8) | Math.round(f(4) * 255);
 }

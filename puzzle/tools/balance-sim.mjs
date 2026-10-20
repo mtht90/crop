@@ -2,6 +2,8 @@
 // usage: node sim.mjs [runs=3] [ids=all] [url=http://localhost:5199]
 import { chromium } from '/opt/node22/lib/node_modules/playwright/index.mjs';
 const runs = +(process.argv[2] ?? 3);
+// HUMAN=1: slower, shorter chains (a casual player) for economy tuning
+const HUMAN = !!process.env.HUMAN;
 const ALL = ['kh_a','kh_b','kh_c','rh_a','rh_b','rh_c','mh_a','mh_b','mh_c','bh_a','bh_b','l_knight','l_barbarian','skull','skel_minion','knight','barbarian','rogue','hood','skel_warrior','skel_rogue'];
 const ids = process.argv[3] && process.argv[3] !== 'all' ? process.argv[3].split(',') : ALL;
 const url = process.argv[4] ?? 'http://localhost:5199';
@@ -18,7 +20,7 @@ for (const id of ids) {
     }, [id, ALL]);
     await p.goto(`${url}/?scene=battle`);
     await p.waitForFunction(() => window.__game?.Scenes.current?.board, null, { timeout: 60000 });
-    const res = await p.evaluate(async () => {
+    const res = await p.evaluate(async (HUMAN) => {
       const G = window.__game, g = G.gsap;
       G.App.pixi.ticker.stop();
       g.ticker.remove(g.updateRoot);
@@ -38,7 +40,7 @@ for (const id of ids) {
         simT += dt;
         if (sc.phase !== 'play' || (sc.timeLeft <= 0)) { if (sc.timeLeft <= 0) break; continue; }
         if ((next -= dt) > 0) continue;
-        next = 0.55 + Math.random() * 0.35; // a quick but human pace
+        next = HUMAN ? 1.0 + Math.random() * 0.6 : 0.55 + Math.random() * 0.35; // HUMAN: a casual player's pace
         const sk = b.pieces.find((q) => q.kind === 'skill' && q.state === 'live' && b.onBoard(q));
         if (sk) { b.pointerDown(sk.x, sk.y); b.pointerUp(); skills++; continue; }
         const bomb = b.pieces.find((q) => (q.kind === 'bomb' || q.kind === 'mega') && q.state === 'live' && b.onBoard(q));
@@ -52,7 +54,7 @@ for (const id of ids) {
         if (grp.length < 3) { idleN++; continue; }
         if (b.tapPop) { b.pointerDown(grp[0].x, grp[0].y); b.pointerUp(); continue; }
         // trace a path through the group (greedy walk over adjacent members)
-        const want = Math.random() < 0.6 ? grp.length : 3 + Math.floor(Math.random() * Math.max(1, grp.length - 2));
+        const want = HUMAN ? Math.min(grp.length, 3 + Math.floor(Math.random() * Math.random() * 8)) : Math.random() < 0.6 ? grp.length : 3 + Math.floor(Math.random() * Math.max(1, grp.length - 2));
         // try every start, greedy walk preferring the neighbor with the fewest onward options; keep the longest
         let path = [];
         for (const start of grp) {
@@ -76,13 +78,13 @@ for (const id of ids) {
         b.pointerUp();
         chains++;
       }
-      const st = {}; for (const q of b.pieces) { const k = q.kind + ':' + q.state + ':' + (b.onBoard(q) ? 'in' : 'out'); st[k] = (st[k] ?? 0) + 1; } return { idle: idleN, fails, st, best: b.bestGroup().length, input: b.inputEnabled, ys: b.pieces.slice(0, 6).map((q) => Math.round(q.y)), score: Math.round(sc.committed), chains, skills, bombs, maxChain: sc.maxChain, fever: sc.feverCount };
-    });
+      const st = {}; for (const q of b.pieces) { const k = q.kind + ':' + q.state + ':' + (b.onBoard(q) ? 'in' : 'out'); st[k] = (st[k] ?? 0) + 1; } return { idle: idleN, fails, st, best: b.bestGroup().length, input: b.inputEnabled, ys: b.pieces.slice(0, 6).map((q) => Math.round(q.y)), score: Math.round(sc.committed), coins: sc.coinsEarned, chains, skills, bombs, maxChain: sc.maxChain, fever: sc.feverCount };
+    }, HUMAN);
     out[id].push(res);
     await p.close();
   }
   const s = out[id].map((x) => x.score);
   const avg = s.reduce((a, c) => a + c, 0) / s.length;
-  for (const x of out[id]) if (x.chains < 70) console.log("  short:", JSON.stringify(x).slice(0, 1500)); console.log(`${id.padEnd(13)} avg=${Math.round(avg).toString().padStart(9)} runs=${s.join(',')} skills=${out[id].map((x) => x.skills).join(',')} chains=${out[id].map((x) => x.chains).join(',')} fever=${out[id].map((x) => x.fever).join(',')}`);
+  for (const x of out[id]) if (x.chains < 70) console.log("  short:", JSON.stringify(x).slice(0, 1500)); console.log(`${id.padEnd(13)} avg=${Math.round(avg).toString().padStart(9)} runs=${s.join(',')} skills=${out[id].map((x) => x.skills).join(',')} chains=${out[id].map((x) => x.chains).join(',')} fever=${out[id].map((x) => x.fever).join(',')} coins=${out[id].map((x) => x.coins).join(',')}`);
 }
 await b.close();

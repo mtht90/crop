@@ -1,5 +1,5 @@
 import { Save } from '../core/Save';
-import { CHARACTERS, MAX_LV, RARITY_INFO, levelFromCount, type CharDef, type Rarity } from './characters';
+import { CHARACTERS, MAX_PLUS, RARITY_INFO, type CharDef, type Rarity } from './characters';
 
 export const COST_SINGLE = 300;
 export const COST_TEN = 3000;
@@ -9,8 +9,10 @@ export const PITY = 80;
 export interface PullResult {
   def: CharDef;
   isNew: boolean;
-  lvUp: boolean;
-  lv: number;
+  /** Duplicate: limit break went up (to `plus`). */
+  plusUp: boolean;
+  plus: number;
+  /** Already at +99: the copy turns into coins. */
   maxed: boolean;
 }
 
@@ -37,13 +39,16 @@ export function pull(n: number): PullResult[] {
     const def = pool[Math.floor(Math.random() * pool.length)];
     const owned = Save.data.owned[def.id];
     const isNew = !owned;
-    const before = owned?.lv ?? 0;
-    const count = (owned?.count ?? 0) + 1;
-    const lv = levelFromCount(count);
-    Save.data.owned[def.id] = { lv, count };
+    const maxed = !!owned && owned.plus >= MAX_PLUS;
+    if (!owned) Save.data.owned[def.id] = { lv: 1, exp: 0, skill: 1, plus: 0, count: 1 };
+    else {
+      owned.count++;
+      if (!maxed) owned.plus++;
+    }
+    const plus = Save.data.owned[def.id].plus;
     Save.data.pity = rarity === 'SSR' ? 0 : Save.data.pity + 1;
     Save.data.totalPulls++;
-    out.push({ def, isNew, lvUp: !isNew && lv > before, lv, maxed: before >= MAX_LV });
+    out.push({ def, isNew, plusUp: !isNew && !maxed, plus, maxed });
   }
   Save.write();
   return out;

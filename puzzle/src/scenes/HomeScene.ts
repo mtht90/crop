@@ -9,7 +9,7 @@ import { MenuBackground } from '../game/Backdrop';
 import { BossView } from '../game/BossView';
 import { Effects } from '../game/Effects';
 import { COLORS, bigTexture, loadCharacterArt, pieceTexture } from '../art/PieceArt';
-import { CHARACTERS, CHAR_BY_ID, RARITY_INFO, charAtk } from '../data/characters';
+import { CHARACTERS, CHAR_BY_ID, RARITY_INFO, charAtk, growthOf } from '../data/characters';
 import { bossForLevel, bossHp } from '../data/bosses';
 import { GIMMICKS, gimmicksFor } from '../data/gimmicks';
 import { BattleScene } from './BattleScene';
@@ -107,12 +107,12 @@ export class HomeScene extends Scene {
     rb.x = -170;
     const rt = txt(def.rarity, { size: 26, font: 'dela', stroke: 0x2a1630, strokeWidth: 5 });
     rt.x = -170;
-    const nm = txt(`${def.name}  Lv.${owned.lv}`, { size: 40, stroke: 0x2a1630, strokeWidth: 9 });
+    const nm = txt(`${def.name}  Lv.${owned.lv}${owned.plus ? `+${owned.plus}` : ''}`, { size: 40, stroke: 0x2a1630, strokeWidth: 9 });
     nm.x = 30;
     nameRow.addChild(rb, rt, nm);
     const st = stars(rinfo.stars, 30, 4);
     st.position.set(360, heroY + 275);
-    const info = txt(`こうげき ${charAtk(def, owned.lv)}   必殺技「${def.skill.name}」`, { size: 24, stroke: 0x2a1630, strokeWidth: 6 });
+    const info = txt(`こうげき ${charAtk(def, growthOf(owned))}   必殺技「${def.skill.name}」`, { size: 24, stroke: 0x2a1630, strokeWidth: 6 });
     info.position.set(360, heroY + 318);
     this.col.addChild(nameRow, st, info);
 

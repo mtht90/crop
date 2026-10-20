@@ -8,7 +8,7 @@ import { Button, grad, panel, popIn, txt } from '../core/UI';
 import { MenuBackground } from '../game/Backdrop';
 import { Effects } from '../game/Effects';
 import { COLORS, bigTexture, loadCharacterArt, pieceTexture } from '../art/PieceArt';
-import { CHARACTERS, MAX_LV, RARITY_INFO, charAtk, charCharge, copiesForLevel, type CharDef } from '../data/characters';
+import { CHARACTERS, MAX_LV, MAX_SKILL_LV, RARITY_INFO, charAtk, charCharge, expToNext, growthOf, skillTicketCost, type CharDef } from '../data/characters';
 import { HomeScene } from './HomeScene';
 import { stars } from './common';
 
@@ -30,7 +30,9 @@ export class CharaScene extends Scene {
     const ownedN = CHARACTERS.filter((c) => Save.data.owned[c.id]).length;
     const cnt = txt(`${ownedN} / ${CHARACTERS.length}`, { size: 28, stroke: 0x2a1630, strokeWidth: 6 });
     cnt.position.set(620, top + 46);
-    this.col.addChild(title, back, cnt);
+    const st = txt(`スキルチケット ${Save.data.skillTickets}枚`, { size: 22, color: 0xfff27a, stroke: 0x2a1630, strokeWidth: 6, anchor: [1, 0.5] });
+    st.position.set(700, top + 92);
+    this.col.addChild(title, back, cnt, st);
 
     const cols = 3;
     const cw = 214;
@@ -118,7 +120,7 @@ export class CharaScene extends Scene {
     ov.addChild(dim);
     const box = new Container();
     box.position.set(360, App.H / 2);
-    const h = 1100;
+    const h = 1180;
     const s = Math.min(1, (App.H - 60) / h);
     box.scale.set(s);
     box.addChild(panel(640, h, { color: 0xfdf7ff }));
@@ -153,30 +155,59 @@ export class CharaScene extends Scene {
     const st = stars(r.stars, 32, 4);
     st.y = 86;
     box.addChild(name, st);
-    const lv = owned?.lv ?? 1;
-    const nextNeed = lv < MAX_LV ? copiesForLevel(lv + 1) - (owned?.count ?? 0) : 0;
+    const g = growthOf(owned);
+    const cap = MAX_LV[def.rarity];
     const rows: [string, string][] = [
-      ['レベル', lv >= MAX_LV ? `Lv.${lv} (MAX)` : `Lv.${lv}（あと${nextNeed}体でUP）`],
-      ['こうげき', `${charAtk(def, lv)}`],
-      ['必殺技', def.skill.name],
+      ['レベル', `Lv.${g.lv} / ${cap}${g.plus ? `  ＋${g.plus}` : ''}`],
+      ['EXP', g.lv >= cap ? 'MAX' : `${g.exp} / ${expToNext(g.lv)}`],
+      ['こうげき', `${charAtk(def, g)}`],
+      ['必殺技', `${def.skill.name}`],
       ['', def.skill.desc],
-      ['ゲージ', `${charCharge(def, lv)} 個で発動`],
+      ['スキルLv', `${g.skill} / ${MAX_SKILL_LV}`],
+      ['ゲージ', `${charCharge(def, g)} 個で発動`],
     ];
     rows.forEach(([k, v], i) => {
-      const y = 150 + i * 52;
+      const y = 140 + i * 48;
       if (k) {
         const kt = txt(k, { size: 26, color: 0x8a6cff, anchor: [0, 0.5] });
         kt.position.set(-270, y);
         box.addChild(kt);
       }
-      const vt = txt(v, { size: k ? 28 : 24, color: 0x4a2f7a, anchor: [0, 0.5], weight: k ? '800' : '500' });
-      vt.position.set(-110, y);
+      const vt = txt(v, { size: k ? 28 : 22, color: 0x4a2f7a, anchor: [0, 0.5], weight: k ? '800' : '500' });
+      vt.position.set(-120, y);
+      if (vt.width > 400) vt.scale.set(400 / vt.width);
       box.addChild(vt);
     });
+    // EXP bar under the level
+    if (g.lv < cap) {
+      const bar = new Graphics();
+      bar.roundRect(70, 176, 200, 14, 7).fill(0xe2d8f4);
+      bar.roundRect(70, 176, Math.max(14, (200 * g.exp) / expToNext(g.lv)), 14, 7).fill(0x8a6cff);
+      box.addChild(bar);
+    }
+    // skill level up with skill tickets (cost grows each level)
+    if (owned && g.skill < MAX_SKILL_LV) {
+      const cost = skillTicketCost(g.skill);
+      const have = Save.data.skillTickets;
+      const up = new Button({
+        w: 230, h: 70, label: `スキルUP（${cost}枚）`, color: have >= cost ? 'yellow' : 'grey', size: 22, onTap: () => {
+          if (Save.data.skillTickets < cost) return this.toast(`スキルチケットがたりない（${Save.data.skillTickets}/${cost}）`);
+          Save.data.skillTickets -= cost;
+          owned.skill++;
+          Save.write();
+          Sound.play('powerUp2', { vol: 0.7 });
+          Sound.sparkle();
+          this.toast(`スキルLv.${owned.skill} になった！`);
+          this.openDetail(def);
+        },
+      });
+      up.position.set(170, 140 + 5 * 48);
+      box.addChild(up);
+    }
     const desc = def.passive
       ? txt(`パッシブ★${def.passive.name}\n${def.passive.desc}`, { size: 22, color: 0xd81b60, wrap: 540 })
       : txt(def.catch, { size: 22, color: 0x7a6a9a, weight: '500', wrap: 540 });
-    desc.y = 425;
+    desc.y = 485;
     box.addChild(desc);
     const selected = Save.data.selected === def.id;
     const btn = new Button({

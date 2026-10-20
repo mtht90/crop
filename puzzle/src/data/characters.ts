@@ -109,31 +109,75 @@ export const RARITY_INFO: Record<Rarity, { color: number; stars: number; rate: n
   SSR: { color: 0xff4fd8, stars: 4, rate: 0.03, label: 'SSR' },
 };
 
-export const MAX_LV = 10;
+/** Level cap by rarity; levels come from playing (EXP). */
+export const MAX_LV: Record<Rarity, number> = { N: 50, R: 70, SR: 90, SSR: 100 };
+export const MAX_SKILL_LV = 6;
+/** Limit break: every duplicate from the gacha adds +1 (tiny bonus). */
+export const MAX_PLUS = 99;
 
-/** Attack including level bonus. */
-export function charAtk(c: CharDef, lv: number): number {
-  return Math.round(c.atk * (1 + (lv - 1) * 0.07));
+/** Growth state of an owned character. */
+export interface Growth {
+  lv: number;
+  exp: number;
+  skill: number;
+  plus: number;
 }
 
-/** Pieces needed to charge the skill (levels shave it down). */
+export function growthOf(owned?: Partial<Growth>): Growth {
+  return { lv: owned?.lv ?? 1, exp: owned?.exp ?? 0, skill: owned?.skill ?? 1, plus: owned?.plus ?? 0 };
+}
+
+/** EXP from `lv` to `lv + 1`. A normal round gives ~100 EXP. */
+export function expToNext(lv: number): number {
+  return Math.round(40 + lv * 6 + lv * lv * 0.05);
+}
+
+/** EXP for a round: a base, the score, and a boss bonus. */
+export function expForRound(score: number, defeated: boolean): number {
+  return Math.round(40 + Math.min(score, 3_000_000) / 4000 + (defeated ? 20 : 0));
+}
+
+/** Adds EXP and returns how many levels were gained. */
+export function addExp(c: CharDef, g: Growth, exp: number): number {
+  const cap = MAX_LV[c.rarity];
+  let ups = 0;
+  g.exp += exp;
+  while (g.lv < cap && g.exp >= expToNext(g.lv)) {
+    g.exp -= expToNext(g.lv);
+    g.lv++;
+    ups++;
+  }
+  if (g.lv >= cap) g.exp = 0;
+  return ups;
+}
+
+/** Skill tickets needed to go from skill level `sl` to `sl + 1` (same ticket for everyone, like Tsum Tsum). */
+export function skillTicketCost(sl: number): number {
+  return [0, 1, 2, 3, 5, 8][sl] ?? Infinity;
+}
+
+/** Attack including level (+1.5%/Lv) and limit break (+0.1%/+Lv). */
+export function charAtk(c: CharDef, g: Growth): number {
+  return Math.round(c.atk * (1 + (g.lv - 1) * 0.015) * (1 + g.plus * 0.001));
+}
+
 /** Skills are meant to be a highlight, not a spam button: every gauge is 3x the listed charge. */
 export const CHARGE_SCALE = 3;
 
-export function charCharge(c: CharDef, lv: number): number {
-  return Math.round(c.skill.charge * CHARGE_SCALE) - Math.floor((lv - 1) / 2);
+/** Pieces needed to charge the skill (each skill level shaves 5% off). */
+export function charCharge(c: CharDef, g: Growth): number {
+  return Math.round(c.skill.charge * CHARGE_SCALE * (1 - (g.skill - 1) * 0.05));
 }
 
-/** Copies needed to reach the next level. */
-export function copiesForLevel(lv: number): number {
-  // Lv1 = 1 copy, each further level needs one more copy than the last one did, capped at 3.
-  let total = 1;
-  for (let l = 1; l < lv; l++) total += Math.min(3, l);
-  return total;
-}
-
-export function levelFromCount(count: number): number {
-  let lv = 1;
-  while (lv < MAX_LV && copiesForLevel(lv + 1) <= count) lv++;
-  return lv;
+/** The skill at a skill level: stronger, bigger, longer. */
+export function skillAt(c: CharDef, sl: number): Skill {
+  const k = sl - 1;
+  const s = c.skill;
+  return {
+    ...s,
+    power: s.power * (1 + k * 0.1),
+    amount: s.amount && (s.kind === 'bombs' || s.kind === 'circle' ? s.amount + Math.floor(k / 2) : Math.round(s.amount * (1 + k * 0.1))),
+    size: s.size && s.size * (1 + k * 0.05),
+    dur: s.dur && s.dur + k * 0.6,
+  };
 }
