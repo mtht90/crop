@@ -105,7 +105,7 @@ export class GachaScene extends Scene {
       this.m3?.show(false);
       Scenes.go(() => new HomeScene());
     });
-    this.coins = new CoinCounter();
+    this.coins = new CoinCounter('left');
     this.coins.position.set(490, top + 54);
     const tk = new Graphics();
     tk.roundRect(-20, -26, 150, 52, 26).fill({ color: 0x2a1630, alpha: 0.85 });

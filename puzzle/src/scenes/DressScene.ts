@@ -22,7 +22,7 @@ const TABS: [LookKind, string][] = [['wallpaper', 'かべがみ'], ['frame', '�
 export class DressScene extends Scene {
   private bg = new MenuBackground(0x36c2a0, 0x3a7bff, 2);
   private col = new Container();
-  private coins = new CoinCounter();
+  private coins = new CoinCounter('left');
   private list!: ScrollBox;
   private tab: LookKind = 'wallpaper';
   private tabs = {} as Record<LookKind, Button>;

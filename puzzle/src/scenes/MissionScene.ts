@@ -14,7 +14,7 @@ type Tab = 'daily' | 'challenge';
 export class MissionScene extends Scene {
   private bg = new MenuBackground(0xff8a3d, 0xff4f8f, 4);
   private col = new Container();
-  private coins = new CoinCounter();
+  private coins = new CoinCounter('left');
   private list!: ScrollBox;
   private tab: Tab = 'daily';
   private tabs: Record<Tab, Button> = {} as Record<Tab, Button>;

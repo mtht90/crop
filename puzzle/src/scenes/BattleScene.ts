@@ -22,7 +22,7 @@ import { currentFrame, currentLine, currentWallpaper, frameTextures, loadWallpap
 import { recordRound } from '../data/missions';
 import type { Stats } from '../core/Save';
 import { Dev, devFab } from '../core/Dev';
-import { submitScore } from '../core/Ranking';
+import { Ranking, submitScore, weekKey } from '../core/Ranking';
 import { ITEM_BY_ID, rollCoinBoost, spendLife, type ItemId } from '../data/play';
 import { expectedScore } from '../data/rank';
 import { Assets, type Texture as PTexture } from 'pixi.js';
@@ -1770,6 +1770,9 @@ export class BattleScene extends Scene {
     d.tutorialDone = true;
     const stats: Stats = { plays: 1, defeats: defeated ? 1 : 0, ...this.round, fevers: this.feverCount, skills: this.skillUses, maxChain: this.maxChain, maxCombo: this.maxCombo };
     recordRound(stats);
+    // a new weekly best plays the climb on the ranking page (remembered before submitScore updates it)
+    const prevWeek = d.rank.best[weekKey()] ?? 0;
+    if (score > prevWeek && Ranking.enabled && Ranking.registered) result.weekly = { prev: prevWeek, now: score };
     void submitScore(score, this.def.id);
     Save.write();
     Scenes.go(() => new ResultScene(result));

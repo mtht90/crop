@@ -21,6 +21,15 @@ export function weekDates(week: string): string {
   return `${s.getUTCMonth() + 1}/${s.getUTCDate()}(${WD[0]})〜${e.getUTCMonth() + 1}/${e.getUTCDate()}(${WD[6]})`;
 }
 
+/** A round that beat this week's best: the ranking page animates the player's climb. */
+export interface RankUp {
+  prev: number;
+  now: number;
+}
+
+/** List slot y (content coordinates) of the n-th row below the podium. */
+const slotY = (i: number) => 10 + i * 92 + 42;
+
 /** This week's ranking, shown as the page to the right of home (Tsum Tsum-style). */
 export class RankingPanel extends Container {
   private list: ScrollBox;
@@ -57,7 +66,7 @@ export class RankingPanel extends Container {
   }
 
   /** Loads the board the first time the page is shown (and refreshes on later visits). */
-  async open(): Promise<void> {
+  async open(rankUp?: RankUp): Promise<void> {
     if (!Ranking.enabled) {
       this.status.text = 'ランキングはじゅんびちゅうです';
       return;
@@ -69,7 +78,7 @@ export class RankingPanel extends Container {
       if (this.destroyed) return;
       this.loaded = true;
       this.status.text = rows.length ? '' : 'まだだれもいません\nいちばんのりをめざそう！';
-      this.fill(rows);
+      this.fill(rows, rankUp);
     } catch {
       if (this.destroyed) return;
       this.status.text = 'ランキングをよみこめませんでした';
@@ -110,8 +119,16 @@ export class RankingPanel extends Container {
     return c;
   }
 
-  private fill(rows: RankRow[]): void {
+  private fill(rows: RankRow[], rankUp?: RankUp): void {
     const me = playerId();
+    // the server may not have this round yet (or the send failed): use the local weekly best
+    const local = Math.max(Save.data.rank.best[weekKey(0)] ?? 0, rankUp?.now ?? 0);
+    if (Ranking.registered && local > 0) {
+      const mine = rows.find((r) => r.player_id === me);
+      if (!mine) rows = [...rows, { player_id: me, name: Save.data.rank.name, score: local, char_id: Save.data.selected }];
+      else if (mine.score < local) mine.score = local;
+      rows.sort((a, z) => z.score - a.score);
+    }
     // ranks with ties
     let rank = 0;
     let prev = -1;
@@ -160,9 +177,11 @@ export class RankingPanel extends Container {
     // the rest
     const c = this.list.content;
     for (const ch of c.removeChildren()) ch.destroy({ children: true });
+    const els: Container[] = [];
     ranked.slice(3).forEach((row, i) => {
       const r = new Container();
-      r.y = 10 + i * 92 + 42;
+      r.y = slotY(i);
+      els.push(r);
       const mine = row.player_id === me;
       const g = new Graphics();
       g.roundRect(-290, -40, 580, 80, 20).fill(mine ? grad([[0, '#fff6c8'], [1, '#ffc94d']]) : 0xfff4dc);
@@ -183,6 +202,66 @@ export class RankingPanel extends Container {
     // my row
     const mineRow = ranked.find((r) => r.player_id === me);
     this.buildMe(mineRow?.rank ?? 0, mineRow?.score ?? 0, ranked.length);
+    if (rankUp && mineRow) this.climb(ranked, els, rankUp);
+  }
+
+  /**
+   * Tsum Tsum-style climb: the player's row starts where the old best ranked, rises to the new
+   * place while the rows it passes slide down, and a banner shows old → new.
+   */
+  private climb(ranked: (RankRow & { rank: number })[], els: Container[], up: RankUp): void {
+    const me = playerId();
+    const others = ranked.filter((r) => r.player_id !== me);
+    const newIdx = ranked.findIndex((r) => r.player_id === me);
+    const newRank = ranked[newIdx].rank;
+    const oldRank = up.prev > 0 ? others.filter((r) => r.score > up.prev).length + 1 : 0;
+    const oldIdx = up.prev > 0 ? Math.min(ranked.length - 1, oldRank - 1) : ranked.length - 1;
+    const banner = (text: string) => {
+      const b = new Container();
+      const t = txt(text, { size: 46, font: 'dela', color: 0xfff27a, stroke: 0xd81b60, strokeWidth: 10 });
+      const g = new Graphics().roundRect(-t.width / 2 - 40, -46, t.width + 80, 92, 46).fill({ color: 0x2a1630, alpha: 0.85 }).stroke({ width: 5, color: 0xffffff });
+      b.addChild(g, t);
+      b.position.set(360, this.listTop + 120);
+      this.addChild(b);
+      popIn(b, 0, 0.6);
+      gsap.to(b, { alpha: 0, y: b.y - 40, delay: 2.4, duration: 0.5, onComplete: () => b.destroy({ children: true }) });
+    };
+    const label = oldRank ? `順位アップ！ ${oldRank}位 → ${newRank}位` : `ランクイン！ ${newRank}位`;
+    if (oldRank && oldRank <= newRank) return;
+    const mineEl = newIdx >= 3 ? els[newIdx - 3] : null;
+    if (!mineEl || oldIdx <= newIdx) {
+      // landed on the podium (or no visible move): just celebrate
+      this.list.centerOn(0);
+      gsap.delayedCall(0.5, () => {
+        banner(label);
+        Sound.play('jLevel', { vol: 0.7 });
+      });
+      return;
+    }
+    // start: me at the old slot, the rows I pass one slot higher
+    const from = oldIdx - 3;
+    const to = newIdx - 3;
+    for (let i = to + 1; i <= from && i < els.length; i++) els[i].y = slotY(i - 1);
+    mineEl.y = slotY(from);
+    this.list.content.setChildIndex(mineEl, this.list.content.children.length - 1);
+    this.list.centerOn(slotY(from));
+    const dur = Math.min(2.2, 0.8 + (from - to) * 0.04);
+    const tl = gsap.timeline({ delay: 0.7 });
+    tl.to(mineEl.scale, { x: 1.06, y: 1.06, duration: 0.2, ease: 'back.out(2)' });
+    tl.add(() => Sound.play('cardSlide', { vol: 0.6 }));
+    tl.to(mineEl, { y: slotY(to), duration: dur, ease: 'power2.inOut' });
+    // the row's rank number counts down as it climbs
+    const rt = mineEl.children[1] as ReturnType<typeof txt>;
+    const n = { v: oldRank || ranked.length };
+    rt.text = String(n.v);
+    tl.to(n, { v: newRank, duration: dur, ease: 'power2.inOut', onUpdate: () => (rt.text = String(Math.round(n.v))) }, '<');
+    for (let i = to + 1; i <= from && i < els.length; i++) tl.to(els[i], { y: slotY(i), duration: dur, ease: 'power2.inOut' }, '<');
+    tl.add(() => this.list.centerOn(slotY(to), dur), '<');
+    tl.to(mineEl.scale, { x: 1, y: 1, duration: 0.3, ease: 'back.out(2)' });
+    tl.add(() => {
+      banner(label);
+      Sound.play('jLevel', { vol: 0.7 });
+    });
   }
 
   private buildMe(rank: number, score: number, total: number): void {

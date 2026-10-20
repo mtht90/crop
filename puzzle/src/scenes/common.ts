@@ -10,28 +10,59 @@ import { Button, coinIcon, fmt, panel, popIn, txt } from '../core/UI';
 import { jungle, num, installBitmapFonts } from '../game/Hud';
 
 /** Coins counter shown at the top of menu screens. */
+/**
+ * Coin total in a dark pill. The pill widens with each extra digit up to 100,000,000 so the
+ * number always sits inside it. `grow` sets which way it widens: from a fixed left edge
+ * (home, top-left) or from a fixed right edge (menu screens, top-right).
+ */
 export class CoinCounter extends Container {
   private digits;
   private shown: number;
-  constructor() {
+  private bg = new Graphics();
+  private icon = coinIcon(22);
+  private minW = 220;
+  private maxW: number;
+  private w = 0;
+  constructor(private grow: 'right' | 'left' = 'right') {
     super();
     installBitmapFonts();
-    const bg = new Graphics();
-    bg.roundRect(-20, -26, 220, 52, 26).fill({ color: 0x000000, alpha: 0.3 });
-    bg.roundRect(-20, -30, 220, 52, 26).fill({ color: 0x2a1630, alpha: 0.85 });
-    const c = coinIcon(22);
-    c.position.set(8, -4);
     this.shown = Save.data.coins;
     this.digits = num(fmt(this.shown), 32);
     this.digits.anchor.set(1, 0.5);
-    this.digits.position.set(186, -4);
-    this.addChild(bg, c, this.digits);
+    // widest the pill gets: the width of 100,000,000
+    this.digits.text = fmt(100_000_000);
+    this.maxW = this.fitW();
+    this.digits.text = fmt(this.shown);
+    this.addChild(this.bg, this.icon, this.digits);
+    this.layout();
+  }
+  /** Pill width needed for the current text: icon + digits + padding. */
+  private fitW(): number {
+    return Math.max(this.minW, 58 + this.digits.width + 22);
+  }
+  private layout(): void {
+    this.digits.scale.set(1);
+    let w = this.fitW();
+    if (w > this.maxW) {
+      // past 100,000,000 the number shrinks instead of the pill growing
+      this.digits.scale.set((this.maxW - 80) / this.digits.width);
+      w = this.maxW;
+    }
+    const left = this.grow === 'right' ? -20 : 200 - w;
+    this.icon.position.set(left + 28, -4);
+    this.digits.position.set(left + w - 14, -4);
+    if (w === this.w) return;
+    this.w = w;
+    this.bg.clear();
+    this.bg.roundRect(left, -26, w, 52, 26).fill({ color: 0x000000, alpha: 0.3 });
+    this.bg.roundRect(left, -30, w, 52, 26).fill({ color: 0x2a1630, alpha: 0.85 });
   }
   refresh(animate = true): void {
     const target = Save.data.coins;
     if (!animate) {
       this.shown = target;
       this.digits.text = fmt(target);
+      this.layout();
       return;
     }
     const o = { v: this.shown };
@@ -41,10 +72,11 @@ export class CoinCounter extends Container {
       ease: 'power2.out',
       onUpdate: () => {
         this.digits.text = fmt(o.v);
+        this.layout();
       },
     });
     this.shown = target;
-    gsap.fromTo(this.digits.scale, { x: 1.3, y: 1.3 }, { x: 1, y: 1, duration: 0.4, ease: 'back.out(3)' });
+    gsap.fromTo(this.icon.scale, { x: 1.4, y: 1.4 }, { x: 1, y: 1, duration: 0.4, ease: 'back.out(3)' });
   }
 }
 
@@ -237,6 +269,13 @@ export class ScrollBox extends Container {
     };
     this.dom = [['pointerdown', down], ['pointermove', move], ['pointerup', up], ['pointercancel', up], ['wheel', wheel]];
     for (const [n, f] of this.dom) window.addEventListener(n, f, n === 'wheel' ? { passive: false } : { passive: true });
+  }
+  /** Scrolls so content y `y` sits in the middle of the view (clamped). */
+  centerOn(y: number, duration = 0): void {
+    const to = this.clamp(this.h / 2 - y);
+    this.vel = 0;
+    if (duration) gsap.to(this.content, { y: to, duration, ease: 'power2.inOut' });
+    else this.content.y = to;
   }
   private clamp(y: number): number {
     const min = Math.min(0, this.h - this.contentH - 30);

@@ -10,6 +10,7 @@ import { num, installBitmapFonts } from '../game/Hud';
 import { bigTexture } from '../art/PieceArt';
 import { CHAR_BY_ID, MAX_LV, expToNext } from '../data/characters';
 import { rankFor } from '../data/rank';
+import type { RankUp } from './RankingPanel';
 import { BattleScene } from './BattleScene';
 import { HomeScene } from './HomeScene';
 import { fmtTime, nextLifeIn, spendLife } from '../data/play';
@@ -40,6 +41,8 @@ export interface BattleResult {
   newBest: boolean;
   prevBest: number;
   charId: string;
+  /** Set when the round beat this week's best (the ranking page then animates the climb). */
+  weekly?: RankUp;
 }
 
 /** Rank by absolute score: E <10万, D <50万, C <100万, B <200万, A <400万, S above. */
@@ -136,6 +139,13 @@ export class ResultScene extends Scene {
       popIn(nb);
       Sound.play('jLevel', { vol: 0.7 });
       this.fx.burst(360 + 170, box.y - pH / 2 + 185, { count: 20, tex: 'star_06', tint: [0xff4f8f, 0xffd23f, 0xffffff], add: true, speed: [100, 400], size: [0.08, 0.16] });
+    } else if (r.weekly) {
+      const wb = txt('今週ベスト更新！', { size: 28, color: 0xff7a1a, stroke: 0xffffff, strokeWidth: 7 });
+      wb.position.set(190, -pH / 2 + 185);
+      wb.rotation = 0.12;
+      box.addChild(wb);
+      popIn(wb);
+      Sound.play('jLevel', { vol: 0.5 });
     }
     await this.wait(0.3);
     // stats
@@ -275,7 +285,7 @@ export class ResultScene extends Scene {
       Scenes.go(() => new BattleScene());
     } });
     again.position.set(200, by);
-    const home = new Button({ w: 250, h: 92, label: 'ホーム', color: 'blue', sound: 'ui_back', onTap: () => Scenes.go(() => new HomeScene()) });
+    const home = new Button({ w: 250, h: 92, label: 'ホーム', color: 'blue', sound: 'ui_back', onTap: () => Scenes.go(() => (r.weekly ? new HomeScene(1, r.weekly) : new HomeScene())) });
     home.position.set(540, by);
     this.col.addChild(again, home);
     popIn(again, 0.05);

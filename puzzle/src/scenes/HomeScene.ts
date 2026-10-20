@@ -11,7 +11,9 @@ import { Effects } from '../game/Effects';
 import { COLORS, bigTexture, loadCharacterArt, pieceTexture } from '../art/PieceArt';
 import { CHARACTERS, CHAR_BY_ID, RARITY_INFO, charAtk, growthOf } from '../data/characters';
 import { bossForLevel, bossHp } from '../data/bosses';
-import { GIMMICKS, gimmicksFor } from '../data/gimmicks';
+import { gimmicksFor } from '../data/gimmicks';
+import { gimmickChips } from './gimmickChips';
+import { loadObstacleArt } from '../art/PieceArt';
 import { BattleScene } from './BattleScene';
 import { CharaScene } from './CharaScene';
 import { GachaScene } from './GachaScene';
@@ -24,7 +26,7 @@ import { jungle } from '../game/Hud';
 import { CoinCounter, loginPopup, openSettings, rewardPopup, stars } from './common';
 import { claimLogin } from '../data/login';
 import { claimWeekly } from '../core/Ranking';
-import { RankingPanel } from './RankingPanel';
+import { RankingPanel, type RankUp } from './RankingPanel';
 import { COST_SINGLE } from '../data/gacha';
 
 export class HomeScene extends Scene {
@@ -43,12 +45,16 @@ export class HomeScene extends Scene {
   private pageIdx = 0;
   private dom: [string, EventListener][] = [];
 
-  constructor(private startPage = 0) {
+  constructor(
+    private startPage = 0,
+    private rankUp?: RankUp,
+  ) {
     super();
   }
 
   async preload(): Promise<void> {
-    await loadCharacterArt([Save.data.selected], { strips: true });
+    // obstacle art is used for the boss card's obstruction icons
+    await Promise.all([loadCharacterArt([Save.data.selected], { strips: true }), loadObstacleArt()]);
   }
 
   enter(): void {
@@ -244,10 +250,9 @@ export class HomeScene extends Scene {
     bn.position.set(-270, -12);
     const bh = txt(`討伐ライン ${fmt(bossHp(lv))}`, { size: 26, color: 0xffb8d8, anchor: [0, 0.5] });
     bh.position.set(-270, 30);
-    const gl = gimmicksFor(lv);
-    const gt = txt(gl.length ? `妨害：${gl.map((g) => GIMMICKS[g].name).join('・')}` : '妨害：なし', { size: 21, color: 0xd8c8ff, anchor: [0, 0.5] });
-    gt.position.set(-270, 66);
-    if (gt.width > 350) gt.scale.set(350 / gt.width);
+    // obstruction chips (tap for details)
+    const gt = gimmickChips(gimmicksFor(lv), 352, () => this.col);
+    gt.position.set(-276, 64);
     const bossClip = new Container();
     const bm = new Graphics().roundRect(80, -96, 240, 190, 34).fill(0xffffff);
     this.boss = new BossView(bdef);
@@ -322,7 +327,7 @@ export class HomeScene extends Scene {
       this.pageIdx = this.startPage;
       this.pager.x = -App.W * this.startPage;
       this.drawDots();
-      void this.rank.open();
+      void this.rank.open(this.rankUp);
     }
   }
 
