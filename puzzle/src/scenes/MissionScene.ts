@@ -7,12 +7,12 @@ import { Button, fmt, grad, popIn, txt } from '../core/UI';
 import { MenuBackground } from '../game/Backdrop';
 import { ACHIEVEMENTS, DAILY_BONUS, canClaim, claim, claimDailyBonus, dailyBonusReady, dailyMissions, isClaimed, progress, rewardText, type Mission } from '../data/missions';
 import { HomeScene } from './HomeScene';
-import { CoinCounter, ScrollBox, rewardPopup } from './common';
+import { CoinCounter, ScrollBox, rewardPopup, menuBar } from './common';
 
 type Tab = 'daily' | 'challenge';
 
 export class MissionScene extends Scene {
-  private bg = new MenuBackground(0xff8a3d, 0xff4f8f);
+  private bg = new MenuBackground(0xff8a3d, 0xff4f8f, 4);
   private col = new Container();
   private coins = new CoinCounter();
   private list!: ScrollBox;
@@ -23,6 +23,7 @@ export class MissionScene extends Scene {
     this.view.addChild(this.bg, this.col);
     Sound.music('home', 0.8);
     const top = App.safeTop + 16;
+    menuBar(this.col, 150);
     const title = txt('ミッション', { size: 52, font: 'dela', stroke: 0x2a1630, strokeWidth: 12 });
     title.position.set(360, top + 46);
     const back = new Button({ w: 150, h: 76, label: 'もどる', color: 'grey', size: 28, sound: 'ui_back', onTap: () => Scenes.go(() => new HomeScene()) });
@@ -69,6 +70,7 @@ export class MissionScene extends Scene {
       const list = [...ACHIEVEMENTS].sort((a, b) => order(a) - order(b));
       for (const m of list) y = this.row(m, false, y);
     }
+    this.list.contentH = y;
   }
 
   private row(m: Mission, daily: boolean, y: number): number {

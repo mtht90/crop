@@ -12,7 +12,7 @@ import { Effects } from '../game/Effects';
 import { World, type PBody } from '../game/Physics';
 import { bigTexture, loadCharacterArt } from '../art/PieceArt';
 import { CHARACTERS, RARITY_INFO, type Rarity } from '../data/characters';
-import { COST_SINGLE, COST_TEN, PITY, pull, rarityRank, type PullResult } from '../data/gacha';
+import { COST_SINGLE, COST_TEN, MAXED_COINS, PITY, pull, rarityRank, type PullResult } from '../data/gacha';
 import { HomeScene } from './HomeScene';
 import { CoinCounter, stars } from './common';
 
@@ -554,9 +554,9 @@ export class GachaScene extends Scene {
     sk.y = 432;
     c.addChild(sk);
     popIn(sk, 0.55);
-    const badgeText = res.isNew ? 'NEW!' : res.maxed ? 'MAX！コイン+50' : `限界突破 +${res.plus}！`;
+    const badgeText = res.isNew ? 'NEW!' : res.maxed ? `MAX！コイン+${MAXED_COINS}` : `限界突破 +${res.plus}！`;
     if (res.maxed && !again) {
-      Save.data.coins += 50;
+      Save.data.coins += MAXED_COINS;
       Save.write();
       this.coins.refresh();
     }
@@ -639,7 +639,7 @@ export class GachaScene extends Scene {
               b.rotation = 0.3;
               card.addChild(b);
             }
-            if (res.maxed) Save.data.coins += 50;
+            if (res.maxed) Save.data.coins += MAXED_COINS;
             gsap.to(card.scale, { x: 1, duration: this.skipAll ? 0.02 : 0.15, ease: 'back.out(2)', onComplete: done });
             if (!this.skipAll) {
               Sound.play('cardFan', { vol: 0.5 });

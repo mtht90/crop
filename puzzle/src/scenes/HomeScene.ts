@@ -18,7 +18,9 @@ import { GachaScene } from './GachaScene';
 import { MissionScene } from './MissionScene';
 import { DressScene } from './DressScene';
 import { claimableCount } from '../data/missions';
-import { CoinCounter, openSettings, stars } from './common';
+import { MAX_LIVES, fmtTime, lives, nextLifeIn } from '../data/play';
+import { CoinCounter, loginPopup, openPrep, openSettings, stars } from './common';
+import { claimLogin } from '../data/login';
 
 export class HomeScene extends Scene {
   private bg = new MenuBackground(0x6a4dff, 0xff7ab8);
@@ -56,16 +58,23 @@ export class HomeScene extends Scene {
 
     // top bar
     const coins = new CoinCounter();
+    this.coinCounter = coins;
     coins.position.set(40, top + 40);
     const settings = iconButton('settings', 80, () => openSettings(this.col));
     settings.position.set(650, top + 38);
     const best = txt(`ベスト ${fmt(Save.data.best)}`, { size: 24, stroke: 0x2a1630, strokeWidth: 6 });
     best.position.set(430, top + 38);
     this.col.addChild(coins, settings, best);
+    // lives (one per round, refill every 10 minutes)
+    const lifeBg = new Graphics().roundRect(-20, -22, 300, 44, 22).fill({ color: 0x2a1630, alpha: 0.85 });
+    lifeBg.position.set(40, top + 96);
+    this.lifeT.position.set(30, top + 96);
+    this.col.addChild(lifeBg, this.lifeT);
+    this.tickLives();
 
     // boss card (◀ ▶ picks any boss reached so far)
     const card = new Container();
-    card.position.set(360, top + 200);
+    card.position.set(360, top + 228);
     const cg = new Graphics();
     cg.roundRect(-320, -90, 640, 190, 34).fill({ color: 0x000000, alpha: 0.25 });
     cg.roundRect(-320, -96, 640, 190, 34).fill(grad([[0, '#3a2470'], [1, '#22164a']]));
@@ -165,7 +174,13 @@ export class HomeScene extends Scene {
       this.col.addChild(tipC);
       gsap.to(tipC, { y: tipC.y - 10, duration: 0.6, yoyo: true, repeat: -1, ease: 'sine.inOut' });
     }
-    if (Save.data.notice) this.showNotice(Save.data.notice);
+    const notice = () => Save.data.notice && this.showNotice(Save.data.notice);
+    const login = Save.data.tutorialDone ? claimLogin() : null;
+    if (login) loginPopup(this.col, login.day, login.got, () => {
+      this.coinCounter?.refresh();
+      notice();
+    });
+    else notice();
   }
 
   private cardBody = new Container();
@@ -245,8 +260,10 @@ export class HomeScene extends Scene {
   }
 
   private startBattle(): void {
-    Sound.stopMusic(0.4);
-    Scenes.go(() => new BattleScene());
+    openPrep(this.col, (items) => {
+      Sound.stopMusic(0.4);
+      Scenes.go(() => new BattleScene(items));
+    });
   }
 
   resize(): void {
@@ -254,7 +271,22 @@ export class HomeScene extends Scene {
     this.col.x = App.colX;
   }
 
+  private coinCounter?: CoinCounter;
+  private lifeT = txt('', { size: 26, color: 0xff6a8a, anchor: [0, 0.5] });
+  private lifeClock = 0;
+
+  private tickLives(): void {
+    const n = lives();
+    const wait = nextLifeIn();
+    this.lifeT.text = `${'♥'.repeat(n)}${'♡'.repeat(MAX_LIVES - n)}  ${wait ? fmtTime(wait) : 'MAX'}`;
+  }
+
   update(dt: number): void {
+    this.lifeClock -= dt;
+    if (this.lifeClock <= 0) {
+      this.lifeClock = 1;
+      this.tickLives();
+    }
     this.t += dt;
     this.bg.update(dt);
     this.fx.update(dt);

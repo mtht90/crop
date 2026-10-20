@@ -48,6 +48,13 @@ export interface SaveData {
   tutorialDone: boolean;
   /** One-time message for the home screen (e.g. refunds for retired characters). */
   notice?: string;
+  /** Economy version: v2 pays ~1,000–6,000 coins a round (old balances are scaled up). */
+  econ: number;
+  /** Lives: one per round, up to 5, one back every 10 minutes. `lifeAt` = when the next one started refilling. */
+  lives: number;
+  lifeAt: number;
+  /** Login bonus: last day claimed and the streak (1–7). */
+  login: { day: string; streak: number };
   /** Lifetime counters for achievements. */
   stats: Partial<Stats>;
   daily: { date: string; ids: string[]; stats: Partial<Stats>; claimed: string[]; bonus: boolean };
@@ -73,6 +80,10 @@ function defaults(): SaveData {
     totalPulls: 0,
     pity: 0,
     tutorialDone: false,
+    econ: 2,
+    lives: 5,
+    lifeAt: 0,
+    login: { day: '', streak: 0 },
     stats: {},
     daily: { date: '', ids: [], stats: {}, claimed: [], bonus: false },
     claimed: [],
@@ -87,14 +98,14 @@ function load(): SaveData {
     const raw = localStorage.getItem(KEY);
     if (!raw) return d;
     const parsed = JSON.parse(raw) as Partial<SaveData>;
-    return migrate({ ...d, ...parsed, settings: { ...d.settings, ...(parsed.settings ?? {}) }, look: { ...d.look, ...(parsed.look ?? {}) }, owned: { ...d.owned, ...(parsed.owned ?? {}) } });
+    return migrate({ ...d, ...parsed, settings: { ...d.settings, ...(parsed.settings ?? {}) }, look: { ...d.look, ...(parsed.look ?? {}) }, owned: { ...d.owned, ...(parsed.owned ?? {}) } }, parsed.econ ?? 1);
   } catch {
     return d;
   }
 }
 
 /** Retired characters turn into coins. */
-function migrate(d: SaveData): SaveData {
+function migrate(d: SaveData, econ = 2): SaveData {
   const lines: string[] = [];
   for (const [id, r] of Object.entries(RETIRED)) {
     const o = d.owned[id];
@@ -105,6 +116,11 @@ function migrate(d: SaveData): SaveData {
     lines.push(`${r.name} → ${coins}コイン`);
   }
   if (!d.owned[d.selected]) d.selected = 'kh_a';
+  // economy v2: gacha went from 300 to 10,000 coins, so old balances scale with it
+  if (econ < 2) {
+    d.coins = Math.round(d.coins * (10000 / 300));
+    d.econ = 2;
+  }
   // v1 characters leveled up from duplicates (Lv1–10); now levels come from play and duplicates are limit breaks
   for (const o of Object.values(d.owned) as Partial<OwnedChar>[]) {
     if (o.skill !== undefined) continue;
@@ -124,6 +140,28 @@ function migrate(d: SaveData): SaveData {
     }
   }
   return d;
+}
+
+const CODE_PREFIX = 'PUNI1:';
+
+/** The save as a copyable code (base64 of the JSON). */
+export function exportSave(): string {
+  const json = JSON.stringify(Save.data);
+  return CODE_PREFIX + btoa(unescape(encodeURIComponent(json)));
+}
+
+/** Restores a code from exportSave; false if it isn't valid. */
+export function importSave(code: string): boolean {
+  if (!code.startsWith(CODE_PREFIX)) return false;
+  try {
+    const json = decodeURIComponent(escape(atob(code.slice(CODE_PREFIX.length).replace(/\s/g, ''))));
+    const parsed = JSON.parse(json) as Partial<SaveData>;
+    if (!parsed || typeof parsed !== 'object' || !parsed.owned) return false;
+    localStorage.setItem(KEY, json);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export const Save = {

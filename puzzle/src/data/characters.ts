@@ -93,9 +93,9 @@ export const CHARACTERS: CharDef[] = ROWS.map(([id, name, rarity, atk, skill, ca
 
 /** Characters taken out of the roster (pointy hats don't fit a round piece); copies are refunded. */
 export const RETIRED: Record<string, { name: string; refund: number }> = {
-  l_mage: { name: 'とんがり帽', refund: 150 },
-  mage: { name: 'メイジ', refund: 500 },
-  skel_mage: { name: 'ホネ魔導士', refund: 1500 },
+  l_mage: { name: 'とんがり帽', refund: 6000 },
+  mage: { name: 'メイジ', refund: 20000 },
+  skel_mage: { name: 'ホネ魔導士', refund: 60000 },
 };
 
 export const STARTER_ID = 'kh_a';
@@ -127,14 +127,15 @@ export function growthOf(owned?: Partial<Growth>): Growth {
   return { lv: owned?.lv ?? 1, exp: owned?.exp ?? 0, skill: owned?.skill ?? 1, plus: owned?.plus ?? 0 };
 }
 
-/** EXP from `lv` to `lv + 1`. A normal round gives ~100 EXP. */
+/** EXP from `lv` to `lv + 1`. A normal round gives ~100–150 EXP. */
 export function expToNext(lv: number): number {
-  return Math.round(40 + lv * 6 + lv * lv * 0.05);
+  // early levels take about one round each, later ones several
+  return Math.round(110 + lv * 15 + lv * lv * 0.3);
 }
 
 /** EXP for a round: a base, the score, and a boss bonus. */
 export function expForRound(score: number, defeated: boolean): number {
-  return Math.round(40 + Math.min(score, 3_000_000) / 4000 + (defeated ? 20 : 0));
+  return Math.round(30 + Math.min(score, 3_000_000) / 5000 + (defeated ? 20 : 0));
 }
 
 /** Adds EXP and returns how many levels were gained. */

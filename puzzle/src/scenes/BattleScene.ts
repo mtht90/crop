@@ -21,6 +21,7 @@ import { GIMMICKS, gimmicksFor, type GimmickId } from '../data/gimmicks';
 import { currentFrame, currentLine, currentWallpaper, frameTextures, loadWallpapers, wallpaperAlias } from '../data/cosmetics';
 import { recordRound } from '../data/missions';
 import type { Stats } from '../core/Save';
+import { ITEM_BY_ID, spendLife, type ItemId } from '../data/play';
 import { Assets, type Texture as PTexture } from 'pixi.js';
 import { loadObstacleArt, obstacleTexture, type ObstacleArt } from '../art/PieceArt';
 import type { Texture } from 'pixi.js';
@@ -167,9 +168,10 @@ export class BattleScene extends Scene {
     if (document.hidden && !this.paused && (this.phase === 'play' || this.phase === 'cutin')) this.pause();
   };
 
-  constructor() {
+  constructor(private items: ItemId[] = []) {
     super();
     installBitmapFonts();
+    if (items.includes('time')) this.timeLeft = BATTLE_TIME + 5;
     const sel = Save.data.selected;
     this.def = CHAR_BY_ID[sel] ?? CHARACTERS[0];
     this.growth = growthOf(Save.data.owned[this.def.id]);
@@ -242,6 +244,11 @@ export class BattleScene extends Scene {
       this.hud.addChild(lineup);
     }
     this.effectLabel.position.set(24, top + 204);
+    if (this.items.length) {
+      const it = txt(this.items.map((i) => ITEM_BY_ID[i].name).join('・'), { size: 18, color: 0x9be7ff, stroke: 0x2a1630, strokeWidth: 5, anchor: [1, 0.5] });
+      it.position.set(696, top + 204);
+      this.hud.addChild(it);
+    }
     const coinIco = coinIcon(13);
     coinIco.position.set(600, top + 140);
     this.coinLabel.position.set(696, top + 140);
@@ -267,7 +274,7 @@ export class BattleScene extends Scene {
     this.hud.addChild(this.timer, this.scoreW, this.skillBtn, this.feverG, this.comboL, this.pauseBtn);
     // manual mode: tap the gauge when it is full
     this.skillBtn.on('pointertap', () => void this.activateSkill());
-    this.timer.set(BATTLE_TIME);
+    this.timer.set(this.timeLeft);
     this.layoutStage();
     this.bindInput();
     document.addEventListener('visibilitychange', this.onVis);
@@ -592,11 +599,12 @@ export class BattleScene extends Scene {
     }
     if (cause === 'bomb') this.round.bombs++;
     if (cause === 'chain' && meta.chain >= 7) this.round.chains7++;
-    // coins drop from long chains (6+) and bombs, doubled in fever
+    // Tsum Tsum-style coins: a 4+ chain drops as many coins as its length, skills 2 per piece, bombs 15
     let drop = 0;
-    if ((cause === 'chain' || cause === 'fever') && meta.chain >= 6) drop = Math.floor((meta.chain - 4) / 2);
-    else if (cause === 'bomb') drop = 1;
-    if (drop > 0) this.dropCoins(drop * (this.feverOn ? 2 : 1), meta.x, meta.y);
+    if ((cause === 'chain' || cause === 'fever') && meta.chain >= 4) drop = meta.chain;
+    else if (cause === 'skill') drop = pops.length * 2;
+    else if (cause === 'bomb') drop = 15;
+    if (drop > 0) this.dropCoins(drop, meta.x, meta.y);
     if (cause !== 'rock') {
       this.combo++;
       this.comboT = COMBO_WINDOW * (this.def.passive?.kind === 'shadow' ? 2 : 1);
@@ -605,6 +613,7 @@ export class BattleScene extends Scene {
     mult *= this.comboMult();
     if (this.feverOn) mult *= 2;
     // the big stadium board makes long chains easy; points are scaled so ranks/lines keep their meaning
+    if (this.items.includes('score')) mult *= 1.1;
     const total = Math.round(this.atk * weight * mult * SCORE_SCALE);
     this.committed += total;
     const orbEvery = Math.max(1, Math.ceil(pops.length / 22));
@@ -718,7 +727,7 @@ export class BattleScene extends Scene {
     this.coinsEarned += n;
     const tx = this.coinLabel.x - 70;
     const ty = this.coinLabel.y;
-    for (let i = 0; i < Math.min(n, 6); i++) {
+    for (let i = 0; i < Math.min(Math.ceil(n / 3), 6); i++) {
       const c = coinIcon(14);
       c.position.set(this.boardX + x + (Math.random() - 0.5) * 40, this.boardY + y);
       this.fxTop.view.addChild(c);
@@ -1670,18 +1679,21 @@ export class BattleScene extends Scene {
   private finish(defeated: boolean): void {
     const d = Save.data;
     const score = Math.round(this.landed);
-    // Tsum Tsum-style: most coins drop during play (long chains, bombs); a small bonus on top.
-    // Tuned so ~6 normal rounds pay for a single pull (300).
-    const bonus = 5 + (defeated ? (this.rematch ? 5 : 10) + Math.min(this.bossLv, 30) : 0);
-    const coins = this.coinsEarned + bonus;
+    // Tsum Tsum-style: coins picked up in play + a score bonus + the boss bonus (~1,000–6,000 a round)
+    const scoreCoins = scoreToCoins(score);
+    const bossCoins = defeated ? (this.rematch ? 150 + this.bossLv * 10 : 300 + Math.min(this.bossLv, 50) * 30) : 0;
+    const bonus = scoreCoins + bossCoins;
+    const coins = Math.round((this.coinsEarned + bonus) * (this.items.includes('coin') ? 1.3 : 1));
     // character growth: EXP from playing, rare skill tickets from bosses
     const owned = d.owned[this.def.id];
     const exp = expForRound(score, defeated);
     const before = owned ? owned.lv : 1;
+    const expBefore = owned ? owned.exp : 0;
     const ups = owned ? addExp(this.def, owned, exp) : 0;
     let skillTickets = 0;
-    if (defeated && !this.rematch && this.bossLv % 5 === 0) skillTickets++;
-    if (defeated && Math.random() < (this.rematch ? 0.03 : 0.1)) skillTickets++;
+    // skill tickets are meant to be very rare
+    if (defeated && !this.rematch && this.bossLv % 10 === 0) skillTickets++;
+    if (defeated && Math.random() < (this.rematch ? 0.003 : 0.01)) skillTickets++;
     d.skillTickets += skillTickets;
     const newBest = score > d.best;
     const result: BattleResult = {
@@ -1700,6 +1712,9 @@ export class BattleScene extends Scene {
       prevBest: d.best,
       charId: this.def.id,
       exp,
+      expBefore,
+      expAfter: owned ? owned.exp : 0,
+      coinParts: { play: this.coinsEarned, score: scoreCoins, boss: bossCoins, item: this.items.includes('coin') },
       lvBefore: before,
       lvAfter: before + ups,
       skillTickets,
@@ -1748,6 +1763,8 @@ export class BattleScene extends Scene {
       w: 380, h: 90, label: 'やりなおす', color: 'blue', onTap: () => {
         close();
         this.phase = 'end';
+        // a retry is a new round: it costs a life (items are not carried over)
+        if (!spendLife()) return Sound.play('ui_error');
         Scenes.go(() => new BattleScene());
       },
     });
@@ -1765,6 +1782,13 @@ export class BattleScene extends Scene {
     this.overlay.addChild(ov);
     gsap.globalTimeline.pause();
   }
+}
+
+/** End-of-round coins from the score: 1 per 400 points up to 1M, then diminishing (cap 4,000). */
+export function scoreToCoins(score: number): number {
+  const base = Math.min(score, 1_000_000) / 400;
+  const extra = Math.max(0, score - 1_000_000) / 2000;
+  return Math.floor(Math.min(4000, base + extra));
 }
 
 /** Damage per piece by chain length: grows faster than linearly, so long traces are what pay. */

@@ -206,16 +206,20 @@ export class Button extends Container {
 }
 
 /** Rounded translucent panel. */
+/** Cream "paper" panel with a wooden border (jungle UI style). Pass `color` for a tinted panel. */
 export function panel(w: number, h: number, opts: { color?: number; alpha?: number; line?: number; r?: number } = {}): Graphics {
   const g = new Graphics();
   const r = opts.r ?? 28;
+  // the old default whites map to the paper color
+  const fill = opts.color === undefined || opts.color === 0xffffff || opts.color === 0xfdf7ff ? 0xfff4dc : opts.color;
   g.roundRect(-w / 2, -h / 2 + 8, w, h, r).fill({ color: 0x000000, alpha: 0.25 });
-  g.roundRect(-w / 2, -h / 2, w, h, r).fill({ color: opts.color ?? 0xffffff, alpha: opts.alpha ?? 1 });
-  g.roundRect(-w / 2, -h / 2, w, h, r).stroke({ width: 5, color: opts.line ?? 0x4a2f7a });
+  g.roundRect(-w / 2, -h / 2, w, h, r).fill({ color: 0x8a5a2a, alpha: opts.alpha ?? 1 });
+  g.roundRect(-w / 2 + 7, -h / 2 + 7, w - 14, h - 14, r - 5).fill({ color: fill, alpha: opts.alpha ?? 1 });
+  g.roundRect(-w / 2, -h / 2, w, h, r).stroke({ width: 4, color: opts.line ?? 0x3b2412 });
+  g.roundRect(-w / 2 + 7, -h / 2 + 7, w - 14, h - 14, r - 5).stroke({ width: 2, color: 0xffe2a8, alpha: 0.8 });
   return g;
 }
 
-/** Pop-in animation for newly shown UI. */
 export function popIn(o: Container, delay = 0, from = 0.4): gsap.core.Tween {
   o.scale.set(from);
   o.alpha = 0;

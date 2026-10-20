@@ -1,9 +1,11 @@
 import { Save } from '../core/Save';
 import { CHARACTERS, MAX_PLUS, RARITY_INFO, type CharDef, type Rarity } from './characters';
 
-export const COST_SINGLE = 300;
-export const COST_TEN = 3000;
+export const COST_SINGLE = 10000;
+export const COST_TEN = 100000;
 /** Pulls without an SSR before one is guaranteed. */
+/** Coins for a duplicate of a character already at +99. */
+export const MAXED_COINS = 2000;
 export const PITY = 80;
 
 export interface PullResult {

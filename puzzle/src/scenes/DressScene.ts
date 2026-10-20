@@ -13,14 +13,14 @@ import {
 } from '../data/cosmetics';
 import { unlockHint } from '../data/missions';
 import { HomeScene } from './HomeScene';
-import { CoinCounter, ScrollBox } from './common';
+import { CoinCounter, ScrollBox, menuBar } from './common';
 
 type Item = Wallpaper | Frame | LineStyle;
 const TABS: [LookKind, string][] = [['wallpaper', 'かべがみ'], ['frame', 'フレーム'], ['line', 'ライン']];
 
 /** Wallpapers, board frames and trace lines: won through missions or bought with coins. */
 export class DressScene extends Scene {
-  private bg = new MenuBackground(0x36c2a0, 0x3a7bff);
+  private bg = new MenuBackground(0x36c2a0, 0x3a7bff, 2);
   private col = new Container();
   private coins = new CoinCounter();
   private list!: ScrollBox;
@@ -35,6 +35,7 @@ export class DressScene extends Scene {
     this.view.addChild(this.bg, this.col);
     Sound.music('home', 0.8);
     const top = App.safeTop + 16;
+    menuBar(this.col, 150);
     const title = txt('きせかえ', { size: 52, font: 'dela', stroke: 0x2a1630, strokeWidth: 12 });
     title.position.set(360, top + 46);
     const back = new Button({ w: 150, h: 76, label: 'もどる', color: 'grey', size: 28, sound: 'ui_back', onTap: () => Scenes.go(() => new HomeScene()) });
@@ -67,6 +68,7 @@ export class DressScene extends Scene {
       tile.position.set(-220 + (i % 3) * 220, 30 + Math.floor(i / 3) * 300 + 140);
       c.addChild(tile);
     });
+    this.list.contentH = 30 + Math.ceil(items.length / 3) * 300;
     c.y = keepY;
   }
 

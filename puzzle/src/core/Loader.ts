@@ -20,6 +20,7 @@ export async function loadAll(onProgress: (p: number) => void): Promise<void> {
   const list: { alias: string; src: string }[] = [];
   for (const b of BOSSES) for (const p of BOSS_POSES) list.push({ alias: bossAlias(b.id, p), src: `${A}/boss/${b.id}_${p}.webp` });
   for (const n of JUNGLE) list.push({ alias: `jungle:${n}`, src: `${A}/jungle/${n}.png` });
+  for (let i = 1; i <= 4; i++) list.push({ alias: `menubg:${i}`, src: `${A}/menubg/${i}.webp` });
   for (const a of list) Assets.add(a);
   let texP = 0;
   let sndP = 0;

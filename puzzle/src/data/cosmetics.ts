@@ -3,7 +3,7 @@ import { Save } from '../core/Save';
 
 /** ★1–4 (0 = starter). Price grows with the rank. */
 export type Star = 0 | 1 | 2 | 3 | 4;
-export const PRICE: Record<Star, number> = { 0: 0, 1: 1500, 2: 4000, 3: 10000, 4: 25000 };
+export const PRICE: Record<Star, number> = { 0: 0, 1: 50000, 2: 120000, 3: 300000, 4: 800000 };
 
 /** Puzzle wallpapers: the floor inside the bowl (KayKit dioramas, tools/render-wallpapers.mjs; Fairy-Tale backgrounds). */
 export interface Wallpaper {

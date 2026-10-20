@@ -10,10 +10,10 @@ import { Effects } from '../game/Effects';
 import { COLORS, bigTexture, loadCharacterArt, pieceTexture } from '../art/PieceArt';
 import { CHARACTERS, MAX_LV, MAX_SKILL_LV, RARITY_INFO, charAtk, charCharge, expToNext, growthOf, skillTicketCost, type CharDef } from '../data/characters';
 import { HomeScene } from './HomeScene';
-import { stars } from './common';
+import { stars, menuBar } from './common';
 
 export class CharaScene extends Scene {
-  private bg = new MenuBackground(0x3a7bff, 0x7a4dff);
+  private bg = new MenuBackground(0x3a7bff, 0x7a4dff, 3);
   private col = new Container();
   private fx = new Effects();
   private cards: { c: Container; def: CharDef; sel: Graphics }[] = [];
@@ -23,6 +23,7 @@ export class CharaScene extends Scene {
     this.view.addChild(this.bg, this.col);
     Sound.music('home', 0.8);
     const top = App.safeTop + 16;
+    menuBar(this.col, 120);
     const title = txt('キャラ', { size: 56, font: 'dela', stroke: 0x2a1630, strokeWidth: 12 });
     title.position.set(360, top + 46);
     const back = new Button({ w: 150, h: 76, label: 'もどる', color: 'grey', size: 28, sound: 'ui_back', onTap: () => Scenes.go(() => new HomeScene()) });

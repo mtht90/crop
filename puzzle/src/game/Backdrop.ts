@@ -1,4 +1,4 @@
-import { Container, Graphics, Rectangle, Sprite, TilingSprite, type Texture } from 'pixi.js';
+import { Assets, Container, Graphics, Rectangle, Sprite, Texture, TilingSprite } from 'pixi.js';
 import { tex } from '../core/Loader';
 import { App } from '../core/App';
 
@@ -44,25 +44,35 @@ export class FairyBackdrop extends Container {
   }
 }
 
-/** Fullscreen soft gradient background used by menus. */
+/**
+ * Menu background: a Fairy-Tale scene (same art family as the battle stage) under a soft
+ * colored shade, with a slowly drifting dot pattern. `c1`/`c2` tint the shade per screen.
+ */
 export class MenuBackground extends Container {
   private g = new Graphics();
+  private pic: Sprite;
   private pattern: TilingSprite;
   private t = 0;
-  constructor(private c1 = 0x7a4dff, private c2 = 0xff6fb5) {
+  constructor(private c1 = 0x7a4dff, private c2 = 0xff6fb5, set = 1) {
     super();
-    this.addChild(this.g);
+    this.pic = new Sprite(Assets.get<Texture>(`menubg:${set}`) ?? Texture.EMPTY);
+    this.pic.anchor.set(0.5);
+    this.addChild(this.pic, this.g);
     this.pattern = new TilingSprite({ texture: dotTexture(), width: 100, height: 100 });
+    this.pattern.alpha = 0.35;
     this.addChild(this.pattern);
   }
   layout(w: number, h: number): void {
+    // cover
+    const tw = this.pic.texture.width || 1;
+    const th = this.pic.texture.height || 1;
+    this.pic.scale.set(Math.max(w / tw, h / th));
+    this.pic.position.set(w / 2, h / 2);
     this.g.clear();
-    this.g.rect(0, 0, w, h).fill({ color: this.c1 });
-    // vertical gradient via stacked bands (cheap and smooth enough at this size)
     const bands = 24;
     for (let i = 0; i < bands; i++) {
       const k = i / (bands - 1);
-      this.g.rect(0, (h * i) / bands, w, h / bands + 1).fill({ color: lerpColor(this.c1, this.c2, k) });
+      this.g.rect(0, (h * i) / bands, w, h / bands + 1).fill({ color: lerpColor(this.c1, this.c2, k), alpha: 0.55 });
     }
     this.pattern.width = w;
     this.pattern.height = h;
