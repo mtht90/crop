@@ -606,7 +606,7 @@ export class BattleScene extends Scene {
     }
   }
 
-  private onResolve(pops: PopInfo[], cause: PopCause, meta: { chain: number; color: number; x: number; y: number }): number {
+  private onResolve(pops: PopInfo[], cause: PopCause, meta: { chain: number; color: number; x: number; y: number; tap?: boolean }): number {
     const token = this.nextToken++;
     if (pops.length === 0) return token;
     let weight = pops.reduce((a, p) => a + p.weight, 0);
@@ -620,6 +620,8 @@ export class BattleScene extends Scene {
         mult *= 1.5;
       }
     } else if (cause === 'bomb') mult *= 1.15;
+    // tap skills: each tap does 3/5 of what the same group would as a chain
+    if (meta.tap) mult *= 0.6;
     else if (cause === 'skill') mult *= this.skill.power * 0.6;
     else if (cause === 'rock') weight = pops.length * 2;
     if ((cause === 'chain' || cause === 'fever') && pops.some((p) => p.cursed)) {
@@ -627,6 +629,7 @@ export class BattleScene extends Scene {
       this.floatText('のろわれた…', this.boardX + meta.x, this.boardY + meta.y - 40, 0xc58cff, 30);
     }
     if (this.def.passive?.kind === 'guard' && cause === 'chain' && meta.chain >= 7) mult *= 1.3;
+    if (this.def.passive?.kind === 'oath' && this.feverOn) mult *= 1.2;
     if (this.effects.has('barrier')) mult *= 0.5;
     for (const p of pops) {
       if (p.kind === 'rock') this.round.broken++;
@@ -842,7 +845,7 @@ export class BattleScene extends Scene {
   // ----------------------------------------------------------------- fever
   private startFever(): void {
     this.feverOn = true;
-    this.feverT = FEVER_TIME;
+    this.feverT = FEVER_TIME + (this.def.passive?.kind === 'oath' ? 2 : 0);
     this.feverCount++;
     this.board.fever = true;
     this.board.forceRelease();
@@ -1108,6 +1111,7 @@ export class BattleScene extends Scene {
     kh_a: 'obs:bomb', kh_b: 'sword', kh_c: 'axe', rh_a: 'star', rh_b: 'star', rh_c: 'star', mh_a: 'staff', mh_b: 'sword', mh_c: 'staff',
     bh_a: 'hammer', bh_b: 'star', l_knight: 'shield', l_barbarian: 'obs:bomb', skull: 'obs:skull', skel_minion: 'obs:bone_a',
     knight: 'lightning', barbarian: 'hammer', rogue: 'dagger', hood: 'dagger', skel_warrior: 'sword', skel_rogue: 'dagger',
+    c_student: 'obs:book', c_short: 'star', c_merchant: 'obs:sack', c_archer: 'arrow', c_ninja: 'dagger', c_knight: 'sword',
   };
 
   private runSkill(): void {
@@ -1239,6 +1243,98 @@ export class BattleScene extends Scene {
           b.popWhere((p) => p.color === order[0] || p.color === order[1], R, M);
           Sound.explosion(true);
           this.shake(12, 0.4);
+        });
+        break;
+      }
+      case 'timePlus': {
+        // the clock gets extra seconds, then a few pieces pop
+        this.timeLeft += s.dur ?? 2;
+        this.floatText(`+${s.dur ?? 2}びょう！`, this.skillBtn.x, this.skillBtn.y - 80, 0x9be7ff, 44);
+        Sound.play('powerUp2', { vol: 0.7 });
+        const pick = pieces().sort(() => Math.random() - 0.5).slice(0, s.amount ?? 5);
+        this.volley(prop, pick, 90, true, 0.08);
+        break;
+      }
+      case 'ring': {
+        // a donut around the middle: the very center survives
+        const cx = R;
+        const cy = M + R * 0.1;
+        const inner = R * 0.28;
+        const outer = inner + size * 2;
+        this.orbit(prop, 5, 0.5);
+        gsap.delayedCall(0.35, () => {
+          this.flashBoard(0xffc0e8);
+          this.fxTop.ring(this.boardX + cx, this.boardY + cy, 0xffc0e8, outer / 70, 0.45);
+          b.shockwave(cx, cy, outer);
+          b.popWhere((p) => {
+            const d = Math.hypot(p.x - cx, p.y - cy);
+            return d > inner && d < outer;
+          }, cx, cy);
+          Sound.explosion(false);
+        });
+        break;
+      }
+      case 'bombMaker': {
+        // pieces pop and leave bombs where they were
+        const list = pieces().sort(() => Math.random() - 0.5).slice(0, s.amount ?? 3);
+        list.forEach((q, i) => gsap.delayedCall(i * 0.15, () => {
+          if (q.state !== 'live') return;
+          const x = q.x;
+          const y = q.y;
+          const bag = this.prop(prop, 90);
+          bag.position.set(this.boardX + x, this.boardY + y - 140);
+          gsap.to(bag, { y: this.boardY + y, rotation: 0.6, duration: 0.22, ease: 'power2.in', onComplete: () => {
+            bag.destroy();
+            b.popWhere((p) => p === q, x, y);
+            gsap.delayedCall(0.12, () => b.spawnBomb(x, y, i >= 2 && this.growth.skill >= 4));
+          } });
+        }));
+        this.skillHit(8, 0xffd23f);
+        break;
+      }
+      case 'arrows': {
+        // thin vertical columns, spread across the bowl, each hit by a falling arrow
+        const n = s.amount ?? 3;
+        for (let i = 0; i < n; i++) {
+          const cx = R + (((i + 0.5) / n) - 0.5) * R * 1.5 + (Math.random() - 0.5) * r;
+          gsap.delayedCall(i * 0.16, () => this.slam(prop, cx, M, size, 220, () => {
+            this.beam(this.boardX + cx, this.boardY + M, Math.PI / 2, size * 2);
+            b.popWhere((p) => Math.abs(p.x - cx) < size, cx, 0);
+          }));
+        }
+        break;
+      }
+      case 'shuriken': {
+        // small blasts at spread-out spots
+        const spots = pieces().sort(() => Math.random() - 0.5);
+        const picked: { x: number; y: number }[] = [];
+        for (const q of spots) {
+          if (picked.length >= (s.amount ?? 5)) break;
+          if (picked.every((o) => Math.hypot(o.x - q.x, o.y - q.y) > size * 1.6)) picked.push({ x: q.x, y: q.y });
+        }
+        picked.forEach((o, i) => gsap.delayedCall(i * 0.1, () => {
+          const st = this.prop(prop, 110);
+          st.position.set(this.skillBtn.x, this.skillBtn.y);
+          gsap.to(st, { x: this.boardX + o.x, y: this.boardY + o.y, rotation: 8, duration: 0.25, ease: 'power1.in', onComplete: () => {
+            st.destroy();
+            this.fxTop.ring(this.boardX + o.x, this.boardY + o.y, 0xfff27a, size / 70, 0.3);
+            b.shockwave(o.x, o.y, size * 1.2);
+            b.popWhere((p) => Math.hypot(p.x - o.x, p.y - o.y) < size, o.x, o.y);
+            Sound.play('hitHeavy', { vol: 0.5, rate: 1.3 });
+          } });
+        }));
+        break;
+      }
+      case 'xBlast': {
+        // two wide slashes cross in the middle, and the fever gauge jumps
+        this.slash(prop, R, M, Math.PI / 4, size, 0xff7ad9);
+        gsap.delayedCall(0.16, () => this.slash(prop, R, M, -Math.PI / 4, size, 0xff7ad9));
+        gsap.delayedCall(0.45, () => {
+          this.shake(10, 0.35);
+          if (!this.feverOn) {
+            this.fever = Math.min(100, this.fever + 30);
+            if (this.fever >= 100 && this.phase === 'play') this.startFever();
+          }
         });
         break;
       }
@@ -1833,7 +1929,7 @@ export function chainMult(n: number): number {
 
 /** Rendered KayKit props used by the special moves (public/assets/fx3d). */
 async function loadSkillProps(): Promise<void> {
-  const list = ['sword', 'axe', 'hammer', 'shield', 'staff', 'dagger', 'lightning', 'star'].map((k) => ({ alias: `fx3d:${k}`, src: `./assets/fx3d/${k}.webp` }));
+  const list = ['sword', 'axe', 'hammer', 'shield', 'staff', 'dagger', 'lightning', 'star', 'arrow'].map((k) => ({ alias: `fx3d:${k}`, src: `./assets/fx3d/${k}.webp` }));
   for (const a of list) if (!Assets.resolver.hasKey(a.alias)) Assets.add(a);
   await Assets.load(list.map((a) => a.alias));
 }

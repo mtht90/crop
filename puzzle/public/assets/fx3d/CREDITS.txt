@@ -1,3 +1,4 @@
 Skill effect sprites rendered from KayKit 3D models (CC0, Kay Lousberg):
 - KayKit Dungeon Pack 1.0: sword_rare, axeDouble_rare, hammer_rare, shield_rare, staff_rare, dagger_rare
 - KayKit Mini-Game Variety Pack 1.2: lightning, star
+- KayKit Character Pack: Adventurers 1.0: arrow

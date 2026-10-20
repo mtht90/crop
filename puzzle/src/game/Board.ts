@@ -60,7 +60,8 @@ export type PopCause = 'chain' | 'bomb' | 'fever' | 'skill' | 'rock';
 
 export interface BoardEvents {
   /** Fired once per resolved action with every piece it popped (pieces pop over time after this). */
-  onResolve(pops: PopInfo[], cause: PopCause, meta: { chain: number; color: number; x: number; y: number }): number;
+  /** `tap` marks a pop from a tap skill (weaker per tap than a traced chain). */
+  onResolve(pops: PopInfo[], cause: PopCause, meta: { chain: number; color: number; x: number; y: number; tap?: boolean }): number;
   /** Fired for every single piece as it visibly pops. `token` is what onResolve returned. */
   onPiecePop(p: PopInfo, index: number, cause: PopCause, token: number): void;
   onChainChange?(len: number, effective: number, color: number): void;
@@ -746,7 +747,7 @@ export class Board {
     for (const p of group) p.state = 'popping';
     const eff = group.reduce((a, p) => a + p.weight, 0);
     const rocks = this.rocksNear(group);
-    const tok = this.ev.onResolve(group.map((p) => this.info(p)), 'fever', { chain: eff, color: start.color, x: start.x, y: start.y });
+    const tok = this.ev.onResolve(group.map((p) => this.info(p)), 'fever', { chain: eff, color: start.color, x: start.x, y: start.y, tap: true });
     group.forEach((p, i) => this.popPiece(p, i * 0.025, i, 'fever', tok));
     if (rocks.length) {
       const rt = this.ev.onResolve(rocks.map((r) => this.info(r)), 'rock', { chain: 0, color: -1, x: start.x, y: start.y });

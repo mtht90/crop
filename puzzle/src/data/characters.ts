@@ -16,6 +16,12 @@ export type SkillKind =
   | 'colorBlast' // pop every piece of the most common color
   | 'twoColor' // pop every piece of the two most common colors
   | 'feverTap' // start fever and allow group tapping for its duration
+  | 'timePlus' // add seconds, then pop a few random pieces
+  | 'ring' // clear a donut around the middle
+  | 'bombMaker' // turn pieces into bombs
+  | 'arrows' // clear several thin vertical columns
+  | 'shuriken' // small blasts at random spots
+  | 'xBlast' // a wide X across the bowl, plus fever gauge
   | 'allClear'; // pop everything
 
 export interface Skill {
@@ -33,7 +39,7 @@ export interface Skill {
   dur?: number;
 }
 
-export type PassiveKind = 'guard' | 'shadow';
+export type PassiveKind = 'guard' | 'shadow' | 'oath';
 
 /** Always-on bonus (SSR only). */
 export interface Passive {
@@ -69,23 +75,30 @@ const ROWS: Row[] = [
   ['mh_c', 'ひげ見習い', 'N', 101, { kind: 'bigMaker', name: 'みならいマジック', desc: '3個をデカピースに変える', charge: 25, power: 1.5, amount: 3 }, 'おひげを伸ばし中の見習い魔法使い。'],
   ['bh_a', 'ひげ親方', 'N', 104, { kind: 'bottom', name: 'かなづちドン', desc: 'ボウルの底をまとめて消す', charge: 27, power: 1.85, size: 2.2 }, '鍛冶屋の親方。声が大きい。'],
   ['bh_b', 'ひげ兄貴', 'N', 103, { kind: 'rim', name: 'ぐるっとひとまわり', desc: 'ボウルのふちを一周消す', charge: 28, power: 1.45, size: 1.6 }, '力持ちの兄貴分。面倒見がいい。'],
+  ['c_student', 'まなぶちゃん', 'N', 100, { kind: 'timePlus', name: 'しゅくだいタイム', desc: '時間を2秒のばして5個消す', charge: 26, power: 1.8, amount: 5, dur: 2 }, '宿題はいつもギリギリに終わらせる。'],
+  ['c_short', 'ぱっつん', 'N', 101, { kind: 'ring', name: 'まんまるリング', desc: 'まんなかをドーナツ形に消す', charge: 27, power: 2.0, size: 1.6 }, '前髪はミリ単位でととのえる派。'],
   // R
   ['l_knight', '見習い騎士', 'R', 115, { kind: 'circle', name: 'たてのいちげき', desc: 'まんなかを大きく丸く消す', charge: 30, power: 6.0, amount: 1, size: 4.3 }, 'かぶとが大きくてちょっと前が見えない。'],
   ['l_barbarian', 'クマかぶり', 'R', 119, { kind: 'bombs', name: 'ダブルボム', desc: 'ボムを2個おとす', charge: 30, power: 4.68, amount: 2 }, 'クマの毛皮がお気に入りの戦士。'],
   ['skull', 'ドクロ', 'R', 121, { kind: 'random', name: 'カラカラわらい', desc: 'ランダムに14個消す', charge: 30, power: 2.73, amount: 14 }, 'カラカラ笑うおちゃめなドクロ。'],
   ['skel_minion', 'ホネっこ', 'R', 112, { kind: 'tapPop', name: 'ホネまわし', desc: '3秒間タップでまとめて消せる', charge: 40, power: 1.6, dur: 3 }, 'ホネだけど元気いっぱい。'],
+  ['c_merchant', 'あきんど', 'R', 116, { kind: 'bombMaker', name: 'おまけボム', desc: '3個をボムに変える', charge: 30, power: 1.9, amount: 3 }, 'なんでも売ってる旅の商人。おまけつき。'],
+  ['c_archer', 'ゆみつかい', 'R', 118, { kind: 'arrows', name: 'アローレイン', desc: '細い縦の列を3本消す', charge: 30, power: 4.0, amount: 3, size: 0.9 }, '森で育った弓の名手。'],
   // SR
   ['knight', 'ナイト', 'SR', 190, { kind: 'colorBlast', name: 'いっせい攻撃', desc: 'いちばん多い色を全部消す', charge: 18, power: 11.0 }, '王国を守る正義の騎士。'],
   ['barbarian', 'バーバリアン', 'SR', 192, { kind: 'bottom', name: 'じならし', desc: 'ボウルの下半分をまとめて消す', charge: 22, power: 5.8, size: 4.4 }, 'クマの頭をかぶった豪快な戦士。'],
   ['rogue', 'ローグ', 'SR', 188, { kind: 'random', name: 'れんぞくアロー', desc: 'ランダムに32個消す', charge: 30, power: 3.02, amount: 32 }, '身軽な弓の名手。'],
   ['hood', 'フードローグ', 'SR', 186, { kind: 'tapPop', name: 'フードの手品', desc: '12秒間タップでまとめて消せる', charge: 32, power: 3.8, dur: 12 }, 'フードの奥で何を考えているのかな？'],
+  ['c_ninja', 'くのいち', 'SR', 188, { kind: 'shuriken', name: 'しゅりけん乱舞', desc: '5か所を小さく丸く消す', charge: 24, power: 7.2, amount: 5, size: 1.8 }, '口数は少ないけど面倒見はいい。'],
   // SSR
   ['skel_warrior', 'ホネ戦士', 'SSR', 250, { kind: 'twoColor', name: 'ダブルブレイク', desc: '多い2色を全部消す', charge: 20, power: 8.0 }, '角かぶとのスケルトン戦士。'],
   ['skel_rogue', 'ホネ盗賊', 'SSR', 245, { kind: 'feverTap', name: 'かげのうたげ', desc: 'フィーバー突入＋その間タップでまとめて消せる', charge: 90, power: 2.8 }, '赤いフードの神出鬼没なスケルトン。'],
+  ['c_knight', 'ひめきし', 'SSR', 248, { kind: 'xBlast', name: 'クロスジャッジ', desc: '大きな×字に消して、フィーバーゲージ+30%', charge: 22, power: 8.0, size: 1.5 }, 'かぶとの下はひみつのお姫さま。'],
 ];
 
 const PASSIVES: Record<string, Passive> = {
   skel_warrior: { kind: 'guard', name: 'ホネのよろい', desc: 'ボスの妨害を3回まではじく\n7つ以上つなぐとダメージ1.3倍' },
+  c_knight: { kind: 'oath', name: 'きしのちかい', desc: 'フィーバーが2秒長い\nフィーバー中のダメージ1.2倍' },
   skel_rogue: { kind: 'shadow', name: 'かげのしのび', desc: 'ボスの妨害がすぐおわる（時間半分）\nコンボがきれにくい' },
 };
 
@@ -196,7 +209,7 @@ export function skillAt(c: CharDef, sl: number): Skill {
     ...s,
     // gauges fill 20% faster than they used to, so each use hits a bit softer
     power: s.power * 0.8 * (1 + k * 0.1),
-    amount: s.amount && (s.kind === 'bombs' || s.kind === 'circle' ? s.amount + Math.floor(k / 2) : Math.round(s.amount * (1 + k * 0.1))),
+    amount: s.amount && (['bombs', 'circle', 'bombMaker', 'arrows', 'shuriken'].includes(s.kind) ? s.amount + Math.floor(k / 2) : Math.round(s.amount * (1 + k * 0.1))),
     size: s.size && s.size * (1 + k * 0.05),
     dur: s.dur && s.dur + k * 0.6,
   };
