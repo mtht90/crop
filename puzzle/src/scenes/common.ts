@@ -165,6 +165,7 @@ export class ScrollBox extends Container {
   private bar = new Graphics();
   private y0 = 0;
   private start = 0;
+  private startX = 0;
   private dragging = false;
   private moved = false;
   private vel = 0;
@@ -192,6 +193,7 @@ export class ScrollBox extends Container {
       this.dragging = true;
       this.moved = false;
       this.start = p.y;
+      this.startX = p.x;
       this.lastY = p.y;
       this.lastT = performance.now();
       this.y0 = this.content.y;
@@ -202,6 +204,11 @@ export class ScrollBox extends Container {
       if (!this.dragging || !e.isPrimary) return;
       const p = local(e);
       const dy = p.y - this.start;
+      // a mostly-sideways drag belongs to page swipes, not to the list
+      if (!this.moved && Math.abs(p.x - this.startX) > Math.abs(dy) * 1.2 && Math.abs(p.x - this.startX) > 14) {
+        this.dragging = false;
+        return;
+      }
       if (Math.abs(dy) > 10 && !this.moved) {
         // it's a scroll, not a tap: children stop reacting until the finger lifts
         this.moved = true;

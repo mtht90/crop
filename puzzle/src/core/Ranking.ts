@@ -1,5 +1,6 @@
 import { Save } from './Save';
 import { giveReward, type Reward } from '../data/missions';
+import { botsFor, weekStartMs } from '../data/rankBots';
 
 /**
  * Weekly online ranking on Supabase (REST, no SDK). Configure with the build-time env
@@ -93,6 +94,33 @@ export async function topScores(week: string, limit = 100): Promise<RankRow[]> {
   return (await r.json()) as RankRow[];
 }
 
+/** Players who have ever played (bots fill the board until there are enough). Cached per session. */
+let playersCache: number | null = null;
+export async function totalPlayers(): Promise<number> {
+  if (playersCache !== null) return playersCache;
+  try {
+    playersCache = await rpc<number>('total_players', {});
+  } catch {
+    // older database without total_players(): count rows instead (close enough)
+    const r = await fetch(`${URL}/rest/v1/weekly_scores?select=player_id`, { headers: { ...headers(), Prefer: 'count=exact', Range: '0-0' } });
+    const range = r.headers.get('content-range') ?? '';
+    playersCache = Number(range.split('/')[1]) || 0;
+  }
+  return playersCache;
+}
+
+/** The full board for a week: real players plus filler players, best first. */
+export async function board(week: string, now = Date.now()): Promise<RankRow[]> {
+  const [rows, players] = await Promise.all([topScores(week, 200), totalPlayers()]);
+  const end = Math.min(now, weekStartMs(week) + 7 * 86400_000 - 1);
+  return [...rows, ...botsFor(week, weekStartMs(week), players, end)].sort((a, z) => z.score - a.score);
+}
+
+/** Rank of `score` on a board (ties share a rank). */
+export function rankIn(rows: RankRow[], score: number): number {
+  return rows.filter((r) => r.score > score).length + 1;
+}
+
 export async function myRank(week: string): Promise<{ rank: number; total: number; score: number } | null> {
   if (!Ranking.enabled) return null;
   return rpc('my_rank', { p_player: playerId(), p_week: week });
@@ -122,9 +150,12 @@ export async function claimWeekly(): Promise<{ rank: number; total: number; got:
       Save.write();
       return null;
     }
-    const got = giveReward(weeklyReward(res.rank, res.total));
+    // rank on the board as players saw it (including filler players)
+    const rows = await board(last);
+    const rank = rankIn(rows.filter((x) => x.player_id !== playerId()), res.score);
+    const got = giveReward(weeklyReward(rank, rows.length));
     Save.write();
-    return { rank: res.rank, total: res.total, got };
+    return { rank, total: rows.length, got };
   } catch {
     return null;
   }

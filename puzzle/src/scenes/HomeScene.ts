@@ -20,10 +20,11 @@ import { DressScene } from './DressScene';
 import { claimableCount } from '../data/missions';
 import { ITEMS, MAX_LIVES, fmtTime, lives, nextLifeIn, spendLife, type ItemId } from '../data/play';
 import { tex } from '../core/Loader';
+import { jungle } from '../game/Hud';
 import { CoinCounter, loginPopup, openSettings, rewardPopup, stars } from './common';
 import { claimLogin } from '../data/login';
 import { claimWeekly } from '../core/Ranking';
-import { RankingScene } from './RankingScene';
+import { RankingPanel } from './RankingPanel';
 import { COST_SINGLE } from '../data/gacha';
 
 export class HomeScene extends Scene {
@@ -36,6 +37,15 @@ export class HomeScene extends Scene {
   private boss!: BossView;
   private t = 0;
   private floaters: { s: Sprite; vy: number; vr: number }[] = [];
+  private page = new Container();
+  private pager = new Container();
+  private rank!: RankingPanel;
+  private pageIdx = 0;
+  private dom: [string, EventListener][] = [];
+
+  constructor(private startPage = 0) {
+    super();
+  }
 
   async preload(): Promise<void> {
     await loadCharacterArt([Save.data.selected], { strips: true });
@@ -43,6 +53,11 @@ export class HomeScene extends Scene {
 
   enter(): void {
     this.view.addChild(this.bg, this.col);
+    // two pages side by side: home, and this week's ranking to the right (swipe or arrows)
+    this.rank = new RankingPanel(this.col);
+    this.rank.x = App.W;
+    this.pager.addChild(this.page, this.rank);
+    this.col.addChild(this.pager);
     Sound.music('home', 0.8);
     const H = App.H;
     const top = App.safeTop + 16;
@@ -56,7 +71,7 @@ export class HomeScene extends Scene {
       s.scale.set(0.25 + Math.random() * 0.25);
       s.alpha = 0.22;
       s.position.set(Math.random() * 720, Math.random() * H);
-      this.col.addChild(s);
+      this.page.addChild(s);
       this.floaters.push({ s, vy: -(10 + Math.random() * 20), vr: (Math.random() - 0.5) * 0.4 });
     }
 
@@ -68,21 +83,21 @@ export class HomeScene extends Scene {
     settings.position.set(650, top + 38);
     const best = txt(`ベスト ${fmt(Save.data.best)}`, { size: 24, stroke: 0x2a1630, strokeWidth: 6 });
     best.position.set(430, top + 38);
-    this.col.addChild(coins, settings, best);
+    this.page.addChild(coins, settings, best);
     // lives (one per round, refill every 10 minutes)
     const lifeBg = new Graphics().roundRect(-20, -26, 330, 52, 26).fill({ color: 0x2a1630, alpha: 0.85 });
     lifeBg.position.set(40, top + 98);
-    this.col.addChild(lifeBg);
+    this.page.addChild(lifeBg);
     for (let i = 0; i < MAX_LIVES; i++) {
       const h = new Sprite(tex('ui:heart'));
       h.anchor.set(0.5);
       h.scale.set(40 / Math.max(1, h.texture.width));
       h.position.set(44 + i * 40, top + 98);
       this.hearts.push(h);
-      this.col.addChild(h);
+      this.page.addChild(h);
     }
     this.lifeT.position.set(250, top + 98);
-    this.col.addChild(this.lifeT);
+    this.page.addChild(this.lifeT);
     this.tickLives();
 
     // boss card (◀ ▶ picks any boss reached so far)
@@ -93,7 +108,7 @@ export class HomeScene extends Scene {
     cg.roundRect(-320, -96, 640, 190, 34).fill(grad([[0, '#3a2470'], [1, '#22164a']]));
     cg.roundRect(-320, -96, 640, 190, 34).stroke({ width: 4, color: 0xffffff, alpha: 0.3 });
     card.addChild(cg, this.cardBody);
-    this.col.addChild(card);
+    this.page.addChild(card);
     popIn(card, 0.05, 0.8);
     const max = Save.data.bossLv;
     if (max > 1) {
@@ -121,7 +136,7 @@ export class HomeScene extends Scene {
     this.heroSprite.cursor = 'pointer';
     this.heroSprite.on('pointertap', () => this.poke());
     this.hero.addChild(this.heroSprite);
-    this.col.addChild(this.hero, this.fx.view);
+    this.page.addChild(this.hero, this.fx.view);
     const rinfo = RARITY_INFO[def.rarity];
     const nameRow = new Container();
     nameRow.position.set(360, heroY + 225);
@@ -137,7 +152,7 @@ export class HomeScene extends Scene {
     st.position.set(360, heroY + 275);
     const info = txt(`こうげき ${charAtk(def, growthOf(owned))}   必殺技「${def.skill.name}」`, { size: 24, stroke: 0x2a1630, strokeWidth: 6 });
     info.position.set(360, heroY + 318);
-    this.col.addChild(nameRow, st, info);
+    this.page.addChild(nameRow, st, info);
 
     // buttons
     const by = H - App.safeBottom - 120;
@@ -149,17 +164,14 @@ export class HomeScene extends Scene {
     chara.position.set(195, by);
     const gacha = new Button({ w: 300, h: 100, label: 'ガチャ', color: 'yellow', size: 38, onTap: () => Scenes.go(() => new GachaScene()) });
     gacha.position.set(525, by);
-    this.col.addChild(battle, chara, gacha);
+    this.page.addChild(battle, chara, gacha);
     this.buildItems(by - 265);
     // missions / cosmetics on either side of the hero
     const mission = new Button({ w: 170, h: 84, label: 'ミッション', color: 'orange', size: 26, onTap: () => Scenes.go(() => new MissionScene()) });
     mission.position.set(100, heroY - 40);
     const dress = new Button({ w: 170, h: 84, label: 'きせかえ', color: 'green', size: 28, onTap: () => Scenes.go(() => new DressScene()) });
     dress.position.set(620, heroY - 40);
-    const ranking = new Button({ w: 170, h: 84, label: 'ランキング', color: 'purple', size: 24, onTap: () => Scenes.go(() => new RankingScene()) });
-    ranking.position.set(100, heroY + 60);
-    this.col.addChild(mission, dress, ranking);
-    popIn(ranking, 0.3, 0.6);
+    this.page.addChild(mission, dress);
     popIn(mission, 0.2, 0.6);
     popIn(dress, 0.25, 0.6);
     const ready = claimableCount();
@@ -169,7 +181,7 @@ export class HomeScene extends Scene {
       const bt = txt(String(ready), { size: 24, font: 'dela' });
       badge.addChild(bg, bt);
       badge.position.set(175, heroY - 78);
-      this.col.addChild(badge);
+      this.page.addChild(badge);
       gsap.to(badge.scale, { x: 1.2, y: 1.2, duration: 0.5, yoyo: true, repeat: -1, ease: 'sine.inOut' });
     }
     this.fillBossCard(Save.fightLv());
@@ -180,7 +192,7 @@ export class HomeScene extends Scene {
       bgB.circle(0, 0, 22).stroke({ width: 4, color: 0xffffff });
       badge.addChild(bgB, txt('!', { size: 30, font: 'dela' }));
       badge.position.set(650, by - 40);
-      this.col.addChild(badge);
+      this.page.addChild(badge);
       gsap.to(badge.scale, { x: 1.2, y: 1.2, duration: 0.5, yoyo: true, repeat: -1, ease: 'sine.inOut' });
     }
     [battle, chara, gacha].forEach((b, i) => popIn(b, 0.15 + i * 0.06, 0.6));
@@ -190,9 +202,10 @@ export class HomeScene extends Scene {
       const tipC = new Container();
       tipC.addChild(tip, tt);
       tipC.position.set(360, by - 270);
-      this.col.addChild(tipC);
+      this.page.addChild(tipC);
       gsap.to(tipC, { y: tipC.y - 10, duration: 0.6, yoyo: true, repeat: -1, ease: 'sine.inOut' });
     }
+    this.buildPager(top);
     const notice = () => Save.data.notice && this.showNotice(Save.data.notice);
     const login = Save.data.tutorialDone ? claimLogin() : null;
     if (login) loginPopup(this.col, login.day, login.got, () => {
@@ -204,7 +217,7 @@ export class HomeScene extends Scene {
     void claimWeekly().then((res) => {
       if (!res || this.view.destroyed) return;
       this.coinCounter?.refresh();
-      rewardPopup(this.col, 'しゅうかんランキング', [`せんしゅうは ${res.rank}位 / ${res.total}人！`, ...res.got]);
+      rewardPopup(this.col, '週間ランキング', [`先週は ${res.rank}位 / ${res.total}人！`, ...res.got]);
     });
   }
 
@@ -244,6 +257,93 @@ export class HomeScene extends Scene {
     bossClip.mask = bm;
     c.addChild(bm, bossClip, bl, bn, bh, gt);
     this.battleBtn?.setSub(`Lv.${lv} ${bdef.name}に${current ? 'ちょうせん' : 'さいせん'}`);
+  }
+
+  /** Arrows, page dots and swipe between home and the ranking page. */
+  private buildPager(top: number): void {
+    const arrow = (name: string, label: string, x: number, y: number, page: Container, to: number) => {
+      const c = new Container();
+      const s = jungle(name);
+      s.scale.set(64 / Math.max(1, s.texture.width));
+      const t = txt(label, { size: 18, stroke: 0x2a1630, strokeWidth: 5 });
+      t.y = 44;
+      c.addChild(s, t);
+      c.position.set(x, y);
+      c.eventMode = 'static';
+      c.cursor = 'pointer';
+      c.on('pointertap', () => this.goPage(to));
+      gsap.to(c, { x: x + (to ? 6 : -6), duration: 0.6, yoyo: true, repeat: -1, ease: 'sine.inOut' });
+      page.addChild(c);
+    };
+    arrow('next', 'ランキング', 676, App.H * 0.47, this.page, 1);
+    // on the ranking page, beside the podium so it never covers the list
+    arrow('prev', 'ホーム', 40, top + 370, this.rank, 0);
+    this.dots.position.set(360, top + 128);
+    this.col.addChild(this.dots);
+    this.drawDots();
+    // swipe: horizontal drags move the pages (vertical ones are left to lists)
+    let sx = 0;
+    let sy = 0;
+    let dragging = false;
+    let horiz = false;
+    const blocked = () => this.col.children.length > 2 || Scenes.current !== this;
+    const down = (ev: Event) => {
+      const e = ev as PointerEvent;
+      if (!e.isPrimary || blocked()) return;
+      sx = e.clientX;
+      sy = e.clientY;
+      dragging = true;
+      horiz = false;
+    };
+    const move = (ev: Event) => {
+      const e = ev as PointerEvent;
+      if (!dragging || !e.isPrimary) return;
+      const dx = (e.clientX - sx) / App.scale;
+      const dy = (e.clientY - sy) / App.scale;
+      if (!horiz && Math.abs(dx) > 18 && Math.abs(dx) > Math.abs(dy) * 1.4) {
+        horiz = true;
+        this.pager.interactiveChildren = false;
+        gsap.killTweensOf(this.pager);
+      }
+      if (horiz) this.pager.x = Math.max(-App.W - 60, Math.min(60, -this.pageIdx * App.W + dx));
+    };
+    const up = (ev: Event) => {
+      const e = ev as PointerEvent;
+      if (!dragging) return;
+      dragging = false;
+      if (!horiz) return;
+      const dx = (e.clientX - sx) / App.scale;
+      setTimeout(() => (this.pager.interactiveChildren = true), 0);
+      this.goPage(dx < -80 ? 1 : dx > 80 ? 0 : this.pageIdx);
+    };
+    this.dom = [['pointerdown', down], ['pointermove', move], ['pointerup', up], ['pointercancel', up]];
+    for (const [n, f] of this.dom) window.addEventListener(n, f, { passive: true });
+    if (this.startPage) {
+      this.pageIdx = this.startPage;
+      this.pager.x = -App.W * this.startPage;
+      this.drawDots();
+      void this.rank.open();
+    }
+  }
+
+  private dots = new Graphics();
+
+  private drawDots(): void {
+    const g = this.dots.clear();
+    for (let i = 0; i < 2; i++) g.circle((i - 0.5) * 26, 0, i === this.pageIdx ? 8 : 6).fill({ color: 0xffffff, alpha: i === this.pageIdx ? 1 : 0.45 });
+  }
+
+  private goPage(i: number): void {
+    const changed = i !== this.pageIdx;
+    this.pageIdx = i;
+    gsap.to(this.pager, { x: -i * App.W, duration: 0.35, ease: 'power3.out' });
+    this.drawDots();
+    if (changed) Sound.play('cardSlide', { vol: 0.5 });
+    if (i === 1) void this.rank.open();
+  }
+
+  exit(): void {
+    for (const [n, f] of this.dom) window.removeEventListener(n, f);
   }
 
   private showNotice(msg: string): void {
@@ -353,7 +453,7 @@ export class HomeScene extends Scene {
         draw();
         gsap.fromTo(c.scale, { x: 1.12, y: 0.9 }, { x: 1, y: 1, duration: 0.4, ease: 'elastic.out(1.4,0.4)' });
       });
-      this.col.addChild(c);
+      this.page.addChild(c);
       popIn(c, 0.2 + i * 0.04, 0.6);
     });
   }
@@ -401,6 +501,7 @@ export class HomeScene extends Scene {
   }
 
   update(dt: number): void {
+    this.rank?.update(dt);
     this.lifeClock -= dt;
     if (this.lifeClock <= 0) {
       this.lifeClock = 1;

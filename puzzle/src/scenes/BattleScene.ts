@@ -24,6 +24,7 @@ import type { Stats } from '../core/Save';
 import { Dev, devFab } from '../core/Dev';
 import { submitScore } from '../core/Ranking';
 import { ITEM_BY_ID, rollCoinBoost, spendLife, type ItemId } from '../data/play';
+import { expectedScore } from '../data/rank';
 import { Assets, type Texture as PTexture } from 'pixi.js';
 import { loadObstacleArt, obstacleTexture, type ObstacleArt } from '../art/PieceArt';
 import type { Texture } from 'pixi.js';
@@ -86,6 +87,7 @@ export class BattleScene extends Scene {
   /** The character's skill at its skill level. */
   private skill: Skill;
   private coinSkill = { perPiece: 0, flat: 0 };
+  private expected = 0;
   private atk: number;
   private chargeNeed: number;
   private bossLv: number;
@@ -185,6 +187,8 @@ export class BattleScene extends Scene {
     this.atk = charAtk(this.def, this.growth);
     this.chargeNeed = charCharge(this.def, this.growth);
     this.skill = skillAt(this.def, this.growth.skill);
+    // the rank at the end is judged against this (set from the starting stats)
+    this.expected = expectedScore(this.def, this.growth, bossHp(Save.fightLv()), items);
     // coin skill grows 10% per skill level
     const cs = COIN_SKILL[this.def.rarity];
     const k = 1 + (this.growth.skill - 1) * 0.1;
@@ -1734,6 +1738,7 @@ export class BattleScene extends Scene {
       defeated,
       bossLv: this.bossLv,
       rematch: this.rematch,
+      expected: this.expected,
       bossName: this.bossDef.name,
       maxCombo: this.maxCombo,
       maxChain: this.maxChain,

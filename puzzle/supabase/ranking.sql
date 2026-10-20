@@ -70,3 +70,10 @@ $$;
 
 grant execute on function public.submit_score(uuid, text, bigint, text) to anon;
 grant execute on function public.my_rank(uuid, date) to anon;
+
+-- How many players have ever played (the game fills the board with extra players below 100).
+create or replace function public.total_players() returns integer
+language sql stable security definer set search_path = public as $$
+  select count(distinct player_id)::int from public.weekly_scores
+$$;
+grant execute on function public.total_players() to anon;

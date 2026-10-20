@@ -57,6 +57,17 @@ export class MissionScene extends Scene {
     for (const ch of c.removeChildren()) ch.destroy({ children: true });
     c.y = 0;
     let y = 20;
+    // claim everything ready on this tab at once
+    const ready = t === 'daily'
+      ? dailyMissions().filter((m) => canClaim(m, true)).length + (dailyBonusReady() ? 1 : 0)
+      : ACHIEVEMENTS.filter((m) => canClaim(m, false)).length;
+    if (ready > 0) {
+      const all = new Button({ w: 440, h: 84, label: `まとめてうけとる（${ready}）`, color: 'yellow', size: 30, onTap: () => this.claimAll(t) });
+      all.position.set(0, y + 44);
+      c.addChild(all);
+      popIn(all, 0, 0.7);
+      y += 104;
+    }
     if (t === 'daily') {
       const head = txt('まいにち3つ。ぜんぶクリアでボーナス！', { size: 24, stroke: 0x2a1630, strokeWidth: 6 });
       head.position.set(0, y + 10);
@@ -141,6 +152,26 @@ export class MissionScene extends Scene {
     }
     this.list.content.addChild(r);
     return y + 150;
+  }
+
+  private claimAll(t: Tab): void {
+    const got: string[] = [];
+    if (t === 'daily') {
+      for (const m of dailyMissions()) got.push(...claim(m, true));
+      got.push(...claimDailyBonus());
+    } else for (const m of ACHIEVEMENTS) got.push(...claim(m, false));
+    // add up repeated coin/ticket lines
+    const sum = new Map<string, number>();
+    const other: string[] = [];
+    for (const g of got) {
+      const coin = g.match(/^(\d+)コイン$/);
+      const tk = g.match(/^(.+)×(\d+)$/);
+      if (coin) sum.set('コイン', (sum.get('コイン') ?? 0) + Number(coin[1]));
+      else if (tk) sum.set(tk[1], (sum.get(tk[1]) ?? 0) + Number(tk[2]));
+      else other.push(g);
+    }
+    const lines = [...[...sum].map(([k, v]) => (k === 'コイン' ? `${fmt(v)}コイン` : `${k}×${v}`)), ...other];
+    this.afterClaim(lines);
   }
 
   private afterClaim(got: string[]): void {

@@ -9,6 +9,7 @@ import { Effects } from '../game/Effects';
 import { num, installBitmapFonts } from '../game/Hud';
 import { bigTexture } from '../art/PieceArt';
 import { CHAR_BY_ID, MAX_LV, expToNext } from '../data/characters';
+import { rankFor } from '../data/rank';
 import { BattleScene } from './BattleScene';
 import { HomeScene } from './HomeScene';
 import { fmtTime, nextLifeIn, spendLife } from '../data/play';
@@ -20,6 +21,8 @@ export interface BattleResult {
   defeated: boolean;
   bossLv: number;
   rematch?: boolean;
+  /** Score this setup is expected to reach (rank is relative to it). */
+  expected: number;
   exp: number;
   expBefore: number;
   expAfter: number;
@@ -41,13 +44,7 @@ export interface BattleResult {
 
 /** Rank by absolute score: E <10万, D <50万, C <100万, B <200万, A <400万, S above. */
 function rankOf(r: BattleResult): { rank: string; color: number } {
-  const v = r.score;
-  if (v >= 4_000_000) return { rank: 'S', color: 0xff4fd8 };
-  if (v >= 2_000_000) return { rank: 'A', color: 0xffb020 };
-  if (v >= 1_000_000) return { rank: 'B', color: 0x4fc3ff };
-  if (v >= 500_000) return { rank: 'C', color: 0x5fd068 };
-  if (v >= 100_000) return { rank: 'D', color: 0x9aa7b8 };
-  return { rank: 'E', color: 0x7a7f90 };
+  return rankFor(r.score, r.expected);
 }
 
 export class ResultScene extends Scene {
@@ -174,6 +171,9 @@ export class ResultScene extends Scene {
     stamp.position.set(200, -pH / 2 + 340);
     stamp.rotation = -0.2;
     box.addChild(stamp);
+    const ex = txt(`めやす ${fmt(r.expected)}`, { size: 18, color: 0x8a6cff });
+    ex.position.set(200, -pH / 2 + 446);
+    box.addChild(ex);
     await this.wait(0.35);
     stamp.scale.set(3);
     stamp.alpha = 0;
