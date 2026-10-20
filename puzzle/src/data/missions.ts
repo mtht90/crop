@@ -9,6 +9,8 @@ export interface Reward {
   skillTickets?: number;
   wallpaper?: string;
   frame?: string;
+  /** Lives (can go past the usual 5, like gifted hearts). */
+  lives?: number;
 }
 
 export interface Mission {
@@ -25,23 +27,23 @@ export type StatKey = keyof Stats | 'bossLv' | 'owned' | 'pulls' | 'best' | 'cha
 
 // ------------------------------------------------------------------ daily
 const DAILY_POOL: Mission[] = [
-  { id: 'd_play', text: 'バトルを3回あそぶ', stat: 'plays', goal: 3, reward: { coins: 1600 } },
+  { id: 'd_play', text: 'バトルを3回あそぶ', stat: 'plays', goal: 3, reward: { coins: 1600, lives: 1 } },
   { id: 'd_pops', text: 'ぷにを300こ消す', stat: 'pops', goal: 300, reward: { coins: 2000 } },
   { id: 'd_fever', text: 'フィーバーを3回する', stat: 'fevers', goal: 3, reward: { coins: 2000 } },
   { id: 'd_skill', text: '必殺技を3回つかう', stat: 'skills', goal: 3, reward: { coins: 1600 } },
   { id: 'd_bomb', text: 'ボムを5こつかう', stat: 'bombs', goal: 5, reward: { coins: 1600 } },
   { id: 'd_chain7', text: '7こ以上つなぐのを10回', stat: 'chains7', goal: 10, reward: { coins: 2000 } },
   { id: 'd_broken', text: 'ボスの妨害を15こ消す', stat: 'broken', goal: 15, reward: { coins: 2000 } },
-  { id: 'd_defeat', text: 'ボスを1回たおす', stat: 'defeats', goal: 1, reward: { coins: 2400 } },
+  { id: 'd_defeat', text: 'ボスを1回たおす', stat: 'defeats', goal: 1, reward: { coins: 2400, lives: 1 } },
   { id: 'd_combo', text: '1回のバトルで30コンボ', stat: 'maxCombo', goal: 30, reward: { coins: 2400 } },
 ];
 export const DAILY_COUNT = 3;
 /** Clearing every daily mission adds this. */
-export const DAILY_BONUS: Reward = { tickets: 1 };
+export const DAILY_BONUS: Reward = { tickets: 1, lives: 3 };
 
 // ----------------------------------------------------------- achievements
 export const ACHIEVEMENTS: Mission[] = [
-  { id: 'a_lv3', text: 'ボスLv.3をたおす', stat: 'bossLv', goal: 4, reward: { coins: 5000 } },
+  { id: 'a_lv3', text: 'ボスLv.3をたおす', stat: 'bossLv', goal: 4, reward: { coins: 5000, lives: 3 } },
   { id: 'a_lv5', text: 'ボスLv.5をたおす', stat: 'bossLv', goal: 6, reward: { tickets: 1 } },
   { id: 'a_lv8', text: 'ボスLv.8をたおす', stat: 'bossLv', goal: 9, reward: { coins: 20000 } },
   { id: 'a_lv10', text: 'ボスLv.10をたおす', stat: 'bossLv', goal: 11, reward: { tickets: 2 } },
@@ -58,12 +60,12 @@ export const ACHIEVEMENTS: Mission[] = [
   { id: 'a_score1', text: 'スコア30万点をとる', stat: 'best', goal: 300000, reward: { coins: 12000 } },
   { id: 'a_score2', text: 'スコア100万点をとる', stat: 'best', goal: 1000000, reward: { coins: 20000 } },
   { id: 'a_score3', text: 'スコア300万点をとる', stat: 'best', goal: 3000000, reward: { frame: 'meadow', tickets: 3 } },
-  { id: 'a_fever1', text: 'フィーバーをあわせて10回', stat: 'fevers', goal: 10, reward: { coins: 12000 } },
+  { id: 'a_fever1', text: 'フィーバーをあわせて10回', stat: 'fevers', goal: 10, reward: { coins: 12000, lives: 3 } },
   { id: 'a_fever2', text: 'フィーバーをあわせて50回', stat: 'fevers', goal: 50, reward: { tickets: 2 } },
   { id: 'a_broken1', text: '妨害をあわせて50こ消す', stat: 'broken', goal: 50, reward: { coins: 12000 } },
   { id: 'a_broken2', text: '妨害をあわせて300こ消す', stat: 'broken', goal: 300, reward: { tickets: 2 } },
   { id: 'a_skill', text: '必殺技をあわせて30回', stat: 'skills', goal: 30, reward: { coins: 12000 } },
-  { id: 'a_own5', text: 'キャラを5体あつめる', stat: 'owned', goal: 5, reward: { coins: 12000 } },
+  { id: 'a_own5', text: 'キャラを5体あつめる', stat: 'owned', goal: 5, reward: { coins: 12000, lives: 3 } },
   { id: 'a_own10', text: 'キャラを10体あつめる', stat: 'owned', goal: 10, reward: { tickets: 2 } },
   { id: 'a_own15', text: 'キャラを15体あつめる', stat: 'owned', goal: 15, reward: { coins: 60000 } },
   { id: 'a_ownAll', text: 'キャラをぜんぶあつめる', stat: 'owned', goal: CHARACTERS.length, reward: { frame: 'gold', tickets: 5 } },
@@ -152,6 +154,10 @@ export function giveReward(r: Reward): string[] {
     d.tickets += r.tickets;
     got.push(`ガチャチケット×${r.tickets}`);
   }
+  if (r.lives) {
+    d.lives += r.lives;
+    got.push(`ライフ×${r.lives}`);
+  }
   if (r.skillTickets) {
     d.skillTickets += r.skillTickets;
     got.push(`スキルチケット×${r.skillTickets}`);
@@ -188,6 +194,7 @@ export function rewardText(r: Reward): string {
   const parts: string[] = [];
   if (r.coins) parts.push(`コイン${r.coins.toLocaleString('en-US')}`);
   if (r.tickets) parts.push(`チケット×${r.tickets}`);
+  if (r.lives) parts.push(`ライフ×${r.lives}`);
   if (r.skillTickets) parts.push(`スキルチケット×${r.skillTickets}`);
   if (r.wallpaper) parts.push(`かべがみ「${WALLPAPER_BY_ID[r.wallpaper]?.name}」`);
   if (r.frame) parts.push(`きせかえ「${FRAME_BY_ID[r.frame]?.name}」`);

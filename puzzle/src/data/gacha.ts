@@ -1,5 +1,5 @@
 import { Save } from '../core/Save';
-import { CHARACTERS, MAX_PLUS, RARITY_INFO, type CharDef, type Rarity } from './characters';
+import { CHARACTERS, MAX_PLUS, MAX_SKILL_LV, RARITY_INFO, type CharDef, type Rarity } from './characters';
 
 export const COST_SINGLE = 30000;
 export const COST_TEN = 300000;
@@ -11,7 +11,10 @@ export const PITY = 80;
 export interface PullResult {
   def: CharDef;
   isNew: boolean;
-  /** Duplicate: limit break went up (to `plus`). */
+  /** Duplicate: skill level went up (to `skill`), like a skill ticket. */
+  skillUp: boolean;
+  skill: number;
+  /** Duplicate of a character at max skill level: limit break went up (to `plus`). */
   plusUp: boolean;
   plus: number;
   /** Already at +99: the copy turns into coins. */
@@ -41,16 +44,20 @@ export function pull(n: number): PullResult[] {
     const def = pool[Math.floor(Math.random() * pool.length)];
     const owned = Save.data.owned[def.id];
     const isNew = !owned;
-    const maxed = !!owned && owned.plus >= MAX_PLUS;
+    // duplicates level the skill first; past max skill level they limit-break, then turn into coins
+    const skillUp = !!owned && owned.skill < MAX_SKILL_LV;
+    const plusUp = !!owned && !skillUp && owned.plus < MAX_PLUS;
+    const maxed = !!owned && !skillUp && !plusUp;
     if (!owned) Save.data.owned[def.id] = { lv: 1, exp: 0, skill: 1, plus: 0, count: 1 };
     else {
       owned.count++;
-      if (!maxed) owned.plus++;
+      if (skillUp) owned.skill++;
+      else if (plusUp) owned.plus++;
     }
-    const plus = Save.data.owned[def.id].plus;
+    const { plus, skill } = Save.data.owned[def.id];
     Save.data.pity = rarity === 'SSR' ? 0 : Save.data.pity + 1;
     Save.data.totalPulls++;
-    out.push({ def, isNew, plusUp: !isNew && !maxed, plus, maxed });
+    out.push({ def, isNew, skillUp, skill, plusUp, plus, maxed });
   }
   Save.write();
   return out;

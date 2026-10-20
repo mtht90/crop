@@ -57,7 +57,7 @@ export interface SaveData {
   /** Items paid for on the home screen, used by the next round. */
   pendingItems: ItemId[];
   /** Online ranking: anonymous player id, nickname, local weekly best, weeks already rewarded. */
-  rank: { id: string; name: string; best: Record<string, number>; claimed: string[] };
+  rank: { id: string; name: string; best: Record<string, number>; claimed: string[]; sent: Record<string, number> };
   /** Login bonus: last day claimed and the streak (1–7). */
   login: { day: string; streak: number };
   /** Lifetime counters for achievements. */
@@ -89,7 +89,7 @@ function defaults(): SaveData {
     lives: 5,
     lifeAt: 0,
     pendingItems: [],
-    rank: { id: '', name: '', best: {}, claimed: [] },
+    rank: { id: '', name: '', best: {}, claimed: [], sent: {} },
     login: { day: '', streak: 0 },
     stats: {},
     daily: { date: '', ids: [], stats: {}, claimed: [], bonus: false },
@@ -105,7 +105,7 @@ function load(): SaveData {
     const raw = localStorage.getItem(KEY);
     if (!raw) return d;
     const parsed = JSON.parse(raw) as Partial<SaveData>;
-    return migrate({ ...d, ...parsed, settings: { ...d.settings, ...(parsed.settings ?? {}) }, look: { ...d.look, ...(parsed.look ?? {}) }, owned: { ...d.owned, ...(parsed.owned ?? {}) } }, parsed.econ ?? 1);
+    return migrate({ ...d, ...parsed, settings: { ...d.settings, ...(parsed.settings ?? {}) }, look: { ...d.look, ...(parsed.look ?? {}) }, owned: { ...d.owned, ...(parsed.owned ?? {}) }, rank: { ...d.rank, ...(parsed.rank ?? {}) } }, parsed.econ ?? 1);
   } catch {
     return d;
   }

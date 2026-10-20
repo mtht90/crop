@@ -77,3 +77,68 @@ language sql stable security definer set search_path = public as $$
   select count(distinct player_id)::int from public.weekly_scores
 $$;
 grant execute on function public.total_players() to anon;
+
+-- ------------------------------------------------------------ life gifts (Tsum Tsum-style)
+-- Players on the ranking can send each other a life: one per sender → recipient per hour.
+-- Gifts wait in the recipient's present box for 14 days. Only the functions below touch the table.
+create table if not exists public.life_gifts (
+  id          bigserial   primary key,
+  to_player   uuid        not null,
+  from_player uuid        not null,
+  from_name   text        not null,
+  created_at  timestamptz not null default now()
+);
+create index if not exists life_gifts_to on public.life_gifts (to_player, created_at);
+create index if not exists life_gifts_from on public.life_gifts (from_player, created_at);
+alter table public.life_gifts enable row level security;
+revoke all on public.life_gifts from anon;
+
+-- Returns 'ok', or why the gift wasn't sent: 'self', 'unknown', 'wait', 'limit', 'full'.
+create or replace function public.send_life(p_from uuid, p_to uuid)
+returns text
+language plpgsql security definer set search_path = public as $$
+declare
+  sender text;
+begin
+  if p_from = p_to then return 'self'; end if;
+  -- both sides must be players who have been on the ranking
+  select name into sender from public.weekly_scores where player_id = p_from order by week desc limit 1;
+  if sender is null or not exists (select 1 from public.weekly_scores where player_id = p_to) then
+    return 'unknown';
+  end if;
+  if exists (select 1 from public.life_gifts where from_player = p_from and to_player = p_to and created_at > now() - interval '1 hour') then
+    return 'wait';
+  end if;
+  if (select count(*) from public.life_gifts where from_player = p_from and created_at > now() - interval '1 hour') >= 60 then
+    return 'limit';
+  end if;
+  if (select count(*) from public.life_gifts where to_player = p_to and created_at > now() - interval '14 days') >= 99 then
+    return 'full';
+  end if;
+  insert into public.life_gifts (to_player, from_player, from_name) values (p_to, p_from, sender);
+  return 'ok';
+end
+$$;
+
+-- Unopened gifts waiting for a player.
+create or replace function public.gift_count(p_player uuid)
+returns integer
+language sql stable security definer set search_path = public as $$
+  select count(*)::int from public.life_gifts where to_player = p_player and created_at > now() - interval '14 days'
+$$;
+
+-- Opens the present box: returns who sent each life and removes them (and anything expired).
+create or replace function public.claim_lives(p_player uuid)
+returns table (from_name text, sent_at timestamptz)
+language plpgsql security definer set search_path = public as $$
+begin
+  delete from public.life_gifts where created_at <= now() - interval '14 days';
+  return query
+    delete from public.life_gifts g where g.to_player = p_player
+    returning g.from_name, g.created_at;
+end
+$$;
+
+grant execute on function public.send_life(uuid, uuid) to anon;
+grant execute on function public.gift_count(uuid) to anon;
+grant execute on function public.claim_lives(uuid) to anon;

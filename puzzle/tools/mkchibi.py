@@ -9,6 +9,7 @@ IDS = sys.argv[2].split(',')
 P = '/home/user/crop/puzzle/public/assets/pieces'
 COLS = ['red', 'blue', 'green', 'yellow', 'purple']
 CELL = 320
+TARGET = 230
 def outline(im, px):
     a = im.split()[3]
     big = a.filter(ImageFilter.MaxFilter(px * 2 + 1)).filter(ImageFilter.GaussianBlur(1.5))
@@ -20,7 +21,10 @@ for cid in IDS:
         b2 = im.getbbox(); bb = (min(bb[0], b2[0]), min(bb[1], b2[1]), max(bb[2], b2[2]), max(bb[3], b2[3]))
     strip = Image.new('RGBA', (CELL * 5, CELL), (0, 0, 0, 0))
     for i, im in enumerate(ims):
-        t = im.crop(bb); t.thumbnail((CELL - 8, CELL - 8), Image.LANCZOS)
+        # same visual size as the KayKit heads: sqrt(w*h) about 230px in a 320px cell
+        t = im.crop(bb)
+        k = TARGET / (t.width * t.height) ** 0.5
+        t = t.resize((round(t.width * k), round(t.height * k)), Image.LANCZOS)
         strip.alpha_composite(t, (i * CELL + (CELL - t.width) // 2, (CELL - t.height) // 2))
     strip.save(f'{P}/{cid}.webp', quality=90, method=6)
     por = outline(Image.open(f'{SRC}/out/chibi/{cid}_orig.png').convert('RGBA'), 20)

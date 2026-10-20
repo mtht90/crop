@@ -25,7 +25,7 @@ import { tex } from '../core/Loader';
 import { jungle } from '../game/Hud';
 import { CoinCounter, loginPopup, openSettings, rewardPopup, stars } from './common';
 import { claimLogin } from '../data/login';
-import { claimWeekly } from '../core/Ranking';
+import { Ranking, claimLives, claimWeekly, giftCount } from '../core/Ranking';
 import { RankingPanel, type RankUp } from './RankingPanel';
 import { COST_SINGLE } from '../data/gacha';
 
@@ -102,6 +102,7 @@ export class HomeScene extends Scene {
       this.hearts.push(h);
       this.page.addChild(h);
     }
+    if (Ranking.enabled) this.buildPresents(top);
     this.lifeT.position.set(250, top + 98);
     this.page.addChild(this.lifeT);
     this.tickLives();
@@ -498,11 +499,59 @@ export class HomeScene extends Scene {
   private hearts: Sprite[] = [];
   private lifeClock = 0;
 
+  /** Present box: lives other players sent from the ranking. */
+  private buildPresents(top: number): void {
+    const c = new Container();
+    c.position.set(450, top + 98);
+    const bg = new Graphics().roundRect(-78, -26, 156, 52, 26).fill({ color: 0x2a1630, alpha: 0.85 });
+    const icon = new Sprite(tex('ui:heart'));
+    icon.anchor.set(0.5);
+    icon.scale.set(36 / Math.max(1, icon.texture.width));
+    icon.x = -52;
+    const label = txt('プレゼント', { size: 20, color: 0xffffff, anchor: [0, 0.5] });
+    label.position.set(-30, -2);
+    const badge = new Container();
+    badge.position.set(70, -22);
+    badge.visible = false;
+    const bt = txt('', { size: 20, color: 0xffffff });
+    badge.addChild(new Graphics().circle(0, 0, 18).fill(0xff3b5c).stroke({ width: 3, color: 0xffffff }), bt);
+    c.addChild(bg, icon, label, badge);
+    this.page.addChild(c);
+    const refresh = async () => {
+      const n = await giftCount();
+      if (this.view.destroyed) return;
+      bt.text = n > 99 ? '99+' : String(n);
+      badge.visible = n > 0;
+      if (n > 0) gsap.fromTo(badge.scale, { x: 1.4, y: 1.4 }, { x: 1, y: 1, duration: 0.4, ease: 'back.out(3)' });
+    };
+    void refresh();
+    c.eventMode = 'static';
+    c.cursor = 'pointer';
+    let busy = false;
+    c.on('pointertap', async () => {
+      if (busy) return;
+      busy = true;
+      Sound.play('ui_tap');
+      const from = await claimLives();
+      busy = false;
+      if (this.view.destroyed) return;
+      if (!from.length) return rewardPopup(this.col, 'プレゼント', ['とどいているプレゼントは', 'ありません']);
+      // tally senders: "あ さんから ×2"
+      const by = new Map<string, number>();
+      for (const n of from) by.set(n, (by.get(n) ?? 0) + 1);
+      const names = [...by].slice(0, 5).map(([n, k]) => `${n} さん${k > 1 ? ` ×${k}` : ''}`);
+      if (by.size > 5) names.push(`ほか ${by.size - 5}人`);
+      rewardPopup(this.col, 'ライフがとどいた！', [`ライフ×${from.length}`, '', ...names]);
+      this.tickLives();
+      void refresh();
+    });
+  }
+
   private tickLives(): void {
     const n = lives();
     const wait = nextLifeIn();
     this.hearts.forEach((h, i) => (h.texture = tex(i < n ? 'ui:heart' : 'ui:heart_empty')));
-    this.lifeT.text = wait ? fmtTime(wait) : 'MAX';
+    this.lifeT.text = n > MAX_LIVES ? `+${n - MAX_LIVES}` : wait ? fmtTime(wait) : 'MAX';
   }
 
   update(dt: number): void {

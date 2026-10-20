@@ -6,7 +6,8 @@ import { Sound } from '../core/Audio';
 import { Button, fmt, grad, panel, popIn, txt } from '../core/UI';
 import { bigTexture, loadCharacterArt } from '../art/PieceArt';
 import { CHARACTERS, CHAR_BY_ID } from '../data/characters';
-import { Ranking, WEEKLY_TIERS, board, playerId, setName, submitScore, weekKey, weeklyTier, type RankRow } from '../core/Ranking';
+import { Ranking, WEEKLY_TIERS, board, giftWait, playerId, sendLife, setName, submitScore, weekKey, weeklyTier, type RankRow } from '../core/Ranking';
+import { tex } from '../core/Loader';
 import { weekStartMs } from '../data/rankBots';
 import { rewardText } from '../data/missions';
 import { ScrollBox } from './common';
@@ -96,6 +97,12 @@ export class RankingPanel extends Container {
 
   update(dt: number): void {
     this.list.update();
+    // heart buttons count down their wait
+    this.giftClock -= dt;
+    if (this.giftClock <= 0) {
+      this.giftClock = 5;
+      for (const d of this.gifts) d();
+    }
     this.clock -= dt;
     if (this.clock <= 0) {
       this.clock = 20;
@@ -137,6 +144,7 @@ export class RankingPanel extends Container {
       prev = r.score;
       return { ...r, rank };
     });
+    this.gifts = [];
     // podium: 2nd, 1st, 3rd
     for (const ch of this.podium.removeChildren()) ch.destroy({ children: true });
     const slots: [number, number, number, number][] = [[1, -200, 150, 0xc8d0e0], [0, 0, 180, 0xffc71f], [2, 200, 132, 0xd8915a]];
@@ -163,6 +171,11 @@ export class RankingPanel extends Container {
       const sc = txt(fmt(row.score), { size: 23, color: 0xd81b60 });
       sc.y = nm.y + 32;
       c.addChild(base, nm, sc, pic, medal, num);
+      if (row.player_id !== me) {
+        const heart = this.giftButton(row, 40);
+        heart.position.set(0, top + 106);
+        c.addChild(heart);
+      }
       if (idx === 0) {
         const crown = new Graphics();
         crown.poly([-36, 16, -42, -18, -18, 0, 0, -28, 18, 0, 42, -18, 36, 16]).fill(0xffd23f).stroke({ width: 4, color: 0x8a5a00 });
@@ -192,10 +205,15 @@ export class RankingPanel extends Container {
       pic.x = -184;
       const nm = txt(row.name, { size: 28, color: 0x4a2f7a, anchor: [0, 0.5] });
       nm.x = -144;
-      if (nm.width > 230) nm.scale.set(230 / nm.width);
+      if (nm.width > 180) nm.scale.set(180 / nm.width);
       const sc = txt(fmt(row.score), { size: 28, font: 'dela', color: 0xd81b60, anchor: [1, 0.5] });
-      sc.x = 272;
+      sc.x = row.player_id === me ? 272 : 214;
       r.addChild(g, rt, pic, nm, sc);
+      if (row.player_id !== me) {
+        const heart = this.giftButton(row, 50);
+        heart.x = 250;
+        r.addChild(heart);
+      }
       c.addChild(r);
     });
     this.list.contentH = 10 + Math.max(0, ranked.length - 3) * 92;
@@ -262,6 +280,71 @@ export class RankingPanel extends Container {
       banner(label);
       Sound.play('jLevel', { vol: 0.7 });
     });
+  }
+
+  /** Heart button: sends this player a life (once an hour), or shows the wait. */
+  private giftButton(row: RankRow, size: number): Container {
+    const c = new Container();
+    const icon = new Sprite(tex('ui:heart'));
+    icon.anchor.set(0.5);
+    const wait = txt('', { size: 15, color: 0xffffff, stroke: 0x2a1630, strokeWidth: 4 });
+    wait.y = size * 0.42;
+    c.addChild(icon, wait);
+    const draw = () => {
+      const ms = giftWait(row.player_id);
+      icon.texture = tex(ms ? 'ui:heart_empty' : 'ui:heart');
+      icon.scale.set(size / Math.max(1, icon.texture.width));
+      icon.alpha = ms ? 0.6 : 1;
+      wait.text = ms ? `${Math.ceil(ms / 60000)}分` : '';
+    };
+    draw();
+    this.gifts.push(draw);
+    c.eventMode = 'static';
+    c.cursor = 'pointer';
+    let busy = false;
+    c.on('pointertap', async () => {
+      if (busy || giftWait(row.player_id)) return Sound.play('ui_tap');
+      busy = true;
+      const err = await sendLife(row.player_id);
+      busy = false;
+      if (this.destroyed) return;
+      if (err) return this.toast(err);
+      draw();
+      Sound.play('powerUp2', { vol: 0.6 });
+      // a heart floats up from the button
+      const p = c.getGlobalPosition();
+      const local = this.toLocal(p);
+      const h = new Sprite(tex('ui:heart'));
+      h.anchor.set(0.5);
+      h.scale.set(size / Math.max(1, h.texture.width));
+      h.position.set(local.x, local.y);
+      this.addChild(h);
+      gsap.to(h, { y: h.y - 120, alpha: 0, duration: 0.8, ease: 'power1.out', onComplete: () => h.destroy() });
+      gsap.fromTo(h.scale, { x: h.scale.x * 0.6, y: h.scale.y * 0.6 }, { x: h.scale.x * 1.4, y: h.scale.y * 1.4, duration: 0.8 });
+      this.toast(`${row.name} にライフをおくった！`);
+    });
+    return c;
+  }
+
+  private gifts: (() => void)[] = [];
+  private giftClock = 0;
+
+  /** Short message over the list. */
+  private toastBox: Container | null = null;
+  private toast(text: string): void {
+    this.toastBox?.destroy({ children: true });
+    const box = new Container();
+    const t = txt(text, { size: 28, color: 0xffffff });
+    if (t.width > 560) t.scale.set(560 / t.width);
+    box.addChild(new Graphics().roundRect(-t.width / 2 - 30, -32, t.width + 60, 64, 32).fill({ color: 0xd81b60, alpha: 0.95 }).stroke({ width: 4, color: 0xffffff }), t);
+    box.position.set(360, this.listTop - 4);
+    this.addChild(box);
+    this.toastBox = box;
+    popIn(box, 0, 0.4);
+    gsap.to(box, { alpha: 0, y: box.y - 24, delay: 1.4, duration: 0.4, onComplete: () => {
+      if (this.toastBox === box) this.toastBox = null;
+      box.destroy({ children: true });
+    } });
   }
 
   private buildMe(rank: number, score: number, total: number): void {

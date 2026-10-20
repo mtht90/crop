@@ -171,3 +171,63 @@ export async function claimWeekly(): Promise<{ rank: number; total: number; got:
     return null;
   }
 }
+
+// ------------------------------------------------------------ life gifts
+/** One life per player per hour, like Tsum Tsum hearts. */
+export const GIFT_COOLDOWN = 60 * 60 * 1000;
+
+/** Milliseconds until `playerId` can get another life from us (0 = now). */
+export function giftWait(to: string, now = Date.now()): number {
+  const at = Save.data.rank.sent[to] ?? 0;
+  return Math.max(0, at + GIFT_COOLDOWN - now);
+}
+
+/** Sends a life. Returns null when sent, otherwise a message to show. */
+export async function sendLife(to: string): Promise<string | null> {
+  const r = Save.data.rank;
+  if (!Ranking.registered) return 'なまえをとうろくしてね';
+  if (giftWait(to) > 0) return 'もうすこし待ってね';
+  // filler players can't receive anything, but sending looks the same
+  if (!to.startsWith('bot-')) {
+    if (!Ranking.enabled) return 'つうしんできません';
+    try {
+      const res = await rpc<string>('send_life', { p_from: playerId(), p_to: to });
+      if (res === 'limit') return '今はこれ以上おくれません';
+      if (res === 'full') return 'あいてのプレゼントがいっぱいです';
+      if (res !== 'ok' && res !== 'wait') return 'おくれませんでした';
+    } catch {
+      return 'つうしんできませんでした';
+    }
+  }
+  const now = Date.now();
+  // forget cooldowns that are long over
+  r.sent = Object.fromEntries(Object.entries(r.sent).filter(([, t]) => now - t < GIFT_COOLDOWN));
+  r.sent[to] = now;
+  Save.write();
+  return null;
+}
+
+/** Unopened lives in the present box. */
+export async function giftCount(): Promise<number> {
+  if (!Ranking.enabled || !Ranking.registered) return 0;
+  try {
+    return await rpc<number>('gift_count', { p_player: playerId() });
+  } catch {
+    return 0;
+  }
+}
+
+/** Opens the present box: adds the lives and returns who sent them. */
+export async function claimLives(): Promise<string[]> {
+  if (!Ranking.enabled || !Ranking.registered) return [];
+  try {
+    const rows = await rpc<{ from_name: string }[]>('claim_lives', { p_player: playerId() });
+    if (rows.length) {
+      Save.data.lives += rows.length;
+      Save.write();
+    }
+    return rows.map((x) => x.from_name);
+  } catch {
+    return [];
+  }
+}
