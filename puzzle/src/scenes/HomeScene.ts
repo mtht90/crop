@@ -4,7 +4,7 @@ import { App } from '../core/App';
 import { Scene, Scenes } from '../core/Scene';
 import { Save } from '../core/Save';
 import { Sound, haptic } from '../core/Audio';
-import { Button, fmt, grad, iconButton, panel, popIn, txt } from '../core/UI';
+import { Button, coinIcon, fmt, grad, iconButton, panel, popIn, txt } from '../core/UI';
 import { MenuBackground } from '../game/Backdrop';
 import { BossView } from '../game/BossView';
 import { Effects } from '../game/Effects';
@@ -18,9 +18,11 @@ import { GachaScene } from './GachaScene';
 import { MissionScene } from './MissionScene';
 import { DressScene } from './DressScene';
 import { claimableCount } from '../data/missions';
-import { MAX_LIVES, fmtTime, lives, nextLifeIn } from '../data/play';
-import { CoinCounter, loginPopup, openPrep, openSettings, stars } from './common';
+import { ITEMS, MAX_LIVES, fmtTime, lives, nextLifeIn, spendLife, type ItemId } from '../data/play';
+import { tex } from '../core/Loader';
+import { CoinCounter, loginPopup, openSettings, rewardPopup, stars } from './common';
 import { claimLogin } from '../data/login';
+import { COST_SINGLE } from '../data/gacha';
 
 export class HomeScene extends Scene {
   private bg = new MenuBackground(0x6a4dff, 0xff7ab8);
@@ -66,10 +68,19 @@ export class HomeScene extends Scene {
     best.position.set(430, top + 38);
     this.col.addChild(coins, settings, best);
     // lives (one per round, refill every 10 minutes)
-    const lifeBg = new Graphics().roundRect(-20, -22, 300, 44, 22).fill({ color: 0x2a1630, alpha: 0.85 });
-    lifeBg.position.set(40, top + 96);
-    this.lifeT.position.set(30, top + 96);
-    this.col.addChild(lifeBg, this.lifeT);
+    const lifeBg = new Graphics().roundRect(-20, -26, 330, 52, 26).fill({ color: 0x2a1630, alpha: 0.85 });
+    lifeBg.position.set(40, top + 98);
+    this.col.addChild(lifeBg);
+    for (let i = 0; i < MAX_LIVES; i++) {
+      const h = new Sprite(tex('ui:heart'));
+      h.anchor.set(0.5);
+      h.scale.set(40 / Math.max(1, h.texture.width));
+      h.position.set(44 + i * 40, top + 98);
+      this.hearts.push(h);
+      this.col.addChild(h);
+    }
+    this.lifeT.position.set(250, top + 98);
+    this.col.addChild(this.lifeT);
     this.tickLives();
 
     // boss card (◀ ▶ picks any boss reached so far)
@@ -92,7 +103,8 @@ export class HomeScene extends Scene {
     }
 
     // hero
-    const heroY = Math.min(top + 560, H * 0.5);
+    // keep the hero (and its info line) clear of the item row above the battle button
+    const heroY = Math.min(top + 560, H * 0.5, H - App.safeBottom - 120 - 670);
     this.hero.position.set(360, heroY);
     const pedestal = new Graphics();
     pedestal.ellipse(0, 150, 210, 46).fill({ color: 0x000000, alpha: 0.25 });
@@ -136,6 +148,7 @@ export class HomeScene extends Scene {
     const gacha = new Button({ w: 300, h: 100, label: 'ガチャ', color: 'yellow', size: 38, onTap: () => Scenes.go(() => new GachaScene()) });
     gacha.position.set(525, by);
     this.col.addChild(battle, chara, gacha);
+    this.buildItems(by - 265);
     // missions / cosmetics on either side of the hero
     const mission = new Button({ w: 170, h: 84, label: 'ミッション', color: 'orange', size: 26, onTap: () => Scenes.go(() => new MissionScene()) });
     mission.position.set(100, heroY - 40);
@@ -155,7 +168,8 @@ export class HomeScene extends Scene {
       gsap.to(badge.scale, { x: 1.2, y: 1.2, duration: 0.5, yoyo: true, repeat: -1, ease: 'sine.inOut' });
     }
     this.fillBossCard(Save.fightLv());
-    if (Save.data.coins >= 100) {
+    // the gacha badge only shows when a pull is affordable
+    if (Save.data.coins >= COST_SINGLE || Save.data.tickets > 0) {
       const badge = new Container();
       const bgB = new Graphics().circle(0, 0, 22).fill(0xff3b5c);
       bgB.circle(0, 0, 22).stroke({ width: 4, color: 0xffffff });
@@ -260,10 +274,102 @@ export class HomeScene extends Scene {
   }
 
   private startBattle(): void {
-    openPrep(this.col, (items) => {
-      Sound.stopMusic(0.4);
-      Scenes.go(() => new BattleScene(items));
+    if (!spendLife()) return this.noLives();
+    const items = [...Save.data.pendingItems];
+    Save.data.pendingItems = [];
+    Save.write();
+    Sound.stopMusic(0.4);
+    Scenes.go(() => new BattleScene(items));
+  }
+
+  private noLives(): void {
+    Sound.play('ui_error');
+    rewardPopup(this.col, 'ライフがたりない', [`つぎのライフまで ${fmtTime(nextLifeIn())}`, '10分で1つかいふくするよ']);
+  }
+
+  /** Item buttons above the battle button: tapping one pays for it right away (tap again to refund). */
+  private buildItems(y: number): void {
+    ITEMS.forEach((it, i) => {
+      const c = new Container();
+      c.position.set(105 + i * 170, y);
+      const bg = new Graphics();
+      const check = txt('✓', { size: 34, font: 'dela', color: 0xff6a00, stroke: 0xffffff, strokeWidth: 6 });
+      check.position.set(56, -40);
+      const draw = () => {
+        const on = Save.data.pendingItems.includes(it.id);
+        bg.clear();
+        bg.roundRect(-75, -58, 150, 116, 22).fill({ color: 0x000000, alpha: 0.25 });
+        bg.roundRect(-75, -62, 150, 116, 22).fill(on ? grad([[0, '#fff6c8'], [1, '#ffc94d']]) : 0xfff4dc);
+        bg.roundRect(-75, -62, 150, 116, 22).stroke({ width: on ? 6 : 4, color: on ? 0xff9a00 : 0x8a5a2a });
+        check.visible = on;
+        c.y = y - (on ? 4 : 0);
+      };
+      const icon = this.itemIcon(it.id);
+      icon.y = -26;
+      const nm = txt(it.name, { size: 20, color: 0x4a2f7a });
+      nm.y = 10;
+      if (nm.width > 136) nm.scale.set(136 / nm.width);
+      const pr = new Container();
+      const ci = coinIcon(10);
+      ci.x = -34;
+      const pt = txt(fmt(it.price), { size: 20, color: 0x8a4f00, anchor: [0, 0.5] });
+      pt.x = -20;
+      pr.addChild(ci, pt);
+      pr.y = 36;
+      c.addChild(bg, icon, nm, pr, check);
+      draw();
+      c.eventMode = 'static';
+      c.cursor = 'pointer';
+      c.on('pointertap', () => {
+        const d = Save.data;
+        const on = d.pendingItems.includes(it.id);
+        if (on) {
+          d.pendingItems = d.pendingItems.filter((x) => x !== it.id);
+          d.coins += it.price;
+          Sound.play('ui_back');
+        } else {
+          if (d.coins < it.price) {
+            Sound.play('ui_error');
+            gsap.fromTo(c, { x: c.x - 8 }, { x: c.x, duration: 0.3, ease: 'elastic.out(1.5,0.3)' });
+            return;
+          }
+          d.coins -= it.price;
+          d.pendingItems.push(it.id);
+          Sound.play('coins', { vol: 0.6 });
+        }
+        Save.write();
+        this.coinCounter?.refresh();
+        draw();
+        gsap.fromTo(c.scale, { x: 1.12, y: 0.9 }, { x: 1, y: 1, duration: 0.4, ease: 'elastic.out(1.4,0.4)' });
+      });
+      this.col.addChild(c);
+      popIn(c, 0.2 + i * 0.04, 0.6);
     });
+  }
+
+  private itemIcon(id: ItemId): Container {
+    const c = new Container();
+    const sp = (alias: string, h: number) => {
+      const s = new Sprite(tex(alias));
+      s.anchor.set(0.5);
+      s.scale.set(h / Math.max(1, s.texture.height));
+      c.addChild(s);
+      return s;
+    };
+    if (id === 'score') sp('ui:star', 50);
+    else if (id === 'coin') sp('ui:coins', 50);
+    else if (id === 'time') {
+      sp('jungle:clock', 46);
+      const t = txt('+5', { size: 22, font: 'dela', color: 0xffffff, stroke: 0x2a1630, strokeWidth: 5 });
+      t.position.set(24, 10);
+      c.addChild(t);
+    } else {
+      // five colors become four
+      const g = new Graphics();
+      [0xff4d6a, 0x36a2ff, 0x3fd35c, 0xffc71f].forEach((col, i) => g.circle(-27 + i * 18, 0, 9).fill(col).stroke({ width: 2, color: 0x2a1630 }));
+      c.addChild(g);
+    }
+    return c;
   }
 
   resize(): void {
@@ -272,13 +378,15 @@ export class HomeScene extends Scene {
   }
 
   private coinCounter?: CoinCounter;
-  private lifeT = txt('', { size: 26, color: 0xff6a8a, anchor: [0, 0.5] });
+  private lifeT = txt('', { size: 24, color: 0xffffff, anchor: [0, 0.5] });
+  private hearts: Sprite[] = [];
   private lifeClock = 0;
 
   private tickLives(): void {
     const n = lives();
     const wait = nextLifeIn();
-    this.lifeT.text = `${'♥'.repeat(n)}${'♡'.repeat(MAX_LIVES - n)}  ${wait ? fmtTime(wait) : 'MAX'}`;
+    this.hearts.forEach((h, i) => (h.texture = tex(i < n ? 'ui:heart' : 'ui:heart_empty')));
+    this.lifeT.text = wait ? fmtTime(wait) : 'MAX';
   }
 
   update(dt: number): void {

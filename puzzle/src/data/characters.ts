@@ -73,7 +73,7 @@ const ROWS: Row[] = [
   ['l_knight', '見習い騎士', 'R', 115, { kind: 'circle', name: 'たてのいちげき', desc: 'まんなかを大きく丸く消す', charge: 30, power: 3.2, amount: 1, size: 4.3 }, 'かぶとが大きくてちょっと前が見えない。'],
   ['l_barbarian', 'クマかぶり', 'R', 119, { kind: 'bombs', name: 'ダブルボム', desc: 'ボムを2個おとす', charge: 30, power: 2.6, amount: 2 }, 'クマの毛皮がお気に入りの戦士。'],
   ['skull', 'ドクロ', 'R', 121, { kind: 'random', name: 'カラカラわらい', desc: 'ランダムに14個消す', charge: 30, power: 2.1, amount: 14 }, 'カラカラ笑うおちゃめなドクロ。'],
-  ['skel_minion', 'ホネっこ', 'R', 117, { kind: 'tapPop', name: 'ホネまわし', desc: '5秒間タップでまとめて消せる', charge: 30, power: 2.4, dur: 5 }, 'ホネだけど元気いっぱい。'],
+  ['skel_minion', 'ホネっこ', 'R', 112, { kind: 'tapPop', name: 'ホネまわし', desc: '3秒間タップでまとめて消せる', charge: 40, power: 1.6, dur: 3 }, 'ホネだけど元気いっぱい。'],
   // SR
   ['knight', 'ナイト', 'SR', 190, { kind: 'colorBlast', name: 'いっせい攻撃', desc: 'いちばん多い色を全部消す', charge: 30, power: 3.8 }, '王国を守る正義の騎士。'],
   ['barbarian', 'バーバリアン', 'SR', 192, { kind: 'bottom', name: 'じならし', desc: 'ボウルの下半分をまとめて消す', charge: 30, power: 3.3, size: 4.4 }, 'クマの頭をかぶった豪快な戦士。'],
@@ -160,6 +160,24 @@ export function skillTicketCost(sl: number): number {
 /** Attack including level (+1.5%/Lv) and limit break (+0.1%/+Lv). */
 export function charAtk(c: CharDef, g: Growth): number {
   return Math.round(c.atk * (1 + (g.lv - 1) * 0.015) * (1 + g.plus * 0.001));
+}
+
+/**
+ * Coin skill by rarity (Tsum Tsum-style "coin tsums"): coins per piece a special move clears,
+ * plus a flat bonus per activation. This is what makes higher ranks earn far more.
+ */
+export const COIN_SKILL: Record<Rarity, { perPiece: number; flat: number }> = {
+  N: { perPiece: 0, flat: 0 },
+  R: { perPiece: 2, flat: 60 },
+  SR: { perPiece: 9, flat: 300 },
+  SSR: { perPiece: 14, flat: 600 },
+};
+
+/** Coins dropped by an n-chain: none below 4, then fast growth (4→1, 10→17, 30→195). */
+export function chainCoins(n: number): number {
+  if (n < 4) return 0;
+  const k = n - 3;
+  return Math.round(0.75 * k + 0.24 * k * k);
 }
 
 /** Skills are meant to be a highlight, not a spam button: every gauge is 3x the listed charge. */

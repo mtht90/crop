@@ -5,9 +5,8 @@ import { App } from '../core/App';
 import { Save, exportSave, importSave } from '../core/Save';
 import { LOGIN_REWARDS } from '../data/login';
 import { Sound } from '../core/Audio';
-import { Button, coinIcon, fmt, grad, panel, popIn, txt } from '../core/UI';
+import { Button, coinIcon, fmt, panel, popIn, txt } from '../core/UI';
 import { jungle, num, installBitmapFonts } from '../game/Hud';
-import { ITEMS, ITEM_BY_ID, MAX_LIVES, fmtTime, lives, nextLifeIn, spendLife, type ItemId } from '../data/play';
 
 /** Coins counter shown at the top of menu screens. */
 export class CoinCounter extends Container {
@@ -160,59 +159,95 @@ export function starPath(g: Graphics, r: number): Graphics {
 export class ScrollBox extends Container {
   readonly content = new Container();
   private maskG = new Graphics();
-  private hit = new Graphics();
+  private bar = new Graphics();
   private y0 = 0;
   private start = 0;
   private dragging = false;
   private moved = false;
   private vel = 0;
   private lastY = 0;
+  private lastT = 0;
   /** Height of the scrolled content (bounds are clipped by the mask, so callers set it). */
   contentH = 0;
+  private dom: [string, EventListener][] = [];
   constructor(public readonly w: number, public readonly h: number) {
     super();
     this.maskG.rect(-w / 2, 0, w, h).fill(0xffffff);
-    this.hit.rect(-w / 2, 0, w, h).fill({ color: 0xffffff, alpha: 0.001 });
-    this.addChild(this.hit, this.content, this.maskG);
+    this.addChild(this.content, this.maskG, this.bar);
     this.content.mask = this.maskG;
-    this.eventMode = 'static';
-    this.on('pointerdown', (e) => {
+    // listen on the page itself (touch, mouse and wheel), independent of what's under the finger
+    const local = (e: { clientX: number; clientY: number }) => {
+      const d = App.toDesign(e.clientX, e.clientY);
+      return this.toLocal({ x: d.x, y: d.y }, App.root);
+    };
+    const inside = (p: { x: number; y: number }) => Math.abs(p.x) <= this.w / 2 && p.y >= 0 && p.y <= this.h;
+    const down = (ev: Event) => {
+      const e = ev as PointerEvent;
+      if (this.destroyed || !this.parent || !e.isPrimary) return;
+      const p = local(e);
+      if (!inside(p)) return;
       this.dragging = true;
       this.moved = false;
-      this.start = e.global.y;
-      this.lastY = e.global.y;
+      this.start = p.y;
+      this.lastY = p.y;
+      this.lastT = performance.now();
       this.y0 = this.content.y;
       this.vel = 0;
-    });
-    this.on('globalpointermove', (e) => {
-      if (!this.dragging) return;
-      const dy = (e.global.y - this.start) / (this.worldTransform.d || 1);
-      if (Math.abs(dy) > 12 && !this.moved) {
+    };
+    const move = (ev: Event) => {
+      const e = ev as PointerEvent;
+      if (!this.dragging || !e.isPrimary) return;
+      const p = local(e);
+      const dy = p.y - this.start;
+      if (Math.abs(dy) > 10 && !this.moved) {
+        // it's a scroll, not a tap: children stop reacting until the finger lifts
         this.moved = true;
         this.content.interactiveChildren = false;
       }
-      if (this.moved) {
-        this.vel = (e.global.y - this.lastY) / (this.worldTransform.d || 1);
-        this.lastY = e.global.y;
-        this.content.y = this.clamp(this.y0 + dy);
-      }
-    });
-    const end = () => {
-      this.dragging = false;
-      this.content.interactiveChildren = true;
+      if (!this.moved) return;
+      const now = performance.now();
+      this.vel = ((p.y - this.lastY) / Math.max(8, now - this.lastT)) * 16;
+      this.lastY = p.y;
+      this.lastT = now;
+      this.content.y = this.clamp(this.y0 + dy);
     };
-    this.on('pointerup', end);
-    this.on('pointerupoutside', end);
+    const up = () => {
+      if (!this.dragging) return;
+      this.dragging = false;
+      // re-enable taps after this event has been dispatched
+      setTimeout(() => (this.content.interactiveChildren = true), 0);
+    };
+    const wheel = (ev: Event) => {
+      const e = ev as WheelEvent;
+      if (this.destroyed || !this.parent || !inside(local(e))) return;
+      e.preventDefault();
+      this.vel = 0;
+      this.content.y = this.clamp(this.content.y - e.deltaY * (e.deltaMode === 1 ? 30 : 1) / (App.scale || 1));
+    };
+    this.dom = [['pointerdown', down], ['pointermove', move], ['pointerup', up], ['pointercancel', up], ['wheel', wheel]];
+    for (const [n, f] of this.dom) window.addEventListener(n, f, n === 'wheel' ? { passive: false } : { passive: true });
   }
   private clamp(y: number): number {
     const min = Math.min(0, this.h - this.contentH - 30);
     return Math.max(min, Math.min(0, y));
   }
-  /** Glide after a flick (call every frame). */
+  /** Glide after a flick, and draw the scroll bar (call every frame). */
   update(): void {
-    if (this.dragging || Math.abs(this.vel) < 0.3) return;
-    this.vel *= 0.92;
-    this.content.y = this.clamp(this.content.y + this.vel);
+    if (!this.dragging && Math.abs(this.vel) >= 0.3) {
+      this.vel *= 0.93;
+      this.content.y = this.clamp(this.content.y + this.vel);
+    }
+    this.bar.clear();
+    const total = this.contentH + 30;
+    if (total > this.h) {
+      const len = Math.max(60, (this.h * this.h) / total);
+      const k = -this.content.y / (total - this.h);
+      this.bar.roundRect(this.w / 2 - 14, k * (this.h - len), 8, len, 4).fill({ color: 0xffffff, alpha: 0.55 });
+    }
+  }
+  destroy(options?: Parameters<Container['destroy']>[0]): void {
+    for (const [n, f] of this.dom) window.removeEventListener(n, f);
+    super.destroy(options);
   }
 }
 
@@ -241,108 +276,6 @@ export function rewardPopup(parent: Container, title: string, lines: string[], o
   popIn(box, 0, 0.5);
   Sound.play('powerUp2', { vol: 0.7 });
   Sound.sparkle();
-}
-
-/** Before a round: lives, boost items to buy, and the start button. */
-export function openPrep(parent: Container, onStart: (items: ItemId[]) => void): void {
-  const ov = new Container();
-  const dim = new Graphics().rect(-App.colX, 0, App.W, App.H).fill({ color: 0x0a0418, alpha: 0.7 });
-  dim.eventMode = 'static';
-  const box = new Container();
-  box.position.set(360, App.H * 0.5);
-  const h = 860;
-  box.addChild(panel(620, h, { color: 0xfdf7ff }));
-  const title = txt('アイテムをえらぼう', { size: 40, font: 'dela', color: 0x4a2f7a });
-  title.y = -h / 2 + 60;
-  box.addChild(title);
-  // lives row
-  const lifeT = txt('', { size: 28, color: 0xff3d6a, anchor: [0.5, 0.5] });
-  lifeT.y = -h / 2 + 120;
-  box.addChild(lifeT);
-  const tick = () => {
-    if (lifeT.destroyed) return;
-    const n = lives();
-    const wait = nextLifeIn();
-    lifeT.text = `ライフ ${'♥'.repeat(n)}${'♡'.repeat(MAX_LIVES - n)}${wait ? `  つぎまで ${fmtTime(wait)}` : ''}`;
-  };
-  tick();
-  const timer = setInterval(tick, 1000);
-  const chosen = new Set<ItemId>();
-  const totalT = txt('', { size: 28, color: 0x4a2f7a });
-  totalT.y = h / 2 - 220;
-  const coinsT = txt('', { size: 22, color: 0x8a6cff });
-  coinsT.y = h / 2 - 180;
-  const total = () => [...chosen].reduce((a, id) => a + ITEM_BY_ID[id].price, 0);
-  const refresh = () => {
-    totalT.text = `ごうけい ${fmt(total())} コイン`;
-    coinsT.text = `もっているコイン ${fmt(Save.data.coins)}`;
-    totalT.style.fill = total() > Save.data.coins ? 0xd81b60 : 0x4a2f7a;
-  };
-  ITEMS.forEach((it, i) => {
-    const row = new Container();
-    row.y = -h / 2 + 210 + i * 130;
-    const bg = new Graphics();
-    const draw = () => {
-      const on = chosen.has(it.id);
-      bg.clear();
-      bg.roundRect(-270, -55, 540, 110, 24).fill(on ? grad([[0, '#fff6c8'], [1, '#ffe08a']]) : 0xffffff);
-      bg.roundRect(-270, -55, 540, 110, 24).stroke({ width: on ? 6 : 4, color: on ? 0xff9a00 : 0xc8b8f0 });
-      check.text = on ? '✓' : '';
-    };
-    const check = txt('', { size: 44, font: 'dela', color: 0xff6a00 });
-    check.x = 220;
-    const nm = txt(it.name, { size: 30, color: 0x4a2f7a, anchor: [0, 0.5] });
-    nm.position.set(-240, -16);
-    const ds = txt(it.desc, { size: 22, color: 0x8a6cff, anchor: [0, 0.5] });
-    ds.position.set(-240, 24);
-    const pr = new Container();
-    const ci = coinIcon(14);
-    ci.x = -20;
-    const pt = txt(fmt(it.price), { size: 26, color: 0x8a4f00, anchor: [0, 0.5] });
-    pr.addChild(ci, pt);
-    pr.x = 80;
-    row.addChild(bg, nm, ds, pr, check);
-    draw();
-    row.eventMode = 'static';
-    row.cursor = 'pointer';
-    row.on('pointertap', () => {
-      if (chosen.has(it.id)) chosen.delete(it.id);
-      else chosen.add(it.id);
-      Sound.play('ui_tap');
-      draw();
-      refresh();
-    });
-    box.addChild(row);
-  });
-  box.addChild(totalT, coinsT);
-  refresh();
-  const close = () => {
-    clearInterval(timer);
-    ov.destroy({ children: true });
-  };
-  const start = new Button({
-    w: 340, h: 110, label: 'スタート！', sub: 'ライフを1つつかう', color: 'pink', size: 44, sound: 'ui_ok', onTap: () => {
-      if (total() > Save.data.coins) return Sound.play('ui_error');
-      if (!spendLife()) {
-        Sound.play('ui_error');
-        lifeT.scale.set(1.3);
-        gsap.to(lifeT.scale, { x: 1, y: 1, duration: 0.3 });
-        return;
-      }
-      Save.data.coins -= total();
-      Save.write();
-      const items = [...chosen];
-      close();
-      onStart(items);
-    },
-  });
-  start.position.set(-70, h / 2 - 90);
-  const cancel = new Button({ w: 170, h: 84, label: 'やめる', color: 'grey', size: 28, sound: 'ui_back', onTap: close });
-  cancel.position.set(200, h / 2 - 90);
-  box.addChild(start, cancel);
-  ov.addChild(dim, box);
-  parent.addChild(ov);
-  popIn(box, 0, 0.6);
 }
 
 /** Wooden plank across the top of a menu screen (behind its title and buttons). */

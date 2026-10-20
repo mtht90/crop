@@ -1,4 +1,5 @@
 import { RETIRED } from '../data/characters';
+import type { ItemId } from '../data/play';
 
 const KEY = 'punitto-battle-save-v2';
 
@@ -53,6 +54,8 @@ export interface SaveData {
   /** Lives: one per round, up to 5, one back every 10 minutes. `lifeAt` = when the next one started refilling. */
   lives: number;
   lifeAt: number;
+  /** Items paid for on the home screen, used by the next round. */
+  pendingItems: ItemId[];
   /** Login bonus: last day claimed and the streak (1–7). */
   login: { day: string; streak: number };
   /** Lifetime counters for achievements. */
@@ -83,6 +86,7 @@ function defaults(): SaveData {
     econ: 2,
     lives: 5,
     lifeAt: 0,
+    pendingItems: [],
     login: { day: '', streak: 0 },
     stats: {},
     daily: { date: '', ids: [], stats: {}, claimed: [], bonus: false },

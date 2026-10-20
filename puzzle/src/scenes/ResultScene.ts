@@ -11,7 +11,7 @@ import { bigTexture } from '../art/PieceArt';
 import { CHAR_BY_ID, MAX_LV, expToNext } from '../data/characters';
 import { BattleScene } from './BattleScene';
 import { HomeScene } from './HomeScene';
-import { openPrep } from './common';
+import { fmtTime, nextLifeIn, spendLife } from '../data/play';
 import { bossForLevel } from '../data/bosses';
 
 export interface BattleResult {
@@ -23,7 +23,7 @@ export interface BattleResult {
   exp: number;
   expBefore: number;
   expAfter: number;
-  coinParts: { play: number; score: number; boss: number; item: boolean };
+  coinParts: { play: number; boss: number; boost: number };
   lvBefore: number;
   lvAfter: number;
   skillTickets: number;
@@ -243,13 +243,13 @@ export class ResultScene extends Scene {
     popIn(coinRow);
     await this.countUp(cv, r.coins, 0.8, '+', true);
     const cp = r.coinParts;
-    const parts = [`プレイ ${fmt(cp.play)}`, `スコア ${fmt(cp.score)}`];
+    const parts = [`プレイ ${fmt(cp.play)}`];
     if (cp.boss) parts.push(`ボス ${fmt(cp.boss)}`);
-    const brk = txt(parts.join(' ＋ ') + (cp.item ? '  (コインアップ×1.3)' : ''), { size: 18, color: 0x8a4f00 });
+    const brk = txt(parts.join(' ＋ ') + (cp.boost > 1 ? `  コインアップ ×${cp.boost}！` : ''), { size: 20, color: cp.boost >= 2 ? 0xd81b60 : 0x8a4f00 });
     brk.y = coinRow.y + 50;
     box.addChild(brk);
     popIn(brk);
-    if (r.skillTickets) this.dropPopup(`スキルチケット×${r.skillTickets}`, 'とってもレア！');
+    if (r.skillTickets) this.dropPopup(`スキルチケット×${r.skillTickets}`, 'ゲット！');
     if (r.defeated) {
       const next = bossForLevel(r.bossLv + 1);
       const msg = r.rematch ? 'さいせんクリア！' : `つぎのボス：Lv.${r.bossLv + 1} ${next.name}`;
@@ -266,7 +266,11 @@ export class ResultScene extends Scene {
     }
     // buttons
     const by = H - App.safeBottom - 110;
-    const again = new Button({ w: 320, h: 104, label: 'もう一回', color: 'pink', onTap: () => openPrep(this.col, (items) => Scenes.go(() => new BattleScene(items))) });
+    const again = new Button({ w: 320, h: 104, label: 'もう一回', color: 'pink', onTap: () => {
+      // a quick retry (no items); items are picked on the home screen
+      if (!spendLife()) return this.dropPopup('ライフがたりない', `つぎまで ${fmtTime(nextLifeIn())}`);
+      Scenes.go(() => new BattleScene());
+    } });
     again.position.set(200, by);
     const home = new Button({ w: 250, h: 92, label: 'ホーム', color: 'blue', sound: 'ui_back', onTap: () => Scenes.go(() => new HomeScene()) });
     home.position.set(540, by);

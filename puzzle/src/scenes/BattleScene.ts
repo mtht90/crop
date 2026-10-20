@@ -12,7 +12,7 @@ import { Effects, fx } from '../game/Effects';
 import { ComboLabel, JFever, JTimer, ScoreLine, SkillButton, banner, installBitmapFonts, jungle, num } from '../game/Hud';
 import { COLORS, bigTexture, loadCharacterArt } from '../art/PieceArt';
 import { loadFairy, tex, unloadFairy } from '../core/Loader';
-import { CHARACTERS, CHAR_BY_ID, RARITY_INFO, addExp, charAtk, charCharge, expForRound, growthOf, skillAt, type CharDef, type Growth, type Skill } from '../data/characters';
+import { CHARACTERS, CHAR_BY_ID, COIN_SKILL, RARITY_INFO, addExp, chainCoins, charAtk, charCharge, expForRound, growthOf, skillAt, type CharDef, type Growth, type Skill } from '../data/characters';
 import { bossAttackCount, bossAttackInterval, bossForLevel, bossHp, type BossDef } from '../data/bosses';
 import { ResultScene, type BattleResult } from './ResultScene';
 import { HomeScene } from './HomeScene';
@@ -21,7 +21,7 @@ import { GIMMICKS, gimmicksFor, type GimmickId } from '../data/gimmicks';
 import { currentFrame, currentLine, currentWallpaper, frameTextures, loadWallpapers, wallpaperAlias } from '../data/cosmetics';
 import { recordRound } from '../data/missions';
 import type { Stats } from '../core/Save';
-import { ITEM_BY_ID, spendLife, type ItemId } from '../data/play';
+import { ITEM_BY_ID, rollCoinBoost, spendLife, type ItemId } from '../data/play';
 import { Assets, type Texture as PTexture } from 'pixi.js';
 import { loadObstacleArt, obstacleTexture, type ObstacleArt } from '../art/PieceArt';
 import type { Texture } from 'pixi.js';
@@ -83,6 +83,7 @@ export class BattleScene extends Scene {
   private growth: Growth;
   /** The character's skill at its skill level. */
   private skill: Skill;
+  private coinSkill = { perPiece: 0, flat: 0 };
   private atk: number;
   private chargeNeed: number;
   private bossLv: number;
@@ -158,6 +159,7 @@ export class BattleScene extends Scene {
   private quakeT = 0;
   /** Coins picked up during the round. */
   private coinsEarned = 0;
+  private fiveToFour = false;
   private coinLabel = txt('0', { size: 26, color: 0xffe36f, stroke: 0x2a1630, strokeWidth: 6, anchor: [1, 0.5] });
   /** Counters for missions. */
   private round = { pops: 0, broken: 0, bombs: 0, chains7: 0 };
@@ -172,12 +174,17 @@ export class BattleScene extends Scene {
     super();
     installBitmapFonts();
     if (items.includes('time')) this.timeLeft = BATTLE_TIME + 5;
+    this.fiveToFour = items.includes('five4');
     const sel = Save.data.selected;
     this.def = CHAR_BY_ID[sel] ?? CHARACTERS[0];
     this.growth = growthOf(Save.data.owned[this.def.id]);
     this.atk = charAtk(this.def, this.growth);
     this.chargeNeed = charCharge(this.def, this.growth);
     this.skill = skillAt(this.def, this.growth.skill);
+    // coin skill grows 10% per skill level
+    const cs = COIN_SKILL[this.def.rarity];
+    const k = 1 + (this.growth.skill - 1) * 0.1;
+    this.coinSkill = { perPiece: cs.perPiece * k, flat: Math.round(cs.flat * k) };
     this.bossLv = Save.fightLv();
     this.rematch = this.bossLv < Save.data.bossLv;
     this.bossDef = bossForLevel(this.bossLv);
@@ -223,6 +230,7 @@ export class BattleScene extends Scene {
     this.board.view.position.set(this.boardX + D / 2, this.boardY + D / 2);
     this.board.onSkullBlow = (x, y) => this.skullBlow(x, y);
     this.board.lineStyle = currentLine();
+    if (this.fiveToFour) this.board.colors = 4;
     this.board.onBroken = () => this.round.broken++;
     this.col.addChild(this.board.view, this.feverFrame, this.orbLayer, this.fxTop.view, this.hud, this.vignette, this.overlay);
     this.drawBoardFrame();
@@ -599,11 +607,11 @@ export class BattleScene extends Scene {
     }
     if (cause === 'bomb') this.round.bombs++;
     if (cause === 'chain' && meta.chain >= 7) this.round.chains7++;
-    // Tsum Tsum-style coins: a 4+ chain drops as many coins as its length, skills 2 per piece, bombs 15
+    // Tsum Tsum-style coins: 4+ chains (growing fast with length) and the character's coin skill
     let drop = 0;
-    if ((cause === 'chain' || cause === 'fever') && meta.chain >= 4) drop = meta.chain;
-    else if (cause === 'skill') drop = pops.length * 2;
-    else if (cause === 'bomb') drop = 15;
+    if (cause === 'chain' || cause === 'fever') drop = chainCoins(meta.chain);
+    else if (cause === 'skill') drop = Math.round(pops.length * this.coinSkill.perPiece);
+    else if (cause === 'bomb') drop = 3;
     if (drop > 0) this.dropCoins(drop, meta.x, meta.y);
     if (cause !== 'rock') {
       this.combo++;
@@ -841,6 +849,7 @@ export class BattleScene extends Scene {
     this.pointerId = null;
     this.skillCharge = 0;
     this.skillUses++;
+    if (this.coinSkill.flat) gsap.delayedCall(1.1, () => this.dropCoins(this.coinSkill.flat, this.board.w / 2, this.board.h * 0.4));
     await this.cutIn();
     if (this.phase !== 'cutin') return;
     this.phase = 'play';
@@ -1679,11 +1688,11 @@ export class BattleScene extends Scene {
   private finish(defeated: boolean): void {
     const d = Save.data;
     const score = Math.round(this.landed);
-    // Tsum Tsum-style: coins picked up in play + a score bonus + the boss bonus (~1,000–6,000 a round)
-    const scoreCoins = scoreToCoins(score);
-    const bossCoins = defeated ? (this.rematch ? 150 + this.bossLv * 10 : 300 + Math.min(this.bossLv, 50) * 30) : 0;
-    const bonus = scoreCoins + bossCoins;
-    const coins = Math.round((this.coinsEarned + bonus) * (this.items.includes('coin') ? 1.3 : 1));
+    // coins come from play (chains, coin skills) plus a small boss bonus; +Coin rolls a multiplier
+    const bossCoins = defeated ? (this.rematch ? 10 : 20 + Math.min(this.bossLv, 50) * 4) : 0;
+    const bonus = bossCoins;
+    const coinBoost = this.items.includes('coin') ? rollCoinBoost() : 1;
+    const coins = Math.round((this.coinsEarned + bonus) * coinBoost);
     // character growth: EXP from playing, rare skill tickets from bosses
     const owned = d.owned[this.def.id];
     const exp = expForRound(score, defeated);
@@ -1692,8 +1701,8 @@ export class BattleScene extends Scene {
     const ups = owned ? addExp(this.def, owned, exp) : 0;
     let skillTickets = 0;
     // skill tickets are meant to be very rare
-    if (defeated && !this.rematch && this.bossLv % 10 === 0) skillTickets++;
-    if (defeated && Math.random() < (this.rematch ? 0.003 : 0.01)) skillTickets++;
+    if (defeated && !this.rematch && this.bossLv % 20 === 0) skillTickets++;
+    if (defeated && Math.random() < (this.rematch ? 0.001 : 0.003)) skillTickets++;
     d.skillTickets += skillTickets;
     const newBest = score > d.best;
     const result: BattleResult = {
@@ -1714,7 +1723,7 @@ export class BattleScene extends Scene {
       exp,
       expBefore,
       expAfter: owned ? owned.exp : 0,
-      coinParts: { play: this.coinsEarned, score: scoreCoins, boss: bossCoins, item: this.items.includes('coin') },
+      coinParts: { play: this.coinsEarned, boss: bossCoins, boost: coinBoost },
       lvBefore: before,
       lvAfter: before + ups,
       skillTickets,
@@ -1782,13 +1791,6 @@ export class BattleScene extends Scene {
     this.overlay.addChild(ov);
     gsap.globalTimeline.pause();
   }
-}
-
-/** End-of-round coins from the score: 1 per 400 points up to 1M, then diminishing (cap 4,000). */
-export function scoreToCoins(score: number): number {
-  const base = Math.min(score, 1_000_000) / 400;
-  const extra = Math.max(0, score - 1_000_000) / 2000;
-  return Math.floor(Math.min(4000, base + extra));
 }
 
 /** Damage per piece by chain length: grows faster than linearly, so long traces are what pay. */

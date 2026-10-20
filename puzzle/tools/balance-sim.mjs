@@ -78,7 +78,7 @@ for (const id of ids) {
         b.pointerUp();
         chains++;
       }
-      const st = {}; for (const q of b.pieces) { const k = q.kind + ':' + q.state + ':' + (b.onBoard(q) ? 'in' : 'out'); st[k] = (st[k] ?? 0) + 1; } return { idle: idleN, fails, st, best: b.bestGroup().length, input: b.inputEnabled, ys: b.pieces.slice(0, 6).map((q) => Math.round(q.y)), score: Math.round(sc.committed), coins: sc.coinsEarned + Math.floor(Math.min(4000, Math.min(sc.committed, 1e6) / 400 + Math.max(0, sc.committed - 1e6) / 2000)), chains, skills, bombs, maxChain: sc.maxChain, fever: sc.feverCount };
+      const st = {}; for (const q of b.pieces) { const k = q.kind + ':' + q.state + ':' + (b.onBoard(q) ? 'in' : 'out'); st[k] = (st[k] ?? 0) + 1; } return { idle: idleN, fails, st, best: b.bestGroup().length, input: b.inputEnabled, ys: b.pieces.slice(0, 6).map((q) => Math.round(q.y)), score: Math.round(sc.committed), coins: sc.coinsEarned, chains, skills, bombs, maxChain: sc.maxChain, fever: sc.feverCount };
     }, HUMAN);
     out[id].push(res);
     await p.close();

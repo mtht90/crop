@@ -168,6 +168,8 @@ export class Board {
   private coverMask = new Graphics();
   private darkG = new Graphics();
   dark = false;
+  /** How many piece colors are in play (the 5→4 item drops one). */
+  colors = 5;
   /** Trace line look (cosmetic). */
   lineStyle: LineStyle | null = null;
   private lastTouch = { x: 0, y: 0 };
@@ -231,13 +233,13 @@ export class Board {
   }
 
   private pickColor(): number {
-    if (Math.random() < 0.7) return Math.floor(Math.random() * 5);
+    if (Math.random() < 0.7) return Math.floor(Math.random() * this.colors);
     const counts = [0, 0, 0, 0, 0];
     for (const p of this.pieces) if (p.color >= 0 && p.state !== 'dead') counts[p.color]++;
-    const weights = counts.map((c) => 1 / (c + 1));
+    const weights = counts.slice(0, this.colors).map((c) => 1 / (c + 1));
     const sum = weights.reduce((a, b) => a + b, 0);
     let r = Math.random() * sum;
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < this.colors; i++) {
       r -= weights[i];
       if (r <= 0) return i;
     }
@@ -1038,7 +1040,7 @@ export class Board {
       } else if (p.status === 'chameleon') {
         if (p.statusT <= 0 && p.state === 'live') {
           p.statusT = 1.4;
-          p.color = (p.color + 1 + Math.floor(Math.random() * 4)) % 5;
+          p.color = (p.color + 1 + Math.floor(Math.random() * (this.colors - 1))) % this.colors;
           this.dress(p);
           p.poke(-5);
         }
@@ -1074,7 +1076,7 @@ export class Board {
     list.forEach((p, i) => {
       gsap.delayedCall((i % 12) * 0.03, () => {
         if (p.state !== 'live') return;
-        p.color = Math.floor(Math.random() * 5);
+        p.color = Math.floor(Math.random() * this.colors);
         this.dress(p);
         p.poke(-6);
       });

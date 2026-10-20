@@ -48,7 +48,7 @@ export function fmtTime(ms: number): string {
 }
 
 // ------------------------------------------------------------------ items
-export type ItemId = 'score' | 'coin' | 'time';
+export type ItemId = 'score' | 'coin' | 'time' | 'five4';
 
 export interface PlayItem {
   id: ItemId;
@@ -60,8 +60,14 @@ export interface PlayItem {
 /** Bought before a round (Tsum Tsum-style boosts). */
 export const ITEMS: PlayItem[] = [
   { id: 'score', name: 'スコアアップ', desc: 'スコア +10%', price: 500 },
-  { id: 'coin', name: 'コインアップ', desc: 'もらえるコイン +30%', price: 500 },
-  { id: 'time', name: 'じかんえんちょう', desc: 'じかん +5びょう', price: 1000 },
+  { id: 'coin', name: 'コインアップ', desc: 'コインが ×1.1〜5 になる', price: 500 },
+  { id: 'time', name: '+5びょう', desc: 'じかん +5びょう', price: 1000 },
+  { id: 'five4', name: '5→4', desc: 'ぷにの色が4しょくになる', price: 1800 },
 ];
 
 export const ITEM_BY_ID = Object.fromEntries(ITEMS.map((i) => [i.id, i])) as Record<ItemId, PlayItem>;
+
+/** The +Coin item's multiplier: random 1.1–5.0, mostly low (average about 1.5), like Tsum Tsum. */
+export function rollCoinBoost(): number {
+  return Math.round((1.1 + 3.9 * Math.random() ** 8) * 10) / 10;
+}
