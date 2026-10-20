@@ -1,0 +1,19 @@
+# Render Blueprint: deploys the puzzle game as a static site (https://render.com/docs/blueprint-spec)
+services:
+  - type: web
+    name: puni-puzzle-battle
+    runtime: static
+    rootDir: puzzle
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+    headers:
+      # hashed bundles never change; everything else is revalidated daily
+      - path: /assets/*.js
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff

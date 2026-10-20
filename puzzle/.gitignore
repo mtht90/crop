@@ -2,3 +2,5 @@ node_modules
 dist
 fonts-src/*.ttf
 fonts-src/.glyphs.txt
+gim/
+*.log

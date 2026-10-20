@@ -60,14 +60,29 @@ export interface PlayItem {
 /** Bought before a round (Tsum Tsum-style boosts). */
 export const ITEMS: PlayItem[] = [
   { id: 'score', name: 'スコアアップ', desc: 'スコア +10%', price: 500 },
-  { id: 'coin', name: 'コインアップ', desc: 'コインが ×1.1〜5 になる', price: 500 },
+  { id: 'coin', name: 'コインアップ', desc: 'コインが ×1.1〜51 になる', price: 500 },
   { id: 'time', name: '+5びょう', desc: 'じかん +5びょう', price: 1000 },
   { id: 'five4', name: '5→4', desc: 'ぷにの色が4しょくになる', price: 1800 },
 ];
 
 export const ITEM_BY_ID = Object.fromEntries(ITEMS.map((i) => [i.id, i])) as Record<ItemId, PlayItem>;
 
-/** The +Coin item's multiplier: random 1.1–5.0, mostly low (average about 1.5), like Tsum Tsum. */
-export function rollCoinBoost(): number {
-  return Math.round((1.1 + 3.9 * Math.random() ** 8) * 10) / 10;
+/**
+ * The +Coin item's multiplier, like Tsum Tsum: usually ×1.1–1.3, sometimes ×2–×10,
+ * and very rarely ×51 (average about ×1.5).
+ */
+const COIN_TABLE: [chance: number, mult: number][] = [
+  [0.001, 51],
+  [0.005, 10],
+  [0.01, 5],
+  [0.03, 3],
+  [0.1, 2],
+];
+
+export function rollCoinBoost(r = Math.random()): number {
+  for (const [chance, mult] of COIN_TABLE) {
+    if (r < chance) return mult;
+    r -= chance;
+  }
+  return Math.round((1.1 + Math.random() * 0.2) * 10) / 10;
 }

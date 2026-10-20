@@ -22,6 +22,13 @@ npm run fonts    # ゲーム内の日本語を追加・変更したらフォン�
 ```
 `?scene=battle` / `home` / `gacha` / `chara` で各画面に直接入れます。
 
+## Render で公開する
+リポジトリ直下の `render.yaml`（Blueprint）で静的サイトとしてデプロイできます。
+1. https://dashboard.render.com で GitHub を連携
+2. 「New」→「Blueprint」→ このリポジトリとブランチを選ぶ
+3. `render.yaml` の内容（`puzzle/` で `npm ci && npm run build`、`dist/` を公開）で自動作成されます
+以後はブランチに push するたびに自動で再デプロイされます。
+
 ## 構成
 - PixiJS v8 (WebGL) + GSAP、物理は円ピース専用の自作PBDソルバー（`src/game/Physics.ts`）
 - 効果音は Web Audio：なぞるたびペンタトニックで音階が上がる合成音＋効果音ラボの素材、リバーブ/ダッキング付き

@@ -250,6 +250,7 @@ export class ResultScene extends Scene {
     box.addChild(brk);
     popIn(brk);
     if (r.skillTickets) this.dropPopup(`スキルチケット×${r.skillTickets}`, 'ゲット！');
+    if (cp.boost >= 5) this.dropPopup(`コイン ×${cp.boost}！！`, 'コインアップ大当たり！');
     if (r.defeated) {
       const next = bossForLevel(r.bossLv + 1);
       const msg = r.rematch ? 'さいせんクリア！' : `つぎのボス：Lv.${r.bossLv + 1} ${next.name}`;
