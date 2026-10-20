@@ -11,16 +11,15 @@ import { jungle, num, installBitmapFonts } from '../game/Hud';
 
 /** Coins counter shown at the top of menu screens. */
 /**
- * Coin total in a dark pill. The pill widens with each extra digit up to 100,000,000 so the
- * number always sits inside it. `grow` sets which way it widens: from a fixed left edge
- * (home, top-left) or from a fixed right edge (menu screens, top-right).
+ * Coin total in a dark pill. The pill widens with each extra digit and fits 100,000,000 exactly;
+ * past that the pill stops growing and the number runs over its edge. `grow` sets which way it
+ * widens: from a fixed left edge (home, top-left) or a fixed right edge (menu screens, top-right).
  */
 export class CoinCounter extends Container {
   private digits;
   private shown: number;
   private bg = new Graphics();
   private icon = coinIcon(22);
-  private minW = 220;
   private maxW: number;
   private w = 0;
   constructor(private grow: 'right' | 'left' = 'right') {
@@ -28,29 +27,22 @@ export class CoinCounter extends Container {
     installBitmapFonts();
     this.shown = Save.data.coins;
     this.digits = num(fmt(this.shown), 32);
-    this.digits.anchor.set(1, 0.5);
-    // widest the pill gets: the width of 100,000,000
+    this.digits.anchor.set(0, 0.5);
     this.digits.text = fmt(100_000_000);
     this.maxW = this.fitW();
     this.digits.text = fmt(this.shown);
     this.addChild(this.bg, this.icon, this.digits);
     this.layout();
   }
-  /** Pill width needed for the current text: icon + digits + padding. */
+  /** Pill width for the current text: coin icon + digits + a snug right margin. */
   private fitW(): number {
-    return Math.max(this.minW, 58 + this.digits.width + 22);
+    return Math.max(150, 56 + this.digits.width + 16);
   }
   private layout(): void {
-    this.digits.scale.set(1);
-    let w = this.fitW();
-    if (w > this.maxW) {
-      // past 100,000,000 the number shrinks instead of the pill growing
-      this.digits.scale.set((this.maxW - 80) / this.digits.width);
-      w = this.maxW;
-    }
+    const w = Math.min(this.maxW, this.fitW());
     const left = this.grow === 'right' ? -20 : 200 - w;
     this.icon.position.set(left + 28, -4);
-    this.digits.position.set(left + w - 14, -4);
+    this.digits.position.set(left + 56, -4);
     if (w === this.w) return;
     this.w = w;
     this.bg.clear();

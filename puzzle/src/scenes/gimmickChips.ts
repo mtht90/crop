@@ -5,35 +5,27 @@ import { Button, panel, popIn, txt } from '../core/UI';
 import { obstacleTexture, type ObstacleArt } from '../art/PieceArt';
 import { GIMMICKS, type GimmickId } from '../data/gimmicks';
 
-/** Obstructions that throw something at the pieces show that thing as their icon. */
-const ART: Partial<Record<GimmickId, ObstacleArt>> = {
+/** Every obstruction's icon: what it throws at the pieces, or a prop that stands for the effect. */
+const ART: Record<GimmickId, ObstacleArt> = {
   rock: 'rock', hardRock: 'hardrock', bigRock: 'grave', junk: 'bone_a', ice: 'crystal', bubble: 'qbox',
   skullBomb: 'bomb', curse: 'skull', web: 'shackle', slime: 'anchor', chameleon: 'qbox',
+  dark: 'lantern', mono: 'camera', ink: 'ink', invisible: 'smokebomb', seal: 'chest', min4: 'idol', weak: 'water',
+  quake: 'rubble', wind: 'umbrella', float: 'ball', tilt: 'table', freeze: 'potion_blue', shuffle: 'cube',
+  timeSteal: 'sack', timeFast: 'lightning', skillDrain: 'potion_green', feverDrain: 'candle', barrier: 'shield',
+  skillSeal: 'book', comboBreak: 'broken',
 };
-/** The rest get a one-kanji badge: purple for board effects, red for attacks on the player. */
-const GLYPH: Partial<Record<GimmickId, string>> = {
-  dark: '闇', mono: '灰', ink: '墨', invisible: '透', seal: '封', min4: '4', weak: '滑', quake: '揺', wind: '風',
-  float: '浮', tilt: '傾', freeze: '凍', shuffle: '混',
-  timeSteal: '時', timeFast: '速', skillDrain: '減', feverDrain: '熱', barrier: '盾', skillSeal: '封', comboBreak: '断',
-};
+/** Ring color: brown for piece obstructions, purple for board effects, red for attacks on the player. */
 const PLAYER: GimmickId[] = ['timeSteal', 'timeFast', 'skillDrain', 'feverDrain', 'barrier', 'skillSeal', 'comboBreak'];
+const PIECE: GimmickId[] = ['rock', 'hardRock', 'bigRock', 'junk', 'ice', 'bubble', 'skullBomb', 'curse', 'web', 'slime', 'chameleon'];
 
 export function gimmickIcon(id: GimmickId, size: number): Container {
   const c = new Container();
-  const art = ART[id];
-  if (art) {
-    c.addChild(new Graphics().circle(0, 0, size / 2).fill(0xfff4dc).stroke({ width: 3, color: 0x8a5a2a }));
-    const s = new Sprite(obstacleTexture(art));
-    s.anchor.set(0.5);
-    s.scale.set((size * 0.92) / Math.max(1, s.texture.width));
-    c.addChild(s);
-  } else {
-    const col = PLAYER.includes(id) ? 0xd81b60 : 0x7a4dff;
-    c.addChild(new Graphics().circle(0, 0, size / 2).fill(col).stroke({ width: 3, color: 0xffffff }));
-    const t = txt(GLYPH[id] ?? '?', { size: size * 0.56, color: 0xffffff });
-    t.y = -1;
-    c.addChild(t);
-  }
+  const ring = PIECE.includes(id) ? 0x8a5a2a : PLAYER.includes(id) ? 0xd81b60 : 0x7a4dff;
+  c.addChild(new Graphics().circle(0, 0, size / 2).fill(0xfff4dc).stroke({ width: 3, color: ring }));
+  const s = new Sprite(obstacleTexture(ART[id]));
+  s.anchor.set(0.5);
+  s.scale.set((size * 0.92) / Math.max(1, s.texture.width));
+  c.addChild(s);
   return c;
 }
 

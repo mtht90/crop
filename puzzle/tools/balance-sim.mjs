@@ -41,6 +41,7 @@ for (const id of ids) {
         if (sc.phase !== 'play' || (sc.timeLeft <= 0)) { if (sc.timeLeft <= 0) break; continue; }
         if ((next -= dt) > 0) continue;
         next = HUMAN ? 1.0 + Math.random() * 0.6 : 0.55 + Math.random() * 0.35; // HUMAN: a casual player's pace
+        if (b.tapPop) next = 0.25 + Math.random() * 0.1; // during tap skills people tap fast
         const sk = b.pieces.find((q) => q.kind === 'skill' && q.state === 'live' && b.onBoard(q));
         if (sk) { b.pointerDown(sk.x, sk.y); b.pointerUp(); skills++; continue; }
         const bomb = b.pieces.find((q) => (q.kind === 'bomb' || q.kind === 'mega') && q.state === 'live' && b.onBoard(q));

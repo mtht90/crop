@@ -58,7 +58,7 @@ export const Dev = {
 
 // ------------------------------------------------------------------ DOM ui
 const CSS = `
-.dev{position:fixed;inset:0;z-index:60;background:rgba(10,4,24,.8);display:flex;align-items:center;justify-content:center;font:14px/1.4 sans-serif;color:#2a1630}
+.dev{position:fixed;inset:0;z-index:60;background:rgba(10,4,24,.8);display:flex;align-items:center;justify-content:center;font:14px/1.4 Memokatchi,sans-serif;color:#2a1630}
 .dev .box{background:#fff4dc;border:5px solid #8a5a2a;border-radius:16px;padding:14px;width:min(92vw,440px);max-height:88vh;overflow:auto;box-sizing:border-box}
 .dev h3{margin:10px 0 6px;font-size:15px;color:#8a5a2a;border-bottom:2px solid #e2c89a}
 .dev .row{display:flex;gap:6px;align-items:center;margin:4px 0;flex-wrap:wrap}
@@ -67,7 +67,7 @@ const CSS = `
 .dev button{padding:7px 10px;border:0;border-radius:10px;background:#7a4dff;color:#fff;font-size:14px}
 .dev button.warn{background:#d81b60}.dev button.grey{background:#8a7a9a}
 .dev .msg{color:#d81b60;min-height:18px}
-.devfab{position:fixed;right:8px;bottom:8px;z-index:55;padding:8px 10px;border:0;border-radius:10px;background:rgba(122,77,255,.85);color:#fff;font:bold 13px sans-serif}
+.devfab{position:fixed;right:8px;bottom:8px;z-index:55;padding:8px 10px;border:0;border-radius:10px;background:rgba(122,77,255,.85);color:#fff;font:bold 13px Memokatchi,sans-serif}
 `;
 
 function sheet(): void {

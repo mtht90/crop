@@ -263,7 +263,7 @@ function drawStatus(kind: StatusArt): HTMLCanvasElement {
       ellipse(ctx, -0.45, -0.5, 0.25, 0.13, -0.6);
       ctx.fillStyle = '#ffffff';
       ctx.fill();
-      ctx.font = 'bold 1.3px sans-serif';
+      ctx.font = '1.3px Memokatchi, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.lineWidth = 0.14;
@@ -391,7 +391,12 @@ export function statusTexture(kind: StatusArt): Texture {
 
 // ------------------------------------------------------------ obstacle sprites
 // KayKit models rendered to 200px cells (tools/mkobstacles.py); the model fills ~90% of the cell.
-export const OBSTACLES = ['rock', 'hardrock', 'grave', 'bone_a', 'bone_b', 'ribcage', 'bomb', 'skull', 'shackle', 'anchor', 'crystal', 'qbox'] as const;
+export const OBSTACLES = [
+  'rock', 'hardrock', 'grave', 'bone_a', 'bone_b', 'ribcage', 'bomb', 'skull', 'shackle', 'anchor', 'crystal', 'qbox',
+  // icons for obstructions that don't throw anything
+  'lantern', 'camera', 'ink', 'smokebomb', 'chest', 'idol', 'water', 'rubble', 'umbrella', 'ball', 'table',
+  'potion_blue', 'cube', 'sack', 'lightning', 'potion_green', 'candle', 'shield', 'book', 'broken',
+] as const;
 export type ObstacleArt = (typeof OBSTACLES)[number];
 export const OBSTACLE_CELL = 200;
 
