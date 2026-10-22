@@ -23,8 +23,10 @@ export function bossForLevel(lv: number): BossDef {
 
 /** Score needed to defeat the boss (討伐ライン). */
 export function bossHp(lv: number): number {
-  // tuned for a 90s round where fever stops the clock
-  return Math.round((120000 * Math.pow(1.24, lv - 1)) / 5000) * 5000;
+  // tuned for a 90s round where fever stops the clock: steep up to Lv15, gentler after
+  const steep = Math.min(lv, 15) - 1;
+  const gentle = Math.max(0, lv - 15);
+  return Math.round((120000 * Math.pow(1.24, steep) * Math.pow(1.08, gentle)) / 5000) * 5000;
 }
 
 /** Seconds between obstruction attacks; 0 = boss does not attack. */

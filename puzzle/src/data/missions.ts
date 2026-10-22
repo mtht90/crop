@@ -1,5 +1,5 @@
 import { Save, type Stats } from '../core/Save';
-import { CHARACTERS } from './characters';
+import { CHARACTERS, isReleased } from './characters';
 import { FRAME_BY_ID, WALLPAPER_BY_ID } from './cosmetics';
 
 export interface Reward {
@@ -68,7 +68,7 @@ export const ACHIEVEMENTS: Mission[] = [
   { id: 'a_own5', text: 'キャラを5体あつめる', stat: 'owned', goal: 5, reward: { coins: 12000, lives: 3 } },
   { id: 'a_own10', text: 'キャラを10体あつめる', stat: 'owned', goal: 10, reward: { tickets: 2 } },
   { id: 'a_own15', text: 'キャラを15体あつめる', stat: 'owned', goal: 15, reward: { coins: 60000 } },
-  { id: 'a_ownAll', text: 'キャラをぜんぶあつめる', stat: 'owned', goal: CHARACTERS.length, reward: { frame: 'gold', tickets: 5 } },
+  { id: 'a_ownAll', text: 'キャラをぜんぶあつめる', stat: 'owned', goal: CHARACTERS.filter((c) => !c.limitedUntil && isReleased(c)).length, reward: { frame: 'gold', tickets: 5 } },
   { id: 'a_clv10', text: 'キャラをLv.10にする', stat: 'charLv', goal: 10, reward: { coins: 12000 } },
   { id: 'a_clv30', text: 'キャラをLv.30にする', stat: 'charLv', goal: 30, reward: { tickets: 2 } },
   { id: 'a_clv50', text: 'キャラをLv.50にする', stat: 'charLv', goal: 50, reward: { tickets: 2 } },

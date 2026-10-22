@@ -8,9 +8,9 @@ import { Button, grad, panel, popIn, txt } from '../core/UI';
 import { MenuBackground } from '../game/Backdrop';
 import { Effects } from '../game/Effects';
 import { COLORS, bigTexture, loadCharacterArt, pieceTexture } from '../art/PieceArt';
-import { CHARACTERS, MAX_LV, MAX_SKILL_LV, RARITY_INFO, charAtk, charCharge, expToNext, growthOf, skillTicketCost, type CharDef } from '../data/characters';
+import { CHARACTERS, inGacha, isReleased, shortDate, MAX_LV, MAX_SKILL_LV, RARITY_INFO, charAtk, charCharge, expToNext, growthOf, skillTicketCost, type CharDef } from '../data/characters';
 import { HomeScene } from './HomeScene';
-import { stars, menuBar } from './common';
+import { ScrollBox, stars, menuBar } from './common';
 
 export class CharaScene extends Scene {
   private bg = new MenuBackground(0x3a7bff, 0x7a4dff, 3);
@@ -28,27 +28,33 @@ export class CharaScene extends Scene {
     title.position.set(360, top + 46);
     const back = new Button({ w: 150, h: 76, label: 'もどる', color: 'grey', size: 28, sound: 'ui_back', onTap: () => Scenes.go(() => new HomeScene()) });
     back.position.set(100, top + 46);
-    const ownedN = CHARACTERS.filter((c) => Save.data.owned[c.id]).length;
-    const cnt = txt(`${ownedN} / ${CHARACTERS.length}`, { size: 28, stroke: 0x2a1630, strokeWidth: 6 });
+    // released characters; limited ones only while they're out or once owned
+    const list = CHARACTERS.filter((c) => isReleased(c) && (!c.limitedUntil || Save.data.owned[c.id] || inGacha(c)));
+    const ownedN = list.filter((c) => Save.data.owned[c.id]).length;
+    const cnt = txt(`${ownedN} / ${list.length}`, { size: 28, stroke: 0x2a1630, strokeWidth: 6 });
     cnt.position.set(620, top + 46);
     const st = txt(`スキルチケット ${Save.data.skillTickets}枚`, { size: 22, color: 0xfff27a, stroke: 0x2a1630, strokeWidth: 6, anchor: [1, 0.5] });
     st.position.set(700, top + 92);
     this.col.addChild(title, back, cnt, st);
 
-    const cols = 3;
+    // 4 columns in a scrolling list, so the collection can keep growing
+    const cols = 4;
     const cw = 214;
     const ch = 232;
-    const gx = (720 - cols * cw) / (cols + 1);
+    const GS = 0.75;
+    const gx = (720 / GS - cols * cw) / (cols + 1);
     const y0 = top + 120;
-    const avail = App.H - y0 - App.safeBottom - 20;
-    const scale = Math.min(1, avail / (Math.ceil(CHARACTERS.length / cols) * (ch + 14)));
+    this.grid = new ScrollBox(720, App.H - y0 - App.safeBottom - 10);
+    this.grid.position.set(360, y0);
     const grid = new Container();
-    grid.position.set(360, y0);
-    grid.scale.set(scale);
-    this.col.addChild(grid, this.fx.view);
-    CHARACTERS.forEach((def, i) => {
+    grid.scale.set(GS);
+    grid.y = 10;
+    this.grid.content.addChild(grid);
+    this.grid.contentH = 20 + Math.ceil(list.length / cols) * (ch + 14) * GS;
+    this.col.addChild(this.grid, this.fx.view);
+    list.forEach((def, i) => {
       const c = new Container();
-      const x = -360 + gx + (i % cols) * (cw + gx) + cw / 2;
+      const x = -360 / GS + gx + (i % cols) * (cw + gx) + cw / 2;
       const y = Math.floor(i / cols) * (ch + 14) + ch / 2;
       c.position.set(x, y);
       const owned = Save.data.owned[def.id];
@@ -71,6 +77,17 @@ export class CharaScene extends Scene {
       const rt = txt(def.rarity, { size: 20, font: 'dela', stroke: 0x2a1630, strokeWidth: 4 });
       rt.position.set(-cw / 2 + 39, -ch / 2 + 24);
       c.addChild(rb, rt);
+      if (def.limitedUntil) {
+        const lb = new Graphics().roundRect(cw / 2 - 74, -ch / 2 + 8, 66, 32, 16).fill(0xff3b5c);
+        const lt = txt('限定', { size: 18, color: 0xffffff });
+        lt.position.set(cw / 2 - 41, -ch / 2 + 24);
+        c.addChild(lb, lt);
+        if (!owned && inGacha(def)) {
+          const until = txt(`${shortDate(def.limitedUntil)}まで`, { size: 18, color: 0xffd23f, stroke: 0x2a1630, strokeWidth: 4 });
+          until.y = -ch / 2 + 58;
+          c.addChild(until);
+        }
+      }
       const nm = txt(owned ? def.name : '？？？', { size: 26, color: owned ? 0x4a2f7a : 0xb8a8e8 });
       nm.y = ch / 2 - 48;
       c.addChild(nm);
@@ -246,7 +263,10 @@ export class CharaScene extends Scene {
     this.col.x = App.colX;
   }
 
+  private grid?: ScrollBox;
+
   update(dt: number): void {
+    this.grid?.update();
     this.bg.update(dt);
     this.fx.update(dt);
   }

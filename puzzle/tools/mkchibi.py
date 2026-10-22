@@ -6,7 +6,8 @@ import sys
 from PIL import Image, ImageFilter
 SRC = sys.argv[1]
 IDS = sys.argv[2].split(',')
-P = '/home/user/crop/puzzle/public/assets/pieces'
+import os
+P = os.environ.get('OUT', '/home/user/crop/puzzle/public/assets/pieces')
 COLS = ['red', 'blue', 'green', 'yellow', 'purple']
 CELL = 320
 TARGET = 230

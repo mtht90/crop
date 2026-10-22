@@ -91,3 +91,8 @@ async function boot(): Promise<void> {
 }
 
 void boot();
+
+// installable app: offline start after the first visit (production builds only)
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => void navigator.serviceWorker.register('./sw.js').catch(() => {}));
+}

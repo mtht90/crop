@@ -1,4 +1,5 @@
-import { Container, Graphics } from 'pixi.js';
+import { Container, Graphics, Sprite } from 'pixi.js';
+import gsap from 'gsap';
 import { App } from '../core/App';
 import { Scene, Scenes } from '../core/Scene';
 import { Save } from '../core/Save';
@@ -7,9 +8,11 @@ import { Button, fmt, grad, popIn, txt } from '../core/UI';
 import { MenuBackground } from '../game/Backdrop';
 import { ACHIEVEMENTS, DAILY_BONUS, canClaim, claim, claimDailyBonus, dailyBonusReady, dailyMissions, isClaimed, progress, rewardText, type Mission } from '../data/missions';
 import { HomeScene } from './HomeScene';
+import { CARDS, LINES, cardComplete, claimBingo, currentCard, nextCard, pendingLines, squareDone } from '../data/bingo';
+import { tex } from '../core/Loader';
 import { CoinCounter, ScrollBox, rewardPopup, menuBar } from './common';
 
-type Tab = 'daily' | 'challenge';
+type Tab = 'daily' | 'challenge' | 'bingo';
 
 export class MissionScene extends Scene {
   private bg = new MenuBackground(0xff8a3d, 0xff4f8f, 4);
@@ -33,9 +36,15 @@ export class MissionScene extends Scene {
     tk.position.set(40, top + 118);
     this.col.addChild(title, back, this.coins, tk);
     const ty = top + 190;
-    (['daily', 'challenge'] as Tab[]).forEach((t, i) => {
-      const b = new Button({ w: 300, h: 80, label: t === 'daily' ? 'デイリー' : 'チャレンジ', color: 'grey', size: 32, onTap: () => this.show(t) });
-      b.position.set(195 + i * 330, ty);
+    const names: Record<Tab, string> = { daily: 'デイリー', challenge: 'チャレンジ', bingo: 'ビンゴ' };
+    (['daily', 'challenge', 'bingo'] as Tab[]).forEach((t, i) => {
+      const b = new Button({ w: 214, h: 80, label: names[t], color: 'grey', size: 30, onTap: () => this.show(t) });
+      b.position.set(126 + i * 234, ty);
+      if (t === 'bingo' && pendingLines().length) {
+        const dot = new Graphics().circle(0, 0, 14).fill(0xff3b5c).stroke({ width: 3, color: 0xffffff });
+        dot.position.set(92, -30);
+        b.addChild(dot);
+      }
       this.tabs[t] = b;
       this.col.addChild(b);
     });
@@ -56,6 +65,7 @@ export class MissionScene extends Scene {
     const c = this.list.content;
     for (const ch of c.removeChildren()) ch.destroy({ children: true });
     c.y = 0;
+    if (t === 'bingo') return this.showBingo();
     let y = 20;
     // claim everything ready on this tab at once
     const ready = t === 'daily'
@@ -82,6 +92,110 @@ export class MissionScene extends Scene {
       for (const m of list) y = this.row(m, false, y);
     }
     this.list.contentH = y;
+  }
+
+  /** The current bingo card: 3x3 squares, stamps for finished ones, ribbons for paid lines. */
+  private showBingo(): void {
+    const c = this.list.content;
+    const card = currentCard();
+    const b = Save.data.bingo;
+    if (!card) {
+      const t = txt('ぜんぶのビンゴカードを\nクリアしました！', { size: 36, stroke: 0x2a1630, strokeWidth: 8, align: 'center', lineHeight: 50 });
+      t.y = 140;
+      c.addChild(t);
+      this.list.contentH = 300;
+      return;
+    }
+    let y = 20;
+    const head = txt(`ビンゴカード ${b.card + 1} / ${CARDS.length}`, { size: 34, font: 'dela', stroke: 0x2a1630, strokeWidth: 8 });
+    head.y = y + 20;
+    const sub = txt(`1列そろうごとに ${rewardText(card.line)}\nぜんぶそろうと ${rewardText(card.full)}`, { size: 21, color: 0xfff27a, stroke: 0x2a1630, strokeWidth: 6, align: 'center', lineHeight: 30 });
+    sub.y = y + 76;
+    c.addChild(head, sub);
+    y += 120;
+    const S = 204;
+    const G = 10;
+    const cx = (i: number) => ((i % 3) - 1) * (S + G);
+    const gridTop = y;
+    const cy = (i: number) => gridTop + S / 2 + Math.floor(i / 3) * (S + G);
+    const stamps: (() => void)[] = [];
+    card.squares.forEach((sq, i) => {
+      const done = squareDone(i);
+      const cell = new Container();
+      cell.position.set(cx(i), cy(i));
+      const g = new Graphics();
+      g.roundRect(-S / 2, -S / 2 + 5, S, S, 24).fill({ color: 0x000000, alpha: 0.2 });
+      g.roundRect(-S / 2, -S / 2, S, S, 24).fill(done ? grad([[0, '#fff1f8'], [1, '#ffd0e8']]) : 0xfdf7ff);
+      g.roundRect(-S / 2, -S / 2, S, S, 24).stroke({ width: 4, color: done ? 0xff4f8f : 0x8a6cff });
+      const num = txt(String(i + 1), { size: 20, font: 'dela', color: 0xffffff });
+      const nb = new Graphics().circle(0, 0, 18).fill(0x8a6cff);
+      nb.position.set(-S / 2 + 26, -S / 2 + 26);
+      num.position.set(nb.x, nb.y - 1);
+      const t = txt(sq.text, { size: 21, color: 0x4a2f7a, wrap: S - 24, align: 'center', lineHeight: 28 });
+      t.y = -6;
+      const v = Math.min(sq.goal, b.prog[i]);
+      const p = txt(`${sq.once ? 'ベスト ' : ''}${fmt(v)} / ${fmt(sq.goal)}`, { size: 17, color: 0x8a6cff });
+      p.y = S / 2 - 26;
+      if (p.width > S - 20) p.scale.set((S - 20) / p.width);
+      cell.addChild(g, nb, num, t, p);
+      if (done) {
+        const st = new Container();
+        const ring = new Graphics().circle(0, 0, 62).stroke({ width: 8, color: 0xff4f8f, alpha: 0.85 });
+        const star = new Sprite(tex('ui:star'));
+        star.anchor.set(0.5);
+        star.scale.set(70 / Math.max(1, star.texture.width));
+        st.addChild(ring, star);
+        st.rotation = -0.2;
+        cell.addChild(st);
+        if (!b.seen[i]) {
+          st.visible = false;
+          stamps.push(() => {
+            st.visible = true;
+            gsap.fromTo(st.scale, { x: 2.4, y: 2.4 }, { x: 1, y: 1, duration: 0.3, ease: 'back.out(2)' });
+            Sound.play('hitHeavy', { vol: 0.5, rate: 1.4 });
+          });
+          b.seen[i] = true;
+        }
+      }
+      c.addChild(cell);
+    });
+    // ribbons across lines already paid out
+    const ribbons = new Graphics();
+    c.addChild(ribbons);
+    const drawRibbon = (li: number) => {
+      const [a, , z] = LINES[li];
+      ribbons.moveTo(cx(a), cy(a)).lineTo(cx(z), cy(z)).stroke({ width: 26, color: 0xffd23f, alpha: 0.55, cap: 'round' });
+    };
+    for (const li of b.lines) drawRibbon(li);
+    y += 3 * (S + G) + 10;
+    // new stamps land one after another, then new lines pay out
+    const pending = pendingLines();
+    stamps.forEach((f, k) => gsap.delayedCall(0.3 + k * 0.25, f));
+    const after = 0.4 + stamps.length * 0.25;
+    if (pending.length) {
+      gsap.delayedCall(after, () => {
+        for (const li of pending) drawRibbon(li);
+        const res = claimBingo();
+        Sound.play('powerUp2', { vol: 0.8 });
+        Sound.sparkle();
+        this.coins.refresh();
+        this.onChange();
+        rewardPopup(this.col, res.full ? 'ビンゴカード コンプリート！' : `ビンゴ！ ×${res.lines}`, this.total(res.got), () => this.show('bingo'));
+      });
+    } else Save.write();
+    if (cardComplete() && !pending.length) {
+      const more = b.card + 1 < CARDS.length;
+      const nb = new Button({ w: 420, h: 90, label: more ? 'つぎのカードへ！' : 'さいごのカードクリア！', color: 'pink', size: 30, onTap: () => {
+        if (!more) return;
+        nextCard();
+        this.show('bingo');
+      } });
+      nb.y = y + 50;
+      c.addChild(nb);
+      nb.breathe();
+      y += 110;
+    }
+    this.list.contentH = y + 20;
   }
 
   private row(m: Mission, daily: boolean, y: number): number {
@@ -160,7 +274,11 @@ export class MissionScene extends Scene {
       for (const m of dailyMissions()) got.push(...claim(m, true));
       got.push(...claimDailyBonus());
     } else for (const m of ACHIEVEMENTS) got.push(...claim(m, false));
-    // add up repeated coin/ticket lines
+    this.afterClaim(this.total(got));
+  }
+
+  /** Adds up repeated coin/ticket lines ("3000コイン" twice → "6,000コイン"). */
+  private total(got: string[]): string[] {
     const sum = new Map<string, number>();
     const other: string[] = [];
     for (const g of got) {
@@ -170,8 +288,7 @@ export class MissionScene extends Scene {
       else if (tk) sum.set(tk[1], (sum.get(tk[1]) ?? 0) + Number(tk[2]));
       else other.push(g);
     }
-    const lines = [...[...sum].map(([k, v]) => (k === 'コイン' ? `${fmt(v)}コイン` : `${k}×${v}`)), ...other];
-    this.afterClaim(lines);
+    return [...[...sum].map(([k, v]) => (k === 'コイン' ? `${fmt(v)}コイン` : `${k}×${v}`)), ...other];
   }
 
   private afterClaim(got: string[]): void {

@@ -20,6 +20,7 @@ import { battleTrack } from '../data/music';
 import { GIMMICKS, gimmicksFor, type GimmickId } from '../data/gimmicks';
 import { currentFrame, currentLine, currentWallpaper, frameTextures, loadWallpapers, wallpaperAlias } from '../data/cosmetics';
 import { recordRound } from '../data/missions';
+import { recordBingo } from '../data/bingo';
 import type { Stats } from '../core/Save';
 import { Dev, devFab } from '../core/Dev';
 import { Ranking, submitScore, weekKey } from '../core/Ranking';
@@ -658,7 +659,8 @@ export class BattleScene extends Scene {
     this.resolves.set(token, { total, remaining: total, perPiece: total / pops.length, n: pops.length, seen: 0, orbEvery, shown: false, crit, cause, color: meta.color });
     // gauges
     // no skill charge during fever / tap mode, or skills would chain into each other
-    if (cause !== 'skill' && !this.feverOn && this.tapT <= 0) this.skillCharge = Math.min(this.chargeNeed, this.skillCharge + weight);
+    // the skill gauge fills in fever too (not while tapping, so tap skills can't chain themselves)
+    if (cause !== 'skill' && this.tapT <= 0) this.skillCharge = Math.min(this.chargeNeed, this.skillCharge + weight);
     if (!this.feverOn && cause !== 'rock') {
       // fever stops the clock; ~200 pieces per fever gives a normal round 2–3 fevers
       this.fever = Math.min(100, this.fever + weight * (cause === 'skill' ? 0.28 : 0.72));
@@ -1112,6 +1114,7 @@ export class BattleScene extends Scene {
     bh_a: 'hammer', bh_b: 'star', l_knight: 'shield', l_barbarian: 'obs:bomb', skull: 'obs:skull', skel_minion: 'obs:bone_a',
     knight: 'lightning', barbarian: 'hammer', rogue: 'dagger', hood: 'dagger', skel_warrior: 'sword', skel_rogue: 'dagger',
     c_student: 'obs:book', c_short: 'star', c_merchant: 'obs:sack', c_archer: 'arrow', c_ninja: 'dagger', c_knight: 'sword',
+    c_kuro: 'lightning', c_pony: 'dagger', c_maskbob: 'star', c_maskT: 'shield', c_pumpkin: 'obs:bomb',
   };
 
   private runSkill(): void {
@@ -1136,6 +1139,17 @@ export class BattleScene extends Scene {
           });
         }
         this.skillHit(10, 0xffd23f);
+        break;
+      case 'megaBombs':
+        // big bombs only (each clears a wide area when tapped)
+        for (let i = 0; i < (s.amount ?? 3); i++) {
+          gsap.delayedCall(i * 0.2, () => {
+            const bomb = b.spawnBomb(R + (Math.random() - 0.5) * R * 0.7, -r, true);
+            bomb.body.velocity.y = 900;
+            this.fxTop.ring(this.boardX + bomb.x, this.boardY + 40, 0xff9a1f, 1.4, 0.45);
+          });
+        }
+        this.skillHit(12, 0xff9a1f);
         break;
       case 'hline':
         this.slash(prop, R, M + R * 0.2, 0, size, glow);
@@ -1332,7 +1346,7 @@ export class BattleScene extends Scene {
         gsap.delayedCall(0.45, () => {
           this.shake(10, 0.35);
           if (!this.feverOn) {
-            this.fever = Math.min(100, this.fever + 30);
+            this.fever = Math.min(100, this.fever + 15);
             if (this.fever >= 100 && this.phase === 'play') this.startFever();
           }
         });
@@ -1815,7 +1829,9 @@ export class BattleScene extends Scene {
     const bossCoins = defeated ? (this.rematch ? 10 : 20 + Math.min(this.bossLv, 50) * 4) : 0;
     const bonus = bossCoins;
     const coinBoost = this.items.includes('coin') ? rollCoinBoost() : 1;
-    const coins = Math.round((this.coinsEarned + bonus) * coinBoost);
+    // パンプキン's passive: Halloween treats (+30% coins)
+    const treat = this.def.passive?.kind === 'treat' ? 1.3 : 1;
+    const coins = Math.round((this.coinsEarned + bonus) * coinBoost * treat);
     // character growth: EXP from playing, rare skill tickets from bosses
     const owned = d.owned[this.def.id];
     const exp = expForRound(score, defeated);
@@ -1866,6 +1882,7 @@ export class BattleScene extends Scene {
     d.tutorialDone = true;
     const stats: Stats = { plays: 1, defeats: defeated ? 1 : 0, ...this.round, fevers: this.feverCount, skills: this.skillUses, maxChain: this.maxChain, maxCombo: this.maxCombo };
     recordRound(stats);
+    recordBingo(stats, this.def.id, score);
     // a new weekly best plays the climb on the ranking page (remembered before submitScore updates it)
     const prevWeek = d.rank.best[weekKey()] ?? 0;
     if (score > prevWeek && Ranking.enabled && Ranking.registered) result.weekly = { prev: prevWeek, now: score };

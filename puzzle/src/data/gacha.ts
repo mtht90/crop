@@ -1,5 +1,5 @@
 import { Save } from '../core/Save';
-import { CHARACTERS, MAX_PLUS, MAX_SKILL_LV, RARITY_INFO, type CharDef, type Rarity } from './characters';
+import { CHARACTERS, MAX_PLUS, MAX_SKILL_LV, RARITY_INFO, inGacha, type CharDef, type Rarity } from './characters';
 
 export const COST_SINGLE = 30000;
 export const COST_TEN = 300000;
@@ -34,14 +34,32 @@ function rollRarity(minSR: boolean): Rarity {
   return minSR ? 'SR' : 'N';
 }
 
+/** Characters that can come out right now. */
+export function gachaPool(): CharDef[] {
+  return CHARACTERS.filter((c) => inGacha(c));
+}
+
+/** Limited characters in the gacha right now (pick-up). */
+export function limitedNow(): CharDef[] {
+  return gachaPool().filter((c) => c.limitedUntil);
+}
+
+/** One character of a rarity; a limited one gets half of that rarity's pulls while it's out. */
+function pickFrom(rarity: Rarity): CharDef {
+  const pool = gachaPool().filter((c) => c.rarity === rarity);
+  const limited = pool.filter((c) => c.limitedUntil);
+  const regular = pool.filter((c) => !c.limitedUntil);
+  const from = limited.length && (!regular.length || Math.random() < 0.5) ? limited : regular;
+  return from[Math.floor(Math.random() * from.length)];
+}
+
 /** Performs the pulls, applies them to the save and returns what was obtained. */
 export function pull(n: number): PullResult[] {
   const out: PullResult[] = [];
   for (let i = 0; i < n; i++) {
     const guarantee = n === 10 && i === n - 1 && !out.some((o) => rarityRank(o.def.rarity) >= 2);
     const rarity = rollRarity(guarantee);
-    const pool = CHARACTERS.filter((c) => c.rarity === rarity);
-    const def = pool[Math.floor(Math.random() * pool.length)];
+    const def = pickFrom(rarity);
     const owned = Save.data.owned[def.id];
     const isNew = !owned;
     // duplicates level the skill first; past max skill level they limit-break, then turn into coins

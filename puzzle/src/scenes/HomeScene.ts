@@ -20,6 +20,7 @@ import { GachaScene } from './GachaScene';
 import { MissionScene } from './MissionScene';
 import { DressScene } from './DressScene';
 import { claimableCount } from '../data/missions';
+import { bingoClaimable } from '../data/bingo';
 import { ITEMS, MAX_LIVES, fmtTime, lives, nextLifeIn, spendLife, type ItemId } from '../data/play';
 import { tex } from '../core/Loader';
 import { jungle } from '../game/Hud';
@@ -27,7 +28,7 @@ import { CoinCounter, loginPopup, openSettings, rewardPopup, stars } from './com
 import { claimLogin } from '../data/login';
 import { Ranking, claimLives, claimWeekly, giftCount } from '../core/Ranking';
 import { RankingPanel, type RankUp } from './RankingPanel';
-import { COST_SINGLE } from '../data/gacha';
+import { COST_SINGLE, limitedNow } from '../data/gacha';
 
 export class HomeScene extends Scene {
   private bg = new MenuBackground(0x6a4dff, 0xff7ab8);
@@ -181,7 +182,7 @@ export class HomeScene extends Scene {
     this.page.addChild(mission, dress);
     popIn(mission, 0.2, 0.6);
     popIn(dress, 0.25, 0.6);
-    const ready = claimableCount();
+    const ready = claimableCount() + bingoClaimable();
     if (ready > 0) {
       const badge = new Container();
       const bg = new Graphics().circle(0, 0, 22).fill(0xff3355).stroke({ width: 4, color: 0xffffff });
@@ -203,6 +204,16 @@ export class HomeScene extends Scene {
       gsap.to(badge.scale, { x: 1.2, y: 1.2, duration: 0.5, yoyo: true, repeat: -1, ease: 'sine.inOut' });
     }
     [battle, chara, gacha].forEach((b, i) => popIn(b, 0.15 + i * 0.06, 0.6));
+    // a limited character is out: ribbon over the gacha button
+    if (limitedNow().length) {
+      const rib = new Container();
+      const rt = txt('期間限定キャラ！', { size: 20, color: 0xffffff });
+      rib.addChild(new Graphics().roundRect(-rt.width / 2 - 16, -17, rt.width + 32, 34, 17).fill(0xff3b5c).stroke({ width: 3, color: 0xffffff }), rt);
+      rib.position.set(gacha.x - 20, by - 62);
+      rib.rotation = -0.05;
+      this.page.addChild(rib);
+      gsap.to(rib.scale, { x: 1.08, y: 1.08, duration: 0.5, yoyo: true, repeat: -1, ease: 'sine.inOut' });
+    }
     if (!Save.data.tutorialDone) {
       const tip = panel(560, 90, { color: 0xffffff });
       const tt = txt('まずは「バトル！」をタップ！', { size: 30, color: 0x4a2f7a });

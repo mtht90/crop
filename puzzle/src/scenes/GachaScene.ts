@@ -11,8 +11,8 @@ import { loadFairy, unloadFairy } from '../core/Loader';
 import { Effects } from '../game/Effects';
 import { World, type PBody } from '../game/Physics';
 import { bigTexture, loadCharacterArt } from '../art/PieceArt';
-import { CHARACTERS, RARITY_INFO, type Rarity } from '../data/characters';
-import { COST_SINGLE, COST_TEN, MAXED_COINS, PITY, pull, rarityRank, type PullResult } from '../data/gacha';
+import { RARITY_INFO, shortDate, type Rarity } from '../data/characters';
+import { COST_SINGLE, COST_TEN, MAXED_COINS, PITY, gachaPool, limitedNow, pull, rarityRank, type PullResult } from '../data/gacha';
 import { HomeScene } from './HomeScene';
 import { CoinCounter, stars } from './common';
 
@@ -140,19 +140,30 @@ export class GachaScene extends Scene {
     tag.roundRect(-110, -22, 220, 44, 22).stroke({ width: 4, color: 0xffffff });
     tag.position.set(-170, -84);
     tag.rotation = -0.06;
-    const tl = txt('PICK UP SSR', { size: 24, font: 'dela', stroke: 0x5a0a2a, strokeWidth: 5 });
+    // a limited character takes the whole plaque while it's out
+    const limited = limitedNow();
+    const tl = txt(limited.length ? '期間限定！' : 'PICK UP SSR', { size: 24, font: 'dela', stroke: 0x5a0a2a, strokeWidth: 5 });
     tl.position.copyFrom(tag.position);
     tl.rotation = tag.rotation;
     p.addChild(board);
-    const ssr = CHARACTERS.filter((c) => c.rarity === 'SSR');
+    if (limited.length) {
+      const info = txt(`${shortDate(limited[0].limitedUntil!)}まで\n出現率アップ中！`, { size: 24, color: 0xd81b60, align: 'center', lineHeight: 32 });
+      info.position.set(170, 0);
+      p.addChild(info);
+    }
+    const ssr = limited.length ? limited : gachaPool().filter((c) => c.rarity === 'SSR');
+    const step = Math.min(180, 470 / Math.max(1, ssr.length - 1));
+    const x0 = limited.length ? -90 : 0;
+    // a lone limited character is shown bigger
+    const big = limited.length === 1 ? 1.2 : 1;
     ssr.forEach((c, i) => {
-      const x = (i - (ssr.length - 1) / 2) * 180;
-      const halo = new Graphics().circle(0, 0, 66).fill(grad([[0, '#fff6c0'], [1, '#ffb020']]));
-      halo.circle(0, 0, 66).stroke({ width: 5, color: 0xffffff });
+      const x = x0 + (i - (ssr.length - 1) / 2) * step;
+      const halo = new Graphics().circle(0, 0, 66 * big).fill(grad([[0, '#fff6c0'], [1, '#ffb020']]));
+      halo.circle(0, 0, 66 * big).stroke({ width: 5, color: 0xffffff });
       halo.position.set(x, 2);
       const art = new Sprite(bigTexture(c));
       art.anchor.set(0.5, 0.55);
-      art.scale.set(130 / Math.max(1, art.texture.width));
+      art.scale.set((130 * big) / Math.max(1, art.texture.width));
       art.position.set(x, 2);
       const nm = txt(c.name, { size: 20, stroke: 0x2a1630, strokeWidth: 5 });
       nm.position.set(x, 70);

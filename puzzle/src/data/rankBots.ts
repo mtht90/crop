@@ -1,4 +1,4 @@
-import { CHARACTERS } from './characters';
+import { CHARACTERS, isReleased } from './characters';
 import type { RankRow } from '../core/Ranking';
 
 /**
@@ -45,7 +45,7 @@ function botName(r: () => number): string {
 function botChar(r: () => number): string {
   const x = r();
   const tier = x < 0.45 ? 'N' : x < 0.75 ? 'R' : x < 0.95 ? 'SR' : 'SSR';
-  const pool = CHARACTERS.filter((c) => c.rarity === tier);
+  const pool = CHARACTERS.filter((c) => c.rarity === tier && !c.limitedUntil && isReleased(c));
   return pool[Math.floor(r() * pool.length)].id;
 }
 
