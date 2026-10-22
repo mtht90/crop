@@ -29,6 +29,8 @@ import { expectedScore } from '../data/rank';
 import { Assets, type Texture as PTexture } from 'pixi.js';
 import { loadObstacleArt, obstacleTexture, type ObstacleArt } from '../art/PieceArt';
 import type { Texture } from 'pixi.js';
+import { VS_ATTACKS, VS_TIME, type VsLink } from '../core/Versus';
+import { rewardPopup } from './common';
 
 export const BATTLE_TIME = 90;
 /** What the boss throws for each piece status. */
@@ -177,7 +179,11 @@ export class BattleScene extends Scene {
     if (document.hidden && !this.paused && (this.phase === 'play' || this.phase === 'cutin')) this.pause();
   };
 
-  constructor(private items: ItemId[] = []) {
+  /** `vs`: a versus match (no boss attacks or defeat line; attacks go to and come from the opponent). */
+  constructor(
+    private items: ItemId[] = [],
+    private vs?: VsLink,
+  ) {
     super();
     installBitmapFonts();
     if (items.includes('time')) this.timeLeft = BATTLE_TIME + 5;
@@ -204,6 +210,78 @@ export class BattleScene extends Scene {
     this.gimmicks = gimmicksFor(this.bossLv);
     this.bossAtkT = this.gimmicks.length ? bossAttackInterval(this.bossLv) || Infinity : Infinity;
     if (this.def.passive?.kind === 'guard') this.guards = 3;
+    if (vs) {
+      this.timeLeft = VS_TIME;
+      this.bossAtkT = Infinity;
+      this.scoreW.versus(vs.opponent.name + (vs.opponent.cpu ? '（CPU）' : ''));
+      vs.onAttack = (id) => void this.vsIncoming(id);
+      vs.onGone = () => this.floatText('あいてがいなくなった…', 360, this.boardY - 50, 0xffffff, 32);
+    }
+  }
+
+  // ----------------------------------------------------------------- versus
+  private vsSendT = 0;
+
+  /** Our big moves (8+ chains, skills, fever) send an obstruction to the opponent (not too often). */
+  private vsSend(why: string): void {
+    if (!this.vs || this.phase !== 'play' || this.vsSendT > 0) return;
+    this.vsSendT = 3;
+    const id = VS_ATTACKS[Math.floor(Math.random() * VS_ATTACKS.length)];
+    this.vs.sendAttack(id);
+    this.floatText(`${why}　${GIMMICKS[id].name}をおくった！`, 360, this.boardY - 50, 0x8dff8a, 30);
+    Sound.play('laser', { vol: 0.5, rate: 1.4 });
+  }
+
+  /** An obstruction from the opponent. */
+  private vsQueued: GimmickId[] = [];
+  private async vsIncoming(id: GimmickId): Promise<void> {
+    // the other side may start a moment earlier: hold attacks until our round begins
+    if (this.phase === 'intro') {
+      this.vsQueued.push(id);
+      return;
+    }
+    if (this.phase !== 'play' && this.phase !== 'cutin') return;
+    const g = GIMMICKS[id];
+    Sound.play('phaserUp', { vol: 0.5, rate: 0.8 });
+    this.gimmickCallout(`${this.vs!.opponent.name}から「${g.name}」`, '');
+    await wait(0.9);
+    if (this.phase !== 'play' && this.phase !== 'cutin') return;
+    if (this.guards > 0) {
+      this.guards--;
+      this.guardBounce();
+      return;
+    }
+    this.applyGimmick(id);
+  }
+
+  /** Versus ending: compare final scores, pay out, back home. */
+  private async vsEnd(): Promise<void> {
+    const vs = this.vs!;
+    const me = Math.round(this.landed);
+    const wait1 = txt('けっかをまっています…', { size: 34, color: 0xffffff, stroke: 0x2a1630, strokeWidth: 8 });
+    wait1.position.set(360, this.boardY + this.board.h * 0.55);
+    this.overlay.addChild(wait1);
+    const opp = await vs.finish(me);
+    wait1.destroy();
+    vs.leave();
+    const win = me > opp;
+    const draw = me === opp;
+    Sound.play(win ? 'jWin' : draw ? 'jLevel' : 'jLose', { vol: 0.85 });
+    await banner(this.overlay, win ? 'WIN!!' : draw ? 'DRAW' : 'LOSE…', 360, this.boardY + this.board.h * 0.42, { size: 130, color: win ? 0xfff27a : 0xb8c0ff, stroke: win ? 0x8a1f00 : 0x1a1240, hold: 0.9 });
+    // rewards: a win pays more against a real opponent
+    const d = Save.data;
+    const coins = win ? (vs.opponent.cpu ? 1500 : 3000) : draw ? 1200 : 600;
+    d.coins += coins;
+    const owned = d.owned[this.def.id];
+    const exp = expForRound(me, false);
+    if (owned) addExp(this.def, owned, exp);
+    d.vs = { win: d.vs.win + (win ? 1 : 0), lose: d.vs.lose + (!win && !draw ? 1 : 0), draw: d.vs.draw + (draw ? 1 : 0) };
+    d.plays++;
+    const stats: Stats = { plays: 1, defeats: 0, ...this.round, fevers: this.feverCount, skills: this.skillUses, maxChain: this.maxChain, maxCombo: this.maxCombo };
+    recordRound(stats);
+    recordBingo(stats, this.def.id, me);
+    Save.write();
+    rewardPopup(this.overlay, win ? 'かち！' : draw ? 'ひきわけ' : 'まけ…', [`${me.toLocaleString('en-US')} vs ${opp.toLocaleString('en-US')}`, `あいて：${vs.opponent.name}${vs.opponent.cpu ? '（CPU）' : ''}`, '', `${coins.toLocaleString('en-US')}コイン`, `EXP +${exp}`, `通算 ${d.vs.win}勝 ${d.vs.lose}敗`], () => Scenes.go(() => new HomeScene()));
   }
 
   async preload(): Promise<void> {
@@ -412,7 +490,9 @@ export class BattleScene extends Scene {
     void banner(this.overlay, 'GO!!', 360, this.boardY + this.board.h * 0.42, { size: 150, color: 0xfff27a, stroke: 0x8a1f00, hold: 0.25 });
     this.phase = 'play';
     this.board.inputEnabled = true;
-    if (!Save.data.tutorialDone) this.showTutorialHint();
+    this.vs?.start();
+    for (const [i, id] of this.vsQueued.splice(0).entries()) gsap.delayedCall(1 + i * 1.5, () => void this.vsIncoming(id));
+    if (!Save.data.tutorialDone && !this.vs) this.showTutorialHint();
   }
 
   private showTutorialHint(): void {
@@ -430,7 +510,8 @@ export class BattleScene extends Scene {
     const playing = this.phase === 'play';
     if (playing) {
       // the clock stops during fever
-      if (!this.feverOn && !this.devClockStopped) this.timeLeft -= dt * (this.effects.has('timeFast') ? 2 : 1);
+      // in versus the clock never stops, so both players' rounds end together
+      if ((this.vs || !this.feverOn) && !this.devClockStopped) this.timeLeft -= dt * (this.effects.has('timeFast') ? 2 : 1);
       const sec = Math.ceil(this.timeLeft);
       if (sec !== this.lastSecond) {
         this.lastSecond = sec;
@@ -468,6 +549,11 @@ export class BattleScene extends Scene {
         if (this.feverT <= 0) this.endFever();
       }
       this.updateEffects(dt);
+      if (this.vs) {
+        this.vsSendT -= dt;
+        this.vs.update(dt, this.committed);
+        this.scoreW.setOpp(this.vs.oppScore);
+      }
       // boss attack (the boss holds off during fever)
       if (!this.feverOn) this.bossAtkT -= dt;
       if (this.bossAtkT <= 0) {
@@ -505,7 +591,7 @@ export class BattleScene extends Scene {
     this.timer.set(this.timeLeft, this.feverOn);
     this.scoreW.target = this.landed;
     this.scoreW.update(dt);
-    this.skillBtn.set(this.skillCharge / this.chargeNeed);
+    this.skillBtn.set(Math.min(1, this.skillCharge / this.chargeNeed));
     this.skillBtn.update(dt);
     this.feverG.value = this.fever;
     this.feverG.active = this.feverOn;
@@ -660,12 +746,13 @@ export class BattleScene extends Scene {
     // gauges
     // no skill charge during fever / tap mode, or skills would chain into each other
     // the skill gauge fills in fever too (not while tapping, so tap skills can't chain themselves)
-    if (cause !== 'skill' && this.tapT <= 0) this.skillCharge = Math.min(this.chargeNeed, this.skillCharge + weight);
+    if (cause !== 'skill' && this.tapT <= 0) this.skillCharge = Math.min(this.chargeNeed * 2, this.skillCharge + weight);
     if (!this.feverOn && cause !== 'rock') {
       // fever stops the clock; ~200 pieces per fever gives a normal round 2–3 fevers
       this.fever = Math.min(100, this.fever + weight * (cause === 'skill' ? 0.28 : 0.72));
       if (this.fever >= 100 && this.phase === 'play') this.startFever();
     }
+    if (this.vs && (cause === 'chain' || cause === 'fever') && meta.chain >= 8 && !meta.tap) this.vsSend(`${meta.chain}チェイン！`);
     // callouts
     if (cause === 'chain') {
       const words: [number, string, number][] = [[12, 'すごすぎ！！', 0xff4fd8], [9, 'すごい！', 0xffb020], [7, 'いいね！', 0x7cf0ff], [5, 'ナイス！', 0xffffff]];
@@ -846,6 +933,7 @@ export class BattleScene extends Scene {
 
   // ----------------------------------------------------------------- fever
   private startFever(): void {
+    this.vsSend('フィーバー！');
     this.feverOn = true;
     this.feverT = FEVER_TIME + (this.def.passive?.kind === 'oath' ? 2 : 0);
     this.feverCount++;
@@ -879,8 +967,10 @@ export class BattleScene extends Scene {
     this.board.forceRelease();
     this.board.inputEnabled = false;
     this.pointerId = null;
-    this.skillCharge = 0;
+    // pieces past a full gauge carry over to the next one
+    this.skillCharge = Math.max(0, this.skillCharge - this.chargeNeed);
     this.skillUses++;
+    this.vsSend('必殺技！');
     if (this.coinSkill.flat) gsap.delayedCall(1.1, () => this.dropCoins(this.coinSkill.flat, this.board.w / 2, this.board.h * 0.4));
     await this.cutIn();
     if (this.phase !== 'cutin') return;
@@ -1734,6 +1824,7 @@ export class BattleScene extends Scene {
     this.landed = Math.max(this.landed, this.committed);
     await wait(0.3);
     this.phase = 'end';
+    if (this.vs) return this.vsEnd();
     const defeated = this.landed >= this.hp;
     if (defeated) await this.defeatSequence();
     else await this.failSequence();

@@ -434,6 +434,18 @@ export class ScoreLine extends Container {
     this.check.visible = false;
     this.addChild(plank, lbl, this.value, this.lineText, this.check);
   }
+  private vsName = '';
+  /** Versus: the line under the score shows the opponent's score instead of the defeat line. */
+  versus(name: string): void {
+    this.vsName = name;
+    this.cleared = true;
+    this.setOpp(0);
+  }
+  setOpp(score: number): void {
+    if (!this.vsName) return;
+    this.lineText.text = `VS ${this.vsName} ${fmt(score)}`;
+    this.lineText.style.fill = this.target >= score ? 0x8dff8a : 0xff8aa0;
+  }
   update(dt: number): void {
     if (this.shown !== this.target) {
       const diff = this.target - this.shown;

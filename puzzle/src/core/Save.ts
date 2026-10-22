@@ -58,6 +58,10 @@ export interface SaveData {
   pendingItems: ItemId[];
   /** Online ranking: anonymous player id, nickname, local weekly best, weeks already rewarded. */
   rank: { id: string; name: string; best: Record<string, number>; claimed: string[]; sent: Record<string, number> };
+  /** Secret for collecting shop purchases on this device (only its hash is sent until claiming). */
+  payKey: string;
+  /** Versus record. */
+  vs: { win: number; lose: number; draw: number };
   /** Bingo cards: current card, square progress, lines paid out, stamps shown (see data/bingo.ts). */
   bingo: { card: number; prog: number[]; lines: number[]; seen: boolean[] };
   /** Login bonus: last day claimed and the streak (1–7). */
@@ -92,6 +96,8 @@ function defaults(): SaveData {
     lifeAt: 0,
     pendingItems: [],
     rank: { id: '', name: '', best: {}, claimed: [], sent: {} },
+    payKey: '',
+    vs: { win: 0, lose: 0, draw: 0 },
     bingo: { card: 0, prog: Array(9).fill(0), lines: [], seen: Array(9).fill(false) },
     login: { day: '', streak: 0 },
     stats: {},

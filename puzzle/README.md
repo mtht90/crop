@@ -65,3 +65,34 @@ npm run fonts    # ゲーム内の日本語を追加・変更したらフォン�
 - ガチャ筐体: "gumball machine" by myles_683 (CC BY 4.0) — https://www.thingiverse.com/thing:5385414 （パーツ分割・着色して three.js でレンダリング。`public/assets/gacha/CREDITS.txt`）
 - 音楽: 魔王魂 (CC BY 4.0) — https://maou.audio/ 「音楽：魔王魂」
 - フォント: めもかっち / やっちゃん (SIL OFL 1.1) — `public/fonts/OFL-Memokatchi.txt`。サブセット化には `fonts-src/Memokatchi.ttf` を置いて `npm run fonts`
+
+## ショップ（課金：Stripe）
+
+コインとライフを Stripe Checkout で販売します。支払いの確認は Supabase の Edge Function が行い、
+ゲームは端末ごとの秘密キーで受け取ります（ランキングのIDでは受け取れないので、他人に横取りされません）。
+最初は **テストモード** で動作確認してから本番に切りかえてください。
+
+1. **Stripe** でアカウントを作り、ダッシュボード → 開発者 → API キーで「シークレットキー」（テストは `sk_test_…`）をコピー。
+2. **Supabase** の SQL Editor で `supabase/shop.sql` を実行（購入テーブルと受け取り用の関数ができます）。
+3. **Edge Function を2つ作る**（Supabase CLI の場合）:
+   ```
+   supabase functions deploy checkout --no-verify-jwt
+   supabase functions deploy stripe-webhook --no-verify-jwt
+   supabase secrets set STRIPE_SECRET_KEY=sk_test_... ALLOWED_ORIGINS=https://puni-puzzle-battle.onrender.com
+   ```
+   （ダッシュボードの Edge Functions 画面から `supabase/functions/` の中身を貼りつけても作れます。`_shared/packs.ts` も一緒に。）
+4. **Stripe の Webhook** を追加：エンドポイント URL `https://<プロジェクト>.supabase.co/functions/v1/stripe-webhook`、
+   イベント `checkout.session.completed` と `checkout.session.async_payment_succeeded`。表示される署名シークレット（`whsec_…`）を
+   `supabase secrets set STRIPE_WEBHOOK_SECRET=whsec_...` で登録。
+5. **Render** の環境変数に `VITE_SHOP_ENABLED=1`（テスト中は `VITE_SHOP_TEST=1` も）を追加して再デプロイ。
+   ホームのコインとライフの横に「＋」が出て、ショップがひらけます。テストカード `4242 4242 4242 4242` で購入を確認。
+6. **公開前に** `public/legal.html`（特定商取引法に基づく表記）の【】を書きかえてください。
+   有償コインは資金決済法の「前払式支払手段」にあたる場合があります（未使用残高が基準日に1,000万円を超えると届出が必要）。
+
+価格と中身は `supabase/functions/_shared/packs.ts`（サーバー側・正）と `src/data/shop.ts`（表示用）で同じにしてください。
+
+## たいせん（リアルタイム対戦）
+
+Supabase Realtime（broadcast / presence）だけで動きます。テーブルや SQL は不要です。
+ホームの「たいせん」から入ると、15秒間オンラインの相手をさがし、見つからなければ CPU（表示つき）と対戦します。
+60秒のスコア勝負で、8チェイン以上・必殺技・フィーバーのたびに相手へ妨害が飛びます。

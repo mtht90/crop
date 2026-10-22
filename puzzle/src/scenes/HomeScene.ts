@@ -28,6 +28,9 @@ import { CoinCounter, loginPopup, openSettings, rewardPopup, stars } from './com
 import { claimLogin } from '../data/login';
 import { Ranking, claimLives, claimWeekly, giftCount } from '../core/Ranking';
 import { RankingPanel, type RankUp } from './RankingPanel';
+import { ShopScene, shopPlus } from './ShopScene';
+import { VersusScene } from './VersusScene';
+import { Shop } from '../core/Shop';
 import { COST_SINGLE, limitedNow } from '../data/gacha';
 
 export class HomeScene extends Scene {
@@ -91,6 +94,14 @@ export class HomeScene extends Scene {
     const best = txt(`ベスト ${fmt(Save.data.best)}`, { size: 24, stroke: 0x2a1630, strokeWidth: 6 });
     best.position.set(430, top + 38);
     this.page.addChild(coins, settings, best);
+    // shop: "+" by the coins and by the lives
+    if (Shop.enabled) {
+      const cp = shopPlus(() => Scenes.go(() => new ShopScene()));
+      cp.position.set(345, top + 40);
+      const lp = shopPlus(() => Scenes.go(() => new ShopScene()));
+      lp.position.set(335, top + 98);
+      this.page.addChild(cp, lp);
+    }
     // lives (one per round, refill every 10 minutes)
     const lifeBg = new Graphics().roundRect(-20, -26, 330, 52, 26).fill({ color: 0x2a1630, alpha: 0.85 });
     lifeBg.position.set(40, top + 98);
@@ -179,9 +190,13 @@ export class HomeScene extends Scene {
     mission.position.set(100, heroY - 40);
     const dress = new Button({ w: 170, h: 84, label: 'きせかえ', color: 'green', size: 28, onTap: () => Scenes.go(() => new DressScene()) });
     dress.position.set(620, heroY - 40);
-    this.page.addChild(mission, dress);
+    // versus under the cosmetics button
+    const versus = new Button({ w: 170, h: 84, label: 'たいせん', color: 'purple', size: 28, onTap: () => Scenes.go(() => new VersusScene()) });
+    versus.position.set(620, heroY + 60);
+    this.page.addChild(mission, dress, versus);
     popIn(mission, 0.2, 0.6);
     popIn(dress, 0.25, 0.6);
+    popIn(versus, 0.3, 0.6);
     const ready = claimableCount() + bingoClaimable();
     if (ready > 0) {
       const badge = new Container();

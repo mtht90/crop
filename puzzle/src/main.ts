@@ -13,6 +13,7 @@ import { GachaScene } from './scenes/GachaScene';
 import { CharaScene } from './scenes/CharaScene';
 import { MissionScene } from './scenes/MissionScene';
 import { DressScene } from './scenes/DressScene';
+import { ShopScene } from './scenes/ShopScene';
 
 async function loadFonts(): Promise<void> {
   const sample = 'ぷにっとバトル討伐0123456789ABC';
@@ -75,7 +76,10 @@ async function boot(): Promise<void> {
   document.addEventListener('dblclick', (e) => e.preventDefault());
 
   Scenes.init();
-  const start = new URLSearchParams(location.search).get('scene');
+  const q = new URLSearchParams(location.search);
+  // back from Stripe Checkout: open the shop (it collects the purchase) and tidy the URL
+  const start = q.get('shop') ? 'shop' : q.get('scene');
+  if (q.get('shop')) history.replaceState(null, '', location.pathname);
   const scenes: Record<string, () => import('./core/Scene').Scene> = {
     home: () => new HomeScene(),
     battle: () => new BattleScene(),
@@ -84,6 +88,7 @@ async function boot(): Promise<void> {
     mission: () => new MissionScene(),
     dress: () => new DressScene(),
     ranking: () => new HomeScene(1),
+    shop: () => new ShopScene(),
   };
   Scenes.go(scenes[start ?? ''] ?? (() => new TitleScene()), true);
   // handle for automated playtests
