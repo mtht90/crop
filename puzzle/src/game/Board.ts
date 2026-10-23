@@ -107,8 +107,6 @@ export class Piece {
   pulse = Math.random() * 10;
   /** Extra scale driven by link state. */
   linkScale = 1;
-  /** 0..1: how much the piece is dimmed while another color is being traced. */
-  dim = 0;
   baseScale = 1;
   appear = 0;
   constructor(
@@ -414,11 +412,7 @@ export class Board {
     p.jelly.alpha += (a - p.jelly.alpha) * Math.min(1, dt * 8);
     if (p.kind === 'normal' || p.kind === 'big') {
       const sealed = this.sealColor >= 0 && p.color === this.sealColor;
-      // while tracing, the other colors step back so the chain's color stands out
-      const off = this.chain.length > 0 && p.color !== this.chain[0].color;
-      p.dim += ((off ? 1 : 0) - p.dim) * Math.min(1, dt * 14);
-      const v = Math.round(255 * (1 - 0.32 * p.dim));
-      p.sprite.tint = sealed ? 0x8c8698 : p.status === 'ice' ? 0x9fdcff : p.status === 'curse' ? 0xc9a0ff : p.dim > 0.01 ? (v << 16) | (v << 8) | Math.min(255, v + 14) : 0xffffff;
+      p.sprite.tint = sealed ? 0x8c8698 : p.status === 'ice' ? 0x9fdcff : p.status === 'curse' ? 0xc9a0ff : 0xffffff;
     }
   }
 
