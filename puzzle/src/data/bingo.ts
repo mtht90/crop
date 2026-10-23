@@ -1,13 +1,13 @@
 import { Save, type Stats } from '../core/Save';
-import { CHAR_BY_ID, type Rarity } from './characters';
+import { CHAR_BY_ID } from './characters';
 import { giveReward, type Reward } from './missions';
 
 /**
  * Bingo cards (Tsum Tsum-style): 3x3 squares of missions. Every finished line pays out,
  * a full card pays more and opens the next card. Squares are either one-battle goals
- * ("in one battle…") or running totals, sometimes only counting a rarity or a character group.
+ * ("in one battle…") or running totals, sometimes only counting a character group.
  */
-type Who = Rarity | 'SR+' | 'knight' | 'skeleton' | 'beard' | 'chibi';
+type Who = 'knight' | 'skeleton' | 'beard' | 'chibi' | 'animal' | 'pirate' | 'monster';
 type Stat = keyof Stats | 'score';
 
 export interface Square {
@@ -25,10 +25,13 @@ export interface Card {
   full: Reward;
 }
 
-const GROUPS: Record<Exclude<Who, Rarity | 'SR+'>, string[]> = {
+const GROUPS: Record<Who, string[]> = {
   knight: ['kh_a', 'kh_b', 'kh_c', 'l_knight', 'knight', 'c_knight'],
   skeleton: ['skull', 'skel_minion', 'skel_warrior', 'skel_rogue'],
-  beard: ['mh_a', 'mh_b', 'mh_c', 'bh_a', 'bh_b'],
+  beard: ['mh_a', 'mh_b', 'mh_c', 'bh_a', 'bh_b', 's_lp1', 's_lp2', 'q_captain'],
+  animal: ['q_chicken', 'q_pigeon', 'q_dog', 'q_cat'],
+  pirate: ['q_anne', 'q_henry', 'q_captain'],
+  monster: ['q_yeti', 'q_goleling', 'q_orc', 'q_ninja', 'q_dragon'],
   chibi: ['c_student', 'c_short', 'c_merchant', 'c_archer', 'c_ninja', 'c_knight', 'c_kuro', 'c_pony', 'c_maskbob', 'c_maskT', 'c_pumpkin', 'b_chan', 'b_chanG', 's_neko', 's_yste', 's_priest', 's_mage', 's_witch', 's_hound'],
 };
 
@@ -39,7 +42,7 @@ export const CARDS: Card[] = [
       { text: 'ぷにを300こ消す', stat: 'pops', goal: 300 },
       { text: '1回で10こつなぐ', stat: 'maxChain', goal: 10, once: true },
       { text: 'フィーバーを3回', stat: 'fevers', goal: 3 },
-      { text: 'Nキャラで必殺技を3回', stat: 'skills', goal: 3, who: 'N' },
+      { text: 'どうぶつキャラで必殺技を3回', stat: 'skills', goal: 3, who: 'animal' },
       { text: 'ボムを10こつかう', stat: 'bombs', goal: 10 },
       { text: '1回のバトルで20万点', stat: 'score', goal: 200000, once: true },
       { text: '騎士キャラでぷにを200こ消す', stat: 'pops', goal: 200, who: 'knight' },
@@ -51,7 +54,7 @@ export const CARDS: Card[] = [
   {
     squares: [
       { text: '1回のバトルで40万点', stat: 'score', goal: 400000, once: true },
-      { text: 'Rキャラでフィーバーを3回', stat: 'fevers', goal: 3, who: 'R' },
+      { text: '海賊キャラでフィーバーを3回', stat: 'fevers', goal: 3, who: 'pirate' },
       { text: '1回で15こつなぐ', stat: 'maxChain', goal: 15, once: true },
       { text: '妨害を30こ消す', stat: 'broken', goal: 30 },
       { text: '1回のバトルで30コンボ', stat: 'maxCombo', goal: 30, once: true },
@@ -68,7 +71,7 @@ export const CARDS: Card[] = [
       { text: '1回のバトルで70万点', stat: 'score', goal: 700000, once: true },
       { text: 'ちびキャラでぷにを1000こ消す', stat: 'pops', goal: 1000, who: 'chibi' },
       { text: '1回で20こつなぐ', stat: 'maxChain', goal: 20, once: true },
-      { text: 'SRキャラで必殺技を10回', stat: 'skills', goal: 10, who: 'SR' },
+      { text: 'モンスターキャラで必殺技を10回', stat: 'skills', goal: 10, who: 'monster' },
       { text: '1回のバトルでフィーバー3回', stat: 'fevers', goal: 3, once: true },
       { text: 'ひげキャラで7こ以上つなぐのを15回', stat: 'chains7', goal: 15, who: 'beard' },
       { text: '妨害を80こ消す', stat: 'broken', goal: 80 },
@@ -82,7 +85,7 @@ export const CARDS: Card[] = [
     squares: [
       { text: '1回のバトルで120万点', stat: 'score', goal: 1200000, once: true },
       { text: '1回で25こつなぐ', stat: 'maxChain', goal: 25, once: true },
-      { text: 'SR以上のキャラでフィーバーを5回', stat: 'fevers', goal: 5, who: 'SR+' },
+      { text: 'ちびキャラでフィーバーを5回', stat: 'fevers', goal: 5, who: 'chibi' },
       { text: '1回のバトルで必殺技を5回', stat: 'skills', goal: 5, once: true },
       { text: '1回のバトルでボムを8こ', stat: 'bombs', goal: 8, once: true },
       { text: '騎士キャラで1回50万点', stat: 'score', goal: 500000, once: true, who: 'knight' },
@@ -102,7 +105,7 @@ export const CARDS: Card[] = [
       { text: 'ちびキャラでフィーバーを10回', stat: 'fevers', goal: 10, who: 'chibi' },
       { text: '1回のバトルでフィーバー4回', stat: 'fevers', goal: 4, once: true },
       { text: '7こ以上つなぐのを100回', stat: 'chains7', goal: 100 },
-      { text: 'SR以上のキャラで必殺技を30回', stat: 'skills', goal: 30, who: 'SR+' },
+      { text: 'ひげキャラで必殺技を30回', stat: 'skills', goal: 30, who: 'beard' },
       { text: 'ボスを12回たおす', stat: 'defeats', goal: 12 },
     ],
     line: { coins: 20000 },
@@ -139,8 +142,6 @@ function matches(who: Who | undefined, charId: string): boolean {
   if (!who) return true;
   const def = CHAR_BY_ID[charId];
   if (!def) return false;
-  if (who === 'SR+') return def.rarity === 'SR' || def.rarity === 'SSR';
-  if (who === 'N' || who === 'R' || who === 'SR' || who === 'SSR') return def.rarity === who;
   return GROUPS[who].includes(charId);
 }
 

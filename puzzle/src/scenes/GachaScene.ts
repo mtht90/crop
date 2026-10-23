@@ -14,7 +14,7 @@ import { bigTexture, loadCharacterArt } from '../art/PieceArt';
 import { RARITY_INFO, shortDate, type Rarity } from '../data/characters';
 import { COST_SINGLE, COST_TEN, MAXED_COINS, PITY, gachaPool, limitedNow, pull, rarityRank, type PullResult } from '../data/gacha';
 import { HomeScene } from './HomeScene';
-import { CoinCounter, stars } from './common';
+import { CoinCounter } from './common';
 
 const CAP_COLORS: Record<Rarity, number[]> = {
   N: [0x8fd0ff],
@@ -142,7 +142,7 @@ export class GachaScene extends Scene {
     tag.rotation = -0.06;
     // a limited character takes the whole plaque while it's out
     const limited = limitedNow();
-    const tl = txt(limited.length ? '期間限定！' : 'PICK UP SSR', { size: 24, font: 'dela', stroke: 0x5a0a2a, strokeWidth: 5 });
+    const tl = txt(limited.length ? '期間限定！' : 'にじいろ',  { size: 24, font: 'dela', stroke: 0x5a0a2a, strokeWidth: 5 });
     tl.position.copyFrom(tag.position);
     tl.rotation = tag.rotation;
     p.addChild(board);
@@ -243,9 +243,9 @@ export class GachaScene extends Scene {
     const ten = new Button({ w: 320, h: 116, label: '10連', sub: `${COST_TEN} コイン`, color: 'pink', size: 44, sound: 'ui_ok', onTap: () => void this.doPull(10) });
     ten.position.set(530, by);
     ten.breathe();
-    const note = txt('10連はSR以上1体確定！', { size: 22, color: 0xfff27a, stroke: 0x2a1630, strokeWidth: 6 });
+    const note = txt('10連はきんいろ以上1体確定！', { size: 22, color: 0xfff27a, stroke: 0x2a1630, strokeWidth: 6 });
     note.position.set(530, by - 78);
-    const pity = txt(`SSR確定まで あと${PITY - Save.data.pity}回`, { size: 20, color: 0xffffff, stroke: 0x2a1630, strokeWidth: 5 });
+    const pity = txt(`にじいろ確定まで あと${PITY - Save.data.pity}回`, { size: 20, color: 0xffffff, stroke: 0x2a1630, strokeWidth: 5 });
     pity.position.set(196, by - 78);
     const rates = new Button({ w: 150, h: 58, label: '提供割合', color: 'purple', size: 22, onTap: () => this.showRates() });
     rates.position.set(620, App.safeTop + 160);
@@ -281,7 +281,7 @@ export class GachaScene extends Scene {
     const box = new Container();
     box.position.set(360, App.H / 2);
     box.addChild(panel(520, 520, { color: 0xfdf7ff }));
-    const t = txt('提供割合', { size: 44, font: 'dela', color: 0x4a2f7a });
+    const t = txt('カプセルの出やすさ', { size: 38, font: 'dela', color: 0x4a2f7a });
     t.y = -200;
     box.addChild(t);
     (['SSR', 'SR', 'R', 'N'] as Rarity[]).forEach((r, i) => {
@@ -289,13 +289,13 @@ export class GachaScene extends Scene {
       const b = new Graphics().roundRect(-60, -24, 120, 48, 24).fill(RARITY_INFO[r].color);
       b.x = -120;
       b.y = y;
-      const l = txt(r, { size: 28, font: 'dela', stroke: 0x2a1630, strokeWidth: 5 });
+      const l = txt(RARITY_INFO[r].label, { size: 24, stroke: 0x2a1630, strokeWidth: 5 });
       l.position.set(-120, y);
-      const v = txt(`${(RARITY_INFO[r].rate * 100).toFixed(0)}%`, { size: 36, font: 'dela', color: 0x4a2f7a });
+      const v = txt(`${+(RARITY_INFO[r].rate * 100).toFixed(1)}%`, { size: 36, font: 'dela', color: 0x4a2f7a });
       v.position.set(100, y);
       box.addChild(b, l, v);
     });
-    const n = txt(`${PITY}回以内にSSR確定`, { size: 24, color: 0x7a6a9a });
+    const n = txt(`${PITY}回以内ににじいろ確定\nどのキャラも強さは同じ。色は出やすさだけ`, { size: 22, color: 0x7a6a9a, align: 'center', lineHeight: 30 });
     n.y = 200;
     box.addChild(n);
     ov.addChild(dim, box);
@@ -343,7 +343,7 @@ export class GachaScene extends Scene {
     if (n === 1) await this.reveal(results[0]);
     else await this.grid(results);
     this.clearStage();
-    this.pityLabel.text = `SSR確定まで あと${PITY - Save.data.pity}回`;
+    this.pityLabel.text = `にじいろ確定まで あと${PITY - Save.data.pity}回`;
     this.refreshTicket();
     this.setUi(true);
     this.busy = false;
@@ -534,35 +534,12 @@ export class GachaScene extends Scene {
     gsap.to(art, { y: -20, duration: 0.8, yoyo: true, repeat: -1, ease: 'sine.inOut', delay: 0.7 });
     Sound.play('powerUp2', { vol: 0.7 });
     haptic(20);
-    const rb = new Container();
-    const rbg = new Graphics().roundRect(-70, -30, 140, 60, 30).fill(r.color);
-    rbg.roundRect(-70, -30, 140, 60, 30).stroke({ width: 5, color: 0xffffff });
-    rb.addChild(rbg, txt(res.def.rarity, { size: 38, font: 'dela', stroke: 0x2a1630, strokeWidth: 7 }));
-    rb.position.set(0, 220);
-    c.addChild(rb);
-    popIn(rb, 0.3);
-    const st = stars(0, 50, r.stars);
-    st.y = 285;
-    c.addChild(st);
-    for (let i = 0; i < r.stars; i++) {
-      gsap.delayedCall(0.45 + i * 0.18, () => {
-        const sg = st.children[i] as Graphics;
-        sg.clear();
-        sg.tint = 0xffffff;
-        const g2 = sg;
-        g2.poly(starPts(25)).fill(0xffd23f).stroke({ width: 4, color: 0x6a3a00 });
-        g2.scale.set(1.8);
-        gsap.to(g2.scale, { x: 1, y: 1, duration: 0.3, ease: 'back.out(3)' });
-        Sound.play('bell', { vol: 0.35, rate: 1 + i * 0.15 });
-        Sound.link(i * 3 + 4);
-      });
-    }
     const name = txt(res.def.name, { size: 64, font: 'dela', stroke: 0x2a1630, strokeWidth: 12 });
-    name.y = 360;
+    name.y = 300;
     c.addChild(name);
     popIn(name, 0.4);
     const sk = txt(`必殺技「${res.def.skill.name}」\n${res.def.skill.desc}${res.def.passive ? `\nパッシブ★${res.def.passive.name}` : ''}`, { size: 24, color: 0xfff27a, stroke: 0x2a1630, strokeWidth: 6, align: 'center', lineHeight: 34 });
-    sk.y = 432;
+    sk.y = 380;
     c.addChild(sk);
     popIn(sk, 0.55);
     const badgeText = res.isNew ? 'NEW!' : res.skillUp ? `スキルLv.${res.skill}！` : res.maxed ? `MAX！コイン+${MAXED_COINS}` : `限界突破 +${res.plus}！`;
@@ -591,6 +568,11 @@ export class GachaScene extends Scene {
     c.destroy({ children: true });
   }
 
+  /**
+   * 10 pulls: cards are dealt face down with their capsule color on the back (a gold back may still be
+   * hiding a rainbow one), then flip one by one. Gold and rainbow cards rise and charge up before they
+   * flip, rainbow cards and new characters get the full reveal, and a summary closes the round.
+   */
   private async grid(results: PullResult[]): Promise<void> {
     const layer = this.stageLayer;
     const c = new Container();
@@ -603,29 +585,69 @@ export class GachaScene extends Scene {
     const skip = new Button({ w: 160, h: 66, label: 'スキップ', color: 'grey', size: 26, onTap: () => (this.skipAll = true) });
     skip.position.set(600, App.safeTop + 60);
     c.addChild(skip);
+    // what each back shows first: half the rainbow cards pose as gold until they flip
+    const backs: Rarity[] = results.map((r) => (r.def.rarity === 'SSR' && Math.random() < 0.5 ? 'SR' : r.def.rarity === 'SR' ? 'SR' : r.def.rarity === 'SSR' ? 'SSR' : 'N'));
+    const drawBack = (g: Graphics, tier: Rarity): void => {
+      g.clear();
+      const fill = tier === 'SSR' ? grad([[0, '#ff7ad9'], [0.35, '#ffd86a'], [0.7, '#7ae0ff'], [1, '#b07cff']]) : tier === 'SR' ? grad([[0, '#ffe58a'], [1, '#e09a10']]) : grad([[0, '#8a5cff'], [1, '#4a2a9a']]);
+      g.roundRect(-cw / 2, -ch / 2, cw, ch, 18).fill(fill);
+      g.roundRect(-cw / 2, -ch / 2, cw, ch, 18).stroke({ width: 5, color: 0xffffff });
+      g.circle(0, 0, 30).fill({ color: 0xffffff, alpha: tier === 'N' ? 0.2 : 0.45 });
+    };
     results.forEach((_res, i) => {
       const card = new Container();
       const x = 360 + ((i % 5) - 2) * (cw + gap);
       const y = y0 + Math.floor(i / 5) * (ch + gap + 40);
       card.position.set(360, App.H + 200);
       const back = new Graphics();
-      back.roundRect(-cw / 2, -ch / 2, cw, ch, 18).fill(grad([[0, '#8a5cff'], [1, '#4a2a9a']]));
-      back.roundRect(-cw / 2, -ch / 2, cw, ch, 18).stroke({ width: 5, color: 0xffffff });
-      back.circle(0, 0, 30).fill({ color: 0xffffff, alpha: 0.2 });
+      drawBack(back, backs[i]);
       card.addChild(back);
+      if (backs[i] !== 'N') {
+        // gold and rainbow backs breathe so the player spots them while dealing
+        gsap.to(back.scale, { x: 1.05, y: 1.05, duration: 0.45, yoyo: true, repeat: -1, ease: 'sine.inOut' });
+      }
       c.addChild(card);
       cards.push(card);
       gsap.to(card, { x, y, duration: 0.35, delay: i * 0.06, ease: 'power3.out' });
       gsap.delayedCall(i * 0.06, () => Sound.play('cardSlide', { vol: 0.5, rate: 0.9 + Math.random() * 0.3 }));
     });
-    await wait(this.skipAll ? 0 : 0.9);
+    await wait(this.skipAll ? 0 : 1.0);
+    let news = 0;
+    let ups = 0;
     for (let i = 0; i < results.length; i++) {
       const res = results[i];
       const card = cards[i];
       const r = RARITY_INFO[res.def.rarity];
-      const high = rarityRank(res.def.rarity) >= 2;
-      if (high && !this.skipAll) await wait(0.25);
+      const tier = rarityRank(res.def.rarity);
+      if (res.isNew) news++;
+      else ups++;
+      if (tier >= 2 && !this.skipAll) {
+        // charge-up: the card rises, shakes and glows before it turns
+        const home = { x: card.x, y: card.y };
+        c.setChildIndex(card, c.children.length - 1);
+        Sound.play('powerUp', { vol: 0.5 });
+        await new Promise<void>((done) => gsap.to(card, { y: home.y - 26, duration: 0.25, ease: 'power2.out', onComplete: done }));
+        gsap.to(card.scale, { x: 1.18, y: 1.18, duration: 0.25 });
+        for (let k = 0; k < 6; k++) gsap.delayedCall(k * 0.06, () => (card.rotation = (k % 2 ? 1 : -1) * 0.06));
+        await wait(0.4);
+        card.rotation = 0;
+        if (backs[i] !== res.def.rarity) {
+          // the gold back was hiding a rainbow one
+          const flash = new Graphics().roundRect(-cw / 2, -ch / 2, cw, ch, 18).fill(0xffffff);
+          card.addChild(flash);
+          drawBack(card.children[0] as Graphics, res.def.rarity);
+          gsap.to(flash, { alpha: 0, duration: 0.4, onComplete: () => flash.destroy() });
+          Sound.play('powerUp2', { vol: 0.8 });
+          haptic([15, 30, 25]);
+          this.fx.burst(card.x, card.y, { count: 26, tex: 'star_06', tint: [0xff7ad9, 0x7ae0ff, 0xffd86a, 0xffffff], add: true, speed: [200, 520], size: [0.08, 0.2] });
+          await wait(0.5);
+        }
+        gsap.to(card, { y: home.y, duration: 0.3, ease: 'power2.in' });
+        gsap.to(card.scale, { x: 1, y: 1, duration: 0.3 });
+        await wait(0.15);
+      }
       await new Promise<void>((done) => {
+        gsap.killTweensOf(card.children[0].scale);
         gsap.to(card.scale, {
           x: 0, duration: this.skipAll ? 0.02 : 0.1, onComplete: () => {
             card.removeChildren().forEach((ch2) => ch2.destroy());
@@ -639,48 +661,55 @@ export class GachaScene extends Scene {
             sp.scale.set(96 / Math.max(1, sp.texture.width));
             sp.y = -12;
             card.addChild(sp);
-            const rl = txt(res.def.rarity, { size: 22, font: 'dela', color: r.color, stroke: 0x2a1630, strokeWidth: 5 });
-            rl.position.set(0, -ch / 2 + 18);
             const nm = txt(res.def.name, { size: 20, color: 0x4a2f7a });
             nm.y = ch / 2 - 22;
-            card.addChild(rl, nm);
+            if (nm.width > cw - 10) nm.scale.set((cw - 10) / nm.width);
+            card.addChild(nm);
             if (res.isNew || res.skillUp || res.plusUp) {
-              const b = txt(res.isNew ? 'NEW' : res.skillUp ? `SL${res.skill}` : `+${res.plus}`, { size: 20, font: 'dela', color: res.isNew ? 0xff4f8f : 0x36a2ff, stroke: 0xffffff, strokeWidth: 5 });
+              const b = txt(res.isNew ? 'NEW' : res.skillUp ? `SL${res.skill}` : `+${res.plus}`, { size: res.isNew ? 24 : 20, font: 'dela', color: res.isNew ? 0xff4f8f : 0x36a2ff, stroke: 0xffffff, strokeWidth: 5 });
               b.position.set(cw / 2 - 18, -ch / 2 + 4);
               b.rotation = 0.3;
               card.addChild(b);
+              if (res.isNew && !this.skipAll) gsap.fromTo(b.scale, { x: 2.2, y: 2.2 }, { x: 1, y: 1, duration: 0.35, ease: 'back.out(3)' });
             }
             if (res.maxed) Save.data.coins += MAXED_COINS;
             gsap.to(card.scale, { x: 1, duration: this.skipAll ? 0.02 : 0.15, ease: 'back.out(2)', onComplete: done });
             if (!this.skipAll) {
               Sound.play('cardFan', { vol: 0.5 });
-              if (high) {
+              if (tier >= 2) {
                 Sound.play(res.def.rarity === 'SSR' ? 'jSSR' : 'jSR', { vol: 0.6 });
                 haptic(25);
                 this.fx.burst(card.x, card.y, { count: 20, tex: 'star_06', tint: [r.color, 0xffffff], add: true, speed: [150, 450], size: [0.08, 0.18] });
                 gsap.fromTo(card.scale, { y: 1.3 }, { y: 1, duration: 0.5, ease: 'elastic.out(1.2,0.4)' });
-              } else Sound.link(i);
+              } else if (res.isNew) Sound.play('pep', { vol: 0.5, rate: 1.2 });
+              else Sound.link(i);
             }
           },
         });
       });
-      if (!this.skipAll) await wait(high ? 0.35 : 0.08);
+      // rainbow cards and brand-new gold ones get the full-screen reveal right away
+      if (!this.skipAll && (res.def.rarity === 'SSR' || (tier >= 2 && res.isNew))) {
+        await wait(0.35);
+        c.visible = false;
+        await this.reveal(res, true);
+        c.visible = true;
+      } else if (!this.skipAll) await wait(tier >= 2 ? 0.35 : res.isNew ? 0.2 : 0.07);
     }
     Save.write();
     this.coins.refresh();
     skip.destroy();
-    // spotlight the best SSR with a full reveal
-    const ssr = results.find((r) => r.def.rarity === 'SSR');
+    const sum = txt(`NEW ${news}体${ups ? `   スキルアップ・限界突破 ${ups}体` : ''}`, { size: 28, color: 0xfff27a, stroke: 0x2a1630, strokeWidth: 7 });
+    sum.position.set(360, App.H - App.safeBottom - 260);
+    c.addChild(sum);
+    popIn(sum);
+    const hint = txt('カードをタップでくわしく見る', { size: 22, stroke: 0x2a1630, strokeWidth: 6, color: 0xffffff });
+    hint.position.set(360, App.H - App.safeBottom - 210);
+    c.addChild(hint);
     const ok = new Button({ w: 300, h: 100, label: 'OK', color: 'pink', size: 40, onTap: () => {} });
     ok.position.set(360, App.H - App.safeBottom - 120);
     c.addChild(ok);
     popIn(ok);
     this.skipAll = false;
-    if (ssr) {
-      const hint = txt('SSRをタップでくわしく見る', { size: 24, stroke: 0x2a1630, strokeWidth: 6, color: 0xfff27a });
-      hint.position.set(360, App.H - App.safeBottom - 210);
-      c.addChild(hint);
-    }
     await new Promise<void>((done) => {
       ok.removeAllListeners('pointerup');
       ok.on('pointerup', () => {
@@ -688,7 +717,6 @@ export class GachaScene extends Scene {
         done();
       });
       cards.forEach((card, i) => {
-        if (results[i].def.rarity !== 'SSR') return;
         card.eventMode = 'static';
         card.cursor = 'pointer';
         card.on('pointertap', async () => {

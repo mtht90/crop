@@ -6,7 +6,7 @@ export const COST_TEN = 300000;
 /** Pulls without an SSR before one is guaranteed. */
 /** Coins for a duplicate of a character already at +99. */
 export const MAXED_COINS = 2000;
-export const PITY = 80;
+export const PITY = 150;
 
 export interface PullResult {
   def: CharDef;
