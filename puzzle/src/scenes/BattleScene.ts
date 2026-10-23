@@ -1165,20 +1165,28 @@ export class BattleScene extends Scene {
    */
   private zap(inside: (x: number, y: number) => boolean, ox: number, oy: number, color: number): void {
     const b = this.board;
-    const c = Math.max(8, b.r * 0.42);
+    const c = Math.max(6, b.r * 0.3);
     const g = new Graphics();
+    const edge = new Graphics();
+    const inn = (x: number, y: number): boolean => this.inBowl(x, y) && inside(x, y);
     for (let y = c / 2; y < b.h; y += c) {
       for (let x = c / 2; x < b.w; x += c) {
-        if (this.inBowl(x, y) && inside(x, y)) g.rect(x - c / 2, y - c / 2, c + 0.5, c + 0.5);
+        if (!inn(x, y)) continue;
+        g.rect(x - c / 2, y - c / 2, c + 0.5, c + 0.5);
+        // cells on the border get a bright outline so the shape reads clearly
+        if (!inn(x - c, y) || !inn(x + c, y) || !inn(x, y - c) || !inn(x, y + c)) edge.rect(x - c / 2, y - c / 2, c + 0.5, c + 0.5);
       }
     }
-    g.fill({ color, alpha: 0.55 });
-    g.blendMode = 'add';
-    g.position.set(this.boardX, this.boardY);
-    this.overlay.addChild(g);
-    g.alpha = 0;
-    gsap.to(g, { alpha: 1, duration: 0.08 });
-    gsap.to(g, { alpha: 0, duration: 0.45, delay: 0.35, onComplete: () => g.destroy() });
+    g.fill({ color, alpha: 0.5 });
+    edge.fill({ color: 0xffffff, alpha: 0.95 });
+    const shape = new Container();
+    shape.addChild(g, edge);
+    shape.blendMode = 'add';
+    shape.position.set(this.boardX, this.boardY);
+    this.overlay.addChild(shape);
+    shape.alpha = 0;
+    gsap.to(shape, { alpha: 1, duration: 0.08 });
+    gsap.to(shape, { alpha: 0, duration: 0.5, delay: 0.6, onComplete: () => shape.destroy({ children: true }) });
     b.popWhere((p) => inside(p.x, p.y), ox, oy);
   }
 
@@ -1589,8 +1597,14 @@ export class BattleScene extends Scene {
         const inside = this.shapeTest(s.shape ?? 'heart', cx, cy, S);
         const SHAPE_COLOR: Partial<Record<ShapeId, number>> = { heart: 0xff7ab8, star: 0xffe066, crescent: 0xfff2a0, spiral: 0x9be7ff, wave: 0x7ad7ff, checker: 0xc9a0ff };
         const col = SHAPE_COLOR[s.shape ?? 'heart'] ?? glow;
-        this.slam(prop, cx, cy, S * 0.6, 240, () => {
-          this.flashBoard(col);
+        // no prop in the way: the outline itself is the show
+        Sound.whoosh(0.5, true);
+        gsap.delayedCall(0.15, () => {
+          b.shockwave(cx, cy, S * 1.4);
+          Sound.explosion(false);
+          Sound.play('powerUp2', { vol: 0.5, rate: 1.2 });
+          this.shake(8, 0.3);
+          haptic([20, 20, 30]);
           this.zap(inside, cx, cy, col);
         });
         break;
