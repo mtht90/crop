@@ -28,6 +28,11 @@ export interface VsLink {
   opponent: Opponent;
   /** Opponent's latest score. */
   oppScore: number;
+  /** Opponent's latest board snapshot (see game/MiniBoard.ts) and whether they're in fever. */
+  oppBoard: number[] | null;
+  oppFever: boolean;
+  /** Sends our board snapshot (the battle throttles this). */
+  sendBoard(snap: number[], fever: boolean): void;
   /** Set by the battle: an attack arrived. */
   onAttack: (id: GimmickId) => void;
   /** Set by the battle: the opponent left mid-match. */
@@ -61,6 +66,12 @@ const CPU_NAMES = ['ぷにロボ', 'CPUくん', 'れんしゅうロボ', 'ホネ
 export class CpuLink implements VsLink {
   opponent: Opponent;
   oppScore = 0;
+  oppBoard: number[] | null = null;
+  oppFever = false;
+  /** A pretend bowl for the mini board: pieces settle, groups pop, new ones drop in. */
+  private fake: { x: number; y: number; c: number; vy: number }[] = [];
+  private popT = 1;
+  private snapT = 0;
   onAttack: (id: GimmickId) => void = () => {};
   onGone: () => void = () => {};
   private target: number;
@@ -76,9 +87,42 @@ export class CpuLink implements VsLink {
   start(): void {
     this.running = true;
   }
+  private fakeStep(dt: number): void {
+    if (!this.fake.length) {
+      // a packed hex grid filling the lower part of the bowl (snapshot units: 0..255)
+      for (let row = 0; row < 9; row++) {
+        for (let col = 0; col < 9; col++) {
+          const x = 24 + col * 26 + (row % 2) * 13;
+          const y = 236 - row * 23;
+          if (Math.hypot(x - 128, y - 128) < 118 && y > 70) this.fake.push({ x, y, c: Math.floor(Math.random() * 5), vy: 0 });
+        }
+      }
+    }
+    // popped pieces fall back into their slot from above
+    for (const p of this.fake) if (p.vy > 0) p.vy = Math.max(0, p.vy - dt * 260);
+    this.popT -= dt;
+    if (this.popT <= 0) {
+      this.popT = 0.8 + Math.random() * 0.8;
+      // pop a same-color group near a random piece; replacements drop in with new colors
+      const seed = this.fake[Math.floor(Math.random() * this.fake.length)];
+      const group = this.fake.filter((p) => p.c === seed.c && Math.hypot(p.x - seed.x, p.y - seed.y) < 60).slice(0, 3 + Math.floor(Math.random() * 6));
+      for (const p of group) {
+        p.vy = 120 + Math.random() * 60;
+        p.c = Math.floor(Math.random() * 5);
+      }
+    }
+    this.snapT -= dt;
+    if (this.snapT <= 0) {
+      this.snapT = 0.3;
+      this.oppBoard = this.fake.flatMap((p) => [p.x, Math.max(0, Math.round(p.y - p.vy)), p.c]);
+    }
+  }
+  sendBoard(): void {}
   update(dt: number): void {
     if (!this.running) return;
     this.t += dt;
+    this.fakeStep(dt);
+    this.oppFever = (this.t % 20) > 16;
     // scores come in bursts like a real player's chains
     const k = Math.min(1, this.t / VS_TIME);
     const goal = this.target * (k * 0.85 + k * k * 0.15);
@@ -103,6 +147,8 @@ export class CpuLink implements VsLink {
 // ------------------------------------------------------------------ online opponent
 class NetLink implements VsLink {
   oppScore = 0;
+  oppBoard: number[] | null = null;
+  oppFever = false;
   onAttack: (id: GimmickId) => void = () => {};
   onGone: () => void = () => {};
   private sendT = 0;
@@ -116,6 +162,11 @@ class NetLink implements VsLink {
   ) {
     ch.on('broadcast', { event: 'score' }, ({ payload }) => {
       if (payload.id === this.oppId) this.oppScore = Math.max(this.oppScore, Number(payload.score) || 0);
+    });
+    ch.on('broadcast', { event: 'board' }, ({ payload }) => {
+      if (payload.id !== this.oppId || !Array.isArray(payload.p)) return;
+      this.oppBoard = payload.p.slice(0, 600).map((v: unknown) => Number(v) || 0);
+      this.oppFever = !!payload.f;
     });
     ch.on('broadcast', { event: 'attack' }, ({ payload }) => {
       if (payload.id === this.oppId && VS_ATTACKS.includes(payload.kind)) this.onAttack(payload.kind);
@@ -137,6 +188,9 @@ class NetLink implements VsLink {
       this.sendT = 0.5;
       void this.ch.send({ type: 'broadcast', event: 'score', payload: { id: playerId(), score: Math.round(myScore) } });
     }
+  }
+  sendBoard(snap: number[], fever: boolean): void {
+    void this.ch.send({ type: 'broadcast', event: 'board', payload: { id: playerId(), p: snap, f: fever ? 1 : 0 } });
   }
   sendAttack(id: GimmickId): void {
     void this.ch.send({ type: 'broadcast', event: 'attack', payload: { id: playerId(), kind: id } });

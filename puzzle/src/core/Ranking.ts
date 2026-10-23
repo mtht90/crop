@@ -195,7 +195,9 @@ export async function sendLife(to: string): Promise<string | null> {
       if (res === 'limit') return '今はこれ以上おくれません';
       if (res === 'full') return 'あいてのプレゼントがいっぱいです';
       if (res !== 'ok' && res !== 'wait') return 'おくれませんでした';
-    } catch {
+    } catch (e) {
+      // the database hasn't been updated with the gift functions (supabase/ranking.sql)
+      if (String(e).includes('404')) return 'サーバーがまだプレゼントに対応していません';
       return 'つうしんできませんでした';
     }
   }

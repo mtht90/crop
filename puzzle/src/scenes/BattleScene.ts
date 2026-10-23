@@ -30,6 +30,7 @@ import { Assets, type Texture as PTexture } from 'pixi.js';
 import { loadObstacleArt, obstacleTexture, type ObstacleArt } from '../art/PieceArt';
 import type { Texture } from 'pixi.js';
 import { VS_ATTACKS, VS_TIME, type VsLink } from '../core/Versus';
+import { MiniBoard, boardSnapshot } from '../game/MiniBoard';
 import { rewardPopup } from './common';
 
 export const BATTLE_TIME = 90;
@@ -221,6 +222,23 @@ export class BattleScene extends Scene {
 
   // ----------------------------------------------------------------- versus
   private vsSendT = 0;
+  private vsBoardT = 0;
+  private mini?: MiniBoard;
+
+  /** The opponent's bowl in miniature, on the right of the stage. */
+  private buildMini(): void {
+    const vs = this.vs!;
+    const opp = CHAR_BY_ID[vs.opponent.charId] ?? CHARACTERS[0];
+    const aspect = this.board.h / this.board.w;
+    const top = App.safeTop + 175;
+    const D = Math.max(120, Math.min(230, (this.stageH - 40 - top) / aspect));
+    this.mini = new MiniBoard(opp, D, aspect, this.board.r, this.board.w);
+    this.mini.position.set(720 - D / 2 - 24, this.stageH - 30 - D * aspect);
+    const name = txt(`${vs.opponent.name}${vs.opponent.cpu ? '（CPU）' : ''}`, { size: 20, color: 0xffffff, stroke: 0x2a1630, strokeWidth: 6 });
+    name.position.set(this.mini.x, this.mini.y - 18);
+    if (name.width > D + 40) name.scale.set((D + 40) / name.width);
+    this.stage.addChild(this.mini, name);
+  }
 
   /** Our big moves (8+ chains, skills, fever) send an obstruction to the opponent (not too often). */
   private vsSend(why: string): void {
@@ -285,7 +303,7 @@ export class BattleScene extends Scene {
   }
 
   async preload(): Promise<void> {
-    await Promise.all([loadFairy(this.bossDef.bg), loadCharacterArt([this.def.id], { strips: true }), loadObstacleArt(), loadSkillProps(), loadWallpapers([currentWallpaper().id, ...frameTextures(currentFrame())])]);
+    await Promise.all([loadFairy(this.bossDef.bg), loadCharacterArt(this.vs ? [this.def.id, this.vs.opponent.charId] : [this.def.id], { strips: true }), loadObstacleArt(), loadSkillProps(), loadWallpapers([currentWallpaper().id, ...frameTextures(currentFrame())])]);
     this.backdrop = new FairyBackdrop(this.bossDef.bg);
   }
 
@@ -442,10 +460,12 @@ export class BattleScene extends Scene {
     const W = App.W;
     this.backdrop.position.set(-App.colX, 0);
     this.backdrop.layout(W, this.stageH + 20);
-    this.boss.position.set(360, this.stageH - 22);
+    // versus: the boss steps aside for the opponent's mini board
+    this.boss.position.set(this.vs ? 210 : 360, this.stageH - 22);
     const avail = this.stageH - 22 - (App.safeTop + 165);
-    this.bossScale = Math.min(1, avail / this.boss.height2);
+    this.bossScale = Math.min(this.vs ? 0.8 : 1, avail / this.boss.height2);
     this.boss.scale.set(this.bossScale);
+    if (this.vs && !this.mini) this.buildMini();
     // the band below the stage
     const ground = new Graphics();
     ground.rect(-App.colX, this.stageH, W, App.H - this.stageH).fill(grad([[0, '#4a2c14'], [1, '#22140a']]));
@@ -553,6 +573,13 @@ export class BattleScene extends Scene {
         this.vsSendT -= dt;
         this.vs.update(dt, this.committed);
         this.scoreW.setOpp(this.vs.oppScore);
+        // our board goes out ~3 times a second; theirs is drawn as it arrives
+        this.vsBoardT -= dt;
+        if (this.vsBoardT <= 0) {
+          this.vsBoardT = 0.3;
+          this.vs.sendBoard(boardSnapshot(this.board), this.feverOn);
+          if (this.vs.oppBoard) this.mini?.set(this.vs.oppBoard, this.vs.oppFever);
+        }
       }
       // boss attack (the boss holds off during fever)
       if (!this.feverOn) this.bossAtkT -= dt;
@@ -584,6 +611,7 @@ export class BattleScene extends Scene {
     this.board.update(this.phase === 'cutin' ? 0 : dt);
     this.boss.rage = this.landed >= this.hp * 0.7 ? 1 : 0;
     this.boss.update(dt);
+    this.mini?.update(dt);
     this.backdrop.update(dt, this.feverOn ? 6 : 1);
     this.updateOrbs(dt);
     this.updateProjectiles(dt);
