@@ -1234,6 +1234,7 @@ export class BattleScene extends Scene {
     c_student: 'obs:book', c_short: 'star', c_merchant: 'obs:sack', c_archer: 'arrow', c_ninja: 'dagger', c_knight: 'sword',
     c_kuro: 'lightning', c_pony: 'dagger', c_maskbob: 'star', c_maskT: 'shield', c_pumpkin: 'obs:bomb', b_chan: 'star', b_chanG: 'lightning',
     q_chicken: 'star', q_pigeon: 'star', q_dog: 'obs:bomb', q_cat: 'dagger', q_henry: 'star', q_anne: 'sword', q_yeti: 'shield', q_goleling: 'lightning', q_orc: 'shield', q_ninja: 'dagger', q_dragon: 'lightning', q_captain: 'obs:bomb',
+    s_lp1: 'star', s_lp2: 'shield', s_lp3: 'star', s_lp4: 'star', s_neko: 'dagger', s_yste: 'arrow', s_priest: 'obs:book', s_mage: 'lightning', s_witch: 'obs:bomb', s_hound: 'lightning',
   };
 
   private runSkill(): void {

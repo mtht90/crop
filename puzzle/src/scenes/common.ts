@@ -134,15 +134,18 @@ export function openSettings(parent: Container, onClose?: () => void): void {
     box.addChild(mb);
   };
   makeMusic();
-  const credit = txt('キャラ・ボス: KayKit (CC0)  背景・UI: CraftPix\n効果音: 効果音ラボ  音楽: 魔王魂 (CC BY 4.0)\nガチャ筐体: gumball machine / myles_683 (CC BY 4.0)\nフォント: めもかっち / やっちゃん (SIL OFL 1.1)', { size: 20, weight: '500', color: 0x7a6a9a, lineHeight: 30 });
+  const credit = txt('キャラ: KayKit / Quaternius / Styloo ほか  背景・UI: CraftPix\n効果音: 効果音ラボ  音楽: 魔王魂 (CC BY 4.0)\nガチャ筐体: gumball machine / myles_683 (CC BY 4.0)\nフォント: めもかっち / やっちゃん (SIL OFL 1.1)', { size: 20, weight: '500', color: 0x7a6a9a, lineHeight: 30 });
   credit.y = 322;
   if (credit.width > 540) credit.scale.set(540 / credit.width);
   box.addChild(credit);
-  const backup = new Button({ w: 300, h: 64, label: 'データのひきつぎ', color: 'green', size: 24, onTap: () => openBackup() });
-  backup.position.set(-90, 228);
-  const dev = new Button({ w: 170, h: 64, label: 'かいはつ', color: 'grey', size: 22, onTap: () => openDevLogin() });
-  dev.position.set(170, 228);
-  box.addChild(backup, dev);
+  const backup = new Button({ w: 240, h: 64, label: 'データのひきつぎ', color: 'green', size: 21, onTap: () => openBackup() });
+  backup.position.set(-170, 228);
+  // every asset's author and license (CC BY needs the attribution to be reachable in the game)
+  const credits = new Button({ w: 170, h: 64, label: 'クレジット', color: 'blue', size: 21, onTap: () => window.open('./credits.html', '_blank') });
+  credits.position.set(50, 228);
+  const dev = new Button({ w: 150, h: 64, label: 'かいはつ', color: 'grey', size: 21, onTap: () => openDevLogin() });
+  dev.position.set(225, 228);
+  box.addChild(backup, credits, dev);
   const close = new Button({
     w: 300, h: 90, label: 'とじる', color: 'pink', sound: 'ui_back', onTap: () => {
       ov.destroy({ children: true });

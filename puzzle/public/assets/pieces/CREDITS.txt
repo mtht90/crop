@@ -5,3 +5,11 @@ c_kuro, c_pony, c_maskbob, c_maskT and c_pumpkin combine parts of the same Chibi
 is pumpkin_orange_jackolantern from KayKit Halloween Bits by Kay Lousberg (CC0).
 "Blender-chan" by AmarilloArts (https://amarilloarts.itch.io/blender-chan), CC0 1.0 Universal. Pieces b_chan, b_chanG (head renders, recolored).
 "Ultimate Monsters" and "Pirate Kit" by Quaternius (https://quaternius.com), CC0 1.0 Universal. Pieces q_* (head renders, recolored).
+The following models are licensed under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). Head renders, recolored for game pieces:
+- "2016. Halloween little witch" by goblin165cm (https://sketchfab.com/3d-models/2016-halloween-little-witch-ccc023590bfb4789af9322864e42d1ab) - piece s_witch
+- "Chibi Nekogirl" by xmnepank (https://sketchfab.com/3d-models/chibi-nekogirl-fbabd7b43705464b827f0f309fbf2bb3) - piece s_neko
+- "Chibi Yste" by xmnepank (https://sketchfab.com/3d-models/chibi-yste-fdcb874a61284a5aa7aa8cf5d9f57b5b) - piece s_yste
+- "Hellhound Monster Girl ~Chibi~" by Shortskirts (https://sketchfab.com/3d-models/hellhound-monster-girl-chibi-4791884022a743f6a8d240e0ce692274) - piece s_hound
+- "Lightning Mage (Free Download)" by Adipriatna (https://sketchfab.com/3d-models/lightning-mage-free-download-f89b591b51cb42c98f84606999e4ec89) - piece s_mage (hat removed)
+- "Low Poly Characters (PACK)" by micaelsampaio (https://sketchfab.com/3d-models/low-poly-characters-pack-f1c8018af59643e0b009a6f018ed9fd9) - pieces s_lp1-s_lp4
+- "Young priestess" by minghauLoh (https://sketchfab.com/3d-models/young-priestess-a7aa853215eb4e1ab5ddea41879d9ff2) - piece s_priest
