@@ -107,6 +107,8 @@ export class Piece {
   pulse = Math.random() * 10;
   /** Extra scale driven by link state. */
   linkScale = 1;
+  /** 0..1: how much the piece is dimmed while another color is being traced. */
+  dim = 0;
   baseScale = 1;
   appear = 0;
   constructor(
@@ -412,7 +414,11 @@ export class Board {
     p.jelly.alpha += (a - p.jelly.alpha) * Math.min(1, dt * 8);
     if (p.kind === 'normal' || p.kind === 'big') {
       const sealed = this.sealColor >= 0 && p.color === this.sealColor;
-      p.sprite.tint = sealed ? 0x8c8698 : p.status === 'ice' ? 0x9fdcff : p.status === 'curse' ? 0xc9a0ff : 0xffffff;
+      // while tracing, the other colors step back so the chain's color stands out
+      const off = this.chain.length > 0 && p.color !== this.chain[0].color;
+      p.dim += ((off ? 1 : 0) - p.dim) * Math.min(1, dt * 14);
+      const v = Math.round(255 * (1 - 0.32 * p.dim));
+      p.sprite.tint = sealed ? 0x8c8698 : p.status === 'ice' ? 0x9fdcff : p.status === 'curse' ? 0xc9a0ff : p.dim > 0.01 ? (v << 16) | (v << 8) | Math.min(255, v + 14) : 0xffffff;
     }
   }
 
@@ -613,6 +619,8 @@ export class Board {
   private link(p: Piece): void {
     p.state = 'linked';
     p.poke(-6);
+    // pops up past its linked size and springs back: the piece answers the finger
+    p.linkScale = 1.3;
     const i = this.chain.length - 1;
     Sound.link(i, (p.x / this.w - 0.5) * 0.6);
     haptic(5);
@@ -648,10 +656,14 @@ export class Board {
     const infos = chain.map((p) => this.info(p));
     const rocks = this.rocksNear(chain);
     const tok = this.ev.onResolve(infos, 'chain', { chain: eff, color, x: lx, y: ly });
-    // one-by-one pops with a beat, like Tsum Tsum (faster in fever), finishing within ~1.4s
-    const stagger = Math.min(this.fever ? 0.06 : 0.09, 1.4 / chain.length);
-    chain.forEach((p, i) => this.popPiece(p, i * stagger, i, 'chain', tok));
-    const end = chain.length * stagger;
+    // one-by-one pops that speed up as they go (first one right away), all done within 0.85s
+    // (0.55s in fever) so the bowl refills quickly and the next trace can start sooner
+    const n = chain.length;
+    const end = Math.min(this.fever ? 0.55 : 0.85, (this.fever ? 0.18 : 0.26) + n * 0.035);
+    chain.forEach((p, i) => this.popPiece(p, n > 1 ? end * Math.pow(i / (n - 1), 0.78) : 0, i, 'chain', tok));
+    // release punch: a flash where the finger let go and a tap on the hand
+    this.overFx.ring(lx, ly, 0xffffff, 0.8 + Math.min(eff, 20) * 0.05, 0.3);
+    haptic(eff >= BOARD_TUNING.bombAt ? [12, 40, 18] : 10);
     if (rocks.length) {
       gsap.delayedCall(end, () => {
         const rt = this.ev.onResolve(rocks.map((r) => this.info(r)), 'rock', { chain: 0, color: -1, x: lx, y: ly });
