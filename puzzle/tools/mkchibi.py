@@ -15,6 +15,19 @@ def outline(im, px):
     a = im.split()[3]
     big = a.filter(ImageFilter.MaxFilter(px * 2 + 1)).filter(ImageFilter.GaussianBlur(1.5))
     base = Image.new('RGBA', im.size, (42, 22, 48, 0)); base.putalpha(big); base.alpha_composite(im); return base
+# CORE=1: size by the solid body of the head (thin horns, wings, ears and spikes are opened away),
+# so those can stick out past the usual size and simply overlap the neighbors (no collision).
+CORE = os.environ.get('CORE') == '1'
+def core_box(im):
+    a = im.split()[3]
+    bb = a.getbbox()
+    k = 256 / max(a.size)
+    sm = a.resize((round(a.width * k), round(a.height * k))).point(lambda v: 255 if v > 128 else 0)
+    w, h = bb[2] - bb[0], bb[3] - bb[1]
+    r = max(1, round((w * h) ** 0.5 * k * 0.11))
+    op = sm.filter(ImageFilter.MinFilter(2 * r + 1)).filter(ImageFilter.MaxFilter(2 * r + 1))
+    cb = op.getbbox() or sm.getbbox()
+    return tuple(round(v / k) for v in cb)
 for cid in IDS:
     ims = [outline(Image.open(f'{SRC}/out/skin/{cid}_{k}.png').convert('RGBA'), 28) for k in COLS]
     bb = ims[0].getbbox()
@@ -25,6 +38,10 @@ for cid in IDS:
         # same visual size as the KayKit heads: sqrt(w*h) about 230px in a 320px cell
         t = im.crop(bb)
         k = TARGET / (t.width * t.height) ** 0.5
+        if CORE:
+            cb = core_box(ims[0])
+            k = TARGET * 1.04 / ((cb[2] - cb[0]) * (cb[3] - cb[1])) ** 0.5
+            k = min(k, (CELL - 4) / max(t.width, t.height))
         t = t.resize((round(t.width * k), round(t.height * k)), Image.LANCZOS)
         strip.alpha_composite(t, (i * CELL + (CELL - t.width) // 2, (CELL - t.height) // 2))
     strip.save(f'{P}/{cid}.webp', quality=90, method=6)

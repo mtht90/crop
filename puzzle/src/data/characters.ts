@@ -83,6 +83,11 @@ const ROWS: Row[] = [
   ['c_student', 'まなぶちゃん', 'N', 100, { kind: 'timePlus', name: 'しゅくだいタイム', desc: '時間を2秒のばして5個消す', charge: 26, power: 1.8, amount: 5, dur: 2 }, '宿題はいつもギリギリに終わらせる。'],
   ['c_short', 'ぱっつん', 'N', 101, { kind: 'ring', name: 'まんまるリング', desc: 'まんなかをドーナツ形に消す', charge: 27, power: 2.0, size: 1.6 }, '前髪はミリ単位でととのえる派。'],
   ['c_kuro', 'くろかみ', 'N', 102, { kind: 'vline', name: 'くろいいなずま', desc: '縦一列をまとめて消す', charge: 26, power: 1.6, size: 1.7 }, '赤い目がチャームポイント。夜ふかしが得意。'],
+  ['q_chicken', 'コケッコ', 'N', 100, { kind: 'random', name: 'コケコッコー', desc: 'ランダムに11個消す', charge: 24, power: 2.55, amount: 11 }, '朝いちばんに大声で起こしてくれる。'],
+  ['q_pigeon', 'ポッポ', 'N', 101, { kind: 'paint', name: 'まめまきペイント', desc: '13個を多い色にぬりかえる', charge: 24, power: 2.0, amount: 13 }, 'いつも眠そうなハト。まめが好き。'],
+  ['q_dog', 'ワンタ', 'N', 102, { kind: 'bombs', name: 'ほりほりボム', desc: 'ボムを1個おとす', charge: 24, power: 2.1, amount: 1 }, '穴をほるとなにか見つけてくる。'],
+  ['q_cat', 'トラにゃん', 'N', 101, { kind: 'diag', name: 'ねこパンチ', desc: 'ななめ一列をまとめて消す', charge: 26, power: 3.0, size: 1.7 }, 'しましまがじまんのネコ。'],
+  ['q_henry', 'ヘンリー', 'N', 100, { kind: 'hline', name: 'リュートの調べ', desc: '横一列をまとめて消す', charge: 26, power: 2.0, size: 1.7 }, '船でいちばんの音楽家。'],
   // R
   ['l_knight', '見習い騎士', 'R', 115, { kind: 'circle', name: 'たてのいちげき', desc: 'まんなかを大きく丸く消す', charge: 30, power: 6.0, amount: 1, size: 4.3 }, 'かぶとが大きくてちょっと前が見えない。'],
   ['l_barbarian', 'クマかぶり', 'R', 119, { kind: 'bombs', name: 'ダブルボム', desc: 'ボムを2個おとす', charge: 30, power: 5.38, amount: 2 }, 'クマの毛皮がお気に入りの戦士。'],
@@ -93,6 +98,10 @@ const ROWS: Row[] = [
   ['c_pony', 'ポニテ', 'R', 117, { kind: 'shuriken', name: 'クナイなげ', desc: '3か所を小さく丸く消す', charge: 28, power: 3.2, amount: 3, size: 1.7 }, 'ポニーテールがトレードマークのしのび見習い。'],
   ['c_maskbob', 'マスクボブ', 'R', 116, { kind: 'paint', name: 'おそろいカラー', desc: '16個を多い色にぬりかえる', charge: 26, power: 1.8, amount: 16 }, '人見知りなのでマスクがてばなせない。'],
   ['b_chan', 'ブレンちゃん', 'R', 117, { kind: 'ring', name: 'ドーナツリング', desc: 'まんなかを大きなドーナツ形に消す', charge: 28, power: 3.3, size: 1.9 }, 'ドーナツとおさるさんが大好きな3Dの女の子。'],
+  ['q_anne', 'アン', 'R', 117, { kind: 'cross', name: 'ダブルアックス', desc: '太い十字にまとめて消す', charge: 28, power: 2.6, size: 1.5 }, '力じまんの女海賊。'],
+  ['q_yeti', 'イエティ', 'R', 118, { kind: 'circle', name: 'ゆきだまドーン', desc: 'まんなかを大きく丸く消す', charge: 30, power: 5.6, amount: 1, size: 4.1 }, '寒いのは平気、暑いのは苦手。'],
+  ['q_goleling', 'ゴブバット', 'R', 116, { kind: 'random', name: 'ばさばさ乱れうち', desc: 'ランダムに14個消す', charge: 30, power: 2.73, amount: 14 }, '夜になると元気になる。'],
+  ['q_orc', 'オークン', 'R', 119, { kind: 'bottom', name: 'どすこいスタンプ', desc: 'ボウルの底を広くまとめて消す', charge: 28, power: 2.5, size: 2.8 }, '見た目はこわいけど、やさしい力持ち。'],
   // SR
   ['knight', 'ナイト', 'SR', 190, { kind: 'colorBlast', name: 'いっせい攻撃', desc: 'いちばん多い色を全部消す', charge: 18, power: 11.0 }, '王国を守る正義の騎士。'],
   ['barbarian', 'バーバリアン', 'SR', 192, { kind: 'bottom', name: 'じならし', desc: 'ボウルの下半分をまとめて消す', charge: 22, power: 5.8, size: 4.4 }, 'クマの頭をかぶった豪快な戦士。'],
@@ -101,10 +110,13 @@ const ROWS: Row[] = [
   ['c_ninja', 'くのいち', 'SR', 188, { kind: 'shuriken', name: 'しゅりけん乱舞', desc: '5か所を小さく丸く消す', charge: 24, power: 13.1, amount: 5, size: 1.8 }, '口数は少ないけど面倒見はいい。'],
   ['c_maskT', 'マスクぱっつん', 'SR', 190, { kind: 'circle', name: 'ダブルドーン', desc: '大きな丸を2回消す', charge: 26, power: 9.0, amount: 2, size: 3.0 }, 'ぱっつん前髪とマスクのしのび。'],
   ['b_chanG', 'ゴーグルブレン', 'SR', 189, { kind: 'cross', name: 'レンダリングビーム', desc: '太い十字にまとめて消す', charge: 24, power: 6.3, size: 1.7 }, 'ゴーグルをかけると本気モード。'],
+  ['q_ninja', 'ドロン', 'SR', 189, { kind: 'random', name: 'かげぶんしん', desc: 'ランダムに28個消す', charge: 28, power: 3.7, amount: 28 }, '音もなくあらわれる、ねむそうな忍者。'],
+  ['q_dragon', 'ドラコ', 'SR', 191, { kind: 'hline', name: 'ほのおのブレス', desc: '太い横一列を消す', charge: 24, power: 5.0, size: 2.4 }, '小さいけれど立派なドラゴン。'],
   // SSR
   ['skel_warrior', 'ホネ戦士', 'SSR', 250, { kind: 'twoColor', name: 'ダブルブレイク', desc: '多い2色を全部消す', charge: 20, power: 8.0 }, '角かぶとのスケルトン戦士。'],
   ['skel_rogue', 'ホネ盗賊', 'SSR', 245, { kind: 'feverTap', name: 'かげのうたげ', desc: 'フィーバー突入＋その間タップでまとめて消せる', charge: 60, power: 2.8 }, '赤いフードの神出鬼没なスケルトン。'],
   ['c_knight', 'ひめきし', 'SSR', 248, { kind: 'xBlast', name: 'クロスジャッジ', desc: '大きな×字に消して、フィーバーゲージ+15%', charge: 22, power: 7.82, size: 1.5 }, 'かぶとの下はひみつのお姫さま。'],
+  ['q_captain', 'バルバロッサ船長', 'SSR', 249, { kind: 'twoColor', name: 'いっせい砲撃', desc: '多い2色を全部消す', charge: 21, power: 7.6 }, '七つの海をまたにかける大海賊。'],
   ['c_pumpkin', 'パンプキン', 'SSR', 250, { kind: 'megaBombs', name: 'ジャック・オ・ボム', desc: '大きなボムを3個おとす', charge: 22, power: 6.0, amount: 3 }, 'ハロウィンにだけあらわれる、かぼちゃ帽子の女の子。'],
 ];
 
@@ -112,6 +124,7 @@ const PASSIVES: Record<string, Passive> = {
   skel_warrior: { kind: 'guard', name: 'ホネのよろい', desc: 'ボスの妨害を3回まではじく\n7つ以上つなぐとダメージ1.3倍' },
   c_pumpkin: { kind: 'treat', name: 'ハロウィンのおかし', desc: 'もらえるコインが1.3倍' },
   c_knight: { kind: 'oath', name: 'きしのちかい', desc: 'フィーバーが2秒長い\nフィーバー中のダメージ1.2倍' },
+  q_captain: { kind: 'treat', name: 'おたからの地図', desc: 'もらえるコインが1.3倍' },
   skel_rogue: { kind: 'shadow', name: 'かげのしのび', desc: 'ボスの妨害がすぐおわる（時間半分）\nコンボがきれにくい' },
 };
 
@@ -121,6 +134,11 @@ const SCHEDULE: Record<string, { release?: string; limitedUntil?: string }> = {
   c_pumpkin: { release: '2026-10-22', limitedUntil: '2026-11-03' },
   b_chan: { release: '2026-10-23' },
   b_chanG: { release: '2026-11-05' },
+  q_goleling: { release: '2026-10-30' },
+  q_orc: { release: '2026-10-30' },
+  q_ninja: { release: '2026-11-06' },
+  q_dragon: { release: '2026-11-06' },
+  q_captain: { release: '2026-11-13' },
 };
 
 export const CHARACTERS: CharDef[] = ROWS.map(([id, name, rarity, atk, skill, catchCopy]) => ({ id, name, rarity, atk, skill, catch: catchCopy, passive: PASSIVES[id], ...SCHEDULE[id] }));

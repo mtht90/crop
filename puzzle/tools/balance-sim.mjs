@@ -4,7 +4,7 @@ import { chromium } from '/opt/node22/lib/node_modules/playwright/index.mjs';
 const runs = +(process.argv[2] ?? 3);
 // HUMAN=1: slower, shorter chains (a casual player) for economy tuning
 const HUMAN = !!process.env.HUMAN;
-const ALL = ['kh_a','kh_b','kh_c','rh_a','rh_b','rh_c','mh_a','mh_b','mh_c','bh_a','bh_b','l_knight','l_barbarian','skull','skel_minion','knight','barbarian','rogue','hood','skel_warrior','skel_rogue','c_student','c_short','c_merchant','c_archer','c_ninja','c_knight','c_kuro','c_pony','c_maskbob','c_maskT','c_pumpkin','b_chan','b_chanG'];
+const ALL = ['kh_a','kh_b','kh_c','rh_a','rh_b','rh_c','mh_a','mh_b','mh_c','bh_a','bh_b','l_knight','l_barbarian','skull','skel_minion','knight','barbarian','rogue','hood','skel_warrior','skel_rogue','c_student','c_short','c_merchant','c_archer','c_ninja','c_knight','c_kuro','c_pony','c_maskbob','c_maskT','c_pumpkin','b_chan','b_chanG','q_chicken','q_pigeon','q_dog','q_cat','q_henry','q_anne','q_yeti','q_goleling','q_orc','q_ninja','q_dragon','q_captain'];
 const ids = process.argv[3] && process.argv[3] !== 'all' ? process.argv[3].split(',') : ALL;
 const url = process.argv[4] ?? 'http://localhost:5199';
 const b = await chromium.launch({ args: ['--enable-unsafe-swiftshader', '--use-gl=angle', '--use-angle=swiftshader'] });
