@@ -338,10 +338,11 @@ export class GachaScene extends Scene {
     // tease: the capsule sometimes shows a lower rarity first and upgrades on opening
     const tease: Rarity = best === 'SSR' ? (Math.random() < 0.5 ? 'SR' : 'SSR') : best === 'SR' && Math.random() < 0.35 ? 'R' : best;
     await this.crank();
-    if (this.m3) await this.dispense3D(tease);
-    await this.capsuleOpen(best, tease);
-    if (n === 1) await this.reveal(results[0]);
-    else await this.grid(results);
+    if (n === 1) {
+      if (this.m3) await this.dispense3D(tease);
+      await this.capsuleOpen(best, tease);
+      await this.reveal(results[0]);
+    } else await this.capsules(results);
     this.clearStage();
     this.pityLabel.text = `にじいろ確定まで あと${PITY - Save.data.pity}回`;
     this.refreshTicket();
@@ -568,132 +569,144 @@ export class GachaScene extends Scene {
     c.destroy({ children: true });
   }
 
+  /** Where capsules come out of the machine (stage coordinates). */
+  private chutePos(): { x: number; y: number } {
+    if (this.m3) {
+      const c = this.m3.chutePoint();
+      const d = App.toDesign(c.x, c.y);
+      return { x: d.x - App.colX, y: d.y };
+    }
+    const ms = this.machine.scale.x;
+    return { x: this.machine.x + (MACHINE.chute[0] - MACHINE.dome[0]) * ms, y: this.machine.y + (MACHINE.chute[1] - MACHINE.dome[1]) * ms };
+  }
+
   /**
-   * 10 pulls: cards are dealt face down with their capsule color on the back (a gold back may still be
-   * hiding a rainbow one), then flip one by one. Gold and rainbow cards rise and charge up before they
-   * flip, rainbow cards and new characters get the full reveal, and a summary closes the round.
+   * 10 pulls: ten capsules pour out of the machine in their colors (a gold one may be hiding a rainbow
+   * one) and pop open one by one. Gold and rainbow capsules shake and charge up first, rainbow and new
+   * gold characters get the full reveal, and a summary closes the round.
    */
-  private async grid(results: PullResult[]): Promise<void> {
+  private async capsules(results: PullResult[]): Promise<void> {
     const layer = this.stageLayer;
+    const dim = new Graphics().rect(-App.colX, 0, App.W, App.H).fill({ color: 0x0a0418, alpha: 0.88 });
+    dim.alpha = 0;
+    layer.addChild(dim);
+    gsap.to(dim, { alpha: 1, duration: 0.5, delay: 0.3 });
+    this.lastDim = dim;
     const c = new Container();
     layer.addChild(c);
-    const cw = 124;
-    const ch = 170;
-    const gap = 12;
-    const y0 = App.H * 0.3;
-    const cards: Container[] = [];
+    const step = 136;
+    const y0 = App.H * 0.36;
+    const caps: Container[] = [];
     const skip = new Button({ w: 160, h: 66, label: 'スキップ', color: 'grey', size: 26, onTap: () => (this.skipAll = true) });
     skip.position.set(600, App.safeTop + 60);
     c.addChild(skip);
-    // what each back shows first: half the rainbow cards pose as gold until they flip
-    const backs: Rarity[] = results.map((r) => (r.def.rarity === 'SSR' && Math.random() < 0.5 ? 'SR' : r.def.rarity === 'SR' ? 'SR' : r.def.rarity === 'SSR' ? 'SSR' : 'N'));
-    const drawBack = (g: Graphics, tier: Rarity): void => {
-      g.clear();
-      const fill = tier === 'SSR' ? grad([[0, '#ff7ad9'], [0.35, '#ffd86a'], [0.7, '#7ae0ff'], [1, '#b07cff']]) : tier === 'SR' ? grad([[0, '#ffe58a'], [1, '#e09a10']]) : grad([[0, '#8a5cff'], [1, '#4a2a9a']]);
-      g.roundRect(-cw / 2, -ch / 2, cw, ch, 18).fill(fill);
-      g.roundRect(-cw / 2, -ch / 2, cw, ch, 18).stroke({ width: 5, color: 0xffffff });
-      g.circle(0, 0, 30).fill({ color: 0xffffff, alpha: tier === 'N' ? 0.2 : 0.45 });
-    };
+    // the color each capsule shows first: half the rainbow ones pose as gold until they open
+    const shown: Rarity[] = results.map((r) => (r.def.rarity === 'SSR' && Math.random() < 0.5 ? 'SR' : r.def.rarity));
+    const from = this.chutePos();
+    if (this.m3) this.m3.show(false);
+    gsap.to(this.machine, { alpha: 0, duration: 0.4, delay: 0.6 });
     results.forEach((_res, i) => {
-      const card = new Container();
-      const x = 360 + ((i % 5) - 2) * (cw + gap);
-      const y = y0 + Math.floor(i / 5) * (ch + gap + 40);
-      card.position.set(360, App.H + 200);
-      const back = new Graphics();
-      drawBack(back, backs[i]);
-      card.addChild(back);
-      if (backs[i] !== 'N') {
-        // gold and rainbow backs breathe so the player spots them while dealing
-        gsap.to(back.scale, { x: 1.05, y: 1.05, duration: 0.45, yoyo: true, repeat: -1, ease: 'sine.inOut' });
+      const cap = new Container();
+      const x = 360 + ((i % 5) - 2) * step;
+      const y = y0 + Math.floor(i / 5) * (step + 70);
+      const sp = new Sprite(gtex(`cap_${shown[i]}`));
+      sp.anchor.set(0.5);
+      sp.scale.set(108 / sp.texture.width);
+      cap.addChild(sp);
+      cap.position.set(from.x, from.y);
+      cap.scale.set(0.4);
+      cap.rotation = (Math.random() - 0.5) * 2;
+      c.addChild(cap);
+      caps.push(cap);
+      // pour out of the chute one after another and bounce into place
+      const d = i * 0.09;
+      gsap.to(cap, { x, duration: 0.55, delay: d, ease: 'power2.out' });
+      gsap.to(cap, { y, duration: 0.55, delay: d, ease: 'bounce.out' });
+      gsap.to(cap, { rotation: 0, duration: 0.55, delay: d, ease: 'power2.out' });
+      gsap.to(cap.scale, { x: 1, y: 1, duration: 0.4, delay: d, ease: 'back.out(2)' });
+      gsap.delayedCall(d, () => Sound.play('drop', { vol: 0.35, rate: 0.9 + Math.random() * 0.3 }));
+      gsap.delayedCall(d + 0.35, () => Sound.play('soft', { vol: 0.3 }));
+      if (shown[i] !== 'N' && shown[i] !== 'R') {
+        // gold and rainbow capsules glow while they wait
+        const glow = new Graphics().circle(0, 0, 64).fill({ color: CAP_COLORS[shown[i]][0], alpha: 0.35 });
+        cap.addChildAt(glow, 0);
+        gsap.to(glow.scale, { x: 1.2, y: 1.2, duration: 0.5, yoyo: true, repeat: -1, ease: 'sine.inOut' });
       }
-      c.addChild(card);
-      cards.push(card);
-      gsap.to(card, { x, y, duration: 0.35, delay: i * 0.06, ease: 'power3.out' });
-      gsap.delayedCall(i * 0.06, () => Sound.play('cardSlide', { vol: 0.5, rate: 0.9 + Math.random() * 0.3 }));
     });
-    await wait(this.skipAll ? 0 : 1.0);
+    await wait(this.skipAll ? 0 : 1.6);
     let news = 0;
     let ups = 0;
     for (let i = 0; i < results.length; i++) {
       const res = results[i];
-      const card = cards[i];
+      const cap = caps[i];
       const r = RARITY_INFO[res.def.rarity];
       const tier = rarityRank(res.def.rarity);
       if (res.isNew) news++;
       else ups++;
+      const sp = cap.children[cap.children.length - 1] as Sprite;
       if (tier >= 2 && !this.skipAll) {
-        // charge-up: the card rises, shakes and glows before it turns
-        const home = { x: card.x, y: card.y };
-        c.setChildIndex(card, c.children.length - 1);
+        // charge-up: the capsule rises and rattles before it opens
+        const home = cap.y;
+        c.setChildIndex(cap, c.children.length - 1);
         Sound.play('powerUp', { vol: 0.5 });
-        await new Promise<void>((done) => gsap.to(card, { y: home.y - 26, duration: 0.25, ease: 'power2.out', onComplete: done }));
-        gsap.to(card.scale, { x: 1.18, y: 1.18, duration: 0.25 });
-        for (let k = 0; k < 6; k++) gsap.delayedCall(k * 0.06, () => (card.rotation = (k % 2 ? 1 : -1) * 0.06));
-        await wait(0.4);
-        card.rotation = 0;
-        if (backs[i] !== res.def.rarity) {
-          // the gold back was hiding a rainbow one
-          const flash = new Graphics().roundRect(-cw / 2, -ch / 2, cw, ch, 18).fill(0xffffff);
-          card.addChild(flash);
-          drawBack(card.children[0] as Graphics, res.def.rarity);
-          gsap.to(flash, { alpha: 0, duration: 0.4, onComplete: () => flash.destroy() });
-          Sound.play('powerUp2', { vol: 0.8 });
+        await new Promise<void>((done) => gsap.to(cap, { y: home - 30, duration: 0.25, ease: 'power2.out', onComplete: done }));
+        gsap.to(cap.scale, { x: 1.25, y: 1.25, duration: 0.25 });
+        for (let k = 0; k < 3; k++) {
+          Sound.snare(0.25 + k * 0.12);
+          haptic(10);
+          await new Promise<void>((done) => gsap.fromTo(cap, { rotation: -0.3 }, { rotation: 0, duration: 0.2, ease: 'elastic.out(1.6,0.3)', onComplete: done }));
+        }
+        if (shown[i] !== res.def.rarity) {
+          // the gold capsule was hiding a rainbow one
+          Sound.riser(0.5);
+          await new Promise<void>((done) => gsap.to(cap, { x: cap.x + 6, duration: 0.035, yoyo: true, repeat: 12, onComplete: done }));
+          this.flash(0xffffff, 0.4);
+          sp.texture = gtex(`cap_${res.def.rarity}`);
+          Sound.play('zap', { vol: 0.8 });
           haptic([15, 30, 25]);
-          this.fx.burst(card.x, card.y, { count: 26, tex: 'star_06', tint: [0xff7ad9, 0x7ae0ff, 0xffd86a, 0xffffff], add: true, speed: [200, 520], size: [0.08, 0.2] });
+          this.fx.burst(cap.x, cap.y, { count: 30, tex: 'star_06', tint: CAP_COLORS.SSR, add: true, speed: [200, 560], size: [0.08, 0.22] });
           await wait(0.5);
         }
-        gsap.to(card, { y: home.y, duration: 0.3, ease: 'power2.in' });
-        gsap.to(card.scale, { x: 1, y: 1, duration: 0.3 });
-        await wait(0.15);
+        gsap.to(cap, { y: home, duration: 0.25, ease: 'power2.in' });
+        await wait(0.2);
       }
-      await new Promise<void>((done) => {
-        gsap.killTweensOf(card.children[0].scale);
-        gsap.to(card.scale, {
-          x: 0, duration: this.skipAll ? 0.02 : 0.1, onComplete: () => {
-            card.removeChildren().forEach((ch2) => ch2.destroy());
-            const f = new Graphics();
-            f.roundRect(-cw / 2, -ch / 2, cw, ch, 18).fill(grad([[0, '#ffffff'], [1, '#efe6ff']]));
-            f.roundRect(-cw / 2, -ch / 2, cw, ch, 18).stroke({ width: 6, color: r.color });
-            if (res.def.rarity === 'SSR') f.roundRect(-cw / 2 + 6, -ch / 2 + 6, cw - 12, ch - 12, 14).stroke({ width: 3, color: 0xffc71f });
-            card.addChild(f);
-            const sp = new Sprite(bigTexture(res.def));
-            sp.anchor.set(0.5, 0.55);
-            sp.scale.set(96 / Math.max(1, sp.texture.width));
-            sp.y = -12;
-            card.addChild(sp);
-            const nm = txt(res.def.name, { size: 20, color: 0x4a2f7a });
-            nm.y = ch / 2 - 22;
-            if (nm.width > cw - 10) nm.scale.set((cw - 10) / nm.width);
-            card.addChild(nm);
-            if (res.isNew || res.skillUp || res.plusUp) {
-              const b = txt(res.isNew ? 'NEW' : res.skillUp ? `SL${res.skill}` : `+${res.plus}`, { size: res.isNew ? 24 : 20, font: 'dela', color: res.isNew ? 0xff4f8f : 0x36a2ff, stroke: 0xffffff, strokeWidth: 5 });
-              b.position.set(cw / 2 - 18, -ch / 2 + 4);
-              b.rotation = 0.3;
-              card.addChild(b);
-              if (res.isNew && !this.skipAll) gsap.fromTo(b.scale, { x: 2.2, y: 2.2 }, { x: 1, y: 1, duration: 0.35, ease: 'back.out(3)' });
-            }
-            if (res.maxed) Save.data.coins += MAXED_COINS;
-            gsap.to(card.scale, { x: 1, duration: this.skipAll ? 0.02 : 0.15, ease: 'back.out(2)', onComplete: done });
-            if (!this.skipAll) {
-              Sound.play('cardFan', { vol: 0.5 });
-              if (tier >= 2) {
-                Sound.play(res.def.rarity === 'SSR' ? 'jSSR' : 'jSR', { vol: 0.6 });
-                haptic(25);
-                this.fx.burst(card.x, card.y, { count: 20, tex: 'star_06', tint: [r.color, 0xffffff], add: true, speed: [150, 450], size: [0.08, 0.18] });
-                gsap.fromTo(card.scale, { y: 1.3 }, { y: 1, duration: 0.5, ease: 'elastic.out(1.2,0.4)' });
-              } else if (res.isNew) Sound.play('pep', { vol: 0.5, rate: 1.2 });
-              else Sound.link(i);
-            }
-          },
-        });
-      });
-      // rainbow cards and brand-new gold ones get the full-screen reveal right away
+      // pop open: the shell bursts, the character springs out
+      cap.removeChildren().forEach((ch2) => ch2.destroy());
+      const halo = new Graphics().circle(0, 0, 58).fill({ color: r.color, alpha: tier >= 2 ? 0.45 : 0.25 });
+      cap.addChild(halo);
+      const art = new Sprite(bigTexture(res.def));
+      art.anchor.set(0.5, 0.55);
+      art.scale.set(100 / Math.max(1, art.texture.width));
+      cap.addChild(art);
+      const nm = txt(res.def.name, { size: 20, stroke: 0x2a1630, strokeWidth: 5 });
+      nm.y = 70;
+      if (nm.width > step - 8) nm.scale.set((step - 8) / nm.width);
+      cap.addChild(nm);
+      if (res.isNew || res.skillUp || res.plusUp) {
+        const b = txt(res.isNew ? 'NEW' : res.skillUp ? `SL${res.skill}` : `+${res.plus}`, { size: res.isNew ? 24 : 20, font: 'dela', color: res.isNew ? 0xff4f8f : 0x36a2ff, stroke: 0xffffff, strokeWidth: 5 });
+        b.position.set(42, -48);
+        b.rotation = 0.3;
+        cap.addChild(b);
+        if (res.isNew && !this.skipAll) gsap.fromTo(b.scale, { x: 2.2, y: 2.2 }, { x: 1, y: 1, duration: 0.35, ease: 'back.out(3)' });
+      }
+      if (res.maxed) Save.data.coins += MAXED_COINS;
+      cap.scale.set(1);
+      if (!this.skipAll) {
+        gsap.fromTo(art.scale, { x: 0, y: 0 }, { x: art.scale.x, y: art.scale.y, duration: 0.4, ease: 'back.out(2.5)' });
+        this.fx.burst(cap.x, cap.y, { count: tier >= 2 ? 24 : 10, tex: 'star_06', tint: [...CAP_COLORS[res.def.rarity], 0xffffff], add: true, speed: [120, tier >= 2 ? 460 : 260], size: [0.06, tier >= 2 ? 0.18 : 0.12] });
+        if (tier >= 2) {
+          Sound.play(res.def.rarity === 'SSR' ? 'jSSR' : 'jSR', { vol: 0.6 });
+          haptic(25);
+        } else if (res.isNew) Sound.play('pep', { vol: 0.5, rate: 1.2 });
+        else Sound.pop(i);
+      }
+      // rainbow characters and brand-new gold ones get the full-screen reveal right away
       if (!this.skipAll && (res.def.rarity === 'SSR' || (tier >= 2 && res.isNew))) {
-        await wait(0.35);
+        await wait(0.45);
         c.visible = false;
         await this.reveal(res, true);
         c.visible = true;
-      } else if (!this.skipAll) await wait(tier >= 2 ? 0.35 : res.isNew ? 0.2 : 0.07);
+      } else if (!this.skipAll) await wait(tier >= 2 ? 0.35 : res.isNew ? 0.22 : 0.1);
     }
     Save.write();
     this.coins.refresh();
@@ -702,7 +715,7 @@ export class GachaScene extends Scene {
     sum.position.set(360, App.H - App.safeBottom - 260);
     c.addChild(sum);
     popIn(sum);
-    const hint = txt('カードをタップでくわしく見る', { size: 22, stroke: 0x2a1630, strokeWidth: 6, color: 0xffffff });
+    const hint = txt('キャラをタップでくわしく見る', { size: 22, stroke: 0x2a1630, strokeWidth: 6, color: 0xffffff });
     hint.position.set(360, App.H - App.safeBottom - 210);
     c.addChild(hint);
     const ok = new Button({ w: 300, h: 100, label: 'OK', color: 'pink', size: 40, onTap: () => {} });
@@ -716,10 +729,10 @@ export class GachaScene extends Scene {
         Sound.play('ui_tap');
         done();
       });
-      cards.forEach((card, i) => {
-        card.eventMode = 'static';
-        card.cursor = 'pointer';
-        card.on('pointertap', async () => {
+      caps.forEach((cap, i) => {
+        cap.eventMode = 'static';
+        cap.cursor = 'pointer';
+        cap.on('pointertap', async () => {
           c.visible = false;
           await this.reveal(results[i], true);
           c.visible = true;
