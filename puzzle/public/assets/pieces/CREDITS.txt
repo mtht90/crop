@@ -6,7 +6,7 @@ is pumpkin_orange_jackolantern from KayKit Halloween Bits by Kay Lousberg (CC0).
 "Blender-chan" by AmarilloArts (https://amarilloarts.itch.io/blender-chan), CC0 1.0 Universal. Pieces b_chan, b_chanG (head renders, recolored).
 "Ultimate Monsters" and "Pirate Kit" by Quaternius (https://quaternius.com), CC0 1.0 Universal. Pieces q_* (head renders, recolored).
 The following models are licensed under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). Head renders, recolored for game pieces:
-- "2016. Halloween little witch" by goblin165cm (https://sketchfab.com/3d-models/2016-halloween-little-witch-ccc023590bfb4789af9322864e42d1ab) - piece s_witch
+- "2016. Halloween little witch" by goblin165cm (https://sketchfab.com/3d-models/2016-halloween-little-witch-ccc023590bfb4789af9322864e42d1ab) - piece s_witch (hat and props removed)
 - "Chibi Nekogirl" by xmnepank (https://sketchfab.com/3d-models/chibi-nekogirl-fbabd7b43705464b827f0f309fbf2bb3) - piece s_neko
 - "Chibi Yste" by xmnepank (https://sketchfab.com/3d-models/chibi-yste-fdcb874a61284a5aa7aa8cf5d9f57b5b) - piece s_yste
 - "Hellhound Monster Girl ~Chibi~" by Shortskirts (https://sketchfab.com/3d-models/hellhound-monster-girl-chibi-4791884022a743f6a8d240e0ce692274) - piece s_hound

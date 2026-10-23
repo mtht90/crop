@@ -120,7 +120,7 @@ const ROWS: Row[] = [
   ['q_ninja', 'ドロン', 'SR', 189, { kind: 'random', name: 'かげぶんしん', desc: 'ランダムに28個消す', charge: 28, power: 3.7, amount: 28 }, '音もなくあらわれる、ねむそうな忍者。'],
   ['q_dragon', 'ドラコ', 'SR', 191, { kind: 'hline', name: 'ほのおのブレス', desc: '太い横一列を消す', charge: 24, power: 5.8, size: 2.4 }, '小さいけれど立派なドラゴン。'],
   ['s_mage', 'ライカ', 'SR', 190, { kind: 'vline', name: 'いなずまの柱', desc: '太い縦一列を消す', charge: 24, power: 4.2, size: 2.4 }, 'かみなりの魔法が得意な魔法使い。'],
-  ['s_witch', 'ハロウィンまじょ', 'SR', 188, { kind: 'bombs', name: 'トリックボム', desc: 'ボムを3個おとす', charge: 26, power: 7.5, amount: 3 }, 'ハロウィンの夜にだけあらわれる魔女っ子。'],
+  ['s_witch', 'ハロウィンまじょ', 'SR', 188, { kind: 'bombs', name: 'トリックボム', desc: 'ボムを3個おとす', charge: 26, power: 7.5, amount: 3 }, 'ハロウィンの夜にだけあらわれる魔女っ子。ぼうしはお休み中。'],
   // SSR
   ['skel_warrior', 'ホネ戦士', 'SSR', 250, { kind: 'twoColor', name: 'ダブルブレイク', desc: '多い2色を全部消す', charge: 20, power: 8.0 }, '角かぶとのスケルトン戦士。'],
   ['skel_rogue', 'ホネ盗賊', 'SSR', 245, { kind: 'feverTap', name: 'かげのうたげ', desc: 'フィーバー突入＋その間タップでまとめて消せる', charge: 60, power: 2.8 }, '赤いフードの神出鬼没なスケルトン。'],
