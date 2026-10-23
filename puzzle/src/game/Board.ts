@@ -160,6 +160,8 @@ export class Board {
   fever = false;
   /** Skill mode: tapping pops the whole same-color group under the finger. */
   tapPop = false;
+  /** Skill mode: every piece the finger crosses pops, whatever its color. */
+  tracePop = false;
   frozen = false;
   /** Obstruction state (boss attacks). */
   sealColor = -1;
@@ -481,6 +483,11 @@ export class Board {
       this.popGroup(p);
       return;
     }
+    if (this.tracePop) {
+      this.pointer = { x, y };
+      this.traceHit([p]);
+      return;
+    }
     this.chain = [p];
     this.link(p);
     this.pointer = { x, y };
@@ -494,6 +501,10 @@ export class Board {
    * end of a move gets a small directional assist toward the nearest valid piece.
    */
   pointerMove(x: number, y: number): void {
+    if (this.tracePop && this.pointer) {
+      this.traceMove(x, y);
+      return;
+    }
     if (!this.pointer || this.chain.length === 0) return;
     const from = this.pointer;
     const dx = x - from.x;
@@ -561,6 +572,30 @@ export class Board {
 
   private backArmed = false;
 
+  /** Trace skill: pops everything the finger sweeps over (touch circle along the segment). */
+  private traceMove(x: number, y: number): void {
+    const from = this.pointer!;
+    this.pointer = { x, y };
+    const dx = x - from.x;
+    const dy = y - from.y;
+    const L2 = dx * dx + dy * dy;
+    const hit = this.live().filter((p) => {
+      if (p.kind === 'bomb' || p.kind === 'mega' || !this.onBoard(p)) return false;
+      const t = L2 > 0 ? Math.max(0, Math.min(1, ((p.x - from.x) * dx + (p.y - from.y) * dy) / L2)) : 0;
+      return Math.hypot(from.x + dx * t - p.x, from.y + dy * t - p.y) < p.r * 1.3;
+    });
+    if (hit.length) this.traceHit(hit);
+  }
+
+  private traceHit(list: Piece[]): void {
+    const victims = list.filter((p) => p.state === 'live' && p.kind !== 'bomb' && p.kind !== 'mega');
+    if (!victims.length) return;
+    for (const p of victims) p.state = 'popping';
+    const infos = victims.map((p) => this.info(p));
+    const tok = this.ev.onResolve(infos, 'skill', { chain: victims.length, color: -1, x: victims[0].x, y: victims[0].y });
+    victims.forEach((p, i) => this.popPiece(p, i * 0.02, i, 'skill', tok));
+  }
+
   private tryLink(p: Piece): void {
     const last = this.chain[this.chain.length - 1];
     if (p === last || p.state !== 'live' || !this.adjacent(p, last)) return;
@@ -580,6 +615,7 @@ export class Board {
   }
 
   pointerUp(): void {
+    if (this.tracePop) this.pointer = null;
     if (this.chain.length === 0) return;
     // something else (a skill, a bomb) may have taken pieces out of the chain meanwhile
     const chain = this.chain.filter((p) => p.state === 'linked');

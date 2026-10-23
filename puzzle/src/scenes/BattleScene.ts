@@ -12,7 +12,7 @@ import { Effects, fx } from '../game/Effects';
 import { ComboLabel, JFever, JTimer, ScoreLine, SkillButton, banner, installBitmapFonts, jungle, num } from '../game/Hud';
 import { COLORS, bigTexture, loadCharacterArt } from '../art/PieceArt';
 import { loadFairy, tex, unloadFairy } from '../core/Loader';
-import { CHARACTERS, CHAR_BY_ID, COIN_SKILL, RARITY_INFO, addExp, chainCoins, charAtk, charCharge, expForRound, growthOf, skillAt, type CharDef, type Growth, type Skill } from '../data/characters';
+import { CHARACTERS, CHAR_BY_ID, COIN_SKILL, RARITY_INFO, addExp, chainCoins, charAtk, charCharge, expForRound, growthOf, skillAt, type CharDef, type Growth, type ShapeId, type Skill } from '../data/characters';
 import { bossAttackCount, bossAttackInterval, bossForLevel, bossHp, type BossDef } from '../data/bosses';
 import { ResultScene, type BattleResult } from './ResultScene';
 import { HomeScene } from './HomeScene';
@@ -143,6 +143,10 @@ export class BattleScene extends Scene {
   private skillCharge = 0;
   /** Seconds left of group-tap mode (skills). */
   private tapT = 0;
+  /** Seconds left of the trace skill, the stopped clock and the long-reach links. */
+  private traceT = 0;
+  private stopT = 0;
+  private reachT = 0;
   /** Battle BGM to return to after fever. */
   private track = '';
   private stuckCheckT = 0.5;
@@ -531,7 +535,7 @@ export class BattleScene extends Scene {
     if (playing) {
       // the clock stops during fever
       // in versus the clock never stops, so both players' rounds end together
-      if ((this.vs || !this.feverOn) && !this.devClockStopped) this.timeLeft -= dt * (this.effects.has('timeFast') ? 2 : 1);
+      if ((this.vs || !this.feverOn) && !this.devClockStopped && this.stopT <= 0) this.timeLeft -= dt * (this.effects.has('timeFast') ? 2 : 1);
       const sec = Math.ceil(this.timeLeft);
       if (sec !== this.lastSecond) {
         this.lastSecond = sec;
@@ -562,6 +566,15 @@ export class BattleScene extends Scene {
       if (this.tapT > 0) {
         this.tapT -= dt;
         if (this.tapT <= 0) this.board.tapPop = false;
+      }
+      if (this.traceT > 0) {
+        this.traceT -= dt;
+        if (this.traceT <= 0) this.board.tracePop = false;
+      }
+      if (this.stopT > 0) this.stopT -= dt;
+      if (this.reachT > 0) {
+        this.reachT -= dt;
+        if (this.reachT <= 0) this.board.reachMod = Math.max(0, this.board.reachMod - 0.9);
       }
       // fever
       if (this.feverOn) {
@@ -1133,8 +1146,104 @@ export class BattleScene extends Scene {
       this.beam(this.boardX + cx, this.boardY + cy, a, width * 2);
       const sx = cx - Math.cos(a) * L;
       const sy = cy - Math.sin(a) * L;
-      b.popWhere((p) => Math.abs(-(p.x - cx) * Math.sin(a) + (p.y - cy) * Math.cos(a)) < width, sx, sy);
+      this.zap((x, y) => Math.abs(-(x - cx) * Math.sin(a) + (y - cy) * Math.cos(a)) < width, sx, sy, color);
     });
+  }
+
+  /** Inside the bowl (board coordinates). */
+  private inBowl(x: number, y: number): boolean {
+    const b = this.board;
+    const R = b.w / 2;
+    if (!b.round) return x >= 0 && x <= b.w && y >= 0 && y <= b.h;
+    const cy = Math.max(R, Math.min(b.h - R, y));
+    return Math.hypot(x - R, y - cy) < R - 2;
+  }
+
+  /**
+   * Lights up exactly the area a move clears (a tiled silhouette over the bowl) and pops every piece
+   * whose center is inside it, so the shape of each move reads at a glance.
+   */
+  private zap(inside: (x: number, y: number) => boolean, ox: number, oy: number, color: number): void {
+    const b = this.board;
+    const c = Math.max(8, b.r * 0.42);
+    const g = new Graphics();
+    for (let y = c / 2; y < b.h; y += c) {
+      for (let x = c / 2; x < b.w; x += c) {
+        if (this.inBowl(x, y) && inside(x, y)) g.rect(x - c / 2, y - c / 2, c + 0.5, c + 0.5);
+      }
+    }
+    g.fill({ color, alpha: 0.55 });
+    g.blendMode = 'add';
+    g.position.set(this.boardX, this.boardY);
+    this.overlay.addChild(g);
+    g.alpha = 0;
+    gsap.to(g, { alpha: 1, duration: 0.08 });
+    gsap.to(g, { alpha: 0, duration: 0.45, delay: 0.35, onComplete: () => g.destroy() });
+    b.popWhere((p) => inside(p.x, p.y), ox, oy);
+  }
+
+  /** Point-in-shape tests for the 'shape' move, in units of the shape's radius (v grows downward). */
+  private shapeTest(shape: ShapeId, cx: number, cy: number, S: number): (x: number, y: number) => boolean {
+    const b = this.board;
+    const r = b.r;
+    return (x, y) => {
+      const u = (x - cx) / S;
+      const v = (y - cy) / S;
+      const d = Math.hypot(u, v);
+      switch (shape) {
+        case 'heart': {
+          const hu = u * 1.15;
+          const hv = -v * 1.15 + 0.25;
+          return (hu * hu + hv * hv - 1) ** 3 - hu * hu * hv ** 3 <= 0;
+        }
+        case 'star': {
+          const a = Math.atan2(u, -v);
+          const seg = Math.PI / 5;
+          const k = Math.abs(((a % (2 * seg)) + 2 * seg) % (2 * seg) - seg) / seg;
+          return d <= 0.42 + 0.63 * k;
+        }
+        case 'diamond':
+          return Math.abs(u) * 0.85 + Math.abs(v) * 0.75 <= 0.85;
+        case 'triangle':
+          return v <= 0.75 && Math.abs(u) <= (v + 1.05) * 0.62;
+        case 'square':
+          return Math.max(Math.abs(u), Math.abs(v)) <= 0.78;
+        case 'plus':
+          return (Math.abs(u) < 0.3 && Math.abs(v) < 1.15) || (Math.abs(v) < 0.3 && Math.abs(u) < 1.15);
+        case 'x':
+          return d < 1.25 && (Math.abs(u - v) < 0.38 || Math.abs(u + v) < 0.38);
+        case 'zigzag': {
+          const t = (((u * 1.4) % 2) + 2) % 2;
+          return Math.abs(v - (Math.abs(t - 1) - 0.5) * 1.1) < 0.3;
+        }
+        case 'wave':
+          return Math.abs(v - 0.5 * Math.sin(u * 2.6)) < 0.3;
+        case 'spiral': {
+          if (d > 1.25) return false;
+          const turn = 0.62;
+          const a = (Math.atan2(v, u) + Math.PI * 2) % (Math.PI * 2);
+          const ph = (((d - (a / (Math.PI * 2)) * turn) % turn) + turn) % turn;
+          return ph < 0.26 || d < 0.18;
+        }
+        case 'crescent':
+          return d <= 1 && Math.hypot(u - 0.48, v + 0.18) > 0.8;
+        case 'hourglass':
+          return Math.abs(v) <= 1.05 && Math.abs(u) <= Math.abs(v) * 0.85 + 0.12;
+        case 'chevron':
+          return Math.abs(v - (Math.abs(u) * 0.85 - 0.45)) < 0.3 && Math.abs(u) < 1.2;
+        case 'twin':
+          return Math.hypot(u - 0.58, v) < 0.52 || Math.hypot(u + 0.58, v) < 0.52;
+        case 'checker':
+          return (Math.floor(x / (r * 2.6)) + Math.floor(y / (r * 2.6))) % 2 === 0;
+        case 'top':
+          return y < b.h * 0.42;
+        case 'hline2':
+          return Math.abs(v + 0.55) < 0.24 || Math.abs(v - 0.55) < 0.24;
+        case 'smile':
+          return Math.hypot(u + 0.42, v + 0.38) < 0.22 || Math.hypot(u - 0.42, v + 0.38) < 0.22 || (v > 0.05 && Math.abs(d - 0.75) < 0.2);
+      }
+      return false;
+    };
   }
 
   /** A big prop drops onto (x, y) and blasts a circle. */
@@ -1279,7 +1388,7 @@ export class BattleScene extends Scene {
         const cx = R + (Math.random() - 0.5) * R * 0.5;
         this.slam(prop, cx, M, size, 300, () => {
           this.beam(this.boardX + cx, this.boardY + M, Math.PI / 2, size * 2);
-          b.popWhere((p) => Math.abs(p.x - cx) < size, cx, 0);
+          this.zap((x) => Math.abs(x - cx) < size, cx, 0, glow);
         });
         break;
       }
@@ -1301,7 +1410,7 @@ export class BattleScene extends Scene {
       case 'circle': {
         const cx = R;
         const cy = M + R * 0.15;
-        this.slam(prop, cx, cy, size, prop === 'shield' ? 300 : 240, () => b.popWhere((p) => Math.hypot(p.x - cx, p.y - cy) < size, cx, cy));
+        this.slam(prop, cx, cy, size, prop === 'shield' ? 300 : 240, () => this.zap((x, y) => Math.hypot(x - cx, y - cy) < size, cx, cy, glow));
         break;
       }
       case 'bottom': {
@@ -1309,7 +1418,7 @@ export class BattleScene extends Scene {
         this.slam(prop, R, b.h - size, size * 1.4, 340, () => {
           this.flashBoard(0xffb070);
           b.shockwave(R, b.h, size * 2);
-          b.popWhere((p) => p.y > top, R, b.h);
+          this.zap((_x, y) => y > top, R, b.h, 0xffb070);
         });
         break;
       }
@@ -1317,7 +1426,7 @@ export class BattleScene extends Scene {
         this.orbit(prop, 6, 0.6);
         gsap.delayedCall(0.1, () => {
           this.flashBoard(0x9be7ff);
-          b.popWhere((p) => Math.hypot(p.x - R, p.y - Math.max(R, Math.min(b.h - R, p.y))) > R - size * 1.25, R, 0);
+          this.zap((x, y) => Math.hypot(x - R, y - Math.max(R, Math.min(b.h - R, y))) > R - size * 1.25, R, 0, 0x9be7ff);
         });
         Sound.whoosh(0.6);
         break;
@@ -1400,10 +1509,10 @@ export class BattleScene extends Scene {
           this.flashBoard(0xffc0e8);
           this.fxTop.ring(this.boardX + cx, this.boardY + cy, 0xffc0e8, outer / 70, 0.45);
           b.shockwave(cx, cy, outer);
-          b.popWhere((p) => {
-            const d = Math.hypot(p.x - cx, p.y - cy);
+          this.zap((x, y) => {
+            const d = Math.hypot(x - cx, y - cy);
             return d > inner && d < outer;
-          }, cx, cy);
+          }, cx, cy, 0xffc0e8);
           Sound.explosion(false);
         });
         break;
@@ -1433,7 +1542,7 @@ export class BattleScene extends Scene {
           const cx = R + (((i + 0.5) / n) - 0.5) * R * 1.5 + (Math.random() - 0.5) * r;
           gsap.delayedCall(i * 0.16, () => this.slam(prop, cx, M, size, 220, () => {
             this.beam(this.boardX + cx, this.boardY + M, Math.PI / 2, size * 2);
-            b.popWhere((p) => Math.abs(p.x - cx) < size, cx, 0);
+            this.zap((x) => Math.abs(x - cx) < size, cx, 0, glow);
           }));
         }
         break;
@@ -1453,7 +1562,7 @@ export class BattleScene extends Scene {
             st.destroy();
             this.fxTop.ring(this.boardX + o.x, this.boardY + o.y, 0xfff27a, size / 70, 0.3);
             b.shockwave(o.x, o.y, size * 1.2);
-            b.popWhere((p) => Math.hypot(p.x - o.x, p.y - o.y) < size, o.x, o.y);
+            this.zap((x, y) => Math.hypot(x - o.x, y - o.y) < size, o.x, o.y, 0xfff27a);
             Sound.play('hitHeavy', { vol: 0.5, rate: 1.3 });
           } });
         }));
@@ -1466,10 +1575,93 @@ export class BattleScene extends Scene {
         gsap.delayedCall(0.45, () => {
           this.shake(10, 0.35);
           if (!this.feverOn) {
-            this.fever = Math.min(100, this.fever + 15);
+            this.fever = Math.min(100, this.fever + 30);
             if (this.fever >= 100 && this.phase === 'play') this.startFever();
           }
         });
+        break;
+      }
+      case 'shape': {
+        // the shape is drawn in light over the bowl, then everything inside it pops
+        const cx = R;
+        const cy = M + R * 0.1;
+        const S = size;
+        const inside = this.shapeTest(s.shape ?? 'heart', cx, cy, S);
+        const SHAPE_COLOR: Partial<Record<ShapeId, number>> = { heart: 0xff7ab8, star: 0xffe066, crescent: 0xfff2a0, spiral: 0x9be7ff, wave: 0x7ad7ff, checker: 0xc9a0ff };
+        const col = SHAPE_COLOR[s.shape ?? 'heart'] ?? glow;
+        this.slam(prop, cx, cy, S * 0.6, 240, () => {
+          this.flashBoard(col);
+          this.zap(inside, cx, cy, col);
+        });
+        break;
+      }
+      case 'trace':
+        this.orbit(prop, 4, 1);
+        this.traceT = s.dur ?? 4;
+        b.tracePop = true;
+        void banner(this.overlay, 'なぞって消せる！', 360, this.boardY + b.h * 0.45, { size: 60, color: 0x9be7ff, stroke: 0x003050, hold: 0.5 });
+        this.skillHit(4, 0x9be7ff);
+        break;
+      case 'timeStop': {
+        this.stopT = s.dur ?? 3;
+        this.flashBoard(0x9be7ff);
+        void banner(this.overlay, `時間停止 ${s.dur ?? 3}びょう！`, 360, this.boardY + b.h * 0.45, { size: 56, color: 0x9be7ff, stroke: 0x002040, hold: 0.4 });
+        Sound.play('powerUp2', { vol: 0.7, rate: 0.8 });
+        const cx = R;
+        const cy = M + R * 0.1;
+        gsap.delayedCall(0.3, () => this.zap((x, y) => Math.hypot(x - cx, y - cy) < size, cx, cy, 0x9be7ff));
+        break;
+      }
+      case 'reach':
+        this.reachT = s.dur ?? 5;
+        b.reachMod += 0.9;
+        this.orbit(prop, 5, 0.8);
+        void banner(this.overlay, 'はなれててもつながる！', 360, this.boardY + b.h * 0.45, { size: 52, color: 0xfff27a, stroke: 0x4a2a00, hold: 0.5 });
+        this.skillHit(6, 0xfff27a);
+        break;
+      case 'escalate': {
+        // waves of pops that grow: 2, 4, 6, ...
+        const waves = s.amount ?? 4;
+        for (let w = 0; w < waves; w++) {
+          gsap.delayedCall(w * 0.38, () => {
+            const pick = pieces().sort(() => Math.random() - 0.5).slice(0, 2 + w * 2);
+            this.volley(prop, pick, 80, true, 0.03);
+            Sound.play('hitHeavy', { vol: 0.4 + w * 0.08, rate: 1.4 - w * 0.08 });
+          });
+        }
+        break;
+      }
+      case 'cleanse': {
+        // every obstruction is swept away, then a blast
+        this.clearAllEffects();
+        for (const p of b.live()) if (p.status) b.clearStatus(p, true);
+        this.flashBoard(0xffffff);
+        void banner(this.overlay, 'じゃまをかいじょ！', 360, this.boardY + b.h * 0.45, { size: 56, color: 0xffffff, stroke: 0x205040, hold: 0.4 });
+        const cx = R;
+        const cy = M + R * 0.1;
+        gsap.delayedCall(0.3, () => this.zap((x, y) => Math.hypot(x - cx, y - cy) < size || false, cx, cy, 0xb0ffd0));
+        gsap.delayedCall(0.35, () => b.popWhere((p) => p.kind === 'rock', cx, cy));
+        break;
+      }
+      case 'vortex': {
+        // a whirlpool drags the pieces in, then the middle pops
+        const cx = R;
+        const cy = M + R * 0.1;
+        for (const p of pieces()) {
+          const dx = cx - p.x;
+          const dy = cy - p.y;
+          const d = Math.hypot(dx, dy) || 1;
+          p.body.velocity.x += (dx / d) * 900;
+          p.body.velocity.y += (dy / d) * 900;
+        }
+        this.orbit(prop, 8, 0.6);
+        Sound.whoosh(0.8);
+        gsap.delayedCall(0.55, () => this.zap((x, y) => Math.hypot(x - cx, y - cy) < size, cx, cy, 0xb48cff));
+        break;
+      }
+      case 'colorLeast': {
+        const c = order.filter((i) => counts[i] > 0).pop() ?? order[order.length - 1];
+        this.strikes(prop, pieces().filter((p) => p.color === c), () => b.popWhere((p) => p.color === c, R, M));
         break;
       }
       case 'allClear':

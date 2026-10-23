@@ -204,6 +204,16 @@ export class Machine3D {
     this.canvas.style.opacity = on ? '1' : '0';
   }
 
+  /** A still copy of the current frame (for 2D scenes that need the machine behind other art). */
+  snapshot(): HTMLCanvasElement {
+    this.renderer.render(this.scene, this.camera);
+    const c = document.createElement('canvas');
+    c.width = this.canvas.width;
+    c.height = this.canvas.height;
+    c.getContext('2d')?.drawImage(this.canvas, 0, 0);
+    return c;
+  }
+
   /** Projects a machine-space point to CSS pixels inside the canvas. */
   project(v: THREE.Vector3): { x: number; y: number } {
     const p = v.clone().applyMatrix4(this.rig.matrixWorld).project(this.camera);

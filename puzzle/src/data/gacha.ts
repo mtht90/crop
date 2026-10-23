@@ -7,6 +7,8 @@ export const COST_TEN = 300000;
 /** Coins for a duplicate of a character already at +99. */
 export const MAXED_COINS = 2000;
 export const PITY = 150;
+/** Chance per pull of the UR character (on top of the rarity rolls). */
+export const UR_RATE = 0.003;
 
 export interface PullResult {
   def: CharDef;
@@ -39,7 +41,7 @@ export function charRates(): { def: CharDef; rate: number }[] {
   const pool = gachaPool();
   const out: { def: CharDef; rate: number }[] = [];
   for (const r of ['SSR', 'SR', 'R', 'N'] as Rarity[]) {
-    const tier = pool.filter((c) => c.rarity === r);
+    const tier = pool.filter((c) => c.rarity === r && !c.ur);
     const limited = tier.filter((c) => c.limitedUntil);
     const regular = tier.filter((c) => !c.limitedUntil);
     for (const c of tier) {
@@ -47,6 +49,11 @@ export function charRates(): { def: CharDef; rate: number }[] {
       out.push({ def: c, rate: RARITY_INFO[r].rate * share });
     }
   }
+  const ur = pool.find((c) => c.ur);
+  const sum = out.reduce((a, o) => a + o.rate, 0);
+  // the UR roll comes first; everything else shares what is left
+  for (const o of out) o.rate *= (1 - (ur ? UR_RATE : 0)) / sum;
+  if (ur) out.push({ def: ur, rate: UR_RATE });
   return out.sort((a, b) => b.rate - a.rate);
 }
 
@@ -62,7 +69,7 @@ export function limitedNow(): CharDef[] {
 
 /** One character of a rarity; a limited one gets half of that rarity's pulls while it's out. */
 function pickFrom(rarity: Rarity): CharDef {
-  const pool = gachaPool().filter((c) => c.rarity === rarity);
+  const pool = gachaPool().filter((c) => c.rarity === rarity && !c.ur);
   const limited = pool.filter((c) => c.limitedUntil);
   const regular = pool.filter((c) => !c.limitedUntil);
   const from = limited.length && (!regular.length || Math.random() < 0.5) ? limited : regular;
@@ -74,8 +81,10 @@ export function pull(n: number): PullResult[] {
   const out: PullResult[] = [];
   for (let i = 0; i < n; i++) {
     const guarantee = n === 10 && i === n - 1 && !out.some((o) => rarityRank(o.def.rarity) >= 2);
-    const rarity = rollRarity(guarantee);
-    const def = pickFrom(rarity);
+    const ur = gachaPool().find((c) => c.ur);
+    const isUr = !!ur && Math.random() < UR_RATE;
+    const rarity = isUr ? 'SSR' : rollRarity(guarantee);
+    const def = isUr ? ur : pickFrom(rarity);
     const owned = Save.data.owned[def.id];
     const isNew = !owned;
     // duplicates level the skill first; past max skill level they limit-break, then turn into coins

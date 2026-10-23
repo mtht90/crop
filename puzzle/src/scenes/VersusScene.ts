@@ -14,6 +14,7 @@ import { fmtTime, nextLifeIn, spendLife } from '../data/play';
 import { CpuLink, Versus, findMatch, type VsLink } from '../core/Versus';
 import { BattleScene } from './BattleScene';
 import { HomeScene } from './HomeScene';
+import { urAura } from '../game/Aura';
 import { menuBar, rewardPopup } from './common';
 
 /** Versus lobby: looks for an online opponent, falls back to a CPU, then starts the match. */
@@ -38,6 +39,11 @@ export class VersusScene extends Scene {
     back.position.set(100, top + 46);
     this.col.addChild(title, back);
     const def = CHAR_BY_ID[Save.data.selected] ?? CHARACTERS[0];
+    if (def.ur) {
+      const aura = urAura(200);
+      aura.position.set(360, App.H * 0.42 - 20);
+      this.col.addChild(aura);
+    }
     const me = new Sprite(bigTexture(def));
     me.anchor.set(0.5, 0.6);
     me.scale.set(1.1);

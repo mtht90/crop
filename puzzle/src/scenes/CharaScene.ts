@@ -10,6 +10,7 @@ import { Effects } from '../game/Effects';
 import { COLORS, bigTexture, loadCharacterArt, pieceTexture } from '../art/PieceArt';
 import { CHARACTERS, inGacha, isReleased, shortDate, MAX_LV, MAX_SKILL_LV, charAtk, charCharge, expToNext, growthOf, skillTicketCost, type CharDef } from '../data/characters';
 import { HomeScene } from './HomeScene';
+import { urAura } from '../game/Aura';
 import { ScrollBox, menuBar } from './common';
 
 export class CharaScene extends Scene {
@@ -63,15 +64,27 @@ export class CharaScene extends Scene {
       g.roundRect(-cw / 2, -ch / 2, cw, ch, 26).fill(owned ? grad([[0, '#ffffff'], [1, '#e8deff']]) : 0x4a3a7a);
       g.roundRect(-cw / 2, -ch / 2, cw, ch, 26).stroke({ width: 6, color: owned ? 0xb07cff : 0x6a5a9a });
       c.addChild(g);
+      if (def.ur && owned) {
+        const aura = urAura(78);
+        aura.y = -14;
+        c.addChild(aura);
+      }
       const sp = new Sprite(bigTexture(def));
       sp.anchor.set(0.5, 0.55);
       sp.scale.set(150 / Math.max(1, sp.texture.width));
       sp.y = -10;
+
       if (!owned) {
         sp.tint = 0x1a0f30;
         sp.alpha = 0.9;
       }
       c.addChild(sp);
+      if (def.ur) {
+        const ub = new Graphics().roundRect(-cw / 2 + 8, -ch / 2 + 8, 58, 32, 16).fill(grad([[0, '#fff27a'], [1, '#ffb020']])).stroke({ width: 3, color: 0xffffff });
+        const ut = txt('UR', { size: 20, font: 'dela', stroke: 0x6a3a00, strokeWidth: 4 });
+        ut.position.set(-cw / 2 + 37, -ch / 2 + 24);
+        c.addChild(ub, ut);
+      }
       if (def.limitedUntil) {
         const lb = new Graphics().roundRect(cw / 2 - 74, -ch / 2 + 8, 66, 32, 16).fill(0xff3b5c);
         const lt = txt('限定', { size: 18, color: 0xffffff });
@@ -140,6 +153,11 @@ export class CharaScene extends Scene {
     box.eventMode = 'static';
     const glow = new Graphics().circle(0, -300, 170).fill({ color: 0xff8fd8, alpha: 0.25 });
     box.addChild(glow);
+    if (def.ur) {
+      const aura = urAura(200);
+      aura.y = -300;
+      box.addChild(aura);
+    }
     const big = new Sprite(bigTexture(def, 0));
     big.anchor.set(0.5, 0.6);
     big.scale.set(1.0);

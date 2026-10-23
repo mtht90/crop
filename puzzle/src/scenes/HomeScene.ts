@@ -31,6 +31,7 @@ import { RankingPanel, type RankUp } from './RankingPanel';
 import { ShopScene, shopPlus } from './ShopScene';
 import { VersusScene } from './VersusScene';
 import { Shop } from '../core/Shop';
+import { urAura } from '../game/Aura';
 import { COST_SINGLE, limitedNow } from '../data/gacha';
 
 export class HomeScene extends Scene {
@@ -147,6 +148,11 @@ export class HomeScene extends Scene {
     pedestal.ellipse(0, 140, 200, 44).fill(grad([[0, '#ffffff'], [1, '#e2d4ff']]));
     pedestal.ellipse(0, 140, 200, 44).stroke({ width: 5, color: 0x8a6cff });
     this.hero.addChild(pedestal);
+    if (def.ur) {
+      const aura = urAura(210);
+      aura.y = 40;
+      this.hero.addChild(aura);
+    }
     this.heroSprite = new Sprite(bigTexture(def));
     this.heroSprite.anchor.set(0.5, 0.75);
     this.heroSprite.scale.set(1.1);
