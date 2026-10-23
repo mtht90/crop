@@ -184,7 +184,7 @@ export class SkillButton extends Container {
     this.portrait.scale.set(96 / Math.max(1, this.portrait.texture.width));
     const mask = new Graphics().circle(0, 0, 51).fill(0xffffff);
     this.portrait.mask = mask;
-    this.readyLabel = txt(Save.data.settings.autoSkill ? 'はつどう！' : 'タップ！', { size: 20, font: 'dela', color: 0xfff27a, stroke: 0x8a1f00, strokeWidth: 6 });
+    this.readyLabel = txt(Save.data.settings.autoSkill ? 'はつどう！' : 'わざOK!', { size: 26, font: 'dela', color: 0xfff27a, stroke: 0x8a1f00, strokeWidth: 7 });
     this.readyLabel.y = 48;
     this.readyLabel.visible = false;
     this.nameLabel = txt(def.skill.name, { size: 18, stroke: 0x2a1630, strokeWidth: 5 });

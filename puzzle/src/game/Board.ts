@@ -163,6 +163,8 @@ export class Board {
   /** Skill mode: every piece the finger crosses pops, whatever its color. */
   tracePop = false;
   frozen = false;
+  /** Seconds the pile stays put after a skill clears an area, so the cleared shape can be seen. */
+  hold = 0;
   /** Obstruction state (boss attacks). */
   sealColor = -1;
   minExtra = 0;
@@ -333,7 +335,9 @@ export class Board {
 
   // --------------------------------------------------------------- update
   update(dt: number): void {
-    if (!this.frozen) {
+    const held = this.hold > 0;
+    if (held) this.hold -= dt;
+    if (!this.frozen && !held) {
       this.acc += dt;
       const step = 1 / 120;
       let n = 0;
@@ -901,6 +905,8 @@ export class Board {
       .filter((p) => p.kind !== 'bomb' && p.kind !== 'mega' && pred(p))
       .sort((p, q) => Math.hypot(p.x - ox, p.y - oy) - Math.hypot(q.x - ox, q.y - oy));
     for (const p of victims) p.state = 'popping';
+    // a big skill clear freezes the pile for a beat: the hole keeps the move's shape
+    if (cause === 'skill' && victims.length >= 4) this.hold = Math.max(this.hold, 0.9);
     const infos = victims.map((p) => this.info(p));
     const tok = this.ev.onResolve(infos, cause, { chain: victims.length, color: -1, x: ox, y: oy });
     victims.forEach((p, i) => this.popPiece(p, i * Math.min(0.03, 0.6 / Math.max(1, victims.length)), i, cause, tok));
@@ -1199,6 +1205,7 @@ export class Board {
     this.minExtra = 0;
     this.reachMod = 0;
     this.frozen = false;
+    this.hold = 0;
     this.world.o.gravityX = 0;
     this.world.o.gravity = BOARD_TUNING.gravity;
   }

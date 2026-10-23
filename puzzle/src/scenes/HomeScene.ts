@@ -9,8 +9,8 @@ import { MenuBackground } from '../game/Backdrop';
 import { BossView } from '../game/BossView';
 import { Effects } from '../game/Effects';
 import { COLORS, bigTexture, loadCharacterArt, pieceTexture } from '../art/PieceArt';
-import { CHARACTERS, CHAR_BY_ID, charAtk, growthOf } from '../data/characters';
-import { bossForLevel, bossHp } from '../data/bosses';
+import { CHARACTERS, CHAR_BY_ID, RARITY_INFO, charAtk, growthOf } from '../data/characters';
+import { bossForLevel, bossHp, fitsCap, stageCap } from '../data/bosses';
 import { gimmicksFor } from '../data/gimmicks';
 import { gimmickChips } from './gimmickChips';
 import { loadObstacleArt } from '../art/PieceArt';
@@ -24,7 +24,7 @@ import { bingoClaimable } from '../data/bingo';
 import { ITEMS, MAX_LIVES, fmtTime, lives, nextLifeIn, spendLife, type ItemId } from '../data/play';
 import { tex } from '../core/Loader';
 import { jungle } from '../game/Hud';
-import { CoinCounter, loginPopup, openSettings, rewardPopup } from './common';
+import { CoinCounter, loginPopup, openSettings, rewardPopup, stars } from './common';
 import { claimLogin } from '../data/login';
 import { Ranking, claimLives, claimWeekly, giftCount } from '../core/Ranking';
 import { RankingPanel, type RankUp } from './RankingPanel';
@@ -162,13 +162,22 @@ export class HomeScene extends Scene {
     this.heroSprite.on('pointertap', () => this.poke());
     this.hero.addChild(this.heroSprite);
     this.page.addChild(this.hero, this.fx.view);
+    const rinfo = RARITY_INFO[def.rarity];
     const nameRow = new Container();
-    nameRow.position.set(360, heroY + 235);
+    nameRow.position.set(360, heroY + 225);
+    const rb = new Graphics().roundRect(-40, -22, 80, 44, 22).fill(def.ur ? 0xffb020 : rinfo.color);
+    rb.roundRect(-40, -22, 80, 44, 22).stroke({ width: 3, color: 0xffffff });
+    rb.x = -170;
+    const rt = txt(def.ur ? 'UR' : def.rarity, { size: 26, font: 'dela', stroke: 0x2a1630, strokeWidth: 5 });
+    rt.x = -170;
     const nm = txt(`${def.name}  Lv.${owned.lv}${owned.plus ? `+${owned.plus}` : ''}`, { size: 40, stroke: 0x2a1630, strokeWidth: 9 });
-    nameRow.addChild(nm);
+    nm.x = 30;
+    nameRow.addChild(rb, rt, nm);
+    const st = stars(def.ur ? 5 : rinfo.stars, 30, def.ur ? 5 : 4);
+    st.position.set(360, heroY + 275);
     const info = txt(`こうげき ${charAtk(def, growthOf(owned))}   必殺技「${def.skill.name}」`, { size: 24, stroke: 0x2a1630, strokeWidth: 6 });
     info.position.set(360, heroY + 318);
-    this.page.addChild(nameRow, info);
+    this.page.addChild(nameRow, st, info);
 
     // buttons
     const by = H - App.safeBottom - 120;
@@ -272,7 +281,7 @@ export class HomeScene extends Scene {
     bl.position.set(-270, -62);
     const bn = txt(`Lv.${lv}  ${bdef.name}`, { size: 40, stroke: 0x2a1630, strokeWidth: 8, anchor: [0, 0.5] });
     bn.position.set(-270, -12);
-    const bh = txt(`討伐ライン ${fmt(bossHp(lv))}`, { size: 26, color: 0xffb8d8, anchor: [0, 0.5] });
+    const bh = txt(`3フロア＋ボス  討伐ライン ${fmt(bossHp(lv))}`, { size: 24, color: 0xffb8d8, anchor: [0, 0.5] });
     bh.position.set(-270, 30);
     // obstruction chips (tap for details)
     const gt = gimmickChips(gimmicksFor(lv), 352, () => this.col);
@@ -285,6 +294,15 @@ export class HomeScene extends Scene {
     bossClip.addChild(this.boss);
     bossClip.mask = bm;
     c.addChild(bm, bossClip, bl, bn, bh, gt);
+    const cap = stageCap(lv);
+    if (cap) {
+      // rarity-limited stage
+      const tag = new Container();
+      const tl = txt(cap === 'N' ? 'Nキャラ限定' : `${cap}以下限定`, { size: 22, color: 0xffffff, stroke: 0x8a0030, strokeWidth: 5 });
+      tag.addChild(new Graphics().roundRect(-tl.width / 2 - 14, -20, tl.width + 28, 40, 20).fill(0xff3b7a).stroke({ width: 3, color: 0xffffff }), tl);
+      tag.position.set(bl.x + bl.width + 20 + tl.width / 2 + 14, -62);
+      c.addChild(tag);
+    }
     this.battleBtn?.setSub(`Lv.${lv} ${bdef.name}に${current ? 'ちょうせん' : 'さいせん'}`);
   }
 
@@ -414,6 +432,13 @@ export class HomeScene extends Scene {
   }
 
   private startBattle(): void {
+    const cap = stageCap(Save.fightLv());
+    const def = CHAR_BY_ID[Save.data.selected];
+    if (def && !fitsCap(def, cap)) {
+      Sound.play('ui_error');
+      rewardPopup(this.col, 'キャラせいげん', [cap === 'N' ? 'このステージはNキャラだけ' : `このステージは${cap}以下のキャラだけ`, 'キャラ画面でえらびなおしてね'], () => Scenes.go(() => new CharaScene()));
+      return;
+    }
     if (!spendLife()) return this.noLives();
     const items = [...Save.data.pendingItems];
     Save.data.pendingItems = [];

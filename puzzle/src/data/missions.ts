@@ -27,56 +27,90 @@ export type StatKey = keyof Stats | 'bossLv' | 'owned' | 'pulls' | 'best' | 'cha
 
 // ------------------------------------------------------------------ daily
 const DAILY_POOL: Mission[] = [
-  { id: 'd_play', text: 'バトルを3回あそぶ', stat: 'plays', goal: 3, reward: { coins: 1600, lives: 1 } },
-  { id: 'd_pops', text: 'ぷにを300こ消す', stat: 'pops', goal: 300, reward: { coins: 2000 } },
-  { id: 'd_fever', text: 'フィーバーを3回する', stat: 'fevers', goal: 3, reward: { coins: 2000 } },
-  { id: 'd_skill', text: '必殺技を3回つかう', stat: 'skills', goal: 3, reward: { coins: 1600 } },
-  { id: 'd_bomb', text: 'ボムを5こつかう', stat: 'bombs', goal: 5, reward: { coins: 1600 } },
-  { id: 'd_chain7', text: '7こ以上つなぐのを10回', stat: 'chains7', goal: 10, reward: { coins: 2000 } },
-  { id: 'd_broken', text: 'ボスの妨害を15こ消す', stat: 'broken', goal: 15, reward: { coins: 2000 } },
-  { id: 'd_defeat', text: 'ボスを1回たおす', stat: 'defeats', goal: 1, reward: { coins: 2400, lives: 1 } },
-  { id: 'd_combo', text: '1回のバトルで30コンボ', stat: 'maxCombo', goal: 30, reward: { coins: 2400 } },
+  { id: 'd_play', text: 'バトルを3回あそぶ', stat: 'plays', goal: 3, reward: { coins: 1600, lives: 3 } },
+  { id: 'd_pops', text: 'ぷにを300こ消す', stat: 'pops', goal: 300, reward: { coins: 2000, lives: 2 } },
+  { id: 'd_fever', text: 'フィーバーを3回する', stat: 'fevers', goal: 3, reward: { coins: 2000, lives: 2 } },
+  { id: 'd_skill', text: '必殺技を3回つかう', stat: 'skills', goal: 3, reward: { coins: 1600, lives: 2 } },
+  { id: 'd_bomb', text: 'ボムを5こつかう', stat: 'bombs', goal: 5, reward: { coins: 1600, lives: 2 } },
+  { id: 'd_chain7', text: '7こ以上つなぐのを10回', stat: 'chains7', goal: 10, reward: { coins: 2000, lives: 2 } },
+  { id: 'd_broken', text: 'ボスの妨害を15こ消す', stat: 'broken', goal: 15, reward: { coins: 2000, lives: 2 } },
+  { id: 'd_defeat', text: 'ボスを1回たおす', stat: 'defeats', goal: 1, reward: { coins: 2400, lives: 3 } },
+  { id: 'd_combo', text: '1回のバトルで30コンボ', stat: 'maxCombo', goal: 30, reward: { coins: 2400, lives: 2 } },
 ];
 export const DAILY_COUNT = 3;
 /** Clearing every daily mission adds this. */
-export const DAILY_BONUS: Reward = { tickets: 1, lives: 3 };
+export const DAILY_BONUS: Reward = { tickets: 1, lives: 8 };
 
 // ----------------------------------------------------------- achievements
-export const ACHIEVEMENTS: Mission[] = [
-  { id: 'a_lv3', text: 'ボスLv.3をたおす', stat: 'bossLv', goal: 4, reward: { coins: 5000, lives: 3 } },
-  { id: 'a_lv5', text: 'ボスLv.5をたおす', stat: 'bossLv', goal: 6, reward: { tickets: 1 } },
-  { id: 'a_lv8', text: 'ボスLv.8をたおす', stat: 'bossLv', goal: 9, reward: { coins: 20000 } },
-  { id: 'a_lv10', text: 'ボスLv.10をたおす', stat: 'bossLv', goal: 11, reward: { tickets: 2 } },
-  { id: 'a_lv15', text: 'ボスLv.15をたおす', stat: 'bossLv', goal: 16, reward: { tickets: 3, coins: 30000 } },
-  { id: 'a_lv20', text: 'ボスLv.20をたおす', stat: 'bossLv', goal: 21, reward: { wallpaper: 'treasure', tickets: 5 } },
-  { id: 'a_lv30', text: 'ボスLv.30をたおす', stat: 'bossLv', goal: 31, reward: { frame: 'rainbow', tickets: 10, skillTickets: 1 } },
-  { id: 'a_pops1', text: 'ぷにをあわせて1,000こ消す', stat: 'pops', goal: 1000, reward: { coins: 8000 } },
-  { id: 'a_pops2', text: 'ぷにをあわせて5,000こ消す', stat: 'pops', goal: 5000, reward: { coins: 10000 } },
-  { id: 'a_pops3', text: 'ぷにをあわせて20,000こ消す', stat: 'pops', goal: 20000, reward: { tickets: 2 } },
-  { id: 'a_pops4', text: 'ぷにをあわせて50,000こ消す', stat: 'pops', goal: 50000, reward: { coins: 120000 } },
-  { id: 'a_chain15', text: '1回で15こつなぐ', stat: 'maxChain', goal: 15, reward: { coins: 8000 } },
-  { id: 'a_chain25', text: '1回で25こつなぐ', stat: 'maxChain', goal: 25, reward: { coins: 30000 } },
-  { id: 'a_chain40', text: '1回で40こつなぐ', stat: 'maxChain', goal: 40, reward: { tickets: 3 } },
-  { id: 'a_score1', text: 'スコア30万点をとる', stat: 'best', goal: 300000, reward: { coins: 12000 } },
-  { id: 'a_score2', text: 'スコア100万点をとる', stat: 'best', goal: 1000000, reward: { coins: 20000 } },
-  { id: 'a_score3', text: 'スコア300万点をとる', stat: 'best', goal: 3000000, reward: { frame: 'meadow', tickets: 3 } },
-  { id: 'a_fever1', text: 'フィーバーをあわせて10回', stat: 'fevers', goal: 10, reward: { coins: 12000, lives: 3 } },
-  { id: 'a_fever2', text: 'フィーバーをあわせて50回', stat: 'fevers', goal: 50, reward: { tickets: 2 } },
-  { id: 'a_broken1', text: '妨害をあわせて50こ消す', stat: 'broken', goal: 50, reward: { coins: 12000 } },
-  { id: 'a_broken2', text: '妨害をあわせて300こ消す', stat: 'broken', goal: 300, reward: { tickets: 2 } },
-  { id: 'a_skill', text: '必殺技をあわせて30回', stat: 'skills', goal: 30, reward: { coins: 12000 } },
-  { id: 'a_own5', text: 'キャラを5体あつめる', stat: 'owned', goal: 5, reward: { coins: 12000, lives: 3 } },
-  { id: 'a_own10', text: 'キャラを10体あつめる', stat: 'owned', goal: 10, reward: { tickets: 2 } },
-  { id: 'a_own15', text: 'キャラを15体あつめる', stat: 'owned', goal: 15, reward: { coins: 60000 } },
-  { id: 'a_ownAll', text: 'キャラをぜんぶあつめる', stat: 'owned', goal: CHARACTERS.filter((c) => !c.limitedUntil && isReleased(c)).length, reward: { frame: 'gold', tickets: 5 } },
-  { id: 'a_clv10', text: 'キャラをLv.10にする', stat: 'charLv', goal: 10, reward: { coins: 12000 } },
-  { id: 'a_clv30', text: 'キャラをLv.30にする', stat: 'charLv', goal: 30, reward: { tickets: 2 } },
-  { id: 'a_clv50', text: 'キャラをLv.50にする', stat: 'charLv', goal: 50, reward: { tickets: 2 } },
-  { id: 'a_clv90', text: 'キャラをLv.90にする', stat: 'charLv', goal: 90, reward: { skillTickets: 1 } },
-  { id: 'a_play10', text: 'バトルを10回あそぶ', stat: 'plays', goal: 10, reward: { coins: 8000 } },
-  { id: 'a_play50', text: 'バトルを50回あそぶ', stat: 'plays', goal: 50, reward: { tickets: 3 } },
-  { id: 'a_pull10', text: 'ガチャを10回まわす', stat: 'pulls', goal: 10, reward: { coins: 12000 } },
+const BASE: Mission[] = [
+  { id: 'a_lv3', text: 'ボスLv.3をたおす', stat: 'bossLv', goal: 4, reward: { coins: 5000, lives: 6 } },
+  { id: 'a_lv5', text: 'ボスLv.5をたおす', stat: 'bossLv', goal: 6, reward: { tickets: 1, lives: 5 } },
+  { id: 'a_lv8', text: 'ボスLv.8をたおす', stat: 'bossLv', goal: 9, reward: { coins: 20000, lives: 5 } },
+  { id: 'a_lv10', text: 'ボスLv.10をたおす', stat: 'bossLv', goal: 11, reward: { tickets: 2, lives: 5 } },
+  { id: 'a_lv15', text: 'ボスLv.15をたおす', stat: 'bossLv', goal: 16, reward: { tickets: 3, coins: 30000, lives: 5 } },
+  { id: 'a_lv20', text: 'ボスLv.20をたおす', stat: 'bossLv', goal: 21, reward: { wallpaper: 'treasure', tickets: 5, lives: 5 } },
+  { id: 'a_lv30', text: 'ボスLv.30をたおす', stat: 'bossLv', goal: 31, reward: { frame: 'rainbow', tickets: 10, skillTickets: 1, lives: 5 } },
+  { id: 'a_pops1', text: 'ぷにをあわせて1,000こ消す', stat: 'pops', goal: 1000, reward: { coins: 8000, lives: 5 } },
+  { id: 'a_pops2', text: 'ぷにをあわせて5,000こ消す', stat: 'pops', goal: 5000, reward: { coins: 10000, lives: 5 } },
+  { id: 'a_pops3', text: 'ぷにをあわせて20,000こ消す', stat: 'pops', goal: 20000, reward: { tickets: 2, lives: 5 } },
+  { id: 'a_pops4', text: 'ぷにをあわせて50,000こ消す', stat: 'pops', goal: 50000, reward: { coins: 120000, lives: 5 } },
+  { id: 'a_chain15', text: '1回で15こつなぐ', stat: 'maxChain', goal: 15, reward: { coins: 8000, lives: 5 } },
+  { id: 'a_chain25', text: '1回で25こつなぐ', stat: 'maxChain', goal: 25, reward: { coins: 30000, lives: 5 } },
+  { id: 'a_chain40', text: '1回で40こつなぐ', stat: 'maxChain', goal: 40, reward: { tickets: 3, lives: 5 } },
+  { id: 'a_score1', text: 'スコア30万点をとる', stat: 'best', goal: 300000, reward: { coins: 12000, lives: 5 } },
+  { id: 'a_score2', text: 'スコア100万点をとる', stat: 'best', goal: 1000000, reward: { coins: 20000, lives: 5 } },
+  { id: 'a_score3', text: 'スコア300万点をとる', stat: 'best', goal: 3000000, reward: { frame: 'meadow', tickets: 3, lives: 5 } },
+  { id: 'a_fever1', text: 'フィーバーをあわせて10回', stat: 'fevers', goal: 10, reward: { coins: 12000, lives: 6 } },
+  { id: 'a_fever2', text: 'フィーバーをあわせて50回', stat: 'fevers', goal: 50, reward: { tickets: 2, lives: 5 } },
+  { id: 'a_broken1', text: '妨害をあわせて50こ消す', stat: 'broken', goal: 50, reward: { coins: 12000, lives: 5 } },
+  { id: 'a_broken2', text: '妨害をあわせて300こ消す', stat: 'broken', goal: 300, reward: { tickets: 2, lives: 5 } },
+  { id: 'a_skill', text: '必殺技をあわせて30回', stat: 'skills', goal: 30, reward: { coins: 12000, lives: 5 } },
+  { id: 'a_own5', text: 'キャラを5体あつめる', stat: 'owned', goal: 5, reward: { coins: 12000, lives: 6 } },
+  { id: 'a_own10', text: 'キャラを10体あつめる', stat: 'owned', goal: 10, reward: { tickets: 2, lives: 5 } },
+  { id: 'a_own15', text: 'キャラを15体あつめる', stat: 'owned', goal: 15, reward: { coins: 60000, lives: 5 } },
+  { id: 'a_ownAll', text: 'キャラをぜんぶあつめる', stat: 'owned', goal: CHARACTERS.filter((c) => !c.limitedUntil && isReleased(c)).length, reward: { frame: 'gold', tickets: 5, lives: 5 } },
+  { id: 'a_clv10', text: 'キャラをLv.10にする', stat: 'charLv', goal: 10, reward: { coins: 12000, lives: 5 } },
+  { id: 'a_clv30', text: 'キャラをLv.30にする', stat: 'charLv', goal: 30, reward: { tickets: 2, lives: 5 } },
+  { id: 'a_clv50', text: 'キャラをLv.50にする', stat: 'charLv', goal: 50, reward: { tickets: 2, lives: 5 } },
+  { id: 'a_clv90', text: 'キャラをLv.90にする', stat: 'charLv', goal: 90, reward: { skillTickets: 1, lives: 5 } },
+  { id: 'a_play10', text: 'バトルを10回あそぶ', stat: 'plays', goal: 10, reward: { coins: 8000, lives: 5 } },
+  { id: 'a_play50', text: 'バトルを50回あそぶ', stat: 'plays', goal: 50, reward: { tickets: 3, lives: 5 } },
+  { id: 'a_pull10', text: 'ガチャを10回まわす', stat: 'pulls', goal: 10, reward: { coins: 12000, lives: 5 } },
 ];
+
+/**
+ * Long tiers on top of the hand-made list: practically endless goals for every counter.
+ * Lives are the main reward (every tier), with coins and the odd ticket.
+ */
+function tiers(stat: StatKey, label: (g: number) => string, goals: number[], idp: string): Mission[] {
+  return goals.map((goal, i) => ({
+    id: `x_${idp}_${goal}`,
+    text: label(goal),
+    stat,
+    goal,
+    reward: { lives: 5 + Math.min(15, i * 2), ...(i % 3 === 2 ? { tickets: 1 + Math.floor(i / 3) } : { coins: 10000 + i * 15000 }) },
+  }));
+}
+const fmtN = (n: number): string => n.toLocaleString('en-US');
+const MORE: Mission[] = [
+  ...tiers('bossLv', (g) => `ボスLv.${g - 1}をたおす`, [41, 51, 61, 71, 81, 91, 101, 121, 151, 201, 251, 301, 401, 501], 'lv'),
+  ...tiers('pops', (g) => `ぷにをあわせて${fmtN(g)}こ消す`, [100000, 200000, 500000, 1000000, 2000000, 5000000, 10000000, 30000000], 'pops'),
+  ...tiers('maxChain', (g) => `1回で${g}こつなぐ`, [50, 60, 70, 80, 100, 120], 'chain'),
+  ...tiers('best', (g) => `スコア${fmtN(g)}点をとる`, [5000000, 10000000, 20000000, 50000000, 100000000, 300000000], 'best'),
+  ...tiers('fevers', (g) => `フィーバーをあわせて${fmtN(g)}回`, [100, 200, 500, 1000, 2000, 5000, 10000], 'fever'),
+  ...tiers('broken', (g) => `妨害をあわせて${fmtN(g)}こ消す`, [1000, 3000, 10000, 30000, 100000], 'broken'),
+  ...tiers('skills', (g) => `必殺技をあわせて${fmtN(g)}回`, [100, 300, 1000, 3000, 10000, 30000], 'skill'),
+  ...tiers('bombs', (g) => `ボムをあわせて${fmtN(g)}こつかう`, [100, 500, 2000, 10000, 50000], 'bomb'),
+  ...tiers('chains7', (g) => `7こ以上つなぐのをあわせて${fmtN(g)}回`, [100, 500, 2000, 10000, 50000], 'c7'),
+  ...tiers('maxCombo', (g) => `1回のバトルで${g}コンボ`, [50, 80, 120, 200, 300], 'combo'),
+  ...tiers('owned', (g) => `キャラを${g}体あつめる`, [20, 25, 30, 35, 40, 45, 50, 55], 'own'),
+  ...tiers('charLv', (g) => `キャラをLv.${g}にする`, [60, 70, 80, 100], 'clv'),
+  ...tiers('plays', (g) => `バトルを${fmtN(g)}回あそぶ`, [100, 200, 500, 1000, 2000, 5000, 10000, 30000], 'play'),
+  ...tiers('defeats', (g) => `ボスをあわせて${fmtN(g)}回たおす`, [10, 30, 100, 300, 1000, 3000, 10000], 'defeat'),
+  ...tiers('pulls', (g) => `ガチャをあわせて${fmtN(g)}回まわす`, [50, 100, 200, 500, 1000, 3000], 'pull'),
+];
+
+export const ACHIEVEMENTS: Mission[] = [...BASE, ...MORE];
 
 const ALL = Object.fromEntries([...DAILY_POOL, ...ACHIEVEMENTS].map((m) => [m.id, m])) as Record<string, Mission>;
 

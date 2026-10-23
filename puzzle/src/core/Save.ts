@@ -51,6 +51,8 @@ export interface SaveData {
   notice?: string;
   /** Economy version: v2 pays ~1,000–6,000 coins a round (old balances are scaled up). */
   econ: number;
+  /** 1: the skill became manual by default (old saves get switched once). */
+  skillV: number;
   /** Lives: one per round, up to 5, one back every 10 minutes. `lifeAt` = when the next one started refilling. */
   lives: number;
   lifeAt: number;
@@ -92,6 +94,7 @@ function defaults(): SaveData {
     pity: 0,
     tutorialDone: false,
     econ: 2,
+    skillV: 0,
     lives: 5,
     lifeAt: 0,
     pendingItems: [],
@@ -104,7 +107,7 @@ function defaults(): SaveData {
     daily: { date: '', ids: [], stats: {}, claimed: [], bonus: false },
     claimed: [],
     look: { wallpaper: 'felt', frame: 'wood', line: 'basic', wallpapers: ['felt'], frames: ['wood'], lines: ['basic'] },
-    settings: { bgm: 0.7, sfx: 0.9, haptics: true, colorAssist: false, battleBgm: 'auto', autoSkill: true },
+    settings: { bgm: 0.7, sfx: 0.9, haptics: true, colorAssist: false, battleBgm: 'auto', autoSkill: false },
   };
 }
 
@@ -132,6 +135,11 @@ function migrate(d: SaveData, econ = 2): SaveData {
     lines.push(`${r.name} → ${coins}コイン`);
   }
   if (!d.owned[d.selected]) d.selected = 'kh_a';
+  // the special move is fired by hand now (it can still be set to automatic)
+  if (!(d.skillV >= 1)) {
+    d.settings.autoSkill = false;
+    d.skillV = 1;
+  }
   // economy v2: gacha went from 300 to 10,000 coins, so old balances scale with it
   if (econ < 2) {
     d.coins = Math.round(d.coins * (10000 / 300));

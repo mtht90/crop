@@ -296,15 +296,14 @@ export class GachaScene extends Scene {
     list.forEach(({ def, rate }, i) => {
       const col = i < rows ? 0 : 1;
       const y = -h / 2 + 120 + (i % rows) * lh;
-      const mark = def.ur ? 'UR ' : def.rarity === 'SSR' ? '★★' : def.rarity === 'SR' ? '★' : '';
-      const nm = txt(`${mark}${def.name}`, { size: 18, color: 0x4a2f7a, anchor: [0, 0.5] });
+      const nm = txt(`[${def.ur ? 'UR' : def.rarity}] ${def.name}`, { size: 18, color: 0x4a2f7a, anchor: [0, 0.5] });
       nm.position.set(-300 + col * 310, y);
       if (nm.width > 190) nm.scale.set(190 / nm.width);
       const v = txt(`${(rate * 100).toFixed(2)}%`, { size: 18, color: 0x7a6a9a, anchor: [1, 0.5] });
       v.position.set(-20 + col * 310, y);
       box.addChild(nm, v);
     });
-    const n = txt(`★のキャラ（★★をふくむ）は10連で1体以上確定\n★★のキャラは${PITY}回引くまでに必ず1体出ます`, { size: 18, color: 0x7a6a9a, align: 'center', lineHeight: 28 });
+    const n = txt(`10連はSR以上が1体以上確定\nSSRは${PITY}回引くまでに必ず1体出ます`, { size: 18, color: 0x7a6a9a, align: 'center', lineHeight: 28 });
     n.y = h / 2 - 66;
     box.addChild(n);
     ov.addChild(dim, box);
@@ -549,6 +548,14 @@ export class GachaScene extends Scene {
     gsap.to(art, { y: -20, duration: 0.8, yoyo: true, repeat: -1, ease: 'sine.inOut', delay: 0.7 });
     Sound.play('powerUp2', { vol: 0.7 });
     haptic(20);
+    const ri = RARITY_INFO[res.def.rarity];
+    const rb = new Container();
+    const rbg = new Graphics().roundRect(-70, -30, 140, 60, 30).fill(res.def.ur ? 0xffb020 : ri.color);
+    rbg.roundRect(-70, -30, 140, 60, 30).stroke({ width: 5, color: 0xffffff });
+    rb.addChild(rbg, txt(res.def.ur ? 'UR' : res.def.rarity, { size: 38, font: 'dela', stroke: 0x2a1630, strokeWidth: 7 }));
+    rb.position.set(0, 220);
+    c.addChild(rb);
+    popIn(rb, 0.3);
     const name = txt(res.def.name, { size: 64, font: 'dela', stroke: 0x2a1630, strokeWidth: 12 });
     name.y = 300;
     c.addChild(name);
@@ -653,17 +660,39 @@ export class GachaScene extends Scene {
       ball.scale.set(0.3);
       c.addChild(ball);
       balls.push(ball);
-      const d = 0.15 + i * 0.08;
-      gsap.to(ball, { x: slots[i].x, y: slots[i].y, duration: 0.55, delay: d, ease: 'back.out(1.4)' });
-      gsap.to(ball.scale, { x: 1, y: 1, duration: 0.55, delay: d, ease: 'back.out(1.6)' });
-      gsap.delayedCall(d, () => Sound.play('drop', { vol: 0.35, rate: 0.9 + Math.random() * 0.3 }));
+      // after the machine rumbles, each capsule pops out of the chute, arcs up and bounces into its spot
+      const d = 1.3 + i * 0.26;
+      ball.alpha = 0;
+      const peak = Math.max(App.safeTop + 40, Math.min(from.y, slots[i].y) - 150 - Math.random() * 60);
+      gsap.set(ball, { alpha: 1, delay: d });
+      gsap.to(ball, { x: slots[i].x, duration: 0.75, delay: d, ease: 'power1.out' });
+      gsap.to(ball, { y: peak, duration: 0.3, delay: d, ease: 'power2.out' });
+      gsap.to(ball, { y: slots[i].y, duration: 0.45, delay: d + 0.3, ease: 'bounce.out' });
+      gsap.to(ball, { rotation: (Math.random() < 0.5 ? -1 : 1) * Math.PI * 2, duration: 0.75, delay: d, ease: 'power1.out' });
+      gsap.to(ball.scale, { x: 1, y: 1, duration: 0.5, delay: d, ease: 'back.out(1.6)' });
+      gsap.delayedCall(d, () => {
+        Sound.play('drop', { vol: 0.5, rate: 0.9 + Math.random() * 0.3 });
+        Sound.play('pep', { vol: 0.3, rate: 1 + i * 0.05 });
+        this.fx.burst(from.x, from.y, { count: 8, tex: 'star_06', tint: [0xffffff, 0xfff27a], add: true, speed: [100, 300], size: [0.06, 0.12], life: [0.3, 0.5] });
+      });
+      gsap.delayedCall(d + 0.75, () => Sound.play('soft', { vol: 0.35 }));
       gsap.to(tap.scale, { x: 1.12, y: 1.12, duration: 0.45, yoyo: true, repeat: -1, ease: 'sine.inOut', delay: Math.random() * 0.4 });
-      gsap.to(ball, { y: `+=${6}`, duration: 1 + Math.random() * 0.4, yoyo: true, repeat: -1, ease: 'sine.inOut', delay: d + 0.6 });
+      gsap.to(ball, { y: `+=${6}`, duration: 1 + Math.random() * 0.4, yoyo: true, repeat: -1, ease: 'sine.inOut', delay: d + 0.8 });
       ball.eventMode = 'static';
       ball.cursor = 'pointer';
       ball.on('pointertap', () => void open(i));
     });
-    gsap.to(all, { alpha: 1, duration: 0.3, delay: 1.2 });
+    // the machine rumbles and shakes before anything comes out
+    const shaker = still ?? this.machine;
+    const sx = shaker.x;
+    Sound.play('diceShake', { vol: 0.9 });
+    for (let k = 0; k < 6; k++) gsap.delayedCall(k * 0.18, () => Sound.play('switch', { vol: 0.5, rate: 0.7 + k * 0.08 }));
+    gsap.to(shaker, { x: sx + 8, duration: 0.05, yoyo: true, repeat: 21, ease: 'sine.inOut', onComplete: () => void (shaker.x = sx) });
+    gsap.delayedCall(1.15, () => {
+      this.flash(0xffffff, 0.25);
+      haptic([20, 30, 20]);
+    });
+    gsap.to(all, { alpha: 1, duration: 0.3, delay: 1.3 + results.length * 0.26 + 0.6 });
 
     const open = async (i: number, quick = false): Promise<void> => {
       if (opened[i] || (busy && !quick)) return;

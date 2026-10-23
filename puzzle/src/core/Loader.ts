@@ -1,7 +1,7 @@
 import { Assets, Texture } from 'pixi.js';
 import { ALL_TRACKS, SCENE_TRACKS } from '../data/music';
 import { Sound } from './Audio';
-import { BOSSES, BOSS_POSES, bossAlias } from '../data/bosses';
+import { BOSSES, BOSS_POSES, ENEMIES, bossAlias } from '../data/bosses';
 import { CHARACTERS } from '../data/characters';
 import { loadCharacterArt } from '../art/PieceArt';
 
@@ -19,6 +19,7 @@ export function tex(alias: string): Texture {
 export async function loadAll(onProgress: (p: number) => void): Promise<void> {
   const list: { alias: string; src: string }[] = [];
   for (const b of BOSSES) for (const p of BOSS_POSES) list.push({ alias: bossAlias(b.id, p), src: `${A}/boss/${b.id}_${p}.webp` });
+  for (const b of ENEMIES) for (const p of BOSS_POSES) list.push({ alias: bossAlias(b.id, p), src: `${A}/enemy/${b.id.slice(2)}_${p}.webp` });
   for (const n of JUNGLE) list.push({ alias: `jungle:${n}`, src: `${A}/jungle/${n}.png` });
   for (let i = 1; i <= 4; i++) list.push({ alias: `menubg:${i}`, src: `${A}/menubg/${i}.webp` });
   for (const n of ['heart', 'heart_empty', 'coins', 'star']) list.push({ alias: `ui:${n}`, src: `${A}/ui/${n}.webp` });

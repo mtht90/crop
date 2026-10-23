@@ -8,10 +8,10 @@ import { Button, grad, panel, popIn, txt } from '../core/UI';
 import { MenuBackground } from '../game/Backdrop';
 import { Effects } from '../game/Effects';
 import { COLORS, bigTexture, loadCharacterArt, pieceTexture } from '../art/PieceArt';
-import { CHARACTERS, inGacha, isReleased, shortDate, MAX_LV, MAX_SKILL_LV, charAtk, charCharge, expToNext, growthOf, skillTicketCost, type CharDef } from '../data/characters';
+import { CHARACTERS, inGacha, isReleased, shortDate, MAX_LV, MAX_SKILL_LV, RARITY_INFO, charAtk, charCharge, expToNext, growthOf, skillTicketCost, type CharDef } from '../data/characters';
 import { HomeScene } from './HomeScene';
 import { urAura } from '../game/Aura';
-import { ScrollBox, menuBar } from './common';
+import { ScrollBox, stars, menuBar } from './common';
 
 export class CharaScene extends Scene {
   private bg = new MenuBackground(0x3a7bff, 0x7a4dff, 3);
@@ -59,10 +59,11 @@ export class CharaScene extends Scene {
       const y = Math.floor(i / cols) * (ch + 14) + ch / 2;
       c.position.set(x, y);
       const owned = Save.data.owned[def.id];
+      const r = RARITY_INFO[def.rarity];
       const g = new Graphics();
       g.roundRect(-cw / 2, -ch / 2 + 6, cw, ch, 26).fill({ color: 0x000000, alpha: 0.25 });
       g.roundRect(-cw / 2, -ch / 2, cw, ch, 26).fill(owned ? grad([[0, '#ffffff'], [1, '#e8deff']]) : 0x4a3a7a);
-      g.roundRect(-cw / 2, -ch / 2, cw, ch, 26).stroke({ width: 6, color: owned ? 0xb07cff : 0x6a5a9a });
+      g.roundRect(-cw / 2, -ch / 2, cw, ch, 26).stroke({ width: 6, color: owned ? (def.ur ? 0xffb020 : r.color) : 0x6a5a9a });
       c.addChild(g);
       if (def.ur && owned) {
         const aura = urAura(78);
@@ -79,6 +80,12 @@ export class CharaScene extends Scene {
         sp.alpha = 0.9;
       }
       c.addChild(sp);
+      if (!def.ur) {
+        const rb = new Graphics().roundRect(-cw / 2 + 8, -ch / 2 + 8, 62, 32, 16).fill(owned ? r.color : 0x6a5a9a);
+        const rt = txt(def.rarity, { size: 20, font: 'dela', stroke: 0x2a1630, strokeWidth: 4 });
+        rt.position.set(-cw / 2 + 39, -ch / 2 + 24);
+        c.addChild(rb, rt);
+      }
       if (def.ur) {
         const ub = new Graphics().roundRect(-cw / 2 + 8, -ch / 2 + 8, 58, 32, 16).fill(grad([[0, '#fff27a'], [1, '#ffb020']])).stroke({ width: 3, color: 0xffffff });
         const ut = txt('UR', { size: 20, font: 'dela', stroke: 0x6a3a00, strokeWidth: 4 });
@@ -151,7 +158,8 @@ export class CharaScene extends Scene {
     box.scale.set(s);
     box.addChild(panel(640, h, { color: 0xfdf7ff }));
     box.eventMode = 'static';
-    const glow = new Graphics().circle(0, -300, 170).fill({ color: 0xff8fd8, alpha: 0.25 });
+    const r = RARITY_INFO[def.rarity];
+    const glow = new Graphics().circle(0, -300, 170).fill({ color: def.ur ? 0xffd23f : r.color, alpha: 0.25 });
     box.addChild(glow);
     if (def.ur) {
       const aura = urAura(200);
@@ -182,7 +190,9 @@ export class CharaScene extends Scene {
     }
     const name = txt(def.name, { size: 52, font: 'dela', color: 0x4a2f7a });
     name.y = -10;
-    box.addChild(name);
+    const st = stars(def.ur ? 5 : r.stars, 32, def.ur ? 5 : 4);
+    st.y = 46;
+    box.addChild(name, st);
     const g = growthOf(owned);
     const cap = MAX_LV[def.rarity];
     const rows: [string, string][] = [
