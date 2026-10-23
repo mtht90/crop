@@ -29,7 +29,7 @@ const GROUPS: Record<Exclude<Who, Rarity | 'SR+'>, string[]> = {
   knight: ['kh_a', 'kh_b', 'kh_c', 'l_knight', 'knight', 'c_knight'],
   skeleton: ['skull', 'skel_minion', 'skel_warrior', 'skel_rogue'],
   beard: ['mh_a', 'mh_b', 'mh_c', 'bh_a', 'bh_b'],
-  chibi: ['c_student', 'c_short', 'c_merchant', 'c_archer', 'c_ninja', 'c_knight', 'c_kuro', 'c_pony', 'c_maskbob', 'c_maskT', 'c_pumpkin'],
+  chibi: ['c_student', 'c_short', 'c_merchant', 'c_archer', 'c_ninja', 'c_knight', 'c_kuro', 'c_pony', 'c_maskbob', 'c_maskT', 'c_pumpkin', 'b_chan', 'b_chanG'],
 };
 
 export const CARDS: Card[] = [

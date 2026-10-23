@@ -3,3 +3,4 @@ Chibi Characters (c_student, c_short, c_merchant, c_archer, c_ninja, c_knight) a
 "Chibi Characters" by Styloo (https://styloo.itch.io/chibi), CC0 1.0 Universal.
 c_kuro, c_pony, c_maskbob, c_maskT and c_pumpkin combine parts of the same Chibi Characters models; c_pumpkin's hat
 is pumpkin_orange_jackolantern from KayKit Halloween Bits by Kay Lousberg (CC0).
+"Blender-chan" by AmarilloArts (https://amarilloarts.itch.io/blender-chan), CC0 1.0 Universal. Pieces b_chan, b_chanG (head renders, recolored).

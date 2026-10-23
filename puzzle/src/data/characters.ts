@@ -92,6 +92,7 @@ const ROWS: Row[] = [
   ['c_archer', 'ゆみつかい', 'R', 118, { kind: 'arrows', name: 'アローレイン', desc: '細い縦の列を3本消す', charge: 30, power: 2.6, amount: 3, size: 0.9 }, '森で育った弓の名手。'],
   ['c_pony', 'ポニテ', 'R', 117, { kind: 'shuriken', name: 'クナイなげ', desc: '3か所を小さく丸く消す', charge: 28, power: 3.2, amount: 3, size: 1.7 }, 'ポニーテールがトレードマークのしのび見習い。'],
   ['c_maskbob', 'マスクボブ', 'R', 116, { kind: 'paint', name: 'おそろいカラー', desc: '16個を多い色にぬりかえる', charge: 26, power: 1.8, amount: 16 }, '人見知りなのでマスクがてばなせない。'],
+  ['b_chan', 'ブレンちゃん', 'R', 117, { kind: 'ring', name: 'ドーナツリング', desc: 'まんなかを大きなドーナツ形に消す', charge: 28, power: 3.3, size: 1.9 }, 'ドーナツとおさるさんが大好きな3Dの女の子。'],
   // SR
   ['knight', 'ナイト', 'SR', 190, { kind: 'colorBlast', name: 'いっせい攻撃', desc: 'いちばん多い色を全部消す', charge: 18, power: 11.0 }, '王国を守る正義の騎士。'],
   ['barbarian', 'バーバリアン', 'SR', 192, { kind: 'bottom', name: 'じならし', desc: 'ボウルの下半分をまとめて消す', charge: 22, power: 5.8, size: 4.4 }, 'クマの頭をかぶった豪快な戦士。'],
@@ -99,6 +100,7 @@ const ROWS: Row[] = [
   ['hood', 'フードローグ', 'SR', 186, { kind: 'tapPop', name: 'フードの手品', desc: '4.5秒間タップでまとめて消せる', charge: 32, power: 3.8, dur: 4.5 }, 'フードの奥で何を考えているのかな？'],
   ['c_ninja', 'くのいち', 'SR', 188, { kind: 'shuriken', name: 'しゅりけん乱舞', desc: '5か所を小さく丸く消す', charge: 24, power: 13.1, amount: 5, size: 1.8 }, '口数は少ないけど面倒見はいい。'],
   ['c_maskT', 'マスクぱっつん', 'SR', 190, { kind: 'circle', name: 'ダブルドーン', desc: '大きな丸を2回消す', charge: 26, power: 9.0, amount: 2, size: 3.0 }, 'ぱっつん前髪とマスクのしのび。'],
+  ['b_chanG', 'ゴーグルブレン', 'SR', 189, { kind: 'cross', name: 'レンダリングビーム', desc: '太い十字にまとめて消す', charge: 24, power: 6.3, size: 1.7 }, 'ゴーグルをかけると本気モード。'],
   // SSR
   ['skel_warrior', 'ホネ戦士', 'SSR', 250, { kind: 'twoColor', name: 'ダブルブレイク', desc: '多い2色を全部消す', charge: 20, power: 8.0 }, '角かぶとのスケルトン戦士。'],
   ['skel_rogue', 'ホネ盗賊', 'SSR', 245, { kind: 'feverTap', name: 'かげのうたげ', desc: 'フィーバー突入＋その間タップでまとめて消せる', charge: 60, power: 2.8 }, '赤いフードの神出鬼没なスケルトン。'],
@@ -117,6 +119,8 @@ const PASSIVES: Record<string, Passive> = {
 const SCHEDULE: Record<string, { release?: string; limitedUntil?: string }> = {
   c_maskT: { release: '2026-10-29' },
   c_pumpkin: { release: '2026-10-22', limitedUntil: '2026-11-03' },
+  b_chan: { release: '2026-10-23' },
+  b_chanG: { release: '2026-11-05' },
 };
 
 export const CHARACTERS: CharDef[] = ROWS.map(([id, name, rarity, atk, skill, catchCopy]) => ({ id, name, rarity, atk, skill, catch: catchCopy, passive: PASSIVES[id], ...SCHEDULE[id] }));
