@@ -12,10 +12,12 @@ import { Effects } from '../game/Effects';
 import { World, type PBody } from '../game/Physics';
 import { bigTexture, loadCharacterArt } from '../art/PieceArt';
 import { RARITY_INFO, shortDate, type Rarity } from '../data/characters';
-import { COST_SINGLE, COST_TEN, MAXED_COINS, PITY, gachaPool, limitedNow, pull, rarityRank, type PullResult } from '../data/gacha';
+import { COST_SINGLE, COST_TEN, MAXED_COINS, PITY, charRates, gachaPool, limitedNow, pull, type PullResult } from '../data/gacha';
 import { HomeScene } from './HomeScene';
 import { CoinCounter } from './common';
 
+/** The one capsule look used for every pull. */
+const CAP: Rarity = 'R';
 const CAP_COLORS: Record<Rarity, number[]> = {
   N: [0x8fd0ff],
   R: [0x36a2ff],
@@ -243,18 +245,12 @@ export class GachaScene extends Scene {
     const ten = new Button({ w: 320, h: 116, label: '10連', sub: `${COST_TEN} コイン`, color: 'pink', size: 44, sound: 'ui_ok', onTap: () => void this.doPull(10) });
     ten.position.set(530, by);
     ten.breathe();
-    const note = txt('10連はきんいろ以上1体確定！', { size: 22, color: 0xfff27a, stroke: 0x2a1630, strokeWidth: 6 });
-    note.position.set(530, by - 78);
-    const pity = txt(`にじいろ確定まで あと${PITY - Save.data.pity}回`, { size: 20, color: 0xffffff, stroke: 0x2a1630, strokeWidth: 5 });
-    pity.position.set(196, by - 78);
     const rates = new Button({ w: 150, h: 58, label: '提供割合', color: 'purple', size: 22, onTap: () => this.showRates() });
     rates.position.set(620, App.safeTop + 160);
     this.buttons = [one, ten, rates];
-    this.ui.addChild(one, ten, note, pity, rates);
-    this.pityLabel = pity;
+    this.ui.addChild(one, ten, rates);
     this.refreshTicket();
   }
-  private pityLabel!: ReturnType<typeof txt>;
 
   /** A free-ticket button floats above the coin buttons while tickets remain. */
   private refreshTicket(): void {
@@ -277,31 +273,44 @@ export class GachaScene extends Scene {
     const ov = new Container();
     const dim = new Graphics().rect(-App.colX, 0, App.W, App.H).fill({ color: 0x0a0418, alpha: 0.6 });
     dim.eventMode = 'static';
-    dim.on('pointertap', () => ov.destroy({ children: true }));
+    // the 3D machine draws above the 2D layer, so it steps aside while the list is open
+    this.m3?.show(false);
+    dim.on('pointertap', () => {
+      ov.destroy({ children: true });
+      this.m3?.show(true);
+    });
     const box = new Container();
     box.position.set(360, App.H / 2);
-    box.addChild(panel(520, 520, { color: 0xfdf7ff }));
-    const t = txt('カプセルの出やすさ', { size: 38, font: 'dela', color: 0x4a2f7a });
-    t.y = -200;
+    const h = 1120;
+    box.scale.set(Math.min(1, (App.H - 40) / h));
+    box.addChild(panel(660, h, { color: 0xfdf7ff }));
+    box.eventMode = 'static';
+    const t = txt('提供割合', { size: 44, font: 'dela', color: 0x4a2f7a });
+    t.y = -h / 2 + 60;
     box.addChild(t);
-    (['SSR', 'SR', 'R', 'N'] as Rarity[]).forEach((r, i) => {
-      const y = -110 + i * 75;
-      const b = new Graphics().roundRect(-60, -24, 120, 48, 24).fill(RARITY_INFO[r].color);
-      b.x = -120;
-      b.y = y;
-      const l = txt(RARITY_INFO[r].label, { size: 24, stroke: 0x2a1630, strokeWidth: 5 });
-      l.position.set(-120, y);
-      const v = txt(`${+(RARITY_INFO[r].rate * 100).toFixed(1)}%`, { size: 36, font: 'dela', color: 0x4a2f7a });
-      v.position.set(100, y);
-      box.addChild(b, l, v);
+    // every character's chance per pull, two columns
+    const list = charRates();
+    const rows = Math.ceil(list.length / 2);
+    const lh = Math.min(34, (h - 230) / rows);
+    list.forEach(({ def, rate }, i) => {
+      const col = i < rows ? 0 : 1;
+      const y = -h / 2 + 120 + (i % rows) * lh;
+      const mark = def.rarity === 'SSR' ? '★★' : def.rarity === 'SR' ? '★' : '';
+      const nm = txt(`${mark}${def.name}`, { size: 18, color: 0x4a2f7a, anchor: [0, 0.5] });
+      nm.position.set(-300 + col * 310, y);
+      if (nm.width > 190) nm.scale.set(190 / nm.width);
+      const v = txt(`${(rate * 100).toFixed(2)}%`, { size: 18, color: 0x7a6a9a, anchor: [1, 0.5] });
+      v.position.set(-20 + col * 310, y);
+      box.addChild(nm, v);
     });
-    const n = txt(`${PITY}回以内ににじいろ確定\nどのキャラも強さは同じ。色は出やすさだけ`, { size: 22, color: 0x7a6a9a, align: 'center', lineHeight: 30 });
-    n.y = 200;
+    const n = txt(`★のキャラ（★★をふくむ）は10連で1体以上確定\n★★のキャラは${PITY}回引くまでに必ず1体出ます`, { size: 18, color: 0x7a6a9a, align: 'center', lineHeight: 28 });
+    n.y = h / 2 - 66;
     box.addChild(n);
     ov.addChild(dim, box);
     this.ui.addChild(ov);
     popIn(box);
   }
+
 
   private setUi(on: boolean): void {
     for (const b of this.buttons) b.enabled = on;
@@ -334,17 +343,16 @@ export class GachaScene extends Scene {
     this.coins.refresh();
     this.setUi(false);
     Sound.play('coins', { vol: 0.8 });
-    const best = results.reduce((a, r) => (rarityRank(r.def.rarity) > rarityRank(a) ? r.def.rarity : a), 'N' as Rarity);
     // tease: the capsule sometimes shows a lower rarity first and upgrades on opening
-    const tease: Rarity = best === 'SSR' ? (Math.random() < 0.5 ? 'SR' : 'SSR') : best === 'SR' && Math.random() < 0.35 ? 'R' : best;
+    // every capsule looks the same: the odds differ per character but nothing on screen tells them apart
+    const tease: Rarity = CAP;
     await this.crank();
     if (n === 1) {
       if (this.m3) await this.dispense3D(tease);
-      await this.capsuleOpen(best, tease);
+      await this.capsuleOpen(CAP, tease);
       await this.reveal(results[0]);
     } else await this.capsules(results);
     this.clearStage();
-    this.pityLabel.text = `にじいろ確定まで あと${PITY - Save.data.pity}回`;
     this.refreshTicket();
     this.setUi(true);
     this.busy = false;
@@ -519,8 +527,8 @@ export class GachaScene extends Scene {
     const cy = App.H * 0.42;
     c.position.set(360, cy);
     layer.addChild(c);
-    const r = RARITY_INFO[res.def.rarity];
-    const rays = this.raysFor(res.def.rarity);
+    const r = RARITY_INFO.SR;
+    const rays = this.raysFor('SR');
     rays.alpha = 0.7;
     c.addChild(rays);
     const glow = new Graphics().circle(0, 0, 230).fill({ color: r.color, alpha: 0.35 });
@@ -555,8 +563,8 @@ export class GachaScene extends Scene {
     c.addChild(badge);
     popIn(badge, 0.6);
     gsap.delayedCall(0.6, () => Sound.play(res.isNew ? 'jLevel' : 'powerUp', { vol: 0.6 }));
-    Sound.play(res.def.rarity === 'SSR' ? 'jSSR' : res.def.rarity === 'SR' ? 'jSR' : res.def.rarity === 'R' ? 'jR' : 'jN', { vol: 0.6 });
-    if (rarityRank(res.def.rarity) >= 2) {
+    Sound.play(res.isNew ? 'jSR' : 'jR', { vol: 0.6 });
+    if (res.isNew) {
       for (let i = 0; i < 5; i++) gsap.delayedCall(i * 0.25, () => this.fx.burst(360 + (Math.random() - 0.5) * 500, cy + (Math.random() - 0.5) * 400, { count: 14, tex: 'star_06', tint: [r.color, 0xffffff], add: true, speed: [100, 400], size: [0.08, 0.2] }));
     }
     await wait(1.0);
@@ -601,7 +609,7 @@ export class GachaScene extends Scene {
     skip.position.set(600, App.safeTop + 60);
     c.addChild(skip);
     // the color each capsule shows first: half the rainbow ones pose as gold until they open
-    const shown: Rarity[] = results.map((r) => (r.def.rarity === 'SSR' && Math.random() < 0.5 ? 'SR' : r.def.rarity));
+    const shown: Rarity[] = results.map(() => CAP);
     const from = this.chutePos();
     if (this.m3) this.m3.show(false);
     gsap.to(this.machine, { alpha: 0, duration: 0.4, delay: 0.6 });
@@ -639,8 +647,9 @@ export class GachaScene extends Scene {
     for (let i = 0; i < results.length; i++) {
       const res = results[i];
       const cap = caps[i];
-      const r = RARITY_INFO[res.def.rarity];
-      const tier = rarityRank(res.def.rarity);
+      const r = RARITY_INFO.SR;
+      // no tiers on screen: new characters are the highlight
+      const tier = res.isNew ? 2 : 0;
       if (res.isNew) news++;
       else ups++;
       const sp = cap.children[cap.children.length - 1] as Sprite;
@@ -656,12 +665,12 @@ export class GachaScene extends Scene {
           haptic(10);
           await new Promise<void>((done) => gsap.fromTo(cap, { rotation: -0.3 }, { rotation: 0, duration: 0.2, ease: 'elastic.out(1.6,0.3)', onComplete: done }));
         }
-        if (shown[i] !== res.def.rarity) {
+        if (shown[i] !== CAP) {
           // the gold capsule was hiding a rainbow one
           Sound.riser(0.5);
           await new Promise<void>((done) => gsap.to(cap, { x: cap.x + 6, duration: 0.035, yoyo: true, repeat: 12, onComplete: done }));
           this.flash(0xffffff, 0.4);
-          sp.texture = gtex(`cap_${res.def.rarity}`);
+          sp.texture = gtex(`cap_${CAP}`);
           Sound.play('zap', { vol: 0.8 });
           haptic([15, 30, 25]);
           this.fx.burst(cap.x, cap.y, { count: 30, tex: 'star_06', tint: CAP_COLORS.SSR, add: true, speed: [200, 560], size: [0.08, 0.22] });
@@ -693,15 +702,15 @@ export class GachaScene extends Scene {
       cap.scale.set(1);
       if (!this.skipAll) {
         gsap.fromTo(art.scale, { x: 0, y: 0 }, { x: art.scale.x, y: art.scale.y, duration: 0.4, ease: 'back.out(2.5)' });
-        this.fx.burst(cap.x, cap.y, { count: tier >= 2 ? 24 : 10, tex: 'star_06', tint: [...CAP_COLORS[res.def.rarity], 0xffffff], add: true, speed: [120, tier >= 2 ? 460 : 260], size: [0.06, tier >= 2 ? 0.18 : 0.12] });
+        this.fx.burst(cap.x, cap.y, { count: tier >= 2 ? 24 : 10, tex: 'star_06', tint: [...CAP_COLORS[CAP], 0xffffff], add: true, speed: [120, tier >= 2 ? 460 : 260], size: [0.06, tier >= 2 ? 0.18 : 0.12] });
         if (tier >= 2) {
-          Sound.play(res.def.rarity === 'SSR' ? 'jSSR' : 'jSR', { vol: 0.6 });
+          Sound.play('jSR', { vol: 0.6 });
           haptic(25);
-        } else if (res.isNew) Sound.play('pep', { vol: 0.5, rate: 1.2 });
+        }
         else Sound.pop(i);
       }
       // rainbow characters and brand-new gold ones get the full-screen reveal right away
-      if (!this.skipAll && (res.def.rarity === 'SSR' || (tier >= 2 && res.isNew))) {
+      if (!this.skipAll && res.isNew) {
         await wait(0.45);
         c.visible = false;
         await this.reveal(res, true);

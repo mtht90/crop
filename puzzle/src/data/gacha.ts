@@ -34,6 +34,22 @@ function rollRarity(minSR: boolean): Rarity {
   return minSR ? 'SR' : 'N';
 }
 
+/** Chance of each character per pull (before the 10-pull guarantee and the hidden pity). */
+export function charRates(): { def: CharDef; rate: number }[] {
+  const pool = gachaPool();
+  const out: { def: CharDef; rate: number }[] = [];
+  for (const r of ['SSR', 'SR', 'R', 'N'] as Rarity[]) {
+    const tier = pool.filter((c) => c.rarity === r);
+    const limited = tier.filter((c) => c.limitedUntil);
+    const regular = tier.filter((c) => !c.limitedUntil);
+    for (const c of tier) {
+      const share = limited.length && regular.length ? 0.5 / (c.limitedUntil ? limited.length : regular.length) : 1 / tier.length;
+      out.push({ def: c, rate: RARITY_INFO[r].rate * share });
+    }
+  }
+  return out.sort((a, b) => b.rate - a.rate);
+}
+
 /** Characters that can come out right now. */
 export function gachaPool(): CharDef[] {
   return CHARACTERS.filter((c) => inGacha(c));
