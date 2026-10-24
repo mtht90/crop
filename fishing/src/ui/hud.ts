@@ -39,6 +39,8 @@ export class Hud {
   }
 
   setPrompt(html: string | null): void {
+    // タッチ操作ではキー表示を出さない
+    if (html && document.body.classList.contains('is-touch')) html = html.replace(/<b>\[[A-Z]\]<\/b>\s*/, '');
     this.prompt.style.display = html ? '' : 'none';
     if (html) this.prompt.innerHTML = html;
   }

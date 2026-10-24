@@ -59,14 +59,11 @@ export class Player {
   move(input: Input, dt: number): void {
     const f = this.forward();
     const r = new THREE.Vector3(-f.z, 0, f.x);
-    const v = new THREE.Vector3();
-    if (input.down('KeyW')) v.add(f);
-    if (input.down('KeyS')) v.sub(f);
-    if (input.down('KeyD')) v.add(r);
-    if (input.down('KeyA')) v.sub(r);
-    const moving = v.lengthSq() > 0;
-    if (moving) {
-      const speed = input.down('ShiftLeft') || input.down('ShiftRight') ? 6.2 : 3.2;
+    const ax = input.moveAxes();
+    const v = new THREE.Vector3().addScaledVector(f, ax.y).addScaledVector(r, ax.x);
+    const amount = Math.min(1, v.length());
+    if (amount > 0.05) {
+      const speed = (ax.run ? 6.2 : 3.2) * amount;
       v.normalize().multiplyScalar(speed * dt);
       // 軸ごとに判定して壁に沿って滑らせる
       if (this.canStand(this.x + v.x, this.z)) this.x += v.x;

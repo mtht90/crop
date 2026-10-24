@@ -7,7 +7,7 @@ import type { Rng } from './rng';
 
 export type FishBehavior = 'run' | 'hold' | 'approach' | 'jump';
 export type FightOutcome = 'landed' | 'lineBreak' | 'spoolEmpty' | 'hookOut';
-export type FightEvent = 'run' | 'jump' | 'headshake' | 'bolt' | 'slack';
+export type FightEvent = 'run' | 'jump' | 'headshake' | 'bolt' | 'slack' | 'surge' | 'tug';
 
 export interface FightSetup {
   species: Species;
@@ -62,6 +62,10 @@ export class Fight {
   dragSlipping = false;
   /** 根ズレによるラインの摩耗 0..1（強度がその分落ちる） */
   wear = 0;
+  /** 首振りによる「ググッ」という引きの脈動 0..1（演出・振動用） */
+  tug = 0;
+  /** 巻いている時のリールの重さ 0..1 */
+  reelLoad = 0;
   elapsed = 0;
   outcome: FightOutcome | null = null;
   events: FightEvent[] = [];
@@ -70,6 +74,9 @@ export class Fight {
   private spike = 0;
   private slackTime = 0;
   private shakeTimer = 0;
+  private tugPhase = 0;
+  private readonly tugFreq: number;
+  private lastTugPeak = false;
 
   constructor(
     private setup: FightSetup,
@@ -89,6 +96,8 @@ export class Fight {
     this.lineOut = setup.distance;
     this.depth = setup.depth;
     this.stamina = this.staminaMax;
+    // 小さく速い魚ほど細かく、大物ほどゆっくり重く首を振る
+    this.tugFreq = (2.2 + f.speed * 1.2) / (1 + 0.35 * Math.log10(1 + weightKg)) * rng.range(0.85, 1.15);
     this.startBehavior('run');
   }
 
@@ -167,7 +176,20 @@ export class Fight {
     if (this.behaviorLeft <= 0) this.nextBehavior();
 
     const inten = this.intensity();
-    const pull = this.pullMax * inten;
+    // 首振りの脈動：鋭いピークを持つ周期的な引き
+    const sf = this.staminaFraction;
+    this.tugPhase += dt * this.tugFreq * Math.PI * 2 * (0.7 + 0.5 * sf);
+    const tugGain = { run: 1, hold: 0.7, approach: 0.25, jump: 0 }[this.behavior] * (0.35 + 0.65 * sf);
+    this.tug = Math.pow(Math.max(0, Math.sin(this.tugPhase)), 5) * tugGain;
+    const peak = this.tug > 0.6;
+    if (peak && !this.lastTugPeak) this.events.push('tug');
+    this.lastTugPeak = peak;
+    // 走っている最中の急な突っ込み
+    if (this.behavior === 'run' && this.rng.chance(dt * 0.35 * species.fight.run * sf)) {
+      this.spike += this.pullMax * 0.45 * (1 - this.cushion);
+      this.events.push('surge');
+    }
+    const pull = this.pullMax * inten * (1 + 0.35 * this.tug);
     // 竿を魚の走る向きと逆に倒すと横走りを抑えられ、スタミナも削れる
     const sideSign = Math.sign(this.side);
     const oppose = Math.max(0, -input.rodSide * sideSign) * Math.min(1, Math.abs(this.side) * 2);
@@ -188,6 +210,7 @@ export class Fight {
       this.lineOut = this.distance;
       const fishForce = pull * Math.max(this.away, 0.1) + 0.06 * weightKg;
       const load = input.reeling ? Math.min(reel.power, 0.3 + 0.1 * weightKg) : 0;
+      this.reelLoad = input.reeling ? Math.min(1, (fishForce + load) / reel.power) : 0;
       const raw = fishForce + load + this.spike;
       if (raw > this.drag) {
         // ドラグが滑って糸が出る

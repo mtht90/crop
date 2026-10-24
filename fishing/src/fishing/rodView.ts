@@ -24,6 +24,11 @@ export class RodView {
   shake = 0;
   private shakeT = 0;
   reelSpin = 0;
+  /** 魚に竿ごと引っ張られる量 0..1 */
+  pull = 0;
+  /** 張った糸の震え (m) */
+  lineVibe = 0;
+  private vibeT = 0;
 
   constructor(camera: THREE.Camera, scene: THREE.Scene) {
     camera.add(this.root);
@@ -111,7 +116,9 @@ export class RodView {
     this.shake = Math.max(0, this.shake - dt * 3);
     const jitter = Math.sin(this.shakeT) * this.shake * 0.04;
     // 根元を立てて、先へ行くほど曲げる
-    const baseTilt = 0.55 + this.swing;
+    // 強く引かれるほど竿が前に倒され、手元ごと持っていかれる
+    const baseTilt = 0.55 + this.swing - this.pull * 0.28;
+    this.root.position.set(0.3 + this.side * 0.04, -0.36 - this.pull * 0.05 + jitter * 0.3, -0.42 - this.pull * 0.09);
     this.root.rotation.set(0, 0, 0);
     this.root.rotation.x = baseTilt;
     this.root.rotation.y = -this.side * 0.45;
@@ -130,12 +137,15 @@ export class RodView {
     const n = p.length / 3;
     const airEnd = entry ?? to;
     const airN = entry ? n - 6 : n;
+    this.vibeT += 0.9;
     for (let i = 0; i < airN; i++) {
       const t = i / (airN - 1);
       const x = from.x + (airEnd.x - from.x) * t;
       const z = from.z + (airEnd.z - from.z) * t;
       let y = from.y + (airEnd.y - from.y) * t;
       y -= Math.sin(t * Math.PI) * sag;
+      // 張り詰めた糸がビリビリ震える
+      y += Math.sin(t * Math.PI) * Math.sin(this.vibeT + t * 9) * this.lineVibe;
       p.set([x, y, z], i * 3);
     }
     if (entry) {

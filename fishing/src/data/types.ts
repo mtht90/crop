@@ -15,7 +15,15 @@ export type LureCategory =
   | 'baitDough'
   | 'baitLive';
 export type Rarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legend';
-export type BodyType = 'fusiform' | 'deep' | 'slender' | 'elongated' | 'catfish' | 'carp' | 'trout' | 'ancient';
+/** 外部モデル（public/assets/fish/<id>.json） */
+export type FishModelId = 'perch' | 'pike' | 'catfish' | 'goldfish' | 'minnow' | 'shark';
+
+export interface FishModel {
+  id: FishModelId;
+  /** 体高・体幅の倍率（同じモデルで体型を作り分ける） */
+  sy?: number;
+  sz?: number;
+}
 export type PatternKind =
   | 'none'
   | 'lateralBand'
@@ -127,7 +135,7 @@ export interface Species {
   spot: SpotId;
   rarity: Rarity;
   desc: string;
-  body: BodyType;
+  model: FishModel;
   length: { min: number; max: number; mean: number; sd: number };
   /** 肥満係数：重さ(g) = k × 体長(cm)^3 / 100 */
   k: number;

@@ -24,7 +24,8 @@ interface Bite {
   cond: Conditions;
   nibbles: number;
   timer: number;
-  phase: 'nibble' | 'take';
+  /** approach = 魚影がルアーに寄ってくる / nibble = 前アタリ / take = 本アタリ */
+  phase: 'approach' | 'nibble' | 'take';
   window: number;
 }
 
@@ -94,6 +95,18 @@ export class FishingController {
   private lastCond: Conditions | null = null;
   private time = 0;
   private rng = new Rng();
+  /** 魚影（アタリ前に寄ってくる影） */
+  private shadow: THREE.Mesh;
+  private shadowFrom = new THREE.Vector3();
+  private shadowPos = new THREE.Vector3();
+  /** 水中のルアー位置を示す水面の目印 */
+  private marker: THREE.Mesh;
+  private hints = 0;
+  private input: Input | null = null;
+  /** 画面の揺れ（Game がカメラに適用） */
+  shake = 0;
+  /** ラインが切れそうな度合い 0..1（画面の縁を赤くする） */
+  danger = 0;
 
   constructor(
     private scene: THREE.Scene,
@@ -106,6 +119,18 @@ export class FishingController {
     this.rod = new RodView(camera, scene);
     this.rod.setVisible(false);
     this.fx = new WaterEffects(scene);
+    const shadowMat = new THREE.MeshBasicMaterial({ color: 0x050a0c, transparent: true, opacity: 0, depthWrite: false });
+    this.shadow = new THREE.Mesh(new THREE.CircleGeometry(0.5, 20).rotateX(-Math.PI / 2), shadowMat);
+    this.shadow.renderOrder = 3;
+    this.shadow.visible = false;
+    scene.add(this.shadow);
+    this.marker = new THREE.Mesh(
+      new THREE.RingGeometry(0.1, 0.14, 24).rotateX(-Math.PI / 2),
+      new THREE.MeshBasicMaterial({ color: 0xfff4d0, transparent: true, opacity: 0.6, depthWrite: false }),
+    );
+    this.marker.renderOrder = 3;
+    this.marker.visible = false;
+    scene.add(this.marker);
   }
 
   get lureDef(): Lure {
@@ -139,6 +164,10 @@ export class FishingController {
     this.rod.swing = 0;
     this.rod.lure.visible = false;
     this.rod.bobber.visible = false;
+    this.shadow.visible = false;
+    this.marker.visible = false;
+    this.shake = 0;
+    this.danger = 0;
     this.removeFish();
     this.audio.setReel(0);
     this.audio.setDrag(0);
@@ -210,7 +239,9 @@ export class FishingController {
   }
 
   update(dt: number, input: Input, player: Player, sensitivity: number): void {
+    this.input = input;
     this.time += dt;
+    this.shake = Math.max(0, this.shake - dt * 3);
     this.spook = Math.max(0, this.spook - dt * 0.25);
     const rodDef = ROD_BY_ID[this.save.equip.rod];
     const reel = REEL_BY_ID[this.save.equip.reel];
@@ -271,6 +302,11 @@ export class FishingController {
       }
     }
 
+    // 振りかぶり・アワセの竿の角度は徐々に戻す（ファイト中はやや立てて構える）
+    if (this.phase !== 'charging' && this.phase !== 'flying' && this.phase !== 'ready') {
+      const rest = this.phase === 'fight' ? 0.12 : 0;
+      this.rod.swing += (rest - this.rod.swing) * Math.min(1, dt * 5);
+    }
     // 竿と糸の描画
     this.rod.update(dt);
     const tip = this.rod.tipWorld();
@@ -292,7 +328,46 @@ export class FishingController {
       this.rod.lure.visible = true;
       this.rod.lure.position.copy(hang);
     }
+    // 水中ルアーの目印と魚影
+    const showMarker = this.phase === 'water' && this.lure.y < -0.1 && !this.rod.bobber.visible;
+    this.marker.visible = showMarker;
+    if (showMarker) {
+      this.marker.position.set(this.lure.x, 0.04, this.lure.z);
+      const k = 1 + 0.15 * Math.sin(this.time * 4);
+      this.marker.scale.set(k, 1, k);
+    }
+    this.updateShadow(dt);
     this.fx.update(dt);
+  }
+
+  private updateShadow(dt: number): void {
+    const b = this.bite;
+    const mat = this.shadow.material as THREE.MeshBasicMaterial;
+    if (!b || this.phase !== 'water') {
+      mat.opacity = Math.max(0, mat.opacity - dt * 2);
+      this.shadow.visible = mat.opacity > 0.01;
+      return;
+    }
+    this.shadow.visible = true;
+    const len = b.fish.length / 100;
+    let target: THREE.Vector3;
+    if (b.phase === 'approach') {
+      const t = 1 - Math.max(0, b.timer) / b.window;
+      target = this.shadowFrom.clone().lerp(this.lure, Math.min(1, t * 1.1));
+      target.x += Math.sin(this.time * 3) * 0.15;
+    } else {
+      // 前アタリ・本アタリ中はルアーの周りでうろつく
+      target = this.lure.clone().add(new THREE.Vector3(Math.sin(this.time * 5) * 0.12, 0, Math.cos(this.time * 4) * 0.12));
+    }
+    const prev = this.shadowPos.clone();
+    this.shadowPos.lerp(target, Math.min(1, dt * 4));
+    this.shadow.position.set(this.shadowPos.x, 0.03, this.shadowPos.z);
+    const mv = this.shadowPos.clone().sub(prev);
+    if (mv.lengthSq() > 1e-7) this.shadow.rotation.y = Math.atan2(-mv.z, mv.x);
+    this.shadow.scale.set(len * 1.1, 1, len * 0.32);
+    // 深いタナの魚ほど影が薄い
+    const depthFade = Math.max(0.25, 1 - -this.lure.y / 6);
+    mat.opacity = Math.min(0.5, mat.opacity + dt) * depthFade;
   }
 
   private tip2lure(tip: THREE.Vector3): number {
@@ -333,6 +408,16 @@ export class FishingController {
     const heavy = lure.category === 'jig' ? 0.6 : lure.pack ? 0.35 : 0.3;
     this.spook = Math.max(this.spook, heavy);
     this.fx.splash(this.lure.x, this.lure.z, 0.25);
+    if (this.hints < 3 && this.save.stats.caught < 10) {
+      this.hints++;
+      const lure = this.lureDef;
+      this.cb.toast(
+        lure.pack
+          ? 'エサ釣り：そのまま待とう。魚影が寄ってきて竿先が「グン」と入ったら右クリック（アワセ）'
+          : 'ルアー：巻いて（左長押し）誘おう。時々止めたり右クリックで動きをつけると食ってくる',
+        'info',
+      );
+    }
     this.audio.splash(0.3);
     const usesFloat = !!lure.pack && this.save.floatDepth > 0;
     this.rod.bobber.visible = usesFloat;
@@ -370,7 +455,7 @@ export class FishingController {
     }
     // 右クリック：アクション（アタリ中はアワセ）
     if (input.rightPressed && input.enabled) {
-      if (this.bite) this.hookset(sensitivity);
+      if (this.bite && this.bite.phase !== 'approach') this.hookset(sensitivity);
       else this.twitch(lure, toOrigin.clone().normalize());
     }
 
@@ -486,7 +571,9 @@ export class FishingController {
       lineVisibility: line.visibility,
       spook: this.spook,
     });
-    if (!this.rng.chance(p * 0.1)) return;
+    // 始めたばかりは釣れやすく
+    const beginner = this.save.stats.caught < 3 ? 2.2 : 1.3;
+    if (!this.rng.chance(p * 0.1 * beginner)) return;
     const species = pickSpecies(list, cond, this.rng);
     if (!species) return;
     const fish = generateFish(species, cond, this.rng);
@@ -498,10 +585,24 @@ export class FishingController {
       fish,
       cond,
       nibbles,
-      timer: this.rng.range(0.2, 0.6),
-      phase: 'nibble',
+      timer: 0,
+      phase: 'approach',
       window: species.hookWindow * rod.sensitivity * (lure.pack ? 1.3 : 1),
     };
+    this.startApproach();
+  }
+
+  /** 魚影が少し離れた所から寄ってくる */
+  private startApproach(): void {
+    const b = this.bite!;
+    const a = this.rng.range(0, Math.PI * 2);
+    const d = this.rng.range(3, 6);
+    this.shadowFrom.set(this.lure.x + Math.cos(a) * d, 0, this.lure.z + Math.sin(a) * d);
+    this.shadowPos.copy(this.shadowFrom);
+    b.phase = 'approach';
+    b.timer = this.rng.range(1.2, 2.2);
+    b.window = b.timer;
+    (this.shadow.material as THREE.MeshBasicMaterial).opacity = 0;
   }
 
   /** 開発用：今のルアー位置で強制的にアタリを起こす */
@@ -511,11 +612,21 @@ export class FishingController {
     const list = speciesForSpot('lake');
     const species = list.find((s) => s.id === speciesId) ?? pickSpecies(list, cond, this.rng) ?? list[0];
     this.bite = { species, fish: generateFish(species, cond, this.rng), cond, nibbles: 0, timer: 0.1, phase: 'nibble', window: 3 };
+    this.shadowPos.copy(this.lure);
   }
 
   private updateBite(dt: number, reeling: boolean, sensitivity: number, lure: Lure): void {
     const b = this.bite!;
     b.timer -= dt;
+    if (b.phase === 'approach') {
+      if (b.timer > 0) return;
+      // 寄ってきた魚の本来のアワセ猶予に戻して前アタリへ
+      const rod = ROD_BY_ID[this.save.equip.rod];
+      b.window = b.species.hookWindow * rod.sensitivity * (lure.pack ? 1.3 : 1);
+      b.phase = 'nibble';
+      b.timer = this.rng.range(0.15, 0.5);
+      return;
+    }
     if (b.phase === 'nibble') {
       if (b.timer > 0) return;
       if (b.nibbles > 0) {
@@ -523,6 +634,8 @@ export class FishingController {
         b.timer = this.rng.range(0.5, 1.3);
         this.rod.shake = 0.35 * sensitivity;
         this.audio.nibble();
+        this.fx.ripple(this.lure.x, this.lure.z, 0.05);
+        this.input?.vibrate(15);
         if (reeling && this.rng.chance(0.25)) {
           this.bite = null;
         }
@@ -533,7 +646,10 @@ export class FishingController {
       this.rod.shake = 1;
       this.rod.bend = 0.6;
       this.audio.bite();
-      this.cb.toast('アタリ！', 'big');
+      this.cb.toast('アタリ！ 今だ、アワセ！', 'big');
+      this.fx.splash(this.lure.x, this.lure.z, 0.12);
+      this.shake = 0.4;
+      this.input?.vibrate([60, 40, 60]);
       // 巻いている最中の本アタリは「向こうアワセ」で掛かることがある
       if (reeling && !lure.pack && this.rng.chance(0.35)) this.startFight(true);
       return;
@@ -556,8 +672,8 @@ export class FishingController {
     const b = this.bite!;
     this.rod.swing = 0.6;
     this.audio.hookset();
-    if (b.phase === 'nibble') {
-      this.cb.toast('早アワセ！ 魚が逃げた', 'bad');
+    if (b.phase === 'approach' || b.phase === 'nibble') {
+      this.cb.toast(b.phase === 'approach' ? '魚が驚いて逃げた…' : '早アワセ！ 魚が逃げた', 'bad');
       if (this.lureDef.pack && this.rng.chance(0.4)) this.consumeBait();
       this.bite = null;
       this.spook = 1;
@@ -601,6 +717,11 @@ export class FishingController {
     this.rod.bobber.visible = false;
     this.rod.lure.visible = false;
     this.cb.toast(auto ? '向こうアワセで掛かった！' : 'フィッシュ！', 'good');
+    this.shake = 0.9;
+    this.rod.shake = 1;
+    this.fx.splash(this.lure.x, this.lure.z, 0.35);
+    this.audio.splash(0.4);
+    this.input?.vibrate([40, 30, 120]);
     this.removeFish();
     this.fishObj = buildFishObject(b.species, b.fish.colorId, b.fish.patternId);
     this.fishObj.group.scale.setScalar(b.fish.length / 100);
@@ -613,7 +734,8 @@ export class FishingController {
     const f = this.fight!;
     const reeling = input.left && input.enabled;
     if (input.enabled) {
-      this.rodSide = Math.max(-1, Math.min(1, this.rodSide + input.mouseDX * 0.004 * sensitivity));
+      if (input.freeCursor && !input.locked) this.rodSide += (Math.max(-1, Math.min(1, input.cursorX * 1.6)) - this.rodSide) * Math.min(1, dt * 8);
+      else this.rodSide = Math.max(-1, Math.min(1, this.rodSide + input.mouseDX * 0.004 * sensitivity));
       if (input.wheel) {
         const reel = REEL_BY_ID[this.save.equip.reel];
         f.setDrag(f.drag - input.wheel * Math.max(0.1, reel.dragMax / 30));
@@ -629,20 +751,42 @@ export class FishingController {
       for (const e of f.events) {
         if (e === 'jump') jumped = true;
         if (e === 'run') ran = true;
+        if (e === 'tug') {
+          this.rod.shake = Math.max(this.rod.shake, 0.5 + f.tug * 0.5);
+          input.vibrate(Math.round(18 + 30 * Math.min(1, f.tension / f.lineTest)));
+        }
+        if (e === 'surge') {
+          this.shake = Math.max(this.shake, 0.7);
+          this.rod.shake = 1;
+          input.vibrate(90);
+        }
         if (e === 'bolt') this.cb.toast('まだ元気だ！足元で突っ込んだ', 'info');
         if (e === 'slack') this.cb.toast('糸がたるんでいる！巻いて！', 'bad');
       }
     }
-    if (ran) this.rod.shake = 0.6;
+    if (ran) {
+      this.rod.shake = 0.8;
+      this.shake = Math.max(this.shake, 0.5);
+      input.vibrate(70);
+    }
     if (jumped) {
       this.jumpT = 0.9;
       this.cb.toast('エラ洗い！ 糸をたるませるな', 'info');
     }
-    this.audio.setDrag(f.dragSlipping ? 0.6 + Math.min(0.4, f.tension / f.lineTest) : 0);
-    this.audio.setReel(reeling && !f.dragSlipping ? 0.8 : 0);
-    this.rod.reelSpin = reeling ? (f.dragSlipping ? 0.1 : 0.8) : 0;
-    this.rod.bend = Math.min(1.6, f.tension / Math.max(0.5, ROD_BY_ID[this.save.equip.rod].power) + 0.05);
+    const tFrac = Math.min(1.2, f.tension / f.lineTest);
+    this.audio.setDrag(f.dragSlipping ? 0.6 + Math.min(0.4, tFrac) : 0);
+    // 重いときはリールがゆっくりになり、ギシギシ鳴る
+    this.audio.setReel(reeling && !f.dragSlipping ? 0.9 * (1 - f.reelLoad * 0.75) : 0);
+    this.audio.setStrain(reeling ? f.reelLoad : 0, tFrac);
+    this.rod.reelSpin = reeling ? (f.dragSlipping ? 0.1 : 0.9 * (1 - f.reelLoad * 0.8)) : 0;
+    const rodPower = Math.max(0.5, ROD_BY_ID[this.save.equip.rod].power);
+    this.rod.bend = Math.min(1.8, f.tension / rodPower + 0.05 + f.tug * 0.25 * Math.min(1, f.pullMax / rodPower));
+    this.rod.pull = Math.min(1, f.tension / rodPower) * 0.8 + f.tug * 0.2;
+    this.rod.lineVibe = f.slack < 0.05 ? (0.015 + f.tug * 0.03) * Math.min(1, tFrac * 1.5) : 0;
     this.rod.side += (this.rodSide - this.rod.side) * Math.min(1, dt * 10);
+    // 引きの強さに応じて画面を揺らす
+    this.shake = Math.max(this.shake, f.tug * 0.35 * Math.min(1, tFrac + 0.3) + (f.dragSlipping ? 0.15 : 0));
+    this.danger = Math.max(0, Math.min(1, (tFrac - 0.75) / 0.25));
 
     // 魚の位置
     const yaw = this.castYaw + f.lateral;
@@ -687,6 +831,10 @@ export class FishingController {
   private finishFight(outcome: FightOutcome): void {
     this.audio.setDrag(0);
     this.audio.setReel(0);
+    this.audio.setStrain(0, 0);
+    this.rod.pull = 0;
+    this.rod.lineVibe = 0;
+    this.danger = 0;
     this.cameraYawHint = null;
     if (outcome === 'landed') {
       this.phase = 'landing';
@@ -732,6 +880,10 @@ export class FishingController {
       colorId: h.fish.colorId,
       patternId: h.fish.patternId,
     };
+  }
+
+  get hasBite(): boolean {
+    return this.bite?.phase === 'take';
   }
 
   hud(): FishingHud {

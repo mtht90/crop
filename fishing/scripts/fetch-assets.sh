@@ -3,7 +3,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 TEX=public/assets/textures
-MOD=public/assets/models
+MOD=assets-src/polyhaven
 mkdir -p "$TEX" "$MOD"
 
 ph_tex() { # Poly Haven texture: name, maps...
@@ -45,8 +45,7 @@ ph_tex brown_mud_leaves_01 diff
 ph_tex bark_brown_02 diff
 
 ph_model barrel_03
-ph_model Lantern_01
 ph_model fern_02
 
 [ -f "$TEX/waternormals.jpg" ] || curl -fsSL -o "$TEX/waternormals.jpg" https://raw.githubusercontent.com/mrdoob/three.js/r169/examples/textures/waternormals.jpg
-echo "assets ok"
+echo "assets ok（魚・植生モデルは scripts/fetch-sources.sh → scripts/convert-models.cjs）"

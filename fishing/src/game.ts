@@ -12,6 +12,8 @@ import { Rng } from './sim/rng';
 import { showCatch } from './ui/catchPanel';
 import { openDex } from './ui/dexPanel';
 import { Hud } from './ui/hud';
+import { TouchControls } from './ui/touch';
+import { preloadFishModels } from './render/fishMesh';
 import { openMap, openPause, openTackle, titleScreen } from './ui/menus';
 import { Modals } from './ui/modal';
 import { openShop } from './ui/shopPanel';
@@ -39,6 +41,8 @@ export class Game {
   private hud: Hud;
   private modals: Modals;
   private preview = new FishPreview();
+  private touch: TouchControls;
+  private danger: HTMLDivElement;
   private mode: Mode = 'title';
   private title: HTMLElement | null = null;
   private headlamp = new THREE.SpotLight(0xfff0d8, 0, 45, 0.55, 0.6, 1.2);
@@ -49,6 +53,7 @@ export class Game {
   private titleT = 0;
   private suppressPause = false;
   private catchOpen = false;
+  private touchState: { mode: 'walk' | 'fish'; canFish: boolean; nearHut: boolean } = { mode: 'walk', canFish: false, nearHut: false };
 
   constructor(app: HTMLElement, private uiRoot: HTMLElement) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -77,6 +82,13 @@ export class Game {
     this.camera.add(this.headlamp.target);
 
     this.hud = new Hud(uiRoot);
+    this.danger = document.createElement('div');
+    this.danger.className = 'danger';
+    uiRoot.append(this.danger);
+    void preloadFishModels();
+    this.touch = new TouchControls(uiRoot, this.input, () => {
+      if (!this.modals.isOpen && this.mode !== 'title') this.openPause();
+    });
     this.modals = new Modals(uiRoot);
     this.modals.onChange = (open) => {
       this.input.enabled = !open;
@@ -147,7 +159,12 @@ export class Game {
     this.mode = 'title';
     this.hud.setVisible(false);
     this.title?.remove();
-    this.title = titleScreen(this.uiRoot, !!loadSave(), (fresh) => {
+    this.title = titleScreen(this.uiRoot, !!loadSave(), (fresh) => void preloadFishModels().then(() => this.start(fresh)));
+    this.audio.setMood('title');
+  }
+
+  private start(fresh: boolean): void {
+    {
       this.audio.init();
       if (fresh) {
         clearSave();
@@ -166,11 +183,11 @@ export class Game {
       this.player.yaw = SPAWN.yaw;
       this.player.pitch = -0.05;
       this.input.lock();
-      this.hud.toast('翠ヶ湖へようこそ。水辺で F を押して釣りを始めよう', 'good');
-      if (fresh) this.hud.toast('釣った魚は図鑑(Tab)に登録される。小屋(E)で売って道具を揃えよう', 'info');
+      const t = this.input.touch;
+      this.hud.toast(t ? '翠ヶ湖へようこそ。水辺で「釣る」を押して釣りを始めよう' : '翠ヶ湖へようこそ。水辺で F を押して釣りを始めよう', 'good');
+      if (fresh) this.hud.toast(t ? '釣った魚は図鑑に登録される。小屋で売って道具を揃えよう' : '釣った魚は図鑑(Tab)に登録される。小屋(E)で売って道具を揃えよう', 'info');
       this.persist();
-    });
-    this.audio.setMood('title');
+    }
   }
 
   private applySettings(): void {
@@ -278,6 +295,9 @@ export class Game {
       this.camera.lookAt(-30, 2, 0);
     } else if (this.mode === 'walk') {
       if (input.enabled) {
+        const cl = input.cursorLook(dt);
+        input.mouseDX += cl.dx;
+        input.mouseDY += cl.dy;
         this.player.look(input, sens);
         this.player.move(input, dt);
       }
@@ -302,7 +322,8 @@ export class Game {
         prompt = '<b>[F]</b> 釣りをする';
         if (input.hit('KeyF') && input.enabled) this.enterFishing();
       }
-      if (!input.locked && !this.modals.isOpen) prompt = 'クリックで操作を再開';
+      if (!input.active && !this.modals.isOpen) prompt = 'クリックで操作を再開';
+      this.touchState = { mode: 'walk', canFish: prompt?.includes('釣り') ?? false, nearHut: this.nearHut() };
       this.hud.setPrompt(prompt);
       this.hud.setKeys([
         ['W A S D', '移動'],
@@ -326,6 +347,9 @@ export class Game {
           this.player.pitch -= input.mouseDY * 0.0022 * sens;
           this.player.pitch = Math.max(-0.9, Math.min(0.5, this.player.pitch));
         } else if (this.fishing.phase !== 'landing') {
+          const cl = input.cursorLook(dt);
+          input.mouseDX += cl.dx;
+          input.mouseDY += cl.dy;
           this.player.look(input, sens, { center: this.fishYaw, range: 1.4 });
         }
         if (fresh && input.hit('KeyF') && !this.fishing.busy) this.exitFishing();
@@ -336,7 +360,16 @@ export class Game {
       }
       this.player.applyTo(this.camera, 0);
       if (!paused) this.fishing.update(dt, input, this.player, sens);
-      this.hud.setPrompt(!input.locked && !this.modals.isOpen ? 'クリックで操作を再開' : null);
+      // 魚の引きで画面が揺れる
+      const sh = this.fishing.shake;
+      if (sh > 0.001) {
+        const t = now / 1000;
+        this.camera.position.x += Math.sin(t * 53) * sh * 0.025;
+        this.camera.position.y += Math.sin(t * 61 + 1) * sh * 0.02;
+        this.camera.rotation.z += Math.sin(t * 37) * sh * 0.012;
+      }
+      this.hud.setPrompt(!input.active && !this.modals.isOpen ? 'クリックで操作を再開' : null);
+      this.touchState = { mode: 'fish', canFish: false, nearHut: false };
       const ph = this.fishing.phase;
       this.hud.setKeys(
         ph === 'fight'
@@ -369,6 +402,16 @@ export class Game {
     for (const m of this.world.windowMats) m.emissiveIntensity = night * 1.5;
     this.headlamp.intensity = night > 0.55 && this.mode !== 'title' ? 18 * night : 0;
     this.hud.flash.style.opacity = String(this.atmo.flashLevel * 0.35);
+    const dg = this.mode === 'fish' ? this.fishing.danger : 0;
+    this.danger.style.opacity = String(dg * (0.6 + 0.4 * Math.sin(now / 90)));
+    this.touch.update({
+      mode: this.mode === 'title' || this.modals.isOpen ? 'hidden' : this.touchState.mode,
+      phase: this.fishing.phase,
+      canFish: this.touchState.canFish,
+      nearHut: this.touchState.nearHut,
+      isBait: !!this.fishing.lureDef.pack,
+      hasBite: this.fishing.hasBite,
+    });
     this.audio.setAmbient({ wind: this.atmo.wave, rain: this.atmo.rainAmount, night, water: this.mode === 'title' ? 0.5 : 1 });
     this.audio.setMood(this.mode === 'title' ? 'title' : this.clock.weather === 'storm' ? 'storm' : night > 0.6 ? 'night' : 'day');
     this.audio.tick();

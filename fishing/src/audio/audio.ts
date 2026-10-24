@@ -52,6 +52,10 @@ export class AudioEngine {
   private dragGain!: GainNode;
   private dragOsc!: OscillatorNode;
   private reelRate = 0;
+  private strainGain!: GainNode;
+  private strainOsc!: OscillatorNode;
+  private humGain!: GainNode;
+  private humOsc!: OscillatorNode;
   private reelNext = 0;
   private mood: Mood = 'title';
   private bgmStep = 0;
@@ -128,6 +132,30 @@ export class AudioEngine {
     dragNoise.connect(this.dragGain);
     this.dragOsc.connect(dragF).connect(this.dragGain);
     this.dragOsc.start();
+    // 重いリールを巻くときのきしみ（低いノコギリ波を細かく揺らす）
+    this.strainGain = this.gain(this.sfx, 0);
+    this.strainOsc = ctx.createOscillator();
+    this.strainOsc.type = 'sawtooth';
+    this.strainOsc.frequency.value = 70;
+    const strainF = ctx.createBiquadFilter();
+    strainF.type = 'bandpass';
+    strainF.frequency.value = 900;
+    strainF.Q.value = 3;
+    const wob = ctx.createOscillator();
+    wob.frequency.value = 23;
+    const wobAmt = ctx.createGain();
+    wobAmt.gain.value = 18;
+    wob.connect(wobAmt).connect(this.strainOsc.frequency);
+    wob.start();
+    this.strainOsc.connect(strainF).connect(this.strainGain);
+    this.strainOsc.start();
+    // 張り詰めた糸の鳴り（テンションで音程が上がる）
+    this.humGain = this.gain(this.sfx, 0);
+    this.humOsc = ctx.createOscillator();
+    this.humOsc.type = 'triangle';
+    this.humOsc.frequency.value = 300;
+    this.humOsc.connect(this.humGain);
+    this.humOsc.start();
   }
 
   setVolumes(v: { master: number; bgm: number; sfx: number }): void {
@@ -448,6 +476,16 @@ export class AudioEngine {
   /** 巻き取り速度 0..1（0で停止） */
   setReel(rate: number): void {
     this.reelRate = rate;
+  }
+
+  /** リールの重さ 0..1 と ラインテンション（強度比）0..1+ */
+  setStrain(load: number, tension: number): void {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    this.strainGain.gain.setTargetAtTime(Math.max(0, load - 0.25) * 0.09, t, 0.05);
+    this.strainOsc.frequency.setTargetAtTime(90 - load * 40, t, 0.1);
+    this.humGain.gain.setTargetAtTime(Math.max(0, tension - 0.55) * 0.05, t, 0.05);
+    this.humOsc.frequency.setTargetAtTime(260 + tension * 520, t, 0.05);
   }
 
   /** ドラグが出ている強さ 0..1 */

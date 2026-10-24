@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { Water } from 'three/examples/jsm/objects/Water.js';
-import { model, texture } from '../core/assets';
+import { instanced, model, texture } from '../core/assets';
 import { Rng } from '../sim/rng';
 import {
   DOCK,
@@ -32,7 +32,6 @@ export class LakeWorld {
   /** 夜に灯る明かり */
   readonly nightLights: THREE.PointLight[] = [];
   readonly windowMats: THREE.MeshStandardMaterial[] = [];
-  private reedMat!: THREE.MeshStandardMaterial;
   private swayTime = { value: 0 };
 
   constructor() {
@@ -247,14 +246,7 @@ export class LakeWorld {
   }
 
   private async loadProps(): Promise<void> {
-    const y0 = terrainHeight(HUT.x, HUT.z);
-    const lantern = await model('Lantern_01');
-    if (lantern) {
-      lantern.scale.setScalar(1.2);
-      lantern.position.set(HUT.x - HUT.d / 2 - 0.5, y0 + 1.95, HUT.z - 0.4);
-      this.group.add(lantern);
-    }
-    const barrel = await model('barrel_03');
+    const barrel = await model('barrel');
     if (barrel) {
       for (const [dx, dz] of [
         [-3.2, 2.6],
@@ -266,7 +258,35 @@ export class LakeWorld {
         this.group.add(b);
       }
     }
-    const fern = await model('fern_02');
+    // 桟橋につないだカヌー
+    const canoe = await model('canoe');
+    if (canoe) {
+      canoe.scale.setScalar(3.4);
+      canoe.position.set(DOCK.xEnd + 8, -0.12, DOCK.halfWidth + 1.3);
+      canoe.rotation.y = Math.PI / 2 + 0.06;
+      this.group.add(canoe);
+    }
+    // 小屋のまわりの小物
+    const decor: [string, number, number, number, number][] = [
+      ['log', -1, 6.5, 3.2, 0.4],
+      ['stump_old', 2, -5.5, 3, 0],
+      ['mushroom_redGroup', 3.5, 5.2, 3, 0],
+      ['flower_yellowA', -2.5, -4.8, 4, 0],
+      ['flower_purpleA', -4.2, -3.6, 4, 0],
+      ['plant_bushLarge', 4, 4, 5, 0],
+    ];
+    for (const [name, dx, dz, sc, rot] of decor) {
+      const m = await model(name);
+      if (!m) continue;
+      const x = HUT.x + dx;
+      const z = HUT.z + dz;
+      m.scale.setScalar(sc);
+      m.rotation.y = rot;
+      m.position.set(x, terrainHeight(x, z), z);
+      m.traverse((o) => (o.castShadow = true));
+      this.group.add(m);
+    }
+    const fern = await model('fern');
     if (fern) {
       const rng = new Rng(77);
       for (let i = 0; i < 60; i++) {
@@ -284,35 +304,15 @@ export class LakeWorld {
     }
   }
 
+  /** 樹木（Kenney Nature Kit）を地形に合わせて並べる */
   private buildTrees(): THREE.Group {
     const g = new THREE.Group();
     const rng = new Rng(1234);
-    const bark = texture('bark_brown_02_diff.jpg');
-    const trunkGeo = new THREE.CylinderGeometry(0.16, 0.3, 4, 7).translate(0, 2, 0);
-    const trunkMat = new THREE.MeshStandardMaterial({ map: bark, roughness: 0.95 });
-    // 針葉樹：円錐を重ねる
-    const coneParts: THREE.BufferGeometry[] = [];
-    for (let i = 0; i < 4; i++) {
-      const r = 2.2 - i * 0.45;
-      coneParts.push(new THREE.ConeGeometry(r, 2.8, 9).translate(0, 3 + i * 1.6, 0));
-    }
-    const conifer = mergeSimple(coneParts);
-    // 広葉樹：球を寄せる
-    const blobParts: THREE.BufferGeometry[] = [];
-    for (const [x, y, z, r] of [
-      [0, 5.2, 0, 2.2],
-      [1.2, 4.6, 0.5, 1.6],
-      [-1.1, 4.8, -0.4, 1.7],
-      [0.2, 6.3, -0.6, 1.5],
-      [-0.3, 4.4, 1.2, 1.4],
-    ]) {
-      blobParts.push(new THREE.IcosahedronGeometry(r, 1).translate(x, y, z));
-    }
-    const broad = mergeSimple(blobParts);
-    const leafMat = new THREE.MeshStandardMaterial({ roughness: 0.95, flatShading: true, map: leafTexture() });
-    const positions: { x: number; z: number; s: number; type: number }[] = [];
+    const kinds = ['tree_pineTallA', 'tree_pineTallB', 'tree_pineDefaultA', 'tree_pineRoundA', 'tree_oak', 'tree_default', 'tree_detailed', 'tree_fat'];
+    const byKind = new Map<string, THREE.Matrix4[]>();
     let tries = 0;
-    while (positions.length < 900 && tries++ < 8000) {
+    let count = 0;
+    while (count < 900 && tries++ < 9000) {
       const a = rng.range(-Math.PI, Math.PI);
       const r = shoreRadius(a) + 10 + Math.pow(rng.next(), 0.7) * 200;
       const x = Math.cos(a) * r;
@@ -323,187 +323,104 @@ export class LakeWorld {
       if (x > DOCK.xLand - 5 && x < HUT.x + 30 && Math.abs(z) < 18) continue;
       if (fbm(x * 0.02, z * 0.02) < 0.38 && r < shoreRadius(a) + 60) continue;
       const near = shoreDistance(x, z) < 30;
-      positions.push({ x, z, s: rng.range(0.75, 1.5), type: near && rng.chance(0.5) ? 1 : rng.chance(0.75) ? 0 : 1 });
+      // 岸辺は広葉樹、奥は針葉樹が多い
+      const kind = near && rng.chance(0.55) ? kinds[4 + rng.int(0, 3)] : rng.chance(0.78) ? kinds[rng.int(0, 3)] : kinds[4 + rng.int(0, 3)];
+      const s = rng.range(5.5, 9);
+      const m = new THREE.Matrix4().compose(
+        new THREE.Vector3(x, h - 0.15, z),
+        new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), rng.range(0, Math.PI * 2)),
+        new THREE.Vector3(s, s * rng.range(0.9, 1.25), s),
+      );
+      if (!byKind.has(kind)) byKind.set(kind, []);
+      byKind.get(kind)!.push(m);
+      count++;
+      if (shoreDistance(x, z) < 40) this.colliders.push({ x, z, r: 0.06 * s });
     }
-    const trunks = new THREE.InstancedMesh(trunkGeo, trunkMat, positions.length);
-    const conifers = new THREE.InstancedMesh(conifer, leafMat, positions.length);
-    const broads = new THREE.InstancedMesh(broad, leafMat, positions.length);
-    let nc = 0;
-    let nb = 0;
-    const m = new THREE.Matrix4();
-    const q = new THREE.Quaternion();
-    const col = new THREE.Color();
-    positions.forEach((p, i) => {
-      const y = terrainHeight(p.x, p.z) - 0.2;
-      q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rng.range(0, Math.PI * 2));
-      m.compose(new THREE.Vector3(p.x, y, p.z), q, new THREE.Vector3(p.s, p.s * rng.range(0.9, 1.3), p.s));
-      trunks.setMatrixAt(i, m);
-      if (p.type === 0) {
-        conifers.setMatrixAt(nc, m);
-        col.setHSL(0.33 + rng.range(-0.03, 0.03), 0.4, 0.1 + rng.range(-0.02, 0.03));
-        conifers.setColorAt(nc++, col);
-      } else {
-        broads.setMatrixAt(nb, m);
-        col.setHSL(0.25 + rng.range(-0.04, 0.05), 0.45, 0.15 + rng.range(-0.03, 0.04));
-        broads.setColorAt(nb++, col);
-      }
-      if (shoreDistance(p.x, p.z) < 40) this.colliders.push({ x: p.x, z: p.z, r: 0.5 * p.s });
-    });
-    conifers.count = nc;
-    broads.count = nb;
-    for (const im of [trunks, conifers, broads]) {
-      im.castShadow = true;
-      im.receiveShadow = true;
-      g.add(im);
-    }
+    for (const [kind, mats] of byKind) g.add(instanced(kind, mats, { tint: (_, c) => c.setHSL(0, 0, rng.range(0.55, 0.85)) }));
     return g;
   }
 
+  /** 岩（Kenney Nature Kit） */
   private buildRocks(): THREE.Group {
     const g = new THREE.Group();
     const rng = new Rng(99);
-    const base = new THREE.IcosahedronGeometry(1, 3);
-    const p = base.getAttribute('position');
-    const v = new THREE.Vector3();
-    for (let i = 0; i < p.count; i++) {
-      v.fromBufferAttribute(p, i);
-      const n = fbm(v.x * 1.7 + 5, v.z * 1.7 + v.y * 1.3, 3);
-      v.multiplyScalar(0.75 + n * 0.55);
-      v.y *= 0.7;
-      p.setXYZ(i, v.x, v.y, v.z);
-    }
-    base.computeVertexNormals();
-    const mat = new THREE.MeshStandardMaterial({ map: texture('gray_rocks_diff.jpg'), normalMap: texture('gray_rocks_nor_gl.jpg', { srgb: false }), roughness: 0.9 });
-    const items: { x: number; z: number; s: number }[] = [];
+    const kinds = ['rock_largeA', 'rock_largeC', 'rock_tallA', 'stone_largeB'];
+    const byKind = new Map<string, THREE.Matrix4[]>();
+    const add = (x: number, z: number, s: number) => {
+      const kind = kinds[rng.int(0, kinds.length - 1)];
+      const y = terrainHeight(x, z);
+      const m = new THREE.Matrix4().compose(
+        new THREE.Vector3(x, y - s * 0.12, z),
+        new THREE.Quaternion().setFromEuler(new THREE.Euler(rng.range(-0.15, 0.15), rng.range(0, 6.3), rng.range(-0.15, 0.15))),
+        new THREE.Vector3(s, s * rng.range(0.7, 1.2), s),
+      );
+      if (!byKind.has(kind)) byKind.set(kind, []);
+      byKind.get(kind)!.push(m);
+      if (s > 1.2 && y > -0.5) this.colliders.push({ x, z, r: s * 0.4 });
+    };
     for (let i = 0; i < 70; i++) {
       const a = ANGLES.rocks + rng.range(-0.38, 0.38);
       const r = shoreRadius(a) + rng.range(-14, 14);
-      items.push({ x: Math.cos(a) * r, z: Math.sin(a) * r, s: rng.range(0.6, 2.6) });
+      add(Math.cos(a) * r, Math.sin(a) * r, rng.range(1.2, 5));
     }
     for (let i = 0; i < 80; i++) {
       const a = rng.range(-Math.PI, Math.PI);
       const r = shoreRadius(a) + rng.range(2, 120);
-      items.push({ x: Math.cos(a) * r, z: Math.sin(a) * r, s: rng.range(0.4, 1.4) });
+      add(Math.cos(a) * r, Math.sin(a) * r, rng.range(0.8, 2.6));
     }
-    const im = new THREE.InstancedMesh(base, mat, items.length);
-    const m = new THREE.Matrix4();
-    const q = new THREE.Quaternion();
-    items.forEach((it, i) => {
-      const y = terrainHeight(it.x, it.z);
-      q.setFromEuler(new THREE.Euler(rng.range(-0.3, 0.3), rng.range(0, 6), rng.range(-0.3, 0.3)));
-      m.compose(new THREE.Vector3(it.x, y + it.s * 0.15, it.z), q, new THREE.Vector3(it.s, it.s, it.s));
-      im.setMatrixAt(i, m);
-      if (it.s > 0.8 && y > -0.5) this.colliders.push({ x: it.x, z: it.z, r: it.s * 0.9 });
-    });
-    im.castShadow = im.receiveShadow = true;
-    g.add(im);
+    for (const [kind, mats] of byKind) g.add(instanced(kind, mats));
     return g;
   }
 
-  private buildReeds(): THREE.InstancedMesh {
-    // 細い葉を数本束ねた株
-    const blades: THREE.BufferGeometry[] = [];
-    const br = new Rng(21);
-    for (let i = 0; i < 7; i++) {
-      const hgt = br.range(1.1, 2);
-      const shape = new THREE.Shape([new THREE.Vector2(-0.025, 0), new THREE.Vector2(0.025, 0), new THREE.Vector2(0.004, hgt), new THREE.Vector2(-0.004, hgt)]);
-      const b = new THREE.ShapeGeometry(shape, 1);
-      b.rotateZ(br.range(-0.25, 0.25));
-      b.rotateY(br.range(0, Math.PI));
-      b.translate(br.range(-0.25, 0.25), 0, br.range(-0.25, 0.25));
-      blades.push(b);
-    }
-    const cross = mergeSimple(blades);
-    this.reedMat = new THREE.MeshStandardMaterial({ color: 0x7d8a45, side: THREE.DoubleSide, roughness: 0.9 });
-    const sway = this.swayTime;
-    this.reedMat.onBeforeCompile = (s) => {
-      s.uniforms.uSway = sway;
-      s.vertexShader = s.vertexShader
-        .replace('#include <common>', '#include <common>\nuniform float uSway;')
-        .replace(
-          '#include <begin_vertex>',
-          `#include <begin_vertex>
-          vec4 ip = instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
-          float k = position.y * position.y * 0.08;
-          transformed.x += sin(uSway * 1.7 + ip.x * 0.3 + ip.z * 0.2) * k;
-          transformed.z += cos(uSway * 1.3 + ip.x * 0.2) * k * 0.6;`,
-        );
-    };
+  /** 岸辺の草むら・葦（Kenney Nature Kit の草を大きくして使う） */
+  private buildReeds(): THREE.Group {
     const rng = new Rng(5);
-    const n = 1600;
-    const im = new THREE.InstancedMesh(cross, this.reedMat, n);
-    const m = new THREE.Matrix4();
-    const q = new THREE.Quaternion();
-    const col = new THREE.Color();
-    let k = 0;
-    for (let i = 0; i < n * 3 && k < n; i++) {
-      const weed = rng.chance(0.75);
+    const tall: THREE.Matrix4[] = [];
+    const tufts: THREE.Matrix4[] = [];
+    for (let i = 0; i < 5000 && tall.length + tufts.length < 1400; i++) {
+      const weed = rng.chance(0.7);
       const a = weed ? ANGLES.weeds + rng.range(-0.4, 0.4) : rng.range(-Math.PI, Math.PI);
-      const r = shoreRadius(a) + rng.range(weed ? -9 : -3, 2.5);
+      const r = shoreRadius(a) + rng.range(weed ? -9 : -3, 3);
       const x = Math.cos(a) * r;
       const z = Math.sin(a) * r;
       const y = terrainHeight(x, z);
-      if (y < -1.2 || y > 0.8) continue;
+      if (y < -1.2 || y > 0.9) continue;
       if (Math.abs(z) < 5 && x > 0) continue;
-      q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rng.range(0, 3));
-      const s = rng.range(0.6, 1.4);
-      m.compose(new THREE.Vector3(x, y, z), q, new THREE.Vector3(s, s * rng.range(0.8, 1.3), s));
-      im.setMatrixAt(k, m);
-      col.setHSL(0.17 + rng.range(-0.04, 0.05), 0.4, 0.3 + rng.range(-0.06, 0.08));
-      im.setColorAt(k++, col);
+      const s = rng.range(2, 3.4);
+      const m = new THREE.Matrix4().compose(
+        new THREE.Vector3(x, Math.max(y, -1.2), z),
+        new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), rng.range(0, 6.3)),
+        new THREE.Vector3(s, s * (y < 0 ? rng.range(2, 3) : rng.range(1.1, 1.6)), s),
+      );
+      (y < 0.2 ? tall : tufts).push(m);
     }
-    im.count = k;
-    return im;
+    const g = new THREE.Group();
+    g.add(instanced('grass_large', tall, { shadow: false, tint: (_, c) => c.setRGB(0.6, 0.62, 0.38) }));
+    g.add(instanced('grass_leafsLarge', tufts, { shadow: false, tint: (_, c) => c.setRGB(0.6, 0.65, 0.45) }));
+    return g;
   }
 
-  private buildLilyPads(): THREE.InstancedMesh {
-    const pad = new THREE.CircleGeometry(0.4, 14, 0.25, Math.PI * 2 - 0.5).rotateX(-Math.PI / 2);
-    const mat = new THREE.MeshStandardMaterial({ color: 0x3f6b2a, roughness: 0.6, side: THREE.DoubleSide });
+  /** スイレンの葉（Kenney Nature Kit） */
+  private buildLilyPads(): THREE.Group {
     const rng = new Rng(8);
-    const n = 420;
-    const im = new THREE.InstancedMesh(pad, mat, n);
-    const m = new THREE.Matrix4();
-    const q = new THREE.Quaternion();
-    const col = new THREE.Color();
-    let k = 0;
-    for (let i = 0; i < n * 3 && k < n; i++) {
+    const big: THREE.Matrix4[] = [];
+    const small: THREE.Matrix4[] = [];
+    for (let i = 0; i < 1500 && big.length + small.length < 380; i++) {
       const a = ANGLES.weeds + rng.range(-0.38, 0.38);
       const r = shoreRadius(a) - rng.range(4, 32);
       const x = Math.cos(a) * r + rng.range(-2, 2);
       const z = Math.sin(a) * r;
       if (fbm(x * 0.08, z * 0.08) < 0.45) continue;
-      q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rng.range(0, 6.3));
-      const s = rng.range(0.6, 1.5);
-      m.compose(new THREE.Vector3(x, 0.03, z), q, new THREE.Vector3(s, 1, s));
-      im.setMatrixAt(k, m);
-      col.setHSL(0.27 + rng.range(-0.03, 0.03), 0.5, 0.22 + rng.range(-0.04, 0.05));
-      im.setColorAt(k++, col);
+      const s = rng.range(2.5, 4.5);
+      const m = new THREE.Matrix4().compose(new THREE.Vector3(x, 0.0, z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), rng.range(0, 6.3)), new THREE.Vector3(s, s, s));
+      (rng.chance(0.6) ? big : small).push(m);
     }
-    im.count = k;
-    im.renderOrder = 2;
-    return im;
+    const g = new THREE.Group();
+    g.add(instanced('lily_large', big, { shadow: false }));
+    g.add(instanced('lily_small', small, { shadow: false }));
+    g.renderOrder = 2;
+    return g;
   }
-}
-
-/** 葉の明暗のまだら模様 */
-function leafTexture(): THREE.Texture {
-  const cv = document.createElement('canvas');
-  cv.width = cv.height = 128;
-  const g = cv.getContext('2d')!;
-  g.fillStyle = '#c8c8c8';
-  g.fillRect(0, 0, 128, 128);
-  const rng = new Rng(3);
-  for (let i = 0; i < 900; i++) {
-    const v = Math.floor(rng.range(120, 255));
-    g.fillStyle = `rgb(${v},${v},${v})`;
-    g.beginPath();
-    g.arc(rng.range(0, 128), rng.range(0, 128), rng.range(1, 4), 0, Math.PI * 2);
-    g.fill();
-  }
-  const t = new THREE.CanvasTexture(cv);
-  t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  t.repeat.set(3, 3);
-  return t;
 }
 
 /** 位置・法線・UVの簡易結合 */

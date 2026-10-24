@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { SPECIES } from '../data/species';
-import { buildFishObject } from '../render/fishMesh';
+import { buildFishObject, preloadFishModels } from '../render/fishMesh';
 
 // 開発用：全魚種（＋色違い・模様違い）を並べて確認するページ。 /lab.html?variants=1
 const params = new URLSearchParams(location.search);
@@ -31,6 +31,7 @@ for (const s of SPECIES) {
     for (const p of s.patterns) items.push({ species: s, color: null, pattern: p.id });
   }
 }
+await preloadFishModels();
 const cols = showVariants ? 8 : 5;
 const swims: { uTime: { value: number } }[] = [];
 items.forEach((it, i) => {
