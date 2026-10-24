@@ -1,3 +1,4 @@
+import { FEATURES } from '../data/features';
 import { RETIRED } from '../data/characters';
 import type { ItemId } from '../data/play';
 
@@ -203,6 +204,7 @@ export const Save = {
   /** The level the next battle is against. */
   fightLv(): number {
     const d = this.data;
+    if (!FEATURES.rematch) return d.bossLv;
     return d.fightLv >= 1 && d.fightLv <= d.bossLv ? d.fightLv : d.bossLv;
   },
   reset(): void {

@@ -1,3 +1,4 @@
+import { FEATURES } from '../data/features';
 import { Container, Graphics, Sprite } from 'pixi.js';
 import gsap from 'gsap';
 import { App } from '../core/App';
@@ -37,7 +38,7 @@ export class MissionScene extends Scene {
     this.col.addChild(title, back, this.coins, tk);
     const ty = top + 190;
     const names: Record<Tab, string> = { daily: 'デイリー', challenge: 'チャレンジ', bingo: 'ビンゴ' };
-    (['daily', 'challenge', 'bingo'] as Tab[]).forEach((t, i) => {
+    (FEATURES.bingo ? (['daily', 'challenge', 'bingo'] as Tab[]) : (['daily', 'challenge'] as Tab[])).forEach((t, i) => {
       const b = new Button({ w: 214, h: 80, label: names[t], color: 'grey', size: 30, onTap: () => this.show(t) });
       b.position.set(126 + i * 234, ty);
       if (t === 'bingo' && pendingLines().length) {

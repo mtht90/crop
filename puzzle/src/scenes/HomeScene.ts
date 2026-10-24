@@ -1,3 +1,4 @@
+import { FEATURES } from '../data/features';
 import { Container, Graphics, Sprite } from 'pixi.js';
 import gsap from 'gsap';
 import { App } from '../core/App';
@@ -131,7 +132,8 @@ export class HomeScene extends Scene {
     this.page.addChild(card);
     popIn(card, 0.05, 0.8);
     const max = Save.data.bossLv;
-    if (max > 1) {
+    // rematches are switched off for now (FEATURES.rematch)
+    if (FEATURES.rematch && max > 1) {
       for (const dir of [-1, 1]) {
         const arrow = new Button({ w: 64, h: 64, label: dir < 0 ? '◀' : '▶', color: 'blue', size: 28, onTap: () => this.pickBoss(dir) });
         arrow.position.set(dir * 318, 0);
@@ -196,18 +198,21 @@ export class HomeScene extends Scene {
     mission.position.set(100, heroY - 40);
     const dress = new Button({ w: 170, h: 84, label: 'きせかえ', color: 'green', size: 28, onTap: () => Scenes.go(() => new DressScene()) });
     dress.position.set(620, heroY - 40);
-    // versus under the cosmetics button
-    const versus = new Button({ w: 170, h: 84, label: 'たいせん', color: 'purple', size: 28, onTap: () => Scenes.go(() => new VersusScene()) });
-    versus.position.set(620, heroY + 60);
     // time attack under the missions button: fixed seconds, best score (weekly ranking)
     const ta = new Button({ w: 170, h: 84, label: 'タイムアタック', color: 'pink', size: 20, onTap: () => this.startTimeAttack() });
     ta.position.set(100, heroY + 60);
-    this.page.addChild(mission, dress, versus, ta);
+    this.page.addChild(mission, dress, ta);
     popIn(ta, 0.3, 0.6);
     popIn(mission, 0.2, 0.6);
     popIn(dress, 0.25, 0.6);
-    popIn(versus, 0.3, 0.6);
-    const ready = claimableCount() + bingoClaimable();
+    if (FEATURES.versus) {
+      // versus under the cosmetics button
+      const versus = new Button({ w: 170, h: 84, label: 'たいせん', color: 'purple', size: 28, onTap: () => Scenes.go(() => new VersusScene()) });
+      versus.position.set(620, heroY + 60);
+      this.page.addChild(versus);
+      popIn(versus, 0.3, 0.6);
+    }
+    const ready = claimableCount() + (FEATURES.bingo ? bingoClaimable() : 0);
     if (ready > 0) {
       const badge = new Container();
       const bg = new Graphics().circle(0, 0, 22).fill(0xff3355).stroke({ width: 4, color: 0xffffff });

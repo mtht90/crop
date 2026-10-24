@@ -1,3 +1,4 @@
+import { FEATURES } from './features';
 import type { CharDef, Rarity } from './characters';
 export interface BossDef {
   id: string;
@@ -83,7 +84,7 @@ export function bossAlias(id: string, pose: BossPose): string {
  * Lv.5, 9, 13, ... are R and below; Lv.7, 11, 15, ... are SR and below; Lv.10, 20, ... are N only.
  */
 export function stageCap(lv: number): Rarity | null {
-  if (lv < 5) return null;
+  if (!FEATURES.rarityCap || lv < 5) return null;
   if (lv % 10 === 0) return 'N';
   if (lv % 4 === 1) return 'R';
   if (lv % 4 === 3) return 'SR';
