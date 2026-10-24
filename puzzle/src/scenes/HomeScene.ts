@@ -199,7 +199,11 @@ export class HomeScene extends Scene {
     // versus under the cosmetics button
     const versus = new Button({ w: 170, h: 84, label: 'たいせん', color: 'purple', size: 28, onTap: () => Scenes.go(() => new VersusScene()) });
     versus.position.set(620, heroY + 60);
-    this.page.addChild(mission, dress, versus);
+    // time attack under the missions button: fixed seconds, best score (weekly ranking)
+    const ta = new Button({ w: 170, h: 84, label: 'タイムアタック', color: 'pink', size: 20, onTap: () => this.startTimeAttack() });
+    ta.position.set(100, heroY + 60);
+    this.page.addChild(mission, dress, versus, ta);
+    popIn(ta, 0.3, 0.6);
     popIn(mission, 0.2, 0.6);
     popIn(dress, 0.25, 0.6);
     popIn(versus, 0.3, 0.6);
@@ -445,6 +449,15 @@ export class HomeScene extends Scene {
     Save.write();
     Sound.stopMusic(0.4);
     Scenes.go(() => new BattleScene(items));
+  }
+
+  private startTimeAttack(): void {
+    if (!spendLife()) return this.noLives();
+    const items = [...Save.data.pendingItems];
+    Save.data.pendingItems = [];
+    Save.write();
+    Sound.stopMusic(0.4);
+    Scenes.go(() => new BattleScene(items, undefined, 'ta'));
   }
 
   private noLives(): void {

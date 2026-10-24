@@ -48,6 +48,14 @@ export function enemyAtkInterval(lv: number, boss: boolean): number {
   return Math.max(3.2, (boss ? 6 : 7) - Math.min(lv, 40) * 0.05);
 }
 
+/** Time attack: a fixed number of seconds to get the highest score (the weekly ranking uses it). */
+export const TA_TIME = 60;
+
+/** Coins for a time attack: a share of the score on top of what the round dropped. */
+export function taCoins(score: number): number {
+  return Math.round(300 + Math.min(score, 50_000_000) / 600);
+}
+
 /** Score needed to defeat the boss (討伐ライン). */
 export function bossHp(lv: number): number {
   // tuned for a 90s round where fever stops the clock: steep up to Lv15, gentler after

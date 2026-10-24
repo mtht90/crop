@@ -53,6 +53,8 @@ export interface SaveData {
   econ: number;
   /** 1: the skill became manual by default (old saves get switched once). */
   skillV: number;
+  /** Time attack (fixed seconds, best score): this week's best, the all-time best, runs this week. */
+  ta: { week: string; best: number; allBest: number; runs: number };
   /** Lives: one per round, up to 5, one back every 10 minutes. `lifeAt` = when the next one started refilling. */
   lives: number;
   lifeAt: number;
@@ -95,6 +97,7 @@ function defaults(): SaveData {
     tutorialDone: false,
     econ: 2,
     skillV: 0,
+    ta: { week: '', best: 0, allBest: 0, runs: 0 },
     lives: 5,
     lifeAt: 0,
     pendingItems: [],

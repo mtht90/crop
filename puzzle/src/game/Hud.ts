@@ -435,6 +435,13 @@ export class ScoreLine extends Container {
     this.addChild(plank, lbl, this.value, this.lineText, this.check);
   }
   private vsName = '';
+  /** Replaces the defeat-line caption (time attack shows the best score there). */
+  setLine(text: string): void {
+    this.lineText.text = text;
+    // no defeat line to cross
+    this.line = Number.POSITIVE_INFINITY;
+  }
+
   /** Versus: the line under the score shows the opponent's score instead of the defeat line. */
   versus(name: string): void {
     this.vsName = name;

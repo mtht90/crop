@@ -388,7 +388,7 @@ export class RankingPanel extends Container {
     const h = 200 + WEEKLY_TIERS.length * rowH + 60;
     const title = txt('今週のほうしゅう', { size: 44, color: 0xff4f8f, stroke: 0xffffff, strokeWidth: 8 });
     title.y = -h / 2 + 56;
-    const note = txt(rank ? `いまは ${rank}位 / ${total}人` : 'スコアを出すとさんかできるよ', { size: 24, color: 0x8a5a2a });
+    const note = txt(rank ? `いまは ${rank}位 / ${total}人` : 'タイムアタックでスコアを出すとさんかできるよ', { size: 24, color: 0x8a5a2a });
     note.y = title.y + 52;
     box.addChild(panel(620, h), title, note);
     WEEKLY_TIERS.forEach((t, i) => {

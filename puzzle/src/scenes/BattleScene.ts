@@ -13,7 +13,7 @@ import { ComboLabel, JFever, JTimer, ScoreLine, SkillButton, banner, installBitm
 import { COLORS, bigTexture, loadCharacterArt } from '../art/PieceArt';
 import { loadFairy, tex, unloadFairy } from '../core/Loader';
 import { CHARACTERS, CHAR_BY_ID, COIN_SKILL, RARITY_INFO, addExp, chainCoins, charAtk, charCharge, expForRound, growthOf, skillAt, type CharDef, type Growth, type ShapeId, type Skill } from '../data/characters';
-import { FLOOR_SHARE, bossAttackCount, bossAttackInterval, bossForLevel, bossHp, enemyAtkInterval, enemyHit, floorEnemies, type BossDef } from '../data/bosses';
+import { FLOOR_SHARE, TA_TIME, taCoins, bossAttackCount, bossAttackInterval, bossForLevel, bossHp, enemyAtkInterval, enemyHit, floorEnemies, type BossDef } from '../data/bosses';
 import { ResultScene, type BattleResult } from './ResultScene';
 import { HomeScene } from './HomeScene';
 import { battleTrack } from '../data/music';
@@ -23,7 +23,7 @@ import { recordRound } from '../data/missions';
 import { recordBingo } from '../data/bingo';
 import type { Stats } from '../core/Save';
 import { Dev, devFab } from '../core/Dev';
-import { Ranking, submitScore, weekKey } from '../core/Ranking';
+import { submitScore, weekKey } from '../core/Ranking';
 import { ITEM_BY_ID, rollCoinBoost, spendLife, type ItemId } from '../data/play';
 import { expectedScore } from '../data/rank';
 import { Assets, type Texture as PTexture } from 'pixi.js';
@@ -204,9 +204,13 @@ export class BattleScene extends Scene {
   };
 
   /** `vs`: a versus match (no boss attacks or defeat line; attacks go to and come from the opponent). */
+  /** Time attack: fixed seconds, no floors or HP, just the highest score (it goes to the weekly ranking). */
+  private ta = false;
+
   constructor(
     private items: ItemId[] = [],
     private vs?: VsLink,
+    mode?: 'ta',
   ) {
     super();
     installBitmapFonts();
@@ -224,14 +228,16 @@ export class BattleScene extends Scene {
     const cs = COIN_SKILL[this.def.rarity];
     const k = 1 + (this.growth.skill - 1) * 0.1;
     this.coinSkill = { perPiece: cs.perPiece * k, flat: Math.round(cs.flat * k) };
-    this.bossLv = Save.fightLv();
-    this.rematch = this.bossLv < Save.data.bossLv;
+    this.ta = mode === 'ta';
+    this.bossLv = this.ta ? Save.data.bossLv : Save.fightLv();
+    this.rematch = this.ta || this.bossLv < Save.data.bossLv;
+    if (this.ta) this.timeLeft = TA_TIME + (items.includes('time') ? 5 : 0);
     this.bossDef = bossForLevel(this.bossLv);
     this.hp = bossHp(this.bossLv);
     // the defeat line is split over three floor enemies and the boss
     const ens = floorEnemies(this.bossLv);
     this.floors = FLOOR_SHARE.map((k, i) => ({ def: i < 3 ? ens[i] : this.bossDef, hp: Math.round(this.hp * k), boss: i === 3 }));
-    this.boss = new BossView(vs ? this.bossDef : this.floors[0].def);
+    this.boss = new BossView(vs || this.ta ? this.bossDef : this.floors[0].def);
     this.scoreW = new ScoreLine(this.hp);
     this.skillBtn = new SkillButton(this.def);
     this.gimmicks = gimmicksFor(this.bossLv);
@@ -414,7 +420,8 @@ export class BattleScene extends Scene {
     });
     this.pauseBtn.position.set(58, top + 54);
     this.hud.addChild(this.timer, this.scoreW, this.skillBtn, this.feverG, this.comboL, this.pauseBtn);
-    if (!this.vs) this.buildDungeonHud();
+    if (!this.vs && !this.ta) this.buildDungeonHud();
+    if (this.ta) this.scoreW.setLine(`今週のベスト ${(Save.data.ta.week === weekKey() ? Save.data.ta.best : 0).toLocaleString('en-US')}`);
     // manual mode: tap the gauge when it is full
     this.skillBtn.on('pointertap', () => void this.activateSkill());
     this.timer.set(this.timeLeft);
@@ -493,7 +500,7 @@ export class BattleScene extends Scene {
     // versus: the boss steps aside for the opponent's mini board
     this.boss.position.set(this.vs ? 210 : 360, this.stageH - 22);
     const avail = this.stageH - 22 - (App.safeTop + 165);
-    this.bossScale = Math.min(this.vs ? 0.8 : 1, avail / this.boss.height2) * (this.vs || this.floors[this.floor]?.boss ? 1 : 0.8);
+    this.bossScale = Math.min(this.vs ? 0.8 : 1, avail / this.boss.height2) * (this.vs || this.ta || this.floors[this.floor]?.boss ? 1 : 0.8);
     this.boss.scale.set(this.bossScale);
     if (this.vs && !this.mini) this.buildMini();
     // the band below the stage
@@ -621,7 +628,7 @@ export class BattleScene extends Scene {
         }
       }
       // floor enemies and the boss hit the player now and then (not during fever or between floors)
-      if (!this.vs && !this.feverOn && !this.floorBusy) {
+      if (!this.vs && !this.ta && !this.feverOn && !this.floorBusy) {
         this.enemyAtkT -= dt;
         if (this.enemyAtkT <= 0) {
           const boss = this.floors[this.floor].boss;
@@ -659,7 +666,7 @@ export class BattleScene extends Scene {
     this.board.update(this.phase === 'cutin' ? 0 : dt);
     this.boss.rage = this.landed >= this.hp * 0.7 ? 1 : 0;
     this.boss.update(dt);
-    if (!this.vs) this.drawDungeonHud();
+    if (!this.vs && !this.ta) this.drawDungeonHud();
     this.mini?.update(dt);
     if (this.walkT > 0) this.walkT -= dt;
     this.backdrop.update(dt, this.walkT > 0 ? 10 : this.feverOn ? 6 : 1);
@@ -928,6 +935,7 @@ export class BattleScene extends Scene {
       this.scoreW.bump();
       if (r.total > this.atk * 25) this.shake(8, 0.25);
     }
+    if (this.ta) return;
     if (this.vs) {
       if (before < this.hp && this.landed >= this.hp && !this.brokeLine) {
         this.brokeLine = true;
@@ -1024,7 +1032,7 @@ export class BattleScene extends Scene {
     this.feverOn = true;
     this.feverT = FEVER_TIME + (this.def.passive?.kind === 'oath' ? 2 : 0);
     this.feverCount++;
-    if (!this.vs) this.healPlayer(Math.round(PLAYER_HP * 0.2));
+    if (!this.vs && !this.ta) this.healPlayer(Math.round(PLAYER_HP * 0.2));
     this.board.fever = true;
     this.board.forceRelease();
     Sound.play('jFever', { vol: 0.8 });
@@ -2109,6 +2117,7 @@ export class BattleScene extends Scene {
     await wait(0.3);
     this.phase = 'end';
     if (this.vs) return this.vsEnd();
+    if (this.ta) return this.finish(false);
     const defeated = this.cleared;
     if (defeated) await this.defeatSequence();
     else await this.failSequence();
@@ -2339,6 +2348,7 @@ export class BattleScene extends Scene {
   }
 
   private finish(defeated: boolean): void {
+    if (this.ta) return this.taFinish();
     const d = Save.data;
     const score = Math.round(this.landed);
     // coins come from play (chains, coin skills) plus a small boss bonus; +Coin rolls a multiplier
@@ -2399,12 +2409,49 @@ export class BattleScene extends Scene {
     const stats: Stats = { plays: 1, defeats: defeated ? 1 : 0, ...this.round, fevers: this.feverCount, skills: this.skillUses, maxChain: this.maxChain, maxCombo: this.maxCombo };
     recordRound(stats);
     recordBingo(stats, this.def.id, score);
-    // a new weekly best plays the climb on the ranking page (remembered before submitScore updates it)
-    const prevWeek = d.rank.best[weekKey()] ?? 0;
-    if (score > prevWeek && Ranking.enabled && Ranking.registered) result.weekly = { prev: prevWeek, now: score };
-    void submitScore(score, this.def.id);
     Save.write();
     Scenes.go(() => new ResultScene(result));
+  }
+
+  /** Time attack result: score, this week's and all-time bests, coins; the score goes to the weekly ranking. */
+  private taFinish(): void {
+    const d = Save.data;
+    const score = Math.round(this.landed);
+    const wk = weekKey();
+    if (d.ta.week !== wk) d.ta = { ...d.ta, week: wk, best: 0, runs: 0 };
+    d.ta.runs++;
+    const newWeek = score > d.ta.best;
+    const newAll = score > d.ta.allBest;
+    if (newWeek) d.ta.best = score;
+    if (newAll) d.ta.allBest = score;
+    const coinBoost = this.items.includes('coin') ? rollCoinBoost() : 1;
+    const treat = this.def.passive?.kind === 'treat' ? 1.3 : 1;
+    const coins = Math.round((this.coinsEarned + taCoins(score)) * coinBoost * treat);
+    d.coins += coins;
+    const owned = d.owned[this.def.id];
+    const exp = expForRound(score, false);
+    const ups = owned ? addExp(this.def, owned, exp) : 0;
+    d.plays++;
+    if (score > d.best) d.best = score;
+    d.tutorialDone = true;
+    const stats: Stats = { plays: 1, defeats: 0, ...this.round, fevers: this.feverCount, skills: this.skillUses, maxChain: this.maxChain, maxCombo: this.maxCombo };
+    recordRound(stats);
+    recordBingo(stats, this.def.id, score);
+    void submitScore(score, this.def.id);
+    Save.write();
+    const f = (n: number) => n.toLocaleString('en-US');
+    if (newWeek || newAll) {
+      Sound.play('jLevel', { vol: 0.7 });
+      Sound.sparkle();
+    }
+    rewardPopup(this.overlay, 'タイムアタック', [
+      `スコア ${f(score)}${newWeek ? '  NEW!' : ''}`,
+      `今週のベスト ${f(d.ta.best)}`,
+      `じこベスト ${f(d.ta.allBest)}${newAll ? '  NEW!' : ''}`,
+      '',
+      `${f(coins)}コイン`,
+      `EXP +${exp}${ups ? '  Lv.UP!' : ''}`,
+    ], () => Scenes.go(() => new HomeScene()));
   }
 
   // ----------------------------------------------------------------- pause
