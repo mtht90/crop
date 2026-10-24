@@ -198,11 +198,7 @@ export class HomeScene extends Scene {
     mission.position.set(100, heroY - 40);
     const dress = new Button({ w: 170, h: 84, label: 'きせかえ', color: 'green', size: 28, onTap: () => Scenes.go(() => new DressScene()) });
     dress.position.set(620, heroY - 40);
-    // time attack under the missions button: fixed seconds, best score (weekly ranking)
-    const ta = new Button({ w: 170, h: 84, label: 'タイムアタック', color: 'pink', size: 20, onTap: () => this.startTimeAttack() });
-    ta.position.set(100, heroY + 60);
-    this.page.addChild(mission, dress, ta);
-    popIn(ta, 0.3, 0.6);
+    this.page.addChild(mission, dress);
     popIn(mission, 0.2, 0.6);
     popIn(dress, 0.25, 0.6);
     if (FEATURES.versus) {
@@ -290,7 +286,7 @@ export class HomeScene extends Scene {
     bl.position.set(-270, -62);
     const bn = txt(`Lv.${lv}  ${bdef.name}`, { size: 40, stroke: 0x2a1630, strokeWidth: 8, anchor: [0, 0.5] });
     bn.position.set(-270, -12);
-    const bh = txt(`3フロア＋ボス  討伐ライン ${fmt(bossHp(lv))}`, { size: 24, color: 0xffb8d8, anchor: [0, 0.5] });
+    const bh = txt(`討伐ライン ${fmt(bossHp(lv))}`, { size: 26, color: 0xffb8d8, anchor: [0, 0.5] });
     bh.position.set(-270, 30);
     // obstruction chips (tap for details)
     const gt = gimmickChips(gimmicksFor(lv), 352, () => this.col);
@@ -454,15 +450,6 @@ export class HomeScene extends Scene {
     Save.write();
     Sound.stopMusic(0.4);
     Scenes.go(() => new BattleScene(items));
-  }
-
-  private startTimeAttack(): void {
-    if (!spendLife()) return this.noLives();
-    const items = [...Save.data.pendingItems];
-    Save.data.pendingItems = [];
-    Save.write();
-    Sound.stopMusic(0.4);
-    Scenes.go(() => new BattleScene(items, undefined, 'ta'));
   }
 
   private noLives(): void {

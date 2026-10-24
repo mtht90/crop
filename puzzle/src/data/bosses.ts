@@ -23,40 +23,6 @@ export function bossForLevel(lv: number): BossDef {
   return BOSSES[(lv - 1) % BOSSES.length];
 }
 
-/** Floor enemies of the dungeon (Quaternius "Ultimate Monsters", CC0); art under assets/enemy. */
-export const ENEMIES: BossDef[] = [
-  ['alien', 'ツノスライム'], ['armabee', 'ハチボール'], ['bluedemon', 'あおオニ'], ['bunny', 'いじわるウサギ'],
-  ['cactoro', 'サボテンくん'], ['demon', 'こあくま'], ['dino', 'トサカザウルス'], ['frog', 'まだらガエル'],
-  ['ghost', 'おばけコウモリ'], ['greenblob', 'みどりモチ'], ['monkroose', 'ヤンチャザル'], ['mushnub', 'キノコまる'],
-  ['mushroomking', 'キノコだいおう'], ['pinkblob', 'ピンクモチ'], ['squidle', 'イカトンボ'], ['wizard', 'とんがりボウシ'],
-].map(([id, name]) => ({ id: `e_${id}`, name, bg: 1, color: 0xffffff }));
-
-/** Share of the defeat line each floor holds: three floor enemies, then the boss. */
-export const FLOOR_SHARE = [0.14, 0.18, 0.22, 0.46];
-
-/** The three floor enemies of a level (always the same for a level). */
-export function floorEnemies(lv: number): BossDef[] {
-  return [0, 1, 2].map((i) => ENEMIES[(lv * 5 + i * 7) % ENEMIES.length]);
-}
-
-/** Damage one enemy hit does to the player (out of 1000 HP). */
-export function enemyHit(lv: number, boss: boolean): number {
-  return Math.round((boss ? 70 : 45) * (1 + Math.min(lv, 60) * 0.006));
-}
-
-/** Seconds between enemy hits. */
-export function enemyAtkInterval(lv: number, boss: boolean): number {
-  return Math.max(3.2, (boss ? 6 : 7) - Math.min(lv, 40) * 0.05);
-}
-
-/** Time attack: a fixed number of seconds to get the highest score (the weekly ranking uses it). */
-export const TA_TIME = 60;
-
-/** Coins for a time attack: a share of the score on top of what the round dropped. */
-export function taCoins(score: number): number {
-  return Math.round(300 + Math.min(score, 50_000_000) / 600);
-}
-
 /** Score needed to defeat the boss (討伐ライン). */
 export function bossHp(lv: number): number {
   // tuned for a 90s round where fever stops the clock: steep up to Lv15, gentler after

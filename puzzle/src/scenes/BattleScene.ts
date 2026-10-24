@@ -13,7 +13,7 @@ import { ComboLabel, JFever, JTimer, ScoreLine, SkillButton, banner, installBitm
 import { COLORS, bigTexture, loadCharacterArt } from '../art/PieceArt';
 import { loadFairy, tex, unloadFairy } from '../core/Loader';
 import { CHARACTERS, CHAR_BY_ID, COIN_SKILL, RARITY_INFO, addExp, chainCoins, charAtk, charCharge, expForRound, growthOf, skillAt, type CharDef, type Growth, type ShapeId, type Skill } from '../data/characters';
-import { FLOOR_SHARE, TA_TIME, taCoins, bossAttackCount, bossAttackInterval, bossForLevel, bossHp, enemyAtkInterval, enemyHit, floorEnemies, type BossDef } from '../data/bosses';
+import { bossAttackCount, bossAttackInterval, bossForLevel, bossHp, type BossDef } from '../data/bosses';
 import { ResultScene, type BattleResult } from './ResultScene';
 import { HomeScene } from './HomeScene';
 import { battleTrack } from '../data/music';
@@ -23,7 +23,7 @@ import { recordRound } from '../data/missions';
 import { recordBingo } from '../data/bingo';
 import type { Stats } from '../core/Save';
 import { Dev, devFab } from '../core/Dev';
-import { submitScore, weekKey } from '../core/Ranking';
+import { Ranking, submitScore, weekKey } from '../core/Ranking';
 import { ITEM_BY_ID, rollCoinBoost, spendLife, type ItemId } from '../data/play';
 import { expectedScore } from '../data/rank';
 import { Assets, type Texture as PTexture } from 'pixi.js';
@@ -34,9 +34,6 @@ import { MiniBoard, boardSnapshot } from '../game/MiniBoard';
 import { rewardPopup } from './common';
 
 export const BATTLE_TIME = 90;
-/** A dungeon run: three floors and the boss, against one clock. */
-export const DUNGEON_TIME = 100;
-const PLAYER_HP = 1000;
 /** What the boss throws for each piece status. */
 const THROWN = { ice: 'crystal', bubble: 'qbox', web: 'shackle', slime: 'anchor', curse: 'skull', skullBomb: 'bomb', chameleon: 'qbox' } as const;
 /** Diameter of the round board in design px. */
@@ -132,23 +129,7 @@ export class BattleScene extends Scene {
 
   private phase: Phase = 'intro';
   private paused = false;
-  private timeLeft = DUNGEON_TIME;
-  // ---- dungeon: floors of enemies, then the boss; the player has HP
-  private floors: { def: BossDef; hp: number; boss: boolean }[] = [];
-  private floor = 0;
-  /** Damage dealt before the current floor (overflow carries into the next enemy). */
-  private floorBase = 0;
-  private floorBusy = false;
-  private cleared = false;
-  private playerHp = PLAYER_HP;
-  private enemyAtkT = 6;
-  private hpBar = new Container();
-  private hpFill = new Graphics();
-  private hpText = txt('', { size: 22, font: 'dela', color: 0xffffff, stroke: 0x2a1630, strokeWidth: 5 });
-  private enemyInfo = new Container();
-  private enemyFill = new Graphics();
-  private enemyName = txt('', { size: 24, color: 0xffffff, stroke: 0x2a1630, strokeWidth: 6 });
-  private floorTag = txt('', { size: 26, font: 'dela', color: 0xfff27a, stroke: 0x2a1630, strokeWidth: 6 });
+  private timeLeft = BATTLE_TIME;
   private landed = 0;
   private committed = 0;
   private combo = 0;
@@ -204,17 +185,14 @@ export class BattleScene extends Scene {
   };
 
   /** `vs`: a versus match (no boss attacks or defeat line; attacks go to and come from the opponent). */
-  /** Time attack: fixed seconds, no floors or HP, just the highest score (it goes to the weekly ranking). */
-  private ta = false;
 
   constructor(
     private items: ItemId[] = [],
     private vs?: VsLink,
-    mode?: 'ta',
   ) {
     super();
     installBitmapFonts();
-    if (items.includes('time')) this.timeLeft = DUNGEON_TIME + 5;
+    if (items.includes('time')) this.timeLeft = BATTLE_TIME + 5;
     this.fiveToFour = items.includes('five4');
     const sel = Save.data.selected;
     this.def = CHAR_BY_ID[sel] ?? CHARACTERS[0];
@@ -228,22 +206,15 @@ export class BattleScene extends Scene {
     const cs = COIN_SKILL[this.def.rarity];
     const k = 1 + (this.growth.skill - 1) * 0.1;
     this.coinSkill = { perPiece: cs.perPiece * k, flat: Math.round(cs.flat * k) };
-    this.ta = mode === 'ta';
-    this.bossLv = this.ta ? Save.data.bossLv : Save.fightLv();
-    this.rematch = this.ta || this.bossLv < Save.data.bossLv;
-    if (this.ta) this.timeLeft = TA_TIME + (items.includes('time') ? 5 : 0);
+    this.bossLv = Save.fightLv();
+    this.rematch = this.bossLv < Save.data.bossLv;
     this.bossDef = bossForLevel(this.bossLv);
     this.hp = bossHp(this.bossLv);
-    // the defeat line is split over three floor enemies and the boss
-    const ens = floorEnemies(this.bossLv);
-    this.floors = FLOOR_SHARE.map((k, i) => ({ def: i < 3 ? ens[i] : this.bossDef, hp: Math.round(this.hp * k), boss: i === 3 }));
-    this.boss = new BossView(vs || this.ta ? this.bossDef : this.floors[0].def);
+    this.boss = new BossView(this.bossDef);
     this.scoreW = new ScoreLine(this.hp);
     this.skillBtn = new SkillButton(this.def);
     this.gimmicks = gimmicksFor(this.bossLv);
-    // the boss's obstructions only start on the boss floor
-    this.bossAtkT = Infinity;
-    this.enemyAtkT = enemyAtkInterval(this.bossLv, false) + 2;
+    this.bossAtkT = this.gimmicks.length ? bossAttackInterval(this.bossLv) || Infinity : Infinity;
     if (this.def.passive?.kind === 'guard') this.guards = 3;
     if (vs) {
       this.timeLeft = VS_TIME;
@@ -420,8 +391,6 @@ export class BattleScene extends Scene {
     });
     this.pauseBtn.position.set(58, top + 54);
     this.hud.addChild(this.timer, this.scoreW, this.skillBtn, this.feverG, this.comboL, this.pauseBtn);
-    if (!this.vs && !this.ta) this.buildDungeonHud();
-    if (this.ta) this.scoreW.setLine(`今週のベスト ${(Save.data.ta.week === weekKey() ? Save.data.ta.best : 0).toLocaleString('en-US')}`);
     // manual mode: tap the gauge when it is full
     this.skillBtn.on('pointertap', () => void this.activateSkill());
     this.timer.set(this.timeLeft);
@@ -500,7 +469,7 @@ export class BattleScene extends Scene {
     // versus: the boss steps aside for the opponent's mini board
     this.boss.position.set(this.vs ? 210 : 360, this.stageH - 22);
     const avail = this.stageH - 22 - (App.safeTop + 165);
-    this.bossScale = Math.min(this.vs ? 0.8 : 1, avail / this.boss.height2) * (this.vs || this.ta || this.floors[this.floor]?.boss ? 1 : 0.8);
+    this.bossScale = Math.min(this.vs ? 0.8 : 1, avail / this.boss.height2);
     this.boss.scale.set(this.bossScale);
     if (this.vs && !this.mini) this.buildMini();
     // the band below the stage
@@ -627,15 +596,6 @@ export class BattleScene extends Scene {
           if (this.vs.oppBoard) this.mini?.set(this.vs.oppBoard, this.vs.oppFever);
         }
       }
-      // floor enemies and the boss hit the player now and then (not during fever or between floors)
-      if (!this.vs && !this.ta && !this.feverOn && !this.floorBusy) {
-        this.enemyAtkT -= dt;
-        if (this.enemyAtkT <= 0) {
-          const boss = this.floors[this.floor].boss;
-          this.enemyAtkT = enemyAtkInterval(this.bossLv, boss);
-          this.enemyStrike(enemyHit(this.bossLv, boss));
-        }
-      }
       // boss attack (the boss holds off during fever)
       if (!this.feverOn) this.bossAtkT -= dt;
       if (this.bossAtkT <= 0) {
@@ -666,10 +626,8 @@ export class BattleScene extends Scene {
     this.board.update(this.phase === 'cutin' ? 0 : dt);
     this.boss.rage = this.landed >= this.hp * 0.7 ? 1 : 0;
     this.boss.update(dt);
-    if (!this.vs && !this.ta) this.drawDungeonHud();
     this.mini?.update(dt);
-    if (this.walkT > 0) this.walkT -= dt;
-    this.backdrop.update(dt, this.walkT > 0 ? 10 : this.feverOn ? 6 : 1);
+    this.backdrop.update(dt, this.feverOn ? 6 : 1);
     this.updateOrbs(dt);
     this.updateProjectiles(dt);
     this.fxTop.update(dt);
@@ -935,13 +893,10 @@ export class BattleScene extends Scene {
       this.scoreW.bump();
       if (r.total > this.atk * 25) this.shake(8, 0.25);
     }
-    if (this.ta) return;
-    if (this.vs) {
-      if (before < this.hp && this.landed >= this.hp && !this.brokeLine) {
-        this.brokeLine = true;
-        this.onLineBroken();
-      }
-    } else this.checkFloor();
+    if (before < this.hp && this.landed >= this.hp && !this.brokeLine) {
+      this.brokeLine = true;
+      this.onLineBroken();
+    }
   }
 
   /** Coins pop out of the board and fly to the counter. */
@@ -1032,7 +987,6 @@ export class BattleScene extends Scene {
     this.feverOn = true;
     this.feverT = FEVER_TIME + (this.def.passive?.kind === 'oath' ? 2 : 0);
     this.feverCount++;
-    if (!this.vs && !this.ta) this.healPlayer(Math.round(PLAYER_HP * 0.2));
     this.board.fever = true;
     this.board.forceRelease();
     Sound.play('jFever', { vol: 0.8 });
@@ -2097,7 +2051,7 @@ export class BattleScene extends Scene {
   }
 
   // ---------------------------------------------------------------- ending
-  private async timeUp(why: 'time' | 'clear' | 'down' = 'time'): Promise<void> {
+  private async timeUp(): Promise<void> {
     if (this.phase === 'timeup' || this.phase === 'end') return;
     const wasCutin = this.phase === 'cutin';
     this.phase = 'timeup';
@@ -2106,10 +2060,9 @@ export class BattleScene extends Scene {
     if (this.feverOn) this.endFever();
     this.clearAllEffects();
     Sound.stopMusic(1.0);
-    if (why !== 'clear') Sound.play('jTimeUp', { vol: 0.8 });
+    Sound.play('jTimeUp', { vol: 0.8 });
     haptic([30, 50, 30]);
-    const text = why === 'clear' ? 'ダンジョンクリア！' : why === 'down' ? 'やられた…' : 'TIME UP!';
-    await banner(this.overlay, text, 360, this.boardY + this.board.h * 0.4, { size: why === 'time' ? 120 : 86, color: why === 'clear' ? 0xfff27a : 0xff8aa0, stroke: why === 'clear' ? 0x8a1f00 : 0x4a0018, hold: 0.6 });
+    await banner(this.overlay, 'TIME UP!', 360, this.boardY + this.board.h * 0.4, { size: 120, color: 0xff8aa0, stroke: 0x4a0018, hold: 0.6 });
     // let every pending orb land
     const t0 = performance.now();
     while ((this.orbs.length || this.resolves.size || this.projectiles.length) && performance.now() - t0 < 4000) await wait(0.05);
@@ -2117,152 +2070,10 @@ export class BattleScene extends Scene {
     await wait(0.3);
     this.phase = 'end';
     if (this.vs) return this.vsEnd();
-    if (this.ta) return this.finish(false);
-    const defeated = this.cleared;
+    const defeated = this.landed >= this.hp;
     if (defeated) await this.defeatSequence();
     else await this.failSequence();
     this.finish(defeated);
-  }
-
-  // --------------------------------------------------------------- dungeon
-  private buildDungeonHud(): void {
-    // player HP where the fever gauge used to be (next to the skill button)
-    const w = 420;
-    const bg = new Graphics().roundRect(-w / 2 - 6, -20, w + 12, 40, 20).fill(0x2a1630).stroke({ width: 3, color: 0xffffff });
-    const heart = new Sprite(tex('ui:heart'));
-    heart.anchor.set(0.5);
-    heart.scale.set(46 / Math.max(1, heart.texture.width));
-    heart.x = -w / 2 - 6;
-    this.hpText.position.set(0, 0);
-    this.hpBar.addChild(bg, this.hpFill, heart, this.hpText);
-    this.hpBar.position.set(430, this.stageH + 58);
-    // the enemy's name, floor and HP over the stage
-    const ew = 300;
-    const ebg = new Graphics().roundRect(-ew / 2 - 4, -11, ew + 8, 22, 11).fill(0x2a1630).stroke({ width: 3, color: 0xffffff });
-    this.enemyName.y = -30;
-    this.floorTag.anchor.set(0, 0.5);
-    this.floorTag.position.set(-ew / 2 - 4, -62);
-    this.enemyInfo.addChild(ebg, this.enemyFill, this.enemyName, this.floorTag);
-    this.enemyInfo.position.set(360, App.safeTop + 262);
-    this.hud.addChild(this.hpBar, this.enemyInfo);
-    this.setEnemyLabels();
-  }
-
-  private setEnemyLabels(): void {
-    const f = this.floors[this.floor];
-    this.enemyName.text = f.boss ? `BOSS  ${f.def.name}` : f.def.name;
-    this.floorTag.text = f.boss ? 'ボスのへや' : `${this.floor + 1}F / ${this.floors.length - 1}F`;
-  }
-
-  private drawDungeonHud(): void {
-    const w = 420;
-    const k = Math.max(0, this.playerHp / PLAYER_HP);
-    this.hpFill.clear();
-    if (k > 0) this.hpFill.roundRect(-w / 2, -14, w * k, 28, 14).fill(k > 0.5 ? 0x5fd068 : k > 0.25 ? 0xffc31f : 0xff4f5f);
-    this.hpText.text = `HP ${Math.max(0, Math.ceil(this.playerHp))}`;
-    const f = this.floors[this.floor];
-    const ew = 300;
-    const left = this.floorBusy ? 0 : Math.max(0, 1 - (this.landed - this.floorBase) / f.hp);
-    this.enemyFill.clear();
-    if (left > 0) this.enemyFill.roundRect(-ew / 2, -8, ew * left, 16, 8).fill(f.boss ? 0xff4fd8 : 0xff7a3a);
-  }
-
-  /** An enemy hits the player: a shot from the enemy to the HP bar. */
-  private enemyStrike(dmg: number): void {
-    if (this.phase !== 'play') return;
-    this.boss.shout(0.5);
-    Sound.play('hitHeavy', { vol: 0.6, rate: 0.8 });
-    const shot = new Sprite(fx('circle_05'));
-    shot.anchor.set(0.5);
-    shot.tint = 0xff4f5f;
-    shot.blendMode = 'add';
-    shot.scale.set(0.5);
-    shot.position.set(this.boss.x, this.boss.y - this.bossH * 0.5);
-    this.overlay.addChild(shot);
-    gsap.to(shot, { x: this.hpBar.x - 150, y: this.hpBar.y, duration: 0.35, ease: 'power2.in', onComplete: () => {
-      shot.destroy();
-      if (this.phase !== 'play') return;
-      this.playerHp = Math.max(0, this.playerHp - dmg);
-      this.floatText(`-${dmg}`, this.hpBar.x, this.hpBar.y - 40, 0xff6a7a, 40);
-      this.vignette.alpha = 0.45;
-      gsap.to(this.vignette, { alpha: 0, duration: 0.5 });
-      this.shake(10, 0.3);
-      haptic([30, 30, 30]);
-      gsap.fromTo(this.hpBar.scale, { x: 1.08, y: 1.25 }, { x: 1, y: 1, duration: 0.4, ease: 'elastic.out(1.2,0.4)' });
-      if (this.playerHp <= 0) void this.playerDown();
-    } });
-  }
-
-  private healPlayer(n: number): void {
-    const before = this.playerHp;
-    this.playerHp = Math.min(PLAYER_HP, this.playerHp + n);
-    if (this.playerHp > before) this.floatText(`+${Math.round(this.playerHp - before)}`, this.hpBar.x, this.hpBar.y - 40, 0x7aff9a, 40);
-  }
-
-  /** Moves on when the current enemy's share of damage has landed. */
-  private checkFloor(): void {
-    if (this.floorBusy || this.cleared || this.phase !== 'play') return;
-    const f = this.floors[this.floor];
-    if (this.landed - this.floorBase < f.hp) return;
-    if (f.boss) void this.dungeonClear();
-    else void this.nextFloor();
-  }
-
-  private async nextFloor(): Promise<void> {
-    this.floorBusy = true;
-    const old = this.boss;
-    const f = this.floors[this.floor];
-    this.floorBase += f.hp;
-    old.die();
-    Sound.explosion(false);
-    Sound.play('bell', { vol: 0.6 });
-    this.coinBurst(old.x, old.y - 100);
-    gsap.to(old, { alpha: 0, x: old.x + 60, duration: 0.6, delay: 0.4, onComplete: () => old.destroy({ children: true }) });
-    void banner(this.overlay, `${this.floor + 1}F クリア！`, 360, this.stageH * 0.5, { size: 70, color: 0xfff27a, stroke: 0x8a1f00, hold: 0.4 });
-    // walk on: the backdrop scrolls while the next enemy steps in
-    await wait(0.7);
-    this.floor++;
-    const next = this.floors[this.floor];
-    this.boss = new BossView(next.def);
-    this.stage.addChild(this.boss);
-    const avail = this.stageH - 22 - (App.safeTop + 165);
-    this.bossScale = Math.min(1, avail / this.boss.height2) * (next.boss ? 1 : 0.8);
-    this.boss.scale.set(this.bossScale);
-    this.boss.position.set(900, this.stageH - 22);
-    this.walkT = 0.9;
-    gsap.to(this.boss, { x: 360, duration: 0.8, ease: 'power2.out' });
-    this.setEnemyLabels();
-    if (next.boss) {
-      Sound.play('bong', { vol: 0.8 });
-      void banner(this.overlay, 'ボス登場！', 360, this.stageH * 0.5, { size: 90, color: 0xff7ad9, stroke: 0x4a0040, hold: 0.5, sub: this.gimmicks.length ? 'ボスは妨害もしてくるよ' : undefined });
-      this.bossAtkT = this.gimmicks.length ? bossAttackInterval(this.bossLv) || Infinity : Infinity;
-    }
-    this.enemyAtkT = enemyAtkInterval(this.bossLv, next.boss) + 1.5;
-    await wait(0.8);
-    this.boss.shout(0.6);
-    this.floorBusy = false;
-    // overflow may already be enough for this one too
-    this.checkFloor();
-  }
-
-  private walkT = 0;
-
-  private async dungeonClear(): Promise<void> {
-    this.cleared = true;
-    this.floorBusy = true;
-    // what is left on the clock and of the HP becomes bonus score
-    const bonus = Math.round((this.timeLeft * 0.006 + (this.playerHp / PLAYER_HP) * 0.15) * this.hp);
-    this.landed += bonus;
-    this.committed += bonus;
-    this.floatText(`クリアボーナス +${bonus.toLocaleString('en-US')}`, 360, this.stageH * 0.35, 0xfff27a, 40);
-    // coins for the time left, so a fast clear pays at least as well as a full round
-    this.dropCoins(Math.round(300 + this.timeLeft * 12), 360, this.stageH * 0.45);
-    await this.timeUp('clear');
-  }
-
-  private async playerDown(): Promise<void> {
-    if (this.phase !== 'play') return;
-    await this.timeUp('down');
   }
 
   private async zoomToBoss(): Promise<void> {
@@ -2348,7 +2159,6 @@ export class BattleScene extends Scene {
   }
 
   private finish(defeated: boolean): void {
-    if (this.ta) return this.taFinish();
     const d = Save.data;
     const score = Math.round(this.landed);
     // coins come from play (chains, coin skills) plus a small boss bonus; +Coin rolls a multiplier
@@ -2409,49 +2219,12 @@ export class BattleScene extends Scene {
     const stats: Stats = { plays: 1, defeats: defeated ? 1 : 0, ...this.round, fevers: this.feverCount, skills: this.skillUses, maxChain: this.maxChain, maxCombo: this.maxCombo };
     recordRound(stats);
     recordBingo(stats, this.def.id, score);
-    Save.write();
-    Scenes.go(() => new ResultScene(result));
-  }
-
-  /** Time attack result: score, this week's and all-time bests, coins; the score goes to the weekly ranking. */
-  private taFinish(): void {
-    const d = Save.data;
-    const score = Math.round(this.landed);
-    const wk = weekKey();
-    if (d.ta.week !== wk) d.ta = { ...d.ta, week: wk, best: 0, runs: 0 };
-    d.ta.runs++;
-    const newWeek = score > d.ta.best;
-    const newAll = score > d.ta.allBest;
-    if (newWeek) d.ta.best = score;
-    if (newAll) d.ta.allBest = score;
-    const coinBoost = this.items.includes('coin') ? rollCoinBoost() : 1;
-    const treat = this.def.passive?.kind === 'treat' ? 1.3 : 1;
-    const coins = Math.round((this.coinsEarned + taCoins(score)) * coinBoost * treat);
-    d.coins += coins;
-    const owned = d.owned[this.def.id];
-    const exp = expForRound(score, false);
-    const ups = owned ? addExp(this.def, owned, exp) : 0;
-    d.plays++;
-    if (score > d.best) d.best = score;
-    d.tutorialDone = true;
-    const stats: Stats = { plays: 1, defeats: 0, ...this.round, fevers: this.feverCount, skills: this.skillUses, maxChain: this.maxChain, maxCombo: this.maxCombo };
-    recordRound(stats);
-    recordBingo(stats, this.def.id, score);
+    // a new weekly best plays the climb on the ranking page (remembered before submitScore updates it)
+    const prevWeek = d.rank.best[weekKey()] ?? 0;
+    if (score > prevWeek && Ranking.enabled && Ranking.registered) result.weekly = { prev: prevWeek, now: score };
     void submitScore(score, this.def.id);
     Save.write();
-    const f = (n: number) => n.toLocaleString('en-US');
-    if (newWeek || newAll) {
-      Sound.play('jLevel', { vol: 0.7 });
-      Sound.sparkle();
-    }
-    rewardPopup(this.overlay, 'タイムアタック', [
-      `スコア ${f(score)}${newWeek ? '  NEW!' : ''}`,
-      `今週のベスト ${f(d.ta.best)}`,
-      `じこベスト ${f(d.ta.allBest)}${newAll ? '  NEW!' : ''}`,
-      '',
-      `${f(coins)}コイン`,
-      `EXP +${exp}${ups ? '  Lv.UP!' : ''}`,
-    ], () => Scenes.go(() => new HomeScene()));
+    Scenes.go(() => new ResultScene(result));
   }
 
   // ----------------------------------------------------------------- pause
