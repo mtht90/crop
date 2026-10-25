@@ -403,7 +403,7 @@ export class FishingController {
     const list = speciesForSpot('lake').filter((s) => (s.lures[lure.category] ?? 0) > 0 && (s.rarity === 'common' || s.rarity === 'uncommon'));
     const species = list.length ? this.rng.pick(list) : speciesForSpot('lake')[0];
     const fish = generateFish(species, cond, this.rng);
-    this.bite = { species, fish, cond, nibbles: 1, timer: 0, phase: 'approach', window: 1 };
+    this.bite = { species, fish, cond, nibbles: 0, timer: 0, phase: 'approach', window: 1 };
     this.startApproach();
     this.tutorialBite = true;
   }
@@ -603,6 +603,8 @@ export class FishingController {
     if (!species) return;
     const fish = generateFish(species, cond, this.rng);
     let nibbles = this.rng.int(species.nibbles[0], species.nibbles[1]);
+    // 慣れるまでは前アタリなし（いきなり本アタリ）
+    if (this.save.stats.caught < 3) nibbles = 0;
     if (!lure.pack) nibbles = Math.min(nibbles, cond.motion === 'fast' ? 0 : 1);
     const rod = ROD_BY_ID[this.save.equip.rod];
     this.bite = {
@@ -668,7 +670,8 @@ export class FishingController {
         return;
       }
       b.phase = 'take';
-      b.timer = b.window;
+      // 人が反応できる猶予を確保する（慣れるまではさらに長く）
+      b.timer = Math.max(b.window, this.save.stats.caught < 5 ? 2.5 : 1.3);
       this.rod.shake = 1;
       this.rod.bend = 0.6;
       this.audio.bite();
@@ -698,6 +701,10 @@ export class FishingController {
     const b = this.bite!;
     this.rod.swing = 0.6;
     this.audio.hookset();
+    if (b.phase === 'nibble' && this.save.stats.caught < 5) {
+      this.cb.toast('まだ早い！ 竿が大きく入って「アタリ！」が出たら押そう', 'info');
+      return;
+    }
     if (b.phase === 'approach' || b.phase === 'nibble') {
       this.cb.toast(b.phase === 'approach' ? '魚が驚いて逃げた…' : '早アワセ！ 魚が逃げた', 'bad');
       if (this.lureDef.pack && this.rng.chance(0.4)) this.consumeBait();

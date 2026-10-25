@@ -1,9 +1,9 @@
 import * as THREE from 'three';
-import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { loadGltf } from './gltf';
 
 const BASE = `${import.meta.env.BASE_URL}assets/`;
 const texLoader = new THREE.TextureLoader();
-const gltfLoader = new GLTFLoader();
 const texCache = new Map<string, THREE.Texture>();
 
 export function texture(name: string, opts: { repeat?: boolean; srgb?: boolean } = {}): THREE.Texture {
@@ -22,7 +22,7 @@ export function texture(name: string, opts: { repeat?: boolean; srgb?: boolean }
 /** 小道具モデル（public/assets/props/<name>.json、変換済み glTF） */
 export async function model(name: string): Promise<THREE.Group | null> {
   try {
-    const g: GLTF = await gltfLoader.loadAsync(`${BASE}props/${name}.json`);
+    const g: GLTF = await loadGltf(`${BASE}props/${name}.json`);
     return g.scene;
   } catch (e) {
     console.warn('model load failed', name, e);

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { loadGltf } from '../core/gltf';
 import type { ColorVariant, FishModelId, Palette, PatternDef, PatternKind, PatternVariant, Species } from '../data/types';
 
 /**
@@ -68,10 +68,9 @@ function averageLum(tex: THREE.Texture | null, color: THREE.Color): number {
 /** ゲーム開始前に全モデルを読み込む */
 export function preloadFishModels(): Promise<void> {
   if (loading) return loading;
-  const loader = new GLTFLoader();
   loading = Promise.all(
     MODEL_IDS.map(async (id) => {
-      const gltf = await loader.loadAsync(`${import.meta.env.BASE_URL}assets/fish/${id}.json`);
+      const gltf = await loadGltf(`${import.meta.env.BASE_URL}assets/fish/${id}.json`);
       const parts: ModelPart[] = [];
       const box = new THREE.Box3();
       gltf.scene.updateMatrixWorld(true);
@@ -93,6 +92,15 @@ export function preloadFishModels(): Promise<void> {
     }),
   ).then(() => undefined);
   return loading;
+}
+
+let fallback: LoadedModel | null = null;
+function fallbackModel(): LoadedModel {
+  if (!fallback) {
+    const geometry = new THREE.SphereGeometry(0.5, 20, 12).scale(1, 0.32, 0.16);
+    fallback = { parts: [{ geometry, map: null, color: new THREE.Color(0.7, 0.7, 0.7), refLum: 0.5, fin: false }], halfHeight: 0.16 };
+  }
+  return fallback;
 }
 
 export function fishModelsReady(): boolean {
@@ -224,8 +232,8 @@ export interface FishObject {
 
 /** 魚の3Dオブジェクト（全長1、+Xが頭）。silhouette = 図鑑の未発見表示 */
 export function buildFishObject(s: Species, colorId: string | null, patternId: string | null, silhouette = false): FishObject {
-  const model = models.get(s.model.id);
-  if (!model) throw new Error(`fish model not loaded: ${s.model.id}`);
+  // モデルが読み込めていない場合も止まらないよう、別のモデルか簡易な形で代用する
+  const model = models.get(s.model.id) ?? models.values().next().value ?? fallbackModel();
   const look = lookOf(s, colorId, patternId);
   const swim: SwimUniforms = { uTime: { value: 0 }, uAmp: { value: 0.03 }, uFreq: { value: 6 } };
   const pal = look.palette;
