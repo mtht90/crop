@@ -53,14 +53,18 @@ export class Game {
   private titleT = 0;
   private suppressPause = false;
   private catchOpen = false;
+  private mobile = false;
   private touchState: { mode: 'walk' | 'fish'; canFish: boolean; nearHut: boolean } = { mode: 'walk', canFish: false, nearHut: false };
 
   constructor(app: HTMLElement, private uiRoot: HTMLElement) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     const low = new URLSearchParams(location.search).get('q') === 'low';
-    this.renderer.setPixelRatio(low ? 0.5 : Math.min(1.5, devicePixelRatio));
+    // スマホは描画負荷を抑える（解像度と影）
+    const mobile = matchMedia('(pointer: coarse)').matches;
+    this.renderer.setPixelRatio(low ? 0.5 : mobile ? Math.min(1.25, devicePixelRatio) : Math.min(1.5, devicePixelRatio));
     this.renderer.setSize(innerWidth, innerHeight);
     this.renderer.shadowMap.enabled = !low;
+    this.mobile = mobile;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     app.append(this.renderer.domElement);
@@ -71,6 +75,7 @@ export class Game {
     this.clock = new GameClock(this.save.clock, rng);
     this.atmo = new Atmosphere(this.scene, this.renderer);
     this.atmo.setWeather(this.clock.weather, true);
+    if (this.mobile) this.atmo.sun.shadow.mapSize.set(1024, 1024);
     this.atmo.onThunder = (d, p) => this.audio.thunder(d, p);
     this.world = new LakeWorld();
     this.scene.add(this.world.group);
@@ -115,11 +120,15 @@ export class Game {
       if (!locked && this.mode !== 'title' && !this.modals.isOpen && !this.suppressPause && !this.catchOpen) this.openPause();
       this.suppressPause = false;
     });
-    addEventListener('resize', () => {
+    const resize = () => {
       this.camera.aspect = innerWidth / innerHeight;
+      // 縦持ちでは横の視野が狭くなるので画角を広げる
+      this.camera.fov = this.camera.aspect < 1 ? 88 : 70;
       this.camera.updateProjectionMatrix();
       this.renderer.setSize(innerWidth, innerHeight);
-    });
+    };
+    addEventListener('resize', resize);
+    resize();
     addEventListener('beforeunload', () => this.persist());
 
     this.applySettings();
@@ -159,7 +168,16 @@ export class Game {
     this.mode = 'title';
     this.hud.setVisible(false);
     this.title?.remove();
-    this.title = titleScreen(this.uiRoot, !!loadSave(), (fresh) => void preloadFishModels().then(() => this.start(fresh)));
+    this.title = titleScreen(this.uiRoot, !!loadSave(), (fresh) => {
+      // 読み込み中の表示。モデルの読み込みに失敗してもゲームは始める
+      const btns = this.title?.querySelectorAll('button');
+      btns?.forEach((b) => ((b as HTMLButtonElement).disabled = true));
+      const first = btns?.[0] as HTMLButtonElement | undefined;
+      if (first) first.textContent = '読み込み中…';
+      void preloadFishModels()
+        .catch((e) => console.warn('fish models failed', e))
+        .then(() => this.start(fresh));
+    });
     this.audio.setMood('title');
   }
 

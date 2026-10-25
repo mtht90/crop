@@ -4,6 +4,35 @@ import { LINE_BY_ID, LINES, LURES, REEL_BY_ID, REELS, RODS, ROD_BY_ID, LB_TO_KG 
 import { h } from './dom';
 import type { Modals } from './modal';
 
+/**
+ * 2段階で確定するボタン（埋め込み表示では confirm() が使えないため、画面内で確認する）。
+ * 1回目のタップで文言が確認に変わり、5秒以内にもう一度押すと実行する。
+ */
+export function confirmButton(label: string, confirmLabel: string, cls: string, action: () => void): HTMLButtonElement {
+  let armed = false;
+  let timer = 0;
+  const b = h('button', {
+    class: cls,
+    text: label,
+    onclick: () => {
+      if (armed) {
+        clearTimeout(timer);
+        action();
+        return;
+      }
+      armed = true;
+      b.textContent = confirmLabel;
+      b.classList.add('confirm-armed');
+      timer = window.setTimeout(() => {
+        armed = false;
+        b.textContent = label;
+        b.classList.remove('confirm-armed');
+      }, 5000);
+    },
+  });
+  return b;
+}
+
 export function openTackle(modals: Modals, save: SaveData, onChange: () => void): void {
   const m = modals.open('タックルボックス', { closeKey: 'KeyI' });
   const render = () => {
@@ -135,13 +164,7 @@ export function openPause(modals: Modals, save: SaveData, cb: PauseCallbacks): v
     controlsHelp(),
   );
   m.footer.append(
-    h('button', {
-      class: 'ghost',
-      text: 'セーブデータを消去',
-      onclick: () => {
-        if (confirm('セーブデータを消去して最初から始めますか？')) cb.onReset();
-      },
-    }),
+    confirmButton('セーブデータを消去', 'もう一度押すと消去', 'ghost', () => cb.onReset()),
     h('button', { class: 'ghost', text: 'タイトルへ', onclick: () => cb.onTitle() }),
     h('button', { class: 'primary', text: '再開', onclick: () => m.close() }),
   );
@@ -158,17 +181,13 @@ export function titleScreen(parent: HTMLElement, hasSave: boolean, onStart: (fre
       'div',
       { class: 'menu' },
       hasSave ? h('button', { class: 'primary', text: 'つづきから', onclick: () => onStart(false) }) : null,
-      h('button', {
-        class: hasSave ? '' : 'primary',
-        text: 'はじめから',
-        onclick: () => {
-          if (!hasSave || confirm('今のセーブデータを消して最初から始めますか？')) onStart(true);
-        },
-      }),
+      hasSave
+        ? confirmButton('はじめから', 'もう一度押して確定（記録は消えます）', '', () => onStart(true))
+        : h('button', { class: 'primary', text: 'はじめから', onclick: () => onStart(true) }),
       h('button', { class: 'ghost', text: '操作方法', onclick: () => (help.style.display = help.style.display ? '' : 'none') }),
     ),
     help,
-    h('div', { class: 'foot', text: '素材: Poly Haven (CC0), three.js examples ／ クリックで操作開始（マウスはゲーム画面に固定されます）' }),
+    h('div', { class: 'foot', text: matchMedia('(pointer: coarse)').matches ? '素材: Quaternius / Kenney / Poly Haven ほか（CREDITS参照）' : '素材: Quaternius / Kenney / Poly Haven ほか ／ クリックで操作開始（マウスはゲーム画面に固定されます）' }),
   );
   parent.append(el);
   return el;

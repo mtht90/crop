@@ -99,7 +99,7 @@ export class Hud {
         rows.push(row('距離', `${hud.distance.toFixed(1)} m`));
         rows.push(row('ルアーの水深', `${hud.depth.toFixed(1)} m / ${hud.waterDepth.toFixed(1)} m（${LAYER_LABEL[hud.layer]}）`));
       }
-      if (hud.isBait) rows.push(row('ウキ下（R）', hud.floatDepth > 0 ? `${hud.floatDepth} m` : 'ウキなし（底）'));
+      if (hud.isBait) rows.push(row(document.body.classList.contains('is-touch') ? 'ウキ下' : 'ウキ下（R）', hud.floatDepth > 0 ? `${hud.floatDepth} m` : 'ウキなし（底）'));
     }
     this.fish.replaceChildren(...rows.filter((r): r is HTMLElement => !!r));
   }
