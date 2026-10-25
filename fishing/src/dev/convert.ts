@@ -37,7 +37,13 @@ function shrink(img: CanvasImageSource & { width: number; height: number }, max:
   const cv = document.createElement('canvas');
   cv.width = Math.round(w * k);
   cv.height = Math.round(h * k);
-  cv.getContext('2d')!.drawImage(img, 0, 0, cv.width, cv.height);
+  const g = cv.getContext('2d')!;
+  // GLTFLoader は ImageBitmap を上下反転済み（imageOrientation: flipY）で読むので元に戻す
+  if (typeof ImageBitmap !== 'undefined' && img instanceof ImageBitmap) {
+    g.translate(0, cv.height);
+    g.scale(1, -1);
+  }
+  g.drawImage(img, 0, 0, cv.width, cv.height);
   const t = new THREE.CanvasTexture(cv);
   t.colorSpace = THREE.SRGBColorSpace;
   t.userData.mimeType = 'image/jpeg';
@@ -77,10 +83,12 @@ function bake(root: THREE.Object3D, skip?: string[]): { geo: THREE.BufferGeometr
     for (const g of groups) {
       const part = new THREE.BufferGeometry();
       for (const name of ['position', 'normal', 'uv']) {
-        const a = src.getAttribute(name) as THREE.BufferAttribute | undefined;
+        const a = src.getAttribute(name) as THREE.BufferAttribute | THREE.InterleavedBufferAttribute | undefined;
         const size = name === 'uv' ? 2 : 3;
         const arr = new Float32Array(g.count * size);
-        if (a) for (let i = 0; i < g.count; i++) for (let k = 0; k < size; k++) arr[i * size + k] = a.array[(g.start + i) * a.itemSize + k];
+        // getX/Y/Z は量子化（normalized）された値やインターリーブ配列も正しく読める
+        const get = [(j: number) => a!.getX(j), (j: number) => a!.getY(j), (j: number) => a!.getZ(j)];
+        if (a) for (let i = 0; i < g.count; i++) for (let k = 0; k < size; k++) arr[i * size + k] = get[k](g.start + i);
         part.setAttribute(name, new THREE.BufferAttribute(arr, size));
       }
       if (!src.getAttribute('normal')) part.computeVertexNormals();

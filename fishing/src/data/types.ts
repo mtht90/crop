@@ -16,13 +16,19 @@ export type LureCategory =
   | 'baitLive';
 export type Rarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legend';
 /** 外部モデル（public/assets/fish/<id>.json） */
-export type FishModelId = 'perch' | 'pike' | 'catfish' | 'goldfish' | 'minnow' | 'shark';
+export type FishModelId = 'bass' | 'trout' | 'salmon' | 'koi' | 'catfish' | 'arowana';
 
 export interface FishModel {
   id: FishModelId;
   /** 体高・体幅の倍率（同じモデルで体型を作り分ける） */
   sy?: number;
   sz?: number;
+  /** 魚種の配色をどれだけ乗せるか（0 = モデルの元テクスチャそのまま） */
+  tint?: number;
+  /** 元テクスチャの濃淡をどれだけ残すか 0..1（元の模様が強いモデルを別種に使う時は下げる） */
+  detail?: number;
+  /** 元テクスチャのまま表示する色違い・模様の id */
+  native?: string[];
 }
 export type PatternKind =
   | 'none'

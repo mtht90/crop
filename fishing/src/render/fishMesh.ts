@@ -41,13 +41,13 @@ interface LoadedModel {
   halfHeight: number;
 }
 
-const MODEL_IDS: FishModelId[] = ['perch', 'pike', 'catfish', 'goldfish', 'minnow', 'shark'];
+const MODEL_IDS: FishModelId[] = ['bass', 'trout', 'salmon', 'koi', 'catfish', 'arowana'];
 const models = new Map<FishModelId, LoadedModel>();
 let loading: Promise<void> | null = null;
 
 function averageLum(tex: THREE.Texture | null, color: THREE.Color): number {
   const img = tex?.image as (CanvasImageSource & { width: number; height: number }) | undefined;
-  if (!img || !img.width) return 0.299 * color.r + 0.587 * color.g + 0.114 * color.b;
+  if (!img || !img.width) return Math.max(color.r, color.g, color.b);
   const cv = document.createElement('canvas');
   cv.width = cv.height = 32;
   const g = cv.getContext('2d', { willReadFrequently: true })!;
@@ -59,7 +59,8 @@ function averageLum(tex: THREE.Texture | null, color: THREE.Color): number {
     if (d[i + 3] < 128) continue;
     // sRGB → 線形の近似
     const lin = (v: number) => Math.pow(v / 255, 2.2);
-    sum += 0.299 * lin(d[i]) + 0.587 * lin(d[i + 1]) + 0.114 * lin(d[i + 2]);
+    // 色相に左右されないよう、明るさは RGB の最大値で測る（紅白の鯉の模様が濃淡として残らない）
+    sum += Math.max(lin(d[i]), lin(d[i + 1]), lin(d[i + 2]));
     n++;
   }
   return Math.max(0.02, n ? sum / n : 0.3);
@@ -125,7 +126,7 @@ const FRAG_HEAD = `
 uniform vec3 uBack; uniform vec3 uFlank; uniform vec3 uBelly; uniform vec3 uFin;
 uniform vec3 uPatColor; uniform vec3 uAccent;
 uniform float uPatInt; uniform float uPatScale; uniform int uPatKind;
-uniform float uTint; uniform float uRefLum; uniform float uIsFin; uniform float uHalfH;
+uniform float uTint; uniform float uRefLum; uniform float uIsFin; uniform float uHalfH; uniform float uDetail; uniform float uPatOn;
 varying vec3 vFPos; varying vec3 vFNor;
 float fh3(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
 float fn3(vec3 x) {
@@ -184,14 +185,16 @@ vec2 fishPattern(vec3 p, float yn) {
 const FRAG_BODY = `
 #include <map_fragment>
 {
-  float lum = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114));
-  float detail = clamp(lum / uRefLum, 0.25, 1.8);
-  float up = normalize(vFNor).y;
-  vec3 base = up > 0.0 ? mix(uFlank, uBack, smoothstep(0.0, 0.75, up)) : mix(uFlank, uBelly, smoothstep(0.0, 0.7, -up));
+  float lum = max(diffuseColor.r, max(diffuseColor.g, diffuseColor.b));
+  float detail = mix(1.0, clamp(lum / uRefLum, 0.25, 1.8), uDetail);
+  // 背は体の上側ほど濃く、腹は下側ほど白く（側面から見ても背の色が見えるよう高さも使う）
+  float k = vFPos.y / uHalfH * 0.8 + normalize(vFNor).y * 0.4;
+  vec3 base = k > -0.12 ? mix(uFlank, uBack, smoothstep(0.0, 0.3, k + 0.12)) : mix(uFlank, uBelly, smoothstep(0.05, 0.5, -k));
   base = mix(base, uFin, uIsFin);
-  vec2 pm = fishPattern(vFPos, vFPos.y / uHalfH);
-  base = mix(base, mix(uPatColor, uAccent, pm.y), pm.x * uPatInt);
   diffuseColor.rgb = mix(diffuseColor.rgb, base * detail, uTint);
+  // 模様は元テクスチャの上にも乗せられる（色違い・模様違い用）
+  vec2 pm = fishPattern(vFPos, vFPos.y / uHalfH);
+  diffuseColor.rgb = mix(diffuseColor.rgb, mix(uPatColor, uAccent, pm.y) * detail, pm.x * uPatInt * uPatOn);
 }
 `;
 
@@ -238,6 +241,12 @@ export function buildFishObject(s: Species, colorId: string | null, patternId: s
   const swim: SwimUniforms = { uTime: { value: 0 }, uAmp: { value: 0.03 }, uFreq: { value: 6 } };
   const pal = look.palette;
   const col = (hex: string) => new THREE.Color(hex);
+  // 元テクスチャのままにするか、魚種・色違いの配色を乗せるか
+  const native = [colorId, patternId].some((id) => id && s.model.native?.includes(id));
+  const baseTint = s.model.tint ?? 0;
+  const tint = native ? 0 : colorId ? Math.max(0.8, baseTint) : baseTint;
+  // 魚種本来の模様は元テクスチャにある（配色を強く乗せた時だけ描く）。模様違いは常に描く
+  const patOn = native ? 0 : patternId || tint > 0.5 ? 1 : 0;
   const mats: THREE.Material[] = model.parts.map((p) => {
     if (silhouette) {
       const m = new THREE.MeshBasicMaterial({ color: 0x1a2430 });
@@ -247,9 +256,9 @@ export function buildFishObject(s: Species, colorId: string | null, patternId: s
     const m = new THREE.MeshStandardMaterial({
       map: p.map,
       color: p.map ? 0xffffff : p.color,
-      roughness: 0.35 - look.metallic * 0.15,
+      roughness: 0.45 - look.metallic * 0.2,
       metalness: 0.05 + look.metallic * 0.7,
-      envMapIntensity: 1.2,
+      envMapIntensity: 0.9,
       side: THREE.DoubleSide,
     });
     installShader(m, swim, {
@@ -262,8 +271,9 @@ export function buildFishObject(s: Species, colorId: string | null, patternId: s
       uPatInt: { value: look.pattern.intensity ?? 0.6 },
       uPatScale: { value: look.pattern.scale ?? 1 },
       uPatKind: { value: PATTERN_INDEX[look.pattern.kind] },
-      // 元テクスチャの色味を少し残す（写実モデルは陰影と鱗、ローポリは単色なので全部置き換える）
-      uTint: { value: !p.map ? 1 : s.model.id === 'goldfish' ? 0.97 : 0.88 },
+      uTint: { value: !p.map ? 1 : tint },
+      uDetail: { value: s.model.detail ?? 1 },
+      uPatOn: { value: patOn },
       uRefLum: { value: p.refLum },
       uIsFin: { value: p.fin ? 1 : 0 },
       uHalfH: { value: model.halfHeight },

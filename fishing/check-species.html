@@ -1,0 +1,22 @@
+<!doctype html><meta charset="utf-8"><body style="margin:0"><script type="module">
+import * as THREE from 'three';
+import { preloadFishModels, buildFishObject } from '/src/render/fishMesh.ts';
+import { SPECIES } from '/src/data/species.ts';
+await preloadFishModels();
+const q = new URLSearchParams(location.search);
+const list = (q.get('list') ?? SPECIES.map((s) => s.id).join(',')).split(',').map((x) => x.split(':'));
+const W = 6, C = 220, H = Math.ceil(list.length / W);
+const r = new THREE.WebGLRenderer({ antialias: true }); r.setSize(W * C, H * C); document.body.append(r.domElement);
+r.setScissorTest(true); r.outputColorSpace = THREE.SRGBColorSpace;
+const env = new THREE.PMREMGenerator(r).fromScene(new (await import('three/examples/jsm/environments/RoomEnvironment.js')).RoomEnvironment(), 0.04).texture;
+list.forEach(([id, color, pat], i) => {
+  const s = SPECIES.find((x) => x.id === id);
+  const o = buildFishObject(s, color || null, pat || null);
+  const sc = new THREE.Scene(); sc.background = new THREE.Color(0x5d6d73); sc.environment = env;
+  sc.add(new THREE.DirectionalLight(0xffffff, 2).translateY(3).translateZ(2)); sc.add(o.group);
+  const c = new THREE.PerspectiveCamera(30, 1, 0.1, 10); c.position.set(0, 0.25, 2.3); c.lookAt(0, 0, 0);
+  const x = (i % W) * C, y = (H - 1 - Math.floor(i / W)) * C;
+  r.setViewport(x, y, C, C); r.setScissor(x, y, C, C); r.render(sc, c);
+});
+window.__done = true;
+</script>
