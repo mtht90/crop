@@ -75,6 +75,8 @@ export class TouchControls {
       id = e.pointerId;
       lx = e.clientX;
       ly = e.clientY;
+      this.input.touchDown = true;
+      this.input.touchPressed = true;
       capture(this.look, e.pointerId);
     });
     this.look.addEventListener('pointermove', (e) => {
@@ -85,7 +87,9 @@ export class TouchControls {
       ly = e.clientY;
     });
     const end = (e: PointerEvent) => {
-      if (e.pointerId === id) id = null;
+      if (e.pointerId !== id) return;
+      id = null;
+      this.input.touchDown = false;
     };
     this.look.addEventListener('pointerup', end);
     this.look.addEventListener('pointercancel', end);
@@ -171,17 +175,18 @@ export class TouchControls {
         }),
       );
     } else if (st.mode === 'fish') {
-      if (st.phase === 'ready' || st.phase === 'charging') {
-        btns.push(this.holdButton('長押しで\nキャスト', 'touch-main'));
+      if (st.phase === 'ready' || st.phase === 'aiming') {
+        // キャストは画面を引っぱって離す
         if (st.isBait) btns.push(this.tapButton('ウキ下', () => this.input.tapKey('KeyR')));
         btns.push(this.tapButton('やめる', () => this.input.tapKey('KeyF')));
       } else if (st.phase === 'water' || st.phase === 'flying') {
         btns.push(this.holdButton('巻く', 'touch-main'));
-        btns.push(this.tapButton(st.hasBite ? 'アワセ！' : '誘う', () => this.input.pressRight(), st.hasBite ? 'touch-alert' : ''));
       } else if (st.phase === 'fight') {
         btns.push(this.holdButton('巻く', 'touch-main'));
         btns.push(this.tapButton('ドラグ＋', () => (this.input.wheel -= 1)));
         btns.push(this.tapButton('ドラグ−', () => (this.input.wheel += 1)));
+      } else if (st.phase === 'net') {
+        btns.push(this.tapButton('タモ！', () => (this.input.pressLeft(), setTimeout(() => this.input.releaseLeft(), 80)), 'touch-main touch-alert'));
       }
     }
     this.actions.replaceChildren(...btns);

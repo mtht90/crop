@@ -28,6 +28,9 @@ export class Input {
   stickY = 0;
   stickRun = false;
   touch = false;
+  /** 画面（視点エリア）を押しているか：スマホのキャストの引っぱりに使う */
+  touchDown = false;
+  touchPressed = false;
   /** UIが開いている間はゲーム入力を無視する */
   enabled = true;
 
@@ -166,5 +169,6 @@ export class Input {
     this.mouseDX = this.mouseDY = 0;
     this.wheel = 0;
     this.leftPressed = this.leftReleased = this.rightPressed = false;
+    this.touchPressed = false;
   }
 }

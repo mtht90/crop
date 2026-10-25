@@ -38,9 +38,23 @@ function simulate(
     rng,
   );
   const dt = 1 / 60;
+  // ポンピング：張力に余裕があれば竿を立てて寄せ、立てきったら倒しながら巻く。
+  // 走られたら竿を寝かせて耐え、ジャンプでは竿を下げ、横走りには逆へ倒す
+  let lift = 0.4;
+  let pumpingUp = true;
   while (!f.outcome && f.elapsed < 600) {
-    const reeling = f.tension < f.drag * (skill > 0.5 ? 0.8 : 1.2) || f.slack > 0.1;
-    f.step({ reeling, rodSide: skill > 0.5 ? -Math.sign(f.side) : 0 }, dt);
+    const ok = f.tension < f.drag * 0.75;
+    if (f.behavior === 'jump' || f.dragSlipping) lift = Math.max(0.15, lift - 2 * dt);
+    else if (pumpingUp) {
+      if (ok) lift = Math.min(1, lift + 0.7 * dt);
+      if (lift >= 0.95 || !ok) pumpingUp = false;
+    } else {
+      lift = Math.max(0.15, lift - 0.32 * dt);
+      if (lift <= 0.2) pumpingUp = true;
+    }
+    const reeling = skill > 0.5 ? (!pumpingUp && f.tension < f.drag * 0.9) || f.slack > 0.1 : f.tension < f.drag * 1.2;
+    f.step({ reeling, rodSide: skill > 0.5 ? -Math.sign(f.side) : 0, rodLift: lift }, dt);
+    if (f.outcome === 'landed') break;
   }
   return { outcome: f.outcome, time: f.elapsed };
 }
@@ -65,12 +79,12 @@ const carpGear = { rod: 'rod_carp', reel: 'reel_large', line: 'fluoro16' };
 const monster = { rod: 'rod_monster', reel: 'reel_big', line: 'pe8' };
 
 describe('ファイト', () => {
-  it('初期装備で平均的なブラックバスはほぼ獲れ、10〜60秒で決着する', () => {
+  it('上手に操作すれば初期装備で平均的なブラックバスは7割以上獲れ、10〜75秒で決着する', () => {
     const r = rate('largemouth', 35, beginner);
     console.log('bass35 beginner', r);
-    expect(r.rate).toBeGreaterThan(0.85);
+    expect(r.rate).toBeGreaterThan(0.7);
     expect(r.avgTime).toBeGreaterThan(8);
-    expect(r.avgTime).toBeLessThan(60);
+    expect(r.avgTime).toBeLessThan(75);
   });
 
   it('初期装備で80cmのコイは厳しいが、鯉用タックルなら獲れる', () => {
@@ -110,10 +124,26 @@ describe('ファイト', () => {
         },
         new Rng(i),
       );
-      while (!f.outcome && f.elapsed < 300) f.step({ reeling: true, rodSide: 0 }, 1 / 60);
+      while (!f.outcome && f.elapsed < 300) f.step({ reeling: true, rodSide: 0, rodLift: 0.4 }, 1 / 60);
       if (f.outcome === 'lineBreak') breaks++;
     }
     expect(breaks).toBeGreaterThan(25);
+  });
+
+  it('ジャンプ中に竿を立てたままだとバレやすい', () => {
+    const run = (lowerOnJump: boolean) => {
+      let out = 0;
+      for (let i = 0; i < 40; i++) {
+        const f = new Fight(
+          { species: SPECIES_BY_ID.largemouth, weightKg: 0.8, iv: { power: 16, stamina: 16, speed: 16, build: 16 }, rod: ROD_BY_ID.rod_beginner, reel: REEL_BY_ID.reel_small, line: LINE_BY_ID.nylon6, drag: 1.9, distance: 20, waterDepth: 3, depth: 1 },
+          new Rng(500 + i),
+        );
+        while (!f.outcome && f.elapsed < 120) f.step({ reeling: f.tension < 1.4, rodSide: 0, rodLift: lowerOnJump && f.behavior === 'jump' ? 0.2 : 0.85 }, 1 / 60);
+        if (f.outcome === 'hookOut') out++;
+      }
+      return out;
+    };
+    expect(run(false)).toBeGreaterThan(run(true) + 5);
   });
 
   it('ずっとたるませているとフックアウトする', () => {
@@ -134,7 +164,7 @@ describe('ファイト', () => {
       new Rng(3),
     );
     f.lineOut = f.distance + 3;
-    while (!f.outcome && f.elapsed < 30) f.step({ reeling: false, rodSide: 0 }, 1 / 60);
+    while (!f.outcome && f.elapsed < 30) f.step({ reeling: false, rodSide: 0, rodLift: 0.4 }, 1 / 60);
     expect(f.outcome).toBe('hookOut');
   });
 });

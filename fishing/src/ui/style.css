@@ -150,7 +150,7 @@ button.ghost {
 }
 .toasts {
   position: absolute;
-  top: 70px;
+  top: 116px;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
@@ -247,7 +247,7 @@ button.ghost {
 .charge {
   position: absolute;
   left: 50%;
-  bottom: 30%;
+  bottom: 12%;
   width: 260px;
   transform: translateX(-50%);
 }
@@ -1016,7 +1016,7 @@ button.confirm-armed {
 .guide {
   position: absolute;
   left: 50%;
-  bottom: 13%;
+  top: 58px;
   transform: translateX(-50%);
   max-width: min(640px, 70vw);
   padding: 9px 18px;
@@ -1057,4 +1057,58 @@ body.is-touch .guide {
     bottom: auto;
     top: 46%;
   }
+}
+
+/* 竿の角度ゲージ・タモ入れ */
+.rodgauge {
+  position: relative;
+  height: 64px;
+  width: 14px;
+  margin: 2px 0 8px auto;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.1);
+}
+.rodgauge .rg-high {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 38%;
+  border-radius: 7px 7px 0 0;
+  background: rgba(255, 122, 106, 0.18);
+}
+.rodgauge.danger .rg-high {
+  background: rgba(255, 122, 106, 0.75);
+}
+.rodgauge > i {
+  position: absolute;
+  left: -4px;
+  width: 22px;
+  height: 6px;
+  margin-bottom: -3px;
+  border-radius: 3px;
+  background: var(--gold);
+}
+.net-track {
+  position: relative;
+  height: 26px;
+  border-radius: 13px;
+  background: rgba(10, 18, 22, 0.75);
+  border: 2px solid rgba(244, 239, 226, 0.4);
+  overflow: hidden;
+}
+.net-zone {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: rgba(139, 224, 139, 0.75);
+}
+.net-mark {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 6px;
+  margin-left: -3px;
+  background: #fff;
+  box-shadow: 0 0 8px #fff;
 }

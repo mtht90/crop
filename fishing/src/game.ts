@@ -353,23 +353,23 @@ export class Game {
         ['Esc', 'メニュー'],
       ]);
     } else if (this.mode === 'fish') {
-      const fighting = this.fishing.phase === 'fight';
       if (input.enabled) {
-        if (fighting) {
-          // ファイト中はマウス左右で竿を操作し、視点は魚を追う
-          const hint = this.fishing.cameraYawHint;
-          if (hint !== null) {
-            let d = hint - this.player.yaw;
-            d = Math.atan2(Math.sin(d), Math.cos(d));
-            this.player.yaw += d * Math.min(1, dt * 2.5);
-          }
-          this.player.pitch -= input.mouseDY * 0.0022 * sens;
-          this.player.pitch = Math.max(-0.9, Math.min(0.5, this.player.pitch));
-        } else if (this.fishing.phase !== 'landing') {
+        const ph = this.fishing.phase;
+        if (ph === 'ready' && !input.touch) {
+          // 構え：PCは視点を動かして狙う（スマホは画面を引っぱるとそのままキャストの狙いになる）
           const cl = input.cursorLook(dt);
           input.mouseDX += cl.dx;
           input.mouseDY += cl.dy;
           this.player.look(input, sens, { center: this.fishYaw, range: 1.4 });
+        } else if (ph === 'water' || ph === 'fight' || ph === 'net') {
+          // 投げた後はマウス・ドラッグで竿を操作するので、視点は仕掛け・魚を自動で追う
+          const hint = this.fishing.cameraYawHint;
+          if (hint !== null) {
+            let d = hint - this.player.yaw;
+            d = Math.atan2(Math.sin(d), Math.cos(d));
+            this.player.yaw += d * Math.min(1, dt * (ph === 'water' ? 1.2 : 2.5));
+          }
+          this.player.pitch += (-0.16 - this.player.pitch) * Math.min(1, dt * 2);
         }
         if (fresh && input.hit('KeyF') && !this.fishing.busy) this.exitFishing();
         if (fresh && input.hit('KeyR') && this.fishing.lureDef.pack && this.fishing.phase === 'ready') {
@@ -392,19 +392,21 @@ export class Game {
       this.hud.setGuide(this.fishing.guide(input.touch));
       const ph = this.fishing.phase;
       this.hud.setKeys(
-        ph === 'fight'
+        ph === 'fight' || ph === 'net'
           ? [
               ['左長押し', '巻く'],
+              ['マウス上下', '竿を立てる／寝かせる（ポンピング）'],
               ['マウス左右', '竿を倒す'],
               ['ホイール', 'ドラグ調整'],
             ]
           : ph === 'water'
             ? [
                 ['左長押し', '巻く（Shiftでゆっくり）'],
-                ['右クリック', 'アクション / アワセ'],
+                ['マウスを上へ振る', '誘い／アワセ'],
+                ['マウスを下げる', '竿を寝かせる'],
               ]
             : [
-                ['左長押し→離す', 'キャスト'],
+                ['左押したまま↓↔', '引っぱって狙う → 離して投げる'],
                 ['R', 'ウキ下（エサ）'],
                 ['I', 'タックル'],
                 ['F', '釣りをやめる'],
@@ -451,7 +453,7 @@ export class Game {
       });
       this.hud.setFishing(this.mode === 'fish' ? this.fishing.hud() : null, this.save.settings.showStamina);
     }
-    if (this.mode === 'fish' && this.fishing.phase === 'charging') this.hud.setFishing(this.fishing.hud(), this.save.settings.showStamina);
+    if (this.mode === 'fish' && ['aiming', 'net'].includes(this.fishing.phase)) this.hud.setFishing(this.fishing.hud(), this.save.settings.showStamina);
 
     this.saveTimer += dt;
     if (this.saveTimer > 30 && this.mode !== 'title') {

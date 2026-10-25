@@ -24,6 +24,8 @@ export class RodView {
   shake = 0;
   private shakeT = 0;
   reelSpin = 0;
+  /** 竿の角度 0 = 寝かせる .. 1 = 立てる */
+  lift = 0.55;
   /** 魚に竿ごと引っ張られる量 0..1 */
   pull = 0;
   /** 張った糸の震え (m) */
@@ -117,7 +119,7 @@ export class RodView {
     const jitter = Math.sin(this.shakeT) * this.shake * 0.04;
     // 根元を立てて、先へ行くほど曲げる
     // 強く引かれるほど竿が前に倒され、手元ごと持っていかれる
-    const baseTilt = 0.55 + this.swing - this.pull * 0.28;
+    const baseTilt = -0.05 + this.lift * 1.1 + this.swing - this.pull * 0.2;
     this.root.position.set(0.3 + this.side * 0.04, -0.36 - this.pull * 0.05 + jitter * 0.3, -0.42 - this.pull * 0.09);
     this.root.rotation.set(0, 0, 0);
     this.root.rotation.x = baseTilt;

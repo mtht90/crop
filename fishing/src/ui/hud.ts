@@ -73,21 +73,47 @@ export class Hud {
 
   setFishing(hud: FishingHud | null, showStamina: boolean): void {
     this.fish.style.display = hud ? '' : 'none';
-    this.charge.style.display = hud?.phase === 'charging' ? '' : 'none';
-    this.crosshair.style.display = hud && hud.phase !== 'ready' && hud.phase !== 'charging' ? 'none' : '';
+    // キャストの引っぱり・タモ入れは画面中央に大きく出す
+    const center = hud?.aim || hud?.net;
+    this.charge.style.display = center ? '' : 'none';
+    this.crosshair.style.display = hud && hud.phase !== 'ready' && hud.phase !== 'aiming' ? 'none' : '';
     if (!hud) return;
-    if (hud.phase === 'charging') {
-      const over = hud.charge > 1.15;
+    if (hud.aim) {
+      const a = hud.aim;
       this.charge.replaceChildren(
-        bar(Math.min(1, hud.charge / 1.15), over ? 'var(--bad)' : 'var(--gold)'),
-        h('div', { class: 'hint', text: over ? '力みすぎ！ 狙いがブレる' : '離してキャスト' }),
+        bar(Math.min(1, a.power / 1.12), a.over ? 'var(--bad)' : 'var(--gold)', [1]),
+        h('div', { class: 'hint', text: a.over ? '引きすぎ！ 狙いがブレる' : `飛距離 ${a.distance.toFixed(0)} m` }),
       );
+    } else if (hud.net) {
+      const n = hud.net;
+      const track = h('div', { class: 'net-track' });
+      const zone = h('i', { class: 'net-zone' });
+      zone.style.left = `${(n.center - n.width / 2) * 100}%`;
+      zone.style.width = `${n.width * 100}%`;
+      const mk = h('b', { class: 'net-mark' });
+      mk.style.left = `${n.pos * 100}%`;
+      track.append(zone, mk);
+      this.charge.replaceChildren(track, h('div', { class: 'hint', text: 'タモ入れ！ 緑に入った瞬間に押す' }));
     }
     const rows: (HTMLElement | null)[] = [];
     const row = (label: string, val: string) => h('div', { class: 'row' }, h('span', { class: 'label', text: label }), h('span', { class: 'val', text: val }));
     rows.push(h('div', { class: 'fh-title', text: `${hud.lureName}${hud.lureCount !== null ? ` ×${hud.lureCount}` : ''}` }));
+    // 竿の角度（立てる↑／寝かせる↓）
+    if (hud.phase === 'water' || hud.phase === 'fight') {
+      const g = h('div', { class: `rodgauge${hud.rodHigh ? ' danger' : ''}` });
+      const k = h('i');
+      k.style.bottom = `${hud.rodLift * 100}%`;
+      g.append(h('span', { class: 'rg-high' }), k);
+      rows.push(h('div', { class: 'row' }, h('span', { class: 'label', text: '竿の角度' }), h('span', { class: 'val', text: hud.rodLift > 0.62 ? '立てている' : hud.rodLift < 0.25 ? '寝かせている' : '中間' })), g);
+    }
+    if (hud.chase !== null) {
+      rows.push(h('div', { class: 'row' }, h('span', { class: 'label', text: '魚の食い気' }), h('span', { class: 'val', text: hud.chase > 0.75 ? 'もう少し！' : '' })));
+      rows.push(bar(hud.chase, hud.chase > 0.75 ? 'var(--gold)' : '#ffb27a'));
+    }
+    if (hud.phase === 'water' && hud.slack > 1) rows.push(row('糸ふけ', `${hud.slack.toFixed(1)} m`));
     if (hud.fight) {
       const f = hud.fight;
+      rows.push(row('魚までの距離', `${Math.max(0, f.distance - 2.5).toFixed(1)} m`));
       const frac = f.tension / f.lineTest;
       const col = frac > 0.85 ? 'var(--bad)' : frac > 0.6 ? 'var(--gold)' : 'var(--accent)';
       rows.push(row('ラインテンション', `${f.tension.toFixed(1)} / ${f.lineTest.toFixed(1)} kg`));
