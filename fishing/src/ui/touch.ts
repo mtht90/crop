@@ -185,8 +185,6 @@ export class TouchControls {
         btns.push(this.holdButton('巻く', 'touch-main'));
         btns.push(this.tapButton('ドラグ＋', () => (this.input.wheel -= 1)));
         btns.push(this.tapButton('ドラグ−', () => (this.input.wheel += 1)));
-      } else if (st.phase === 'net') {
-        btns.push(this.holdButton('巻く', 'touch-main'));
       }
     }
     this.actions.replaceChildren(...btns);

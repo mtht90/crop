@@ -7,7 +7,7 @@ import type { Rng } from './rng';
 
 export type FishBehavior = 'run' | 'hold' | 'approach' | 'jump';
 export type FightOutcome = 'landed' | 'lineBreak' | 'spoolEmpty' | 'hookOut';
-export type FightEvent = 'run' | 'jump' | 'headshake' | 'bolt' | 'slack' | 'surge' | 'tug';
+export type FightEvent = 'run' | 'jump' | 'headshake' | 'bolt' | 'slack' | 'surge' | 'tug' | 'turn' | 'weeds';
 
 export interface FightSetup {
   species: Species;
@@ -43,6 +43,8 @@ export const PUMP_LENGTH = 2.2;
 export const LAND_DISTANCE = 2.5;
 /** 取り込みに必要なスタミナ残量の上限 */
 export const LAND_STAMINA = 0.3;
+/** 横へこれ以上走られると藻や障害物に糸が擦れる (rad) */
+export const WEED_ANGLE = 0.85;
 
 export class Fight {
   readonly pullMax: number;
@@ -67,6 +69,10 @@ export class Fight {
   away = 1;
   side = 0;
   dragSlipping = false;
+  /** 竿を魚と逆へ倒せている度合い 0..1 */
+  oppose = 0;
+  /** 藻や障害物に糸が擦れている */
+  inWeeds = false;
   /** 根ズレによるラインの摩耗 0..1（強度がその分落ちる） */
   wear = 0;
   /** 首振りによる「ググッ」という引きの脈動 0..1（演出・振動用） */
@@ -96,7 +102,7 @@ export class Fight {
     const { species, weightKg, iv, rod, reel, line } = setup;
     const f = species.fight;
     this.pullMax = weightKg * f.pull * (0.8 + (0.4 * iv.power) / IV_MAX);
-    this.staminaMax = (6 + 10 * Math.pow(weightKg, 0.85)) * f.stamina * (0.7 + (0.6 * iv.stamina) / IV_MAX);
+    this.staminaMax = (1.5 + 12 * Math.pow(weightKg, 0.95)) * f.stamina * (0.7 + (0.6 * iv.stamina) / IV_MAX);
     this.vmax = f.speed * (1 + 0.8 * Math.log10(1 + weightKg)) * (0.8 + (0.4 * iv.speed) / IV_MAX);
     this.runScale = 1 + 0.5 * Math.log10(1 + weightKg);
     this.lineTest = line.lb * LB_TO_KG;
@@ -155,8 +161,10 @@ export class Fight {
     switch (b) {
       case 'run': {
         this.behaviorLeft = r.range(1.5, 4) * this.runScale;
-        this.away = r.range(0.35, 1);
-        this.side = (r.chance(0.5) ? -1 : 1) * (1 - this.away) * r.range(0.8, 1.6);
+        this.away = r.range(0.25, 0.9);
+        // 走りは横成分が主体。前の走りと逆へ切り返すことが多い
+        const dir = this.side !== 0 && r.chance(0.65) ? -Math.sign(this.side) : r.chance(0.5) ? -1 : 1;
+        this.side = dir * r.range(0.6, 1.1);
         this.spike += this.pullMax * 0.7 * this.intensity() * (1 - this.cushion);
         this.events.push('run');
         // アワセが甘いと走り出しで外れることがある
@@ -220,9 +228,17 @@ export class Fight {
       this.events.push('surge');
     }
     const pull = this.pullMax * inten * (1 + 0.35 * this.tug);
-    // 竿を魚の走る向きと逆に倒すと横走りを抑えられ、スタミナも削れる
+    // 走っている途中で向きを切り返す
+    if (this.behavior === 'run' && this.rng.chance(dt * 0.25 * species.fight.speed)) {
+      this.side = -this.side;
+      this.events.push('turn');
+    }
+    // 竿を魚の走る向きと逆に倒すと横走りを抑えられ、スタミナを大きく削れる。同じ向きに倒すと魚が楽になる
     const sideSign = Math.sign(this.side);
-    const oppose = Math.max(0, -input.rodSide * sideSign) * Math.min(1, Math.abs(this.side) * 2);
+    const sideAmt = Math.min(1, Math.abs(this.side) * 2);
+    const oppose = Math.max(0, -input.rodSide * sideSign) * sideAmt;
+    const assist = Math.max(0, input.rodSide * sideSign) * sideAmt;
+    this.oppose = oppose;
     const vr = this.away * this.vmax * inten;
     const vl = this.side * this.vmax * inten * (1 - 0.6 * oppose);
 
@@ -242,7 +258,7 @@ export class Fight {
     const reelLimit = reel.power * 0.55;
     this.reelLoad = input.reeling ? Math.min(1, this.tension / reelLimit) : 0;
     if (input.reeling) {
-      const gain = reel.speed * Math.max(0, Math.min(1, 1 - this.tension / reelLimit));
+      const gain = reel.speed * 2.2 * Math.max(0, Math.min(1, 1 - this.tension / reelLimit));
       this.lineOut = Math.max(0.5, this.lineOut - gain * dt);
     }
 
@@ -296,9 +312,14 @@ export class Fight {
     if (species.fight.bottom && this.behavior === 'hold' && this.depth > waterDepth - 0.5 && this.slack < 0.05) {
       this.wear = Math.min(1, this.wear + dt * 0.012 * this.setup.line.abrasion);
     }
+    // 横へ走られすぎると岸寄りの藻や杭に糸が擦れる
+    const weeds = Math.abs(this.lateral) > WEED_ANGLE && this.slack < 0.3;
+    if (weeds && !this.inWeeds) this.events.push('weeds');
+    this.inWeeds = weeds;
+    if (weeds) this.wear = Math.min(1, this.wear + dt * 0.03 * this.setup.line.abrasion * (Math.abs(this.lateral) - WEED_ANGLE + 0.3));
 
-    // スタミナ
-    const drain = this.tension * (1 + 0.6 * oppose) * 0.9 + pull * 0.12;
+    // スタミナ：主に「魚と逆へ竿を倒して耐える」ことで削れる
+    const drain = this.tension * (0.3 + 1.6 * oppose - 0.2 * assist) * 0.9 + pull * 0.05;
     this.stamina -= drain * dt;
     if (this.tension < 0.15 * this.pullMax) this.stamina += 0.025 * this.staminaMax * dt;
     this.stamina = Math.max(0, Math.min(this.staminaMax, this.stamina));

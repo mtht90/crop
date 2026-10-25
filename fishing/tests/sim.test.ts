@@ -25,6 +25,7 @@ function simulate(
   gear: { rod: string; reel: string; line: string },
   seed: number,
   skill = 1,
+  oppose = skill > 0.5,
 ): { outcome: FightOutcome | null; time: number } {
   const s = SPECIES_BY_ID[speciesId];
   const iv: IVs = { power: 16, stamina: 16, speed: 16, build: 16 };
@@ -53,7 +54,7 @@ function simulate(
       if (lift <= 0.2) pumpingUp = true;
     }
     const reeling = skill > 0.5 ? (!pumpingUp && f.tension < f.drag * 0.9) || f.slack > 0.1 : f.tension < f.drag * 1.2;
-    f.step({ reeling, rodSide: skill > 0.5 ? -Math.sign(f.side) : 0, rodLift: lift }, dt);
+    f.step({ reeling, rodSide: oppose ? -Math.sign(f.side) : 0, rodLift: lift }, dt);
     if (f.outcome === 'landed') break;
   }
   return { outcome: f.outcome, time: f.elapsed };
@@ -85,6 +86,27 @@ describe('ファイト', () => {
     expect(r.rate).toBeGreaterThan(0.7);
     expect(r.avgTime).toBeGreaterThan(8);
     expect(r.avgTime).toBeLessThan(75);
+  });
+
+  it('魚と逆へ竿を倒すと早く弱り、倒さないと長引いてバラしやすい', () => {
+    let tOpp = 0;
+    let tNone = 0;
+    let lostNone = 0;
+    for (let i = 0; i < 30; i++) {
+      const a = simulate('largemouth', 50, beginner, 2000 + i, 1, true);
+      const b = simulate('largemouth', 50, beginner, 2000 + i, 1, false);
+      tOpp += a.time;
+      tNone += b.time;
+      if (b.outcome !== 'landed') lostNone++;
+    }
+    expect(tNone).toBeGreaterThan(tOpp * 1.25);
+    expect(lostNone).toBeGreaterThan(0);
+  });
+
+  it('大物ほどファイトが長い', () => {
+    const small = rate('largemouth', 25, beginner);
+    const big = rate('koi', 80, carpGear);
+    expect(big.avgTime).toBeGreaterThan(small.avgTime * 1.4);
   });
 
   it('初期装備で80cmのコイは厳しいが、鯉用タックルなら獲れる', () => {

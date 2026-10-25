@@ -139,7 +139,6 @@ export class FishingController {
   private lastTwitch = -10;
 
   // タモ入れ
-  private netTime = 0;
 
   private shadow: THREE.Mesh;
   private shadowFrom = new THREE.Vector3();
@@ -918,6 +917,14 @@ export class FishingController {
       f.setDrag(f.drag - input.wheel * Math.max(0.1, reel.dragMax / 30));
       this.save.drag = f.drag;
     }
+    // 魚に竿を持っていかれる：走る向きへ竿先が倒され、強く引かれるほど竿が寝かされる
+    const rodPower = Math.max(0.5, ROD_BY_ID[this.save.equip.rod].power);
+    const load = Math.min(1.5, f.tension / rodPower);
+    if (input.enabled) {
+      const sideK = f.behavior === 'run' ? 0.9 : f.behavior === 'hold' ? 0.35 : 0.15;
+      this.rodSide = Math.max(-1, Math.min(1, this.rodSide + Math.sign(f.side) * Math.min(1, Math.abs(f.side) * 2) * sideK * load * dt));
+      this.rodLift = Math.max(0, this.rodLift - load * (0.12 + 0.35 * f.tug) * dt);
+    }
     this.fixedAcc += dt;
     let jumped = false;
     let ran = false;
@@ -937,6 +944,17 @@ export class FishingController {
           input.vibrate(90);
         }
         if (e === 'slack') this.tip('糸がたるんでいる');
+        if (e === 'turn') {
+          // 切り返し：竿先が逆へ持っていかれる
+          this.rod.shake = Math.max(this.rod.shake, 0.8);
+          this.shake = Math.max(this.shake, 0.45);
+          input.vibrate([25, 20, 50]);
+          if (f.distance < 12 && this.fishPos.y > -1.2) this.fx.splash(this.fishPos.x, this.fishPos.z, 0.25);
+        }
+        if (e === 'weeds') {
+          this.tip('藻に糸が擦れている。逆へ竿を倒して引き出す', 'bad');
+          input.vibrate([15, 15, 15, 15, 15, 15]);
+        }
       }
     }
     if (ran) {
@@ -954,7 +972,6 @@ export class FishingController {
     this.audio.setReel(reeling && !f.dragSlipping ? 0.9 * (1 - f.reelLoad * 0.75) : 0);
     this.audio.setStrain(reeling ? f.reelLoad : 0, tFrac);
     this.rod.reelSpin = reeling ? (f.dragSlipping ? 0.1 : 0.9 * (1 - f.reelLoad * 0.8)) : 0;
-    const rodPower = Math.max(0.5, ROD_BY_ID[this.save.equip.rod].power);
     this.rod.bend = Math.min(1.8, f.tension / rodPower + 0.05 + f.tug * 0.25 * Math.min(1, f.pullMax / rodPower));
     this.rod.pull = Math.min(1, f.tension / rodPower) * 0.8 + f.tug * 0.2;
     this.rod.lineVibe = f.slack < 0.05 ? (0.015 + f.tug * 0.03) * Math.min(1, tFrac * 1.5) : 0;
@@ -962,6 +979,14 @@ export class FishingController {
     this.danger = Math.max(0, Math.min(1, (tFrac - 0.75) / 0.25), f.behavior === 'jump' && f.rodHigh ? 0.8 : 0);
 
     this.placeFish(dt, f);
+    // 糸が水を切る：魚が横へ走るほど、糸の入水点から波紋が立つ
+    if (f.behavior === 'run' && f.slack < 0.1 && this.rng.chance(dt * (2 + 8 * Math.min(1, Math.abs(f.side)) * Math.min(1, tFrac * 2)))) {
+      const tip = this.rod.tipWorld();
+      const k = tip.y / Math.max(0.01, tip.y - this.fishPos.y);
+      const ex = tip.x + (this.fishPos.x - tip.x) * Math.min(1, k);
+      const ez = tip.z + (this.fishPos.z - tip.z) * Math.min(1, k);
+      this.fx.ripple(ex, ez, 0.15);
+    }
     if (f.outcome === 'landed') this.startNet(f);
     else if (f.outcome) this.finishFight(f.outcome);
   }
@@ -969,7 +994,9 @@ export class FishingController {
   private placeFish(dt: number, f: Fight): void {
     const yaw = this.castYaw + f.lateral;
     const dir = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
-    const target = new THREE.Vector3(this.origin.x + dir.x * f.distance, -f.depth, this.origin.z + dir.z * f.distance);
+    // 足元の魚は桟橋の先、見下ろせる位置で暴れる
+    const dist = this.phase === 'net' ? 5 : f.distance;
+    const target = new THREE.Vector3(this.origin.x + dir.x * dist, -f.depth, this.origin.z + dir.z * dist);
     if (this.jumpT > 0) {
       this.jumpT -= dt;
       const t = 1 - this.jumpT / 1.0;
@@ -980,60 +1007,117 @@ export class FishingController {
       }
     }
     if (this.phase === 'net') {
-      // 足元で暴れる
-      target.y = -0.05 + Math.abs(Math.sin(this.time * 9)) * 0.08;
-      if (this.rng.chance(dt * 6)) this.fx.splash(target.x, target.z, 0.15);
+      // 足元で暴れる／おとなしくなると水面に浮いて横になる
+      target.y = this.netQuiet ? 0.03 : -0.02 + Math.abs(Math.sin(this.time * 11)) * 0.14;
+      if (!this.netQuiet) {
+        target.x += Math.sin(this.time * 7.3) * 0.25;
+        target.z += Math.cos(this.time * 5.1) * 0.25;
+      }
     }
     const prev = this.fishPos.clone();
     this.fishPos.lerp(target, Math.min(1, dt * 8));
-    if (f.depth < 1 && f.behavior === 'run' && this.rng.chance(dt * 4)) this.fx.ripple(this.fishPos.x, this.fishPos.z, 0.3);
+    // 浅いところを走ると水面が盛り上がる（引き波）
+    if (f.depth < 1.6 && (f.behavior === 'run' || f.behavior === 'approach') && this.rng.chance(dt * (8 - f.depth * 4))) this.fx.ripple(this.fishPos.x, this.fishPos.z, 0.25 + 0.25 * (1 - f.depth / 1.6));
     if (this.fishObj) {
       const g = this.fishObj.group;
-      g.visible = this.fishPos.y > -0.6 || f.distance < 5 || this.phase === 'net';
+      g.visible = this.fishPos.y > -1.4 || f.distance < 6 || this.phase === 'net';
       g.position.copy(this.fishPos);
       const mv = this.fishPos.clone().sub(prev);
-      if (mv.lengthSq() > 1e-6) g.rotation.set(0, Math.atan2(-mv.z, mv.x), this.jumpT > 0 ? Math.sin(this.time * 20) * 0.5 : 0);
+      const quiet = this.netQuiet;
+      if (mv.lengthSq() > 1e-6 && !quiet) g.rotation.set(0, Math.atan2(-mv.z, mv.x), this.jumpT > 0 ? Math.sin(this.time * 20) * 0.5 : 0);
+      // おとなしくなった魚は横倒しになる（向きを保ったまま体の軸で転がす）
+      g.rotation.order = 'YXZ';
+      g.rotation.x += ((quiet ? 1.25 : 0) - g.rotation.x) * Math.min(1, dt * 4);
       this.fishObj.swim.uTime.value = this.time;
-      this.fishObj.swim.uAmp.value = f.behavior === 'run' || this.phase === 'net' ? 0.07 : 0.035;
-      this.fishObj.swim.uFreq.value = f.behavior === 'run' || this.phase === 'net' ? 13 : 7;
+      const thrash = f.behavior === 'run' || (this.phase === 'net' && !quiet);
+      this.fishObj.swim.uAmp.value = quiet ? 0.015 : thrash ? 0.08 : 0.035;
+      this.fishObj.swim.uFreq.value = quiet ? 3 : thrash ? 14 : 7;
     }
     this.cameraYawHint = Math.atan2(-(this.fishPos.x - this.origin.x), -(this.fishPos.z - this.origin.z));
   }
 
   // ---------------- 取り込み ----------------
-  // 弱った魚は足元で横になる。竿を立てて顔を水面に上げ、暴れさせずに保てば網に入る。
+  // 足元まで寄せた魚は、暴れる→おとなしくなる、を繰り返す。
+  // おとなしくなった瞬間に竿を一気に振り上げれば抜き上げられる。暴れている最中に抜くとバレたり切られたりする。
+
+  private netTime = 0;
+  /** 足元で暴れている残り時間（0 ならおとなしい） */
+  private netThrash = 0;
+  /** 次に暴れ出すまでの時間 */
+  private netCalm = 0;
 
   private startNet(_f: Fight): void {
     this.phase = 'net';
     this.netTime = 0;
-    this.netHold = 0;
+    this.netThrash = this.rng.range(0.6, 1.2);
+    this.netCalm = 0;
+    this.liftVel = 0;
     this.audio.setDrag(0);
     this.audio.setReel(0);
+    this.audio.setStrain(0, 0);
   }
 
-  private netHold = 0;
+  /** 足元の魚がおとなしくしているか */
+  private get netQuiet(): boolean {
+    return this.phase === 'net' && this.netThrash <= 0;
+  }
 
   private updateNet(dt: number, input: Input): void {
     const f = this.fight!;
     this.netTime += dt;
+    const h = this.hooked!;
+    const heavy = Math.min(1, h.fish.weight / 1000 / Math.max(0.5, ROD_BY_ID[this.save.equip.rod].power));
+    if (this.netThrash > 0) {
+      this.netThrash -= dt;
+      if (this.netThrash <= 0) this.netCalm = this.rng.range(0.9, 1.6) + Math.min(1.5, this.netTime * 0.12);
+      if (this.rng.chance(dt * 7)) this.fx.splash(this.fishPos.x, this.fishPos.z, 0.2 + 0.3 * heavy);
+      if (this.rng.chance(dt * 3)) {
+        this.audio.splash(0.35);
+        input.vibrate(30);
+      }
+      this.rod.shake = Math.max(this.rod.shake, 0.6);
+    } else {
+      this.netCalm -= dt;
+      if (this.netCalm <= 0) {
+        this.netThrash = this.rng.range(0.6, 1.4) * (0.7 + heavy);
+        this.shake = Math.max(this.shake, 0.3);
+      }
+    }
     this.placeFish(dt, f);
-    const reeling = input.left && input.enabled;
-    // 竿を立てて顔を上げている間だけ網に寄せられる。巻きすぎ・竿を寝かせると暴れる
-    const lifted = this.rodLift > 0.6;
-    this.rod.bend = 0.5 + (lifted ? 0.4 : 0);
-    if (lifted && !reeling) this.netHold += dt;
-    else this.netHold = Math.max(0, this.netHold - dt * 0.8);
-    if (this.netHold > 1.2) {
-      this.finishFight('landed');
+    this.rod.bend = 0.45 + heavy * 0.5 + (this.netThrash > 0 ? 0.25 * Math.abs(Math.sin(this.time * 12)) : 0);
+
+    // 竿を一気に振り上げて抜き上げる
+    if (this.liftVel > FLICK && input.enabled) {
+      this.liftVel = 0;
+      this.rod.swing = 0.6;
+      this.shake = Math.max(this.shake, 0.6);
+      input.vibrate([20, 20, 80]);
+      if (this.netThrash <= 0) {
+        this.finishFight('landed');
+        return;
+      }
+      // 暴れている最中に抜こうとした
+      this.audio.splash(0.7);
+      this.fx.splash(this.fishPos.x, this.fishPos.z, 0.6);
+      if (heavy > 0.5 && this.rng.chance(heavy - 0.3)) {
+        this.finishFight('lineBreak');
+        return;
+      }
+      if (this.rng.chance(0.25 + 0.4 * (1 - f.hookQuality))) {
+        this.finishFight('hookOut');
+        return;
+      }
+      this.tip('暴れているうちは抜けない。おとなしくなるまで待つ', 'bad');
+      f.resumeAfterNetMiss();
+      this.phase = 'fight';
       return;
     }
-    const thrash = (reeling ? 0.6 : 0) + (this.rodLift < 0.3 ? 0.35 : 0) + (this.netTime > 6 ? 0.4 : 0);
-    if (this.rng.chance(dt * thrash)) {
+    // もたもたしていると体力が戻って再び走る
+    if (this.netTime > 10) {
       this.audio.splash(0.6);
       this.fx.splash(this.fishPos.x, this.fishPos.z, 0.5);
       f.resumeAfterNetMiss();
       this.phase = 'fight';
-      if (this.rng.chance(0.25 * (1 - f.hookQuality))) this.finishFight('hookOut');
     }
   }
 
@@ -1151,13 +1235,17 @@ export class FishingController {
       }
       case 'fight': {
         const f = this.fight!;
+        const side = touch ? '左右にドラッグ' : 'マウス左右';
         if (f.behavior === 'jump') return '跳んだら竿を下げる';
-        if (f.dragSlipping) return '走られたら竿を寝かせ、魚と逆へ倒して耐える';
+        if (f.inWeeds) return `藻に擦れている。${side}で魚と逆へ竿を倒して引き出す`;
+        if (f.behavior === 'run' && f.oppose < 0.3) return `魚が横へ走っている。${side}で逆へ竿を倒して耐えると弱っていく`;
         if (f.reelLoad > 0.9) return '重くて巻けないときは、竿を立てて寄せ、下げながら巻く';
         return '竿を立てて寄せ、下げながら巻く';
       }
       case 'net':
-        return touch ? '足元まで寄った。上にドラッグして竿を立て、巻かずに待つと網ですくえる' : '足元まで寄った。マウスを上げて竿を立て、巻かずに待つと網ですくえる';
+        return this.netQuiet
+          ? `おとなしくなった。竿を下げてから${touch ? '一気に上へスワイプ' : 'マウスを一気に上へ振って'}抜き上げる`
+          : '足元で暴れている。おとなしくなるまで待つ';
       case 'landing':
         return '';
     }

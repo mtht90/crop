@@ -369,7 +369,7 @@ export class Game {
             d = Math.atan2(Math.sin(d), Math.cos(d));
             this.player.yaw += d * Math.min(1, dt * (ph === 'water' ? 1.2 : 2.5));
           }
-          this.player.pitch += (-0.16 - this.player.pitch) * Math.min(1, dt * 2);
+          this.player.pitch += ((ph === 'net' ? -0.3 : -0.16) - this.player.pitch) * Math.min(1, dt * 2);
         }
         if (fresh && input.hit('KeyF') && !this.fishing.busy) this.exitFishing();
         if (fresh && input.hit('KeyR') && this.fishing.lureDef.pack && this.fishing.phase === 'ready') {
@@ -392,11 +392,13 @@ export class Game {
       this.hud.setGuide(this.fishing.guide(input.touch));
       const ph = this.fishing.phase;
       this.hud.setKeys(
-        ph === 'fight' || ph === 'net'
+        ph === 'net'
+          ? [['マウスを一気に上へ', '抜き上げる（おとなしい時に）']]
+          : ph === 'fight'
           ? [
               ['左長押し', '巻く'],
               ['マウス上下', '竿を立てる／寝かせる'],
-              ['マウス左右', '竿を倒す'],
+              ['マウス左右', '竿を倒す（魚と逆へ）'],
               ['ホイール', 'ドラグ調整'],
             ]
           : ph === 'water'

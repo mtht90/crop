@@ -46,7 +46,7 @@ export class Hud {
     if (!text || text === this.lastGuide) return;
     this.lastGuide = text;
     this.guide.textContent = text;
-    this.guide.classList.toggle('hot', text.startsWith('竿先が入った'));
+    this.guide.classList.toggle('hot', text.startsWith('竿先が入った') || text.startsWith('おとなしくなった'));
   }
 
   setPrompt(html: string | null): void {
@@ -80,7 +80,7 @@ export class Hud {
     const row = (label: string, val: string) => h('div', { class: 'row' }, h('span', { class: 'label', text: label }), h('span', { class: 'val', text: val }));
     rows.push(h('div', { class: 'fh-title', text: `${hud.lureName}${hud.lureCount !== null ? ` ×${hud.lureCount}` : ''}` }));
     // 竿の角度（立てる↑／寝かせる↓）
-    if (hud.phase === 'water' || hud.phase === 'fight') {
+    if (hud.phase === 'water') {
       const g = h('div', { class: `rodgauge${hud.rodHigh ? ' danger' : ''}` });
       const k = h('i');
       k.style.bottom = `${hud.rodLift * 100}%`;
@@ -93,25 +93,22 @@ export class Hud {
     }
     if (hud.phase === 'water' && hud.slack > 1) rows.push(row('糸ふけ', `${hud.slack.toFixed(1)} m`));
     if (hud.fight) {
+      // ファイト中は糸の張りだけ。あとは竿のしなりと魚の動きで判断する
       const f = hud.fight;
-      rows.push(row('魚までの距離', `${Math.max(0, f.distance - 2.5).toFixed(1)} m`));
       const frac = f.tension / f.lineTest;
       const col = frac > 0.85 ? 'var(--bad)' : frac > 0.6 ? 'var(--gold)' : 'var(--accent)';
-      rows.push(row('ラインテンション', `${f.tension.toFixed(1)} / ${f.lineTest.toFixed(1)} kg`));
+      rows.push(row('糸の張り', f.slipping ? 'ドラグが出ている' : ''));
       rows.push(bar(frac, col, [f.drag / f.lineTest], 'tension'));
-      rows.push(row('ドラグ（ホイール）', `${f.drag.toFixed(1)} kg${f.slipping ? '  ズズズ…' : ''}`));
-      rows.push(row('出ている糸', `${f.lineOut.toFixed(0)} / ${f.capacity.toFixed(0)} m`));
-      rows.push(bar(f.lineOut / f.capacity, f.lineOut / f.capacity > 0.8 ? 'var(--bad)' : '#8fa3ad'));
-      if (f.wear > 0.05) rows.push(row('ライン摩耗', `${Math.round(f.wear * 100)}%`));
+      rows.push(row('ドラグ（ホイール）', `${f.drag.toFixed(1)} kg`));
+      if (f.lineOut / f.capacity > 0.6) {
+        rows.push(row('残りの糸', `${Math.max(0, f.capacity - f.lineOut).toFixed(0)} m`));
+        rows.push(bar(f.lineOut / f.capacity, 'var(--bad)'));
+      }
+      if (f.wear > 0.05) rows.push(row('糸の傷み', `${Math.round(f.wear * 100)}%`));
       if (showStamina) {
         rows.push(row('魚の勢い', ''));
         rows.push(bar(f.stamina, '#ff9f6a', [0.3]));
       }
-      const side = h('div', { class: 'rodside' });
-      const knob = h('i');
-      knob.style.left = `${50 + f.rodSide * 50}%`;
-      side.append(knob);
-      rows.push(row('竿の向き（マウス左右）', ''), side);
     } else {
       if (hud.phase === 'water') {
         rows.push(row('距離', `${hud.distance.toFixed(1)} m`));
