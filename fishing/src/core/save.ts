@@ -74,7 +74,7 @@ export function newSave(): SaveData {
     },
     equip: { rod: 'rod_beginner', reel: 'reel_small', line: 'nylon6', lure: 'bait_worm' },
     drag: 1.6,
-    floatDepth: 0,
+    floatDepth: 1,
     coolerLevel: 0,
     cooler: [],
     dex: {},
@@ -92,7 +92,10 @@ export function loadSave(): SaveData | null {
     const data = JSON.parse(raw) as SaveData;
     if (data.version !== 1) return null;
     const base = newSave();
-    return { ...base, ...data, settings: { ...base.settings, ...data.settings }, stats: { ...base.stats, ...data.stats } };
+    const merged = { ...base, ...data, settings: { ...base.settings, ...data.settings }, stats: { ...base.stats, ...data.stats } };
+    // まだ1匹も釣っていないデータは、アタリが見やすいウキ釣りから始める
+    if (merged.stats.caught === 0 && merged.floatDepth === 0) merged.floatDepth = 1;
+    return merged;
   } catch {
     return null;
   }

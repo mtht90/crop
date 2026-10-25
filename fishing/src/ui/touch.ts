@@ -2,6 +2,15 @@ import type { Input } from '../core/input';
 import type { Phase } from '../fishing/fishing';
 import { h } from './dom';
 
+/** 指を外に動かしても離した判定を取れるようにする（失敗しても操作は続ける） */
+function capture(el: Element, id: number): void {
+  try {
+    el.setPointerCapture(id);
+  } catch {
+    /* 対応していない環境 */
+  }
+}
+
 export interface TouchState {
   mode: 'walk' | 'fish' | 'hidden';
   phase: Phase;
@@ -66,7 +75,7 @@ export class TouchControls {
       id = e.pointerId;
       lx = e.clientX;
       ly = e.clientY;
-      this.look.setPointerCapture(e.pointerId);
+      capture(this.look, e.pointerId);
     });
     this.look.addEventListener('pointermove', (e) => {
       if (e.pointerId !== id) return;
@@ -99,7 +108,7 @@ export class TouchControls {
       const r = this.stick.getBoundingClientRect();
       cx = r.left + r.width / 2;
       cy = r.top + r.height / 2;
-      this.stick.setPointerCapture(e.pointerId);
+      capture(this.stick, e.pointerId);
       set(e.clientX - cx, e.clientY - cy);
     });
     this.stick.addEventListener('pointermove', (e) => {
@@ -129,9 +138,9 @@ export class TouchControls {
     const b = h('button', { class: `touch-btn ${cls}`, text: label });
     b.addEventListener('pointerdown', (e) => {
       e.preventDefault();
-      b.setPointerCapture(e.pointerId);
       b.classList.add('on');
       this.input.pressLeft();
+      capture(b, e.pointerId);
     });
     const up = () => {
       b.classList.remove('on');

@@ -101,7 +101,9 @@ export class FishingController {
   private shadowPos = new THREE.Vector3();
   /** 水中のルアー位置を示す水面の目印 */
   private marker: THREE.Mesh;
-  private hints = 0;
+  /** エサを巻き続けている時間（「エサは待つ」と教えるため） */
+  private baitReelTime = 0;
+  private reelHintShown = false;
   private input: Input | null = null;
   /** 画面の揺れ（Game がカメラに適用） */
   shake = 0;
@@ -392,8 +394,26 @@ export class FishingController {
     if (over > 0.2) this.cb.toast('力みすぎた！', 'info');
   }
 
+  private tutorialTime = 0;
+
+  /** 最初の1匹用：このルアーで釣れる身近な魚を寄せる */
+  private forceTutorialBite(lure: Lure): void {
+    this.tutorialTime = 0;
+    const cond = this.conditions(this.layerAt());
+    const list = speciesForSpot('lake').filter((s) => (s.lures[lure.category] ?? 0) > 0 && (s.rarity === 'common' || s.rarity === 'uncommon'));
+    const species = list.length ? this.rng.pick(list) : speciesForSpot('lake')[0];
+    const fish = generateFish(species, cond, this.rng);
+    this.bite = { species, fish, cond, nibbles: 1, timer: 0, phase: 'approach', window: 1 };
+    this.startApproach();
+    this.tutorialBite = true;
+  }
+
+  private tutorialBite = false;
+
   private splashDown(lure: Lure): void {
     this.phase = 'water';
+    this.baitReelTime = 0;
+    this.tutorialTime = 0;
     this.inWaterTime = 0;
     this.touchedBottom = false;
     this.lureSpeed = 0;
@@ -408,16 +428,6 @@ export class FishingController {
     const heavy = lure.category === 'jig' ? 0.6 : lure.pack ? 0.35 : 0.3;
     this.spook = Math.max(this.spook, heavy);
     this.fx.splash(this.lure.x, this.lure.z, 0.25);
-    if (this.hints < 3 && this.save.stats.caught < 10) {
-      this.hints++;
-      const lure = this.lureDef;
-      this.cb.toast(
-        lure.pack
-          ? 'エサ釣り：そのまま待とう。魚影が寄ってきて竿先が「グン」と入ったら右クリック（アワセ）'
-          : 'ルアー：巻いて（左長押し）誘おう。時々止めたり右クリックで動きをつけると食ってくる',
-        'info',
-      );
-    }
     this.audio.splash(0.3);
     const usesFloat = !!lure.pack && this.save.floatDepth > 0;
     this.rod.bobber.visible = usesFloat;
@@ -503,9 +513,24 @@ export class FishingController {
 
     // 回収
     if (dist < 2.8 || (wd < 0.15 && reeling)) {
-      if (this.bite) this.cb.toast('魚が離れた…', 'info');
+      this.cb.toast(this.bite ? '魚が離れた…' : '仕掛けを回収した。もう一度投げよう', 'info');
       this.reset();
       return;
+    }
+
+    // エサを巻き続けていたら教える
+    if (lure.pack && reeling && !this.bite) {
+      this.baitReelTime += dt;
+      if (this.baitReelTime > 1.5 && !this.reelHintShown) {
+        this.reelHintShown = true;
+        this.cb.toast('エサは巻かずに待つと食ってくる！指を離して待ってみよう', 'big');
+      }
+    }
+
+    // 最初の1匹は必ず釣れるように（エサなら数秒待つ、ルアーなら数秒巻くと寄ってくる）
+    if (!this.bite && this.save.stats.caught === 0) {
+      this.tutorialTime += lure.pack ? (reeling ? 0 : dt) : reeling ? dt : dt * 0.3;
+      if (this.tutorialTime > 4) this.forceTutorialBite(lure);
     }
 
     // アタリの抽選と進行
@@ -622,8 +647,9 @@ export class FishingController {
       if (b.timer > 0) return;
       // 寄ってきた魚の本来のアワセ猶予に戻して前アタリへ
       const rod = ROD_BY_ID[this.save.equip.rod];
-      b.window = b.species.hookWindow * rod.sensitivity * (lure.pack ? 1.3 : 1);
+      b.window = b.species.hookWindow * rod.sensitivity * (lure.pack ? 1.3 : 1) * (this.tutorialBite ? 3 : 1);
       b.phase = 'nibble';
+      this.cb.toast('魚が寄ってきた…！ まだ待って', 'info');
       b.timer = this.rng.range(0.15, 0.5);
       return;
     }
@@ -646,7 +672,7 @@ export class FishingController {
       this.rod.shake = 1;
       this.rod.bend = 0.6;
       this.audio.bite();
-      this.cb.toast('アタリ！ 今だ、アワセ！', 'big');
+      this.cb.toast(this.input?.touch ? 'アタリ！「アワセ！」を押せ！' : 'アタリ！ 今だ、右クリックでアワセ！', 'big');
       this.fx.splash(this.lure.x, this.lure.z, 0.12);
       this.shake = 0.4;
       this.input?.vibrate([60, 40, 60]);
@@ -717,6 +743,7 @@ export class FishingController {
     this.rod.bobber.visible = false;
     this.rod.lure.visible = false;
     this.cb.toast(auto ? '向こうアワセで掛かった！' : 'フィッシュ！', 'good');
+    this.tutorialBite = false;
     this.shake = 0.9;
     this.rod.shake = 1;
     this.fx.splash(this.lure.x, this.lure.z, 0.35);
@@ -880,6 +907,41 @@ export class FishingController {
       colorId: h.fish.colorId,
       patternId: h.fish.patternId,
     };
+  }
+
+  /** 画面下に出す「次にやること」 */
+  guide(touch: boolean): string {
+    const cast = touch ? '「キャスト」' : '左クリック';
+    const reel = touch ? '「巻く」' : '左クリック';
+    const set = touch ? '「アワセ！」' : '右クリック';
+    const lure = this.lureDef;
+    switch (this.phase) {
+      case 'ready':
+        return `① ${cast}を長押しして力をためて、離して水面へ投げよう`;
+      case 'charging':
+        return 'ゲージがたまったら離す！（ためすぎると狙いがブレる）';
+      case 'flying':
+        return '…';
+      case 'water': {
+        const b = this.bite;
+        if (this.onLand) return `陸に落ちた。${reel}を長押しして回収しよう`;
+        if (b?.phase === 'take') return `🎣 今だ！ ${set}でアワセ！`;
+        if (b?.phase === 'nibble') return '魚がつついている…まだアワセず、竿が大きく入るのを待て';
+        if (b?.phase === 'approach') return '魚影が近づいてくる…そのまま';
+        return lure.pack
+          ? `② エサは巻かずに待とう。魚影が寄ってきて「アタリ！」が出たら ${set}`
+          : `② ${reel}を長押しで巻いてルアーを泳がせよう。止めたり${touch ? '「誘う」' : '右クリック'}で動きをつけると食ってくる`;
+      }
+      case 'fight': {
+        const f = this.fight!;
+        if (f.tension > f.effectiveLineTest * 0.85) return '⚠ 切れそう！巻くのをやめて糸を出させよう';
+        if (f.dragSlipping) return '魚が走って糸が出ている。無理に巻かず、竿を魚と逆に倒して耐えよう';
+        if (f.slack > 0.5) return `糸がたるんでいる！${reel}で巻いて張ろう`;
+        return `③ ${reel}を長押しで寄せよう。魚まであと ${Math.max(0, f.distance - 2.5).toFixed(1)} m`;
+      }
+      case 'landing':
+        return '取り込み！';
+    }
   }
 
   get hasBite(): boolean {

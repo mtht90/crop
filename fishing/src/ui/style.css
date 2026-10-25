@@ -1011,3 +1011,50 @@ button.confirm-armed {
     line-height: 1.3;
   }
 }
+
+/* 次にやることの案内 */
+.guide {
+  position: absolute;
+  left: 50%;
+  bottom: 13%;
+  transform: translateX(-50%);
+  max-width: min(640px, 70vw);
+  padding: 9px 18px;
+  border-radius: 14px;
+  background: rgba(10, 18, 22, 0.72);
+  border: 1px solid rgba(95, 208, 181, 0.45);
+  font-weight: 700;
+  font-size: 15px;
+  line-height: 1.5;
+  text-align: center;
+  z-index: 2;
+}
+.guide.hot {
+  background: rgba(240, 192, 80, 0.9);
+  color: #2a1c00;
+  border-color: var(--gold);
+  font-size: 18px;
+  animation: glow 0.45s infinite alternate;
+}
+@keyframes glow {
+  to {
+    box-shadow: 0 0 24px 6px rgba(240, 192, 80, 0.8);
+  }
+}
+body.is-touch .guide {
+  bottom: auto;
+  top: calc(50px + env(safe-area-inset-top, 0px));
+  left: 264px;
+  right: 140px;
+  transform: none;
+  max-width: none;
+  font-size: 13px;
+}
+@media (orientation: portrait) {
+  body.is-touch .guide {
+    left: 84px;
+    right: 16px;
+    bottom: auto;
+    top: 46%;
+  }
+}

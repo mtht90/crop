@@ -14,11 +14,13 @@ export class Hud {
   private fish = h('div', { class: 'fishhud' });
   private charge = h('div', { class: 'charge' });
   private crosshair = h('div', { class: 'crosshair' });
+  private guide = h('div', { class: 'guide' });
+  private lastGuide = '';
   readonly flash = h('div', { class: 'flash' });
   private lastKeys = '';
 
   constructor(parent: HTMLElement) {
-    this.root.append(this.flash, this.status, this.crosshair, this.prompt, this.toasts, this.keys, this.fish, this.charge);
+    this.root.append(this.flash, this.status, this.crosshair, this.guide, this.prompt, this.toasts, this.keys, this.fish, this.charge);
     parent.append(this.root);
     this.setPrompt(null);
     this.setFishing(null, true);
@@ -36,6 +38,15 @@ export class Hud {
       h('span', { class: 'chip money' }, yen(o.money)),
       h('span', { class: 'chip' }, `クーラー ${o.cooler}`),
     );
+  }
+
+  /** 「次にやること」の案内 */
+  setGuide(text: string | null): void {
+    this.guide.style.display = text ? '' : 'none';
+    if (!text || text === this.lastGuide) return;
+    this.lastGuide = text;
+    this.guide.textContent = text;
+    this.guide.classList.toggle('hot', text.includes('今だ') || text.includes('⚠'));
   }
 
   setPrompt(html: string | null): void {

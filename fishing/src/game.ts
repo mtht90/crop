@@ -341,6 +341,7 @@ export class Game {
         if (input.hit('KeyF') && input.enabled) this.enterFishing();
       }
       if (!input.active && !this.modals.isOpen) prompt = 'クリックで操作を再開';
+      this.hud.setGuide(null);
       this.touchState = { mode: 'walk', canFish: prompt?.includes('釣り') ?? false, nearHut: this.nearHut() };
       this.hud.setPrompt(prompt);
       this.hud.setKeys([
@@ -388,6 +389,7 @@ export class Game {
       }
       this.hud.setPrompt(!input.active && !this.modals.isOpen ? 'クリックで操作を再開' : null);
       this.touchState = { mode: 'fish', canFish: false, nearHut: false };
+      this.hud.setGuide(this.fishing.guide(input.touch));
       const ph = this.fishing.phase;
       this.hud.setKeys(
         ph === 'fight'
