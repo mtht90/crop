@@ -52,6 +52,19 @@ export class WaterEffects {
     this.ripple(x, z, size);
   }
 
+  /** 空中の物（釣り上げた魚など）から滴る水 */
+  drip(p: THREE.Vector3, n: number, spread: number): void {
+    for (let i = 0; i < n && this.drops.length < this.MAX; i++) {
+      const life = 0.4 + Math.random() * 0.5;
+      this.drops.push({
+        p: new THREE.Vector3(p.x + (Math.random() - 0.5) * spread, p.y + (Math.random() - 0.5) * spread * 0.5, p.z + (Math.random() - 0.5) * spread),
+        v: new THREE.Vector3((Math.random() - 0.5) * 0.8, Math.random() * 0.6, (Math.random() - 0.5) * 0.8),
+        life,
+        max: life,
+      });
+    }
+  }
+
   ripple(x: number, z: number, size: number): void {
     const mat = new THREE.MeshBasicMaterial({ color: 0xdfeef2, transparent: true, opacity: 0.6, depthWrite: false });
     const mesh = new THREE.Mesh(this.ringGeo, mat);
