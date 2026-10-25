@@ -266,8 +266,8 @@ export class Game {
     const res = registerCatch(this.save, fish, s, record);
     this.audio.land(RARITY_RANK[s.rarity]);
     if (fish.colorId || fish.patternId) this.audio.sparkle();
-    if (s.rarity === 'legend') this.hud.toast(`伝説の魚 ${s.name} を釣り上げた！！`, 'big');
-    else if (RARITY_RANK[s.rarity] >= 2) this.hud.toast(`${RARITY_LABEL[s.rarity]}！ ${s.name}`, 'big');
+    if (s.rarity === 'legend') this.hud.toast(`伝説の魚 — ${s.name}`, 'big');
+    else if (RARITY_RANK[s.rarity] >= 2) this.hud.toast(`${RARITY_LABEL[s.rarity]} — ${s.name}`, 'big');
     this.catchOpen = true;
     const full = this.save.cooler.length >= coolerCapacity(this.save);
     const choice = await showCatch(this.modals, this.preview, s, fish, res, full);
@@ -395,7 +395,7 @@ export class Game {
         ph === 'fight' || ph === 'net'
           ? [
               ['左長押し', '巻く'],
-              ['マウス上下', '竿を立てる／寝かせる（ポンピング）'],
+              ['マウス上下', '竿を立てる／寝かせる'],
               ['マウス左右', '竿を倒す'],
               ['ホイール', 'ドラグ調整'],
             ]
@@ -406,7 +406,7 @@ export class Game {
                 ['マウスを下げる', '竿を寝かせる'],
               ]
             : [
-                ['左押したまま↓↔', '引っぱって狙う → 離して投げる'],
+                ['左ドラッグ', '振りかぶって投げる'],
                 ['R', 'ウキ下（エサ）'],
                 ['I', 'タックル'],
                 ['F', '釣りをやめる'],

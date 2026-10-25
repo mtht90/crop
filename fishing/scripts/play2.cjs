@@ -36,5 +36,12 @@ const { chromium } = require('playwright');
   await g(() => { const f = window.__game.fishing.fight; if (f) { f.stamina = 0; f.distance = 2; f.lineOut = 2 + f.rodLift * 2.2; } });
   for (let i = 0; i < 60 && (await ph()) !== 'net'; i++) await page.waitForTimeout(250);
   await shot('a5-net');
+  // 竿を立てたまま巻かずに保つと網に入る
+  await page.mouse.move(480, 60); await page.waitForTimeout(400);
+  await page.mouse.move(480, 30);
+  for (let i = 0; i < 40 && (await ph()) === 'net'; i++) await page.waitForTimeout(250);
+  console.log('after net:', await ph(), 'rodLift', await g(() => window.__game.fishing.rodLift));
+  await page.waitForTimeout(3000);
+  await shot('a6-catch');
   await browser.close();
 })();

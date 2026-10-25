@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=Shippori+Mincho+B1:wght@500;700;800&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&display=swap');
 
 :root {
   --ink: #f4efe2;
@@ -6,8 +6,8 @@
   --panel: rgba(16, 26, 30, 0.86);
   --panel-2: rgba(30, 44, 48, 0.9);
   --line: rgba(244, 239, 226, 0.14);
-  --accent: #5fd0b5;
-  --gold: #f0c050;
+  --accent: #a9c2b0;
+  --gold: #d2b47a;
   --bad: #ff7a6a;
   --good: #8be08b;
   --common: #b9c4c8;
@@ -28,7 +28,10 @@ body {
   overflow: hidden;
   background: #0b1418;
   color: var(--ink);
-  font-family: 'M PLUS Rounded 1c', 'Hiragino Maru Gothic ProN', 'Yu Gothic UI', 'Meiryo', sans-serif;
+  --serif: 'Shippori Mincho B1', 'Hiragino Mincho ProN', 'Yu Mincho', serif;
+  --latin: 'Cormorant Garamond', 'Shippori Mincho B1', serif;
+  font-family: 'Zen Kaku Gothic New', 'Hiragino Kaku Gothic ProN', 'Yu Gothic UI', 'Meiryo', sans-serif;
+  font-feature-settings: 'palt';
   user-select: none;
 }
 
@@ -51,15 +54,15 @@ body {
 button {
   font: inherit;
   color: var(--ink);
-  background: rgba(95, 208, 181, 0.16);
-  border: 1px solid rgba(95, 208, 181, 0.5);
+  background: rgba(169, 194, 176, 0.16);
+  border: 1px solid rgba(169, 194, 176, 0.5);
   border-radius: 10px;
   padding: 7px 14px;
   cursor: pointer;
   transition: background 0.12s, transform 0.08s;
 }
 button:hover:not(:disabled) {
-  background: rgba(95, 208, 181, 0.32);
+  background: rgba(169, 194, 176, 0.32);
 }
 button:active:not(:disabled) {
   transform: translateY(1px);
@@ -179,7 +182,7 @@ button.ghost {
   color: var(--gold);
   background: transparent;
   border: none;
-  text-shadow: 0 2px 8px #000, 0 0 18px rgba(240, 192, 80, 0.6);
+  text-shadow: 0 2px 8px #000, 0 0 18px rgba(210, 180, 122, 0.6);
 }
 @keyframes toast-in {
   from {
@@ -557,19 +560,19 @@ h4 {
   border-radius: 999px;
   font-size: 12px;
   font-weight: 800;
-  background: rgba(240, 192, 80, 0.18);
+  background: rgba(210, 180, 122, 0.18);
   color: var(--gold);
-  border: 1px solid rgba(240, 192, 80, 0.5);
-  animation: pop 0.4s cubic-bezier(0.3, 1.6, 0.5, 1);
+  border: 1px solid rgba(210, 180, 122, 0.5);
+  animation: pop 0.5s ease-out;
 }
 .badge.new {
-  background: rgba(95, 208, 181, 0.2);
+  background: rgba(169, 194, 176, 0.2);
   color: var(--accent);
   border-color: var(--accent);
 }
 @keyframes pop {
   from {
-    transform: scale(0.4);
+    transform: translateY(4px);
     opacity: 0;
   }
 }
@@ -672,7 +675,7 @@ h4 {
   margin: 0 auto 4px;
   border-radius: 50%;
   background: var(--accent);
-  box-shadow: 0 0 0 4px rgba(95, 208, 181, 0.25);
+  box-shadow: 0 0 0 4px rgba(169, 194, 176, 0.25);
 }
 .map .spot.locked i {
   background: #6a7378;
@@ -832,15 +835,15 @@ input[type='range'] {
   height: 112px;
   border-radius: 50%;
   font-size: 18px;
-  background: rgba(95, 208, 181, 0.35);
+  background: rgba(169, 194, 176, 0.35);
   border-color: var(--accent);
 }
 .touch-btn.on {
-  background: rgba(95, 208, 181, 0.75);
+  background: rgba(169, 194, 176, 0.75);
   color: #0d2420;
 }
 .touch-btn.touch-alert {
-  background: rgba(240, 192, 80, 0.75);
+  background: rgba(210, 180, 122, 0.75);
   border-color: var(--gold);
   color: #2a1c00;
   animation: pulse 0.5s infinite alternate;
@@ -1022,7 +1025,7 @@ button.confirm-armed {
   padding: 9px 18px;
   border-radius: 14px;
   background: rgba(10, 18, 22, 0.72);
-  border: 1px solid rgba(95, 208, 181, 0.45);
+  border: 1px solid rgba(169, 194, 176, 0.45);
   font-weight: 700;
   font-size: 15px;
   line-height: 1.5;
@@ -1030,7 +1033,7 @@ button.confirm-armed {
   z-index: 2;
 }
 .guide.hot {
-  background: rgba(240, 192, 80, 0.9);
+  background: rgba(210, 180, 122, 0.9);
   color: #2a1c00;
   border-color: var(--gold);
   font-size: 18px;
@@ -1038,7 +1041,7 @@ button.confirm-armed {
 }
 @keyframes glow {
   to {
-    box-shadow: 0 0 24px 6px rgba(240, 192, 80, 0.8);
+    box-shadow: 0 0 24px 6px rgba(210, 180, 122, 0.8);
   }
 }
 body.is-touch .guide {
@@ -1111,4 +1114,77 @@ body.is-touch .guide {
   margin-left: -3px;
   background: #fff;
   box-shadow: 0 0 8px #fff;
+}
+
+
+/* ---------- 書体と形（図鑑・釣り具らしい落ち着いた見た目） ---------- */
+.title h1 {
+  font-family: var(--latin);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+.title .sub {
+  font-family: var(--serif);
+  letter-spacing: 0.6em;
+}
+.modal header h2,
+.dex-detail h3,
+.catch h3,
+.catch .big,
+.records b,
+.grade {
+  font-family: var(--serif);
+  font-weight: 700;
+}
+.sci {
+  font-family: var(--latin);
+  font-size: 15px;
+}
+button,
+.tabs button,
+.status .chip,
+.toast,
+.guide,
+.prompt,
+.badge,
+.rarity,
+.hint,
+.swatch {
+  border-radius: 4px;
+}
+.modal,
+.dex-detail,
+.dex-card,
+.item,
+.fishhud,
+.touch-btn {
+  border-radius: 6px;
+}
+.touch-btn.touch-main {
+  border-radius: 50%;
+}
+button.primary,
+.tabs button.on {
+  font-weight: 700;
+}
+.toast {
+  font-weight: 500;
+  font-size: 14px;
+  background: rgba(8, 14, 16, 0.7);
+}
+.toast.big {
+  font-family: var(--serif);
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--ink);
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.8);
+}
+.guide {
+  font-weight: 500;
+  font-size: 14px;
+  background: rgba(8, 14, 16, 0.6);
+  border-color: rgba(244, 239, 226, 0.18);
+}
+.status .chip {
+  font-weight: 500;
 }

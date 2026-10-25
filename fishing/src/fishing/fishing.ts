@@ -59,9 +59,7 @@ export interface FishingHud {
   rodLift: number;
   rodHigh: boolean;
   slack: number;
-  aim: null | { power: number; over: boolean; distance: number };
   chase: number | null;
-  net: null | { pos: number; center: number; width: number };
   fight: null | {
     tension: number;
     lineTest: number;
@@ -132,25 +130,15 @@ export class FishingController {
   // キャストの狙い
   private aimPower = 0;
   private aimYaw = 0;
-  /** 狙い中にカメラが向く上下角（Game が参照） */
-  aimPitch: number | null = null;
-  private reticle: THREE.Mesh;
-  private errorRing: THREE.Mesh;
 
   // ナブラ（水面がざわつく好ポイント）
   private hotspots: HotSpot[] = [];
-  private hotspotHint = false;
 
   // ルアーの誘い
   private stillTime = 0;
   private lastTwitch = -10;
 
   // タモ入れ
-  private netPos = 0;
-  private netDir = 1;
-  private netCenter = 0.5;
-  private netWidth = 0.2;
-  private netSpeed = 1;
   private netTime = 0;
 
   private shadow: THREE.Mesh;
@@ -188,14 +176,17 @@ export class FishingController {
       scene.add(m);
       return m;
     };
-    this.reticle = flat(0.5, 0.8, 0xffe070, 1);
-    this.errorRing = flat(0.95, 1, 0xff7a6a, 0.6);
     this.marker = flat(0.1, 0.14, 0xfff4d0, 0.6);
     const shadowMat = new THREE.MeshBasicMaterial({ color: 0x050a0c, transparent: true, opacity: 0, depthWrite: false });
     this.shadow = new THREE.Mesh(new THREE.CircleGeometry(0.5, 20).rotateX(-Math.PI / 2), shadowMat);
     this.shadow.renderOrder = 3;
     this.shadow.visible = false;
     scene.add(this.shadow);
+  }
+
+  /** 慣れるまでの短い助言（2匹釣った後は出さない） */
+  private tip(text: string, kind: 'info' | 'good' | 'bad' = 'info'): void {
+    if (this.save.stats.caught < 2) this.cb.toast(text, kind);
   }
 
   get lureDef(): Lure {
@@ -244,8 +235,6 @@ export class FishingController {
     this.rod.bobber.visible = false;
     this.shadow.visible = false;
     this.marker.visible = false;
-    this.reticle.visible = false;
-    this.errorRing.visible = false;
     this.shake = 0;
     this.danger = 0;
     this.cameraYawHint = null;
@@ -375,14 +364,12 @@ export class FishingController {
           }
         }
         player.yaw = this.aimYaw;
-        if (this.aimPitch !== null) player.pitch += (this.aimPitch + 0.12 - player.pitch) * Math.min(1, dt * 6);
-        this.rod.swing = 0.7 * Math.min(1, this.aimPower);
-        this.updateReticle(player, rodDef.cast, lure);
+        // 竿を後ろへ振りかぶる（引いた分だけ遠くへ飛ぶ）
+        this.rod.swing = 0.9 * Math.min(1.2, this.aimPower);
         if (!hold) {
           if (this.aimPower < 0.08) {
             // ほとんど引いていなければキャンセル
             this.phase = 'ready';
-            this.reticle.visible = this.errorRing.visible = false;
           } else this.release(player, rodDef.cast, lure);
         }
         break;
@@ -474,28 +461,7 @@ export class FishingController {
     return 0.7 + Math.max(0, this.aimPower - OVER_PULL) * 30;
   }
 
-  private updateReticle(player: Player, castDist: number, lure: Lure): void {
-    const d = this.castDistance(castDist, lure);
-    const p = new THREE.Vector3(player.x - Math.sin(this.aimYaw) * d, 0.05, player.z - Math.cos(this.aimYaw) * d);
-    const ground = terrainHeight(p.x, p.z);
-    p.y = Math.max(0.05, ground + 0.05);
-    this.reticle.visible = this.errorRing.visible = true;
-    this.reticle.position.copy(p);
-    this.errorRing.position.copy(p);
-    const er = this.errorRadius();
-    const over = this.aimPower > OVER_PULL;
-    (this.reticle.material as THREE.MeshBasicMaterial).color.set(over ? 0xff7a6a : this.nearHotspot(p, 3) ? 0x8be08b : 0xfff2c0);
-    // 遠いほど小さく見えるので、距離に応じて輪を大きくする
-    const size = (1 + d / 12) * (1 + 0.08 * Math.sin(this.time * 8));
-    this.reticle.scale.set(size, 1, size);
-    this.errorRing.scale.set(er + d / 20, 1, er + d / 20);
-    // 着水点が見えるように視線を下げる
-    const eye = this.camera.position;
-    this.aimPitch = Math.atan2(p.y - eye.y, Math.hypot(p.x - eye.x, p.z - eye.z));
-  }
-
   private release(player: Player, castDist: number, lure: Lure): void {
-    this.reticle.visible = this.errorRing.visible = false;
     const d = this.castDistance(castDist, lure);
     const er = this.errorRadius();
     const a = this.rng.range(0, Math.PI * 2);
@@ -510,7 +476,7 @@ export class FishingController {
     this.flightDur = 0.5 + d / 32;
     this.phase = 'flying';
     this.audio.cast();
-    if (this.aimPower > OVER_PULL + 0.05) this.cb.toast('引きすぎた！ 狙いがブレた', 'info');
+
   }
 
   private splashDown(lure: Lure): void {
@@ -531,10 +497,7 @@ export class FishingController {
     this.lure.y = 0;
     const heavy = lure.category === 'jig' ? 0.6 : lure.pack ? 0.35 : 0.3;
     this.spook = Math.max(this.spook, heavy);
-    if (this.nearHotspot(this.lure, 2.5)) {
-      this.spook = 0;
-      this.cb.toast('ナイスキャスト！ ナブラの真ん中だ', 'good');
-    }
+    if (this.nearHotspot(this.lure, 2.5)) this.spook = 0;
     this.fx.splash(this.lure.x, this.lure.z, 0.25);
     this.audio.splash(0.3);
     const usesFloat = !!lure.pack && this.save.floatDepth > 0;
@@ -567,17 +530,15 @@ export class FishingController {
       h.life -= dt;
       h.next -= dt;
       if (h.next <= 0) {
-        h.next = this.rng.range(0.4, 1.4);
+        h.next = this.rng.range(1.2, 3.5);
         const jx = this.rng.range(-1.5, 1.5);
         const jz = this.rng.range(-1.5, 1.5);
-        this.fx.splash(h.pos.x + jx, h.pos.z + jz, this.rng.range(0.04, 0.12));
+        this.fx.ripple(h.pos.x + jx, h.pos.z + jz, this.rng.range(0.05, 0.15));
+        if (this.rng.chance(0.3)) this.fx.splash(h.pos.x + jx, h.pos.z + jz, 0.04);
       }
     }
     this.hotspots = this.hotspots.filter((h) => h.life > 0);
-    if (!this.hotspotHint && this.hotspots.length && this.phase === 'ready') {
-      this.hotspotHint = true;
-      this.cb.toast('水面がバシャバシャしている所（ナブラ）は魚が集まっている。狙って投げよう', 'info');
-    }
+
   }
 
   // ---------------- 水中 ----------------
@@ -743,7 +704,6 @@ export class FishingController {
     if (b?.phase === 'chase') {
       const paused = this.stillTime > 0.3 && this.stillTime < 2;
       b.interest += paused ? 0.4 : 0.12;
-      if (paused) this.cb.toast('食い気が上がった！', 'good');
     }
     this.stillTime = 0;
     this.lastTwitch = this.time;
@@ -762,7 +722,7 @@ export class FishingController {
       lineVisibility: line.visibility,
       spook: this.spook,
     });
-    const hot = this.nearHotspot(this.lure, 5) ? 3 : 1;
+    const hot = this.nearHotspot(this.lure, 5) ? 1.8 : 1;
     if (!this.rng.chance(p * 0.1 * hot)) return;
     const species = pickSpecies(list, cond, this.rng);
     if (!species) return;
@@ -793,7 +753,6 @@ export class FishingController {
     b.window = b.timer;
     // ルアーには後ろから追ってくる
     b.phase = lure.pack ? 'approach' : 'chase';
-    if (!lure.pack) this.cb.toast('魚がルアーを追ってきた！', 'info');
     (this.shadow.material as THREE.MeshBasicMaterial).opacity = 0;
   }
 
@@ -817,7 +776,7 @@ export class FishingController {
     this.rod.shake = 1;
     this.rod.bend = 0.6;
     this.audio.bite();
-    this.cb.toast(this.input?.touch ? 'アタリ！ 上にスワイプしてアワセ！' : 'アタリ！ マウスを上に振ってアワセ！', 'big');
+    if (this.save.stats.caught < 2) this.cb.toast(this.input?.touch ? 'アタリ — 上にスワイプして合わせる' : 'アタリ — マウスを上に振って合わせる', 'info');
     this.fx.splash(this.lure.x, this.lure.z, lure.pack ? 0.12 : 0.3);
     this.shake = 0.4;
     this.input?.vibrate([60, 40, 60]);
@@ -838,7 +797,7 @@ export class FishingController {
         return;
       }
       if (b.interest <= 0) {
-        this.cb.toast('見切られた…（巻くだけでなく、止めて→あおって誘おう）', 'bad');
+        this.tip('見切られた。巻くだけでなく、止めてからあおってみよう', 'bad');
         this.bite = null;
         this.spook = 0.4;
       }
@@ -848,7 +807,6 @@ export class FishingController {
       if (b.timer > 0) return;
       b.phase = 'nibble';
       b.timer = this.rng.range(0.15, 0.5);
-      if (b.nibbles > 0) this.cb.toast('魚がエサをつついている…まだ我慢', 'info');
       return;
     }
     if (b.phase === 'nibble') {
@@ -870,11 +828,8 @@ export class FishingController {
     this.rod.shake = Math.max(this.rod.shake, 0.5);
     this.rod.bend = 0.5;
     if (b.timer <= 0) {
-      this.cb.toast('見切られた…（アタリが出たらすぐアワセよう）', 'bad');
-      if (lure.pack && this.rng.chance(0.6)) {
-        this.consumeBait();
-        this.cb.toast('エサを取られた', 'info');
-      }
+      this.tip('合わせが遅れた', 'bad');
+      if (lure.pack && this.rng.chance(0.6)) this.consumeBait();
       this.bite = null;
       this.rod.bend = 0;
       this.spook = 0.5;
@@ -888,7 +843,7 @@ export class FishingController {
     this.audio.hookset();
     if (b.phase !== 'take') {
       if (this.tutorialBite) return;
-      this.cb.toast('早アワセ！ 魚が驚いて逃げた', 'bad');
+      this.tip('早合わせ。竿先が大きく入るまで待とう', 'bad');
       if (this.lureDef.pack && this.rng.chance(0.4)) this.consumeBait();
       this.bite = null;
       this.spook = 1;
@@ -900,7 +855,7 @@ export class FishingController {
     const slackPenalty = this.lineSlack > 1 ? 0.4 : 1;
     const q = strength * timing * slackPenalty;
     if (q < 0.22 && !this.tutorialBite) {
-      this.cb.toast(this.lineSlack > 1 ? '糸ふけでアワセが効かなかった…（先に巻いて糸を張ろう）' : 'アワセが弱かった…（もっと素早く振り上げよう）', 'bad');
+      this.tip(this.lineSlack > 1 ? '糸ふけで合わせが効かなかった' : '合わせが弱かった', 'bad');
       this.bite = null;
       this.spook = 0.8;
       this.cb.onLost('miss');
@@ -940,7 +895,7 @@ export class FishingController {
     this.fixedAcc = 0;
     this.rod.bobber.visible = false;
     this.rod.lure.visible = false;
-    this.cb.toast(quality > 0.75 ? 'ガッチリ掛かった！ フィッシュ！' : quality > 0.45 ? 'フィッシュ！' : '浅く掛かった…慎重に！', quality > 0.45 ? 'good' : 'info');
+
     this.tutorialBite = false;
     this.shake = 0.9;
     this.rod.shake = 1;
@@ -981,8 +936,7 @@ export class FishingController {
           this.rod.shake = 1;
           input.vibrate(90);
         }
-        if (e === 'bolt') this.cb.toast('まだ元気だ！ 足元で突っ込んだ', 'info');
-        if (e === 'slack') this.cb.toast('糸がたるんでいる！ 巻いて張れ！', 'bad');
+        if (e === 'slack') this.tip('糸がたるんでいる');
       }
     }
     if (ran) {
@@ -992,7 +946,7 @@ export class FishingController {
     }
     if (jumped) {
       this.jumpT = 1.0;
-      this.cb.toast('跳んだ！ 竿を下げろ！', 'big');
+      this.tip('跳んだら竿を下げる');
       input.vibrate([30, 30, 30, 30, 30]);
     }
     const tFrac = Math.min(1.2, f.tension / f.lineTest);
@@ -1046,52 +1000,41 @@ export class FishingController {
     this.cameraYawHint = Math.atan2(-(this.fishPos.x - this.origin.x), -(this.fishPos.z - this.origin.z));
   }
 
-  // ---------------- タモ入れ ----------------
+  // ---------------- 取り込み ----------------
+  // 弱った魚は足元で横になる。竿を立てて顔を水面に上げ、暴れさせずに保てば網に入る。
 
-  private startNet(f: Fight): void {
+  private startNet(_f: Fight): void {
     this.phase = 'net';
     this.netTime = 0;
-    this.netPos = 0;
-    this.netDir = 1;
-    const kg = this.hooked!.fish.weight / 1000;
-    // 大きい魚・元気な魚ほど狙いが狭く速い
-    this.netWidth = Math.max(0.07, Math.min(0.26, 0.24 - Math.log10(1 + kg) * 0.09)) * (0.8 + 0.4 * (1 - f.staminaFraction / 0.3));
-    this.netSpeed = 0.9 + this.hooked!.species.fight.speed * 0.45 + Math.log10(1 + kg) * 0.4;
-    this.netCenter = this.rng.range(0.25, 0.75);
+    this.netHold = 0;
     this.audio.setDrag(0);
     this.audio.setReel(0);
-    this.cb.toast(this.input?.touch ? '寄った！ 緑に入った瞬間「タモ！」' : '寄った！ 緑に入った瞬間クリックでタモ入れ！', 'big');
+    this.tip(this.input?.touch ? '寄った。上にドラッグして竿を立て、魚の顔を上げて網へ' : '寄った。マウスを上げて竿を立て、魚の顔を上げて網へ');
   }
+
+  private netHold = 0;
 
   private updateNet(dt: number, input: Input): void {
     const f = this.fight!;
     this.netTime += dt;
-    this.netPos += this.netDir * this.netSpeed * dt * (1 + 0.3 * Math.sin(this.time * 7));
-    if (this.netPos > 1) {
-      this.netPos = 1;
-      this.netDir = -1;
-    } else if (this.netPos < 0) {
-      this.netPos = 0;
-      this.netDir = 1;
-    }
     this.placeFish(dt, f);
-    this.rod.bend = 0.9;
-    this.rod.shake = Math.max(this.rod.shake, 0.4);
-    const pressed = (input.leftPressed || input.touchPressed) && input.enabled;
-    if (pressed || this.netTime > 6) {
-      const hit = pressed && Math.abs(this.netPos - this.netCenter) <= this.netWidth / 2;
-      if (hit) {
-        this.cb.toast('タモ入れ成功！', 'good');
-        this.finishFight('landed');
-      } else {
-        this.cb.toast('タモ入れ失敗！ 魚がまた走った', 'bad');
-        this.audio.splash(0.6);
-        this.fx.splash(this.fishPos.x, this.fishPos.z, 0.5);
-        f.resumeAfterNetMiss();
-        this.phase = 'fight';
-        // 掛かりが浅いと、タモ入れの失敗で外れることも
-        if (this.rng.chance(0.25 * (1 - f.hookQuality))) this.finishFight('hookOut');
-      }
+    const reeling = input.left && input.enabled;
+    // 竿を立てて顔を上げている間だけ網に寄せられる。巻きすぎ・竿を寝かせると暴れる
+    const lifted = this.rodLift > 0.6;
+    this.rod.bend = 0.5 + (lifted ? 0.4 : 0);
+    if (lifted && !reeling) this.netHold += dt;
+    else this.netHold = Math.max(0, this.netHold - dt * 0.8);
+    if (this.netHold > 1.2) {
+      this.finishFight('landed');
+      return;
+    }
+    const thrash = (reeling ? 0.6 : 0) + (this.rodLift < 0.3 ? 0.35 : 0) + (this.netTime > 6 ? 0.4 : 0);
+    if (this.rng.chance(dt * thrash)) {
+      this.audio.splash(0.6);
+      this.fx.splash(this.fishPos.x, this.fishPos.z, 0.5);
+      f.resumeAfterNetMiss();
+      this.phase = 'fight';
+      if (this.rng.chance(0.25 * (1 - f.hookQuality))) this.finishFight('hookOut');
     }
   }
 
@@ -1113,7 +1056,7 @@ export class FishingController {
       return;
     }
     const msg: Record<Exclude<FightOutcome, 'landed'>, string> = {
-      lineBreak: 'ラインブレイク！ 糸を切られた…',
+      lineBreak: '糸を切られた',
       spoolEmpty: '糸を全部出された…',
       hookOut: 'フックが外れた…',
     };
@@ -1183,41 +1126,41 @@ export class FishingController {
 
   /** 画面に出す「次にやること」 */
   guide(touch: boolean): string {
+    if (this.save.stats.caught >= 2) return '';
+    return this.guideText(touch);
+  }
+
+  private guideText(touch: boolean): string {
     const reel = touch ? '「巻く」' : '左クリック長押し';
     const up = touch ? '上にスワイプ' : 'マウスを上に振る';
     const lure = this.lureDef;
     switch (this.phase) {
       case 'ready':
-        return touch ? '画面を押したまま下へ引っぱり、左右で狙って、離すと投げる' : '左クリックを押したままマウスを下へ引いて飛距離、左右で方向。離すと投げる';
+        return touch ? '画面を押したまま下へ引いて竿を振りかぶり、離して投げる' : '左クリックを押したままマウスを下へ引いて振りかぶり、離して投げる';
       case 'aiming':
-        return this.aimPower > OVER_PULL ? '引きすぎ！ 狙いがブレる（少し戻そう）' : '輪が着水点。ナブラ（水面のざわつき）を狙って離せ！';
+        return this.aimPower > OVER_PULL ? '振りかぶりすぎると狙いがぶれる' : '引くほど遠くへ飛ぶ';
       case 'flying':
-        return '…';
+        return '';
       case 'water': {
         const b = this.bite;
-        if (this.onLand) return `陸に落ちた。${reel}で回収しよう`;
-        if (b?.phase === 'take') return `🎣 今だ！ ${up}てアワセ！`;
-        if (b?.phase === 'nibble') return 'つついている…まだ我慢。竿が大きく入ったら振り上げろ';
-        if (b?.phase === 'approach') return '魚影が近づいてくる…動かさずに待て';
-        if (b?.phase === 'chase') return `魚が追ってきた！ 止めて→竿をあおる（${touch ? '小さく上スワイプ' : 'マウスを小さく上へ'}）で食わせろ`;
-        if (this.lineSlack > 1.5) return `糸ふけが出ている。${reel}で張っておかないとアワセが効かない`;
-        return lure.pack
-          ? '待とう。エサは動かさない方が食う。アタリが出たら竿を振り上げてアワセ'
-          : `${reel}で巻き、時々止めて${touch ? '上スワイプ' : 'マウスを上へ'}で竿をあおって誘おう`;
+        if (this.onLand) return `陸に落ちた。${reel}で回収する`;
+        if (b?.phase === 'take') return `竿先が入った — ${up}て合わせる`;
+        if (b?.phase === 'nibble') return '小さなアタリ。竿先が大きく入るまで待つ';
+        if (b?.phase === 'chase') return `魚が追っている。止めてから${touch ? '小さく上スワイプ' : 'マウスを小さく上へ'}であおる`;
+        if (this.lineSlack > 1.5) return `糸ふけが出ている。${reel}で糸を張る`;
+        return lure.pack ? 'エサは動かさずに待つ' : `${reel}で巻き、時々止めて竿をあおって誘う`;
       }
       case 'fight': {
         const f = this.fight!;
-        if (f.behavior === 'jump') return f.rodHigh ? '⚠ 跳んだ！ 竿を下げろ！' : '竿を下げて耐えろ…';
-        if (f.tension > f.effectiveLineTest * 0.85) return '⚠ 切れる！ 竿を下げて巻くのをやめろ';
-        if (f.dragSlipping) return '走られている！ 無理せず竿を寝かせ、魚と逆へ倒して耐えろ';
-        if (f.slack > 0.6) return `糸がたるんでいる！ ${reel}で張れ`;
-        if (f.reelLoad > 0.9) return `重くて巻けない！ 竿を${touch ? '上にスワイプして' : 'マウスを上げて'}立てて寄せ、下げながら巻け（ポンピング）`;
-        return `竿を立てて寄せ → 下げながら巻く。あと ${Math.max(0, f.distance - 2.5).toFixed(1)} m`;
+        if (f.behavior === 'jump') return '跳んだら竿を下げる';
+        if (f.dragSlipping) return '走られたら竿を寝かせ、魚と逆へ倒して耐える';
+        if (f.reelLoad > 0.9) return '重くて巻けないときは、竿を立てて寄せ、下げながら巻く';
+        return '竿を立てて寄せ、下げながら巻く';
       }
       case 'net':
-        return touch ? 'マーカーが緑に入った瞬間「タモ！」' : 'マーカーが緑に入った瞬間クリック！';
+        return touch ? '上にドラッグして竿を立て、魚の顔を上げたまま保つ' : 'マウスを上げて竿を立て、魚の顔を上げたまま保つ';
       case 'landing':
-        return '取り込み！';
+        return '';
     }
   }
 
@@ -1238,9 +1181,7 @@ export class FishingController {
       rodLift: this.rodLift,
       rodHigh: !!f && f.behavior === 'jump' && f.rodHigh,
       slack: this.phase === 'water' ? this.lineSlack : f ? Math.max(0, f.slack) : 0,
-      aim: this.phase === 'aiming' ? { power: this.aimPower, over: this.aimPower > OVER_PULL, distance: this.castDistance(ROD_BY_ID[this.save.equip.rod].cast, lure) } : null,
       chase: this.bite?.phase === 'chase' ? Math.max(0, Math.min(1, this.bite.interest)) : null,
-      net: this.phase === 'net' ? { pos: this.netPos, center: this.netCenter, width: this.netWidth } : null,
       fight:
         f && this.phase === 'fight'
           ? {

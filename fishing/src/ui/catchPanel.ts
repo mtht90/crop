@@ -17,7 +17,7 @@ export function showCatch(
 ): Promise<'keep' | 'release'> {
   return new Promise((resolve) => {
     let decided: 'keep' | 'release' = coolerFull ? 'release' : 'keep';
-    const m = modals.open(res.newSpecies ? '新種発見！' : '釣り上げた！', {
+    const m = modals.open(res.newSpecies ? '新種' : '釣果', {
       onClose: () => {
         preview.unmount();
         removeEventListener('keydown', onKey);
