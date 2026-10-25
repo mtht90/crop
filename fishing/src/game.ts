@@ -5,6 +5,7 @@ import { addToCooler, coolerCapacity, registerCatch, release } from './core/prog
 import { clearSave, loadSave, newSave, writeSave, type CatchRecord, type SaveData } from './core/save';
 import { RARITY_LABEL, WEATHER_LABEL, type Species, type Weather, WEATHERS } from './data/types';
 import { FishingController } from './fishing/fishing';
+import { FishPopulation } from './fishing/population';
 import { FishPreview } from './render/preview';
 import { GameClock } from './sim/environment';
 import type { FishInstance } from './sim/individual';
@@ -13,12 +14,12 @@ import { showCatch } from './ui/catchPanel';
 import { openDex } from './ui/dexPanel';
 import { Hud } from './ui/hud';
 import { TouchControls } from './ui/touch';
-import { preloadFishModels } from './render/fishMesh';
+import { fishModelsReady, preloadFishModels, UNDERWATER } from './render/fishMesh';
 import { openMap, openPause, openTackle, titleScreen } from './ui/menus';
 import { Modals } from './ui/modal';
 import { openShop } from './ui/shopPanel';
 import { Atmosphere } from './world/atmosphere';
-import { HUT, SPAWN, waterDepth } from './world/lakeShape';
+import { HUT, SPAWN, onDock, waterDepth } from './world/lakeShape';
 import { LakeWorld } from './world/lakeWorld';
 import { Player } from './world/player';
 
@@ -49,6 +50,9 @@ export class Game {
   private fishYaw = 0;
   private last = performance.now();
   private hudTimer = 0;
+  private population: FishPopulation;
+  private lastPlayerPos = { x: 0, z: 0 };
+  private playerSpeed = 0;
   private saveTimer = 0;
   private titleT = 0;
   private suppressPause = false;
@@ -110,6 +114,14 @@ export class Game {
       onCatch: (f, s, r) => void this.onCatch(f, s, r),
       onLost: () => this.persist(),
     });
+    this.population = new FishPopulation(this.scene, new Rng(), (x, z, size) => this.fishing.fx.ripple(x, z, size));
+    this.fishing.population = this.population;
+    let spookTold = false;
+    this.population.onPlayerSpooked = () => {
+      if (spookTold || this.save.stats.caught >= 2) return;
+      spookTold = true;
+      this.hud.toast('足音で魚が逃げた。水辺では静かに歩こう', 'info');
+    };
 
     this.renderer.domElement.addEventListener('click', () => {
       this.audio.init();
@@ -136,6 +148,29 @@ export class Game {
     if (this.mode === 'title') this.showTitle();
     this.renderer.setAnimationLoop(() => this.frame());
     (window as unknown as { __game: Game }).__game = this;
+  }
+
+  /** 湖を泳ぐ魚と水の見え方（天気で濁り、偏光グラスで照り返しが減る） */
+  private updateWaterLife(dt: number, t: number): void {
+    const glasses = this.save.gear.includes('polarized');
+    const clear = { sunny: 1, cloudy: 0.85, fog: 0.7, rain: 0.5, storm: 0.3 }[this.clock.weather];
+    const night = this.atmo.night;
+    this.world.setClarity(clear * (glasses ? 1 : 0.65) * (1 - 0.6 * night), glasses ? 0.4 : 1);
+    UNDERWATER.uMurk.value = (0.22 / clear) * (glasses ? 0.6 : 1);
+    UNDERWATER.uWaterCol.value.setRGB(0.07, 0.13, 0.11).multiplyScalar(1 - 0.85 * night);
+    if (this.mode === 'title' || !fishModelsReady() || dt <= 0) return;
+    const p = this.player;
+    // 瞬間移動（開始・寝て起きた等）は歩いたことにしない
+    const step = Math.hypot(p.x - this.lastPlayerPos.x, p.z - this.lastPlayerPos.z);
+    const moved = step > 2 ? 0 : step / dt;
+    this.playerSpeed += (Math.min(10, moved) - this.playerSpeed) * Math.min(1, dt * 6);
+    this.lastPlayerPos = { x: p.x, z: p.z };
+    this.population.update(
+      dt,
+      { x: p.x, z: p.z, speed: this.playerSpeed, onDock: onDock(p.x, p.z) },
+      { time: this.clock.timeBand, weather: this.clock.weather, season: this.clock.season },
+      t,
+    );
   }
 
   /** 開発・確認用：?start&hour=17&weather=rain&fish=1 */
@@ -420,6 +455,7 @@ export class Game {
     // 世界の更新
     this.atmo.update(dt, this.clock.hour, this.camera, this.renderer);
     this.world.update(dt, this.atmo.wave);
+    this.updateWaterLife(dt, now / 1000);
     if (this.world.water.material.uniforms.sunDirection) this.world.water.material.uniforms.sunDirection.value.copy(this.atmo.sunDir);
     const night = this.atmo.night;
     for (const l of this.world.nightLights) l.intensity = night * 14;

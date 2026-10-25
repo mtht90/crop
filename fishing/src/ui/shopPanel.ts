@@ -2,7 +2,7 @@ import { coolerCapacity, sellFromCooler } from '../core/progress';
 import type { SaveData } from '../core/save';
 import { SPECIES_BY_ID } from '../data/species';
 import { SPOTS } from '../data/spots';
-import { COOLER_LEVELS, LINES, LURES, REELS, RODS, LB_TO_KG } from '../data/tackle';
+import { COOLER_LEVELS, GEAR, LINES, LURES, REELS, RODS, LB_TO_KG } from '../data/tackle';
 import { formatWeight, priceOf } from '../sim/individual';
 import { h, yen } from './dom';
 import type { Modals } from './modal';
@@ -13,7 +13,7 @@ export interface ShopCallbacks {
   coin(): void;
 }
 
-type Tab = 'sell' | 'rods' | 'reels' | 'lines' | 'lures' | 'cooler' | 'spots' | 'rest';
+type Tab = 'sell' | 'rods' | 'reels' | 'lines' | 'lures' | 'gear' | 'cooler' | 'spots' | 'rest';
 
 const TAB_LABEL: Record<Tab, string> = {
   sell: '売却',
@@ -21,6 +21,7 @@ const TAB_LABEL: Record<Tab, string> = {
   reels: 'リール',
   lines: 'ライン',
   lures: 'ルアー・エサ',
+  gear: '小物',
   cooler: 'クーラー',
   spots: '入漁券',
   rest: '休憩',
@@ -129,6 +130,12 @@ export function openShop(modals: Modals, save: SaveData, cb: ShopCallbacks): voi
           list.append(
             item(l.name, `${l.desc}　強度${(l.lb * LB_TO_KG).toFixed(1)}kg・見えにくさ${Math.round((2 - l.visibility) * 50)}・耐摩耗${Math.round(100 / l.abrasion)}`, h('span', { class: 'price', text: owned ? '所持' : yen(l.price) }), owned ? h('span') : h('button', { text: '買う', disabled: save.money < l.price, onclick: () => buy(l.price, () => save.owned.lines.push(l.id)) })),
           );
+        }
+        break;
+      case 'gear':
+        for (const g of GEAR) {
+          const owned = save.gear.includes(g.id);
+          list.append(item(g.name, g.desc, h('span', { class: 'price', text: owned ? '所持' : yen(g.price) }), owned ? h('span') : h('button', { text: '買う', disabled: save.money < g.price, onclick: () => buy(g.price, () => save.gear.push(g.id)) })));
         }
         break;
       case 'lures':

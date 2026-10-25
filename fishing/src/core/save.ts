@@ -47,6 +47,8 @@ export interface SaveData {
   clock: ClockState;
   owned: { rods: string[]; reels: string[]; lines: string[]; lures: Record<string, number> };
   equip: { rod: string; reel: string; line: string; lure: string };
+  /** 小物（偏光グラスなど）。持っていれば効果がある */
+  gear: string[];
   drag: number;
   /** エサ釣りのウキ下 (m)。0 = ウキなし（底まで沈める） */
   floatDepth: number;
@@ -73,6 +75,7 @@ export function newSave(): SaveData {
       lures: { bait_worm: 20, lure_spinner: 1, lure_worm: 1 },
     },
     equip: { rod: 'rod_beginner', reel: 'reel_small', line: 'nylon6', lure: 'bait_worm' },
+    gear: [],
     drag: 1.6,
     floatDepth: 1,
     coolerLevel: 0,

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { Water } from 'three/examples/jsm/objects/Water.js';
+import { UNDERWATER } from '../render/fishMesh';
 import { instanced, model, texture } from '../core/assets';
 import { Rng } from '../sim/rng';
 import {
@@ -109,7 +110,7 @@ export class LakeWorld {
       tForest: { value: texture('forest_ground_04_diff.jpg') },
     };
     mat.onBeforeCompile = (shader) => {
-      Object.assign(shader.uniforms, tex);
+      Object.assign(shader.uniforms, tex, UNDERWATER);
       shader.vertexShader = shader.vertexShader
         .replace('#include <common>', '#include <common>\nattribute vec4 splat;\nvarying vec4 vSplat;\nvarying vec3 vWPos;')
         .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvSplat = splat;\nvWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
@@ -118,6 +119,7 @@ export class LakeWorld {
           '#include <common>',
           `#include <common>
           uniform sampler2D tGrass; uniform sampler2D tSand; uniform sampler2D tMud; uniform sampler2D tRock; uniform sampler2D tForest;
+          uniform vec3 uWaterCol; uniform float uMurk;
           varying vec4 vSplat; varying vec3 vWPos;
           vec3 tri(sampler2D t, vec2 p) { return mix(texture2D(t, p * 0.11).rgb, texture2D(t, p * 0.027).rgb, 0.45); }`,
         )
@@ -126,14 +128,29 @@ export class LakeWorld {
           `vec2 p = vWPos.xz;
           float wf = clamp(1.0 - (vSplat.x + vSplat.y + vSplat.z + vSplat.w), 0.0, 1.0);
           vec3 col = tri(tGrass, p) * vSplat.x + tri(tSand, p) * vSplat.y + tri(tMud, p) * vSplat.z + tri(tRock, p * 0.7) * vSplat.w + tri(tForest, p) * wf;
+          // 水底は草ではなく泥と砂（岩場はそのまま）
+          float bed = smoothstep(0.05, 0.6, -vWPos.y) * (1.0 - vSplat.w);
+          col = mix(col, mix(tri(tMud, p), tri(tSand, p * 0.8), 0.45) * vec3(0.8, 0.85, 0.75), bed);
           float under = clamp(-vWPos.y / 2.5, 0.0, 1.0);
-          col = mix(col, col * vec3(0.32, 0.45, 0.42), under);
+          col = mix(col, col * vec3(0.55, 0.65, 0.6), under);
           diffuseColor.rgb *= col * 1.15;`,
+        )
+        // 深いほど水の色に溶ける（魚と同じ見え方）
+        .replace(
+          '#include <tonemapping_fragment>',
+          'if (vWPos.y < 0.0) gl_FragColor.rgb = mix(gl_FragColor.rgb, uWaterCol, clamp(1.0 - exp(vWPos.y * uMurk * 1.2), 0.0, 0.95));\n#include <tonemapping_fragment>',
         );
     };
     const mesh = new THREE.Mesh(geo, mat);
     mesh.receiveShadow = true;
     return mesh;
+  }
+
+  /** 水の澄み具合 0..1 と、水面の照り返しの強さ（偏光グラスで下がる） */
+  setClarity(see: number, glare: number): void {
+    const u = this.water.material.uniforms;
+    u.uSee.value = see;
+    u.uGlare.value = glare;
   }
 
   private buildWater(): Water {
@@ -151,6 +168,17 @@ export class LakeWorld {
       alpha: 0.93,
     });
     water.material.transparent = true;
+    // 真上から覗くほど水中が透けて見える（uSee = 水の澄み具合）。uGlare = 水面の照り返し（偏光グラスで減る）
+    const m = water.material;
+    m.uniforms.uSee = { value: 0.6 };
+    m.uniforms.uGlare = { value: 1 };
+    m.fragmentShader = m.fragmentShader
+      .replace('uniform float alpha;', 'uniform float alpha;\nuniform float uSee;\nuniform float uGlare;')
+      .replace('float reflectance = rf0 + ( 1.0 - rf0 ) * pow( ( 1.0 - theta ), 5.0 );', 'float reflectance = ( rf0 + ( 1.0 - rf0 ) * pow( ( 1.0 - theta ), 5.0 ) ) * uGlare;')
+      .replace(
+        'gl_FragColor = vec4( outgoingLight, alpha );',
+        'float seeK = clamp( ( 1.0 - reflectance ) * uSee * smoothstep( 0.15, 0.7, theta ), 0.0, 1.0 );\ngl_FragColor = vec4( outgoingLight * ( 1.0 - 0.5 * seeK ), mix( alpha, 0.06, seeK ) );',
+      );
     water.rotation.x = -Math.PI / 2;
     water.position.y = 0;
     water.renderOrder = 1;

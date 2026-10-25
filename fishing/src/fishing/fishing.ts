@@ -10,10 +10,11 @@ import { activity, type GameClock } from '../sim/environment';
 import { Fight, PUMP_LENGTH, type FightOutcome } from '../sim/fight';
 import { generateFish, type FishInstance } from '../sim/individual';
 import { Rng } from '../sim/rng';
-import { biteChancePerSecond, pickSpecies } from '../sim/spawn';
+import { biteChancePerSecond, pickSpecies, speciesWeight } from '../sim/spawn';
 import { structureAt, waterDepth, terrainHeight } from '../world/lakeShape';
 import type { Player } from '../world/player';
 import { WaterEffects } from './effects';
+import type { AmbientFish, FishPopulation } from './population';
 import { RodView } from './rodView';
 
 /**
@@ -38,6 +39,10 @@ interface Bite {
   window: number;
   /** ルアーを追う魚のやる気 0..1（1で食う、0で見切る） */
   interest: number;
+  /** 実際に泳いで寄ってくる個体（湖の魚） */
+  amb: AmbientFish | null;
+  /** 賢さ 0..1（大物ほど見切りやすく、違和感ですぐ離す） */
+  wary: number;
 }
 
 interface HotSpot {
@@ -153,6 +158,9 @@ export class FishingController {
   danger = 0;
   /** カメラが向くべき方向（Game が参照） */
   cameraYawHint: number | null = null;
+  /** 湖を泳ぐ魚（Game が設定） */
+  population: FishPopulation | null = null;
+  private thrashTimer = 0;
 
   constructor(
     private scene: THREE.Scene,
@@ -221,6 +229,7 @@ export class FishingController {
   /** ルアーを回収して構えに戻す */
   reset(): void {
     this.phase = 'ready';
+    if (this.bite) this.endBite(false, 0);
     this.bite = null;
     this.fight = null;
     this.hooked = null;
@@ -499,6 +508,9 @@ export class FishingController {
     if (this.nearHotspot(this.lure, 2.5)) this.spook = 0;
     this.fx.splash(this.lure.x, this.lure.z, 0.25);
     this.audio.splash(0.3);
+    // 着水音：真上に落とすと散り、少し離れた魚は様子を見に来る
+    const loud = lure.category === 'jig' ? 0.65 : lure.category === 'topwater' || lure.category === 'frog' ? 0.45 : lure.pack ? 0.2 : 0.35;
+    this.population?.splash(this.lure.x, this.lure.z, loud, lure.id);
     const usesFloat = !!lure.pack && this.save.floatDepth > 0;
     this.rod.bobber.visible = usesFloat;
     if (usesFloat) this.rod.bobber.position.set(this.lure.x, 0, this.lure.z);
@@ -702,10 +714,16 @@ export class FishingController {
     const b = this.bite;
     if (b?.phase === 'chase') {
       const paused = this.stillTime > 0.3 && this.stillTime < 2;
-      b.interest += paused ? 0.4 : 0.12;
+      b.interest += (paused ? 0.4 : 0.12) * this.chaseGain(b, lure);
     }
     this.stillTime = 0;
     this.lastTwitch = this.time;
+  }
+
+  /** 追ってくる魚の食い気の上がりやすさ（賢い個体・同じ場所で同じルアーを投げ続けると下がる） */
+  private chaseGain(b: Bite, lure: Lure): number {
+    const fatigue = this.population?.lureFatigue(this.lure.x, this.lure.z, lure.id) ?? 0;
+    return (1 - 0.5 * b.wary) / (1 + 0.15 * Math.max(0, fatigue - 1));
   }
 
   private rollBite(lure: Lure): void {
@@ -722,13 +740,49 @@ export class FishingController {
       spook: this.spook,
     });
     const hot = this.nearHotspot(this.lure, 5) ? 1.8 : 1;
-    if (!this.rng.chance(p * 0.1 * hot)) return;
-    const species = pickSpecies(list, cond, this.rng);
-    if (!species) return;
-    const fish = generateFish(species, cond, this.rng);
-    const nibbles = lure.pack ? this.rng.int(species.nibbles[0], species.nibbles[1]) : 0;
-    this.bite = { species, fish, cond, nibbles, timer: 0, phase: 'approach', window: 1, interest: 0.4 };
+    // 近くを泳いでいる魚ほど寄ってきやすい。釣り続けた場所はスレて食いが落ちる
+    const pop = this.population;
+    const pressure = pop ? pop.pressureAt(this.lure.x, this.lure.z) : 0;
+    const lureDepth = -this.lure.y;
+    const cands = (pop?.candidates(this.lure, lure.pack ? 5 : 9) ?? [])
+      .map((a) => ({
+        a,
+        w:
+          speciesWeight(a.species, cond) *
+          Math.exp(-Math.hypot(a.pos.x - this.lure.x, a.pos.z - this.lure.z) / 4) *
+          Math.exp(-Math.abs(-a.pos.y - lureDepth) / (lure.pack ? 2 : 3.5)) *
+          (1 - 0.6 * a.wary),
+      }))
+      .filter((c) => c.w > 0);
+    const near = pop ? (cands.length ? Math.min(2, 0.6 + 0.35 * cands.length) : 0.3) : 1;
+    if (!this.rng.chance((p * 0.1 * hot * near) / (1 + pressure))) return;
+    let species: Species | null;
+    let fish: FishInstance;
+    let amb: AmbientFish | null = null;
+    const picked = cands.length ? this.rng.weighted(cands, (c) => c.w) : null;
+    if (picked) {
+      amb = picked.a;
+      species = amb.species;
+      fish = amb.fish;
+    } else {
+      // 見えていない深場から寄ってくる
+      species = pickSpecies(list, cond, this.rng);
+      if (!species) return;
+      fish = generateFish(species, cond, this.rng);
+      amb = pop?.spawnFor(species, fish, this.lure) ?? null;
+    }
+    const nibbles = lure.pack ? this.rng.int(species.nibbles[0], species.nibbles[1]) + (amb && amb.wary > 0.5 ? 1 : 0) : 0;
+    this.bite = { species, fish, cond, nibbles, timer: 0, phase: 'approach', window: 1, interest: 0.4, amb, wary: amb?.wary ?? 0 };
     this.startApproach(lure);
+  }
+
+  /** アタリが終わった（見切った・逃げた・合わせ損ねた）。spooked なら魚は逃げ、その場所が少しスレる */
+  private endBite(spooked: boolean, pressure: number): void {
+    const b = this.bite;
+    this.bite = null;
+    if (!b) return;
+    if (b.amb) this.population?.release(b.amb, spooked);
+    if (pressure > 0) this.population?.addPressure(this.lure.x, this.lure.z, pressure);
   }
 
   /** 最初の1匹用：このルアーで釣れる身近な魚を寄せる */
@@ -737,16 +791,24 @@ export class FishingController {
     const cond = this.conditions(this.layerAt());
     const list = speciesForSpot('lake').filter((s) => (s.lures[lure.category] ?? 0) > 0 && (s.rarity === 'common' || s.rarity === 'uncommon'));
     const species = list.length ? this.rng.pick(list) : speciesForSpot('lake')[0];
-    this.bite = { species, fish: generateFish(species, cond, this.rng), cond, nibbles: 0, timer: 0, phase: 'approach', window: 1, interest: 0.7 };
+    const fish = generateFish(species, cond, this.rng);
+    const amb = this.population?.spawnFor(species, fish, this.lure) ?? null;
+    this.bite = { species, fish, cond, nibbles: 0, timer: 0, phase: 'approach', window: 1, interest: 0.7, amb, wary: 0 };
     this.startApproach(lure);
     this.tutorialBite = true;
   }
 
   private startApproach(lure: Lure): void {
     const b = this.bite!;
-    const a = this.rng.range(0, Math.PI * 2);
-    const d = this.rng.range(3, 6);
-    this.shadowFrom.set(this.lure.x + Math.cos(a) * d, 0, this.lure.z + Math.sin(a) * d);
+    if (b.amb) {
+      // 実際に泳いでいる魚が寄ってくる
+      this.population?.engage(b.amb);
+      this.shadowFrom.copy(b.amb.pos);
+    } else {
+      const a = this.rng.range(0, Math.PI * 2);
+      const d = this.rng.range(3, 6);
+      this.shadowFrom.set(this.lure.x + Math.cos(a) * d, this.lure.y, this.lure.z + Math.sin(a) * d);
+    }
     this.shadowPos.copy(this.shadowFrom);
     b.timer = this.rng.range(1.2, 2.2);
     b.window = b.timer;
@@ -761,7 +823,10 @@ export class FishingController {
     const cond = this.conditions(this.layerAt());
     const list = speciesForSpot('lake');
     const species = list.find((s) => s.id === speciesId) ?? pickSpecies(list, cond, this.rng) ?? list[0];
-    this.bite = { species, fish: generateFish(species, cond, this.rng), cond, nibbles: 0, timer: 0.1, phase: 'nibble', window: 3, interest: 1 };
+    const fish = generateFish(species, cond, this.rng);
+    const amb = this.population?.spawnFor(species, fish, this.lure) ?? null;
+    if (amb) this.population?.engage(amb);
+    this.bite = { species, fish, cond, nibbles: 0, timer: 0.1, phase: 'nibble', window: 3, interest: 1, amb, wary: 0 };
     this.shadowPos.copy(this.lure);
   }
 
@@ -770,7 +835,7 @@ export class FishingController {
     const rod = ROD_BY_ID[this.save.equip.rod];
     // ルアーへの食いつきは一瞬、エサはやや長い。最初の1匹だけは長めに待つ
     const base = b.species.hookWindow * rod.sensitivity * (lure.pack ? 1.4 : 1.1);
-    b.timer = this.tutorialBite ? 2.5 : Math.max(0.6, base);
+    b.timer = this.tutorialBite ? 2.5 : Math.max(0.5, base * (1 - 0.3 * b.wary));
     b.window = b.timer;
     this.rod.shake = 1;
     this.rod.bend = 0.6;
@@ -787,17 +852,20 @@ export class FishingController {
     if (b.phase === 'chase') {
       // ルアーを追う魚：一定速で巻き続けると少しずつ、止めてからの誘いで一気に食い気が上がる。
       // 止めすぎ・速すぎは見切られる
+      // 大物ほど・同じルアーを見慣れているほど食い気が上がりにくく、違和感（止めすぎ・速すぎ・糸ふけ）ですぐ離れる
       const fast = this.lureSpeed > 1.1 && b.species.motion !== 'fast';
-      if (this.stillTime > 2) b.interest -= 0.25 * dt;
-      else if (fast) b.interest -= 0.15 * dt;
-      else if (this.lureSpeed > 0.05) b.interest += 0.06 * dt;
+      const doubt = 1 + 1.5 * b.wary;
+      if (this.stillTime > 2 - b.wary) b.interest -= 0.25 * doubt * dt;
+      else if (fast) b.interest -= 0.15 * doubt * dt;
+      else if (this.lureSpeed > 0.05) b.interest += 0.06 * this.chaseGain(b, lure) * dt;
+      if (this.lineSlack > 1.2) b.interest -= 0.2 * b.wary * dt;
       if (b.interest >= 1) {
         this.startTake(b, lure);
         return;
       }
       if (b.interest <= 0) {
         this.tip('見切られた。巻くだけでなく、止めてからあおってみよう', 'bad');
-        this.bite = null;
+        this.endBite(false, 0.15);
         this.spook = 0.4;
       }
       return;
@@ -817,8 +885,8 @@ export class FishingController {
         this.audio.nibble();
         this.fx.ripple(this.lure.x, this.lure.z, 0.05);
         this.input?.vibrate(15);
-        // エサを動かすと警戒される
-        if (this.lureSpeed > 0.1 && this.rng.chance(0.35)) this.bite = null;
+        // エサを動かすと警戒される（大物ほど敏感）
+        if (this.lureSpeed > 0.1 && this.rng.chance(0.35 + 0.4 * b.wary)) this.endBite(true, 0.2);
         return;
       }
       this.startTake(b, lure);
@@ -829,7 +897,7 @@ export class FishingController {
     if (b.timer <= 0) {
       this.tip('合わせが遅れた', 'bad');
       if (lure.pack && this.rng.chance(0.6)) this.consumeBait();
-      this.bite = null;
+      this.endBite(true, 0.3);
       this.rod.bend = 0;
       this.spook = 0.5;
     }
@@ -844,7 +912,7 @@ export class FishingController {
       if (this.tutorialBite) return;
       this.tip('早合わせ。竿先が大きく入るまで待とう', 'bad');
       if (this.lureDef.pack && this.rng.chance(0.4)) this.consumeBait();
-      this.bite = null;
+      this.endBite(true, 0.3);
       this.spook = 1;
       this.cb.onLost('miss');
       return;
@@ -855,7 +923,7 @@ export class FishingController {
     const q = strength * timing * slackPenalty;
     if (q < 0.22 && !this.tutorialBite) {
       this.tip(this.lineSlack > 1 ? '糸ふけで合わせが効かなかった' : '合わせが弱かった', 'bad');
-      this.bite = null;
+      this.endBite(true, 0.3);
       this.spook = 0.8;
       this.cb.onLost('miss');
       return;
@@ -902,11 +970,19 @@ export class FishingController {
     this.audio.splash(0.4);
     this.input?.vibrate([40, 30, 120]);
     this.removeFish();
-    this.fishObj = buildFishObject(b.species, b.fish.colorId, b.fish.patternId);
-    this.fishObj.group.scale.setScalar(b.fish.length / 100);
-    this.fishObj.group.visible = false;
-    this.scene.add(this.fishObj.group);
+    if (b.amb && this.population) {
+      // 寄ってきた魚そのものが掛かる
+      this.fishObj = this.population.take(b.amb);
+    } else {
+      this.fishObj = buildFishObject(b.species, b.fish.colorId, b.fish.patternId, false, true);
+      this.fishObj.group.scale.setScalar(b.fish.length / 100);
+      this.fishObj.group.visible = false;
+      this.scene.add(this.fishObj.group);
+    }
     this.fishPos.set(this.lure.x, this.lure.y, this.lure.z);
+    // 掛かった魚が暴れると周りの魚は散る
+    this.population?.splash(this.lure.x, this.lure.z, 0.7, undefined, false);
+    this.thrashTimer = 1;
   }
 
   private updateFight(dt: number, input: Input): void {
@@ -979,6 +1055,11 @@ export class FishingController {
     this.danger = Math.max(0, Math.min(1, (tFrac - 0.75) / 0.25), f.behavior === 'jump' && f.rodHigh ? 0.8 : 0);
 
     this.placeFish(dt, f);
+    this.thrashTimer -= dt;
+    if (this.thrashTimer <= 0) {
+      this.thrashTimer = 1.2;
+      this.population?.splash(this.fishPos.x, this.fishPos.z, f.behavior === 'run' || f.behavior === 'jump' ? 0.6 : 0.3, undefined, false);
+    }
     // 糸が水を切る：魚が横へ走るほど、糸の入水点から波紋が立つ
     if (f.behavior === 'run' && f.slack < 0.1 && this.rng.chance(dt * (2 + 8 * Math.min(1, Math.abs(f.side)) * Math.min(1, tFrac * 2)))) {
       const tip = this.rod.tipWorld();
@@ -1020,7 +1101,7 @@ export class FishingController {
     if (f.depth < 1.6 && (f.behavior === 'run' || f.behavior === 'approach') && this.rng.chance(dt * (8 - f.depth * 4))) this.fx.ripple(this.fishPos.x, this.fishPos.z, 0.25 + 0.25 * (1 - f.depth / 1.6));
     if (this.fishObj) {
       const g = this.fishObj.group;
-      g.visible = this.fishPos.y > -1.4 || f.distance < 6 || this.phase === 'net';
+      g.visible = true;
       g.position.copy(this.fishPos);
       const mv = this.fishPos.clone().sub(prev);
       const quiet = this.netQuiet;
@@ -1122,6 +1203,8 @@ export class FishingController {
   }
 
   private finishFight(outcome: FightOutcome): void {
+    // 釣れても逃げられても、その場所の魚はスレる
+    this.population?.addPressure(this.fishPos.x, this.fishPos.z, outcome === 'landed' ? 1 : 0.7);
     this.audio.setDrag(0);
     this.audio.setReel(0);
     this.audio.setStrain(0, 0);
@@ -1153,6 +1236,7 @@ export class FishingController {
     this.reset();
   }
 
+  /** 寄ってくる魚（湖の魚の個体）を動かす。個体がいない時は水面に影だけ出す */
   private updateShadow(dt: number): void {
     const b = this.bite;
     const mat = this.shadow.material as THREE.MeshBasicMaterial;
@@ -1161,7 +1245,6 @@ export class FishingController {
       this.shadow.visible = mat.opacity > 0.01;
       return;
     }
-    this.shadow.visible = true;
     const len = b.fish.length / 100;
     let target: THREE.Vector3;
     if (b.phase === 'approach') {
@@ -1173,12 +1256,36 @@ export class FishingController {
       target = this.lure.clone().addScaledVector(away, 0.4 + (1 - b.interest) * 1.4);
       target.x += Math.sin(this.time * 3) * 0.2;
     } else {
-      target = this.lure.clone().add(new THREE.Vector3(Math.sin(this.time * 5) * 0.12, 0, Math.cos(this.time * 4) * 0.12));
+      // つつく・食う：ルアーのすぐそばで小刻みに動く
+      target = this.lure.clone().add(new THREE.Vector3(Math.sin(this.time * 5) * 0.08, 0, Math.cos(this.time * 4) * 0.08));
     }
+    target.y = Math.min(-0.08, target.y);
     const prev = this.shadowPos.clone();
-    this.shadowPos.lerp(target, Math.min(1, dt * 4));
-    this.shadow.position.set(this.shadowPos.x, 0.03, this.shadowPos.z);
+    this.shadowPos.lerp(target, Math.min(1, dt * (b.phase === 'take' ? 8 : 4)));
     const mv = this.shadowPos.clone().sub(prev);
+    const amb = b.amb;
+    if (amb) {
+      this.shadow.visible = false;
+      const g = amb.obj.group;
+      g.visible = true;
+      // 口がルアーに届くよう、体の中心は進行方向の後ろへずらす
+      const head = mv.lengthSq() > 1e-7 ? new THREE.Vector3(mv.x, 0, mv.z).normalize() : new THREE.Vector3(Math.cos(g.rotation.y), 0, -Math.sin(g.rotation.y));
+      if (mv.lengthSq() > 1e-7) {
+        const yaw = Math.atan2(-head.z, head.x);
+        let d = yaw - g.rotation.y;
+        d = Math.atan2(Math.sin(d), Math.cos(d));
+        g.rotation.y += d * Math.min(1, dt * 6);
+      }
+      amb.pos.copy(this.shadowPos).addScaledVector(head, -len * 0.45);
+      g.position.copy(amb.pos);
+      const speed = mv.length() / Math.max(dt, 1e-4);
+      amb.obj.swim.uTime.value = this.time;
+      amb.obj.swim.uAmp.value = b.phase === 'take' ? 0.08 : 0.03 + Math.min(0.05, speed * 0.03);
+      amb.obj.swim.uFreq.value = b.phase === 'take' ? 14 : 5 + Math.min(10, speed * 5);
+      return;
+    }
+    this.shadow.visible = true;
+    this.shadow.position.set(this.shadowPos.x, 0.03, this.shadowPos.z);
     if (mv.lengthSq() > 1e-7) this.shadow.rotation.y = Math.atan2(-mv.z, mv.x);
     this.shadow.scale.set(len * 1.1, 1, len * 0.32);
     const depthFade = Math.max(0.3, 1 - -this.lure.y / 6);

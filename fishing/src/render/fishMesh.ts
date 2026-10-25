@@ -198,17 +198,24 @@ const FRAG_BODY = `
 }
 `;
 
+/** 水中の見え方（湖の魚すべてで共有）。濁りが強いほど深い魚は水の色に溶ける */
+export const UNDERWATER = {
+  uWaterCol: { value: new THREE.Color(0x0b2422) },
+  uMurk: { value: 0.3 },
+};
+const NO_WATER = { uWaterCol: { value: new THREE.Color(0) }, uMurk: { value: 0 } };
+
 export interface SwimUniforms {
   uTime: { value: number };
   uAmp: { value: number };
   uFreq: { value: number };
 }
 
-function installShader(mat: THREE.Material, swim: SwimUniforms, extra: Record<string, { value: unknown }> | null): void {
+function installShader(mat: THREE.Material, swim: SwimUniforms, extra: Record<string, { value: unknown }> | null, water = NO_WATER): void {
   mat.onBeforeCompile = (shader) => {
-    Object.assign(shader.uniforms, swim, extra ?? {});
+    Object.assign(shader.uniforms, swim, extra ?? {}, extra ? water : {});
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nuniform float uTime;\nuniform float uAmp;\nuniform float uFreq;\nvarying vec3 vFPos;\nvarying vec3 vFNor;')
+      .replace('#include <common>', '#include <common>\nuniform float uTime;\nuniform float uAmp;\nuniform float uFreq;\nvarying vec3 vFPos;\nvarying vec3 vFNor;\nvarying float vWorldY;')
       .replace(
         '#include <begin_vertex>',
         `#include <begin_vertex>
@@ -216,10 +223,18 @@ function installShader(mat: THREE.Material, swim: SwimUniforms, extra: Record<st
         vFNor = normal;
         float tailK = clamp(0.55 - position.x, 0.0, 1.1);
         transformed.z += sin(uTime * uFreq - position.x * 7.0) * uAmp * tailK * tailK;
-        transformed.x -= abs(sin(uTime * uFreq - position.x * 7.0)) * uAmp * 0.15 * tailK;`,
+        transformed.x -= abs(sin(uTime * uFreq - position.x * 7.0)) * uAmp * 0.15 * tailK;
+        vWorldY = (modelMatrix * vec4(transformed, 1.0)).y;`,
       );
     if (extra) {
-      shader.fragmentShader = shader.fragmentShader.replace('#include <common>', `#include <common>\n${FRAG_HEAD}`).replace('#include <map_fragment>', FRAG_BODY);
+      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <common>', `#include <common>\n${FRAG_HEAD}\nuniform vec3 uWaterCol; uniform float uMurk; varying float vWorldY;`)
+        .replace('#include <map_fragment>', FRAG_BODY)
+        // 水面下は深さに応じて暗い影（魚影）になっていく。周りの水より暗いので見つけやすい
+        .replace(
+          '#include <tonemapping_fragment>',
+          'if (vWorldY < 0.0) gl_FragColor.rgb = mix(gl_FragColor.rgb, uWaterCol * 0.35, clamp(1.0 - exp(vWorldY * uMurk * 1.6), 0.0, 0.85));\n#include <tonemapping_fragment>',
+        );
     } else {
       shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vFPos;\nvarying vec3 vFNor;');
     }
@@ -233,8 +248,8 @@ export interface FishObject {
   dispose(): void;
 }
 
-/** 魚の3Dオブジェクト（全長1、+Xが頭）。silhouette = 図鑑の未発見表示 */
-export function buildFishObject(s: Species, colorId: string | null, patternId: string | null, silhouette = false): FishObject {
+/** 魚の3Dオブジェクト（全長1、+Xが頭）。silhouette = 図鑑の未発見表示、inWorld = 湖の中（水中の見え方を適用） */
+export function buildFishObject(s: Species, colorId: string | null, patternId: string | null, silhouette = false, inWorld = false): FishObject {
   // モデルが読み込めていない場合も止まらないよう、別のモデルか簡易な形で代用する
   const model = models.get(s.model.id) ?? models.values().next().value ?? fallbackModel();
   const look = lookOf(s, colorId, patternId);
@@ -277,7 +292,7 @@ export function buildFishObject(s: Species, colorId: string | null, patternId: s
       uRefLum: { value: p.refLum },
       uIsFin: { value: p.fin ? 1 : 0 },
       uHalfH: { value: model.halfHeight },
-    });
+    }, inWorld ? UNDERWATER : NO_WATER);
     return m;
   });
   const group = new THREE.Group();

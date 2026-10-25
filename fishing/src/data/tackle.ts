@@ -121,3 +121,12 @@ export const COOLER_LEVELS = [
   { capacity: 25, price: 9000 },
   { capacity: 40, price: 25000 },
 ];
+
+export interface Gear {
+  id: string;
+  name: string;
+  desc: string;
+  price: number;
+}
+
+export const GEAR: Gear[] = [{ id: 'polarized', name: '偏光グラス', desc: '水面の照り返しを抑え、水中の魚がよく見える。', price: 3500 }];
