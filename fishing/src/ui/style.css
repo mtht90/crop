@@ -1187,3 +1187,15 @@ button.primary,
 .status .chip {
   font-weight: 500;
 }
+
+/* スマホは文字を最小限に：時刻と天気だけ、操作の説明は出さない */
+body.is-touch .status .chip:nth-child(1),
+body.is-touch .status .chip:nth-child(4),
+body.is-touch .status .chip:nth-child(5),
+body.is-touch .prompt {
+  display: none !important;
+}
+body.is-touch .fishhud {
+  width: 140px;
+  padding: 6px 8px;
+}

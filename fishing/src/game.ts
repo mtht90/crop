@@ -428,7 +428,7 @@ export class Game {
       const ph = this.fishing.phase;
       this.hud.setKeys(
         ph === 'net'
-          ? [['マウスを一気に上へ', '抜き上げる（おとなしい時に）']]
+          ? [['マウスを上へ', '抜き上げる']]
           : ph === 'fight'
           ? [
               ['左長押し', '巻く'],

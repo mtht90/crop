@@ -163,7 +163,7 @@ export class FishingController {
 
   constructor(
     private scene: THREE.Scene,
-    private camera: THREE.PerspectiveCamera,
+    camera: THREE.PerspectiveCamera,
     private save: SaveData,
     private clock: GameClock,
     private audio: AudioEngine,
@@ -192,7 +192,8 @@ export class FishingController {
 
   /** 慣れるまでの短い助言（2匹釣った後は出さない） */
   private tip(text: string, kind: 'info' | 'good' | 'bad' = 'info'): void {
-    if (this.save.stats.caught < 2) this.cb.toast(text, kind);
+    // スマホは画面が狭いので助言は出さない（ガイド1行だけ）
+    if (this.save.stats.caught < 2 && !this.input?.touch) this.cb.toast(text, kind);
   }
 
   get lureDef(): Lure {
@@ -242,7 +243,6 @@ export class FishingController {
     this.rod.lure.quaternion.identity();
     this.rod.bobber.visible = false;
     this.shadow.visible = false;
-    this.haul.dropped = false;
     this.marker.visible = false;
     this.shake = 0;
     this.danger = 0;
@@ -423,7 +423,7 @@ export class FishingController {
       const sag = this.phase === 'flying' ? 0.2 : this.bite?.phase === 'take' ? 0.02 : 0.15 + this.lineSlack * 0.35;
       const end = this.rod.bobber.visible ? this.rod.bobber.position : this.lure;
       this.rod.drawLine(tip, end, sag, this.rod.bobber.visible ? null : entry);
-    } else if ((this.phase === 'fight' || this.phase === 'net' || this.phase === 'landing') && this.fight && !this.haul.dropped) {
+    } else if ((this.phase === 'fight' || this.phase === 'net' || this.phase === 'landing') && this.fight) {
       // 糸は魚の口へ。ルアーは口に掛かって見える
       const end = this.fishObj ? this.mouthOf(this.fishObj.group) : this.fishPos;
       const sag = this.phase === 'landing' ? (this.haulTaut ? 0 : 0.08) : Math.max(0, Math.min(1.5, this.fight.slack * 0.4 + (this.fight.tension < 0.2 ? 0.3 : 0.02)));
@@ -831,7 +831,7 @@ export class FishingController {
     this.rod.shake = 1;
     this.rod.bend = 0.6;
     this.audio.bite();
-    if (this.save.stats.caught < 2) this.cb.toast(this.input?.touch ? 'アタリ — 上にスワイプして合わせる' : 'アタリ — マウスを上に振って合わせる', 'info');
+    this.tip('アタリ — マウスを上に振って合わせる');
     this.fx.splash(this.lure.x, this.lure.z, lure.pack ? 0.12 : 0.3);
     this.shake = 0.4;
     this.input?.vibrate([60, 40, 60]);
@@ -1052,12 +1052,12 @@ export class FishingController {
       this.population?.splash(this.fishPos.x, this.fishPos.z, f.behavior === 'run' || f.behavior === 'jump' ? 0.6 : 0.3, undefined, false);
     }
     // 糸が水を切る：魚が横へ走るほど、糸の入水点から波紋が立つ
-    if (f.behavior === 'run' && f.slack < 0.1 && this.rng.chance(dt * (2 + 8 * Math.min(1, Math.abs(f.side)) * Math.min(1, tFrac * 2)))) {
+    if (f.behavior === 'run' && f.slack < 0.1 && this.rng.chance(dt * (0.5 + 2.5 * Math.min(1, Math.abs(f.side)) * Math.min(1, tFrac * 2)))) {
       const tip = this.rod.tipWorld();
       const k = tip.y / Math.max(0.01, tip.y - this.fishPos.y);
       const ex = tip.x + (this.fishPos.x - tip.x) * Math.min(1, k);
       const ez = tip.z + (this.fishPos.z - tip.z) * Math.min(1, k);
-      this.fx.ripple(ex, ez, 0.15);
+      this.fx.ripple(ex, ez, 0.08);
     }
     if (f.outcome === 'landed') this.startNet(f);
     else if (f.outcome) this.finishFight(f.outcome);
@@ -1085,7 +1085,7 @@ export class FishingController {
     const prev = this.fishPos.clone();
     this.fishPos.lerp(target, Math.min(1, dt * 8));
     // 浅いところを走ると水面が盛り上がる（引き波）
-    if (f.depth < 1.6 && (f.behavior === 'run' || f.behavior === 'approach') && this.rng.chance(dt * (8 - f.depth * 4))) this.fx.ripple(this.fishPos.x, this.fishPos.z, 0.25 + 0.25 * (1 - f.depth / 1.6));
+    if (f.depth < 1.6 && (f.behavior === 'run' || f.behavior === 'approach') && this.rng.chance(dt * (2.5 - f.depth))) this.fx.ripple(this.fishPos.x, this.fishPos.z, 0.15 + 0.2 * (1 - f.depth / 1.6));
     if (this.fishObj) {
       const g = this.fishObj.group;
       g.visible = true;
@@ -1166,8 +1166,8 @@ export class FishingController {
   }
 
   // ---------------- 抜き上げ ----------------
-  // 口に掛かった糸を竿先からの振り子として解く。巻きながら持ち上げ、魚は空中で暴れて水を滴らせる。
-  // 重い魚・浅い掛かりは空中で外れることがある。
+  // 口に掛かった糸を竿先からの振り子として解く。巻きながら持ち上げ、竿先にぶら下がった魚は
+  // 「激しく身をよじる → 力が抜けてだらりと揺れる」を繰り返す。
 
   private haul = {
     mouth: new THREE.Vector3(),
@@ -1175,14 +1175,17 @@ export class FishingController {
     len: 1,
     t: 0,
     out: false,
-    dropped: false,
-    dropAt: -1,
-    hold: 0,
     drip: 0,
     heavy: 0,
     head: new THREE.Vector3(0, 1, 0),
-    from: new THREE.Vector3(),
-    fromQ: new THREE.Quaternion(),
+    /** 暴れている残り時間（0 以下は休み） */
+    fit: 0,
+    rest: 0,
+    /** 糸の軸まわりの回転（ぶら下がった魚はくるくる回る） */
+    spin: 0,
+    spinVel: 0,
+    bend: 0,
+    bendVel: 0,
   };
   private haulTaut = false;
 
@@ -1199,11 +1202,14 @@ export class FishingController {
     h.vel.copy(toTip).multiplyScalar(3.5 / (1 + h.heavy * 1.5)).add(new THREE.Vector3(0, 2.5 / (1 + h.heavy), 0));
     h.t = 0;
     h.out = h.mouth.y > 0.05;
-    h.dropped = false;
-    h.dropAt = -1;
-    h.hold = 0;
     h.drip = 0;
     h.head.set(0, 1, 0);
+    h.fit = this.rng.range(0.8, 1.4);
+    h.rest = 0;
+    h.spin = 0;
+    h.spinVel = this.rng.range(-3, 3);
+    h.bend = 0;
+    h.bendVel = 0;
     this.rod.swing = 0.45;
   }
 
@@ -1218,127 +1224,99 @@ export class FishingController {
     h.t += dt;
     const len = hk.fish.length / 100;
     const tip = this.rod.tipWorld();
-    // 竿を立てたまま、リールで糸を巻き取って寄せる
+    // 竿を立て、リールで竿先から少し下まで巻き取る
     this.rodLift += (0.95 - this.rodLift) * Math.min(1, dt * 3);
-    this.rod.reelSpin = h.dropped ? 0 : 0.8;
-    this.audio.setReel(h.dropped || h.hold > 0 ? 0 : 0.6);
-    const thrash = Math.max(0.25, 1 - h.t * 0.25);
+    const hang = 0.45 + len * 0.25;
+    const reeling = h.len > hang + 0.02;
+    if (reeling) h.len = Math.max(hang, h.len - (2.4 / (1 + h.heavy)) * dt);
+    this.rod.reelSpin = reeling ? 0.8 : 0;
+    this.audio.setReel(reeling ? 0.6 : 0);
 
-    if (h.hold <= 0) {
-      if (!h.dropped) h.len = Math.max(0.55 + len * 0.3, h.len - (2.4 / (1 + h.heavy)) * dt);
-      h.vel.y -= 9.8 * dt;
-      if (h.mouth.y < 0) {
-        // 水の抵抗と浮力
-        h.vel.multiplyScalar(Math.exp(-dt * 5));
-        h.vel.y += 7 * dt;
-      }
-      // 空中で尾を振って暴れる
-      if (this.rng.chance(dt * 9 * thrash)) {
-        h.vel.add(new THREE.Vector3(this.rng.range(-1, 1), this.rng.range(0, 0.6), this.rng.range(-1, 1)).multiplyScalar(0.9 * (1 - h.heavy * 0.5)));
-        this.rod.shake = Math.max(this.rod.shake, 0.7);
-        input.vibrate(20);
-      }
-      h.mouth.addScaledVector(h.vel, dt);
-      // 糸は伸びない：竿先から len より離れられない
-      this.haulTaut = false;
-      if (!h.dropped) {
-        const d = h.mouth.clone().sub(tip);
-        const dist = d.length();
-        if (dist > h.len) {
-          d.divideScalar(dist);
-          h.mouth.copy(tip).addScaledVector(d, h.len);
-          const out = h.vel.dot(d);
-          if (out > 0) {
-            h.vel.addScaledVector(d, -out);
-            // 張った瞬間の衝撃で竿がしなる
-            this.rod.bend = Math.min(1.8, this.rod.bend + out * 0.15 * (1 + h.heavy));
-          }
-          this.haulTaut = true;
-        }
-      }
-      this.rod.bend += ((this.haulTaut ? 0.35 + h.heavy * 1.1 : 0.15) - this.rod.bend) * Math.min(1, dt * 6);
+    // 暴れる⇔力が抜ける の周期。時間とともに暴れる時間が短く、間が長くなる
+    const tired = Math.min(1, h.t / 6);
+    if (h.fit > 0) {
+      h.fit -= dt;
+      if (h.fit <= 0) h.rest = this.rng.range(0.4, 1.0) + tired * 1.2;
+    } else {
+      h.rest -= dt;
+      if (h.rest <= 0) h.fit = this.rng.range(0.5, 1.2) * (1 - tired * 0.5);
+    }
+    const thrashing = h.fit > 0;
+    const power = (1 - h.heavy * 0.4) * (1 - tired * 0.4);
 
-      // 水面を割って出る
-      if (!h.out && h.mouth.y > 0.05) {
-        h.out = true;
-        this.fx.splash(h.mouth.x, h.mouth.z, 0.3 + len * 0.6);
-        this.audio.splash(0.5 + len * 0.4);
-        this.shake = Math.max(this.shake, 0.4 + h.heavy * 0.4);
-        input.vibrate([30, 20, 60]);
-        // 重い魚・浅い掛かりは空中で外れることがある
-        const hq = this.fight?.hookQuality ?? 1;
-        const p = 0.03 + 0.25 * h.heavy * h.heavy + 0.12 * (1 - hq);
-        if (this.rng.chance(p)) h.dropAt = h.t + this.rng.range(0.15, 0.6);
+    // 口を質点として扱う振り子
+    h.vel.y -= 9.8 * dt;
+    if (h.mouth.y < 0) {
+      // 水の抵抗と浮力
+      h.vel.multiplyScalar(Math.exp(-dt * 5));
+      h.vel.y += 7 * dt;
+    } else h.vel.multiplyScalar(Math.exp(-dt * 0.4));
+    if (thrashing && this.rng.chance(dt * 14)) {
+      // 尾を打つたびに体ごと横へ跳ねる
+      h.vel.add(new THREE.Vector3(this.rng.range(-1, 1), this.rng.range(-0.2, 0.5), this.rng.range(-1, 1)).multiplyScalar(1.1 * power));
+      h.spinVel += this.rng.range(-6, 6) * power;
+      this.rod.shake = Math.max(this.rod.shake, 0.6);
+      if (this.rng.chance(0.3)) input.vibrate(15);
+    }
+    h.mouth.addScaledVector(h.vel, dt);
+    // 糸は伸びない：竿先から len より離れられない
+    this.haulTaut = false;
+    const d = h.mouth.clone().sub(tip);
+    const dist = d.length();
+    if (dist > h.len) {
+      d.divideScalar(dist);
+      h.mouth.copy(tip).addScaledVector(d, h.len);
+      const out = h.vel.dot(d);
+      if (out > 0) {
+        h.vel.addScaledVector(d, -out);
+        // 張った瞬間の衝撃で竿がしなる
+        this.rod.bend = Math.min(1.8, this.rod.bend + out * 0.15 * (1 + h.heavy));
       }
-      if (h.dropAt > 0 && h.t >= h.dropAt && !h.dropped) {
-        h.dropped = true;
-        this.rod.bend = 0;
-        this.rod.shake = 1;
-        this.audio.miss();
-      }
-      // 外れた魚は水に落ちて逃げる
-      if (h.dropped && h.mouth.y < -0.05 && h.vel.y < 0) {
-        this.fx.splash(h.mouth.x, h.mouth.z, 0.4 + len * 0.6);
-        this.audio.splash(0.7);
-        this.haul.dropped = false;
-        this.cb.toast('抜き上げる途中で外れた…', 'bad');
-        this.save.stats.lost++;
-        this.cb.onLost('hookOut');
-        this.reset();
-        return;
-      }
-      // 頭は糸の方向（張っている時）、たるむと重さで頭が下がる
-      const toTip = tip.clone().sub(h.mouth).normalize();
-      const want = h.dropped ? new THREE.Vector3(h.vel.x, -Math.abs(h.vel.y) - 1, h.vel.z).normalize() : this.haulTaut ? toTip : toTip.clone().lerp(new THREE.Vector3(0, -1, 0), 0.4).normalize();
-      h.head.lerp(want, Math.min(1, dt * 10)).normalize();
-      const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(1, 0, 0), h.head);
-      // 体をくねらせて身をよじる
-      const wig = new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.sin(h.t * 7.3) * 0.9 * thrash, Math.sin(h.t * 15) * 0.35 * thrash, 0));
-      g.quaternion.copy(q).multiply(wig);
-      g.position.copy(h.mouth).addScaledVector(h.head, -len * 0.5);
-      this.fishPos.copy(g.position);
-      this.fishObj.swim.uTime.value = this.time;
-      this.fishObj.swim.uAmp.value = 0.06 + 0.07 * thrash;
-      this.fishObj.swim.uFreq.value = 12 + 6 * thrash;
-      // 水が滴る
-      if (h.out) {
-        h.drip -= dt;
-        if (h.drip <= 0) {
-          h.drip = 0.05;
-          this.fx.drip(g.position, Math.max(1, Math.round(4 * thrash)), len * 0.5);
-        }
-      }
-      this.cameraYawHint = Math.atan2(-(g.position.x - this.origin.x), -(g.position.z - this.origin.z));
-      // 手元まで来たら掴む
-      const near = g.position.distanceTo(this.camera.position) < 2.2 + len;
-      if (h.out && !h.dropped && (near || h.t > 2.4) && h.t > 0.9) {
-        h.hold = 1e-4;
-        h.from.copy(g.position);
-        h.fromQ.copy(g.quaternion);
-        this.audio.setReel(0);
-        this.rod.reelSpin = 0;
-      }
-      return;
+      this.haulTaut = true;
+    }
+    this.rod.bend += ((this.haulTaut ? 0.3 + h.heavy * 1.1 : 0.12) - this.rod.bend) * Math.min(1, dt * 6);
+
+    // 水面を割って出る
+    if (!h.out && h.mouth.y > 0.05) {
+      h.out = true;
+      this.fx.splash(h.mouth.x, h.mouth.z, 0.3 + len * 0.6);
+      this.audio.splash(0.5 + len * 0.4);
+      this.shake = Math.max(this.shake, 0.3 + h.heavy * 0.4);
+      input.vibrate([30, 20, 60]);
     }
 
-    // 手に持って見せる：体側をこちらに向け、時々ばたつく
-    h.hold += dt;
-    const k = Math.min(1, h.hold / 0.45);
-    const e = k * k * (3 - 2 * k);
-    const target = this.camera.localToWorld(new THREE.Vector3(0.05, -0.15, -0.9 - len * 0.6));
-    g.position.lerpVectors(h.from, target, e);
-    const face = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(this.camera.position, target, new THREE.Vector3(0, 1, 0)));
-    // lookAt の向きは -Z が前なので、体側（+Z）がこちらを向くよう反転
-    face.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI));
-    const flop = Math.max(0, Math.sin(h.hold * 11)) * Math.max(0, 1 - h.hold * 0.7);
-    face.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(0, flop * 0.25, Math.sin(h.hold * 3) * 0.06)));
-    g.quaternion.slerpQuaternions(h.fromQ, face, e);
-    this.fishObj.swim.uAmp.value = 0.015 + 0.08 * flop;
-    this.fishObj.swim.uFreq.value = 14;
+    // 姿勢：頭は糸の方、体は重さで垂れる。暴れると体を C 字に曲げて反り返し、糸の軸まわりに回る
+    const toTip = tip.clone().sub(h.mouth).normalize();
+    const want = this.haulTaut ? toTip : toTip.clone().lerp(new THREE.Vector3(0, -1, 0), 0.5).normalize();
+    h.head.lerp(want, Math.min(1, dt * 8)).normalize();
+    // 体の曲げ（ばね）：暴れると左右に大きく反り返る
+    const bendTarget = thrashing ? Math.sin(h.t * 16) * 0.9 * power : 0;
+    h.bendVel += ((bendTarget - h.bend) * 120 - h.bendVel * 9) * dt;
+    h.bend += h.bendVel * dt;
+    h.spinVel *= Math.exp(-dt * (thrashing ? 1.5 : 0.8));
+    // ねじれた糸が戻る力
+    h.spinVel -= h.spin * 1.2 * dt;
+    h.spin += h.spinVel * dt;
+    const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(1, 0, 0), h.head);
+    q.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(h.spin, h.bend * 0.45, 0)));
+    g.quaternion.copy(q);
+    g.position.copy(h.mouth).addScaledVector(h.head, -len * 0.5);
+    this.fishPos.copy(g.position);
     this.fishObj.swim.uTime.value = this.time;
-    this.rod.bend += (0.1 - this.rod.bend) * Math.min(1, dt * 5);
-    if (flop > 0.6 && this.rng.chance(dt * 6)) this.fx.drip(g.position, 3, len * 0.4);
-    if (h.hold > 1.5) {
+    // 尾びれの振り：暴れている時は大きく速く、休むとかすかに
+    this.fishObj.swim.uAmp.value = thrashing ? 0.13 * power + 0.04 : 0.012;
+    this.fishObj.swim.uFreq.value = thrashing ? 20 : 3;
+    // 水が滴る（暴れると飛び散る）
+    if (h.out) {
+      h.drip -= dt;
+      if (h.drip <= 0) {
+        h.drip = thrashing ? 0.04 : 0.12;
+        this.fx.drip(g.position, thrashing ? 4 : 1, len * (thrashing ? 0.8 : 0.3));
+      }
+    }
+    this.cameraYawHint = Math.atan2(-(g.position.x - this.origin.x), -(g.position.z - this.origin.z));
+    // 竿先まで寄せてしばらくぶら下げたら釣果へ
+    if (h.out && !reeling && h.t > 3.2) {
       this.hooked = null;
       this.cb.onCatch(hk.fish, hk.species, this.record(hk));
       this.reset();
@@ -1358,6 +1336,9 @@ export class FishingController {
   private startNet(_f: Fight): void {
     this.phase = 'net';
     this.netTime = 0;
+    this.netSwipe = 0;
+    // 竿を立てきっていても振り上げられるよう、少し寝かせた状態から
+    this.rodLift = Math.min(this.rodLift, 0.5);
     this.netThrash = this.rng.range(0.6, 1.2);
     this.netCalm = 0;
     this.liftVel = 0;
@@ -1371,62 +1352,34 @@ export class FishingController {
     return this.phase === 'net' && this.netThrash <= 0;
   }
 
+  private netSwipe = 0;
+
   private updateNet(dt: number, input: Input): void {
     const f = this.fight!;
     this.netTime += dt;
     const h = this.hooked!;
     const heavy = Math.min(1, h.fish.weight / 1000 / Math.max(0.5, ROD_BY_ID[this.save.equip.rod].power));
+    // 足元で暴れる・力尽きて浮くを繰り返す（見た目だけ。抜き上げはいつでもできる）
     if (this.netThrash > 0) {
       this.netThrash -= dt;
-      if (this.netThrash <= 0) this.netCalm = this.rng.range(0.9, 1.6) + Math.min(1.5, this.netTime * 0.12);
-      if (this.rng.chance(dt * 7)) this.fx.splash(this.fishPos.x, this.fishPos.z, 0.2 + 0.3 * heavy);
-      if (this.rng.chance(dt * 3)) {
-        this.audio.splash(0.35);
-        input.vibrate(30);
-      }
-      this.rod.shake = Math.max(this.rod.shake, 0.6);
+      if (this.netThrash <= 0) this.netCalm = this.rng.range(0.9, 1.6);
+      if (this.rng.chance(dt * 3)) input.vibrate(30);
     } else {
       this.netCalm -= dt;
-      if (this.netCalm <= 0) {
-        this.netThrash = this.rng.range(0.6, 1.4) * (0.7 + heavy);
-        this.shake = Math.max(this.shake, 0.3);
-      }
+      if (this.netCalm <= 0) this.netThrash = this.rng.range(0.6, 1.4) * (0.7 + heavy);
     }
     this.placeFish(dt, f);
     this.rod.bend = 0.45 + heavy * 0.5 + (this.netThrash > 0 ? 0.25 * Math.abs(Math.sin(this.time * 12)) : 0);
 
-    // 竿を一気に振り上げて抜き上げる
-    if (this.liftVel > FLICK && input.enabled) {
+    // 上に振る・スワイプする（竿が立ちきっていても上への操作なら反応する）
+    if (input.enabled) this.netSwipe = Math.max(0, this.netSwipe * Math.exp(-dt * 4) - input.mouseDY);
+    if (input.enabled && (this.liftVel > 0.7 || this.netSwipe > 30)) {
       this.liftVel = 0;
+      this.netSwipe = 0;
       this.rod.swing = 0.6;
-      this.shake = Math.max(this.shake, 0.6);
+      this.shake = Math.max(this.shake, 0.5);
       input.vibrate([20, 20, 80]);
-      if (this.netThrash <= 0) {
-        this.finishFight('landed');
-        return;
-      }
-      // 暴れている最中に抜こうとした
-      this.audio.splash(0.7);
-      this.fx.splash(this.fishPos.x, this.fishPos.z, 0.6);
-      if (heavy > 0.5 && this.rng.chance(heavy - 0.3)) {
-        this.finishFight('lineBreak');
-        return;
-      }
-      if (this.rng.chance(0.25 + 0.4 * (1 - f.hookQuality))) {
-        this.finishFight('hookOut');
-        return;
-      }
-      this.tip('暴れているうちは抜けない。おとなしくなるまで待つ', 'bad');
-      f.resumeAfterNetMiss();
-      this.phase = 'fight';
-      return;
-    }
-    // もたもたしていると体力が戻って再び走る
-    if (this.netTime > 10) {
-      this.audio.splash(0.6);
-      this.fx.splash(this.fishPos.x, this.fishPos.z, 0.5);
-      f.resumeAfterNetMiss();
-      this.phase = 'fight';
+      this.finishFight('landed');
     }
   }
 
@@ -1544,7 +1497,7 @@ export class FishingController {
 
   /** 画面に出す「次にやること」 */
   guide(touch: boolean): string {
-    if (this.save.stats.caught >= 2) return '';
+    if (this.save.stats.caught >= (touch ? 1 : 2)) return '';
     return this.guideText(touch);
   }
 
@@ -1578,9 +1531,7 @@ export class FishingController {
         return '竿を立てて寄せ、下げながら巻く';
       }
       case 'net':
-        return this.netQuiet
-          ? `おとなしくなった。竿を下げてから${touch ? '一気に上へスワイプ' : 'マウスを一気に上へ振って'}抜き上げる`
-          : '足元で暴れている。おとなしくなるまで待つ';
+        return touch ? '上にスワイプで抜き上げる' : 'マウスを上に振って抜き上げる';
       case 'landing':
         return '';
     }

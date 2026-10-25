@@ -50,15 +50,14 @@ const { chromium } = require('playwright');
   await g(() => { const f = window.__game.fishing.fight; if (f) { f.stamina = 0; f.distance = 2; f.lineOut = 2 + f.rodLift * 2.2; } });
   for (let i = 0; i < 60 && (await ph()) !== 'net'; i++) await page.waitForTimeout(250);
   await shot('a5-net');
-  // おとなしくなるのを待って、竿を下げてから一気に振り上げる
-  for (let i = 0; i < 40 && (await g(() => window.__game.fishing.netThrash > 0)); i++) await page.waitForTimeout(100);
-  await shot('a5b-quiet');
-  console.log('fishobj', await g(() => { const x = window.__game.fishing, o = x.fishObj?.group; return o ? `vis=${o.visible} pos=${o.position.toArray().map((v) => v.toFixed(2))} scale=${o.scale.x.toFixed(2)} rot=${o.rotation.toArray().slice(0, 3).map((v) => v.toFixed(2))} parent=${!!o.parent} children=${o.children.length}` : 'none'; }));
-  await page.mouse.move(480, 420); await page.waitForTimeout(300);
-  await page.mouse.move(480, 60);
-  for (let i = 0; i < 20 && (await ph()) === 'net'; i++) await page.waitForTimeout(100);
-  console.log('after net:', await ph());
-  await page.waitForTimeout(3000);
-  await shot('a6-catch');
+  // 上に振って抜き上げる
+  await page.mouse.move(480, 300); await page.waitForTimeout(200);
+  await page.mouse.move(480, 200);
+  await page.waitForTimeout(100);
+  console.log('after swipe:', await ph());
+  for (let i = 0; i < 4; i++) {
+    await page.screenshot({ path: `${out}/a6-haul${i}.png`, timeout: 120000 });
+    console.log('haul', i, await g(() => { const x = window.__game.fishing, h = x.haul; return `${x.phase} t=${h.t.toFixed(2)} fit=${h.fit.toFixed(2)} y=${h.mouth.y.toFixed(2)} len=${h.len.toFixed(2)}`; }));
+  }
   await browser.close();
 })();

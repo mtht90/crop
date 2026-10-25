@@ -37,6 +37,14 @@ export interface AmbientFish {
   /** 群れのリーダー（小魚は群れで泳ぐ） */
   leader: AmbientFish | null;
   phase: number;
+  /** 向き (rad)。+X が頭で、heading=0 は +X 方向 */
+  heading: number;
+  speed: number;
+  /** 尾を振って加速している残り時間（0 以下は惰性で滑っている） */
+  kick: number;
+  /** 次に尾を振るまで */
+  glide: number;
+  pitch: number;
 }
 
 const TARGET_COUNT = 30;
@@ -134,7 +142,9 @@ export class FishPopulation {
   private place(s: Species, fish: FishInstance, x: number, z: number, depth: number, leader: AmbientFish | null): AmbientFish {
     const obj = buildFishObject(s, fish.colorId, fish.patternId, false, true);
     obj.group.scale.setScalar(fish.length / 100);
-    obj.group.rotation.y = this.rng.range(0, Math.PI * 2);
+    obj.group.rotation.order = 'YXZ';
+    const heading = this.rng.range(-Math.PI, Math.PI);
+    obj.group.rotation.y = heading;
     this.scene.add(obj.group);
     const pos = new THREE.Vector3(x, -depth, z);
     const a: AmbientFish = {
@@ -152,6 +162,11 @@ export class FishPopulation {
       wary: this.waryOf(s, fish),
       leader,
       phase: this.rng.range(0, 10),
+      heading,
+      speed: 0,
+      kick: 0,
+      glide: this.rng.range(0, 2),
+      pitch: 0,
     };
     this.fish.push(a);
     return a;
@@ -278,6 +293,8 @@ export class FishPopulation {
   /** 逃げた・バレた・見切った魚は離れていき、しばらく警戒する */
   release(a: AmbientFish, spooked: boolean): void {
     if (!this.fish.includes(a)) return;
+    a.heading = a.obj.group.rotation.y;
+    a.pitch = 0;
     a.state = 'cruise';
     a.timer = 0;
     if (spooked) this.scare(a, a.pos.x + this.rng.range(-1, 1), a.pos.z + this.rng.range(-1, 1), 1);
@@ -330,69 +347,123 @@ export class FishPopulation {
     this.render(player);
   }
 
+  /**
+   * 魚の泳ぎ：向きは少しずつしか変えられず、尾を数回振って加速しては惰性で滑る。
+   * 個体ごとにふらつき（wander）があり、群れは仲間と間隔を取りながら大まかに揃う。
+   */
   private steer(a: AmbientFish, dt: number): void {
     const s = a.species;
     const lenM = a.fish.length / 100;
-    let speed = (0.18 + lenM * 0.5) * (0.7 + 0.3 * s.fight.speed);
+    // 巡航速度は体長に比例（体長の 0.6〜1 倍/秒）
+    let cruise = (0.12 + lenM * 0.8) * (0.7 + 0.3 * s.fight.speed);
+    let turnRate = 0.9;
     a.timer -= dt;
     switch (a.state) {
       case 'flee':
-        speed = 2.2 + lenM * 2 + s.fight.speed;
+        cruise = 1.8 + lenM * 3 + s.fight.speed;
+        turnRate = 7;
         if (a.timer <= 0) {
           a.state = 'cruise';
           a.target.copy(a.home);
         }
         break;
       case 'inspect':
-        speed *= 1.8;
+        cruise *= 1.6;
+        turnRate = 2;
         if (a.timer <= 0) a.state = 'cruise';
         break;
       case 'hold':
-        speed = 0.04;
+        cruise = 0.02;
+        turnRate = 0.3;
         if (a.timer <= 0) a.state = 'cruise';
         break;
       case 'cruise': {
-        const reached = Math.hypot(a.target.x - a.pos.x, a.target.z - a.pos.z) < 0.8;
+        const reached = Math.hypot(a.target.x - a.pos.x, a.target.z - a.pos.z) < 1;
         if (a.leader && a.leader.state !== 'engaged') {
-          // 群れ：リーダーの近くを保つ
-          a.target.set(a.leader.pos.x + Math.sin(a.phase) * 0.8, 0, a.leader.pos.z + Math.cos(a.phase) * 0.8);
-          if (a.leader.state === 'flee' && a.state === 'cruise') {
+          if (a.leader.state === 'flee') {
             a.state = 'flee';
-            a.timer = a.leader.timer;
-            a.target.copy(a.leader.target);
+            a.timer = a.leader.timer + this.rng.range(-0.3, 0.3);
+            a.target.copy(a.leader.target).add(new THREE.Vector3(this.rng.range(-2, 2), 0, this.rng.range(-2, 2)));
           }
         } else if (reached || a.timer <= 0) {
-          if (this.rng.chance(0.35)) {
+          if (this.rng.chance(0.4)) {
             a.state = 'hold';
-            a.timer = this.rng.range(2, 6);
+            a.timer = this.rng.range(2, 8);
           } else {
             const t = this.randomWaterPoint(a.home.x, a.home.z, 0, 10, 0.5);
             if (t) a.target.copy(t);
-            a.timer = this.rng.range(6, 14);
+            a.timer = this.rng.range(8, 20);
           }
         }
         break;
       }
     }
-    // 水平移動（浅すぎる方へは行かない）
-    const to = new THREE.Vector3(a.target.x - a.pos.x, 0, a.target.z - a.pos.z);
-    const dist = to.length();
-    const want = dist > 0.05 ? to.multiplyScalar(Math.min(speed, dist * 2) / dist) : new THREE.Vector3();
-    a.vel.lerp(want, Math.min(1, dt * (a.state === 'flee' ? 6 : 1.5)));
+
+    // 行きたい方向
+    let want: number;
+    if (a.leader && a.leader.state !== 'engaged' && a.state !== 'flee') {
+      // 群れ：リーダーに付いていきつつ、近すぎる仲間からは離れる
+      const lx = a.leader.pos.x + Math.cos(a.leader.heading + Math.PI + Math.sin(a.phase) * 1.2) * (0.5 + (a.phase % 1) * 0.8);
+      const lz = a.leader.pos.z - Math.sin(a.leader.heading + Math.PI + Math.sin(a.phase) * 1.2) * (0.5 + (a.phase % 1) * 0.8);
+      let vx = lx - a.pos.x;
+      let vz = lz - a.pos.z;
+      for (const o of this.fish) {
+        if (o === a || (o.leader !== a.leader && o !== a.leader)) continue;
+        const dx = a.pos.x - o.pos.x;
+        const dz = a.pos.z - o.pos.z;
+        const d2 = dx * dx + dz * dz;
+        if (d2 < 0.16 && d2 > 1e-6) {
+          vx += (dx / d2) * 0.08;
+          vz += (dz / d2) * 0.08;
+        }
+      }
+      const far = Math.hypot(vx, vz);
+      want = far > 0.3 ? Math.atan2(-vz, vx) : a.leader.heading;
+      cruise = Math.max(cruise, a.leader.speed * (far > 1 ? 1.3 : 1));
+      turnRate = 1.6;
+    } else {
+      want = Math.atan2(-(a.target.z - a.pos.z), a.target.x - a.pos.x);
+    }
+    // 個体ごとのふらつき
+    want += (Math.sin(this.time * 0.37 + a.phase * 3.1) + Math.sin(this.time * 0.91 + a.phase)) * (a.state === 'flee' ? 0.15 : 0.45);
+    // 先が浅ければ曲がる
+    const look = 1 + lenM * 2;
+    const ax = a.pos.x + Math.cos(a.heading) * look;
+    const az = a.pos.z - Math.sin(a.heading) * look;
+    if (waterDepth(ax, az) < 0.5 || onDock(ax, az)) {
+      want = a.heading + (Math.sin(a.phase * 7) > 0 ? 1 : -1) * 1.5;
+      cruise *= 0.6;
+    }
+    let dh = want - a.heading;
+    dh = Math.atan2(Math.sin(dh), Math.cos(dh));
+    a.heading += Math.max(-turnRate * dt, Math.min(turnRate * dt, dh));
+
+    // 尾を振って加速 → 惰性で滑る
+    a.glide -= dt;
+    if (a.kick > 0) a.kick -= dt;
+    else if (a.glide <= 0) {
+      a.kick = this.rng.range(0.25, 0.6) * (a.state === 'flee' ? 3 : 1);
+      a.glide = a.kick + this.rng.range(0.3, 1.6) * (a.state === 'hold' ? 3 : 1);
+    }
+    const target = a.kick > 0 ? cruise * 1.35 : cruise * 0.45;
+    const rate = a.kick > 0 ? (a.state === 'flee' ? 8 : 2) : 0.7;
+    a.speed += (target - a.speed) * Math.min(1, dt * rate);
+    a.vel.set(Math.cos(a.heading) * a.speed, 0, -Math.sin(a.heading) * a.speed);
     const nx = a.pos.x + a.vel.x * dt;
     const nz = a.pos.z + a.vel.z * dt;
-    const wd = waterDepth(nx, nz);
-    if (wd > 0.35 && !onDock(nx, nz)) {
+    if (waterDepth(nx, nz) > 0.35 && !onDock(nx, nz)) {
       a.pos.x = nx;
       a.pos.z = nz;
     } else {
-      a.vel.multiplyScalar(-0.5);
-      a.target.copy(a.home);
+      a.speed *= 0.3;
+      a.heading += Math.PI * 0.5 * (Math.sin(a.phase * 5) > 0 ? 1 : -1);
     }
-    // 深さ：逃げる時は潜る
+    // 深さ：逃げる時は潜る。上下に動く時は頭を上げ下げする
     const here = waterDepth(a.pos.x, a.pos.z);
-    const wantDepth = Math.min(here - 0.12, a.state === 'flee' ? Math.max(a.depth, Math.min(here * 0.7, a.depth + 1.5)) : a.depth);
-    a.pos.y += (-Math.max(0.2, wantDepth) - a.pos.y) * Math.min(1, dt * 0.8);
+    const wantDepth = Math.min(here - 0.12, a.state === 'flee' ? Math.max(a.depth, Math.min(here * 0.7, a.depth + 1.5)) : a.depth + Math.sin(this.time * 0.2 + a.phase) * 0.15);
+    const vy = (-Math.max(0.2, wantDepth) - a.pos.y) * Math.min(1, dt * 0.6);
+    a.pos.y += vy;
+    a.pitch += (Math.max(-0.35, Math.min(0.35, (vy / Math.max(dt, 1e-4)) * 0.8)) - a.pitch) * Math.min(1, dt * 2);
   }
 
   private render(player: PlayerPresence): void {
@@ -402,16 +473,14 @@ export class FishPopulation {
       g.visible = !far;
       if (far || a.state === 'engaged') continue;
       g.position.copy(a.pos);
-      const sp = a.vel.length();
-      if (sp > 0.02) {
-        const yaw = Math.atan2(-a.vel.z, a.vel.x);
-        let d = yaw - g.rotation.y;
-        d = Math.atan2(Math.sin(d), Math.cos(d));
-        g.rotation.y += d * 0.15;
-      }
+      g.rotation.order = 'YXZ';
+      g.rotation.set(0, a.heading, a.pitch);
+      // 尾の振り：加速中は大きく速く、滑っている間はほとんど振らない
+      const effort = a.kick > 0 ? 1 : 0.15;
+      const lenK = Math.max(0.4, a.fish.length / 40);
       a.obj.swim.uTime.value = this.time + a.phase;
-      a.obj.swim.uAmp.value = 0.02 + Math.min(0.07, sp * 0.03);
-      a.obj.swim.uFreq.value = 4 + Math.min(12, sp * 5);
+      a.obj.swim.uAmp.value = 0.012 + effort * (0.03 + Math.min(0.05, a.speed * 0.04));
+      a.obj.swim.uFreq.value = (3 + effort * (5 + a.speed * 6)) / Math.sqrt(lenK);
     }
   }
 

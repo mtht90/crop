@@ -46,7 +46,7 @@ export class Hud {
     if (!text || text === this.lastGuide) return;
     this.lastGuide = text;
     this.guide.textContent = text;
-    this.guide.classList.toggle('hot', text.startsWith('竿先が入った') || text.startsWith('おとなしくなった'));
+    this.guide.classList.toggle('hot', text.startsWith('竿先が入った'));
   }
 
   setPrompt(html: string | null): void {
@@ -76,6 +76,17 @@ export class Hud {
     this.charge.style.display = 'none';
     this.crosshair.style.display = hud && hud.phase !== 'ready' && hud.phase !== 'aiming' ? 'none' : '';
     if (!hud) return;
+    // スマホは文字を出さず、ファイト中の糸の張りだけ
+    if (document.body.classList.contains('is-touch')) {
+      if (!hud.fight) {
+        this.fish.style.display = 'none';
+        return;
+      }
+      const frac = hud.fight.tension / hud.fight.lineTest;
+      const col = frac > 0.85 ? 'var(--bad)' : frac > 0.6 ? 'var(--gold)' : 'var(--accent)';
+      this.fish.replaceChildren(bar(frac, col, [hud.fight.drag / hud.fight.lineTest], 'tension'));
+      return;
+    }
     const rows: (HTMLElement | null)[] = [];
     const row = (label: string, val: string) => h('div', { class: 'row' }, h('span', { class: 'label', text: label }), h('span', { class: 'val', text: val }));
     rows.push(h('div', { class: 'fh-title', text: `${hud.lureName}${hud.lureCount !== null ? ` ×${hud.lureCount}` : ''}` }));
