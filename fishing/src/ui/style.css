@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=Shippori+Mincho+B1:wght@500;700;800&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@300;400;500;700&family=Jost:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap');
 
 :root {
   --ink: #f4efe2;
@@ -28,9 +28,9 @@ body {
   overflow: hidden;
   background: #0b1418;
   color: var(--ink);
-  --serif: 'Shippori Mincho B1', 'Hiragino Mincho ProN', 'Yu Mincho', serif;
-  --latin: 'Cormorant Garamond', 'Shippori Mincho B1', serif;
-  font-family: 'Zen Kaku Gothic New', 'Hiragino Kaku Gothic ProN', 'Yu Gothic UI', 'Meiryo', sans-serif;
+  --jp: 'Zen Kaku Gothic New', 'Hiragino Kaku Gothic ProN', 'Yu Gothic UI', 'Meiryo', sans-serif;
+  --latin: 'Jost', var(--jp);
+  font-family: var(--latin);
   font-feature-settings: 'palt';
   user-select: none;
 }
@@ -1117,14 +1117,13 @@ body.is-touch .guide {
 }
 
 
-/* ---------- 書体と形（図鑑・釣り具らしい落ち着いた見た目） ---------- */
+/* ---------- 書体と形（ゴシックで統一した落ち着いた見た目） ---------- */
 .title h1 {
-  font-family: var(--latin);
-  font-weight: 600;
-  letter-spacing: 0.06em;
+  font-weight: 300;
+  letter-spacing: 0.14em;
 }
 .title .sub {
-  font-family: var(--serif);
+  font-weight: 300;
   letter-spacing: 0.6em;
 }
 .modal header h2,
@@ -1133,12 +1132,12 @@ body.is-touch .guide {
 .catch .big,
 .records b,
 .grade {
-  font-family: var(--serif);
-  font-weight: 700;
+  font-weight: 500;
+  letter-spacing: 0.04em;
 }
 .sci {
-  font-family: var(--latin);
-  font-size: 15px;
+  font-size: 14px;
+  letter-spacing: 0.02em;
 }
 button,
 .tabs button,
@@ -1173,9 +1172,9 @@ button.primary,
   background: rgba(8, 14, 16, 0.7);
 }
 .toast.big {
-  font-family: var(--serif);
-  font-size: 26px;
-  font-weight: 700;
+  font-size: 24px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
   color: var(--ink);
   text-shadow: 0 2px 10px rgba(0, 0, 0, 0.8);
 }
