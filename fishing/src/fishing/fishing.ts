@@ -1009,7 +1009,6 @@ export class FishingController {
     this.netHold = 0;
     this.audio.setDrag(0);
     this.audio.setReel(0);
-    this.tip(this.input?.touch ? '寄った。上にドラッグして竿を立て、魚の顔を上げて網へ' : '寄った。マウスを上げて竿を立て、魚の顔を上げて網へ');
   }
 
   private netHold = 0;
@@ -1158,7 +1157,7 @@ export class FishingController {
         return '竿を立てて寄せ、下げながら巻く';
       }
       case 'net':
-        return touch ? '上にドラッグして竿を立て、魚の顔を上げたまま保つ' : 'マウスを上げて竿を立て、魚の顔を上げたまま保つ';
+        return touch ? '足元まで寄った。上にドラッグして竿を立て、巻かずに待つと網ですくえる' : '足元まで寄った。マウスを上げて竿を立て、巻かずに待つと網ですくえる';
       case 'landing':
         return '';
     }
