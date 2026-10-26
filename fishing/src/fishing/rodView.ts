@@ -12,6 +12,7 @@ export class RodView {
   private reelHandle: THREE.Group;
   readonly line: THREE.Line;
   private linePos: Float32Array;
+  private lineCol: Float32Array;
   /** 仕掛けの先（ルアー・エサ）。中身は setTackle で差し替える */
   readonly lure = new THREE.Group();
   private tackle: TackleObject | null = null;
@@ -95,7 +96,10 @@ export class RodView {
     this.linePos = new Float32Array(48 * 3);
     const lg = new THREE.BufferGeometry();
     lg.setAttribute('position', new THREE.BufferAttribute(this.linePos, 3));
-    this.line = new THREE.Line(lg, new THREE.LineBasicMaterial({ color: 0xe8e8e0, transparent: true, opacity: 0.8 }));
+    // 頂点カラー：空中は明るく、水中は水の色に沈む
+    this.lineCol = new Float32Array(48 * 3).fill(0.9);
+    lg.setAttribute('color', new THREE.BufferAttribute(this.lineCol, 3));
+    this.line = new THREE.Line(lg, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.85 }));
     this.line.frustumCulled = false;
     scene.add(this.line);
 
@@ -168,30 +172,46 @@ export class RodView {
     this.updateLeader();
   }
 
-  /** 竿先から終点まで糸を描く。sag = たるみ量 (m)、entry = 水面への入水点（無ければ空中のみ） */
-  drawLine(from: THREE.Vector3, to: THREE.Vector3, sag: number, entry: THREE.Vector3 | null): void {
+  /**
+   * 竿先から終点まで糸を描く。sag = 空中のたるみ (m)、entry = 水面への入水点（無ければ空中のみ）、
+   * bow = 水中の糸が水の抵抗で膨らむ向きと量 (m)
+   */
+  drawLine(from: THREE.Vector3, to: THREE.Vector3, sag: number, entry: THREE.Vector3 | null, bow: THREE.Vector3 | null = null): void {
     const p = this.linePos;
+    const c = this.lineCol;
     const n = p.length / 3;
     const airEnd = entry ?? to;
-    const airN = entry ? n - 6 : n;
+    const waterN = entry ? 14 : 0;
+    const airN = n - waterN;
     this.vibeT += 0.9;
     for (let i = 0; i < airN; i++) {
       const t = i / (airN - 1);
       const x = from.x + (airEnd.x - from.x) * t;
       const z = from.z + (airEnd.z - from.z) * t;
       let y = from.y + (airEnd.y - from.y) * t;
-      y -= Math.sin(t * Math.PI) * sag;
+      // 自重のたるみは懸垂線に近い形（竿先側は張り、水面側で垂れる）
+      y -= Math.sin(t * Math.PI) * sag * (0.7 + 0.3 * t);
       // 張り詰めた糸がビリビリ震える
       y += Math.sin(t * Math.PI) * Math.sin(this.vibeT + t * 9) * this.lineVibe;
       p.set([x, y, z], i * 3);
+      c.set([0.92, 0.92, 0.88], i * 3);
     }
     if (entry) {
-      for (let i = 0; i < 6; i++) {
-        const t = (i + 1) / 6;
-        p.set([entry.x + (to.x - entry.x) * t, entry.y + (to.y - entry.y) * t, entry.z + (to.z - entry.z) * t], (airN + i) * 3);
+      for (let i = 0; i < waterN; i++) {
+        const t = (i + 1) / waterN;
+        const k = Math.sin(t * Math.PI);
+        p.set(
+          [entry.x + (to.x - entry.x) * t + (bow?.x ?? 0) * k, entry.y + (to.y - entry.y) * t + (bow?.y ?? 0) * k, entry.z + (to.z - entry.z) * t + (bow?.z ?? 0) * k],
+          (airN + i) * 3,
+        );
+        // 深いほど水に溶けて見えにくい
+        const d = Math.max(0, -p[(airN + i) * 3 + 1]);
+        const v = 0.55 * Math.exp(-d * 0.6) + 0.12;
+        c.set([v * 0.85, v, v * 0.95], (airN + i) * 3);
       }
     }
     this.line.geometry.getAttribute('position').needsUpdate = true;
+    this.line.geometry.getAttribute('color').needsUpdate = true;
   }
 
   setVisible(v: boolean): void {

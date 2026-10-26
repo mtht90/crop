@@ -41,7 +41,22 @@ interface LoadedModel {
   halfHeight: number;
 }
 
-const MODEL_IDS: FishModelId[] = ['bass', 'trout', 'salmon', 'koi', 'catfish', 'arowana'];
+const MODEL_IDS: FishModelId[] = [
+  'trout',
+  'salmon',
+  'koi',
+  'catfish',
+  'arowana',
+  's_carp',
+  's_crucian',
+  's_namazu',
+  's_snakehead',
+  's_oikawa',
+  's_hasu',
+  's_bluegill',
+  's_bass',
+  's_ayu',
+];
 const models = new Map<FishModelId, LoadedModel>();
 let loading: Promise<void> | null = null;
 
@@ -251,7 +266,8 @@ export interface FishObject {
 /** 魚の3Dオブジェクト（全長1、+Xが頭）。silhouette = 図鑑の未発見表示、inWorld = 湖の中（水中の見え方を適用） */
 export function buildFishObject(s: Species, colorId: string | null, patternId: string | null, silhouette = false, inWorld = false): FishObject {
   // モデルが読み込めていない場合も止まらないよう、別のモデルか簡易な形で代用する
-  const model = models.get(s.model.id) ?? models.values().next().value ?? fallbackModel();
+  const variantModel = (patternId && s.model.variants?.[patternId]) || (colorId && s.model.variants?.[colorId]) || s.model.id;
+  const model = models.get(variantModel) ?? models.values().next().value ?? fallbackModel();
   const look = lookOf(s, colorId, patternId);
   const swim: SwimUniforms = { uTime: { value: 0 }, uAmp: { value: 0.03 }, uFreq: { value: 6 } };
   const pal = look.palette;

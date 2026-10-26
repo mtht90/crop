@@ -169,6 +169,9 @@ export class FishingController {
   /** 湖を泳ぐ魚（Game が設定） */
   population: FishPopulation | null = null;
   private thrashTimer = 0;
+  /** ファイト中の魚の頭の向きと傾き */
+  private fishHead = new THREE.Vector3(1, 0, 0);
+  private fishRoll = 0;
 
   constructor(
     private scene: THREE.Scene,
@@ -499,9 +502,26 @@ export class FishingController {
     } else if ((this.phase === 'fight' || this.phase === 'net' || this.phase === 'landing') && this.fight) {
       // 糸は魚の口へ。ルアーは口に掛かって見える
       const end = this.fishObj ? this.mouthOf(this.fishObj.group) : this.fishPos;
-      const sag = this.phase === 'landing' ? (this.haulTaut ? 0 : 0.08) : Math.max(0, Math.min(1.5, this.fight.slack * 0.4 + (this.fight.tension < 0.2 ? 0.3 : 0.02)));
-      const entry = end.y < -0.05 ? new THREE.Vector3(end.x, 0, end.z) : null;
-      this.rod.drawLine(tip, end, sag, entry);
+      const f = this.fight;
+      // 足元で暴れている間・抜き上げ中は竿を立てて張っている
+      const slackK = this.phase === 'fight' ? Math.max(0, Math.min(1, f.slack * 0.5 + (f.tension < 0.2 ? 0.4 : 0))) : 0.05;
+      const sag = this.phase === 'landing' ? (this.haulTaut ? 0 : 0.08) : Math.min(1.5, 0.02 + slackK * 1.2);
+      let entry: THREE.Vector3 | null = null;
+      let bow: THREE.Vector3 | null = null;
+      if (end.y < -0.05) {
+        // 張っていれば竿先と魚を結ぶ直線が水面と交わる所、たるむほど手前で水に入る
+        const k = tip.y / Math.max(0.01, tip.y - end.y);
+        entry = tip.clone().lerp(end, Math.min(1, k));
+        entry.lerp(new THREE.Vector3(end.x, 0, end.z), slackK * 0.6);
+        entry.y = 0;
+        // 水の抵抗で、魚の動きと反対側へ糸が膨らむ。たるめば沈む
+        const side = new THREE.Vector3(-(end.z - this.origin.z), 0, end.x - this.origin.x).normalize();
+        bow = side.multiplyScalar(-Math.sign(f.side) * Math.min(1.2, Math.abs(f.side) * 0.6 * (f.behavior === 'run' ? 1 : 0.4)));
+        bow.y = -slackK * 0.6;
+        // 糸が水を切る
+        if (f.behavior === 'run' && f.slack < 0.1 && this.rng.chance(0.08)) this.fx.ripple(entry.x, entry.z, 0.06);
+      }
+      this.rod.drawLine(tip, end, sag, entry, bow);
       this.rod.lure.visible = !this.lureDef.pack;
       this.rod.lure.position.copy(end);
       if (this.fishObj) this.rod.lure.quaternion.copy(this.fishObj.group.quaternion);
@@ -1146,14 +1166,6 @@ export class FishingController {
       this.thrashTimer = 1.2;
       this.population?.splash(this.fishPos.x, this.fishPos.z, f.behavior === 'run' || f.behavior === 'jump' ? 0.6 : 0.3, undefined, false);
     }
-    // 糸が水を切る：魚が横へ走るほど、糸の入水点から波紋が立つ
-    if (f.behavior === 'run' && f.slack < 0.1 && this.rng.chance(dt * (0.5 + 2.5 * Math.min(1, Math.abs(f.side)) * Math.min(1, tFrac * 2)))) {
-      const tip = this.rod.tipWorld();
-      const k = tip.y / Math.max(0.01, tip.y - this.fishPos.y);
-      const ex = tip.x + (this.fishPos.x - tip.x) * Math.min(1, k);
-      const ez = tip.z + (this.fishPos.z - tip.z) * Math.min(1, k);
-      this.fx.ripple(ex, ez, 0.08);
-    }
     if (f.outcome === 'landed') this.startNet(f);
     else if (f.outcome) this.finishFight(f.outcome);
   }
@@ -1178,20 +1190,45 @@ export class FishingController {
       return;
     }
     const prev = this.fishPos.clone();
+    // fishPos は口（糸の先）の位置
     this.fishPos.lerp(target, Math.min(1, dt * 8));
     // 浅いところを走ると水面が盛り上がる（引き波）
     if (f.depth < 1.6 && (f.behavior === 'run' || f.behavior === 'approach') && this.rng.chance(dt * (2.5 - f.depth))) this.fx.ripple(this.fishPos.x, this.fishPos.z, 0.15 + 0.2 * (1 - f.depth / 1.6));
     if (this.fishObj) {
       const g = this.fishObj.group;
       g.visible = true;
-      g.position.copy(this.fishPos);
+      const len = (this.hooked?.fish.length ?? 30) / 100;
       const mv = this.fishPos.clone().sub(prev);
+      const sp = mv.length() / Math.max(dt, 1e-4);
+      // 向き：抵抗している時は釣り人から遠ざかる向き、寄せられている時は口から引かれて手前を向く。
+      // 横へ走れば走る方へ、潜れば頭を下げ、浮けば上げる。跳ねた時は飛ぶ方向
+      const away = new THREE.Vector3(this.fishPos.x - this.origin.x, 0, this.fishPos.z - this.origin.z).normalize();
+      const want = new THREE.Vector3();
+      if (this.jumpT > 0 && mv.lengthSq() > 1e-8) want.copy(mv).normalize();
+      else {
+        want.copy(away).multiplyScalar(f.behavior === 'approach' || f.tension > f.pullMax * 0.9 ? -0.7 : 1);
+        const horiz = new THREE.Vector3(mv.x, 0, mv.z);
+        if (horiz.lengthSq() > 1e-8) want.addScaledVector(horiz.normalize(), Math.min(1.2, sp * 0.8));
+        want.y = Math.max(-0.7, Math.min(0.7, (mv.y / Math.max(dt, 1e-4)) * 0.6));
+        if (want.lengthSq() < 1e-6) want.copy(away);
+        want.normalize();
+      }
+      this.fishHead.lerp(want, Math.min(1, dt * (this.jumpT > 0 ? 12 : 4))).normalize();
+      const yaw = Math.atan2(-this.fishHead.z, this.fishHead.x);
+      const pitch = Math.asin(Math.max(-1, Math.min(1, this.fishHead.y)));
+      // 疲れるほど体を傾けて横を見せる。走っている時は立て直す。首振りで頭を左右に振る
+      const tiredRoll = f.behavior === 'run' ? 0.1 : (1 - f.staminaFraction) * 1.1;
+      this.fishRoll += (tiredRoll + Math.sin(this.time * 2.3) * 0.12 - this.fishRoll) * Math.min(1, dt * 2);
+      const shake = f.tug * Math.sin(this.time * 21) * 0.4 + (this.jumpT > 0 ? Math.sin(this.time * 24) * 0.6 : 0);
       g.rotation.order = 'YXZ';
-      if (mv.lengthSq() > 1e-6) g.rotation.set(0, Math.atan2(-mv.z, mv.x), this.jumpT > 0 ? Math.sin(this.time * 20) * 0.5 : 0);
+      g.rotation.set(this.fishRoll, yaw + shake, pitch);
+      // 口が糸の先に来るよう、体の中心は頭の向きの後ろ側
+      const headDir = new THREE.Vector3(Math.cos(pitch) * Math.cos(yaw + shake), Math.sin(pitch), -Math.cos(pitch) * Math.sin(yaw + shake));
+      g.position.copy(this.fishPos).addScaledVector(headDir, -len * 0.5);
       this.fishObj.swim.uTime.value = this.time;
-      const thrash = f.behavior === 'run';
-      this.fishObj.swim.uAmp.value = thrash ? 0.08 : 0.035;
-      this.fishObj.swim.uFreq.value = thrash ? 14 : 7;
+      const effort = f.behavior === 'run' ? 1 : f.behavior === 'hold' ? 0.6 : 0.35;
+      this.fishObj.swim.uAmp.value = 0.03 + 0.07 * effort * (0.4 + 0.6 * f.staminaFraction) + f.tug * 0.03;
+      this.fishObj.swim.uFreq.value = 6 + 10 * effort;
     }
     this.cameraYawHint = Math.atan2(-(this.fishPos.x - this.origin.x), -(this.fishPos.z - this.origin.z));
   }

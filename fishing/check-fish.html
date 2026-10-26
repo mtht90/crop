@@ -1,0 +1,20 @@
+<!doctype html><meta charset="utf-8"><body style="margin:0;background:#888"><script type="module">
+import * as THREE from 'three';
+import { loadGltf } from '/src/core/gltf.ts';
+const q = new URLSearchParams(location.search);
+const ids = q.get('ids').split(',');
+const r = new THREE.WebGLRenderer({ antialias: true }); r.setSize(300 * ids.length, 600); document.body.append(r.domElement);
+r.setScissorTest(true);
+const gs = await Promise.all(ids.map((id) => loadGltf(`/assets/fish/${id}.json`)));
+ids.forEach((id, i) => {
+  for (const [row, pos] of [[0, [0, 0, 2.4]], [1, [0, 2.4, 0.001]]]) {
+    const s = new THREE.Scene(); s.background = new THREE.Color(0x888888);
+    s.add(new THREE.HemisphereLight(0xffffff, 0x444444, 3)); s.add(gs[i].scene.clone());
+    s.add(new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, -0.35, 0.3), 0.4, 0xff0000));
+    s.add(new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), new THREE.Vector3(-0.45, 0, 0.3), 0.2, 0x00ff00));
+    const c = new THREE.PerspectiveCamera(30, 1, 0.1, 10); c.position.set(...pos); c.lookAt(0, 0, 0);
+    r.setViewport(i * 300, (1 - row) * 300, 300, 300); r.setScissor(i * 300, (1 - row) * 300, 300, 300); r.render(s, c);
+  }
+});
+window.__done = true;
+</script>

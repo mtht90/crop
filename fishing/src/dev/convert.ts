@@ -72,6 +72,14 @@ function bake(root: THREE.Object3D, skip?: string[]): { geo: THREE.BufferGeometr
     const m = o as THREE.Mesh;
     if (!m.isMesh) return;
     const src = m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone();
+    // 量子化（正規化された整数）の頂点はそのまま変換すると範囲外が潰れるので、先に小数へ戻す
+    for (const name of Object.keys(src.attributes)) {
+      const a = src.getAttribute(name);
+      if (a.array instanceof Float32Array && !a.normalized && !(a as THREE.InterleavedBufferAttribute).isInterleavedBufferAttribute) continue;
+      const f = new Float32Array(a.count * a.itemSize);
+      for (let i = 0; i < a.count; i++) for (let k = 0; k < a.itemSize; k++) f[i * a.itemSize + k] = a.getComponent(i, k);
+      src.setAttribute(name, new THREE.BufferAttribute(f, a.itemSize));
+    }
     src.applyMatrix4(m.matrixWorld);
     src.computeBoundingBox();
     const bs = new THREE.Vector3();
@@ -100,22 +108,113 @@ function bake(root: THREE.Object3D, skip?: string[]): { geo: THREE.BufferGeometr
   return { geo, mats };
 }
 
-function normalizeFish(geo: THREE.BufferGeometry, src: ModelSource): void {
+/** 魚の向きと大きさをそろえる。かけた変換を返す（同じ変換を元モデルにも使うため） */
+function normalizeFish(geo: THREE.BufferGeometry, src: ModelSource): THREE.Matrix4 {
+  const M = new THREE.Matrix4();
+  const apply = (m: THREE.Matrix4) => {
+    geo.applyMatrix4(m);
+    M.premultiply(m);
+  };
   geo.computeBoundingBox();
   const s = new THREE.Vector3();
   geo.boundingBox!.getSize(s);
   // 一番長い軸を X に
-  if (s.z >= s.x && s.z >= s.y) geo.rotateY(Math.PI / 2);
-  else if (s.y >= s.x && s.y >= s.z) geo.rotateZ(-Math.PI / 2);
-  if (src.flip) geo.rotateY(Math.PI);
-  if (src.roll) geo.rotateX(src.roll);
+  if (s.z >= s.x && s.z >= s.y) apply(new THREE.Matrix4().makeRotationY(Math.PI / 2));
+  else if (s.y >= s.x && s.y >= s.z) apply(new THREE.Matrix4().makeRotationZ(-Math.PI / 2));
+  if (src.flip) apply(new THREE.Matrix4().makeRotationY(Math.PI));
+  if (src.roll) apply(new THREE.Matrix4().makeRotationX(src.roll));
   geo.computeBoundingBox();
   const c = new THREE.Vector3();
   geo.boundingBox!.getCenter(c);
-  geo.translate(-c.x, -c.y, -c.z);
+  apply(new THREE.Matrix4().makeTranslation(-c.x, -c.y, -c.z));
   geo.boundingBox!.getSize(s);
-  geo.scale(1 / s.x, 1 / s.x, 1 / s.x);
+  apply(new THREE.Matrix4().makeScale(1 / s.x, 1 / s.x, 1 / s.x));
   geo.computeBoundingBox();
+  return M;
+}
+
+/**
+ * 高精細モデルを左右の真横から正射影で撮り、上半分 = +Z 側、下半分 = -Z 側の画像にする。
+ * 透明な縁は周りの色で埋めて、投影の境目に背景が出ないようにする。
+ */
+function bakeSides(hi: THREE.BufferGeometry, mats: THREE.Material[], size: number, y0: number, y1: number): HTMLCanvasElement {
+  const half = size / 2;
+  const r = new THREE.WebGLRenderer({ alpha: true, preserveDrawingBuffer: true });
+  r.setSize(size, half);
+  r.setClearColor(0x000000, 0);
+  r.outputColorSpace = THREE.SRGBColorSpace;
+  const scene = new THREE.Scene();
+  const basic = mats.map((m) => new THREE.MeshBasicMaterial({ map: (m as THREE.MeshStandardMaterial).map ?? null, color: (m as THREE.MeshStandardMaterial).map ? 0xffffff : (m as THREE.MeshStandardMaterial).color, side: THREE.DoubleSide }));
+  scene.add(new THREE.Mesh(hi, basic.length === 1 ? basic[0] : basic));
+  const cam = new THREE.OrthographicCamera(-0.52, 0.52, y1, y0, 0.01, 20);
+  const out = document.createElement('canvas');
+  out.width = size;
+  out.height = size;
+  const g = out.getContext('2d')!;
+  for (const [side, row] of [[1, 0], [-1, half]] as const) {
+    cam.position.set(0, 0, 5 * side);
+    cam.up.set(0, 1, 0);
+    cam.lookAt(0, 0, 0);
+    r.render(scene, cam);
+    g.drawImage(r.domElement, 0, row);
+  }
+  r.dispose();
+  // 縁の透明な所を周りの色で埋める
+  const img = g.getImageData(0, 0, size, size);
+  const d = img.data;
+  for (let pass = 0; pass < 12; pass++) {
+    const src = new Uint8ClampedArray(d);
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const i = (y * size + x) * 4;
+        if (src[i + 3] > 200) continue;
+        let n = 0;
+        let cr = 0, cg = 0, cb = 0;
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const xx = x + dx, yy = y + dy;
+          if (xx < 0 || yy < 0 || xx >= size || yy >= size || (yy < half) !== (y < half)) continue;
+          const j = (yy * size + xx) * 4;
+          if (src[j + 3] > 200) {
+            cr += src[j];
+            cg += src[j + 1];
+            cb += src[j + 2];
+            n++;
+          }
+        }
+        if (n) {
+          d[i] = cr / n;
+          d[i + 1] = cg / n;
+          d[i + 2] = cb / n;
+          d[i + 3] = 255;
+        }
+      }
+    }
+  }
+  g.putImageData(img, 0, 0);
+  return out;
+}
+
+/** 軽いメッシュの UV を、真横からの投影で付け直す（面の向きで左右どちらの画像を使うか決める） */
+function projectSideUv(geo: THREE.BufferGeometry, y0: number, y1: number): THREE.BufferGeometry {
+  const g = geo.index ? geo.toNonIndexed() : geo;
+  const pos = g.getAttribute('position');
+  const uv = new Float32Array(pos.count * 2);
+  const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+  for (let t = 0; t < pos.count; t += 3) {
+    a.fromBufferAttribute(pos, t);
+    b.fromBufferAttribute(pos, t + 1);
+    c.fromBufferAttribute(pos, t + 2);
+    const nz = new THREE.Vector3().subVectors(b, a).cross(new THREE.Vector3().subVectors(c, a)).z;
+    for (let k = 0; k < 3; k++) {
+      const x = pos.getX(t + k);
+      const y = (pos.getY(t + k) - y0) / (y1 - y0);
+      uv[(t + k) * 2] = nz >= 0 ? (x + 0.52) / 1.04 : (0.52 - x) / 1.04;
+      uv[(t + k) * 2 + 1] = nz >= 0 ? 0.5 + y * 0.5 : y * 0.5;
+    }
+  }
+  g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  g.clearGroups();
+  return g;
 }
 
 function normalizeProp(geo: THREE.BufferGeometry, height?: number): void {
@@ -176,19 +275,39 @@ async function convert(src: ModelSource): Promise<void> {
       (m as THREE.MeshStandardMaterial).color.set(0xffffff);
     }
   }
-  if (src.kind === 'fish') normalizeFish(geo, src);
-  else normalizeProp(geo, src.height);
-  geo.deleteAttribute('color');
-  if (!src.keepUv && !out.some((m) => (m as THREE.MeshStandardMaterial).map)) geo.deleteAttribute('uv');
-  geo.computeVertexNormals();
-  const mesh = new THREE.Mesh(geo, out.length === 1 ? out[0] : out);
+  let finalGeo = geo;
+  let finalMats = out;
+  if (src.kind === 'fish') {
+    const M = normalizeFish(geo, src);
+    if (src.hiFile) {
+      // 高精細モデルを同じ向き・大きさにそろえて、真横から撮ったテクスチャを作る
+      const hiRoot = (await new GLTFLoader().loadAsync(src.hiFile)).scene;
+      const hi = bake(hiRoot, src.skip);
+      hi.geo.applyMatrix4(M);
+      hi.geo.computeBoundingBox();
+      const y0 = hi.geo.boundingBox!.min.y * 1.04;
+      const y1 = hi.geo.boundingBox!.max.y * 1.04;
+      const atlas = bakeSides(hi.geo, hi.mats, src.texSize ?? 1024, y0, y1);
+      const t = new THREE.CanvasTexture(atlas);
+      t.colorSpace = THREE.SRGBColorSpace;
+      t.userData.mimeType = 'image/jpeg';
+      finalGeo = projectSideUv(geo, y0, y1);
+      finalMats = [new THREE.MeshStandardMaterial({ map: t, roughness: 0.45, metalness: 0, side: THREE.DoubleSide, name: 'scan' })];
+    }
+  } else normalizeProp(geo, src.height);
+  const geo2 = finalGeo;
+  geo2.deleteAttribute('color');
+  if (!src.keepUv && !finalMats.some((m) => (m as THREE.MeshStandardMaterial).map)) geo2.deleteAttribute('uv');
+  geo2.computeVertexNormals();
+  geo2.computeBoundingBox();
+  const mesh = new THREE.Mesh(geo2, finalMats.length === 1 ? finalMats[0] : finalMats);
   mesh.name = src.id;
   const scene = new THREE.Scene();
   scene.add(mesh);
   const json = (await new GLTFExporter().parseAsync(scene, { binary: false, embedImages: true })) as object;
   const text = JSON.stringify(json);
   await window.__save!(src.out, text);
-  const bb = geo.boundingBox!;
+  const bb = geo2.boundingBox!;
   log(`${src.id}: ${(text.length / 1024).toFixed(0)}KB tris=${geo.getAttribute('position').count / 3} size=${bb.max.x - bb.min.x}x${(bb.max.y - bb.min.y).toFixed(3)}x${(bb.max.z - bb.min.z).toFixed(3)}`);
 }
 

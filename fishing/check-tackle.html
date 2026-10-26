@@ -17,7 +17,7 @@ items.forEach((id, i) => {
   else { const t = buildTackle(LURES.find((l) => l.id === id)); t.update(0.3, 0.5); obj = t.group; size = 0.11; }
   const box = new THREE.Box3().setFromObject(obj); const c = box.getCenter(new THREE.Vector3()); obj.position.sub(c);
   sc.add(obj);
-  const cam = new THREE.PerspectiveCamera(30, 1, 0.001, 10); cam.position.set(0.02, 0.06, size * 2.2); cam.lookAt(0, 0, 0);
+  const cam = new THREE.PerspectiveCamera(30, 1, 0.001, 10); cam.position.set(size * 0.3, size * 0.5, size * 2.0); cam.lookAt(0, 0, 0);
   const x = (i % W) * C, y = (H - 1 - Math.floor(i / W)) * C;
   r.setViewport(x, y, C, C); r.setScissor(x, y, C, C); r.render(sc, cam);
 });

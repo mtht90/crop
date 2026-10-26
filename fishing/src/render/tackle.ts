@@ -120,11 +120,118 @@ function addLip(g: THREE.Group, w: number, len: number, angle: number, x: number
   g.add(m);
 }
 
-function hardBody(lure: Lure, profile: [number, number][], squash: number, metallic: number): THREE.Mesh {
+interface PaintOpts {
+  /** 腹の色 */
+  belly?: string;
+  /** 側面の鱗箔（ホログラム）の強さ 0..1 */
+  foil?: number;
+  /** 背中の斑点 */
+  spots?: boolean;
+  /** 側線の帯の色 */
+  stripe?: string;
+}
+
+/**
+ * 実物のプラグの塗装を描く（lathe の UV：u = 周方向、v = 頭→尾）。
+ * 背は lure.color のグラデーション、側面は鱗模様の箔、腹は白（または指定色）、頭にエラの赤。
+ * 箔の部分は金属質（metalnessMap）にして、光の角度で光る。
+ */
+function paintLure(color: string, o: PaintOpts): { map: THREE.Texture; metal: THREE.Texture } {
+  const W = 512;
+  const H = 256;
+  const cv = document.createElement('canvas');
+  cv.width = W;
+  cv.height = H;
+  const g = cv.getContext('2d')!;
+  const mcv = document.createElement('canvas');
+  mcv.width = W;
+  mcv.height = H;
+  const mg = mcv.getContext('2d')!;
+  const back = new THREE.Color(color).multiplyScalar(0.6);
+  const belly = new THREE.Color(o.belly ?? '#f3f1ea');
+  const flank = new THREE.Color(color).lerp(new THREE.Color('#d9dee2'), 0.55);
+  // u: 0.75 = 背、0.25 = 腹、0 / 0.5 = 側面
+  for (let x = 0; x < W; x++) {
+    const u = x / W;
+    const top = Math.max(0, -Math.sin(u * Math.PI * 2)); // 背側ほど 1
+    const bot = Math.max(0, Math.sin(u * Math.PI * 2)); // 腹側ほど 1
+    const c = flank.clone().lerp(back, THREE.MathUtils.smoothstep(top, 0.15, 0.6)).lerp(belly, THREE.MathUtils.smoothstep(bot, 0.3, 0.75));
+    g.fillStyle = `#${c.getHexString()}`;
+    g.fillRect(x, 0, 1, H);
+    const m = Math.round(255 * (o.foil ?? 0.6) * Math.max(0, 1 - top * 2.2 - bot * 2));
+    mg.fillStyle = `rgb(${m},${m},${m})`;
+    mg.fillRect(x, 0, 1, H);
+  }
+  // 側面の鱗（ずらして並べた菱形の箔）
+  const foil = o.foil ?? 0.6;
+  if (foil > 0) {
+    for (let row = 0; row < 26; row++) {
+      for (let col = 0; col < 40; col++) {
+        const x = (col + (row % 2) * 0.5) * (W / 40);
+        const y = 30 + row * ((H - 50) / 26);
+        const u = x / W;
+        const side = 1 - Math.abs(Math.sin(u * Math.PI * 2));
+        if (side < 0.25) continue;
+        const v = 0.75 + Math.random() * 0.35;
+        g.fillStyle = `rgba(${Math.round(225 * v)},${Math.round(232 * v)},${Math.round(238 * v)},${0.35 * side * foil})`;
+        g.beginPath();
+        g.moveTo(x, y - 4);
+        g.lineTo(x + 5, y);
+        g.lineTo(x, y + 4);
+        g.lineTo(x - 5, y);
+        g.closePath();
+        g.fill();
+        mg.fillStyle = `rgba(255,255,255,${0.5 * side})`;
+        mg.fill();
+      }
+    }
+  }
+  if (o.stripe) {
+    g.fillStyle = o.stripe;
+    for (const cx of [0, W / 2, W]) g.fillRect(cx - 10, 40, 20, H - 60);
+  }
+  if (o.spots) {
+    g.fillStyle = `#${back.clone().multiplyScalar(0.45).getHexString()}`;
+    for (let i = 0; i < 70; i++) {
+      const x = W * (0.62 + Math.random() * 0.26);
+      g.beginPath();
+      g.arc(x, 40 + Math.random() * (H - 70), 1.5 + Math.random() * 3, 0, Math.PI * 2);
+      g.fill();
+    }
+  }
+  // エラ（頭の後ろの赤い線とエラぶたの影）
+  for (const cx of [0, W / 2, W]) {
+    g.fillStyle = 'rgba(40,30,30,0.35)';
+    g.fillRect(cx - 40, 34, 80, 6);
+    g.fillStyle = 'rgba(200,40,35,0.85)';
+    g.fillRect(cx - 34, 40, 68, 5);
+  }
+  // キャンバスの上端 = 頭（v = 0）にするため上下反転しない
+  const map = new THREE.CanvasTexture(cv);
+  map.colorSpace = THREE.SRGBColorSpace;
+  map.anisotropy = 4;
+  map.flipY = false;
+  const metal = new THREE.CanvasTexture(mcv);
+  metal.flipY = false;
+  return { map, metal };
+}
+
+function hardBody(lure: Lure, profile: [number, number][], squash: number, o: PaintOpts = {}): THREE.Mesh {
   const g = bodyGeometry(profile, squash);
-  const base = new THREE.Color(lure.color);
-  paintBody(g, base.clone().multiplyScalar(0.55), base.clone().lerp(new THREE.Color(0xdde3e6), 0.35), new THREE.Color(0xf2f0e8));
-  return new THREE.Mesh(g, new THREE.MeshPhysicalMaterial({ vertexColors: true, metalness: metallic, roughness: 0.22, clearcoat: 1, clearcoatRoughness: 0.08 }));
+  const { map, metal } = paintLure(lure.color, o);
+  return new THREE.Mesh(
+    g,
+    new THREE.MeshPhysicalMaterial({
+      map,
+      metalnessMap: metal,
+      metalness: 0.85,
+      roughness: 0.2,
+      clearcoat: 1,
+      clearcoatRoughness: 0.05,
+      iridescence: (o.foil ?? 0.6) * 0.8,
+      iridescenceIOR: 1.6,
+    }),
+  );
 }
 
 // ---------------- ルアー ----------------
@@ -132,7 +239,7 @@ function hardBody(lure: Lure, profile: [number, number][], squash: number, metal
 function minnow(lure: Lure): TackleObject {
   const g = new THREE.Group();
   const L = 0.09;
-  g.add(hardBody(lure, [[0, 0.002], [0.006, 0.006], [0.02, 0.0095], [0.045, 0.009], [0.07, 0.0055], [0.085, 0.003], [0.09, 0.0015]], 0.62, 0.55));
+  g.add(hardBody(lure, [[0, 0.002], [0.006, 0.006], [0.02, 0.0095], [0.045, 0.009], [0.07, 0.0055], [0.085, 0.003], [0.09, 0.0015]], 0.62, { foil: 0.9 }));
   addEyes(g, -0.011, 0.002, 0.0048, 0.0022);
   addLip(g, 0.012, 0.016, 0.55, -0.004, -0.003);
   addTreble(g, 0.012, new THREE.Vector3(-L * 0.4, -0.009, 0));
@@ -151,7 +258,7 @@ function minnow(lure: Lure): TackleObject {
 
 function crank(lure: Lure): TackleObject {
   const g = new THREE.Group();
-  g.add(hardBody(lure, [[0, 0.003], [0.006, 0.011], [0.018, 0.015], [0.034, 0.013], [0.052, 0.006], [0.058, 0.002]], 0.72, 0.3));
+  g.add(hardBody(lure, [[0, 0.003], [0.006, 0.011], [0.018, 0.015], [0.034, 0.013], [0.052, 0.006], [0.058, 0.002]], 0.72, { foil: 0.35, belly: '#f0b040', spots: true }));
   addEyes(g, -0.01, 0.004, 0.0085, 0.0028);
   addLip(g, 0.016, 0.026, 0.95, -0.002, -0.006);
   addTreble(g, 0.012, new THREE.Vector3(-0.022, -0.014, 0));
@@ -223,7 +330,21 @@ function softWorm(lure: Lure): TackleObject {
     const a = (i / 16) * Math.PI * 1.6;
     tailPts.push(new THREE.Vector3(-0.078 - Math.sin(a) * 0.012, Math.cos(a) * 0.012 - 0.012, 0));
   }
-  const mat = new THREE.MeshPhysicalMaterial({ color: lure.color, roughness: 0.45, transmission: 0.25, thickness: 0.004, sheen: 0.5 });
+  // 半透明の樹脂にラメ（細かい金属片）が入っている
+  const fcv = document.createElement('canvas');
+  fcv.width = fcv.height = 128;
+  const fg = fcv.getContext('2d')!;
+  fg.fillStyle = lure.color;
+  fg.fillRect(0, 0, 128, 128);
+  for (let i = 0; i < 220; i++) {
+    fg.fillStyle = Math.random() < 0.5 ? 'rgba(20,20,20,0.8)' : 'rgba(255,220,120,0.9)';
+    fg.fillRect(Math.random() * 128, Math.random() * 128, 1.5, 1.5);
+  }
+  const flakes = new THREE.CanvasTexture(fcv);
+  flakes.colorSpace = THREE.SRGBColorSpace;
+  flakes.wrapS = flakes.wrapT = THREE.RepeatWrapping;
+  flakes.repeat.set(6, 1);
+  const mat = new THREE.MeshPhysicalMaterial({ map: flakes, roughness: 0.4, transmission: 0.35, thickness: 0.004, sheen: 0.6, sheenColor: new THREE.Color(lure.color), clearcoat: 0.6 });
   const bodyGeo = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 30, 0.0035, 10, false);
   const body = new THREE.Mesh(bodyGeo, mat);
   g.add(body);
@@ -257,7 +378,8 @@ function metalJig(lure: Lure): TackleObject {
   geo.translate(-0.0375, 0, 0);
   const base = new THREE.Color(lure.color);
   paintBody(geo, base.clone().multiplyScalar(0.6), new THREE.Color(0xd9dde0), new THREE.Color(0xf4f4f0));
-  g.add(new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0.95, roughness: 0.15 })));
+  // ホログラムシートを貼ったメタルジグ（見る角度で虹色に光る）
+  g.add(new THREE.Mesh(geo, new THREE.MeshPhysicalMaterial({ vertexColors: true, metalness: 1, roughness: 0.12, iridescence: 1, iridescenceIOR: 1.8, iridescenceThicknessRange: [200, 900], clearcoat: 1 })));
   addEyes(g, -0.008, 0.002, 0.003, 0.0018);
   // フロントのアシストフック
   addHook(g, 0.018, new THREE.Vector3(-0.006, -0.002, 0.002), 0.4);
@@ -268,7 +390,7 @@ function metalJig(lure: Lure): TackleObject {
 function popper(lure: Lure): TackleObject {
   const g = new THREE.Group();
   // 口の部分がカップ状にへこんでいる
-  g.add(hardBody(lure, [[0, 0.0075], [0.002, 0.0055], [0.004, 0.0085], [0.02, 0.0095], [0.045, 0.007], [0.062, 0.003], [0.066, 0.0015]], 1, 0.15));
+  g.add(hardBody(lure, [[0, 0.0075], [0.002, 0.0055], [0.004, 0.0085], [0.02, 0.0095], [0.045, 0.007], [0.062, 0.003], [0.066, 0.0015]], 1, { foil: 0.15, belly: '#f6efe0' }));
   addEyes(g, -0.009, 0.004, 0.0078, 0.0026);
   addTreble(g, 0.012, new THREE.Vector3(-0.026, -0.009, 0));
   addTreble(g, 0.011, new THREE.Vector3(-0.066, -0.002, 0));

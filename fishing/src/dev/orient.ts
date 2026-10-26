@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 // 開発用：変換済みの魚の向き確認（赤 = +X 頭、緑 = +Y 背）
-const ids = ['bass', 'trout', 'salmon', 'koi', 'catfish', 'arowana'];
+const ids = ['trout', 'salmon', 'koi', 'catfish', 'arowana', 's_carp', 's_crucian', 's_namazu', 's_snakehead', 's_oikawa', 's_hasu', 's_bluegill', 's_bass', 's_ayu'];
 const r = new THREE.WebGLRenderer({ antialias: true });
 r.setSize(innerWidth, innerHeight);
 document.body.appendChild(r.domElement);

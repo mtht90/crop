@@ -16,7 +16,22 @@ export type LureCategory =
   | 'baitLive';
 export type Rarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legend';
 /** 外部モデル（public/assets/fish/<id>.json） */
-export type FishModelId = 'bass' | 'trout' | 'salmon' | 'koi' | 'catfish' | 'arowana';
+export type FishModelId =
+  | 'trout'
+  | 'salmon'
+  | 'koi'
+  | 'catfish'
+  | 'arowana'
+  // ffish.asia の実写スキャン
+  | 's_carp'
+  | 's_crucian'
+  | 's_namazu'
+  | 's_snakehead'
+  | 's_oikawa'
+  | 's_hasu'
+  | 's_bluegill'
+  | 's_bass'
+  | 's_ayu';
 
 export interface FishModel {
   id: FishModelId;
@@ -29,6 +44,8 @@ export interface FishModel {
   detail?: number;
   /** 元テクスチャのまま表示する色違い・模様の id */
   native?: string[];
+  /** 色違い・模様ごとに別のモデルを使う（例：錦鯉は紅白のモデル） */
+  variants?: Record<string, FishModelId>;
 }
 export type PatternKind =
   | 'none'

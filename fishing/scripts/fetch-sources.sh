@@ -18,6 +18,14 @@ if [ ! -f "$SRC/polyyai/lod.zip" ]; then
   rm -f "$JAR"
 fi
 [ -d "$SRC/polyyai/3D_Fish_Pack_LowPoly" ] || unzip -oq "$SRC/polyyai/lod.zip" -d "$SRC/polyyai"
+# 魚：ffish.asia の実写スキャン（CC0、元は Sketchfab）。圧縮済みの CC0 複製から取得し、
+# scripts/scan-lite.mjs で軽くしてから convert-models.cjs が真横から撮ったテクスチャを焼き直す
+FF=https://raw.githubusercontent.com/lisa-1002/fishing3d/main/vendor/fish/real
+mkdir -p "$SRC/ffish/lite"
+for n in carp crucian amur_catfish snakehead horsemouth threelips bluegill bass ayu; do
+  get "$FF/scan_$n.glb" "ffish/scan_$n.glb"
+  [ -f "$SRC/ffish/lite/$n.glb" ] || SNAP=0.003 node scripts/scan-lite.mjs "$SRC/ffish/scan_$n.glb" "$SRC/ffish/lite/$n.glb" 9000
+done
 get https://kenney.nl/media/pages/assets/nature-kit/37ac38a37b-1677698939/kenney_nature-kit.zip kenney_nature.zip
 get https://kenney.nl/media/pages/assets/pirate-kit/e6d4bb1525-1771333093/kenney_pirate-kit.zip kenney_pirate.zip
 cd "$SRC"
