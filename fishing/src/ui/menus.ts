@@ -2,7 +2,7 @@ import type { SaveData, Settings } from '../core/save';
 import { SPOTS } from '../data/spots';
 import { LINE_BY_ID, LINES, LURES, REEL_BY_ID, REELS, RODS, ROD_BY_ID, LB_TO_KG } from '../data/tackle';
 import { h } from './dom';
-import type { Modals } from './modal';
+import type { ModalHandle, Modals } from './modal';
 
 /**
  * 2段階で確定するボタン（埋め込み表示では confirm() が使えないため、画面内で確認する）。
@@ -33,8 +33,8 @@ export function confirmButton(label: string, confirmLabel: string, cls: string, 
   return b;
 }
 
-export function openTackle(modals: Modals, save: SaveData, onChange: () => void): void {
-  const m = modals.open('タックルボックス', { closeKey: 'KeyI' });
+export function openTackle(modals: Modals, save: SaveData, onChange: () => void, host?: ModalHandle): void {
+  const m = host ?? modals.open('タックルボックス', { closeKey: 'KeyI' });
   const render = () => {
     const col = (title: string, rows: HTMLElement[]) => h('div', null, h('h4', { text: title }), h('div', { class: 'list' }, ...rows));
     const pick = (on: boolean, name: string, spec: string, apply: () => void, disabled = false) =>
@@ -72,8 +72,8 @@ const MAP_SVG = `<svg viewBox="0 0 100 100" preserveAspectRatio="none" style="po
   <path d="M8,30 l6,-8 l6,8 Z M14,34 l5,-7 l5,7 Z M60,10 l6,-9 l6,9 Z" fill="#41584a"/>
 </svg>`;
 
-export function openMap(modals: Modals, save: SaveData, onTravel?: (id: string) => void): void {
-  const m = modals.open('マップ', { closeKey: 'KeyM' });
+export function openMap(modals: Modals, save: SaveData, onTravel?: (id: string) => void, host?: ModalHandle): void {
+  const m = host ?? modals.open('マップ', { closeKey: 'KeyM' });
   const info = h('div', { class: 'info', text: '釣り場を選ぶと詳細を表示します。' });
   const map = h('div', { class: 'map' });
   map.innerHTML = MAP_SVG;
@@ -127,23 +127,21 @@ export function controlsHelp(): HTMLElement {
     ['WASD / Shift', '移動 / 走る'],
     ['マウス', '視点'],
     ['F', '釣りをする / やめる（水辺で）'],
-    ['E', '釣り小屋に入る（小屋の前で）'],
-    ['左クリック長押し → 離す', 'キャスト（溜めるほど遠投・溜めすぎ注意）'],
-    ['左クリック長押し', 'リールを巻く（Shift併用でゆっくり）'],
-    ['右クリック', 'ロッドアクション / アタリでアワセ'],
-    ['R', 'ウキ下を変更（エサ釣り）'],
-    ['ファイト中 マウス左右', '竿を倒す（魚の走る向きと逆へ倒すと効果的）'],
-    ['ファイト中 ホイール', 'ドラグ調整'],
-    ['Tab', '図鑑'],
-    ['I', 'タックルボックス'],
-    ['M', 'マップ'],
-    ['Esc', 'メニュー'],
+    ['E', '話しかける・店に入る'],
+    ['左ドラッグして離す', 'キャスト（引いた反対へ飛ぶ）'],
+    ['左クリック長押し', 'リールを巻く（Shiftでゆっくり）'],
+    ['マウスを上へ振る', '誘い・アワセ・抜き上げ'],
+    ['マウス上下・左右', '竿を立てる・寝かせる・倒す（魚と逆へ）'],
+    ['ホイール', 'ドラグ調整（ファイト中）'],
+    ['R', 'ウキ下を変える（エサ釣り）'],
+    ['Tab / I / M / Esc', '図鑑 / タックル / 地図 / 設定'],
   ];
+
   return h('div', { class: 'help-grid' }, ...rows.flatMap(([k, v]) => [h('b', { text: k }), h('span', { text: v })]));
 }
 
-export function openPause(modals: Modals, save: SaveData, cb: PauseCallbacks): void {
-  const m = modals.open('メニュー', { small: true });
+export function openPause(modals: Modals, save: SaveData, cb: PauseCallbacks, host?: ModalHandle): void {
+  const m = host ?? modals.open('メニュー', { small: true });
   const s = save.settings;
   const slider = (label: string, key: 'master' | 'bgm' | 'sfx' | 'sensitivity' | 'feel', min: number, max: number, step: number) => {
     const input = h('input') as HTMLInputElement;
@@ -160,13 +158,7 @@ export function openPause(modals: Modals, save: SaveData, cb: PauseCallbacks): v
     });
     return h('div', { class: 'setting' }, h('span', { text: label }), input, val);
   };
-  const stamina = h('input') as HTMLInputElement;
-  stamina.type = 'checkbox';
-  stamina.checked = s.showStamina;
-  stamina.addEventListener('change', () => {
-    s.showStamina = stamina.checked;
-    cb.onSettings(s);
-  });
+
   m.body.append(
     h('h4', { text: '設定' }),
     slider('全体音量', 'master', 0, 1, 0.05),
@@ -174,7 +166,6 @@ export function openPause(modals: Modals, save: SaveData, cb: PauseCallbacks): v
     slider('効果音', 'sfx', 0, 1, 0.05),
     slider('マウス感度', 'sensitivity', 0.3, 2.5, 0.1),
     slider('引きの演出', 'feel', 0, 1, 0.1),
-    h('label', { class: 'setting' }, h('span', { text: '魚の勢いを表示' }), stamina, h('span')),
     h('h4', { text: '操作' }),
     controlsHelp(),
   );

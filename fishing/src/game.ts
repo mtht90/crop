@@ -14,13 +14,13 @@ import { GameClock } from './sim/environment';
 import type { FishInstance } from './sim/individual';
 import { Rng } from './sim/rng';
 import { showCatch } from './ui/catchPanel';
-import { openDex } from './ui/dexPanel';
+import { openMenu, type MenuTab } from './ui/mainMenu';
 import { Hud } from './ui/hud';
 import { TouchControls } from './ui/touch';
 import { fishModelsReady, modelIdsFor, preloadFishModels, UNDERWATER } from './render/fishMesh';
 import { SPOTS } from './data/spots';
 import { speciesForSpot } from './data/species';
-import { openMap, openPause, openTackle, titleScreen } from './ui/menus';
+import { titleScreen } from './ui/menus';
 import { Modals } from './ui/modal';
 import { openShop } from './ui/shopPanel';
 import { openNpc } from './ui/npcPanel';
@@ -352,7 +352,22 @@ export class Game {
   }
 
   private openPause(): void {
-    openPause(this.modals, this.save, {
+    this.openMenu('settings');
+  }
+
+  /** 図鑑・タックル・クーラー・地図・設定をまとめたメニュー */
+  private openMenu(tab: MenuTab): void {
+    openMenu(this.modals, {
+      save: this.save,
+      preview: this.preview,
+      onTackle: () => (this.fishing.rod.setTackle(this.fishing.lureDef), this.persist()),
+      onTravel: (id) => this.travel(id),
+      pause: this.pauseCallbacks(),
+    }, tab);
+  }
+
+  private pauseCallbacks() {
+    return {
       onSettings: () => {
         this.applySettings();
         this.persist();
@@ -368,7 +383,7 @@ export class Game {
         this.exitFishing();
         this.showTitle();
       },
-    });
+    };
   }
 
   private enterFishing(): void {
@@ -436,9 +451,9 @@ export class Game {
     // グローバルキー（モーダルを閉じたキーで別の操作をしない）
     const fresh = now - this.modals.lastClosed > 150;
     if (this.mode !== 'title' && !this.modals.isOpen && fresh) {
-      if (input.hit('Tab')) openDex(this.modals, this.preview, this.save);
-      else if (input.hit('KeyI') && !this.fishing.busy) openTackle(this.modals, this.save, () => (this.fishing.rod.setTackle(this.fishing.lureDef), this.persist()));
-      else if (input.hit('KeyM')) openMap(this.modals, this.save, (id) => this.travel(id));
+      if (input.hit('Tab')) this.openMenu('dex');
+      else if (input.hit('KeyI') && !this.fishing.busy) this.openMenu('tackle');
+      else if (input.hit('KeyM')) this.openMenu('map');
     }
 
     const sens = this.save.settings.sensitivity;

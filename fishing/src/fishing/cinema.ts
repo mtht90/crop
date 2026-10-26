@@ -151,7 +151,7 @@ export class Cinema {
       dofK = this.focusPower * (t < 0.12 ? smooth(t / 0.12) : 1 - smooth((t - 0.45) / 0.55)) * feel;
       if (t >= 1) this.focusAt = null;
     }
-    this.dofAmount = this.focusAt ? dofK : 0;
+    this.dofAmount = this.focusAt ? dofK * 0.65 : 0;
     if (this.focusAt && dofK > 0.01) {
       const p = this.tmp.copy(this.focusAt).project(camera);
       this.dofFocus.set(p.x * 0.5 + 0.5, p.y * 0.5 + 0.5);

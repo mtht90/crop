@@ -91,7 +91,7 @@ export class FishPreview {
     if (hit) return hit;
     const wasRunning = this.running;
     this.running = false;
-    this.renderer.setSize(200, 100);
+    this.renderer.setSize(360, 180);
     this.camera.aspect = 2;
     this.camera.updateProjectionMatrix();
     this.setFish(s, colorId, patternId, silhouette);

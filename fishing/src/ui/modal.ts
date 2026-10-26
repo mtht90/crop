@@ -28,12 +28,42 @@ export class Modals {
     return !!this.current;
   }
 
-  open(title: string, opts: { small?: boolean; onClose?: () => void; headerExtra?: Node[]; closeKey?: string } = {}): ModalHandle {
+  open(
+    title: string,
+    opts: {
+      small?: boolean;
+      onClose?: () => void;
+      headerExtra?: Node[];
+      closeKey?: string;
+      /** 全画面のメニュー：見出しの代わりにタブを並べる */
+      tabs?: { id: string; label: string }[];
+      tab?: string;
+      onTab?: (id: string) => void;
+    } = {},
+  ): ModalHandle {
     this.close(true);
     const body = h('div', { class: 'body' });
     const footer = h('footer');
-    const header = h('header', null, h('h2', { text: title }), ...(opts.headerExtra ?? []), h('button', { class: 'ghost', text: '閉じる (Esc)', onclick: () => this.close() }));
-    const modal = h('div', { class: `modal${opts.small ? ' small' : ''}` }, header, body, footer);
+    const close = h('button', { class: 'ghost esc', text: 'Esc', title: '閉じる', onclick: () => this.close() });
+    const tabs = opts.tabs
+      ? h(
+          'nav',
+          { class: 'menu-tabs' },
+          ...opts.tabs.map((t) =>
+            h('button', {
+              class: `mt${t.id === opts.tab ? ' on' : ''}`,
+              text: t.label,
+              onclick: (e) => {
+                const nav = (e.currentTarget as HTMLElement).parentElement!;
+                nav.querySelectorAll('.mt').forEach((b) => b.classList.toggle('on', b === e.currentTarget));
+                opts.onTab?.(t.id);
+              },
+            }),
+          ),
+        )
+      : h('h2', { text: title });
+    const header = h('header', null, tabs, ...(opts.headerExtra ?? []), opts.tabs ? close : h('button', { class: 'ghost', text: '閉じる (Esc)', onclick: () => this.close() }));
+    const modal = h('div', { class: `modal${opts.small ? ' small' : ''}${opts.tabs ? ' full' : ''}` }, header, body, footer);
     const back = h('div', { class: 'modal-back' }, modal);
     back.addEventListener('mousedown', (e) => {
       if (e.target === back) this.close();

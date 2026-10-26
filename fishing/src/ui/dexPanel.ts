@@ -22,7 +22,7 @@ import { lookOf } from '../render/fishMesh';
 import type { FishPreview } from '../render/preview';
 import { formatWeight } from '../sim/individual';
 import { h } from './dom';
-import type { Modals } from './modal';
+import type { ModalHandle, Modals } from './modal';
 import { fishModelsReady, modelIdsFor, preloadFishModels } from '../render/fishMesh';
 
 const LURE_CAT_LABEL: Record<string, string> = {
@@ -44,15 +44,16 @@ function topKeys<K extends string>(table: Mult<K>, keys: K[], labels: Record<K, 
   return vals.filter((v) => v[1] >= Math.max(1.25, max * 0.8)).map((v) => labels[v[0]]);
 }
 
-export function openDex(modals: Modals, preview: FishPreview, save: SaveData): void {
+export function openDex(modals: Modals, preview: FishPreview, save: SaveData, host?: ModalHandle): void {
   let spot = save.area ?? 'lake';
   let selected: Species | null = null;
   const tabs = h('div', { class: 'tabs' });
   const summary = h('div', { class: 'dex-summary' });
-  const m = modals.open('釣魚図鑑', { headerExtra: [summary], onClose: () => preview.unmount(), closeKey: 'Tab' });
+  const m = host ?? modals.open('釣魚図鑑', { headerExtra: [summary], onClose: () => preview.unmount(), closeKey: 'Tab' });
   const grid = h('div', { class: 'dex-grid' });
   const detail = h('div', { class: 'dex-detail' });
-  m.body.append(tabs, h('div', { style: 'height:12px' }), h('div', { class: 'dex' }, grid, detail));
+  // メニューの中では、釣り場の切り替えと集めた数を本文の上に出す
+  m.body.append(host ? h('div', { class: 'dex-top' }, tabs, summary) : tabs, h('div', { style: 'height:12px' }), h('div', { class: 'dex' }, grid, detail));
 
   const renderTabs = () => {
     tabs.replaceChildren(

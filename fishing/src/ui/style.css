@@ -1246,3 +1246,272 @@ body.is-touch .fishhud {
   opacity: 0;
   background: radial-gradient(ellipse at 50% 50%, transparent 48%, rgba(0, 0, 0, 0.55) 78%, rgba(0, 0, 0, 0.85) 100%);
 }
+
+/* ================================================================
+   メニュー（暗いガラス・太めのゴシック）。景色が透けて見える全画面
+   ================================================================ */
+.modal-back {
+  background: rgba(3, 8, 10, 0.25);
+  backdrop-filter: blur(14px) brightness(0.78) saturate(1.1);
+  -webkit-backdrop-filter: blur(14px) brightness(0.78) saturate(1.1);
+}
+.modal {
+  background: rgba(9, 16, 22, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+}
+.modal header h2 {
+  font-weight: 900;
+  letter-spacing: 0.04em;
+}
+.modal.full {
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  border-radius: 0;
+  border: none;
+  background: linear-gradient(rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0.1) 120px, rgba(9, 16, 22, 0.35));
+  box-shadow: none;
+}
+.modal.full header {
+  gap: 28px;
+  padding: max(14px, env(safe-area-inset-top, 0px)) max(28px, env(safe-area-inset-right, 0px)) 0 max(28px, env(safe-area-inset-left, 0px));
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  align-items: flex-end;
+}
+.menu-tabs {
+  display: flex;
+  gap: 26px;
+  flex: 1;
+  overflow-x: auto;
+}
+.menu-tabs .mt {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  padding: 6px 2px 12px;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #9aa6a8;
+  white-space: nowrap;
+}
+.menu-tabs .mt:hover {
+  color: var(--ink);
+  background: none;
+}
+.menu-tabs .mt.on {
+  color: var(--ink);
+  border-bottom-color: var(--gold);
+}
+.menu-money {
+  color: var(--gold);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  padding-bottom: 12px;
+}
+.modal.full header .esc {
+  margin-bottom: 10px;
+  font-size: 12px;
+  padding: 2px 10px;
+  color: #9aa6a8;
+}
+.modal.full .body {
+  flex: 1;
+  padding: 22px max(28px, env(safe-area-inset-right, 0px)) 22px max(28px, env(safe-area-inset-left, 0px));
+}
+.modal.full footer:empty {
+  display: none;
+}
+.modal.full .body.tab-settings {
+  max-width: 640px;
+}
+
+/* 図鑑：魚の姿を大きく、未発見は影 */
+.dex-top {
+  display: flex;
+  align-items: baseline;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+.dex-top .tabs button {
+  background: none;
+  border: none;
+  font-size: 15px;
+  font-weight: 900;
+  color: #9aa6a8;
+  padding: 0;
+  margin-right: 14px;
+}
+.dex-top .tabs button.on {
+  color: var(--ink);
+}
+.dex-top .dex-summary {
+  margin-left: auto;
+}
+.tab-dex .dex {
+  grid-template-columns: 1.35fr 1fr;
+  height: calc(100% - 44px);
+}
+.tab-dex .dex-grid {
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+  overflow: auto;
+}
+.dex-card {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  padding: 10px 10px 8px;
+  text-align: left;
+  font-size: 13px;
+  font-weight: 700;
+}
+.dex-card.on {
+  border-color: var(--gold);
+  background: rgba(217, 181, 108, 0.08);
+}
+.tab-dex .dex-card {
+  overflow: hidden;
+}
+.tab-dex .dex-card img {
+  height: 84px;
+  transform: scale(1.4);
+}
+.dex-detail {
+  background: rgba(9, 16, 22, 0.55);
+  border: none;
+  border-left: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 0;
+}
+.dex-detail .preview {
+  height: 220px;
+  background: radial-gradient(ellipse at center, rgba(255, 255, 255, 0.08), transparent 70%);
+}
+.dex-detail h3 {
+  font-size: 30px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+}
+.records b {
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+/* クーラー */
+.cooler-top {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.cooler-top b {
+  font-size: 26px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+.cooler-sum {
+  margin-left: auto;
+  color: #9aa6a8;
+}
+.cooler-sum b {
+  font-size: 18px;
+  color: var(--gold);
+}
+.cooler-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+}
+.cooler-card {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  padding: 10px 12px;
+  display: grid;
+  gap: 4px;
+}
+.cooler-card img {
+  width: 100%;
+  height: 90px;
+  object-fit: contain;
+}
+.cooler-card .cn {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.cooler-card .cn b {
+  font-size: 16px;
+  font-weight: 900;
+}
+.cooler-card .cn i {
+  font-style: normal;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.cooler-card .cm {
+  display: flex;
+  justify-content: space-between;
+}
+.cooler-card .cm span {
+  color: var(--gold);
+}
+.empty {
+  padding: 40px 0;
+}
+
+/* タックル */
+.tab-tackle .item,
+.item {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+}
+.item.on {
+  border-color: var(--gold);
+}
+.item .name {
+  font-weight: 700;
+}
+
+/* 釣果 */
+.catch .preview {
+  background: radial-gradient(ellipse at center, rgba(255, 255, 255, 0.09), transparent 70%);
+}
+.catch .big {
+  font-size: 46px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+.catch h3 {
+  font-weight: 900;
+}
+button.primary {
+  background: var(--ink);
+  color: #0b1216;
+  border-color: var(--ink);
+  font-weight: 700;
+}
+button.primary:hover {
+  background: #fff;
+}
+@media (max-width: 760px) {
+  .tab-dex .dex {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+  .menu-tabs {
+    gap: 16px;
+  }
+  .menu-tabs .mt {
+    font-size: 14px;
+  }
+  .modal.full header,
+  .modal.full .body {
+    padding-left: max(14px, env(safe-area-inset-left, 0px));
+    padding-right: max(14px, env(safe-area-inset-right, 0px));
+  }
+}

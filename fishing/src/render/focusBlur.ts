@@ -28,8 +28,8 @@ export class FocusBlur {
         varying vec2 vUv;
         void main() {
           vec2 d = vUv - uFocus; d.x *= uAspect;
-          float k = smoothstep(0.08, 0.42, length(d)) * uAmount;
-          float r = k * 9.0;
+          float k = smoothstep(0.14, 0.6, length(d)) * uAmount;
+          float r = k * 4.5;
           vec4 sum = texture2D(tScene, vUv) * 2.0;
           float w = 2.0;
           // 円盤状に16点を2周
