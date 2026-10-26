@@ -537,32 +537,9 @@ export class Game {
       if (!paused) this.fishing.update(dt, input, this.player, sens);
       this.hud.setPrompt(!input.active && !this.modals.isOpen ? 'クリックで操作を再開' : null);
       this.touchState = { mode: 'fish', canFish: false, nearHut: false };
-      this.hud.setGuide(this.fishing.guide(input.touch));
-      const ph = this.fishing.phase;
-      this.hud.setKeys(
-        ph === 'net'
-          ? [['マウスを上へ', '抜き上げる']]
-          : ph === 'fight'
-          ? [
-              ['左長押し', '巻く'],
-              ['マウス上下', '竿を立てる／寝かせる'],
-              ['マウス左右', '竿を倒す（魚と逆へ）'],
-              ['ホイール', 'ドラグ調整'],
-            ]
-          : ph === 'water'
-            ? [
-                ['左長押し', '巻く（Shiftでゆっくり）'],
-                ['マウスを上へ振る', '誘い／アワセ'],
-                ['マウスを下げる', '竿を寝かせる'],
-              ]
-            : [
-                ['左ドラッグ', '引っぱって離す（反対へ飛ぶ）'],
-                ['R', 'ウキ下（エサ）'],
-                ['I', 'タックル'],
-                ['F', '釣りをやめる'],
-                ['Tab', '図鑑'],
-              ],
-      );
+      // 釣り中は文字を出さない（竿・糸・音・画面の演出だけで伝える）
+      this.hud.setGuide(null);
+      this.hud.setKeys([]);
     }
 
     // 世界の更新
@@ -610,9 +587,9 @@ export class Game {
         money: this.save.money,
         cooler: `${this.save.cooler.length}/${coolerCapacity(this.save)}`,
       });
-      this.hud.setFishing(this.mode === 'fish' ? this.fishing.hud() : null, this.save.settings.showStamina);
+      this.hud.setFishing(null, false);
+      this.hud.setCrosshair(this.mode === 'walk');
     }
-    if (this.mode === 'fish' && ['aiming', 'net'].includes(this.fishing.phase)) this.hud.setFishing(this.fishing.hud(), this.save.settings.showStamina);
 
     this.saveTimer += dt;
     if (this.saveTimer > 30 && this.mode !== 'title') {

@@ -243,10 +243,8 @@ export class FishingController {
   }
 
   /** 慣れるまでの短い助言（2匹釣った後は出さない） */
-  private tip(text: string, kind: 'info' | 'good' | 'bad' = 'info'): void {
-    // スマホは画面が狭いので助言は出さない（ガイド1行だけ）
-    if (this.save.stats.caught < 2 && !this.input?.touch) this.cb.toast(text, kind);
-  }
+  /** 釣り中の助言（文字は出さない方針なので何もしない。呼び出し箇所は状況の目印として残す） */
+  private tip(_text: string, _kind: 'info' | 'good' | 'bad' = 'info'): void {}
 
   get lureDef(): Lure {
     return LURE_BY_ID[this.save.equip.lure];
@@ -801,8 +799,7 @@ export class FishingController {
       this.lure.y = bottom;
       if (!this.touchedBottom && !moving && lure.sink > 0) {
         this.touchedBottom = true;
-        this.cb.toast(`着底（水深 ${wd.toFixed(1)}m）`, 'info');
-      }
+        }
     }
     this.lure.y = Math.min(0, this.lure.y);
 
@@ -816,7 +813,6 @@ export class FishingController {
 
     // 回収
     if (dist < 2.8 || (wd < 0.15 && reeling)) {
-      this.cb.toast(this.bite ? '魚が離れた…' : '仕掛けを回収した。もう一度投げよう', 'info');
       this.reset();
       return;
     }

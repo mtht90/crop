@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@300;400;500;700&family=Jost:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=Jost:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap');
 
 :root {
   --ink: #f4efe2;
@@ -31,6 +31,7 @@ body {
   --jp: 'Zen Kaku Gothic New', 'Hiragino Kaku Gothic ProN', 'Yu Gothic UI', 'Meiryo', sans-serif;
   --latin: 'Jost', var(--jp);
   font-family: var(--latin);
+  font-weight: 500;
   font-feature-settings: 'palt';
   user-select: none;
 }
@@ -85,21 +86,26 @@ button.ghost {
 /* ---------- HUD ---------- */
 .status {
   position: absolute;
-  top: 14px;
-  left: 16px;
+  top: max(10px, env(safe-area-inset-top, 0px));
+  left: max(12px, env(safe-area-inset-left, 0px));
   display: flex;
-  gap: 10px;
+  gap: 2px;
   align-items: center;
   font-weight: 700;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+  opacity: 0.82;
 }
+/* 上部の情報は小さく一列に（区切りは細い縦線） */
 .status .chip {
-  background: rgba(10, 18, 22, 0.55);
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  padding: 5px 12px;
-  font-size: 14px;
+  background: none;
+  border: none;
+  padding: 0 8px;
+  font-size: 12px;
+  letter-spacing: 0.04em;
   white-space: nowrap;
+}
+.status .chip + .chip {
+  border-left: 1px solid rgba(244, 239, 226, 0.35);
 }
 .status .money {
   color: var(--gold);
@@ -877,8 +883,8 @@ body.is-touch .status {
   max-width: calc(100vw - 260px);
 }
 body.is-touch .status .chip {
-  font-size: 12px;
-  padding: 3px 9px;
+  font-size: 11px;
+  padding: 0 6px;
 }
 /* 視点操作の領域より上にHUDを出す */
 .toasts,

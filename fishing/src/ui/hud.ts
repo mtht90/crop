@@ -26,6 +26,11 @@ export class Hud {
     this.setFishing(null, true);
   }
 
+  /** 照準の点（歩いている時だけ） */
+  setCrosshair(v: boolean): void {
+    this.crosshair.style.display = v ? '' : 'none';
+  }
+
   setVisible(v: boolean): void {
     this.root.style.display = v ? '' : 'none';
   }
