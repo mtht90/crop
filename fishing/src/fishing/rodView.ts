@@ -322,7 +322,8 @@ export class RodView {
     const lurch = this.lurch * F;
     const cu = this.closeup;
     const tilt = -0.05 + this.dispLift * 0.8 + this.swing - pull * 0.32 - lurch * 0.25 + cu * 0.12;
-    const yaw = -this.side * 0.45;
+    // 竿を左右に倒しても竿先が画面から出ないよう、振り幅は控えめに
+    const yaw = -this.side * 0.3;
     this.root.position.set(0.3 - cu * 0.16 + this.side * 0.05, -0.36 + cu * 0.05 - pull * 0.08 - lurch * 0.06, -0.42 - cu * 0.08 - pull * 0.2 - lurch * 0.16);
     this.root.rotation.set(tilt, yaw, -this.side * 0.25);
     // 竿を振ると、胴と穂先は慣性で遅れてしなり、止めると振り戻る

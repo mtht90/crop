@@ -7,7 +7,7 @@ import { LINE_BY_ID, LURE_BY_ID, REEL_BY_ID, ROD_BY_ID, type Lure } from '../dat
 import type { Conditions, Layer, Species } from '../data/types';
 import { buildFishObject, type FishObject } from '../render/fishMesh';
 import { activity, type GameClock } from '../sim/environment';
-import { Fight, PUMP_LENGTH, type FightOutcome, type Obstacle } from '../sim/fight';
+import { Fight, PUMP_LENGTH, type FightOutcome, type HookHold, type Obstacle } from '../sim/fight';
 import { generateFish, type FishInstance } from '../sim/individual';
 import { Rng } from '../sim/rng';
 import { biteChancePerSecond, pickSpecies, speciesWeight } from '../sim/spawn';
@@ -180,6 +180,8 @@ export class FishingController {
   /** ファイト中の竿への負荷（操作の重さ） */
   private fightLoad = 0;
   private prevBend = 0;
+  /** 小アタリでウキがちょんと沈む量（減衰） */
+  private nibbleDip = 0;
   private creakCd = 0;
   private viewX = 0;
   private viewZ = 0;
@@ -444,6 +446,7 @@ export class FishingController {
     this.rod.lurch = this.lurch;
     this.time += dt;
     this.shake = Math.max(0, this.shake - dt * 3);
+    this.nibbleDip = Math.max(0, this.nibbleDip - dt * 7);
     this.spook = Math.max(0, this.spook - dt * 0.25);
     const rodDef = ROD_BY_ID[this.save.equip.rod];
     const lure = this.lureDef;
@@ -844,7 +847,7 @@ export class FishingController {
     if (usesFloat) {
       const b = this.rod.bobber;
       let sink = Math.sin(this.time * 2) * 0.01;
-      if (this.bite?.phase === 'nibble') sink -= this.rod.shake * 0.04;
+      if (this.bite?.phase === 'nibble') sink -= this.nibbleDip * 0.05;
       if (this.bite?.phase === 'take') sink = -0.12;
       b.position.y += (sink - b.position.y) * Math.min(1, dt * 12);
     }
@@ -938,7 +941,8 @@ export class FishingController {
       fish = generateFish(species, cond, this.rng);
       amb = pop?.spawnFor(species, fish, this.lure) ?? null;
     }
-    const nibbles = lure.pack ? this.rng.int(species.nibbles[0], species.nibbles[1]) + (amb && amb.wary > 0.5 ? 1 : 0) : 0;
+    // エサ釣りはたいてい小アタリ（ちょんちょん）を挟んでから本アタリになる
+    const nibbles = lure.pack ? Math.max(this.rng.chance(0.8) ? 1 : 0, this.rng.int(species.nibbles[0], species.nibbles[1])) + (amb && amb.wary > 0.5 ? 1 : 0) : 0;
     this.bite = { species, fish, cond, nibbles, timer: 0, phase: 'approach', window: 1, interest: 0.4, amb, wary: amb?.wary ?? 0 };
     // 大物が寄ってきた：影に気づく「間」
     if (amb && this.isBig(species, fish)) this.onCue?.({ kind: 'shadow', at: amb.pos });
@@ -999,6 +1003,19 @@ export class FishingController {
     this.shadowPos.copy(this.lure);
   }
 
+  /** 小アタリ：竿先とウキが「ちょん、ちょん」と小さく2回入る */
+  private nibblePulse(b: Bite): void {
+    const once = () => {
+      if (this.bite !== b || b.phase !== 'nibble') return;
+      this.rod.kick(0.16);
+      this.rod.shake = Math.max(this.rod.shake, 0.18);
+      this.nibbleDip = 1;
+      this.audio.nibble();
+    };
+    once();
+    window.setTimeout(once, this.rng.range(130, 220));
+  }
+
   private startTake(b: Bite, lure: Lure): void {
     b.phase = 'take';
     const rod = ROD_BY_ID[this.save.equip.rod];
@@ -1008,6 +1025,7 @@ export class FishingController {
     b.window = b.timer;
     this.rod.shake = 1;
     this.rod.bend = 0.6;
+    this.rod.kick(0.9);
     this.audio.bite();
     this.tip('アタリ — マウスを上に振って合わせる');
     this.fx.splash(this.lure.x, this.lure.z, lure.pack ? 0.12 : 0.3);
@@ -1049,11 +1067,11 @@ export class FishingController {
       if (b.timer > 0) return;
       if (b.nibbles > 0) {
         b.nibbles--;
-        b.timer = this.rng.range(0.5, 1.3);
-        this.rod.shake = 0.35;
-        this.audio.nibble();
+        b.timer = this.rng.range(0.6, 1.4);
+        // 小アタリ「ちょんちょん」：竿先が小さく2回入る
+        this.nibblePulse(b);
         this.fx.ripple(this.lure.x, this.lure.z, 0.05);
-        this.input?.vibrate(15);
+        this.input?.vibrate([12, 90, 12]);
         // エサを動かすと警戒される（大物ほど敏感）
         if (this.lureSpeed > 0.1 && this.rng.chance(0.35 + 0.4 * b.wary)) this.endBite(true, 0.2);
         return;
@@ -1079,17 +1097,29 @@ export class FishingController {
     this.audio.hookset();
     if (b.phase !== 'take') {
       if (this.tutorialBite) return;
-      this.tip('早合わせ。竿先が大きく入るまで待とう', 'bad');
-      if (this.lureDef.pack && this.rng.chance(0.4)) this.consumeBait();
+      // 小アタリで合わせても、ほとんどは空振り。たまに皮一枚・スレで掛かる
+      if (b.phase === 'nibble' && this.rng.chance(0.15)) {
+        this.startFight(0.15, this.rng.chance(0.4) ? 'foul' : 'thin');
+        return;
+      }
+      if (this.lureDef.pack && this.rng.chance(0.25)) this.consumeBait();
+      // 空振り：警戒心の薄い魚はまだ居残ってエサをつつく
+      if (b.phase === 'nibble' && !this.rng.chance(0.4 + 0.5 * b.wary)) {
+        b.nibbles = Math.max(b.nibbles, 1);
+        b.timer = this.rng.range(1.2, 2.4);
+        this.spook = Math.max(this.spook, 0.2);
+        return;
+      }
       this.endBite(true, 0.3);
-      this.spook = 1;
+      this.spook = 0.6;
       this.cb.onLost('miss');
       return;
     }
     const strength = Math.max(0, Math.min(1, 0.3 + (speed - FLICK) / 4));
     const timing = 1 - 0.4 * (1 - Math.max(0, b.timer) / b.window);
     const slackPenalty = this.lineSlack > 1 ? 0.4 : 1;
-    const q = strength * timing * slackPenalty;
+    // 本アタリ（竿先が持っていかれている時）に合わせれば、針はしっかり食い込む
+    const q = Math.min(1, strength * timing * slackPenalty + 0.25);
     if (q < 0.22 && !this.tutorialBite) {
       this.tip(this.lineSlack > 1 ? '糸ふけで合わせが効かなかった' : '合わせが弱かった', 'bad');
       this.endBite(true, 0.3);
@@ -1097,7 +1127,7 @@ export class FishingController {
       this.cb.onLost('miss');
       return;
     }
-    this.startFight(Math.max(q, this.tutorialBite ? 0.8 : q));
+    this.startFight(Math.max(q, this.tutorialBite ? 0.8 : q), q > 0.55 ? 'solid' : undefined);
   }
 
   // ---------------- ファイト ----------------
@@ -1148,7 +1178,7 @@ export class FishingController {
     return out;
   }
 
-  private startFight(quality: number): void {
+  private startFight(quality: number, hold?: HookHold): void {
     const b = this.bite!;
     this.bite = null;
     const wd = waterDepth(this.lure.x, this.lure.z);
@@ -1167,6 +1197,7 @@ export class FishingController {
         waterDepth: Math.max(0.5, wd),
         depth: -this.lure.y,
         hookQuality: quality,
+        hookHold: hold,
         obstacles: this.obstaclesAround(),
       },
       this.rng,

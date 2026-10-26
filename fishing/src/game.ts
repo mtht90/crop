@@ -67,6 +67,8 @@ export class Game {
   private title: HTMLElement | null = null;
   private headlamp = new THREE.SpotLight(0xfff0d8, 0, 45, 0.55, 0.6, 1.2);
   private fishYaw = 0;
+  /** 投げた時の視点の向き（ファイト中はここから大きく外れない） */
+  private castViewYaw = 0;
   private last = performance.now();
   private hudTimer = 0;
   private population: FishPopulation;
@@ -519,6 +521,8 @@ export class Game {
     } else if (this.mode === 'fish') {
       if (input.enabled) {
         const ph = this.fishing.phase;
+        // 構えている間の向きを覚えておく（投げた後の視点の基準）
+        if (ph === 'ready' || ph === 'aiming') this.castViewYaw = this.player.yaw;
         if (ph === 'ready' && !input.touch) {
           // 構え：PCは視点を動かして狙う（スマホは画面を引っぱるとそのままキャストの狙いになる）
           const cl = input.cursorLook(dt);
@@ -527,11 +531,15 @@ export class Game {
           this.player.look(input, sens, { center: this.fishYaw, range: 1.4 });
         } else if (ph === 'water' || ph === 'fight' || ph === 'net') {
           // 投げた後はマウス・ドラッグで竿を操作するので、視点は仕掛け・魚を自動で追う
+          // 視点は魚の方へ少しだけ向く（投げた向きから大きくは外れない。竿が画面に残るように）
           const hint = this.fishing.cameraYawHint;
           if (hint !== null) {
-            let d = hint - this.player.yaw;
+            let off = hint - this.castViewYaw;
+            off = Math.atan2(Math.sin(off), Math.cos(off));
+            const target = this.castViewYaw + Math.max(-0.35, Math.min(0.35, off * 0.45));
+            let d = target - this.player.yaw;
             d = Math.atan2(Math.sin(d), Math.cos(d));
-            this.player.yaw += d * Math.min(1, dt * (ph === 'water' ? 1.2 : 2.5));
+            this.player.yaw += d * Math.min(1, dt * 1.2);
           }
           this.player.pitch += ((ph === 'net' ? -0.3 : -0.16) - this.player.pitch) * Math.min(1, dt * 2);
           // 跳んだ魚をカメラが追う
@@ -544,8 +552,8 @@ export class Game {
             const pitchT = Math.atan2(L.y - (this.player.y + 1.6), Math.hypot(dx, dz));
             let d = yawT - this.player.yaw;
             d = Math.atan2(Math.sin(d), Math.cos(d));
-            this.player.yaw += d * Math.min(1, realDt * 6 * lw);
-            this.player.pitch += (pitchT - this.player.pitch) * Math.min(1, realDt * 5 * lw);
+            this.player.yaw += Math.max(-0.3, Math.min(0.3, d)) * Math.min(1, realDt * 3 * lw);
+            this.player.pitch += (Math.min(0.05, pitchT) - this.player.pitch) * Math.min(1, realDt * 2 * lw);
           }
         }
         if (fresh && input.hit('KeyF') && !this.fishing.busy) this.exitFishing();
@@ -567,6 +575,14 @@ export class Game {
       this.applyPullFeel();
       this.camera.updateMatrixWorld();
       if (!paused) this.fishing.update(dt, input, this.player, sens);
+      // 竿先が画面の端から出そうなら、視点をそちらへ寄せて竿を画面に残す
+      if (!paused && this.fishing.phase !== 'ready' && this.fishing.phase !== 'aiming') {
+        const tip = this.fishing.rod.tipWorld().project(this.camera);
+        const ox = Math.max(0, Math.abs(tip.x) - 0.78) * Math.sign(tip.x);
+        const oy = Math.max(0, tip.y - 0.72);
+        this.player.yaw -= ox * Math.min(1, realDt * 4);
+        this.player.pitch += oy * Math.min(1, realDt * 3);
+      }
       this.hud.setPrompt(!input.active && !this.modals.isOpen ? 'クリックで操作を再開' : null);
       this.touchState = { mode: 'fish', canFish: false, nearHut: false };
       // 釣り中は文字を出さない（竿・糸・音・画面の演出だけで伝える）
