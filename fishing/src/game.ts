@@ -337,7 +337,7 @@ export class Game {
     const fresh = now - this.modals.lastClosed > 150;
     if (this.mode !== 'title' && !this.modals.isOpen && fresh) {
       if (input.hit('Tab')) openDex(this.modals, this.preview, this.save);
-      else if (input.hit('KeyI') && !this.fishing.busy) openTackle(this.modals, this.save, () => (this.fishing.rod.setLureColor(this.fishing.lureDef.color), this.persist()));
+      else if (input.hit('KeyI') && !this.fishing.busy) openTackle(this.modals, this.save, () => (this.fishing.rod.setTackle(this.fishing.lureDef), this.persist()));
       else if (input.hit('KeyM')) openMap(this.modals, this.save);
     }
 
@@ -443,7 +443,7 @@ export class Game {
                 ['マウスを下げる', '竿を寝かせる'],
               ]
             : [
-                ['左ドラッグ', '振りかぶって投げる'],
+                ['左ドラッグ', '引っぱって離す（反対へ飛ぶ）'],
                 ['R', 'ウキ下（エサ）'],
                 ['I', 'タックル'],
                 ['F', '釣りをやめる'],

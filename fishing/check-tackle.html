@@ -1,0 +1,25 @@
+<!doctype html><meta charset="utf-8"><body style="margin:0"><script type="module">
+import * as THREE from 'three';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { preloadFishModels } from '/src/render/fishMesh.ts';
+import { buildTackle, buildBobber } from '/src/render/tackle.ts';
+import { LURES } from '/src/data/tackle.ts';
+await preloadFishModels();
+const W = 4, C = 260, items = [...LURES.map((l) => l.id), 'bobber'], H = Math.ceil(items.length / W);
+const r = new THREE.WebGLRenderer({ antialias: true }); r.setSize(W * C, H * C); document.body.append(r.domElement);
+r.setScissorTest(true); r.toneMapping = THREE.ACESFilmicToneMapping;
+const env = new THREE.PMREMGenerator(r).fromScene(new RoomEnvironment(), 0.04).texture;
+items.forEach((id, i) => {
+  const sc = new THREE.Scene(); sc.background = new THREE.Color(0x56666c); sc.environment = env;
+  sc.add(new THREE.DirectionalLight(0xffffff, 2).translateY(2).translateZ(1));
+  let obj, size;
+  if (id === 'bobber') { obj = buildBobber(); size = 0.16; }
+  else { const t = buildTackle(LURES.find((l) => l.id === id)); t.update(0.3, 0.5); obj = t.group; size = 0.11; }
+  const box = new THREE.Box3().setFromObject(obj); const c = box.getCenter(new THREE.Vector3()); obj.position.sub(c);
+  sc.add(obj);
+  const cam = new THREE.PerspectiveCamera(30, 1, 0.001, 10); cam.position.set(0.02, 0.06, size * 2.2); cam.lookAt(0, 0, 0);
+  const x = (i % W) * C, y = (H - 1 - Math.floor(i / W)) * C;
+  r.setViewport(x, y, C, C); r.setScissor(x, y, C, C); r.render(sc, cam);
+});
+window.__done = true;
+</script>

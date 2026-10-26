@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import type { Lure } from '../data/tackle';
+import { buildBobber, buildSinker, buildTackle, type TackleObject } from '../render/tackle';
 
 const SEGMENTS = 10;
 
@@ -10,9 +12,15 @@ export class RodView {
   private reelHandle: THREE.Group;
   readonly line: THREE.Line;
   private linePos: Float32Array;
-  readonly lure: THREE.Mesh;
+  /** 仕掛けの先（ルアー・エサ）。中身は setTackle で差し替える */
+  readonly lure = new THREE.Group();
+  private tackle: TackleObject | null = null;
   readonly bobber: THREE.Group;
-  private lureMat: THREE.MeshStandardMaterial;
+  private sinker: THREE.Mesh;
+  /** ウキからエサまでのハリス */
+  private leader: THREE.Line;
+  /** ルアーが水中を引かれる速さ（動きの演出用） */
+  lureSpeed = 0;
 
   /** 竿のしなり（0..1 程度） */
   bend = 0;
@@ -91,22 +99,47 @@ export class RodView {
     this.line.frustumCulled = false;
     scene.add(this.line);
 
-    this.lureMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3, metalness: 0.3 });
-    this.lure = new THREE.Mesh(new THREE.CapsuleGeometry(0.02, 0.06, 4, 8).rotateX(Math.PI / 2), this.lureMat);
     scene.add(this.lure);
 
-    this.bobber = new THREE.Group();
-    const top = new THREE.Mesh(new THREE.SphereGeometry(0.045, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0xe03020, roughness: 0.4, emissive: 0x401008 }));
-    const bottom = new THREE.Mesh(new THREE.SphereGeometry(0.045, 12, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0xf2f2f2, roughness: 0.4 }));
-    const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.12), new THREE.MeshStandardMaterial({ color: 0xffd040, emissive: 0x403000 }));
-    stick.position.y = 0.08;
-    this.bobber.add(top, bottom, stick);
+    // 大きめの棒ウキ（遠くでもトップが見える）
+    this.bobber = buildBobber();
+    this.bobber.scale.setScalar(1.5);
     this.bobber.visible = false;
     scene.add(this.bobber);
+    this.sinker = buildSinker();
+    this.sinker.visible = false;
+    scene.add(this.sinker);
+    const ll = new THREE.BufferGeometry();
+    ll.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+    this.leader = new THREE.Line(ll, new THREE.LineBasicMaterial({ color: 0xe8e8e0, transparent: true, opacity: 0.5 }));
+    this.leader.frustumCulled = false;
+    this.leader.visible = false;
+    scene.add(this.leader);
   }
 
-  setLureColor(hex: string): void {
-    this.lureMat.color.set(hex);
+  /** 仕掛けの先をルアー・エサのモデルに差し替える */
+  setTackle(lure: Lure): void {
+    if (this.tackle) {
+      this.lure.remove(this.tackle.group);
+      this.tackle.dispose();
+    }
+    this.tackle = buildTackle(lure);
+    this.lure.add(this.tackle.group);
+  }
+
+  /** ウキ → ガン玉 → エサ のハリスを描く（ウキを使っていない時は隠す） */
+  updateLeader(): void {
+    const show = this.bobber.visible && this.lure.visible;
+    this.leader.visible = show;
+    this.sinker.visible = show;
+    if (!show) return;
+    const top = this.bobber.position.clone().add(new THREE.Vector3(0, -0.1, 0));
+    const end = this.lure.position;
+    const p = this.leader.geometry.getAttribute('position') as THREE.BufferAttribute;
+    p.setXYZ(0, top.x, top.y, top.z);
+    p.setXYZ(1, end.x, end.y, end.z);
+    p.needsUpdate = true;
+    this.sinker.position.lerpVectors(end, top, 0.25);
   }
 
   tipWorld(out = new THREE.Vector3()): THREE.Vector3 {
@@ -131,6 +164,8 @@ export class RodView {
       this.segs[i].rotation.y = this.side * this.bend * 0.05 * k;
     }
     this.reelHandle.rotation.x += this.reelSpin * dt * 18;
+    this.tackle?.update(dt, this.lureSpeed);
+    this.updateLeader();
   }
 
   /** 竿先から終点まで糸を描く。sag = たるみ量 (m)、entry = 水面への入水点（無ければ空中のみ） */

@@ -131,9 +131,18 @@ export class FishingController {
   /** 竿を寝かせて出た糸ふけ（m）。巻くか竿を立てると取れる */
   private lineSlack = 0;
 
-  // キャストの狙い
+  // キャストの狙い（引っぱって離す：引いた反対へ飛ぶ）
   private aimPower = 0;
   private aimYaw = 0;
+  private baseYaw = 0;
+  private pullX = 0;
+  private pullY = 0;
+  private pressCursor = { x: 0, y: 0 };
+  private aimTick = 0;
+  private arrow: THREE.Group;
+  private arrowShaft: THREE.Mesh;
+  private arrowHead: THREE.Mesh;
+  private arrowMat: THREE.ShaderMaterial;
 
   // ナブラ（水面がざわつく好ポイント）
   private hotspots: HotSpot[] = [];
@@ -183,6 +192,29 @@ export class FishingController {
       return m;
     };
     this.marker = flat(0.1, 0.14, 0xfff4d0, 0.6);
+    // 狙いの矢印（水面に描く。手元側ほど薄い）
+    this.arrowMat = new THREE.ShaderMaterial({
+      uniforms: { uColor: { value: new THREE.Color(0xf4f1e8) }, uAlpha: { value: 0.6 } },
+      vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+      fragmentShader: 'uniform vec3 uColor; uniform float uAlpha; varying vec2 vUv; void main(){ float e = smoothstep(0.0, 0.5, vUv.x) * (1.0 - smoothstep(0.35, 0.5, abs(vUv.y - 0.5))); gl_FragColor = vec4(uColor, uAlpha * e); }',
+      transparent: true,
+      depthWrite: false,
+      depthTest: false,
+    });
+    this.arrowShaft = new THREE.Mesh(new THREE.PlaneGeometry(1, 0.14).translate(0.5, 0, 0).rotateX(-Math.PI / 2), this.arrowMat);
+    const headShape = new THREE.Shape([new THREE.Vector2(0, -0.3), new THREE.Vector2(0.55, 0), new THREE.Vector2(0, 0.3)]);
+    const headGeo = new THREE.ShapeGeometry(headShape).rotateX(-Math.PI / 2);
+    // 頭は全体が濃く見えるよう UV を固定
+    const huv = headGeo.getAttribute('uv');
+    for (let i = 0; i < huv.count; i++) huv.setXY(i, 1, 0.5);
+    this.arrowHead = new THREE.Mesh(headGeo, this.arrowMat);
+    this.arrow = new THREE.Group();
+    this.arrow.add(this.arrowShaft, this.arrowHead);
+    this.arrow.renderOrder = 20;
+    this.arrowShaft.renderOrder = 20;
+    this.arrowHead.renderOrder = 20;
+    this.arrow.visible = false;
+    scene.add(this.arrow);
     const shadowMat = new THREE.MeshBasicMaterial({ color: 0x050a0c, transparent: true, opacity: 0, depthWrite: false });
     this.shadow = new THREE.Mesh(new THREE.CircleGeometry(0.5, 20).rotateX(-Math.PI / 2), shadowMat);
     this.shadow.renderOrder = 3;
@@ -216,7 +248,7 @@ export class FishingController {
     this.origin.set(player.x, player.y, player.z);
     this.phase = 'ready';
     this.rod.setVisible(true);
-    this.rod.setLureColor(this.lureDef.color);
+    this.rod.setTackle(this.lureDef);
     this.hotspots = [];
   }
 
@@ -243,6 +275,8 @@ export class FishingController {
     this.rod.lure.quaternion.identity();
     this.rod.bobber.visible = false;
     this.shadow.visible = false;
+    this.arrow.visible = false;
+    this.audio.setDrag(0);
     this.marker.visible = false;
     this.shake = 0;
     this.danger = 0;
@@ -357,29 +391,61 @@ export class FishingController {
             this.phase = 'aiming';
             this.aimPower = 0;
             this.aimYaw = player.yaw;
+            this.baseYaw = player.yaw;
+            this.pullX = this.pullY = 0;
+            this.pressCursor = { x: input.cursorX, y: input.cursorY };
+            this.aimTick = 0;
           }
         }
         break;
       }
       case 'aiming': {
-        // 下へ引くほど遠くへ、左右で方向を決める
+        // 引っぱった量で飛距離、引いた反対の向きへ飛ぶ（下へ引けば正面、左下へ引けば右奥）
         if (input.enabled) {
           if (input.freeCursor && !input.locked) {
-            this.aimPower = Math.max(0, Math.min(1.4, (input.cursorY + 0.2) * 1.2));
-            this.aimYaw -= input.cursorX * dt * 1.2;
+            this.pullX = (input.cursorX - this.pressCursor.x) * innerWidth * 0.5;
+            this.pullY = (input.cursorY - this.pressCursor.y) * innerHeight * 0.5;
           } else {
-            this.aimPower = Math.max(0, Math.min(1.4, this.aimPower + input.mouseDY * 0.0035 * sensitivity));
-            this.aimYaw -= input.mouseDX * 0.0025 * sensitivity;
+            this.pullX += input.mouseDX * sensitivity;
+            this.pullY += input.mouseDY * sensitivity;
           }
         }
-        player.yaw = this.aimYaw;
-        // 竿を後ろへ振りかぶる（引いた分だけ遠くへ飛ぶ）
-        this.rod.swing = 0.9 * Math.min(1.2, this.aimPower);
+        const pullLen = Math.hypot(this.pullX, this.pullY);
+        const R = Math.min(innerWidth, innerHeight) * 0.38;
+        // 上へ引いた（後ろへ投げる）分は力にならない
+        const forward = this.pullY > 0 ? 1 : Math.max(0, 1 + this.pullY / Math.max(1, pullLen) * 2);
+        this.aimPower = Math.min(1.4, (pullLen / R) * forward);
+        const ang = Math.max(-1.15, Math.min(1.15, Math.atan2(-this.pullX, Math.max(1, this.pullY))));
+        this.aimYaw = this.baseYaw - ang;
+        // 視点は少しだけ狙いの方へ
+        player.yaw = this.baseYaw - ang * 0.35;
+        // 竿が後ろへしなって力が溜まる
+        const load = Math.min(1.2, this.aimPower);
+        this.rod.swing = 0.9 * load;
+        this.rod.bend = -0.9 * load;
+        this.rod.shake = Math.max(this.rod.shake, this.aimPower > OVER_PULL ? 0.25 : 0);
+        this.audio.setStrain(load * 0.7, load * 0.8);
+        const tick = Math.floor(this.aimPower * 8);
+        if (tick !== this.aimTick) {
+          if (tick > this.aimTick) input.vibrate(5 + tick * 3);
+          this.aimTick = tick;
+        }
+        this.updateArrow(player);
         if (!hold) {
+          this.arrow.visible = false;
+          this.audio.setStrain(0, 0);
           if (this.aimPower < 0.08) {
             // ほとんど引いていなければキャンセル
             this.phase = 'ready';
-          } else this.release(player, rodDef.cast, lure);
+            this.rod.bend = 0;
+          } else {
+            this.release(player, rodDef.cast, lure);
+            // 弾く：竿が前へ一気に戻り、糸がシュルシュル出ていく
+            this.rod.bend = 0.9 + load * 0.6;
+            this.shake = Math.max(this.shake, 0.2 + load * 0.3);
+            input.vibrate([10, 15, 35]);
+            this.audio.setDrag(0.25 + load * 0.25);
+          }
         }
         break;
       }
@@ -389,6 +455,7 @@ export class FishingController {
         this.lure.lerpVectors(this.flightFrom, this.flightTo, t);
         this.lure.y += Math.sin(t * Math.PI) * (this.flightFrom.distanceTo(this.flightTo) * 0.25);
         this.rod.swing += (-0.35 - this.rod.swing) * Math.min(1, dt * 10);
+        this.rod.bend += (0 - this.rod.bend) * Math.min(1, dt * 5);
         if (t >= 1) this.splashDown(lure);
         break;
       }
@@ -416,9 +483,15 @@ export class FishingController {
     this.rod.side += ((this.phase === 'fight' || this.phase === 'water' ? this.rodSide : 0) - this.rod.side) * Math.min(1, dt * 10);
     this.rod.update(dt);
     const tip = this.rod.tipWorld();
+    this.rod.lureSpeed = this.phase === 'water' ? this.lureSpeed : 0;
     if (this.phase === 'flying' || this.phase === 'water') {
       this.rod.lure.visible = true;
       this.rod.lure.position.copy(this.lure);
+      // 向き：飛んでいる間は進む方向、水中は引かれる方（手前）、ウキ下のエサは縦にぶら下がる
+      const toward = this.phase === 'flying' ? this.flightTo : this.origin;
+      const yaw = Math.atan2(-(toward.z - this.lure.z), toward.x - this.lure.x);
+      const hanging = this.rod.bobber.visible || (this.phase === 'water' && this.lureSpeed < 0.05 && this.lure.y > -waterDepth(this.lure.x, this.lure.z) + 0.05 && !this.lureDef.pack && this.lureDef.sink > 0);
+      this.rod.lure.rotation.set(0, yaw, hanging ? Math.PI / 2 : this.phase === 'flying' ? -0.4 : 0, 'YXZ');
       const entry = this.lure.y < -0.02 ? new THREE.Vector3(this.lure.x, 0, this.lure.z) : null;
       const sag = this.phase === 'flying' ? 0.2 : this.bite?.phase === 'take' ? 0.02 : 0.15 + this.lineSlack * 0.35;
       const end = this.rod.bobber.visible ? this.rod.bobber.position : this.lure;
@@ -433,10 +506,12 @@ export class FishingController {
       this.rod.lure.position.copy(end);
       if (this.fishObj) this.rod.lure.quaternion.copy(this.fishObj.group.quaternion);
     } else {
-      const hang = tip.clone().add(new THREE.Vector3(0, -0.35, 0));
+      const hang = tip.clone().add(new THREE.Vector3(Math.sin(this.time * 1.3) * 0.01, -0.35, Math.cos(this.time * 1.1) * 0.01));
       this.rod.drawLine(tip, hang, 0, null);
       this.rod.lure.visible = true;
       this.rod.lure.position.copy(hang);
+      // 竿先から垂れ下がる（結び目が上）
+      this.rod.lure.rotation.set(0, this.time * 0.3, Math.PI / 2, 'YXZ');
     }
     const showMarker = this.phase === 'water' && this.lure.y < -0.1 && !this.rod.bobber.visible;
     this.marker.visible = showMarker;
@@ -450,6 +525,25 @@ export class FishingController {
   }
 
   // ---------------- キャスト ----------------
+
+  /** 狙いの矢印：手元の少し先から、狙う方向へ力の分だけ伸びる。引きすぎると橙に震える */
+  private updateArrow(player: Player): void {
+    const p = this.aimPower;
+    this.arrow.visible = p > 0.03;
+    if (!this.arrow.visible) return;
+    const over = p > OVER_PULL;
+    const len = 0.8 + Math.min(1.2, p) * 6;
+    const yaw = this.aimYaw + (over ? Math.sin(this.time * 40) * 0.03 : 0);
+    const fx = -Math.sin(yaw);
+    const fz = -Math.cos(yaw);
+    this.arrow.position.set(player.x + fx * 1.3, Math.max(0.03, player.y - 0.4), player.z + fz * 1.3);
+    // 矢印は +X 向きに作ってあるので、狙いの方向へ回す
+    this.arrow.rotation.set(0, Math.atan2(-fz, fx), 0);
+    this.arrowShaft.scale.set(len, 1, 1);
+    this.arrowHead.position.x = len;
+    (this.arrowMat.uniforms.uColor.value as THREE.Color).set(over ? 0xff9a4a : 0xf4f1e8);
+    this.arrowMat.uniforms.uAlpha.value = 0.35 + Math.min(1, p) * 0.35;
+  }
 
   private castDistance(castDist: number, lure: Lure): number {
     const line = LINE_BY_ID[this.save.equip.line];
@@ -480,6 +574,7 @@ export class FishingController {
 
   private splashDown(lure: Lure): void {
     this.phase = 'water';
+    this.audio.setDrag(0);
     this.tutorialTime = 0;
     this.inWaterTime = 0;
     this.touchedBottom = false;
@@ -1507,9 +1602,9 @@ export class FishingController {
     const lure = this.lureDef;
     switch (this.phase) {
       case 'ready':
-        return touch ? '画面を押したまま下へ引いて竿を振りかぶり、離して投げる' : '左クリックを押したままマウスを下へ引いて振りかぶり、離して投げる';
+        return touch ? '画面を押したまま引っぱって、離して投げる（引いた反対へ飛ぶ）' : '左クリックしたまま引っぱって、離して投げる（引いた反対へ飛ぶ）';
       case 'aiming':
-        return this.aimPower > OVER_PULL ? '振りかぶりすぎると狙いがぶれる' : '引くほど遠くへ飛ぶ';
+        return this.aimPower > OVER_PULL ? '引きすぎ — 狙いがぶれる' : '';
       case 'flying':
         return '';
       case 'water': {
