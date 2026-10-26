@@ -42,6 +42,8 @@ export class AudioEngine {
   private master!: GainNode;
   private sfx!: GainNode;
   private bgm!: GainNode;
+  /** 環境音とBGMをまとめて絞る（演出で周りの音を消す） */
+  private duckGain!: GainNode;
   private amb!: GainNode;
   private noise!: AudioBuffer;
   private wind!: GainNode;
@@ -75,8 +77,9 @@ export class AudioEngine {
     this.master = ctx.createGain();
     this.master.connect(ctx.destination);
     this.sfx = this.gain(this.master, 1);
-    this.bgm = this.gain(this.master, 0.5);
-    this.amb = this.gain(this.master, 0.9);
+    this.duckGain = this.gain(this.master, 1);
+    this.bgm = this.gain(this.duckGain, 0.5);
+    this.amb = this.gain(this.duckGain, 0.9);
     this.applyVolumes();
 
     const len = ctx.sampleRate * 2;
@@ -537,4 +540,77 @@ export class AudioEngine {
     this.noiseBurst(t, 0.25 + size * 0.3, 0.2 + size * 0.25, 'lowpass', 1600 + size * 800, 300, p);
     this.tone(t, 180 / (0.5 + size), 0.15, 0.08 * size, 'sine', p);
   }
+
+  /** 周りの音を絞る：level = 残す割合（0..1）。演出の間ずっと呼んでよい */
+  setDuck(level: number): void {
+    if (!this.ctx) return;
+    this.duckGain.gain.setTargetAtTime(Math.max(0, Math.min(1, level)), this.ctx.currentTime, 0.06);
+  }
+
+  /** 心音（ドクン）：張り詰めた時に繰り返す */
+  heartbeat(power: number): void {
+    if (!this.ctx || power <= 0.02) return;
+    const t = this.ctx.currentTime;
+    for (const [dt, v] of [
+      [0, 1],
+      [0.16, 0.65],
+    ]) {
+      const o = this.ctx.createOscillator();
+      const g = this.ctx.createGain();
+      o.frequency.setValueAtTime(62, t + dt);
+      o.frequency.exponentialRampToValueAtTime(38, t + dt + 0.14);
+      g.gain.setValueAtTime(0.0001, t + dt);
+      g.gain.exponentialRampToValueAtTime(0.42 * power * v, t + dt + 0.012);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dt + 0.2);
+      o.connect(g).connect(this.sfx);
+      o.start(t + dt);
+      o.stop(t + dt + 0.25);
+    }
+  }
+
+  /** 低く響くドーン（大物の気配） */
+  boom(power = 1): void {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const o = this.ctx.createOscillator();
+    const g = this.ctx.createGain();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(48, t);
+    o.frequency.exponentialRampToValueAtTime(28, t + 1.6);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.5 * power, t + 0.04);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 2.2);
+    o.connect(g).connect(this.sfx);
+    o.start(t);
+    o.stop(t + 2.3);
+    this.noiseBurst(t, 1.2, 0.08 * power, 'lowpass', 160, 60);
+  }
+
+  /** 時間が引き伸ばされる時の空気の音（スロー） */
+  whoosh(power = 1): void {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    this.noiseBurst(t, 0.7, 0.12 * power, 'bandpass', 900, 180);
+  }
+
+  /** 張り詰めた低い持続音（伝説の魚の気配）。level 0 で止まる */
+  setDrone(level: number): void {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    if (!this.droneGain) {
+      this.droneGain = this.gain(this.sfx, 0);
+      for (const f of [41.2, 61.7, 82.4]) {
+        const o = this.ctx.createOscillator();
+        o.type = 'sawtooth';
+        o.frequency.value = f;
+        const lp = this.ctx.createBiquadFilter();
+        lp.type = 'lowpass';
+        lp.frequency.value = 220;
+        o.connect(lp).connect(this.droneGain);
+        o.start();
+      }
+    }
+    this.droneGain.gain.setTargetAtTime(level * 0.05, t, 0.8);
+  }
+  private droneGain: GainNode | null = null;
 }

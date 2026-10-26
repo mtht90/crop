@@ -5,6 +5,7 @@ import { addToCooler, coolerCapacity, registerCatch, release } from './core/prog
 import { clearSave, loadSave, newSave, writeSave, type CatchRecord, type SaveData } from './core/save';
 import { RARITY_LABEL, WEATHER_LABEL, type Species, type Weather, WEATHERS } from './data/types';
 import { FishingController } from './fishing/fishing';
+import { Cinema } from './fishing/cinema';
 import { HOOK_HOLD_LABEL } from './sim/fight';
 import { FishPopulation } from './fishing/population';
 import { FishPreview } from './render/preview';
@@ -50,6 +51,7 @@ export class Game {
   /** 今いる釣り場の魚のモデル */
   private areaModels: FishModelId[] = [];
   private npcs!: NpcLayer;
+  private cinema: Cinema;
   private player: Player;
   private audio = new AudioEngine();
   private fishing: FishingController;
@@ -57,7 +59,6 @@ export class Game {
   private modals: Modals;
   private preview = new FishPreview();
   private touch: TouchControls;
-  private danger: HTMLDivElement;
   private strain: HTMLDivElement;
   private baseFov = 70;
   private mode: Mode = 'title';
@@ -109,9 +110,6 @@ export class Game {
     this.camera.add(this.headlamp.target);
 
     this.hud = new Hud(uiRoot);
-    this.danger = document.createElement('div');
-    this.danger.className = 'danger';
-    uiRoot.append(this.danger);
     this.strain = document.createElement('div');
     this.strain.className = 'strain';
     uiRoot.prepend(this.strain);
@@ -135,6 +133,8 @@ export class Game {
       onLost: () => this.persist(),
     });
     this.fishing.rod.setTackle(this.fishing.lureDef);
+    this.cinema = new Cinema(uiRoot, this.renderer.domElement, this.audio);
+    this.fishing.onCue = (c) => this.cinema.cue(c);
     this.population = new FishPopulation(this.scene, new Rng(), (x, z, size) => this.fishing.fx.ripple(x, z, size));
     this.fishing.population = this.population;
     let spookTold = false;
@@ -336,7 +336,7 @@ export class Game {
       this.camera.rotation.y -= pan * lean * 0.07;
       this.camera.rotation.z -= pan * (lean * 0.04 + lu * 0.03);
     }
-    const fov = this.baseFov * (1 - Math.min(0.12, lean * 0.04 + Math.max(0, lu) * 0.05));
+    const fov = this.baseFov * (1 - Math.min(0.12, lean * 0.04 + Math.max(0, lu) * 0.05)) * this.cinema.fovMul;
     if (Math.abs(fov - this.camera.fov) > 0.01) {
       this.camera.fov = fov;
       this.camera.updateProjectionMatrix();
@@ -415,8 +415,10 @@ export class Game {
 
   private frame(): void {
     const now = performance.now();
-    const dt = Math.min(0.05, (now - this.last) / 1000);
+    const realDt = Math.min(0.05, (now - this.last) / 1000);
     this.last = now;
+    // 見せ場ではシミュレーションの時間をゆっくりにする（スロー）
+    const dt = realDt * this.cinema.timeScale;
     const paused = this.modals.isOpen || this.mode === 'title';
     const input = this.input;
 
@@ -515,6 +517,19 @@ export class Game {
             this.player.yaw += d * Math.min(1, dt * (ph === 'water' ? 1.2 : 2.5));
           }
           this.player.pitch += ((ph === 'net' ? -0.3 : -0.16) - this.player.pitch) * Math.min(1, dt * 2);
+          // 跳んだ魚をカメラが追う
+          const lw = this.cinema.lookWeight;
+          if (lw > 0.01) {
+            const L = this.cinema.look;
+            const dx = L.x - this.player.x;
+            const dz = L.z - this.player.z;
+            const yawT = Math.atan2(-dx, -dz);
+            const pitchT = Math.atan2(L.y - (this.player.y + 1.6), Math.hypot(dx, dz));
+            let d = yawT - this.player.yaw;
+            d = Math.atan2(Math.sin(d), Math.cos(d));
+            this.player.yaw += d * Math.min(1, realDt * 6 * lw);
+            this.player.pitch += (pitchT - this.player.pitch) * Math.min(1, realDt * 5 * lw);
+          }
         }
         if (fresh && input.hit('KeyF') && !this.fishing.busy) this.exitFishing();
         if (fresh && input.hit('KeyR') && this.fishing.lureDef.pack && this.fishing.phase === 'ready') {
@@ -544,6 +559,7 @@ export class Game {
 
     // 世界の更新
     this.atmo.update(dt, this.clock.hour, this.camera, this.renderer);
+    this.renderer.toneMappingExposure *= this.cinema.exposureMul;
     this.world.update(dt, this.atmo.wave);
     if (this.mode !== 'title') {
       // 今日の依頼がまだ済んでいない人の頭に「！」
@@ -558,8 +574,9 @@ export class Game {
     for (const m of this.world.windowMats) m.emissiveIntensity = night * 1.5;
     this.headlamp.intensity = night > 0.55 && this.mode !== 'title' ? 18 * night : 0;
     this.hud.flash.style.opacity = String(this.atmo.flashLevel * 0.35);
-    const dg = this.mode === 'fish' ? this.fishing.danger : 0;
-    this.danger.style.opacity = String(dg * (0.6 + 0.4 * Math.sin(now / 90)));
+    // 切れそうな時は赤い縁ではなく、色が抜けて縁が暗くなり心音が鳴る
+    this.cinema.update(realDt, this.camera, this.mode === 'fish' ? this.fishing.danger : 0, this.mode === 'fish', this.save.settings.feel);
+    this.fishing.rod.closeup = this.cinema.closeup;
     this.touch.update({
       mode: this.mode === 'title' || this.modals.isOpen ? 'hidden' : this.touchState.mode,
       phase: this.fishing.phase,

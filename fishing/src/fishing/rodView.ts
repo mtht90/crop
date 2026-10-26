@@ -74,6 +74,8 @@ export class RodView {
   pull = 0;
   /** 引きの衝撃で手元ごと前へ持っていかれる量（ばねで戻る） */
   lurch = 0;
+  /** 竿先への寄り 0..1（強い突っ込みの瞬間、竿を画面の中央へ寄せて竿先を大きく見せる） */
+  closeup = 0;
   /** 演出の強さ（設定） */
   feel = 1;
   /** 張った糸の震え (m) */
@@ -318,9 +320,10 @@ export class RodView {
     // 強く引かれるほど竿が前に倒され、手元ごと持っていかれる
     const pull = this.pull * (0.5 + 0.5 * F);
     const lurch = this.lurch * F;
-    const tilt = -0.05 + this.dispLift * 0.8 + this.swing - pull * 0.32 - lurch * 0.25;
+    const cu = this.closeup;
+    const tilt = -0.05 + this.dispLift * 0.8 + this.swing - pull * 0.32 - lurch * 0.25 + cu * 0.12;
     const yaw = -this.side * 0.45;
-    this.root.position.set(0.3 + this.side * 0.05, -0.36 - pull * 0.08 - lurch * 0.06, -0.42 - pull * 0.2 - lurch * 0.16);
+    this.root.position.set(0.3 - cu * 0.16 + this.side * 0.05, -0.36 + cu * 0.05 - pull * 0.08 - lurch * 0.06, -0.42 - cu * 0.08 - pull * 0.2 - lurch * 0.16);
     this.root.rotation.set(tilt, yaw, -this.side * 0.25);
     // 竿を振ると、胴と穂先は慣性で遅れてしなり、止めると振り戻る
     if (dt > 0) {

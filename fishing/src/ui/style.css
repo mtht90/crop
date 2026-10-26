@@ -1237,3 +1237,18 @@ body.is-touch .fishhud {
   justify-content: space-between;
   align-items: center;
 }
+
+/* 映画的な演出：注目点のまわりのぼけ、縁の暗がり */
+.cine-dof {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: none;
+}
+.cine-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(ellipse at 50% 50%, transparent 48%, rgba(0, 0, 0, 0.55) 78%, rgba(0, 0, 0, 0.85) 100%);
+}

@@ -16,6 +16,7 @@ import type { Player } from '../world/player';
 import { WaterEffects } from './effects';
 import type { AmbientFish, FishPopulation } from './population';
 import { RodView } from './rodView';
+import type { Cue } from './cinema';
 
 /** 糸が沈める下限：湖底・地面・桟橋の上 */
 const lineFloor = (x: number, z: number): number => (onDock(x, z) ? DOCK.deckY + 0.02 : terrainHeight(x, z) + 0.02);
@@ -167,6 +168,8 @@ export class FishingController {
   shake = 0;
   /** ラインが切れそうな度合い 0..1（画面の縁を赤くする） */
   danger = 0;
+  /** 見せ場の合図（Game が映画的な演出に変える） */
+  onCue: ((c: Cue) => void) | null = null;
   /** 引きの演出の強さ（設定 0..1） */
   feel = 1;
   /** 引きの衝撃で体ごと前へ持っていかれる量（ばね） */
@@ -409,6 +412,11 @@ export class FishingController {
     this.lurchV += amount * 5.5;
     this.rod.kick(amount);
     this.audio.thump(amount * (0.5 + 0.5 * this.feel), this.fishPan * 0.7);
+  }
+
+  /** 大物・珍しい魚（演出を強める） */
+  private isBig(s: Species, f: FishInstance): boolean {
+    return s.rarity === 'rare' || s.rarity === 'epic' || s.rarity === 'legend' || f.length > s.length.mean + s.length.sd * 1.2;
   }
 
   /** 位置 (x,z) が画面の左右どちらか -1..1（音の定位用） */
@@ -932,6 +940,8 @@ export class FishingController {
     }
     const nibbles = lure.pack ? this.rng.int(species.nibbles[0], species.nibbles[1]) + (amb && amb.wary > 0.5 ? 1 : 0) : 0;
     this.bite = { species, fish, cond, nibbles, timer: 0, phase: 'approach', window: 1, interest: 0.4, amb, wary: amb?.wary ?? 0 };
+    // 大物が寄ってきた：影に気づく「間」
+    if (amb && this.isBig(species, fish)) this.onCue?.({ kind: 'shadow', at: amb.pos });
     this.startApproach(lure);
   }
 
@@ -1174,6 +1184,9 @@ export class FishingController {
     this.rod.shake = 1;
     this.fishPan = this.panOf(this.lure.x, this.lure.z);
     this.jolt(0.9);
+    const big = this.isBig(b.species, b.fish);
+    this.onCue?.({ kind: 'hookset', at: new THREE.Vector3(this.lure.x, Math.max(-0.3, this.lure.y), this.lure.z), big });
+    if (b.species.rarity === 'legend') this.onCue?.({ kind: 'legend', on: true });
     this.fx.splash(this.lure.x, this.lure.z, 0.35);
     this.audio.splashAt(0.4, this.fishPan);
     this.input?.vibrate([40, 30, 120]);
@@ -1226,6 +1239,7 @@ export class FishingController {
           input.vibrate(Math.round(18 + 30 * Math.min(1, f.tension / f.lineTest)));
         }
         if (e === 'surge') {
+          this.onCue?.({ kind: 'surge', power: Math.min(1, load) });
           this.shake = Math.max(this.shake, 0.7);
           this.rod.shake = 1;
           this.jolt(1);
@@ -1245,6 +1259,7 @@ export class FishingController {
           input.vibrate([15, 15, 15, 15, 15, 15]);
         }
         if (e === 'cover') {
+          this.onCue?.({ kind: 'surge', power: 1 });
           // 障害物へ一気に突っ込む
           this.rod.shake = 1;
           this.shake = Math.max(this.shake, 0.6);
@@ -1271,6 +1286,7 @@ export class FishingController {
     }
     if (jumped) {
       this.jumpT = 1.0;
+      this.onCue?.({ kind: 'jump', at: this.fishPos, big: this.isBig(this.hooked!.species, this.hooked!.fish) });
       this.tip('跳んだら竿を下げる');
       input.vibrate([30, 30, 30, 30, 30]);
     }
@@ -1667,7 +1683,9 @@ export class FishingController {
     this.fightLoad = 0;
     this.danger = 0;
     this.cameraYawHint = null;
+    this.onCue?.({ kind: 'legend', on: false });
     if (outcome === 'landed') {
+      if (this.hooked) this.onCue?.({ kind: 'land', at: this.fishPos, big: this.isBig(this.hooked.species, this.hooked.fish) });
       this.phase = 'landing';
       if (this.fishObj) this.fishObj.group.visible = true;
       this.fx.splash(this.fishPos.x, this.fishPos.z, 0.6);
@@ -1676,6 +1694,7 @@ export class FishingController {
       this.startHaul();
       return;
     }
+    this.onCue?.({ kind: 'lost' });
     const msg: Record<Exclude<FightOutcome, 'landed'>, string> = {
       lineBreak: '糸を切られた',
       spoolEmpty: '糸を全部出された…',
