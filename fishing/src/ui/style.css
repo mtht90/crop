@@ -1238,13 +1238,7 @@ body.is-touch .fishhud {
   align-items: center;
 }
 
-/* 映画的な演出：注目点のまわりのぼけ、縁の暗がり */
-.cine-dof {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  display: none;
-}
+/* 映画的な演出：縁の暗がり（ぼけは WebGL 側で描く） */
 .cine-vignette {
   position: absolute;
   inset: 0;

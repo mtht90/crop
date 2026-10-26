@@ -1685,7 +1685,7 @@ export class FishingController {
     this.cameraYawHint = null;
     this.onCue?.({ kind: 'legend', on: false });
     if (outcome === 'landed') {
-      if (this.hooked) this.onCue?.({ kind: 'land', at: this.fishPos, big: this.isBig(this.hooked.species, this.hooked.fish) });
+      if (this.hooked) this.onCue?.({ kind: 'land', at: this.fishPos, big: this.isBig(this.hooked.species, this.hooked.fish), legend: this.hooked.species.rarity === 'legend' });
       this.phase = 'landing';
       if (this.fishObj) this.fishObj.group.visible = true;
       this.fx.splash(this.fishPos.x, this.fishPos.z, 0.6);

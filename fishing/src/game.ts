@@ -6,6 +6,7 @@ import { clearSave, loadSave, newSave, writeSave, type CatchRecord, type SaveDat
 import { RARITY_LABEL, WEATHER_LABEL, type Species, type Weather, WEATHERS } from './data/types';
 import { FishingController } from './fishing/fishing';
 import { Cinema } from './fishing/cinema';
+import { FocusBlur } from './render/focusBlur';
 import { HOOK_HOLD_LABEL } from './sim/fight';
 import { FishPopulation } from './fishing/population';
 import { FishPreview } from './render/preview';
@@ -52,6 +53,7 @@ export class Game {
   private areaModels: FishModelId[] = [];
   private npcs!: NpcLayer;
   private cinema: Cinema;
+  private focusBlur = new FocusBlur();
   private player: Player;
   private audio = new AudioEngine();
   private fishing: FishingController;
@@ -616,6 +618,6 @@ export class Game {
     if (this.mode !== 'fish') this.fishing.fx.update(dt);
 
     input.endFrame();
-    this.renderer.render(this.scene, this.camera);
+    this.focusBlur.render(this.renderer, this.scene, this.camera, this.cinema.dofAmount, this.cinema.dofFocus);
   }
 }

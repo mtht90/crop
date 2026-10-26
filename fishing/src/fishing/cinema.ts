@@ -7,7 +7,7 @@ export type Cue =
   | { kind: 'jump'; at: THREE.Vector3; big: boolean }
   | { kind: 'surge'; power: number }
   | { kind: 'shadow'; at: THREE.Vector3 }
-  | { kind: 'land'; at: THREE.Vector3; big: boolean }
+  | { kind: 'land'; at: THREE.Vector3; big: boolean; legend?: boolean }
   | { kind: 'legend'; on: boolean }
   | { kind: 'lost' };
 
@@ -30,6 +30,9 @@ export class Cinema {
   /** カメラが追う点（ジャンプした魚など）と、その強さ */
   readonly look = new THREE.Vector3();
   lookWeight = 0;
+  /** 注目点のまわりのぼけの強さ 0..1 と、注目点の画面上の位置（0..1、左下原点） */
+  dofAmount = 0;
+  readonly dofFocus = new THREE.Vector2(0.5, 0.5);
   /** 画面の明るさの倍率（伝説の魚で暗くなる） */
   exposureMul = 1;
 
@@ -46,8 +49,8 @@ export class Cinema {
   private legend = 0;
   private legendOn = false;
   private lostT = 0;
+  private shine = 0;
   private beat = 0;
-  private dof: HTMLDivElement;
   private vignette: HTMLDivElement;
   private tmp = new THREE.Vector3();
 
@@ -56,12 +59,9 @@ export class Cinema {
     private canvas: HTMLCanvasElement,
     private audio: AudioEngine,
   ) {
-    this.dof = document.createElement('div');
-    this.dof.className = 'cine-dof';
     this.vignette = document.createElement('div');
     this.vignette.className = 'cine-vignette';
     ui.prepend(this.vignette);
-    ui.prepend(this.dof);
   }
 
   /** 時間を scale 倍に落とし、hold 秒（実時間）保ってから release 秒で戻す */
@@ -107,6 +107,8 @@ export class Cinema {
         this.audio.boom(0.9);
         break;
       case 'land':
+        // 伝説の魚を抜き上げた瞬間、雲が切れて光が差す
+        if (c.legend) this.shine = 1;
         if (c.big) {
           this.slow(0.25, 1.0, 0.8);
           this.focus(c.at, 1.8, 0.7);
@@ -149,17 +151,11 @@ export class Cinema {
       dofK = this.focusPower * (t < 0.12 ? smooth(t / 0.12) : 1 - smooth((t - 0.45) / 0.55)) * feel;
       if (t >= 1) this.focusAt = null;
     }
-    if (dofK > 0.01 && this.focusAt) {
+    this.dofAmount = this.focusAt ? dofK : 0;
+    if (this.focusAt && dofK > 0.01) {
       const p = this.tmp.copy(this.focusAt).project(camera);
-      const x = (p.x * 0.5 + 0.5) * 100;
-      const y = (-p.y * 0.5 + 0.5) * 100;
-      const mask = `radial-gradient(circle at ${x.toFixed(1)}% ${y.toFixed(1)}%, transparent 7vmin, rgba(0,0,0,0.6) 18vmin, #000 34vmin)`;
-      this.dof.style.webkitMaskImage = mask;
-      this.dof.style.maskImage = mask;
-      this.dof.style.backdropFilter = `blur(${(dofK * 7).toFixed(1)}px)`;
-      (this.dof.style as unknown as { webkitBackdropFilter: string }).webkitBackdropFilter = `blur(${(dofK * 7).toFixed(1)}px)`;
-      this.dof.style.display = '';
-    } else this.dof.style.display = 'none';
+      this.dofFocus.set(p.x * 0.5 + 0.5, p.y * 0.5 + 0.5);
+    }
 
     // 竿先の寄り
     this.closeT = Math.max(0, this.closeT - dt);
@@ -172,7 +168,8 @@ export class Cinema {
 
     // 伝説の魚：空が暗くなり、低い持続音
     this.legend += ((this.legendOn ? 1 : 0) - this.legend) * Math.min(1, dt * 0.6);
-    this.exposureMul = 1 - 0.38 * this.legend;
+    this.shine = Math.max(0, this.shine - dt * 0.25);
+    this.exposureMul = (1 - 0.38 * this.legend) * (1 + 0.45 * smooth(this.shine * 1.5) * this.shine);
     this.audio.setDrone(this.legend);
 
     // 切れそうな時：色が抜け、縁が暗くなり、心音
