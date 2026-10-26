@@ -41,6 +41,8 @@ export interface Settings {
   sfx: number;
   sensitivity: number;
   showStamina: boolean;
+  /** 魚の引きの演出（視点・竿・揺れ）の強さ 0..1 */
+  feel: number;
 }
 
 export interface SaveData {
@@ -86,7 +88,7 @@ export function newSave(): SaveData {
     spots: ['lake'],
     rewards: [],
     stats: { caught: 0, released: 0, earned: 0, lost: 0 },
-    settings: { master: 0.8, bgm: 0.5, sfx: 0.8, sensitivity: 1, showStamina: true },
+    settings: { master: 0.8, bgm: 0.5, sfx: 0.8, sensitivity: 1, showStamina: true, feel: 1 },
   };
 }
 

@@ -45,6 +45,8 @@ export class Game {
   private preview = new FishPreview();
   private touch: TouchControls;
   private danger: HTMLDivElement;
+  private strain: HTMLDivElement;
+  private baseFov = 70;
   private mode: Mode = 'title';
   private title: HTMLElement | null = null;
   private headlamp = new THREE.SpotLight(0xfff0d8, 0, 45, 0.55, 0.6, 1.2);
@@ -95,6 +97,9 @@ export class Game {
     this.danger = document.createElement('div');
     this.danger.className = 'danger';
     uiRoot.append(this.danger);
+    this.strain = document.createElement('div');
+    this.strain.className = 'strain';
+    uiRoot.prepend(this.strain);
     void preloadFishModels();
     this.touch = new TouchControls(uiRoot, this.input, () => {
       if (!this.modals.isOpen && this.mode !== 'title') this.openPause();
@@ -136,7 +141,8 @@ export class Game {
     const resize = () => {
       this.camera.aspect = innerWidth / innerHeight;
       // 縦持ちでは横の視野が狭くなるので画角を広げる
-      this.camera.fov = this.camera.aspect < 1 ? 88 : 70;
+      this.baseFov = this.camera.aspect < 1 ? 88 : 70;
+      this.camera.fov = this.baseFov;
       this.camera.updateProjectionMatrix();
       this.renderer.setSize(innerWidth, innerHeight);
     };
@@ -247,6 +253,31 @@ export class Game {
   private applySettings(): void {
     const s = this.save.settings;
     this.audio.setVolumes({ master: s.master, bgm: s.bgm, sfx: s.sfx });
+    this.fishing.feel = s.feel;
+  }
+
+  /**
+   * 魚に引かれる体感：視点ごと前へ・魚の方へ持っていかれ、衝撃で前のめりになり、
+   * 強く引かれるほど視界が狭まる（振動の代わり）
+   */
+  private applyPullFeel(): void {
+    const F = this.mode === 'fish' ? this.save.settings.feel : 0;
+    const lean = this.fishing.lean * F;
+    const lu = this.fishing.lurch * F;
+    const pan = this.fishing.fishPan;
+    if (lean > 0.001 || Math.abs(lu) > 0.001) {
+      this.camera.translateZ(-(lean * 0.18 + lu * 0.16));
+      this.camera.position.y -= lean * 0.05 + lu * 0.06;
+      this.camera.rotation.x -= lean * 0.07 + lu * 0.07;
+      this.camera.rotation.y -= pan * lean * 0.07;
+      this.camera.rotation.z -= pan * (lean * 0.04 + lu * 0.03);
+    }
+    const fov = this.baseFov * (1 - Math.min(0.12, lean * 0.04 + Math.max(0, lu) * 0.05));
+    if (Math.abs(fov - this.camera.fov) > 0.01) {
+      this.camera.fov = fov;
+      this.camera.updateProjectionMatrix();
+    }
+    this.strain.style.opacity = String(Math.min(0.9, lean * 0.55 + Math.max(0, lu) * 0.35));
   }
 
   private persist(): void {
@@ -423,6 +454,7 @@ export class Game {
         this.camera.position.y += Math.sin(t * 61 + 1) * sh * 0.02;
         this.camera.rotation.z += Math.sin(t * 37) * sh * 0.012;
       }
+      this.applyPullFeel();
       this.hud.setPrompt(!input.active && !this.modals.isOpen ? 'クリックで操作を再開' : null);
       this.touchState = { mode: 'fish', canFish: false, nearHut: false };
       this.hud.setGuide(this.fishing.guide(input.touch));

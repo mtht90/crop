@@ -131,7 +131,7 @@ export function controlsHelp(): HTMLElement {
 export function openPause(modals: Modals, save: SaveData, cb: PauseCallbacks): void {
   const m = modals.open('メニュー', { small: true });
   const s = save.settings;
-  const slider = (label: string, key: 'master' | 'bgm' | 'sfx' | 'sensitivity', min: number, max: number, step: number) => {
+  const slider = (label: string, key: 'master' | 'bgm' | 'sfx' | 'sensitivity' | 'feel', min: number, max: number, step: number) => {
     const input = h('input') as HTMLInputElement;
     input.type = 'range';
     input.min = String(min);
@@ -159,6 +159,7 @@ export function openPause(modals: Modals, save: SaveData, cb: PauseCallbacks): v
     slider('BGM', 'bgm', 0, 1, 0.05),
     slider('効果音', 'sfx', 0, 1, 0.05),
     slider('マウス感度', 'sensitivity', 0.3, 2.5, 0.1),
+    slider('引きの演出', 'feel', 0, 1, 0.1),
     h('label', { class: 'setting' }, h('span', { text: '魚の勢いを表示' }), stamina, h('span')),
     h('h4', { text: '操作' }),
     controlsHelp(),

@@ -164,6 +164,20 @@ export class FishingController {
   shake = 0;
   /** ラインが切れそうな度合い 0..1（画面の縁を赤くする） */
   danger = 0;
+  /** 引きの演出の強さ（設定 0..1） */
+  feel = 1;
+  /** 引きの衝撃で体ごと前へ持っていかれる量（ばね） */
+  lurch = 0;
+  private lurchV = 0;
+  /** 魚が左右どちらにいるか -1..1（カメラ・音の向き） */
+  fishPan = 0;
+  /** ファイト中の竿への負荷（操作の重さ） */
+  private fightLoad = 0;
+  private prevBend = 0;
+  private creakCd = 0;
+  private viewX = 0;
+  private viewZ = 0;
+  private viewYaw = 0;
   /** カメラが向くべき方向（Game が参照） */
   cameraYawHint: number | null = null;
   /** 湖を泳ぐ魚（Game が設定） */
@@ -274,6 +288,9 @@ export class FishingController {
     this.rod.swing = 0;
     this.rod.pull = 0;
     this.rod.lineVibe = 0;
+    this.rod.spoolSlip = 0;
+    this.lurch = this.lurchV = 0;
+    this.fightLoad = 0;
     this.rod.lure.visible = false;
     this.rod.lure.quaternion.identity();
     this.rod.bobber.visible = false;
@@ -362,19 +379,59 @@ export class FishingController {
     if (input.freeCursor && !input.locked) {
       const tl = Math.max(0, Math.min(1, 0.5 - input.cursorY * 0.9));
       const ts = Math.max(-1, Math.min(1, input.cursorX * 1.6));
-      this.rodLift += (tl - this.rodLift) * Math.min(1, dt * 14);
-      this.rodSide += (ts - this.rodSide) * Math.min(1, dt * 10);
+      this.rodLift += (tl - this.rodLift) * Math.min(1, dt * 14 * (tl > this.rodLift ? this.heavy(0) : 1));
+      this.rodSide += (ts - this.rodSide) * Math.min(1, dt * 10 * this.heavy(ts - this.rodSide));
     } else {
-      this.rodLift = Math.max(0, Math.min(1, this.rodLift - input.mouseDY * 0.0032 * sens));
-      this.rodSide = Math.max(-1, Math.min(1, this.rodSide + input.mouseDX * 0.004 * sens));
+      const dy = -input.mouseDY * 0.0032 * sens;
+      const dx = input.mouseDX * 0.004 * sens;
+      this.rodLift = Math.max(0, Math.min(1, this.rodLift + (dy > 0 ? dy * this.heavy(0) : dy)));
+      this.rodSide = Math.max(-1, Math.min(1, this.rodSide + dx * this.heavy(dx)));
     }
     const v = (this.rodLift - prev) / Math.max(dt, 1e-4);
     // 速い振り上げを取りこぼさないよう、上向きは即座に、下向きはなめらかに追う
     this.liftVel = v > this.liftVel ? v : this.liftVel + (v - this.liftVel) * Math.min(1, dt * 12);
   }
 
+  /**
+   * 魚に引かれている時の竿の重さ（入力に掛ける係数）。
+   * 竿を立てる・魚と逆へ倒す操作ほど重く、魚の方へ倒すのは軽い
+   */
+  private heavy(dirSide: number): number {
+    if (this.phase !== 'fight' || !this.fight) return 1;
+    const against = dirSide === 0 || Math.sign(dirSide) !== Math.sign(this.fight.side) ? 1 : 0.2;
+    return 1 / (1 + this.fightLoad * 1.8 * this.feel * against);
+  }
+
+  /** 引きの衝撃：竿先がお辞儀し、体ごと前へ持っていかれ、低い音が鳴る */
+  private jolt(amount: number): void {
+    this.lurchV += amount * 5.5;
+    this.rod.kick(amount);
+    this.audio.thump(amount * (0.5 + 0.5 * this.feel), this.fishPan * 0.7);
+  }
+
+  /** 位置 (x,z) が画面の左右どちらか -1..1（音の定位用） */
+  private panOf(x: number, z: number): number {
+    const dx = x - this.viewX;
+    const dz = z - this.viewZ;
+    const d = Math.hypot(dx, dz) || 1;
+    return (dx * Math.cos(this.viewYaw) - dz * Math.sin(this.viewYaw)) / d;
+  }
+
+  /** 竿ごと前へ引っ張られている度合い（Game が視点に反映） */
+  get lean(): number {
+    return this.phase === 'fight' ? this.rod.pull : 0;
+  }
+
   update(dt: number, input: Input, player: Player, sensitivity: number): void {
     this.input = input;
+    this.viewX = player.x;
+    this.viewZ = player.z;
+    this.viewYaw = player.yaw;
+    this.rod.feel = this.feel;
+    // 体ごと持っていかれた分は、ばねでゆっくり戻る
+    this.lurchV += (-this.lurch * 55 - this.lurchV * 9) * dt;
+    this.lurch = Math.max(-0.2, Math.min(1.4, this.lurch + this.lurchV * dt));
+    this.rod.lurch = this.lurch;
     this.time += dt;
     this.shake = Math.max(0, this.shake - dt * 3);
     this.spook = Math.max(0, this.spook - dt * 0.25);
@@ -1119,8 +1176,10 @@ export class FishingController {
     this.tutorialBite = false;
     this.shake = 0.9;
     this.rod.shake = 1;
+    this.fishPan = this.panOf(this.lure.x, this.lure.z);
+    this.jolt(0.9);
     this.fx.splash(this.lure.x, this.lure.z, 0.35);
-    this.audio.splash(0.4);
+    this.audio.splashAt(0.4, this.fishPan);
     this.input?.vibrate([40, 30, 120]);
     this.removeFish();
     if (b.amb && this.population) {
@@ -1149,6 +1208,8 @@ export class FishingController {
     // 魚に竿を持っていかれる：走る向きへ竿先が倒され、強く引かれるほど竿が寝かされる
     const rodPower = Math.max(0.5, ROD_BY_ID[this.save.equip.rod].power);
     const load = Math.min(1.5, f.tension / rodPower);
+    this.fightLoad = load;
+    this.fishPan += (this.panOf(this.fishPos.x, this.fishPos.z) - this.fishPan) * Math.min(1, dt * 4);
     if (input.enabled) {
       const sideK = f.behavior === 'run' ? 0.9 : f.behavior === 'hold' ? 0.35 : 0.15;
       this.rodSide = Math.max(-1, Math.min(1, this.rodSide + Math.sign(f.side) * Math.min(1, Math.abs(f.side) * 2) * sideK * load * dt));
@@ -1165,11 +1226,13 @@ export class FishingController {
         if (e === 'run') ran = true;
         if (e === 'tug') {
           this.rod.shake = Math.max(this.rod.shake, 0.5 + f.tug * 0.5);
+          this.jolt((0.25 + 0.5 * f.tug) * Math.min(1, 0.3 + load));
           input.vibrate(Math.round(18 + 30 * Math.min(1, f.tension / f.lineTest)));
         }
         if (e === 'surge') {
           this.shake = Math.max(this.shake, 0.7);
           this.rod.shake = 1;
+          this.jolt(1);
           input.vibrate(90);
         }
         if (e === 'slack') this.tip('糸がたるんでいる');
@@ -1177,6 +1240,7 @@ export class FishingController {
           // 切り返し：竿先が逆へ持っていかれる
           this.rod.shake = Math.max(this.rod.shake, 0.8);
           this.shake = Math.max(this.shake, 0.45);
+          this.jolt(0.7);
           input.vibrate([25, 20, 50]);
           if (f.distance < 12 && this.fishPos.y > -1.2) this.fx.splash(this.fishPos.x, this.fishPos.z, 0.25);
         }
@@ -1188,6 +1252,7 @@ export class FishingController {
           // 障害物へ一気に突っ込む
           this.rod.shake = 1;
           this.shake = Math.max(this.shake, 0.6);
+          this.jolt(1.1);
           input.vibrate([40, 20, 80]);
         }
         if (e === 'snag') {
@@ -1197,11 +1262,13 @@ export class FishingController {
         }
         if (e === 'unsnag') {
           this.shake = Math.max(this.shake, 0.4);
+          this.jolt(0.5);
           input.vibrate([30, 30, 60]);
         }
       }
     }
     if (ran) {
+      this.jolt(0.8);
       this.rod.shake = 0.8;
       this.shake = Math.max(this.shake, 0.5);
       input.vibrate(70);
@@ -1218,6 +1285,15 @@ export class FishingController {
     this.rod.reelSpin = reeling ? (f.dragSlipping ? 0.1 : 0.9 * (1 - f.reelLoad * 0.8)) : 0;
     this.rod.bend = Math.min(1.8, f.tension / rodPower + 0.05 + f.tug * 0.25 * Math.min(1, f.pullMax / rodPower));
     this.rod.pull = Math.min(1, f.tension / rodPower) * 0.8 + f.tug * 0.2;
+    this.rod.spoolSlip = f.dragSlipping ? 0.4 + Math.min(0.8, tFrac) : 0;
+    // しなりが急に深くなると竿がきしむ
+    this.creakCd -= dt;
+    const dBend = (this.rod.bend - this.prevBend) / Math.max(dt, 1e-4);
+    this.prevBend = this.rod.bend;
+    if (this.creakCd <= 0 && (dBend > 1.6 || (this.rod.bend > 1.1 && this.rng.chance(dt * 0.8)))) {
+      this.audio.creak(Math.min(1, this.rod.bend / 1.5) * (0.5 + 0.5 * this.feel));
+      this.creakCd = 0.35;
+    }
     this.rod.lineVibe = f.slack < 0.05 ? (0.015 + f.tug * 0.03) * Math.min(1, tFrac * 1.5) : 0;
     // 潜られている間は糸が障害物に擦れてガリガリと震える
     if (f.behavior === 'snagged') {
@@ -1250,7 +1326,7 @@ export class FishingController {
       target.y = Math.sin(Math.min(1, t) * Math.PI) * (0.6 + Math.min(1, this.hooked!.fish.length / 80));
       if (this.jumpT <= 0 || (t > 0.02 && t < 0.06)) {
         this.fx.splash(target.x, target.z, 0.5 + this.hooked!.fish.length / 100);
-        this.audio.splash(0.6);
+        this.audio.splashAt(0.6, this.fishPan);
       }
     }
     if (this.phase === 'net') {
@@ -1591,6 +1667,8 @@ export class FishingController {
     this.audio.setStrain(0, 0);
     this.rod.pull = 0;
     this.rod.lineVibe = 0;
+    this.rod.spoolSlip = 0;
+    this.fightLoad = 0;
     this.danger = 0;
     this.cameraYawHint = null;
     if (outcome === 'landed') {

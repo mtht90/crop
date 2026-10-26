@@ -895,6 +895,15 @@ body.is-touch .status .chip {
   opacity: 0;
 }
 
+/* 強く引かれている時に視界が狭まる */
+.strain {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse at 50% 55%, transparent 45%, rgba(4, 10, 16, 0.55) 80%, rgba(2, 6, 10, 0.85) 100%);
+  opacity: 0;
+}
+
 /* ---------- スマホ・小さい画面 ---------- */
 button.confirm-armed {
   background: rgba(255, 122, 106, 0.3);

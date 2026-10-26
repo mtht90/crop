@@ -484,7 +484,7 @@ export class AudioEngine {
     const t = this.ctx.currentTime;
     this.strainGain.gain.setTargetAtTime(Math.max(0, load - 0.25) * 0.09, t, 0.05);
     this.strainOsc.frequency.setTargetAtTime(90 - load * 40, t, 0.1);
-    this.humGain.gain.setTargetAtTime(Math.max(0, tension - 0.55) * 0.05, t, 0.05);
+    this.humGain.gain.setTargetAtTime(Math.max(0, tension - 0.35) * 0.07, t, 0.05);
     this.humOsc.frequency.setTargetAtTime(260 + tension * 520, t, 0.05);
   }
 
@@ -494,5 +494,47 @@ export class AudioEngine {
     const t = this.ctx.currentTime;
     this.dragGain.gain.setTargetAtTime(level * 0.12, t, 0.03);
     this.dragOsc.frequency.setTargetAtTime(40 + level * 50, t, 0.05);
+  }
+
+  /** 魚の引きの「グンッ」：低い打撃音（スマホの振動の代わり）。pan = -1 左 .. 1 右 */
+  thump(power: number, pan = 0): void {
+    if (!this.ctx || power <= 0.02) return;
+    const ctx = this.ctx;
+    const t = ctx.currentTime;
+    const p = ctx.createStereoPanner();
+    p.pan.value = Math.max(-1, Math.min(1, pan));
+    p.connect(this.sfx);
+    const o = ctx.createOscillator();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(95, t);
+    o.frequency.exponentialRampToValueAtTime(38, t + 0.18);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(0.32 * Math.min(1.3, power), t + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.28);
+    o.connect(g).connect(p);
+    o.start(t);
+    o.stop(t + 0.3);
+    this.noiseBurst(t, 0.08, 0.06 * power, 'lowpass', 500, 120, p);
+  }
+
+  /** 竿のきしみ：しなりが急に変わった時のギシッという音 */
+  creak(power: number): void {
+    if (!this.ctx || power <= 0.05) return;
+    const t = this.ctx.currentTime;
+    const n = 3 + Math.floor(power * 4);
+    for (let i = 0; i < n; i++) this.click(t + i * (0.018 + Math.random() * 0.012), 0.05 * power, 380 + Math.random() * 260);
+  }
+
+  /** 方向つきの水しぶき */
+  splashAt(size: number, pan: number): void {
+    if (!this.ctx) return;
+    const ctx = this.ctx;
+    const t = ctx.currentTime;
+    const p = ctx.createStereoPanner();
+    p.pan.value = Math.max(-1, Math.min(1, pan));
+    p.connect(this.sfx);
+    this.noiseBurst(t, 0.25 + size * 0.3, 0.2 + size * 0.25, 'lowpass', 1600 + size * 800, 300, p);
+    this.tone(t, 180 / (0.5 + size), 0.15, 0.08 * size, 'sine', p);
   }
 }
