@@ -1208,3 +1208,26 @@ body.is-touch .fishhud {
   width: 140px;
   padding: 6px 8px;
 }
+
+/* 釣り場の人との会話 */
+.npc-line {
+  margin: 8px 0 12px;
+  font-size: 16px;
+  line-height: 1.7;
+}
+.npc-req {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.npc-req b {
+  font-size: 17px;
+}
+.npc-req.done {
+  grid-auto-flow: column;
+  justify-content: space-between;
+  align-items: center;
+}

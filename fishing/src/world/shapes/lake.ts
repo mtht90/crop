@@ -1,4 +1,5 @@
-import type { Structure } from '../data/types';
+import type { Structure } from '../../data/types';
+import type { AreaShape } from '../shape';
 
 /**
  * 翠ヶ湖の形と地形（描画に依存しない純粋な関数）。
@@ -163,3 +164,15 @@ export const HUT = { x: SHORE_EAST + 17, z: -9, w: 6, d: 5, rot: Math.PI / 2 };
 export const SPAWN = { x: SHORE_EAST + 9, z: 4, yaw: Math.PI / 2 };
 
 export const ANGLES = ANGLE;
+
+export const LAKE: AreaShape = {
+  id: 'lake',
+  sea: false,
+  terrainHeight,
+  structureAt,
+  isWeedArea,
+  isRockArea,
+  dock: DOCK,
+  hut: HUT,
+  spawn: SPAWN,
+};

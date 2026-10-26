@@ -56,9 +56,25 @@ const MODEL_IDS: FishModelId[] = [
   's_bluegill',
   's_bass',
   's_ayu',
+  'm_kurodai',
+  'm_mejina',
+  'm_aji',
+  'm_saba',
+  'm_kasago',
+  'm_suzuki',
+  'm_kisu',
+  'm_kawahagi',
+  'm_kyusen',
+  'm_bora',
+  'm_madai',
+  'm_ishidai',
+  'm_buri',
+  'm_fugu',
+  'm_iwashi',
+  'm_tachiuo',
+  'm_kue',
 ];
 const models = new Map<FishModelId, LoadedModel>();
-let loading: Promise<void> | null = null;
 
 function averageLum(tex: THREE.Texture | null, color: THREE.Color): number {
   const img = tex?.image as (CanvasImageSource & { width: number; height: number }) | undefined;
@@ -81,33 +97,52 @@ function averageLum(tex: THREE.Texture | null, color: THREE.Color): number {
   return Math.max(0.02, n ? sum / n : 0.3);
 }
 
-/** ゲーム開始前に全モデルを読み込む */
-export function preloadFishModels(): Promise<void> {
-  if (loading) return loading;
-  loading = Promise.all(
-    MODEL_IDS.map(async (id) => {
-      const gltf = await loadGltf(`${import.meta.env.BASE_URL}assets/fish/${id}.json`);
-      const parts: ModelPart[] = [];
-      const box = new THREE.Box3();
-      gltf.scene.updateMatrixWorld(true);
-      gltf.scene.traverse((o) => {
-        const m = o as THREE.Mesh;
-        if (!m.isMesh) return;
-        // マテリアルごとに別メッシュとして読み込まれるので、それぞれを部位として扱う
-        const geometry = m.geometry.clone().applyMatrix4(m.matrixWorld);
-        if (!geometry.getAttribute('uv')) {
-          geometry.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(geometry.getAttribute('position').count * 2), 2));
-        }
-        geometry.computeBoundingBox();
-        box.union(geometry.boundingBox!);
-        const sm = m.material as THREE.MeshStandardMaterial;
-        const map = sm.map ?? null;
-        parts.push({ geometry, map, color: sm.color.clone(), refLum: averageLum(map, sm.color), fin: /fin/i.test(sm.name) });
-      });
-      models.set(id, { parts, halfHeight: (box.max.y - box.min.y) / 2 });
+const pending = new Map<FishModelId, Promise<void>>();
+
+async function loadModel(id: FishModelId): Promise<void> {
+  const gltf = await loadGltf(`${import.meta.env.BASE_URL}assets/fish/${id}.json`);
+  const parts: ModelPart[] = [];
+  const box = new THREE.Box3();
+  gltf.scene.updateMatrixWorld(true);
+  gltf.scene.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh) return;
+    // マテリアルごとに別メッシュとして読み込まれるので、それぞれを部位として扱う
+    const geometry = m.geometry.clone().applyMatrix4(m.matrixWorld);
+    if (!geometry.getAttribute('uv')) {
+      geometry.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(geometry.getAttribute('position').count * 2), 2));
+    }
+    geometry.computeBoundingBox();
+    box.union(geometry.boundingBox!);
+    const sm = m.material as THREE.MeshStandardMaterial;
+    const map = sm.map ?? null;
+    parts.push({ geometry, map, color: sm.color.clone(), refLum: averageLum(map, sm.color), fin: /fin/i.test(sm.name) });
+  });
+  models.set(id, { parts, halfHeight: (box.max.y - box.min.y) / 2 });
+}
+
+/** 魚種が使うモデル（色違い用の別モデルを含む） */
+export function modelIdsFor(list: Species[]): FishModelId[] {
+  const ids = new Set<FishModelId>();
+  for (const s of list) {
+    ids.add(s.model.id);
+    for (const v of Object.values(s.model.variants ?? {})) ids.add(v);
+  }
+  return [...ids];
+}
+
+/** モデルを読み込む（読み込み済み・読み込み中のものは待つだけ）。省略時は全部 */
+export function preloadFishModels(ids: FishModelId[] = MODEL_IDS): Promise<void> {
+  return Promise.all(
+    ids.map((id) => {
+      let p = pending.get(id);
+      if (!p) {
+        p = loadModel(id).catch((e) => console.warn('fish model', id, e));
+        pending.set(id, p);
+      }
+      return p;
     }),
   ).then(() => undefined);
-  return loading;
 }
 
 let fallback: LoadedModel | null = null;
@@ -119,8 +154,8 @@ function fallbackModel(): LoadedModel {
   return fallback;
 }
 
-export function fishModelsReady(): boolean {
-  return models.size === MODEL_IDS.length;
+export function fishModelsReady(ids: FishModelId[] = MODEL_IDS): boolean {
+  return ids.every((id) => models.has(id));
 }
 
 // ---------------- シェーダ ----------------

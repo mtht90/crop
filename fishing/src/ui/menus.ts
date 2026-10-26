@@ -72,27 +72,41 @@ const MAP_SVG = `<svg viewBox="0 0 100 100" preserveAspectRatio="none" style="po
   <path d="M8,30 l6,-8 l6,8 Z M14,34 l5,-7 l5,7 Z M60,10 l6,-9 l6,9 Z" fill="#41584a"/>
 </svg>`;
 
-export function openMap(modals: Modals, save: SaveData): void {
+export function openMap(modals: Modals, save: SaveData, onTravel?: (id: string) => void): void {
   const m = modals.open('マップ', { closeKey: 'KeyM' });
   const info = h('div', { class: 'info', text: '釣り場を選ぶと詳細を表示します。' });
   const map = h('div', { class: 'map' });
   map.innerHTML = MAP_SVG;
   for (const s of SPOTS) {
-    const unlocked = save.spots.includes(s.id);
+    // 入漁券のいらない釣り場は最初から行ける
+    const unlocked = s.price === 0 || save.spots.includes(s.id);
+    const here = s.id === save.area;
     const el = h(
       'div',
       {
         class: `spot${s.implemented && unlocked ? '' : ' locked'}${s.expansion ? ' expansion' : ''}`,
         onclick: () => {
+          const canGo = s.implemented && unlocked && !here && onTravel;
           info.replaceChildren(
             h('b', { text: s.name }),
-            h('span', { class: 'muted', text: s.expansion ? '　未開拓エリア' : s.implemented ? (unlocked ? '　現在地' : '　入漁券が必要') : '　準備中（入漁券は今後販売）' }),
+            h('span', { class: 'muted', text: s.expansion ? '　未開拓エリア' : s.implemented ? (here ? '　現在地' : unlocked ? '' : '　入漁券が必要') : '　準備中' }),
             h('div', { style: 'margin-top:4px', text: s.desc }),
+            canGo
+              ? h('button', {
+                  class: 'primary',
+                  style: 'margin-top:8px',
+                  text: `${s.name}へ行く`,
+                  onclick: () => {
+                    m.close();
+                    onTravel(String(s.id));
+                  },
+                })
+              : '',
           );
         },
       },
       h('i'),
-      h('span', { class: s.id === 'lake' ? 'here' : '', text: s.expansion ? `？ ${s.name}` : s.name }),
+      h('span', { class: here ? 'here' : '', text: s.expansion ? `？ ${s.name}` : s.name }),
     );
     el.style.left = `${s.map[0] * 100}%`;
     el.style.top = `${s.map[1] * 100}%`;

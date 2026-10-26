@@ -11,7 +11,7 @@ import { Fight, PUMP_LENGTH, type FightOutcome, type Obstacle } from '../sim/fig
 import { generateFish, type FishInstance } from '../sim/individual';
 import { Rng } from '../sim/rng';
 import { biteChancePerSecond, pickSpecies, speciesWeight } from '../sim/spawn';
-import { DOCK, isRockArea, isWeedArea, structureAt, waterDepth, terrainHeight, onDock } from '../world/lakeShape';
+import { DOCK, currentArea, isRockArea, isWeedArea, structureAt, waterDepth, terrainHeight, onDock } from '../world/shape';
 import type { Player } from '../world/player';
 import { WaterEffects } from './effects';
 import type { AmbientFish, FishPopulation } from './population';
@@ -895,7 +895,7 @@ export class FishingController {
     this.lastCond = cond;
     // ルアーは動かしていないと見向きもされない
     if (!lure.pack && this.lureSpeed < 0.05 && this.time - this.lastTwitch > 2) return;
-    const list = speciesForSpot('lake');
+    const list = speciesForSpot(currentArea().id);
     const line = LINE_BY_ID[this.save.equip.line];
     const p = biteChancePerSecond(list, cond, {
       activity: activity(cond.time, cond.weather, cond.season),
@@ -952,8 +952,8 @@ export class FishingController {
   private forceTutorialBite(lure: Lure): void {
     this.tutorialTime = 0;
     const cond = this.conditions(this.layerAt());
-    const list = speciesForSpot('lake').filter((s) => (s.lures[lure.category] ?? 0) > 0 && (s.rarity === 'common' || s.rarity === 'uncommon'));
-    const species = list.length ? this.rng.pick(list) : speciesForSpot('lake')[0];
+    const list = speciesForSpot(currentArea().id).filter((s) => (s.lures[lure.category] ?? 0) > 0 && (s.rarity === 'common' || s.rarity === 'uncommon'));
+    const species = list.length ? this.rng.pick(list) : speciesForSpot(currentArea().id)[0];
     const fish = generateFish(species, cond, this.rng);
     const amb = this.population?.spawnFor(species, fish, this.lure) ?? null;
     this.bite = { species, fish, cond, nibbles: 0, timer: 0, phase: 'approach', window: 1, interest: 0.7, amb, wary: 0 };
@@ -984,7 +984,7 @@ export class FishingController {
   debugBite(speciesId?: string): void {
     if (this.phase !== 'water' || this.bite) return;
     const cond = this.conditions(this.layerAt());
-    const list = speciesForSpot('lake');
+    const list = speciesForSpot(currentArea().id);
     const species = list.find((s) => s.id === speciesId) ?? pickSpecies(list, cond, this.rng) ?? list[0];
     const fish = generateFish(species, cond, this.rng);
     const amb = this.population?.spawnFor(species, fish, this.lure) ?? null;

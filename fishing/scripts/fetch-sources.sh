@@ -22,7 +22,10 @@ fi
 # scripts/scan-lite.mjs で軽くしてから convert-models.cjs が真横から撮ったテクスチャを焼き直す
 FF=https://raw.githubusercontent.com/lisa-1002/fishing3d/main/vendor/fish/real
 mkdir -p "$SRC/ffish/lite"
-for n in carp crucian amur_catfish snakehead horsemouth threelips bluegill bass ayu; do
+# 海の魚（汐見港・磯）
+for n in carp crucian amur_catfish snakehead horsemouth threelips bluegill bass ayu \
+  blackseabream blackfish jackmackerel mackerel rock_kasago seabass whiting filefish wrasse_kyusen \
+  mullet redseabream knifejaw_barred yellowtail puffer sardine cutlass grouper; do
   get "$FF/scan_$n.glb" "ffish/scan_$n.glb"
   [ -f "$SRC/ffish/lite/$n.glb" ] || SNAP=0.003 node scripts/scan-lite.mjs "$SRC/ffish/scan_$n.glb" "$SRC/ffish/lite/$n.glb" 9000
 done

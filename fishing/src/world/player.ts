@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { Input } from '../core/input';
-import type { Collider } from './lakeWorld';
-import { DOCK, onDock, terrainHeight, waterDepth } from './lakeShape';
+import type { Collider } from './common';
+import { DOCK, onDock, terrainHeight, waterDepth } from './shape';
 
 const EYE = 1.62;
 
@@ -32,12 +32,16 @@ export class Player {
 
   canStand(x: number, z: number): boolean {
     if (Math.hypot(x, z) > 330) return false;
-    if (onDock(x, z)) return true;
-    if (waterDepth(x, z) > 0.35) return false;
     for (const c of this.colliders) {
       if (Math.abs(c.x - x) < c.r + 0.4 && Math.abs(c.z - z) < c.r + 0.4 && Math.hypot(c.x - x, c.z - z) < c.r + 0.35) return false;
     }
-    return true;
+    if (onDock(x, z)) return true;
+    return waterDepth(x, z) <= 0.35;
+  }
+
+  /** 釣り場を移った時に障害物を差し替える */
+  setColliders(c: Collider[]): void {
+    this.colliders = c;
   }
 
   forward(): THREE.Vector3 {

@@ -1,6 +1,7 @@
 import type { Grade, FishInstance } from '../sim/individual';
 import type { ClockState } from '../sim/environment';
 import type { Layer, Season, Structure, TimeBand, Weather } from '../data/types';
+import type { RequestState } from './requests';
 
 export interface CatchRecord {
   day: number;
@@ -60,6 +61,10 @@ export interface SaveData {
   cooler: (FishInstance & { record: CatchRecord })[];
   dex: Record<string, DexEntry>;
   spots: string[];
+  /** 今いる釣り場 */
+  area: string;
+  /** 釣り場の人からの納品依頼（人ごと） */
+  requests: Record<string, RequestState>;
   rewards: string[];
   stats: { caught: number; released: number; earned: number; lost: number };
   settings: Settings;
@@ -86,6 +91,8 @@ export function newSave(): SaveData {
     cooler: [],
     dex: {},
     spots: ['lake'],
+    area: 'lake',
+    requests: {},
     rewards: [],
     stats: { caught: 0, released: 0, earned: 0, lost: 0 },
     settings: { master: 0.8, bgm: 0.5, sfx: 0.8, sensitivity: 1, showStamina: true, feel: 1 },

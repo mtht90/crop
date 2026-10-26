@@ -15,13 +15,23 @@ import { showCatch } from './ui/catchPanel';
 import { openDex } from './ui/dexPanel';
 import { Hud } from './ui/hud';
 import { TouchControls } from './ui/touch';
-import { fishModelsReady, preloadFishModels, UNDERWATER } from './render/fishMesh';
+import { fishModelsReady, modelIdsFor, preloadFishModels, UNDERWATER } from './render/fishMesh';
+import { SPOTS } from './data/spots';
+import { speciesForSpot } from './data/species';
 import { openMap, openPause, openTackle, titleScreen } from './ui/menus';
 import { Modals } from './ui/modal';
 import { openShop } from './ui/shopPanel';
+import { openNpc } from './ui/npcPanel';
+import { NpcLayer } from './world/npcs';
+import { NPCS } from './data/npcs';
 import { Atmosphere } from './world/atmosphere';
-import { HUT, SPAWN, onDock, waterDepth } from './world/lakeShape';
+import { HUT, SPAWN, currentArea, onDock, setArea, waterDepth } from './world/shape';
 import { LakeWorld } from './world/lakeWorld';
+import { CoastWorld } from './world/coastWorld';
+import type { FishingWorld } from './world/common';
+import { LAKE } from './world/shapes/lake';
+import { COAST } from './world/shapes/coast';
+import type { FishModelId } from './data/types';
 import { Player } from './world/player';
 
 type Mode = 'title' | 'walk' | 'fish';
@@ -36,7 +46,10 @@ export class Game {
   private save: SaveData;
   private clock: GameClock;
   private atmo: Atmosphere;
-  private world: LakeWorld;
+  private world!: FishingWorld;
+  /** 今いる釣り場の魚のモデル */
+  private areaModels: FishModelId[] = [];
+  private npcs!: NpcLayer;
   private player: Player;
   private audio = new AudioEngine();
   private fishing: FishingController;
@@ -61,7 +74,7 @@ export class Game {
   private suppressPause = false;
   private catchOpen = false;
   private mobile = false;
-  private touchState: { mode: 'walk' | 'fish'; canFish: boolean; nearHut: boolean } = { mode: 'walk', canFish: false, nearHut: false };
+  private touchState: { mode: 'walk' | 'fish'; canFish: boolean; nearHut: boolean; talk?: boolean } = { mode: 'walk', canFish: false, nearHut: false };
 
   constructor(app: HTMLElement, private uiRoot: HTMLElement) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -84,8 +97,10 @@ export class Game {
     this.atmo.setWeather(this.clock.weather, true);
     if (this.mobile) this.atmo.sun.shadow.mapSize.set(1024, 1024);
     this.atmo.onThunder = (d, p) => this.audio.thunder(d, p);
-    this.world = new LakeWorld();
-    this.scene.add(this.world.group);
+    const qa = new URLSearchParams(location.search).get('area');
+    if (qa) this.save.area = qa;
+    if (!SPOTS.some((s) => s.id === this.save.area && s.implemented)) this.save.area = 'lake';
+    this.buildWorld(this.save.area);
     this.player = new Player(SPAWN.x, SPAWN.z, SPAWN.yaw, this.world.colliders);
     this.scene.add(this.camera);
     this.camera.add(this.headlamp);
@@ -100,7 +115,6 @@ export class Game {
     this.strain = document.createElement('div');
     this.strain.className = 'strain';
     uiRoot.prepend(this.strain);
-    void preloadFishModels();
     this.touch = new TouchControls(uiRoot, this.input, () => {
       if (!this.modals.isOpen && this.mode !== 'title') this.openPause();
     });
@@ -120,6 +134,7 @@ export class Game {
       onCatch: (f, s, r) => void this.onCatch(f, s, r),
       onLost: () => this.persist(),
     });
+    this.fishing.rod.setTackle(this.fishing.lureDef);
     this.population = new FishPopulation(this.scene, new Rng(), (x, z, size) => this.fishing.fx.ripple(x, z, size));
     this.fishing.population = this.population;
     let spookTold = false;
@@ -157,6 +172,45 @@ export class Game {
     (window as unknown as { __game: Game }).__game = this;
   }
 
+  /** 釣り場の地形・見た目を作る（前の釣り場は片付ける） */
+  private buildWorld(id: string): void {
+    setArea(id === 'coast' ? COAST : LAKE);
+    if (this.world) {
+      this.scene.remove(this.world.group);
+      this.world.group.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (m.geometry) m.geometry.dispose();
+      });
+    }
+    this.world = id === 'coast' ? new CoastWorld() : new LakeWorld();
+    this.scene.add(this.world.group);
+    this.npcs ??= new NpcLayer(this.scene);
+    void this.npcs.setArea(id, this.world.colliders);
+    this.areaModels = modelIdsFor(speciesForSpot(id));
+    void preloadFishModels(this.areaModels);
+  }
+
+  /** マップから別の釣り場へ移動する */
+  private travel(id: string): void {
+    const spot = SPOTS.find((s) => s.id === id);
+    if (!spot || !spot.implemented || id === this.save.area) return;
+    this.exitFishing();
+    this.population.clear();
+    this.save.area = id;
+    this.buildWorld(id);
+    this.player.setColliders(this.world.colliders);
+    this.player.x = SPAWN.x;
+    this.player.z = SPAWN.z;
+    this.player.yaw = SPAWN.yaw;
+    this.player.pitch = -0.05;
+    this.player.y = this.player.groundAt(SPAWN.x, SPAWN.z);
+    this.lastPlayerPos = { x: SPAWN.x, z: SPAWN.z };
+    // 活き餌の小魚は釣り場ごとに違う
+    this.fishing.rod.setTackle(this.fishing.lureDef);
+    this.hud.toast(`${spot.name}に着いた`, 'good');
+    this.persist();
+  }
+
   /** 湖を泳ぐ魚と水の見え方（天気で濁り、偏光グラスで照り返しが減る） */
   private updateWaterLife(dt: number, t: number): void {
     const glasses = this.save.gear.includes('polarized');
@@ -164,8 +218,10 @@ export class Game {
     const night = this.atmo.night;
     this.world.setClarity(clear * (glasses ? 1 : 0.65) * (1 - 0.6 * night), glasses ? 0.4 : 1);
     UNDERWATER.uMurk.value = (0.22 / clear) * (glasses ? 0.6 : 1);
-    UNDERWATER.uWaterCol.value.setRGB(0.07, 0.13, 0.11).multiplyScalar(1 - 0.85 * night);
-    if (this.mode === 'title' || !fishModelsReady() || dt <= 0) return;
+    // 海は青く、湖は緑がかる
+    if (currentArea().sea) UNDERWATER.uWaterCol.value.setRGB(0.04, 0.12, 0.16).multiplyScalar(1 - 0.85 * night);
+    else UNDERWATER.uWaterCol.value.setRGB(0.07, 0.13, 0.11).multiplyScalar(1 - 0.85 * night);
+    if (this.mode === 'title' || !fishModelsReady(this.areaModels) || dt <= 0) return;
     const p = this.player;
     // 瞬間移動（開始・寝て起きた等）は歩いたことにしない
     const step = Math.hypot(p.x - this.lastPlayerPos.x, p.z - this.lastPlayerPos.z);
@@ -216,7 +272,7 @@ export class Game {
       btns?.forEach((b) => ((b as HTMLButtonElement).disabled = true));
       const first = btns?.[0] as HTMLButtonElement | undefined;
       if (first) first.textContent = '読み込み中…';
-      void preloadFishModels()
+      void preloadFishModels(this.areaModels)
         .catch((e) => console.warn('fish models failed', e))
         .then(() => this.start(fresh));
     });
@@ -234,6 +290,12 @@ export class Game {
         this.clock.setTime(this.save.clock.minutes);
         this.atmo.setWeather(this.clock.weather, true);
       }
+      // 最初から始めた時など、表示中の釣り場とセーブの現在地が違えば作り直す
+      if (currentArea().id !== this.save.area) {
+        this.population.clear();
+        this.buildWorld(this.save.area);
+        this.player.setColliders(this.world.colliders);
+      }
       this.title?.remove();
       this.title = null;
       this.mode = 'walk';
@@ -242,9 +304,11 @@ export class Game {
       this.player.z = SPAWN.z;
       this.player.yaw = SPAWN.yaw;
       this.player.pitch = -0.05;
+      this.player.y = this.player.groundAt(SPAWN.x, SPAWN.z);
       this.input.lock();
       const t = this.input.touch;
-      this.hud.toast(t ? '翠ヶ湖へようこそ。水辺で「釣る」を押して釣りを始めよう' : '翠ヶ湖へようこそ。水辺で F を押して釣りを始めよう', 'good');
+      const name = SPOTS.find((s) => s.id === this.save.area)?.name ?? '翠ヶ湖';
+      this.hud.toast(t ? `${name}へようこそ。水辺で「釣る」を押して釣りを始めよう` : `${name}へようこそ。水辺で F を押して釣りを始めよう`, 'good');
       if (fresh) this.hud.toast(t ? '釣った魚は図鑑に登録される。小屋で売って道具を揃えよう' : '釣った魚は図鑑(Tab)に登録される。小屋(E)で売って道具を揃えよう', 'info');
       this.persist();
     }
@@ -370,7 +434,7 @@ export class Game {
     if (this.mode !== 'title' && !this.modals.isOpen && fresh) {
       if (input.hit('Tab')) openDex(this.modals, this.preview, this.save);
       else if (input.hit('KeyI') && !this.fishing.busy) openTackle(this.modals, this.save, () => (this.fishing.rod.setTackle(this.fishing.lureDef), this.persist()));
-      else if (input.hit('KeyM')) openMap(this.modals, this.save);
+      else if (input.hit('KeyM')) openMap(this.modals, this.save, (id) => this.travel(id));
     }
 
     const sens = this.save.settings.sensitivity;
@@ -388,8 +452,22 @@ export class Game {
       }
       this.player.applyTo(this.camera);
       let prompt: string | null = null;
-      if (this.nearHut()) {
-        prompt = '<b>[E]</b> 釣り小屋に入る';
+      const npc = this.npcs.nearest(this.player.x, this.player.z);
+      if (npc) {
+        prompt = `<b>[E]</b> ${npc.name}に話しかける`;
+        if (input.hit('KeyE') && input.enabled) {
+          openNpc(this.modals, this.save, npc, this.clock.day, {
+            onDeliver: (r) => {
+              this.audio.coin();
+              this.npcs.emote(npc.id);
+              this.hud.toast(`依頼達成！ +¥${r.toLocaleString('ja-JP')}`, 'good');
+              this.persist();
+            },
+          });
+          this.persist();
+        }
+      } else if (this.nearHut()) {
+        prompt = `<b>[E]</b> ${currentArea().id === 'coast' ? '釣具店' : '釣り小屋'}に入る`;
         if (input.hit('KeyE') && input.enabled) {
           openShop(this.modals, this.save, {
             onChange: () => this.persist(),
@@ -409,7 +487,7 @@ export class Game {
       }
       if (!input.active && !this.modals.isOpen) prompt = 'クリックで操作を再開';
       this.hud.setGuide(null);
-      this.touchState = { mode: 'walk', canFish: prompt?.includes('釣り') ?? false, nearHut: this.nearHut() };
+      this.touchState = { mode: 'walk', canFish: prompt?.includes('釣りをする') ?? false, nearHut: !!npc || this.nearHut(), talk: !!npc };
       this.hud.setPrompt(prompt);
       this.hud.setKeys([
         ['W A S D', '移動'],
@@ -490,6 +568,12 @@ export class Game {
     // 世界の更新
     this.atmo.update(dt, this.clock.hour, this.camera, this.renderer);
     this.world.update(dt, this.atmo.wave);
+    if (this.mode !== 'title') {
+      // 今日の依頼がまだ済んでいない人の頭に「！」
+      const marks = new Set<string>();
+      for (const n of NPCS) if (n.area === this.save.area && !(this.save.requests[n.id]?.day === this.clock.day && this.save.requests[n.id]?.done)) marks.add(n.id);
+      this.npcs.update(dt, this.player, marks);
+    }
     this.updateWaterLife(dt, now / 1000);
     if (this.world.water.material.uniforms.sunDirection) this.world.water.material.uniforms.sunDirection.value.copy(this.atmo.sunDir);
     const night = this.atmo.night;
@@ -504,10 +588,12 @@ export class Game {
       phase: this.fishing.phase,
       canFish: this.touchState.canFish,
       nearHut: this.touchState.nearHut,
+      talk: !!this.touchState.talk,
       isBait: !!this.fishing.lureDef.pack,
       hasBite: this.fishing.hasBite,
     });
-    this.audio.setAmbient({ wind: this.atmo.wave, rain: this.atmo.rainAmount, night, water: this.mode === 'title' ? 0.5 : 1 });
+    // 海は波音が大きい
+    this.audio.setAmbient({ wind: this.atmo.wave, rain: this.atmo.rainAmount, night, water: this.mode === 'title' ? 0.5 : currentArea().sea ? 1.8 : 1 });
     this.audio.setMood(this.mode === 'title' ? 'title' : this.clock.weather === 'storm' ? 'storm' : night > 0.6 ? 'night' : 'day');
     this.audio.tick();
 

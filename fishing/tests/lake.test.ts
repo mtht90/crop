@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DOCK, HUT, SPAWN, structureAt, terrainHeight, waterDepth } from '../src/world/lakeShape';
+import { DOCK, HUT, SPAWN, structureAt, terrainHeight, waterDepth } from '../src/world/shape';
 
 describe('湖の地形', () => {
   it('スポーン地点と小屋は陸上', () => {

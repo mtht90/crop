@@ -16,6 +16,8 @@ export interface TouchState {
   phase: Phase;
   canFish: boolean;
   nearHut: boolean;
+  /** 近くの人に話しかけられる */
+  talk?: boolean;
   isBait: boolean;
   hasBite: boolean;
 }
@@ -159,14 +161,14 @@ export class TouchControls {
     if (!this.enabled) return;
     this.root.style.display = st.mode === 'hidden' ? 'none' : '';
     this.stick.style.display = st.mode === 'walk' ? '' : 'none';
-    const key = `${st.mode}|${st.phase}|${st.canFish}|${st.nearHut}|${st.isBait}|${st.hasBite}|${this.input.stickRun}`;
+    const key = `${st.mode}|${st.phase}|${st.canFish}|${st.nearHut}|${st.talk}|${st.isBait}|${st.hasBite}|${this.input.stickRun}`;
     if (key === this.lastKey) return;
     // 押している最中にボタンを作り直すと離した判定が取れないので、押下中は更新しない
     if (this.input.left && this.lastKey.split('|')[0] === st.mode) return;
     this.lastKey = key;
     const btns: HTMLElement[] = [];
     if (st.mode === 'walk') {
-      if (st.nearHut) btns.push(this.tapButton('小屋', () => this.input.tapKey('KeyE'), 'touch-main'));
+      if (st.nearHut) btns.push(this.tapButton(st.talk ? '話す' : '小屋', () => this.input.tapKey('KeyE'), 'touch-main'));
       else if (st.canFish) btns.push(this.tapButton('釣る', () => this.input.tapKey('KeyF'), 'touch-main'));
       btns.push(
         this.tapButton(this.input.stickRun ? '歩く' : '走る', () => {

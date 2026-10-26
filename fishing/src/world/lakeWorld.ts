@@ -1,7 +1,7 @@
 import * as THREE from 'three';
-import { Water } from 'three/examples/jsm/objects/Water.js';
-import { UNDERWATER } from '../render/fishMesh';
+import type { Water } from 'three/examples/jsm/objects/Water.js';
 import { instanced, model, texture } from '../core/assets';
+import { buildHut, buildWater, terrainMaterial, type Collider, type FishingWorld } from './common';
 import { Rng } from '../sim/rng';
 import {
   DOCK,
@@ -14,19 +14,13 @@ import {
   shoreRadius,
   terrainHeight,
   ANGLES,
-} from './lakeShape';
+} from './shapes/lake';
 
 const TERRAIN_SIZE = 760;
 const TERRAIN_SEG = 300;
 
-export interface Collider {
-  x: number;
-  z: number;
-  r: number;
-}
-
 /** 湖の釣り場：地形・水面・桟橋・小屋・植生 */
-export class LakeWorld {
+export class LakeWorld implements FishingWorld {
   readonly group = new THREE.Group();
   readonly water: Water;
   readonly colliders: Collider[] = [];
@@ -37,10 +31,10 @@ export class LakeWorld {
 
   constructor() {
     this.group.add(this.buildTerrain());
-    this.water = this.buildWater();
+    this.water = buildWater(0x0e2b2a);
     this.group.add(this.water);
     this.group.add(this.buildDock());
-    this.group.add(this.buildHut());
+    this.group.add(buildHut(HUT, '釣り小屋', this, terrainHeight(HUT.x, HUT.z)));
     this.group.add(this.buildTrees());
     this.group.add(this.buildRocks());
     this.group.add(this.buildReeds());
@@ -101,46 +95,13 @@ export class LakeWorld {
     }
     geo.setAttribute('splat', new THREE.BufferAttribute(splat, 4));
 
-    const mat = new THREE.MeshStandardMaterial({ roughness: 0.95, metalness: 0 });
-    const tex = {
-      tGrass: { value: texture('aerial_grass_rock_diff.jpg') },
-      tSand: { value: texture('coast_sand_01_diff.jpg') },
-      tMud: { value: texture('brown_mud_leaves_01_diff.jpg') },
-      tRock: { value: texture('gray_rocks_diff.jpg') },
-      tForest: { value: texture('forest_ground_04_diff.jpg') },
-    };
-    mat.onBeforeCompile = (shader) => {
-      Object.assign(shader.uniforms, tex, UNDERWATER);
-      shader.vertexShader = shader.vertexShader
-        .replace('#include <common>', '#include <common>\nattribute vec4 splat;\nvarying vec4 vSplat;\nvarying vec3 vWPos;')
-        .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvSplat = splat;\nvWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
-      shader.fragmentShader = shader.fragmentShader
-        .replace(
-          '#include <common>',
-          `#include <common>
-          uniform sampler2D tGrass; uniform sampler2D tSand; uniform sampler2D tMud; uniform sampler2D tRock; uniform sampler2D tForest;
-          uniform vec3 uWaterCol; uniform float uMurk;
-          varying vec4 vSplat; varying vec3 vWPos;
-          vec3 tri(sampler2D t, vec2 p) { return mix(texture2D(t, p * 0.11).rgb, texture2D(t, p * 0.027).rgb, 0.45); }`,
-        )
-        .replace(
-          '#include <map_fragment>',
-          `vec2 p = vWPos.xz;
-          float wf = clamp(1.0 - (vSplat.x + vSplat.y + vSplat.z + vSplat.w), 0.0, 1.0);
-          vec3 col = tri(tGrass, p) * vSplat.x + tri(tSand, p) * vSplat.y + tri(tMud, p) * vSplat.z + tri(tRock, p * 0.7) * vSplat.w + tri(tForest, p) * wf;
-          // 水底は草ではなく泥と砂（岩場はそのまま）
-          float bed = smoothstep(0.05, 0.6, -vWPos.y) * (1.0 - vSplat.w);
-          col = mix(col, mix(tri(tMud, p), tri(tSand, p * 0.8), 0.45) * vec3(0.8, 0.85, 0.75), bed);
-          float under = clamp(-vWPos.y / 2.5, 0.0, 1.0);
-          col = mix(col, col * vec3(0.55, 0.65, 0.6), under);
-          diffuseColor.rgb *= col * 1.15;`,
-        )
-        // 深いほど水の色に溶ける（魚と同じ見え方）
-        .replace(
-          '#include <tonemapping_fragment>',
-          'if (vWPos.y < 0.0) gl_FragColor.rgb = mix(gl_FragColor.rgb, uWaterCol, clamp(1.0 - exp(vWPos.y * uMurk * 1.2), 0.0, 0.95));\n#include <tonemapping_fragment>',
-        );
-    };
+    const mat = terrainMaterial({
+      grass: 'aerial_grass_rock_diff.jpg',
+      sand: 'coast_sand_01_diff.jpg',
+      mud: 'brown_mud_leaves_01_diff.jpg',
+      rock: 'gray_rocks_diff.jpg',
+      forest: 'forest_ground_04_diff.jpg',
+    });
     const mesh = new THREE.Mesh(geo, mat);
     mesh.receiveShadow = true;
     return mesh;
@@ -151,38 +112,6 @@ export class LakeWorld {
     const u = this.water.material.uniforms;
     u.uSee.value = see;
     u.uGlare.value = glare;
-  }
-
-  private buildWater(): Water {
-    const geo = new THREE.PlaneGeometry(1600, 1600);
-    const normals = texture('waternormals.jpg', { srgb: false });
-    const water = new Water(geo, {
-      textureWidth: 512,
-      textureHeight: 512,
-      waterNormals: normals,
-      sunDirection: new THREE.Vector3(0.5, 0.6, 0.2).normalize(),
-      sunColor: 0xffffff,
-      waterColor: 0x0e2b2a,
-      distortionScale: 2.2,
-      fog: true,
-      alpha: 0.93,
-    });
-    water.material.transparent = true;
-    // 真上から覗くほど水中が透けて見える（uSee = 水の澄み具合）。uGlare = 水面の照り返し（偏光グラスで減る）
-    const m = water.material;
-    m.uniforms.uSee = { value: 0.6 };
-    m.uniforms.uGlare = { value: 1 };
-    m.fragmentShader = m.fragmentShader
-      .replace('uniform float alpha;', 'uniform float alpha;\nuniform float uSee;\nuniform float uGlare;')
-      .replace('float reflectance = rf0 + ( 1.0 - rf0 ) * pow( ( 1.0 - theta ), 5.0 );', 'float reflectance = ( rf0 + ( 1.0 - rf0 ) * pow( ( 1.0 - theta ), 5.0 ) ) * uGlare;')
-      .replace(
-        'gl_FragColor = vec4( outgoingLight, alpha );',
-        'float seeK = clamp( ( 1.0 - reflectance ) * uSee * smoothstep( 0.15, 0.7, theta ), 0.0, 1.0 );\ngl_FragColor = vec4( outgoingLight * ( 1.0 - 0.5 * seeK ), mix( alpha, 0.06, seeK ) );',
-      );
-    water.rotation.x = -Math.PI / 2;
-    water.position.y = 0;
-    water.renderOrder = 1;
-    return water;
   }
 
   private buildDock(): THREE.Group {
@@ -210,66 +139,6 @@ export class LakeWorld {
     const rail = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.08, DOCK.halfWidth * 2), postMat);
     rail.position.set(DOCK.xEnd + 0.3, DOCK.deckY + 0.48, 0);
     g.add(rail);
-    return g;
-  }
-
-  private buildHut(): THREE.Group {
-    const g = new THREE.Group();
-    const wallTex = texture('weathered_planks_diff.jpg').clone();
-    wallTex.repeat.set(2, 1);
-    wallTex.rotation = Math.PI / 2;
-    const wallMat = new THREE.MeshStandardMaterial({ map: wallTex, color: 0xb59a7a, roughness: 0.9 });
-    const y0 = terrainHeight(HUT.x, HUT.z);
-    const walls = new THREE.Mesh(new THREE.BoxGeometry(HUT.d, 3, HUT.w), wallMat);
-    walls.position.set(0, 1.5, 0);
-    walls.castShadow = walls.receiveShadow = true;
-    g.add(walls);
-    // 屋根
-    const roofShape = new THREE.Shape([new THREE.Vector2(-HUT.d / 2 - 0.5, 0), new THREE.Vector2(HUT.d / 2 + 0.5, 0), new THREE.Vector2(0, 1.6)]);
-    const roofGeo = new THREE.ExtrudeGeometry(roofShape, { depth: HUT.w + 0.8, bevelEnabled: false });
-    roofGeo.translate(0, 0, -(HUT.w + 0.8) / 2);
-    const roof = new THREE.Mesh(roofGeo, new THREE.MeshStandardMaterial({ color: 0x5b2f25, roughness: 0.8 }));
-    roof.position.y = 3;
-    roof.castShadow = true;
-    g.add(roof);
-    // 正面（湖側 = -X）にドアと窓
-    const door = new THREE.Mesh(new THREE.BoxGeometry(0.08, 2.1, 1.1), new THREE.MeshStandardMaterial({ color: 0x3a2618, roughness: 0.8 }));
-    door.position.set(-HUT.d / 2 - 0.03, 1.05, 0.9);
-    g.add(door);
-    for (const z of [-1.6]) {
-      const winMat = new THREE.MeshStandardMaterial({ color: 0x223040, emissive: 0xffb050, emissiveIntensity: 0 });
-      this.windowMats.push(winMat);
-      const win = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.9, 1.2), winMat);
-      win.position.set(-HUT.d / 2 - 0.03, 1.7, z);
-      g.add(win);
-    }
-    // 看板
-    const cv = document.createElement('canvas');
-    cv.width = 512;
-    cv.height = 128;
-    const c = cv.getContext('2d')!;
-    c.fillStyle = '#4a3220';
-    c.fillRect(0, 0, 512, 128);
-    c.strokeStyle = '#2a1a10';
-    c.lineWidth = 10;
-    c.strokeRect(5, 5, 502, 118);
-    c.fillStyle = '#f2e2c0';
-    c.font = 'bold 64px sans-serif';
-    c.textAlign = 'center';
-    c.textBaseline = 'middle';
-    c.fillText('釣り小屋', 256, 68);
-    const signTex = new THREE.CanvasTexture(cv);
-    signTex.colorSpace = THREE.SRGBColorSpace;
-    const sign = new THREE.Mesh(new THREE.PlaneGeometry(2, 0.5), new THREE.MeshStandardMaterial({ map: signTex, roughness: 0.8 }));
-    sign.position.set(-HUT.d / 2 - 0.08, 2.65, 0);
-    sign.rotation.y = -Math.PI / 2;
-    g.add(sign);
-    const lamp = new THREE.PointLight(0xffb060, 0, 14, 1.6);
-    lamp.position.set(-HUT.d / 2 - 0.6, 2.3, -0.4);
-    g.add(lamp);
-    this.nightLights.push(lamp);
-    g.position.set(HUT.x, y0 - 0.1, HUT.z);
-    this.colliders.push({ x: HUT.x, z: HUT.z, r: 3.6 });
     return g;
   }
 

@@ -98,6 +98,8 @@ export const LINES: Line[] = [
 export const LURES: Lure[] = [
   { id: 'bait_worm', name: 'ミミズ', desc: 'エサ釣りの基本。何でも釣れる。', price: 200, category: 'baitWorm', sink: 0.35, retrieve: 'bottom', dive: 0, castMult: 0.8, pack: 20, color: '#a5584f' },
   { id: 'bait_dough', name: '練りエサ', desc: 'コイ・フナ類に。底でじっと待つ。', price: 300, category: 'baitDough', sink: 0.5, retrieve: 'bottom', dive: 0, castMult: 0.85, pack: 20, color: '#d8c79a' },
+  { id: 'bait_isome', name: '青イソメ', desc: '海のエサ釣りの基本。キスやカサゴ、根魚に。', price: 400, category: 'baitWorm', sink: 0.4, retrieve: 'bottom', dive: 0, castMult: 0.85, pack: 20, color: '#6a5a3a' },
+  { id: 'bait_krill', name: 'オキアミ', desc: '海のエサの万能選手。メジナ・クロダイ・アジ・マダイが好む。', price: 350, category: 'baitKrill', sink: 0.25, retrieve: 'bottom', dive: 0, castMult: 0.8, pack: 20, color: '#f0a08a' },
   { id: 'bait_live', name: '活き餌（小魚）', desc: '大型の肉食魚に効く。', price: 600, category: 'baitLive', sink: 0.25, retrieve: 'hold', dive: 0, castMult: 0.75, pack: 10, alive: true, color: '#c0c8cc' },
   { id: 'lure_spinner', name: 'スピナー', desc: 'ブレードが回転して光る。巻くだけで釣れる。', price: 700, category: 'spinner', sink: 0.6, retrieve: 'hold', dive: 0, castMult: 1.0, color: '#d8d8d8' },
   { id: 'lure_minnow', name: 'ミノー', desc: '小魚型。巻くと1mほど潜る。トゥイッチで食わせる。', price: 1000, category: 'minnow', sink: 0, retrieve: 'dive', dive: 1.2, castMult: 0.95, color: '#7aa3c4' },

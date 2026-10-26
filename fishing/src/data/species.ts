@@ -1,3 +1,4 @@
+import { COAST_SPECIES } from './speciesCoast';
 import type { Species } from './types';
 
 /**
@@ -673,6 +674,8 @@ export const SPECIES: Species[] = [
     patterns: [],
   },
 ];
+
+SPECIES.push(...COAST_SPECIES);
 
 export const SPECIES_BY_ID: Record<string, Species> = Object.fromEntries(SPECIES.map((s) => [s.id, s]));
 

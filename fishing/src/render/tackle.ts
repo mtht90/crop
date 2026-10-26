@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { Lure } from '../data/tackle';
 import { SPECIES_BY_ID } from '../data/species';
 import { buildFishObject } from './fishMesh';
+import { currentArea } from '../world/shape';
 
 /**
  * 仕掛け・ルアー・エサの3Dモデル（実物の寸法、単位 m）。
@@ -512,10 +513,51 @@ function dough(): TackleObject {
   return { group: g, update() {}, dispose() {} };
 }
 
+/** オキアミ：半透明の桜色の小エビ。尾から針を刺して丸まっている */
+function krill(): TackleObject {
+  const g = new THREE.Group();
+  addHook(g, 0.012, new THREE.Vector3(0.004, 0, 0), 0, steel());
+  const shell = new THREE.MeshPhysicalMaterial({ color: 0xf0a08a, roughness: 0.35, transmission: 0.35, thickness: 0.004, clearcoat: 0.6, emissive: 0x3a0c06 });
+  // 頭から尾へ、弧を描いて細くなる節
+  const segs = 7;
+  for (let i = 0; i < segs; i++) {
+    const t = i / (segs - 1);
+    const a = -0.4 + t * 2.4;
+    const r = 0.0105;
+    const seg = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 8), shell);
+    const w = 0.0034 * (1 - t * 0.55);
+    seg.scale.set(0.0032, w, w * 0.9);
+    seg.position.set(Math.cos(a) * r - 0.004, Math.sin(a) * r, 0);
+    seg.rotation.z = a + Math.PI / 2;
+    g.add(seg);
+  }
+  // 尾扇
+  const tail = new THREE.Mesh(new THREE.ConeGeometry(0.0022, 0.004, 6), shell);
+  const at = -0.4 + 2.4 + 0.35;
+  tail.position.set(Math.cos(at) * 0.0105 - 0.004, Math.sin(at) * 0.0105, 0);
+  tail.rotation.z = at;
+  g.add(tail);
+  // 黒い目と触角
+  const eyeMat = new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 0.2 });
+  const head = new THREE.Vector3(Math.cos(-0.4) * 0.0105 - 0.004, Math.sin(-0.4) * 0.0105, 0);
+  for (const z of [-0.0018, 0.0018]) {
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.0009, 8, 6), eyeMat);
+    eye.position.set(head.x + 0.002, head.y + 0.0012, z);
+    g.add(eye);
+  }
+  const antMat = new THREE.LineBasicMaterial({ color: 0xd88070, transparent: true, opacity: 0.8 });
+  for (const z of [-0.001, 0.001]) {
+    const pts = [head.clone().add(new THREE.Vector3(0.002, 0, z)), head.clone().add(new THREE.Vector3(0.012, -0.003, z * 4)), head.clone().add(new THREE.Vector3(0.02, -0.008, z * 7))];
+    g.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), antMat));
+  }
+  return { group: g, update() {}, dispose() {} };
+}
+
 /** 活き餌：背掛けにした小魚が泳ぐ */
 function liveBait(): TackleObject {
   const g = new THREE.Group();
-  const s = SPECIES_BY_ID['oikawa'] ?? SPECIES_BY_ID[Object.keys(SPECIES_BY_ID)[0]];
+  // 海ではイワシ、淡水ではオイカワを泳がせる
+  const s = SPECIES_BY_ID[currentArea().sea ? 'iwashi' : 'oikawa'] ?? SPECIES_BY_ID[Object.keys(SPECIES_BY_ID)[0]];
   const fish = buildFishObject(s, null, null, false, true);
   fish.group.scale.setScalar(0.065);
   fish.group.position.x = -0.03;
@@ -559,6 +601,8 @@ export function buildTackle(lure: Lure): TackleObject {
       return dough();
     case 'baitLive':
       return liveBait();
+    case 'baitKrill':
+      return krill();
   }
 }
 

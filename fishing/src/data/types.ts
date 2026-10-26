@@ -13,7 +13,8 @@ export type LureCategory =
   | 'jig'
   | 'baitWorm'
   | 'baitDough'
-  | 'baitLive';
+  | 'baitLive'
+  | 'baitKrill';
 export type Rarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legend';
 /** 外部モデル（public/assets/fish/<id>.json） */
 export type FishModelId =
@@ -31,7 +32,25 @@ export type FishModelId =
   | 's_hasu'
   | 's_bluegill'
   | 's_bass'
-  | 's_ayu';
+  | 's_ayu'
+  // 海の魚（ffish.asia の実写スキャン）
+  | 'm_kurodai'
+  | 'm_mejina'
+  | 'm_aji'
+  | 'm_saba'
+  | 'm_kasago'
+  | 'm_suzuki'
+  | 'm_kisu'
+  | 'm_kawahagi'
+  | 'm_kyusen'
+  | 'm_bora'
+  | 'm_madai'
+  | 'm_ishidai'
+  | 'm_buri'
+  | 'm_fugu'
+  | 'm_iwashi'
+  | 'm_tachiuo'
+  | 'm_kue';
 
 export interface FishModel {
   id: FishModelId;
@@ -77,6 +96,20 @@ export const STRUCTURE_LABEL: Record<Structure, string> = {
   shallows: '砂地の浅場',
   open: '沖の深場',
 };
+/** 海の釣り場でのポイントの呼び名 */
+export const STRUCTURE_LABEL_SEA: Record<Structure, string> = {
+  weeds: '藻場',
+  rocks: '磯',
+  inflow: '河口',
+  dock: '堤防',
+  shallows: '砂浜',
+  open: '沖',
+};
+
+export function structureLabels(spot: string): Record<Structure, string> {
+  return spot === 'coast' || spot === 'offshore' ? STRUCTURE_LABEL_SEA : STRUCTURE_LABEL;
+}
+
 export const RARITY_LABEL: Record<Rarity, string> = {
   common: 'コモン',
   uncommon: 'アンコモン',

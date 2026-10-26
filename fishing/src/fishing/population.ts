@@ -5,7 +5,7 @@ import { buildFishObject, type FishObject } from '../render/fishMesh';
 import { generateFish, type FishInstance } from '../sim/individual';
 import type { Rng } from '../sim/rng';
 import { mult, RARITY_WEIGHT } from '../sim/spawn';
-import { onDock, structureAt, waterDepth } from '../world/lakeShape';
+import { currentArea, onDock, structureAt, waterDepth } from '../world/shape';
 
 /**
  * 湖を泳いでいる魚（目に見える個体）。
@@ -122,7 +122,7 @@ export class FishPopulation {
   }
 
   private pickSpecies(c: Conditions): Species | null {
-    const list = speciesForSpot('lake');
+    const list = speciesForSpot(currentArea().id);
     return this.rng.weighted(list, (s) => RARITY_WEIGHT[s.rarity] * mult(s.times, c.time) * mult(s.weathers, c.weather) * mult(s.seasons, c.season) * mult(s.structures, c.structure));
   }
 
@@ -220,7 +220,7 @@ export class FishPopulation {
 
   /** 開発用：指定の魚をその場に置いてとどまらせる */
   debugPlace(speciesId: string, x: number, z: number, depth: number, length?: number): void {
-    const s = speciesForSpot('lake').find((sp) => sp.id === speciesId);
+    const s = speciesForSpot(currentArea().id).find((sp) => sp.id === speciesId);
     if (!s) return;
     const cond: Conditions = { time: 'day', weather: 'sunny', season: 'spring', layer: 'mid', structure: 'open', lure: 'baitWorm', motion: 'slow' };
     const fish = generateFish(s, cond, this.rng);

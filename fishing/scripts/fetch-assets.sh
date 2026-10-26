@@ -43,6 +43,9 @@ ph_tex gray_rocks diff nor_gl
 ph_tex weathered_planks diff nor_gl
 ph_tex brown_mud_leaves_01 diff
 ph_tex bark_brown_02 diff
+# 汐見港・磯
+ph_tex concrete_floor_02 diff
+ph_tex coast_land_rocks_01 diff
 
 ph_model barrel_03
 ph_model fern_02

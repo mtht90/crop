@@ -9,7 +9,7 @@ import {
   RARITY_LABEL,
   SEASON_LABEL,
   SEASONS,
-  STRUCTURE_LABEL,
+  structureLabels,
   STRUCTURES,
   TIME_BANDS,
   TIME_LABEL,
@@ -23,6 +23,7 @@ import type { FishPreview } from '../render/preview';
 import { formatWeight } from '../sim/individual';
 import { h } from './dom';
 import type { Modals } from './modal';
+import { fishModelsReady, modelIdsFor, preloadFishModels } from '../render/fishMesh';
 
 const LURE_CAT_LABEL: Record<string, string> = {
   topwater: 'トップウォーター',
@@ -44,7 +45,7 @@ function topKeys<K extends string>(table: Mult<K>, keys: K[], labels: Record<K, 
 }
 
 export function openDex(modals: Modals, preview: FishPreview, save: SaveData): void {
-  let spot = 'lake';
+  let spot = save.area ?? 'lake';
   let selected: Species | null = null;
   const tabs = h('div', { class: 'tabs' });
   const summary = h('div', { class: 'dex-summary' });
@@ -85,6 +86,16 @@ export function openDex(modals: Modals, preview: FishPreview, save: SaveData): v
       preview.unmount();
       return;
     }
+    // 別の釣り場の魚はモデルを読み込んでから描く
+    const ids = modelIdsFor(list);
+    if (!fishModelsReady(ids)) {
+      grid.replaceChildren(h('div', { class: 'muted', text: '読み込み中…' }));
+      const want = spot;
+      void preloadFishModels(ids).then(() => {
+        if (spot === want && modals.isOpen) render();
+      });
+      return;
+    }
     grid.replaceChildren(
       ...list.map((s) => {
         const e = save.dex[s.id];
@@ -123,7 +134,7 @@ export function openDex(modals: Modals, preview: FishPreview, save: SaveData): v
         h('span', { class: `rarity ${s.rarity}`, text: RARITY_LABEL[s.rarity] }),
         h('p', { class: 'desc muted', text: 'まだ釣り上げていない魚。どんな条件で釣れるのだろう…' }),
         h('h4', { text: '手がかり' }),
-        h('div', { class: 'hints' }, h('span', { class: 'hint', text: `よく釣れるポイント：${topKeys(s.structures, STRUCTURES, STRUCTURE_LABEL)[0] ?? '？'}` })),
+        h('div', { class: 'hints' }, h('span', { class: 'hint', text: `よく釣れるポイント：${topKeys(s.structures, STRUCTURES, structureLabels(s.spot))[0] ?? '？'}` })),
       );
       return;
     }
@@ -167,14 +178,14 @@ export function openDex(modals: Modals, preview: FishPreview, save: SaveData): v
         hint('天候', topKeys(s.weathers, WEATHERS, WEATHER_LABEL)),
         hint('季節', topKeys(s.seasons, SEASONS, SEASON_LABEL)),
         hint('タナ', topKeys(s.layers, LAYERS, LAYER_LABEL)),
-        hint('ポイント', topKeys(s.structures, STRUCTURES, STRUCTURE_LABEL)),
+        hint('ポイント', topKeys(s.structures, STRUCTURES, structureLabels(s.spot))),
         hint('好むエサ・ルアー', lures),
       ),
       h('h4', { text: '初めて釣った日' }),
       h(
         'div',
         { class: 'small muted' },
-        `${f.day}日目 ${f.clock}（${SEASON_LABEL[f.season]}・${WEATHER_LABEL[f.weather]}）${STRUCTURE_LABEL[f.structure]}／${LAYER_LABEL[f.layer]}　`,
+        `${f.day}日目 ${f.clock}（${SEASON_LABEL[f.season]}・${WEATHER_LABEL[f.weather]}）${structureLabels(s.spot)[f.structure]}／${LAYER_LABEL[f.layer]}　`,
         `${ROD_BY_ID[f.rod]?.name ?? f.rod}・${LINE_BY_ID[f.line]?.name ?? f.line}・${LURE_BY_ID[f.lure]?.name ?? f.lure}`,
       ),
     );

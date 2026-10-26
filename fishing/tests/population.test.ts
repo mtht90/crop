@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { FishPopulation } from '../src/fishing/population';
 import { Rng } from '../src/sim/rng';
-import { DOCK } from '../src/world/lakeShape';
+import { DOCK } from '../src/world/shape';
 
 const cond = { time: 'day', weather: 'sunny', season: 'spring' } as const;
 // 桟橋の先（水深 3〜4m）

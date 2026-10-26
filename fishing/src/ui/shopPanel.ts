@@ -30,7 +30,7 @@ const TAB_LABEL: Record<Tab, string> = {
 export function openShop(modals: Modals, save: SaveData, cb: ShopCallbacks): void {
   let tab: Tab = save.cooler.length ? 'sell' : 'rods';
   const money = h('span', { class: 'price', style: 'font-size:18px' });
-  const m = modals.open('釣り小屋', { headerExtra: [money] });
+  const m = modals.open(save.area === 'coast' ? '釣具店' : '釣り小屋', { headerExtra: [money] });
   const tabs = h('div', { class: 'tabs' });
   const content = h('div', { style: 'margin-top:14px' });
   m.body.append(tabs, content);
