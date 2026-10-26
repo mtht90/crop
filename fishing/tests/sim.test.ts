@@ -3,7 +3,7 @@ import { SPECIES, SPECIES_BY_ID } from '../src/data/species';
 import { LINE_BY_ID, REEL_BY_ID, ROD_BY_ID, LB_TO_KG } from '../src/data/tackle';
 import type { Conditions } from '../src/data/types';
 import { GameClock } from '../src/sim/environment';
-import { Fight, type FightOutcome } from '../src/sim/fight';
+import { Fight, type FightOutcome, type HookHold, type Obstacle } from '../src/sim/fight';
 import { generateFish, gradeOf, priceOf, type IVs } from '../src/sim/individual';
 import { Rng } from '../src/sim/rng';
 import { biteChancePerSecond, pickSpecies, speciesWeight } from '../src/sim/spawn';
@@ -26,6 +26,7 @@ function simulate(
   seed: number,
   skill = 1,
   oppose = skill > 0.5,
+  dragK = 0.7,
 ): { outcome: FightOutcome | null; time: number } {
   const s = SPECIES_BY_ID[speciesId];
   const iv: IVs = { power: 16, stamina: 16, speed: 16, build: 16 };
@@ -35,7 +36,7 @@ function simulate(
   const line = LINE_BY_ID[gear.line];
   const rng = new Rng(seed);
   const f = new Fight(
-    { species: s, weightKg, iv, rod, reel, line, drag: line.lb * LB_TO_KG * 0.7, distance: 25, waterDepth: 4, depth: 2 },
+    { species: s, weightKg, iv, rod, reel, line, drag: line.lb * LB_TO_KG * dragK, distance: 25, waterDepth: 4, depth: 2, hookHold: 'solid' },
     rng,
   );
   const dt = 1 / 60;
@@ -60,12 +61,12 @@ function simulate(
   return { outcome: f.outcome, time: f.elapsed };
 }
 
-function rate(speciesId: string, len: number, gear: { rod: string; reel: string; line: string }, n = 60) {
+function rate(speciesId: string, len: number, gear: { rod: string; reel: string; line: string }, n = 60, dragK = 0.7) {
   let landed = 0;
   let time = 0;
   const outcomes: Record<string, number> = {};
   for (let i = 0; i < n; i++) {
-    const r = simulate(speciesId, len, gear, 1000 + i);
+    const r = simulate(speciesId, len, gear, 1000 + i, 1, true, dragK);
     outcomes[r.outcome ?? 'timeout'] = (outcomes[r.outcome ?? 'timeout'] ?? 0) + 1;
     if (r.outcome === 'landed') {
       landed++;
@@ -107,6 +108,59 @@ describe('ファイト', () => {
     const small = rate('largemouth', 25, beginner);
     const big = rate('koi', 80, carpGear);
     expect(big.avgTime).toBeGreaterThan(small.avgTime * 1.4);
+  });
+
+  it('障害物に潜られたら、糸を緩めて待つ方が強引に引くより切られにくい', () => {
+    const obstacles: Obstacle[] = [{ lateral: 0.5, distance: 14, radius: 2.5, kind: 'post' }];
+    const run = (patient: boolean) => {
+      let broke = 0;
+      let snags = 0;
+      for (let i = 0; i < 40; i++) {
+        const s = SPECIES_BY_ID['raigyo'];
+        const line = LINE_BY_ID['nylon6'];
+        const f = new Fight(
+          { species: s, weightKg: 1.5, iv: { power: 16, stamina: 16, speed: 16, build: 16 }, rod: ROD_BY_ID['rod_beginner'], reel: REEL_BY_ID['reel_small'], line, drag: line.lb * LB_TO_KG * 0.7, distance: 20, waterDepth: 4, depth: 2, obstacles, hookHold: 'solid' },
+          new Rng(3000 + i),
+        );
+        let snagged = false;
+        while (!f.outcome && f.elapsed < 240) {
+          if (f.behavior === 'snagged') snagged = true;
+          const stuck = f.behavior === 'snagged';
+          f.step({ reeling: stuck ? !patient : f.tension < f.drag * 0.9, rodSide: -Math.sign(f.side), rodLift: stuck ? (patient ? 0.1 : 0.9) : 0.5 }, 1 / 60);
+        }
+        if (snagged) snags++;
+        if (f.outcome === 'lineBreak') broke++;
+      }
+      return { broke, snags };
+    };
+    const force = run(false);
+    const wait = run(true);
+    expect(force.snags).toBeGreaterThan(5);
+    expect(wait.broke).toBeLessThan(force.broke);
+  });
+
+  it('皮一枚の掛かりは、糸をたるませると外れやすい', () => {
+    const slackOut = (hold: HookHold) => {
+      let out = 0;
+      for (let i = 0; i < 40; i++) {
+        const line = LINE_BY_ID['nylon6'];
+        const f = new Fight(
+          { species: SPECIES_BY_ID['largemouth'], weightKg: 0.6, iv: { power: 16, stamina: 16, speed: 16, build: 16 }, rod: ROD_BY_ID['rod_beginner'], reel: REEL_BY_ID['reel_small'], line, drag: 2, distance: 15, waterDepth: 4, depth: 2, hookHold: hold },
+          new Rng(4000 + i),
+        );
+        // ときどき竿を寝かせて糸をたるませる下手なやり取り
+        while (!f.outcome && f.elapsed < 60) f.step({ reeling: f.elapsed % 6 < 3, rodSide: 0, rodLift: f.elapsed % 6 < 3 ? 0.6 : 0.05 }, 1 / 60);
+        if (f.outcome === 'hookOut') out++;
+      }
+      return out;
+    };
+    expect(slackOut('thin')).toBeGreaterThan(slackOut('solid'));
+  });
+
+  it('ドラグを締めすぎると突っ込みの衝撃で切れやすく、適度なら獲れる', () => {
+    const tight = rate('largemouth', 55, beginner, 40, 1.15);
+    const good = rate('largemouth', 55, beginner, 40, 0.5);
+    expect(tight.outcomes.lineBreak ?? 0).toBeGreaterThan(good.outcomes.lineBreak ?? 0);
   });
 
   it('初期装備で80cmのコイは厳しいが、鯉用タックルなら獲れる', () => {

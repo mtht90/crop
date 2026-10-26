@@ -5,6 +5,7 @@ import { addToCooler, coolerCapacity, registerCatch, release } from './core/prog
 import { clearSave, loadSave, newSave, writeSave, type CatchRecord, type SaveData } from './core/save';
 import { RARITY_LABEL, WEATHER_LABEL, type Species, type Weather, WEATHERS } from './data/types';
 import { FishingController } from './fishing/fishing';
+import { HOOK_HOLD_LABEL } from './sim/fight';
 import { FishPopulation } from './fishing/population';
 import { FishPreview } from './render/preview';
 import { GameClock } from './sim/environment';
@@ -305,7 +306,7 @@ export class Game {
     else if (RARITY_RANK[s.rarity] >= 2) this.hud.toast(`${RARITY_LABEL[s.rarity]} — ${s.name}`, 'big');
     this.catchOpen = true;
     const full = this.save.cooler.length >= coolerCapacity(this.save);
-    const choice = await showCatch(this.modals, this.preview, s, fish, res, full);
+    const choice = await showCatch(this.modals, this.preview, s, fish, res, full, record.hook ? HOOK_HOLD_LABEL[record.hook] : undefined);
     this.catchOpen = false;
     if (choice === 'keep' && addToCooler(this.save, fish, record)) {
       this.hud.toast(`${s.name}をクーラーに入れた`, 'good');

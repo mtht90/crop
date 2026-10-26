@@ -14,6 +14,7 @@ export function showCatch(
   fish: FishInstance,
   res: CatchResult,
   coolerFull: boolean,
+  hookNote?: string,
 ): Promise<'keep' | 'release'> {
   return new Promise((resolve) => {
     let decided: 'keep' | 'release' = coolerFull ? 'release' : 'keep';
@@ -55,6 +56,7 @@ export function showCatch(
           h('span', { class: `rarity ${s.rarity}`, text: RARITY_LABEL[s.rarity] }),
           h('h3', { style: 'margin:6px 0 0;font-size:26px', text: s.name }),
           h('div', { class: 'sci', text: s.sci }),
+          hookNote ? h('div', { class: 'muted small', style: 'margin-top:4px', text: `掛かり：${hookNote}` }) : null,
           h('div', { style: 'display:flex;gap:16px;align-items:center;margin:14px 0' }, h('div', { class: `grade ${fish.grade}`, text: fish.grade }), h('div', null, h('div', { class: 'big', text: `${fish.length.toFixed(1)} cm` }), h('div', { class: 'muted', text: formatWeight(fish.weight) }))),
           h('h4', { text: `個体値（合計 ${sum} / ${IV_MAX * 4}）` }),
           h('div', { class: 'ivs' }, ...ivRows),

@@ -7,11 +7,11 @@ import { LINE_BY_ID, LURE_BY_ID, REEL_BY_ID, ROD_BY_ID, type Lure } from '../dat
 import type { Conditions, Layer, Species } from '../data/types';
 import { buildFishObject, type FishObject } from '../render/fishMesh';
 import { activity, type GameClock } from '../sim/environment';
-import { Fight, PUMP_LENGTH, type FightOutcome } from '../sim/fight';
+import { Fight, PUMP_LENGTH, type FightOutcome, type Obstacle } from '../sim/fight';
 import { generateFish, type FishInstance } from '../sim/individual';
 import { Rng } from '../sim/rng';
 import { biteChancePerSecond, pickSpecies, speciesWeight } from '../sim/spawn';
-import { structureAt, waterDepth, terrainHeight } from '../world/lakeShape';
+import { DOCK, isRockArea, isWeedArea, structureAt, waterDepth, terrainHeight } from '../world/lakeShape';
 import type { Player } from '../world/player';
 import { WaterEffects } from './effects';
 import type { AmbientFish, FishPopulation } from './population';
@@ -1039,6 +1039,52 @@ export class FishingController {
 
   // ---------------- ファイト ----------------
 
+  /**
+   * 掛けた所の周りで、魚が逃げ込もうとする障害物（桟橋の杭・藻場・岩場・沈み木）を
+   * 釣り人から見た向き（竿を出した向きからの角度）と距離に直して渡す
+   */
+  private obstaclesAround(): Obstacle[] {
+    const out: Obstacle[] = [];
+    const ox = this.origin.x;
+    const oz = this.origin.z;
+    const add = (x: number, z: number, radius: number, kind: Obstacle['kind']) => {
+      const d = Math.hypot(x - ox, z - oz);
+      if (d < 3) return;
+      let a = Math.atan2(-(x - ox), -(z - oz)) - this.castYaw;
+      a = Math.atan2(Math.sin(a), Math.cos(a));
+      // 魚の位置は「竿を出した向き + lateral」で描くので、同じ向きの差をそのまま使う
+      if (Math.abs(a) > 1.25) return;
+      if (out.some((o) => Math.hypot((o.lateral - a) * d, o.distance - d) < radius * 2)) return;
+      out.push({ lateral: a, distance: d, radius, kind });
+    };
+    // 桟橋の杭
+    for (let x = DOCK.xEnd + 0.3; x <= DOCK.xLand; x += 3) {
+      for (const z of [-DOCK.halfWidth + 0.15, DOCK.halfWidth - 0.15]) if (waterDepth(x, z) > 0.4) add(x, z, 1.4, 'post');
+    }
+    // 掛けた所の周りの藻場・岩場
+    const hx = this.lure.x;
+    const hz = this.lure.z;
+    for (let i = 0; i < 80 && out.length < 6; i++) {
+      const a = this.rng.range(0, Math.PI * 2);
+      const r = this.rng.range(2, 22);
+      const x = hx + Math.cos(a) * r;
+      const z = hz + Math.sin(a) * r;
+      const wd = waterDepth(x, z);
+      if (wd < 0.5) continue;
+      if (isWeedArea(x, z) && wd < 3.5) add(x, z, 3, 'weeds');
+      else if (isRockArea(x, z)) add(x, z, 2, 'rock');
+    }
+    // 沈み木（見えない）
+    if (this.rng.chance(0.5)) {
+      const a = this.rng.range(0, Math.PI * 2);
+      const r = this.rng.range(5, 12);
+      const x = hx + Math.cos(a) * r;
+      const z = hz + Math.sin(a) * r;
+      if (waterDepth(x, z) > 1.2) add(x, z, 2, 'log');
+    }
+    return out;
+  }
+
   private startFight(quality: number): void {
     const b = this.bite!;
     this.bite = null;
@@ -1058,6 +1104,7 @@ export class FishingController {
         waterDepth: Math.max(0.5, wd),
         depth: -this.lure.y,
         hookQuality: quality,
+        obstacles: this.obstaclesAround(),
       },
       this.rng,
     );
@@ -1133,9 +1180,24 @@ export class FishingController {
           input.vibrate([25, 20, 50]);
           if (f.distance < 12 && this.fishPos.y > -1.2) this.fx.splash(this.fishPos.x, this.fishPos.z, 0.25);
         }
-        if (e === 'weeds') {
+        if (e === 'weeds' && f.behavior !== 'snagged') {
           this.tip('藻に糸が擦れている。逆へ竿を倒して引き出す', 'bad');
           input.vibrate([15, 15, 15, 15, 15, 15]);
+        }
+        if (e === 'cover') {
+          // 障害物へ一気に突っ込む
+          this.rod.shake = 1;
+          this.shake = Math.max(this.shake, 0.6);
+          input.vibrate([40, 20, 80]);
+        }
+        if (e === 'snag') {
+          this.rod.shake = 1;
+          input.vibrate([20, 20, 20, 20, 20, 20, 20]);
+          this.tip('潜られた。糸を緩めて待つと出てくる。強く引くと擦れて切れる', 'bad');
+        }
+        if (e === 'unsnag') {
+          this.shake = Math.max(this.shake, 0.4);
+          input.vibrate([30, 30, 60]);
         }
       }
     }
@@ -1157,6 +1219,12 @@ export class FishingController {
     this.rod.bend = Math.min(1.8, f.tension / rodPower + 0.05 + f.tug * 0.25 * Math.min(1, f.pullMax / rodPower));
     this.rod.pull = Math.min(1, f.tension / rodPower) * 0.8 + f.tug * 0.2;
     this.rod.lineVibe = f.slack < 0.05 ? (0.015 + f.tug * 0.03) * Math.min(1, tFrac * 1.5) : 0;
+    // 潜られている間は糸が障害物に擦れてガリガリと震える
+    if (f.behavior === 'snagged') {
+      this.rod.lineVibe = Math.max(this.rod.lineVibe, 0.02 + 0.05 * tFrac);
+      this.rod.shake = Math.max(this.rod.shake, 0.25 + 0.5 * tFrac);
+      if (tFrac > 0.3 && this.rng.chance(dt * 4)) input.vibrate(12);
+    }
     this.shake = Math.max(this.shake, f.tug * 0.35 * Math.min(1, tFrac + 0.3) + (f.dragSlipping ? 0.15 : 0));
     this.danger = Math.max(0, Math.min(1, (tFrac - 0.75) / 0.25), f.behavior === 'jump' && f.rodHigh ? 0.8 : 0);
 
@@ -1624,6 +1692,7 @@ export class FishingController {
       grade: h.fish.grade,
       colorId: h.fish.colorId,
       patternId: h.fish.patternId,
+      hook: this.fight?.hookHold,
     };
   }
 
@@ -1657,6 +1726,9 @@ export class FishingController {
         const f = this.fight!;
         const side = touch ? '左右にドラッグ' : 'マウス左右';
         if (f.behavior === 'jump') return '跳んだら竿を下げる';
+        if (f.behavior === 'snagged') return '潜られた。糸を緩めて待つ（強く引くと擦れて切れる）';
+        if (f.behavior === 'cover') return `障害物へ突っ込んでいる。${side}で逆へ倒し、竿を立てて止める`;
+        if (f.tension > f.effectiveLineTest * 0.85) return touch ? '切れそう — 「ドラグ−」で緩める' : '切れそう — ホイールでドラグを緩める';
         if (f.inWeeds) return `藻に擦れている。${side}で魚と逆へ竿を倒して引き出す`;
         if (f.behavior === 'run' && f.oppose < 0.3) return `魚が横へ走っている。${side}で逆へ竿を倒して耐えると弱っていく`;
         if (f.reelLoad > 0.9) return '重くて巻けないときは、竿を立てて寄せ、下げながら巻く';

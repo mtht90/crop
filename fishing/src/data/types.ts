@@ -135,6 +135,14 @@ export interface PatternVariant {
   priceMult?: number;
 }
 
+/**
+ * 引きの個性。
+ * bulldog = 重く長く底へ突っ込む（コイ・フナ）／ jumper = エラ洗いを繰り返す（バス）／
+ * headshaker = 底で首を振り続ける（ナマズ）／ sprinter = 水面近くを速く走り回る（マス・小型の川魚）／
+ * diver = 障害物へ一直線に潜る（ライギョ・主）
+ */
+export type FightStyle = 'bulldog' | 'jumper' | 'headshaker' | 'sprinter' | 'diver';
+
 export interface FightParams {
   /** 体重1kgあたりの引きの強さ係数 */
   pull: number;
@@ -148,6 +156,8 @@ export interface FightParams {
   run: number;
   /** 底に張り付く（根に潜る）傾向 */
   bottom?: boolean;
+  /** 引きの個性（未指定なら数値から決める） */
+  style?: FightStyle;
 }
 
 export interface Species {

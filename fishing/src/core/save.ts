@@ -19,6 +19,8 @@ export interface CatchRecord {
   grade: Grade;
   colorId: string | null;
   patternId: string | null;
+  /** 針の掛かり具合 */
+  hook?: 'solid' | 'thin' | 'foul';
 }
 
 export interface DexEntry {
