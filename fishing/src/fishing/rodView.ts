@@ -2,6 +2,28 @@ import * as THREE from 'three';
 import type { Lure } from '../data/tackle';
 import { buildBobber, buildSinker, buildTackle, type TackleObject } from '../render/tackle';
 import { LineSim } from './lineSim';
+import { Line2 } from 'three/examples/jsm/lines/Line2.js';
+import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js';
+import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
+
+/**
+ * 折れ線の点列を Line2 の線分バッファへ書き込む（毎フレーム新しいバッファを作らない）
+ */
+function writeSegments(g: LineGeometry, attr: 'instanceStart' | 'instanceColorStart', pts: Float32Array): void {
+  const buf = (g.getAttribute(attr) as THREE.InterleavedBufferAttribute).data;
+  const a = buf.array as Float32Array;
+  const n = pts.length / 3;
+  for (let i = 0; i < n - 1; i++) {
+    const o = i * 6;
+    a[o] = pts[i * 3];
+    a[o + 1] = pts[i * 3 + 1];
+    a[o + 2] = pts[i * 3 + 2];
+    a[o + 3] = pts[i * 3 + 3];
+    a[o + 4] = pts[i * 3 + 4];
+    a[o + 5] = pts[i * 3 + 5];
+  }
+  buf.needsUpdate = true;
+}
 
 const SEGMENTS = 14;
 const SEG_LEN = 0.14;
@@ -19,8 +41,9 @@ export class RodView {
   private guides: THREE.Object3D[] = [];
   private spoolFront = new THREE.Object3D();
   /** リールからガイドを通って竿先までの糸（竿の座標系） */
-  private guideLine: THREE.Line;
-  readonly line: THREE.Line;
+  private guideLine: Line2;
+  private guidePos: Float32Array;
+  readonly line: Line2;
   private linePos: Float32Array;
   private lineCol: Float32Array;
   /** 仕掛けの先（ルアー・エサ）。中身は setTackle で差し替える */
@@ -207,19 +230,21 @@ export class RodView {
     parent.add(this.tip);
     this.guides.push(this.tip);
 
-    const gl = new THREE.BufferGeometry();
-    gl.setAttribute('position', new THREE.BufferAttribute(new Float32Array((this.guides.length + 1) * 3), 3));
-    this.guideLine = new THREE.Line(gl, new THREE.LineBasicMaterial({ color: 0xe8e8e0, transparent: true, opacity: 0.7 }));
+    // 糸は画面上で一定の太さ（ピクセル）で描く。細い1pxの線だと竿先付近で空に溶けて途切れて見える
+    this.guidePos = new Float32Array((this.guides.length + 1) * 3);
+    const gl = new LineGeometry();
+    gl.setPositions(this.guidePos);
+    this.guideLine = new Line2(gl, new LineMaterial({ color: 0xdedcd2, linewidth: 1.6, transparent: true, opacity: 0.9 }));
     this.guideLine.frustumCulled = false;
     this.root.add(this.guideLine);
 
     this.linePos = new Float32Array(48 * 3);
-    const lg = new THREE.BufferGeometry();
-    lg.setAttribute('position', new THREE.BufferAttribute(this.linePos, 3));
     // 頂点カラー：空中は明るく、水中は水の色に沈む
     this.lineCol = new Float32Array(48 * 3).fill(0.9);
-    lg.setAttribute('color', new THREE.BufferAttribute(this.lineCol, 3));
-    this.line = new THREE.Line(lg, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.85 }));
+    const lg = new LineGeometry();
+    lg.setPositions(this.linePos);
+    lg.setColors(this.lineCol);
+    this.line = new Line2(lg, new LineMaterial({ vertexColors: true, linewidth: 1.6, transparent: true, opacity: 0.9 }));
     this.line.frustumCulled = false;
     scene.add(this.line);
 
@@ -366,17 +391,17 @@ export class RodView {
 
   private updateGuideLine(): void {
     this.root.updateWorldMatrix(true, true);
-    const p = this.guideLine.geometry.getAttribute('position') as THREE.BufferAttribute;
+    const p = this.guidePos;
     const v = new THREE.Vector3();
     this.spoolFront.getWorldPosition(v);
     this.root.worldToLocal(v);
-    p.setXYZ(0, v.x, v.y, v.z);
+    p.set([v.x, v.y, v.z], 0);
     for (let i = 0; i < this.guides.length; i++) {
       this.guides[i].getWorldPosition(v);
       this.root.worldToLocal(v);
-      p.setXYZ(i + 1, v.x, v.y, v.z);
+      p.set([v.x, v.y, v.z], (i + 1) * 3);
     }
-    p.needsUpdate = true;
+    writeSegments(this.guideLine.geometry, 'instanceStart', p);
   }
 
   /**
@@ -407,8 +432,8 @@ export class RodView {
         c.set([v * 0.85, v, v * 0.95], k);
       }
     }
-    this.line.geometry.getAttribute('position').needsUpdate = true;
-    this.line.geometry.getAttribute('color').needsUpdate = true;
+    writeSegments(this.line.geometry, 'instanceStart', p);
+    writeSegments(this.line.geometry, 'instanceColorStart', c);
   }
 
   /** 糸が水面に入る点 */

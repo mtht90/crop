@@ -445,8 +445,8 @@ export class Game {
         }
       }
       this.player.applyTo(this.camera, 0);
-      if (!paused) this.fishing.update(dt, input, this.player, sens);
-      // 魚の引きで画面が揺れる
+      // 魚の引きで画面が揺れる・体ごと持っていかれる。
+      // 竿はカメラに付いているので、竿先の位置から糸を描く前にカメラを動かし終える
       const sh = this.fishing.shake;
       if (sh > 0.001) {
         const t = now / 1000;
@@ -455,6 +455,8 @@ export class Game {
         this.camera.rotation.z += Math.sin(t * 37) * sh * 0.012;
       }
       this.applyPullFeel();
+      this.camera.updateMatrixWorld();
+      if (!paused) this.fishing.update(dt, input, this.player, sens);
       this.hud.setPrompt(!input.active && !this.modals.isOpen ? 'クリックで操作を再開' : null);
       this.touchState = { mode: 'fish', canFish: false, nearHut: false };
       this.hud.setGuide(this.fishing.guide(input.touch));
