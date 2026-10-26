@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { Lure } from '../data/tackle';
 import { buildBobber, buildSinker, buildTackle, type TackleObject } from '../render/tackle';
+import { LineSim } from './lineSim';
 
 const SEGMENTS = 14;
 const SEG_LEN = 0.14;
@@ -55,9 +56,29 @@ export class RodView {
   /** 張った糸の震え (m) */
   lineVibe = 0;
   private vibeT = 0;
-  /** 竿先のばね（引きの衝撃で大きくお辞儀して揺れ戻る） */
+  /** 竿先のばね（引きの衝撃で大きくお辞儀して揺れ戻る。竿先の固有振動） */
   private tipK = 0;
   private tipV = 0;
+  /** 胴のしなり（2次元：竿の座標で x = 右, y = 上）。糸に引かれる向きへ、ばねで遅れて曲がる */
+  private bx = 0;
+  private by = 0;
+  private bvx = 0;
+  private bvy = 0;
+  /** 手の慣性：竿の角度は入力に少し遅れてついてくる */
+  private dispLift = 0.55;
+  private liftV = 0;
+  private prevTilt = 0;
+  private prevYaw = 0;
+  private tiltVel = 0;
+  private yawVel = 0;
+  /** 糸の物理 */
+  private sim = new LineSim(48);
+  private hasLine = false;
+  private time = 0;
+  /** 竿先から垂れたルアーの振り子 */
+  private hang = new THREE.Vector3();
+  private hangPrev = new THREE.Vector3();
+  private hangInit = false;
 
   constructor(camera: THREE.Camera, scene: THREE.Scene) {
     camera.add(this.root);
@@ -255,35 +276,68 @@ export class RodView {
   }
 
   update(dt: number): void {
+    dt = Math.min(dt, 1 / 20);
     const F = this.feel;
-    this.shakeT += dt * 40;
+    this.time += dt;
+    this.shakeT += dt * 24;
     this.shake = Math.max(0, this.shake - dt * 3);
-    const jitter = Math.sin(this.shakeT) * this.shake * (0.04 + 0.05 * F);
-    // 竿先のばね（重い竿先がゆっくり揺れ戻る）
-    this.tipV += (-this.tipK * 160 - this.tipV * 9) * dt;
+    // 竿先の固有振動（約4Hz）。アタリや糸鳴りはこの揺れを励起する
+    this.tipV += Math.sin(this.shakeT + Math.sin(this.time * 3.1)) * this.shake * (14 + 16 * F) * dt;
+    this.tipV += (-this.tipK * 576 - this.tipV * 9.6) * dt;
     this.tipK += this.tipV * dt;
-    // 根元を立てて、先へ行くほど曲げる
+    // 手の慣性
+    if (dt > 0) {
+      this.liftV += ((this.lift - this.dispLift) * 196 - this.liftV * 25) * dt;
+      this.dispLift += this.liftV * dt;
+    }
     // 強く引かれるほど竿が前に倒され、手元ごと持っていかれる
     const pull = this.pull * (0.5 + 0.5 * F);
     const lurch = this.lurch * F;
-    const baseTilt = -0.05 + this.lift * 0.8 + this.swing - pull * 0.32 - lurch * 0.25;
-    this.root.position.set(
-      0.3 + this.side * 0.05,
-      -0.36 - pull * 0.08 - lurch * 0.06 + jitter * 0.3,
-      -0.42 - pull * 0.2 - lurch * 0.16,
-    );
-    this.root.rotation.set(0, 0, 0);
-    this.root.rotation.x = baseTilt;
-    this.root.rotation.y = -this.side * 0.45;
-    this.root.rotation.z = -this.side * 0.25;
+    const tilt = -0.05 + this.dispLift * 0.8 + this.swing - pull * 0.32 - lurch * 0.25;
+    const yaw = -this.side * 0.45;
+    this.root.position.set(0.3 + this.side * 0.05, -0.36 - pull * 0.08 - lurch * 0.06, -0.42 - pull * 0.2 - lurch * 0.16);
+    this.root.rotation.set(tilt, yaw, -this.side * 0.25);
+    // 竿を振ると、胴と穂先は慣性で遅れてしなり、止めると振り戻る
+    if (dt > 0) {
+      const tv = (tilt - this.prevTilt) / dt;
+      const yv = (yaw - this.prevYaw) / dt;
+      const dTv = Math.max(-25, Math.min(25, tv - this.tiltVel));
+      const dYv = Math.max(-25, Math.min(25, yv - this.yawVel));
+      this.bvy -= dTv * 0.55;
+      this.bvx += dYv * 0.55;
+      this.tipV -= dTv * 0.25;
+      this.tiltVel = tv;
+      this.yawVel = yv;
+    }
+    this.prevTilt = tilt;
+    this.prevYaw = yaw;
+    // 糸に引かれる向き（竿の座標）。竿と糸の角度が大きいほど曲げる力が大きい
+    let dx = 0;
+    let dy = -1;
+    let amount = this.bend;
+    if (this.hasLine && this.bend > 0) {
+      const [lx, ly, lz] = this.sim.pullDir();
+      const q = this.root.getWorldQuaternion(new THREE.Quaternion()).invert();
+      const d = new THREE.Vector3(lx, ly, lz).applyQuaternion(q);
+      const sinA = Math.hypot(d.x, d.y);
+      if (sinA > 1e-3) {
+        dx = d.x / sinA;
+        dy = d.y / sinA;
+      }
+      amount = this.bend * (0.3 + 0.7 * Math.min(1, sinA));
+    }
+    // 胴のしなり：ばね（約1.4Hz）で糸の引きを追う
+    this.bvx += ((amount * dx - this.bx) * 81 - this.bvx * 8) * dt;
+    this.bvy += ((amount * dy - this.by) * 81 - this.bvy * 8) * dt;
+    this.bx += this.bvx * dt;
+    this.by += this.bvy * dt;
     // 胴から曲がるパラボリックなしなり：先へ行くほど大きく曲がる
     const n = this.segs.length;
     for (let i = 0; i < n; i++) {
       const k = (i + 1) / n;
-      const w = Math.pow(k, 1.6) * 2.2;
-      const bend = this.bend * 0.105 * w + (jitter + this.tipK) * k * k * k * 0.9;
-      this.segs[i].rotation.x = -bend;
-      this.segs[i].rotation.y = this.side * this.bend * 0.05 * k;
+      const w = Math.pow(k, 1.6) * 2.2 * 0.105;
+      const tk = this.tipK * k * k * k * 0.9;
+      this.segs[i].rotation.set(this.by * w + dy * tk, -(this.bx * w + dx * tk), 0);
     }
     // ハンドルとローターは巻くと回り、ドラグが滑るとスプールが逆に回る
     this.reelHandle.rotation.x -= this.reelSpin * dt * 18;
@@ -292,6 +346,22 @@ export class RodView {
     this.updateGuideLine();
     this.tackle?.update(dt, this.lureSpeed);
     this.updateLeader();
+  }
+
+  /** 竿先からぶら下がったルアーの位置（振り子。竿を動かすと揺れる） */
+  hangFrom(tip: THREE.Vector3, len: number, dt: number): THREE.Vector3 {
+    if (!this.hangInit || this.hang.distanceTo(tip) > len * 3) {
+      this.hang.copy(tip).y -= len;
+      this.hangPrev.copy(this.hang);
+      this.hangInit = true;
+    }
+    const h = Math.min(dt, 1 / 30);
+    const v = this.hang.clone().sub(this.hangPrev).multiplyScalar(Math.exp(-h * 1.5));
+    this.hangPrev.copy(this.hang);
+    this.hang.add(v).y -= 9.8 * h * h;
+    const d = this.hang.clone().sub(tip);
+    this.hang.copy(tip).addScaledVector(d.normalize(), len);
+    return this.hang;
   }
 
   private updateGuideLine(): void {
@@ -310,45 +380,46 @@ export class RodView {
   }
 
   /**
-   * 竿先から終点まで糸を描く。sag = 空中のたるみ (m)、entry = 水面への入水点（無ければ空中のみ）、
-   * bow = 水中の糸が水の抵抗で膨らむ向きと量 (m)
+   * 竿先から終点まで、長さ rest (m) の糸を物理で動かして描く。
+   * floor = 糸が沈める下限の高さ（湖底・地面）
    */
-  drawLine(from: THREE.Vector3, to: THREE.Vector3, sag: number, entry: THREE.Vector3 | null, bow: THREE.Vector3 | null = null): void {
+  updateLine(dt: number, from: THREE.Vector3, to: THREE.Vector3, rest: number, floor?: (x: number, z: number) => number): void {
+    this.sim.step(dt, from.x, from.y, from.z, to.x, to.y, to.z, rest, floor);
+    this.hasLine = true;
     const p = this.linePos;
     const c = this.lineCol;
-    const n = p.length / 3;
-    const airEnd = entry ?? to;
-    const waterN = entry ? 14 : 0;
-    const airN = n - waterN;
-    this.vibeT += 0.9;
-    for (let i = 0; i < airN; i++) {
-      const t = i / (airN - 1);
-      const x = from.x + (airEnd.x - from.x) * t;
-      const z = from.z + (airEnd.z - from.z) * t;
-      let y = from.y + (airEnd.y - from.y) * t;
-      // 自重のたるみは懸垂線に近い形（竿先側は張り、水面側で垂れる）
-      y -= Math.sin(t * Math.PI) * sag * (0.7 + 0.3 * t);
-      // 張り詰めた糸がビリビリ震える
-      y += Math.sin(t * Math.PI) * Math.sin(this.vibeT + t * 9) * this.lineVibe;
-      p.set([x, y, z], i * 3);
-      c.set([0.92, 0.92, 0.88], i * 3);
-    }
-    if (entry) {
-      for (let i = 0; i < waterN; i++) {
-        const t = (i + 1) / waterN;
-        const k = Math.sin(t * Math.PI);
-        p.set(
-          [entry.x + (to.x - entry.x) * t + (bow?.x ?? 0) * k, entry.y + (to.y - entry.y) * t + (bow?.y ?? 0) * k, entry.z + (to.z - entry.z) * t + (bow?.z ?? 0) * k],
-          (airN + i) * 3,
-        );
+    const sp = this.sim.pos;
+    const n = this.sim.n;
+    this.vibeT += dt * 55;
+    for (let i = 0; i < n; i++) {
+      const t = i / (n - 1);
+      const k = i * 3;
+      // 張り詰めた空中の糸がビリビリ震える
+      const y = sp[k + 1];
+      const vib = y > 0 ? Math.sin(t * Math.PI) * Math.sin(this.vibeT + t * 9) * this.lineVibe : 0;
+      p[k] = sp[k];
+      p[k + 1] = y + vib;
+      p[k + 2] = sp[k + 2];
+      if (y >= 0) c.set([0.92, 0.92, 0.88], k);
+      else {
         // 深いほど水に溶けて見えにくい
-        const d = Math.max(0, -p[(airN + i) * 3 + 1]);
-        const v = 0.55 * Math.exp(-d * 0.6) + 0.12;
-        c.set([v * 0.85, v, v * 0.95], (airN + i) * 3);
+        const v = 0.55 * Math.exp(y * 0.6) + 0.12;
+        c.set([v * 0.85, v, v * 0.95], k);
       }
     }
     this.line.geometry.getAttribute('position').needsUpdate = true;
     this.line.geometry.getAttribute('color').needsUpdate = true;
+  }
+
+  /** 糸が水面に入る点 */
+  lineEntry(): [number, number] | null {
+    return this.sim.entry();
+  }
+
+  /** 次に描く糸を両端の直線から始め直す */
+  resetLine(): void {
+    this.hasLine = false;
+    this.sim = new LineSim(48);
   }
 
   setVisible(v: boolean): void {

@@ -11,11 +11,14 @@ import { Fight, PUMP_LENGTH, type FightOutcome, type Obstacle } from '../sim/fig
 import { generateFish, type FishInstance } from '../sim/individual';
 import { Rng } from '../sim/rng';
 import { biteChancePerSecond, pickSpecies, speciesWeight } from '../sim/spawn';
-import { DOCK, isRockArea, isWeedArea, structureAt, waterDepth, terrainHeight } from '../world/lakeShape';
+import { DOCK, isRockArea, isWeedArea, structureAt, waterDepth, terrainHeight, onDock } from '../world/lakeShape';
 import type { Player } from '../world/player';
 import { WaterEffects } from './effects';
 import type { AmbientFish, FishPopulation } from './population';
 import { RodView } from './rodView';
+
+/** 糸が沈める下限：湖底・地面・桟橋の上 */
+const lineFloor = (x: number, z: number): number => (onDock(x, z) ? DOCK.deckY + 0.02 : terrainHeight(x, z) + 0.02);
 
 /**
  * ready   = 構え（PCは視点を動かして狙う）
@@ -290,6 +293,7 @@ export class FishingController {
     this.rod.lineVibe = 0;
     this.rod.spoolSlip = 0;
     this.lurch = this.lurchV = 0;
+    this.rod.resetLine();
     this.fightLoad = 0;
     this.rod.lure.visible = false;
     this.rod.lure.quaternion.identity();
@@ -552,39 +556,35 @@ export class FishingController {
       const yaw = Math.atan2(-(toward.z - this.lure.z), toward.x - this.lure.x);
       const hanging = this.rod.bobber.visible || (this.phase === 'water' && this.lureSpeed < 0.05 && this.lure.y > -waterDepth(this.lure.x, this.lure.z) + 0.05 && !this.lureDef.pack && this.lureDef.sink > 0);
       this.rod.lure.rotation.set(0, yaw, hanging ? Math.PI / 2 : this.phase === 'flying' ? -0.4 : 0, 'YXZ');
-      const entry = this.lure.y < -0.02 ? new THREE.Vector3(this.lure.x, 0, this.lure.z) : null;
-      const sag = this.phase === 'flying' ? 0.2 : this.bite?.phase === 'take' ? 0.02 : 0.15 + this.lineSlack * 0.35;
       const end = this.rod.bobber.visible ? this.rod.bobber.position : this.lure;
-      this.rod.drawLine(tip, end, sag, this.rod.bobber.visible ? null : entry);
+      // 糸の長さ：飛行中は少し余分に出ていき、着水後は糸ふけの分だけ長い
+      const straight = tip.distanceTo(end);
+      const rest = this.phase === 'flying' ? straight * 1.02 + 0.3 : this.bite?.phase === 'take' ? straight : straight * 1.01 + this.lineSlack;
+      this.rod.updateLine(dt, tip, end, rest, lineFloor);
     } else if ((this.phase === 'fight' || this.phase === 'net' || this.phase === 'landing') && this.fight) {
       // 糸は魚の口へ。ルアーは口に掛かって見える
       const end = this.fishObj ? this.mouthOf(this.fishObj.group) : this.fishPos;
       const f = this.fight;
-      // 足元で暴れている間・抜き上げ中は竿を立てて張っている
-      const slackK = this.phase === 'fight' ? Math.max(0, Math.min(1, f.slack * 0.5 + (f.tension < 0.2 ? 0.4 : 0))) : 0.05;
-      const sag = this.phase === 'landing' ? (this.haulTaut ? 0 : 0.08) : Math.min(1.5, 0.02 + slackK * 1.2);
-      let entry: THREE.Vector3 | null = null;
-      let bow: THREE.Vector3 | null = null;
-      if (end.y < -0.05) {
-        // 張っていれば竿先と魚を結ぶ直線が水面と交わる所、たるむほど手前で水に入る
-        const k = tip.y / Math.max(0.01, tip.y - end.y);
-        entry = tip.clone().lerp(end, Math.min(1, k));
-        entry.lerp(new THREE.Vector3(end.x, 0, end.z), slackK * 0.6);
-        entry.y = 0;
-        // 水の抵抗で、魚の動きと反対側へ糸が膨らむ。たるめば沈む
-        const side = new THREE.Vector3(-(end.z - this.origin.z), 0, end.x - this.origin.x).normalize();
-        bow = side.multiplyScalar(-Math.sign(f.side) * Math.min(1.2, Math.abs(f.side) * 0.6 * (f.behavior === 'run' ? 1 : 0.4)));
-        bow.y = -slackK * 0.6;
-        // 糸が水を切る
-        if (f.behavior === 'run' && f.slack < 0.1 && this.rng.chance(0.08)) this.fx.ripple(entry.x, entry.z, 0.06);
-      }
-      this.rod.drawLine(tip, end, sag, entry, bow);
+      // 糸の長さ：張力が強いほど一直線、たるみの分だけ長い
+      const straight = tip.distanceTo(end);
+      const rodPower = Math.max(0.5, ROD_BY_ID[this.save.equip.rod].power);
+      const rest =
+        this.phase === 'fight'
+          ? straight + Math.max(0, f.slack) + straight * 0.02 * Math.max(0, 1 - f.tension / (0.25 * rodPower))
+          : this.phase === 'landing'
+          ? straight + (this.haulTaut ? 0 : 0.08)
+          : straight + 0.05;
+      this.rod.updateLine(dt, tip, end, rest, lineFloor);
+      // 糸が水を切る
+      const entry = this.rod.lineEntry();
+      if (entry && this.phase === 'fight' && f.behavior === 'run' && f.slack < 0.1 && this.rng.chance(0.08)) this.fx.ripple(entry[0], entry[1], 0.06);
+
       this.rod.lure.visible = !this.lureDef.pack;
       this.rod.lure.position.copy(end);
       if (this.fishObj) this.rod.lure.quaternion.copy(this.fishObj.group.quaternion);
     } else {
-      const hang = tip.clone().add(new THREE.Vector3(Math.sin(this.time * 1.3) * 0.01, -0.35, Math.cos(this.time * 1.1) * 0.01));
-      this.rod.drawLine(tip, hang, 0, null);
+      const hang = this.rod.hangFrom(tip, 0.35, dt);
+      this.rod.updateLine(dt, tip, hang, 0.35);
       this.rod.lure.visible = true;
       this.rod.lure.position.copy(hang);
       // 竿先から垂れ下がる（結び目が上）
