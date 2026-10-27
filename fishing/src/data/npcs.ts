@@ -17,8 +17,6 @@ export interface NpcDef {
   /** 肩書き（話しかける時に表示） */
   title: string;
   area: SpotId;
-  /** public/assets/npc/<model>.json（Kenney Mini Characters） */
-  model: string;
   x: number;
   z: number;
   /** 向き（プレイヤーと同じ規則：0 = -Z を向く） */
@@ -44,7 +42,6 @@ export const NPCS: NpcDef[] = [
     name: 'ケンタ',
     title: '釣り仲間',
     area: 'lake',
-    model: 'male-c',
     x: LAKE_DOCK.xLand - 4,
     z: 0.95,
     yaw: Math.PI / 2,
@@ -69,7 +66,6 @@ export const NPCS: NpcDef[] = [
     name: 'ハル',
     title: '近所のおばあちゃん',
     area: 'lake',
-    model: 'female-d',
     x: LAKE_HUT.x - 6,
     z: LAKE_HUT.z + 7,
     yaw: Math.PI / 2,
@@ -94,7 +90,6 @@ export const NPCS: NpcDef[] = [
     name: 'ゲンジ',
     title: '漁師',
     area: 'coast',
-    model: 'male-e',
     x: COAST_DOCK.xLand - 7,
     z: -1.7,
     yaw: Math.PI / 2,
@@ -120,7 +115,6 @@ export const NPCS: NpcDef[] = [
     name: 'ヒデ',
     title: '料理屋「汐見亭」の大将',
     area: 'coast',
-    model: 'male-a',
     x: COAST_HUT.x - 7,
     z: COAST_HUT.z - 6,
     yaw: Math.PI / 2 + 0.4,
@@ -147,7 +141,6 @@ export const NPCS: NpcDef[] = [
     name: 'サキ',
     title: '汐見水族館の飼育員',
     area: 'coast',
-    model: 'female-b',
     x: coastX(ZONES.river + 20) + 9,
     z: ZONES.river + 20,
     yaw: Math.PI / 2 - 0.3,

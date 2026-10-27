@@ -10,7 +10,7 @@
 | 魚：実写スキャン（コイ / ゲンゴロウブナ / ナマズ / カムルチー / オイカワ / ハス / ブルーギル / オオクチバス類 / アユ。コイ・フナ・ナマズ・ライギョ・オイカワ・ウグイ・ハス・ニゴイ・ブルーギル・バス類・ワカサギ・ソウギョに使用。軽くしたメッシュに、元モデルを真横から撮ったテクスチャを貼り直している） | [ffish.asia / floraZia.com（Sketchfab）](https://sketchfab.com/ffishAsia-and-floraZia)。取得は CC0 の複製（[lisa-1002/fishing3d](https://github.com/lisa-1002/fishing3d)）から | CC0 |
 | 海の魚：実写スキャン（クロダイ / メジナ / マアジ / マサバ / カサゴ / スズキ / シロギス / カワハギ / キュウセン / ボラ / マダイ / イシダイ / ブリ / クサフグ / マイワシ / タチウオ / クエ。汐見港・磯の魚に使用） | [ffish.asia / floraZia.com（Sketchfab）](https://sketchfab.com/ffishAsia-and-floraZia)。取得は CC0 の複製（[lisa-1002/fishing3d](https://github.com/lisa-1002/fishing3d)）から | CC0 |
 | 樹木・岩・草・スイレン・カヌーなど | [Kenney Nature Kit](https://kenney.nl/assets/nature-kit) | CC0 |
-| 釣り場の人（ケンタ・ハル・ゲンジ・ヒデ・サキ） | [Kenney Mini Characters](https://kenney.nl/assets/mini-characters) | CC0 |
+| 釣り場の人（ケンタ・ハル・ゲンジ・ヒデ・サキ）：素体・体型・骨格とウェイト・服・髪・肌・目 | [MakeHuman](http://www.makehumancommunity.org/) の CC0 データ（[MPFB2](https://github.com/makehumancommunity/mpfb2) の data と MakeHuman システムアセット）から scripts/make-human.mjs で組み立て | CC0 |
 | 水面の法線マップ（waternormals.jpg） | [three.js examples](https://github.com/mrdoob/three.js/tree/r169/examples/textures) | MIT |
 | 空・水面シェーダ（Sky / Water） | three.js examples (`three/examples/jsm/objects`) | MIT |
 | フォント（Zen Kaku Gothic New / Jost） | [Google Fonts](https://fonts.google.com/) | SIL Open Font License 1.1 |
