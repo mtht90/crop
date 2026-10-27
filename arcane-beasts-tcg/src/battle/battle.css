@@ -993,6 +993,7 @@
   .zone-bench.opp { top: calc(var(--u) * 6.5); }
   .zone-bench.me { top: calc(var(--u) * 61.1); }
   .slot { width: calc(var(--u) * 9); }
+  .slot.slot-active { width: 100%; }
   .zone-stadium { left: calc(var(--u) * 49); top: calc(var(--u) * 37.7); width: calc(var(--u) * 5.6); }
 
   .pile { width: calc(var(--u) * 5.6); }
