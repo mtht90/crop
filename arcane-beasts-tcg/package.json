@@ -13,7 +13,7 @@
     "server": "tsx server/index.ts",
     "server:check": "tsc --noEmit -p tsconfig.server.json",
     "start": "vite build && tsx server/index.ts",
-    "build:web": "vite build"
+    "build:web": "node --max-old-space-size=300 --max-semi-space-size=2 node_modules/vite/bin/vite.js build"
   },
   "keywords": [],
   "author": "",
