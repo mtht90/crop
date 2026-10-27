@@ -51,9 +51,9 @@ export function topCard(slot: Slot): MonsterCard {
 }
 
 /** Prize cards the opponent takes when this monster is knocked out */
-export const prizeValue = (mc: MonsterCard) => (mc.ex ? 3 : mc.omega ? 2 : 1);
-/** Ω and EX monsters carry a rule box */
-export const hasRule = (mc: MonsterCard) => !!(mc.omega || mc.ex);
+export const prizeValue = (mc: MonsterCard) => (mc.rarity === 5 ? 3 : mc.rarity === 4 ? 2 : 1);
+/** ★4 and ★5 monsters are the "big" ones some cards single out */
+export const hasRule = (mc: MonsterCard) => mc.rarity >= 4;
 
 export function slotAt(s: GameState, pos: Pos): Slot | null {
   const pl = s.players[pos.p];
@@ -73,6 +73,24 @@ function toolKey(slot: Slot): string | null {
   return (card(slot.tool.cid) as TrainerCard).key;
 }
 
+/**
+ * 地形 (stadium cards): each one favours a type (+30 to its attacks on the
+ * active monster) and holds another back (−20). See also harbor / oasis /
+ * swamp / battlefield below, and the weather each one brings on screen.
+ */
+export const TERRAIN: Record<string, { boost?: EType; weaken?: EType }> = {
+  volcano: { boost: 'fire', weaken: 'water' },
+  coast: { boost: 'water', weaken: 'fire' },
+  forest: { boost: 'grass', weaken: 'lightning' },
+  peak: { boost: 'lightning', weaken: 'grass' },
+  ruins: { boost: 'psychic', weaken: 'dark' },
+  crypt: { boost: 'dark', weaken: 'psychic' },
+  mine: { boost: 'fighting', weaken: 'colorless' },
+  sky: { boost: 'colorless', weaken: 'fighting' },
+};
+export const TERRAIN_BOOST = 30;
+export const TERRAIN_WEAKEN = 20;
+
 export function stadiumKey(s: GameState): string | null {
   return s.stadium ? (card(s.stadium.cid) as TrainerCard).key : null;
 }
@@ -82,7 +100,8 @@ export function maxHp(s: GameState, slot: Slot): number {
   let hp = mc.hp;
   if (toolKey(slot) === 'charm') hp += 30;
   if (toolKey(slot) === 'mailcoat' && mc.stage === 'basic') hp += 60;
-  if (stadiumKey(s) === 'harbor' && !hasRule(mc)) hp += 30;
+  // 亡者の港: the small grow sturdier, the big ones wither
+  if (stadiumKey(s) === 'harbor') hp += hasRule(mc) ? -30 : 40;
   return hp;
 }
 
@@ -1028,11 +1047,10 @@ export class Game {
         }
         dmg += boost;
         const st = stadiumKey(s);
-        if (st === 'volcano' && mc.type === 'fire') dmg += 20;
-        if (st === 'ruins' && mc.type === 'psychic') dmg += 20;
-        if (st === 'crypt' && mc.type === 'dark') dmg += 20;
-        if (st === 'peak' && mc.type === 'lightning') dmg += 20;
-        if (st === 'battlefield') dmg += 10;
+        const tr = st ? TERRAIN[st] : undefined;
+        if (tr?.boost === mc.type) dmg += TERRAIN_BOOST;
+        if (tr?.weaken === mc.type) dmg = Math.max(0, dmg - TERRAIN_WEAKEN);
+        if (st === 'battlefield') dmg += 20;
         // weakness / resistance
         const dc = topCard(D);
         let weak = false;
@@ -1674,7 +1692,7 @@ export class Game {
       const slot = this.pl(p).active;
       if (!slot) continue;
       const pos: Pos = { p, z: 'active' };
-      if (slot.conditions.includes('poisoned')) this.putDamage(pos, stadiumKey(s) === 'swamp' ? 30 : 10, 'grass', 'checkup');
+      if (slot.conditions.includes('poisoned')) this.putDamage(pos, stadiumKey(s) === 'swamp' ? 40 : 10, 'grass', 'checkup');
       if (slot.conditions.includes('burned')) {
         this.putDamage(pos, 20, 'fire', 'checkup');
         if (this.flip(p, 'やけどの回復')) {
@@ -1694,7 +1712,7 @@ export class Game {
       }
     }
     if (stadiumKey(s) === 'oasis') {
-      for (const p of order) if (this.pl(p).active && this.pl(p).active!.damage > 0) this.heal({ p, z: 'active' }, 10);
+      for (const p of order) if (this.pl(p).active && this.pl(p).active!.damage > 0) this.heal({ p, z: 'active' }, 20);
     }
     // abilities between turns
     for (const p of order) {

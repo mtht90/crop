@@ -964,3 +964,122 @@
 .mat.drop-any.drop-hot::before { border-color: #fff4c2; box-shadow: inset 0 0 60px rgba(255, 214, 110, 0.35), 0 0 30px rgba(255, 214, 110, 0.4); }
 /* dragging must never select text */
 .battle-screen { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+
+/* 地形: weather over the battlefield and a chip with the terrain's effect */
+.battle-weather { position: absolute; inset: 0; pointer-events: none; z-index: 1; animation: terrain-in 1.2s ease-out; }
+.battle-weather canvas { width: 100%; height: 100%; display: block; }
+@keyframes terrain-in { from { opacity: 0; } to { opacity: 1; } }
+.terrain-chip { position: absolute; left: 50%; top: max(6px, env(safe-area-inset-top)); translate: -50% 0; z-index: 70; display: flex; gap: 8px; align-items: center; padding: 4px 12px; border-radius: 999px; background: rgba(6, 10, 26, 0.78); border: 1px solid var(--line); font-size: calc(var(--u) * 1); font-weight: 800; white-space: nowrap; pointer-events: none; animation: terrain-in 0.8s ease-out; }
+.terrain-chip b { color: var(--gold-2); font-family: var(--font-display); font-weight: 400; }
+.terrain-chip .up { color: #9cf7a8; }
+.terrain-chip .down { color: #ff9e9e; }
+
+/* ============================================================================
+   Portrait: the stage is 56.25u wide and 100u tall. The opponent sits on top,
+   you below, the hand and turn controls at the bottom.
+   ========================================================================== */
+@media (orientation: portrait) {
+  .mat-line { left: calc(var(--u) * 4); right: calc(var(--u) * 4); top: calc(var(--u) * 40); }
+  .mat-zone.active.opp { left: calc(var(--u) * 21.1); top: calc(var(--u) * 21.4); width: calc(var(--u) * 14); height: calc(var(--u) * 17.8); }
+  .mat-zone.active.me { left: calc(var(--u) * 21.1); top: calc(var(--u) * 41); width: calc(var(--u) * 14); height: calc(var(--u) * 17.8); }
+  .mat-zone.bench.opp { left: calc(var(--u) * 2.2); top: calc(var(--u) * 6); width: calc(var(--u) * 51.8); height: calc(var(--u) * 13.6); }
+  .mat-zone.bench.me { left: calc(var(--u) * 2.2); top: calc(var(--u) * 60.6); width: calc(var(--u) * 51.8); height: calc(var(--u) * 13.6); }
+  .mat-emblem { left: calc(var(--u) * 23.1); top: calc(var(--u) * 35); }
+
+  .zone-active { width: calc(var(--u) * 12); left: calc(var(--u) * 22.1); }
+  .zone-active.opp { top: calc(var(--u) * 22.3); }
+  .zone-active.me { top: calc(var(--u) * 41.6); }
+  .zone-bench { left: calc(var(--u) * 3.2); width: calc(var(--u) * 49.8); gap: calc(var(--u) * 1.2); }
+  .zone-bench.opp { top: calc(var(--u) * 6.5); }
+  .zone-bench.me { top: calc(var(--u) * 61.1); }
+  .slot { width: calc(var(--u) * 9); }
+  .zone-stadium { left: calc(var(--u) * 49); top: calc(var(--u) * 37.7); width: calc(var(--u) * 5.6); }
+
+  .pile { width: calc(var(--u) * 5.6); }
+  .pile.deck.opp { left: calc(var(--u) * 49); top: calc(var(--u) * 21.4); }
+  .pile.discard.opp { left: calc(var(--u) * 41); top: calc(var(--u) * 21.4); }
+  .pile.deck.me { left: calc(var(--u) * 49); top: calc(var(--u) * 50.4); }
+  .pile.discard.me { left: calc(var(--u) * 41); top: calc(var(--u) * 50.4); }
+  .pile-count { font-size: calc(var(--u) * 1.3); bottom: calc(var(--u) * -2.2); }
+
+  .prizes { left: calc(var(--u) * 1.6); width: calc(var(--u) * 12); height: calc(var(--u) * 16); }
+  .prizes.opp { top: calc(var(--u) * 21.4); }
+  .prizes.me { top: calc(var(--u) * 41.6); }
+  .prize-slot { width: calc(var(--u) * 5.4); left: calc(mod(var(--i), 2) * var(--u) * 6); top: calc(round(down, calc(var(--i) / 2), 1) * var(--u) * 4.6); }
+  .prize-count { font-size: calc(var(--u) * 1.3); bottom: calc(var(--u) * -2.6); }
+  .prizes.opp .prize-count { top: calc(var(--u) * 16.4); bottom: auto; }
+
+  .hand { top: calc(var(--u) * 76.2); height: calc(var(--u) * 14); }
+  .hand-card { width: calc(var(--u) * 10); }
+  .opp-hand-card { width: calc(var(--u) * 4.4); }
+  .playing-wrap { left: calc(var(--u) * 15.1); top: calc(var(--u) * 26); width: calc(var(--u) * 26); }
+
+  .plate { padding: calc(var(--u) * 0.5) calc(var(--u) * 1.6) calc(var(--u) * 0.5) calc(var(--u) * 0.5); }
+  .plate.opp { top: calc(var(--u) * 0.8); }
+  .plate.me { top: calc(var(--u) * 92.6); }
+  .plate img { width: calc(var(--u) * 4.6); height: calc(var(--u) * 4.6); }
+  .plate-name { font-size: calc(var(--u) * 1.6); max-width: calc(var(--u) * 16); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .plate-sub { font-size: calc(var(--u) * 1.15); }
+  .thinking { font-size: calc(var(--u) * 1.2); }
+
+  .turn-box { left: auto; right: calc(var(--u) * 1.2); top: calc(var(--u) * 92); width: auto; flex-direction: row; gap: calc(var(--u) * 1); }
+  .turn-chip { font-size: calc(var(--u) * 1.7); padding: calc(var(--u) * 0.3) calc(var(--u) * 1.4); }
+  .turn-flags { font-size: calc(var(--u) * 1.5); }
+  .turn-flags span { width: calc(var(--u) * 3); height: calc(var(--u) * 3); }
+  .end-turn { width: auto; --h: calc(var(--u) * 5.4); font-size: calc(var(--u) * 1.8); padding: 0 calc(var(--u) * 2.2); }
+  .confirm-note { position: absolute; right: 0; bottom: calc(100% + var(--u) * 0.6); white-space: nowrap; font-size: calc(var(--u) * 1.2); }
+
+  .log-toggle { width: calc(var(--u) * 4.4); height: calc(var(--u) * 4.4); font-size: calc(var(--u) * 2); }
+  .log-toggle.surrender { right: calc(var(--u) * 6); }
+  .log-panel { left: calc(var(--u) * 2); right: calc(var(--u) * 2); width: auto; top: calc(var(--u) * 6); font-size: calc(var(--u) * 1.3); }
+  .preview { right: auto; left: calc(var(--u) * 10.6); top: calc(var(--u) * 8); width: calc(var(--u) * 35); }
+
+  .action-menu { width: calc(var(--u) * 50); left: calc(var(--u) * 3.1) !important; }
+  .action-menu.at-active, .action-menu.at-bench { top: auto; bottom: calc(var(--u) * 26); }
+  .am-name { font-size: calc(var(--u) * 2); }
+  .am-close { font-size: calc(var(--u) * 2.2); }
+  .am-main b { font-size: calc(var(--u) * 1.7); }
+  .am-main small { font-size: calc(var(--u) * 1.15); }
+  .am-main em { font-size: calc(var(--u) * 1.1); }
+  .am-cost { font-size: calc(var(--u) * 1.4); min-width: calc(var(--u) * 7.5); }
+  .am-dmg { font-size: calc(var(--u) * 2.6); }
+  .am-badge { font-size: calc(var(--u) * 1.1); }
+
+  .sel-bar { left: 50%; translate: -50% 0; top: calc(var(--u) * 39); max-width: calc(var(--u) * 52); font-size: calc(var(--u) * 1.4); }
+  .sel-bar.prompt, .sel-bar.setup { top: calc(var(--u) * 37.4); max-width: calc(var(--u) * 52); }
+  .modal { width: calc(var(--u) * 53); max-height: calc(var(--u) * 90); }
+  .modal-title { font-size: calc(var(--u) * 2.2); }
+  .modal-sub { font-size: calc(var(--u) * 1.3); }
+  .grid-card { width: calc(var(--u) * 11.6); }
+
+  .stamp-ui { left: auto; right: calc(var(--u) * 1.2); top: calc(var(--u) * 85.4); }
+  .stamp-btn { width: calc(var(--u) * 4.6); height: calc(var(--u) * 4.6); }
+  .stamp-palette { left: auto; right: 0; bottom: calc(100% + var(--u) * 1); }
+}
+/* tall phones: the stage grows to the screen; the gap opens in the middle of
+   the field (--dy) and below your bench (another --dy), so the hand sits at
+   the bottom edge */
+@media (orientation: portrait) {
+  .battle-stage { --sh: min(100dvh, calc(var(--u) * 125)); --dy: calc((var(--sh) - var(--u) * 100) / 2); height: var(--sh); }
+  .mat-line { top: calc(var(--u) * 40 + var(--dy) * 0.5); }
+  .mat-emblem { top: calc(var(--u) * 35 + var(--dy) * 0.5); }
+  .zone-stadium { top: calc(var(--u) * 37.7 + var(--dy) * 0.5); }
+  .sel-bar { top: calc(var(--u) * 39 + var(--dy) * 0.5); }
+  .sel-bar.prompt, .sel-bar.setup { top: calc(var(--u) * 37.4 + var(--dy) * 0.5); }
+  .mat-zone.active.me { top: calc(var(--u) * 41 + var(--dy)); }
+  .zone-active.me { top: calc(var(--u) * 41.6 + var(--dy)); }
+  .prizes.me { top: calc(var(--u) * 41.6 + var(--dy)); }
+  .pile.deck.me, .pile.discard.me { top: calc(var(--u) * 50.4 + var(--dy)); }
+  .mat-zone.bench.me { top: calc(var(--u) * 60.6 + var(--dy)); }
+  .zone-bench.me { top: calc(var(--u) * 61.1 + var(--dy)); }
+  .hand { top: calc(var(--u) * 76.2 + var(--dy) * 2); }
+  .plate.me { top: calc(var(--u) * 92.6 + var(--dy) * 2); }
+  .turn-box { top: calc(var(--u) * 92 + var(--dy) * 2); }
+  .stamp-ui { top: calc(var(--u) * 85.4 + var(--dy) * 2); }
+  .playing-wrap { top: calc(var(--u) * 26 + var(--dy) * 0.5); }
+}
+@media (orientation: portrait) {
+  .stamp-ui { top: calc(var(--u) * 0.8) !important; right: calc(var(--u) * 11.2); }
+  .stamp-btn { width: calc(var(--u) * 4.4); height: calc(var(--u) * 4.4); }
+  .stamp-palette { top: calc(100% + var(--u) * 1); bottom: auto; width: calc(var(--u) * 40); }
+}

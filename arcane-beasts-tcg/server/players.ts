@@ -2,17 +2,13 @@
 // Player records (anonymous id + secret), stored in one JSON file.
 //   • a device holds {id, secret}; the server keeps only a hash of the secret
 //   • a transfer code (10 minutes, one use) hands the identity to another device
-//   • online rank is kept here (the same ladder as the CPU ranked mode)
+//   • the online record (games, wins, losses) is kept here
 // ============================================================================
 import { createHash, randomBytes, randomInt, randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { applyRanked, ensureSeason, freshRank, RANKS, type RankChange, type RankState } from '../src/state/ranked';
 import { PORTRAITS, type OnlineProfile } from '../src/online/protocol';
 import { judgeName } from '../src/online/names';
-import { validAvatar } from '../src/online/avatar';
-import { maskEmail, type GoogleIdentity } from './google';
-import type { StoredPasskey } from './passkey';
 import type { PlayerBackend } from './remote';
 
 export interface PlayerRecord {
@@ -20,25 +16,20 @@ export interface PlayerRecord {
   secrets: string[]; // sha256 hashes
   name: string;
   portrait: string;
-  rank: RankState;
+  /** left over from the old ranked mode (no longer used) */
+  rank?: unknown;
   games: number;
   wins: number;
   losses: number;
   createdAt: number;
   lastSeen: number;
-  /** sha256 of the Google account id, once signed up with Google */
-  google?: string;
-  /** the e-mail, masked, for display only */
-  googleMail?: string;
-  /** passkeys that log in as this player */
-  passkeys?: StoredPasskey[];
 }
 
 const hash = (s: string) => createHash('sha256').update(s).digest('hex');
 const CODE_ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
 
 /** a built-in portrait key or an uploaded picture that passed the check */
-export const portraitOk = (s: unknown): s is string => typeof s === 'string' && (PORTRAITS.includes(s) || validAvatar(s));
+export const portraitOk = (s: unknown): s is string => typeof s === 'string' && PORTRAITS.includes(s);
 
 export const cleanName = (s: unknown) => {
   const t = String(s ?? '')
@@ -65,7 +56,6 @@ export class PlayerStore {
       try {
         const data = JSON.parse(readFileSync(file, 'utf8')) as PlayerRecord[];
         for (const p of data) {
-          p.rank = { ...freshRank(), ...p.rank };
           this.players.set(p.id, p);
         }
       } catch (e) {
@@ -83,7 +73,6 @@ export class PlayerStore {
     if (!this.backend) return;
     const list = await this.backend.loadAll();
     for (const p of list) {
-      p.rank = { ...freshRank(), ...p.rank };
       this.players.set(p.id, p);
     }
     // anything only the local file knew (an earlier run without a database) moves up
@@ -98,7 +87,6 @@ export class PlayerStore {
       secrets: [hash(secret)],
       name: ((v) => (v.ok ? cleanName(v.name) : `ななし${randomInt(100, 1000)}`))(judgeName(name)),
       portrait: portrait && PORTRAITS.includes(portrait) ? portrait : PORTRAITS[0],
-      rank: freshRank(),
       games: 0,
       wins: 0,
       losses: 0,
@@ -121,7 +109,11 @@ export class PlayerStore {
       p.name = `ななし${randomInt(100, 1000)}`;
       this.save(p);
     }
-    if (ensureSeason(p.rank)) this.save(p);
+    // pictures uploaded when that was still allowed
+    if (!PORTRAITS.includes(p.portrait)) {
+      p.portrait = PORTRAITS[0];
+      this.save(p);
+    }
     return p;
   }
 
@@ -136,54 +128,14 @@ export class PlayerStore {
   }
 
   profile(p: PlayerRecord): OnlineProfile {
-    return { id: p.id, name: p.name, portrait: p.portrait, rank: p.rank, games: p.games, google: p.googleMail, passkeys: p.passkeys?.length ?? 0 };
+    return { id: p.id, name: p.name, portrait: p.portrait, games: p.games, wins: p.wins, losses: p.losses };
   }
 
-  rankLabel(p: PlayerRecord) {
-    return RANKS[p.rank.rank];
-  }
-
-  /** record a finished ranked game; returns the change shown to the player */
-  recordRanked(p: PlayerRecord, win: boolean): RankChange {
-    const change = applyRanked(p.rank, win);
-    p.games++;
-    if (win) p.wins++;
-    else p.losses++;
-    this.save(p);
-    return change;
-  }
   recordCasual(p: PlayerRecord, win: boolean) {
     p.games++;
     if (win) p.wins++;
     else p.losses++;
     this.save(p);
-  }
-
-  // ---- Google accounts ----------------------------------------------------
-  /**
-   * Google sign-in for the player on this connection.
-   *   new   — nobody used this Google account yet: it is joined to `p`
-   *   same  — `p` already belongs to it
-   *   login — it belongs to another player: the device switches to that one (new secret)
-   *   null  — `p` already belongs to a different Google account
-   */
-  googleSignIn(p: PlayerRecord, who: GoogleIdentity): { mode: 'new' | 'same' | 'login'; player: PlayerRecord; secret?: string } | null {
-    const key = hash(`google:${who.sub}`);
-    const owner = [...this.players.values()].find((x) => x.google === key);
-    if (owner && owner.id === p.id) {
-      p.googleMail = maskEmail(who.email);
-      this.save(p);
-      return { mode: 'same', player: p };
-    }
-    if (owner) {
-      owner.googleMail = maskEmail(who.email);
-      return { mode: 'login', player: owner, secret: this.newSecret(owner) };
-    }
-    if (p.google) return null;
-    p.google = key;
-    p.googleMail = maskEmail(who.email);
-    this.save(p);
-    return { mode: 'new', player: p };
   }
 
   /** a fresh secret for another device of `p` (the oldest of more than 5 stops working) */
@@ -193,24 +145,6 @@ export class PlayerStore {
     if (p.secrets.length > 5) p.secrets.shift();
     this.save(p);
     return secret;
-  }
-
-  // ---- passkeys -----------------------------------------------------------
-  addPasskey(p: PlayerRecord, pk: Omit<StoredPasskey, 'createdAt'>) {
-    p.passkeys = [...(p.passkeys ?? []).filter((x) => x.id !== pk.id), { ...pk, createdAt: this.now() }].slice(-10);
-    this.save(p);
-  }
-  findPasskey(id: string): { player: PlayerRecord; passkey: StoredPasskey } | null {
-    for (const p of this.players.values()) {
-      const pk = p.passkeys?.find((x) => x.id === id);
-      if (pk) return { player: p, passkey: pk };
-    }
-    return null;
-  }
-  touchPasskey(p: PlayerRecord, id: string, counter: number) {
-    const pk = p.passkeys?.find((x) => x.id === id);
-    if (pk) pk.counter = counter;
-    this.save(p);
   }
 
   // ---- transfer codes -----------------------------------------------------

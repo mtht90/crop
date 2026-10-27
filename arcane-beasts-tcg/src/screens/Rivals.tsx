@@ -9,7 +9,6 @@ import { artUrl } from '../lib/assets';
 import { CardFace, EnergySymbol } from '../ui/Card';
 import { Icon } from '../ui/Icon';
 import { TopBar } from '../ui/TopBar';
-import { RankEmblem } from '../ui/RankEmblem';
 import { foley, playMusic, sfx } from '../audio/audio';
 
 const LV: Record<Difficulty, number> = { easy: 1, normal: 2, hard: 3 };
@@ -36,7 +35,7 @@ export function Rivals() {
   const rdeck = deckById(r.deck);
   const keyCards = rdeck.cards
     .map(([n]) => byName(n))
-    .filter((c) => c.kind === 'monster' && (c.omega || c.ex || c.stage === 'stage2'))
+    .filter((c) => c.kind === 'monster' && (c.rarity >= 4 || c.stage === 'stage2'))
     .slice(0, 3);
 
   const fight = (spectate = false) => {
@@ -74,138 +73,137 @@ export function Rivals() {
 
   return (
     <div className="screen">
-      <div className="screen-bg" style={{ backgroundImage: `url(${artUrl(r.scene)})` }} key={r.scene} />
-      <div className="screen-shade" />
-      <div className="stage">
+      <div className="page-bg" style={{ backgroundImage: `url(${artUrl(r.scene)})` }} key={r.scene} />
+      <div className="page-shade" />
+      <div className="page">
         <TopBar title="フリー対戦" back="arena" />
-        <div className="seg rival-sets">
-          {SETS.map((k) => (
-            <button
-              key={k}
-              className={rset === k ? 'on' : ''}
-              onClick={() => {
-                foley.tick();
-                setRset(k);
-                const first = RIVALS.findIndex((rv, i) => setOf(i) === k && !save.beaten.includes(rv.id));
-                setSel(first === -1 ? RIVALS.findIndex((_, i) => setOf(i) === k) : first);
-              }}
-            >
-              {SET_INFO[k].short}の強敵
-              {k === 'AB3' && <i>NEW</i>}
-            </button>
-          ))}
-        </div>
-        <div className="rival-list" style={shown.length <= 5 ? { gridTemplateColumns: `repeat(${shown.length}, 1fr)` } : undefined}>
-          {shown.map(({ rv, i }) => {
-            const open = unlocked(i);
-            return (
-              <motion.div
-                key={rv.id}
-                className={`rival-card ${sel === i ? 'sel' : ''} ${open ? '' : 'locked'}`}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.04 }}
+        <div className="page-inner rv3">
+          {/* the deck you bring */}
+          <button className="box arena3-deck" onClick={() => go('deck')}>
+            {deck && <CardFace cid={deck.cover} />}
+            <span className="arena3-deck-text">
+              <small>使用デッキ</small>
+              <b>{deck?.name ?? 'デッキがありません'}</b>
+              {errs.length > 0 && <span className="warn">{errs[0]}</span>}
+            </span>
+            <span className="chip-btn">変更</span>
+          </button>
+
+          {/* rivals */}
+          <h3 className="section-title">強敵に挑む</h3>
+          <div className="ms3-tabs">
+            {SETS.map((k) => (
+              <button
+                key={k}
+                className={`chip-btn ${rset === k ? 'on' : ''}`}
                 onClick={() => {
-                  if (!open) return sfx('miss-2', 0.4);
-                  foley.flip();
-                  setSel(i);
+                  foley.tick();
+                  setRset(k);
+                  const first = RIVALS.findIndex((rv, i) => setOf(i) === k && !save.beaten.includes(rv.id));
+                  setSel(first === -1 ? RIVALS.findIndex((_, i) => setOf(i) === k) : first);
                 }}
               >
-                <img className="scene" src={artUrl(rv.scene)} alt="" />
-                <img className="por" src={artUrl(rv.portrait)} alt="" />
-                <div className="num">{numInSet(i)}</div>
-                {save.beaten.includes(rv.id) && <div className="cleared">CLEAR</div>}
-                {!open && (
-                  <div className="lock">
-                    <Icon name="lock" />
-                  </div>
-                )}
-                <div className="rname">
-                  {open ? rv.name : '？？？'}
-                  <small>{open ? rv.title : '前の相手を倒すと解放'}</small>
-                </div>
-              </motion.div>
-            );
-          })}
-        </div>
-
-        <div className="panel free-box">
-          <h3>フリー対戦</h3>
-          <div className="seg">
-            {ALL_DECKS.map((d) => (
-              <button key={d.id} className={freeDeck === d.id ? 'on' : ''} onClick={() => setFreeDeck(d.id)}>
-                {d.name}
+                {SET_INFO[k].short}の強敵
               </button>
             ))}
           </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <div className="seg">
-              {(['easy', 'normal', 'hard'] as Difficulty[]).map((l) => (
-                <button key={l} className={freeLv === l ? 'on' : ''} onClick={() => setFreeLv(l)}>
-                  {l === 'easy' ? 'かんたん' : l === 'normal' ? 'ふつう' : 'むずかしい'}
+          <div className="rv3-list">
+            {shown.map(({ rv, i }) => {
+              const open = unlocked(i);
+              return (
+                <button
+                  key={rv.id}
+                  className={`rv3-card ${sel === i ? 'sel' : ''} ${open ? '' : 'locked'}`}
+                  onClick={() => {
+                    if (!open) return sfx('miss-2', 0.4);
+                    foley.flip();
+                    setSel(i);
+                  }}
+                >
+                  <img className="scene" src={artUrl(rv.scene)} alt="" />
+                  <img className="por" src={artUrl(rv.portrait)} alt="" />
+                  <span className="num">{numInSet(i)}</span>
+                  {save.beaten.includes(rv.id) && <span className="cleared">CLEAR</span>}
+                  {!open && (
+                    <span className="lock">
+                      <Icon name="lock" />
+                    </span>
+                  )}
+                  <span className="rname">{open ? rv.name : '？？？'}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <AnimatePresence mode="wait">
+            <motion.div key={r.id} className="box rv3-detail" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
+              <div className="rv3-top">
+                <img className="rv3-por" src={artUrl(r.portrait)} alt="" />
+                <div className="rv3-info">
+                  <small>
+                    {SET_INFO[setOf(sel)].short} 第{numInSet(sel)}の強敵 ・ {r.title}
+                  </small>
+                  <h2>{r.name}</h2>
+                  <div className="rv3-meta">
+                    <EnergySymbol type={rdeck.type} size="1.2em" />
+                    <span>
+                      {rdeck.name}（{TYPE_JP[rdeck.type]}）
+                    </span>
+                  </div>
+                  <div className="rv3-meta">
+                    <span className="stars">
+                      {'★'.repeat(LV[r.level])}
+                      {'☆'.repeat(3 - LV[r.level])}
+                    </span>
+                    <span>
+                      報酬 <b>{r.reward}</b>コイン{!save.beaten.includes(r.id) && '（初勝利+200）'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <p className="rv3-intro">「{r.intro}」</p>
+              <div className="rv3-keys">
+                <small>切り札</small>
+                <div>
+                  {keyCards.map((c) => (
+                    <CardFace key={c.id} cid={c.id} interactive />
+                  ))}
+                </div>
+              </div>
+              <button className="btn big red rv3-go" disabled={!!errs.length} onClick={() => fight()}>
+                <Icon name="swords" /> 挑戦する
+              </button>
+            </motion.div>
+          </AnimatePresence>
+
+          {/* free play against any recipe */}
+          <h3 className="section-title">好きなデッキと対戦</h3>
+          <div className="box rv3-free">
+            <div className="db3-chips rv3-decks">
+              {ALL_DECKS.map((d) => (
+                <button key={d.id} className={`chip-btn ${freeDeck === d.id ? 'on' : ''}`} onClick={() => setFreeDeck(d.id)}>
+                  <EnergySymbol type={d.type} size="1.1em" /> {d.name}
                 </button>
               ))}
             </div>
-            <button className="btn small blue" style={{ marginLeft: 'auto' }} disabled={!!errs.length} onClick={() => fightFree()}>
-              対戦する
-            </button>
-            <button className="btn small ghost" title="CPU同士の対戦を観戦" disabled={!!errs.length} onClick={() => fightFree(true)}>
-              観戦
-            </button>
+            <div className="rv3-free-row">
+              <div className="db3-chips">
+                {(['easy', 'normal', 'hard'] as Difficulty[]).map((l) => (
+                  <button key={l} className={`chip-btn ${freeLv === l ? 'on' : ''}`} onClick={() => setFreeLv(l)}>
+                    {l === 'easy' ? 'かんたん' : l === 'normal' ? 'ふつう' : 'むずかしい'}
+                  </button>
+                ))}
+              </div>
+              <span className="db3-spacer" />
+              <button className="btn small ghost" title="自分のデッキとCPUのデッキで、CPU同士が対戦します" disabled={!!errs.length} onClick={() => fightFree(true)}>
+                CPU同士を観る
+              </button>
+              <button className="btn small blue" disabled={!!errs.length} onClick={() => fightFree()}>
+                対戦する
+              </button>
+            </div>
           </div>
         </div>
-
-        <AnimatePresence mode="wait">
-          <motion.div key={r.id} className="panel rival-detail" initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.2 }}>
-            <div className="rd-top">
-              <img className="rd-por" src={artUrl(r.portrait)} alt="" />
-              <div>
-                <div className="rtitle">
-                  {SET_INFO[setOf(sel)].short} 第{numInSet(sel)}の強敵 ・ {r.title}
-                </div>
-                <h2>{r.name}</h2>
-                <div className="rd-meta">
-                  <span>
-                    デッキ <b>{rdeck.name}</b>
-                  </span>
-                  <EnergySymbol type={rdeck.type} size="1.4em" />
-                  <span>{TYPE_JP[rdeck.type]}</span>
-                </div>
-                <div className="rd-meta">
-                  <span>
-                    強さ <span className="stars">{'★'.repeat(LV[r.level])}{'☆'.repeat(3 - LV[r.level])}</span>
-                  </span>
-                  <span>
-                    報酬 <b>{r.reward}</b> コイン{!save.beaten.includes(r.id) && '（初勝利+200）'}
-                  </span>
-                </div>
-              </div>
-            </div>
-            <div className="bubble" style={{ alignSelf: 'stretch' }}>
-              <b>{r.name}</b>
-              <p>「{r.intro}」</p>
-            </div>
-            <div style={{ fontWeight: 800, color: 'var(--ink-dim)', fontSize: 'calc(var(--u) * 1)' }}>切り札</div>
-            <div className="rd-cards">
-              {keyCards.map((c) => (
-                <CardFace key={c.id} cid={c.id} interactive />
-              ))}
-            </div>
-            <div className="rd-actions">
-              <div>
-                <div style={{ fontSize: 'calc(var(--u) * 0.9)', color: 'var(--ink-dim)' }}>使用デッキ</div>
-                <div style={{ fontWeight: 900 }}>{deck?.name ?? 'なし'}</div>
-                {errs.length > 0 && <div className="warn">{errs[0]}</div>}
-              </div>
-              <button className="btn ghost small" onClick={() => go('deck')}>
-                デッキ変更
-              </button>
-              <button className="btn big red" style={{ marginLeft: 'auto' }} disabled={!!errs.length} onClick={() => fight()}>
-                <Icon name="swords" /> 挑戦する
-              </button>
-            </div>
-          </motion.div>
-        </AnimatePresence>
       </div>
     </div>
   );

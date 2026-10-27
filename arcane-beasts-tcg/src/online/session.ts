@@ -103,7 +103,7 @@ export class GameSession {
     }
     if (!frames.length && !pr) return [];
     const out: Outgoing[] = [];
-    for (const viewer of [0, 1, 'spectator'] as Viewer[]) {
+    for (const viewer of [0, 1] as Viewer[]) {
       const f: FrameMsg[] = frames.map((fr) => ({ ev: viewEvent(fr.ev, viewer), state: viewState(fr.state, viewer) }));
       const mine = viewer !== 'spectator' && pr && pr.player === viewer ? pr : null;
       out.push({

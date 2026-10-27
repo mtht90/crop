@@ -325,17 +325,6 @@
   border-radius: 0.6cqw;
   margin-right: 0.4cqw;
 }
-.rmark { font-style: normal; margin-left: 0.6cqw; }
-.rmark.r-R, .rmark.r-RR { color: #111; }
-.t-dark .rmark.r-R, .t-dark .rmark.r-RR { color: #fff; }
-.rmark.r-SR, .rmark.r-UR {
-  font-family: 'Cinzel', serif;
-  font-weight: 900;
-  background: linear-gradient(90deg, #ffd86b, #ff5fa2, #7c5cff);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
 
 /* ------------------------------- Full art -------------------------------- */
 .tcg.full-art .tcg-art {
@@ -852,19 +841,15 @@
 }
 
 /* ------------------------------ Rarity marks ----------------------------- */
-.rmark { font-style: normal; letter-spacing: -0.12em; margin-left: 0.8cqw; font-family: 'M PLUS 1p', sans-serif; font-weight: 900; }
-.rmark.r-C, .rmark.r-U, .rmark.r-R, .rmark.r-RR { color: #1b1b1f; }
-.t-dark .rmark.r-C, .t-dark .rmark.r-U, .t-dark .rmark.r-R, .t-dark .rmark.r-RR,
-.tcg.bleed .rmark, .tcg.v-S .rmark, .kind-energy .rmark { color: #fff; }
-.rmark.r-ST, .rmark.r-ST2, .rmark.r-CR {
-  letter-spacing: 0;
-  font-size: 1.25em;
-  background: linear-gradient(180deg, #fff6c9, #e0a526);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  filter: drop-shadow(0 0 0.4cqw rgba(0, 0, 0, 0.5));
-}
+.rmark { font-style: normal; letter-spacing: -0.12em; margin-left: 0.8cqw; font-family: 'M PLUS 1p', sans-serif; font-weight: 900; color: #1b1b1f; }
+.t-dark .rmark, .tcg.bleed .rmark, .tcg.v-S .rmark, .kind-energy .rmark { color: #fff; }
+/* ★ colours: grey, blue, gold, rainbow, rainbow-gold */
+.rmark.r-1 { color: #8a909b; }
+.rmark.r-2 { color: #2f86e0; }
+.rmark.r-3, .rmark.r-4, .rmark.r-5 { letter-spacing: 0; -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 0 0.4cqw rgba(0, 0, 0, 0.55)); }
+.rmark.r-3 { background-image: linear-gradient(180deg, #fff6c9, #e0a526); }
+.rmark.r-4 { background-image: linear-gradient(90deg, #ff6b6b, #ffd36b, #6bff9a, #6bc8ff, #c56bff); }
+.rmark.r-5 { font-size: 1.15em; background-image: linear-gradient(90deg, #fff1a8, #ff9ad5, #fff1a8, #9ad8ff, #fff1a8); }
 .tcg.v-mirror .tcg-footer .setno::after { content: 'MIRROR'; margin-left: 1cqw; font-family: 'Cinzel', serif; font-weight: 900; font-size: 0.85em; letter-spacing: 0.08em; opacity: 0.7; }
 
 /* mirror pattern: fine diagonal etching on top of the rainbow */

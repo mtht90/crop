@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { aiAnswer } from '../ai';
 import { ALL_DECKS, deckById, expand, validateDeck } from '../decks';
-import { canPay, Game, maxHp } from '../game';
+import { canPay, Game, maxHp, prizeValue, TERRAIN } from '../game';
 import { ALL_CARDS, byName, card } from '../cards';
-import { aceCandidates, buildDeck } from '../autodeck';
-import { applyRanked, DAN, freshRank, MEIJIN, RANKS } from '../../state/ranked';
+import { aceCandidates, buildDeck, fromRecipe } from '../autodeck';
 
 function playOut(d0: string, d1: string, seed: number) {
   const a = ALL_DECKS.find((d) => d.id === d0)!;
@@ -76,7 +75,7 @@ describe('第2弾 rules', () => {
   }
   const inst = (g: Game, cid: string, owner: 0 | 1) => ({ uid: 90000 + Math.floor(Math.random() * 9999), cid, owner });
 
-  it('EX knocked out gives 3 prizes, Ω gives 2', () => {
+  it('★5 knocked out gives 3 prizes, ★4 gives 2', () => {
     for (const [name, want] of [['ドラグーン', 3], ['トリトン', 2], ['ドレイクファイター', 1]] as const) {
       const g = started();
       const victim = g.s.players[1];
@@ -90,19 +89,22 @@ describe('第2弾 rules', () => {
     }
   });
 
-  it('亡者の港 raises HP only for monsters without a rule box', () => {
+  it('亡者の港: ★1–3 get +40 HP, ★4 / ★5 lose 30', () => {
     const g = started();
     const plain = g.newSlot(inst(g, byName('ドレイクファイター').id, 0));
     const ex = g.newSlot(inst(g, byName('ドラグーン').id, 0));
     g.s.stadium = inst(g, byName('亡者の港').id, 0);
-    expect(maxHp(g.s, plain)).toBe(130);
+    expect(maxHp(g.s, plain)).toBe(140);
     expect(maxHp(g.s, ex)).toBe(310);
   });
 
-  it('EX cards carry their flag and rarity', () => {
-    const exs = ALL_CARDS.filter((c) => c.kind === 'monster' && c.ex && !c.variant);
-    expect(exs.filter((c) => c.set !== 'AB3').length).toBe(5);
-    for (const c of exs) expect(c.rarity).toBe('ST');
+  it('★5 is a handful of monsters; ★4 / ★5 give 2 / 3 prizes; printings keep their ★', () => {
+    const base = ALL_CARDS.filter((c) => !c.variant);
+    const five = base.filter((c) => c.rarity === 5);
+    expect(five.map((c) => c.name).sort()).toEqual(['アークウィッチ', 'クイーンアント', 'グランドナイト', 'ドラグーン', 'リッチロード'].sort());
+    expect(base.filter((c) => c.rarity === 4).length).toBeGreaterThan(15);
+    for (const c of base) if (c.kind === 'monster') expect(prizeValue(c)).toBe(c.rarity === 5 ? 3 : c.rarity === 4 ? 2 : 1);
+    for (const v of ALL_CARDS.filter((c) => c.variant)) expect(v.rarity).toBe(card(v.baseId!).rarity);
   });
 });
 
@@ -150,36 +152,10 @@ describe('おすすめ編成', () => {
   }, 60000);
 });
 
-describe('ランクマッチ', () => {
-  it('級 never demotes; 100pt promotes and pays a reward once', () => {
-    const r = freshRank();
-    expect(applyRanked(r, false).after).toEqual({ rank: 0, pts: 0 });
-    applyRanked(r, true);
-    const c = applyRanked(r, true);
-    expect(c.after.rank).toBe(1);
-    expect(c.rewards.map((x) => x.rank)).toEqual([1]);
-  });
-  it('段 loses points and demotes below 0, never below 初段', () => {
-    const r = { ...freshRank(), rank: DAN + 1, pts: 10 };
-    const c = applyRanked(r, false);
-    expect(c.demoted).toBe(true);
-    expect(c.after.rank).toBe(DAN);
-    const d = applyRanked({ ...freshRank(), rank: DAN, pts: 0 }, false);
-    expect(d.after).toEqual({ rank: DAN, pts: 0 });
-  });
-  it('rank names run 10級 … 1級, 初段 … 十段, 名人', () => {
-    expect(RANKS[0]).toBe('10級');
-    expect(RANKS[9]).toBe('1級');
-    expect(RANKS[DAN]).toBe('初段');
-    expect(RANKS[19]).toBe('十段');
-    expect(RANKS[MEIJIN]).toBe('名人');
-  });
-});
-
 describe('第3弾 辺境の軍勢', () => {
   const ab3 = ALL_CARDS.filter((c) => c.set === 'AB3' && !c.variant);
-  it('has 120 base cards and every evolution line resolves', () => {
-    expect(ab3.length).toBe(120);
+  it('has 121 base cards (120 + 天空の浮島) and every evolution line resolves', () => {
+    expect(ab3.length).toBe(121);
     for (const c of ab3) {
       if (c.kind !== 'monster' || !c.evolvesFrom) continue;
       const p = byName(c.evolvesFrom);
@@ -188,7 +164,7 @@ describe('第3弾 辺境の軍勢', () => {
   });
   it('AI plays full games with decks built around every AB3 ex / Ω', () => {
     const all = () => 4;
-    const aces = ab3.filter((c) => c.kind === 'monster' && (c.ex || c.omega));
+    const aces = ab3.filter((c) => c.kind === 'monster' && c.rarity >= 4);
     expect(aces.length).toBeGreaterThanOrEqual(10);
     for (let i = 0; i < aces.length; i++) {
       const a = buildDeck(aces[i].name, all).cards;
@@ -236,4 +212,22 @@ describe('第3弾 辺境の軍勢', () => {
       }
     }
   }, 120000);
+});
+
+describe('地形', () => {
+  it('every type has a terrain that favours it, and the card says so', () => {
+    const stadiums = ALL_CARDS.filter((c) => c.kind === 'trainer' && c.sub === 'stadium' && !c.variant);
+    for (const t of ['fire', 'water', 'grass', 'lightning', 'psychic', 'fighting', 'dark', 'colorless'] as const) {
+      const key = Object.entries(TERRAIN).find(([, v]) => v.boost === t)?.[0];
+      expect(key, t).toBeTruthy();
+      expect(stadiums.some((c) => c.kind === 'trainer' && c.key === key), t).toBe(true);
+    }
+  });
+  it('おすすめデッキ: every recipe becomes a legal deck when you own everything', () => {
+    for (const d of ALL_DECKS) {
+      const r = fromRecipe(d, () => 4);
+      expect(r.cards.length, d.id).toBe(60);
+      expect(validateDeck(r.cards), d.id).toEqual([]);
+    }
+  });
 });

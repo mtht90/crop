@@ -53,7 +53,7 @@ interface BattleStore {
   /** online: the opponent dropped; they forfeit at this time (epoch ms) */
   peerOffline: number | null;
   /** online: the latest stamp received */
-  incomingStamp: { key: number; id: string; from: 0 | 1 | 'spectator' } | null;
+  incomingStamp: { key: number; id: string; from: 0 | 1 } | null;
   /** online: what the server decided (rank change etc.) */
   onlineResult: import('../online/protocol').ServerMsg | null;
 }
@@ -192,8 +192,8 @@ export abstract class FramePlayer {
       case 'stadium':
         foley.whoosh();
         sfx('magic-holy-2', 0.6);
-        fx.banner(`スタジアム「${card(this.cidIn(s, ev.uid)).name}」`, 'info');
-        return d(1200);
+        fx.banner(`地形変化！「${card(this.cidIn(s, ev.uid)).name}」`, 'info');
+        return d(1400);
       case 'discard':
         foley.slide();
         return d(260);

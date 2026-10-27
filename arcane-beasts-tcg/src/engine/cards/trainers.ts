@@ -37,11 +37,11 @@ export const TRAINERS: TrainerCard[] = [
   t('helmet', '棘の鎧', 'tool', 'U', 'このカードをつけているバトルモンスターが、相手のモンスターからワザのダメージを受けたとき、ワザを使ったモンスターにダメカンを2個のせる。', 'item', { icon: 'spiked-armor' }),
 
   // ---------------------------- Stadiums ----------------------------
-  t('volcano', '灼熱の火山帯', 'stadium', 'U', 'おたがいの炎モンスターが使うワザの、相手のバトルモンスターへのダメージは「+20」される。', 'story/landscape-lava'),
-  t('forest', 'エルフの森', 'stadium', 'U', 'おたがいのプレイヤーは、自分の番に1回、自分の山札からたねモンスターを1枚選び、ベンチに出してよい。そして山札を切る。', 'story/landscape-hills-01'),
-  t('coast', '嵐の海岸', 'stadium', 'U', 'おたがいの場のモンスター全員の、にげるためのエネルギーは、1個少なくなる。', 'story/landscape-coast'),
-  t('swamp', '瘴気の沼', 'stadium', 'U', 'おたがいのどくのモンスターにのせるダメカンの数は、2個多くなる。', 'story/swamp-03'),
-  t('battlefield', '英雄の古戦場', 'stadium', 'U', 'おたがいのモンスターが使うワザの、相手のバトルモンスターへのダメージは「+10」される。', 'story/landscape-battlefield_nohumans'),
+  t('volcano', '灼熱の火山帯', 'stadium', 'U', 'おたがいの炎モンスターが使うワザの、相手のバトルモンスターへのダメージは「+30」、水モンスターのワザのダメージは「-20」される。', 'story/landscape-lava'),
+  t('forest', 'エルフの森', 'stadium', 'U', 'おたがいの草モンスターのワザのダメージは「+30」、雷モンスターのワザのダメージは「-20」される。また、自分の番に1回、山札からたねモンスターを1枚選び、ベンチに出してよい。', 'story/landscape-hills-01'),
+  t('coast', '嵐の海岸', 'stadium', 'U', 'おたがいの水モンスターのワザのダメージは「+30」、炎モンスターのワザのダメージは「-20」される。また、場のモンスター全員の、にげるためのエネルギーは1個少なくなる。', 'story/landscape-coast'),
+  t('swamp', '瘴気の沼', 'stadium', 'U', 'おたがいのどくのモンスターにのせるダメカンの数は、3個多くなる。', 'story/swamp-03'),
+  t('battlefield', '英雄の古戦場', 'stadium', 'U', 'おたがいのモンスターが使うワザの、相手のバトルモンスターへのダメージは「+20」される。', 'story/landscape-battlefield_nohumans'),
 ];
 
 
@@ -66,7 +66,7 @@ export const ENERGIES: EnergyCard[] = [
       set: 'AB1' as const,
       no: en,
       name: ENAMES[ty],
-      rarity: 'C' as Rarity,
+      rarity: 1 as Rarity,
       art: `energy/${ty}`,
       basic: true,
       provides: [ty],
@@ -79,7 +79,7 @@ export const ENERGIES: EnergyCard[] = [
     set: 'AB1',
     no: 208,
     name: 'ダブル無色エネルギー',
-    rarity: 'U',
+    rarity: 2,
     art: 'energy/colorless',
     basic: false,
     provides: ['colorless'],
@@ -93,7 +93,7 @@ export const ENERGIES: EnergyCard[] = [
     set: 'AB1',
     no: 209,
     name: '虹色エネルギー',
-    rarity: 'R',
+    rarity: 3,
     art: 'energy/rainbow',
     basic: false,
     provides: ['fire', 'water', 'grass', 'lightning', 'psychic', 'fighting', 'dark'],

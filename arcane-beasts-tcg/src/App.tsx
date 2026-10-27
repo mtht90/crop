@@ -12,7 +12,6 @@ import { DeckBuilder } from './screens/DeckBuilder';
 import { Collection } from './screens/Collection';
 import { Shop } from './screens/Shop';
 import { Missions } from './screens/Missions';
-import { Exchange } from './screens/Exchange';
 import { Lobby } from './screens/Lobby';
 import { StoryMap } from './screens/StoryMap';
 import { Scene } from './screens/Scene';
@@ -24,6 +23,9 @@ import { setGyroEnabled, startGyro } from './lib/gyro';
 import { expand, RIVALS, deckById } from './engine/decks';
 import './screens/screens.css';
 import { ConfirmDialog } from './ui/Confirm';
+import { TabBar, TAB_OF } from './ui/TabBar';
+import { More } from './screens/More';
+import './styles/app.css';
 import { useBattle } from './battle/controller';
 
 if (import.meta.env.DEV) Object.assign(window, { __stores: { useStore, useBattle } });
@@ -58,10 +60,10 @@ const SCREENS = {
   collection: Collection,
   shop: Shop,
   missions: Missions,
-  exchange: Exchange,
   lobby: Lobby,
   story: StoryMap,
   scene: Scene,
+  more: More,
   settings: Settings,
   credits: Credits,
   rules: Rules,
@@ -90,11 +92,10 @@ export function App() {
         level: 'normal',
         scene: ['story/landscape-battlefield_nohumans', 'story/p-mountains', 'story/p-summer', 'story/landscape-castle', 'story/p-winter', 'story/p-great-tree'][Math.floor(Math.random() * 6)],
         reward: 0,
-        spectate: m.you === 'spectator',
         online: m,
       });
     };
-    if (q.has('room') || q.has('watch')) useStore.getState().go(useStore.getState().save.started ? 'lobby' : 'starter');
+    if (q.has('room')) useStore.getState().go(useStore.getState().save.started ? 'lobby' : 'starter');
     else if (q.has('gallery')) useStore.getState().go('gallery');
     else if (q.has('battle')) debugBattle();
     else if (q.has('screen')) useStore.getState().go(q.get('screen') as never);
@@ -117,15 +118,14 @@ export function App() {
           </linearGradient>
         </defs>
       </svg>
-      <div className="rotate-hint">
-        <div>📱↻</div>
-        <p>画面を横向きにしてお楽しみください</p>
+      <div className={`app ${TAB_OF[screen] ? 'with-tabs' : ''}`}>
+        <AnimatePresence mode="wait">
+          <motion.div key={screen === 'battle' ? `battle-${seq}` : screen} className="screen" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, pointerEvents: 'none' }} transition={{ duration: 0.25 }}>
+            <Comp />
+          </motion.div>
+        </AnimatePresence>
+        {TAB_OF[screen] && <TabBar screen={screen} />}
       </div>
-      <AnimatePresence mode="wait">
-        <motion.div key={screen === 'battle' ? `battle-${seq}` : screen} className="screen" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, pointerEvents: 'none' }} transition={{ duration: 0.25 }}>
-          <Comp />
-        </motion.div>
-      </AnimatePresence>
       <ConfirmDialog />
     </>
   );

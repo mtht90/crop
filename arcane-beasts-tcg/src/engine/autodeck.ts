@@ -8,6 +8,7 @@
 // Fancy printings (gold, full art, …) are used first when you own them.
 // ============================================================================
 import { ALL_CARDS, byName, MAIN_SET, RARITIES } from './cards';
+import type { DeckList } from './decks';
 import type { CardDef, EType, MonsterCard } from './types';
 
 export type OwnedFn = (cid: string) => number;
@@ -25,10 +26,10 @@ const MONSTERS = MAIN_SET.filter((c): c is MonsterCard => c.kind === 'monster');
 
 export const ownedOfName = (name: string, owned: OwnedFn) => (printingsByName.get(name) ?? []).reduce((n, c) => n + owned(c.id), 0);
 
-/** strongest monsters you own, as ace candidates (Ω / EX / final evolutions first) */
+/** strongest monsters you own, as ace candidates (★4/★5 and final evolutions first) */
 export function aceCandidates(owned: OwnedFn): MonsterCard[] {
   const hasEvolution = new Set(MONSTERS.map((m) => m.evolvesFrom).filter(Boolean));
-  return MONSTERS.filter((m) => ownedOfName(m.name, owned) > 0 && !hasEvolution.has(m.name) && (m.stage !== 'basic' || m.omega || m.ex || m.hp >= 110))
+  return MONSTERS.filter((m) => ownedOfName(m.name, owned) > 0 && !hasEvolution.has(m.name) && (m.stage !== 'basic' || m.rarity >= 4 || m.hp >= 110))
     .map((m) => ({ m, v: power(m) }))
     .sort((a, b) => b.v - a.v)
     .map((x) => x.m);
@@ -36,7 +37,7 @@ export function aceCandidates(owned: OwnedFn): MonsterCard[] {
 
 function power(m: MonsterCard) {
   const dmg = Math.max(0, ...m.attacks.map((a) => a.damage ?? 30));
-  return dmg + m.hp * 0.35 + (m.ability ? 25 : 0) + (m.ex ? 45 : m.omega ? 30 : 0) + (m.stage === 'stage2' ? 15 : 0);
+  return dmg + m.hp * 0.35 + (m.ability ? 25 : 0) + (m.rarity === 5 ? 45 : m.rarity === 4 ? 30 : 0) + (m.stage === 'stage2' ? 15 : 0);
 }
 
 /** the evolution chain ending at `top` (basic first) */
@@ -119,9 +120,9 @@ export function buildDeck(aceName: string, owned: OwnedFn): AutoDeck {
   const hasStage2 = [...inDeck].some((n) => (byName(n) as MonsterCard).stage === 'stage2');
   const hasRule = [...inDeck].some((n) => {
     const m = byName(n) as MonsterCard;
-    return m.omega || m.ex;
+    return m.rarity >= 4;
   });
-  const STADIUM: Partial<Record<EType, string>> = { fire: '灼熱の火山帯', water: '嵐の海岸', grass: 'エルフの森', dark: '亡者の港', fighting: '英雄の古戦場', psychic: '瘴気の沼', lightning: '嵐の海岸' };
+  const STADIUM: Partial<Record<EType, string>> = { fire: '灼熱の火山帯', water: '嵐の海岸', grass: 'エルフの森', dark: '呪われた地下墓地', fighting: 'ドワーフの坑道', psychic: '古代の遺跡', lightning: '雷鳴の頂', colorless: '天空の浮島' };
   const trainers: [string, number, boolean?][] = [
     ['大賢者の研究', 4],
     ['召喚の巻物', 4],
@@ -152,4 +153,58 @@ export function buildDeck(aceName: string, owned: OwnedFn): AutoDeck {
   take(energyName, 60 - cards.length);
 
   return { cards, ace: ace.name, type, notes };
+}
+
+/**
+ * おすすめデッキ: a ready-made recipe built from what you own. Lines you are
+ * short of are filled from an おすすめ編成 around the recipe's ace, so the
+ * result is always a legal 60-card deck.
+ */
+export function fromRecipe(recipe: DeckList, owned: OwnedFn): AutoDeck & { have: number } {
+  const used = new Map<string, number>();
+  const byNameCount = new Map<string, number>();
+  const cards: string[] = [];
+  const take = (name: string, n: number): number => {
+    const def = byName(name);
+    const basicEnergy = def.kind === 'energy' && def.basic;
+    let got = 0;
+    for (const p of printingsByName.get(name) ?? []) {
+      while (got < n) {
+        if (!basicEnergy && (byNameCount.get(name) ?? 0) >= 4) return got;
+        const have = basicEnergy ? Infinity : owned(p.id) - (used.get(p.id) ?? 0);
+        if (have <= 0) break;
+        used.set(p.id, (used.get(p.id) ?? 0) + 1);
+        byNameCount.set(name, (byNameCount.get(name) ?? 0) + 1);
+        cards.push(p.id);
+        got++;
+      }
+      if (got >= n) break;
+    }
+    return got;
+  };
+  // the recipe itself, energy last
+  const isEnergy = (n: string) => byName(n).kind === 'energy';
+  for (const [name, n] of recipe.cards.filter(([n]) => !isEnergy(n))) take(name, n);
+  const have = cards.length;
+  const wanted = recipe.cards.filter(([n]) => !isEnergy(n)).reduce((x, [, n]) => x + n, 0);
+  // fill the gaps from an auto-built deck around the ace
+  const ace = byName(recipe.cover);
+  const notes: string[] = [];
+  if (have < wanted) {
+    notes.push(`持っていないカード${wanted - have}枚を、手持ちの近いカードで補いました`);
+    if (ace.kind === 'monster') {
+      const fill = buildDeck(ace.name, (cid) => owned(cid) - (used.get(cid) ?? 0));
+      for (const cid of fill.cards) {
+        if (cards.length >= 60 - recipe.cards.filter(([n]) => isEnergy(n)).reduce((x, [, n]) => x + n, 0)) break;
+        const c = ALL_CARDS.find((x) => x.id === cid)!;
+        if (c.kind === 'energy') continue;
+        take(c.name, 1);
+      }
+    }
+  }
+  for (const [name, n] of recipe.cards.filter(([n]) => isEnergy(n))) take(name, n);
+  // top up with the recipe's basic energy
+  const energyName = MAIN_SET.find((c) => c.kind === 'energy' && c.basic && c.energyType === recipe.type)?.name ?? '基本炎エネルギー';
+  if (cards.length < 60) take(energyName, 60 - cards.length);
+  return { cards: cards.slice(0, 60), ace: recipe.cover, type: recipe.type, notes, have: Math.round((have / Math.max(1, wanted)) * 100) };
 }

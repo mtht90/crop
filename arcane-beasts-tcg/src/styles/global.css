@@ -13,10 +13,25 @@
   --red: #ff4d5e;
   --green: #4ade80;
   --blue: #5ab0ff;
-  /* stage unit: 1% of a 16:9 stage fitted in the viewport */
+  /* stage unit: 1% of the long side of a 16:9 stage fitted in the viewport
+     (landscape: 100u × 56.25u; portrait: 56.25u × 100u) */
   --u: min(1vw, 1.7778vh);
   --stage-w: calc(var(--u) * 100);
   --stage-h: calc(var(--u) * 56.25);
+  /* horizontal centre of the stage, in u (hand fans and bench drops use it) */
+  --cx: 50;
+  /* menu type scale: readable on a phone, not huge on a monitor */
+  --fs-xs: clamp(10px, 0.55vmin + 7px, 13px);
+  --fs-s: clamp(12px, 0.7vmin + 8px, 15px);
+  --fs-m: clamp(13px, 0.9vmin + 9px, 18px);
+  --fs-l: clamp(16px, 1.4vmin + 10px, 24px);
+  --fs-xl: clamp(20px, 2.6vmin + 10px, 36px);
+  --pad: clamp(12px, 2.2vmin, 28px);
+  --gap: clamp(8px, 1.6vmin, 18px);
+  --radius: clamp(10px, 1.4vmin, 16px);
+  /* the tab bar: along the bottom in portrait, down the left side in landscape */
+  --tab-h: 0px;
+  --tab-w: 0px;
   --font-ui: 'M PLUS Rounded 1c', 'M PLUS 1p', system-ui, sans-serif;
   --font-display: 'Dela Gothic One', 'M PLUS 1p', sans-serif;
   --font-latin: 'Cinzel', serif;
@@ -24,6 +39,14 @@
   --font-title: 'Cinzel', 'Dela Gothic One', serif;
   --title-grad: linear-gradient(180deg, #fffdf0 0%, #ffe08a 35%, #c98d1f 62%, #fff1b3 80%, #b8801c 100%);
   --title-shadow: drop-shadow(0 5px 0 #3a2200) drop-shadow(0 0 30px rgba(255, 190, 80, 0.55));
+}
+@media (orientation: portrait) {
+  :root {
+    --u: min(1.7778vw, 1vh);
+    --stage-w: calc(var(--u) * 56.25);
+    --stage-h: calc(var(--u) * 100);
+    --cx: 28.125;
+  }
 }
 * { box-sizing: border-box; }
 html, body, #root {
@@ -158,26 +181,6 @@ img { -webkit-user-drag: none; }
   pointer-events: none;
 }
 
-.rotate-hint { display: none; }
-@media (orientation: portrait) and (max-width: 760px) {
-  .rotate-hint {
-    position: fixed;
-    inset: 0;
-    z-index: 9999;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 16px;
-    background: radial-gradient(circle, #16204a, #03050e);
-    color: var(--gold-2);
-    font-weight: 800;
-    text-align: center;
-    padding: 24px;
-  }
-  .rotate-hint div { font-size: 64px; animation: rot 2s ease-in-out infinite; }
-  @keyframes rot { 50% { transform: rotate(90deg); } }
-}
 .guide {
   position: absolute;
   left: 50%;
@@ -206,3 +209,8 @@ img { -webkit-user-drag: none; }
 .confirm-box { width: min(92vw, calc(var(--u) * 44)); padding: calc(var(--u) * 2); display: flex; flex-direction: column; gap: calc(var(--u) * 1.6); }
 .confirm-box p { margin: 0; font-weight: 800; font-size: max(14px, calc(var(--u) * 1.3)); line-height: 1.6; text-align: center; }
 .confirm-actions { display: flex; gap: calc(var(--u) * 1); justify-content: center; }
+@media (orientation: portrait) {
+  .guide { width: calc(var(--u) * 52); }
+  .guide h3 { font-size: calc(var(--u) * 2.6); }
+  .guide ol { font-size: calc(var(--u) * 1.5); }
+}

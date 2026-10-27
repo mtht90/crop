@@ -4,8 +4,7 @@
 // the lobby reads. Game messages are handed to the battle controller.
 // ============================================================================
 import { create } from 'zustand';
-import { startAuthentication, startRegistration } from '@simplewebauthn/browser';
-import { isRegistered, PROTOCOL, type ClientMsg, type LiveGame, type MatchKind, type OnlineProfile, type OppInfo, type RoomInfo, type ServerMsg } from './protocol';
+import { PROTOCOL, type ClientMsg, type MatchKind, type OnlineProfile, type OppInfo, type RoomInfo, type ServerMsg } from './protocol';
 
 const KEY = 'arcane-beasts-online-v1';
 const SERVER_KEY = 'arcane-beasts-server';
@@ -15,8 +14,6 @@ interface Creds {
   secret?: string;
   name?: string;
   portrait?: string;
-  /** signed up with Google or a passkey (the home screen stops nagging) */
-  registered?: boolean;
 }
 
 function loadCreds(): Creds {
@@ -26,9 +23,6 @@ function loadCreds(): Creds {
     return {};
   }
 }
-/** has this device's player signed up? (read without connecting) */
-export const isSignedUp = () => !!loadCreds().registered;
-
 function saveCreds(c: Creds) {
   try {
     localStorage.setItem(KEY, JSON.stringify(c));
@@ -80,7 +74,7 @@ export function setServerAddress(addr: string) {
 export type Status = 'idle' | 'connecting' | 'open';
 
 export interface MatchInfo {
-  you: 0 | 1 | 'spectator';
+  you: 0 | 1;
   kind: MatchKind;
   code: string;
   opp: OppInfo;
@@ -92,13 +86,10 @@ interface OnlineStore {
   /** a connection attempt failed (server unreachable) */
   failed: boolean;
   profile: OnlineProfile | null;
-  /** the OAuth client id for the Google button (null: Google login is not set up on the server) */
-  googleClientId: string | null;
   online: number;
   waiting: number;
   room: RoomInfo | null;
-  queued: 'random' | 'ranked' | null;
-  live: LiveGame[];
+  queued: 'random' | null;
   transfer: { code: string; expires: number } | null;
   /** last error text (cleared when read by the UI) */
   error: string | null;
@@ -110,12 +101,10 @@ export const useOnline = create<OnlineStore>(() => ({
   status: 'idle',
   failed: false,
   profile: null,
-  googleClientId: null,
   online: 0,
   waiting: 0,
   room: null,
   queued: null,
-  live: [],
   transfer: null,
   error: null,
   match: null,
@@ -215,8 +204,8 @@ class OnlineClient {
     switch (m.t) {
       case 'welcome': {
         const c = loadCreds();
-        saveCreds({ ...c, id: m.profile.id, secret: m.secret, name: m.profile.name, portrait: m.profile.portrait, registered: isRegistered(m.profile) });
-        set({ status: 'open', failed: false, profile: m.profile, googleClientId: m.googleClientId ?? null, online: m.online, waiting: m.waiting });
+        saveCreds({ ...c, id: m.profile.id, secret: m.secret, name: m.profile.name, portrait: m.profile.portrait });
+        set({ status: 'open', failed: false, profile: m.profile, online: m.online, waiting: m.waiting });
         return;
       }
       case 'renamed':
@@ -224,20 +213,10 @@ class OnlineClient {
         set({ profile: m.profile });
         return;
       case 'linked':
-        saveCreds({ ...loadCreds(), id: m.profile.id, secret: m.secret, name: m.profile.name, portrait: m.profile.portrait, registered: isRegistered(m.profile) });
+        saveCreds({ ...loadCreds(), id: m.profile.id, secret: m.secret, name: m.profile.name, portrait: m.profile.portrait });
         set({ profile: m.profile, error: null });
         // log in again as the transferred identity
         this.ws?.close();
-        return;
-      case 'account':
-        saveCreds({ ...loadCreds(), id: m.profile.id, ...(m.secret ? { secret: m.secret } : {}), name: m.profile.name, portrait: m.profile.portrait, registered: isRegistered(m.profile) });
-        set({ profile: m.profile, error: null });
-        // switched to another account: log in again as it
-        if (m.mode === 'login') this.ws?.close();
-        return;
-      case 'passkeyOptions':
-        this.pkOptions[m.mode] = { options: m.options, at: Date.now() };
-        this.pkWait?.(m);
         return;
       case 'transferCode':
         set({ transfer: { code: m.code, expires: m.expires } });
@@ -247,9 +226,6 @@ class OnlineClient {
         return;
       case 'queued':
         set({ queued: m.kind, waiting: m.waiting });
-        return;
-      case 'live':
-        set({ live: m.games });
         return;
       case 'pong':
         set({ online: m.online, waiting: m.waiting });
@@ -296,7 +272,7 @@ class OnlineClient {
   joinRoom(code: string, deck: string[]) {
     this.send({ t: 'join', code, deck });
   }
-  queue(kind: 'random' | 'ranked', deck: string[]) {
+  queue(kind: 'random', deck: string[]) {
     this.send({ t: 'queue', kind, deck });
   }
   cancel() {
@@ -304,68 +280,8 @@ class OnlineClient {
     this.send({ t: 'ping', n: ++this.pings });
     useOnline.setState({ queued: null, room: null });
   }
-  watch(code: string) {
-    this.send({ t: 'spectate', code });
-  }
-  refreshLive() {
-    this.send({ t: 'live' });
-  }
   rename(name: string, portrait?: string) {
     this.send({ t: 'rename', name, portrait });
-  }
-  /** passkey challenges fetched ahead of time: Safari only opens the passkey sheet if it is asked right in the tap */
-  private pkOptions: Partial<Record<'register' | 'login', { options: unknown; at: number }>> = {};
-  private pkWait: ((m: Extract<ServerMsg, { t: 'passkeyOptions' }>) => void) | null = null;
-
-  /** fetch fresh challenges for both buttons (call when the sign-in UI shows, and again every few minutes) */
-  preparePasskeys() {
-    this.send({ t: 'passkeyBegin', mode: 'register' });
-    this.send({ t: 'passkeyBegin', mode: 'login' });
-  }
-
-  /**
-   * sign up (register) or log in with a passkey. Call it straight from the click
-   * handler: with a prepared challenge the browser's sheet opens without any wait.
-   */
-  async passkey(mode: 'register' | 'login'): Promise<void> {
-    const ready = this.pkOptions[mode];
-    delete this.pkOptions[mode];
-    let options = ready && Date.now() - ready.at < 4 * 60_000 ? ready.options : null;
-    if (!options) {
-      // no challenge yet (slow connection): ask now — Chrome and Android still accept the late call
-      const m = await new Promise<Extract<ServerMsg, { t: 'passkeyOptions' }> | null>((resolve) => {
-        this.pkWait = (x) => x.mode === mode && resolve(x);
-        this.send({ t: 'passkeyBegin', mode });
-        setTimeout(() => resolve(null), 10_000);
-      });
-      this.pkWait = null;
-      if (!m) return void useOnline.setState({ error: 'サーバーから応答がありません' });
-      delete this.pkOptions[mode];
-      options = m.options;
-    }
-    try {
-      const response =
-        mode === 'register'
-          ? await startRegistration({ optionsJSON: options as Parameters<typeof startRegistration>[0]['optionsJSON'] })
-          : await startAuthentication({ optionsJSON: options as Parameters<typeof startAuthentication>[0]['optionsJSON'] });
-      this.send({ t: 'passkeyFinish', mode, response });
-    } catch (e) {
-      const name = (e as { name?: string })?.name;
-      useOnline.setState({
-        error:
-          name === 'NotAllowedError' || name === 'AbortError'
-            ? '登録・ログインがキャンセルされました'
-            : name === 'InvalidStateError'
-              ? 'この端末はすでに登録されています。「ログイン」の方を押してください'
-              : 'この端末では顔・指紋認証での登録が使えませんでした',
-      });
-    } finally {
-      // a used challenge is gone: get the next one ready
-      this.send({ t: 'passkeyBegin', mode });
-    }
-  }
-  googleSignIn(credential: string) {
-    this.send({ t: 'google', credential });
   }
   requestTransfer() {
     this.send({ t: 'transfer' });

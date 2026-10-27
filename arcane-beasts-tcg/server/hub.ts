@@ -6,13 +6,9 @@
 // ============================================================================
 import { validateDeck } from '../src/engine/decks';
 import { card } from '../src/engine/cards';
-import { RANKS } from '../src/state/ranked';
 import { GameSession, promptMs, type Outgoing } from '../src/online/session';
-import { PROTOCOL, type ClientMsg, type ErrorCode, type LiveGame, type MatchKind, type OppInfo, type RoomInfo, type ServerMsg } from '../src/online/protocol';
+import { PROTOCOL, type ClientMsg, type ErrorCode, type MatchKind, type OppInfo, type RoomInfo, type ServerMsg } from '../src/online/protocol';
 import { judgeName } from '../src/online/names';
-import { isAvatarUrl } from '../src/online/avatar';
-import type { GoogleVerifier } from './google';
-import { passkeyOrigin, webauthn, type PasskeyService } from './passkey';
 import { PlayerStore, portraitOk, type PlayerRecord } from './players';
 import { randomInt } from 'node:crypto';
 
@@ -30,10 +26,6 @@ export interface HubOptions {
   /** messages per second one connection may send before it is dropped */
   rateLimit?: number;
   log?: (msg: string) => void;
-  /** Google sign-in, when the server has an OAuth client id */
-  google?: { clientId: string; verify: GoogleVerifier };
-  /** passkey checks (tests replace them) */
-  passkeys?: PasskeyService;
 }
 
 interface Seat {
@@ -49,7 +41,6 @@ interface Room {
   kind: MatchKind;
   state: 'waiting' | 'playing' | 'over';
   seats: [Seat | null, Seat | null];
-  spectators: Set<Conn>;
   session: GameSession | null;
   turnTimer: ReturnType<typeof setTimeout> | null;
   cleanup: ReturnType<typeof setTimeout> | null;
@@ -59,25 +50,20 @@ interface Room {
 class Conn {
   player: PlayerRecord | null = null;
   room: Room | null = null;
-  seat: 0 | 1 | 'spectator' | null = null;
-  queued: { kind: 'random' | 'ranked'; deck: string[]; since: number } | null = null;
+  seat: 0 | 1 | null = null;
+  queued: { kind: 'random'; deck: string[]; since: number } | null = null;
   replaced = false;
   windowStart = 0;
   windowCount = 0;
   lastStamp = 0;
   badCodes = 0;
-  /** the passkey challenge this connection is answering */
-  challenges: Partial<Record<'register' | 'login', { value: string; expires: number }>> = {};
   constructor(
     readonly sock: Socket,
     readonly id: number,
-    /** the page's address (the WebSocket Origin header) */
-    readonly origin?: string,
   ) {}
 }
 
 const CODE_ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
-const MAX_SPECTATORS = 20;
 const sleepless = <T extends { unref?: () => void }>(t: T) => (t.unref?.(), t);
 
 export class Hub {
@@ -93,10 +79,7 @@ export class Hub {
   private tick: ReturnType<typeof setInterval>;
   private log: (m: string) => void;
 
-  private opts: HubOptions;
-
   constructor(opts: HubOptions) {
-    this.opts = opts;
     this.store = opts.store;
     this.scale = opts.timeScale ?? 1;
     this.grace = opts.graceMs ?? 60_000;
@@ -120,8 +103,8 @@ export class Hub {
   // ------------------------------------------------------------------------
   // connections
   // ------------------------------------------------------------------------
-  connect(sock: Socket, origin?: string): Conn {
-    const c = new Conn(sock, this.nextId++, origin);
+  connect(sock: Socket): Conn {
+    const c = new Conn(sock, this.nextId++);
     this.conns.add(c);
     return c;
   }
@@ -133,11 +116,6 @@ export class Hub {
     this.dequeue(c);
     const room = c.room;
     if (!room) return;
-    if (c.seat === 'spectator') {
-      room.spectators.delete(c);
-      this.broadcastRoom(room);
-      return;
-    }
     if (c.seat === null) return;
     const seat = room.seats[c.seat];
     if (!seat) return;
@@ -183,19 +161,10 @@ export class Hub {
       case 'rename': {
         const verdict = judgeName(m.name);
         if (!verdict.ok) return this.error(c, 'bad_name', verdict.message);
-        if (m.portrait !== undefined && !portraitOk(m.portrait)) return this.error(c, 'bad_image', isAvatarUrl(m.portrait) ? '画像が大きすぎるか、形式が違います' : 'その絵は選べません');
+        if (m.portrait !== undefined && !portraitOk(m.portrait)) return this.error(c, 'bad_request', 'その絵は選べません');
         this.store.rename(c.player, verdict.name, m.portrait);
         return this.send(c, { t: 'renamed', profile: this.store.profile(c.player) });
       }
-      case 'google':
-        void this.googleSignIn(c, m.credential).catch((e) => this.authFailed(c, e));
-        return;
-      case 'passkeyBegin':
-        void this.passkeyBegin(c, m.mode).catch((e) => this.authFailed(c, e));
-        return;
-      case 'passkeyFinish':
-        void this.passkeyFinish(c, m.mode, m.response).catch((e) => this.authFailed(c, e));
-        return;
       case 'transfer': {
         const { code, expires } = this.store.createTransfer(c.player);
         return this.send(c, { t: 'transferCode', code, expires });
@@ -210,10 +179,6 @@ export class Hub {
         this.dequeue(c);
         if (c.room?.state === 'waiting') this.leave(c);
         return;
-      case 'spectate':
-        return this.spectate(c, m.code);
-      case 'live':
-        return this.send(c, { t: 'live', games: this.liveGames() });
       case 'answer':
         return this.answer(c, m.seq, m.answer);
       case 'surrender':
@@ -259,14 +224,11 @@ export class Hub {
       c.seat = old.seat;
       const room = c.room;
       if (room && c.seat !== null) {
-        if (c.seat === 'spectator') {
-          room.spectators.delete(old);
-          room.spectators.add(c);
-        } else if (room.seats[c.seat]) room.seats[c.seat]!.conn = c;
+        if (room.seats[c.seat]) room.seats[c.seat]!.conn = c;
       }
     }
     const s = this.stats();
-    this.send(c, { t: 'welcome', v: PROTOCOL, profile: this.store.profile(player), secret, online: s.online, waiting: s.waiting, resume: c.room && c.room.state !== 'over' ? c.room.code : undefined, googleClientId: this.opts.google?.clientId });
+    this.send(c, { t: 'welcome', v: PROTOCOL, profile: this.store.profile(player), secret, online: s.online, waiting: s.waiting, resume: c.room && c.room.state !== 'over' ? c.room.code : undefined });
     // rejoin a running game
     const room = this.findActiveRoom(player.id);
     if (room && c.seat === null) {
@@ -287,77 +249,6 @@ export class Hub {
       this.send(room.seats[c.seat === 0 ? 1 : 0]?.conn ?? null, { t: 'peer', connected: true, until: null });
       this.broadcastRoom(room);
     }
-  }
-
-  /** `google`: sign up / sign in with a Google ID token */
-  private async googleSignIn(c: Conn, credential: string) {
-    const g = this.opts.google;
-    const p = c.player;
-    if (!g) return this.error(c, 'bad_request', 'Googleログインはまだ準備中です');
-    if (!p) return;
-    if (c.room || c.queued) return this.error(c, 'busy', '対戦中・待機中はアカウントを切り替えられません');
-    const who = await g.verify(String(credential ?? ''));
-    if (!who) return this.error(c, 'bad_code', 'Googleでの確認に失敗しました。もう一度お試しください');
-    if (c.player !== p || c.room || c.queued) return;
-    const r = this.store.googleSignIn(p, who);
-    if (!r) return this.error(c, 'busy', 'このアカウントはすでに別のGoogleアカウントとつながっています');
-    this.log(`google ${r.mode} ${r.player.name}`);
-    this.send(c, { t: 'account', mode: r.mode, profile: this.store.profile(r.player), secret: r.secret });
-  }
-
-  private authFailed(c: Conn, e: unknown) {
-    this.log(`sign-in error: ${e instanceof Error ? e.message : String(e)}`);
-    this.error(c, 'bad_request', 'ログインの処理に失敗しました。もう一度お試しください');
-  }
-
-  private get passkeys() {
-    return this.opts.passkeys ?? webauthn;
-  }
-
-  /** `passkeyBegin`: hand out a challenge for creating or using a passkey */
-  private async passkeyBegin(c: Conn, mode: 'register' | 'login') {
-    const p = c.player;
-    const at = passkeyOrigin(c.origin);
-    if (!p) return;
-    if (!at) return this.error(c, 'bad_request', 'パスキーは https のページでのみ使えます');
-    if (mode !== 'register' && mode !== 'login') return this.error(c, 'bad_request', 'invalid message');
-    const options =
-      mode === 'register'
-        ? await this.passkeys.registrationOptions({ rpID: at.rpID, userId: p.id, userName: p.name, exclude: (p.passkeys ?? []).map((x) => x.id) })
-        : await this.passkeys.authenticationOptions({ rpID: at.rpID });
-    c.challenges[mode] = { value: options.challenge, expires: Date.now() + 5 * 60_000 };
-    this.send(c, { t: 'passkeyOptions', mode, options });
-  }
-
-  /** `passkeyFinish`: check what the authenticator signed */
-  private async passkeyFinish(c: Conn, mode: 'register' | 'login', response: unknown) {
-    const p = c.player;
-    const at = passkeyOrigin(c.origin);
-    const ch = mode === 'register' || mode === 'login' ? c.challenges[mode] : undefined;
-    if (ch) delete c.challenges[mode];
-    if (!p || !at) return;
-    if (!ch || ch.expires < Date.now()) return this.error(c, 'bad_code', '時間切れです。もう一度お試しください');
-    if (mode === 'register') {
-      const pk = await this.passkeys.verifyRegistration({ response, challenge: ch.value, origin: at.origin, rpID: at.rpID });
-      if (!pk) return this.error(c, 'bad_code', 'パスキーを登録できませんでした');
-      if (c.player !== p) return;
-      const taken = this.store.findPasskey(pk.id);
-      if (taken && taken.player.id !== p.id) return this.error(c, 'busy', 'このパスキーは別のプレイヤーで使われています');
-      this.store.addPasskey(p, pk);
-      this.log(`passkey new ${p.name}`);
-      return this.send(c, { t: 'account', mode: 'new', profile: this.store.profile(p) });
-    }
-    const id = typeof response === 'object' && response && typeof (response as { id?: unknown }).id === 'string' ? (response as { id: string }).id : '';
-    const found = id ? this.store.findPasskey(id) : null;
-    if (!found) return this.error(c, 'bad_code', 'このパスキーは登録されていません');
-    if (c.room || c.queued) return this.error(c, 'busy', '対戦中・待機中はアカウントを切り替えられません');
-    const ok = await this.passkeys.verifyAuthentication({ response, challenge: ch.value, origin: at.origin, rpID: at.rpID, passkey: found.passkey });
-    if (!ok) return this.error(c, 'bad_code', 'パスキーでの確認に失敗しました');
-    if (c.player !== p || c.room || c.queued) return;
-    this.store.touchPasskey(found.player, found.passkey.id, ok.counter);
-    if (found.player.id === p.id) return this.send(c, { t: 'account', mode: 'same', profile: this.store.profile(p) });
-    this.log(`passkey login ${found.player.name}`);
-    this.send(c, { t: 'account', mode: 'login', profile: this.store.profile(found.player), secret: this.store.newSecret(found.player) });
   }
 
   /** `link`: a new device presents a transfer code instead of an id */
@@ -402,7 +293,7 @@ export class Hub {
       return false;
     }
     if (c.room) {
-      if (c.room.state === 'over' || c.seat === 'spectator') this.leave(c);
+      if (c.room.state === 'over') this.leave(c);
       else {
         this.error(c, 'busy', 'すでに部屋にいます');
         return false;
@@ -419,7 +310,7 @@ export class Hub {
   }
 
   private makeRoom(kind: MatchKind): Room {
-    const room: Room = { code: this.newCode(), kind, state: 'waiting', seats: [null, null], spectators: new Set(), session: null, turnTimer: null, cleanup: null, created: Date.now() };
+    const room: Room = { code: this.newCode(), kind, state: 'waiting', seats: [null, null], session: null, turnTimer: null, cleanup: null, created: Date.now() };
     this.rooms.set(room.code, room);
     return room;
   }
@@ -454,34 +345,10 @@ export class Hub {
     this.startGame(room);
   }
 
-  private spectate(c: Conn, codeIn: string) {
-    const code = String(codeIn ?? '').toUpperCase().replace(/[^0-9A-Z]/g, '');
-    const room = this.rooms.get(code);
-    if (!room || room.state !== 'playing' || !room.session) {
-      c.badCodes++;
-      if (c.badCodes > 8) c.sock.close();
-      return this.error(c, 'no_room', '観戦できる試合が見つかりません');
-    }
-    if (room.spectators.size >= MAX_SPECTATORS) return this.error(c, 'room_full', '観戦席がいっぱいです');
-    if (!this.free(c)) return;
-    room.spectators.add(c);
-    c.room = room;
-    c.seat = 'spectator';
-    this.sendStart(room, c);
-    this.send(c, room.session.snapshot('spectator'));
-    this.broadcastRoom(room);
-  }
-
   leave(c: Conn) {
     this.dequeue(c);
     const room = c.room;
     if (!room) return;
-    if (c.seat === 'spectator') {
-      room.spectators.delete(c);
-      c.room = null;
-      c.seat = null;
-      return this.broadcastRoom(room);
-    }
     if (room.state === 'playing' && (c.seat === 0 || c.seat === 1)) return this.forfeit(room, c.seat, 'surrender');
     c.room = null;
     c.seat = null;
@@ -492,7 +359,6 @@ export class Hub {
     this.clearRoomTimers(room);
     for (const s of room.seats) if (s?.grace) clearTimeout(s.grace);
     for (const s of room.seats) if (s?.conn && s.conn.room === room) (s.conn.room = null), (s.conn.seat = null);
-    for (const sp of room.spectators) (sp.room = null), (sp.seat = null);
     this.rooms.delete(room.code);
   }
 
@@ -513,7 +379,7 @@ export class Hub {
   // ------------------------------------------------------------------------
   // matchmaking
   // ------------------------------------------------------------------------
-  private enqueue(c: Conn, kind: 'random' | 'ranked', deckIn: string[]) {
+  private enqueue(c: Conn, kind: 'random', deckIn: string[]) {
     const deck = this.checkDeck(c, deckIn);
     if (!deck || !this.free(c)) return;
     c.queued = { kind, deck, since: Date.now() };
@@ -529,8 +395,7 @@ export class Hub {
   }
 
   private matchmake() {
-    const now = Date.now();
-    for (const kind of ['ranked', 'random'] as const) {
+    for (const kind of ['random'] as const) {
       for (;;) {
         const pool = this.queue.filter((q) => q.queued?.kind === kind && q.player);
         let pair: [Conn, Conn] | null = null;
@@ -539,11 +404,6 @@ export class Hub {
             const a = pool[i];
             const b = pool[j];
             if (a.player!.id === b.player!.id) continue;
-            if (kind === 'ranked') {
-              const wait = Math.max(now - a.queued!.since, now - b.queued!.since) / this.scale;
-              const gap = 1 + Math.floor(wait / 15_000);
-              if (Math.abs(a.player!.rank.rank - b.player!.rank.rank) > gap) continue;
-            }
             pair = [a, b];
             break;
           }
@@ -566,7 +426,7 @@ export class Hub {
   // games
   // ------------------------------------------------------------------------
   private oppInfo(p: PlayerRecord): OppInfo {
-    return { name: p.name, rank: RANKS[p.rank.rank], portrait: p.portrait };
+    return { name: p.name, portrait: p.portrait };
   }
 
   private sendStart(room: Room, c: Conn) {
@@ -607,8 +467,7 @@ export class Hub {
 
   private dispatch(room: Room, out: Outgoing[]) {
     for (const o of out) {
-      if (o.to === 'spectator') for (const sp of room.spectators) this.send(sp, o.msg);
-      else this.send(room.seats[o.to]?.conn ?? null, o.msg);
+      if (o.to !== 'spectator') this.send(room.seats[o.to]?.conn ?? null, o.msg);
     }
     const session = room.session!;
     if (session.over) return this.finish(room);
@@ -643,15 +502,9 @@ export class Hub {
       if (!seat) return;
       const r = session.result(idx);
       const win = w === idx;
-      let rank;
-      if (w === 0 || w === 1) {
-        if (room.kind === 'ranked') rank = this.store.recordRanked(seat.player, win);
-        else this.store.recordCasual(seat.player, win);
-      }
-      this.send(seat.conn, { t: 'over', winner: r.winner, reason: r.reason, rank, rankNow: room.kind === 'ranked' ? seat.player.rank : undefined });
+      if (w === 0 || w === 1) this.store.recordCasual(seat.player, win);
+      this.send(seat.conn, { t: 'over', winner: r.winner, reason: r.reason });
     });
-    const sr = session.result('spectator');
-    for (const sp of room.spectators) this.send(sp, { t: 'over', winner: sr.winner, reason: sr.reason });
     this.broadcastRoom(room);
     room.cleanup = sleepless(setTimeout(() => this.destroyRoom(room), 90_000 * this.scale));
   }
@@ -662,13 +515,8 @@ export class Hub {
     if (now - c.lastStamp < 1000 * this.scale) return;
     c.lastStamp = now;
     const room = c.room;
-    if (c.seat === 'spectator') {
-      for (const sp of room.spectators) if (sp !== c) this.send(sp, { t: 'stamp', from: 'spectator', id });
-      return;
-    }
     const other = room.seats[c.seat === 0 ? 1 : 0]?.conn;
     this.send(other ?? null, { t: 'stamp', from: 1, id });
-    for (const sp of room.spectators) this.send(sp, { t: 'stamp', from: c.seat as 0 | 1, id });
   }
 
   // ------------------------------------------------------------------------
@@ -679,25 +527,13 @@ export class Hub {
       code: room.code,
       kind: room.kind,
       state: room.state,
-      players: room.seats.filter(Boolean).map((s) => ({ name: s!.player.name, rank: RANKS[s!.player.rank.rank], connected: !!s!.conn })),
-      spectators: room.spectators.size,
+      players: room.seats.filter(Boolean).map((s) => ({ name: s!.player.name, connected: !!s!.conn })),
     };
   }
 
   private broadcastRoom(room: Room) {
     const info = this.roomInfo(room);
     room.seats.forEach((s, i) => this.send(s?.conn ?? null, { t: 'room', room: info, you: i as 0 | 1 }));
-    for (const sp of room.spectators) this.send(sp, { t: 'room', room: info, you: 'spectator' });
-  }
-
-  private liveGames(): LiveGame[] {
-    const out: LiveGame[] = [];
-    for (const r of this.rooms.values()) {
-      if (r.kind === 'friend' || r.state !== 'playing' || !r.session) continue;
-      const [a, b] = r.seats as [Seat, Seat];
-      out.push({ code: r.code, kind: r.kind, players: [a.player.name, b.player.name], ranks: [RANKS[a.player.rank.rank], RANKS[b.player.rank.rank]], turn: r.session.game.s.turn, spectators: r.spectators.size });
-    }
-    return out.slice(0, 30);
   }
 
   // ------------------------------------------------------------------------

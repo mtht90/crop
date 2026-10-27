@@ -105,100 +105,98 @@ export function Missions() {
 
   return (
     <div className="screen">
-      <div className="screen-bg" style={{ backgroundImage: `url(${artUrl('story/landscape-castle')})` }} />
-      <div className="screen-shade" />
-      <div className="stage">
-        <TopBar title="ミッション" />
-        <div className="ms-tabs">
-          {tabs.map((t) => (
-            <button
-              key={t.id}
-              className={`ms-tab ${tab === t.id ? 'on' : ''}`}
-              onClick={() => {
-                foley.tick();
-                setTab(t.id);
-              }}
-            >
-              <Icon name={t.icon} />
-              <span>{t.label}</span>
-              {t.n > 0 && <i className="dot">{t.n}</i>}
-            </button>
-          ))}
-          <div className="ms-note">
-            ミッションを達成してコインを獲得しよう。バトルやパック開封で進みます。
+      <div className="page-bg" style={{ backgroundImage: `url(${artUrl('story/landscape-castle')})` }} />
+      <div className="page-shade" />
+      <div className="page">
+        <TopBar title="ミッション" back="more" />
+        <div className="page-inner ms3">
+          <div className="ms3-tabs">
+            {tabs.map((t) => (
+              <button
+                key={t.id}
+                className={`chip-btn ${tab === t.id ? 'on' : ''}`}
+                onClick={() => {
+                  foley.tick();
+                  setTab(t.id);
+                }}
+              >
+                <Icon name={t.icon} />
+                {t.label}
+                {t.n > 0 && <i className="ms3-dot">{t.n}</i>}
+              </button>
+            ))}
+          </div>
+
+          <div className="box ms3-body">
+            {tab === 'login' ? (
+              <LoginTrack onClaim={give} />
+            ) : (
+              <>
+                <div className="ms3-head">
+                  {remain && (
+                    <span className="ms-remain">
+                      <Icon name="hourglass" /> {remain}
+                    </span>
+                  )}
+                  <button className="btn small" disabled={!count(list)} onClick={() => claimAll(list)}>
+                    まとめて受け取る
+                  </button>
+                </div>
+                <div className="ms3-list">
+                  <AnimatePresence initial={false}>
+                    {list.map((r, i) => (
+                      <motion.div
+                        layout
+                        key={r.m.id}
+                        className={`ms3-row ${r.done ? 'done' : ''} ${r.claimed ? 'claimed' : ''}`}
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, x: 30 }}
+                        transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1], delay: Math.min(i, 12) * 0.03 }}
+                      >
+                        <div className="ms3-main">
+                          <div className="ms3-label">{r.m.label}</div>
+                          <div className="ms3-prog">
+                            <div className="ms3-bar">
+                              <div style={{ transform: `scaleX(${Math.min(1, r.value / r.m.target)})` }} />
+                            </div>
+                            <span>
+                              {Math.min(r.value, r.m.target).toLocaleString()} / {r.m.target.toLocaleString()}
+                            </span>
+                          </div>
+                        </div>
+                        <button className={`ms3-claim ${r.done && !r.claimed ? 'ready' : ''}`} disabled={!r.done || r.claimed} onClick={() => claim(r)}>
+                          <span>
+                            <Icon name="coin" /> {r.m.reward.toLocaleString()}
+                          </span>
+                          <small>{r.claimed ? '受取済み' : r.done ? '受け取る' : '未達成'}</small>
+                        </button>
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
+                  {tab === 'achv' && !list.length && <div className="empty-note">すべての実績を達成しました</div>}
+                  {tab === 'normal' && !list.length && <div className="empty-note">すべての通常ミッションを達成しました</div>}
+                </div>
+              </>
+            )}
           </div>
         </div>
-
-        <div className="ms-body panel">
-          {tab === 'login' ? (
-            <LoginTrack onClaim={give} />
-          ) : (
-            <>
-              <div className="ms-head">
-                <h2>{tabs.find((t) => t.id === tab)!.label}</h2>
-                {remain && (
-                  <span className="ms-remain">
-                    <Icon name="hourglass" /> {remain}
-                  </span>
-                )}
-                <button className="btn small" disabled={!count(list)} onClick={() => claimAll(list)}>
-                  まとめて受け取る
-                </button>
-              </div>
-              <div className="ms-list">
-                <AnimatePresence initial={false}>
-                  {list.map((r, i) => (
-                    <motion.div
-                      layout
-                      key={r.m.id}
-                      className={`ms-row ${r.done ? 'done' : ''} ${r.claimed ? 'claimed' : ''}`}
-                      initial={{ opacity: 0, y: 8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, x: 30 }}
-                      transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1], delay: Math.min(i, 12) * 0.03 }}
-                    >
-                      <div className="ms-main">
-                        <div className="ms-label">{r.m.label}</div>
-                        <div className="ms-prog">
-                          <div className="ms-bar">
-                            <div style={{ transform: `scaleX(${Math.min(1, r.value / r.m.target)})` }} />
-                          </div>
-                          <span>
-                            {Math.min(r.value, r.m.target).toLocaleString()} / {r.m.target.toLocaleString()}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="ms-reward">
-                        <Icon name="coin" /> {r.m.reward.toLocaleString()}
-                      </div>
-                      <button className={`btn small ${r.done && !r.claimed ? '' : 'ghost'}`} disabled={!r.done || r.claimed} onClick={() => claim(r)}>
-                        {r.claimed ? '受取済み' : r.done ? '受け取る' : '未達成'}
-                      </button>
-                    </motion.div>
-                  ))}
-                </AnimatePresence>
-                {tab === 'achv' && !list.length && <div className="ms-empty">すべての実績を達成しました</div>}
-                {tab === 'normal' && !list.length && <div className="ms-empty">すべての通常ミッションを達成しました</div>}
-              </div>
-            </>
-          )}
-        </div>
-        <AnimatePresence>
-          {flash && (
-            <motion.div
-              key={flash.id}
-              className="coin-flash"
-              initial={{ opacity: 0, y: 12, scale: 0.96 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-              onAnimationComplete={() => setTimeout(() => setFlash((f) => (f?.id === flash.id ? null : f)), 900)}
-            >
-              <Icon name="coin" /> +{flash.coins.toLocaleString()}
-            </motion.div>
-          )}
-        </AnimatePresence>
       </div>
+      <AnimatePresence>
+        {flash && (
+          <motion.div
+            key={flash.id}
+            className="coin-flash"
+            initial={{ opacity: 0, y: 12, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+            onAnimationComplete={() => setTimeout(() => setFlash((f) => (f?.id === flash.id ? null : f)), 900)}
+          >
+            <Icon name="coin" /> +{flash.coins.toLocaleString()}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -214,8 +212,7 @@ export function LoginTrack({ onClaim, compact }: { onClaim?: (coins: number) => 
   return (
     <div className={`login ${compact ? 'compact' : ''}`}>
       {!compact && (
-        <div className="ms-head">
-          <h2>ログインボーナス</h2>
+        <div className="ms3-head">
           <span className="ms-remain">
             <Icon name="hourglass" /> 次の受け取りまで {can ? '―' : fmtRemain(msUntilTomorrow(new Date(now)))}
           </span>

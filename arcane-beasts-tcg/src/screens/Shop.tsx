@@ -1,17 +1,15 @@
 // ============================================================================
 // Pack opening, modelled on the TCG Pocket flow:
-//   booster select → pick a pack → trace the top edge to tear it → cards rise
-//   out of the pack → swipe through the stack (rarest last; ★ cards arrive
-//   face-down and turn over on tap) → results
+//   通常 / プレミアム → swipe the pack into the sky → it falls back as a meteor
+//   → trace the top edge to tear it → swipe through the cards (rarest last;
+//   ★4 / ★5 arrive face-down and turn over on tap) → results
 // Effects are light-based (bloom, rings, glints); motion is transform/opacity.
 // ============================================================================
 import { AnimatePresence, animate, motion, useAnimationControls, useMotionValue, useTransform, type MotionValue } from 'motion/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { CardDef, Rarity, SetCode } from '../engine/types';
-import { byName, RARITY_SYMBOL } from '../engine/cards';
-import { dayNumber, msToNextLineup, THEMES, typesLabel } from '../state/themes';
-import { todaysLineup, BOOSTERS, MIRROR_CHANCE, openPack, openPremium, PACK_PRICE, PACK_TABLE, premiumBooster, PREMIUM_PRICE, PREMIUM_TABLE, RARITY_ORDER, useStore, type Booster } from '../state/store';
-import { currentPickup, fmtRemain } from '../state/progress';
+import type { CardDef, Rarity } from '../engine/types';
+import { byName, RARITY_COLOR, RARITY_SYMBOL } from '../engine/cards';
+import { BOOSTERS, NORMAL_BOOSTER, openPack, PACK_TABLE, PREMIUM_BOOSTER, PREMIUM_TABLE, PRINTING_CHANCE, PREMIUM_PRINTING_CHANCE, useStore, type Booster } from '../state/store';
 import { CardBack, CardFace } from '../ui/Card';
 import { TopBar } from '../ui/TopBar';
 import { Icon } from '../ui/Icon';
@@ -28,15 +26,14 @@ const EASE_OUT = [0.16, 1, 0.3, 1] as const;
 const EASE_IN = [0.7, 0, 0.84, 0] as const;
 const EASE_IN_OUT = [0.65, 0, 0.35, 1] as const;
 
-/** ☆ rarities arrive face-down and turn over on tap */
-const isStar = (r: Rarity) => RARITY_ORDER[r] >= RARITY_ORDER.ST;
-const RARE_COLOR: Partial<Record<Rarity, string>> = { CR: '#ffd27a', ST2: '#ffe9a8', ST: '#fff1c4', RR: '#ffd9b0' };
-const rareColor = (r: Rarity) => RARE_COLOR[r] ?? '#ffffff';
-const priceOf = (b: Booster) => (b.premium ? PREMIUM_PRICE : PACK_PRICE);
+/** ★4 and ★5 arrive face-down and turn over on tap */
+const isStar = (r: Rarity) => r >= 4;
+const rareColor = (r: Rarity) => (r >= 3 ? RARITY_COLOR[r] : '#ffffff');
+const priceOf = (b: Booster) => b.price;
 
 // ---------------------------------------------------------------------------
 // Omen (予兆) and promotion (昇格)
-//   actual: the best card in the pack → 0 nothing / 1 ◇◇◇◇ / 2 ☆ / 3 ♛
+//   actual: the best ★ in the pack (grey / blue / gold / rainbow / rainbow-gold)
 //   shown:  what the meteors and the first aura colour reveal. It is never
 //           higher than the truth; sometimes lower, and the pack's aura then
 //           climbs to the real colour before it can be opened.
@@ -47,15 +44,16 @@ interface Omen {
   /** one meteor per card, best first; a card's meteor never shows more than the omen */
   meteors: OmenTier[];
 }
-const cardTier = (c: CardDef): OmenTier => (RARITY_ORDER[c.rarity] >= RARITY_ORDER.CR ? 3 : RARITY_ORDER[c.rarity] >= RARITY_ORDER.ST ? 2 : RARITY_ORDER[c.rarity] >= RARITY_ORDER.RR ? 1 : 0);
+const cardTier = (c: CardDef): OmenTier => c.rarity;
 function makeOmen(cards: CardDef[], god: boolean): Omen {
   const tiers = cards.map(cardTier).sort((a, b) => b - a);
-  const actual = (god ? 3 : tiers[0]) as OmenTier;
+  const actual = (god ? 5 : tiers[0]) as OmenTier;
   let shown = actual;
   const r = Math.random();
-  if (actual === 3) shown = (r < 0.15 ? 1 : r < 0.5 ? 2 : 3) as OmenTier;
-  else if (actual === 2) shown = (r < 0.35 ? 1 : 2) as OmenTier;
-  else if (actual === 1) shown = (r < 0.25 ? 0 : 1) as OmenTier;
+  // sometimes the meteors hide the truth, and the aura climbs (昇格) before the pack opens
+  if (actual === 5) shown = (r < 0.2 ? 3 : r < 0.55 ? 4 : 5) as OmenTier;
+  else if (actual === 4) shown = (r < 0.35 ? 3 : 4) as OmenTier;
+  else if (actual === 3) shown = (r < 0.25 ? 2 : 3) as OmenTier;
   const dbg = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('omen') : null; // e.g. ?omen=3,1
   if (dbg) {
     const [a, b] = dbg.split(',').map(Number);
@@ -64,11 +62,6 @@ function makeOmen(cards: CardDef[], god: boolean): Omen {
   const meteors = tiers.map((t, i) => (i === 0 ? shown : (Math.min(t, shown) as OmenTier)));
   return { actual, shown, meteors };
 }
-type Tab = 'today' | 'premium';
-const hms = (ms: number) => {
-  const t = Math.max(0, Math.floor(ms / 1000));
-  return `${String(Math.floor(t / 3600)).padStart(2, '0')}:${String(Math.floor((t % 3600) / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
-};
 
 function useUnit() {
   const calc = () => Math.min(window.innerWidth / 100, (window.innerHeight * 1.7778) / 100);
@@ -126,8 +119,8 @@ interface OpeningState {
   cards: CardDef[];
   god: boolean;
   fresh: Set<string>;
-  /** indices of cards that became shards (11th copy or later) */
-  shards: Set<number>;
+  /** coins each card was sold for (already at the copy limit), by index */
+  sold: number[];
   /** 1 or 10 (10連) */
   packs: number;
   key: number;
@@ -137,29 +130,9 @@ export function Shop() {
   const save = useStore((s) => s.save);
   const update = useStore((s) => s.update);
   const addCards = useStore((s) => s.addCards);
-  const [sel, setSel] = useState(0);
   const [opening, setOpening] = useState<OpeningState | null>(null);
-  const [odds, setOdds] = useState(false);
-  const [kind, setKind] = useState<Tab>(() => (/[?&]premium/.test(location.search) ? 'premium' : 'today'));
-  const u = useUnit();
+  const [odds, setOdds] = useState<Booster | null>(null);
   useEffect(() => playMusic('shop'), []);
-  const premium = useMemo(() => premiumBooster(), []);
-  const pickup = useMemo(() => currentPickup(), []);
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
-  }, []);
-  // today's two series; the line-up changes at local midnight
-  const day = dayNumber(now);
-  const lineup = useMemo(() => todaysLineup(), [day]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => setSel(0), [day]);
-  // every pack on sale today, side by side (the set series first)
-  const today = useMemo(() => [...lineup].sort((x, y) => (x.kind === 'set' ? -1 : 0) - (y.kind === 'set' ? -1 : 0)).flatMap((se) => se.boosters.map((bo) => ({ bo, se }))), [lineup]);
-  const list = kind === 'premium' ? [] : today.map((t) => t.bo);
-  const series = kind === 'premium' ? null : today[Math.min(sel, today.length - 1)].se;
-  const b = kind === 'premium' ? premium : list[Math.min(sel, list.length - 1)];
-  const price = priceOf(b);
 
   const buy = useCallback(
     (booster: Booster, packs = 1) => {
@@ -168,7 +141,7 @@ export function Shop() {
         sfx('miss-2', 0.5);
         return false;
       }
-      const results = Array.from({ length: packs }, () => (booster.premium ? openPremium() : openPack(booster)));
+      const results = Array.from({ length: packs }, () => openPack(booster));
       const cards = results.flatMap((r) => r.cards);
       const god = results.some((r) => r.god);
       const col = useStore.getState().save.collection;
@@ -178,119 +151,75 @@ export function Shop() {
         s.packsOpened += packs;
       });
       for (let k = 0; k < packs; k++) useStore.getState().recordPack(!!booster.premium);
-      const flags = addCards(cards.map((c) => c.id));
-      const shards = new Set(flags.flatMap((f, i) => (f ? [i] : [])));
-      setOpening({ booster, cards, god, fresh, shards, packs, key: Date.now() });
+      const sold = addCards(cards.map((c) => c.id));
+      setOpening({ booster, cards, god, fresh, sold, packs, key: Date.now() });
       return true;
     },
     [update, addCards],
   );
 
-  const shift = (d: number) => {
-    foley.slide();
-    setSel((sel + d + list.length) % list.length);
-  };
-
   return (
-    <div className="screen shop2">
-      <Backdrop hue={b.hue} />
-      <div className="stage">
-        <TopBar
-          title="パック開封"
-          right={
-            <>
-            <div className="shop-kind">
-              {(['today', 'premium'] as Tab[]).map((k) => (
-                <button
-                  key={k}
-                  className={`${kind === k ? 'on' : ''} ${k === 'premium' ? 'premium' : ''}`}
-                  onClick={() => {
-                    if (kind === k) return;
-                    foley.slide();
-                    setKind(k);
-                    setSel(0);
-                  }}
-                >
-                  {k === 'premium' ? 'プレミアム' : '本日のパック'}
-                  {k !== 'premium' && <i className="lim">{list.length || today.length}種</i>}
-                  {k === 'premium' && pickup && <i>PICK UP</i>}
-                </button>
-              ))}
-            </div>
-            <span className="lineup-timer" title="毎日0時に、本日のパックが入れ替わります">
-              入れ替えまで <b>{hms(msToNextLineup(now))}</b>
-            </span>
-            <button className="textbtn" onClick={() => setOdds(true)}>
-              提供割合
-            </button>
-            </>
-          }
-        />
-        {kind !== 'premium' ? (
-        <div className="shop2-row" key={`${kind}-${day}`}>
-          {list.map((bo, i) => {
-            let d = (((i - sel) % list.length) + list.length) % list.length;
-            if (d > list.length / 2) d -= list.length;
-            const center = d === 0;
-            const far = Math.abs(d) > 1;
-            return (
-              <motion.div
-                key={bo.id}
-                className="shop2-pack"
-                initial={false}
-                animate={{ x: d * u * 24 - u * 10.5, scale: center ? 1 : 0.7, y: center ? 0 : u * 5.5, rotateY: Math.max(-1, Math.min(1, d)) * -22, opacity: center ? 1 : far ? 0 : 0.45 }}
-                transition={{ type: 'spring', stiffness: 170, damping: 26, mass: 1 }}
-                style={{ zIndex: center ? 3 : 1, pointerEvents: far ? 'none' : undefined }}
-                onClick={() => (center ? buy(bo) : shift(d))}
-              >
-                <motion.div animate={center ? { y: [0, -u * 0.6, 0] } : { y: 0 }} transition={{ duration: 4.5, repeat: Infinity, ease: 'easeInOut' }}>
-                  <BoosterPack booster={bo} tilt={center} still={!center} />
+    <div className="screen shop3">
+      <Backdrop hue="#3d5bbf" />
+      <div className="page">
+        <TopBar title="パック" back={null} />
+        <div className="shop3-packs">
+          {BOOSTERS.map((b, i) => (
+            <motion.section
+              key={b.id}
+              className={`shop3-card ${b.premium ? 'premium' : ''}`}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.08 * i, duration: 0.5, ease: EASE_OUT }}
+            >
+              <div className="shop3-pack" onClick={() => buy(b)}>
+                <motion.div animate={{ y: [0, -6, 0] }} transition={{ duration: 4.5, repeat: Infinity, ease: 'easeInOut', delay: i * 0.6 }}>
+                  <BoosterPack booster={b} tilt />
                 </motion.div>
-              </motion.div>
-            );
-          })}
-          {list.length > 1 && (
-            <>
-              <button className="shop2-arrow l" onClick={() => shift(-1)} aria-label="前のパック">
-                ‹
-              </button>
-              <button className="shop2-arrow r" onClick={() => shift(1)} aria-label="次のパック">
-                ›
-              </button>
-            </>
-          )}
-        </div>
-        ) : (
-          <PremiumView booster={premium} pickup={pickup} now={now} u={u} onBuy={() => buy(premium)} />
-        )}
-        <div className="shop2-bottom">
-          <AnimatePresence mode="wait">
-            <motion.div key={b.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.25 }} style={{ textAlign: 'center' }}>
-              <div className="shop2-name">{b.name}</div>
-              <div className="shop2-sub">{b.premium ? '全弾から・5枚目は◇◇◇◇以上確定' : b.theme ? `本日のパック ・ 全弾から ・ ${typesLabel(b.types)}` : `${series?.name ?? ''} ・ ${typesLabel(b.types)}`}</div>
-              {!b.premium && list.length > 1 && (
-                <div className="shop2-dots">
-                  {list.map((x, i) => (
-                    <i key={x.id} className={i === sel ? 'on' : ''} onClick={() => (foley.tick(), setSel(i))} />
-                  ))}
+              </div>
+              <div className="shop3-info">
+                <h3>{b.name}</h3>
+                <ul>
+                  {b.premium ? (
+                    <>
+                      <li>
+                        5枚目は<b className="s3">★3以上</b>確定
+                      </li>
+                      <li>
+                        <b className="s4">★4</b>・<b className="s5">★5</b>が通常の約6倍
+                      </li>
+                      <li>特別仕様のカードも出やすい</li>
+                    </>
+                  ) : (
+                    <>
+                      <li>すべての弾のカードが出る</li>
+                      <li>
+                        ごくまれに<b className="s4">★4</b>・<b className="s5">★5</b>
+                      </li>
+                      <li>5枚入り</li>
+                    </>
+                  )}
+                </ul>
+                <div className="shop3-buy">
+                  <button className={`pill ${b.premium ? 'gold' : ''}`} disabled={save.coins < b.price} onClick={() => buy(b)}>
+                    1パック
+                    <span className="coin">
+                      <Icon name="coin" /> {b.price}
+                    </span>
+                  </button>
+                  <button className={`pill ten ${b.premium ? 'gold' : ''}`} disabled={save.coins < b.price * 10} onClick={() => buy(b, 10)}>
+                    10パック
+                    <span className="coin">
+                      <Icon name="coin" /> {(b.price * 10).toLocaleString()}
+                    </span>
+                  </button>
                 </div>
-              )}
-            </motion.div>
-          </AnimatePresence>
-          <div className="shop2-buttons">
-            <button className={`pill ${b.premium ? 'gold' : ''}`} disabled={save.coins < price} onClick={() => buy(b)}>
-              開封する
-              <span className="coin">
-                <Icon name="coin" /> {price}
-              </span>
-            </button>
-            <button className={`pill ten ${b.premium ? 'gold' : ''}`} disabled={save.coins < price * 10} onClick={() => buy(b, 10)}>
-              10パック開封
-              <span className="coin">
-                <Icon name="coin" /> {(price * 10).toLocaleString()}
-              </span>
-            </button>
-          </div>
+                <button className="textbtn shop3-odds" onClick={() => setOdds(b)}>
+                  提供割合
+                </button>
+              </div>
+            </motion.section>
+          ))}
         </div>
       </div>
 
@@ -307,7 +236,7 @@ export function Shop() {
         )}
       </AnimatePresence>
 
-      {odds && <OddsModal premium={kind === 'premium'} onClose={() => setOdds(false)} />}
+      {odds && <OddsModal premium={!!odds.premium} onClose={() => setOdds(null)} />}
     </div>
   );
 }
@@ -343,9 +272,7 @@ function OddsModal({ onClose, premium }: { onClose: () => void; premium?: boolea
           </tbody>
         </table>
         <div className="odds-note">
-          {premium
-            ? 'すべての弾のカードが出ます。ピックアップ開催中は、ピックアップ対象と同じレアリティが出た場合、その50%がピックアップカードになります。'
-            : `3枚目は${Math.round(MIRROR_CHANCE * 100)}%でミラー仕様のカードになります。パックに描かれたタイプのカードは2倍出やすくなります。ごくまれに、5枚すべてが◇◇◇◇以上のパックが出ることがあります。そのパックの弾に存在しないレアリティが出た場合は、1つ下のレアリティになります。`}
+          {`すべての弾のカードが出ます。どのカードも${Math.round((premium ? PREMIUM_PRINTING_CHANCE : PRINTING_CHANCE) * 100)}%で特別仕様（ミラー・イラスト・ゴールドなど）になります。特別仕様の★は元のカードと同じです。ごくまれに、すべてが★3以上のパックが出ることがあります。同じカードが${10}枚を超えた分は、自動でコインに交換されます。`}
         </div>
         <button className="pill ghost" onClick={onClose}>
           閉じる
@@ -363,7 +290,7 @@ interface OpeningProps extends Omit<OpeningState, 'key'> {
   onAgain: () => void;
 }
 
-function Opening({ booster, cards, god, fresh, shards, packs, onClose, onAgain }: OpeningProps) {
+function Opening({ booster, cards, god, fresh, sold, packs, onClose, onAgain }: OpeningProps) {
   const u = useUnit();
   const [phase, setPhase] = useState<Phase>('launch');
   const cineApi = useRef<CinemaApi | null>(null);
@@ -482,7 +409,7 @@ function Opening({ booster, cards, god, fresh, shards, packs, onClose, onAgain }
 
         {(phase === 'multi' || (phase === 'reveal' && packs > 1)) && <TornPile booster={booster} u={u} n={Math.min(packs, 10)} fall={false} />}
         {phase === 'multi' && (
-          <MultiResults opened={revealed} cards={cards} fresh={fresh} shards={shards} burstAt={burstAt} onClose={onClose} onAgain={onAgain} canAgain={coins >= priceOf(booster) * packs} price={priceOf(booster) * packs} u={u} />
+          <MultiResults opened={revealed} cards={cards} fresh={fresh} sold={sold} burstAt={burstAt} onClose={onClose} onAgain={onAgain} canAgain={coins >= priceOf(booster) * packs} price={priceOf(booster) * packs} u={u} />
         )}
 
         {phase === 'reveal' && top && (
@@ -550,7 +477,7 @@ function Opening({ booster, cards, god, fresh, shards, packs, onClose, onAgain }
           </>
         )}
 
-        {phase === 'results' && <Results cards={cards} fresh={fresh} shards={shards} onClose={onClose} onAgain={onAgain} canAgain={coins >= priceOf(booster)} price={priceOf(booster)} u={u} />}
+        {phase === 'results' && <Results cards={cards} fresh={fresh} sold={sold} onClose={onClose} onAgain={onAgain} canAgain={coins >= priceOf(booster)} price={priceOf(booster)} u={u} />}
       </div>
     </motion.div>
   );
@@ -736,17 +663,17 @@ function CinemaLayer({ omen, god, aura, held, playing, api, target, onDone }: { 
         holdAt: LAUNCH_HOLD,
         onBeat: (b) => {
           if (b === 'twinkle') {
-            foley.chime(4 + omen.shown);
+            foley.chime(2 + omen.shown);
             foley.sparkle();
           } else if (b === 'enter') {
             foley.whoosh();
-            if (omen.shown >= 2) setTimeout(() => foley.sparkle(), 250);
+            if (omen.shown >= 3) setTimeout(() => foley.sparkle(), 250);
             if (god) setTimeout(() => foley.rarity(5), 700);
           } else if (b === 'dive') foley.charge();
           else if (b === 'impact') {
             foley.impact();
             sfx('rumble', 0.5);
-          } else if (b === 'orb') foley.chime(3 + omen.shown);
+          } else if (b === 'orb') foley.chime(1 + omen.shown);
           else if (b === 'morph') sfx('magic-holy-2', 0.4);
         },
         onDone: () => doneRef.current(),
@@ -821,7 +748,7 @@ function TearStage({ booster, god, u, cards, omen, packs, onAura, burstAt, onDon
         setAura(t);
         setPromo((n) => n + 1);
         foley.impact();
-        foley.rarity(2 + t);
+        foley.rarity(t);
         sfx('magic-holy-2', 0.5);
         const r = packRef.current?.getBoundingClientRect();
         if (r) {
@@ -842,7 +769,7 @@ function TearStage({ booster, god, u, cards, omen, packs, onAura, burstAt, onDon
       const edge = Math.random() * 4;
       const x = edge < 1 ? r.left : edge < 2 ? r.right : r.left + Math.random() * r.width;
       const y = edge < 2 ? r.top + Math.random() * r.height : edge < 3 ? r.top : r.bottom;
-      burstAt(x, y, `aura${auraRef.current}`, auraRef.current === 0 ? 1 : 2, 0.9);
+      burstAt(x, y, `aura${auraRef.current}`, auraRef.current <= 1 ? 1 : 2, 0.9);
     }, 130);
     return () => clearInterval(iv);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1264,7 +1191,7 @@ function TopCard({ card, u, first, faceDown, burstAt, onFlipImpact, onFlipped, o
   const ref = useRef<HTMLDivElement>(null);
   const busy = useRef(false);
   const star = isStar(card.rarity);
-  const rank = RARITY_ORDER[card.rarity];
+  const rank = card.rarity;
   const [up, setUp] = useState(!faceDown);
   // Which face shows is decided here from the flip angle, not left to backface-visibility:
   // iOS Safari lets the front show through the back of a card with layered effects.
@@ -1308,7 +1235,7 @@ function TopCard({ card, u, first, faceDown, burstAt, onFlipImpact, onFlipped, o
       setUp(true);
       onFlipImpact();
       foley.impact();
-      foley.rarity(rank >= RARITY_ORDER.CR ? 5 : 4);
+      foley.rarity(rank === 5 ? 5 : 4);
       const c = center();
       if (c) {
         burstAt(c.cx, c.cy, 'glint', 50, 1.6);
@@ -1419,7 +1346,7 @@ interface MultiProps {
   opened?: Set<number>;
   cards: CardDef[];
   fresh: Set<string>;
-  shards: Set<number>;
+  sold: number[];
   burstAt: (x: number, y: number, preset: string, n: number, scale?: number) => void;
   onClose: () => void;
   onAgain: () => void;
@@ -1428,13 +1355,13 @@ interface MultiProps {
   u: number;
 }
 
-function MultiResults({ opened, cards, fresh, shards, burstAt, onClose, onAgain, canAgain, price, u }: MultiProps) {
+function MultiResults({ opened, cards, fresh, sold, burstAt, onClose, onAgain, canAgain, price, u }: MultiProps) {
   // keep each card's original index (shard flags refer to it), sort rarest last
   const items = useMemo(
     () =>
       cards
         .map((c, i) => ({ c, i }))
-        .sort((a, b) => RARITY_ORDER[a.c.rarity] - RARITY_ORDER[b.c.rarity] || (a.c.variant ? 1 : 0) - (b.c.variant ? 1 : 0) || a.i - b.i),
+        .sort((a, b) => a.c.rarity - b.c.rarity || (a.c.variant ? 1 : 0) - (b.c.variant ? 1 : 0) || a.i - b.i),
     [cards],
   );
   const hidden = items.filter((x) => isStar(x.c.rarity)).map((x) => x.i);
@@ -1450,9 +1377,9 @@ function MultiResults({ opened, cards, fresh, shards, burstAt, onClose, onAgain,
 
   useEffect(() => {
     for (let k = 0; k < Math.min(12, items.length); k++) setTimeout(() => foley.slide(), 60 + k * 70);
-    // a shimmer for the RR (◇◇◇◇) cards as they land
+    // a shimmer for the ★3 (gold) cards as they land
     items.forEach((x, k) => {
-      if (RARITY_ORDER[x.c.rarity] !== RARITY_ORDER.RR) return;
+      if (x.c.rarity !== 3) return;
       setTimeout(() => {
         const r = refs.current.get(x.i)?.getBoundingClientRect();
         if (r) burstAt(r.left + r.width / 2, r.top + r.height / 2, 'glint', 5, 0.7);
@@ -1467,7 +1394,7 @@ function MultiResults({ opened, cards, fresh, shards, burstAt, onClose, onAgain,
     setOpen((s) => new Set(s).add(i));
     setFlash({ id: Date.now() + i, color: rareColor(c.rarity) });
     foley.impact();
-    foley.rarity(RARITY_ORDER[c.rarity] >= RARITY_ORDER.CR ? 5 : 4);
+    foley.rarity(c.rarity === 5 ? 5 : 4);
     sfx('magic-holy-2', 0.3);
     const r = refs.current.get(i)?.getBoundingClientRect();
     if (r) {
@@ -1510,7 +1437,7 @@ function MultiResults({ opened, cards, fresh, shards, burstAt, onClose, onAgain,
           if (onlyNew && !fresh.has(c.id)) return null;
           const star = isStar(c.rarity);
           const down = star && !open.has(i);
-          const rank = RARITY_ORDER[c.rarity];
+          const rank = c.rarity;
           return (
             <motion.div
               key={i}
@@ -1543,9 +1470,9 @@ function MultiResults({ opened, cards, fresh, shards, burstAt, onClose, onAgain,
               </motion.div>
               {down && <motion.div className="multi-halo" animate={{ opacity: [0.35, 0.7, 0.35] }} transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }} />}
               {!down && fresh.has(c.id) && <span className="new">NEW</span>}
-              {!down && shards.has(i) && (
+              {!down && sold[i] > 0 && (
                 <span className="shard-tag">
-                  <Icon name="shard" />
+                  <Icon name="coin" /> +{sold[i]}
                 </span>
               )}
             </motion.div>
@@ -1592,7 +1519,7 @@ function MultiResults({ opened, cards, fresh, shards, burstAt, onClose, onAgain,
 // ---------------------------------------------------------------------------
 // Results
 // ---------------------------------------------------------------------------
-function Results({ cards, fresh, shards, onClose, onAgain, canAgain, price, u }: { cards: CardDef[]; fresh: Set<string>; shards: Set<number>; onClose: () => void; onAgain: () => void; canAgain: boolean; price: number; u: number }) {
+function Results({ cards, fresh, sold, onClose, onAgain, canAgain, price, u }: { cards: CardDef[]; fresh: Set<string>; sold: number[]; onClose: () => void; onAgain: () => void; canAgain: boolean; price: number; u: number }) {
   const [zoom, setZoom] = useState<string | null>(null);
   useEffect(() => {
     cards.forEach((_, i) => setTimeout(() => foley.slide(), 80 + i * 90));
@@ -1606,11 +1533,11 @@ function Results({ cards, fresh, shards, onClose, onAgain, canAgain, price, u }:
           <div className="results-row" key={ri}>
             {row.map((c) => {
               const i = n++;
-              const rank = RARITY_ORDER[c.rarity];
+              const rank = c.rarity;
               return (
                 <motion.div
                   key={i}
-                  className="results-item"
+                  className={`results-item r${rank}`}
                   initial={{ opacity: 0, y: u * 1.6, scale: 0.97 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   transition={{ delay: 0.08 + i * 0.07, duration: 0.6, ease: EASE_OUT }}
@@ -1623,9 +1550,9 @@ function Results({ cards, fresh, shards, onClose, onAgain, canAgain, price, u }:
                   <CardFace cid={c.id} />
                   {rank >= 3 && <div className="glare" style={{ animationDelay: `${0.5 + i * 0.07}s` }} />}
                   {fresh.has(c.id) && <span className="new">NEW</span>}
-                  {shards.has(i) && (
+                  {sold[i] > 0 && (
                     <span className="shard-tag">
-                      <Icon name="shard" /> かけら+1
+                      <Icon name="coin" /> 上限のため +{sold[i]}
                     </span>
                   )}
                 </motion.div>
@@ -1658,75 +1585,5 @@ function Results({ cards, fresh, shards, onClose, onAgain, canAgain, price, u }:
   );
 }
 
-// ---------------------------------------------------------------------------
-// Premium pack view with the (irregular) pick-up banner
-// ---------------------------------------------------------------------------
-function PremiumView({ booster, pickup, now, u, onBuy }: { booster: Booster; pickup: ReturnType<typeof currentPickup>; now: number; u: number; onBuy: () => void }) {
-  return (
-    <div className="prem">
-      <motion.div className="prem-info" initial={{ opacity: 0, x: -u * 2 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.6, ease: EASE_OUT }}>
-        <div className="prem-kicker">PREMIUM PACK</div>
-        <h3>プレミアムパック</h3>
-        <ul>
-          <li>
-            <b>全スロット</b>のレアリティが上昇
-          </li>
-          <li>
-            5枚目は<b>◇◇◇◇以上</b>確定
-          </li>
-          <li>
-            ☆・♛ の出現数 通常の<b>約6倍</b>
-          </li>
-          <li>
-            <b>全弾</b>のカードが封入
-          </li>
-        </ul>
-      </motion.div>
-      <motion.div
-        className="shop2-pack prem-pack"
-        initial={{ opacity: 0, y: u * 2, scale: 0.96 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ duration: 0.7, ease: EASE_OUT }}
-        onClick={onBuy}
-      >
-        <motion.div animate={{ y: [0, -u * 0.6, 0] }} transition={{ duration: 4.5, repeat: Infinity, ease: 'easeInOut' }}>
-          <BoosterPack booster={booster} tilt />
-        </motion.div>
-      </motion.div>
-      <motion.div className={`prem-pu ${pickup ? 'on' : ''}`} initial={{ opacity: 0, x: u * 2 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.6, ease: EASE_OUT, delay: 0.05 }}>
-        {pickup ? (
-          <>
-            <div className="pu-head">
-              <span className="pu-tag">PICK UP</span>
-              <span className="pu-time">
-                <Icon name="hourglass" /> 残り {fmtRemain(pickup.end.getTime() - now)}
-              </span>
-            </div>
-            <div className="pu-card">
-              <CardFace cid={pickup.card.id} />
-              <div className="glare" />
-            </div>
-            <div className="pu-name">{pickup.card.name}</div>
-            <div className="pu-desc">{RARITY_SYMBOL[pickup.card.rarity]} が出たとき、50%でこのカードに</div>
-          </>
-        ) : (
-          <>
-            <div className="pu-head">
-              <span className="pu-tag off">PICK UP</span>
-            </div>
-            <div className="pu-empty">
-              <div className="q">?</div>
-              現在開催中のピックアップはありません。
-              <br />
-              ピックアップは<b>不定期</b>に開催されます。
-            </div>
-          </>
-        )}
-      </motion.div>
-    </div>
-  );
-}
-
 // keep the mascot lookup warm so packs render without a hitch
 BOOSTERS.forEach((b) => byName(b.mascot));
-THEMES.forEach((t) => byName(t.mascot));

@@ -9,7 +9,7 @@ export function Gallery() {
   const v = q.get('v');
   const set = q.get('set');
   const names = q.get('names')?.split(',');
-  const src = ALL_CARDS.filter((c) => (!v || (v === 'base' ? !c.variant : c.variant === v || c.rarity === v)) && (!set || c.set === set) && (!names || names.includes(c.name)));
+  const src = ALL_CARDS.filter((c) => (!v || (v === 'base' ? !c.variant : c.variant === v || String(c.rarity) === v)) && (!set || c.set === set) && (!names || names.includes(c.name)));
   const list = src.slice(from, from + n);
   return (
     <div style={{ position: 'absolute', inset: 0, overflow: 'auto', padding: 20, display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', alignContent: 'flex-start', gap: 18, background: '#1a2040' }}>

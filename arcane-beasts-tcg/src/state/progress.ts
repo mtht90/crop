@@ -1,10 +1,8 @@
 // ============================================================================
 // Player progression & economy: level/EXP, login bonus, missions, battle
-// rewards, and the irregular pick-up schedule for the premium pack.
+// rewards.
 // Everything is computed locally from the save + the viewer's clock.
 // ============================================================================
-import { ALL_CARDS } from '../engine/cards';
-import type { CardDef } from '../engine/types';
 import type { Difficulty } from '../engine/ai';
 
 export interface Stats {
@@ -19,14 +17,14 @@ export interface Stats {
   trainers: number;
   packs: number;
   premiumPacks: number;
-  rankedWins: number;
+  onlineWins: number;
   exchanges: number;
   /** the longest win streak so far (kept with max, not added) */
   bestStreak: number;
 }
 export type StatKey = keyof Stats;
 
-export const EMPTY_STATS: Stats = { battles: 0, wins: 0, hardWins: 0, perfectWins: 0, kos: 0, damage: 0, prizes: 0, evolves: 0, trainers: 0, packs: 0, premiumPacks: 0, rankedWins: 0, exchanges: 0, bestStreak: 0 };
+export const EMPTY_STATS: Stats = { battles: 0, wins: 0, hardWins: 0, perfectWins: 0, kos: 0, damage: 0, prizes: 0, evolves: 0, trainers: 0, packs: 0, premiumPacks: 0, onlineWins: 0, exchanges: 0, bestStreak: 0 };
 
 export interface Period {
   key: string;
@@ -188,7 +186,7 @@ export function battleReward(p: Progress, o: BattleOutcome): { lines: RewardLine
 export interface Mission {
   id: string;
   label: string;
-  stat: StatKey | 'level' | 'collection' | 'rivals' | 'story' | 'rank' | 'uniques' | 'stars' | 'decks';
+  stat: StatKey | 'level' | 'collection' | 'rivals' | 'story' | 'uniques' | 'stars' | 'decks';
   target: number;
   reward: number;
 }
@@ -233,7 +231,6 @@ export const ACHIEVEMENTS: Mission[] = [
 // 通常ミッション: one-off goals, all shown at once
 const n = (id: string, label: string, stat: Mission['stat'], target: number, reward: number): Mission => ({ id: `n-${id}-${target}`, label, stat, target, reward });
 const many = (id: string, stat: Mission['stat'], label: (t: number) => string, tiers: [number, number][]) => tiers.map(([t, r]) => n(id, label(t), stat, t, r));
-const RANK_NAMES = ['10級', '9級', '8級', '7級', '6級', '5級', '4級', '3級', '2級', '1級', '初段', '二段', '三段', '四段', '五段', '六段', '七段', '八段', '九段', '十段', '名人'];
 
 export const NORMAL_MISSIONS: Mission[] = [
   // はじめの一歩
@@ -257,17 +254,15 @@ export const NORMAL_MISSIONS: Mission[] = [
   ...many('prize', 'prizes', (t) => `サイドを通算${t}枚とる`, [[10, 100], [30, 200], [100, 500], [300, 1200]]),
   ...many('evo', 'evolves', (t) => `通算${t}回進化させる`, [[5, 60], [20, 150], [50, 300], [100, 500], [300, 1200]]),
   ...many('tr', 'trainers', (t) => `トレーナーズを通算${t}枚使う`, [[10, 60], [30, 120], [100, 300], [300, 700], [1000, 1800]]),
-  // ランクマッチ
-  ...many('rwin', 'rankedWins', (t) => `ランクマッチで通算${t}回勝つ`, [[1, 100], [3, 150], [10, 400], [30, 900], [100, 2500]]),
-  ...[1, 3, 5, 9, 10, 13, 15, 19, 20].map((i) => n('rank', `ランク「${RANK_NAMES[i]}」に到達`, 'rank', i, i >= 20 ? 5000 : i >= 10 ? 400 + (i - 10) * 150 : 100 + i * 40)),
+  // オンライン
+  ...many('owin', 'onlineWins', (t) => `オンライン対戦で通算${t}回勝つ`, [[1, 100], [3, 150], [10, 400], [30, 900], [100, 2500]]),
   // 強敵
   ...many('rival', 'rivals', (t) => `強敵を${t}人撃破`, [[2, 120], [3, 150], [6, 300], [10, 500], [15, 800], [22, 2000]]),
   // パック・コレクション
   ...many('pack', 'packs', (t) => `パックを通算${t}回開ける`, [[3, 60], [10, 150], [20, 250], [50, 500], [200, 1500]]),
   ...many('prem', 'premiumPacks', (t) => `プレミアムパックを通算${t}回開ける`, [[3, 150], [5, 250], [20, 700]]),
-  ...many('ex', 'exchanges', (t) => `かけらでカードを${t}回交換する`, [[1, 100], [5, 250], [20, 800]]),
   ...many('uniq', 'uniques', (t) => `ちがうカードを${t}種類集める`, [[30, 100], [50, 150], [100, 300], [150, 450], [200, 600], [300, 1000], [400, 1600], [500, 2500]]),
-  ...many('star', 'stars', (t) => `☆以上のカードを${t}種類集める`, [[1, 150], [5, 300], [10, 500], [25, 1000], [50, 2000]]),
+  ...many('star', 'stars', (t) => `★4以上のカードを${t}種類集める`, [[1, 150], [3, 300], [8, 600], [20, 1200], [40, 2500]]),
   ...many('deck', 'decks', (t) => `デッキを${t}つ作る`, [[3, 120], [5, 250], [10, 500]]),
   ...many('lv', 'level', (t) => `プレイヤーレベル${t}に到達`, [[2, 60], [3, 80], [4, 100], [6, 150], [8, 200], [15, 500], [25, 900], [40, 1500], [50, 2500]]),
 ];
@@ -285,7 +280,6 @@ export interface ExtCtx {
   collectionPct: number;
   rivals: number;
   story: number;
-  rank: number;
   uniques: number;
   stars: number;
   decks: number;
@@ -296,7 +290,7 @@ export type MissionPeriod = 'daily' | 'weekly' | 'achv' | 'normal';
 export function missionValue(p: Progress, m: Mission, period: MissionPeriod, ext: ExtCtx): number {
   if (m.stat === 'level') return p.level;
   if (m.stat === 'collection') return Math.floor(ext.collectionPct);
-  if (m.stat === 'rivals' || m.stat === 'story' || m.stat === 'rank' || m.stat === 'uniques' || m.stat === 'stars' || m.stat === 'decks') return ext[m.stat];
+  if (m.stat === 'rivals' || m.stat === 'story' || m.stat === 'uniques' || m.stat === 'stars' || m.stat === 'decks') return ext[m.stat];
   if (period === 'daily') return p.daily.counters[m.stat] ?? 0;
   if (period === 'weekly') return p.weekly.counters[m.stat] ?? 0;
   return p.stats[m.stat] ?? 0;
@@ -309,43 +303,4 @@ export function claimableCount(p: Progress, ext: ExtCtx): number {
   for (const m of ACHIEVEMENTS) if (!p.achvClaimed.includes(m.id) && missionValue(p, m, 'achv', ext) >= m.target) n++;
   for (const m of NORMAL_MISSIONS) if (!(p.normalClaimed ?? []).includes(m.id) && missionValue(p, m, 'normal', ext) >= m.target) n++;
   return n;
-}
-
-// ---------------------------------------------------------------------------
-// Irregular pick-up schedule for the premium pack
-// ---------------------------------------------------------------------------
-export interface Pickup {
-  card: CardDef;
-  start: Date;
-  end: Date;
-}
-
-const PICKUP_POOL = ALL_CARDS.filter((c) => (c.rarity === 'ST' || c.rarity === 'ST2' || c.rarity === 'CR') && c.variant !== 'S' && c.kind === 'monster');
-const ANCHOR = new Date(2026, 0, 1);
-
-/** Pick-ups run for 2–4 days with irregular 1–5 day breaks in between. */
-export function currentPickup(now = new Date()): Pickup | null {
-  if (typeof location !== 'undefined' && /[?&]pickup/.test(location.search)) {
-    return { card: PICKUP_POOL[0], start: new Date(now.getTime() - 86400000), end: new Date(now.getTime() + 2.4 * 86400000) };
-  }
-  const r = seeded('arcane-pickup');
-  const day = 86400000;
-  let t = ANCHOR.getTime();
-  const limit = now.getTime() + 120 * day;
-  let prev = -1;
-  while (t < limit) {
-    const gap = 1 + Math.floor(r() * 5);
-    const dur = 2 + Math.floor(r() * 3);
-    let pick = Math.floor(r() * PICKUP_POOL.length);
-    if (pick === prev) pick = (pick + 1) % PICKUP_POOL.length;
-    prev = pick;
-    const start = new Date(t + gap * day);
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(start.getTime() + dur * day);
-    end.setHours(0, 0, 0, 0);
-    if (now >= start && now < end) return { card: PICKUP_POOL[pick], start, end };
-    if (start > now) return null;
-    t = end.getTime();
-  }
-  return null;
 }

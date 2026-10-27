@@ -19,11 +19,11 @@ export function Settings() {
   const set = (k: 'music' | 'sfx' | 'speed', v: number) => update((s) => void (s.settings[k] = v));
   return (
     <div className="screen">
-      <div className="screen-bg" style={{ backgroundImage: `url(${artUrl('story/landscape-castle')})` }} />
-      <div className="screen-shade" />
-      <div className="stage">
-        <TopBar title="設定" />
-        <div className="panel settings-box">
+      <div className="page-bg" style={{ backgroundImage: `url(${artUrl('story/landscape-castle')})` }} />
+      <div className="page-shade" />
+      <div className="page">
+        <TopBar title="設定" back="more" />
+        <div className="box page-inner settings3">
           <div className="set-row">
             <label>BGM 音量</label>
             <input type="range" min={0} max={1} step={0.05} value={settings.music} onChange={(e) => set('music', Number(e.target.value))} />
@@ -144,7 +144,7 @@ function DevRow() {
             オフにする
           </button>
         </div>
-        <div className="set-note">{msg || 'ストーリー全章・強敵すべてクリア済み。コインとかけらは使っても減りません'}</div>
+        <div className="set-note">{msg || 'ストーリー全章・強敵すべてクリア済み。コインは使っても減りません'}</div>
       </>
     );
   const submit = () => {
@@ -201,14 +201,14 @@ export function Rules() {
   const sample = byName('ヒオネコ').id;
   return (
     <div className="screen">
-      <div className="screen-bg" style={{ backgroundImage: `url(${artUrl('story/landscape-castle')})` }} />
-      <div className="screen-shade" />
-      <div className="stage">
-        <TopBar title="あそびかた" />
-        <div className="panel doc">
+      <div className="page-bg" style={{ backgroundImage: `url(${artUrl('story/landscape-castle')})` }} />
+      <div className="page-shade" />
+      <div className="page">
+        <TopBar title="あそびかた" back="more" />
+        <div className="box page-inner doc3">
           <h2>勝利条件</h2>
           <ul>
-            <li>相手のモンスターをきぜつさせてサイドを<b>6枚</b>すべてとる（Ωモンスターをきぜつさせると2枚、EXモンスターなら3枚）</li>
+            <li>相手のモンスターをきぜつさせてサイドを<b>6枚</b>すべてとる（★4のモンスターなら2枚、★5なら3枚とれる）</li>
             <li>相手の場のモンスターをすべていなくする</li>
             <li>相手が自分の番のはじめに山札を引けなくなる</li>
           </ul>
@@ -219,31 +219,36 @@ export function Rules() {
               <li>左上は進化段階（たね／1進化／2進化）、右上はHPとタイプ</li>
               <li>ワザの左のマークは必要なエネルギー。<EnergySymbol type="colorless" size="1.1em" />（無色）はどのエネルギーでも払える</li>
               <li>下段は弱点（ダメージ×2）・抵抗力（-30）・にげるためのエネルギー</li>
-              <li>名前の横に<b>Ω</b>があるカードは強力だが、きぜつするとサイドを2枚とられる</li>
-              <li>第2弾から登場した<b>EX</b>はさらに強力。そのかわり、きぜつするとサイドを<b>3枚</b>とられる</li>
+              <li>
+                <b>★4・★5</b>のモンスターは強力。そのかわり、きぜつするとサイドを★4は<b>2枚</b>、★5は<b>3枚</b>とられる
+              </li>
             </ul>
           </div>
-          <h2>レアリティとモデル</h2>
-          <p>カードには<b>レアリティ</b>（出にくさ・6段階）と<b>モデル</b>（絵柄や加工の種類）があります。性能はモデルが違っても同じです。</p>
+          <h2>レアリティ（★）</h2>
+          <p>
+            カードの★は<b>強さ</b>をあらわします（★1〜★5）。同じカードの特別な絵柄（ミラー・イラスト・フルアートなど）は、★も性能も元のカードと同じです。
+          </p>
           <ul>
             <li>
-              <b>◇ ◇◇ ◇◇◇</b> … コモン・アンコモン・レア。まれに光沢加工の<b>ミラー</b>モデルがある
+              <b>★1・★2</b> … 基本のカード。パックによく入っている
             </li>
             <li>
-              <b>◇◇◇◇</b> … ダブルレア。<b>Ω</b>モデルと<b>EX</b>モデル
+              <b>★3</b> … 主力になる強いカード
             </li>
             <li>
-              <b>☆</b> … スター。絵が全面に広がる<b>イラスト</b>、ΩやEX・サポーターの<b>フルアート</b>、色違いの<b>シャイニー</b>
+              <b>★4</b> … かなりレアで強力。きぜつするとサイド2枚
             </li>
             <li>
-              <b>♛</b> … クラウン。一枚絵の<b>イラスト</b>と<b>ゴールド</b>。最高レアリティ
+              <b>★5</b> … 少数精鋭の切り札。HPもワザもひときわ強い。きぜつするとサイド3枚
             </li>
-            <li>☆以上のカードはウラ向きで出てくる。パックのオーラの色で、中に何があるかが分かることも…</li>
+            <li>パックを開けるとき、光の色で中身が分かる：★1 灰・★2 青・★3 金・★4 虹・★5 虹金</li>
+            <li>同じカードは10枚まで持てる。11枚目以降はコインに変わる</li>
           </ul>
-          <h2>かけらと交換所</h2>
+          <h2>地形（スタジアム）</h2>
           <ul>
-            <li>同じカードは10枚まで持てる。11枚目以降は、そのカードのレアリティの<b>かけら</b>になる</li>
-            <li>かけらを集めると、<b>かけら交換所</b>（コレクション画面から）で同じレアリティの好きなカードと交換できる</li>
+            <li>地形カードを出すと、場の景色と天気が変わる</li>
+            <li>多くの地形は、あるタイプのワザを<b>+30</b>強くし、別のタイプを<b>-20</b>弱くする。どのタイプにも得意な地形がある</li>
+            <li>新しい地形を出すと、前の地形はトラッシュされる</li>
           </ul>
           <h2>準備</h2>
           <ul>
@@ -259,7 +264,7 @@ export function Rules() {
             <li>エネルギーを1枚つける（1回だけ）</li>
             <li>トレーナーズを使う：アイテム（何枚でも）・サポーター（1枚だけ）・スタジアム（1枚だけ）・どうぐ（1匹に1枚）</li>
             <li>特性を使う／バトルモンスターをにげる（エネルギーをトラッシュして入れ替え・1回だけ）</li>
-            <li>最後にワザを使うと番が終わる。ワザを使わずに<b>ターン終了</b>してもよい</li>
+            <li>ワザを使うと自動で番が終わる。ワザを使わずに<b>ターン終了</b>してもよい</li>
           </ul>
           <h2>特殊状態（チェックタイム：番と番の間に処理）</h2>
           <ul>
@@ -272,10 +277,10 @@ export function Rules() {
           </ul>
           <h2>操作</h2>
           <ul>
-            <li>手札のカードを<b>ドラッグ</b>して場に出す、または<b>クリック</b>で選んでから出し先をクリック</li>
-            <li>自分のモンスターをクリックすると、ワザ・特性・にげるのメニューが開く</li>
-            <li>カードにマウスを乗せると右側に拡大表示。右上の本アイコンでバトルログ</li>
-            <li>トラッシュの山をクリックすると中身を確認できる</li>
+            <li>手札のカードを<b>ドラッグ</b>して場に出す、または<b>タップ</b>で選んでから出し先をタップ</li>
+            <li>自分のモンスターをタップすると、ワザ・特性・にげるのメニューが開く</li>
+            <li>カードを長押し（PCはマウスを乗せる）と拡大表示。右上の本アイコンでバトルログ</li>
+            <li>トラッシュの山をタップすると中身を確認できる</li>
           </ul>
         </div>
       </div>
@@ -287,11 +292,11 @@ export function Credits() {
   useEffect(() => playMusic('menu'), []);
   return (
     <div className="screen">
-      <div className="screen-bg" style={{ backgroundImage: `url(${artUrl('story/landscape-bridge_sun')})` }} />
-      <div className="screen-shade" />
-      <div className="stage">
-        <TopBar title="クレジット" />
-        <div className="panel doc">
+      <div className="page-bg" style={{ backgroundImage: `url(${artUrl('story/landscape-bridge_sun')})` }} />
+      <div className="page-shade" />
+      <div className="page">
+        <TopBar title="クレジット" back="more" />
+        <div className="box page-inner doc3">
           <h2>ARCANE BEASTS</h2>
           <p>ゲームデザイン・プログラム：オリジナル。カード名・テキスト・ルールエンジンは本作のために書き下ろしました。</p>
           <h2>イラスト・効果音・BGM</h2>

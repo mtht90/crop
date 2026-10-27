@@ -96,7 +96,7 @@ export function StoryMap() {
       </AnimatePresence>
       <div className="sc-shade" />
 
-      <div className="stage">
+      <div className="sc-page">
         <TopBar title="ストーリー" back="arena" />
         <div className="sc-tools">
           <span className="sc-deck">
@@ -117,6 +117,7 @@ export function StoryMap() {
           </label>
         </div>
 
+        <div className="sc-fill" />
         {/* chapter text */}
         <AnimatePresence mode="wait">
           <motion.div key={sel} className="sc-info" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.45, ease: EASE_OUT }}>
@@ -154,6 +155,7 @@ export function StoryMap() {
         </AnimatePresence>
 
         {/* actions */}
+        <div className="sc-bottom">
         <div className="sc-act">
           {!locked && (
             <button className="btn big red" disabled={!isPro && !!errs.length} onClick={start}>
@@ -179,13 +181,14 @@ export function StoryMap() {
           )}
         </div>
 
+        </div>
         {/* filmstrip */}
         <div className="sc-strip">
           <button className="sc-arrow" disabled={sel <= -1} onClick={() => move(-1)} aria-label="前の章">
             ‹
           </button>
           <div className="sc-reel">
-            <div className="sc-row" style={{ transform: `translateX(calc(var(--u) * ${-(sel + 1) * 11.2}))` }}>
+            <div className="sc-row" style={{ transform: `translateX(calc((var(--sc-tw) + var(--sc-tg)) * ${-(sel + 1)}))` }}>
               {[-1, ...CHAPTERS.map((_, i) => i)].map((i) => {
                 const st = i < 0 ? 'cleared' : chapterState(save, i);
                 const c = i < 0 ? null : CHAPTERS[i];

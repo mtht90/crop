@@ -2,29 +2,31 @@ import { useStore, type Screen } from '../state/store';
 import { Icon } from './Icon';
 import { sfx } from '../audio/audio';
 
-export function TopBar({ title, back = 'home', right }: { title: string; back?: Screen | null; right?: React.ReactNode }) {
+/** page header: back (sub-screens only), title, extras and coins */
+export function TopBar({ title, back = null, right }: { title: string; back?: Screen | null; right?: React.ReactNode }) {
   const go = useStore((s) => s.go);
   const coins = useStore((s) => s.save.coins);
   return (
-    <div className="topbar">
+    <header className="page-head">
       {back && (
         <button
           className="back-btn"
+          aria-label="もどる"
           onClick={() => {
             sfx('contract', 0.5);
             go(back);
           }}
         >
-          <Icon name="back" /> もどる
+          <Icon name="back" />
         </button>
       )}
-      <div className="topbar-title">{title}</div>
-      <div className="topbar-right">
+      <h1 className="page-title">{title}</h1>
+      <div className="page-head-right">
         {right}
         <span className="coin-chip">
           <Icon name="coin" /> {coins.toLocaleString()}
         </span>
       </div>
-    </div>
+    </header>
   );
 }

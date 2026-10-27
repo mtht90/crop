@@ -85,18 +85,13 @@ export function Stamps({ oppName, online }: { oppName: string; online?: OnlineCo
     () =>
       useBattle.subscribe((st, prev) => {
         if (online) {
-          // a stamp from the other side (or a spectator)
+          // a stamp from the other side
           const inc = st.incomingStamp;
           if (inc && inc !== prev.incomingStamp && STAMPS.some((x) => x.id === inc.id)) {
             foley.pop();
             const stamp = byId(inc.id);
-            if (inc.from === 0 && online.spectating) {
-              setMine({ key: inc.key, stamp });
-              later(2600, () => setMine(null));
-            } else {
-              setTheirs({ key: inc.key, stamp });
-              later(2600, () => setTheirs(null));
-            }
+            setTheirs({ key: inc.key, stamp });
+            later(2600, () => setTheirs(null));
           }
           return;
         }

@@ -93,7 +93,7 @@ export function describeEffect(e: AttackEffect): string {
     case 'bonusPerDiscardMonster':
       return `自分のトラッシュにあるモンスターの数×${e.per}ダメージ追加。${e.max ? `（追加は最大${e.max}ダメージ）` : ''}`;
     case 'bonusIfOmega':
-      return `相手のバトルモンスターがΩかEXなら、${e.bonus}ダメージ追加。`;
+      return `相手のバトルモンスターが★4以上なら、${e.bonus}ダメージ追加。`;
     case 'bonusPerHand':
       return `${e.whose === 'self' ? '自分' : '相手'}の手札の枚数×${e.per}ダメージ追加。${e.max ? `（追加は最大${e.max}ダメージ）` : ''}`;
     case 'bonusPerTrash':
@@ -167,18 +167,20 @@ for (const mc of [...MONSTERS, ...MONSTERS2, ...MONSTERS3]) {
 }
 
 // --------------------------------------------------------------------------
-// Rarity (7 tiers) and model (how the card is printed)
+// Rarity (★1 – ★5) and model (how the card is printed)
 // --------------------------------------------------------------------------
-export const RARITIES: Rarity[] = ['C', 'U', 'R', 'RR', 'ST', 'ST2', 'CR'];
-export const RARITY_SYMBOL: Record<Rarity, string> = { C: '◇', U: '◇◇', R: '◇◇◇', RR: '◇◇◇◇', ST: '☆', ST2: '☆☆', CR: '♛' };
-export const RARITY_NAME: Record<Rarity, string> = { C: 'コモン', U: 'アンコモン', R: 'レア', RR: 'ダブルレア', ST: 'スター', ST2: 'ダブルスター', CR: 'クラウン' };
+export const RARITIES: Rarity[] = [1, 2, 3, 4, 5];
+export const RARITY_SYMBOL: Record<Rarity, string> = { 1: '★', 2: '★★', 3: '★★★', 4: '★★★★', 5: '★★★★★' };
+export const RARITY_NAME: Record<Rarity, string> = { 1: '★1', 2: '★2', 3: '★3', 4: '★4', 5: '★5' };
+/** the colour each ★ shows in (pack opening, badges): grey, blue, gold, rainbow, rainbow-gold */
+export const RARITY_COLOR: Record<Rarity, string> = { 1: '#b8bec9', 2: '#5ab0ff', 3: '#ffc245', 4: '#ff79d6', 5: '#fff1a8' };
+/** prize cards taken when this monster is knocked out */
+export const prizesOf = (r: Rarity) => (r === 5 ? 3 : r === 4 ? 2 : 1);
 
-export type Model = 'normal' | 'mirror' | 'omega' | 'ex' | 'illust' | 'fullart' | 'shiny' | 'gold';
+export type Model = 'normal' | 'mirror' | 'illust' | 'fullart' | 'shiny' | 'gold';
 export const MODEL_NAME: Record<Model, string> = {
   normal: 'ノーマル',
   mirror: 'ミラー',
-  omega: 'Ω',
-  ex: 'EX',
   illust: 'イラスト',
   fullart: 'フルアート',
   shiny: 'シャイニー',
@@ -199,11 +201,9 @@ export function modelOf(c: CardDef): Model {
     case 'UR':
       return 'gold';
   }
-  if (c.kind === 'monster' && c.ex) return 'ex';
-  if (c.kind === 'monster' && c.omega) return 'omega';
   return 'normal';
 }
-/** "☆ イラスト" style label */
+/** "★★★ イラスト" style label */
 export const printLabel = (c: CardDef) => `${RARITY_SYMBOL[c.rarity]} ${MODEL_NAME[modelOf(c)]}`;
 
 // --------------------------------------------------------------------------
@@ -216,8 +216,6 @@ export const SET_INFO: Record<SetCode, { name: string; short: string }> = {
 };
 export const SETS: SetCode[] = ['AB1', 'AB2', 'AB3'];
 
-// EX is a ☆ card (it used to share ◇◇◇◇ with Ω)
-for (const mc of [...MONSTERS, ...MONSTERS2, ...MONSTERS3]) if (mc.ex) mc.rarity = 'ST';
 const MAIN1: CardDef[] = [...MONSTERS, ...TRAINERS, ...ENERGIES];
 MAIN1.forEach((c, i) => (c.no = i + 1));
 const MAIN2: CardDef[] = [...MONSTERS2, ...TRAINERS2];
@@ -235,7 +233,7 @@ export const SET_COUNT: Record<SetCode, number> = { AB1: MAIN1.length, AB2: MAIN
 //   AR     … illustration rare: the art spreads over the whole card
 //   CHR    … character rare: the monster together with its trainer
 //   S      … shiny: rare colouring with a star-foil frame
-//   SR     … full-art Ω / EX / supporter
+//   SR     … full-art ★4 / ★5 / supporter
 //   SAR    … special art: dramatic close-up illustration
 //   UR     … gold
 // --------------------------------------------------------------------------
@@ -250,9 +248,8 @@ function named(name: string): CardDef {
 }
 
 function alt(base: CardDef, v: Variant, extra: Partial<CardDef> = {}) {
-  // EX prints climb one step: the plain EX is ☆, its full-art / illustration prints are ☆☆ (gold stays ♛)
-  const isEx = base.kind === 'monster' && !!base.ex;
-  const rarity: Rarity = v === 'mirror' ? base.rarity : v === 'UR' ? 'CR' : isEx && (v === 'SAR' || v === 'SR') ? 'ST2' : v === 'SAR' ? 'CR' : 'ST';
+  // a special printing keeps the ★ of the card it reprints
+  const rarity: Rarity = base.rarity;
   const no = v === 'mirror' ? base.no : ++secret[base.set];
   VARIANTS.push({
     ...base,
@@ -298,7 +295,7 @@ const PLAN: Record<SetCode, SetVariants> = {
       ['エルフキャプテン', 'elves/druid'],
     ],
     S: [['グランティ', 200], ['エルフスカウト', 60], ['ゾンビラット', 280], ['ミスティック', 120], ['カヌー', 20], ['ドワーフガード', 320]],
-    SR: [...MONSTERS3.filter((x) => x.omega || x.ex).map((x) => x.name), '傭兵の契約', '案内人の笛', '族長の号令'],
+    SR: [...MONSTERS3.filter((x) => x.rarity >= 4).map((x) => x.name), '傭兵の契約', '案内人の笛', '族長の号令'],
     SAR: [
       ['タウロクプロテクター', undefined, 'story/p-burning'],
       ['ナーガウォーロード', undefined, 'story/p-storm-sea'],
@@ -310,7 +307,7 @@ const PLAN: Record<SetCode, SetVariants> = {
       ['グランドナイト', undefined, 'story/landscape-castle'],
       ['傭兵の契約', undefined, 'story/p-shadows'],
     ],
-    UR: [...MONSTERS3.filter((x) => x.ex).map((x) => x.name), 'サイキックメイジ', 'ドワーフロード', '傭兵の契約'],
+    UR: [...MONSTERS3.filter((x) => x.rarity >= 4).map((x) => x.name), 'サイキックメイジ', 'ドワーフロード', '傭兵の契約'],
   },
   AB1: {
     AR: [
@@ -329,7 +326,7 @@ const PLAN: Record<SetCode, SetVariants> = {
       ['レヴナント', 'undead/ancient-lich'],
     ],
     S: [['ヒオネコ', 200], ['ワイバーン', 110], ['アカオオカミ', 190], ['オオツチグモ', 250], ['ゴースト', 150], ['ディープテンタクル', 90]],
-    SR: [...MONSTERS.filter((x) => x.omega).map((x) => x.name), '大賢者の研究', '司令官の号令', '盗賊団の手引き', '白魔導士の祈り'],
+    SR: [...MONSTERS.filter((x) => x.rarity >= 4).map((x) => x.name), '大賢者の研究', '司令官の号令', '盗賊団の手引き', '白魔導士の祈り'],
     SAR: [
       ['ヴォルカリオン', undefined, 'story/p-burning'],
       ['リヴァイアサーペント', { scale: 1.1, x: 40, y: 14 }, 'story/p-storm-sea'],
@@ -356,7 +353,7 @@ const PLAN: Record<SetCode, SetVariants> = {
       ['ツカイマ', 'humans/mage-red+female'],
     ],
     S: [['ドレイクファイター', 170], ['ナーガソルジャー', 260], ['クサレオオカミ', 200], ['シルフ', 300], ['ワーム', 190], ['ユキダマ', 300]],
-    SR: [...MONSTERS2.filter((x) => x.omega || x.ex).map((x) => x.name), '騎士の突撃', '暗殺者の刃', '聖騎士の加護'],
+    SR: [...MONSTERS2.filter((x) => x.rarity >= 4).map((x) => x.name), '騎士の突撃', '暗殺者の刃', '聖騎士の加護'],
     SAR: [
       ['ドラグーン', undefined, 'story/p-drake-fleet'],
       ['ナーガクイーン', undefined, 'story/p-wild-sea'],
@@ -367,7 +364,7 @@ const PLAN: Record<SetCode, SetVariants> = {
       ['ヴァンパイア', { scale: 1.2 }, 'story/p-graves'],
       ['暗殺者の刃', undefined, 'story/p-shadows'],
     ],
-    UR: [...MONSTERS2.filter((x) => x.ex).map((x) => x.name), '賢者の水晶', '覇者の紋章'],
+    UR: [...MONSTERS2.filter((x) => x.rarity >= 4).map((x) => x.name), '賢者の水晶', '覇者の紋章'],
   },
 };
 
@@ -375,20 +372,20 @@ for (const set of SETS) {
   const main = MAIN_OF[set];
   for (const c of main) {
     const basicEnergy = c.kind === 'energy' && c.basic;
-    if (!basicEnergy && (c.rarity === 'C' || c.rarity === 'U' || c.rarity === 'R')) alt(c, 'mirror');
+    if (!basicEnergy && c.rarity <= 3) alt(c, 'mirror');
   }
   const plan = PLAN[set];
   const withScene = (scene?: string) => (scene ? { scene } : {});
   for (const [n, crop, scene] of plan.AR) alt(named(n), 'AR', { crop, ...withScene(scene) });
   for (const [n, partner, crop] of plan.CHR) alt(named(n), 'CHR', { partner, crop });
   for (const [n, hue] of plan.S) alt(named(n), 'S', { hue });
-  for (const n of plan.SR) alt(named(n), 'SR');
+  for (const n of new Set(plan.SR)) alt(named(n), 'SR');
   // supporters with a painting are printed as the painting alone
   for (const [n, crop, scene] of plan.SAR) {
     const base = named(n);
     alt(base, 'SAR', { crop, ...withScene(scene), ...(scene && base.kind === 'trainer' ? { paint: true } : {}) });
   }
-  for (const n of plan.UR) alt(named(n), 'UR');
+  for (const n of new Set(plan.UR)) alt(named(n), 'UR');
 }
 
 export const ALL_CARDS: CardDef[] = [...MAIN_SET, ...VARIANTS];

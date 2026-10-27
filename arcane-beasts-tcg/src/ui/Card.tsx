@@ -31,7 +31,8 @@ export function RainbowSymbol({ size = '1em' }: { size?: string | number }) {
 }
 
 /** rarities printed with a foil treatment */
-const HOLO = new Set(['R', 'RR', 'ST', 'ST2', 'CR']);
+/** ★3 and up shine */
+const HOLO = new Set([3, 4, 5]);
 /** variants whose illustration covers the whole card */
 const BLEED = new Set(['AR', 'CHR', 'SAR']);
 const SUB_JP: Record<string, string> = { item: 'アイテム', supporter: 'サポーター', stadium: 'スタジアム', tool: 'どうぐ' };
@@ -103,7 +104,7 @@ export const CardFace = memo(function CardFace({ cid, className, style, interact
     `kind-${def.kind}`,
     v ? `v-${v}` : '',
     v && BLEED.has(v) ? 'bleed' : '',
-    def.kind === 'monster' && def.ex ? 'ex' : '',
+    def.kind === 'monster' && def.rarity === 5 ? 'ex' : '',
     def.kind === 'monster' ? `t-${def.type}` : def.kind === 'energy' ? `t-${def.energyType}` : `sub-${(def as TrainerCard).sub}`,
     def.fullArt ? 'full-art' : '',
     def.gold ? 'gold' : '',
@@ -140,45 +141,7 @@ export const CardFace = memo(function CardFace({ cid, className, style, interact
   );
 });
 
-export function OmegaMark() {
-  return (
-    <svg className="omega" viewBox="0 0 40 40" aria-label="Ω">
-      <defs>
-        <linearGradient id="omg" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#fff6c9" />
-          <stop offset="0.35" stopColor="#ffc94a" />
-          <stop offset="0.65" stopColor="#ff5fa2" />
-          <stop offset="1" stopColor="#7c5cff" />
-        </linearGradient>
-      </defs>
-      <path
-        d="M20 3C10.6 3 4 9.6 4 18.4c0 5.9 3 10.4 7.4 13H5.5V37h12.6v-5.2C12.8 30 9.8 25 9.8 18.6 9.8 12.3 14.1 8 20 8s10.2 4.3 10.2 10.6c0 6.4-3 11.4-8.3 13.2V37h12.6v-5.6h-5.9c4.4-2.6 7.4-7.1 7.4-13C36 9.6 29.4 3 20 3z"
-        fill="url(#omg)"
-        stroke="#3a1a00"
-        strokeWidth="1.6"
-        paintOrder="stroke"
-      />
-    </svg>
-  );
-}
 
-export function ExMark() {
-  return (
-    <svg className="exmark" viewBox="0 0 64 36" aria-label="EX">
-      <defs>
-        <linearGradient id="exg" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#ffffff" />
-          <stop offset="0.45" stopColor="#ffe7a3" />
-          <stop offset="0.55" stopColor="#ff9b3d" />
-          <stop offset="1" stopColor="#d6321b" />
-        </linearGradient>
-      </defs>
-      <text x="32" y="29" textAnchor="middle" fontFamily="'Dela Gothic One', sans-serif" fontSize="30" transform="skewX(-12) translate(6 0)" fill="url(#exg)" stroke="#2a0a00" strokeWidth="3.2" paintOrder="stroke" letterSpacing="-1">
-        EX
-      </text>
-    </svg>
-  );
-}
 
 function Footer({ def }: { def: CardDef }) {
   return (
@@ -212,7 +175,7 @@ function MonsterFace({ def }: { def: MonsterCard }) {
       prev = null;
     }
   }
-  const nameLen = def.name.length + (def.omega ? 1 : 0) + (def.ex ? 1.6 : 0) + (def.hp >= 100 ? 0.5 : 0);
+  const nameLen = def.name.length + (def.hp >= 100 ? 0.5 : 0);
   const crop = def.crop ?? {};
   const pStyle: React.CSSProperties | undefined =
     def.variant === 'S'
@@ -232,8 +195,6 @@ function MonsterFace({ def }: { def: MonsterCard }) {
         <span className={`tcg-stage stage-${def.stage}`}>{STAGE_JP[def.stage]}</span>
         <span className={`name ${nameLen > 6.5 ? 'long' : ''} ${nameLen > 8 ? 'xlong' : ''} ${nameLen > 9.5 ? 'xxlong' : ''}`}>
           {def.name}
-          {def.omega && <OmegaMark />}
-          {def.ex && <ExMark />}
         </span>
         <span className="hp">
           <small>HP</small>
@@ -275,9 +236,12 @@ function MonsterFace({ def }: { def: MonsterCard }) {
             {a.text && <p>{a.text}</p>}
           </div>
         ))}
-        {def.omega && <div className="omega-rule"><b>Ωルール</b>：Ωがきぜつしたとき、相手はサイドを2枚とる。</div>}
-        {def.ex && <div className="omega-rule ex-rule"><b>EXルール</b>：EXがきぜつしたとき、相手はサイドを3枚とる。</div>}
-        {def.flavor && !def.ability && def.attacks.length < 2 && !def.omega && !def.ex && <div className="tcg-flavor">{def.flavor}</div>}
+        {def.rarity >= 4 && (
+          <div className={`omega-rule ${def.rarity === 5 ? 'ex-rule' : ''}`}>
+            <b>{RARITY_SYMBOL[def.rarity]}</b>：きぜつしたとき、相手はサイドを{def.rarity === 5 ? 3 : 2}枚とる。
+          </div>
+        )}
+        {def.flavor && !def.ability && def.attacks.length < 2 && def.rarity < 4 && <div className="tcg-flavor">{def.flavor}</div>}
       </div>
       <div className="tcg-stats">
         <div>

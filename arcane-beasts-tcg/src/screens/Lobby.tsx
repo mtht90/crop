@@ -1,6 +1,6 @@
 // ============================================================================
-// オンライン対戦ロビー: friend rooms (code + QR), random and ranked matches,
-// watching live games, and the player's online profile / transfer code.
+// オンライン対戦ロビー: friend rooms (code + QR), random matches, and the
+// player's online profile / transfer code.
 // ============================================================================
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
@@ -10,19 +10,13 @@ import { artUrl } from '../lib/assets';
 import { TopBar } from '../ui/TopBar';
 import { CardFace } from '../ui/Card';
 import { judgeName } from '../online/names';
-import { fileToAvatar } from '../online/avatarFile';
-import { isAvatarUrl } from '../online/avatar';
-import { AccountBox, AccountSheet, markAskedToSignUp, shouldAskToSignUp } from './AccountBox';
-import { RankEmblem } from '../ui/RankEmblem';
 import { Icon } from '../ui/Icon';
-import { RANKS } from '../state/ranked';
-import { isRegistered, PORTRAITS, type MatchKind } from '../online/protocol';
+import { PORTRAITS } from '../online/protocol';
 import { online, onlineSupported, serverUrl, setServerAddress, useOnline } from '../online/client';
 import { foley, playMusic, sfx } from '../audio/audio';
 import './lobby.css';
 
 const EASE_OUT = [0.16, 1, 0.3, 1] as const;
-const KIND_LABEL: Record<MatchKind, string> = { friend: 'フレンド', random: 'ランダム', ranked: 'ランク' };
 
 const PUBLIC_KEY = 'arcane-beasts-public-url';
 const isLocalHost = (h: string) => /^(localhost|127\.|0\.0\.0\.0|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|\[?::1\]?$)/.test(h) || h.endsWith('.local');
@@ -101,15 +95,11 @@ export function Lobby() {
   const deck = activeDeck(save);
   const deckErr = deck ? validateDeck(deck.cards)[0] : 'デッキがありません';
   const [codeIn, setCodeIn] = useState('');
-  const [watchIn, setWatchIn] = useState('');
   const [name, setName] = useState('');
   const [toast, setToast] = useState<string | null>(null);
   const [link, setLink] = useState('');
   const [showXfer, setShowXfer] = useState(false);
-  const invite = useRef<{ room?: string; watch?: string }>({});
-  const pick = useRef<HTMLInputElement>(null);
-  // the first time the lobby opens, offer to sign up (once per device)
-  const [askSignUp, setAskSignUp] = useState(false);
+  const invite = useRef<{ room?: string }>({});
   const flash = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(null), 2600);
@@ -121,7 +111,7 @@ export function Lobby() {
   useEffect(() => {
     if (!supported) return;
     const q = new URLSearchParams(location.search);
-    invite.current = { room: q.get('room')?.toUpperCase() ?? undefined, watch: q.get('watch')?.toUpperCase() ?? undefined };
+    invite.current = { room: q.get('room')?.toUpperCase() ?? undefined };
     online.connect();
     return () => {
       if (!useOnline.getState().match) online.disconnect();
@@ -130,20 +120,13 @@ export function Lobby() {
 
   useEffect(() => {
     if (st.profile) setName((n) => n || st.profile!.name);
-    if (st.profile && !isRegistered(st.profile) && shouldAskToSignUp()) {
-      markAskedToSignUp();
-      setAskSignUp(true);
-    }
   }, [st.profile]);
 
-  // invitation links (?room=ABCD joins, ?watch=ABCD spectates) are used once the profile is ready
+  // invitation links (?room=ABCD) are used once the profile is ready
   useEffect(() => {
     if (st.status !== 'open' || !deck || deckErr) return;
     const inv = invite.current;
-    if (inv.watch) {
-      online.watch(inv.watch);
-      invite.current = {};
-    } else if (inv.room) {
+    if (inv.room) {
       setCodeIn(inv.room);
       online.joinRoom(inv.room, deck.cards);
       invite.current = {};
@@ -159,14 +142,6 @@ export function Lobby() {
     return () => clearTimeout(t);
   }, [st.error]);
 
-  // keep the watch list fresh
-  useEffect(() => {
-    if (st.status !== 'open') return;
-    online.refreshLive();
-    const iv = setInterval(() => online.refreshLive(), 8000);
-    return () => clearInterval(iv);
-  }, [st.status]);
-
   const waitingRoom = st.room && st.room.state === 'waiting' ? st.room : null;
   const [base, setBase] = usePublicBase();
   const [baseIn, setBaseIn] = useState('');
@@ -174,23 +149,18 @@ export function Lobby() {
   const qr = useQr(inviteUrl);
   const ready = st.status === 'open' && !!deck && !deckErr;
   const busy = !!st.queued || !!waitingRoom;
-  const rank = st.profile?.rank;
-  const syncRank = useStore((s) => s.syncOnlineRank);
-  useEffect(() => {
-    if (rank) syncRank({ rank: rank.rank, pts: rank.pts, best: rank.best });
-  }, [rank?.rank, rank?.pts, rank?.best, syncRank]); // eslint-disable-line react-hooks/exhaustive-deps
   /** the small panels opened from the main screen */
-  const [sheet, setSheet] = useState<null | 'friend' | 'watch' | 'profile'>(null);
+  const [sheet, setSheet] = useState<null | 'friend' | 'profile'>(null);
   const [mode, setMode] = useState<'make' | 'join'>('make');
 
   if (!supported)
     return (
       <div className="screen">
-        <div className="screen-bg" style={{ backgroundImage: `url(${artUrl('story/p-mountains')})` }} />
-        <div className="screen-shade" />
-        <div className="stage">
-          <TopBar title="フレンド対戦" back="arena" />
-          <div className="panel lb-unsupported">
+        <div className="page-bg" style={{ backgroundImage: `url(${artUrl('story/p-mountains')})` }} />
+        <div className="page-shade" />
+        <div className="page">
+          <TopBar title="オンライン対戦" back="arena" />
+          <div className="box lb-unsupported">
             <h2>この画面ではオンライン対戦を使えません</h2>
             <p>オンライン対戦は、専用サーバーにつないだ版でだけ遊べます。サーバーが配信しているゲームのURLを開いてください。</p>
             <p className="lb-dim">（claude.aiのアーティファクト内からは外部のサーバーにつなげないため、CPU対戦のみ遊べます）</p>
@@ -220,7 +190,7 @@ export function Lobby() {
     {
       key: 'friend',
       title: '友達と対戦',
-      sub: 'QRで招待',
+      sub: '部屋をつくってQRで招待',
       bg: 'story/p-summer',
       fig: 'humans/paladin',
       icon: 'person',
@@ -228,42 +198,22 @@ export function Lobby() {
     },
     {
       key: 'random',
-      title: 'ランダム',
-      sub: 'すぐ対戦',
+      title: 'ランダムマッチ',
+      sub: 'だれかとすぐ対戦',
       bg: 'story/p-mountains',
       fig: 'humans/duelist',
       icon: 'swords',
       onClick: () => online.queue('random', deck!.cards),
     },
-    {
-      key: 'ranked',
-      title: 'ランク',
-      sub: rank ? RANKS[rank.rank] : '昇級・昇段',
-      bg: 'story/landscape-castle',
-      fig: 'humans/marshal',
-      icon: 'crown',
-      onClick: () => online.queue('ranked', deck!.cards),
-    },
-    // a slot kept for a mode that does not exist yet
-    {
-      key: 'soon',
-      title: 'いつか空く',
-      sub: '近日解放',
-      bg: 'story/landscape-lava',
-      fig: 'monsters/fire-dragon',
-      icon: 'lock',
-      soon: true,
-      onClick: () => {},
-    },
   ];
 
   return (
     <div className="screen lobby">
-      <div className="screen-bg" style={{ backgroundImage: `url(${artUrl('story/p-mountains')})` }} />
-      <div className="screen-shade" />
-      <div className="stage">
+      <div className="page-bg" style={{ backgroundImage: `url(${artUrl('story/p-mountains')})` }} />
+      <div className="page-shade" />
+      <div className="page">
         <TopBar
-          title="フレンド対戦"
+          title="オンライン対戦"
           back="arena"
           right={
             <span className="lb-online" title={addr}>
@@ -272,81 +222,65 @@ export function Lobby() {
             </span>
           }
         />
-
-        {/* ------------------------------ the ways to play ------------------------------ */}
-        <div className="lb-tiles">
-          {tiles.map((t, i) => (
-            <motion.div
-              key={t.key}
-              className={`tile ${t.soon ? 'soon' : ready ? '' : 'off'}`}
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.06 * i, type: 'spring', stiffness: 220, damping: 24 }}
-              onMouseEnter={() => ready && !t.soon && foley.hover()}
-              onClick={() => ready && !t.soon && play(t.onClick)}
-            >
-              <img className="bg" src={artUrl(t.bg)} alt="" />
-              <div className="shade" />
-              <img className="fig" src={artUrl(t.fig)} alt="" />
-              <div className="label">
-                <div className="ico">
-                  <Icon name={t.icon} />
-                </div>
-                <h2>{t.title}</h2>
-                <p>{t.sub}</p>
-              </div>
-            </motion.div>
-          ))}
-          {st.status !== 'open' && (
-            <div className="lb-veil">
-              <div className="lb-spinner small" />
-              <b>{st.failed ? 'サーバーにつながりません' : 'サーバーに接続しています…'}</b>
-            </div>
-          )}
-        </div>
-
-        {/* ------------------------------ you ------------------------------ */}
-        <div className="lb-side">
-          <motion.div className="panel lb-me" initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, ease: EASE_OUT }}>
+        <div className="page-inner lb3">
+          {/* you */}
+          <motion.div className="box lb3-me" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45, ease: EASE_OUT }}>
             {st.profile ? (
               <>
                 <img src={artUrl(st.profile.portrait)} alt="" />
-                <div className="lb-me-info">
+                <div className="lb3-me-info">
                   <b>{st.profile.name}</b>
-                  <div className="lb-rank">
-                    <RankEmblem rank={rank!.rank} size="calc(var(--u) * 3.4)" />
-                    <span>{RANKS[rank!.rank]}</span>
-                  </div>
                   <small>
-                    今月 {rank!.wins}勝 {rank!.losses}敗
+                    オンライン {st.profile.wins}勝 {st.profile.losses}敗
                   </small>
                 </div>
-                <button className="icon-btn lb-edit" title="プロフィール" onClick={() => setSheet('profile')}>
+                <button className="round-btn" title="プロフィール" onClick={() => setSheet('profile')}>
                   <Icon name="gear" />
                 </button>
               </>
             ) : (
-              <div className="lb-dim">接続するとここに表示されます</div>
+              <div className="lb-dim">{st.failed ? 'サーバーにつながりません' : 'サーバーに接続しています…'}</div>
             )}
           </motion.div>
 
-          <motion.div className="panel lb-deckbox" initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, ease: EASE_OUT, delay: 0.06 }}>
-            {deck && <CardFace cid={deck.cover} />}
-            <div>
-              <h4>使用デッキ</h4>
-              <div className="dname">{deck?.name ?? '―'}</div>
-              <button className="btn small" onClick={() => go('deck')}>
-                変更
-              </button>
-              {deckErr && <div className="warn">{deckErr}</div>}
-            </div>
-          </motion.div>
+          {/* the ways to play */}
+          <div className="lb3-tiles">
+            {tiles.map((t, i) => (
+              <motion.div
+                key={t.key}
+                className={`tile2 ${ready ? '' : 'off'}`}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.06 * (i + 1), duration: 0.45 }}
+                onMouseEnter={() => ready && foley.hover()}
+                onClick={() => ready && play(t.onClick)}
+              >
+                <img className="bg" src={artUrl(t.bg)} alt="" />
+                <div className="shade" />
+                <img className="fig" src={artUrl(t.fig)} alt="" />
+                <div className="label">
+                  <div className="ico">
+                    <Icon name={t.icon} />
+                  </div>
+                  <h2>{t.title}</h2>
+                  <p>{t.sub}</p>
+                </div>
+              </motion.div>
+            ))}
+          </div>
 
-          <motion.button className="btn lb-watch-btn" initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, ease: EASE_OUT, delay: 0.12 }} onClick={() => setSheet('watch')}>
-            <Icon name="crystal-ball" /> 観戦
-            <span className="lb-badge">{st.live.length}</span>
+          {/* deck */}
+          <motion.button className="box arena3-deck" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15, duration: 0.45 }} onClick={() => go('deck')}>
+            {deck && <CardFace cid={deck.cover} />}
+            <span className="arena3-deck-text">
+              <small>使用デッキ</small>
+              <b>{deck?.name ?? 'デッキがありません'}</b>
+              {deckErr && <span className="warn">{deckErr}</span>}
+            </span>
+            <span className="chip-btn">変更</span>
           </motion.button>
         </div>
+      </div>
 
         {/* ------------------------------ small panels ------------------------------ */}
         <AnimatePresence>
@@ -383,34 +317,6 @@ export function Lobby() {
                   </>
                 )}
 
-                {sheet === 'watch' && (
-                  <>
-                    <h3>観戦</h3>
-                    <div className="lb-live">
-                      {st.live.length === 0 && <div className="lb-empty">いま観戦できる試合はありません</div>}
-                      {st.live.map((g) => (
-                        <button key={g.code} className="lb-game" onClick={() => online.watch(g.code)}>
-                          <span className={`lb-kind ${g.kind}`}>{KIND_LABEL[g.kind]}</span>
-                          <span className="lb-vs">
-                            {g.players[0]} <small>{g.ranks[0]}</small>
-                            <i>vs</i>
-                            {g.players[1]} <small>{g.ranks[1]}</small>
-                          </span>
-                          <small>
-                            ターン{Math.max(1, g.turn)}・{g.spectators}人
-                          </small>
-                        </button>
-                      ))}
-                    </div>
-                    <div className="lb-codebox">
-                      <input placeholder="コード" value={watchIn} maxLength={4} onChange={(e) => setWatchIn(e.target.value.toUpperCase())} />
-                      <button className="btn" disabled={watchIn.length < 4 || st.status !== 'open'} onClick={() => online.watch(watchIn)}>
-                        観戦
-                      </button>
-                    </div>
-                  </>
-                )}
-
                 {sheet === 'profile' && st.profile && (
                   <>
                     <h3>プロフィール</h3>
@@ -436,56 +342,20 @@ export function Lobby() {
                       }}
                       onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
                     />
-                    {rank && (
-                      <div className="lb-prof-rank">
-                        <RankEmblem rank={rank.rank} size="calc(var(--u) * 2.6)" />
-                        <b>{RANKS[rank.rank]}</b>
-                        <small>
-                          今月 {rank.wins}勝 {rank.losses}敗
-                        </small>
-                      </div>
-                    )}
+                    <div className="lb-prof-rank">
+                      <small>
+                        オンライン {st.profile.wins}勝 {st.profile.losses}敗
+                      </small>
+                    </div>
                     </div>
                     <div className="lb-prof-right">
                     <h4>アイコン</h4>
                     <div className="lb-portraits">
-                      {isAvatarUrl(st.profile.portrait) && (
-                        <button className="on" title="いまのアイコン">
-                          <img src={st.profile.portrait} alt="" />
-                        </button>
-                      )}
-                      <button
-                        className="lb-upload"
-                        title="自分の画像をアイコンにする"
-                        onClick={() => pick.current?.click()}
-                      >
-                        <i className="lb-plus">＋</i>
-                        <span>自分の画像</span>
-                      </button>
-                      <input
-                        ref={pick}
-                        type="file"
-                        accept="image/*"
-                        hidden
-                        onChange={(e) => {
-                          const f = e.target.files?.[0];
-                          e.target.value = '';
-                          if (!f) return;
-                          fileToAvatar(f).then(
-                            (url) => online.rename(name.trim() && judgeName(name).ok ? name : st.profile!.name, url),
-                            (err: Error) => flash(err.message),
-                          );
-                        }}
-                      />
                       {PORTRAITS.map((p) => (
                         <button key={p} className={p === st.profile!.portrait ? 'on' : ''} onClick={() => online.rename(name || st.profile!.name, p)}>
                           <img src={artUrl(p)} alt="" />
                         </button>
                       ))}
-                    </div>
-                    <div className="lb-acct">
-                      <h4>アカウント</h4>
-                      <AccountBox />
                     </div>
                     </div>
                     </div>
@@ -543,7 +413,7 @@ export function Lobby() {
                         <b>QRコードの宛先がありません</b>
                         <p>このアドレス（{location.host}）は同じパソコンの中でしか開けません。公開URLを入力してください。</p>
                         <div className="lb-join">
-                          <input style={{ width: 'calc(var(--u) * 19)', textTransform: 'none', letterSpacing: 0 }} placeholder="https://…" value={baseIn} onChange={(e) => setBaseIn(e.target.value)} />
+                          <input style={{ textTransform: 'none', letterSpacing: 0 }} placeholder="https://…" value={baseIn} onChange={(e) => setBaseIn(e.target.value)} />
                           <button className="btn small" disabled={!baseIn.trim()} onClick={() => setBase(baseIn)}>
                             設定
                           </button>
@@ -569,7 +439,7 @@ export function Lobby() {
                 ) : (
                   <>
                     <div className="lb-spinner" />
-                    <div className="lb-pulse">{st.queued === 'ranked' ? 'ランクの相手をさがしています…' : '相手をさがしています…'}</div>
+                    <div className="lb-pulse">相手をさがしています…</div>
                     <small className="lb-dim">{st.waiting}人が待っています</small>
                     <button className="btn small ghost" onClick={() => online.cancel()}>
                       やめる
@@ -586,8 +456,6 @@ export function Lobby() {
             </motion.div>
           )}
         </AnimatePresence>
-      </div>
-      <AnimatePresence>{askSignUp && <AccountSheet first onClose={() => setAskSignUp(false)} />}</AnimatePresence>
     </div>
   );
 }

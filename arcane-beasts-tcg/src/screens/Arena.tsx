@@ -47,30 +47,29 @@ export function Arena() {
     { to: 'rivals', title: 'フリー対戦', sub: `強敵とバトル（${save.beaten.length}/${RIVALS.length} 撃破）`, bg: 'story/p-mountains', fig: 'humans/duelist', icon: 'swords' },
     {
       to: 'lobby',
-      title: 'フレンド対戦',
-      sub: online ? 'フレンド・ランダム・ランク'  : 'オンライン版でのみ遊べます',
+      title: 'オンライン対戦',
+      sub: online ? 'フレンド対戦・ランダムマッチ' : 'オンライン版でのみ遊べます',
       bg: 'story/p-summer',
       fig: 'humans/cavalier',
       icon: 'person',
       off: !online,
     },
-    { to: 'deck', title: 'デッキ編集', sub: deck ? `使用中「${deck.name}」` : 'デッキを組もう', bg: 'story/grim-altar', fig: 'woses/ancient-wose', icon: 'deck' },
   ];
 
   return (
     <div className="screen">
-      <div className="screen-bg" style={{ backgroundImage: `url(${artUrl('story/landscape-battlefield_nohumans')})` }} />
-      <div className="screen-shade" />
-      <div className="stage">
+      <div className="page-bg" style={{ backgroundImage: `url(${artUrl('story/landscape-battlefield_nohumans')})` }} />
+      <div className="page-shade" />
+      <div className="page">
         <TopBar title="バトル" />
-        <div className="arena-cards">
+        <div className="page-inner arena3">
           {tiles.map((t, i) => (
             <motion.div
               key={t.to}
-              className={`tile ${t.off ? 'off' : ''}`}
-              initial={{ opacity: 0, y: 30 }}
+              className={`tile2 ${i === 0 ? 'big arena3-story' : ''} ${t.off ? 'off' : ''}`}
+              initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.05 * i, type: 'spring', stiffness: 220, damping: 24 }}
+              transition={{ delay: 0.05 * i, duration: 0.45 }}
               onMouseEnter={() => foley.hover()}
               onClick={() => {
                 if (t.off) return;
@@ -91,39 +90,15 @@ export function Arena() {
               {t.badge && <div className="badge">{t.badge}</div>}
             </motion.div>
           ))}
-        </div>
-
-        {/* the bottom band: your deck in the middle, your record either side */}
-        <motion.div className="panel arena-band" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2, duration: 0.5 }}>
-          <div className="ab-stat">
-            <b>{save.wins}</b>
-            <span>勝利</span>
-          </div>
-          <div className="ab-stat">
-            <b>{save.losses}</b>
-            <span>敗北</span>
-          </div>
-          <div className="ab-deck" onClick={() => go('deck')}>
+          <motion.button className="box arena3-deck" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18, duration: 0.45 }} onClick={() => go('deck')}>
             {deck && <CardFace cid={deck.cover} />}
-            <div>
+            <span className="arena3-deck-text">
               <small>使用中のデッキ</small>
-              <b>{deck?.name ?? '―'}</b>
-            </div>
-            <span className="btn small">変更</span>
-          </div>
-          <div className="ab-stat">
-            <b>
-              {save.story.cleared.length}/{CHAPTERS.length}
-            </b>
-            <span>ストーリー</span>
-          </div>
-          <div className="ab-stat">
-            <b>
-              {save.beaten.length}/{RIVALS.length}
-            </b>
-            <span>強敵撃破</span>
-          </div>
-        </motion.div>
+              <b>{deck?.name ?? 'デッキがありません'}</b>
+            </span>
+            <span className="chip-btn">変更</span>
+          </motion.button>
+        </div>
       </div>
     </div>
   );

@@ -419,9 +419,12 @@
 }
 .rbadge b { letter-spacing: -0.1em; font-weight: 900; }
 .rbadge span { font-size: 0.85em; }
-.rb-RR { background: rgba(255, 200, 150, 0.12); box-shadow: inset 0 0 0 1px rgba(255, 190, 130, 0.4); color: #ffe2c4; }
-.rb-ST, .rb-ST2, .rb-CR { background: linear-gradient(180deg, rgba(255, 230, 150, 0.25), rgba(200, 140, 30, 0.2)); box-shadow: inset 0 0 0 1px rgba(255, 215, 120, 0.6); }
-.rb-ST b, .rb-ST2 b, .rb-CR b { color: #ffe08a; font-size: 1.15em; text-shadow: 0 0 8px rgba(255, 200, 80, 0.6); }
+.rb-1 b { color: #c3c8d2; }
+.rb-2 b { color: #7cc2ff; }
+.rb-3 b { color: #ffd36b; text-shadow: 0 0 6px rgba(255, 200, 80, 0.5); }
+.rb-4 b, .rb-5 b { background-image: linear-gradient(90deg, #ff6b6b, #ffd36b, #6bff9a, #6bc8ff, #c56bff); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.rb-5 b { background-image: linear-gradient(90deg, #fff1a8, #ff9ad5, #fff1a8, #9ad8ff, #fff1a8); filter: drop-shadow(0 0 6px rgba(255, 230, 150, 0.6)); }
+.rb-4, .rb-5 { background: linear-gradient(180deg, rgba(255, 230, 150, 0.2), rgba(200, 140, 30, 0.15)); }
 
 /* ------------------------------- Collection ------------------------------- */
 .col-item { content-visibility: auto; contain-intrinsic-size: auto calc(var(--u) * 14.5); }
@@ -617,3 +620,15 @@
 .ab-deck .tcg { width: calc(var(--u) * 4.6); flex: none; }
 .ab-deck small { display: block; color: var(--ink-dim); font-weight: 700; font-size: calc(var(--u) * 0.85); }
 .ab-deck b { display: block; font-family: var(--font-display); font-weight: 400; font-size: calc(var(--u) * 1.7); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: calc(var(--u) * 16); }
+@media (orientation: portrait) {
+  .starter-head { top: calc(var(--u) * 6); padding: 0 calc(var(--u) * 2); }
+  .starter-head h1 { font-size: calc(var(--u) * 3.4); }
+  .starter-head p { font-size: calc(var(--u) * 1.5); line-height: 1.6; }
+  .starter-row { top: calc(var(--u) * 22); gap: calc(var(--u) * 1); padding: 0 calc(var(--u) * 1); }
+  .starter-opt { width: calc(var(--u) * 17.4); }
+  .starter-opt .tcg { width: calc(var(--u) * 17); }
+  .starter-opt > h3 { font-size: calc(var(--u) * 1.9); }
+  .starter-opt > p { font-size: calc(var(--u) * 1.3); }
+  .starter-go { bottom: calc(var(--u) * 8); }
+  .starter-go .btn.big { font-size: calc(var(--u) * 1.9); --h: calc(var(--u) * 6); white-space: nowrap; }
+}

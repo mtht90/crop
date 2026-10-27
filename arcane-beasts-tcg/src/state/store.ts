@@ -3,18 +3,15 @@ import type { MatchInfo } from '../online/client';
 import type { Beat } from '../story/types';
 import { create } from 'zustand';
 import { ALL_CARDS, card, CARDS, SET_INFO } from '../engine/cards';
-import { ensureSeason, freshRank, type RankChange, type RankState } from './ranked';
 import { expand, RIVALS, STARTER_DECKS, type Rival } from '../engine/decks';
 import type { Difficulty } from '../engine/ai';
 import type { CardDef, EType, Rarity, SetCode } from '../engine/types';
-import { dayNumber, lineupFor, type Series } from './themes';
 import {
   ACHIEVEMENTS,
   addExp,
   battleReward,
   bump,
   canClaimLogin,
-  currentPickup,
   dailyMissions,
   dayKey,
   ensurePeriods,
@@ -35,21 +32,19 @@ import {
 } from './progress';
 
 // ----------------------------------------------------------------------------
-// Shards (かけら): copies beyond MAX_COPIES turn into shards of that rarity,
-// and shards of a rarity can be exchanged for any card of the same rarity.
+// Copies beyond MAX_COPIES are sold for coins on the spot (by ★).
 // ----------------------------------------------------------------------------
 export const MAX_COPIES = 10;
-export const SHARD_COST: Record<Rarity, number> = { C: 10, U: 10, R: 12, RR: 18, ST: 25, ST2: 28, CR: 30 };
-export const SHARD_RARITIES: Rarity[] = ['C', 'U', 'R', 'RR', 'ST', 'ST2', 'CR'];
-/** shard keys from the 11-rarity era */
-const OLD_RARITY: Record<string, Rarity> = { RRR: 'RR', AR: 'ST', CHR: 'ST', S: 'ST', SR: 'ST', SAR: 'CR', UR: 'CR' };
+export const DUPE_COINS: Record<Rarity, number> = { 1: 5, 2: 10, 3: 25, 4: 80, 5: 200 };
+/** what the old かけら (shards) are worth now that they are gone, per shard */
+const SHARD_COINS: Record<string, number> = { C: 10, U: 10, R: 15, RR: 30, RRR: 30, ST: 50, ST2: 60, CR: 80, AR: 50, CHR: 50, S: 50, SR: 50, SAR: 80, UR: 80 };
 const CARDS_OK = (cid: string) => cid in CARDS;
 const isBasicEnergy = (cid: string) => {
   const c = card(cid);
   return c.kind === 'energy' && c.basic;
 };
 
-export type Screen = 'arena' | 'story' | 'scene' | 'lobby' | 'title' | 'starter' | 'home' | 'rivals' | 'battle' | 'deck' | 'collection' | 'shop' | 'missions' | 'exchange' | 'settings' | 'credits' | 'rules' | 'gallery';
+export type Screen = 'arena' | 'story' | 'scene' | 'lobby' | 'title' | 'starter' | 'home' | 'rivals' | 'battle' | 'deck' | 'collection' | 'shop' | 'missions' | 'more' | 'settings' | 'credits' | 'rules' | 'gallery';
 
 export interface SavedDeck {
   id: string;
@@ -83,12 +78,9 @@ export interface Save {
   started: boolean;
   guideSeen?: boolean;
   progress: Progress;
-  /** かけら: duplicates beyond MAX_COPIES, per rarity */
-  shards: Partial<Record<Rarity, number>>;
-  ranked: RankState;
   /** story mode progress */
   story: StorySave;
-  /** developer mode (entered with a code in 設定): everything cleared, coins and shards never run out */
+  /** developer mode (entered with a code in 設定): everything cleared, coins never run out */
   dev?: boolean;
 }
 
@@ -132,12 +124,10 @@ const KEY = 'arcane-beasts-save-v1';
 // ----------------------------------------------------------------------------
 export const DEV_CODE = 'ARCANE-DEV';
 const DEV_COINS = 9_999_999;
-const DEV_SHARDS = 9_999;
 
-/** developer mode keeps coins and shards topped up */
+/** developer mode keeps the coins topped up */
 function refill(s: Save) {
   s.coins = Math.max(s.coins, DEV_COINS);
-  for (const r of SHARD_RARITIES) s.shards[r] = Math.max(s.shards[r] ?? 0, DEV_SHARDS);
 }
 
 /** turn developer mode on: the story and every rival cleared, resources without limit */
@@ -176,8 +166,6 @@ function freshSave(): Save {
     settings: { music: 0.5, sfx: 0.8, speed: 1, fx: 'auto', vibrate: true, gyro: true },
     started: false,
     progress: freshProgress(),
-    shards: {},
-    ranked: freshRank(),
     story: freshStory(),
   };
 }
@@ -191,21 +179,18 @@ function load(): Save {
       s.progress = { ...freshProgress(), ...(s.progress ?? {}) };
       s.progress.stats = { ...freshProgress().stats, ...s.progress.stats };
       if ((s.story?.v ?? 1) < STORY_VERSION) s.story = { ...freshStory(), scenes: s.story?.scenes ?? true, hero: s.story?.hero };
-      s.shards = s.shards ?? {};
-      s.ranked = { ...freshRank(), ...(s.ranked ?? {}) };
       s.story = { ...freshStory(), ...(s.story ?? {}) };
-      ensureSeason(s.ranked);
-      for (const [k, n] of Object.entries(s.shards) as [string, number][]) {
-        const to = OLD_RARITY[k];
-        if (!to) continue;
-        s.shards[to] = (s.shards[to] ?? 0) + n;
-        delete (s.shards as Record<string, number>)[k];
+      // the renewal: かけら are gone — each one is paid out in coins
+      const old = s as Omit<Save, never> & { shards?: Record<string, number>; ranked?: unknown };
+      if (old.shards) {
+        for (const [k, n] of Object.entries(old.shards)) s.coins += (SHARD_COINS[k] ?? 10) * Math.max(0, n || 0);
+        delete old.shards;
       }
-      // migrate: anything already over the cap becomes shards
+      delete old.ranked;
+      // anything over the cap is sold
       for (const [cid, n] of Object.entries(s.collection)) {
         if (n > MAX_COPIES && CARDS_OK(cid) && !isBasicEnergy(cid)) {
-          const r = card(cid).rarity;
-          s.shards[r] = (s.shards[r] ?? 0) + n - MAX_COPIES;
+          s.coins += DUPE_COINS[card(cid).rarity] * (n - MAX_COPIES);
           s.collection[cid] = MAX_COPIES;
         }
       }
@@ -234,17 +219,12 @@ interface Store {
   go: (s: Screen) => void;
   update: (f: (s: Save) => void) => void;
   chooseStarter: (deckId: string) => void;
-  /** adds cards; returns, per card, whether it became a shard instead */
-  addCards: (cids: string[]) => boolean[];
-  exchange: (cid: string) => boolean;
-  /** keep the saved rank in step with the online one (it feeds the rank missions) */
-  syncOnlineRank: (r: Pick<RankState, 'rank' | 'pts' | 'best'>) => void;
+  /** adds cards; returns, per card, the coins it was sold for when already at the copy limit (0 = kept) */
+  addCards: (cids: string[]) => number[];
   /** play a scene full-screen, then call `then` */
   playScene: (id: string, beats: Beat[], then: () => void) => void;
   markScene: (id: string) => void;
   clearChapter: (chapterId: string) => void;
-  /** pay rank rewards decided by the server (online ranked) */
-  grantRankRewards: (rewards: RankChange['rewards']) => void;
   startBattle: (cfg: BattleConfig) => void;
   reset: () => void;
   claimLogin: () => number;
@@ -291,19 +271,19 @@ export const useStore = create<Store>((set, get) => ({
     });
   },
   addCards: (cids) => {
-    const out: boolean[] = [];
+    const out: number[] = [];
     get().update((s) => {
       for (const cid of cids) {
         const have = s.collection[cid] ?? 0;
-        const c = card(cid);
         if (have >= MAX_COPIES && !isBasicEnergy(cid)) {
-          s.shards[c.rarity] = (s.shards[c.rarity] ?? 0) + 1;
-          out.push(true);
+          const coins = DUPE_COINS[card(cid).rarity];
+          s.coins += coins;
+          out.push(coins);
           continue;
         }
         if (!have) s.newCards.push(cid);
         s.collection[cid] = have + 1;
-        out.push(false);
+        out.push(0);
       }
     });
     return out;
@@ -317,33 +297,6 @@ export const useStore = create<Store>((set, get) => ({
     get().update((s) => {
       if (!s.story.cleared.includes(chapterId)) s.story.cleared.push(chapterId);
     }),
-  syncOnlineRank: (r) =>
-    get().update((s) => {
-      s.ranked.rank = r.rank;
-      s.ranked.pts = r.pts;
-      s.ranked.best = Math.max(s.ranked.best, r.best, r.rank);
-    }),
-  grantRankRewards: (rewards) =>
-    get().update((s) => {
-      for (const { reward } of rewards) {
-        s.coins += reward.coins;
-        for (const [r, n] of Object.entries(reward.shards ?? {}) as [Rarity, number][]) s.shards[r] = (s.shards[r] ?? 0) + n;
-      }
-    }),
-  exchange: (cid) => {
-    let ok = false;
-    get().update((s) => {
-      const c = card(cid);
-      const cost = SHARD_COST[c.rarity];
-      if ((s.shards[c.rarity] ?? 0) < cost || (s.collection[cid] ?? 0) >= MAX_COPIES) return;
-      s.shards[c.rarity] = (s.shards[c.rarity] ?? 0) - cost;
-      if (!s.collection[cid]) s.newCards.push(cid);
-      s.collection[cid] = (s.collection[cid] ?? 0) + 1;
-      bump(s.progress, { exchanges: 1 });
-      ok = true;
-    });
-    return ok;
-  },
   startBattle: (cfg) => set((st) => ({ battle: cfg, screen: 'battle', battleSeq: st.battleSeq + 1 })),
   reset: () => {
     const s = freshSave();
@@ -430,9 +383,9 @@ export function extCtx(s: Save): ExtCtx {
     const c = card(cid);
     if (c.kind === 'energy' && c.basic) continue;
     uniques++;
-    if (RARITY_ORDER[c.rarity] >= RARITY_ORDER.ST) stars++;
+    if (c.rarity >= 4) stars++;
   }
-  return { collectionPct: collectionPct(s), rivals: s.beaten.length, story: s.story.cleared.length, rank: s.ranked.rank, uniques, stars, decks: s.decks.length };
+  return { collectionPct: collectionPct(s), rivals: s.beaten.length, story: s.story.cleared.length, uniques, stars, decks: s.decks.length };
 }
 
 export { dailyMissions, weeklyMissions, ACHIEVEMENTS, NORMAL_MISSIONS };
@@ -448,116 +401,83 @@ export function owned(s: Save, cid: string) {
 }
 
 // ----------------------------------------------------------------------------
-// Booster packs (5 cards, the last slot is the rare slot)
+// Booster packs: two kinds, both drawing from every set (5 cards each)
+//   通常パック     150 coins
+//   プレミアムパック 450 coins — the last card is ★3 or better, ★4/★5 come far more often
+// A drawn card may come as one of its special printings (mirror, illustration,
+// shiny, gold …): same card, same ★, only the look is rarer.
 // ----------------------------------------------------------------------------
-/** every normal pack costs the same */
 export const PACK_PRICE = 150;
+export const PREMIUM_PRICE = 450;
 export const PACK_SIZE = 5;
 
 export interface Booster {
-  id: string;
+  id: 'normal' | 'premium';
   name: string;
-  set: SetCode;
-  mascot: string; // card name shown on the pack
-  types: EType[]; // featured types (drawn twice as often)
-  hue: string; // accent colour for the pack art
+  /** card name shown on the pack */
+  mascot: string;
+  hue: string;
   hue2: string;
   premium?: boolean;
-  /** daily pack: draws from every set (see themes.ts) */
-  theme?: string;
-  /** name printed on the pack instead of the set name */
-  title?: string;
-  /** daily packs: the share of draws that should be of the featured types (set packs just double them) */
-  share?: number;
+  price: number;
 }
 
-export const PREMIUM_PRICE = 300;
-
-export function premiumBooster(): Booster {
-  const pu = currentPickup();
-  const mascot = pu ? (pu.card.baseId ? card(pu.card.baseId).name : pu.card.name) : 'ドラグーン';
-  return { id: 'premium', name: 'プレミアムパック', set: 'AB2', mascot, types: [], hue: '#e9c46a', hue2: '#1c1206', premium: true };
-}
-
-export const BOOSTERS: Booster[] = [
-  { id: 'blaze', name: 'ヴォルカリオンパック', set: 'AB1', mascot: 'ヴォルカリオン', types: ['fire', 'fighting'], hue: '#ff6a2b', hue2: '#7a1405' },
-  { id: 'abyss', name: 'リヴァイアサーペントパック', set: 'AB1', mascot: 'リヴァイアサーペント', types: ['water', 'lightning'], hue: '#39a8ff', hue2: '#0a2a6e' },
-  { id: 'grove', name: 'エンシェントウッドパック', set: 'AB1', mascot: 'エンシェントウッド', types: ['grass', 'psychic', 'dark'], hue: '#7fdc5a', hue2: '#123f1a' },
-  { id: 'dragon', name: 'ドラグーンパック', set: 'AB2', mascot: 'ドラグーン', types: ['fire', 'fighting', 'colorless'], hue: '#ffb03a', hue2: '#4a1a02' },
-  { id: 'deep', name: 'ナーガクイーンパック', set: 'AB2', mascot: 'ナーガクイーン', types: ['water', 'psychic'], hue: '#3fd6c8', hue2: '#062a3a' },
-  { id: 'undead', name: 'リッチロードパック', set: 'AB2', mascot: 'リッチロード', types: ['dark', 'grass', 'lightning'], hue: '#9d7bff', hue2: '#150a33' },
-  { id: 'horde', name: 'オークソブリンパック', set: 'AB3', mascot: 'オークソブリン', types: ['fighting', 'fire', 'colorless'], hue: '#d8742c', hue2: '#3a1606' },
-  { id: 'stone', name: 'ドラゴンガードパック', set: 'AB3', mascot: 'ドラゴンガード', types: ['lightning', 'water', 'grass'], hue: '#79b8ff', hue2: '#0c1f3d' },
-  { id: 'plague', name: 'ドラウグロードパック', set: 'AB3', mascot: 'ドラウグロード', types: ['dark', 'psychic', 'colorless'], hue: '#c36bff', hue2: '#1c0b2e' },
-];
+export const NORMAL_BOOSTER: Booster = { id: 'normal', name: '通常パック', mascot: 'ヴォルカリオン', hue: '#5ab0ff', hue2: '#0a2a6e', price: PACK_PRICE };
+export const PREMIUM_BOOSTER: Booster = { id: 'premium', name: 'プレミアムパック', mascot: 'ドラグーン', hue: '#e9c46a', hue2: '#1c1206', premium: true, price: PREMIUM_PRICE };
+export const BOOSTERS: Booster[] = [NORMAL_BOOSTER, PREMIUM_BOOSTER];
 
 export const setName = (set: SetCode) => SET_INFO[set].name;
 
-const SET_BLURB: Record<SetCode, string> = {
-  AB1: 'はじまりの弾。基本の魔獣とトレーナーがそろう。',
-  AB2: 'EXが初登場した弾。覇竜・冥海・死霊の3パック。',
-  AB3: '最新弾。辺境の軍勢と、新しいEXたち。',
-};
-export const SET_SERIES = Object.fromEntries(
-  (['AB1', 'AB2', 'AB3'] as SetCode[]).map((set) => [set, { id: set, kind: 'set', set, name: `${SET_INFO[set].short} ${SET_INFO[set].name}`, blurb: SET_BLURB[set], boosters: BOOSTERS.filter((x) => x.set === set) }]),
-) as Record<SetCode, Series>;
-
-/** the two series on sale today (?lineup=N looks N days ahead) */
-export function todaysLineup(now = Date.now()): [Series, Series] {
-  const off = typeof location !== 'undefined' ? Number(new URLSearchParams(location.search).get('lineup') ?? 0) || 0 : 0;
-  return lineupFor(dayNumber(now) + off, SET_SERIES);
+/** the regular printing of every card that can come out of a pack, by ★ */
+const BASE_POOL: Record<Rarity, CardDef[]> = { 1: [], 2: [], 3: [], 4: [], 5: [] };
+/** special printings of each card */
+const PRINTINGS = new Map<string, CardDef[]>();
+for (const c of ALL_CARDS) {
+  if (c.kind === 'energy' && c.basic) continue;
+  if (c.variant) PRINTINGS.set(c.baseId!, [...(PRINTINGS.get(c.baseId!) ?? []), c]);
+  else BASE_POOL[c.rarity].push(c);
 }
 
-/** which cards a pack draws from: one set, or every set (daily and premium packs) */
-type Scope = SetCode | undefined;
-const scopeOf = (b: Booster): Scope => (b.theme || b.premium ? undefined : b.set);
-const scopeKey = (s: Scope) => s ?? '*';
-const inScope = (c: CardDef, s: Scope) => s === undefined || c.set === s;
+/** odds per slot: cumulative thresholds, e.g. [[1, 0.8], [2, 1]] */
+type Slot = [Rarity, number][];
+export const PACK_TABLE: Slot[] = [
+  [[1, 0.8], [2, 1]],
+  [[1, 0.8], [2, 1]],
+  [[1, 0.75], [2, 1]],
+  [[2, 0.75], [3, 1]],
+  [[2, 0.4], [3, 0.95], [4, 0.996], [5, 1]],
+];
+export const PREMIUM_TABLE: Slot[] = [
+  [[1, 0.5], [2, 0.95], [3, 1]],
+  [[1, 0.45], [2, 0.93], [3, 1]],
+  [[2, 0.7], [3, 1]],
+  [[3, 0.9], [4, 0.99], [5, 1]],
+  [[3, 0.8], [4, 0.97], [5, 1]],
+];
+/** a very rare pack where every card is ★3 or better */
+const GOD_TABLE: Slot[] = [[[3, 1]], [[3, 1]], [[4, 1]], [[4, 1]], [[5, 1]]];
+/** chance that a drawn card comes as one of its special printings */
+export const PRINTING_CHANCE = 0.08;
+export const PREMIUM_PRINTING_CHANCE = 0.16;
 
-/** cards that can appear for a rarity (mirrors come from their own slot) */
-const POOLS = new Map<string, CardDef[]>();
-function pool(r: Rarity, scope?: Scope, mirror = false): CardDef[] {
-  const key = `${r}|${scopeKey(scope)}|${mirror}`;
-  let p = POOLS.get(key);
-  if (!p) {
-    p = ALL_CARDS.filter((c) => c.rarity === r && (c.variant === 'mirror') === mirror && !(c.kind === 'energy' && c.basic) && inScope(c, scope));
-    POOLS.set(key, p);
-  }
-  return p;
-}
-
-function featured(c: CardDef, b: Booster) {
-  return (c.kind === 'monster' && b.types.includes(c.type)) || (c.kind === 'energy' && b.types.includes(c.energyType));
-}
-
-function pickWeighted(arr: CardDef[], b: Booster): CardDef {
-  const isF = arr.map((c) => featured(c, b));
-  const nF = isF.filter(Boolean).length;
-  // weight the featured cards so they make up `share` of the draws, whatever the pool looks like
-  const fw = b.share && nF && nF < arr.length ? (b.share * (arr.length - nF)) / ((1 - b.share) * nF) : 2;
-  const w = isF.map((f) => (f ? Math.max(1, fw) : 1));
-  let r = Math.random() * w.reduce((x, y) => x + y, 0);
-  for (let i = 0; i < arr.length; i++) if ((r -= w[i]) <= 0) return arr[i];
-  return arr[arr.length - 1];
-}
-
-/** table entries are cumulative thresholds, e.g. [['C', 0.9], ['U', 1]] */
-function roll(table: [Rarity, number][]): Rarity {
+function roll(table: Slot): Rarity {
   const r = Math.random();
   for (const [k, p] of table) if (r < p) return k;
   return table[table.length - 1][0];
 }
 
-/** roll a rarity; if the pool has no card of that rarity, take the nearest lower one (or the nearest higher) */
-function rollCard(table: [Rarity, number][], b: Booster, scope?: Scope): CardDef {
-  let r = roll(table);
-  const order = Object.keys(RARITY_ORDER) as Rarity[];
-  if (!pool(r, scope).length) {
-    const lower = order.filter((k) => RARITY_ORDER[k] < RARITY_ORDER[r] && pool(k, scope).length);
-    const higher = order.filter((k) => RARITY_ORDER[k] > RARITY_ORDER[r] && pool(k, scope).length);
-    r = lower.length ? lower[lower.length - 1] : higher[0];
+function draw(r: Rarity, printing: number): CardDef {
+  const pool = BASE_POOL[r].length ? BASE_POOL[r] : BASE_POOL[1];
+  const base = pool[Math.floor(Math.random() * pool.length)];
+  const alts = PRINTINGS.get(base.id);
+  if (alts?.length && Math.random() < printing) {
+    // mirrors are the common special printing; the illustrated ones are rarer
+    const mirror = alts.find((x) => x.variant === 'mirror');
+    const others = alts.filter((x) => x.variant !== 'mirror');
+    if (mirror && (!others.length || Math.random() < 0.65)) return mirror;
+    return others[Math.floor(Math.random() * others.length)] ?? base;
   }
-  return pickWeighted(pool(r, scope), b);
+  return base;
 }
 
 export interface PackResult {
@@ -565,60 +485,13 @@ export interface PackResult {
   god: boolean;
 }
 
-/** Normal pack odds, per slot. Slot 3 may be a mirror; slot 5 is the rare slot. */
-export const PACK_TABLE: [Rarity, number][][] = [
-  [['C', 0.9], ['U', 1]],
-  [['C', 0.85], ['U', 1]],
-  [['C', 0.75], ['U', 1]],
-  [['U', 0.66], ['R', 0.9], ['RR', 1]],
-  [['R', 0.52], ['RR', 0.78], ['ST', 0.95], ['ST2', 0.98], ['CR', 1]],
-];
-export const MIRROR_CHANCE = 0.3;
-const GOD_TABLE: [Rarity, number][][] = [
-  [['RR', 1]],
-  [['RR', 0.5], ['ST', 1]],
-  [['ST', 1]],
-  [['ST', 0.5], ['ST2', 0.8], ['CR', 1]],
-  [['ST', 0.3], ['ST2', 0.6], ['CR', 1]],
-];
-
-export function openPack(b: Booster = BOOSTERS[0]): PackResult {
-  const god = Math.random() < 0.005 || (typeof location !== 'undefined' && location.search.includes('godpack'));
-  const cards = (god ? GOD_TABLE : PACK_TABLE).map((t, i) => {
-    const scope = scopeOf(b);
-    if (!god && i === 2 && Math.random() < MIRROR_CHANCE) {
-      const r = roll([['C', 0.6], ['U', 0.9], ['R', 1]]);
-      const m = pool(r, scope, true);
-      if (m.length) return pickWeighted(m, b);
-    }
-    return rollCard(t, b, scope);
-  });
-  cards.sort((x, y) => RARITY_ORDER[x.rarity] - RARITY_ORDER[y.rarity]);
+export function openPack(b: Booster = NORMAL_BOOSTER): PackResult {
+  const premium = !!b.premium;
+  const god = Math.random() < (premium ? 0.004 : 0.001) || (typeof location !== 'undefined' && location.search.includes('godpack'));
+  const table = god ? GOD_TABLE : premium ? PREMIUM_TABLE : PACK_TABLE;
+  const cards = table.map((t) => draw(roll(t), premium || god ? PREMIUM_PRINTING_CHANCE : PRINTING_CHANCE));
+  cards.sort((x, y) => x.rarity - y.rarity || (x.variant ? 1 : 0) - (y.variant ? 1 : 0));
   return { cards, god };
 }
-
-/** Premium pack: slots roll a little higher; the last slot is RR or better. Cards from every set. */
-export const PREMIUM_TABLE: [Rarity, number][][] = [
-  [['U', 0.7], ['R', 0.95], ['RR', 1]],
-  [['U', 0.65], ['R', 0.93], ['RR', 1]],
-  [['R', 0.7], ['RR', 0.96], ['ST', 1]],
-  [['R', 0.45], ['RR', 0.88], ['ST', 0.97], ['ST2', 0.995], ['CR', 1]],
-  [['RR', 0.72], ['ST', 0.92], ['ST2', 0.98], ['CR', 1]],
-];
-
-export function openPremium(): PackResult {
-  const pu = currentPickup();
-  const b = premiumBooster();
-  const cards = PREMIUM_TABLE.map((t) => {
-    const c = rollCard(t, b);
-    // pick-up: half of the draws at the pick-up card's rarity become that card
-    if (pu && pu.card.rarity === c.rarity && Math.random() < 0.5) return pu.card;
-    return c;
-  });
-  cards.sort((x, y) => RARITY_ORDER[x.rarity] - RARITY_ORDER[y.rarity]);
-  return { cards, god: false };
-}
-
-export const RARITY_ORDER: Record<Rarity, number> = { C: 0, U: 1, R: 2, RR: 3, ST: 4, ST2: 5, CR: 6 };
 
 export { RIVALS };

@@ -28,10 +28,12 @@ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { liteFx, reportFrameTime } from '../../lib/fx';
 
-/** 0 = nothing special, 1 = ◇◇◇◇, 2 = ☆, 3 = ♛ */
-export type OmenTier = 0 | 1 | 2 | 3;
+/** the best ★ in the pack: 1 grey, 2 blue, 3 gold, 4 rainbow, 5 rainbow-gold */
+export type OmenTier = 1 | 2 | 3 | 4 | 5;
 
-export const OMEN_COLORS: Record<OmenTier, string> = { 0: '#cfe0ff', 1: '#4fa8ff', 2: '#ffc245', 3: '#ff79d6' };
+export const OMEN_COLORS: Record<OmenTier, string> = { 1: '#c4cad6', 2: '#4fa8ff', 3: '#ffc245', 4: '#ff79d6', 5: '#ffe08a' };
+/** how much of the rainbow runs through each tier's light (★5: rainbow laid over gold) */
+export const OMEN_RAINBOW: Record<OmenTier, number> = { 1: 0, 2: 0, 3: 0, 4: 1, 5: 0.55 };
 
 /** the quiet opening before the meteors; the rest of the timeline is written relative to it */
 const T0 = 3.5;
@@ -461,7 +463,7 @@ class Ribbon {
   constructor(
     readonly n: number,
     color: THREE.Color,
-    rainbow: boolean,
+    rainbow: number,
   ) {
     this.geo = new THREE.BufferGeometry();
     this.pos = new Float32Array(n * 2 * 3);
@@ -486,7 +488,7 @@ class Ribbon {
     this.mat = new THREE.ShaderMaterial({
       vertexShader: TRAIL_VERT,
       fragmentShader: TRAIL_FRAG,
-      uniforms: { uColor: { value: color }, uRainbow: { value: rainbow ? 1 : 0 }, uTime: { value: 0 }, uFade: { value: 1 } },
+      uniforms: { uColor: { value: color }, uRainbow: { value: rainbow }, uTime: { value: 0 }, uFade: { value: 1 } },
       transparent: true,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
@@ -607,10 +609,11 @@ export class MeteorCinema {
     private readonly host: HTMLElement,
     private readonly opts: CinemaOptions,
   ) {
-    this.color = new THREE.Color(opts.god ? OMEN_COLORS[2] : OMEN_COLORS[opts.tier]);
+    this.color = new THREE.Color(opts.god ? OMEN_COLORS[5] : OMEN_COLORS[opts.tier]);
     this.auraTier = opts.tier;
     this.auraColor.copy(this.color);
-    const rainbow = opts.tier === 3;
+    const rainbowAmt = opts.god ? OMEN_RAINBOW[5] : OMEN_RAINBOW[opts.tier];
+    const rainbow = rainbowAmt > 0;
 
     const lite = liteFx();
     this.renderer = new THREE.WebGLRenderer({ antialias: !lite, alpha: false, powerPreference: 'high-performance' });
@@ -782,11 +785,11 @@ export class MeteorCinema {
     const god = !!opts.god;
     let tiers = opts.meteors.length ? opts.meteors : [opts.tier];
     // god pack: every meteor gold, and a golden rain on top
-    if (god) tiers = [...tiers.map((t): OmenTier => (t === 3 ? 3 : 2)), ...Array.from({ length: lite ? 10 : 26 }, (): OmenTier => 2)];
+    if (god) tiers = [...tiers.map((t): OmenTier => (t >= 4 ? t : 4)), ...Array.from({ length: lite ? 10 : 26 }, (): OmenTier => 5)];
     const many = tiers.length > 12;
     const mk = (path: THREE.Vector3[], t0: number, t1: number, main: boolean, tier: OmenTier) => {
       const col = new THREE.Color(OMEN_COLORS[tier]);
-      const ribbon = new Ribbon(main ? 64 : many ? 22 : 36, col, tier === 3);
+      const ribbon = new Ribbon(main ? 64 : many ? 22 : 36, col, OMEN_RAINBOW[tier]);
       const head = new THREE.Sprite(new THREE.SpriteMaterial({ map: headTex, color: 0xffffff, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
       const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: col, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
       head.visible = glow.visible = false;
@@ -813,7 +816,7 @@ export class MeteorCinema {
       const mid = start.clone().lerp(end, 0.5);
       mk([start, mid, end], t0, t0 + rnd(0.45, 0.8) * (many ? 0.8 : 1), false, tier);
     });
-    this.color = new THREE.Color(god ? OMEN_COLORS[2] : OMEN_COLORS[tiers[0]]);
+    this.color = new THREE.Color(god ? OMEN_COLORS[5] : OMEN_COLORS[tiers[0]]);
 
     // the launched pack as a climbing star (and, for a bundle, its companions)
     this.riseCore = this.riseSprite(1, false);
@@ -919,7 +922,8 @@ export class MeteorCinema {
     spg.setAttribute('aAlpha', new THREE.BufferAttribute(this.sparkAlpha, 1));
     const spc = new Float32Array(MAXS * 3);
     for (let i = 0; i < MAXS; i++) {
-      const c = rainbow ? new THREE.Color().setHSL(Math.random(), 0.8, 0.7) : this.color.clone().lerp(new THREE.Color('#ffffff'), Math.random() * 0.6);
+      // ★5: half the sparks gold, half rainbow
+      const c = rainbow && !(rainbowAmt < 1 && Math.random() < 0.5) ? new THREE.Color().setHSL(Math.random(), 0.8, 0.7) : this.color.clone().lerp(new THREE.Color('#ffffff'), Math.random() * 0.6);
       spc.set([c.r, c.g, c.b], i * 3);
     }
     spg.setAttribute('aColor', new THREE.BufferAttribute(spc, 3));
@@ -966,7 +970,7 @@ export class MeteorCinema {
           uHalf: { value: new THREE.Vector2(0.3, 0.3) },
           uColor: { value: this.color.clone() },
           uTime: { value: 0 },
-          uRainbow: { value: rainbow ? 1 : 0 },
+          uRainbow: { value: rainbowAmt },
           ...extra,
         },
         transparent: true,
@@ -1048,7 +1052,7 @@ export class MeteorCinema {
     if (tier !== this.auraTier) {
       this.auraTier = tier;
       this.pulse = 1;
-      (this.aura.material as THREE.ShaderMaterial).uniforms.uRainbow.value = tier === 3 ? 1 : 0;
+      (this.aura.material as THREE.ShaderMaterial).uniforms.uRainbow.value = OMEN_RAINBOW[tier];
     }
     this.auraTarget = visible ? 1 : 0;
     this.auraHotTarget = hot ? 1 : 0;
@@ -1290,7 +1294,7 @@ export class MeteorCinema {
     this.reflection.visible = main.ribbon.mesh.visible;
     (this.reflection.material as THREE.ShaderMaterial).uniforms.uTime.value = t;
     // sky tint while the meteors are out; glow on the horizon where it lands
-    skyU.uTintAmt.value = smooth(1.0, 1.8, T) * (1 - smooth(L_IMPACT, L_IMPACT + 1.4, T)) * (0.5 + this.opts.tier * 0.35);
+    skyU.uTintAmt.value = smooth(1.0, 1.8, T) * (1 - smooth(L_IMPACT, L_IMPACT + 1.4, T)) * (0.2 + (this.opts.tier - 1) * 0.3);
     const toImpact = this.IMPACT.clone().sub(camPos).normalize();
     skyU.uGlowDir.value.copy(toImpact);
     skyU.uGlowAmt.value = smooth(2.2, L_IMPACT, T) * (1 - smooth(L_IMPACT + 0.3, L_IMPACT + 1.4, T)) * 1.2;
@@ -1372,7 +1376,7 @@ export class MeteorCinema {
       au.uColor.value.copy(this.auraColor);
       au.uTime.value = t;
       au.uHot.value = this.auraHot + this.pulse;
-      const base = [0.35, 0.7, 0.95, 1.1][this.auraTier];
+      const base = [0.25, 0.45, 0.75, 0.95, 1.15][this.auraTier - 1];
       au.uAmt.value = this.auraAmt * (base + this.pulse * 0.8);
     }
 

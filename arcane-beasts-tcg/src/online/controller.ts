@@ -24,12 +24,7 @@ export class OnlineController extends FramePlayer implements BattleDriver {
 
   constructor(readonly match: MatchInfo) {
     super();
-    this.spectator = match.you === 'spectator';
     useBattle.setState({ view: null, prompt: null, result: null, thinking: false, lastEvent: null, hover: null, stats: { ...EMPTY_STATS }, timer: null, peerOffline: null, incomingStamp: null, onlineResult: null });
-  }
-
-  get spectating() {
-    return this.match.you === 'spectator';
   }
 
   start() {
@@ -52,7 +47,7 @@ export class OnlineController extends FramePlayer implements BattleDriver {
   }
 
   answer(a: Answer) {
-    if (!this.prompt || this.spectating) return;
+    if (!this.prompt) return;
     this.prompt = null;
     useBattle.setState({ prompt: null });
     online.send({ t: 'answer', seq: this.seq, answer: a });
@@ -90,7 +85,7 @@ export class OnlineController extends FramePlayer implements BattleDriver {
     this.prompt = prompt;
     this.legalNow = legal;
     this.clock(actor, deadline);
-    useBattle.setState({ view: state, prompt, thinking: !prompt && actor === 1 && !this.spectating });
+    useBattle.setState({ view: state, prompt, thinking: !prompt && actor === 1 });
   }
 
   private async pump() {

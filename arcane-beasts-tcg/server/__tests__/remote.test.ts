@@ -33,7 +33,7 @@ describe('hosted player database', () => {
     const a = new PlayerStore(null, Date.now, new SupabaseBackend('https://x.supabase.co/', 'key', db.fetcher));
     await a.init();
     const { player } = a.create('アリス');
-    a.recordRanked(player, true);
+    a.recordCasual(player, true);
     await a.close();
     expect(db.rows.get(player.id)?.name).toBe('アリス');
     expect(db.rows.get(player.id)?.games).toBe(1);
@@ -41,7 +41,7 @@ describe('hosted player database', () => {
     const b = new PlayerStore(null, Date.now, new SupabaseBackend('https://x.supabase.co', 'key', db.fetcher));
     await b.init();
     expect(b.size).toBe(1);
-    expect(b.get(player.id)?.rank.pts).toBe(player.rank.pts);
+    expect(b.get(player.id)?.wins).toBe(1);
   });
 
   test('reads every page, and writes in small batches', async () => {

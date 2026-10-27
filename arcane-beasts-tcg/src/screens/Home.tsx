@@ -2,14 +2,10 @@ import { CHAPTERS } from '../story';
 import { nextChapterIndex } from '../story/flow';
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useState } from 'react';
-import { activeDeck, collectionPct, extCtx, useStore, RIVALS, SHARD_COST, SHARD_RARITIES } from '../state/store';
-import { canClaimLogin, claimableCount, currentPickup, expToNext } from '../state/progress';
+import { activeDeck, collectionPct, extCtx, useStore, RIVALS } from '../state/store';
+import { canClaimLogin, claimableCount, expToNext } from '../state/progress';
 import { LoginTrack } from './Missions';
-import { isSignedUp, onlineSupported, useOnline } from '../online/client';
-import { isRegistered } from '../online/protocol';
-import { AccountSheet } from './AccountBox';
 import { artUrl } from '../lib/assets';
-import { CardFace } from '../ui/Card';
 import { Icon } from '../ui/Icon';
 import { foley, playMusic, sfx } from '../audio/audio';
 import type { Screen } from '../state/store';
@@ -21,7 +17,6 @@ interface TileDef {
   bg: string;
   fig: string;
   icon: string;
-  big?: boolean;
   badge?: string;
 }
 
@@ -33,16 +28,10 @@ export function Home() {
   useEffect(() => playMusic('menu'), []);
   const deck = activeDeck(save);
   const pct = Math.floor(collectionPct(save));
-  const shardReady = SHARD_RARITIES.some((r) => (save.shards[r] ?? 0) >= SHARD_COST[r]);
   const nextIdx = nextChapterIndex(save);
   const nextCh = CHAPTERS[nextIdx];
   const missionN = claimableCount(save.progress, extCtx(save));
-  const pickup = currentPickup();
   const p = save.progress;
-  // not signed up yet: a small chip that opens the sign-up sheet
-  const [acctOpen, setAcctOpen] = useState(false);
-  const liveProfile = useOnline((s) => s.profile);
-  const askAcct = onlineSupported() && !(liveProfile ? isRegistered(liveProfile) : isSignedUp());
   const [loginOpen, setLoginOpen] = useState(() => {
     // pop the login bonus once per session; afterwards it lives in ミッション
     const open = canClaimLogin(save.progress) && !loginShown;
@@ -50,129 +39,104 @@ export function Home() {
     return open;
   });
   const tiles: TileDef[] = [
-    { to: 'arena', title: 'バトル', sub: save.story.started ? `ストーリー 第${nextIdx + 1}章「${nextCh.title}」・ランクマッチ` : 'ストーリー・ランクマッチ・フリー対戦', bg: 'story/landscape-lava', fig: 'monsters/fire-dragon', icon: 'swords', big: true },
-    { to: 'deck', title: 'デッキ編集', sub: '60枚のデッキを組もう', bg: 'story/grim-altar', fig: 'woses/ancient-wose', icon: 'deck' },
-    { to: 'shop', title: 'パック開封', sub: pickup ? `ピックアップ開催中！` : `第2弾「覇者の降臨」登場`, bg: 'story/swamp-02', fig: 'monsters/jinn', icon: 'chest', badge: pickup ? 'PICK UP' : 'NEW' },
-    { to: 'collection', title: 'コレクション', sub: `収集率 ${pct}%`, bg: 'story/landscape-mountains-01', fig: 'monsters/sea-serpent', icon: 'cards', badge: save.newCards.length ? `NEW ${save.newCards.length}` : shardReady ? '交換可' : undefined },
-    { to: 'missions', title: 'ミッション', sub: missionN ? `報酬を受け取れます` : 'デイリー・ウィークリー・実績', bg: 'story/landscape-castle', fig: 'humans/mage-white+female', icon: 'trophy', badge: missionN ? `${missionN}` : undefined },
+    { to: 'shop', title: 'パック', sub: '通常・プレミアム', bg: 'story/swamp-02', fig: 'monsters/jinn', icon: 'chest' },
+    { to: 'missions', title: 'ミッション', sub: missionN ? '報酬を受け取れます' : 'デイリー・実績', bg: 'story/landscape-castle', fig: 'humans/mage-white+female', icon: 'trophy', badge: missionN ? `${missionN}` : undefined },
+    { to: 'collection', title: 'コレクション', sub: `収集率 ${pct}%`, bg: 'story/landscape-mountains-01', fig: 'monsters/sea-serpent', icon: 'cards', badge: save.newCards.length ? `NEW ${save.newCards.length}` : undefined },
+    { to: 'deck', title: 'デッキ', sub: deck ? deck.name : 'デッキを組もう', bg: 'story/grim-altar', fig: 'woses/ancient-wose', icon: 'deck' },
   ];
+  const tap = (to: Screen) => {
+    sfx('expand', 0.5);
+    go(to);
+  };
 
   return (
-    <div className="screen">
-      <div className="screen-bg" style={{ backgroundImage: `url(${artUrl('story/landscape-hills-02')})` }} />
-      <div className="screen-shade" />
-      <div className="stage">
-        <div className="home-logo">
-          <div className="l1 title-display" style={{ fontFamily: 'var(--font-latin)' }}>
-            ARCANE BEASTS
+    <div className="screen home3">
+      <div className="page-bg" style={{ backgroundImage: `url(${artUrl('story/landscape-hills-02')})` }} />
+      <div className="page-shade" />
+      <div className="page">
+        <header className="page-head home3-head">
+          <div className="home3-logo">
+            <b>ARCANE BEASTS</b>
+            <small>TRADING CARD GAME</small>
           </div>
-          <div className="l2">TRADING CARD GAME</div>
-        </div>
-        <div className="home-top-right">
-          <div className="lv-chip" title="プレイヤーレベル">
-            <div className="lv">{p.level}</div>
-            <div className="meta">
-              <small>
-                Lv.{p.level}　EXP {p.exp}/{expToNext(p.level)}
-              </small>
+          <div className="page-head-right">
+            <div className="lv-chip2" title="プレイヤーレベル">
+              <b>Lv.{p.level}</b>
               <div className="xb">
                 <div style={{ transform: `scaleX(${p.exp / expToNext(p.level)})` }} />
               </div>
             </div>
+            <span className="coin-chip">
+              <Icon name="coin" /> {save.coins.toLocaleString()}
+            </span>
           </div>
-          {askAcct && (
-            <button className="ac-chip" onClick={() => setAcctOpen(true)}>
-              ログイン / 新規登録
-            </button>
-          )}
-          <button className="icon-btn" title="ミッション" onClick={() => go('missions')}>
-            <Icon name="trophy" />
-            {missionN > 0 && <i className="dot">{missionN}</i>}
-          </button>
-          <span className="coin-chip">
-            <Icon name="coin" /> {save.coins.toLocaleString()}
-          </span>
-          <button className="icon-btn" title="設定" onClick={() => go('settings')}>
-            <Icon name="gear" />
-          </button>
-        </div>
+        </header>
 
-        <div className="home-grid">
-          {tiles.map((t, i) => (
-            <motion.div
-              key={t.to}
-              className={`tile ${t.big ? 'big' : ''}`}
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.05 * i, type: 'spring', stiffness: 220, damping: 24 }}
-              onMouseEnter={() => foley.hover()}
-              onClick={() => {
-                sfx('expand', 0.5);
-                go(t.to);
-              }}
-            >
-              <img className="bg" src={artUrl(t.bg)} alt="" />
-              <div className="shade" />
-              <img className="fig" src={artUrl(t.fig)} alt="" />
-              <div className="label">
-                <div className="ico">
-                  <Icon name={t.icon} />
-                </div>
-                <h2>{t.title}</h2>
-                <p>{t.sub}</p>
+        <div className="page-inner home3-grid">
+          <motion.div className="tile2 big home3-hero" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} onMouseEnter={() => foley.hover()} onClick={() => tap('arena')}>
+            <img className="bg" src={artUrl('story/landscape-lava')} alt="" />
+            <div className="shade" />
+            <img className="fig" src={artUrl('monsters/fire-dragon')} alt="" />
+            <div className="label">
+              <div className="ico">
+                <Icon name="swords" />
               </div>
-              {t.badge && <div className="badge">{t.badge}</div>}
-            </motion.div>
-          ))}
-        </div>
-
-        <div className="home-side">
-          <motion.div className="panel deck-box" initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }}>
-            {deck && <CardFace cid={deck.cover} />}
-            <div>
-              <h3>使用中のデッキ</h3>
-              <div className="dname">{deck?.name ?? '―'}</div>
-              <div style={{ marginTop: 8 }}>
-                <button className="btn small" onClick={() => go('deck')}>
-                  編集する
-                </button>
-              </div>
+              <h2>バトル</h2>
+              <p>{save.story.started ? `ストーリー 第${nextIdx + 1}章「${nextCh.title}」` : 'ストーリー・強敵・オンライン対戦'}</p>
             </div>
           </motion.div>
-          <motion.div className="panel stat-box" initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }}>
+
+          <div className="home3-tiles">
+            {tiles.map((t, i) => (
+              <motion.div
+                key={t.to}
+                className="tile2"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.06 + 0.05 * i, duration: 0.45 }}
+                onMouseEnter={() => foley.hover()}
+                onClick={() => tap(t.to)}
+              >
+                <img className="bg" src={artUrl(t.bg)} alt="" />
+                <div className="shade" />
+                <img className="fig" src={artUrl(t.fig)} alt="" />
+                <div className="label">
+                  <div className="ico">
+                    <Icon name={t.icon} />
+                  </div>
+                  <h2>{t.title}</h2>
+                  <p>{t.sub}</p>
+                </div>
+                {t.badge && <div className="badge">{t.badge}</div>}
+              </motion.div>
+            ))}
+          </div>
+
+          <motion.div className="box home3-stats" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25, duration: 0.45 }}>
             <div>
               <b>{save.wins}</b>
               <span>勝利</span>
             </div>
             <div>
-              <b>{save.beaten.length}/{RIVALS.length}</b>
-              <span>撃破した強敵</span>
+              <b>
+                {save.beaten.length}/{RIVALS.length}
+              </b>
+              <span>強敵撃破</span>
+            </div>
+            <div>
+              <b>
+                {save.story.cleared.length}/{CHAPTERS.length}
+              </b>
+              <span>ストーリー</span>
             </div>
             <div>
               <b>{pct}%</b>
               <span>コレクション</span>
             </div>
           </motion.div>
-          <div className="home-links">
-            <button className="btn ghost small" onClick={() => go('settings')}>
-              <Icon name="gear" /> 設定
-            </button>
-            <button className="btn ghost small" onClick={() => go('rules')}>
-              <Icon name="book" /> あそびかた
-            </button>
-            <button className="btn ghost small" onClick={() => go('credits')}>
-              <Icon name="info" /> クレジット
-            </button>
-            <button className="btn ghost small" onClick={() => go('title')}>
-              <Icon name="back" /> タイトルへ
-            </button>
-          </div>
         </div>
       </div>
-      <AnimatePresence>
-        {loginOpen && <LoginModal onClose={() => setLoginOpen(false)} />}
-        {acctOpen && <AccountSheet key="acct" onClose={() => setAcctOpen(false)} />}
-      </AnimatePresence>
+      <AnimatePresence>{loginOpen && <LoginModal onClose={() => setLoginOpen(false)} />}</AnimatePresence>
     </div>
   );
 }

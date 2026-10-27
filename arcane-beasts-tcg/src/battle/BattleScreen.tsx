@@ -1,7 +1,7 @@
 import { LayoutGroup, motion, AnimatePresence } from 'motion/react';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { card, TYPE_JP } from '../engine/cards';
-import { autoRetreatDiscard, canPay, energyUnits, maxHp, posEq, posKey, retreatCost, topCard } from '../engine/game';
+import { autoRetreatDiscard, canPay, energyUnits, maxHp, posEq, posKey, retreatCost, TERRAIN, TERRAIN_BOOST, TERRAIN_WEAKEN, topCard } from '../engine/game';
 import type { Action, CardInst, EnergyCard, GameState, MonsterCard, Pos, Prompt, Slot, TrainerCard } from '../engine/types';
 import { CardBack, CardFace, EnergySymbol, RainbowSymbol } from '../ui/Card';
 import { Icon } from '../ui/Icon';
@@ -15,7 +15,12 @@ import { ResultOverlay } from './ResultOverlay';
 import { useStore } from '../state/store';
 import { foley, playMusic, sfx } from '../audio/audio';
 import { askConfirm } from '../ui/Confirm';
+import { Weather } from '../story/Weather';
+import type { Weather as WeatherKind } from '../story/types';
 import './battle.css';
+
+/** the weather each terrain brings over the battlefield */
+const TERRAIN_WEATHER: Record<string, WeatherKind> = { volcano: 'embers', coast: 'storm', forest: 'petals', swamp: 'fog', battlefield: 'ash', harbor: 'fog', ruins: 'motes', crypt: 'ash', peak: 'storm', oasis: 'motes', mine: 'ash', sky: 'stars' };
 
 const LAYOUT = { type: 'spring' as const, stiffness: 260, damping: 30, mass: 0.9 };
 
@@ -135,7 +140,7 @@ function SlotView({ s, slot, pos, highlight, selectable, onClick, big }: SlotPro
           ))}
         </div>
       )}
-      {(mc.omega || mc.ex) && <div className={`omega-glow ${mc.ex ? 'ex' : ''}`} />}
+      {mc.rarity >= 4 && <div className={`omega-glow ${mc.rarity === 5 ? 'ex' : ''}`} />}
     </div>
   );
 }
@@ -285,8 +290,9 @@ function Hand({ cards, playable, selected, onSelect, onDrop, setupPick, dropKeys
     return c ? pickDrop(c[0], c[1], dropKeys(uid)) : null;
   };
   const n = cards.length;
-  const maxW = 50;
-  const cw = 8.2;
+  const portrait = isPortrait();
+  const maxW = portrait ? 52 : 50;
+  const cw = portrait ? 10 : 8.2;
   const step = n <= 1 ? 0 : Math.min(cw * 0.92, (maxW - cw) / (n - 1));
   const total = step * (n - 1) + cw;
   const [hover, setHover] = useState<number | null>(null);
@@ -308,7 +314,7 @@ function Hand({ cards, playable, selected, onSelect, onDrop, setupPick, dropKeys
             transition={{ layout: LAYOUT }}
             className={`bc hand-card ${can ? 'can' : ''} ${isSel ? 'sel' : ''} ${dragging === c.uid ? `dragging ${touch.current ? 'lifted' : ''}` : ''}`}
             style={{
-              left: `calc(var(--u) * ${50 - total / 2 + i * step})`,
+              left: `calc(var(--u) * (var(--cx) + ${-total / 2 + i * step}))`,
               zIndex: isHover || isSel ? 100 : i,
             }}
             initial={{ rotateY: 90 }}
@@ -384,6 +390,8 @@ function Hand({ cards, playable, selected, onSelect, onDrop, setupPick, dropKeys
   );
 }
 
+const isPortrait = () => typeof window !== 'undefined' && window.matchMedia('(orientation: portrait)').matches;
+
 function OppHand({ cards, mine }: { cards: CardInst[]; mine?: boolean }) {
   const n = cards.length;
   const step = Math.min(2.6, 26 / Math.max(n, 1));
@@ -396,7 +404,7 @@ function OppHand({ cards, mine }: { cards: CardInst[]; mine?: boolean }) {
           face={false}
           light
           className="opp-hand-card"
-          style={{ left: `calc(var(--u) * ${50 - (step * (n - 1)) / 2 + i * step - 2.2})`, rotate: `${(i - (n - 1) / 2) * -2.5}deg` }}
+          style={{ left: `calc(var(--u) * (var(--cx) + ${-(step * (n - 1)) / 2 + i * step - 2.2}))`, rotate: `${(i - (n - 1) / 2) * -2.5}deg` }}
         />
       ))}
     </div>
@@ -427,7 +435,7 @@ function ActionMenu({ s, pos, legal, onAct, onRetreat, onClose }: MenuProps) {
   return (
     <motion.div
       className={`action-menu ${pos.z === 'active' ? 'at-active' : 'at-bench'}`}
-      style={pos.z === 'bench' ? { left: `calc(var(--u) * ${31.6 + pos.i * 7.6 + 3.2})` } : undefined}
+      style={pos.z === 'bench' && !isPortrait() ? { left: `calc(var(--u) * ${31.6 + pos.i * 7.6 + 3.2})` } : undefined}
       initial={{ opacity: 0, x: -20, scale: 0.95 }}
       animate={{ opacity: 1, x: 0, scale: 1 }}
       exit={{ opacity: 0, scale: 0.95 }}
@@ -534,7 +542,7 @@ function LogPanel({ s, open, onToggle }: { s: GameState; open: boolean; onToggle
 // ---------------------------------------------------------------------------
 // Online: connection warning and the time left to act
 // ---------------------------------------------------------------------------
-function OnlineHud({ spectating }: { spectating: boolean }) {
+function OnlineHud() {
   const timer = useBattle((s) => s.timer);
   const peerOffline = useBattle((s) => s.peerOffline);
   const [now, setNow] = useState(Date.now());
@@ -549,7 +557,7 @@ function OnlineHud({ spectating }: { spectating: boolean }) {
         相手の通信が切れています… あと{left(peerOffline)}秒で勝ちになります
       </div>
     );
-  if (timer && left(timer.until) <= (timer.actor === 0 ? 40 : 30) && !spectating) {
+  if (timer && left(timer.until) <= (timer.actor === 0 ? 40 : 30)) {
     return (
       <div className={`online-hud ${timer.actor === 0 ? 'me' : ''}`}>
         {timer.actor === 0 ? `あなたの持ち時間 あと${left(timer.until)}秒` : `相手の持ち時間 あと${left(timer.until)}秒`}
@@ -826,7 +834,9 @@ export function BattleScreen() {
   const setupBenchInst = isSetup ? setupBench.map((u) => me.hand.find((c) => c.uid === u)!).filter(Boolean) : [];
 
   const stadium = s.stadium;
-  const bg = stadium ? (card(stadium.cid) as TrainerCard).art : cfg.scene;
+  const terrain = stadium ? (card(stadium.cid) as TrainerCard) : null;
+  const bg = terrain ? terrain.art : cfg.scene;
+  const terrainFx = terrain ? TERRAIN[terrain.key] : undefined;
 
   return (
     <div
@@ -838,6 +848,14 @@ export function BattleScreen() {
     >
       <div className="battle-bg" style={{ backgroundImage: `url(${artUrl(bg)})` }} key={bg} />
       <div className="battle-bg-shade" />
+      {terrain && <div className="battle-weather" key={`w-${terrain.key}`}><Weather kind={TERRAIN_WEATHER[terrain.key] ?? 'motes'} /></div>}
+      {terrainFx && (
+        <div className="terrain-chip" key={`t-${terrain!.key}`}>
+          <b>{terrain!.name}</b>
+          {terrainFx.boost && <span className="up">{TYPE_JP[terrainFx.boost]} +{TERRAIN_BOOST}</span>}
+          {terrainFx.weaken && <span className="down">{TYPE_JP[terrainFx.weaken]} −{TERRAIN_WEAKEN}</span>}
+        </div>
+      )}
       <div className="stage battle-stage">
         <div className="battle-shake">
           <div className={`mat ${dragUid !== null && selNoTarget ? 'drop-any' : ''}`} data-drop="board">
@@ -919,7 +937,7 @@ export function BattleScreen() {
               )}
             </AnimatePresence>
 
-            {cfg.online?.you === 'spectator' ? <OppHand cards={me.hand} mine /> : <Hand cards={handCards} playable={playable} selected={selected} onSelect={onSelectHand} onDrop={onDropHand} setupPick={isSetup ? setupBasics : undefined} dropKeys={dropKeys} onDragging={setDragUid} />}
+            {<Hand cards={handCards} playable={playable} selected={selected} onSelect={onSelectHand} onDrop={onDropHand} setupPick={isSetup ? setupBasics : undefined} dropKeys={dropKeys} onDragging={setDragUid} />}
           </LayoutGroup>
 
           {/* HUD */}
@@ -939,7 +957,7 @@ export function BattleScreen() {
             )}
           </div>
           {(!cfg.spectate || cfg.online) && <Stamps oppName={cfg.oppName} online={cfg.online ? (ctrl as OnlineController) : null} />}
-          {cfg.online && <OnlineHud spectating={cfg.online.you === 'spectator'} />}
+          {cfg.online && <OnlineHud />}
           <div className="plate me">
             <img src={artUrl(cfg.online ? cfg.online.me.portrait : 'humans/lieutenant')} alt="" />
             <div>
@@ -953,7 +971,7 @@ export function BattleScreen() {
           <div className="turn-box">
             <div className={`turn-chip ${s.current === 0 ? 'me' : 'opp'}`}>
               <small>TURN {Math.max(1, s.turn)}</small>
-              {s.phase === 'setup' ? '準備中' : cfg.online?.you === 'spectator' ? `${s.players[s.current].name}の番` : s.current === 0 ? 'あなたの番' : '相手の番'}
+              {s.phase === 'setup' ? '準備中' : s.current === 0 ? 'あなたの番' : '相手の番'}
             </div>
             <div className="turn-flags">
               <span className={s.flags.energyAttached || s.current !== 0 ? 'used' : ''} title="エネルギー">
@@ -1045,18 +1063,18 @@ export function BattleScreen() {
                 <h3>操作ガイド</h3>
                 <ol>
                   <li>
-                    手札のカードは <b>ドラッグ</b> で場に出すか、<b>クリック</b> で選んでから出し先をクリック
+                    手札のカードは <b>ドラッグ</b> で場に出すか、<b>タップ</b> で選んでから出し先をタップ
                   </li>
                   <li>
-                    光っているカードが今使えるカード。エネルギーは1ターンに1枚まで
+                    光っているカードが今使えるカード。エネルギーは1ターンに1枚まで。ワザを使うと自動でターン終了
                   </li>
                   <li>
-                    自分の <b>バトル場のモンスターをクリック</b> するとワザ・特性・にげるのメニュー
+                    自分の <b>バトル場のモンスターをタップ</b> するとワザ・特性・にげるのメニュー
                   </li>
                   <li>
                     カードに <b>マウスを乗せる（スマホは長押し）</b> と拡大表示。右上の本アイコンでログ
                   </li>
-                  <li>相手のサイドを6枚とれば勝ち！Ωモンスターを倒すと2枚とれる</li>
+                  <li>相手のサイドを6枚とれば勝ち！★4を倒すと2枚、★5なら3枚とれる</li>
                 </ol>
                 <button
                   className="btn big"

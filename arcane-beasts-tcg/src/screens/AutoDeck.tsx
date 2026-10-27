@@ -73,10 +73,10 @@ export function AutoDeckModal({ onClose, onBuild }: { onClose: () => void; onBui
                 ))}
                 <div className="ad-actions">
                   <button className="btn small ghost" onClick={() => { sfx('button'); onBuild(deck, 'replace'); }}>
-                    編集中のデッキに上書き
+                    編集してから保存
                   </button>
                   <button className="btn small blue" onClick={() => { sfx('button'); onBuild(deck, 'new'); }}>
-                    新しいデッキとして作る
+                    このデッキを使う
                   </button>
                 </div>
               </motion.div>

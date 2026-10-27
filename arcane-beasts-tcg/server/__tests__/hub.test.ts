@@ -26,7 +26,7 @@ class Bot {
   prompt: Prompt | null = null;
   legal: Action[] = [];
   seq = 0;
-  you: 0 | 1 | 'spectator' | null = null;
+  you: 0 | 1 | null = null;
   over: Extract<ServerMsg, { t: 'over' }> | null = null;
   auto = true;
   closed = false;
@@ -225,42 +225,7 @@ describe('online hub', () => {
     expect(b.last('start')?.opp.name).toBe('A');
     expect(hub.stats().waiting).toBe(0);
     await until(() => !!a.over && !!b.over, 60_000);
-    expect(a.over!.rank).toBeUndefined();
   }, 90_000);
-
-  test('ranked games move the ladder; casual ones do not', async () => {
-    const hub = makeHub();
-    const a = new Bot(hub, 'A');
-    const b = new Bot(hub, 'B');
-    a.hello();
-    b.hello();
-    a.say({ t: 'queue', kind: 'ranked', deck: deckOf(0) });
-    b.say({ t: 'queue', kind: 'ranked', deck: deckOf(4) });
-    await until(() => !!a.over && !!b.over, 60_000);
-    const w = a.over!.winner === 0 ? a : a.over!.winner === 1 ? b : null;
-    if (w) {
-      const l = w === a ? b : a;
-      expect(w.over!.rank!.delta).toBe(50);
-      expect(w.over!.rankNow!.wins).toBe(1);
-      expect(l.over!.rank!.delta).toBe(0); // 級: no points lost
-      expect(l.over!.rankNow!.losses).toBe(1);
-    }
-  }, 90_000);
-
-  test('a far-away rank has to wait before it is matched', () => {
-    const hub = makeHub();
-    const a = new Bot(hub, 'A');
-    const b = new Bot(hub, 'B');
-    a.hello();
-    b.hello();
-    hub.store.get(b.id)!.rank.rank = 15;
-    a.say({ t: 'queue', kind: 'ranked', deck: deckOf(0) });
-    b.say({ t: 'queue', kind: 'ranked', deck: deckOf(1) });
-    expect(a.last('start')).toBeUndefined();
-    expect(hub.stats().waiting).toBe(2);
-    a.say({ t: 'cancel' });
-    expect(hub.stats().waiting).toBe(1);
-  });
 
   test('surrender ends the game; an idle player loses on time', async () => {
     const hub = makeHub({ timeScale: 0.002 });
@@ -323,68 +288,17 @@ describe('online hub', () => {
     expect(back.over!.winner).toBe(0);
   });
 
-  test('spectators see the game without hands or prompts', async () => {
+  test('stamps reach the opponent, rate limited', () => {
     const hub = makeHub();
     const a = new Bot(hub, 'A');
     const b = new Bot(hub, 'B');
-    const s = new Bot(hub, 'S');
-    a.hello();
-    b.hello();
-    s.hello();
-    a.say({ t: 'queue', kind: 'random', deck: deckOf(0) });
-    b.say({ t: 'queue', kind: 'random', deck: deckOf(1) });
-    s.say({ t: 'live' });
-    const live = s.last('live')!.games;
-    expect(live).toHaveLength(1);
-    s.say({ t: 'spectate', code: live[0].code });
-    expect(s.last('start')?.you).toBe('spectator');
-    await until(() => !!a.over && !!b.over && !!s.over, 60_000);
-    expect(s.errors()).toEqual([]);
-    expect(s.allStates.length).toBeGreaterThan(20);
-    for (const st of s.allStates) {
-      expect(st.players[0].hand.every((c) => c.cid === HIDDEN_CID)).toBe(true);
-      expect(st.players[1].hand.every((c) => c.cid === HIDDEN_CID)).toBe(true);
-    }
-    expect(s.msgs.every((m) => m.t !== 'batch' || m.prompt === null)).toBe(true);
-    // a spectator cannot play
-    s.say({ t: 'answer', seq: 1, answer: { type: 'choice', index: 0 } });
-    expect(s.errors().at(-1)?.code).toBe('not_in_game');
-  }, 90_000);
-
-  test('friend rooms can be watched by code', () => {
-    const hub = makeHub();
-    const a = new Bot(hub, 'A');
-    const b = new Bot(hub, 'B');
-    const s = new Bot(hub, 'S');
-    a.hello();
-    b.hello();
-    s.hello();
-    a.auto = b.auto = false;
-    a.say({ t: 'create', deck: deckOf(0) });
-    const code = a.last('room')!.room.code;
-    s.say({ t: 'spectate', code });
-    expect(s.errors().at(-1)?.code).toBe('no_room'); // not started yet
-    b.say({ t: 'join', code, deck: deckOf(1) });
-    s.say({ t: 'live' });
-    expect(s.last('live')!.games).toHaveLength(0); // friend games are not listed
-    s.say({ t: 'spectate', code });
-    expect(s.last('start')?.you).toBe('spectator');
-  });
-
-  test('stamps reach the opponent and spectators, rate limited', () => {
-    const hub = makeHub();
-    const a = new Bot(hub, 'A');
-    const b = new Bot(hub, 'B');
-    const s = new Bot(hub, 'S');
-    for (const x of [a, b, s]) (x.hello(), (x.auto = false));
+    for (const x of [a, b]) (x.hello(), (x.auto = false));
     a.say({ t: 'create', deck: deckOf(0) });
     const code = a.last('room')!.room.code;
     b.say({ t: 'join', code, deck: deckOf(1) });
-    s.say({ t: 'spectate', code });
     a.say({ t: 'stamp', id: 'hi' });
     a.say({ t: 'stamp', id: 'hi' });
     expect(b.msgs.filter((m) => m.t === 'stamp')).toEqual([{ t: 'stamp', from: 1, id: 'hi' }]);
-    expect(s.msgs.filter((m) => m.t === 'stamp')).toEqual([{ t: 'stamp', from: 0, id: 'hi' }]);
     expect(a.msgs.some((m) => m.t === 'stamp')).toBe(false);
     a.say({ t: 'stamp', id: '../x' });
   });
