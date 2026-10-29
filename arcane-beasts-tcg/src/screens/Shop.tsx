@@ -16,7 +16,7 @@ import { Icon } from '../ui/Icon';
 import { foley, playMusic, sfx, tearLoop } from '../audio/audio';
 import { particles } from '../battle/particles';
 import { BoosterPack, TEAR_BAND, TEAR_Y, tearClips, tearEdgeFrom } from './pack/BoosterPack';
-import { MeteorCinema, OMEN_COLORS, type OmenTier } from './pack/cinema';
+import { CINE_SLOW, MeteorCinema, OMEN_COLORS, type OmenTier } from './pack/cinema';
 import './pack/pack.css';
 import { vibrate } from '../lib/fx';
 
@@ -510,33 +510,44 @@ const LAUNCH_HOLD = 1.5;
 /** seconds between packs of a bundle leaving one after another */
 const LAUNCH_GAP = 0.11;
 
+/** the thrown pack is handed to the 3D star once it has shrunk to this fraction of its size */
+const HANDOFF_SCALE = 0.06;
+
 /**
- * One pack's flight, as keyframes: a straight line from where it was let go to
- * (dx, dy) px away — the ridge line, where it becomes a point of light. It
- * leaves with the swipe's speed and slows as it recedes (far things cross the
- * screen slowly), shrinking and tipping back as it goes.
+ * One pack's flight, as keyframes. It moves away from you at a steady speed
+ * along a straight line toward the ridge, so true perspective does the rest:
+ * its apparent size is s(t) = 1 / (1 + k·t) and it closes on the ridge point in
+ * exactly that proportion — quick out of the hand, then gliding smaller and
+ * slower into the distance, without ever stopping. (dx, dy): the ridge point,
+ * in px from where it was let go; speed: the swipe, in px/s.
  */
-function flightPath(dx: number, dy: number, speed: number) {
-  const dist = Math.hypot(dx, dy);
-  const dur = Math.max(0.55, Math.min(0.85, 0.95 - speed / 7000));
-  const K = 2.4;
-  const N = 10;
+function flightPath(dx: number, dy: number, speed: number, tilt0 = 0, lean0 = 0) {
+  const dist = Math.max(1, Math.hypot(dx, dy));
+  // s falls from 1 to HANDOFF_SCALE: k·dur = 1/HANDOFF_SCALE - 1, and the
+  // starting speed on screen is dist·k — matched to the swipe as far as is sensible
+  const kd = 1 / HANDOFF_SCALE - 1;
+  const dur = Math.max(0.75, Math.min(1.35, (dist * kd) / Math.max(1200, speed))) * CINE_SLOW;
+  const N = 18;
   const x: number[] = [];
   const y: number[] = [];
   const rotateX: number[] = [];
+  const rotate: number[] = [];
   const scale: number[] = [];
-  const opacity: number[] = [];
+  const times: number[] = [];
   for (let i = 0; i <= N; i++) {
     const t = i / N;
-    const e = 1 - Math.pow(1 - t, K);
-    x.push(dx * e);
-    y.push(dy * e);
-    rotateX.push(55 * Math.pow(e, 0.8));
-    scale.push(1 - 0.96 * Math.pow(e, 0.7));
-    opacity.push(t < 0.85 ? 1 : 1 - (t - 0.85) / 0.15);
+    const sc = 1 / (1 + kd * t);
+    x.push(dx * (1 - sc));
+    y.push(dy * (1 - sc));
+    // it settles a little flatter as it goes (seen from slightly above), no more
+    // it leaves with the tilt and lean it had in the hand, then settles a
+    // little flatter as it goes (seen from slightly above)
+    rotateX.push(tilt0 + (18 - tilt0) * (1 - sc));
+    rotate.push(lean0 * sc);
+    scale.push(sc);
+    times.push(t);
   }
-  void dist;
-  return { x, y, rotateX, scale, opacity, dur };
+  return { x, y, rotateX, rotate, scale, times, dur };
 }
 
 function PackLaunch({
@@ -586,7 +597,7 @@ function PackLaunch({
       const to = aim(sx + fan) ?? { x: sx + fan, y: sy - H * 0.38 };
       // always away from you, up the screen: never drop toward the lake
       to.y = Math.min(to.y, sy - H * 0.12);
-      return flightPath(to.x - sx, to.y - sy, speed);
+      return flightPath(to.x - sx, to.y - sy, speed, tipBack.get(), tilt.get() + restOf(o).rotate);
     });
     const still = () => {
       x.stop();
@@ -605,7 +616,8 @@ function PackLaunch({
         paths.map((p, o) => ({
           x: cx + from.x + restOf(o).x + p.x[p.x.length - 1],
           y: cy + from.y + restOf(o).y + p.y[p.y.length - 1],
-          delay: o * LAUNCH_GAP + p.dur * 0.88,
+          // in the cinematic's own seconds (it runs CINE_SLOW times slower when debugging)
+          delay: (o * LAUNCH_GAP + p.dur * 0.93) / CINE_SLOW,
         })),
       );
     }
@@ -616,7 +628,7 @@ function PackLaunch({
         foley.whoosh();
         vibrate(o === 0 ? 18 : 8);
       }, o * LAUNCH_GAP * 1000);
-    setTimeout(onGone, ((n - 1) * LAUNCH_GAP + paths[0].dur * 0.85) * 1000);
+    setTimeout(onGone, ((n - 1) * LAUNCH_GAP + paths[0].dur * 0.95) * 1000);
   };
 
   return (
@@ -660,18 +672,22 @@ function PackLaunch({
                     ? {
                         x: path.x.map((v) => v + rest.x + from.x),
                         y: path.y.map((v) => v + rest.y + from.y),
-                        rotate: 0,
+                        rotate: path.rotate,
                         rotateX: path.rotateX,
                         scale: path.scale,
-                        opacity: path.opacity,
-                        filter: ['brightness(1)', 'brightness(1.5)', 'brightness(2.6)'],
+                        // it stays itself all the way; only at the very end does the 3D star take over
+                        opacity: [1, 1, 0],
                       }
                     : rest
                 }
-                transition={path ? { duration: path.dur, delay: order * LAUNCH_GAP, ease: 'linear' } : { duration: 0.3 }}
+                transition={
+                  path
+                    ? { duration: path.dur, delay: order * LAUNCH_GAP, ease: 'linear', times: path.times, opacity: { duration: path.dur, delay: order * LAUNCH_GAP, times: [0, 0.93, 1] } }
+                    : { duration: 0.3 }
+                }
               >
                 <BoosterPack booster={booster} still={k !== n - 1} />
-                {path && <motion.i className="launch-trail" initial={{ opacity: 0, scaleY: 0.2 }} animate={{ opacity: [0, 0.9, 0.7, 0], scaleY: [0.2, 1, 1.3, 1.5] }} transition={{ duration: path.dur, delay: order * LAUNCH_GAP, times: [0, 0.25, 0.75, 1] }} />}
+                {path && <motion.i className="launch-trail" initial={{ opacity: 0, scaleY: 0.2 }} animate={{ opacity: [0, 0.55, 0], scaleY: [0.2, 1, 1.2] }} transition={{ duration: path.dur * 0.5, delay: order * LAUNCH_GAP, times: [0, 0.3, 1] }} />}
               </motion.div>
             );
           })}

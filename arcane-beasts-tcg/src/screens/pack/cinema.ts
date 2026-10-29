@@ -70,7 +70,7 @@ export interface CinemaOptions {
   holdAt?: number;
 }
 
-const CINE_SLOW = typeof location !== 'undefined' ? Math.max(1, Number(new URLSearchParams(location.search).get('cineslow')) || 1) : 1;
+export const CINE_SLOW = typeof location !== 'undefined' ? Math.max(1, Number(new URLSearchParams(location.search).get('cineslow')) || 1) : 1;
 const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
 const smooth = (a: number, b: number, t: number) => {
   const x = clamp01((t - a) / (b - a));
@@ -1297,7 +1297,9 @@ export class MeteorCinema {
     // 3D stays straight on screen), shrinking toward the horizon until the far range
     // hides it. There it glows in the omen colour; then the sky flashes and the
     // shower comes down from the flash.
-    const RISE = 1.3;
+    // the DOM pack has already flown most of the way: the star only closes the last
+    // stretch (same steady recession) and sinks behind the peaks
+    const RISE = 0.75;
     if (this.rise && t >= this.rise.t0 - 0.02) {
       this.rise.from ??= this.worldAt(this.rise.screen);
       const { t0 } = this.rise;
@@ -1308,7 +1310,8 @@ export class MeteorCinema {
         this.behind = new THREE.Vector3(camPos.x + flat.x * BEHIND_DIST, AIM_Y, camPos.z + flat.z * BEHIND_DIST);
       }
       const k = clamp01((t - t0) / RISE);
-      const e = 1 - Math.pow(1 - k, 2.2);
+      // steady speed away from you (perspective already slows it on screen)
+      const e = k;
       // out along the line of sight to the ridge (so it stays put on screen and
       // shrinks into the distance), then it sinks behind the peaks at the end
       const pos = from.clone().lerp(this.behind, e);
@@ -1318,14 +1321,16 @@ export class MeteorCinema {
       this.riseCore.visible = this.riseHalo.visible = vis > 0.001;
       this.riseCore.position.copy(pos);
       this.riseHalo.position.copy(pos);
-      this.riseCore.scale.setScalar(d * 0.04 * (1 - 0.5 * e));
-      this.riseHalo.scale.setScalar(d * 0.16 * (1 - 0.55 * e));
+      // it starts the size the pack was when it was handed over, and keeps shrinking
+      const far = 1 - 0.6 * e;
+      this.riseCore.scale.setScalar(d * 0.012 * far);
+      this.riseHalo.scale.setScalar(d * 0.05 * far);
       (this.riseCore.material as THREE.SpriteMaterial).opacity = vis;
       (this.riseHalo.material as THREE.SpriteMaterial).opacity = vis * 0.8;
       if (vis > 0 && k < 0.9 && Math.random() < 0.7) this.emit(pos, 1, d * 0.01, -0.4);
 
       // 予兆: the light behind the mountains swells, breathes, then gives way to the flash
-      const landed = t0 + RISE - 0.1;
+      const landed = t0 + RISE - 0.05;
       const swell = smooth(landed, landed + 0.5, t) * (1 - smooth(T_FLASH - 0.05, T_FLASH + 0.25, t));
       const breathe = 1 + 0.12 * Math.sin((t - landed) * 7);
       if (t >= landed + 0.3) this.beat('twinkle');
@@ -1354,15 +1359,15 @@ export class MeteorCinema {
           e.aimed = true;
         }
         const kk = clamp01((t - s0) / RISE);
-        const p = e.from.clone().lerp(e.to, 1 - Math.pow(1 - kk, 2.2));
+        const p = e.from.clone().lerp(e.to, kk);
         p.y += (BEHIND_Y - p.y) * smooth(0.72, 1, kk);
         const ev = smooth(s0 - 0.02, s0 + 0.1, t) * (1 - smooth(s0 + RISE - 0.05, s0 + RISE + 0.1, t));
         const dd = p.distanceTo(camPos);
         e.core.visible = e.halo.visible = ev > 0.001;
         e.core.position.copy(p);
         e.halo.position.copy(p);
-        e.core.scale.setScalar(dd * 0.025 * (1 - 0.5 * kk));
-        e.halo.scale.setScalar(dd * 0.09 * (1 - 0.5 * kk));
+        e.core.scale.setScalar(dd * 0.009 * (1 - 0.6 * kk));
+        e.halo.scale.setScalar(dd * 0.035 * (1 - 0.6 * kk));
         (e.core.material as THREE.SpriteMaterial).opacity = ev * (e.core.userData.max as number);
         (e.halo.material as THREE.SpriteMaterial).opacity = ev * (e.halo.userData.max as number);
       }
