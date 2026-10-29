@@ -587,42 +587,14 @@
 }
 
 /* ---------------------------------- Back --------------------------------- */
-.tcg-back .tcg-frame {
-  background: linear-gradient(135deg, #3a2a10, #c9962b 20%, #5e4411 40%, #e8c567 60%, #4a3410 80%, #c9962b);
-  padding: 2.6cqw;
-}
-.back-inner {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  border-radius: 3cqw;
-  overflow: hidden;
-  display: grid;
-  place-items: center;
-  background: radial-gradient(90% 70% at 50% 45%, #1b2a6e 0%, #0f1a4a 55%, #080d28 100%);
-  box-shadow: inset 0 0 0 0.4cqw rgba(0, 0, 0, 0.45);
-}
-.back-line { position: absolute; inset: 3.4cqw; border-radius: 1.6cqw; border: 0.35cqw solid rgba(233, 196, 106, 0.45); pointer-events: none; }
-.back-mark { width: 40cqw; height: 40cqw; color: #e2bd62; filter: drop-shadow(0 0 1.6cqw rgba(233, 196, 106, 0.35)); }
-.back-name {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 9cqw;
-  text-align: center;
-  font-family: 'Cinzel', serif;
-  font-weight: 700;
-  font-size: 5.2cqw;
-  letter-spacing: 0.32em;
-  padding-left: 0.32em;
-  color: #e2bd62;
-  opacity: 0.85;
-}
+/* the back is a single painting: a silver compass star on black */
+.tcg-back .tcg-frame { background: #0b0d11; padding: 0; overflow: hidden; }
+.back-art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; -webkit-user-drag: none; }
 .back-sheen {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: linear-gradient(115deg, transparent 35%, rgba(255, 240, 200, 0.1) 48%, transparent 60%);
+  background: linear-gradient(115deg, transparent 35%, rgba(235, 242, 255, 0.12) 48%, transparent 60%);
   background-size: 260% 100%;
   animation: back-sheen 7s ease-in-out infinite;
   mix-blend-mode: screen;

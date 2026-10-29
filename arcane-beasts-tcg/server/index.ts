@@ -17,7 +17,12 @@ import { PlayerStore } from './players';
 import { backendFromEnv } from './remote';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
-const root = resolve(process.env.WEB_DIR ?? join(here, '..', 'dist'));
+// the game: WEB_DIR, else the prebuilt web/ that ships with the repo (so the
+// host does not have to build it), else a local dist/ build
+const prebuilt = join(here, '..', 'web');
+const root = resolve(process.env.WEB_DIR ?? (existsSync(join(prebuilt, 'index.html')) ? prebuilt : join(here, '..', 'dist')));
+/** images, sounds and the service worker are not copied into web/: they are served from public/ */
+const extra = resolve(join(here, '..', 'public'));
 const port = Number(process.env.PORT ?? 8787);
 const dataDir = resolve(process.env.DATA_DIR ?? join(here, '..', 'data'));
 
@@ -34,6 +39,7 @@ const MIME: Record<string, string> = {
   '.mp3': 'audio/mpeg',
   '.ogg': 'audio/ogg',
   '.woff2': 'font/woff2',
+  '.woff': 'font/woff',
   '.ico': 'image/x-icon',
 };
 
@@ -48,7 +54,14 @@ const stamp = () => new Date().toISOString().slice(11, 19);
 const hub = new Hub({ store, log: (m) => console.log(`[${stamp()}] ${m}`) });
 
 function serve(req: IncomingMessage, res: ServerResponse) {
-  const url = new URL(req.url ?? '/', 'http://x');
+  // a malformed path (e.g. "//") must not take the whole server down
+  let url: URL;
+  try {
+    url = new URL((req.url ?? '/').replace(/^\/+/, '/'), 'http://x');
+  } catch {
+    res.writeHead(400).end();
+    return;
+  }
   if (url.pathname === '/api/info') {
     res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
     res.end(JSON.stringify({ publicUrl: process.env.PUBLIC_URL?.replace(/\/+$/, '') || null }));
@@ -66,7 +79,9 @@ function serve(req: IncomingMessage, res: ServerResponse) {
     res.writeHead(403).end();
     return;
   }
-  const target = existsSync(file) && statSync(file).isFile() ? file : join(root, 'index.html');
+  const isFile = (f: string) => existsSync(f) && statSync(f).isFile();
+  const fromExtra = normalize(join(extra, rel));
+  const target = isFile(file) ? file : fromExtra.startsWith(extra + sep) && isFile(fromExtra) ? fromExtra : join(root, 'index.html');
   if (!existsSync(target)) {
     res.writeHead(503, { 'content-type': 'text/plain; charset=utf-8' });
     res.end('ゲームがまだビルドされていません。先に npm run build を実行してください。');

@@ -357,17 +357,8 @@ export const CardBack = memo(function CardBack({ className, style }: { className
   return (
     <div className={`tcg tcg-back ${className ?? ''}`} style={style}>
       <div className="tcg-frame">
-        <div className="back-inner">
-          <div className="back-line" />
-          <svg className="back-mark" viewBox="0 0 100 100" aria-hidden>
-            <circle cx="50" cy="50" r="46" fill="none" stroke="currentColor" strokeWidth="1.6" />
-            <circle cx="50" cy="50" r="40" fill="none" stroke="currentColor" strokeWidth="0.6" opacity="0.55" />
-            <path d="M50 18 L55 45 L82 50 L55 55 L50 82 L45 55 L18 50 L45 45 Z" fill="currentColor" />
-            <circle cx="50" cy="50" r="4" fill="#0b1336" />
-          </svg>
-          <div className="back-name">ARCANE BEASTS</div>
-          <div className="back-sheen" />
-        </div>
+        <img className="back-art" src={artUrl('card-back')} alt="" draggable={false} />
+        <div className="back-sheen" />
       </div>
     </div>
   );

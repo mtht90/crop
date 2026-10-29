@@ -4,8 +4,9 @@ services:
     name: arcane-beasts
     runtime: node
     plan: free
-    # the build needs the dev dependencies (vite, TypeScript), so ask npm for them explicitly
-    buildCommand: npm ci --include=dev && npm run build:web
+    # the game is built before it is pushed (web/ is in the repository), so the
+    # host only installs what the server needs — no build, well inside the free plan's memory
+    buildCommand: npm ci --omit=dev
     startCommand: npm run server
     healthCheckPath: /healthz
     envVars:

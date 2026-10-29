@@ -12,7 +12,9 @@ export default defineConfig(({ mode }) => ({
   build: {
     target: 'es2022',
     chunkSizeWarningLimit: 1500,
-    outDir: mode === 'artifact' ? 'dist-artifact' : 'dist',
+    outDir: mode === 'artifact' ? 'dist-artifact' : mode === 'deploy' ? 'web' : 'dist',
+    // the deploy build ships only the code: the server serves public/ itself
+    copyPublicDir: mode !== 'deploy',
     ...(mode === 'artifact' ? { assetsInlineLimit: 0, cssCodeSplit: false, rollupOptions: { output: { inlineDynamicImports: true } } } : {}),
   },
   server: { proxy: { '/ws': { target: 'ws://127.0.0.1:8787', ws: true } } },
