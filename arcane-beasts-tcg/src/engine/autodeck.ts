@@ -26,10 +26,10 @@ const MONSTERS = MAIN_SET.filter((c): c is MonsterCard => c.kind === 'monster');
 
 export const ownedOfName = (name: string, owned: OwnedFn) => (printingsByName.get(name) ?? []).reduce((n, c) => n + owned(c.id), 0);
 
-/** strongest monsters you own, as ace candidates (★4/★5 and final evolutions first) */
+/** strongest monsters you own, as ace candidates (the aces and final evolutions first) */
 export function aceCandidates(owned: OwnedFn): MonsterCard[] {
   const hasEvolution = new Set(MONSTERS.map((m) => m.evolvesFrom).filter(Boolean));
-  return MONSTERS.filter((m) => ownedOfName(m.name, owned) > 0 && !hasEvolution.has(m.name) && (m.stage !== 'basic' || m.rarity >= 4 || m.hp >= 110))
+  return MONSTERS.filter((m) => ownedOfName(m.name, owned) > 0 && !hasEvolution.has(m.name) && (m.stage !== 'basic' || m.ace || m.hp >= 110))
     .map((m) => ({ m, v: power(m) }))
     .sort((a, b) => b.v - a.v)
     .map((x) => x.m);
@@ -37,7 +37,7 @@ export function aceCandidates(owned: OwnedFn): MonsterCard[] {
 
 function power(m: MonsterCard) {
   const dmg = Math.max(0, ...m.attacks.map((a) => a.damage ?? 30));
-  return dmg + m.hp * 0.35 + (m.ability ? 25 : 0) + (m.rarity === 5 ? 45 : m.rarity === 4 ? 30 : 0) + (m.stage === 'stage2' ? 15 : 0);
+  return dmg + m.hp * 0.35 + (m.ability ? 25 : 0) + (m.ace ? 30 : 0) + (m.stage === 'stage2' ? 15 : 0);
 }
 
 /** the evolution chain ending at `top` (basic first) */
@@ -120,7 +120,7 @@ export function buildDeck(aceName: string, owned: OwnedFn): AutoDeck {
   const hasStage2 = [...inDeck].some((n) => (byName(n) as MonsterCard).stage === 'stage2');
   const hasRule = [...inDeck].some((n) => {
     const m = byName(n) as MonsterCard;
-    return m.rarity >= 4;
+    return m.hp >= 150;
   });
   const STADIUM: Partial<Record<EType, string>> = { fire: '灼熱の火山帯', water: '嵐の海岸', grass: 'エルフの森', dark: '呪われた地下墓地', fighting: 'ドワーフの坑道', psychic: '古代の遺跡', lightning: '雷鳴の頂', colorless: '天空の浮島' };
   const trainers: [string, number, boolean?][] = [

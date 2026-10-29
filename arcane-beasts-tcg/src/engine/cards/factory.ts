@@ -1,10 +1,14 @@
 // Card factories shared by every set
 import type { Ability, Attack, EType, LegacyRarity, MonsterCard, Rarity, SetCode, Stage, TrainerCard, TrainerSub } from '../types';
 
-const STAR: Record<LegacyRarity, Rarity> = { C: 1, U: 2, R: 3, RR: 4 };
+// ★ now says how rare a printing is: regular cards are ★1–★3, the special
+// printings carry ★3 (illustration), ★4 (full art, shiny) and ★5 (gold).
+const STAR: Record<LegacyRarity, Rarity> = { C: 1, U: 2, R: 3, RR: 3 };
 
-/** the few ★5 monsters: the strongest of what used to be EX */
-export const FIVE_STAR = new Set(['ドラグーン', 'クイーンアント', 'リッチロード', 'アークウィッチ', 'グランドナイト']);
+/** the old EX / Ω monsters are ordinary ★3 cards now: their stats come down to the top of the ★3 range */
+const ACE_HP: Record<Stage, [number, number]> = { basic: [130, 170], stage1: [140, 180], stage2: [170, 210] };
+const ACE_TOP: Record<Stage, number> = { basic: 130, stage1: 140, stage2: 160 };
+const round10 = (n: number) => Math.round(n / 10) * 10;
 
 const WEAK: Record<EType, EType | undefined> = {
   fire: 'water',
@@ -20,19 +24,21 @@ const WEAK: Record<EType, EType | undefined> = {
 type Opt = Partial<Pick<MonsterCard, 'evolvesFrom' | 'weakness' | 'resistance' | 'flavor' | 'scene'>> & {
   ability?: Ability;
   noWeak?: boolean;
-  /** the old "Ω" mark in the card lists: becomes ★4 */
+  /** the old "Ω" mark in the card lists: now a regular ★3 (an ace) */
   omega?: boolean;
-  /** the old "EX" mark: ★5 for the few in FIVE_STAR, ★4 for the rest */
+  /** the old "EX" mark: now a regular ★3 (an ace) */
   ex?: boolean;
 };
 
-/** the big attack of a ★4 / ★5 monster, nudged to fit its tier */
-function adjustTop(attacks: Attack[], by: number): Attack[] {
-  let top = -1;
-  attacks.forEach((a, i) => {
-    if ((a.damage ?? 0) > (attacks[top]?.damage ?? -1)) top = i;
-  });
-  return attacks.map((a, i) => (i === top && a.damage ? { ...a, damage: Math.max(10, a.damage + by) } : a));
+/** an old EX / Ω monster brought down to ordinary ★3 strength */
+function aceStats(stage: Stage, hp: number, attacks: Attack[]): { hp: number; attacks: Attack[] } {
+  const [lo, hi] = ACE_HP[stage];
+  const top = Math.max(1, ...attacks.map((a) => a.damage ?? 0));
+  const k = Math.min(0.7, ACE_TOP[stage] / top);
+  return {
+    hp: Math.max(lo, Math.min(hi, round10(hp * 0.6))),
+    attacks: attacks.map((a) => (a.damage ? { ...a, damage: Math.max(10, round10(a.damage * k)) } : a)),
+  };
 }
 
 export function monsterFactory(set: SetCode) {
@@ -51,15 +57,9 @@ export function monsterFactory(set: SetCode) {
 ): MonsterCard {
   counter++;
   const no = counter;
-  const rarity: Rarity = opt.ex ? (FIVE_STAR.has(name) ? 5 : 4) : opt.omega ? 4 : STAR[legacy];
-  // ★5 carries 3 prizes: a little more HP and punch. Former EX that are now ★4 come down to the ★4 level.
-  if (rarity === 5) {
-    hp += 30;
-    attacks = adjustTop(attacks, 20);
-  } else if (opt.ex) {
-    hp -= 30;
-    attacks = adjustTop(attacks, -20);
-  }
+  const ace = !!(opt.ex || opt.omega);
+  const rarity: Rarity = ace ? 3 : STAR[legacy];
+  if (ace) ({ hp, attacks } = aceStats(stage, hp, attacks));
   return {
     kind: 'monster',
     id: `${set}-${String(no).padStart(3, '0')}`,
@@ -78,6 +78,7 @@ export function monsterFactory(set: SetCode) {
     resistance: opt.resistance,
     evolvesFrom: opt.evolvesFrom,
     ability: opt.ability,
+    ace: ace || undefined,
     flavor: opt.flavor,
     scene: opt.scene,
   };

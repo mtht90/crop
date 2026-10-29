@@ -93,7 +93,7 @@ export function describeEffect(e: AttackEffect): string {
     case 'bonusPerDiscardMonster':
       return `自分のトラッシュにあるモンスターの数×${e.per}ダメージ追加。${e.max ? `（追加は最大${e.max}ダメージ）` : ''}`;
     case 'bonusIfOmega':
-      return `相手のバトルモンスターが★4以上なら、${e.bonus}ダメージ追加。`;
+      return `相手のバトルモンスターがHP150以上なら、${e.bonus}ダメージ追加。`;
     case 'bonusPerHand':
       return `${e.whose === 'self' ? '自分' : '相手'}の手札の枚数×${e.per}ダメージ追加。${e.max ? `（追加は最大${e.max}ダメージ）` : ''}`;
     case 'bonusPerTrash':
@@ -175,7 +175,7 @@ export const RARITY_NAME: Record<Rarity, string> = { 1: '★1', 2: '★2', 3: '�
 /** the colour each ★ shows in (pack opening, badges): grey, blue, gold, rainbow, rainbow-gold */
 export const RARITY_COLOR: Record<Rarity, string> = { 1: '#b8bec9', 2: '#5ab0ff', 3: '#ffc245', 4: '#ff79d6', 5: '#fff1a8' };
 /** prize cards taken when this monster is knocked out */
-export const prizesOf = (r: Rarity) => (r === 5 ? 3 : r === 4 ? 2 : 1);
+
 
 export type Model = 'normal' | 'mirror' | 'illust' | 'fullart' | 'shiny' | 'gold';
 export const MODEL_NAME: Record<Model, string> = {
@@ -233,7 +233,7 @@ export const SET_COUNT: Record<SetCode, number> = { AB1: MAIN1.length, AB2: MAIN
 //   AR     … illustration rare: the art spreads over the whole card
 //   CHR    … character rare: the monster together with its trainer
 //   S      … shiny: rare colouring with a star-foil frame
-//   SR     … full-art ★4 / ★5 / supporter
+//   SR     … full art (★4): the aces and some supporters
 //   SAR    … special art: dramatic close-up illustration
 //   UR     … gold
 // --------------------------------------------------------------------------
@@ -248,8 +248,9 @@ function named(name: string): CardDef {
 }
 
 function alt(base: CardDef, v: Variant, extra: Partial<CardDef> = {}) {
-  // a special printing keeps the ★ of the card it reprints
-  const rarity: Rarity = base.rarity;
+  // the ★ of a printing is its rarity: illustrations ★3, full art and shiny ★4,
+  // gold ★5; a mirror keeps the ★ of the card it reprints
+  const rarity: Rarity = v === 'UR' ? 5 : v === 'SR' || v === 'S' ? 4 : v === 'mirror' ? base.rarity : 3;
   const no = v === 'mirror' ? base.no : ++secret[base.set];
   VARIANTS.push({
     ...base,
@@ -295,7 +296,7 @@ const PLAN: Record<SetCode, SetVariants> = {
       ['エルフキャプテン', 'elves/druid'],
     ],
     S: [['グランティ', 200], ['エルフスカウト', 60], ['ゾンビラット', 280], ['ミスティック', 120], ['カヌー', 20], ['ドワーフガード', 320]],
-    SR: [...MONSTERS3.filter((x) => x.rarity >= 4).map((x) => x.name), '傭兵の契約', '案内人の笛', '族長の号令'],
+    SR: [...MONSTERS3.filter((x) => x.ace).map((x) => x.name), '傭兵の契約', '案内人の笛', '族長の号令'],
     SAR: [
       ['タウロクプロテクター', undefined, 'story/p-burning'],
       ['ナーガウォーロード', undefined, 'story/p-storm-sea'],
@@ -307,7 +308,7 @@ const PLAN: Record<SetCode, SetVariants> = {
       ['グランドナイト', undefined, 'story/landscape-castle'],
       ['傭兵の契約', undefined, 'story/p-shadows'],
     ],
-    UR: [...MONSTERS3.filter((x) => x.rarity >= 4).map((x) => x.name), 'サイキックメイジ', 'ドワーフロード', '傭兵の契約'],
+    UR: [...MONSTERS3.filter((x) => x.ace).map((x) => x.name), 'サイキックメイジ', 'ドワーフロード', '傭兵の契約'],
   },
   AB1: {
     AR: [
@@ -326,7 +327,7 @@ const PLAN: Record<SetCode, SetVariants> = {
       ['レヴナント', 'undead/ancient-lich'],
     ],
     S: [['ヒオネコ', 200], ['ワイバーン', 110], ['アカオオカミ', 190], ['オオツチグモ', 250], ['ゴースト', 150], ['ディープテンタクル', 90]],
-    SR: [...MONSTERS.filter((x) => x.rarity >= 4).map((x) => x.name), '大賢者の研究', '司令官の号令', '盗賊団の手引き', '白魔導士の祈り'],
+    SR: [...MONSTERS.filter((x) => x.ace).map((x) => x.name), '大賢者の研究', '司令官の号令', '盗賊団の手引き', '白魔導士の祈り'],
     SAR: [
       ['ヴォルカリオン', undefined, 'story/p-burning'],
       ['リヴァイアサーペント', { scale: 1.1, x: 40, y: 14 }, 'story/p-storm-sea'],
@@ -353,7 +354,7 @@ const PLAN: Record<SetCode, SetVariants> = {
       ['ツカイマ', 'humans/mage-red+female'],
     ],
     S: [['ドレイクファイター', 170], ['ナーガソルジャー', 260], ['クサレオオカミ', 200], ['シルフ', 300], ['ワーム', 190], ['ユキダマ', 300]],
-    SR: [...MONSTERS2.filter((x) => x.rarity >= 4).map((x) => x.name), '騎士の突撃', '暗殺者の刃', '聖騎士の加護'],
+    SR: [...MONSTERS2.filter((x) => x.ace).map((x) => x.name), '騎士の突撃', '暗殺者の刃', '聖騎士の加護'],
     SAR: [
       ['ドラグーン', undefined, 'story/p-drake-fleet'],
       ['ナーガクイーン', undefined, 'story/p-wild-sea'],
@@ -364,7 +365,7 @@ const PLAN: Record<SetCode, SetVariants> = {
       ['ヴァンパイア', { scale: 1.2 }, 'story/p-graves'],
       ['暗殺者の刃', undefined, 'story/p-shadows'],
     ],
-    UR: [...MONSTERS2.filter((x) => x.rarity >= 4).map((x) => x.name), '賢者の水晶', '覇者の紋章'],
+    UR: [...MONSTERS2.filter((x) => x.ace).map((x) => x.name), '賢者の水晶', '覇者の紋章'],
   },
 };
 
@@ -372,7 +373,8 @@ for (const set of SETS) {
   const main = MAIN_OF[set];
   for (const c of main) {
     const basicEnergy = c.kind === 'energy' && c.basic;
-    if (!basicEnergy && c.rarity <= 3) alt(c, 'mirror');
+    // (the old EX / Ω aces get full-art and gold printings instead, as before)
+    if (!basicEnergy && !(c.kind === 'monster' && c.ace)) alt(c, 'mirror');
   }
   const plan = PLAN[set];
   const withScene = (scene?: string) => (scene ? { scene } : {});

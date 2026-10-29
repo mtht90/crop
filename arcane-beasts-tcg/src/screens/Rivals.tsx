@@ -35,7 +35,7 @@ export function Rivals() {
   const rdeck = deckById(r.deck);
   const keyCards = rdeck.cards
     .map(([n]) => byName(n))
-    .filter((c) => c.kind === 'monster' && (c.rarity >= 4 || c.stage === 'stage2'))
+    .filter((c) => c.kind === 'monster' && (c.ace || c.stage === 'stage2'))
     .slice(0, 3);
 
   const fight = (spectate = false) => {

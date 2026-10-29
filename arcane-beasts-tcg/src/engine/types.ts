@@ -17,8 +17,9 @@ export const ALL_TYPES: EType[] = [...ENERGY_TYPES, 'colorless'];
 
 export type Stage = 'basic' | 'stage1' | 'stage2';
 /**
- * ★1 – ★5, by strength alone. ★4 monsters give 2 prize cards when knocked out,
- * ★5 monsters 3. Special printings keep the ★ of the card they reprint.
+ * ★1 – ★5: how rare a printing is. Regular cards are ★1–★3 by strength;
+ * illustrations are ★3, full art and shiny ★4, gold ★5 (mirrors keep their
+ * card's ★). Every monster gives one prize card.
  */
 export type Rarity = 1 | 2 | 3 | 4 | 5;
 /** how the card lists write rarity (common / uncommon / rare); turned into ★ when the cards are built */
@@ -136,6 +137,8 @@ export interface MonsterCard extends CardBase {
   retreat: number;
   attacks: Attack[];
   ability?: Ability;
+  /** a former EX / Ω monster: an ordinary ★3 now, but the deck's star (gets the full-art and gold printings) */
+  ace?: boolean;
   species: string;
   scene?: string; // override background landscape
 }

@@ -140,7 +140,6 @@ function SlotView({ s, slot, pos, highlight, selectable, onClick, big }: SlotPro
           ))}
         </div>
       )}
-      {mc.rarity >= 4 && <div className={`omega-glow ${mc.rarity === 5 ? 'ex' : ''}`} />}
     </div>
   );
 }
@@ -1074,7 +1073,7 @@ export function BattleScreen() {
                   <li>
                     カードに <b>マウスを乗せる（スマホは長押し）</b> と拡大表示。右上の本アイコンでログ
                   </li>
-                  <li>相手のサイドを6枚とれば勝ち！★4を倒すと2枚、★5なら3枚とれる</li>
+                  <li>相手のモンスターを倒すたびにサイドを1枚。6枚とれば勝ち！</li>
                 </ol>
                 <button
                   className="btn big"

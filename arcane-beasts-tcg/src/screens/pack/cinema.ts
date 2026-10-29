@@ -1134,14 +1134,14 @@ export class MeteorCinema {
   }
 
   /** aura around the pack: tier colour, visibility, and "hot" (trembling before 昇格) */
-  setAura(tier: OmenTier, visible: boolean, hot: boolean) {
+  setAura(tier: OmenTier, visible: boolean, hot: boolean, amt = 1) {
     if (tier !== this.auraTier) {
       this.auraTier = tier;
       this.pulse = 1;
       (this.aura.material as THREE.ShaderMaterial).uniforms.uRainbow.value = OMEN_RAINBOW[tier];
       (this.aura.material as THREE.ShaderMaterial).uniforms.uTier.value = tier;
     }
-    this.auraTarget = visible ? 1 : 0;
+    this.auraTarget = visible ? Math.max(0, Math.min(1, amt)) : 0;
     this.auraHotTarget = hot ? 1 : 0;
   }
 

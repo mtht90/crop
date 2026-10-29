@@ -805,39 +805,44 @@
   background-size: 100% 100%, 300% 300%;
 }
 
-/* ------------------------------ S (shiny) ------------------------------- */
+/* ------------------------------ S (shiny) -------------------------------
+   色違い＋全面ホイル: the card keeps its type colours, the monster comes in its
+   rare colouring, and a fine foil covers the whole card — glitter that
+   catches the light and a rainbow sheen that slides as the card tilts. */
 .tcg.v-S .tcg-frame {
-  background: linear-gradient(135deg, #8d93a1 0%, #1d2029 22%, #b9bfcc 40%, #15171d 58%, #9ea4b1 78%, #22252e 100%);
+  background:
+    linear-gradient(115deg, rgba(255, 255, 255, 0) 30%, rgba(255, 255, 255, 0.85) 48%, rgba(255, 255, 255, 0) 66%) var(--mx) var(--my) / 250% 250%,
+    conic-gradient(from 200deg at 50% 50%, #e8ecff, #ffd6f3, #fff4c2, #c9f7e6, #cfe3ff, #e8ecff);
 }
-.tcg.v-S .tcg-inner { background: radial-gradient(ellipse at 50% 30%, #3b4270 0%, #1a1d38 55%, #0b0c1a 100%); }
-.tcg.v-S .tcg-head, .tcg.v-S .tcg-body, .tcg.v-S .tcg-stats, .tcg.v-S .tcg-footer, .tcg.v-S .tcg-species { color: #f1f2ff; }
-.tcg.v-S .tcg-species { background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.18), transparent); color: #e6e9ff; }
-.tcg.v-S .tcg-head .hp { color: #fff; text-shadow: 0 0.3cqw 0 #2a2d55; }
-.tcg.v-S .tcg-head .name { text-shadow: 0 0.3cqw 0.6cqw rgba(0, 0, 0, 0.8); }
-.tcg.v-S .tcg-head .name::after { content: '✦'; margin-left: 0.8cqw; font-size: 0.7em; color: #ffe9a8; vertical-align: 0.2em; }
-.tcg.v-S .ability { background: rgba(0, 0, 0, 0.3); }
-.tcg.v-S .ab-name { color: #ffe3a0; }
-.tcg.v-S .tcg-art { box-shadow: 0 0 0 0.8cqw #c9cfdc, 0 0 0 1.15cqw rgba(0, 0, 0, 0.5), inset 0 0 3cqw rgba(0, 0, 0, 0.45); }
-.tcg.v-S .tcg-art .scene { filter: grayscale(0.55) brightness(0.55) contrast(1.1); }
+.tcg.v-S .tcg-art { box-shadow: 0 0 0 0.7cqw rgba(255, 255, 255, 0.9), 0 0 0 1.1cqw rgba(160, 170, 220, 0.6), inset 0 0 3cqw rgba(0, 0, 0, 0.3); }
+.tcg.v-S .tcg-art .scene { filter: saturate(0.65) brightness(0.8) hue-rotate(var(--shue, 0deg)); }
+.tcg.v-S .tcg-head .name::after { content: '✦'; margin-left: 0.8cqw; font-size: 0.7em; color: #fff3b0; vertical-align: 0.2em; text-shadow: 0 0 0.8cqw #fff; }
+/* the foil: three layers of fine glitter of different pitch (so they never line
+   up into a grid), each shifting a little with the tilt, over a soft rainbow */
 .tcg-glitter {
   position: absolute;
   inset: 0;
-  z-index: 4;
+  z-index: 6;
   pointer-events: none;
-  background:
-    radial-gradient(circle, rgba(255, 255, 255, 0.95) 0 0.22cqw, transparent 0.5cqw) 0 0 / 7cqw 7cqw,
-    radial-gradient(circle, rgba(255, 236, 170, 0.9) 0 0.18cqw, transparent 0.45cqw) 3.5cqw 2cqw / 9cqw 9cqw,
-    radial-gradient(circle, rgba(170, 220, 255, 0.9) 0 0.18cqw, transparent 0.45cqw) 1.5cqw 5cqw / 11cqw 11cqw;
+  /* two offset copies of the scattered tile (set inline), drifting against each other with the tilt */
+  background-size: 46cqw 46cqw, 31cqw 31cqw;
+  background-position: calc(var(--mx) * 0.08) calc(var(--my) * 0.08), calc(7cqw - var(--mx) * 0.06) calc(11cqw - var(--my) * 0.05);
   mix-blend-mode: screen;
-  opacity: 0.55;
-  animation: glitter 3.2s ease-in-out infinite alternate;
+  opacity: 0.85;
+  -webkit-mask: radial-gradient(farthest-corner circle at var(--mx) var(--my), #000 0%, rgba(0, 0, 0, 0.6) 40%, rgba(0, 0, 0, 0.3) 100%);
+  mask: radial-gradient(farthest-corner circle at var(--mx) var(--my), #000 0%, rgba(0, 0, 0, 0.6) 40%, rgba(0, 0, 0, 0.3) 100%);
+  animation: glitter 2.6s ease-in-out infinite alternate;
 }
-@keyframes glitter { from { opacity: 0.25; } to { opacity: 0.7; } }
-.tcg.interactive .tcg-glitter { animation: none; opacity: calc(0.35 + var(--hyp) * 0.5); }
+@keyframes glitter { from { opacity: 0.5; } to { opacity: 0.9; } }
+.tcg.interactive .tcg-glitter { animation: none; opacity: calc(0.6 + var(--hyp) * 0.4); }
 .v-S .tcg-shine {
-  opacity: 0.22;
-  background: repeating-linear-gradient(115deg, rgba(220, 230, 255, 0.8) 0%, rgba(120, 130, 170, 0.4) 10%, rgba(255, 255, 255, 0.85) 20%, rgba(120, 130, 170, 0.4) 30%, rgba(220, 230, 255, 0.8) 40%);
-  background-size: 300% 300%;
+  opacity: 0.42;
+  background:
+    repeating-linear-gradient(120deg, rgba(255, 120, 200, 0.55) 0%, rgba(255, 230, 120, 0.5) 7%, rgba(120, 255, 200, 0.5) 14%, rgba(120, 200, 255, 0.55) 21%, rgba(200, 140, 255, 0.55) 28%, rgba(255, 120, 200, 0.55) 35%);
+  background-size: 260% 260%;
+  background-position: var(--mx) var(--my);
+  mix-blend-mode: color-dodge;
+  filter: brightness(0.9) contrast(1.25);
 }
 
 /* ------------------------------ Rarity marks ----------------------------- */

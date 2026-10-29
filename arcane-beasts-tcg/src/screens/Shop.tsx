@@ -1,7 +1,8 @@
 // ============================================================================
 // Pack opening, modelled on the TCG Pocket flow:
-//   通常 / プレミアム → swipe the pack into the sky → it falls back as a meteor
-//   → trace the top edge to tear it → swipe through the cards (rarest last;
+//   通常 / プレミアム → hold the pack to charge it (its light builds up in the
+//   omen colour and may climb, 昇格) and let go → trace the top edge to tear
+//   it → swipe through the cards (rarest last;
 //   ★4 / ★5 arrive face-down and turn over on tap) → results
 // Effects are light-based (bloom, rings, glints); motion is transform/opacity.
 // ============================================================================
@@ -20,7 +21,7 @@ import { CINE_SLOW, MeteorCinema, OMEN_COLORS, type OmenTier } from './pack/cine
 import './pack/pack.css';
 import { vibrate } from '../lib/fx';
 
-type Phase = 'launch' | 'cinema' | 'tear' | 'reveal' | 'results' | 'multi';
+type Phase = 'tear' | 'reveal' | 'results' | 'multi';
 
 const EASE_OUT = [0.16, 1, 0.3, 1] as const;
 const EASE_IN = [0.7, 0, 0.84, 0] as const;
@@ -286,7 +287,7 @@ function OddsModal({ onClose, premium }: { onClose: () => void; premium?: boolea
           </tbody>
         </table>
         <div className="odds-note">
-          {`すべての弾のカードが出ます。どのカードも${Math.round((premium ? PREMIUM_PRINTING_CHANCE : PRINTING_CHANCE) * 100)}%で特別仕様（ミラー・イラスト・ゴールドなど）になります。特別仕様の★は元のカードと同じです。ごくまれに、すべてが★3以上のパックが出ることがあります。同じカードが${10}枚を超えた分は、自動でコインに交換されます。`}
+          {`すべての弾のカードが出ます。★1〜★3のカードは${Math.round((premium ? PREMIUM_PRINTING_CHANCE : PRINTING_CHANCE) * 100)}%でミラー仕様になります。★3にはイラスト仕様、★4はフルアート・シャイニー仕様、★5はゴールド仕様です（特別仕様でも性能は元のカードと同じ）。ごくまれに、すべてが★3以上のパックが出ることがあります。同じカードが${10}枚を超えた分は、自動でコインに交換されます。`}
         </div>
         <button className="pill ghost" onClick={onClose}>
           閉じる
@@ -306,12 +307,12 @@ interface OpeningProps extends Omit<OpeningState, 'key'> {
 
 function Opening({ booster, cards, god, fresh, sold, packs, onClose, onAgain }: OpeningProps) {
   const u = useUnit();
-  const [phase, setPhase] = useState<Phase>('launch');
+  const [phase, setPhase] = useState<Phase>('tear');
   const cineApi = useRef<CinemaApi | null>(null);
   /** WebGL failed: after the launch go straight to the pack */
   const noCine = useRef(false);
   const omen = useMemo(() => makeOmen(cards, god), [cards, god]);
-  const [aura, setAura] = useState<AuraState>({ tier: omen.shown, visible: false, hot: false });
+  const [aura, setAura] = useState<AuraState>({ tier: omen.shown, visible: false, hot: false, amt: 0 });
   const packSlot = useRef<HTMLDivElement>(null);
   const [idx, setIdx] = useState(0);
   const [revealed, setRevealed] = useState<Set<number>>(new Set());
@@ -347,20 +348,17 @@ function Opening({ booster, cards, god, fresh, sold, packs, onClose, onAgain }: 
     <motion.div ref={root} className="po" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.45, ease: EASE_IN_OUT }}>
       <Backdrop hue={booster.hue} dim={dim} />
       <AnimatePresence>
-        {(phase === 'launch' || phase === 'cinema' || phase === 'tear') && (
+        {phase === 'tear' && (
           <CinemaLayer
             key="cinema"
             omen={omen}
             god={god && packs === 1}
             aura={aura}
-            held={phase === 'launch'}
-            playing={phase === 'cinema'}
+            held
+            playing={false}
             api={cineApi}
             target={() => packSlot.current?.getBoundingClientRect() ?? null}
-            onDone={() => {
-              if (phase === 'launch') noCine.current = true;
-              else setPhase('tear');
-            }}
+            onDone={() => void (noCine.current = true)}
           />
         )}
       </AnimatePresence>
@@ -403,18 +401,8 @@ function Opening({ booster, cards, god, fresh, sold, packs, onClose, onAgain }: 
 
       <div className="stage">
         {/* where the pack will be: the cinematic's light (and later the aura) aims here */}
-        {phase === 'launch' && (
-          <PackLaunch
-            booster={booster}
-            packs={packs}
-            u={u}
-            onLaunch={(pts) => cineApi.current?.release(pts)}
-            aim={(x) => cineApi.current?.aim(x) ?? null}
-            onGone={() => setPhase(noCine.current ? 'tear' : 'cinema')}
-          />
-        )}
 
-        {(phase === 'launch' || phase === 'cinema' || phase === 'tear') && (
+        {phase === 'tear' && (
           <div className="tear-wrap" style={{ visibility: 'hidden', pointerEvents: 'none' }}>
             <div className="tear-float" ref={packSlot} />
           </div>
@@ -498,228 +486,22 @@ function Opening({ booster, cards, god, fresh, sold, packs, onClose, onAgain }: 
 }
 
 // ---------------------------------------------------------------------------
-// 流星降臨: the live-rendered cinematic that delivers the pack
+// The night lake behind the pack (rendered live with three.js): it rises from
+// the water to the mountains and waits there, and draws the pack's aura
 // ---------------------------------------------------------------------------
-// ---------------------------------------------------------------------------
-// Launch: the pack (or a bundle of them) floats over the night lake. Swipe it
-// up and it flies into the sky, becomes a star, and falls back as the meteor.
-// ---------------------------------------------------------------------------
-/** where the cinematic waits (seconds into its opening): the lake, the far peaks, the moon */
-const LAUNCH_HOLD = 1.5;
-
-/** seconds between packs of a bundle leaving one after another */
-const LAUNCH_GAP = 0.11;
-
-/** the thrown pack is handed to the 3D star once it has shrunk to this fraction of its size */
-const HANDOFF_SCALE = 0.06;
-
-/**
- * One pack's flight, as keyframes. It moves away from you at a steady speed
- * along a straight line toward the ridge, so true perspective does the rest:
- * its apparent size is s(t) = 1 / (1 + k·t) and it closes on the ridge point in
- * exactly that proportion — quick out of the hand, then gliding smaller and
- * slower into the distance, without ever stopping. (dx, dy): the ridge point,
- * in px from where it was let go; speed: the swipe, in px/s.
- */
-function flightPath(dx: number, dy: number, speed: number, tilt0 = 0, lean0 = 0) {
-  const dist = Math.max(1, Math.hypot(dx, dy));
-  // s falls from 1 to HANDOFF_SCALE: k·dur = 1/HANDOFF_SCALE - 1, and the
-  // starting speed on screen is dist·k — matched to the swipe as far as is sensible
-  const kd = 1 / HANDOFF_SCALE - 1;
-  const dur = Math.max(0.75, Math.min(1.35, (dist * kd) / Math.max(1200, speed))) * CINE_SLOW;
-  const N = 18;
-  const x: number[] = [];
-  const y: number[] = [];
-  const rotateX: number[] = [];
-  const rotate: number[] = [];
-  const scale: number[] = [];
-  const times: number[] = [];
-  for (let i = 0; i <= N; i++) {
-    const t = i / N;
-    const sc = 1 / (1 + kd * t);
-    x.push(dx * (1 - sc));
-    y.push(dy * (1 - sc));
-    // it settles a little flatter as it goes (seen from slightly above), no more
-    // it leaves with the tilt and lean it had in the hand, then settles a
-    // little flatter as it goes (seen from slightly above)
-    rotateX.push(tilt0 + (18 - tilt0) * (1 - sc));
-    rotate.push(lean0 * sc);
-    scale.push(sc);
-    times.push(t);
-  }
-  return { x, y, rotateX, rotate, scale, times, dur };
-}
-
-function PackLaunch({
-  booster,
-  packs,
-  u,
-  onLaunch,
-  aim,
-  onGone,
-}: {
-  booster: Booster;
-  packs: number;
-  u: number;
-  onLaunch: (points: { x: number; y: number; delay: number }[]) => void;
-  aim: (screenX: number) => { x: number; y: number } | null;
-  onGone: () => void;
-}) {
-  const n = Math.min(packs, 10);
-  const x = useMotionValue(0);
-  const y = useMotionValue(0);
-  const box = useRef<HTMLDivElement>(null);
-  const [flight, setFlight] = useState<{ from: { x: number; y: number }; paths: ReturnType<typeof flightPath>[] } | null>(null);
-  const gone = !!flight;
-  const [hint, hideHint] = useIdleHint('launch', 1400);
-  // held in the hand: it leans the way it is pulled and tips back a little as it rises
-  const lift = useTransform(y, [-u * 14, 0], [1, 0]);
-  const tilt = useTransform(x, [-u * 20, u * 20], [-9, 9]);
-  const tipBack = useTransform(y, [-u * 14, 0, u * 4], [16, 0, -4]);
-  const glow = useTransform(lift, (v) => 0.25 + v * 0.75);
-  const shadow = useTransform(lift, [0, 1], [0.7, 0]);
-  const W = typeof window !== 'undefined' ? window.innerWidth : 1000;
-  const H = typeof window !== 'undefined' ? window.innerHeight : 600;
-  const restOf = (o: number) => ({ x: o * u * 0.32, y: o * u * 0.26, rotate: n > 1 ? (o % 2 ? 1.2 : -1.2) * Math.min(1, o) : 0, scale: 1, opacity: 1 });
-
-  const launch = (vx: number, vy: number) => {
-    if (gone) return;
-    hideHint();
-    const r = box.current?.getBoundingClientRect();
-    // the holder must not spring back under the packs: freeze it where it was let go and hand that to the flights
-    const from = { x: x.get(), y: y.get() };
-    const speed = Math.hypot(vx, vy);
-    // straight out: each pack heads for the ridge line above where it is (a bundle fans a little)
-    const paths = Array.from({ length: n }, (_, o) => {
-      const sx = (r ? r.left + r.width / 2 : W / 2) + restOf(o).x;
-      const sy = (r ? r.top + r.height / 2 : H / 2) + restOf(o).y;
-      const fan = o === 0 ? 0 : ((o % 2 ? 1 : -1) * Math.ceil(o / 2) * W) / 40;
-      const to = aim(sx + fan) ?? { x: sx + fan, y: sy - H * 0.38 };
-      // always away from you, up the screen: never drop toward the lake
-      to.y = Math.min(to.y, sy - H * 0.12);
-      return flightPath(to.x - sx, to.y - sy, speed, tipBack.get(), tilt.get() + restOf(o).rotate);
-    });
-    const still = () => {
-      x.stop();
-      y.stop();
-      x.jump(0);
-      y.jump(0);
-    };
-    still();
-    requestAnimationFrame(still);
-    setFlight({ from, paths });
-    if (r) {
-      // where each pack ends as a point of light; the 3D star carries on from there
-      const cx = r.left + r.width / 2 - from.x;
-      const cy = r.top + r.height / 2 - from.y;
-      onLaunch(
-        paths.map((p, o) => ({
-          x: cx + from.x + restOf(o).x + p.x[p.x.length - 1],
-          y: cy + from.y + restOf(o).y + p.y[p.y.length - 1],
-          // in the cinematic's own seconds (it runs CINE_SLOW times slower when debugging)
-          delay: (o * LAUNCH_GAP + p.dur * 0.93) / CINE_SLOW,
-        })),
-      );
-    }
-    sfx('magic-holy-2', 0.3);
-    // one whoosh per pack: shun, shun, shun…
-    for (let o = 0; o < n; o++)
-      setTimeout(() => {
-        foley.whoosh();
-        vibrate(o === 0 ? 18 : 8);
-      }, o * LAUNCH_GAP * 1000);
-    setTimeout(onGone, ((n - 1) * LAUNCH_GAP + paths[0].dur * 0.95) * 1000);
-  };
-
-  return (
-    <div className="launch">
-      <div className="tear-wrap launch-wrap">
-        <motion.div
-          ref={box}
-          className={`launch-pack ${gone ? 'gone' : ''}`}
-          style={{ x, y, rotate: tilt, rotateX: tipBack, transformPerspective: 900 }}
-          drag={gone ? false : true}
-          dragConstraints={{ top: 0, bottom: 0, left: 0, right: 0 }}
-          // it comes up with the finger almost 1:1, resists being pushed down or sideways
-          dragElastic={{ top: 0.95, bottom: 0.12, left: 0.35, right: 0.35 }}
-          dragMomentum={false}
-          dragTransition={{ bounceStiffness: 420, bounceDamping: 26 }}
-          onDragStart={hideHint}
-          onDragEnd={(_, info) => {
-            const up = info.offset.y < -u * 6 || info.velocity.y < -420;
-            if (up && info.velocity.y < 300) launch(info.velocity.x, Math.min(info.velocity.y, -900));
-          }}
-          onTap={() => !gone && animate(y, [0, -u * 2.2, 0], { duration: 0.55, ease: 'easeOut' })}
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.8, ease: EASE_OUT }}
-        >
-          {/* the light it leaves behind as it rises */}
-          <motion.div className="launch-glow" style={{ opacity: glow }} animate={gone ? { opacity: 0 } : undefined} transition={{ duration: 0.4 }} />
-          {Array.from({ length: n }, (_, k) => {
-            const order = n - 1 - k; // 0 = the front pack, which leaves first
-            const rest = restOf(order);
-            const path = flight?.paths[order];
-            const from = flight?.from ?? { x: 0, y: 0 };
-            return (
-              <motion.div
-                key={k}
-                className="launch-one"
-                style={{ zIndex: k, transformPerspective: 1100 }}
-                initial={false}
-                animate={
-                  path
-                    ? {
-                        x: path.x.map((v) => v + rest.x + from.x),
-                        y: path.y.map((v) => v + rest.y + from.y),
-                        rotate: path.rotate,
-                        rotateX: path.rotateX,
-                        scale: path.scale,
-                        // it stays itself all the way; only at the very end does the 3D star take over
-                        opacity: [1, 1, 0],
-                      }
-                    : rest
-                }
-                transition={
-                  path
-                    ? { duration: path.dur, delay: order * LAUNCH_GAP, ease: 'linear', times: path.times, opacity: { duration: path.dur, delay: order * LAUNCH_GAP, times: [0, 0.93, 1] } }
-                    : { duration: 0.3 }
-                }
-              >
-                <BoosterPack booster={booster} still={k !== n - 1} />
-                {path && <motion.i className="launch-trail" initial={{ opacity: 0, scaleY: 0.2 }} animate={{ opacity: [0, 0.55, 0], scaleY: [0.2, 1, 1.2] }} transition={{ duration: path.dur * 0.5, delay: order * LAUNCH_GAP, times: [0, 0.3, 1] }} />}
-              </motion.div>
-            );
-          })}
-        </motion.div>
-        <motion.div className="launch-shadow" style={{ opacity: shadow }} animate={gone ? { opacity: 0 } : undefined} />
-      </div>
-      {/* no words: after a pause, a soft chevron shows which way to throw */}
-      <AnimatePresence>
-        {!gone && hint && (
-          <motion.div className="launch-cue" initial={{ opacity: 0 }} animate={{ opacity: 0.8 }} exit={{ opacity: 0 }} transition={{ duration: 0.6 }}>
-            <div className="launch-chev">
-              <i />
-              <i />
-              <i />
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
+/** where the scene settles (seconds into its opening): the lake, the far peaks, the moon */
+const SCENE_HOLD = 1.5;
 
 interface AuraState {
   tier: OmenTier;
   visible: boolean;
   hot: boolean;
+  /** how strong it is, 0–1 (it builds up while the pack is charged) */
+  amt: number;
 }
 
 interface CinemaApi {
-  release: (points: { x: number; y: number; delay: number }[]) => void;
-  /** screen point on the ridge line straight out from screen x (where a thrown pack goes) */
-  aim: (screenX: number) => { x: number; y: number };
+  setAura: (a: AuraState) => void;
 }
 
 function CinemaLayer({ omen, god, aura, held, playing, api, target, onDone }: { omen: Omen; god: boolean; aura: AuraState; held: boolean; playing: boolean; api: React.MutableRefObject<CinemaApi | null>; target: () => DOMRect | null; onDone: () => void }) {
@@ -737,7 +519,7 @@ function CinemaLayer({ omen, god, aura, held, playing, api, target, onDone }: { 
         god,
         meteors: omen.meteors,
         target,
-        holdAt: LAUNCH_HOLD,
+        holdAt: SCENE_HOLD,
         onBeat: (b) => {
           if (b === 'twinkle') {
             foley.chime(2 + omen.shown);
@@ -764,7 +546,7 @@ function CinemaLayer({ omen, god, aura, held, playing, api, target, onDone }: { 
       return;
     }
     cine.current = c;
-    api.current = { release: (pts) => c.release(pts), aim: (x) => c.aimAt(x) };
+    api.current = { setAura: (a) => c.setAura(a.tier, a.visible, a.hot, a.amt) };
     c.play();
     return () => {
       c.dispose();
@@ -775,7 +557,7 @@ function CinemaLayer({ omen, god, aura, held, playing, api, target, onDone }: { 
   }, []);
 
   useEffect(() => cine.current?.setIdle(!playing), [playing]);
-  useEffect(() => cine.current?.setAura(aura.tier, aura.visible, aura.hot), [aura]);
+  useEffect(() => cine.current?.setAura(aura.tier, aura.visible, aura.hot, aura.amt), [aura]);
 
   return (
     <>
@@ -795,6 +577,9 @@ function CinemaLayer({ omen, god, aura, held, playing, api, target, onDone }: { 
   );
 }
 
+/** seconds of holding to fill the charge */
+const CHARGE_TIME = 1.4;
+
 interface TearProps {
   booster: Booster;
   god: boolean;
@@ -808,44 +593,121 @@ interface TearProps {
 }
 
 function TearStage({ booster, god, u, cards, omen, packs, onAura, burstAt, onDone }: TearProps) {
-  // aura: starts at the omen shown by the meteors and climbs to the truth
+  // 力をためる: hold the pack and its light builds up in the omen colour; on
+  // the way it may climb (昇格) to the truth. Let go once it is full and the
+  // light bursts — then the pack can be torn open.
   const [aura, setAura] = useState<OmenTier>(omen.shown);
   const [shaking, setShaking] = useState(false);
   const [promo, setPromo] = useState(0);
   const locked = aura < omen.actual;
-  useEffect(() => {
-    if (omen.actual <= omen.shown) return;
-    const timers: ReturnType<typeof setTimeout>[] = [];
-    let at = 1100;
-    for (let tier = omen.shown + 1; tier <= omen.actual; tier++) {
-      const t = tier as OmenTier;
-      timers.push(setTimeout(() => {
-        setShaking(true);
-        foley.charge();
-      }, at));
-      timers.push(setTimeout(() => {
-        setShaking(false);
-        setAura(t);
-        setPromo((n) => n + 1);
-        foley.impact();
-        foley.rarity(t);
-        sfx('magic-holy-2', 0.5);
-        const r = packRef.current?.getBoundingClientRect();
-        if (r) {
-          burstAt(r.left + r.width / 2, r.top + r.height / 2, `aura${t}`, 70, 1.6);
-          burstAt(r.left + r.width / 2, r.top + r.height / 2, 'sparkw', 30, 1.4);
-        }
-      }, at + 750));
-      at += 1500;
+  const [charged, setCharged] = useState(false);
+  const charge = useMotionValue(0);
+  /** the charge in coarse steps, for the 3D aura (so the whole overlay does not re-render every frame) */
+  const [chargeStep, setChargeStep] = useState(0);
+  const holding = useRef(false);
+  const [held, setHeld] = useState(false);
+  const promoted = useRef(0);
+  // the climbs happen part way through the charge, evenly spaced
+  const promoAt = useMemo(() => {
+    const n = omen.actual - omen.shown;
+    return Array.from({ length: n }, (_, k) => 0.4 + (0.5 * (k + 1)) / (n + 1));
+  }, [omen]);
+  const promote = (t: OmenTier) => {
+    setAura(t);
+    setPromo((n) => n + 1);
+    setShaking(true);
+    setTimeout(() => setShaking(false), 450);
+    foley.impact();
+    foley.rarity(t);
+    sfx('magic-holy-2', 0.5);
+    vibrate([0, 30]);
+    const r = packRef.current?.getBoundingClientRect();
+    if (r) {
+      burstAt(r.left + r.width / 2, r.top + r.height / 2, `aura${t}`, 70, 1.6);
+      burstAt(r.left + r.width / 2, r.top + r.height / 2, 'sparkw', 30, 1.4);
     }
-    return () => timers.forEach(clearTimeout);
+  };
+  const release = () => {
+    setCharged(true);
+    charge.set(1);
+    setChargeStep(1);
+    hideHint();
+    foley.impact();
+    foley.rarity(auraRef.current);
+    sfx('magic-holy-2', 0.55);
+    vibrate([0, 40]);
+    const r = packRef.current?.getBoundingClientRect();
+    if (r) {
+      const cx = r.left + r.width / 2;
+      const cy = r.top + r.height / 2;
+      burstAt(cx, cy, `aura${auraRef.current}`, 90, 1.8);
+      burstAt(cx, cy, 'glint', 24, 1.4);
+      burstAt(cx, cy, 'sparkw', 40, 1.6);
+    }
+    setSnap(true);
+    setTimeout(() => setSnap(false), 140);
+  };
+  // the charge runs while the pack is held and drains when it is let go too soon
+  useEffect(() => {
+    if (charged) return;
+    let raf = 0;
+    let last = performance.now();
+    let step = 0;
+    let tick = 0;
+    const loop = (now: number) => {
+      // (a frame's timestamp can be older than the moment the loop started: never step backwards)
+      const dt = Math.max(0, Math.min(0.05, (now - last) / 1000));
+      last = Math.max(last, now);
+      let c = charge.get();
+      c = holding.current ? Math.min(1, c + dt / CHARGE_TIME) : Math.max(0, c - dt / 0.6);
+      charge.set(c);
+      const st = Math.round(c * 20) / 20;
+      if (st !== step) {
+        step = st;
+        setChargeStep(st);
+      }
+      while (promoted.current < promoAt.length && c >= promoAt[promoted.current]) {
+        promote((omen.shown + promoted.current + 1) as OmenTier);
+        promoted.current++;
+      }
+      // light gathers into the pack from all round it, faster as it fills
+      const r = packRef.current?.getBoundingClientRect();
+      if (r && holding.current && Math.random() < 0.35 + c * 0.6) {
+        const a = Math.random() * Math.PI * 2;
+        const rad = Math.max(r.width, r.height) * (0.55 + Math.random() * 0.25);
+        burstAt(r.left + r.width / 2 + Math.cos(a) * rad, r.top + r.height / 2 + Math.sin(a) * rad, `aura${auraRef.current}`, 1, 0.8 + c * 0.5);
+      }
+      // a soft tick every so often, quickening as it fills
+      tick += dt;
+      if (holding.current && tick > 0.28 - c * 0.18) {
+        tick = 0;
+        vibrate(5);
+      }
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  // drifting motes around the pack in the aura colour
+  }, [charged]);
+  const onHoldStart = (e: React.PointerEvent) => {
+    if (charged) return;
+    (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+    holding.current = true;
+    setHeld(true);
+    hideHint();
+    foley.charge();
+  };
+  const onHoldEnd = () => {
+    if (charged || !holding.current) return;
+    holding.current = false;
+    setHeld(false);
+    if (charge.get() >= 1) release();
+  };
+  // drifting motes around the pack in the aura colour, once its light is out
   useEffect(() => {
     const iv = setInterval(() => {
       const r = packRef.current?.getBoundingClientRect();
-      if (!r) return;
+      if (!r || charge.get() < 0.05) return;
       const edge = Math.random() * 4;
       const x = edge < 1 ? r.left : edge < 2 ? r.right : r.left + Math.random() * r.width;
       const y = edge < 2 ? r.top + Math.random() * r.height : edge < 3 ? r.top : r.bottom;
@@ -854,13 +716,15 @@ function TearStage({ booster, god, u, cards, omen, packs, onAura, burstAt, onDon
     return () => clearInterval(iv);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  const ring = useTransform(charge, (c) => 1 - c);
+  const squeeze = useTransform(charge, (c) => 1 - c * 0.035);
   const auraRef = useRef(aura);
   auraRef.current = aura;
   const packRef = useRef<HTMLDivElement>(null);
   const [dir, setDir] = useState<1 | -1>(1);
   const [torn, setTorn] = useState(false);
   const [active, setActive] = useState(false);
-  const [hint, hideHint] = useIdleHint('tear', 1800);
+  const [hint, hideHint] = useIdleHint(charged ? 'tear' : 'charge', charged ? 1800 : 900);
   // the traced cut, in percent of the pack box; only points inside TEAR_BAND count
   const pathRef = useRef<[number, number][]>([]);
   const [path, setPath] = useState<[number, number][]>([]);
@@ -883,7 +747,10 @@ function TearStage({ booster, god, u, cards, omen, packs, onAura, burstAt, onDon
   const [healing, setHealing] = useState(false);
   const finishing = useRef(false);
   const buzz = vibrate;
-  useEffect(() => onAura({ tier: aura, visible: !torn, hot: shaking }), [aura, torn, shaking, onAura]);
+  useEffect(
+    () => onAura({ tier: aura, visible: !torn && (charged || chargeStep > 0), hot: shaking || (held && chargeStep > 0.25), amt: charged ? 1 : 0.15 + chargeStep * 0.85 }),
+    [aura, torn, shaking, onAura, charged, chargeStep, held],
+  );
 
   const B0 = TEAR_BAND[0] * 100;
   const B1 = TEAR_BAND[1] * 100;
@@ -907,6 +774,15 @@ function TearStage({ booster, god, u, cards, omen, packs, onAura, burstAt, onDon
   };
 
   const finish = () => {
+    if (!charged) {
+      // keyboard: skip straight to a full charge
+      while (promoted.current < promoAt.length) {
+        promote((omen.shown + promoted.current + 1) as OmenTier);
+        promoted.current++;
+      }
+      release();
+      return;
+    }
     if (torn || locked || finishing.current) return;
     finishing.current = true;
     hideHint();
@@ -1141,11 +1017,15 @@ function TearStage({ booster, god, u, cards, omen, packs, onAura, burstAt, onDon
         <motion.div
           className="tear-press"
           animate={snap ? { scale: 1.035, rotate: 0 } : active ? { scale: 0.985, rotate: -dir * 0.6 } : { scale: 1, rotate: 0 }}
+          onPointerDown={onHoldStart}
+          onPointerUp={onHoldEnd}
+          onPointerCancel={onHoldEnd}
           transition={snap ? { duration: 0.06 } : { type: 'spring', stiffness: 380, damping: 22 }}
           style={{ filter: snap ? 'brightness(1.8) saturate(0.6)' : undefined }}
         >
           <motion.div
-            className={`tear-float ${shaking ? 'shaking' : ''}`}
+            className={`tear-float ${shaking || (held && chargeStep > 0.25) ? 'shaking' : ''} ${held && !charged ? 'charging' : ''}`}
+            style={{ scale: charged ? 1 : squeeze }}
             ref={packRef}
             initial={{ opacity: 0, filter: 'brightness(4) saturate(0)' }}
             animate={torn || active || cutting ? { y: 0, opacity: 1, filter: 'brightness(1) saturate(1)' } : { y: [0, -u * 0.45, 0], opacity: 1, filter: 'brightness(1) saturate(1)' }}
@@ -1158,7 +1038,13 @@ function TearStage({ booster, god, u, cards, omen, packs, onAura, burstAt, onDon
             {torn && (
               <motion.div className="tear-beam" initial={{ opacity: 0, scaleY: 0.2 }} animate={{ opacity: [0, 0.9, 0], scaleY: [0.2, 1, 1.15] }} transition={{ delay: 0.25, duration: 1.3, times: [0, 0.35, 1], ease: 'easeOut' }} />
             )}
-            {!torn && !cutting && <BoosterPack booster={booster} tilt={!active} god={god} />}
+            {!torn && !cutting && <BoosterPack booster={booster} tilt={!active && !held} god={god} />}
+            {/* the charge: light runs round the edge of the pack as it fills */}
+            {!charged && (
+              <svg className="charge-ring" viewBox="0 0 60 100" preserveAspectRatio="none">
+                <motion.rect x="0.8" y="0.8" width="58.4" height="98.4" rx="2.6" pathLength={1} style={{ strokeDashoffset: ring }} />
+              </svg>
+            )}
             {!torn && cutting && (
               <>
                 <div className="tear-part" style={{ zIndex: 4 }}>
@@ -1201,7 +1087,7 @@ function TearStage({ booster, god, u, cards, omen, packs, onAura, burstAt, onDon
                 />
               </>
             )}
-            {!torn && (
+            {!torn && charged && (
               <>
                 <div className={`tear-band ${active ? 'on' : ''} ${outside ? 'warn' : ''}`} style={{ top: `${B0}%`, height: `${B1 - B0}%` }} />
                 {!cutting && <div className="tear-guide" style={{ top: `${TEAR_Y * 100}%` }} />}
@@ -1235,7 +1121,12 @@ function TearStage({ booster, god, u, cards, omen, packs, onAura, burstAt, onDon
             光の帯の中をなぞってください
           </motion.div>
         )}
-        {hint && !outside && !torn && !locked && (
+        {hint && !charged && !held && (
+          <motion.div key="hint-charge" className="po-hint" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            パックを長押しして、力をためる
+          </motion.div>
+        )}
+        {hint && charged && !outside && !torn && !locked && (
           <motion.div key="hint" className="po-hint" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             パックの上のほうを好きな線でなぞって開封
           </motion.div>

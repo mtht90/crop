@@ -104,7 +104,7 @@ export const CardFace = memo(function CardFace({ cid, className, style, interact
     `kind-${def.kind}`,
     v ? `v-${v}` : '',
     v && BLEED.has(v) ? 'bleed' : '',
-    def.kind === 'monster' && def.rarity === 5 ? 'ex' : '',
+    '',
     def.kind === 'monster' ? `t-${def.type}` : def.kind === 'energy' ? `t-${def.energyType}` : `sub-${(def as TrainerCard).sub}`,
     def.fullArt ? 'full-art' : '',
     def.gold ? 'gold' : '',
@@ -132,7 +132,7 @@ export const CardFace = memo(function CardFace({ cid, className, style, interact
           {def.kind === 'trainer' && <TrainerFace def={def} />}
           {def.kind === 'energy' && <EnergyFace def={def} />}
           {v === 'mirror' && <div className={`tcg-mirror ${def.kind === 'trainer' ? 'tw' : def.kind === 'energy' ? 'ew' : ''}`} />}
-          {v === 'S' && <div className="tcg-glitter" />}
+          {v === 'S' && <div className="tcg-glitter" style={{ backgroundImage: `${GLITTER}, ${GLITTER}` }} />}
           {holo && <div className="tcg-shine" />}
           {(holo || v === 'mirror') && <div className="tcg-glare" />}
         </div>
@@ -142,6 +142,31 @@ export const CardFace = memo(function CardFace({ cid, className, style, interact
 });
 
 
+
+/**
+ * the shiny foil: a tile of scattered glints of different sizes and tints —
+ * fine grains and a few four-point sparkles — so it reads as foil, not as a grid
+ */
+const GLITTER = (() => {
+  let seed = 11;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
+  const tints = ['#ffffff', '#fff4c8', '#d4f0ff', '#ffd8f2', '#e2ffe8'];
+  let body = '';
+  for (let i = 0; i < 220; i++) {
+    const x = (rnd() * 100).toFixed(1);
+    const y = (rnd() * 100).toFixed(1);
+    const c = tints[Math.floor(rnd() * tints.length)];
+    const o = (0.35 + rnd() * 0.65).toFixed(2);
+    if (rnd() < 0.08) {
+      // a little four-point sparkle
+      const r = 1.1 + rnd() * 1.4;
+      const w = r * 0.16;
+      body += `<path d='M${x} ${+y - r}L${+x + w} ${y}L${x} ${+y + r}L${+x - w} ${y}ZM${+x - r} ${y}L${x} ${+y - w}L${+x + r} ${y}L${x} ${+y + w}Z' fill='${c}' opacity='${o}'/>`;
+    } else body += `<circle cx='${x}' cy='${y}' r='${(0.12 + rnd() * 0.3).toFixed(2)}' fill='${c}' opacity='${o}'/>`;
+  }
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'>${body}</svg>`;
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+})();
 
 function Footer({ def }: { def: CardDef }) {
   return (
@@ -236,12 +261,7 @@ function MonsterFace({ def }: { def: MonsterCard }) {
             {a.text && <p>{a.text}</p>}
           </div>
         ))}
-        {def.rarity >= 4 && (
-          <div className={`omega-rule ${def.rarity === 5 ? 'ex-rule' : ''}`}>
-            <b>{RARITY_SYMBOL[def.rarity]}</b>：きぜつしたとき、相手はサイドを{def.rarity === 5 ? 3 : 2}枚とる。
-          </div>
-        )}
-        {def.flavor && !def.ability && def.attacks.length < 2 && def.rarity < 4 && <div className="tcg-flavor">{def.flavor}</div>}
+        {def.flavor && !def.ability && def.attacks.length < 2 && <div className="tcg-flavor">{def.flavor}</div>}
       </div>
       <div className="tcg-stats">
         <div>

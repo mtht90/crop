@@ -1,3 +1,4 @@
+import type { MonsterCard } from '../types';
 import { describe, expect, it } from 'vitest';
 import { aiAnswer } from '../ai';
 import { ALL_DECKS, deckById, expand, validateDeck } from '../decks';
@@ -75,8 +76,8 @@ describe('第2弾 rules', () => {
   }
   const inst = (g: Game, cid: string, owner: 0 | 1) => ({ uid: 90000 + Math.floor(Math.random() * 9999), cid, owner });
 
-  it('★5 knocked out gives 3 prizes, ★4 gives 2', () => {
-    for (const [name, want] of [['ドラグーン', 3], ['トリトン', 2], ['ドレイクファイター', 1]] as const) {
+  it('every monster knocked out gives one prize (★ is only rarity)', () => {
+    for (const [name, want] of [['ドラグーン', 1], ['トリトン', 1], ['ドレイクファイター', 1]] as const) {
       const g = started();
       const victim = g.s.players[1];
       const slot = g.newSlot(inst(g, byName(name).id, 1));
@@ -89,22 +90,27 @@ describe('第2弾 rules', () => {
     }
   });
 
-  it('亡者の港: ★1–3 get +40 HP, ★4 / ★5 lose 30', () => {
+  it('亡者の港: under HP 150 get +40 HP, HP 150 and up lose 30', () => {
     const g = started();
     const plain = g.newSlot(inst(g, byName('ドレイクファイター').id, 0));
-    const ex = g.newSlot(inst(g, byName('ドラグーン').id, 0));
+    const big = byName('ドラグーン') as MonsterCard;
+    expect(big.hp).toBeGreaterThanOrEqual(150);
+    const ex = g.newSlot(inst(g, big.id, 0));
     g.s.stadium = inst(g, byName('亡者の港').id, 0);
     expect(maxHp(g.s, plain)).toBe(140);
-    expect(maxHp(g.s, ex)).toBe(310);
+    expect(maxHp(g.s, ex)).toBe(big.hp - 30);
   });
 
-  it('★5 is a handful of monsters; ★4 / ★5 give 2 / 3 prizes; printings keep their ★', () => {
+  it('★ is the printing: regular ★1–3, illustration ★3, full art / shiny ★4, gold ★5', () => {
     const base = ALL_CARDS.filter((c) => !c.variant);
-    const five = base.filter((c) => c.rarity === 5);
-    expect(five.map((c) => c.name).sort()).toEqual(['アークウィッチ', 'クイーンアント', 'グランドナイト', 'ドラグーン', 'リッチロード'].sort());
-    expect(base.filter((c) => c.rarity === 4).length).toBeGreaterThan(15);
-    for (const c of base) if (c.kind === 'monster') expect(prizeValue(c)).toBe(c.rarity === 5 ? 3 : c.rarity === 4 ? 2 : 1);
-    for (const v of ALL_CARDS.filter((c) => c.variant)) expect(v.rarity).toBe(card(v.baseId!).rarity);
+    for (const c of base) expect(c.rarity, c.name).toBeLessThanOrEqual(3);
+    for (const c of base) if (c.kind === 'monster') expect(prizeValue(c)).toBe(1);
+    const want = (v: string, b: number) => (v === 'UR' ? 5 : v === 'SR' || v === 'S' ? 4 : v === 'mirror' ? b : 3);
+    for (const v of ALL_CARDS.filter((c) => c.variant)) expect(v.rarity, v.id).toBe(want(v.variant!, card(v.baseId!).rarity));
+    expect(ALL_CARDS.filter((c) => c.rarity === 5).length).toBeGreaterThan(15);
+    expect(ALL_CARDS.filter((c) => c.rarity === 4).length).toBeGreaterThan(30);
+    // the old EX / Ω aces are ordinary ★3 strength now
+    for (const m of base) if (m.kind === 'monster' && m.ace) expect(m.hp, m.name).toBeLessThanOrEqual(210);
   });
 });
 
@@ -164,7 +170,7 @@ describe('第3弾 辺境の軍勢', () => {
   });
   it('AI plays full games with decks built around every AB3 ex / Ω', () => {
     const all = () => 4;
-    const aces = ab3.filter((c) => c.kind === 'monster' && c.rarity >= 4);
+    const aces = ab3.filter((c) => c.kind === 'monster' && c.ace);
     expect(aces.length).toBeGreaterThanOrEqual(10);
     for (let i = 0; i < aces.length; i++) {
       const a = buildDeck(aces[i].name, all).cards;

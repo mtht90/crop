@@ -830,3 +830,10 @@
   .multi .results-actions { position: sticky; bottom: 0; width: 100%; justify-content: center; padding: calc(var(--u) * 1.6) 0 max(calc(var(--u) * 2.4), env(safe-area-inset-bottom)); background: linear-gradient(0deg, rgba(4, 5, 11, 0.95) 55%, transparent); z-index: 5; }
   .multi-item .new { font-size: calc(var(--u) * 1); }
 }
+
+/* 力をためる: the charge runs round the edge of the pack in the omen colour */
+.tear-press { touch-action: none; cursor: pointer; -webkit-touch-callout: none; user-select: none; }
+.charge-ring { position: absolute; inset: -1.5%; width: 103%; height: 103%; overflow: visible; pointer-events: none; z-index: 11; }
+.charge-ring rect { fill: none; stroke: var(--ac, #fff); stroke-width: 1.1px; vector-effect: non-scaling-stroke; stroke-dasharray: 1; stroke-linecap: round; filter: drop-shadow(0 0 3px var(--ac, #fff)) drop-shadow(0 0 8px var(--ac, #fff)); }
+.tear-float.charging .charge-ring rect { stroke: color-mix(in srgb, var(--ac, #fff) 55%, white); stroke-width: 2.4px; }
+.tear-float.charging > .bp { filter: brightness(1.08); }
