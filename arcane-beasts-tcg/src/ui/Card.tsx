@@ -353,6 +353,9 @@ function EnergyFace({ def }: { def: EnergyCard }) {
 // ---------------------------------------------------------------------------
 // Card back
 // ---------------------------------------------------------------------------
+// the card back image, for CSS that draws small backs (piles, prizes, the opponent's hand)
+if (typeof document !== 'undefined') document.documentElement.style.setProperty('--card-back', `url("${artUrl('card-back')}")`);
+
 export const CardBack = memo(function CardBack({ className, style }: { className?: string; style?: React.CSSProperties }) {
   return (
     <div className={`tcg tcg-back ${className ?? ''}`} style={style}>

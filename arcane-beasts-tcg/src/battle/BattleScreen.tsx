@@ -17,6 +17,7 @@ import { foley, playMusic, sfx } from '../audio/audio';
 import { askConfirm } from '../ui/Confirm';
 import { Weather } from '../story/Weather';
 import type { Weather as WeatherKind } from '../story/types';
+import { vibrate } from '../lib/fx';
 import './battle.css';
 
 /** the weather each terrain brings over the battlefield */
@@ -38,6 +39,55 @@ interface BCProps {
   light?: boolean; // lightweight back
 }
 
+/** a real mouse (or pen) that hovers: touch screens get previews by long press instead */
+const canHover = () => typeof window !== 'undefined' && window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+
+/**
+ * Touch: tap = play / select / open the menu, long press (0.4 s, finger still)
+ * = show the card big while the finger stays down. Letting go closes it and the
+ * tap is swallowed, so a preview never triggers an action.
+ */
+const pressPreview = (() => {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let start: { x: number; y: number } | null = null;
+  let shown = false;
+  let swallowUntil = 0;
+  const cancel = () => {
+    clearTimeout(timer);
+    timer = undefined;
+    start = null;
+  };
+  return {
+    down(e: React.PointerEvent) {
+      cancel();
+      const el = (e.target as HTMLElement).closest('.tcg[data-cid]') as HTMLElement | null;
+      if (!el || !el.closest('.battle-stage')) return;
+      const cid = el.dataset.cid!;
+      start = { x: e.clientX, y: e.clientY };
+      timer = setTimeout(() => {
+        shown = true;
+        useBattle.getState().setHover(cid);
+        vibrate(10);
+      }, 400);
+    },
+    move(e: React.PointerEvent) {
+      // the finger is dragging (a hand card, a scroll): not a long press
+      if (start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > 10) cancel();
+    },
+    up() {
+      cancel();
+      if (shown) {
+        shown = false;
+        useBattle.getState().setHover(null);
+        swallowUntil = performance.now() + 350;
+      }
+    },
+    swallow() {
+      return performance.now() < swallowUntil;
+    },
+  };
+})();
+
 const BoardCard = memo(function BoardCard({ inst, face, className, style, onClick, dim, hoverPreview = true, light }: BCProps) {
   const setHover = useBattle((s) => s.setHover);
   return (
@@ -47,7 +97,7 @@ const BoardCard = memo(function BoardCard({ inst, face, className, style, onClic
       className={`bc ${className ?? ''}`}
       style={style}
       onClick={onClick}
-      onMouseEnter={hoverPreview && face ? () => !document.body.classList.contains('hand-dragging') && setHover(inst.cid) : undefined}
+      onMouseEnter={hoverPreview && face ? () => canHover() && !document.body.classList.contains('hand-dragging') && setHover(inst.cid) : undefined}
       onMouseLeave={hoverPreview && face ? () => setHover(null) : undefined}
       onContextMenu={face ? (e) => {
         e.preventDefault();
@@ -362,7 +412,7 @@ function Hand({ cards, playable, selected, onSelect, onDrop, setupPick, dropKeys
               else if (Math.hypot(info.offset.x, info.offset.y) < 14) onSelect(c.uid);
             }}
             onMouseEnter={() => {
-              if (dragging !== null) return;
+              if (dragging !== null || !canHover()) return;
               setHover(c.uid);
               setPreview(c.cid);
               foley.hover();
@@ -843,6 +893,17 @@ export function BattleScreen() {
       onContextMenu={(e) => e.preventDefault()}
       onPointerDown={(e) => {
         if (e.pointerType === 'touch' && !(e.target as HTMLElement).closest('.bc')) useBattle.getState().setHover(null);
+        if (e.pointerType !== 'mouse') pressPreview.down(e);
+      }}
+      onPointerMove={(e) => e.pointerType !== 'mouse' && pressPreview.move(e)}
+      onPointerUp={() => pressPreview.up()}
+      onPointerCancel={() => pressPreview.up()}
+      onClickCapture={(e) => {
+        // the tap that ends a long press only closes the preview: it must not also play, select or open a menu
+        if (pressPreview.swallow()) {
+          e.stopPropagation();
+          e.preventDefault();
+        }
       }}
     >
       <div className="battle-bg" style={{ backgroundImage: `url(${artUrl(bg)})` }} key={bg} />

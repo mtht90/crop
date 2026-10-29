@@ -577,8 +577,12 @@ function CinemaLayer({ omen, god, aura, held, playing, api, target, onDone }: { 
   );
 }
 
-/** seconds of holding to fill the charge */
-const CHARGE_TIME = 1.4;
+/** seconds of holding to fill the charge: the better the pack, the longer the wait */
+const chargeTime = (tier: OmenTier) => (tier >= 4 ? 4.4 : tier === 3 ? 3.6 : 3.0);
+/** the three peaks of the charge (fractions of it): each one hits harder */
+const STAGES = [1 / 3, 2 / 3, 0.97];
+/** a promotion holds the charge this long: the light is drawn in, then bursts in the new colour */
+const PROMO_HOLD = 1.25;
 
 interface TearProps {
   booster: Booster;
@@ -607,11 +611,48 @@ function TearStage({ booster, god, u, cards, omen, packs, onAura, burstAt, onDon
   const holding = useRef(false);
   const [held, setHeld] = useState(false);
   const promoted = useRef(0);
+  /** how many of the three peaks have been reached (0–3) */
+  const [stage, setStage] = useState(0);
+  const stageRef = useRef(0);
+  /** during a promotion: the light is being drawn into the pack */
+  const [inhale, setInhale] = useState(false);
+  const pauseUntil = useRef(0);
   // the climbs happen part way through the charge, evenly spaced
+  // they sit between the peaks, so each climb is its own moment
   const promoAt = useMemo(() => {
     const n = omen.actual - omen.shown;
-    return Array.from({ length: n }, (_, k) => 0.4 + (0.5 * (k + 1)) / (n + 1));
+    return Array.from({ length: n }, (_, k) => 0.45 + (0.4 * (k + 1)) / (n + 1));
   }, [omen]);
+  const CHARGE = chargeTime(omen.actual);
+  /** a peak: a burst of light, a chime a step higher, a harder buzz */
+  const reachStage = (k: number) => {
+    stageRef.current = k;
+    setStage(k);
+    foley.chime(2 + k * 2);
+    if (k >= 2) foley.sparkle();
+    vibrate(k === 3 ? [0, 30, 40, 30] : [0, 12 + k * 8]);
+    const r = packRef.current?.getBoundingClientRect();
+    if (r) {
+      const cx = r.left + r.width / 2;
+      const cy = r.top + r.height / 2;
+      burstAt(cx, cy, `aura${auraRef.current}`, 20 + k * 18, 1.1 + k * 0.25);
+      burstAt(cx, cy, 'sparkw', 10 + k * 10, 1.2);
+    }
+    setSnap(true);
+    setTimeout(() => setSnap(false), 70 + k * 30);
+  };
+  /** 昇格: the charge stops, the light is drawn in… then bursts out in the new colour */
+  const startPromotion = (t: OmenTier) => {
+    pauseUntil.current = performance.now() + PROMO_HOLD * 1000;
+    setInhale(true);
+    foley.charge();
+    sfx('rumble', 0.45);
+    vibrate([0, 20, 60, 20, 60, 20]);
+    setTimeout(() => {
+      setInhale(false);
+      promote(t);
+    }, PROMO_HOLD * 1000 * 0.78);
+  };
   const promote = (t: OmenTier) => {
     setAura(t);
     setPromo((n) => n + 1);
@@ -659,27 +700,34 @@ function TearStage({ booster, god, u, cards, omen, packs, onAura, burstAt, onDon
       const dt = Math.max(0, Math.min(0.05, (now - last) / 1000));
       last = Math.max(last, now);
       let c = charge.get();
-      c = holding.current ? Math.min(1, c + dt / CHARGE_TIME) : Math.max(0, c - dt / 0.6);
+      const paused = now < pauseUntil.current;
+      // it fills slowly at first and quickens toward the top; let go too soon and it ebbs away
+      if (!paused) c = holding.current ? Math.min(1, c + (dt / CHARGE) * (0.75 + 0.5 * c)) : Math.max(0, c - dt / 1.2);
       charge.set(c);
+      while (stageRef.current < 3 && c >= STAGES[stageRef.current]) reachStage(stageRef.current + 1);
+      if (!holding.current && stageRef.current > 0 && c < STAGES[stageRef.current - 1] - 0.02) {
+        stageRef.current--;
+        setStage(stageRef.current);
+      }
       const st = Math.round(c * 20) / 20;
       if (st !== step) {
         step = st;
         setChargeStep(st);
       }
-      while (promoted.current < promoAt.length && c >= promoAt[promoted.current]) {
-        promote((omen.shown + promoted.current + 1) as OmenTier);
+      if (!paused && holding.current && promoted.current < promoAt.length && c >= promoAt[promoted.current]) {
+        startPromotion((omen.shown + promoted.current + 1) as OmenTier);
         promoted.current++;
       }
       // light gathers into the pack from all round it, faster as it fills
       const r = packRef.current?.getBoundingClientRect();
-      if (r && holding.current && Math.random() < 0.35 + c * 0.6) {
+      if (r && holding.current && Math.random() < (paused ? 1 : 0.35 + c * 0.6)) {
         const a = Math.random() * Math.PI * 2;
-        const rad = Math.max(r.width, r.height) * (0.55 + Math.random() * 0.25);
-        burstAt(r.left + r.width / 2 + Math.cos(a) * rad, r.top + r.height / 2 + Math.sin(a) * rad, `aura${auraRef.current}`, 1, 0.8 + c * 0.5);
+        const rad = Math.max(r.width, r.height) * (paused ? 0.9 + Math.random() * 0.4 : 0.55 + Math.random() * 0.25);
+        burstAt(r.left + r.width / 2 + Math.cos(a) * rad, r.top + r.height / 2 + Math.sin(a) * rad, `aura${auraRef.current}`, paused ? 3 : 1, 0.8 + c * 0.5);
       }
-      // a soft tick every so often, quickening as it fills
+      // a heartbeat that quickens as it fills
       tick += dt;
-      if (holding.current && tick > 0.28 - c * 0.18) {
+      if (holding.current && tick > 0.5 - c * 0.38) {
         tick = 0;
         vibrate(5);
       }
@@ -718,6 +766,8 @@ function TearStage({ booster, god, u, cards, omen, packs, onAura, burstAt, onDon
   }, []);
   const ring = useTransform(charge, (c) => 1 - c);
   const squeeze = useTransform(charge, (c) => 1 - c * 0.035);
+  /** the world goes dark around the pack as it fills, most of all at the last peak */
+  const dark = charged ? 0 : stage >= 3 ? 0.72 : stage === 2 ? 0.42 : stage === 1 ? 0.2 : 0;
   const auraRef = useRef(aura);
   auraRef.current = aura;
   const packRef = useRef<HTMLDivElement>(null);
@@ -748,8 +798,8 @@ function TearStage({ booster, god, u, cards, omen, packs, onAura, burstAt, onDon
   const finishing = useRef(false);
   const buzz = vibrate;
   useEffect(
-    () => onAura({ tier: aura, visible: !torn && (charged || chargeStep > 0), hot: shaking || (held && chargeStep > 0.25), amt: charged ? 1 : 0.15 + chargeStep * 0.85 }),
-    [aura, torn, shaking, onAura, charged, chargeStep, held],
+    () => onAura({ tier: aura, visible: !torn && (charged || chargeStep > 0), hot: shaking || (held && chargeStep > 0.25), amt: charged ? 1 : inhale ? 0.08 : 0.15 + chargeStep * 0.85 }),
+    [aura, torn, shaking, onAura, charged, chargeStep, held, inhale],
   );
 
   const B0 = TEAR_BAND[0] * 100;
@@ -999,7 +1049,16 @@ function TearStage({ booster, god, u, cards, omen, packs, onAura, burstAt, onDon
           })}
       </motion.div>
 
+      {/* the world falls dark round the pack as the charge peaks; only its light is left */}
+      <motion.div className="charge-dim" initial={false} animate={{ opacity: inhale ? 0.85 : dark }} transition={{ duration: inhale ? 0.5 : 0.9, ease: 'easeOut' }} />
       <div className="tear-wrap" style={{ ['--ac' as string]: OMEN_COLORS[aura] }}>
+        {!charged && (
+          <div className="charge-pips">
+            {[1, 2, 3].map((k) => (
+              <motion.i key={k} className={stage >= k ? 'on' : ''} animate={stage >= k ? { scale: [1.8, 1] } : { scale: 1 }} transition={{ duration: 0.35, ease: EASE_OUT }} />
+            ))}
+          </div>
+        )}
         <PackAura tier={aura} promo={promo} />
         {packs > 1 && (
           <motion.div className="tear-bundle" initial={{ opacity: 0 }} animate={{ opacity: torn ? 0 : 1 }} transition={{ duration: torn ? 0.3 : 0.6, delay: torn ? 0 : 0.2 }}>
@@ -1016,7 +1075,15 @@ function TearStage({ booster, god, u, cards, omen, packs, onAura, burstAt, onDon
         )}
         <motion.div
           className="tear-press"
-          animate={snap ? { scale: 1.035, rotate: 0 } : active ? { scale: 0.985, rotate: -dir * 0.6 } : { scale: 1, rotate: 0 }}
+          animate={
+            inhale
+              ? { scale: 0.9, rotate: 0, transition: { duration: PROMO_HOLD * 0.75, ease: [0.5, 0, 0.9, 0.6] } }
+              : snap
+                ? { scale: 1.035 + (charged ? 0 : stage * 0.012), rotate: 0 }
+                : active
+                  ? { scale: 0.985, rotate: -dir * 0.6 }
+                  : { scale: 1, rotate: 0 }
+          }
           onPointerDown={onHoldStart}
           onPointerUp={onHoldEnd}
           onPointerCancel={onHoldEnd}
