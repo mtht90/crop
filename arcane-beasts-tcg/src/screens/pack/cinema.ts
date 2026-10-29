@@ -42,12 +42,19 @@ const L_IMPACT = 2.55;
 const L_DONE = 4.45;
 export const T_IMPACT = T0 + L_IMPACT;
 export const T_DONE = T0 + L_DONE;
-/** where the launched pack stops as a star, and where the whole shower then
- *  radiates from: the main meteor falls from here, the rest streak away from it */
-const RADIANT = new THREE.Vector3(-40, 215, -390);
+/** the sky flashes here once the omen has glowed behind the mountains; the
+ *  main meteor falls from this spot and the rest of the shower fans out below it */
+const RADIANT = new THREE.Vector3(-30, 240, -470);
+/** the launched pack flies straight off and drops behind the far range at this distance and height */
+const BEHIND_DIST = 640;
+const BEHIND_Y = 12;
+/** the thrown pack is aimed at the ridge line: this height out at BEHIND_DIST */
+const AIM_Y = 95;
+/** the flash in the sky (timeline seconds): the shower follows straight after */
+const T_FLASH = T0 + 0.7;
 const MOON_DIR = new THREE.Vector3(0.5, 0.3, -0.81).normalize();
 
-type Beat = 'twinkle' | 'enter' | 'dive' | 'impact' | 'orb' | 'morph';
+type Beat = 'twinkle' | 'flash' | 'enter' | 'dive' | 'impact' | 'orb' | 'morph';
 
 export interface CinemaOptions {
   tier: OmenTier;
@@ -634,7 +641,13 @@ export class MeteorCinema {
   private rise: { screen: { x: number; y: number }; from: THREE.Vector3 | null; t0: number; base: number } | null = null;
   private riseCore!: THREE.Sprite;
   private riseHalo!: THREE.Sprite;
-  private riseExtra: { to: THREE.Vector3; screen: { x: number; y: number }; from: THREE.Vector3 | null; delay: number; core: THREE.Sprite; halo: THREE.Sprite }[] = [];
+  private behindGlow!: THREE.Sprite;
+  private behindCore!: THREE.Sprite;
+  private skyFlash!: THREE.Sprite;
+  private skyFlashCore!: THREE.Sprite;
+  /** where the launched pack went down behind the mountains */
+  private behind: THREE.Vector3 | null = null;
+  private riseExtra: { to: THREE.Vector3; screen: { x: number; y: number }; from: THREE.Vector3 | null; delay: number; core: THREE.Sprite; halo: THREE.Sprite; aimed?: boolean }[] = [];
   private headTex!: THREE.Texture;
   private glowTex!: THREE.Texture;
   private auraAmt = 0;
@@ -850,7 +863,7 @@ export class MeteorCinema {
     const rest = tiers.slice(1);
     rest.forEach((tier, k) => {
       const f = rest.length > 1 ? k / (rest.length - 1) : 0.5;
-      const t0 = 0.85 + f * 1.45 + rnd(-0.08, 0.08);
+      const t0 = 0.9 + f * 1.4 + rnd(-0.06, 0.06);
       // each starts a little way out from the radiant and streaks straight away
       // from it, falling as it goes (the whole shower points back to one spot)
       // they fan out below the radiant (left, down, right) — nothing climbs back up
@@ -868,6 +881,16 @@ export class MeteorCinema {
     // the launched pack as a climbing star (and, for a bundle, its companions)
     this.riseCore = this.riseSprite(1, false);
     this.riseHalo = this.riseSprite(0.8, true);
+    // the omen glowing up from behind the mountains (the ranges hide its lower half)
+    this.behindGlow = this.riseSprite(1, true);
+    this.behindCore = this.riseSprite(0.9, false);
+    // the flash in the sky the shower starts from
+    this.skyFlash = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: 0xffffff, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, transparent: true, opacity: 0 }));
+    this.skyFlash.visible = false;
+    this.scene.add(this.skyFlash);
+    this.skyFlashCore = new THREE.Sprite(new THREE.SpriteMaterial({ map: headTex, color: 0xffffff, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, transparent: true, opacity: 0 }));
+    this.skyFlashCore.visible = false;
+    this.scene.add(this.skyFlashCore);
 
     // the main meteor mirrored in the lake
     this.reflection = new THREE.Mesh(this.meteors[0].ribbon.mesh.geometry, this.meteors[0].ribbon.mat.clone());
@@ -1083,6 +1106,22 @@ export class MeteorCinema {
     this.hold = null;
   }
 
+  /**
+   * Where a pack thrown straight from screen x should head: the point on the
+   * ridge line out along that bearing, in screen pixels. The DOM pack flies
+   * there in a straight line and becomes a point; the star then carries on
+   * along the same line and sinks behind the mountains.
+   */
+  aimAt(screenX: number): { x: number; y: number } {
+    const r = this.host.getBoundingClientRect();
+    this.camera.updateMatrixWorld();
+    const p = this.camera.localToWorld(this.screenToCamera(screenX, r.top + r.height / 2, 9));
+    const cam = this.camera.position;
+    const flat = new THREE.Vector3(p.x - cam.x, 0, p.z - cam.z).normalize();
+    const w = new THREE.Vector3(cam.x + flat.x * BEHIND_DIST, AIM_Y, cam.z + flat.z * BEHIND_DIST).project(this.camera);
+    return { x: r.left + ((w.x + 1) / 2) * r.width, y: r.top + ((1 - w.y) / 2) * r.height };
+  }
+
   /** where a screen point is, in the world, right now (a little way in front of the camera) */
   private worldAt(p: { x: number; y: number }) {
     this.camera.updateMatrixWorld();
@@ -1235,7 +1274,8 @@ export class MeteorCinema {
 
     // ---------------- camera ----------------
     const look = new THREE.Vector3();
-    const up1 = easeInOut(smooth(0, 1.6, T));
+    // the gaze stays on the mountains while the omen glows, and lifts with the flash
+    const up1 = easeInOut(smooth(0.55, 1.9, T));
     // the opening: begin just above the water and lift the gaze to the horizon
     const intro = 1 - easeInOut(smooth(0, T0, Tr));
     look.set(-30 * up1 + intro * 14, 4 + 150 * up1 - intro * 20, -300);
@@ -1252,38 +1292,54 @@ export class MeteorCinema {
       camPos.x += Math.sin(s * 1.7) * 0.12 * shake;
       camPos.y += Math.sin(s * 2.3) * 0.09 * shake;
     }
-    // ---------------- the launched pack climbs as a star ----------------
-    const sky = this.meteors[0].path.getPointAt(0);
+    // ---------------- the launched pack flies off, behind the mountains ----------------
+    // It goes straight away from you along the line it was thrown (a straight line in
+    // 3D stays straight on screen), shrinking toward the horizon until the far range
+    // hides it. There it glows in the omen colour; then the sky flashes and the
+    // shower comes down from the flash.
+    const RISE = 1.3;
     if (this.rise && t >= this.rise.t0 - 0.02) {
-      // the star picks up where the pack became a point of light on screen
       this.rise.from ??= this.worldAt(this.rise.screen);
       const { t0 } = this.rise;
       const from = this.rise.from;
-      const climb = easeOutCubic(smooth(t0, t0 + 1.7, t));
-      // an arc: up first, then out toward its place in the sky
-      // up and away into the sky ahead
-      const ctl = new THREE.Vector3(from.x + (sky.x - from.x) * 0.12, sky.y * 0.92, from.z * 0.3 + sky.z * 0.7);
-      const a = from.clone().lerp(ctl, climb);
-      const pos = a.lerp(ctl.clone().lerp(sky, climb), climb);
+      if (!this.behind) {
+        // straight ahead along the throw: same bearing from the camera, out past the far range
+        const flat = new THREE.Vector3(from.x - camPos.x, 0, from.z - camPos.z).normalize();
+        this.behind = new THREE.Vector3(camPos.x + flat.x * BEHIND_DIST, AIM_Y, camPos.z + flat.z * BEHIND_DIST);
+      }
+      const k = clamp01((t - t0) / RISE);
+      const e = 1 - Math.pow(1 - k, 2.2);
+      // out along the line of sight to the ridge (so it stays put on screen and
+      // shrinks into the distance), then it sinks behind the peaks at the end
+      const pos = from.clone().lerp(this.behind, e);
+      pos.y += (BEHIND_Y - pos.y) * smooth(0.72, 1, k);
       const d = pos.distanceTo(camPos);
-      const arrived = smooth(t0 + 1.5, t0 + 1.8, t);
-      // "kira": the star flares once in place before it falls
-      const flareAt = Math.max(t0 + 2.0, T0 + 0.45);
-      if (t >= flareAt) this.beat('twinkle');
-      const flare = Math.exp(-Math.pow((t - flareAt - 0.12) * 5.5, 2));
-      const vis = smooth(t0 - 0.02, t0 + 0.12, t) * (1 - smooth(T0 + 0.95, T0 + 1.05, t));
-      const tw = 1 + Math.sin(amb * 9) * 0.12 * arrived;
+      const vis = smooth(t0 - 0.02, t0 + 0.1, t) * (1 - smooth(t0 + RISE - 0.05, t0 + RISE + 0.1, t));
       this.riseCore.visible = this.riseHalo.visible = vis > 0.001;
       this.riseCore.position.copy(pos);
       this.riseHalo.position.copy(pos);
-      this.riseCore.scale.setScalar(d * (0.05 - 0.026 * climb) * tw * (1 + flare * 1.6));
-      this.riseHalo.scale.setScalar(d * (0.22 - 0.11 * climb) * tw * (1 + flare * 2.2));
+      this.riseCore.scale.setScalar(d * 0.04 * (1 - 0.5 * e));
+      this.riseHalo.scale.setScalar(d * 0.16 * (1 - 0.55 * e));
       (this.riseCore.material as THREE.SpriteMaterial).opacity = vis;
-      (this.riseHalo.material as THREE.SpriteMaterial).opacity = vis * 0.85;
-      if (vis > 0 && climb < 0.98 && Math.random() < 0.8) this.emit(pos, 1, d * 0.012, -0.6);
-      // the camera lifts its gaze after it
-      const seek = smooth(t0, t0 + 0.6, t) * (1 - smooth(T0 + 1.6, T0 + 2.2, t));
-      look.lerp(pos.clone().lerp(new THREE.Vector3(-30, 60, -300), 0.35), seek * 0.5);
+      (this.riseHalo.material as THREE.SpriteMaterial).opacity = vis * 0.8;
+      if (vis > 0 && k < 0.9 && Math.random() < 0.7) this.emit(pos, 1, d * 0.01, -0.4);
+
+      // 予兆: the light behind the mountains swells, breathes, then gives way to the flash
+      const landed = t0 + RISE - 0.1;
+      const swell = smooth(landed, landed + 0.5, t) * (1 - smooth(T_FLASH - 0.05, T_FLASH + 0.25, t));
+      const breathe = 1 + 0.12 * Math.sin((t - landed) * 7);
+      if (t >= landed + 0.3) this.beat('twinkle');
+      // centred on the ridge line, so the mountains cut it off and it rims the peaks
+      const gp = this.behind.clone().setY(AIM_Y + 10);
+      const gd = gp.distanceTo(camPos);
+      this.behindGlow.visible = this.behindCore.visible = swell > 0.001;
+      this.behindGlow.position.copy(gp);
+      this.behindCore.position.copy(this.behind.clone().setY(AIM_Y - 6));
+      this.behindGlow.scale.setScalar(gd * 0.62 * (0.55 + 0.45 * swell) * breathe);
+      this.behindCore.scale.setScalar(gd * 0.16 * swell * breathe);
+      (this.behindGlow.material as THREE.SpriteMaterial).color.copy(this.color);
+      (this.behindGlow.material as THREE.SpriteMaterial).opacity = swell;
+      (this.behindCore.material as THREE.SpriteMaterial).opacity = swell * 0.9;
     }
     if (this.rise) {
       const base = this.rise.base;
@@ -1291,19 +1347,44 @@ export class MeteorCinema {
         const s0 = base + e.delay;
         if (t < s0 - 0.02) continue;
         e.from ??= this.worldAt(e.screen);
-        const from = e.from;
-        const k = easeOutCubic(smooth(s0, s0 + 1.5, t));
-        const c2 = new THREE.Vector3(from.x + (e.to.x - from.x) * 0.12, e.to.y * 0.92, from.z * 0.3 + e.to.z * 0.7);
-        const p = from.clone().lerp(c2, k).lerp(c2.clone().lerp(e.to, k), k);
-        const ev = smooth(s0 - 0.02, s0 + 0.12, t) * (1 - smooth(T0 + 1.3, T0 + 1.7, t));
+        if (!e.aimed) {
+          // each companion follows its own straight line out past the mountains
+          const flat = new THREE.Vector3(e.from.x - camPos.x, 0, e.from.z - camPos.z).normalize();
+          e.to.set(camPos.x + flat.x * BEHIND_DIST, AIM_Y, camPos.z + flat.z * BEHIND_DIST);
+          e.aimed = true;
+        }
+        const kk = clamp01((t - s0) / RISE);
+        const p = e.from.clone().lerp(e.to, 1 - Math.pow(1 - kk, 2.2));
+        p.y += (BEHIND_Y - p.y) * smooth(0.72, 1, kk);
+        const ev = smooth(s0 - 0.02, s0 + 0.1, t) * (1 - smooth(s0 + RISE - 0.05, s0 + RISE + 0.1, t));
         const dd = p.distanceTo(camPos);
         e.core.visible = e.halo.visible = ev > 0.001;
         e.core.position.copy(p);
         e.halo.position.copy(p);
-        e.core.scale.setScalar(dd * (0.03 - 0.02 * k));
-        e.halo.scale.setScalar(dd * (0.11 - 0.07 * k));
+        e.core.scale.setScalar(dd * 0.025 * (1 - 0.5 * kk));
+        e.halo.scale.setScalar(dd * 0.09 * (1 - 0.5 * kk));
         (e.core.material as THREE.SpriteMaterial).opacity = ev * (e.core.userData.max as number);
         (e.halo.material as THREE.SpriteMaterial).opacity = ev * (e.halo.userData.max as number);
+      }
+    }
+    // ピカン: one bright flash high in the sky, where the meteors come from
+    {
+      // a sharp spike (rises in ~50 ms) with a short afterglow
+      const dtF = t - T_FLASH;
+      const f = dtF < 0 ? Math.exp(-Math.pow(dtF * 22, 2)) : Math.exp(-dtF * 7);
+      const after = dtF > 0 ? Math.exp(-dtF * 2.5) * 0.3 : 0;
+      const amt = this.rise ? Math.max(f, after) : 0;
+      this.skyFlash.visible = this.skyFlashCore.visible = amt > 0.005;
+      if (this.skyFlash.visible) {
+        const fd = RADIANT.distanceTo(camPos);
+        this.skyFlashCore.position.copy(RADIANT);
+        this.skyFlashCore.scale.setScalar(fd * (0.04 + 0.16 * f));
+        (this.skyFlashCore.material as THREE.SpriteMaterial).opacity = Math.min(1, amt * 1.4);
+        this.skyFlash.position.copy(RADIANT);
+        this.skyFlash.scale.setScalar(fd * (0.3 + 0.9 * f));
+        (this.skyFlash.material as THREE.SpriteMaterial).color.copy(this.color).lerp(new THREE.Color(0xffffff), 0.6);
+        (this.skyFlash.material as THREE.SpriteMaterial).opacity = amt;
+        if (f > 0.5) this.beat('flash');
       }
     }
 

@@ -63,6 +63,19 @@ function makeOmen(cards: CardDef[], god: boolean): Omen {
   return { actual, shown, meteors };
 }
 
+/** true while the screen is taller than wide */
+function usePortrait() {
+  const q = typeof window !== 'undefined' ? window.matchMedia('(orientation: portrait)') : null;
+  const [p, setP] = useState(() => !!q?.matches);
+  useEffect(() => {
+    if (!q) return;
+    const on = () => setP(q.matches);
+    q.addEventListener('change', on);
+    return () => q.removeEventListener('change', on);
+  }, [q]);
+  return p;
+}
+
 function useUnit() {
   const calc = () => Math.min(window.innerWidth / 100, (window.innerHeight * 1.7778) / 100);
   const [u, setU] = useState(calc);
@@ -396,6 +409,7 @@ function Opening({ booster, cards, god, fresh, sold, packs, onClose, onAgain }: 
             packs={packs}
             u={u}
             onLaunch={(pts) => cineApi.current?.release(pts)}
+            aim={(x) => cineApi.current?.aim(x) ?? null}
             onGone={() => setPhase(noCine.current ? 'tear' : 'cinema')}
           />
         )}
@@ -497,41 +511,49 @@ const LAUNCH_HOLD = 1.5;
 const LAUNCH_GAP = 0.11;
 
 /**
- * One pack's flight into the sky, as keyframes. It leaves the hand with the
- * swipe's own speed and direction (vx, vy in px/s) and then slows as it recedes
- * — far things cross the screen slowly — while it shrinks, tips back and fades.
+ * One pack's flight, as keyframes: a straight line from where it was let go to
+ * (dx, dy) px away — the ridge line, where it becomes a point of light. It
+ * leaves with the swipe's speed and slows as it recedes (far things cross the
+ * screen slowly), shrinking and tipping back as it goes.
  */
-function flightPath(vx: number, vy: number, w: number, h: number, spread: number) {
-  // mostly upward: a sideways flick bends the throw by up to ~25°
-  let ang = Math.atan2(vx, -Math.min(-1, vy));
-  ang = Math.max(-0.45, Math.min(0.45, ang)) + spread;
-  const speed = Math.max(900, Math.hypot(vx, vy));
-  const dur = Math.max(0.5, Math.min(0.8, 0.95 - speed / 6000));
-  // ease-out e(t) = 1 - (1 - t)^K starts at K·L/dur: pick L so that equals the swipe speed
+function flightPath(dx: number, dy: number, speed: number) {
+  const dist = Math.hypot(dx, dy);
+  const dur = Math.max(0.55, Math.min(0.85, 0.95 - speed / 7000));
   const K = 2.4;
-  const L = Math.max(h * 0.32, Math.min(h * 0.62, (speed * dur) / K));
   const N = 10;
   const x: number[] = [];
   const y: number[] = [];
   const rotateX: number[] = [];
-  const rotate: number[] = [];
   const scale: number[] = [];
   const opacity: number[] = [];
   for (let i = 0; i <= N; i++) {
     const t = i / N;
     const e = 1 - Math.pow(1 - t, K);
-    x.push(Math.sin(ang) * L * e);
-    y.push(-Math.cos(ang) * L * e);
-    rotateX.push(58 * Math.pow(e, 0.8));
-    rotate.push(((ang * 180) / Math.PI) * 0.5 * e);
-    scale.push(1 - 0.96 * Math.pow(e, 0.85));
-    opacity.push(t < 0.8 ? 1 : 1 - (t - 0.8) / 0.2);
+    x.push(dx * e);
+    y.push(dy * e);
+    rotateX.push(55 * Math.pow(e, 0.8));
+    scale.push(1 - 0.96 * Math.pow(e, 0.7));
+    opacity.push(t < 0.85 ? 1 : 1 - (t - 0.85) / 0.15);
   }
-  void w;
-  return { x, y, rotateX, rotate, scale, opacity, dur };
+  void dist;
+  return { x, y, rotateX, scale, opacity, dur };
 }
 
-function PackLaunch({ booster, packs, u, onLaunch, onGone }: { booster: Booster; packs: number; u: number; onLaunch: (points: { x: number; y: number; delay: number }[]) => void; onGone: () => void }) {
+function PackLaunch({
+  booster,
+  packs,
+  u,
+  onLaunch,
+  aim,
+  onGone,
+}: {
+  booster: Booster;
+  packs: number;
+  u: number;
+  onLaunch: (points: { x: number; y: number; delay: number }[]) => void;
+  aim: (screenX: number) => { x: number; y: number } | null;
+  onGone: () => void;
+}) {
   const n = Math.min(packs, 10);
   const x = useMotionValue(0);
   const y = useMotionValue(0);
@@ -555,7 +577,17 @@ function PackLaunch({ booster, packs, u, onLaunch, onGone }: { booster: Booster;
     const r = box.current?.getBoundingClientRect();
     // the holder must not spring back under the packs: freeze it where it was let go and hand that to the flights
     const from = { x: x.get(), y: y.get() };
-    const paths = Array.from({ length: n }, (_, o) => flightPath(vx, vy, W, H, o === 0 ? 0 : (Math.random() - 0.5) * 0.35));
+    const speed = Math.hypot(vx, vy);
+    // straight out: each pack heads for the ridge line above where it is (a bundle fans a little)
+    const paths = Array.from({ length: n }, (_, o) => {
+      const sx = (r ? r.left + r.width / 2 : W / 2) + restOf(o).x;
+      const sy = (r ? r.top + r.height / 2 : H / 2) + restOf(o).y;
+      const fan = o === 0 ? 0 : ((o % 2 ? 1 : -1) * Math.ceil(o / 2) * W) / 40;
+      const to = aim(sx + fan) ?? { x: sx + fan, y: sy - H * 0.38 };
+      // always away from you, up the screen: never drop toward the lake
+      to.y = Math.min(to.y, sy - H * 0.12);
+      return flightPath(to.x - sx, to.y - sy, speed);
+    });
     const still = () => {
       x.stop();
       y.stop();
@@ -628,7 +660,7 @@ function PackLaunch({ booster, packs, u, onLaunch, onGone }: { booster: Booster;
                     ? {
                         x: path.x.map((v) => v + rest.x + from.x),
                         y: path.y.map((v) => v + rest.y + from.y),
-                        rotate: path.rotate,
+                        rotate: 0,
                         rotateX: path.rotateX,
                         scale: path.scale,
                         opacity: path.opacity,
@@ -670,6 +702,8 @@ interface AuraState {
 
 interface CinemaApi {
   release: (points: { x: number; y: number; delay: number }[]) => void;
+  /** screen point on the ridge line straight out from screen x (where a thrown pack goes) */
+  aim: (screenX: number) => { x: number; y: number };
 }
 
 function CinemaLayer({ omen, god, aura, held, playing, api, target, onDone }: { omen: Omen; god: boolean; aura: AuraState; held: boolean; playing: boolean; api: React.MutableRefObject<CinemaApi | null>; target: () => DOMRect | null; onDone: () => void }) {
@@ -692,6 +726,9 @@ function CinemaLayer({ omen, god, aura, held, playing, api, target, onDone }: { 
           if (b === 'twinkle') {
             foley.chime(2 + omen.shown);
             foley.sparkle();
+          } else if (b === 'flash') {
+            foley.sparkle();
+            sfx('magic-holy-2', 0.45);
           } else if (b === 'enter') {
             foley.whoosh();
             if (omen.shown >= 3) setTimeout(() => foley.sparkle(), 250);
@@ -711,7 +748,7 @@ function CinemaLayer({ omen, god, aura, held, playing, api, target, onDone }: { 
       return;
     }
     cine.current = c;
-    api.current = { release: (pts) => c.release(pts) };
+    api.current = { release: (pts) => c.release(pts), aim: (x) => c.aimAt(x) };
     c.play();
     return () => {
       c.dispose();
@@ -1427,8 +1464,10 @@ function MultiResults({ opened, cards, fresh, sold, burstAt, onClose, onAgain, c
     setTimeout(() => (running.current = false), left.length * 520);
   };
 
-  const cols = items.length > 30 ? 10 : 5;
-  const w = items.length > 30 ? 6.05 : 9.6;
+  // portrait phones: five across and the list scrolls; landscape fits it all on one screen
+  const portrait = usePortrait();
+  const cols = portrait ? 5 : items.length > 30 ? 10 : 5;
+  const w = portrait ? 10.2 : items.length > 30 ? 6.05 : 9.6;
   return (
     <div className="multi">
       <div className="multi-head">

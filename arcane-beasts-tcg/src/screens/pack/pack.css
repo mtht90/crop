@@ -816,3 +816,17 @@
 .multi-item.r5::before, .results-item.r5::before { box-shadow: 0 0 16px rgba(255, 210, 90, 0.6), 0 0 36px rgba(255, 190, 60, 0.3); }
 @keyframes rim-run { to { --rim: 360deg; } }
 .multi-item, .results-item { isolation: isolate; }
+/* the pack waits low, over the lake, with the mountains above it: thrown
+   straight up the screen it heads into the far range and drops behind it */
+.tear-wrap.launch-wrap { top: calc(var(--u) * 24); width: calc(var(--u) * 17); margin-left: calc(var(--u) * -8.5); }
+@media (orientation: portrait) {
+  .tear-wrap.launch-wrap { top: calc(var(--u) * 47); width: calc(var(--u) * 27); margin-left: calc(var(--u) * -13.5); }
+}
+/* portrait 10連: the list scrolls; the buttons stay pinned at the bottom */
+@media (orientation: portrait) {
+  .multi { justify-content: flex-start; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: calc(var(--u) * 6) 0 0; touch-action: pan-y; }
+  .multi-head { font-size: calc(var(--u) * 1.5); }
+  .multi-grid { gap: calc(var(--u) * 1) calc(var(--u) * 0.8); padding-bottom: calc(var(--u) * 2); }
+  .multi .results-actions { position: sticky; bottom: 0; width: 100%; justify-content: center; padding: calc(var(--u) * 1.6) 0 max(calc(var(--u) * 2.4), env(safe-area-inset-bottom)); background: linear-gradient(0deg, rgba(4, 5, 11, 0.95) 55%, transparent); z-index: 5; }
+  .multi-item .new { font-size: calc(var(--u) * 1); }
+}
