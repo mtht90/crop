@@ -186,7 +186,7 @@ export function Shop() {
                         5枚目は<b className="s3">★3以上</b>確定
                       </li>
                       <li>
-                        <b className="s4">★4</b>・<b className="s5">★5</b>が通常の約6倍
+                        <b className="s4">★4</b>・<b className="s5">★5</b>が通常の約3倍
                       </li>
                       <li>特別仕様のカードも出やすい</li>
                     </>
@@ -246,7 +246,8 @@ function oddsRows(table: [Rarity, number][][], labels: string[]): [string, strin
   return table.map((t, i) => {
     let prev = 0;
     const parts = t.map(([r, p]) => {
-      const pct = Math.round((p - prev) * 1000) / 10;
+      // two decimals so the legendary ★5 (a few hundredths of a percent) still shows
+      const pct = Math.round((p - prev) * 10000) / 100;
       prev = p;
       return `${RARITY_SYMBOL[r]} ${pct}%`;
     });
@@ -407,7 +408,6 @@ function Opening({ booster, cards, god, fresh, sold, packs, onClose, onAgain }: 
 
         {phase === 'tear' && <TearStage booster={booster} god={god} u={u} cards={cards} omen={omen} packs={packs} onAura={setAura} burstAt={burstAt} onDone={() => setPhase('reveal')} />}
 
-        {(phase === 'multi' || (phase === 'reveal' && packs > 1)) && <TornPile booster={booster} u={u} n={Math.min(packs, 10)} fall={false} />}
         {phase === 'multi' && (
           <MultiResults opened={revealed} cards={cards} fresh={fresh} sold={sold} burstAt={burstAt} onClose={onClose} onAgain={onAgain} canAgain={coins >= priceOf(booster) * packs} price={priceOf(booster) * packs} u={u} />
         )}
@@ -495,68 +495,86 @@ const LAUNCH_HOLD = 1.5;
 
 /** seconds between packs of a bundle leaving one after another */
 const LAUNCH_GAP = 0.11;
-const LAUNCH_FLIGHT = 0.62;
 
-/** thrown into the sky ahead: the pack tips over backwards and shrinks into the distance */
-function flightPath(w: number, h: number, seed: number) {
-  const drift = (seed - 0.5) * 0.08 * w; // the front pack goes straight; the rest wander a little
-  const spanY = (0.24 + seed * 0.05) * h;
-  const N = 9;
+/**
+ * One pack's flight into the sky, as keyframes. It leaves the hand with the
+ * swipe's own speed and direction (vx, vy in px/s) and then slows as it recedes
+ * — far things cross the screen slowly — while it shrinks, tips back and fades.
+ */
+function flightPath(vx: number, vy: number, w: number, h: number, spread: number) {
+  // mostly upward: a sideways flick bends the throw by up to ~25°
+  let ang = Math.atan2(vx, -Math.min(-1, vy));
+  ang = Math.max(-0.45, Math.min(0.45, ang)) + spread;
+  const speed = Math.max(900, Math.hypot(vx, vy));
+  const dur = Math.max(0.5, Math.min(0.8, 0.95 - speed / 6000));
+  // ease-out e(t) = 1 - (1 - t)^K starts at K·L/dur: pick L so that equals the swipe speed
+  const K = 2.4;
+  const L = Math.max(h * 0.32, Math.min(h * 0.62, (speed * dur) / K));
+  const N = 10;
   const x: number[] = [];
   const y: number[] = [];
   const rotateX: number[] = [];
+  const rotate: number[] = [];
   const scale: number[] = [];
   const opacity: number[] = [];
   for (let i = 0; i <= N; i++) {
     const t = i / N;
-    const s = Math.pow(t, 1.3); // slow out of the hand, fast into the sky
-    x.push(drift * s);
-    y.push(-spanY * (1 - Math.pow(1 - s, 1.8)));
-    rotateX.push(62 * Math.pow(s, 0.6)); // the top falls away from you
-    scale.push(1 - 0.95 * Math.pow(s, 0.7));
-    opacity.push(t < 0.85 ? 1 : 1 - (t - 0.85) / 0.15);
+    const e = 1 - Math.pow(1 - t, K);
+    x.push(Math.sin(ang) * L * e);
+    y.push(-Math.cos(ang) * L * e);
+    rotateX.push(58 * Math.pow(e, 0.8));
+    rotate.push(((ang * 180) / Math.PI) * 0.5 * e);
+    scale.push(1 - 0.96 * Math.pow(e, 0.85));
+    opacity.push(t < 0.8 ? 1 : 1 - (t - 0.8) / 0.2);
   }
-  return { x, y, rotateX, scale, opacity };
+  void w;
+  return { x, y, rotateX, rotate, scale, opacity, dur };
 }
 
 function PackLaunch({ booster, packs, u, onLaunch, onGone }: { booster: Booster; packs: number; u: number; onLaunch: (points: { x: number; y: number; delay: number }[]) => void; onGone: () => void }) {
   const n = Math.min(packs, 10);
+  const x = useMotionValue(0);
   const y = useMotionValue(0);
   const box = useRef<HTMLDivElement>(null);
-  const [gone, setGone] = useState(false);
-  /** how far the pack had been pulled up when it was let go (the flights start from there) */
-  const [from, setFrom] = useState(0);
-  const [hint, hideHint] = useIdleHint('launch', 900);
+  const [flight, setFlight] = useState<{ from: { x: number; y: number }; paths: ReturnType<typeof flightPath>[] } | null>(null);
+  const gone = !!flight;
+  const [hint, hideHint] = useIdleHint('launch', 1400);
+  // held in the hand: it leans the way it is pulled and tips back a little as it rises
   const lift = useTransform(y, [-u * 14, 0], [1, 0]);
-  const tilt = useTransform(y, [-u * 14, 0, u * 4], [-6, 0, 2]);
+  const tilt = useTransform(x, [-u * 20, u * 20], [-9, 9]);
+  const tipBack = useTransform(y, [-u * 14, 0, u * 4], [16, 0, -4]);
   const glow = useTransform(lift, (v) => 0.25 + v * 0.75);
   const shadow = useTransform(lift, [0, 1], [0.7, 0]);
   const W = typeof window !== 'undefined' ? window.innerWidth : 1000;
   const H = typeof window !== 'undefined' ? window.innerHeight : 600;
-  /** one flight per pack, by launch order (0 = the front pack, first to go) */
-  const paths = useMemo(() => Array.from({ length: n }, (_, o) => flightPath(W, H, o === 0 ? 0.5 : Math.random())), [n, W, H]);
   const restOf = (o: number) => ({ x: o * u * 0.32, y: o * u * 0.26, rotate: n > 1 ? (o % 2 ? 1.2 : -1.2) * Math.min(1, o) : 0, scale: 1, opacity: 1 });
 
-  const launch = () => {
+  const launch = (vx: number, vy: number) => {
     if (gone) return;
     hideHint();
     const r = box.current?.getBoundingClientRect();
-    // the holder must not spring back down under the packs: freeze it and hand its offset to the flights
-    const pulled = y.get();
-    setFrom(pulled);
-    setGone(true);
+    // the holder must not spring back under the packs: freeze it where it was let go and hand that to the flights
+    const from = { x: x.get(), y: y.get() };
+    const paths = Array.from({ length: n }, (_, o) => flightPath(vx, vy, W, H, o === 0 ? 0 : (Math.random() - 0.5) * 0.35));
     const still = () => {
+      x.stop();
       y.stop();
+      x.jump(0);
       y.jump(0);
     };
     still();
     requestAnimationFrame(still);
+    setFlight({ from, paths });
     if (r) {
       // where each pack ends as a point of light; the 3D star carries on from there
-      const cx = r.left + r.width / 2;
-      const cy = r.top + r.height / 2;
+      const cx = r.left + r.width / 2 - from.x;
+      const cy = r.top + r.height / 2 - from.y;
       onLaunch(
-        paths.map((p, o) => ({ x: cx + restOf(o).x + p.x[p.x.length - 1], y: cy + restOf(o).y + p.y[p.y.length - 1], delay: o * LAUNCH_GAP + LAUNCH_FLIGHT * 0.88 })),
+        paths.map((p, o) => ({
+          x: cx + from.x + restOf(o).x + p.x[p.x.length - 1],
+          y: cy + from.y + restOf(o).y + p.y[p.y.length - 1],
+          delay: o * LAUNCH_GAP + p.dur * 0.88,
+        })),
       );
     }
     sfx('magic-holy-2', 0.3);
@@ -566,26 +584,26 @@ function PackLaunch({ booster, packs, u, onLaunch, onGone }: { booster: Booster;
         foley.whoosh();
         vibrate(o === 0 ? 18 : 8);
       }, o * LAUNCH_GAP * 1000);
-    setTimeout(onGone, ((n - 1) * LAUNCH_GAP + LAUNCH_FLIGHT * 0.85) * 1000);
+    setTimeout(onGone, ((n - 1) * LAUNCH_GAP + paths[0].dur * 0.85) * 1000);
   };
 
   return (
     <div className="launch">
-      <motion.div className="launch-title" initial={{ opacity: 0, y: -8 }} animate={{ opacity: gone ? 0 : 1, y: 0 }} transition={{ duration: 0.6, delay: gone ? 0 : 0.4 }}>
-        {packs > 1 ? `${packs}パックを空へ` : 'パックを空へ'}
-      </motion.div>
       <div className="tear-wrap launch-wrap">
         <motion.div
           ref={box}
           className={`launch-pack ${gone ? 'gone' : ''}`}
-          style={{ y, rotate: tilt }}
-          drag={gone ? false : 'y'}
-          dragConstraints={{ top: 0, bottom: 0 }}
-          dragElastic={{ top: 0.75, bottom: 0.12 }}
-          dragTransition={{ bounceStiffness: 380, bounceDamping: 24 }}
+          style={{ x, y, rotate: tilt, rotateX: tipBack, transformPerspective: 900 }}
+          drag={gone ? false : true}
+          dragConstraints={{ top: 0, bottom: 0, left: 0, right: 0 }}
+          // it comes up with the finger almost 1:1, resists being pushed down or sideways
+          dragElastic={{ top: 0.95, bottom: 0.12, left: 0.35, right: 0.35 }}
+          dragMomentum={false}
+          dragTransition={{ bounceStiffness: 420, bounceDamping: 26 }}
           onDragStart={hideHint}
           onDragEnd={(_, info) => {
-            if (info.offset.y < -u * 5 || info.velocity.y < -550) launch();
+            const up = info.offset.y < -u * 6 || info.velocity.y < -420;
+            if (up && info.velocity.y < 300) launch(info.velocity.x, Math.min(info.velocity.y, -900));
           }}
           onTap={() => !gone && animate(y, [0, -u * 2.2, 0], { duration: 0.55, ease: 'easeOut' })}
           initial={{ opacity: 0, scale: 0.9 }}
@@ -597,7 +615,8 @@ function PackLaunch({ booster, packs, u, onLaunch, onGone }: { booster: Booster;
           {Array.from({ length: n }, (_, k) => {
             const order = n - 1 - k; // 0 = the front pack, which leaves first
             const rest = restOf(order);
-            const path = paths[order];
+            const path = flight?.paths[order];
+            const from = flight?.from ?? { x: 0, y: 0 };
             return (
               <motion.div
                 key={k}
@@ -605,29 +624,37 @@ function PackLaunch({ booster, packs, u, onLaunch, onGone }: { booster: Booster;
                 style={{ zIndex: k, transformPerspective: 1100 }}
                 initial={false}
                 animate={
-                  gone
-                    ? { x: path.x.map((v) => v + rest.x), y: path.y.map((v) => v + rest.y + from), rotate: 0, rotateX: path.rotateX, scale: path.scale, opacity: path.opacity, filter: ['brightness(1)', 'brightness(1.6)', 'brightness(2.6)'] }
+                  path
+                    ? {
+                        x: path.x.map((v) => v + rest.x + from.x),
+                        y: path.y.map((v) => v + rest.y + from.y),
+                        rotate: path.rotate,
+                        rotateX: path.rotateX,
+                        scale: path.scale,
+                        opacity: path.opacity,
+                        filter: ['brightness(1)', 'brightness(1.5)', 'brightness(2.6)'],
+                      }
                     : rest
                 }
-                transition={gone ? { duration: LAUNCH_FLIGHT, delay: order * LAUNCH_GAP, ease: 'linear' } : { duration: 0.3 }}
+                transition={path ? { duration: path.dur, delay: order * LAUNCH_GAP, ease: 'linear' } : { duration: 0.3 }}
               >
                 <BoosterPack booster={booster} still={k !== n - 1} />
-                {gone && <motion.i className="launch-trail" initial={{ opacity: 0, scaleY: 0.2 }} animate={{ opacity: [0, 1, 0.9, 0], scaleY: [0.2, 1, 1.4, 1.6] }} transition={{ duration: LAUNCH_FLIGHT, delay: order * LAUNCH_GAP, times: [0, 0.3, 0.8, 1] }} />}
+                {path && <motion.i className="launch-trail" initial={{ opacity: 0, scaleY: 0.2 }} animate={{ opacity: [0, 0.9, 0.7, 0], scaleY: [0.2, 1, 1.3, 1.5] }} transition={{ duration: path.dur, delay: order * LAUNCH_GAP, times: [0, 0.25, 0.75, 1] }} />}
               </motion.div>
             );
           })}
         </motion.div>
         <motion.div className="launch-shadow" style={{ opacity: shadow }} animate={gone ? { opacity: 0 } : undefined} />
       </div>
+      {/* no words: after a pause, a soft chevron shows which way to throw */}
       <AnimatePresence>
-        {!gone && (
-          <motion.div className="launch-cue" initial={{ opacity: 0 }} animate={{ opacity: hint ? 1 : 0.55 }} exit={{ opacity: 0 }} transition={{ duration: 0.5 }}>
+        {!gone && hint && (
+          <motion.div className="launch-cue" initial={{ opacity: 0 }} animate={{ opacity: 0.8 }} exit={{ opacity: 0 }} transition={{ duration: 0.6 }}>
             <div className="launch-chev">
               <i />
               <i />
               <i />
             </div>
-            上にスワイプして、空へ
           </motion.div>
         )}
       </AnimatePresence>
@@ -904,7 +931,11 @@ function TearStage({ booster, god, u, cards, omen, packs, onAura, burstAt, onDon
     if (!s || torn || finishing.current) return;
     const [x, y] = pt;
     const pts = pathRef.current;
-    const inBand = y >= B0 && y <= B1 && x >= -12 && x <= 112;
+    const tipX = pts.length ? pts[pts.length - 1][0] : 0;
+    // a finger drifting a little off the line is pulled back onto it; only a
+    // clear miss (well above or below the band) stops the blade
+    const slack = (B1 - B0) * 1.2;
+    const inBand = y >= B0 - slack && y <= B1 + slack && x >= -12 && x <= 112;
     if (!inBand) {
       // off the line: the blade stops until the finger comes back to the tip
       if (pts.length && !s.lost) {
@@ -916,8 +947,10 @@ function TearStage({ booster, god, u, cards, omen, packs, onAura, burstAt, onDon
       return;
     }
     const cx = Math.max(0, Math.min(100, x));
+    const cy = Math.max(B0 + 1, Math.min(B1 - 1, y));
+    pt = [cx, cy];
     if (!pts.length) {
-      pathRef.current = [[cx, y]];
+      pathRef.current = [[cx, cy]];
       s.lastX = cx;
       s.lastT = performance.now();
       s.t0 = s.lastT;
@@ -925,13 +958,14 @@ function TearStage({ booster, god, u, cards, omen, packs, onAura, burstAt, onDon
     }
     const last = pts[pts.length - 1];
     if (s.lost) {
-      if (Math.abs(cx - last[0]) > 9) return;
+      // the blade waits at the tip: carry on once the finger reaches it again
+      if (Math.abs(cx - tipX) > 14) return;
       s.lost = false;
       setOutside(false);
     }
     if (s.dir === 0) {
       if (Math.abs(cx - last[0]) < 2) {
-        pathRef.current = [[cx, y]];
+        pathRef.current = [[cx, cy]];
         return;
       }
       s.dir = cx > last[0] ? 1 : -1;
@@ -939,12 +973,12 @@ function TearStage({ booster, god, u, cards, omen, packs, onAura, burstAt, onDon
     }
     const adv = (cx - last[0]) * s.dir;
     if (adv < 0.8) return;
-    const next: [number, number][] = [...pts, [cx, y]];
+    const next: [number, number][] = [...pts, [cx, cy]];
     pathRef.current = next;
     setPath(next);
     const p = Math.min(1, Math.abs(cx - next[0][0]) / 70);
     lift.set(s.dir * p);
-    const [hx, hy] = pctToClient([cx, y]);
+    const [hx, hy] = pctToClient([cx, cy]);
     burstAt(hx, hy, 'sparkw', 1, 0.8);
     if (Math.random() < 0.35) burstAt(hx, hy, `aura${auraRef.current}`, 1, 0.8);
     // finger speed in pack widths per second, smoothed
@@ -974,8 +1008,13 @@ function TearStage({ booster, god, u, cards, omen, packs, onAura, burstAt, onDon
   const onDown = (e: React.PointerEvent) => {
     if (torn || locked || finishing.current || healing) return;
     (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
-    g.current = { dir: 0, lost: false, lastBuzz: 0, lastT: 0, lastX: 0, speed: 0, t0: performance.now() };
-    pathRef.current = [];
+    const prev = pathRef.current;
+    // a cut already under way: the new stroke picks it up from the tip
+    const resume = prev.length >= 2;
+    g.current = resume
+      ? { dir, lost: true, lastBuzz: Math.abs(prev[prev.length - 1][0] - prev[0][0]) / 70, lastT: performance.now(), lastX: prev[prev.length - 1][0], speed: 0, t0: performance.now() - 300 }
+      : { dir: 0, lost: false, lastBuzz: 0, lastT: 0, lastX: 0, speed: 0, t0: performance.now() };
+    if (!resume) pathRef.current = [];
     setActive(true);
     hideHint();
     const pt = toPct(e);
@@ -1000,7 +1039,10 @@ function TearStage({ booster, god, u, cards, omen, packs, onAura, burstAt, onDon
     const pts = pathRef.current;
     const done = pts.length >= 2 ? Math.abs(pts[pts.length - 1][0] - pts[0][0]) / 70 : 0;
     if (done >= 0.7) finish();
-    else if (pts.length) heal();
+    // let go part way: the cut stays open and the next stroke carries it on;
+    // only a tiny nick closes up again
+    else if (done < 0.12 && pts.length) heal();
+    else if (pts.length) sound.current?.idle();
     g.current = null;
   };
 
@@ -1053,10 +1095,10 @@ function TearStage({ booster, god, u, cards, omen, packs, onAura, burstAt, onDon
             className={`tear-float ${shaking ? 'shaking' : ''}`}
             ref={packRef}
             initial={{ opacity: 0, filter: 'brightness(4) saturate(0)' }}
-            animate={torn ? { y: 0, opacity: 1, filter: 'brightness(1) saturate(1)' } : { y: [0, -u * 0.45, 0], opacity: 1, filter: 'brightness(1) saturate(1)' }}
+            animate={torn || active || cutting ? { y: 0, opacity: 1, filter: 'brightness(1) saturate(1)' } : { y: [0, -u * 0.45, 0], opacity: 1, filter: 'brightness(1) saturate(1)' }}
             transition={
-              torn
-                ? { duration: 0.3 }
+              torn || active || cutting
+                ? { duration: 0.25 }
                 : { y: { duration: 4.5, repeat: Infinity, ease: 'easeInOut' }, opacity: { duration: 0.35 }, filter: { duration: 0.9, ease: EASE_OUT } }
             }
           >
@@ -1083,7 +1125,7 @@ function TearStage({ booster, god, u, cards, omen, packs, onAura, burstAt, onDon
                   className="tear-part"
                   style={{ zIndex: 4 }}
                   initial={{ y: 0, opacity: 1 }}
-                  animate={packs > 1 ? { y: u * 30, opacity: 0 } : { y: u * 70, opacity: 1 }}
+                  animate={{ y: u * 75, rotate: dir * 4, opacity: 1 }}
                   transition={{ delay: 0.38, duration: 0.85, ease: EASE_IN }}
                 >
                   <BoosterPack booster={booster} part="body" god={god} clip={clips.body} />
@@ -1125,13 +1167,12 @@ function TearStage({ booster, god, u, cards, omen, packs, onAura, burstAt, onDon
                     transition={{ duration: 1.6, times: [0, 0.15, 0.8, 1], repeat: Infinity, repeatDelay: 0.9, ease: EASE_IN_OUT }}
                   />
                 )}
-                <div className="tear-zone" style={{ top: `${B0 - 7}%`, height: `${B1 - B0 + 14}%` }} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp} />
+                <div className="tear-zone" style={{ top: `${B0 - 12}%`, height: `${B1 - B0 + 24}%` }} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp} />
               </>
             )}
           </motion.div>
         </motion.div>
       </div>
-      {torn && packs > 1 && <TornPile booster={booster} u={u} n={Math.min(packs, 10)} fall />}
       <AnimatePresence>
         {snap && <motion.div key="snap" className="tear-flash" initial={{ opacity: 0.9 }} animate={{ opacity: 0.9 }} exit={{ opacity: 0, transition: { duration: 0.5, ease: 'easeOut' } }} />}
       </AnimatePresence>
@@ -1185,8 +1226,9 @@ interface TopProps {
 
 function TopCard({ card, u, first, faceDown, burstAt, onFlipImpact, onFlipped, onGone }: TopProps) {
   const x = useMotionValue(0);
+  const y = useMotionValue(0);
+  // held by the finger: it leans with the pull, the way a card pivots in your hand
   const rotate = useTransform(x, [-u * 45, u * 45], [-14, 14]);
-  const opacity = useTransform(x, [-u * 70, -u * 40, 0, u * 40, u * 70], [0, 1, 1, 1, 0]);
   const controls = useAnimationControls();
   const ref = useRef<HTMLDivElement>(null);
   const busy = useRef(false);
@@ -1248,15 +1290,22 @@ function TopCard({ card, u, first, faceDown, burstAt, onFlipImpact, onFlipped, o
     busy.current = false;
   };
 
-  const fly = (dir: 1 | -1, velocity = 0) => {
+  /** throw it off along (dx, dy) at `speed` px/s; the next card shows once this one has left the screen */
+  const fly = (dx: number, dy: number, speed = 2400) => {
     if (busy.current) return;
     busy.current = true;
     hideHint();
     foley.swipe();
-    const target = dir * window.innerWidth * 0.9;
-    animate(x, target, { type: 'spring', stiffness: 90, damping: 20, velocity: velocity || dir * 2600, restDelta: 40 });
-    controls.start({ y: -u * 2, transition: { duration: 0.4, ease: EASE_OUT } });
-    setTimeout(onGone, 330);
+    const len = Math.hypot(dx, dy) || 1;
+    const far = Math.max(window.innerWidth, window.innerHeight) * 1.1;
+    const tx = x.get() + (dx / len) * far;
+    const ty = y.get() + (dy / len) * far;
+    const dur = Math.max(0.22, Math.min(0.45, far / Math.max(1600, speed)));
+    // ease-out so it leaves with the finger's speed instead of starting from rest
+    const ease = [0.25, 0.75, 0.45, 1] as const;
+    animate(x, tx, { duration: dur, ease });
+    animate(y, ty, { duration: dur, ease });
+    setTimeout(onGone, dur * 1000 * 0.9);
   };
 
   const rc = rareColor(card.rarity);
@@ -1265,18 +1314,23 @@ function TopCard({ card, u, first, faceDown, burstAt, onFlipImpact, onFlipped, o
       <motion.div
         ref={ref}
         className="sc top"
-        style={{ x, rotate, opacity, rotateY: ry, ['--rc' as string]: rc }}
+        style={{ x, y, rotate, rotateY: ry, ['--rc' as string]: rc }}
         initial={{ rotateY: faceDown ? 180 : 0, scale: 0.985 }}
         animate={controls}
-        drag={up ? 'x' : false}
-        dragConstraints={{ left: 0, right: 0 }}
-        dragElastic={0.85}
-        dragTransition={{ bounceStiffness: 300, bounceDamping: 26 }}
+        // it follows the finger anywhere; let go and it is thrown the way it was moving
+        drag={up}
+        dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
+        dragElastic={0.9}
+        dragMomentum={false}
+        dragTransition={{ bounceStiffness: 320, bounceDamping: 26 }}
         onDragStart={hideHint}
         onDragEnd={(_, info) => {
-          if (Math.abs(info.offset.x) > u * 6 || Math.abs(info.velocity.x) > 500) fly(info.offset.x > 0 ? 1 : -1, info.velocity.x);
+          const sp = Math.hypot(info.velocity.x, info.velocity.y);
+          const dist = Math.hypot(info.offset.x, info.offset.y);
+          if (sp > 450) fly(info.velocity.x, info.velocity.y, sp);
+          else if (dist > u * 7) fly(info.offset.x, info.offset.y, 1800);
         }}
-        onTap={() => (!up ? flip() : fly(-1))}
+        onTap={() => (!up ? flip() : fly(-1, -0.15))}
       >
         {star && <motion.div className="halo" animate={{ scale: [1, 1.06, 1], opacity: up ? [0.35, 0.5, 0.35] : [0.28, 0.45, 0.28] }} transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }} />}
         <motion.div className="sc-face" style={{ visibility: frontVis }}>
@@ -1296,45 +1350,6 @@ function TopCard({ card, u, first, faceDown, burstAt, onFlipImpact, onFlipped, o
         )}
       </AnimatePresence>
     </>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// 10連: the opened packs tumble down and pile up at the bottom of the screen
-// ---------------------------------------------------------------------------
-function pileSpot(k: number) {
-  const r = (n: number) => {
-    const v = Math.sin((k + 1) * 12.9898 + n * 78.233) * 43758.5453;
-    return v - Math.floor(v);
-  };
-  return { x: (r(1) - 0.5) * 70, y: r(2) * 5, rot: (r(3) - 0.5) * 80 };
-}
-
-function TornPile({ booster, u, n, fall }: { booster: Booster; u: number; n: number; fall: boolean }) {
-  // a soft thud as each pack lands
-  useEffect(() => {
-    if (!fall) return;
-    const ts = Array.from({ length: n }, (_, k) => setTimeout(() => foley.place(), 350 + k * 90 + 700));
-    return () => ts.forEach(clearTimeout);
-  }, [fall, n]);
-  return (
-    <div className="torn-pile">
-      {Array.from({ length: n }, (_, k) => {
-        const p = pileSpot(k);
-        return (
-          <motion.div
-            key={k}
-            className="torn-piece"
-            style={{ zIndex: k }}
-            initial={fall ? { x: 0, y: -u * 30, scale: 2, rotate: 0, opacity: 0 } : false}
-            animate={{ x: p.x * u, y: p.y * u, scale: 1, rotate: p.rot, opacity: 1 }}
-            transition={fall ? { delay: 0.35 + k * 0.09, duration: 0.75, ease: [0.3, 0, 0.2, 1], opacity: { delay: 0.35 + k * 0.09, duration: 0.05 } } : { duration: 0 }}
-          >
-            <BoosterPack booster={booster} part="body" still />
-          </motion.div>
-        );
-      })}
-    </div>
   );
 }
 

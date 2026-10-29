@@ -89,6 +89,15 @@ function FloaterView({ f }: { f: Floater }) {
           <div className="fx-ko">{f.text}</div>
         </motion.div>
       );
+    case 'pillar': {
+      // a column of light standing on the card while it evolves
+      const w = f.scale ?? 100;
+      return (
+        <motion.div className="fx-anchor" style={common} initial={{ opacity: 0 }} animate={{ opacity: [0, 1, 1, 0] }} transition={{ duration: dur, times: [0, 0.25, 0.6, 1] }}>
+          <motion.div className="fx-pillar" style={{ width: w * 0.9, height: w * 3.2 }} initial={{ scaleX: 0.15 }} animate={{ scaleX: [0.15, 1, 1.25] }} transition={{ duration: dur, times: [0, 0.35, 1], ease: 'easeOut' }} />
+        </motion.div>
+      );
+    }
     case 'ability':
       return (
         <motion.div className="fx-anchor" style={common} initial={{ y: 10, opacity: 0 }} animate={{ y: 0, opacity: [0, 1, 1, 0] }} transition={{ duration: dur }}>

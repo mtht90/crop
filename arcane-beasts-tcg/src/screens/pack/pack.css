@@ -280,7 +280,9 @@
 .tear-wrap { position: absolute; left: 50%; top: calc(var(--u) * 6.6); width: calc(var(--u) * 24); margin-left: calc(var(--u) * -12); z-index: 10; }
 .tear-float { position: relative; width: 100%; aspect-ratio: 60 / 100; }
 .tear-float > .bp, .tear-part { position: absolute; inset: 0; }
-.tear-zone { position: absolute; left: -15%; right: -15%; cursor: crosshair; z-index: 6; touch-action: none; }
+.tear-zone { position: absolute; left: -15%; right: -15%; cursor: crosshair; z-index: 12; touch-action: none; }
+/* the peeled strip and the blade marker must not catch the finger: a second stroke has to reach the zone */
+.tear-part, .tear-head, .tear-band, .tear-guide, .tear-dot { pointer-events: none; }
 .tear-guide {
   position: absolute;
   left: 4%;
@@ -708,9 +710,6 @@
 
 /* ------------------------------- Pack pick ------------------------------ */
 
-.torn-pile { position: absolute; left: 50%; top: calc(var(--u) * 42); width: 0; height: 0; z-index: 4; pointer-events: none; }
-.torn-piece { position: absolute; width: calc(var(--u) * 11); margin-left: calc(var(--u) * -5.5); aspect-ratio: 60 / 100; filter: brightness(0.7) drop-shadow(0 6px 10px rgba(0, 0, 0, 0.5)); }
-.torn-piece > .bp { position: absolute; inset: 0; }
 .multi-filter { margin-left: calc(var(--u) * 1.2); }
 .multi-filter button { font-size: calc(var(--u) * 0.8); padding: 2px calc(var(--u) * 0.8); letter-spacing: 0.04em; }
 .multi-filter button:disabled { opacity: 0.4; cursor: default; }
@@ -787,14 +786,33 @@
   .po-skip { font-size: calc(var(--u) * 1.6) !important; }
 }
 
-/* ★ colours behind revealed cards: grey, blue, gold, rainbow, rainbow-gold */
-.multi-item::before, .results-item::before { content: ''; position: absolute; inset: -6%; border-radius: 10%; z-index: -1; pointer-events: none; opacity: 0; filter: blur(10px); transition: opacity 0.4s; }
+/* ★ colours on revealed cards: a soft light hugging the card's edge — none for
+   ★1, blue ★2, gold ★3; ★4 and ★5 get a thin rim whose rainbow slowly runs
+   round the card (★5 on gold), instead of a glow blob behind it */
+@property --rim { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+.multi-item::before, .results-item::before { content: ''; position: absolute; inset: 0; border-radius: 5.5% / 4%; z-index: -1; pointer-events: none; opacity: 0; transition: opacity 0.5s; }
 .multi-item:not(.down)::before, .results-item::before { opacity: 1; }
-.multi-item.r1::before, .results-item.r1::before { background: radial-gradient(closest-side, rgba(184, 190, 201, 0.35), transparent); }
-.multi-item.r2::before, .results-item.r2::before { background: radial-gradient(closest-side, rgba(90, 176, 255, 0.55), transparent); }
-.multi-item.r3::before, .results-item.r3::before { background: radial-gradient(closest-side, rgba(255, 194, 69, 0.7), transparent); }
-.multi-item.r4::before, .results-item.r4::before { background: conic-gradient(from 0deg, #ff6b9a, #ffd36b, #7dff9a, #6bd6ff, #b18bff, #ff6b9a); animation: r-spin 4s linear infinite; opacity: 0.85; }
-.multi-item.r5::before, .results-item.r5::before { background: conic-gradient(from 0deg, #fff1a8, #ff9ad5, #ffe066, #9ae6ff, #fff1a8, #ffc94d, #fff1a8); animation: r-spin 3s linear infinite; opacity: 1; filter: blur(8px) brightness(1.2); }
 .multi-item.down::before { opacity: 0 !important; }
-@keyframes r-spin { to { transform: rotate(360deg); } }
+.multi-item.r2::before, .results-item.r2::before { box-shadow: 0 0 10px rgba(90, 176, 255, 0.45), 0 0 22px rgba(90, 176, 255, 0.2); }
+.multi-item.r3::before, .results-item.r3::before { box-shadow: 0 0 12px rgba(255, 194, 69, 0.55), 0 0 28px rgba(255, 170, 40, 0.25); }
+.multi-item.r4::after, .results-item.r4::after,
+.multi-item.r5::after, .results-item.r5::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 6% / 4.3%;
+  padding: 2px;
+  pointer-events: none;
+  z-index: 3;
+  background: conic-gradient(from var(--rim), #ff7ad9, #ffd84a, #7dffa8, #6bd6ff, #b18bff, #ff7ad9);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  animation: rim-run 5s linear infinite;
+}
+.multi-item.r5::after, .results-item.r5::after { background: conic-gradient(from var(--rim), #fff3b0, #ffc93a, #fff3b0, #ff9ad5, #ffc93a, #9ae6ff, #fff3b0); animation-duration: 4s; }
+.multi-item.down::after { opacity: 0; }
+.multi-item.r4::before, .results-item.r4::before { box-shadow: 0 0 14px rgba(255, 140, 220, 0.4), 0 0 30px rgba(120, 200, 255, 0.22); }
+.multi-item.r5::before, .results-item.r5::before { box-shadow: 0 0 16px rgba(255, 210, 90, 0.6), 0 0 36px rgba(255, 190, 60, 0.3); }
+@keyframes rim-run { to { --rim: 360deg; } }
 .multi-item, .results-item { isolation: isolate; }

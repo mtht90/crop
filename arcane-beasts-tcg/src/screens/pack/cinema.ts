@@ -31,9 +31,9 @@ import { liteFx, reportFrameTime } from '../../lib/fx';
 /** the best ★ in the pack: 1 grey, 2 blue, 3 gold, 4 rainbow, 5 rainbow-gold */
 export type OmenTier = 1 | 2 | 3 | 4 | 5;
 
-export const OMEN_COLORS: Record<OmenTier, string> = { 1: '#c4cad6', 2: '#4fa8ff', 3: '#ffc245', 4: '#ff79d6', 5: '#ffe08a' };
+export const OMEN_COLORS: Record<OmenTier, string> = { 1: '#b9c2d3', 2: '#3d8eff', 3: '#ffb22e', 4: '#ff5fd2', 5: '#ffc93a' };
 /** how much of the rainbow runs through each tier's light (★5: rainbow laid over gold) */
-export const OMEN_RAINBOW: Record<OmenTier, number> = { 1: 0, 2: 0, 3: 0, 4: 1, 5: 0.55 };
+export const OMEN_RAINBOW: Record<OmenTier, number> = { 1: 0, 2: 0, 3: 0, 4: 1, 5: 0.4 };
 
 /** the quiet opening before the meteors; the rest of the timeline is written relative to it */
 const T0 = 3.5;
@@ -42,8 +42,9 @@ const L_IMPACT = 2.55;
 const L_DONE = 4.45;
 export const T_IMPACT = T0 + L_IMPACT;
 export const T_DONE = T0 + L_DONE;
-/** where the shower radiates from: high up ahead, where the launched packs went */
-const RADIANT = new THREE.Vector3(-90, 320, -440);
+/** where the launched pack stops as a star, and where the whole shower then
+ *  radiates from: the main meteor falls from here, the rest streak away from it */
+const RADIANT = new THREE.Vector3(-40, 215, -390);
 const MOON_DIR = new THREE.Vector3(0.5, 0.3, -0.81).normalize();
 
 type Beat = 'twinkle' | 'enter' | 'dive' | 'impact' | 'orb' | 'morph';
@@ -62,6 +63,7 @@ export interface CinemaOptions {
   holdAt?: number;
 }
 
+const CINE_SLOW = typeof location !== 'undefined' ? Math.max(1, Number(new URLSearchParams(location.search).get('cineslow')) || 1) : 1;
 const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
 const smooth = (a: number, b: number, t: number) => {
   const x = clamp01((t - a) / (b - a));
@@ -371,30 +373,67 @@ void main(){
 }
 `;
 
-// flames licking up around the pack; colour = omen, uHot = trembling before a promotion
+// the pack's aura, layered by ★ (uTier 1..5):
+//   a wide halo of the omen colour, flame tongues with a hot core licking up
+//   from the edges, slowly turning light rays from ★3, twinkling glints at ★4/★5.
+//   ★4 runs the rainbow round the edge; ★5 is gold with a rainbow sheen.
+//   uHot = trembling before a promotion (昇格)
 const AURA_FRAG = /* glsl */ `
-uniform vec2 uHalf; uniform vec3 uColor; uniform float uTime; uniform float uAmt; uniform float uHot; uniform float uRainbow;
+uniform vec2 uHalf; uniform vec3 uColor; uniform float uTime; uniform float uAmt; uniform float uHot; uniform float uRainbow; uniform float uTier;
 varying vec2 vUv;
 ${NOISE}
+float h21(vec2 p){ return fract(sin(dot(p, vec2(41.3, 289.1))) * 43758.5453); }
 void main(){
   vec2 p = (vUv - 0.5) * 2.0;
   float d = sdBox(p, uHalf, 0.03);
-  if (d < -0.01) discard;
-  float speed = 1.4 + uHot * 2.6;
-  // tongues of flame: noise stretched vertically and scrolling upward
-  float n = fbm(vec3(p.x * 7.0, p.y * 2.2 - uTime * speed, uTime * 0.4));
-  float n2 = fbm(vec3(p.x * 13.0 + 3.0, p.y * 3.5 - uTime * speed * 1.5, uTime * 0.6));
-  float up = smoothstep(-0.2, 0.9, p.y);
-  float reach = 0.05 + 0.07 * n + up * 0.12 * n2 + uHot * 0.06;
+  if (d < -0.012) discard;
   float x = max(d, 0.0);
-  float body = exp(-x / reach * 1.4);
-  float tongues = smoothstep(0.42, 0.75, n2 * (0.7 + 0.6 * n)) * exp(-x / (reach * 2.6));
-  float edge = exp(-x * 55.0);
-  vec3 tint = mix(uColor, hsv2rgb(vec3(fract(p.y * 0.25 + p.x * 0.2 - uTime * 0.18), 0.75, 1.0)), uRainbow);
-  float flick = 1.0 + 0.25 * sin(uTime * 31.0) * uHot;
-  vec3 col = tint * (body * 0.7 + tongues * 1.1) + mix(tint, vec3(1.0), 0.65) * edge * 0.8;
-  float a = clamp((body * 0.5 + tongues * 0.9 + edge * 0.6) * uAmt * flick, 0.0, 1.0);
-  gl_FragColor = vec4(col * a, a);
+  float tier = uTier;
+  float ang = atan(p.y, p.x);
+  float speed = 1.2 + uHot * 3.0;
+  // colour: the omen, rainbow running round the edge for ★4, a sheen over gold for ★5
+  float hue = fract(ang / 6.2832 + uTime * 0.12 + p.y * 0.15);
+  vec3 bow = hsv2rgb(vec3(hue, 0.85, 1.0));
+  vec3 tint = mix(uColor, bow, uRainbow);
+  vec3 hot = mix(tint, vec3(1.0), 0.3);
+  // 1) wide soft halo
+  float halo = exp(-x * (6.0 - tier * 0.6)) * (0.07 + tier * 0.035);
+  // 2) flame tongues scrolling upward
+  float n = fbm(vec3(p.x * 6.0, p.y * 2.0 - uTime * speed, uTime * 0.35));
+  float n2 = fbm(vec3(p.x * 12.0 + 3.0, p.y * 3.2 - uTime * speed * 1.6, uTime * 0.6));
+  float up = smoothstep(-0.3, 1.0, p.y);
+  float reach = (0.05 + 0.012 * tier) + 0.08 * n + up * (0.08 + 0.03 * tier) * n2 + uHot * 0.07;
+  float body = exp(-x / reach * 1.6);
+  float tongue = smoothstep(0.45, 0.78, n2 * (0.75 + 0.6 * n)) * exp(-x / (reach * 2.4));
+  float core = exp(-x * 70.0);
+  // 3) light rays turning slowly (★3 and up)
+  float rays = 0.0;
+  if (tier > 2.5) {
+    float k = 10.0 + tier * 3.0;
+    float r1 = pow(0.5 + 0.5 * sin(ang * k + uTime * 0.5 + n * 2.0), 10.0);
+    float r2 = pow(0.5 + 0.5 * sin(ang * (k * 0.5 + 1.0) - uTime * 0.35), 14.0);
+    rays = (r1 + r2 * 0.7) * smoothstep(0.0, 0.04, x) * exp(-x * 3.0) * (tier - 2.0) * 0.16;
+  }
+  // 4) glints that wink in and out around the pack (★4 and up)
+  float glint = 0.0;
+  if (tier > 3.5) {
+    vec2 g = p * 9.0;
+    vec2 cell = floor(g);
+    vec2 f = fract(g) - 0.5;
+    float rnd = h21(cell);
+    float tw = pow(max(0.0, sin(uTime * (1.5 + rnd * 2.5) + rnd * 40.0)), 12.0);
+    float star = max(0.0, 1.0 - length(f) * 7.0) + max(0.0, 1.0 - abs(f.x) * 30.0) * max(0.0, 1.0 - abs(f.y) * 4.0) + max(0.0, 1.0 - abs(f.y) * 30.0) * max(0.0, 1.0 - abs(f.x) * 4.0);
+    glint = star * tw * step(0.78, rnd) * smoothstep(0.0, 0.05, x) * exp(-x * 3.0) * (tier - 3.0) * 1.4;
+  }
+  float flick = 1.0 + 0.3 * sin(uTime * 31.0) * uHot;
+  vec3 col = tint * halo
+           + tint * body * 0.6
+           + mix(tint, hot, 0.4) * tongue * 0.85
+           + hot * core * 0.7
+           + tint * rays
+           + mix(vec3(1.0), bow, 0.35 * uRainbow) * glint;
+  col *= uAmt * flick;
+  gl_FragColor = vec4(col, clamp(max(col.r, max(col.g, col.b)), 0.0, 1.0));
 }
 `;
 
@@ -796,22 +835,30 @@ export class MeteorCinema {
       this.scene.add(ribbon.mesh, glow, head);
       this.meteors.push({ ribbon, head, glow, path: new THREE.CatmullRomCurve3(path), t0, t1, main, span: main ? 0.55 : many ? 0.22 : 0.35 });
     };
-    mk(
-      [new THREE.Vector3(-30, 205, -380), new THREE.Vector3(-95, 140, -290), new THREE.Vector3(-55, 62, -170), new THREE.Vector3(-6, 14, -75), this.IMPACT.clone()],
-      1.0,
-      L_IMPACT,
-      true,
-      tiers[0],
-    );
+    // the main meteor: one smooth arc from the star down to the lake, bowing
+    // only slightly (like something falling from far away), never doubling back
     const radiant = RADIANT.clone();
+    const ctl = radiant.clone().lerp(this.IMPACT, 0.5).add(new THREE.Vector3(18, 34, 0));
+    const arc: THREE.Vector3[] = [];
+    for (let i = 0; i <= 6; i++) {
+      const u = i / 6;
+      // quadratic Bézier radiant → ctl → impact
+      arc.push(radiant.clone().multiplyScalar((1 - u) * (1 - u)).addScaledVector(ctl, 2 * u * (1 - u)).addScaledVector(this.IMPACT, u * u));
+    }
+    mk(arc, 1.0, L_IMPACT, true, tiers[0]);
     const rnd = (a: number, b: number) => a + Math.random() * (b - a);
     const rest = tiers.slice(1);
     rest.forEach((tier, k) => {
       const f = rest.length > 1 ? k / (rest.length - 1) : 0.5;
       const t0 = 0.85 + f * 1.45 + rnd(-0.08, 0.08);
-      const start = radiant.clone().add(new THREE.Vector3(rnd(-60, 160), rnd(-90, 30), rnd(-40, 60)));
-      const dir = start.clone().sub(radiant).add(new THREE.Vector3(140, -80, 0)).normalize();
-      const len = rnd(90, 190);
+      // each starts a little way out from the radiant and streaks straight away
+      // from it, falling as it goes (the whole shower points back to one spot)
+      // they fan out below the radiant (left, down, right) — nothing climbs back up
+      const ang = -Math.PI * (0.12 + 0.76 * ((k + 0.5) / Math.max(1, rest.length))) + rnd(-0.12, 0.12);
+      const out = new THREE.Vector3(Math.cos(ang), Math.sin(ang) * 0.6, rnd(-0.2, 0.2)).normalize();
+      const start = radiant.clone().addScaledVector(out, rnd(18, 50));
+      const dir = out.clone().multiplyScalar(0.6).add(new THREE.Vector3(0, -0.8, 0.15)).normalize();
+      const len = rnd(90, 180);
       const end = start.clone().addScaledVector(dir, len);
       const mid = start.clone().lerp(end, 0.5);
       mk([start, mid, end], t0, t0 + rnd(0.45, 0.8) * (many ? 0.8 : 1), false, tier);
@@ -981,7 +1028,7 @@ export class MeteorCinema {
     this.morph = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), planeMat(MORPH_FRAG, { uRadius: { value: 0.3 }, uFill: { value: 0 }, uGlow: { value: 0 } }));
     this.morph.visible = false;
     this.morph.renderOrder = 10;
-    this.aura = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), planeMat(AURA_FRAG, { uAmt: { value: 0 }, uHot: { value: 0 } }));
+    this.aura = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), planeMat(AURA_FRAG, { uAmt: { value: 0 }, uHot: { value: 0 }, uTier: { value: this.opts.god ? 5 : this.opts.tier } }));
     this.aura.visible = false;
     this.aura.renderOrder = 9;
     this.camera.add(this.morph, this.aura);
@@ -1029,7 +1076,7 @@ export class MeteorCinema {
     this.rise = { screen: main, from: null, t0: t0 + main.delay, base: t0 };
     const rnd = (a: number, b: number) => a + Math.random() * (b - a);
     for (const p of rest.slice(0, 9)) {
-      const to = RADIANT.clone().add(new THREE.Vector3(rnd(-110, 150), rnd(-120, 20), rnd(-30, 50)));
+      const to = RADIANT.clone().add(new THREE.Vector3(rnd(-45, 45), rnd(-30, 25), rnd(-20, 20)));
       this.riseExtra.push({ to, screen: p, from: null, delay: p.delay, core: this.riseSprite(0.55, false), halo: this.riseSprite(0.3, true) });
     }
     this.offset += this.hold - this.time();
@@ -1053,6 +1100,7 @@ export class MeteorCinema {
       this.auraTier = tier;
       this.pulse = 1;
       (this.aura.material as THREE.ShaderMaterial).uniforms.uRainbow.value = OMEN_RAINBOW[tier];
+      (this.aura.material as THREE.ShaderMaterial).uniforms.uTier.value = tier;
     }
     this.auraTarget = visible ? 1 : 0;
     this.auraHotTarget = hot ? 1 : 0;
@@ -1135,7 +1183,8 @@ export class MeteorCinema {
   private meteorS(m: Meteor, T: number) {
     const x = clamp01((T - m.t0) / (m.t1 - m.t0));
     if (!m.main) return x;
-    return x < 0.6 ? (x / 0.6) * 0.5 : 0.5 + easeInCubic((x - 0.6) / 0.4) * 0.5;
+    // it never slows: it keeps gathering speed as it comes down toward you
+    return 0.55 * x + 0.45 * x * x * x;
   }
 
   // -------------------------------------------------------------------------
@@ -1147,7 +1196,8 @@ export class MeteorCinema {
       this.last = now;
     }
     const raw = (now - this.last) / 1000;
-    const dt = Math.min(1 / 15, raw);
+    // ?cineslow=N plays the whole cinematic N times slower (for checking it frame by frame)
+    const dt = Math.min(1 / 15, raw) / CINE_SLOW;
     // adaptive resolution: sustained slow frames → render at 75%, then 55%
     this.slow = this.slow * 0.95 + (raw > 0.034 ? 1 : 0) * 0.05;
     if (this.slow > 0.6 && this.renderer.getPixelRatio() > 0.56) {
@@ -1191,7 +1241,7 @@ export class MeteorCinema {
     look.set(-30 * up1 + intro * 14, 4 + 150 * up1 - intro * 20, -300);
     const main = this.meteors[0];
     const follow = smooth(1.7, 2.35, T);
-    if (follow > 0) look.lerp(main.path.getPointAt(this.meteorS(main, Math.min(T, main.t1))), follow * 0.8);
+    if (follow > 0) look.lerp(main.path.getPointAt(this.meteorS(main, Math.min(T, main.t1))), follow * 0.5);
     const settle = smooth(L_IMPACT - 0.05, L_IMPACT + 0.9, T);
     if (settle > 0) look.lerp(new THREE.Vector3(0, 1.2, -60), easeInOut(settle));
     camPos.set(Math.sin(amb * 0.37) * 0.08 - intro * 0.5, 1.4 + Math.sin(amb * 0.53) * 0.05 - intro * 0.35, 7.8 - 3.0 * smooth(0, T_DONE, Tr));
@@ -1233,7 +1283,7 @@ export class MeteorCinema {
       if (vis > 0 && climb < 0.98 && Math.random() < 0.8) this.emit(pos, 1, d * 0.012, -0.6);
       // the camera lifts its gaze after it
       const seek = smooth(t0, t0 + 0.6, t) * (1 - smooth(T0 + 1.6, T0 + 2.2, t));
-      look.lerp(pos.clone().lerp(new THREE.Vector3(-30, 60, -300), 0.35), seek * 0.75);
+      look.lerp(pos.clone().lerp(new THREE.Vector3(-30, 60, -300), 0.35), seek * 0.5);
     }
     if (this.rise) {
       const base = this.rise.base;
@@ -1368,7 +1418,7 @@ export class MeteorCinema {
     this.aura.visible = this.auraAmt > 0.01;
     if (this.aura.visible) {
       const { w: tw, h: th } = this.targetSize(target, D);
-      const size = Math.max(tw, th) * 1.5;
+      const size = Math.max(tw, th) * 1.9;
       const au = (this.aura.material as THREE.ShaderMaterial).uniforms;
       this.aura.position.copy(orbCam);
       this.aura.scale.set(size, size, 1);
@@ -1376,7 +1426,7 @@ export class MeteorCinema {
       au.uColor.value.copy(this.auraColor);
       au.uTime.value = t;
       au.uHot.value = this.auraHot + this.pulse;
-      const base = [0.25, 0.45, 0.75, 0.95, 1.15][this.auraTier - 1];
+      const base = [0.55, 0.75, 0.95, 1.05, 1.15][this.auraTier - 1];
       au.uAmt.value = this.auraAmt * (base + this.pulse * 0.8);
     }
 

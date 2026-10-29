@@ -622,13 +622,20 @@
 .fx-anchor > * { position: absolute; left: 0; top: 0; transform: translate(-50%, -50%); white-space: nowrap; }
 .fx-dmg {
   font-family: var(--font-display);
-  font-size: calc(var(--u) * 3.6);
-  color: #fff;
-  -webkit-text-stroke: calc(var(--u) * 0.25) #9b0010;
+  font-size: calc(var(--u) * 3.8);
+  line-height: 1;
+  padding: 0.1em 0.15em;
+  background: linear-gradient(180deg, #ffffff 0%, #fff1d0 45%, #ffb14a 55%, #ff5a2a 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-stroke: calc(var(--u) * 0.28) #5a0010;
   paint-order: stroke fill;
-  text-shadow: 0 4px 0 #5a0008, 0 0 20px rgba(255, 60, 60, 0.8);
+  filter: drop-shadow(0 calc(var(--u) * 0.35) 0 #2a0008) drop-shadow(0 0 calc(var(--u) * 1.4) rgba(255, 70, 40, 0.75));
+  letter-spacing: 0.02em;
 }
-.fx-dmg.big { font-size: calc(var(--u) * 5); color: #fff4c4; -webkit-text-stroke-color: #b00020; }
+.fx-dmg.big { font-size: calc(var(--u) * 5.4); background: linear-gradient(180deg, #ffffff 0%, #fff6b0 40%, #ffd23a 55%, #ff3b1f 100%); -webkit-background-clip: text; background-clip: text; filter: drop-shadow(0 calc(var(--u) * 0.4) 0 #2a0008) drop-shadow(0 0 calc(var(--u) * 2) rgba(255, 150, 40, 0.9)); }
+.fx-pillar { transform-origin: 50% 50%; translate: -50% -60%; border-radius: 50%; background: radial-gradient(ellipse 50% 50% at 50% 50%, rgba(255, 255, 255, 0.95), rgba(255, 236, 170, 0.6) 35%, rgba(255, 210, 110, 0.18) 65%, transparent 75%); mix-blend-mode: screen; filter: blur(2px); }
 .fx-heal {
   font-family: var(--font-display);
   font-size: calc(var(--u) * 3);

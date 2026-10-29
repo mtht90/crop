@@ -445,14 +445,16 @@ export const PACK_TABLE: Slot[] = [
   [[1, 0.8], [2, 1]],
   [[1, 0.75], [2, 1]],
   [[2, 0.75], [3, 1]],
-  [[2, 0.4], [3, 0.95], [4, 0.996], [5, 1]],
+  // ★4 about 1 pack in 100, ★5 about 1 in 2000 (with the god pack)
+  [[2, 0.4], [3, 0.9896], [4, 0.9996], [5, 1]],
 ];
 export const PREMIUM_TABLE: Slot[] = [
   [[1, 0.5], [2, 0.95], [3, 1]],
   [[1, 0.45], [2, 0.93], [3, 1]],
   [[2, 0.7], [3, 1]],
-  [[3, 0.9], [4, 0.99], [5, 1]],
-  [[3, 0.8], [4, 0.97], [5, 1]],
+  // about three times the normal pack: ★4 ~3%, ★5 ~0.15% per pack
+  [[3, 0.9895], [4, 0.9995], [5, 1]],
+  [[3, 0.979], [4, 0.9992], [5, 1]],
 ];
 /** a very rare pack where every card is ★3 or better */
 const GOD_TABLE: Slot[] = [[[3, 1]], [[3, 1]], [[4, 1]], [[4, 1]], [[5, 1]]];
@@ -487,7 +489,7 @@ export interface PackResult {
 
 export function openPack(b: Booster = NORMAL_BOOSTER): PackResult {
   const premium = !!b.premium;
-  const god = Math.random() < (premium ? 0.004 : 0.001) || (typeof location !== 'undefined' && location.search.includes('godpack'));
+  const god = Math.random() < (premium ? 0.0003 : 0.0001) || (typeof location !== 'undefined' && location.search.includes('godpack'));
   const table = god ? GOD_TABLE : premium ? PREMIUM_TABLE : PACK_TABLE;
   const cards = table.map((t) => draw(roll(t), premium || god ? PREMIUM_PRINTING_CHANCE : PRINTING_CHANCE));
   cards.sort((x, y) => x.rarity - y.rarity || (x.variant ? 1 : 0) - (y.variant ? 1 : 0));
