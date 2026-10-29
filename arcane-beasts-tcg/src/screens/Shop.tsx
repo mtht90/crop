@@ -766,8 +766,6 @@ function TearStage({ booster, god, u, cards, omen, packs, onAura, burstAt, onDon
   }, []);
   const ring = useTransform(charge, (c) => 1 - c);
   const squeeze = useTransform(charge, (c) => 1 - c * 0.035);
-  /** the world goes dark around the pack as it fills, most of all at the last peak */
-  const dark = charged ? 0 : stage >= 3 ? 0.72 : stage === 2 ? 0.42 : stage === 1 ? 0.2 : 0;
   const auraRef = useRef(aura);
   auraRef.current = aura;
   const packRef = useRef<HTMLDivElement>(null);
@@ -1049,16 +1047,7 @@ function TearStage({ booster, god, u, cards, omen, packs, onAura, burstAt, onDon
           })}
       </motion.div>
 
-      {/* the world falls dark round the pack as the charge peaks; only its light is left */}
-      <motion.div className="charge-dim" initial={false} animate={{ opacity: inhale ? 0.85 : dark }} transition={{ duration: inhale ? 0.5 : 0.9, ease: 'easeOut' }} />
       <div className="tear-wrap" style={{ ['--ac' as string]: OMEN_COLORS[aura] }}>
-        {!charged && (
-          <div className="charge-pips">
-            {[1, 2, 3].map((k) => (
-              <motion.i key={k} className={stage >= k ? 'on' : ''} animate={stage >= k ? { scale: [1.8, 1] } : { scale: 1 }} transition={{ duration: 0.35, ease: EASE_OUT }} />
-            ))}
-          </div>
-        )}
         <PackAura tier={aura} promo={promo} />
         {packs > 1 && (
           <motion.div className="tear-bundle" initial={{ opacity: 0 }} animate={{ opacity: torn ? 0 : 1 }} transition={{ duration: torn ? 0.3 : 0.6, delay: torn ? 0 : 0.2 }}>

@@ -837,8 +837,3 @@
 .charge-ring rect { fill: none; stroke: var(--ac, #fff); stroke-width: 1.1px; vector-effect: non-scaling-stroke; stroke-dasharray: 1; stroke-linecap: round; filter: drop-shadow(0 0 3px var(--ac, #fff)) drop-shadow(0 0 8px var(--ac, #fff)); }
 .tear-float.charging .charge-ring rect { stroke: color-mix(in srgb, var(--ac, #fff) 55%, white); stroke-width: 2.4px; }
 .tear-float.charging > .bp { filter: brightness(1.08); }
-/* the charge's three peaks, and the dark that closes in round the pack */
-.charge-dim { position: absolute; inset: -10%; z-index: 9; pointer-events: none; background: radial-gradient(ellipse 34% 30% at 50% 44%, transparent 0%, rgba(2, 3, 8, 0.55) 55%, #020308 100%); }
-.charge-pips { position: absolute; left: 0; right: 0; bottom: -9%; display: flex; justify-content: center; gap: 4%; pointer-events: none; }
-.charge-pips i { width: 7%; aspect-ratio: 1; border-radius: 50%; border: 1.5px solid color-mix(in srgb, var(--ac, #fff) 60%, white); opacity: 0.45; transform: rotate(45deg); border-radius: 22%; }
-.charge-pips i.on { opacity: 1; background: color-mix(in srgb, var(--ac, #fff) 50%, white); box-shadow: 0 0 8px var(--ac, #fff), 0 0 18px var(--ac, #fff); }
