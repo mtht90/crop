@@ -8,12 +8,60 @@ export type MusicKey = 'title' | 'menu' | 'shop' | 'battle1' | 'battle2' | 'batt
 const vol = { master: 0.8, music: 0.5, sfx: 0.8 };
 const sfxCache = new Map<string, Howl>();
 let musicKey: MusicKey | null = null;
-let music: Howl | null = null;
+
+// ---------------------------------------------------------------------------
+// Music: one <audio> element, reused for every track, played through Web Audio.
+// Streaming keeps memory low (tracks are several MB), and the gain node is what
+// makes the volume and fades work on iPhone / iPad, where an <audio> element's
+// own volume is read-only. (A new player per screen used to pile up there
+// until the browser's pool ran out.)
+// ---------------------------------------------------------------------------
+let musicEl: HTMLAudioElement | null = null;
+let musicGain: GainNode | null = null;
+let wantPlay = false;
+function musicNodes() {
+  if (musicEl) return musicEl;
+  musicEl = new Audio();
+  musicEl.preload = 'auto';
+  (musicEl as HTMLAudioElement & { playsInline?: boolean }).playsInline = true;
+  const c = (Howler as unknown as { ctx?: AudioContext }).ctx;
+  if (c) {
+    try {
+      const src = c.createMediaElementSource(musicEl);
+      musicGain = c.createGain();
+      musicGain.gain.value = 0;
+      src.connect(musicGain).connect(c.destination);
+    } catch {
+      musicGain = null;
+    }
+  }
+  // whenever a track actually starts (perhaps only after the first tap), bring it up
+  musicEl.addEventListener('playing', () => wantPlay && musicFade(1, 1200));
+  // the first touch anywhere may be what the browser needs before it lets music play
+  const kick = () => {
+    const ac = (Howler as unknown as { ctx?: AudioContext }).ctx;
+    if (ac?.state === 'suspended') void ac.resume();
+    if (wantPlay && musicEl?.paused) void musicEl.play().catch(() => {});
+  };
+  for (const ev of ['pointerdown', 'touchend', 'keydown']) window.addEventListener(ev, kick, { passive: true });
+  return musicEl;
+}
+/** fade the music to a level (0–1 of the music volume) over ms */
+function musicFade(to: number, ms: number) {
+  const level = to * vol.music * vol.master;
+  if (musicGain) {
+    const g = musicGain.gain;
+    const t = musicGain.context.currentTime;
+    g.cancelScheduledValues(t);
+    g.setValueAtTime(g.value, t);
+    g.linearRampToValueAtTime(level, t + ms / 1000);
+  } else if (musicEl) musicEl.volume = Math.min(1, level);
+}
 
 export function setVolumes(v: Partial<typeof vol>) {
   Object.assign(vol, v);
   Howler.volume(vol.master);
-  if (music) music.volume(vol.music);
+  if (musicEl && !musicEl.paused) musicFade(1, 150);
 }
 
 export function sfx(name: string, volume = 1, rate = 1) {
@@ -28,26 +76,38 @@ export function sfx(name: string, volume = 1, rate = 1) {
 }
 
 export function playMusic(key: MusicKey, loop = true) {
-  if (musicKey === key && music?.playing()) return;
-  const old = music;
-  if (old) {
-    old.fade(old.volume(), 0, 700);
-    setTimeout(() => old.unload(), 800);
+  const el = musicNodes();
+  wantPlay = true;
+  if (musicKey === key) {
+    // same track: only make sure it is going (it may still be waiting for a first tap)
+    if (el.paused) void el.play().catch(() => {});
+    return;
   }
   musicKey = key;
-  music = new Howl({ src: [asset(`music/${key}.mp3`)], loop, html5: true, volume: 0 });
-  music.play();
-  music.fade(0, vol.music, 1200);
+  const start = () => {
+    if (musicKey !== key) return;
+    el.src = asset(`music/${key}.mp3`);
+    el.loop = loop;
+    el.currentTime = 0;
+    musicFade(0, 0);
+    void el.play().catch(() => {});
+    if (!musicGain) musicFade(1, 0);
+  };
+  if (!el.paused && el.src) {
+    musicFade(0, 600);
+    setTimeout(start, 650);
+  } else start();
 }
 
 export function stopMusic() {
-  if (music) {
-    const m = music;
-    m.fade(m.volume(), 0, 600);
-    setTimeout(() => m.unload(), 700);
-  }
-  music = null;
+  wantPlay = false;
   musicKey = null;
+  if (!musicEl) return;
+  const el = musicEl;
+  musicFade(0, 600);
+  setTimeout(() => {
+    if (!wantPlay) el.pause();
+  }, 650);
 }
 
 // ---------------------------------------------------------------------------

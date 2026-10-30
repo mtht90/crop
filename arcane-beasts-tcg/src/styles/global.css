@@ -214,3 +214,10 @@ img { -webkit-user-drag: none; }
   .guide h3 { font-size: calc(var(--u) * 2.6); }
   .guide ol { font-size: calc(var(--u) * 1.5); }
 }
+
+/* iPhone / iPad: no double-tap zoom, no text-selection loupe or "save image"
+   popup on long presses (long press is a game gesture here) — inputs excepted */
+html { touch-action: manipulation; -webkit-text-size-adjust: 100%; }
+body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; overscroll-behavior: none; }
+input, textarea, [contenteditable] { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
+img { -webkit-touch-callout: none; }

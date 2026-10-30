@@ -577,12 +577,8 @@ function CinemaLayer({ omen, god, aura, held, playing, api, target, onDone }: { 
   );
 }
 
-/** seconds of holding to fill the charge: the better the pack, the longer the wait */
-const chargeTime = (tier: OmenTier) => (tier >= 4 ? 4.4 : tier === 3 ? 3.6 : 3.0);
-/** the three peaks of the charge (fractions of it): each one hits harder */
-const STAGES = [1 / 3, 2 / 3, 0.97];
-/** a promotion holds the charge this long: the light is drawn in, then bursts in the new colour */
-const PROMO_HOLD = 1.25;
+/** seconds of holding to fill the charge */
+const CHARGE_TIME = 2.7;
 
 interface TearProps {
   booster: Booster;
@@ -597,98 +593,41 @@ interface TearProps {
 }
 
 function TearStage({ booster, god, u, cards, omen, packs, onAura, burstAt, onDone }: TearProps) {
-  // 力をためる: hold the pack and its light builds up in the omen colour; on
-  // the way it may climb (昇格) to the truth. Let go once it is full and the
-  // light bursts — then the pack can be torn open.
-  const [aura, setAura] = useState<OmenTier>(omen.shown);
+  // 力をためる: hold the pack (about 2.7 s) and white light gathers into it,
+  // the pack trembling harder as it fills. Let go when it is full and it blooms
+  // — ボワっ — in the colour of its best ★. Then it can be torn open.
+  const aura = omen.actual;
   const [shaking, setShaking] = useState(false);
   const [promo, setPromo] = useState(0);
-  const locked = aura < omen.actual;
+  const locked = false;
   const [charged, setCharged] = useState(false);
   const charge = useMotionValue(0);
-  /** the charge in coarse steps, for the 3D aura (so the whole overlay does not re-render every frame) */
+  /** the charge in coarse steps, for the 3D light (so the overlay does not re-render every frame) */
   const [chargeStep, setChargeStep] = useState(0);
   const holding = useRef(false);
   const [held, setHeld] = useState(false);
-  const promoted = useRef(0);
-  /** how many of the three peaks have been reached (0–3) */
-  const [stage, setStage] = useState(0);
-  const stageRef = useRef(0);
-  /** during a promotion: the light is being drawn into the pack */
-  const [inhale, setInhale] = useState(false);
-  const pauseUntil = useRef(0);
-  // the climbs happen part way through the charge, evenly spaced
-  // they sit between the peaks, so each climb is its own moment
-  const promoAt = useMemo(() => {
-    const n = omen.actual - omen.shown;
-    return Array.from({ length: n }, (_, k) => 0.45 + (0.4 * (k + 1)) / (n + 1));
-  }, [omen]);
-  const CHARGE = chargeTime(omen.actual);
-  /** a peak: a burst of light, a chime a step higher, a harder buzz */
-  const reachStage = (k: number) => {
-    stageRef.current = k;
-    setStage(k);
-    foley.chime(2 + k * 2);
-    if (k >= 2) foley.sparkle();
-    vibrate(k === 3 ? [0, 30, 40, 30] : [0, 12 + k * 8]);
-    const r = packRef.current?.getBoundingClientRect();
-    if (r) {
-      const cx = r.left + r.width / 2;
-      const cy = r.top + r.height / 2;
-      burstAt(cx, cy, `aura${auraRef.current}`, 20 + k * 18, 1.1 + k * 0.25);
-      burstAt(cx, cy, 'sparkw', 10 + k * 10, 1.2);
-    }
-    setSnap(true);
-    setTimeout(() => setSnap(false), 70 + k * 30);
-  };
-  /** 昇格: the charge stops, the light is drawn in… then bursts out in the new colour */
-  const startPromotion = (t: OmenTier) => {
-    pauseUntil.current = performance.now() + PROMO_HOLD * 1000;
-    setInhale(true);
-    foley.charge();
-    sfx('rumble', 0.45);
-    vibrate([0, 20, 60, 20, 60, 20]);
-    setTimeout(() => {
-      setInhale(false);
-      promote(t);
-    }, PROMO_HOLD * 1000 * 0.78);
-  };
-  const promote = (t: OmenTier) => {
-    setAura(t);
-    setPromo((n) => n + 1);
-    setShaking(true);
-    setTimeout(() => setShaking(false), 450);
-    foley.impact();
-    foley.rarity(t);
-    sfx('magic-holy-2', 0.5);
-    vibrate([0, 30]);
-    const r = packRef.current?.getBoundingClientRect();
-    if (r) {
-      burstAt(r.left + r.width / 2, r.top + r.height / 2, `aura${t}`, 70, 1.6);
-      burstAt(r.left + r.width / 2, r.top + r.height / 2, 'sparkw', 30, 1.4);
-    }
-  };
   const release = () => {
     setCharged(true);
     charge.set(1);
     setChargeStep(1);
     hideHint();
+    setPromo((n) => n + 1);
     foley.impact();
-    foley.rarity(auraRef.current);
+    foley.rarity(aura);
     sfx('magic-holy-2', 0.55);
     vibrate([0, 40]);
     const r = packRef.current?.getBoundingClientRect();
     if (r) {
       const cx = r.left + r.width / 2;
       const cy = r.top + r.height / 2;
-      burstAt(cx, cy, `aura${auraRef.current}`, 90, 1.8);
-      burstAt(cx, cy, 'glint', 24, 1.4);
+      burstAt(cx, cy, `aura${aura}`, 110, 2);
+      burstAt(cx, cy, 'glint', 26, 1.5);
       burstAt(cx, cy, 'sparkw', 40, 1.6);
     }
     setSnap(true);
     setTimeout(() => setSnap(false), 140);
   };
-  // the charge runs while the pack is held and drains when it is let go too soon
+  // the charge runs while the pack is held and ebbs away when it is let go too soon
   useEffect(() => {
     if (charged) return;
     let raf = 0;
@@ -696,40 +635,30 @@ function TearStage({ booster, god, u, cards, omen, packs, onAura, burstAt, onDon
     let step = 0;
     let tick = 0;
     const loop = (now: number) => {
-      // (a frame's timestamp can be older than the moment the loop started: never step backwards)
-      const dt = Math.max(0, Math.min(0.05, (now - last) / 1000));
+      // real time, so it takes 2.7 s however slowly frames come (a busy phone, low power mode);
+      // a frame's timestamp can be older than the moment the loop started: never step backwards
+      const dt = Math.max(0, Math.min(0.3, (now - last) / 1000));
       last = Math.max(last, now);
       let c = charge.get();
-      const paused = now < pauseUntil.current;
-      // it fills slowly at first and quickens toward the top; let go too soon and it ebbs away
-      if (!paused) c = holding.current ? Math.min(1, c + (dt / CHARGE) * (0.75 + 0.5 * c)) : Math.max(0, c - dt / 1.2);
+      c = holding.current ? Math.min(1, c + dt / CHARGE_TIME) : Math.max(0, c - dt / 1.0);
       charge.set(c);
-      while (stageRef.current < 3 && c >= STAGES[stageRef.current]) reachStage(stageRef.current + 1);
-      if (!holding.current && stageRef.current > 0 && c < STAGES[stageRef.current - 1] - 0.02) {
-        stageRef.current--;
-        setStage(stageRef.current);
-      }
       const st = Math.round(c * 20) / 20;
       if (st !== step) {
         step = st;
         setChargeStep(st);
       }
-      if (!paused && holding.current && promoted.current < promoAt.length && c >= promoAt[promoted.current]) {
-        startPromotion((omen.shown + promoted.current + 1) as OmenTier);
-        promoted.current++;
-      }
-      // light gathers into the pack from all round it, faster as it fills
+      // white light drawn in from all round the pack, thicker as it fills
       const r = packRef.current?.getBoundingClientRect();
-      if (r && holding.current && Math.random() < (paused ? 1 : 0.35 + c * 0.6)) {
+      if (r && holding.current && Math.random() < 0.3 + c * 0.7) {
         const a = Math.random() * Math.PI * 2;
-        const rad = Math.max(r.width, r.height) * (paused ? 0.9 + Math.random() * 0.4 : 0.55 + Math.random() * 0.25);
-        burstAt(r.left + r.width / 2 + Math.cos(a) * rad, r.top + r.height / 2 + Math.sin(a) * rad, `aura${auraRef.current}`, paused ? 3 : 1, 0.8 + c * 0.5);
+        const rad = Math.max(r.width, r.height) * (0.6 + Math.random() * 0.3);
+        burstAt(r.left + r.width / 2 + Math.cos(a) * rad, r.top + r.height / 2 + Math.sin(a) * rad, 'mote', 1 + Math.round(c * 2), 0.9 + c * 0.6);
       }
       // a heartbeat that quickens as it fills
       tick += dt;
-      if (holding.current && tick > 0.5 - c * 0.38) {
+      if (holding.current && tick > 0.45 - c * 0.33) {
         tick = 0;
-        vibrate(5);
+        vibrate(5 + Math.round(c * 10));
       }
       raf = requestAnimationFrame(loop);
     };
@@ -751,23 +680,38 @@ function TearStage({ booster, god, u, cards, omen, packs, onAura, burstAt, onDon
     setHeld(false);
     if (charge.get() >= 1) release();
   };
-  // drifting motes around the pack in the aura colour, once its light is out
+  // full: it lets go by itself a moment later if the finger stays down
   useEffect(() => {
+    if (charged || chargeStep < 1 || !held) return;
+    foley.chime(6);
+    const t = setTimeout(() => {
+      if (holding.current) {
+        holding.current = false;
+        setHeld(false);
+        release();
+      }
+    }, 450);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chargeStep, held, charged]);
+  // drifting motes around the pack in its colour, once it has bloomed
+  useEffect(() => {
+    if (!charged) return;
     const iv = setInterval(() => {
       const r = packRef.current?.getBoundingClientRect();
-      if (!r || charge.get() < 0.05) return;
+      if (!r) return;
       const edge = Math.random() * 4;
       const x = edge < 1 ? r.left : edge < 2 ? r.right : r.left + Math.random() * r.width;
       const y = edge < 2 ? r.top + Math.random() * r.height : edge < 3 ? r.top : r.bottom;
-      burstAt(x, y, `aura${auraRef.current}`, auraRef.current <= 1 ? 1 : 2, 0.9);
+      burstAt(x, y, `aura${aura}`, aura <= 1 ? 1 : 2, 0.9);
     }, 130);
     return () => clearInterval(iv);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [charged]);
+  void setShaking;
   const ring = useTransform(charge, (c) => 1 - c);
   const squeeze = useTransform(charge, (c) => 1 - c * 0.035);
   const auraRef = useRef(aura);
-  auraRef.current = aura;
   const packRef = useRef<HTMLDivElement>(null);
   const [dir, setDir] = useState<1 | -1>(1);
   const [torn, setTorn] = useState(false);
@@ -796,8 +740,9 @@ function TearStage({ booster, god, u, cards, omen, packs, onAura, burstAt, onDon
   const finishing = useRef(false);
   const buzz = vibrate;
   useEffect(
-    () => onAura({ tier: aura, visible: !torn && (charged || chargeStep > 0), hot: shaking || (held && chargeStep > 0.25), amt: charged ? 1 : inhale ? 0.08 : 0.15 + chargeStep * 0.85 }),
-    [aura, torn, shaking, onAura, charged, chargeStep, held, inhale],
+    // while charging the light is white (★1's grey-white); it takes the ★ colour when it blooms
+    () => onAura({ tier: charged ? aura : 1, visible: !torn && (charged || chargeStep > 0), hot: shaking || (held && chargeStep > 0.3), amt: charged ? 1 : 0.1 + chargeStep * 0.9 }),
+    [aura, torn, shaking, onAura, charged, chargeStep, held],
   );
 
   const B0 = TEAR_BAND[0] * 100;
@@ -824,10 +769,6 @@ function TearStage({ booster, god, u, cards, omen, packs, onAura, burstAt, onDon
   const finish = () => {
     if (!charged) {
       // keyboard: skip straight to a full charge
-      while (promoted.current < promoAt.length) {
-        promote((omen.shown + promoted.current + 1) as OmenTier);
-        promoted.current++;
-      }
       release();
       return;
     }
@@ -1047,7 +988,7 @@ function TearStage({ booster, god, u, cards, omen, packs, onAura, burstAt, onDon
           })}
       </motion.div>
 
-      <div className="tear-wrap" style={{ ['--ac' as string]: OMEN_COLORS[aura] }}>
+      <div className="tear-wrap" style={{ ['--ac' as string]: charged ? OMEN_COLORS[aura] : '#ffffff' }}>
         <PackAura tier={aura} promo={promo} />
         {packs > 1 && (
           <motion.div className="tear-bundle" initial={{ opacity: 0 }} animate={{ opacity: torn ? 0 : 1 }} transition={{ duration: torn ? 0.3 : 0.6, delay: torn ? 0 : 0.2 }}>
@@ -1065,10 +1006,8 @@ function TearStage({ booster, god, u, cards, omen, packs, onAura, burstAt, onDon
         <motion.div
           className="tear-press"
           animate={
-            inhale
-              ? { scale: 0.9, rotate: 0, transition: { duration: PROMO_HOLD * 0.75, ease: [0.5, 0, 0.9, 0.6] } }
-              : snap
-                ? { scale: 1.035 + (charged ? 0 : stage * 0.012), rotate: 0 }
+            snap
+                ? { scale: 1.05, rotate: 0 }
                 : active
                   ? { scale: 0.985, rotate: -dir * 0.6 }
                   : { scale: 1, rotate: 0 }
