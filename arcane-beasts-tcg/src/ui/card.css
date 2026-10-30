@@ -371,13 +371,42 @@
 .tcg.gold .tcg-inner { background: linear-gradient(160deg, #fff6c9, #d9a93a 50%, #7d5208); }
 .tcg.gold .tcg-art .scene { filter: sepia(1) saturate(2.2) hue-rotate(-12deg) brightness(0.85) contrast(1.1); }
 .tcg.gold .tcg-art .portrait { filter: sepia(0.85) saturate(2.4) hue-rotate(-10deg) brightness(1.08) contrast(1.15) drop-shadow(0 0 2cqw rgba(255, 220, 120, 0.8)); }
-/* SV — the gold printing in silver: cool, bright, monochrome */
+/* SV — silver foil: the whole card is polished silver with a cracked-ice
+   prism pattern; the art is pressed into it as pale, embossed lines */
 .tcg.v-SV .tcg-frame {
-  background: linear-gradient(135deg, #ffffff 0%, #9aa3ae 20%, #f4f7fb 38%, #7c8591 55%, #e6ebf1 72%, #5f6873 88%, #fbfdff 100%);
+  background: linear-gradient(135deg, #ffffff 0%, #b9c0c9 20%, #f7f9fc 38%, #9aa2ad 55%, #eef2f6 72%, #8f97a2 88%, #ffffff 100%);
 }
-.tcg.v-SV .tcg-inner { background: linear-gradient(160deg, #f6f8fb, #aab3bf 50%, #48505b); }
-.tcg.v-SV .tcg-art .scene { filter: grayscale(1) brightness(0.8) contrast(1.15); }
-.tcg.v-SV .tcg-art .portrait { filter: grayscale(0.92) brightness(1.12) contrast(1.2) drop-shadow(0 0 2cqw rgba(210, 230, 255, 0.85)); }
+.tcg.v-SV .tcg-inner {
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.55), rgba(190, 198, 208, 0.25) 45%, rgba(255, 255, 255, 0.5) 70%, rgba(170, 178, 190, 0.3)),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'%3E%3Cpath d='M0.0 0.0L9.9 0.0L14.4 9.7Z' fill='rgb%28198%2C198%2C206%29'/%3E%3Cpath d='M0.0 0.0L14.4 9.7L0.0 12.5Z' fill='rgb%28179%2C179%2C187%29'/%3E%3Cpath d='M0.0 12.5L14.4 9.7L13.6 24.3Z' fill='rgb%28172%2C172%2C180%29'/%3E%3Cpath d='M0.0 12.5L13.6 24.3L0.0 25.1Z' fill='rgb%28169%2C169%2C177%29'/%3E%3Cpath d='M0.0 25.1L13.6 24.3L10.2 42.1Z' fill='rgb%28179%2C179%2C187%29'/%3E%3Cpath d='M0.0 25.1L10.2 42.1L0.0 44.4Z' fill='rgb%28151%2C151%2C159%29'/%3E%3Cpath d='M0.0 44.4L10.2 42.1L17.6 53.4Z' fill='rgb%28225%2C225%2C233%29'/%3E%3Cpath d='M0.0 44.4L17.6 53.4L0.0 52.9Z' fill='rgb%28173%2C173%2C181%29'/%3E%3Cpath d='M0.0 52.9L17.6 53.4L11.5 72.7Z' fill='rgb%28150%2C150%2C158%29'/%3E%3Cpath d='M0.0 52.9L11.5 72.7L0.0 71.8Z' fill='rgb%28168%2C168%2C176%29'/%3E%3Cpath d='M0.0 71.8L11.5 72.7L18.8 86.5Z' fill='rgb%28197%2C197%2C205%29'/%3E%3Cpath d='M0.0 71.8L18.8 86.5L0.0 84.4Z' fill='rgb%28228%2C228%2C236%29'/%3E%3Cpath d='M0.0 84.4L18.8 86.5L0.0 100.0Z' fill='rgb%28166%2C166%2C174%29'/%3E%3Cpath d='M18.8 86.5L13.3 100.0L0.0 100.0Z' fill='rgb%28238%2C238%2C246%29'/%3E%3Cpath d='M9.9 0.0L33.3 0.0L14.4 9.7Z' fill='rgb%28229%2C229%2C237%29'/%3E%3Cpath d='M33.3 0.0L24.0 17.9L14.4 9.7Z' fill='rgb%28233%2C233%2C241%29'/%3E%3Cpath d='M14.4 9.7L24.0 17.9L13.6 24.3Z' fill='rgb%28156%2C156%2C164%29'/%3E%3Cpath d='M24.0 17.9L26.5 25.0L13.6 24.3Z' fill='rgb%28208%2C208%2C216%29'/%3E%3Cpath d='M13.6 24.3L26.5 25.0L10.2 42.1Z' fill='rgb%28249%2C249%2C255%29'/%3E%3Cpath d='M26.5 25.0L24.7 40.9L10.2 42.1Z' fill='rgb%28237%2C237%2C245%29'/%3E%3Cpath d='M10.2 42.1L24.7 40.9L17.6 53.4Z' fill='rgb%28200%2C200%2C208%29'/%3E%3Cpath d='M24.7 40.9L31.7 54.0L17.6 53.4Z' fill='rgb%28200%2C200%2C208%29'/%3E%3Cpath d='M17.6 53.4L31.7 54.0L29.4 72.8Z' fill='rgb%28163%2C163%2C171%29'/%3E%3Cpath d='M17.6 53.4L29.4 72.8L11.5 72.7Z' fill='rgb%28211%2C211%2C219%29'/%3E%3Cpath d='M11.5 72.7L29.4 72.8L18.8 86.5Z' fill='rgb%28157%2C157%2C165%29'/%3E%3Cpath d='M29.4 72.8L27.3 86.2L18.8 86.5Z' fill='rgb%28174%2C174%2C182%29'/%3E%3Cpath d='M18.8 86.5L27.3 86.2L24.2 100.0Z' fill='rgb%28176%2C176%2C184%29'/%3E%3Cpath d='M18.8 86.5L24.2 100.0L13.3 100.0Z' fill='rgb%28206%2C206%2C214%29'/%3E%3Cpath d='M33.3 0.0L38.5 0.0L39.9 16.1Z' fill='rgb%28193%2C193%2C201%29'/%3E%3Cpath d='M33.3 0.0L39.9 16.1L24.0 17.9Z' fill='rgb%28226%2C226%2C234%29'/%3E%3Cpath d='M24.0 17.9L39.9 16.1L42.1 26.7Z' fill='rgb%28150%2C150%2C158%29'/%3E%3Cpath d='M24.0 17.9L42.1 26.7L26.5 25.0Z' fill='rgb%28222%2C222%2C230%29'/%3E%3Cpath d='M26.5 25.0L42.1 26.7L43.7 42.4Z' fill='rgb%28162%2C162%2C170%29'/%3E%3Cpath d='M26.5 25.0L43.7 42.4L24.7 40.9Z' fill='rgb%28196%2C196%2C204%29'/%3E%3Cpath d='M24.7 40.9L43.7 42.4L31.7 54.0Z' fill='rgb%28159%2C159%2C167%29'/%3E%3Cpath d='M43.7 42.4L40.9 60.1L31.7 54.0Z' fill='rgb%28176%2C176%2C184%29'/%3E%3Cpath d='M31.7 54.0L40.9 60.1L29.4 72.8Z' fill='rgb%28169%2C169%2C177%29'/%3E%3Cpath d='M40.9 60.1L44.8 68.9L29.4 72.8Z' fill='rgb%28231%2C231%2C239%29'/%3E%3Cpath d='M29.4 72.8L44.8 68.9L43.6 86.0Z' fill='rgb%28194%2C194%2C202%29'/%3E%3Cpath d='M29.4 72.8L43.6 86.0L27.3 86.2Z' fill='rgb%28227%2C227%2C235%29'/%3E%3Cpath d='M27.3 86.2L43.6 86.0L46.6 100.0Z' fill='rgb%28165%2C165%2C173%29'/%3E%3Cpath d='M27.3 86.2L46.6 100.0L24.2 100.0Z' fill='rgb%28164%2C164%2C172%29'/%3E%3Cpath d='M38.5 0.0L59.4 0.0L39.9 16.1Z' fill='rgb%28209%2C209%2C217%29'/%3E%3Cpath d='M59.4 0.0L55.0 19.1L39.9 16.1Z' fill='rgb%28211%2C211%2C219%29'/%3E%3Cpath d='M39.9 16.1L55.0 19.1L53.3 27.8Z' fill='rgb%28160%2C160%2C168%29'/%3E%3Cpath d='M39.9 16.1L53.3 27.8L42.1 26.7Z' fill='rgb%28168%2C168%2C176%29'/%3E%3Cpath d='M42.1 26.7L53.3 27.8L59.7 39.4Z' fill='rgb%28193%2C193%2C201%29'/%3E%3Cpath d='M42.1 26.7L59.7 39.4L43.7 42.4Z' fill='rgb%28244%2C244%2C252%29'/%3E%3Cpath d='M43.7 42.4L59.7 39.4L57.0 52.5Z' fill='rgb%28238%2C238%2C246%29'/%3E%3Cpath d='M43.7 42.4L57.0 52.5L40.9 60.1Z' fill='rgb%28170%2C170%2C178%29'/%3E%3Cpath d='M40.9 60.1L57.0 52.5L44.8 68.9Z' fill='rgb%28176%2C176%2C184%29'/%3E%3Cpath d='M57.0 52.5L58.8 74.1L44.8 68.9Z' fill='rgb%28217%2C217%2C225%29'/%3E%3Cpath d='M44.8 68.9L58.8 74.1L57.9 89.5Z' fill='rgb%28238%2C238%2C246%29'/%3E%3Cpath d='M44.8 68.9L57.9 89.5L43.6 86.0Z' fill='rgb%28219%2C219%2C227%29'/%3E%3Cpath d='M43.6 86.0L57.9 89.5L46.6 100.0Z' fill='rgb%28247%2C247%2C255%29'/%3E%3Cpath d='M57.9 89.5L55.3 100.0L46.6 100.0Z' fill='rgb%28217%2C217%2C225%29'/%3E%3Cpath d='M59.4 0.0L73.4 0.0L72.4 15.1Z' fill='rgb%28232%2C232%2C240%29'/%3E%3Cpath d='M59.4 0.0L72.4 15.1L55.0 19.1Z' fill='rgb%28161%2C161%2C169%29'/%3E%3Cpath d='M55.0 19.1L72.4 15.1L53.3 27.8Z' fill='rgb%28183%2C183%2C191%29'/%3E%3Cpath d='M72.4 15.1L71.0 32.0L53.3 27.8Z' fill='rgb%28216%2C216%2C224%29'/%3E%3Cpath d='M53.3 27.8L71.0 32.0L75.9 42.6Z' fill='rgb%28171%2C171%2C179%29'/%3E%3Cpath d='M53.3 27.8L75.9 42.6L59.7 39.4Z' fill='rgb%28195%2C195%2C203%29'/%3E%3Cpath d='M59.7 39.4L75.9 42.6L57.0 52.5Z' fill='rgb%28218%2C218%2C226%29'/%3E%3Cpath d='M75.9 42.6L73.1 52.7L57.0 52.5Z' fill='rgb%28219%2C219%2C227%29'/%3E%3Cpath d='M57.0 52.5L73.1 52.7L58.8 74.1Z' fill='rgb%28192%2C192%2C200%29'/%3E%3Cpath d='M73.1 52.7L73.4 72.9L58.8 74.1Z' fill='rgb%28231%2C231%2C239%29'/%3E%3Cpath d='M58.8 74.1L73.4 72.9L76.4 88.9Z' fill='rgb%28253%2C253%2C255%29'/%3E%3Cpath d='M58.8 74.1L76.4 88.9L57.9 89.5Z' fill='rgb%28250%2C250%2C255%29'/%3E%3Cpath d='M57.9 89.5L76.4 88.9L55.3 100.0Z' fill='rgb%28174%2C174%2C182%29'/%3E%3Cpath d='M76.4 88.9L69.3 100.0L55.3 100.0Z' fill='rgb%28253%2C253%2C255%29'/%3E%3Cpath d='M73.4 0.0L84.6 0.0L87.4 9.5Z' fill='rgb%28201%2C201%2C209%29'/%3E%3Cpath d='M73.4 0.0L87.4 9.5L72.4 15.1Z' fill='rgb%28244%2C244%2C252%29'/%3E%3Cpath d='M72.4 15.1L87.4 9.5L71.0 32.0Z' fill='rgb%28175%2C175%2C183%29'/%3E%3Cpath d='M87.4 9.5L85.3 25.3L71.0 32.0Z' fill='rgb%28216%2C216%2C224%29'/%3E%3Cpath d='M71.0 32.0L85.3 25.3L81.9 38.4Z' fill='rgb%28243%2C243%2C251%29'/%3E%3Cpath d='M71.0 32.0L81.9 38.4L75.9 42.6Z' fill='rgb%28153%2C153%2C161%29'/%3E%3Cpath d='M75.9 42.6L81.9 38.4L73.1 52.7Z' fill='rgb%28251%2C251%2C255%29'/%3E%3Cpath d='M81.9 38.4L88.4 53.4L73.1 52.7Z' fill='rgb%28185%2C185%2C193%29'/%3E%3Cpath d='M73.1 52.7L88.4 53.4L83.2 70.3Z' fill='rgb%28174%2C174%2C182%29'/%3E%3Cpath d='M73.1 52.7L83.2 70.3L73.4 72.9Z' fill='rgb%28238%2C238%2C246%29'/%3E%3Cpath d='M73.4 72.9L83.2 70.3L76.4 88.9Z' fill='rgb%28194%2C194%2C202%29'/%3E%3Cpath d='M83.2 70.3L89.4 81.5L76.4 88.9Z' fill='rgb%28207%2C207%2C215%29'/%3E%3Cpath d='M76.4 88.9L89.4 81.5L69.3 100.0Z' fill='rgb%28242%2C242%2C250%29'/%3E%3Cpath d='M89.4 81.5L85.2 100.0L69.3 100.0Z' fill='rgb%28194%2C194%2C202%29'/%3E%3Cpath d='M84.6 0.0L100.0 0.0L87.4 9.5Z' fill='rgb%28196%2C196%2C204%29'/%3E%3Cpath d='M100.0 0.0L100.0 14.8L87.4 9.5Z' fill='rgb%28160%2C160%2C168%29'/%3E%3Cpath d='M87.4 9.5L100.0 14.8L100.0 32.4Z' fill='rgb%28179%2C179%2C187%29'/%3E%3Cpath d='M87.4 9.5L100.0 32.4L85.3 25.3Z' fill='rgb%28210%2C210%2C218%29'/%3E%3Cpath d='M85.3 25.3L100.0 32.4L100.0 46.0Z' fill='rgb%28176%2C176%2C184%29'/%3E%3Cpath d='M85.3 25.3L100.0 46.0L81.9 38.4Z' fill='rgb%28211%2C211%2C219%29'/%3E%3Cpath d='M81.9 38.4L100.0 46.0L88.4 53.4Z' fill='rgb%28228%2C228%2C236%29'/%3E%3Cpath d='M100.0 46.0L100.0 60.8L88.4 53.4Z' fill='rgb%28150%2C150%2C158%29'/%3E%3Cpath d='M88.4 53.4L100.0 60.8L100.0 69.2Z' fill='rgb%28233%2C233%2C241%29'/%3E%3Cpath d='M88.4 53.4L100.0 69.2L83.2 70.3Z' fill='rgb%28194%2C194%2C202%29'/%3E%3Cpath d='M83.2 70.3L100.0 69.2L89.4 81.5Z' fill='rgb%28160%2C160%2C168%29'/%3E%3Cpath d='M100.0 69.2L100.0 84.9L89.4 81.5Z' fill='rgb%28234%2C234%2C242%29'/%3E%3Cpath d='M89.4 81.5L100.0 84.9L100.0 100.0Z' fill='rgb%28199%2C199%2C207%29'/%3E%3Cpath d='M89.4 81.5L100.0 100.0L85.2 100.0Z' fill='rgb%28250%2C250%2C255%29'/%3E%3C/svg%3E") 0 0 / 46cqw 46cqw,
+    #dfe3e9;
+}
+.tcg.v-SV .tcg-art { background: none; }
+.tcg.v-SV .tcg-art .scene { opacity: 0; }
+.tcg.v-SV .tcg-art .portrait {
+  filter: grayscale(1) contrast(0.8) brightness(1.45) sepia(0.15) hue-rotate(180deg);
+  mix-blend-mode: multiply;
+  opacity: 0.85;
+  /* fade the picture's edges into the foil so no image box shows */
+  -webkit-mask-image: radial-gradient(ellipse 62% 66% at 50% 48%, #000 62%, transparent 100%);
+  mask-image: radial-gradient(ellipse 62% 66% at 50% 48%, #000 62%, transparent 100%);
+}
+/* supporters are painted pictures: fade them in further so the picture's frame melts away */
+.tcg.v-SV.kind-trainer .tcg-art .portrait {
+  -webkit-mask-image: radial-gradient(ellipse 46% 46% at 50% 54%, #000 35%, transparent 100%);
+  mask-image: radial-gradient(ellipse 46% 46% at 50% 54%, #000 35%, transparent 100%);
+}
+.tcg.v-SV .tcg-head, .tcg.v-SV .tcg-body, .tcg.v-SV .tcg-stats, .tcg.v-SV .tcg-footer, .tcg.v-SV .tcg-head .hp,
+.tcg.v-SV .tcg-tname, .tcg.v-SV .tlabel, .tcg.v-SV .tcg-tbody, .tcg.v-SV .tcg-trule {
+  color: #20252c;
+  text-shadow: 0 0.15cqw 0 rgba(255, 255, 255, 0.85);
+}
+.tcg.v-SV .tcg-head .name { text-shadow: 0 0.15cqw 0 rgba(255, 255, 255, 0.9), 0 0 1.5cqw rgba(255, 255, 255, 0.7); }
+.tcg.v-SV .tcg-body, .tcg.v-SV .tcg-tbody, .tcg.v-SV .tcg-trule { background: linear-gradient(transparent, rgba(255, 255, 255, 0.28) 14%, rgba(255, 255, 255, 0.28)); }
+.tcg.v-SV .tcg-stats { background: rgba(255, 255, 255, 0.3); border-color: rgba(60, 70, 85, 0.3); }
+.tcg.v-SV .rmark { color: #20252c; }
+.tcg.v-SV.full-art.kind-trainer .tcg-tname, .tcg.v-SV.full-art .tlabel { color: #20252c; text-shadow: 0 0.15cqw 0 rgba(255, 255, 255, 0.9), 0 0 1.5cqw rgba(255, 255, 255, 0.7); }
 
 /* -------------------------------- Trainer -------------------------------- */
 .kind-trainer .tcg-inner { background: linear-gradient(175deg, #fafbfd 0%, #dfe4ec 60%, #b8c0cc 100%); }
@@ -574,11 +603,16 @@
   background-size: 300% 300%;
 }
 .v-SV .tcg-shine {
-  opacity: 0.4;
+  opacity: 0.7;
   background:
-    repeating-linear-gradient(115deg, rgba(255, 255, 255, 0.85) 0%, rgba(150, 160, 175, 0.55) 10%, rgba(235, 245, 255, 0.9) 20%, rgba(95, 105, 120, 0.55) 30%, rgba(255, 255, 255, 0.85) 40%);
-  background-size: 300% 300%;
+    linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, 0.95) 46%, rgba(255, 255, 255, 1) 50%, rgba(255, 255, 255, 0.95) 54%, transparent 70%),
+    repeating-linear-gradient(115deg, rgba(255, 255, 255, 0.7) 0%, rgba(180, 225, 255, 0.45) 9%, rgba(255, 255, 255, 0.8) 18%, rgba(255, 200, 235, 0.4) 27%, rgba(255, 255, 255, 0.7) 36%);
+  background-size: 300% 300%, 300% 300%;
+  mix-blend-mode: overlay;
+  filter: none;
 }
+.tcg.interactive.v-SV .tcg-shine { opacity: calc(0.55 + var(--hyp) * 0.45); }
+.tcg.v-SV .tcg-glare { mix-blend-mode: screen; background: radial-gradient(farthest-corner circle at var(--mx) var(--my), rgba(255, 255, 255, 0.85) 0%, rgba(255, 255, 255, 0.25) 28%, transparent 55%); }
 .tcg.interactive .tcg-shine { animation: none; opacity: calc(0.25 + var(--hyp) * 0.4); }
 .tcg.interactive.r-R .tcg-shine { opacity: calc(0.2 + var(--hyp) * 0.35); }
 .tcg-glare {
