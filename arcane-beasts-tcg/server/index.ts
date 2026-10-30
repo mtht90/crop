@@ -99,9 +99,9 @@ function saveTransfer(req: IncomingMessage, res: ServerResponse, url: URL) {
 // 引っ越し: the game itself now lives on a static host (no bandwidth limit).
 // Visitors of the old address get a tiny page that hands their saved data to
 // the new address in the URL fragment; this server keeps the online play and
-// the 引き継ぎ API. MOVED_TO="" turns it off.
+// the 引き継ぎ API. Off until MOVED_TO is set to the new address.
 // ---------------------------------------------------------------------------
-const MOVED_TO = (process.env.MOVED_TO ?? 'https://arcane-beasts.pages.dev').replace(/\/+$/, '');
+const MOVED_TO = (process.env.MOVED_TO ?? '').replace(/\/+$/, '');
 const OLD_HOST = /\.onrender\.com$/;
 const MOVE_PAGE = `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>ARCANE BEASTS — 引っ越しました</title>

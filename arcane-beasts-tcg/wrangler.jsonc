@@ -1,0 +1,10 @@
+// Cloudflare (Workers with static assets): serves site/, built by `npm run pages:site`.
+// Online play and 引き継ぎ stay on the Render server (VITE_SERVER_HOST).
+{
+  "name": "arcane-beasts",
+  "compatibility_date": "2025-01-01",
+  "assets": {
+    "directory": "./site",
+    "not_found_handling": "single-page-application"
+  }
+}
