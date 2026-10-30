@@ -10,6 +10,7 @@ import { askConfirm } from '../ui/Confirm';
 import { canVibrate, liteFx, resetAutoFx, type FxLevel } from '../lib/fx';
 import { startGyro } from '../lib/gyro';
 import { canPromptInstall, isInstalled, isIOS, onInstallChange, promptInstall, pwaAvailable } from '../lib/pwa';
+import { backupText, codeTransferSupported, issueCode, prettyCode, redeemCode, restoreBackup } from '../lib/transfer';
 
 export function Settings() {
   const settings = useStore((s) => s.save.settings);
@@ -99,6 +100,7 @@ export function Settings() {
               ))}
             </div>
           </div>
+          <TransferRows />
           <InstallRow />
           <DevRow />
           <div className="set-row danger">
@@ -168,6 +170,135 @@ function DevRow() {
         </button>
       </div>
       {msg && <div className="set-note">{msg}</div>}
+    </>
+  );
+}
+
+/** copy text, falling back to a hidden textarea where the clipboard API is not allowed */
+async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand?.('copy') ?? false;
+    ta.remove();
+    return ok;
+  }
+}
+
+/** 引き継ぎ: a code through the server, or a backup text where there is none */
+function TransferRows() {
+  const [mode, setMode] = useState<null | 'issue' | 'enter' | 'backup' | 'restore'>(null);
+  const [issued, setIssued] = useState<{ code: string; expires: number } | null>(null);
+  const [code, setCode] = useState('');
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+  const viaCode = codeTransferSupported();
+  const fail = (e: unknown) => setMsg(e instanceof Error ? e.message : String(e));
+  const confirmOverwrite = () => askConfirm('この端末のカード・コイン・デッキ・ストーリーの進み具合は、引き継いだデータで上書きされます。よろしいですか？', '引き継ぐ', true);
+
+  const issue = async () => {
+    setMode('issue');
+    setMsg('');
+    setBusy(true);
+    try {
+      setIssued(await issueCode());
+      sfx('receive', 0.6);
+    } catch (e) {
+      fail(e);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const redeem = async () => {
+    if (!(await confirmOverwrite())) return;
+    setBusy(true);
+    setMsg('');
+    try {
+      await redeemCode(code);
+      sfx('fanfare-short', 0.6);
+    } catch (e) {
+      fail(e);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const restore = async () => {
+    if (!(await confirmOverwrite())) return;
+    try {
+      restoreBackup(text);
+      sfx('fanfare-short', 0.6);
+    } catch (e) {
+      fail(e);
+    }
+  };
+  const left = issued ? Math.max(0, Math.round((issued.expires - Date.now()) / 60000)) : 0;
+
+  return (
+    <>
+      <div className="set-row">
+        <label>引き継ぎ</label>
+        {viaCode ? (
+          <>
+            <button className={`btn small ${mode === 'issue' ? 'blue' : ''}`} disabled={busy} onClick={() => void issue()}>
+              コードを発行
+            </button>
+            <button className={`btn small ${mode === 'enter' ? 'blue' : ''}`} onClick={() => (setMode('enter'), setMsg(''))}>
+              コードを入力
+            </button>
+          </>
+        ) : (
+          <>
+            <button className={`btn small ${mode === 'backup' ? 'blue' : ''}`} onClick={() => (setMode('backup'), setMsg(''), setText(backupText()))}>
+              バックアップを書き出す
+            </button>
+            <button className={`btn small ${mode === 'restore' ? 'blue' : ''}`} onClick={() => (setMode('restore'), setMsg(''), setText(''))}>
+              バックアップから復元
+            </button>
+          </>
+        )}
+      </div>
+      {mode === 'issue' && issued && (
+        <div className="set-xfer">
+          <button className="xfer-code" onClick={() => void copyText(issued.code).then((ok) => setMsg(ok ? 'コピーしました' : ''))} title="タップでコピー">
+            {prettyCode(issued.code)}
+          </button>
+          <div className="set-note">新しい端末の「設定 → 引き継ぎ → コードを入力」で入れてください。有効期限はあと約{left}分、1回だけ使えます。この端末のデータはそのまま残ります。</div>
+        </div>
+      )}
+      {mode === 'enter' && (
+        <div className="set-xfer">
+          <input className="dev-input xfer-input" value={code} placeholder="XXXX-XXXX" maxLength={9} autoCapitalize="characters" autoCorrect="off" spellCheck={false} onChange={(e) => setCode(e.target.value.toUpperCase())} onKeyDown={(e) => e.key === 'Enter' && void redeem()} />
+          <button className="btn small gold-btn" disabled={busy || code.replace(/[^0-9A-Z]/gi, '').length !== 8} onClick={() => void redeem()}>
+            引き継ぐ
+          </button>
+        </div>
+      )}
+      {mode === 'backup' && (
+        <div className="set-xfer">
+          <textarea className="xfer-text" readOnly value={text} onFocus={(e) => e.currentTarget.select()} />
+          <button className="btn small" onClick={() => void copyText(text).then((ok) => setMsg(ok ? 'コピーしました。メモ帳などに保存してください' : '文字列を長押しして、すべて選択 → コピーしてください'))}>
+            コピー
+          </button>
+        </div>
+      )}
+      {mode === 'restore' && (
+        <div className="set-xfer">
+          <textarea className="xfer-text" value={text} placeholder="AB1: で始まる文字列を貼り付け" onChange={(e) => setText(e.target.value)} />
+          <button className="btn small gold-btn" disabled={!text.trim()} onClick={() => void restore()}>
+            復元する
+          </button>
+        </div>
+      )}
+      {msg && <div className="set-note">{msg}</div>}
+      {!mode && <div className="set-note">{viaCode ? '機種変更のときは、古い端末でコードを発行して、新しい端末で入力します' : 'このページでは、文字列のバックアップで別の端末に移せます'}</div>}
     </>
   );
 }

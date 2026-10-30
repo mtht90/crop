@@ -121,6 +121,27 @@ export interface BattleConfig {
 
 const KEY = 'arcane-beasts-save-v1';
 
+/** the save as it is stored (for 引き継ぎ) */
+export function exportSave(): string {
+  return JSON.stringify(useStore.getState().save);
+}
+
+/**
+ * replace this device's save with one brought from another device; the usual
+ * load path runs on it, so older saves are brought up to date the same way
+ */
+export function importSave(raw: string): boolean {
+  try {
+    const v = JSON.parse(raw) as Partial<Save>;
+    if (!v || typeof v !== 'object' || typeof v.coins !== 'number' || typeof v.collection !== 'object' || !Array.isArray(v.decks)) return false;
+    localStorage.setItem(KEY, raw);
+  } catch {
+    return false;
+  }
+  useStore.setState({ save: load(), screen: 'home', battle: null, scene: null });
+  return true;
+}
+
 // ----------------------------------------------------------------------------
 // Developer mode
 // ----------------------------------------------------------------------------

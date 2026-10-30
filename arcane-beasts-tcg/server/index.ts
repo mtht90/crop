@@ -15,6 +15,7 @@ import { WebSocketServer } from 'ws';
 import { Hub } from './hub';
 import { PlayerStore } from './players';
 import { backendFromEnv } from './remote';
+import { RateLimit, SaveTransfers } from './saves';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 // the game: WEB_DIR, else the prebuilt web/ that ships with the repo (so the
@@ -52,6 +53,47 @@ await store.init().catch((e) => {
 });
 const stamp = () => new Date().toISOString().slice(11, 19);
 const hub = new Hub({ store, log: (m) => console.log(`[${stamp()}] ${m}`) });
+const saves = new SaveTransfers(join(dataDir, 'save-transfers.json'));
+const saveLimit = new RateLimit(30, 10 * 60 * 1000);
+
+const CORS = { 'access-control-allow-origin': '*', 'access-control-allow-methods': 'GET, POST, OPTIONS', 'access-control-allow-headers': 'content-type' };
+const json = (res: ServerResponse, status: number, body: unknown) => {
+  res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...CORS });
+  res.end(JSON.stringify(body));
+};
+const clientIp = (req: IncomingMessage) => String(req.headers['x-forwarded-for'] ?? '').split(',')[0].trim() || req.socket.remoteAddress || '?';
+
+/** POST /api/save-transfer (body: the save JSON) → {code, expires}; GET /api/save-transfer/CODE → the save, once */
+function saveTransfer(req: IncomingMessage, res: ServerResponse, url: URL) {
+  if (req.method === 'OPTIONS') return void res.writeHead(204, CORS).end();
+  if (!saveLimit.allow(clientIp(req))) return json(res, 429, { error: '試行回数が多すぎます。しばらく待ってからお試しください' });
+  if (req.method === 'POST' && url.pathname === '/api/save-transfer') {
+    let body = '';
+    let tooBig = false;
+    req.setEncoding('utf8');
+    req.on('data', (c: string) => {
+      if (tooBig) return;
+      body += c;
+      if (body.length > 700_000) tooBig = true;
+    });
+    req.on('end', () => {
+      if (tooBig) return json(res, 413, { error: 'データが大きすぎます' });
+      const r = saves.create(body);
+      if ('error' in r) return json(res, 400, r);
+      console.log(`[${stamp()}] save transfer issued (${saves.size} pending)`);
+      json(res, 200, r);
+    });
+    return;
+  }
+  const m = /^\/api\/save-transfer\/([0-9A-Za-z-]{4,20})$/.exec(url.pathname);
+  if (req.method === 'GET' && m) {
+    const data = saves.take(m[1]);
+    if (!data) return json(res, 404, { error: 'コードが見つかりません（期限切れ・使用済み・入力ミス）' });
+    res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...CORS });
+    return void res.end(data);
+  }
+  json(res, 404, { error: 'not found' });
+}
 
 function serve(req: IncomingMessage, res: ServerResponse) {
   // a malformed path (e.g. "//") must not take the whole server down
@@ -62,6 +104,7 @@ function serve(req: IncomingMessage, res: ServerResponse) {
     res.writeHead(400).end();
     return;
   }
+  if (url.pathname.startsWith('/api/save-transfer')) return saveTransfer(req, res, url);
   if (url.pathname === '/api/info') {
     res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
     res.end(JSON.stringify({ publicUrl: process.env.PUBLIC_URL?.replace(/\/+$/, '') || null }));

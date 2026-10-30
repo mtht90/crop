@@ -24,6 +24,8 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(req.url);
   const fonts = url.host === 'fonts.googleapis.com' || url.host === 'fonts.gstatic.com';
   if (url.origin !== location.origin && !fonts) return;
+  // server calls (引き継ぎ, info, health) must always reach the server
+  if (url.pathname.startsWith('/api/') || url.pathname === '/healthz') return;
 
   if (req.mode === 'navigate') {
     e.respondWith(

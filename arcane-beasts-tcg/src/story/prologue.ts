@@ -1,5 +1,5 @@
 // 序章「黄昏のリーフェル」 — the festival, the old master, the twelve cards.
-import { bars, bg, bgm, cg, choice, fx, hide, mood, narr, place, say, show, showCard, sfx, think, title, tone, wait, weather, whisper } from './dsl';
+import { bars, bg, bgm, cg, choice, fx, hide, mood, narr, place, say, show, showCard, sfx, think, title, wait, weather, whisper } from './dsl';
 import type { Beat } from './types';
 
 export const PROLOGUE: Beat[] = [

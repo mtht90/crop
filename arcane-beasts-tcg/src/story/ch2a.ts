@@ -1,5 +1,5 @@
 // 第二章「灰の巡礼」 第1〜6話 — 散った十二枚と、師の背中を追って
-import { bars, bg, bgm, branch, cg, choice, cutin, flag, fx, hide, mood, move, narr, place, say, show, showCard, shout, sfx, think, title, tone, wait, weather, whisper } from './dsl';
+import { bars, bg, bgm, branch, cg, choice, cutin, flag, fx, hide, mood, move, narr, place, say, show, showCard, shout, sfx, think, title, tone, weather } from './dsl';
 import type { Chapter } from './types';
 
 /** how many times the player chose to save rather than to strike back */

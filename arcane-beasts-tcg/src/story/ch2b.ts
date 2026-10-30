@@ -1,5 +1,5 @@
 // 第二章「灰の巡礼」 第7〜12話 — 北の山あい、灰の村、そして若き師
-import { bars, bg, bgm, branch, cg, choice, cutin, flag, fx, hide, mood, move, narr, place, say, show, showCard, shout, sfx, think, title, tone, wait, weather, whisper } from './dsl';
+import { bars, bg, bgm, branch, cg, choice, cutin, flag, fx, hide, mood, move, narr, place, say, show, showCard, shout, sfx, title, tone, wait, weather } from './dsl';
 import { mercy } from './ch2a';
 import type { Chapter } from './types';
 
