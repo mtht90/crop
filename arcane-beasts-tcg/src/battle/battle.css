@@ -64,6 +64,8 @@
 
 /* --------------------------------- Zones -------------------------------- */
 .zone-active { position: absolute; width: calc(var(--u) * 8.6); left: calc(var(--u) * 45.7); }
+/* never more than one card here; if two slots ever meet they overlap rather than stack */
+.zone-active > .slot + .slot { position: absolute; inset: 0; }
 .zone-active.me { top: calc(var(--u) * 28.7); }
 .zone-active.opp { top: calc(var(--u) * 14.5); }
 .zone-bench {

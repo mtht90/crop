@@ -953,12 +953,14 @@ export function BattleScreen() {
             <DiscardPile s={s} p={0} onOpen={() => setDiscardView(0)} />
             <div className="zone-active me">
               {me.active && <SlotView key={me.active.stack[0].uid} s={s} slot={me.active} pos={{ p: 0, z: 'active' }} big highlight={slotHL({ p: 0, z: 'active' })} selectable={myAction} onClick={() => onSlotClick({ p: 0, z: 'active' })} />}
-              {setupActiveInst && (
+              {/* the setup placeholders only while there is no real active yet: a setup
+                  prompt that outlives the state update would stack a second slot under it */}
+              {!me.active && setupActiveInst && (
                 <div className="slot slot-active" data-drop="0a">
                   <BoardCard inst={setupActiveInst} face onClick={() => onSetupPick(setupActiveInst.uid)} />
                 </div>
               )}
-              {isSetup && !setupActiveInst && (
+              {isSetup && !me.active && !setupActiveInst && (
                 <div className="slot slot-active empty hl" data-drop="0a">
                   <div className="setup-hint">バトル場</div>
                 </div>
