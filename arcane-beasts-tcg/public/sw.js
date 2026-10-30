@@ -1,8 +1,9 @@
 // ARCANE BEASTS service worker: play offline once assets have been seen.
 //   pages       network first, cached copy when offline
-//   everything  stale-while-revalidate (art, audio, fonts, the bundle)
+//   assets      cache first (art, sound, fonts, the hashed bundle): fetched once
+//   everything  else stale-while-revalidate
 // Range requests (streamed music) go straight to the network.
-const CACHE = 'arcane-beasts-v1';
+const CACHE = 'arcane-beasts-v2';
 const CORE = ['./', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 
 self.addEventListener('install', (e) => {
@@ -40,6 +41,23 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
+  // art, sound and the built bundle never change under the same name: once a copy
+  // is cached it is used as is, without asking the network again (this is what
+  // keeps the server's traffic down). Change CACHE above when the art changes.
+  if (url.pathname.includes('/assets/') || fonts) {
+    e.respondWith(
+      caches.open(CACHE).then(async (c) => {
+        const hit = await c.match(req);
+        if (hit) return hit;
+        const res = await fetch(req);
+        if (res.ok || res.type === 'opaque') c.put(req, res.clone());
+        return res;
+      }),
+    );
+    return;
+  }
+
+  // anything else: stale-while-revalidate
   e.respondWith(
     caches.open(CACHE).then(async (c) => {
       const hit = await c.match(req);

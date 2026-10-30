@@ -132,10 +132,30 @@ function serve(req: IncomingMessage, res: ServerResponse) {
   }
   const ext = extname(target);
   const hashed = /[\\/]assets[\\/].+-[\w-]{6,}\.\w+$/.test(target);
-  res.writeHead(200, {
+  const st = statSync(target);
+  // a validator, so a browser that already has the file gets a tiny 304 instead of the bytes
+  const etag = `"${st.size.toString(36)}-${Math.floor(st.mtimeMs).toString(36)}"`;
+  const media = /\.(webp|png|jpg|svg|mp3|ogg|woff2?)$/.test(target);
+  const headers: Record<string, string | number> = {
     'content-type': MIME[ext] ?? 'application/octet-stream',
-    'cache-control': target.endsWith('index.html') || target.endsWith('sw.js') ? 'no-cache' : hashed ? 'public, max-age=31536000, immutable' : 'public, max-age=3600',
-  });
+    // pages: always check; the bundle: forever (its name changes); art and sound: a week, then revalidate
+    'cache-control': target.endsWith('index.html') || target.endsWith('sw.js') ? 'no-cache' : hashed ? 'public, max-age=31536000, immutable' : media ? 'public, max-age=604800' : 'public, max-age=3600',
+    etag,
+    'accept-ranges': 'bytes',
+  };
+  if (req.headers['if-none-match'] === etag) return void res.writeHead(304, headers).end();
+  // music streams in pieces: answer range requests instead of sending the whole file each time
+  const range = /^bytes=(\d*)-(\d*)$/.exec(String(req.headers.range ?? ''));
+  if (range && (range[1] || range[2])) {
+    let start = range[1] ? Number(range[1]) : Math.max(0, st.size - Number(range[2]));
+    let end = range[1] && range[2] ? Number(range[2]) : st.size - 1;
+    end = Math.min(end, st.size - 1);
+    if (start > end || start >= st.size) return void res.writeHead(416, { 'content-range': `bytes */${st.size}` }).end();
+    res.writeHead(206, { ...headers, 'content-range': `bytes ${start}-${end}/${st.size}`, 'content-length': end - start + 1 });
+    if (req.method === 'HEAD') return void res.end();
+    return void createReadStream(target, { start, end }).pipe(res);
+  }
+  res.writeHead(200, { ...headers, 'content-length': st.size });
   if (req.method === 'HEAD') return void res.end();
   createReadStream(target).pipe(res);
 }

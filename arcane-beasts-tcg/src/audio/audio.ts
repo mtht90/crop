@@ -75,6 +75,34 @@ export function sfx(name: string, volume = 1, rate = 1) {
   if (rate !== 1) h.rate(rate, id);
 }
 
+/**
+ * a track as a blob URL: the file is fetched whole (so the service worker caches
+ * it and later visits never download it again). An <audio> element pointed at
+ * the file itself streams it with range requests, which no cache keeps.
+ */
+const trackUrls = new Map<MusicKey, string>();
+async function trackSrc(key: MusicKey): Promise<string> {
+  const have = trackUrls.get(key);
+  if (have) return have;
+  const url = asset(`music/${key}.mp3`);
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return url;
+    const blob = URL.createObjectURL(await res.blob());
+    trackUrls.set(key, blob);
+    // keep a few tracks in memory; the rest come back from the cache when needed
+    while (trackUrls.size > 4) {
+      const [old, u] = trackUrls.entries().next().value as [MusicKey, string];
+      if (old === musicKey) break;
+      trackUrls.delete(old);
+      URL.revokeObjectURL(u);
+    }
+    return blob;
+  } catch {
+    return url;
+  }
+}
+
 export function playMusic(key: MusicKey, loop = true) {
   const el = musicNodes();
   wantPlay = true;
@@ -84,9 +112,10 @@ export function playMusic(key: MusicKey, loop = true) {
     return;
   }
   musicKey = key;
-  const start = () => {
+  const start = async () => {
+    const src = await trackSrc(key);
     if (musicKey !== key) return;
-    el.src = asset(`music/${key}.mp3`);
+    el.src = src;
     el.loop = loop;
     el.currentTime = 0;
     musicFade(0, 0);
@@ -95,8 +124,8 @@ export function playMusic(key: MusicKey, loop = true) {
   };
   if (!el.paused && el.src) {
     musicFade(0, 600);
-    setTimeout(start, 650);
-  } else start();
+    setTimeout(() => void start(), 650);
+  } else void start();
 }
 
 export function stopMusic() {
