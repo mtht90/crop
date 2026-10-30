@@ -532,7 +532,7 @@ function DeckRow({ id, n, addOk, onAdd, onRemove, onZoom }: { id: string; n: num
         {c.kind === 'energy' && <EnergySymbol type={c.energyType} size="1.05em" />}
         {c.kind === 'trainer' && <Icon name={c.sub === 'supporter' ? 'person' : c.sub === 'stadium' ? 'shield' : 'sparkles'} />}
         <b>{c.name}</b>
-        {c.variant && <small>{MODEL_NAME[modelOf(c)]}</small>}
+        {c.variant && <small>{MODEL_NAME[modelOf(c)!]}</small>}
         {c.kind === 'monster' && c.rarity >= 4 && <i className={`db3-star r-${c.rarity}`}>{'★'.repeat(c.rarity)}</i>}
       </span>
       <button className="db3-step" onClick={onRemove} title="1枚へらす">

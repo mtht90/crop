@@ -30,8 +30,7 @@ export function RainbowSymbol({ size = '1em' }: { size?: string | number }) {
   );
 }
 
-/** rarities printed with a foil treatment */
-/** ★3 and up shine */
+/** ★3 and up shine (full art is printed matte) */
 const HOLO = new Set([3, 4, 5]);
 /** variants whose illustration covers the whole card */
 const BLEED = new Set(['SAR']);
@@ -98,7 +97,7 @@ export const CardFace = memo(function CardFace({ cid, className, style, interact
 
   const rare = def.rarity;
   const v = def.variant;
-  const holo = HOLO.has(rare) && v !== 'mirror';
+  const holo = HOLO.has(rare) && v !== 'mirror' && v !== 'SR';
   const classes = [
     'tcg',
     `kind-${def.kind}`,

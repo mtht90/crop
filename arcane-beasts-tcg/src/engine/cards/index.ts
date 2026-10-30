@@ -178,15 +178,15 @@ export const RARITY_COLOR: Record<Rarity, string> = { 1: '#b8bec9', 2: '#5ab0ff'
 /** prize cards taken when this monster is knocked out */
 
 
-export type Model = 'normal' | 'mirror' | 'fullart' | 'special' | 'gold';
+/** special printings; a card printed the ordinary way has no model */
+export type Model = 'mirror' | 'fullart' | 'special' | 'gold';
 export const MODEL_NAME: Record<Model, string> = {
-  normal: 'ノーマル',
   mirror: 'ミラー',
   fullart: 'フルアート',
   special: 'スペシャルアート',
   gold: 'ゴールド',
 };
-export function modelOf(c: CardDef): Model {
+export function modelOf(c: CardDef): Model | null {
   switch (c.variant) {
     case 'mirror':
       return 'mirror';
@@ -197,10 +197,13 @@ export function modelOf(c: CardDef): Model {
     case 'UR':
       return 'gold';
   }
-  return 'normal';
+  return null;
 }
-/** "★★★ フルアート" style label */
-export const printLabel = (c: CardDef) => `${RARITY_SYMBOL[c.rarity]} ${MODEL_NAME[modelOf(c)]}`;
+/** "★★★ フルアート" style label ("★★" alone for an ordinary printing) */
+export const printLabel = (c: CardDef) => {
+  const m = modelOf(c);
+  return m ? `${RARITY_SYMBOL[c.rarity]} ${MODEL_NAME[m]}` : RARITY_SYMBOL[c.rarity];
+};
 
 // --------------------------------------------------------------------------
 // Chapters

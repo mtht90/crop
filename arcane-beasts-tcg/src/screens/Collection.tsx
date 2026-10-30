@@ -171,7 +171,7 @@ export function Collection() {
               <CardFace cid={zoom} interactive />
               <div className="zoom-label">
                 <RarityBadge r={card(zoom).rarity} named />
-                <span>{MODEL_NAME[modelOf(card(zoom))]}モデル</span>
+                {modelOf(card(zoom)) && <span>{MODEL_NAME[modelOf(card(zoom))!]}</span>}
               </div>
             </motion.div>
           </motion.div>
