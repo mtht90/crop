@@ -52,6 +52,8 @@ export const CAST: Record<string, Cast> = {
   bandit: { id: 'bandit', name: '野盗', color: '#c9b49a', look: { normal: 'humans/footpad' } },
   agent: { id: 'agent', name: '黒衣の女', color: '#ff7a9c', look: { normal: 'humans/assassin+female' } },
   cultist: { id: 'cultist', name: '信徒', color: '#a8b8ff', look: { normal: 'humans/dark-adept' } },
+  /** a voice with no face (never shown on stage) */
+  voice: { id: 'voice', name: '？？？', color: '#9aa0c8', look: { normal: 'camp/asheviere' } },
 };
 
 for (const r of RIVALS) {
