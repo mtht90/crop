@@ -3,6 +3,8 @@ import { ACT2_CHAPTERS } from './act2';
 import { ACT3_CHAPTERS } from './act3';
 import { ACT4_CHAPTERS } from './act4';
 import { PROLOGUE } from './prologue';
+import { CH2A } from './ch2a';
+import { CH2B } from './ch2b';
 import type { Chapter } from './types';
 
 export { CAST, castFor, HERO_LOOKS, DEFAULT_HERO } from './cast';
@@ -10,9 +12,12 @@ export { PROLOGUE };
 export type { Beat, Chapter, Cast } from './types';
 
 /** the chapters (章) of the story; each is twelve episodes (話) */
-export const PARTS: { no: number; name: string; title: string }[] = [{ no: 1, name: '第一章', title: '十二枚の伝説' }];
+export const PARTS: { no: number; name: string; title: string }[] = [
+  { no: 1, name: '第一章', title: '十二枚の伝説' },
+  { no: 2, name: '第二章', title: '灰の巡礼' },
+];
 /** every episode, in order */
-export const CHAPTERS: Chapter[] = [...ACT1_CHAPTERS, ...ACT2_CHAPTERS, ...ACT3_CHAPTERS, ...ACT4_CHAPTERS];
+export const CHAPTERS: Chapter[] = [...ACT1_CHAPTERS, ...ACT2_CHAPTERS, ...ACT3_CHAPTERS, ...ACT4_CHAPTERS, ...CH2A, ...CH2B];
 
 export const chapterById = (id: string) => CHAPTERS.find((c) => c.id === id);
 export const chapterOfRival = (rivalId: string) => CHAPTERS.find((c) => c.rival === rivalId);

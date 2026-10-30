@@ -30,7 +30,11 @@ export type Beat =
   | { t: 'card'; name: string; caption?: string }
   | { t: 'cutin'; id: string; mood?: string; line?: string }
   | { t: 'place'; name: string; sub?: string }
-  | { t: 'choice'; prompt?: string; options: { label: string; then: Beat[] }[] };
+  | { t: 'choice'; prompt?: string; options: { label: string; then: Beat[] }[] }
+  /** remember a decision (saved; replaying a scene just writes the same value again) */
+  | { t: 'flag'; key: string; value: string }
+  /** play one of two beat lists depending on the decisions made so far */
+  | { t: 'branch'; test: (flags: Record<string, string>) => boolean; then: Beat[]; else: Beat[] };
 
 export interface Cast {
   id: string;

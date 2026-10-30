@@ -4,7 +4,7 @@
 import { motion } from 'motion/react';
 import { useEffect } from 'react';
 import { onlineSupported } from '../online/client';
-import { CHAPTERS, episodeLabel } from '../story';
+import { CHAPTERS, episodeLabel, PARTS } from '../story';
 import { nextChapterIndex, isCleared } from '../story/flow';
 import { activeDeck, useStore, RIVALS } from '../state/store';
 import { artUrl } from '../lib/assets';
@@ -38,7 +38,7 @@ export function Arena() {
     {
       to: 'story',
       title: 'ストーリー',
-      sub: storyDone ? '第一章 完 ── 好きな話を読み返せます' : save.story.started ? `${episodeLabel(nextCh)}「${nextCh.title}」` : '十二枚の伝説をめぐる旅',
+      sub: storyDone ? `${PARTS[PARTS.length - 1].name} 完 ── 好きな話を読み返せます` : save.story.started ? `${episodeLabel(nextCh)}「${nextCh.title}」` : '十二枚の伝説をめぐる旅',
       bg: 'story/landscape-lava',
       fig: 'monsters/fire-dragon',
       icon: 'book',

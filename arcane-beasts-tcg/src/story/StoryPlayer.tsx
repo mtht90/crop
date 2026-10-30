@@ -12,6 +12,7 @@ import { Weather as WeatherLayer } from './Weather';
 import type { Beat, Cast, Pan, Slot, Style, Tone, Weather } from './types';
 import { byName } from '../engine/cards';
 import { CardFace } from '../ui/Card';
+import { useStore } from '../state/store';
 import './story.css';
 
 interface CharState {
@@ -196,6 +197,14 @@ export function StoryPlayer({ beats: initial, cast, onDone, label, allowSkip = t
         foley.chime(5);
         const t = setTimeout(() => setI((n) => n + 1), fast ? 300 : 3400);
         return () => clearTimeout(t);
+      }
+      case 'flag':
+        useStore.getState().update((s) => void (s.story.flags = { ...(s.story.flags ?? {}), [b.key]: b.value }));
+        return next(0);
+      case 'branch': {
+        const path = b.test(useStore.getState().save.story.flags ?? {}) ? b.then : b.else;
+        setBeats((bs) => [...bs.slice(0, i + 1), ...path, ...bs.slice(i + 1)]);
+        return next(0);
       }
       case 'choice':
         setSay(null);

@@ -9,15 +9,16 @@ function walk(beats: Beat[], f: (b: Beat) => void) {
   for (const b of beats) {
     f(b);
     if (b.t === 'choice') for (const o of b.options) walk(o.then, f);
+    if (b.t === 'branch') walk([...b.then, ...b.else], f);
   }
 }
 
 describe('story', () => {
-  it('has 12 chapters, each against a different existing rival', () => {
-    expect(CHAPTERS.length).toBe(12);
-    expect(new Set(CHAPTERS.map((c) => c.rival)).size).toBe(12);
+  it('has twelve episodes per chapter, each against a different existing rival', () => {
+    for (const part of new Set(CHAPTERS.map((c) => c.part))) expect(CHAPTERS.filter((c) => c.part === part).length, `part ${part}`).toBe(12);
+    expect(new Set(CHAPTERS.map((c) => c.rival)).size).toBe(CHAPTERS.length);
     for (const c of CHAPTERS) expect(RIVALS.some((r) => r.id === c.rival), c.rival).toBe(true);
-    expect(new Set(CHAPTERS.map((c) => c.id)).size).toBe(12);
+    expect(new Set(CHAPTERS.map((c) => c.id)).size).toBe(CHAPTERS.length);
   });
   it('every card shown in a scene exists, and chapter art exists', () => {
     const scenes: Beat[][] = [PROLOGUE];

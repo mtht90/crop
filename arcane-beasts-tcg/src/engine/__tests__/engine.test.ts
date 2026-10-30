@@ -252,7 +252,7 @@ describe('chapters', () => {
       expect(nos.length, set).toBe(SET_COUNT[set]);
     }
     // the first chapter's rivals only play first-chapter cards
-    for (const ch of CHAPTERS) {
+    for (const ch of CHAPTERS.filter((c) => c.part === 1)) {
       const r = RIVALS.find((x) => x.id === ch.rival);
       if (!r) continue;
       for (const [n] of deckById(r.deck).cards) expect(byName(n).set, `${r.id} ${n}`).toBe('AB1');

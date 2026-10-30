@@ -19,6 +19,10 @@ export const title = (main: string, sub?: string, kicker?: string): Beat => ({ t
 export const bars = (on: boolean): Beat => ({ t: 'bars', on });
 export const wait = (ms: number): Beat => ({ t: 'wait', ms });
 export const choice = (prompt: string, options: { label: string; then: Beat[] }[]): Beat => ({ t: 'choice', prompt, options });
+/** remember a decision under a key (e.g. flag('m01', 'save')) */
+export const flag = (key: string, value: string): Beat => ({ t: 'flag', key, value });
+/** pick a path by the decisions made so far */
+export const branch = (test: (flags: Record<string, string>) => boolean, then: Beat[], otherwise: Beat[] = []): Beat => ({ t: 'branch', test, then, else: otherwise });
 
 /** full-screen illustration (a "CG"): characters step out, letterbox in. cg(null) returns to the stage */
 export const cg = (key: string | null, pan: Pan = 'in', caption?: string): Beat => ({ t: 'cg', key, pan, caption });

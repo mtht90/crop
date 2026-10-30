@@ -9,7 +9,7 @@ import { artUrl } from '../lib/assets';
 import { TopBar } from '../ui/TopBar';
 import { Icon } from '../ui/Icon';
 import { EnergySymbol } from '../ui/Card';
-import { CHAPTERS, episodeLabel, PARTS } from '../story';
+import { CHAPTERS, episodeLabel, episodeNo, PARTS } from '../story';
 import { chapterState, isCleared, nextChapterIndex, replayScene, startChapter } from '../story/flow';
 import { foley, playMusic, sfx } from '../audio/audio';
 import { HeroCreate } from '../story/HeroCreate';
@@ -203,7 +203,7 @@ export function StoryMap() {
                     }}
                   >
                     <span className="im" style={{ backgroundImage: `url(${artUrl(a)})` }} />
-                    <span className="n">{i < 0 ? '序' : i + 1}</span>
+                    <span className="n">{i < 0 ? '序' : c!.part > 1 ? `${c!.part}-${episodeNo(c!)}` : episodeNo(c!)}</span>
                     {st === 'cleared' && i >= 0 && <span className="ck"><Icon name="check" /></span>}
                     {st === 'locked' && <span className="lk"><Icon name="lock" /></span>}
                   </button>

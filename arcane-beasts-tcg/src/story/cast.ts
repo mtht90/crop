@@ -24,6 +24,15 @@ const TYPE_COLOR: Record<string, string> = {
   highelf: '#9be27c',
   shadow: '#d99cff',
   elder: '#c4a4ff',
+  'ash-trader': '#c9b49a',
+  'night-steward': '#ffe066',
+  'ghost-fleet': '#b9c8ff',
+  'tide-folk': '#6cc4ff',
+  oasis: '#ffb36c',
+  'thunder-peak': '#ffe066',
+  'ashen-village': '#c9ced9',
+  'young-master': '#c4a4ff',
+  herald: '#9aa0c8',
 };
 
 /** looks the player can choose for their character */
@@ -52,6 +61,9 @@ export const CAST: Record<string, Cast> = {
   bandit: { id: 'bandit', name: '野盗', color: '#c9b49a', look: { normal: 'humans/footpad' } },
   agent: { id: 'agent', name: '黒衣の女', color: '#ff7a9c', look: { normal: 'humans/assassin+female' } },
   cultist: { id: 'cultist', name: '信徒', color: '#a8b8ff', look: { normal: 'humans/dark-adept' } },
+  sailor: { id: 'sailor', name: '老水夫', color: '#a8c8e8', look: { normal: 'humans/woodsman' } },
+  caravan: { id: 'caravan', name: '隊商の男', color: '#e8c89a', look: { normal: 'dunefolk/rover' } },
+  knight: { id: 'knight', name: '覇竜騎士', color: '#ffc245', look: { normal: 'humans/knight' } },
   /** a voice with no face (never shown on stage) */
   voice: { id: 'voice', name: '？？？', color: '#9aa0c8', look: { normal: 'camp/asheviere' } },
 };

@@ -97,6 +97,8 @@ export interface StorySave {
   hero?: { name: string; look: string };
   /** story edition; saves from an older story start the new one from the beginning */
   v?: number;
+  /** decisions made in scenes (choice key → what was chosen) */
+  flags?: Record<string, string>;
 }
 export const STORY_VERSION = 2;
 export const freshStory = (): StorySave => ({ started: false, cleared: [], seen: [], scenes: true, v: STORY_VERSION });
