@@ -1,7 +1,7 @@
 // デッキ: your decks, ready-made おすすめデッキ, ace auto-build, and the editor
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ALL_CARDS, byName, card, ENERGIES, MODEL_NAME, modelOf, TYPE_JP } from '../engine/cards';
+import { ALL_CARDS, byName, card, ENERGIES, TYPE_JP } from '../engine/cards';
 import { ALL_DECKS, validateDeck } from '../engine/decks';
 import { fromRecipe } from '../engine/autodeck';
 import type { CardDef, EType } from '../engine/types';
@@ -532,7 +532,6 @@ function DeckRow({ id, n, addOk, onAdd, onRemove, onZoom }: { id: string; n: num
         {c.kind === 'energy' && <EnergySymbol type={c.energyType} size="1.05em" />}
         {c.kind === 'trainer' && <Icon name={c.sub === 'supporter' ? 'person' : c.sub === 'stadium' ? 'shield' : 'sparkles'} />}
         <b>{c.name}</b>
-        {c.variant && <small>{MODEL_NAME[modelOf(c)!]}</small>}
         {c.kind === 'monster' && c.rarity >= 4 && <i className={`db3-star r-${c.rarity}`}>{'★'.repeat(c.rarity)}</i>}
       </span>
       <button className="db3-step" onClick={onRemove} title="1枚へらす">

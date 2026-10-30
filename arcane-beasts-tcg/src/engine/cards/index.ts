@@ -178,33 +178,6 @@ export const RARITY_COLOR: Record<Rarity, string> = { 1: '#b8bec9', 2: '#5ab0ff'
 /** prize cards taken when this monster is knocked out */
 
 
-/** special printings; a card printed the ordinary way has no model */
-export type Model = 'mirror' | 'fullart' | 'special' | 'gold';
-export const MODEL_NAME: Record<Model, string> = {
-  mirror: 'ミラー',
-  fullart: 'フルアート',
-  special: 'スペシャルアート',
-  gold: 'ゴールド',
-};
-export function modelOf(c: CardDef): Model | null {
-  switch (c.variant) {
-    case 'mirror':
-      return 'mirror';
-    case 'SR':
-      return 'fullart';
-    case 'SAR':
-      return 'special';
-    case 'UR':
-      return 'gold';
-  }
-  return null;
-}
-/** "★★★ フルアート" style label ("★★" alone for an ordinary printing) */
-export const printLabel = (c: CardDef) => {
-  const m = modelOf(c);
-  return m ? `${RARITY_SYMBOL[c.rarity]} ${MODEL_NAME[m]}` : RARITY_SYMBOL[c.rarity];
-};
-
 // --------------------------------------------------------------------------
 // Chapters
 //   cards are grouped by the chapter of the story they belong to (the SetCode
@@ -235,10 +208,12 @@ export const SET_COUNT: Record<SetCode, number> = { AB1: MAIN_OF.AB1.length, AB2
 //   mirror … reverse-holo version of a regular card (same number and ★)
 //   SR     … full art (★3): the aces and some supporters
 //   SAR    … special art (★4): dramatic close-up illustration
+//   SV     … silver (★4): the gold printing in silver, and the full-art supporters
 //   UR     … gold (★5)
+// (cards are only ever classed by ★; the printing is just how it looks)
 // --------------------------------------------------------------------------
-const SUFFIX: Record<Variant, string> = { mirror: 'M', SR: 'SR', SAR: 'SAR', UR: 'UR' };
-const PRINT_STAR: Record<Exclude<Variant, 'mirror'>, Rarity> = { SR: 3, SAR: 4, UR: 5 };
+const SUFFIX: Record<Variant, string> = { mirror: 'M', SR: 'SR', SAR: 'SAR', SV: 'SV', UR: 'UR' };
+const PRINT_STAR: Record<Exclude<Variant, 'mirror'>, Rarity> = { SR: 3, SAR: 4, SV: 4, UR: 5 };
 const secret: Record<SetCode, number> = { ...SET_COUNT };
 const VARIANTS: CardDef[] = [];
 
@@ -258,7 +233,7 @@ function alt(base: CardDef, v: Variant, extra: Partial<CardDef> = {}) {
     rarity,
     variant: v,
     baseId: base.id,
-    fullArt: v === 'SR' || v === 'UR' || (v === 'SAR' && base.kind === 'trainer') || undefined,
+    fullArt: v === 'SR' || v === 'SV' || v === 'UR' || (v === 'SAR' && base.kind === 'trainer') || undefined,
     gold: v === 'UR' || undefined,
     ...extra,
   } as CardDef);
@@ -316,7 +291,7 @@ const PLAN: Plan[] = [
 ];
 
 for (const c of MAIN_SET) if (!(c.kind === 'energy' && c.basic)) alt(c, 'mirror');
-// secret numbers run per chapter: full art, then special art, then gold
+// secret numbers run per chapter: full art, special art, silver, then gold
 for (const set of SETS)
   for (const p of PLAN) {
     const mine = (n: string) => named(n).set === set;
@@ -329,6 +304,8 @@ for (const set of SETS)
       const base = named(n);
       if (base.set === set) alt(base, 'SAR', { crop, ...(scene ? { scene } : {}), ...(scene && base.kind === 'trainer' ? { paint: true } : {}) });
     }
+// silver: every card that has a gold or a full-art printing
+for (const set of SETS) for (const p of PLAN) for (const n of new Set([...p.UR, ...p.SR])) if (named(n).set === set && !VARIANTS.some((x) => x.id === `${named(n).id}-SV`)) alt(named(n), 'SV');
 for (const set of SETS) for (const p of PLAN) for (const n of new Set(p.UR)) if (named(n).set === set) alt(named(n), 'UR');
 
 export const ALL_CARDS: CardDef[] = [...MAIN_SET, ...VARIANTS];

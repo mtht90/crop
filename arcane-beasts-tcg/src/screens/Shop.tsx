@@ -202,7 +202,7 @@ export function Shop() {
                       <li>
                         <b className="s4">★4</b>・<b className="s5">★5</b>が通常の約3倍
                       </li>
-                      <li>特別仕様のカードも出やすい</li>
+                      <li>光るカード・特別な絵のカードも出やすい</li>
                     </>
                   ) : (
                     <>
@@ -287,7 +287,7 @@ function OddsModal({ onClose, premium }: { onClose: () => void; premium?: boolea
           </tbody>
         </table>
         <div className="odds-note">
-          {`すべての章のカードが出ます。★1〜★3のカードは${Math.round((premium ? PREMIUM_PRINTING_CHANCE : PRINTING_CHANCE) * 100)}%でミラー仕様になります。★3にはフルアート仕様、★4はスペシャルアート仕様、★5はゴールド仕様です（特別仕様でも性能は元のカードと同じ）。ごくまれに、すべてが★3以上のパックが出ることがあります。同じカードが${10}枚を超えた分は、自動でコインに交換されます。`}
+          {`すべての章のカードが出ます。★1〜★3のカードは${Math.round((premium ? PREMIUM_PRINTING_CHANCE : PRINTING_CHANCE) * 100)}%で光るカードになります。★3〜★5には特別な絵のカードがあります（絵が違っても性能は元のカードと同じ）。ごくまれに、すべてが★3以上のパックが出ることがあります。同じカードが${10}枚を超えた分は、自動でコインに交換されます。`}
         </div>
         <button className="pill ghost" onClick={onClose}>
           閉じる

@@ -371,6 +371,13 @@
 .tcg.gold .tcg-inner { background: linear-gradient(160deg, #fff6c9, #d9a93a 50%, #7d5208); }
 .tcg.gold .tcg-art .scene { filter: sepia(1) saturate(2.2) hue-rotate(-12deg) brightness(0.85) contrast(1.1); }
 .tcg.gold .tcg-art .portrait { filter: sepia(0.85) saturate(2.4) hue-rotate(-10deg) brightness(1.08) contrast(1.15) drop-shadow(0 0 2cqw rgba(255, 220, 120, 0.8)); }
+/* SV — the gold printing in silver: cool, bright, monochrome */
+.tcg.v-SV .tcg-frame {
+  background: linear-gradient(135deg, #ffffff 0%, #9aa3ae 20%, #f4f7fb 38%, #7c8591 55%, #e6ebf1 72%, #5f6873 88%, #fbfdff 100%);
+}
+.tcg.v-SV .tcg-inner { background: linear-gradient(160deg, #f6f8fb, #aab3bf 50%, #48505b); }
+.tcg.v-SV .tcg-art .scene { filter: grayscale(1) brightness(0.8) contrast(1.15); }
+.tcg.v-SV .tcg-art .portrait { filter: grayscale(0.92) brightness(1.12) contrast(1.2) drop-shadow(0 0 2cqw rgba(210, 230, 255, 0.85)); }
 
 /* -------------------------------- Trainer -------------------------------- */
 .kind-trainer .tcg-inner { background: linear-gradient(175deg, #fafbfd 0%, #dfe4ec 60%, #b8c0cc 100%); }
@@ -564,6 +571,12 @@
   opacity: 0.45;
   background:
     repeating-linear-gradient(115deg, rgba(255, 236, 170, 0.8) 0%, rgba(201, 150, 43, 0.6) 10%, rgba(255, 250, 220, 0.85) 20%, rgba(143, 95, 12, 0.6) 30%, rgba(255, 236, 170, 0.8) 40%);
+  background-size: 300% 300%;
+}
+.v-SV .tcg-shine {
+  opacity: 0.4;
+  background:
+    repeating-linear-gradient(115deg, rgba(255, 255, 255, 0.85) 0%, rgba(150, 160, 175, 0.55) 10%, rgba(235, 245, 255, 0.9) 20%, rgba(95, 105, 120, 0.55) 30%, rgba(255, 255, 255, 0.85) 40%);
   background-size: 300% 300%;
 }
 .tcg.interactive .tcg-shine { animation: none; opacity: calc(0.25 + var(--hyp) * 0.4); }
@@ -789,7 +802,6 @@
 .rmark.r-3 { background-image: linear-gradient(180deg, #fff6c9, #e0a526); }
 .rmark.r-4 { background-image: linear-gradient(90deg, #ff6b6b, #ffd36b, #6bff9a, #6bc8ff, #c56bff); }
 .rmark.r-5 { font-size: 1.15em; background-image: linear-gradient(90deg, #fff1a8, #ff9ad5, #fff1a8, #9ad8ff, #fff1a8); }
-.tcg.v-mirror .tcg-footer .setno::after { content: 'MIRROR'; margin-left: 1cqw; font-family: 'Cinzel', serif; font-weight: 900; font-size: 0.85em; letter-spacing: 0.08em; opacity: 0.7; }
 
 /* mirror pattern: fine diagonal etching on top of the rainbow */
 .tcg-mirror::after {

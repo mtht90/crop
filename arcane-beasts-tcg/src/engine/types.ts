@@ -18,7 +18,7 @@ export const ALL_TYPES: EType[] = [...ENERGY_TYPES, 'colorless'];
 export type Stage = 'basic' | 'stage1' | 'stage2';
 /**
  * ★1 – ★5: how rare a printing is. Regular cards are ★1–★3 by strength;
- * full art is ★3, special art ★4, gold ★5 (mirrors keep their
+ * full art is ★3, special art and silver ★4, gold ★5 (mirrors keep their
  * card's ★). Every monster gives one prize card.
  */
 export type Rarity = 1 | 2 | 3 | 4 | 5;
@@ -26,7 +26,7 @@ export type Rarity = 1 | 2 | 3 | 4 | 5;
 export type LegacyRarity = 'C' | 'U' | 'R' | 'RR';
 export type SetCode = 'AB1' | 'AB2' | 'AB3';
 /** Alternate printings of a base card */
-export type Variant = 'mirror' | 'SR' | 'SAR' | 'UR';
+export type Variant = 'mirror' | 'SR' | 'SAR' | 'SV' | 'UR';
 export type Condition = 'poisoned' | 'burned' | 'asleep' | 'paralyzed' | 'confused';
 
 // ---------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useMemo, useState } from 'react';
-import { ALL_CARDS, card, MODEL_NAME, modelOf, RARITIES, RARITY_SYMBOL, SET_INFO, SETS, type Model } from '../engine/cards';
+import { ALL_CARDS, card, RARITIES, RARITY_SYMBOL, SET_INFO, SETS } from '../engine/cards';
 import type { EType, Rarity, SetCode } from '../engine/types';
 import { ENERGY_TYPES } from '../engine/types';
 import { collectionPct, owned, useStore } from '../state/store';
@@ -11,15 +11,12 @@ import { Icon } from '../ui/Icon';
 import { RarityBadge } from '../ui/RarityBadge';
 import { foley, playMusic, sfx } from '../audio/audio';
 
-type Kind = 'all' | Model;
-const KINDS: [Kind, string][] = [['all', 'すべて'], ...(Object.entries(MODEL_NAME) as [Model, string][])];
 
 export function Collection() {
   const save = useStore((s) => s.save);
   const update = useStore((s) => s.update);
   const go = useStore((s) => s.go);
   const [set, setSet] = useState<SetCode | 'all'>('all');
-  const [kind, setKind] = useState<Kind>('all');
   const [types, setTypes] = useState<EType[]>([]);
   const [rar, setRar] = useState<Rarity[]>([]);
   const [ownedOnly, setOwnedOnly] = useState(false);
@@ -36,17 +33,16 @@ export function Collection() {
   const list = useMemo(
     () =>
       ALL_CARDS.filter((c) => set === 'all' || c.set === set)
-        .filter((c) => kind === 'all' || modelOf(c) === kind)
         .filter((c) => !types.length || (c.kind === 'monster' && types.includes(c.type)) || (c.kind === 'energy' && types.includes(c.energyType)))
         .filter((c) => !rar.length || rar.includes(c.rarity))
         .filter((c) => !ownedOnly || owned(save, c.id) > 0),
-    [set, kind, types, rar, ownedOnly, save],
+    [set, types, rar, ownedOnly, save],
   );
   const scope = ALL_CARDS.filter((c) => set === 'all' || c.set === set);
   const have = scope.filter((c) => owned(save, c.id) > 0).length;
   const pct = collectionPct(save, set === 'all' ? undefined : set);
 
-  const nFilters = (kind !== 'all' ? 1 : 0) + types.length + rar.length + (ownedOnly ? 1 : 0);
+  const nFilters = types.length + rar.length + (ownedOnly ? 1 : 0);
 
   return (
     <div className="screen">
@@ -102,16 +98,6 @@ export function Collection() {
                   </div>
                 </div>
                 <div className="col3-frow">
-                  <span>絵柄</span>
-                  <div className="db3-chips">
-                    {KINDS.map(([k, label]) => (
-                      <button key={k} className={`chip-btn ${kind === k ? 'on' : ''}`} onClick={() => setKind(k)}>
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="col3-frow">
                   <span>表示</span>
                   <div className="db3-chips">
                     <button className={`chip-btn ${ownedOnly ? 'on' : ''}`} onClick={() => setOwnedOnly(!ownedOnly)}>
@@ -121,7 +107,6 @@ export function Collection() {
                       <button
                         className="chip-btn"
                         onClick={() => {
-                          setKind('all');
                           setTypes([]);
                           setRar([]);
                           setOwnedOnly(false);
@@ -171,7 +156,6 @@ export function Collection() {
               <CardFace cid={zoom} interactive />
               <div className="zoom-label">
                 <RarityBadge r={card(zoom).rarity} named />
-                {modelOf(card(zoom)) && <span>{MODEL_NAME[modelOf(card(zoom))!]}</span>}
               </div>
             </motion.div>
           </motion.div>

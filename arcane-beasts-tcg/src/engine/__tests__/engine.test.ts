@@ -102,15 +102,15 @@ describe('第2弾 rules', () => {
     expect(maxHp(g.s, ex)).toBe(big.hp - 30);
   });
 
-  it('★ is the printing: regular ★1–3, full art ★3, special art ★4, gold ★5', () => {
+  it('★ is the printing: regular ★1–3, full art ★3, special art / silver ★4, gold ★5', () => {
     const base = ALL_CARDS.filter((c) => !c.variant);
     for (const c of base) expect(c.rarity, c.name).toBeLessThanOrEqual(3);
     for (const c of base) if (c.kind === 'monster') expect(prizeValue(c)).toBe(1);
-    const want = (v: string, b: number) => (v === 'UR' ? 5 : v === 'SAR' ? 4 : v === 'SR' ? 3 : b);
+    const want = (v: string, b: number) => (v === 'UR' ? 5 : v === 'SAR' || v === 'SV' ? 4 : v === 'SR' ? 3 : b);
     for (const v of ALL_CARDS.filter((c) => c.variant)) expect(v.rarity, v.id).toBe(want(v.variant!, card(v.baseId!).rarity));
     expect(ALL_CARDS.filter((c) => c.rarity === 5).length).toBeGreaterThan(15);
     expect(ALL_CARDS.filter((c) => c.rarity === 4).length).toBeGreaterThan(15);
-    expect(ALL_CARDS.filter((c) => c.variant && !['mirror', 'SR', 'SAR', 'UR'].includes(c.variant))).toEqual([]);
+    expect(ALL_CARDS.filter((c) => c.variant && !['mirror', 'SR', 'SAR', 'SV', 'UR'].includes(c.variant))).toEqual([]);
     // every regular card (aces too) has a mirror, basic energy aside
     const mirrored = new Set(ALL_CARDS.filter((c) => c.variant === 'mirror').map((c) => c.baseId));
     for (const c of base) if (!(c.kind === 'energy' && c.basic)) expect(mirrored.has(c.id), c.name).toBe(true);
