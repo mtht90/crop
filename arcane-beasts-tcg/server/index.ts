@@ -99,15 +99,15 @@ function saveTransfer(req: IncomingMessage, res: ServerResponse, url: URL) {
 // 引っ越し: the game itself now lives on a static host (no bandwidth limit).
 // Visitors of the old address get a tiny page that hands their saved data to
 // the new address in the URL fragment; this server keeps the online play and
-// the 引き継ぎ API. Off until MOVED_TO is set to the new address.
+// the 引き継ぎ API. MOVED_TO (Render → Environment) names the new address; "off" turns it off.
 // ---------------------------------------------------------------------------
-const MOVED_TO = (process.env.MOVED_TO ?? '').replace(/\/+$/, '');
+const MOVED_TO = (process.env.MOVED_TO ?? 'https://arcane-beasts.mthtnko.workers.dev').replace(/\/+$/, '');
 const OLD_HOST = /\.onrender\.com$/;
 const MOVE_PAGE = `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>ARCANE BEASTS — 引っ越しました</title>
 <style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#060a1c;color:#e8ecff;font-family:system-ui,sans-serif;text-align:center}a{color:#ffd77a}</style></head>
 <body><div><p style="font-size:20px;font-weight:700">ARCANE BEASTS は新しいアドレスに引っ越しました</p>
-<p>データを持って移動しています…</p><p><a id="go" href="${MOVED_TO}/">移動しない場合はこちら</a></p></div>
+<p id="msg">データを持って移動しています…</p><p><a id="go" href="${MOVED_TO}/">移動しない場合はこちら</a></p></div>
 <script>
 (function(){
   var to=${JSON.stringify(MOVED_TO)}+'/'+location.search, data={}, n=0;
@@ -115,7 +115,11 @@ const MOVE_PAGE = `<!doctype html><html lang="ja"><head><meta charset="utf-8"><m
   if(n){var bytes=new TextEncoder().encode(JSON.stringify(data)),bin='';for(var j=0;j<bytes.length;j+=32768)bin+=String.fromCharCode.apply(null,bytes.subarray(j,j+32768));to+='#move='+encodeURIComponent(btoa(bin));}
   document.getElementById('go').href=to;
   try{navigator.serviceWorker&&navigator.serviceWorker.getRegistrations().then(function(rs){rs.forEach(function(r){r.unregister();});});}catch(e){}
-  setTimeout(function(){location.replace(to);},300);
+  // move only once the new address is really up (its icon loads); the data stays here until then
+  var probe=new Image();
+  probe.onload=function(){location.replace(to);};
+  probe.onerror=function(){document.getElementById('msg').textContent='新しいアドレスを準備中です。少し時間をおいて、もう一度開いてください（データはこの端末に残っています）';};
+  probe.src=${JSON.stringify(MOVED_TO)}+'/icons/icon-192.png?'+Date.now();
 })();
 </script></body></html>`;
 /** replaces the old service worker: forgets its cache and steps aside, so the move page is what loads */
@@ -132,7 +136,7 @@ function serve(req: IncomingMessage, res: ServerResponse) {
     return;
   }
   if (url.pathname.startsWith('/api/save-transfer')) return saveTransfer(req, res, url);
-  if (MOVED_TO && OLD_HOST.test(String(req.headers.host ?? '')) && url.pathname !== '/healthz' && !url.pathname.startsWith('/api/')) {
+  if (MOVED_TO && MOVED_TO !== 'off' && OLD_HOST.test(String(req.headers.host ?? '')) && url.pathname !== '/healthz' && !url.pathname.startsWith('/api/')) {
     if (url.pathname === '/sw.js') {
       res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-cache' });
       return void res.end(KILL_SW);
