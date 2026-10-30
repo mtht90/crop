@@ -14,6 +14,29 @@
     <link rel="icon" type="image/png" href="./icons/icon-192.png" />
   </head>
   <body>
+    <script>
+      // 引っ越し: the old address sends its saved data here as #move=… (the part
+      // after # never reaches any server). Runs before the game reads its save.
+      (function () {
+        var m = /[#&]move=([^&]+)/.exec(location.hash);
+        if (!m) return;
+        try {
+          var bin = atob(decodeURIComponent(m[1]));
+          var bytes = new Uint8Array(bin.length);
+          for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+          var data = JSON.parse(new TextDecoder().decode(bytes));
+          var KEY = 'arcane-beasts-save-v1';
+          var here = localStorage.getItem(KEY);
+          var started = false;
+          try { started = !!(here && JSON.parse(here).started); } catch (e) {}
+          var ok = !started || confirm('前のアドレスで遊んでいたデータが届きました。\nこの端末の新しいアドレスのデータを、前のアドレスのデータで上書きしますか？');
+          if (ok) for (var k in data) if (k.indexOf('arcane-beasts-') === 0 && k !== 'arcane-beasts-server') localStorage.setItem(k, data[k]);
+        } catch (e) {
+          /* a broken link only means nothing is moved */
+        }
+        history.replaceState(null, '', location.pathname + location.search);
+      })();
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

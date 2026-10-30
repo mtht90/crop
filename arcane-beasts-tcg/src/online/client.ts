@@ -57,6 +57,9 @@ export function serverUrl(): string {
     if (/^wss?:\/\//.test(custom)) return custom;
     return `${/^(localhost|127\.|192\.168\.|10\.)/.test(custom) ? 'ws' : secure ? 'wss' : 'ws'}://${custom.replace(/\/ws$/, '')}/ws`;
   }
+  // the game's static host has no server of its own: use the one it was built for
+  const home = import.meta.env.VITE_SERVER_HOST as string | undefined;
+  if (home && location.host !== home && !/^(localhost|127\.)/.test(location.hostname)) return `wss://${home}/ws`;
   return `${secure ? 'wss' : 'ws'}://${location.host}/ws`;
 }
 

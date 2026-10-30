@@ -95,6 +95,33 @@ function saveTransfer(req: IncomingMessage, res: ServerResponse, url: URL) {
   json(res, 404, { error: 'not found' });
 }
 
+// ---------------------------------------------------------------------------
+// 引っ越し: the game itself now lives on a static host (no bandwidth limit).
+// Visitors of the old address get a tiny page that hands their saved data to
+// the new address in the URL fragment; this server keeps the online play and
+// the 引き継ぎ API. MOVED_TO="" turns it off.
+// ---------------------------------------------------------------------------
+const MOVED_TO = (process.env.MOVED_TO ?? 'https://arcane-beasts.pages.dev').replace(/\/+$/, '');
+const OLD_HOST = /\.onrender\.com$/;
+const MOVE_PAGE = `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ARCANE BEASTS — 引っ越しました</title>
+<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#060a1c;color:#e8ecff;font-family:system-ui,sans-serif;text-align:center}a{color:#ffd77a}</style></head>
+<body><div><p style="font-size:20px;font-weight:700">ARCANE BEASTS は新しいアドレスに引っ越しました</p>
+<p>データを持って移動しています…</p><p><a id="go" href="${MOVED_TO}/">移動しない場合はこちら</a></p></div>
+<script>
+(function(){
+  var to=${JSON.stringify(MOVED_TO)}+'/'+location.search, data={}, n=0;
+  try{for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);if(k&&k.indexOf('arcane-beasts-')===0&&k!=='arcane-beasts-server'){data[k]=localStorage.getItem(k);n++;}}}catch(e){}
+  if(n){var bytes=new TextEncoder().encode(JSON.stringify(data)),bin='';for(var j=0;j<bytes.length;j+=32768)bin+=String.fromCharCode.apply(null,bytes.subarray(j,j+32768));to+='#move='+encodeURIComponent(btoa(bin));}
+  document.getElementById('go').href=to;
+  try{navigator.serviceWorker&&navigator.serviceWorker.getRegistrations().then(function(rs){rs.forEach(function(r){r.unregister();});});}catch(e){}
+  setTimeout(function(){location.replace(to);},300);
+})();
+</script></body></html>`;
+/** replaces the old service worker: forgets its cache and steps aside, so the move page is what loads */
+const KILL_SW = `self.addEventListener('install',function(){self.skipWaiting();});
+self.addEventListener('activate',function(e){e.waitUntil(caches.keys().then(function(ks){return Promise.all(ks.map(function(k){return caches.delete(k);}));}).then(function(){return self.registration.unregister();}).then(function(){return self.clients.matchAll();}).then(function(cs){cs.forEach(function(c){c.navigate(c.url);});}));});`;
+
 function serve(req: IncomingMessage, res: ServerResponse) {
   // a malformed path (e.g. "//") must not take the whole server down
   let url: URL;
@@ -105,6 +132,19 @@ function serve(req: IncomingMessage, res: ServerResponse) {
     return;
   }
   if (url.pathname.startsWith('/api/save-transfer')) return saveTransfer(req, res, url);
+  if (MOVED_TO && OLD_HOST.test(String(req.headers.host ?? '')) && url.pathname !== '/healthz' && !url.pathname.startsWith('/api/')) {
+    if (url.pathname === '/sw.js') {
+      res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-cache' });
+      return void res.end(KILL_SW);
+    }
+    // pages (and anything that is not a file) get the move page; files are not served from here any more
+    if (!/\.\w+$/.test(url.pathname) || url.pathname.endsWith('.html')) {
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache' });
+      return void res.end(MOVE_PAGE);
+    }
+    res.writeHead(301, { location: `${MOVED_TO}${url.pathname}${url.search}` });
+    return void res.end();
+  }
   if (url.pathname === '/api/info') {
     res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
     res.end(JSON.stringify({ publicUrl: process.env.PUBLIC_URL?.replace(/\/+$/, '') || null }));

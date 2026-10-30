@@ -14,7 +14,8 @@
     "server:check": "tsc --noEmit -p tsconfig.server.json",
     "start": "vite build && tsx server/index.ts",
     "build:deploy": "node --max-old-space-size=600 node_modules/vite/bin/vite.js build --mode deploy",
-    "build:web": "node --max-old-space-size=300 --max-semi-space-size=2 node_modules/vite/bin/vite.js build"
+    "build:web": "node --max-old-space-size=300 --max-semi-space-size=2 node_modules/vite/bin/vite.js build",
+    "pages:site": "node scripts/pages-site.mjs"
   },
   "keywords": [],
   "author": "",
