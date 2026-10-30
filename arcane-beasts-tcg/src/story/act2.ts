@@ -1,20 +1,19 @@
-// 第二幕「奪い合う者たち」 — ロウガ / フローラ / ガルム
+// 第一章 第4〜6話「奪い合う者たち」 — ロウガ / フローラ / ガルム
 import { bars, bg, bgm, cg, choice, cutin, fx, hide, mood, move, narr, place, say, show, showCard, shout, sfx, think, title, tone, wait, weather, whisper } from './dsl';
-import type { Act, Chapter } from './types';
+import type { Chapter } from './types';
 
-export const ACT2: Act = { no: 2, title: '奪い合う者たち', sub: '欲と、嘘と', bg: 'story/p-ambush' };
 
 export const ACT2_CHAPTERS: Chapter[] = [
   // ------------------------------------------------------------------ 4 ロウガ
   {
     id: 'n04',
-    act: 2,
+    part: 1,
     rival: 'rouga',
     title: '狼の街道',
     summary: '旅人からカードと命を奪う野盗の頭。その手下たちの目も、また飢えていた。',
     art: 'story/p-ambush',
     before: [
-      title('第二幕　奪い合う者たち', '欲と、嘘と', 'ACT II'),
+      title('奪い合う者たち', '欲と、嘘と', 'EPISODE 4'),
       bgm('suspense'),
       bg('story/p-midlands', 'right', { tint: 'rgba(210,190,160,1)' }),
       weather('ash'),
@@ -92,7 +91,7 @@ export const ACT2_CHAPTERS: Chapter[] = [
   // ------------------------------------------------------------------ 5 フローラ
   {
     id: 'n05',
-    act: 2,
+    part: 1,
     rival: 'flora',
     title: '墓守の娘',
     summary: '恋人の棺に、伝説の一枚が眠っている。勝てば、墓を掘り返すことになる。',
@@ -174,7 +173,7 @@ export const ACT2_CHAPTERS: Chapter[] = [
   // ------------------------------------------------------------------ 6 ガルム
   {
     id: 'n06',
-    act: 2,
+    part: 1,
     rival: 'garm',
     title: '鉱山の掟',
     summary: '賃金をカードで賭けさせる鉱山の親方。そして、待ち伏せていたのは——。',
@@ -247,7 +246,7 @@ export const ACT2_CHAPTERS: Chapter[] = [
       weather('rain'),
       narr('雨が降り出した。'),
       narr('マントを返し忘れていたことに気づいたのは、彼女の足音が聞こえなくなってからだった。'),
-      title('第二幕　完', '七枚の伝説', 'ACT II'),
+      title('七枚の伝説', '第6話　完', 'EPISODE 6'),
     ],
     lose: [
       bg('story/blacksmith', 'in'),

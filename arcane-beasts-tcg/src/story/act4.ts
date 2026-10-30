@@ -1,20 +1,19 @@
-// 第四幕「始まりの庭」 — カーミラ / モルガナ / オルデン
+// 第一章 第10〜12話「始まりの庭」 — カーミラ / モルガナ / オルデン
 import { bars, bg, bgm, cg, choice, cutin, fx, hide, mood, move, narr, place, say, show, showCard, shout, sfx, title, tone, wait, weather, whisper } from './dsl';
-import type { Act, Chapter } from './types';
+import type { Chapter } from './types';
 
-export const ACT4: Act = { no: 4, title: '始まりの庭', sub: '永遠の代価', bg: 'story/p-shrine' };
 
 export const ACT4_CHAPTERS: Chapter[] = [
   // ------------------------------------------------------------------ 10 カーミラ
   {
     id: 'n10',
-    act: 4,
+    part: 1,
     rival: 'carmilla',
     title: '夜会の館',
     summary: 'リーゼの依頼人、カーミラ。仮面の夜会で明かされる、本当の雇い主の名。',
     art: 'story/p-bride',
     before: [
-      title('第四幕　始まりの庭', '永遠の代価', 'ACT IV'),
+      title('始まりの庭', '永遠の代価', 'EPISODE 10'),
       bgm('shadows'),
       bg('story/landscape-castle', 'in', { tint: 'rgba(120,110,170,1)' }),
       weather('none'),
@@ -93,7 +92,7 @@ export const ACT4_CHAPTERS: Chapter[] = [
   // ------------------------------------------------------------------ 11 モルガナ
   {
     id: 'n11',
-    act: 4,
+    part: 1,
     rival: 'morgana',
     title: '庭の門番',
     summary: 'オルデンの、かつての弟子。真実を知って逃げた彼女は、門の前で待っていた。',
@@ -162,7 +161,7 @@ export const ACT4_CHAPTERS: Chapter[] = [
   // ------------------------------------------------------------------ 12 オルデン
   {
     id: 'n12',
-    act: 4,
+    part: 1,
     rival: 'olden',
     title: '始まりの庭',
     summary: '十二枚が揃った。庭の中央で、師が待っている。',
@@ -305,7 +304,7 @@ export const ACT4_CHAPTERS: Chapter[] = [
       fx('fadeBlackSlow'),
       tone('none'),
       bgm('elegy'),
-      title('第一部　完', '十二枚の伝説', 'END OF PART ONE'),
+      title('第一章　完', '十二枚の伝説', 'END OF CHAPTER I'),
     ],
     lose: [
       bg('story/p-shrine', 'in'),

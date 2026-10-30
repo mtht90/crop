@@ -1,20 +1,19 @@
-// 第三幕「ひとりの道」 — ネレア / セツナ / ヴェルド
+// 第一章 第7〜9話「ひとりの道」 — ネレア / セツナ / ヴェルド
 import { bars, bg, bgm, cg, choice, cutin, fx, hide, mood, narr, place, say, show, showCard, shout, sfx, think, title, tone, wait, weather, whisper } from './dsl';
-import type { Act, Chapter } from './types';
+import type { Chapter } from './types';
 
-export const ACT3: Act = { no: 3, title: 'ひとりの道', sub: '雪と、古い傷', bg: 'story/p-snow-hut' };
 
 export const ACT3_CHAPTERS: Chapter[] = [
   // ------------------------------------------------------------------ 7 ネレア
   {
     id: 'n07',
-    act: 3,
+    part: 1,
     rival: 'nerea',
     title: '湖の神殿',
     summary: 'ひとりきりの旅。伝説の一枚を神と崇める教団と、その大巫女。',
     art: 'story/p-temple',
     before: [
-      title('第三幕　ひとりの道', '雪と、古い傷', 'ACT III'),
+      title('ひとりの道', '雪と、古い傷', 'EPISODE 7'),
       bgm('transience'),
       bg('story/p-river-mist', 'right'),
       weather('fog'),
@@ -84,7 +83,7 @@ export const ACT3_CHAPTERS: Chapter[] = [
   // ------------------------------------------------------------------ 8 セツナ
   {
     id: 'n08',
-    act: 3,
+    part: 1,
     rival: 'setsuna',
     title: '氷河の伝承',
     summary: '伝承を知る魔導士が語る「代価」。そして、雪の中から戻ってきたのは——。',
@@ -163,7 +162,7 @@ export const ACT3_CHAPTERS: Chapter[] = [
   // ------------------------------------------------------------------ 9 ヴェルド
   {
     id: 'n09',
-    act: 3,
+    part: 1,
     rival: 'verd',
     title: '古竜の森',
     summary: '四十年前、オルデンと共に旅をしたエルフ。その目に浮かぶのは、懐かしさではなかった。',
@@ -224,7 +223,7 @@ export const ACT3_CHAPTERS: Chapter[] = [
       say('hero', '……違う。先生は、そんな人じゃない。'),
       say('hero', '確かめる。……王都へ行こう、リーゼ。カーミラに、直接聞く。'),
       tone('none'),
-      title('第三幕　完', '十枚の伝説', 'ACT III'),
+      title('十枚の伝説', '第9話　完', 'EPISODE 9'),
     ],
     lose: [
       bg('story/p-great-tree', 'in'),

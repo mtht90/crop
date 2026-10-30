@@ -5,6 +5,7 @@ import { MONSTERS2 } from './monsters2';
 import { TRAINERS2 } from './trainers2';
 import { MONSTERS3 } from './monsters3';
 import { TRAINERS3 } from './trainers3';
+import { CH1_EXTRA, CH2_EXTRA } from './chapters';
 
 export const TYPE_JP: Record<EType, string> = {
   fire: '炎',
@@ -177,68 +178,65 @@ export const RARITY_COLOR: Record<Rarity, string> = { 1: '#b8bec9', 2: '#5ab0ff'
 /** prize cards taken when this monster is knocked out */
 
 
-export type Model = 'normal' | 'mirror' | 'illust' | 'fullart' | 'shiny' | 'gold';
+export type Model = 'normal' | 'mirror' | 'fullart' | 'special' | 'gold';
 export const MODEL_NAME: Record<Model, string> = {
   normal: 'ノーマル',
   mirror: 'ミラー',
-  illust: 'イラスト',
   fullart: 'フルアート',
-  shiny: 'シャイニー',
+  special: 'スペシャルアート',
   gold: 'ゴールド',
 };
 export function modelOf(c: CardDef): Model {
   switch (c.variant) {
     case 'mirror':
       return 'mirror';
-    case 'AR':
-    case 'CHR':
-    case 'SAR':
-      return 'illust';
     case 'SR':
       return 'fullart';
-    case 'S':
-      return 'shiny';
+    case 'SAR':
+      return 'special';
     case 'UR':
       return 'gold';
   }
   return 'normal';
 }
-/** "★★★ イラスト" style label */
+/** "★★★ フルアート" style label */
 export const printLabel = (c: CardDef) => `${RARITY_SYMBOL[c.rarity]} ${MODEL_NAME[modelOf(c)]}`;
 
 // --------------------------------------------------------------------------
-// Sets
+// Chapters
+//   cards are grouped by the chapter of the story they belong to (the SetCode
+//   is the chapter); ids keep the printing they were first made in
 // --------------------------------------------------------------------------
-export const SET_INFO: Record<SetCode, { name: string; short: string }> = {
-  AB1: { name: '目覚めの咆哮', short: '第1弾' },
-  AB2: { name: '覇者の降臨', short: '第2弾' },
-  AB3: { name: '辺境の軍勢', short: '第3弾' },
+export const SET_INFO: Record<SetCode, { name: string; short: string; code: string }> = {
+  AB1: { name: '十二枚の伝説', short: '第一章', code: 'CH1' },
+  AB2: { name: '灰の巡礼', short: '第二章', code: 'CH2' },
+  AB3: { name: '影の王冠', short: '第三章', code: 'CH3' },
 };
 export const SETS: SetCode[] = ['AB1', 'AB2', 'AB3'];
 
-const MAIN1: CardDef[] = [...MONSTERS, ...TRAINERS, ...ENERGIES];
-MAIN1.forEach((c, i) => (c.no = i + 1));
-const MAIN2: CardDef[] = [...MONSTERS2, ...TRAINERS2];
-MAIN2.forEach((c, i) => (c.no = i + 1));
-const MAIN3: CardDef[] = [...MONSTERS3, ...TRAINERS3];
-MAIN3.forEach((c, i) => (c.no = i + 1));
-export const MAIN_SET: CardDef[] = [...MAIN1, ...MAIN2, ...MAIN3];
-const MAIN_OF: Record<SetCode, CardDef[]> = { AB1: MAIN1, AB2: MAIN2, AB3: MAIN3 };
-/** Number of regular (non-secret) cards per set, printed as "no/COUNT" */
-export const SET_COUNT: Record<SetCode, number> = { AB1: MAIN1.length, AB2: MAIN2.length, AB3: MAIN3.length };
+const PRINT1: CardDef[] = [...MONSTERS, ...TRAINERS, ...ENERGIES];
+const PRINT2: CardDef[] = [...MONSTERS2, ...TRAINERS2];
+const PRINT3: CardDef[] = [...MONSTERS3, ...TRAINERS3];
+const chapterOf = (c: CardDef, printing: SetCode): SetCode =>
+  printing === 'AB1' || CH1_EXTRA.has(c.name) ? 'AB1' : printing === 'AB2' || CH2_EXTRA.has(c.name) ? 'AB2' : 'AB3';
+const MAIN_OF: Record<SetCode, CardDef[]> = { AB1: [], AB2: [], AB3: [] };
+for (const [printing, list] of [['AB1', PRINT1], ['AB2', PRINT2], ['AB3', PRINT3]] as const)
+  for (const c of list) MAIN_OF[(c.set = chapterOf(c, printing))].push(c);
+for (const set of SETS) MAIN_OF[set].forEach((c, i) => (c.no = i + 1));
+export const MAIN_SET: CardDef[] = SETS.flatMap((s) => MAIN_OF[s]);
+/** Number of regular (non-secret) cards per chapter, printed as "no/COUNT" */
+export const SET_COUNT: Record<SetCode, number> = { AB1: MAIN_OF.AB1.length, AB2: MAIN_OF.AB2.length, AB3: MAIN_OF.AB3.length };
 
 // --------------------------------------------------------------------------
-// Alternate printings
-//   mirror … reverse-holo version of a C/U/R card (same number)
-//   AR     … illustration rare: the art spreads over the whole card
-//   CHR    … character rare: the monster together with its trainer
-//   S      … shiny: rare colouring with a star-foil frame
-//   SR     … full art (★4): the aces and some supporters
-//   SAR    … special art: dramatic close-up illustration
-//   UR     … gold
+// Printings
+//   mirror … reverse-holo version of a regular card (same number and ★)
+//   SR     … full art (★3): the aces and some supporters
+//   SAR    … special art (★4): dramatic close-up illustration
+//   UR     … gold (★5)
 // --------------------------------------------------------------------------
-const SUFFIX: Record<Variant, string> = { mirror: 'M', AR: 'AR', CHR: 'CHR', S: 'S', SR: 'SR', SAR: 'SAR', UR: 'UR' };
-const secret: Record<SetCode, number> = { AB1: MAIN1.length, AB2: MAIN2.length, AB3: MAIN3.length };
+const SUFFIX: Record<Variant, string> = { mirror: 'M', SR: 'SR', SAR: 'SAR', UR: 'UR' };
+const PRINT_STAR: Record<Exclude<Variant, 'mirror'>, Rarity> = { SR: 3, SAR: 4, UR: 5 };
+const secret: Record<SetCode, number> = { ...SET_COUNT };
 const VARIANTS: CardDef[] = [];
 
 function named(name: string): CardDef {
@@ -248,9 +246,7 @@ function named(name: string): CardDef {
 }
 
 function alt(base: CardDef, v: Variant, extra: Partial<CardDef> = {}) {
-  // the ★ of a printing is its rarity: illustrations ★3, full art and shiny ★4,
-  // gold ★5; a mirror keeps the ★ of the card it reprints
-  const rarity: Rarity = v === 'UR' ? 5 : v === 'SR' || v === 'S' ? 4 : v === 'mirror' ? base.rarity : 3;
+  const rarity: Rarity = v === 'mirror' ? base.rarity : PRINT_STAR[v];
   const no = v === 'mirror' ? base.no : ++secret[base.set];
   VARIANTS.push({
     ...base,
@@ -268,34 +264,14 @@ function alt(base: CardDef, v: Variant, extra: Partial<CardDef> = {}) {
 type CropSpec = { scale?: number; x?: number; y?: number };
 /** [card name, framing, painted background] — backgrounds are Wesnoth campaign story paintings */
 type ArtSpec = [string, CropSpec?, string?];
-interface SetVariants {
-  AR: ArtSpec[];
-  CHR: [string, string, CropSpec?][]; // monster, partner portrait
-  S: [string, number][]; // monster, hue rotation
+interface Plan {
   SR: string[];
   SAR: ArtSpec[];
   UR: string[];
 }
-
-const PLAN: Record<SetCode, SetVariants> = {
-  AB3: {
-    AR: [
-      ['ガレオン', undefined, 'story/p-island'], ['サンシルフ', undefined, 'story/p-burning'], ['タウロクヴァンガード', undefined, 'story/landscape-desert'], ['サンチャンピオン', undefined, 'story/p-mountains'],
-      ['マーフォークブローラー', undefined, 'story/p-wild-sea'], ['エルフヒーロー', undefined, 'story/p-great-tree'], ['エルフキャプテン', undefined, 'story/p-black-forest'], ['シャイド', undefined, 'story/p-storm-sea'],
-      ['オークスレイヤー', undefined, 'story/p-the-fall'], ['ドワーフセンチネル', undefined, 'story/blacksmith'], ['ゴブリンラウザー'], ['スケルトンライダー', undefined, 'story/p-graves'],
-      ['メカニカルレイダー'], ['ハルバードナイト', undefined, 'story/landscape-castle'],
-    ],
-    CHR: [
-      ['エルフヒーロー', 'camp/lisar'],
-      ['サンチャンピオン', 'camp/konrad'],
-      ['アークウィッチ', 'camp/delfador'],
-      ['ドラウグロード', 'camp/asheviere'],
-      ['グランドナイト', 'camp/lisar-glad'],
-      ['オークスレイヤー', 'orcs/warlord'],
-      ['ナーガウォーロード', 'merfolk/priestess'],
-      ['エルフキャプテン', 'elves/druid'],
-    ],
-    S: [['グランティ', 200], ['エルフスカウト', 60], ['ゾンビラット', 280], ['ミスティック', 120], ['カヌー', 20], ['ドワーフガード', 320]],
+/** printings by the set the card was first made in */
+const PLAN: Plan[] = [
+  {
     SR: [...MONSTERS3.filter((x) => x.ace).map((x) => x.name), '傭兵の契約', '案内人の笛', '族長の号令'],
     SAR: [
       ['タウロクプロテクター', undefined, 'story/p-burning'],
@@ -310,23 +286,7 @@ const PLAN: Record<SetCode, SetVariants> = {
     ],
     UR: [...MONSTERS3.filter((x) => x.ace).map((x) => x.name), 'サイキックメイジ', 'ドワーフロード', '傭兵の契約'],
   },
-  AB1: {
-    AR: [
-      ['ヒアリクイーン'], ['ゴウカレイス', undefined, 'story/p-burning'], ['イエティ', undefined, 'story/p-snowfield'], ['コガネスカラベ', undefined, 'story/p-great-tree'],
-      ['サンダーグリフォン', undefined, 'story/p-mountains'], ['レイス', undefined, 'story/p-graves'], ['グリズリー'], ['ホワイトホース', undefined, 'story/p-summer'],
-      ['ドレッドバット'], ['ヤミオオカミ', undefined, 'story/p-black-forest'],
-    ],
-    CHR: [
-      ['コダマギ', 'humans/peasant'],
-      ['ミズチ', 'merfolk/initiate'],
-      ['ライメイハヤブサ', 'humans/longbowman'],
-      ['トロル', 'trolls/troll-shaman'],
-      ['バーナドレイク', 'drakes/flameheart'],
-      ['グレートウルフ', 'goblins/wolf-rider'],
-      ['ナイトメア', 'humans/dark-adept+female'],
-      ['レヴナント', 'undead/ancient-lich'],
-    ],
-    S: [['ヒオネコ', 200], ['ワイバーン', 110], ['アカオオカミ', 190], ['オオツチグモ', 250], ['ゴースト', 150], ['ディープテンタクル', 90]],
+  {
     SR: [...MONSTERS.filter((x) => x.ace).map((x) => x.name), '大賢者の研究', '司令官の号令', '盗賊団の手引き', '白魔導士の祈り'],
     SAR: [
       ['ヴォルカリオン', undefined, 'story/p-burning'],
@@ -336,24 +296,7 @@ const PLAN: Record<SetCode, SetVariants> = {
     ],
     UR: ['ヴォルカリオン', 'リヴァイアサーペント', 'デスナイト', 'トロルキング', 'エンシェントウッド', 'ナイトゴーント', '進化の秘薬', '虹色エネルギー'],
   },
-  AB2: {
-    AR: [
-      ['ドレイクガーディアン'], ['ヒブネ', undefined, 'story/p-island'], ['ナーガリングキャスター'], ['シャイード', undefined, 'story/p-great-tree'],
-      ['セイレーン', undefined, 'story/p-wild-sea'], ['オオヒグマ', undefined, 'story/p-summer'], ['ドラウグ', undefined, 'story/p-graves'], ['ゾンビグリフォン'],
-      ['スノーゴーレム', undefined, 'story/p-winter'], ['テュポーン', undefined, 'story/p-storm-sea'], ['カエンワイト', undefined, 'story/p-burning'],
-      ['フレッシュゴーレム', undefined, 'story/p-fog'], ['メダマソウ', undefined, 'story/p-great-tree'],
-    ],
-    CHR: [
-      ['ドレイククラッシャー', 'humans/grand-knight'],
-      ['ナーガミュルミドン', 'merfolk/priestess'],
-      ['ブラウンリッチ', 'humans/necromancer+female'],
-      ['ロックトロル', 'orcs/warlord'],
-      ['ヘイタイアリ', 'elves/druid'],
-      ['スノーゴーレム', 'elves/sorceress'],
-      ['ワーム', 'elves/shaman'],
-      ['ツカイマ', 'humans/mage-red+female'],
-    ],
-    S: [['ドレイクファイター', 170], ['ナーガソルジャー', 260], ['クサレオオカミ', 200], ['シルフ', 300], ['ワーム', 190], ['ユキダマ', 300]],
+  {
     SR: [...MONSTERS2.filter((x) => x.ace).map((x) => x.name), '騎士の突撃', '暗殺者の刃', '聖騎士の加護'],
     SAR: [
       ['ドラグーン', undefined, 'story/p-drake-fleet'],
@@ -367,28 +310,23 @@ const PLAN: Record<SetCode, SetVariants> = {
     ],
     UR: [...MONSTERS2.filter((x) => x.ace).map((x) => x.name), '賢者の水晶', '覇者の紋章'],
   },
-};
+];
 
-for (const set of SETS) {
-  const main = MAIN_OF[set];
-  for (const c of main) {
-    const basicEnergy = c.kind === 'energy' && c.basic;
-    // (the old EX / Ω aces get full-art and gold printings instead, as before)
-    if (!basicEnergy && !(c.kind === 'monster' && c.ace)) alt(c, 'mirror');
+for (const c of MAIN_SET) if (!(c.kind === 'energy' && c.basic)) alt(c, 'mirror');
+// secret numbers run per chapter: full art, then special art, then gold
+for (const set of SETS)
+  for (const p of PLAN) {
+    const mine = (n: string) => named(n).set === set;
+    for (const n of new Set(p.SR)) if (mine(n)) alt(named(n), 'SR');
   }
-  const plan = PLAN[set];
-  const withScene = (scene?: string) => (scene ? { scene } : {});
-  for (const [n, crop, scene] of plan.AR) alt(named(n), 'AR', { crop, ...withScene(scene) });
-  for (const [n, partner, crop] of plan.CHR) alt(named(n), 'CHR', { partner, crop });
-  for (const [n, hue] of plan.S) alt(named(n), 'S', { hue });
-  for (const n of new Set(plan.SR)) alt(named(n), 'SR');
-  // supporters with a painting are printed as the painting alone
-  for (const [n, crop, scene] of plan.SAR) {
-    const base = named(n);
-    alt(base, 'SAR', { crop, ...withScene(scene), ...(scene && base.kind === 'trainer' ? { paint: true } : {}) });
-  }
-  for (const n of new Set(plan.UR)) alt(named(n), 'UR');
-}
+for (const set of SETS)
+  for (const p of PLAN)
+    // supporters with a painting are printed as the painting alone
+    for (const [n, crop, scene] of p.SAR) {
+      const base = named(n);
+      if (base.set === set) alt(base, 'SAR', { crop, ...(scene ? { scene } : {}), ...(scene && base.kind === 'trainer' ? { paint: true } : {}) });
+    }
+for (const set of SETS) for (const p of PLAN) for (const n of new Set(p.UR)) if (named(n).set === set) alt(named(n), 'UR');
 
 export const ALL_CARDS: CardDef[] = [...MAIN_SET, ...VARIANTS];
 export const CARDS: Record<string, CardDef> = Object.fromEntries(ALL_CARDS.map((c) => [c.id, c]));

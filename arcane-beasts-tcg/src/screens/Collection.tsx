@@ -70,7 +70,7 @@ export function Collection() {
           <div className="ms3-tabs">
             {(['all', ...SETS] as const).map((k) => (
               <button key={k} className={`chip-btn ${set === k ? 'on' : ''}`} onClick={() => (foley.tick(), setSet(k))}>
-                {k === 'all' ? '全弾' : SET_INFO[k].short}
+                {k === 'all' ? '全章' : SET_INFO[k].short}
               </button>
             ))}
             <button className={`chip-btn ${showFilter || nFilters ? 'on' : ''}`} onClick={() => setShowFilter(!showFilter)}>

@@ -1,8 +1,8 @@
 // Card factories shared by every set
 import type { Ability, Attack, EType, LegacyRarity, MonsterCard, Rarity, SetCode, Stage, TrainerCard, TrainerSub } from '../types';
 
-// ★ now says how rare a printing is: regular cards are ★1–★3, the special
-// printings carry ★3 (illustration), ★4 (full art, shiny) and ★5 (gold).
+// ★ says how rare a printing is: regular cards are ★1–★3, the special
+// printings carry ★3 (full art), ★4 (special art) and ★5 (gold).
 const STAR: Record<LegacyRarity, Rarity> = { C: 1, U: 2, R: 3, RR: 3 };
 
 /** the old EX / Ω monsters are ordinary ★3 cards now: their stats come down to the top of the ★3 range */

@@ -42,9 +42,11 @@ export interface Cast {
   faces?: 'left' | 'right';
 }
 
+/** one episode (話) of the story; twelve make a chapter (章) */
 export interface Chapter {
   id: string;
-  act: number;
+  /** the chapter (章) it belongs to, 1-based */
+  part: number;
   /** rival id (decks.ts) the player duels */
   rival: string;
   title: string;
@@ -58,9 +60,3 @@ export interface Chapter {
   lose?: Beat[];
 }
 
-export interface Act {
-  no: number;
-  title: string;
-  sub: string;
-  bg: string;
-}

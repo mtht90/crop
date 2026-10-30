@@ -128,7 +128,7 @@ export const STARTER_DECKS: DeckList[] = [
 ];
 
 // ----------------------------------------------------------------------------
-// 第2弾 decks (used by the new rivals and free battle)
+// decks of the later rivals (also used in free battle)
 // ----------------------------------------------------------------------------
 export const EX_DECKS: DeckList[] = [
   {
@@ -239,7 +239,7 @@ export const EX_DECKS: DeckList[] = [
   },
 ];
 
-/** 第3弾の強敵が使うデッキ */
+/** more rivals' decks */
 export const AB3_DECKS: DeckList[] = [
   {
     id: 'sunfolk',
@@ -358,7 +358,7 @@ export interface Rival {
   win: string;
   lose: string;
   scene: string;
-  /** set the rival belongs to (第2弾 rivals unlock after the first 8) */
+  /** chapter the rival belongs to */
   set?: 'AB1' | 'AB2' | 'AB3';
 }
 
@@ -396,43 +396,47 @@ export const RIVALS: Rival[] = [
     intro: '千年の眠りを妨げし者よ…その魂、我が軍勢に加えてくれよう。', win: '魂はもらったぞ…', lose: 'バカな…この我が敗れるだと…！', scene: 'story/bones',
   },
   {
-    id: 'flora', name: 'フローラ', title: '墓守のドルイド', portrait: 'elves/druid', deck: 'swarm', level: 'normal', reward: 380, set: 'AB2',
+    id: 'flora', name: 'フローラ', title: '墓守のドルイド', portrait: 'elves/druid', deck: 'swarm', level: 'normal', reward: 380,
     intro: '彼の眠りを、乱さないで。', win: '帰って。ここは、死んだ人の場所よ。', lose: '……掘るなら、せめて、優しくしてあげて。', scene: 'story/landscape-hills-02',
   },
   {
-    id: 'garm', name: 'ガルム', title: '鉱山の親方', portrait: 'orcs/warlord', deck: 'troll', level: 'hard', reward: 460, set: 'AB2',
+    id: 'garm', name: 'ガルム', title: '鉱山の親方', portrait: 'orcs/warlord', deck: 'troll', level: 'hard', reward: 460,
     intro: '賃金がほしけりゃ、勝って取れ。それがこの山の掟だ。', win: '次の給金も、俺のもんだな。', lose: '……グハ。山の掟は、お前の勝ちだ。', scene: 'story/landscape-mountains-03',
   },
   {
-    id: 'nerea', name: 'ネレア', title: '湖の神殿の大巫女', portrait: 'merfolk/priestess', deck: 'naga', level: 'hard', reward: 480, set: 'AB2',
+    id: 'nerea', name: 'ネレア', title: '湖の神殿の大巫女', portrait: 'merfolk/priestess', deck: 'naga', level: 'hard', reward: 480,
     intro: '聖なるカードに触れる者には、罰が下ります。', win: '祈りなさい。あなたの罪が、洗われるまで。', lose: '……神よ。なぜ、この者を選ぶのですか。', scene: 'story/landscape-beach',
+  },
+  {
+    id: 'setsuna', name: 'セツナ', title: '氷河の魔導士', portrait: 'elves/sorceress', deck: 'frost', level: 'hard', reward: 540,
+    intro: '伝承を知りたいのなら、まず、私に勝ちなさい。', win: '知らないほうが、幸せなこともあるのです。', lose: '……いいでしょう。代価を、教えてあげます。', scene: 'story/p-snowfield',
+  },
+  {
+    id: 'verd', name: 'ヴェルド', title: '古竜の守り手', portrait: 'elves/shaman', deck: 'wyrm', level: 'hard', reward: 560,
+    intro: 'あの男の弟子か。……その顔、昔のあいつにそっくりだ。', win: '森へ帰りな。庭へは、行くんじゃない。', lose: '……行くのか。なら、覚悟して行け。', scene: 'story/p-great-tree',
+  },
+  {
+    id: 'carmilla', name: 'カーミラ', title: '夜会の女主人', portrait: 'humans/mage-red+female', deck: 'night', level: 'hard', reward: 600,
+    intro: 'ようこそ、坊や。……あら、可愛い番犬も一緒なのね。', win: '踊り疲れたかしら。今夜はここまで。', lose: '……ふふ、いいわ。あの方の所へ行きなさい。', scene: 'story/p-graves',
+  },
+  {
+    id: 'morgana', name: 'モルガナ', title: '庭の門番', portrait: 'humans/necromancer+female', deck: 'lich', level: 'hard', reward: 650,
+    intro: 'ここから先へは、行かせない。あなたのために。', win: '帰りなさい。まだ、間に合うかもしれない。', lose: '……もう、止められないのね。', scene: 'story/grim-altar',
+  },
+  {
+    id: 'olden', name: 'オルデン', title: '師', portrait: 'camp/delfador', deck: 'elder', level: 'hard', reward: 1500,
+    intro: '来たか。よく、ここまで勝ち続けてくれた。', win: 'お前の役目は終わった。……ありがとう。', lose: '……強くなったな。だが、もう遅い。', scene: 'story/p-shrine',
   },
   {
     id: 'sieg', name: 'ジーク', title: '覇竜騎士団長', portrait: 'humans/grand-knight', deck: 'dragoon', level: 'hard', reward: 520, set: 'AB2',
     intro: '覇者の名にかけて、全力で相手をしよう。騎士団、前へ！', win: '覇竜の炎こそ、王者の証だ。', lose: 'その力…お前こそ次の覇者かもしれんな。', scene: 'story/landscape-mountains-05',
   },
   {
-    id: 'morgana', name: 'モルガナ', title: '庭の門番', portrait: 'humans/necromancer+female', deck: 'lich', level: 'hard', reward: 650, set: 'AB2',
-    intro: 'ここから先へは、行かせない。あなたのために。', win: '帰りなさい。まだ、間に合うかもしれない。', lose: '……もう、止められないのね。', scene: 'story/grim-altar',
-  },
-  {
-    id: 'setsuna', name: 'セツナ', title: '氷河の魔導士', portrait: 'elves/sorceress', deck: 'frost', level: 'hard', reward: 540, set: 'AB2',
-    intro: '伝承を知りたいのなら、まず、私に勝ちなさい。', win: '知らないほうが、幸せなこともあるのです。', lose: '……いいでしょう。代価を、教えてあげます。', scene: 'story/p-snowfield',
-  },
-  {
-    id: 'verd', name: 'ヴェルド', title: '古竜の守り手', portrait: 'elves/shaman', deck: 'wyrm', level: 'hard', reward: 560, set: 'AB2',
-    intro: 'あの男の弟子か。……その顔、昔のあいつにそっくりだ。', win: '森へ帰りな。庭へは、行くんじゃない。', lose: '……行くのか。なら、覚悟して行け。', scene: 'story/p-great-tree',
-  },
-  {
-    id: 'carmilla', name: 'カーミラ', title: '夜会の女主人', portrait: 'humans/mage-red+female', deck: 'night', level: 'hard', reward: 600, set: 'AB2',
-    intro: 'ようこそ、坊や。……あら、可愛い番犬も一緒なのね。', win: '踊り疲れたかしら。今夜はここまで。', lose: '……ふふ、いいわ。あの方の所へ行きなさい。', scene: 'story/p-graves',
-  },
-  {
-    id: 'salima', name: 'サリマ', title: '砂陽の戦士長', portrait: 'camp/q-champion', deck: 'sunfolk', level: 'hard', reward: 620, set: 'AB3',
+    id: 'salima', name: 'サリマ', title: '砂陽の戦士長', portrait: 'camp/q-champion', deck: 'sunfolk', level: 'hard', reward: 620, set: 'AB2',
     intro: '砂漠に入る者は、まず太陽に試される。次に、わたしが試す。', win: '日輪は、誰にも沈められない。', lose: '……見事。砂の民は、強き者に旗を預ける。', scene: 'story/landscape-desert',
   },
   {
-    id: 'dorgan', name: 'ドルガン', title: '鋼鉄の坑道長', portrait: 'dwarves/lord', deck: 'mine', level: 'hard', reward: 680, set: 'AB3',
+    id: 'dorgan', name: 'ドルガン', title: '鋼鉄の坑道長', portrait: 'dwarves/lord', deck: 'mine', level: 'hard', reward: 680, set: 'AB2',
     intro: 'ガハハ！ 坑道の扉は、わしの鉄槌を越えた者にしか開かんぞ！', win: '鍛え直して出直してこい！', lose: '……ふん、石頭のわしを割るとは。気に入った！', scene: 'story/landscape-mountains-03',
   },
   {
@@ -446,9 +450,5 @@ export const RIVALS: Rival[] = [
   {
     id: 'asha', name: '影の女王', title: '千年の黒幕', portrait: 'camp/asheviere', deck: 'shadow', level: 'hard', reward: 1000, set: 'AB3',
     intro: 'ようこそ、小さな召喚士。あなたの絆ごと、闇に溶かしてあげましょう。', win: '光など、影があるから輝けるのよ。', lose: '……ありえない。私の、千年が……！', scene: 'story/p-shadows',
-  },
-  {
-    id: 'olden', name: 'オルデン', title: '師', portrait: 'camp/delfador', deck: 'elder', level: 'hard', reward: 1500, set: 'AB3',
-    intro: '来たか。よく、ここまで勝ち続けてくれた。', win: 'お前の役目は終わった。……ありがとう。', lose: '……強くなったな。だが、もう遅い。', scene: 'story/p-shrine',
   },
 ];

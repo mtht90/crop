@@ -18,7 +18,7 @@ export const ALL_TYPES: EType[] = [...ENERGY_TYPES, 'colorless'];
 export type Stage = 'basic' | 'stage1' | 'stage2';
 /**
  * ★1 – ★5: how rare a printing is. Regular cards are ★1–★3 by strength;
- * illustrations are ★3, full art and shiny ★4, gold ★5 (mirrors keep their
+ * full art is ★3, special art ★4, gold ★5 (mirrors keep their
  * card's ★). Every monster gives one prize card.
  */
 export type Rarity = 1 | 2 | 3 | 4 | 5;
@@ -26,7 +26,7 @@ export type Rarity = 1 | 2 | 3 | 4 | 5;
 export type LegacyRarity = 'C' | 'U' | 'R' | 'RR';
 export type SetCode = 'AB1' | 'AB2' | 'AB3';
 /** Alternate printings of a base card */
-export type Variant = 'mirror' | 'AR' | 'CHR' | 'S' | 'SR' | 'SAR' | 'UR';
+export type Variant = 'mirror' | 'SR' | 'SAR' | 'UR';
 export type Condition = 'poisoned' | 'burned' | 'asleep' | 'paralyzed' | 'confused';
 
 // ---------------------------------------------------------------------------
@@ -105,7 +105,7 @@ export interface Ability {
 }
 
 interface CardBase {
-  id: string; // e.g. AB1-001
+  id: string; // e.g. AB1-001 (the printing the card was first made in)
   no: number;
   name: string;
   rarity: Rarity;
@@ -114,13 +114,10 @@ interface CardBase {
   fullArt?: boolean;
   gold?: boolean;
   baseId?: string; // for alternate-art variants
+  /** the chapter the card belongs to */
   set: SetCode;
   variant?: Variant;
-  /** CHR: portrait of the trainer drawn with the monster */
-  partner?: string;
-  /** S (shiny): hue rotation applied to the portrait */
-  hue?: number;
-  /** AR/SAR/CHR art framing: portrait scale / horizontal anchor (%) / bottom offset (%) */
+  /** SAR art framing: portrait scale / horizontal anchor (%) / bottom offset (%) */
   crop?: { scale?: number; x?: number; y?: number };
   /** illustration printed as a painting only (no portrait on top) */
   paint?: boolean;

@@ -9,7 +9,7 @@ import { artUrl } from '../lib/assets';
 import { TopBar } from '../ui/TopBar';
 import { Icon } from '../ui/Icon';
 import { EnergySymbol } from '../ui/Card';
-import { ACTS, CHAPTERS } from '../story';
+import { CHAPTERS, episodeLabel, PARTS } from '../story';
 import { chapterState, isCleared, nextChapterIndex, replayScene, startChapter } from '../story/flow';
 import { foley, playMusic, sfx } from '../audio/audio';
 import { HeroCreate } from '../story/HeroCreate';
@@ -41,7 +41,6 @@ export function StoryMap() {
   const done = CHAPTERS.filter((c) => isCleared(save, c)).length;
   const seen = (id: string) => save.story.seen.includes(id);
   const art = isPro ? PROLOGUE_ART : (ch!.art ?? rival!.scene);
-  const act = ch ? ACTS[ch.act - 1] : null;
 
   const move = (d: number) => {
     const n = Math.max(-1, Math.min(CHAPTERS.length - 1, sel + d));
@@ -121,12 +120,12 @@ export function StoryMap() {
         {/* chapter text */}
         <AnimatePresence mode="wait">
           <motion.div key={sel} className="sc-info" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.45, ease: EASE_OUT }}>
-            <div className="sc-kick">{isPro ? 'PROLOGUE' : `第${ch!.act}幕 ${act!.title}　・　第${sel + 1}章`}</div>
+            <div className="sc-kick">{isPro ? 'PROLOGUE' : `${episodeLabel(ch!)}　・　${PARTS[ch!.part - 1].title}`}</div>
             <h1 className="gold-title">{isPro ? 'プロローグ' : locked ? '？？？' : ch!.title}</h1>
             {isPro ? (
               <p className="sc-sum">すべての始まり。</p>
             ) : locked ? (
-              <p className="sc-sum">前の章をクリアすると解放されます。</p>
+              <p className="sc-sum">前の話をクリアすると解放されます。</p>
             ) : (
               <>
                 <div className="sc-who">
@@ -184,7 +183,7 @@ export function StoryMap() {
         </div>
         {/* filmstrip */}
         <div className="sc-strip">
-          <button className="sc-arrow" disabled={sel <= -1} onClick={() => move(-1)} aria-label="前の章">
+          <button className="sc-arrow" disabled={sel <= -1} onClick={() => move(-1)} aria-label="前の話">
             ‹
           </button>
           <div className="sc-reel">
@@ -212,11 +211,11 @@ export function StoryMap() {
               })}
             </div>
           </div>
-          <button className="sc-arrow" disabled={sel >= CHAPTERS.length - 1} onClick={() => move(1)} aria-label="次の章">
+          <button className="sc-arrow" disabled={sel >= CHAPTERS.length - 1} onClick={() => move(1)} aria-label="次の話">
             ›
           </button>
           <div className="sc-prog">
-            {done} / {CHAPTERS.length} 章クリア
+            {done} / {CHAPTERS.length} 話クリア
           </div>
         </div>
       </div>

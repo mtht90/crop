@@ -187,6 +187,19 @@ function load(): Save {
         delete old.shards;
       }
       delete old.ranked;
+      // retired printings (illustration, character, shiny) become the card itself
+      const retired = (cid: string) => (CARDS_OK(cid) ? cid : cid.replace(/-(AR|CHR|S)$/, ''));
+      for (const [cid, n] of Object.entries(s.collection)) {
+        const to = retired(cid);
+        if (to === cid || !CARDS_OK(to)) continue;
+        s.collection[to] = (s.collection[to] ?? 0) + n;
+        delete s.collection[cid];
+      }
+      for (const d of s.decks) {
+        d.cards = d.cards.map(retired);
+        d.cover = retired(d.cover);
+      }
+      s.newCards = s.newCards.map(retired).filter(CARDS_OK);
       // anything over the cap is sold
       for (const [cid, n] of Object.entries(s.collection)) {
         if (n > MAX_COPIES && CARDS_OK(cid) && !isBasicEnergy(cid)) {
@@ -401,11 +414,11 @@ export function owned(s: Save, cid: string) {
 }
 
 // ----------------------------------------------------------------------------
-// Booster packs: two kinds, both drawing from every set (5 cards each)
+// Booster packs: two kinds, both drawing from every chapter (5 cards each)
 //   通常パック     150 coins
 //   プレミアムパック 450 coins — the last card is ★3 or better, ★4/★5 come far more often
-// A drawn card may come as one of its special printings (mirror, illustration,
-// shiny, gold …): same card, same ★, only the look is rarer.
+// A drawn card may come as one of its special printings (mirror, full art,
+// special art, gold): same card, same ★, only the look is rarer.
 // ----------------------------------------------------------------------------
 export const PACK_PRICE = 150;
 export const PREMIUM_PRICE = 450;
@@ -430,22 +443,21 @@ export const setName = (set: SetCode) => SET_INFO[set].name;
 
 /**
  * what a pack can give, by ★: the regular cards (★1–★3) with their mirrors,
- * the illustrations (★3), the full-art and shiny printings (★4) and the gold
- * printings (★5)
+ * the full-art printings (★3), the special art (★4) and the gold printings (★5)
  */
 const BASE_POOL: Record<Rarity, CardDef[]> = { 1: [], 2: [], 3: [], 4: [], 5: [] };
-/** illustrated ★3 printings: a ★3 draw becomes one of these now and then */
-const ILLUST_POOL: CardDef[] = [];
+/** full-art ★3 printings: a ★3 draw becomes one of these now and then */
+const FULLART_POOL: CardDef[] = [];
 /** each regular card's mirror */
 const MIRROR = new Map<string, CardDef>();
 for (const c of ALL_CARDS) {
   if (c.kind === 'energy' && c.basic) continue;
   if (c.variant === 'mirror') MIRROR.set(c.baseId!, c);
-  else if (c.variant && c.rarity === 3) ILLUST_POOL.push(c);
+  else if (c.variant && c.rarity === 3) FULLART_POOL.push(c);
   else BASE_POOL[c.rarity].push(c);
 }
-/** share of ★3 draws that come as an illustration */
-const ILLUST_SHARE = 0.25;
+/** share of ★3 draws that come as a full art */
+const FULLART_SHARE = 0.25;
 
 /** odds per slot: cumulative thresholds, e.g. [[1, 0.8], [2, 1]] */
 type Slot = [Rarity, number][];
@@ -479,7 +491,7 @@ function roll(table: Slot): Rarity {
 
 function draw(r: Rarity, printing: number): CardDef {
   const pick = (a: CardDef[]) => a[Math.floor(Math.random() * a.length)];
-  if (r === 3 && ILLUST_POOL.length && Math.random() < ILLUST_SHARE) return pick(ILLUST_POOL);
+  if (r === 3 && FULLART_POOL.length && Math.random() < FULLART_SHARE) return pick(FULLART_POOL);
   const pool = BASE_POOL[r].length ? BASE_POOL[r] : BASE_POOL[1];
   const c = pick(pool);
   // a regular card sometimes comes as its mirror (same ★)

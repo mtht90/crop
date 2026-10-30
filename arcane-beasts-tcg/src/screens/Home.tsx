@@ -1,4 +1,4 @@
-import { CHAPTERS } from '../story';
+import { CHAPTERS, episodeLabel } from '../story';
 import { nextChapterIndex } from '../story/flow';
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useState } from 'react';
@@ -82,7 +82,7 @@ export function Home() {
                 <Icon name="swords" />
               </div>
               <h2>バトル</h2>
-              <p>{save.story.started ? `ストーリー 第${nextIdx + 1}章「${nextCh.title}」` : 'ストーリー・強敵・オンライン対戦'}</p>
+              <p>{save.story.started ? `ストーリー ${episodeLabel(nextCh)}「${nextCh.title}」` : 'ストーリー・強敵・オンライン対戦'}</p>
             </div>
           </motion.div>
 

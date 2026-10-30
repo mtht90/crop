@@ -1,14 +1,13 @@
-// 第一幕「旅立ち」 — ティム / マリナ / ヴェイン
+// 第一章 第1〜3話「旅立ち」 — ティム / マリナ / ヴェイン
 import { bg, bgm, cg, choice, cutin, fx, hide, mood, move, narr, place, say, show, showCard, shout, sfx, think, title, tone, weather, whisper } from './dsl';
-import type { Act, Chapter } from './types';
+import type { Chapter } from './types';
 
-export const ACT1: Act = { no: 1, title: '旅立ち', sub: '十二枚の伝説', bg: 'story/p-farmer' };
 
 export const ACT1_CHAPTERS: Chapter[] = [
   // ------------------------------------------------------------------ 1 ティム
   {
     id: 'n01',
-    act: 1,
+    part: 1,
     rival: 'tim',
     title: '形見のカード',
     summary: '最初の村。伝説の一枚を持っていたのは、亡き父の形見を握りしめた少年だった。',
@@ -74,7 +73,7 @@ export const ACT1_CHAPTERS: Chapter[] = [
   // ------------------------------------------------------------------ 2 マリナ
   {
     id: 'n02',
-    act: 1,
+    part: 1,
     rival: 'marina',
     title: '潮騒の港',
     summary: '港町の海の祠。伝説を守る巫女と、金で動く旅の剣士との出会い。',
@@ -167,7 +166,7 @@ export const ACT1_CHAPTERS: Chapter[] = [
   // ------------------------------------------------------------------ 3 ヴェイン
   {
     id: 'n03',
-    act: 1,
+    part: 1,
     rival: 'vane',
     title: '雷鳴の峠',
     summary: 'カードの賭けで兄を亡くした射手。「そんなもののために、人は死ぬんだ」。',
@@ -230,7 +229,7 @@ export const ACT1_CHAPTERS: Chapter[] = [
       say('liese', '……さっきは、ごめん。煽るような言い方して。'),
       say('hero', 'いいよ。おかげで、勝負になった。'),
       say('liese', '……そういうとこ、甘いよね。{name}は。', 'glad'),
-      title('第一幕　完', '四枚の伝説', 'ACT I'),
+      title('四枚の伝説', '第3話　完', 'EPISODE 3'),
     ],
     lose: [
       bg('story/landscape-mountains-04', 'in', { tint: 'rgba(160,170,200,1)' }),

@@ -718,34 +718,6 @@
   pointer-events: none;
 }
 
-/* AR — bright, painterly; canvas grain instead of foil lines */
-.tcg.v-AR .tcg-art .scene { filter: saturate(1.25) contrast(1.04) brightness(1.02); }
-.tcg.v-AR .tcg-art .portrait { filter: drop-shadow(0 1.2cqw 1.8cqw rgba(0, 0, 0, 0.5)); }
-.tcg.v-AR .tcg-inner::before {
-  background:
-    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.05) 0 0.25cqw, transparent 0.25cqw 0.6cqw),
-    repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.05) 0 0.25cqw, transparent 0.25cqw 0.7cqw);
-  z-index: 2;
-}
-.v-AR .tcg-shine, .v-CHR .tcg-shine {
-  opacity: 0.2;
-  background: linear-gradient(115deg, transparent 20%, rgba(255, 245, 210, 0.9) 45%, rgba(170, 220, 255, 0.8) 55%, transparent 80%);
-  background-size: 250% 250%;
-  mix-blend-mode: soft-light;
-}
-
-/* CHR — the monster with its trainer in front */
-.tcg.v-CHR .tcg-art .scene { filter: saturate(1.1) brightness(0.9); }
-.tcg.v-CHR .tcg-art .portrait { left: var(--px, 62%); height: calc(var(--ps, 1) * 80%); bottom: var(--py, 30%); }
-.tcg.v-CHR .tcg-art .partner {
-  position: absolute;
-  left: 2%;
-  bottom: 22%;
-  height: 62%;
-  object-fit: contain;
-  filter: drop-shadow(0 1cqw 1.6cqw rgba(0, 0, 0, 0.6)) drop-shadow(0 0 0.4cqw rgba(255, 255, 255, 0.35));
-}
-
 /* SAR — dramatic close-up, colour-washed sky, iridescent frame */
 .tcg.v-SAR .tcg-frame {
   background: linear-gradient(135deg, #fff4fb 0%, #c7d7ff 18%, #fffbe6 34%, #e3c9ff 50%, #c9fff0 66%, #ffe0c2 82%, #f4f7ff 100%);
@@ -777,49 +749,9 @@
   background-size: 100% 100%, 300% 300%;
 }
 
-/* ------------------------------ S (shiny) -------------------------------
-   色違い＋全面ホイル: the card keeps its type colours, the monster comes in its
-   rare colouring, and a fine foil covers the whole card — glitter that
-   catches the light and a rainbow sheen that slides as the card tilts. */
-.tcg.v-S .tcg-frame {
-  background:
-    linear-gradient(115deg, rgba(255, 255, 255, 0) 30%, rgba(255, 255, 255, 0.85) 48%, rgba(255, 255, 255, 0) 66%) var(--mx) var(--my) / 250% 250%,
-    conic-gradient(from 200deg at 50% 50%, #e8ecff, #ffd6f3, #fff4c2, #c9f7e6, #cfe3ff, #e8ecff);
-}
-.tcg.v-S .tcg-art { box-shadow: 0 0 0 0.7cqw rgba(255, 255, 255, 0.9), 0 0 0 1.1cqw rgba(160, 170, 220, 0.6), inset 0 0 3cqw rgba(0, 0, 0, 0.3); }
-.tcg.v-S .tcg-art .scene { filter: saturate(0.65) brightness(0.8) hue-rotate(var(--shue, 0deg)); }
-.tcg.v-S .tcg-head .name::after { content: '✦'; margin-left: 0.8cqw; font-size: 0.7em; color: #fff3b0; vertical-align: 0.2em; text-shadow: 0 0 0.8cqw #fff; }
-/* the foil: three layers of fine glitter of different pitch (so they never line
-   up into a grid), each shifting a little with the tilt, over a soft rainbow */
-.tcg-glitter {
-  position: absolute;
-  inset: 0;
-  z-index: 6;
-  pointer-events: none;
-  /* two offset copies of the scattered tile (set inline), drifting against each other with the tilt */
-  background-size: 46cqw 46cqw, 31cqw 31cqw;
-  background-position: calc(var(--mx) * 0.08) calc(var(--my) * 0.08), calc(7cqw - var(--mx) * 0.06) calc(11cqw - var(--my) * 0.05);
-  mix-blend-mode: screen;
-  opacity: 0.85;
-  -webkit-mask: radial-gradient(farthest-corner circle at var(--mx) var(--my), #000 0%, rgba(0, 0, 0, 0.6) 40%, rgba(0, 0, 0, 0.3) 100%);
-  mask: radial-gradient(farthest-corner circle at var(--mx) var(--my), #000 0%, rgba(0, 0, 0, 0.6) 40%, rgba(0, 0, 0, 0.3) 100%);
-  animation: glitter 2.6s ease-in-out infinite alternate;
-}
-@keyframes glitter { from { opacity: 0.5; } to { opacity: 0.9; } }
-.tcg.interactive .tcg-glitter { animation: none; opacity: calc(0.6 + var(--hyp) * 0.4); }
-.v-S .tcg-shine {
-  opacity: 0.42;
-  background:
-    repeating-linear-gradient(120deg, rgba(255, 120, 200, 0.55) 0%, rgba(255, 230, 120, 0.5) 7%, rgba(120, 255, 200, 0.5) 14%, rgba(120, 200, 255, 0.55) 21%, rgba(200, 140, 255, 0.55) 28%, rgba(255, 120, 200, 0.55) 35%);
-  background-size: 260% 260%;
-  background-position: var(--mx) var(--my);
-  mix-blend-mode: color-dodge;
-  filter: brightness(0.9) contrast(1.25);
-}
-
 /* ------------------------------ Rarity marks ----------------------------- */
 .rmark { font-style: normal; letter-spacing: -0.12em; margin-left: 0.8cqw; font-family: 'M PLUS 1p', sans-serif; font-weight: 900; color: #1b1b1f; }
-.t-dark .rmark, .tcg.bleed .rmark, .tcg.v-S .rmark, .kind-energy .rmark { color: #fff; }
+.t-dark .rmark, .tcg.bleed .rmark, .kind-energy .rmark { color: #fff; }
 /* ★ colours: grey, blue, gold, rainbow, rainbow-gold */
 .rmark.r-1 { color: #8a909b; }
 .rmark.r-2 { color: #2f86e0; }

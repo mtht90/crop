@@ -1,9 +1,10 @@
 import type { MonsterCard } from '../types';
 import { describe, expect, it } from 'vitest';
 import { aiAnswer } from '../ai';
-import { ALL_DECKS, deckById, expand, validateDeck } from '../decks';
+import { ALL_DECKS, deckById, expand, RIVALS, validateDeck } from '../decks';
 import { canPay, Game, maxHp, prizeValue, TERRAIN } from '../game';
-import { ALL_CARDS, byName, card } from '../cards';
+import { ALL_CARDS, byName, card, SET_COUNT, SETS } from '../cards';
+import { CHAPTERS } from '../../story';
 import { aceCandidates, buildDeck, fromRecipe } from '../autodeck';
 
 function playOut(d0: string, d1: string, seed: number) {
@@ -101,14 +102,18 @@ describe('第2弾 rules', () => {
     expect(maxHp(g.s, ex)).toBe(big.hp - 30);
   });
 
-  it('★ is the printing: regular ★1–3, illustration ★3, full art / shiny ★4, gold ★5', () => {
+  it('★ is the printing: regular ★1–3, full art ★3, special art ★4, gold ★5', () => {
     const base = ALL_CARDS.filter((c) => !c.variant);
     for (const c of base) expect(c.rarity, c.name).toBeLessThanOrEqual(3);
     for (const c of base) if (c.kind === 'monster') expect(prizeValue(c)).toBe(1);
-    const want = (v: string, b: number) => (v === 'UR' ? 5 : v === 'SR' || v === 'S' ? 4 : v === 'mirror' ? b : 3);
+    const want = (v: string, b: number) => (v === 'UR' ? 5 : v === 'SAR' ? 4 : v === 'SR' ? 3 : b);
     for (const v of ALL_CARDS.filter((c) => c.variant)) expect(v.rarity, v.id).toBe(want(v.variant!, card(v.baseId!).rarity));
     expect(ALL_CARDS.filter((c) => c.rarity === 5).length).toBeGreaterThan(15);
-    expect(ALL_CARDS.filter((c) => c.rarity === 4).length).toBeGreaterThan(30);
+    expect(ALL_CARDS.filter((c) => c.rarity === 4).length).toBeGreaterThan(15);
+    expect(ALL_CARDS.filter((c) => c.variant && !['mirror', 'SR', 'SAR', 'UR'].includes(c.variant))).toEqual([]);
+    // every regular card (aces too) has a mirror, basic energy aside
+    const mirrored = new Set(ALL_CARDS.filter((c) => c.variant === 'mirror').map((c) => c.baseId));
+    for (const c of base) if (!(c.kind === 'energy' && c.basic)) expect(mirrored.has(c.id), c.name).toBe(true);
     // the old EX / Ω aces are ordinary ★3 strength now
     for (const m of base) if (m.kind === 'monster' && m.ace) expect(m.hp, m.name).toBeLessThanOrEqual(210);
   });
@@ -158,8 +163,8 @@ describe('おすすめ編成', () => {
   }, 60000);
 });
 
-describe('第3弾 辺境の軍勢', () => {
-  const ab3 = ALL_CARDS.filter((c) => c.set === 'AB3' && !c.variant);
+describe('third printing (辺境の軍勢)', () => {
+  const ab3 = ALL_CARDS.filter((c) => c.id.startsWith('AB3-') && !c.variant);
   it('has 121 base cards (120 + 天空の浮島) and every evolution line resolves', () => {
     expect(ab3.length).toBe(121);
     for (const c of ab3) {
@@ -235,5 +240,24 @@ describe('地形', () => {
       expect(r.cards.length, d.id).toBe(60);
       expect(validateDeck(r.cards), d.id).toEqual([]);
     }
+  });
+});
+
+describe('chapters', () => {
+  it('groups every card into a chapter, numbered from 1 within it', () => {
+    const base = ALL_CARDS.filter((c) => !c.variant);
+    for (const set of SETS) {
+      const nos = base.filter((c) => c.set === set).map((c) => c.no).sort((a, b) => a - b);
+      expect(nos, set).toEqual(nos.map((_, i) => i + 1));
+      expect(nos.length, set).toBe(SET_COUNT[set]);
+    }
+    // the first chapter's rivals only play first-chapter cards
+    for (const ch of CHAPTERS) {
+      const r = RIVALS.find((x) => x.id === ch.rival);
+      if (!r) continue;
+      for (const [n] of deckById(r.deck).cards) expect(byName(n).set, `${r.id} ${n}`).toBe('AB1');
+    }
+    // secret printings are numbered after the chapter's regular cards
+    for (const v of ALL_CARDS.filter((c) => c.variant && c.variant !== 'mirror')) expect(v.no, v.id).toBeGreaterThan(SET_COUNT[v.set]);
   });
 });

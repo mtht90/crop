@@ -17,7 +17,7 @@ export const PROLOGUE: Beat[] = [
   narr('それから千年。十二枚は大陸じゅうに散り、伝説はおとぎ話になった。'),
   cg(null),
   bars(false),
-  title('ARCANE BEASTS', '第一部　十二枚の伝説', 'PROLOGUE'),
+  title('ARCANE BEASTS', '第一章　十二枚の伝説', 'PROLOGUE'),
 
   // ---------------------------------------------------------------- festival
   bgm('knolls'),
@@ -114,5 +114,5 @@ export const PROLOGUE: Beat[] = [
   fx('fadeBlackSlow'),
   hide('olden'),
   tone('none'),
-  title('第一幕　旅立ち', '十二枚の伝説', 'ACT I'),
+  title('第一章　十二枚の伝説', '旅立ち', 'CHAPTER I'),
 ];
