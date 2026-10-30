@@ -118,8 +118,9 @@ export function StoryMap() {
 
         <div className="sc-fill" />
         {/* chapter text */}
-        <AnimatePresence mode="wait">
-          <motion.div key={sel} className="sc-info" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.45, ease: EASE_OUT }}>
+        {/* no exit animation: with mode="wait", flicking through quickly could leave an old
+            chapter's text on screen while the strip and painting had moved on */}
+        <motion.div key={sel} className="sc-info" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45, ease: EASE_OUT }}>
             <div className="sc-kick">{isPro ? 'PROLOGUE' : `${episodeLabel(ch!)}　・　${PARTS[ch!.part - 1].title}`}</div>
             <h1 className="gold-title">{isPro ? 'プロローグ' : locked ? '？？？' : ch!.title}</h1>
             {isPro ? (
@@ -150,8 +151,7 @@ export function StoryMap() {
                 </div>
               </>
             )}
-          </motion.div>
-        </AnimatePresence>
+        </motion.div>
 
         {/* actions */}
         <div className="sc-bottom">
