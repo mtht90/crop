@@ -1056,7 +1056,8 @@
   .modal { width: calc(var(--u) * 53); max-height: calc(var(--u) * 90); }
   .modal-title { font-size: calc(var(--u) * 2.2); }
   .modal-sub { font-size: calc(var(--u) * 1.3); }
-  .grid-card { width: calc(var(--u) * 11.6); }
+  /* five to a row (three made a tall column of big cards that had to be scrolled) */
+  .grid-card { width: calc(var(--u) * 8.4); }
 
   .stamp-ui { left: auto; right: calc(var(--u) * 1.2); top: calc(var(--u) * 85.4); }
   .stamp-btn { width: calc(var(--u) * 4.6); height: calc(var(--u) * 4.6); }
