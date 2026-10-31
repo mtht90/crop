@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect } from 'react';
-import { activeDeck, useStore } from './state/store';
+import { activeDeck, useStore, type Screen } from './state/store';
 import { Gallery } from './screens/Gallery';
 import { BattleScreen } from './battle/BattleScreen';
 import { Title } from './screens/Title';
@@ -18,7 +18,7 @@ import { Scene } from './screens/Scene';
 import { online } from './online/client';
 import { Credits, Rules, Settings } from './screens/Misc';
 import { setVolumes, unlockAudio } from './audio/audio';
-import { configureFx } from './lib/fx';
+import { configureFx, vibrate } from './lib/fx';
 import { setGyroEnabled, startGyro } from './lib/gyro';
 import { expand, RIVALS, deckById } from './engine/decks';
 import './screens/screens.css';
@@ -104,7 +104,35 @@ export function App() {
       if (useStore.getState().save.settings.gyro) void startGyro();
     };
     window.addEventListener('pointerdown', unlock);
-    return () => window.removeEventListener('pointerdown', unlock);
+    // a light tick under the finger on anything pressable
+    const tick = (e: PointerEvent) => {
+      if (e.pointerType !== 'mouse' && (e.target as Element | null)?.closest?.('button:not(:disabled), .tile2, .chip-btn, [role="button"]')) vibrate(5);
+    };
+    window.addEventListener('pointerdown', tick, { passive: true });
+    // the browser's back (button, swipe, Android key) goes back a screen instead of leaving the game
+    const LOCKED: Screen[] = ['battle', 'scene', 'title', 'starter'];
+    try {
+      history.replaceState({ ab: useStore.getState().screen }, '');
+    } catch {
+      /* no history (sandboxed frame) */
+    }
+    const onPop = (e: PopStateEvent) => {
+      const cur = useStore.getState().screen;
+      const to = (e.state as { ab?: Screen } | null)?.ab;
+      // mid-battle, mid-scene and the opening screens stay where they are
+      if (LOCKED.includes(cur)) return void history.pushState({ ab: cur }, '');
+      if (to) useStore.setState({ screen: to });
+      else if (cur !== 'home') {
+        useStore.setState({ screen: 'home' });
+        history.pushState({ ab: 'home' }, '');
+      }
+    };
+    window.addEventListener('popstate', onPop);
+    return () => {
+      window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('pointerdown', tick);
+      window.removeEventListener('popstate', onPop);
+    };
   }, []);
   const Comp = SCREENS[screen];
   return (
@@ -119,8 +147,16 @@ export function App() {
         </defs>
       </svg>
       <div className={`app ${TAB_OF[screen] ? 'with-tabs' : ''}`}>
-        <AnimatePresence mode="wait">
-          <motion.div key={screen === 'battle' ? `battle-${seq}` : screen} className="screen" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, pointerEvents: 'none' }} transition={{ duration: 0.25 }}>
+        {/* cross-fade: the next screen comes in while the last one fades (no blank moment between them) */}
+        <AnimatePresence initial={false}>
+          <motion.div
+            key={screen === 'battle' ? `battle-${seq}` : screen}
+            className="screen"
+            initial={{ opacity: 0, scale: 0.985 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, pointerEvents: 'none', zIndex: 0 }}
+            transition={{ duration: 0.18, ease: [0.2, 0.8, 0.2, 1] }}
+          >
             <Comp />
           </motion.div>
         </AnimatePresence>

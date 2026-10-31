@@ -100,6 +100,16 @@ export function Settings() {
               ))}
             </div>
           </div>
+          <div className="set-row">
+            <label>手札の並び</label>
+            <div className="seg">
+              {[true, false].map((v) => (
+                <button key={String(v)} className={(settings.handSort !== false) === v ? 'on' : ''} onClick={() => update((s) => void (s.settings.handSort = v))}>
+                  {v ? '自動で整理' : '引いた順'}
+                </button>
+              ))}
+            </div>
+          </div>
           <TransferRows />
           <InstallRow />
           <DevRow />

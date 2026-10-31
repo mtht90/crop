@@ -61,6 +61,8 @@ export interface Settings {
   vibrate: boolean;
   /** tilt cards (holo shine) with the device's motion sensor */
   gyro: boolean;
+  /** keep the hand sorted (monsters, trainers, energy) */
+  handSort?: boolean;
 }
 
 export interface Save {
@@ -285,7 +287,16 @@ export const useStore = create<Store>((set, get) => ({
   battle: null,
   scene: null,
   battleSeq: 0,
-  go: (screen) => set({ screen }),
+  go: (screen) => {
+    // each screen change is a history step, so the browser's back returns here
+    if (screen !== get().screen && typeof history !== 'undefined')
+      try {
+        history.pushState({ ab: screen }, '');
+      } catch {
+        /* no history */
+      }
+    set({ screen });
+  },
   update: (f) => {
     const s = structuredClone(get().save);
     f(s);

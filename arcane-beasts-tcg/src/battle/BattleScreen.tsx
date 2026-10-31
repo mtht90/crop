@@ -1,5 +1,5 @@
-import { LayoutGroup, motion, AnimatePresence } from 'motion/react';
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { LayoutGroup, motion, AnimatePresence, useDragControls, type DragControls } from 'motion/react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { card, TYPE_JP } from '../engine/cards';
 import { autoRetreatDiscard, canPay, energyUnits, maxHp, posEq, posKey, retreatCost, TERRAIN, TERRAIN_BOOST, TERRAIN_WEAKEN, topCard } from '../engine/game';
 import type { Action, CardInst, EnergyCard, GameState, MonsterCard, Pos, Prompt, Slot, TrainerCard } from '../engine/types';
@@ -47,6 +47,9 @@ const canHover = () => typeof window !== 'undefined' && window.matchMedia('(hove
  * = show the card big while the finger stays down. Letting go closes it and the
  * tap is swallowed, so a preview never triggers an action.
  */
+/** set by the hand: the stray click after a slide or a drag must not hit what is under the finger now */
+const handClickSwallow = { until: 0 };
+
 const pressPreview = (() => {
   let timer: ReturnType<typeof setTimeout> | undefined;
   let start: { x: number; y: number } | null = null;
@@ -321,12 +324,102 @@ function cardCentre(uid: number): [number, number] | null {
   return [r.left + r.width / 2, r.top + r.height / 2];
 }
 
-function Hand({ cards, playable, selected, onSelect, onDrop, setupPick, dropKeys, onDragging }: HandProps) {
+/** hand order: monsters by stage, then trainers by kind, then energy; same cards side by side */
+const HAND_ORDER = (c: CardInst) => {
+  const d = card(c.cid);
+  if (d.kind === 'monster') return (d.stage === 'basic' ? 0 : d.stage === 'stage1' ? 1 : 2) * 1000;
+  if (d.kind === 'trainer') return 3000 + ({ supporter: 0, item: 1, tool: 2, stadium: 3 }[d.sub] ?? 4) * 100;
+  return 8000;
+};
+const sortHand = (cards: CardInst[]) =>
+  [...cards].sort((x, y) => HAND_ORDER(x) - HAND_ORDER(y) || card(x.cid).name.localeCompare(card(y.cid).name, 'ja') || x.uid - y.uid);
+
+interface HandCardProps {
+  c: CardInst;
+  left: string;
+  z: number;
+  rot: number;
+  y: number;
+  scale: number;
+  can: boolean;
+  sel: boolean;
+  dragging: boolean;
+  lifted: boolean;
+  register: (uid: number, controls: DragControls | null) => void;
+  onDown: (e: React.PointerEvent, uid: number) => void;
+  onDragStart: () => void;
+  onDrag: () => void;
+  onDragEnd: (offset: { x: number; y: number }) => void;
+  onMouseEnter: () => void;
+  onMouseLeave: () => void;
+  onClick: () => void;
+  onPreview: () => void;
+}
+
+function HandCard(p: HandCardProps) {
+  const controls = useDragControls();
+  const { register, c } = p;
+  useEffect(() => {
+    register(c.uid, controls);
+    return () => register(c.uid, null);
+  }, [register, c.uid, controls]);
+  return (
+    <motion.div
+      layoutId={`c${c.uid}`}
+      transition={{ layout: LAYOUT }}
+      className={`bc hand-card ${p.can ? 'can' : ''} ${p.sel ? 'sel' : ''} ${p.dragging ? `dragging ${p.lifted ? 'lifted' : ''}` : ''}`}
+      style={{ left: p.left, zIndex: p.z }}
+      initial={{ rotateY: 90 }}
+      animate={{ rotate: p.rot, y: p.y, scale: p.scale, rotateY: 0 }}
+      drag={p.can}
+      dragListener={false}
+      dragControls={controls}
+      dragSnapToOrigin
+      dragMomentum={false}
+      dragElastic={1}
+      dragTransition={{ bounceStiffness: 500, bounceDamping: 32 }}
+      whileDrag={{ scale: p.lifted ? 1 : 0.92, zIndex: 200, rotate: 0 }}
+      onPointerDown={(e) => p.onDown(e, c.uid)}
+      onDragStart={p.onDragStart}
+      onDrag={p.onDrag}
+      onDragEnd={(_, info) => p.onDragEnd(info.offset)}
+      onMouseEnter={p.onMouseEnter}
+      onMouseLeave={p.onMouseLeave}
+      onClick={p.onClick}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        p.onPreview();
+      }}
+      data-uid={c.uid}
+    >
+      <div className="bc-fx">
+        <CardFace cid={c.cid} className="bc-card" />
+      </div>
+      {p.can && <div className="can-glow" />}
+    </motion.div>
+  );
+}
+
+/**
+ * The hand. With a finger: slide sideways over the cards and the one under the
+ * finger rises (let go to pick it); pull upwards to drag it onto the board. With
+ * a mouse: hover to raise, drag to play, click to pick.
+ */
+function Hand({ cards: raw, playable, selected, onSelect, onDrop, setupPick, dropKeys, onDragging }: HandProps) {
+  const sorted = useStore((s) => s.save.settings.handSort !== false);
+  const cards = useMemo(() => (sorted ? sortHand(raw) : raw), [raw, sorted]);
   const [dragging, setDragging] = useState<number | null>(null);
-  const touch = useRef(false);
+  const [lifted, setLifted] = useState(false);
   const hot = useRef<string | null>(null);
-  /** a click that ends a drag is not a tap */
-  const dragged = useRef(false);
+  /** a click that ends a drag or a slide is not a tap */
+  const swallowUntil = useRef(0);
+  /** the click that ends a slide or a drag lands wherever the card went: ignore it everywhere */
+  const swallow = () => (swallowUntil.current = handClickSwallow.until = performance.now() + 450);
+  const controlsOf = useRef(new Map<number, DragControls>());
+  const register = useCallback((uid: number, ctl: DragControls | null) => {
+    if (ctl) controlsOf.current.set(uid, ctl);
+    else controlsOf.current.delete(uid);
+  }, []);
   // y is animated in px: a calc() string cannot be added to the drag offset
   const [u, setU] = useState(unitPx);
   useEffect(() => {
@@ -345,9 +438,95 @@ function Hand({ cards, playable, selected, onSelect, onDrop, setupPick, dropKeys
   const step = n <= 1 ? 0 : Math.min(cw * 0.92, (maxW - cw) / (n - 1));
   const total = step * (n - 1) + cw;
   const [hover, setHover] = useState<number | null>(null);
+  /** a finger is on the hand: the whole fan comes up a little so it can be read */
+  const [open, setOpen] = useState(false);
   const setPreview = useBattle((s) => s.setHover);
+  const canPlay = (uid: number) => playable.has(uid) || !!setupPick?.has(uid);
+  /** phones held sideways: the hand sits low on the screen, so it comes up further */
+  const short = typeof window !== 'undefined' && window.innerHeight < 520;
+
+  // ---- pointer gesture: decide between a slide (scrub), a drag and a tap ----
+  const gesture = useRef<{ id: number; uid: number; x: number; y: number; touch: boolean; mode: 'wait' | 'scrub' | 'drag' } | null>(null);
+  const startDrag = (uid: number, e: PointerEvent | React.PointerEvent, touch: boolean) => {
+    const ctl = controlsOf.current.get(uid);
+    if (!ctl || !canPlay(uid)) return false;
+    setLifted(touch);
+    ctl.start(e as PointerEvent);
+    return true;
+  };
+  const onDown = (e: React.PointerEvent, uid: number) => {
+    if (e.button !== 0) return;
+    const touch = e.pointerType !== 'mouse';
+    gesture.current = { id: e.pointerId, uid, x: e.clientX, y: e.clientY, touch, mode: 'wait' };
+    if (touch) {
+      setOpen(true);
+      setHover(uid);
+    }
+  };
+  useEffect(() => {
+    const move = (e: PointerEvent) => {
+      const g = gesture.current;
+      if (!g || e.pointerId !== g.id || g.mode === 'drag') return;
+      const dx = e.clientX - g.x;
+      const dy = e.clientY - g.y;
+      if (g.mode === 'wait') {
+        if (Math.hypot(dx, dy) < (g.touch ? 9 : 4)) return;
+        // a mouse drags in any direction; a finger drags upwards and slides sideways
+        const up = !g.touch || (dy < 0 && -dy > Math.abs(dx) * 0.7);
+        if (up) {
+          const uid = g.touch ? (hoverRef.current ?? g.uid) : g.uid;
+          if (startDrag(uid, e, g.touch)) {
+            g.mode = 'drag';
+            return;
+          }
+        }
+        if (!g.touch) return;
+        g.mode = 'scrub';
+        swallow();
+      }
+      if (g.mode === 'scrub') {
+        // lifting off the hand while sliding also picks up the card under the finger
+        const handTop = document.querySelector('.hand')?.getBoundingClientRect().top ?? 0;
+        if (e.clientY < handTop - unitPx() * 4 && hoverRef.current !== null && startDrag(hoverRef.current, e, true)) {
+          g.mode = 'drag';
+          return;
+        }
+        const el = document.elementFromPoint(e.clientX, Math.min(e.clientY, window.innerHeight - 2))?.closest('.hand-card') as HTMLElement | null;
+        const uid = el ? Number(el.dataset.uid) : null;
+        if (uid !== null && uid !== hoverRef.current) {
+          setHover(uid);
+          foley.hover();
+          vibrate(4);
+        }
+      }
+    };
+    const up = (e: PointerEvent) => {
+      const g = gesture.current;
+      if (!g || e.pointerId !== g.id) return;
+      gesture.current = null;
+      setOpen(false);
+      if (g.mode === 'scrub') {
+        // let go over a card: pick it, as a tap would
+        if (hoverRef.current !== null) onSelect(hoverRef.current);
+        swallow();
+      }
+      // a plain tap is left to the click that follows, as with a mouse
+      if (g.mode !== 'drag' && g.touch) setHover(null);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+    return () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+    };
+  });
+  const hoverRef = useRef<number | null>(null);
+  hoverRef.current = hover;
+
   return (
-    <div className="hand">
+    <div className={`hand ${open ? 'open' : ''}`}>
       {cards.map((c, i) => {
         const mid = (n - 1) / 2;
         const off = i - mid;
@@ -355,35 +534,25 @@ function Hand({ cards, playable, selected, onSelect, onDrop, setupPick, dropKeys
         const lift = Math.abs(off) * Math.abs(off) * 0.12;
         const isSel = selected === c.uid;
         const isHover = hover === c.uid;
-        const can = playable.has(c.uid) || setupPick?.has(c.uid);
+        const up = isHover || isSel;
         return (
-          <motion.div
+          <HandCard
             key={c.uid}
-            layoutId={`c${c.uid}`}
-            transition={{ layout: LAYOUT }}
-            className={`bc hand-card ${can ? 'can' : ''} ${isSel ? 'sel' : ''} ${dragging === c.uid ? `dragging ${touch.current ? 'lifted' : ''}` : ''}`}
-            style={{
-              left: `calc(var(--u) * (var(--cx) + ${-total / 2 + i * step}))`,
-              zIndex: isHover || isSel ? 100 : i,
-            }}
-            initial={{ rotateY: 90 }}
-            animate={{
-              rotate: isHover || isSel ? 0 : rot,
-              y: u * (isSel ? -8.5 : isHover ? -7 : lift),
-              scale: isHover || isSel ? 1.18 : 1,
-              rotateY: 0,
-            }}
-            drag={can}
-            dragSnapToOrigin
-            dragMomentum={false}
-            dragElastic={1}
-            dragTransition={{ bounceStiffness: 500, bounceDamping: 32 }}
-            whileDrag={{ scale: touch.current ? 1 : 0.92, zIndex: 200, rotate: 0 }}
-            onPointerDown={(e) => {
-              touch.current = e.pointerType !== 'mouse';
-            }}
+            c={c}
+            left={`calc(var(--u) * (var(--cx) + ${-total / 2 + i * step}))`}
+            z={up ? 100 : i}
+            rot={up ? 0 : rot}
+            y={u * ((isSel ? -8.5 : isHover ? (short ? -10 : -7.5) : lift) - (open ? (short ? 5 : 3) : 0))}
+            scale={up ? 1.18 : 1}
+            can={canPlay(c.uid)}
+            sel={isSel}
+            dragging={dragging === c.uid}
+            lifted={lifted}
+            register={register}
+            onDown={onDown}
             onDragStart={() => {
               foley.slide();
+              vibrate(8);
               setHover(null);
               setPreview(null);
               setDragging(c.uid);
@@ -395,21 +564,27 @@ function Hand({ cards, playable, selected, onSelect, onDrop, setupPick, dropKeys
               if (t !== hot.current) {
                 hot.current = t;
                 markHot(t);
-                if (t) foley.tick();
+                if (t) {
+                  foley.tick();
+                  vibrate(6);
+                }
               }
             }}
-            onDragEnd={(_, info) => {
+            onDragEnd={(offset) => {
               const t = target(c.uid);
               hot.current = null;
               markHot(null);
-              dragged.current = true;
-              setTimeout(() => (dragged.current = false), 0);
+              swallow();
               setDragging(null);
               onDragging(null);
+              setOpen(false);
               document.body.classList.remove('hand-dragging');
-              if (t) onDrop(c.uid, t);
+              if (t) {
+                vibrate(14);
+                onDrop(c.uid, t);
+              }
               // a short wobble is a tap
-              else if (Math.hypot(info.offset.x, info.offset.y) < 14) onSelect(c.uid);
+              else if (Math.hypot(offset.x, offset.y) < 14) onSelect(c.uid);
             }}
             onMouseEnter={() => {
               if (dragging !== null || !canHover()) return;
@@ -418,21 +593,13 @@ function Hand({ cards, playable, selected, onSelect, onDrop, setupPick, dropKeys
               foley.hover();
             }}
             onMouseLeave={() => {
+              if (!canHover()) return;
               setHover(null);
               setPreview(null);
             }}
-            onClick={() => !dragged.current && onSelect(c.uid)}
-            onContextMenu={(e) => {
-              e.preventDefault();
-              setPreview(c.cid);
-            }}
-            data-uid={c.uid}
-          >
-            <div className="bc-fx">
-              <CardFace cid={c.cid} className="bc-card" />
-            </div>
-            {can && <div className="can-glow" />}
-          </motion.div>
+            onClick={() => performance.now() > swallowUntil.current && !gesture.current && onSelect(c.uid)}
+            onPreview={() => setPreview(c.cid)}
+          />
         );
       })}
     </div>
@@ -900,7 +1067,7 @@ export function BattleScreen() {
       onPointerCancel={() => pressPreview.up()}
       onClickCapture={(e) => {
         // the tap that ends a long press only closes the preview: it must not also play, select or open a menu
-        if (pressPreview.swallow()) {
+        if (pressPreview.swallow() || performance.now() < handClickSwallow.until) {
           e.stopPropagation();
           e.preventDefault();
         }
