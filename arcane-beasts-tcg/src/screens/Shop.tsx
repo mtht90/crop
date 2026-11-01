@@ -151,7 +151,7 @@ export function Shop() {
   const buy = useCallback(
     (booster: Booster, packs = 1) => {
       const cost = priceOf(booster) * packs;
-      if (useStore.getState().save.coins < cost) {
+      if (useStore.getState().save.gems < cost) {
         sfx('miss-2', 0.5);
         return false;
       }
@@ -161,7 +161,7 @@ export function Shop() {
       const col = useStore.getState().save.collection;
       const fresh = new Set(cards.filter((c) => !(col[c.id] ?? 0)).map((c) => c.id));
       update((s) => {
-        s.coins -= cost;
+        s.gems -= cost;
         s.packsOpened += packs;
       });
       for (let k = 0; k < packs; k++) useStore.getState().recordPack(!!booster.premium);
@@ -215,16 +215,16 @@ export function Shop() {
                   )}
                 </ul>
                 <div className="shop3-buy">
-                  <button className={`pill ${b.premium ? 'gold' : ''}`} disabled={save.coins < b.price} onClick={() => buy(b)}>
+                  <button className={`pill ${b.premium ? 'gold' : ''}`} disabled={save.gems < b.price} onClick={() => buy(b)}>
                     1パック
                     <span className="coin">
-                      <Icon name="coin" /> {b.price}
+                      <Icon name="gem" /> {b.price}
                     </span>
                   </button>
-                  <button className={`pill ten ${b.premium ? 'gold' : ''}`} disabled={save.coins < b.price * 10} onClick={() => buy(b, 10)}>
+                  <button className={`pill ten ${b.premium ? 'gold' : ''}`} disabled={save.gems < b.price * 10} onClick={() => buy(b, 10)}>
                     10パック
                     <span className="coin">
-                      <Icon name="coin" /> {(b.price * 10).toLocaleString()}
+                      <Icon name="gem" /> {(b.price * 10).toLocaleString()}
                     </span>
                   </button>
                 </div>
@@ -319,7 +319,7 @@ function Opening({ booster, cards, god, fresh, sold, packs, onClose, onAgain }: 
   const [fx, setFx] = useState<{ id: number; color: string } | null>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const root = useRef<HTMLDivElement>(null);
-  const coins = useStore((s) => s.save.coins);
+  const coins = useStore((s) => s.save.gems);
 
   useEffect(() => {
     particles.attach(canvas.current);
@@ -1448,7 +1448,7 @@ function MultiResults({ opened, cards, fresh, sold, burstAt, onClose, onAgain, c
             <button className="pill" disabled={!canAgain} onClick={onAgain}>
               もう一度10パック
               <span className="coin">
-                <Icon name="coin" /> {price}
+                <Icon name="gem" /> {price}
               </span>
             </button>
           </>
@@ -1524,7 +1524,7 @@ function Results({ cards, fresh, sold, onClose, onAgain, canAgain, price, u }: {
         <button className="pill" disabled={!canAgain} onClick={onAgain}>
           もう1パック開ける
           <span className="coin">
-            <Icon name="coin" /> {price}
+            <Icon name="gem" /> {price}
           </span>
         </button>
       </motion.div>

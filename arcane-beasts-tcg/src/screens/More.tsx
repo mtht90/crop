@@ -16,6 +16,7 @@ export function More() {
   const items: { to: Screen; icon: string; title: string; sub: string; badge?: string }[] = [
     { to: 'missions', icon: 'trophy', title: 'ミッション', sub: 'デイリー・ウィークリー・実績・ログインボーナス', badge: missions ? String(missions) : undefined },
     { to: 'collection', icon: 'cards', title: 'コレクション', sub: `集めたカード（収集率 ${Math.floor(collectionPct(save))}%）`, badge: save.newCards.length ? `NEW ${save.newCards.length}` : undefined },
+    { to: 'wardrobe', icon: 'wardrobe', title: 'ワードローブ', sub: `カード裏面・バトルの背景・称号（コインで交換）` },
     { to: 'settings', icon: 'gear', title: '設定', sub: '音量・演出・引き継ぎ' },
     { to: 'rules', icon: 'book', title: 'あそびかた', sub: 'ルールと用語' },
     { to: 'credits', icon: 'info', title: 'クレジット', sub: '素材と制作' },

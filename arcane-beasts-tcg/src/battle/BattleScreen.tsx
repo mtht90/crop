@@ -13,6 +13,7 @@ import { PromptLayer } from './PromptLayer';
 import { Stamps } from './Stamps';
 import { ResultOverlay } from './ResultOverlay';
 import { useStore } from '../state/store';
+import { cosmeticById } from '../state/cosmetics';
 import { foley, playMusic, sfx } from '../audio/audio';
 import { askConfirm } from '../ui/Confirm';
 import { Weather } from '../story/Weather';
@@ -789,6 +790,7 @@ function OnlineHud() {
 export function BattleScreen() {
   const cfg = useStore((s) => s.battle)!;
   const settings = useStore((s) => s.save.settings);
+  const wardrobe = useStore((s) => s.save.wardrobe);
   const ctrlRef = useRef<BattleDriver | null>(null);
   const view = useBattle((s) => s.view);
   const prompt = useBattle((s) => s.prompt);
@@ -1051,7 +1053,9 @@ export function BattleScreen() {
 
   const stadium = s.stadium;
   const terrain = stadium ? (card(stadium.cid) as TrainerCard) : null;
-  const bg = terrain ? terrain.art : cfg.scene;
+  const matArt = cosmeticById(wardrobe?.mat ?? '')?.art;
+  const myTitle = wardrobe?.title && wardrobe.title !== 'title-none' ? cosmeticById(wardrobe.title)?.name : undefined;
+  const bg = terrain ? terrain.art : (matArt ?? cfg.scene);
   const terrainFx = terrain ? TERRAIN[terrain.key] : undefined;
 
   return (
@@ -1191,6 +1195,7 @@ export function BattleScreen() {
             <img src={artUrl(cfg.online ? cfg.online.me.portrait : 'humans/lieutenant')} alt="" />
             <div>
               <div className="plate-name">{cfg.online ? cfg.online.me.name : 'あなた'}</div>
+              {myTitle && <div className="plate-title">{myTitle}</div>}
               <div className="plate-sub">
                 手札 {me.hand.length} ・ 山札 {me.deck.length}
               </div>

@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
-import { claimableCount, expToNext, levelReward, bump } from '../state/progress';
+import { claimableCount, expToNext, levelGems, levelReward, bump } from '../state/progress';
 import { extCtx, useStore, type BattleRewardResult } from '../state/store';
 import { useBattle } from './controller';
 import { artUrl } from '../lib/assets';
@@ -101,7 +101,14 @@ export function ResultOverlay() {
               onAnimationComplete={() => foley.tick()}
             >
               <span>{l.label}</span>
-              <b>+{l.coins}</b>
+              <b>
+                +{l.coins}
+                {!!l.gems && (
+                  <span className="rl-gem">
+                    <Icon name="gem" /> +{l.gems}
+                  </span>
+                )}
+              </b>
             </motion.div>
           ))}
           <motion.div
@@ -114,6 +121,11 @@ export function ResultOverlay() {
             <span>合計</span>
             <b>
               <Icon name="coin" /> {res.total.toLocaleString()}
+              {res.gems > 0 && (
+                <span className="rl-gem">
+                  <Icon name="gem" /> {res.gems.toLocaleString()}
+                </span>
+              )}
             </b>
           </motion.div>
           <ExpBar res={res} delay={lineDelay + nLines * 0.18 + 0.5} />
@@ -214,7 +226,7 @@ function ExpBar({ res, delay }: { res: BattleRewardResult; delay: number }) {
       <AnimatePresence>
         {up && (
           <motion.div key={up} className="lvup" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
-            レベルアップ！ Lv.{up} ・ ボーナス +{levelReward(up)} コイン
+            レベルアップ！ Lv.{up} ・ ボーナス +{levelReward(up)} コイン・+{levelGems(up)} ジェム
           </motion.div>
         )}
       </AnimatePresence>

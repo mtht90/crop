@@ -17,12 +17,14 @@ import { StoryMap } from './screens/StoryMap';
 import { Scene } from './screens/Scene';
 import { online } from './online/client';
 import { Credits, Rules, Settings } from './screens/Misc';
+import { Wardrobe } from './screens/Wardrobe';
 import { setVolumes, unlockAudio } from './audio/audio';
 import { configureFx, vibrate } from './lib/fx';
 import { setGyroEnabled, startGyro } from './lib/gyro';
 import { expand, RIVALS, deckById } from './engine/decks';
 import './screens/screens.css';
 import { ConfirmDialog } from './ui/Confirm';
+import { cosmeticById } from './state/cosmetics';
 import { TabBar, TAB_OF } from './ui/TabBar';
 import { More } from './screens/More';
 import './styles/app.css';
@@ -68,6 +70,7 @@ const SCREENS = {
   credits: Credits,
   rules: Rules,
   gallery: Gallery,
+  wardrobe: Wardrobe,
 };
 
 export function App() {
@@ -103,6 +106,13 @@ export function App() {
       unlockAudio();
       if (useStore.getState().save.settings.gyro) void startGyro();
     };
+    // the sleeve in use: one CSS variable that every card back reads
+    const applyLook = () => {
+      const w = useStore.getState().save.wardrobe;
+      document.documentElement.style.setProperty('--back-filter', cosmeticById(w?.sleeve ?? '')?.filter ?? 'none');
+    };
+    applyLook();
+    const stopLook = useStore.subscribe(applyLook);
     window.addEventListener('pointerdown', unlock);
     // a light tick under the finger on anything pressable
     const tick = (e: PointerEvent) => {
@@ -130,6 +140,7 @@ export function App() {
     window.addEventListener('popstate', onPop);
     return () => {
       window.removeEventListener('pointerdown', unlock);
+      stopLook();
       window.removeEventListener('pointerdown', tick);
       window.removeEventListener('popstate', onPop);
     };

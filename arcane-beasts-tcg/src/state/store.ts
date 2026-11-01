@@ -5,6 +5,7 @@ import { create } from 'zustand';
 import { ALL_CARDS, card, CARDS, SET_INFO } from '../engine/cards';
 import { expand, RIVALS, STARTER_DECKS, type Rival } from '../engine/decks';
 import type { Difficulty } from '../engine/ai';
+import { cleanWardrobe, cosmeticById, freshWardrobe, type Wardrobe } from './cosmetics';
 import type { CardDef, EType, Rarity, SetCode } from '../engine/types';
 import {
   ACHIEVEMENTS,
@@ -18,6 +19,9 @@ import {
   freshProgress,
   levelReward,
   LOGIN_REWARDS,
+  LOGIN_GEMS,
+  levelGems,
+  missionGems,
   loginSlot,
   missionValue,
   weeklyMissions,
@@ -44,7 +48,7 @@ const isBasicEnergy = (cid: string) => {
   return c.kind === 'energy' && c.basic;
 };
 
-export type Screen = 'arena' | 'story' | 'scene' | 'lobby' | 'title' | 'starter' | 'home' | 'rivals' | 'battle' | 'deck' | 'collection' | 'shop' | 'missions' | 'more' | 'settings' | 'credits' | 'rules' | 'gallery';
+export type Screen = 'arena' | 'story' | 'scene' | 'lobby' | 'title' | 'starter' | 'home' | 'rivals' | 'battle' | 'deck' | 'collection' | 'shop' | 'missions' | 'more' | 'settings' | 'credits' | 'rules' | 'gallery' | 'wardrobe';
 
 export interface SavedDeck {
   id: string;
@@ -67,7 +71,11 @@ export interface Settings {
 
 export interface Save {
   v: 1;
+  /** コイン: bought looks in the ワードローブ; earned by battles, missions, duplicates */
   coins: number;
+  /** ジェム: buy packs; earned by first clears, missions, the login cycle, level-ups */
+  gems: number;
+  wardrobe: Wardrobe;
   collection: Record<string, number>;
   decks: SavedDeck[];
   activeDeck: string;
@@ -149,10 +157,12 @@ export function importSave(raw: string): boolean {
 // ----------------------------------------------------------------------------
 export const DEV_CODE = 'ARCANE-DEV';
 const DEV_COINS = 9_999_999;
+const DEV_GEMS = 999_999;
 
 /** developer mode keeps the coins topped up */
 function refill(s: Save) {
   s.coins = Math.max(s.coins, DEV_COINS);
+  s.gems = Math.max(s.gems ?? 0, DEV_GEMS);
 }
 
 /** turn developer mode on: the story and every rival cleared, resources without limit */
@@ -179,7 +189,9 @@ export function grantAllCards(s: Save) {
 function freshSave(): Save {
   return {
     v: 1,
-    coins: 600,
+    coins: 300,
+    gems: 600,
+    wardrobe: freshWardrobe(),
     collection: {},
     decks: [],
     activeDeck: '',
@@ -199,7 +211,8 @@ function load(): Save {
   try {
     const raw = localStorage.getItem(KEY);
     if (raw) {
-      const s = { ...freshSave(), ...JSON.parse(raw) } as Save;
+      const parsed = JSON.parse(raw) as Partial<Save>;
+      const s = { ...freshSave(), ...parsed } as Save;
       s.settings = { ...freshSave().settings, ...(s.settings ?? {}) };
       s.progress = { ...freshProgress(), ...(s.progress ?? {}) };
       s.progress.stats = { ...freshProgress().stats, ...s.progress.stats };
@@ -225,6 +238,9 @@ function load(): Save {
         d.cover = retired(d.cover);
       }
       s.newCards = s.newCards.map(retired).filter(CARDS_OK);
+      // gems arrived later: what a player had in coins (which bought packs until now) carries over 1:1
+      if (typeof parsed.gems !== 'number') s.gems = Math.max(0, parsed.coins ?? 0);
+      s.wardrobe = cleanWardrobe(s.wardrobe);
       // anything over the cap is sold
       for (const [cid, n] of Object.entries(s.collection)) {
         if (n > MAX_COPIES && CARDS_OK(cid) && !isBasicEnergy(cid)) {
@@ -265,15 +281,28 @@ interface Store {
   clearChapter: (chapterId: string) => void;
   startBattle: (cfg: BattleConfig) => void;
   reset: () => void;
-  claimLogin: () => number;
-  claimMission: (m: Mission, period: MissionPeriod) => number;
+  claimLogin: () => Wallet;
+  claimMission: (m: Mission, period: MissionPeriod) => Wallet;
+  /** buy a look with coins (false = not enough / already owned) */
+  buyCosmetic: (id: string) => boolean;
+  equipCosmetic: (id: string) => void;
   recordPack: (premium: boolean) => void;
   recordBattle: (o: BattleOutcome, st: Partial<Stats>) => BattleRewardResult;
+}
+
+/** what a claim paid out */
+export interface Wallet {
+  coins: number;
+  gems: number;
 }
 
 export interface BattleRewardResult {
   lines: RewardLine[];
   total: number;
+  /** gems from the lines above */
+  gems: number;
+  /** gems from level-ups */
+  levelGems: number;
   exp: number;
   levelBefore: number;
   expBefore: number;
@@ -351,19 +380,38 @@ export const useStore = create<Store>((set, get) => ({
     set({ save: s, screen: 'title' });
   },
   claimLogin: () => {
-    let got = 0;
+    const got: Wallet = { coins: 0, gems: 0 };
     get().update((s) => {
       const p = s.progress;
       if (!canClaimLogin(p)) return;
-      got = LOGIN_REWARDS[loginSlot(p)];
+      got.coins = LOGIN_REWARDS[loginSlot(p)];
+      got.gems = LOGIN_GEMS[loginSlot(p)];
       p.loginCount++;
       p.loginDay = dayKey();
-      s.coins += got;
+      s.coins += got.coins;
+      s.gems += got.gems;
     });
     return got;
   },
+  buyCosmetic: (id) => {
+    const c = cosmeticById(id);
+    let ok = false;
+    get().update((s) => {
+      if (!c || s.wardrobe.owned.includes(id) || s.coins < c.price) return;
+      s.coins -= c.price;
+      s.wardrobe.owned.push(id);
+      s.wardrobe[c.kind] = id;
+      ok = true;
+    });
+    return ok;
+  },
+  equipCosmetic: (id) =>
+    get().update((s) => {
+      const c = cosmeticById(id);
+      if (c && s.wardrobe.owned.includes(id)) s.wardrobe[c.kind] = id;
+    }),
   claimMission: (m, period) => {
-    let got = 0;
+    const got: Wallet = { coins: 0, gems: 0 };
     get().update((s) => {
       const p = s.progress;
       ensurePeriods(p);
@@ -372,8 +420,10 @@ export const useStore = create<Store>((set, get) => ({
       const list = period === 'daily' ? p.daily.claimed : period === 'weekly' ? p.weekly.claimed : period === 'normal' ? p.normalClaimed : p.achvClaimed;
       if (list.includes(m.id) || missionValue(p, m, period, ext) < m.target) return;
       list.push(m.id);
-      s.coins += m.reward;
-      got = m.reward;
+      got.coins = m.reward;
+      got.gems = missionGems(m.reward);
+      s.coins += got.coins;
+      s.gems += got.gems;
     });
     return got;
   },
@@ -382,12 +432,12 @@ export const useStore = create<Store>((set, get) => ({
       bump(s.progress, { packs: 1, premiumPacks: premium ? 1 : 0 });
     }),
   recordBattle: (o, st) => {
-    let res: BattleRewardResult = { lines: [], total: 0, exp: 0, levelBefore: 1, expBefore: 0, levelUps: [], levelCoins: 0 };
+    let res: BattleRewardResult = { lines: [], total: 0, gems: 0, levelGems: 0, exp: 0, levelBefore: 1, expBefore: 0, levelUps: [], levelCoins: 0 };
     get().update((s) => {
       const p = s.progress;
       ensurePeriods(p);
       const r = battleReward(p, o);
-      res = { ...r, levelBefore: p.level, expBefore: p.exp, levelUps: [], levelCoins: 0 };
+      res = { ...r, levelGems: 0, levelBefore: p.level, expBefore: p.exp, levelUps: [], levelCoins: 0 };
       bump(p, {
         ...st,
         battles: 1,
@@ -407,7 +457,9 @@ export const useStore = create<Store>((set, get) => ({
       const ups = addExp(p, r.exp);
       res.levelUps = ups;
       res.levelCoins = ups.reduce((n, l) => n + levelReward(l), 0);
+      res.levelGems = ups.reduce((n, l) => n + levelGems(l), 0);
       s.coins += r.total + res.levelCoins;
+      s.gems += r.gems + res.levelGems;
     });
     return res;
   },

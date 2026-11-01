@@ -30,6 +30,7 @@ export const TAB_OF: Partial<Record<Screen, Tab>> = {
   settings: 'more',
   rules: 'more',
   credits: 'more',
+  wardrobe: 'more',
 };
 
 export function TabBar({ screen }: { screen: Screen }) {

@@ -142,6 +142,19 @@ export function addExp(p: Progress, amount: number): number[] {
 // Login bonus (7-day cycle; the cycle advances on each day you log in)
 // ---------------------------------------------------------------------------
 export const LOGIN_REWARDS = [60, 80, 100, 120, 150, 200, 450];
+/** gems with each day of the login cycle */
+export const LOGIN_GEMS = [10, 10, 15, 15, 20, 30, 100];
+
+// ---------------------------------------------------------------------------
+// Gems (ジェム) buy packs; coins (コイン) buy looks. Gems are earned, never sold:
+//   first clear of a rival / story episode, first win of the day, missions,
+//   the login cycle and level-ups. Tune the numbers here.
+// ---------------------------------------------------------------------------
+export const GEM_FIRST_CLEAR: Record<Difficulty, number> = { easy: 40, normal: 60, hard: 100 };
+export const GEM_DAILY_WIN = 10;
+/** a mission's gems follow its coin reward (about a third, in fives) */
+export const missionGems = (reward: number) => Math.max(5, Math.round(reward / 3 / 5) * 5);
+export const levelGems = (level: number) => (level % 5 === 0 ? 50 : 20);
 export const canClaimLogin = (p: Progress) => p.loginDay !== dayKey();
 export const loginSlot = (p: Progress) => p.loginCount % 7;
 
@@ -160,24 +173,25 @@ export interface BattleOutcome {
 export interface RewardLine {
   label: string;
   coins: number;
+  gems?: number;
 }
 
-export function battleReward(p: Progress, o: BattleOutcome): { lines: RewardLine[]; total: number; exp: number } {
+export function battleReward(p: Progress, o: BattleOutcome): { lines: RewardLine[]; total: number; gems: number; exp: number } {
   const lines: RewardLine[] = [];
   if (o.win) {
     lines.push({ label: '勝利報酬', coins: o.baseReward });
     if (o.prizesTaken) lines.push({ label: `サイド獲得 ×${o.prizesTaken}`, coins: o.prizesTaken * 5 });
     if (o.prizesLost === 0) lines.push({ label: 'パーフェクト勝利', coins: Math.round(o.baseReward * 0.3) });
     if (p.streak >= 1) lines.push({ label: `${p.streak + 1}連勝ボーナス`, coins: Math.round(o.baseReward * Math.min(0.5, p.streak * 0.1)) });
-    if (p.lastWinDay !== dayKey()) lines.push({ label: '本日の初勝利', coins: 100 });
-    if (o.firstClear) lines.push({ label: '強敵 初撃破', coins: 200 });
+    if (p.lastWinDay !== dayKey()) lines.push({ label: '本日の初勝利', coins: 100, gems: GEM_DAILY_WIN });
+    if (o.firstClear) lines.push({ label: '初回クリアボーナス', coins: 200, gems: GEM_FIRST_CLEAR[o.level] });
   } else {
     lines.push({ label: '参加報酬', coins: Math.round(o.baseReward * 0.2) });
     if (o.prizesTaken) lines.push({ label: `サイド獲得 ×${o.prizesTaken}`, coins: o.prizesTaken * 5 });
   }
   const mult = o.level === 'hard' ? 2 : o.level === 'normal' ? 1.5 : 1;
   const exp = Math.round((o.win ? 100 : 40) * mult + o.prizesTaken * 5);
-  return { lines, total: lines.reduce((n, l) => n + l.coins, 0), exp };
+  return { lines, total: lines.reduce((n, l) => n + l.coins, 0), gems: lines.reduce((n, l) => n + (l.gems ?? 0), 0), exp };
 }
 
 // ---------------------------------------------------------------------------

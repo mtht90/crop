@@ -4,13 +4,15 @@ import { TopBar } from '../ui/TopBar';
 import { Icon } from '../ui/Icon';
 import { artUrl } from '../lib/assets';
 import { foley, playMusic, sfx } from '../audio/audio';
-import { ACHIEVEMENTS, dailyMissions, extCtx, NORMAL_MISSIONS, useStore, weeklyMissions, type Save } from '../state/store';
+import { ACHIEVEMENTS, dailyMissions, extCtx, NORMAL_MISSIONS, useStore, weeklyMissions, type Save, type Wallet } from '../state/store';
 import {
   canClaimLogin,
   ensurePeriods,
   fmtRemain,
+  LOGIN_GEMS,
   LOGIN_REWARDS,
   loginSlot,
+  missionGems,
   missionValue,
   msUntilNextWeek,
   msUntilTomorrow,
@@ -75,7 +77,7 @@ export function Missions() {
   useEffect(() => playMusic('menu'), []);
   const now = useNow();
   const [tab, setTab] = useState<Tab>(() => (canClaimLogin(save.progress) ? 'login' : 'normal'));
-  const [flash, setFlash] = useState<{ id: number; coins: number } | null>(null);
+  const [flash, setFlash] = useState<({ id: number } & Wallet) | null>(null);
 
   const data = useMemo(() => ({ normal: rows(save, 'normal'), daily: rows(save, 'daily'), weekly: rows(save, 'weekly'), achv: rows(save, 'achv') }), [save]);
   const count = (list: Row[]) => list.filter((r) => r.done && !r.claimed).length;
@@ -87,16 +89,21 @@ export function Missions() {
     { id: 'achv', label: '実績', icon: 'trophy', n: count(data.achv) },
   ];
 
-  const give = (coins: number) => {
-    if (!coins) return;
+  const give = (w: Wallet) => {
+    if (!w.coins && !w.gems) return;
     foley.chime(6);
     sfx('gold', 0.6);
-    setFlash({ id: Date.now(), coins });
+    setFlash({ id: Date.now(), ...w });
   };
   const claim = (r: Row) => give(claimMission(r.m, r.period));
   const claimAll = (list: Row[]) => {
-    let sum = 0;
-    for (const r of list) if (r.done && !r.claimed) sum += useStore.getState().claimMission(r.m, r.period);
+    const sum: Wallet = { coins: 0, gems: 0 };
+    for (const r of list)
+      if (r.done && !r.claimed) {
+        const w = useStore.getState().claimMission(r.m, r.period);
+        sum.coins += w.coins;
+        sum.gems += w.gems;
+      }
     give(sum);
   };
 
@@ -168,6 +175,7 @@ export function Missions() {
                         <button className={`ms3-claim ${r.done && !r.claimed ? 'ready' : ''}`} disabled={!r.done || r.claimed} onClick={() => claim(r)}>
                           <span>
                             <Icon name="coin" /> {r.m.reward.toLocaleString()}
+                            <i className="ms3-gem"><Icon name="gem" /> {missionGems(r.m.reward)}</i>
                           </span>
                           <small>{r.claimed ? '受取済み' : r.done ? '受け取る' : '未達成'}</small>
                         </button>
@@ -193,7 +201,8 @@ export function Missions() {
             transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
             onAnimationComplete={() => setTimeout(() => setFlash((f) => (f?.id === flash.id ? null : f)), 900)}
           >
-            <Icon name="coin" /> +{flash.coins.toLocaleString()}
+            {flash.coins > 0 && <><Icon name="coin" /> +{flash.coins.toLocaleString()}</>}
+            {flash.gems > 0 && <span className="flash-gem"><Icon name="gem" /> +{flash.gems.toLocaleString()}</span>}
           </motion.div>
         )}
       </AnimatePresence>
@@ -202,7 +211,7 @@ export function Missions() {
 }
 
 /** 7-day login bonus track. Used on the missions screen and in the home popup. */
-export function LoginTrack({ onClaim, compact }: { onClaim?: (coins: number) => void; compact?: boolean }) {
+export function LoginTrack({ onClaim, compact }: { onClaim?: (w: Wallet) => void; compact?: boolean }) {
   const progress = useStore((s) => s.save.progress);
   const claimLogin = useStore((s) => s.claimLogin);
   const now = useNow(30000);
@@ -229,6 +238,7 @@ export function LoginTrack({ onClaim, compact }: { onClaim?: (coins: number) => 
                 <Icon name={i === 6 ? 'chest' : 'coin'} />
               </div>
               <div className="c">{c}</div>
+              <div className="g"><Icon name="gem" /> {LOGIN_GEMS[i]}</div>
               {got && (
                 <div className="stamp">
                   <Icon name="check" />
@@ -248,7 +258,7 @@ export function LoginTrack({ onClaim, compact }: { onClaim?: (coins: number) => 
             onClaim?.(got);
           }}
         >
-          {can ? `${LOGIN_REWARDS[today]} コインを受け取る` : '本日は受け取り済み'}
+          {can ? `${LOGIN_REWARDS[today]} コイン・${LOGIN_GEMS[today]} ジェムを受け取る` : '本日は受け取り済み'}
         </button>
       </div>
     </div>

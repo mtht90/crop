@@ -59,6 +59,7 @@
   border-radius: 6% / 4.3%;
   /* the same back as everywhere else (a small light copy for piles, prizes and the opponent's hand) */
   background: #0b0d11 var(--card-back) center / cover no-repeat;
+  filter: var(--back-filter, none);
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
 }
 

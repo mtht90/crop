@@ -6,6 +6,7 @@ import { sfx } from '../audio/audio';
 export function TopBar({ title, back = null, right }: { title: string; back?: Screen | null; right?: React.ReactNode }) {
   const go = useStore((s) => s.go);
   const coins = useStore((s) => s.save.coins);
+  const gems = useStore((s) => s.save.gems);
   return (
     <header className="page-head">
       {back && (
@@ -23,6 +24,9 @@ export function TopBar({ title, back = null, right }: { title: string; back?: Sc
       <h1 className="page-title">{title}</h1>
       <div className="page-head-right">
         {right}
+        <span className="coin-chip gem-chip">
+          <Icon name="gem" /> {gems.toLocaleString()}
+        </span>
         <span className="coin-chip">
           <Icon name="coin" /> {coins.toLocaleString()}
         </span>

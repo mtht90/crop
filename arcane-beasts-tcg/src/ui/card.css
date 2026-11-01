@@ -630,7 +630,7 @@
 /* ---------------------------------- Back --------------------------------- */
 /* the back is a single painting: a silver compass star on black */
 .tcg-back .tcg-frame { background: #0b0d11; padding: 0; overflow: hidden; }
-.back-art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; -webkit-user-drag: none; }
+.back-art { filter: var(--back-filter, none); position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; -webkit-user-drag: none; }
 .back-sheen {
   position: absolute;
   inset: 0;

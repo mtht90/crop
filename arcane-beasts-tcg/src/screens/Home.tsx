@@ -8,7 +8,7 @@ import { LoginTrack } from './Missions';
 import { artUrl } from '../lib/assets';
 import { Icon } from '../ui/Icon';
 import { foley, playMusic, sfx } from '../audio/audio';
-import type { Screen } from '../state/store';
+import type { Screen, Wallet } from '../state/store';
 
 interface TileDef {
   to: Screen;
@@ -66,6 +66,9 @@ export function Home() {
                 <div style={{ transform: `scaleX(${p.exp / expToNext(p.level)})` }} />
               </div>
             </div>
+            <span className="coin-chip gem-chip">
+              <Icon name="gem" /> {save.gems.toLocaleString()}
+            </span>
             <span className="coin-chip">
               <Icon name="coin" /> {save.coins.toLocaleString()}
             </span>
@@ -142,7 +145,7 @@ export function Home() {
 }
 
 function LoginModal({ onClose }: { onClose: () => void }) {
-  const [got, setGot] = useState(0);
+  const [got, setGot] = useState<Wallet | null>(null);
   return (
     <motion.div className="login-modal-back" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }}>
       <motion.div
@@ -157,11 +160,11 @@ function LoginModal({ onClose }: { onClose: () => void }) {
           <Icon name="close" />
         </button>
         <h2>ログインボーナス</h2>
-        <div className="sub">{got ? `${got} コインを受け取りました` : '7日目は大きな報酬がもらえます'}</div>
+        <div className="sub">{got ? `${got.coins} コイン・${got.gems} ジェムを受け取りました` : '7日目は大きな報酬がもらえます'}</div>
         <LoginTrack
           compact
           onClaim={(c) => {
-            if (!c) return;
+            if (!c.coins && !c.gems) return;
             setGot(c);
             foley.chime(6);
             sfx('gold', 0.6);
