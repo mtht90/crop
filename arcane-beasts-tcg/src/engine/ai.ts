@@ -246,13 +246,210 @@ function simulate(g: Game, p: 0 | 1, a: Action): number {
   return evaluate(f.s, p);
 }
 
-export function chooseAction(g: Game, p: 0 | 1, level: Difficulty = 'normal', actionsThisTurn = 0): Action {
+// ----------------------------------------------------------------------------
+// Strength levels
+//   Difficulty (かんたん / ふつう / むずかしい) is what the story rivals use;
+//   CPU対戦 uses numbered levels 1–9. A level is a profile:
+//     noise / skip / badAttack / slip   how often it errs (low levels)
+//     depth / width / budgetMs          how far it plans its own turn (high levels)
+//     threat                            how much it fears the reply it is leaving open
+//   The CPU never looks at the hand of the human player: its idea of the reply is
+//   what the board alone allows (an attack that is one energy short is assumed to
+//   get that energy).
+// ----------------------------------------------------------------------------
+export type CpuLevel = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
+export type AiLevel = Difficulty | number;
+
+export interface AiProfile {
+  noise: number;
+  skip: number;
+  badAttack: number;
+  slip: number;
+  depth: number;
+  width: number;
+  threat: number;
+  /** how many imagined replies of the opponent it plays out per way of ending its turn */
+  replies: number;
+  budgetMs: number;
+}
+
+export const PROFILES: Record<CpuLevel, AiProfile> = {
+  1: { noise: 45, skip: 0.3, badAttack: 0.35, slip: 0.35, depth: 0, width: 0, threat: 0, replies: 0, budgetMs: 0 },
+  2: { noise: 30, skip: 0.2, badAttack: 0.2, slip: 0.22, depth: 0, width: 0, threat: 0, replies: 0, budgetMs: 0 },
+  3: { noise: 20, skip: 0.12, badAttack: 0.1, slip: 0.12, depth: 0, width: 0, threat: 0, replies: 0, budgetMs: 0 },
+  4: { noise: 12, skip: 0.06, badAttack: 0.05, slip: 0.06, depth: 0, width: 0, threat: 0, replies: 0, budgetMs: 0 },
+  5: { noise: 5, skip: 0, badAttack: 0, slip: 0, depth: 0, width: 0, threat: 0, replies: 0, budgetMs: 0 },
+  6: { noise: 0, skip: 0, badAttack: 0, slip: 0, depth: 1, width: 4, threat: 0.8, replies: 0, budgetMs: 250 },
+  7: { noise: 0, skip: 0, badAttack: 0, slip: 0, depth: 2, width: 5, threat: 1, replies: 0, budgetMs: 450 },
+  8: { noise: 0, skip: 0, badAttack: 0, slip: 0, depth: 2, width: 5, threat: 0.5, replies: 1, budgetMs: 500 },
+  9: { noise: 0, skip: 0, badAttack: 0, slip: 0, depth: 3, width: 6, threat: 0.4, replies: 2, budgetMs: 900 },
+};
+
+export const CPU_LEVELS: { level: CpuLevel; name: string; blurb: string }[] = [
+  { level: 1, name: 'はじめて', blurb: 'ルールを覚えたてのCPU。よく手を間違える' },
+  { level: 2, name: 'みならい', blurb: 'ときどき良い手を見逃す' },
+  { level: 3, name: 'ふつう', blurb: '基本はおさえている' },
+  { level: 4, name: 'なれた人', blurb: 'ほとんど間違えない' },
+  { level: 5, name: 'ベテラン', blurb: '目の前の最善手を選ぶ' },
+  { level: 6, name: '上級', blurb: '相手の反撃を考えて攻撃を選ぶ' },
+  { level: 7, name: '達人', blurb: '1ターンの手順を先読みする' },
+  { level: 8, name: '名人', blurb: '手順と反撃を深く読む' },
+  { level: 9, name: '伝説', blurb: 'トッププレイヤーでも負けることがある' },
+];
+
+/** the profile for a story difficulty or a CPU level */
+export function profileOf(level: AiLevel): AiProfile {
+  const n = typeof level === 'number' ? level : level === 'easy' ? 2 : level === 'normal' ? 5 : 6;
+  return PROFILES[Math.max(1, Math.min(9, Math.round(n))) as CpuLevel];
+}
+
+/** what the board alone says the opponent can do to my active monster after my turn */
+function threatPenalty(s: GameState, p: 0 | 1, weight: number): number {
+  if (s.phase === 'over' || weight <= 0) return 0;
+  const o = other(p);
+  const me = s.players[p].active;
+  const them = s.players[o].active;
+  if (!me || !them) return 0;
+  const tm = topCard(them);
+  const units = energyCount(them);
+  // an attack one energy short is assumed to be paid (the opponent attaches this turn)
+  let dmg = 0;
+  for (const a of tm.attacks) if (a.cost.length <= units + 1) dmg = Math.max(dmg, a.damage ?? 20);
+  if (topCard(me).weakness === tm.type) dmg *= 2;
+  const left = hpLeft(s, me);
+  let pen = 0;
+  if (dmg >= left) {
+    pen += 130 * prizeValue(topCard(me));
+    // nothing to promote: losing the active may lose the game
+    if (!s.players[p].bench.length) pen += 600;
+  } else {
+    pen += (dmg / left) * 25;
+  }
+  return pen * weight;
+}
+
+const isTerminal = (a: Action) => a.t === 'attack' || a.t === 'endTurn';
+
+/** apply an action on a copy, answering the follow-up prompts with the heuristics */
+function step(g: Game, p: 0 | 1, a: Action): Game | null {
+  const f = g.fork();
+  try {
+    f.answer({ type: 'action', action: a });
+    runUntilBack(f, p);
+  } catch {
+    return null;
+  }
+  return f;
+}
+
+/**
+ * Imagine the opponent's turn: what it holds is not known, so its hand and deck are
+ * shuffled together (it keeps as many cards in hand as it has) and it then plays
+ * its turn the way a level-5 CPU would.
+ */
+function imagineReply(after: Game, p: 0 | 1): number {
+  const f = after.fork();
+  const o = other(p);
+  const pl = f.s.players[o];
+  const pool = [...pl.hand, ...pl.deck];
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  const n = pl.hand.length;
+  pl.hand = pool.slice(0, n);
+  pl.deck = pool.slice(n);
+  let guard = 0;
+  let actions = 0;
+  try {
+    while (f.pending && f.s.phase !== 'over' && guard++ < 120) {
+      const pr = f.pending;
+      if (pr.type === 'action' && pr.player === p) break; // my turn again
+      if (pr.type === 'action') actions++;
+      f.answer(aiAnswer(f, 5, actions));
+    }
+  } catch {
+    /* an odd state: judge it where it stands */
+  }
+  return evaluate(f.s, p);
+}
+
+/** the value of ending my turn this way */
+function finishValue(g: Game, p: 0 | 1, a: Action, prof: AiProfile): number {
+  const f = step(g, p, a);
+  if (!f) return -Infinity;
+  let v = evaluate(f.s, p) - threatPenalty(f.s, p, prof.threat);
+  if (prof.replies > 0 && f.s.phase !== 'over') {
+    let sum = 0;
+    for (let k = 0; k < prof.replies; k++) sum += imagineReply(f, p);
+    v += sum / prof.replies - evaluate(f.s, p);
+  }
+  return v;
+}
+
+interface Found {
+  v: number;
+  a: Action;
+}
+
+/** best way to play out the rest of my turn, `depth` more setup actions deep */
+function search(g: Game, p: 0 | 1, depth: number, prof: AiProfile, deadline: number): Found | null {
+  const legal = g.legalActions(p);
+  let best: Found = { v: -Infinity, a: { t: 'endTurn' } };
+  for (const a of legal) {
+    if (!isTerminal(a)) continue;
+    const v = finishValue(g, p, a, prof);
+    if (v > best.v) best = { v, a };
+    if (Date.now() > deadline) return null;
+  }
+  if (depth <= 0) return best;
+  const next: { a: Action; f: Game; v: number }[] = [];
+  for (const a of legal) {
+    if (isTerminal(a)) continue;
+    const f = step(g, p, a);
+    if (!f || f.s.phase === 'over' || !f.pending || f.pending.type !== 'action' || f.pending.player !== p) continue;
+    next.push({ a, f, v: evaluate(f.s, p) });
+    if (Date.now() > deadline) return null;
+  }
+  next.sort((x, y) => y.v - x.v);
+  for (const n of next.slice(0, prof.width)) {
+    const r = search(n.f, p, depth - 1, prof, deadline);
+    if (!r) return null;
+    // a setup move has to be worth more than simply finishing now
+    if (r.v > best.v + 0.5) best = { v: r.v, a: n.a };
+  }
+  return best;
+}
+
+/** plan my turn deeper and deeper until the time is up; keep the last full answer */
+function plan(g: Game, p: 0 | 1, prof: AiProfile): Action {
+  const deadline = Date.now() + prof.budgetMs;
+  let best: Action | null = null;
+  for (let d = 0; d <= prof.depth; d++) {
+    const r = search(g, p, d, prof, deadline);
+    if (!r) break;
+    best = r.a;
+  }
+  return best ?? { t: 'endTurn' };
+}
+
+function randomOf<T>(xs: T[]): T {
+  return xs[Math.floor(Math.random() * xs.length)];
+}
+
+export function chooseAction(g: Game, p: 0 | 1, level: AiLevel = 'normal', actionsThisTurn = 0): Action {
   const legal = g.legalActions(p);
   if (legal.length <= 1 || actionsThisTurn > 40) return { t: 'endTurn' };
-  const base = evaluate(g.s, p);
-  const noise = level === 'easy' ? 25 : level === 'normal' ? 5 : 0;
+  const prof = profileOf(level);
+  if (prof.depth > 0) return plan(g, p, prof);
 
-  // Retreat actions: only consider one per bench target (auto discard)
+  const base = evaluate(g.s, p);
+  // the low levels sometimes just attack with whatever they can
+  if (prof.badAttack > 0 && Math.random() < prof.badAttack) {
+    const atks = legal.filter((a) => a.t === 'attack');
+    if (atks.length) return randomOf(atks);
+  }
+
   let best: Action = { t: 'endTurn' };
   let bestV = -Infinity;
   const attacks: Action[] = [];
@@ -262,9 +459,8 @@ export function chooseAction(g: Game, p: 0 | 1, level: Difficulty = 'normal', ac
       attacks.push(a);
       continue;
     }
-    // Easy CPU skips some good plays
-    if (level === 'easy' && Math.random() < 0.1) continue;
-    const v = simulate(g, p, a) + (Math.random() - 0.5) * noise;
+    if (prof.skip > 0 && Math.random() < prof.skip) continue;
+    const v = simulate(g, p, a) + (Math.random() - 0.5) * prof.noise;
     if (v > bestV) {
       bestV = v;
       best = a;
@@ -277,7 +473,7 @@ export function chooseAction(g: Game, p: 0 | 1, level: Difficulty = 'normal', ac
   let atkBest: Action = { t: 'endTurn' };
   let atkV = simulate(g, p, { t: 'endTurn' });
   for (const a of attacks) {
-    const v = simulate(g, p, a) + (Math.random() - 0.5) * noise;
+    const v = simulate(g, p, a) + (Math.random() - 0.5) * prof.noise;
     if (v > atkV - 1) {
       atkV = v;
       atkBest = a;
@@ -286,8 +482,18 @@ export function chooseAction(g: Game, p: 0 | 1, level: Difficulty = 'normal', ac
   return atkBest;
 }
 
-export function aiAnswer(g: Game, level: Difficulty = 'normal', actionsThisTurn = 0): Answer {
+export function aiAnswer(g: Game, level: AiLevel = 'normal', actionsThisTurn = 0): Answer {
   const pr = g.pending!;
   if (pr.type === 'action') return { type: 'action', action: chooseAction(g, pr.player, level, actionsThisTurn) };
+  const prof = profileOf(level);
+  // a beginner sometimes picks a target at random
+  if (prof.slip > 0 && Math.random() < prof.slip) {
+    if (pr.type === 'slot' && pr.options.length) return { type: 'slot', pos: randomOf(pr.options) };
+    if (pr.type === 'cards' && pr.max > 0) {
+      const ok = pr.cards.filter((c) => pr.selectable.includes(c.uid)).map((c) => c.uid);
+      const n = Math.min(ok.length, Math.max(pr.min, 1));
+      return { type: 'cards', uids: [...ok].sort(() => Math.random() - 0.5).slice(0, n) };
+    }
+  }
   return heuristicAnswer(g, pr);
 }

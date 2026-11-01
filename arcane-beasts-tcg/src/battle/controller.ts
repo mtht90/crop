@@ -3,7 +3,7 @@
 // dispatches FX, runs the CPU, and exposes human prompts to the UI.
 // ============================================================================
 import { create } from 'zustand';
-import { aiAnswer, type Difficulty } from '../engine/ai';
+import { aiAnswer, type AiLevel } from '../engine/ai';
 import { card } from '../engine/cards';
 import { Game, slotAt, topCard } from '../engine/game';
 import type { Action, Answer, Frame, GameEvent, GameState, MonsterCard, Prompt } from '../engine/types';
@@ -268,13 +268,13 @@ export abstract class FramePlayer {
 
 export class BattleController extends FramePlayer implements BattleDriver {
   game: Game;
-  level: Difficulty;
+  level: AiLevel;
   autoHuman = false;
   private running = false;
   private actionsThisTurn = 0;
   private lastTurn = 0;
 
-  constructor(decks: [string[], string[]], names: [string, string], level: Difficulty) {
+  constructor(decks: [string[], string[]], names: [string, string], level: AiLevel) {
     super();
     this.game = Game.create(decks, names, (Math.random() * 2 ** 31) | 0, { record: true });
     this.level = level;

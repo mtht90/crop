@@ -445,7 +445,7 @@ export function Credits() {
           <p>ポートレート・背景画は Wesnoth アートチームによるものです。音楽：Aleksi Aubry-Carlson、Timothy Pinkham、Doug Kaufman、Mattias Westlund、Stephen Rozanc、Gianmarco Leone。</p>
           <h2>アイコン</h2>
           <p>
-            <a href="https://game-icons.net/" target="_blank" rel="noreferrer">game-icons.net</a>（Lorc、Delapouite ほか）— CC BY 3.0
+            <a href="https://game-icons.net/" target="_blank" rel="noreferrer">game-icons.net</a>（Lorc、Delapouite ほか）— CC BY 3.0 ／ コインとジェムの絵は <a href="https://github.com/googlefonts/noto-emoji" target="_blank" rel="noreferrer">Noto Emoji</a>（Google）— Apache 2.0
           </p>
           <h2>フォント</h2>
           <p>Dela Gothic One、M PLUS Rounded 1c、M PLUS 1p、Cinzel — SIL Open Font License 1.1</p>

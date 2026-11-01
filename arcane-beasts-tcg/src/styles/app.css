@@ -523,9 +523,9 @@
 
 /* ジェム */
 .gem-chip { color: #8fe3ff; }
-.gem-chip svg { color: #7ad8ff; filter: drop-shadow(0 0 4px rgba(120, 216, 255, 0.55)); }
+.gem-chip .money { filter: drop-shadow(0 0 4px rgba(120, 216, 255, 0.6)); }
+.coin-chip .money-coin { filter: drop-shadow(0 0 3px rgba(255, 200, 80, 0.5)); }
 .rl-gem, .flash-gem, .ms3-gem { display: inline-flex; align-items: center; gap: 3px; margin-left: 10px; color: #8fe3ff; font-style: normal; }
-.rl-gem svg, .flash-gem svg, .ms3-gem svg { color: #7ad8ff; }
 .ms3-gem { margin-left: 8px; font-size: 0.85em; }
 .login-day .g { font-size: 10px; color: #8fe3ff; display: flex; align-items: center; gap: 2px; justify-content: center; }
 
@@ -551,3 +551,35 @@
 .wd-tab-mat { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
 .wd-tab-mat .wd-thumb { height: 92px; }
 .wd-tab-title .wd-thumb { height: 56px; }
+
+/* coins and gems: a little sparkle crossing the chip every few seconds */
+.coin-chip { position: relative; overflow: hidden; }
+.coin-chip::after { content: ''; position: absolute; inset: 0; background: linear-gradient(105deg, transparent 40%, rgba(255, 255, 255, 0.35) 50%, transparent 60%); background-size: 250% 100%; background-position: 140% 0; animation: chip-glint 6s ease-in-out infinite; pointer-events: none; }
+.gem-chip::after { animation-delay: 3s; }
+@keyframes chip-glint { 0%, 70% { background-position: 140% 0; } 100% { background-position: -60% 0; } }
+@media (prefers-reduced-motion: reduce) { .coin-chip::after { animation: none; } }
+
+/* money pictures a little larger where they are the point */
+.coin-chip .money { width: 1.45em !important; height: 1.45em !important; margin: -0.2em 0; }
+.login-day .ico .money { width: 30px !important; height: 30px !important; }
+.login-day .g .money { width: 14px !important; height: 14px !important; }
+.pill .money { width: 1.35em !important; height: 1.35em !important; }
+.rl-gem .money, .flash-gem .money, .coin-flash .money, .reward-total .money { width: 1.4em !important; height: 1.4em !important; }
+.wd-item small .money { width: 1.3em !important; height: 1.3em !important; }
+
+/* CPU対戦 */
+.cpu3-levels { display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 6px; }
+.cpu3-lv { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 2px 8px; border-radius: 10px; border: 2px solid rgba(255, 255, 255, 0.14); background: rgba(10, 16, 40, 0.7); color: #fff; font-family: inherit; cursor: pointer; min-width: 0; }
+.cpu3-lv b { font-size: var(--fs-m); font-family: var(--font-display); }
+.cpu3-lv small { font-size: 10px; color: var(--ink-dim); white-space: nowrap; }
+.cpu3-lv.on { border-color: var(--gold); box-shadow: 0 0 14px rgba(232, 197, 103, 0.5); background: rgba(70, 52, 10, 0.55); }
+.cpu3-lv .cleared { position: absolute; top: -6px; right: -4px; font-size: 8px; font-weight: 900; padding: 1px 4px; border-radius: 6px; background: #1f9d55; color: #fff; }
+.cpu3-lv.lv-7 b, .cpu3-lv.lv-8 b { color: #ffb36c; }
+.cpu3-lv.lv-9 b { color: #ff7a9c; text-shadow: 0 0 10px rgba(255, 90, 140, 0.7); }
+.cpu3-detail { display: flex; gap: 16px; align-items: center; padding: 14px 16px; }
+.cpu3-por { width: 92px; height: 92px; border-radius: 50%; object-fit: cover; object-position: top; border: 3px solid var(--gold); flex: none; }
+.cpu3-info { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.cpu3-info h2 { margin: 0; }
+.cpu3-info p { margin: 0; color: var(--ink-dim); font-size: var(--fs-s); }
+.cpu3-note { margin: 0; }
+@media (max-width: 560px) { .cpu3-levels { grid-template-columns: repeat(5, minmax(0, 1fr)); } }

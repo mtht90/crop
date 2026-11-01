@@ -45,6 +45,7 @@ function debugBattle() {
     oppName: rival.name,
     oppPortrait: rival.portrait,
     level: rival.level,
+    cpuLevel: q.has('cpu') ? Number(q.get('cpu')) : undefined,
     scene: rival.scene,
     reward: rival.reward,
     spectate: q.has('auto'),

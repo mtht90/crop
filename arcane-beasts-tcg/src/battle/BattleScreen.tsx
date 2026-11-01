@@ -817,7 +817,7 @@ export function BattleScreen() {
 
   // lifecycle
   useEffect(() => {
-    const ctrl: BattleDriver = cfg.online ? new OnlineController(cfg.online) : new BattleController([cfg.playerDeck, cfg.oppDeck], ['あなた', cfg.oppName], cfg.level);
+    const ctrl: BattleDriver = cfg.online ? new OnlineController(cfg.online) : new BattleController([cfg.playerDeck, cfg.oppDeck], ['あなた', cfg.oppName], cfg.cpuLevel ?? cfg.level);
     ctrl.speed = settings.speed;
     ctrl.autoHuman = !!cfg.spectate && !cfg.online;
     ctrlRef.current = ctrl;

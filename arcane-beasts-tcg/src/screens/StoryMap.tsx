@@ -105,7 +105,7 @@ export function StoryMap() {
             デッキ変更
           </button>
           <button className="btn small ghost" onClick={() => go('rivals')}>
-            フリー対戦
+            CPU対戦
           </button>
           <button className="btn small ghost" onClick={() => setCreating({ then: () => {} })}>
             主人公

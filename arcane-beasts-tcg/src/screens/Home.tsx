@@ -85,7 +85,7 @@ export function Home() {
                 <Icon name="swords" />
               </div>
               <h2>バトル</h2>
-              <p>{save.story.started ? `ストーリー ${episodeLabel(nextCh)}「${nextCh.title}」` : 'ストーリー・強敵・オンライン対戦'}</p>
+              <p>{save.story.started ? `ストーリー ${episodeLabel(nextCh)}「${nextCh.title}」` : 'ストーリー・CPU対戦・オンライン対戦'}</p>
             </div>
           </motion.div>
 

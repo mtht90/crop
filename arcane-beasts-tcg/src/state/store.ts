@@ -80,6 +80,8 @@ export interface Save {
   decks: SavedDeck[];
   activeDeck: string;
   beaten: string[];
+  /** CPU対戦 levels already beaten once (first wins pay gems) */
+  cpuBeaten?: number[];
   wins: number;
   losses: number;
   packsOpened: number;
@@ -120,6 +122,8 @@ export interface BattleConfig {
   oppName: string;
   oppPortrait: string;
   level: Difficulty;
+  /** CPU対戦: the CPU's strength, 1–9 (the thinking uses it; `level` is only the tier for rewards) */
+  cpuLevel?: number;
   scene: string;
   reward: number;
   spectate?: boolean;

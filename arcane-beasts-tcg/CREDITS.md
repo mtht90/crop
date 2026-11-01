@@ -619,3 +619,8 @@ licensed under [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/), via `@
 - Dela Gothic One — SIL Open Font License 1.1 (via @fontsource)
 - M PLUS Rounded 1c / M PLUS 1p — SIL Open Font License 1.1 (via @fontsource)
 - Cinzel — SIL Open Font License 1.1 (via @fontsource)
+
+## Noto Emoji (coin and gem pictures)
+
+`public/assets/ui/coin.svg` and `gem.svg` are from [Noto Emoji](https://github.com/googlefonts/noto-emoji)
+(Google), licensed under the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0), via Iconify.

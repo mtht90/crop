@@ -44,7 +44,7 @@ export function Arena() {
       icon: 'book',
       badge: save.story.started ? undefined : 'NEW',
     },
-    { to: 'rivals', title: 'フリー対戦', sub: `強敵とバトル（${save.beaten.length}/${RIVALS.length} 撃破）`, bg: 'story/p-mountains', fig: 'humans/duelist', icon: 'swords' },
+    { to: 'rivals', title: 'CPU対戦', sub: `レベル1〜9から選んで対戦（${(save.cpuBeaten ?? []).length}/9 勝利）`, bg: 'story/p-mountains', fig: 'humans/duelist', icon: 'swords' },
     {
       to: 'lobby',
       title: 'オンライン対戦',

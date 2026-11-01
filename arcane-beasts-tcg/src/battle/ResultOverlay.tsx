@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
-import { claimableCount, expToNext, levelGems, levelReward, bump } from '../state/progress';
+import { claimableCount, CPU_FIRST_GEMS, expToNext, levelGems, levelReward, bump } from '../state/progress';
 import { extCtx, useStore, type BattleRewardResult } from '../state/store';
 import { useBattle } from './controller';
 import { artUrl } from '../lib/assets';
@@ -58,10 +58,21 @@ export function ResultOverlay() {
     const before = claimableCount(useStore.getState().save.progress, extCtx(useStore.getState().save));
     const st = useBattle.getState().stats;
     if (cfg.story && win) useStore.getState().clearChapter(cfg.story.chapterId);
-    const firstClear = win && !!cfg.rival && !useStore.getState().save.beaten.includes(cfg.rival.id);
-    if (firstClear) update((s) => void s.beaten.push(cfg.rival!.id));
+    const sv = useStore.getState().save;
+    const cpu = cfg.cpuLevel && !cfg.rival ? cfg.cpuLevel : 0;
+    const firstClear = win && ((!!cfg.rival && !sv.beaten.includes(cfg.rival.id)) || (!!cpu && !(sv.cpuBeaten ?? []).includes(cpu)));
+    if (firstClear && cfg.rival) update((s) => void s.beaten.push(cfg.rival!.id));
+    if (firstClear && cpu) update((s) => void (s.cpuBeaten = [...(s.cpuBeaten ?? []), cpu]));
     const r = recordBattle(
-      { win, level: cfg.level, baseReward: cfg.reward, prizesTaken: st.prizes, prizesLost: st.prizesLost, firstClear },
+      {
+        win,
+        level: cfg.level,
+        baseReward: cfg.reward,
+        prizesTaken: st.prizes,
+        prizesLost: st.prizesLost,
+        firstClear,
+        ...(cpu ? { firstClearGems: CPU_FIRST_GEMS[cpu - 1], firstClearLabel: `CPUレベル${cpu} 初勝利` } : {}),
+      },
       { kos: st.kos, damage: st.damage, prizes: st.prizes, evolves: st.evolves, trainers: st.trainers },
     );
     setRes(r);

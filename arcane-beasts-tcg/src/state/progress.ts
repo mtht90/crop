@@ -155,6 +155,16 @@ export const GEM_DAILY_WIN = 10;
 /** a mission's gems follow its coin reward (about a third, in fives) */
 export const missionGems = (reward: number) => Math.max(5, Math.round(reward / 3 / 5) * 5);
 export const levelGems = (level: number) => (level % 5 === 0 ? 50 : 20);
+
+// ---------------------------------------------------------------------------
+// CPU対戦 (levels 1–9)
+// ---------------------------------------------------------------------------
+/** coins for a win, by level */
+export const CPU_REWARD = [60, 80, 100, 130, 170, 220, 280, 360, 480];
+/** gems for the first win at each level */
+export const CPU_FIRST_GEMS = [20, 20, 30, 30, 40, 50, 60, 80, 150];
+/** the difficulty tier a level counts as (rewards, missions) */
+export const cpuTier = (level: number): Difficulty => (level <= 3 ? 'easy' : level <= 6 ? 'normal' : 'hard');
 export const canClaimLogin = (p: Progress) => p.loginDay !== dayKey();
 export const loginSlot = (p: Progress) => p.loginCount % 7;
 
@@ -168,6 +178,9 @@ export interface BattleOutcome {
   prizesTaken: number;
   prizesLost: number;
   firstClear: boolean;
+  /** gems and name of a first clear that is not a rival's (CPU対戦 levels) */
+  firstClearGems?: number;
+  firstClearLabel?: string;
 }
 
 export interface RewardLine {
@@ -184,7 +197,7 @@ export function battleReward(p: Progress, o: BattleOutcome): { lines: RewardLine
     if (o.prizesLost === 0) lines.push({ label: 'パーフェクト勝利', coins: Math.round(o.baseReward * 0.3) });
     if (p.streak >= 1) lines.push({ label: `${p.streak + 1}連勝ボーナス`, coins: Math.round(o.baseReward * Math.min(0.5, p.streak * 0.1)) });
     if (p.lastWinDay !== dayKey()) lines.push({ label: '本日の初勝利', coins: 100, gems: GEM_DAILY_WIN });
-    if (o.firstClear) lines.push({ label: '初回クリアボーナス', coins: 200, gems: GEM_FIRST_CLEAR[o.level] });
+    if (o.firstClear) lines.push({ label: o.firstClearLabel ?? '初回クリアボーナス', coins: 200, gems: o.firstClearGems ?? GEM_FIRST_CLEAR[o.level] });
   } else {
     lines.push({ label: '参加報酬', coins: Math.round(o.baseReward * 0.2) });
     if (o.prizesTaken) lines.push({ label: `サイド獲得 ×${o.prizesTaken}`, coins: o.prizesTaken * 5 });
