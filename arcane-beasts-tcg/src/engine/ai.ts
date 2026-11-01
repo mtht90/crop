@@ -255,7 +255,8 @@ function simulate(g: Game, p: 0 | 1, a: Action): number {
 //     threat                            how much it fears the reply it is leaving open
 //   The CPU never looks at the hand of the human player: its idea of the reply is
 //   what the board alone allows (an attack that is one energy short is assumed to
-//   get that energy).
+//   get that energy). `replies` (imagining the opponent's turn on a shuffled hand)
+//   is kept but off: in play-tests it was noisier than the board-only threat.
 // ----------------------------------------------------------------------------
 export type CpuLevel = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 export type AiLevel = Difficulty | number;
@@ -281,8 +282,8 @@ export const PROFILES: Record<CpuLevel, AiProfile> = {
   5: { noise: 5, skip: 0, badAttack: 0, slip: 0, depth: 0, width: 0, threat: 0, replies: 0, budgetMs: 0 },
   6: { noise: 0, skip: 0, badAttack: 0, slip: 0, depth: 1, width: 4, threat: 0.8, replies: 0, budgetMs: 250 },
   7: { noise: 0, skip: 0, badAttack: 0, slip: 0, depth: 2, width: 5, threat: 1, replies: 0, budgetMs: 450 },
-  8: { noise: 0, skip: 0, badAttack: 0, slip: 0, depth: 2, width: 5, threat: 0.5, replies: 1, budgetMs: 500 },
-  9: { noise: 0, skip: 0, badAttack: 0, slip: 0, depth: 3, width: 6, threat: 0.4, replies: 2, budgetMs: 900 },
+  8: { noise: 0, skip: 0, badAttack: 0, slip: 0, depth: 3, width: 6, threat: 1.1, replies: 0, budgetMs: 600 },
+  9: { noise: 0, skip: 0, badAttack: 0, slip: 0, depth: 4, width: 7, threat: 1.2, replies: 0, budgetMs: 900 },
 };
 
 export const CPU_LEVELS: { level: CpuLevel; name: string; blurb: string }[] = [
