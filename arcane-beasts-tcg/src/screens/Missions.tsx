@@ -7,6 +7,7 @@ import { foley, playMusic, sfx } from '../audio/audio';
 import { ACHIEVEMENTS, dailyMissions, extCtx, NORMAL_MISSIONS, useStore, weeklyMissions, type Save, type Wallet } from '../state/store';
 import {
   canClaimLogin,
+  currentEvent,
   ensurePeriods,
   fmtRemain,
   LOGIN_GEMS,
@@ -19,8 +20,8 @@ import {
   type Mission,
 } from '../state/progress';
 
-type Tab = 'login' | 'normal' | 'daily' | 'weekly' | 'achv';
-type Period = 'normal' | 'daily' | 'weekly' | 'achv';
+type Tab = 'login' | 'event' | 'normal' | 'daily' | 'weekly' | 'achv';
+type Period = 'normal' | 'daily' | 'weekly' | 'achv' | 'event';
 
 interface Row {
   m: Mission;
@@ -34,12 +35,15 @@ function rows(save: Save, period: Period): Row[] {
   const p = structuredClone(save.progress);
   ensurePeriods(p);
   const ext = extCtx(save);
-  const list = period === 'daily' ? dailyMissions(p) : period === 'weekly' ? weeklyMissions(p) : period === 'normal' ? NORMAL_MISSIONS : ACHIEVEMENTS;
-  const claimedIds = period === 'daily' ? p.daily.claimed : period === 'weekly' ? p.weekly.claimed : period === 'normal' ? (p.normalClaimed ?? []) : p.achvClaimed;
+  const list =
+    period === 'daily' ? dailyMissions(p) : period === 'weekly' ? weeklyMissions(p) : period === 'normal' ? NORMAL_MISSIONS : period === 'event' ? currentEvent(p).tasks : ACHIEVEMENTS;
+  const claimedIds =
+    period === 'daily' ? p.daily.claimed : period === 'weekly' ? p.weekly.claimed : period === 'normal' ? (p.normalClaimed ?? []) : period === 'event' ? (p.event?.claimed ?? []) : p.achvClaimed;
   let out = list.map((m) => {
     const value = missionValue(p, m, period, ext);
     return { m, period, value, done: value >= m.target, claimed: claimedIds.includes(m.id) };
   });
+  if (period === 'event') return out; // in the event's own order: the all-clear bonus last
   if (period === 'achv') {
     // Only show the lowest unclaimed tier of each achievement line (plus claimed history hidden)
     const seen = new Set<string>();
@@ -79,10 +83,11 @@ export function Missions() {
   const [tab, setTab] = useState<Tab>(() => (canClaimLogin(save.progress) ? 'login' : 'normal'));
   const [flash, setFlash] = useState<({ id: number } & Wallet) | null>(null);
 
-  const data = useMemo(() => ({ normal: rows(save, 'normal'), daily: rows(save, 'daily'), weekly: rows(save, 'weekly'), achv: rows(save, 'achv') }), [save]);
+  const data = useMemo(() => ({ event: rows(save, 'event'), normal: rows(save, 'normal'), daily: rows(save, 'daily'), weekly: rows(save, 'weekly'), achv: rows(save, 'achv') }), [save]);
   const count = (list: Row[]) => list.filter((r) => r.done && !r.claimed).length;
   const tabs: { id: Tab; label: string; icon: string; n: number }[] = [
     { id: 'login', label: 'ログインボーナス', icon: 'crown', n: canClaimLogin(save.progress) ? 1 : 0 },
+    { id: 'event', label: 'イベント', icon: 'sparkles', n: count(data.event) },
     { id: 'normal', label: '通常', icon: 'scroll-quill', n: count(data.normal) },
     { id: 'daily', label: 'デイリー', icon: 'hourglass', n: count(data.daily) },
     { id: 'weekly', label: 'ウィークリー', icon: 'scroll-unfurled', n: count(data.weekly) },
@@ -108,7 +113,14 @@ export function Missions() {
   };
 
   const list = tab === 'login' ? [] : data[tab];
-  const remain = tab === 'daily' ? `リセットまで ${fmtRemain(msUntilTomorrow(new Date(now)))}` : tab === 'weekly' ? `リセットまで ${fmtRemain(msUntilNextWeek(new Date(now)))}` : '';
+  const event = currentEvent(save.progress);
+  const remain =
+    tab === 'daily'
+      ? `リセットまで ${fmtRemain(msUntilTomorrow(new Date(now)))}`
+      : tab === 'event'
+        ? `終了まで ${fmtRemain(msUntilNextWeek(new Date(now)))}`
+        : tab === 'weekly'
+          ? `リセットまで ${fmtRemain(msUntilNextWeek(new Date(now)))}` : '';
 
   return (
     <div className="screen">
@@ -139,6 +151,13 @@ export function Missions() {
               <LoginTrack onClaim={give} />
             ) : (
               <>
+                {tab === 'event' && (
+                  <div className="ms3-event" style={{ backgroundImage: `url(${artUrl(event.art)})` }}>
+                    <small>期間限定イベント</small>
+                    <b>{event.name}</b>
+                    <p>{event.blurb}</p>
+                  </div>
+                )}
                 <div className="ms3-head">
                   {remain && (
                     <span className="ms-remain">
@@ -174,8 +193,16 @@ export function Missions() {
                         </div>
                         <button className={`ms3-claim ${r.done && !r.claimed ? 'ready' : ''}`} disabled={!r.done || r.claimed} onClick={() => claim(r)}>
                           <span>
-                            <Icon name="coin" /> {r.m.reward.toLocaleString()}
-                            <i className="ms3-gem"><Icon name="gem" /> {missionGems(r.m.reward)}</i>
+                            {r.m.reward > 0 && (
+                              <>
+                                <Icon name="coin" /> {r.m.reward.toLocaleString()}
+                              </>
+                            )}
+                            {missionGems(r.m) > 0 && (
+                              <i className="ms3-gem">
+                                <Icon name="gem" /> {missionGems(r.m)}
+                              </i>
+                            )}
                           </span>
                           <small>{r.claimed ? '受取済み' : r.done ? '受け取る' : '未達成'}</small>
                         </button>

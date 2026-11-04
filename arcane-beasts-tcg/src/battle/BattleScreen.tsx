@@ -1,7 +1,7 @@
 import { LayoutGroup, motion, AnimatePresence, useDragControls, type DragControls } from 'motion/react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { card, TYPE_JP } from '../engine/cards';
-import { autoRetreatDiscard, canPay, energyUnits, maxHp, posEq, posKey, retreatCost, TERRAIN, TERRAIN_BOOST, TERRAIN_WEAKEN, topCard } from '../engine/game';
+import { autoRetreatDiscard, canPay, energyUnits, maxHp, posEq, posKey, retreatCost, STADIUM_NOTE, TERRAIN, TERRAIN_BOOST, TERRAIN_WEAKEN, topCard } from '../engine/game';
 import type { Action, CardInst, EnergyCard, GameState, MonsterCard, Pos, Prompt, Slot, TrainerCard } from '../engine/types';
 import { CardBack, CardFace, EnergySymbol, RainbowSymbol } from '../ui/Card';
 import { Icon } from '../ui/Icon';
@@ -21,8 +21,8 @@ import type { Weather as WeatherKind } from '../story/types';
 import { vibrate } from '../lib/fx';
 import './battle.css';
 
-/** the weather each terrain brings over the battlefield */
-const TERRAIN_WEATHER: Record<string, WeatherKind> = { volcano: 'embers', coast: 'storm', forest: 'petals', swamp: 'fog', battlefield: 'ash', harbor: 'fog', ruins: 'motes', crypt: 'ash', peak: 'storm', oasis: 'motes', mine: 'ash', sky: 'stars' };
+/** the weather each stadium brings over the battlefield */
+const TERRAIN_WEATHER: Record<string, WeatherKind> = { volcano: 'embers', coast: 'storm', forest: 'petals', swamp: 'fog', battlefield: 'ash', harbor: 'fog', ruins: 'motes', crypt: 'ash', peak: 'storm', oasis: 'motes', mine: 'ash', sky: 'stars', snowfield: 'snow', greattree: 'petals', remains: 'ash', statue: 'stars', shrine: 'motes', mist: 'fog', study: 'motes', hall: 'motes', altar: 'embers', summoning: 'stars', spire: 'rain' };
 
 const LAYOUT = { type: 'spring' as const, stiffness: 260, damping: 30, mass: 0.9 };
 
@@ -1080,11 +1080,12 @@ export function BattleScreen() {
       <div className="battle-bg" style={{ backgroundImage: `url(${artUrl(bg)})` }} key={bg} />
       <div className="battle-bg-shade" />
       {terrain && <div className="battle-weather" key={`w-${terrain.key}`}><Weather kind={TERRAIN_WEATHER[terrain.key] ?? 'motes'} /></div>}
-      {terrainFx && (
-        <div className="terrain-chip" key={`t-${terrain!.key}`}>
-          <b>{terrain!.name}</b>
-          {terrainFx.boost && <span className="up">{TYPE_JP[terrainFx.boost]} +{TERRAIN_BOOST}</span>}
-          {terrainFx.weaken && <span className="down">{TYPE_JP[terrainFx.weaken]} −{TERRAIN_WEAKEN}</span>}
+      {terrain && (terrainFx || STADIUM_NOTE[terrain.key]) && (
+        <div className="terrain-chip" key={`t-${terrain.key}`}>
+          <b>{terrain.name}</b>
+          {terrainFx?.boost && <span className="up">{TYPE_JP[terrainFx.boost]} +{TERRAIN_BOOST}</span>}
+          {terrainFx?.weaken && <span className="down">{TYPE_JP[terrainFx.weaken]} −{TERRAIN_WEAKEN}</span>}
+          {STADIUM_NOTE[terrain.key] && <span className="note">{STADIUM_NOTE[terrain.key]}</span>}
         </div>
       )}
       <div className="stage battle-stage">
@@ -1218,6 +1219,18 @@ export function BattleScreen() {
                 <Icon name="retreat" />
               </span>
             </div>
+            {terrain && legal.some((a) => a.t === 'stadium') && (
+              <button
+                className="btn small stadium-use"
+                title={STADIUM_NOTE[terrain.key]}
+                onClick={() => {
+                  foley.tick();
+                  act({ t: 'stadium' });
+                }}
+              >
+                <Icon name="shield" /> {terrain.name}を使う
+              </button>
+            )}
             <button className={`btn big end-turn ${myAction ? 'ready' : ''}`} disabled={!myAction} onClick={endTurn}>
               {confirmEnd ? '本当に終了？' : 'ターン終了'}
             </button>

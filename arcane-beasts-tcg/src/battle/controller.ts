@@ -192,7 +192,7 @@ export abstract class FramePlayer {
       case 'stadium':
         foley.whoosh();
         sfx('magic-holy-2', 0.6);
-        fx.banner(`地形変化！「${card(this.cidIn(s, ev.uid)).name}」`, 'info');
+        fx.banner(`スタジアム変化！「${card(this.cidIn(s, ev.uid)).name}」`, 'info');
         return d(1400);
       case 'discard':
         foley.slide();

@@ -75,7 +75,7 @@ function toolKey(slot: Slot): string | null {
 }
 
 /**
- * 地形 (stadium cards): each one favours a type (+30 to its attacks on the
+ * スタジアム (stadium cards): each one favours a type (+30 to its attacks on the
  * active monster) and holds another back (−20). See also harbor / oasis /
  * swamp / battlefield below, and the weather each one brings on screen.
  */
@@ -88,6 +88,27 @@ export const TERRAIN: Record<string, { boost?: EType; weaken?: EType }> = {
   crypt: { boost: 'dark', weaken: 'psychic' },
   mine: { boost: 'fighting', weaken: 'colorless' },
   sky: { boost: 'colorless', weaken: 'fighting' },
+};
+/** one short line for the battle screen's stadium chip (type stadiums show their +/− instead) */
+export const STADIUM_NOTE: Record<string, string> = {
+  forest: '毎番1回 たねをベンチへ',
+  coast: 'にげるエネ −1',
+  mine: '毎番1回 1枚捨てて2枚引く',
+  swamp: 'どく +30',
+  battlefield: 'ワザ +20',
+  harbor: 'HP150未満 +40 / 以上 −30',
+  oasis: 'バトル場 毎ターン20回復',
+  snowfield: 'にげるエネ +1・やけど無効',
+  greattree: 'ベンチ 毎ターン10回復',
+  remains: '毎番1回 エネを回収',
+  statue: 'サイドが多い側 ワザ +30',
+  shrine: '特殊状態にならない',
+  mist: 'ベンチはワザのダメージを受けない',
+  study: '毎番1回 上3枚から1枚',
+  hall: '進化モンスター 被ダメ −20',
+  altar: 'ワザ +30・反動20',
+  summoning: '毎番1回 トラッシュのエネをベンチへ',
+  spire: '毎番1回 手札3枚以下で2枚引く',
 };
 export const TERRAIN_BOOST = 30;
 export const TERRAIN_WEAKEN = 20;
@@ -156,6 +177,7 @@ export function retreatCost(s: GameState, slot: Slot): number {
   if (toolKey(slot) === 'float') return 0;
   let c = topCard(slot).retreat;
   if (stadiumKey(s) === 'coast') c -= 1;
+  if (stadiumKey(s) === 'snowfield') c += 1;
   return Math.max(0, c);
 }
 
@@ -546,9 +568,7 @@ export class Game {
     // abilities
     for (const { pos, slot } of slotsOf(s, p)) if (this.canUseAbility(p, pos, slot)) out.push({ t: 'ability', pos });
     // stadium
-    if (stadiumKey(s) === 'forest' && !s.flags.stadiumUsed && pl.bench.length < BENCH_MAX && pl.deck.some((c) => isBasic(c.cid)))
-      out.push({ t: 'stadium' });
-    if (stadiumKey(s) === 'mine' && !s.flags.stadiumUsed && pl.hand.length > 0 && pl.deck.length > 1) out.push({ t: 'stadium' });
+    if (!s.flags.stadiumUsed && this.stadiumActionOk(p)) out.push({ t: 'stadium' });
     // attacks
     if (act && !firstTurn) {
       topCard(act).attacks.forEach((_, i) => {
@@ -789,6 +809,14 @@ export class Game {
           s.stadium = c;
           s.stadiumOwner = p;
           this.emit({ e: 'stadium', p, uid: c.uid });
+          if (def.key === 'shrine')
+            for (const q of [0, 1] as const) {
+              const act = this.pl(q).active;
+              if (act && act.conditions.length) {
+                act.conditions = [];
+                this.emit({ e: 'cure', pos: { p: q, z: 'active' } });
+              }
+            }
           return false;
         }
         if (def.sub === 'supporter') s.flags.supporterPlayed = true;
@@ -822,14 +850,7 @@ export class Game {
       case 'stadium': {
         s.flags.stadiumUsed = true;
         this.emit({ e: 'message', text: `${pl.name}は${cardName(s.stadium!.cid)}の効果を使った` });
-        if (stadiumKey(s) === 'mine') {
-          const [u] = yield* this.chooseCards(p, 'トラッシュする手札を1枚選んでください', pl.hand, pl.hand.map((c) => c.uid), 1, 1);
-          const moved = pl.hand.filter((c) => c.uid === u);
-          pl.hand = pl.hand.filter((c) => c.uid !== u);
-          pl.discard.push(...moved);
-          if (moved.length) this.emit({ e: 'discard', p, uids: [u] });
-          this.draw(p, 2);
-        } else yield* this.benchFromDeck(p, 1, () => true);
+        yield* this.stadiumAction(p);
         return false;
       }
       case 'attack': {
@@ -881,6 +902,64 @@ export class Game {
     return true;
   }
 
+  private *stadiumAction(p: 0 | 1): Gen {
+    const pl = this.pl(p);
+    switch (stadiumKey(this.s)) {
+      case 'mine': {
+        const [u] = yield* this.chooseCards(p, 'トラッシュする手札を1枚選んでください', pl.hand, pl.hand.map((c) => c.uid), 1, 1);
+        const moved = pl.hand.filter((c) => c.uid === u);
+        pl.hand = pl.hand.filter((c) => c.uid !== u);
+        pl.discard.push(...moved);
+        if (moved.length) this.emit({ e: 'discard', p, uids: [u] });
+        this.draw(p, 2);
+        return;
+      }
+      case 'forest':
+        yield* this.benchFromDeck(p, 1, () => true);
+        return;
+      case 'remains': {
+        const sel = pl.discard.filter((c) => isBasicEnergy(c.cid));
+        const [u] = yield* this.chooseCards(p, '手札に加える基本エネルギーを選んでください', sel, sel.map((c) => c.uid), 1, 1);
+        const i = pl.discard.findIndex((c) => c.uid === u);
+        if (i < 0) return;
+        const [c] = pl.discard.splice(i, 1);
+        pl.hand.push(c);
+        this.emit({ e: 'search', p, uids: [c.uid] });
+        return;
+      }
+      case 'summoning': {
+        const sel = pl.discard.filter((c) => isBasicEnergy(c.cid));
+        const [u] = yield* this.chooseCards(p, 'ベンチにつける基本エネルギーを選んでください', sel, sel.map((c) => c.uid), 1, 1);
+        const i = pl.discard.findIndex((c) => c.uid === u);
+        if (i < 0) return;
+        const targets = pl.bench.map((_, j) => ({ p, z: 'bench', i: j }) as Pos);
+        const pos = yield* this.chooseSlot(p, `${cardName(pl.discard[i].cid)}をつけるベンチモンスターを選んでください`, targets);
+        if (!pos) return;
+        const [c] = pl.discard.splice(i, 1);
+        slotAt(this.s, pos)!.energy.push(c);
+        this.emit({ e: 'attach', p, uid: c.uid, pos });
+        this.putDamage(pos, 20, 'psychic', 'effect');
+        return;
+      }
+      case 'study': {
+        const top = pl.deck.slice(0, 3);
+        const [u] = yield* this.chooseCards(p, '手札に加えるカードを1枚選んでください（残りは山札の下へ）', top, top.map((c) => c.uid), 0, 1);
+        const rest = top.filter((c) => c.uid !== u);
+        pl.deck.splice(0, top.length);
+        const got = top.find((c) => c.uid === u);
+        pl.deck.push(...rest);
+        if (got) {
+          pl.hand.push(got);
+          this.emit({ e: 'search', p, uids: [got.uid] });
+        }
+        return;
+      }
+      case 'spire':
+        this.draw(p, 2);
+        return;
+    }
+  }
+
   // --------------------------------------------------------------------------
   // Damage
   // --------------------------------------------------------------------------
@@ -902,10 +981,33 @@ export class Game {
   addCondition(pos: Pos, cond: Condition) {
     const slot = slotAt(this.s, pos);
     if (!slot || pos.z !== 'active') return;
+    if (stadiumKey(this.s) === 'shrine') return;
     const rot: Condition[] = ['asleep', 'paralyzed', 'confused'];
     if (rot.includes(cond)) slot.conditions = slot.conditions.filter((c) => !rot.includes(c));
     if (!slot.conditions.includes(cond)) slot.conditions.push(cond);
     this.emit({ e: 'condition', pos, cond });
+  }
+
+  /** can the player use the stadium in play this turn (once per turn)? */
+  stadiumActionOk(p: 0 | 1): boolean {
+    const s = this.s;
+    const pl = this.pl(p);
+    switch (stadiumKey(s)) {
+      case 'forest':
+        return pl.bench.length < BENCH_MAX && pl.deck.some((c) => isBasic(c.cid));
+      case 'mine':
+        return pl.hand.length > 0 && pl.deck.length > 1;
+      case 'remains':
+        return pl.discard.some((c) => isBasicEnergy(c.cid));
+      case 'summoning':
+        return pl.bench.length > 0 && pl.discard.some((c) => isBasicEnergy(c.cid));
+      case 'study':
+        return pl.deck.length > 0;
+      case 'spire':
+        return pl.hand.length <= 3 && pl.deck.length > 0;
+      default:
+        return false;
+    }
   }
 
   /** Is this slot protected from the opponent's attack effects this turn? */
@@ -914,7 +1016,7 @@ export class Game {
   }
 
   private benchProtected(p: 0 | 1) {
-    return slotsOf(this.s, p).some((x) => hasAbility(x.slot, 'benchBarrier'));
+    return stadiumKey(this.s) === 'mist' || slotsOf(this.s, p).some((x) => hasAbility(x.slot, 'benchBarrier'));
   }
 
   /** Damage from an attack effect to a non-active or any target (no W/R). */
@@ -1052,6 +1154,8 @@ export class Game {
         if (tr?.boost === mc.type) dmg += TERRAIN_BOOST;
         if (tr?.weaken === mc.type) dmg = Math.max(0, dmg - TERRAIN_WEAKEN);
         if (st === 'battlefield') dmg += 20;
+        if (st === 'altar') dmg += 30;
+        if (st === 'statue' && me.prizes.length > this.pl(opp).prizes.length) dmg += 30;
         // weakness / resistance
         const dc = topCard(D);
         let weak = false;
@@ -1069,11 +1173,13 @@ export class Game {
         if (red && red.k === 'damageReduce') dmg -= red.n;
         if (toolKey(D) === 'crest' && hasRule(dc)) dmg -= 30;
         if (toolKey(D) === 'tower') dmg -= 20;
+        if (st === 'hall' && dc.stage !== 'basic') dmg -= 20;
         for (const f of D.flags) if (f.k === 'reduce' && f.untilTurn >= s.turn) dmg -= f.n ?? 0;
         dmg = Math.max(0, dmg);
         if (dmg > 0) {
           this.putDamage({ p: opp, z: 'active' }, dmg, mc.type, 'attack', weak, resist);
           if (toolKey(A) === 'fangs') this.heal({ p, z: 'active' }, 20);
+          if (st === 'altar') this.putDamage({ p, z: 'active' }, 20, 'dark', 'effect');
           // reactive effects
           const cd = hasAbility(D, 'counterDamage');
           if (cd && cd.k === 'counterDamage') this.putDamage({ p, z: 'active' }, cd.n, topCard(D).type, 'effect');
@@ -1695,7 +1801,7 @@ export class Game {
       const pos: Pos = { p, z: 'active' };
       if (slot.conditions.includes('poisoned')) this.putDamage(pos, stadiumKey(s) === 'swamp' ? 40 : 10, 'grass', 'checkup');
       if (slot.conditions.includes('burned')) {
-        this.putDamage(pos, 20, 'fire', 'checkup');
+        if (stadiumKey(s) !== 'snowfield') this.putDamage(pos, 20, 'fire', 'checkup');
         if (this.flip(p, 'やけどの回復')) {
           slot.conditions = slot.conditions.filter((c) => c !== 'burned');
           this.emit({ e: 'cure', pos });
@@ -1714,6 +1820,9 @@ export class Game {
     }
     if (stadiumKey(s) === 'oasis') {
       for (const p of order) if (this.pl(p).active && this.pl(p).active!.damage > 0) this.heal({ p, z: 'active' }, 20);
+    }
+    if (stadiumKey(s) === 'greattree') {
+      for (const p of order) this.pl(p).bench.forEach((b, i) => b.damage > 0 && this.heal({ p, z: 'bench', i }, 10));
     }
     // abilities between turns
     for (const p of order) {

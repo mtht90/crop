@@ -9,6 +9,7 @@ import { artUrl } from '../lib/assets';
 import { TopBar } from '../ui/TopBar';
 import { Icon } from '../ui/Icon';
 import { EnergySymbol } from '../ui/Card';
+import { coinsFor } from '../state/progress';
 import { CHAPTERS, episodeLabel, episodeNo, PARTS } from '../story';
 import { chapterState, isCleared, nextChapterIndex, replayScene, startChapter } from '../story/flow';
 import { foley, playMusic, sfx } from '../audio/audio';
@@ -145,7 +146,7 @@ export function StoryMap() {
                     <EnergySymbol type={rdeck!.type} size="1.2em" /> {TYPE_JP[rdeck!.type]}・{rdeck!.name}
                   </span>
                   <span>
-                    報酬 <b>{rival!.reward}</b>
+                    報酬 <Icon name="coin" /> <b>{coinsFor(rival!.reward).toLocaleString()}</b>
                   </span>
                   {state === 'cleared' && <span className="clear">CLEAR</span>}
                 </div>

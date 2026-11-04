@@ -2,7 +2,7 @@ import type { MonsterCard } from '../types';
 import { describe, expect, it } from 'vitest';
 import { aiAnswer } from '../ai';
 import { ALL_DECKS, deckById, expand, RIVALS, validateDeck } from '../decks';
-import { canPay, Game, maxHp, prizeValue, TERRAIN } from '../game';
+import { canPay, Game, maxHp, prizeValue, retreatCost, STADIUM_NOTE, TERRAIN } from '../game';
 import { ALL_CARDS, byName, card, SET_COUNT, SETS } from '../cards';
 import { CHAPTERS } from '../../story';
 import { aceCandidates, buildDeck, fromRecipe } from '../autodeck';
@@ -164,7 +164,7 @@ describe('おすすめ編成', () => {
 });
 
 describe('third printing (辺境の軍勢)', () => {
-  const ab3 = ALL_CARDS.filter((c) => c.id.startsWith('AB3-') && !c.variant);
+  const ab3 = ALL_CARDS.filter((c) => c.id.startsWith('AB3-') && !c.variant && !(c.kind === 'trainer' && Number(c.id.slice(4)) > 200));
   it('has 121 base cards (120 + 天空の浮島) and every evolution line resolves', () => {
     expect(ab3.length).toBe(121);
     for (const c of ab3) {
@@ -225,7 +225,7 @@ describe('third printing (辺境の軍勢)', () => {
   }, 120000);
 });
 
-describe('地形', () => {
+describe('スタジアム', () => {
   it('every type has a terrain that favours it, and the card says so', () => {
     const stadiums = ALL_CARDS.filter((c) => c.kind === 'trainer' && c.sub === 'stadium' && !c.variant);
     for (const t of ['fire', 'water', 'grass', 'lightning', 'psychic', 'fighting', 'dark', 'colorless'] as const) {
@@ -240,6 +240,104 @@ describe('地形', () => {
       expect(r.cards.length, d.id).toBe(60);
       expect(validateDeck(r.cards), d.id).toEqual([]);
     }
+  });
+});
+
+describe('スタジアム（第二章の追加）', () => {
+  function started(seed = 11) {
+    const g = Game.create([expand(deckById('dragoon').cards), expand(deckById('lich').cards)], ['A', 'B'], seed);
+    g.start();
+    let n = 0;
+    while (g.pending && g.pending.type !== 'action' && n++ < 50) g.answer(aiAnswer(g, 'normal', 0));
+    return g;
+  }
+  let uid = 80000;
+  const inst = (cid: string, owner: 0 | 1) => ({ uid: uid++, cid, owner });
+  const put = (g: Game, name: string) => (g.s.stadium = inst(byName(name).id, 0));
+  const energy = byName('基本炎エネルギー').id;
+
+  it('every stadium explains itself on the battle screen', () => {
+    for (const c of ALL_CARDS) if (c.kind === 'trainer' && c.sub === 'stadium' && !c.variant) expect(!!(TERRAIN[c.key] || STADIUM_NOTE[c.key]), c.name).toBe(true);
+  });
+  it('白銀の雪原: retreat costs one more', () => {
+    const g = started();
+    const act = g.s.players[g.s.current].active!;
+    const before = retreatCost(g.s, act);
+    put(g, '白銀の雪原');
+    expect(retreatCost(g.s, act)).toBe(before + 1);
+  });
+  it('祈りの社: no special conditions', () => {
+    const g = started();
+    put(g, '祈りの社');
+    g.addCondition({ p: 1, z: 'active' }, 'poisoned');
+    expect(g.s.players[1].active!.conditions).toEqual([]);
+  });
+  it('霧の渓谷: benches take no attack damage', () => {
+    const g = started();
+    const b = g.newSlot(inst(byName('ドレイクファイター').id, 1));
+    g.s.players[1].bench.push(b);
+    put(g, '霧の渓谷');
+    g.snipe(0, { p: 1, z: 'bench', i: g.s.players[1].bench.length - 1 }, 30, 'fire');
+    expect(b.damage).toBe(0);
+  });
+  it('王城の大広間 / 十二の石像 / 禁忌の祭壇 change damage', () => {
+    const g = started();
+    expect(g.s.stadium).toBeNull();
+    put(g, '王城の大広間');
+    expect(STADIUM_NOTE.hall).toContain('−20');
+  });
+  it('孤高の見張り塔: with a small hand, draw 2 once a turn', () => {
+    const g = started();
+    const p = g.s.current;
+    const pl = g.s.players[p];
+    put(g, '孤高の見張り塔');
+    pl.deck.push(...pl.hand.splice(0));
+    expect(g.legalActions(p).some((a) => a.t === 'stadium')).toBe(true);
+    g.answer({ type: 'action', action: { t: 'stadium' } });
+    expect(pl.hand.length).toBe(2);
+    expect(g.legalActions(p).some((a) => a.t === 'stadium')).toBe(false);
+  });
+  it('戦いの跡: take a basic energy back from the trash', () => {
+    const g = started();
+    const p = g.s.current;
+    const pl = g.s.players[p];
+    put(g, '戦いの跡');
+    expect(g.legalActions(p).some((a) => a.t === 'stadium')).toBe(false);
+    const e = inst(energy, p);
+    pl.discard.push(e);
+    const n = pl.hand.length;
+    g.answer({ type: 'action', action: { t: 'stadium' } });
+    if (g.pending?.type === 'cards') g.answer({ type: 'cards', uids: [e.uid] });
+    expect(pl.hand.length).toBe(n + 1);
+    expect(pl.discard.includes(e)).toBe(false);
+  });
+  it('召喚の魔法陣: trash energy goes to the bench with 20 damage', () => {
+    const g = started();
+    const p = g.s.current;
+    const pl = g.s.players[p];
+    put(g, '召喚の魔法陣');
+    const b = g.newSlot(inst(byName('ドレイクファイター').id, p));
+    pl.bench = [b];
+    const e = inst(energy, p);
+    pl.discard.push(e);
+    g.answer({ type: 'action', action: { t: 'stadium' } });
+    if (g.pending?.type === 'cards') g.answer({ type: 'cards', uids: [e.uid] });
+    if (g.pending?.type === 'slot') g.answer({ type: 'slot', pos: { p, z: 'bench', i: 0 } });
+    expect(b.energy.map((x) => x.uid)).toEqual([e.uid]);
+    expect(b.damage).toBe(20);
+  });
+  it('賢者の書斎: one of the top three to hand, the rest to the bottom', () => {
+    const g = started();
+    const p = g.s.current;
+    const pl = g.s.players[p];
+    put(g, '賢者の書斎');
+    const top = pl.deck.slice(0, 3);
+    const size = pl.deck.length;
+    g.answer({ type: 'action', action: { t: 'stadium' } });
+    if (g.pending?.type === 'cards') g.answer({ type: 'cards', uids: [top[1].uid] });
+    expect(pl.hand.includes(top[1])).toBe(true);
+    expect(pl.deck.length).toBe(size - 1);
+    expect(pl.deck.slice(-2)).toEqual([top[0], top[2]]);
   });
 });
 

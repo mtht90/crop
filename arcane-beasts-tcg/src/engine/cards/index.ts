@@ -5,6 +5,7 @@ import { MONSTERS2 } from './monsters2';
 import { TRAINERS2 } from './trainers2';
 import { MONSTERS3 } from './monsters3';
 import { TRAINERS3 } from './trainers3';
+import { STADIUMS } from './stadiums';
 import { CH1_EXTRA, CH2_EXTRA } from './chapters';
 
 export const TYPE_JP: Record<EType, string> = {
@@ -192,7 +193,7 @@ export const SETS: SetCode[] = ['AB1', 'AB2', 'AB3'];
 
 const PRINT1: CardDef[] = [...MONSTERS, ...TRAINERS, ...ENERGIES];
 const PRINT2: CardDef[] = [...MONSTERS2, ...TRAINERS2];
-const PRINT3: CardDef[] = [...MONSTERS3, ...TRAINERS3];
+const PRINT3: CardDef[] = [...MONSTERS3, ...TRAINERS3, ...STADIUMS];
 const chapterOf = (c: CardDef, printing: SetCode): SetCode =>
   printing === 'AB1' || CH1_EXTRA.has(c.name) ? 'AB1' : printing === 'AB2' || CH2_EXTRA.has(c.name) ? 'AB2' : 'AB3';
 const MAIN_OF: Record<SetCode, CardDef[]> = { AB1: [], AB2: [], AB3: [] };

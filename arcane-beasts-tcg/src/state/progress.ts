@@ -40,6 +40,8 @@ export interface Progress {
   stats: Stats;
   daily: Period;
   weekly: Period;
+  /** this week's 期間限定イベント (optional: older saves start it fresh) */
+  event?: Period;
   achvClaimed: string[];
   /** 通常ミッション already claimed */
   normalClaimed: string[];
@@ -56,6 +58,7 @@ export function freshProgress(): Progress {
     stats: { ...EMPTY_STATS },
     daily: { key: '', counters: {}, claimed: [] },
     weekly: { key: '', counters: {}, claimed: [] },
+    event: { key: '', counters: {}, claimed: [] },
     achvClaimed: [],
     normalClaimed: [],
     loginCount: 0,
@@ -108,6 +111,7 @@ export function ensurePeriods(p: Progress) {
   const w = weekKey();
   if (p.daily.key !== d) p.daily = { key: d, counters: {}, claimed: [] };
   if (p.weekly.key !== w) p.weekly = { key: w, counters: {}, claimed: [] };
+  if (p.event?.key !== w) p.event = { key: w, counters: {}, claimed: [] };
 }
 
 export function bump(p: Progress, add: Partial<Stats>) {
@@ -117,6 +121,7 @@ export function bump(p: Progress, add: Partial<Stats>) {
     p.stats[k] = (p.stats[k] ?? 0) + v;
     p.daily.counters[k] = (p.daily.counters[k] ?? 0) + v;
     p.weekly.counters[k] = (p.weekly.counters[k] ?? 0) + v;
+    p.event!.counters[k] = (p.event!.counters[k] ?? 0) + v;
   }
 }
 
@@ -124,7 +129,22 @@ export function bump(p: Progress, add: Partial<Stats>) {
 // Level / EXP
 // ---------------------------------------------------------------------------
 export const expToNext = (level: number) => 200 + (level - 1) * 100;
-export const levelReward = (level: number) => 100 + level * 25 + (level % 5 === 0 ? 300 : 0);
+
+// ---------------------------------------------------------------------------
+// Economy
+//   コイン … earned by everyday play (battles, missions, login, level-ups) in
+//            the hundreds to thousands; spent on looks (ワードローブ)
+//   ジェム … pack opening. Earned mainly from the weekly 期間限定イベント
+//            (50–250 a task, more for the hard ones and for clearing them all),
+//            plus first clears, the login cycle and level-ups
+//   The two never convert. Priced so that 1 ジェム is worth about 6–7 コイン
+//   (a 150-gem pack ≈ 1,000 coins of play).
+// ---------------------------------------------------------------------------
+export const COIN_SCALE = 5;
+export const GEM_TO_COIN = 6.5;
+/** coins a battle's base reward pays out (rivals and CPU levels list the base) */
+export const coinsFor = (base: number) => base * COIN_SCALE;
+export const levelReward = (level: number) => (100 + level * 25 + (level % 5 === 0 ? 300 : 0)) * COIN_SCALE;
 
 /** Adds EXP; returns the levels reached (each grants levelReward coins). */
 export function addExp(p: Progress, amount: number): number[] {
@@ -141,7 +161,7 @@ export function addExp(p: Progress, amount: number): number[] {
 // ---------------------------------------------------------------------------
 // Login bonus (7-day cycle; the cycle advances on each day you log in)
 // ---------------------------------------------------------------------------
-export const LOGIN_REWARDS = [60, 80, 100, 120, 150, 200, 450];
+export const LOGIN_REWARDS = [300, 400, 500, 600, 750, 1000, 2500];
 /** gems with each day of the login cycle */
 export const LOGIN_GEMS = [10, 10, 15, 15, 20, 30, 100];
 
@@ -152,8 +172,8 @@ export const LOGIN_GEMS = [10, 10, 15, 15, 20, 30, 100];
 // ---------------------------------------------------------------------------
 export const GEM_FIRST_CLEAR: Record<Difficulty, number> = { easy: 40, normal: 60, hard: 100 };
 export const GEM_DAILY_WIN = 10;
-/** a mission's gems follow its coin reward (about a third, in fives) */
-export const missionGems = (reward: number) => Math.max(5, Math.round(reward / 3 / 5) * 5);
+/** gems a mission pays: only event tasks carry them */
+export const missionGems = (m: Mission) => m.gems ?? 0;
 export const levelGems = (level: number) => (level % 5 === 0 ? 50 : 20);
 
 // ---------------------------------------------------------------------------
@@ -204,6 +224,7 @@ export function battleReward(p: Progress, o: BattleOutcome): { lines: RewardLine
   }
   const mult = o.level === 'hard' ? 2 : o.level === 'normal' ? 1.5 : 1;
   const exp = Math.round((o.win ? 100 : 40) * mult + o.prizesTaken * 5);
+  for (const l of lines) l.coins *= COIN_SCALE;
   return { lines, total: lines.reduce((n, l) => n + l.coins, 0), gems: lines.reduce((n, l) => n + (l.gems ?? 0), 0), exp };
 }
 
@@ -213,9 +234,12 @@ export function battleReward(p: Progress, o: BattleOutcome): { lines: RewardLine
 export interface Mission {
   id: string;
   label: string;
-  stat: StatKey | 'level' | 'collection' | 'rivals' | 'story' | 'uniques' | 'stars' | 'decks';
+  stat: StatKey | 'level' | 'collection' | 'rivals' | 'story' | 'uniques' | 'stars' | 'decks' | 'eventTasks';
   target: number;
+  /** coins */
   reward: number;
+  /** gems (event tasks) */
+  gems?: number;
 }
 
 const DAILY_POOL: Mission[] = [
@@ -295,6 +319,9 @@ export const NORMAL_MISSIONS: Mission[] = [
   ...many('lv', 'level', (t) => `プレイヤーレベル${t}に到達`, [[2, 60], [3, 80], [4, 100], [6, 150], [8, 200], [15, 500], [25, 900], [40, 1500], [50, 2500]]),
 ];
 
+// everyday missions pay coins in the hundreds to thousands
+for (const list of [DAILY_POOL, WEEKLY_POOL, ACHIEVEMENTS, NORMAL_MISSIONS]) for (const m of list) m.reward *= COIN_SCALE;
+
 export function dailyMissions(p: Progress): Mission[] {
   const r = seeded(`daily-${p.daily.key || dayKey()}`);
   return [...DAILY_POOL].sort(() => r() - 0.5).slice(0, 3);
@@ -313,14 +340,16 @@ export interface ExtCtx {
   decks: number;
 }
 
-export type MissionPeriod = 'daily' | 'weekly' | 'achv' | 'normal';
+export type MissionPeriod = 'daily' | 'weekly' | 'achv' | 'normal' | 'event';
 
 export function missionValue(p: Progress, m: Mission, period: MissionPeriod, ext: ExtCtx): number {
+  if (m.stat === 'eventTasks') return (p.event?.claimed ?? []).filter((id) => id !== m.id).length;
   if (m.stat === 'level') return p.level;
   if (m.stat === 'collection') return Math.floor(ext.collectionPct);
   if (m.stat === 'rivals' || m.stat === 'story' || m.stat === 'uniques' || m.stat === 'stars' || m.stat === 'decks') return ext[m.stat];
   if (period === 'daily') return p.daily.counters[m.stat] ?? 0;
   if (period === 'weekly') return p.weekly.counters[m.stat] ?? 0;
+  if (period === 'event') return p.event?.counters[m.stat] ?? 0;
   return p.stats[m.stat] ?? 0;
 }
 
@@ -330,5 +359,90 @@ export function claimableCount(p: Progress, ext: ExtCtx): number {
   for (const m of weeklyMissions(p)) if (!p.weekly.claimed.includes(m.id) && missionValue(p, m, 'weekly', ext) >= m.target) n++;
   for (const m of ACHIEVEMENTS) if (!p.achvClaimed.includes(m.id) && missionValue(p, m, 'achv', ext) >= m.target) n++;
   for (const m of NORMAL_MISSIONS) if (!(p.normalClaimed ?? []).includes(m.id) && missionValue(p, m, 'normal', ext) >= m.target) n++;
+  const ev = currentEvent(p);
+  if (p.event?.key === ev.key) for (const m of ev.tasks) if (!p.event.claimed.includes(m.id) && missionValue(p, m, 'event', ext) >= m.target) n++;
   return n;
+}
+
+// ---------------------------------------------------------------------------
+// 期間限定イベント: one themed event a week (Monday to Sunday), rotating.
+// Tasks pay gems: 50–250 each, the hard ones the most, and clearing every
+// other task of the week adds a bonus.
+// ---------------------------------------------------------------------------
+export interface GameEvent {
+  id: string;
+  name: string;
+  blurb: string;
+  art: string;
+  tasks: Mission[];
+}
+const ev = (id: string, label: string, stat: Mission['stat'], target: number, gems: number): Mission => ({ id: `e-${id}`, label, stat, target, reward: 0, gems });
+const ALL_CLEAR = (n: number, gems: number) => ev('all', `このイベントのほかの課題を${n}つ達成する`, 'eventTasks', n, gems);
+
+export const EVENTS: Omit<GameEvent, 'key'>[] = [
+  {
+    id: 'dawn',
+    name: '十二枚の夜明け祭',
+    blurb: '十二枚の伝説が始まった日を祝う一週間。たくさん戦って、たくさん勝とう。',
+    art: 'story/p-summer',
+    tasks: [
+      ev('battle5', 'バトルを5回する', 'battles', 5, 50),
+      ev('win3', 'バトルに3回勝つ', 'wins', 3, 80),
+      ev('ko25', '相手のモンスターを25匹きぜつさせる', 'kos', 25, 100),
+      ev('evo10', 'モンスターを10回進化させる', 'evolves', 10, 100),
+      ev('hard3', '「むずかしい」相手に3回勝つ', 'hardWins', 3, 200),
+      ALL_CLEAR(5, 300),
+    ],
+  },
+  {
+    id: 'ash',
+    name: '灰の巡礼週間',
+    blurb: '灰の道を歩く巡礼者たちに倣い、一戦ずつ確かに積み上げる週。',
+    art: 'story/p-pilgrims',
+    tasks: [
+      ev('battle8', 'バトルを8回する', 'battles', 8, 60),
+      ev('prize20', 'サイドを合計20枚とる', 'prizes', 20, 100),
+      ev('tr30', 'トレーナーズを30枚使う', 'trainers', 30, 100),
+      ev('pack5', 'パックを5回開ける', 'packs', 5, 80),
+      ev('perfect2', 'パーフェクト勝利を2回達成する', 'perfectWins', 2, 250),
+      ALL_CLEAR(5, 300),
+    ],
+  },
+  {
+    id: 'dragon',
+    name: '竜骨の闘技会',
+    blurb: '古竜の骨で組まれた闘技場に、腕自慢が集まる。大きなダメージで観客を沸かせよう。',
+    art: 'story/p-mountains',
+    tasks: [
+      ev('win4', 'バトルに4回勝つ', 'wins', 4, 80),
+      ev('dmg5000', 'ワザで合計5000ダメージを与える', 'damage', 5000, 120),
+      ev('ko40', '相手のモンスターを40匹きぜつさせる', 'kos', 40, 150),
+      ev('hard5', '「むずかしい」相手に5回勝つ', 'hardWins', 5, 250),
+      ev('online2', 'オンライン対戦で2回勝つ', 'onlineWins', 2, 150),
+      ALL_CLEAR(4, 300),
+    ],
+  },
+  {
+    id: 'stars',
+    name: '星降る蒐集祭',
+    blurb: '夜空から星が降る季節。カードを集め、デッキを磨く週。',
+    art: 'story/p-lake-castle',
+    tasks: [
+      ev('pack6', 'パックを6回開ける', 'packs', 6, 80),
+      ev('battle6', 'バトルを6回する', 'battles', 6, 50),
+      ev('evo15', 'モンスターを15回進化させる', 'evolves', 15, 120),
+      ev('win5', 'バトルに5回勝つ', 'wins', 5, 120),
+      ev('perfect3', 'パーフェクト勝利を3回達成する', 'perfectWins', 3, 250),
+      ALL_CLEAR(5, 300),
+    ],
+  },
+];
+
+/** the event running this week (by the viewer's calendar) */
+export function currentEvent(p?: Progress): GameEvent & { key: string } {
+  const key = p?.event?.key || weekKey();
+  const monday = new Date(key.slice(1) + 'T00:00:00');
+  const week = Math.floor(monday.getTime() / (7 * 86400000));
+  const e = EVENTS[((week % EVENTS.length) + EVENTS.length) % EVENTS.length];
+  return { ...e, key, tasks: e.tasks.map((t) => ({ ...t, id: `${t.id}-${e.id}` })) };
 }

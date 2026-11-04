@@ -294,6 +294,7 @@ function TrainerFace({ def }: { def: TrainerCard }) {
       </div>
       <div className="tcg-tbody">
         <p>{def.text}</p>
+        {def.flavor && def.text.length <= 72 && <p className="tflavor">{def.flavor}</p>}
       </div>
       <div className="tcg-trule">{SUB_RULE[def.sub]}</div>
       <Footer def={def} />

@@ -276,6 +276,13 @@
   color: #fff;
 }
 .omega-rule b { color: #ffd86b; }
+.tcg-tbody p.tflavor {
+  margin-top: 1.2cqw;
+  font-size: 2.4cqw;
+  font-weight: 500;
+  font-style: italic;
+  opacity: 0.75;
+}
 .tcg-flavor {
   font-size: 2.55cqw;
   font-style: italic;
@@ -351,7 +358,7 @@
   bottom: 17cqw;
 }
 .tcg.full-art .tcg-stats { background: rgba(0, 0, 0, 0.5); border-color: rgba(255, 255, 255, 0.3); }
-.tcg.full-art .tcg-species, .tcg.full-art .evo-from { display: none; }
+.tcg.full-art .tcg-species { display: none; }
 .tcg.full-art .tcg-inner::before {
   background:
     repeating-linear-gradient(115deg, rgba(255, 255, 255, 0.08) 0 0.35cqw, transparent 0.35cqw 1.4cqw),
@@ -477,7 +484,8 @@
   right: 3.6cqw;
   bottom: 24cqw;
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  justify-content: center;
   padding: 0 1.6cqw;
   z-index: 2;
 }
@@ -735,7 +743,10 @@
   left: var(--px, 50%);
   bottom: var(--py, 26%);
 }
-.tcg.bleed .tcg-species, .tcg.bleed .evo-from { display: none; }
+.tcg.bleed .tcg-species { display: none; }
+/* art-forward faces still say what they evolve from, as a slim tag */
+.tcg.full-art .evo-from img, .tcg.bleed .evo-from img { width: 8cqw; height: 8cqw; border-width: 0.45cqw; }
+.tcg.full-art .evo-from span, .tcg.bleed .evo-from span { margin-top: 0; background: rgba(0, 0, 0, 0.62); box-shadow: 0 0 0 0.25cqw rgba(255, 255, 255, 0.25); }
 .tcg.bleed .tcg-head, .tcg.bleed .tcg-body, .tcg.bleed .tcg-stats, .tcg.bleed .tcg-footer { color: #fff; }
 .tcg.bleed .tcg-head .name { text-shadow: 0 0.3cqw 0.8cqw #000, 0 0 2cqw rgba(0, 0, 0, 0.6); }
 .tcg.bleed .tcg-head .hp { color: #fff; text-shadow: 0 0.3cqw 0.8cqw #000; }

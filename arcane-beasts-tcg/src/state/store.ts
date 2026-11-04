@@ -33,13 +33,15 @@ import {
   type Progress,
   type RewardLine,
   type Stats,
+  COIN_SCALE,
 } from './progress';
 
 // ----------------------------------------------------------------------------
 // Copies beyond MAX_COPIES are sold for coins on the spot (by ★).
 // ----------------------------------------------------------------------------
+export const ECON_VERSION = 2;
 export const MAX_COPIES = 10;
-export const DUPE_COINS: Record<Rarity, number> = { 1: 5, 2: 10, 3: 25, 4: 80, 5: 200 };
+export const DUPE_COINS: Record<Rarity, number> = { 1: 25, 2: 50, 3: 125, 4: 400, 5: 1000 };
 /** what the old かけら (shards) are worth now that they are gone, per shard */
 const SHARD_COINS: Record<string, number> = { C: 10, U: 10, R: 15, RR: 30, RRR: 30, ST: 50, ST2: 60, CR: 80, AR: 50, CHR: 50, S: 50, SR: 50, SAR: 80, UR: 80 };
 const CARDS_OK = (cid: string) => cid in CARDS;
@@ -71,6 +73,8 @@ export interface Settings {
 
 export interface Save {
   v: 1;
+  /** economy version (2: the coin scale-up) */
+  econ?: number;
   /** コイン: bought looks in the ワードローブ; earned by battles, missions, duplicates */
   coins: number;
   /** ジェム: buy packs; earned by first clears, missions, the login cycle, level-ups */
@@ -193,7 +197,8 @@ export function grantAllCards(s: Save) {
 function freshSave(): Save {
   return {
     v: 1,
-    coins: 300,
+    econ: ECON_VERSION,
+    coins: 1500,
     gems: 600,
     wardrobe: freshWardrobe(),
     collection: {},
@@ -244,6 +249,11 @@ function load(): Save {
       s.newCards = s.newCards.map(retired).filter(CARDS_OK);
       // gems arrived later: what a player had in coins (which bought packs until now) carries over 1:1
       if (typeof parsed.gems !== 'number') s.gems = Math.max(0, parsed.coins ?? 0);
+      // the economy redesign: everyday coins pay out 5× what they did, so do the coins already saved
+      if ((parsed.econ ?? 1) < ECON_VERSION) {
+        s.coins = Math.max(0, Math.round(s.coins * COIN_SCALE));
+        s.econ = ECON_VERSION;
+      }
       s.wardrobe = cleanWardrobe(s.wardrobe);
       // anything over the cap is sold
       for (const [cid, n] of Object.entries(s.collection)) {
@@ -421,11 +431,13 @@ export const useStore = create<Store>((set, get) => ({
       ensurePeriods(p);
       const ext = extCtx(s);
       p.normalClaimed ??= [];
-      const list = period === 'daily' ? p.daily.claimed : period === 'weekly' ? p.weekly.claimed : period === 'normal' ? p.normalClaimed : p.achvClaimed;
+      p.event ??= { key: '', counters: {}, claimed: [] };
+      const list =
+        period === 'daily' ? p.daily.claimed : period === 'weekly' ? p.weekly.claimed : period === 'normal' ? p.normalClaimed : period === 'event' ? p.event.claimed : p.achvClaimed;
       if (list.includes(m.id) || missionValue(p, m, period, ext) < m.target) return;
       list.push(m.id);
       got.coins = m.reward;
-      got.gems = missionGems(m.reward);
+      got.gems = missionGems(m);
       s.coins += got.coins;
       s.gems += got.gems;
     });

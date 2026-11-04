@@ -149,6 +149,8 @@ export interface TrainerCard extends CardBase {
   text: string;
   icon?: string; // game-icons name for item/tool art
   scene?: string;
+  /** a line of lore, shown under the rules when there is room */
+  flavor?: string;
 }
 
 export interface EnergyCard extends CardBase {
