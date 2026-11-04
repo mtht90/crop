@@ -1,0 +1,16 @@
+{
+  "sim": { "tickRate": 30 },
+  "mana": { "max": 10, "start": 5, "regenSeconds": 2.8, "doubleMultiplier": 2 },
+  "deck": { "initialHand": 4, "handLimit": 6, "drawInterval": 4 },
+  "match": { "duration": 180, "doubleManaAt": 60, "overtime": 60 },
+  "buff": { "stacking": "refresh" },
+  "spell": { "towerDamageRatio": 0.35 },
+  "towers": {
+    "guard": { "hp": 1500, "damage": 55, "attackInterval": 0.8, "range": 7.0, "radius": 1.4, "projectile": "fx_arrow", "projectileSpeed": 14 },
+    "king": { "hp": 2600, "damage": 70, "attackInterval": 1.0, "range": 7.0, "radius": 1.8, "projectile": "fx_cannonball", "projectileSpeed": 12 }
+  },
+  "cpu": {
+    "easy": { "thinkInterval": 1.6, "reactionDelay": 1.2, "randomness": 0.35, "attackManaThreshold": 8.5 },
+    "normal": { "thinkInterval": 0.6, "reactionDelay": 0.3, "randomness": 0.08, "attackManaThreshold": 7 }
+  }
+}

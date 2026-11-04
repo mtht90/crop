@@ -1,0 +1,4 @@
+{
+  "player": ["swordsman", "archer", "heavy_knight", "goblin", "mage", "wyvern", "fireball", "cannon", "horn", "heal_light", "ward", "gale"],
+  "cpu": ["swordsman", "archer", "heavy_knight", "goblin", "mage", "wyvern", "fireball", "cannon", "horn", "heal_light", "ward", "gale"]
+}

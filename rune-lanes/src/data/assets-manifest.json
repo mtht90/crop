@@ -1,0 +1,659 @@
+{
+ "_comment": "ゲーム内キー → 実ファイルの対応表。差し替えは path を書き換えるかファイルを上書きするだけでよい。license=unspecified は B 区分。",
+ "sources": [
+  {
+   "id": "kenney-tiny-dungeon",
+   "name": "Tiny Dungeon",
+   "author": "Kenney",
+   "url": "https://opengameart.org/content/tiny-dungeon",
+   "license": "CC0 1.0",
+   "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "category": "A"
+  },
+  {
+   "id": "kenney-tiny-town",
+   "name": "Tiny Town",
+   "author": "Kenney",
+   "url": "https://opengameart.org/content/tiny-town",
+   "license": "CC0 1.0",
+   "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "category": "A"
+  },
+  {
+   "id": "kenney-tiny-battle",
+   "name": "Tiny Battle",
+   "author": "Kenney",
+   "url": "https://opengameart.org/content/tiny-battle",
+   "license": "CC0 1.0",
+   "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "category": "A"
+  },
+  {
+   "id": "tiny-creatures",
+   "name": "Tiny Creatures",
+   "author": "Clint Bellanger",
+   "url": "https://opengameart.org/content/tiny-creatures",
+   "license": "CC0 1.0",
+   "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "category": "A"
+  },
+  {
+   "id": "kenney-ui-pixel-adventure",
+   "name": "UI Pack - Pixel Adventure",
+   "author": "Kenney",
+   "url": "https://opengameart.org/content/ui-pack-pixel-adventure",
+   "license": "CC0 1.0",
+   "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "category": "A"
+  },
+  {
+   "id": "explosion-32",
+   "name": "32x32 Explosion",
+   "author": "diamonddmgirl",
+   "url": "https://opengameart.org/content/32x32-explosion",
+   "license": "CC0 1.0",
+   "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "category": "A"
+  },
+  {
+   "id": "old-tower-inn",
+   "name": "[Chiptune] Medieval: The Old Tower Inn",
+   "author": "RandomMind",
+   "url": "https://opengameart.org/content/chiptune-medieval-the-old-tower-inn",
+   "license": "CC0 1.0",
+   "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "category": "A"
+  },
+  {
+   "id": "junkala-5-chiptunes",
+   "name": "5 Chiptunes (Action)",
+   "author": "Juhani Junkala (SubspaceAudio)",
+   "url": "https://opengameart.org/content/5-chiptunes-action",
+   "license": "CC0 1.0",
+   "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "category": "A"
+  },
+  {
+   "id": "junkala-512-sfx",
+   "name": "512 Sound Effects (8-bit style)",
+   "author": "Juhani Junkala (SubspaceAudio)",
+   "url": "https://opengameart.org/content/512-sound-effects-8-bit-style",
+   "license": "CC0 1.0",
+   "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "category": "A"
+  },
+  {
+   "id": "kenney-jingles",
+   "name": "85 Short music jingles",
+   "author": "Kenney",
+   "url": "https://opengameart.org/content/85-short-music-jingles",
+   "license": "CC0 1.0",
+   "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "category": "A"
+  },
+  {
+   "id": "kenney-rpg-audio",
+   "name": "50 RPG sound effects",
+   "author": "Kenney",
+   "url": "https://opengameart.org/content/50-rpg-sound-effects",
+   "license": "CC0 1.0",
+   "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "category": "A"
+  },
+  {
+   "id": "kenney-interface-sounds",
+   "name": "Interface Sounds",
+   "author": "Kenney",
+   "url": "https://opengameart.org/content/interface-sounds",
+   "license": "CC0 1.0",
+   "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "category": "A"
+  },
+  {
+   "id": "rubberduck-80-rpg",
+   "name": "80 CC0 RPG SFX",
+   "author": "rubberduck",
+   "url": "https://opengameart.org/content/80-cc0-rpg-sfx",
+   "license": "CC0 1.0",
+   "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "category": "A"
+  },
+  {
+   "id": "dotgothic16",
+   "name": "DotGothic16",
+   "author": "Fontworks Inc. (The DotGothic16 Project Authors)",
+   "url": "https://fonts.google.com/specimen/DotGothic16",
+   "license": "SIL OFL 1.1",
+   "licenseUrl": "https://openfontlicense.org/",
+   "category": "A"
+  }
+ ],
+ "images": [
+  {
+   "key": "unit_swordsman",
+   "path": "assets/sprites/units/swordsman.png",
+   "source": "kenney-tiny-dungeon",
+   "original": "tile_0097",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "unit_archer",
+   "path": "assets/sprites/units/archer.png",
+   "source": "kenney-tiny-dungeon",
+   "original": "tile_0112",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "unit_heavy_knight",
+   "path": "assets/sprites/units/heavy_knight.png",
+   "source": "kenney-tiny-dungeon",
+   "original": "tile_0096",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "unit_goblin",
+   "path": "assets/sprites/units/goblin.png",
+   "source": "tiny-creatures",
+   "original": "tile_0011",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "unit_mage",
+   "path": "assets/sprites/units/mage.png",
+   "source": "kenney-tiny-dungeon",
+   "original": "tile_0084",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "unit_wyvern",
+   "path": "assets/sprites/units/wyvern.png",
+   "source": "tiny-creatures",
+   "original": "tile_0034",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "bld_cannon",
+   "path": "assets/sprites/buildings/cannon.png",
+   "source": "kenney-tiny-dungeon",
+   "original": "tile_0041",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "tile_grass_0",
+   "path": "assets/tiles/grass_0.png",
+   "source": "kenney-tiny-town",
+   "original": "tile_0000",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "tile_grass_1",
+   "path": "assets/tiles/grass_1.png",
+   "source": "kenney-tiny-town",
+   "original": "tile_0001",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "tile_grass_2",
+   "path": "assets/tiles/grass_2.png",
+   "source": "kenney-tiny-town",
+   "original": "tile_0002",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "tile_dirt",
+   "path": "assets/tiles/dirt.png",
+   "source": "kenney-tiny-town",
+   "original": "tile_0025",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "tile_tree_pine",
+   "path": "assets/tiles/tree_pine.png",
+   "source": "kenney-tiny-town",
+   "original": "tile_0004",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "tile_tree_round",
+   "path": "assets/tiles/tree_round.png",
+   "source": "kenney-tiny-town",
+   "original": "tile_0028",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "tile_bush",
+   "path": "assets/tiles/bush.png",
+   "source": "kenney-tiny-town",
+   "original": "tile_0005",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "tile_mushroom",
+   "path": "assets/tiles/mushroom.png",
+   "source": "kenney-tiny-town",
+   "original": "tile_0029",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "tile_fence_v",
+   "path": "assets/tiles/fence_v.png",
+   "source": "kenney-tiny-town",
+   "original": "tile_0047",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "tile_water",
+   "path": "assets/tiles/water.png",
+   "source": "kenney-tiny-battle",
+   "original": "tile_0037",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "tile_water_alt",
+   "path": "assets/tiles/water_alt.png",
+   "source": "kenney-tiny-battle",
+   "original": "tile_0038",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "tile_shore_top",
+   "path": "assets/tiles/shore_top.png",
+   "source": "kenney-tiny-battle",
+   "original": "tile_0019",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "tile_shore_bottom",
+   "path": "assets/tiles/shore_bottom.png",
+   "source": "kenney-tiny-battle",
+   "original": "tile_0055",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "tile_flag_blue",
+   "path": "assets/tiles/flag_blue.png",
+   "source": "kenney-tiny-battle",
+   "original": "tile_0052",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "tile_flag_red",
+   "path": "assets/tiles/flag_red.png",
+   "source": "kenney-tiny-battle",
+   "original": "tile_0070",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "tile_castle_tl",
+   "path": "assets/tiles/castle_tl.png",
+   "source": "kenney-tiny-town",
+   "original": "tile_0096",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "tile_castle_t",
+   "path": "assets/tiles/castle_t.png",
+   "source": "kenney-tiny-town",
+   "original": "tile_0097",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "tile_castle_tr",
+   "path": "assets/tiles/castle_tr.png",
+   "source": "kenney-tiny-town",
+   "original": "tile_0098",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "tile_castle_l",
+   "path": "assets/tiles/castle_l.png",
+   "source": "kenney-tiny-town",
+   "original": "tile_0108",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "tile_castle_c",
+   "path": "assets/tiles/castle_c.png",
+   "source": "kenney-tiny-town",
+   "original": "tile_0109",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "tile_castle_r",
+   "path": "assets/tiles/castle_r.png",
+   "source": "kenney-tiny-town",
+   "original": "tile_0110",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "tile_castle_bl",
+   "path": "assets/tiles/castle_bl.png",
+   "source": "kenney-tiny-town",
+   "original": "tile_0120",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "tile_castle_b",
+   "path": "assets/tiles/castle_b.png",
+   "source": "kenney-tiny-town",
+   "original": "tile_0121",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "tile_castle_br",
+   "path": "assets/tiles/castle_br.png",
+   "source": "kenney-tiny-town",
+   "original": "tile_0122",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "fx_arrow",
+   "path": "assets/effects/arrow.png",
+   "source": "kenney-tiny-town",
+   "original": "tile_0119",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "fx_magic_orb",
+   "path": "assets/effects/magic_orb.png",
+   "source": "tiny-creatures",
+   "original": "tile_0090",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "fx_flame",
+   "path": "assets/effects/flame.png",
+   "source": "tiny-creatures",
+   "original": "tile_0056",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "fx_cannonball",
+   "path": "assets/effects/cannonball.png",
+   "source": "kenney-tiny-town",
+   "original": "tile_0105",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "fx_heart",
+   "path": "assets/effects/heart.png",
+   "source": "kenney-tiny-battle",
+   "original": "tile_0195",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "icon_attack",
+   "path": "assets/ui/icon_attack.png",
+   "source": "kenney-tiny-dungeon",
+   "original": "tile_0104",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "icon_shield",
+   "path": "assets/ui/icon_shield.png",
+   "source": "kenney-tiny-dungeon",
+   "original": "tile_0102",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "icon_haste",
+   "path": "assets/ui/icon_haste.png",
+   "source": "kenney-tiny-dungeon",
+   "original": "tile_0116",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "icon_heal",
+   "path": "assets/ui/icon_heal.png",
+   "source": "kenney-tiny-dungeon",
+   "original": "tile_0115",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "ui_panel_card",
+   "path": "assets/ui/panel_card.png",
+   "source": "kenney-ui-pixel-adventure",
+   "original": "Large/Thick tile_0000",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "ui_panel_card_back",
+   "path": "assets/ui/panel_card_back.png",
+   "source": "kenney-ui-pixel-adventure",
+   "original": "Large/Thick tile_0001",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "ui_panel_blue",
+   "path": "assets/ui/panel_blue.png",
+   "source": "kenney-ui-pixel-adventure",
+   "original": "Large/Thick tile_0002",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "ui_panel_dark",
+   "path": "assets/ui/panel_dark.png",
+   "source": "kenney-ui-pixel-adventure",
+   "original": "Large/Thick tile_0003",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "ui_panel_frame",
+   "path": "assets/ui/panel_frame.png",
+   "source": "kenney-ui-pixel-adventure",
+   "original": "Large/Thick tile_0032",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "ui_button_left",
+   "path": "assets/ui/button_left.png",
+   "source": "kenney-ui-pixel-adventure",
+   "original": "Large/Thick tile_0043",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "ui_button_mid",
+   "path": "assets/ui/button_mid.png",
+   "source": "kenney-ui-pixel-adventure",
+   "original": "Large/Thick tile_0044",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "ui_button_right",
+   "path": "assets/ui/button_right.png",
+   "source": "kenney-ui-pixel-adventure",
+   "original": "Large/Thick tile_0045",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "ui_gem_cost",
+   "path": "assets/ui/gem_cost.png",
+   "source": "kenney-ui-pixel-adventure",
+   "original": "Large/Thick tile_0041",
+   "license": "CC0 1.0"
+  }
+ ],
+ "spritesheets": [
+  {
+   "key": "fx_explosion",
+   "path": "assets/effects/explosion_sheet.png",
+   "source": "explosion-32",
+   "original": "explosion_pixelfied.png",
+   "frameWidth": 32,
+   "frameHeight": 32,
+   "license": "CC0 1.0"
+  }
+ ],
+ "audio": [
+  {
+   "key": "bgm_title",
+   "path": "assets/audio/bgm/title.mp3",
+   "source": "old-tower-inn",
+   "original": "NES_TheOldTowerInn.mp3",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "bgm_battle",
+   "path": "assets/audio/bgm/battle.mp3",
+   "source": "junkala-5-chiptunes",
+   "original": "Level 1.wav",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "bgm_battle_final",
+   "path": "assets/audio/bgm/battle_final.mp3",
+   "source": "junkala-5-chiptunes",
+   "original": "Level 3.wav",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "bgm_win",
+   "path": "assets/audio/bgm/win.mp3",
+   "source": "kenney-jingles",
+   "original": "jingles_NES00.ogg",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "bgm_lose",
+   "path": "assets/audio/bgm/lose.mp3",
+   "source": "kenney-jingles",
+   "original": "jingles_NES09.ogg",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "se_draw",
+   "path": "assets/audio/se/draw.mp3",
+   "source": "kenney-rpg-audio",
+   "original": "bookFlip1.ogg",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "se_shuffle",
+   "path": "assets/audio/se/shuffle.mp3",
+   "source": "kenney-rpg-audio",
+   "original": "bookFlip3.ogg",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "se_card_play",
+   "path": "assets/audio/se/card_play.mp3",
+   "source": "kenney-interface-sounds",
+   "original": "drop_002.ogg",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "se_support",
+   "path": "assets/audio/se/support.mp3",
+   "source": "junkala-512-sfx",
+   "original": "sfx_sounds_powerup2.wav",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "se_heal",
+   "path": "assets/audio/se/heal.mp3",
+   "source": "junkala-512-sfx",
+   "original": "sfx_sounds_powerup10.wav",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "se_melee",
+   "path": "assets/audio/se/melee.mp3",
+   "source": "junkala-512-sfx",
+   "original": "sfx_wpn_sword1.wav",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "se_arrow",
+   "path": "assets/audio/se/arrow.mp3",
+   "source": "kenney-rpg-audio",
+   "original": "drawKnife1.ogg",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "se_magic",
+   "path": "assets/audio/se/magic.mp3",
+   "source": "rubberduck-80-rpg",
+   "original": "spell_01.ogg",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "se_fireball",
+   "path": "assets/audio/se/fireball.mp3",
+   "source": "rubberduck-80-rpg",
+   "original": "spell_fire_01.ogg",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "se_explosion",
+   "path": "assets/audio/se/explosion.mp3",
+   "source": "junkala-512-sfx",
+   "original": "sfx_exp_medium1.wav",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "se_cannon",
+   "path": "assets/audio/se/cannon.mp3",
+   "source": "junkala-512-sfx",
+   "original": "sfx_wpn_cannon1.wav",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "se_tower_destroy",
+   "path": "assets/audio/se/tower_destroy.mp3",
+   "source": "junkala-512-sfx",
+   "original": "sfx_exp_long1.wav",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "se_unit_die",
+   "path": "assets/audio/se/unit_die.mp3",
+   "source": "rubberduck-80-rpg",
+   "original": "creature_die_01.ogg",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "se_no_mana",
+   "path": "assets/audio/se/no_mana.mp3",
+   "source": "kenney-interface-sounds",
+   "original": "error_004.ogg",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "se_button",
+   "path": "assets/audio/se/button.mp3",
+   "source": "kenney-interface-sounds",
+   "original": "click_002.ogg",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "se_countdown",
+   "path": "assets/audio/se/countdown.mp3",
+   "source": "junkala-512-sfx",
+   "original": "sfx_sounds_Blip7.wav",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "se_deploy",
+   "path": "assets/audio/se/deploy.mp3",
+   "source": "rubberduck-80-rpg",
+   "original": "item_misc_01.ogg",
+   "license": "CC0 1.0"
+  },
+  {
+   "key": "se_hit",
+   "path": "assets/audio/se/hit.mp3",
+   "source": "junkala-512-sfx",
+   "original": "sfx_damage_hit2.wav",
+   "license": "CC0 1.0"
+  }
+ ],
+ "fonts": [
+  {
+   "key": "DotGothic16",
+   "path": "assets/fonts/DotGothic16-Regular.ttf",
+   "source": "dotgothic16",
+   "original": "DotGothic16-Regular.ttf",
+   "license": "SIL OFL 1.1"
+  }
+ ]
+}

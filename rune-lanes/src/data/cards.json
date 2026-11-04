@@ -1,0 +1,102 @@
+[
+  {
+    "id": "swordsman", "name": "剣士", "description": "標準的な近接兵。地上の敵を斬る。",
+    "type": "unit", "cost": 3, "count": 1,
+    "hp": 720, "damage": 95, "attackInterval": 1.1, "range": 0.7, "sightRange": 5.5, "moveSpeed": 1.0,
+    "targetType": "ground", "isFlying": false, "splashRadius": 0, "deployTime": 1, "lifetime": 0,
+    "supportEffect": null, "radius": 0.42, "mass": 4, "projectile": null, "projectileSpeed": 0, "displayScale": 2.0,
+    "spriteKey": "unit_swordsman", "cardArtKey": "unit_swordsman", "sfx": { "attack": "se_melee" }
+  },
+  {
+    "id": "archer", "name": "弓兵", "description": "2人組の射手。空中にも矢が届く。",
+    "type": "unit", "cost": 3, "count": 2,
+    "hp": 260, "damage": 55, "attackInterval": 1.0, "range": 5.0, "sightRange": 5.5, "moveSpeed": 1.0,
+    "targetType": "both", "isFlying": false, "splashRadius": 0, "deployTime": 1, "lifetime": 0,
+    "supportEffect": null, "radius": 0.35, "mass": 2, "projectile": "fx_arrow", "projectileSpeed": 12, "displayScale": 1.8,
+    "spriteKey": "unit_archer", "cardArtKey": "unit_archer", "sfx": { "attack": "se_arrow" }
+  },
+  {
+    "id": "heavy_knight", "name": "重装騎士", "description": "分厚い鎧の盾役。建物だけを狙って進む。",
+    "type": "unit", "cost": 5, "count": 1,
+    "hp": 2600, "damage": 150, "attackInterval": 1.5, "range": 0.7, "sightRange": 7, "moveSpeed": 0.6,
+    "targetType": "buildings", "isFlying": false, "splashRadius": 0, "deployTime": 1, "lifetime": 0,
+    "supportEffect": null, "radius": 0.55, "mass": 12, "projectile": null, "projectileSpeed": 0, "displayScale": 2.6,
+    "spriteKey": "unit_heavy_knight", "cardArtKey": "unit_heavy_knight", "sfx": { "attack": "se_melee" }
+  },
+  {
+    "id": "goblin", "name": "ゴブリン隊", "description": "素早い小鬼の3匹組。打たれ弱い。",
+    "type": "unit", "cost": 2, "count": 3,
+    "hp": 170, "damage": 65, "attackInterval": 1.0, "range": 0.5, "sightRange": 5.5, "moveSpeed": 1.6,
+    "targetType": "ground", "isFlying": false, "splashRadius": 0, "deployTime": 1, "lifetime": 0,
+    "supportEffect": null, "radius": 0.3, "mass": 1, "projectile": null, "projectileSpeed": 0, "displayScale": 1.6,
+    "spriteKey": "unit_goblin", "cardArtKey": "unit_goblin", "sfx": { "attack": "se_hit" }
+  },
+  {
+    "id": "mage", "name": "魔術師", "description": "魔弾で周囲ごと吹き飛ばす範囲攻撃。",
+    "type": "unit", "cost": 5, "count": 1,
+    "hp": 560, "damage": 150, "attackInterval": 1.5, "range": 5.0, "sightRange": 5.5, "moveSpeed": 1.0,
+    "targetType": "both", "isFlying": false, "splashRadius": 1.5, "deployTime": 1, "lifetime": 0,
+    "supportEffect": null, "radius": 0.42, "mass": 4, "projectile": "fx_magic_orb", "projectileSpeed": 9, "displayScale": 2.0,
+    "spriteKey": "unit_mage", "cardArtKey": "unit_mage", "sfx": { "attack": "se_magic" }
+  },
+  {
+    "id": "wyvern", "name": "飛竜", "description": "川を越えて飛ぶ竜。炎の息は範囲攻撃。",
+    "type": "unit", "cost": 4, "count": 1,
+    "hp": 820, "damage": 110, "attackInterval": 1.6, "range": 3.0, "sightRange": 5.5, "moveSpeed": 1.2,
+    "targetType": "both", "isFlying": true, "splashRadius": 1.2, "deployTime": 1, "lifetime": 0,
+    "supportEffect": null, "radius": 0.5, "mass": 5, "projectile": "fx_flame", "projectileSpeed": 8, "displayScale": 2.4,
+    "spriteKey": "unit_wyvern", "cardArtKey": "unit_wyvern", "sfx": { "attack": "se_fireball" }
+  },
+  {
+    "id": "fireball", "name": "火球", "description": "指定した地点を炎で焼き払う呪文。",
+    "type": "spell", "cost": 4, "count": 1,
+    "hp": 0, "damage": 420, "attackInterval": 0, "range": 0, "sightRange": 0, "moveSpeed": 0,
+    "targetType": "both", "isFlying": false, "splashRadius": 2.5, "deployTime": 0, "lifetime": 0,
+    "supportEffect": null, "radius": 0, "mass": 0, "projectile": "fx_flame", "projectileSpeed": 14, "displayScale": 3.0,
+    "spriteKey": "fx_flame", "cardArtKey": "fx_flame", "sfx": { "attack": "se_fireball", "hit": "se_explosion" }
+  },
+  {
+    "id": "cannon", "name": "防衛砲台", "description": "地上の敵を撃つ固定砲台。30秒で崩れる。",
+    "type": "building", "cost": 4, "count": 1,
+    "hp": 900, "damage": 120, "attackInterval": 1.0, "range": 5.5, "sightRange": 5.5, "moveSpeed": 0,
+    "targetType": "ground", "isFlying": false, "splashRadius": 0, "deployTime": 1, "lifetime": 30,
+    "supportEffect": null, "radius": 0.7, "mass": 1000, "projectile": "fx_cannonball", "projectileSpeed": 11, "displayScale": 2.6,
+    "spriteKey": "bld_cannon", "cardArtKey": "bld_cannon", "sfx": { "attack": "se_cannon" }
+  },
+  {
+    "id": "horn", "name": "鼓舞の角笛", "description": "味方1体の攻撃力を8秒間 +50%。",
+    "type": "support", "cost": 2, "count": 1,
+    "hp": 0, "damage": 0, "attackInterval": 0, "range": 0, "sightRange": 0, "moveSpeed": 0,
+    "targetType": "both", "isFlying": false, "splashRadius": 0, "deployTime": 0, "lifetime": 0,
+    "supportEffect": { "kind": "attack", "value": 0.5, "duration": 8 },
+    "radius": 0, "mass": 0, "projectile": null, "projectileSpeed": 0, "displayScale": 2.4,
+    "spriteKey": "icon_attack", "cardArtKey": "icon_attack", "sfx": { "attack": "se_support" }
+  },
+  {
+    "id": "heal_light", "name": "癒しの光", "description": "味方1体の最大HPの40%を回復。",
+    "type": "support", "cost": 2, "count": 1,
+    "hp": 0, "damage": 0, "attackInterval": 0, "range": 0, "sightRange": 0, "moveSpeed": 0,
+    "targetType": "both", "isFlying": false, "splashRadius": 0, "deployTime": 0, "lifetime": 0,
+    "supportEffect": { "kind": "heal", "value": 0.4, "duration": 0 },
+    "radius": 0, "mass": 0, "projectile": null, "projectileSpeed": 0, "displayScale": 2.4,
+    "spriteKey": "icon_heal", "cardArtKey": "icon_heal", "sfx": { "attack": "se_heal" }
+  },
+  {
+    "id": "ward", "name": "守りの加護", "description": "最大HPの30%のシールドを10秒間付与。",
+    "type": "support", "cost": 3, "count": 1,
+    "hp": 0, "damage": 0, "attackInterval": 0, "range": 0, "sightRange": 0, "moveSpeed": 0,
+    "targetType": "both", "isFlying": false, "splashRadius": 0, "deployTime": 0, "lifetime": 0,
+    "supportEffect": { "kind": "shield", "value": 0.3, "duration": 10 },
+    "radius": 0, "mass": 0, "projectile": null, "projectileSpeed": 0, "displayScale": 2.4,
+    "spriteKey": "icon_shield", "cardArtKey": "icon_shield", "sfx": { "attack": "se_support" }
+  },
+  {
+    "id": "gale", "name": "疾風の加護", "description": "移動速度・攻撃速度を8秒間 +40%。",
+    "type": "support", "cost": 2, "count": 1,
+    "hp": 0, "damage": 0, "attackInterval": 0, "range": 0, "sightRange": 0, "moveSpeed": 0,
+    "targetType": "both", "isFlying": false, "splashRadius": 0, "deployTime": 0, "lifetime": 0,
+    "supportEffect": { "kind": "haste", "value": 0.4, "duration": 8 },
+    "radius": 0, "mass": 0, "projectile": null, "projectileSpeed": 0, "displayScale": 2.4,
+    "spriteKey": "icon_haste", "cardArtKey": "icon_haste", "sfx": { "attack": "se_support" }
+  }
+]
