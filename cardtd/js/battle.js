@@ -58,7 +58,7 @@
       this.fx = [];
       this.texts = [];
       this.time = 0;            // 試合経過(秒)
-      this.ready = 3.2;         // 開始前カウントダウン
+      this.ready = 3.9;         // 開始前(対戦帯 + カウントダウン)
       this.over = null;
       this.t = 0;               // 演出用の時間
       this.shake = 0;
@@ -232,6 +232,7 @@
 
       for (const u of this.units) {
         u.flash = Math.max(0, u.flash - dt * 5);
+        if (u.hitT > 0) u.hitT -= dt;
         u.healT = Math.max(0, u.healT - dt * 2);
         if (u.state === 'dead') { u.deadT += dt; continue; }
         if (u.state === 'spawn') {
@@ -311,6 +312,23 @@
           u.walk += dt * slowMul * (u.charged ? 1 : 1.6);
           if (u.dir > 0) u.x = Math.min(u.x, R.laneLength - 4);
           else u.x = Math.max(u.x, 4);
+        }
+      }
+      // 味方同士が完全に重ならないよう、奥行きを少しずつずらす
+      if (!frozen) {
+        const live = this.units.filter(u => (u.state === 'walk' || u.state === 'attack') && !u.def.flying);
+        for (let i = 0; i < live.length; i++) {
+          for (let j = i + 1; j < live.length; j++) {
+            const a = live[i], b = live[j];
+            if (a.side !== b.side) continue;
+            const minDx = (a.def.large || b.def.large) ? 30 : 18;
+            if (Math.abs(a.x - b.x) > minDx) continue;
+            const dd = a.depth - b.depth;
+            if (Math.abs(dd) > 0.32) continue;
+            const push = dt * 0.9 * (dd >= 0 ? 1 : -1);
+            a.depth = Math.max(0, Math.min(1, a.depth + push));
+            b.depth = Math.max(0, Math.min(1, b.depth - push));
+          }
         }
       }
       // 退場
@@ -405,6 +423,7 @@
       d = Math.round(d);
       t.hp -= d;
       t.flash = 1;
+      t.hitT = 0.18;
       const big = (srcDef.vsLarge && t.def.large) || (srcDef.vsAir && t.def.flying);
       this.text(t.x, t.depth, this.unitTop(t), String(d), big ? '#ffd23a' : (t.side === 0 ? '#ff9a8a' : '#ffffff'), big ? 17 : 13);
       if (t.hp <= 0) this.kill(t, srcSide);
@@ -729,6 +748,7 @@
         alpha = 0.6 + 0.4 * k;
       }
       ctx.globalAlpha = alpha;
+      if (u.hitT > 0) ctx.translate(-u.dir * u.hitT * 22, 0);
       ctx.scale(u.dir * UNIT_SCALE, UNIT_SCALE);
       if (u.stunT > 0) ctx.rotate(-0.12);
       let pose;

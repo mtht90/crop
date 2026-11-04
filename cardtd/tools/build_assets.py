@@ -20,6 +20,7 @@
     fx/            FX.zip                                 (2D Spell Effects)
     sfx/           RPGsounds_Kenney.zip                   (Kenney 50 RPG Sound Effects)
     music/         music-loop-bundle-*.zip                (FREE Music Loop Bundle)
+    k_rpg/         UIpack_RPG.zip                         (Kenney UI Pack: RPG Expansion, CC0)
 
 出力は縮小・切り出し済みの画像と音声だけ(元の素材ファイルそのものは出力しない)。
 必要なもの: Pillow、ffmpeg(音声の変換)
@@ -353,10 +354,63 @@ def build_audio():
         subprocess.run(['ffmpeg', '-y', '-loglevel', 'error', '-i', src, '-ac', '2', '-b:a', '96k', os.path.join(OUT, 'audio', 'bgm_' + k + '.mp3')], check=True)
 
 
+def build_skin():
+    """ボタン・枠・ゲージなどの UI 部品(Mechanized Magic UI + Kenney RPG UI)。"""
+    B = os.path.join(SRC, 'ui/1_Free Pack/HUD/Free/PNG Big (256 px)/')
+    K = os.path.join(SRC, 'k_rpg/PNG/')
+    out = os.path.join(OUT, 'skin')
+    os.makedirs(out, exist_ok=True)
+
+    def hud(name, key, width):
+        im = Image.open(B + name + '.png').convert('RGBA')
+        im = im.crop(im.getbbox())
+        h = round(im.height * width / im.width)
+        im.resize((width, h), Image.LANCZOS).save(os.path.join(out, key + '.webp'), 'WEBP', quality=92)
+
+    hud('HUD_default_gold (25)', 'btn_gold', 340)
+    hud('HUD_default_bright (25)', 'btn_silver', 340)
+    hud('HUD_default_dark (26)', 'btn_dark', 340)
+    hud('HUD_default_gold (21)', 'frame_gold', 340)
+    hud('HUD_default_bright (22)', 'frame_silver', 340)
+    hud('HUD_default_gold (30)', 'oct_gold', 160)
+    hud('HUD_default_dark (31)', 'oct_dark', 160)
+    hud('HUD_default_gold (29)', 'disc_gold', 200)
+    hud('HUD_default_dark (30)', 'disc_dark', 200)
+    hud('HUD_default_gold (17)', 'plate_gold', 340)
+    hud('HUD_default_dark (18)', 'plate_dark', 340)
+
+    def bar(color, key):
+        # 左・中・右の3枚をつなげて2倍に拡大(CSS の border-image で伸ばす)
+        if color == 'Back':
+            parts = ['barBack_horizontalLeft', 'barBack_horizontalMid', 'barBack_horizontalRight']
+        else:
+            mid = 'bar%s_horizontalBlue' % color if color == 'Blue' else 'bar%s_horizontalMid' % color
+            parts = ['bar%s_horizontalLeft' % color, mid, 'bar%s_horizontalRight' % color]
+        ims = [Image.open(K + n + '.png').convert('RGBA') for n in parts]
+        w = sum(i.width for i in ims)
+        cv = Image.new('RGBA', (w, ims[0].height))
+        x = 0
+        for i in ims:
+            cv.alpha_composite(i, (x, 0)); x += i.width
+        cv.resize((w * 3, cv.height * 3), Image.LANCZOS).save(os.path.join(out, key + '.webp'), 'WEBP', quality=95)
+
+    for c, k in [('Back', 'bar_back'), ('Red', 'bar_red'), ('Blue', 'bar_blue'), ('Green', 'bar_green'), ('Yellow', 'bar_yellow')]:
+        bar(c, k)
+    for n, k in [('panel_beigeLight', 'parchment'), ('panel_brown', 'wood'), ('panelInset_beige', 'parchment_inset')]:
+        im = Image.open(K + n + '.png').convert('RGBA')
+        im.resize((im.width * 3, im.height * 3), Image.LANCZOS).save(os.path.join(out, k + '.webp'), 'WEBP', quality=95)
+    for n, k in [('cursorGauntlet_bronze', 'cursor'), ('cursorHand_beige', 'cursor_hand')]:
+        im = Image.open(K + n + '.png').convert('RGBA')
+        im.save(os.path.join(out, k + '.png'))
+    for n in ['arrowBeige_left', 'arrowBeige_right', 'iconCheck_bronze', 'iconCross_brown']:
+        im = Image.open(K + n + '.png').convert('RGBA')
+        im.resize((im.width * 3, im.height * 3), Image.LANCZOS).save(os.path.join(out, n + '.webp'), 'WEBP', quality=95)
+
+
 def main():
     for d in ['units', 'portraits', 'bg', 'castle', 'fx', 'cards', 'ui', 'audio']:
         os.makedirs(os.path.join(OUT, d), exist_ok=True)
-    only = set(os.environ.get('ONLY', 'units,bg,castle,fx,cards,ui,audio').split(','))
+    only = set(os.environ.get('ONLY', 'units,bg,castle,fx,cards,ui,audio,skin').split(','))
     meta = {'units': {}, 'fx': {}}
     old = os.path.join(OUT, 'assets.js')
     if os.path.exists(old):
@@ -372,6 +426,7 @@ def main():
     if 'cards' in only: print('cards'); build_cards()
     if 'ui' in only: print('ui'); build_ui()
     if 'audio' in only: print('audio'); build_audio()
+    if 'skin' in only: print('skin'); build_skin()
     with open(os.path.join(OUT, 'assets.js'), 'w', encoding='utf-8') as f:
         f.write('/* build_assets.py が生成 */\nwindow.CTD = window.CTD || {};\nCTD.ASSET_META = ')
         json.dump(meta, f, ensure_ascii=False, separators=(',', ':'))

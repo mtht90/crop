@@ -285,9 +285,9 @@
       <div class="enemy-deck">${Object.entries(counts).sort((a, b) => CTD.CARDS[a[0]].cost - CTD.CARDS[b[0]].cost).map(([id, n]) => cardHTML(id, { count: n })).join('')}</div>
       <div class="info-row">
         <div class="cond">
-          <span class="${rec.stars >= 1 ? 'ok' : 'ng'}">★ 勝利する</span>
-          <span class="${rec.stars >= 2 ? 'ok' : 'ng'}">★ 自分の城の HP を半分以上残して勝つ</span>
-          <span class="${rec.stars >= 3 ? 'ok' : 'ng'}">★ 3分以内に相手の城を壊す</span>
+          <span class="${rec.stars >= 1 ? 'ok' : 'ng'}">勝利する</span>
+          <span class="${rec.stars >= 2 ? 'ok' : 'ng'}">自分の城の HP を半分以上残して勝つ</span>
+          <span class="${rec.stars >= 3 ? 'ok' : 'ng'}">3分以内に相手の城を壊す</span>
         </div>
         <div class="reward-info">初回クリア <i class="gem"></i>${CTD.ECONOMY.firstClear}<br>新しい星 1つ <i class="gem"></i>${CTD.ECONOMY.perNewStar}<br>再挑戦の勝利 <i class="gem"></i>${CTD.ECONOMY.replayWin}</div>
       </div>
@@ -557,7 +557,8 @@
     tutorial = st.tutorial ? { list: CTD.TUTORIAL[st.tutorial].map(x => Object.assign({ done: false }, x)), played: false } : null;
     buildHud();
     CTD.music(battleTrack());
-    showCount(3);
+    intro(st);
+    setTimeout(() => { if (battle && battle.ready > 0) showCount(3); }, 700);
   }
 
   function endBattle() {
@@ -769,8 +770,11 @@
       toast('カードは自陣(中央線より左)にしか出せない', { ms: 1600 });
       return false;
     }
+    const id = battle.sides[0].hand[slot].id;
+    const from = hudRefs.slots[slot].getBoundingClientRect();
     const ok = battle.play(0, slot, x, CTD.screenToDepth(p.y + 30));
-    if (!ok) CTD.sfx('denied');
+    if (!ok) { CTD.sfx('denied'); return ok; }
+    flyCard(id, (from.left + from.width / 2 - offX) / scale, (from.top + from.height / 2 - offY) / scale, p.x, p.y);
     return ok;
   }
 
@@ -843,6 +847,27 @@
     setTimeout(() => el.remove(), 950);
   }
 
+  function flyCard(id, fx, fy, tx, ty) {
+    const el = document.createElement('div');
+    el.className = 'fly-card';
+    el.innerHTML = cardHTML(id);
+    el.style.left = fx + 'px'; el.style.top = fy + 'px';
+    stage.appendChild(el);
+    el.animate([
+      { transform: 'translate(-50%, -50%) scale(1) rotate(0deg)', opacity: 1 },
+      { transform: `translate(calc(-50% + ${tx - fx}px), calc(-50% + ${ty - fy}px)) scale(0.25) rotate(${tx > fx ? 18 : -18}deg)`, opacity: 0.2 },
+    ], { duration: 260, easing: 'cubic-bezier(.3,.7,.4,1)' }).onfinish = () => el.remove();
+  }
+
+  function intro(st) {
+    const el = document.createElement('div');
+    el.className = 'intro';
+    const boss = st.boss ? '<em>BOSS</em>' : '';
+    el.innerHTML = `<div class="intro-band"><span class="you">あなた</span><b>VS</b><span class="foe">${esc(st.id)} ${esc(st.name)}${boss}</span></div>`;
+    stage.appendChild(el);
+    setTimeout(() => el.remove(), 2400);
+  }
+
   function banner(title, sub) {
     const el = document.createElement('div');
     el.className = 'banner';
@@ -882,9 +907,9 @@
       <h2 class="result-title ${win ? 'win' : 'lose'}">${title}</h2>
       <div class="result-stars">${conds.map((c, i) => `<span class="bigstar ${c ? 'on' : ''}" style="animation-delay:${0.3 + i * 0.35}s">★</span>`).join('')}</div>
       <div class="cond">
-        <span class="${conds[0] ? 'ok' : 'ng'}">${conds[0] ? '✔' : '✖'} 勝利する</span>
-        <span class="${conds[1] ? 'ok' : 'ng'}">${conds[1] ? '✔' : '✖'} 自分の城の HP を半分以上残す(${Math.round(ev.hpRatio * 100)}%)</span>
-        <span class="${conds[2] ? 'ok' : 'ng'}">${conds[2] ? '✔' : '✖'} 3分以内に相手の城を壊す</span>
+        <span class="${conds[0] ? 'ok' : 'ng'}">勝利する</span>
+        <span class="${conds[1] ? 'ok' : 'ng'}">自分の城の HP を半分以上残す(${Math.round(ev.hpRatio * 100)}%)</span>
+        <span class="${conds[2] ? 'ok' : 'ng'}">3分以内に相手の城を壊す</span>
       </div>
       ${gems ? `<div class="reward"><i class="gem"></i> +${gems} <small>(${lines.join('、')})</small></div>` : `<p class="hint">${win ? '' : ev.result === 'draw' ? '城の HP が同じだった(引き分けはクリアにならない)' : 'デッキの相性を見直してみよう(偵察で相手のデッキが見られる)'}</p>`}
       <div class="row">
