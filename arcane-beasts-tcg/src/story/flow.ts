@@ -1,7 +1,7 @@
 // Story progress and how a chapter runs: scene → duel → scene.
 import { deckById, expand, RIVALS } from '../engine/decks';
 import { activeDeck, useStore, type Save } from '../state/store';
-import { CHAPTERS, PROLOGUE, type Chapter } from './index';
+import { CHAPTERS, episodeNo, PROLOGUE, type Chapter } from './index';
 
 export type ChapterState = 'cleared' | 'open' | 'locked';
 
@@ -23,6 +23,20 @@ export function nextChapterIndex(save: Save): number {
   return i === -1 ? CHAPTERS.length - 1 : i;
 }
 
+/**
+ * how hard the story opponent thinks (CPU対戦 levels 1–9): it grows along each
+ * chapter, and every chapter starts a step above where the last one began
+ *   第一章 … 3 → 8 (the last episode)   第二章 … 5 → 9
+ */
+export function storyCpuLevel(ch: Chapter): number {
+  const n = episodeNo(ch);
+  const total = CHAPTERS.filter((c) => c.part === ch.part).length;
+  const start = Math.min(7, 1 + ch.part * 2);
+  const top = Math.min(9, 7 + ch.part);
+  if (n >= total) return top;
+  return Math.min(top - 1, start + Math.floor(((n - 1) / Math.max(1, total - 2)) * (top - 1 - start) + 0.5));
+}
+
 function beginDuel(ch: Chapter) {
   const st = useStore.getState();
   const deck = activeDeck(st.save);
@@ -37,6 +51,7 @@ function beginDuel(ch: Chapter) {
     level: r.level,
     scene: r.scene,
     reward: r.reward,
+    cpuLevel: storyCpuLevel(ch),
     story: { chapterId: ch.id },
   });
 }

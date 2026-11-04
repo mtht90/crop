@@ -70,7 +70,7 @@ export function slotsOf(s: GameState, p: 0 | 1): { pos: Pos; slot: Slot }[] {
   return out;
 }
 
-function toolKey(slot: Slot): string | null {
+export function toolKey(slot: Slot): string | null {
   if (!slot.tool) return null;
   return (card(slot.tool.cid) as TrainerCard).key;
 }

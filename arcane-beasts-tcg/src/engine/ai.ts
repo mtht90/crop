@@ -16,11 +16,18 @@ import {
   retreatCost,
   slotAt,
   slotsOf,
+  stadiumKey,
+  TERRAIN,
+  toolKey,
   topCard,
 } from './game';
-import type { Action, Answer, CardInst, GameState, MonsterCard, Pos, Prompt, Slot } from './types';
+import type { Action, Answer, CardInst, EType, GameState, MonsterCard, Pos, Prompt, Slot } from './types';
 
 export type Difficulty = 'easy' | 'normal' | 'hard';
+
+// experiment switches for benchmarks (node only; always off in the browser)
+const EXP: string = (typeof process !== 'undefined' && (process as { env?: Record<string, string> }).env?.AI_EXP) || '';
+const X = (k: string) => EXP.includes(k);
 
 // ----------------------------------------------------------------------------
 // Board evaluation
@@ -32,6 +39,42 @@ function bestDamage(slot: Slot): number {
   return best;
 }
 
+const ANY: EType[] = ['fire', 'water', 'grass', 'lightning', 'psychic', 'fighting', 'dark', 'colorless'];
+
+/** what one hit of `base` from `att` really does to `def`: tools, stadium, weakness, resistance, guards */
+function hitOn(s: GameState, att: Slot, def: Slot | null, base: number): number {
+  if (base <= 0) return 0;
+  const mc = topCard(att);
+  let d = base;
+  const tk = toolKey(att);
+  if (tk === 'band') d += 20;
+  if (tk === 'drum' && mc.stage === 'basic') d += 30;
+  const st = stadiumKey(s);
+  const tr = st ? TERRAIN[st] : undefined;
+  if (tr?.boost === mc.type) d += 30;
+  if (tr?.weaken === mc.type) d = Math.max(0, d - 20);
+  if (st === 'battlefield') d += 20;
+  if (st === 'altar') d += 30;
+  if (!def) return d;
+  const dc = topCard(def);
+  if (dc.weakness === mc.type) d *= 2;
+  if (dc.resistance === mc.type) d -= 30;
+  const dk = toolKey(def);
+  if (dk === 'tower') d -= 20;
+  if (dk === 'crest' && hasRule(dc)) d -= 30;
+  if (st === 'hall' && dc.stage !== 'basic') d -= 20;
+  return Math.max(0, d);
+}
+
+/** the hardest hit `att` can land on `def` with its energy (plus `extra` energy of any type, for threats) */
+function bestHit(s: GameState, att: Slot, def: Slot | null, extra = 0): number {
+  const units = energyUnits(att);
+  for (let i = 0; i < extra; i++) units.push(ANY);
+  let best = 0;
+  for (const a of topCard(att).attacks) if (canPay(units, a.cost)) best = Math.max(best, hitOn(s, att, def, a.damage ?? (a.effects?.length ? 20 : 0)));
+  return best;
+}
+
 function readiness(slot: Slot): number {
   // fraction of the most expensive attack cost we can pay
   const units = energyUnits(slot).length;
@@ -40,7 +83,7 @@ function readiness(slot: Slot): number {
   return Math.min(units, maxCost) / maxCost;
 }
 
-function slotValue(s: GameState, slot: Slot, active: boolean): number {
+function slotValue(s: GameState, slot: Slot, active: boolean, foe: Slot | null = null): number {
   const mc = topCard(slot);
   const hp = maxHp(s, slot);
   const left = hpLeft(s, slot);
@@ -53,8 +96,8 @@ function slotValue(s: GameState, slot: Slot, active: boolean): number {
   v += Math.min(energyCount(slot), maxCost + 1) * (active ? 11 : 6);
   if (energyCount(slot) > maxCost + 1) v -= (energyCount(slot) - maxCost - 1) * 3; // wasted energy
   v += readiness(slot) * (active ? 32 : 12);
-  const dmg = bestDamage(slot);
-  v += dmg * (active ? 0.4 : 0.12);
+  const dmg = foe ? bestHit(s, slot, foe) : bestDamage(slot);
+  v += Math.min(dmg, foe ? hpLeft(s, foe) + 30 : 400) * (active ? 0.4 : 0.12);
   if (active && dmg > 0) v += 25;
   if (slot.tool) v += 6;
   if (mc.ability) v += 6;
@@ -74,8 +117,18 @@ export function evaluate(s: GameState, p: 0 | 1): number {
     const pl = s.players[q];
     let v = 0;
     v += (6 - pl.prizes.length) * 180;
-    if (pl.active) v += slotValue(s, pl.active, true);
-    for (const b of pl.bench) v += slotValue(s, b, false);
+    const foe = s.players[other(q)].active;
+    if (pl.active) v += slotValue(s, pl.active, true, foe);
+    let backup = 0;
+    for (const b of pl.bench) {
+      v += slotValue(s, b, false, foe);
+      backup = Math.max(backup, readiness(b) + (foe && bestHit(s, b, foe) >= hpLeft(s, foe) ? 0.5 : 0));
+    }
+    // a second attacker getting ready on the bench keeps the pressure on after a KO
+    if (!X('nobackup')) {
+      v += backup * 22;
+      if (pl.bench.length === 0) v -= 40;
+    }
     v += Math.min(pl.hand.length, 10) * 3.5;
     if (pl.deck.length < 6) v -= (6 - pl.deck.length) * 15;
     if (!pl.active && !pl.bench.length) v -= 5000;
@@ -86,10 +139,8 @@ export function evaluate(s: GameState, p: 0 | 1): number {
   const me = s.players[p].active;
   const them = s.players[o].active;
   if (me && them) {
-    const d = bestDamage(me) * (topCard(them).weakness === topCard(me).type ? 2 : 1);
-    if (d >= hpLeft(s, them)) score += 30 * prizeValue(topCard(them));
-    const t = bestDamage(them) * (topCard(me).weakness === topCard(them).type ? 2 : 1);
-    if (t >= hpLeft(s, me)) score -= 25 * prizeValue(topCard(me));
+    if (bestHit(s, me, them) >= hpLeft(s, them)) score += 40 * prizeValue(topCard(them));
+    if (bestHit(s, them, me) >= hpLeft(s, me)) score -= 30 * prizeValue(topCard(me));
   }
   return score;
 }
@@ -137,8 +188,15 @@ function cardValue(g: Game, p: 0 | 1, c: CardInst): number {
 // ----------------------------------------------------------------------------
 // Prompt heuristics
 // ----------------------------------------------------------------------------
-function slotScoreForActive(s: GameState, slot: Slot): number {
-  return bestDamage(slot) * 1.2 + hpLeft(s, slot) * 0.3 + readiness(slot) * 40 + (hasRule(topCard(slot)) ? 10 : 0);
+function slotScoreForActive(s: GameState, slot: Slot, p?: 0 | 1): number {
+  const foe = p === undefined ? null : s.players[other(p)].active;
+  let v = (foe ? bestHit(s, slot, foe) : bestDamage(slot)) * 1.2 + hpLeft(s, slot) * 0.3 + readiness(slot) * 40 + (hasRule(topCard(slot)) ? 10 : 0);
+  if (foe) {
+    if (bestHit(s, slot, foe) >= hpLeft(s, foe)) v += 80; // it can take a prize right away
+    if (bestHit(s, foe, slot, 1) >= hpLeft(s, slot)) v -= 45; // it would just be knocked out
+    v -= retreatCost(s, slot) * 4;
+  }
+  return v;
 }
 
 export function heuristicAnswer(g: Game, pr: Prompt): Answer {
@@ -182,7 +240,8 @@ export function heuristicAnswer(g: Game, pr: Prompt): Answer {
         let v = 0;
         if (!mine) {
           const myAct = s.players[pr.player].active;
-          const dmgTitle = /(\d+)ダメージ/.exec(t);
+          const counters = /ダメカンを(\d+)個/.exec(t);
+          const dmgTitle = counters ? ([counters[0], String(Number(counters[1]) * 10)] as const) : /(\d+)ダメージ/.exec(t);
           if (t.includes('エネルギーをトラッシュ')) {
             v = energyCount(sl) * 10 + (o.z === 'active' ? 25 : 0) + (hasRule(topCard(sl)) ? 15 : 0);
           } else if (dmgTitle) {
@@ -205,7 +264,7 @@ export function heuristicAnswer(g: Game, pr: Prompt): Answer {
           const maxCost = Math.max(...atks.map((a) => a.cost.length));
           v = (units.length < maxCost ? 30 : 0) + (o.z === 'active' ? 15 : 0) + (hasRule(topCard(sl)) ? 10 : 0) + topCard(sl).hp * 0.05;
         } else {
-          v = slotScoreForActive(s, sl);
+          v = slotScoreForActive(s, sl, pr.player);
         }
         if (v > bestV) {
           bestV = v;
@@ -235,7 +294,7 @@ function runUntilBack(g: Game, p: 0 | 1, limit = 200) {
   }
 }
 
-function simulate(g: Game, p: 0 | 1, a: Action): number {
+function simulate(g: Game, p: 0 | 1, a: Action, threat = 0): number {
   const f = g.fork();
   try {
     f.answer({ type: 'action', action: a });
@@ -243,7 +302,7 @@ function simulate(g: Game, p: 0 | 1, a: Action): number {
   } catch {
     return -Infinity;
   }
-  return evaluate(f.s, p);
+  return evaluate(f.s, p) - (threat > 0 && isTerminal(a) ? threatPenalty(f.s, p, threat) : 0);
 }
 
 // ----------------------------------------------------------------------------
@@ -278,8 +337,8 @@ export const PROFILES: Record<CpuLevel, AiProfile> = {
   1: { noise: 45, skip: 0.3, badAttack: 0.35, slip: 0.35, depth: 0, width: 0, threat: 0, replies: 0, budgetMs: 0 },
   2: { noise: 30, skip: 0.2, badAttack: 0.2, slip: 0.22, depth: 0, width: 0, threat: 0, replies: 0, budgetMs: 0 },
   3: { noise: 20, skip: 0.12, badAttack: 0.1, slip: 0.12, depth: 0, width: 0, threat: 0, replies: 0, budgetMs: 0 },
-  4: { noise: 12, skip: 0.06, badAttack: 0.05, slip: 0.06, depth: 0, width: 0, threat: 0, replies: 0, budgetMs: 0 },
-  5: { noise: 5, skip: 0, badAttack: 0, slip: 0, depth: 0, width: 0, threat: 0, replies: 0, budgetMs: 0 },
+  4: { noise: 12, skip: 0.06, badAttack: 0.05, slip: 0.06, depth: 0, width: 0, threat: 0.3, replies: 0, budgetMs: 0 },
+  5: { noise: 5, skip: 0, badAttack: 0, slip: 0, depth: 0, width: 0, threat: 0.6, replies: 0, budgetMs: 0 },
   6: { noise: 0, skip: 0, badAttack: 0, slip: 0, depth: 1, width: 4, threat: 0.8, replies: 0, budgetMs: 250 },
   7: { noise: 0, skip: 0, badAttack: 0, slip: 0, depth: 2, width: 5, threat: 1, replies: 0, budgetMs: 450 },
   8: { noise: 0, skip: 0, badAttack: 0, slip: 0, depth: 3, width: 6, threat: 1.1, replies: 0, budgetMs: 600 },
@@ -301,11 +360,18 @@ export const CPU_LEVELS: { level: CpuLevel; name: string; blurb: string }[] = [
 /** the profile for a story difficulty or a CPU level */
 export function profileOf(level: AiLevel): AiProfile {
   const n = typeof level === 'number' ? level : level === 'easy' ? 2 : level === 'normal' ? 5 : 6;
-  return PROFILES[Math.max(1, Math.min(9, Math.round(n))) as CpuLevel];
+  const pf = PROFILES[Math.max(1, Math.min(9, Math.round(n))) as CpuLevel];
+  if (X('big') && n >= 9) return { ...pf, depth: 6, width: 8, budgetMs: 2500 };
+  return pf;
 }
 
-/** what the board alone says the opponent can do to my active monster after my turn */
-function threatPenalty(s: GameState, p: 0 | 1, weight: number): number {
+/**
+ * what the board alone says the opponent can do to my active monster after my
+ * turn. Its active is assumed to get one more energy (it attaches every turn);
+ * a bench monster could be switched in, so it counts at a discount. Losing the
+ * active costs its prize, what was built on it, and maybe the game.
+ */
+function threatPenaltyOld(s: GameState, p: 0 | 1, weight: number): number {
   if (s.phase === 'over' || weight <= 0) return 0;
   const o = other(p);
   const me = s.players[p].active;
@@ -313,7 +379,6 @@ function threatPenalty(s: GameState, p: 0 | 1, weight: number): number {
   if (!me || !them) return 0;
   const tm = topCard(them);
   const units = energyCount(them);
-  // an attack one energy short is assumed to be paid (the opponent attaches this turn)
   let dmg = 0;
   for (const a of tm.attacks) if (a.cost.length <= units + 1) dmg = Math.max(dmg, a.damage ?? 20);
   if (topCard(me).weakness === tm.type) dmg *= 2;
@@ -321,10 +386,33 @@ function threatPenalty(s: GameState, p: 0 | 1, weight: number): number {
   let pen = 0;
   if (dmg >= left) {
     pen += 130 * prizeValue(topCard(me));
-    // nothing to promote: losing the active may lose the game
     if (!s.players[p].bench.length) pen += 600;
-  } else {
-    pen += (dmg / left) * 25;
+  } else pen += (dmg / left) * 25;
+  return pen * weight;
+}
+
+function threatPenalty(s: GameState, p: 0 | 1, weight: number): number {
+  if (X('oldthreat')) return threatPenaltyOld(s, p, weight);
+  if (s.phase === 'over' || weight <= 0) return 0;
+  const o = other(p);
+  const me = s.players[p].active;
+  const them = s.players[o].active;
+  if (!me) return 0;
+  const left = hpLeft(s, me);
+  const foes: [Slot, number][] = [];
+  if (them) foes.push([them, 1]);
+  if (!X('nobenchthreat')) for (const b of s.players[o].bench) foes.push([b, 0.55]);
+  let pen = 0;
+  for (const [f, w] of foes) {
+    const dmg = bestHit(s, f, me, 1);
+    let x: number;
+    if (dmg >= left) {
+      x = X('smallko') ? 130 * prizeValue(topCard(me)) : 180 * prizeValue(topCard(me)) + slotValue(s, me, true) * 0.5;
+      // their next KO wins, or I have nothing to send out
+      if (s.players[o].prizes.length <= prizeValue(topCard(me))) x += 2500;
+      if (!s.players[p].bench.length) x += 2500;
+    } else x = (dmg / left) * 30;
+    pen = Math.max(pen, x * w);
   }
   return pen * weight;
 }
@@ -472,9 +560,9 @@ export function chooseAction(g: Game, p: 0 | 1, level: AiLevel = 'normal', actio
 
   // attack or end turn
   let atkBest: Action = { t: 'endTurn' };
-  let atkV = simulate(g, p, { t: 'endTurn' });
+  let atkV = simulate(g, p, { t: 'endTurn' }, prof.threat);
   for (const a of attacks) {
-    const v = simulate(g, p, a) + (Math.random() - 0.5) * prof.noise;
+    const v = simulate(g, p, a, prof.threat) + (Math.random() - 0.5) * prof.noise;
     if (v > atkV - 1) {
       atkV = v;
       atkBest = a;
@@ -483,10 +571,63 @@ export function chooseAction(g: Game, p: 0 | 1, level: AiLevel = 'normal', actio
   return atkBest;
 }
 
+/**
+ * The planning levels think about their choices too: which card to take from a
+ * search, which monster to send out, where to put energy or damage. Each option
+ * is tried on a copy and the rest of the turn planned from there; the best
+ * outcome wins. (Small prompts only, and never the opponent's hidden cards.)
+ */
+function planPrompt(g: Game, pr: Prompt, prof: AiProfile): Answer | null {
+  if (pr.type !== 'slot' && pr.type !== 'cards') return null;
+  const p = pr.player;
+  const opts: Answer[] = [];
+  if (pr.type === 'slot') {
+    if (pr.options.length < 2 || pr.options.length > 10) return null;
+    for (const o of pr.options) opts.push({ type: 'slot', pos: o });
+  } else {
+    if (pr.max !== 1 || pr.min > 1) return null;
+    // one option per distinct card (copies are the same choice)
+    const seen = new Set<string>();
+    for (const c of pr.cards) {
+      if (!pr.selectable.includes(c.uid) || seen.has(c.cid)) continue;
+      seen.add(c.cid);
+      opts.push({ type: 'cards', uids: [c.uid] });
+    }
+    if (pr.min === 0) opts.push({ type: 'cards', uids: [] });
+    if (opts.length < 2 || opts.length > 14) return null;
+  }
+  const deadline = Date.now() + prof.budgetMs * 0.6;
+  let best: Answer | null = null;
+  let bestV = -Infinity;
+  for (const o of opts) {
+    const f = g.fork();
+    let v: number;
+    try {
+      f.answer(o);
+      runUntilBack(f, p);
+      if (f.s.phase === 'over') v = evaluate(f.s, p);
+      else if (f.pending?.type === 'action' && f.pending.player === p) v = search(f, p, Math.min(1, prof.depth), prof, deadline)?.v ?? evaluate(f.s, p);
+      else v = evaluate(f.s, p) - threatPenalty(f.s, p, prof.threat);
+    } catch {
+      continue;
+    }
+    if (v > bestV) {
+      bestV = v;
+      best = o;
+    }
+    if (Date.now() > deadline) break;
+  }
+  return best;
+}
+
 export function aiAnswer(g: Game, level: AiLevel = 'normal', actionsThisTurn = 0): Answer {
   const pr = g.pending!;
   if (pr.type === 'action') return { type: 'action', action: chooseAction(g, pr.player, level, actionsThisTurn) };
   const prof = profileOf(level);
+  if (prof.depth > 0 && !X('noprompt')) {
+    const a = planPrompt(g, pr, prof);
+    if (a) return a;
+  }
   // a beginner sometimes picks a target at random
   if (prof.slip > 0 && Math.random() < prof.slip) {
     if (pr.type === 'slot' && pr.options.length) return { type: 'slot', pos: randomOf(pr.options) };
