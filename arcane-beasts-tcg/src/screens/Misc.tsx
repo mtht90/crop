@@ -1,3 +1,4 @@
+import { errorLog } from '../ui/ErrorBoundary';
 import { useEffect, useState } from 'react';
 import { DEV_CODE, enterDevMode, grantAllCards, useStore } from '../state/store';
 import { CHAPTERS } from '../story';
@@ -113,6 +114,7 @@ export function Settings() {
           <TransferRows />
           <InstallRow />
           <DevRow />
+          <ErrorLogRow />
           <div className="set-row danger">
             <label>セーブデータ</label>
             <button
@@ -467,5 +469,33 @@ export function Credits() {
         </div>
       </div>
     </div>
+  );
+}
+
+/** copy the device's error log, to paste into a bug report */
+function ErrorLogRow() {
+  const [msg, setMsg] = useState('');
+  const n = errorLog().length;
+  return (
+    <>
+      <div className="set-row">
+        <label>不具合の記録</label>
+        <button
+          className="btn small"
+          onClick={async () => {
+            const text = [`ARCANE BEASTS ${navigator.userAgent}`, ...errorLog()].join('\n\n');
+            try {
+              await navigator.clipboard.writeText(text);
+              setMsg(n ? `${n}件の記録をコピーしました。不具合の報告に貼り付けてください` : 'エラーの記録はありません（端末の情報だけコピーしました）');
+            } catch {
+              setMsg('コピーできませんでした');
+            }
+          }}
+        >
+          記録をコピー{n ? `（${n}件）` : ''}
+        </button>
+      </div>
+      {msg && <div className="set-note">{msg}</div>}
+    </>
   );
 }

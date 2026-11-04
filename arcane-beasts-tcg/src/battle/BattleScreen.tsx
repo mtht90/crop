@@ -1,5 +1,5 @@
 import { LayoutGroup, motion, AnimatePresence, useDragControls, type DragControls } from 'motion/react';
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createContext, memo, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { card, TYPE_JP } from '../engine/cards';
 import { autoRetreatDiscard, canPay, energyUnits, maxHp, posEq, posKey, retreatCost, STADIUM_NOTE, TERRAIN, TERRAIN_BOOST, TERRAIN_WEAKEN, topCard } from '../engine/game';
 import type { Action, CardInst, EnergyCard, GameState, MonsterCard, Pos, Prompt, Slot, TrainerCard } from '../engine/types';
@@ -17,6 +17,7 @@ import { cosmeticById } from '../state/cosmetics';
 import { foley, playMusic, sfx } from '../audio/audio';
 import { askConfirm } from '../ui/Confirm';
 import { Weather } from '../story/Weather';
+import { logError } from '../ui/ErrorBoundary';
 import type { Weather as WeatherKind } from '../story/types';
 import { vibrate } from '../lib/fx';
 import './battle.css';
@@ -117,6 +118,89 @@ const BoardCard = memo(function BoardCard({ inst, face, className, style, onClic
 });
 
 // ---------------------------------------------------------------------------
+// Board watchdog: rare, hard-to-pin glitches (an animation interrupted when the
+// phone sleeps or a drag is cancelled by the system, a fade that outlives its
+// card) could leave a card invisible or off its slot. Every second the board
+// checks itself; anything wrong for two checks in a row is put right by
+// re-mounting the cards (they glide back into place).
+// ---------------------------------------------------------------------------
+const HealCtx = createContext(0);
+
+function useBoardWatchdog(): number {
+  const [nonce, setNonce] = useState(0);
+  useEffect(() => {
+    const finishedAt = new WeakMap<Animation, number>();
+    let strikes = 0;
+    /** what was wrong last time, per slot: a card that is off and has not moved is frozen */
+    let last = new Map<string, string>();
+    const check = () => {
+      if (document.hidden || document.body.classList.contains('hand-dragging')) return;
+      let wrong = false;
+      let why = '';
+      const seen = new Map<string, string>();
+      const now = performance.now();
+      for (const sl of document.querySelectorAll<HTMLElement>('.battle-stage .slot[data-pos]:not(.empty)')) {
+        const bc = sl.querySelector<HTMLElement>(':scope > .bc');
+        if (!bc) continue;
+        const fx = bc.querySelector<HTMLElement>('.bc-fx');
+        // a finished fade (the KO crumble) that still holds a card on the board
+        for (const el of [bc, fx]) {
+          if (!el) continue;
+          for (const a of el.getAnimations()) {
+            if (a.playState !== 'finished') continue;
+            const t = finishedAt.get(a) ?? (finishedAt.set(a, now), now);
+            if (now - t > 1500) a.cancel();
+          }
+        }
+        const op = Math.min(+getComputedStyle(bc).opacity, fx ? +getComputedStyle(fx).opacity : 1);
+        const a = sl.getBoundingClientRect();
+        const c = bc.getBoundingClientRect();
+        const off = Math.abs(a.left - c.left) > a.width * 0.25 || Math.abs(a.top - c.top) > a.width * 0.25 || c.width < a.width * 0.5;
+        if (op < 0.3 || off) {
+          // rounded to 4px: a card still gliding moves more than that between checks
+          const sig = `${op < 0.3 ? 'faded' : ''}${Math.round((c.left - a.left) / 4)},${Math.round((c.top - a.top) / 4)}`;
+          const key = sl.dataset.pos ?? '';
+          seen.set(key, sig);
+          if (last.get(key) === sig) {
+            wrong = true;
+            why = `${key} op=${op.toFixed(2)} dx=${Math.round(c.left - a.left)} dy=${Math.round(c.top - a.top)} w=${Math.round(c.width)}/${Math.round(a.width)}`;
+          }
+        }
+      }
+      // two slots in one battle field: keep only the visible problem count
+      for (const z of document.querySelectorAll('.battle-stage .zone-active')) if (z.querySelectorAll(':scope > .slot').length > 1) {
+        wrong = true;
+        why = 'two slots';
+      }
+      last = seen;
+      strikes = wrong ? strikes + 1 : 0;
+      if (strikes >= 1) {
+        strikes = 0;
+        for (const el of document.querySelectorAll<HTMLElement>('.battle-stage .slot .bc, .battle-stage .slot .bc-fx')) {
+          for (const an of el.getAnimations()) if (an.playState === 'finished') an.cancel();
+          el.style.opacity = '';
+        }
+        const w = window as unknown as { __boardHeals?: string[] };
+        (w.__boardHeals ??= []).push(why);
+        logError('board-repaired', why);
+        setNonce((n) => n + 1);
+      }
+    };
+    const t = setInterval(check, 600);
+    // coming back to the app: redraw the board once
+    const vis = () => {
+      if (!document.hidden) setTimeout(() => setNonce((n) => n + 1), 120);
+    };
+    document.addEventListener('visibilitychange', vis);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener('visibilitychange', vis);
+    };
+  }, []);
+  return nonce;
+}
+
+// ---------------------------------------------------------------------------
 // In-play monster slot
 // ---------------------------------------------------------------------------
 const COND_ICON: Record<string, string> = { poisoned: 'poison', burned: 'burn', asleep: 'sleep', paralyzed: 'paralyze', confused: 'confuse' };
@@ -143,6 +227,7 @@ interface SlotProps {
 }
 
 function SlotView({ s, slot, pos, highlight, selectable, onClick, big }: SlotProps) {
+  const heal = useContext(HealCtx);
   const top = slot.stack[slot.stack.length - 1];
   const mc = topCard(slot);
   const hp = maxHp(s, slot);
@@ -162,7 +247,7 @@ function SlotView({ s, slot, pos, highlight, selectable, onClick, big }: SlotPro
           ))}
         </div>
       )}
-      <BoardCard key={top.uid} inst={top} face />
+      <BoardCard key={`${top.uid}-${heal}`} inst={top} face />
       <div className="hpbar">
         <div className={`hpfill ${pct <= 0.25 ? 'low' : pct <= 0.5 ? 'mid' : ''}`} style={{ width: `${pct * 100}%` }} />
         <span>
@@ -412,6 +497,28 @@ function Hand({ cards: raw, playable, selected, onSelect, onDrop, setupPick, dro
   const [dragging, setDragging] = useState<number | null>(null);
   const [lifted, setLifted] = useState(false);
   const hot = useRef<string | null>(null);
+  // the system can cancel a drag without a drop (a notification, the app
+  // switcher, a phone call): never leave a card hanging in the air
+  useEffect(() => {
+    if (dragging === null) return;
+    const reset = () => {
+      hot.current = null;
+      markHot(null);
+      setDragging(null);
+      onDragging(null);
+      setLifted(false);
+      document.body.classList.remove('hand-dragging');
+    };
+    const vis = () => document.hidden && reset();
+    window.addEventListener('pointercancel', reset);
+    window.addEventListener('blur', reset);
+    document.addEventListener('visibilitychange', vis);
+    return () => {
+      window.removeEventListener('pointercancel', reset);
+      window.removeEventListener('blur', reset);
+      document.removeEventListener('visibilitychange', vis);
+    };
+  }, [dragging, onDragging]);
   /** a click that ends a drag or a slide is not a tap */
   const swallowUntil = useRef(0);
   /** the click that ends a slide or a drag lands wherever the card went: ignore it everywhere */
@@ -797,6 +904,7 @@ export function BattleScreen() {
   const thinking = useBattle((s) => s.thinking);
   const [selected, setSelected] = useState<number | null>(null);
   const [dragUid, setDragUid] = useState<number | null>(null);
+  const heal = useBoardWatchdog();
   const [menu, setMenu] = useState<Pos | null>(null);
   const [retreat, setRetreat] = useState<{ discard: number[]; need: number; choosing: boolean } | null>(null);
   const [setupActive, setSetupActive] = useState<number | null>(null);
@@ -1100,6 +1208,7 @@ export function BattleScreen() {
               <Icon name="omega" size="100%" />
             </div>
           </div>
+          <HealCtx.Provider value={heal}>
           <LayoutGroup>
             {/* opponent */}
             <OppHand cards={opp.hand} />
@@ -1173,6 +1282,7 @@ export function BattleScreen() {
 
             {<Hand cards={handCards} playable={playable} selected={selected} onSelect={onSelectHand} onDrop={onDropHand} setupPick={isSetup ? setupBasics : undefined} dropKeys={dropKeys} onDragging={setDragUid} />}
           </LayoutGroup>
+          </HealCtx.Provider>
 
           {/* HUD */}
           <div className="plate opp">

@@ -208,11 +208,12 @@
 .home3-stats b { display: block; font-family: var(--font-display); font-weight: 400; font-size: var(--fs-l); color: var(--gold-2); }
 .home3-stats span { font-size: var(--fs-xs); color: var(--ink-dim); font-weight: 700; }
 @media (orientation: landscape) {
-  .home3-grid { grid-template-columns: 1.15fr 1fr; grid-template-areas: 'hero tiles' 'stats tiles'; align-content: start; }
+  .home3-grid { grid-template-columns: 1.15fr 1fr; grid-template-areas: 'news news' 'hero tiles' 'stats tiles'; align-content: start; }
   .home3-hero { grid-area: hero; min-height: clamp(200px, 52vh, 460px); }
   .home3-tiles { grid-area: tiles; }
   .home3-tiles .tile2 { min-height: clamp(110px, 31vh, 260px); }
   .home3-stats { grid-area: stats; }
+  .home3-news { grid-area: news; }
 }
 
 /* ---------------------------------- more --------------------------------- */
@@ -288,6 +289,33 @@
 .login-modal { width: min(640px, 100%); padding: 18px 18px 16px; }
 .login-modal h2 { margin: 0; text-align: center; font-family: var(--font-display); font-weight: 400; font-size: var(--fs-l); color: var(--gold-2); }
 .login-modal .sub { text-align: center; color: var(--ink-dim); font-size: var(--fs-xs); margin: 4px 0 8px; font-weight: 700; }
+.home3-news { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; padding: 9px 14px; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.home3-news b { flex: 1; min-width: 0; font-size: var(--fs-s); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.news-new { font-style: normal; font-size: 11px; font-weight: 900; color: #fff; background: var(--red); padding: 1px 7px; border-radius: 999px; }
+.news-modal { position: relative; width: min(680px, 100%); max-height: min(86dvh, 860px); display: flex; flex-direction: column; gap: 10px; padding: 18px 16px 12px; }
+.news-modal h2 { margin: 0; text-align: center; font-family: var(--font-display); font-weight: 400; font-size: var(--fs-l); color: var(--gold-2); }
+.news-modal .close { position: absolute; right: 10px; top: 10px; width: 34px; height: 34px; font-size: 16px; }
+.news-tabs { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; flex: none; }
+.news-tabs .chip-btn { flex: none; }
+.news-list { flex: 1; min-height: 0; overflow-y: auto; display: grid; gap: 8px; align-content: start; padding-right: 2px; }
+.news-item { border-radius: 12px; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.1); overflow: hidden; }
+.news-item.open { border-color: rgba(233, 196, 106, 0.45); }
+.news-head { all: unset; box-sizing: border-box; width: 100%; display: grid; grid-template-columns: auto 1fr auto auto; gap: 4px 8px; align-items: center; padding: 10px 12px; cursor: pointer; }
+.news-head b { font-size: var(--fs-s); line-height: 1.35; }
+.news-head small { color: var(--ink-dim); font-size: var(--fs-xs); white-space: nowrap; }
+.news-caret { color: var(--ink-dim); font-size: 10px; }
+.news-kind { font-size: 11px; font-weight: 900; padding: 2px 8px; border-radius: 999px; background: #3b4a7a; color: #dfe6ff; white-space: nowrap; }
+.k-update .news-kind { background: #1f6f4a; color: #d8ffe9; }
+.k-event .news-kind { background: #7a5a12; color: #fff3cf; }
+.k-fix .news-kind { background: #7a2a36; color: #ffe0e5; }
+.news-body { padding: 0 14px 12px; display: grid; gap: 6px; font-size: var(--fs-s); line-height: 1.6; }
+.news-body p { margin: 0; }
+.news-bullet { position: relative; padding-left: 1.1em; }
+.news-bullet::before { content: '・'; position: absolute; left: 0; color: var(--gold-2); }
+.news-body .btn { justify-self: start; margin-top: 4px; }
+.news-art { height: 110px; border-radius: 10px; background-size: cover; background-position: center; margin-bottom: 4px; }
+.news-hide { display: flex; align-items: center; justify-content: center; gap: 6px; font-size: var(--fs-xs); color: var(--ink-dim); font-weight: 700; flex: none; cursor: pointer; }
+.news-hide input { width: 16px; height: 16px; accent-color: var(--gold-2); }
 .login-modal .close { position: absolute; right: 10px; top: 10px; width: 34px; height: 34px; font-size: 16px; }
 .login-modal .btn { --h: 42px; font-size: var(--fs-s); padding: 0 16px; }
 .coin-flash { position: fixed; left: 50%; top: 40%; translate: -50% 0; z-index: 400; padding: 10px 22px; border-radius: 999px; background: rgba(10, 16, 40, 0.95); border: 1px solid var(--gold); color: var(--gold-2); font-weight: 900; font-size: var(--fs-l); display: flex; align-items: center; gap: 8px; pointer-events: none; }
@@ -590,3 +618,11 @@
 .cpu3-info p { margin: 0; color: var(--ink-dim); font-size: var(--fs-s); }
 .cpu3-note { margin: 0; }
 @media (max-width: 560px) { .cpu3-levels { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+
+/* a screen that broke */
+.error-screen { display: grid; place-items: center; padding: 16px; background: var(--bg0); }
+.error-panel { width: min(520px, 100%); padding: 20px; display: grid; gap: 12px; text-align: center; }
+.error-panel h2 { margin: 0; font-family: var(--font-display); font-weight: 400; color: var(--gold-2); }
+.error-panel p { margin: 0; color: var(--ink-dim); font-size: var(--fs-s); }
+.error-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.error-detail { font-size: 11px; color: #ff9e9e; word-break: break-all; opacity: 0.8; }

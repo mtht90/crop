@@ -5,6 +5,8 @@ import { useEffect, useState } from 'react';
 import { activeDeck, collectionPct, extCtx, useStore, RIVALS } from '../state/store';
 import { canClaimLogin, claimableCount, expToNext } from '../state/progress';
 import { LoginTrack } from './Missions';
+import { hasUnreadNews, newsAtStart, useNews } from './News';
+import { NEWS } from '../state/news';
 import { artUrl } from '../lib/assets';
 import { Icon } from '../ui/Icon';
 import { foley, playMusic, sfx } from '../audio/audio';
@@ -21,6 +23,7 @@ interface TileDef {
 }
 
 let loginShown = false;
+let newsShown = false;
 
 export function Home() {
   const save = useStore((s) => s.save);
@@ -32,12 +35,22 @@ export function Home() {
   const nextCh = CHAPTERS[nextIdx];
   const missionN = claimableCount(save.progress, extCtx(save));
   const p = save.progress;
+  const newsOpen = useNews((s) => s.open);
+  const showNews = useNews((s) => s.show);
+  // お知らせ first (once per start, unless hidden for today), then the login bonus
+  useEffect(() => {
+    if (newsShown) return;
+    newsShown = true;
+    if (newsAtStart(save.newsHideDay)) showNews();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [loginOpen, setLoginOpen] = useState(() => {
     // pop the login bonus once per session; afterwards it lives in ミッション
-    const open = canClaimLogin(save.progress) && !loginShown;
-    loginShown = true;
-    return open;
+    return canClaimLogin(save.progress) && !loginShown;
   });
+  useEffect(() => {
+    loginShown = true;
+  }, []);
   const tiles: TileDef[] = [
     { to: 'shop', title: 'パック', sub: '通常・プレミアム', bg: 'story/swamp-02', fig: 'monsters/jinn', icon: 'chest' },
     { to: 'missions', title: 'ミッション', sub: missionN ? '報酬を受け取れます' : 'デイリー・実績', bg: 'story/landscape-castle', fig: 'humans/mage-white+female', icon: 'trophy', badge: missionN ? `${missionN}` : undefined },
@@ -76,6 +89,18 @@ export function Home() {
         </header>
 
         <div className="page-inner home3-grid">
+          <button
+            className="box home3-news"
+            onClick={() => {
+              sfx('expand', 0.4);
+              showNews();
+            }}
+          >
+            <span className="news-kind">お知らせ</span>
+            <b>{NEWS[0].title}</b>
+            {hasUnreadNews(save.newsSeen) && <i className="news-new">NEW</i>}
+            <span className="news-caret">▶</span>
+          </button>
           <motion.div className="tile2 big home3-hero" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} onMouseEnter={() => foley.hover()} onClick={() => tap('arena')}>
             <img className="bg" src={artUrl('story/landscape-lava')} alt="" />
             <div className="shade" />
@@ -139,7 +164,7 @@ export function Home() {
           </motion.div>
         </div>
       </div>
-      <AnimatePresence>{loginOpen && <LoginModal onClose={() => setLoginOpen(false)} />}</AnimatePresence>
+      <AnimatePresence>{loginOpen && !newsOpen && <LoginModal onClose={() => setLoginOpen(false)} />}</AnimatePresence>
     </div>
   );
 }

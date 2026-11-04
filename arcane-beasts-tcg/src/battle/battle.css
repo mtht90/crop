@@ -66,7 +66,9 @@
 /* --------------------------------- Zones -------------------------------- */
 .zone-active { position: absolute; width: calc(var(--u) * 8.6); left: calc(var(--u) * 45.7); }
 /* never more than one card here; if two slots ever meet they overlap rather than stack */
-.zone-active > .slot + .slot { position: absolute; inset: 0; }
+/* everything in a battle field sits at its top: nothing can push the card down out of place */
+.zone-active { aspect-ratio: 63 / 88; }
+.zone-active > * { position: absolute !important; top: 0; left: 0; right: 0; }
 .zone-active.me { top: calc(var(--u) * 28.7); }
 .zone-active.opp { top: calc(var(--u) * 14.5); }
 .zone-bench {
@@ -1073,7 +1075,15 @@
    the field (--dy) and below your bench (another --dy), so the hand sits at
    the bottom edge */
 @media (orientation: portrait) {
-  .battle-stage { --sh: min(100dvh, calc(var(--u) * 125)); --dy: calc((var(--sh) - var(--u) * 100) / 2); height: var(--sh); }
+  /* phones with a notch / status bar over the page: keep the board clear of it */
+  .battle-stage {
+    --safe-t: env(safe-area-inset-top, 0px);
+    --safe-b: env(safe-area-inset-bottom, 0px);
+    --sh: clamp(calc(var(--u) * 100), calc(100dvh - var(--safe-t) - var(--safe-b)), calc(var(--u) * 125));
+    --dy: calc((var(--sh) - var(--u) * 100) / 2);
+    height: var(--sh);
+    margin-top: calc((var(--safe-t) - var(--safe-b)) / 2);
+  }
   .mat-line { top: calc(var(--u) * 40 + var(--dy) * 0.5); }
   .mat-emblem { top: calc(var(--u) * 35 + var(--dy) * 0.5); }
   .zone-stadium { top: calc(var(--u) * 37.7 + var(--dy) * 0.5); }

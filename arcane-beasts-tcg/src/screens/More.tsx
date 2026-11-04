@@ -1,4 +1,5 @@
 // その他: everything that is not one of the main tabs
+import { hasUnreadNews, useNews } from './News';
 import { motion } from 'motion/react';
 import { useEffect } from 'react';
 import { claimableCount } from '../state/progress';
@@ -13,7 +14,8 @@ export function More() {
   const go = useStore((s) => s.go);
   useEffect(() => playMusic('menu'), []);
   const missions = claimableCount(save.progress, extCtx(save));
-  const items: { to: Screen; icon: string; title: string; sub: string; badge?: string }[] = [
+  const items: { to: Screen; icon: string; title: string; sub: string; badge?: string; open?: () => void }[] = [
+    { to: 'home', icon: 'scroll-unfurled', title: 'お知らせ', sub: 'アップデート・イベント・不具合修正の情報', badge: hasUnreadNews(save.newsSeen) ? 'NEW' : undefined, open: () => useNews.getState().show() },
     { to: 'missions', icon: 'trophy', title: 'ミッション', sub: 'デイリー・ウィークリー・実績・ログインボーナス', badge: missions ? String(missions) : undefined },
     { to: 'collection', icon: 'cards', title: 'コレクション', sub: `集めたカード（収集率 ${Math.floor(collectionPct(save))}%）`, badge: save.newCards.length ? `NEW ${save.newCards.length}` : undefined },
     { to: 'wardrobe', icon: 'wardrobe', title: 'ワードローブ', sub: `カード裏面・バトルの背景・称号（コインで交換）` },
@@ -31,7 +33,7 @@ export function More() {
         <div className="page-inner more-list">
           {items.map((it, i) => (
             <motion.button
-              key={it.to}
+              key={it.title}
               className="box more-item"
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
@@ -39,7 +41,8 @@ export function More() {
               onMouseEnter={() => foley.hover()}
               onClick={() => {
                 sfx('expand', 0.4);
-                go(it.to);
+                if (it.open) it.open();
+                else go(it.to);
               }}
             >
               <span className="more-ico">

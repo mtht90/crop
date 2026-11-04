@@ -93,6 +93,9 @@ export interface Save {
   settings: Settings;
   started: boolean;
   guideSeen?: boolean;
+  /** お知らせ: the newest entry opened, and the day the start-up popup was turned off */
+  newsSeen?: string;
+  newsHideDay?: string;
   progress: Progress;
   /** story mode progress */
   story: StorySave;

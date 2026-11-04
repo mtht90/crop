@@ -24,6 +24,10 @@ import { setGyroEnabled, startGyro } from './lib/gyro';
 import { expand, RIVALS, deckById } from './engine/decks';
 import './screens/screens.css';
 import { ConfirmDialog } from './ui/Confirm';
+import { NewsModal } from './screens/News';
+import { ErrorBoundary, watchGlobalErrors } from './ui/ErrorBoundary';
+
+watchGlobalErrors();
 import { cosmeticById } from './state/cosmetics';
 import { TabBar, TAB_OF } from './ui/TabBar';
 import { More } from './screens/More';
@@ -169,11 +173,14 @@ export function App() {
             exit={{ opacity: 0, pointerEvents: 'none', zIndex: 0 }}
             transition={{ duration: 0.18, ease: [0.2, 0.8, 0.2, 1] }}
           >
-            <Comp />
+            <ErrorBoundary where={screen} onHome={() => useStore.setState({ screen: 'home', battle: null })}>
+              <Comp />
+            </ErrorBoundary>
           </motion.div>
         </AnimatePresence>
         {TAB_OF[screen] && <TabBar screen={screen} />}
       </div>
+      <NewsModal />
       <ConfirmDialog />
     </>
   );
