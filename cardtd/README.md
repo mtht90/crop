@@ -35,6 +35,7 @@ cd cardtd && python3 -m http.server 8000
 | 城 | Free Stone Tower Game Assets | CraftPix |
 | 背景 | Free Horizontal Game Backgrounds / Free Cartoon Forest 2D Backgrounds / Free Elven Land 2D Battle Backgrounds | CraftPix |
 | カード・UI | Mechanized Magic: 2D Vector Cards Pack / Ultimate UI Pack(Dumivid) | CC0 |
+| UI 部品(ゲージ・羊皮紙・カーソル) | Kenney UI Pack: RPG Expansion | CC0 |
 | エフェクト | 2D Spell Effects(Martin Jelinek) | CC0 |
 | 効果音 | Kenney 50 RPG Sound Effects | CC0 |
 | BGM | FREE Music Loop Bundle(Tallbeard Studios / Abstraction) | CC0 |
