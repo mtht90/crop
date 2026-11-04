@@ -18,6 +18,17 @@ export const NEWS_KIND_JP: Record<NewsKind, string> = { update: 'アップデー
 
 export const NEWS: NewsItem[] = [
   {
+    id: '2026-11-04-story-cpu',
+    kind: 'update',
+    date: '2026/11/04',
+    title: 'ストーリーの対戦相手が手ごわくなりました',
+    body: [
+      'ストーリーの相手は、話が進むほど強く考えるようになりました（CPU対戦のレベルと同じ強さ）。',
+      '・第一章：レベル3から始まり、最終話はレベル8',
+      '・第二章：レベル5から始まり、最終話はレベル9（伝説）',
+    ],
+  },
+  {
     id: '2026-11-04-rewards2',
     kind: 'update',
     date: '2026/11/04',
