@@ -48,7 +48,7 @@ export class CardView extends Phaser.GameObjects.Container {
     const cost = addText(scene, gem.x, gem.y - 1, String(card.cost), Math.round(20 * s), '#ffffff');
     const countTag = card.count > 1 ? addText(scene, w / 2 - 14 * s, h / 2 - 46 * s, `×${card.count}`, Math.round(13 * s), CSS.dark, { strokeThickness: 0 }) : null;
     this.dim = scene.add.rectangle(0, 0, w - 6, h - 6, 0x000000, 0.55).setVisible(false);
-    this.needText = addText(scene, 0, -4 * s, '', Math.round(16 * s), CSS.mana).setVisible(false);
+    this.needText = addText(scene, 0, -6 * s, '', Math.round(20 * s), CSS.mana).setVisible(false);
     this.add([panel, band, this.art, ...(extra ? [extra] : []), name, typeTag, gem, cost, ...(countTag ? [countTag] : []), this.dim, this.needText]);
     this.setSize(w, h);
     scene.add.existing(this);

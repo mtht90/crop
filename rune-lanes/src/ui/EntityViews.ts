@@ -71,10 +71,7 @@ export class UnitView {
     let bob = 0;
     if (c.isFlying) bob = Math.sin(time / 180 + c.id) * 3;
     else if (c.moving) bob = -Math.abs(Math.sin(time / 90 + c.id)) * 3;
-    let lunge = 0;
-    const since = c.kind === 'unit' ? time / 1000 : 999;
-    void since;
-    this.sprite.y = -this.lift - 4 + bob + lunge;
+    this.sprite.y = -this.lift - 4 + bob;
     this.sprite.setFlipX(c.facing < 0);
     this.sprite.setAlpha(deploying ? 0.45 + 0.25 * Math.sin(time / 60) : 1);
     if (this.scene.time.now < this.flashUntil) this.sprite.setTint(0xffffff).setTintMode(Phaser.TintModes.FILL);
@@ -190,7 +187,7 @@ export class TowerView {
     this.sleep.setVisible(c.towerType === 'king' && !c.active);
     if (this.sleep.visible) this.sleep.y = -c.radius * TILE + Math.sin(time / 300) * 4;
     const w = c.towerType === 'king' ? 110 : 84;
-    const y = c.team === 0 ? c.radius * TILE + 16 : -c.radius * TILE - 22;
+    const y = c.radius * TILE + 14;
     this.bars.clear();
     this.bars.fillStyle(0x000000, 0.75).fillRect(-w / 2 - 2, y - 2, w + 4, 12);
     this.bars.fillStyle(c.team === 0 ? COLORS.player : COLORS.cpu).fillRect(-w / 2, y, w * (c.hp / c.maxHp), 8);

@@ -139,8 +139,7 @@ export class InfoHud {
     const d = 5000;
     addPanel(scene, 684, 70, 70, 96, 'ui_panel_dark').setDepth(d);
     this.phase = addText(scene, 684, 40, '残り', 14, CSS.dim).setDepth(d + 1);
-    this.timer = addText(scene, 684, 70, '3:00', 22, '#ffffff').setDepth(d + 1);
-    addText(scene, 684, 100, '撃破', 13, CSS.dim).setDepth(d + 1);
+    this.timer = addText(scene, 684, 76, '3:00', 22, '#ffffff').setDepth(d + 1);
 
     addPanel(scene, 36, 70, 66, 96, 'ui_panel_dark').setDepth(d);
     addText(scene, 36, 36, 'CPU', 15, CSS.cpu).setDepth(d + 1);
@@ -150,7 +149,7 @@ export class InfoHud {
 
     this.crowns = [
       addText(scene, 36, 990, '★0', 22, CSS.player).setDepth(d + 1),
-      addText(scene, 684, 140, '★0', 22, CSS.cpu).setDepth(d + 1),
+      addText(scene, 36, 150, '★0', 22, CSS.cpu).setDepth(d + 1),
     ];
     addText(scene, 36, 962, 'あなた', 14, CSS.player).setDepth(d + 1);
   }

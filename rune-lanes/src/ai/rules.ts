@@ -3,7 +3,6 @@ import { enemyOf } from '../core/types';
 import type { Rng } from '../core/Rng';
 import type { BattleWorld } from '../systems/BattleWorld';
 import {
-  affordableHand,
   bridgeX,
   canHitAir,
   clusterAround,
