@@ -341,6 +341,53 @@ describe('スタジアム（第二章の追加）', () => {
   });
 });
 
+describe('★が高い版は強い', () => {
+  function started(seed = 5) {
+    const g = Game.create([expand(deckById('dragoon').cards), expand(deckById('lich').cards)], ['A', 'B'], seed);
+    g.start();
+    let n = 0;
+    while (g.pending && g.pending.type !== 'action' && n++ < 50) g.answer(aiAnswer(g, 'normal', 0));
+    return g;
+  }
+  const v = (name: string, variant: string) => ALL_CARDS.find((c) => c.name === name && c.variant === variant)!;
+  it('monsters gain HP and damage with each tier; mirrors stay the same', () => {
+    const base = byName('アークウィッチ') as MonsterCard;
+    const top = (c: MonsterCard) => Math.max(...c.attacks.map((a) => a.damage ?? 0));
+    const want: Record<string, [number, number]> = { mirror: [0, 0], SR: [10, 10], SV: [30, 20], UR: [50, 30] };
+    for (const [variant, [hp, dmg]] of Object.entries(want)) {
+      const c = v('アークウィッチ', variant) as MonsterCard;
+      expect(c.hp - base.hp, variant).toBe(hp);
+      expect(top(c) - top(base), variant).toBe(dmg);
+    }
+  });
+  it('every trainer with a special printing says and does more', () => {
+    for (const c of ALL_CARDS) if ((c.kind === 'trainer' || c.kind === 'energy') && c.variant && c.variant !== 'mirror') expect((c as { text?: string }).text, c.id).not.toBe((card(c.baseId!) as { text?: string }).text);
+    expect(v('大賢者の研究', 'SR').kind === 'trainer' && (v('大賢者の研究', 'SR') as { text: string }).text).toContain('8枚');
+  });
+  it('大賢者の研究 (★4) draws 9', () => {
+    const g = started();
+    const p = g.s.current;
+    const pl = g.s.players[p];
+    const c = { uid: 77001, cid: v('大賢者の研究', 'SV').id, owner: p };
+    pl.hand.push(c);
+    g.s.flags.supporterPlayed = false;
+    if (g.s.turn === 1) g.s.turn = 2;
+    g.answer({ type: 'action', action: { t: 'playTrainer', uid: c.uid } });
+    expect(pl.hand.length).toBe(9);
+  });
+  it('虹色エネルギー (★4 / ★5) puts no damage on', () => {
+    const g = started();
+    const p = g.s.current;
+    const pl = g.s.players[p];
+    const c = { uid: 77002, cid: v('虹色エネルギー', 'UR').id, owner: p };
+    pl.hand.push(c);
+    g.s.flags.energyAttached = false;
+    const before = pl.active!.damage;
+    g.answer({ type: 'action', action: { t: 'attachEnergy', uid: c.uid, target: { p, z: 'active' } } });
+    expect(pl.active!.damage).toBe(before);
+  });
+});
+
 describe('chapters', () => {
   it('groups every card into a chapter, numbered from 1 within it', () => {
     const base = ALL_CARDS.filter((c) => !c.variant);

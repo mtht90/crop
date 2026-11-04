@@ -119,6 +119,8 @@ interface CardBase {
   variant?: Variant;
   /** SAR art framing: portrait scale / horizontal anchor (%) / bottom offset (%) */
   crop?: { scale?: number; x?: number; y?: number };
+  /** how much stronger this printing is: 0 regular / mirror, 1 full art (★3), 2 ★4, 3 gold (★5) */
+  tier?: number;
   /** illustration printed as a painting only (no portrait on top) */
   paint?: boolean;
 }

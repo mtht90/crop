@@ -7,6 +7,7 @@ import { MONSTERS3 } from './monsters3';
 import { TRAINERS3 } from './trainers3';
 import { STADIUMS } from './stadiums';
 import { CH1_EXTRA, CH2_EXTRA } from './chapters';
+import { boostedText, boostMonster, TIER } from './boost';
 
 export const TYPE_JP: Record<EType, string> = {
   fire: '炎',
@@ -227,8 +228,15 @@ function named(name: string): CardDef {
 function alt(base: CardDef, v: Variant, extra: Partial<CardDef> = {}) {
   const rarity: Rarity = v === 'mirror' ? base.rarity : PRINT_STAR[v];
   const no = v === 'mirror' ? base.no : ++secret[base.set];
+  // rarer printings are stronger (see boost.ts)
+  const tier = TIER[v];
+  const text = boostedText(base, tier);
+  const power: Partial<CardDef> = tier
+    ? { tier, ...(base.kind === 'monster' ? boostMonster(base, tier) : {}), ...(text ? { text } : {}) }
+    : {};
   VARIANTS.push({
     ...base,
+    ...power,
     id: `${base.id}-${SUFFIX[v]}`,
     no,
     rarity,

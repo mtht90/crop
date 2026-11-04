@@ -7,6 +7,7 @@
 // snapshot of the state, so the UI can replay the match beat by beat.
 // ============================================================================
 import { card, byName, COND_JP, TYPE_JP } from './cards';
+import { POWER, tierOf } from './cards/boost';
 import type {
   Action,
   Answer,
@@ -718,7 +719,7 @@ export class Game {
       case 'herbalist':
         return true;
       case 'warchief':
-        return handOthers.length < 5 && pl.deck.length > 0;
+        return handOthers.length < POWER.warchief(tierOf(def)) && pl.deck.length > 0;
       case 'thief':
         return opp.hand.length > 0;
       case 'venom':
@@ -788,7 +789,8 @@ export class Game {
         slot.energy.push(c);
         s.flags.energyAttached = true;
         this.emit({ e: 'attach', p, uid: c.uid, pos: a.target });
-        if ((card(c.cid) as EnergyCard).any) this.putDamage(a.target, 10, 'colorless', 'effect');
+        const ec = card(c.cid) as EnergyCard;
+        if (ec.any && POWER.rainbow(tierOf(ec))) this.putDamage(a.target, 10 * POWER.rainbow(tierOf(ec)), 'colorless', 'effect');
         return false;
       }
       case 'playTrainer': {
@@ -1171,7 +1173,7 @@ export class Game {
         // defender-side modifiers
         const red = hasAbility(D, 'damageReduce');
         if (red && red.k === 'damageReduce') dmg -= red.n;
-        if (toolKey(D) === 'crest' && hasRule(dc)) dmg -= 30;
+        if (toolKey(D) === 'crest' && hasRule(dc)) dmg -= POWER.crest(tierOf(card(D.tool!.cid)));
         if (toolKey(D) === 'tower') dmg -= 20;
         if (st === 'hall' && dc.stage !== 'basic') dmg -= 20;
         for (const f of D.flags) if (f.k === 'reduce' && f.untilTurn >= s.turn) dmg -= f.n ?? 0;
@@ -1431,6 +1433,7 @@ export class Game {
   private *trainerEffect(p: 0 | 1, def: TrainerCard, inst: CardInst): Gen {
     const s = this.s;
     const pl = this.pl(p);
+    const t = tierOf(def); // rarer printings are stronger (cards/boost.ts)
     const opp = other(p);
     const isMon = (d: CardDef) => d.kind === 'monster';
     switch (def.key) {
@@ -1438,11 +1441,12 @@ export class Game {
         const h = pl.hand.splice(0);
         pl.discard.push(...h);
         if (h.length) this.emit({ e: 'discard', p, uids: h.map((c) => c.uid) });
-        this.draw(p, 7);
+        this.draw(p, POWER.research(t));
         break;
       }
       case 'boss':
         yield* this.promptSwitch(opp, p, 'バトル場に呼び出す相手のベンチモンスターを選んでください');
+        if (POWER.boss(t)) this.draw(p, POWER.boss(t));
         break;
       case 'iono': {
         for (const q of [p, opp] as const) {
@@ -1457,6 +1461,7 @@ export class Game {
           this.emit({ e: 'shuffle', p: q });
         }
         for (const q of [p, opp] as const) this.draw(q, this.pl(q).prizes.length);
+        if (POWER.iono(t)) this.draw(p, POWER.iono(t));
         break;
       }
       case 'hunter': {
@@ -1468,7 +1473,7 @@ export class Game {
         const opts = slotsOf(s, p).filter((x) => x.slot.damage > 0 || x.slot.conditions.length).map((x) => x.pos);
         const pos = yield* this.chooseSlot(p, '回復するモンスターを選んでください', opts);
         if (pos) {
-          this.heal(pos, 80);
+          this.heal(pos, POWER.cleric(t));
           const sl = slotAt(s, pos)!;
           if (sl.conditions.length) {
             sl.conditions = [];
@@ -1534,6 +1539,7 @@ export class Game {
         const pos = yield* this.chooseSlot(p, '進化させるたねモンスターを選んでください', opts);
         const c = this.removeFromHand(p, u);
         yield* this.evolveSlot(p, pos!, c);
+        if (POWER.candy(tierOf(def))) this.draw(p, POWER.candy(tierOf(def)));
         break;
       }
       case 'retrieval':
@@ -1561,19 +1567,20 @@ export class Game {
         yield* this.searchToHand(p, '基本エネルギーを1枚選んでください', (d) => d.kind === 'energy' && d.basic, 1);
         break;
       case 'rally':
-        yield* this.benchFromDeck(p, 2, () => true);
+        yield* this.benchFromDeck(p, POWER.rally(t), () => true);
         break;
       case 'assassin': {
         const opts = slotsOf(s, opp).map((x) => x.pos);
-        const pos = yield* this.chooseSlot(p, '30ダメージぶんのダメカンをのせる相手のモンスターを選んでください', opts);
-        if (pos) this.putDamage(pos, 30, 'colorless', 'effect');
+        const n = POWER.assassin(t);
+        const pos = yield* this.chooseSlot(p, `ダメカンを${n}個のせる相手のモンスターを選んでください`, opts);
+        if (pos) this.putDamage(pos, n * 10, 'colorless', 'effect');
         break;
       }
       case 'paladin':
-        for (const { pos, slot } of slotsOf(s, p)) if (slot.damage > 0) this.heal(pos, 30);
+        for (const { pos, slot } of slotsOf(s, p)) if (slot.damage > 0) this.heal(pos, POWER.paladin(t));
         break;
       case 'tutor':
-        yield* this.searchToHand(p, '手札に加えるトレーナーズを選んでください', (d) => d.kind === 'trainer', 1);
+        yield* this.searchToHand(p, '手札に加えるトレーナーズを選んでください', (d) => d.kind === 'trainer', POWER.tutor(t));
         break;
       case 'energyswap': {
         const from = slotsOf(s, p).filter((x) => x.slot.energy.some((e) => isBasicEnergy(e.cid))).map((x) => x.pos);
@@ -1630,10 +1637,10 @@ export class Game {
         break;
       }
       case 'warchief':
-        this.draw(p, Math.max(0, 5 - pl.hand.length));
+        this.draw(p, Math.max(0, POWER.warchief(t) - pl.hand.length));
         break;
       case 'mercenary': {
-        for (let k = 0; k < 2; k++) if (this.flip(p, def.name)) yield* this.searchToHand(p, '手札に加えるカードを1枚選んでください', () => true, 1);
+        for (let k = 0; k < POWER.mercenary(t); k++) if (this.flip(p, def.name)) yield* this.searchToHand(p, '手札に加えるカードを1枚選んでください', () => true, 1);
         break;
       }
       case 'thief': {
@@ -1655,7 +1662,7 @@ export class Game {
       case 'guide': {
         const room = BENCH_MAX - pl.bench.length;
         const cands = pl.discard.filter((d) => isBasic(d.cid));
-        const chosen = yield* this.chooseCards(p, 'ベンチに出すたねモンスターを選んでください', cands, cands.map((c) => c.uid), 0, Math.min(2, room));
+        const chosen = yield* this.chooseCards(p, 'ベンチに出すたねモンスターを選んでください', cands, cands.map((c) => c.uid), 0, Math.min(POWER.guide(t), room));
         for (const uid of chosen) {
           const i = pl.discard.findIndex((c) => c.uid === uid);
           const c = pl.discard.splice(i, 1)[0];
