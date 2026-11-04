@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { battleReward, bump, COIN_SCALE, currentEvent, dayKey, ensurePeriods, EVENTS, freshProgress, GEM_DAILY_WIN, GEM_FIRST_CLEAR, LOGIN_GEMS, LOGIN_REWARDS, levelGems, levelReward, missionGems, missionValue, NORMAL_MISSIONS, ACHIEVEMENTS, weekKey } from '../progress';
+import { battleReward, bump, COIN_SCALE, currentEvent, dayKey, ensurePeriods, EVENTS, freshProgress, GEM_DAILY_WIN, GEM_FIRST_CLEAR, LOGIN_GEMS, LOGIN_REWARDS, levelGems, levelReward, missionGems, missionValue, NORMAL_MISSIONS, storyFirstClear, ACHIEVEMENTS, weekKey } from '../progress';
 import { cleanWardrobe, COSMETICS, DEFAULT_LOOK, freshWardrobe } from '../cosmetics';
 
 const win = { win: true, level: 'normal' as const, baseReward: 300, prizesTaken: 6, prizesLost: 2, firstClear: false };
@@ -25,10 +25,17 @@ describe('gems (ジェム)', () => {
   it('everyday missions pay coins in the hundreds to thousands; only event tasks pay gems', () => {
     expect(LOGIN_GEMS.length).toBe(LOGIN_REWARDS.length);
     expect(LOGIN_GEMS[6]).toBeGreaterThan(LOGIN_GEMS[0]);
-    for (const m of [...NORMAL_MISSIONS, ...ACHIEVEMENTS]) {
-      expect(missionGems(m), m.id).toBe(0);
-      expect(m.reward, m.id).toBeGreaterThanOrEqual(150);
+    for (const m of [...NORMAL_MISSIONS, ...ACHIEVEMENTS]) expect(m.reward, m.id).toBeGreaterThanOrEqual(150);
+    for (const m of ACHIEVEMENTS) expect(missionGems(m), m.id).toBe(0);
+    // 通常ミッション mix in a few gems
+    for (const m of NORMAL_MISSIONS) {
+      expect(missionGems(m), m.id).toBeGreaterThanOrEqual(5);
+      expect(missionGems(m), m.id).toBeLessThanOrEqual(100);
     }
+    // story first clears: tens of gems early on, up to 500 for a finale
+    expect(storyFirstClear(1, false, 1).gems).toBeGreaterThanOrEqual(20);
+    expect(storyFirstClear(12, true, 2).gems).toBe(500);
+    expect(storyFirstClear(11, false, 1).coins).toBeGreaterThan(storyFirstClear(1, false, 1).coins);
     expect(levelReward(2)).toBeGreaterThanOrEqual(500);
     for (const e of EVENTS) {
       const tasks = e.tasks.filter((t) => t.stat !== 'eventTasks');

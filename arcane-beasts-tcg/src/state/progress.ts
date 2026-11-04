@@ -175,6 +175,17 @@ export const GEM_DAILY_WIN = 10;
 /** gems a mission pays: only event tasks carry them */
 export const missionGems = (m: Mission) => m.gems ?? 0;
 export const levelGems = (level: number) => (level % 5 === 0 ? 50 : 20);
+/**
+ * the first clear of a story episode: it grows along the chapter, and each
+ * chapter's last episode pays the most (episode 1: 500 coins · 30 gems …
+ * episode 11: 1,500 · 180; the finale 3,000 · 300, from 第二章 on 5,000 · 500)
+ */
+export function storyFirstClear(episode: number, last: boolean, part: number): { coins: number; gems: number } {
+  if (last) return part <= 1 ? { coins: 3000, gems: 300 } : { coins: 5000, gems: 500 };
+  return { coins: 500 + (episode - 1) * 100, gems: 30 + (episode - 1) * 15 };
+}
+/** 通常ミッション also carry a few gems (about 1 per 50 coins, in fives, 5–100) */
+export const normalMissionGems = (coins: number) => Math.min(100, Math.max(5, Math.round(coins / 50 / 5) * 5));
 
 // ---------------------------------------------------------------------------
 // CPU対戦 (levels 1–9)
@@ -201,6 +212,8 @@ export interface BattleOutcome {
   /** gems and name of a first clear that is not a rival's (CPU対戦 levels) */
   firstClearGems?: number;
   firstClearLabel?: string;
+  /** coins of that first clear, as paid (story episodes) */
+  firstClearCoins?: number;
 }
 
 export interface RewardLine {
@@ -217,7 +230,7 @@ export function battleReward(p: Progress, o: BattleOutcome): { lines: RewardLine
     if (o.prizesLost === 0) lines.push({ label: 'パーフェクト勝利', coins: Math.round(o.baseReward * 0.3) });
     if (p.streak >= 1) lines.push({ label: `${p.streak + 1}連勝ボーナス`, coins: Math.round(o.baseReward * Math.min(0.5, p.streak * 0.1)) });
     if (p.lastWinDay !== dayKey()) lines.push({ label: '本日の初勝利', coins: 100, gems: GEM_DAILY_WIN });
-    if (o.firstClear) lines.push({ label: o.firstClearLabel ?? '初回クリアボーナス', coins: 200, gems: o.firstClearGems ?? GEM_FIRST_CLEAR[o.level] });
+    if (o.firstClear && o.firstClearCoins === undefined) lines.push({ label: o.firstClearLabel ?? '初回クリアボーナス', coins: 200, gems: o.firstClearGems ?? GEM_FIRST_CLEAR[o.level] });
   } else {
     lines.push({ label: '参加報酬', coins: Math.round(o.baseReward * 0.2) });
     if (o.prizesTaken) lines.push({ label: `サイド獲得 ×${o.prizesTaken}`, coins: o.prizesTaken * 5 });
@@ -225,6 +238,9 @@ export function battleReward(p: Progress, o: BattleOutcome): { lines: RewardLine
   const mult = o.level === 'hard' ? 2 : o.level === 'normal' ? 1.5 : 1;
   const exp = Math.round((o.win ? 100 : 40) * mult + o.prizesTaken * 5);
   for (const l of lines) l.coins *= COIN_SCALE;
+  // story first clears are priced in final coins
+  if (o.win && o.firstClear && o.firstClearCoins !== undefined)
+    lines.push({ label: o.firstClearLabel ?? 'ストーリー初回クリア', coins: o.firstClearCoins, gems: o.firstClearGems ?? GEM_FIRST_CLEAR[o.level] });
   return { lines, total: lines.reduce((n, l) => n + l.coins, 0), gems: lines.reduce((n, l) => n + (l.gems ?? 0), 0), exp };
 }
 
@@ -321,6 +337,7 @@ export const NORMAL_MISSIONS: Mission[] = [
 
 // everyday missions pay coins in the hundreds to thousands
 for (const list of [DAILY_POOL, WEEKLY_POOL, ACHIEVEMENTS, NORMAL_MISSIONS]) for (const m of list) m.reward *= COIN_SCALE;
+for (const m of NORMAL_MISSIONS) m.gems = normalMissionGems(m.reward);
 
 export function dailyMissions(p: Progress): Mission[] {
   const r = seeded(`daily-${p.daily.key || dayKey()}`);

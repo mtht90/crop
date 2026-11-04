@@ -9,7 +9,7 @@ import { artUrl } from '../lib/assets';
 import { TopBar } from '../ui/TopBar';
 import { Icon } from '../ui/Icon';
 import { EnergySymbol } from '../ui/Card';
-import { coinsFor } from '../state/progress';
+import { coinsFor, storyFirstClear } from '../state/progress';
 import { CHAPTERS, episodeLabel, episodeNo, PARTS } from '../story';
 import { chapterState, isCleared, nextChapterIndex, replayScene, startChapter } from '../story/flow';
 import { foley, playMusic, sfx } from '../audio/audio';
@@ -39,6 +39,7 @@ export function StoryMap() {
   const deck = activeDeck(save);
   const errs = deck ? validateDeck(deck.cards) : ['デッキがありません'];
   const rdeck = rival ? deckById(rival.deck) : null;
+  const firstPay = ch ? storyFirstClear(episodeNo(ch), episodeNo(ch) === CHAPTERS.filter((c) => c.part === ch.part).length, ch.part) : { coins: 0, gems: 0 };
   const done = CHAPTERS.filter((c) => isCleared(save, c)).length;
   const seen = (id: string) => save.story.seen.includes(id);
   const art = isPro ? PROLOGUE_ART : (ch!.art ?? rival!.scene);
@@ -146,7 +147,15 @@ export function StoryMap() {
                     <EnergySymbol type={rdeck!.type} size="1.2em" /> {TYPE_JP[rdeck!.type]}・{rdeck!.name}
                   </span>
                   <span>
-                    報酬 <Icon name="coin" /> <b>{coinsFor(rival!.reward).toLocaleString()}</b>
+                    {state === 'cleared' ? (
+                      <>
+                        報酬 <Icon name="coin" /> <b>{coinsFor(rival!.reward).toLocaleString()}</b>
+                      </>
+                    ) : (
+                      <>
+                        初回 <Icon name="coin" /> <b>{(coinsFor(rival!.reward) + firstPay.coins).toLocaleString()}</b> <Icon name="gem" /> <b>{firstPay.gems}</b>
+                      </>
+                    )}
                   </span>
                   {state === 'cleared' && <span className="clear">CLEAR</span>}
                 </div>

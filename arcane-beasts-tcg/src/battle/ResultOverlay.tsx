@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
-import { claimableCount, CPU_FIRST_GEMS, expToNext, levelGems, levelReward, bump } from '../state/progress';
+import { CHAPTERS, episodeLabel, episodeNo } from '../story';
+import { claimableCount, CPU_FIRST_GEMS, storyFirstClear, expToNext, levelGems, levelReward, bump } from '../state/progress';
 import { extCtx, useStore, type BattleRewardResult } from '../state/store';
 import { useBattle } from './controller';
 import { artUrl } from '../lib/assets';
@@ -57,10 +58,16 @@ export function ResultOverlay() {
     }
     const before = claimableCount(useStore.getState().save.progress, extCtx(useStore.getState().save));
     const st = useBattle.getState().stats;
+    // a story episode's first clear is the episode's, even when its rival was met before
+    const storyCh = cfg.story ? CHAPTERS.find((c) => c.id === cfg.story!.chapterId) : undefined;
+    const storyFirst = !!storyCh && win && !useStore.getState().save.story.cleared.includes(storyCh.id);
     if (cfg.story && win) useStore.getState().clearChapter(cfg.story.chapterId);
     const sv = useStore.getState().save;
     const cpu = cfg.cpuLevel && !cfg.rival ? cfg.cpuLevel : 0;
-    const firstClear = win && ((!!cfg.rival && !sv.beaten.includes(cfg.rival.id)) || (!!cpu && !(sv.cpuBeaten ?? []).includes(cpu)));
+    const firstClear = storyFirst || (win && ((!!cfg.rival && !sv.beaten.includes(cfg.rival.id)) || (!!cpu && !(sv.cpuBeaten ?? []).includes(cpu))));
+    const storyPay = storyCh
+      ? storyFirstClear(episodeNo(storyCh), episodeNo(storyCh) === CHAPTERS.filter((c) => c.part === storyCh.part).length, storyCh.part)
+      : null;
     if (firstClear && cfg.rival) update((s) => void s.beaten.push(cfg.rival!.id));
     if (firstClear && cpu) update((s) => void (s.cpuBeaten = [...(s.cpuBeaten ?? []), cpu]));
     const r = recordBattle(
@@ -72,6 +79,7 @@ export function ResultOverlay() {
         prizesLost: st.prizesLost,
         firstClear,
         ...(cpu ? { firstClearGems: CPU_FIRST_GEMS[cpu - 1], firstClearLabel: `CPUレベル${cpu} 初勝利` } : {}),
+        ...(storyFirst && storyPay ? { firstClearCoins: storyPay.coins, firstClearGems: storyPay.gems, firstClearLabel: `${episodeLabel(storyCh!)} 初回クリア` } : {}),
       },
       { kos: st.kos, damage: st.damage, prizes: st.prizes, evolves: st.evolves, trainers: st.trainers },
     );

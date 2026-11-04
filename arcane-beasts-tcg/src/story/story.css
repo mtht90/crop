@@ -157,7 +157,7 @@
 .story-choice .opt:hover::after { translate: 120% 0; }
 
 /* ---- controls ---- */
-.story-ctrl { position: absolute; right: calc(var(--u) * 1.4); top: calc(var(--u) * 1.2); display: flex; gap: calc(var(--u) * 0.5); z-index: 12; }
+.story-ctrl { position: absolute; right: calc(var(--u) * 1.4 + env(safe-area-inset-right, 0px)); top: calc(var(--u) * 1.2 + env(safe-area-inset-top, 0px)); display: flex; gap: calc(var(--u) * 0.5); z-index: 12; }
 .story-ctrl button { height: calc(var(--u) * 2.6); padding: 0 calc(var(--u) * 1.2); border: 1px solid rgba(232, 197, 103, 0.5); border-radius: calc(var(--u) * 0.3); background: rgba(14, 9, 5, 0.72); color: #f1e6c8; font-family: var(--font-ui); font-weight: 800; letter-spacing: 0.1em; font-size: calc(var(--u) * 1); cursor: pointer; backdrop-filter: blur(4px); }
 .story-ctrl button:hover { background: rgba(60, 40, 18, 0.85); }
 .story-ctrl button.on { background: linear-gradient(180deg, #fff0b8, #d9a93a); color: #2a1a00; border-color: var(--gold-leaf-hi); }
