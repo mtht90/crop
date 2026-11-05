@@ -240,8 +240,8 @@
 .arena3-deck-text b { font-family: var(--font-display); font-weight: 400; font-size: var(--fs-m); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 @media (orientation: landscape) {
   .arena3 { grid-template-columns: 1.3fr 1fr; grid-template-rows: auto auto auto; }
-  .arena3-story { grid-column: 1; grid-row: 1 / span 2; min-height: clamp(240px, 62vh, 520px); }
-  .arena3 .tile2:not(.big) { grid-column: 2; min-height: clamp(130px, 30vh, 250px); }
+  .arena3-story { grid-column: 1; grid-row: 1 / span 3; min-height: clamp(240px, 62vh, 520px); }
+  .arena3 .tile2:not(.big) { grid-column: 2; min-height: clamp(110px, 24vh, 250px); }
   .arena3-deck { grid-column: 1 / -1; }
 }
 
