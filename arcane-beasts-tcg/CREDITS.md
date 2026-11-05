@@ -634,3 +634,11 @@ licensed under [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/), via `@
 
 ## エフェクト素材
 - Particle Pack — Kenney (kenney.nl), CC0 1.0（レイドカードのきらめき・光輪・レンズフレア）
+
+## 効果音（カード・画面・パック開封）
+`public/assets/sfx/foley/` — all CC0 1.0 (public domain), converted to MP3:
+- Casino Audio — Kenney (kenney.nl), via OpenGameArt: card slide / place / shove / shuffle
+- Interface Sounds — Kenney (kenney.nl): click, tick, confirmation, glass, pluck, scratch
+- Sci-Fi Sounds — Kenney (kenney.nl): low-frequency explosions, metal impacts, force field, low engine, thruster
+- 100 CC0 SFX — rubberduck (OpenGameArt): gong, paper
+- 100 CC0 SFX #2 — rubberduck (OpenGameArt): air whooshes

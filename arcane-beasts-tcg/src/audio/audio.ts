@@ -1,4 +1,4 @@
-// Audio: Wesnoth SFX/music via Howler + procedural card foley via WebAudio
+// Audio: Wesnoth SFX/music via Howler + recorded foley (CC0) via Web Audio
 import { Howl, Howler } from 'howler';
 import { asset } from '../lib/assets';
 import type { EType, MonsterCard } from '../engine/types';
@@ -140,253 +140,191 @@ export function stopMusic() {
 }
 
 // ---------------------------------------------------------------------------
-// Procedural foley (card slides, flips, shuffles)
+// Foley: card, interface and pack sounds, all recorded files (CC0: Kenney,
+// OpenGameArt — see CREDITS.md), decoded once and played through Web Audio so
+// they can overlap, be pitched and be looped. Nothing is synthesised.
 // ---------------------------------------------------------------------------
-let noiseBuf: AudioBuffer | null = null;
 function ctx(): AudioContext | null {
-  const c = (Howler as unknown as { ctx: AudioContext }).ctx;
-  if (!c) return null;
-  if (!noiseBuf) {
-    noiseBuf = c.createBuffer(1, c.sampleRate * 0.6, c.sampleRate);
-    const d = noiseBuf.getChannelData(0);
-    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  return (Howler as unknown as { ctx?: AudioContext }).ctx ?? null;
+}
+const FOLEY = [
+  'slide1', 'slide2', 'slide3', 'slide4', 'slide5', 'slide6', 'place1', 'place2', 'place3', 'place4', 'flip1', 'flip2', 'flip3', 'flip4',
+  'shuffle', 'packopen', 'tick', 'hover', 'chime1', 'chime2', 'chime3', 'chime4', 'sparkle1', 'sparkle2', 'pop', 'scratch',
+  'impact', 'boom', 'grip', 'thud', 'swell', 'build', 'rumble', 'wind', 'gong1', 'gong2', 'paper1', 'paper2', 'paper3', 'paper4', 'rush', 'whoosh', 'swipe',
+] as const;
+type FoleyName = (typeof FOLEY)[number];
+const bufs = new Map<FoleyName, AudioBuffer>();
+const loading = new Map<FoleyName, Promise<AudioBuffer | null>>();
+function load(name: FoleyName): Promise<AudioBuffer | null> {
+  const have = bufs.get(name);
+  if (have) return Promise.resolve(have);
+  let p = loading.get(name);
+  if (!p) {
+    const c = ctx();
+    p = fetch(asset(`sfx/foley/${name}.mp3`))
+      .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(String(r.status)))))
+      .then((ab) => (c ?? new AudioContext()).decodeAudioData(ab))
+      .then((b) => {
+        bufs.set(name, b);
+        return b;
+      })
+      .catch(() => null);
+    loading.set(name, p);
   }
-  return c;
+  return p;
 }
-
-function noise(dur: number, f0: number, f1: number, gain: number, q = 0.8, delay = 0) {
+let preloaded = false;
+function preloadFoley() {
+  if (preloaded || !ctx()) return;
+  preloaded = true;
+  for (const n of FOLEY) void load(n);
+}
+const level = () => vol.sfx * vol.master;
+interface Voice {
+  src: AudioBufferSourceNode;
+  gain: GainNode;
+}
+/** play a sound now (or, if it is still loading, as soon as it arrives — unless that is too late to matter) */
+function play(name: FoleyName, volume = 1, rate = 1, delay = 0, loop = false): Voice | null {
   const c = ctx();
-  if (!c || !noiseBuf) return;
-  const t = c.currentTime + delay;
+  if (!c) return null;
+  preloadFoley();
+  const b = bufs.get(name);
+  if (!b) {
+    const asked = performance.now();
+    void load(name).then((got) => got && performance.now() - asked < 250 && play(name, volume, rate, delay, loop));
+    return null;
+  }
   const src = c.createBufferSource();
-  src.buffer = noiseBuf;
-  const bp = c.createBiquadFilter();
-  bp.type = 'bandpass';
-  bp.Q.value = q;
-  bp.frequency.setValueAtTime(f0, t);
-  bp.frequency.exponentialRampToValueAtTime(f1, t + dur);
-  const g = c.createGain();
-  const peak = gain * vol.sfx * vol.master;
-  g.gain.setValueAtTime(0.0001, t);
-  g.gain.exponentialRampToValueAtTime(peak, t + dur * 0.15);
-  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-  src.connect(bp).connect(g).connect(c.destination);
-  src.start(t, Math.random() * 0.2, dur + 0.05);
+  src.buffer = b;
+  src.playbackRate.value = rate;
+  src.loop = loop;
+  if (loop) {
+    // skip the encoder's silence at either end so the loop has no gap
+    src.loopStart = Math.min(0.06, b.duration / 4);
+    src.loopEnd = Math.max(src.loopStart + 0.1, b.duration - 0.06);
+  }
+  const gain = c.createGain();
+  gain.gain.value = volume * level();
+  src.connect(gain).connect(c.destination);
+  src.start(c.currentTime + delay, loop ? src.loopStart : 0);
+  return { src, gain };
 }
-
-function tone(freq: number, dur: number, gain: number, type: OscillatorType = 'sine', delay = 0, slide = 1) {
-  const c = ctx();
-  if (!c) return;
-  const t = c.currentTime + delay;
-  const o = c.createOscillator();
-  o.type = type;
-  o.frequency.setValueAtTime(freq, t);
-  o.frequency.exponentialRampToValueAtTime(freq * slide, t + dur);
-  const g = c.createGain();
-  g.gain.setValueAtTime(0.0001, t);
-  g.gain.exponentialRampToValueAtTime(gain * vol.sfx * vol.master, t + 0.01);
-  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-  o.connect(g).connect(c.destination);
-  o.start(t);
-  o.stop(t + dur + 0.05);
-}
+const pickN = <T extends string>(base: string, n: number) => `${base}${1 + Math.floor(Math.random() * n)}` as T;
+const vary = (r = 0.06) => 1 - r + Math.random() * r * 2;
 
 export const foley = {
-  slide: () => noise(0.16, 2400, 900, 0.35, 0.7),
-  place: () => {
-    noise(0.07, 1800, 600, 0.5, 1.2);
-    tone(140, 0.08, 0.12, 'sine', 0, 0.6);
-  },
-  flip: () => {
-    noise(0.05, 3000, 1500, 0.3, 1);
-    noise(0.06, 2000, 1000, 0.25, 1, 0.05);
-  },
-  shuffle: () => {
-    for (let i = 0; i < 7; i++) noise(0.05, 2600, 1400, 0.22, 1, i * 0.045);
-  },
-  hover: () => noise(0.04, 4000, 3000, 0.08, 2),
-  chime: (n = 0) => {
-    const base = 660 * Math.pow(2, n / 12);
-    tone(base, 0.35, 0.12, 'triangle');
-    tone(base * 1.5, 0.45, 0.08, 'sine', 0.06);
-  },
-  sparkle: () => {
-    for (let i = 0; i < 6; i++) tone(1200 + Math.random() * 1800, 0.2, 0.05, 'sine', i * 0.05);
-  },
-  whoosh: () => noise(0.35, 400, 2600, 0.3, 0.6),
-  /**
-   * paper/foil tear: a bright noise sweep with crackles. `speed` (0 slow … 1
-   * fast) shapes it: a quick swipe is a short bright "shak!", a slow pull a
-   * longer, lower "shaaa…".
-   */
+  slide: () => play(pickN('slide', 6), 0.55, vary()),
+  place: () => play(pickN('place', 4), 0.7, vary()),
+  flip: () => play(pickN('flip', 4), 0.55, vary()),
+  shuffle: () => play('shuffle', 0.7),
+  hover: () => play('hover', 0.12, vary(0.1)),
+  /** a soft confirmation; `n` picks one of four */
+  chime: (n = 0) => play(`chime${(Math.abs(Math.round(n)) % 4) + 1}` as FoleyName, 0.45),
+  sparkle: () => play(pickN('sparkle', 2), 0.35, vary(0.1)),
+  whoosh: () => play('whoosh', 0.45, vary()),
+  /** the pack tearing: quick swipes are short and bright, slow pulls lower */
   rip: (speed = 0.6) => {
     const s = Math.min(1, Math.max(0, speed));
-    const dur = 0.2 + (1 - s) * 0.38;
-    noise(dur, 4200 + s * 2200, 700 + s * 500, 0.45 + s * 0.2, 0.9);
-    const n = Math.round(6 + (1 - s) * 8);
-    for (let i = 0; i < n; i++) noise(0.03, 3000 + Math.random() * 3000, 1500, 0.22, 2, 0.02 + (i * dur) / n);
-    tone(90, 0.25, 0.1 + s * 0.1, 'sine', 0.03, 0.5);
+    play(pickN('paper', 4), 0.65 + s * 0.35, 0.85 + s * 0.35);
+    play('thud', 0.25, 1.2, 0.03);
   },
-  /** short scrape while the finger drags along the tear line */
-  scratch: () => noise(0.05, 4200, 2600, 0.12, 1.5),
-  pop: () => {
-    tone(520, 0.12, 0.14, 'sine', 0, 1.8);
-    noise(0.05, 2500, 1200, 0.15, 1.2);
+  scratch: () => play('scratch', 0.2, vary(0.12)),
+  pop: () => play('pop', 0.45, vary()),
+  tick: () => play('tick', 0.35, vary(0.04)),
+  swipe: () => play('swipe', 0.45, vary()),
+  /** a build-up before a rare card turns over */
+  charge: () => play('build', 0.55),
+  impact: () => play('impact', 0.95),
+  /** a rare card arriving: a bell, deeper and with a boom for the rarest */
+  rarity: (lv: number) => {
+    if (lv >= 5) {
+      play('gong2', 0.7, 0.9);
+      play('boom', 0.5);
+    } else if (lv >= 4) play('gong1', 0.6);
+    else play('gong1', 0.35, 1.25);
   },
-  tick: () => tone(1400, 0.035, 0.05, 'square', 0, 0.9),
-  swipe: () => noise(0.22, 900, 3400, 0.32, 0.7),
-  /** a distant low boom (the pack's light appearing far off) */
-  boom: (weight = 1) => {
-    tone(48, 0.9, 0.22 * weight, 'sine', 0, 0.7);
-    tone(96, 0.5, 0.06 * weight, 'triangle', 0, 0.6);
-    noise(0.6, 400, 90, 0.18 * weight, 0.7);
-  },
-  /** a deep swell, falling in (the pack diving toward you) */
-  swell: () => {
-    tone(140, 0.9, 0.16, 'sine', 0, 0.35);
-    tone(70, 1.0, 0.2, 'sine', 0.05, 0.6);
-    noise(0.9, 900, 120, 0.22, 0.6);
-  },
-  /** a low, wide whoosh */
-  rush: () => noise(0.5, 260, 1100, 0.3, 0.55),
+  /** a distant low boom */
+  boom: (weight = 1) => play('boom', Math.min(1, 0.55 * weight), 1.05 - Math.min(0.25, weight * 0.08)),
+  /** a deep swell (the pack diving toward you) */
+  swell: () => play('swell', 0.7, 0.8),
+  /** a low, wide rush of air */
+  rush: () => play('rush', 0.5, 0.75),
   /** a deep bell (the best packs) */
-  gong: () => {
-    tone(73, 2.2, 0.22, 'sine', 0, 0.98);
-    tone(146.5, 1.6, 0.08, 'sine', 0, 0.99);
-    tone(219, 1.1, 0.04, 'triangle', 0, 0.99);
-  },
+  gong: () => play('gong2', 0.6, 0.8),
   /** a heavy thud as the pack is gripped */
-  grip: () => {
-    tone(58, 0.45, 0.3, 'sine', 0, 0.75);
-    noise(0.18, 600, 120, 0.25, 0.8);
-  },
-  /** rising shimmer that builds suspense before a rare flip */
-  charge: () => {
-    for (let i = 0; i < 10; i++) tone(400 * Math.pow(2, i / 6), 0.18, 0.04, 'triangle', i * 0.06);
-  },
-  impact: () => {
-    tone(70, 0.5, 0.35, 'sine', 0, 0.4);
-    noise(0.3, 1800, 200, 0.4, 0.6);
-  },
-  rarity: (level: number) => {
-    const notes = [0, 4, 7, 12, 16, 19];
-    for (let i = 0; i < Math.min(notes.length, 2 + level); i++) tone(523 * Math.pow(2, notes[i] / 12), 0.5, 0.09, 'triangle', i * 0.07);
-  },
+  grip: () => play('grip', 0.8),
 };
 
-/**
- * The pack being charged: a deep rumble that swells while it is held — two low
- * tones a hair apart (a slow beat), a growl an octave up, and filtered noise
- * like wind drawn in. `update(c)` with the charge 0…1 raises its weight and
- * pitch a little; `stop()` lets it die away.
- */
-export function chargeLoop() {
-  const c = ctx();
-  if (!c || !noiseBuf) return null;
-  const t0 = c.currentTime;
-  const out = c.createGain();
-  out.gain.value = 0.0001;
-  const lp = c.createBiquadFilter();
-  lp.type = 'lowpass';
-  lp.frequency.value = 220;
-  lp.Q.value = 0.8;
-  lp.connect(out).connect(c.destination);
-  const o1 = c.createOscillator();
-  o1.type = 'sine';
-  o1.frequency.value = 46;
-  const o2 = c.createOscillator();
-  o2.type = 'sine';
-  o2.frequency.value = 47.5;
-  const o3 = c.createOscillator();
-  o3.type = 'sawtooth';
-  o3.frequency.value = 92;
-  const g3 = c.createGain();
-  g3.gain.value = 0.18;
-  o1.connect(lp);
-  o2.connect(lp);
-  o3.connect(g3).connect(lp);
-  const nz = c.createBufferSource();
-  nz.buffer = noiseBuf;
-  nz.loop = true;
-  const nbp = c.createBiquadFilter();
-  nbp.type = 'bandpass';
-  nbp.frequency.value = 300;
-  nbp.Q.value = 0.7;
-  const ng = c.createGain();
-  ng.gain.value = 0.0001;
-  nz.connect(nbp).connect(ng).connect(c.destination);
-  [o1, o2, o3, nz].forEach((n) => n.start(t0));
-  let stopped = false;
-  const level = () => vol.sfx * vol.master;
-  out.gain.setTargetAtTime(0.32 * level(), t0, 0.12);
-  return {
-    update(charge: number) {
-      if (stopped) return;
-      const t = c.currentTime;
-      const k = Math.min(1, Math.max(0, charge));
-      o1.frequency.setTargetAtTime(46 + k * 14, t, 0.1);
-      o2.frequency.setTargetAtTime(47.5 + k * 16, t, 0.1);
-      o3.frequency.setTargetAtTime(92 + k * 30, t, 0.1);
-      lp.frequency.setTargetAtTime(220 + k * 520, t, 0.1);
-      out.gain.setTargetAtTime((0.32 + k * 0.5) * level(), t, 0.1);
-      nbp.frequency.setTargetAtTime(300 + k * 900, t, 0.1);
-      ng.gain.setTargetAtTime(Math.max(0.0001, k * k * 0.16 * level()), t, 0.1);
-    },
-    stop(fade = 0.25) {
-      if (stopped) return;
-      stopped = true;
-      const t = c.currentTime;
-      out.gain.setTargetAtTime(0.0001, t, fade / 3);
-      ng.gain.setTargetAtTime(0.0001, t, fade / 3);
-      [o1, o2, o3, nz].forEach((n) => n.stop(t + fade + 0.3));
-    },
-  };
+/** load the foley up front (call on the first tap, when sound is allowed) */
+export function warmFoley() {
+  preloadFoley();
 }
 
 // ---------------------------------------------------------------------------
 // Semantic game sounds
 // ---------------------------------------------------------------------------
 /**
- * Continuous tear sound while the finger cuts the pack: filtered noise whose
- * brightness and loudness follow the finger speed, with crackles.
+ * The pack being charged: a low engine rumble that swells, with a rush of
+ * wind drawn in as it nears full. `update(c)` with the charge 0…1 raises its
+ * weight and pitch; `stop()` lets it die away.
+ */
+export function chargeLoop() {
+  const c = ctx();
+  if (!c) return null;
+  const hum = play('rumble', 0, 0.85, 0, true);
+  const air = play('wind', 0, 0.7, 0, true);
+  if (!hum || !air) {
+    hum?.src.stop();
+    air?.src.stop();
+    return null;
+  }
+  const t0 = c.currentTime;
+  hum.gain.gain.setTargetAtTime(0.45 * level(), t0, 0.12);
+  let stopped = false;
+  return {
+    update(charge: number) {
+      if (stopped) return;
+      const t = c.currentTime;
+      const k = Math.min(1, Math.max(0, charge));
+      hum.src.playbackRate.setTargetAtTime(0.85 + k * 0.45, t, 0.1);
+      hum.gain.gain.setTargetAtTime((0.45 + k * 0.55) * level(), t, 0.1);
+      air.src.playbackRate.setTargetAtTime(0.7 + k * 0.5, t, 0.1);
+      air.gain.gain.setTargetAtTime(k * k * 0.35 * level(), t, 0.1);
+    },
+    stop(fade = 0.25) {
+      if (stopped) return;
+      stopped = true;
+      const t = c.currentTime;
+      for (const v of [hum, air]) {
+        v.gain.gain.setTargetAtTime(0.0001, t, fade / 3);
+        v.src.stop(t + fade + 0.3);
+      }
+    },
+  };
+}
+
+/**
+ * The tear while the finger cuts: bursts of paper that come faster and louder
+ * with the finger speed.
  */
 export function tearLoop() {
-  const c = ctx();
-  if (!c || !noiseBuf) return null;
-  const src = c.createBufferSource();
-  src.buffer = noiseBuf;
-  src.loop = true;
-  const hp = c.createBiquadFilter();
-  hp.type = 'highpass';
-  hp.frequency.value = 900;
-  const bp = c.createBiquadFilter();
-  bp.type = 'bandpass';
-  bp.Q.value = 1.1;
-  bp.frequency.value = 2200;
-  const g = c.createGain();
-  g.gain.value = 0.0001;
-  src.connect(hp).connect(bp).connect(g).connect(c.destination);
-  src.start();
+  if (!ctx()) return null;
+  let last = 0;
   let stopped = false;
   return {
     /** speed: 0 (still) … 1 (a fast swipe) */
     update(speed: number) {
       if (stopped) return;
-      const t = c.currentTime;
       const s = Math.min(1, Math.max(0, speed));
-      bp.frequency.setTargetAtTime(1500 + s * 4300, t, 0.03);
-      g.gain.setTargetAtTime(Math.max(0.0001, (0.03 + s * 0.28) * vol.sfx * vol.master), t, 0.03);
-      if (Math.random() < 0.2 + s * 0.5) noise(0.02, 2500 + Math.random() * 3500, 1500, 0.08 + s * 0.18, 2.5);
+      const now = performance.now();
+      if (s < 0.08 || now - last < 170 - s * 110) return;
+      last = now;
+      play(pickN('paper', 4), 0.25 + s * 0.6, 0.9 + s * 0.3);
     },
-    idle() {
-      if (!stopped) g.gain.setTargetAtTime(0.0001, c.currentTime, 0.05);
-    },
+    idle() {},
     stop() {
-      if (stopped) return;
       stopped = true;
-      const t = c.currentTime;
-      g.gain.setTargetAtTime(0.0001, t, 0.04);
-      src.stop(t + 0.3);
     },
   };
 }
@@ -447,4 +385,5 @@ export function cry(mc: MonsterCard, death = false) {
 export function unlockAudio() {
   const c = ctx();
   if (c && c.state === 'suspended') void c.resume();
+  preloadFoley();
 }
