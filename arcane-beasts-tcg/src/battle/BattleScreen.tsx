@@ -893,12 +893,12 @@ function ActionMenu({ s, pos, legal, onAct, onRetreat, onClose }: MenuProps) {
 // ---------------------------------------------------------------------------
 // Preview of hovered card
 // ---------------------------------------------------------------------------
-function Preview() {
+function Preview({ targeting = false }: { targeting?: boolean }) {
   const cid = useBattle((s) => s.hover);
   return (
     <AnimatePresence>
       {cid && (
-        <motion.div key={cid} className="preview" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>
+        <motion.div key={cid} className={`preview ${targeting ? 'targeting' : ''}`} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>
           <CardFace cid={cid} />
         </motion.div>
       )}
@@ -1485,7 +1485,7 @@ export function BattleScreen() {
             )}
           </AnimatePresence>
 
-          {!menu && <Preview />}
+          {!menu && <Preview targeting={targetKeys.size > 0 || benchTarget} />}
           <FxLayer />
           <PromptLayer ctrl={ctrl} />
           {discardView !== null && <DiscardModal cards={s.players[discardView].discard} title={discardView === 0 ? 'あなたのトラッシュ' : '相手のトラッシュ'} onClose={() => setDiscardView(null)} />}
