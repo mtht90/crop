@@ -112,6 +112,7 @@
 .tcg-head .name.long { font-size: 5.6cqw; }
 .tcg-head .name.xlong { font-size: 4.8cqw; }
 .tcg-head .name.xxlong { font-size: 4.1cqw; letter-spacing: -0.05em; }
+.tcg-head .name.xxxlong { font-size: 3.6cqw; letter-spacing: -0.06em; }
 .t-dark .tcg-head .name { text-shadow: 0 0.3cqw 0.6cqw rgba(0, 0, 0, 0.8); }
 .omega {
   display: inline-block;
@@ -265,7 +266,9 @@
 .cost { display: flex; gap: 0.35cqw; flex: none; min-width: 22cqw; }
 .cost .esym { width: 5.2cqw !important; height: 5.2cqw !important; }
 .cost.empty .ghost { opacity: 0; }
-.atk-name { flex: 1; font-size: 5cqw; font-weight: 900; letter-spacing: -0.02em; white-space: nowrap; }
+.atk-name { flex: 1; min-width: 0; font-size: 5cqw; font-weight: 900; letter-spacing: -0.02em; white-space: nowrap; overflow: hidden; text-overflow: clip; }
+.atk-name.long { font-size: 4.4cqw; letter-spacing: -0.04em; }
+.atk-name.xlong { font-size: 3.8cqw; letter-spacing: -0.05em; }
 .atk-dmg { font-family: 'Dela Gothic One', sans-serif; font-size: 6.4cqw; min-width: 12cqw; text-align: right; }
 
 .omega-rule {
@@ -355,7 +358,7 @@
   padding: 1cqw 2cqw;
   left: 2.4cqw;
   right: 2.4cqw;
-  bottom: 17cqw;
+  bottom: 16cqw;
 }
 .tcg.full-art .tcg-stats { background: rgba(0, 0, 0, 0.5); border-color: rgba(255, 255, 255, 0.3); }
 .tcg.full-art .tcg-species { display: none; }
@@ -862,3 +865,4 @@
 .tcg.bleed .tcg-art .scene[src*='/p-'] { filter: saturate(1.08) contrast(1.02); transform: none; }
 .portrait-art .scene.painting { filter: none; }
 .tcg.full-art.kind-trainer .tcg-art .scene.painting { filter: saturate(1.05); }
+.tcg.full-art .tcg-body p, .tcg.bleed .tcg-body p { line-height: 1.24; }

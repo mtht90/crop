@@ -248,6 +248,7 @@
 /* -------------------------------- missions ------------------------------- */
 .ms3 { max-width: 900px; }
 .ms3-tabs { display: flex; gap: 8px; overflow-x: auto; padding: 2px 0 6px; scrollbar-width: none; }
+.col3 .ms3-tabs { flex-wrap: wrap; }
 .ms3-tabs::-webkit-scrollbar { display: none; }
 .ms3-tabs .chip-btn svg { color: var(--gold); }
 .ms3-dot { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--red); color: #fff; font-style: normal; font-size: 11px; font-weight: 900; line-height: 18px; text-align: center; }
@@ -444,7 +445,11 @@
 .col3-frow { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .col3-frow > span { flex: none; width: 3.5em; font-size: var(--fs-xs); font-weight: 900; color: var(--ink-dim); }
 .col3-frow .db3-types { flex: 1; }
-.col3-frow .db3-chips { flex: 1; min-width: 0; }
+.col3-frow .db3-chips { flex: 1; min-width: 0; flex-wrap: wrap; overflow: visible; }
+.col3-frow .db3-chips .chip-btn { padding: 5px 10px; }
+/* the kind chips in the deck builder wrap too, so nothing hides off the edge */
+.db3-filters .db3-chips { flex-wrap: wrap; overflow: visible; }
+.db3-filters .db3-chips .chip-btn { padding: 5px 10px; }
 .col3-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(clamp(96px, 15vmin, 150px), 1fr)); gap: 12px; padding: 4px 4px 8px; }
 .col3-grid .col-item .cnt { min-width: 24px; font-size: 11px; }
 .col3-grid .col-item .q { font-size: 30px; }

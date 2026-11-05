@@ -1,3 +1,4 @@
+import { CARD_KINDS, matchKinds, type KindKey } from '../ui/cardKinds';
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useMemo, useState } from 'react';
 import { ALL_CARDS, card, RARITIES, RARITY_SYMBOL, SET_INFO, SETS } from '../engine/cards';
@@ -19,6 +20,7 @@ export function Collection() {
   const [set, setSet] = useState<SetCode | 'all'>('all');
   const [types, setTypes] = useState<EType[]>([]);
   const [rar, setRar] = useState<Rarity[]>([]);
+  const [kinds, setKinds] = useState<KindKey[]>([]);
   const [ownedOnly, setOwnedOnly] = useState(false);
   const [showFilter, setShowFilter] = useState(false);
   const [zoom, setZoom] = useState<string | null>(null);
@@ -35,14 +37,15 @@ export function Collection() {
       ALL_CARDS.filter((c) => set === 'all' || c.set === set)
         .filter((c) => !types.length || (c.kind === 'monster' && types.includes(c.type)) || (c.kind === 'energy' && types.includes(c.energyType)))
         .filter((c) => !rar.length || rar.includes(c.rarity))
+        .filter((c) => matchKinds(c, kinds))
         .filter((c) => !ownedOnly || owned(save, c.id) > 0),
-    [set, types, rar, ownedOnly, save],
+    [set, types, rar, kinds, ownedOnly, save],
   );
   const scope = ALL_CARDS.filter((c) => set === 'all' || c.set === set);
   const have = scope.filter((c) => owned(save, c.id) > 0).length;
   const pct = collectionPct(save, set === 'all' ? undefined : set);
 
-  const nFilters = types.length + rar.length + (ownedOnly ? 1 : 0);
+  const nFilters = types.length + rar.length + kinds.length + (ownedOnly ? 1 : 0);
 
   return (
     <div className="screen">
@@ -78,6 +81,16 @@ export function Collection() {
             {showFilter && (
               <motion.div className="box col3-filter" initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}>
                 <div className="col3-frow">
+                  <span>種類</span>
+                  <div className="db3-chips">
+                    {CARD_KINDS.map((k) => (
+                      <button key={k.key} className={`chip-btn ${kinds.includes(k.key) ? 'on' : ''}`} onClick={() => setKinds(kinds.includes(k.key) ? kinds.filter((x) => x !== k.key) : [...kinds, k.key])}>
+                        {k.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="col3-frow">
                   <span>タイプ</span>
                   <div className="db3-types">
                     {[...ENERGY_TYPES, 'colorless' as EType].map((t) => (
@@ -108,6 +121,7 @@ export function Collection() {
                         className="chip-btn"
                         onClick={() => {
                           setTypes([]);
+                          setKinds([]);
                           setRar([]);
                           setOwnedOnly(false);
                         }}

@@ -1,3 +1,4 @@
+import { CARD_KINDS, matchKinds, type KindKey } from '../ui/cardKinds';
 // デッキ: your decks, ready-made おすすめデッキ, ace auto-build, and the editor
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -340,7 +341,7 @@ function Editor({
   const save = useStore((s) => s.save);
   const [pane, setPane] = useState<'deck' | 'cards'>(deck.cards.length ? 'deck' : 'cards');
   const [q, setQ] = useState('');
-  const [kind, setKind] = useState<Kind>('all');
+  const [kinds, setKinds] = useState<KindKey[]>([]);
   const [types, setTypes] = useState<EType[]>([]);
   const [zoom, setZoom] = useState<string | null>(null);
 
@@ -353,7 +354,7 @@ function Editor({
   const nameCount = (name: string) => deck.cards.filter((id) => card(id).name === name).length;
 
   const pool = ALL_CARDS.filter((c) => owned(save, c.id) > 0)
-    .filter((c) => kind === 'all' || c.kind === kind)
+    .filter((c) => matchKinds(c, kinds))
     .filter((c) => !types.length || (c.kind === 'monster' && types.includes(c.type)) || (c.kind === 'energy' && types.includes(c.energyType)))
     .filter((c) => !q || c.name.includes(q))
     .sort((a, b) => sortKey(a) - sortKey(b));
@@ -478,9 +479,12 @@ function Editor({
             <div className="db3-filters">
               <input placeholder="カード名で検索" value={q} onChange={(e) => setQ(e.target.value)} />
               <div className="db3-chips">
-                {(['all', 'monster', 'trainer', 'energy'] as Kind[]).map((k) => (
-                  <button key={k} className={`chip-btn ${kind === k ? 'on' : ''}`} onClick={() => setKind(k)}>
-                    {k === 'all' ? 'すべて' : k === 'monster' ? 'モンスター' : k === 'trainer' ? 'トレーナーズ' : 'エネルギー'}
+                <button className={`chip-btn ${!kinds.length ? 'on' : ''}`} onClick={() => setKinds([])}>
+                  すべて
+                </button>
+                {CARD_KINDS.map((k) => (
+                  <button key={k.key} className={`chip-btn ${kinds.includes(k.key) ? 'on' : ''}`} onClick={() => setKinds(kinds.includes(k.key) ? kinds.filter((x) => x !== k.key) : [...kinds, k.key])}>
+                    {k.label}
                   </button>
                 ))}
               </div>

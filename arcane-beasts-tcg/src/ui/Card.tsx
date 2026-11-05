@@ -164,6 +164,9 @@ function Cost({ cost }: { cost: EType[] }) {
   );
 }
 
+/** how much room an attack line takes: name, cost icons, damage */
+const atkLen = (a: MonsterCard['attacks'][number]) => a.name.length + Math.max(0, a.cost.length - 3) * 1.1 + (a.damage !== undefined ? String(a.damage).length * 0.9 + (a.suffix ? 0.7 : 0) : 0);
+
 function MonsterFace({ def }: { def: MonsterCard }) {
   const scene = def.scene ?? TYPE_SCENE[def.type];
   let prev: MonsterCard | null = null;
@@ -189,7 +192,7 @@ function MonsterFace({ def }: { def: MonsterCard }) {
       </div>
       <div className="tcg-head">
         <span className={`tcg-stage stage-${def.stage}`}>{STAGE_JP[def.stage]}</span>
-        <span className={`name ${nameLen > 6.5 ? 'long' : ''} ${nameLen > 8 ? 'xlong' : ''} ${nameLen > 9.5 ? 'xxlong' : ''}`}>
+        <span className={`name ${nameLen > 6.5 ? 'long' : ''} ${nameLen > 8 ? 'xlong' : ''} ${nameLen > 9.5 ? 'xxlong' : ''} ${nameLen > 11 ? 'xxxlong' : ''}`}>
           {def.name}
         </span>
         <span className="hp">
@@ -221,7 +224,7 @@ function MonsterFace({ def }: { def: MonsterCard }) {
           <div className="attack" key={i}>
             <div className="attack-head">
               <Cost cost={a.cost} />
-              <span className="atk-name">{a.name}</span>
+              <span className={`atk-name ${atkLen(a) > 13 ? 'xlong' : atkLen(a) > 11.5 ? 'long' : ''}`}>{a.name}</span>
               {a.damage !== undefined && (
                 <span className="atk-dmg">
                   {a.damage}
