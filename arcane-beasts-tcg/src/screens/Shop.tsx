@@ -850,7 +850,7 @@ function TearStage({ booster, god, u, cards, omen, packs, onAura, burstAt, onDon
   // full: it lets go by itself a moment later if the finger stays down
   useEffect(() => {
     if (charged || chargeStep < 1 || !held) return;
-    foley.grip();
+    // full: no sound of its own — the rumble at its height says it
     const t = setTimeout(() => {
       if (holding.current) {
         holding.current = false;

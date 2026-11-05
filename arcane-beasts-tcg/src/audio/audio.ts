@@ -253,7 +253,7 @@ export const foley = {
   /** a deep bell (the best packs) */
   gong: () => play('gong2', 0.6, 0.8),
   /** a heavy thud as the pack is gripped */
-  grip: () => play('grip', 0.8),
+  grip: () => play('impact', 0.5, 1.15),
 };
 
 /** load the foley up front (call on the first tap, when sound is allowed) */

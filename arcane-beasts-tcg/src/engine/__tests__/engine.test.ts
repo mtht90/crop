@@ -364,7 +364,7 @@ describe('★が高い版は強い', () => {
     for (const c of ALL_CARDS) if ((c.kind === 'trainer' || c.kind === 'energy') && c.variant && c.variant !== 'mirror') expect((c as { text?: string }).text, c.id).not.toBe((card(c.baseId!) as { text?: string }).text);
     expect(v('大賢者の研究', 'SR').kind === 'trainer' && (v('大賢者の研究', 'SR') as { text: string }).text).toContain('8枚');
   });
-  it('大賢者の研究 (★4) draws 9', () => {
+  it('大賢者の研究 (★4) draws 8 (7 + 1)', () => {
     const g = started();
     const p = g.s.current;
     const pl = g.s.players[p];
@@ -373,7 +373,7 @@ describe('★が高い版は強い', () => {
     g.s.flags.supporterPlayed = false;
     if (g.s.turn === 1) g.s.turn = 2;
     g.answer({ type: 'action', action: { t: 'playTrainer', uid: c.uid } });
-    expect(pl.hand.length).toBe(9);
+    expect(pl.hand.length).toBe(8);
   });
   it('虹色エネルギー (★4 / ★5) puts no damage on', () => {
     const g = started();

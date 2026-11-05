@@ -30,27 +30,27 @@ const ceilHalf = (t: number) => Math.ceil(t / 2);
 
 /** the numbers each boosted effect uses, by tier */
 export const POWER = {
-  research: (t: number) => 7 + t, // cards drawn
-  boss: (t: number) => t, // cards drawn afterwards
-  iono: (t: number) => t, // extra cards for you
+  research: (t: number) => 7 + ceilHalf(t), // cards drawn (7, 8, 8, 9)
+  boss: (t: number) => ceilHalf(t), // cards drawn afterwards (0, 1, 1, 2)
+  iono: (t: number) => ceilHalf(t), // extra cards for you (0, 1, 1, 2)
   cleric: (t: number) => 80 + 20 * t, // HP healed
   rally: (t: number) => 2 + ceilHalf(t), // basics benched
   assassin: (t: number) => 3 + t, // damage counters
   paladin: (t: number) => 30 + 10 * t, // HP healed on each
-  mercenary: (t: number) => 2 + t, // coins
+  mercenary: (t: number) => 2 + ceilHalf(t), // coins (2, 3, 3, 4)
   guide: (t: number) => 2 + ceilHalf(t), // basics from the trash
-  warchief: (t: number) => 5 + t, // hand size drawn to
-  candy: (t: number) => t, // cards drawn afterwards
-  tutor: (t: number) => 1 + ceilHalf(t), // trainers searched
+  warchief: (t: number) => 5 + ceilHalf(t), // hand size drawn to (5, 6, 6, 7)
+  candy: (t: number) => ceilHalf(t), // cards drawn afterwards (0, 1, 1, 2)
+  tutor: (t: number) => 1 + ceilHalf(t), // trainers searched (1, 2, 2, 3)
   crest: (t: number) => 30 + 10 * t, // damage reduced
   rainbow: (t: number) => (t >= 2 ? 0 : 1), // damage counters on attach
 } as const;
 
 const TEXT: Record<string, (t: number) => string> = {
   research: (t) => `自分の手札をすべてトラッシュし、山札を${POWER.research(t)}枚引く。`,
-  boss: (t) => `相手のベンチモンスターを1匹選び、バトル場のモンスターと入れ替える。その後、自分の山札を${POWER.boss(t)}枚引く。`,
+  boss: (t) => `相手のベンチモンスターを1匹選び、バトル場のモンスターと入れ替える。${POWER.boss(t) ? `その後、自分の山札を${POWER.boss(t)}枚引く。` : ''}`,
   iono: (t) =>
-    `おたがいのプレイヤーは、それぞれ手札をすべてウラにして切り、山札の下にもどす。その後、それぞれ自分のサイドの残り枚数ぶん、山札を引く。さらに自分は${POWER.iono(t)}枚引く。`,
+    `おたがいのプレイヤーは、それぞれ手札をすべてウラにして切り、山札の下にもどす。その後、それぞれ自分のサイドの残り枚数ぶん、山札を引く。${POWER.iono(t) ? `さらに自分は${POWER.iono(t)}枚引く。` : ''}`,
   cleric: (t) => `自分のモンスター1匹のHPを「${POWER.cleric(t)}」回復し、特殊状態をすべて回復する。`,
   rally: (t) => `自分の山札からたねモンスターを${POWER.rally(t)}枚まで選び、ベンチに出す。そして山札を切る。`,
   assassin: (t) => `相手のモンスター1匹に、ダメカンを${POWER.assassin(t)}個のせる。`,
@@ -59,7 +59,7 @@ const TEXT: Record<string, (t: number) => string> = {
   guide: (t) => `自分のトラッシュからたねモンスターを${POWER.guide(t)}枚まで選び、ベンチに出す。`,
   warchief: (t) => `自分の手札が${POWER.warchief(t)}枚になるまで、山札を引く。（手札が${POWER.warchief(t)}枚以上のときは使えない）`,
   candy: (t) =>
-    `自分の場のたねモンスター1匹に、そのモンスターから進化する2進化モンスターを手札から重ねて進化させる。その後、自分の山札を${POWER.candy(t)}枚引く。(最初の番や、出したばかりのモンスターには使えない。)`,
+    `自分の場のたねモンスター1匹に、そのモンスターから進化する2進化モンスターを手札から重ねて進化させる。${POWER.candy(t) ? `その後、自分の山札を${POWER.candy(t)}枚引く。` : ''}(最初の番や、出したばかりのモンスターには使えない。)`,
   tutor: (t) => `自分の山札からトレーナーズを${POWER.tutor(t)}枚まで選び、相手に見せて手札に加える。そして山札を切る。`,
   crest: (t) => `このカードをつけているHP150以上のモンスターが、相手のモンスターから受けるワザのダメージは「-${POWER.crest(t)}」される。`,
   rainbow: (t) =>
