@@ -577,6 +577,90 @@ function CinemaLayer({ omen, god, aura, held, playing, api, target, onDone }: { 
   );
 }
 
+/**
+ * 力をためる: streaks of light drawn in from all round the screen, rushing into
+ * the pack (they pass behind it and vanish into it). More and faster as the
+ * charge fills; none once the finger lets go.
+ */
+function ChargeIntake({ charge, holding, target }: { charge: MotionValue<number>; holding: React.MutableRefObject<boolean>; target: React.RefObject<HTMLDivElement> }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const c = ref.current;
+    if (!c) return;
+    const ctx = c.getContext('2d')!;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    let w = 0;
+    let h = 0;
+    let box = c.getBoundingClientRect();
+    const fit = () => {
+      box = c.getBoundingClientRect();
+      w = c.width = Math.max(1, Math.floor(box.width * dpr));
+      h = c.height = Math.max(1, Math.floor(box.height * dpr));
+    };
+    fit();
+    window.addEventListener('resize', fit);
+    interface S { a: number; d: number; v: number; len: number; wd: number; warm: number }
+    const ss: S[] = [];
+    let raf = 0;
+    let last = performance.now();
+    let acc = 0;
+    const frame = (now: number) => {
+      raf = requestAnimationFrame(frame);
+      const dt = Math.min(0.05, (now - last) / 1000);
+      last = now;
+      const ch = charge.get();
+      const r = target.current?.getBoundingClientRect();
+      ctx.clearRect(0, 0, w, h);
+      if (!r) return;
+      const cx = (r.left + r.width / 2 - box.left) * dpr;
+      const cy = (r.top + r.height / 2 - box.top) * dpr;
+      const far = Math.hypot(w, h) * 0.62;
+      const core = Math.min(r.width, r.height) * dpr * 0.32;
+      // new streaks: a trickle at first, a flood near full
+      if (holding.current && ch < 1) {
+        acc += dt * (22 + ch * ch * 220);
+        while (acc >= 1) {
+          acc -= 1;
+          ss.push({ a: Math.random() * Math.PI * 2, d: far * (0.75 + Math.random() * 0.35), v: far * (0.35 + Math.random() * 0.3 + ch * 0.9), len: 0.12 + Math.random() * 0.14 + ch * 0.12, wd: (1 + Math.random() * 1.8 + ch * 2.4) * dpr, warm: Math.random() });
+        }
+      }
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.lineCap = 'round';
+      for (let i = ss.length - 1; i >= 0; i--) {
+        const k = ss[i];
+        k.v *= 1 + dt * 2.6; // they speed up as they fall in
+        k.d -= k.v * dt;
+        if (k.d <= core) {
+          ss.splice(i, 1);
+          continue;
+        }
+        const tail = Math.min(far, k.d * (1 + k.len * 2.2));
+        const ca = Math.cos(k.a);
+        const sa = Math.sin(k.a);
+        const near = 1 - Math.min(1, (k.d - core) / far);
+        const alpha = Math.min(1, 0.3 + near * 1.1);
+        const g = ctx.createLinearGradient(cx + ca * k.d, cy + sa * k.d, cx + ca * tail, cy + sa * tail);
+        const col = k.warm < 0.35 ? '255,228,170' : '235,244,255';
+        g.addColorStop(0, `rgba(${col},${alpha})`);
+        g.addColorStop(1, `rgba(${col},0)`);
+        ctx.strokeStyle = g;
+        ctx.lineWidth = k.wd;
+        ctx.beginPath();
+        ctx.moveTo(cx + ca * k.d, cy + sa * k.d);
+        ctx.lineTo(cx + ca * tail, cy + sa * tail);
+        ctx.stroke();
+      }
+      ctx.globalCompositeOperation = 'source-over';
+    };
+    raf = requestAnimationFrame(frame);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('resize', fit);
+    };
+  }, [charge, holding, target]);
+  return <canvas ref={ref} className="charge-intake" />;
+}
+
 /** seconds of holding to fill the charge */
 const CHARGE_TIME = 2.7;
 
@@ -649,7 +733,7 @@ function TearStage({ booster, god, u, cards, omen, packs, onAura, burstAt, onDon
       }
       // white light drawn in from all round the pack, thicker as it fills
       const r = packRef.current?.getBoundingClientRect();
-      if (r && holding.current && Math.random() < 0.3 + c * 0.7) {
+      if (r && holding.current && Math.random() < 0.08 + c * 0.25) {
         const a = Math.random() * Math.PI * 2;
         const rad = Math.max(r.width, r.height) * (0.6 + Math.random() * 0.3);
         burstAt(r.left + r.width / 2 + Math.cos(a) * rad, r.top + r.height / 2 + Math.sin(a) * rad, 'mote', 1 + Math.round(c * 2), 0.9 + c * 0.6);
@@ -710,6 +794,9 @@ function TearStage({ booster, god, u, cards, omen, packs, onAura, burstAt, onDon
   }, [charged]);
   void setShaking;
   const ring = useTransform(charge, (c) => 1 - c);
+  const dim = useTransform(charge, (c) => (charged ? 0 : Math.min(1, c * 1.15)));
+  const core = useTransform(charge, (c) => (charged ? 0 : Math.min(1, Math.pow(c, 1.25) * 1.1)));
+  const coreScale = useTransform(charge, (c) => 0.6 + c * 0.5);
   const squeeze = useTransform(charge, (c) => 1 - c * 0.035);
   const auraRef = useRef(aura);
   const packRef = useRef<HTMLDivElement>(null);
@@ -988,12 +1075,17 @@ function TearStage({ booster, god, u, cards, omen, packs, onAura, burstAt, onDon
           })}
       </motion.div>
 
+      {!torn && <motion.div className="charge-dim" style={{ opacity: dim }} />}
+      {!charged && <ChargeIntake charge={charge} holding={holding} target={packRef} />}
       <div className="tear-wrap" style={{ ['--ac' as string]: charged ? OMEN_COLORS[aura] : '#ffffff' }}>
         <PackAura tier={aura} promo={promo} />
+        <AnimatePresence>
+        {snap && <motion.div key={`wave${promo}`} className="charge-wave" style={{ ['--ac' as string]: OMEN_COLORS[aura] }} initial={{ opacity: 0.95, scale: 0.3 }} animate={{ opacity: 0, scale: 3.2 }} exit={{ opacity: 0 }} transition={{ duration: 0.9, ease: EASE_OUT }} />}
+      </AnimatePresence>
         {packs > 1 && (
           <motion.div className="tear-bundle" initial={{ opacity: 0 }} animate={{ opacity: torn ? 0 : 1 }} transition={{ duration: torn ? 0.3 : 0.6, delay: torn ? 0 : 0.2 }}>
-            {[3, 2, 1].map((k) => (
-              <div key={k} className="tb-sheet" style={{ transform: `translate(${k * u * 0.55}px, ${k * u * 0.35}px) rotate(${k * 1.6}deg)`, opacity: 1 - k * 0.18 }}>
+            {[-2, 2, -1, 1].map((k) => (
+              <div key={k} className="tb-sheet" style={{ transform: `translate(${k * u * 0.9}px, ${Math.abs(k) * u * 0.25}px) rotate(${k * 2.4}deg)`, opacity: 1 - Math.abs(k) * 0.2 }}>
                 <BoosterPack booster={booster} still god={god} />
               </div>
             ))}
@@ -1019,7 +1111,7 @@ function TearStage({ booster, god, u, cards, omen, packs, onAura, burstAt, onDon
           style={{ filter: snap ? 'brightness(1.8) saturate(0.6)' : undefined }}
         >
           <motion.div
-            className={`tear-float ${shaking || (held && chargeStep > 0.25) ? 'shaking' : ''} ${held && !charged ? 'charging' : ''}`}
+            className={`tear-float ${shaking || (held && chargeStep > 0.25 && chargeStep < 1) ? 'shaking' : ''} ${held && !charged ? 'charging' : ''} ${held && !charged && chargeStep >= 1 ? 'full' : ''}`}
             style={{ scale: charged ? 1 : squeeze }}
             ref={packRef}
             initial={{ opacity: 0, filter: 'brightness(4) saturate(0)' }}
@@ -1034,6 +1126,7 @@ function TearStage({ booster, god, u, cards, omen, packs, onAura, burstAt, onDon
               <motion.div className="tear-beam" initial={{ opacity: 0, scaleY: 0.2 }} animate={{ opacity: [0, 0.9, 0], scaleY: [0.2, 1, 1.15] }} transition={{ delay: 0.25, duration: 1.3, times: [0, 0.35, 1], ease: 'easeOut' }} />
             )}
             {!torn && !cutting && <BoosterPack booster={booster} tilt={!active && !held} god={god} />}
+            {!charged && <motion.div className="charge-core" style={{ opacity: core, scale: coreScale }} />}
             {/* the charge: light runs round the edge of the pack as it fills */}
             {!charged && (
               <svg className="charge-ring" viewBox="0 0 60 100" preserveAspectRatio="none">
