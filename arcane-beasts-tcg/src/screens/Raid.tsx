@@ -92,7 +92,6 @@ export function Raid() {
                   <div className="raid3-hptext">
                     <b>HP</b> {left.toLocaleString()}
                     <small> / {lapHp.toLocaleString()}</small>
-                    <em>{lap}周目</em>
                   </div>
                   <div className="raid3-hpbar">
                     <div style={{ width: `${(100 * left) / lapHp}%` }} />
@@ -163,9 +162,9 @@ export function Raid() {
                   <div className="raid2-cond win">
                     <b>討伐</b>
                     <p>
-                      ボスのHPを0にすると、その周をクリア
+                      ボスのHPを0にすると討伐
                       <br />
-                      ボスは強くなって復活し、次の周へ
+                      ボスは強くなって復活する
                     </p>
                   </div>
                   <div className="raid2-cond keep">
@@ -186,11 +185,10 @@ export function Raid() {
                       山札が引けなくなる
                     </p>
                   </div>
-                  <h3>ボスのワザ（毎ターン、上から順に使う）</h3>
+                  <h3>ボスのワザ</h3>
                   {boss.attacks.map((a, i) => (
                     <div className="raid2-move" key={i}>
-                      <i>{i + 1}</i>
-                      <div>
+                                            <div>
                         <b>{a.name}</b>
                         {a.text && <p>{a.text}</p>}
                       </div>
@@ -198,7 +196,7 @@ export function Raid() {
                     </div>
                   ))}
                   <div className="raid2-rage">HPが半分以下になると激昂し、すべてのワザのダメージが +{BOSS_RAGE_BONUS}</div>
-                  <div className="raid2-rage">2周目からはHP {raidLapHp(2).toLocaleString()}、すべてのワザのダメージが +{raidLapBonus(2)}</div>
+                  <div className="raid2-rage">復活したボスはHP {raidLapHp(2).toLocaleString()}、すべてのワザのダメージが +{raidLapBonus(2)}</div>
                   <ul className="raid3-notes">
                     <li>ボスは1体だけ。エネルギーなしでワザを使い、特殊状態にならない</li>
                     <li>挑戦は週1回目が無料、2回目からはジェム{RAID_TRY_GEMS}個。何度でも挑戦できる</li>
@@ -207,17 +205,10 @@ export function Raid() {
               ) : (
                 <>
                   <h2>報酬一覧</h2>
-                  <h3>周回クリア報酬</h3>
-                  <div className="raid2-ladder laps">
-                    {[1, 2, 3].map((n) => (
-                      <div key={n} className={`raid2-step ${n <= r.laps ? 'got' : n === lap ? 'next' : ''}`}>
-                        <small>{n === 3 ? '3周目以降' : `${n}周目`}</small>
-                        <b>
-                          <Icon name="gem" /> {raidLapReward(n)}
-                        </b>
-                      </div>
-                    ))}
-                  </div>
+                  <h3>討伐報酬</h3>
+                  <p className="raid3-note">
+                    ボスを倒すたびに <Icon name="gem" /> {raidLapReward(1)}（2回目は {raidLapReward(2)}、3回目からは {raidLapReward(3)}）。倒したボスは強くなって復活する。
+                  </p>
                   <h3>参加報酬</h3>
                   <p className="raid3-note">毎回のバトルで、与えたダメージ100ごとにジェム1個（最大{RAID_TRY_GEMS}個）。</p>
                   <h3>レイドカード</h3>
@@ -227,11 +218,10 @@ export function Raid() {
                     </div>
                     <div>
                       <b>「{rc.name}」</b>
-                      <p>周をクリアするたび、ごくまれに（{(RAID_DROP * 100).toFixed(0)}%）手に入る。パックからは出ない特別なカードで、デッキに1枚まで入れられる。</p>
+                      <p>ボスを倒すたび、ごくまれに（{(RAID_DROP * 100).toFixed(0)}%）手に入る。パックからは出ない特別なカードで、デッキに1枚まで入れられる。</p>
                       <small>{ownCard ? `所持 ${save.collection[rc.id]}枚` : '未所持'}</small>
                     </div>
                   </div>
-                  <p className="set-note">今週 {r.laps}周クリア ／ {r.tries}回挑戦{r.best ? ` ・ 1回の最高ダメージ ${r.best.toLocaleString()}` : ''}</p>
                 </>
               )}
             </motion.div>

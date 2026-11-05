@@ -205,7 +205,7 @@ function useBoardWatchdog(): number {
 // ---------------------------------------------------------------------------
 // Boss raid: the entrance, and the HP bar with the boss's next move
 // ---------------------------------------------------------------------------
-function RaidIntro({ bossId, hp, left, lap, onDone }: { bossId: string; hp: number; left: number; lap: number; onDone: () => void }) {
+function RaidIntro({ bossId, hp, left, onDone }: { bossId: string; hp: number; left: number; onDone: () => void }) {
   const b = card(bossId) as MonsterCard;
   useEffect(() => {
     sfx('rumble', 0.9);
@@ -230,7 +230,7 @@ function RaidIntro({ bossId, hp, left, lap, onDone }: { bossId: string; hp: numb
         transition={{ duration: 1.2, delay: 0.25, ease: [0.16, 1, 0.3, 1] }}
       />
       <motion.div className="ri-kicker" initial={{ opacity: 0, scaleX: 0.3 }} animate={{ opacity: 1, scaleX: 1 }} transition={{ delay: 0.9, duration: 0.5 }}>
-        今週のレイドボス ・ {lap}周目
+        今週のレイドボス
       </motion.div>
       <motion.div className="ri-name gold-title" initial={{ opacity: 0, y: 30, letterSpacing: '0.6em' }} animate={{ opacity: 1, y: 0, letterSpacing: '0.04em' }} transition={{ delay: 1.15, duration: 0.7, ease: [0.16, 1, 0.3, 1] }}>
         {b.name}
@@ -249,7 +249,6 @@ function RaidHud({ s }: { s: GameState }) {
   const hp = maxHp(s, bs);
   const left = Math.max(0, hp - bs.damage);
   const dealt = bs.damage - s.raid.startDamage;
-  const next = b.attacks[s.raid.moves % b.attacks.length];
   const rage = bs.damage * 2 >= hp;
   return (
     <div className={`raid-hud ${rage ? 'rage' : ''}`}>
@@ -263,10 +262,7 @@ function RaidHud({ s }: { s: GameState }) {
         <div className="rh-fill" style={{ width: `${(100 * left) / hp}%` }} />
       </div>
       <div className="rh-bottom">
-        <span className="rh-next">
-          次のワザ：<b>{next.name}</b> {next.damage ? `${next.damage + (rage ? BOSS_RAGE_BONUS : 0)}` : ''}
-          {rage && <i> 激昂</i>}
-        </span>
+        <span className="rh-next">{rage && <i>激昂中：ワザのダメージ +{BOSS_RAGE_BONUS}</i>}</span>
         <span className="rh-dealt">
           与えたダメージ {dealt.toLocaleString()} ・ <em>あと{s.players[1].prizes.length}匹きぜつで負け</em>
         </span>
@@ -1266,8 +1262,8 @@ export function BattleScreen() {
       <div className="battle-bg" style={{ backgroundImage: `url(${artUrl(bg)})` }} key={bg} />
       <div className="battle-bg-shade" />
       {cfg.raid && <RaidHud s={s} />}
-      <AnimatePresence>{cfg.raid && raidIntro && <RaidIntro bossId={cfg.raid.bossId} hp={cfg.raid.hp} left={cfg.raid.hp - cfg.raid.startDamage} lap={cfg.raid.lap} onDone={endRaidIntro} />}</AnimatePresence>
-      {terrain && <div className="battle-weather" key={`w-${terrain.key}`}><Weather kind={TERRAIN_WEATHER[terrain.key] ?? 'motes'} /></div>}
+      <AnimatePresence>{cfg.raid && raidIntro && <RaidIntro bossId={cfg.raid.bossId} hp={cfg.raid.hp} left={cfg.raid.hp - cfg.raid.startDamage} onDone={endRaidIntro} />}</AnimatePresence>
+      {terrain && <div className="battle-weather" key={`w-${terrain.key}`}><Weather lite kind={TERRAIN_WEATHER[terrain.key] ?? 'motes'} /></div>}
       {terrain && (terrainFx || STADIUM_NOTE[terrain.key]) && (
         <div className="terrain-chip" key={`t-${terrain.key}`}>
           <b>{terrain.name}</b>

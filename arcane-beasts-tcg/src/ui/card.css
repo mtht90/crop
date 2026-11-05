@@ -1018,3 +1018,8 @@
   84% { opacity: 0.3; scale: 0.6; rotate: 45deg; }
 }
 .raid-sparks .raid-flare { left: var(--mx); top: var(--my); width: 60cqw; opacity: calc(0.15 + var(--hyp) * 0.55); animation: none; scale: 1; filter: drop-shadow(0 0 2cqw rgba(var(--rgl), 0.8)); transition: left 0.15s ease-out, top 0.15s ease-out; }
+
+/* a card that cannot be chosen is dimmed whatever its printing (some
+   printings set their own filter on the card) */
+.tcg.dim { filter: grayscale(0.7) brightness(0.55) !important; }
+.tcg.dim .tcg-shine, .tcg.dim .tcg-glare, .tcg.dim .raid-glitter, .tcg.dim .raid-sparks { display: none; }

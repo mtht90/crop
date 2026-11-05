@@ -611,10 +611,10 @@ export class Game {
     if (!s.flags.stadiumUsed && this.stadiumActionOk(p)) out.push({ t: 'stadium' });
     // attacks
     if (s.raid && p === 1) {
-      // the boss only fights, one attack after another
-      const i = this.raidNextMove();
-      if (act && !firstTurn && this.canAttack(p, i)) return [{ t: 'attack', index: i }];
-      return [{ t: 'endTurn' }];
+      // the boss only fights: it picks one of its attacks (the CPU chooses)
+      const atks: Action[] = [];
+      if (act && !firstTurn) topCard(act).attacks.forEach((_, i) => this.canAttack(p, i) && atks.push({ t: 'attack', index: i }));
+      return atks.length ? atks : [{ t: 'endTurn' }];
     }
     if (act && !firstTurn) {
       topCard(act).attacks.forEach((_, i) => {

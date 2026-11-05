@@ -14,7 +14,26 @@ interface P {
 
 const rnd = (a: number, b: number) => a + Math.random() * (b - a);
 
-export function Weather({ kind }: { kind: W }) {
+/** a soft round glow, drawn once and stamped (cheaper than a gradient per particle per frame) */
+const spriteCache = new Map<string, HTMLCanvasElement>();
+function glow(col: string, inner = 1): HTMLCanvasElement {
+  const key = `${col}|${inner}`;
+  let c = spriteCache.get(key);
+  if (c) return c;
+  c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d')!;
+  const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  gr.addColorStop(0, `rgba(${col},${inner})`);
+  gr.addColorStop(1, `rgba(${col},0)`);
+  g.fillStyle = gr;
+  g.fillRect(0, 0, 64, 64);
+  spriteCache.set(key, c);
+  return c;
+}
+
+/** `lite`: for use over a live battle — fewer particles, 1x resolution, 30 fps */
+export function Weather({ kind, lite = false }: { kind: W; lite?: boolean }) {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const c = ref.current;
@@ -24,13 +43,17 @@ export function Weather({ kind }: { kind: W }) {
     let h = 0;
     const fit = () => {
       const r = c.getBoundingClientRect();
-      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      const dpr = lite ? 1 : Math.min(2, window.devicePixelRatio || 1);
       w = c.width = Math.max(1, Math.floor(r.width * dpr));
       h = c.height = Math.max(1, Math.floor(r.height * dpr));
     };
     fit();
     window.addEventListener('resize', fit);
-    const count = { rain: 240, storm: 340, snow: 150, embers: 90, ash: 90, petals: 50, stars: 130, fog: 7, motes: 55 }[kind];
+    const full = { rain: 240, storm: 340, snow: 150, embers: 90, ash: 90, petals: 50, stars: 130, fog: 7, motes: 55 }[kind];
+    const count = lite ? Math.max(4, Math.round(full * 0.35)) : full;
+    const emberImg = glow('255,150,60');
+    const moteImg = glow('255,236,170');
+    const fogImg = glow('215,225,240');
     const make = (spread = true): P => {
       const base: P = { x: rnd(0, w), y: spread ? rnd(0, h) : -20, vx: 0, vy: 0, r: 1, a: 1, ph: rnd(0, 6.28) };
       switch (kind) {
@@ -60,9 +83,17 @@ export function Weather({ kind }: { kind: W }) {
     let last = performance.now();
     const frame = (now: number) => {
       raf = requestAnimationFrame(frame);
+      if (lite && now - last < 31) return; // ~30 fps is plenty for weather
       const dt = Math.min(2.5, (now - last) / 16.7);
       last = now;
       ctx.clearRect(0, 0, w, h);
+      // rain: every drop in one path, one stroke
+      const rainy = kind === 'rain' || kind === 'storm';
+      if (rainy) {
+        ctx.strokeStyle = 'rgba(200,220,255,0.42)';
+        ctx.lineWidth = lite ? 1 : 1.1;
+        ctx.beginPath();
+      }
       for (let k = 0; k < ps.length; k++) {
         const p = ps[k];
         p.ph += 0.03 * dt;
@@ -81,12 +112,8 @@ export function Weather({ kind }: { kind: W }) {
         switch (kind) {
           case 'rain':
           case 'storm':
-            ctx.strokeStyle = `rgba(200,220,255,${p.a})`;
-            ctx.lineWidth = p.r;
-            ctx.beginPath();
             ctx.moveTo(p.x, p.y);
             ctx.lineTo(p.x + p.vx * 2.2, p.y - p.vy * 2.2);
-            ctx.stroke();
             break;
           case 'snow':
             ctx.fillStyle = `rgba(255,255,255,${p.a})`;
@@ -111,14 +138,9 @@ export function Weather({ kind }: { kind: W }) {
           case 'embers':
           case 'motes': {
             const tw = 0.6 + Math.sin(p.ph * 3) * 0.4;
-            const col = kind === 'embers' ? '255,150,60' : '255,236,170';
-            const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r * 4);
-            g.addColorStop(0, `rgba(${col},${p.a * tw})`);
-            g.addColorStop(1, `rgba(${col},0)`);
-            ctx.fillStyle = g;
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, p.r * 4, 0, 6.283);
-            ctx.fill();
+            ctx.globalAlpha = p.a * tw;
+            ctx.drawImage(kind === 'embers' ? emberImg : moteImg, p.x - p.r * 4, p.y - p.r * 4, p.r * 8, p.r * 8);
+            ctx.globalAlpha = 1;
             break;
           }
           case 'stars': {
@@ -130,15 +152,14 @@ export function Weather({ kind }: { kind: W }) {
             break;
           }
           case 'fog': {
-            const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r);
-            g.addColorStop(0, `rgba(215,225,240,${p.a})`);
-            g.addColorStop(1, 'rgba(215,225,240,0)');
-            ctx.fillStyle = g;
-            ctx.fillRect(p.x - p.r, p.y - p.r, p.r * 2, p.r * 2);
+            ctx.globalAlpha = p.a;
+            ctx.drawImage(fogImg, p.x - p.r, p.y - p.r, p.r * 2, p.r * 2);
+            ctx.globalAlpha = 1;
             break;
           }
         }
       }
+      if (rainy) ctx.stroke();
       if (kind === 'storm') {
         if (now > nextBolt) {
           bolt = 1;
@@ -156,6 +177,6 @@ export function Weather({ kind }: { kind: W }) {
       cancelAnimationFrame(raf);
       window.removeEventListener('resize', fit);
     };
-  }, [kind]);
+  }, [kind, lite]);
   return <canvas ref={ref} className={`story-weather ${kind}`} />;
 }

@@ -74,7 +74,7 @@ export function ResultOverlay() {
       );
       const rr = useStore.getState().recordRaid({ win, dealt });
       const lines = [{ label: `ボスに与えたダメージ ${dealt.toLocaleString()}`, coins: 0, gems: rr.gems }];
-      if (win) lines.push({ label: `${rr.lap}周目 討伐報酬`, coins: 0, gems: rr.lapGems });
+      if (win) lines.push({ label: '討伐報酬', coins: 0, gems: rr.lapGems });
       setRaidRes(rr);
       setRes({ ...base, lines, total: base.total, gems: base.gems + rr.gems + rr.lapGems });
       return;
@@ -126,7 +126,7 @@ export function ResultOverlay() {
         <motion.div className="raid-result-bar" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
           <div className="rrb-head">
             <b>{cfg.oppName}</b>
-            <span>{raidRes.win ? `${raidRes.lap}周目クリア！ 次は${raidRes.lap + 1}周目` : `${raidRes.lap}周目 ・ 残りHP ${(raidRes.hp - raidRes.damage).toLocaleString()} / ${raidRes.hp.toLocaleString()}`}</span>
+            <span>{raidRes.win ? '討伐！ ボスは強くなって復活する' : `残りHP ${(raidRes.hp - raidRes.damage).toLocaleString()} / ${raidRes.hp.toLocaleString()}`}</span>
           </div>
           <div className="rrb-track">
             <motion.div className="rrb-fill" initial={{ width: `${(100 * (raidRes.hp - raidRes.damage + raidRes.dealt)) / raidRes.hp}%` }} animate={{ width: `${(100 * (raidRes.hp - raidRes.damage)) / raidRes.hp}%` }} transition={{ delay: 0.9, duration: 1.2, ease: [0.16, 1, 0.3, 1] }} />
