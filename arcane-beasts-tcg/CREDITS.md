@@ -624,3 +624,6 @@ licensed under [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/), via `@
 
 `public/assets/ui/coin.svg` and `gem.svg` are from [Noto Emoji](https://github.com/googlefonts/noto-emoji)
 (Google), licensed under the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0), via Iconify.
+
+## エフェクト素材
+- Particle Pack — Kenney (kenney.nl), CC0 1.0（レイドカードのきらめき・光輪・レンズフレア）

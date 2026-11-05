@@ -2,7 +2,7 @@ import { memo, useEffect, useRef } from 'react';
 import { card, COND_JP, RARITY_SYMBOL, STAGE_JP, SET_COUNT, SET_INFO, TYPE_JP, byName } from '../engine/cards';
 import type { CardDef, EnergyCard, EType, MonsterCard, TrainerCard } from '../engine/types';
 import { onGyro } from '../lib/gyro';
-import { artUrl, TYPE_COLOR, TYPE_SCENE } from '../lib/assets';
+import { artUrl, asset, TYPE_COLOR, TYPE_SCENE } from '../lib/assets';
 import { Icon } from './Icon';
 import './card.css';
 
@@ -138,7 +138,7 @@ export const CardFace = memo(function CardFace({ cid, className, style, interact
           {v === 'mirror' && <div className={`tcg-mirror ${def.kind === 'trainer' ? 'tw' : def.kind === 'energy' ? 'ew' : ''}`} />}
           {(holo || def.raid) && <div className="tcg-shine" />}
           {(holo || v === 'mirror' || def.raid) && <div className="tcg-glare" />}
-          {def.raid && <div className="raid-sparkle" />}
+          {def.raid && <RaidSparkles />}
         </div>
       </div>
       {/* the raid monster's head and shoulders break out over the top of the card */}
@@ -185,6 +185,26 @@ function Cost({ cost }: { cost: EType[] }) {
 /** how much room an attack line takes: name, cost icons, damage */
 const atkLen = (a: MonsterCard['attacks'][number]) => a.name.length + Math.max(0, a.cost.length - 3) * 1.1 + (a.damage !== undefined ? String(a.damage).length * 0.9 + (a.suffix ? 0.7 : 0) : 0);
 
+/** stars that flash over a raid card, and a lens flare that follows the tilt */
+const SPARKS: [string, number, number, number, number][] = [
+  // image, left %, top %, size (cqw), delay (s)
+  ['star_07', 18, 16, 16, 0],
+  ['star_08', 80, 30, 12, 1.4],
+  ['star_06', 12, 50, 11, 2.6],
+  ['star_07', 86, 12, 14, 3.4],
+  ['star_06', 62, 44, 9, 2],
+];
+function RaidSparkles() {
+  return (
+    <div className="raid-sparks">
+      {SPARKS.map(([img, x, y, size, delay], i) => (
+        <img key={i} src={asset(`fx/raid/${img}.webp`)} alt="" draggable={false} style={{ left: `${x}%`, top: `${y}%`, width: `${size}cqw`, animationDelay: `${delay}s` }} />
+      ))}
+      <img className="raid-flare" src={asset('fx/raid/flare_01.webp')} alt="" draggable={false} />
+    </div>
+  );
+}
+
 function MonsterFace({ def }: { def: MonsterCard }) {
   const scene = def.scene ?? TYPE_SCENE[def.type];
   let prev: MonsterCard | null = null;
@@ -208,15 +228,17 @@ function MonsterFace({ def }: { def: MonsterCard }) {
         {def.variant === 'SAR' && !scene.startsWith('story/p-') && <div className="sar-wash" />}
         {def.raid && (
           <>
-            {/* cold foil: silver rays stamped behind the monster */}
-            <div className="raid-coldfoil" />
+            {/* behind the monster: soft rays, a halo and a ring of light */}
+            <div className="raid-rays" />
+            <img className="raid-halo" src={asset('fx/raid/light_01.webp')} alt="" draggable={false} />
+            <img className="raid-ring" src={asset('fx/raid/circle_03.webp')} alt="" draggable={false} />
             {/* relief: the monster raised from the card, lit from where it tilts */}
             <img className="raid-relief lo" src={artUrl(def.art)} alt="" draggable={false} loading="lazy" />
             <img className="raid-relief hi" src={artUrl(def.art)} alt="" draggable={false} loading="lazy" />
           </>
         )}
         <img className="portrait" src={artUrl(def.art)} alt={def.name} draggable={false} loading="lazy" style={pStyle} />
-        {def.raid && <div className="raid-holo" />}
+        {def.raid && <div className="raid-glitter" style={{ ['--glitter' as string]: `url(${asset('fx/raid/glitter.webp')})`, ['--glitter2' as string]: `url(${asset('fx/raid/glitter-big.webp')})` }} />}
       </div>
       <div className="tcg-head">
         <span className={`tcg-stage stage-${def.stage}`}>{STAGE_JP[def.stage]}</span>
