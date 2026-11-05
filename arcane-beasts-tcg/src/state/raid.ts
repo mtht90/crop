@@ -27,7 +27,7 @@ export interface RaidSave {
 }
 
 /** the boss's HP on lap n (from 1) */
-export const raidLapHp = (lap: number) => (lap <= 1 ? 1200 : 1800);
+export const raidLapHp = (lap: number) => (lap <= 1 ? 1500 : 2200);
 /** extra damage on each boss attack on lap n */
 export const raidLapBonus = (lap: number) => (lap <= 1 ? 0 : 10);
 /** what clearing lap n pays */
@@ -45,10 +45,11 @@ export function currentBoss(key = weekKey()): MonsterCard {
 /** the raid as it stands this week (a fresh one when the week has moved on) */
 export function raidNow(r: RaidSave | undefined): RaidSave {
   const key = weekKey();
-  if (r && r.key === key && typeof (r as Partial<RaidSave>).laps === 'number') return r;
+  const bossId = currentBoss(key).id;
+  if (r && r.key === key && r.bossId === bossId && typeof (r as Partial<RaidSave>).laps === 'number') return r;
   // an older save from this week keeps its tries (so the free one is not given twice)
   const tries = r && r.key === key ? r.tries : 0;
-  return { key, bossId: currentBoss(key).id, tries, laps: 0, damage: 0, best: 0 };
+  return { key, bossId, tries, laps: 0, damage: 0, best: 0 };
 }
 
 export const raidCost = (r: RaidSave) => (r.tries === 0 ? 0 : RAID_TRY_GEMS);

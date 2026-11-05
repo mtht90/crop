@@ -380,6 +380,10 @@ Assets were resized / re-encoded (WebP, MP3) and effect frames were packed into 
 | image | `data/core/images/portraits/monsters/jumpcat.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
 | image | `data/core/images/portraits/monsters/jumping-spider.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
 | image | `data/core/images/portraits/monsters/kraken.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
+| image | `data/campaigns/Eastern_Invasion/images/portraits/mal-ravanal.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
+| image | `data/campaigns/Descent_Into_Darkness/images/portraits/malin_lich-ancient.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
+| image | `data/campaigns/Northern_Rebirth/images/portraits/Malifor.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
+| image | `data/campaigns/Dead_Water/images/portraits/kai_krellis2.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
 | image | `data/core/images/portraits/monsters/mudcrawler.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
 | image | `data/core/images/portraits/monsters/naiad.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
 | image | `data/core/images/portraits/monsters/nibbler.webp` | GNU GPL v2+ | Battle for Wesnoth Project |
