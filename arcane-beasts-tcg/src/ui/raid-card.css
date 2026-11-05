@@ -1,0 +1,103 @@
+/* ================================ RAID CARD ================================ */
+.tcg.raid-card { --rg: 255, 70, 40; isolation: isolate; }
+.tcg.raid-card.t-water { --rg: 70, 170, 255; }
+.tcg.raid-card.t-dark { --rg: 185, 80, 255; }
+/* the card itself is the frame: a thin black edge, the gold is drawn inside */
+.tcg.raid-card .tcg-frame { padding: 0.9cqw; background: #050403; box-shadow: 0 0 0 0.25cqw #2a1d06, 0 1cqw 2.4cqw rgba(0, 0, 0, 0.7), 0 0 4cqw rgba(var(--rg), 0.35); animation: rf-breathe 3.6s ease-in-out infinite; }
+@keyframes rf-breathe { 50% { box-shadow: 0 0 0 0.25cqw #4a3510, 0 1cqw 2.4cqw rgba(0, 0, 0, 0.7), 0 0 7cqw 0.8cqw rgba(var(--rg), 0.6); } }
+.tcg.raid-card .tcg-inner { border-radius: 3.6cqw; background: #050403; }
+.tcg.raid-card .tcg-inner::before { display: none; }
+
+.rf { position: absolute; inset: 0; overflow: hidden; border-radius: inherit; color: #f6e7c1; font-family: 'Shippori Mincho B1', 'M PLUS 1p', serif; }
+.rf-scene { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: brightness(0.5) saturate(1.25) contrast(1.15) sepia(0.15); transform: scale(1.06); }
+.rf-glow { position: absolute; inset: 0; background: radial-gradient(ellipse 60% 45% at 50% 40%, rgba(var(--rg), 0.55), transparent 70%); mix-blend-mode: screen; }
+.rf-portrait { position: absolute; left: 50%; bottom: 38%; height: 56%; translate: -50% 0; object-fit: contain; filter: drop-shadow(0 0 2.4cqw rgba(var(--rg), 0.8)) drop-shadow(0 1.4cqw 1.6cqw rgba(0, 0, 0, 0.8)); }
+.rf-vignette { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(5, 3, 2, 0.75) 0%, transparent 22%, transparent 48%, rgba(5, 3, 2, 0.6) 60%, rgba(5, 3, 2, 0.95) 100%), radial-gradient(ellipse at 50% 45%, transparent 55%, rgba(0, 0, 0, 0.7) 100%); }
+/* etched foil: fine engraving lines and starlight that move with the tilt */
+.rf-foil {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at var(--mx) var(--my), rgba(255, 240, 200, 0.35), transparent 40%),
+    repeating-linear-gradient(115deg, rgba(255, 230, 170, 0.09) 0 0.25cqw, transparent 0.25cqw 0.9cqw),
+    radial-gradient(0.35cqw 0.35cqw at 18% 22%, #fff, transparent 70%), radial-gradient(0.3cqw 0.3cqw at 72% 14%, #fff, transparent 70%),
+    radial-gradient(0.4cqw 0.4cqw at 84% 46%, #fff, transparent 70%), radial-gradient(0.3cqw 0.3cqw at 12% 58%, #fff, transparent 70%),
+    radial-gradient(0.35cqw 0.35cqw at 62% 30%, #fff, transparent 70%);
+  mix-blend-mode: color-dodge;
+  opacity: 0.75;
+  animation: rf-twinkle 2.8s ease-in-out infinite;
+}
+@keyframes rf-twinkle { 50% { opacity: 0.45; } }
+.rf-frame { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+
+/* the crest: a gold medallion holding the type, set into the top of the frame */
+.rf-crest { position: absolute; left: 50%; top: 1.6cqw; width: 11cqw; height: 11cqw; translate: -50% 0; padding: 1.1cqw; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff3c4, #c9962b 55%, #6b4609); box-shadow: 0 0 0 0.4cqw #2a1d06, 0 0.6cqw 1.2cqw rgba(0, 0, 0, 0.8), 0 0 3cqw rgba(var(--rg), 0.7); z-index: 7; }
+.rf-band {
+  position: absolute;
+  left: 3.4cqw;
+  right: 3.4cqw;
+  top: 74cqw;
+  height: 14cqw;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 4.6cqw 0 5cqw;
+  background: linear-gradient(180deg, rgba(10, 6, 2, 0.2), rgba(10, 6, 2, 0.92) 30%, rgba(10, 6, 2, 0.92) 70%, rgba(10, 6, 2, 0.2));
+  border-top: 0.35cqw solid transparent;
+  border-bottom: 0.35cqw solid transparent;
+  border-image: linear-gradient(90deg, transparent, #c9962b 12%, #fff1bd 50%, #c9962b 88%, transparent) 1;
+}
+.rf-title { display: grid; gap: 0.2cqw; min-width: 0; }
+.rf-title small { font-family: Cinzel, serif; font-size: 2.1cqw; letter-spacing: 0.4em; color: #e9c46a; text-shadow: 0 0.2cqw 0.4cqw #000; }
+.rf-title b {
+  font-size: 7cqw;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  line-height: 1.12;
+  white-space: nowrap;
+  background: linear-gradient(180deg, #fffaf0 0%, #ffe39a 38%, #c9922a 60%, #fff0c0 82%, #a87418 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0.35cqw 0.25cqw rgba(0, 0, 0, 0.95)) drop-shadow(0 0 1.6cqw rgba(var(--rg), 0.6));
+}
+.rf-hp { flex: none; display: flex; align-items: baseline; gap: 0.6cqw; font-family: Cinzel, serif; font-weight: 700; }
+.rf-hp small { font-size: 2.6cqw; color: #e9c46a; }
+.rf-hp b { font-size: 6.4cqw; background: linear-gradient(180deg, #fff, #ffd76a 55%, #b77d16); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 0.3cqw 0.2cqw #000); }
+
+/* the text plate: smoked glass between two gold rules */
+.rf-plate { position: absolute; left: 7.2cqw; right: 7.2cqw; top: 89.4cqw; bottom: 18.4cqw; z-index: 3; display: flex; flex-direction: column; justify-content: space-between; gap: 1cqw; padding: 1.6cqw 2.2cqw 1.2cqw; border-radius: 1.6cqw; background: linear-gradient(180deg, rgba(16, 10, 4, 0.72), rgba(8, 5, 2, 0.85)); box-shadow: inset 0 0 0 0.25cqw rgba(233, 196, 106, 0.55), inset 0 0 3cqw rgba(0, 0, 0, 0.7); backdrop-filter: blur(0.6cqw); }
+.rf-atk-head { display: flex; align-items: center; gap: 1.4cqw; }
+.rf-cost { display: flex; gap: 0.5cqw; flex: none; min-width: 19cqw; }
+.rf-cost i { display: grid; place-items: center; width: 4.8cqw; height: 4.8cqw; padding: 0.4cqw; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff1b8, #b8851d 60%, #5a3a06); box-shadow: 0 0.2cqw 0.4cqw #000; }
+.rf-atk-name { flex: 1; min-width: 0; font-size: 4.3cqw; font-weight: 800; letter-spacing: 0.04em; color: #fff3d0; white-space: nowrap; overflow: hidden; text-shadow: 0 0.25cqw 0.4cqw #000; }
+.rf-dmg { font-family: Cinzel, serif; font-weight: 700; font-size: 5.8cqw; background: linear-gradient(180deg, #fff, #ffd76a 55%, #b77d16); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 0.3cqw 0.2cqw #000); }
+.rf-atk p { margin: 0.3cqw 0 0; font-family: 'M PLUS 1p', sans-serif; font-size: 2.35cqw; line-height: 1.32; color: #e9dcc0; }
+.rf-stats { display: flex; justify-content: space-between; padding-top: 1cqw; border-top: 0.2cqw solid rgba(233, 196, 106, 0.35); font-family: 'M PLUS 1p', sans-serif; font-size: 2.4cqw; font-weight: 800; color: #e9c46a; }
+.rf-stats span { display: inline-flex; align-items: center; gap: 0.5cqw; }
+
+/* the wax seal over the bottom of the frame */
+.rf-seal { position: absolute; left: 50%; bottom: 2.4cqw; width: 14cqw; height: 14cqw; translate: -50% 0; z-index: 4; filter: drop-shadow(0 0.6cqw 0.8cqw rgba(0, 0, 0, 0.85)); }
+.rf-seal svg { width: 100%; height: 100%; display: block; }
+.rf-foot { position: absolute; left: 15cqw; right: 15cqw; bottom: 6.2cqw; z-index: 3; display: flex; justify-content: space-between; font-family: Cinzel, serif; font-size: 2.1cqw; letter-spacing: 0.06em; color: #c9a45a; }
+.rf-no { font-weight: 700; }
+
+/* the monster climbing out over the top of the frame */
+.raid-pop {
+  position: absolute;
+  left: 50%;
+  bottom: 37%;
+  height: 66%;
+  translate: -50% 0;
+  z-index: 5;
+  pointer-events: none;
+  object-fit: contain;
+  filter: drop-shadow(0 0 1.6cqw rgba(var(--rg), 0.85)) drop-shadow(0 1cqw 1.4cqw rgba(0, 0, 0, 0.7));
+  /* only its feet fade into the nameplate */
+  mask-image: linear-gradient(to top, transparent 0%, #000 12%);
+  -webkit-mask-image: linear-gradient(to top, transparent 0%, #000 12%);
+  animation: raid-rise 3.2s ease-in-out infinite;
+}
+@keyframes raid-rise { 50% { transform: translateY(-1cqw); } }
