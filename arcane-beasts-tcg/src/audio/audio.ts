@@ -252,8 +252,8 @@ export const foley = {
   rush: () => play('rush', 0.5, 0.75),
   /** a deep, wide blast: the charged pack let go */
   blast: () => play('blast', 0.9),
-  /** the best packs: a holy swell on top */
-  gong: () => sfx('magic-holy-2', 0.55),
+  /** the best packs: a second, deeper blast */
+  gong: () => play('boom', 0.7, 0.85),
   /** a heavy thud as the pack is gripped */
   grip: () => play('impact', 0.5, 1.15),
 };
