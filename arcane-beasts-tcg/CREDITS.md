@@ -642,3 +642,4 @@ licensed under [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/), via `@
 - Sci-Fi Sounds — Kenney (kenney.nl): low-frequency explosions, metal impacts, force field, low engine, thruster
 - 100 CC0 SFX — rubberduck (OpenGameArt): gong, paper
 - 100 CC0 SFX #2 — rubberduck (OpenGameArt): air whooshes
+- Muffled Distant Explosion — NenadSimic (OpenGameArt), CC0: the charged pack let go

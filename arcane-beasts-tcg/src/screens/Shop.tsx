@@ -775,9 +775,9 @@ function TearStage({ booster, god, u, cards, omen, packs, onAura, burstAt, onDon
     hideHint();
     setPromo((n) => n + 1);
     // a deep blow, heavier for a better pack (no chimes)
-    foley.impact();
-    foley.boom(0.8 + aura * 0.15);
-    if (aura >= 4) setTimeout(() => foley.gong(), 120);
+    foley.blast();
+    sfx('magic-holy-1', 0.4 + aura * 0.08);
+    if (aura >= 4) setTimeout(() => foley.gong(), 160);
     vibrate([0, 40]);
     const r = packRef.current?.getBoundingClientRect();
     if (r) {

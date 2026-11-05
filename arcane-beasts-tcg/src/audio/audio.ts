@@ -150,7 +150,7 @@ function ctx(): AudioContext | null {
 const FOLEY = [
   'slide1', 'slide2', 'slide3', 'slide4', 'slide5', 'slide6', 'place1', 'place2', 'place3', 'place4', 'flip1', 'flip2', 'flip3', 'flip4',
   'shuffle', 'packopen', 'tick', 'hover', 'chime1', 'chime2', 'chime3', 'chime4', 'sparkle1', 'sparkle2', 'pop', 'scratch',
-  'impact', 'boom', 'grip', 'thud', 'swell', 'build', 'rumble', 'wind', 'gong1', 'gong2', 'paper1', 'paper2', 'paper3', 'paper4', 'rush', 'whoosh', 'swipe',
+  'impact', 'blast', 'boom', 'grip', 'thud', 'swell', 'build', 'rumble', 'wind', 'gong1', 'gong2', 'paper1', 'paper2', 'paper3', 'paper4', 'rush', 'whoosh', 'swipe',
 ] as const;
 type FoleyName = (typeof FOLEY)[number];
 const bufs = new Map<FoleyName, AudioBuffer>();
@@ -250,8 +250,10 @@ export const foley = {
   swell: () => play('swell', 0.7, 0.8),
   /** a low, wide rush of air */
   rush: () => play('rush', 0.5, 0.75),
-  /** a deep bell (the best packs) */
-  gong: () => play('gong2', 0.6, 0.8),
+  /** a deep, wide blast: the charged pack let go */
+  blast: () => play('blast', 0.9),
+  /** the best packs: a holy swell on top */
+  gong: () => sfx('magic-holy-2', 0.55),
   /** a heavy thud as the pack is gripped */
   grip: () => play('impact', 0.5, 1.15),
 };
