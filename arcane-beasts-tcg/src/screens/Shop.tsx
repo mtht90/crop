@@ -14,7 +14,7 @@ import { BOOSTERS, NORMAL_BOOSTER, openPack, PACK_TABLE, PREMIUM_BOOSTER, PREMIU
 import { CardBack, CardFace } from '../ui/Card';
 import { TopBar } from '../ui/TopBar';
 import { Icon } from '../ui/Icon';
-import { foley, playMusic, sfx, tearLoop } from '../audio/audio';
+import { chargeLoop, foley, playMusic, sfx, tearLoop } from '../audio/audio';
 import { particles } from '../battle/particles';
 import { BoosterPack, TEAR_BAND, TEAR_Y, tearClips, tearEdgeFrom } from './pack/BoosterPack';
 import { CINE_SLOW, MeteorCinema, OMEN_COLORS, type OmenTier } from './pack/cinema';
@@ -526,22 +526,18 @@ function CinemaLayer({ omen, god, aura, held, playing, api, target, onDone }: { 
         target,
         holdAt: SCENE_HOLD,
         onBeat: (b) => {
-          if (b === 'twinkle') {
-            foley.chime(2 + omen.shown);
-            foley.sparkle();
-          } else if (b === 'flash') {
-            foley.sparkle();
-            sfx('magic-holy-2', 0.45);
-          } else if (b === 'enter') {
-            foley.whoosh();
-            if (omen.shown >= 3) setTimeout(() => foley.sparkle(), 250);
-            if (god) setTimeout(() => foley.rarity(5), 700);
-          } else if (b === 'dive') foley.charge();
+          // heavy and low throughout: booms, swells and rushes, no chimes
+          if (b === 'twinkle') foley.boom(0.6 + omen.shown * 0.1);
+          else if (b === 'flash') foley.boom(1);
+          else if (b === 'enter') {
+            foley.rush();
+            if (god) setTimeout(() => foley.gong(), 500);
+          } else if (b === 'dive') foley.swell();
           else if (b === 'impact') {
             foley.impact();
             sfx('rumble', 0.5);
-          } else if (b === 'orb') foley.chime(1 + omen.shown);
-          else if (b === 'morph') sfx('magic-holy-2', 0.4);
+          } else if (b === 'orb') foley.boom(0.7);
+          else if (b === 'morph') foley.boom(0.8);
         },
         onDone: () => doneRef.current(),
       });
@@ -764,7 +760,15 @@ function TearStage({ booster, god, u, cards, omen, packs, onAura, burstAt, onDon
   const [chargeStep, setChargeStep] = useState(0);
   const holding = useRef(false);
   const [held, setHeld] = useState(false);
+  /** the rumble while the pack is held */
+  const rumble = useRef<ReturnType<typeof chargeLoop>>(null);
+  const stopRumble = (fade?: number) => {
+    rumble.current?.stop(fade);
+    rumble.current = null;
+  };
+  useEffect(() => () => stopRumble(0.1), []);
   const release = () => {
+    stopRumble(0.08);
     setCharged(true);
     charge.set(1);
     setChargeStep(1);
@@ -800,6 +804,7 @@ function TearStage({ booster, god, u, cards, omen, packs, onAura, burstAt, onDon
       let c = charge.get();
       c = holding.current ? Math.min(1, c + dt / CHARGE_TIME) : Math.max(0, c - dt / 1.0);
       charge.set(c);
+      rumble.current?.update(c);
       const st = Math.round(c * 20) / 20;
       if (st !== step) {
         step = st;
@@ -830,18 +835,21 @@ function TearStage({ booster, god, u, cards, omen, packs, onAura, burstAt, onDon
     holding.current = true;
     setHeld(true);
     hideHint();
-    foley.charge();
+    foley.grip();
+    stopRumble(0.05);
+    rumble.current = chargeLoop();
   };
   const onHoldEnd = () => {
     if (charged || !holding.current) return;
     holding.current = false;
     setHeld(false);
     if (charge.get() >= 1) release();
+    else stopRumble(0.5);
   };
   // full: it lets go by itself a moment later if the finger stays down
   useEffect(() => {
     if (charged || chargeStep < 1 || !held) return;
-    foley.chime(6);
+    foley.grip();
     const t = setTimeout(() => {
       if (holding.current) {
         holding.current = false;

@@ -235,6 +235,31 @@ export const foley = {
   },
   tick: () => tone(1400, 0.035, 0.05, 'square', 0, 0.9),
   swipe: () => noise(0.22, 900, 3400, 0.32, 0.7),
+  /** a distant low boom (the pack's light appearing far off) */
+  boom: (weight = 1) => {
+    tone(48, 0.9, 0.22 * weight, 'sine', 0, 0.7);
+    tone(96, 0.5, 0.06 * weight, 'triangle', 0, 0.6);
+    noise(0.6, 400, 90, 0.18 * weight, 0.7);
+  },
+  /** a deep swell, falling in (the pack diving toward you) */
+  swell: () => {
+    tone(140, 0.9, 0.16, 'sine', 0, 0.35);
+    tone(70, 1.0, 0.2, 'sine', 0.05, 0.6);
+    noise(0.9, 900, 120, 0.22, 0.6);
+  },
+  /** a low, wide whoosh */
+  rush: () => noise(0.5, 260, 1100, 0.3, 0.55),
+  /** a deep bell (the best packs) */
+  gong: () => {
+    tone(73, 2.2, 0.22, 'sine', 0, 0.98);
+    tone(146.5, 1.6, 0.08, 'sine', 0, 0.99);
+    tone(219, 1.1, 0.04, 'triangle', 0, 0.99);
+  },
+  /** a heavy thud as the pack is gripped */
+  grip: () => {
+    tone(58, 0.45, 0.3, 'sine', 0, 0.75);
+    noise(0.18, 600, 120, 0.25, 0.8);
+  },
   /** rising shimmer that builds suspense before a rare flip */
   charge: () => {
     for (let i = 0; i < 10; i++) tone(400 * Math.pow(2, i / 6), 0.18, 0.04, 'triangle', i * 0.06);
@@ -248,6 +273,75 @@ export const foley = {
     for (let i = 0; i < Math.min(notes.length, 2 + level); i++) tone(523 * Math.pow(2, notes[i] / 12), 0.5, 0.09, 'triangle', i * 0.07);
   },
 };
+
+/**
+ * The pack being charged: a deep rumble that swells while it is held — two low
+ * tones a hair apart (a slow beat), a growl an octave up, and filtered noise
+ * like wind drawn in. `update(c)` with the charge 0…1 raises its weight and
+ * pitch a little; `stop()` lets it die away.
+ */
+export function chargeLoop() {
+  const c = ctx();
+  if (!c || !noiseBuf) return null;
+  const t0 = c.currentTime;
+  const out = c.createGain();
+  out.gain.value = 0.0001;
+  const lp = c.createBiquadFilter();
+  lp.type = 'lowpass';
+  lp.frequency.value = 220;
+  lp.Q.value = 0.8;
+  lp.connect(out).connect(c.destination);
+  const o1 = c.createOscillator();
+  o1.type = 'sine';
+  o1.frequency.value = 46;
+  const o2 = c.createOscillator();
+  o2.type = 'sine';
+  o2.frequency.value = 47.5;
+  const o3 = c.createOscillator();
+  o3.type = 'sawtooth';
+  o3.frequency.value = 92;
+  const g3 = c.createGain();
+  g3.gain.value = 0.18;
+  o1.connect(lp);
+  o2.connect(lp);
+  o3.connect(g3).connect(lp);
+  const nz = c.createBufferSource();
+  nz.buffer = noiseBuf;
+  nz.loop = true;
+  const nbp = c.createBiquadFilter();
+  nbp.type = 'bandpass';
+  nbp.frequency.value = 300;
+  nbp.Q.value = 0.7;
+  const ng = c.createGain();
+  ng.gain.value = 0.0001;
+  nz.connect(nbp).connect(ng).connect(c.destination);
+  [o1, o2, o3, nz].forEach((n) => n.start(t0));
+  let stopped = false;
+  const level = () => vol.sfx * vol.master;
+  out.gain.setTargetAtTime(0.32 * level(), t0, 0.12);
+  return {
+    update(charge: number) {
+      if (stopped) return;
+      const t = c.currentTime;
+      const k = Math.min(1, Math.max(0, charge));
+      o1.frequency.setTargetAtTime(46 + k * 14, t, 0.1);
+      o2.frequency.setTargetAtTime(47.5 + k * 16, t, 0.1);
+      o3.frequency.setTargetAtTime(92 + k * 30, t, 0.1);
+      lp.frequency.setTargetAtTime(220 + k * 520, t, 0.1);
+      out.gain.setTargetAtTime((0.32 + k * 0.5) * level(), t, 0.1);
+      nbp.frequency.setTargetAtTime(300 + k * 900, t, 0.1);
+      ng.gain.setTargetAtTime(Math.max(0.0001, k * k * 0.16 * level()), t, 0.1);
+    },
+    stop(fade = 0.25) {
+      if (stopped) return;
+      stopped = true;
+      const t = c.currentTime;
+      out.gain.setTargetAtTime(0.0001, t, fade / 3);
+      ng.gain.setTargetAtTime(0.0001, t, fade / 3);
+      [o1, o2, o3, nz].forEach((n) => n.stop(t + fade + 0.3));
+    },
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Semantic game sounds
