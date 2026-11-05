@@ -680,6 +680,8 @@
 .raid2-cond b { display: block; font-family: var(--font-display); font-weight: 400; font-size: var(--fs-m); }
 .raid2-cond.win b { color: var(--gold-2); }
 .raid2-cond.lose b { color: #ff9e9e; }
+.raid2-cond.keep b { color: #9fd8ff; }
+.raid2-ladder.laps { grid-template-columns: repeat(3, 1fr); }
 .raid2-cond p { margin: 2px 0 0; font-size: var(--fs-s); font-weight: 800; line-height: 1.55; }
 .raid2-rules ul { grid-column: 1 / -1; margin: 0; padding-left: 1.2em; display: grid; gap: 3px; font-size: var(--fs-xs); color: var(--ink-dim); line-height: 1.5; }
 .raid2-ladder { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
@@ -743,8 +745,10 @@
 .raid3-info > div { flex: 1; min-width: 0; display: grid; gap: 5px; }
 .raid3-hptext { font-family: var(--font-display); font-size: var(--fs-l); color: #fff; line-height: 1; }
 .raid3-hptext b { font-weight: 400; color: var(--gold-2); font-size: 0.7em; margin-right: 4px; }
+.raid3-hptext small { font-size: 0.6em; color: var(--ink-dim); }
+.raid3-hptext em { float: right; font-style: normal; font-family: inherit; font-size: 0.6em; padding: 2px 8px; border-radius: 999px; background: rgba(var(--bt), 0.35); border: 1px solid rgba(var(--bt), 0.7); }
 .raid3-hpbar { height: 10px; border-radius: 999px; background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(255, 255, 255, 0.18); overflow: hidden; }
-.raid3-hpbar div { height: 100%; background: linear-gradient(180deg, #ff9db0, #e8355a 60%, #9a1033); }
+.raid3-hpbar div { transition: width 0.8s ease; height: 100%; background: linear-gradient(180deg, #ff9db0, #e8355a 60%, #9a1033); }
 .raid3-chips { display: flex; gap: 6px; flex-wrap: wrap; }
 .raid3-chips > span { display: inline-flex; align-items: center; gap: 4px; padding: 2px 9px; border-radius: 999px; background: rgba(255, 255, 255, 0.08); font-size: var(--fs-xs); font-weight: 800; }
 .raid3-chips .esym { flex: none; }
@@ -769,8 +773,10 @@
 .raid3-sheet h2 { margin: 0; font-family: var(--font-display); font-weight: 400; color: var(--gold-2); }
 .raid3-sheet h3 { margin: 6px 0 0; font-size: var(--fs-s); color: var(--ink-dim); font-weight: 900; }
 .raid3-sheet .icon-btn.close { position: absolute; top: 10px; right: 10px; }
+.raid3-note { margin: 0; font-size: var(--fs-s); color: var(--ink); }
 .raid3-notes { margin: 0; padding-left: 1.2em; font-size: var(--fs-xs); color: var(--ink-dim); line-height: 1.5; }
 .raid3-sheet .raid2-cond { display: flex; gap: 12px; align-items: baseline; }
+.raid3-sheet .raid2-cond b { flex: none; width: 4.6em; font-size: var(--fs-s); }
 .raid3-sheet .raid2-cond p { margin: 0; }
 /* portrait: the boss fills the top half; everything else stacks below */
 @media (orientation: portrait) {

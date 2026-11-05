@@ -121,6 +121,8 @@ export function stadiumKey(s: GameState): string | null {
 
 export function maxHp(s: GameState, slot: Slot): number {
   const mc = topCard(slot);
+  // a raid boss's HP is set by the lap it is on
+  if (s.raid?.hp && mc.id.startsWith('BOSS-')) return s.raid.hp;
   let hp = mc.hp;
   if (toolKey(slot) === 'charm') hp += 30;
   if (toolKey(slot) === 'mailcoat' && mc.stage === 'basic') hp += 60;
@@ -264,9 +266,9 @@ export class Game {
    * `mult` times the damage). The boss starts with the damage already dealt
    * this week.
    */
-  static createRaid(deck: string[], bossId: string, startDamage: number, names: [string, string], seed = Date.now() >>> 0, opts: GameOptions = {}): Game {
+  static createRaid(deck: string[], bossId: string, startDamage: number, names: [string, string], seed = Date.now() >>> 0, opts: GameOptions = {}, lap: { hp?: number; bonus?: number } = {}): Game {
     const g = Game.create([deck, [bossId]], names, seed, opts);
-    g.s.raid = { moves: 0, mult: RAID_MULT, startDamage };
+    g.s.raid = { moves: 0, mult: RAID_MULT, startDamage, ...lap };
     return g;
   }
 
@@ -1189,6 +1191,7 @@ export class Game {
         dmg += s.flags.attackBonus;
         // a raid boss with half its HP gone grows fiercer
         if (s.raid && p === 1 && A.damage * 2 >= maxHp(s, A)) dmg += BOSS_RAGE_BONUS;
+        if (s.raid && p === 1) dmg += s.raid.bonus ?? 0;
         if (toolKey(A) === 'band') dmg += 20;
         if (toolKey(A) === 'drum' && mc.stage === 'basic') dmg += 30;
         let boost = 0;

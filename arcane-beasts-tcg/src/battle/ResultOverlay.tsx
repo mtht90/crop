@@ -62,22 +62,21 @@ export function ResultOverlay() {
       return;
     }
     if (cfg.raid) {
-      // a raid: one battle decides it; each win this week pays more
+      // a raid: the damage done stays on the boss; bringing it to 0 clears the lap
       const v = useBattle.getState().view;
       const bossSlot = v?.players[1].active;
-      const hp = (card(cfg.raid.bossId) as MonsterCard).hp;
-      const dealt = win ? hp : Math.min(hp, bossSlot?.damage ?? 0);
+      const hp = cfg.raid.hp;
+      const dealt = Math.max(0, (win ? hp : Math.min(hp, bossSlot?.damage ?? 0)) - cfg.raid.startDamage);
       const stR = useBattle.getState().stats;
       const base = recordBattle(
         { win, level: 'hard', baseReward: 0, prizesTaken: 0, prizesLost: stR.prizesLost, firstClear: false },
         { kos: stR.kos, damage: stR.damage, prizes: stR.prizes, evolves: stR.evolves, trainers: stR.trainers },
       );
-      const rr = useStore.getState().recordRaid({ win, dealt, turns: Math.ceil((v?.turn ?? 0) / 2) });
-      const lines = win
-        ? [{ label: `討伐報酬（今週${rr.wins}勝目）`, coins: 0, gems: rr.gems }]
-        : [{ label: `ボスに与えたダメージ ${dealt.toLocaleString()}`, coins: 0, gems: rr.gems }];
+      const rr = useStore.getState().recordRaid({ win, dealt });
+      const lines = [{ label: `ボスに与えたダメージ ${dealt.toLocaleString()}`, coins: 0, gems: rr.gems }];
+      if (win) lines.push({ label: `${rr.lap}周目 討伐報酬`, coins: 0, gems: rr.lapGems });
       setRaidRes(rr);
-      setRes({ ...base, lines, total: base.total, gems: base.gems + rr.gems });
+      setRes({ ...base, lines, total: base.total, gems: base.gems + rr.gems + rr.lapGems });
       return;
     }
     const before = claimableCount(useStore.getState().save.progress, extCtx(useStore.getState().save));
@@ -127,7 +126,10 @@ export function ResultOverlay() {
         <motion.div className="raid-result-bar" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
           <div className="rrb-head">
             <b>{cfg.oppName}</b>
-            <span>{raidRes.win ? `今週 ${raidRes.wins}勝 ・ 次の勝利はさらに報酬アップ` : `与えたダメージ ${raidRes.dealt.toLocaleString()}`}</span>
+            <span>{raidRes.win ? `${raidRes.lap}周目クリア！ 次は${raidRes.lap + 1}周目` : `${raidRes.lap}周目 ・ 残りHP ${(raidRes.hp - raidRes.damage).toLocaleString()} / ${raidRes.hp.toLocaleString()}`}</span>
+          </div>
+          <div className="rrb-track">
+            <motion.div className="rrb-fill" initial={{ width: `${(100 * (raidRes.hp - raidRes.damage + raidRes.dealt)) / raidRes.hp}%` }} animate={{ width: `${(100 * (raidRes.hp - raidRes.damage)) / raidRes.hp}%` }} transition={{ delay: 0.9, duration: 1.2, ease: [0.16, 1, 0.3, 1] }} />
           </div>
         </motion.div>
       )}

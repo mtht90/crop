@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { aiAnswer } from '../ai';
 import { deckById, expand } from '../decks';
-import { Game } from '../game';
+import { Game, maxHp } from '../game';
+import { RAID_TRY_GEMS, raidBattleGems, raidLapBonus, raidLapHp, raidLapReward, raidNow } from '../../state/raid';
+import { weekKey } from '../../state/progress';
 import { BOSSES, RAID_CARDS, RAID_MULT } from '../cards/bosses';
 import { ALL_CARDS } from '../cards';
 import { validateDeck } from '../decks';
@@ -49,6 +51,31 @@ describe('ボスレイド', () => {
     const b = BOSSES[0];
     const g = playRaid(b.id, b.hp - 10, 7);
     expect(g.s.winner).toBe(0);
+  });
+  it('a lap sets the boss HP and makes its attacks hit harder; damage carries over', () => {
+    const b = BOSSES[0];
+    const g = Game.createRaid(expand(deckById('fire').cards), b.id, 700, ['あなた', 'ボス'], 5, {}, { hp: 1800, bonus: 10 });
+    g.start();
+    let n = 0;
+    while (g.pending && g.pending.type !== 'action' && n++ < 30) g.answer(aiAnswer(g, 5, 0));
+    const boss = g.s.players[1].active!;
+    expect(boss.damage).toBe(700);
+    expect(maxHp(g.s, boss)).toBe(1800);
+    expect(g.s.raid!.bonus).toBe(10);
+  });
+  it('raid laps: clearing pays more than the tries it takes; lap 2 is tougher', () => {
+    expect(raidLapHp(2)).toBeGreaterThan(raidLapHp(1));
+    expect(raidLapBonus(2)).toBeGreaterThan(raidLapBonus(1));
+    expect(raidLapReward(1)).toBeGreaterThan(RAID_TRY_GEMS * 10);
+    expect(raidLapReward(2)).toBeGreaterThan(raidLapReward(1));
+    expect(raidBattleGems(250)).toBe(2);
+    expect(raidBattleGems(99999)).toBe(RAID_TRY_GEMS);
+    // a save from before laps keeps this week's tries (no second free try)
+    const old = { key: weekKey(), bossId: BOSSES[0].id, tries: 3, wins: 1, best: 0, fastest: 0 } as unknown as Parameters<typeof raidNow>[0];
+    const r = raidNow(old);
+    expect(r.tries).toBe(3);
+    expect(r.laps).toBe(0);
+    expect(r.damage).toBe(0);
   });
   it('raid cards: never in the regular card list, one per deck', () => {
     for (const c of RAID_CARDS) expect(ALL_CARDS.some((x) => x.id === c.id), c.id).toBe(false);

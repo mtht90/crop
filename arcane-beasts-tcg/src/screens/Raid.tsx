@@ -6,7 +6,7 @@ import { validateDeck } from '../engine/decks';
 import { card } from '../engine/cards';
 import { BOSS_RAGE_BONUS, RAID_DROP, raidCardOf } from '../engine/cards/bosses';
 import type { MonsterCard } from '../engine/types';
-import { currentBoss, RAID_TRY_GEMS, raidCost, raidNow, raidWinReward } from '../state/raid';
+import { currentBoss, RAID_TRY_GEMS, raidCost, raidLapBonus, raidLapHp, raidLapReward, raidNow } from '../state/raid';
 import { CardFace } from '../ui/Card';
 import { fmtRemain, msUntilNextWeek } from '../state/progress';
 import { artUrl } from '../lib/assets';
@@ -36,7 +36,9 @@ export function Raid() {
   const deck = activeDeck(save);
   const errs = deck ? validateDeck(deck.cards) : ['デッキがありません'];
   const deckOk = !!deck && errs.length === 0;
-  const next = raidWinReward(r.wins + 1);
+  const lap = r.laps + 1;
+  const lapHp = raidLapHp(lap);
+  const left = lapHp - r.damage;
 
   const challenge = async () => {
     if (!deck || !deckOk) return go('deck');
@@ -88,10 +90,12 @@ export function Raid() {
                 <img src={artUrl(boss.art)} alt="" />
                 <div>
                   <div className="raid3-hptext">
-                    <b>HP</b> {boss.hp.toLocaleString()}
+                    <b>HP</b> {left.toLocaleString()}
+                    <small> / {lapHp.toLocaleString()}</small>
+                    <em>{lap}周目</em>
                   </div>
                   <div className="raid3-hpbar">
-                    <div />
+                    <div style={{ width: `${(100 * left) / lapHp}%` }} />
                   </div>
                   <div className="raid3-chips">
                     <span>
@@ -117,7 +121,7 @@ export function Raid() {
                   <span className="raid3-gem">
                     <Icon name="gem" />
                   </span>
-                  <small>{next.gems}</small>
+                  <small>{raidLapReward(lap)}</small>
                 </div>
               </div>
             </section>
@@ -157,8 +161,20 @@ export function Raid() {
                 <>
                   <h2>ルール</h2>
                   <div className="raid2-cond win">
-                    <b>勝ち</b>
-                    <p>1回のバトルで、ボスのHPを0にする</p>
+                    <b>討伐</b>
+                    <p>
+                      ボスのHPを0にすると、その周をクリア
+                      <br />
+                      ボスは強くなって復活し、次の周へ
+                    </p>
+                  </div>
+                  <div className="raid2-cond keep">
+                    <b>持ち越し</b>
+                    <p>
+                      バトルに負けても、与えたダメージはそのまま残る
+                      <br />
+                      （週が変わるとリセット）
+                    </p>
                   </div>
                   <div className="raid2-cond lose">
                     <b>負け</b>
@@ -182,6 +198,7 @@ export function Raid() {
                     </div>
                   ))}
                   <div className="raid2-rage">HPが半分以下になると激昂し、すべてのワザのダメージが +{BOSS_RAGE_BONUS}</div>
+                  <div className="raid2-rage">2周目からはHP {raidLapHp(2).toLocaleString()}、すべてのワザのダメージが +{raidLapBonus(2)}</div>
                   <ul className="raid3-notes">
                     <li>ボスは1体だけ。エネルギーなしでワザを使い、特殊状態にならない</li>
                     <li>挑戦は週1回目が無料、2回目からはジェム{RAID_TRY_GEMS}個。何度でも挑戦できる</li>
@@ -190,18 +207,19 @@ export function Raid() {
               ) : (
                 <>
                   <h2>報酬一覧</h2>
-                  <h3>勝利報酬（今週の勝利数で増える）</h3>
-                  <div className="raid2-ladder">
-                    {[0, 1, 2, 3, 4].map((k) => Math.max(1, r.wins - 1) + k).map((n) => (
-                      <div key={n} className={`raid2-step ${n <= r.wins ? 'got' : n === r.wins + 1 ? 'next' : ''}`}>
-                        <small>{n}勝目</small>
+                  <h3>周回クリア報酬</h3>
+                  <div className="raid2-ladder laps">
+                    {[1, 2, 3].map((n) => (
+                      <div key={n} className={`raid2-step ${n <= r.laps ? 'got' : n === lap ? 'next' : ''}`}>
+                        <small>{n === 3 ? '3周目以降' : `${n}周目`}</small>
                         <b>
-                          <Icon name="gem" /> {raidWinReward(n).gems}
+                          <Icon name="gem" /> {raidLapReward(n)}
                         </b>
                       </div>
                     ))}
                   </div>
-                  <p className="set-note">1勝ごとに+10、最大150。負けても、与えたダメージ100ごとにジェム1個（最大{RAID_TRY_GEMS}個）。</p>
+                  <h3>参加報酬</h3>
+                  <p className="raid3-note">毎回のバトルで、与えたダメージ100ごとにジェム1個（最大{RAID_TRY_GEMS}個）。</p>
                   <h3>レイドカード</h3>
                   <div className="raid-drop-row">
                     <div className={`raid-drop-card ${ownCard ? '' : 'locked'}`}>
@@ -209,11 +227,11 @@ export function Raid() {
                     </div>
                     <div>
                       <b>「{rc.name}」</b>
-                      <p>勝利するたび、ごくまれに（{(RAID_DROP * 100).toFixed(1)}%）手に入る。パックからは出ない特別なカードで、デッキに1枚まで入れられる。</p>
+                      <p>周をクリアするたび、ごくまれに（{(RAID_DROP * 100).toFixed(0)}%）手に入る。パックからは出ない特別なカードで、デッキに1枚まで入れられる。</p>
                       <small>{ownCard ? `所持 ${save.collection[rc.id]}枚` : '未所持'}</small>
                     </div>
                   </div>
-                  <p className="set-note">今週 {r.wins}勝 ／ {r.tries}回挑戦{r.fastest ? ` ・ 最速 ${r.fastest}ターン` : ''}</p>
+                  <p className="set-note">今週 {r.laps}周クリア ／ {r.tries}回挑戦{r.best ? ` ・ 1回の最高ダメージ ${r.best.toLocaleString()}` : ''}</p>
                 </>
               )}
             </motion.div>

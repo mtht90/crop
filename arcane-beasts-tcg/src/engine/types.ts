@@ -242,6 +242,10 @@ export interface RaidState {
   mult: number;
   /** the boss's damage when the battle started (carried over this week) */
   startDamage: number;
+  /** the boss's HP for this lap (overrides the card's) */
+  hp?: number;
+  /** extra damage on every boss attack (later laps hit harder) */
+  bonus?: number;
 }
 
 export interface LogEntry {

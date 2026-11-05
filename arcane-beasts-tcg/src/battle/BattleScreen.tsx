@@ -205,7 +205,7 @@ function useBoardWatchdog(): number {
 // ---------------------------------------------------------------------------
 // Boss raid: the entrance, and the HP bar with the boss's next move
 // ---------------------------------------------------------------------------
-function RaidIntro({ bossId, onDone }: { bossId: string; onDone: () => void }) {
+function RaidIntro({ bossId, hp, left, lap, onDone }: { bossId: string; hp: number; left: number; lap: number; onDone: () => void }) {
   const b = card(bossId) as MonsterCard;
   useEffect(() => {
     sfx('rumble', 0.9);
@@ -230,13 +230,13 @@ function RaidIntro({ bossId, onDone }: { bossId: string; onDone: () => void }) {
         transition={{ duration: 1.2, delay: 0.25, ease: [0.16, 1, 0.3, 1] }}
       />
       <motion.div className="ri-kicker" initial={{ opacity: 0, scaleX: 0.3 }} animate={{ opacity: 1, scaleX: 1 }} transition={{ delay: 0.9, duration: 0.5 }}>
-        今週のレイドボス
+        今週のレイドボス ・ {lap}周目
       </motion.div>
       <motion.div className="ri-name gold-title" initial={{ opacity: 0, y: 30, letterSpacing: '0.6em' }} animate={{ opacity: 1, y: 0, letterSpacing: '0.04em' }} transition={{ delay: 1.15, duration: 0.7, ease: [0.16, 1, 0.3, 1] }}>
         {b.name}
       </motion.div>
       <motion.div className="ri-hp" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.6 }}>
-        HP {b.hp.toLocaleString()}
+        HP {left.toLocaleString()} / {hp.toLocaleString()}
       </motion.div>
     </motion.div>
   );
@@ -1266,7 +1266,7 @@ export function BattleScreen() {
       <div className="battle-bg" style={{ backgroundImage: `url(${artUrl(bg)})` }} key={bg} />
       <div className="battle-bg-shade" />
       {cfg.raid && <RaidHud s={s} />}
-      <AnimatePresence>{cfg.raid && raidIntro && <RaidIntro bossId={cfg.raid.bossId} onDone={endRaidIntro} />}</AnimatePresence>
+      <AnimatePresence>{cfg.raid && raidIntro && <RaidIntro bossId={cfg.raid.bossId} hp={cfg.raid.hp} left={cfg.raid.hp - cfg.raid.startDamage} lap={cfg.raid.lap} onDone={endRaidIntro} />}</AnimatePresence>
       {terrain && <div className="battle-weather" key={`w-${terrain.key}`}><Weather kind={TERRAIN_WEATHER[terrain.key] ?? 'motes'} /></div>}
       {terrain && (terrainFx || STADIUM_NOTE[terrain.key]) && (
         <div className="terrain-chip" key={`t-${terrain.key}`}>

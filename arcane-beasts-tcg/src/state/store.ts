@@ -35,7 +35,7 @@ import {
   type Stats,
   OLD_COIN_SCALE,
 } from './progress';
-import { raidCost, raidLossCoins, raidNow, raidWinReward, rollRaidDrop, type RaidSave } from './raid';
+import { raidBattleGems, raidCost, raidLapBonus, raidLapHp, raidLapReward, raidNow, rollRaidDrop, type RaidSave } from './raid';
 
 // ----------------------------------------------------------------------------
 // Copies beyond MAX_COPIES are sold for coins on the spot (by ★).
@@ -142,7 +142,7 @@ export interface BattleConfig {
   /** a story chapter's duel */
   story?: { chapterId: string };
   /** this week's boss raid */
-  raid?: { bossId: string; startDamage: number };
+  raid?: { bossId: string; startDamage: number; hp: number; bonus: number; lap: number };
 }
 
 const KEY = 'arcane-beasts-save-v1';
@@ -316,16 +316,23 @@ interface Store {
   /** pay for a raid try and start it (false = not enough gems) */
   startRaid: (playerDeck: string[]) => boolean;
   /** pay out a raid battle; returns what it paid */
-  recordRaid: (o: { win: boolean; dealt: number; turns: number }) => RaidResult;
+  recordRaid: (o: { win: boolean; dealt: number }) => RaidResult;
 }
 
 export interface RaidResult {
+  /** the lap was cleared */
   win: boolean;
+  /** damage done in this battle */
   dealt: number;
-  coins: number;
+  /** gems for the damage */
   gems: number;
-  /** this week's wins, this one included */
-  wins: number;
+  /** gems for clearing the lap */
+  lapGems: number;
+  /** the lap fought */
+  lap: number;
+  /** the boss's damage after the battle, and its HP on that lap */
+  damage: number;
+  hp: number;
   /** the raid card, if it dropped */
   drop: string | null;
 }
@@ -439,35 +446,35 @@ export const useStore = create<Store>((set, get) => ({
       cpuLevel: 7,
       scene: boss.scene ?? 'story/p-the-fall',
       reward: 0,
-      raid: { bossId: boss.id, startDamage: 0 },
+      raid: { bossId: boss.id, startDamage: r.damage, hp: raidLapHp(r.laps + 1), bonus: raidLapBonus(r.laps + 1), lap: r.laps + 1 },
     });
     return true;
   },
-  recordRaid: ({ win, dealt, turns }) => {
-    const res: RaidResult = { win, dealt, coins: 0, gems: 0, wins: 0, drop: null };
+  recordRaid: ({ win, dealt }) => {
+    const res: RaidResult = { win, dealt, gems: 0, lapGems: 0, lap: 0, damage: 0, hp: 0, drop: null };
     get().update((s) => {
       const r = raidNow(s.raid);
+      const lap = r.laps + 1;
+      const hp = raidLapHp(lap);
+      res.lap = lap;
+      res.hp = hp;
+      res.gems = raidBattleGems(dealt);
       if (win) {
-        const n = r.wins + 1;
-        const pay = raidWinReward(n);
-        res.coins = pay.coins;
-        res.gems = pay.gems;
-        res.wins = n;
+        res.lapGems = raidLapReward(lap);
+        res.damage = hp;
         const drop = rollRaidDrop(r.bossId);
         if (drop) {
           res.drop = drop.id;
           if (!s.collection[drop.id]) s.newCards.push(drop.id);
           s.collection[drop.id] = Math.min(MAX_COPIES, (s.collection[drop.id] ?? 0) + 1);
         }
-        s.raid = { ...r, wins: n, best: Math.max(r.best, dealt), fastest: r.fastest ? Math.min(r.fastest, turns) : turns };
+        s.raid = { ...r, laps: lap, damage: 0, best: Math.max(r.best, dealt) };
       } else {
-        res.coins = raidLossCoins(dealt);
-        res.wins = r.wins;
-        s.raid = { ...r, best: Math.max(r.best, dealt) };
+        // whatever was knocked off stays off (the boss keeps at least 10 HP)
+        res.damage = Math.min(hp - 10, r.damage + dealt);
+        s.raid = { ...r, damage: res.damage, best: Math.max(r.best, dealt) };
       }
-      s.gems += res.gems + res.coins;
-      res.gems += res.coins;
-      res.coins = 0;
+      s.gems += res.gems + res.lapGems;
     });
     return res;
   },

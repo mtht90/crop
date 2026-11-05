@@ -55,7 +55,7 @@ export const BOSSES: MonsterCard[] = [
 ];
 
 /** a raid boss's attacks grow by this much once half its HP is gone */
-export const BOSS_RAGE_BONUS = 30;
+export const BOSS_RAGE_BONUS = 10;
 /** in a raid, your damage to the boss is multiplied by this (1: as printed) */
 export const RAID_MULT = 1;
 
@@ -111,4 +111,4 @@ export const RAID_CARDS: MonsterCard[] = [
 /** the raid card a boss can drop */
 export const raidCardOf = (bossId: string) => RAID_CARDS.find((c) => c.id === bossId.replace('BOSS-', 'RAID-'))!;
 /** chance a raid card drops after a win */
-export const RAID_DROP = 0.003;
+export const RAID_DROP = 0.01;

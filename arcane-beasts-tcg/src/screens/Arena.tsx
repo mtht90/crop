@@ -53,7 +53,7 @@ export function Arena() {
       sub: (() => {
         const r = raidNow(save.raid);
         const b = card(r.bossId) as MonsterCard;
-        return `今週：${b.name}（今週 ${r.wins}勝）`;
+        return `今週：${b.name}（${r.laps + 1}周目）`;
       })(),
       bg: 'story/p-the-fall',
       fig: currentBoss().art,
