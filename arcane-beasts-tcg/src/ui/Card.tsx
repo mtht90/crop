@@ -3,7 +3,6 @@ import { card, COND_JP, RARITY_SYMBOL, STAGE_JP, SET_COUNT, SET_INFO, TYPE_JP, b
 import type { CardDef, EnergyCard, EType, MonsterCard, TrainerCard } from '../engine/types';
 import { onGyro } from '../lib/gyro';
 import { artUrl, TYPE_COLOR, TYPE_SCENE } from '../lib/assets';
-import { RaidFace } from './RaidFace';
 import { Icon } from './Icon';
 import './card.css';
 
@@ -128,7 +127,7 @@ export const CardFace = memo(function CardFace({ cid, className, style, interact
     >
       <div className="tcg-frame">
         <div className="tcg-inner">
-          {def.kind === 'monster' && (def.raid ? <RaidFace def={def} /> : <MonsterFace def={def} />)}
+          {def.kind === 'monster' && <MonsterFace def={def} />}
           {def.kind === 'trainer' && <TrainerFace def={def} />}
           {def.kind === 'energy' && <EnergyFace def={def} />}
           {v === 'mirror' && <div className={`tcg-mirror ${def.kind === 'trainer' ? 'tw' : def.kind === 'energy' ? 'ew' : ''}`} />}
@@ -136,8 +135,6 @@ export const CardFace = memo(function CardFace({ cid, className, style, interact
           {(holo || v === 'mirror') && <div className="tcg-glare" />}
         </div>
       </div>
-      {/* a raid card's monster breaks out over the top of its frame */}
-      {def.raid && def.kind === 'monster' && <img className="raid-pop" src={artUrl(def.art)} alt="" draggable={false} loading="lazy" />}
     </div>
   );
 });
