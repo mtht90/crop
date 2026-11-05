@@ -87,16 +87,16 @@ export function Raid() {
             <div className="raid-rw">
               <span>次の勝利（今週{r.wins + 1}勝目）</span>
               <b>
-                <Icon name="gem" /> {next.gems} <Icon name="coin" /> {next.coins.toLocaleString()}
+                <Icon name="gem" /> {next.gems}
               </b>
             </div>
             <div className="raid-rw">
               <span>勝つたびに</span>
-              <b>報酬が増えていく（ジェム最大150・コイン最大20,000）</b>
+              <b>報酬が増えていく（最大150ジェム）</b>
             </div>
             <div className="raid-rw">
               <span>負けても</span>
-              <b>与えたダメージに応じてコイン</b>
+              <b>与えたダメージに応じて少しジェム</b>
             </div>
             <div className="raid-drop-row">
               <div className={`raid-drop-card ${ownCard ? '' : 'locked'}`}>

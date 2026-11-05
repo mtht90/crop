@@ -287,7 +287,7 @@ function OddsModal({ onClose, premium }: { onClose: () => void; premium?: boolea
           </tbody>
         </table>
         <div className="odds-note">
-          {`すべての章のカードが出ます。★1〜★3のカードは${Math.round((premium ? PREMIUM_PRINTING_CHANCE : PRINTING_CHANCE) * 100)}%で光るカードになります。★3〜★5には特別な絵のカードがあります（絵が違っても性能は元のカードと同じ）。ごくまれに、すべてが★3以上のパックが出ることがあります。同じカードが${10}枚を超えた分は、自動でコインに交換されます。`}
+          {`すべての章のカードが出ます。★1〜★3のカードは${Math.round((premium ? PREMIUM_PRINTING_CHANCE : PRINTING_CHANCE) * 100)}%で光るカードになります。★3〜★5には特別な絵のカードがあります（絵が違っても性能は元のカードと同じ）。ごくまれに、すべてが★3以上のパックが出ることがあります。同じカードが${10}枚を超えた分は、自動でジェムに交換されます。`}
         </div>
         <button className="pill ghost" onClick={onClose}>
           閉じる
@@ -1428,7 +1428,7 @@ function MultiResults({ opened, cards, fresh, sold, burstAt, onClose, onAgain, c
               {!down && fresh.has(c.id) && <span className="new">NEW</span>}
               {!down && sold[i] > 0 && (
                 <span className="shard-tag">
-                  <Icon name="coin" /> +{sold[i]}
+                  <Icon name="gem" /> +{sold[i]}
                 </span>
               )}
             </motion.div>
@@ -1508,7 +1508,7 @@ function Results({ cards, fresh, sold, onClose, onAgain, canAgain, price, u }: {
                   {fresh.has(c.id) && <span className="new">NEW</span>}
                   {sold[i] > 0 && (
                     <span className="shard-tag">
-                      <Icon name="coin" /> 上限のため +{sold[i]}
+                      <Icon name="gem" /> 上限のため +{sold[i]}
                     </span>
                   )}
                 </motion.div>

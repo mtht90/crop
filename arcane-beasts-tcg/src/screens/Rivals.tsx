@@ -113,7 +113,7 @@ export function Rivals() {
               <p>{info.blurb}</p>
               <div className="rv3-meta">
                 <span>
-                  勝利 <Icon name="coin" /> <b>{coinsFor(CPU_REWARD[level - 1]).toLocaleString()}</b>
+                  勝利 <Icon name="gem" /> <b>{coinsFor(CPU_REWARD[level - 1]).toLocaleString()}</b>
                 </span>
                 {!beaten.includes(level) && (
                   <span>

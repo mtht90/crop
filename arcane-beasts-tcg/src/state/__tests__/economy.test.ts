@@ -4,58 +4,59 @@ import { cleanWardrobe, COSMETICS, DEFAULT_LOOK, freshWardrobe } from '../cosmet
 
 const win = { win: true, level: 'normal' as const, baseReward: 300, prizesTaken: 6, prizesLost: 2, firstClear: false };
 
-describe('gems (ジェム)', () => {
-  it('a first clear pays gems by difficulty on top of coins', () => {
+describe('gems (ジェム) — the one currency', () => {
+  it('pays what used to be coins as gems, at the old values; coins are always 0', () => {
     const p = freshProgress();
     p.lastWinDay = dayKey();
     const again = battleReward(p, win);
-    expect(again.gems).toBe(0);
+    expect(again.total).toBe(0);
+    for (const l of again.lines) expect(l.coins, l.label).toBe(0);
+    // 勝利報酬 300 + サイド 6×10 (no daily, no first clear)
+    expect(again.gems).toBeGreaterThanOrEqual(300);
     for (const level of ['easy', 'normal', 'hard'] as const) {
       const r = battleReward(p, { ...win, level, firstClear: true });
-      expect(r.gems, level).toBe(GEM_FIRST_CLEAR[level]);
-      expect(r.lines.find((l) => l.label === '初回クリアボーナス')?.coins).toBe(200 * COIN_SCALE);
+      expect(r.lines.find((l) => l.label === '初回クリアボーナス')?.gems).toBe(200 * COIN_SCALE + GEM_FIRST_CLEAR[level]);
+      expect(r.gems - again.gems, level).toBe(200 + GEM_FIRST_CLEAR[level]);
     }
   });
-  it('the first win of the day adds a few gems; losing pays none', () => {
+  it('the first win of the day adds a bonus; losing still pays a little', () => {
     const p = freshProgress();
+    p.lastWinDay = dayKey();
+    const plain = battleReward(p, win).gems;
     p.lastWinDay = '';
-    expect(battleReward(p, win).gems).toBe(GEM_DAILY_WIN);
-    expect(battleReward(p, { ...win, win: false }).gems).toBe(0);
+    expect(battleReward(p, win).gems - plain).toBe(100 + GEM_DAILY_WIN);
+    const lose = battleReward(p, { ...win, win: false });
+    expect(lose.gems).toBeGreaterThan(0);
+    expect(lose.gems).toBeLessThan(plain);
   });
-  it('everyday missions pay coins in the hundreds to thousands; only event tasks pay gems', () => {
+  it('missions, logins, story and levels pay gems at pre-gem coin values', () => {
     expect(LOGIN_GEMS.length).toBe(LOGIN_REWARDS.length);
-    expect(LOGIN_GEMS[6]).toBeGreaterThan(LOGIN_GEMS[0]);
-    for (const m of [...NORMAL_MISSIONS, ...ACHIEVEMENTS]) expect(m.reward, m.id).toBeGreaterThanOrEqual(150);
-    for (const m of ACHIEVEMENTS) expect(missionGems(m), m.id).toBe(0);
-    // 通常ミッション mix in a few gems
-    for (const m of NORMAL_MISSIONS) {
-      expect(missionGems(m), m.id).toBeGreaterThanOrEqual(5);
-      expect(missionGems(m), m.id).toBeLessThanOrEqual(100);
+    expect(LOGIN_REWARDS[6] + LOGIN_GEMS[6]).toBeGreaterThan(LOGIN_REWARDS[0] + LOGIN_GEMS[0]);
+    for (const m of [...NORMAL_MISSIONS, ...ACHIEVEMENTS]) {
+      expect(m.reward, m.id).toBeGreaterThanOrEqual(30);
+      expect(missionGems(m), m.id).toBe(m.reward + (m.gems ?? 0));
     }
-    // story first clears: tens of gems early on, up to 500 for a finale
+    expect(storyFirstClear(1, false, 1).coins).toBe(0);
     expect(storyFirstClear(1, false, 1).gems).toBeGreaterThanOrEqual(20);
     expect(storyFirstClear(12, true, 2).gems).toBe(500);
-    expect(storyFirstClear(11, false, 1).coins).toBeGreaterThan(storyFirstClear(1, false, 1).coins);
-    expect(levelReward(2)).toBeGreaterThanOrEqual(500);
+    expect(storyFirstClear(11, false, 1).gems).toBeGreaterThan(storyFirstClear(1, false, 1).gems);
+    expect(levelReward(2)).toBeGreaterThanOrEqual(100);
+    expect(levelGems(5)).toBeGreaterThan(levelGems(4));
     for (const e of EVENTS) {
       const tasks = e.tasks.filter((t) => t.stat !== 'eventTasks');
       for (const t of tasks) {
         expect(t.gems!, t.id).toBeGreaterThanOrEqual(50);
         expect(t.gems!, t.id).toBeLessThanOrEqual(250);
       }
-      // clearing several tasks pays more than any single one
       const bonus = e.tasks.find((t) => t.stat === 'eventTasks')!;
       expect(bonus.gems!).toBeGreaterThan(Math.max(...tasks.map((t) => t.gems!)));
       expect(bonus.target).toBeLessThanOrEqual(tasks.length);
     }
-    expect(levelGems(5)).toBeGreaterThan(levelGems(4));
-    // a week of logins is about one pack (150), not a dozen
-    expect(LOGIN_GEMS.reduce((a, b) => a + b, 0)).toBeLessThan(250);
   });
 });
 
 describe('ワードローブ', () => {
-  it('has unique ids, free defaults and a price on everything else', () => {
+  it('has unique ids, free defaults and a gem price on everything else', () => {
     expect(new Set(COSMETICS.map((c) => c.id)).size).toBe(COSMETICS.length);
     for (const id of Object.values(DEFAULT_LOOK)) expect(COSMETICS.find((c) => c.id === id)?.price).toBe(0);
     for (const c of COSMETICS) if (!Object.values(DEFAULT_LOOK).includes(c.id as never)) expect(c.price, c.id).toBeGreaterThan(0);

@@ -131,17 +131,15 @@ export function bump(p: Progress, add: Partial<Stats>) {
 export const expToNext = (level: number) => 200 + (level - 1) * 100;
 
 // ---------------------------------------------------------------------------
-// Economy
-//   コイン … earned by everyday play (battles, missions, login, level-ups) in
-//            the hundreds to thousands; spent on looks (ワードローブ)
-//   ジェム … pack opening. Earned mainly from the weekly 期間限定イベント
-//            (50–250 a task, more for the hard ones and for clearing them all),
-//            plus first clears, the login cycle and level-ups
-//   The two never convert. Priced so that 1 ジェム is worth about 6–7 コイン
-//   (a 150-gem pack ≈ 1,000 coins of play).
+// Economy — one currency, ジェム. Everyday play (battles, missions, login,
+//   level-ups, story, duplicates) pays gems at what coins paid before gems
+//   existed; gems buy packs and looks (ワードローブ). コイン were abolished:
+//   old saves move their coins into gems at the pre-gem value.
 // ---------------------------------------------------------------------------
-export const COIN_SCALE = 5;
-export const GEM_TO_COIN = 6.5;
+/** coins are gone: everything is paid in gems at the old coin values (scale 1) */
+export const COIN_SCALE = 1;
+/** what the coin scale was while coins existed (old saves convert at this) */
+export const OLD_COIN_SCALE = 5;
 /** coins a battle's base reward pays out (rivals and CPU levels list the base) */
 export const coinsFor = (base: number) => base * COIN_SCALE;
 export const levelReward = (level: number) => (100 + level * 25 + (level % 5 === 0 ? 300 : 0)) * COIN_SCALE;
@@ -161,19 +159,19 @@ export function addExp(p: Progress, amount: number): number[] {
 // ---------------------------------------------------------------------------
 // Login bonus (7-day cycle; the cycle advances on each day you log in)
 // ---------------------------------------------------------------------------
-export const LOGIN_REWARDS = [300, 400, 500, 600, 750, 1000, 2500];
+export const LOGIN_REWARDS = [60, 80, 100, 120, 150, 200, 450];
 /** gems with each day of the login cycle */
 export const LOGIN_GEMS = [10, 10, 15, 15, 20, 30, 100];
 
 // ---------------------------------------------------------------------------
-// Gems (ジェム) buy packs; coins (コイン) buy looks. Gems are earned, never sold:
+// Gems (ジェム) buy packs and looks. Gems are earned, never sold:
 //   first clear of a rival / story episode, first win of the day, missions,
 //   the login cycle and level-ups. Tune the numbers here.
 // ---------------------------------------------------------------------------
 export const GEM_FIRST_CLEAR: Record<Difficulty, number> = { easy: 40, normal: 60, hard: 100 };
 export const GEM_DAILY_WIN = 10;
-/** gems a mission pays: only event tasks carry them */
-export const missionGems = (m: Mission) => m.gems ?? 0;
+/** gems a mission pays (its old coin reward, plus any gems it carried) */
+export const missionGems = (m: Mission) => m.reward + (m.gems ?? 0);
 export const levelGems = (level: number) => (level % 5 === 0 ? 50 : 20);
 /**
  * the first clear of a story episode: it grows along the chapter, and each
@@ -181,8 +179,8 @@ export const levelGems = (level: number) => (level % 5 === 0 ? 50 : 20);
  * episode 11: 1,500 · 180; the finale 3,000 · 300, from 第二章 on 5,000 · 500)
  */
 export function storyFirstClear(episode: number, last: boolean, part: number): { coins: number; gems: number } {
-  if (last) return part <= 1 ? { coins: 3000, gems: 300 } : { coins: 5000, gems: 500 };
-  return { coins: 500 + (episode - 1) * 100, gems: 30 + (episode - 1) * 15 };
+  if (last) return part <= 1 ? { coins: 0, gems: 300 } : { coins: 0, gems: 500 };
+  return { coins: 0, gems: 30 + (episode - 1) * 15 };
 }
 /** 通常ミッション also carry a few gems (about 1 per 50 coins, in fives, 5–100) */
 export const normalMissionGems = (coins: number) => Math.min(100, Math.max(5, Math.round(coins / 50 / 5) * 5));
@@ -237,7 +235,11 @@ export function battleReward(p: Progress, o: BattleOutcome): { lines: RewardLine
   }
   const mult = o.level === 'hard' ? 2 : o.level === 'normal' ? 1.5 : 1;
   const exp = Math.round((o.win ? 100 : 40) * mult + o.prizesTaken * 5);
-  for (const l of lines) l.coins *= COIN_SCALE;
+  // one currency: what was coins is paid as gems, at the old values
+  for (const l of lines) {
+    l.gems = (l.gems ?? 0) + l.coins * COIN_SCALE;
+    l.coins = 0;
+  }
   // story first clears are priced in final coins
   if (o.win && o.firstClear && o.firstClearCoins !== undefined)
     lines.push({ label: o.firstClearLabel ?? 'ストーリー初回クリア', coins: o.firstClearCoins, gems: o.firstClearGems ?? GEM_FIRST_CLEAR[o.level] });
@@ -337,7 +339,6 @@ export const NORMAL_MISSIONS: Mission[] = [
 
 // everyday missions pay coins in the hundreds to thousands
 for (const list of [DAILY_POOL, WEEKLY_POOL, ACHIEVEMENTS, NORMAL_MISSIONS]) for (const m of list) m.reward *= COIN_SCALE;
-for (const m of NORMAL_MISSIONS) m.gems = normalMissionGems(m.reward);
 
 export function dailyMissions(p: Progress): Mission[] {
   const r = seeded(`daily-${p.daily.key || dayKey()}`);

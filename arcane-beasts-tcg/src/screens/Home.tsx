@@ -82,9 +82,6 @@ export function Home() {
             <span className="coin-chip gem-chip">
               <Icon name="gem" /> {save.gems.toLocaleString()}
             </span>
-            <span className="coin-chip">
-              <Icon name="coin" /> {save.coins.toLocaleString()}
-            </span>
           </div>
         </header>
 
@@ -185,7 +182,7 @@ function LoginModal({ onClose }: { onClose: () => void }) {
           <Icon name="close" />
         </button>
         <h2>ログインボーナス</h2>
-        <div className="sub">{got ? `${got.coins} コイン・${got.gems} ジェムを受け取りました` : '7日目は大きな報酬がもらえます'}</div>
+        <div className="sub">{got ? `${got.gems} ジェムを受け取りました` : '7日目は大きな報酬がもらえます'}</div>
         <LoginTrack
           compact
           onClaim={(c) => {

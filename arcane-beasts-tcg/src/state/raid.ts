@@ -25,10 +25,11 @@ export interface RaidSave {
 
 /** what the n-th win of the week pays (n from 1) */
 export function raidWinReward(n: number): { gems: number; coins: number } {
-  return { gems: Math.min(150, 30 + 10 * (n - 1)), coins: Math.min(20000, 3000 + 1000 * (n - 1)) };
+  return { gems: Math.min(150, 30 + 10 * (n - 1)), coins: 0 };
 }
 /** coins for a lost battle, by the damage it did */
-export const raidLossCoins = (dealt: number) => Math.min(5000, Math.floor((dealt * 5) / 50) * 50);
+/** a lost battle gives a little back for the damage (never more than a try costs) */
+export const raidLossCoins = (dealt: number) => Math.min(RAID_TRY_GEMS, Math.floor(dealt / 100));
 
 /** this week's boss (by the viewer's calendar) */
 export function currentBoss(key = weekKey()): MonsterCard {

@@ -890,9 +890,8 @@
 
 /* --- behind the monster: soft focus rays (blurred, slowly turning), a halo
    of light and a ring, in the boss's colour and gold --- */
-.tcg.raid-card { --rgl: 255, 200, 110; }
-.tcg.raid-card.t-water { --rgl: 150, 210, 255; }
-.tcg.raid-card.t-dark { --rgl: 210, 150, 255; }
+/* every raid card glows gold (金虹) */
+.tcg.raid-card { --rgl: 255, 206, 96; }
 .raid-rays {
   position: absolute;
   left: 50%;
@@ -957,24 +956,42 @@
 }
 @keyframes raid-glint { from { filter: brightness(1); } to { filter: brightness(1.6); } }
 
-/* --- cold foil frame: brushed silver with a highlight that rides the tilt --- */
+/* --- 金虹 frame: polished gold with a rainbow sheen that slides as the card
+   tilts, brushed lines and a hot highlight riding the light --- */
 .tcg.raid-card .tcg-frame {
   background:
-    radial-gradient(circle at var(--mx) var(--my), rgba(255, 255, 255, 0.95), transparent 38%),
-    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.14) 0 0.15cqw, rgba(0, 0, 0, 0.06) 0.15cqw 0.35cqw),
-    linear-gradient(135deg, #ffffff 0%, #b9c1cc 16%, #f4f7fb 30%, #8d96a3 46%, #ffffff 58%, #a8b1bd 74%, #eef2f7 90%, #9aa3af 100%);
+    radial-gradient(circle at var(--mx) var(--my), rgba(255, 255, 240, 0.95), rgba(255, 240, 190, 0.35) 22%, transparent 42%),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.16) 0 0.15cqw, rgba(90, 50, 0, 0.08) 0.15cqw 0.35cqw),
+    linear-gradient(115deg, rgba(255, 90, 170, 0.55), rgba(255, 210, 90, 0) 14%, rgba(120, 255, 190, 0.5) 28%, rgba(255, 210, 90, 0) 42%, rgba(110, 200, 255, 0.55) 56%, rgba(255, 210, 90, 0) 70%, rgba(190, 130, 255, 0.5) 84%, rgba(255, 90, 170, 0.55)) var(--mx) var(--my) / 260% 260%,
+    linear-gradient(135deg, #fff6c4 0%, #d29a22 16%, #fff3b8 30%, #a8700f 46%, #ffe9a0 58%, #c48a1c 74%, #fff1b0 90%, #94600b 100%);
+  background-blend-mode: normal, overlay, color-dodge, normal;
 }
-/* silver foil lettering for the name and HP */
+/* a thin rainbow foil line just inside the frame */
+.tcg.raid-card .tcg-inner { box-shadow: 0 0 0 0.35cqw rgba(255, 236, 170, 0.9), 0 0 0 0.6cqw rgba(120, 70, 0, 0.55); }
+
+/* --- foil over the picture: soft gold-rainbow bands that sweep with the
+   tilt (on top of the glitter), strongest at the edges of the light --- */
+.tcg.raid-card .tcg-glare {
+  background:
+    radial-gradient(circle at var(--mx) var(--my), rgba(255, 244, 200, 0.55), transparent 40%),
+    linear-gradient(115deg, transparent 30%, rgba(255, 120, 190, 0.5) 38%, rgba(255, 220, 120, 0.6) 43%, rgba(130, 255, 200, 0.5) 48%, rgba(120, 200, 255, 0.5) 53%, rgba(200, 140, 255, 0.45) 58%, transparent 66%);
+  background-size: 100% 100%, 250% 250%;
+  background-position: center, var(--mx) var(--my);
+  mix-blend-mode: color-dodge;
+  opacity: calc(0.2 + var(--hyp) * 0.5);
+}
+
+/* gold foil lettering for the name and HP */
 .tcg.raid-card .tcg-head .name,
 .tcg.raid-card .tcg-head .hp {
-  background: linear-gradient(180deg, #ffffff 0%, #ffffff 35%, #b9c3cf 52%, #ffffff 70%, #e3e9f0 100%);
+  background: linear-gradient(180deg, #fffbe0 0%, #ffe48a 30%, #c8901c 52%, #fff0a8 70%, #e0a93a 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
   text-shadow: none;
-  -webkit-text-stroke: 0.22cqw rgba(16, 20, 28, 0.85);
+  -webkit-text-stroke: 0.22cqw rgba(40, 20, 0, 0.9);
   paint-order: stroke fill;
-  filter: drop-shadow(0 0.3cqw 0.35cqw rgba(0, 0, 0, 0.9));
+  filter: drop-shadow(0 0.3cqw 0.35cqw rgba(0, 0, 0, 0.9)) drop-shadow(0 0 0.6cqw rgba(255, 200, 80, 0.45));
 }
 
 /* --- stars flashing over the card, and a lens flare riding the tilt --- */

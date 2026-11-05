@@ -149,11 +149,11 @@ export function StoryMap() {
                   <span>
                     {state === 'cleared' ? (
                       <>
-                        報酬 <Icon name="coin" /> <b>{coinsFor(rival!.reward).toLocaleString()}</b>
+                        報酬 <Icon name="gem" /> <b>{coinsFor(rival!.reward).toLocaleString()}</b>
                       </>
                     ) : (
                       <>
-                        初回 <Icon name="coin" /> <b>{(coinsFor(rival!.reward) + firstPay.coins).toLocaleString()}</b> <Icon name="gem" /> <b>{firstPay.gems}</b>
+                        初回 <Icon name="gem" /> <b>{(coinsFor(rival!.reward) + firstPay.gems).toLocaleString()}</b>
                       </>
                     )}
                   </span>

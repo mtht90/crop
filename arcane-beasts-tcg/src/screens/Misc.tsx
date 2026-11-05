@@ -120,7 +120,7 @@ export function Settings() {
             <button
               className="btn red small"
               onClick={async () => {
-                if (await askConfirm('すべてのカード・コイン・デッキが消去されます。本当にリセットしますか？', 'リセットする', true)) reset();
+                if (await askConfirm('すべてのカード・ジェム・デッキが消去されます。本当にリセットしますか？', 'リセットする', true)) reset();
               }}
             >
               データをリセット
@@ -158,7 +158,7 @@ function DevRow() {
             オフにする
           </button>
         </div>
-        <div className="set-note">{msg || 'ストーリー全話・強敵すべてクリア済み。コインは使っても減りません'}</div>
+        <div className="set-note">{msg || 'ストーリー全話・強敵すべてクリア済み。ジェムは使っても減りません'}</div>
       </>
     );
   const submit = () => {
@@ -214,7 +214,7 @@ function TransferRows() {
   const [msg, setMsg] = useState('');
   const viaCode = codeTransferSupported();
   const fail = (e: unknown) => setMsg(e instanceof Error ? e.message : String(e));
-  const confirmOverwrite = () => askConfirm('この端末のカード・コイン・デッキ・ストーリーの進み具合は、引き継いだデータで上書きされます。よろしいですか？', '引き継ぐ', true);
+  const confirmOverwrite = () => askConfirm('この端末のカード・ジェム・デッキ・ストーリーの進み具合は、引き継いだデータで上書きされます。よろしいですか？', '引き継ぐ', true);
 
   const issue = async () => {
     setMode('issue');
@@ -385,13 +385,12 @@ export function Rules() {
               <b>強化の目安</b>：モンスターは 全面絵 HP+10・ワザ+10 ／ ★4 HP+30・ワザ+20 ／ ★5 HP+50・ワザ+30。サポーターやグッズは、引く枚数・回復量などが増える（カードに書かれた数字のとおり）。光るカード（ミラー）は通常版と同じ性能
             </li>
             <li>パックを開けるとき、光の色で中身が分かる：★1 灰・★2 青・★3 金・★4 虹・★5 虹金</li>
-            <li>同じカードは10枚まで持てる。11枚目以降はコインに変わる</li>
+            <li>同じカードは10枚まで持てる。11枚目以降はジェムに変わる</li>
           </ul>
-          <h2>コインとジェム</h2>
+          <h2>ジェム</h2>
           <ul>
-            <li><b>コイン</b>：バトル・ミッション・ログイン・レベルアップでたくさんもらえる。ワードローブ（スリーブ・プレイマット・称号）を買うのに使う</li>
-            <li><b>ジェム</b>：パックを開けるのに使う。毎週の<b>期間限定イベント</b>の課題（1つ50〜250）、初回クリア、ログイン、レベルアップでもらえる</li>
-            <li>コインとジェムは交換できない。目安は ジェム1 ≒ コイン6〜7</li>
+            <li>ゲーム内のお金は<b>ジェム</b>ひとつだけ。バトル・ミッション・ログイン・レベルアップ・イベント・ボスレイドでもらえる</li>
+            <li>パックを開ける、ワードローブ（スリーブ・プレイマット・称号）と交換する、の両方に使う</li>
           </ul>
           <h2>スタジアム</h2>
           <ul>

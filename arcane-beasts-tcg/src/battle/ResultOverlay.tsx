@@ -74,10 +74,10 @@ export function ResultOverlay() {
       );
       const rr = useStore.getState().recordRaid({ win, dealt, turns: Math.ceil((v?.turn ?? 0) / 2) });
       const lines = win
-        ? [{ label: `討伐報酬（今週${rr.wins}勝目）`, coins: rr.coins, gems: rr.gems }]
-        : [{ label: `ボスに与えたダメージ ${dealt.toLocaleString()}`, coins: rr.coins }];
+        ? [{ label: `討伐報酬（今週${rr.wins}勝目）`, coins: 0, gems: rr.gems }]
+        : [{ label: `ボスに与えたダメージ ${dealt.toLocaleString()}`, coins: 0, gems: rr.gems }];
       setRaidRes(rr);
-      setRes({ ...base, lines, total: base.total + rr.coins, gems: base.gems + rr.gems });
+      setRes({ ...base, lines, total: base.total, gems: base.gems + rr.gems });
       return;
     }
     const before = claimableCount(useStore.getState().save.progress, extCtx(useStore.getState().save));
@@ -154,12 +154,9 @@ export function ResultOverlay() {
             >
               <span>{l.label}</span>
               <b>
-                +{l.coins}
-                {!!l.gems && (
-                  <span className="rl-gem">
-                    <Icon name="gem" /> +{l.gems}
-                  </span>
-                )}
+                <span className="rl-gem">
+                  <Icon name="gem" /> +{(l.gems ?? 0) + l.coins}
+                </span>
               </b>
             </motion.div>
           ))}
@@ -172,12 +169,9 @@ export function ResultOverlay() {
           >
             <span>合計</span>
             <b>
-              <Icon name="coin" /> {res.total.toLocaleString()}
-              {res.gems > 0 && (
-                <span className="rl-gem">
-                  <Icon name="gem" /> {res.gems.toLocaleString()}
-                </span>
-              )}
+              <span className="rl-gem">
+                <Icon name="gem" /> {(res.gems + res.total).toLocaleString()}
+              </span>
             </b>
           </motion.div>
           <ExpBar res={res} delay={lineDelay + nLines * 0.18 + 0.5} />
@@ -279,7 +273,7 @@ function ExpBar({ res, delay }: { res: BattleRewardResult; delay: number }) {
       <AnimatePresence>
         {up && (
           <motion.div key={up} className="lvup" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
-            レベルアップ！ Lv.{up} ・ ボーナス +{levelReward(up)} コイン・+{levelGems(up)} ジェム
+            レベルアップ！ Lv.{up} ・ ボーナス +{levelReward(up) + levelGems(up)} ジェム
           </motion.div>
         )}
       </AnimatePresence>

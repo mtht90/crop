@@ -36,7 +36,7 @@ export function Wardrobe() {
       setMsg(`「${c.name}」を手に入れました`);
     } else {
       sfx('miss-2', 0.5);
-      setMsg('コインが足りません。バトルやミッションで集めましょう');
+      setMsg('ジェムが足りません。バトルやミッションで集めましょう');
     }
   };
 
@@ -74,7 +74,7 @@ export function Wardrobe() {
                   <small>
                     {on ? 'つかっている' : owned ? 'えらぶ' : (
                       <>
-                        <Icon name="coin" /> {c.price.toLocaleString()}
+                        <Icon name="gem" /> {c.price.toLocaleString()}
                       </>
                     )}
                   </small>

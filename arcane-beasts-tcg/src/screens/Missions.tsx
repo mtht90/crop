@@ -193,11 +193,6 @@ export function Missions() {
                         </div>
                         <button className={`ms3-claim ${r.done && !r.claimed ? 'ready' : ''}`} disabled={!r.done || r.claimed} onClick={() => claim(r)}>
                           <span>
-                            {r.m.reward > 0 && (
-                              <>
-                                <Icon name="coin" /> {r.m.reward.toLocaleString()}
-                              </>
-                            )}
                             {missionGems(r.m) > 0 && (
                               <i className="ms3-gem">
                                 <Icon name="gem" /> {missionGems(r.m)}
@@ -228,7 +223,7 @@ export function Missions() {
             transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
             onAnimationComplete={() => setTimeout(() => setFlash((f) => (f?.id === flash.id ? null : f)), 900)}
           >
-            {flash.coins > 0 && <><Icon name="coin" /> +{flash.coins.toLocaleString()}</>}
+            
             {flash.gems > 0 && <span className="flash-gem"><Icon name="gem" /> +{flash.gems.toLocaleString()}</span>}
           </motion.div>
         )}
@@ -262,10 +257,9 @@ export function LoginTrack({ onClaim, compact }: { onClaim?: (w: Wallet) => void
             <div key={i} className={`login-day ${got ? 'got' : ''} ${cur ? 'cur' : ''} ${i === 6 ? 'last' : ''}`}>
               <div className="d">DAY {i + 1}</div>
               <div className="ico">
-                <Icon name={i === 6 ? 'chest' : 'coin'} />
+                <Icon name={i === 6 ? 'chest' : 'gem'} />
               </div>
-              <div className="c">{c}</div>
-              <div className="g"><Icon name="gem" /> {LOGIN_GEMS[i]}</div>
+              <div className="c">{c + LOGIN_GEMS[i]}</div>
               {got && (
                 <div className="stamp">
                   <Icon name="check" />
@@ -285,7 +279,7 @@ export function LoginTrack({ onClaim, compact }: { onClaim?: (w: Wallet) => void
             onClaim?.(got);
           }}
         >
-          {can ? `${LOGIN_REWARDS[today]} コイン・${LOGIN_GEMS[today]} ジェムを受け取る` : '本日は受け取り済み'}
+          {can ? `${LOGIN_REWARDS[today] + LOGIN_GEMS[today]} ジェムを受け取る` : '本日は受け取り済み'}
         </button>
       </div>
     </div>
