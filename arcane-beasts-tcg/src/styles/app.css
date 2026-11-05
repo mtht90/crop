@@ -662,6 +662,34 @@
 .raid-rw b { display: inline-flex; align-items: center; gap: 4px; }
 .raid-rw small { color: var(--green); font-weight: 900; }
 .raid-rw.got { opacity: 0.55; }
+.raid2 .section-title { display: flex; align-items: baseline; gap: 8px; }
+.raid2-remain { margin-left: auto; font-weight: 800; letter-spacing: 0.02em; color: var(--ink-dim); font-size: var(--fs-xs); }
+.raid2-por { width: 104px; height: 104px; border-radius: 50%; object-fit: cover; object-position: 50% 20%; border: 3px solid var(--gold); flex: none; background: radial-gradient(circle, rgba(255, 220, 140, 0.18), rgba(0, 0, 0, 0.35)); }
+.raid2-boss .cpu3-info small { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; color: var(--gold-2); font-weight: 800; font-size: var(--fs-xs); }
+.raid2-boss .cpu3-info small .esym { flex: none; }
+.raid2-moves, .raid2-rules, .raid2-rewards { padding: 10px 14px; display: grid; gap: 8px; }
+.raid2-move { display: flex; align-items: center; gap: 10px; padding-bottom: 8px; border-bottom: 1px solid rgba(255, 255, 255, 0.07); }
+.raid2-move > i { flex: none; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-style: normal; font-weight: 900; font-size: var(--fs-xs); color: #1a1408; background: linear-gradient(180deg, var(--gold-2), var(--gold)); }
+.raid2-move > div { flex: 1; min-width: 0; }
+.raid2-move b { font-weight: 900; }
+.raid2-move p { margin: 2px 0 0; color: var(--ink-dim); font-size: var(--fs-xs); line-height: 1.45; }
+.raid2-dmg { font-family: var(--font-display); font-size: var(--fs-l); color: var(--gold-2); }
+.raid2-rage { font-size: var(--fs-xs); font-weight: 800; color: #ffb27a; }
+.raid2-rules { grid-template-columns: 1fr 1fr; }
+.raid2-cond { padding: 8px 10px; border-radius: 10px; background: rgba(0, 0, 0, 0.28); border: 1px solid var(--line); }
+.raid2-cond b { display: block; font-family: var(--font-display); font-weight: 400; font-size: var(--fs-m); }
+.raid2-cond.win b { color: var(--gold-2); }
+.raid2-cond.lose b { color: #ff9e9e; }
+.raid2-cond p { margin: 2px 0 0; font-size: var(--fs-s); font-weight: 800; line-height: 1.55; }
+.raid2-rules ul { grid-column: 1 / -1; margin: 0; padding-left: 1.2em; display: grid; gap: 3px; font-size: var(--fs-xs); color: var(--ink-dim); line-height: 1.5; }
+.raid2-ladder { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.raid2-step { display: grid; justify-items: center; gap: 2px; padding: 6px 2px; border-radius: 10px; background: rgba(0, 0, 0, 0.28); border: 1px solid var(--line); }
+.raid2-step small { color: var(--ink-dim); font-weight: 800; font-size: var(--fs-xs); }
+.raid2-step b { display: inline-flex; align-items: center; gap: 3px; }
+.raid2-step.got { opacity: 0.45; }
+@media (max-width: 520px) { .raid2-rules { grid-template-columns: 1fr; } .raid2-cond { display: flex; gap: 12px; align-items: baseline; } .raid2-cond p { margin: 0; } }
+.raid2-step.next { border-color: var(--gold); background: linear-gradient(180deg, rgba(255, 220, 140, 0.2), rgba(200, 140, 30, 0.12)); }
+.raid2-go { display: flex; justify-content: center; padding: 4px 0 14px; }
 .raid-go { display: grid; gap: 6px; justify-items: center; padding-bottom: 12px; }
 .raid-go small { color: var(--ink-dim); font-weight: 800; }
 .raid-btn { min-width: min(320px, 90%); }

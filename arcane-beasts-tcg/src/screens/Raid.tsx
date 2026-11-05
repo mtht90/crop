@@ -4,9 +4,9 @@ import { useEffect } from 'react';
 import { activeDeck, useStore } from '../state/store';
 import { validateDeck } from '../engine/decks';
 import { card } from '../engine/cards';
-import { RAID_DROP, raidCardOf } from '../engine/cards/bosses';
+import { BOSS_RAGE_BONUS, RAID_DROP, raidCardOf } from '../engine/cards/bosses';
 import type { MonsterCard } from '../engine/types';
-import { currentBoss, raidCost, raidNow, raidWinReward } from '../state/raid';
+import { currentBoss, RAID_TRY_GEMS, raidCost, raidNow, raidWinReward } from '../state/raid';
 import { CardFace } from '../ui/Card';
 import { fmtRemain, msUntilNextWeek } from '../state/progress';
 import { artUrl } from '../lib/assets';
@@ -24,7 +24,6 @@ export function Raid() {
   useEffect(() => playMusic('boss'), []);
   const r = raidNow(save.raid);
   const boss = (card(r.bossId) as MonsterCard) ?? currentBoss();
-  const next = raidWinReward(r.wins + 1);
   const rc = raidCardOf(boss.id);
   const ownCard = (save.collection[rc.id] ?? 0) > 0;
   const cost = raidCost(r);
@@ -41,94 +40,133 @@ export function Raid() {
     }
   };
 
+  const wins = r.wins;
+  const ladder = [1, 2, 3, 4, 5].map((k) => Math.max(1, wins - 1) + k - 1).map((n) => ({ n, gems: raidWinReward(n).gems }));
+  const errs = deck ? validateDeck(deck.cards) : [];
+
   return (
-    <div className="screen raid">
+    <div className="screen">
       <div className="page-bg" style={{ backgroundImage: `url(${artUrl(boss.scene ?? 'story/p-the-fall')})` }} />
-      <div className="page-shade raid-shade" />
+      <div className="page-shade" />
       <div className="page">
         <TopBar title="ボスレイド" back="arena" />
-        <div className="page-inner raid-page">
-          <motion.div className="raid-hero" initial={{ opacity: 0, scale: 1.04 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}>
-            <img className="raid-boss-img" src={artUrl(boss.art)} alt="" />
-            <div className="raid-hero-text">
-              <small>今週のレイドボス ・ 残り {fmtRemain(msUntilNextWeek())}</small>
-              <h1 className="gold-title">{boss.name}</h1>
-              <p>{boss.flavor}</p>
-              <div className="raid-tags">
-                <span>
-                  <EnergySymbol type={boss.type} size="1.1em" /> {TYPE_JP[boss.type]}
-                </span>
+        <div className="page-inner rv3 raid2">
+          <button className="box arena3-deck" onClick={() => go('deck')}>
+            {deck && <CardFace cid={deck.cover} />}
+            <span className="arena3-deck-text">
+              <small>使用デッキ</small>
+              <b>{deck?.name ?? 'デッキがありません'}</b>
+              {errs.length > 0 && <span className="warn">{errs[0]}</span>}
+            </span>
+            <span className="chip-btn">変更</span>
+          </button>
+
+          <h3 className="section-title">
+            今週のボス <span className="raid2-remain">あと {fmtRemain(msUntilNextWeek())}</span>
+          </h3>
+          <motion.div className="box cpu3-detail raid2-boss" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45 }}>
+            <img className="raid2-por" src={artUrl(boss.art)} alt="" />
+            <div className="cpu3-info">
+              <small>
+                HP {boss.hp.toLocaleString()} ・ <EnergySymbol type={boss.type} size="1.05em" /> {TYPE_JP[boss.type]}
                 {boss.weakness && (
-                  <span>
-                    弱点 <EnergySymbol type={boss.weakness} size="1.1em" /> ×2
-                  </span>
+                  <>
+                    {' '}・ 弱点 <EnergySymbol type={boss.weakness} size="1.05em" /> ×2
+                  </>
                 )}
-                <span>特殊状態にならない</span>
+              </small>
+              <h2>{boss.name}</h2>
+              <p>{boss.flavor}</p>
+              <div className="rv3-meta">
+                <span>
+                  今週 <b>{r.wins}</b>勝 ／ {r.tries}回挑戦
+                </span>
+                {r.fastest ? (
+                  <span>
+                    最速 <b>{r.fastest}</b>ターン
+                  </span>
+                ) : r.best ? (
+                  <span>
+                    最高ダメージ <b>{r.best.toLocaleString()}</b>
+                  </span>
+                ) : null}
               </div>
             </div>
           </motion.div>
 
-          <div className="box raid-hp">
-            <div className="raid-hp-head">
-              <b>HP {boss.hp.toLocaleString()}</b>
-              <span>1回のバトルで倒しきれば勝利</span>
-            </div>
-            <div className="raid-hp-track">
-              <div className="raid-hp-fill" style={{ width: '100%' }} />
-            </div>
-            <div className="raid-stats">
-              <span>今週 {r.wins}勝 ／ {r.tries}回挑戦</span>
-              <span>{r.fastest ? `最速 ${r.fastest}ターン` : `最高ダメージ ${r.best.toLocaleString()}`}</span>
-            </div>
+          <h3 className="section-title">ボスのワザ（毎ターン、上から順に使う）</h3>
+          <div className="box raid2-moves">
+            {boss.attacks.map((a, i) => (
+              <div className="raid2-move" key={i}>
+                <i>{i + 1}</i>
+                <div>
+                  <b>{a.name}</b>
+                  {a.text && <p>{a.text}</p>}
+                </div>
+                <span className="raid2-dmg">{a.damage ?? '―'}</span>
+              </div>
+            ))}
+            <div className="raid2-rage">HPが半分以下になると激昂し、すべてのワザのダメージが +{BOSS_RAGE_BONUS}</div>
           </div>
 
-          <div className="box raid-rewards">
-            <h3>報酬</h3>
-            <div className="raid-rw">
-              <span>次の勝利（今週{r.wins + 1}勝目）</span>
-              <b>
-                <Icon name="gem" /> {next.gems}
-              </b>
+          <h3 className="section-title">ルール</h3>
+          <div className="box raid2-rules">
+            <div className="raid2-cond win">
+              <b>勝ち</b>
+              <p>1回のバトルで、ボスのHPを0にする</p>
             </div>
-            <div className="raid-rw">
-              <span>勝つたびに</span>
-              <b>報酬が増えていく（最大150ジェム）</b>
+            <div className="raid2-cond lose">
+              <b>負け</b>
+              <p>
+                あなたのモンスターが6匹きぜつする
+                <br />
+                場にモンスターがいなくなる
+                <br />
+                山札が引けなくなる
+              </p>
             </div>
-            <div className="raid-rw">
-              <span>負けても</span>
-              <b>与えたダメージに応じて少しジェム</b>
+            <ul>
+              <li>ボスは1体だけで、ベンチ・手札・山札はない。エネルギーなしでワザを使う</li>
+              <li>ボスはどく・マヒなどの特殊状態にならない</li>
+              <li>あなたは普段どおり先攻・後攻を決め、自分のデッキで戦う</li>
+              <li>挑戦は週1回目が無料、2回目からはジェム{RAID_TRY_GEMS}個。何度でも挑戦できる</li>
+            </ul>
+          </div>
+
+          <h3 className="section-title">報酬</h3>
+          <div className="box raid2-rewards">
+            <div className="raid2-ladder">
+              {ladder.map((l) => (
+                <div key={l.n} className={`raid2-step ${l.n <= wins ? 'got' : l.n === wins + 1 ? 'next' : ''}`}>
+                  <small>{l.n}勝目</small>
+                  <b>
+                    <Icon name="gem" /> {l.gems}
+                  </b>
+                </div>
+              ))}
             </div>
+            <p className="set-note">今週の勝利数が増えるほど報酬が上がる（1勝ごとに+10、最大150）。負けても、与えたダメージ100ごとにジェム1個（最大{RAID_TRY_GEMS}個）。</p>
             <div className="raid-drop-row">
               <div className={`raid-drop-card ${ownCard ? '' : 'locked'}`}>
                 <CardFace cid={rc.id} />
               </div>
               <div>
                 <b>レイドカード「{rc.name}」</b>
-                <p>勝利するたび、ごくまれに（{(RAID_DROP * 100).toFixed(1)}%）手に入る。パックからは出ない特別なカード。デッキに1枚まで入れられる。</p>
+                <p>勝利するたび、ごくまれに（{(RAID_DROP * 100).toFixed(1)}%）手に入る。パックからは出ない特別なカードで、デッキに1枚まで入れられる。</p>
                 <small>{ownCard ? `所持 ${save.collection[rc.id]}枚` : '未所持'}</small>
               </div>
             </div>
           </div>
 
-          <div className="box raid-rules">
-            <h3>ルール</h3>
-            <ul>
-              <li>相手はボス1体だけ。ボスは毎ターン、ワザを順番に使う（次のワザは画面に表示）</li>
-              <li>あなたのサイドは1枚。ボスをきぜつさせれば勝利</li>
-              <li>HPが半分を切ると、ボスのワザが強くなる</li>
-              <li>毎週1回目は無料、2回目からはジェム10個。何度でも挑戦できる</li>
-            </ul>
-          </div>
-
-          <div className="raid-go">
-            <small>使用デッキ：{deck ? deck.name : 'なし'}</small>
-            <button className="btn big red raid-btn" onClick={challenge}>
-              {!deckOk ? 'デッキを組む' : cost ? (
-                <>
-                  挑戦する <span className="raid-cost"><Icon name="gem" /> {cost}</span>
-                </>
+          <div className="raid2-go">
+            <button className="btn blue raid-btn" onClick={challenge}>
+              {!deckOk ? (
+                'デッキを組む'
               ) : (
-                '挑戦する（無料）'
+                <>
+                  <Icon name="swords" /> 挑戦する
+                  <span className="raid-cost">{cost ? <><Icon name="gem" /> {cost}</> : '無料'}</span>
+                </>
               )}
             </button>
           </div>

@@ -229,8 +229,8 @@ function RaidIntro({ bossId, onDone }: { bossId: string; onDone: () => void }) {
         animate={{ scale: 1, y: 0, opacity: 1, filter: 'brightness(1) blur(0px)' }}
         transition={{ duration: 1.2, delay: 0.25, ease: [0.16, 1, 0.3, 1] }}
       />
-      <motion.div className="ri-warn" initial={{ opacity: 0, scaleX: 0 }} animate={{ opacity: 1, scaleX: 1 }} transition={{ delay: 0.9, duration: 0.4 }}>
-        ⚠ RAID BOSS ⚠
+      <motion.div className="ri-kicker" initial={{ opacity: 0, scaleX: 0.3 }} animate={{ opacity: 1, scaleX: 1 }} transition={{ delay: 0.9, duration: 0.5 }}>
+        今週のレイドボス
       </motion.div>
       <motion.div className="ri-name gold-title" initial={{ opacity: 0, y: 30, letterSpacing: '0.6em' }} animate={{ opacity: 1, y: 0, letterSpacing: '0.04em' }} transition={{ delay: 1.15, duration: 0.7, ease: [0.16, 1, 0.3, 1] }}>
         {b.name}
@@ -267,7 +267,9 @@ function RaidHud({ s }: { s: GameState }) {
           次のワザ：<b>{next.name}</b> {next.damage ? `${next.damage + (rage ? BOSS_RAGE_BONUS : 0)}` : ''}
           {rage && <i> 激昂</i>}
         </span>
-        <span className="rh-dealt">与えたダメージ {dealt.toLocaleString()}</span>
+        <span className="rh-dealt">
+          与えたダメージ {dealt.toLocaleString()} ・ <em>あと{s.players[1].prizes.length}匹きぜつで負け</em>
+        </span>
       </div>
     </div>
   );
