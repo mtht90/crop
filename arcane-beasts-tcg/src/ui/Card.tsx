@@ -69,6 +69,9 @@ export const CardFace = memo(function CardFace({ cid, className, style, interact
     el.style.setProperty('--rx', `${(0.5 - y) * 18}deg`);
     el.style.setProperty('--ry', `${(x - 0.5) * 22}deg`);
     el.style.setProperty('--hyp', `${Math.min(1, Math.hypot(x - 0.5, y - 0.5) * 2)}`);
+    // -0.5 … 0.5: how far the layers of a 3D card slide against each other
+    el.style.setProperty('--tx', `${x - 0.5}`);
+    el.style.setProperty('--ty', `${y - 0.5}`);
   };
   const onMove = (e: React.PointerEvent) => {
     if (!interactive || !ref.current) return;
@@ -91,6 +94,8 @@ export const CardFace = memo(function CardFace({ cid, className, style, interact
       el.style.setProperty('--mx', '50%');
       el.style.setProperty('--my', '50%');
       el.style.setProperty('--hyp', '0');
+      el.style.setProperty('--tx', '0');
+      el.style.setProperty('--ty', '0');
     }
     onMouseLeave?.();
   };
@@ -103,7 +108,7 @@ export const CardFace = memo(function CardFace({ cid, className, style, interact
     `kind-${def.kind}`,
     v ? `v-${v}` : '',
     v && BLEED.has(v) ? 'bleed' : '',
-    def.raid ? 'raid-card' : '',
+    def.raid ? 'raid-card bleed full-art' : '',
     def.kind === 'monster' ? `t-${def.type}` : def.kind === 'energy' ? `t-${def.energyType}` : `sub-${(def as TrainerCard).sub}`,
     def.fullArt ? 'full-art' : '',
     def.gold ? 'gold' : '',
@@ -131,10 +136,17 @@ export const CardFace = memo(function CardFace({ cid, className, style, interact
           {def.kind === 'trainer' && <TrainerFace def={def} />}
           {def.kind === 'energy' && <EnergyFace def={def} />}
           {v === 'mirror' && <div className={`tcg-mirror ${def.kind === 'trainer' ? 'tw' : def.kind === 'energy' ? 'ew' : ''}`} />}
-          {holo && <div className="tcg-shine" />}
-          {(holo || v === 'mirror') && <div className="tcg-glare" />}
+          {(holo || def.raid) && <div className="tcg-shine" />}
+          {(holo || v === 'mirror' || def.raid) && <div className="tcg-glare" />}
+          {def.raid && <div className="raid-sparkle" />}
         </div>
       </div>
+      {/* the raid monster's head and shoulders break out over the top of the card */}
+      {def.raid && def.kind === 'monster' && (
+        <div className="raid-pop-box">
+          <img className="raid-pop" src={artUrl(def.art)} alt="" draggable={false} loading="lazy" />
+        </div>
+      )}
     </div>
   );
 });

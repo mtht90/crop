@@ -866,3 +866,54 @@
 .portrait-art .scene.painting { filter: none; }
 .tcg.full-art.kind-trainer .tcg-art .scene.painting { filter: saturate(1.05); }
 .tcg.full-art .tcg-body p, .tcg.bleed .tcg-body p { line-height: 1.24; }
+
+/* ================================ RAID CARD ================================
+   the full-art form, with a strong hologram and a 3D picture: the landscape
+   and the monster slide against each other as the card tilts, and the
+   monster's head breaks out over the top of the card */
+.tcg.raid-card { --tx: 0; --ty: 0; }
+.tcg.raid-card .tcg-art .scene { transform: scale(1.14) translate(calc(var(--tx) * -3.5cqw), calc(var(--ty) * -3cqw)); transition: transform 0.15s ease-out; }
+.tcg.raid-card .tcg-art .portrait,
+.raid-pop { transform: translateX(-50%) translate(calc(var(--tx) * 3.5cqw), calc(var(--ty) * 2.5cqw)); transition: transform 0.15s ease-out; }
+.raid-pop-box { position: absolute; inset: 2.9cqw; z-index: 5; pointer-events: none; clip-path: inset(-40% -1% 100% -1%); }
+.tcg.raid-card .tcg-art .portrait { height: 98%; bottom: 21%; }
+.raid-pop {
+  position: absolute;
+  left: 50%;
+  bottom: 21%;
+  height: 98%;
+  object-fit: contain;
+  filter: drop-shadow(0 1cqw 1.4cqw rgba(0, 0, 0, 0.55));
+}
+/* the hologram: rainbow foil across the whole card, brighter than any other */
+.tcg.raid-card .tcg-shine {
+  inset: 0;
+  /* like real foil: faint when the card lies flat, bright as it tilts */
+  opacity: calc(0.06 + var(--hyp) * 0.3);
+  transition: opacity 0.2s;
+  background:
+    repeating-linear-gradient(110deg,
+      rgba(255, 0, 132, 0.6) 0%, rgba(252, 164, 0, 0.6) 5%, rgba(255, 255, 0, 0.55) 10%,
+      rgba(0, 255, 138, 0.55) 15%, rgba(0, 207, 255, 0.6) 20%, rgba(204, 76, 250, 0.6) 25%, rgba(255, 0, 132, 0.6) 30%),
+    repeating-radial-gradient(circle at var(--mx) var(--my), rgba(255, 255, 255, 0.18) 0 0.4cqw, transparent 0.4cqw 2.2cqw);
+  background-size: 140% 140%, 100% 100%;
+  background-position: var(--mx) var(--my), 0 0;
+  mix-blend-mode: color-dodge;
+  filter: brightness(0.8) contrast(1.5) saturate(1.1);
+}
+/* starlight: fine glitter that twinkles */
+.raid-sparkle {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  background-image:
+    radial-gradient(0.45cqw 0.45cqw at 14% 18%, #fff, transparent 70%), radial-gradient(0.35cqw 0.35cqw at 36% 9%, #fff, transparent 70%),
+    radial-gradient(0.5cqw 0.5cqw at 78% 22%, #fff, transparent 70%), radial-gradient(0.3cqw 0.3cqw at 88% 48%, #fff, transparent 70%),
+    radial-gradient(0.45cqw 0.45cqw at 9% 52%, #fff, transparent 70%), radial-gradient(0.35cqw 0.35cqw at 62% 36%, #fff, transparent 70%),
+    radial-gradient(0.4cqw 0.4cqw at 24% 70%, #fff, transparent 70%), radial-gradient(0.3cqw 0.3cqw at 70% 64%, #fff, transparent 70%),
+    radial-gradient(0.45cqw 0.45cqw at 48% 86%, #fff, transparent 70%), radial-gradient(0.35cqw 0.35cqw at 92% 80%, #fff, transparent 70%);
+  mix-blend-mode: screen;
+  animation: raid-twinkle 2.4s ease-in-out infinite alternate;
+}
+@keyframes raid-twinkle { from { opacity: 0.25; } to { opacity: 0.95; } }
