@@ -6,7 +6,7 @@ import { ALL_CARDS, card, CARDS, SET_INFO } from '../engine/cards';
 import { expand, RIVALS, STARTER_DECKS, type Rival } from '../engine/decks';
 import type { Difficulty } from '../engine/ai';
 import { cleanWardrobe, cosmeticById, freshWardrobe, type Wardrobe } from './cosmetics';
-import type { CardDef, EType, Rarity, SetCode } from '../engine/types';
+import type { CardDef, EType, MonsterCard, Rarity, SetCode } from '../engine/types';
 import {
   ACHIEVEMENTS,
   addExp,
@@ -35,6 +35,7 @@ import {
   type Stats,
   COIN_SCALE,
 } from './progress';
+import { raidCost, raidNow, raidBattleCoins, RAID_MILESTONES, type RaidSave } from './raid';
 
 // ----------------------------------------------------------------------------
 // Copies beyond MAX_COPIES are sold for coins on the spot (by ★).
@@ -50,7 +51,7 @@ const isBasicEnergy = (cid: string) => {
   return c.kind === 'energy' && c.basic;
 };
 
-export type Screen = 'arena' | 'story' | 'scene' | 'lobby' | 'title' | 'starter' | 'home' | 'rivals' | 'battle' | 'deck' | 'collection' | 'shop' | 'missions' | 'more' | 'settings' | 'credits' | 'rules' | 'gallery' | 'wardrobe';
+export type Screen = 'arena' | 'story' | 'scene' | 'lobby' | 'title' | 'starter' | 'home' | 'rivals' | 'battle' | 'deck' | 'collection' | 'shop' | 'missions' | 'more' | 'settings' | 'credits' | 'rules' | 'gallery' | 'wardrobe' | 'raid';
 
 export interface SavedDeck {
   id: string;
@@ -95,6 +96,8 @@ export interface Save {
   guideSeen?: boolean;
   /** お知らせ: the newest entry opened, and the day the start-up popup was turned off */
   newsSeen?: string;
+  /** this week's boss raid */
+  raid?: RaidSave;
   newsHideDay?: string;
   progress: Progress;
   /** story mode progress */
@@ -138,6 +141,8 @@ export interface BattleConfig {
   online?: MatchInfo;
   /** a story chapter's duel */
   story?: { chapterId: string };
+  /** this week's boss raid */
+  raid?: { bossId: string; startDamage: number };
 }
 
 const KEY = 'arcane-beasts-save-v1';
@@ -305,6 +310,20 @@ interface Store {
   equipCosmetic: (id: string) => void;
   recordPack: (premium: boolean) => void;
   recordBattle: (o: BattleOutcome, st: Partial<Stats>) => BattleRewardResult;
+  /** pay for a raid try and start it (false = not enough gems) */
+  startRaid: (playerDeck: string[]) => boolean;
+  /** bank a raid battle's damage; returns what it paid */
+  recordRaid: (bossDamage: number) => RaidResult;
+}
+
+export interface RaidResult {
+  dealt: number;
+  coins: number;
+  gems: number;
+  milestones: string[];
+  defeated: boolean;
+  damage: number;
+  hp: number;
 }
 
 /** what a claim paid out */
@@ -395,6 +414,54 @@ export const useStore = create<Store>((set, get) => ({
     const s = freshSave();
     persist(s);
     set({ save: s, screen: 'title' });
+  },
+  startRaid: (playerDeck) => {
+    const st = get();
+    const r = raidNow(st.save.raid);
+    const cost = raidCost(r);
+    const boss = card(r.bossId) as MonsterCard;
+    if (st.save.gems < cost || r.damage >= boss.hp) return false;
+    st.update((s) => {
+      s.gems -= cost;
+      s.raid = { ...r, tries: r.tries + 1 };
+    });
+    st.startBattle({
+      rival: null,
+      playerDeck,
+      oppDeck: [boss.id],
+      oppName: boss.name,
+      oppPortrait: boss.art,
+      level: 'hard',
+      cpuLevel: 7,
+      scene: boss.scene ?? 'story/p-the-fall',
+      reward: 0,
+      raid: { bossId: boss.id, startDamage: r.damage },
+    });
+    return true;
+  },
+  recordRaid: (bossDamage) => {
+    const res: RaidResult = { dealt: 0, coins: 0, gems: 0, milestones: [], defeated: false, damage: 0, hp: 0 };
+    get().update((s) => {
+      const r = raidNow(s.raid);
+      const boss = card(r.bossId) as MonsterCard;
+      const now = Math.min(boss.hp, Math.max(r.damage, bossDamage));
+      res.dealt = now - r.damage;
+      res.coins = raidBattleCoins(res.dealt);
+      for (const m of RAID_MILESTONES)
+        if (!r.paid.includes(m.pct) && now * 100 >= boss.hp * m.pct) {
+          r.paid.push(m.pct);
+          res.gems += m.gems;
+          res.coins += m.coins;
+          res.milestones.push(m.label);
+        }
+      res.defeated = now >= boss.hp;
+      res.damage = now;
+      res.hp = boss.hp;
+      s.raid = { ...r, damage: now, best: Math.max(r.best, res.dealt) };
+      s.coins += res.coins;
+      s.gems += res.gems;
+    });
+    return res;
   },
   claimLogin: () => {
     const got: Wallet = { coins: 0, gems: 0 };

@@ -1,3 +1,4 @@
+import { CoinArt } from '../ui/CoinArt';
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useRef } from 'react';
 import fxMeta from '../assets/fx.json';
@@ -176,10 +177,10 @@ export function FxLayer() {
               transition={{ duration: 0.95, ease: [0.2, 0.7, 0.3, 1], y: { duration: 0.95, times: [0, 0.45, 1], ease: 'easeOut' } }}
             >
               <div className="coin-face heads">
-                <Icon name="crown" size="60%" />
+                <CoinArt side="heads" />
               </div>
               <div className="coin-face tails">
-                <Icon name="skull" size="55%" />
+                <CoinArt side="tails" />
               </div>
             </motion.div>
             <motion.div className={`fx-coin-result ${coin.heads ? 'heads' : 'tails'}`} initial={{ opacity: 0, scale: 0.5 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.95 }}>

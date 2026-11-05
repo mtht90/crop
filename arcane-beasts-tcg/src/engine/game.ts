@@ -8,6 +8,7 @@
 // ============================================================================
 import { card, byName, COND_JP, TYPE_JP } from './cards';
 import { POWER, tierOf } from './cards/boost';
+import { BOSS_RAGE_BONUS, RAID_MULT } from './cards/bosses';
 import type {
   Action,
   Answer,
@@ -257,6 +258,25 @@ export class Game {
     return new Game(s, opts);
   }
 
+  /**
+   * a boss raid: player 0 plays its deck and needs one prize; player 1 is the
+   * boss alone (it never draws, cannot be put to sleep or switched, and takes
+   * `mult` times the damage). The boss starts with the damage already dealt
+   * this week.
+   */
+  static createRaid(deck: string[], bossId: string, startDamage: number, names: [string, string], seed = Date.now() >>> 0, opts: GameOptions = {}): Game {
+    const g = Game.create([deck, [bossId]], names, seed, opts);
+    g.s.raid = { moves: 0, mult: RAID_MULT, startDamage };
+    return g;
+  }
+
+  /** the raid boss's next attack (they go in turn) */
+  raidNextMove(): number {
+    const b = this.s.players[1].active;
+    if (!this.s.raid || !b) return 0;
+    return this.s.raid.moves % topCard(b).attacks.length;
+  }
+
   /** Clone for AI simulation. Only valid while waiting on an 'action' prompt. */
   fork(): Game {
     const g = new Game(structuredClone(this.s), { record: false });
@@ -475,9 +495,11 @@ export class Game {
     this.emit({ e: 'first', p: s.first });
 
     for (const p of [0, 1] as const) this.shuffle(p);
+    const raid = s.raid;
+    const sides: (0 | 1)[] = raid ? [0] : [0, 1];
     // draw & mulligan
     const hasBasic = (p: 0 | 1) => this.pl(p).hand.some((c) => isBasic(c.cid));
-    for (const p of [0, 1] as const) {
+    for (const p of sides) {
       this.draw(p, HAND_START);
       let guard = 0;
       while (!hasBasic(p) && guard++ < 50) {
@@ -490,12 +512,19 @@ export class Game {
       }
     }
     // extra draws for opponent's mulligans
-    for (const p of [0, 1] as const) {
+    for (const p of sides) {
       const opp = this.pl(other(p));
       if (opp.mulligans > 0) this.draw(p, opp.mulligans);
     }
+    if (raid) {
+      // the boss takes the field with this week's wounds
+      const bp = this.pl(1);
+      const b = bp.deck.splice(0, 1)[0];
+      bp.active = this.newSlot(b);
+      bp.active.damage = raid.startDamage;
+    }
     // choose active & bench
-    for (const p of [0, 1] as const) {
+    for (const p of sides) {
       const a = yield { type: 'setup', player: p };
       if (a.type !== 'setup') throw new Error('bad setup');
       const pl = this.pl(p);
@@ -509,9 +538,16 @@ export class Game {
       }
     }
     // prizes
-    for (const p of [0, 1] as const) {
+    for (const p of sides) {
       const pl = this.pl(p);
-      pl.prizes = pl.deck.splice(0, PRIZES);
+      // in a raid one prize is enough: knock the boss out and it is over
+      pl.prizes = pl.deck.splice(0, raid ? 1 : PRIZES);
+    }
+    if (raid) {
+      // the boss takes prizes as usual; it has no deck, so they are tokens
+      const bp = this.pl(1);
+      const cid = bp.active!.stack[0].cid;
+      bp.prizes = Array.from({ length: PRIZES }, () => ({ uid: s.nextUid++, cid, owner: 1 as const }));
     }
     this.emit({ e: 'setupDone' });
   }
@@ -524,6 +560,7 @@ export class Game {
     // expire flags
     for (const q of [0, 1] as const) for (const { slot } of slotsOf(s, q)) slot.flags = slot.flags.filter((f) => f.untilTurn >= s.turn);
     this.emit({ e: 'turn', p, turn: s.turn });
+    if (s.raid && p === 1) return; // the boss never draws
     if (this.pl(p).deck.length === 0) {
       this.win(other(p), `${this.pl(p).name}は山札が引けなくなった！`);
     }
@@ -571,6 +608,12 @@ export class Game {
     // stadium
     if (!s.flags.stadiumUsed && this.stadiumActionOk(p)) out.push({ t: 'stadium' });
     // attacks
+    if (s.raid && p === 1) {
+      // the boss only fights, one attack after another
+      const i = this.raidNextMove();
+      if (act && !firstTurn && this.canAttack(p, i)) return [{ t: 'attack', index: i }];
+      return [{ t: 'endTurn' }];
+    }
     if (act && !firstTurn) {
       topCard(act).attacks.forEach((_, i) => {
         if (this.canAttack(p, i)) out.push({ t: 'attack', index: i });
@@ -968,6 +1011,8 @@ export class Game {
   putDamage(pos: Pos, amount: number, type: EType, source: 'attack' | 'effect' | 'checkup', weak = false, resist = false) {
     const slot = slotAt(this.s, pos);
     if (!slot || amount <= 0) return;
+    // raid: every hit on the boss lands many times over
+    if (this.s.raid && pos.p === 1) amount *= this.s.raid.mult;
     slot.damage += amount;
     this.emit({ e: 'damage', pos, amount, weak, resist, type, source });
   }
@@ -984,6 +1029,7 @@ export class Game {
     const slot = slotAt(this.s, pos);
     if (!slot || pos.z !== 'active') return;
     if (stadiumKey(this.s) === 'shrine') return;
+    if (this.s.raid && pos.p === 1) return; // a raid boss shrugs off special conditions
     const rot: Condition[] = ['asleep', 'paralyzed', 'confused'];
     if (rot.includes(cond)) slot.conditions = slot.conditions.filter((c) => !rot.includes(c));
     if (!slot.conditions.includes(cond)) slot.conditions.push(cond);
@@ -1045,6 +1091,7 @@ export class Game {
     const has = <K extends AttackEffect['k']>(k: K) => effects.filter((e) => e.k === k) as Extract<AttackEffect, { k: K }>[];
 
     this.emit({ e: 'attack', p, name: atk.name, type: mc.type, attacker: A.stack[A.stack.length - 1].uid });
+    if (s.raid && p === 1) s.raid.moves++;
 
     // confusion
     if (A.conditions.includes('confused')) {
@@ -1140,6 +1187,8 @@ export class Game {
       } else if (dmg > 0) {
         // attacker-side modifiers
         dmg += s.flags.attackBonus;
+        // a raid boss with half its HP gone grows fiercer
+        if (s.raid && p === 1 && A.damage * 2 >= maxHp(s, A)) dmg += BOSS_RAGE_BONUS;
         if (toolKey(A) === 'band') dmg += 20;
         if (toolKey(A) === 'drum' && mc.stage === 'basic') dmg += 30;
         let boost = 0;

@@ -1,3 +1,7 @@
+import { card } from '../engine/cards';
+import type { MonsterCard } from '../engine/types';
+import { raidBattleCoins, RAID_MILESTONES } from '../state/raid';
+import type { RaidResult } from '../state/store';
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
 import { CHAPTERS, episodeLabel, episodeNo } from '../story';
@@ -26,6 +30,7 @@ export function ResultOverlay() {
   const startBattle = useStore((s) => s.startBattle);
   const applied = useRef(false);
   const [res, setRes] = useState<BattleRewardResult | null>(null);
+  const [raidRes, setRaidRes] = useState<RaidResult | null>(null);
   const [missionsReady, setMissionsReady] = useState(0);
 
   useEffect(() => {
@@ -54,6 +59,29 @@ export function ResultOverlay() {
       if (win) update((s) => bump(s.progress, { onlineWins: 1 }));
       const after0 = claimableCount(useStore.getState().save.progress, extCtx(useStore.getState().save));
       setMissionsReady(Math.max(0, after0 - before0));
+      return;
+    }
+    if (cfg.raid) {
+      // a raid: the damage is banked for the week whatever the outcome
+      const v = useBattle.getState().view;
+      const bossSlot = v?.players[1].active;
+      const hp = (card(cfg.raid.bossId) as MonsterCard).hp;
+      const bossDamage = result.winner === 0 && !bossSlot ? hp : (bossSlot?.damage ?? cfg.raid.startDamage);
+      const stR = useBattle.getState().stats;
+      const base = recordBattle(
+        { win, level: 'hard', baseReward: 0, prizesTaken: 0, prizesLost: stR.prizesLost, firstClear: false },
+        { kos: stR.kos, damage: stR.damage, prizes: stR.prizes, evolves: stR.evolves, trainers: stR.trainers },
+      );
+      const rr = useStore.getState().recordRaid(bossDamage);
+      const lines = [
+        { label: `ボスに与えたダメージ ${rr.dealt.toLocaleString()}`, coins: raidBattleCoins(rr.dealt) },
+        ...rr.milestones.map((m) => {
+          const ms = RAID_MILESTONES.find((x) => x.label === m)!;
+          return { label: m, coins: ms.coins, gems: ms.gems };
+        }),
+      ];
+      setRaidRes(rr);
+      setRes({ ...base, lines, total: base.total + rr.coins, gems: base.gems + rr.gems });
       return;
     }
     const before = claimableCount(useStore.getState().save.progress, extCtx(useStore.getState().save));
@@ -96,15 +124,33 @@ export function ResultOverlay() {
   return (
     <motion.div className={`result ${win ? 'win' : 'lose'}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.6 }}>
       <motion.div className="result-title" initial={{ scale: 1.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1], delay: 0.15 }}>
-        {draw ? 'DRAW' : win ? 'VICTORY' : 'DEFEAT'}
+        {cfg.raid ? (win ? '討伐！' : 'RAID END') : draw ? 'DRAW' : win ? 'VICTORY' : 'DEFEAT'}
       </motion.div>
       <div className="result-reason">{result.reason}</div>
+      {raidRes && (
+        <motion.div className="raid-result-bar" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
+          <div className="rrb-head">
+            <b>{cfg.oppName}</b>
+            <span>
+              今週 {raidRes.damage.toLocaleString()} / {raidRes.hp.toLocaleString()}
+            </span>
+          </div>
+          <div className="rrb-track">
+            <motion.div
+              className="rrb-fill"
+              initial={{ width: `${(100 * (raidRes.damage - raidRes.dealt)) / raidRes.hp}%` }}
+              animate={{ width: `${(100 * raidRes.damage) / raidRes.hp}%` }}
+              transition={{ delay: 0.9, duration: 1.4, ease: [0.16, 1, 0.3, 1] }}
+            />
+          </div>
+        </motion.div>
+      )}
       <div className="result-row">
       {<motion.div className="result-rival" initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.6 }}>
         <img src={artUrl(cfg.oppPortrait)} alt="" />
         <div className="bubble">
           <b>{cfg.oppName}</b>
-          <p>{cfg.online ? 'ありがとうございました！' : cfg.rival ? (win ? cfg.rival.lose : cfg.rival.win) : win ? '参りました！' : '私の勝ちですね。'}</p>
+          <p>{cfg.raid ? (win ? '……グ、オォ……' : '……（まだ倒れない。今週のうちに、もう一度）') : cfg.online ? 'ありがとうございました！' : cfg.rival ? (win ? cfg.rival.lose : cfg.rival.win) : win ? '参りました！' : '私の勝ちですね。'}</p>
         </div>
       </motion.div>}
 
@@ -166,10 +212,11 @@ export function ResultOverlay() {
             } else if (cfg.online) {
               online.clearMatch();
               go('lobby');
-            } else startBattle({ ...cfg });
+            } else if (cfg.raid) go('raid');
+            else startBattle({ ...cfg });
           }}
         >
-          {cfg.story ? (win ? '物語をつづける' : 'もう一度挑む') : cfg.online ? 'ロビーへ' : 'もう一度'}
+          {cfg.story ? (win ? '物語をつづける' : 'もう一度挑む') : cfg.online ? 'ロビーへ' : cfg.raid ? 'レイドへ' : 'もう一度'}
         </button>
         {missionsReady > 0 && !(cfg.story && win) && (
           <button
@@ -191,7 +238,7 @@ export function ResultOverlay() {
             sfx('button');
             useBattle.setState({ result: null, view: null, prompt: null });
             if (cfg.online) online.clearMatch();
-            go(cfg.story ? 'story' : cfg.online ? 'arena' : cfg.rival ? 'rivals' : 'home');
+            go(cfg.story ? 'story' : cfg.online ? 'arena' : cfg.raid ? 'arena' : cfg.rival ? 'rivals' : 'home');
           }}
         >
           {cfg.story ? 'ストーリーへ' : cfg.online ? 'バトルメニューへ' : cfg.rival ? '対戦相手を選ぶ' : 'ホームへ'}

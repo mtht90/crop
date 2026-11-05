@@ -18,6 +18,8 @@ import { foley, playMusic, sfx } from '../audio/audio';
 import { askConfirm } from '../ui/Confirm';
 import { Weather } from '../story/Weather';
 import { logError } from '../ui/ErrorBoundary';
+import { shake } from './fx';
+import { BOSS_RAGE_BONUS } from '../engine/cards/bosses';
 import type { Weather as WeatherKind } from '../story/types';
 import { vibrate } from '../lib/fx';
 import './battle.css';
@@ -198,6 +200,77 @@ function useBoardWatchdog(): number {
     };
   }, []);
   return nonce;
+}
+
+// ---------------------------------------------------------------------------
+// Boss raid: the entrance, and the HP bar with the boss's next move
+// ---------------------------------------------------------------------------
+function RaidIntro({ bossId, onDone }: { bossId: string; onDone: () => void }) {
+  const b = card(bossId) as MonsterCard;
+  useEffect(() => {
+    sfx('rumble', 0.9);
+    const t1 = setTimeout(() => {
+      sfx('horn-3', 0.8);
+      shake(2.2);
+      vibrate([40, 30, 80]);
+    }, 900);
+    const t2 = setTimeout(() => sfx('drake-hit-1', 0.9), 1300);
+    const t3 = setTimeout(onDone, 3400);
+    return () => [t1, t2, t3].forEach(clearTimeout);
+  }, [onDone]);
+  return (
+    <motion.div className="raid-intro" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: { duration: 0.5 } }} onClick={onDone}>
+      <motion.div className="ri-flash" initial={{ opacity: 0 }} animate={{ opacity: [0, 0, 0.9, 0] }} transition={{ duration: 1.5, times: [0, 0.55, 0.62, 1] }} />
+      <motion.img
+        className="ri-boss"
+        src={artUrl(b.art)}
+        alt=""
+        initial={{ scale: 2.4, y: 60, opacity: 0, filter: 'brightness(0) blur(6px)' }}
+        animate={{ scale: 1, y: 0, opacity: 1, filter: 'brightness(1) blur(0px)' }}
+        transition={{ duration: 1.2, delay: 0.25, ease: [0.16, 1, 0.3, 1] }}
+      />
+      <motion.div className="ri-warn" initial={{ opacity: 0, scaleX: 0 }} animate={{ opacity: 1, scaleX: 1 }} transition={{ delay: 0.9, duration: 0.4 }}>
+        ⚠ RAID BOSS ⚠
+      </motion.div>
+      <motion.div className="ri-name gold-title" initial={{ opacity: 0, y: 30, letterSpacing: '0.6em' }} animate={{ opacity: 1, y: 0, letterSpacing: '0.04em' }} transition={{ delay: 1.15, duration: 0.7, ease: [0.16, 1, 0.3, 1] }}>
+        {b.name}
+      </motion.div>
+      <motion.div className="ri-hp" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.6 }}>
+        HP {b.hp.toLocaleString()}
+      </motion.div>
+    </motion.div>
+  );
+}
+
+function RaidHud({ s }: { s: GameState }) {
+  const bs = s.players[1].active;
+  if (!s.raid || !bs) return null;
+  const b = topCard(bs);
+  const hp = maxHp(s, bs);
+  const left = Math.max(0, hp - bs.damage);
+  const dealt = bs.damage - s.raid.startDamage;
+  const next = b.attacks[s.raid.moves % b.attacks.length];
+  const rage = bs.damage * 2 >= hp;
+  return (
+    <div className={`raid-hud ${rage ? 'rage' : ''}`}>
+      <div className="rh-top">
+        <b>{b.name}</b>
+        <span>
+          HP {left.toLocaleString()} / {hp.toLocaleString()}
+        </span>
+      </div>
+      <div className="rh-track">
+        <div className="rh-fill" style={{ width: `${(100 * left) / hp}%` }} />
+      </div>
+      <div className="rh-bottom">
+        <span className="rh-next">
+          次のワザ：<b>{next.name}</b> {next.damage ? `${next.damage + (rage ? BOSS_RAGE_BONUS : 0)}` : ''}
+          {rage && <i> 激昂</i>}
+        </span>
+        <span className="rh-dealt">与えたダメージ {dealt.toLocaleString()}</span>
+      </div>
+    </div>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -905,6 +978,8 @@ export function BattleScreen() {
   const [selected, setSelected] = useState<number | null>(null);
   const [dragUid, setDragUid] = useState<number | null>(null);
   const heal = useBoardWatchdog();
+  const [raidIntro, setRaidIntro] = useState(!!cfg.raid);
+  const endRaidIntro = useCallback(() => setRaidIntro(false), []);
   const [menu, setMenu] = useState<Pos | null>(null);
   const [retreat, setRetreat] = useState<{ discard: number[]; need: number; choosing: boolean } | null>(null);
   const [setupActive, setSetupActive] = useState<number | null>(null);
@@ -917,20 +992,21 @@ export function BattleScreen() {
   const [ready, setReady] = useState(false);
   const startedRef = useRef(false);
   useEffect(() => {
-    if (ready && !guide && !startedRef.current && ctrlRef.current) {
+    // a raid boss makes its entrance before the coin toss
+    if (ready && !guide && !raidIntro && !startedRef.current && ctrlRef.current) {
       startedRef.current = true;
       ctrlRef.current.start();
     }
-  }, [ready, guide]);
+  }, [ready, guide, raidIntro]);
 
   // lifecycle
   useEffect(() => {
-    const ctrl: BattleDriver = cfg.online ? new OnlineController(cfg.online) : new BattleController([cfg.playerDeck, cfg.oppDeck], ['あなた', cfg.oppName], cfg.cpuLevel ?? cfg.level);
+    const ctrl: BattleDriver = cfg.online ? new OnlineController(cfg.online) : new BattleController([cfg.playerDeck, cfg.oppDeck], ['あなた', cfg.oppName], cfg.cpuLevel ?? cfg.level, cfg.raid);
     ctrl.speed = settings.speed;
     ctrl.autoHuman = !!cfg.spectate && !cfg.online;
     ctrlRef.current = ctrl;
     if (import.meta.env.DEV) (window as unknown as Record<string, unknown>).__ctrl = ctrl;
-    const boss = cfg.rival?.id === 'necros' || cfg.rival?.id === 'lilith';
+    const boss = !!cfg.raid || cfg.rival?.id === 'necros' || cfg.rival?.id === 'lilith';
     playMusic(boss ? 'boss' : (['battle1', 'battle2', 'battle3'] as const)[Math.floor(Math.random() * 3)]);
     // preload the art used by both decks so cards never pop in
     const urls = new Set<string>([artUrl(cfg.scene)]);
@@ -1168,7 +1244,7 @@ export function BattleScreen() {
 
   return (
     <div
-      className="screen battle-screen"
+      className={`screen battle-screen ${cfg.raid ? 'is-raid' : ''}`}
       onContextMenu={(e) => e.preventDefault()}
       onPointerDown={(e) => {
         if (e.pointerType === 'touch' && !(e.target as HTMLElement).closest('.bc')) useBattle.getState().setHover(null);
@@ -1187,6 +1263,8 @@ export function BattleScreen() {
     >
       <div className="battle-bg" style={{ backgroundImage: `url(${artUrl(bg)})` }} key={bg} />
       <div className="battle-bg-shade" />
+      {cfg.raid && <RaidHud s={s} />}
+      <AnimatePresence>{cfg.raid && raidIntro && <RaidIntro bossId={cfg.raid.bossId} onDone={endRaidIntro} />}</AnimatePresence>
       {terrain && <div className="battle-weather" key={`w-${terrain.key}`}><Weather kind={TERRAIN_WEATHER[terrain.key] ?? 'motes'} /></div>}
       {terrain && (terrainFx || STADIUM_NOTE[terrain.key]) && (
         <div className="terrain-chip" key={`t-${terrain.key}`}>

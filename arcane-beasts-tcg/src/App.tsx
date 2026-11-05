@@ -25,6 +25,7 @@ import { expand, RIVALS, deckById } from './engine/decks';
 import './screens/screens.css';
 import { ConfirmDialog } from './ui/Confirm';
 import { NewsModal } from './screens/News';
+import { Raid } from './screens/Raid';
 import { ErrorBoundary, watchGlobalErrors } from './ui/ErrorBoundary';
 
 watchGlobalErrors();
@@ -62,6 +63,7 @@ const SCREENS = {
   home: Home,
   arena: Arena,
   rivals: Rivals,
+  raid: Raid,
   battle: BattleScreen,
   deck: DeckBuilder,
   collection: Collection,

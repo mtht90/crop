@@ -229,6 +229,17 @@ export interface GameState {
   rng: number;
   nextUid: number;
   log: LogEntry[];
+  /** a boss raid: player 1 is the boss alone */
+  raid?: RaidState;
+}
+
+export interface RaidState {
+  /** the boss's attacks used so far (they go in turn) */
+  moves: number;
+  /** your damage to the boss is multiplied by this */
+  mult: number;
+  /** the boss's damage when the battle started (carried over this week) */
+  startDamage: number;
 }
 
 export interface LogEntry {

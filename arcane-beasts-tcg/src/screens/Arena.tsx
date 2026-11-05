@@ -1,3 +1,6 @@
+import { currentBoss, raidNow } from '../state/raid';
+import { card } from '../engine/cards';
+import type { MonsterCard } from '../engine/types';
 // バトル: the battle menu opened from the home screen. Laid out like home —
 // four tall mode cards in a row (story, free battles, online play, deck) and a
 // band underneath with the deck in use and the player's record.
@@ -43,6 +46,19 @@ export function Arena() {
       fig: 'monsters/fire-dragon',
       icon: 'book',
       badge: save.story.started ? undefined : 'NEW',
+    },
+    {
+      to: 'raid',
+      title: 'ボスレイド',
+      sub: (() => {
+        const r = raidNow(save.raid);
+        const b = card(r.bossId) as MonsterCard;
+        return r.damage >= b.hp ? `${b.name} 討伐済み` : `今週：${b.name}（残りHP ${Math.round(100 - (100 * r.damage) / b.hp)}%）`;
+      })(),
+      bg: 'story/p-the-fall',
+      fig: currentBoss().art,
+      icon: 'skull',
+      badge: raidNow(save.raid).tries === 0 ? '無料' : undefined,
     },
     { to: 'rivals', title: 'CPU対戦', sub: `レベル1〜9から選んで対戦（${(save.cpuBeaten ?? []).length}/9 勝利）`, bg: 'story/p-mountains', fig: 'humans/duelist', icon: 'swords' },
     {

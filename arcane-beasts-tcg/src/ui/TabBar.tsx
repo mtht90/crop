@@ -20,6 +20,7 @@ export const TAB_OF: Partial<Record<Screen, Tab>> = {
   home: 'home',
   arena: 'arena',
   rivals: 'arena',
+  raid: 'arena',
   story: 'arena',
   lobby: 'arena',
   shop: 'shop',

@@ -442,7 +442,8 @@ function randomOf<T>(xs: T[]): T {
 
 export function chooseAction(g: Game, p: 0 | 1, level: AiLevel = 'normal', actionsThisTurn = 0): Action {
   const legal = g.legalActions(p);
-  if (legal.length <= 1 || actionsThisTurn > 40) return { t: 'endTurn' };
+  if (legal.length === 1) return legal[0];
+  if (legal.length === 0 || actionsThisTurn > 40) return { t: 'endTurn' };
   const prof = profileOf(level);
   if (prof.depth > 0) return plan(g, p, prof);
 
