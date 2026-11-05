@@ -206,7 +206,17 @@ function MonsterFace({ def }: { def: MonsterCard }) {
       <div className="tcg-art">
         <img className="scene" src={artUrl(scene)} alt="" draggable={false} loading="lazy" />
         {def.variant === 'SAR' && !scene.startsWith('story/p-') && <div className="sar-wash" />}
+        {def.raid && (
+          <>
+            {/* cold foil: silver rays stamped behind the monster */}
+            <div className="raid-coldfoil" />
+            {/* relief: the monster raised from the card, lit from where it tilts */}
+            <img className="raid-relief lo" src={artUrl(def.art)} alt="" draggable={false} loading="lazy" />
+            <img className="raid-relief hi" src={artUrl(def.art)} alt="" draggable={false} loading="lazy" />
+          </>
+        )}
         <img className="portrait" src={artUrl(def.art)} alt={def.name} draggable={false} loading="lazy" style={pStyle} />
+        {def.raid && <div className="raid-holo" />}
       </div>
       <div className="tcg-head">
         <span className={`tcg-stage stage-${def.stage}`}>{STAGE_JP[def.stage]}</span>
