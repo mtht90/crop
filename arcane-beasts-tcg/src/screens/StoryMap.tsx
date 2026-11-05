@@ -25,7 +25,7 @@ export function StoryMap() {
   const save = useStore((s) => s.save);
   const go = useStore((s) => s.go);
   const update = useStore((s) => s.update);
-  useEffect(() => playMusic('menu'), []);
+  useEffect(() => playMusic('journey'), []);
   const [sel, setSel] = useState(() => (save.story.started ? nextChapterIndex(save) : -1));
   const drag = useRef<{ x: number; moved: boolean } | null>(null);
   /** naming the hero; holds what to do afterwards */

@@ -105,7 +105,7 @@ export function Lobby() {
     setTimeout(() => setToast(null), 2600);
   };
 
-  useEffect(() => playMusic('menu'), []);
+  useEffect(() => playMusic('online'), []);
 
   // connect while this screen is open; leave the socket alone once a game starts
   useEffect(() => {

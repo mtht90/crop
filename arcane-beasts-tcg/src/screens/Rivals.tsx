@@ -51,7 +51,7 @@ export function Rivals() {
   });
   /** '' = the CPU chooses (a different deck from its pool each time) */
   const [deckId, setDeckId] = useState('');
-  useEffect(() => playMusic('menu'), []);
+  useEffect(() => playMusic('legends'), []);
 
   const deck = activeDeck(save);
   const errs = deck ? validateDeck(deck.cards) : ['デッキがありません'];

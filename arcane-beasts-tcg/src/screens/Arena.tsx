@@ -31,7 +31,7 @@ interface Tile {
 export function Arena() {
   const save = useStore((s) => s.save);
   const go = useStore((s) => s.go);
-  useEffect(() => playMusic('menu'), []);
+  useEffect(() => playMusic('legends'), []);
   const deck = activeDeck(save);
   const nextIdx = nextChapterIndex(save);
   const nextCh = CHAPTERS[nextIdx];

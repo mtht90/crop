@@ -146,7 +146,7 @@ export function Shop() {
   const addCards = useStore((s) => s.addCards);
   const [opening, setOpening] = useState<OpeningState | null>(null);
   const [odds, setOdds] = useState<Booster | null>(null);
-  useEffect(() => playMusic('shop'), []);
+  useEffect(() => playMusic('packs'), []);
 
   const buy = useCallback(
     (booster: Booster, packs = 1) => {
@@ -309,6 +309,11 @@ function Opening({ booster, cards, god, fresh, sold, packs, onClose, onAgain }: 
   const u = useUnit();
   const [phase, setPhase] = useState<Phase>('tear');
   const cineApi = useRef<CinemaApi | null>(null);
+  // opening has its own music; the shop's comes back when it closes
+  useEffect(() => {
+    playMusic('opening');
+    return () => playMusic('packs');
+  }, []);
   /** WebGL failed: after the launch go straight to the pack */
   const noCine = useRef(false);
   const omen = useMemo(() => makeOmen(cards, god), [cards, god]);
@@ -599,11 +604,48 @@ function ChargeIntake({ charge, holding, target }: { charge: MotionValue<number>
     };
     fit();
     window.addEventListener('resize', fit);
-    interface S { a: number; d: number; v: number; len: number; wd: number; warm: number }
+    /** a soft dot, drawn once, stamped at each streak's head */
+    const dot = document.createElement('canvas');
+    dot.width = dot.height = 64;
+    {
+      const g = dot.getContext('2d')!;
+      const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+      gr.addColorStop(0, 'rgba(255,255,255,1)');
+      gr.addColorStop(0.18, 'rgba(255,250,235,0.85)');
+      gr.addColorStop(0.45, 'rgba(255,236,190,0.22)');
+      gr.addColorStop(1, 'rgba(255,236,190,0)');
+      g.fillStyle = gr;
+      g.fillRect(0, 0, 64, 64);
+    }
+    const COLS = ['255,255,255', '255,236,186', '214,236,255', '255,246,222'];
+    interface S { a: number; d: number; v: number; len: number; wd: number; col: string; tw: number }
+    interface D { a: number; d: number; v: number; r: number; ph: number }
     const ss: S[] = [];
+    const dust: D[] = [];
     let raf = 0;
     let last = performance.now();
     let acc = 0;
+    let accD = 0;
+    // a tapered streak: wide and bright at the head, a hair at the tail
+    const streak = (hx: number, hy: number, tx: number, ty: number, wd: number, col: string, alpha: number) => {
+      const dx = tx - hx;
+      const dy = ty - hy;
+      const L = Math.hypot(dx, dy) || 1;
+      const nx = (-dy / L) * wd * 0.5;
+      const ny = (dx / L) * wd * 0.5;
+      const g = ctx.createLinearGradient(hx, hy, tx, ty);
+      g.addColorStop(0, `rgba(${col},${alpha})`);
+      g.addColorStop(0.25, `rgba(${col},${alpha * 0.55})`);
+      g.addColorStop(1, `rgba(${col},0)`);
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.moveTo(hx + nx, hy + ny);
+      ctx.lineTo(tx, ty);
+      ctx.lineTo(hx - nx, hy - ny);
+      ctx.arc(hx, hy, wd * 0.5, Math.atan2(-ny, -nx), Math.atan2(ny, nx));
+      ctx.closePath();
+      ctx.fill();
+    };
     const frame = (now: number) => {
       raf = requestAnimationFrame(frame);
       const dt = Math.min(0.05, (now - last) / 1000);
@@ -615,40 +657,72 @@ function ChargeIntake({ charge, holding, target }: { charge: MotionValue<number>
       const cx = (r.left + r.width / 2 - box.left) * dpr;
       const cy = (r.top + r.height / 2 - box.top) * dpr;
       const far = Math.hypot(w, h) * 0.62;
-      const core = Math.min(r.width, r.height) * dpr * 0.32;
-      // new streaks: a trickle at first, a flood near full
-      if (holding.current && ch < 1) {
-        acc += dt * (22 + ch * ch * 220);
+      const core = Math.min(r.width, r.height) * dpr * 0.3;
+      const on = holding.current && ch < 1;
+      // streaks: a trickle at first, a rush near full
+      if (on) {
+        acc += dt * (16 + ch * ch * 120);
         while (acc >= 1) {
           acc -= 1;
-          ss.push({ a: Math.random() * Math.PI * 2, d: far * (0.75 + Math.random() * 0.35), v: far * (0.35 + Math.random() * 0.3 + ch * 0.9), len: 0.12 + Math.random() * 0.14 + ch * 0.12, wd: (1 + Math.random() * 1.8 + ch * 2.4) * dpr, warm: Math.random() });
+          const big = Math.random() < 0.18;
+          ss.push({
+            a: Math.random() * Math.PI * 2,
+            d: far * (0.8 + Math.random() * 0.3),
+            v: far * (0.3 + Math.random() * 0.25 + ch * 0.8),
+            len: (big ? 0.5 : 0.22) + Math.random() * 0.2 + ch * 0.2,
+            wd: (big ? 3.4 : 1.6) * (0.8 + Math.random() * 0.5 + ch * 0.6) * dpr,
+            col: COLS[Math.floor(Math.random() * COLS.length)],
+            tw: Math.random() * 6.28,
+          });
+        }
+        // fine dust drifting in more slowly between the streaks
+        accD += dt * (30 + ch * 60);
+        while (accD >= 1) {
+          accD -= 1;
+          dust.push({ a: Math.random() * Math.PI * 2, d: far * (0.5 + Math.random() * 0.5), v: far * (0.08 + Math.random() * 0.1 + ch * 0.25), r: (0.6 + Math.random() * 1.2) * dpr, ph: Math.random() * 6.28 });
         }
       }
       ctx.globalCompositeOperation = 'lighter';
-      ctx.lineCap = 'round';
+      for (let i = dust.length - 1; i >= 0; i--) {
+        const k = dust[i];
+        k.v *= 1 + dt * 1.6;
+        k.d -= k.v * dt;
+        k.a += dt * 0.35 * (far / Math.max(k.d, core)) * 0.25; // a slow swirl as it nears
+        k.ph += dt * 9;
+        if (k.d <= core) {
+          dust.splice(i, 1);
+          continue;
+        }
+        const al = (0.35 + Math.sin(k.ph) * 0.3) * Math.min(1, (far - k.d) / (far * 0.2));
+        ctx.fillStyle = `rgba(255,244,214,${Math.max(0, al)})`;
+        ctx.fillRect(cx + Math.cos(k.a) * k.d - k.r / 2, cy + Math.sin(k.a) * k.d - k.r / 2, k.r, k.r);
+      }
       for (let i = ss.length - 1; i >= 0; i--) {
         const k = ss[i];
-        k.v *= 1 + dt * 2.6; // they speed up as they fall in
+        k.v *= 1 + dt * 2.4; // they speed up as they fall in
         k.d -= k.v * dt;
         if (k.d <= core) {
           ss.splice(i, 1);
           continue;
         }
-        const tail = Math.min(far, k.d * (1 + k.len * 2.2));
         const ca = Math.cos(k.a);
         const sa = Math.sin(k.a);
-        const near = 1 - Math.min(1, (k.d - core) / far);
-        const alpha = Math.min(1, 0.3 + near * 1.1);
-        const g = ctx.createLinearGradient(cx + ca * k.d, cy + sa * k.d, cx + ca * tail, cy + sa * tail);
-        const col = k.warm < 0.35 ? '255,228,170' : '235,244,255';
-        g.addColorStop(0, `rgba(${col},${alpha})`);
-        g.addColorStop(1, `rgba(${col},0)`);
-        ctx.strokeStyle = g;
-        ctx.lineWidth = k.wd;
-        ctx.beginPath();
-        ctx.moveTo(cx + ca * k.d, cy + sa * k.d);
-        ctx.lineTo(cx + ca * tail, cy + sa * tail);
-        ctx.stroke();
+        const hx = cx + ca * k.d;
+        const hy = cy + sa * k.d;
+        // the faster it goes, the longer it stretches
+        const tail = Math.min(far * 1.1, k.d + far * k.len * (0.5 + (k.v / far) * 0.6));
+        const tx = cx + ca * tail;
+        const ty = cy + sa * tail;
+        // fade in from the edge, fade out right at the pack
+        const fadeIn = Math.min(1, (far * 1.05 - k.d) / (far * 0.25));
+        const fadeOut = Math.min(1, (k.d - core) / (core * 1.2));
+        const alpha = Math.max(0, Math.min(fadeIn, fadeOut)) * (0.75 + Math.sin(k.tw + now / 90) * 0.15);
+        streak(hx, hy, tx, ty, k.wd * 3.2, k.col, alpha * 0.16); // soft glow
+        streak(hx, hy, tx, ty, k.wd, k.col, alpha); // bright core
+        const hs = k.wd * 5;
+        ctx.globalAlpha = alpha;
+        ctx.drawImage(dot, hx - hs / 2, hy - hs / 2, hs, hs);
+        ctx.globalAlpha = 1;
       }
       ctx.globalCompositeOperation = 'source-over';
     };
@@ -795,8 +869,6 @@ function TearStage({ booster, god, u, cards, omen, packs, onAura, burstAt, onDon
   void setShaking;
   const ring = useTransform(charge, (c) => 1 - c);
   const dim = useTransform(charge, (c) => (charged ? 0 : Math.min(1, c * 1.15)));
-  const core = useTransform(charge, (c) => (charged ? 0 : Math.min(1, Math.pow(c, 1.25) * 1.1)));
-  const coreScale = useTransform(charge, (c) => 0.6 + c * 0.5);
   const squeeze = useTransform(charge, (c) => 1 - c * 0.035);
   const auraRef = useRef(aura);
   const packRef = useRef<HTMLDivElement>(null);
@@ -1126,7 +1198,6 @@ function TearStage({ booster, god, u, cards, omen, packs, onAura, burstAt, onDon
               <motion.div className="tear-beam" initial={{ opacity: 0, scaleY: 0.2 }} animate={{ opacity: [0, 0.9, 0], scaleY: [0.2, 1, 1.15] }} transition={{ delay: 0.25, duration: 1.3, times: [0, 0.35, 1], ease: 'easeOut' }} />
             )}
             {!torn && !cutting && <BoosterPack booster={booster} tilt={!active && !held} god={god} />}
-            {!charged && <motion.div className="charge-core" style={{ opacity: core, scale: coreScale }} />}
             {/* the charge: light runs round the edge of the pack as it fills */}
             {!charged && (
               <svg className="charge-ring" viewBox="0 0 60 100" preserveAspectRatio="none">

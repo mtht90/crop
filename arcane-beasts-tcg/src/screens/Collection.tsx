@@ -27,7 +27,7 @@ export function Collection() {
   const [zoom, setZoom] = useState<string | null>(null);
   const [newSet] = useState(() => new Set(save.newCards));
   useEffect(() => {
-    playMusic('menu');
+    playMusic('workshop');
     // clear NEW flags once viewed
     if (save.newCards.length) update((s) => void (s.newCards = []));
     // eslint-disable-next-line react-hooks/exhaustive-deps

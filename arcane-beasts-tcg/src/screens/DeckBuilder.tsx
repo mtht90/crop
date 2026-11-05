@@ -63,7 +63,7 @@ function usePress(onTap: () => void, onLong: () => void) {
 export function DeckBuilder() {
   const save = useStore((s) => s.save);
   const update = useStore((s) => s.update);
-  useEffect(() => playMusic('menu'), []);
+  useEffect(() => playMusic('workshop'), []);
   const [editing, setEditing] = useState<SavedDeck | null>(null);
   const [dirty, setDirty] = useState(false);
   const [tab, setTab] = useState<ListTab>('mine');

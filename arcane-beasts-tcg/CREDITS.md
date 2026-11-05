@@ -526,6 +526,9 @@ Assets were resized / re-encoded (WebP, MP3) and effect frames were packed into 
 | music | `data/core/music/victory.ogg` | GNU GPL v2+ | Timothy Pinkham(TimothyP) |
 | music | `data/core/music/wanderer.ogg` | GNU GPL v2+ | Timothy Pinkham(TimothyP) |
 | music | `data/core/music/weight_of_revenge.ogg` | GNU GPL v2+ | Doug Kaufman(dkaufman) |
+| music | `data/core/music/elvish-theme.ogg` | GNU GPL v2+ | Battle for Wesnoth Project |
+| music | `data/core/music/heroes_rite.ogg` | GNU GPL v2+ | Battle for Wesnoth Project |
+| music | `data/core/music/knalgan_theme.ogg` | GNU GPL v2+ | Battle for Wesnoth Project |
 | sound | `data/core/sounds/bat-hit-1.ogg` | GNU GPL v2+ | Lari Nieminen(zookeeper) |
 | sound | `data/core/sounds/bite.ogg` | GNU GPL v2+ | Lari Nieminen(zookeeper) |
 | sound | `data/core/sounds/claws.ogg` | GNU GPL v2+ | Lari Nieminen(zookeeper) |
