@@ -1,6 +1,6 @@
+import { CardFace } from '../ui/Card';
 import { card } from '../engine/cards';
 import type { MonsterCard } from '../engine/types';
-import { raidBattleCoins, RAID_MILESTONES } from '../state/raid';
 import type { RaidResult } from '../state/store';
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
@@ -62,24 +62,20 @@ export function ResultOverlay() {
       return;
     }
     if (cfg.raid) {
-      // a raid: the damage is banked for the week whatever the outcome
+      // a raid: one battle decides it; each win this week pays more
       const v = useBattle.getState().view;
       const bossSlot = v?.players[1].active;
       const hp = (card(cfg.raid.bossId) as MonsterCard).hp;
-      const bossDamage = result.winner === 0 && !bossSlot ? hp : (bossSlot?.damage ?? cfg.raid.startDamage);
+      const dealt = win ? hp : Math.min(hp, bossSlot?.damage ?? 0);
       const stR = useBattle.getState().stats;
       const base = recordBattle(
         { win, level: 'hard', baseReward: 0, prizesTaken: 0, prizesLost: stR.prizesLost, firstClear: false },
         { kos: stR.kos, damage: stR.damage, prizes: stR.prizes, evolves: stR.evolves, trainers: stR.trainers },
       );
-      const rr = useStore.getState().recordRaid(bossDamage);
-      const lines = [
-        { label: `ボスに与えたダメージ ${rr.dealt.toLocaleString()}`, coins: raidBattleCoins(rr.dealt) },
-        ...rr.milestones.map((m) => {
-          const ms = RAID_MILESTONES.find((x) => x.label === m)!;
-          return { label: m, coins: ms.coins, gems: ms.gems };
-        }),
-      ];
+      const rr = useStore.getState().recordRaid({ win, dealt, turns: Math.ceil((v?.turn ?? 0) / 2) });
+      const lines = win
+        ? [{ label: `討伐報酬（今週${rr.wins}勝目）`, coins: rr.coins, gems: rr.gems }]
+        : [{ label: `ボスに与えたダメージ ${dealt.toLocaleString()}`, coins: rr.coins }];
       setRaidRes(rr);
       setRes({ ...base, lines, total: base.total + rr.coins, gems: base.gems + rr.gems });
       return;
@@ -131,20 +127,11 @@ export function ResultOverlay() {
         <motion.div className="raid-result-bar" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
           <div className="rrb-head">
             <b>{cfg.oppName}</b>
-            <span>
-              今週 {raidRes.damage.toLocaleString()} / {raidRes.hp.toLocaleString()}
-            </span>
-          </div>
-          <div className="rrb-track">
-            <motion.div
-              className="rrb-fill"
-              initial={{ width: `${(100 * (raidRes.damage - raidRes.dealt)) / raidRes.hp}%` }}
-              animate={{ width: `${(100 * raidRes.damage) / raidRes.hp}%` }}
-              transition={{ delay: 0.9, duration: 1.4, ease: [0.16, 1, 0.3, 1] }}
-            />
+            <span>{raidRes.win ? `今週 ${raidRes.wins}勝 ・ 次の勝利はさらに報酬アップ` : `与えたダメージ ${raidRes.dealt.toLocaleString()}`}</span>
           </div>
         </motion.div>
       )}
+      {raidRes?.drop && <RaidDrop cid={raidRes.drop} />}
       <div className="result-row">
       {<motion.div className="result-rival" initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.6 }}>
         <img src={artUrl(cfg.oppPortrait)} alt="" />
@@ -296,6 +283,28 @@ function ExpBar({ res, delay }: { res: BattleRewardResult; delay: number }) {
           </motion.div>
         )}
       </AnimatePresence>
+    </motion.div>
+  );
+}
+
+/** the raid card dropped: a moment of its own */
+function RaidDrop({ cid }: { cid: string }) {
+  const [open, setOpen] = useState(true);
+  useEffect(() => {
+    sfx('magic-holy-2', 0.9);
+    const t = setTimeout(() => sfx('fanfare-short', 0.9), 700);
+    return () => clearTimeout(t);
+  }, []);
+  if (!open) return null;
+  return (
+    <motion.div className="raid-drop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} onClick={() => setOpen(false)}>
+      <motion.div className="rd-title gold-title" initial={{ scale: 2, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}>
+        RAID CARD 獲得！
+      </motion.div>
+      <motion.div className="rd-card" initial={{ rotateY: 540, scale: 0.4, opacity: 0 }} animate={{ rotateY: 0, scale: 1, opacity: 1 }} transition={{ duration: 1.4, delay: 0.3, ease: [0.16, 1, 0.3, 1] }}>
+        <CardFace cid={cid} />
+      </motion.div>
+      <small>タップで閉じる ・ コレクションの「レイド」に記録されました</small>
     </motion.div>
   );
 }

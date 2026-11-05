@@ -121,6 +121,8 @@ interface CardBase {
   crop?: { scale?: number; x?: number; y?: number };
   /** how much stronger this printing is: 0 regular / mirror, 1 full art (★3), 2 ★4, 3 gold (★5) */
   tier?: number;
+  /** a raid card: won from a raid boss, one per deck, never in packs */
+  raid?: boolean;
   /** illustration printed as a painting only (no portrait on top) */
   paint?: boolean;
 }

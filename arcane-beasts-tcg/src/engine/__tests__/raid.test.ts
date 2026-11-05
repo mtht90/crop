@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { aiAnswer } from '../ai';
 import { deckById, expand } from '../decks';
 import { Game } from '../game';
-import { BOSSES, RAID_MULT } from '../cards/bosses';
+import { BOSSES, RAID_CARDS, RAID_MULT } from '../cards/bosses';
+import { ALL_CARDS } from '../cards';
+import { validateDeck } from '../decks';
 
 function playRaid(bossId: string, start: number, seed: number) {
   const g = Game.createRaid(expand(deckById('fire').cards), bossId, start, ['あなた', 'ボス'], seed);
@@ -47,5 +49,13 @@ describe('ボスレイド', () => {
     const b = BOSSES[0];
     const g = playRaid(b.id, b.hp - 10, 7);
     expect(g.s.winner).toBe(0);
+  });
+  it('raid cards: never in the regular card list, one per deck', () => {
+    for (const c of RAID_CARDS) expect(ALL_CARDS.some((x) => x.id === c.id), c.id).toBe(false);
+    const base = expand(deckById('fire').cards);
+    const two = [...base.slice(0, 58), RAID_CARDS[0].id, RAID_CARDS[1].id];
+    expect(validateDeck(two).some((e) => e.includes('レイドカード'))).toBe(true);
+    const one = [...base.slice(0, 59), RAID_CARDS[0].id];
+    expect(validateDeck(one).some((e) => e.includes('レイドカード'))).toBe(false);
   });
 });

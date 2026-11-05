@@ -4,9 +4,10 @@ import { useEffect } from 'react';
 import { activeDeck, useStore } from '../state/store';
 import { validateDeck } from '../engine/decks';
 import { card } from '../engine/cards';
-import { RAID_MULT } from '../engine/cards/bosses';
+import { RAID_DROP, raidCardOf } from '../engine/cards/bosses';
 import type { MonsterCard } from '../engine/types';
-import { currentBoss, raidCost, raidNow, RAID_MILESTONES } from '../state/raid';
+import { currentBoss, raidCost, raidNow, raidWinReward } from '../state/raid';
+import { CardFace } from '../ui/Card';
 import { fmtRemain, msUntilNextWeek } from '../state/progress';
 import { artUrl } from '../lib/assets';
 import { Icon } from '../ui/Icon';
@@ -23,9 +24,9 @@ export function Raid() {
   useEffect(() => playMusic('boss'), []);
   const r = raidNow(save.raid);
   const boss = (card(r.bossId) as MonsterCard) ?? currentBoss();
-  const left = Math.max(0, boss.hp - r.damage);
-  const pct = (100 * r.damage) / boss.hp;
-  const defeated = left <= 0;
+  const next = raidWinReward(r.wins + 1);
+  const rc = raidCardOf(boss.id);
+  const ownCard = (save.collection[rc.id] ?? 0) > 0;
   const cost = raidCost(r);
   const deck = activeDeck(save);
   const deckOk = !!deck && validateDeck(deck.cards).length === 0;
@@ -69,19 +70,43 @@ export function Raid() {
 
           <div className="box raid-hp">
             <div className="raid-hp-head">
-              <b>HP {left.toLocaleString()}</b>
-              <span>/ {boss.hp.toLocaleString()}</span>
-              {defeated && <i className="raid-done">討伐済み</i>}
+              <b>HP {boss.hp.toLocaleString()}</b>
+              <span>1回のバトルで倒しきれば勝利</span>
             </div>
             <div className="raid-hp-track">
-              <div className="raid-hp-fill" style={{ width: `${100 - pct}%` }} />
-              {RAID_MILESTONES.slice(0, 3).map((m) => (
-                <i key={m.pct} className={`raid-mark ${r.paid.includes(m.pct) ? 'on' : ''}`} style={{ left: `${100 - m.pct}%` }} />
-              ))}
+              <div className="raid-hp-fill" style={{ width: '100%' }} />
             </div>
             <div className="raid-stats">
-              <span>今週の挑戦 {r.tries}回</span>
-              <span>1回の最高 {r.best.toLocaleString()}</span>
+              <span>今週 {r.wins}勝 ／ {r.tries}回挑戦</span>
+              <span>{r.fastest ? `最速 ${r.fastest}ターン` : `最高ダメージ ${r.best.toLocaleString()}`}</span>
+            </div>
+          </div>
+
+          <div className="box raid-rewards">
+            <h3>報酬</h3>
+            <div className="raid-rw">
+              <span>次の勝利（今週{r.wins + 1}勝目）</span>
+              <b>
+                <Icon name="gem" /> {next.gems} <Icon name="coin" /> {next.coins.toLocaleString()}
+              </b>
+            </div>
+            <div className="raid-rw">
+              <span>勝つたびに</span>
+              <b>報酬が増えていく（ジェム最大150・コイン最大20,000）</b>
+            </div>
+            <div className="raid-rw">
+              <span>負けても</span>
+              <b>与えたダメージに応じてコイン</b>
+            </div>
+            <div className="raid-drop-row">
+              <div className={`raid-drop-card ${ownCard ? '' : 'locked'}`}>
+                <CardFace cid={rc.id} />
+              </div>
+              <div>
+                <b>レイドカード「{rc.name}」</b>
+                <p>勝利するたび、ごくまれに（{(RAID_DROP * 100).toFixed(1)}%）手に入る。パックからは出ない特別なカード。デッキに1枚まで入れられる。</p>
+                <small>{ownCard ? `所持 ${save.collection[rc.id]}枚` : '未所持'}</small>
+              </div>
             </div>
           </div>
 
@@ -89,34 +114,16 @@ export function Raid() {
             <h3>ルール</h3>
             <ul>
               <li>相手はボス1体だけ。ボスは毎ターン、ワザを順番に使う（次のワザは画面に表示）</li>
-              <li>あなたのサイドは1枚。ボスをきぜつさせれば討伐</li>
-              <li>ボスへのダメージは <b>×{RAID_MULT}</b>。与えたダメージは今週ずっと残る</li>
+              <li>あなたのサイドは1枚。ボスをきぜつさせれば勝利</li>
               <li>HPが半分を切ると、ボスのワザが強くなる</li>
-              <li>毎週1回目は無料、2回目からはジェム10個</li>
+              <li>毎週1回目は無料、2回目からはジェム10個。何度でも挑戦できる</li>
             </ul>
-          </div>
-
-          <div className="box raid-rewards">
-            <h3>報酬</h3>
-            {RAID_MILESTONES.map((m) => (
-              <div key={m.pct} className={`raid-rw ${r.paid.includes(m.pct) ? 'got' : ''}`}>
-                <span>{m.pct === 100 ? '討伐' : `HP ${m.pct}% 削る`}</span>
-                <b>
-                  <Icon name="gem" /> {m.gems} <Icon name="coin" /> {m.coins.toLocaleString()}
-                </b>
-                {r.paid.includes(m.pct) && <small>受取済み</small>}
-              </div>
-            ))}
-            <div className="raid-rw">
-              <span>毎回</span>
-              <b>与えたダメージに応じてコイン</b>
-            </div>
           </div>
 
           <div className="raid-go">
             <small>使用デッキ：{deck ? deck.name : 'なし'}</small>
-            <button className="btn big red raid-btn" disabled={defeated} onClick={challenge}>
-              {defeated ? '今週は討伐済み' : !deckOk ? 'デッキを組む' : cost ? (
+            <button className="btn big red raid-btn" onClick={challenge}>
+              {!deckOk ? 'デッキを組む' : cost ? (
                 <>
                   挑戦する <span className="raid-cost"><Icon name="gem" /> {cost}</span>
                 </>

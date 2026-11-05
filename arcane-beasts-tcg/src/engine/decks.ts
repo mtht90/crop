@@ -430,6 +430,8 @@ export function validateDeck(ids: string[]): string[] {
     counts.set(c.name, (counts.get(c.name) ?? 0) + 1);
   }
   for (const [name, n] of counts) if (n > 4) errs.push(`「${name}」は4枚までです（${n}枚）`);
+  const raid = ids.filter((id) => card(id).raid).length;
+  if (raid > 1) errs.push(`レイドカードはデッキに1枚までです（${raid}枚）`);
   if (!ids.some((id) => {
     const c = card(id);
     return c.kind === 'monster' && c.stage === 'basic';

@@ -103,7 +103,7 @@ export const CardFace = memo(function CardFace({ cid, className, style, interact
     `kind-${def.kind}`,
     v ? `v-${v}` : '',
     v && BLEED.has(v) ? 'bleed' : '',
-    '',
+    def.raid ? 'raid-card bleed full-art' : '',
     def.kind === 'monster' ? `t-${def.type}` : def.kind === 'energy' ? `t-${def.energyType}` : `sub-${(def as TrainerCard).sub}`,
     def.fullArt ? 'full-art' : '',
     def.gold ? 'gold' : '',
@@ -133,8 +133,12 @@ export const CardFace = memo(function CardFace({ cid, className, style, interact
           {v === 'mirror' && <div className={`tcg-mirror ${def.kind === 'trainer' ? 'tw' : def.kind === 'energy' ? 'ew' : ''}`} />}
           {holo && <div className="tcg-shine" />}
           {(holo || v === 'mirror') && <div className="tcg-glare" />}
+          {def.raid && <div className="raid-embers" />}
+          {def.raid && <div className="raid-sheen" />}
         </div>
       </div>
+      {/* a raid card's monster breaks out over the top of its frame */}
+      {def.raid && def.kind === 'monster' && <img className="raid-pop" src={artUrl(def.art)} alt="" draggable={false} loading="lazy" />}
     </div>
   );
 });
@@ -147,7 +151,13 @@ function Footer({ def }: { def: CardDef }) {
     <div className="tcg-footer">
       <span className="illus">{def.kind === 'energy' || (def.kind === 'trainer' && (def.sub === 'item' || def.sub === 'tool')) ? 'Icon. game-icons.net' : 'Illus. Wesnoth'}</span>
       <span className="setno">
-        <b>{SET_INFO[def.set].code}</b> {String(def.no).padStart(3, '0')}/{SET_COUNT[def.set]} <i className={`rmark r-${def.rarity}`}>{RARITY_SYMBOL[def.rarity]}</i>
+        {def.raid ? (
+          <i className="rmark r-raid">RAID</i>
+        ) : (
+          <>
+            <b>{SET_INFO[def.set].code}</b> {String(def.no).padStart(3, '0')}/{SET_COUNT[def.set]} <i className={`rmark r-${def.rarity}`}>{RARITY_SYMBOL[def.rarity]}</i>
+          </>
+        )}
       </span>
     </div>
   );

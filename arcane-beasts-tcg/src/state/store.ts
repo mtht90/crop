@@ -35,7 +35,7 @@ import {
   type Stats,
   COIN_SCALE,
 } from './progress';
-import { raidCost, raidNow, raidBattleCoins, RAID_MILESTONES, type RaidSave } from './raid';
+import { raidCost, raidLossCoins, raidNow, raidWinReward, rollRaidDrop, type RaidSave } from './raid';
 
 // ----------------------------------------------------------------------------
 // Copies beyond MAX_COPIES are sold for coins on the spot (by ★).
@@ -312,18 +312,19 @@ interface Store {
   recordBattle: (o: BattleOutcome, st: Partial<Stats>) => BattleRewardResult;
   /** pay for a raid try and start it (false = not enough gems) */
   startRaid: (playerDeck: string[]) => boolean;
-  /** bank a raid battle's damage; returns what it paid */
-  recordRaid: (bossDamage: number) => RaidResult;
+  /** pay out a raid battle; returns what it paid */
+  recordRaid: (o: { win: boolean; dealt: number; turns: number }) => RaidResult;
 }
 
 export interface RaidResult {
+  win: boolean;
   dealt: number;
   coins: number;
   gems: number;
-  milestones: string[];
-  defeated: boolean;
-  damage: number;
-  hp: number;
+  /** this week's wins, this one included */
+  wins: number;
+  /** the raid card, if it dropped */
+  drop: string | null;
 }
 
 /** what a claim paid out */
@@ -420,7 +421,7 @@ export const useStore = create<Store>((set, get) => ({
     const r = raidNow(st.save.raid);
     const cost = raidCost(r);
     const boss = card(r.bossId) as MonsterCard;
-    if (st.save.gems < cost || r.damage >= boss.hp) return false;
+    if (st.save.gems < cost) return false;
     st.update((s) => {
       s.gems -= cost;
       s.raid = { ...r, tries: r.tries + 1 };
@@ -435,29 +436,32 @@ export const useStore = create<Store>((set, get) => ({
       cpuLevel: 7,
       scene: boss.scene ?? 'story/p-the-fall',
       reward: 0,
-      raid: { bossId: boss.id, startDamage: r.damage },
+      raid: { bossId: boss.id, startDamage: 0 },
     });
     return true;
   },
-  recordRaid: (bossDamage) => {
-    const res: RaidResult = { dealt: 0, coins: 0, gems: 0, milestones: [], defeated: false, damage: 0, hp: 0 };
+  recordRaid: ({ win, dealt, turns }) => {
+    const res: RaidResult = { win, dealt, coins: 0, gems: 0, wins: 0, drop: null };
     get().update((s) => {
       const r = raidNow(s.raid);
-      const boss = card(r.bossId) as MonsterCard;
-      const now = Math.min(boss.hp, Math.max(r.damage, bossDamage));
-      res.dealt = now - r.damage;
-      res.coins = raidBattleCoins(res.dealt);
-      for (const m of RAID_MILESTONES)
-        if (!r.paid.includes(m.pct) && now * 100 >= boss.hp * m.pct) {
-          r.paid.push(m.pct);
-          res.gems += m.gems;
-          res.coins += m.coins;
-          res.milestones.push(m.label);
+      if (win) {
+        const n = r.wins + 1;
+        const pay = raidWinReward(n);
+        res.coins = pay.coins;
+        res.gems = pay.gems;
+        res.wins = n;
+        const drop = rollRaidDrop(r.bossId);
+        if (drop) {
+          res.drop = drop.id;
+          if (!s.collection[drop.id]) s.newCards.push(drop.id);
+          s.collection[drop.id] = Math.min(MAX_COPIES, (s.collection[drop.id] ?? 0) + 1);
         }
-      res.defeated = now >= boss.hp;
-      res.damage = now;
-      res.hp = boss.hp;
-      s.raid = { ...r, damage: now, best: Math.max(r.best, res.dealt) };
+        s.raid = { ...r, wins: n, best: Math.max(r.best, dealt), fastest: r.fastest ? Math.min(r.fastest, turns) : turns };
+      } else {
+        res.coins = raidLossCoins(dealt);
+        res.wins = r.wins;
+        s.raid = { ...r, best: Math.max(r.best, dealt) };
+      }
       s.coins += res.coins;
       s.gems += res.gems;
     });

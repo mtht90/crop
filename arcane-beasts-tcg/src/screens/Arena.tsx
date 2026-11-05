@@ -53,7 +53,7 @@ export function Arena() {
       sub: (() => {
         const r = raidNow(save.raid);
         const b = card(r.bossId) as MonsterCard;
-        return r.damage >= b.hp ? `${b.name} 討伐済み` : `今週：${b.name}（残りHP ${Math.round(100 - (100 * r.damage) / b.hp)}%）`;
+        return `今週：${b.name}（今週 ${r.wins}勝）`;
       })(),
       bg: 'story/p-the-fall',
       fig: currentBoss().art,

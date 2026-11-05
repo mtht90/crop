@@ -1,3 +1,4 @@
+import { RAID_CARDS } from '../engine/cards/bosses';
 import { CARD_KINDS, matchKinds, type KindKey } from '../ui/cardKinds';
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useMemo, useState } from 'react';
@@ -17,7 +18,7 @@ export function Collection() {
   const save = useStore((s) => s.save);
   const update = useStore((s) => s.update);
   const go = useStore((s) => s.go);
-  const [set, setSet] = useState<SetCode | 'all'>('all');
+  const [set, setSet] = useState<SetCode | 'all' | 'raid'>('all');
   const [types, setTypes] = useState<EType[]>([]);
   const [rar, setRar] = useState<Rarity[]>([]);
   const [kinds, setKinds] = useState<KindKey[]>([]);
@@ -34,16 +35,16 @@ export function Collection() {
 
   const list = useMemo(
     () =>
-      ALL_CARDS.filter((c) => set === 'all' || c.set === set)
+      (set === 'raid' ? RAID_CARDS : ALL_CARDS.filter((c) => set === 'all' || c.set === set))
         .filter((c) => !types.length || (c.kind === 'monster' && types.includes(c.type)) || (c.kind === 'energy' && types.includes(c.energyType)))
         .filter((c) => !rar.length || rar.includes(c.rarity))
         .filter((c) => matchKinds(c, kinds))
         .filter((c) => !ownedOnly || owned(save, c.id) > 0),
     [set, types, rar, kinds, ownedOnly, save],
   );
-  const scope = ALL_CARDS.filter((c) => set === 'all' || c.set === set);
+  const scope = set === 'raid' ? RAID_CARDS : ALL_CARDS.filter((c) => set === 'all' || c.set === set);
   const have = scope.filter((c) => owned(save, c.id) > 0).length;
-  const pct = collectionPct(save, set === 'all' ? undefined : set);
+  const pct = set === 'raid' ? (100 * have) / scope.length : collectionPct(save, set === 'all' ? undefined : set);
 
   const nFilters = types.length + rar.length + kinds.length + (ownedOnly ? 1 : 0);
 
@@ -72,6 +73,9 @@ export function Collection() {
                 {k === 'all' ? '全章' : SET_INFO[k].short}
               </button>
             ))}
+            <button className={`chip-btn raid-tab ${set === 'raid' ? 'on' : ''}`} onClick={() => (foley.tick(), setSet('raid'))}>
+              レイド
+            </button>
             <button className={`chip-btn ${showFilter || nFilters ? 'on' : ''}`} onClick={() => setShowFilter(!showFilter)}>
               <Icon name="filter" /> 絞り込み{nFilters ? ` ${nFilters}` : ''}
             </button>

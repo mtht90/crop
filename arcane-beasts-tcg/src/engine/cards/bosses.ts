@@ -17,7 +17,7 @@ const boss = (o: Omit<MonsterCard, 'kind' | 'stage' | 'rarity' | 'set' | 'retrea
 
 export const BOSSES: MonsterCard[] = [
   boss({
-    id: 'BOSS-frost', no: 1, name: '氷河の巨獣ユミル', art: 'monsters/yeti', type: 'water', hp: 10000, weakness: 'fire',
+    id: 'BOSS-frost', no: 1, name: '氷河の巨獣ユミル', art: 'monsters/yeti', type: 'water', hp: 500, weakness: 'fire',
     species: 'ひょうがの', scene: 'story/p-snowfield', flavor: '吹雪の夜にだけ、山が歩く。',
     attacks: [
       { name: '氷塊なげ', cost: [], damage: 60, text: '' },
@@ -26,7 +26,7 @@ export const BOSSES: MonsterCard[] = [
     ],
   }),
   boss({
-    id: 'BOSS-dragon', no: 2, name: '紅蓮竜ヴァルグリム', art: 'monsters/fire-dragon', type: 'fire', hp: 30000, weakness: 'water',
+    id: 'BOSS-dragon', no: 2, name: '紅蓮竜ヴァルグリム', art: 'monsters/fire-dragon', type: 'fire', hp: 1500, weakness: 'water',
     species: 'ぐれんりゅう', scene: 'story/landscape-lava', flavor: '十二枚の一枚を、千年抱いて眠っていた竜。',
     attacks: [
       { name: '灼熱の爪', cost: [], damage: 80, text: '' },
@@ -35,7 +35,7 @@ export const BOSSES: MonsterCard[] = [
     ],
   }),
   boss({
-    id: 'BOSS-kraken', no: 3, name: '深淵王クラーケン', art: 'monsters/kraken', type: 'water', hp: 60000, weakness: 'lightning',
+    id: 'BOSS-kraken', no: 3, name: '深淵王クラーケン', art: 'monsters/kraken', type: 'water', hp: 3000, weakness: 'lightning',
     species: 'しんえんの', scene: 'story/p-storm-sea', flavor: '船乗りたちは、海が裏返る音を聞いたという。',
     attacks: [
       { name: '大渦', cost: [], damage: 70, text: '相手のバトルモンスターについているエネルギーを1個トラッシュする。', effects: [{ k: 'discardOppEnergy', n: 1 }] },
@@ -44,7 +44,7 @@ export const BOSSES: MonsterCard[] = [
     ],
   }),
   boss({
-    id: 'BOSS-herald', no: 4, name: '終焉の使者ハービンジャー', art: 'monsters/war-harbinger', type: 'dark', hp: 100000, weakness: 'grass',
+    id: 'BOSS-herald', no: 4, name: '終焉の使者ハービンジャー', art: 'monsters/war-harbinger', type: 'dark', hp: 5000, weakness: 'grass',
     species: 'しゅうえんの', scene: 'story/p-the-fall', flavor: '十二枚の呪いが、形を持って歩き出したもの。',
     attacks: [
       { name: '滅びの鎌', cost: [], damage: 90, text: '相手のバトルモンスターをどくにする。', effects: [{ k: 'condition', cond: 'poisoned' }] },
@@ -56,5 +56,59 @@ export const BOSSES: MonsterCard[] = [
 
 /** a raid boss's attacks grow by this much once half its HP is gone */
 export const BOSS_RAGE_BONUS = 40;
-/** in a raid, your damage to the boss is multiplied by this */
-export const RAID_MULT = 20;
+/** in a raid, your damage to the boss is multiplied by this (1: as printed) */
+export const RAID_MULT = 1;
+
+// ----------------------------------------------------------------------------
+// レイドカード: each boss can (very rarely) be won after beating it. These are
+// real cards, one per deck, at a strong but fair level — the boss's avatar.
+// They are never in packs and are not counted in the collection percentage.
+// ----------------------------------------------------------------------------
+const raidCard = (o: Omit<MonsterCard, 'kind' | 'stage' | 'rarity' | 'set' | 'raid'>): MonsterCard => ({
+  kind: 'monster',
+  stage: 'basic',
+  rarity: 5,
+  set: 'AB1',
+  raid: true,
+  ...o,
+});
+
+export const RAID_CARDS: MonsterCard[] = [
+  raidCard({
+    id: 'RAID-frost', no: 901, name: 'ユミル', art: 'monsters/yeti', type: 'water', hp: 180, retreat: 3, weakness: 'fire',
+    species: 'ひょうがの', scene: 'story/p-snowfield', flavor: '吹雪の夜にだけ、山が歩く。',
+    attacks: [
+      { name: '吹雪の咆哮', cost: ['water', 'colorless'], damage: 50, text: '相手のベンチモンスター全員にも、それぞれ10ダメージ。', effects: [{ k: 'spread', n: 10 }] },
+      { name: '凍てつく抱擁', cost: ['water', 'water', 'colorless'], damage: 130, text: 'コインを1回投げオモテなら、相手のバトルモンスターをマヒにする。', effects: [{ k: 'condition', cond: 'paralyzed', flip: true }] },
+    ],
+  }),
+  raidCard({
+    id: 'RAID-dragon', no: 902, name: 'ヴァルグリム', art: 'monsters/fire-dragon', type: 'fire', hp: 190, retreat: 3, weakness: 'water',
+    species: 'ぐれんりゅう', scene: 'story/landscape-lava', flavor: '十二枚の一枚を、千年抱いて眠っていた竜。',
+    attacks: [
+      { name: '灼熱の爪', cost: ['fire', 'colorless'], damage: 70, text: '' },
+      { name: '業火のブレス', cost: ['fire', 'fire', 'colorless'], damage: 140, text: '相手のベンチモンスター全員にも、それぞれ20ダメージ。', effects: [{ k: 'spread', n: 20 }] },
+    ],
+  }),
+  raidCard({
+    id: 'RAID-kraken', no: 903, name: 'クラーケン王', art: 'monsters/kraken', type: 'water', hp: 200, retreat: 4, weakness: 'lightning',
+    species: 'しんえんの', scene: 'story/p-storm-sea', flavor: '船乗りたちは、海が裏返る音を聞いたという。',
+    attacks: [
+      { name: '触腕の連撃', cost: ['water', 'colorless'], damage: 30, text: '相手のベンチモンスター2匹に、それぞれ30ダメージ。', effects: [{ k: 'benchSnipe', n: 30, count: 2 }] },
+      { name: '深海の圧', cost: ['water', 'water', 'colorless', 'colorless'], damage: 170, text: '' },
+    ],
+  }),
+  raidCard({
+    id: 'RAID-herald', no: 904, name: 'ハービンジャー', art: 'monsters/war-harbinger', type: 'dark', hp: 200, retreat: 3, weakness: 'grass',
+    species: 'しゅうえんの', scene: 'story/p-the-fall', flavor: '十二枚の呪いが、形を持って歩き出したもの。',
+    attacks: [
+      { name: '滅びの鎌', cost: ['dark', 'colorless'], damage: 60, text: '相手のバトルモンスターをどくにする。', effects: [{ k: 'condition', cond: 'poisoned' }] },
+      { name: '終焉の刻', cost: ['dark', 'dark', 'colorless'], damage: 150, text: '' },
+    ],
+  }),
+];
+
+/** the raid card a boss can drop */
+export const raidCardOf = (bossId: string) => RAID_CARDS.find((c) => c.id === bossId.replace('BOSS-', 'RAID-'))!;
+/** chance a raid card drops after a win */
+export const RAID_DROP = 0.003;

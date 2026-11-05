@@ -866,3 +866,81 @@
 .portrait-art .scene.painting { filter: none; }
 .tcg.full-art.kind-trainer .tcg-art .scene.painting { filter: saturate(1.05); }
 .tcg.full-art .tcg-body p, .tcg.bleed .tcg-body p { line-height: 1.24; }
+
+/* ================================ RAID CARD ================================
+   black gold, a heartbeat of red light, embers rising, and the monster
+   climbing out over the top of the frame */
+.tcg.raid-card { --raid-glow: 255, 46, 30; isolation: isolate; }
+.tcg.raid-card.t-water { --raid-glow: 60, 170, 255; }
+.tcg.raid-card.t-dark { --raid-glow: 190, 60, 255; }
+.tcg.raid-card .tcg-frame {
+  background:
+    linear-gradient(135deg, #f7d77a 0%, #3a2a08 9%, #0b0905 22%, #a07a1c 36%, #0b0905 50%, #fbe28f 63%, #1a1306 78%, #c99a2e 92%, #0b0905 100%);
+  box-shadow: 0 0 0 0.5cqw #0b0905, 0 0 0 1.1cqw #c99a2e, 0 0.8cqw 2cqw rgba(0, 0, 0, 0.6);
+  animation: raid-beat 1.6s ease-in-out infinite;
+}
+@keyframes raid-beat {
+  0%, 100% { box-shadow: 0 0 0 0.5cqw #0b0905, 0 0 0 1.1cqw #c99a2e, 0 0 2cqw 0.4cqw rgba(var(--raid-glow), 0.45), 0 0.8cqw 2cqw rgba(0, 0, 0, 0.6); }
+  14% { box-shadow: 0 0 0 0.5cqw #0b0905, 0 0 0 1.1cqw #ffe9a6, 0 0 6cqw 1.6cqw rgba(var(--raid-glow), 0.95), 0 0.8cqw 2cqw rgba(0, 0, 0, 0.6); }
+  28% { box-shadow: 0 0 0 0.5cqw #0b0905, 0 0 0 1.1cqw #c99a2e, 0 0 2.5cqw 0.5cqw rgba(var(--raid-glow), 0.5), 0 0.8cqw 2cqw rgba(0, 0, 0, 0.6); }
+  40% { box-shadow: 0 0 0 0.5cqw #0b0905, 0 0 0 1.1cqw #fff0b8, 0 0 5cqw 1.2cqw rgba(var(--raid-glow), 0.85), 0 0.8cqw 2cqw rgba(0, 0, 0, 0.6); }
+}
+.tcg.raid-card .tcg-inner { background: radial-gradient(circle at 50% 38%, rgba(var(--raid-glow), 0.55), #07050a 70%); }
+.tcg.raid-card .tcg-art .scene { filter: brightness(0.55) saturate(1.3) contrast(1.1); }
+/* the gold leaf rule around the text box */
+.tcg.raid-card .tcg-body { border: 0.4cqw solid rgba(233, 196, 106, 0.75); background: linear-gradient(transparent, rgba(8, 4, 2, 0.8) 10%, rgba(8, 4, 2, 0.82)); }
+.tcg.raid-card .tcg-head .name { color: #ffe08a; text-shadow: 0 0 1.2cqw rgba(var(--raid-glow), 0.9), 0 0.3cqw 0.6cqw #000; }
+.tcg.raid-card .tcg-head .hp { color: #ffe08a; }
+/* the name bar and the text stay in front of the monster climbing out */
+.tcg.raid-card .tcg-head, .tcg.raid-card .tcg-body, .tcg.raid-card .tcg-stats, .tcg.raid-card .tcg-footer { z-index: 6; }
+.tcg.raid-card .tcg-head::before { background: linear-gradient(180deg, rgba(8, 4, 2, 0.85), rgba(8, 4, 2, 0.55)) !important; }
+/* embers drifting up through the art */
+.raid-embers {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  background-image:
+    radial-gradient(0.9cqw 0.9cqw at 12% 80%, rgba(255, 220, 140, 0.95), transparent 60%),
+    radial-gradient(0.6cqw 0.6cqw at 30% 60%, rgba(var(--raid-glow), 0.95), transparent 60%),
+    radial-gradient(1.1cqw 1.1cqw at 52% 90%, rgba(255, 240, 180, 0.9), transparent 60%),
+    radial-gradient(0.7cqw 0.7cqw at 70% 70%, rgba(var(--raid-glow), 0.9), transparent 60%),
+    radial-gradient(0.8cqw 0.8cqw at 88% 85%, rgba(255, 220, 140, 0.95), transparent 60%),
+    radial-gradient(0.5cqw 0.5cqw at 42% 40%, rgba(255, 255, 220, 0.9), transparent 60%);
+  background-size: 100% 60%;
+  background-repeat: repeat-y;
+  animation: raid-embers 4.5s linear infinite;
+  mix-blend-mode: screen;
+}
+@keyframes raid-embers { from { background-position: 0 0; } to { background-position: 0 -100%; } }
+/* a slow band of light across the black gold */
+.raid-sheen {
+  position: absolute;
+  inset: -20%;
+  z-index: 4;
+  pointer-events: none;
+  background: linear-gradient(115deg, transparent 40%, rgba(255, 236, 170, 0.28) 48%, rgba(255, 255, 255, 0.5) 50%, rgba(255, 236, 170, 0.28) 52%, transparent 60%);
+  animation: raid-sheen 3.8s ease-in-out infinite;
+  mix-blend-mode: overlay;
+}
+@keyframes raid-sheen { 0% { transform: translateX(-60%); } 55%, 100% { transform: translateX(60%); } }
+/* the monster climbing out of the frame: only its upper part shows above the art */
+.raid-pop {
+  position: absolute;
+  left: 50%;
+  bottom: 37%;
+  height: 68%;
+  translate: -50% 0;
+  z-index: 5;
+  pointer-events: none;
+  object-fit: contain;
+  filter: drop-shadow(0 0 1.6cqw rgba(var(--raid-glow), 0.9)) drop-shadow(0 1cqw 1.4cqw rgba(0, 0, 0, 0.7));
+  /* the lower half fades into the card, the head stands over the frame */
+  mask-image: linear-gradient(to top, transparent 0%, transparent 30%, #000 52%);
+  -webkit-mask-image: linear-gradient(to top, transparent 0%, transparent 30%, #000 52%);
+  transform: translateZ(0);
+  animation: raid-rise 3.2s ease-in-out infinite;
+}
+@keyframes raid-rise { 50% { transform: translateY(-1.2cqw) scale(1.015); } }
+.tcg.raid-card .tcg-art .portrait { opacity: 0.85; }
+.rmark.r-raid { font-style: normal; font-weight: 900; letter-spacing: 0.12em; padding: 0 1.2cqw; border-radius: 1cqw; color: #2a1a00; background: linear-gradient(180deg, #fff3b8, #e0a92c 60%, #8f5f0c); box-shadow: 0 0 1.2cqw rgba(var(--raid-glow), 0.8); }
