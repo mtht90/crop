@@ -12,6 +12,8 @@ const boss = (o: Omit<MonsterCard, 'kind' | 'stage' | 'rarity' | 'set' | 'retrea
   rarity: 5,
   set: 'AB1',
   retreat: 4,
+  // a boss looks just like its raid card (gold rainbow foil)
+  raid: true,
   ...o,
 });
 
@@ -19,7 +21,7 @@ export const BOSSES: MonsterCard[] = [
   // the order is the weekly rotation (week index mod length); the week of
   // 2026-11-02 is index 5
   boss({
-    id: 'BOSS-boneking', no: 8, name: '紅衣の骸王マリグレス', art: 'bosses/bone-king', type: 'fire', hp: 1100, weakness: 'water',
+    id: 'BOSS-boneking', no: 8, name: '紅衣の骸王マリグレス', art: 'bosses/bone-king', type: 'fire', hp: 1500, weakness: 'water',
     species: 'こういの', scene: 'story/p-burning', flavor: '燃える宝珠を胸に、骨だけになっても玉座を降りなかった王。',
     attacks: [
       { name: '骸骨の宝珠', cost: [], damage: 50, text: '相手のバトルモンスターをやけどにする。', effects: [{ k: 'condition', cond: 'burned' }] },
@@ -28,7 +30,7 @@ export const BOSSES: MonsterCard[] = [
     ],
   }),
   boss({
-    id: 'BOSS-frost', no: 1, name: '氷河の巨獣ユミル', art: 'monsters/yeti', type: 'water', hp: 900, weakness: 'fire',
+    id: 'BOSS-frost', no: 1, name: '氷河の巨獣ユミル', art: 'monsters/yeti', type: 'water', hp: 1500, weakness: 'fire',
     species: 'ひょうがの', scene: 'story/p-snowfield', flavor: '吹雪の夜にだけ、山が歩く。',
     attacks: [
       { name: '氷塊なげ', cost: [], damage: 40, text: '' },
@@ -37,7 +39,7 @@ export const BOSSES: MonsterCard[] = [
     ],
   }),
   boss({
-    id: 'BOSS-kraken', no: 3, name: '深淵王クラーケン', art: 'monsters/kraken', type: 'water', hp: 1000, weakness: 'lightning',
+    id: 'BOSS-kraken', no: 3, name: '深淵王クラーケン', art: 'monsters/kraken', type: 'water', hp: 1500, weakness: 'lightning',
     species: 'しんえんの', scene: 'story/p-storm-sea', flavor: '船乗りたちは、海が裏返る音を聞いたという。',
     attacks: [
       { name: '大渦', cost: [], damage: 40, text: '相手のバトルモンスターについているエネルギーを1個トラッシュする。', effects: [{ k: 'discardOppEnergy', n: 1 }] },
@@ -46,7 +48,7 @@ export const BOSSES: MonsterCard[] = [
     ],
   }),
   boss({
-    id: 'BOSS-herald', no: 4, name: '終焉の使者ハービンジャー', art: 'monsters/war-harbinger', type: 'dark', hp: 1100, weakness: 'grass',
+    id: 'BOSS-herald', no: 4, name: '終焉の使者ハービンジャー', art: 'monsters/war-harbinger', type: 'dark', hp: 1500, weakness: 'grass',
     species: 'しゅうえんの', scene: 'story/p-the-fall', flavor: '十二枚の呪いが、形を持って歩き出したもの。',
     attacks: [
       { name: '滅びの鎌', cost: [], damage: 50, text: '相手のバトルモンスターをどくにする。', effects: [{ k: 'condition', cond: 'poisoned' }] },
@@ -55,7 +57,7 @@ export const BOSSES: MonsterCard[] = [
     ],
   }),
   boss({
-    id: 'BOSS-dragon', no: 2, name: '紅蓮竜ヴァルグリム', art: 'monsters/fire-dragon', type: 'fire', hp: 1000, weakness: 'water',
+    id: 'BOSS-dragon', no: 2, name: '紅蓮竜ヴァルグリム', art: 'monsters/fire-dragon', type: 'fire', hp: 1500, weakness: 'water',
     species: 'ぐれんりゅう', scene: 'story/landscape-lava', flavor: '十二枚の一枚を、千年抱いて眠っていた竜。',
     attacks: [
       { name: '灼熱の爪', cost: [], damage: 50, text: '' },
@@ -64,7 +66,7 @@ export const BOSSES: MonsterCard[] = [
     ],
   }),
   boss({
-    id: 'BOSS-emperor', no: 5, name: '不死皇帝ネクロディウス', art: 'bosses/undying-emperor', type: 'dark', hp: 1200, weakness: 'fighting',
+    id: 'BOSS-emperor', no: 5, name: '不死皇帝ネクロディウス', art: 'bosses/undying-emperor', type: 'dark', hp: 1500, weakness: 'fighting',
     species: 'ふしこうてい', scene: 'story/grim-altar', flavor: '砂時計が落ちきるたび、ひとつの国が死者の国になった。',
     attacks: [
       { name: '冥府の王笏', cost: [], damage: 60, text: '' },
@@ -73,7 +75,7 @@ export const BOSSES: MonsterCard[] = [
     ],
   }),
   boss({
-    id: 'BOSS-seaking', no: 6, name: '海王ネプトラス', art: 'bosses/sea-king', type: 'water', hp: 1100, weakness: 'lightning',
+    id: 'BOSS-seaking', no: 6, name: '海王ネプトラス', art: 'bosses/sea-king', type: 'water', hp: 1500, weakness: 'lightning',
     species: 'かいおう', scene: 'story/p-wild-sea', flavor: '王冠が波間に光ったら、港の鐘を三度鳴らせ。',
     attacks: [
       { name: '王の戦鎚', cost: [], damage: 70, text: '' },
@@ -82,7 +84,7 @@ export const BOSSES: MonsterCard[] = [
     ],
   }),
   boss({
-    id: 'BOSS-archlich', no: 7, name: '古の大魔導ゼルヴァーン', art: 'bosses/archlich', type: 'psychic', hp: 1100, weakness: 'dark',
+    id: 'BOSS-archlich', no: 7, name: '古の大魔導ゼルヴァーン', art: 'bosses/archlich', type: 'psychic', hp: 1500, weakness: 'dark',
     species: 'いにしえの', scene: 'story/p-summoning', flavor: '死を越えるために、すべての禁書を読み終えた者。',
     attacks: [
       { name: '禁呪の書', cost: [], damage: 40, text: '相手の手札をウラにして1枚ランダムに選び、トラッシュする。', effects: [{ k: 'discardOppHand', n: 1 }] },
