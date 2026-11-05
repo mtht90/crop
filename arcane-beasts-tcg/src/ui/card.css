@@ -981,18 +981,33 @@
   opacity: calc(0.2 + var(--hyp) * 0.5);
 }
 
-/* gold foil lettering for the name and HP */
+/* --- the whole card is gold (like a gold card): the picture is toned to
+   gold, the panels are dark amber, and the lettering is rainbow foil --- */
+.tcg.raid-card .tcg-inner { background: linear-gradient(160deg, #fff6c9, #d9a93a 50%, #7d5208); }
+.tcg.raid-card .tcg-art .scene { filter: sepia(1) saturate(2.3) hue-rotate(-12deg) brightness(0.8) contrast(1.12); }
+.tcg.raid-card .tcg-art .portrait,
+.tcg.raid-card .raid-pop { filter: sepia(0.9) saturate(2.4) hue-rotate(-10deg) brightness(1.05) contrast(1.18) drop-shadow(0 1cqw 1.4cqw rgba(60, 30, 0, 0.6)); }
+.tcg.raid-card.bleed .tcg-inner::after { background: linear-gradient(transparent 55%, rgba(50, 26, 0, 0.55) 75%, rgba(40, 20, 0, 0.75)); }
+.tcg.raid-card .tcg-body { background: linear-gradient(rgba(70, 40, 0, 0.35), rgba(45, 24, 0, 0.62) 18%, rgba(40, 20, 0, 0.62)); box-shadow: inset 0 0 0 0.25cqw rgba(255, 220, 130, 0.45); }
+.tcg.raid-card .tcg-body p, .tcg.raid-card .tcg-footer { color: #fff1c4; }
+.tcg.raid-card .tcg-stats { background: rgba(45, 24, 0, 0.6); border-color: rgba(255, 220, 130, 0.55); color: #ffe7a0; }
+.tcg.raid-card .tcg-stats label { color: #ffd77a; }
+.tcg.raid-card .tcg-head::before { background: linear-gradient(rgba(50, 26, 0, 0.6), transparent); }
+/* rainbow foil lettering: name, HP, attack names and damage */
 .tcg.raid-card .tcg-head .name,
-.tcg.raid-card .tcg-head .hp {
-  background: linear-gradient(180deg, #fffbe0 0%, #ffe48a 30%, #c8901c 52%, #fff0a8 70%, #e0a93a 100%);
+.tcg.raid-card .tcg-head .hp,
+.tcg.raid-card .atk-name,
+.tcg.raid-card .atk-dmg {
+  background: linear-gradient(100deg, #ff9ccf 0%, #ffe070 20%, #9effc4 40%, #8fdcff 60%, #c9a2ff 80%, #ff9ccf 100%) var(--mx) 50% / 150% 100%;
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
   text-shadow: none;
-  -webkit-text-stroke: 0.22cqw rgba(40, 20, 0, 0.9);
+  -webkit-text-stroke: 0.22cqw rgba(50, 24, 0, 0.92);
   paint-order: stroke fill;
-  filter: drop-shadow(0 0.3cqw 0.35cqw rgba(0, 0, 0, 0.9)) drop-shadow(0 0 0.6cqw rgba(255, 200, 80, 0.45));
+  filter: drop-shadow(0 0.3cqw 0.35cqw rgba(0, 0, 0, 0.85)) drop-shadow(0 0 0.6cqw rgba(255, 210, 110, 0.4));
 }
+.tcg.raid-card .atk-name, .tcg.raid-card .atk-dmg { -webkit-text-stroke-width: 0.18cqw; }
 
 /* --- stars flashing over the card, and a lens flare riding the tilt --- */
 .raid-sparks { position: absolute; inset: 0; z-index: 4; pointer-events: none; overflow: hidden; border-radius: inherit; }
