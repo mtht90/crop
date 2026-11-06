@@ -1,4 +1,4 @@
-// ボスレイド: this week's boss, how worn down it is, and a way in.
+// ボスレイド: the running session's boss, how worn down it is, and a way in.
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useState } from 'react';
 import { activeDeck, useStore } from '../state/store';
@@ -45,7 +45,7 @@ export function Raid() {
   const challenge = async () => {
     if (!session) return;
     if (!deck || !deckOk) return go('deck');
-    if (cost > 0 && !(await askConfirm(`ジェムを${cost}個使って挑戦しますか？（今週${r.tries + 1}回目）`, '挑戦する'))) return;
+    if (cost > 0 && !(await askConfirm(`ジェムを${cost}個使って挑戦しますか？（この開催で${r.tries + 1}回目）`, '挑戦する'))) return;
     sfx('horn-1', 0.7);
     if (!startRaid(deck.cards)) {
       foley.tick();
@@ -133,7 +133,7 @@ export function Raid() {
             <motion.button className="raid3-go" onClick={challenge} whileTap={{ scale: 0.97 }} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3, duration: 0.45 }}>
               <Icon name="swords" />
               <span>{deckOk ? '挑戦する' : 'デッキを組む'}</span>
-              {deckOk && <small>{cost ? <><Icon name="gem" /> {cost}</> : '今週1回目 無料'}</small>}
+              {deckOk && <small>{cost ? <><Icon name="gem" /> {cost}</> : '1回目 無料'}</small>}
             </motion.button>
             <div className="raid3-subs">
               <button className="raid3-sub" onClick={() => go('deck')}>
@@ -208,7 +208,7 @@ export function Raid() {
                   <div className="raid2-rage">復活したボスはHP {raidLapHp(2).toLocaleString()}、すべてのワザのダメージが +{raidLapBonus(2)}</div>
                   <ul className="raid3-notes">
                     <li>ボスは1体だけ。エネルギーなしでワザを使い、特殊状態にならない</li>
-                    <li>挑戦は週1回目が無料、2回目からはジェム{RAID_TRY_GEMS}個。何度でも挑戦できる</li>
+                    <li>レイドは不定期に開催。開催中は何度でも挑戦でき、1回目は無料、2回目からはジェム{RAID_TRY_GEMS}個</li>
                   </ul>
                 </>
               ) : (

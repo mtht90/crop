@@ -35,21 +35,43 @@ export const raidLapReward = (lap: number) => (lap <= 1 ? 300 : lap === 2 ? 500 
 export const raidBattleGems = (dealt: number) => Math.min(RAID_TRY_GEMS, Math.floor(dealt / 100));
 
 // ---------------------------------------------------------------------------
-// When raids run: not every week, but in sessions announced ahead. Add a line
-// here to hold one (dates are local, the session runs from the start day's
-// midnight to the end day's midnight).
+// When raids run: at random. The calendar is drawn from a fixed seed, so every
+// player sees the same sessions without a server: after each session comes a
+// random gap (6–20 days), then a session of random length (3–8 days) with a
+// boss picked at random (never the same one twice in a row).
 // ---------------------------------------------------------------------------
 export interface RaidSession {
   start: string; // YYYY-MM-DD
   end: string; // YYYY-MM-DD (the first day it is over)
   boss: string;
 }
-export const RAID_SESSIONS: RaidSession[] = [
-  { start: '2026-11-02', end: '2026-11-09', boss: 'BOSS-emperor' },
-  { start: '2026-11-23', end: '2026-11-30', boss: 'BOSS-seaking' },
-  { start: '2026-12-14', end: '2026-12-21', boss: 'BOSS-archlich' },
-  { start: '2027-01-04', end: '2027-01-11', boss: 'BOSS-boneking' },
-];
+const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+function drawSessions(): RaidSession[] {
+  let seed = 0x5eed1234;
+  const rnd = () => {
+    // mulberry32
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = seed;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  // the first one is the session already running when raids went random
+  const out: RaidSession[] = [{ start: '2026-11-02', end: '2026-11-09', boss: 'BOSS-emperor' }];
+  let day = new Date(2026, 10, 9);
+  let last = 'BOSS-emperor';
+  while (out.length < 120) {
+    const start = new Date(day.getFullYear(), day.getMonth(), day.getDate() + 6 + Math.floor(rnd() * 15));
+    const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 3 + Math.floor(rnd() * 6));
+    const pool = BOSSES.filter((b) => b.id !== last);
+    const boss = pool[Math.floor(rnd() * pool.length)].id;
+    out.push({ start: ymd(start), end: ymd(end), boss });
+    last = boss;
+    day = end;
+  }
+  return out;
+}
+export const RAID_SESSIONS: RaidSession[] = drawSessions();
 const at = (d: string) => new Date(d + 'T00:00:00').getTime();
 /** the session running now, or null */
 export function raidSession(now = Date.now()): RaidSession | null {

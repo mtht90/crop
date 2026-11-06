@@ -182,11 +182,15 @@ img { -webkit-user-drag: none; }
 }
 
 .guide {
-  position: absolute;
+  /* fixed to the screen (the board can be wider than the window) */
+  position: fixed;
   left: 50%;
   top: 50%;
-  transform: translate(-50%, -50%);
-  width: calc(var(--u) * 52);
+  /* the separate property: an animated transform would otherwise wipe out the centring */
+  translate: -50% -50%;
+  width: min(calc(var(--u) * 52), calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
   z-index: 650;
   padding: calc(var(--u) * 2);
   display: flex;
@@ -210,7 +214,7 @@ img { -webkit-user-drag: none; }
 .confirm-box p { margin: 0; font-weight: 800; font-size: max(14px, calc(var(--u) * 1.3)); line-height: 1.6; text-align: center; }
 .confirm-actions { display: flex; gap: calc(var(--u) * 1); justify-content: center; }
 @media (orientation: portrait) {
-  .guide { width: calc(var(--u) * 52); }
+  .guide { width: min(calc(var(--u) * 52), calc(100vw - 24px)); }
   .guide h3 { font-size: calc(var(--u) * 2.6); }
   .guide ol { font-size: calc(var(--u) * 1.5); }
 }

@@ -231,7 +231,7 @@ function RaidIntro({ bossId, hp, left, onDone }: { bossId: string; hp: number; l
         transition={{ duration: 1.2, delay: 0.25, ease: [0.16, 1, 0.3, 1] }}
       />
       <motion.div className="ri-kicker" initial={{ opacity: 0, scaleX: 0.3 }} animate={{ opacity: 1, scaleX: 1 }} transition={{ delay: 0.9, duration: 0.5 }}>
-        今週のレイドボス
+        レイドボス
       </motion.div>
       <motion.div className="ri-name gold-title" initial={{ opacity: 0, y: 30, letterSpacing: '0.6em' }} animate={{ opacity: 1, y: 0, letterSpacing: '0.04em' }} transition={{ delay: 1.15, duration: 0.7, ease: [0.16, 1, 0.3, 1] }}>
         {b.name}

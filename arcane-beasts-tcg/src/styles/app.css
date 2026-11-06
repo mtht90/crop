@@ -298,11 +298,11 @@
 .news-modal .close { position: absolute; right: 10px; top: 10px; width: 34px; height: 34px; font-size: 16px; }
 .news-tabs { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; flex: none; }
 .news-tabs .chip-btn { flex: none; }
-.news-list { flex: 1; min-height: 0; overflow-y: auto; display: grid; gap: 8px; align-content: start; padding-right: 2px; }
-.news-item { border-radius: 12px; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.1); overflow: hidden; }
+.news-list { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding-right: 2px; -webkit-overflow-scrolling: touch; }
+.news-item { flex: none; border-radius: 12px; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.1); overflow: hidden; }
 .news-item.open { border-color: rgba(233, 196, 106, 0.45); }
 .news-head { all: unset; box-sizing: border-box; width: 100%; display: grid; grid-template-columns: auto 1fr auto auto; gap: 4px 8px; align-items: center; padding: 10px 12px; cursor: pointer; }
-.news-head b { font-size: var(--fs-s); line-height: 1.35; }
+.news-head b { font-size: var(--fs-s); line-height: 1.35; min-width: 0; overflow-wrap: anywhere; }
 .news-head small { color: var(--ink-dim); font-size: var(--fs-xs); white-space: nowrap; }
 .news-caret { color: var(--ink-dim); font-size: 10px; }
 .news-kind { font-size: 11px; font-weight: 900; padding: 2px 8px; border-radius: 999px; background: #3b4a7a; color: #dfe6ff; white-space: nowrap; }
