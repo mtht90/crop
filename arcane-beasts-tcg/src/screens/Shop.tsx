@@ -11,7 +11,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CardDef, Rarity } from '../engine/types';
 import { byName, RARITY_COLOR, RARITY_SYMBOL } from '../engine/cards';
 import { dayKey } from '../state/progress';
-import { BOOSTERS, NORMAL_BOOSTER, openPack, PACK_TABLE, PREMIUM_BOOSTER, PREMIUM_TABLE, PRINTING_CHANCE, PREMIUM_PRINTING_CHANCE, TEN_PACKS, freePackState, FREE_PACKS_PER_DAY, useStore, type Booster } from '../state/store';
+import { BOOSTERS, NORMAL_BOOSTER, openPack, PACK_TABLE, PREMIUM_BOOSTER, PREMIUM_TABLE, PRINTING_CHANCE, PREMIUM_PRINTING_CHANCE, TEN_PACKS, freePackState, FREE_PACKS_PER_DAY, FREE_PACK_GAP_MS, useStore, type FreePackState, type Booster } from '../state/store';
 import { CardBack, CardFace } from '../ui/Card';
 import { TopBar } from '../ui/TopBar';
 import { Icon } from '../ui/Icon';
@@ -170,7 +170,12 @@ export function Shop() {
   const buy = useCallback(
     (booster: Booster, packs = 1) => {
       // a single 通常パック is free while a free one is ready
-      const useFree = !booster.premium && packs === 1 && freePackState(useStore.getState().save).ready;
+      // the 通常パック is the free slot only: 2 a day, never bought
+      const useFree = !booster.premium;
+      if (useFree && (packs !== 1 || !freePackState(useStore.getState().save).ready)) {
+        sfx('miss-2', 0.5);
+        return false;
+      }
       const cost = useFree ? 0 : costOf(booster, packs);
       if (useStore.getState().save.gems < cost) {
         sfx('miss-2', 0.5);
@@ -211,10 +216,11 @@ export function Shop() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.08 * i, duration: 0.5, ease: EASE_OUT }}
             >
-              <div className="shop3-pack" onClick={() => buy(b)}>
+              <div className={`shop3-pack ${!b.premium ? (free.ready ? 'free-on' : 'free-wait') : ''}`} onClick={() => buy(b)}>
                 <motion.div animate={{ y: [0, -6, 0] }} transition={{ duration: 4.5, repeat: Infinity, ease: 'easeInOut', delay: i * 0.6 }}>
                   <BoosterPack booster={b} tilt />
                 </motion.div>
+                {!b.premium && free.ready && <span className="free3-ribbon">FREE</span>}
               </div>
               <div className="shop3-info">
                 <h3>{b.name}</h3>
@@ -239,35 +245,23 @@ export function Shop() {
                     </>
                   )}
                 </ul>
-                <div className="shop3-buy">
-                  {!b.premium && free.ready ? (
-                    <button className="pill free" onClick={() => buy(b)}>
-                      無料で開ける
-                      <span className="coin">あと{free.left}パック</span>
-                    </button>
-                  ) : (
-                    <button className={`pill ${b.premium ? 'gold' : ''}`} disabled={save.gems < b.price} onClick={() => buy(b)}>
+                {b.premium ? (
+                  <div className="shop3-buy">
+                    <button className="pill gold" disabled={save.gems < b.price} onClick={() => buy(b)}>
                       1パック
                       <span className="coin">
                         <Icon name="gem" /> {b.price.toLocaleString()}
                       </span>
                     </button>
-                  )}
-                  <button className={`pill ten ${b.premium ? 'gold' : ''}`} disabled={save.gems < b.price * TEN_PACKS} onClick={() => buy(b, 10)}>
-                    10パック
-                    <span className="coin">
-                      <Icon name="gem" /> {(b.price * TEN_PACKS).toLocaleString()}
-                    </span>
-                  </button>
-                </div>
-                {!b.premium && (
-                  <div className={`shop3-free ${free.ready ? 'on' : ''}`}>
-                    {free.ready
-                      ? `無料パック 本日あと${free.left}回`
-                      : free.readyAt
-                        ? `次の無料パックまで ${fmtWait(free.readyAt - now)}`
-                        : '本日の無料パックは終了（明日また2回）'}
+                    <button className="pill ten gold" disabled={save.gems < b.price * TEN_PACKS} onClick={() => buy(b, 10)}>
+                      10パック
+                      <span className="coin">
+                        <Icon name="gem" /> {(b.price * TEN_PACKS).toLocaleString()}
+                      </span>
+                    </button>
                   </div>
+                ) : (
+                  <FreeSlot free={free} now={now} onOpen={() => buy(b)} />
                 )}
                 <button className="textbtn shop3-odds" onClick={() => setOdds(b)}>
                   提供割合
@@ -292,6 +286,40 @@ export function Shop() {
       </AnimatePresence>
 
       {odds && <OddsModal premium={!!odds.premium} onClose={() => setOdds(null)} />}
+    </div>
+  );
+}
+
+/** the daily free 通常パック: two slots, a big button, or the wait until the next one */
+function FreeSlot({ free, now, onOpen }: { free: FreePackState; now: number; onOpen: () => void }) {
+  const used = FREE_PACKS_PER_DAY - free.left;
+  const midnight = new Date(now);
+  midnight.setHours(24, 0, 0, 0);
+  const wait = free.readyAt ? free.readyAt - now : midnight.getTime() - now;
+  const frac = free.readyAt ? 1 - wait / FREE_PACK_GAP_MS : 0;
+  return (
+    <div className={`free3 ${free.ready ? 'on' : free.readyAt ? 'wait' : 'done'}`}>
+      <div className="free3-head">
+        <span className="free3-tag">毎日無料</span>
+        <span className="free3-slots">
+          {Array.from({ length: FREE_PACKS_PER_DAY }, (_, k) => (
+            <i key={k} className={k < used ? 'used' : k === used && free.ready ? 'ready' : 'wait'} />
+          ))}
+        </span>
+      </div>
+      {free.ready ? (
+        <button className="free3-btn" onClick={onOpen}>
+          <span>無料で開ける</span>
+          <small>本日あと{free.left}パック</small>
+        </button>
+      ) : (
+        <div className="free3-timer">
+          <div className="free3-bar">
+            <i style={{ width: `${Math.max(0, Math.min(1, frac)) * 100}%` }} />
+          </div>
+          <span>{free.readyAt ? <>次の無料パックまで <b>{fmtWait(wait)}</b></> : <>本日分は開封済み・明日また2パック <b>{fmtWait(wait)}</b></>}</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -525,7 +553,7 @@ function Opening({ booster, cards, god, fresh, sold, packs, onClose, onAgain }: 
           </>
         )}
 
-        {phase === 'results' && <Results cards={cards} fresh={fresh} sold={sold} onClose={onClose} onAgain={onAgain} canAgain={coins >= priceOf(booster)} price={priceOf(booster)} u={u} />}
+        {phase === 'results' && <Results cards={cards} fresh={fresh} sold={sold} onClose={onClose} onAgain={onAgain} canAgain={booster.premium ? coins >= priceOf(booster) : freePackState(useStore.getState().save).ready} price={booster.premium ? priceOf(booster) : 0} u={u} />}
       </div>
     </motion.div>
   );
@@ -1662,7 +1690,7 @@ function MultiResults({ opened, cards, fresh, sold, burstAt, onClose, onAgain, c
             <button className="pill" disabled={!canAgain} onClick={onAgain}>
               もう一度10パック
               <span className="coin">
-                <Icon name="gem" /> {price}
+                <Icon name="gem" /> {price.toLocaleString()}
               </span>
             </button>
           </>
@@ -1735,12 +1763,12 @@ function Results({ cards, fresh, sold, onClose, onAgain, canAgain, price, u }: {
         <button className="pill ghost" onClick={onClose}>
           とじる
         </button>
-        <button className="pill" disabled={!canAgain} onClick={onAgain}>
-          もう1パック開ける
-          <span className="coin">
-            <Icon name="gem" /> {price}
-          </span>
-        </button>
+        {(price > 0 || canAgain) && (
+          <button className="pill" disabled={!canAgain} onClick={onAgain}>
+            もう1パック開ける
+            <span className="coin">{price > 0 ? <><Icon name="gem" /> {price.toLocaleString()}</> : '無料'}</span>
+          </button>
+        )}
       </motion.div>
       <AnimatePresence>
         {zoom && (

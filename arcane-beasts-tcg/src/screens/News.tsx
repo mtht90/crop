@@ -104,9 +104,12 @@ export function NewsModal() {
                   <div key={n.id} className={`news-item k-${n.kind} ${isOpen ? 'open' : ''}`}>
                     <button
                       className="news-head"
-                      onClick={() => {
+                      onClick={(e) => {
                         foley.tick();
                         setOpenId(isOpen ? '' : n.id);
+                        // the item above may close and shrink: keep the one just opened in view
+                        const el = e.currentTarget.parentElement;
+                        if (!isOpen && el) requestAnimationFrame(() => el.scrollIntoView({ block: 'start', behavior: 'smooth' }));
                       }}
                     >
                       <span className="news-kind">{NEWS_KIND_JP[n.kind]}</span>
