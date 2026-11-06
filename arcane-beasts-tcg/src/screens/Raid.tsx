@@ -219,7 +219,7 @@ export function Raid() {
                     ボスを倒すたびに <Icon name="gem" /> {raidLapReward(1)}（2回目は {raidLapReward(2)}、3回目からは {raidLapReward(3)}）。倒したボスは強くなって復活する。
                   </p>
                   <h3>参加報酬</h3>
-                  <p className="raid3-note">毎回のバトルで、与えたダメージ100ごとにジェム1個（最大{RAID_TRY_GEMS}個）。</p>
+                  <p className="raid3-note">毎回のバトルで、与えたダメージ40ごとにジェム1個（最大50個）。</p>
                   <h3>レイドカード</h3>
                   <div className="raid-drop-row">
                     <div className={`raid-drop-card ${ownCard ? '' : 'locked'}`}>

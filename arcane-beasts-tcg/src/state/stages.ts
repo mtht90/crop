@@ -101,6 +101,8 @@ export interface Stage {
   rules: string[];
   /** gems for the first clear */
   gems: number;
+  /** gems for every win (repeats too) */
+  winGems: number;
 }
 
 /** the rule written out, one line each */
@@ -141,6 +143,7 @@ export function stagesOf(ev: StageEvent): Stage[] {
       cpu: r.cpu,
       rules: modsText(r.mods),
       gems: i === STAGE_COUNT - 1 ? 400 : boss ? 150 : 50,
+      winGems: i === STAGE_COUNT - 1 ? 60 : boss ? 30 : 10,
     };
   });
 }
@@ -191,8 +194,8 @@ export function shopOf(ev: StageEvent): ShopItem[] {
   const card = EVENT_CARDS.find((c) => c.id === ev.card)!;
   return [
     { id: 'card', label: card.name, cost: 400, limit: 2, card: card.id },
-    { id: 'gems150', label: 'ジェム 150', cost: 50, limit: 5, gems: 150 },
-    { id: 'gems50', label: 'ジェム 50', cost: 20, limit: 20, gems: 50 },
+    { id: 'gems150', label: 'ジェム 150', cost: 50, limit: 10, gems: 150 },
+    { id: 'gems50', label: 'ジェム 50', cost: 20, limit: 40, gems: 50 },
   ];
 }
 

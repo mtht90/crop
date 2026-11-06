@@ -334,6 +334,8 @@ export interface StageResult {
   win: boolean;
   /** gems for clearing this stage the first time */
   gems: number;
+  /** gems every win pays */
+  winGems: number;
   shards: number;
   /** the event card, if the great boss dropped it */
   drop: string | null;
@@ -472,7 +474,7 @@ export const useStore = create<Store>((set, get) => ({
     return true;
   },
   recordStage: ({ win, index, key }) => {
-    const res: StageResult = { win, gems: 0, shards: 0, drop: null, first: false };
+    const res: StageResult = { win, gems: 0, winGems: 0, shards: 0, drop: null, first: false };
     if (!win) return res;
     get().update((s) => {
       const sv = stageNow(s.stages);
@@ -485,6 +487,7 @@ export const useStore = create<Store>((set, get) => ({
         res.gems = stage.gems;
         sv.cleared = index + 1;
       }
+      res.winGems = stage.winGems;
       res.shards = rollShards(index);
       sv.shards += res.shards;
       if (index === stagesOf(ev).length - 1 && Math.random() < EVENT_CARD_DROP) {
@@ -492,7 +495,7 @@ export const useStore = create<Store>((set, get) => ({
         if (!s.collection[ev.card]) s.newCards.push(ev.card);
         s.collection[ev.card] = Math.min(MAX_COPIES, (s.collection[ev.card] ?? 0) + 1);
       }
-      s.gems += res.gems;
+      s.gems += res.gems + res.winGems;
       s.stages = { ...sv };
     });
     return res;

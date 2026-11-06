@@ -257,6 +257,9 @@ export function Stage() {
                   </div>
                   <h3>勝つたびに（何度でも）</h3>
                   <p className="raid3-note">
+                    <Icon name="gem" /> ジェム：ふつうのステージ10、1-5・2-5のボス30、3-5のボス60
+                  </p>
+                  <p className="raid3-note">
                     <Shard /> イベントのかけら：ふつうのステージは80%の確率で10〜40個、1-5・2-5のボスは必ず40〜60個、3-5のボスは必ず80〜100個
                   </p>
                   <h3>3-5 のボス</h3>
@@ -307,13 +310,12 @@ function StageInfo({ st, first }: { st: StageT; first: boolean }) {
           ))}
         </ul>
         <small className="stg-info-rw">
-          {first ? (
+          {first && (
             <>
-              初回 <Icon name="gem" /> {st.gems}
+              初回 <Icon name="gem" /> {st.gems} ・{' '}
             </>
-          ) : (
-            'クリア済み'
-          )}{' '}
+          )}
+          勝利 <Icon name="gem" /> {st.winGems}{' '}
           ・ CPU Lv.{st.cpu}
         </small>
       </div>

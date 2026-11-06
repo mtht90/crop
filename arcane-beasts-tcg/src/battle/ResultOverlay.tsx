@@ -71,9 +71,10 @@ export function ResultOverlay() {
       );
       const sr = useStore.getState().recordStage({ win, index: cfg.stage.index, key: cfg.stage.key });
       const lines = [...base.lines];
+      if (sr.winGems) lines.push({ label: 'ステージ勝利', coins: 0, gems: sr.winGems });
       if (sr.gems) lines.push({ label: '初回クリア報酬', coins: 0, gems: sr.gems });
       setStageRes(sr);
-      setRes({ ...base, lines, gems: base.gems + sr.gems });
+      setRes({ ...base, lines, gems: base.gems + sr.gems + sr.winGems });
       return;
     }
     if (cfg.raid) {

@@ -30,9 +30,9 @@ export const raidLapHp = (lap: number) => (lap <= 1 ? 1500 : 2200);
 /** extra damage on each boss attack on lap n */
 export const raidLapBonus = (lap: number) => (lap <= 1 ? 0 : 10);
 /** what clearing lap n pays */
-export const raidLapReward = (lap: number) => (lap <= 1 ? 300 : lap === 2 ? 500 : 200);
+export const raidLapReward = (lap: number) => (lap <= 1 ? 1000 : lap === 2 ? 1500 : 800);
 /** gems for any battle, by the damage it did (never more than a try costs) */
-export const raidBattleGems = (dealt: number) => Math.min(RAID_TRY_GEMS, Math.floor(dealt / 100));
+export const raidBattleGems = (dealt: number) => Math.min(50, Math.floor(dealt / 40));
 
 // ---------------------------------------------------------------------------
 // When raids run: at random. The calendar is drawn from a fixed seed, so every
