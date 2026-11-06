@@ -18,6 +18,7 @@ import {
   slotsOf,
   topCard,
 } from './game';
+import { mctsAction } from './mcts';
 import type { Action, Answer, CardInst, GameState, MonsterCard, Pos, Prompt, Slot } from './types';
 
 export type Difficulty = 'easy' | 'normal' | 'hard';
@@ -312,6 +313,8 @@ export interface AiProfile {
   /** how many imagined replies of the opponent it plays out per way of ending its turn */
   replies: number;
   budgetMs: number;
+  /** Monte Carlo play-outs instead of the turn search: ms per decision (0 = off) */
+  mcts?: number;
 }
 
 export const PROFILES: Record<CpuLevel, AiProfile> = {
@@ -483,6 +486,7 @@ export function chooseAction(g: Game, p: 0 | 1, level: AiLevel = 'normal', actio
   if (legal.length === 1) return legal[0];
   if (legal.length === 0 || actionsThisTurn > 40) return { t: 'endTurn' };
   const prof = profileOf(level);
+  if (prof.mcts) return mctsAction(g, p, { budgetMs: prof.mcts, horizon: 30 });
   if (prof.depth > 0) return plan(g, p, prof);
 
   const base = evaluate(g.s, p);
