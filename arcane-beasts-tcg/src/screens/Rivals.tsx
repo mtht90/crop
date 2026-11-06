@@ -2,7 +2,7 @@
 // (キャラとデッキ) are met in the story only.
 import { useEffect, useMemo, useState } from 'react';
 import { activeDeck, useStore } from '../state/store';
-import { ALL_DECKS, CH2_DECKS, EX_DECKS, AB3_DECKS, STARTER_DECKS, expand, validateDeck, type DeckList, cpuPrintTier, upgradeDeck } from '../engine/decks';
+import { ALL_DECKS, EX_DECKS, STARTER_DECKS, expand, validateDeck, type DeckList, cpuPrintTier, DECK_STRENGTH, upgradeDeck } from '../engine/decks';
 import { CPU_LEVELS, type CpuLevel } from '../engine/ai';
 import { coinsFor, CPU_FIRST_GEMS, CPU_REWARD, cpuTier } from '../state/progress';
 import { artUrl } from '../lib/assets';
@@ -38,7 +38,9 @@ const SCENE: Record<CpuLevel, string> = {
 function poolFor(level: number): DeckList[] {
   if (level <= 3) return STARTER_DECKS;
   if (level <= 6) return [...STARTER_DECKS, ...EX_DECKS];
-  return [...EX_DECKS, ...AB3_DECKS, ...CH2_DECKS];
+  // the strongest decks (Lv9 only the very top)
+  const top = DECK_STRENGTH.slice(0, level >= 9 ? 6 : DECK_STRENGTH.length);
+  return ALL_DECKS.filter((d) => top.includes(d.id));
 }
 
 export function Rivals() {

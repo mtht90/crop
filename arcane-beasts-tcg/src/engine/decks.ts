@@ -595,3 +595,9 @@ export function upgradeDeck(ids: string[], maxTier: number): string[] {
 }
 /** how strong the printings a CPU level brings are */
 export const cpuPrintTier = (level: number) => (level >= 8 ? 3 : level >= 7 ? 2 : level >= 5 ? 1 : 0);
+
+/**
+ * prebuilt decks by strength (round robin at Lv5, scripts/deck-rank.ts), the
+ * strongest first. High CPU levels pick from the top of this list.
+ */
+export const DECK_STRENGTH = ['highelf', 'sunfolk', 'wyrm', 'lich', 'shadow', 'ashen-village', 'water', 'naga', 'psychic', 'night', 'grass'];
