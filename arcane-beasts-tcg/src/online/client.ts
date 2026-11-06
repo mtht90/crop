@@ -125,8 +125,14 @@ class OnlineClient {
   private pingTimer: ReturnType<typeof setInterval> | null = null;
   private pings = 0;
   private listeners = new Set<Listener>();
-  /** game messages that arrived before a controller was listening */
+  /**
+   * the game's messages since its last snapshot: a controller that subscribes
+   * late (the battle screen is still loading) or anew gets the table from here
+   */
   private buffer: GameMsg[] = [];
+  /** when anything last came from the server (a link can die without closing) */
+  private lastHeard = 0;
+  private watchTimer: ReturnType<typeof setInterval> | null = null;
   /** called when a game starts (the app opens the battle screen) */
   onStart: ((m: MatchInfo) => void) | null = null;
 
@@ -161,11 +167,13 @@ class OnlineClient {
     this.ws = ws;
     ws.onopen = () => {
       this.retry = 0;
+      this.lastHeard = Date.now();
       const c = loadCreds();
       this.raw({ t: 'hello', v: PROTOCOL, id: c.id, secret: c.secret, name: c.name, portrait: c.portrait });
       this.startPing();
     };
     ws.onmessage = (e) => {
+      this.lastHeard = Date.now();
       try {
         this.handle(JSON.parse(String(e.data)) as ServerMsg);
       } catch (err) {
@@ -187,19 +195,64 @@ class OnlineClient {
 
   private startPing() {
     this.stopPing();
-    this.pingTimer = setInterval(() => this.raw({ t: 'ping', n: ++this.pings }), 20_000);
+    this.pingTimer = setInterval(() => this.raw({ t: 'ping', n: ++this.pings }), 15_000);
+    // the server answers every ping: a long silence means the link is dead (a phone that
+    // changed networks or slept) even if the socket never closed — drop it and reconnect
+    this.watchTimer = setInterval(() => {
+      if (this.ws && this.ws.readyState === WebSocket.OPEN && Date.now() - this.lastHeard > 40_000) this.drop();
+    }, 5_000);
   }
   private stopPing() {
     if (this.pingTimer) clearInterval(this.pingTimer);
+    if (this.watchTimer) clearInterval(this.watchTimer);
     this.pingTimer = null;
+    this.watchTimer = null;
+  }
+  /** give up on the current socket now; onclose reconnects */
+  private drop() {
+    const ws = this.ws;
+    if (!ws) return;
+    try {
+      ws.close();
+    } catch {
+      /* already gone */
+    }
+    // some browsers wait long before firing close on a dead link: act now
+    ws.onclose?.(new CloseEvent('close'));
+  }
+  /**
+   * back from the background: check the link at once (a ping must be answered
+   * within a few seconds) instead of waiting for the next one
+   */
+  checkLink() {
+    if (!this.wanted) return;
+    if (!this.ws) {
+      if (this.retryTimer) clearTimeout(this.retryTimer);
+      this.retry = 0;
+      this.open();
+      return;
+    }
+    if (this.ws.readyState !== WebSocket.OPEN) return;
+    const asked = Date.now();
+    this.raw({ t: 'ping', n: ++this.pings });
+    setTimeout(() => {
+      if (this.ws && this.lastHeard < asked) this.drop();
+    }, 6_000);
   }
 
-  private raw(m: ClientMsg) {
-    if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify(m));
+  private raw(m: ClientMsg): boolean {
+    if (this.ws?.readyState !== WebSocket.OPEN) return false;
+    try {
+      this.ws.send(JSON.stringify(m));
+      return true;
+    } catch {
+      return false;
+    }
   }
 
-  send(m: ClientMsg) {
-    this.raw(m);
+  /** false when it could not go out (no link): the caller can resync after the reconnect */
+  send(m: ClientMsg): boolean {
+    return this.raw(m);
   }
 
   private handle(m: ServerMsg) {
@@ -237,8 +290,12 @@ class OnlineClient {
         set({ error: m.message, queued: m.code === 'busy' ? useOnline.getState().queued : null });
         return;
       case 'start': {
-        this.buffer = [];
         const info: MatchInfo = { you: m.you, kind: m.kind, code: m.code, opp: m.opp, me: m.me };
+        const cur = useOnline.getState().match;
+        // a reconnect into the game already on screen: keep the battle screen (and its
+        // controller); the snapshot that follows puts the table right
+        if (cur && cur.code === m.code && cur.you === m.you && this.listeners.size) return;
+        this.buffer = [];
         set({ match: info, queued: null });
         this.onStart?.(info);
         return;
@@ -249,8 +306,18 @@ class OnlineClient {
       case 'peer':
       case 'stamp':
         if (m.t === 'over') set({ room: null });
-        if (!this.listeners.size) this.buffer.push(m);
-        else this.listeners.forEach((l) => l(m));
+        // keep what a late (or new) controller needs: the last snapshot and what came after
+        // (a batch folds into one snapshot of where it ends, so this stays small)
+        if (m.t === 'snapshot') this.buffer = [m];
+        else if (!this.listeners.size) {
+          // nobody watching yet (the battle screen is loading): keep every frame so it plays them all
+          this.buffer.push(m);
+        } else if (m.t === 'batch') {
+          const prev = this.buffer.find((x) => x.t === 'snapshot') as Extract<GameMsg, { t: 'snapshot' }> | undefined;
+          const state = m.frames.length ? m.frames[m.frames.length - 1].state : prev?.state;
+          if (state) this.buffer = [{ t: 'snapshot', state, prompt: m.prompt, legal: m.legal, seq: m.seq, actor: m.actor, deadline: m.deadline }];
+        } else if (m.t === 'over') this.buffer.push(m);
+        this.listeners.forEach((l) => l(m));
         return;
     }
   }
@@ -258,8 +325,7 @@ class OnlineClient {
   /** the battle controller subscribes; messages that came earlier are replayed */
   listen(l: Listener): () => void {
     this.listeners.add(l);
-    const early = this.buffer.splice(0);
-    for (const m of early) l(m);
+    for (const m of this.buffer) l(m);
     return () => void this.listeners.delete(l);
   }
 
@@ -299,5 +365,13 @@ class OnlineClient {
 }
 
 export const online = new OnlineClient();
+
+// a phone brought back from the background often has a dead socket: check it at once
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) online.checkLink();
+  });
+  window.addEventListener('online', () => online.checkLink());
+}
 
 if (import.meta.env.DEV) (window as unknown as Record<string, unknown>).__online = { online, useOnline };

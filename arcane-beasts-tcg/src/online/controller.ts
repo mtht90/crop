@@ -21,6 +21,8 @@ export class OnlineController extends FramePlayer implements BattleDriver {
   private legalNow: Action[] = [];
   private unsub: (() => void) | null = null;
   private stampKey = 0;
+  /** after an answer, the server must reply; if it does not, ask for the table again */
+  private replyTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(readonly match: MatchInfo) {
     super();
@@ -34,6 +36,7 @@ export class OnlineController extends FramePlayer implements BattleDriver {
 
   dispose() {
     this.disposed = true;
+    if (this.replyTimer) clearTimeout(this.replyTimer);
     this.unsub?.();
     this.unsub = null;
   }
@@ -51,6 +54,13 @@ export class OnlineController extends FramePlayer implements BattleDriver {
     this.prompt = null;
     useBattle.setState({ prompt: null });
     online.send({ t: 'answer', seq: this.seq, answer: a });
+    // an answer that never arrives (or whose reply is lost) must not leave the
+    // board stuck: with no word from the server, ask for the table as it stands
+    if (this.replyTimer) clearTimeout(this.replyTimer);
+    this.replyTimer = setTimeout(() => {
+      this.replyTimer = null;
+      if (!this.disposed && !this.prompt) online.send({ t: 'sync' });
+    }, 8_000);
   }
 
   act(action: Action) {
@@ -64,6 +74,10 @@ export class OnlineController extends FramePlayer implements BattleDriver {
   // --------------------------------------------------------------------------
   private receive(m: Msg) {
     if (this.disposed) return;
+    if (m.t !== 'stamp' && m.t !== 'peer' && this.replyTimer) {
+      clearTimeout(this.replyTimer);
+      this.replyTimer = null;
+    }
     if (m.t === 'peer') {
       useBattle.setState({ peerOffline: m.connected ? null : Date.now() + (m.until ?? 0) });
       return;

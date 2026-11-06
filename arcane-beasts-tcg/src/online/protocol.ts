@@ -53,6 +53,8 @@ export type ClientMsg =
   | { t: 'queue'; kind: 'random'; deck: string[] }
   | { t: 'cancel' }
   | { t: 'answer'; seq: number; answer: Answer }
+  /** ask for the table as it stands (after a lost answer or a doubtful link) */
+  | { t: 'sync' }
   | { t: 'surrender' }
   | { t: 'stamp'; id: string }
   | { t: 'leave' }

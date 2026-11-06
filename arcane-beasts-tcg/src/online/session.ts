@@ -24,6 +24,8 @@ export class GameSession {
   seq = 0;
   /** the prompt currently waiting for a player */
   private waiting: Prompt | null = null;
+  /** when the waiting prompt was put (ms), so a late snapshot shows the time really left */
+  private waitingSince = 0;
   started = false;
 
   constructor(decks: [string[], string[]], names: [string, string], seed = (Math.random() * 2 ** 31) | 0) {
@@ -60,7 +62,7 @@ export class GameSession {
     const w = this.waiting;
     if (!w || this.game.over) return { actor: null, deadline: null };
     const me = perspectiveOf(viewer);
-    return { actor: w.player === me ? 0 : 1, deadline: promptMs(w) };
+    return { actor: w.player === me ? 0 : 1, deadline: Math.max(0, promptMs(w) - (Date.now() - this.waitingSince)) };
   }
 
   /** deal the cards and run to the first decision */
@@ -99,6 +101,7 @@ export class GameSession {
     const pr = this.game.over ? null : this.game.pending;
     if (pr && pr !== this.waiting) {
       this.waiting = pr;
+      this.waitingSince = Date.now();
       this.seq++;
     }
     if (!frames.length && !pr) return [];

@@ -181,6 +181,10 @@ export class Hub {
         return;
       case 'answer':
         return this.answer(c, m.seq, m.answer);
+      case 'sync':
+        // the client is unsure of the table (an answer that got lost): send it as it stands
+        if (c.room?.state === 'playing' && c.room.session && (c.seat === 0 || c.seat === 1)) this.send(c, c.room.session.snapshot(c.seat));
+        return;
       case 'surrender':
         if (c.room?.state === 'playing' && (c.seat === 0 || c.seat === 1)) this.forfeit(c.room, c.seat, 'surrender');
         return;
@@ -455,6 +459,8 @@ export class Hub {
     if (r.error) {
       // stale answers are normal after a reconnect; show others
       if (r.error !== 'stale answer') this.error(c, 'bad_answer', r.error);
+      // either way the client has dropped its prompt: give it the table back so it is never stuck
+      if (!room.session.over) this.send(c, room.session.snapshot(c.seat));
       return;
     }
     this.dispatch(room, r.out);

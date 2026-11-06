@@ -2,7 +2,7 @@
 import { chromium } from 'playwright';
 const [out, mode = 'friend'] = process.argv.slice(2);
 const BASE = process.env.BASE ?? 'http://127.0.0.1:5173';
-const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+const browser = await chromium.launch();
 const mk = async (name, starter) => {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 } });
   const page = await ctx.newPage();
@@ -27,15 +27,19 @@ const snap = async (p, tag) => p.screenshot({ path: `${out}-${String(shot++).pad
 await snap(A, 'lobby');
 
 if (mode === 'friend') {
-  await A.getByText('部屋を作る').click();
-  await A.waitForSelector('.lb-room-code');
-  await A.waitForSelector('.lb-qr img', { timeout: 10000 });
-  const code = await A.locator('.lb-room-code').innerText();
+  await A.getByText('友達と対戦').click();
+  await A.waitForTimeout(500);
+  await A.locator('.btn.big.gold-btn', { hasText: '部屋をつくる' }).click();
+  await A.waitForSelector('.lb-room-code', { timeout: 15000 });
+  const code = (await A.locator('.lb-room-code').innerText()).replace(/\s/g, '');
   console.log('room code', code);
   await A.waitForTimeout(500);
   await snap(A, 'room');
-  await B.getByPlaceholder('部屋コード', { exact: true }).fill(code);
-  await B.getByRole('button', { name: '入る' }).click();
+  await B.getByText('友達と対戦').click();
+  await B.waitForTimeout(500);
+  await B.getByText('コードで入る').click();
+  await B.getByPlaceholder('ABCD').fill(code);
+  await B.getByRole('button', { name: '入る', exact: true }).click();
 } else {
   await A.getByText('相手をさがす').click();
   await B.getByText('相手をさがす').click();

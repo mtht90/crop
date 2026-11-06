@@ -179,6 +179,45 @@ describe('online hub', () => {
     expect(hub.stats().rooms).toBe(1);
   }, 90_000);
 
+  test('a lost or bad answer never leaves a player stuck: the table comes back', async () => {
+    const hub = makeHub();
+    const a = new Bot(hub, 'アリス');
+    const b = new Bot(hub, 'ボブ');
+    a.hello();
+    b.hello();
+    a.auto = false;
+    b.auto = false;
+    a.say({ t: 'create', deck: deckOf(0) });
+    b.say({ t: 'join', code: a.last('room')!.room.code, deck: deckOf(1) });
+    await until(() => !!a.prompt || !!b.prompt);
+    const who = a.prompt ? a : b;
+    const seq = who.seq;
+    // an answer with an old number (sent before a reconnect): ignored, but the table is re-sent
+    const snaps = who.msgs.filter((m) => m.t === 'snapshot').length;
+    who.prompt = null;
+    who.say({ t: 'answer', seq: seq - 1, answer: { type: 'choice', index: 0 } });
+    await until(() => who.msgs.filter((m) => m.t === 'snapshot').length > snaps && !!who.prompt);
+    expect(who.seq).toBe(seq);
+    // a nonsense answer: an error, and again the prompt comes back
+    const snaps2 = who.msgs.filter((m) => m.t === 'snapshot').length;
+    who.prompt = null;
+    who.say({ t: 'answer', seq, answer: { type: 'slot', pos: { p: 1, z: 'bench', i: 9 } } });
+    await until(() => who.msgs.filter((m) => m.t === 'snapshot').length > snaps2 && !!who.prompt);
+    // asking for the table at any time works too
+    const snaps3 = who.msgs.filter((m) => m.t === 'snapshot').length;
+    who.say({ t: 'sync' });
+    await until(() => who.msgs.filter((m) => m.t === 'snapshot').length > snaps3);
+    const snap = who.last('snapshot')!;
+    expect(snap.actor).toBe(0);
+    // the clock shows the time really left, not a fresh full turn
+    expect(snap.deadline!).toBeLessThanOrEqual(150_000);
+    // and the game still plays on to the end
+    a.auto = true;
+    b.auto = true;
+    who.respond();
+    await until(() => !!a.over && !!b.over, 30_000);
+  }, 60_000);
+
   test('flooding a connection gets it dropped', () => {
     const hub = makeHub({ rateLimit: 20 });
     const a = new Bot(hub, 'A');
