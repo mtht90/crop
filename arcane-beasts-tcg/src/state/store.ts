@@ -3,7 +3,7 @@ import type { MatchInfo } from '../online/client';
 import type { Beat } from '../story/types';
 import { create } from 'zustand';
 import { ALL_CARDS, card, CARDS, SET_INFO } from '../engine/cards';
-import { deckById, expand, RIVALS, STARTER_DECKS, type Rival } from '../engine/decks';
+import { cpuPrintTier, deckById, expand, upgradeDeck, RIVALS, STARTER_DECKS, type Rival } from '../engine/decks';
 import type { Difficulty } from '../engine/ai';
 import { cleanWardrobe, cosmeticById, freshWardrobe, type Wardrobe } from './cosmetics';
 import type { CardDef, EType, MonsterCard, Rarity, SetCode } from '../engine/types';
@@ -460,7 +460,7 @@ export const useStore = create<Store>((set, get) => ({
     st.startBattle({
       rival: null,
       playerDeck,
-      oppDeck: expand(deckById(stage.deck)!.cards),
+      oppDeck: upgradeDeck(expand(deckById(stage.deck)!.cards), cpuPrintTier(stage.cpu)),
       oppName: `${stage.label} ${stage.name}`,
       oppPortrait: stage.portrait,
       level: stage.cpu >= 7 ? 'hard' : stage.cpu >= 4 ? 'normal' : 'easy',

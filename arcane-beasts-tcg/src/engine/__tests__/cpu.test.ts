@@ -53,3 +53,18 @@ describe('CPU levels', () => {
     expect([1, 3, 4, 6, 7, 9].map(cpuTier)).toEqual(['easy', 'easy', 'normal', 'normal', 'hard', 'hard']);
   });
 });
+
+describe('CPUのデッキ強化', () => {
+  it('higher levels bring stronger printings of the same cards', async () => {
+    const { upgradeDeck, cpuPrintTier, deckById: byId, expand: ex } = await import('../decks');
+    const { card } = await import('../cards');
+    const base = ex(byId('fire')!.cards);
+    expect(upgradeDeck(base, cpuPrintTier(3))).toEqual(base);
+    const up = upgradeDeck(base, cpuPrintTier(9));
+    expect(up.length).toBe(base.length);
+    // same cards by name, some now rarer printings
+    expect(up.map((id) => card(id).name)).toEqual(base.map((id) => card(id).name));
+    expect(up.filter((id, i) => id !== base[i]).length).toBeGreaterThan(0);
+    expect(Math.max(...up.map((id) => card(id).tier ?? 0))).toBeLessThanOrEqual(3);
+  });
+});

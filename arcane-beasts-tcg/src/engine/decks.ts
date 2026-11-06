@@ -1,4 +1,4 @@
-import { byName, card } from './cards';
+import { byName, card, strongestPrinting } from './cards';
 import type { EType } from './types';
 
 export interface DeckList {
@@ -584,3 +584,14 @@ export const RIVALS: Rival[] = [
     intro: 'ようこそ、小さな召喚士。あなたの絆ごと、闇に溶かしてあげましょう。', win: '光など、影があるから輝けるのよ。', lose: '……ありえない。私の、千年が……！', scene: 'story/p-shadows',
   },
 ];
+
+/**
+ * a CPU's deck at its strength: every card swapped for its strongest printing
+ * up to `maxTier` (0 regular … 3 gold). Rarer printings hit harder and draw more.
+ */
+export function upgradeDeck(ids: string[], maxTier: number): string[] {
+  if (maxTier <= 0) return ids;
+  return ids.map((id) => strongestPrinting(id, maxTier));
+}
+/** how strong the printings a CPU level brings are */
+export const cpuPrintTier = (level: number) => (level >= 8 ? 3 : level >= 7 ? 2 : level >= 5 ? 1 : 0);

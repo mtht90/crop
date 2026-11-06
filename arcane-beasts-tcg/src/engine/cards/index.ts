@@ -344,3 +344,19 @@ export function isTrainer(c: CardDef): c is TrainerCard {
 }
 
 export { MONSTERS, TRAINERS, ENERGIES, MONSTERS2, TRAINERS2, MONSTERS3, TRAINERS3 };
+
+/** the strongest printing of a card up to a tier (the card itself when it has none) */
+const PRINTINGS = new Map<string, CardDef[]>();
+for (const v of VARIANTS) if (v.baseId) PRINTINGS.set(v.baseId, [...(PRINTINGS.get(v.baseId) ?? []), v]);
+export function strongestPrinting(id: string, maxTier: number): string {
+  let best = id;
+  let bt = 0;
+  for (const v of PRINTINGS.get(id) ?? []) {
+    const t = v.tier ?? 0;
+    if (t > bt && t <= maxTier) {
+      best = v.id;
+      bt = t;
+    }
+  }
+  return best;
+}

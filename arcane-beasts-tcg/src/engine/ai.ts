@@ -25,6 +25,42 @@ export type Difficulty = 'easy' | 'normal' | 'hard';
 // ----------------------------------------------------------------------------
 // Board evaluation
 // ----------------------------------------------------------------------------
+/** the weights of the board evaluation (tuned by self-play: scripts/ai-tune.ts) */
+export const W0 = {
+  prize: 180,
+  hpFrac: 30,
+  hpAbs: 0.05,
+  basic: 10,
+  stage1: 32,
+  stage2: 55,
+  rule: 15,
+  energyActive: 11,
+  energyBench: 6,
+  wasted: 3,
+  readyActive: 32,
+  readyBench: 12,
+  dmgActive: 0.4,
+  dmgBench: 0.12,
+  canAttack: 25,
+  tool: 6,
+  ability: 6,
+  cond: 12,
+  stuck: 15,
+  retreat: 2,
+  hand: 3.5,
+  deckLow: 15,
+  oppScale: 0.9,
+  koThreat: 30,
+  beKOd: 25,
+  bench: 0,
+};
+export type Weights = typeof W0;
+/** the weights in use (replaced by the tuned set) */
+export let W: Weights = { ...W0 };
+export function setWeights(w: Weights) {
+  W = { ...w };
+}
+
 function bestDamage(slot: Slot): number {
   const units = energyUnits(slot);
   let best = 0;
@@ -40,56 +76,58 @@ function readiness(slot: Slot): number {
   return Math.min(units, maxCost) / maxCost;
 }
 
-function slotValue(s: GameState, slot: Slot, active: boolean): number {
+function slotValue(s: GameState, slot: Slot, active: boolean, w: Weights): number {
   const mc = topCard(slot);
   const hp = maxHp(s, slot);
   const left = hpLeft(s, slot);
   let v = 0;
-  v += (left / hp) * 30 + left * 0.05;
-  v += mc.stage === 'basic' ? 10 : mc.stage === 'stage1' ? 32 : 55;
-  if (hasRule(mc)) v += 15 * (prizeValue(mc) - 1);
+  v += (left / hp) * w.hpFrac + left * w.hpAbs;
+  v += mc.stage === 'basic' ? w.basic : mc.stage === 'stage1' ? w.stage1 : w.stage2;
+  if (hasRule(mc)) v += w.rule * (prizeValue(mc) - 1);
   const atks = mc.attacks;
   const maxCost = Math.max(...atks.map((a) => a.cost.length), 1);
-  v += Math.min(energyCount(slot), maxCost + 1) * (active ? 11 : 6);
-  if (energyCount(slot) > maxCost + 1) v -= (energyCount(slot) - maxCost - 1) * 3; // wasted energy
-  v += readiness(slot) * (active ? 32 : 12);
+  v += Math.min(energyCount(slot), maxCost + 1) * (active ? w.energyActive : w.energyBench);
+  if (energyCount(slot) > maxCost + 1) v -= (energyCount(slot) - maxCost - 1) * w.wasted; // wasted energy
+  v += readiness(slot) * (active ? w.readyActive : w.readyBench);
   const dmg = bestDamage(slot);
-  v += dmg * (active ? 0.4 : 0.12);
-  if (active && dmg > 0) v += 25;
-  if (slot.tool) v += 6;
-  if (mc.ability) v += 6;
+  v += dmg * (active ? w.dmgActive : w.dmgBench);
+  if (active && dmg > 0) v += w.canAttack;
+  if (slot.tool) v += w.tool;
+  if (mc.ability) v += w.ability;
   if (active) {
-    v -= slot.conditions.length * 12;
-    if (slot.conditions.includes('asleep') || slot.conditions.includes('paralyzed')) v -= 15;
+    v -= slot.conditions.length * w.cond;
+    if (slot.conditions.includes('asleep') || slot.conditions.includes('paralyzed')) v -= w.stuck;
     // retreat burden
-    v -= retreatCost(s, slot) * 2;
+    v -= retreatCost(s, slot) * w.retreat;
   }
   return v;
 }
 
-export function evaluate(s: GameState, p: 0 | 1): number {
+export function evaluate(s: GameState, p: 0 | 1, w: Weights = W): number {
   if (s.phase === 'over') return s.winner === p ? 1e6 : s.winner === -1 ? 0 : -1e6;
   const o = other(p);
+  const total = s.mods?.prizes ?? 6;
   const side = (q: 0 | 1) => {
     const pl = s.players[q];
     let v = 0;
-    v += (6 - pl.prizes.length) * 180;
-    if (pl.active) v += slotValue(s, pl.active, true);
-    for (const b of pl.bench) v += slotValue(s, b, false);
-    v += Math.min(pl.hand.length, 10) * 3.5;
-    if (pl.deck.length < 6) v -= (6 - pl.deck.length) * 15;
+    v += (total - pl.prizes.length) * w.prize;
+    if (pl.active) v += slotValue(s, pl.active, true, w);
+    for (const b of pl.bench) v += slotValue(s, b, false, w);
+    v += Math.min(pl.bench.length, 3) * w.bench;
+    v += Math.min(pl.hand.length, 10) * w.hand;
+    if (pl.deck.length < 6) v -= (6 - pl.deck.length) * w.deckLow;
     if (!pl.active && !pl.bench.length) v -= 5000;
     return v;
   };
-  let score = side(p) - side(o) * 0.9;
+  let score = side(p) - side(o) * w.oppScale;
   // threat: can my active KO their active next attack?
   const me = s.players[p].active;
   const them = s.players[o].active;
   if (me && them) {
     const d = bestDamage(me) * (topCard(them).weakness === topCard(me).type ? 2 : 1);
-    if (d >= hpLeft(s, them)) score += 30 * prizeValue(topCard(them));
+    if (d >= hpLeft(s, them)) score += w.koThreat * prizeValue(topCard(them));
     const t = bestDamage(them) * (topCard(me).weakness === topCard(them).type ? 2 : 1);
-    if (t >= hpLeft(s, me)) score -= 25 * prizeValue(topCard(me));
+    if (t >= hpLeft(s, me)) score -= w.beKOd * prizeValue(topCard(me));
   }
   return score;
 }
@@ -293,11 +331,11 @@ export const CPU_LEVELS: { level: CpuLevel; name: string; blurb: string }[] = [
   { level: 2, name: 'みならい', blurb: 'ときどき良い手を見逃す' },
   { level: 3, name: 'ふつう', blurb: '基本はおさえている' },
   { level: 4, name: 'なれた人', blurb: 'ほとんど間違えない' },
-  { level: 5, name: 'ベテラン', blurb: '目の前の最善手を選ぶ' },
-  { level: 6, name: '上級', blurb: '相手の反撃を考えて攻撃を選ぶ' },
-  { level: 7, name: '達人', blurb: '1ターンの手順を先読みする' },
-  { level: 8, name: '名人', blurb: '手順と反撃を深く読む' },
-  { level: 9, name: '伝説', blurb: 'トッププレイヤーでも負けることがある' },
+  { level: 5, name: 'ベテラン', blurb: '目の前の最善手を選ぶ。デッキに全面絵（★3）のカードが入る' },
+  { level: 6, name: '上級', blurb: '相手の反撃を考えて攻撃を選ぶ。★3のカード入り' },
+  { level: 7, name: '達人', blurb: '1ターンの手順を先読みする。★4のカード入り' },
+  { level: 8, name: '名人', blurb: '手順と反撃を深く読む。★5のカード入り' },
+  { level: 9, name: '伝説', blurb: '最も深く読む。★5のカード入りの強化デッキ' },
 ];
 
 /** the profile for a story difficulty or a CPU level */

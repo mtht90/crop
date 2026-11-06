@@ -2,7 +2,7 @@
 // (キャラとデッキ) are met in the story only.
 import { useEffect, useMemo, useState } from 'react';
 import { activeDeck, useStore } from '../state/store';
-import { ALL_DECKS, CH2_DECKS, EX_DECKS, AB3_DECKS, STARTER_DECKS, expand, validateDeck, type DeckList } from '../engine/decks';
+import { ALL_DECKS, CH2_DECKS, EX_DECKS, AB3_DECKS, STARTER_DECKS, expand, validateDeck, type DeckList, cpuPrintTier, upgradeDeck } from '../engine/decks';
 import { CPU_LEVELS, type CpuLevel } from '../engine/ai';
 import { coinsFor, CPU_FIRST_GEMS, CPU_REWARD, cpuTier } from '../state/progress';
 import { artUrl } from '../lib/assets';
@@ -66,7 +66,7 @@ export function Rivals() {
     startBattle({
       rival: null,
       playerDeck: deck.cards,
-      oppDeck: expand(d.cards),
+      oppDeck: upgradeDeck(expand(d.cards), cpuPrintTier(level)),
       oppName: `CPU Lv.${level}（${d.name}）`,
       oppPortrait: PORTRAIT[level],
       level: cpuTier(level),
