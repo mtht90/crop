@@ -1194,10 +1194,8 @@ function TearStage({ booster, god, u, cards, omen, packs, onAura, burstAt, onDon
     const pts = pathRef.current;
     const done = pts.length >= 2 ? Math.abs(pts[pts.length - 1][0] - pts[0][0]) / 70 : 0;
     if (done >= 0.7) finish();
-    // let go part way: the cut stays open and the next stroke carries it on;
-    // only a tiny nick closes up again
-    else if (done < 0.12 && pts.length) heal();
-    else if (pts.length) sound.current?.idle();
+    // let go part way: the seam closes up and the cut starts over
+    else if (pts.length) heal();
     g.current = null;
   };
 

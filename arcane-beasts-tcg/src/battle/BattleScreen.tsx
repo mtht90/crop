@@ -470,7 +470,9 @@ function pickDrop(x: number, y: number, keys: Set<string>): string | null {
 function markHot(key: string | null) {
   for (const el of document.querySelectorAll('.drop-hot')) el.classList.remove('drop-hot');
   if (!key) return;
-  const sel = key === 'board' ? '.mat' : key === 'bench' ? '.zone-bench.me' : `[data-drop="${key}"]`;
+  // while choosing the first card, the whole board leads to the empty battle field: light that
+  const setupField = key === 'board' ? document.querySelector('.slot-active.empty.hl[data-drop="0a"]') : null;
+  const sel = setupField ? '.slot-active.empty.hl[data-drop="0a"]' : key === 'board' ? '.mat' : key === 'bench' ? '.zone-bench.me' : `[data-drop="${key}"]`;
   for (const el of document.querySelectorAll(sel)) el.classList.add('drop-hot');
 }
 
@@ -503,6 +505,8 @@ interface HandCardProps {
   sel: boolean;
   dragging: boolean;
   lifted: boolean;
+  /** spring back to the hand when let go (off when over a place it can go: it flies on from there) */
+  snap: boolean;
   register: (uid: number, controls: DragControls | null) => void;
   onDown: (e: React.PointerEvent, uid: number) => void;
   onDragStart: () => void;
@@ -532,7 +536,7 @@ function HandCard(p: HandCardProps) {
       drag={p.can}
       dragListener={false}
       dragControls={controls}
-      dragSnapToOrigin
+      dragSnapToOrigin={p.snap}
       dragMomentum={false}
       dragElastic={1}
       dragTransition={{ bounceStiffness: 500, bounceDamping: 32 }}
@@ -569,12 +573,26 @@ function Hand({ cards: raw, playable, selected, onSelect, onDrop, setupPick, dro
   const [dragging, setDragging] = useState<number | null>(null);
   const [lifted, setLifted] = useState(false);
   const hot = useRef<string | null>(null);
+  /** the place under the dragged card (state, so the card knows not to spring back when let go there) */
+  const [hotKey, setHotKey] = useState<string | null>(null);
+  /** a card let go over a place: if it is still in the hand a moment later, it goes back */
+  const [parked, setParked] = useState<{ uid: number; n: number } | null>(null);
+  const [remount, setRemount] = useState<Record<number, number>>({});
+  useEffect(() => {
+    if (!parked) return;
+    const t = setTimeout(() => {
+      if (raw.some((c) => c.uid === parked.uid)) setRemount((m) => ({ ...m, [parked.uid]: (m[parked.uid] ?? 0) + 1 }));
+      setParked(null);
+    }, 700);
+    return () => clearTimeout(t);
+  }, [parked, raw]);
   // the system can cancel a drag without a drop (a notification, the app
   // switcher, a phone call): never leave a card hanging in the air
   useEffect(() => {
     if (dragging === null) return;
     const reset = () => {
       hot.current = null;
+      setHotKey(null);
       markHot(null);
       setDragging(null);
       onDragging(null);
@@ -717,7 +735,7 @@ function Hand({ cards: raw, playable, selected, onSelect, onDrop, setupPick, dro
         const up = isHover || isSel;
         return (
           <HandCard
-            key={c.uid}
+            key={`${c.uid}-${remount[c.uid] ?? 0}`}
             c={c}
             left={`calc(var(--u) * (var(--cx) + ${-total / 2 + i * step}))`}
             z={up ? 100 : i}
@@ -728,6 +746,7 @@ function Hand({ cards: raw, playable, selected, onSelect, onDrop, setupPick, dro
             sel={isSel}
             dragging={dragging === c.uid}
             lifted={lifted}
+            snap={!(dragging === c.uid && hotKey)}
             register={register}
             onDown={onDown}
             onDragStart={() => {
@@ -743,6 +762,7 @@ function Hand({ cards: raw, playable, selected, onSelect, onDrop, setupPick, dro
               const t = target(c.uid);
               if (t !== hot.current) {
                 hot.current = t;
+                setHotKey(t);
                 markHot(t);
                 if (t) {
                   foley.tick();
@@ -753,6 +773,7 @@ function Hand({ cards: raw, playable, selected, onSelect, onDrop, setupPick, dro
             onDragEnd={(offset) => {
               const t = target(c.uid);
               hot.current = null;
+              setHotKey(null);
               markHot(null);
               swallow();
               setDragging(null);
@@ -761,6 +782,7 @@ function Hand({ cards: raw, playable, selected, onSelect, onDrop, setupPick, dro
               document.body.classList.remove('hand-dragging');
               if (t) {
                 vibrate(14);
+                setParked({ uid: c.uid, n: Date.now() });
                 onDrop(c.uid, t);
               }
               // a short wobble is a tap
@@ -1129,6 +1151,11 @@ export function BattleScreen() {
     if (isSetup) {
       if (!setupBasics.has(uid)) return keys;
       keys.add('0a');
+      // the first card always goes to the battle field: anywhere on the board pulls it there
+      if (setupActive === null || setupActive === uid) {
+        keys.add('board');
+        return keys;
+      }
       if (setupBench.length < 5) for (let i = 0; i < 5; i++) keys.add(`0b${i}`);
       return keys;
     }
