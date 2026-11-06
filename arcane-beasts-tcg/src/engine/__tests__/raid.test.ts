@@ -68,10 +68,9 @@ describe('ボスレイド', () => {
     expect(raidLapBonus(2)).toBeGreaterThan(raidLapBonus(1));
     expect(raidLapReward(1)).toBeGreaterThan(RAID_TRY_GEMS * 10);
     expect(raidLapReward(2)).toBeGreaterThan(raidLapReward(1));
-    // a raid is a big earner: a good battle pays far more than a try costs
-    expect(raidBattleGems(250)).toBe(6);
-    expect(raidBattleGems(99999)).toBe(50);
-    expect(raidLapReward(1)).toBeGreaterThanOrEqual(1000);
+    // a raid pays when the boss falls (a big lump, like ぷにぷに's campaigns), not per battle
+    expect(raidBattleGems(99999)).toBe(0);
+    expect(raidLapReward(1)).toBeGreaterThanOrEqual(3000);
     // a save from before laps keeps this week's tries (no second free try)
     const old = { key: weekKey(), bossId: BOSSES[0].id, tries: 3, wins: 1, best: 0, fastest: 0 } as unknown as Parameters<typeof raidNow>[0];
     const r = raidNow(old);

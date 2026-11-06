@@ -1,57 +1,46 @@
 import { describe, expect, it } from 'vitest';
-import { battleReward, bump, COIN_SCALE, currentEvent, dayKey, ensurePeriods, EVENTS, freshProgress, GEM_DAILY_WIN, GEM_FIRST_CLEAR, LOGIN_GEMS, LOGIN_REWARDS, levelGems, levelReward, missionGems, missionValue, NORMAL_MISSIONS, storyFirstClear, ACHIEVEMENTS, weekKey } from '../progress';
+import { battleReward, bump, currentEvent, winGems, dayKey, ensurePeriods, EVENTS, freshProgress, GEM_DAILY_WIN, GEM_FIRST_CLEAR, LOGIN_GEMS, LOGIN_REWARDS, levelGems, levelReward, missionGems, missionValue, NORMAL_MISSIONS, storyFirstClear, ACHIEVEMENTS, weekKey } from '../progress';
 import { cleanWardrobe, COSMETICS, DEFAULT_LOOK, freshWardrobe } from '../cosmetics';
+import { PACK_PRICE, PREMIUM_PRICE, TEN_PACKS } from '../store';
 
 const win = { win: true, level: 'normal' as const, baseReward: 300, prizesTaken: 6, prizesLost: 2, firstClear: false };
 
-describe('gems (ジェム) — the one currency', () => {
-  it('pays what used to be coins as gems, at the old values; coins are always 0', () => {
+describe('gems (ジェム) — ぷにぷに準拠', () => {
+  it('a win pays a little (5-30), a first clear a lot; coins are always 0', () => {
     const p = freshProgress();
     p.lastWinDay = dayKey();
     const again = battleReward(p, win);
     expect(again.total).toBe(0);
     for (const l of again.lines) expect(l.coins, l.label).toBe(0);
-    // 勝利報酬 300 + サイド 6×10 (no daily, no first clear)
-    expect(again.gems).toBeGreaterThanOrEqual(300);
+    expect(again.gems).toBe(winGems(300));
+    expect(winGems(0)).toBe(5);
+    expect(winGems(99999)).toBe(30);
     for (const level of ['easy', 'normal', 'hard'] as const) {
       const r = battleReward(p, { ...win, level, firstClear: true });
-      expect(r.lines.find((l) => l.label === '初回クリアボーナス')?.gems).toBe(200 * COIN_SCALE + GEM_FIRST_CLEAR[level]);
-      expect(r.gems - again.gems, level).toBe(200 + GEM_FIRST_CLEAR[level]);
+      expect(r.gems - again.gems, level).toBe(GEM_FIRST_CLEAR[level]);
     }
   });
-  it('the first win of the day adds a bonus; losing still pays a little', () => {
+  it('the first win of the day adds a bonus; a loss pays nothing', () => {
     const p = freshProgress();
     p.lastWinDay = dayKey();
     const plain = battleReward(p, win).gems;
     p.lastWinDay = '';
-    expect(battleReward(p, win).gems - plain).toBe(100 + GEM_DAILY_WIN);
+    expect(battleReward(p, win).gems - plain).toBe(GEM_DAILY_WIN);
     const lose = battleReward(p, { ...win, win: false });
-    expect(lose.gems).toBeGreaterThan(0);
-    expect(lose.gems).toBeLessThan(plain);
+    expect(lose.gems).toBe(0);
+    expect(lose.exp).toBeGreaterThan(0);
   });
-  it('missions, logins, story and levels pay gems at pre-gem coin values', () => {
-    expect(LOGIN_GEMS.length).toBe(LOGIN_REWARDS.length);
-    expect(LOGIN_REWARDS[6] + LOGIN_GEMS[6]).toBeGreaterThan(LOGIN_REWARDS[0] + LOGIN_GEMS[0]);
-    for (const m of [...NORMAL_MISSIONS, ...ACHIEVEMENTS]) {
-      expect(m.reward, m.id).toBeGreaterThanOrEqual(30);
-      expect(missionGems(m), m.id).toBe(m.reward + (m.gems ?? 0));
-    }
-    expect(storyFirstClear(1, false, 1).coins).toBe(0);
-    expect(storyFirstClear(1, false, 1).gems).toBeGreaterThanOrEqual(20);
-    expect(storyFirstClear(12, true, 2).gems).toBe(500);
+  it('a pack is 500, a 10連 4,500; a login week pays one pack', () => {
+    expect(PACK_PRICE).toBe(500);
+    expect(PACK_PRICE * TEN_PACKS).toBe(4500);
+    expect(PREMIUM_PRICE).toBe(PACK_PRICE * 3);
+    expect(LOGIN_REWARDS.reduce((a, b) => a + b, 0) + LOGIN_GEMS.reduce((a, b) => a + b, 0)).toBe(500);
+    for (const m of [...NORMAL_MISSIONS, ...ACHIEVEMENTS]) expect(missionGems(m), m.id).toBe(m.reward + (m.gems ?? 0));
+    expect(storyFirstClear(1, false, 1).gems).toBe(100);
+    expect(storyFirstClear(12, true, 2).gems).toBe(1500);
     expect(storyFirstClear(11, false, 1).gems).toBeGreaterThan(storyFirstClear(1, false, 1).gems);
-    expect(levelReward(2)).toBeGreaterThanOrEqual(100);
+    expect(levelReward(2)).toBe(0);
     expect(levelGems(5)).toBeGreaterThan(levelGems(4));
-    for (const e of EVENTS) {
-      const tasks = e.tasks.filter((t) => t.stat !== 'eventTasks');
-      for (const t of tasks) {
-        expect(t.gems!, t.id).toBeGreaterThanOrEqual(50);
-        expect(t.gems!, t.id).toBeLessThanOrEqual(250);
-      }
-      const bonus = e.tasks.find((t) => t.stat === 'eventTasks')!;
-      expect(bonus.gems!).toBeGreaterThan(Math.max(...tasks.map((t) => t.gems!)));
-      expect(bonus.target).toBeLessThanOrEqual(tasks.length);
-    }
   });
 });
 

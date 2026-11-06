@@ -11,7 +11,7 @@
 import { BOSSES, RAID_DROP, raidCardOf } from '../engine/cards/bosses';
 import type { MonsterCard } from '../engine/types';
 
-export const RAID_TRY_GEMS = 10;
+export const RAID_TRY_GEMS = 50;
 
 export interface RaidSave {
   key: string;
@@ -30,9 +30,9 @@ export const raidLapHp = (lap: number) => (lap <= 1 ? 1500 : 2200);
 /** extra damage on each boss attack on lap n */
 export const raidLapBonus = (lap: number) => (lap <= 1 ? 0 : 10);
 /** what clearing lap n pays */
-export const raidLapReward = (lap: number) => (lap <= 1 ? 1000 : lap === 2 ? 1500 : 800);
+export const raidLapReward = (lap: number) => (lap <= 1 ? 3000 : lap === 2 ? 5000 : 2500);
 /** gems for any battle, by the damage it did (never more than a try costs) */
-export const raidBattleGems = (dealt: number) => Math.min(50, Math.floor(dealt / 40));
+export const raidBattleGems = (_dealt: number) => 0; // the boss keeps the damage; gems come when it falls
 
 // ---------------------------------------------------------------------------
 // When raids run: at random. The calendar is drawn from a fixed seed, so every

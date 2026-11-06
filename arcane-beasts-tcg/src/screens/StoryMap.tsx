@@ -9,7 +9,7 @@ import { artUrl } from '../lib/assets';
 import { TopBar } from '../ui/TopBar';
 import { Icon } from '../ui/Icon';
 import { EnergySymbol } from '../ui/Card';
-import { coinsFor, storyFirstClear } from '../state/progress';
+import { storyFirstClear, winGems } from '../state/progress';
 import { CHAPTERS, episodeLabel, episodeNo, PARTS } from '../story';
 import { chapterState, isCleared, nextChapterIndex, replayScene, startChapter } from '../story/flow';
 import { foley, playMusic, sfx } from '../audio/audio';
@@ -149,11 +149,11 @@ export function StoryMap() {
                   <span>
                     {state === 'cleared' ? (
                       <>
-                        報酬 <Icon name="gem" /> <b>{coinsFor(rival!.reward).toLocaleString()}</b>
+                        報酬 <Icon name="gem" /> <b>{winGems(rival!.reward).toLocaleString()}</b>
                       </>
                     ) : (
                       <>
-                        初回 <Icon name="gem" /> <b>{(coinsFor(rival!.reward) + firstPay.gems).toLocaleString()}</b>
+                        初回 <Icon name="gem" /> <b>{(winGems(rival!.reward) + firstPay.gems).toLocaleString()}</b>
                       </>
                     )}
                   </span>

@@ -95,8 +95,7 @@ export function ResultOverlay() {
         { kos: stR.kos, damage: stR.damage, prizes: stR.prizes, evolves: stR.evolves, trainers: stR.trainers },
       );
       const rr = useStore.getState().recordRaid({ win, dealt });
-      const lines = [{ label: `ボスに与えたダメージ ${dealt.toLocaleString()}`, coins: 0, gems: rr.gems }];
-      if (win) lines.push({ label: '討伐報酬', coins: 0, gems: rr.lapGems });
+      const lines = win ? [{ label: '討伐報酬', coins: 0, gems: rr.lapGems }] : [];
       setRaidRes(rr);
       setRes({ ...base, lines, total: base.total, gems: base.gems + rr.gems + rr.lapGems });
       return;

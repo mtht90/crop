@@ -41,9 +41,9 @@ import { raidBattleGems, raidCost, raidLapBonus, raidLapHp, raidLapReward, raidN
 // ----------------------------------------------------------------------------
 // Copies beyond MAX_COPIES are sold for coins on the spot (by ★).
 // ----------------------------------------------------------------------------
-export const ECON_VERSION = 3;
+export const ECON_VERSION = 4;
 export const MAX_COPIES = 10;
-export const DUPE_COINS: Record<Rarity, number> = { 1: 5, 2: 10, 3: 25, 4: 80, 5: 200 };
+export const DUPE_COINS: Record<Rarity, number> = { 1: 5, 2: 10, 3: 30, 4: 100, 5: 300 };
 /** what the old かけら (shards) are worth now that they are gone, per shard */
 const SHARD_COINS: Record<string, number> = { C: 10, U: 10, R: 15, RR: 30, RRR: 30, ST: 50, ST2: 60, CR: 80, AR: 50, CHR: 50, S: 50, SR: 50, SAR: 80, UR: 80 };
 const CARDS_OK = (cid: string) => cid in CARDS;
@@ -264,12 +264,14 @@ function load(): Save {
       if (typeof parsed.gems !== 'number') s.gems = Math.max(0, parsed.coins ?? 0);
       // the economy redesign: everyday coins pay out 5× what they did, so do the coins already saved
       // coins are gone: what is saved turns into gems at the old (pre-gem) value
-      if ((parsed.econ ?? 1) < ECON_VERSION) {
+      if ((parsed.econ ?? 1) < 3) {
         const was = (parsed.econ ?? 1) >= 2 ? Math.floor(s.coins / OLD_COIN_SCALE) : s.coins;
         s.gems += Math.max(0, was);
         s.coins = 0;
-        s.econ = ECON_VERSION;
       }
+      // ぷにぷに準拠: a pack went from 150 to 500 gems, so saved gems buy as many packs as before
+      if ((parsed.econ ?? 1) < 4) s.gems = Math.round((s.gems * 10) / 3);
+      s.econ = ECON_VERSION;
       s.wardrobe = cleanWardrobe(s.wardrobe);
       // anything over the cap is sold
       for (const [cid, n] of Object.entries(s.collection)) {
@@ -708,8 +710,10 @@ export function owned(s: Save, cid: string) {
 // A drawn card may come as one of its special printings (mirror, full art,
 // special art, gold): same card, same ★, only the look is rarer.
 // ----------------------------------------------------------------------------
-export const PACK_PRICE = 150;
-export const PREMIUM_PRICE = 450;
+export const PACK_PRICE = 500;
+export const PREMIUM_PRICE = 1500;
+/** 10連 costs 9 packs (ぷにぷに: 1回500・10連4,500) */
+export const TEN_PACKS = 9;
 export const PACK_SIZE = 5;
 
 export interface Booster {

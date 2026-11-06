@@ -142,7 +142,8 @@ export const COIN_SCALE = 1;
 export const OLD_COIN_SCALE = 5;
 /** coins a battle's base reward pays out (rivals and CPU levels list the base) */
 export const coinsFor = (base: number) => base * COIN_SCALE;
-export const levelReward = (level: number) => (100 + level * 25 + (level % 5 === 0 ? 300 : 0)) * COIN_SCALE;
+/** level-ups pay only levelGems now (kept for old callers) */
+export const levelReward = (_level: number) => 0;
 
 /** Adds EXP; returns the levels reached (each grants levelReward coins). */
 export function addExp(p: Progress, amount: number): number[] {
@@ -159,28 +160,30 @@ export function addExp(p: Progress, amount: number): number[] {
 // ---------------------------------------------------------------------------
 // Login bonus (7-day cycle; the cycle advances on each day you log in)
 // ---------------------------------------------------------------------------
-export const LOGIN_REWARDS = [60, 80, 100, 120, 150, 200, 450];
-/** gems with each day of the login cycle */
-export const LOGIN_GEMS = [10, 10, 15, 15, 20, 30, 100];
+export const LOGIN_REWARDS = [30, 30, 50, 50, 70, 70, 200];
+/** (folded into LOGIN_REWARDS: one 7-day cycle pays 500 = one pack) */
+export const LOGIN_GEMS = [0, 0, 0, 0, 0, 0, 0];
 
 // ---------------------------------------------------------------------------
 // Gems (ジェム) buy packs and looks. Gems are earned, never sold:
 //   first clear of a rival / story episode, first win of the day, missions,
 //   the login cycle and level-ups. Tune the numbers here.
 // ---------------------------------------------------------------------------
-export const GEM_FIRST_CLEAR: Record<Difficulty, number> = { easy: 40, normal: 60, hard: 100 };
-export const GEM_DAILY_WIN = 10;
+export const GEM_FIRST_CLEAR: Record<Difficulty, number> = { easy: 150, normal: 200, hard: 300 };
+export const GEM_DAILY_WIN = 30;
+/** a won battle that can be played again pays a little: 5–30 by its base reward (ぷにぷにの通常ステージ) */
+export const winGems = (base: number) => Math.min(30, Math.max(5, Math.round(base / 16)));
 /** gems a mission pays (its old coin reward, plus any gems it carried) */
 export const missionGems = (m: Mission) => m.reward + (m.gems ?? 0);
-export const levelGems = (level: number) => (level % 5 === 0 ? 50 : 20);
+export const levelGems = (level: number) => (level % 5 === 0 ? 150 : 30);
 /**
  * the first clear of a story episode: it grows along the chapter, and each
  * chapter's last episode pays the most (episode 1: 500 coins · 30 gems …
  * episode 11: 1,500 · 180; the finale 3,000 · 300, from 第二章 on 5,000 · 500)
  */
 export function storyFirstClear(episode: number, last: boolean, part: number): { coins: number; gems: number } {
-  if (last) return part <= 1 ? { coins: 0, gems: 300 } : { coins: 0, gems: 500 };
-  return { coins: 0, gems: 30 + (episode - 1) * 15 };
+  if (last) return part <= 1 ? { coins: 0, gems: 1000 } : { coins: 0, gems: 1500 };
+  return { coins: 0, gems: 100 + (episode - 1) * 50 };
 }
 /** 通常ミッション also carry a few gems (about 1 per 50 coins, in fives, 5–100) */
 export const normalMissionGems = (coins: number) => Math.min(100, Math.max(5, Math.round(coins / 50 / 5) * 5));
@@ -191,7 +194,7 @@ export const normalMissionGems = (coins: number) => Math.min(100, Math.max(5, Ma
 /** coins for a win, by level */
 export const CPU_REWARD = [60, 80, 100, 130, 170, 220, 280, 360, 480];
 /** gems for the first win at each level */
-export const CPU_FIRST_GEMS = [20, 20, 30, 30, 40, 50, 60, 80, 150];
+export const CPU_FIRST_GEMS = [60, 60, 100, 100, 150, 150, 200, 300, 500];
 /** the difficulty tier a level counts as (rewards, missions) */
 export const cpuTier = (level: number): Difficulty => (level <= 3 ? 'easy' : level <= 6 ? 'normal' : 'hard');
 export const canClaimLogin = (p: Progress) => p.loginDay !== dayKey();
@@ -220,35 +223,21 @@ export interface RewardLine {
   gems?: number;
 }
 
-/** the most a lost battle pays for taking part */
-export const LOSS_PART_MAX = 15;
+/** a lost battle pays nothing */
+export const LOSS_PART_MAX = 0;
 
 export function battleReward(p: Progress, o: BattleOutcome): { lines: RewardLine[]; total: number; gems: number; exp: number } {
+  // ぷにぷに準拠: a loss pays nothing; a win pays a little (more on the day's first),
+  // and the big amounts come once (first clears) or from events and raids
   const lines: RewardLine[] = [];
   if (o.win) {
-    lines.push({ label: '勝利報酬', coins: o.baseReward });
-    if (o.prizesTaken) lines.push({ label: `サイド獲得 ×${o.prizesTaken}`, coins: o.prizesTaken * 5 });
-    if (o.prizesLost === 0) lines.push({ label: 'パーフェクト勝利', coins: Math.round(o.baseReward * 0.3) });
-    if (p.streak >= 1) lines.push({ label: `${p.streak + 1}連勝ボーナス`, coins: Math.round(o.baseReward * Math.min(0.5, p.streak * 0.1)) });
-    if (p.lastWinDay !== dayKey()) lines.push({ label: '本日の初勝利', coins: 100, gems: GEM_DAILY_WIN });
-    if (o.firstClear && o.firstClearCoins === undefined) lines.push({ label: o.firstClearLabel ?? '初回クリアボーナス', coins: 200, gems: o.firstClearGems ?? GEM_FIRST_CLEAR[o.level] });
-  } else {
-    // a loss pays a little for taking part, never a win's worth
-    const part = Math.min(LOSS_PART_MAX, Math.round(o.baseReward * 0.03));
-    if (part > 0) lines.push({ label: '参加報酬', coins: part });
-    if (o.prizesTaken) lines.push({ label: `サイド獲得 ×${o.prizesTaken}`, coins: o.prizesTaken * 2 });
+    lines.push({ label: '勝利報酬', coins: 0, gems: winGems(o.baseReward) });
+    if (p.lastWinDay !== dayKey()) lines.push({ label: '本日の初勝利', coins: 0, gems: GEM_DAILY_WIN });
+    if (o.firstClear) lines.push({ label: o.firstClearLabel ?? '初回クリアボーナス', coins: 0, gems: o.firstClearGems ?? GEM_FIRST_CLEAR[o.level] });
   }
   const mult = o.level === 'hard' ? 2 : o.level === 'normal' ? 1.5 : 1;
-  const exp = Math.round((o.win ? 100 : 25) * mult + o.prizesTaken * (o.win ? 5 : 2));
-  // one currency: what was coins is paid as gems, at the old values
-  for (const l of lines) {
-    l.gems = (l.gems ?? 0) + l.coins * COIN_SCALE;
-    l.coins = 0;
-  }
-  // story first clears are priced in final coins
-  if (o.win && o.firstClear && o.firstClearCoins !== undefined)
-    lines.push({ label: o.firstClearLabel ?? 'ストーリー初回クリア', coins: o.firstClearCoins, gems: o.firstClearGems ?? GEM_FIRST_CLEAR[o.level] });
-  return { lines, total: lines.reduce((n, l) => n + l.coins, 0), gems: lines.reduce((n, l) => n + (l.gems ?? 0), 0), exp };
+  const exp = o.win ? Math.round(100 * mult + o.prizesTaken * 5) : Math.round(25 * mult);
+  return { lines, total: 0, gems: lines.reduce((n, l) => n + (l.gems ?? 0), 0), exp };
 }
 
 // ---------------------------------------------------------------------------
@@ -266,25 +255,25 @@ export interface Mission {
 }
 
 const DAILY_POOL: Mission[] = [
-  { id: 'd-battle3', label: 'バトルを3回する', stat: 'battles', target: 3, reward: 80 },
-  { id: 'd-win1', label: 'バトルに1回勝利する', stat: 'wins', target: 1, reward: 80 },
-  { id: 'd-win2', label: 'バトルに2回勝利する', stat: 'wins', target: 2, reward: 120 },
-  { id: 'd-ko5', label: '相手のモンスターを5匹きぜつさせる', stat: 'kos', target: 5, reward: 90 },
-  { id: 'd-dmg600', label: 'ワザで合計600ダメージを与える', stat: 'damage', target: 600, reward: 90 },
-  { id: 'd-prize6', label: 'サイドを合計6枚とる', stat: 'prizes', target: 6, reward: 90 },
-  { id: 'd-evolve3', label: 'モンスターを3回進化させる', stat: 'evolves', target: 3, reward: 70 },
-  { id: 'd-trainer8', label: 'トレーナーズを8枚使う', stat: 'trainers', target: 8, reward: 70 },
-  { id: 'd-pack2', label: 'パックを2回開ける', stat: 'packs', target: 2, reward: 60 },
+  { id: 'd-battle3', label: 'バトルを3回する', stat: 'battles', target: 3, reward: 30 },
+  { id: 'd-win1', label: 'バトルに1回勝利する', stat: 'wins', target: 1, reward: 30 },
+  { id: 'd-win2', label: 'バトルに2回勝利する', stat: 'wins', target: 2, reward: 30 },
+  { id: 'd-ko5', label: '相手のモンスターを5匹きぜつさせる', stat: 'kos', target: 5, reward: 30 },
+  { id: 'd-dmg600', label: 'ワザで合計600ダメージを与える', stat: 'damage', target: 600, reward: 30 },
+  { id: 'd-prize6', label: 'サイドを合計6枚とる', stat: 'prizes', target: 6, reward: 30 },
+  { id: 'd-evolve3', label: 'モンスターを3回進化させる', stat: 'evolves', target: 3, reward: 30 },
+  { id: 'd-trainer8', label: 'トレーナーズを8枚使う', stat: 'trainers', target: 8, reward: 30 },
+  { id: 'd-pack2', label: 'パックを2回開ける', stat: 'packs', target: 2, reward: 30 },
 ];
 
 const WEEKLY_POOL: Mission[] = [
-  { id: 'w-win10', label: 'バトルに10回勝利する', stat: 'wins', target: 10, reward: 500 },
-  { id: 'w-battle15', label: 'バトルを15回する', stat: 'battles', target: 15, reward: 400 },
-  { id: 'w-ko30', label: '相手のモンスターを30匹きぜつさせる', stat: 'kos', target: 30, reward: 450 },
-  { id: 'w-hard3', label: '「むずかしい」相手に3回勝利する', stat: 'hardWins', target: 3, reward: 500 },
-  { id: 'w-dmg5000', label: 'ワザで合計5000ダメージを与える', stat: 'damage', target: 5000, reward: 450 },
-  { id: 'w-pack10', label: 'パックを10回開ける', stat: 'packs', target: 10, reward: 350 },
-  { id: 'w-perfect2', label: 'パーフェクト勝利を2回達成する', stat: 'perfectWins', target: 2, reward: 500 },
+  { id: 'w-win10', label: 'バトルに10回勝利する', stat: 'wins', target: 10, reward: 150 },
+  { id: 'w-battle15', label: 'バトルを15回する', stat: 'battles', target: 15, reward: 150 },
+  { id: 'w-ko30', label: '相手のモンスターを30匹きぜつさせる', stat: 'kos', target: 30, reward: 150 },
+  { id: 'w-hard3', label: '「むずかしい」相手に3回勝利する', stat: 'hardWins', target: 3, reward: 150 },
+  { id: 'w-dmg5000', label: 'ワザで合計5000ダメージを与える', stat: 'damage', target: 5000, reward: 150 },
+  { id: 'w-pack10', label: 'パックを10回開ける', stat: 'packs', target: 10, reward: 150 },
+  { id: 'w-perfect2', label: 'パーフェクト勝利を2回達成する', stat: 'perfectWins', target: 2, reward: 150 },
 ];
 
 function tiered(id: string, label: (n: number) => string, stat: Mission['stat'], tiers: [number, number][]): Mission[] {

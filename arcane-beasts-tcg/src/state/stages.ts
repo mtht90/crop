@@ -142,8 +142,8 @@ export function stagesOf(ev: StageEvent): Stage[] {
       mods: r.mods,
       cpu: r.cpu,
       rules: modsText(r.mods),
-      gems: i === STAGE_COUNT - 1 ? 400 : boss ? 150 : 50,
-      winGems: i === STAGE_COUNT - 1 ? 60 : boss ? 30 : 10,
+      gems: i === STAGE_COUNT - 1 ? 1500 : boss ? 500 : 150,
+      winGems: i === STAGE_COUNT - 1 ? 270 : boss ? 130 : 70,
     };
   });
 }
@@ -194,8 +194,8 @@ export function shopOf(ev: StageEvent): ShopItem[] {
   const card = EVENT_CARDS.find((c) => c.id === ev.card)!;
   return [
     { id: 'card', label: card.name, cost: 400, limit: 2, card: card.id },
-    { id: 'gems150', label: 'ジェム 150', cost: 50, limit: 10, gems: 150 },
-    { id: 'gems50', label: 'ジェム 50', cost: 20, limit: 40, gems: 50 },
+    { id: 'gems500', label: 'ジェム 500', cost: 50, limit: 10, gems: 500 },
+    { id: 'gems150', label: 'ジェム 150', cost: 20, limit: 40, gems: 150 },
   ];
 }
 

@@ -36,7 +36,7 @@ export function Wardrobe() {
       setMsg(`「${c.name}」を手に入れました`);
     } else {
       sfx('miss-2', 0.5);
-      setMsg('ジェムが足りません。バトルやミッションで集めましょう');
+      setMsg('ジェムが足りません。イベントやボスレイド、初回クリアで大きく集められます');
     }
   };
 

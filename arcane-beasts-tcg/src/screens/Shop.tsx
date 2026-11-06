@@ -10,7 +10,7 @@ import { AnimatePresence, animate, motion, useAnimationControls, useMotionValue,
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CardDef, Rarity } from '../engine/types';
 import { byName, RARITY_COLOR, RARITY_SYMBOL } from '../engine/cards';
-import { BOOSTERS, NORMAL_BOOSTER, openPack, PACK_TABLE, PREMIUM_BOOSTER, PREMIUM_TABLE, PRINTING_CHANCE, PREMIUM_PRINTING_CHANCE, useStore, type Booster } from '../state/store';
+import { BOOSTERS, NORMAL_BOOSTER, openPack, PACK_TABLE, PREMIUM_BOOSTER, PREMIUM_TABLE, PRINTING_CHANCE, PREMIUM_PRINTING_CHANCE, TEN_PACKS, useStore, type Booster } from '../state/store';
 import { CardBack, CardFace } from '../ui/Card';
 import { TopBar } from '../ui/TopBar';
 import { Icon } from '../ui/Icon';
@@ -31,6 +31,8 @@ const EASE_IN_OUT = [0.65, 0, 0.35, 1] as const;
 const isStar = (r: Rarity) => r >= 4;
 const rareColor = (r: Rarity) => (r >= 3 ? RARITY_COLOR[r] : '#ffffff');
 const priceOf = (b: Booster) => b.price;
+/** what n packs cost: a 10連 is 9 packs' price */
+const costOf = (b: Booster, n: number) => priceOf(b) * (n >= 10 ? TEN_PACKS * Math.floor(n / 10) + (n % 10) : n);
 
 // ---------------------------------------------------------------------------
 // Omen (予兆) and promotion (昇格)
@@ -150,7 +152,7 @@ export function Shop() {
 
   const buy = useCallback(
     (booster: Booster, packs = 1) => {
-      const cost = priceOf(booster) * packs;
+      const cost = costOf(booster, packs);
       if (useStore.getState().save.gems < cost) {
         sfx('miss-2', 0.5);
         return false;
@@ -221,10 +223,10 @@ export function Shop() {
                       <Icon name="gem" /> {b.price}
                     </span>
                   </button>
-                  <button className={`pill ten ${b.premium ? 'gold' : ''}`} disabled={save.gems < b.price * 10} onClick={() => buy(b, 10)}>
+                  <button className={`pill ten ${b.premium ? 'gold' : ''}`} disabled={save.gems < b.price * TEN_PACKS} onClick={() => buy(b, 10)}>
                     10パック
                     <span className="coin">
-                      <Icon name="gem" /> {(b.price * 10).toLocaleString()}
+                      <Icon name="gem" /> {(b.price * TEN_PACKS).toLocaleString()}
                     </span>
                   </button>
                 </div>
@@ -416,7 +418,7 @@ function Opening({ booster, cards, god, fresh, sold, packs, onClose, onAgain }: 
         {phase === 'tear' && <TearStage booster={booster} god={god} u={u} cards={cards} omen={omen} packs={packs} onAura={setAura} burstAt={burstAt} onDone={() => setPhase('reveal')} />}
 
         {phase === 'multi' && (
-          <MultiResults opened={revealed} cards={cards} fresh={fresh} sold={sold} burstAt={burstAt} onClose={onClose} onAgain={onAgain} canAgain={coins >= priceOf(booster) * packs} price={priceOf(booster) * packs} u={u} />
+          <MultiResults opened={revealed} cards={cards} fresh={fresh} sold={sold} burstAt={burstAt} onClose={onClose} onAgain={onAgain} canAgain={coins >= costOf(booster, packs)} price={costOf(booster, packs)} u={u} />
         )}
 
         {phase === 'reveal' && top && (

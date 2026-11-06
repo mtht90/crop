@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { activeDeck, useStore } from '../state/store';
 import { ALL_DECKS, EX_DECKS, STARTER_DECKS, expand, validateDeck, type DeckList, cpuPrintTier, DECK_STRENGTH, upgradeDeck } from '../engine/decks';
 import { CPU_LEVELS, type CpuLevel } from '../engine/ai';
-import { coinsFor, CPU_FIRST_GEMS, CPU_REWARD, cpuTier } from '../state/progress';
+import { CPU_FIRST_GEMS, CPU_REWARD, cpuTier, winGems } from '../state/progress';
 import { artUrl } from '../lib/assets';
 import { CardFace, EnergySymbol } from '../ui/Card';
 import { Icon } from '../ui/Icon';
@@ -115,7 +115,7 @@ export function Rivals() {
               <p>{info.blurb}</p>
               <div className="rv3-meta">
                 <span>
-                  勝利 <Icon name="gem" /> <b>{coinsFor(CPU_REWARD[level - 1]).toLocaleString()}</b>
+                  勝利 <Icon name="gem" /> <b>{winGems(CPU_REWARD[level - 1]).toLocaleString()}</b>
                 </span>
                 {!beaten.includes(level) && (
                   <span>
