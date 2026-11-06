@@ -91,6 +91,8 @@ export interface Save {
   wins: number;
   losses: number;
   packsOpened: number;
+  /** today's free 通常パック (2 a day, a few hours apart) */
+  freePacks?: { day: string; used: number; last: number };
   newCards: string[];
   settings: Settings;
   started: boolean;
@@ -714,6 +716,29 @@ export const PACK_PRICE = 500;
 export const PREMIUM_PRICE = 1500;
 /** 10連 costs 9 packs (ぷにぷに: 1回500・10連4,500) */
 export const TEN_PACKS = 9;
+
+// ----------------------------------------------------------------------------
+// Free packs: 2 通常パック a day. The second one opens a few hours after the
+// first; both come back at the start of the next day.
+// ----------------------------------------------------------------------------
+export const FREE_PACKS_PER_DAY = 2;
+export const FREE_PACK_GAP_MS = 4 * 60 * 60 * 1000;
+export interface FreePackState {
+  /** free packs left today */
+  left: number;
+  /** one can be opened right now */
+  ready: boolean;
+  /** when the next one opens (ms), if one is left but waiting */
+  readyAt: number | null;
+}
+export function freePackState(s: Pick<Save, 'freePacks'>, now = Date.now()): FreePackState {
+  const f = s.freePacks;
+  const used = f && f.day === dayKey(new Date(now)) ? f.used : 0;
+  const left = Math.max(0, FREE_PACKS_PER_DAY - used);
+  if (left === 0) return { left, ready: false, readyAt: null };
+  const at = used > 0 && f ? f.last + FREE_PACK_GAP_MS : 0;
+  return at > now ? { left, ready: false, readyAt: at } : { left, ready: true, readyAt: null };
+}
 export const PACK_SIZE = 5;
 
 export interface Booster {

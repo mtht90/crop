@@ -10,7 +10,8 @@ import { AnimatePresence, animate, motion, useAnimationControls, useMotionValue,
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CardDef, Rarity } from '../engine/types';
 import { byName, RARITY_COLOR, RARITY_SYMBOL } from '../engine/cards';
-import { BOOSTERS, NORMAL_BOOSTER, openPack, PACK_TABLE, PREMIUM_BOOSTER, PREMIUM_TABLE, PRINTING_CHANCE, PREMIUM_PRINTING_CHANCE, TEN_PACKS, useStore, type Booster } from '../state/store';
+import { dayKey } from '../state/progress';
+import { BOOSTERS, NORMAL_BOOSTER, openPack, PACK_TABLE, PREMIUM_BOOSTER, PREMIUM_TABLE, PRINTING_CHANCE, PREMIUM_PRINTING_CHANCE, TEN_PACKS, freePackState, FREE_PACKS_PER_DAY, useStore, type Booster } from '../state/store';
 import { CardBack, CardFace } from '../ui/Card';
 import { TopBar } from '../ui/TopBar';
 import { Icon } from '../ui/Icon';
@@ -31,6 +32,14 @@ const EASE_IN_OUT = [0.65, 0, 0.35, 1] as const;
 const isStar = (r: Rarity) => r >= 4;
 const rareColor = (r: Rarity) => (r >= 3 ? RARITY_COLOR[r] : '#ffffff');
 const priceOf = (b: Booster) => b.price;
+/** h:mm:ss */
+const fmtWait = (ms: number) => {
+  const t = Math.max(0, Math.ceil(ms / 1000));
+  const h = Math.floor(t / 3600);
+  const m = Math.floor((t % 3600) / 60);
+  const s = t % 60;
+  return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+};
 /** what n packs cost: a 10連 is 9 packs' price */
 const costOf = (b: Booster, n: number) => priceOf(b) * (n >= 10 ? TEN_PACKS * Math.floor(n / 10) + (n % 10) : n);
 
@@ -150,9 +159,19 @@ export function Shop() {
   const [odds, setOdds] = useState<Booster | null>(null);
   useEffect(() => playMusic('packs'), []);
 
+  // the free 通常パック: tick once a second so the countdown moves
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const iv = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(iv);
+  }, []);
+  const free = freePackState(save, now);
+
   const buy = useCallback(
     (booster: Booster, packs = 1) => {
-      const cost = costOf(booster, packs);
+      // a single 通常パック is free while a free one is ready
+      const useFree = !booster.premium && packs === 1 && freePackState(useStore.getState().save).ready;
+      const cost = useFree ? 0 : costOf(booster, packs);
       if (useStore.getState().save.gems < cost) {
         sfx('miss-2', 0.5);
         return false;
@@ -165,6 +184,10 @@ export function Shop() {
       update((s) => {
         s.gems -= cost;
         s.packsOpened += packs;
+        if (useFree) {
+          const st = freePackState(s);
+          s.freePacks = { day: dayKey(), used: FREE_PACKS_PER_DAY - st.left + 1, last: Date.now() };
+        }
       });
       for (let k = 0; k < packs; k++) useStore.getState().recordPack(!!booster.premium);
       const sold = addCards(cards.map((c) => c.id));
@@ -217,12 +240,19 @@ export function Shop() {
                   )}
                 </ul>
                 <div className="shop3-buy">
-                  <button className={`pill ${b.premium ? 'gold' : ''}`} disabled={save.gems < b.price} onClick={() => buy(b)}>
-                    1パック
-                    <span className="coin">
-                      <Icon name="gem" /> {b.price}
-                    </span>
-                  </button>
+                  {!b.premium && free.ready ? (
+                    <button className="pill free" onClick={() => buy(b)}>
+                      無料で開ける
+                      <span className="coin">あと{free.left}パック</span>
+                    </button>
+                  ) : (
+                    <button className={`pill ${b.premium ? 'gold' : ''}`} disabled={save.gems < b.price} onClick={() => buy(b)}>
+                      1パック
+                      <span className="coin">
+                        <Icon name="gem" /> {b.price.toLocaleString()}
+                      </span>
+                    </button>
+                  )}
                   <button className={`pill ten ${b.premium ? 'gold' : ''}`} disabled={save.gems < b.price * TEN_PACKS} onClick={() => buy(b, 10)}>
                     10パック
                     <span className="coin">
@@ -230,6 +260,15 @@ export function Shop() {
                     </span>
                   </button>
                 </div>
+                {!b.premium && (
+                  <div className={`shop3-free ${free.ready ? 'on' : ''}`}>
+                    {free.ready
+                      ? `無料パック 本日あと${free.left}回`
+                      : free.readyAt
+                        ? `次の無料パックまで ${fmtWait(free.readyAt - now)}`
+                        : '本日の無料パックは終了（明日また2回）'}
+                  </div>
+                )}
                 <button className="textbtn shop3-odds" onClick={() => setOdds(b)}>
                   提供割合
                 </button>

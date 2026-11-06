@@ -2,7 +2,7 @@
 // side in landscape. Sub-screens (強敵, ストーリー, フレンド対戦 …) light up
 // the tab they belong to.
 import { claimableCount } from '../state/progress';
-import { extCtx, useStore, type Screen } from '../state/store';
+import { extCtx, freePackState, useStore, type Screen } from '../state/store';
 import { foley } from '../audio/audio';
 import { Icon } from './Icon';
 
@@ -39,6 +39,7 @@ export function TabBar({ screen }: { screen: Screen }) {
   const save = useStore((s) => s.save);
   const active = TAB_OF[screen];
   const missions = claimableCount(save.progress, extCtx(save));
+  const freePack = freePackState(save).ready;
   return (
     <nav className="tabbar">
       {TABS.map((t) => (
@@ -54,6 +55,7 @@ export function TabBar({ screen }: { screen: Screen }) {
           <span className="tab-ico">
             <Icon name={t.icon} />
             {t.id === 'more' && missions > 0 && <i className="tab-dot">{missions}</i>}
+            {t.id === 'shop' && freePack && <i className="tab-dot">無料</i>}
           </span>
           <span className="tab-label">{t.label}</span>
         </button>

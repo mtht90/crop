@@ -338,6 +338,10 @@
 .shop3-buy { display: flex; gap: 8px; flex-wrap: wrap; }
 .shop3-buy .pill { flex: 1 1 120px; min-width: 0; }
 .shop3-odds { align-self: flex-start; font-size: var(--fs-xs); }
+.shop3-buy .pill.free { background: linear-gradient(180deg, #7ff0b0, #2fae6b); color: #06301a; border-color: #b9ffd6; box-shadow: 0 0 18px rgba(80, 230, 150, 0.45); }
+.shop3-buy .pill.free .coin { color: #0b4a28; }
+.shop3-free { font-size: var(--fs-xs); color: var(--ink-dim, #aab); font-variant-numeric: tabular-nums; }
+.shop3-free.on { color: #7ff0b0; font-weight: 700; }
 @media (orientation: landscape) and (min-height: 600px) {
   .shop3-card { grid-template-columns: 1fr; justify-items: center; text-align: left; }
   .shop3-pack { max-width: min(200px, 34vh); }
