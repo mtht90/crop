@@ -214,6 +214,8 @@ export interface TurnFlags {
   retreated: boolean;
   stadiumUsed: boolean;
   attackBonus: number; // from supporters like 騎士団長の激励
+  /** a healing ability was used this turn (only one per turn, however many healers are out) */
+  healed?: boolean;
 }
 
 export interface GameState {

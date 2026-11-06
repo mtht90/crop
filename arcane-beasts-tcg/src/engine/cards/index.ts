@@ -137,7 +137,7 @@ export function describeAbility(a: AbilitySpec): string {
     case 'energyFromDiscard':
       return `自分の番に1回使える。自分のトラッシュから基本${TYPE_JP[a.type]}エネルギーを1枚選び、自分のモンスターにつける。${a.selfDamage ? `その後、このモンスターにダメカンを${a.selfDamage / 10}個のせる。` : ''}`;
     case 'healOnce':
-      return `自分の番に1回使える。自分のモンスター1匹のHPを「${a.n}」回復する。`;
+      return `自分の番に1回使える。自分のモンスター1匹のHPを「${a.n}」回復する。（回復の特性は、何匹いても1ターンに1回だけ）`;
     case 'searchBasicOnce':
       return `自分の番に1回使える。自分の山札から${a.nameIncludes ? `名前に「${a.nameIncludes}」とつく` : ''}たねモンスターを1枚選び、ベンチに出す。そして山札を切る。`;
     case 'switchInOnce':

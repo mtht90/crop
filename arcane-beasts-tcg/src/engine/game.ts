@@ -686,7 +686,7 @@ export class Game {
       case 'energyFromDiscard':
         return pl.discard.some((c) => isBasicEnergyOf(c.cid, spec.type));
       case 'healOnce':
-        return slotsOf(s, p).some((x) => x.slot.damage > 0);
+        return !s.flags.healed && slotsOf(s, p).some((x) => x.slot.damage > 0);
       case 'searchBasicOnce':
         return pl.bench.length < BENCH_MAX && pl.deck.length > 0;
       case 'switchInOnce':
@@ -1472,6 +1472,7 @@ export class Game {
       }
       case 'healOnce': {
         const opts = slotsOf(s, p).filter((x) => x.slot.damage > 0).map((x) => x.pos);
+        s.flags.healed = true;
         const target = yield* this.chooseSlot(p, '回復するモンスターを選んでください', opts);
         if (target) this.heal(target, spec.n);
         break;
