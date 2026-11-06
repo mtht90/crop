@@ -93,3 +93,13 @@ describe('期間限定イベント', () => {
     expect(p.event!.claimed).toEqual([]);
   });
 });
+
+describe('負けたときの報酬', () => {
+  it('a lost battle pays only a little, even a big story duel', async () => {
+    const { battleReward, freshProgress, LOSS_PART_MAX } = await import('../progress');
+    const r = battleReward(freshProgress(), { win: false, level: 'hard', baseReward: 1500, prizesTaken: 5, prizesLost: 6, firstClear: false });
+    expect(r.gems).toBeLessThanOrEqual(LOSS_PART_MAX + 10);
+    const w = battleReward(freshProgress(), { win: true, level: 'hard', baseReward: 1500, prizesTaken: 6, prizesLost: 2, firstClear: false });
+    expect(w.gems).toBeGreaterThan(r.gems * 20);
+  });
+});

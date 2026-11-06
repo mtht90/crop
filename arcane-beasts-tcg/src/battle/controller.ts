@@ -37,6 +37,8 @@ const EMPTY: BattleStats = { kos: 0, damage: 0, prizes: 0, prizesLost: 0, evolve
 export interface BattleResult {
   winner: 0 | 1 | -1;
   reason: string;
+  /** the player gave up: no rewards at all */
+  surrendered?: boolean;
 }
 
 interface BattleStore {
@@ -298,7 +300,7 @@ export class BattleController extends FramePlayer implements BattleDriver {
 
   surrender() {
     this.disposed = true;
-    useBattle.setState({ result: { winner: 1, reason: 'あなたは降参した…' }, prompt: null, thinking: false });
+    useBattle.setState({ result: { winner: 1, reason: 'あなたは降参した…', surrendered: true }, prompt: null, thinking: false });
   }
 
   /** Legal actions for the human right now. */

@@ -220,6 +220,9 @@ export interface RewardLine {
   gems?: number;
 }
 
+/** the most a lost battle pays for taking part */
+export const LOSS_PART_MAX = 15;
+
 export function battleReward(p: Progress, o: BattleOutcome): { lines: RewardLine[]; total: number; gems: number; exp: number } {
   const lines: RewardLine[] = [];
   if (o.win) {
@@ -230,11 +233,13 @@ export function battleReward(p: Progress, o: BattleOutcome): { lines: RewardLine
     if (p.lastWinDay !== dayKey()) lines.push({ label: '本日の初勝利', coins: 100, gems: GEM_DAILY_WIN });
     if (o.firstClear && o.firstClearCoins === undefined) lines.push({ label: o.firstClearLabel ?? '初回クリアボーナス', coins: 200, gems: o.firstClearGems ?? GEM_FIRST_CLEAR[o.level] });
   } else {
-    lines.push({ label: '参加報酬', coins: Math.round(o.baseReward * 0.2) });
-    if (o.prizesTaken) lines.push({ label: `サイド獲得 ×${o.prizesTaken}`, coins: o.prizesTaken * 5 });
+    // a loss pays a little for taking part, never a win's worth
+    const part = Math.min(LOSS_PART_MAX, Math.round(o.baseReward * 0.03));
+    if (part > 0) lines.push({ label: '参加報酬', coins: part });
+    if (o.prizesTaken) lines.push({ label: `サイド獲得 ×${o.prizesTaken}`, coins: o.prizesTaken * 2 });
   }
   const mult = o.level === 'hard' ? 2 : o.level === 'normal' ? 1.5 : 1;
-  const exp = Math.round((o.win ? 100 : 40) * mult + o.prizesTaken * 5);
+  const exp = Math.round((o.win ? 100 : 25) * mult + o.prizesTaken * (o.win ? 5 : 2));
   // one currency: what was coins is paid as gems, at the old values
   for (const l of lines) {
     l.gems = (l.gems ?? 0) + l.coins * COIN_SCALE;

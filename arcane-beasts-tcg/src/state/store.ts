@@ -318,6 +318,8 @@ interface Store {
   equipCosmetic: (id: string) => void;
   recordPack: (premium: boolean) => void;
   recordBattle: (o: BattleOutcome, st: Partial<Stats>) => BattleRewardResult;
+  /** a surrender: a loss, and nothing else (no gems, EXP or mission progress) */
+  recordSurrender: () => void;
   /** pay for a raid try and start it (false = not enough gems) */
   startRaid: (playerDeck: string[]) => boolean;
   /** pay out a raid battle; returns what it paid */
@@ -625,6 +627,11 @@ export const useStore = create<Store>((set, get) => ({
   recordPack: (premium) =>
     get().update((s) => {
       bump(s.progress, { packs: 1, premiumPacks: premium ? 1 : 0 });
+    }),
+  recordSurrender: () =>
+    get().update((s) => {
+      s.progress.streak = 0;
+      s.losses++;
     }),
   recordBattle: (o, st) => {
     let res: BattleRewardResult = { lines: [], total: 0, gems: 0, levelGems: 0, exp: 0, levelBefore: 1, expBefore: 0, levelUps: [], levelCoins: 0 };

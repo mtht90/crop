@@ -109,7 +109,7 @@ export const MONSTERS: MonsterCard[] = [
   m('ナイアド', 'monsters/naiad', W, 'basic', 70, 1, 'U', 'いずみ', [
     { name: 'みずのはどう', cost: [W], damage: 20 },
   ], {
-    ability: { name: '癒しの泉', text: '', spec: { k: 'healOnce', n: 30 } },
+    ability: { name: '癒しの泉', text: '', spec: { k: 'healOnce', n: 10 } },
     flavor: '森の泉に棲む水の精。傷ついた旅人をそっと癒して去っていく。',
   }),
 
@@ -148,7 +148,7 @@ export const MONSTERS: MonsterCard[] = [
     { name: 'とこやみのいのり', cost: [G, G], damage: 30, effects: [{ k: 'condition', cond: 'asleep' }, { k: 'condition', cond: 'poisoned' }] },
   ], {
     evolvesFrom: 'リザードスカウト',
-    ability: { name: '祈祷', text: '', spec: { k: 'healOnce', n: 30 } },
+    ability: { name: '祈祷', text: '', spec: { k: 'healOnce', n: 20 } },
     flavor: '古き蜥蜴族の呪術師。泥と骨で占い、雨と病を操る。',
   }),
   m('コブタ', 'monsters/piglet', G, 'basic', 60, 1, 'C', 'こぶた', [

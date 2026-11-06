@@ -110,7 +110,7 @@ export class OnlineController extends FramePlayer implements BattleDriver {
         } else if (m.t === 'over') {
           this.prompt = null;
           this.clock(null, null);
-          useBattle.setState({ result: { winner: m.winner, reason: reasonText(m.reason) }, onlineResult: m, prompt: null, thinking: false });
+          useBattle.setState({ result: { winner: m.winner, reason: reasonText(m.reason), surrendered: m.reason === 'surrender' && m.winner !== 0 }, onlineResult: m, prompt: null, thinking: false });
         }
       }
     } finally {

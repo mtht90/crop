@@ -46,6 +46,12 @@ export function ResultOverlay() {
       setTimeout(() => clearInterval(iv), 2200);
     }
     if (cfg.spectate) return;
+    if (result.surrendered) {
+      // giving up pays nothing, whatever the battle
+      useStore.getState().recordSurrender();
+      setRes({ lines: [{ label: '降参したため報酬はありません', coins: 0, gems: 0 }], total: 0, gems: 0, levelGems: 0, exp: 0, levelBefore: useStore.getState().save.progress.level, expBefore: useStore.getState().save.progress.exp, levelUps: [], levelCoins: 0 });
+      return;
+    }
     if (cfg.online) {
       // online: coins and progress are paid here
       if (draw0(result.winner)) return;

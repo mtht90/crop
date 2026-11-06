@@ -46,7 +46,7 @@ export const MONSTERS3: MonsterCard[] = [
     { name: 'ひのうた', cost: [F], damage: 20 },
     { name: '日輪のうた', cost: [F, C], damage: 40, effects: [{ k: 'healSelf', n: 20 }] },
   ], {
-    ability: { name: '朝焼けの歌', text: '', spec: { k: 'healOnce', n: 30 } },
+    ability: { name: '朝焼けの歌', text: '', spec: { k: 'healOnce', n: 10 } },
     flavor: '夜明けとともに歌いはじめる砂の歌い手。その歌声は、傷ついた仲間の火を呼び戻す。',
   }),
   m('サンシルフ', 'camp/q-sun-sylph', F, 'basic', 120, 1, 'R', 'ようせい', [
@@ -157,7 +157,7 @@ export const MONSTERS3: MonsterCard[] = [
     { name: 'みどりのいぶき', cost: [G], damage: 20 },
     { name: '森のめぐみ', cost: [G, C], damage: 40, effects: [{ k: 'healAllSelf', n: 10 }] },
   ], {
-    ability: { name: '癒しの祈り', text: '', spec: { k: 'healOnce', n: 30 } },
+    ability: { name: '癒しの祈り', text: '', spec: { k: 'healOnce', n: 20 } },
     flavor: '森の貴婦人。彼女が歩いたあとには、しおれた草花が顔を上げる。',
   }),
   m('エルフロード', 'elves/lord', G, 'basic', 130, 2, 'R', 'エルフ', [
@@ -244,7 +244,7 @@ export const MONSTERS3: MonsterCard[] = [
     { name: 'しろいひかり', cost: [P], damage: 20 },
     { name: 'せいなる祈り', cost: [P, C], damage: 30, effects: [{ k: 'healAllSelf', n: 10 }] },
   ], {
-    ability: { name: '白魔法', text: '', spec: { k: 'healOnce', n: 30 } },
+    ability: { name: '白魔法', text: '', spec: { k: 'healOnce', n: 20 } },
     flavor: '傷をいやす白魔法の使い手。戦場では敵味方どちらの傷も、放っておけない。',
   }),
   m('ルーンマスター', 'dwarves/runemaster', P, 'basic', 100, 1, 'U', 'ドワーフ', [
