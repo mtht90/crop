@@ -26,13 +26,13 @@ describe('ステージイベント', () => {
       }
       expect(card(ev.card).name).toBeTruthy();
       expect(shopOf(ev)[0].card).toBe(ev.card);
-      // a run of first clears pays about 500 gems
-      expect(st.reduce((n, s) => n + s.gems, 0)).toBeGreaterThan(400);
+      // the event is a time to earn: a run of first clears pays well over 1,000 gems
+      expect(st.reduce((n, s) => n + s.gems, 0)).toBeGreaterThan(1000);
     }
   });
   it('bosses always drop shards; ordinary stages only sometimes', () => {
     expect(rollShards(4, () => 0.99)).toBeGreaterThan(0);
-    expect(rollShards(14, () => 0)).toBeGreaterThanOrEqual(30);
+    expect(rollShards(14, () => 0)).toBeGreaterThanOrEqual(80);
     expect(rollShards(1, () => 0.99)).toBe(0);
     expect(rollShards(1, () => 0.1)).toBeGreaterThan(0);
     expect(isBossStage(9)).toBe(true);

@@ -140,7 +140,7 @@ export function stagesOf(ev: StageEvent): Stage[] {
       mods: r.mods,
       cpu: r.cpu,
       rules: modsText(r.mods),
-      gems: i === STAGE_COUNT - 1 ? 150 : boss ? 60 : 20,
+      gems: i === STAGE_COUNT - 1 ? 400 : boss ? 150 : 50,
     };
   });
 }
@@ -169,14 +169,14 @@ export function currentStageEvent(now = new Date()): { ev: StageEvent; key: stri
 // ---------------------------------------------------------------------------
 /** shards a won stage drops (random); bosses always drop some */
 export function rollShards(i: number, rand = Math.random): number {
-  if (i === STAGE_COUNT - 1) return 30 + Math.floor(rand() * 11);
-  if (isBossStage(i)) return 15 + Math.floor(rand() * 11);
-  if (rand() >= 0.6) return 0;
+  if (i === STAGE_COUNT - 1) return 80 + Math.floor(rand() * 21);
+  if (isBossStage(i)) return 40 + Math.floor(rand() * 21);
+  if (rand() >= 0.8) return 0;
   const r = rand();
-  return r < 0.6 ? 5 : r < 0.9 ? 10 : 20;
+  return r < 0.55 ? 10 : r < 0.88 ? 20 : 40;
 }
 /** chance the great boss drops the event card on a win */
-export const EVENT_CARD_DROP = 0.05;
+export const EVENT_CARD_DROP = 0.08;
 
 export interface ShopItem {
   id: string;
@@ -191,8 +191,8 @@ export function shopOf(ev: StageEvent): ShopItem[] {
   const card = EVENT_CARDS.find((c) => c.id === ev.card)!;
   return [
     { id: 'card', label: card.name, cost: 400, limit: 2, card: card.id },
-    { id: 'gems100', label: 'ジェム 100', cost: 60, limit: 5, gems: 100 },
-    { id: 'gems30', label: 'ジェム 30', cost: 20, limit: 20, gems: 30 },
+    { id: 'gems150', label: 'ジェム 150', cost: 50, limit: 5, gems: 150 },
+    { id: 'gems50', label: 'ジェム 50', cost: 20, limit: 20, gems: 50 },
   ];
 }
 

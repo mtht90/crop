@@ -892,3 +892,34 @@
 }
 .stg-banner { width: 100%; text-align: left; cursor: pointer; border: 0; color: inherit; font: inherit; display: grid; gap: 4px; min-height: 160px; align-content: end; }
 .stg-banner-go { justify-self: end; padding: 6px 14px; border-radius: 10px; background: linear-gradient(100deg, #c84dff, #6a2bd8); font-weight: 900; }
+/* stage nodes drawn as little islands (pictures), bosses as glowing medallions */
+.stg-node { width: 118px; height: 112px; }
+.stg-art { position: relative; z-index: 2; width: 108px; height: 92px; object-fit: contain; margin-bottom: 22px; filter: drop-shadow(0 8px 10px rgba(0, 0, 0, 0.45)); pointer-events: none; transition: transform 0.2s; }
+.stg-glow { position: absolute; left: 50%; bottom: 14px; width: 96px; height: 30px; translate: -50% 0; border-radius: 50%; z-index: 1; background: radial-gradient(ellipse, rgba(255, 255, 255, 0.28), transparent 70%); }
+.stg-node .stg-disc, .stg-node .stg-icon { display: none; }
+.stg-node.lock .stg-art { filter: grayscale(0.55) brightness(0.78) drop-shadow(0 8px 10px rgba(0, 0, 0, 0.45)); }
+.stg-lock { position: absolute; left: 50%; top: 38%; translate: -50% -50%; z-index: 3; width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; background: rgba(20, 22, 40, 0.85); border: 2px solid rgba(255, 255, 255, 0.7); font-size: 17px; }
+.stg-node.cur .stg-glow { background: radial-gradient(ellipse, rgba(255, 220, 110, 0.95), rgba(255, 190, 60, 0.35) 55%, transparent 75%); width: 120px; height: 40px; animation: stg-sel 1.4s ease-in-out infinite; }
+.stg-node.cur .stg-art { animation: stg-float 2.4s ease-in-out infinite; }
+@keyframes stg-float { 50% { transform: translateY(-4px); } }
+.stg-node.sel .stg-art { transform: scale(1.08); }
+.stg-node.sel::before { display: none; }
+.stg-node.sel .stg-glow { box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.85), 0 0 18px rgba(var(--et), 0.9); }
+.stg-node.boss { width: 136px; height: 132px; }
+.stg-node.boss .stg-art { width: 124px; height: 112px; margin-bottom: 20px; border-radius: 50%; filter: drop-shadow(0 0 14px rgba(180, 90, 255, 0.85)); }
+.stg-node.boss .stg-glow { background: radial-gradient(ellipse, rgba(190, 110, 255, 0.85), rgba(120, 50, 220, 0.35) 55%, transparent 75%); width: 130px; height: 40px; }
+.stg-node.boss.lock .stg-art { filter: grayscale(0.6) brightness(0.55) drop-shadow(0 0 10px rgba(150, 80, 255, 0.5)); }
+.stg-boss-tag { top: auto; bottom: 30px; font-family: var(--font-display); font-size: 15px; letter-spacing: 0.12em; }
+.stg-node .stg-label { bottom: 0; }
+.stg-node:has(.stg-chapter) .stg-here { top: -40px; }
+.stg-here { top: -14px; }
+@media (orientation: portrait) {
+  .stg-node { width: 104px; height: 100px; }
+  .stg-art { width: 96px; height: 82px; }
+  .stg-node.boss { width: 124px; height: 120px; }
+  .stg-node.boss .stg-art { width: 112px; height: 100px; }
+}
+/* no raid running: the screen goes dark with when the next one is */
+.raid3-closed { position: absolute; top: calc(64px + env(safe-area-inset-top)); right: 0; bottom: var(--tab-h); left: var(--tab-w); z-index: 50; display: grid; place-content: center; justify-items: center; gap: 8px; padding: 24px; text-align: center; background: rgba(2, 3, 10, 0.78); backdrop-filter: grayscale(0.8); -webkit-backdrop-filter: grayscale(0.8); }
+.raid3-closed b { font-family: var(--font-display); font-weight: 400; font-size: var(--fs-l); color: var(--gold-2); }
+.raid3-closed span { color: var(--ink-dim); font-weight: 800; }

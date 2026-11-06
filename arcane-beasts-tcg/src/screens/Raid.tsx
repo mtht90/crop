@@ -6,9 +6,9 @@ import { validateDeck } from '../engine/decks';
 import { card } from '../engine/cards';
 import { BOSS_RAGE_BONUS, RAID_DROP, raidCardOf } from '../engine/cards/bosses';
 import type { MonsterCard } from '../engine/types';
-import { currentBoss, RAID_TRY_GEMS, raidCost, raidLapBonus, raidLapHp, raidLapReward, raidNow } from '../state/raid';
+import { currentBoss, fmtDay, lastDay, nextRaidSession, raidEndsIn, raidSession, RAID_TRY_GEMS, raidCost, raidLapBonus, raidLapHp, raidLapReward, raidNow } from '../state/raid';
 import { CardFace } from '../ui/Card';
-import { fmtRemain, msUntilNextWeek } from '../state/progress';
+import { fmtRemain } from '../state/progress';
 import { artUrl } from '../lib/assets';
 import { Icon } from '../ui/Icon';
 import { EnergySymbol } from '../ui/Card';
@@ -40,7 +40,10 @@ export function Raid() {
   const lapHp = raidLapHp(lap);
   const left = lapHp - r.damage;
 
+  const session = raidSession();
+  const upcoming = nextRaidSession();
   const challenge = async () => {
+    if (!session) return;
     if (!deck || !deckOk) return go('deck');
     if (cost > 0 && !(await askConfirm(`ジェムを${cost}個使って挑戦しますか？（今週${r.tries + 1}回目）`, '挑戦する'))) return;
     sfx('horn-1', 0.7);
@@ -75,11 +78,11 @@ export function Raid() {
         <div className="raid3-body">
           <motion.div className="raid3-logo" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.15, duration: 0.5 }}>
             <span className="raid3-kicker">
-              <Icon name="crown" /> 週替わりレイドバトル
+              <Icon name="crown" /> レイドバトル
             </span>
             <h1>{boss.name}</h1>
             <span className="raid3-period">
-              <Icon name="hourglass" /> 終了まで あと {fmtRemain(msUntilNextWeek())}
+              <Icon name="hourglass" /> 終了まで あと {fmtRemain(raidEndsIn())}
             </span>
           </motion.div>
 
@@ -149,6 +152,12 @@ export function Raid() {
         </div>
       </div>
 
+      {!session && (
+        <div className="raid3-closed">
+          <b>現在、レイドは開催していません</b>
+          <span>{upcoming ? `次回 ${fmtDay(upcoming.start)}〜${lastDay(upcoming)}` : '次回の開催をお待ちください'}</span>
+        </div>
+      )}
       <AnimatePresence>
         {sheet && (
           <motion.div className="login-modal-back" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setSheet(null)}>

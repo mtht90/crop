@@ -26,6 +26,10 @@ const Shard = ({ size = '1.1em' }: { size?: string }) => <img className="shard-i
  * where node i sits on the winding path. `along` is the map's long side; the
  * first and last stages keep clear of the title and the bottom panel.
  */
+/** each stage's picture: the islands in order, the three bosses their own */
+const ART = ['s0', 's1', 's2', 's3', 'boss1', 's9', 's5', 's6', 's7', 'boss2', 's8', 's4', 's10', 's11', 'boss3'];
+const nodeArt = (i: number) => ART[i] ?? 's0';
+
 const PAD = { portrait: [300, 230], landscape: [150, 130] } as const;
 function nodePos(i: number, along: number, across: number, portrait: boolean) {
   const [pa, pb] = portrait ? PAD.portrait : PAD.landscape;
@@ -135,9 +139,14 @@ export function Stage() {
                     onClick={() => pick(i)}
                   >
                     {i % 5 === 0 && <span className="stg-chapter">第{i / 5 + 1}章</span>}
-                    {s.boss && <span className="stg-boss-tag">{i === STAGE_COUNT - 1 ? 'BOSS' : '中ボス'}</span>}
-                    <span className="stg-icon">{s.boss ? <img src={artUrl(s.portrait)} alt="" /> : <Icon name={lock ? 'lock' : 'tower-flag'} />}</span>
-                    <span className="stg-disc" />
+                    {s.boss && <span className="stg-boss-tag">BOSS</span>}
+                    <span className="stg-glow" />
+                    <img className="stg-art" src={asset(`ui/stage/${nodeArt(i)}.webp`)} alt="" draggable={false} />
+                    {lock && (
+                      <span className="stg-lock">
+                        <Icon name="lock" />
+                      </span>
+                    )}
                     <span className="stg-label">{s.label}</span>
                     {done(i) && (
                       <span className="stg-check">
@@ -248,16 +257,16 @@ export function Stage() {
                   </div>
                   <h3>勝つたびに（何度でも）</h3>
                   <p className="raid3-note">
-                    <Shard /> イベントのかけら：ふつうのステージは60%の確率で5〜20個、中ボスは必ず15〜25個、大ボスは必ず30〜40個
+                    <Shard /> イベントのかけら：ふつうのステージは80%の確率で10〜40個、1-5・2-5のボスは必ず40〜60個、3-5のボスは必ず80〜100個
                   </p>
-                  <h3>大ボス</h3>
+                  <h3>3-5 のボス</h3>
                   <div className="raid-drop-row">
                     <div className={`raid-drop-card ${(save.collection[ev.card] ?? 0) > 0 ? '' : 'locked'}`}>
                       <CardFace cid={ev.card} />
                     </div>
                     <div>
                       <b>「{cardDef.name}」</b>
-                      <p>大ボスに勝つたび、{Math.round(EVENT_CARD_DROP * 100)}%の確率で手に入る。交換所でかけらと交換もできる。このイベントでしか手に入らない。</p>
+                      <p>3-5 のボスに勝つたび、{Math.round(EVENT_CARD_DROP * 100)}%の確率で手に入る。交換所でかけらと交換もできる。このイベントでしか手に入らない。</p>
                     </div>
                   </div>
                 </>
@@ -269,7 +278,7 @@ export function Stage() {
                     <li>{ev.blurb}</li>
                     <li>ステージは全{STAGE_COUNT}。勝つと次のステージが開きます。クリアしたステージは何度でも遊べます</li>
                     <li>ステージごとに変則ルールがあります（挑戦前に表示）</li>
-                    <li>1-5・2-5は中ボス、3-5は大ボス</li>
+                    <li>1-5・2-5・3-5はボス。3-5を倒すとイベントクリアです</li>
                     <li>はじめてクリアするとジェム。勝つたびに「イベントのかけら」がときどき手に入り、交換所で限定カードやジェムと交換できます</li>
                     <li>イベントは2週間ごとに入れ替わります。かけらは次のイベントには持ち越せません</li>
                   </ul>

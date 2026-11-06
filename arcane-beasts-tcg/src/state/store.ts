@@ -36,7 +36,7 @@ import {
   OLD_COIN_SCALE,
 } from './progress';
 import { currentStageEvent, EVENT_CARD_DROP, rollShards, shopOf, stageNow, stagesOf, type StageSave } from './stages';
-import { raidBattleGems, raidCost, raidLapBonus, raidLapHp, raidLapReward, raidNow, rollRaidDrop, type RaidSave } from './raid';
+import { raidBattleGems, raidCost, raidLapBonus, raidLapHp, raidLapReward, raidNow, raidSession, rollRaidDrop, type RaidSave } from './raid';
 
 // ----------------------------------------------------------------------------
 // Copies beyond MAX_COPIES are sold for coins on the spot (by ★).
@@ -519,6 +519,8 @@ export const useStore = create<Store>((set, get) => ({
   },
   startRaid: (playerDeck) => {
     const st = get();
+    // no session running: nothing to fight
+    if (!raidSession()) return false;
     const r = raidNow(st.save.raid);
     const cost = raidCost(r);
     const boss = card(r.bossId) as MonsterCard;

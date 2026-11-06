@@ -1,5 +1,5 @@
 import { currentStageEvent, STAGE_COUNT, stageNow } from '../state/stages';
-import { currentBoss, raidNow } from '../state/raid';
+import { currentBoss, fmtDay, lastDay, nextRaidSession, raidNow, raidSession } from '../state/raid';
 import { card } from '../engine/cards';
 import type { MonsterCard } from '../engine/types';
 // バトル: the battle menu opened from the home screen. Laid out like home —
@@ -52,14 +52,19 @@ export function Arena() {
       to: 'raid',
       title: 'ボスレイド',
       sub: (() => {
-        const r = raidNow(save.raid);
-        const b = card(r.bossId) as MonsterCard;
-        return `今週：${b.name}`;
+        const on = raidSession();
+        if (!on) {
+          const nx = nextRaidSession();
+          return nx ? `開催していません（次回 ${fmtDay(nx.start)}〜）` : '開催していません（次回未定）';
+        }
+        const b = card(raidNow(save.raid).bossId) as MonsterCard;
+        return `開催中：${b.name}（〜${lastDay(on)}）`;
       })(),
       bg: 'story/p-the-fall',
       fig: currentBoss().art,
       icon: 'skull',
-      badge: raidNow(save.raid).tries === 0 ? '無料' : undefined,
+      off: !raidSession(),
+      badge: raidSession() && raidNow(save.raid).tries === 0 ? '無料' : undefined,
     },
     {
       to: 'stage',

@@ -10,7 +10,6 @@
 // ============================================================================
 import { BOSSES, RAID_DROP, raidCardOf } from '../engine/cards/bosses';
 import type { MonsterCard } from '../engine/types';
-import { weekKey } from './progress';
 
 export const RAID_TRY_GEMS = 10;
 
@@ -35,19 +34,58 @@ export const raidLapReward = (lap: number) => (lap <= 1 ? 300 : lap === 2 ? 500 
 /** gems for any battle, by the damage it did (never more than a try costs) */
 export const raidBattleGems = (dealt: number) => Math.min(RAID_TRY_GEMS, Math.floor(dealt / 100));
 
-/** this week's boss (by the viewer's calendar) */
-export function currentBoss(key = weekKey()): MonsterCard {
-  const monday = new Date(key.slice(1) + 'T00:00:00');
-  const week = Math.floor(monday.getTime() / (7 * 86400000));
-  return BOSSES[((week % BOSSES.length) + BOSSES.length) % BOSSES.length];
+// ---------------------------------------------------------------------------
+// When raids run: not every week, but in sessions announced ahead. Add a line
+// here to hold one (dates are local, the session runs from the start day's
+// midnight to the end day's midnight).
+// ---------------------------------------------------------------------------
+export interface RaidSession {
+  start: string; // YYYY-MM-DD
+  end: string; // YYYY-MM-DD (the first day it is over)
+  boss: string;
+}
+export const RAID_SESSIONS: RaidSession[] = [
+  { start: '2026-11-02', end: '2026-11-09', boss: 'BOSS-emperor' },
+  { start: '2026-11-23', end: '2026-11-30', boss: 'BOSS-seaking' },
+  { start: '2026-12-14', end: '2026-12-21', boss: 'BOSS-archlich' },
+  { start: '2027-01-04', end: '2027-01-11', boss: 'BOSS-boneking' },
+];
+const at = (d: string) => new Date(d + 'T00:00:00').getTime();
+/** the session running now, or null */
+export function raidSession(now = Date.now()): RaidSession | null {
+  return RAID_SESSIONS.find((x) => now >= at(x.start) && now < at(x.end)) ?? null;
+}
+/** the next session to come (null: none announced) */
+export function nextRaidSession(now = Date.now()): RaidSession | null {
+  return RAID_SESSIONS.filter((x) => at(x.start) > now).sort((a, b) => at(a.start) - at(b.start))[0] ?? null;
+}
+/** ms until the running session ends */
+export const raidEndsIn = (now = Date.now()) => {
+  const s = raidSession(now);
+  return s ? at(s.end) - now : 0;
+};
+/** "11/23" */
+export const fmtDay = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;
+/** the session's last day, "11/29" (its end is the first day it is over) */
+export function lastDay(s: RaidSession) {
+  const d = new Date(at(s.end) - 12 * 3600000);
+  return `${d.getMonth() + 1}/${d.getDate()}`;
 }
 
-/** the raid as it stands this week (a fresh one when the week has moved on) */
+/** the boss of the running session (or of the next one, when none runs) */
+export function currentBoss(): MonsterCard {
+  const s = raidSession() ?? nextRaidSession() ?? RAID_SESSIONS[RAID_SESSIONS.length - 1];
+  return BOSSES.find((b) => b.id === s.boss) ?? BOSSES[0];
+}
+
+/** the raid as it stands in this session (a fresh one when a new session has begun) */
 export function raidNow(r: RaidSave | undefined): RaidSave {
-  const key = weekKey();
-  const bossId = currentBoss(key).id;
+  const s = raidSession() ?? nextRaidSession();
+  // older saves used the Monday of the week as the key: the same thing for a session starting on it
+  const key = s ? `W${s.start}` : 'none';
+  const bossId = currentBoss().id;
   if (r && r.key === key && r.bossId === bossId && typeof (r as Partial<RaidSave>).laps === 'number') return r;
-  // an older save from this week keeps its tries (so the free one is not given twice)
+  // an older save from this session keeps its tries (so the free one is not given twice)
   const tries = r && r.key === key ? r.tries : 0;
   return { key, bossId, tries, laps: 0, damage: 0, best: 0 };
 }
