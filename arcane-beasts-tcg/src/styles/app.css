@@ -244,6 +244,12 @@
   .arena3 .tile2:not(.big) { grid-column: 2; min-height: clamp(96px, 18vh, 220px); }
   .arena3-deck { grid-column: 1 / -1; }
 }
+/* a phone on its side: the story beside a 2×2 of the other modes, all on one screen */
+@media (orientation: landscape) and (max-height: 520px) {
+  .arena3 { grid-template-columns: 1.15fr 1fr 1fr; grid-template-rows: auto auto; }
+  .arena3-story { grid-column: 1; grid-row: 1 / span 2; min-height: 0; }
+  .arena3 .tile2:not(.big) { grid-column: auto; min-height: clamp(96px, 34vh, 150px); }
+}
 
 /* -------------------------------- missions ------------------------------- */
 .ms3 { max-width: 900px; }
@@ -891,6 +897,20 @@
   .stg-go { min-width: 0; padding: 12px 18px; }
   .stg-node { width: 84px; height: 84px; }
 }
+@media (orientation: landscape) and (max-height: 520px) {
+  .stg-logo { gap: 2px; }
+  .stg-logo .stg-kicker { display: none; }
+  .stg-logo h1 { display: flex; gap: 0.3em; font-size: 22px; }
+  .stg-shards { grid-template-columns: auto auto auto; padding: 4px 6px 4px 10px; gap: 0 8px; }
+  .stg-shards small { display: none; }
+  .stg-shards b { grid-column: 2; font-size: 18px; }
+  .stg-mini { grid-column: 3; grid-row: 1; padding: 4px 10px; font-size: 12px; }
+  .stg-chapter { transform: scale(0.85); }
+  .stg-logo h1 span + span { padding-left: 0; }
+  .stg-node { width: 62px; height: 62px; }
+  .stg-info { padding: 6px 10px; }
+  .stg-info-por { width: 44px; height: 44px; }
+}
 .stg-banner { width: 100%; text-align: left; cursor: pointer; border: 0; color: inherit; font: inherit; display: grid; gap: 4px; min-height: 160px; align-content: end; }
 .stg-banner-go { justify-self: end; padding: 6px 14px; border-radius: 10px; background: linear-gradient(100deg, #c84dff, #6a2bd8); font-weight: 900; }
 /* stage nodes drawn as little islands (pictures), bosses as glowing medallions */
@@ -951,3 +971,13 @@
 .free3-bar { height: 8px; border-radius: 99px; background: rgba(255, 255, 255, 0.1); overflow: hidden; }
 .free3-bar i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #2fae6b, #8ff5bf); transition: width 1s linear; }
 .free3.done .free3-bar i { width: 0 !important; }
+/* a phone on its side: smaller islands so the whole node (name included) fits the strip between the title and the panel */
+@media (orientation: landscape) and (max-height: 520px) {
+  .stg-node { width: 88px; height: 82px; }
+  .stg-art { width: 80px; height: 66px; margin-bottom: 18px; }
+  .stg-node.boss { width: 100px; height: 96px; }
+  .stg-node.boss .stg-art { width: 86px; height: 78px; margin-bottom: 18px; }
+  .stg-boss-tag { bottom: 22px; font-size: 12px; padding: 0 8px; }
+  .stg-node .stg-label { font-size: 12px; padding: 1px 8px; }
+  .stg-chapter { top: -18px; font-size: 11px; padding: 1px 8px; }
+}

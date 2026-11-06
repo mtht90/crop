@@ -175,6 +175,7 @@ export function ResultOverlay() {
 
       {res && (
         <div className="reward-panel panel">
+          {res.lines.length === 0 && <div className="reward-none">{win ? '今回は報酬なし' : '負けたため報酬はありません'}</div>}
           {res.lines.map((l, i) => (
             <motion.div
               key={l.label}
@@ -185,11 +186,13 @@ export function ResultOverlay() {
               onAnimationComplete={() => foley.tick()}
             >
               <span>{l.label}</span>
-              <b>
-                <span className="rl-gem">
-                  <Icon name="gem" /> +{(l.gems ?? 0) + l.coins}
-                </span>
-              </b>
+              {(l.gems ?? 0) + l.coins > 0 && (
+                <b>
+                  <span className="rl-gem">
+                    <Icon name="gem" /> +{((l.gems ?? 0) + l.coins).toLocaleString()}
+                  </span>
+                </b>
+              )}
             </motion.div>
           ))}
           <motion.div

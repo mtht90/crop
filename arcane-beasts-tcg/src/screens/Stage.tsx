@@ -30,14 +30,14 @@ const Shard = ({ size = '1.1em' }: { size?: string }) => <img className="shard-i
 const ART = ['s0', 's1', 's2', 's3', 'boss1', 's9', 's5', 's6', 's7', 'boss2', 's8', 's4', 's10', 's11', 'boss3'];
 const nodeArt = (i: number) => ART[i] ?? 's0';
 
-const PAD = { portrait: [300, 230], landscape: [150, 130] } as const;
-function nodePos(i: number, along: number, across: number, portrait: boolean) {
-  const [pa, pb] = portrait ? PAD.portrait : PAD.landscape;
+const PAD = { portrait: [300, 230], landscape: [150, 130], fit: [90, 90] } as const;
+function nodePos(i: number, along: number, across: number, portrait: boolean, fit = false) {
+  const [pa, pb] = fit ? PAD.fit : portrait ? PAD.portrait : PAD.landscape;
   const step = (along - pa - pb) / (STAGE_COUNT - 1);
   const a = pa + step * i;
   const wave = Math.sin(i * 0.95 + 0.4);
   // sideways the path keeps to the middle band (title above, panel below)
-  const b = portrait ? across * (0.5 + wave * 0.3) : across * (0.52 + wave * 0.17);
+  const b = portrait ? across * (0.5 + wave * 0.3) : across * (fit ? 0.5 + wave * 0.12 : 0.52 + wave * 0.17);
   return portrait ? { x: b, y: along - a } : { x: a, y: b };
 }
 
@@ -60,30 +60,53 @@ export function Stage() {
 
   // the map's size follows the screen; it scrolls along its long side
   const scroller = useRef<HTMLDivElement>(null);
+  const body = useRef<HTMLDivElement>(null);
+  const logo = useRef<HTMLDivElement>(null);
+  const shards = useRef<HTMLDivElement>(null);
+  const foot = useRef<HTMLDivElement>(null);
   const [box, setBox] = useState({ w: 390, h: 600 });
   const [portrait, setPortrait] = useState(() => window.innerHeight >= window.innerWidth);
+  // on a phone the map lives between the title and the bottom panel, so no
+  // stage ever hides behind them (a big screen has room for the map to wind under)
+  const fitBand = portrait || window.innerHeight < 520;
+  const [band, setBand] = useState<{ top: number; bottom: number } | null>(null);
   useLayoutEffect(() => {
     const fit = () => {
-      const r = scroller.current?.getBoundingClientRect();
-      if (r) setBox({ w: r.width, h: r.height });
-      setPortrait(window.innerHeight >= window.innerWidth);
+      const isPortrait = window.innerHeight >= window.innerWidth;
+      setPortrait(isPortrait);
+      const b = body.current?.getBoundingClientRect();
+      if (b && (isPortrait || window.innerHeight < 520)) {
+        const top = Math.max(logo.current?.getBoundingClientRect().bottom ?? b.top, shards.current?.getBoundingClientRect().bottom ?? b.top) - b.top + 6;
+        const bottom = b.bottom - (foot.current?.getBoundingClientRect().top ?? b.bottom) + 6;
+        setBand({ top: Math.max(0, Math.round(top)), bottom: Math.max(0, Math.round(bottom)) });
+      } else setBand(null);
+      requestAnimationFrame(() => {
+        const r = scroller.current?.getBoundingClientRect();
+        if (r) setBox({ w: r.width, h: r.height });
+      });
     };
     fit();
+    const ro = new ResizeObserver(fit);
+    for (const el of [body.current, logo.current, shards.current, foot.current]) if (el) ro.observe(el);
     window.addEventListener('resize', fit);
-    return () => window.removeEventListener('resize', fit);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', fit);
+    };
   }, []);
-  const along = portrait ? Math.max(box.h, STAGE_COUNT * 112 + 530) : Math.max(box.w, STAGE_COUNT * 150 + 280);
+  const fitted = fitBand && !!band;
+  const along = portrait ? Math.max(box.h, STAGE_COUNT * 112 + (fitted ? 180 : 530)) : Math.max(box.w, STAGE_COUNT * 150 + (fitted ? 180 : 280));
   const across = portrait ? box.w : box.h;
-  const pts = stages.map((_, i) => nodePos(i, along, across, portrait));
+  const pts = stages.map((_, i) => nodePos(i, along, across, portrait, fitted));
   // open on the stage to play next
   useLayoutEffect(() => {
     const el = scroller.current;
     if (!el) return;
     const p = pts[next];
-    if (portrait) el.scrollTop = Math.max(0, p.y - box.h * 0.6);
+    if (portrait) el.scrollTop = Math.max(0, p.y - box.h * (fitted ? 0.5 : 0.6));
     else el.scrollLeft = Math.max(0, p.x - box.w * 0.35);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [portrait, box.w, box.h]);
+  }, [portrait, box.w, box.h, fitted]);
 
   const pick = (i: number) => {
     if (i > sv.cleared) {
@@ -121,8 +144,8 @@ export function Stage() {
             </button>
           }
         />
-        <div className="stg-body">
-          <div className="stg-map" ref={scroller}>
+        <div className="stg-body" ref={body}>
+          <div className="stg-map" ref={scroller} style={fitted ? { top: band!.top, bottom: band!.bottom } : undefined}>
             <div className="stg-track" style={portrait ? { height: along, width: '100%' } : { width: along, height: '100%' }}>
               <svg className="stg-path" width={portrait ? across : along} height={portrait ? along : across}>
                 <path d={path} className="stg-path-bg" />
@@ -160,7 +183,7 @@ export function Stage() {
             </div>
           </div>
 
-          <motion.div className="stg-logo" initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5 }}>
+          <motion.div ref={logo} className="stg-logo" initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5 }}>
             <span className="stg-kicker">
               <Icon name="crown" /> 期間限定イベント
             </span>
@@ -173,7 +196,7 @@ export function Stage() {
             </span>
           </motion.div>
 
-          <div className="stg-shards">
+          <div className="stg-shards" ref={shards}>
             <small>イベントのかけら</small>
             <b>
               <Shard size="1.2em" /> {sv.shards.toLocaleString()}
@@ -183,7 +206,7 @@ export function Stage() {
             </button>
           </div>
 
-          <div className="stg-foot">
+          <div className="stg-foot" ref={foot}>
             <StageInfo st={st} first={!done(st.index)} />
             <div className="stg-actions">
               <button className="stg-sub" onClick={() => open('rewards')}>

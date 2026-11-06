@@ -123,7 +123,7 @@ export function Raid() {
                   <span className="raid3-gem">
                     <Icon name="gem" />
                   </span>
-                  <small>{raidLapReward(lap)}</small>
+                  <small>{raidLapReward(lap).toLocaleString()}</small>
                 </div>
               </div>
             </section>
@@ -216,7 +216,7 @@ export function Raid() {
                   <h2>報酬一覧</h2>
                   <h3>討伐報酬</h3>
                   <p className="raid3-note">
-                    ボスを倒すたびに <Icon name="gem" /> {raidLapReward(1)}（2回目は {raidLapReward(2)}、3回目からは {raidLapReward(3)}）。倒したボスは強くなって復活する。
+                    ボスを倒すたびに <Icon name="gem" /> {raidLapReward(1).toLocaleString()}（2回目は {raidLapReward(2).toLocaleString()}、3回目からは {raidLapReward(3).toLocaleString()}）。倒したボスは強くなって復活する。
                   </p>
                   <h3>参加報酬</h3>
                   <p className="raid3-note">負けても、与えたダメージはボスに残る。ジェムは倒したときにまとめてもらえる。</p>

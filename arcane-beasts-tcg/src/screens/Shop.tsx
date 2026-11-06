@@ -220,7 +220,6 @@ export function Shop() {
                 <motion.div animate={{ y: [0, -6, 0] }} transition={{ duration: 4.5, repeat: Infinity, ease: 'easeInOut', delay: i * 0.6 }}>
                   <BoosterPack booster={b} tilt />
                 </motion.div>
-                {!b.premium && free.ready && <span className="free3-ribbon">FREE</span>}
               </div>
               <div className="shop3-info">
                 <h3>{b.name}</h3>
