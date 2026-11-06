@@ -956,10 +956,20 @@
 .free3-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .free3-tag { font-weight: 900; font-size: var(--fs-xs); letter-spacing: 0.1em; color: #8ff5bf; }
 .free3.wait .free3-tag, .free3.done .free3-tag { color: #c7cfe0; }
-.free3-slots { display: flex; gap: 6px; }
-.free3-slots i { width: 22px; height: 30px; border-radius: 4px; border: 1.5px solid rgba(255, 255, 255, 0.35); background: rgba(255, 255, 255, 0.05); }
-.free3-slots i.ready { border-color: #b6ffd6; background: linear-gradient(180deg, #7ff0b0, #2fae6b); box-shadow: 0 0 10px rgba(80, 240, 150, 0.7); }
-.free3-slots i.used { opacity: 0.35; background: repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.18) 0 3px, transparent 3px 6px); }
+.free3-slots { display: flex; gap: 8px; align-items: flex-end; }
+/* each daily free pack is a little pack: lit when it can be opened, stamped when spent */
+.free3-slot { position: relative; width: 30px; height: 46px; border-radius: 3px; overflow: hidden; background: linear-gradient(180deg, #5ab0ff, #0a2a6e); box-shadow: 0 0 0 1.5px rgba(233, 196, 106, 0.85), 0 3px 6px rgba(0, 0, 0, 0.5); transition: filter 0.3s, transform 0.3s; }
+.free3-slot img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 40% 20%; }
+.free3-slot .seal { position: absolute; left: 0; right: 0; height: 4px; background: repeating-linear-gradient(90deg, #2a3f78 0 2px, #9fb5e8 2px 3px); }
+.free3-slot .seal.top { top: 0; }
+.free3-slot .seal.bottom { bottom: 0; }
+.free3-slot .mark { position: absolute; inset: 0; display: grid; place-items: center; font-size: 16px; color: #fff; text-shadow: 0 1px 3px #000; }
+.free3-slot.ready { transform: translateY(-3px); box-shadow: 0 0 0 1.5px #ffe7a0, 0 0 14px rgba(255, 220, 120, 0.85), 0 4px 8px rgba(0, 0, 0, 0.5); animation: free3-bob 1.8s ease-in-out infinite; }
+.free3-slot.wait { filter: grayscale(0.5) brightness(0.6); }
+.free3-slot.wait .mark { color: #ffe08a; }
+.free3-slot.used { filter: grayscale(1) brightness(0.45); box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.25); }
+.free3-slot.used .mark { filter: none; color: #9cf0b8; }
+@keyframes free3-bob { 0%, 100% { transform: translateY(-3px); } 50% { transform: translateY(-6px); } }
 .free3-btn { position: relative; overflow: hidden; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 12px 16px; border: 0; border-radius: 999px; cursor: pointer; color: #04301a; background: linear-gradient(180deg, #b6ffd6, #41d58a 55%, #26a463); box-shadow: 0 0 22px rgba(80, 240, 150, 0.5), inset 0 2px 0 rgba(255, 255, 255, 0.7), 0 4px 0 #17703f; }
 .free3-btn span { font-family: var(--font-display); font-size: clamp(15px, 3.8vw, 20px); letter-spacing: 0.06em; }
 .free3-btn small { font-size: var(--fs-xs); font-weight: 800; opacity: 0.8; }

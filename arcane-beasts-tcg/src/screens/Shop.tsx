@@ -15,6 +15,8 @@ import { BOOSTERS, NORMAL_BOOSTER, openPack, PACK_TABLE, PREMIUM_BOOSTER, PREMIU
 import { CardBack, CardFace } from '../ui/Card';
 import { TopBar } from '../ui/TopBar';
 import { Icon } from '../ui/Icon';
+import type { MonsterCard } from '../engine/types';
+import { artUrl } from '../lib/assets';
 import { chargeLoop, foley, playMusic, sfx, tearLoop } from '../audio/audio';
 import { particles } from '../battle/particles';
 import { BoosterPack, TEAR_BAND, TEAR_Y, tearClips, tearEdgeFrom } from './pack/BoosterPack';
@@ -301,9 +303,26 @@ function FreeSlot({ free, now, onOpen }: { free: FreePackState; now: number; onO
       <div className="free3-head">
         <span className="free3-tag">毎日無料</span>
         <span className="free3-slots">
-          {Array.from({ length: FREE_PACKS_PER_DAY }, (_, k) => (
-            <i key={k} className={k < used ? 'used' : k === used && free.ready ? 'ready' : 'wait'} />
-          ))}
+          {Array.from({ length: FREE_PACKS_PER_DAY }, (_, k) => {
+            const st = k < used ? 'used' : k === used && free.ready ? 'ready' : 'wait';
+            return (
+              <span key={k} className={`free3-slot ${st}`} title={st === 'used' ? '開封済み' : st === 'ready' ? '開けられます' : 'まだ開けられません'}>
+                <img src={artUrl((byName(NORMAL_BOOSTER.mascot) as MonsterCard).art)} alt="" draggable={false} />
+                <i className="seal top" />
+                <i className="seal bottom" />
+                {st === 'used' && (
+                  <b className="mark">
+                    <Icon name="check" />
+                  </b>
+                )}
+                {st === 'wait' && (
+                  <b className="mark">
+                    <Icon name="hourglass" />
+                  </b>
+                )}
+              </span>
+            );
+          })}
         </span>
       </div>
       {free.ready ? (
