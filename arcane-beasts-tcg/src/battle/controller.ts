@@ -6,7 +6,7 @@ import { create } from 'zustand';
 import { aiAnswer, type AiLevel } from '../engine/ai';
 import { card } from '../engine/cards';
 import { Game, slotAt, topCard } from '../engine/game';
-import type { Action, Answer, Frame, GameEvent, GameState, MonsterCard, Prompt } from '../engine/types';
+import type { Action, Answer, Frame, GameEvent, GameState, MonsterCard, Prompt, BattleMods } from '../engine/types';
 import { attackSound, cry, foley, sfx } from '../audio/audio';
 import { fx } from './fx';
 
@@ -274,10 +274,11 @@ export class BattleController extends FramePlayer implements BattleDriver {
   private actionsThisTurn = 0;
   private lastTurn = 0;
 
-  constructor(decks: [string[], string[]], names: [string, string], level: AiLevel, raid?: { bossId: string; startDamage: number; hp?: number; bonus?: number }) {
+  constructor(decks: [string[], string[]], names: [string, string], level: AiLevel, raid?: { bossId: string; startDamage: number; hp?: number; bonus?: number }, mods?: BattleMods) {
     super();
     const seed = (Math.random() * 2 ** 31) | 0;
     this.game = raid ? Game.createRaid(decks[0], raid.bossId, raid.startDamage, names, seed, { record: true }, { hp: raid.hp, bonus: raid.bonus }) : Game.create(decks, names, seed, { record: true });
+    if (mods) this.game.s.mods = mods;
     this.level = level;
     useBattle.setState({ view: structuredClone(this.game.s), prompt: null, result: null, thinking: false, lastEvent: null, hover: null, stats: { ...EMPTY } });
   }

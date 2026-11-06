@@ -124,6 +124,7 @@ export function maxHp(s: GameState, slot: Slot): number {
   // a raid boss's HP is set by the lap it is on
   if (s.raid?.hp && mc.id.startsWith('BOSS-')) return s.raid.hp;
   let hp = mc.hp;
+  if (s.mods?.hp) hp += s.mods.hp[slot.stack[0].owner] ?? 0;
   if (toolKey(slot) === 'charm') hp += 30;
   if (toolKey(slot) === 'mailcoat' && mc.stage === 'basic') hp += 60;
   // 亡者の港: the small grow sturdier, the big ones wither
@@ -488,11 +489,14 @@ export class Game {
   private *setup(): Gen {
     const s = this.s;
     this.emit({ e: 'start' });
-    // coin toss for first player
-    const heads = this.flip(0, '先攻・後攻を決めるコイントス');
-    const winner: 0 | 1 = heads ? 0 : 1;
-    const pick = yield* this.choice(winner, 'コイントスに勝ちました！先攻・後攻を選んでください', ['先攻', '後攻']);
-    s.first = pick === 0 ? winner : other(winner);
+    if (s.mods?.oppFirst) s.first = 1;
+    else {
+      // coin toss for first player
+      const heads = this.flip(0, '先攻・後攻を決めるコイントス');
+      const winner: 0 | 1 = heads ? 0 : 1;
+      const pick = yield* this.choice(winner, 'コイントスに勝ちました！先攻・後攻を選んでください', ['先攻', '後攻']);
+      s.first = pick === 0 ? winner : other(winner);
+    }
     s.current = s.first;
     this.emit({ e: 'first', p: s.first });
 
@@ -501,8 +505,9 @@ export class Game {
     const sides: (0 | 1)[] = raid ? [0] : [0, 1];
     // draw & mulligan
     const hasBasic = (p: 0 | 1) => this.pl(p).hand.some((c) => isBasic(c.cid));
+    const handOf = (p: 0 | 1) => s.mods?.hand?.[p] ?? HAND_START;
     for (const p of sides) {
-      this.draw(p, HAND_START);
+      this.draw(p, handOf(p));
       let guard = 0;
       while (!hasBasic(p) && guard++ < 50) {
         const pl = this.pl(p);
@@ -510,7 +515,7 @@ export class Game {
         pl.mulligans++;
         pl.deck.push(...pl.hand.splice(0));
         this.shuffle(p);
-        this.draw(p, HAND_START);
+        this.draw(p, handOf(p));
       }
     }
     // extra draws for opponent's mulligans
@@ -543,7 +548,7 @@ export class Game {
     for (const p of sides) {
       const pl = this.pl(p);
       // in a raid one prize is enough: knock the boss out and it is over
-      pl.prizes = pl.deck.splice(0, raid ? 1 : PRIZES);
+      pl.prizes = pl.deck.splice(0, raid ? 1 : (s.mods?.prizes ?? PRIZES));
     }
     if (raid) {
       // the boss takes prizes as usual; it has no deck, so they are tokens
@@ -579,7 +584,7 @@ export class Game {
     const out: Action[] = [];
     if (s.phase !== 'main' || s.current !== p) return out;
     const pl = this.pl(p);
-    const firstTurn = s.turn === 1;
+    const firstTurn = s.turn === 1 && !s.mods?.firstAttack;
     const noEvolve = isFirstTurnOf(s);
 
     for (const c of pl.hand) {
@@ -1192,6 +1197,7 @@ export class Game {
         // a raid boss with half its HP gone grows fiercer
         if (s.raid && p === 1 && A.damage * 2 >= maxHp(s, A)) dmg += BOSS_RAGE_BONUS;
         if (s.raid && p === 1) dmg += s.raid.bonus ?? 0;
+        for (const m of s.mods?.dmg ?? []) if ((m.side === 'both' || m.side === p) && (!m.type || m.type === mc.type)) dmg += m.n;
         if (toolKey(A) === 'band') dmg += 20;
         if (toolKey(A) === 'drum' && mc.stage === 'basic') dmg += 30;
         let boost = 0;

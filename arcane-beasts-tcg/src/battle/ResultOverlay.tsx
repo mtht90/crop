@@ -1,14 +1,14 @@
 import { CardFace } from '../ui/Card';
 import { card } from '../engine/cards';
 import type { MonsterCard } from '../engine/types';
-import type { RaidResult } from '../state/store';
+import type { StageResult, RaidResult } from '../state/store';
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
 import { CHAPTERS, episodeLabel, episodeNo } from '../story';
 import { claimableCount, CPU_FIRST_GEMS, storyFirstClear, expToNext, levelGems, levelReward, bump } from '../state/progress';
 import { extCtx, useStore, type BattleRewardResult } from '../state/store';
 import { useBattle } from './controller';
-import { artUrl } from '../lib/assets';
+import { artUrl, asset } from '../lib/assets';
 import { Icon } from '../ui/Icon';
 import { foley, playMusic, sfx } from '../audio/audio';
 import { particles } from './particles';
@@ -31,6 +31,7 @@ export function ResultOverlay() {
   const applied = useRef(false);
   const [res, setRes] = useState<BattleRewardResult | null>(null);
   const [raidRes, setRaidRes] = useState<RaidResult | null>(null);
+  const [stageRes, setStageRes] = useState<StageResult | null>(null);
   const [missionsReady, setMissionsReady] = useState(0);
 
   useEffect(() => {
@@ -59,6 +60,20 @@ export function ResultOverlay() {
       if (win) update((s) => bump(s.progress, { onlineWins: 1 }));
       const after0 = claimableCount(useStore.getState().save.progress, extCtx(useStore.getState().save));
       setMissionsReady(Math.max(0, after0 - before0));
+      return;
+    }
+    if (cfg.stage) {
+      // a stage of the stage event: first clears pay gems, wins may drop shards
+      const stS = useBattle.getState().stats;
+      const base = recordBattle(
+        { win, level: cfg.level, baseReward: 0, prizesTaken: stS.prizes, prizesLost: stS.prizesLost, firstClear: false },
+        { kos: stS.kos, damage: stS.damage, prizes: stS.prizes, evolves: stS.evolves, trainers: stS.trainers },
+      );
+      const sr = useStore.getState().recordStage({ win, index: cfg.stage.index, key: cfg.stage.key });
+      const lines = [...base.lines];
+      if (sr.gems) lines.push({ label: '初回クリア報酬', coins: 0, gems: sr.gems });
+      setStageRes(sr);
+      setRes({ ...base, lines, gems: base.gems + sr.gems });
       return;
     }
     if (cfg.raid) {
@@ -134,6 +149,15 @@ export function ResultOverlay() {
         </motion.div>
       )}
       {raidRes?.drop && <RaidDrop cid={raidRes.drop} />}
+      {stageRes && stageRes.win && (
+        <motion.div className="stage-result" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
+          {stageRes.first && <b>ステージクリア！ 次のステージが開きました</b>}
+          <span>
+            <img src={asset('ui/shard.svg')} alt="" /> イベントのかけら {stageRes.shards > 0 ? `+${stageRes.shards}` : 'ドロップなし'}
+          </span>
+        </motion.div>
+      )}
+      {stageRes?.drop && <RaidDrop cid={stageRes.drop} />}
       <div className="result-row">
       {<motion.div className="result-rival" initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.6 }}>
         <img src={artUrl(cfg.oppPortrait)} alt="" />
@@ -196,10 +220,11 @@ export function ResultOverlay() {
               online.clearMatch();
               go('lobby');
             } else if (cfg.raid) go('raid');
+            else if (cfg.stage && win) go('stage');
             else startBattle({ ...cfg });
           }}
         >
-          {cfg.story ? (win ? '物語をつづける' : 'もう一度挑む') : cfg.online ? 'ロビーへ' : cfg.raid ? 'レイドへ' : 'もう一度'}
+          {cfg.story ? (win ? '物語をつづける' : 'もう一度挑む') : cfg.online ? 'ロビーへ' : cfg.raid ? 'レイドへ' : cfg.stage && win ? 'イベントマップへ' : 'もう一度'}
         </button>
         {missionsReady > 0 && !(cfg.story && win) && (
           <button
@@ -214,17 +239,17 @@ export function ResultOverlay() {
           </button>
         )}
         {/* a won story duel always goes on to the scene after it (that is where the card is handed over) */}
-        {!(cfg.story && win) && (
+        {!(cfg.story && win) && !(cfg.stage && win) && (
         <button
           className="btn big"
           onClick={() => {
             sfx('button');
             useBattle.setState({ result: null, view: null, prompt: null });
             if (cfg.online) online.clearMatch();
-            go(cfg.story ? 'story' : cfg.online ? 'arena' : cfg.raid ? 'arena' : cfg.rival ? 'rivals' : 'home');
+            go(cfg.story ? 'story' : cfg.online ? 'arena' : cfg.raid ? 'arena' : cfg.stage ? 'stage' : cfg.rival ? 'rivals' : 'home');
           }}
         >
-          {cfg.story ? 'ストーリーへ' : cfg.online ? 'バトルメニューへ' : cfg.rival ? '対戦相手を選ぶ' : 'ホームへ'}
+          {cfg.story ? 'ストーリーへ' : cfg.online ? 'バトルメニューへ' : cfg.stage ? 'イベントマップへ' : cfg.rival ? '対戦相手を選ぶ' : 'ホームへ'}
         </button>
         )}
       </motion.div>

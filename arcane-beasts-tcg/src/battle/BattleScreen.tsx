@@ -17,6 +17,7 @@ import { cosmeticById } from '../state/cosmetics';
 import { foley, playMusic, sfx } from '../audio/audio';
 import { askConfirm } from '../ui/Confirm';
 import { Weather } from '../story/Weather';
+import { modsText } from '../state/stages';
 import { logError } from '../ui/ErrorBoundary';
 import { shake } from './fx';
 import { BOSS_RAGE_BONUS } from '../engine/cards/bosses';
@@ -999,7 +1000,7 @@ export function BattleScreen() {
 
   // lifecycle
   useEffect(() => {
-    const ctrl: BattleDriver = cfg.online ? new OnlineController(cfg.online) : new BattleController([cfg.playerDeck, cfg.oppDeck], ['あなた', cfg.oppName], cfg.cpuLevel ?? cfg.level, cfg.raid);
+    const ctrl: BattleDriver = cfg.online ? new OnlineController(cfg.online) : new BattleController([cfg.playerDeck, cfg.oppDeck], ['あなた', cfg.oppName], cfg.cpuLevel ?? cfg.level, cfg.raid, cfg.stage?.mods);
     ctrl.speed = settings.speed;
     ctrl.autoHuman = !!cfg.spectate && !cfg.online;
     ctrlRef.current = ctrl;
@@ -1262,6 +1263,14 @@ export function BattleScreen() {
       <div className="battle-bg" style={{ backgroundImage: `url(${artUrl(bg)})` }} key={bg} />
       <div className="battle-bg-shade" />
       {cfg.raid && <RaidHud s={s} />}
+      {cfg.stage && (
+        <div className="stage-chip">
+          <b>{cfg.oppName.split(' ')[0]}</b>
+          {modsText(cfg.stage.mods).map((r) => (
+            <span key={r}>{r}</span>
+          ))}
+        </div>
+      )}
       <AnimatePresence>{cfg.raid && raidIntro && <RaidIntro bossId={cfg.raid.bossId} hp={cfg.raid.hp} left={cfg.raid.hp - cfg.raid.startDamage} onDone={endRaidIntro} />}</AnimatePresence>
       {terrain && <div className="battle-weather" key={`w-${terrain.key}`}><Weather lite kind={TERRAIN_WEATHER[terrain.key] ?? 'motes'} /></div>}
       {terrain && (terrainFx || STADIUM_NOTE[terrain.key]) && (

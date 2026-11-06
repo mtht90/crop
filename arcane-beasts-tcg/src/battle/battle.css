@@ -1140,3 +1140,9 @@
 .is-raid .zone-active.opp { transform: scale(1.28); transform-origin: 50% 85%; z-index: 30; }
 .is-raid .zone-active.opp .bc-card { filter: drop-shadow(0 0 calc(var(--u) * 1.2) rgba(255, 210, 120, 0.55)); }
 .is-raid .mat-zone.bench.opp, .is-raid .zone-bench.opp { opacity: 0; }
+/* イベントのステージ: its special rules, top centre */
+.stage-chip { position: absolute; left: 50%; top: max(6px, env(safe-area-inset-top)); translate: -50% 0; z-index: 70; display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; align-items: center; max-width: 70vw; padding: 4px 12px; border-radius: 14px; background: rgba(28, 14, 60, 0.85); border: 1px solid rgba(200, 160, 255, 0.6); font-size: calc(var(--u) * 1); font-weight: 800; pointer-events: none; }
+.stage-chip b { color: var(--gold-2); font-family: var(--font-display); font-weight: 400; }
+.stage-chip span { color: #f0e6ff; }
+.stage-chip ~ .terrain-chip { top: calc(max(6px, env(safe-area-inset-top)) + var(--u) * 3.6); }
+@media (orientation: portrait) { .stage-chip { max-width: 94vw; top: calc(max(8px, env(safe-area-inset-top)) + var(--u) * 5.6); font-size: calc(var(--u) * 1.4); } }

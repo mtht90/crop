@@ -1,3 +1,4 @@
+import { currentStageEvent, STAGE_COUNT, stageNow } from '../state/stages';
 import { currentBoss, raidNow } from '../state/raid';
 import { card } from '../engine/cards';
 import type { MonsterCard } from '../engine/types';
@@ -59,6 +60,19 @@ export function Arena() {
       fig: currentBoss().art,
       icon: 'skull',
       badge: raidNow(save.raid).tries === 0 ? '無料' : undefined,
+    },
+    {
+      to: 'stage',
+      title: 'イベント',
+      sub: (() => {
+        const { ev } = currentStageEvent();
+        const sv = stageNow(save.stages);
+        return `${ev.title.join('')}（${Math.min(sv.cleared, STAGE_COUNT)}/${STAGE_COUNT}）`;
+      })(),
+      bg: currentStageEvent().ev.bg,
+      fig: currentStageEvent().ev.bosses[2].portrait,
+      icon: 'crown',
+      badge: stageNow(save.stages).cleared === 0 ? '開催中' : undefined,
     },
     { to: 'rivals', title: 'CPU対戦', sub: `レベル1〜9から選んで対戦（${(save.cpuBeaten ?? []).length}/9 勝利）`, bg: 'story/p-mountains', fig: 'humans/duelist', icon: 'swords' },
     {

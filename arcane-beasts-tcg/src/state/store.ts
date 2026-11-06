@@ -3,7 +3,7 @@ import type { MatchInfo } from '../online/client';
 import type { Beat } from '../story/types';
 import { create } from 'zustand';
 import { ALL_CARDS, card, CARDS, SET_INFO } from '../engine/cards';
-import { expand, RIVALS, STARTER_DECKS, type Rival } from '../engine/decks';
+import { deckById, expand, RIVALS, STARTER_DECKS, type Rival } from '../engine/decks';
 import type { Difficulty } from '../engine/ai';
 import { cleanWardrobe, cosmeticById, freshWardrobe, type Wardrobe } from './cosmetics';
 import type { CardDef, EType, MonsterCard, Rarity, SetCode } from '../engine/types';
@@ -35,6 +35,7 @@ import {
   type Stats,
   OLD_COIN_SCALE,
 } from './progress';
+import { currentStageEvent, EVENT_CARD_DROP, rollShards, shopOf, stageNow, stagesOf, type StageSave } from './stages';
 import { raidBattleGems, raidCost, raidLapBonus, raidLapHp, raidLapReward, raidNow, rollRaidDrop, type RaidSave } from './raid';
 
 // ----------------------------------------------------------------------------
@@ -51,7 +52,7 @@ const isBasicEnergy = (cid: string) => {
   return c.kind === 'energy' && c.basic;
 };
 
-export type Screen = 'arena' | 'story' | 'scene' | 'lobby' | 'title' | 'starter' | 'home' | 'rivals' | 'battle' | 'deck' | 'collection' | 'shop' | 'missions' | 'more' | 'settings' | 'credits' | 'rules' | 'gallery' | 'wardrobe' | 'raid';
+export type Screen = 'arena' | 'story' | 'scene' | 'lobby' | 'title' | 'starter' | 'home' | 'rivals' | 'battle' | 'deck' | 'collection' | 'shop' | 'missions' | 'more' | 'settings' | 'credits' | 'rules' | 'gallery' | 'wardrobe' | 'raid' | 'stage';
 
 export interface SavedDeck {
   id: string;
@@ -98,6 +99,8 @@ export interface Save {
   newsSeen?: string;
   /** this week's boss raid */
   raid?: RaidSave;
+  /** this fortnight's stage event */
+  stages?: StageSave;
   newsHideDay?: string;
   progress: Progress;
   /** story mode progress */
@@ -143,6 +146,8 @@ export interface BattleConfig {
   story?: { chapterId: string };
   /** this week's boss raid */
   raid?: { bossId: string; startDamage: number; hp: number; bonus: number; lap: number };
+  /** a stage of the stage event (its rule is in mods) */
+  stage?: { key: string; index: number; mods: import('../engine/types').BattleMods };
 }
 
 const KEY = 'arcane-beasts-save-v1';
@@ -317,6 +322,23 @@ interface Store {
   startRaid: (playerDeck: string[]) => boolean;
   /** pay out a raid battle; returns what it paid */
   recordRaid: (o: { win: boolean; dealt: number }) => RaidResult;
+  /** start stage i of the stage event (false = not open yet) */
+  startStage: (i: number, playerDeck: string[]) => boolean;
+  /** pay out a stage battle */
+  recordStage: (o: { win: boolean; index: number; key: string }) => StageResult;
+  /** trade shards at the exchange (false = not enough / sold out) */
+  tradeStage: (itemId: string) => boolean;
+}
+
+export interface StageResult {
+  win: boolean;
+  /** gems for clearing this stage the first time */
+  gems: number;
+  shards: number;
+  /** the event card, if the great boss dropped it */
+  drop: string | null;
+  /** this was the first clear (a new stage opened) */
+  first: boolean;
 }
 
 export interface RaidResult {
@@ -425,6 +447,75 @@ export const useStore = create<Store>((set, get) => ({
     const s = freshSave();
     persist(s);
     set({ save: s, screen: 'title' });
+  },
+  startStage: (i, playerDeck) => {
+    const st = get();
+    const sv = stageNow(st.save.stages);
+    if (i > sv.cleared) return false;
+    const { ev, key } = currentStageEvent();
+    const stage = stagesOf(ev)[i];
+    st.update((s) => {
+      s.stages = sv;
+    });
+    st.startBattle({
+      rival: null,
+      playerDeck,
+      oppDeck: expand(deckById(stage.deck)!.cards),
+      oppName: `${stage.label} ${stage.name}`,
+      oppPortrait: stage.portrait,
+      level: stage.cpu >= 7 ? 'hard' : stage.cpu >= 4 ? 'normal' : 'easy',
+      cpuLevel: stage.cpu,
+      scene: ev.bg,
+      reward: 0,
+      stage: { key, index: i, mods: stage.mods },
+    });
+    return true;
+  },
+  recordStage: ({ win, index, key }) => {
+    const res: StageResult = { win, gems: 0, shards: 0, drop: null, first: false };
+    if (!win) return res;
+    get().update((s) => {
+      const sv = stageNow(s.stages);
+      // the event changed while this battle ran: nothing to pay into
+      if (sv.key !== key) return;
+      const { ev } = currentStageEvent();
+      const stage = stagesOf(ev)[index];
+      if (index === sv.cleared) {
+        res.first = true;
+        res.gems = stage.gems;
+        sv.cleared = index + 1;
+      }
+      res.shards = rollShards(index);
+      sv.shards += res.shards;
+      if (index === stagesOf(ev).length - 1 && Math.random() < EVENT_CARD_DROP) {
+        res.drop = ev.card;
+        if (!s.collection[ev.card]) s.newCards.push(ev.card);
+        s.collection[ev.card] = Math.min(MAX_COPIES, (s.collection[ev.card] ?? 0) + 1);
+      }
+      s.gems += res.gems;
+      s.stages = { ...sv };
+    });
+    return res;
+  },
+  tradeStage: (itemId) => {
+    let ok = false;
+    get().update((s) => {
+      const sv = stageNow(s.stages);
+      const item = shopOf(currentStageEvent().ev).find((x) => x.id === itemId);
+      if (!item) return;
+      const n = sv.bought[item.id] ?? 0;
+      if (n >= item.limit || sv.shards < item.cost) return;
+      sv.shards -= item.cost;
+      sv.bought = { ...sv.bought, [item.id]: n + 1 };
+      if (item.card) {
+        if (!s.collection[item.card]) s.newCards.push(item.card);
+        s.collection[item.card] = Math.min(MAX_COPIES, (s.collection[item.card] ?? 0) + 1);
+      }
+      if (item.gems) s.gems += item.gems;
+      s.stages = { ...sv };
+      ok = true;
+    });
+    return ok;
   },
   startRaid: (playerDeck) => {
     const st = get();

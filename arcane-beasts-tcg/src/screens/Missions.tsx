@@ -4,6 +4,7 @@ import { TopBar } from '../ui/TopBar';
 import { Icon } from '../ui/Icon';
 import { artUrl } from '../lib/assets';
 import { foley, playMusic, sfx } from '../audio/audio';
+import { currentStageEvent, STAGE_COUNT, stageNow } from '../state/stages';
 import { ACHIEVEMENTS, dailyMissions, extCtx, NORMAL_MISSIONS, useStore, weeklyMissions, type Save, type Wallet } from '../state/store';
 import {
   canClaimLogin,
@@ -87,7 +88,7 @@ export function Missions() {
   const count = (list: Row[]) => list.filter((r) => r.done && !r.claimed).length;
   const tabs: { id: Tab; label: string; icon: string; n: number }[] = [
     { id: 'login', label: 'ログインボーナス', icon: 'crown', n: canClaimLogin(save.progress) ? 1 : 0 },
-    { id: 'event', label: 'イベント', icon: 'sparkles', n: count(data.event) },
+    { id: 'event', label: 'イベント', icon: 'sparkles', n: 0 },
     { id: 'normal', label: '通常', icon: 'scroll-quill', n: count(data.normal) },
     { id: 'daily', label: 'デイリー', icon: 'hourglass', n: count(data.daily) },
     { id: 'weekly', label: 'ウィークリー', icon: 'scroll-unfurled', n: count(data.weekly) },
@@ -149,15 +150,10 @@ export function Missions() {
           <div className="box ms3-body">
             {tab === 'login' ? (
               <LoginTrack onClaim={give} />
+            ) : tab === 'event' ? (
+              <StageBanner />
             ) : (
               <>
-                {tab === 'event' && (
-                  <div className="ms3-event" style={{ backgroundImage: `url(${artUrl(event.art)})` }}>
-                    <small>期間限定イベント</small>
-                    <b>{event.name}</b>
-                    <p>{event.blurb}</p>
-                  </div>
-                )}
                 <div className="ms3-head">
                   {remain && (
                     <span className="ms-remain">
@@ -229,6 +225,23 @@ export function Missions() {
         )}
       </AnimatePresence>
     </div>
+  );
+}
+
+/** the stage event's way in (the event tab used to hold the weekly tasks) */
+function StageBanner() {
+  const go = useStore((s) => s.go);
+  const sv = stageNow(useStore((s) => s.save.stages));
+  const { ev, ends } = currentStageEvent();
+  return (
+    <button className="ms3-event stg-banner" style={{ backgroundImage: `url(${artUrl(ev.bg)})` }} onClick={() => (sfx('expand', 0.5), go('stage'))}>
+      <small>期間限定イベント ・ あと {fmtRemain(ends.getTime() - Date.now())}</small>
+      <b>{ev.title.join('')}</b>
+      <p>{ev.blurb}</p>
+      <span className="stg-banner-go">
+        {Math.min(sv.cleared, STAGE_COUNT)}/{STAGE_COUNT} ステージ ・ マップへ ›
+      </span>
+    </button>
   );
 }
 

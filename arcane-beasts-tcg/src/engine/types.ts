@@ -233,6 +233,24 @@ export interface GameState {
   log: LogEntry[];
   /** a boss raid: player 1 is the boss alone */
   raid?: RaidState;
+  /** special rules for this battle (event stages) */
+  mods?: BattleMods;
+}
+
+/** rule changes for one battle; [you, opponent] where a pair is given */
+export interface BattleMods {
+  /** prize cards each side takes to win (default 6) */
+  prizes?: number;
+  /** extra HP on every monster of each side */
+  hp?: [number, number];
+  /** extra damage on attacks: for one side (or both), optionally only one type */
+  dmg?: { side: 0 | 1 | 'both'; type?: EType; n: number }[];
+  /** cards in the opening hand of each side (default 7) */
+  hand?: [number, number];
+  /** attacks are allowed on the very first turn */
+  firstAttack?: boolean;
+  /** the opponent always goes first (no coin toss) */
+  oppFirst?: boolean;
 }
 
 export interface RaidState {

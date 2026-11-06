@@ -7,6 +7,7 @@ import { MONSTERS3 } from './monsters3';
 import { TRAINERS3 } from './trainers3';
 import { STADIUMS } from './stadiums';
 import { BOSSES, RAID_CARDS } from './bosses';
+import { EVENT_CARDS } from './events';
 import { CH1_EXTRA, CH2_EXTRA } from './chapters';
 import { boostedText, boostMonster, TIER } from './boost';
 
@@ -319,7 +320,7 @@ for (const set of SETS) for (const p of PLAN) for (const n of new Set([...p.UR, 
 for (const set of SETS) for (const p of PLAN) for (const n of new Set(p.UR)) if (named(n).set === set) alt(named(n), 'UR');
 
 export const ALL_CARDS: CardDef[] = [...MAIN_SET, ...VARIANTS];
-export const CARDS: Record<string, CardDef> = Object.fromEntries([...ALL_CARDS, ...BOSSES, ...RAID_CARDS].map((c) => [c.id, c]));
+export const CARDS: Record<string, CardDef> = Object.fromEntries([...ALL_CARDS, ...BOSSES, ...RAID_CARDS, ...EVENT_CARDS].map((c) => [c.id, c]));
 export const CARD_BY_NAME: Record<string, CardDef> = Object.fromEntries(MAIN_SET.map((c) => [c.name, c]));
 
 export function card(cid: string): CardDef {

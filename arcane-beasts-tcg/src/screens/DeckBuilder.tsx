@@ -1,4 +1,5 @@
 import { RAID_CARDS } from '../engine/cards/bosses';
+import { EVENT_CARDS } from '../engine/cards/events';
 import { CARD_KINDS, matchKinds, type KindKey } from '../ui/cardKinds';
 // デッキ: your decks, ready-made おすすめデッキ, ace auto-build, and the editor
 import { AnimatePresence, motion } from 'motion/react';
@@ -354,7 +355,7 @@ function Editor({
   }, [deck.cards]);
   const nameCount = (name: string) => deck.cards.filter((id) => card(id).name === name).length;
 
-  const pool = [...ALL_CARDS, ...RAID_CARDS].filter((c) => owned(save, c.id) > 0)
+  const pool = [...ALL_CARDS, ...RAID_CARDS, ...EVENT_CARDS].filter((c) => owned(save, c.id) > 0)
     .filter((c) => matchKinds(c, kinds))
     .filter((c) => !types.length || (c.kind === 'monster' && types.includes(c.type)) || (c.kind === 'energy' && types.includes(c.energyType)))
     .filter((c) => !q || c.name.includes(q))

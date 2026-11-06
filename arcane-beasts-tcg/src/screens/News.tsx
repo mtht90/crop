@@ -3,7 +3,9 @@ import { AnimatePresence, motion } from 'motion/react';
 import { useMemo, useState } from 'react';
 import { create } from 'zustand';
 import { NEWS, NEWS_KIND_JP, type NewsItem, type NewsKind } from '../state/news';
-import { currentEvent, dayKey, fmtRemain, msUntilNextWeek } from '../state/progress';
+import { dayKey, fmtRemain } from '../state/progress';
+import { currentStageEvent } from '../state/stages';
+import { card } from '../engine/cards';
 import { useStore } from '../state/store';
 import { artUrl } from '../lib/assets';
 import { Icon } from '../ui/Icon';
@@ -29,19 +31,20 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'fix', label: '不具合修正' },
 ];
 
-function eventNews(progress: Parameters<typeof currentEvent>[0]): NewsItem & { art: string } {
-  const ev = currentEvent(progress);
-  const total = ev.tasks.reduce((n, t) => n + (t.gems ?? 0), 0);
+function eventNews(_progress?: unknown): NewsItem & { art: string } {
+  const { ev, key, ends } = currentStageEvent();
   return {
-    id: `event-${ev.key}`,
+    id: `stage-${key}`,
     kind: 'event',
-    title: `期間限定イベント「${ev.name}」開催中`,
-    art: ev.art,
+    title: `イベント「${ev.title.join('')}」開催中`,
+    art: ev.bg,
     body: [
       ev.blurb,
-      `・課題をクリアするとジェムがもらえます（すべてで最大 ${total} ジェム）`,
-      `・終了まで あと${fmtRemain(msUntilNextWeek())}（毎週月曜に新しいイベントが始まります）`,
-      '・ミッション →「イベント」タブから受け取れます',
+      '・全15ステージのマップを進むイベントです。ステージごとに変則ルールがあり、1-5・2-5は中ボス、3-5は大ボス',
+      '・はじめてクリアしたステージはジェム。勝つたびに「イベントのかけら」がときどき手に入り、交換所で限定カードやジェムと交換できます',
+      `・大ボスに勝つと、まれに限定カード「${card(ev.card).name}」が手に入ります`,
+      `・終了まで あと${fmtRemain(ends.getTime() - Date.now())}（2週間ごとに新しいイベントが始まります）`,
+      '・バトル →「イベント」から遊べます',
     ],
   };
 }
@@ -129,7 +132,7 @@ export function NewsModal() {
                             onClick={() => {
                               sfx('expand', 0.4);
                               close();
-                              go('missions');
+                              go('stage');
                             }}
                           >
                             イベントを見る
