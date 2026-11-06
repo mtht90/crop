@@ -26,6 +26,17 @@ describe('CPU levels', () => {
     }
     expect(PROFILES[9].budgetMs).toBeLessThanOrEqual(1500); // it must never keep the player waiting long
   });
+  it('the top level thinks a few seconds a turn at most', async () => {
+    const { mctsBudget } = await import('../ai');
+    const ms = PROFILES[9].mcts ?? 0;
+    expect(ms).toBeGreaterThan(0);
+    expect(ms).toBeLessThanOrEqual(2000);
+    let turn = 0;
+    for (let a = 1; a <= 8; a++) turn += mctsBudget(ms, a);
+    expect(turn).toBeLessThanOrEqual(8000);
+    expect(mctsBudget(ms, 1)).toBe(ms);
+    expect(mctsBudget(ms, 20)).toBeGreaterThan(0);
+  });
   it('story difficulties map onto the levels', () => {
     expect(profileOf('easy')).toBe(PROFILES[2]);
     expect(profileOf('normal')).toBe(PROFILES[5]);

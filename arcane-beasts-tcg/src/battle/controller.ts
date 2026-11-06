@@ -3,7 +3,7 @@
 // dispatches FX, runs the CPU, and exposes human prompts to the UI.
 // ============================================================================
 import { create } from 'zustand';
-import { aiAnswer, type AiLevel } from '../engine/ai';
+import { aiAnswerAsync, type AiLevel } from '../engine/ai';
 import { card } from '../engine/cards';
 import { Game, slotAt, topCard } from '../engine/game';
 import type { Action, Answer, Frame, GameEvent, GameState, MonsterCard, Prompt, BattleMods } from '../engine/types';
@@ -355,7 +355,8 @@ export class BattleController extends FramePlayer implements BattleDriver {
         await sleep((pr.type === 'action' ? 520 : 380) / this.rate);
         if (this.disposed) return;
         if (pr.type === 'action') this.actionsThisTurn++;
-        const ans = aiAnswer(this.game, pr.player === HUMAN ? 'normal' : this.level, this.actionsThisTurn);
+        const ans = await aiAnswerAsync(this.game, pr.player === HUMAN ? 'normal' : this.level, this.actionsThisTurn);
+        if (this.disposed) return;
         this.game.answer(ans);
       }
     } finally {

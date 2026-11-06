@@ -18,7 +18,7 @@ import {
   slotsOf,
   topCard,
 } from './game';
-import { mctsAction } from './mcts';
+import { mctsAction, mctsActionAsync } from './mcts';
 import type { Action, Answer, CardInst, GameState, MonsterCard, Pos, Prompt, Slot } from './types';
 
 export type Difficulty = 'easy' | 'normal' | 'hard';
@@ -326,7 +326,7 @@ export const PROFILES: Record<CpuLevel, AiProfile> = {
   6: { noise: 0, skip: 0, badAttack: 0, slip: 0, depth: 1, width: 4, threat: 0.8, replies: 0, budgetMs: 250 },
   7: { noise: 0, skip: 0, badAttack: 0, slip: 0, depth: 2, width: 5, threat: 1, replies: 0, budgetMs: 450 },
   8: { noise: 0, skip: 0, badAttack: 0, slip: 0, depth: 3, width: 6, threat: 1.1, replies: 0, budgetMs: 600 },
-  9: { noise: 0, skip: 0, badAttack: 0, slip: 0, depth: 4, width: 7, threat: 1.2, replies: 0, budgetMs: 900 },
+  9: { noise: 0, skip: 0, badAttack: 0, slip: 0, depth: 4, width: 7, threat: 1.2, replies: 0, budgetMs: 900, mcts: 1500 },
 };
 
 export const CPU_LEVELS: { level: CpuLevel; name: string; blurb: string }[] = [
@@ -338,7 +338,7 @@ export const CPU_LEVELS: { level: CpuLevel; name: string; blurb: string }[] = [
   { level: 6, name: '上級', blurb: '相手の反撃を考えて攻撃を選ぶ。★3のカード入り' },
   { level: 7, name: '達人', blurb: '1ターンの手順を先読みする。★4のカード入り' },
   { level: 8, name: '名人', blurb: '手順と反撃を深く読む。★5のカード入り' },
-  { level: 9, name: '伝説', blurb: '最も深く読む。★5のカード入りの強化デッキ' },
+  { level: 9, name: '伝説', blurb: '一手ごとに何百通りも最後まで試して、いちばん勝てる手を選ぶ。★5のカード入りの強化デッキ' },
 ];
 
 /** the profile for a story difficulty or a CPU level */
@@ -486,7 +486,7 @@ export function chooseAction(g: Game, p: 0 | 1, level: AiLevel = 'normal', actio
   if (legal.length === 1) return legal[0];
   if (legal.length === 0 || actionsThisTurn > 40) return { t: 'endTurn' };
   const prof = profileOf(level);
-  if (prof.mcts) return mctsAction(g, p, { budgetMs: prof.mcts, horizon: 30 });
+  if (prof.mcts) return mctsAction(g, p, { budgetMs: mctsBudget(prof.mcts, actionsThisTurn), horizon: 30 });
   if (prof.depth > 0) return plan(g, p, prof);
 
   const base = evaluate(g.s, p);
@@ -526,6 +526,22 @@ export function chooseAction(g: Game, p: 0 | 1, level: AiLevel = 'normal', actio
     }
   }
   return atkBest;
+}
+
+/** thinking time per move: the turn's first moves matter most, later ones get less (a turn stays a few seconds) */
+export function mctsBudget(ms: number, actionsThisTurn: number) {
+  return Math.round(ms * Math.max(0.3, 1 - 0.2 * Math.max(0, actionsThisTurn - 1)));
+}
+
+/** like aiAnswer, but a long search runs in slices so the screen keeps moving */
+export async function aiAnswerAsync(g: Game, level: AiLevel = 'normal', actionsThisTurn = 0): Promise<Answer> {
+  const pr = g.pending!;
+  const prof = profileOf(level);
+  if (pr.type === 'action' && prof.mcts) {
+    const legal = g.legalActions(pr.player);
+    if (legal.length > 1 && actionsThisTurn <= 40) return { type: 'action', action: await mctsActionAsync(g, pr.player, { budgetMs: mctsBudget(prof.mcts, actionsThisTurn), horizon: 30 }) };
+  }
+  return aiAnswer(g, level, actionsThisTurn);
 }
 
 export function aiAnswer(g: Game, level: AiLevel = 'normal', actionsThisTurn = 0): Answer {

@@ -126,44 +126,96 @@ export interface MctsOptions {
   horizon: number;
 }
 
-/** choose an action by Monte Carlo play-outs */
-export function mctsAction(g: Game, p: 0 | 1, opt: MctsOptions): Action {
-  const legal = g.legalActions(p);
-  if (legal.length <= 1) return legal[0] ?? { t: 'endTurn' };
-  const stats = legal.map(() => ({ n: 0, w: 0 }));
-  const deadline = Date.now() + opt.budgetMs;
-  let total = 0;
-  while (Date.now() < deadline) {
-    // UCB1: try every action once, then favour the promising ones
+/** a search over the legal actions, run in slices so the screen can keep moving */
+class Search {
+  legal: Action[];
+  stats: { n: number; w: number }[];
+  total = 0;
+  constructor(
+    private g: Game,
+    private p: 0 | 1,
+    private opt: MctsOptions,
+  ) {
+    this.legal = g.legalActions(p);
+    this.stats = this.legal.map(() => ({ n: 0, w: 0 }));
+  }
+  /** one play-out: UCB1 picks the action (each is tried once first) */
+  step() {
+    const { stats } = this;
     let k = stats.findIndex((x) => x.n === 0);
     if (k < 0) {
       let best = -Infinity;
       for (let i = 0; i < stats.length; i++) {
         const x = stats[i];
-        const u = x.w / x.n + 0.9 * Math.sqrt(Math.log(total) / x.n);
+        const u = x.w / x.n + 0.9 * Math.sqrt(Math.log(this.total) / x.n);
         if (u > best) {
           best = u;
           k = i;
         }
       }
     }
-    const f = g.fork();
-    determinize(f, p);
+    const f = this.g.fork();
+    determinize(f, this.p);
     let v = 0;
     try {
-      f.answer({ type: 'action', action: legal[k] });
-      v = playout(f, p, opt.horizon);
+      f.answer({ type: 'action', action: this.legal[k] });
+      v = playout(f, this.p, this.opt.horizon);
     } catch {
       v = 0;
     }
     stats[k].n++;
     stats[k].w += v;
-    total++;
+    this.total++;
   }
-  // the most tried action is the most trusted
-  let k = 0;
-  for (let i = 1; i < stats.length; i++) if (stats[i].n > stats[k].n || (stats[i].n === stats[k].n && stats[i].w > stats[k].w)) k = i;
-  return legal[k];
+  /** play-outs until `until` (ms timestamp) */
+  run(until: number) {
+    while (Date.now() < until) this.step();
+  }
+  /** the leader is so far ahead that the rest of the time cannot change the pick */
+  settled(msLeft: number, msSpent: number) {
+    if (this.total < this.legal.length * 4 || msSpent <= 0) return false;
+    const rate = this.total / msSpent;
+    const ns = this.stats.map((x) => x.n).sort((a, b) => b - a);
+    return ns[0] - (ns[1] ?? 0) > rate * msLeft;
+  }
+  /** the most tried action is the most trusted */
+  best(): Action {
+    const { stats } = this;
+    let k = 0;
+    for (let i = 1; i < stats.length; i++) if (stats[i].n > stats[k].n || (stats[i].n === stats[k].n && stats[i].w > stats[k].w)) k = i;
+    return this.legal[k];
+  }
+}
+
+/** choose an action by Monte Carlo play-outs (blocks for up to the budget) */
+export function mctsAction(g: Game, p: 0 | 1, opt: MctsOptions): Action {
+  const legal = g.legalActions(p);
+  if (legal.length <= 1) return legal[0] ?? { t: 'endTurn' };
+  const search = new Search(g, p, opt);
+  const t0 = Date.now();
+  const deadline = t0 + opt.budgetMs;
+  while (Date.now() < deadline) {
+    search.run(Math.min(deadline, Date.now() + 40));
+    const now = Date.now();
+    if (search.settled(deadline - now, now - t0)) break;
+  }
+  return search.best();
+}
+
+/** the same, in 30ms slices with a pause between them so animations keep playing */
+export async function mctsActionAsync(g: Game, p: 0 | 1, opt: MctsOptions): Promise<Action> {
+  const legal = g.legalActions(p);
+  if (legal.length <= 1) return legal[0] ?? { t: 'endTurn' };
+  const search = new Search(g, p, opt);
+  const t0 = Date.now();
+  const deadline = t0 + opt.budgetMs;
+  while (Date.now() < deadline) {
+    search.run(Math.min(deadline, Date.now() + 30));
+    const now = Date.now();
+    if (search.settled(deadline - now, now - t0)) break;
+    await new Promise((r) => setTimeout(r, 0));
+  }
+  return search.best();
 }
 
 /** how many play-outs fit in a budget (for tuning) */
