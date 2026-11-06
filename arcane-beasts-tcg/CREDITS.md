@@ -632,6 +632,10 @@ licensed under [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/), via `@
 `public/assets/ui/coin.svg` and `gem.svg` are from [Noto Emoji](https://github.com/googlefonts/noto-emoji)
 (Google), licensed under the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0), via Iconify.
 
+## ボタン素材（public/assets/ui/btn）
+- GUI Buttons — OpenGameArt (opengameart.org/content/gui-buttons-0), CC0 1.0: 金・ガラス（青。緑・紫・紅は色違いに加工）・赤・灰・木のボタン枠
+- Golden UI — Buch (opengameart.org/content/golden-ui), CC0 1.0: ドット絵のタブと丸ボタン（4倍に拡大、丸ボタンは左右対称に整えて中を塗りつぶし）
+
 ## エフェクト素材
 - Particle Pack — Kenney (kenney.nl), CC0 1.0（レイドカードのきらめき・光輪・レンズフレア）
 
