@@ -34,7 +34,6 @@ import { cosmeticById } from './state/cosmetics';
 import { TabBar, TAB_OF } from './ui/TabBar';
 import { More } from './screens/More';
 import './styles/app.css';
-import './styles/skin.css';
 import { useBattle } from './battle/controller';
 
 if (import.meta.env.DEV) Object.assign(window, { __stores: { useStore, useBattle } });
