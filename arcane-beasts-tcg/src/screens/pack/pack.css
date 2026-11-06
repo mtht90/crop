@@ -844,6 +844,6 @@
 .tear-float.charging > .bp { filter: brightness(1.08); }
 
 /* 力をためる: the room darkens, light rushes in, the pack fills with light */
-.charge-dim { position: absolute; inset: 0; z-index: 8; pointer-events: none; background: radial-gradient(42% 38% at 50% 38%, transparent 0%, rgba(2, 3, 8, 0.55) 55%, rgba(0, 0, 0, 0.88) 100%); }
-.charge-intake { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 9; pointer-events: none; }
+.charge-dim { position: absolute; inset: -150vmax; z-index: 8; pointer-events: none; background: radial-gradient(circle at 50% calc(50% - 6vh), transparent 0, rgba(2, 3, 8, 0.55) 34vmin, rgba(0, 0, 0, 0.88) 80vmax); }
+.charge-intake { position: absolute; top: calc((100% - 100dvh) / 2); left: calc((100% - 100vw) / 2); width: 100vw; height: 100dvh; z-index: 9; pointer-events: none; }
 .charge-wave { position: absolute; left: 50%; top: 50%; width: 120%; aspect-ratio: 1; translate: -50% -50%; border-radius: 50%; z-index: 11; pointer-events: none; border: calc(var(--u) * 0.6) solid var(--ac, #fff); box-shadow: 0 0 calc(var(--u) * 3) var(--ac, #fff), inset 0 0 calc(var(--u) * 3) var(--ac, #fff); }
