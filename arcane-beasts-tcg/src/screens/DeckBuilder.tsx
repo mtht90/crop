@@ -6,7 +6,8 @@ import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ALL_CARDS, byName, card, ENERGIES, TYPE_JP } from '../engine/cards';
 import { ALL_DECKS, validateDeck } from '../engine/decks';
-import { fromRecipe } from '../engine/autodeck';
+import { fromRecipe, printingsOf } from '../engine/autodeck';
+import { buildFromCode, decodeDeck, encodeDeck } from '../engine/deckcode';
 import type { CardDef, EType } from '../engine/types';
 import { ENERGY_TYPES } from '../engine/types';
 import { owned, useStore, type SavedDeck } from '../state/store';
@@ -69,6 +70,7 @@ export function DeckBuilder() {
   const [dirty, setDirty] = useState(false);
   const [tab, setTab] = useState<ListTab>('mine');
   const [auto, setAuto] = useState(false);
+  const [codeOpen, setCodeOpen] = useState(false);
   const [zoom, setZoom] = useState<string | null>(null);
   const [toast, setToast] = useState('');
 
@@ -167,6 +169,13 @@ export function DeckBuilder() {
               <span>
                 <b>自分で組む</b>
                 <small>空のデッキから編集</small>
+              </span>
+            </button>
+            <button className="box db3-quick-btn" onClick={() => (sfx('expand', 0.5), setCodeOpen(true))}>
+              <Icon name="scroll-unfurled" />
+              <span>
+                <b>コードで組む</b>
+                <small>デッキコードを入力</small>
               </span>
             </button>
           </div>
@@ -291,9 +300,103 @@ export function DeckBuilder() {
           />
         )}
       </AnimatePresence>
+      <AnimatePresence>
+        {codeOpen && (
+          <CodeModal
+            onClose={() => setCodeOpen(false)}
+            onSave={(d, activate) => {
+              store(d, activate);
+              setCodeOpen(false);
+              setTab('mine');
+              sfx('fanfare-short', 0.5);
+              flash(activate ? `「${d.name}」を作って使用デッキにしました` : `「${d.name}」を保存しました（未完成）`);
+            }}
+          />
+        )}
+      </AnimatePresence>
       <Toast text={toast} />
       <Zoom cid={zoom} onClose={() => setZoom(null)} />
     </div>
+  );
+}
+
+/**
+ * デッキコード: paste or type a code, see the deck it stands for (cards you are
+ * missing are dimmed, with how many you have), then save it.
+ */
+function CodeModal({ onClose, onSave }: { onClose: () => void; onSave: (d: SavedDeck, activate: boolean) => void }) {
+  const save = useStore((s) => s.save);
+  const [text, setText] = useState('');
+  const decoded = useMemo(() => (text.trim() ? decodeDeck(text) : null), [text]);
+  const built = useMemo(() => (decoded ? buildFromCode(decoded, (cid) => owned(save, cid), printingsOf) : null), [decoded, save]);
+  const complete = !!built && built.have === built.need && !validateDeck(built.cards).length;
+  const ace = useMemo(() => {
+    if (!decoded) return null;
+    const mons = decoded.cards.map((e) => ({ e, c: card(e.id) })).filter((x) => x.c.kind === 'monster');
+    mons.sort((a, b) => (b.c.kind === 'monster' && a.c.kind === 'monster' ? b.c.hp - a.c.hp : 0));
+    return mons[0]?.c ?? null;
+  }, [decoded]);
+  const name = ace ? `${ace.name}デッキ` : 'コードのデッキ';
+  const make = (cards: string[], activate: boolean) =>
+    onSave({ id: `deck-${Date.now()}`, name, cards, cover: cards.find((id) => card(id).name === ace?.name) ?? cards[0] ?? '' }, activate);
+  const fill = () => {
+    if (!decoded || !ace || ace.kind !== 'monster') return;
+    // the code's own list, the gaps filled from the player's cards around its ace
+    const r = fromRecipe({ id: 'code', name, type: ace.type, cover: ace.name, description: '', cards: decoded.cards.map((e) => [e.name, e.n]) }, (cid) => owned(save, cid));
+    if (validateDeck(r.cards).length) return;
+    make(r.cards, true);
+  };
+  const order = (id: string) => sortKey(card(id));
+  return (
+    <motion.div className="modal-back" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
+      <motion.div className="panel code-modal" initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 10, opacity: 0 }} onClick={(e) => e.stopPropagation()}>
+        <button className="icon-btn close" title="閉じる" onClick={onClose}>
+          <Icon name="close" />
+        </button>
+        <h3>デッキコードで組む</h3>
+        <textarea className="code-input" placeholder="AB1-XXXXX-XXXXX-…" value={text} onChange={(e) => setText(e.target.value)} rows={2} autoFocus spellCheck={false} />
+        {text.trim() && !decoded && <div className="code-bad">コードが読めません。もう一度確かめてください</div>}
+        {built && (
+          <>
+            <div className={`code-sum ${complete ? 'ok' : ''}`}>
+              <b>{name}</b>
+              <span>
+                所持 {built.have} / {built.need}枚{built.need !== 60 && '（60枚ではありません）'}
+              </span>
+            </div>
+            <div className="code-grid">
+              {[...built.lines]
+                .sort((a, b) => order(a.id) - order(b.id))
+                .map((l) => (
+                  <div key={l.id} className={`code-card ${l.have < l.need ? (l.have ? 'part' : 'none') : ''}`}>
+                    <CardFace cid={l.id} />
+                    <span className="code-n">
+                      {l.have < l.need ? `${l.have}/${l.need}` : `×${l.need}`}
+                    </span>
+                  </div>
+                ))}
+            </div>
+            {!complete && <p className="code-note">暗いカードは持っていない（足りない）カードです。数字は「持っている枚数/必要な枚数」</p>}
+            <div className="code-actions">
+              {complete ? (
+                <button className="btn big" onClick={() => make(built.cards, true)}>
+                  このデッキを使う
+                </button>
+              ) : (
+                <>
+                  <button className="btn ghost" onClick={() => make(built.cards, false)}>
+                    持っている分だけ保存（未完成）
+                  </button>
+                  <button className="btn" onClick={fill}>
+                    足りない分を手持ちで補って使う
+                  </button>
+                </>
+              )}
+            </div>
+          </>
+        )}
+      </motion.div>
+    </motion.div>
   );
 }
 
@@ -433,6 +536,21 @@ function Editor({
           </button>
           <input className="db3-name" value={deck.name} maxLength={16} onChange={(e) => onChange({ ...deck, name: e.target.value })} />
           <span className={`db3-count ${deck.cards.length === 60 ? 'ok' : ''}`}>{deck.cards.length}/60</span>
+          <button
+            className="btn small ghost db3-code"
+            disabled={!deck.cards.length}
+            onClick={async () => {
+              const code = encodeDeck(deck.cards);
+              try {
+                await navigator.clipboard.writeText(code);
+                flash(`デッキコードをコピーしました：${code}`);
+              } catch {
+                await askConfirm(`デッキコード：${code}`, 'OK');
+              }
+            }}
+          >
+            コードをコピー
+          </button>
         </header>
 
         <div className="db3-seg">

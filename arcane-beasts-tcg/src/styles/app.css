@@ -355,7 +355,8 @@
 
 /* ---------------------------------- deck --------------------------------- */
 .db3 { max-width: 1100px; }
-.db3-quick { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap); }
+.db3-quick { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--gap); }
+@media (max-width: 560px) { .db3-quick { grid-template-columns: 1fr 1fr; } .db3-quick-btn:nth-child(3) { grid-column: 1 / -1; } }
 .db3-quick-btn { display: flex; align-items: center; gap: 12px; padding: 14px; color: var(--ink); text-align: left; cursor: pointer; font-family: inherit; }
 .db3-quick-btn > svg { font-size: 26px; color: var(--gold); flex: none; }
 .db3-quick-btn span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
@@ -991,3 +992,22 @@
   .stg-node .stg-label { font-size: 12px; padding: 1px 8px; }
   .stg-chapter { top: -18px; font-size: 11px; padding: 1px 8px; }
 }
+
+/* デッキコード */
+.db3-code { margin-left: auto; flex: none; }
+.code-modal { position: relative; width: min(760px, calc(100vw - 24px)); max-height: min(88dvh, 900px); display: flex; flex-direction: column; gap: 10px; padding: 18px 16px 14px; }
+.code-modal h3 { margin: 0; text-align: center; font-family: var(--font-display); font-weight: 400; color: var(--gold-2); }
+.code-modal .close { position: absolute; right: 10px; top: 10px; }
+.code-input { width: 100%; box-sizing: border-box; resize: none; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: rgba(0, 0, 0, 0.45); color: var(--ink); font: 700 15px/1.4 ui-monospace, Menlo, monospace; letter-spacing: 0.04em; }
+.code-bad { color: #ff9a9a; font-weight: 800; font-size: var(--fs-s); text-align: center; }
+.code-sum { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-weight: 800; color: #ffcf9a; }
+.code-sum.ok { color: #9cf0b8; }
+.code-grid { flex: 1; min-height: 0; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 8px; padding: 2px; }
+.code-card { position: relative; }
+.code-card .tcg { width: 100%; }
+.code-card.none .tcg { filter: grayscale(1) brightness(0.35) !important; }
+.code-card.part .tcg { filter: grayscale(0.6) brightness(0.6) !important; }
+.code-n { position: absolute; right: 2px; bottom: 2px; padding: 1px 6px; border-radius: 999px; background: rgba(0, 0, 0, 0.8); color: #fff; font-weight: 900; font-size: 12px; }
+.code-card.none .code-n, .code-card.part .code-n { background: #b3262f; }
+.code-note { margin: 0; font-size: var(--fs-xs); color: var(--ink-dim); text-align: center; }
+.code-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }

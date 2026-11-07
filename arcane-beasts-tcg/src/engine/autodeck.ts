@@ -24,6 +24,9 @@ for (const list of printingsByName.values()) list.sort((a, b) => RARITIES.indexO
 
 const MONSTERS = MAIN_SET.filter((c): c is MonsterCard => c.kind === 'monster');
 
+/** every printing of a card, the fanciest first */
+export const printingsOf = (name: string): CardDef[] => printingsByName.get(name) ?? [];
+
 export const ownedOfName = (name: string, owned: OwnedFn) => (printingsByName.get(name) ?? []).reduce((n, c) => n + owned(c.id), 0);
 
 /** strongest monsters you own, as ace candidates (the aces and final evolutions first) */
