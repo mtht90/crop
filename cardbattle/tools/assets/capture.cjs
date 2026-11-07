@@ -12,7 +12,7 @@ const CARDS = ['iron_knight', 'archer_duo', 'rock_giant', 'bone_legion', 'wyvern
 
 (async () => {
   const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
-  const page = await browser.newPage({ viewport: { width: 320, height: 400 } });
+  const page = await browser.newPage({ viewport: { width: 480, height: 600 } });
   page.on('pageerror', (e) => console.error('page error:', e.message));
   for (const card of CARDS) {
     await page.goto(`${BASE}/tools/capture.html?card=${card}`);

@@ -62,3 +62,12 @@ Universal Animation Library は、今のモデルが同じ骨格ではないた�
 | 音のオン・オフ | 文字ボタン（M PLUS Rounded 1c） | Kenney にスピーカーのアイコンが無いため文字にした |
 | トロフィーのアイコン | Kenney UI Pack の黄色い星 | トロフィーの絵が無いため星で代用 |
 | PWA のアイコン | 鉄の騎士のカード絵（撮影したもの）を紺の背景に置いたもの | — |
+
+## カード枠について（2026-11 調査）
+
+より凝ったカード枠の素材を探したが、無料で使えるものは見つからなかった。
+- 見た目の良いもの（goldenseal「2D Frame Cards」、derrick008「Fantasy Card Assets」、pzuh「TCG Card Template Vol 4」）は有料（$5〜8）で、一部は AI 生成
+- 無料・CC0 のもの（OpenGameArt「TCG Templates」など）は簡素で、LAYERLAB より良くならない
+
+そのため、LAYERLAB の枠はそのまま使い、レアリティ色の光の背景・名前の帯・ルーン形のコスト・光の反射を CSS で重ねて見た目を作っている。
+有料素材を買ってよければ、`tools/assets/prepare.mjs` の `FRAMES` を差し替えるだけで使える。

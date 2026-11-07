@@ -51,6 +51,9 @@ export class BattleView {
   private readonly dying: Dying[] = [];
   private readonly projectiles = new Map<number, ProjectileView>();
   private readonly pendingMarkers: { mesh: THREE.Mesh; executeTick: number; startTick: number }[] = [];
+  /** 橋の上のルーン（光る紋章と光の柱） */
+  private runeObj: THREE.Group | null = null;
+  private readonly auras = new Map<number, THREE.Sprite>();
   private readonly tmp = new THREE.Vector3();
   private readonly tmp2 = new THREE.Vector3();
   private readonly geo = {
@@ -220,7 +223,7 @@ export class BattleView {
         case 'commandAccepted': {
           const mesh = new THREE.Mesh(
             this.geo.ring,
-            new THREE.MeshBasicMaterial({ color: TEAM_COLORS[this.team(ev.owner)], transparent: true, opacity: 0.9, depthWrite: false }),
+            new THREE.MeshBasicMaterial({ color: ev.empowered ? '#ffd36a' : TEAM_COLORS[this.team(ev.owner)], transparent: true, opacity: 0.9, depthWrite: false }),
           );
           mesh.rotation.x = -Math.PI / 2;
           simToWorld(ev.pos.x, ev.pos.y, 0.07, mesh.position);
@@ -335,6 +338,22 @@ export class BattleView {
         case 'crownScored':
           audio.play('crown', 0.9, 0);
           break;
+        case 'runeSpawned':
+          simToWorld(ev.pos.x, ev.pos.y, 0.4, this.tmp);
+          this.fx.ring(this.tmp.clone().setY(0.1), '#c89bff', 0.5, 3, 0.6);
+          this.fx.burst(this.tmp, '#e2c7ff', { texture: 'magic', count: 8, speed: 3, size: 0.9, life: 0.8, gravity: -2 });
+          audio.play('announce', 0.7, 0);
+          break;
+        case 'runeClaimed': {
+          simToWorld(ev.pos.x, ev.pos.y, 0.6, this.tmp);
+          const c = TEAM_COLORS[this.team(ev.owner)];
+          this.fx.flash(this.tmp.clone().setY(1.2), 'light', '#ffe7a8', 5, 0.35);
+          this.fx.burst(this.tmp, '#ffd86a', { texture: 'star', count: 16, speed: 7, size: 0.8, life: 0.8 });
+          this.fx.burst(this.tmp, c, { texture: 'magic', count: 6, speed: 4, size: 1.2, life: 0.7, gravity: -3 });
+          this.fx.ring(this.tmp.clone().setY(0.1), '#ffd86a', 0.5, 4.5, 0.5);
+          audio.play('crown', 0.8, 0);
+          break;
+        }
         default:
           break;
       }
@@ -439,8 +458,88 @@ export class BattleView {
       }
     }
 
+    this.updateRune(dt);
+    this.updateAuras(seen);
     this.updateProjectiles(dt, alpha);
     this.updateMarkers();
+  }
+
+  /** ルーン：紫に光る紋章が回り、光の柱が立つ */
+  private updateRune(dt: number): void {
+    const rune = this.sim.rune;
+    if (!rune) {
+      if (this.runeObj) {
+        this.root.remove(this.runeObj);
+        this.runeObj = null;
+      }
+      return;
+    }
+    if (!this.runeObj) {
+      const g = new THREE.Group();
+      const sigil = new THREE.Mesh(
+        new THREE.PlaneGeometry(2.4, 2.4),
+        new THREE.MeshBasicMaterial({ map: assets.texture('magic') ?? null, color: '#c58cff', transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }),
+      );
+      sigil.rotation.x = -Math.PI / 2;
+      sigil.position.y = 0.3;
+      sigil.name = 'sigil';
+      const beam = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.35, 0.6, 6, 20, 1, true),
+        new THREE.MeshBasicMaterial({ color: '#b98aff', transparent: true, opacity: 0.22, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }),
+      );
+      beam.position.y = 3.2;
+      const stone = new THREE.Mesh(
+        new THREE.OctahedronGeometry(0.42, 0),
+        new THREE.MeshStandardMaterial({ color: '#d9b8ff', emissive: '#9b5cff', emissiveIntensity: 1.6, roughness: 0.2, metalness: 0.3 }),
+      );
+      stone.position.y = 1.2;
+      stone.name = 'stone';
+      const glow = new THREE.Sprite(
+        new THREE.SpriteMaterial({ map: assets.texture('light') ?? null, color: '#c79bff', transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }),
+      );
+      glow.scale.setScalar(2.6);
+      glow.position.y = 1.2;
+      g.add(sigil, beam, stone, glow);
+      simToWorld(rune.pos.x, rune.pos.y, 0, g.position);
+      this.root.add(g);
+      this.runeObj = g;
+    }
+    const t = performance.now() / 1000;
+    const sigil = this.runeObj.getObjectByName('sigil');
+    const stone = this.runeObj.getObjectByName('stone');
+    if (sigil) sigil.rotation.z += dt * 0.8;
+    if (stone) {
+      stone.rotation.y += dt * 1.5;
+      stone.position.y = 1.2 + Math.sin(t * 2.2) * 0.15;
+    }
+  }
+
+  /** ルーンで強化されたユニットの足元に、金色の紋章を回す */
+  private updateAuras(seen: Set<number>): void {
+    for (const e of this.sim.entities) {
+      if (!e.empowered || e.hp <= 0) continue;
+      const v = this.views.get(e.id);
+      if (!v) continue;
+      let a = this.auras.get(e.id);
+      if (!a) {
+        a = new THREE.Sprite(
+          new THREE.SpriteMaterial({ map: assets.texture('magic') ?? null, color: '#ffd36a', transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }),
+        );
+        a.center.set(0.5, 0.5);
+        this.auras.set(e.id, a);
+        v.root.add(a);
+      }
+      const r = Math.max(0.9, (e.radius / UNIT) * 2.6);
+      a.scale.setScalar(r + Math.sin(performance.now() / 250 + e.id) * 0.08);
+      a.position.y = 0.25;
+      (a.material as THREE.SpriteMaterial).rotation += 0.03;
+    }
+    for (const [id, a] of this.auras) {
+      if (seen.has(id) && this.sim.getEntity(id)?.hp) continue;
+      a.removeFromParent();
+      (a.material as THREE.Material).dispose();
+      this.auras.delete(id);
+    }
   }
 
   private updateProjectiles(dt: number, alpha: number): void {
@@ -529,5 +628,8 @@ export class BattleView {
     this.projectiles.clear();
     for (const m of this.pendingMarkers) this.root.remove(m.mesh);
     this.pendingMarkers.length = 0;
+    if (this.runeObj) this.root.remove(this.runeObj);
+    this.runeObj = null;
+    this.auras.clear();
   }
 }

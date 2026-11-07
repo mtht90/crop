@@ -275,7 +275,7 @@ async function main() {
       const img = sharp(join(SRC, rel));
       const { width, height } = await img.metadata();
       await img.extract({ left: Math.round(width * 0.12), top: Math.round(height * 0.1), width: Math.round(width * 0.76), height: Math.round(height * 0.8) })
-        .resize(320, 400, { fit: 'cover', position: 'centre' }).webp({ quality: 85 }).toFile(dst.replace(/\.png$/, '.webp'));
+        .resize(480, 600, { fit: 'cover', position: 'centre' }).webp({ quality: 85 }).toFile(dst.replace(/\.png$/, '.webp'));
     } else await copyFile(join(SRC, rel), dst);
   }
   for (const f of FRAMES) await f.op(sharp(join(SRC, f.src))).png().toFile(join(OUT, f.out));

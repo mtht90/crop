@@ -225,3 +225,35 @@ describe('BOT対戦とリプレイ', () => {
     expect(hardWins).toBeGreaterThan(easyWins);
   });
 });
+
+describe('ルーン', () => {
+  it('30秒でどちらかの橋の上に現れ、最初に触れた陣営が力を得る', () => {
+    const sim = newSim();
+    stepSeconds(sim, 29.9);
+    expect(sim.rune).toBeNull();
+    stepSeconds(sim, 0.2);
+    expect(sim.rune).not.toBeNull();
+    const rune = sim.rune!;
+    expect(content.rules.bridgeX).toContain(rune.pos.x);
+    sim.players[0].hand[0] = content.cards.require('bone_legion');
+    sim.players[0].manaUnits = 10 * content.rules.manaUnit;
+    sim.tryAccept({ player: 0, cardId: 'bone_legion', pos: { x: rune.pos.x, y: 13500 }, issueTick: sim.tick });
+    stepSeconds(sim, 6);
+    expect(sim.rune).toBeNull();
+    expect(sim.players[0].runeCharged).toBe(true);
+  });
+
+  it('ルーンの力を持っていると、次のカードが強化される（1枚だけ）', () => {
+    const sim = newSim();
+    sim.players[0].runeCharged = true;
+    sim.players[0].hand[0] = content.cards.require('iron_knight');
+    sim.tryAccept({ player: 0, cardId: 'iron_knight', pos: tiles(9, 5), issueTick: 0 });
+    expect(sim.players[0].runeCharged).toBe(false);
+    stepSeconds(sim, 0.5);
+    const k = sim.entities.find((e) => e.card?.id === 'iron_knight')!;
+    const base = content.cards.require('iron_knight');
+    expect(k.empowered).toBe(true);
+    expect(k.maxHp).toBe(Math.trunc((base.hitpoints * (100 + content.rules.runeEmpowerPercent)) / 100));
+    expect(k.damage).toBe(Math.trunc((base.damage * (100 + content.rules.runeEmpowerPercent)) / 100));
+  });
+});

@@ -53,6 +53,8 @@ export class BotBrain {
       if (threat.defenderHp >= (threat.totalHp * 6) / 10 && !threat.hasAir) return null;
       return this.tryCounter(sim, me, mana, threat);
     }
+    const rune = this.tryRune(sim, me, mana);
+    if (rune) return rune;
     if (mana >= this.profile.pushMana) return this.tryPush(sim, me, mana);
     if (this.profile.supportPushes) return this.trySupport(sim, me, mana);
     return null;
@@ -193,6 +195,23 @@ export class BotBrain {
     // 重いユニットは後ろから、軽いユニットは橋の手前から
     const y = hasTag(pick, 'tank') ? UNIT / 2 : r.riverStart - UNIT / 2;
     return this.issue(sim, pick, this.world(sim, this.clampOwn(sim, this.jitter({ x: laneX, y }))));
+  }
+
+  /** ルーンが出ていて、まだ誰も向かっていなければ、安くて速いユニットを橋の手前に出して取りに行く */
+  private tryRune(sim: BattleSimulation, me: PlayerState, mana: number): DeployCommand | null {
+    const rune = sim.rune;
+    if (!rune || me.runeCharged || this.profile.randomCardPermille >= 400) return null; // かんたんBOTは狙わない
+    for (const e of sim.entities) {
+      if (e.hp > 0 && e.kind === 'troop' && e.owner === this.player && sqrDist(e.pos, rune.pos) < 7000 * 7000) return null;
+    }
+    let pick: CardStats | null = null;
+    for (const c of me.hand) {
+      if (c.type !== 'troop' || c.cost > mana || c.cost > 4) continue;
+      if (!pick || c.speed > pick.speed || (c.speed === pick.speed && c.cost < pick.cost)) pick = c;
+    }
+    if (!pick) return null;
+    const local = this.local(sim, rune.pos);
+    return this.issue(sim, pick, this.world(sim, this.clampOwn(sim, { x: local.x, y: sim.rules.riverStart - 1500 })));
   }
 
   /** 味方のタンクが前進していれば、その後ろに遠距離・空中ユニットを足す */

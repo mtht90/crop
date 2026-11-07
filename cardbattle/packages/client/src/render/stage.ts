@@ -90,6 +90,7 @@ export class Stage {
     sun.shadow.camera.near = 1;
     sun.shadow.camera.far = 70;
     sun.shadow.bias = -0.0005;
+    sun.shadow.intensity = 0.22; // 影はごく薄く（形が分かる程度）
     this.scene.add(sun);
   }
 

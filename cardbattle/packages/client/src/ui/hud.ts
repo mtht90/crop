@@ -105,6 +105,11 @@ export class Hud {
         void box.offsetWidth;
         box.classList.add('pop');
         this.announce(ev.owner === this.localPlayer ? 'クラウン獲得！' : 'タワーを壊された！', ev.owner === this.localPlayer ? 'good' : 'bad', 1400);
+      } else if (ev.type === 'runeSpawned') {
+        this.announce('ルーン出現！\n橋の上の石に触れろ', 'rune', 1800);
+      } else if (ev.type === 'runeClaimed') {
+        const mine = ev.owner === this.localPlayer;
+        this.announce(mine ? 'ルーン獲得！\n次のカードが強化' : '相手がルーンを獲得', mine ? 'rune' : 'bad', 1800);
       } else if (ev.type === 'announcement') {
         audio.play('announce', 0.8, 0);
         if (ev.kind === 'doubleMana') this.announce('残り60秒！\nマナ2倍', 'big', 2200);
@@ -175,6 +180,8 @@ export class Hud {
       const missing = Math.max(0, Math.min(1, (card.cost - mana) / card.cost));
       s.el.style.setProperty('--wait', String(missing));
     }
+    // ルーンの力を持っているあいだは、手札全体が金色に光る
+    this.root.classList.toggle('rune-charged', me.runeCharged);
     const next = me.queue[0];
     if (this.els.next.dataset.id !== next.id) {
       this.els.next.dataset.id = next.id;
@@ -199,15 +206,18 @@ export class Hud {
 export function renderCard(el: HTMLDivElement, card: CardStats): void {
   el.dataset.rarity = card.rarity;
   el.dataset.type = card.type;
-  // 素材があればカードの絵（撮影した画像）と LAYERLAB の枠、無ければ種類アイコン
+  // 重ね順：レアリティの光 → カードの絵 → 名前の帯 → LAYERLAB の枠 → コスト（ルーンの宝石）→ 光の反射
   const art = assets.available
-    ? `<img class="card-img" src="${assetUrl(cardArt(card.id, card.type))}" alt="" draggable="false">
+    ? `<div class="card-glow"></div>
+       <img class="card-img" src="${assetUrl(cardArt(card.id, card.type))}" alt="" draggable="false">
+       <div class="card-ribbon"></div>
        <img class="card-frame" src="${assetUrl(FRAME_BY_RARITY[card.rarity])}" alt="" draggable="false" onerror="this.parentElement.classList.add('no-frame');this.remove()">`
     : `<div class="card-art"><span class="card-icon">${TYPE_ICON[card.type] ?? '?'}</span></div>`;
   el.innerHTML = `
     ${art}
     <div class="card-name">${escapeHtml(card.name)}</div>
-    <div class="card-cost">${card.cost}</div>
+    <div class="card-cost"><span>${card.cost}</span></div>
+    <div class="card-shine"></div>
     <div class="card-wait"></div>`;
   el.title = `${card.name}（${RARITY_LABEL[card.rarity] ?? card.rarity}）`;
 }

@@ -67,6 +67,8 @@ export interface Entity {
   lastAttackTick: number;
   lastDamagedTick: number;
   spawnTick: number;
+  /** ルーンの力で強化されたユニット */
+  empowered: boolean;
 }
 
 export interface Projectile {
@@ -107,7 +109,9 @@ export interface AcceptedCommand {
 export type RejectReason = 'none' | 'matchOver' | 'unknownPlayer' | 'cardNotInHand' | 'notEnoughMana' | 'invalidPlacement';
 
 export type SimEvent =
-  | { type: 'commandAccepted'; tick: number; owner: number; pos: Vec; card: CardStats; executeTick: number }
+  | { type: 'commandAccepted'; tick: number; owner: number; pos: Vec; card: CardStats; executeTick: number; empowered: boolean }
+  | { type: 'runeSpawned'; tick: number; pos: Vec }
+  | { type: 'runeClaimed'; tick: number; owner: number; pos: Vec; by: number }
   | { type: 'entitySpawned'; tick: number; id: number; owner: number; pos: Vec; card: CardStats }
   | { type: 'entityDied'; tick: number; id: number; owner: number; pos: Vec; kind: EntityKind }
   | { type: 'damaged'; tick: number; id: number; sourceId: number; owner: number; amount: number; pos: Vec }
@@ -132,6 +136,14 @@ export interface PlayerState {
   manaUnits: number;
   crowns: number;
   towers: Record<TowerSlot, number>;
+  /** ルーンの力を持っている（次に出すカードが強化される） */
+  runeCharged: boolean;
+}
+
+/** 橋の上に現れるルーン */
+export interface Rune {
+  pos: Vec;
+  spawnTick: number;
 }
 
 interface PendingDeploy {
@@ -139,6 +151,7 @@ interface PendingDeploy {
   player: number;
   card: CardStats;
   pos: Vec;
+  empowered: boolean;
 }
 
 const TOWER_SLOTS: TowerSlot[] = ['king', 'left', 'right'];
@@ -165,6 +178,10 @@ export class BattleSimulation {
   readonly events: SimEvent[] = [];
   readonly acceptedLog: AcceptedCommand[] = [];
   private readonly pending: PendingDeploy[] = [];
+  /** 今アリーナにあるルーン（無ければ null） */
+  rune: Rune | null = null;
+  /** 次にルーンが現れる tick（0 = 出現しないルール） */
+  nextRuneTick = 0;
   private readonly rng: Rng;
   private nextId = 1;
   private readonly byId = new Map<number, Entity>();
@@ -179,6 +196,7 @@ export class BattleSimulation {
     this.rng = new Rng(seed);
     this.players = [this.createPlayer(0, names[0], deck0), this.createPlayer(1, names[1], deck1)];
     for (const p of this.players) this.spawnTowers(p);
+    this.nextRuneTick = rules.runeFirstTick;
   }
 
   get isOver(): boolean {
@@ -202,6 +220,7 @@ export class BattleSimulation {
       manaUnits: this.rules.startMana * this.rules.manaUnit,
       crowns: 0,
       towers: { king: -1, left: -1, right: -1 },
+      runeCharged: false,
     };
   }
 
@@ -249,6 +268,7 @@ export class BattleSimulation {
       lastAttackTick: -1000,
       lastDamagedTick: -1000,
       spawnTick: 0,
+      empowered: false,
     };
     this.addEntity(e);
     return e;
@@ -367,9 +387,12 @@ export class BattleSimulation {
 
     const pos = this.snapPosition(card, cmd.pos);
     const executeTick = this.tick + this.rules.commandDelayTicks;
-    this.pending.push({ executeTick, player: cmd.player, card, pos });
+    // ルーンの力は、次に出したカード1枚に使われる
+    const empowered = p.runeCharged;
+    p.runeCharged = false;
+    this.pending.push({ executeTick, player: cmd.player, card, pos, empowered });
     this.acceptedLog.push({ acceptTick: this.tick, executeTick, command: { ...cmd, pos: { ...cmd.pos } } });
-    this.events.push({ type: 'commandAccepted', tick: this.tick, owner: cmd.player, pos, card, executeTick });
+    this.events.push({ type: 'commandAccepted', tick: this.tick, owner: cmd.player, pos, card, executeTick, empowered });
     return 'none';
   }
 
@@ -397,6 +420,7 @@ export class BattleSimulation {
     }
 
     this.resolveCollisions();
+    this.updateRune();
     this.updateProjectiles();
     if (this.isOver) return;
 
@@ -421,8 +445,8 @@ export class BattleSimulation {
     const due = this.pending.filter((p) => p.executeTick <= this.tick);
     if (due.length === 0) return;
     for (const p of due) {
-      if (isSpell(p.card)) this.castSpell(p.player, p.card, p.pos);
-      else this.spawnCard(p.player, p.card, p.pos);
+      if (isSpell(p.card)) this.castSpell(p.player, p.card, p.pos, p.empowered);
+      else this.spawnCard(p.player, p.card, p.pos, p.empowered);
     }
     const keep = this.pending.filter((p) => p.executeTick > this.tick);
     this.pending.length = 0;
@@ -483,9 +507,36 @@ export class BattleSimulation {
     this.events.push({ type: 'matchEnded', tick: this.tick, winner, reason });
   }
 
+  // ------------------------------------------------------------ ルーン
+
+  /**
+   * ルーン：決まった間隔でどちらかの橋の中央に現れ、最初に触れたユニットの陣営が力を得る。
+   * どちらの橋に出るかはシード由来の乱数で決まる（リプレイ・オンラインでも同じになる）。
+   */
+  private updateRune(): void {
+    const r = this.rules;
+    if (r.runeIntervalTicks <= 0 || this.nextRuneTick <= 0) return;
+    if (!this.rune && this.tick >= this.nextRuneTick) {
+      const bx = r.bridgeX[this.rng.range(r.bridgeX.length)];
+      this.rune = { pos: { x: bx, y: idiv(r.riverStart + r.riverEnd, 2) }, spawnTick: this.tick };
+      this.events.push({ type: 'runeSpawned', tick: this.tick, pos: { ...this.rune.pos } });
+    }
+    if (!this.rune) return;
+    for (const e of this.entities) {
+      if (e.hp <= 0 || e.kind !== 'troop' || e.deployTimer > 0) continue;
+      const reach = r.runeRadius + e.radius;
+      if (sqrDist(e.pos, this.rune.pos) > reach * reach) continue;
+      this.players[e.owner].runeCharged = true;
+      this.events.push({ type: 'runeClaimed', tick: this.tick, owner: e.owner, pos: { ...this.rune.pos }, by: e.id });
+      this.rune = null;
+      this.nextRuneTick = this.tick + r.runeIntervalTicks;
+      return;
+    }
+  }
+
   // ------------------------------------------------------------ 生成
 
-  private spawnCard(owner: number, card: CardStats, center: Vec): void {
+  private spawnCard(owner: number, card: CardStats, center: Vec, empowered = false): void {
     const r = this.rules;
     const n = card.count;
     let cols = 1;
@@ -498,16 +549,22 @@ export class BattleSimulation {
       for (let c = 0; c < inRow; c++, idx++) {
         const ox = n === 1 ? 0 : idiv((2 * c - (inRow - 1)) * card.spawnSpacing, 2);
         const oy = n === 1 ? 0 : sign * idiv((2 * row - (rows - 1)) * card.spawnSpacing, 2);
-        this.spawnUnit(owner, card, {
-          x: clamp(center.x + ox, card.radius, r.width - card.radius),
-          y: clamp(center.y + oy, card.radius, r.height - card.radius),
-        });
+        this.spawnUnit(
+          owner,
+          card,
+          {
+            x: clamp(center.x + ox, card.radius, r.width - card.radius),
+            y: clamp(center.y + oy, card.radius, r.height - card.radius),
+          },
+          empowered,
+        );
       }
     }
   }
 
-  private spawnUnit(owner: number, card: CardStats, pos: Vec): Entity {
+  private spawnUnit(owner: number, card: CardStats, pos: Vec, empowered = false): Entity {
     const building = card.type === 'building';
+    const boost = (v: number) => (empowered ? idiv(v * (100 + this.rules.runeEmpowerPercent), 100) : v);
     const e: Entity = {
       id: this.nextId++,
       owner,
@@ -516,12 +573,12 @@ export class BattleSimulation {
       card,
       pos,
       prevPos: { ...pos },
-      hp: card.hitpoints,
-      maxHp: card.hitpoints,
+      hp: boost(card.hitpoints),
+      maxHp: boost(card.hitpoints),
       radius: card.radius,
       mass: building ? 0 : card.mass,
       flying: card.flying,
-      damage: card.damage,
+      damage: boost(card.damage),
       hitTicks: card.hitTicks,
       firstHitTicks: card.firstHitTicks,
       range: card.range,
@@ -543,16 +600,18 @@ export class BattleSimulation {
       lastAttackTick: -1000,
       lastDamagedTick: -1000,
       spawnTick: this.tick,
+      empowered,
     };
     this.addEntity(e);
     this.events.push({ type: 'entitySpawned', tick: this.tick, id: e.id, owner, pos: { ...pos }, card });
     return e;
   }
 
-  private castSpell(owner: number, card: CardStats, target: Vec): void {
+  private castSpell(owner: number, card: CardStats, target: Vec, empowered = false): void {
     this.events.push({ type: 'spellCast', tick: this.tick, owner, pos: target, card });
+    const pct = empowered ? 100 + this.rules.runeEmpowerPercent : 100;
     if (card.spellTravelSpeed <= 0) {
-      this.spellImpact(owner, card, target);
+      this.spellImpact(owner, card, target, pct);
       return;
     }
     const king = this.getTower(owner, 'king');
@@ -567,8 +626,8 @@ export class BattleSimulation {
       origin,
       targetPos: { ...target },
       speed: card.spellTravelSpeed,
-      damage: card.damage,
-      towerDamage: card.crownTowerDamage,
+      damage: idiv(card.damage * pct, 100),
+      towerDamage: idiv(card.crownTowerDamage * pct, 100),
       splash: card.spellRadius,
       hitsAir: true,
       hitsGround: true,
@@ -580,9 +639,11 @@ export class BattleSimulation {
     this.events.push({ type: 'projectileLaunched', tick: this.tick, id: p.id, sourceId: -1, owner });
   }
 
-  private spellImpact(owner: number, card: CardStats, at: Vec): void {
+  private spellImpact(owner: number, card: CardStats, at: Vec, pct = 100, damage?: number, towerDamage?: number): void {
     this.events.push({ type: 'spellImpact', tick: this.tick, owner, pos: { ...at }, card, radius: card.spellRadius });
-    this.areaDamage(owner, -1, at, card.spellRadius, card.damage, card.crownTowerDamage, true, true, card.stunTicks, card.knockback);
+    const d = damage ?? idiv(card.damage * pct, 100);
+    const td = towerDamage ?? idiv(card.crownTowerDamage * pct, 100);
+    this.areaDamage(owner, -1, at, card.spellRadius, d, td, true, true, card.stunTicks, card.knockback);
   }
 
   // ------------------------------------------------------------ 行動
@@ -882,7 +943,7 @@ export class BattleSimulation {
 
       p.done = true;
       this.events.push({ type: 'projectileHit', tick: this.tick, id: p.id, owner: p.owner, pos: { ...p.pos } });
-      if (p.spell) this.spellImpact(p.owner, p.spell, p.pos);
+      if (p.spell) this.spellImpact(p.owner, p.spell, p.pos, 100, p.damage, p.towerDamage);
       else if (p.splash > 0) this.areaDamage(p.owner, p.sourceId, p.pos, p.splash, p.damage, p.towerDamage, p.hitsAir, p.hitsGround, 0, 0);
       else if (target && target.hp > 0) this.applyDamage(target, p.damage, p.sourceId);
       if (this.isOver) return;
@@ -971,9 +1032,12 @@ export class BattleSimulation {
     h.mix(this.tick);
     h.mixString(this.phase);
     h.mix(this.winner);
+    h.mix(this.rune ? this.rune.pos.x : -1);
+    h.mix(this.nextRuneTick);
     for (const p of this.players) {
       h.mix(p.manaUnits);
       h.mix(p.crowns);
+      h.mix(p.runeCharged ? 1 : 0);
       for (const c of p.hand) h.mixString(c.id);
     }
     for (const e of this.entities) {

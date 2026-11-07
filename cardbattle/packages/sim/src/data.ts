@@ -91,6 +91,7 @@ export interface RulesData {
   commandDelaySeconds: number;
   handSize: number;
   deckSize: number;
+  rune?: { firstSpawnSeconds: number; intervalSeconds: number; pickupRadius: number; empowerPercent: number };
 }
 
 export interface BotProfileData {
@@ -222,6 +223,11 @@ export interface Rules {
   commandDelayTicks: number;
   handSize: number;
   deckSize: number;
+  /** ルール：0 なら出現しない */
+  runeFirstTick: number;
+  runeIntervalTicks: number;
+  runeRadius: number;
+  runeEmpowerPercent: number;
 }
 
 export function compileRules(r: RulesData): Rules {
@@ -246,6 +252,10 @@ export function compileRules(r: RulesData): Rules {
     commandDelayTicks: secondsToTicks(r.commandDelaySeconds),
     handSize: r.handSize,
     deckSize: r.deckSize,
+    runeFirstTick: r.rune ? secondsToTicks(r.rune.firstSpawnSeconds) : 0,
+    runeIntervalTicks: r.rune ? secondsToTicks(r.rune.intervalSeconds) : 0,
+    runeRadius: r.rune ? tilesToMilli(r.rune.pickupRadius) : 0,
+    runeEmpowerPercent: r.rune?.empowerPercent ?? 0,
   };
 }
 
