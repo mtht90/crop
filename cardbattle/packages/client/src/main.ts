@@ -9,7 +9,7 @@ import {
 } from '@cardbattle/sim';
 import { ArenaView } from './render/arenaView';
 import { BattleView } from './render/battleView';
-import { setArenaSize } from './render/coords';
+import { setArenaSize, simToWorld } from './render/coords';
 import { Fx } from './render/fx';
 import { Stage } from './render/stage';
 import { WorldUi } from './render/worldUi';
@@ -135,7 +135,7 @@ function showTitle(): void {
         <div class="logo-main">RUNE ARENA</div>
         <div class="logo-sub">ルーン・アリーナ</div>
       </div>
-      <div class="trophy">🏆 <span>${profile.trophies}</span></div>
+      <div class="trophy"><i class="trophy-icon"></i> <span>${profile.trophies}</span></div>
       <div class="panel">
         <div class="panel-title">BOTと対戦</div>
         <div class="bot-buttons">
@@ -146,10 +146,10 @@ function showTitle(): void {
       <div class="footer">描画: ${stage.backendName}${assets.available ? '' : '（素材なし・仮表示）'}${
         assets.failures.length ? `<br>読み込めなかった素材 ${assets.failures.length} 件：${escapeHtml(assets.failures[0])}` : ''
       }</div>
-      <button class="mute-btn" data-act="mute">${audio.muted ? '🔇' : '🔊'}</button>
+      <button class="mute-btn" data-act="mute">${audio.muted ? '音 OFF' : '音 ON'}</button>
     </div>`;
   screensEl.querySelector('[data-act="mute"]')?.addEventListener('click', (e) => {
-    (e.currentTarget as HTMLElement).textContent = audio.toggleMute() ? '🔇' : '🔊';
+    (e.currentTarget as HTMLElement).textContent = audio.toggleMute() ? '音 OFF' : '音 ON';
   });
   screensEl.querySelectorAll<HTMLButtonElement>('[data-bot]').forEach((b) =>
     b.addEventListener('click', () => {
@@ -196,7 +196,7 @@ function showResult(b: Battle): void {
         <div class="result-reason">${reasonText[sim.endReason] ?? ''}</div>
         <div class="result-row enemy"><span>${escapeHtml(sim.players[1 - me].name)}</span><span class="crowns">${crowns(sim.players[1 - me].crowns)}</span></div>
         <div class="result-row ally"><span>${escapeHtml(sim.players[me].name)}</span><span class="crowns">${crowns(sim.players[me].crowns)}</span></div>
-        ${b.isReplay ? '' : `<div class="result-trophy">🏆 ${profile.trophies} <span class="${delta >= 0 ? 'plus' : 'minus'}">${delta >= 0 ? '+' : ''}${delta}</span></div>`}
+        ${b.isReplay ? '' : `<div class="result-trophy"><i class="trophy-icon"></i> ${profile.trophies} <span class="${delta >= 0 ? 'plus' : 'minus'}">${delta >= 0 ? '+' : ''}${delta}</span></div>`}
         <div class="result-buttons">
           ${b.bot && !b.isReplay ? '<button class="btn" data-act="again">もう一度</button>' : ''}
           ${replay || b.isReplay ? '<button class="btn secondary" data-act="replay">リプレイを見る</button>' : ''}
@@ -225,6 +225,12 @@ function frame(now: number): void {
     b.session.advance(dt * debugSpeed, (events) => {
       b.view.handleEvents(events);
       b.hud.handleEvents(events);
+      for (const ev of events) {
+        if (ev.type !== 'crownScored') continue;
+        const p = { x: 0, y: 0, visible: false };
+        stage.projectToScreen(simToWorld(ev.pos.x, ev.pos.y, 3), p);
+        b.hud.flyCrown(p.x, p.y, ev.owner);
+      }
     });
     b.view.update(dt, b.session.interpolation);
     b.hud.update(b.input?.selected ?? -1, b.input?.dragging ?? -1);

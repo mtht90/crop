@@ -1,4 +1,23 @@
 import * as THREE from 'three/webgpu';
+import { pass } from 'three/tsl';
+import { bloom } from 'three/addons/tsl/display/BloomNode.js';
+
+/** 描画の品質。スマホ（指で操作する端末）は軽め、PC は高め。?quality=low|high で指定もできる */
+export interface Quality {
+  name: 'low' | 'high';
+  pixelRatio: number;
+  shadows: boolean;
+  bloom: boolean;
+}
+
+export function detectQuality(): Quality {
+  const q = new URLSearchParams(location.search).get('quality');
+  const mobile = window.matchMedia?.('(pointer: coarse)').matches ?? false;
+  const low = q === 'low' || (q !== 'high' && mobile);
+  return low
+    ? { name: 'low', pixelRatio: Math.min(window.devicePixelRatio, 1.5), shadows: true, bloom: false }
+    : { name: 'high', pixelRatio: Math.min(window.devicePixelRatio, 2), shadows: true, bloom: true };
+}
 import { arena } from './coords';
 
 /**
@@ -44,8 +63,8 @@ export class Stage {
   ) {
     // ?renderer=webgl で WebGL2 を強制できる（古い端末・不具合の切り分け用）
     this.renderer = new THREE.WebGPURenderer({ canvas, antialias: true, alpha: false, forceWebGL });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    this.renderer.shadowMap.enabled = true;
+    this.renderer.setPixelRatio(this.quality.pixelRatio);
+    this.renderer.shadowMap.enabled = this.quality.shadows;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.05;
@@ -69,8 +88,22 @@ export class Stage {
     this.scene.add(sun);
   }
 
+  readonly quality = detectQuality();
+  private pipeline: THREE.RenderPipeline | null = null;
+
   async init(): Promise<void> {
     await this.renderer.init();
+    if (this.quality.bloom) {
+      // 光るもの（炎・雷・閃光）だけがにじむように、しきい値を高めにしたブルーム
+      try {
+        const scenePass = pass(this.scene, this.camera);
+        const color = scenePass.getTextureNode('output');
+        this.pipeline = new THREE.RenderPipeline(this.renderer, color.add(bloom(color, 0.55, 0.35, 0.82)));
+      } catch (e) {
+        console.warn('bloom disabled', e);
+        this.pipeline = null;
+      }
+    }
   }
 
   get backendName(): string {
@@ -144,7 +177,8 @@ export class Stage {
   }
 
   render(): void {
-    this.renderer.render(this.scene, this.camera);
+    if (this.pipeline) this.pipeline.render();
+    else this.renderer.render(this.scene, this.camera);
   }
 
   /** 画面座標（canvas 基準のピクセル）から地面上の点を求める */

@@ -798,12 +798,58 @@ button {
   position: absolute;
   right: 10px;
   top: calc(var(--safe-top) + 10px);
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
+  padding: 8px 12px;
+  border-radius: 18px;
   border: none;
   background: rgba(0, 0, 0, 0.45);
   color: #fff;
-  font-size: 18px;
+  font-size: 13px;
   cursor: pointer;
+}
+
+/* トロフィー：Kenney の星（素材が無いときは丸） */
+.trophy-icon {
+  display: inline-block;
+  width: 24px;
+  height: 24px;
+  vertical-align: -4px;
+  border-radius: 50%;
+  background: var(--gold);
+}
+.themed .trophy-icon {
+  border-radius: 0;
+  background: var(--img-star-yellow) center / contain no-repeat;
+}
+
+/* クラウン獲得の演出 */
+.flying-crown {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 34px;
+  height: 34px;
+  z-index: 20;
+  pointer-events: none;
+  border-radius: 50%;
+  background: var(--gold);
+  filter: drop-shadow(0 0 10px rgba(255, 220, 120, 0.9));
+}
+.themed .flying-crown.ally {
+  border-radius: 0;
+  background: var(--img-star-blue) center / contain no-repeat;
+}
+.themed .flying-crown.enemy {
+  border-radius: 0;
+  background: var(--img-star-red) center / contain no-repeat;
+}
+.flying-crown.rise {
+  transition: transform 0.5s cubic-bezier(0.2, 1.8, 0.4, 1);
+}
+.flying-crown.go {
+  transition: transform 0.7s cubic-bezier(0.6, 0, 0.3, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .flying-crown {
+    display: none;
+  }
 }

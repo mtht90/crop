@@ -114,6 +114,26 @@ export class Hud {
     }
   }
 
+  /** タワーを壊したとき：星（クラウン）が壊れた場所から上のクラウン欄へ飛んでいく */
+  flyCrown(fromX: number, fromY: number, owner: number): void {
+    const target = owner === this.localPlayer ? this.els.myCrowns : this.els.oppCrowns;
+    const rootRect = this.root.getBoundingClientRect();
+    const t = target.getBoundingClientRect();
+    const star = document.createElement('div');
+    star.className = `flying-crown ${owner === this.localPlayer ? 'ally' : 'enemy'}`;
+    star.style.transform = `translate(${fromX}px, ${fromY}px) translate(-50%, -50%) scale(0.4)`;
+    this.root.appendChild(star);
+    requestAnimationFrame(() => {
+      star.classList.add('rise');
+      star.style.transform = `translate(${fromX}px, ${fromY - 70}px) translate(-50%, -50%) scale(2.2) rotate(-20deg)`;
+      window.setTimeout(() => {
+        star.classList.add('go');
+        star.style.transform = `translate(${t.left - rootRect.left + t.width / 2}px, ${t.top - rootRect.top + t.height / 2}px) translate(-50%, -50%) scale(0.8) rotate(340deg)`;
+      }, 520);
+      window.setTimeout(() => star.remove(), 1300);
+    });
+  }
+
   announce(text: string, cls: string, ms: number): void {
     const el = this.els.announce;
     el.className = `hud-announce show ${cls}`;

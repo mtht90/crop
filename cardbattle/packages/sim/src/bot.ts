@@ -205,10 +205,12 @@ export class BotBrain {
     }
     if (!tank) return null;
     const lp = this.local(sim, tank.pos);
-    if (lp.y > sim.rules.riverStart) return null;
-    const pick = me.hand.find((c) => c.cost <= mana && c.type === 'troop' && (hasTag(c, 'ranged') || hasTag(c, 'air')));
+    // 敵陣に入ったタンクには、橋の手前から援護を送る
+    const supportAt = lp.y > sim.rules.riverStart ? { x: sim.rules.bridgeX[sim.rules.bridgeX.length > 1 && lp.x > sim.rules.width / 2 ? 1 : 0], y: sim.rules.riverStart - 500 } : { x: lp.x, y: lp.y - 1500 };
+    if (lp.y > sim.rules.riverEnd + 6 * UNIT) return null;
+    const pick = me.hand.find((c) => c.cost <= mana && c.type === 'troop' && (hasTag(c, 'ranged') || hasTag(c, 'air') || hasTag(c, 'swarm')));
     if (!pick) return null;
-    return this.issue(sim, pick, this.world(sim, this.clampOwn(sim, this.jitter({ x: lp.x, y: lp.y - 1500 }))));
+    return this.issue(sim, pick, this.world(sim, this.clampOwn(sim, this.jitter(supportAt))));
   }
 
   /** 呪文で削り切れるタワーがあれば撃つ */
