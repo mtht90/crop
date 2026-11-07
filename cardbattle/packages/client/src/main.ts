@@ -94,7 +94,7 @@ function startBattle(session: MatchSession, mode: Mode, bot: BotProfile | null, 
   const sim = session.simulation;
   // プレイヤー1（オンラインの後手）は、自陣が手前に来るようにカメラを反対側に回す
   stage.flipped = session.localPlayer === 1;
-  const arena = new ArenaView(sim);
+  const arena = new ArenaView(sim, stage.flipped);
   const view = new BattleView(sim, session.localPlayer, stage, worldUi, fx);
   const hud = new Hud(hudEl, sim, session.localPlayer);
   stage.scene.add(arena.root, view.root);

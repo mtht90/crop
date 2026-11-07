@@ -69,19 +69,24 @@ export class Stage {
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.05;
 
-    this.scene.background = new THREE.Color('#1d2a3a');
-    this.scene.fog = new THREE.Fog('#1d2a3a', 60, 140);
+    // 空と遠景：明るい空色に向かって霧で溶け込ませる
+    this.scene.background = new THREE.Color('#9cc9ea');
+    this.scene.fog = new THREE.Fog('#a9d0ec', 55, 110);
 
-    const hemi = new THREE.HemisphereLight('#dfefff', '#4a5a3a', 1.4);
+    const hemi = new THREE.HemisphereLight('#d6ecff', '#55663a', 1.25);
     this.scene.add(hemi);
-    const sun = new THREE.DirectionalLight('#fff3dd', 2.6);
-    sun.position.set(-10, 26, 14);
+    // 斜め後ろからの暖かい日差し（影が手前に伸びて立体感が出る）＋反対側からの弱い青い補助光
+    const sun = new THREE.DirectionalLight('#ffeccc', 3.1);
+    sun.position.set(-12, 24, -10);
+    const fill = new THREE.DirectionalLight('#9fc4ff', 0.7);
+    fill.position.set(10, 8, 14);
+    this.scene.add(fill);
     sun.castShadow = true;
-    sun.shadow.mapSize.set(1024, 1024);
-    sun.shadow.camera.left = -14;
-    sun.shadow.camera.right = 14;
-    sun.shadow.camera.top = 22;
-    sun.shadow.camera.bottom = -22;
+    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.camera.left = -20;
+    sun.shadow.camera.right = 20;
+    sun.shadow.camera.top = 26;
+    sun.shadow.camera.bottom = -26;
     sun.shadow.camera.near = 1;
     sun.shadow.camera.far = 70;
     sun.shadow.bias = -0.0005;
@@ -120,7 +125,7 @@ export class Stage {
   /** アリーナの四隅が、手札エリアと上バーを除いた範囲にちょうど収まる距離・注視点を探す */
   fitCamera(): void {
     const cam = this.camera;
-    const elevation = THREE.MathUtils.degToRad(57);
+    const elevation = THREE.MathUtils.degToRad(53);
     const hw = arena.width / 2 + 0.6;
     const hh = arena.height / 2 + 0.6;
     const corners = [
@@ -154,6 +159,11 @@ export class Stage {
       const factor = Math.max((maxY - minY) / desiredSpan, maxX / 0.98);
       d *= Math.pow(factor, 0.8);
       tz -= ((maxY + minY) / 2 - desiredMid) * 6;
+    }
+    // 霧はアリーナの奥より先から効かせる（アリーナ自体はくっきり、遠くの村だけが霞む）
+    if (this.scene.fog instanceof THREE.Fog) {
+      this.scene.fog.near = d + 12;
+      this.scene.fog.far = d + 70;
     }
     this.basePos.copy(cam.position);
     this.baseTarget.set(0, 0, tz * flip);

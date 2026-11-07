@@ -2,6 +2,7 @@ import * as THREE from 'three/webgpu';
 import { UNIT, type BattleSimulation, type CardStats } from '@cardbattle/sim';
 import { arena, simToWorld } from './coords';
 import { arenaPart, bakeStatic } from './models';
+import { createEnvironment } from './environment';
 
 /**
  * アリーナの仮オブジェクト（地面・川・橋）と、配置範囲・射程円などの補助表示。
@@ -16,28 +17,33 @@ export class ArenaView {
   private readonly ghost: THREE.Mesh;
   private readonly ghostMat: THREE.MeshStandardMaterial;
 
-  constructor(private readonly sim: BattleSimulation) {
+  constructor(
+    private readonly sim: BattleSimulation,
+    flipped = false,
+  ) {
     const r = sim.rules;
     const riverStart = r.riverStart / UNIT;
     const riverEnd = r.riverEnd / UNIT;
 
-    // 地面：タイルごとに明暗をつけた格子（頂点カラー）
-    const ground = this.tileMesh((tx, ty, c) => {
-      const inRiver = ty + 0.5 > riverStart && ty + 0.5 < riverEnd;
-      if (inRiver) c.set('#2f6f9f');
-      else c.set((tx + ty) % 2 === 0 ? '#6fae4f' : '#66a447');
-    }, 0);
-    ground.receiveShadow = true;
-    this.root.add(ground);
-
-    // 川の水面
-    const water = new THREE.Mesh(
-      new THREE.PlaneGeometry(arena.width + 4, riverEnd - riverStart),
-      new THREE.MeshStandardMaterial({ color: '#3b8fd0', roughness: 0.15, metalness: 0.1, transparent: true, opacity: 0.85 }),
-    );
-    water.rotation.x = -Math.PI / 2;
-    water.position.copy(simToWorld(r.width / 2, (r.riverStart + r.riverEnd) / 2, -0.05));
-    this.root.add(water);
+    // 地面・川・石畳・周りの村（素材があれば）。無ければ頂点カラーの格子と単色の水面
+    const env = createEnvironment(r, flipped);
+    if (env) this.root.add(env);
+    else {
+      const ground = this.tileMesh((tx, ty, c) => {
+        const inRiver = ty + 0.5 > riverStart && ty + 0.5 < riverEnd;
+        if (inRiver) c.set('#2f6f9f');
+        else c.set((tx + ty) % 2 === 0 ? '#6fae4f' : '#66a447');
+      }, 0);
+      ground.receiveShadow = true;
+      this.root.add(ground);
+      const water = new THREE.Mesh(
+        new THREE.PlaneGeometry(arena.width + 4, riverEnd - riverStart),
+        new THREE.MeshStandardMaterial({ color: '#3b8fd0', roughness: 0.15, metalness: 0.1, transparent: true, opacity: 0.85 }),
+      );
+      water.rotation.x = -Math.PI / 2;
+      water.position.copy(simToWorld(r.width / 2, (r.riverStart + r.riverEnd) / 2, -0.05));
+      this.root.add(water);
+    }
 
     // 橋（素材があれば MegaKit の床板と柵、無ければ箱）
     const bridgeMat = new THREE.MeshStandardMaterial({ color: '#9c7149', roughness: 0.9 });
@@ -65,19 +71,21 @@ export class ArenaView {
     }
     this.decorate(r.bridgeX.map((b) => b / UNIT), r.bridgeHalfWidth / UNIT, riverStart, riverEnd);
 
-    // 外周の縁
-    const rimMat = new THREE.MeshStandardMaterial({ color: '#3c4a3a', roughness: 1 });
-    const rimGeo = new THREE.BoxGeometry(arena.width + 2, 0.6, 1);
-    for (const z of [-1, 1]) {
-      const rim = new THREE.Mesh(rimGeo, rimMat);
-      rim.position.set(0, 0.2, z * (arena.height / 2 + 0.5));
-      this.root.add(rim);
-    }
-    const sideGeo = new THREE.BoxGeometry(1, 0.6, arena.height + 2);
-    for (const x of [-1, 1]) {
-      const rim = new THREE.Mesh(sideGeo, rimMat);
-      rim.position.set(x * (arena.width / 2 + 0.5), 0.2, 0);
-      this.root.add(rim);
+    if (!env) {
+      // 外周の縁
+      const rimMat = new THREE.MeshStandardMaterial({ color: '#3c4a3a', roughness: 1 });
+      const rimGeo = new THREE.BoxGeometry(arena.width + 2, 0.6, 1);
+      for (const z of [-1, 1]) {
+        const rim = new THREE.Mesh(rimGeo, rimMat);
+        rim.position.set(0, 0.2, z * (arena.height / 2 + 0.5));
+        this.root.add(rim);
+      }
+      const sideGeo = new THREE.BoxGeometry(1, 0.6, arena.height + 2);
+      for (const x of [-1, 1]) {
+        const rim = new THREE.Mesh(sideGeo, rimMat);
+        rim.position.set(x * (arena.width / 2 + 0.5), 0.2, 0);
+        this.root.add(rim);
+      }
     }
 
     // 配置できない範囲の表示（ドラッグ中だけ）

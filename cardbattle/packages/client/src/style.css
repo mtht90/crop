@@ -1023,3 +1023,51 @@ button {
 .themed .card.no-frame {
   border: 3px solid var(--frame);
 }
+
+/* ================================================================ 対戦中の上バー（細く・半透明に） */
+.themed .hud-top .hud-player,
+.themed .hud-top .hud-timer {
+  border: none;
+  border-image: none;
+  background: linear-gradient(180deg, rgba(14, 20, 32, 0.82), rgba(14, 20, 32, 0.6));
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  border-radius: 12px;
+  padding: 5px 10px 6px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+}
+.themed .hud-top .hud-player.enemy {
+  box-shadow: inset 0 -3px 0 var(--enemy), 0 2px 10px rgba(0, 0, 0, 0.35);
+}
+.themed .hud-top .hud-player.ally {
+  box-shadow: inset 0 -3px 0 var(--ally), 0 2px 10px rgba(0, 0, 0, 0.35);
+}
+.themed .hud-top .hud-player .hud-name {
+  font-size: 12px;
+  text-shadow: 0 1px 2px #000;
+}
+.themed .hud-top .crown i {
+  width: 17px;
+  height: 17px;
+}
+.themed .hud-top .hud-timer {
+  min-width: 70px;
+  box-shadow: inset 0 0 0 2px rgba(242, 201, 76, 0.55), 0 2px 10px rgba(0, 0, 0, 0.35);
+}
+.themed .hud-top .hud-timer-value {
+  font-size: 19px;
+  color: #fff;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.6);
+}
+.themed .hud-top .hud-timer-label {
+  font-size: 9px;
+  letter-spacing: 1px;
+  color: var(--gold);
+}
+/* 下の手札エリア：木目の板の上にカードが並ぶように */
+.themed .hud-bottom {
+  background: linear-gradient(to top, rgba(32, 22, 14, 0.96) 75%, rgba(32, 22, 14, 0));
+}
+.hpbar.tower {
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+}

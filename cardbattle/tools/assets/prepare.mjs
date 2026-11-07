@@ -45,6 +45,14 @@ const MODELS = {
   floor_wood: `${MVK}/Floor_WoodDark.gltf`,
   border: `${MVK}/Prop_ExteriorBorder_Straight1.gltf`,
   vine: `${MVK}/Prop_Vine2.gltf`,
+  // アリーナの外の村（背景）
+  house_wall: `${MVK}/Wall_Plaster_Straight.gltf`,
+  house_window: `${MVK}/Wall_Plaster_Window_Wide_Round.gltf`,
+  house_door: `${MVK}/Wall_Plaster_Door_Round.gltf`,
+  house_roof: `${MVK}/Roof_RoundTiles_4x4.gltf`,
+  house_corner: `${MVK}/Corner_Exterior_Wood.gltf`,
+  wagon: `${MVK}/Prop_Wagon.gltf`,
+  metal_fence: `${MVK}/Prop_MetalFence_Ornament.gltf`,
 };
 
 const KUI = 'Kenney/ui-pack/PNG';
@@ -129,6 +137,14 @@ const FRAMES = [
   { out: 'cards/frame_legendary.png', src: `${LAY}/CardFrame_Rectangle_01_Red_BorderGem.png`, op: (s) => s.modulate({ saturation: 1.3 }) },
 ];
 
+/** 地面などに使う MegaKit のテクスチャ */
+const ENV_TEXTURES = {
+  'noise.png': `${Q}/MedievalVillageMegaKit/Textures/T_Noise_Terrain.png`,
+  'brushed.png': `${Q}/MedievalVillageMegaKit/Textures/T_BrushedNoise.png`,
+  'cobble.png': `${Q}/MedievalVillageMegaKit/Textures/T_UnevenBrick_BaseColor.png`,
+  'cobble_normal.png': `${Q}/MedievalVillageMegaKit/Textures/T_UnevenBrick_Normal.png`,
+};
+
 /** BGM：用途 → 魔王魂の曲ファイル（https://maou.audio/ から手動でダウンロードして置く） */
 const BGM = {
   battle: 'MaouDamashii/maou_game_battle01.mp3',
@@ -147,7 +163,7 @@ const KEEP_ANIMS = {
 };
 
 /** スマホ向けに形を簡略化する部品（三角形の数の目標割合）。タワーの角柱は1本で約3000三角形あるため */
-const SIMPLIFY = { pillar: 0.2, border: 0.35, tower_roof: 0.6 };
+const SIMPLIFY = { pillar: 0.2, border: 0.35, tower_roof: 0.6, house_roof: 0.5, house_corner: 0.4, wagon: 0.6, metal_fence: 0.5 };
 
 async function prepareModel(name, rel) {
   const doc = await io.read(join(SRC, rel));
@@ -263,6 +279,11 @@ async function main() {
     } else await copyFile(join(SRC, rel), dst);
   }
   for (const f of FRAMES) await f.op(sharp(join(SRC, f.src))).png().toFile(join(OUT, f.out));
+  // 地面・水面・石畳に使うテクスチャ（MegaKit のノイズと石畳）
+  await mkdir(join(OUT, 'env'), { recursive: true });
+  for (const [out, rel] of Object.entries(ENV_TEXTURES)) {
+    await sharp(join(SRC, rel)).resize(512, 512).png().toFile(join(OUT, 'env', out));
+  }
   await subsetFonts();
   await writeIcons();
   await writeFile(

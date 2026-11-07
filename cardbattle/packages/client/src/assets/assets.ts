@@ -1,6 +1,6 @@
 import * as THREE from 'three/webgpu';
 import { GLTFLoader, type GLTF } from 'three/addons/loaders/GLTFLoader.js';
-import { FX_TEXTURES, MODEL_FILES } from './visuals';
+import { ENV_TEXTURES, FX_TEXTURES, MODEL_FILES } from './visuals';
 
 let base = './assets/game/';
 /** 開発ツールのページなど、別の階層から読み込むときに変える */
@@ -43,7 +43,7 @@ class AssetStore {
     this.bgm = manifest.bgm ?? [];
     const loader = new GLTFLoader();
     const texLoader = new THREE.TextureLoader();
-    const total = MODEL_FILES.length + FX_TEXTURES.length;
+    const total = MODEL_FILES.length + FX_TEXTURES.length + ENV_TEXTURES.length;
     let done = 0;
     const tick = () => onProgress(++done, total);
     const attempt = async (label: string, fn: () => Promise<void>) => {
@@ -66,6 +66,15 @@ class AssetStore {
             }
           });
           this.models.set(name, gltf);
+        }),
+      ),
+      ...ENV_TEXTURES.map((name) =>
+        attempt(`env/${name}`, async () => {
+          const tex = await texLoader.loadAsync(assetUrl(`env/${name}.png`));
+          tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+          tex.anisotropy = 4;
+          if (name === 'cobble') tex.colorSpace = THREE.SRGBColorSpace;
+          this.textures.set(`env_${name}`, tex);
         }),
       ),
       ...FX_TEXTURES.map((name) =>

@@ -16,11 +16,11 @@ export interface UnitVisual {
 }
 
 export const UNIT_VISUALS: Record<string, UnitVisual> = {
-  iron_knight: { model: 'knight', height: 1.7, anims: { idle: 'Idle', move: 'Walk', attack: 'SwordSlash', death: 'Death' }, teamTint: 0.35 },
-  archer_duo: { model: 'archer', height: 1.45, anims: { idle: 'Idle', move: 'Walk', attack: 'Shoot_OneHanded', death: 'Death' }, teamTint: 0.3 },
-  rock_giant: { model: 'giant', height: 2.9, anims: { idle: 'Idle', move: 'Walk', attack: 'Punch', death: 'Death' }, teamTint: 0.25, baseTint: '#a39a8e' },
-  bone_legion: { model: 'skeleton', height: 1.0, anims: { idle: 'Idle', move: 'Run', attack: 'Weapon', death: 'Death' }, teamTint: 0.3 },
-  wyvern: { model: 'wyvern', height: 1.9, anims: { idle: 'Flying_Idle', move: 'Fast_Flying', attack: 'Headbutt', death: 'Death' }, teamTint: 0.3 },
+  iron_knight: { model: 'knight', height: 2.0, anims: { idle: 'Idle', move: 'Walk', attack: 'SwordSlash', death: 'Death' }, teamTint: 0.35 },
+  archer_duo: { model: 'archer', height: 1.75, anims: { idle: 'Idle', move: 'Walk', attack: 'Shoot_OneHanded', death: 'Death' }, teamTint: 0.3 },
+  rock_giant: { model: 'giant', height: 3.4, anims: { idle: 'Idle', move: 'Walk', attack: 'Punch', death: 'Death' }, teamTint: 0.25, baseTint: '#a39a8e' },
+  bone_legion: { model: 'skeleton', height: 1.2, anims: { idle: 'Idle', move: 'Run', attack: 'Weapon', death: 'Death' }, teamTint: 0.3 },
+  wyvern: { model: 'wyvern', height: 2.2, anims: { idle: 'Flying_Idle', move: 'Fast_Flying', attack: 'Headbutt', death: 'Death' }, teamTint: 0.3 },
 };
 
 /** レアリティ → カード枠 */
@@ -38,7 +38,11 @@ export const cardArt = (cardId: string, type: string): string =>
 export const MODEL_FILES = [
   'knight', 'archer', 'giant', 'skeleton', 'wyvern',
   'wall', 'pillar', 'tower_roof_blue', 'tower_roof_red', 'crate', 'chimney', 'fence', 'floor_wood', 'border', 'vine',
+  'house_wall', 'house_window', 'house_door', 'house_roof', 'house_corner', 'wagon', 'metal_fence',
 ];
+
+/** 地面・水面・石畳に使うテクスチャ（public/assets/game/env/） */
+export const ENV_TEXTURES = ['noise', 'brushed', 'cobble', 'cobble_normal'];
 
 export const FX_TEXTURES = ['star', 'spark', 'smoke', 'fire', 'flame', 'circle', 'dirt', 'magic', 'scorch', 'light', 'lightning', 'slash', 'trace'];
 
