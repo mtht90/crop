@@ -1,0 +1,21 @@
+{
+  "name": "@cardbattle/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "dev": "tsx watch src/index.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@cardbattle/sim": "0.1.0",
+    "tsx": "^4.23.15",
+    "ws": "^8.22.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/ws": "^8.18.2",
+    "vitest": "^5.1.0"
+  }
+}

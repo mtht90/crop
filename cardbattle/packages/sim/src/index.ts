@@ -4,3 +4,5 @@ export * from './sim';
 export * from './bot';
 export * from './session';
 export * from './content';
+export * from './protocol';
+export * from './online';

@@ -2,15 +2,20 @@
   "name": "cardbattle",
   "private": true,
   "type": "module",
-  "workspaces": ["packages/sim", "packages/client"],
+  "workspaces": [
+    "packages/sim",
+    "packages/client",
+    "packages/server"
+  ],
   "scripts": {
     "dev": "npm run dev -w @cardbattle/client",
     "build": "npm run build -w @cardbattle/client",
-    "test": "npm test -w @cardbattle/sim",
-    "typecheck": "tsc -p packages/sim && tsc -p packages/client --noEmit",
+    "test": "npm test -w @cardbattle/sim && npm test -w @cardbattle/server",
+    "typecheck": "tsc -p packages/sim && tsc -p packages/client --noEmit && tsc -p packages/server",
     "simulate": "npm run simulate -w @cardbattle/sim",
     "assets:prepare": "node tools/assets/prepare.mjs",
-    "assets:capture": "node tools/assets/capture.cjs"
+    "assets:capture": "node tools/assets/capture.cjs",
+    "server": "npm start -w @cardbattle/server"
   },
   "devDependencies": {
     "typescript": "~5.9.3"
