@@ -1074,3 +1074,34 @@
   .lb-label { position: static; justify-items: center; margin-top: 10px; }
   .lb-row { gap: 0; }
 }
+
+/* ---------------------------- Login bonus: hanko --------------------------- */
+.login-day .stamp { display: none; }
+.login-day.got { opacity: 1; }
+.login-day.got .ico, .login-day.got .c, .login-day.got .d { opacity: 0.32; }
+.login-day.cur.can, .login-day.cur:has(.ghost) { cursor: pointer; }
+.login-day.fresh { overflow: visible; z-index: 3; }
+.login-day.fresh::after { display: none; }
+.hanko {
+  position: absolute; left: 50%; top: 50%; width: 86%; max-width: 66px; aspect-ratio: 456 / 481; margin: 0; translate: -50% -50%;
+  pointer-events: none; user-select: none;
+  filter: drop-shadow(0 0 4px rgba(255, 30, 30, 0.55)) saturate(1.15) brightness(1.08);
+}
+.login-day.last .hanko { max-width: 88px; }
+.hanko.ghost { opacity: 0.13; filter: grayscale(0.2) brightness(1.6); animation: hanko-ghost 1.8s ease-in-out infinite; transform: rotate(var(--r)); }
+@keyframes hanko-ghost { 0%, 100% { opacity: 0.08; scale: 1; } 50% { opacity: 0.2; scale: 1.05; } }
+.slam { position: absolute; inset: 0; pointer-events: none; }
+.slam > * { position: absolute; left: 50%; top: 50%; }
+.slam-img { translate: -50% -50%; filter: drop-shadow(0 0 6px rgba(255, 40, 30, 0.8)) drop-shadow(0 6px 10px rgba(0, 0, 0, 0.6)) saturate(1.2) brightness(1.1); }
+.slam-shadow { width: 70%; aspect-ratio: 1; margin: -35% 0 0 -35%; border-radius: 50%; background: radial-gradient(closest-side, rgba(0, 0, 0, 0.85), transparent); }
+.slam-flash { width: 120%; aspect-ratio: 1; margin: -60% 0 0 -60%; border-radius: 50%; background: radial-gradient(closest-side, rgba(255, 236, 200, 0.95), rgba(255, 70, 40, 0.55) 45%, transparent); mix-blend-mode: screen; }
+.slam-ring { width: 80%; aspect-ratio: 1; margin: -40% 0 0 -40%; border-radius: 50%; border: 3px solid rgba(255, 90, 60, 0.9); box-shadow: 0 0 14px rgba(255, 60, 40, 0.8), inset 0 0 10px rgba(255, 60, 40, 0.6); }
+.slam-drop { display: block; margin: -3px 0 0 -3px; border-radius: 50% 50% 50% 10%; background: radial-gradient(circle at 35% 35%, #ff6b5a, #9c0f12 70%); box-shadow: 0 0 6px rgba(255, 40, 30, 0.7); }
+.slam-glow { inset: -10%; left: -10%; top: -10%; border-radius: inherit; background: radial-gradient(closest-side, rgba(255, 40, 30, 0.35), transparent); mix-blend-mode: screen; }
+.login-plus {
+  position: absolute; left: 50%; top: 18%; translate: -50% 0; z-index: 4; white-space: nowrap; pointer-events: none;
+  display: flex; align-items: center; gap: 3px;
+  font-family: var(--font-display); font-size: 20px; color: #fff3c4;
+  text-shadow: 0 0 10px rgba(255, 200, 90, 0.9), 0 2px 0 #6b3d00, 0 3px 8px #000;
+}
+.login-plus svg { color: #8fe3ff; filter: drop-shadow(0 0 6px rgba(120, 220, 255, 0.9)); }

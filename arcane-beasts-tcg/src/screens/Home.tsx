@@ -190,7 +190,7 @@ function LoginModal({ onClose }: { onClose: () => void }) {
             setGot(c);
             foley.chime(6);
             sfx('gold', 0.6);
-            setTimeout(onClose, 1100);
+            setTimeout(onClose, 1700);
           }}
         />
       </motion.div>

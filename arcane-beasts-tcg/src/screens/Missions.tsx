@@ -2,7 +2,8 @@ import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useMemo, useState } from 'react';
 import { TopBar } from '../ui/TopBar';
 import { Icon } from '../ui/Icon';
-import { artUrl } from '../lib/assets';
+import { artUrl, asset } from '../lib/assets';
+import { vibrate } from '../lib/fx';
 import { foley, playMusic, sfx } from '../audio/audio';
 import { currentStageEvent, STAGE_COUNT, stageNow } from '../state/stages';
 import { ACHIEVEMENTS, dailyMissions, extCtx, NORMAL_MISSIONS, useStore, weeklyMissions, type Save, type Wallet } from '../state/store';
@@ -245,7 +246,12 @@ function StageBanner() {
   );
 }
 
-/** 7-day login bonus track. Used on the missions screen and in the home popup. */
+/** each day's stamp lands at its own slight angle, like it was pressed by hand */
+const STAMP_TILT = [-12, 9, -7, 13, -10, 6, -15];
+const STAMP = asset('ui/stamp.webp');
+
+/** 7-day login bonus track. Used on the missions screen and in the home popup.
+ *  Claiming slams the emblem stamp onto today's square. */
 export function LoginTrack({ onClaim, compact }: { onClaim?: (w: Wallet) => void; compact?: boolean }) {
   const progress = useStore((s) => s.save.progress);
   const claimLogin = useStore((s) => s.claimLogin);
@@ -253,6 +259,30 @@ export function LoginTrack({ onClaim, compact }: { onClaim?: (w: Wallet) => void
   const can = canClaimLogin(progress);
   // the slot shown as "today": if already claimed today it is the previous slot
   const today = can ? loginSlot(progress) : (progress.loginCount + 6) % 7;
+  // the square being stamped right now (the press plays once, then it stays like the others)
+  const [fresh, setFresh] = useState<number | null>(null);
+  const [shake, setShake] = useState(0);
+  const [plus, setPlus] = useState<number | null>(null);
+  const press = () => {
+    if (!can || fresh !== null) return;
+    const slot = today;
+    const amount = LOGIN_REWARDS[slot] + LOGIN_GEMS[slot];
+    setFresh(slot);
+    foley.whoosh();
+    // the moment the stamp hits the paper
+    setTimeout(() => {
+      foley.impact();
+      foley.boom(slot === 6 ? 1.4 : 0.8);
+      sfx('ink', 0.55);
+      vibrate(slot === 6 ? [30, 40, 60] : 35);
+      setShake((n) => n + 1);
+      const got = claimLogin();
+      setTimeout(() => {
+        setPlus(amount);
+        onClaim?.(got);
+      }, 260);
+    }, 470);
+  };
   return (
     <div className={`login ${compact ? 'compact' : ''}`}>
       {!compact && (
@@ -262,39 +292,120 @@ export function LoginTrack({ onClaim, compact }: { onClaim?: (w: Wallet) => void
           </span>
         </div>
       )}
-      <div className="login-track">
+      <motion.div
+        key={shake}
+        className="login-track"
+        animate={shake ? { x: [0, -7, 6, -4, 3, -1, 0], y: [0, 5, -3, 2, -1, 0, 0] } : undefined}
+        transition={{ duration: 0.42, ease: 'easeOut' }}
+      >
         {LOGIN_REWARDS.map((c, i) => {
-          const got = i < today || (i === today && !can);
+          const isFresh = fresh === i;
+          const got = !isFresh && (i < today || (i === today && !can));
           const cur = i === today;
           return (
-            <div key={i} className={`login-day ${got ? 'got' : ''} ${cur ? 'cur' : ''} ${i === 6 ? 'last' : ''}`}>
+            <div
+              key={i}
+              className={`login-day ${got ? 'got' : ''} ${cur ? 'cur' : ''} ${isFresh ? 'fresh' : ''} ${i === 6 ? 'last' : ''}`}
+              onClick={cur && can ? press : undefined}
+            >
               <div className="d">DAY {i + 1}</div>
               <div className="ico">
                 <Icon name={i === 6 ? 'chest' : 'gem'} />
               </div>
               <div className="c">{c + LOGIN_GEMS[i]}</div>
-              {got && (
-                <div className="stamp">
-                  <Icon name="check" />
-                </div>
-              )}
+              {got && <img className="hanko" src={STAMP} alt="" style={{ transform: `rotate(${STAMP_TILT[i]}deg)` }} />}
+              {cur && can && fresh === null && <img className="hanko ghost" src={STAMP} alt="" style={{ ['--r' as string]: `${STAMP_TILT[i]}deg` }} />}
+              {isFresh && <Slam tilt={STAMP_TILT[i]} big={i === 6} />}
+              <AnimatePresence>
+                {isFresh && compact && plus !== null && (
+                  <motion.div
+                    className="login-plus"
+                    initial={{ opacity: 0, y: 6, scale: 0.6 }}
+                    animate={{ opacity: [0, 1, 1, 0], y: -46, scale: 1 }}
+                    transition={{ duration: 1.5, times: [0, 0.15, 0.7, 1], ease: [0.2, 0.8, 0.2, 1] }}
+                  >
+                    +{plus} <Icon name="gem" />
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           );
         })}
-      </div>
+      </motion.div>
       <div className="login-foot">
         <span>通算ログイン {progress.loginCount} 日</span>
-        <button
-          className="btn"
-          disabled={!can}
-          onClick={() => {
-            const got = claimLogin();
-            onClaim?.(got);
-          }}
-        >
-          {can ? `${LOGIN_REWARDS[today] + LOGIN_GEMS[today]} ジェムを受け取る` : '本日は受け取り済み'}
+        <button className="btn" disabled={!can || fresh !== null} onClick={press}>
+          {can && fresh === null ? `${LOGIN_REWARDS[today] + LOGIN_GEMS[today]} ジェムを受け取る` : '本日は受け取り済み'}
         </button>
       </div>
+    </div>
+  );
+}
+
+/** the press: the stamp lifts, hangs a beat, slams down with a squash, and the ink bursts out */
+function Slam({ tilt, big }: { tilt: number; big: boolean }) {
+  const drops = useMemo(
+    () =>
+      Array.from({ length: big ? 16 : 11 }, (_, k) => {
+        const a = (k / (big ? 16 : 11)) * Math.PI * 2 + Math.random() * 0.5;
+        const d = 30 + Math.random() * (big ? 46 : 30);
+        return { x: Math.cos(a) * d, y: Math.sin(a) * d, s: 3 + Math.random() * 5, t: Math.random() * 0.06 };
+      }),
+    [big],
+  );
+  const HIT = 0.47;
+  return (
+    <div className="slam">
+      {/* the shadow grows and sharpens as the stamp comes down */}
+      <motion.div
+        className="slam-shadow"
+        initial={{ opacity: 0, scale: 1.6 }}
+        animate={{ opacity: [0, 0.5, 0.75, 0], scale: [1.6, 1.25, 0.9, 0.9] }}
+        transition={{ duration: HIT + 0.1, times: [0, 0.6, 0.97, 1] }}
+      />
+      <motion.img
+        className="hanko slam-img"
+        src={STAMP}
+        alt=""
+        initial={{ opacity: 0, scale: 2.8, rotate: tilt - 22, y: -40 }}
+        animate={{
+          opacity: [0, 1, 1, 1, 1],
+          scale: [2.8, 2.35, 0.86, 1.06, 1],
+          rotate: [tilt - 22, tilt - 26, tilt + 1, tilt, tilt],
+          y: [-40, -52, 0, 0, 0],
+        }}
+        transition={{ duration: HIT + 0.3, times: [0, 0.48, HIT / (HIT + 0.3), 0.8, 1], ease: ['easeOut', [0.7, 0, 0.9, 0.4], 'easeOut', 'easeInOut'] }}
+      />
+      {/* the flash and the ring of the impact */}
+      <motion.div
+        className="slam-flash"
+        initial={{ opacity: 0, scale: 0.4 }}
+        animate={{ opacity: [0, 0, 0.95, 0], scale: [0.4, 0.4, 1.2, 1.6] }}
+        transition={{ duration: HIT + 0.35, times: [0, 0.57, 0.62, 1] }}
+      />
+      <motion.div
+        className="slam-ring"
+        initial={{ opacity: 0, scale: 0.3 }}
+        animate={{ opacity: [0, 0, 0.9, 0], scale: [0.3, 0.3, 0.9, big ? 3.2 : 2.4] }}
+        transition={{ duration: HIT + 0.45, times: [0, 0.5, 0.55, 1], ease: 'easeOut' }}
+      />
+      {drops.map((p, k) => (
+        <motion.i
+          key={k}
+          className="slam-drop"
+          style={{ width: p.s, height: p.s }}
+          initial={{ opacity: 0, x: 0, y: 0, scale: 0.4 }}
+          animate={{ opacity: [0, 0, 1, 0], x: [0, 0, p.x * 0.7, p.x], y: [0, 0, p.y * 0.7, p.y + 10], scale: [0.4, 0.4, 1, 0.6] }}
+          transition={{ duration: HIT + 0.55, times: [0, (HIT + p.t) / (HIT + 0.55), (HIT + p.t + 0.12) / (HIT + 0.55), 1], ease: 'easeOut' }}
+        />
+      ))}
+      {/* the ink soaks in: a red glow that settles */}
+      <motion.div
+        className="slam-glow"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: [0, 0, 1, 0.35] }}
+        transition={{ duration: HIT + 1.1, times: [0, 0.3, 0.38, 1] }}
+      />
     </div>
   );
 }
