@@ -361,6 +361,10 @@
   filter: drop-shadow(0 0 30px rgba(255, 220, 140, 0.55));
 }
 .stadium-card { width: 100%; }
+/* while the card asks you to pick a monster, it steps aside (small, at the side) so the board shows */
+.playing-wrap { transition: left 0.25s ease, top 0.25s ease, width 0.25s ease, opacity 0.25s; }
+.playing-wrap.aside { left: calc(var(--u) * 1) !important; top: calc(var(--u) * 30) !important; width: calc(var(--u) * 8) !important; pointer-events: none; opacity: 0.9; }
+@media (orientation: portrait) { .playing-wrap.aside { left: auto !important; right: calc(var(--u) * 1); top: calc(var(--u) * 44) !important; width: calc(var(--u) * 11) !important; } }
 
 /* ---------------------------------- HUD --------------------------------- */
 .plate {

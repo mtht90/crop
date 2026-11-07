@@ -1386,7 +1386,7 @@ export function BattleScreen() {
             </div>
             <AnimatePresence>
               {s.playing && (
-                <motion.div className="playing-wrap" key={s.playing.uid} initial={{ opacity: 1 }} exit={{ opacity: 1 }}>
+                <motion.div className={`playing-wrap ${slotPrompt && slotPrompt.player === HUMAN ? 'aside' : ''}`} key={s.playing.uid} initial={{ opacity: 1 }} exit={{ opacity: 1 }}>
                   <BoardCard inst={s.playing} face className="playing-card" hoverPreview={false} />
                 </motion.div>
               )}
@@ -1521,7 +1521,8 @@ export function BattleScreen() {
             )}
           </AnimatePresence>
 
-          {!menu && <Preview targeting={targetKeys.size > 0 || benchTarget} />}
+          {/* while picking a monster on the board, the big card preview would hide it */}
+          {!menu && !(slotPrompt && slotPrompt.player === HUMAN) && <Preview targeting={targetKeys.size > 0 || benchTarget} />}
           <FxLayer />
           <PromptLayer ctrl={ctrl} />
           {discardView !== null && <DiscardModal cards={s.players[discardView].discard} title={discardView === 0 ? 'あなたのトラッシュ' : '相手のトラッシュ'} onClose={() => setDiscardView(null)} />}

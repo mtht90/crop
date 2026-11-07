@@ -38,14 +38,14 @@ export function Collection() {
 
   const list = useMemo(
     () =>
-      (set === 'raid' ? SPECIAL : ALL_CARDS.filter((c) => set === 'all' || c.set === set))
+      (set === 'raid' ? SPECIAL : set === 'all' ? [...ALL_CARDS, ...SPECIAL] : ALL_CARDS.filter((c) => c.set === set))
         .filter((c) => !types.length || (c.kind === 'monster' && types.includes(c.type)) || (c.kind === 'energy' && types.includes(c.energyType)))
         .filter((c) => !rar.length || rar.includes(c.rarity))
         .filter((c) => matchKinds(c, kinds))
         .filter((c) => !ownedOnly || owned(save, c.id) > 0),
     [set, types, rar, kinds, ownedOnly, save],
   );
-  const scope = set === 'raid' ? SPECIAL : ALL_CARDS.filter((c) => set === 'all' || c.set === set);
+  const scope = set === 'raid' ? SPECIAL : set === 'all' ? [...ALL_CARDS, ...SPECIAL] : ALL_CARDS.filter((c) => c.set === set);
   const have = scope.filter((c) => owned(save, c.id) > 0).length;
   const pct = set === 'raid' ? (100 * have) / scope.length : collectionPct(save, set === 'all' ? undefined : set);
 
@@ -77,7 +77,7 @@ export function Collection() {
               </button>
             ))}
             <button className={`chip-btn raid-tab ${set === 'raid' ? 'on' : ''}`} onClick={() => (foley.tick(), setSet('raid'))}>
-              特別
+              その他
             </button>
             <button className={`chip-btn ${showFilter || nFilters ? 'on' : ''}`} onClick={() => setShowFilter(!showFilter)}>
               <Icon name="filter" /> 絞り込み{nFilters ? ` ${nFilters}` : ''}

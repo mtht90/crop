@@ -1011,3 +1011,12 @@
 .code-card.none .code-n, .code-card.part .code-n { background: #b3262f; }
 .code-note { margin: 0; font-size: var(--fs-xs); color: var(--ink-dim); text-align: center; }
 .code-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+/* the free pack row matches the premium buttons: the little packs, then one pill-sized button */
+.free3 { display: grid !important; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 10px !important; padding: 0 !important; background: none !important; border: 0 !important; }
+.free3-head { flex-direction: column; align-items: flex-start; gap: 4px; }
+.free3-btn { flex-direction: row !important; justify-content: center; gap: 8px !important; height: calc(var(--u) * 3.6); min-height: 40px; padding: 0 16px !important; box-shadow: 0 4px 12px rgba(40, 200, 120, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 3px 0 #17703f !important; }
+.free3-btn span { font-family: var(--font-ui) !important; font-weight: 900; font-size: clamp(12px, 3.2vw, 15px) !important; letter-spacing: 0.06em; }
+.free3-btn small { font-size: 11px !important; opacity: 0.85; }
+.free3-timer { gap: 4px; }
+.free3-btn span, .free3-btn small { white-space: nowrap; }
+@media (max-width: 560px) { .free3-btn small { display: none; } }

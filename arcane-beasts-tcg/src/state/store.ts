@@ -3,6 +3,8 @@ import type { MatchInfo } from '../online/client';
 import type { Beat } from '../story/types';
 import { create } from 'zustand';
 import { ALL_CARDS, card, CARDS, SET_INFO } from '../engine/cards';
+import { RAID_CARDS } from '../engine/cards/bosses';
+import { EVENT_CARDS } from '../engine/cards/events';
 import { cpuPrintTier, deckById, expand, upgradeDeck, RIVALS, STARTER_DECKS, type Rival } from '../engine/decks';
 import type { Difficulty } from '../engine/ai';
 import { cleanWardrobe, cosmeticById, freshWardrobe, type Wardrobe } from './cosmetics';
@@ -201,8 +203,11 @@ export function enterDevMode(s: Save, chapterIds: string[]) {
 }
 
 /** every printing, up to the copy limit */
+/** cards outside the chapters (raid and event cards): その他 in the collection */
+export const OTHER_CARDS = [...RAID_CARDS, ...EVENT_CARDS];
+
 export function grantAllCards(s: Save) {
-  for (const c of ALL_CARDS) {
+  for (const c of [...ALL_CARDS, ...OTHER_CARDS]) {
     if (c.kind === 'energy' && c.basic) continue;
     if (!s.collection[c.id]) s.newCards.push(c.id);
     s.collection[c.id] = Math.max(s.collection[c.id] ?? 0, 4);
@@ -673,7 +678,8 @@ export const useStore = create<Store>((set, get) => ({
 
 /** Collection progress over every printing (mirrors included) */
 export function collectionPct(s: Save, set?: SetCode) {
-  const list = ALL_CARDS.filter((c) => !set || c.set === set);
+  // the whole collection counts the その他 cards (raid and event cards) too
+  const list = set ? ALL_CARDS.filter((c) => c.set === set) : [...ALL_CARDS, ...OTHER_CARDS];
   const have = list.filter((c) => (c.kind === 'energy' && c.basic) || (s.collection[c.id] ?? 0) > 0).length;
   return (have / list.length) * 100;
 }
