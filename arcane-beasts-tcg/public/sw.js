@@ -3,7 +3,7 @@
 //   assets      cache first (art, sound, fonts, the hashed bundle): fetched once
 //   everything  else stale-while-revalidate
 // Range requests (streamed music) go straight to the network.
-const CACHE = 'arcane-beasts-v2';
+const CACHE = 'arcane-beasts-v3';
 const CORE = ['./', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 
 self.addEventListener('install', (e) => {
