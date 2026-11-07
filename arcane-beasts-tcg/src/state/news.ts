@@ -18,6 +18,15 @@ export const NEWS_KIND_JP: Record<NewsKind, string> = { update: 'アップデー
 
 export const NEWS: NewsItem[] = [
   {
+    id: '2026-11-07-jinn',
+    kind: 'update',
+    date: '2026/11/07',
+    title: 'ジンを調整しました',
+    body: [
+      '・ミスティックバースト：10＋おたがいのバトルモンスターのエネルギー1個につき10（これまでは30）',
+    ],
+  },
+  {
     id: '2026-11-07-code',
     kind: 'update',
     date: '2026/11/07',

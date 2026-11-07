@@ -23,3 +23,14 @@ describe('回復の特性', () => {
     expect(heals().length).toBe(0);
   });
 });
+
+describe('ミスティックバースト', () => {
+  it('adds only 10 a energy, so even a heavy board stays near 100', async () => {
+    const { byName } = await import('../cards');
+    const jinn = byName('ジン') as import('../types').MonsterCard;
+    const e = jinn.attacks[1].effects!.find((x) => x.k === 'bonusPerEnergy') as { per: number };
+    expect(e.per).toBe(10);
+    // nine energy between the two actives: 10 + 9×10
+    expect((jinn.attacks[1].damage ?? 0) + 9 * e.per).toBeLessThanOrEqual(100);
+  });
+});

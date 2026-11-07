@@ -225,7 +225,7 @@ export const MONSTERS: MonsterCard[] = [
   ], { flavor: '真夜中にだけ現れる黒馬。その蹄の音を聞いた者は悪夢にうなされる。' }),
   m('ジン', 'monsters/jinn', P, 'basic', 190, 2, 'RR', 'まじん', [
     { name: 'ねがいごと', cost: [C], effects: [{ k: 'draw', n: 2 }] },
-    { name: 'ミスティックバースト', cost: [P, C, C], damage: 20, suffix: '+', effects: [{ k: 'bonusPerEnergy', per: 30, on: 'both' }] },
+    { name: 'ミスティックバースト', cost: [P, C, C], damage: 20, suffix: '+', effects: [{ k: 'bonusPerEnergy', per: 10, on: 'both' }] },
   ], { omega: true, flavor: '古のランプに封じられていた魔神。三つの願いの代償は計り知れない。' }),
   m('ディープテンタクル', 'monsters/deep-tentacle', P, 'basic', 100, 2, 'C', 'しんえん', [
     { name: 'からみつく', cost: [P, C], damage: 30, effects: [{ k: 'condition', cond: 'paralyzed', flip: true }] },
