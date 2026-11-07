@@ -1026,20 +1026,6 @@
 .loading-bg { position: absolute; inset: 0; background-size: cover; background-position: 62% 30%; filter: brightness(0.75) saturate(1.15); animation: kenburns 18s ease-in-out infinite alternate; }
 .loading-shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(4, 6, 18, 0.75) 0%, transparent 30%, transparent 55%, rgba(4, 6, 18, 0.96) 100%), radial-gradient(ellipse at 50% 50%, transparent 50%, rgba(0, 0, 0, 0.5)); }
 @keyframes loading-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
-.loading-foot { position: absolute; left: 50%; bottom: max(28px, env(safe-area-inset-bottom)); translate: -50% 0; width: min(92vw, 640px); display: grid; gap: 10px; }
-.loading-tip { display: flex; gap: 10px; align-items: flex-start; padding: 10px 14px; border-radius: 12px; background: rgba(10, 14, 36, 0.78); border: 1px solid rgba(160, 190, 255, 0.28); color: #e6ecff; font-size: 13px; font-weight: 700; line-height: 1.5; min-height: 2.6em; }
-.loading-tip b { flex: none; padding: 1px 8px; border-radius: 6px; background: linear-gradient(180deg, #ffe08a, #c99a3a); color: #2a1a00; font-size: 11px; letter-spacing: 0.08em; }
-.loading-bar { height: 8px; border-radius: 99px; background: rgba(255, 255, 255, 0.12); overflow: hidden; box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5); }
-.loading-bar i { position: relative; display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #4f8bff, #9fd0ff 60%, #fff3c4); transition: width 0.3s ease-out; overflow: hidden; }
-.loading-bar i::after { content: ''; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 20%, rgba(255, 255, 255, 0.7) 50%, transparent 80%); animation: loading-sheen 1.2s linear infinite; }
-@keyframes loading-sheen { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
-.loading-row { display: flex; justify-content: space-between; color: #cfe0ff; font-family: var(--font-latin, serif); font-weight: 800; font-size: 12px; letter-spacing: 0.2em; }
-.loading-label em { font-style: normal; animation: loading-dot 1.2s infinite; }
-.loading-label em:nth-child(2) { animation-delay: 0.2s; }
-.loading-label em:nth-child(3) { animation-delay: 0.4s; }
-@keyframes loading-dot { 0%, 100% { opacity: 0.2; } 50% { opacity: 1; } }
-.loading-pct { font-variant-numeric: tabular-nums; }
-@media (orientation: landscape) and (max-height: 520px) { .loading-tip { font-size: 12px; padding: 6px 10px; } }
 .loading-logo { position: absolute; left: 0; right: 0; top: max(7vh, env(safe-area-inset-top)); display: grid; justify-items: center; }
 @keyframes kenburns { from { transform: scale(1.04) translate(0, 0); } to { transform: scale(1.14) translate(-1.5%, 1%); } }
 
@@ -1059,4 +1045,32 @@
 @media (orientation: portrait) {
   .ab-logo-main { white-space: normal; width: auto; max-width: 92vw; text-align: center; font-size: min(15vw, 84px); line-height: 1.02; }
   .ab-logo-sub { font-size: min(3.2vw, 16px); }
+}
+
+/* loading: ornate TIPS in the middle, a gold bar with jewel caps, serif "Now Loading..." */
+.loading-foot { position: absolute; left: 50%; bottom: max(26px, env(safe-area-inset-bottom)); translate: -50% 0; width: min(94vw, 1100px); display: grid; justify-items: center; gap: 10px; }
+.lt-head { display: flex; align-items: center; gap: 10px; width: min(92vw, 760px); }
+.lt-head b { font-family: 'Cormorant Garamond', 'Cinzel', serif; font-weight: 700; font-size: clamp(22px, 3.4vmin, 34px); letter-spacing: 0.06em; color: #f4dfae; text-shadow: 0 0 12px rgba(255, 210, 130, 0.5), 0 2px 4px #000; }
+.lt-line { flex: 1; height: 1px; background: linear-gradient(90deg, transparent, #e9c98a 70%, #fff3cf); box-shadow: 0 0 6px rgba(255, 220, 150, 0.6); }
+.lt-line.r { background: linear-gradient(270deg, transparent, #e9c98a 70%, #fff3cf); }
+.lt-spark { width: 14px; height: 14px; flex: none; fill: #fff1c8; filter: drop-shadow(0 0 4px rgba(255, 220, 140, 0.95)); }
+.lt-text { margin: 0; max-width: min(92vw, 760px); min-height: 2.9em; text-align: center; font-family: 'Shippori Mincho', 'Hiragino Mincho ProN', 'Yu Mincho', serif; font-weight: 600; font-size: clamp(13px, 2.1vmin, 18px); line-height: 1.6; letter-spacing: 0.04em; color: #fbf6ea; text-shadow: 0 1px 3px #000, 0 0 10px rgba(0, 0, 0, 0.8); }
+.lb-row { position: relative; width: 100%; display: grid; grid-template-columns: 1fr; justify-items: center; margin-top: 6px; }
+.lb-bar { display: flex; align-items: center; width: min(88vw, 760px); }
+.lb-cap { width: 22px; height: 22px; margin: 0 -6px; position: relative; z-index: 2; }
+.lb-track { flex: 1; height: 12px; border-radius: 99px; padding: 2px; background: linear-gradient(180deg, #2a2111, #0a0805); box-shadow: 0 0 0 1px #c9a45c, 0 0 0 2px rgba(0, 0, 0, 0.6), inset 0 2px 4px rgba(0, 0, 0, 0.8); }
+.lb-track i { position: relative; display: block; height: 100%; border-radius: inherit; background: linear-gradient(180deg, #fff6d0 0%, #f2cf6c 40%, #c9922c 70%, #ffe7a0 100%); box-shadow: 0 0 10px rgba(255, 210, 110, 0.75); overflow: hidden; }
+.lb-track i::after { content: ''; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, 0.85) 50%, transparent 70%); animation: lb-sheen 1.4s linear infinite; }
+@keyframes lb-sheen { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+.lb-label { position: absolute; right: 0; bottom: -4px; display: grid; justify-items: end; font-family: 'Cormorant Garamond', 'Cinzel', serif; font-style: italic; font-weight: 600; font-size: clamp(18px, 2.8vmin, 28px); color: #f4dfae; text-shadow: 0 0 10px rgba(255, 210, 130, 0.45), 0 2px 3px #000; }
+.lb-label span { padding-bottom: 4px; border-bottom: 1px solid rgba(233, 201, 138, 0.8); }
+.lb-label em { font-style: inherit; animation: lb-dot 1.2s infinite; }
+.lb-label em:nth-child(2) { animation-delay: 0.2s; }
+.lb-label em:nth-child(3) { animation-delay: 0.4s; }
+@keyframes lb-dot { 0%, 100% { opacity: 0.25; } 50% { opacity: 1; } }
+.lb-label small { font-style: normal; font-family: 'Cinzel', serif; font-size: 11px; letter-spacing: 0.15em; opacity: 0.8; margin-top: 2px; }
+/* phones: the label sits under the bar, centred */
+@media (max-width: 900px) {
+  .lb-label { position: static; justify-items: center; margin-top: 10px; }
+  .lb-row { gap: 0; }
 }

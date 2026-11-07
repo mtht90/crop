@@ -1044,7 +1044,7 @@ export function BattleScreen() {
     // a short loading screen while both decks' pictures come in (never longer than a few seconds)
     const t0 = Date.now();
     Promise.race([preloadWithProgress([...urls], (p) => !cancelled && setLoaded(p)), new Promise((r) => setTimeout(r, 4000))]).then(() => {
-      setTimeout(() => !cancelled && setReady(true), Math.max(0, 900 - (Date.now() - t0)));
+      setTimeout(() => !cancelled && setReady(true), Math.max(0, 1250 - (Date.now() - t0)));
     });
     return () => {
       cancelled = true;
@@ -1531,7 +1531,7 @@ export function BattleScreen() {
           <PromptLayer ctrl={ctrl} />
           {discardView !== null && <DiscardModal cards={s.players[discardView].discard} title={discardView === 0 ? 'あなたのトラッシュ' : '相手のトラッシュ'} onClose={() => setDiscardView(null)} />}
           <ResultOverlay />
-          <AnimatePresence>{!ready && <Loading key="battle-loading" progress={loaded} label="BATTLE LOADING" />}</AnimatePresence>
+          <AnimatePresence>{!ready && <Loading key="battle-loading" progress={loaded} label="Battle Loading" />}</AnimatePresence>
           {guide && (
             <div className="modal-back" style={{ zIndex: 640 }}>
               <motion.div className="panel guide" initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}>
