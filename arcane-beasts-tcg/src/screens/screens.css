@@ -646,3 +646,8 @@
 .title-press span { display: inline-block; padding: 8px 28px; font-family: var(--font-latin, serif); font-weight: 900; font-size: clamp(16px, 3.2vmin, 26px); letter-spacing: 0.32em; color: #fff; text-shadow: 0 0 18px rgba(255, 220, 140, 0.95), 0 2px 4px #000; background: linear-gradient(90deg, transparent, rgba(10, 14, 40, 0.65) 20%, rgba(10, 14, 40, 0.65) 80%, transparent); animation: blink 1.6s ease-in-out infinite; }
 .title-meta { position: absolute; left: 0; right: 0; bottom: max(10px, env(safe-area-inset-bottom)); display: flex; justify-content: space-between; padding: 0 16px; font-size: 11px; font-weight: 700; color: rgba(220, 230, 255, 0.7); letter-spacing: 0.08em; pointer-events: none; }
 @media (orientation: landscape) and (max-height: 520px) { .title-emblem { width: 58vmin; top: 42%; } .title-press { bottom: 8%; } }
+
+.title-bg.dragon { inset: -30px; background-position: 62% 30%; filter: brightness(0.8) saturate(1.15) !important; }
+.title-logo2 { position: absolute; left: 0; right: 0; top: max(9vh, env(safe-area-inset-top)); display: grid; justify-items: center; pointer-events: none; }
+.title-screen .title-rays { opacity: 0.55; top: 30%; }
+.title-screen .title-glow { background: linear-gradient(180deg, rgba(4, 6, 18, 0.7) 0%, transparent 32%, transparent 60%, rgba(4, 6, 18, 0.9) 100%) !important; }

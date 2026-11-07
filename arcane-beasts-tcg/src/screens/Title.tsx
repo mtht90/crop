@@ -1,7 +1,8 @@
 import { motion } from 'motion/react';
 import { useEffect, useState } from 'react';
 import { useStore } from '../state/store';
-import { artUrl, asset } from '../lib/assets';
+import { asset } from '../lib/assets';
+import { Embers, Logo } from '../ui/Logo';
 import { playMusic, sfx, unlockAudio, foley } from '../audio/audio';
 
 /** shown on the title screen */
@@ -33,12 +34,12 @@ export function Title() {
       onClick={start}
       onPointerMove={(e) => setM({ x: e.clientX / window.innerWidth - 0.5, y: e.clientY / window.innerHeight - 0.5 })}
     >
-      <div className="title-bg" style={{ backgroundImage: `url(${artUrl('story/landscape-bridge_sun')})`, transform: `translate(${m.x * -24}px, ${m.y * -16}px) scale(1.05)` }} />
+      <div className="title-bg dragon" style={{ backgroundImage: `url(${asset('ui/dragon.webp')})`, transform: `translate(${m.x * -24}px, ${m.y * -16}px) scale(1.08)` }} />
       <div className="title-glow" />
       <div className="title-rays" />
-      <motion.div className="title-emblem" initial={{ opacity: 0, scale: 1.25, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}>
-        <img src={asset('ui/keyart.webp')} alt="ARCANE BEASTS" draggable={false} />
-        <i className="title-shine" />
+      <Embers n={34} />
+      <motion.div className="title-logo2" initial={{ opacity: 0, scale: 1.25, filter: 'blur(8px)' }} animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }} transition={{ duration: 1.1, ease: [0.16, 1, 0.3, 1] }}>
+        <Logo />
       </motion.div>
       <motion.div className="title-press" initial={{ opacity: 0 }} animate={leaving ? { scale: 1.25, opacity: 0 } : { opacity: 1 }} transition={{ delay: leaving ? 0 : 0.9 }}>
         <span>TAP TO START</span>

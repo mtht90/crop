@@ -100,7 +100,7 @@ export function App() {
     document.getElementById('boot')?.remove();
     if (booted) return;
     const t0 = Date.now();
-    const urls = [asset('ui/keyart.webp'), artUrl('story/landscape-bridge_sun'), ...BOOT_ART.map(artUrl)];
+    const urls = [asset('ui/dragon.webp'), ...BOOT_ART.map(artUrl)];
     void preloadWithProgress(urls, (p) => setBoot(p)).then(() => setTimeout(() => setBooted(true), Math.max(0, 1400 - (Date.now() - t0))));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

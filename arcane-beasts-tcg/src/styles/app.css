@@ -1023,9 +1023,8 @@
 
 /* ------------------------------- loading -------------------------------- */
 .loading { position: fixed; inset: 0; z-index: 2000; display: grid; place-items: center; background: #060a1c; overflow: hidden; }
-.loading-bg { position: absolute; inset: -40px; background-size: cover; background-position: center; filter: blur(28px) brightness(0.45) saturate(1.3); transform: scale(1.1); }
-.loading-shade { position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 42%, transparent 30%, rgba(4, 6, 18, 0.85) 80%), linear-gradient(180deg, transparent 55%, rgba(4, 6, 18, 0.95)); }
-.loading-art { position: relative; width: min(56vmin, 420px); aspect-ratio: 1; border-radius: 18%; margin-bottom: 14vh; box-shadow: 0 0 60px rgba(120, 170, 255, 0.45), 0 20px 50px rgba(0, 0, 0, 0.6); animation: loading-float 4s ease-in-out infinite; }
+.loading-bg { position: absolute; inset: 0; background-size: cover; background-position: 62% 30%; filter: brightness(0.75) saturate(1.15); animation: kenburns 18s ease-in-out infinite alternate; }
+.loading-shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(4, 6, 18, 0.75) 0%, transparent 30%, transparent 55%, rgba(4, 6, 18, 0.96) 100%), radial-gradient(ellipse at 50% 50%, transparent 50%, rgba(0, 0, 0, 0.5)); }
 @keyframes loading-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
 .loading-foot { position: absolute; left: 50%; bottom: max(28px, env(safe-area-inset-bottom)); translate: -50% 0; width: min(92vw, 640px); display: grid; gap: 10px; }
 .loading-tip { display: flex; gap: 10px; align-items: flex-start; padding: 10px 14px; border-radius: 12px; background: rgba(10, 14, 36, 0.78); border: 1px solid rgba(160, 190, 255, 0.28); color: #e6ecff; font-size: 13px; font-weight: 700; line-height: 1.5; min-height: 2.6em; }
@@ -1040,4 +1039,24 @@
 .loading-label em:nth-child(3) { animation-delay: 0.4s; }
 @keyframes loading-dot { 0%, 100% { opacity: 0.2; } 50% { opacity: 1; } }
 .loading-pct { font-variant-numeric: tabular-nums; }
-@media (orientation: landscape) and (max-height: 520px) { .loading-art { width: 46vmin; margin-bottom: 18vh; } .loading-tip { font-size: 12px; padding: 6px 10px; } }
+@media (orientation: landscape) and (max-height: 520px) { .loading-tip { font-size: 12px; padding: 6px 10px; } }
+.loading-logo { position: absolute; left: 0; right: 0; top: max(7vh, env(safe-area-inset-top)); display: grid; justify-items: center; }
+@keyframes kenburns { from { transform: scale(1.04) translate(0, 0); } to { transform: scale(1.14) translate(-1.5%, 1%); } }
+
+/* the logo in type */
+.ab-logo { display: grid; justify-items: center; gap: 6px; text-align: center; }
+.ab-logo-main { position: relative; font-family: var(--font-title); font-weight: 900; font-size: clamp(30px, 8.6vw, 92px); line-height: 1; letter-spacing: 0.06em; white-space: nowrap; background: var(--title-grad); -webkit-background-clip: text; background-clip: text; color: transparent; filter: var(--title-shadow); }
+.ab-logo-main::after { content: attr(data-text); position: absolute; inset: 0; background: linear-gradient(110deg, transparent 40%, rgba(255, 255, 255, 0.95) 50%, transparent 60%); background-size: 300% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: logo-sweep 4s ease-in-out infinite; }
+@keyframes logo-sweep { 0%, 50% { background-position: 120% 0; } 100% { background-position: -40% 0; } }
+.ab-logo-sub { display: flex; align-items: center; gap: 10px; font-family: var(--font-title); font-weight: 700; font-size: clamp(10px, 1.9vw, 18px); letter-spacing: 0.45em; color: #ffe9b0; text-shadow: 0 2px 6px #000; }
+.ab-logo-sub i { width: clamp(24px, 8vw, 90px); height: 1px; background: linear-gradient(90deg, transparent, #ffd47a, transparent); }
+.ab-logo.small .ab-logo-main { font-size: clamp(24px, 6vw, 56px); }
+
+/* embers */
+.embers { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.embers i { position: absolute; bottom: -10px; width: var(--s); height: var(--s); border-radius: 50%; background: radial-gradient(circle, #fff3c0, #ff9a3c 45%, rgba(255, 80, 20, 0) 70%); box-shadow: 0 0 8px rgba(255, 140, 40, 0.9); animation: ember linear infinite; opacity: 0; }
+@keyframes ember { 0% { transform: translate(0, 0); opacity: 0; } 10% { opacity: 1; } 80% { opacity: 0.8; } 100% { transform: translate(var(--dx), -105vh); opacity: 0; } }
+@media (orientation: portrait) {
+  .ab-logo-main { white-space: normal; width: auto; max-width: 92vw; text-align: center; font-size: min(15vw, 84px); line-height: 1.02; }
+  .ab-logo-sub { font-size: min(3.2vw, 16px); }
+}

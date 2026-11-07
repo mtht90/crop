@@ -6,6 +6,7 @@ import { motion } from 'motion/react';
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { asset } from '../lib/assets';
+import { Embers, Logo } from './Logo';
 
 export const TIPS = [
   '弱点をつくとダメージは2倍。相手のタイプを見てアタッカーを選ぼう',
@@ -33,9 +34,12 @@ export function Loading({ progress, label = 'NOW LOADING' }: { progress: number;
   // drawn on the page itself, so a transformed parent (the battle stage) cannot shrink it
   return createPortal(
     <motion.div className="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }}>
-      <div className="loading-bg" style={{ backgroundImage: `url(${asset('ui/keyart.webp')})` }} />
+      <div className="loading-bg" style={{ backgroundImage: `url(${asset('ui/dragon.webp')})` }} />
       <div className="loading-shade" />
-      <motion.img className="loading-art" src={asset('ui/keyart.webp')} alt="" initial={{ scale: 0.94, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }} />
+      <Embers />
+      <motion.div className="loading-logo" initial={{ opacity: 0, y: -10, scale: 1.04 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}>
+        <Logo />
+      </motion.div>
       <div className="loading-foot">
         <motion.div key={tip} className="loading-tip" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }}>
           <b>TIPS</b>
