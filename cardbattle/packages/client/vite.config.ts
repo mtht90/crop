@@ -29,6 +29,6 @@ export default defineConfig({
   plugins: [serveThirdparty()],
   // three/addons（GLTFLoader など）も WebGPU 版の three を使うようにそろえる
   resolve: { alias: [{ find: /^three$/, replacement: 'three/webgpu' }] },
-  build: { target: 'es2022', sourcemap: true, chunkSizeWarningLimit: 1500 },
+  build: { target: 'es2022', sourcemap: false, chunkSizeWarningLimit: 1500 },
   server: { port: 5173 },
 });

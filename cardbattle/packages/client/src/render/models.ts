@@ -1,5 +1,6 @@
 import * as THREE from 'three/webgpu';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { assets } from '../assets/assets';
 import { UNIT_VISUALS, type UnitVisual } from '../assets/visuals';
 
@@ -95,6 +96,41 @@ function alongZ(name: string, length: number): THREE.Group | null {
   return holder;
 }
 
+/**
+ * 動かない部品の集まりを、マテリアルごとに1つのメッシュへまとめる（ドローコール削減）。
+ * 位置・回転・拡大はジオメトリに焼き込む。
+ */
+export function bakeStatic(group: THREE.Object3D, castShadow = true): THREE.Group {
+  group.updateMatrixWorld(true);
+  const inv = new THREE.Matrix4().copy(group.matrixWorld).invert();
+  const buckets = new Map<string, { material: THREE.Material; geos: THREE.BufferGeometry[] }>();
+  group.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh || Array.isArray(mesh.material)) return;
+    const g = mesh.geometry.clone();
+    g.applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, mesh.matrixWorld));
+    // 結合できるように属性をそろえる（法線・UV・位置だけ残す）
+    for (const name of Object.keys(g.attributes)) if (!['position', 'normal', 'uv'].includes(name)) g.deleteAttribute(name);
+    const key = `${mesh.material.uuid}|${Object.keys(g.attributes).sort().join(',')}|${g.index ? 'i' : 'n'}`;
+    let b = buckets.get(key);
+    if (!b) buckets.set(key, (b = { material: mesh.material, geos: [] }));
+    b.geos.push(g);
+  });
+  const out = new THREE.Group();
+  for (const b of buckets.values()) {
+    const merged = mergeGeometries(b.geos, false);
+    if (!merged) continue;
+    const m = new THREE.Mesh(merged, b.material);
+    m.castShadow = castShadow;
+    m.receiveShadow = true;
+    out.add(m);
+  }
+  out.position.copy(group.position);
+  out.quaternion.copy(group.quaternion);
+  out.scale.copy(group.scale);
+  return out;
+}
+
 // ------------------------------------------------------------------ ユニット
 
 export function createUnitModel(cardId: string, team: Team | null): ModelInstance | null {
@@ -161,7 +197,7 @@ export function createTower(kind: 'king' | 'princess', team: Team, halfSize: num
     root.add(roof);
   }
   const materials = recolor(root, null, 0);
-  return { root, materials, height: wallH + (kind === 'king' ? 2.6 : 2.4) };
+  return { root: bakeStatic(root), materials, height: wallH + (kind === 'king' ? 2.6 : 2.4) };
 }
 
 /** 守りの砲台：MegaKit に大砲がないので、木箱の土台＋横倒しにしたレンガの煙突を砲身にして代用（ASSETS_TODO.md 参照） */

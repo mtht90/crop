@@ -3,4 +3,6 @@ dist/
 *.log
 .vite/
 thirdparty/
-packages/client/public/assets/game/
+# 加工済み素材のうち、再配布できないもの（LAYERLAB の枠・魔王魂の BGM）だけを除外する
+packages/client/public/assets/game/cards/frame_*
+packages/client/public/assets/game/bgm/

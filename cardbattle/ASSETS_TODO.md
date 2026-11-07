@@ -2,9 +2,13 @@
 
 ## 素材の流れ
 
-1. ダウンロードした未加工の素材を `cardbattle/thirdparty/<作者>/<パック>/` に置く（gitignore 済み。再配布できない素材が混ざるため git には入れない）
+1. ダウンロードした未加工の素材を `cardbattle/thirdparty/<作者>/<パック>/` に置く（gitignore 済み）
 2. `npm run assets:prepare` … 使うファイルだけを選んで加工し、`packages/client/public/assets/game/` に書き出す
+   （モデルは GLB・512px WebP・使うアニメーションだけ・タワー部品は形を簡略化、フォントは使う文字だけの WOFF2、PWA アイコン）
 3. `npm run dev` を起動した状態で `npm run assets:capture` … ユニット・建物のカード絵を撮影する
+
+加工済みの素材のうち CC0（Quaternius・Kenney）と OFL（M PLUS Rounded 1c）は git に含めている。
+LAYERLAB のカード枠（`cards/frame_*`）と魔王魂の BGM（`bgm/`）は再配布できないので含めていない。
 
 ## ダウンロード済みの素材（2026-11-07）
 
@@ -55,5 +59,6 @@ Universal Animation Library は、今のモデルが同じ骨格ではないた�
 | 木 | なし | MegaKit に木が無い（仕様では「木」も想定していた） |
 | 弓兵の矢 | 細い円柱 | 適切なモデルが無い |
 | 敵味方の足元のリング | 単色のリング | Kenney Particle Pack の円の画像にするか検討 |
-| 音量・ミュートのアイコン | 端末の絵文字（🔊） | Kenney UI Pack のアイコンに差し替え |
-| トロフィーのアイコン | 端末の絵文字（🏆） | Kenney UI Pack の星などに差し替え |
+| 音のオン・オフ | 文字ボタン（M PLUS Rounded 1c） | Kenney にスピーカーのアイコンが無いため文字にした |
+| トロフィーのアイコン | Kenney UI Pack の黄色い星 | トロフィーの絵が無いため星で代用 |
+| PWA のアイコン | 鉄の騎士のカード絵（撮影したもの）を紺の背景に置いたもの | — |

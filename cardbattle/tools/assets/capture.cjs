@@ -22,4 +22,15 @@ const CARDS = ['iron_knight', 'archer_duo', 'rock_giant', 'bone_legion', 'wyvern
     console.log('captured', card);
   }
   await browser.close();
+  // ホーム画面用のアイコン（PWA）：鉄の騎士のカード絵を、紺の背景に置いたもの
+  const iconDir = path.resolve(OUT, '../icons');
+  require('fs').mkdirSync(iconDir, { recursive: true });
+  for (const size of [192, 512, 180]) {
+    const art = await sharp(path.join(OUT, 'unit_iron_knight.webp')).resize(Math.round(size * 0.82), Math.round(size * 0.82), { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } }).toBuffer();
+    await sharp({ create: { width: size, height: size, channels: 4, background: '#1d2a3a' } })
+      .composite([{ input: art, gravity: 'south' }])
+      .png()
+      .toFile(path.join(iconDir, `icon-${size}.png`));
+  }
+  console.log('icons written');
 })();

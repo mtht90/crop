@@ -34,8 +34,8 @@ export async function applyTheme(available: boolean): Promise<void> {
   const abs = (rel: string) => new URL(assetUrl(rel), document.baseURI).href;
   for (const [k, v] of Object.entries(IMAGES)) root.style.setProperty(`--img-${k}`, `url("${abs(v)}")`);
   const fonts = [
-    new FontFace('M PLUS Rounded 1c', `url("${assetUrl('fonts/MPLUSRounded1c-Bold.ttf')}")`, { weight: '700' }),
-    new FontFace('M PLUS Rounded 1c', `url("${assetUrl('fonts/MPLUSRounded1c-ExtraBold.ttf')}")`, { weight: '800' }),
+    new FontFace('M PLUS Rounded 1c', `url("${assetUrl('fonts/MPLUSRounded1c-Bold.woff2')}")`, { weight: '700' }),
+    new FontFace('M PLUS Rounded 1c', `url("${assetUrl('fonts/MPLUSRounded1c-ExtraBold.woff2')}")`, { weight: '800' }),
   ];
   await Promise.all(
     fonts.map(async (f) => {

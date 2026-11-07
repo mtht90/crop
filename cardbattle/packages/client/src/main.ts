@@ -503,7 +503,7 @@ async function boot(): Promise<void> {
   showHome();
   stage.renderer.setAnimationLoop(frame);
   // デバッグ用：コンソールから状態を見られるようにする
-  (window as unknown as Record<string, unknown>).__game = { get battle() { return battle; }, content, profile };
+  (window as unknown as Record<string, unknown>).__game = { get battle() { return battle; }, content, profile, stage };
 }
 
 boot().catch((err) => {

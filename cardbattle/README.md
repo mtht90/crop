@@ -11,37 +11,57 @@
 ```bash
 cd cardbattle
 npm install
-npm run dev        # http://localhost:5173 を開く（スマホからは同じLANのIPで）
+npm run dev          # http://localhost:5173 を開く（BOT 戦・練習・リプレイ。スマホからは同じLANのIPで）
 ```
 
-素材（3Dモデル・UI・効果音・フォント）は git に含めていません。無い場合は仮の図形で動きます。
-素材を使うときは、ASSETS_TODO.md の一覧の素材を `cardbattle/thirdparty/` に置いてから：
+オンライン対戦を試すときは、クライアントをビルドしてゲームサーバーから配信します。
+
+```bash
+npm run build
+npm run server       # http://localhost:8787 を2つのブラウザ（またはPCとスマホ）で開き、両方で「対戦」を押す
+```
+
+- ホーム：名前の変更、トロフィー、対戦（ランダムマッチ。10秒で相手が見つからなければ BOT と対戦）、BOT 練習、デッキ、リプレイ
+- カードは手札からアリーナへドラッグ。タップでカードを選び、アリーナをタップしても置けます。PC では 1〜4 キーでも選べます
+- 対戦の結果はトロフィーが ±30（0未満にはならない）。BOT 練習は増減なし
+- 直近5試合のリプレイを端末に保存し、ホームの「リプレイ」から再生できます
+- スマホでは「共有 → ホーム画面に追加」でアプリのように全画面で遊べます（PWA）
+
+## 公開（Render）
+
+リポジトリのルートにある `render.yaml` で、ゲームサーバーとクライアント配信を1つの Web サービスとして作れます。
+Render の Dashboard → New → Blueprint でこのリポジトリを選ぶと、`npm run build` → `npm run server` で起動します（WebSocket は `/ws`、死活監視は `/healthz`）。
+無料プランは15分アクセスがないと停止し、次のアクセスで起動に数十秒かかります。
+
+素材について：Quaternius・Kenney（CC0）と M PLUS Rounded 1c（OFL、使う文字だけに軽量化）を加工したものは git に含めています。
+LAYERLAB のカード枠と魔王魂の BGM は再配布できないため含めていません（無い場合、カード枠はレアリティ色の線、BGM は無音になります）。
+これらも使うときは、素材を `cardbattle/thirdparty/` に置いて次を実行してから、ビルド・デプロイしてください。
 
 ```bash
 npm run assets:prepare   # 使う素材を選んで加工し packages/client/public/assets/game/ に出力
 npm run dev              # 別のターミナルで起動したまま
-npm run assets:capture   # ユニット・建物のカード絵を撮影
+npm run assets:capture   # ユニット・建物のカード絵を撮影（変更したときだけ）
 ```
 
 GLB を配信できない場所（claude.ai のアーティファクトなど）に置くときは、ビルド後に
-`node tools/assets/package-static.mjs packages/client/dist` でモデルを JSON 形式の glTF に変換します。
-
-- タイトル画面で BOT の難易度（かんたん／ふつう／むずかしい）を選ぶと対戦が始まります。
-- カードを手札からアリーナへドラッグして配置します。タップでカードを選び、アリーナをタップしても置けます。PC では 1〜4 キーでも選べます。
-- 試合が終わったら「リプレイを見る」で同じ試合を再生できます。
+`node tools/assets/package-static.mjs packages/client/dist` でモデルを .json の glTF に変換します。
 
 デバッグ用の URL オプション：
 
 | オプション | 内容 |
 |---|---|
 | `?renderer=webgl` | WebGL2 で描画する（WebGPU の不具合の切り分け用） |
-| `?speed=4` | 試合を4倍速で進める |
+| `?quality=low` / `high` | 画質（指定しないとスマホは軽量、PC は高画質＝ブルームあり） |
+| `?fps` | フレームレート・ドローコール数・三角形数を表示 |
+| `?speed=4` | オフラインの試合を4倍速で進める |
+| `?server=wss://...` | オンライン対戦の接続先を変える |
 
 ## テスト・調整
 
 ```bash
-npm test                              # ルール・配置・タワー・リプレイ一致などのテスト
+npm test                              # ルール・配置・タワー・リプレイ一致・カードの相性・オンライン同期・切断のテスト
 npm run simulate -- 50 hard normal    # BOT同士を50試合させて勝率・カード使用数を出す
+npx tsx packages/sim/test/matchups.ts # カード同士の相性を1対1で確かめる
 npm run typecheck
 npm run build                         # packages/client/dist に静的ファイルを出力
 ```
@@ -58,6 +78,7 @@ cardbattle/
     src/bot.ts             ルールベースの BOT
     src/session.ts         ネットワーク層との境界（MatchSession）・リプレイ
   packages/client/         three.js の描画・DOM の UI・入力
+  packages/server/         オンライン対戦のゲームサーバー（WebSocket。ホストとしてコマンドを検証して配る）
   tools/assets/            素材の加工（prepare）・カード絵の撮影（capture）・静的配信用の変換
   thirdparty/              ダウンロードした未加工の素材（git には入れない）
   ASSETS_TODO.md           必要な外部素材と、足りないもの
@@ -70,4 +91,6 @@ cardbattle/
 - クライアントが送るのは `DeployCommand`（カードID・配置位置・ティック番号）だけ。ホスト（オフラインでは自分の端末）が `tryAccept` でコスト・配置可能かを検証し、0.3秒後（6tick後）に実行する。
 - 受理されたコマンド列を記録すればリプレイになる。同じ列を再生すると最後の状態ハッシュまで一致する（テストで確認）。
 - BOT も人間と同じ `DeployCommand` を出すだけ。
+- オンライン対戦はサーバーがホスト。受理したコマンドを tick ごとに配り、クライアントは同じシミュレーションをロックステップで進める。
+  2秒ごとに状態ハッシュを送り、ずれを検出する。切断しても10秒以内に戻れば、受理済みのコマンド列から状態を作り直して続行（戻れなければ負け）。
 - 数値はすべて `packages/sim/data/*.json` にあり、コードには書かない。

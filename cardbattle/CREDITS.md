@@ -15,9 +15,9 @@
 
 | 素材 | 作者 | ライセンス | URL | 使っている場所 |
 |---|---|---|---|---|
-| GUI - Card Frame（Free） | LAYERLAB | 配布ページの利用条件 | https://layerlab.itch.io/gui-card-frame | カード枠（レアリティ別に色替え）、カードの背景 |
+| GUI - Card Frame（Free） | LAYERLAB | 配布ページの利用条件 | https://layerlab.itch.io/gui-card-frame | カード枠（レアリティ別に色替え）、カードの背景（再配布不可のため git には含めない） |
 | UI Pack - RPG Expansion | Kenney | CC0 1.0 | https://kenney.nl/assets/ui-pack-rpg-expansion | パネル、ボタン、HPバー・マナゲージ |
-| UI Pack | Kenney | CC0 1.0 | https://kenney.nl/assets/ui-pack | クラウンの星 |
+| UI Pack | Kenney | CC0 1.0 | https://kenney.nl/assets/ui-pack | クラウン・トロフィーの星 |
 | Particle Pack | Kenney | CC0 1.0 | https://kenney.nl/assets/particle-pack | 着地・ヒット・爆発・煙・雷・炎のエフェクト |
 
 ## 音
@@ -33,7 +33,7 @@
 
 | 素材 | 作者 | ライセンス | URL |
 |---|---|---|---|
-| M PLUS Rounded 1c（Bold・ExtraBold） | M+ FONTS PROJECT | SIL Open Font License 1.1 | https://fonts.google.com/specimen/M+PLUS+Rounded+1c |
+| M PLUS Rounded 1c（Bold・ExtraBold。ゲームで使う文字だけに軽量化した WOFF2） | The M+ FONTS Project Authors | SIL Open Font License 1.1（`assets/game/fonts/OFL.txt` を同梱） | https://github.com/coz-m/MPLUS_FONTS |
 
 ## ライブラリ
 
@@ -43,3 +43,7 @@
 | Vite | MIT | https://vite.dev |
 | glTF Transform（素材の加工のみ） | MIT | https://gltf-transform.dev |
 | sharp（素材の加工のみ） | Apache-2.0 | https://sharp.pixelplumbing.com |
+| meshoptimizer（素材の加工のみ） | MIT | https://github.com/zeux/meshoptimizer |
+| subset-font（素材の加工のみ） | BSD-3-Clause | https://github.com/papandreou/subset-font |
+| ws（ゲームサーバー） | MIT | https://github.com/websockets/ws |
+| tsx（ゲームサーバーの実行） | MIT | https://github.com/privatenumber/tsx |

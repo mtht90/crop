@@ -8,9 +8,11 @@
  */
 import { NodeIO } from '@gltf-transform/core';
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
-import { dedup, prune, resample, textureCompress } from '@gltf-transform/functions';
+import { dedup, prune, resample, simplify, textureCompress, weld } from '@gltf-transform/functions';
+import { MeshoptSimplifier } from 'meshoptimizer';
 import sharp from 'sharp';
-import { copyFile, mkdir, rm, stat, writeFile } from 'node:fs/promises';
+import subsetFont from 'subset-font';
+import { copyFile, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -115,9 +117,8 @@ const COPIES = {
   'sfx/win.ogg': 'Kenney/interface-sounds/Audio/confirmation_004.ogg',
   'sfx/lose.ogg': 'Kenney/interface-sounds/Audio/back_003.ogg',
   'sfx/card.ogg': 'Kenney/rpg-audio/Audio/bookFlip1.ogg',
-  // フォント
-  'fonts/MPLUSRounded1c-Bold.ttf': 'Fonts/MPLUSRounded1c/MPLUSRounded1c-Bold.ttf',
-  'fonts/MPLUSRounded1c-ExtraBold.ttf': 'Fonts/MPLUSRounded1c/MPLUSRounded1c-ExtraBold.ttf',
+  // フォント（本体は subsetFonts で軽量化。OFL はライセンス文の同梱が条件）
+  'fonts/OFL.txt': 'Fonts/MPLUSRounded1c/OFL.txt',
 };
 
 /** カード枠の色替え（レアリティ：コモン＝灰、レア＝橙、エピック＝紫、レジェンド＝虹色系） */
@@ -145,12 +146,16 @@ const KEEP_ANIMS = {
   wyvern: ['Flying_Idle', 'Fast_Flying', 'Headbutt', 'Death'],
 };
 
+/** スマホ向けに形を簡略化する部品（三角形の数の目標割合）。タワーの角柱は1本で約3000三角形あるため */
+const SIMPLIFY = { pillar: 0.2, border: 0.35, tower_roof: 0.6 };
+
 async function prepareModel(name, rel) {
   const doc = await io.read(join(SRC, rel));
   const keep = KEEP_ANIMS[name];
   if (keep) for (const a of doc.getRoot().listAnimations()) if (!keep.includes(a.getName())) a.dispose();
   await doc.transform(
     resample(), // アニメーションの冗長なキーフレームを削除
+    ...(SIMPLIFY[name] ? [weld(), simplify({ simplifier: MeshoptSimplifier, ratio: SIMPLIFY[name], error: 0.01 })] : []),
     dedup(),
     prune(),
     textureCompress({ encoder: sharp, targetFormat: 'webp', resize: [512, 512], quality: 85 }),
@@ -184,10 +189,61 @@ const TEAM_TINT = {
   tower_roof: { match: /RoundTiles_BaseColor/, colors: { blue: [60, 120, 255], red: [255, 70, 55] } },
 };
 
+/**
+ * フォントの軽量化：ゲームで使う文字（かな・英数字・記号と、UI・カードデータに出てくる漢字）だけを残して WOFF2 にする。
+ * 3.5MB×2 → 数十KB。入っていない文字（プレイヤーが入力した珍しい漢字など）は端末のフォントで表示される。
+ */
+async function subsetFonts() {
+  const chars = new Set();
+  const add = (text) => {
+    for (const ch of text) chars.add(ch);
+  };
+  for (let c = 0x20; c < 0x7f; c++) chars.add(String.fromCharCode(c));
+  for (let c = 0x3000; c < 0x3100; c++) chars.add(String.fromCharCode(c)); // 記号・ひらがな・カタカナ
+  for (let c = 0xff01; c < 0xff5f; c++) chars.add(String.fromCharCode(c)); // 全角英数
+  add('…・ー「」『』！？（）〜→←↑↓★☆×÷＋－');
+  const walk = async (dir) => {
+    for (const e of await readdir(dir, { withFileTypes: true })) {
+      const p = join(dir, e.name);
+      if (e.isDirectory()) await walk(p);
+      else if (/\.(ts|json|html|css)$/.test(e.name)) add(await readFile(p, 'utf8'));
+    }
+  };
+  await walk(join(ROOT, 'packages/client/src'));
+  await walk(join(ROOT, 'packages/sim/data'));
+  add(await readFile(join(ROOT, 'packages/client/index.html'), 'utf8'));
+  const text = [...chars].join('');
+  for (const w of ['Bold', 'ExtraBold']) {
+    const src = await readFile(join(SRC, `Fonts/MPLUSRounded1c/MPLUSRounded1c-${w}.ttf`));
+    const out = await subsetFont(src, text, { targetFormat: 'woff2' });
+    await writeFile(join(OUT, `fonts/MPLUSRounded1c-${w}.woff2`), out);
+    console.log(`font ${w}: ${(src.length / 1024).toFixed(0)} KB → ${(out.length / 1024).toFixed(0)} KB (${chars.size} 文字)`);
+  }
+}
+
+/** ホーム画面用アイコン（PWA）：撮影済みの鉄の騎士のカード絵を紺の背景に置く */
+async function writeIcons() {
+  const art = join(OUT, 'cards/unit_iron_knight.webp');
+  if (!existsSync(art)) return;
+  await mkdir(join(OUT, 'icons'), { recursive: true });
+  for (const size of [192, 512, 180]) {
+    const fg = await sharp(art).resize(Math.round(size * 0.82), Math.round(size * 0.82), { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } }).toBuffer();
+    await sharp({ create: { width: size, height: size, channels: 4, background: '#1d2a3a' } })
+      .composite([{ input: fg, gravity: 'south' }])
+      .png()
+      .toFile(join(OUT, `icons/icon-${size}.png`));
+  }
+}
+
 async function main() {
   if (!existsSync(SRC)) throw new Error(`${SRC} がありません。先に npm run assets:fetch を実行してください`);
+  // 撮影済みのカード絵（npm run assets:capture の出力）は作り直さずに残す
+  const kept = new Map();
+  const cardsDir = join(OUT, 'cards');
+  if (existsSync(cardsDir)) for (const f of await readdir(cardsDir)) if (f.startsWith('unit_')) kept.set(f, await readFile(join(cardsDir, f)));
   await rm(OUT, { recursive: true, force: true });
   for (const d of ['models', 'ui', 'cards', 'fx', 'sfx', 'fonts']) await mkdir(join(OUT, d), { recursive: true });
+  for (const [f, data] of kept) await writeFile(join(cardsDir, f), data);
 
   let total = 0;
   for (const [name, rel] of Object.entries(MODELS)) {
@@ -207,7 +263,13 @@ async function main() {
     } else await copyFile(join(SRC, rel), dst);
   }
   for (const f of FRAMES) await f.op(sharp(join(SRC, f.src))).png().toFile(join(OUT, f.out));
-  await writeFile(join(OUT, 'README.txt'), 'tools/assets/prepare.mjs が自動生成したファイルです。手で編集しないでください。\n');
+  await subsetFonts();
+  await writeIcons();
+  await writeFile(
+    join(OUT, 'README.txt'),
+    'tools/assets/prepare.mjs が自動生成したファイルです。手で編集しないでください。\n' +
+      '素材の作者・ライセンスは cardbattle/CREDITS.md を参照（Quaternius・Kenney は CC0、M PLUS Rounded 1c は SIL OFL 1.1：fonts/OFL.txt）。\n',
+  );
   // BGM（魔王魂）：thirdparty/MaouDamashii/ に置かれていればコピーする
   const bgm = [];
   for (const [name, rel] of Object.entries(BGM)) {

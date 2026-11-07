@@ -1,0 +1,13 @@
+# Render（https://render.com）の設定：Rune Arena のゲームサーバー（オンライン対戦）とクライアント配信を1つのサービスで動かす
+services:
+  - type: web
+    name: rune-arena
+    runtime: node
+    rootDir: cardbattle
+    plan: free
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm run server
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_VERSION
+        value: "22"

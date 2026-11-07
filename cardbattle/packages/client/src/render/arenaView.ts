@@ -1,7 +1,7 @@
 import * as THREE from 'three/webgpu';
 import { UNIT, type BattleSimulation, type CardStats } from '@cardbattle/sim';
 import { arena, simToWorld } from './coords';
-import { arenaPart } from './models';
+import { arenaPart, bakeStatic } from './models';
 
 /**
  * アリーナの仮オブジェクト（地面・川・橋）と、配置範囲・射程円などの補助表示。
@@ -114,16 +114,17 @@ export class ArenaView {
   /** 外周の石の縁と、川岸の柵（Medieval Village MegaKit） */
   private decorate(bridges: number[], bridgeHalf: number, riverStart: number, riverEnd: number): void {
     if (!arenaPart('border', 1, 1, 1)) return;
+    const deco = new THREE.Group();
     const w = arena.width;
     const h = arena.height;
-    const seg = 2;
+    const seg = 3;
     // 外周：手前と奥
     for (let x = 0; x < w; x += seg) {
       for (const y of [-0.3, h + 0.3]) {
         const b = arenaPart('border', seg, 0.5, 0.6);
         if (!b) continue;
         b.position.copy(simToWorld((x + seg / 2) * UNIT, y * UNIT, 0));
-        this.root.add(b);
+        deco.add(b);
       }
     }
     // 外周：左右
@@ -133,7 +134,7 @@ export class ArenaView {
         if (!b) continue;
         b.rotation.y = Math.PI / 2;
         b.position.copy(simToWorld(x * UNIT, (y + seg / 2) * UNIT, 0));
-        this.root.add(b);
+        deco.add(b);
       }
     }
     // 川岸の柵（橋の部分は空ける）
@@ -144,9 +145,11 @@ export class ArenaView {
         const f = arenaPart('fence', 1.5, 0.6, 0.2);
         if (!f) continue;
         f.position.copy(simToWorld(cx * UNIT, y * UNIT, 0));
-        this.root.add(f);
+        deco.add(f);
       }
     }
+    // 外周と柵は動かないので、まとめて少ないドローコールにする（影は落とさない）
+    this.root.add(bakeStatic(deco, false));
   }
 
   /** 1タイル = 1枚の四角形をまとめたメッシュ（頂点カラーで塗り分ける） */

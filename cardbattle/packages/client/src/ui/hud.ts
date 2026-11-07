@@ -202,7 +202,7 @@ export function renderCard(el: HTMLDivElement, card: CardStats): void {
   // 素材があればカードの絵（撮影した画像）と LAYERLAB の枠、無ければ種類アイコン
   const art = assets.available
     ? `<img class="card-img" src="${assetUrl(cardArt(card.id, card.type))}" alt="" draggable="false">
-       <img class="card-frame" src="${assetUrl(FRAME_BY_RARITY[card.rarity])}" alt="" draggable="false">`
+       <img class="card-frame" src="${assetUrl(FRAME_BY_RARITY[card.rarity])}" alt="" draggable="false" onerror="this.parentElement.classList.add('no-frame');this.remove()">`
     : `<div class="card-art"><span class="card-icon">${TYPE_ICON[card.type] ?? '?'}</span></div>`;
   el.innerHTML = `
     ${art}

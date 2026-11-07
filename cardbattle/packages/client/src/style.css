@@ -1018,3 +1018,8 @@ button {
   background: rgba(0, 0, 0, 0.6);
   pointer-events: none;
 }
+
+/* LAYERLAB の枠が無いとき（git に含めていない環境）は、レアリティ色の線で代用 */
+.themed .card.no-frame {
+  border: 3px solid var(--frame);
+}
