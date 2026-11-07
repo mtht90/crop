@@ -143,7 +143,9 @@ function showTitle(): void {
         </div>
         <p class="hint">カードを手札からアリーナへドラッグ（またはタップ→アリーナをタップ）して出します。<br>PCでは 1〜4 キーでカードを選べます。</p>
       </div>
-      <div class="footer">描画: ${stage.backendName}${assets.available ? '' : '（素材なし・仮表示）'}</div>
+      <div class="footer">描画: ${stage.backendName}${assets.available ? '' : '（素材なし・仮表示）'}${
+        assets.failures.length ? `<br>読み込めなかった素材 ${assets.failures.length} 件：${escapeHtml(assets.failures[0])}` : ''
+      }</div>
       <button class="mute-btn" data-act="mute">${audio.muted ? '🔇' : '🔊'}</button>
     </div>`;
   screensEl.querySelector('[data-act="mute"]')?.addEventListener('click', (e) => {

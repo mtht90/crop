@@ -22,18 +22,23 @@ class AssetStore {
   private readonly textures = new Map<string, THREE.Texture>();
 
   async load(onProgress: (done: number, total: number) => void): Promise<void> {
-    // manifest.json：素材の有無と、モデルの形式（通常は .glb、GLB を配信できない場所では .json の glTF）
-    let manifest: { modelExt?: string; bgm?: string[] } | null = null;
-    try {
-      const res = await fetch(assetUrl('manifest.json'));
-      if (res.ok && !(res.headers.get('content-type') ?? '').includes('html')) manifest = await res.json();
-    } catch {
-      manifest = null;
+    // 素材の設定：ページに埋め込まれていればそれを使い、無ければ manifest.json を読む
+    let manifest: { modelExt?: string; bgm?: string[] } | null =
+      (window as unknown as { __RUNE_ASSETS__?: { modelExt?: string; bgm?: string[] } }).__RUNE_ASSETS__ ?? null;
+    if (!manifest) {
+      try {
+        const res = await fetch(assetUrl('manifest.json'));
+        if (res.ok && !(res.headers.get('content-type') ?? '').includes('html')) manifest = await res.json();
+      } catch (e) {
+        this.failures.push(`manifest.json: ${String(e)}`);
+      }
     }
     if (!manifest) {
       console.warn('素材が見つかりません（npm run assets:prepare）。仮の図形で表示します');
       return;
     }
+    // 素材は1つずつ読み込み、読めなかったものだけ仮の図形にする（1つの失敗で全部が仮表示にならないように）
+    this.available = true;
     const ext = manifest.modelExt ?? 'glb';
     this.bgm = manifest.bgm ?? [];
     const loader = new GLTFLoader();
@@ -41,27 +46,40 @@ class AssetStore {
     const total = MODEL_FILES.length + FX_TEXTURES.length;
     let done = 0;
     const tick = () => onProgress(++done, total);
+    const attempt = async (label: string, fn: () => Promise<void>) => {
+      try {
+        await fn();
+      } catch (e) {
+        console.warn('素材の読み込みに失敗', label, e);
+        this.failures.push(`${label}: ${e instanceof Error ? e.message : String(e)}`);
+      }
+      tick();
+    };
     await Promise.all([
-      ...MODEL_FILES.map(async (name) => {
-        const gltf = await loader.loadAsync(assetUrl(`models/${name}.${ext}`));
-        gltf.scene.traverse((o) => {
-          if ((o as THREE.Mesh).isMesh) {
-            o.castShadow = true;
-            o.receiveShadow = true;
-          }
-        });
-        this.models.set(name, gltf);
-        tick();
-      }),
-      ...FX_TEXTURES.map(async (name) => {
-        const tex = await texLoader.loadAsync(assetUrl(`fx/${name}.png`));
-        tex.colorSpace = THREE.SRGBColorSpace;
-        this.textures.set(name, tex);
-        tick();
-      }),
+      ...MODEL_FILES.map((name) =>
+        attempt(`models/${name}`, async () => {
+          const gltf = await loader.loadAsync(assetUrl(`models/${name}.${ext}`));
+          gltf.scene.traverse((o) => {
+            if ((o as THREE.Mesh).isMesh) {
+              o.castShadow = true;
+              o.receiveShadow = true;
+            }
+          });
+          this.models.set(name, gltf);
+        }),
+      ),
+      ...FX_TEXTURES.map((name) =>
+        attempt(`fx/${name}`, async () => {
+          const tex = await texLoader.loadAsync(assetUrl(`fx/${name}.png`));
+          tex.colorSpace = THREE.SRGBColorSpace;
+          this.textures.set(name, tex);
+        }),
+      ),
     ]);
-    this.available = true;
   }
+
+  /** 読み込めなかった素材（原因の調査用） */
+  readonly failures: string[] = [];
 
   model(name: string): GLTF | undefined {
     return this.models.get(name);
