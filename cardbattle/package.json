@@ -1,0 +1,16 @@
+{
+  "name": "cardbattle",
+  "private": true,
+  "type": "module",
+  "workspaces": ["packages/sim", "packages/client"],
+  "scripts": {
+    "dev": "npm run dev -w @cardbattle/client",
+    "build": "npm run build -w @cardbattle/client",
+    "test": "npm test -w @cardbattle/sim",
+    "typecheck": "tsc -p packages/sim && tsc -p packages/client --noEmit",
+    "simulate": "npm run simulate -w @cardbattle/sim"
+  },
+  "devDependencies": {
+    "typescript": "~5.9.3"
+  }
+}

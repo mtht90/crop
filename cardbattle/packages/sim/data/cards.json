@@ -1,0 +1,58 @@
+{
+  "$comment": "カードの数値。単位：距離=タイル、時間=秒、speed=タイル/分（遅い45/普通60/速い90/とても速い120）、projectileSpeed=タイル/秒。レベル11相当を目安にした初期値。",
+  "cards": [
+    {
+      "id": "iron_knight", "displayName": "鉄の騎士", "type": "troop", "rarity": "common", "cost": 3,
+      "tags": ["tank", "melee"],
+      "count": 1, "hitpoints": 1766, "damage": 202, "hitSpeed": 1.2, "firstHitDelay": 0.6,
+      "range": 1.2, "sightRange": 5.5, "speed": 60, "canHitGround": true, "canHitAir": false,
+      "collisionRadius": 0.5, "mass": 6, "deployTime": 1.0
+    },
+    {
+      "id": "archer_duo", "displayName": "弓兵コンビ", "type": "troop", "rarity": "common", "cost": 3,
+      "tags": ["ranged", "antiAir"],
+      "count": 2, "spawnSpacing": 1.0, "hitpoints": 304, "damage": 107, "hitSpeed": 0.9, "firstHitDelay": 0.4,
+      "range": 5.0, "sightRange": 5.5, "speed": 60, "canHitGround": true, "canHitAir": true,
+      "collisionRadius": 0.45, "mass": 3, "projectileSpeed": 15, "deployTime": 1.0
+    },
+    {
+      "id": "rock_giant", "displayName": "岩の巨兵", "type": "troop", "rarity": "rare", "cost": 5,
+      "tags": ["tank", "winCondition", "melee"],
+      "count": 1, "hitpoints": 4091, "damage": 254, "hitSpeed": 1.5, "firstHitDelay": 0.5,
+      "range": 1.2, "sightRange": 7.5, "speed": 45, "targets": "buildings", "canHitGround": true, "canHitAir": false,
+      "collisionRadius": 0.75, "mass": 18, "deployTime": 1.0
+    },
+    {
+      "id": "bone_legion", "displayName": "骨の軍団", "type": "troop", "rarity": "epic", "cost": 3,
+      "tags": ["swarm", "melee"],
+      "count": 8, "spawnSpacing": 0.8, "hitpoints": 81, "damage": 81, "hitSpeed": 1.0, "firstHitDelay": 0.4,
+      "range": 0.5, "sightRange": 5.5, "speed": 90, "canHitGround": true, "canHitAir": false,
+      "collisionRadius": 0.3, "mass": 1, "deployTime": 1.0
+    },
+    {
+      "id": "wyvern", "displayName": "翼竜", "type": "troop", "rarity": "epic", "cost": 4,
+      "tags": ["air", "splash", "antiAir", "antiSwarm"],
+      "count": 1, "hitpoints": 1152, "damage": 161, "hitSpeed": 1.5, "firstHitDelay": 0.5,
+      "range": 3.5, "sightRange": 5.5, "speed": 90, "flying": true, "canHitGround": true, "canHitAir": true,
+      "collisionRadius": 0.5, "mass": 4, "splashRadius": 1.5, "projectileSpeed": 8, "deployTime": 1.0
+    },
+    {
+      "id": "guard_cannon", "displayName": "守りの砲台", "type": "building", "rarity": "common", "cost": 3,
+      "tags": ["building"],
+      "hitpoints": 824, "damage": 212, "hitSpeed": 0.9, "firstHitDelay": 0.4,
+      "range": 5.5, "sightRange": 5.5, "canHitGround": true, "canHitAir": false,
+      "collisionRadius": 0.8, "projectileSpeed": 15, "deployTime": 1.0, "lifetime": 30
+    },
+    {
+      "id": "fire_orb", "displayName": "火球", "type": "spell", "rarity": "rare", "cost": 4,
+      "tags": ["spell", "splash"],
+      "damage": 689, "crownTowerDamage": 207, "spellRadius": 2.5, "spellTravelSpeed": 10, "knockback": 0.8
+    },
+    {
+      "id": "thunder_strike", "displayName": "雷撃", "type": "spell", "rarity": "common", "cost": 2,
+      "tags": ["spell", "splash", "antiSwarm"],
+      "damage": 192, "crownTowerDamage": 58, "spellRadius": 2.5, "spellTravelSpeed": 0, "stunDuration": 0.5
+    }
+  ],
+  "starterDeck": ["iron_knight", "archer_duo", "rock_giant", "bone_legion", "wyvern", "guard_cannon", "fire_orb", "thunder_strike"]
+}

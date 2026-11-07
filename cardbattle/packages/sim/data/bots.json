@@ -1,0 +1,9 @@
+{
+  "$comment": "BOTの難易度。reaction=敵が自陣に入ってから反応するまで(秒)、pushMana=攻めに出るマナ、randomCardPermille=適当なカードを出す確率(‰)。",
+  "bots": [
+    { "id": "easy",   "displayName": "かんたん", "reactionSeconds": 1.6,  "thinkIntervalSeconds": 0.8, "pushMana": 10, "randomCardPermille": 400, "placementJitter": 1.5, "fireballValueHp": 1200, "finishTowersWithSpells": false, "supportPushes": false },
+    { "id": "normal", "displayName": "ふつう",   "reactionSeconds": 0.8,  "thinkIntervalSeconds": 0.5, "pushMana": 9,  "randomCardPermille": 150, "placementJitter": 0.7, "fireballValueHp": 900,  "finishTowersWithSpells": false, "supportPushes": true },
+    { "id": "hard",   "displayName": "むずかしい", "reactionSeconds": 0.35, "thinkIntervalSeconds": 0.25, "pushMana": 8, "randomCardPermille": 0,   "placementJitter": 0.2, "fireballValueHp": 700,  "finishTowersWithSpells": true,  "supportPushes": true }
+  ],
+  "names": ["Haruto", "Yui", "Sora", "Mio", "Ren", "Aoi", "Kaito", "Hina", "Riku", "Sakura", "Leo", "Emma", "Noah", "Mia", "Lucas", "Nora"]
+}

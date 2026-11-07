@@ -1,0 +1,19 @@
+{
+  "name": "@cardbattle/client",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host"
+  },
+  "dependencies": {
+    "@cardbattle/sim": "0.1.0",
+    "three": "^0.187.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.187.0",
+    "vite": "^8.3.6"
+  }
+}

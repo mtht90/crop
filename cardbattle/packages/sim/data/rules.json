@@ -1,0 +1,13 @@
+{
+  "$comment": "試合ルール・タワー・アリーナ。座標はタイル（自陣の左下が原点、相手側は上下反転）。",
+  "arenaWidth": 18, "arenaHeight": 32,
+  "riverStartY": 15, "riverEndY": 17,
+  "bridgeX": [3.5, 14.5], "bridgeHalfWidth": 1.5,
+  "pocketDepth": 6,
+  "princessTower": { "hitpoints": 3052, "damage": 109, "hitSpeed": 0.8, "range": 7.5, "projectileSpeed": 20, "footprintHalfSize": 1.5, "x": 3.5, "y": 6.5 },
+  "kingTower":     { "hitpoints": 4824, "damage": 109, "hitSpeed": 1.0, "range": 7.0, "projectileSpeed": 20, "footprintHalfSize": 2.0, "x": 9.0, "y": 3.0 },
+  "maxMana": 10, "startMana": 5, "manaRegenSeconds": 2.8,
+  "doubleManaLastSeconds": 60, "overtimeBaseMultiplier": 2, "tripleManaLastOvertimeSeconds": 60,
+  "regulationSeconds": 180, "overtimeSeconds": 120,
+  "commandDelaySeconds": 0.3, "handSize": 4, "deckSize": 8
+}
