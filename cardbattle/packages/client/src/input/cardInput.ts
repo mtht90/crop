@@ -23,6 +23,7 @@ export class CardInput {
   private readonly abort = new AbortController();
   onPlaced?: (card: CardStats) => void;
   onInvalid?: () => void;
+  onSelect?: () => void;
 
   constructor(
     private readonly session: MatchSession,
@@ -65,6 +66,7 @@ export class CardInput {
 
   private select(slot: number): void {
     this.selected = this.selected === slot ? -1 : slot;
+    if (this.selected >= 0) this.onSelect?.();
     const c = this.selected >= 0 ? this.card(this.selected) : undefined;
     if (c) this.arena.showPlacement(this.session.localPlayer, c);
     else this.arena.hideCursor();

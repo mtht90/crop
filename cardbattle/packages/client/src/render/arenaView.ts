@@ -1,6 +1,7 @@
 import * as THREE from 'three/webgpu';
 import { UNIT, type BattleSimulation, type CardStats } from '@cardbattle/sim';
 import { arena, simToWorld } from './coords';
+import { arenaPart } from './models';
 
 /**
  * アリーナの仮オブジェクト（地面・川・橋）と、配置範囲・射程円などの補助表示。
@@ -38,14 +39,31 @@ export class ArenaView {
     water.position.copy(simToWorld(r.width / 2, (r.riverStart + r.riverEnd) / 2, -0.05));
     this.root.add(water);
 
-    // 橋
+    // 橋（素材があれば MegaKit の床板と柵、無ければ箱）
     const bridgeMat = new THREE.MeshStandardMaterial({ color: '#9c7149', roughness: 0.9 });
+    const bw = (r.bridgeHalfWidth * 2) / UNIT;
+    const bl = riverEnd - riverStart + 1.2;
     for (const bx of r.bridgeX) {
-      const bridge = new THREE.Mesh(new THREE.BoxGeometry((r.bridgeHalfWidth * 2) / UNIT, 0.2, riverEnd - riverStart + 1), bridgeMat);
-      bridge.position.copy(simToWorld(bx, (r.riverStart + r.riverEnd) / 2, 0.05));
-      bridge.castShadow = bridge.receiveShadow = true;
-      this.root.add(bridge);
+      const center = simToWorld(bx, (r.riverStart + r.riverEnd) / 2, 0.02);
+      const planks = arenaPart('floor_wood', bw, 0.25, bl);
+      if (planks) {
+        planks.position.copy(center);
+        this.root.add(planks);
+        for (const side of [-1, 1]) {
+          const rail = arenaPart('fence', bl, 0.8, 0.25);
+          if (!rail) continue;
+          rail.rotation.y = Math.PI / 2;
+          rail.position.set(center.x + side * (bw / 2 - 0.05), 0.2, center.z);
+          this.root.add(rail);
+        }
+      } else {
+        const bridge = new THREE.Mesh(new THREE.BoxGeometry(bw, 0.2, bl - 0.2), bridgeMat);
+        bridge.position.copy(center);
+        bridge.castShadow = bridge.receiveShadow = true;
+        this.root.add(bridge);
+      }
     }
+    this.decorate(r.bridgeX.map((b) => b / UNIT), r.bridgeHalfWidth / UNIT, riverStart, riverEnd);
 
     // 外周の縁
     const rimMat = new THREE.MeshStandardMaterial({ color: '#3c4a3a', roughness: 1 });
@@ -91,6 +109,44 @@ export class ArenaView {
     this.ghost = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 24), this.ghostMat);
     this.ghost.visible = false;
     this.root.add(this.ghost);
+  }
+
+  /** 外周の石の縁と、川岸の柵（Medieval Village MegaKit） */
+  private decorate(bridges: number[], bridgeHalf: number, riverStart: number, riverEnd: number): void {
+    if (!arenaPart('border', 1, 1, 1)) return;
+    const w = arena.width;
+    const h = arena.height;
+    const seg = 2;
+    // 外周：手前と奥
+    for (let x = 0; x < w; x += seg) {
+      for (const y of [-0.3, h + 0.3]) {
+        const b = arenaPart('border', seg, 0.5, 0.6);
+        if (!b) continue;
+        b.position.copy(simToWorld((x + seg / 2) * UNIT, y * UNIT, 0));
+        this.root.add(b);
+      }
+    }
+    // 外周：左右
+    for (let y = 0; y < h; y += seg) {
+      for (const x of [-0.3, w + 0.3]) {
+        const b = arenaPart('border', seg, 0.5, 0.6);
+        if (!b) continue;
+        b.rotation.y = Math.PI / 2;
+        b.position.copy(simToWorld(x * UNIT, (y + seg / 2) * UNIT, 0));
+        this.root.add(b);
+      }
+    }
+    // 川岸の柵（橋の部分は空ける）
+    for (let x = 0; x < w; x += 1.5) {
+      const cx = x + 0.75;
+      if (bridges.some((b) => Math.abs(cx - b) < bridgeHalf + 0.6)) continue;
+      for (const y of [riverStart - 0.1, riverEnd + 0.1]) {
+        const f = arenaPart('fence', 1.5, 0.6, 0.2);
+        if (!f) continue;
+        f.position.copy(simToWorld(cx * UNIT, y * UNIT, 0));
+        this.root.add(f);
+      }
+    }
   }
 
   /** 1タイル = 1枚の四角形をまとめたメッシュ（頂点カラーで塗り分ける） */

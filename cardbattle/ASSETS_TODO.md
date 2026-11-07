@@ -1,63 +1,59 @@
-# ASSETS_TODO（素材の配置依頼と不足リスト）
+# ASSETS_TODO（素材の状況と不足リスト）
 
-素材は自分でダウンロードできないため、下の一覧を手元でダウンロードして
-`packages/client/public/assets/thirdparty/<作者名>/<パック名>/` に置いてください。
-（このフォルダは `.gitignore` 済みです。ライセンス上、再配布できない素材が混ざるため git には入れません）
+## 素材の流れ
 
-配置が終わるまでは、仮の図形（円柱・カプセル・箱）と CSS だけで動くようにしてあります。
+1. ダウンロードした未加工の素材を `cardbattle/thirdparty/<作者>/<パック>/` に置く（gitignore 済み。再配布できない素材が混ざるため git には入れない）
+2. `npm run assets:prepare` … 使うファイルだけを選んで加工し、`packages/client/public/assets/game/` に書き出す
+3. `npm run dev` を起動した状態で `npm run assets:capture` … ユニット・建物のカード絵を撮影する
 
-## 1. ダウンロードして置いてほしい素材
+## ダウンロード済みの素材（2026-11-07）
 
-Web版では 3D モデルは **glTF（.gltf / .glb）形式** を使います。Quaternius のパックは glTF 版を選んでください。
+| 素材 | 作者 / ライセンス | 入手元 | 置き場所 |
+|---|---|---|---|
+| Ultimate Animated Character Pack | Quaternius / CC0 | https://quaternius.com/packs/ultimatedanimatedcharacter.html | `thirdparty/Quaternius/UltimateAnimatedCharacter/` |
+| Ultimate Monsters Pack | Quaternius / CC0 | https://quaternius.com/packs/ultimatemonsters.html | `thirdparty/Quaternius/UltimateMonsters/` |
+| Modular Character Outfits - Fantasy（無料版） | Quaternius / CC0 | https://quaternius.itch.io/modular-character-outfits-fantasy | `thirdparty/Quaternius/ModularCharacterOutfitsFantasy/` |
+| Universal Base Characters | Quaternius / CC0 | https://quaternius.itch.io/universal-base-characters | `thirdparty/Quaternius/UniversalBaseCharacters/` |
+| Universal Animation Library 1・2 | Quaternius / CC0 | https://quaternius.itch.io/universal-animation-library 、…-2 | `thirdparty/Quaternius/UniversalAnimationLibrary(2)/` |
+| Medieval Village MegaKit | Quaternius / CC0 | https://quaternius.itch.io/medieval-village-megakit | `thirdparty/Quaternius/MedievalVillageMegaKit/` |
+| 3D Card Kit - Fantasy | Quaternius / CC0 | https://quaternius.itch.io/3d-card-kit-fantasy | `thirdparty/Quaternius/3DCardKitFantasy/` |
+| GUI - Card Frame（Free） | LAYERLAB | https://layerlab.itch.io/gui-card-frame | `thirdparty/LAYERLAB/GUICardFrame/` |
+| UI Pack / UI Pack RPG Expansion / Fantasy UI Borders | Kenney / CC0 | https://kenney.nl/assets | `thirdparty/Kenney/...` |
+| Particle Pack | Kenney / CC0 | https://kenney.nl/assets/particle-pack | `thirdparty/Kenney/particle-pack/` |
+| Impact Sounds / Interface Sounds / RPG Audio | Kenney / CC0 | https://kenney.nl/assets | `thirdparty/Kenney/...` |
+| M PLUS Rounded 1c（Bold・ExtraBold） | M+ FONTS PROJECT / SIL OFL 1.1 | https://github.com/google/fonts/tree/main/ofl/mplusrounded1c | `thirdparty/Fonts/MPLUSRounded1c/` |
 
-| # | 素材 | 作者 / ライセンス | ダウンロード先 | 置き場所 |
-|---|---|---|---|---|
-| 1 | Ultimate Animated Character Pack | Quaternius / CC0 | https://quaternius.com/packs/ultimatedanimatedcharacter.html | `thirdparty/Quaternius/UltimateAnimatedCharacter/` |
-| 2 | Modular Character Outfits - Fantasy | Quaternius / CC0 | https://quaternius.com/packs/modularcharacteroutfitsfantasy.html | `thirdparty/Quaternius/ModularCharacterOutfitsFantasy/` |
-| 3 | Universal Base Characters | Quaternius / CC0 | https://quaternius.com/packs/universalbasecharacters.html | `thirdparty/Quaternius/UniversalBaseCharacters/` |
-| 4 | Ultimate Monsters Pack | Quaternius / CC0 | https://quaternius.com/packs/ultimatemonsters.html | `thirdparty/Quaternius/UltimateMonsters/` |
-| 5 | Medieval Village MegaKit | Quaternius / CC0 | https://quaternius.com/packs/medievalvillagemegakit.html | `thirdparty/Quaternius/MedievalVillageMegaKit/` |
-| 6 | 3D Card Kit - Fantasy | Quaternius / CC0 | https://quaternius.com/packs/3dcardkitfantasy.html | `thirdparty/Quaternius/3DCardKitFantasy/` |
-| 7 | Universal Animation Library 1 | Quaternius / CC0 | https://quaternius.com/packs/universalanimationlibrary.html | `thirdparty/Quaternius/UniversalAnimationLibrary/` |
-| 8 | Universal Animation Library 2 | Quaternius / CC0 | https://quaternius.com/packs/universalanimationlibrary2.html | `thirdparty/Quaternius/UniversalAnimationLibrary2/` |
-| 9 | GUI - Card Frame（Free） | LAYERLAB / パックの利用規約に従う | https://layerlab.itch.io/gui-card-frame | `thirdparty/LAYERLAB/GUICardFrame/` |
-| 10 | Fantasy UI Borders | Kenney / CC0 | https://kenney-assets.itch.io/fantasy-ui-borders | `thirdparty/Kenney/FantasyUIBorders/` |
-| 11 | UI Pack | Kenney / CC0 | https://kenney.nl/assets/ui-pack | `thirdparty/Kenney/UIPack/` |
-| 12 | UI Pack - RPG Expansion | Kenney / CC0 | https://kenney.nl/assets/ui-pack-rpg-expansion | `thirdparty/Kenney/UIPackRPG/` |
-| 13 | Particle Pack | Kenney / CC0 | https://kenney.nl/assets/particle-pack | `thirdparty/Kenney/ParticlePack/` |
-| 14 | Impact Sounds | Kenney / CC0 | https://kenney.nl/assets/impact-sounds | `thirdparty/Kenney/ImpactSounds/` |
-| 15 | RPG Audio | Kenney / CC0 | https://kenney.nl/assets/rpg-audio | `thirdparty/Kenney/RPGAudio/` |
-| 16 | Interface Sounds | Kenney / CC0 | https://kenney.nl/assets/interface-sounds | `thirdparty/Kenney/InterfaceSounds/` |
-| 17 | BGM（バトル用1曲・ホーム用1曲） | 魔王魂 / 魔王魂の利用規約 | https://maou.audio/ | `thirdparty/MaouDamashii/BGM/` |
-| 18 | M PLUS Rounded 1c（Bold / ExtraBold の TTF） | Coji Morishita ほか / SIL OFL 1.1 | https://fonts.google.com/specimen/M+PLUS+Rounded+1c | `thirdparty/fonts/MPLUSRounded1c-Bold.ttf`, `MPLUSRounded1c-ExtraBold.ttf` |
+## 手動での対応が必要なもの
 
-- フォントは置くだけで自動的に使われます（ファイル名を上の通りにしてください）。
-- BGM は曲が決まったらファイル名と曲名を教えてください（クレジットに曲名が必要です）。
-- Mixamo（https://www.mixamo.com）は、Quaternius のアニメーションで足りないものが出たときだけ使います。今のところ不要です。
-
-## 2. 足りない素材・仮置きしているもの（マイルストーン1 時点）
-
-| 何が足りないか | 今の代用 | 予定 |
+| 何が足りないか | 理由 | お願い |
 |---|---|---|
-| ユニットの3Dモデル（8種） | 色付きのカプセル・球・箱 | M2で Quaternius のモデルに差し替え |
-| タワー・アリーナ・橋・柵・木 | 円柱・箱・頂点カラーの地面 | M2で Medieval Village MegaKit に差し替え |
-| 「守りの砲台」の大砲パーツ | 箱＋円柱 | M2で MegaKit の中を確認。大砲が無ければ近いパーツを組み合わせ、ここに理由を書く |
-| カードの絵 | 種類アイコン（⚔ 🏰 ✦）※端末の絵文字 | M2で撮影ツールを作り、モデル／Card Kit を撮影して PNG 化 |
-| カード枠 | CSS の枠線（レアリティ色は仕様通り） | M2で LAYERLAB の枠を色替えして使用 |
-| パネル・ボタン・ゲージ | CSS のグラデーション | M2で Kenney の画像（border-image）に差し替え |
-| エフェクト（着地・ヒット・破片・呪文） | テクスチャなしの破片・リング | M3で Kenney Particle Pack のテクスチャを使う |
-| 効果音・BGM | なし（無音） | M2で組み込み |
-| フォント | 端末のフォント（ヒラギノ丸ゴ等） | 上の #18 を置けば自動で切り替わる |
-| クラウン・トロフィーのアイコン | 文字（♛ 🏆） | M2で Kenney UI Pack のアイコンに差し替え |
+| BGM（魔王魂） | 魔王魂のサーバーが自動ダウンロードを受け付けないため取得できなかった | https://maou.audio/game_battle01/ と https://maou.audio/game_town01/ から MP3 をダウンロードし、`thirdparty/MaouDamashii/maou_game_battle01.mp3` と `maou_game_town01.mp3` として置く → `npm run assets:prepare` で自動的に使われる（別の曲にする場合は `tools/assets/prepare.mjs` の `BGM` を変更） |
+| LAYERLAB のライセンス文書 | ZIP にライセンスファイルが入っていない | 配布ページの利用条件を確認する（無料版。公開リポジトリには入れていない） |
 
-## 3. モデル選定のメモ（M2で中身を確認して確定させる）
+## 仕様の目安と違うモデルにしたもの（パックの中身を確認した結果）
 
-| カード | 第1候補 |
-|---|---|
-| 鉄の騎士 | Modular Character Outfits - Fantasy の騎士装備 |
-| 弓兵コンビ | Ultimate Animated Character Pack の弓を持つキャラ ×2 |
-| 岩の巨兵 | Ultimate Monsters Pack のゴーレム系（無ければ一番大きい地上モンスター） |
-| 骨の軍団 | Ultimate Monsters Pack のスケルトン系 |
-| 翼竜 | Ultimate Monsters Pack のドラゴン系 |
-| 守りの砲台 | Medieval Village MegaKit の塔パーツ＋大砲系パーツ |
-| 火球 / 雷撃 | 3D Card Kit - Fantasy の炎系 / 雷系の場面 |
+| カード | 使ったモデル | 理由 |
+|---|---|---|
+| 鉄の騎士 | Ultimate Animated Character の `Knight_Male` | Modular Outfits の無料版には Ranger と Peasant しかなく、騎士装備が無い |
+| 弓兵コンビ | Ultimate Animated Character の `Elf` | 弓を持ったモデルがどのパックにも無い。緑の帽子のエルフが一番弓兵らしい。攻撃は `Shoot_OneHanded` |
+| 岩の巨兵 | Ultimate Monsters の `Yeti`（石の色に色替え） | ゴーレムが無い。一番大きい地上モンスターを灰色寄りに色替え |
+| 骨の軍団 | Ultimate Monsters の `Orc_Skull`（小さく表示） | スケルトンが無い。頭が骸骨のモンスターが一番近い |
+| 翼竜 | Ultimate Monsters の `Dragon_Evolved` | 目安どおり |
+| 守りの砲台 | MegaKit の `Prop_Crate`（土台）＋横倒しの `Prop_Chimney`（砲身） | MegaKit に大砲のパーツが無い |
+| タワー | MegaKit の `Wall_UnevenBrick_Straight`・`Corner_Exterior_Brick`・`Prop_ExteriorBorder_Straight1`・`Roof_Tower_RoundTiles` を組み合わせ | 塔そのもののモデルが無いので部品を組んだ。屋根の瓦を青・赤に色替え |
+| 火球・雷撃のカード絵 | 3D Card Kit の `Renders/1_Fireball.png`・`21_Element_Lightning.png` | パック同梱の同じ場面のレンダー画像を使った（自前で撮影する代わり）。周りの飾り枠は切り落とした |
+
+アニメーションは Ultimate Animated Character / Ultimate Monsters に入っているもの（Quaternius 製・CC0）を使っている。
+Universal Animation Library は、今のモデルが同じ骨格ではないため未使用（UAL 用の骨格を持つモデルに切り替えるときに使う）。
+
+## まだ素材になっていないもの
+
+| もの | 今の表示 | 予定 |
+|---|---|---|
+| 地面の芝生 | 頂点カラーの市松模様（テクスチャなし） | MegaKit に芝生・地面のタイルが無い。他の素材に置き換えるか相談 |
+| 川の水面 | 単色の半透明な板 | 同上 |
+| 木 | なし | MegaKit に木が無い（仕様では「木」も想定していた） |
+| 弓兵の矢 | 細い円柱 | 適切なモデルが無い |
+| 敵味方の足元のリング | 単色のリング | Kenney Particle Pack の円の画像にするか検討 |
+| 音量・ミュートのアイコン | 端末の絵文字（🔊） | Kenney UI Pack のアイコンに差し替え |
+| トロフィーのアイコン | 端末の絵文字（🏆） | Kenney UI Pack の星などに差し替え |

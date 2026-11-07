@@ -1,4 +1,7 @@
 import { TICK_RATE, type BattleSimulation, type CardStats, type SimEvent } from '@cardbattle/sim';
+import { assets, assetUrl } from '../assets/assets';
+import { audio } from '../audio';
+import { cardArt, FRAME_BY_RARITY } from '../assets/visuals';
 
 const RARITY_LABEL: Record<string, string> = { common: 'コモン', rare: 'レア', epic: 'エピック', legendary: 'レジェンド' };
 const TYPE_ICON: Record<string, string> = { troop: '⚔', building: '🏰', spell: '✦' };
@@ -88,7 +91,7 @@ export class Hud {
   }
 
   private renderCrowns(): void {
-    const draw = (n: number) => [0, 1, 2].map((i) => `<span class="crown ${i < n ? 'on' : ''}">♛</span>`).join('');
+    const draw = (n: number) => crownIcons(n);
     this.els.oppCrowns.innerHTML = draw(this.sim.players[1 - this.localPlayer].crowns);
     this.els.myCrowns.innerHTML = draw(this.sim.players[this.localPlayer].crowns);
   }
@@ -103,6 +106,7 @@ export class Hud {
         box.classList.add('pop');
         this.announce(ev.owner === this.localPlayer ? 'クラウン獲得！' : 'タワーを壊された！', ev.owner === this.localPlayer ? 'good' : 'bad', 1400);
       } else if (ev.type === 'announcement') {
+        audio.play('announce', 0.8, 0);
         if (ev.kind === 'doubleMana') this.announce('残り60秒！\nマナ2倍', 'big', 2200);
         else if (ev.kind === 'overtime') this.announce('延長戦！\nサドンデス', 'big', 2600);
         else this.announce('マナ3倍！', 'big', 2000);
@@ -140,6 +144,7 @@ export class Hud {
       if (s.card !== card) {
         s.card = card;
         renderCard(s.el, card);
+        if (s.card) audio.play('card', 0.3, 80);
         s.el.classList.remove('deal');
         void s.el.offsetWidth;
         s.el.classList.add('deal');
@@ -174,8 +179,13 @@ export class Hud {
 export function renderCard(el: HTMLDivElement, card: CardStats): void {
   el.dataset.rarity = card.rarity;
   el.dataset.type = card.type;
+  // 素材があればカードの絵（撮影した画像）と LAYERLAB の枠、無ければ種類アイコン
+  const art = assets.available
+    ? `<img class="card-img" src="${assetUrl(cardArt(card.id, card.type))}" alt="" draggable="false">
+       <img class="card-frame" src="${assetUrl(FRAME_BY_RARITY[card.rarity])}" alt="" draggable="false">`
+    : `<div class="card-art"><span class="card-icon">${TYPE_ICON[card.type] ?? '?'}</span></div>`;
   el.innerHTML = `
-    <div class="card-art"><span class="card-icon">${TYPE_ICON[card.type] ?? '?'}</span></div>
+    ${art}
     <div class="card-name">${escapeHtml(card.name)}</div>
     <div class="card-cost">${card.cost}</div>
     <div class="card-wait"></div>`;
@@ -184,4 +194,9 @@ export function renderCard(el: HTMLDivElement, card: CardStats): void {
 
 export function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+}
+
+/** クラウン3つ分のアイコン（Kenney UI Pack の星。素材が無ければ文字） */
+export function crownIcons(n: number): string {
+  return [0, 1, 2].map((i) => `<span class="crown ${i < n ? 'on' : ''}"><i></i></span>`).join('');
 }

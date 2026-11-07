@@ -14,7 +14,10 @@ import { Fx } from './render/fx';
 import { Stage } from './render/stage';
 import { WorldUi } from './render/worldUi';
 import { CardInput } from './input/cardInput';
-import { Hud, escapeHtml } from './ui/hud';
+import { Hud, crownIcons, escapeHtml } from './ui/hud';
+import { assets } from './assets/assets';
+import { applyTheme } from './ui/theme';
+import { audio } from './audio';
 import { profile, saveProfile } from './profile';
 
 const content = loadContent();
@@ -26,9 +29,9 @@ const hudEl = document.getElementById('hud')!;
 const worldUiEl = document.getElementById('world-ui')!;
 const screensEl = document.getElementById('screens')!;
 
-const stage = new Stage(canvas);
-const worldUi = new WorldUi(worldUiEl, stage);
-const fx = new Fx(stage.scene);
+let stage!: Stage;
+let worldUi!: WorldUi;
+let fx!: Fx;
 
 /** 進行中の対戦（オフライン BOT 戦・リプレイ再生で共通） */
 interface Battle {
@@ -46,6 +49,7 @@ let battle: Battle | null = null;
 // ---------------------------------------------------------------- 画面サイズ
 
 function layout(): void {
+  if (!stage) return;
   // 縦長（9:16）の画面を基準にする。PC の横長画面では中央に縦長で表示
   const vw = window.innerWidth;
   const vh = window.innerHeight;
@@ -77,11 +81,19 @@ function startBattle(session: MatchSession, isReplay: boolean, bot: BotProfile |
   stage.scene.add(arena.root, view.root);
   const input = isReplay ? null : new CardInput(session, stage, arena, hud, gameEl);
   if (input) {
-    input.onPlaced = () => navigator.vibrate?.(12);
-    input.onInvalid = () => hud.announce('そこには置けません', 'small', 700);
+    input.onPlaced = () => {
+      navigator.vibrate?.(12);
+      audio.play('place', 0.6, 0);
+    };
+    input.onInvalid = () => {
+      hud.announce('そこには置けません', 'small', 700);
+      audio.play('invalid', 0.6, 0);
+    };
+    input.onSelect = () => audio.play('select', 0.5, 0);
   }
   if (isReplay) hud.announce('リプレイ再生中', 'small', 1500);
   battle = { session, arena, view, hud, input, isReplay, resultShown: false, bot };
+  audio.playMusic('battle');
   gameEl.classList.add('in-battle');
   layout();
   view.update(0, 1);
@@ -116,6 +128,7 @@ function endBattle(): void {
 
 function showTitle(): void {
   endBattle();
+  audio.playMusic('home');
   screensEl.innerHTML = `
     <div class="screen title">
       <div class="logo">
@@ -130,10 +143,17 @@ function showTitle(): void {
         </div>
         <p class="hint">カードを手札からアリーナへドラッグ（またはタップ→アリーナをタップ）して出します。<br>PCでは 1〜4 キーでカードを選べます。</p>
       </div>
-      <div class="footer">描画: ${stage.backendName}</div>
+      <div class="footer">描画: ${stage.backendName}${assets.available ? '' : '（素材なし・仮表示）'}</div>
+      <button class="mute-btn" data-act="mute">${audio.muted ? '🔇' : '🔊'}</button>
     </div>`;
+  screensEl.querySelector('[data-act="mute"]')?.addEventListener('click', (e) => {
+    (e.currentTarget as HTMLElement).textContent = audio.toggleMute() ? '🔇' : '🔊';
+  });
   screensEl.querySelectorAll<HTMLButtonElement>('[data-bot]').forEach((b) =>
-    b.addEventListener('click', () => startBotMatch(content.bots.find((x) => x.id === b.dataset.bot)!)),
+    b.addEventListener('click', () => {
+      audio.play('click', 0.6, 0);
+      startBotMatch(content.bots.find((x) => x.id === b.dataset.bot)!);
+    }),
   );
 }
 
@@ -163,9 +183,11 @@ function showResult(b: Battle): void {
     draw: '引き分け',
     forfeit: '相手の切断',
   };
-  const crowns = (n: number) => [0, 1, 2].map((i) => `<span class="crown ${i < n ? 'on' : ''}">♛</span>`).join('');
+  const crowns = crownIcons;
   const title = draw ? '引き分け' : won ? '勝利！' : '敗北…';
   window.setTimeout(() => {
+    audio.playMusic(null);
+    if (!b.isReplay) audio.play(won ? 'win' : 'lose', 0.9, 0);
     screensEl.innerHTML = `
       <div class="screen result ${draw ? 'draw' : won ? 'win' : 'lose'}">
         <div class="result-title">${b.isReplay ? 'リプレイ終了' : title}</div>
@@ -212,7 +234,15 @@ function frame(now: number): void {
 }
 
 async function boot(): Promise<void> {
-  await stage.init();
+  screensEl.innerHTML = `<div class="screen loading"><div class="logo"><div class="logo-main">RUNE ARENA</div></div><div class="bar"><div></div></div><div class="footer">読み込み中…</div></div>`;
+  const bar = screensEl.querySelector<HTMLDivElement>('.bar div')!;
+  stage = await Stage.create(canvas);
+  worldUi = new WorldUi(worldUiEl, stage);
+  fx = new Fx(stage.scene);
+  await assets.load((done, total) => (bar.style.width = `${Math.round((done / total) * 100)}%`)).catch((e) => console.warn(e));
+  await applyTheme(assets.available);
+  // ブラウザの制限で、音は最初のタップ／クリックから鳴らせる
+  window.addEventListener('pointerdown', () => audio.unlock(), { capture: true });
   layout();
   showTitle();
   stage.renderer.setAnimationLoop(frame);

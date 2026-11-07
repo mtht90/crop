@@ -22,9 +22,27 @@ export class Stage {
   private readonly raycaster = new THREE.Raycaster();
   private readonly groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 
-  constructor(readonly canvas: HTMLCanvasElement) {
+  /** WebGPU のアダプターが取れない環境（埋め込み表示・古い端末）では最初から WebGL2 で作る */
+  static async create(canvas: HTMLCanvasElement): Promise<Stage> {
+    let forceWebGL = new URLSearchParams(location.search).get('renderer') === 'webgl';
+    if (!forceWebGL) {
+      try {
+        const gpu = (navigator as Navigator & { gpu?: { requestAdapter(): Promise<unknown> } }).gpu;
+        forceWebGL = !gpu || !(await gpu.requestAdapter());
+      } catch {
+        forceWebGL = true;
+      }
+    }
+    const stage = new Stage(canvas, forceWebGL);
+    await stage.init();
+    return stage;
+  }
+
+  private constructor(
+    readonly canvas: HTMLCanvasElement,
+    forceWebGL: boolean,
+  ) {
     // ?renderer=webgl で WebGL2 を強制できる（古い端末・不具合の切り分け用）
-    const forceWebGL = new URLSearchParams(location.search).get('renderer') === 'webgl';
     this.renderer = new THREE.WebGPURenderer({ canvas, antialias: true, alpha: false, forceWebGL });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = true;

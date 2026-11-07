@@ -8,7 +8,9 @@
     "build": "npm run build -w @cardbattle/client",
     "test": "npm test -w @cardbattle/sim",
     "typecheck": "tsc -p packages/sim && tsc -p packages/client --noEmit",
-    "simulate": "npm run simulate -w @cardbattle/sim"
+    "simulate": "npm run simulate -w @cardbattle/sim",
+    "assets:prepare": "node tools/assets/prepare.mjs",
+    "assets:capture": "node tools/assets/capture.cjs"
   },
   "devDependencies": {
     "typescript": "~5.9.3"
