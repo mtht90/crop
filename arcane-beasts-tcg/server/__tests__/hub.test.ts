@@ -210,7 +210,7 @@ describe('online hub', () => {
     const snap = who.last('snapshot')!;
     expect(snap.actor).toBe(0);
     // the clock shows the time really left, not a fresh full turn
-    expect(snap.deadline!).toBeLessThanOrEqual(150_000);
+    expect(snap.deadline!).toBeLessThanOrEqual(300_000);
     // and the game still plays on to the end
     a.auto = true;
     b.auto = true;

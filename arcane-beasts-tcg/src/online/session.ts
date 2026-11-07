@@ -15,7 +15,7 @@ export interface Outgoing {
 }
 
 /** time a player has to answer a prompt (ms) */
-export const ANSWER_MS = { action: 90_000, setup: 150_000, other: 60_000 };
+export const ANSWER_MS = { action: 300_000, setup: 300_000, other: 180_000 };
 export const promptMs = (p: Prompt) => (p.type === 'action' ? ANSWER_MS.action : p.type === 'setup' ? ANSWER_MS.setup : ANSWER_MS.other);
 
 export class GameSession {
