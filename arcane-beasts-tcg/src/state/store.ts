@@ -713,7 +713,7 @@ export function owned(s: Save, cid: string) {
 // special art, gold): same card, same ★, only the look is rarer.
 // ----------------------------------------------------------------------------
 export const PACK_PRICE = 500;
-export const PREMIUM_PRICE = 1500;
+export const PREMIUM_PRICE = 500;
 /** 10連 costs 9 packs (ぷにぷに: 1回500・10連4,500) */
 export const TEN_PACKS = 9;
 

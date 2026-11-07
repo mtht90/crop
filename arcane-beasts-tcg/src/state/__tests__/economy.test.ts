@@ -33,7 +33,8 @@ describe('gems (ジェム) — ぷにぷに準拠', () => {
   it('a pack is 500, a 10連 4,500; a login week pays one pack', () => {
     expect(PACK_PRICE).toBe(500);
     expect(PACK_PRICE * TEN_PACKS).toBe(4500);
-    expect(PREMIUM_PRICE).toBe(PACK_PRICE * 3);
+    expect(PREMIUM_PRICE).toBe(500);
+    expect(PREMIUM_PRICE * TEN_PACKS).toBe(4500);
     expect(LOGIN_REWARDS.reduce((a, b) => a + b, 0) + LOGIN_GEMS.reduce((a, b) => a + b, 0)).toBe(500);
     for (const m of [...NORMAL_MISSIONS, ...ACHIEVEMENTS]) expect(missionGems(m), m.id).toBe(m.reward + (m.gems ?? 0));
     expect(storyFirstClear(1, false, 1).gems).toBe(100);
