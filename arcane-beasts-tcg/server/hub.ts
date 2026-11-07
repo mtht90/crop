@@ -7,10 +7,11 @@
 import { validateDeck } from '../src/engine/decks';
 import { card } from '../src/engine/cards';
 import { GameSession, promptMs, type Outgoing } from '../src/online/session';
-import { PROTOCOL, type ClientMsg, type ErrorCode, type MatchKind, type OppInfo, type RoomInfo, type ServerMsg } from '../src/online/protocol';
+import { PROTOCOL, type ClientMsg, type ErrorCode, type MatchKind, type OppInfo, type QueueKind, type RoomInfo, type ServerMsg } from '../src/online/protocol';
 import { judgeName } from '../src/online/names';
 import { PlayerStore, portraitOk, type PlayerRecord } from './players';
 import { randomInt } from 'node:crypto';
+import { matchWindow } from '../src/online/rank';
 
 export interface Socket {
   send(data: string): void;
@@ -51,7 +52,7 @@ class Conn {
   player: PlayerRecord | null = null;
   room: Room | null = null;
   seat: 0 | 1 | null = null;
-  queued: { kind: 'random'; deck: string[]; since: number } | null = null;
+  queued: { kind: QueueKind; deck: string[]; since: number } | null = null;
   replaced = false;
   windowStart = 0;
   windowCount = 0;
@@ -383,7 +384,8 @@ export class Hub {
   // ------------------------------------------------------------------------
   // matchmaking
   // ------------------------------------------------------------------------
-  private enqueue(c: Conn, kind: 'random', deckIn: string[]) {
+  private enqueue(c: Conn, kind: QueueKind, deckIn: string[]) {
+    if (kind !== 'random' && kind !== 'ranked') return this.error(c, 'bad_request', '不明な対戦モードです');
     const deck = this.checkDeck(c, deckIn);
     if (!deck || !this.free(c)) return;
     c.queued = { kind, deck, since: Date.now() };
@@ -399,18 +401,30 @@ export class Hub {
   }
 
   private matchmake() {
-    for (const kind of ['random'] as const) {
+    const now = Date.now();
+    for (const kind of ['random', 'ranked'] as const) {
       for (;;) {
         const pool = this.queue.filter((q) => q.queued?.kind === kind && q.player);
         let pair: [Conn, Conn] | null = null;
-        for (let i = 0; i < pool.length && !pair; i++) {
+        let best = Infinity;
+        for (let i = 0; i < pool.length; i++) {
           for (let j = i + 1; j < pool.length; j++) {
             const a = pool[i];
             const b = pool[j];
             if (a.player!.id === b.player!.id) continue;
-            pair = [a, b];
-            break;
+            if (kind === 'random') {
+              pair = [a, b];
+              break;
+            }
+            // ranked: the closest ratings first; the longer someone waits, the wider they accept
+            const diff = Math.abs(this.store.rating(a.player!) - this.store.rating(b.player!));
+            const win = Math.max(matchWindow((now - a.queued!.since) / this.scale), matchWindow((now - b.queued!.since) / this.scale));
+            if (diff <= win && diff < best) {
+              best = diff;
+              pair = [a, b];
+            }
           }
+          if (pair && kind === 'random') break;
         }
         if (!pair) break;
         const [a, b] = Math.random() < 0.5 ? pair : [pair[1], pair[0]];
@@ -429,8 +443,10 @@ export class Hub {
   // ------------------------------------------------------------------------
   // games
   // ------------------------------------------------------------------------
-  private oppInfo(p: PlayerRecord): OppInfo {
-    return { name: p.name, portrait: p.portrait };
+  private oppInfo(p: PlayerRecord, ranked = false): OppInfo {
+    if (!ranked) return { name: p.name, portrait: p.portrait };
+    const v = this.store.rankView(p);
+    return { name: p.name, portrait: p.portrait, rank: { tier: v.tier, div: v.div } };
   }
 
   private sendStart(room: Room, c: Conn) {
@@ -438,7 +454,7 @@ export class Hub {
     const [s0, s1] = room.seats;
     const mine = you === 1 ? s1 : s0;
     const theirs = you === 1 ? s0 : s1;
-    this.send(c, { t: 'start', you, kind: room.kind, code: room.code, me: this.oppInfo(mine!.player), opp: this.oppInfo(theirs!.player) });
+    this.send(c, { t: 'start', you, kind: room.kind, code: room.code, me: this.oppInfo(mine!.player, room.kind === 'ranked'), opp: this.oppInfo(theirs!.player, room.kind === 'ranked') });
   }
 
   private startGame(room: Room) {
@@ -503,13 +519,20 @@ export class Hub {
     for (const s of room.seats) if (s?.grace) (clearTimeout(s.grace), (s.grace = null));
     const w = session.game.s.winner;
     this.log(`game ${room.code} over: ${w} (${session.game.s.winReason})`);
+    const [p0, p1] = room.seats;
+    // ranked: both ratings move together (a draw changes nothing)
+    const ranked = room.kind === 'ranked' && p0 && p1 && (w === 0 || w === 1) ? this.store.recordRanked(p0.player, p1.player, w) : null;
     ([0, 1] as const).forEach((idx) => {
       const seat = room.seats[idx];
       if (!seat) return;
       const r = session.result(idx);
       const win = w === idx;
-      if (w === 0 || w === 1) this.store.recordCasual(seat.player, win);
+      if (!ranked && (w === 0 || w === 1)) this.store.recordCasual(seat.player, win);
       this.send(seat.conn, { t: 'over', winner: r.winner, reason: r.reason });
+      if (ranked) {
+        this.send(seat.conn, { t: 'rank', ...ranked[idx] });
+        this.send(seat.conn, { t: 'renamed', profile: this.store.profile(seat.player) });
+      }
     });
     this.broadcastRoom(room);
     room.cleanup = sleepless(setTimeout(() => this.destroyRoom(room), 90_000 * this.scale));

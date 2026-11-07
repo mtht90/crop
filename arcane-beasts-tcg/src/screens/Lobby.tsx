@@ -14,6 +14,8 @@ import { Icon } from '../ui/Icon';
 import { PORTRAITS } from '../online/protocol';
 import { online, onlineSupported, serverUrl, setServerAddress, useOnline } from '../online/client';
 import { foley, playMusic, sfx } from '../audio/audio';
+import { RankBar, RankEmblem, RankLabel, emblemUrl } from '../ui/Rank';
+import { SEASON_GEMS, TIERS } from '../online/rank';
 import './lobby.css';
 
 const EASE_OUT = [0.16, 1, 0.3, 1] as const;
@@ -186,7 +188,18 @@ export function Lobby() {
   };
   const addr = serverUrl().replace(/^wss?:\/\//, '').replace(/\/ws$/, '');
 
-  const tiles = [
+  const rank = st.profile?.rank ?? null;
+  const tiles: { key: string; title: string; sub: string; bg: string; fig: string; emblem?: boolean; icon: string; onClick: () => void }[] = [
+    {
+      key: 'ranked',
+      title: 'ランクマッチ',
+      sub: rank ? `${Number(rank.season.slice(5))}月シーズン開催中` : 'ランクを上げよう',
+      bg: 'story/landscape-castle',
+      fig: emblemUrl(rank),
+      emblem: true,
+      icon: 'trophy',
+      onClick: () => online.queue('ranked', deck!.cards),
+    },
     {
       key: 'friend',
       title: '友達と対戦',
@@ -234,6 +247,12 @@ export function Lobby() {
                     オンライン {st.profile.wins}勝 {st.profile.losses}敗
                   </small>
                 </div>
+                {rank && (
+                  <div className="lb3-me-rank">
+                    <RankEmblem v={rank} size={46} />
+                    <RankLabel v={rank} />
+                  </div>
+                )}
                 <button className="round-btn" title="プロフィール" onClick={() => setSheet('profile')}>
                   <Icon name="gear" />
                 </button>
@@ -248,7 +267,7 @@ export function Lobby() {
             {tiles.map((t, i) => (
               <motion.div
                 key={t.key}
-                className={`tile2 ${ready ? '' : 'off'}`}
+                className={`tile2 lb-tile-${t.key} ${ready ? '' : 'off'}`}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.06 * (i + 1), duration: 0.45 }}
@@ -257,13 +276,19 @@ export function Lobby() {
               >
                 <img className="bg" src={artUrl(t.bg)} alt="" />
                 <div className="shade" />
-                <img className="fig" src={artUrl(t.fig)} alt="" />
+                {t.emblem ? <img className="fig lb-emblem" src={t.fig} alt="" /> : <img className="fig" src={artUrl(t.fig)} alt="" />}
                 <div className="label">
                   <div className="ico">
                     <Icon name={t.icon} />
                   </div>
                   <h2>{t.title}</h2>
                   <p>{t.sub}</p>
+                  {t.emblem && rank && (
+                    <div className="lb-rank-line">
+                      <RankLabel v={rank} />
+                      <RankBar v={rank} />
+                    </div>
+                  )}
                 </div>
               </motion.div>
             ))}
@@ -438,8 +463,15 @@ export function Lobby() {
                   </>
                 ) : (
                   <>
-                    <div className="lb-spinner" />
-                    <div className="lb-pulse">相手をさがしています…</div>
+                    {st.queued === 'ranked' ? (
+                      <div className="lb-rank-wait">
+                        <RankEmblem v={rank} size={96} />
+                        {rank && <RankLabel v={rank} />}
+                      </div>
+                    ) : (
+                      <div className="lb-spinner" />
+                    )}
+                    <div className="lb-pulse">{st.queued === 'ranked' ? 'ランクマッチ ・ ' : ''}相手をさがしています…</div>
                     <small className="lb-dim">{st.waiting}人が待っています</small>
                     <button className="btn small ghost" onClick={() => online.cancel()}>
                       やめる
@@ -447,6 +479,35 @@ export function Lobby() {
                   </>
                 )}
               </div>
+            </motion.div>
+          )}
+
+          {rank?.last && save.rankPaid !== rank.last.season && !busy && (
+            <motion.div className="lb-back" key="season" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              <motion.div className="panel lb-sheet lb-season" initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} transition={{ duration: 0.5, ease: EASE_OUT }}>
+                <small>{Number(rank.last.season.slice(5))}月シーズン 終了</small>
+                <h3>シーズン報酬</h3>
+                <RankEmblem v={{ tier: rank.last.tier, div: rank.last.tier >= 5 ? 0 : 1 }} size={110} />
+                <b style={{ color: TIERS[rank.last.tier].color }}>{TIERS[rank.last.tier].name}</b>
+                <div className="lb-season-gem">
+                  <Icon name="gem" /> {SEASON_GEMS[rank.last.tier].toLocaleString()}
+                </div>
+                <button
+                  className="btn big gold-btn"
+                  onClick={() => {
+                    const last = rank.last!;
+                    useStore.getState().update((s) => {
+                      if (s.rankPaid === last.season) return;
+                      s.rankPaid = last.season;
+                      s.gems += SEASON_GEMS[last.tier];
+                    });
+                    foley.chime(6);
+                    sfx('gold', 0.6);
+                  }}
+                >
+                  受け取る
+                </button>
+              </motion.div>
             </motion.div>
           )}
 

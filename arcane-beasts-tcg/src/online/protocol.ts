@@ -4,6 +4,9 @@
 // are allowed to see, always from their own point of view (you = player 0).
 // ============================================================================
 import type { Action, Answer, GameEvent, GameState, Prompt } from '../engine/types';
+import type { RankView } from './rank';
+
+export type { RankView };
 
 export const PROTOCOL = 1;
 
@@ -11,7 +14,9 @@ export const PROTOCOL = 1;
 export const PORTRAITS = ['humans/lieutenant', 'humans/knight', 'humans/mage', 'humans/swordsman', 'humans/ranger', 'humans/mage-light+female', 'elves/hero', 'elves/ranger+female', 'dwarves/lord', 'merfolk/hunter'];
 
 /** how a match was made */
-export type MatchKind = 'friend' | 'random';
+export type MatchKind = 'friend' | 'random' | 'ranked';
+/** the queues a player can join */
+export type QueueKind = 'random' | 'ranked';
 
 export interface FrameMsg {
   ev: GameEvent;
@@ -21,6 +26,8 @@ export interface FrameMsg {
 export interface OppInfo {
   name: string;
   portrait: string;
+  /** their tier (ranked matches only) */
+  rank?: { tier: number; div: number };
 }
 
 export interface RoomInfo {
@@ -38,6 +45,8 @@ export interface OnlineProfile {
   games: number;
   wins: number;
   losses: number;
+  /** ranked: the tier shown (the rating itself stays on the server) */
+  rank?: RankView;
 }
 
 // ---------------------------------------------------------------------------
@@ -50,7 +59,7 @@ export type ClientMsg =
   | { t: 'link'; code: string } // take over another identity with a transfer code
   | { t: 'create'; deck: string[] } // friend room
   | { t: 'join'; code: string; deck: string[] }
-  | { t: 'queue'; kind: 'random'; deck: string[] }
+  | { t: 'queue'; kind: QueueKind; deck: string[] }
   | { t: 'cancel' }
   | { t: 'answer'; seq: number; answer: Answer }
   /** ask for the table as it stands (after a lost answer or a doubtful link) */
@@ -69,7 +78,7 @@ export type ServerMsg =
   | { t: 'transferCode'; code: string; expires: number }
   | { t: 'linked'; profile: OnlineProfile; secret: string }
   | { t: 'room'; room: RoomInfo; you?: 0 | 1 }
-  | { t: 'queued'; kind: 'random'; waiting: number }
+  | { t: 'queued'; kind: QueueKind; waiting: number }
   /** a game has started: the first full snapshot follows */
   | { t: 'start'; you: 0 | 1; kind: MatchKind; code: string; opp: OppInfo; me: OppInfo }
   /**
@@ -81,6 +90,8 @@ export type ServerMsg =
   /** new frames to play in order, then (maybe) a prompt for you */
   | { t: 'batch'; frames: FrameMsg[]; prompt: Prompt | null; legal: Action[]; seq: number; actor: 0 | 1 | null; deadline: number | null }
   | { t: 'over'; winner: 0 | 1 | -1; reason: string }
+  /** after a ranked game: the tier before and after */
+  | { t: 'rank'; before: RankView; after: RankView }
   | { t: 'peer'; connected: boolean; until: number | null }
   | { t: 'stamp'; from: 0 | 1; id: string }
   | { t: 'error'; code: ErrorCode; message: string }

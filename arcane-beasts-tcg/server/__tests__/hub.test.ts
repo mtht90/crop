@@ -266,6 +266,40 @@ describe('online hub', () => {
     await until(() => !!a.over && !!b.over, 60_000);
   }, 90_000);
 
+  test('ranked: players close in rating meet, the winner climbs, the loser drops, only tiers are sent', async () => {
+    const hub = makeHub();
+    const a = new Bot(hub, 'A');
+    const b = new Bot(hub, 'B');
+    const far = new Bot(hub, 'Far');
+    a.hello();
+    b.hello();
+    far.hello();
+    expect(a.last('welcome')!.profile.rank?.tier).toBe(0);
+    expect(JSON.stringify(a.last('welcome'))).not.toContain('rating');
+    // someone far above waits in the queue: a fresh player is not paired with them at once
+    hub.store.get(far.id)!.ranked = { ...hub.store.rankState(hub.store.get(far.id)!), rating: 1600 };
+    far.say({ t: 'queue', kind: 'ranked', deck: deckOf(1) });
+    a.say({ t: 'queue', kind: 'ranked', deck: deckOf(2) });
+    expect(a.last('start')).toBeFalsy();
+    b.say({ t: 'queue', kind: 'ranked', deck: deckOf(3) });
+    expect(a.last('start')?.kind).toBe('ranked');
+    expect(a.last('start')?.opp.name).toBe('B');
+    expect(a.last('start')?.opp.rank).toEqual({ tier: 0, div: 1 });
+    a.auto = false;
+    b.auto = false;
+    a.say({ t: 'surrender' });
+    await until(() => !!a.last('rank') && !!b.last('rank'), 5000);
+    const ra = hub.store.get(a.id)!.ranked!;
+    const rb = hub.store.get(b.id)!.ranked!;
+    expect(rb.rating).toBeGreaterThan(1025);
+    expect(ra.rating).toBeLessThan(1025);
+    expect(rb.wins).toBe(1);
+    expect(ra.losses).toBe(1);
+    expect(JSON.stringify(b.last('rank'))).not.toContain('rating');
+    expect(b.last('rank')!.after.wins).toBe(1);
+    far.say({ t: 'cancel' });
+  }, 30_000);
+
   test('surrender ends the game; an idle player loses on time', async () => {
     const hub = makeHub({ timeScale: 0.002 });
     const a = new Bot(hub, 'A');

@@ -4,7 +4,7 @@
 // the lobby reads. Game messages are handed to the battle controller.
 // ============================================================================
 import { create } from 'zustand';
-import { PROTOCOL, type ClientMsg, type MatchKind, type OnlineProfile, type OppInfo, type RoomInfo, type ServerMsg } from './protocol';
+import { PROTOCOL, type ClientMsg, type MatchKind, type OnlineProfile, type OppInfo, type QueueKind, type RankView, type RoomInfo, type ServerMsg } from './protocol';
 
 const KEY = 'arcane-beasts-online-v1';
 const SERVER_KEY = 'arcane-beasts-server';
@@ -92,7 +92,9 @@ interface OnlineStore {
   online: number;
   waiting: number;
   room: RoomInfo | null;
-  queued: 'random' | null;
+  queued: QueueKind | null;
+  /** the tier change of the ranked game just finished */
+  rankChange: { before: RankView; after: RankView } | null;
   transfer: { code: string; expires: number } | null;
   /** last error text (cleared when read by the UI) */
   error: string | null;
@@ -108,6 +110,7 @@ export const useOnline = create<OnlineStore>(() => ({
   waiting: 0,
   room: null,
   queued: null,
+  rankChange: null,
   transfer: null,
   error: null,
   match: null,
@@ -283,6 +286,9 @@ class OnlineClient {
       case 'queued':
         set({ queued: m.kind, waiting: m.waiting });
         return;
+      case 'rank':
+        set({ rankChange: { before: m.before, after: m.after } });
+        return;
       case 'pong':
         set({ online: m.online, waiting: m.waiting });
         return;
@@ -296,7 +302,7 @@ class OnlineClient {
         // controller); the snapshot that follows puts the table right
         if (cur && cur.code === m.code && cur.you === m.you && this.listeners.size) return;
         this.buffer = [];
-        set({ match: info, queued: null });
+        set({ match: info, queued: null, rankChange: null });
         this.onStart?.(info);
         return;
       }
@@ -341,7 +347,7 @@ class OnlineClient {
   joinRoom(code: string, deck: string[]) {
     this.send({ t: 'join', code, deck });
   }
-  queue(kind: 'random', deck: string[]) {
+  queue(kind: QueueKind, deck: string[]) {
     this.send({ t: 'queue', kind, deck });
   }
   cancel() {

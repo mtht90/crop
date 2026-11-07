@@ -75,3 +75,35 @@
 .lb-qr-missing { width: 100%; padding: 10px; border-radius: 12px; background: rgba(255, 138, 106, 0.1); border: 1px solid rgba(255, 138, 106, 0.4); display: flex; flex-direction: column; gap: 6px; font-size: var(--fs-xs); text-align: left; }
 .lb-qr-missing b { color: #ffb4a0; }
 .lb-qr-missing p { margin: 0; line-height: 1.6; color: var(--ink-dim); font-weight: 600; }
+
+/* ------------------------------- ランクマッチ ------------------------------- */
+.lb3-tiles { grid-template-columns: 1fr 1fr; }
+.lb3-tiles .lb-tile-ranked { grid-column: 1 / -1; }
+.lb3-tiles .tile2:not(.lb-tile-ranked) { min-height: clamp(110px, 16vh, 180px); }
+.lb3-tiles .tile2:not(.lb-tile-ranked) .label h2 { font-size: 16px; white-space: nowrap; }
+@media (orientation: landscape) {
+  .lb3-tiles { grid-template-columns: 1.4fr 1fr 1fr; }
+  .lb3-tiles .lb-tile-ranked { grid-column: auto; }
+  .lb3-tiles .tile2:not(.lb-tile-ranked) { min-height: clamp(150px, 34vh, 280px); }
+}
+.lb-tile-ranked .shade { background: linear-gradient(90deg, rgba(6, 8, 22, 0.92) 30%, rgba(6, 8, 22, 0.35)); }
+.tile2 .fig.lb-emblem {
+  right: 4%; left: auto; top: 50%; bottom: auto; width: auto; height: 78%; max-height: 170px; translate: 0 -50%; object-fit: contain;
+  filter: drop-shadow(0 0 18px rgba(255, 220, 140, 0.45)) drop-shadow(0 8px 14px rgba(0, 0, 0, 0.6));
+  animation: lb-emblem-float 3.2s ease-in-out infinite;
+}
+@keyframes lb-emblem-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+.lb-rank-line { display: flex; flex-direction: column; gap: 5px; margin-top: 6px; width: min(220px, 55%); }
+.lb-rank-line .rank-label { font-size: var(--fs-s); }
+.lb3-me-rank { display: flex; flex-direction: column; align-items: center; gap: 2px; flex: none; }
+.lb3-me-rank .rank-label { font-size: 11px; }
+.lb-rank-wait { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.lb-rank-wait .rank-emblem { animation: lb-rank-pulse 1.6s ease-in-out infinite; }
+@keyframes lb-rank-pulse { 0%, 100% { transform: scale(1); filter: drop-shadow(0 0 6px var(--rk)); } 50% { transform: scale(1.06); filter: drop-shadow(0 0 22px var(--rk)); } }
+.lb-season { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
+.lb-season > small { color: var(--ink-dim); font-weight: 700; }
+.lb-season h3 { margin: 0; }
+.lb-season > b { font-family: var(--font-display); font-weight: 400; font-size: var(--fs-l); }
+.lb-season .rank-emblem { filter: drop-shadow(0 0 20px var(--rk)); }
+.lb-season-gem { display: flex; align-items: center; gap: 6px; font-family: var(--font-display); font-size: var(--fs-l); color: #bfefff; }
+.lb-season-gem svg { color: #8fe3ff; }

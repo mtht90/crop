@@ -14,7 +14,8 @@ import { foley, playMusic, sfx } from '../audio/audio';
 import { particles } from './particles';
 import { useFx } from './fx';
 import { RARITY_SYMBOL } from '../engine/cards';
-import { online } from '../online/client';
+import { online, useOnline } from '../online/client';
+import { RankChange, RankEmblem } from '../ui/Rank';
 import { chapterById } from '../story';
 import { finishChapter, retryChapter } from '../story/flow';
 import type { Rarity } from '../engine/types';
@@ -30,6 +31,7 @@ export function ResultOverlay() {
   const startBattle = useStore((s) => s.startBattle);
   const applied = useRef(false);
   const [res, setRes] = useState<BattleRewardResult | null>(null);
+  const rankChange = useOnline((s) => s.rankChange);
   const [raidRes, setRaidRes] = useState<RaidResult | null>(null);
   const [stageRes, setStageRes] = useState<StageResult | null>(null);
   const [missionsReady, setMissionsReady] = useState(0);
@@ -59,7 +61,7 @@ export function ResultOverlay() {
       const st0 = useBattle.getState().stats;
       const before0 = claimableCount(useStore.getState().save.progress, extCtx(useStore.getState().save));
       const r0 = recordBattle(
-        { win, level: 'normal', baseReward: kind === 'random' ? 60 : 0, prizesTaken: st0.prizes, prizesLost: st0.prizesLost, firstClear: false },
+        { win, level: 'normal', baseReward: kind !== 'friend' ? 60 : 0, prizesTaken: st0.prizes, prizesLost: st0.prizesLost, firstClear: false },
         { kos: st0.kos, damage: st0.damage, prizes: st0.prizes, evolves: st0.evolves, trainers: st0.trainers },
       );
       setRes(r0);
@@ -143,6 +145,7 @@ export function ResultOverlay() {
         {cfg.raid ? (win ? '討伐！' : 'RAID END') : draw ? 'DRAW' : win ? 'VICTORY' : 'DEFEAT'}
       </motion.div>
       <div className="result-reason">{result.reason}</div>
+      {cfg.online?.kind === 'ranked' && rankChange && <RankChange before={rankChange.before} after={rankChange.after} />}
       {raidRes && (
         <motion.div className="raid-result-bar" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
           <div className="rrb-head">
@@ -168,7 +171,10 @@ export function ResultOverlay() {
       {<motion.div className="result-rival" initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.6 }}>
         <img src={artUrl(cfg.oppPortrait)} alt="" />
         <div className="bubble">
-          <b>{cfg.oppName}</b>
+          <b>
+            {cfg.online?.opp.rank && <RankEmblem v={cfg.online.opp.rank} size={22} />}
+            {cfg.oppName}
+          </b>
           <p>{cfg.raid ? (win ? '……グ、オォ……' : '……（まだ倒れない。開催中に、もう一度）') : cfg.online ? 'ありがとうございました！' : cfg.rival ? (win ? cfg.rival.lose : cfg.rival.win) : win ? '参りました！' : '私の勝ちですね。'}</p>
         </div>
       </motion.div>}

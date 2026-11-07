@@ -1105,3 +1105,22 @@
   text-shadow: 0 0 10px rgba(255, 200, 90, 0.9), 0 2px 0 #6b3d00, 0 3px 8px #000;
 }
 .login-plus svg { color: #8fe3ff; filter: drop-shadow(0 0 6px rgba(120, 220, 255, 0.9)); }
+
+/* --------------------------------- ranks ---------------------------------- */
+.rank-emblem { display: inline-block; object-fit: contain; flex: none; vertical-align: middle; }
+.rank-label { font-family: var(--font-display); font-weight: 400; letter-spacing: 0.04em; white-space: nowrap; text-shadow: 0 0 10px rgba(0, 0, 0, 0.8), 0 1px 0 #000; }
+.rank-bar { height: 6px; border-radius: 999px; background: rgba(255, 255, 255, 0.12); overflow: hidden; box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.6); }
+.rank-bar > i { display: block; height: 100%; border-radius: inherit; box-shadow: 0 0 8px currentColor; }
+.rank-change { display: flex; align-items: center; gap: 14px; padding: 10px 18px 10px 12px; margin: 6px auto 0; border-radius: 14px; background: rgba(6, 10, 28, 0.78); border: 1px solid rgba(255, 255, 255, 0.14); min-width: min(320px, 92vw); position: relative; z-index: 2; }
+.rank-change.up { border-color: rgba(255, 215, 120, 0.7); box-shadow: 0 0 24px rgba(255, 200, 90, 0.35); }
+.rc-emblem { position: relative; display: grid; place-items: center; }
+.rc-emblem .rank-emblem { filter: drop-shadow(0 0 12px var(--rk)); position: relative; }
+.rc-burst { position: absolute; inset: -40%; border-radius: 50%; background: conic-gradient(from 0deg, transparent 0 8%, rgba(255, 230, 160, 0.55) 10%, transparent 12% 25%, rgba(255, 230, 160, 0.55) 27%, transparent 29% 42%, rgba(255, 230, 160, 0.55) 44%, transparent 46% 58%, rgba(255, 230, 160, 0.55) 60%, transparent 62% 75%, rgba(255, 230, 160, 0.55) 77%, transparent 79% 92%, rgba(255, 230, 160, 0.55) 94%, transparent 96%); mask: radial-gradient(closest-side, #000 40%, transparent); animation: rc-spin 6s linear infinite; }
+@keyframes rc-spin { to { transform: rotate(360deg); } }
+.rc-text { display: flex; flex-direction: column; gap: 4px; min-width: 150px; flex: 1; }
+.rc-text > small { color: var(--ink-dim); font-weight: 700; font-size: 11px; }
+.rc-text .rank-label { font-size: var(--fs-l); }
+.rc-step { font-family: var(--font-display); font-weight: 400; color: #ffe38a; font-size: var(--fs-s); text-shadow: 0 0 10px rgba(255, 200, 80, 0.8); }
+.rank-change.down .rc-step { color: #9aa6c4; text-shadow: none; }
+.rc-text .rc-rec { font-size: 10px; }
+.bubble b .rank-emblem { margin-right: 4px; vertical-align: -5px; }

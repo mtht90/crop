@@ -79,6 +79,8 @@ export interface Save {
   v: 1;
   /** economy version (2: the coin scale-up) */
   econ?: number;
+  /** ランクマッチ: the last season whose reward was taken */
+  rankPaid?: string;
   /** コイン: abolished — always 0 (old saves moved theirs into gems) */
   coins: number;
   /** ジェム: the one currency — packs and looks; earned by all play */

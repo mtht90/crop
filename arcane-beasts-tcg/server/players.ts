@@ -10,6 +10,7 @@ import { dirname } from 'node:path';
 import { PORTRAITS, type OnlineProfile } from '../src/online/protocol';
 import { judgeName } from '../src/online/names';
 import type { PlayerBackend } from './remote';
+import { applyResult, newRank, rollSeason, viewOf, type RankState, type RankView } from '../src/online/rank';
 
 export interface PlayerRecord {
   id: string;
@@ -18,6 +19,8 @@ export interface PlayerRecord {
   portrait: string;
   /** left over from the old ranked mode (no longer used) */
   rank?: unknown;
+  /** ranked matches: the hidden rating and this season's record */
+  ranked?: RankState;
   games: number;
   wins: number;
   losses: number;
@@ -128,7 +131,38 @@ export class PlayerStore {
   }
 
   profile(p: PlayerRecord): OnlineProfile {
-    return { id: p.id, name: p.name, portrait: p.portrait, games: p.games, wins: p.wins, losses: p.losses };
+    return { id: p.id, name: p.name, portrait: p.portrait, games: p.games, wins: p.wins, losses: p.losses, rank: this.rankView(p) };
+  }
+
+  // ---- ranked -------------------------------------------------------------
+  /** the record in the current season (a new month rolls it over first) */
+  rankState(p: PlayerRecord): RankState {
+    const cur = p.ranked ? rollSeason(p.ranked, this.now()) : newRank(this.now());
+    if (cur !== p.ranked) {
+      p.ranked = cur;
+      this.save(p);
+    }
+    return cur;
+  }
+  rankView(p: PlayerRecord): RankView {
+    return viewOf(this.rankState(p));
+  }
+  /** the hidden rating (matchmaking only) */
+  rating(p: PlayerRecord) {
+    return this.rankState(p).rating;
+  }
+  /** a ranked game ended: both ratings move; returns each side's view before and after */
+  recordRanked(a: PlayerRecord, b: PlayerRecord, winner: 0 | 1): [{ before: RankView; after: RankView }, { before: RankView; after: RankView }] {
+    const ra = this.rankState(a);
+    const rb = this.rankState(b);
+    a.ranked = applyResult(ra, rb.rating, winner === 0);
+    b.ranked = applyResult(rb, ra.rating, winner === 1);
+    this.recordCasual(a, winner === 0);
+    this.recordCasual(b, winner === 1);
+    return [
+      { before: viewOf(ra), after: viewOf(a.ranked) },
+      { before: viewOf(rb), after: viewOf(b.ranked) },
+    ];
   }
 
   recordCasual(p: PlayerRecord, win: boolean) {
