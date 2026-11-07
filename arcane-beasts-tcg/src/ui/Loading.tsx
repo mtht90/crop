@@ -25,7 +25,22 @@ export const TIPS = [
 ];
 
 /** the shortest time the bar takes to fill */
+/** the shortest a loading screen stays (ms) */
 export const MIN_MS = 1100;
+
+/**
+ * how far a natural-looking bar has got after `u` (0–1) of its time: quick at
+ * first, a short pause somewhere in the middle (as if a big file is coming),
+ * then on to the end. `pause` moves the pause, so no two loads look the same.
+ */
+function curve(u: number, pause: number): number {
+  const e = (x: number) => 1 - (1 - x) ** 3; // ease out
+  const p0 = pause; // where the pause starts (time and amount roughly equal)
+  if (u < p0) return e(u / p0) * (p0 + 0.08);
+  if (u < p0 + 0.18) return p0 + 0.08 + ((u - p0) / 0.18) * 0.04; // the pause: barely moves
+  return p0 + 0.12 + e((u - p0 - 0.18) / (1 - p0 - 0.18)) * (1 - p0 - 0.12);
+}
+
 
 function Sparkle({ className = '' }: { className?: string }) {
   return (
@@ -35,27 +50,42 @@ function Sparkle({ className = '' }: { className?: string }) {
   );
 }
 
-export function Loading({ progress, label = 'Now Loading' }: { progress: number; label?: string }) {
+export function Loading({ progress, label = 'Now Loading', minMs = MIN_MS, onDone }: { progress: number; label?: string; minMs?: number; onDone?: () => void }) {
   const [tip, setTip] = useState(() => Math.floor(Math.random() * TIPS.length));
   useEffect(() => {
     const iv = setInterval(() => setTip((t) => (t + 1) % TIPS.length), 3800);
     return () => clearInterval(iv);
   }, []);
-  // the bar fills over at least ~1s, even when everything is already loaded
+  // the bar follows a natural curve over at least minMs, and never runs ahead of
+  // what has really loaded (that only lets it reach 90% until everything is in)
   const [shown, setShown] = useState(0);
+  const progressRef = useRef(progress);
+  progressRef.current = progress;
+  const doneRef = useRef(onDone);
+  doneRef.current = onDone;
   useEffect(() => {
     const t0 = performance.now();
+    const pause = 0.3 + Math.random() * 0.3;
     let raf = 0;
+    let finished = false;
     const step = () => {
-      const cap = Math.min(1, (performance.now() - t0) / MIN_MS);
-      setShown((v) => Math.max(v, Math.min(progressRef.current, cap)));
-      if (cap < 1 || progressRef.current < 1) raf = requestAnimationFrame(step);
+      const u = Math.min(1, (performance.now() - t0) / minMs);
+      const real = progressRef.current >= 1 ? 1 : 0.1 + progressRef.current * 0.8;
+      const v = Math.min(curve(u, pause), real);
+      setShown((old) => Math.max(old, v));
+      if (u >= 1 && real >= 1) {
+        if (!finished) {
+          finished = true;
+          // a beat at 100% before moving on
+          setTimeout(() => doneRef.current?.(), 220);
+        }
+        return;
+      }
+      raf = requestAnimationFrame(step);
     };
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
-  }, []);
-  const progressRef = useRef(progress);
-  progressRef.current = progress;
+  }, [minMs]);
   const pct = Math.round(Math.max(0, Math.min(1, shown)) * 100);
   // drawn on the page itself, so a transformed parent (the battle stage) cannot shrink it
   return createPortal(
