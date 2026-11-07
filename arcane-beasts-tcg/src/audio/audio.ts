@@ -389,3 +389,43 @@ export function unlockAudio() {
   if (c && c.state === 'suspended') void c.resume();
   preloadFoley();
 }
+
+// ----------------------------------------------------------------------------
+// The app put away (home button, another app, the phone sleeping): silence
+// everything at once, and bring the music back when it returns.
+// ----------------------------------------------------------------------------
+let asleep = false;
+function sleepAudio() {
+  if (asleep) return;
+  asleep = true;
+  try {
+    musicEl?.pause();
+  } catch {
+    /* nothing playing */
+  }
+  const c = ctx();
+  if (c && c.state === 'running') void c.suspend();
+  Howler.mute(true);
+}
+function wakeAudio() {
+  if (!asleep) return;
+  asleep = false;
+  Howler.mute(false);
+  const c = ctx();
+  if (c && c.state === 'suspended') void c.resume();
+  if (wantPlay && musicEl?.paused) {
+    if (musicGain) musicGain.gain.value = 0;
+    void musicEl
+      .play()
+      .then(() => musicFade(1, 900))
+      .catch(() => {});
+  }
+}
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => (document.hidden ? sleepAudio() : wakeAudio()));
+  // iOS home-screen apps sometimes only send pagehide / freeze when put away
+  window.addEventListener('pagehide', sleepAudio);
+  document.addEventListener('freeze', sleepAudio);
+  window.addEventListener('pageshow', () => !document.hidden && wakeAudio());
+  document.addEventListener('resume', () => !document.hidden && wakeAudio());
+}

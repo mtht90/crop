@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'motion/react';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { activeDeck, useStore, type Screen } from './state/store';
 import { Gallery } from './screens/Gallery';
 import { BattleScreen } from './battle/BattleScreen';
@@ -34,9 +34,16 @@ import { cosmeticById } from './state/cosmetics';
 import { TabBar, TAB_OF } from './ui/TabBar';
 import { More } from './screens/More';
 import './styles/app.css';
+import { Loading, preloadWithProgress } from './ui/Loading';
+import { artUrl as _artUrl, asset } from './lib/assets';
+
 import { useBattle } from './battle/controller';
 
 if (import.meta.env.DEV) Object.assign(window, { __stores: { useStore, useBattle } });
+
+/** pictures the first screens show (title, home) */
+const BOOT_ART = ['story/grim-altar', 'story/landscape-mountains-01', 'story/swamp-02', 'monsters/jinn'];
+const artUrl = _artUrl;
 
 function debugBattle() {
   const q = new URLSearchParams(location.search);
@@ -85,6 +92,18 @@ const SCREENS = {
 export function App() {
   const screen = useStore((s) => s.screen);
   const seq = useStore((s) => s.battleSeq);
+  // start-up: the key art and the first screens' pictures load behind a loading screen
+  const [boot, setBoot] = useState(0);
+  const [booted, setBooted] = useState(() => new URLSearchParams(location.search).has('battle') || new URLSearchParams(location.search).has('screen'));
+  useEffect(() => {
+    // the plain-HTML splash (shown while the code downloads) hands over to the loading screen
+    document.getElementById('boot')?.remove();
+    if (booted) return;
+    const t0 = Date.now();
+    const urls = [asset('ui/keyart.webp'), artUrl('story/landscape-bridge_sun'), ...BOOT_ART.map(artUrl)];
+    void preloadWithProgress(urls, (p) => setBoot(p)).then(() => setTimeout(() => setBooted(true), Math.max(0, 1400 - (Date.now() - t0))));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const settings = useStore((s) => s.save.settings);
   useEffect(() => setVolumes({ music: settings.music, sfx: settings.sfx }), [settings.music, settings.sfx]);
   useEffect(() => configureFx(settings.fx, settings.vibrate), [settings.fx, settings.vibrate]);
@@ -155,6 +174,12 @@ export function App() {
     };
   }, []);
   const Comp = SCREENS[screen];
+  if (!booted)
+    return (
+      <AnimatePresence>
+        <Loading key="boot" progress={boot} />
+      </AnimatePresence>
+    );
   return (
     <>
       <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden>

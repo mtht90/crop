@@ -5,7 +5,8 @@ import { autoRetreatDiscard, canPay, energyUnits, maxHp, posEq, posKey, retreatC
 import type { Action, CardInst, EnergyCard, GameState, MonsterCard, Pos, Prompt, Slot, TrainerCard } from '../engine/types';
 import { CardBack, CardFace, EnergySymbol, RainbowSymbol } from '../ui/Card';
 import { Icon } from '../ui/Icon';
-import { artUrl, preload, TYPE_SCENE } from '../lib/assets';
+import { artUrl, TYPE_SCENE } from '../lib/assets';
+import { Loading, preloadWithProgress } from '../ui/Loading';
 import { BattleController, HUMAN, useBattle, type BattleDriver } from './controller';
 import { OnlineController } from '../online/controller';
 import { FxLayer } from './FxLayer';
@@ -1011,6 +1012,7 @@ export function BattleScreen() {
   const guideSeen = useStore((s) => !!s.save.guideSeen);
   const [guide, setGuide] = useState(!guideSeen && !cfg.spectate && !cfg.online);
   const [ready, setReady] = useState(false);
+  const [loaded, setLoaded] = useState(0);
   const startedRef = useRef(false);
   useEffect(() => {
     // a raid boss makes its entrance before the coin toss
@@ -1039,8 +1041,10 @@ export function BattleScreen() {
       } else if (c.kind === 'trainer' && c.art !== 'item') urls.add(artUrl(c.art));
     }
     let cancelled = false;
-    Promise.race([preload([...urls]), new Promise((r) => setTimeout(r, 2500))]).then(() => {
-      if (!cancelled) setReady(true);
+    // a short loading screen while both decks' pictures come in (never longer than a few seconds)
+    const t0 = Date.now();
+    Promise.race([preloadWithProgress([...urls], (p) => !cancelled && setLoaded(p)), new Promise((r) => setTimeout(r, 4000))]).then(() => {
+      setTimeout(() => !cancelled && setReady(true), Math.max(0, 900 - (Date.now() - t0)));
     });
     return () => {
       cancelled = true;
@@ -1527,6 +1531,7 @@ export function BattleScreen() {
           <PromptLayer ctrl={ctrl} />
           {discardView !== null && <DiscardModal cards={s.players[discardView].discard} title={discardView === 0 ? 'あなたのトラッシュ' : '相手のトラッシュ'} onClose={() => setDiscardView(null)} />}
           <ResultOverlay />
+          <AnimatePresence>{!ready && <Loading key="battle-loading" progress={loaded} label="BATTLE LOADING" />}</AnimatePresence>
           {guide && (
             <div className="modal-back" style={{ zIndex: 640 }}>
               <motion.div className="panel guide" initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}>

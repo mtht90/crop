@@ -632,3 +632,17 @@
   .starter-go { bottom: calc(var(--u) * 8); }
   .starter-go .btn.big { font-size: calc(var(--u) * 1.9); --h: calc(var(--u) * 6); white-space: nowrap; }
 }
+
+/* title: the key art as the emblem, light rays behind, TAP TO START */
+.title-bg { filter: brightness(0.55) saturate(1.25) blur(2px) !important; }
+.title-rays { position: absolute; left: 50%; top: 44%; width: 160vmax; height: 160vmax; translate: -50% -50%; background: repeating-conic-gradient(from 0deg, rgba(255, 236, 180, 0.13) 0deg 6deg, transparent 6deg 18deg); mask-image: radial-gradient(circle, #000 0%, transparent 45%); -webkit-mask-image: radial-gradient(circle, #000 0%, transparent 45%); animation: title-spin 60s linear infinite; pointer-events: none; }
+@keyframes title-spin { to { rotate: 360deg; } }
+.title-emblem { position: absolute; left: 50%; top: 44%; width: min(62vmin, 520px); aspect-ratio: 1; translate: -50% -50%; border-radius: 18%; overflow: hidden; box-shadow: 0 0 0 3px rgba(255, 230, 160, 0.55), 0 0 70px rgba(140, 190, 255, 0.55), 0 30px 60px rgba(0, 0, 0, 0.6); }
+.title-emblem img { display: block; width: 100%; height: 100%; animation: title-breathe 5s ease-in-out infinite; }
+@keyframes title-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.025); } }
+.title-shine { position: absolute; inset: 0; background: linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.55) 50%, transparent 65%); background-size: 250% 100%; animation: title-shine 4.5s ease-in-out infinite; mix-blend-mode: screen; pointer-events: none; }
+@keyframes title-shine { 0%, 55% { background-position: 150% 0; } 100% { background-position: -100% 0; } }
+.title-press { position: absolute; left: 0; right: 0; bottom: 13%; text-align: center; pointer-events: none; }
+.title-press span { display: inline-block; padding: 8px 28px; font-family: var(--font-latin, serif); font-weight: 900; font-size: clamp(16px, 3.2vmin, 26px); letter-spacing: 0.32em; color: #fff; text-shadow: 0 0 18px rgba(255, 220, 140, 0.95), 0 2px 4px #000; background: linear-gradient(90deg, transparent, rgba(10, 14, 40, 0.65) 20%, rgba(10, 14, 40, 0.65) 80%, transparent); animation: blink 1.6s ease-in-out infinite; }
+.title-meta { position: absolute; left: 0; right: 0; bottom: max(10px, env(safe-area-inset-bottom)); display: flex; justify-content: space-between; padding: 0 16px; font-size: 11px; font-weight: 700; color: rgba(220, 230, 255, 0.7); letter-spacing: 0.08em; pointer-events: none; }
+@media (orientation: landscape) and (max-height: 520px) { .title-emblem { width: 58vmin; top: 42%; } .title-press { bottom: 8%; } }

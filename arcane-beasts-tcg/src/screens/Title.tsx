@@ -1,19 +1,17 @@
 import { motion } from 'motion/react';
 import { useEffect, useState } from 'react';
 import { useStore } from '../state/store';
-import { artUrl } from '../lib/assets';
-import { CardFace } from '../ui/Card';
+import { artUrl, asset } from '../lib/assets';
 import { playMusic, sfx, unlockAudio, foley } from '../audio/audio';
-import { ALL_CARDS } from '../engine/cards';
 
-const SHOWCASE = ['ヴォルカリオン', 'リヴァイアサーペント', 'エンシェントウッド'];
+/** shown on the title screen */
+const APP_VERSION = '1.1.0';
 
 export function Title() {
   const go = useStore((s) => s.go);
   const started = useStore((s) => s.save.started);
   const [m, setM] = useState({ x: 0, y: 0 });
   const [leaving, setLeaving] = useState(false);
-  const cards = SHOWCASE.map((n) => ALL_CARDS.find((c) => c.name === n && c.variant === 'SR')!);
 
   useEffect(() => {
     playMusic('title');
@@ -37,30 +35,17 @@ export function Title() {
     >
       <div className="title-bg" style={{ backgroundImage: `url(${artUrl('story/landscape-bridge_sun')})`, transform: `translate(${m.x * -24}px, ${m.y * -16}px) scale(1.05)` }} />
       <div className="title-glow" />
-      <div className="stage">
-        <div className="title-cards" style={{ transform: `translate(${m.x * 18}px, ${m.y * 12}px)` }}>
-          {cards.map((c, i) => (
-            <motion.div
-              key={c.id}
-              className="title-card"
-              initial={{ y: 200, opacity: 0, rotate: 0 }}
-              animate={{ y: [0, -10, 0], opacity: 1, rotate: (i - 1) * 14, x: `calc(var(--u) * ${(i - 1) * 13})` }}
-              transition={{ y: { duration: 4 + i, repeat: Infinity, ease: 'easeInOut', delay: 0.6 + i * 0.3 }, opacity: { duration: 0.8, delay: 0.2 + i * 0.15 }, rotate: { duration: 0.8, delay: 0.2 + i * 0.15 }, x: { duration: 0.8, delay: 0.2 + i * 0.15 } }}
-              style={{ zIndex: i === 1 ? 2 : 1 }}
-            >
-              <CardFace cid={c.id} />
-            </motion.div>
-          ))}
-        </div>
-        <motion.div className="title-logo" initial={{ opacity: 0, scale: 1.3 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 1.1, ease: 'easeOut' }}>
-          <div className="l1">ARCANE BEASTS</div>
-          <div className="l2">アルケイン・ビースト</div>
-          <div className="l3">TRADING CARD GAME</div>
-        </motion.div>
-        <motion.div className="press" animate={leaving ? { scale: 1.3, opacity: 0 } : {}}>
-          クリックしてはじめる
-        </motion.div>
-        <div className="title-foot">Art & audio: Battle for Wesnoth (GPL) · Icons: game-icons.net (CC BY 3.0)</div>
+      <div className="title-rays" />
+      <motion.div className="title-emblem" initial={{ opacity: 0, scale: 1.25, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}>
+        <img src={asset('ui/keyart.webp')} alt="ARCANE BEASTS" draggable={false} />
+        <i className="title-shine" />
+      </motion.div>
+      <motion.div className="title-press" initial={{ opacity: 0 }} animate={leaving ? { scale: 1.25, opacity: 0 } : { opacity: 1 }} transition={{ delay: leaving ? 0 : 0.9 }}>
+        <span>TAP TO START</span>
+      </motion.div>
+      <div className="title-meta">
+        <span>Ver.{APP_VERSION}</span>
+        <span>© ARCANE BEASTS</span>
       </div>
       {leaving && <motion.div style={{ position: 'absolute', inset: 0, background: '#fff' }} initial={{ opacity: 0 }} animate={{ opacity: [0, 0.9, 0] }} transition={{ duration: 0.65 }} />}
     </div>
