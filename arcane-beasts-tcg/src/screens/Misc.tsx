@@ -97,6 +97,17 @@ export function Settings() {
             {settings.fx === 'auto' && liteFx() ? '（現在：軽量）' : ''}
           </div>
           <div className="set-row">
+            <label>ほかのアプリの音と一緒に流す</label>
+            <div className="seg">
+              {[true, false].map((v) => (
+                <button key={String(v)} className={(settings.mixAudio !== false) === v ? 'on' : ''} onClick={() => update((s) => void (s.settings.mixAudio = v))}>
+                  {v ? 'ON' : 'OFF'}
+                </button>
+              ))}
+            </div>
+          </div>
+          {settings.mixAudio !== false && <div className="set-note">ONのとき、iPhoneの消音モードではゲームの音が鳴りません</div>}
+          <div className="set-row">
             <label>振動</label>
             <div className="seg">
               {[true, false].map((v) => (

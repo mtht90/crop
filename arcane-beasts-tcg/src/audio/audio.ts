@@ -470,3 +470,19 @@ if (typeof document !== 'undefined') {
   window.addEventListener('pageshow', () => !document.hidden && wakeAudio());
   document.addEventListener('resume', () => !document.hidden && wakeAudio());
 }
+
+// ----------------------------------------------------------------------------
+// Sharing the speaker with other apps. As an ordinary player the game takes the
+// phone's audio over, which pauses whatever else is playing (a YouTube video in
+// picture-in-picture stops). As "ambient" sound it plays alongside instead.
+// (Safari 16.4+; elsewhere this does nothing.)
+// ----------------------------------------------------------------------------
+export function setAudioMix(mix: boolean) {
+  const nav = navigator as Navigator & { audioSession?: { type: string } };
+  if (!nav.audioSession) return;
+  try {
+    nav.audioSession.type = mix ? 'ambient' : 'auto';
+  } catch {
+    /* not allowed here */
+  }
+}

@@ -73,6 +73,8 @@ export interface Settings {
   gyro: boolean;
   /** keep the hand sorted (monsters, trainers, energy) */
   handSort?: boolean;
+  /** play alongside other apps' sound (a YouTube picture-in-picture keeps going); on unless turned off */
+  mixAudio?: boolean;
 }
 
 export interface Save {

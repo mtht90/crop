@@ -18,7 +18,7 @@ import { Scene } from './screens/Scene';
 import { online } from './online/client';
 import { Credits, Rules, Settings } from './screens/Misc';
 import { Wardrobe } from './screens/Wardrobe';
-import { setVolumes, unlockAudio } from './audio/audio';
+import { setAudioMix, setVolumes, unlockAudio } from './audio/audio';
 import { configureFx, vibrate } from './lib/fx';
 import { setGyroEnabled, startGyro } from './lib/gyro';
 import { expand, RIVALS, deckById } from './engine/decks';
@@ -112,6 +112,7 @@ export function App() {
   const settings = useStore((s) => s.save.settings);
   useEffect(() => setVolumes({ music: settings.music, sfx: settings.sfx }), [settings.music, settings.sfx]);
   useEffect(() => configureFx(settings.fx, settings.vibrate), [settings.fx, settings.vibrate]);
+  useEffect(() => setAudioMix(settings.mixAudio !== false), [settings.mixAudio]);
   useEffect(() => setGyroEnabled(settings.gyro), [settings.gyro]);
   useEffect(() => {
     const q = new URLSearchParams(location.search);
