@@ -158,7 +158,7 @@ export function canMeet(ratingA: number, ratingB: number, waitedMs: number) {
 
 // ---------------------------------------------------------------------------
 // placement: one game against a bot decides where a new player starts.
-// Bronze and silver are the usual places; gold I is as high as it goes.
+// Most start around bronze II; silver I is as high as it goes.
 // ---------------------------------------------------------------------------
 export interface PlacementResult {
   win: boolean;
@@ -174,9 +174,10 @@ export function placementRating(r: PlacementResult): number {
   const mid = (div: number) => BASE + STEP * div + STEP / 2;
   const prizes = Math.max(0, Math.min(6, Math.floor(r.prizes)));
   const lost = Math.max(0, Math.min(6, Math.floor(r.prizesLost)));
-  if (!r.win) return mid(prizes >= 4 ? 2 : prizes >= 2 ? 1 : 0); // bronze III / II / I
-  if (lost <= 1 && r.turns <= 16) return mid(6); // gold I: a clean, quick win
-  return mid(lost <= 1 ? 5 : lost <= 3 ? 4 : 3); // silver III / II / I
+  // most players land around bronze II; silver I is as high as it goes
+  if (!r.win) return mid(prizes >= 3 ? 1 : 0); // bronze II / I
+  if (lost <= 1 && r.turns <= 16) return mid(3); // silver I: a clean, quick win
+  return mid(lost <= 1 ? 2 : 1); // bronze III / II
 }
 
 /** the bot of the placement match: a CPU level a little above the middle */

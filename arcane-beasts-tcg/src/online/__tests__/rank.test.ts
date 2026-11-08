@@ -68,14 +68,14 @@ describe('ranked', () => {
     expect(rollSeason(next, Date.UTC(2026, 11, 20))).toBe(next);
   });
 
-  test('placement: bronze or silver usually, gold III at the very most', () => {
+  test('placement: most land around bronze II, silver I at the very most', () => {
     const tier = (r: Parameters<typeof placementRating>[0]) => viewOf({ ...newRank(NOV), rating: placementRating(r) });
     expect(rankName(tier({ win: false, prizes: 0, prizesLost: 6, turns: 20 }))).toBe('ブロンズ I');
-    expect(rankName(tier({ win: false, prizes: 5, prizesLost: 6, turns: 30 }))).toBe('ブロンズ III');
-    expect(rankName(tier({ win: true, prizes: 6, prizesLost: 5, turns: 30 }))).toBe('シルバー I');
-    expect(rankName(tier({ win: true, prizes: 6, prizesLost: 1, turns: 30 }))).toBe('シルバー III');
-    expect(rankName(tier({ win: true, prizes: 6, prizesLost: 0, turns: 10 }))).toBe('ゴールド I');
-    // nonsense in, still at most gold III
-    expect(tier({ win: true, prizes: 999, prizesLost: -5, turns: 0 }).tier).toBeLessThanOrEqual(2);
+    expect(rankName(tier({ win: false, prizes: 5, prizesLost: 6, turns: 30 }))).toBe('ブロンズ II');
+    expect(rankName(tier({ win: true, prizes: 6, prizesLost: 4, turns: 30 }))).toBe('ブロンズ II');
+    expect(rankName(tier({ win: true, prizes: 6, prizesLost: 1, turns: 30 }))).toBe('ブロンズ III');
+    expect(rankName(tier({ win: true, prizes: 6, prizesLost: 0, turns: 10 }))).toBe('シルバー I');
+    // nonsense in, still at most silver I
+    expect(rankName(tier({ win: true, prizes: 999, prizesLost: -5, turns: 0 }))).toBe('シルバー I');
   });
 });

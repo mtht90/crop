@@ -338,7 +338,8 @@ describe('online hub', () => {
     const r = a.last('rank')!;
     expect(r.placement).toBe(true);
     expect(r.after.placed).toBe(true);
-    expect(r.after.tier).toBe(1);
+    expect(r.after.tier).toBe(0);
+    expect(r.after.div).toBe(2);
     expect(JSON.stringify(r)).not.toContain('rating');
     const rating = hub.store.get(a.id)!.ranked!.rating;
     // a second report changes nothing
