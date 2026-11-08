@@ -214,7 +214,7 @@ export function Lobby() {
     {
       key: 'ranked',
       title: 'ランクマッチ',
-      sub: unplaced ? '認定戦（CPUと1戦）で最初のランクが決まります' : rank ? `${Number(rank.season.slice(5))}月シーズン開催中` : 'ランクを上げよう',
+      sub: unplaced ? '認定戦' : rank ? `${Number(rank.season.slice(5))}月シーズン開催中` : 'ランクを上げよう',
       bg: 'story/landscape-castle',
       fig: emblemUrl(rank),
       emblem: true,
@@ -310,7 +310,7 @@ export function Lobby() {
                   </div>
                   <h2>{t.title}</h2>
                   <p>{t.sub}</p>
-                  {t.emblem && unplaced && <b className="lb-placement">認定戦をはじめる ›</b>}
+                  {t.emblem && unplaced && <b className="lb-placement">はじめる ›</b>}
                   {t.emblem && rank && (
                     <div className="lb-rank-line">
                       <RankLabel v={rank} />
@@ -508,7 +508,6 @@ export function Lobby() {
                       <div className="lb-spinner" />
                     )}
                     <div className="lb-pulse">{st.queued === 'ranked' ? 'ランクマッチ ・ ' : ''}相手をさがしています…</div>
-                    {st.queued === 'ranked' && <small className="lb-dim">同じランク帯の相手をさがします（1分たつと、ひとつ上・下のランク帯とも）</small>}
                     <small className="lb-dim">{st.waiting}人が待っています</small>
                     <button className="btn small ghost" onClick={() => online.cancel()}>
                       やめる

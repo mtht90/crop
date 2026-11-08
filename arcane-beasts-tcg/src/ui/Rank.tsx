@@ -78,7 +78,7 @@ export function RankChange({ before, after, placement = false }: { before: RankV
       <div className="rc-text">
         <small>{placement ? 'RANKED ・ 認定戦' : `RANKED ・ ${Number(after.season.slice(5))}月シーズン`}</small>
         {swap && moved ? (
-          <motion.div className="rc-step" initial={{ opacity: 0, letterSpacing: '0.6em' }} animate={{ opacity: 1, letterSpacing: '0.28em' }} transition={{ duration: 1.1, ease: [0.16, 1, 0.3, 1] }}>
+          <motion.div className="rc-step" initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}>
             <span>{word}</span>
           </motion.div>
         ) : null}
