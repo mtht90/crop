@@ -166,7 +166,6 @@ export function Lobby() {
           <div className="box lb-unsupported">
             <h2>この画面ではオンライン対戦を使えません</h2>
             <p>オンライン対戦は、専用サーバーにつないだ版でだけ遊べます。サーバーが配信しているゲームのURLを開いてください。</p>
-            <p className="lb-dim">（claude.aiのアーティファクト内からは外部のサーバーにつなげないため、CPU対戦のみ遊べます）</p>
           </div>
         </div>
       </div>

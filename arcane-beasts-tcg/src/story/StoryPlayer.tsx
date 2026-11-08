@@ -327,7 +327,7 @@ export function StoryPlayer({ beats: initial, cast, onDone, label, allowSkip = t
   };
 
   const skip = async () => {
-    if (allowSkip && (await askConfirm('このシーンをスキップしますか？（あとでストーリー画面から読み返せます）', 'スキップする'))) finish();
+    if (allowSkip && (await askConfirm('このシーンをスキップしますか？', 'スキップする'))) finish();
   };
 
   const speaker = say?.who ?? null;

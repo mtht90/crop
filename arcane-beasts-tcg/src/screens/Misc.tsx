@@ -389,11 +389,11 @@ export function Rules() {
           </div>
           <h2>レアリティ（★）</h2>
           <p>
-            カードの★は<b>レア度</b>（出にくさ）です（★1〜★5）。同じカードでも、特別な絵柄（★3の全面絵・★4・★5）は<b>性能も上がります</b>。
+            カードの★は<b>レア度</b>です。同じカードでも、特別な絵柄（★3の全面絵・★4・★5）は<b>性能も上がります</b>。
           </p>
           <ul>
             <li>
-              <b>★1・★2</b> … 基本のカード。パックによく入っている（光るカードも同じ★）
+              <b>★1・★2</b> … 基本のカード。パックによく入っている
             </li>
             <li>
               <b>★3</b> … 主力になる強いカードと、絵が全面に広がるカード
@@ -413,9 +413,9 @@ export function Rules() {
           <h2>ジェム</h2>
           <ul>
             <li>ゲーム内のお金は<b>ジェム</b>ひとつだけ。バトル・ミッション・ログイン・レベルアップ・イベント・ボスレイドでもらえる</li>
-            <li>パックを開ける、ワードローブ（スリーブ・プレイマット・称号）と交換する、の両方に使う</li>
-            <li>通常パックは毎日の無料パック。1日2回まで（2回目は1回目の4時間後から。日付が変わると戻る）</li>
-            <li>ジェムで買えるのはプレミアムパック。1回500ジェム、10連は4,500ジェム（1回分おトク）</li>
+            <li>パックを開ける、ワードローブと交換する、の両方に使う</li>
+            <li>通常パックは1日2回まで無料。2回目は1回目の4時間後から</li>
+            <li>ジェムで買えるのはプレミアムパック。1回500ジェム、10連は4,500ジェム</li>
             <li>負けたとき・降参したときは報酬なし。勝てば少しジェムがもらえ、その日の初勝利はさらに多い</li>
             <li>大きく稼げるのは、ストーリーなどの初回クリア、イベント、ボスレイド</li>
           </ul>
@@ -423,7 +423,7 @@ export function Rules() {
           <ul>
             <li>2週間ごとに新しいイベントが始まる。全15ステージのマップを進み、ステージごとに変則ルールがある</li>
             <li>1-5・2-5・3-5はボス。勝つたびにジェム、はじめてクリアしたステージはさらにジェムがもらえる</li>
-            <li>勝つたびに「イベントのかけら」がときどき手に入り、交換所で限定カードやジェムと交換できる（イベントが終わると消える）</li>
+            <li>勝つたびに「イベントのかけら」がときどき手に入り、交換所で限定カードやジェムと交換できる</li>
             <li>3-5のボスに勝つと、まれに限定カードが手に入る</li>
           </ul>
           <h2>ボスレイド</h2>
@@ -434,7 +434,7 @@ export function Rules() {
           </ul>
           <h2>特別なカード</h2>
           <ul>
-            <li>レイドカードとイベントの限定カードは、パックからは出ない。コレクションの「その他」で見られる（収集率にも数える）</li>
+            <li>レイドカードとイベントの限定カードは、パックからは出ない。コレクションの「その他」で見られる</li>
           </ul>
           <h2>スタジアム</h2>
           <ul>
@@ -501,7 +501,7 @@ export function Credits() {
           <p>ポートレート・背景画は Wesnoth アートチームによるものです。音楽：Aleksi Aubry-Carlson、Timothy Pinkham、Doug Kaufman、Mattias Westlund、Stephen Rozanc、Gianmarco Leone。</p>
           <h2>アイコン</h2>
           <p>
-            <a href="https://game-icons.net/" target="_blank" rel="noreferrer">game-icons.net</a>（Lorc、Delapouite ほか）— CC BY 3.0 ／ コインとジェムの絵は <a href="https://github.com/googlefonts/noto-emoji" target="_blank" rel="noreferrer">Noto Emoji</a>（Google）— Apache 2.0 ／ レイドカードの光の素材は <a href="https://kenney.nl/assets/particle-pack" target="_blank" rel="noreferrer">Kenney Particle Pack</a> — CC0 ／ カードや画面の効果音は Kenney（Casino Audio・Interface Sounds・Sci-Fi Sounds）と OpenGameArt の rubberduck — CC0
+            <a href="https://game-icons.net/" target="_blank" rel="noreferrer">game-icons.net</a>（Lorc、Delapouite ほか）— CC BY 3.0 ／ コインとジェムの絵は <a href="https://github.com/googlefonts/noto-emoji" target="_blank" rel="noreferrer">Noto Emoji</a>（Google）— Apache 2.0 ／ レイドカードの光の素材は <a href="https://kenney.nl/assets/particle-pack" target="_blank" rel="noreferrer">Kenney Particle Pack</a> — CC0 ／ カードや画面の効果音は Kenney（Casino Audio・Interface Sounds・Sci-Fi Sounds）と OpenGameArt の rubberduck — CC0 ／ ランクの紋章は <a href="https://rhosgfx.itch.io/vector-ranks" target="_blank" rel="noreferrer">Vector Ranks</a> by RhosGFX — CC0
           </p>
           <h2>フォント</h2>
           <p>Dela Gothic One、M PLUS Rounded 1c、M PLUS 1p、Cinzel — SIL Open Font License 1.1</p>
@@ -529,7 +529,7 @@ function ErrorLogRow() {
             const text = [`ARCANE BEASTS ${navigator.userAgent}`, ...errorLog()].join('\n\n');
             try {
               await navigator.clipboard.writeText(text);
-              setMsg(n ? `${n}件の記録をコピーしました。不具合の報告に貼り付けてください` : 'エラーの記録はありません（端末の情報だけコピーしました）');
+              setMsg(n ? `${n}件の記録をコピーしました。不具合の報告に貼り付けてください` : 'エラーの記録はありません');
             } catch {
               setMsg('コピーできませんでした');
             }

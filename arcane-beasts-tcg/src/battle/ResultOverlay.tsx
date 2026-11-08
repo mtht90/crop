@@ -183,7 +183,7 @@ export function ResultOverlay() {
             {cfg.online?.opp.rank && <RankEmblem v={cfg.online.opp.rank} size={22} />}
             {cfg.oppName}
           </b>
-          <p>{cfg.raid ? (win ? '……グ、オォ……' : '……（まだ倒れない。開催中に、もう一度）') : cfg.online ? 'ありがとうございました！' : cfg.rival ? (win ? cfg.rival.lose : cfg.rival.win) : win ? '参りました！' : '私の勝ちですね。'}</p>
+          <p>{cfg.raid ? (win ? '……グ、オォ……' : '……まだ倒れぬ') : cfg.online ? 'ありがとうございました！' : cfg.rival ? (win ? cfg.rival.lose : cfg.rival.win) : win ? '参りました！' : '私の勝ちですね。'}</p>
         </div>
       </motion.div>}
 

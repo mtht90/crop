@@ -149,7 +149,7 @@ export function Rivals() {
               </button>
             </div>
           </div>
-          <div className="set-note">強敵（キャラとの対戦）は、ストーリーで挑めます。</div>
+          <div className="set-note">強敵とはストーリーで戦えます。</div>
         </div>
       </div>
     </div>

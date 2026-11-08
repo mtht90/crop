@@ -374,7 +374,7 @@ function OddsModal({ onClose, premium }: { onClose: () => void; premium?: boolea
           </tbody>
         </table>
         <div className="odds-note">
-          {`すべての章のカードが出ます。★1〜★3のカードは${Math.round((premium ? PREMIUM_PRINTING_CHANCE : PRINTING_CHANCE) * 100)}%で光るカードになります。★3〜★5には特別な絵のカードがあります（絵が違っても性能は元のカードと同じ）。ごくまれに、すべてが★3以上のパックが出ることがあります。同じカードが${10}枚を超えた分は、自動でジェムに交換されます。`}
+          {`すべての章のカードが出ます。★1〜★3のカードは${Math.round((premium ? PREMIUM_PRINTING_CHANCE : PRINTING_CHANCE) * 100)}%で光るカードになります。★3〜★5には特別な絵のカードがあります。ごくまれに、すべてが★3以上のパックが出ることがあります。同じカードが${10}枚を超えた分は、自動でジェムに交換されます。`}
         </div>
         <button className="pill ghost" onClick={onClose}>
           閉じる

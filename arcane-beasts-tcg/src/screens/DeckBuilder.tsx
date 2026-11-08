@@ -376,7 +376,7 @@ function CodeModal({ onClose, onSave }: { onClose: () => void; onSave: (d: Saved
                   </div>
                 ))}
             </div>
-            {!complete && <p className="code-note">暗いカードは持っていない（足りない）カードです。数字は「持っている枚数/必要な枚数」</p>}
+            {!complete && <p className="code-note">暗いカードは持っていないカードです</p>}
             <div className="code-actions">
               {complete ? (
                 <button className="btn big" onClick={() => make(built.cards, true)}>

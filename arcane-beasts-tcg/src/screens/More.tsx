@@ -18,7 +18,7 @@ export function More() {
     { to: 'home', icon: 'scroll-unfurled', title: 'お知らせ', sub: 'アップデート・イベント・不具合修正の情報', badge: hasUnreadNews(save.newsSeen) ? 'NEW' : undefined, open: () => useNews.getState().show() },
     { to: 'missions', icon: 'trophy', title: 'ミッション', sub: 'デイリー・ウィークリー・実績・ログインボーナス', badge: missions ? String(missions) : undefined },
     { to: 'collection', icon: 'cards', title: 'コレクション', sub: `集めたカード（収集率 ${Math.floor(collectionPct(save))}%）`, badge: save.newCards.length ? `NEW ${save.newCards.length}` : undefined },
-    { to: 'wardrobe', icon: 'wardrobe', title: 'ワードローブ', sub: `カード裏面・バトルの背景・称号（ジェムで交換）` },
+    { to: 'wardrobe', icon: 'wardrobe', title: 'ワードローブ', sub: `カード裏面・バトルの背景・称号` },
     { to: 'settings', icon: 'gear', title: '設定', sub: '音量・演出・引き継ぎ' },
     { to: 'rules', icon: 'book', title: 'あそびかた', sub: 'ルールと用語' },
     { to: 'credits', icon: 'info', title: 'クレジット', sub: '素材と制作' },

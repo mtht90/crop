@@ -1469,7 +1469,7 @@ export function BattleScreen() {
             className="log-toggle surrender"
             title="降参する"
             onClick={async () => {
-              if (await askConfirm('降参しますか？（敗北になります）', '降参する', true)) ctrl?.surrender();
+              if (await askConfirm('降参しますか？', '降参する', true)) ctrl?.surrender();
             }}
           >
             <Icon name="skull" />
@@ -1508,7 +1508,7 @@ export function BattleScreen() {
             )}
  {isSetup && (
               <motion.div key="setup" className="sel-bar setup" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
-                <span>{setupActive === null ? 'バトル場に出すたねモンスターを選んでください' : 'ベンチに出すたねモンスターを選んでください（任意）'}</span>
+                <span>{setupActive === null ? 'バトル場に出すたねモンスターを選んでください' : 'ベンチに出すたねモンスターを選んでください'}</span>
                 <button className="btn blue" disabled={setupActive === null} onClick={finishSetup}>
                   準備完了
                 </button>
@@ -1573,7 +1573,7 @@ export function BattleScreen() {
 function selHint(c: ReturnType<typeof card> | undefined, bench: boolean, targets: boolean): string {
   if (!c) return '';
   if (c.kind === 'energy') return 'エネルギーをつけるモンスターを選んでください';
-  if (c.kind === 'monster') return bench ? 'ベンチに出します（ベンチをクリック）' : targets ? '進化させるモンスターを選んでください' : '';
+  if (c.kind === 'monster') return bench ? 'ベンチに出します' : targets ? '進化させるモンスターを選んでください' : '';
   if (c.kind === 'trainer' && c.sub === 'tool') return 'どうぐをつけるモンスターを選んでください';
   return `${c.name}を使いますか？`;
 }

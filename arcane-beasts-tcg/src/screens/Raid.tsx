@@ -180,8 +180,6 @@ export function Raid() {
                     <b>持ち越し</b>
                     <p>
                       バトルに負けても、与えたダメージはそのまま残る
-                      <br />
-                      （週が変わるとリセット）
                     </p>
                   </div>
                   <div className="raid2-cond lose">
