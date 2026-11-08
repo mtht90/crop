@@ -300,6 +300,30 @@ describe('online hub', () => {
     far.say({ t: 'cancel' });
   }, 30_000);
 
+  test('ranked: the next tier is allowed after a minute in the queue, two tiers apart never', async () => {
+    const hub = makeHub({ timeScale: 0.001 });
+    const [a, s, g] = [new Bot(hub, 'Bronze'), new Bot(hub, 'Silver'), new Bot(hub, 'Gold')];
+    for (const p of [a, s, g]) p.hello();
+    const set = (b: Bot, rating: number) => (hub.store.get(b.id)!.ranked = { ...hub.store.rankState(hub.store.get(b.id)!), rating });
+    set(a, 1040);
+    set(s, 1070);
+    set(g, 1230);
+    a.say({ t: 'queue', kind: 'ranked', deck: deckOf(1) });
+    g.say({ t: 'queue', kind: 'ranked', deck: deckOf(2) });
+    // bronze and gold: never, however long they wait
+    await new Promise((r) => setTimeout(r, 150));
+    expect(a.last('start')).toBeFalsy();
+    s.say({ t: 'queue', kind: 'ranked', deck: deckOf(3) });
+    // silver is one tier from each; the bronze player has waited past a minute (scaled), so they meet
+    await until(() => !!a.last('start'), 3000);
+    expect(a.last('start')!.opp.name).toBe('Silver');
+    expect(g.last('start')).toBeFalsy();
+    for (const p of [a, s]) p.auto = false;
+    a.say({ t: 'surrender' });
+    g.say({ t: 'cancel' });
+    await until(() => !!a.last('rank'), 3000);
+  }, 20_000);
+
   test('surrender ends the game; an idle player loses on time', async () => {
     const hub = makeHub({ timeScale: 0.002 });
     const a = new Bot(hub, 'A');

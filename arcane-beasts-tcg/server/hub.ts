@@ -11,7 +11,7 @@ import { PROTOCOL, type ClientMsg, type ErrorCode, type MatchKind, type OppInfo,
 import { judgeName } from '../src/online/names';
 import { PlayerStore, portraitOk, type PlayerRecord } from './players';
 import { randomInt } from 'node:crypto';
-import { matchWindow } from '../src/online/rank';
+import { canMeet } from '../src/online/rank';
 
 export interface Socket {
   send(data: string): void;
@@ -416,10 +416,12 @@ export class Hub {
               pair = [a, b];
               break;
             }
-            // ranked: the closest ratings first; the longer someone waits, the wider they accept
-            const diff = Math.abs(this.store.rating(a.player!) - this.store.rating(b.player!));
-            const win = Math.max(matchWindow((now - a.queued!.since) / this.scale), matchWindow((now - b.queued!.since) / this.scale));
-            if (diff <= win && diff < best) {
+            // ranked: same tier at once, the next tier up/down after a minute, never further; closest first
+            const ra = this.store.rating(a.player!);
+            const rb = this.store.rating(b.player!);
+            const waited = (now - Math.min(a.queued!.since, b.queued!.since)) / this.scale;
+            const diff = Math.abs(ra - rb);
+            if (canMeet(ra, rb, waited) && diff < best) {
               best = diff;
               pair = [a, b];
             }

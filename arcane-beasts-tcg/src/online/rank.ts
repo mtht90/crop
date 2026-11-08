@@ -1,10 +1,10 @@
 // ============================================================================
 // Ranked matches: a hidden rating (never shown) decides the tier the player
 // sees — ブロンズ III … ダイヤ I, then マスター.
-//   • the rating moves Elo-style (bigger swings for the first games)
-//   • once a tier is reached you never fall out of it for the rest of the season
-//   • seasons are calendar months (Japan time); a new season pulls everyone
-//     halfway back toward the start
+//   • the rating moves Elo-style within that range
+//   • each game moves it by a set range (12…28); there is no demotion protection
+//   • seasons are calendar months (Japan time); a new season starts everyone
+//     two divisions lower
 // Shared by the server (which owns the rating) and the client (which only
 // gets the RankView).
 // ============================================================================
@@ -28,8 +28,8 @@ export const MASTER_AT = BASE + STEP * DIVS; // 1650
 
 export interface RankState {
   rating: number;
-  /** the lowest rating allowed this season (the start of the best tier reached) */
-  floor: number;
+  /** (no longer used: there is no demotion protection) */
+  floor?: number;
   season: string;
   games: number;
   wins: number;
@@ -72,40 +72,37 @@ export function tierOf(rating: number) {
   return Math.floor(divIndex(rating) / 3);
 }
 
-/** the rating where a tier starts (bronze has no bottom) */
-export function tierStart(tier: number) {
-  return tier <= 0 ? 0 : tier >= 5 ? MASTER_AT : BASE + STEP * 3 * tier;
-}
-
 export function newRank(now = Date.now()): RankState {
   return { rating: START_RATING, floor: 0, season: seasonKey(now), games: 0, wins: 0, losses: 0, best: tierOf(START_RATING) };
 }
 
-/** carry a record into the current season (a new month pulls the rating halfway back) */
+/** a new month: everyone starts the season a little lower (two divisions down) */
+export const SEASON_DROP = STEP * 2;
+/** the bottom of the ladder (a little below bronze III's start) */
+const LOWEST = BASE - STEP * 2;
+
+/** carry a record into the current season */
 export function rollSeason(r: RankState, now = Date.now()): RankState {
   const season = seasonKey(now);
   if (r.season === season) return r;
   const final = tierOf(r.rating);
-  const rating = Math.round(START_RATING + (r.rating - START_RATING) / 2);
+  const rating = Math.max(Math.min(r.rating, BASE), r.rating - SEASON_DROP);
   return { rating, floor: 0, season, games: 0, wins: 0, losses: 0, best: tierOf(rating), last: r.games > 0 ? { season: r.season, tier: final } : undefined };
 }
 
-/** how much a game moves the rating: big for the first games, then steadier */
-const kFactor = (games: number) => (games < 10 ? 48 : games < 30 ? 32 : 24);
+/** a game moves the rating by 12…28 (20 between equals; more for beating someone stronger) */
+export const SWING = { min: 12, mid: 20, max: 28 };
 
 /** the record after a game against `opp` (rating) */
 export function applyResult(r: RankState, opp: number, win: boolean): RankState {
   const expect = 1 / (1 + 10 ** ((opp - r.rating) / 400));
-  let delta = Math.round(kFactor(r.games) * ((win ? 1 : 0) - expect));
-  // a win always moves you up and a loss down, at least a little
-  if (win) delta = Math.max(8, delta);
-  else delta = Math.min(-6, delta);
-  const rating = Math.max(r.floor, r.rating + delta);
+  const size = Math.round(SWING.mid * 2 * (win ? 1 - expect : expect));
+  const delta = (win ? 1 : -1) * Math.max(SWING.min, Math.min(SWING.max, size));
+  const rating = Math.max(LOWEST, r.rating + delta);
   const tier = tierOf(rating);
   return {
     ...r,
     rating,
-    floor: Math.max(r.floor, tierStart(tier)),
     games: r.games + 1,
     wins: r.wins + (win ? 1 : 0),
     losses: r.losses + (win ? 0 : 1),
@@ -144,5 +141,13 @@ export function stepOf(a: RankView, b: RankView) {
 /** gems for last season's final tier */
 export const SEASON_GEMS = [100, 200, 400, 700, 1100, 1600];
 
-/** the matchmaking window: how far apart two ratings may be after waiting `ms` */
-export const matchWindow = (ms: number) => (ms > 25_000 ? Infinity : 120 + ms / 40);
+/** after this long in the queue, the tiers just above and below are allowed too */
+export const WIDEN_MS = 60_000;
+/**
+ * may two waiting players meet? Same tier (any of III/II/I): yes. One tier apart:
+ * once either has waited a minute. Two or more apart: never.
+ */
+export function canMeet(ratingA: number, ratingB: number, waitedMs: number) {
+  const d = Math.abs(tierOf(ratingA) - tierOf(ratingB));
+  return d === 0 || (d === 1 && waitedMs >= WIDEN_MS);
+}

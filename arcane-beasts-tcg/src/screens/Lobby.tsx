@@ -472,6 +472,7 @@ export function Lobby() {
                       <div className="lb-spinner" />
                     )}
                     <div className="lb-pulse">{st.queued === 'ranked' ? 'ランクマッチ ・ ' : ''}相手をさがしています…</div>
+                    {st.queued === 'ranked' && <small className="lb-dim">同じランク帯の相手をさがします（1分たつと、ひとつ上・下のランク帯とも）</small>}
                     <small className="lb-dim">{st.waiting}人が待っています</small>
                     <button className="btn small ghost" onClick={() => online.cancel()}>
                       やめる
