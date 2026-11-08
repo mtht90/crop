@@ -7,7 +7,7 @@
 import { validateDeck } from '../src/engine/decks';
 import { card } from '../src/engine/cards';
 import { GameSession, promptMs, type Outgoing } from '../src/online/session';
-import { PROTOCOL, type ClientMsg, type ErrorCode, type MatchKind, type OppInfo, type QueueKind, type RoomInfo, type ServerMsg } from '../src/online/protocol';
+import { DEV_CODE, PROTOCOL, type ClientMsg, type ErrorCode, type MatchKind, type OppInfo, type QueueKind, type RoomInfo, type ServerMsg } from '../src/online/protocol';
 import { judgeName } from '../src/online/names';
 import { PlayerStore, portraitOk, type PlayerRecord } from './players';
 import { randomInt } from 'node:crypto';
@@ -176,6 +176,13 @@ export class Hub {
         return this.join(c, m.code, m.deck);
       case 'queue':
         return this.enqueue(c, m.kind, m.deck);
+      case 'dev': {
+        if (m.code !== DEV_CODE) return this.error(c, 'bad_code', 'コードがちがいます');
+        const r = this.store.makeMaster(c.player);
+        this.log(`dev mode: ${c.player.name} → master`);
+        this.send(c, { t: 'rank', ...r });
+        return this.send(c, { t: 'renamed', profile: this.store.profile(c.player) });
+      }
       case 'placement': {
         const ok = typeof m.win === 'boolean' && [m.prizes, m.prizesLost, m.turns].every((n) => typeof n === 'number' && Number.isFinite(n) && n >= 0 && n < 1000);
         if (!ok) return this.error(c, 'bad_request', '認定戦の結果が読めません');
@@ -459,7 +466,7 @@ export class Hub {
   private oppInfo(p: PlayerRecord, ranked = false): OppInfo {
     if (!ranked) return { name: p.name, portrait: p.portrait };
     const v = this.store.rankView(p);
-    return { name: p.name, portrait: p.portrait, rank: { tier: v.tier, div: v.div } };
+    return { name: p.name, portrait: p.portrait, rank: { tier: v.tier, div: v.div, mr: v.mr } };
   }
 
   private sendStart(room: Room, c: Conn) {

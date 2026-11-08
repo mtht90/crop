@@ -7,7 +7,7 @@ import { RAID_CARDS } from '../engine/cards/bosses';
 import { EVENT_CARDS } from '../engine/cards/events';
 import { cpuPrintTier, deckById, expand, upgradeDeck, RIVALS, STARTER_DECKS, type Rival } from '../engine/decks';
 import type { Difficulty } from '../engine/ai';
-import { cleanWardrobe, cosmeticById, freshWardrobe, type Wardrobe } from './cosmetics';
+import { cleanWardrobe, COSMETICS, cosmeticById, freshWardrobe, type Wardrobe } from './cosmetics';
 import type { CardDef, EType, MonsterCard, Rarity, SetCode } from '../engine/types';
 import {
   ACHIEVEMENTS,
@@ -37,7 +37,7 @@ import {
   type Stats,
   OLD_COIN_SCALE,
 } from './progress';
-import { currentStageEvent, EVENT_CARD_DROP, rollShards, shopOf, stageNow, stagesOf, type StageSave } from './stages';
+import { currentStageEvent, EVENT_CARD_DROP, rollShards, shopOf, STAGE_COUNT, stageNow, stagesOf, type StageSave } from './stages';
 import { raidBattleGems, raidCost, raidLapBonus, raidLapHp, raidLapReward, raidNow, raidSession, rollRaidDrop, type RaidSave } from './raid';
 
 // ----------------------------------------------------------------------------
@@ -186,7 +186,7 @@ export function importSave(raw: string): boolean {
 // ----------------------------------------------------------------------------
 // Developer mode
 // ----------------------------------------------------------------------------
-export const DEV_CODE = 'ARCANE-DEV';
+export { DEV_CODE } from '../online/protocol';
 const DEV_COINS = 9_999_999;
 const DEV_GEMS = 999_999;
 
@@ -205,6 +205,11 @@ export function enterDevMode(s: Save, chapterIds: string[]) {
   s.story.cleared = [...chapterIds];
   s.story.seen = ['prologue', ...chapterIds.flatMap((id) => [`${id}:before`, `${id}:after`])];
   s.beaten = RIVALS.map((r) => r.id);
+  // every CPU level beaten, this event's stages all cleared, the whole wardrobe, every card
+  s.cpuBeaten = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+  s.stages = { ...stageNow(s.stages), cleared: STAGE_COUNT };
+  s.wardrobe = { ...s.wardrobe, owned: [...new Set([...s.wardrobe.owned, ...COSMETICS.map((c) => c.id)])] };
+  grantAllCards(s);
   refill(s);
 }
 

@@ -18,6 +18,16 @@ export const NEWS_KIND_JP: Record<NewsKind, string> = { update: 'アップデー
 
 export const NEWS: NewsItem[] = [
   {
+    id: '2026-11-08-smooth',
+    kind: 'update',
+    date: '2026/11/08',
+    title: 'BGMと画面の切り替わりをなめらかにしました',
+    body: [
+      '・BGMは前の曲と次の曲が重なりながら切り替わります',
+      '・ランクマッチのマスターは、マスターレーティングの数字で表示されます',
+    ],
+  },
+  {
     id: '2026-11-07-ranked',
     kind: 'update',
     date: '2026/11/07',

@@ -349,6 +349,19 @@ describe('online hub', () => {
     expect(a.errors().at(-1)?.code).toBe('bad_request');
   });
 
+  test('developer code puts the account in master', async () => {
+    const hub = makeHub();
+    const a = new Bot(hub, 'A');
+    a.hello();
+    a.say({ t: 'dev', code: 'WRONG' });
+    expect(a.errors().at(-1)?.code).toBe('bad_code');
+    a.say({ t: 'dev', code: 'ARCANE-DEV' });
+    await until(() => !!a.last('rank'));
+    expect(a.last('rank')!.after.tier).toBe(5);
+    expect(a.last('rank')!.after.mr).toBeGreaterThanOrEqual(1500);
+    expect(a.last('renamed')!.profile.rank?.placed).toBe(true);
+  });
+
   test('surrender ends the game; an idle player loses on time', async () => {
     const hub = makeHub({ timeScale: 0.002 });
     const a = new Bot(hub, 'A');

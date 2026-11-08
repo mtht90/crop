@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'motion/react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { activeDeck, useStore, type Screen } from './state/store';
 import { Gallery } from './screens/Gallery';
 import { BattleScreen } from './battle/BattleScreen';
@@ -67,6 +67,9 @@ function debugBattle() {
   });
 }
 
+/** screens that are a different place, not another menu */
+const HEAVY: Screen[] = ['battle', 'scene', 'title'];
+
 const SCREENS = {
   title: Title,
   starter: Starter,
@@ -115,6 +118,7 @@ export function App() {
     // a game found by the server opens the battle screen
     // the icon chosen in 設定 is the one other players see
     online.wantPortrait = () => useStore.getState().save.avatar;
+    online.wantDev = () => !!useStore.getState().save.dev;
     online.onStart = (m) => {
       const st = useStore.getState();
       const deck = activeDeck(st.save);
@@ -178,6 +182,12 @@ export function App() {
     };
   }, []);
   const Comp = SCREENS[screen];
+  // a big change of scene (a battle or a story scene starting or ending)
+  const prevScreen = useRef(screen);
+  const heavy = HEAVY.includes(screen) !== HEAVY.includes(prevScreen.current) || (screen === 'battle' && prevScreen.current === 'battle');
+  useEffect(() => {
+    prevScreen.current = screen;
+  }, [screen, seq]);
   if (!booted)
     return (
       <AnimatePresence>
@@ -196,15 +206,15 @@ export function App() {
         </defs>
       </svg>
       <div className={`app ${TAB_OF[screen] ? 'with-tabs' : ''}`}>
-        {/* cross-fade: the next screen comes in while the last one fades (no blank moment between them) */}
+        {/* cross-fade: the next screen comes in while the last one fades. Into and out of
+            battles and scenes it dips through the dark first (a scene change, not a menu change) */}
         <AnimatePresence initial={false}>
           <motion.div
             key={screen === 'battle' ? `battle-${seq}` : screen}
             className="screen"
-            initial={{ opacity: 0, scale: 0.985 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, pointerEvents: 'none', zIndex: 0 }}
-            transition={{ duration: 0.18, ease: [0.2, 0.8, 0.2, 1] }}
+            initial={{ opacity: 0, scale: 1.012 }}
+            animate={{ opacity: 1, scale: 1, transition: heavy ? { duration: 0.6, delay: 0.32, ease: [0.25, 0.1, 0.25, 1] } : { duration: 0.38, ease: [0.25, 0.1, 0.25, 1] } }}
+            exit={{ opacity: 0, pointerEvents: 'none', zIndex: 0, transition: { duration: heavy ? 0.32 : 0.34, ease: [0.4, 0, 0.6, 1] } }}
           >
             <ErrorBoundary where={screen} onHome={() => useStore.setState({ screen: 'home', battle: null })}>
               <Comp />

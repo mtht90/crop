@@ -10,6 +10,9 @@ export type { RankView };
 
 export const PROTOCOL = 1;
 
+/** 開発者モードのコード (also gives the online account the top rank) */
+export const DEV_CODE = 'ARCANE-DEV';
+
 /** portraits a player can pick */
 export const PORTRAITS = ['humans/lieutenant', 'humans/knight', 'humans/mage', 'humans/swordsman', 'humans/ranger', 'humans/mage-light+female', 'elves/hero', 'elves/ranger+female', 'dwarves/lord', 'merfolk/hunter'];
 
@@ -27,7 +30,7 @@ export interface OppInfo {
   name: string;
   portrait: string;
   /** their tier (ranked matches only) */
-  rank?: { tier: number; div: number };
+  rank?: { tier: number; div: number; mr?: number };
 }
 
 export interface RoomInfo {
@@ -61,6 +64,8 @@ export type ClientMsg =
   | { t: 'join'; code: string; deck: string[] }
   | { t: 'queue'; kind: QueueKind; deck: string[] }
   | { t: 'cancel' }
+  /** 開発者モード: the account goes to master */
+  | { t: 'dev'; code: string }
   /** the ranked placement match (played against a bot on the device) is over */
   | { t: 'placement'; win: boolean; prizes: number; prizesLost: number; turns: number }
   | { t: 'answer'; seq: number; answer: Answer }

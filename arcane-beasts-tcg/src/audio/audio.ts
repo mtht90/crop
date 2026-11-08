@@ -16,27 +16,40 @@ let musicKey: MusicKey | null = null;
 // own volume is read-only. (A new player per screen used to pile up there
 // until the browser's pool ran out.)
 // ---------------------------------------------------------------------------
+interface Deck {
+  el: HTMLAudioElement;
+  gain: GainNode | null;
+}
+/** two players, so one track can fade out while the next fades in */
+const decks: Deck[] = [];
+let cur = 0;
+/** the deck playing now (what the rest of this file controls) */
 let musicEl: HTMLAudioElement | null = null;
-let musicGain: GainNode | null = null;
 let wantPlay = false;
-function musicNodes() {
-  if (musicEl) return musicEl;
-  musicEl = new Audio();
-  musicEl.preload = 'auto';
-  (musicEl as HTMLAudioElement & { playsInline?: boolean }).playsInline = true;
+function makeDeck(): Deck {
+  const el = new Audio();
+  el.preload = 'auto';
+  (el as HTMLAudioElement & { playsInline?: boolean }).playsInline = true;
+  let gain: GainNode | null = null;
   const c = (Howler as unknown as { ctx?: AudioContext }).ctx;
   if (c) {
     try {
-      const src = c.createMediaElementSource(musicEl);
-      musicGain = c.createGain();
-      musicGain.gain.value = 0;
-      src.connect(musicGain).connect(c.destination);
+      const src = c.createMediaElementSource(el);
+      gain = c.createGain();
+      gain.gain.value = 0;
+      src.connect(gain).connect(c.destination);
     } catch {
-      musicGain = null;
+      gain = null;
     }
   }
-  // whenever a track actually starts (perhaps only after the first tap), bring it up
-  musicEl.addEventListener('playing', () => wantPlay && musicFade(1, 1200));
+  // whenever the current track actually starts (perhaps only after the first tap), bring it up
+  el.addEventListener('playing', () => wantPlay && el === musicEl && musicFade(1, CROSS_MS));
+  return { el, gain };
+}
+function musicNodes() {
+  if (musicEl) return musicEl;
+  decks.push(makeDeck(), makeDeck());
+  musicEl = decks[0].el;
   // the first touch anywhere may be what the browser needs before it lets music play
   const kick = () => {
     const ac = (Howler as unknown as { ctx?: AudioContext }).ctx;
@@ -46,16 +59,35 @@ function musicNodes() {
   for (const ev of ['pointerdown', 'touchend', 'keydown']) window.addEventListener(ev, kick, { passive: true });
   return musicEl;
 }
+/** how long one track takes to hand over to the next */
+const CROSS_MS = 1400;
+function fadeDeck(d: Deck, to: number, ms: number) {
+  const level = to * vol.music * vol.master;
+  if (d.gain) {
+    const g = d.gain.gain;
+    const t = d.gain.context.currentTime;
+    const from = g.value;
+    // hold wherever a fade in progress has got to (no jump), then go on from there
+    const hold = (g as AudioParam & { cancelAndHoldAtTime?: (t: number) => AudioParam }).cancelAndHoldAtTime;
+    if (hold) hold.call(g, t);
+    else g.cancelScheduledValues(t);
+    if (ms <= 0) return void g.setValueAtTime(level, t + 0.005);
+    // an S-shaped ramp sounds smoother than a straight line
+    const n = 24;
+    const curve = new Float32Array(n);
+    for (let i = 0; i < n; i++) curve[i] = from + (level - from) * (0.5 - 0.5 * Math.cos((Math.PI * i) / (n - 1)));
+    try {
+      g.setValueCurveAtTime(curve, t + 0.01, ms / 1000);
+    } catch {
+      g.setValueAtTime(from, t);
+      g.linearRampToValueAtTime(level, t + ms / 1000);
+    }
+  } else d.el.volume = Math.min(1, level);
+}
 /** fade the music to a level (0–1 of the music volume) over ms */
 function musicFade(to: number, ms: number) {
-  const level = to * vol.music * vol.master;
-  if (musicGain) {
-    const g = musicGain.gain;
-    const t = musicGain.context.currentTime;
-    g.cancelScheduledValues(t);
-    g.setValueAtTime(g.value, t);
-    g.linearRampToValueAtTime(level, t + ms / 1000);
-  } else if (musicEl) musicEl.volume = Math.min(1, level);
+  const d = decks[cur];
+  if (d) fadeDeck(d, to, ms);
 }
 
 export function setVolumes(v: Partial<typeof vol>) {
@@ -112,20 +144,29 @@ export function playMusic(key: MusicKey, loop = true) {
     return;
   }
   musicKey = key;
-  const start = async () => {
+  void (async () => {
     const src = await trackSrc(key);
     if (musicKey !== key) return;
-    el.src = src;
-    el.loop = loop;
-    el.currentTime = 0;
-    musicFade(0, 0);
-    void el.play().catch(() => {});
-    if (!musicGain) musicFade(1, 0);
-  };
-  if (!el.paused && el.src) {
-    musicFade(0, 600);
-    setTimeout(() => void start(), 650);
-  } else void start();
+    // the old track fades out on its deck while the new one fades in on the other
+    const old = decks[cur];
+    const playing = !old.el.paused && !!old.el.src;
+    if (playing) {
+      cur = 1 - cur;
+      fadeDeck(old, 0, CROSS_MS);
+      const oldEl = old.el;
+      setTimeout(() => {
+        if (oldEl !== decks[cur].el) oldEl.pause();
+      }, CROSS_MS + 80);
+    }
+    const d = decks[cur];
+    musicEl = d.el;
+    d.el.src = src;
+    d.el.loop = loop;
+    d.el.currentTime = 0;
+    fadeDeck(d, 0, 0);
+    void d.el.play().catch(() => {});
+    if (!d.gain) fadeDeck(d, 1, 0);
+  })();
 }
 
 export function stopMusic() {
@@ -133,10 +174,10 @@ export function stopMusic() {
   musicKey = null;
   if (!musicEl) return;
   const el = musicEl;
-  musicFade(0, 600);
+  musicFade(0, 900);
   setTimeout(() => {
     if (!wantPlay) el.pause();
-  }, 650);
+  }, 950);
 }
 
 // ---------------------------------------------------------------------------
@@ -399,7 +440,7 @@ function sleepAudio() {
   if (asleep) return;
   asleep = true;
   try {
-    musicEl?.pause();
+    for (const d of decks) d.el.pause();
   } catch {
     /* nothing playing */
   }
@@ -414,7 +455,7 @@ function wakeAudio() {
   const c = ctx();
   if (c && c.state === 'suspended') void c.resume();
   if (wantPlay && musicEl?.paused) {
-    if (musicGain) musicGain.gain.value = 0;
+    fadeDeck(decks[cur], 0, 0);
     void musicEl
       .play()
       .then(() => musicFade(1, 900))

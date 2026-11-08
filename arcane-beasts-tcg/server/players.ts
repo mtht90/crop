@@ -10,7 +10,7 @@ import { dirname } from 'node:path';
 import { PORTRAITS, type OnlineProfile } from '../src/online/protocol';
 import { judgeName } from '../src/online/names';
 import type { PlayerBackend } from './remote';
-import { applyResult, newRank, placementRating, rollSeason, tierOf, viewOf, type PlacementResult, type RankState, type RankView } from '../src/online/rank';
+import { applyResult, MASTER_AT, newRank, placementRating, rollSeason, tierOf, viewOf, type PlacementResult, type RankState, type RankView } from '../src/online/rank';
 
 export interface PlayerRecord {
   id: string;
@@ -152,6 +152,13 @@ export class PlayerStore {
   /** the hidden rating (matchmaking only) */
   rating(p: PlayerRecord) {
     return this.rankState(p).rating;
+  }
+  /** 開発者モード: straight to master */
+  makeMaster(p: PlayerRecord): { before: RankView; after: RankView } {
+    const r = this.rankState(p);
+    p.ranked = { ...r, rating: Math.max(r.rating, MASTER_AT + 100), placed: true, best: 5 };
+    this.save(p);
+    return { before: viewOf(r), after: viewOf(p.ranked) };
   }
   /** the placement match: sets the starting rank (once) */
   place(p: PlayerRecord, res: PlacementResult): { before: RankView; after: RankView } | null {

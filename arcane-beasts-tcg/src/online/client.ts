@@ -5,7 +5,7 @@
 // ============================================================================
 import { create } from 'zustand';
 import type { PlacementResult } from './rank';
-import { PROTOCOL, type ClientMsg, type MatchKind, type OnlineProfile, type OppInfo, type QueueKind, type RankView, type RoomInfo, type ServerMsg } from './protocol';
+import { DEV_CODE, PROTOCOL, type ClientMsg, type MatchKind, type OnlineProfile, type OppInfo, type QueueKind, type RankView, type RoomInfo, type ServerMsg } from './protocol';
 
 const KEY = 'arcane-beasts-online-v1';
 const SERVER_KEY = 'arcane-beasts-server';
@@ -287,6 +287,8 @@ class OnlineClient {
         // a placement result that has not reached the server yet
         const pend = loadPlacement();
         if (pend) this.send({ t: 'placement', ...pend });
+        // 開発者モード: the account goes to master
+        if (this.wantDev?.() && (m.profile.rank?.tier ?? 0) < 5) this.send({ t: 'dev', code: DEV_CODE });
         // the icon chosen in the game (設定) is the one others see
         const look = this.wantPortrait?.();
         if (look && look !== m.profile.portrait) this.send({ t: 'rename', name: m.profile.name, portrait: look });
@@ -379,6 +381,12 @@ class OnlineClient {
     useOnline.setState({ rankChange: null });
     if (useOnline.getState().status === 'open') this.send({ t: 'placement', ...r });
     else this.connect();
+  }
+  /** 開発者モード is on (set by the app) */
+  wantDev: (() => boolean) | null = null;
+  /** 開発者モード was just turned on */
+  devRank() {
+    if (useOnline.getState().status === 'open') this.send({ t: 'dev', code: DEV_CODE });
   }
   /** the icon the game wants others to see (set by the app) */
   wantPortrait: (() => string | undefined) | null = null;

@@ -26,6 +26,8 @@ export function RankLabel({ v }: { v: { tier: number; div: number } }) {
 
 /** the bar inside the division (no number: only how far along) */
 export function RankBar({ v, from }: { v: RankView; from?: number }) {
+  // master has its rating instead of a bar
+  if (v.tier >= 5) return null;
   return (
     <div className="rank-bar">
       <motion.i initial={{ width: `${(from ?? v.progress) * 100}%` }} animate={{ width: `${v.progress * 100}%` }} transition={{ delay: 0.9, duration: 0.9, ease: [0.16, 1, 0.3, 1] }} style={{ background: TIERS[v.tier].color }} />
@@ -56,6 +58,7 @@ export function RankChange({ before, after, placement = false }: { before: RankV
     }, 1400);
     return () => clearTimeout(t);
   }, [moved, up, big]);
+  const master = !placement && before.tier >= 5 && after.tier >= 5 && before.mr != null && after.mr != null;
   const shown = swap ? after : before;
   const word = placement ? 'PLACEMENT' : STEP_WORD[step];
   const line = placement ? `${rankName(after)} からスタート` : stepLine(step, shown);
@@ -82,7 +85,17 @@ export function RankChange({ before, after, placement = false }: { before: RankV
             <span>{word}</span>
           </motion.div>
         ) : null}
-        <div className="rc-name">{swap && moved ? line : placement ? '判定中…' : rankName(shown)}</div>
+        {master ? (
+          <div className="rc-name rc-mr">
+            {TIERS[5].name} <CountTo from={before.mr!} to={after.mr!} />
+            <b className={after.mr! >= before.mr! ? 'plus' : 'minus'}>
+              {after.mr! >= before.mr! ? '+' : '−'}
+              {Math.abs(after.mr! - before.mr!)}
+            </b>
+          </div>
+        ) : (
+          <div className="rc-name">{swap && moved ? line : placement ? '判定中…' : rankName(shown)}</div>
+        )}
         {(!placement || swap) && <RankBar v={shown} from={swap && moved ? (up ? 0 : 1) : before.progress} />}
         <small className="rc-rec">
           今シーズン {after.wins}勝 {after.losses}敗
@@ -90,4 +103,21 @@ export function RankChange({ before, after, placement = false }: { before: RankV
       </div>
     </motion.div>
   );
+}
+
+/** a number that runs from one value to another */
+function CountTo({ from, to }: { from: number; to: number }) {
+  const [n, setN] = useState(from);
+  useEffect(() => {
+    const t0 = performance.now() + 900;
+    let raf = 0;
+    const step = () => {
+      const u = Math.max(0, Math.min(1, (performance.now() - t0) / 900));
+      setN(Math.round(from + (to - from) * (1 - (1 - u) ** 3)));
+      if (u < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [from, to]);
+  return <span className="rc-mr-n">{n}</span>;
 }

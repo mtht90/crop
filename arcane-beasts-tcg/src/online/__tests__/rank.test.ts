@@ -50,7 +50,10 @@ describe('ranked', () => {
   test('master sits on top and has no division', () => {
     const v = viewOf({ ...newRank(NOV), rating: MASTER_AT + 50 });
     expect(v.tier).toBe(5);
-    expect(rankName(v)).toBe('マスター');
+    expect(rankName(v)).toBe('マスター 1550');
+    expect(v.mr).toBe(1550);
+    // the rating keeps climbing past the top of the ladder
+    expect(viewOf({ ...newRank(NOV), rating: MASTER_AT + 400 }).mr).toBe(1900);
     expect(emblemKey(v)).toBe('master');
   });
 

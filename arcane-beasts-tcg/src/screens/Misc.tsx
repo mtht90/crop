@@ -181,7 +181,7 @@ function DevRow() {
             オフにする
           </button>
         </div>
-        <div className="set-note">{msg || 'ストーリー全話・強敵すべてクリア済み。ジェムは使っても減りません'}</div>
+        <div className="set-note">{msg || '全クリア・全カード・ランクマッチはマスター。ジェムは減りません'}</div>
       </>
     );
   const submit = () => {
@@ -191,6 +191,7 @@ function DevRow() {
       return;
     }
     update((s) => enterDevMode(s, CHAPTERS.map((c) => c.id)));
+    online.devRank();
     sfx('fanfare-short', 0.6);
     setCode('');
     setMsg('');

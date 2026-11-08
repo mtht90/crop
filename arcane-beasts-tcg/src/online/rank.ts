@@ -58,6 +58,8 @@ export interface RankView {
   last?: { season: string; tier: number };
   /** false until the placement match is played */
   placed: boolean;
+  /** マスター only: the master rating, a number that keeps climbing */
+  mr?: number;
 }
 
 /** "2026-11" in Japan time */
@@ -120,11 +122,15 @@ export function viewOf(r: RankState): RankView {
   const master = i >= DIVS;
   const lo = master ? MASTER_AT : BASE + STEP * i;
   const progress = master ? Math.min(1, (r.rating - MASTER_AT) / 300) : i === 0 && r.rating < BASE ? 0 : Math.max(0, Math.min(1, (r.rating - lo) / STEP));
-  return { tier, div: master ? 0 : (i % 3) + 1, progress, season: r.season, games: r.games, wins: r.wins, losses: r.losses, last: r.last, placed: !!r.placed };
+  return { mr: master ? masterRating(r.rating) : undefined, tier, div: master ? 0 : (i % 3) + 1, progress, season: r.season, games: r.games, wins: r.wins, losses: r.losses, last: r.last, placed: !!r.placed };
 }
 
+/** マスターレーティング: master starts at 1500 and goes up from there */
+export const MR_START = 1500;
+export const masterRating = (rating: number) => Math.round(MR_START + rating - MASTER_AT);
+
 const ROMAN = ['', 'I', 'II', 'III'];
-export const rankName = (v: { tier: number; div: number }) => `${TIERS[v.tier].name}${v.div ? ` ${ROMAN[v.div]}` : ''}`;
+export const rankName = (v: { tier: number; div: number; mr?: number }) => (v.tier >= 5 ? `${TIERS[5].name}${v.mr != null ? ` ${v.mr}` : ''}` : `${TIERS[v.tier].name}${v.div ? ` ${ROMAN[v.div]}` : ''}`);
 
 /** the emblem picture: each division one step grander (1…12), master the grandest */
 export function emblemKey(v: { tier: number; div: number } | null | undefined) {
