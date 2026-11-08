@@ -1,4 +1,4 @@
-import { AnimatePresence, motion } from 'motion/react';
+import { AnimatePresence, motion, useAnimate } from 'motion/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { TopBar } from '../ui/TopBar';
 import { Icon } from '../ui/Icon';
@@ -261,7 +261,8 @@ export function LoginTrack({ onClaim, compact }: { onClaim?: (w: Wallet) => void
   const today = can ? loginSlot(progress) : (progress.loginCount + 6) % 7;
   // the square being stamped right now (the press plays once, then it stays like the others)
   const [fresh, setFresh] = useState<number | null>(null);
-  const [shake, setShake] = useState(0);
+  // the row shakes on impact (played on the element itself: nothing remounts, so the stamp plays once)
+  const [track, animateTrack] = useAnimate();
   const [plus, setPlus] = useState<number | null>(null);
   const pressed = useRef(false);
   const press = () => {
@@ -277,7 +278,7 @@ export function LoginTrack({ onClaim, compact }: { onClaim?: (w: Wallet) => void
       foley.boom(slot === 6 ? 1.4 : 0.8);
       sfx('ink', 0.55);
       vibrate(slot === 6 ? [30, 40, 60] : 35);
-      setShake((n) => n + 1);
+      if (track.current) void animateTrack(track.current, { x: [0, -7, 6, -4, 3, -1, 0], y: [0, 5, -3, 2, -1, 0, 0] }, { duration: 0.42, ease: 'easeOut' });
       const got = claimLogin();
       setTimeout(() => {
         setPlus(amount);
@@ -301,12 +302,7 @@ export function LoginTrack({ onClaim, compact }: { onClaim?: (w: Wallet) => void
           </span>
         </div>
       )}
-      <motion.div
-        key={shake}
-        className="login-track"
-        animate={shake ? { x: [0, -7, 6, -4, 3, -1, 0], y: [0, 5, -3, 2, -1, 0, 0] } : undefined}
-        transition={{ duration: 0.42, ease: 'easeOut' }}
-      >
+      <div ref={track} className="login-track">
         {LOGIN_REWARDS.map((c, i) => {
           const isFresh = fresh === i;
           const got = !isFresh && (i < today || (i === today && !can));
@@ -339,7 +335,7 @@ export function LoginTrack({ onClaim, compact }: { onClaim?: (w: Wallet) => void
             </div>
           );
         })}
-      </motion.div>
+      </div>
       <div className="login-foot">
         <span>通算ログイン {progress.loginCount} 日</span>
       </div>
