@@ -1154,5 +1154,4 @@
 /* start-up: the studio mark */
 .splash { position: fixed; inset: 0; z-index: 3000; display: grid; place-items: center; background: #000; }
 .splash-mark { display: flex; flex-direction: column; align-items: center; gap: 18px; }
-.splash-mark img { width: clamp(90px, 18vmin, 150px); height: auto; filter: drop-shadow(0 0 18px rgba(255, 40, 30, 0.35)); }
-.splash-mark span { font-family: var(--font-latin); font-weight: 700; font-size: clamp(13px, 2.2vmin, 18px); letter-spacing: 0.42em; padding-left: 0.42em; color: #d9d2c3; }
+.splash-mark img { width: clamp(150px, 34vmin, 280px); height: auto; filter: drop-shadow(0 0 22px rgba(40, 150, 255, 0.25)); }
