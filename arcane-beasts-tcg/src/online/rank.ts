@@ -1,6 +1,6 @@
 // ============================================================================
 // Ranked matches: a hidden rating (never shown) decides the tier the player
-// sees — ブロンズ III … ダイヤ I, then マスター.
+// sees — ブロンズ I … ダイヤ III, then マスター.
 //   • the rating moves Elo-style within that range
 //   • each game moves it by a set range (12…28); there is no demotion protection
 //   • seasons are calendar months (Japan time); a new season starts everyone
@@ -19,7 +19,7 @@ export const TIERS = [
 ] as const;
 
 export const START_RATING = 1050;
-/** where bronze III starts, and each division's width (a division is about 5 even wins) */
+/** where bronze I starts, and each division's width (a division is about 5 even wins) */
 const BASE = 800;
 export const STEP = 100;
 /** 5 tiers × 3 divisions below master */
@@ -46,7 +46,7 @@ export interface RankState {
 export interface RankView {
   /** 0 bronze … 5 master */
   tier: number;
-  /** 3, 2, 1 (I is the top of a tier); 0 for master */
+  /** 1, 2, 3 (III is the top of a tier); 0 for master */
   div: number;
   /** how far through the division (0…1) */
   progress: number;
@@ -66,7 +66,7 @@ export function seasonKey(now = Date.now()) {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
 }
 
-/** division index 0 (bronze III) … 14 (diamond I), 15 = master */
+/** division index 0 (bronze I) … 14 (diamond III), 15 = master */
 export function divIndex(rating: number) {
   if (rating >= MASTER_AT) return DIVS;
   return Math.max(0, Math.min(DIVS - 1, Math.floor((rating - BASE) / STEP)));
@@ -82,7 +82,7 @@ export function newRank(now = Date.now()): RankState {
 
 /** a new month: everyone starts the season a little lower (two divisions down) */
 export const SEASON_DROP = STEP * 2;
-/** the bottom of the ladder (a little below bronze III's start) */
+/** the bottom of the ladder (a little below bronze I's start) */
 const LOWEST = BASE - STEP * 2;
 
 /** carry a record into the current season */
@@ -120,7 +120,7 @@ export function viewOf(r: RankState): RankView {
   const master = i >= DIVS;
   const lo = master ? MASTER_AT : BASE + STEP * i;
   const progress = master ? Math.min(1, (r.rating - MASTER_AT) / 300) : i === 0 && r.rating < BASE ? 0 : Math.max(0, Math.min(1, (r.rating - lo) / STEP));
-  return { tier, div: master ? 0 : 3 - (i % 3), progress, season: r.season, games: r.games, wins: r.wins, losses: r.losses, last: r.last, placed: !!r.placed };
+  return { tier, div: master ? 0 : (i % 3) + 1, progress, season: r.season, games: r.games, wins: r.wins, losses: r.losses, last: r.last, placed: !!r.placed };
 }
 
 const ROMAN = ['', 'I', 'II', 'III'];
@@ -130,15 +130,15 @@ export const rankName = (v: { tier: number; div: number }) => `${TIERS[v.tier].n
 export function emblemKey(v: { tier: number; div: number } | null | undefined) {
   if (!v) return 'unranked';
   if (v.tier >= 5) return 'master';
-  return `${TIERS[v.tier].id}-${3 - v.div}`;
+  return `${TIERS[v.tier].id}-${v.div - 1}`;
 }
 
 /** a ranking step: 'up' (new tier), 'div-up', 'div-down', 'same' */
 export function stepOf(a: RankView, b: RankView) {
   if (b.tier > a.tier) return 'tier-up';
   if (b.tier < a.tier) return 'tier-down';
-  if (b.div < a.div) return 'div-up';
-  if (b.div > a.div) return 'div-down';
+  if (b.div > a.div) return 'div-up';
+  if (b.div < a.div) return 'div-down';
   return 'same';
 }
 
@@ -148,7 +148,7 @@ export const SEASON_GEMS = [100, 200, 400, 700, 1100, 1600];
 /** after this long in the queue, the tiers just above and below are allowed too */
 export const WIDEN_MS = 60_000;
 /**
- * may two waiting players meet? Same tier (any of III/II/I): yes. One tier apart:
+ * may two waiting players meet? Same tier (any of I/II/III): yes. One tier apart:
  * once either has waited a minute. Two or more apart: never.
  */
 export function canMeet(ratingA: number, ratingB: number, waitedMs: number) {
@@ -158,7 +158,7 @@ export function canMeet(ratingA: number, ratingB: number, waitedMs: number) {
 
 // ---------------------------------------------------------------------------
 // placement: one game against a bot decides where a new player starts.
-// Bronze and silver are the usual places; gold III is as high as it goes.
+// Bronze and silver are the usual places; gold I is as high as it goes.
 // ---------------------------------------------------------------------------
 export interface PlacementResult {
   win: boolean;
@@ -174,9 +174,9 @@ export function placementRating(r: PlacementResult): number {
   const mid = (div: number) => BASE + STEP * div + STEP / 2;
   const prizes = Math.max(0, Math.min(6, Math.floor(r.prizes)));
   const lost = Math.max(0, Math.min(6, Math.floor(r.prizesLost)));
-  if (!r.win) return mid(prizes >= 4 ? 2 : prizes >= 2 ? 1 : 0); // bronze I / II / III
-  if (lost <= 1 && r.turns <= 16) return mid(6); // gold III: a clean, quick win
-  return mid(lost <= 1 ? 5 : lost <= 3 ? 4 : 3); // silver I / II / III
+  if (!r.win) return mid(prizes >= 4 ? 2 : prizes >= 2 ? 1 : 0); // bronze III / II / I
+  if (lost <= 1 && r.turns <= 16) return mid(6); // gold I: a clean, quick win
+  return mid(lost <= 1 ? 5 : lost <= 3 ? 4 : 3); // silver III / II / I
 }
 
 /** the bot of the placement match: a CPU level a little above the middle */

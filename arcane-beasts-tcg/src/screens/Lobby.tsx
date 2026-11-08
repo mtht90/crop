@@ -524,7 +524,7 @@ export function Lobby() {
               <motion.div className="panel lb-sheet lb-season" initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} transition={{ duration: 0.5, ease: EASE_OUT }}>
                 <small>{Number(rank.last.season.slice(5))}月シーズン 終了</small>
                 <h3>シーズン報酬</h3>
-                <RankEmblem v={{ tier: rank.last.tier, div: rank.last.tier >= 5 ? 0 : 1 }} size={110} />
+                <RankEmblem v={{ tier: rank.last.tier, div: rank.last.tier >= 5 ? 0 : 3 }} size={110} />
                 <b style={{ color: TIERS[rank.last.tier].color }}>{TIERS[rank.last.tier].name}</b>
                 <div className="lb-season-gem">
                   <Icon name="gem" /> {SEASON_GEMS[rank.last.tier].toLocaleString()}

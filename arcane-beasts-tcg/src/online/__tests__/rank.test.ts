@@ -6,7 +6,7 @@ const NOV = Date.UTC(2026, 10, 7, 3);
 describe('ranked', () => {
   test('a new player starts in bronze I and the view hides the rating', () => {
     const v = viewOf(newRank(NOV));
-    expect(rankName(v)).toBe('ブロンズ I');
+    expect(rankName(v)).toBe('ブロンズ III');
     expect(Object.keys(v)).not.toContain('rating');
     expect(emblemKey(v)).toBe('bronze-2');
   });
@@ -70,11 +70,11 @@ describe('ranked', () => {
 
   test('placement: bronze or silver usually, gold III at the very most', () => {
     const tier = (r: Parameters<typeof placementRating>[0]) => viewOf({ ...newRank(NOV), rating: placementRating(r) });
-    expect(rankName(tier({ win: false, prizes: 0, prizesLost: 6, turns: 20 }))).toBe('ブロンズ III');
-    expect(rankName(tier({ win: false, prizes: 5, prizesLost: 6, turns: 30 }))).toBe('ブロンズ I');
-    expect(rankName(tier({ win: true, prizes: 6, prizesLost: 5, turns: 30 }))).toBe('シルバー III');
-    expect(rankName(tier({ win: true, prizes: 6, prizesLost: 1, turns: 30 }))).toBe('シルバー I');
-    expect(rankName(tier({ win: true, prizes: 6, prizesLost: 0, turns: 10 }))).toBe('ゴールド III');
+    expect(rankName(tier({ win: false, prizes: 0, prizesLost: 6, turns: 20 }))).toBe('ブロンズ I');
+    expect(rankName(tier({ win: false, prizes: 5, prizesLost: 6, turns: 30 }))).toBe('ブロンズ III');
+    expect(rankName(tier({ win: true, prizes: 6, prizesLost: 5, turns: 30 }))).toBe('シルバー I');
+    expect(rankName(tier({ win: true, prizes: 6, prizesLost: 1, turns: 30 }))).toBe('シルバー III');
+    expect(rankName(tier({ win: true, prizes: 6, prizesLost: 0, turns: 10 }))).toBe('ゴールド I');
     // nonsense in, still at most gold III
     expect(tier({ win: true, prizes: 999, prizesLost: -5, turns: 0 }).tier).toBeLessThanOrEqual(2);
   });

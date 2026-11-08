@@ -289,7 +289,7 @@ describe('online hub', () => {
     b.say({ t: 'queue', kind: 'ranked', deck: deckOf(3) });
     expect(a.last('start')?.kind).toBe('ranked');
     expect(a.last('start')?.opp.name).toBe('B');
-    expect(a.last('start')?.opp.rank).toEqual({ tier: 0, div: 1 });
+    expect(a.last('start')?.opp.rank).toEqual({ tier: 0, div: 3 });
     a.auto = false;
     b.auto = false;
     a.say({ t: 'surrender' });
