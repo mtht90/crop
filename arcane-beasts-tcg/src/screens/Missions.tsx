@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'motion/react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { TopBar } from '../ui/TopBar';
 import { Icon } from '../ui/Icon';
 import { artUrl, asset } from '../lib/assets';
@@ -263,8 +263,10 @@ export function LoginTrack({ onClaim, compact }: { onClaim?: (w: Wallet) => void
   const [fresh, setFresh] = useState<number | null>(null);
   const [shake, setShake] = useState(0);
   const [plus, setPlus] = useState<number | null>(null);
+  const pressed = useRef(false);
   const press = () => {
-    if (!can || fresh !== null) return;
+    if (!can || fresh !== null || pressed.current) return;
+    pressed.current = true;
     const slot = today;
     const amount = LOGIN_REWARDS[slot] + LOGIN_GEMS[slot];
     setFresh(slot);
@@ -283,6 +285,13 @@ export function LoginTrack({ onClaim, compact }: { onClaim?: (w: Wallet) => void
       }, 260);
     }, 470);
   };
+  // the screen opens, a beat, and today's stamp comes down by itself
+  useEffect(() => {
+    if (!can) return;
+    const t = setTimeout(press, 750);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [can]);
   return (
     <div className={`login ${compact ? 'compact' : ''}`}>
       {!compact && (
@@ -306,7 +315,6 @@ export function LoginTrack({ onClaim, compact }: { onClaim?: (w: Wallet) => void
             <div
               key={i}
               className={`login-day ${got ? 'got' : ''} ${cur ? 'cur' : ''} ${isFresh ? 'fresh' : ''} ${i === 6 ? 'last' : ''}`}
-              onClick={cur && can ? press : undefined}
             >
               <div className="d">DAY {i + 1}</div>
               <div className="ico">
@@ -334,9 +342,6 @@ export function LoginTrack({ onClaim, compact }: { onClaim?: (w: Wallet) => void
       </motion.div>
       <div className="login-foot">
         <span>通算ログイン {progress.loginCount} 日</span>
-        <button className="btn" disabled={!can || fresh !== null} onClick={press}>
-          {can && fresh === null ? `${LOGIN_REWARDS[today] + LOGIN_GEMS[today]} ジェムを受け取る` : '本日は受け取り済み'}
-        </button>
       </div>
     </div>
   );
