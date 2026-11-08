@@ -5,7 +5,7 @@
 // ============================================================================
 import { create } from 'zustand';
 import type { PlacementResult } from './rank';
-import { DEV_CODE, PROTOCOL, type ClientMsg, type MatchKind, type OnlineProfile, type OppInfo, type QueueKind, type RankView, type RoomInfo, type ServerMsg } from './protocol';
+import { DEV_CODE, PROTOCOL, type ClientMsg, type MatchKind, type OnlineProfile, type OppInfo, type QueueKind, type RankEntry, type RankView, type RoomInfo, type ServerMsg } from './protocol';
 
 const KEY = 'arcane-beasts-online-v1';
 const SERVER_KEY = 'arcane-beasts-server';
@@ -96,6 +96,8 @@ interface OnlineStore {
   queued: QueueKind | null;
   /** the tier change of the ranked game just finished */
   rankChange: { before: RankView; after: RankView; placement?: boolean } | null;
+  /** ランクマッチのランキング (top 10), when asked for */
+  ranking: { season: string; top: RankEntry[] } | null;
   transfer: { code: string; expires: number } | null;
   /** last error text (cleared when read by the UI) */
   error: string | null;
@@ -130,6 +132,7 @@ export const useOnline = create<OnlineStore>(() => ({
   room: null,
   queued: null,
   rankChange: null,
+  ranking: null,
   transfer: null,
   error: null,
   match: null,
@@ -313,6 +316,9 @@ class OnlineClient {
       case 'queued':
         set({ queued: m.kind, waiting: m.waiting });
         return;
+      case 'ranking':
+        set({ ranking: { season: m.season, top: m.top } });
+        return;
       case 'rank':
         if (m.placement) savePlacement(null);
         set({ rankChange: { before: m.before, after: m.after, placement: !!m.placement } });
@@ -381,6 +387,10 @@ class OnlineClient {
     useOnline.setState({ rankChange: null });
     if (useOnline.getState().status === 'open') this.send({ t: 'placement', ...r });
     else this.connect();
+  }
+  /** ask for this season's top 10 */
+  requestRanking() {
+    this.send({ t: 'ranking' });
   }
   /** 開発者モード is on (set by the app) */
   wantDev: (() => boolean) | null = null;

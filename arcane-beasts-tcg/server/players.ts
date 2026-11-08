@@ -10,7 +10,7 @@ import { dirname } from 'node:path';
 import { PORTRAITS, type OnlineProfile } from '../src/online/protocol';
 import { judgeName } from '../src/online/names';
 import type { PlayerBackend } from './remote';
-import { applyResult, MASTER_AT, newRank, placementRating, rollSeason, tierOf, viewOf, type PlacementResult, type RankState, type RankView } from '../src/online/rank';
+import { applyResult, MASTER_AT, newRank, seasonKey, placementRating, rollSeason, tierOf, viewOf, type PlacementResult, type RankState, type RankView } from '../src/online/rank';
 
 export interface PlayerRecord {
   id: string;
@@ -159,6 +159,14 @@ export class PlayerStore {
     p.ranked = { ...r, rating: Math.max(r.rating, MASTER_AT + 100), placed: true, best: 5 };
     this.save(p);
     return { before: viewOf(r), after: viewOf(p.ranked) };
+  }
+  /** this season's best ranked players, highest first */
+  topRanked(n: number): PlayerRecord[] {
+    const season = seasonKey(this.now());
+    return [...this.players.values()]
+      .filter((p) => p.ranked && this.rankState(p).placed && p.ranked.season === season)
+      .sort((a, b) => b.ranked!.rating - a.ranked!.rating)
+      .slice(0, n);
   }
   /** the placement match: sets the starting rank (once) */
   place(p: PlayerRecord, res: PlacementResult): { before: RankView; after: RankView } | null {

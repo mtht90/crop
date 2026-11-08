@@ -7,11 +7,11 @@
 import { validateDeck } from '../src/engine/decks';
 import { card } from '../src/engine/cards';
 import { GameSession, promptMs, type Outgoing } from '../src/online/session';
-import { DEV_CODE, PROTOCOL, type ClientMsg, type ErrorCode, type MatchKind, type OppInfo, type QueueKind, type RoomInfo, type ServerMsg } from '../src/online/protocol';
+import { DEV_CODE, PROTOCOL, type ClientMsg, type ErrorCode, type MatchKind, type OppInfo, type QueueKind, type RankEntry, type RoomInfo, type ServerMsg } from '../src/online/protocol';
 import { judgeName } from '../src/online/names';
 import { PlayerStore, portraitOk, type PlayerRecord } from './players';
 import { randomInt } from 'node:crypto';
-import { canMeet, viewOf } from '../src/online/rank';
+import { canMeet, seasonKey, viewOf } from '../src/online/rank';
 import { BOT_AFTER_MS, botAnswer, botDelay, makeBot, type Bot } from './bot';
 
 export interface Socket {
@@ -84,6 +84,7 @@ export class Hub {
   private grace: number;
   private rateLimit: number;
   private botAfter: number;
+  private rankingCache: { at: number; season: string; top: RankEntry[] } | null = null;
   private tick: ReturnType<typeof setInterval>;
   private log: (m: string) => void;
 
@@ -184,6 +185,17 @@ export class Hub {
         return this.join(c, m.code, m.deck);
       case 'queue':
         return this.enqueue(c, m.kind, m.deck);
+      case 'ranking': {
+        const now = Date.now();
+        if (!this.rankingCache || now - this.rankingCache.at > 15_000) {
+          const top = this.store.topRanked(10).map((p) => {
+            const v = this.store.rankView(p);
+            return { name: p.name, portrait: p.portrait, rank: { tier: v.tier, div: v.div, mr: v.mr } };
+          });
+          this.rankingCache = { at: now, season: seasonKey(now), top };
+        }
+        return this.send(c, { t: 'ranking', season: this.rankingCache.season, top: this.rankingCache.top });
+      }
       case 'dev': {
         if (m.code !== DEV_CODE) return this.error(c, 'bad_code', 'コードがちがいます');
         const r = this.store.makeMaster(c.player);
@@ -471,7 +483,7 @@ export class Hub {
     for (const c of this.queue.filter((q) => q.queued?.kind === 'ranked' && q.player && now - q.queued.since >= this.botAfter * this.scale)) {
       const deck = c.queued!.deck;
       this.dequeue(c);
-      const bot = makeBot(this.store.rating(c.player!));
+      const bot = makeBot(this.store.rating(c.player!), deck);
       const room = this.makeRoom('ranked');
       const me = Math.random() < 0.5 ? 0 : 1;
       this.sit(room, me, c, deck);

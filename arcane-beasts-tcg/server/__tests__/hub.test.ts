@@ -386,6 +386,24 @@ describe('online hub', () => {
     expect(hub.store.size).toBe(1);
   }, 90_000);
 
+  test('ranking: the season top players by rank, without ratings; bots and unplaced players are left out', async () => {
+    const hub = makeHub();
+    const bots = ['A', 'B', 'C', 'D'].map((n) => new Bot(hub, n));
+    for (const b of bots) b.hello();
+    const set = (b: Bot, rating: number, placed = true) => (hub.store.get(b.id)!.ranked = { ...hub.store.rankState(hub.store.get(b.id)!), rating, placed });
+    set(bots[0], 1100);
+    set(bots[1], 2400);
+    set(bots[2], 1500);
+    set(bots[3], 3000, false);
+    bots[0].say({ t: 'ranking' });
+    await until(() => !!bots[0].last('ranking'));
+    const r = bots[0].last('ranking')!;
+    expect(r.top.map((e) => e.name)).toEqual(['B', 'C', 'A']);
+    expect(r.top[0].rank.tier).toBe(5);
+    expect(r.top[0].rank.mr).toBe(1600);
+    expect(JSON.stringify(r)).not.toContain('rating');
+  });
+
   test('surrender ends the game; an idle player loses on time', async () => {
     const hub = makeHub({ timeScale: 0.002 });
     const a = new Bot(hub, 'A');

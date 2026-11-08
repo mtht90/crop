@@ -5,7 +5,8 @@
 // ============================================================================
 import { randomInt, randomUUID } from 'node:crypto';
 import { aiAnswer } from '../src/engine/ai';
-import { ALL_DECKS, cpuPrintTier, DECK_STRENGTH, expand, upgradeDeck } from '../src/engine/decks';
+import { card } from '../src/engine/cards';
+import { ALL_DECKS, expand, upgradeDeck } from '../src/engine/decks';
 import type { Answer } from '../src/engine/types';
 import type { Game } from '../src/engine/game';
 import { PORTRAITS } from '../src/online/protocol';
@@ -36,14 +37,49 @@ export interface Bot {
   turn: number;
 }
 
-/** a bot for someone of `rating`: a rank close to theirs, a CPU level to match */
-export function makeBot(rating: number): Bot {
+/** a rough strength of a deck: how big and how hard-hitting its monsters are */
+export function deckPower(ids: string[]): number {
+  let sum = 0;
+  let n = 0;
+  for (const id of ids) {
+    const c = card(id);
+    if (c.kind !== 'monster') continue;
+    const hit = Math.max(0, ...c.attacks.map((a) => a.damage ?? 0));
+    sum += c.hp + hit * 1.5;
+    n++;
+  }
+  return n ? sum / n : 0;
+}
+
+/** how rare the printings a deck brings are (0 regular … 3 gold): the highest seen at least twice */
+export function deckTier(ids: string[]): number {
+  const count = [0, 0, 0, 0];
+  for (const id of ids) {
+    const c = card(id) as { kind: string; tier?: number };
+    if (c.kind !== 'energy') count[Math.min(3, c.tier ?? 0)]++;
+  }
+  for (let t = 3; t > 0; t--) if (count[t] >= 2) return t;
+  return 0;
+}
+
+const POWERS = new Map<string, number>();
+const powerOf = (d: (typeof ALL_DECKS)[number]) => {
+  if (!POWERS.has(d.id)) POWERS.set(d.id, deckPower(expand(d.cards)));
+  return POWERS.get(d.id)!;
+};
+
+/**
+ * a bot for someone of `rating` who brings `deck`: a rank close to theirs, a CPU
+ * level to match the rank, and a prebuilt deck about as strong as theirs
+ */
+export function makeBot(rating: number, deck: string[] = []): Bot {
   const r = Math.round(rating + randomInt(-40, 41));
   const tier = tierOf(r);
   const level = [4, 5, 6, 7, 8, 8][tier];
-  // the stronger the tier, the stronger the deck pool
-  const pool = tier >= 2 ? ALL_DECKS.filter((d) => DECK_STRENGTH.includes(d.id)) : ALL_DECKS;
-  const d = pool[randomInt(pool.length)];
+  // the three prebuilt decks closest in strength to the player's, one at random
+  const mine = deck.length ? deckPower(deck) : 0;
+  const near = [...ALL_DECKS].sort((a, b) => Math.abs(powerOf(a) - mine) - Math.abs(powerOf(b) - mine)).slice(0, 3);
+  const d = deck.length ? near[randomInt(near.length)] : ALL_DECKS[randomInt(ALL_DECKS.length)];
   const record: PlayerRecord = {
     id: `bot-${randomUUID()}`,
     secrets: [],
@@ -56,7 +92,8 @@ export function makeBot(rating: number): Bot {
     createdAt: Date.now(),
     lastSeen: Date.now(),
   };
-  return { record, level, deck: upgradeDeck(expand(d.cards), cpuPrintTier(level)), actions: 0, turn: -1 };
+  // printings as rare as the player's own
+  return { record, level, deck: upgradeDeck(expand(d.cards), deckTier(deck)), actions: 0, turn: -1 };
 }
 
 /** the bot's answer to what the game is waiting for */

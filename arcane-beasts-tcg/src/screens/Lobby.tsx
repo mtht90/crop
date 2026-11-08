@@ -153,7 +153,7 @@ export function Lobby() {
   const ready = st.status === 'open' && !!deck && !deckErr;
   const busy = !!st.queued || !!waitingRoom;
   /** the small panels opened from the main screen */
-  const [sheet, setSheet] = useState<null | 'friend' | 'profile'>(null);
+  const [sheet, setSheet] = useState<null | 'friend' | 'profile' | 'ranking'>(null);
   const [mode, setMode] = useState<'make' | 'join'>('make');
 
   if (!supported)
@@ -279,6 +279,16 @@ export function Lobby() {
                     <RankLabel v={rank} />
                   </div>
                 )}
+                <button
+                  className="round-btn"
+                  title="ランキング"
+                  onClick={() => {
+                    online.requestRanking();
+                    setSheet('ranking');
+                  }}
+                >
+                  <Icon name="trophy" />
+                </button>
                 <button className="round-btn" title="プロフィール" onClick={() => setSheet('profile')}>
                   <Icon name="gear" />
                 </button>
@@ -338,7 +348,7 @@ export function Lobby() {
         <AnimatePresence>
           {sheet && !busy && (
             <motion.div className="lb-back" key="sheet" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={close}>
-              <motion.div className={`panel lb-sheet ${sheet === 'profile' ? 'wide' : ''}`} initial={{ opacity: 0, y: 24, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 12 }} transition={{ duration: 0.35, ease: EASE_OUT }} onClick={(e) => e.stopPropagation()}>
+              <motion.div className={`panel lb-sheet ${sheet === 'profile' || sheet === 'ranking' ? 'wide' : ''}`} initial={{ opacity: 0, y: 24, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 12 }} transition={{ duration: 0.35, ease: EASE_OUT }} onClick={(e) => e.stopPropagation()}>
                 <button className="icon-btn close" title="閉じる" onClick={close}>
                   <Icon name="close" />
                 </button>
@@ -365,6 +375,30 @@ export function Lobby() {
                           入る
                         </button>
                       </div>
+                    )}
+                  </>
+                )}
+
+                {sheet === 'ranking' && (
+                  <>
+                    <h3>ランキング</h3>
+                    {st.ranking && <div className="lb-rk-season">{Number(st.ranking.season.slice(5))}月シーズン</div>}
+                    {!st.ranking ? (
+                      <div className="lb-spinner small" />
+                    ) : st.ranking.top.length === 0 ? (
+                      <div className="lb-dim">まだいません</div>
+                    ) : (
+                      <ol className="lb-rk">
+                        {st.ranking.top.map((e, i) => (
+                          <li key={i} className={i < 3 ? `top${i + 1}` : ''}>
+                            <b className="lb-rk-n">{i + 1}</b>
+                            <img className="lb-rk-av" src={artUrl(e.portrait)} alt="" />
+                            <span className="lb-rk-name">{e.name}</span>
+                            <RankEmblem v={e.rank} size={30} />
+                            <RankLabel v={e.rank} />
+                          </li>
+                        ))}
+                      </ol>
                     )}
                   </>
                 )}

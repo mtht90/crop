@@ -33,6 +33,12 @@ export interface OppInfo {
   rank?: { tier: number; div: number; mr?: number };
 }
 
+export interface RankEntry {
+  name: string;
+  portrait: string;
+  rank: { tier: number; div: number; mr?: number };
+}
+
 export interface RoomInfo {
   code: string;
   kind: MatchKind;
@@ -64,6 +70,8 @@ export type ClientMsg =
   | { t: 'join'; code: string; deck: string[] }
   | { t: 'queue'; kind: QueueKind; deck: string[] }
   | { t: 'cancel' }
+  /** ランクマッチのランキング (top 10) */
+  | { t: 'ranking' }
   /** 開発者モード: the account goes to master */
   | { t: 'dev'; code: string }
   /** the ranked placement match (played against a bot on the device) is over */
@@ -97,6 +105,8 @@ export type ServerMsg =
   /** new frames to play in order, then (maybe) a prompt for you */
   | { t: 'batch'; frames: FrameMsg[]; prompt: Prompt | null; legal: Action[]; seq: number; actor: 0 | 1 | null; deadline: number | null }
   | { t: 'over'; winner: 0 | 1 | -1; reason: string }
+  /** ランクマッチのランキング: this season's top players (ranks only, never ratings) */
+  | { t: 'ranking'; season: string; top: RankEntry[] }
   /** after a ranked game: the tier before and after */
   | { t: 'rank'; before: RankView; after: RankView; placement?: boolean }
   | { t: 'peer'; connected: boolean; until: number | null }
