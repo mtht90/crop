@@ -120,7 +120,7 @@ class Bot {
 }
 
 let hubs: Hub[] = [];
-const makeHub = (o: { timeScale?: number; graceMs?: number; rateLimit?: number } = {}) => {
+const makeHub = (o: { timeScale?: number; graceMs?: number; rateLimit?: number; botAfterMs?: number } = {}) => {
   const hub = new Hub({ store: new PlayerStore(null), rateLimit: 1e9, ...o });
   hubs.push(hub);
   return hub;
@@ -306,7 +306,7 @@ describe('online hub', () => {
   }, 30_000);
 
   test('ranked: the next tier is allowed after a minute in the queue, two tiers apart never', async () => {
-    const hub = makeHub({ timeScale: 0.001 });
+    const hub = makeHub({ timeScale: 0.001, botAfterMs: 1e9 });
     const [a, s, g] = [new Bot(hub, 'Bronze'), new Bot(hub, 'Silver'), new Bot(hub, 'Gold')];
     for (const p of [a, s, g]) p.hello();
     const set = (b: Bot, rating: number) => (hub.store.get(b.id)!.ranked = { ...hub.store.rankState(hub.store.get(b.id)!), rating, placed: true });
@@ -361,6 +361,30 @@ describe('online hub', () => {
     expect(a.last('rank')!.after.mr).toBeGreaterThanOrEqual(1500);
     expect(a.last('renamed')!.profile.rank?.placed).toBe(true);
   });
+
+  test('ranked: alone for 30 seconds, a bot takes the other seat and plays the game out', async () => {
+    const hub = makeHub({ timeScale: 0.002 });
+    const a = new Bot(hub, 'A');
+    a.hello();
+    hub.store.get(a.id)!.ranked = { ...hub.store.rankState(hub.store.get(a.id)!), placed: true, rating: 1250 };
+    a.say({ t: 'queue', kind: 'ranked', deck: deckOf(1) });
+    expect(a.last('start')).toBeFalsy();
+    await until(() => !!a.last('start'), 5000);
+    const st = a.last('start')!;
+    expect(st.kind).toBe('ranked');
+    // it looks like anyone else: a name, a portrait, a rank near yours
+    expect(st.opp.name).toBeTruthy();
+    expect(st.opp.rank?.tier).toBe(1);
+    expect(JSON.stringify(a.msgs)).not.toMatch(/bot/i);
+    expect(a.last('room')!.room.players.every((p) => p.connected)).toBe(true);
+    await until(() => !!a.over, 60_000);
+    await until(() => !!a.last('rank'), 3000);
+    const r = hub.store.get(a.id)!.ranked!;
+    expect(r.games).toBe(1);
+    expect(r.rating).not.toBe(1250);
+    // the bot is not kept as a player
+    expect(hub.store.size).toBe(1);
+  }, 90_000);
 
   test('surrender ends the game; an idle player loses on time', async () => {
     const hub = makeHub({ timeScale: 0.002 });

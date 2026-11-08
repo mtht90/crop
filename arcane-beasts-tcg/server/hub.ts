@@ -11,7 +11,8 @@ import { DEV_CODE, PROTOCOL, type ClientMsg, type ErrorCode, type MatchKind, typ
 import { judgeName } from '../src/online/names';
 import { PlayerStore, portraitOk, type PlayerRecord } from './players';
 import { randomInt } from 'node:crypto';
-import { canMeet } from '../src/online/rank';
+import { canMeet, viewOf } from '../src/online/rank';
+import { BOT_AFTER_MS, botAnswer, botDelay, makeBot, type Bot } from './bot';
 
 export interface Socket {
   send(data: string): void;
@@ -24,6 +25,8 @@ export interface HubOptions {
   timeScale?: number;
   /** how long a dropped player may come back (ms, before scaling) */
   graceMs?: number;
+  /** ranked: how long someone waits alone before a bot steps in (ms, before scaling) */
+  botAfterMs?: number;
   /** messages per second one connection may send before it is dropped */
   rateLimit?: number;
   log?: (msg: string) => void;
@@ -35,6 +38,8 @@ interface Seat {
   deck: string[];
   grace: ReturnType<typeof setTimeout> | null;
   graceUntil: number | null;
+  /** a ranked bot sits here (the other player is not told) */
+  bot?: Bot;
 }
 
 interface Room {
@@ -44,6 +49,7 @@ interface Room {
   seats: [Seat | null, Seat | null];
   session: GameSession | null;
   turnTimer: ReturnType<typeof setTimeout> | null;
+  botTimer?: ReturnType<typeof setTimeout> | null;
   cleanup: ReturnType<typeof setTimeout> | null;
   created: number;
 }
@@ -77,6 +83,7 @@ export class Hub {
   private scale: number;
   private grace: number;
   private rateLimit: number;
+  private botAfter: number;
   private tick: ReturnType<typeof setInterval>;
   private log: (m: string) => void;
 
@@ -85,6 +92,7 @@ export class Hub {
     this.scale = opts.timeScale ?? 1;
     this.grace = opts.graceMs ?? 60_000;
     this.rateLimit = opts.rateLimit ?? 60;
+    this.botAfter = opts.botAfterMs ?? BOT_AFTER_MS;
     this.log = opts.log ?? (() => undefined);
     this.tick = sleepless(setInterval(() => this.matchmake(), Math.max(50, 2000 * this.scale)));
   }
@@ -387,7 +395,8 @@ export class Hub {
   private clearRoomTimers(room: Room) {
     if (room.turnTimer) clearTimeout(room.turnTimer);
     if (room.cleanup) clearTimeout(room.cleanup);
-    room.turnTimer = room.cleanup = null;
+    if (room.botTimer) clearTimeout(room.botTimer);
+    room.turnTimer = room.cleanup = room.botTimer = null;
   }
 
   private findActiveRoom(playerId: string): Room | null {
@@ -458,6 +467,17 @@ export class Hub {
         this.startGame(room);
       }
     }
+    // ranked: nobody came within 30 seconds, so a bot takes the other seat
+    for (const c of this.queue.filter((q) => q.queued?.kind === 'ranked' && q.player && now - q.queued.since >= this.botAfter * this.scale)) {
+      const deck = c.queued!.deck;
+      this.dequeue(c);
+      const bot = makeBot(this.store.rating(c.player!));
+      const room = this.makeRoom('ranked');
+      const me = Math.random() < 0.5 ? 0 : 1;
+      this.sit(room, me, c, deck);
+      room.seats[me === 0 ? 1 : 0] = { player: bot.record, conn: null, deck: bot.deck, grace: null, graceUntil: null, bot };
+      this.startGame(room);
+    }
   }
 
   // ------------------------------------------------------------------------
@@ -465,7 +485,7 @@ export class Hub {
   // ------------------------------------------------------------------------
   private oppInfo(p: PlayerRecord, ranked = false): OppInfo {
     if (!ranked) return { name: p.name, portrait: p.portrait };
-    const v = this.store.rankView(p);
+    const v = p.id.startsWith('bot-') && p.ranked ? viewOf(p.ranked) : this.store.rankView(p);
     return { name: p.name, portrait: p.portrait, rank: { tier: v.tier, div: v.div, mr: v.mr } };
   }
 
@@ -514,6 +534,30 @@ export class Hub {
     const session = room.session!;
     if (session.over) return this.finish(room);
     this.armTimer(room);
+    this.botTurn(room);
+  }
+
+  /** if the game waits for a bot, it answers after a moment */
+  private botTurn(room: Room) {
+    if (room.botTimer) clearTimeout(room.botTimer);
+    room.botTimer = null;
+    const pr = room.session?.pending;
+    if (!pr) return;
+    const seat = room.seats[pr.player];
+    if (!seat?.bot) return;
+    const bot = seat.bot;
+    const seq = room.session!.seq;
+    room.botTimer = sleepless(
+      setTimeout(() => {
+        const session = room.session;
+        if (!session || session.over || session.seq !== seq || room.state !== 'playing') return;
+        let r = session.answerRaw(pr.player, botAnswer(bot, session.game));
+        // (should the thinking ever fail, it ends its turn rather than stall the game)
+        if (r.error) r = session.answerRaw(pr.player, { type: 'action', action: { t: 'endTurn' } });
+        if (r.error) return this.forfeit(room, pr.player, 'timeout');
+        this.dispatch(room, r.out);
+      }, botDelay(pr.type) * this.scale),
+    );
   }
 
   /** the player who has to act gets a limited time */
@@ -541,12 +585,23 @@ export class Hub {
     this.log(`game ${room.code} over: ${w} (${session.game.s.winReason})`);
     const [p0, p1] = room.seats;
     // ranked: both ratings move together (a draw changes nothing)
-    const ranked = room.kind === 'ranked' && p0 && p1 && (w === 0 || w === 1) ? this.store.recordRanked(p0.player, p1.player, w) : null;
+    const vsBot = !!(p0?.bot || p1?.bot);
+    const ranked =
+      room.kind === 'ranked' && p0 && p1 && (w === 0 || w === 1)
+        ? vsBot
+          ? ((h: 0 | 1) => {
+              // only the person's side counts; the same change sits in both slots
+              const r = this.store.recordRankedVsBot(room.seats[h]!.player, room.seats[h === 0 ? 1 : 0]!.player.ranked!.rating, w === h);
+              return [r, r] as const;
+            })(p0.bot ? 1 : 0)
+          : this.store.recordRanked(p0.player, p1.player, w)
+        : null;
     ([0, 1] as const).forEach((idx) => {
       const seat = room.seats[idx];
       if (!seat) return;
       const r = session.result(idx);
       const win = w === idx;
+      if (seat.bot) return;
       if (!ranked && (w === 0 || w === 1)) this.store.recordCasual(seat.player, win);
       this.send(seat.conn, { t: 'over', winner: r.winner, reason: r.reason });
       if (ranked) {
@@ -576,7 +631,7 @@ export class Hub {
       code: room.code,
       kind: room.kind,
       state: room.state,
-      players: room.seats.filter(Boolean).map((s) => ({ name: s!.player.name, connected: !!s!.conn })),
+      players: room.seats.filter(Boolean).map((s) => ({ name: s!.player.name, connected: !!s!.conn || !!s!.bot })),
     };
   }
 

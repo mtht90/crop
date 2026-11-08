@@ -87,6 +87,20 @@ export class GameSession {
     return { out: this.flush() };
   }
 
+  /** an answer in the game's own numbering (the server's bot) */
+  answerRaw(seat: 0 | 1, ans: Answer): { out: Outgoing[]; error?: string } {
+    if (this.game.over) return { out: [], error: 'game over' };
+    const pr = this.waiting;
+    if (!pr || pr.player !== seat) return { out: [], error: 'not your turn' };
+    try {
+      this.game.answer(ans);
+    } catch (e) {
+      return { out: [], error: e instanceof Error ? e.message : 'bad answer' };
+    }
+    this.waiting = null;
+    return { out: this.flush() };
+  }
+
   /** end the game now (surrender, timeout, disconnect): `loser` loses */
   forfeit(loser: 0 | 1, reason: string): Outgoing[] {
     if (this.game.over) return [];

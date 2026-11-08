@@ -169,6 +169,13 @@ export class PlayerStore {
     this.save(p);
     return { before: viewOf(r), after: viewOf(p.ranked) };
   }
+  /** a ranked game against a bot: only the player's side is recorded */
+  recordRankedVsBot(p: PlayerRecord, botRating: number, win: boolean): { before: RankView; after: RankView } {
+    const r = this.rankState(p);
+    p.ranked = applyResult(r, botRating, win);
+    this.recordCasual(p, win);
+    return { before: viewOf(r), after: viewOf(p.ranked) };
+  }
   /** a ranked game ended: both ratings move; returns each side's view before and after */
   recordRanked(a: PlayerRecord, b: PlayerRecord, winner: 0 | 1): [{ before: RankView; after: RankView }, { before: RankView; after: RankView }] {
     const ra = this.rankState(a);
