@@ -7,6 +7,7 @@ import { RAID_CARDS } from '../engine/cards/bosses';
 import { EVENT_CARDS } from '../engine/cards/events';
 import { cpuPrintTier, deckById, expand, upgradeDeck, RIVALS, STARTER_DECKS, type Rival } from '../engine/decks';
 import type { Difficulty } from '../engine/ai';
+import { allRecipes, pickRecipe } from './recipes';
 import { cleanWardrobe, COSMETICS, cosmeticById, freshWardrobe, type Wardrobe } from './cosmetics';
 import type { CardDef, EType, MonsterCard, Rarity, SetCode } from '../engine/types';
 import {
@@ -85,6 +86,9 @@ export interface Save {
   rankPaid?: string;
   /** the player's icon (battles, online profile) */
   avatar?: string;
+  /** デッキレシピ owned, and the ones not yet shown to the player */
+  recipes?: string[];
+  recipeInbox?: string[];
   /** コイン: abolished — always 0 (old saves moved theirs into gems) */
   coins: number;
   /** ジェム: the one currency — packs and looks; earned by all play */
@@ -212,12 +216,22 @@ export function enterDevMode(s: Save, chapterIds: string[]) {
   s.stages = { ...stageNow(s.stages), cleared: STAGE_COUNT };
   s.wardrobe = { ...s.wardrobe, owned: [...new Set([...s.wardrobe.owned, ...COSMETICS.map((c) => c.id)])] };
   grantAllCards(s);
+  s.recipes = allRecipes().map((r) => r.id);
   refill(s);
 }
 
 /** every printing, up to the copy limit */
 /** cards outside the chapters (raid and event cards): その他 in the collection */
 export const OTHER_CARDS = [...RAID_CARDS, ...EVENT_CARDS];
+
+/** give a デッキレシピ the player does not have yet (`prefer` when it is new to them) */
+export function grantRecipe(s: Save, prefer?: string): string | null {
+  const r = pickRecipe(s.recipes ?? [], prefer);
+  if (!r) return null;
+  s.recipes = [...(s.recipes ?? []), r.id];
+  s.recipeInbox = [...(s.recipeInbox ?? []), r.id];
+  return r.id;
+}
 
 export function grantAllCards(s: Save) {
   for (const c of [...ALL_CARDS, ...OTHER_CARDS]) {
@@ -510,6 +524,7 @@ export const useStore = create<Store>((set, get) => ({
         res.first = true;
         res.gems = stage.gems;
         sv.cleared = index + 1;
+        if (index % 5 === 4) grantRecipe(s);
       }
       res.winGems = stage.winGems;
       res.shards = rollShards(index);
@@ -582,6 +597,7 @@ export const useStore = create<Store>((set, get) => ({
       if (win) {
         res.lapGems = raidLapReward(lap);
         res.damage = hp;
+        grantRecipe(s);
         const drop = rollRaidDrop(r.bossId);
         if (drop) {
           res.drop = drop.id;
@@ -605,6 +621,8 @@ export const useStore = create<Store>((set, get) => ({
       if (!canClaimLogin(p)) return;
       got.coins = 0;
       got.gems = LOGIN_REWARDS[loginSlot(p)] + LOGIN_GEMS[loginSlot(p)];
+      // the 7th day also brings a デッキレシピ
+      if (loginSlot(p) === 6) grantRecipe(s);
       p.loginCount++;
       p.loginDay = dayKey();
       s.gems += got.gems;
@@ -643,6 +661,8 @@ export const useStore = create<Store>((set, get) => ({
       got.coins = 0;
       got.gems = missionGems(m);
       s.gems += got.gems;
+      // weekly missions and achievements also bring a デッキレシピ
+      if (period === 'weekly' || period === 'achv') grantRecipe(s);
     });
     return got;
   },
@@ -683,6 +703,7 @@ export const useStore = create<Store>((set, get) => ({
       // level-ups pay their old coin bonus as gems too
       res.levelCoins = 0;
       res.levelGems = ups.reduce((n, l) => n + levelReward(l) + levelGems(l), 0);
+      for (const l of ups) if (l % 5 === 0) grantRecipe(s);
       s.gems += r.gems + res.levelGems;
     });
     return res;

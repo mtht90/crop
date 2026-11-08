@@ -11,6 +11,7 @@ import { buildFromCode, decodeDeck, encodeDeck } from '../engine/deckcode';
 import type { CardDef, EType } from '../engine/types';
 import { ENERGY_TYPES } from '../engine/types';
 import { owned, useStore, type SavedDeck } from '../state/store';
+import { recipeById, type Recipe } from '../state/recipes';
 import { artUrl } from '../lib/assets';
 import { CardFace, EnergySymbol } from '../ui/Card';
 import { Icon } from '../ui/Icon';
@@ -20,7 +21,7 @@ import { askConfirm } from '../ui/Confirm';
 import { AutoDeckModal } from './AutoDeck';
 
 type Kind = 'all' | 'monster' | 'trainer' | 'energy';
-type ListTab = 'mine' | 'recipes';
+type ListTab = 'mine' | 'recipes' | 'codes';
 
 const EASE_OUT = [0.16, 1, 0.3, 1] as const;
 
@@ -70,7 +71,7 @@ export function DeckBuilder() {
   const [dirty, setDirty] = useState(false);
   const [tab, setTab] = useState<ListTab>('mine');
   const [auto, setAuto] = useState(false);
-  const [codeOpen, setCodeOpen] = useState(false);
+  const [codeOpen, setCodeOpen] = useState<false | { code: string; name?: string }>(false);
   const [zoom, setZoom] = useState<string | null>(null);
   const [toast, setToast] = useState('');
 
@@ -171,7 +172,7 @@ export function DeckBuilder() {
                 <small>空のデッキから編集</small>
               </span>
             </button>
-            <button className="box db3-quick-btn" onClick={() => (sfx('expand', 0.5), setCodeOpen(true))}>
+            <button className="box db3-quick-btn" onClick={() => (sfx('expand', 0.5), setCodeOpen({ code: '' }))}>
               <Icon name="scroll-unfurled" />
               <span>
                 <b>コードで組む</b>
@@ -187,9 +188,14 @@ export function DeckBuilder() {
             <button className={`chip-btn ${tab === 'recipes' ? 'on' : ''}`} onClick={() => (foley.tick(), setTab('recipes'))}>
               <Icon name="book" /> おすすめデッキ
             </button>
+            <button className={`chip-btn ${tab === 'codes' ? 'on' : ''}`} onClick={() => (foley.tick(), setTab('codes'))}>
+              <Icon name="scroll-unfurled" /> デッキレシピ {(save.recipes ?? []).length}
+            </button>
           </div>
 
-          {tab === 'mine' ? (
+          {tab === 'codes' ? (
+            <RecipeList onBuild={(r) => (sfx('expand', 0.5), setCodeOpen({ code: r.code, name: r.name }))} onCopy={(r) => void navigator.clipboard?.writeText(r.code).then(() => flash('コードをコピーしました'), () => flash('コピーできませんでした'))} />
+          ) : tab === 'mine' ? (
             <div className="db3-grid">
               {save.decks.map((d, i) => {
                 const errs = validateDeck(d.cards);
@@ -303,6 +309,8 @@ export function DeckBuilder() {
       <AnimatePresence>
         {codeOpen && (
           <CodeModal
+            initial={codeOpen.code}
+            title={codeOpen.name}
             onClose={() => setCodeOpen(false)}
             onSave={(d, activate) => {
               store(d, activate);
@@ -324,9 +332,9 @@ export function DeckBuilder() {
  * デッキコード: paste or type a code, see the deck it stands for (cards you are
  * missing are dimmed, with how many you have), then save it.
  */
-function CodeModal({ onClose, onSave }: { onClose: () => void; onSave: (d: SavedDeck, activate: boolean) => void }) {
+function CodeModal({ onClose, onSave, initial = '', title }: { onClose: () => void; onSave: (d: SavedDeck, activate: boolean) => void; initial?: string; title?: string }) {
   const save = useStore((s) => s.save);
-  const [text, setText] = useState('');
+  const [text, setText] = useState(initial);
   const decoded = useMemo(() => (text.trim() ? decodeDeck(text) : null), [text]);
   const built = useMemo(() => (decoded ? buildFromCode(decoded, (cid) => owned(save, cid), printingsOf) : null), [decoded, save]);
   const complete = !!built && built.have === built.need && !validateDeck(built.cards).length;
@@ -336,7 +344,7 @@ function CodeModal({ onClose, onSave }: { onClose: () => void; onSave: (d: Saved
     mons.sort((a, b) => (b.c.kind === 'monster' && a.c.kind === 'monster' ? b.c.hp - a.c.hp : 0));
     return mons[0]?.c ?? null;
   }, [decoded]);
-  const name = ace ? `${ace.name}デッキ` : 'コードのデッキ';
+  const name = title ?? (ace ? `${ace.name}デッキ` : 'コードのデッキ');
   const make = (cards: string[], activate: boolean) =>
     onSave({ id: `deck-${Date.now()}`, name, cards, cover: cards.find((id) => card(id).name === ace?.name) ?? cards[0] ?? '' }, activate);
   const fill = () => {
@@ -677,6 +685,59 @@ function PoolCard({ c, inDeck, own, blocked, onAdd, onZoom }: { c: CardDef; inDe
       <CardFace cid={c.id} />
       {inDeck > 0 && <div className="cnt in">{inDeck}</div>}
       <div className="cnt">{isBasicE ? '∞' : `×${own}`}</div>
+    </div>
+  );
+}
+
+/** デッキレシピ: the deck codes won as rewards, newest first */
+function RecipeList({ onBuild, onCopy }: { onBuild: (r: Recipe) => void; onCopy: (r: Recipe) => void }) {
+  const save = useStore((s) => s.save);
+  const list = useMemo(
+    () =>
+      [...(save.recipes ?? [])]
+        .reverse()
+        .map((id) => recipeById(id))
+        .filter((r): r is Recipe => !!r)
+        .map((r) => {
+          const d = decodeDeck(r.code);
+          const b = d ? buildFromCode(d, (cid) => owned(save, cid), printingsOf) : null;
+          return { r, have: b?.have ?? 0, need: b?.need ?? 60 };
+        }),
+    [save],
+  );
+  if (!list.length) return <div className="empty-note">デッキレシピはまだありません</div>;
+  return (
+    <div className="db3-grid">
+      {list.map(({ r, have, need }, i) => {
+        const c = card(r.cover);
+        return (
+          <motion.div key={r.id} className="box db3-deck recipe" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(i, 12) * 0.03, duration: 0.4, ease: EASE_OUT }}>
+            <div className="db3-deck-art" onClick={() => onBuild(r)}>
+              <CardFace cid={r.cover} />
+            </div>
+            <div className="db3-deck-info">
+              <b>{r.name}</b>
+              <small>{c.kind === 'monster' && <EnergySymbol type={c.type} size="1.1em" />}</small>
+              <div className="db3-have">
+                <div className="ms3-bar">
+                  <div style={{ transform: `scaleX(${have / Math.max(1, need)})` }} />
+                </div>
+                <span>
+                  所持 {have}/{need}
+                </span>
+              </div>
+              <div className="db3-deck-btns">
+                <button className="btn small blue" onClick={() => onBuild(r)}>
+                  組む
+                </button>
+                <button className="btn small ghost" onClick={() => onCopy(r)}>
+                  コードをコピー
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        );
+      })}
     </div>
   );
 }

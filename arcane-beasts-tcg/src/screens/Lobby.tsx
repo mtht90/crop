@@ -4,7 +4,7 @@
 // ============================================================================
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
-import { activeDeck, useStore } from '../state/store';
+import { activeDeck, grantRecipe, useStore } from '../state/store';
 import { validateDeck } from '../engine/decks';
 import { artUrl } from '../lib/assets';
 import { TopBar } from '../ui/TopBar';
@@ -569,6 +569,8 @@ export function Lobby() {
                       if (s.rankPaid === last.season) return;
                       s.rankPaid = last.season;
                       s.gems += SEASON_GEMS[last.tier];
+                      // and デッキレシピ: one, two from gold, three from diamond
+                      for (let i = 0; i < 1 + Math.floor(last.tier / 2); i++) grantRecipe(s);
                     });
                     foley.chime(6);
                     sfx('gold', 0.6);

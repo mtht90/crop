@@ -36,6 +36,7 @@ import { More } from './screens/More';
 import './styles/app.css';
 import { preloadWithProgress } from './ui/Loading';
 import { Splash } from './ui/Splash';
+import { RecipeInbox } from './ui/RecipeInbox';
 import { artUrl as _artUrl, asset } from './lib/assets';
 
 import { useBattle } from './battle/controller';
@@ -225,6 +226,7 @@ export function App() {
         {TAB_OF[screen] && <TabBar screen={screen} />}
       </div>
       <NewsModal />
+      <RecipeInbox />
       <ConfirmDialog />
     </>
   );

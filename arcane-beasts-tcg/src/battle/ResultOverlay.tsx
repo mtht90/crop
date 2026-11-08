@@ -6,7 +6,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
 import { CHAPTERS, episodeLabel, episodeNo } from '../story';
 import { claimableCount, CPU_FIRST_GEMS, storyFirstClear, expToNext, levelGems, levelReward, bump } from '../state/progress';
-import { extCtx, useStore, type BattleRewardResult } from '../state/store';
+import { extCtx, grantRecipe, useStore, type BattleRewardResult } from '../state/store';
 import { useBattle } from './controller';
 import { artUrl, asset } from '../lib/assets';
 import { Icon } from '../ui/Icon';
@@ -123,6 +123,8 @@ export function ResultOverlay() {
       : null;
     if (firstClear && cfg.rival) update((s) => void s.beaten.push(cfg.rival!.id));
     if (firstClear && cpu) update((s) => void (s.cpuBeaten = [...(s.cpuBeaten ?? []), cpu]));
+    // a first win brings a デッキレシピ (a story rival's: their own deck)
+    if (firstClear) update((s) => void grantRecipe(s, cfg.rival ? `pre:${cfg.rival.deck}` : undefined));
     const r = recordBattle(
       {
         win,

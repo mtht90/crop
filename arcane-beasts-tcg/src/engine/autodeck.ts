@@ -65,7 +65,10 @@ export interface AutoDeck {
   notes: string[];
 }
 
-export function buildDeck(aceName: string, owned: OwnedFn): AutoDeck {
+/** how a deck plays: 標準, 速攻 (fast basics and pressure), 堅守 (big bodies and healing) */
+export type DeckStyle = 'std' | 'rush' | 'guard';
+
+export function buildDeck(aceName: string, owned: OwnedFn, style: DeckStyle = 'std'): AutoDeck {
   const ace = byName(aceName) as MonsterCard;
   const type = ace.type === 'colorless' ? (ace.attacks.flatMap((a) => a.cost).find((c) => c !== 'colorless') ?? 'fighting') : ace.type;
   const used = new Map<string, number>(); // cid → copies taken
@@ -108,7 +111,13 @@ export function buildDeck(aceName: string, owned: OwnedFn): AutoDeck {
     .filter((m) => !MONSTERS.some((x) => x.evolvesFrom === m.name && ownedOfName(x.name, owned) > 0 && fitsType(x, type)))
     .map((m) => ({ m, chain: chainTo(m) }))
     .filter(({ chain }) => chain.every((c) => ownedOfName(c.name, owned) > 0 && fitsType(c, type)))
-    .sort((a, b) => power(b.m) / b.chain.length - power(a.m) / a.chain.length);
+    .sort((a, b) =>
+      style === 'rush'
+        ? power(b.m) / b.chain.length ** 2 - power(a.m) / a.chain.length ** 2
+        : style === 'guard'
+          ? b.m.hp - a.m.hp || power(b.m) - power(a.m)
+          : power(b.m) / b.chain.length - power(a.m) / a.chain.length,
+    );
   for (const { chain } of tops) {
     if (monsterCount() >= 17) break;
     const counts = chain.length === 1 ? [2] : chain.length === 2 ? [3, 2] : [3, 2, 2];
@@ -126,7 +135,33 @@ export function buildDeck(aceName: string, owned: OwnedFn): AutoDeck {
     return m.hp >= 150;
   });
   const STADIUM: Partial<Record<EType, string>> = { fire: '灼熱の火山帯', water: '嵐の海岸', grass: 'エルフの森', dark: '呪われた地下墓地', fighting: 'ドワーフの坑道', psychic: '古代の遺跡', lightning: '雷鳴の頂', colorless: '天空の浮島' };
-  const trainers: [string, number, boolean?][] = [
+  const RUSH: [string, number, boolean?][] = [
+    ['大賢者の研究', 4],
+    ['召喚の巻物', 4],
+    ['騎士の突撃', 3],
+    ['狩人の知恵', 3],
+    ['エネルギー結晶', 3],
+    ['魔獣の笛', 2],
+    ['司令官の号令', 2],
+    ['運命のコイン', 2],
+    [STADIUM[type] ?? '英雄の古戦場', 2],
+    ['見習い魔導士', 2],
+    ['進化の秘薬', 1, hasStage2],
+  ];
+  const GUARD: [string, number, boolean?][] = [
+    ['大賢者の研究', 4],
+    ['回復薬', 4],
+    ['召喚の巻物', 3],
+    ['転移の羽', 3],
+    ['覇者の紋章', 2, hasRule],
+    ['進化の秘薬', 2, hasStage2],
+    ['書庫の整理', 2],
+    ['賢者の水晶', 2],
+    [STADIUM[type] ?? '英雄の古戦場', 2],
+    ['司令官の号令', 2],
+    ['魔獣の笛', 1],
+  ];
+  const trainers: [string, number, boolean?][] = style === 'rush' ? RUSH : style === 'guard' ? GUARD : [
     ['大賢者の研究', 4],
     ['召喚の巻物', 4],
     ['魔獣の笛', 2],
