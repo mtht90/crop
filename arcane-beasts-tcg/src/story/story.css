@@ -181,6 +181,13 @@
 .story-cutin .por { position: absolute; bottom: -4%; height: 112%; width: auto; max-width: 60%; object-fit: contain; object-position: 50% 0; filter: drop-shadow(0 10px 30px rgba(0, 0, 0, 0.7)); }
 .story-cutin .nm { position: absolute; top: 34%; font-family: var(--font-title); font-weight: 900; font-size: calc(var(--u) * 9.2); letter-spacing: 0.12em; white-space: nowrap; background: var(--title-grad); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 6px 0 rgba(0, 0, 0, 0.65)) drop-shadow(0 0 30px rgba(233, 196, 106, 0.55)); }
 .story-cutin .ln { position: absolute; top: 62%; font-family: var(--font-ui); font-weight: 700; font-size: calc(var(--u) * 2); letter-spacing: 0.2em; color: #f6eedb; text-shadow: 0 3px 10px #000; white-space: nowrap; }
+@media (orientation: portrait) {
+  /* a tall screen: the character stands over the band, the name and line on its right */
+  .story-cutin .band { top: 30%; height: 42%; }
+  .story-cutin .por { height: 66%; bottom: 28%; max-width: 78%; object-position: 50% 100%; left: -8% !important; -webkit-mask-image: linear-gradient(180deg, #000 78%, transparent 99%); mask-image: linear-gradient(180deg, #000 78%, transparent 99%); }
+  .story-cutin .nm { top: 47%; font-size: calc(var(--u) * 8.4); }
+  .story-cutin .ln { top: 63%; font-size: calc(var(--u) * 2.3); letter-spacing: 0.12em; }
+}
 
 /* ---- colour grades ---- */
 .story-world { transition: filter 1.2s ease; }

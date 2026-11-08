@@ -182,7 +182,7 @@ function LoginModal({ onClose }: { onClose: () => void }) {
           <Icon name="close" />
         </button>
         <h2>ログインボーナス</h2>
-        <div className="sub">{got ? `${got.gems} ジェムを受け取りました` : '7日目は大きな報酬がもらえます'}</div>
+        {got && <div className="sub">{`${got.gems} ジェムを受け取りました`}</div>}
         <LoginTrack
           compact
           onClaim={(c) => {

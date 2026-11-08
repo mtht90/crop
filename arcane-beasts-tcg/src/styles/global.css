@@ -60,6 +60,9 @@ html, body, #root {
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
 }
+/* the whole screen, home-indicator strip included (an installed iPhone app can leave
+   a 100%-high page short of the bottom edge) */
+#root { position: fixed; inset: 0; width: auto; height: auto; }
 button { font-family: inherit; }
 img { -webkit-user-drag: none; }
 ::-webkit-scrollbar { width: 10px; height: 10px; }
