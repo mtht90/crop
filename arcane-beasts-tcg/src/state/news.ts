@@ -18,6 +18,18 @@ export const NEWS_KIND_JP: Record<NewsKind, string> = { update: 'アップデー
 
 export const NEWS: NewsItem[] = [
   {
+    id: '2026-11-09-odds',
+    kind: 'info',
+    date: '2026/11/09',
+    title: '★3の提供割合を変更しました',
+    body: [
+      '・通常パック：★3はおよそ3パックに1枚',
+      '・プレミアムパック：5枚目は必ず★3以上',
+      '・★4・★5の提供割合は変わりません',
+      '・ログインボーナスは、画面を開くと自動で受け取るようになりました',
+    ],
+  },
+  {
     id: '2026-11-08-smooth',
     kind: 'update',
     date: '2026/11/08',

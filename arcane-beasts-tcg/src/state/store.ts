@@ -822,16 +822,16 @@ export const PACK_TABLE: Slot[] = [
   [[1, 0.8], [2, 1]],
   [[1, 0.8], [2, 1]],
   [[1, 0.75], [2, 1]],
-  [[2, 0.75], [3, 1]],
-  // ★4 about 1 pack in 100, ★5 about 1 in 2000 (with the god pack)
-  [[2, 0.4], [3, 0.9896], [4, 0.9996], [5, 1]],
+  [[1, 0.4], [2, 1]],
+  // ★3 about 1 pack in 3, ★4 about 1 in 100, ★5 about 1 in 2000 (with the god pack)
+  [[2, 0.7], [3, 0.9896], [4, 0.9996], [5, 1]],
 ];
 export const PREMIUM_TABLE: Slot[] = [
-  [[1, 0.5], [2, 0.95], [3, 1]],
-  [[1, 0.45], [2, 0.93], [3, 1]],
-  [[2, 0.7], [3, 1]],
-  // about three times the normal pack: ★4 ~3%, ★5 ~0.15% per pack
-  [[3, 0.9895], [4, 0.9995], [5, 1]],
+  [[1, 0.5], [2, 1]],
+  [[1, 0.45], [2, 1]],
+  [[1, 0.2], [2, 1]],
+  // the last card is always ★3 or better; ★4 ~3%, ★5 ~0.15% per pack
+  [[2, 0.6], [3, 0.9895], [4, 0.9995], [5, 1]],
   [[3, 0.979], [4, 0.9992], [5, 1]],
 ];
 /** a very rare pack where every card is ★3 or better */
