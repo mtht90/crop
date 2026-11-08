@@ -98,12 +98,15 @@ export function rollSeason(r: RankState, now = Date.now()): RankState {
 
 /** a game moves the rating by 12…28 (20 between equals; more for beating someone stronger) */
 export const SWING = { min: 12, mid: 20, max: 28 };
+/** in master, where the rating is shown as a number: 7…24 a game */
+export const MASTER_SWING = { min: 7, mid: 15, max: 24 };
 
 /** the record after a game against `opp` (rating) */
 export function applyResult(r: RankState, opp: number, win: boolean): RankState {
   const expect = 1 / (1 + 10 ** ((opp - r.rating) / 400));
-  const size = Math.round(SWING.mid * 2 * (win ? 1 - expect : expect));
-  const delta = (win ? 1 : -1) * Math.max(SWING.min, Math.min(SWING.max, size));
+  const sw = r.rating >= MASTER_AT ? MASTER_SWING : SWING;
+  const size = Math.round(sw.mid * 2 * (win ? 1 - expect : expect));
+  const delta = (win ? 1 : -1) * Math.max(sw.min, Math.min(sw.max, size));
   const rating = Math.max(LOWEST, r.rating + delta);
   const tier = tierOf(rating);
   return {
@@ -125,8 +128,8 @@ export function viewOf(r: RankState): RankView {
   return { mr: master ? masterRating(r.rating) : undefined, tier, div: master ? 0 : (i % 3) + 1, progress, season: r.season, games: r.games, wins: r.wins, losses: r.losses, last: r.last, placed: !!r.placed };
 }
 
-/** マスターレーティング: master starts at 1500 and goes up from there */
-export const MR_START = 1500;
+/** マスターレーティング: master starts at 1 and goes up from there */
+export const MR_START = 1;
 export const masterRating = (rating: number) => Math.round(MR_START + rating - MASTER_AT);
 
 const ROMAN = ['', 'I', 'II', 'III'];

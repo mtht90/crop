@@ -50,10 +50,10 @@ describe('ranked', () => {
   test('master sits on top and has no division', () => {
     const v = viewOf({ ...newRank(NOV), rating: MASTER_AT + 50 });
     expect(v.tier).toBe(5);
-    expect(rankName(v)).toBe('マスター 1550');
-    expect(v.mr).toBe(1550);
+    expect(rankName(v)).toBe('マスター 51');
+    expect(v.mr).toBe(51);
     // the rating keeps climbing past the top of the ladder
-    expect(viewOf({ ...newRank(NOV), rating: MASTER_AT + 400 }).mr).toBe(1900);
+    expect(viewOf({ ...newRank(NOV), rating: MASTER_AT + 400 }).mr).toBe(401);
     expect(emblemKey(v)).toBe('master');
   });
 
@@ -80,5 +80,16 @@ describe('ranked', () => {
     expect(rankName(tier({ win: true, prizes: 6, prizesLost: 0, turns: 10 }))).toBe('シルバー I');
     // nonsense in, still at most silver I
     expect(rankName(tier({ win: true, prizes: 999, prizesLost: -5, turns: 0 }))).toBe('シルバー I');
+  });
+
+  test('master: the rating moves 7 to 24 a game', () => {
+    const r = { ...newRank(NOV), rating: MASTER_AT + 300 };
+    for (const opp of [MASTER_AT - 400, MASTER_AT + 300, MASTER_AT + 1200]) {
+      for (const win of [true, false]) {
+        const d = Math.abs(applyResult(r, opp, win).rating - r.rating);
+        expect(d).toBeGreaterThanOrEqual(7);
+        expect(d).toBeLessThanOrEqual(24);
+      }
+    }
   });
 });

@@ -358,7 +358,7 @@ describe('online hub', () => {
     a.say({ t: 'dev', code: 'ARCANE-DEV' });
     await until(() => !!a.last('rank'));
     expect(a.last('rank')!.after.tier).toBe(5);
-    expect(a.last('rank')!.after.mr).toBeGreaterThanOrEqual(1500);
+    expect(a.last('rank')!.after.mr).toBeGreaterThanOrEqual(1);
     expect(a.last('renamed')!.profile.rank?.placed).toBe(true);
   });
 
@@ -400,7 +400,7 @@ describe('online hub', () => {
     const r = bots[0].last('ranking')!;
     expect(r.top.map((e) => e.name)).toEqual(['B', 'C', 'A']);
     expect(r.top[0].rank.tier).toBe(5);
-    expect(r.top[0].rank.mr).toBe(1600);
+    expect(r.top[0].rank.mr).toBe(101);
     expect(JSON.stringify(r)).not.toContain('rating');
   });
 
