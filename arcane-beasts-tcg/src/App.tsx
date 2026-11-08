@@ -44,6 +44,8 @@ if (import.meta.env.DEV) Object.assign(window, { __stores: { useStore, useBattle
 /** pictures the first screens show (title, home) */
 const BOOT_ART = ['story/grim-altar', 'story/landscape-mountains-01', 'story/swamp-02', 'monsters/jinn'];
 const artUrl = _artUrl;
+/** the start-up loading screen runs at least this long, so a tip can be read */
+const BOOT_MS = 5200;
 
 function debugBattle() {
   const q = new URLSearchParams(location.search);
@@ -99,9 +101,8 @@ export function App() {
     // the plain-HTML splash (shown while the code downloads) hands over to the loading screen
     document.getElementById('boot')?.remove();
     if (booted) return;
-    const t0 = Date.now();
     const urls = [asset('ui/dragon.webp'), ...BOOT_ART.map(artUrl)];
-    void preloadWithProgress(urls, (p) => setBoot(p)).then(() => setTimeout(() => setBooted(true), Math.max(0, 1400 - (Date.now() - t0))));
+    void preloadWithProgress(urls, (p) => setBoot(p));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const settings = useStore((s) => s.save.settings);
@@ -111,6 +112,8 @@ export function App() {
   useEffect(() => {
     const q = new URLSearchParams(location.search);
     // a game found by the server opens the battle screen
+    // the icon chosen in 設定 is the one other players see
+    online.wantPortrait = () => useStore.getState().save.avatar;
     online.onStart = (m) => {
       const st = useStore.getState();
       const deck = activeDeck(st.save);
@@ -177,7 +180,7 @@ export function App() {
   if (!booted)
     return (
       <AnimatePresence>
-        <Loading key="boot" progress={boot} />
+        <Loading key="boot" progress={boot} minMs={BOOT_MS} onDone={() => setBooted(true)} />
       </AnimatePresence>
     );
   return (

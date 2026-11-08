@@ -81,6 +81,8 @@ export interface Save {
   econ?: number;
   /** ランクマッチ: the last season whose reward was taken */
   rankPaid?: string;
+  /** the player's icon (battles, online profile) */
+  avatar?: string;
   /** コイン: abolished — always 0 (old saves moved theirs into gems) */
   coins: number;
   /** ジェム: the one currency — packs and looks; earned by all play */
@@ -152,6 +154,8 @@ export interface BattleConfig {
   story?: { chapterId: string };
   /** this week's boss raid */
   raid?: { bossId: string; startDamage: number; hp: number; bonus: number; lap: number };
+  /** ランクマッチの認定戦 (against a bot; the result goes to the server) */
+  placement?: boolean;
   /** a stage of the stage event (its rule is in mods) */
   stage?: { key: string; index: number; mods: import('../engine/types').BattleMods };
 }

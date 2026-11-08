@@ -61,6 +61,8 @@ export type ClientMsg =
   | { t: 'join'; code: string; deck: string[] }
   | { t: 'queue'; kind: QueueKind; deck: string[] }
   | { t: 'cancel' }
+  /** the ranked placement match (played against a bot on the device) is over */
+  | { t: 'placement'; win: boolean; prizes: number; prizesLost: number; turns: number }
   | { t: 'answer'; seq: number; answer: Answer }
   /** ask for the table as it stands (after a lost answer or a doubtful link) */
   | { t: 'sync' }
@@ -91,7 +93,7 @@ export type ServerMsg =
   | { t: 'batch'; frames: FrameMsg[]; prompt: Prompt | null; legal: Action[]; seq: number; actor: 0 | 1 | null; deadline: number | null }
   | { t: 'over'; winner: 0 | 1 | -1; reason: string }
   /** after a ranked game: the tier before and after */
-  | { t: 'rank'; before: RankView; after: RankView }
+  | { t: 'rank'; before: RankView; after: RankView; placement?: boolean }
   | { t: 'peer'; connected: boolean; until: number | null }
   | { t: 'stamp'; from: 0 | 1; id: string }
   | { t: 'error'; code: ErrorCode; message: string }

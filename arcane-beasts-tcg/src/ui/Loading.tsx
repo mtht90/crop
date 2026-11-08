@@ -53,7 +53,7 @@ function Sparkle({ className = '' }: { className?: string }) {
 export function Loading({ progress, label = 'Now Loading', minMs = MIN_MS, onDone }: { progress: number; label?: string; minMs?: number; onDone?: () => void }) {
   const [tip, setTip] = useState(() => Math.floor(Math.random() * TIPS.length));
   useEffect(() => {
-    const iv = setInterval(() => setTip((t) => (t + 1) % TIPS.length), 3800);
+    const iv = setInterval(() => setTip((t) => (t + 1) % TIPS.length), 6000);
     return () => clearInterval(iv);
   }, []);
   // the bar follows a natural curve over at least minMs, and never runs ahead of

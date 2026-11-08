@@ -4,6 +4,7 @@
 // the lobby reads. Game messages are handed to the battle controller.
 // ============================================================================
 import { create } from 'zustand';
+import type { PlacementResult } from './rank';
 import { PROTOCOL, type ClientMsg, type MatchKind, type OnlineProfile, type OppInfo, type QueueKind, type RankView, type RoomInfo, type ServerMsg } from './protocol';
 
 const KEY = 'arcane-beasts-online-v1';
@@ -94,12 +95,30 @@ interface OnlineStore {
   room: RoomInfo | null;
   queued: QueueKind | null;
   /** the tier change of the ranked game just finished */
-  rankChange: { before: RankView; after: RankView } | null;
+  rankChange: { before: RankView; after: RankView; placement?: boolean } | null;
   transfer: { code: string; expires: number } | null;
   /** last error text (cleared when read by the UI) */
   error: string | null;
   /** the game in progress, if any */
   match: MatchInfo | null;
+}
+
+const PLACEMENT_KEY = 'arcane-beasts-placement';
+function loadPlacement(): PlacementResult | null {
+  try {
+    const v = JSON.parse(localStorage.getItem(PLACEMENT_KEY) ?? 'null') as PlacementResult | null;
+    return v && typeof v.win === 'boolean' ? v : null;
+  } catch {
+    return null;
+  }
+}
+function savePlacement(r: PlacementResult | null) {
+  try {
+    if (r) localStorage.setItem(PLACEMENT_KEY, JSON.stringify(r));
+    else localStorage.removeItem(PLACEMENT_KEY);
+  } catch {
+    /* ignore */
+  }
 }
 
 export const useOnline = create<OnlineStore>(() => ({
@@ -265,6 +284,12 @@ class OnlineClient {
         const c = loadCreds();
         saveCreds({ ...c, id: m.profile.id, secret: m.secret, name: m.profile.name, portrait: m.profile.portrait });
         set({ status: 'open', failed: false, profile: m.profile, online: m.online, waiting: m.waiting });
+        // a placement result that has not reached the server yet
+        const pend = loadPlacement();
+        if (pend) this.send({ t: 'placement', ...pend });
+        // the icon chosen in the game (設定) is the one others see
+        const look = this.wantPortrait?.();
+        if (look && look !== m.profile.portrait) this.send({ t: 'rename', name: m.profile.name, portrait: look });
         return;
       }
       case 'renamed':
@@ -287,7 +312,8 @@ class OnlineClient {
         set({ queued: m.kind, waiting: m.waiting });
         return;
       case 'rank':
-        set({ rankChange: { before: m.before, after: m.after } });
+        if (m.placement) savePlacement(null);
+        set({ rankChange: { before: m.before, after: m.after, placement: !!m.placement } });
         return;
       case 'pong':
         set({ online: m.online, waiting: m.waiting });
@@ -347,6 +373,15 @@ class OnlineClient {
   joinRoom(code: string, deck: string[]) {
     this.send({ t: 'join', code, deck });
   }
+  /** the placement match was played (against the bot, on this device): report it */
+  submitPlacement(r: PlacementResult) {
+    savePlacement(r);
+    useOnline.setState({ rankChange: null });
+    if (useOnline.getState().status === 'open') this.send({ t: 'placement', ...r });
+    else this.connect();
+  }
+  /** the icon the game wants others to see (set by the app) */
+  wantPortrait: (() => string | undefined) | null = null;
   queue(kind: QueueKind, deck: string[]) {
     this.send({ t: 'queue', kind, deck });
   }

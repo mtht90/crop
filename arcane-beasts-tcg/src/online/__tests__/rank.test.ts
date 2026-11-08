@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { applyResult, canMeet, emblemKey, newRank, rankName, rollSeason, seasonKey, SEASON_DROP, START_RATING, SWING, tierOf, viewOf, MASTER_AT, WIDEN_MS } from '../rank';
+import { placementRating, applyResult, canMeet, emblemKey, newRank, rankName, rollSeason, seasonKey, SEASON_DROP, START_RATING, SWING, tierOf, viewOf, MASTER_AT, WIDEN_MS } from '../rank';
 
 const NOV = Date.UTC(2026, 10, 7, 3);
 
@@ -39,8 +39,8 @@ describe('ranked', () => {
   test('matching: any division of the same tier; the next tier only after a minute; never two apart', () => {
     const bronze1 = 1040;
     const bronze3 = 905;
-    const silver3 = 1060;
-    const gold = 1220;
+    const silver3 = 1120;
+    const gold = 1420;
     expect(canMeet(bronze1, bronze3, 0)).toBe(true);
     expect(canMeet(bronze1, silver3, 0)).toBe(false);
     expect(canMeet(bronze1, silver3, WIDEN_MS)).toBe(true);
@@ -66,5 +66,16 @@ describe('ranked', () => {
     expect(next.games).toBe(0);
     expect(next.last).toEqual({ season: '2026-11', tier: tierOf(1400) });
     expect(rollSeason(next, Date.UTC(2026, 11, 20))).toBe(next);
+  });
+
+  test('placement: bronze or silver usually, gold III at the very most', () => {
+    const tier = (r: Parameters<typeof placementRating>[0]) => viewOf({ ...newRank(NOV), rating: placementRating(r) });
+    expect(rankName(tier({ win: false, prizes: 0, prizesLost: 6, turns: 20 }))).toBe('ブロンズ III');
+    expect(rankName(tier({ win: false, prizes: 5, prizesLost: 6, turns: 30 }))).toBe('ブロンズ I');
+    expect(rankName(tier({ win: true, prizes: 6, prizesLost: 5, turns: 30 }))).toBe('シルバー III');
+    expect(rankName(tier({ win: true, prizes: 6, prizesLost: 1, turns: 30 }))).toBe('シルバー I');
+    expect(rankName(tier({ win: true, prizes: 6, prizesLost: 0, turns: 10 }))).toBe('ゴールド III');
+    // nonsense in, still at most gold III
+    expect(tier({ win: true, prizes: 999, prizesLost: -5, turns: 0 }).tier).toBeLessThanOrEqual(2);
   });
 });

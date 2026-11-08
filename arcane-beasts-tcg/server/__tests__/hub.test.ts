@@ -275,9 +275,14 @@ describe('online hub', () => {
     b.hello();
     far.hello();
     expect(a.last('welcome')!.profile.rank?.tier).toBe(0);
+    expect(a.last('welcome')!.profile.rank?.placed).toBe(false);
     expect(JSON.stringify(a.last('welcome'))).not.toContain('rating');
+    // ranked needs the placement match first
+    a.say({ t: 'queue', kind: 'ranked', deck: deckOf(2) });
+    expect(a.errors().at(-1)?.code).toBe('bad_request');
+    for (const p of [a, b, far]) hub.store.get(p.id)!.ranked = { ...hub.store.rankState(hub.store.get(p.id)!), placed: true };
     // someone far above waits in the queue: a fresh player is not paired with them at once
-    hub.store.get(far.id)!.ranked = { ...hub.store.rankState(hub.store.get(far.id)!), rating: 1600 };
+    hub.store.get(far.id)!.ranked = { ...hub.store.rankState(hub.store.get(far.id)!), rating: 2000 };
     far.say({ t: 'queue', kind: 'ranked', deck: deckOf(1) });
     a.say({ t: 'queue', kind: 'ranked', deck: deckOf(2) });
     expect(a.last('start')).toBeFalsy();
@@ -291,8 +296,8 @@ describe('online hub', () => {
     await until(() => !!a.last('rank') && !!b.last('rank'), 5000);
     const ra = hub.store.get(a.id)!.ranked!;
     const rb = hub.store.get(b.id)!.ranked!;
-    expect(rb.rating).toBeGreaterThan(1025);
-    expect(ra.rating).toBeLessThan(1025);
+    expect(rb.rating).toBeGreaterThan(1050);
+    expect(ra.rating).toBeLessThan(1050);
     expect(rb.wins).toBe(1);
     expect(ra.losses).toBe(1);
     expect(JSON.stringify(b.last('rank'))).not.toContain('rating');
@@ -304,10 +309,10 @@ describe('online hub', () => {
     const hub = makeHub({ timeScale: 0.001 });
     const [a, s, g] = [new Bot(hub, 'Bronze'), new Bot(hub, 'Silver'), new Bot(hub, 'Gold')];
     for (const p of [a, s, g]) p.hello();
-    const set = (b: Bot, rating: number) => (hub.store.get(b.id)!.ranked = { ...hub.store.rankState(hub.store.get(b.id)!), rating });
+    const set = (b: Bot, rating: number) => (hub.store.get(b.id)!.ranked = { ...hub.store.rankState(hub.store.get(b.id)!), rating, placed: true });
     set(a, 1040);
-    set(s, 1070);
-    set(g, 1230);
+    set(s, 1150);
+    set(g, 1420);
     a.say({ t: 'queue', kind: 'ranked', deck: deckOf(1) });
     g.say({ t: 'queue', kind: 'ranked', deck: deckOf(2) });
     // bronze and gold: never, however long they wait
@@ -323,6 +328,25 @@ describe('online hub', () => {
     g.say({ t: 'cancel' });
     await until(() => !!a.last('rank'), 3000);
   }, 20_000);
+
+  test('ranked placement: the result sets the starting rank once', async () => {
+    const hub = makeHub();
+    const a = new Bot(hub, 'A');
+    a.hello();
+    a.say({ t: 'placement', win: true, prizes: 6, prizesLost: 2, turns: 24 });
+    await until(() => !!a.last('rank'));
+    const r = a.last('rank')!;
+    expect(r.placement).toBe(true);
+    expect(r.after.placed).toBe(true);
+    expect(r.after.tier).toBe(1);
+    expect(JSON.stringify(r)).not.toContain('rating');
+    const rating = hub.store.get(a.id)!.ranked!.rating;
+    // a second report changes nothing
+    a.say({ t: 'placement', win: true, prizes: 6, prizesLost: 0, turns: 8 });
+    expect(hub.store.get(a.id)!.ranked!.rating).toBe(rating);
+    a.say({ t: 'placement', win: 'yes' as unknown as boolean, prizes: 1, prizesLost: 1, turns: 1 });
+    expect(a.errors().at(-1)?.code).toBe('bad_request');
+  });
 
   test('surrender ends the game; an idle player loses on time', async () => {
     const hub = makeHub({ timeScale: 0.002 });

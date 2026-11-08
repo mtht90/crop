@@ -993,6 +993,7 @@ export function BattleScreen() {
   const cfg = useStore((s) => s.battle)!;
   const settings = useStore((s) => s.save.settings);
   const wardrobe = useStore((s) => s.save.wardrobe);
+  const avatar = useStore((s) => s.save.avatar);
   const ctrlRef = useRef<BattleDriver | null>(null);
   const view = useBattle((s) => s.view);
   const prompt = useBattle((s) => s.prompt);
@@ -1419,7 +1420,7 @@ export function BattleScreen() {
           {(!cfg.spectate || cfg.online) && <Stamps oppName={cfg.oppName} online={cfg.online ? (ctrl as OnlineController) : null} />}
           {cfg.online && <OnlineHud />}
           <div className="plate me">
-            <img src={artUrl(cfg.online ? cfg.online.me.portrait : 'humans/lieutenant')} alt="" />
+            <img src={artUrl(cfg.online ? cfg.online.me.portrait : (avatar ?? 'humans/lieutenant'))} alt="" />
             <div>
               <div className="plate-name">{cfg.online ? cfg.online.me.name : 'あなた'}</div>
               {myTitle && <div className="plate-title">{myTitle}</div>}

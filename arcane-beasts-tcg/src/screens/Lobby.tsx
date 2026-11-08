@@ -15,7 +15,8 @@ import { PORTRAITS } from '../online/protocol';
 import { online, onlineSupported, serverUrl, setServerAddress, useOnline } from '../online/client';
 import { foley, playMusic, sfx } from '../audio/audio';
 import { RankBar, RankEmblem, RankLabel, emblemUrl } from '../ui/Rank';
-import { SEASON_GEMS, TIERS } from '../online/rank';
+import { PLACEMENT_CPU, SEASON_GEMS, TIERS } from '../online/rank';
+import { ALL_DECKS, DECK_STRENGTH, cpuPrintTier, expand, upgradeDeck } from '../engine/decks';
 import './lobby.css';
 
 const EASE_OUT = [0.16, 1, 0.3, 1] as const;
@@ -188,17 +189,37 @@ export function Lobby() {
   };
   const addr = serverUrl().replace(/^wss?:\/\//, '').replace(/\/ws$/, '');
 
-  const rank = st.profile?.rank ?? null;
+  const rank0 = st.profile?.rank ?? null;
+  const unplaced = !!rank0 && !rank0.placed;
+  const rank = unplaced ? null : rank0;
+  /** ランクマッチの認定戦: one game against a bot with one of the stronger decks */
+  const placement = () => {
+    const pool = ALL_DECKS.filter((d) => DECK_STRENGTH.slice(0, 12).includes(d.id));
+    const d = pool[Math.floor(Math.random() * pool.length)];
+    sfx('horn-3', 0.7);
+    useStore.getState().startBattle({
+      rival: null,
+      playerDeck: deck!.cards,
+      oppDeck: upgradeDeck(expand(d.cards), cpuPrintTier(PLACEMENT_CPU + 1)),
+      oppName: `認定戦（${d.name}）`,
+      oppPortrait: 'humans/general',
+      level: 'normal',
+      cpuLevel: PLACEMENT_CPU,
+      scene: 'story/landscape-castle',
+      reward: 0,
+      placement: true,
+    });
+  };
   const tiles: { key: string; title: string; sub: string; bg: string; fig: string; emblem?: boolean; icon: string; onClick: () => void }[] = [
     {
       key: 'ranked',
       title: 'ランクマッチ',
-      sub: rank ? `${Number(rank.season.slice(5))}月シーズン開催中` : 'ランクを上げよう',
+      sub: unplaced ? '認定戦（CPUと1戦）で最初のランクが決まります' : rank ? `${Number(rank.season.slice(5))}月シーズン開催中` : 'ランクを上げよう',
       bg: 'story/landscape-castle',
       fig: emblemUrl(rank),
       emblem: true,
       icon: 'trophy',
-      onClick: () => online.queue('ranked', deck!.cards),
+      onClick: () => (unplaced ? placement() : online.queue('ranked', deck!.cards)),
     },
     {
       key: 'friend',
@@ -247,6 +268,12 @@ export function Lobby() {
                     オンライン {st.profile.wins}勝 {st.profile.losses}敗
                   </small>
                 </div>
+                {unplaced && (
+                  <div className="lb3-me-rank">
+                    <RankEmblem v={null} size={46} />
+                    <span className="rank-label">未認定</span>
+                  </div>
+                )}
                 {rank && (
                   <div className="lb3-me-rank">
                     <RankEmblem v={rank} size={46} />
@@ -283,6 +310,7 @@ export function Lobby() {
                   </div>
                   <h2>{t.title}</h2>
                   <p>{t.sub}</p>
+                  {t.emblem && unplaced && <b className="lb-placement">認定戦をはじめる ›</b>}
                   {t.emblem && rank && (
                     <div className="lb-rank-line">
                       <RankLabel v={rank} />
@@ -377,7 +405,15 @@ export function Lobby() {
                     <h4>アイコン</h4>
                     <div className="lb-portraits">
                       {PORTRAITS.map((p) => (
-                        <button key={p} className={p === st.profile!.portrait ? 'on' : ''} onClick={() => online.rename(name || st.profile!.name, p)}>
+                        <button
+                          key={p}
+                          className={p === st.profile!.portrait ? 'on' : ''}
+                          onClick={() => {
+                            useStore.getState().update((s) => void (s.avatar = p));
+                            // the name as saved (a half-typed name must not hold the picture back)
+                            online.rename(st.profile!.name, p);
+                          }}
+                        >
                           <img src={artUrl(p)} alt="" />
                         </button>
                       ))}

@@ -48,6 +48,13 @@ export function ResultOverlay() {
       setTimeout(() => clearInterval(iv), 2200);
     }
     if (cfg.spectate) return;
+    if (cfg.placement) {
+      // ランクマッチの認定戦: the result decides the starting rank (no rewards)
+      const stP = useBattle.getState().stats;
+      online.submitPlacement({ win, prizes: stP.prizes, prizesLost: stP.prizesLost, turns: useBattle.getState().view?.turn ?? 30 });
+      if (result.surrendered) useStore.getState().recordSurrender();
+      return;
+    }
     if (result.surrendered) {
       // giving up pays nothing, whatever the battle
       useStore.getState().recordSurrender();
@@ -145,7 +152,8 @@ export function ResultOverlay() {
         {cfg.raid ? (win ? '討伐！' : 'RAID END') : draw ? 'DRAW' : win ? 'VICTORY' : 'DEFEAT'}
       </motion.div>
       <div className="result-reason">{result.reason}</div>
-      {cfg.online?.kind === 'ranked' && rankChange && <RankChange before={rankChange.before} after={rankChange.after} />}
+      {((cfg.online?.kind === 'ranked' && rankChange && !rankChange.placement) || (cfg.placement && rankChange?.placement)) && <RankChange before={rankChange!.before} after={rankChange!.after} placement={!!cfg.placement} />}
+      {cfg.placement && !rankChange?.placement && <div className="result-reason">認定結果をサーバーに送っています…</div>}
       {raidRes && (
         <motion.div className="raid-result-bar" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
           <div className="rrb-head">
@@ -231,7 +239,7 @@ export function ResultOverlay() {
               const ch = chapterById(cfg.story.chapterId)!;
               if (win) finishChapter(ch);
               else retryChapter(ch);
-            } else if (cfg.online) {
+            } else if (cfg.online || cfg.placement) {
               online.clearMatch();
               go('lobby');
             } else if (cfg.raid) go('raid');
@@ -239,7 +247,7 @@ export function ResultOverlay() {
             else startBattle({ ...cfg });
           }}
         >
-          {cfg.story ? (win ? '物語をつづける' : 'もう一度挑む') : cfg.online ? 'ロビーへ' : cfg.raid ? 'レイドへ' : cfg.stage && win ? 'イベントマップへ' : 'もう一度'}
+          {cfg.story ? (win ? '物語をつづける' : 'もう一度挑む') : cfg.online || cfg.placement ? 'ロビーへ' : cfg.raid ? 'レイドへ' : cfg.stage && win ? 'イベントマップへ' : 'もう一度'}
         </button>
         {missionsReady > 0 && !(cfg.story && win) && (
           <button
@@ -261,10 +269,10 @@ export function ResultOverlay() {
             sfx('button');
             useBattle.setState({ result: null, view: null, prompt: null });
             if (cfg.online) online.clearMatch();
-            go(cfg.story ? 'story' : cfg.online ? 'arena' : cfg.raid ? 'arena' : cfg.stage ? 'stage' : cfg.rival ? 'rivals' : 'home');
+            go(cfg.story ? 'story' : cfg.online || cfg.placement ? 'arena' : cfg.raid ? 'arena' : cfg.stage ? 'stage' : cfg.rival ? 'rivals' : 'home');
           }}
         >
-          {cfg.story ? 'ストーリーへ' : cfg.online ? 'バトルメニューへ' : cfg.stage ? 'イベントマップへ' : cfg.rival ? '対戦相手を選ぶ' : 'ホームへ'}
+          {cfg.story ? 'ストーリーへ' : cfg.online || cfg.placement ? 'バトルメニューへ' : cfg.stage ? 'イベントマップへ' : cfg.rival ? '対戦相手を選ぶ' : 'ホームへ'}
         </button>
         )}
       </motion.div>

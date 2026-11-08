@@ -18,13 +18,13 @@ export const TIERS = [
   { id: 'master', name: 'マスター', color: '#ff6b7a' },
 ] as const;
 
-export const START_RATING = 1025;
-/** the rating where bronze III ends and each division's width */
-const BASE = 900;
-const STEP = 50;
+export const START_RATING = 1050;
+/** where bronze III starts, and each division's width (a division is about 5 even wins) */
+const BASE = 800;
+export const STEP = 100;
 /** 5 tiers × 3 divisions below master */
 const DIVS = 15;
-export const MASTER_AT = BASE + STEP * DIVS; // 1650
+export const MASTER_AT = BASE + STEP * DIVS; // 2300
 
 export interface RankState {
   rating: number;
@@ -38,6 +38,8 @@ export interface RankState {
   best: number;
   /** last season's final tier, kept until the next season starts */
   last?: { season: string; tier: number };
+  /** the placement match is done (a new player's first rank comes from it) */
+  placed?: boolean;
 }
 
 /** what the player sees: never the rating itself */
@@ -54,6 +56,8 @@ export interface RankView {
   losses: number;
   /** last season's final tier (shown once for its reward) */
   last?: { season: string; tier: number };
+  /** false until the placement match is played */
+  placed: boolean;
 }
 
 /** "2026-11" in Japan time */
@@ -73,7 +77,7 @@ export function tierOf(rating: number) {
 }
 
 export function newRank(now = Date.now()): RankState {
-  return { rating: START_RATING, floor: 0, season: seasonKey(now), games: 0, wins: 0, losses: 0, best: tierOf(START_RATING) };
+  return { rating: START_RATING, season: seasonKey(now), games: 0, wins: 0, losses: 0, best: tierOf(START_RATING), placed: false };
 }
 
 /** a new month: everyone starts the season a little lower (two divisions down) */
@@ -87,7 +91,7 @@ export function rollSeason(r: RankState, now = Date.now()): RankState {
   if (r.season === season) return r;
   const final = tierOf(r.rating);
   const rating = Math.max(Math.min(r.rating, BASE), r.rating - SEASON_DROP);
-  return { rating, floor: 0, season, games: 0, wins: 0, losses: 0, best: tierOf(rating), last: r.games > 0 ? { season: r.season, tier: final } : undefined };
+  return { rating, season, games: 0, wins: 0, losses: 0, best: tierOf(rating), last: r.games > 0 ? { season: r.season, tier: final } : undefined, placed: r.placed };
 }
 
 /** a game moves the rating by 12…28 (20 between equals; more for beating someone stronger) */
@@ -116,7 +120,7 @@ export function viewOf(r: RankState): RankView {
   const master = i >= DIVS;
   const lo = master ? MASTER_AT : BASE + STEP * i;
   const progress = master ? Math.min(1, (r.rating - MASTER_AT) / 300) : i === 0 && r.rating < BASE ? 0 : Math.max(0, Math.min(1, (r.rating - lo) / STEP));
-  return { tier, div: master ? 0 : 3 - (i % 3), progress, season: r.season, games: r.games, wins: r.wins, losses: r.losses, last: r.last };
+  return { tier, div: master ? 0 : 3 - (i % 3), progress, season: r.season, games: r.games, wins: r.wins, losses: r.losses, last: r.last, placed: !!r.placed };
 }
 
 const ROMAN = ['', 'I', 'II', 'III'];
@@ -151,3 +155,29 @@ export function canMeet(ratingA: number, ratingB: number, waitedMs: number) {
   const d = Math.abs(tierOf(ratingA) - tierOf(ratingB));
   return d === 0 || (d === 1 && waitedMs >= WIDEN_MS);
 }
+
+// ---------------------------------------------------------------------------
+// placement: one game against a bot decides where a new player starts.
+// Bronze and silver are the usual places; gold III is as high as it goes.
+// ---------------------------------------------------------------------------
+export interface PlacementResult {
+  win: boolean;
+  /** prizes the player took / lost */
+  prizes: number;
+  prizesLost: number;
+  /** the game's turn count (both players) */
+  turns: number;
+}
+
+/** the starting rating (the middle of a division) */
+export function placementRating(r: PlacementResult): number {
+  const mid = (div: number) => BASE + STEP * div + STEP / 2;
+  const prizes = Math.max(0, Math.min(6, Math.floor(r.prizes)));
+  const lost = Math.max(0, Math.min(6, Math.floor(r.prizesLost)));
+  if (!r.win) return mid(prizes >= 4 ? 2 : prizes >= 2 ? 1 : 0); // bronze I / II / III
+  if (lost <= 1 && r.turns <= 16) return mid(6); // gold III: a clean, quick win
+  return mid(lost <= 1 ? 5 : lost <= 3 ? 4 : 3); // silver I / II / III
+}
+
+/** the bot of the placement match: a CPU level a little above the middle */
+export const PLACEMENT_CPU = 5;

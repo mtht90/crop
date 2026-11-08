@@ -12,6 +12,8 @@ import { canVibrate, liteFx, resetAutoFx, type FxLevel } from '../lib/fx';
 import { startGyro } from '../lib/gyro';
 import { canPromptInstall, isInstalled, isIOS, onInstallChange, promptInstall, pwaAvailable } from '../lib/pwa';
 import { backupText, codeTransferSupported, issueCode, prettyCode, redeemCode, restoreBackup } from '../lib/transfer';
+import { PORTRAITS } from '../online/protocol';
+import { online, useOnline } from '../online/client';
 
 export function Settings() {
   const settings = useStore((s) => s.save.settings);
@@ -19,6 +21,7 @@ export function Settings() {
   const reset = useStore((s) => s.reset);
   useEffect(() => playMusic('menu'), []);
   const set = (k: 'music' | 'sfx' | 'speed', v: number) => update((s) => void (s.settings[k] = v));
+  const avatar = useStore((s) => s.save.avatar);
   return (
     <div className="screen">
       <div className="page-bg" style={{ backgroundImage: `url(${artUrl('story/landscape-castle')})` }} />
@@ -26,6 +29,26 @@ export function Settings() {
       <div className="page">
         <TopBar title="設定" back="more" />
         <div className="box page-inner settings3">
+          <div className="set-row set-avatar">
+            <label>アイコン</label>
+            <div className="lb-portraits">
+              {PORTRAITS.map((p) => (
+                <button
+                  key={p}
+                  className={p === (avatar ?? PORTRAITS[0]) ? 'on' : ''}
+                  onClick={() => {
+                    sfx('button', 0.5);
+                    update((s) => void (s.avatar = p));
+                    // keep the online profile in step (when connected)
+                    const prof = useOnline.getState().profile;
+                    if (prof && useOnline.getState().status === 'open') online.rename(prof.name, p);
+                  }}
+                >
+                  <img src={artUrl(p)} alt="" />
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="set-row">
             <label>BGM 音量</label>
             <input type="range" min={0} max={1} step={0.05} value={settings.music} onChange={(e) => set('music', Number(e.target.value))} />

@@ -10,7 +10,7 @@ import { dirname } from 'node:path';
 import { PORTRAITS, type OnlineProfile } from '../src/online/protocol';
 import { judgeName } from '../src/online/names';
 import type { PlayerBackend } from './remote';
-import { applyResult, newRank, rollSeason, viewOf, type RankState, type RankView } from '../src/online/rank';
+import { applyResult, newRank, placementRating, rollSeason, tierOf, viewOf, type PlacementResult, type RankState, type RankView } from '../src/online/rank';
 
 export interface PlayerRecord {
   id: string;
@@ -137,6 +137,8 @@ export class PlayerStore {
   // ---- ranked -------------------------------------------------------------
   /** the record in the current season (a new month rolls it over first) */
   rankState(p: PlayerRecord): RankState {
+    // records from before placement matches existed: anyone who has played is placed
+    if (p.ranked && p.ranked.placed === undefined) p.ranked.placed = p.ranked.games > 0;
     const cur = p.ranked ? rollSeason(p.ranked, this.now()) : newRank(this.now());
     if (cur !== p.ranked) {
       p.ranked = cur;
@@ -150,6 +152,15 @@ export class PlayerStore {
   /** the hidden rating (matchmaking only) */
   rating(p: PlayerRecord) {
     return this.rankState(p).rating;
+  }
+  /** the placement match: sets the starting rank (once) */
+  place(p: PlayerRecord, res: PlacementResult): { before: RankView; after: RankView } | null {
+    const r = this.rankState(p);
+    if (r.placed) return null;
+    const rating = placementRating(res);
+    p.ranked = { ...r, rating, placed: true, best: Math.max(r.best, tierOf(rating)) };
+    this.save(p);
+    return { before: viewOf(r), after: viewOf(p.ranked) };
   }
   /** a ranked game ended: both ratings move; returns each side's view before and after */
   recordRanked(a: PlayerRecord, b: PlayerRecord, winner: 0 | 1): [{ before: RankView; after: RankView }, { before: RankView; after: RankView }] {

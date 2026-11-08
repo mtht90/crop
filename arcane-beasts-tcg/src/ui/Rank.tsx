@@ -38,8 +38,8 @@ const STEP_WORD: Record<string, string> = { 'tier-up': 'PROMOTION', 'div-up': 'R
 const stepLine = (step: string, v: RankView) => (step === 'tier-up' || step === 'div-up' ? `${rankName(v)} へ昇格` : step === 'same' ? '' : `${rankName(v)} へ降格`);
 
 /** after a ranked game: the old emblem gives way to the new one */
-export function RankChange({ before, after }: { before: RankView; after: RankView }) {
-  const step = stepOf(before, after);
+export function RankChange({ before, after, placement = false }: { before: RankView; after: RankView; placement?: boolean }) {
+  const step = placement ? (after.tier >= 2 ? 'tier-up' : 'div-up') : stepOf(before, after);
   const up = step === 'tier-up' || step === 'div-up';
   const big = step === 'tier-up';
   const moved = step !== 'same';
@@ -57,6 +57,8 @@ export function RankChange({ before, after }: { before: RankView; after: RankVie
     return () => clearTimeout(t);
   }, [moved, up, big]);
   const shown = swap ? after : before;
+  const word = placement ? 'PLACEMENT' : STEP_WORD[step];
+  const line = placement ? `${rankName(after)} からスタート` : stepLine(step, shown);
   return (
     <motion.div className={`rank-change ${swap && up ? 'up' : ''} ${swap && moved && !up ? 'down' : ''} ${big ? 'big' : ''}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}>
       <i className="rc-corner tl" />
@@ -69,19 +71,19 @@ export function RankChange({ before, after }: { before: RankView; after: RankVie
           animate={{ opacity: 1, scale: 1, filter: 'brightness(1) blur(0px)' }}
           transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
         >
-          <RankEmblem v={shown} size={76} />
+          <RankEmblem v={placement && !swap ? null : shown} size={76} />
         </motion.div>
         {swap && up && <motion.i className="rc-sweep" initial={{ x: '-100%', opacity: 0 }} animate={{ x: '360%', opacity: [0, 1, 1, 0] }} transition={{ duration: 1.1, ease: [0.4, 0, 0.2, 1], delay: 0.15 }} />}
       </div>
       <div className="rc-text">
-        <small>RANKED ・ {Number(after.season.slice(5))}月シーズン</small>
+        <small>{placement ? 'RANKED ・ 認定戦' : `RANKED ・ ${Number(after.season.slice(5))}月シーズン`}</small>
         {swap && moved ? (
           <motion.div className="rc-step" initial={{ opacity: 0, letterSpacing: '0.6em' }} animate={{ opacity: 1, letterSpacing: '0.28em' }} transition={{ duration: 1.1, ease: [0.16, 1, 0.3, 1] }}>
-            <span>{STEP_WORD[step]}</span>
+            <span>{word}</span>
           </motion.div>
         ) : null}
-        <div className="rc-name">{swap && moved ? stepLine(step, shown) : rankName(shown)}</div>
-        <RankBar v={shown} from={swap && moved ? (up ? 0 : 1) : before.progress} />
+        <div className="rc-name">{swap && moved ? line : placement ? '判定中…' : rankName(shown)}</div>
+        {(!placement || swap) && <RankBar v={shown} from={swap && moved ? (up ? 0 : 1) : before.progress} />}
         <small className="rc-rec">
           今シーズン {after.wins}勝 {after.losses}敗
         </small>

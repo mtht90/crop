@@ -176,6 +176,16 @@ export class Hub {
         return this.join(c, m.code, m.deck);
       case 'queue':
         return this.enqueue(c, m.kind, m.deck);
+      case 'placement': {
+        const ok = typeof m.win === 'boolean' && [m.prizes, m.prizesLost, m.turns].every((n) => typeof n === 'number' && Number.isFinite(n) && n >= 0 && n < 1000);
+        if (!ok) return this.error(c, 'bad_request', '認定戦の結果が読めません');
+        const r = this.store.place(c.player, { win: m.win, prizes: m.prizes, prizesLost: m.prizesLost, turns: m.turns });
+        if (r) this.log(`placement ${c.player.name}: ${m.win ? 'win' : 'loss'} → tier ${r.after.tier}`);
+        // (a repeat just gets the rank as it is)
+        const v = this.store.rankView(c.player);
+        this.send(c, { t: 'rank', before: r?.before ?? v, after: r?.after ?? v, placement: true });
+        return this.send(c, { t: 'renamed', profile: this.store.profile(c.player) });
+      }
       case 'cancel':
         this.dequeue(c);
         if (c.room?.state === 'waiting') this.leave(c);
@@ -386,6 +396,7 @@ export class Hub {
   // ------------------------------------------------------------------------
   private enqueue(c: Conn, kind: QueueKind, deckIn: string[]) {
     if (kind !== 'random' && kind !== 'ranked') return this.error(c, 'bad_request', '不明な対戦モードです');
+    if (kind === 'ranked' && !this.store.rankState(c.player!).placed) return this.error(c, 'bad_request', '先に認定戦をプレイしてください');
     const deck = this.checkDeck(c, deckIn);
     if (!deck || !this.free(c)) return;
     c.queued = { kind, deck, since: Date.now() };
