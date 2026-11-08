@@ -13,7 +13,7 @@ import { startGyro } from '../lib/gyro';
 import { canPromptInstall, isInstalled, isIOS, onInstallChange, promptInstall, pwaAvailable } from '../lib/pwa';
 import { backupText, codeTransferSupported, issueCode, prettyCode, redeemCode, restoreBackup } from '../lib/transfer';
 import { PORTRAITS } from '../online/protocol';
-import { online, useOnline } from '../online/client';
+import { forgetOnlineIdentity, online, useOnline } from '../online/client';
 
 export function Settings() {
   const settings = useStore((s) => s.save.settings);
@@ -143,7 +143,10 @@ export function Settings() {
             <button
               className="btn red small"
               onClick={async () => {
-                if (await askConfirm('すべてのカード・ジェム・デッキが消去されます。本当にリセットしますか？', 'リセットする', true)) reset();
+                if (await askConfirm('すべてのカード・ジェム・デッキと、オンラインの名前・ランクが消去されます。本当にリセットしますか？', 'リセットする', true)) {
+                  forgetOnlineIdentity();
+                  reset();
+                }
               }}
             >
               データをリセット

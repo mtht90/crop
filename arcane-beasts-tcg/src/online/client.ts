@@ -425,6 +425,21 @@ class OnlineClient {
 
 export const online = new OnlineClient();
 
+/**
+ * データリセット: this device forgets its online identity, so the next connection
+ * starts a new player (new name, no rank). The old account stays on the server.
+ */
+export function forgetOnlineIdentity() {
+  online.disconnect();
+  try {
+    localStorage.removeItem(KEY);
+    localStorage.removeItem(PLACEMENT_KEY);
+  } catch {
+    /* storage unavailable */
+  }
+  useOnline.setState({ profile: null, rankChange: null, ranking: null, transfer: null, room: null, queued: null, match: null });
+}
+
 // a phone brought back from the background often has a dead socket: check it at once
 if (typeof document !== 'undefined') {
   document.addEventListener('visibilitychange', () => {
