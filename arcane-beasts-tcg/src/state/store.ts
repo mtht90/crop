@@ -26,6 +26,9 @@ import {
   LOGIN_GEMS,
   levelGems,
   missionGems,
+  missionCoins,
+  LOGIN_COINS,
+  levelCoins,
   loginSlot,
   missionValue,
   weeklyMissions,
@@ -398,6 +401,8 @@ interface Store {
 }
 
 export interface StageResult {
+  /** coins of a first clear */
+  coins?: number;
   win: boolean;
   /** gems for clearing this stage the first time */
   gems: number;
@@ -411,6 +416,8 @@ export interface StageResult {
 }
 
 export interface RaidResult {
+  /** coins of a cleared lap */
+  coins?: number;
   /** the lap was cleared */
   win: boolean;
   /** damage done in this battle */
@@ -553,6 +560,8 @@ export const useStore = create<Store>((set, get) => ({
       if (index === sv.cleared) {
         res.first = true;
         res.gems = stage.gems;
+        res.coins = 300 + index * 50;
+        s.coins += res.coins;
         sv.cleared = index + 1;
         if (index % 5 === 4) grantRecipe(s);
       }
@@ -626,6 +635,8 @@ export const useStore = create<Store>((set, get) => ({
       res.gems = raidBattleGems(dealt);
       if (win) {
         res.lapGems = raidLapReward(lap);
+        res.coins = 1000;
+        s.coins += res.coins;
         res.damage = hp;
         grantRecipe(s);
         const drop = rollRaidDrop(r.bossId);
@@ -649,13 +660,14 @@ export const useStore = create<Store>((set, get) => ({
     get().update((s) => {
       const p = s.progress;
       if (!canClaimLogin(p)) return;
-      got.coins = 0;
+      got.coins = LOGIN_COINS[loginSlot(p)];
       got.gems = LOGIN_REWARDS[loginSlot(p)] + LOGIN_GEMS[loginSlot(p)];
       // the 7th day also brings a デッキレシピ
       if (loginSlot(p) === 6) grantRecipe(s);
       p.loginCount++;
       p.loginDay = dayKey();
       s.gems += got.gems;
+      s.coins += got.coins;
     });
     return got;
   },
@@ -762,9 +774,10 @@ export const useStore = create<Store>((set, get) => ({
         period === 'daily' ? p.daily.claimed : period === 'weekly' ? p.weekly.claimed : period === 'normal' ? p.normalClaimed : period === 'event' ? p.event.claimed : p.achvClaimed;
       if (list.includes(m.id) || missionValue(p, m, period, ext) < m.target) return;
       list.push(m.id);
-      got.coins = 0;
+      got.coins = missionCoins(m);
       got.gems = missionGems(m);
       s.gems += got.gems;
+      s.coins += got.coins;
       // weekly missions and achievements also bring a デッキレシピ
       if (period === 'weekly' || period === 'achv') grantRecipe(s);
     });
@@ -805,11 +818,11 @@ export const useStore = create<Store>((set, get) => ({
       const ups = addExp(p, r.exp);
       res.levelUps = ups;
       // level-ups pay their old coin bonus as gems too
-      res.levelCoins = 0;
+      res.levelCoins = ups.reduce((n, l) => n + levelCoins(l), 0);
       res.levelGems = ups.reduce((n, l) => n + levelReward(l) + levelGems(l), 0);
       for (const l of ups) if (l % 5 === 0) grantRecipe(s);
       s.gems += r.gems + res.levelGems;
-      s.coins += r.total;
+      s.coins += r.total + res.levelCoins;
     });
     return res;
   },

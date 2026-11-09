@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 import { create } from 'zustand';
 import { foley, playMusic, sfx } from '../audio/audio';
 import { card } from '../engine/cards';
-import { artUrl } from '../lib/assets';
+import { asset } from '../lib/assets';
 import { dailyDeals, GEM_PRODUCTS, leftOf, MAX_DECK_SLOTS, SHOP_ITEMS, type Deal, type ShopItem } from '../state/market';
 import { dayKey, fmtRemain, msUntilTomorrow } from '../state/progress';
 import { deckSlotsOf, PREMIUM_BOOSTER, SPECIAL_BOOSTER, useStore } from '../state/store';
@@ -60,6 +60,14 @@ function Head() {
   );
 }
 
+/** the painted item pictures of the shop */
+const SHOP_ART: Record<string, string> = { ticket: 'ticket-rare', stars: 'ticket-sure3', robot: 'ticket-auto', 'scroll-unfurled': 'recipe', shard: 'shard', deck: 'slot', crown: 'chest', chest: 'chest', coin: 'coin-bag' };
+const shopArt = (name: string) => asset(`ui/shop/${name}.webp`);
+function ItemArt({ icon }: { icon: string }) {
+  const a = SHOP_ART[icon];
+  return a ? <img className="st4-art" src={shopArt(a)} alt="" draggable={false} /> : <Icon name={icon} />;
+}
+
 export function Store() {
   const seg = useShopSeg((s) => s.seg);
   if (seg === 'pack') return <Shop header={<Head />} />;
@@ -70,7 +78,7 @@ function StorePage({ seg }: { seg: Seg }) {
   useEffect(() => playMusic('packs'), []);
   return (
     <div className="screen st4">
-      <div className="page-bg st4-bg" style={{ backgroundImage: `url(${artUrl('story/landscape-castle')})` }} />
+      <div className="page-bg st4-bg" style={{ backgroundImage: `url(${shopArt('bg-cave')})` }} />
       <div className="page-shade" />
       <div className="page">
         <Head />
@@ -94,6 +102,8 @@ interface Banner {
   hue: string;
   pack?: import('../state/store').Booster;
   icon?: string;
+  /** a painted banner that replaces the whole layout */
+  img?: string;
   go: () => void;
 }
 
@@ -103,7 +113,7 @@ function Pick() {
   const starter = SHOP_ITEMS.find((i) => i.id === 'starter')!;
   const sure3 = SHOP_ITEMS.find((i) => i.id === 'sure3-set')!;
   const banners: Banner[] = [
-    { key: 'special', kicker: 'NEW', title: 'スペシャルパック', sub: '★3以上2枚確定', hue: SPECIAL_BOOSTER.hue, pack: SPECIAL_BOOSTER, go: () => useShopSeg.setState({ seg: 'pack' }) },
+    { key: 'special', kicker: 'NEW', title: 'スペシャルパック', sub: '★3以上2枚確定', hue: SPECIAL_BOOSTER.hue, pack: SPECIAL_BOOSTER, img: 'banner-special', go: () => useShopSeg.setState({ seg: 'pack' }) },
     ...(leftOf(starter, save.shopBought) > 0 ? [{ key: 'starter', kicker: '初心者限定・1回のみ', title: 'スタートダッシュセット', sub: starter.note!, badge: `${Math.round((1 - starter.price / starter.worth!) * 100)}%おトク`, hue: '#ffd76a', icon: 'crown', go: () => setBuy(starter) }] : []),
     { key: 'sure3', kicker: '週1回', title: '★3確定セット', sub: sure3.note!, hue: '#c890ff', icon: 'stars', go: () => setBuy(sure3) },
     { key: 'premium', kicker: 'いつでも', title: 'レアパック', sub: '5枚目は★3以上確定', hue: PREMIUM_BOOSTER.hue, pack: PREMIUM_BOOSTER, go: () => useShopSeg.setState({ seg: 'pack' }) },
@@ -120,7 +130,7 @@ function Pick() {
         <AnimatePresence mode="popLayout" initial={false}>
           <motion.button
             key={b.key}
-            className="st4-banner"
+            className={`st4-banner ${b.img ? 'painted' : ''}`}
             style={{ ['--bh' as string]: b.hue }}
             initial={{ opacity: 0, x: 40 }}
             animate={{ opacity: 1, x: 0 }}
@@ -128,12 +138,16 @@ function Pick() {
             transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
             onClick={() => (sfx('expand', 0.4), b.go())}
           >
+            {b.img ? (
+              <img className="st4-banner-img" src={shopArt(b.img)} alt={b.title} draggable={false} />
+            ) : (
+            <>
             <span className="st4-banner-art">
               {b.pack ? (
                 <BoosterPack booster={b.pack} still />
               ) : (
                 <span className="st4-banner-ico">
-                  <Icon name={b.icon ?? 'chest'} />
+                  <ItemArt icon={b.icon ?? 'chest'} />
                 </span>
               )}
             </span>
@@ -142,6 +156,8 @@ function Pick() {
               <b>{b.title}</b>
               <span>{b.sub}</span>
             </span>
+            </>
+            )}
             {b.badge && <span className="st4-banner-badge">{b.badge}</span>}
           </motion.button>
         </AnimatePresence>
@@ -287,7 +303,7 @@ function ItemList({ section }: { section: ShopItem['section'][] }) {
                 >
                   <span className="st4-tile-name">{it.name}</span>
                   <span className="st4-tile-art">
-                    <Icon name={it.icon} />
+                    <ItemArt icon={it.icon} />
                     {it.limit && (
                       <i className="st4-tile-limit">
                         {it.limit.per === 'once' ? '1回限定' : `${it.limit.per === 'week' ? '今週' : '今日'}あと${left}回`}
@@ -330,10 +346,8 @@ function Gems() {
       <div className="st4-gems">
         {GEM_PRODUCTS.map((g, k) => (
           <motion.button key={g.yen} className="st4-gem" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: k * 0.05, duration: 0.4 }} onClick={() => (sfx('expand', 0.4), setNote('現在、ジェムの購入は準備中です'))}>
-            <span className="st4-gem-art" style={{ ['--n' as string]: Math.min(5, k + 1) }}>
-              {Array.from({ length: Math.min(5, k + 1) }, (_, j) => (
-                <Icon key={j} name="gem" />
-              ))}
+            <span className="st4-gem-art">
+              <img src={shopArt(`gems-${Math.min(3, Math.floor(k / 2) + 1)}`)} alt="" draggable={false} style={{ ['--s' as string]: 0.78 + (k % 2) * 0.22 }} />
             </span>
             <b>{g.gems.toLocaleString()}</b>
             <span className="st4-yen">¥{g.yen.toLocaleString()}</span>

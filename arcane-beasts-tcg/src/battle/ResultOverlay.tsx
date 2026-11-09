@@ -5,7 +5,7 @@ import type { StageResult, RaidResult } from '../state/store';
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
 import { CHAPTERS, episodeLabel, episodeNo } from '../story';
-import { claimableCount, CPU_FIRST_GEMS, storyFirstClear, expToNext, levelGems, levelReward, bump } from '../state/progress';
+import { claimableCount, CPU_FIRST_GEMS, storyFirstClear, expToNext, levelGems, levelReward, levelCoins, bump } from '../state/progress';
 import { extCtx, grantRecipe, useStore, type BattleRewardResult } from '../state/store';
 import { useBattle } from './controller';
 import { artUrl, asset } from '../lib/assets';
@@ -87,9 +87,9 @@ export function ResultOverlay() {
       const sr = useStore.getState().recordStage({ win, index: cfg.stage.index, key: cfg.stage.key });
       const lines = [...base.lines];
       if (sr.winGems) lines.push({ label: 'ステージ勝利', coins: 0, gems: sr.winGems });
-      if (sr.gems) lines.push({ label: '初回クリア報酬', coins: 0, gems: sr.gems });
+      if (sr.gems) lines.push({ label: '初回クリア報酬', coins: sr.coins ?? 0, gems: sr.gems });
       setStageRes(sr);
-      setRes({ ...base, lines, gems: base.gems + sr.gems + sr.winGems });
+      setRes({ ...base, lines, total: base.total + (sr.coins ?? 0), gems: base.gems + sr.gems + sr.winGems });
       return;
     }
     if (cfg.raid) {
@@ -104,9 +104,9 @@ export function ResultOverlay() {
         { kos: stR.kos, damage: stR.damage, prizes: stR.prizes, evolves: stR.evolves, trainers: stR.trainers },
       );
       const rr = useStore.getState().recordRaid({ win, dealt });
-      const lines = win ? [{ label: '討伐報酬', coins: 0, gems: rr.lapGems }] : [];
+      const lines = [...base.lines.filter((l) => l.label === 'コイン'), ...(win ? [{ label: '討伐報酬', coins: rr.coins ?? 0, gems: rr.lapGems }] : [])];
       setRaidRes(rr);
-      setRes({ ...base, lines, total: base.total, gems: base.gems + rr.gems + rr.lapGems });
+      setRes({ ...base, lines, total: base.total + (rr.coins ?? 0), gems: base.gems + rr.gems + rr.lapGems });
       return;
     }
     const before = claimableCount(useStore.getState().save.progress, extCtx(useStore.getState().save));
@@ -337,7 +337,7 @@ function ExpBar({ res, delay }: { res: BattleRewardResult; delay: number }) {
       <AnimatePresence>
         {up && (
           <motion.div key={up} className="lvup" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
-            レベルアップ！ Lv.{up} ・ ボーナス +{levelReward(up) + levelGems(up)} ジェム
+            レベルアップ！ Lv.{up} ・ ボーナス +{levelReward(up) + levelGems(up)} ジェム ・ +{levelCoins(up).toLocaleString()} コイン
           </motion.div>
         )}
       </AnimatePresence>

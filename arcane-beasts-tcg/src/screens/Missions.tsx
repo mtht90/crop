@@ -16,6 +16,8 @@ import {
   LOGIN_REWARDS,
   loginSlot,
   missionGems,
+  missionCoins,
+  LOGIN_COINS,
   missionValue,
   msUntilNextWeek,
   msUntilTomorrow,
@@ -195,6 +197,11 @@ export function Missions() {
                                 <Icon name="gem" /> {missionGems(r.m)}
                               </i>
                             )}
+                            {missionCoins(r.m) > 0 && (
+                              <i className="ms3-coin">
+                                <Icon name="coin" /> {missionCoins(r.m).toLocaleString()}
+                              </i>
+                            )}
                           </span>
                           <small>{r.claimed ? '受取済み' : r.done ? '受け取る' : '未達成'}</small>
                         </button>
@@ -222,6 +229,7 @@ export function Missions() {
           >
             
             {flash.gems > 0 && <span className="flash-gem"><Icon name="gem" /> +{flash.gems.toLocaleString()}</span>}
+            {flash.coins > 0 && <span className="flash-coin"><Icon name="coin" /> +{flash.coins.toLocaleString()}</span>}
           </motion.div>
         )}
       </AnimatePresence>
@@ -317,6 +325,9 @@ export function LoginTrack({ onClaim, compact }: { onClaim?: (w: Wallet) => void
                 <Icon name={i === 6 ? 'chest' : 'gem'} />
               </div>
               <div className="c">{c + LOGIN_GEMS[i]}</div>
+              <div className="c coin">
+                <Icon name="coin" /> {LOGIN_COINS[i]}
+              </div>
               {got && <img className="hanko" src={STAMP} alt="" style={{ transform: `rotate(${STAMP_TILT[i]}deg)` }} />}
               {cur && can && fresh === null && <img className="hanko ghost" src={STAMP} alt="" style={{ ['--r' as string]: `${STAMP_TILT[i]}deg` }} />}
               {isFresh && <Slam tilt={STAMP_TILT[i]} big={i === 6} />}

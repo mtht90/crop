@@ -175,6 +175,14 @@ export const GEM_DAILY_WIN = 30;
 export const winGems = (base: number) => Math.min(30, Math.max(5, Math.round(base / 16)));
 /** gems a mission pays (its old coin reward, plus any gems it carried) */
 export const missionGems = (m: Mission) => m.reward + (m.gems ?? 0);
+/** coins a mission pays too (for the 交換所) */
+export const missionCoins = (m: Mission) => (m.reward > 0 ? m.reward * 5 : (m.gems ?? 0) * 2);
+/** coins of the login cycle */
+export const LOGIN_COINS = [100, 100, 150, 150, 200, 200, 500];
+/** coins of a level-up (every 5th level more) */
+export const levelCoins = (level: number) => (level % 5 === 0 ? 1000 : 200);
+/** coins of a first clear, by difficulty */
+export const FIRST_CLEAR_COINS: Record<Difficulty, number> = { easy: 300, normal: 500, hard: 800 };
 export const levelGems = (level: number) => (level % 5 === 0 ? 150 : 30);
 /**
  * the first clear of a story episode: it grows along the chapter, and each
@@ -182,8 +190,8 @@ export const levelGems = (level: number) => (level % 5 === 0 ? 150 : 30);
  * episode 11: 1,500 · 180; the finale 3,000 · 300, from 第二章 on 5,000 · 500)
  */
 export function storyFirstClear(episode: number, last: boolean, part: number): { coins: number; gems: number } {
-  if (last) return part <= 1 ? { coins: 0, gems: 1000 } : { coins: 0, gems: 1500 };
-  return { coins: 0, gems: 100 + (episode - 1) * 50 };
+  if (last) return part <= 1 ? { coins: 2000, gems: 1000 } : { coins: 3000, gems: 1500 };
+  return { coins: 300 + (episode - 1) * 50, gems: 100 + (episode - 1) * 50 };
 }
 /** 通常ミッション also carry a few gems (about 1 per 50 coins, in fives, 5–100) */
 export const normalMissionGems = (coins: number) => Math.min(100, Math.max(5, Math.round(coins / 50 / 5) * 5));
@@ -236,7 +244,7 @@ export function battleReward(p: Progress, o: BattleOutcome): { lines: RewardLine
   if (o.win) {
     lines.push({ label: '勝利報酬', coins: 0, gems: winGems(o.baseReward) });
     if (p.lastWinDay !== dayKey()) lines.push({ label: '本日の初勝利', coins: 0, gems: GEM_DAILY_WIN });
-    if (o.firstClear) lines.push({ label: o.firstClearLabel ?? '初回クリアボーナス', coins: 0, gems: o.firstClearGems ?? GEM_FIRST_CLEAR[o.level] });
+    if (o.firstClear) lines.push({ label: o.firstClearLabel ?? '初回クリアボーナス', coins: o.firstClearCoins ?? FIRST_CLEAR_COINS[o.level], gems: o.firstClearGems ?? GEM_FIRST_CLEAR[o.level] });
   }
   const mult = o.level === 'hard' ? 2 : o.level === 'normal' ? 1.5 : 1;
   const exp = o.win ? Math.round(100 * mult + o.prizesTaken * 5) : Math.round(25 * mult);

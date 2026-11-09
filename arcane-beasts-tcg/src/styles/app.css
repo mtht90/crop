@@ -1371,3 +1371,16 @@
   .pk-badge span { font-size: 11px; max-width: 60px; }
 }
 .pk-body .free3 { width: 100%; }
+.flash-coin, .ms3-coin { display: inline-flex; align-items: center; gap: 3px; margin-left: 10px; color: #ffd76a; font-style: normal; }
+.ms3-coin { margin-left: 0; font-size: 0.85em; }
+.ms3-claim span { flex-wrap: wrap; justify-content: center; }
+.login-day .c.coin { display: inline-flex; align-items: center; gap: 2px; font-size: 9px; color: #ffd76a; white-space: nowrap; }
+.login-day .c.coin .money { width: 10px !important; height: 10px !important; }
+/* painted shop pictures */
+.st4-art { width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 6px 10px rgba(10, 20, 60, 0.45)); pointer-events: none; user-select: none; }
+.st4-tile-art .st4-art { width: 88px; height: 88px; }
+.st4-banner-ico:has(.st4-art) { background: none; box-shadow: none; width: clamp(110px, 24vw, 170px); transform: rotate(-4deg); }
+.st4-banner.painted { display: block; padding: 0; min-height: 0; aspect-ratio: 1452 / 232; background: #0d1230; border-color: #e8c567; }
+.st4-banner-img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.st4-gem-art { height: 74px; align-items: center; }
+.st4-gem-art img { height: calc(74px * var(--s, 1)); width: auto; max-width: 100%; object-fit: contain; filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.5)); }
