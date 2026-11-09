@@ -9,7 +9,7 @@ import { card } from '../engine/cards';
 import { artUrl } from '../lib/assets';
 import { dailyDeals, GEM_PRODUCTS, leftOf, MAX_DECK_SLOTS, SHOP_ITEMS, type Deal, type ShopItem } from '../state/market';
 import { dayKey, fmtRemain, msUntilTomorrow } from '../state/progress';
-import { deckSlotsOf, pickupBooster, PREMIUM_BOOSTER, useStore } from '../state/store';
+import { deckSlotsOf, PREMIUM_BOOSTER, SPECIAL_BOOSTER, useStore } from '../state/store';
 import { CardFace } from '../ui/Card';
 import { Icon } from '../ui/Icon';
 import { PaySheet } from '../ui/PaySheet';
@@ -98,14 +98,13 @@ interface Banner {
 function Pick() {
   const save = useStore((s) => s.save);
   const [buy, setBuy] = useState<ShopItem | null>(null);
-  const pickup = pickupBooster();
   const starter = SHOP_ITEMS.find((i) => i.id === 'starter')!;
   const sure3 = SHOP_ITEMS.find((i) => i.id === 'sure3-set')!;
   const banners: Banner[] = [
-    { key: 'pickup', kicker: '期間限定', title: 'ピックアップパック', sub: pickup.lines![0], badge: `あと${Math.max(1, Math.ceil((pickup.ends - Date.now()) / 86400_000))}日`, hue: pickup.hue, pack: pickup, go: () => useShopSeg.setState({ seg: 'pack' }) },
+    { key: 'special', kicker: 'NEW', title: 'スペシャルパック', sub: '★3以上2枚確定', hue: SPECIAL_BOOSTER.hue, pack: SPECIAL_BOOSTER, go: () => useShopSeg.setState({ seg: 'pack' }) },
     ...(leftOf(starter, save.shopBought) > 0 ? [{ key: 'starter', kicker: '初心者限定・1回のみ', title: 'スタートダッシュセット', sub: starter.note!, badge: `${Math.round((1 - starter.price / starter.worth!) * 100)}%おトク`, hue: '#ffd76a', icon: 'crown', go: () => setBuy(starter) }] : []),
     { key: 'sure3', kicker: '週1回', title: '★3確定セット', sub: sure3.note!, hue: '#c890ff', icon: 'stars', go: () => setBuy(sure3) },
-    { key: 'premium', kicker: 'いつでも', title: 'プレミアムパック', sub: '5枚目は★3以上確定', hue: PREMIUM_BOOSTER.hue, pack: PREMIUM_BOOSTER, go: () => useShopSeg.setState({ seg: 'pack' }) },
+    { key: 'premium', kicker: 'いつでも', title: 'レアパック', sub: '5枚目は★3以上確定', hue: PREMIUM_BOOSTER.hue, pack: PREMIUM_BOOSTER, go: () => useShopSeg.setState({ seg: 'pack' }) },
   ];
   const [i, setI] = useState(0);
   useEffect(() => {
@@ -245,7 +244,7 @@ function ItemList({ section }: { section: ShopItem['section'][] }) {
     <>
       <div className="st4-have">
         <span>
-          <Icon name="ticket" /> プレミアム <b>{save.packTickets?.premium ?? 0}</b>
+          <Icon name="ticket" /> レア <b>{save.packTickets?.premium ?? 0}</b>
         </span>
         <span>
           <Icon name="stars" /> ★3確定 <b>{save.packTickets?.sure3 ?? 0}</b>

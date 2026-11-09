@@ -11,7 +11,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CardDef, Rarity } from '../engine/types';
 import { byName, RARITY_COLOR, RARITY_SYMBOL } from '../engine/cards';
 import { dayKey } from '../state/progress';
-import { CHAPTER_BOOSTERS, pickupBooster, SURE3_BOOSTER, TYPE_BOOSTERS, BOOSTERS, NORMAL_BOOSTER, openPack, PACK_TABLE, PREMIUM_BOOSTER, PREMIUM_TABLE, PRINTING_CHANCE, PREMIUM_PRINTING_CHANCE, TEN_PACKS, freePackState, FREE_PACKS_PER_DAY, FREE_PACK_GAP_MS, useStore, type FreePackState, type Booster } from '../state/store';
+import { CHAPTER_BOOSTERS, SPECIAL_BOOSTER, SPECIAL_TABLE, SURE3_BOOSTER, TYPE_BOOSTERS, BOOSTERS, NORMAL_BOOSTER, openPack, PACK_TABLE, PREMIUM_BOOSTER, PREMIUM_TABLE, PRINTING_CHANCE, PREMIUM_PRINTING_CHANCE, TEN_PACKS, freePackState, FREE_PACKS_PER_DAY, FREE_PACK_GAP_MS, useStore, type FreePackState, type Booster } from '../state/store';
 import { CardBack, CardFace } from '../ui/Card';
 import { TopBar } from '../ui/TopBar';
 import { Icon } from '../ui/Icon';
@@ -43,7 +43,7 @@ const fmtWait = (ms: number) => {
   return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 };
 /** what n packs cost: a 10連 is 9 packs' price */
-const costOf = (b: Booster, n: number) => priceOf(b) * (n >= 10 ? TEN_PACKS * Math.floor(n / 10) + (n % 10) : n);
+const costOf = (b: Booster, n: number) => (n >= 10 && b.tenPrice ? b.tenPrice * Math.floor(n / 10) + priceOf(b) * (n % 10) : priceOf(b) * (n >= 10 ? TEN_PACKS * Math.floor(n / 10) + (n % 10) : n));
 
 // ---------------------------------------------------------------------------
 // Omen (予兆) and promotion (昇格)
@@ -180,7 +180,6 @@ export function Shop({ header }: { header?: React.ReactNode } = {}) {
     return () => clearInterval(iv);
   }, []);
   const free = freePackState(save, now);
-  const pickup = useMemo(() => pickupBooster(now), [Math.floor(now / 3600_000)]);
 
   const buy = useCallback(
     (booster: Booster, packs = 1, via: Via = booster.free ? 'free' : 'gem') => {
@@ -224,7 +223,7 @@ export function Shop({ header }: { header?: React.ReactNode } = {}) {
       <div className="page">
         {header ?? <TopBar title="パック" back={null} />}
         <PackShowcase groups={[
-          ['おすすめ', [NORMAL_BOOSTER, PREMIUM_BOOSTER, pickup]],
+          ['おすすめ', [NORMAL_BOOSTER, PREMIUM_BOOSTER, SPECIAL_BOOSTER]],
           ['章パック', CHAPTER_BOOSTERS],
           ['タイプ別', TYPE_BOOSTERS],
         ]} free={free} now={now} onBuy={buy} onOdds={setOdds} />
@@ -243,7 +242,7 @@ export function Shop({ header }: { header?: React.ReactNode } = {}) {
         )}
       </AnimatePresence>
 
-      {odds && <OddsModal premium={!!odds.premium} onClose={() => setOdds(null)} />}
+      {odds && <OddsModal premium={!!odds.premium} special={odds.table === 'special'} onClose={() => setOdds(null)} />}
     </div>
   );
 }
@@ -317,12 +316,7 @@ function PackPanel({ b, free, now, onBuy, onOdds }: { b: Booster & { ends?: numb
   const save = useStore((s) => s.save);
   const premiumT = save.packTickets?.premium ?? 0;
   const sure3T = save.packTickets?.sure3 ?? 0;
-  const lines =
-    b.lines ??
-    (b.premium ? ['5枚目は★3以上確定', '★4・★5が通常の約3倍', '光るカード・特別な絵のカードも出やすい'] : ['すべての章のカードが出る', 'ごくまれに★4・★5', '5枚入り']);
-  const badge = b.free ? '毎日無料' : b.ends ? `あと${Math.max(1, Math.ceil((b.ends - now) / 86400_000))}日` : b.id === 'premium' ? '★3以上確定' : b.id.startsWith('ch-') ? '章限定' : b.id.startsWith('type-') ? 'タイプ限定' : '';
-  const kicker = b.free ? '1日2回まで無料' : b.ends ? '期間限定' : b.premium ? '★3以上確定のパック' : 'ねらいのタイプを集めよう';
-  const icons = ['cards', 'stars', 'sparkles'];
+  const badge = b.free ? '毎日無料' : b.id === 'special' ? '★3以上2枚確定' : b.id === 'premium' ? '★3以上確定' : '';
   return (
     <section className={`pk-panel ${b.premium ? 'premium' : ''}`} style={{ ['--hue' as string]: b.hue, ['--hue2' as string]: b.hue2 }}>
       <i className="pk-crystals" />
@@ -340,15 +334,6 @@ function PackPanel({ b, free, now, onBuy, onOdds }: { b: Booster & { ends?: numb
       </div>
       <div className="pk-body">
         <h3 className="pk-title">{b.name}</h3>
-        <p className="pk-kicker">― {kicker} ―</p>
-        <div className="pk-info">
-          {lines.slice(0, 3).map((l, k) => (
-            <div key={l} className="pk-cell">
-              <Icon name={icons[k]} />
-              <span>{l}</span>
-            </div>
-          ))}
-        </div>
         {b.free ? (
           <FreeSlot free={free} now={now} onOpen={() => onBuy(b)} />
         ) : (
@@ -357,9 +342,9 @@ function PackPanel({ b, free, now, onBuy, onOdds }: { b: Booster & { ends?: numb
               <small>1パック</small>
               <Icon name="gem" /> {b.price.toLocaleString()}
             </button>
-            <button className="pk-price ten" disabled={save.gems < b.price * TEN_PACKS} onClick={() => onBuy(b, 10)}>
+            <button className="pk-price ten" disabled={save.gems < costOf(b, 10)} onClick={() => onBuy(b, 10)}>
               <small>10パック</small>
-              <Icon name="gem" /> {(b.price * TEN_PACKS).toLocaleString()}
+              <Icon name="gem" /> {costOf(b, 10).toLocaleString()}
             </button>
           </div>
         )}
@@ -527,13 +512,13 @@ function oddsRows(table: [Rarity, number][][], labels: string[]): [string, strin
   });
 }
 
-function OddsModal({ onClose, premium }: { onClose: () => void; premium?: boolean }) {
+function OddsModal({ onClose, premium, special }: { onClose: () => void; premium?: boolean; special?: boolean }) {
   const labels = ['1枚目', '2枚目', '3枚目', '4枚目', '5枚目'];
-  const rows = oddsRows(premium ? PREMIUM_TABLE : PACK_TABLE, labels);
+  const rows = oddsRows(special ? SPECIAL_TABLE : premium ? PREMIUM_TABLE : PACK_TABLE, labels);
   return (
     <div className="zoom-back" onClick={onClose}>
       <div className="panel odds-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-title">提供割合{premium ? '（プレミアムパック）' : '（通常パック）'}</div>
+        <div className="modal-title">提供割合{special ? '（スペシャルパック）' : premium ? '（レアパック）' : '（通常パック）'}</div>
         <table className="odds-table">
           <tbody>
             {rows.map(([slot, text]) => (

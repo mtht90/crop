@@ -852,7 +852,7 @@ export function owned(s: Save, cid: string) {
 // ----------------------------------------------------------------------------
 // Booster packs: two kinds, both drawing from every chapter (5 cards each)
 //   通常パック     150 coins
-//   プレミアムパック 450 coins — the last card is ★3 or better, ★4/★5 come far more often
+//   レアパック 450 coins — the last card is ★3 or better, ★4/★5 come far more often
 // A drawn card may come as one of its special printings (mirror, full art,
 // special art, gold): same card, same ★, only the look is rarer.
 // ----------------------------------------------------------------------------
@@ -898,6 +898,10 @@ export interface Booster {
   free?: boolean;
   /** gems for one pack */
   price: number;
+  /** gems for ten (when not the usual 9 packs' worth) */
+  tenPrice?: number;
+  /** its own odds table */
+  table?: 'special';
   /** which cards it can hold (all when unset) */
   only?: (c: CardDef) => boolean;
   /** cards that come more often within their ★ */
@@ -911,7 +915,10 @@ export interface Booster {
 }
 
 export const NORMAL_BOOSTER: Booster = { id: 'normal', name: '通常パック', mascot: 'ヴォルカリオン', hue: '#5ab0ff', hue2: '#0a2a6e', price: PACK_PRICE, free: true, label: 'STANDARD' };
-export const PREMIUM_BOOSTER: Booster = { id: 'premium', name: 'プレミアムパック', mascot: 'ドラグーン', hue: '#e9c46a', hue2: '#1c1206', premium: true, price: PREMIUM_PRICE, label: 'PREMIUM' };
+export const PREMIUM_BOOSTER: Booster = { id: 'premium', name: 'レアパック', mascot: 'ドラグーン', hue: '#e9c46a', hue2: '#1c1206', premium: true, price: PREMIUM_PRICE, label: 'RARE' };
+/** スペシャルパック: the last two cards ★3 or better, ★4 and ★5 about twice the レアパック's */
+export const SPECIAL_PRICE = 800;
+export const SPECIAL_BOOSTER: Booster = { id: 'special', name: 'スペシャルパック', mascot: 'ドラグーン', hue: '#b98cff', hue2: '#12052a', premium: true, table: 'special', price: SPECIAL_PRICE, tenPrice: 7980, label: 'SPECIAL' };
 /** opened with a ★3確定チケット: a 通常パック whose last card is ★3 or better */
 export const SURE3_BOOSTER: Booster = { ...NORMAL_BOOSTER, id: 'sure3', name: '★3確定パック', free: false, sure3: true, price: 0, hue: '#c890ff', hue2: '#2a0e4a', label: '★3 GUARANTEED' };
 
@@ -934,40 +941,12 @@ export const TYPE_BOOSTERS: Booster[] = TYPE_PACKS.map(([t, jp, hue, hue2]) => {
   return { id: `type-${t}`, name: `${jp}のパック`, mascot: mascotOf((c) => c.kind === 'monster' && c.type === t), hue, hue2, price: TYPE_PACK_PRICE, only, label: `${jp.toUpperCase()} PACK`, lines: [`${jp}タイプのモンスターとトレーナーズだけが出る`, '★の出やすさは通常パックと同じ', '5枚入り'] };
 });
 
-/** 章パック: one chapter's cards, at the プレミアムパック's odds */
+/** 章パック: one chapter's cards, at the レアパック's odds */
 export const CHAPTER_BOOSTERS: Booster[] = SETS.map((code, i) => {
   const only = (c: CardDef) => c.set === code;
   const hues = [['#e9c46a', '#1c1206'], ['#9ad0ff', '#0a1a33'], ['#d58bff', '#1d0730']][i] ?? ['#e9c46a', '#1c1206'];
-  return { id: `ch-${code}`, name: `${SET_INFO[code].short}パック`, mascot: mascotOf((c) => c.kind === 'monster' && c.set === code), hue: hues[0], hue2: hues[1], premium: true, price: PREMIUM_PRICE, only, label: SET_INFO[code].code, lines: [`${SET_INFO[code].short}「${SET_INFO[code].name}」のカードだけが出る`, '5枚目は★3以上確定', '★の出やすさはプレミアムパックと同じ'] };
+  return { id: `ch-${code}`, name: `${SET_INFO[code].short}パック`, mascot: mascotOf((c) => c.kind === 'monster' && c.set === code), hue: hues[0], hue2: hues[1], premium: true, price: PREMIUM_PRICE, only, label: SET_INFO[code].code, lines: [`${SET_INFO[code].short}「${SET_INFO[code].name}」のカードだけが出る`, '5枚目は★3以上確定', '★の出やすさはレアパックと同じ'] };
 });
-
-/** ピックアップパック: a few cards come more often for two weeks, at the プレミアムパック's odds */
-export const PICKUP_DAYS = 14;
-export function pickupBooster(now = Date.now()): Booster & { ends: number } {
-  const period = Math.floor(now / (PICKUP_DAYS * 86400_000));
-  const pool = MAIN_SET.filter((c): c is MonsterCard => c.kind === 'monster' && (c.rarity === 3 || c.rarity === 4));
-  let a = (period * 2654435761) >>> 0;
-  const rnd = () => ((a = (a * 1664525 + 1013904223) >>> 0) / 4294967296);
-  const picks: string[] = [];
-  while (picks.length < 3 && picks.length < pool.length) {
-    const c = pool[Math.floor(rnd() * pool.length)];
-    if (!picks.includes(c.id)) picks.push(c.id);
-  }
-  const lead = card(picks[0]);
-  return {
-    id: 'pickup',
-    name: 'ピックアップパック',
-    mascot: lead.name,
-    hue: '#ff8fb1',
-    hue2: '#2a0716',
-    premium: true,
-    price: PREMIUM_PRICE,
-    pickup: picks,
-    label: 'PICK UP',
-    lines: [`${picks.map((id) => card(id).name).join('・')}が出やすい`, '5枚目は★3以上確定', '★の出やすさはプレミアムパックと同じ'],
-    ends: (period + 1) * PICKUP_DAYS * 86400_000,
-  };
-}
 
 /** the packs the shop lists first */
 export const BOOSTERS: Booster[] = [NORMAL_BOOSTER, PREMIUM_BOOSTER];
@@ -1013,6 +992,14 @@ export const PREMIUM_TABLE: Slot[] = [
   [[2, 0.6], [3, 0.9895], [4, 0.9995], [5, 1]],
   [[3, 0.979], [4, 0.9992], [5, 1]],
 ];
+export const SPECIAL_TABLE: Slot[] = [
+  [[1, 0.35], [2, 1]],
+  [[2, 0.8], [3, 1]],
+  [[2, 0.5], [3, 1]],
+  // ★4 ~6%, ★5 ~0.35% a pack
+  [[3, 0.97], [4, 0.998], [5, 1]],
+  [[3, 0.9685], [4, 0.9985], [5, 1]],
+];
 /** the ★3確定チケット's pack: the 通常パック, but the last card is ★3 or better */
 export const SURE3_TABLE: Slot[] = [...PACK_TABLE.slice(0, 4), [[3, 0.9896], [4, 0.9996], [5, 1]]];
 /** a very rare pack where every card is ★3 or better */
@@ -1053,7 +1040,7 @@ export interface PackResult {
 export function openPack(b: Booster = NORMAL_BOOSTER): PackResult {
   const premium = !!b.premium;
   const god = Math.random() < (premium ? 0.0003 : 0.0001) || (typeof location !== 'undefined' && location.search.includes('godpack'));
-  const table = god ? GOD_TABLE : premium ? PREMIUM_TABLE : b.sure3 ? SURE3_TABLE : PACK_TABLE;
+  const table = god ? GOD_TABLE : b.table === 'special' ? SPECIAL_TABLE : premium ? PREMIUM_TABLE : b.sure3 ? SURE3_TABLE : PACK_TABLE;
   const cards = table.map((t) => draw(roll(t), premium || god ? PREMIUM_PRINTING_CHANCE : PRINTING_CHANCE, b.only, b.pickup));
   cards.sort((x, y) => x.rarity - y.rarity || (x.variant ? 1 : 0) - (y.variant ? 1 : 0));
   return { cards, god };

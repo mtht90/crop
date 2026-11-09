@@ -23,7 +23,7 @@ export interface Give {
   tickets?: number;
   recipes?: number;
   shards?: number;
-  /** プレミアムパックチケット */
+  /** レアパックチケット */
   premium?: number;
   /** ★3確定チケット */
   sure3?: number;
@@ -58,11 +58,11 @@ export const MAX_DECK_SLOTS = 40;
 
 export const SHOP_ITEMS: ShopItem[] = [
   // お得なセット
-  { id: 'starter', section: 'set', name: 'スタートダッシュセット', price: 980, give: { premium: 3, tickets: 5, coins: 10000 }, icon: 'crown', limit: { per: 'once', n: 1 }, worth: 3 * PREMIUM_TICKET_WORTH + 700 + 500, note: 'プレミアムパックチケット×3・オートチケット×5・コイン×10,000' },
+  { id: 'starter', section: 'set', name: 'スタートダッシュセット', price: 980, give: { premium: 3, tickets: 5, coins: 10000 }, icon: 'crown', limit: { per: 'once', n: 1 }, worth: 3 * PREMIUM_TICKET_WORTH + 700 + 500, note: 'レアパックチケット×3・オートチケット×5・コイン×10,000' },
   { id: 'weekly', section: 'set', name: '週替わりセット', price: 450, give: { tickets: 3, shards: 20 }, icon: 'chest', limit: { per: 'week', n: 1 }, worth: 3 * AUTO_PRICE + 200, note: 'オートチケット×3・イベントのかけら×20' },
   { id: 'sure3-set', section: 'set', name: '★3確定セット', price: 900, give: { sure3: 3 }, icon: 'stars', limit: { per: 'week', n: 1 }, worth: 3 * SURE3_PRICE, note: '★3確定チケット×3' },
   // アイテム (gems)
-  { id: 'premium1', section: 'item', name: 'プレミアムパックチケット', price: PREMIUM_TICKET_WORTH, give: { premium: 1 }, icon: 'ticket', note: 'プレミアムパックを1回引ける' },
+  { id: 'premium1', section: 'item', name: 'レアパックチケット', price: PREMIUM_TICKET_WORTH, give: { premium: 1 }, icon: 'ticket', note: 'レアパックを1回引ける' },
   { id: 'sure3', section: 'item', name: '★3確定チケット', price: SURE3_PRICE, give: { sure3: 1 }, icon: 'stars', note: '5枚目が★3以上の通常パックを1回引ける' },
   { id: 'auto1', section: 'item', name: 'オートバトルチケット', price: AUTO_PRICE, give: { tickets: 1 }, icon: 'robot' },
   { id: 'auto5', section: 'item', name: 'オートバトルチケット ×5', price: 700, give: { tickets: 5 }, icon: 'robot', worth: 5 * AUTO_PRICE },
@@ -74,7 +74,7 @@ export const SHOP_ITEMS: ShopItem[] = [
   { id: 'x-slot', section: 'exchange', currency: 'coin', name: 'デッキ枠 +1', price: SLOT_COINS, give: { slots: 1 }, icon: 'deck', note: `最大${MAX_DECK_SLOTS}まで` },
   { id: 'x-auto', section: 'exchange', currency: 'coin', name: 'オートバトルチケット', price: 1500, give: { tickets: 1 }, icon: 'robot', limit: { per: 'day', n: 3 } },
   { id: 'x-sure3', section: 'exchange', currency: 'coin', name: '★3確定チケット', price: 6000, give: { sure3: 1 }, icon: 'stars', limit: { per: 'week', n: 3 } },
-  { id: 'x-premium', section: 'exchange', currency: 'coin', name: 'プレミアムパックチケット', price: 10000, give: { premium: 1 }, icon: 'ticket', limit: { per: 'week', n: 2 } },
+  { id: 'x-premium', section: 'exchange', currency: 'coin', name: 'レアパックチケット', price: 10000, give: { premium: 1 }, icon: 'ticket', limit: { per: 'week', n: 2 } },
   { id: 'x-shards', section: 'exchange', currency: 'coin', name: 'イベントのかけら ×5', price: 800, give: { shards: 5 }, icon: 'shard', limit: { per: 'day', n: 5 } },
 ];
 

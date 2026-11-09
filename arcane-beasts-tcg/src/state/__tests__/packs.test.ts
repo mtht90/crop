@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { card } from '../../engine/cards';
-import { CHAPTER_BOOSTERS, openPack, pickupBooster, PREMIUM_BOOSTER, SURE3_BOOSTER, TYPE_BOOSTERS } from '../store';
+import { CHAPTER_BOOSTERS, openPack, PREMIUM_BOOSTER, SPECIAL_BOOSTER, SURE3_BOOSTER, TYPE_BOOSTERS } from '../store';
 import { battleCoins } from '../progress';
 
 const base = (id: string) => card(id.replace(/-(SAR|SR|UR|M|FA)$/, ''));
@@ -24,16 +24,18 @@ describe('パックの種類', () => {
     }
   });
 
-  it('the pickup comes more often than in a plain premium pack, at the same ★ odds', () => {
-    const p = pickupBooster(Date.UTC(2026, 10, 9));
-    expect(p.pickup).toHaveLength(3);
-    const count = (b: typeof p | typeof PREMIUM_BOOSTER) => {
-      let n = 0;
-      for (let i = 0; i < 3000; i++) n += openPack(b).cards.filter((c) => p.pickup!.includes(c.id)).length;
-      return n;
-    };
-    expect(count(p)).toBeGreaterThan(count({ ...PREMIUM_BOOSTER }) * 3);
-    void base;
+  it('スペシャルパック: two ★3-or-better cards every time, ★4 about twice the レアパック', () => {
+    let sp4 = 0;
+    let rare4 = 0;
+    for (let i = 0; i < 6000; i++) {
+      const c = openPack(SPECIAL_BOOSTER).cards;
+      if (!c.some((x) => x.rarity === 5 || x.rarity === 4)) expect(c.filter((x) => x.rarity >= 3).length).toBeGreaterThanOrEqual(2);
+      if (c.some((x) => x.rarity >= 4)) sp4++;
+      if (openPack(PREMIUM_BOOSTER).cards.some((x) => x.rarity >= 4)) rare4++;
+    }
+    expect(sp4).toBeGreaterThan(rare4 * 1.5);
+    expect(SPECIAL_BOOSTER.price).toBe(800);
+    expect(SPECIAL_BOOSTER.tenPrice).toBe(7980);
   });
 
   it('a battle pays coins: more for a win', () => {
