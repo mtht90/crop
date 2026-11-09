@@ -152,7 +152,7 @@ const ROWS: Row[] = [
 const PASSIVES: Record<string, Passive> = {
   skel_warrior: { kind: 'guard', name: 'ホネのよろい', desc: 'ボスの妨害を3回まではじく\n7つ以上つなぐとダメージ1.3倍' },
   c_pumpkin: { kind: 'treat', name: 'ハロウィンのおかし', desc: 'もらえるコインが1.3倍' },
-  c_knight: { kind: 'royal', name: 'ひめきしのちかい', desc: 'いつでもダメージ1.1倍\nフィーバーが3秒長い・フィーバー中1.3倍' },
+  c_knight: { kind: 'royal', name: 'ひめきしのちかい', desc: 'いつでもダメージ1.1倍・コイン1.6倍\nフィーバーが3秒長い・フィーバー中1.3倍' },
   q_captain: { kind: 'treat', name: 'おたからの地図', desc: 'もらえるコインが1.3倍' },
   s_hound: { kind: 'oath', name: 'ばんけんのほえごえ', desc: 'フィーバーが2秒長い\nフィーバー中のダメージ1.2倍' },
   skel_rogue: { kind: 'shadow', name: 'かげのしのび', desc: 'ボスの妨害がすぐおわる（時間半分）\nコンボがきれにくい' },

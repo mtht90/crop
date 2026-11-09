@@ -205,7 +205,9 @@ export class BattleScene extends Scene {
     // coin skill grows 10% per skill level
     const cs = COIN_SKILL[this.def.rarity];
     const k = 1 + (this.growth.skill - 1) * 0.1;
-    this.coinSkill = { perPiece: cs.perPiece * k, flat: Math.round(cs.flat * k) };
+    // the UR's move scatters twice the coins
+    const royal = this.def.passive?.kind === 'royal' ? 2 : 1;
+    this.coinSkill = { perPiece: cs.perPiece * k * royal, flat: Math.round(cs.flat * k * royal) };
     this.bossLv = Save.fightLv();
     this.rematch = this.bossLv < Save.data.bossLv;
     this.bossDef = bossForLevel(this.bossLv);
@@ -2168,7 +2170,7 @@ export class BattleScene extends Scene {
     const bonus = bossCoins;
     const coinBoost = this.items.includes('coin') ? rollCoinBoost() : 1;
     // パンプキン's passive: Halloween treats (+30% coins)
-    const treat = this.def.passive?.kind === 'treat' ? 1.3 : 1;
+    const treat = this.def.passive?.kind === 'treat' ? 1.3 : this.def.passive?.kind === 'royal' ? 1.6 : 1;
     const coins = Math.round((this.coinsEarned + bonus) * coinBoost * treat);
     // character growth: EXP from playing, rare skill tickets from bosses
     const owned = d.owned[this.def.id];
