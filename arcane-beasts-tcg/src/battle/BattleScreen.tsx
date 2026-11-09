@@ -30,6 +30,8 @@ import './battle.css';
 const TERRAIN_WEATHER: Record<string, WeatherKind> = { volcano: 'embers', coast: 'storm', forest: 'petals', swamp: 'fog', battlefield: 'ash', harbor: 'fog', ruins: 'motes', crypt: 'ash', peak: 'storm', oasis: 'motes', mine: 'ash', sky: 'stars', snowfield: 'snow', greattree: 'petals', remains: 'ash', statue: 'stars', shrine: 'motes', mist: 'fog', study: 'motes', hall: 'motes', altar: 'embers', summoning: 'stars', spire: 'rain' };
 
 const LAYOUT = { type: 'spring' as const, stiffness: 260, damping: 30, mass: 0.9 };
+/** オートバトル costs this many gems per battle */
+const AUTO_PRICE = 300;
 
 // ---------------------------------------------------------------------------
 // Board card with shared-layout animation
@@ -1056,6 +1058,9 @@ export function BattleScreen() {
   }, [settings.speed]);
 
   const ctrl = ctrlRef.current;
+  // オートバトル: paid once per battle, then on and off freely
+  const [auto, setAuto] = useState(false);
+  const [autoPaid, setAutoPaid] = useState(false);
   const myAction = prompt?.type === 'action' && prompt.player === HUMAN;
   const legal = useMemo(() => (myAction && ctrl ? ctrl.legal() : []), [prompt, ctrl, myAction]);
 
@@ -1463,6 +1468,28 @@ export function BattleScreen() {
           </div>
 
           <LogPanel s={s} open={logOpen} onToggle={() => setLogOpen(!logOpen)} />
+          {!cfg.online && !cfg.spectate && !cfg.placement && (
+            <button
+              className={`log-toggle auto ${auto ? 'on' : ''}`}
+              title="オートバトル"
+              onClick={async () => {
+                const c = ctrl as BattleController | null;
+                if (!c?.setAuto) return;
+                if (!autoPaid) {
+                  const gems = useStore.getState().save.gems;
+                  if (gems < AUTO_PRICE) return void askConfirm(`オートバトルには${AUTO_PRICE}ジェム必要です`, 'OK');
+                  if (!(await askConfirm(`${AUTO_PRICE}ジェムでオートバトルにしますか？`, 'オートにする'))) return;
+                  useStore.getState().update((x) => void (x.gems -= x.dev ? 0 : AUTO_PRICE));
+                  setAutoPaid(true);
+                }
+                sfx('button', 0.5);
+                c.setAuto(!auto);
+                setAuto(!auto);
+              }}
+            >
+              AUTO
+            </button>
+          )}
           <button
             className="log-toggle surrender"
             title="降参する"

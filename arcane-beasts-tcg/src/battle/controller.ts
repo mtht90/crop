@@ -16,6 +16,8 @@ export const HUMAN = 0 as const;
 export interface BattleDriver {
   speed: number;
   autoHuman: boolean;
+  /** オートバトル: the player's side plays itself from now on (or stops) */
+  setAuto?(on: boolean): void;
   start(): void;
   dispose(): void;
   surrender(): void;
@@ -310,6 +312,16 @@ export class BattleController extends FramePlayer implements BattleDriver {
     return this.game.legalActions(HUMAN);
   }
 
+  /** the strength the player's side plays at under オートバトル */
+  autoLevel: AiLevel = 7;
+  setAuto(on: boolean) {
+    this.autoHuman = on;
+    if (on && this.game.pending?.player === HUMAN && !this.running) {
+      useBattle.setState({ prompt: null });
+      void this.pump();
+    }
+  }
+
   answer(a: Answer) {
     const pr = this.game.pending;
     if (!pr || pr.player !== HUMAN || this.running || this.autoHuman) return;
@@ -357,7 +369,7 @@ export class BattleController extends FramePlayer implements BattleDriver {
         await sleep((pr.type === 'action' ? 520 : 380) / this.rate);
         if (this.disposed) return;
         if (pr.type === 'action') this.actionsThisTurn++;
-        const ans = await aiAnswerAsync(this.game, pr.player === HUMAN ? 'normal' : this.level, this.actionsThisTurn);
+        const ans = await aiAnswerAsync(this.game, pr.player === HUMAN ? this.autoLevel : this.level, this.actionsThisTurn);
         if (this.disposed) return;
         this.game.answer(ans);
       }

@@ -463,6 +463,9 @@
   z-index: 520;
 }
 .log-toggle.surrender { right: calc(var(--u) * 4.4); color: #ffb0b0; }
+.log-toggle.auto { z-index: 640; right: calc(var(--u) * 8); width: auto; padding: 0 calc(var(--u) * 1); border-radius: 999px; font-family: var(--font-latin); font-weight: 900; font-size: calc(var(--u) * 1); letter-spacing: 0.08em; color: var(--ink-dim); }
+.log-toggle.auto.on { color: #1a1206; background: linear-gradient(180deg, #ffe9a8, #e2a93a); border-color: #ffe9a8; box-shadow: 0 0 14px rgba(255, 210, 110, 0.6); animation: auto-pulse 1.6s ease-in-out infinite; }
+@keyframes auto-pulse { 50% { box-shadow: 0 0 22px rgba(255, 210, 110, 0.9); } }
 .log-panel {
   position: absolute;
   right: calc(var(--u) * 0.8);
@@ -1059,6 +1062,7 @@
 
   .log-toggle { width: calc(var(--u) * 4.4); height: calc(var(--u) * 4.4); font-size: calc(var(--u) * 2); }
   .log-toggle.surrender { right: calc(var(--u) * 6); }
+  .log-toggle.auto { right: calc(var(--u) * 11.2); font-size: calc(var(--u) * 1.5); }
   .log-panel { left: calc(var(--u) * 2); right: calc(var(--u) * 2); width: auto; top: calc(var(--u) * 6); font-size: calc(var(--u) * 1.3); }
   .preview { right: auto; left: calc(var(--u) * 10.6); top: calc(var(--u) * 8); width: calc(var(--u) * 35); }
   /* a card waiting for a target: its big preview would cover the board, so it steps aside */
