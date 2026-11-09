@@ -31,6 +31,8 @@ function makeDeck(): Deck {
   el.preload = 'auto';
   (el as HTMLAudioElement & { playsInline?: boolean }).playsInline = true;
   let gain: GainNode | null = null;
+  // make sure the audio context exists: without it the volume cannot be set on iPhone / iPad
+  if (!(Howler as unknown as { ctx?: AudioContext }).ctx) Howler.volume(Howler.volume());
   const c = (Howler as unknown as { ctx?: AudioContext }).ctx;
   if (c) {
     try {
@@ -63,6 +65,8 @@ function musicNodes() {
 const CROSS_MS = 1400;
 function fadeDeck(d: Deck, to: number, ms: number) {
   const level = to * vol.music * vol.master;
+  // volume 0 really is silent, even where the element's own volume cannot be changed
+  d.el.muted = vol.music * vol.master <= 0.001;
   if (d.gain) {
     const g = d.gain.gain;
     const t = d.gain.context.currentTime;

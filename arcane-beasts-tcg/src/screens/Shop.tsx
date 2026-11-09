@@ -326,7 +326,6 @@ function PackPanel({ b, free, now, onBuy, onOdds }: { b: Booster & { ends?: numb
         </span>
       )}
       <div className={`pk-art ${b.free ? (free.ready ? 'free-on' : 'free-wait') : ''}`} onClick={() => onBuy(b)}>
-        <i className="pk-ring" />
         <i className="pk-glow" />
         <motion.div animate={{ y: [0, -8, 0], rotate: [-4, -2, -4] }} transition={{ duration: 4.5, repeat: Infinity, ease: 'easeInOut' }}>
           <BoosterPack booster={b} tilt />

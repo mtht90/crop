@@ -97,18 +97,3 @@ describe('負けたときの報酬', () => {
     expect(w.gems).toBeGreaterThan(r.gems * 20);
   });
 });
-
-describe('勝利ジェムの1日上限', () => {
-  it('wins stop paying gems at WIN_GEMS_DAY_CAP a day', async () => {
-    const { battleReward, freshProgress, dayKey, WIN_GEMS_DAY_CAP, winGems } = await import('../progress');
-    const p = freshProgress();
-    p.lastWinDay = dayKey();
-    const win = { win: true, level: 'hard' as const, baseReward: 480, prizesTaken: 6, prizesLost: 0, firstClear: false };
-    p.winGemsDay = { day: dayKey(), n: WIN_GEMS_DAY_CAP - 100 };
-    expect(battleReward(p, win).gems).toBe(100);
-    p.winGemsDay = { day: dayKey(), n: WIN_GEMS_DAY_CAP };
-    expect(battleReward(p, win).gems).toBe(0);
-    p.winGemsDay = { day: '2000-01-01', n: WIN_GEMS_DAY_CAP };
-    expect(battleReward(p, win).gems).toBe(winGems(480));
-  });
-});

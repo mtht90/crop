@@ -810,8 +810,6 @@ export const useStore = create<Store>((set, get) => ({
         p.streak++;
         p.stats.bestStreak = Math.max(p.stats.bestStreak ?? 0, p.streak);
         p.lastWinDay = dayKey();
-        const wg = r.lines.find((l) => l.label === '勝利報酬')?.gems ?? 0;
-        p.winGemsDay = { day: dayKey(), n: (p.winGemsDay?.day === dayKey() ? p.winGemsDay.n : 0) + wg };
         s.wins++;
       } else {
         p.streak = 0;
