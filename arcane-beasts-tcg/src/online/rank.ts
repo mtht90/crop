@@ -152,7 +152,7 @@ export function stepOf(a: RankView, b: RankView) {
 }
 
 /** gems for last season's final tier */
-export const SEASON_GEMS = [200, 400, 800, 1400, 2200, 3200];
+export const SEASON_GEMS = [2000, 4000, 8000, 14000, 22000, 32000];
 
 /** after this long in the queue, the tiers just above and below are allowed too */
 export const WIDEN_MS = 60_000;

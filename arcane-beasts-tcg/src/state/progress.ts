@@ -160,7 +160,7 @@ export function addExp(p: Progress, amount: number): number[] {
 // ---------------------------------------------------------------------------
 // Login bonus (7-day cycle; the cycle advances on each day you log in)
 // ---------------------------------------------------------------------------
-export const LOGIN_REWARDS = [60, 60, 100, 100, 150, 150, 400];
+export const LOGIN_REWARDS = [600, 600, 1000, 1000, 1500, 1500, 4000];
 /** (folded into LOGIN_REWARDS: one 7-day cycle pays 500 = one pack) */
 export const LOGIN_GEMS = [0, 0, 0, 0, 0, 0, 0];
 
@@ -169,12 +169,14 @@ export const LOGIN_GEMS = [0, 0, 0, 0, 0, 0, 0];
 //   first clear of a rival / story episode, first win of the day, missions,
 //   the login cycle and level-ups. Tune the numbers here.
 // ---------------------------------------------------------------------------
-export const GEM_FIRST_CLEAR: Record<Difficulty, number> = { easy: 250, normal: 350, hard: 500 };
-export const GEM_DAILY_WIN = 60;
+/** every gem reward is multiplied by this */
+export const GEM_BOOST = 10;
+export const GEM_FIRST_CLEAR: Record<Difficulty, number> = { easy: 250 * GEM_BOOST, normal: 350 * GEM_BOOST, hard: 500 * GEM_BOOST };
+export const GEM_DAILY_WIN = 60 * GEM_BOOST;
 /** a won battle that can be played again pays a little: 5–30 by its base reward (ぷにぷにの通常ステージ) */
-export const winGems = (base: number) => Math.min(60, Math.max(10, Math.round(base / 8)));
+export const winGems = (base: number) => Math.min(60, Math.max(10, Math.round(base / 8))) * GEM_BOOST;
 /** gems a mission pays (its old coin reward, plus any gems it carried) */
-export const missionGems = (m: Mission) => m.reward * 2 + (m.gems ?? 0);
+export const missionGems = (m: Mission) => (m.reward * 2 + (m.gems ?? 0)) * GEM_BOOST;
 /** coins a mission pays too (for the 交換所) */
 export const missionCoins = (m: Mission) => (m.reward > 0 ? m.reward * 5 : (m.gems ?? 0) * 2);
 /** coins of the login cycle */
@@ -183,15 +185,15 @@ export const LOGIN_COINS = [100, 100, 150, 150, 200, 200, 500];
 export const levelCoins = (level: number) => (level % 5 === 0 ? 1000 : 200);
 /** coins of a first clear, by difficulty */
 export const FIRST_CLEAR_COINS: Record<Difficulty, number> = { easy: 300, normal: 500, hard: 800 };
-export const levelGems = (level: number) => (level % 5 === 0 ? 300 : 60);
+export const levelGems = (level: number) => (level % 5 === 0 ? 300 : 60) * GEM_BOOST;
 /**
  * the first clear of a story episode: it grows along the chapter, and each
  * chapter's last episode pays the most (episode 1: 500 coins · 30 gems …
  * episode 11: 1,500 · 180; the finale 3,000 · 300, from 第二章 on 5,000 · 500)
  */
 export function storyFirstClear(episode: number, last: boolean, part: number): { coins: number; gems: number } {
-  if (last) return part <= 1 ? { coins: 2000, gems: 1000 } : { coins: 3000, gems: 1500 };
-  return { coins: 300 + (episode - 1) * 50, gems: 100 + (episode - 1) * 50 };
+  if (last) return part <= 1 ? { coins: 2000, gems: 1000 * GEM_BOOST } : { coins: 3000, gems: 1500 * GEM_BOOST };
+  return { coins: 300 + (episode - 1) * 50, gems: (100 + (episode - 1) * 50) * GEM_BOOST };
 }
 /** 通常ミッション also carry a few gems (about 1 per 50 coins, in fives, 5–100) */
 export const normalMissionGems = (coins: number) => Math.min(100, Math.max(5, Math.round(coins / 50 / 5) * 5));
@@ -202,7 +204,7 @@ export const normalMissionGems = (coins: number) => Math.min(100, Math.max(5, Ma
 /** coins for a win, by level */
 export const CPU_REWARD = [60, 80, 100, 130, 170, 220, 280, 360, 480];
 /** gems for the first win at each level */
-export const CPU_FIRST_GEMS = [60, 60, 100, 100, 150, 150, 200, 300, 500];
+export const CPU_FIRST_GEMS = [60, 60, 100, 100, 150, 150, 200, 300, 500].map((g) => g * GEM_BOOST);
 /** the difficulty tier a level counts as (rewards, missions) */
 export const cpuTier = (level: number): Difficulty => (level <= 3 ? 'easy' : level <= 6 ? 'normal' : 'hard');
 export const canClaimLogin = (p: Progress) => p.loginDay !== dayKey();
