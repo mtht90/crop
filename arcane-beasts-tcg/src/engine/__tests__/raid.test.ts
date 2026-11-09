@@ -72,7 +72,8 @@ describe('ボスレイド', () => {
     expect(raidBattleGems(99999)).toBe(0);
     expect(raidLapReward(1)).toBeGreaterThanOrEqual(3000);
     // a save from before laps keeps this week's tries (no second free try)
-    const old = { key: weekKey(), bossId: BOSSES[0].id, tries: 3, wins: 1, best: 0, fastest: 0 } as unknown as Parameters<typeof raidNow>[0];
+    // (the key of the raid session running now, whatever day the test runs on)
+    const old = { key: raidNow(undefined).key, bossId: BOSSES[0].id, tries: 3, wins: 1, best: 0, fastest: 0 } as unknown as Parameters<typeof raidNow>[0];
     const r = raidNow(old);
     expect(r.tries).toBe(3);
     expect(r.laps).toBe(0);
