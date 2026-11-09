@@ -6,11 +6,10 @@ import { extCtx, freePackState, useStore, type Screen } from '../state/store';
 import { foley } from '../audio/audio';
 import { Icon } from './Icon';
 
-type Tab = 'home' | 'arena' | 'shop' | 'store' | 'deck' | 'more';
+type Tab = 'home' | 'arena' | 'store' | 'deck' | 'more';
 const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'home', label: 'ホーム', icon: 'tower-flag' },
   { id: 'arena', label: 'バトル', icon: 'swords' },
-  { id: 'shop', label: 'パック', icon: 'chest' },
   { id: 'store', label: 'ショップ', icon: 'shop' },
   { id: 'deck', label: 'デッキ', icon: 'deck' },
   { id: 'more', label: 'その他', icon: 'scroll-unfurled' },
@@ -24,7 +23,7 @@ export const TAB_OF: Partial<Record<Screen, Tab>> = {
   raid: 'arena',
   story: 'arena',
   lobby: 'arena',
-  shop: 'shop',
+  shop: 'store',
   store: 'store',
   deck: 'deck',
   more: 'more',
@@ -57,7 +56,7 @@ export function TabBar({ screen }: { screen: Screen }) {
           <span className="tab-ico">
             <Icon name={t.icon} />
             {t.id === 'more' && missions > 0 && <i className="tab-dot">{missions}</i>}
-            {t.id === 'shop' && freePack && <i className="tab-dot">無料</i>}
+            {t.id === 'store' && freePack && <i className="tab-dot">無料</i>}
           </span>
           <span className="tab-label">{t.label}</span>
         </button>

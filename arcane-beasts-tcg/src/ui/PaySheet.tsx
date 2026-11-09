@@ -16,7 +16,10 @@ export function PaySheet({
   onCancel,
   onDone,
   shopLink = true,
+  children,
 }: {
+  /** what is being bought, shown above the price */
+  children?: React.ReactNode;
   /** offer a way to the ショップ when short (not in the middle of a battle) */
   shopLink?: boolean;
   title: string;
@@ -66,6 +69,7 @@ export function PaySheet({
     <motion.div className="pay-back" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={phase === 'ask' ? onCancel : undefined}>
       <motion.div className="panel pay-sheet" initial={{ y: 30, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 16, opacity: 0 }} transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }} onClick={(e) => e.stopPropagation()}>
         <div className="pay-title">{title}</div>
+        {children}
         {phase === 'done' ? (
           <motion.div className="pay-done" initial={{ scale: 0.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.4, ease: [0.2, 1.4, 0.3, 1] }}>
             <span className="pay-check">
@@ -114,7 +118,7 @@ export function PaySheet({
                     閉じる
                   </button>
                   {shopLink && (
-                    <button className="btn" onClick={() => (onCancel(), go('store'))}>
+                    <button className="btn" onClick={() => (onCancel(), go('store'))} hidden={!shopLink}>
                       ショップへ
                     </button>
                   )}

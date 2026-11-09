@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { AUTO_PRICE, SHOP_ITEMS } from '../market';
+import { AUTO_PRICE, dailyDeals, SHOP_ITEMS } from '../market';
+import { card } from '../../engine/cards';
 import { useStore } from '../store';
 
 const st = () => useStore.getState();
@@ -9,6 +10,8 @@ const set = (gems: number, tickets = 0) =>
     s.autoTickets = tickets;
     s.autoPaidSeq = undefined;
     s.purchases = [];
+    s.shopBought = {};
+    s.dealsBought = undefined;
     s.dev = false;
   });
 
@@ -58,5 +61,32 @@ describe('ショップと支払い', () => {
     // the event's last stage pays 270 a win; on auto about half are won
     expect(AUTO_PRICE).toBeGreaterThan(270 * 0.5);
     expect(AUTO_PRICE).toBeLessThan(270);
+  });
+
+  it('sets: the starter set once ever, the weekly set once a week, both cheaper than their parts', () => {
+    set(10000);
+    for (const id of ['starter', 'weekly'] as const) {
+      const it = SHOP_ITEMS.find((i) => i.id === id)!;
+      expect(it.price).toBeLessThan(it.worth!);
+      expect(st().buyItem(id).ok).toBe(true);
+      expect(st().buyItem(id).ok).toBe(false);
+    }
+    expect(st().save.autoTickets).toBe(8);
+    expect((st().save.recipes ?? []).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('日替わり: four cards (★3, ★2, ★2, ★1), the same all day, one of each', () => {
+    const d = dailyDeals('2026-11-09');
+    expect(d.map((x) => card(x.cid).rarity)).toEqual([3, 2, 2, 1]);
+    expect(dailyDeals('2026-11-09')).toEqual(d);
+    expect(dailyDeals('2026-11-10')).not.toEqual(d);
+    set(1000);
+    const today = dailyDeals();
+    const before = st().save.collection[today[0].cid] ?? 0;
+    expect(st().buyDeal(today[0].cid)).toBe(true);
+    expect(st().save.collection[today[0].cid]).toBe(before + 1);
+    expect(st().save.gems).toBe(1000 - today[0].price);
+    expect(st().buyDeal(today[0].cid)).toBe(false);
+    expect(st().buyDeal('not-a-deal')).toBe(false);
   });
 });

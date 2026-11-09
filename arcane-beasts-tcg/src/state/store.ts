@@ -8,7 +8,7 @@ import { EVENT_CARDS } from '../engine/cards/events';
 import { cpuPrintTier, deckById, expand, upgradeDeck, RIVALS, STARTER_DECKS, type Rival } from '../engine/decks';
 import type { Difficulty } from '../engine/ai';
 import { allRecipes, pickRecipe } from './recipes';
-import { AUTO_PRICE, SHOP_ITEMS, type ItemId, type Purchase } from './market';
+import { AUTO_PRICE, dailyDeals, limitKey, SHOP_ITEMS, type ItemId, type Purchase } from './market';
 import { cleanWardrobe, COSMETICS, cosmeticById, freshWardrobe, type Wardrobe } from './cosmetics';
 import type { CardDef, EType, MonsterCard, Rarity, SetCode } from '../engine/types';
 import {
@@ -93,6 +93,10 @@ export interface Save {
   autoPaidSeq?: number;
   /** every payment, newest first */
   purchases?: Purchase[];
+  /** limited shop items bought: item → the period it was bought in */
+  shopBought?: Record<string, string>;
+  /** 日替わり cards bought today: the day and the cards */
+  dealsBought?: { day: string; cids: string[] };
   /** デッキレシピ owned, and the ones not yet shown to the player */
   recipes?: string[];
   recipeInbox?: string[];
@@ -360,8 +364,10 @@ interface Store {
   claimMission: (m: Mission, period: MissionPeriod) => Wallet;
   /** buy a look with coins (false = not enough / already owned) */
   buyCosmetic: (id: string) => boolean;
-  /** buy from the ショップ: false when the gems are short */
+  /** buy from the ショップ: false when the gems are short or it is sold out */
   buyItem: (id: ItemId) => { ok: boolean; recipe?: string };
+  /** buy one of today's 日替わり cards */
+  buyDeal: (cid: string) => boolean;
   /**
    * pay for this battle's オートバトル: a ticket if there is one, else the gems.
    * Paying twice for one battle is impossible ('already').
@@ -651,16 +657,42 @@ export const useStore = create<Store>((set, get) => ({
     let res: { ok: boolean; recipe?: string } = { ok: false };
     get().update((s) => {
       if (!item || s.gems < item.price) return;
-      // the gems and the record change together
+      const lk = limitKey(item);
+      if (lk && s.shopBought?.[item.id] === lk) return;
+      // the gems, what it holds and the record change together
       const paid = s.dev ? 0 : item.price;
       s.gems -= paid;
       if (item.tickets) s.autoTickets = (s.autoTickets ?? 0) + item.tickets;
       let recipe: string | undefined;
-      if (item.recipe) recipe = grantRecipe(s) ?? undefined;
+      for (let i = 0; i < (item.recipes ?? 0); i++) recipe = grantRecipe(s) ?? recipe;
+      if (item.shards) s.stages = { ...stageNow(s.stages), shards: stageNow(s.stages).shards + item.shards };
+      if (lk) s.shopBought = { ...(s.shopBought ?? {}), [item.id]: lk };
       s.purchases = [{ at: Date.now(), label: item.name, gems: paid }, ...(s.purchases ?? [])].slice(0, 100);
       res = { ok: true, recipe };
     });
     return res;
+  },
+  buyDeal: (cid) => {
+    let ok = false;
+    get().update((s) => {
+      const day = dayKey();
+      const deal = dailyDeals(day).find((d) => d.cid === cid);
+      const bought = s.dealsBought?.day === day ? s.dealsBought.cids : [];
+      if (!deal || bought.includes(cid) || s.gems < deal.price) return;
+      const paid = s.dev ? 0 : deal.price;
+      s.gems -= paid;
+      if (!s.collection[cid]) s.newCards.push(cid);
+      const n = (s.collection[cid] ?? 0) + 1;
+      // past the copy limit the card is sold back at once, like a pack's
+      if (n > MAX_COPIES) {
+        s.gems += DUPE_COINS[card(cid).rarity];
+        s.collection[cid] = MAX_COPIES;
+      } else s.collection[cid] = n;
+      s.dealsBought = { day, cids: [...bought, cid] };
+      s.purchases = [{ at: Date.now(), label: `日替わり：${card(cid).name}`, gems: paid }, ...(s.purchases ?? [])].slice(0, 100);
+      ok = true;
+    });
+    return ok;
   },
   payAuto: (seq) => {
     let res: 'paid' | 'ticket' | 'already' | 'short' = 'short';

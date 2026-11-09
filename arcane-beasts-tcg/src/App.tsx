@@ -10,7 +10,6 @@ import { Arena } from './screens/Arena';
 import { Rivals } from './screens/Rivals';
 import { DeckBuilder } from './screens/DeckBuilder';
 import { Collection } from './screens/Collection';
-import { Shop } from './screens/Shop';
 import { Missions } from './screens/Missions';
 import { Lobby } from './screens/Lobby';
 import { StoryMap } from './screens/StoryMap';
@@ -84,7 +83,7 @@ const SCREENS = {
   battle: BattleScreen,
   deck: DeckBuilder,
   collection: Collection,
-  shop: Shop,
+  shop: Store,
   missions: Missions,
   lobby: Lobby,
   story: StoryMap,

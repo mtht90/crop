@@ -153,7 +153,7 @@ interface OpeningState {
   key: number;
 }
 
-export function Shop() {
+export function Shop({ header }: { header?: React.ReactNode } = {}) {
   const save = useStore((s) => s.save);
   const update = useStore((s) => s.update);
   const addCards = useStore((s) => s.addCards);
@@ -208,7 +208,7 @@ export function Shop() {
     <div className="screen shop3">
       <Backdrop hue="#3d5bbf" />
       <div className="page">
-        <TopBar title="パック" back={null} />
+        {header ?? <TopBar title="パック" back={null} />}
         <div className="shop3-packs">
           {BOOSTERS.map((b, i) => (
             <motion.section
