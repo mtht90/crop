@@ -19,7 +19,7 @@
   height: var(--tab-h);
   padding-bottom: env(safe-area-inset-bottom);
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(6, 1fr);
   background: linear-gradient(180deg, rgba(10, 16, 40, 0.92), rgba(4, 7, 20, 0.98));
   border-top: 1px solid var(--line);
   box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.5);
@@ -34,7 +34,7 @@
     height: auto;
     padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom) env(safe-area-inset-left);
     grid-template-columns: 1fr;
-    grid-template-rows: repeat(5, 1fr);
+    grid-template-rows: repeat(6, 1fr);
     border-top: none;
     border-right: 1px solid var(--line);
     box-shadow: 8px 0 30px rgba(0, 0, 0, 0.5);
@@ -1168,3 +1168,34 @@
 .recipe-got-card { width: 130px; perspective: 600px; filter: drop-shadow(0 8px 20px rgba(0, 0, 0, 0.6)) drop-shadow(0 0 18px rgba(232, 197, 103, 0.35)); }
 .recipe-got > b { font-family: var(--font-display); font-weight: 400; font-size: var(--fs-l); }
 .recipe-got-btns { display: flex; gap: 8px; }
+
+/* ショップ */
+.store3 { display: flex; flex-direction: column; gap: var(--gap); }
+.store3-have { display: flex; flex-wrap: wrap; gap: 8px 18px; padding: 12px 14px; font-weight: 800; font-size: var(--fs-s); color: var(--ink-dim); }
+.store3-have b { color: var(--gold-2); font-size: var(--fs-m); margin: 0 2px; }
+.store3-have svg { color: var(--gold); vertical-align: -0.15em; }
+.store3-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--gap); }
+.store3-item { display: flex; align-items: center; gap: 12px; padding: 14px; color: var(--ink); font-family: inherit; text-align: left; cursor: pointer; }
+.store3-ico { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 12px; background: rgba(232, 197, 103, 0.12); border: 1px solid var(--line); color: var(--gold); font-size: 24px; flex: none; }
+.store3-name { flex: 1; font-weight: 800; }
+.store3-price { display: flex; align-items: center; gap: 4px; font-family: var(--font-display); font-size: var(--fs-m); color: #bfefff; white-space: nowrap; }
+/* 支払い */
+.pay-back { position: fixed; inset: 0; z-index: 950; display: grid; place-items: center; padding: 16px; background: rgba(2, 4, 12, 0.72); }
+.pay-sheet { position: relative; width: min(360px, 100%); padding: 20px 20px 16px; display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; }
+.pay-title { font-weight: 900; color: var(--ink-dim); font-size: var(--fs-s); }
+.pay-price { display: flex; align-items: center; gap: 8px; font-family: var(--font-display); font-size: clamp(28px, 8vw, 40px); color: #d8f6ff; }
+.pay-price .money { width: 0.9em !important; height: 0.9em !important; }
+.pay-balance { font-weight: 800; color: var(--ink-dim); font-variant-numeric: tabular-nums; }
+.pay-balance b { color: var(--ink); }
+.pay-balance b.short { color: #ff9aa5; }
+.pay-short { color: #ff9aa5; font-weight: 800; font-size: var(--fs-s); }
+.pay-btns { display: flex; gap: 10px; margin-top: 4px; }
+.pay-btns .btn { min-width: 120px; }
+.pay-fly { position: absolute; left: 50%; top: 45%; pointer-events: none; }
+.pay-fly span { position: absolute; font-size: 22px; }
+.pay-done { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 10px 0 6px; font-family: var(--font-display); font-size: var(--fs-l); color: var(--gold-2); }
+.pay-check { display: grid; place-items: center; width: 64px; height: 64px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #7be38a, #1f8a3a); color: #fff; font-size: 34px; box-shadow: 0 0 24px rgba(90, 220, 120, 0.5); }
+.buy-log { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 260px; overflow-y: auto; font-size: var(--fs-xs); }
+.buy-log li { display: grid; grid-template-columns: 76px minmax(0, 1fr) auto; gap: 10px; padding: 6px 10px; border-radius: 8px; background: rgba(255, 255, 255, 0.05); }
+.buy-at { color: var(--ink-dim); font-variant-numeric: tabular-nums; }
+.buy-what { font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

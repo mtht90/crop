@@ -8,6 +8,7 @@ import { EVENT_CARDS } from '../engine/cards/events';
 import { cpuPrintTier, deckById, expand, upgradeDeck, RIVALS, STARTER_DECKS, type Rival } from '../engine/decks';
 import type { Difficulty } from '../engine/ai';
 import { allRecipes, pickRecipe } from './recipes';
+import { AUTO_PRICE, SHOP_ITEMS, type ItemId, type Purchase } from './market';
 import { cleanWardrobe, COSMETICS, cosmeticById, freshWardrobe, type Wardrobe } from './cosmetics';
 import type { CardDef, EType, MonsterCard, Rarity, SetCode } from '../engine/types';
 import {
@@ -55,7 +56,7 @@ const isBasicEnergy = (cid: string) => {
   return c.kind === 'energy' && c.basic;
 };
 
-export type Screen = 'arena' | 'story' | 'scene' | 'lobby' | 'title' | 'starter' | 'home' | 'rivals' | 'battle' | 'deck' | 'collection' | 'shop' | 'missions' | 'more' | 'settings' | 'credits' | 'rules' | 'gallery' | 'wardrobe' | 'raid' | 'stage';
+export type Screen = 'arena' | 'story' | 'scene' | 'lobby' | 'title' | 'starter' | 'home' | 'rivals' | 'battle' | 'deck' | 'collection' | 'shop' | 'missions' | 'more' | 'settings' | 'credits' | 'rules' | 'gallery' | 'wardrobe' | 'raid' | 'stage' | 'store';
 
 export interface SavedDeck {
   id: string;
@@ -86,6 +87,12 @@ export interface Save {
   rankPaid?: string;
   /** the player's icon (battles, online profile) */
   avatar?: string;
+  /** オートバトル tickets */
+  autoTickets?: number;
+  /** the battle (its battleSeq) whose オートバトル is paid for: never twice for one battle */
+  autoPaidSeq?: number;
+  /** every payment, newest first */
+  purchases?: Purchase[];
   /** デッキレシピ owned, and the ones not yet shown to the player */
   recipes?: string[];
   recipeInbox?: string[];
@@ -336,6 +343,8 @@ interface Store {
   battle: BattleConfig | null;
   scene: { id: string; beats: Beat[]; then: () => void } | null;
   battleSeq: number;
+  /** a battle's own id (when it started): what an オートバトル payment is tied to */
+  battleId: number;
   go: (s: Screen) => void;
   update: (f: (s: Save) => void) => void;
   chooseStarter: (deckId: string) => void;
@@ -351,6 +360,13 @@ interface Store {
   claimMission: (m: Mission, period: MissionPeriod) => Wallet;
   /** buy a look with coins (false = not enough / already owned) */
   buyCosmetic: (id: string) => boolean;
+  /** buy from the ショップ: false when the gems are short */
+  buyItem: (id: ItemId) => { ok: boolean; recipe?: string };
+  /**
+   * pay for this battle's オートバトル: a ticket if there is one, else the gems.
+   * Paying twice for one battle is impossible ('already').
+   */
+  payAuto: (seq: number) => 'paid' | 'ticket' | 'already' | 'short';
   equipCosmetic: (id: string) => void;
   recordPack: (premium: boolean) => void;
   recordBattle: (o: BattleOutcome, st: Partial<Stats>) => BattleRewardResult;
@@ -425,6 +441,7 @@ export const useStore = create<Store>((set, get) => ({
   battle: null,
   scene: null,
   battleSeq: 0,
+  battleId: 0,
   go: (screen) => {
     // each screen change is a history step, so the browser's back returns here
     if (screen !== get().screen && typeof history !== 'undefined')
@@ -482,7 +499,7 @@ export const useStore = create<Store>((set, get) => ({
     get().update((s) => {
       if (!s.story.cleared.includes(chapterId)) s.story.cleared.push(chapterId);
     }),
-  startBattle: (cfg) => set((st) => ({ battle: cfg, screen: 'battle', battleSeq: st.battleSeq + 1 })),
+  startBattle: (cfg) => set((st) => ({ battle: cfg, screen: 'battle', battleSeq: st.battleSeq + 1, battleId: Date.now() })),
   reset: () => {
     const s = freshSave();
     persist(s);
@@ -628,6 +645,41 @@ export const useStore = create<Store>((set, get) => ({
       s.gems += got.gems;
     });
     return got;
+  },
+  buyItem: (id) => {
+    const item = SHOP_ITEMS.find((x) => x.id === id);
+    let res: { ok: boolean; recipe?: string } = { ok: false };
+    get().update((s) => {
+      if (!item || s.gems < item.price) return;
+      // the gems and the record change together
+      const paid = s.dev ? 0 : item.price;
+      s.gems -= paid;
+      if (item.tickets) s.autoTickets = (s.autoTickets ?? 0) + item.tickets;
+      let recipe: string | undefined;
+      if (item.recipe) recipe = grantRecipe(s) ?? undefined;
+      s.purchases = [{ at: Date.now(), label: item.name, gems: paid }, ...(s.purchases ?? [])].slice(0, 100);
+      res = { ok: true, recipe };
+    });
+    return res;
+  },
+  payAuto: (seq) => {
+    let res: 'paid' | 'ticket' | 'already' | 'short' = 'short';
+    get().update((s) => {
+      if (s.autoPaidSeq === seq) return void (res = 'already');
+      if ((s.autoTickets ?? 0) > 0) {
+        s.autoTickets = (s.autoTickets ?? 0) - 1;
+        s.autoPaidSeq = seq;
+        s.purchases = [{ at: Date.now(), label: 'オートバトル', gems: 0, tickets: 1 }, ...(s.purchases ?? [])].slice(0, 100);
+        return void (res = 'ticket');
+      }
+      if (s.gems < AUTO_PRICE && !s.dev) return void (res = 'short');
+      const paid = s.dev ? 0 : AUTO_PRICE;
+      s.gems -= paid;
+      s.autoPaidSeq = seq;
+      s.purchases = [{ at: Date.now(), label: 'オートバトル', gems: paid }, ...(s.purchases ?? [])].slice(0, 100);
+      res = 'paid';
+    });
+    return res;
   },
   buyCosmetic: (id) => {
     const c = cosmeticById(id);

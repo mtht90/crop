@@ -6,11 +6,12 @@ import { extCtx, freePackState, useStore, type Screen } from '../state/store';
 import { foley } from '../audio/audio';
 import { Icon } from './Icon';
 
-type Tab = 'home' | 'arena' | 'shop' | 'deck' | 'more';
+type Tab = 'home' | 'arena' | 'shop' | 'store' | 'deck' | 'more';
 const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'home', label: 'ホーム', icon: 'tower-flag' },
   { id: 'arena', label: 'バトル', icon: 'swords' },
   { id: 'shop', label: 'パック', icon: 'chest' },
+  { id: 'store', label: 'ショップ', icon: 'shop' },
   { id: 'deck', label: 'デッキ', icon: 'deck' },
   { id: 'more', label: 'その他', icon: 'scroll-unfurled' },
 ];
@@ -24,6 +25,7 @@ export const TAB_OF: Partial<Record<Screen, Tab>> = {
   story: 'arena',
   lobby: 'arena',
   shop: 'shop',
+  store: 'store',
   deck: 'deck',
   more: 'more',
   collection: 'more',

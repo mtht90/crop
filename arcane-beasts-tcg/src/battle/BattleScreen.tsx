@@ -8,6 +8,8 @@ import { Icon } from '../ui/Icon';
 import { artUrl, TYPE_SCENE } from '../lib/assets';
 import { preloadWithProgress } from '../ui/Loading';
 import { BattleController, HUMAN, useBattle, type BattleDriver } from './controller';
+import { AUTO_PRICE } from '../state/market';
+import { PaySheet } from '../ui/PaySheet';
 import { OnlineController } from '../online/controller';
 import { FxLayer } from './FxLayer';
 import { PromptLayer } from './PromptLayer';
@@ -30,8 +32,6 @@ import './battle.css';
 const TERRAIN_WEATHER: Record<string, WeatherKind> = { volcano: 'embers', coast: 'storm', forest: 'petals', swamp: 'fog', battlefield: 'ash', harbor: 'fog', ruins: 'motes', crypt: 'ash', peak: 'storm', oasis: 'motes', mine: 'ash', sky: 'stars', snowfield: 'snow', greattree: 'petals', remains: 'ash', statue: 'stars', shrine: 'motes', mist: 'fog', study: 'motes', hall: 'motes', altar: 'embers', summoning: 'stars', spire: 'rain' };
 
 const LAYOUT = { type: 'spring' as const, stiffness: 260, damping: 30, mass: 0.9 };
-/** オートバトル costs this many gems per battle */
-const AUTO_PRICE = 300;
 
 // ---------------------------------------------------------------------------
 // Board card with shared-layout animation
@@ -1061,6 +1061,9 @@ export function BattleScreen() {
   // オートバトル: paid once per battle, then on and off freely
   const [auto, setAuto] = useState(false);
   const [autoPaid, setAutoPaid] = useState(false);
+  const [paying, setPaying] = useState(false);
+  const battleSeq = useStore((s) => s.battleId);
+  const autoTickets = useStore((s) => s.save.autoTickets ?? 0);
   const myAction = prompt?.type === 'action' && prompt.player === HUMAN;
   const legal = useMemo(() => (myAction && ctrl ? ctrl.legal() : []), [prompt, ctrl, myAction]);
 
@@ -1472,24 +1475,46 @@ export function BattleScreen() {
             <button
               className={`log-toggle auto ${auto ? 'on' : ''}`}
               title="オートバトル"
-              onClick={async () => {
+              onClick={() => {
                 const c = ctrl as BattleController | null;
                 if (!c?.setAuto) return;
-                if (!autoPaid) {
-                  const gems = useStore.getState().save.gems;
-                  if (gems < AUTO_PRICE) return void askConfirm(`オートバトルには${AUTO_PRICE}ジェム必要です`, 'OK');
-                  if (!(await askConfirm(`${AUTO_PRICE}ジェムでオートバトルにしますか？`, 'オートにする'))) return;
-                  useStore.getState().update((x) => void (x.gems -= x.dev ? 0 : AUTO_PRICE));
+                // paid for this battle already: on and off freely
+                if (autoPaid || useStore.getState().save.autoPaidSeq === battleSeq) {
                   setAutoPaid(true);
+                  sfx('button', 0.5);
+                  c.setAuto(!auto);
+                  setAuto(!auto);
+                  return;
                 }
-                sfx('button', 0.5);
-                c.setAuto(!auto);
-                setAuto(!auto);
+                setPaying(true);
               }}
             >
               AUTO
             </button>
           )}
+          <AnimatePresence>
+            {paying && (
+              <PaySheet
+                key="auto-pay"
+                shopLink={false}
+                title="オートバトル（この試合）"
+                price={AUTO_PRICE}
+                ticket={autoTickets > 0 ? { have: autoTickets } : undefined}
+                onCancel={() => setPaying(false)}
+                onPay={() => {
+                  const r = useStore.getState().payAuto(battleSeq);
+                  return r === 'paid' || r === 'ticket' || r === 'already';
+                }}
+                onDone={() => {
+                  setPaying(false);
+                  setAutoPaid(true);
+                  const c = ctrl as BattleController | null;
+                  c?.setAuto?.(true);
+                  setAuto(true);
+                }}
+              />
+            )}
+          </AnimatePresence>
           <button
             className="log-toggle surrender"
             title="降参する"

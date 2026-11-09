@@ -148,6 +148,7 @@ export function Settings() {
           <TransferRows />
           <InstallRow />
           <DevRow />
+          <PurchaseLog />
           <ErrorLogRow />
           <div className="set-row danger">
             <label>セーブデータ</label>
@@ -554,6 +555,37 @@ function ErrorLogRow() {
         </button>
       </div>
       {msg && <div className="set-note">{msg}</div>}
+    </>
+  );
+}
+
+/** 購入履歴: every payment, newest first */
+function PurchaseLog() {
+  const list = useStore((s) => s.save.purchases ?? []);
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <div className="set-row">
+        <label>購入履歴</label>
+        <button className="btn small ghost" onClick={() => setOpen((v) => !v)}>
+          {open ? '閉じる' : `見る（${list.length}件）`}
+        </button>
+      </div>
+      {open && (
+        <ul className="buy-log">
+          {list.length === 0 && <li className="lb-dim">まだありません</li>}
+          {list.map((p, i) => {
+            const d = new Date(p.at);
+            return (
+              <li key={i}>
+                <span className="buy-at">{`${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`}</span>
+                <span className="buy-what">{p.label}</span>
+                <b>{p.tickets ? `チケット ${p.tickets}枚` : `${p.gems.toLocaleString()} ジェム`}</b>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </>
   );
 }
