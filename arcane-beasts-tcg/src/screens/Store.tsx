@@ -116,7 +116,7 @@ function Pick() {
     { key: 'special', kicker: 'NEW', title: 'スペシャルパック', sub: '★3以上2枚確定', hue: SPECIAL_BOOSTER.hue, pack: SPECIAL_BOOSTER, img: 'banner-special', go: () => useShopSeg.setState({ seg: 'pack' }) },
     ...(leftOf(starter, save.shopBought) > 0 ? [{ key: 'starter', kicker: '初心者限定・1回のみ', title: 'スタートダッシュセット', sub: starter.note!, badge: `${Math.round((1 - starter.price / starter.worth!) * 100)}%おトク`, hue: '#ffd76a', icon: 'crown', go: () => setBuy(starter) }] : []),
     { key: 'sure3', kicker: '週1回', title: '★3確定セット', sub: sure3.note!, hue: '#c890ff', icon: 'stars', go: () => setBuy(sure3) },
-    { key: 'premium', kicker: 'いつでも', title: 'レアパック', sub: '5枚目は★3以上確定', hue: PREMIUM_BOOSTER.hue, pack: PREMIUM_BOOSTER, go: () => useShopSeg.setState({ seg: 'pack' }) },
+    { key: 'premium', kicker: '', title: 'レアパック', sub: '', hue: PREMIUM_BOOSTER.hue, pack: PREMIUM_BOOSTER, go: () => useShopSeg.setState({ seg: 'pack' }) },
   ];
   const [i, setI] = useState(0);
   useEffect(() => {
@@ -152,9 +152,9 @@ function Pick() {
               )}
             </span>
             <span className="st4-banner-text">
-              <small>{b.kicker}</small>
+              {b.kicker && <small>{b.kicker}</small>}
               <b>{b.title}</b>
-              <span>{b.sub}</span>
+              {b.sub && <span>{b.sub}</span>}
             </span>
             </>
             )}

@@ -53,8 +53,8 @@ export function topCard(slot: Slot): MonsterCard {
 }
 
 /** Prize cards the opponent takes when this monster is knocked out */
-/** every monster is worth one prize card (★ is only how rare a printing is) */
-export const prizeValue = (_mc: MonsterCard) => 1;
+/** a monster is worth one prize card; a ★4 or ★5 printing (the stronger ones) two */
+export const prizeValue = (mc: MonsterCard) => (mc.rarity >= 4 ? 2 : 1);
 /** a big monster (HP 150 or more): what the harbour, the crest and some attacks single out */
 export const hasRule = (mc: MonsterCard) => mc.hp >= 150;
 

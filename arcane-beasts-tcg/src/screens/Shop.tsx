@@ -316,7 +316,7 @@ function PackPanel({ b, free, now, onBuy, onOdds }: { b: Booster & { ends?: numb
   const save = useStore((s) => s.save);
   const premiumT = save.packTickets?.premium ?? 0;
   const sure3T = save.packTickets?.sure3 ?? 0;
-  const badge = b.free ? '毎日無料' : b.id === 'special' ? '★3以上2枚確定' : b.id === 'premium' ? '★3以上確定' : '';
+  const badge = '';
   return (
     <section className={`pk-panel ${b.premium ? 'premium' : ''}`} style={{ ['--hue' as string]: b.hue, ['--hue2' as string]: b.hue2 }}>
       <i className="pk-crystals" />

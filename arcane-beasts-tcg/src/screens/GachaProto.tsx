@@ -19,7 +19,6 @@ interface Banner {
   /** the plate on the left */
   tab: string;
   tabSub?: string;
-  kicker?: string;
   title: string;
   sub?: string;
   until?: string;
@@ -28,8 +27,7 @@ interface Banner {
   scene: string;
   /** the cards on the banner (the first is the biggest) */
   feature: string[];
-  rateUp?: boolean;
-  promo?: string;
+  pickup?: boolean;
   one: number;
   ten: number;
   free?: boolean;
@@ -41,7 +39,6 @@ const BANNERS: Banner[] = [
     id: 'pickup',
     tab: 'ピックアップ',
     tabSub: '紅蓮と星詠み',
-    kicker: '期間限定',
     title: '紅蓮と星詠み',
     sub: 'ヴォルカリオン ・ アークウィッチ',
     until: '2026/11/23 23:59まで',
@@ -49,17 +46,16 @@ const BANNERS: Banner[] = [
     hue2: '#3a0a2a',
     scene: 'story/p-fire-sky',
     feature: ['AB1-011-SAR', 'AB3-051-SAR'],
-    rateUp: true,
-    promo: '10連で★3以上1枚確定',
+    pickup: true,
     one: 500,
     ten: 4500,
     points: true,
   },
-  { id: 'special', tab: 'スペシャルパック', kicker: 'いつでも', title: 'スペシャルパック', sub: '★3以上2枚確定', hue: '#b98cff', hue2: '#12052a', scene: 'story/p-lake-castle', feature: ['AB2-004-SAR'], promo: '★4・★5が出やすい', one: 800, ten: 7980 },
-  { id: 'rare', tab: 'レアパック', kicker: 'いつでも', title: 'レアパック', sub: '5枚目は★3以上確定', hue: '#e9c46a', hue2: '#1c1206', scene: 'story/landscape-castle', feature: ['AB2-034-SAR'], one: 500, ten: 4500 },
-  { id: 'normal', tab: '通常パック', tabSub: '毎日無料', kicker: '毎日2回無料', title: '通常パック', sub: 'すべての章のカード', hue: '#5ab0ff', hue2: '#0a2a6e', scene: 'story/landscape-mountains-01', feature: ['AB1-014-SAR'], one: 500, ten: 4500, free: true },
-  { id: 'chapter', tab: '章パック', kicker: 'いつでも', title: '章パック', sub: '選んだ章のカードだけ', hue: '#9ad0ff', hue2: '#0a1a33', scene: 'story/p-great-tree', feature: ['AB3-036-SAR'], one: 500, ten: 4500 },
-  { id: 'type', tab: 'タイプ別パック', kicker: 'いつでも', title: 'タイプ別パック', sub: '選んだタイプのモンスターだけ', hue: '#8be28c', hue2: '#0a2a14', scene: 'story/grim-altar', feature: ['AB2-015-SAR'], one: 300, ten: 2700 },
+  { id: 'special', tab: 'スペシャルパック', title: 'スペシャルパック', hue: '#b98cff', hue2: '#12052a', scene: 'story/p-lake-castle', feature: ['AB2-004-SAR'], one: 800, ten: 7980 },
+  { id: 'rare', tab: 'レアパック', title: 'レアパック', hue: '#e9c46a', hue2: '#1c1206', scene: 'story/landscape-castle', feature: ['AB2-034-SAR'], one: 500, ten: 4500 },
+  { id: 'normal', tab: '通常パック', tabSub: '毎日無料', title: '通常パック', hue: '#5ab0ff', hue2: '#0a2a6e', scene: 'story/landscape-mountains-01', feature: ['AB1-014-SAR'], one: 500, ten: 4500, free: true },
+  { id: 'chapter', tab: '章パック', title: '章パック', hue: '#9ad0ff', hue2: '#0a1a33', scene: 'story/p-great-tree', feature: ['AB3-036-SAR'], one: 500, ten: 4500 },
+  { id: 'type', tab: 'タイプ別パック', title: 'タイプ別パック', hue: '#8be28c', hue2: '#0a2a14', scene: 'story/grim-altar', feature: ['AB2-015-SAR'], one: 300, ten: 2700 },
 ];
 
 export function GachaProto() {
@@ -86,7 +82,7 @@ export function GachaProto() {
                   <b>{x.tab}</b>
                   {x.tabSub && <small>{x.tabSub}</small>}
                 </span>
-                {x.rateUp && <i className="gp-tab-up">UP</i>}
+                {x.pickup && <i className="gp-tab-up">限定</i>}
                 {x.free && <i className="gp-tab-free">無料</i>}
               </button>
             ))}
@@ -126,22 +122,14 @@ export function GachaProto() {
               <div className="gp-head">
                 {b.until && <div className="gp-until">{b.until}</div>}
                 <div className="gp-title">
-                  {b.kicker && <small>{b.kicker}</small>}
                   <b>{b.title}</b>
                 </div>
-                {b.promo && <div className="gp-promo">{b.promo}</div>}
               </div>
 
-              {b.rateUp && (
-                <motion.div className="gp-rateup" initial={{ opacity: 0, scale: 1.4, rotate: -14 }} animate={{ opacity: 1, scale: 1, rotate: -8 }} transition={{ delay: 0.3, type: 'spring', stiffness: 260, damping: 16 }}>
-                  <span>登場確率</span>
-                  <b>アップ</b>
-                </motion.div>
-              )}
-
               {/* bottom left: what is featured */}
+              {b.pickup && (
               <div className="gp-feature">
-                {b.rateUp && <div className="gp-tag">★4 ピックアップ</div>}
+                <div className="gp-tag">ピックアップ</div>
                 <div className="gp-names">{b.sub}</div>
                 <div className="gp-minis">
                   {b.feature.map((cid) => (
@@ -151,6 +139,7 @@ export function GachaProto() {
                   ))}
                 </div>
               </div>
+              )}
 
               {/* bottom right: the pulls */}
               <div className="gp-pulls">
