@@ -10,6 +10,9 @@ const set = (gems: number, tickets = 0) =>
     s.autoTickets = tickets;
     s.autoPaidSeq = undefined;
     s.purchases = [];
+    s.coins = 0;
+    s.packTickets = {};
+    s.deckSlots = undefined;
     s.shopBought = {};
     s.dealsBought = undefined;
     s.dev = false;
@@ -45,7 +48,7 @@ describe('ショップと支払い', () => {
   it('shop: tickets cheaper in bulk, a recipe is new to the player, short buys fail', () => {
     const one = SHOP_ITEMS.find((i) => i.id === 'auto1')!;
     const ten = SHOP_ITEMS.find((i) => i.id === 'auto10')!;
-    expect(ten.price / ten.tickets!).toBeLessThan(one.price);
+    expect(ten.price / ten.give.tickets!).toBeLessThan(one.price);
     set(5000);
     expect(st().buyItem('auto5').ok).toBe(true);
     expect(st().save.autoTickets).toBe(5);
@@ -72,7 +75,8 @@ describe('ショップと支払い', () => {
       expect(st().buyItem(id).ok).toBe(false);
     }
     expect(st().save.autoTickets).toBe(8);
-    expect((st().save.recipes ?? []).length).toBeGreaterThanOrEqual(2);
+    expect(st().save.packTickets?.premium).toBe(3);
+    expect(st().save.coins).toBe(10000);
   });
 
   it('日替わり: four cards (★3, ★2, ★2, ★1), the same all day, one of each', () => {
@@ -88,5 +92,19 @@ describe('ショップと支払い', () => {
     expect(st().save.gems).toBe(1000 - today[0].price);
     expect(st().buyDeal(today[0].cid)).toBe(false);
     expect(st().buyDeal('not-a-deal')).toBe(false);
+  });
+
+  it('交換所: paid in coins, with a weekly limit; deck slots grow to the cap', () => {
+    set(0);
+    st().update((s) => void (s.coins = 100000));
+    for (let i = 0; i < 3; i++) expect(st().buyItem('x-sure3').ok).toBe(true);
+    expect(st().buyItem('x-sure3').ok).toBe(false);
+    expect(st().save.packTickets?.sure3).toBe(3);
+    expect(st().save.coins).toBe(100000 - 3 * 6000);
+    expect(st().save.gems).toBe(0);
+    const before = st().save.coins;
+    expect(st().buyItem('x-slot').ok).toBe(true);
+    expect(st().save.deckSlots).toBe(11);
+    expect(st().save.coins).toBe(before - 3000);
   });
 });

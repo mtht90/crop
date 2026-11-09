@@ -17,7 +17,13 @@ import { RarityBadge } from '../ui/RarityBadge';
 import { foley, playMusic, sfx } from '../audio/audio';
 
 
-export function Collection() {
+/** 図鑑: every card (owned or not) */
+export function Dex() {
+  return <Collection dex />;
+}
+
+/** コレクション: only the cards owned; 図鑑 (dex) shows them all */
+export function Collection({ dex = false }: { dex?: boolean } = {}) {
   const save = useStore((s) => s.save);
   const update = useStore((s) => s.update);
   const go = useStore((s) => s.go);
@@ -42,8 +48,8 @@ export function Collection() {
         .filter((c) => !types.length || (c.kind === 'monster' && types.includes(c.type)) || (c.kind === 'energy' && types.includes(c.energyType)))
         .filter((c) => !rar.length || rar.includes(c.rarity))
         .filter((c) => matchKinds(c, kinds))
-        .filter((c) => !ownedOnly || owned(save, c.id) > 0),
-    [set, types, rar, kinds, ownedOnly, save],
+        .filter((c) => (!ownedOnly && dex) || owned(save, c.id) > 0),
+    [set, types, rar, kinds, ownedOnly, save, dex],
   );
   const scope = set === 'raid' ? SPECIAL : set === 'all' ? [...ALL_CARDS, ...SPECIAL] : ALL_CARDS.filter((c) => c.set === set);
   const have = scope.filter((c) => owned(save, c.id) > 0).length;
@@ -56,7 +62,7 @@ export function Collection() {
       <div className="page-bg" style={{ backgroundImage: `url(${artUrl('story/landscape-mountains-01')})` }} />
       <div className="page-shade" />
       <div className="page">
-        <TopBar title="コレクション" back="more" />
+        <TopBar title={dex ? '図鑑' : 'コレクション'} back="more" />
         <div className="page-inner col3">
           <div className="box col3-progress">
             <div className="col3-pct">
@@ -120,7 +126,7 @@ export function Collection() {
                 <div className="col3-frow">
                   <span>表示</span>
                   <div className="db3-chips">
-                    <button className={`chip-btn ${ownedOnly ? 'on' : ''}`} onClick={() => setOwnedOnly(!ownedOnly)}>
+                    <button className={`chip-btn ${ownedOnly ? 'on' : ''}`} hidden={!dex} onClick={() => setOwnedOnly(!ownedOnly)}>
                       持っているカードだけ
                     </button>
                     {nFilters > 0 && (

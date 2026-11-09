@@ -28,6 +28,7 @@ export const TAB_OF: Partial<Record<Screen, Tab>> = {
   deck: 'deck',
   more: 'more',
   collection: 'more',
+  dex: 'more',
   missions: 'more',
   settings: 'more',
   rules: 'more',

@@ -6,12 +6,13 @@ import { PACK_PRICE, PREMIUM_PRICE, TEN_PACKS } from '../store';
 const win = { win: true, level: 'normal' as const, baseReward: 300, prizesTaken: 6, prizesLost: 2, firstClear: false };
 
 describe('gems (ジェム) — ぷにぷに準拠', () => {
-  it('a win pays a little (5-30), a first clear a lot; coins are always 0', () => {
+  it('a win pays a little (5-30), a first clear a lot; coins come only on their own line', () => {
     const p = freshProgress();
     p.lastWinDay = dayKey();
     const again = battleReward(p, win);
-    expect(again.total).toBe(0);
-    for (const l of again.lines) expect(l.coins, l.label).toBe(0);
+    // コイン (for the 交換所): one line of their own, never mixed into the gem lines
+    expect(again.total).toBe(again.lines.find((l) => l.label === 'コイン')!.coins);
+    for (const l of again.lines) if (l.label !== 'コイン') expect(l.coins, l.label).toBe(0);
     expect(again.gems).toBe(winGems(300));
     expect(winGems(0)).toBe(5);
     expect(winGems(99999)).toBe(30);

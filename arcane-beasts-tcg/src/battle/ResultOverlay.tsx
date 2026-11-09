@@ -204,9 +204,16 @@ export function ResultOverlay() {
               <span>{l.label}</span>
               {(l.gems ?? 0) + l.coins > 0 && (
                 <b>
-                  <span className="rl-gem">
-                    <Icon name="gem" /> +{((l.gems ?? 0) + l.coins).toLocaleString()}
-                  </span>
+                  {(l.gems ?? 0) > 0 && (
+                    <span className="rl-gem">
+                      <Icon name="gem" /> +{(l.gems ?? 0).toLocaleString()}
+                    </span>
+                  )}
+                  {l.coins > 0 && (
+                    <span className="rl-coin">
+                      <Icon name="coin" /> +{l.coins.toLocaleString()}
+                    </span>
+                  )}
                 </b>
               )}
             </motion.div>
@@ -221,8 +228,13 @@ export function ResultOverlay() {
             <span>合計</span>
             <b>
               <span className="rl-gem">
-                <Icon name="gem" /> {(res.gems + res.total).toLocaleString()}
+                <Icon name="gem" /> {res.gems.toLocaleString()}
               </span>
+              {res.total > 0 && (
+                <span className="rl-coin">
+                  <Icon name="coin" /> {res.total.toLocaleString()}
+                </span>
+              )}
             </b>
           </motion.div>
           <ExpBar res={res} delay={lineDelay + nLines * 0.18 + 0.5} />

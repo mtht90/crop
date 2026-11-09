@@ -2,13 +2,13 @@ import type { FxLevel } from '../lib/fx';
 import type { MatchInfo } from '../online/client';
 import type { Beat } from '../story/types';
 import { create } from 'zustand';
-import { ALL_CARDS, card, CARDS, SET_INFO } from '../engine/cards';
+import { ALL_CARDS, card, CARDS, MAIN_SET, SET_INFO, SETS } from '../engine/cards';
 import { RAID_CARDS } from '../engine/cards/bosses';
 import { EVENT_CARDS } from '../engine/cards/events';
 import { cpuPrintTier, deckById, expand, upgradeDeck, RIVALS, STARTER_DECKS, type Rival } from '../engine/decks';
 import type { Difficulty } from '../engine/ai';
 import { allRecipes, pickRecipe } from './recipes';
-import { AUTO_PRICE, dailyDeals, limitKey, SHOP_ITEMS, type ItemId, type Purchase } from './market';
+import { AUTO_PRICE, dailyDeals, DEFAULT_DECK_SLOTS, leftOf, limitKey, MAX_DECK_SLOTS, SHOP_ITEMS, type ItemId, type Purchase } from './market';
 import { cleanWardrobe, COSMETICS, cosmeticById, freshWardrobe, type Wardrobe } from './cosmetics';
 import type { CardDef, EType, MonsterCard, Rarity, SetCode } from '../engine/types';
 import {
@@ -56,7 +56,7 @@ const isBasicEnergy = (cid: string) => {
   return c.kind === 'energy' && c.basic;
 };
 
-export type Screen = 'arena' | 'story' | 'scene' | 'lobby' | 'title' | 'starter' | 'home' | 'rivals' | 'battle' | 'deck' | 'collection' | 'shop' | 'missions' | 'more' | 'settings' | 'credits' | 'rules' | 'gallery' | 'wardrobe' | 'raid' | 'stage' | 'store';
+export type Screen = 'arena' | 'story' | 'scene' | 'lobby' | 'title' | 'starter' | 'home' | 'rivals' | 'battle' | 'deck' | 'collection' | 'shop' | 'missions' | 'more' | 'settings' | 'credits' | 'rules' | 'gallery' | 'wardrobe' | 'raid' | 'stage' | 'store' | 'dex';
 
 export interface SavedDeck {
   id: string;
@@ -93,8 +93,12 @@ export interface Save {
   autoPaidSeq?: number;
   /** every payment, newest first */
   purchases?: Purchase[];
-  /** limited shop items bought: item → the period it was bought in */
-  shopBought?: Record<string, string>;
+  /** limited shop items bought: item → the period and how many */
+  shopBought?: Record<string, { key: string; n: number } | string>;
+  /** パックチケット: プレミアム and ★3確定 */
+  packTickets?: { premium?: number; sure3?: number };
+  /** decks that can be saved (DEFAULT_DECK_SLOTS when unset) */
+  deckSlots?: number;
   /** 日替わり cards bought today: the day and the cards */
   dealsBought?: { day: string; cids: string[] };
   /** デッキレシピ owned, and the ones not yet shown to the player */
@@ -234,6 +238,9 @@ export function enterDevMode(s: Save, chapterIds: string[]) {
 /** every printing, up to the copy limit */
 /** cards outside the chapters (raid and event cards): その他 in the collection */
 export const OTHER_CARDS = [...RAID_CARDS, ...EVENT_CARDS];
+
+/** how many decks can be saved */
+export const deckSlotsOf = (s: Pick<Save, 'deckSlots' | 'decks'>) => Math.max(s.deckSlots ?? DEFAULT_DECK_SLOTS, s.decks.length);
 
 /** give a デッキレシピ the player does not have yet (`prefer` when it is new to them) */
 export function grantRecipe(s: Save, prefer?: string): string | null {
@@ -656,18 +663,30 @@ export const useStore = create<Store>((set, get) => ({
     const item = SHOP_ITEMS.find((x) => x.id === id);
     let res: { ok: boolean; recipe?: string } = { ok: false };
     get().update((s) => {
-      if (!item || s.gems < item.price) return;
-      const lk = limitKey(item);
-      if (lk && s.shopBought?.[item.id] === lk) return;
-      // the gems, what it holds and the record change together
+      if (!item) return;
+      const coin = item.currency === 'coin';
+      if ((coin ? s.coins : s.gems) < item.price) return;
+      if (leftOf(item, s.shopBought) <= 0) return;
+      const g = item.give;
+      if (g.slots && deckSlotsOf(s) >= MAX_DECK_SLOTS) return;
+      // the price, what it holds and the record change together
       const paid = s.dev ? 0 : item.price;
-      s.gems -= paid;
-      if (item.tickets) s.autoTickets = (s.autoTickets ?? 0) + item.tickets;
+      if (coin) s.coins -= paid;
+      else s.gems -= paid;
+      if (g.tickets) s.autoTickets = (s.autoTickets ?? 0) + g.tickets;
+      if (g.premium || g.sure3) s.packTickets = { premium: (s.packTickets?.premium ?? 0) + (g.premium ?? 0), sure3: (s.packTickets?.sure3 ?? 0) + (g.sure3 ?? 0) };
+      if (g.coins) s.coins += g.coins;
+      if (g.slots) s.deckSlots = Math.min(MAX_DECK_SLOTS, deckSlotsOf(s) + g.slots);
       let recipe: string | undefined;
-      for (let i = 0; i < (item.recipes ?? 0); i++) recipe = grantRecipe(s) ?? recipe;
-      if (item.shards) s.stages = { ...stageNow(s.stages), shards: stageNow(s.stages).shards + item.shards };
-      if (lk) s.shopBought = { ...(s.shopBought ?? {}), [item.id]: lk };
-      s.purchases = [{ at: Date.now(), label: item.name, gems: paid }, ...(s.purchases ?? [])].slice(0, 100);
+      for (let i = 0; i < (g.recipes ?? 0); i++) recipe = grantRecipe(s) ?? recipe;
+      if (g.shards) s.stages = { ...stageNow(s.stages), shards: stageNow(s.stages).shards + g.shards };
+      const lk = limitKey(item);
+      if (lk) {
+        const prev = s.shopBought?.[item.id];
+        const n = typeof prev === 'object' && prev.key === lk ? prev.n : prev === lk ? 1 : 0;
+        s.shopBought = { ...(s.shopBought ?? {}), [item.id]: { key: lk, n: n + 1 } };
+      }
+      s.purchases = [{ at: Date.now(), label: item.name, gems: coin ? 0 : paid, coins: coin ? paid : undefined }, ...(s.purchases ?? [])].slice(0, 100);
       res = { ok: true, recipe };
     });
     return res;
@@ -789,6 +808,7 @@ export const useStore = create<Store>((set, get) => ({
       res.levelGems = ups.reduce((n, l) => n + levelReward(l) + levelGems(l), 0);
       for (const l of ups) if (l % 5 === 0) grantRecipe(s);
       s.gems += r.gems + res.levelGems;
+      s.coins += r.total;
     });
     return res;
   },
@@ -866,18 +886,90 @@ export function freePackState(s: Pick<Save, 'freePacks'>, now = Date.now()): Fre
 export const PACK_SIZE = 5;
 
 export interface Booster {
-  id: 'normal' | 'premium';
+  id: string;
   name: string;
   /** card name shown on the pack */
   mascot: string;
   hue: string;
   hue2: string;
+  /** the premium odds (the last card ★3 or better) */
   premium?: boolean;
+  /** the daily free pack (never bought) */
+  free?: boolean;
+  /** gems for one pack */
   price: number;
+  /** which cards it can hold (all when unset) */
+  only?: (c: CardDef) => boolean;
+  /** cards that come more often within their ★ */
+  pickup?: string[];
+  /** the last card is ★3 or better (★3確定チケット) */
+  sure3?: boolean;
+  /** the word on the pack */
+  label?: string;
+  /** what it is, a line each */
+  lines?: string[];
 }
 
-export const NORMAL_BOOSTER: Booster = { id: 'normal', name: '通常パック', mascot: 'ヴォルカリオン', hue: '#5ab0ff', hue2: '#0a2a6e', price: PACK_PRICE };
-export const PREMIUM_BOOSTER: Booster = { id: 'premium', name: 'プレミアムパック', mascot: 'ドラグーン', hue: '#e9c46a', hue2: '#1c1206', premium: true, price: PREMIUM_PRICE };
+export const NORMAL_BOOSTER: Booster = { id: 'normal', name: '通常パック', mascot: 'ヴォルカリオン', hue: '#5ab0ff', hue2: '#0a2a6e', price: PACK_PRICE, free: true, label: 'STANDARD' };
+export const PREMIUM_BOOSTER: Booster = { id: 'premium', name: 'プレミアムパック', mascot: 'ドラグーン', hue: '#e9c46a', hue2: '#1c1206', premium: true, price: PREMIUM_PRICE, label: 'PREMIUM' };
+/** opened with a ★3確定チケット: a 通常パック whose last card is ★3 or better */
+export const SURE3_BOOSTER: Booster = { ...NORMAL_BOOSTER, id: 'sure3', name: '★3確定パック', free: false, sure3: true, price: 0, hue: '#c890ff', hue2: '#2a0e4a', label: '★3 GUARANTEED' };
+
+/** タイプ別パック: one type's monsters and every trainer, at the 通常パック's odds */
+const TYPE_PACKS: [EType, string, string, string][] = [
+  ['fire', '炎', '#ff7a45', '#3a0c02'],
+  ['water', '水', '#4fb4ff', '#04223f'],
+  ['grass', '草', '#6fd16a', '#0b2a0a'],
+  ['lightning', '雷', '#ffd84a', '#2e2400'],
+  ['psychic', '超', '#d07bff', '#24073a'],
+  ['fighting', '闘', '#d6935a', '#2b1305'],
+  ['dark', '悪', '#8f9bb8', '#0b0e18'],
+  ['colorless', '無色', '#e8e8f0', '#1c1c26'],
+];
+export const TYPE_PACK_PRICE = 300;
+const mascotOf = (only: (c: CardDef) => boolean) =>
+  (MAIN_SET.filter((c): c is MonsterCard => c.kind === 'monster' && only(c)).sort((a, b) => (b.ace ? 1 : 0) - (a.ace ? 1 : 0) || b.hp - a.hp)[0]?.name) ?? 'ヴォルカリオン';
+export const TYPE_BOOSTERS: Booster[] = TYPE_PACKS.map(([t, jp, hue, hue2]) => {
+  const only = (c: CardDef) => c.kind !== 'monster' || c.type === t;
+  return { id: `type-${t}`, name: `${jp}のパック`, mascot: mascotOf((c) => c.kind === 'monster' && c.type === t), hue, hue2, price: TYPE_PACK_PRICE, only, label: `${jp.toUpperCase()} PACK`, lines: [`${jp}タイプのモンスターとトレーナーズだけが出る`, '★の出やすさは通常パックと同じ', '5枚入り'] };
+});
+
+/** 章パック: one chapter's cards, at the プレミアムパック's odds */
+export const CHAPTER_BOOSTERS: Booster[] = SETS.map((code, i) => {
+  const only = (c: CardDef) => c.set === code;
+  const hues = [['#e9c46a', '#1c1206'], ['#9ad0ff', '#0a1a33'], ['#d58bff', '#1d0730']][i] ?? ['#e9c46a', '#1c1206'];
+  return { id: `ch-${code}`, name: `${SET_INFO[code].short}パック`, mascot: mascotOf((c) => c.kind === 'monster' && c.set === code), hue: hues[0], hue2: hues[1], premium: true, price: PREMIUM_PRICE, only, label: SET_INFO[code].code, lines: [`${SET_INFO[code].short}「${SET_INFO[code].name}」のカードだけが出る`, '5枚目は★3以上確定', '★の出やすさはプレミアムパックと同じ'] };
+});
+
+/** ピックアップパック: a few cards come more often for two weeks, at the プレミアムパック's odds */
+export const PICKUP_DAYS = 14;
+export function pickupBooster(now = Date.now()): Booster & { ends: number } {
+  const period = Math.floor(now / (PICKUP_DAYS * 86400_000));
+  const pool = MAIN_SET.filter((c): c is MonsterCard => c.kind === 'monster' && (c.rarity === 3 || c.rarity === 4));
+  let a = (period * 2654435761) >>> 0;
+  const rnd = () => ((a = (a * 1664525 + 1013904223) >>> 0) / 4294967296);
+  const picks: string[] = [];
+  while (picks.length < 3 && picks.length < pool.length) {
+    const c = pool[Math.floor(rnd() * pool.length)];
+    if (!picks.includes(c.id)) picks.push(c.id);
+  }
+  const lead = card(picks[0]);
+  return {
+    id: 'pickup',
+    name: 'ピックアップパック',
+    mascot: lead.name,
+    hue: '#ff8fb1',
+    hue2: '#2a0716',
+    premium: true,
+    price: PREMIUM_PRICE,
+    pickup: picks,
+    label: 'PICK UP',
+    lines: [`${picks.map((id) => card(id).name).join('・')}が出やすい`, '5枚目は★3以上確定', '★の出やすさはプレミアムパックと同じ'],
+    ends: (period + 1) * PICKUP_DAYS * 86400_000,
+  };
+}
+
+/** the packs the shop lists first */
 export const BOOSTERS: Booster[] = [NORMAL_BOOSTER, PREMIUM_BOOSTER];
 
 export const setName = (set: SetCode) => SET_INFO[set].name;
@@ -897,6 +989,9 @@ for (const c of ALL_CARDS) {
   else if (c.variant && c.rarity === 3) FULLART_POOL.push(c);
   else BASE_POOL[c.rarity].push(c);
 }
+/** a special printing → the card it is a printing of (for a pack's card filter) */
+const MIRROR_BASE = new Map<string, CardDef>();
+for (const c of ALL_CARDS) if (c.baseId) MIRROR_BASE.set(c.id, ALL_CARDS.find((x) => x.id === c.baseId) ?? c);
 /** share of ★3 draws that come as a full art */
 const FULLART_SHARE = 0.25;
 
@@ -918,6 +1013,8 @@ export const PREMIUM_TABLE: Slot[] = [
   [[2, 0.6], [3, 0.9895], [4, 0.9995], [5, 1]],
   [[3, 0.979], [4, 0.9992], [5, 1]],
 ];
+/** the ★3確定チケット's pack: the 通常パック, but the last card is ★3 or better */
+export const SURE3_TABLE: Slot[] = [...PACK_TABLE.slice(0, 4), [[3, 0.9896], [4, 0.9996], [5, 1]]];
 /** a very rare pack where every card is ★3 or better */
 const GOD_TABLE: Slot[] = [[[3, 1]], [[3, 1]], [[4, 1]], [[4, 1]], [[5, 1]]];
 /** chance that a drawn card comes as one of its special printings */
@@ -930,10 +1027,18 @@ function roll(table: Slot): Rarity {
   return table[table.length - 1][0];
 }
 
-function draw(r: Rarity, printing: number): CardDef {
+/** a pickup card of the drawn ★ comes this often */
+const PICKUP_SHARE = 0.5;
+
+function draw(r: Rarity, printing: number, only?: (c: CardDef) => boolean, pickup?: string[]): CardDef {
   const pick = (a: CardDef[]) => a[Math.floor(Math.random() * a.length)];
-  if (r === 3 && FULLART_POOL.length && Math.random() < FULLART_SHARE) return pick(FULLART_POOL);
-  const pool = BASE_POOL[r].length ? BASE_POOL[r] : BASE_POOL[1];
+  const fits = (c: CardDef) => !only || only(MIRROR_BASE.get(c.id) ?? c);
+  const fa = FULLART_POOL.filter(fits);
+  if (r === 3 && fa.length && Math.random() < FULLART_SHARE) return pick(fa);
+  const ups = (pickup ?? []).map((id) => BASE_POOL[r].find((c) => c.id === id)).filter((c): c is CardDef => !!c);
+  if (ups.length && Math.random() < PICKUP_SHARE) return pick(ups);
+  let pool = BASE_POOL[r].filter(fits);
+  if (!pool.length) pool = BASE_POOL[r].length ? BASE_POOL[r] : BASE_POOL[1];
   const c = pick(pool);
   // a regular card sometimes comes as its mirror (same ★)
   const m = r <= 3 ? MIRROR.get(c.id) : undefined;
@@ -948,8 +1053,8 @@ export interface PackResult {
 export function openPack(b: Booster = NORMAL_BOOSTER): PackResult {
   const premium = !!b.premium;
   const god = Math.random() < (premium ? 0.0003 : 0.0001) || (typeof location !== 'undefined' && location.search.includes('godpack'));
-  const table = god ? GOD_TABLE : premium ? PREMIUM_TABLE : PACK_TABLE;
-  const cards = table.map((t) => draw(roll(t), premium || god ? PREMIUM_PRINTING_CHANCE : PRINTING_CHANCE));
+  const table = god ? GOD_TABLE : premium ? PREMIUM_TABLE : b.sure3 ? SURE3_TABLE : PACK_TABLE;
+  const cards = table.map((t) => draw(roll(t), premium || god ? PREMIUM_PRINTING_CHANCE : PRINTING_CHANCE, b.only, b.pickup));
   cards.sort((x, y) => x.rarity - y.rarity || (x.variant ? 1 : 0) - (y.variant ? 1 : 0));
   return { cards, god };
 }

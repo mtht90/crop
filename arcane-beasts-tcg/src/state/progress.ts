@@ -226,6 +226,9 @@ export interface RewardLine {
 /** a lost battle pays nothing */
 export const LOSS_PART_MAX = 0;
 
+/** coins a battle pays: a win 100–200 by difficulty, a loss 20 */
+export const battleCoins = (win: boolean, level: Difficulty) => (win ? (level === 'hard' ? 200 : level === 'normal' ? 150 : 100) : 20);
+
 export function battleReward(p: Progress, o: BattleOutcome): { lines: RewardLine[]; total: number; gems: number; exp: number } {
   // ぷにぷに準拠: a loss pays nothing; a win pays a little (more on the day's first),
   // and the big amounts come once (first clears) or from events and raids
@@ -237,7 +240,9 @@ export function battleReward(p: Progress, o: BattleOutcome): { lines: RewardLine
   }
   const mult = o.level === 'hard' ? 2 : o.level === 'normal' ? 1.5 : 1;
   const exp = o.win ? Math.round(100 * mult + o.prizesTaken * 5) : Math.round(25 * mult);
-  return { lines, total: 0, gems: lines.reduce((n, l) => n + (l.gems ?? 0), 0), exp };
+  // コイン: every finished battle pays some (a win more), for the 交換所
+  lines.push({ label: 'コイン', coins: battleCoins(o.win, o.level), gems: 0 });
+  return { lines, total: lines.reduce((n, l) => n + l.coins, 0), gems: lines.reduce((n, l) => n + (l.gems ?? 0), 0), exp };
 }
 
 // ---------------------------------------------------------------------------

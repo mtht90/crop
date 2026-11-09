@@ -15,37 +15,89 @@ import { dayKey, weekKey } from './progress';
 export const AUTO_PRICE = 150;
 export const RECIPE_PRICE = 300;
 
-export type ItemId = 'auto1' | 'auto5' | 'auto10' | 'recipe' | 'shards10' | 'starter' | 'weekly';
+export type ItemId = string;
+
+/** what an item gives */
+export interface Give {
+  /** オートバトルチケット */
+  tickets?: number;
+  recipes?: number;
+  shards?: number;
+  /** プレミアムパックチケット */
+  premium?: number;
+  /** ★3確定チケット */
+  sure3?: number;
+  coins?: number;
+  /** デッキ枠 */
+  slots?: number;
+}
 
 export interface ShopItem {
   id: ItemId;
   name: string;
   price: number;
-  /** what it holds */
-  tickets?: number;
-  recipes?: number;
-  shards?: number;
+  /** paid in gems (default) or coins (交換所) */
+  currency?: 'gem' | 'coin';
+  give: Give;
   icon: string;
-  /** how often it can be bought: once ever, once a week (else without limit) */
-  limit?: 'once' | 'weekly';
+  /** where it is listed */
+  section: 'set' | 'item' | 'exchange';
+  /** how many can be bought: ever, a week or a day */
+  limit?: { per: 'once' | 'week' | 'day'; n: number };
   /** the gems its parts would cost on their own */
   worth?: number;
   /** a short line under the name */
   note?: string;
 }
 
+export const PREMIUM_TICKET_WORTH = 500;
+export const SURE3_PRICE = 350;
+export const SLOT_COINS = 3000;
+export const DEFAULT_DECK_SLOTS = 10;
+export const MAX_DECK_SLOTS = 40;
+
 export const SHOP_ITEMS: ShopItem[] = [
-  { id: 'starter', name: 'スタートダッシュセット', price: 900, tickets: 5, recipes: 2, icon: 'crown', limit: 'once', worth: 700 + 2 * RECIPE_PRICE, note: 'チケット×5・デッキレシピ×2' },
-  { id: 'weekly', name: '週替わりセット', price: 450, tickets: 3, shards: 20, icon: 'chest', limit: 'weekly', worth: 3 * AUTO_PRICE + 200, note: 'チケット×3・イベントのかけら×20' },
-  { id: 'auto1', name: 'オートバトルチケット', price: AUTO_PRICE, tickets: 1, icon: 'ticket' },
-  { id: 'auto5', name: 'オートバトルチケット ×5', price: 700, tickets: 5, icon: 'ticket', worth: 5 * AUTO_PRICE },
-  { id: 'auto10', name: 'オートバトルチケット ×10', price: 1350, tickets: 10, icon: 'ticket', worth: 10 * AUTO_PRICE },
-  { id: 'recipe', name: 'デッキレシピ', price: RECIPE_PRICE, recipes: 1, icon: 'scroll-unfurled', note: '持っていないレシピから1つ' },
-  { id: 'shards10', name: 'イベントのかけら ×10', price: 100, shards: 10, icon: 'shard', note: '開催中のイベントの交換所で使えます' },
+  // お得なセット
+  { id: 'starter', section: 'set', name: 'スタートダッシュセット', price: 980, give: { premium: 3, tickets: 5, coins: 10000 }, icon: 'crown', limit: { per: 'once', n: 1 }, worth: 3 * PREMIUM_TICKET_WORTH + 700 + 500, note: 'プレミアムパックチケット×3・オートチケット×5・コイン×10,000' },
+  { id: 'weekly', section: 'set', name: '週替わりセット', price: 450, give: { tickets: 3, shards: 20 }, icon: 'chest', limit: { per: 'week', n: 1 }, worth: 3 * AUTO_PRICE + 200, note: 'オートチケット×3・イベントのかけら×20' },
+  { id: 'sure3-set', section: 'set', name: '★3確定セット', price: 900, give: { sure3: 3 }, icon: 'stars', limit: { per: 'week', n: 1 }, worth: 3 * SURE3_PRICE, note: '★3確定チケット×3' },
+  // アイテム (gems)
+  { id: 'premium1', section: 'item', name: 'プレミアムパックチケット', price: PREMIUM_TICKET_WORTH, give: { premium: 1 }, icon: 'ticket', note: 'プレミアムパックを1回引ける' },
+  { id: 'sure3', section: 'item', name: '★3確定チケット', price: SURE3_PRICE, give: { sure3: 1 }, icon: 'stars', note: '5枚目が★3以上の通常パックを1回引ける' },
+  { id: 'auto1', section: 'item', name: 'オートバトルチケット', price: AUTO_PRICE, give: { tickets: 1 }, icon: 'robot' },
+  { id: 'auto5', section: 'item', name: 'オートバトルチケット ×5', price: 700, give: { tickets: 5 }, icon: 'robot', worth: 5 * AUTO_PRICE },
+  { id: 'auto10', section: 'item', name: 'オートバトルチケット ×10', price: 1350, give: { tickets: 10 }, icon: 'robot', worth: 10 * AUTO_PRICE },
+  { id: 'recipe', section: 'item', name: 'デッキレシピ', price: RECIPE_PRICE, give: { recipes: 1 }, icon: 'scroll-unfurled', note: '持っていないレシピから1つ' },
+  { id: 'shards10', section: 'item', name: 'イベントのかけら ×10', price: 100, give: { shards: 10 }, icon: 'shard', note: '開催中のイベントの交換所で使えます' },
+  { id: 'slot-gem', section: 'item', name: 'デッキ枠 +1', price: 200, give: { slots: 1 }, icon: 'deck', note: `デッキを保存できる数が増えます（最大${MAX_DECK_SLOTS}）` },
+  // 交換所 (coins)
+  { id: 'x-slot', section: 'exchange', currency: 'coin', name: 'デッキ枠 +1', price: SLOT_COINS, give: { slots: 1 }, icon: 'deck', note: `最大${MAX_DECK_SLOTS}まで` },
+  { id: 'x-auto', section: 'exchange', currency: 'coin', name: 'オートバトルチケット', price: 1500, give: { tickets: 1 }, icon: 'robot', limit: { per: 'day', n: 3 } },
+  { id: 'x-sure3', section: 'exchange', currency: 'coin', name: '★3確定チケット', price: 6000, give: { sure3: 1 }, icon: 'stars', limit: { per: 'week', n: 3 } },
+  { id: 'x-premium', section: 'exchange', currency: 'coin', name: 'プレミアムパックチケット', price: 10000, give: { premium: 1 }, icon: 'ticket', limit: { per: 'week', n: 2 } },
+  { id: 'x-shards', section: 'exchange', currency: 'coin', name: 'イベントのかけら ×5', price: 800, give: { shards: 5 }, icon: 'shard', limit: { per: 'day', n: 5 } },
 ];
 
 /** the key a limited item is counted under right now ('' = no limit) */
-export const limitKey = (it: ShopItem, now = new Date()) => (it.limit === 'once' ? 'once' : it.limit === 'weekly' ? weekKey(now) : '');
+export const limitKey = (it: ShopItem, now = new Date()) => (!it.limit ? '' : it.limit.per === 'once' ? 'once' : it.limit.per === 'week' ? weekKey(now) : dayKey(now));
+/** how many more can be bought now (Infinity without a limit) */
+export function leftOf(it: ShopItem, bought: Record<string, { key: string; n: number } | string> | undefined, now = new Date()) {
+  if (!it.limit) return Infinity;
+  const b = bought?.[it.id];
+  const key = limitKey(it, now);
+  const n = typeof b === 'string' ? (b === key ? 1 : 0) : b && b.key === key ? b.n : 0;
+  return Math.max(0, it.limit.n - n);
+}
+
+/** ジェム購入 (the buy screen only: payment is not open yet) */
+export const GEM_PRODUCTS = [
+  { yen: 160, gems: 100 },
+  { yen: 610, gems: 400 },
+  { yen: 1220, gems: 830 },
+  { yen: 3060, gems: 2150 },
+  { yen: 4900, gems: 3550 },
+  { yen: 10000, gems: 7650 },
+];
 
 /** the price of a card in the 日替わり, by ★ */
 export const DEAL_PRICE: Record<number, number> = { 1: 40, 2: 80, 3: 250 };
@@ -84,4 +136,6 @@ export interface Purchase {
   gems: number;
   /** tickets used */
   tickets?: number;
+  /** coins paid (交換所) */
+  coins?: number;
 }

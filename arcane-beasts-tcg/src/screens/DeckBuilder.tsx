@@ -10,7 +10,7 @@ import { fromRecipe, printingsOf } from '../engine/autodeck';
 import { buildFromCode, decodeDeck, encodeDeck } from '../engine/deckcode';
 import type { CardDef, EType } from '../engine/types';
 import { ENERGY_TYPES } from '../engine/types';
-import { owned, useStore, type SavedDeck } from '../state/store';
+import { deckSlotsOf, owned, useStore, type SavedDeck } from '../state/store';
 import { recipeById, type Recipe } from '../state/recipes';
 import { artUrl } from '../lib/assets';
 import { CardFace, EnergySymbol } from '../ui/Card';
@@ -80,7 +80,13 @@ export function DeckBuilder() {
     setTimeout(() => setToast(''), 1800);
   };
 
-  const store = (d: SavedDeck, activate: boolean) =>
+  const store = (d: SavedDeck, activate: boolean) => {
+    const st = useStore.getState().save;
+    // a new deck needs a free デッキ枠
+    if (!st.decks.some((x) => x.id === d.id) && st.decks.length >= deckSlotsOf(st)) {
+      flash(`デッキ枠がいっぱいです（${deckSlotsOf(st)}）。ショップで増やせます`);
+      return;
+    }
     update((s) => {
       const i = s.decks.findIndex((x) => x.id === d.id);
       const deck = { ...d, cover: coverOf(d.cards, d.cover) };
@@ -88,6 +94,7 @@ export function DeckBuilder() {
       else s.decks.push(deck);
       if (activate || !s.activeDeck) s.activeDeck = deck.id;
     });
+  };
 
   const useDeck = (d: SavedDeck) => {
     if (validateDeck(d.cards).length) return flash('このデッキはまだ完成していません');
@@ -183,7 +190,7 @@ export function DeckBuilder() {
 
           <div className="ms3-tabs">
             <button className={`chip-btn ${tab === 'mine' ? 'on' : ''}`} onClick={() => (foley.tick(), setTab('mine'))}>
-              <Icon name="deck" /> マイデッキ {save.decks.length}
+              <Icon name="deck" /> マイデッキ {save.decks.length}/{deckSlotsOf(save)}
             </button>
             <button className={`chip-btn ${tab === 'recipes' ? 'on' : ''}`} onClick={() => (foley.tick(), setTab('recipes'))}>
               <Icon name="book" /> おすすめデッキ

@@ -54,7 +54,7 @@ export function Home() {
   const tiles: TileDef[] = [
     { to: 'shop', title: 'パック', sub: '毎日無料・プレミアム', bg: 'story/swamp-02', fig: 'monsters/jinn', icon: 'chest' },
     { to: 'missions', title: 'ミッション', sub: missionN ? '報酬を受け取れます' : 'デイリー・実績', bg: 'story/landscape-castle', fig: 'humans/mage-white+female', icon: 'trophy', badge: missionN ? `${missionN}` : undefined },
-    { to: 'collection', title: 'コレクション', sub: `収集率 ${pct}%`, bg: 'story/landscape-mountains-01', fig: 'monsters/sea-serpent', icon: 'cards', badge: save.newCards.length ? `NEW ${save.newCards.length}` : undefined },
+    { to: 'dex', title: '図鑑', sub: `収集率 ${pct}%`, bg: 'story/landscape-mountains-01', fig: 'monsters/sea-serpent', icon: 'cards', badge: save.newCards.length ? `NEW ${save.newCards.length}` : undefined },
     { to: 'deck', title: 'デッキ', sub: deck ? deck.name : 'デッキを組もう', bg: 'story/grim-altar', fig: 'woses/ancient-wose', icon: 'deck' },
   ];
   const tap = (to: Screen) => {

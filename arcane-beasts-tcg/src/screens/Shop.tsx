@@ -11,7 +11,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CardDef, Rarity } from '../engine/types';
 import { byName, RARITY_COLOR, RARITY_SYMBOL } from '../engine/cards';
 import { dayKey } from '../state/progress';
-import { BOOSTERS, NORMAL_BOOSTER, openPack, PACK_TABLE, PREMIUM_BOOSTER, PREMIUM_TABLE, PRINTING_CHANCE, PREMIUM_PRINTING_CHANCE, TEN_PACKS, freePackState, FREE_PACKS_PER_DAY, FREE_PACK_GAP_MS, useStore, type FreePackState, type Booster } from '../state/store';
+import { CHAPTER_BOOSTERS, pickupBooster, SURE3_BOOSTER, TYPE_BOOSTERS, BOOSTERS, NORMAL_BOOSTER, openPack, PACK_TABLE, PREMIUM_BOOSTER, PREMIUM_TABLE, PRINTING_CHANCE, PREMIUM_PRINTING_CHANCE, TEN_PACKS, freePackState, FREE_PACKS_PER_DAY, FREE_PACK_GAP_MS, useStore, type FreePackState, type Booster } from '../state/store';
 import { CardBack, CardFace } from '../ui/Card';
 import { TopBar } from '../ui/TopBar';
 import { Icon } from '../ui/Icon';
@@ -141,8 +141,20 @@ function Backdrop({ hue, dim = 0 }: { hue: string; dim?: number }) {
 // ---------------------------------------------------------------------------
 // Shop screen (booster select)
 // ---------------------------------------------------------------------------
+/** how a pack was paid for: the daily free one, gems, or a ticket */
+type Via = 'free' | 'gem' | 'ticket';
+
+/** can `packs` of this pack be opened that way right now */
+function canOpen(b: Booster, packs: number, via: Via): boolean {
+  const s = useStore.getState().save;
+  if (via === 'free') return !!b.free && packs === 1 && freePackState(s).ready;
+  if (via === 'ticket') return (b.sure3 ? s.packTickets?.sure3 ?? 0 : s.packTickets?.premium ?? 0) >= packs;
+  return !b.free && s.gems >= costOf(b, packs);
+}
+
 interface OpeningState {
   booster: Booster;
+  via: Via;
   cards: CardDef[];
   god: boolean;
   fresh: Set<string>;
@@ -168,21 +180,16 @@ export function Shop({ header }: { header?: React.ReactNode } = {}) {
     return () => clearInterval(iv);
   }, []);
   const free = freePackState(save, now);
+  const pickup = useMemo(() => pickupBooster(now), [Math.floor(now / 3600_000)]);
 
   const buy = useCallback(
-    (booster: Booster, packs = 1) => {
-      // a single 通常パック is free while a free one is ready
-      // the 通常パック is the free slot only: 2 a day, never bought
-      const useFree = !booster.premium;
-      if (useFree && (packs !== 1 || !freePackState(useStore.getState().save).ready)) {
+    (booster: Booster, packs = 1, via: Via = booster.free ? 'free' : 'gem') => {
+      // the 通常パック is the free slot only (2 a day, never bought); others are gems or a ticket
+      if (!canOpen(booster, packs, via)) {
         sfx('miss-2', 0.5);
         return false;
       }
-      const cost = useFree ? 0 : costOf(booster, packs);
-      if (useStore.getState().save.gems < cost) {
-        sfx('miss-2', 0.5);
-        return false;
-      }
+      const cost = via === 'gem' ? costOf(booster, packs) : 0;
       const results = Array.from({ length: packs }, () => openPack(booster));
       const cards = results.flatMap((r) => r.cards);
       const god = results.some((r) => r.god);
@@ -191,14 +198,21 @@ export function Shop({ header }: { header?: React.ReactNode } = {}) {
       update((s) => {
         s.gems -= cost;
         s.packsOpened += packs;
-        if (useFree) {
+        if (via === 'free') {
           const st = freePackState(s);
           s.freePacks = { day: dayKey(), used: FREE_PACKS_PER_DAY - st.left + 1, last: Date.now() };
         }
+        if (via === 'ticket') {
+          const t = { premium: s.packTickets?.premium ?? 0, sure3: s.packTickets?.sure3 ?? 0 };
+          if (booster.sure3) t.sure3 -= packs;
+          else t.premium -= packs;
+          s.packTickets = t;
+        }
+        if (cost > 0 || via === 'ticket') s.purchases = [{ at: Date.now(), label: `${booster.name}${packs > 1 ? ` ×${packs}` : ''}`, gems: cost, tickets: via === 'ticket' ? packs : undefined }, ...(s.purchases ?? [])].slice(0, 100);
       });
       for (let k = 0; k < packs; k++) useStore.getState().recordPack(!!booster.premium);
       const sold = addCards(cards.map((c) => c.id));
-      setOpening({ booster, cards, god, fresh, sold, packs, key: Date.now() });
+      setOpening({ booster, via, cards, god, fresh, sold, packs, key: Date.now() });
       return true;
     },
     [update, addCards],
@@ -209,68 +223,21 @@ export function Shop({ header }: { header?: React.ReactNode } = {}) {
       <Backdrop hue="#3d5bbf" />
       <div className="page">
         {header ?? <TopBar title="パック" back={null} />}
-        <div className="shop3-packs">
-          {BOOSTERS.map((b, i) => (
-            <motion.section
-              key={b.id}
-              className={`shop3-card ${b.premium ? 'premium' : ''}`}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.08 * i, duration: 0.5, ease: EASE_OUT }}
-            >
-              <div className={`shop3-pack ${!b.premium ? (free.ready ? 'free-on' : 'free-wait') : ''}`} onClick={() => buy(b)}>
-                <motion.div animate={{ y: [0, -6, 0] }} transition={{ duration: 4.5, repeat: Infinity, ease: 'easeInOut', delay: i * 0.6 }}>
-                  <BoosterPack booster={b} tilt />
-                </motion.div>
-              </div>
-              <div className="shop3-info">
-                <h3>{b.name}</h3>
-                <ul>
-                  {b.premium ? (
-                    <>
-                      <li>
-                        5枚目は<b className="s3">★3以上</b>確定
-                      </li>
-                      <li>
-                        <b className="s4">★4</b>・<b className="s5">★5</b>が通常の約3倍
-                      </li>
-                      <li>光るカード・特別な絵のカードも出やすい</li>
-                    </>
-                  ) : (
-                    <>
-                      <li>すべての章のカードが出る</li>
-                      <li>
-                        ごくまれに<b className="s4">★4</b>・<b className="s5">★5</b>
-                      </li>
-                      <li>5枚入り</li>
-                    </>
-                  )}
-                </ul>
-                {b.premium ? (
-                  <div className="shop3-buy">
-                    <button className="pill gold" disabled={save.gems < b.price} onClick={() => buy(b)}>
-                      1パック
-                      <span className="coin">
-                        <Icon name="gem" /> {b.price.toLocaleString()}
-                      </span>
-                    </button>
-                    <button className="pill ten gold" disabled={save.gems < b.price * TEN_PACKS} onClick={() => buy(b, 10)}>
-                      10パック
-                      <span className="coin">
-                        <Icon name="gem" /> {(b.price * TEN_PACKS).toLocaleString()}
-                      </span>
-                    </button>
-                  </div>
-                ) : (
-                  <FreeSlot free={free} now={now} onOpen={() => buy(b)} />
-                )}
-                <button className="textbtn shop3-odds" onClick={() => setOdds(b)}>
-                  提供割合
-                </button>
-              </div>
-            </motion.section>
+        <PackSection title="おすすめ">
+          {[NORMAL_BOOSTER, PREMIUM_BOOSTER, pickup].map((b, i) => (
+            <PackCard key={b.id} b={b} i={i} free={free} now={now} onBuy={buy} onOdds={setOdds} />
           ))}
-        </div>
+        </PackSection>
+        <PackSection title="章パック">
+          {CHAPTER_BOOSTERS.map((b, i) => (
+            <PackCard key={b.id} b={b} i={i} free={free} now={now} onBuy={buy} onOdds={setOdds} />
+          ))}
+        </PackSection>
+        <PackSection title="タイプ別パック">
+          {TYPE_BOOSTERS.map((b, i) => (
+            <PackCard key={b.id} b={b} i={i} free={free} now={now} onBuy={buy} onOdds={setOdds} compact />
+          ))}
+        </PackSection>
       </div>
 
       <AnimatePresence>
@@ -280,7 +247,7 @@ export function Shop({ header }: { header?: React.ReactNode } = {}) {
             key={opening.key}
             onClose={() => setOpening(null)}
             onAgain={() => {
-              if (!buy(opening.booster, opening.packs)) setOpening(null);
+              if (!buy(opening.booster, opening.packs, opening.via)) setOpening(null);
             }}
           />
         )}
@@ -288,6 +255,85 @@ export function Shop({ header }: { header?: React.ReactNode } = {}) {
 
       {odds && <OddsModal premium={!!odds.premium} onClose={() => setOdds(null)} />}
     </div>
+  );
+}
+
+function PackSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="shop3-sec">
+      <h2 className="shop3-sec-title">{title}</h2>
+      <div className="shop3-packs">{children}</div>
+    </section>
+  );
+}
+
+/** one pack: its picture, what it holds, and the ways to open it */
+function PackCard({ b, i, free, now, onBuy, onOdds, compact }: { b: Booster & { ends?: number }; i: number; free: FreePackState; now: number; onBuy: (b: Booster, packs?: number, via?: Via) => boolean; onOdds: (b: Booster) => void; compact?: boolean }) {
+  const save = useStore((s) => s.save);
+  const premiumT = save.packTickets?.premium ?? 0;
+  const sure3T = save.packTickets?.sure3 ?? 0;
+  return (
+    <motion.section
+      className={`shop3-card ${b.premium ? 'premium' : ''} ${compact ? 'compact' : ''}`}
+      style={{ ['--hue' as string]: b.hue }}
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.05 * i, duration: 0.5, ease: EASE_OUT }}
+    >
+      <div className={`shop3-pack ${b.free ? (free.ready ? 'free-on' : 'free-wait') : ''}`} onClick={() => onBuy(b)}>
+        <motion.div animate={{ y: [0, -6, 0] }} transition={{ duration: 4.5, repeat: Infinity, ease: 'easeInOut', delay: i * 0.6 }}>
+          <BoosterPack booster={b} tilt />
+        </motion.div>
+      </div>
+      <div className="shop3-info">
+        <h3>
+          {b.name}
+          {b.ends && <small className="shop3-ends">あと{Math.max(1, Math.ceil((b.ends - now) / 86400_000))}日</small>}
+        </h3>
+        <ul>
+          {(b.lines ??
+            (b.premium
+              ? ['5枚目は★3以上確定', '★4・★5が通常の約3倍', '光るカード・特別な絵のカードも出やすい']
+              : ['すべての章のカードが出る', 'ごくまれに★4・★5', '5枚入り'])
+          ).map((l) => (
+            <li key={l}>{l}</li>
+          ))}
+        </ul>
+        {b.free ? (
+          <FreeSlot free={free} now={now} onOpen={() => onBuy(b)} />
+        ) : (
+          <div className="shop3-buy">
+            <button className="pill gold" disabled={save.gems < b.price} onClick={() => onBuy(b)}>
+              1パック
+              <span className="coin">
+                <Icon name="gem" /> {b.price.toLocaleString()}
+              </span>
+            </button>
+            {!compact && (
+              <button className="pill ten gold" disabled={save.gems < b.price * TEN_PACKS} onClick={() => onBuy(b, 10)}>
+                10パック
+                <span className="coin">
+                  <Icon name="gem" /> {(b.price * TEN_PACKS).toLocaleString()}
+                </span>
+              </button>
+            )}
+          </div>
+        )}
+        {b.id === 'premium' && premiumT > 0 && (
+          <button className="pill ticket" onClick={() => onBuy(b, 1, 'ticket')}>
+            <Icon name="ticket" /> チケットで引く（{premiumT}）
+          </button>
+        )}
+        {b.id === 'normal' && sure3T > 0 && (
+          <button className="pill ticket sure3" onClick={() => onBuy(SURE3_BOOSTER, 1, 'ticket')}>
+            <Icon name="stars" /> ★3確定チケットで引く（{sure3T}）
+          </button>
+        )}
+        <button className="textbtn shop3-odds" onClick={() => onOdds(b)}>
+          提供割合
+        </button>
+      </div>
+    </motion.section>
   );
 }
 
@@ -392,7 +438,7 @@ interface OpeningProps extends Omit<OpeningState, 'key'> {
   onAgain: () => void;
 }
 
-function Opening({ booster, cards, god, fresh, sold, packs, onClose, onAgain }: OpeningProps) {
+function Opening({ booster, via, cards, god, fresh, sold, packs, onClose, onAgain }: OpeningProps) {
   const u = useUnit();
   const [phase, setPhase] = useState<Phase>('tear');
   const cineApi = useRef<CinemaApi | null>(null);
@@ -503,7 +549,7 @@ function Opening({ booster, cards, god, fresh, sold, packs, onClose, onAgain }: 
         {phase === 'tear' && <TearStage booster={booster} god={god} u={u} cards={cards} omen={omen} packs={packs} onAura={setAura} burstAt={burstAt} onDone={() => setPhase('reveal')} />}
 
         {phase === 'multi' && (
-          <MultiResults opened={revealed} cards={cards} fresh={fresh} sold={sold} burstAt={burstAt} onClose={onClose} onAgain={onAgain} canAgain={coins >= costOf(booster, packs)} price={costOf(booster, packs)} u={u} />
+          <MultiResults opened={revealed} cards={cards} fresh={fresh} sold={sold} burstAt={burstAt} onClose={onClose} onAgain={onAgain} canAgain={canOpen(booster, packs, via)} price={via === 'gem' ? costOf(booster, packs) : 0} u={u} />
         )}
 
         {phase === 'reveal' && top && (
@@ -571,7 +617,7 @@ function Opening({ booster, cards, god, fresh, sold, packs, onClose, onAgain }: 
           </>
         )}
 
-        {phase === 'results' && <Results cards={cards} fresh={fresh} sold={sold} onClose={onClose} onAgain={onAgain} canAgain={booster.premium ? coins >= priceOf(booster) : freePackState(useStore.getState().save).ready} price={booster.premium ? priceOf(booster) : 0} u={u} />}
+        {phase === 'results' && <Results cards={cards} fresh={fresh} sold={sold} onClose={onClose} onAgain={onAgain} canAgain={canOpen(booster, 1, via)} price={via === 'gem' ? priceOf(booster) : 0} u={u} />}
       </div>
     </motion.div>
   );

@@ -122,7 +122,7 @@ export const BoosterPack = memo(function BoosterPack({ booster, className, style
           <div className="bp-fade" />
           <div className="bp-logo">
             <span className="a">ARCANE BEASTS</span>
-            <span className="b">{booster.premium ? 'PREMIUM' : 'STANDARD'}</span>
+            <span className="b">{booster.label ?? (booster.premium ? 'PREMIUM' : 'STANDARD')}</span>
           </div>
           <div className="bp-foot">
             <span className="line" />

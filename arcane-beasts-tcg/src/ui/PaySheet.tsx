@@ -17,7 +17,10 @@ export function PaySheet({
   onDone,
   shopLink = true,
   children,
+  currency = 'gem',
 }: {
+  /** paid in coins (交換所) */
+  currency?: 'gem' | 'coin';
   /** what is being bought, shown above the price */
   children?: React.ReactNode;
   /** offer a way to the ショップ when short (not in the middle of a battle) */
@@ -30,7 +33,8 @@ export function PaySheet({
   onCancel: () => void;
   onDone: () => void;
 }) {
-  const gems = useStore((s) => s.save.gems);
+  const gems = useStore((s) => (currency === 'coin' ? s.save.coins : s.save.gems));
+  const cur = currency === 'coin' ? 'coin' : 'gem';
   const go = useStore((s) => s.go);
   const [phase, setPhase] = useState<'ask' | 'paying' | 'done'>('ask');
   const before = useRef(gems);
@@ -86,7 +90,7 @@ export function PaySheet({
                 </>
               ) : (
                 <>
-                  <Icon name="gem" /> {price.toLocaleString()}
+                  <Icon name={cur} /> {price.toLocaleString()}
                 </>
               )}
             </div>
@@ -97,7 +101,7 @@ export function PaySheet({
                 </>
               ) : (
                 <>
-                  所持 <Icon name="gem" /> {(phase === 'paying' ? before.current : gems).toLocaleString()} → <b className={short ? 'short' : ''}>{(phase === 'paying' ? shown : after).toLocaleString()}</b>
+                  所持 <Icon name={cur} /> {(phase === 'paying' ? before.current : gems).toLocaleString()} → <b className={short ? 'short' : ''}>{(phase === 'paying' ? shown : after).toLocaleString()}</b>
                 </>
               )}
             </div>
@@ -105,14 +109,16 @@ export function PaySheet({
               <div className="pay-fly">
                 {Array.from({ length: 6 }, (_, i) => (
                   <motion.span key={i} initial={{ x: 0, y: 0, opacity: 1, scale: 1 }} animate={{ x: 60 + i * 8, y: -120 - i * 10, opacity: 0, scale: 0.5 }} transition={{ delay: i * 0.06, duration: 0.6, ease: 'easeIn' }}>
-                    <Icon name="gem" />
+                    <Icon name={cur} />
                   </motion.span>
                 ))}
               </div>
             )}
             {short ? (
               <>
-                <div className="pay-short">ジェムが足りません（あと {(price - gems).toLocaleString()}）</div>
+                <div className="pay-short">
+                  {currency === 'coin' ? 'コイン' : 'ジェム'}が足りません（あと {(price - gems).toLocaleString()}）
+                </div>
                 <div className="pay-btns">
                   <button className="btn ghost" onClick={onCancel}>
                     閉じる

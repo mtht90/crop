@@ -566,6 +566,8 @@
 .gem-chip { color: #8fe3ff; }
 .gem-chip .money { filter: drop-shadow(0 0 4px rgba(120, 216, 255, 0.6)); }
 .coin-chip .money-coin { filter: drop-shadow(0 0 3px rgba(255, 200, 80, 0.5)); }
+.rl-coin { display: inline-flex; align-items: center; gap: 3px; margin-left: 10px; color: #ffd76a; font-style: normal; }
+.rl-coin .money { width: 1.4em !important; height: 1.4em !important; }
 .rl-gem, .flash-gem, .ms3-gem { display: inline-flex; align-items: center; gap: 3px; margin-left: 10px; color: #8fe3ff; font-style: normal; }
 .ms3-gem { margin-left: 8px; font-size: 0.85em; }
 .ms3-claim span > .ms3-gem:first-child { margin-left: 0; font-size: 1em; }
@@ -1247,3 +1249,64 @@
 .st4-items { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--gap); }
 .st4-item { display: flex; align-items: center; gap: 12px; padding: 12px 14px; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
 .st4-item-ico { display: grid; place-items: center; width: 46px; height: 46px; border-radius: 12px; background: rgba(232, 197, 103, 0.12); border: 1px solid var(--line); color: var(--gold); font-size: 24px; flex: none; }
+
+/* the header's money: coins and gems, the gem one leads to the gem shop */
+.page-head .coin-chip.coin-only { color: #ffe39a; }
+.page-head .gem-chip { cursor: pointer; }
+.page-head .gem-chip .chip-plus { display: inline-grid; place-items: center; width: 18px; height: 18px; margin-left: 4px; border-radius: 50%; background: linear-gradient(180deg, #fff1bf, #d9a23a); color: #2a1a00; font-weight: 900; font-size: 13px; line-height: 1; }
+@media (max-width: 420px) { .page-head .coin-chip.coin-only { display: none; } }
+
+/* ショップ: banner carousel */
+.st4-carousel { position: relative; }
+.st4-banner { position: relative; width: 100%; min-height: clamp(150px, 26vh, 230px); display: grid; grid-template-columns: minmax(110px, 30%) 1fr; align-items: center; gap: 14px; padding: 16px 52px 30px 22px; overflow: hidden; border-radius: 18px; border: 1px solid color-mix(in srgb, var(--bh) 70%, #fff); background: radial-gradient(90% 140% at 15% 50%, color-mix(in srgb, var(--bh) 55%, transparent), transparent 60%), radial-gradient(60% 120% at 100% 0%, color-mix(in srgb, var(--bh) 30%, transparent), transparent 70%), linear-gradient(120deg, #0d1230, #060816); color: var(--ink); font: inherit; text-align: left; cursor: pointer; box-shadow: 0 14px 34px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 0 30px color-mix(in srgb, var(--bh) 25%, transparent); }
+.st4-banner::after { content: ''; position: absolute; inset: 0; background: linear-gradient(110deg, transparent 35%, rgba(255, 245, 210, 0.14) 50%, transparent 65%); background-size: 250% 100%; animation: login-sheen 3.6s cubic-bezier(0.45, 0, 0.2, 1) infinite; pointer-events: none; }
+.st4-banner-art { display: grid; place-items: center; height: 100%; }
+.st4-banner-art .bp { width: min(120px, 100%); transform: rotate(-8deg); filter: drop-shadow(0 12px 20px rgba(0, 0, 0, 0.6)); }
+.st4-banner-ico { display: grid; place-items: center; width: clamp(80px, 18vw, 120px); aspect-ratio: 1; border-radius: 24px; background: radial-gradient(circle at 35% 30%, #fff8dc, var(--bh) 70%); color: #241500; font-size: clamp(44px, 10vw, 68px); box-shadow: 0 0 30px color-mix(in srgb, var(--bh) 60%, transparent); transform: rotate(-6deg); }
+.st4-banner-text { display: flex; flex-direction: column; gap: 6px; min-width: 0; position: relative; z-index: 1; }
+.st4-banner-text small { align-self: flex-start; padding: 2px 10px; border-radius: 999px; background: rgba(0, 0, 0, 0.45); border: 1px solid color-mix(in srgb, var(--bh) 60%, transparent); color: color-mix(in srgb, var(--bh) 60%, #fff); font-weight: 900; font-size: var(--fs-xs); letter-spacing: 0.08em; }
+.st4-banner-text b { font-family: var(--font-display); font-weight: 400; font-size: clamp(22px, 5.6vw, 40px); line-height: 1.1; background: linear-gradient(180deg, #fffdf0, #ffe08a 45%, #d79b2a); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 3px 0 rgba(0, 0, 0, 0.6)); }
+.st4-banner-text > span { font-weight: 800; font-size: var(--fs-s); color: #e6e9ff; text-shadow: 0 1px 3px #000; }
+.st4-banner-badge { position: absolute; right: 14px; top: 12px; padding: 4px 12px; border-radius: 999px; background: linear-gradient(180deg, #ff7a8a, #d6304a); color: #fff; font-weight: 900; font-size: var(--fs-xs); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4); z-index: 1; }
+.st4-arrow { position: absolute; top: 50%; translate: 0 -60%; width: 30px; height: 44px; border: 0; border-radius: 10px; background: rgba(0, 0, 0, 0.45); color: #ffe9a8; font-size: 26px; font-weight: 900; cursor: pointer; z-index: 2; }
+.st4-arrow.l { left: 6px; }
+.st4-arrow.r { right: 6px; }
+.st4-dots { position: absolute; left: 0; right: 0; bottom: 10px; display: flex; justify-content: center; gap: 8px; z-index: 2; }
+.st4-dots i { width: 9px; height: 9px; border-radius: 50%; background: rgba(255, 255, 255, 0.3); cursor: pointer; }
+.st4-dots i.on { background: #ffd76a; box-shadow: 0 0 8px rgba(255, 215, 106, 0.8); }
+/* item tiles (like a shop shelf) */
+.st4-group { display: flex; flex-direction: column; gap: var(--gap); }
+.st4-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--gap); }
+.st4-tile { position: relative; display: flex; flex-direction: column; align-items: stretch; gap: 0; overflow: hidden; padding: 0; border-radius: 14px; border: 1px solid rgba(232, 197, 103, 0.45); background: linear-gradient(180deg, #e9ecf8, #c9cfe6); color: #1b2140; font: inherit; cursor: pointer; box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4); }
+.st4-tile-name { padding: 7px 8px; background: linear-gradient(180deg, #2a3366, #1a2147); color: #f3efe0; font-weight: 900; font-size: var(--fs-xs); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st4-tile-art { position: relative; display: grid; place-items: center; height: 96px; font-size: 52px; color: #3a4aa0; background: radial-gradient(circle at 50% 45%, #ffffff, rgba(255, 255, 255, 0) 70%); }
+.st4-tile.set .st4-tile-art { color: #b8861b; }
+.st4-tile.exchange .st4-tile-art { color: #a8761a; }
+.st4-tile-art svg { filter: drop-shadow(0 4px 8px rgba(40, 50, 120, 0.35)); }
+.st4-tile-limit { position: absolute; right: 6px; bottom: 6px; padding: 2px 8px; border-radius: 999px; background: rgba(20, 24, 48, 0.75); color: #fff; font-style: normal; font-weight: 800; font-size: 10px; }
+.st4-tile-off { position: absolute; right: 6px; top: 6px; padding: 3px 8px; border-radius: 999px; background: #ff5a7a; color: #fff; font-style: normal; font-weight: 900; font-size: 10px; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3); }
+.st4-tile-note { padding: 0 8px 6px; min-height: 2.4em; color: #4a5279; font-weight: 700; font-size: 10px; line-height: 1.25; text-align: center; }
+.st4-tile-price { display: flex; align-items: center; justify-content: center; gap: 4px; margin: 0 8px 8px; padding: 6px 4px; border-radius: 999px; background: linear-gradient(180deg, #2a3366, #161c3e); color: #fff; font-family: var(--font-display); font-weight: 400; font-size: var(--fs-s); box-shadow: inset 0 0 0 1px rgba(232, 197, 103, 0.6); }
+.st4-tile-price s { color: #9aa3c8; font-family: var(--font-ui); font-weight: 700; font-size: 0.75em; margin-right: 3px; }
+.st4-tile-price.coin { color: #ffe39a; }
+.st4-tile.sold { filter: grayscale(0.85) brightness(0.65); cursor: default; }
+/* gems */
+.st4-gems { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--gap); }
+.st4-gem { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 16px 10px 12px; border-radius: 16px; border: 1px solid rgba(143, 227, 255, 0.4); background: radial-gradient(circle at 50% 30%, rgba(120, 210, 255, 0.22), transparent 65%), linear-gradient(180deg, #16204a, #0a0f26); color: var(--ink); font: inherit; cursor: pointer; box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4); }
+.st4-gem-art { display: flex; align-items: flex-end; justify-content: center; height: 54px; }
+.st4-gem-art .money { width: 30px !important; height: 30px !important; margin: 0 -6px; filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.5)); }
+.st4-gem b { font-family: var(--font-display); font-weight: 400; font-size: var(--fs-l); color: #d8f6ff; }
+.st4-yen { padding: 5px 18px; border-radius: 999px; background: linear-gradient(180deg, #fff1bf, #e2b44e); color: #2a1a00; font-weight: 900; }
+.st4-legal { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 6px; }
+.st4-legal button { padding: 6px 14px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.2); background: rgba(0, 0, 0, 0.4); color: var(--ink-dim); font: inherit; font-weight: 700; font-size: var(--fs-xs); cursor: pointer; }
+.st4-note { margin: 0; font-weight: 800; }
+/* packs: sections, the compact type packs, ticket buttons */
+.shop3-sec { display: flex; flex-direction: column; gap: var(--gap); width: 100%; max-width: 1100px; margin: 0 auto; }
+.shop3-sec-title { margin: 6px 0 0; font-family: var(--font-display); font-weight: 400; font-size: var(--fs-l); color: var(--gold-2); }
+.shop3-card.compact { grid-template-columns: minmax(80px, 30%) 1fr; padding: 10px; }
+.shop3-card.compact .shop3-pack { max-width: 110px; }
+.shop3-card.compact ul { font-size: var(--fs-xs); }
+.shop3-ends { margin-left: 8px; padding: 2px 8px; border-radius: 999px; background: #d6304a; color: #fff; font-family: var(--font-ui); font-weight: 900; font-size: 11px; vertical-align: middle; }
+.pill.ticket { margin-top: 6px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 36px; border-radius: 999px; border: 1px solid rgba(255, 215, 120, 0.6); background: rgba(255, 210, 110, 0.12); color: #ffe9a8; font: inherit; font-weight: 900; cursor: pointer; }
+.pill.ticket.sure3 { border-color: rgba(200, 144, 255, 0.7); background: rgba(200, 144, 255, 0.14); color: #ecd6ff; }
+.shop3 .page { overflow-y: auto; }
