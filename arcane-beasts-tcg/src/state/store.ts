@@ -740,6 +740,7 @@ export const useStore = create<Store>((set, get) => ({
       s.gems -= c.price;
       s.wardrobe.owned.push(id);
       s.wardrobe[c.kind] = id;
+      s.purchases = [{ at: Date.now(), label: `見た目：${c.name}`, gems: c.price }, ...(s.purchases ?? [])].slice(0, 100);
       ok = true;
     });
     return ok;

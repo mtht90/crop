@@ -1,5 +1,7 @@
 // ワードローブ: card sleeves, battle mats and titles, bought with coins. Looks only.
+import { AnimatePresence } from 'motion/react';
 import { useEffect, useState } from 'react';
+import { PaySheet } from '../ui/PaySheet';
 import { artUrl } from '../lib/assets';
 import { foley, playMusic, sfx } from '../audio/audio';
 import { MATS, SLEEVES, TITLES, type Cosmetic, type CosmeticKind } from '../state/cosmetics';
@@ -15,12 +17,29 @@ const TABS: { id: CosmeticKind; label: string; list: Cosmetic[] }[] = [
 ];
 
 export function Wardrobe() {
+  useEffect(() => playMusic('shop'), []);
+  return (
+    <div className="screen">
+      <div className="page-bg" style={{ backgroundImage: `url(${artUrl('story/p-study')})` }} />
+      <div className="page-shade" />
+      <div className="page">
+        <TopBar title="見た目" back="store" />
+        <div className="page-inner">
+          <Looks />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** 見た目 (in the ショップ): sleeves, battle backgrounds and titles — buy, then choose */
+export function Looks() {
   const save = useStore((s) => s.save);
   const buy = useStore((s) => s.buyCosmetic);
   const equip = useStore((s) => s.equipCosmetic);
   const [tab, setTab] = useState<CosmeticKind>('sleeve');
   const [msg, setMsg] = useState('');
-  useEffect(() => playMusic('shop'), []);
+  const [paying, setPaying] = useState<Cosmetic | null>(null);
   const w = save.wardrobe;
   const cur = TABS.find((t) => t.id === tab)!;
 
@@ -30,23 +49,11 @@ export function Wardrobe() {
       equip(c.id);
       sfx('select', 0.5);
       setMsg(`「${c.name}」に変えました`);
-    } else if (buy(c.id)) {
-      sfx('gold', 0.6);
-      foley.chime(6);
-      setMsg(`「${c.name}」を手に入れました`);
-    } else {
-      sfx('miss-2', 0.5);
-      setMsg('ジェムが足りません。イベントやボスレイド、初回クリアで大きく集められます');
-    }
+    } else setPaying(c);
   };
 
   return (
-    <div className="screen">
-      <div className="page-bg" style={{ backgroundImage: `url(${artUrl('story/p-study')})` }} />
-      <div className="page-shade" />
-      <div className="page">
-        <TopBar title="ワードローブ" back="more" />
-        <div className="page-inner wd">
+    <div className="wd">
           <div className="ms3-tabs">
             {TABS.map((t) => (
               <button key={t.id} className={`chip-btn ${tab === t.id ? 'on' : ''}`} onClick={() => (foley.tick(), setTab(t.id), setMsg(''))}>
@@ -54,7 +61,7 @@ export function Wardrobe() {
               </button>
             ))}
           </div>
-          <div className="set-note wd-note">見た目だけの報酬です。強さには関係しません。{msg && <b className="wd-msg"> {msg}</b>}</div>
+          {msg && <div className="set-note wd-note"><b className="wd-msg">{msg}</b></div>}
           <div className={`wd-grid wd-tab-${tab}`}>
             {cur.list.map((c) => {
               const owned = w.owned.includes(c.id);
@@ -83,8 +90,22 @@ export function Wardrobe() {
               );
             })}
           </div>
-        </div>
-      </div>
+      <AnimatePresence>
+        {paying && (
+          <PaySheet
+            key={paying.id}
+            title={paying.name}
+            price={paying.price}
+            onCancel={() => setPaying(null)}
+            onPay={() => buy(paying.id)}
+            onDone={() => {
+              equip(paying.id);
+              setMsg(`「${paying.name}」を手に入れました`);
+              setPaying(null);
+            }}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

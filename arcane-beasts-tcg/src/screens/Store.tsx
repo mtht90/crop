@@ -16,8 +16,9 @@ import { PaySheet } from '../ui/PaySheet';
 import { setOpenGemShop, TopBar } from '../ui/TopBar';
 import { BoosterPack } from './pack/BoosterPack';
 import { Shop } from './Shop';
+import { Looks } from './Wardrobe';
 
-type Seg = 'pick' | 'pack' | 'items' | 'exchange' | 'gems';
+type Seg = 'pick' | 'pack' | 'items' | 'looks' | 'exchange' | 'gems';
 /** the section open (kept when leaving and coming back) */
 export const useShopSeg = create<{ seg: Seg }>(() => ({ seg: 'pick' }));
 setOpenGemShop(() => {
@@ -29,6 +30,7 @@ const SEGS: { id: Seg; label: string; icon: string }[] = [
   { id: 'pick', label: 'おすすめ', icon: 'stars' },
   { id: 'pack', label: 'パック', icon: 'cards' },
   { id: 'items', label: 'アイテム', icon: 'crystal-ball' },
+  { id: 'looks', label: '見た目', icon: 'wardrobe' },
   { id: 'exchange', label: '交換所', icon: 'exchange' },
   { id: 'gems', label: 'ジェム', icon: 'gem' },
 ];
@@ -73,7 +75,7 @@ function StorePage({ seg }: { seg: Seg }) {
       <div className="page">
         <Head />
         <div className="page-inner st4-body">
-          {seg === 'pick' ? <Pick /> : seg === 'items' ? <ItemList section={['set', 'item']} /> : seg === 'exchange' ? <ItemList section={['exchange']} /> : <Gems />}
+          {seg === 'looks' ? <Looks /> : seg === 'pick' ? <Pick /> : seg === 'items' ? <ItemList section={['set', 'item']} /> : seg === 'exchange' ? <ItemList section={['exchange']} /> : <Gems />}
         </div>
       </div>
     </div>
@@ -307,16 +309,6 @@ function ItemList({ section }: { section: ShopItem['section'][] }) {
                 </motion.button>
               );
             })}
-            {title === 'アイテム' && (
-              <button className="st4-tile" onClick={() => go('wardrobe')}>
-                <span className="st4-tile-name">ワードローブ</span>
-                <span className="st4-tile-art">
-                  <Icon name="wardrobe" />
-                </span>
-                <small className="st4-tile-note">スリーブ・プレイマット・称号</small>
-                <span className="st4-tile-price">見る ›</span>
-              </button>
-            )}
           </div>
         </div>
       ))}
