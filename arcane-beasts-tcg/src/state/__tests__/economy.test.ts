@@ -14,8 +14,11 @@ describe('gems (ジェム) — ぷにぷに準拠', () => {
     expect(again.total).toBe(again.lines.find((l) => l.label === 'コイン')!.coins);
     for (const l of again.lines) if (l.label !== 'コイン') expect(l.coins, l.label).toBe(0);
     expect(again.gems).toBe(winGems(300));
-    expect(winGems(0)).toBe(10);
-    expect(winGems(99999)).toBe(60);
+    expect(winGems(0)).toBe(80);
+    expect(winGems(99999)).toBe(250);
+    // CPU levels average about 150
+    const cpu = [60, 80, 100, 130, 170, 220, 280, 360, 480].map(winGems);
+    expect(Math.abs(cpu.reduce((a, b) => a + b, 0) / cpu.length - 150)).toBeLessThan(20);
     for (const level of ['easy', 'normal', 'hard'] as const) {
       const r = battleReward(p, { ...win, level, firstClear: true });
       expect(r.gems - again.gems, level).toBe(GEM_FIRST_CLEAR[level]);
@@ -92,5 +95,20 @@ describe('負けたときの報酬', () => {
     expect(r.gems).toBeLessThanOrEqual(LOSS_PART_MAX + 10);
     const w = battleReward(freshProgress(), { win: true, level: 'hard', baseReward: 1500, prizesTaken: 6, prizesLost: 2, firstClear: false });
     expect(w.gems).toBeGreaterThan(r.gems * 20);
+  });
+});
+
+describe('勝利ジェムの1日上限', () => {
+  it('wins stop paying gems at WIN_GEMS_DAY_CAP a day', async () => {
+    const { battleReward, freshProgress, dayKey, WIN_GEMS_DAY_CAP, winGems } = await import('../progress');
+    const p = freshProgress();
+    p.lastWinDay = dayKey();
+    const win = { win: true, level: 'hard' as const, baseReward: 480, prizesTaken: 6, prizesLost: 0, firstClear: false };
+    p.winGemsDay = { day: dayKey(), n: WIN_GEMS_DAY_CAP - 100 };
+    expect(battleReward(p, win).gems).toBe(100);
+    p.winGemsDay = { day: dayKey(), n: WIN_GEMS_DAY_CAP };
+    expect(battleReward(p, win).gems).toBe(0);
+    p.winGemsDay = { day: '2000-01-01', n: WIN_GEMS_DAY_CAP };
+    expect(battleReward(p, win).gems).toBe(winGems(480));
   });
 });

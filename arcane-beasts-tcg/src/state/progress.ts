@@ -37,6 +37,8 @@ export interface Progress {
   exp: number;
   streak: number;
   lastWinDay: string;
+  /** gems paid by wins today (for the daily cap) */
+  winGemsDay?: { day: string; n: number };
   stats: Stats;
   daily: Period;
   weekly: Period;
@@ -172,7 +174,11 @@ export const LOGIN_GEMS = [0, 0, 0, 0, 0, 0, 0];
 export const GEM_FIRST_CLEAR: Record<Difficulty, number> = { easy: 250, normal: 350, hard: 500 };
 export const GEM_DAILY_WIN = 60;
 /** a won battle that can be played again pays a little: 5–30 by its base reward (ぷにぷにの通常ステージ) */
-export const winGems = (base: number) => Math.min(60, Math.max(10, Math.round(base / 8)));
+export const winGems = (base: number) => Math.min(250, Math.max(80, Math.round((80 + ((base - 60) * 170) / 420) / 5) * 5));
+/** wins pay gems up to this much a day (the day's first win bonus is apart) */
+export const WIN_GEMS_DAY_CAP = 4500;
+/** what is left of today's cap */
+export const winGemsLeft = (p: Progress) => Math.max(0, WIN_GEMS_DAY_CAP - (p.winGemsDay?.day === dayKey() ? p.winGemsDay.n : 0));
 /** gems a mission pays (its old coin reward, plus any gems it carried) */
 export const missionGems = (m: Mission) => m.reward * 2 + (m.gems ?? 0);
 /** coins a mission pays too (for the 交換所) */
@@ -242,7 +248,7 @@ export function battleReward(p: Progress, o: BattleOutcome): { lines: RewardLine
   // and the big amounts come once (first clears) or from events and raids
   const lines: RewardLine[] = [];
   if (o.win) {
-    lines.push({ label: '勝利報酬', coins: 0, gems: winGems(o.baseReward) });
+    lines.push({ label: '勝利報酬', coins: 0, gems: Math.min(winGems(o.baseReward), winGemsLeft(p)) });
     if (p.lastWinDay !== dayKey()) lines.push({ label: '本日の初勝利', coins: 0, gems: GEM_DAILY_WIN });
     if (o.firstClear) lines.push({ label: o.firstClearLabel ?? '初回クリアボーナス', coins: o.firstClearCoins ?? FIRST_CLEAR_COINS[o.level], gems: o.firstClearGems ?? GEM_FIRST_CLEAR[o.level] });
   }

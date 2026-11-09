@@ -91,12 +91,12 @@ export function leftOf(it: ShopItem, bought: Record<string, { key: string; n: nu
 
 /** ジェム購入 (the buy screen only: payment is not open yet) */
 export const GEM_PRODUCTS = [
-  { yen: 160, gems: 100 },
-  { yen: 610, gems: 400 },
-  { yen: 1220, gems: 830 },
-  { yen: 3060, gems: 2150 },
-  { yen: 4900, gems: 3550 },
-  { yen: 10000, gems: 7650 },
+  { yen: 160, gems: 400 },
+  { yen: 480, gems: 1250 },
+  { yen: 980, gems: 2600 },
+  { yen: 1960, gems: 5400 },
+  { yen: 2940, gems: 8200 },
+  { yen: 4900, gems: 14000 },
 ];
 
 /** the price of a card in the 日替わり, by ★ */
