@@ -14,8 +14,8 @@ describe('gems (ジェム) — ぷにぷに準拠', () => {
     expect(again.total).toBe(again.lines.find((l) => l.label === 'コイン')!.coins);
     for (const l of again.lines) if (l.label !== 'コイン') expect(l.coins, l.label).toBe(0);
     expect(again.gems).toBe(winGems(300));
-    expect(winGems(0)).toBe(5);
-    expect(winGems(99999)).toBe(30);
+    expect(winGems(0)).toBe(10);
+    expect(winGems(99999)).toBe(60);
     for (const level of ['easy', 'normal', 'hard'] as const) {
       const r = battleReward(p, { ...win, level, firstClear: true });
       expect(r.gems - again.gems, level).toBe(GEM_FIRST_CLEAR[level]);
@@ -31,13 +31,13 @@ describe('gems (ジェム) — ぷにぷに準拠', () => {
     expect(lose.gems).toBe(0);
     expect(lose.exp).toBeGreaterThan(0);
   });
-  it('a pack is 500, a 10連 4,500; a login week pays one pack', () => {
+  it('a pack is 500, a 10連 4,500; a login week pays about two packs', () => {
     expect(PACK_PRICE).toBe(500);
     expect(PACK_PRICE * TEN_PACKS).toBe(4500);
     expect(PREMIUM_PRICE).toBe(500);
     expect(PREMIUM_PRICE * TEN_PACKS).toBe(4500);
-    expect(LOGIN_REWARDS.reduce((a, b) => a + b, 0) + LOGIN_GEMS.reduce((a, b) => a + b, 0)).toBe(500);
-    for (const m of [...NORMAL_MISSIONS, ...ACHIEVEMENTS]) expect(missionGems(m), m.id).toBe(m.reward + (m.gems ?? 0));
+    expect(LOGIN_REWARDS.reduce((a, b) => a + b, 0) + LOGIN_GEMS.reduce((a, b) => a + b, 0)).toBe(1020);
+    for (const m of [...NORMAL_MISSIONS, ...ACHIEVEMENTS]) expect(missionGems(m), m.id).toBe(m.reward * 2 + (m.gems ?? 0));
     expect(storyFirstClear(1, false, 1).gems).toBe(100);
     expect(storyFirstClear(12, true, 2).gems).toBe(1500);
     expect(storyFirstClear(11, false, 1).gems).toBeGreaterThan(storyFirstClear(1, false, 1).gems);

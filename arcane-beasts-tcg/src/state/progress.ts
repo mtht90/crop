@@ -160,7 +160,7 @@ export function addExp(p: Progress, amount: number): number[] {
 // ---------------------------------------------------------------------------
 // Login bonus (7-day cycle; the cycle advances on each day you log in)
 // ---------------------------------------------------------------------------
-export const LOGIN_REWARDS = [30, 30, 50, 50, 70, 70, 200];
+export const LOGIN_REWARDS = [60, 60, 100, 100, 150, 150, 400];
 /** (folded into LOGIN_REWARDS: one 7-day cycle pays 500 = one pack) */
 export const LOGIN_GEMS = [0, 0, 0, 0, 0, 0, 0];
 
@@ -169,12 +169,12 @@ export const LOGIN_GEMS = [0, 0, 0, 0, 0, 0, 0];
 //   first clear of a rival / story episode, first win of the day, missions,
 //   the login cycle and level-ups. Tune the numbers here.
 // ---------------------------------------------------------------------------
-export const GEM_FIRST_CLEAR: Record<Difficulty, number> = { easy: 150, normal: 200, hard: 300 };
-export const GEM_DAILY_WIN = 30;
+export const GEM_FIRST_CLEAR: Record<Difficulty, number> = { easy: 250, normal: 350, hard: 500 };
+export const GEM_DAILY_WIN = 60;
 /** a won battle that can be played again pays a little: 5–30 by its base reward (ぷにぷにの通常ステージ) */
-export const winGems = (base: number) => Math.min(30, Math.max(5, Math.round(base / 16)));
+export const winGems = (base: number) => Math.min(60, Math.max(10, Math.round(base / 8)));
 /** gems a mission pays (its old coin reward, plus any gems it carried) */
-export const missionGems = (m: Mission) => m.reward + (m.gems ?? 0);
+export const missionGems = (m: Mission) => m.reward * 2 + (m.gems ?? 0);
 /** coins a mission pays too (for the 交換所) */
 export const missionCoins = (m: Mission) => (m.reward > 0 ? m.reward * 5 : (m.gems ?? 0) * 2);
 /** coins of the login cycle */
@@ -183,7 +183,7 @@ export const LOGIN_COINS = [100, 100, 150, 150, 200, 200, 500];
 export const levelCoins = (level: number) => (level % 5 === 0 ? 1000 : 200);
 /** coins of a first clear, by difficulty */
 export const FIRST_CLEAR_COINS: Record<Difficulty, number> = { easy: 300, normal: 500, hard: 800 };
-export const levelGems = (level: number) => (level % 5 === 0 ? 150 : 30);
+export const levelGems = (level: number) => (level % 5 === 0 ? 300 : 60);
 /**
  * the first clear of a story episode: it grows along the chapter, and each
  * chapter's last episode pays the most (episode 1: 500 coins · 30 gems …
