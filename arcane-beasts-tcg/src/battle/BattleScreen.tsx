@@ -441,32 +441,61 @@ interface HandProps {
 const unitPx = () => Math.min(window.innerWidth / 100, (window.innerHeight * 1.7778) / 100);
 
 /**
- * The drop target for a card whose picture is centred at (x, y): the slot under it,
- * or failing that the nearest place it may go, as long as it is close enough.
- * Broad zones (the whole bench, the whole mat) only count when no single slot does.
+ * The drop target for a dragged card aimed at (x, y). A slot counts when the aim is
+ * on it (with a little margin); among those the nearest centre wins. The place
+ * already lit stays lit until the aim clearly leaves it, so it never flickers
+ * between two neighbours. When there is only one place the card can go, anywhere
+ * above the hand will do. Broad zones (the whole bench, the whole mat) only count
+ * when no single slot does.
  */
-function pickDrop(x: number, y: number, keys: Set<string>): string | null {
+function pickDrop(x: number, y: number, keys: Set<string>, current: string | null): string | null {
   if (!keys.size) return null;
   const u = unitPx();
   const hand = document.querySelector('.hand')?.getBoundingClientRect();
   // still over the hand: not played yet
   if (hand && y > hand.top + u * 2) return null;
-  let best: string | null = null;
-  let score = Infinity;
+  const rects = new Map<string, DOMRect>();
   for (const el of document.querySelectorAll<HTMLElement>('[data-drop]')) {
     const key = el.dataset.drop!;
     if (!keys.has(key)) continue;
+    // the same place can be marked twice (a slot and what is in it): keep the bigger
     const r = el.getBoundingClientRect();
-    const d = Math.hypot(Math.max(r.left - x, 0, x - r.right), Math.max(r.top - y, 0, y - r.bottom));
-    const broad = key === 'board' || key === 'bench';
-    if (d > (broad ? 0 : u * 6)) continue;
-    const sc = d + (broad ? u * 100 : 0);
-    if (sc < score) {
-      score = sc;
-      best = key;
+    const had = rects.get(key);
+    if (r.width * r.height > 0 && (!had || r.width * r.height > had.width * had.height)) rects.set(key, r);
+  }
+  const inside = (r: DOMRect, m: number) => x >= r.left - m && x <= r.right + m && y >= r.top - m && y <= r.bottom + m;
+  const precise = [...rects.keys()].filter((k) => k !== 'board' && k !== 'bench');
+  // keep what is lit while the aim is still near it
+  if (current && precise.includes(current) && inside(rects.get(current)!, u * 2.2)) return current;
+  let best: string | null = null;
+  let score = Infinity;
+  for (const k of precise) {
+    const r = rects.get(k)!;
+    if (!inside(r, u * 1.2)) continue;
+    const d = Math.hypot(x - (r.left + r.width / 2), y - (r.top + r.height / 2));
+    if (d < score) {
+      score = d;
+      best = k;
     }
   }
-  return best;
+  if (best) return best;
+  // only one place it can go: no need to aim
+  if (precise.length === 1 && !keys.has('bench')) return precise[0];
+  // close to a slot, just off it
+  for (const k of precise) {
+    const r = rects.get(k)!;
+    const d = Math.hypot(Math.max(r.left - x, 0, x - r.right), Math.max(r.top - y, 0, y - r.bottom));
+    if (d <= u * 3 && d < score) {
+      score = d;
+      best = k;
+    }
+  }
+  if (best) return best;
+  for (const k of ['bench', 'board']) {
+    const r = rects.get(k);
+    if (r && inside(r, 0)) return k;
+  }
+  return null;
 }
 
 /** light the place a dragged card would land on */
@@ -513,7 +542,7 @@ interface HandCardProps {
   register: (uid: number, controls: DragControls | null) => void;
   onDown: (e: React.PointerEvent, uid: number) => void;
   onDragStart: () => void;
-  onDrag: () => void;
+  onDrag: (e: MouseEvent | TouchEvent | PointerEvent) => void;
   onDragEnd: (offset: { x: number; y: number }) => void;
   onMouseEnter: () => void;
   onMouseLeave: () => void;
@@ -546,7 +575,7 @@ function HandCard(p: HandCardProps) {
       whileDrag={{ scale: p.lifted ? 1 : 0.92, zIndex: 200, rotate: 0 }}
       onPointerDown={(e) => p.onDown(e, c.uid)}
       onDragStart={p.onDragStart}
-      onDrag={p.onDrag}
+      onDrag={(e) => p.onDrag(e)}
       onDragEnd={(_, info) => p.onDragEnd(info.offset)}
       onMouseEnter={p.onMouseEnter}
       onMouseLeave={p.onMouseLeave}
@@ -576,6 +605,8 @@ function Hand({ cards: raw, playable, selected, onSelect, onDrop, setupPick, dro
   const [dragging, setDragging] = useState<number | null>(null);
   const [lifted, setLifted] = useState(false);
   const hot = useRef<string | null>(null);
+  /** what was lit last in this drag (kept even if the system cancels the pointer first) */
+  const lastHot = useRef<string | null>(null);
   /** the place under the dragged card (state, so the card knows not to spring back when let go there) */
   const [hotKey, setHotKey] = useState<string | null>(null);
   /** a card let go over a place: if it is still in the hand a moment later, it goes back */
@@ -628,9 +659,14 @@ function Hand({ cards: raw, playable, selected, onSelect, onDrop, setupPick, dro
     window.addEventListener('resize', on);
     return () => window.removeEventListener('resize', on);
   }, []);
+  /** where the finger (or the mouse) is during a drag */
+  const finger = useRef<[number, number] | null>(null);
   const target = (uid: number) => {
     const c = cardCentre(uid);
-    return c ? pickDrop(c[0], c[1], dropKeys(uid)) : null;
+    const f = finger.current;
+    // a finger: halfway between it and the card shown above it; a mouse: the pointer
+    const aim = f && c ? (lifted ? [(f[0] + c[0]) / 2, (f[1] + c[1]) / 2] : f) : c;
+    return aim ? pickDrop(aim[0], aim[1], dropKeys(uid), hot.current) : null;
   };
   const n = cards.length;
   const portrait = isPortrait();
@@ -672,8 +708,8 @@ function Hand({ cards: raw, playable, selected, onSelect, onDrop, setupPick, dro
       const dy = e.clientY - g.y;
       if (g.mode === 'wait') {
         if (Math.hypot(dx, dy) < (g.touch ? 9 : 4)) return;
-        // a mouse drags in any direction; a finger drags upwards and slides sideways
-        const up = !g.touch || (dy < 0 && -dy > Math.abs(dx) * 0.7);
+        // a mouse drags in any direction; a finger drags when it goes up at all (even far to the side), and slides when it moves flat
+        const up = !g.touch || (dy < 0 && -dy > Math.abs(dx) * 0.25);
         if (up) {
           const uid = g.touch ? (hoverRef.current ?? g.uid) : g.uid;
           if (startDrag(uid, e, g.touch)) {
@@ -761,8 +797,11 @@ function Hand({ cards: raw, playable, selected, onSelect, onDrop, setupPick, dro
               onDragging(c.uid);
               document.body.classList.add('hand-dragging');
             }}
-            onDrag={() => {
+            onDrag={(e) => {
+              const pt = 'touches' in e ? e.touches[0] : e;
+              if (pt) finger.current = [pt.clientX, pt.clientY];
               const t = target(c.uid);
+              lastHot.current = t;
               if (t !== hot.current) {
                 hot.current = t;
                 setHotKey(t);
@@ -774,7 +813,10 @@ function Hand({ cards: raw, playable, selected, onSelect, onDrop, setupPick, dro
               }
             }}
             onDragEnd={(offset) => {
-              const t = target(c.uid);
+              // let go: it goes where it was lit (what the player saw)
+              const t = hot.current ?? lastHot.current ?? target(c.uid);
+              lastHot.current = null;
+              finger.current = null;
               hot.current = null;
               setHotKey(null);
               markHot(null);
