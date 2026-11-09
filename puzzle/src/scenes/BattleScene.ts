@@ -205,9 +205,9 @@ export class BattleScene extends Scene {
     // coin skill grows 10% per skill level
     const cs = COIN_SKILL[this.def.rarity];
     const k = 1 + (this.growth.skill - 1) * 0.1;
-    // the UR's move scatters twice the coins
-    const royal = this.def.passive?.kind === 'royal' ? 2 : 1;
-    this.coinSkill = { perPiece: cs.perPiece * k * royal, flat: Math.round(cs.flat * k * royal) };
+    this.coinSkill = { perPiece: cs.perPiece * k, flat: Math.round(cs.flat * k) };
+    // the UR's move is a coin shower: about 7,000 coins a use (70 a piece plus a big flat bonus)
+    if (this.def.passive?.kind === 'royal') this.coinSkill = { perPiece: 70 * k, flat: Math.round(6300 * k) };
     this.bossLv = Save.fightLv();
     this.rematch = this.bossLv < Save.data.bossLv;
     this.bossDef = bossForLevel(this.bossLv);
@@ -908,7 +908,8 @@ export class BattleScene extends Scene {
     this.coinsEarned += n;
     const tx = this.coinLabel.x - 70;
     const ty = this.coinLabel.y;
-    for (let i = 0; i < Math.min(Math.ceil(n / 3), 6); i++) {
+    // a big drop (the UR's coin shower) sends more coins flying
+    for (let i = 0; i < Math.min(Math.ceil(n / 3), n >= 1000 ? 24 : 6); i++) {
       const c = coinIcon(14);
       c.position.set(this.boardX + x + (Math.random() - 0.5) * 40, this.boardY + y);
       this.fxTop.view.addChild(c);
@@ -1025,7 +1026,10 @@ export class BattleScene extends Scene {
     this.skillCharge = Math.max(0, this.skillCharge - this.chargeNeed);
     this.skillUses++;
     this.vsSend('必殺技！');
-    if (this.coinSkill.flat) gsap.delayedCall(1.1, () => this.dropCoins(this.coinSkill.flat, this.board.w / 2, this.board.h * 0.4));
+    if (this.coinSkill.flat) gsap.delayedCall(1.1, () => {
+      this.dropCoins(this.coinSkill.flat, this.board.w / 2, this.board.h * 0.4);
+      if (this.coinSkill.flat >= 1000) this.floatText(`+${this.coinSkill.flat.toLocaleString('en-US')}コイン！`, 360, this.boardY + this.board.h * 0.3, 0xffd23f, 56);
+    });
     await this.cutIn();
     if (this.phase !== 'cutin') return;
     this.phase = 'play';
