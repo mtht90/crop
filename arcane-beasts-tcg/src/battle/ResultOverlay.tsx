@@ -337,7 +337,7 @@ function ExpBar({ res, delay }: { res: BattleRewardResult; delay: number }) {
       <AnimatePresence>
         {up && (
           <motion.div key={up} className="lvup" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
-            レベルアップ！ Lv.{up} ・ ボーナス +{(levelReward(up) + levelGems(up)).toLocaleString()} ジェム ・ +{levelCoins(up).toLocaleString()} コイン
+            レベルアップ！ Lv.{up} ・ ボーナス +{levelReward(up) + levelGems(up)} ジェム ・ +{levelCoins(up).toLocaleString()} コイン
           </motion.div>
         )}
       </AnimatePresence>

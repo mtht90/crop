@@ -30,7 +30,7 @@ export const raidLapHp = (lap: number) => (lap <= 1 ? 1500 : 2200);
 /** extra damage on each boss attack on lap n */
 export const raidLapBonus = (lap: number) => (lap <= 1 ? 0 : 10);
 /** what clearing lap n pays */
-export const raidLapReward = (lap: number) => (lap <= 1 ? 30000 : lap === 2 ? 50000 : 25000);
+export const raidLapReward = (lap: number) => (lap <= 1 ? 3000 : lap === 2 ? 5000 : 2500);
 /** gems for any battle, by the damage it did (never more than a try costs) */
 export const raidBattleGems = (_dealt: number) => 0; // the boss keeps the damage; gems come when it falls
 

@@ -50,7 +50,7 @@ import { raidBattleGems, raidCost, raidLapBonus, raidLapHp, raidLapReward, raidN
 // ----------------------------------------------------------------------------
 export const ECON_VERSION = 4;
 export const MAX_COPIES = 10;
-export const DUPE_COINS: Record<Rarity, number> = { 1: 50, 2: 100, 3: 300, 4: 1000, 5: 3000 };
+export const DUPE_COINS: Record<Rarity, number> = { 1: 5, 2: 10, 3: 30, 4: 100, 5: 300 };
 /** what the old かけら (shards) are worth now that they are gone, per shard */
 const SHARD_COINS: Record<string, number> = { C: 10, U: 10, R: 15, RR: 30, RRR: 30, ST: 50, ST2: 60, CR: 80, AR: 50, CHR: 50, S: 50, SR: 50, SAR: 80, UR: 80 };
 const CARDS_OK = (cid: string) => cid in CARDS;
