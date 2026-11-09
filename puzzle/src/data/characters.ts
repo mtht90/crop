@@ -55,7 +55,7 @@ export interface Skill {
   shape?: ShapeId;
 }
 
-export type PassiveKind = 'guard' | 'shadow' | 'oath' | 'treat';
+export type PassiveKind = 'guard' | 'shadow' | 'oath' | 'treat' | 'royal';
 
 /** Always-on bonus (SSR only). */
 export interface Passive {
@@ -143,7 +143,7 @@ const ROWS: Row[] = [
   // SSR
   ['skel_warrior', 'ホネ戦士', 'SSR', 160, { kind: 'twoColor', name: 'ダブルブレイク', desc: '多い2色を全部消す', charge: 20, power: 1.63 }, '角かぶとのスケルトン戦士。'],
   ['skel_rogue', 'ホネ盗賊', 'SSR', 160, { kind: 'feverTap', name: 'かげのうたげ', desc: 'フィーバー突入＋その間タップでまとめて消せる', charge: 105, power: 0.56 }, '赤いフードの神出鬼没なスケルトン。'],
-  ['c_knight', 'ひめきし', 'SSR', 160, { kind: 'xBlast', name: 'ロイヤルクロス', desc: '大きな×字に消して、フィーバーゲージ+30%', charge: 22, power: 1.9, size: 1.5 }, 'かぶとの下はひみつのお姫さま。'],
+  ['c_knight', 'ひめきし', 'SSR', 200, { kind: 'xBlast', name: 'ロイヤルクロス', desc: '特大の×字に消して、フィーバーゲージ+50%', charge: 20, power: 2.3, size: 1.8 }, 'かぶとの下はひみつのお姫さま。'],
   ['q_captain', 'バルバロッサ船長', 'SSR', 160, { kind: 'twoColor', name: 'いっせい砲撃', desc: '多い2色を全部消す', charge: 21, power: 2.42 }, '七つの海をまたにかける大海賊。'],
   ['s_hound', 'ケルベロ', 'SSR', 160, { kind: 'shape', name: 'じごくのきば', desc: '大きな三角形に消す', charge: 22, power: 5.37, size: 4.4, shape: 'triangle' }, 'こわそうに見えて、じつは甘えんぼ。'],
   ['c_pumpkin', 'パンプキン', 'SSR', 160, { kind: 'megaBombs', name: 'ジャック・オ・ボム', desc: '大きなボムを2個おとす', charge: 30, power: 0.93, amount: 2 }, 'ハロウィンにだけあらわれる、かぼちゃ帽子の女の子。'],
@@ -152,7 +152,7 @@ const ROWS: Row[] = [
 const PASSIVES: Record<string, Passive> = {
   skel_warrior: { kind: 'guard', name: 'ホネのよろい', desc: 'ボスの妨害を3回まではじく\n7つ以上つなぐとダメージ1.3倍' },
   c_pumpkin: { kind: 'treat', name: 'ハロウィンのおかし', desc: 'もらえるコインが1.3倍' },
-  c_knight: { kind: 'oath', name: 'きしのちかい', desc: 'フィーバーが2秒長い\nフィーバー中のダメージ1.2倍' },
+  c_knight: { kind: 'royal', name: 'ひめきしのちかい', desc: 'いつでもダメージ1.1倍\nフィーバーが3秒長い・フィーバー中1.3倍' },
   q_captain: { kind: 'treat', name: 'おたからの地図', desc: 'もらえるコインが1.3倍' },
   s_hound: { kind: 'oath', name: 'ばんけんのほえごえ', desc: 'フィーバーが2秒長い\nフィーバー中のダメージ1.2倍' },
   skel_rogue: { kind: 'shadow', name: 'かげのしのび', desc: 'ボスの妨害がすぐおわる（時間半分）\nコンボがきれにくい' },

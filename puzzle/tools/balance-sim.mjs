@@ -16,7 +16,7 @@ for (const id of ids) {
     p.on('pageerror', (e) => console.log(id, 'pageerror', e.message));
     await p.addInitScript(([id, ALL]) => {
       const owned = Object.fromEntries(ALL.map((i) => [i, { lv: 1, count: 1 }]));
-      localStorage.setItem('punitto-battle-save-v2', JSON.stringify({ coins: 0, owned, selected: id, bossLv: 1, tutorialDone: true }));
+      localStorage.setItem('punitto-battle-save-v2', JSON.stringify({ coins: 0, owned, selected: id, bossLv: 1, tutorialDone: true, skillV: 1, settings: { autoSkill: true } }));
     }, [id, ALL]);
     await p.goto(`${url}/?scene=battle`);
     await p.waitForFunction(() => window.__game?.Scenes.current?.board, null, { timeout: 60000 });

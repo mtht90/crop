@@ -767,6 +767,8 @@ export class BattleScene extends Scene {
     }
     if (this.def.passive?.kind === 'guard' && cause === 'chain' && meta.chain >= 7) mult *= 1.3;
     if (this.def.passive?.kind === 'oath' && this.feverOn) mult *= 1.2;
+    // the UR: a little stronger always, much stronger in fever
+    if (this.def.passive?.kind === 'royal') mult *= this.feverOn ? 1.1 * 1.3 : 1.1;
     if (this.effects.has('barrier')) mult *= 0.5;
     for (const p of pops) {
       if (p.kind === 'rock') this.round.broken++;
@@ -985,7 +987,7 @@ export class BattleScene extends Scene {
   private startFever(): void {
     this.vsSend('フィーバー！');
     this.feverOn = true;
-    this.feverT = FEVER_TIME + (this.def.passive?.kind === 'oath' ? 2 : 0);
+    this.feverT = FEVER_TIME + (this.def.passive?.kind === 'oath' ? 2 : this.def.passive?.kind === 'royal' ? 3 : 0);
     this.feverCount++;
     this.board.fever = true;
     this.board.forceRelease();
@@ -1592,7 +1594,7 @@ export class BattleScene extends Scene {
         gsap.delayedCall(0.45, () => {
           this.shake(10, 0.35);
           if (!this.feverOn) {
-            this.fever = Math.min(100, this.fever + 30);
+            this.fever = Math.min(100, this.fever + 50);
             if (this.fever >= 100 && this.phase === 'play') this.startFever();
           }
         });
