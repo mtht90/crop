@@ -27,7 +27,6 @@ import { NewsModal } from './screens/News';
 import { Raid } from './screens/Raid';
 import { Stage } from './screens/Stage';
 import { Store } from './screens/Store';
-import { GachaProto } from './screens/GachaProto';
 import { ErrorBoundary, watchGlobalErrors } from './ui/ErrorBoundary';
 
 watchGlobalErrors();
@@ -81,7 +80,6 @@ const SCREENS = {
   raid: Raid,
   stage: Stage,
   store: Store,
-  gacha: GachaProto,
   battle: BattleScreen,
   deck: DeckBuilder,
   collection: Collection,

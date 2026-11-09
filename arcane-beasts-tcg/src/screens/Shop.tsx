@@ -22,6 +22,8 @@ import { particles } from '../battle/particles';
 import { BoosterPack, TEAR_BAND, TEAR_Y, tearClips, tearEdgeFrom } from './pack/BoosterPack';
 import { CINE_SLOW, MeteorCinema, OMEN_COLORS, type OmenTier } from './pack/cinema';
 import './pack/pack.css';
+import { GachaView } from './Gacha';
+import { isPickup, pickupBooster, pickupNow, pickupPoints } from '../state/pickup';
 import { vibrate } from '../lib/fx';
 
 type Phase = 'tear' | 'reveal' | 'results' | 'multi';
@@ -180,6 +182,8 @@ export function Shop({ header }: { header?: React.ReactNode } = {}) {
     return () => clearInterval(iv);
   }, []);
   const free = freePackState(save, now);
+  const pickupKey = pickupNow(now).key;
+  const pickup = useMemo(() => pickupBooster(PREMIUM_BOOSTER.price), [pickupKey]);
 
   const buy = useCallback(
     (booster: Booster, packs = 1, via: Via = booster.free ? 'free' : 'gem') => {
@@ -210,6 +214,8 @@ export function Shop({ header }: { header?: React.ReactNode } = {}) {
         if (cost > 0 || via === 'ticket') s.purchases = [{ at: Date.now(), label: `${booster.name}${packs > 1 ? ` ×${packs}` : ''}`, gems: cost, tickets: via === 'ticket' ? packs : undefined }, ...(s.purchases ?? [])].slice(0, 100);
       });
       for (let k = 0; k < packs; k++) useStore.getState().recordPack(!!booster.premium);
+      // a pickup pack: one 交換P a pack
+      if (isPickup(booster)) update((s) => void (s.pickupPts = { key: pickupNow().key, n: pickupPoints(s.pickupPts) + packs }));
       const sold = addCards(cards.map((c) => c.id));
       setOpening({ booster, via, cards, god, fresh, sold, packs, key: Date.now() });
       return true;
@@ -222,11 +228,7 @@ export function Shop({ header }: { header?: React.ReactNode } = {}) {
       <Backdrop hue="#3d5bbf" />
       <div className="page">
         {header ?? <TopBar title="パック" back={null} />}
-        <PackShowcase groups={[
-          ['おすすめ', [NORMAL_BOOSTER, PREMIUM_BOOSTER, SPECIAL_BOOSTER]],
-          ['章パック', CHAPTER_BOOSTERS],
-          ['タイプ別', TYPE_BOOSTERS],
-        ]} free={free} now={now} onBuy={buy} onOdds={setOdds} />
+        <GachaView pickup={pickup} free={free} now={now} cost={costOf} onBuy={buy} onOdds={setOdds} />
       </div>
 
       <AnimatePresence>
@@ -247,255 +249,10 @@ export function Shop({ header }: { header?: React.ReactNode } = {}) {
   );
 }
 
-/** the packs one at a time, big (arrows, dots, a swipe), grouped by a row of chips */
-function PackShowcase({ groups, free, now, onBuy, onOdds }: { groups: [string, (Booster & { ends?: number })[]][]; free: FreePackState; now: number; onBuy: (b: Booster, packs?: number, via?: Via) => boolean; onOdds: (b: Booster) => void }) {
-  const [g, setG] = useState(0);
-  const [i, setI] = useState(0);
-  const [dir, setDir] = useState(1);
-  const list = groups[g][1];
-  const b = list[Math.min(i, list.length - 1)];
-  const step = (d: number) => {
-    foley.swipe();
-    setDir(d);
-    setI((n) => (n + d + list.length) % list.length);
-  };
-  return (
-    <div className="pk-show">
-      <div className="pk-groups">
-        {groups.map(([name], k) => (
-          <button key={name} className={`pk-group ${k === g ? 'on' : ''}`} onClick={() => (foley.tick(), setG(k), setI(0))}>
-            {name}
-          </button>
-        ))}
-      </div>
-      <div className="pk-stage">
-        <AnimatePresence mode="popLayout" initial={false} custom={dir}>
-          <motion.div
-            key={b.id}
-            custom={dir}
-            className="pk-panel-wrap"
-            initial={{ opacity: 0, x: dir * 60 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: dir * -60 }}
-            transition={{ duration: 0.4, ease: EASE_OUT }}
-            drag="x"
-            dragConstraints={{ left: 0, right: 0 }}
-            dragElastic={0.25}
-            onDragEnd={(_, info) => {
-              if (info.offset.x < -60) step(1);
-              else if (info.offset.x > 60) step(-1);
-            }}
-          >
-            <PackPanel b={b} free={free} now={now} onBuy={onBuy} onOdds={onOdds} />
-          </motion.div>
-        </AnimatePresence>
-        {list.length > 1 && (
-          <>
-            <button className="pk-arrow l" aria-label="前のパック" onClick={() => step(-1)}>
-              ‹
-            </button>
-            <button className="pk-arrow r" aria-label="次のパック" onClick={() => step(1)}>
-              ›
-            </button>
-          </>
-        )}
-      </div>
-      {list.length > 1 && (
-        <div className="pk-dots">
-          {list.map((x, k) => (
-            <i key={x.id} className={k === i ? 'on' : ''} onClick={() => (setDir(k > i ? 1 : -1), setI(k))} />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
 
-/** one pack, shown big: the pack in a ring of light, its name, what it holds, the price */
-function PackPanel({ b, free, now, onBuy, onOdds }: { b: Booster & { ends?: number }; free: FreePackState; now: number; onBuy: (b: Booster, packs?: number, via?: Via) => boolean; onOdds: (b: Booster) => void }) {
-  const save = useStore((s) => s.save);
-  const premiumT = save.packTickets?.premium ?? 0;
-  const sure3T = save.packTickets?.sure3 ?? 0;
-  const badge = '';
-  return (
-    <section className={`pk-panel ${b.premium ? 'premium' : ''}`} style={{ ['--hue' as string]: b.hue, ['--hue2' as string]: b.hue2 }}>
-      <i className="pk-crystals" />
-      {badge && (
-        <span className="pk-badge">
-          <span>{badge}</span>
-        </span>
-      )}
-      <div className={`pk-art ${b.free ? (free.ready ? 'free-on' : 'free-wait') : ''}`} onClick={() => onBuy(b)}>
-        <i className="pk-glow" />
-        <motion.div animate={{ y: [0, -8, 0], rotate: [-4, -2, -4] }} transition={{ duration: 4.5, repeat: Infinity, ease: 'easeInOut' }}>
-          <BoosterPack booster={b} tilt />
-        </motion.div>
-      </div>
-      <div className="pk-body">
-        <h3 className="pk-title">{b.name}</h3>
-        {b.free ? (
-          <FreeSlot free={free} now={now} onOpen={() => onBuy(b)} />
-        ) : (
-          <div className="pk-buy">
-            <button className="pk-price" disabled={save.gems < b.price} onClick={() => onBuy(b)}>
-              <small>1パック</small>
-              <Icon name="gem" /> {b.price.toLocaleString()}
-            </button>
-            <button className="pk-price ten" disabled={save.gems < costOf(b, 10)} onClick={() => onBuy(b, 10)}>
-              <small>10パック</small>
-              <Icon name="gem" /> {costOf(b, 10).toLocaleString()}
-            </button>
-          </div>
-        )}
-        <div className="pk-more">
-          {b.id === 'premium' && premiumT > 0 && (
-            <button className="pill ticket" onClick={() => onBuy(b, 1, 'ticket')}>
-              <Icon name="ticket" /> チケットで引く（{premiumT}）
-            </button>
-          )}
-          {b.id === 'normal' && sure3T > 0 && (
-            <button className="pill ticket sure3" onClick={() => onBuy(SURE3_BOOSTER, 1, 'ticket')}>
-              <Icon name="stars" /> ★3確定チケットで引く（{sure3T}）
-            </button>
-          )}
-          <button className="textbtn shop3-odds" onClick={() => onOdds(b)}>
-            提供割合
-          </button>
-        </div>
-      </div>
-    </section>
-  );
-}
 
-function PackSection({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section className="shop3-sec">
-      <h2 className="shop3-sec-title">{title}</h2>
-      <div className="shop3-packs">{children}</div>
-    </section>
-  );
-}
 
-/** one pack: its picture, what it holds, and the ways to open it */
-function PackCard({ b, i, free, now, onBuy, onOdds, compact }: { b: Booster & { ends?: number }; i: number; free: FreePackState; now: number; onBuy: (b: Booster, packs?: number, via?: Via) => boolean; onOdds: (b: Booster) => void; compact?: boolean }) {
-  const save = useStore((s) => s.save);
-  const premiumT = save.packTickets?.premium ?? 0;
-  const sure3T = save.packTickets?.sure3 ?? 0;
-  return (
-    <motion.section
-      className={`shop3-card ${b.premium ? 'premium' : ''} ${compact ? 'compact' : ''}`}
-      style={{ ['--hue' as string]: b.hue }}
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.05 * i, duration: 0.5, ease: EASE_OUT }}
-    >
-      <div className={`shop3-pack ${b.free ? (free.ready ? 'free-on' : 'free-wait') : ''}`} onClick={() => onBuy(b)}>
-        <motion.div animate={{ y: [0, -6, 0] }} transition={{ duration: 4.5, repeat: Infinity, ease: 'easeInOut', delay: i * 0.6 }}>
-          <BoosterPack booster={b} tilt />
-        </motion.div>
-      </div>
-      <div className="shop3-info">
-        <h3>
-          {b.name}
-          {b.ends && <small className="shop3-ends">あと{Math.max(1, Math.ceil((b.ends - now) / 86400_000))}日</small>}
-        </h3>
-        <ul>
-          {(b.lines ??
-            (b.premium
-              ? ['5枚目は★3以上確定', '★4・★5が通常の約3倍', '光るカード・特別な絵のカードも出やすい']
-              : ['すべての章のカードが出る', 'ごくまれに★4・★5', '5枚入り'])
-          ).map((l) => (
-            <li key={l}>{l}</li>
-          ))}
-        </ul>
-        {b.free ? (
-          <FreeSlot free={free} now={now} onOpen={() => onBuy(b)} />
-        ) : (
-          <div className="shop3-buy">
-            <button className="pill gold" disabled={save.gems < b.price} onClick={() => onBuy(b)}>
-              1パック
-              <span className="coin">
-                <Icon name="gem" /> {b.price.toLocaleString()}
-              </span>
-            </button>
-            {!compact && (
-              <button className="pill ten gold" disabled={save.gems < b.price * TEN_PACKS} onClick={() => onBuy(b, 10)}>
-                10パック
-                <span className="coin">
-                  <Icon name="gem" /> {(b.price * TEN_PACKS).toLocaleString()}
-                </span>
-              </button>
-            )}
-          </div>
-        )}
-        {b.id === 'premium' && premiumT > 0 && (
-          <button className="pill ticket" onClick={() => onBuy(b, 1, 'ticket')}>
-            <Icon name="ticket" /> チケットで引く（{premiumT}）
-          </button>
-        )}
-        {b.id === 'normal' && sure3T > 0 && (
-          <button className="pill ticket sure3" onClick={() => onBuy(SURE3_BOOSTER, 1, 'ticket')}>
-            <Icon name="stars" /> ★3確定チケットで引く（{sure3T}）
-          </button>
-        )}
-        <button className="textbtn shop3-odds" onClick={() => onOdds(b)}>
-          提供割合
-        </button>
-      </div>
-    </motion.section>
-  );
-}
 
-/** the daily free 通常パック: two slots, a big button, or the wait until the next one */
-function FreeSlot({ free, now, onOpen }: { free: FreePackState; now: number; onOpen: () => void }) {
-  const used = FREE_PACKS_PER_DAY - free.left;
-  const midnight = new Date(now);
-  midnight.setHours(24, 0, 0, 0);
-  const wait = free.readyAt ? free.readyAt - now : midnight.getTime() - now;
-  const frac = free.readyAt ? 1 - wait / FREE_PACK_GAP_MS : 0;
-  return (
-    <div className={`free3 ${free.ready ? 'on' : free.readyAt ? 'wait' : 'done'}`}>
-      <div className="free3-head">
-        <span className="free3-tag">毎日無料</span>
-        <span className="free3-slots">
-          {Array.from({ length: FREE_PACKS_PER_DAY }, (_, k) => {
-            const st = k < used ? 'used' : k === used && free.ready ? 'ready' : 'wait';
-            return (
-              <span key={k} className={`free3-slot ${st}`} title={st === 'used' ? '開封済み' : st === 'ready' ? '開けられます' : 'まだ開けられません'}>
-                <img src={artUrl((byName(NORMAL_BOOSTER.mascot) as MonsterCard).art)} alt="" draggable={false} />
-                <i className="seal top" />
-                <i className="seal bottom" />
-                {st === 'used' && (
-                  <b className="mark">
-                    <Icon name="check" />
-                  </b>
-                )}
-                {st === 'wait' && (
-                  <b className="mark">
-                    <Icon name="hourglass" />
-                  </b>
-                )}
-              </span>
-            );
-          })}
-        </span>
-      </div>
-      {free.ready ? (
-        <button className="free3-btn" onClick={onOpen}>
-          <span>無料で開ける</span>
-          <small>本日あと{free.left}パック</small>
-        </button>
-      ) : (
-        <div className="free3-timer">
-          <div className="free3-bar">
-            <i style={{ width: `${Math.max(0, Math.min(1, frac)) * 100}%` }} />
-          </div>
-          <span>{free.readyAt ? <>次の無料パックまで <b>{fmtWait(wait)}</b></> : <>本日分は開封済み・明日また2パック <b>{fmtWait(wait)}</b></>}</span>
-        </div>
-      )}
-    </div>
-  );
-}
 
 /** turn cumulative slot tables into "C 75% ／ U 25%" rows */
 function oddsRows(table: [Rarity, number][][], labels: string[]): [string, string][] {

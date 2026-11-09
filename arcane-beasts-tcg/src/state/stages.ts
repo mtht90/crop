@@ -142,7 +142,7 @@ export function stagesOf(ev: StageEvent): Stage[] {
       mods: r.mods,
       cpu: r.cpu,
       rules: modsText(r.mods),
-      gems: i === STAGE_COUNT - 1 ? 1500 : boss ? 500 : 150,
+      gems: i === STAGE_COUNT - 1 ? 2500 : boss ? 1200 : 700,
       winGems: i === STAGE_COUNT - 1 ? 270 : boss ? 130 : 70,
     };
   });

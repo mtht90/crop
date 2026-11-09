@@ -59,7 +59,7 @@ const isBasicEnergy = (cid: string) => {
   return c.kind === 'energy' && c.basic;
 };
 
-export type Screen = 'arena' | 'story' | 'scene' | 'lobby' | 'title' | 'starter' | 'home' | 'rivals' | 'battle' | 'deck' | 'collection' | 'shop' | 'missions' | 'more' | 'settings' | 'credits' | 'rules' | 'gallery' | 'wardrobe' | 'raid' | 'stage' | 'store' | 'dex' | 'gacha';
+export type Screen = 'arena' | 'story' | 'scene' | 'lobby' | 'title' | 'starter' | 'home' | 'rivals' | 'battle' | 'deck' | 'collection' | 'shop' | 'missions' | 'more' | 'settings' | 'credits' | 'rules' | 'gallery' | 'wardrobe' | 'raid' | 'stage' | 'store' | 'dex';
 
 export interface SavedDeck {
   id: string;
@@ -100,6 +100,8 @@ export interface Save {
   shopBought?: Record<string, { key: string; n: number } | string>;
   /** パックチケット: プレミアム and ★3確定 */
   packTickets?: { premium?: number; sure3?: number };
+  /** 交換P of the pickup on sale (reset when the pickup changes) */
+  pickupPts?: { key: string; n: number };
   /** decks that can be saved (DEFAULT_DECK_SLOTS when unset) */
   deckSlots?: number;
   /** 日替わり cards bought today: the day and the cards */

@@ -1,7 +1,6 @@
-/* ガチャ画面の試作 */
-.gp-bg { filter: blur(6px) brightness(0.45); transform: scale(1.05); }
-.gp-page { display: flex; flex-direction: column; min-height: 0; height: 100%; }
-.gp-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(170px, 22%) 1fr; gap: 14px; padding: 6px 16px 14px; }
+/* ガチャ画面 */
+.shop3 .page:has(.gp-body) { display: flex; flex-direction: column; overflow: hidden; }
+.gp-body { position: relative; flex: 1; min-height: 0; width: 100%; max-width: 1400px; margin: 0 auto; display: grid; grid-template-columns: minmax(170px, 22%) 1fr; gap: 14px; padding: 6px 16px 14px; }
 
 /* the banner list */
 .gp-tabs { display: flex; flex-direction: column; gap: 8px; overflow-y: auto; padding: 4px 6px 4px 0; scrollbar-width: none; }
@@ -86,3 +85,16 @@
   .gp-pulls { left: 12px; right: 12px; width: auto; }
   .gp-points { position: absolute; right: 0; bottom: calc(100% + 60px); }
 }
+
+.gp-chips { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; max-width: 100%; }
+.gp-chips button { padding: 4px 12px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--h) 60%, #fff); background: rgba(0, 0, 0, 0.5); color: #fff; font: inherit; font-weight: 900; font-size: 12px; cursor: pointer; }
+.gp-chips button.on { background: color-mix(in srgb, var(--h) 80%, #000); box-shadow: 0 0 12px color-mix(in srgb, var(--h) 60%, transparent); }
+.gp-pull:disabled, .gp-pbtn:disabled { filter: grayscale(0.7) brightness(0.7); cursor: default; }
+.gp-pull.free.off span { font-size: 13px; }
+.gp-pull.ticket { flex-direction: row; justify-content: center; gap: 10px; padding: 8px; background: linear-gradient(180deg, #c890ff, #7a3ad0 60%, #4a1a8a); box-shadow: 0 4px 0 #2a0a5a, 0 8px 18px rgba(0, 0, 0, 0.45); }
+.gp-pull.ticket b { font-size: 16px; }
+.gp-trade-cards { display: flex; justify-content: center; gap: 14px; margin: 10px 0 4px; }
+.gp-trade-card { width: 120px; padding: 0; border: none; background: none; cursor: pointer; transition: transform 0.2s; }
+.gp-trade-card:hover:not(:disabled) { transform: translateY(-4px); }
+/* soften the edge of art that comes with its own ground */
+.gp-fig { -webkit-mask-image: linear-gradient(to top, transparent 0%, #000 16%), radial-gradient(closest-side, #000 80%, transparent); -webkit-mask-composite: source-in; mask-image: linear-gradient(to top, transparent 0%, #000 16%), radial-gradient(closest-side, #000 80%, transparent); mask-composite: intersect; }
