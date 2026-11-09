@@ -223,21 +223,11 @@ export function Shop({ header }: { header?: React.ReactNode } = {}) {
       <Backdrop hue="#3d5bbf" />
       <div className="page">
         {header ?? <TopBar title="パック" back={null} />}
-        <PackSection title="おすすめ">
-          {[NORMAL_BOOSTER, PREMIUM_BOOSTER, pickup].map((b, i) => (
-            <PackCard key={b.id} b={b} i={i} free={free} now={now} onBuy={buy} onOdds={setOdds} />
-          ))}
-        </PackSection>
-        <PackSection title="章パック">
-          {CHAPTER_BOOSTERS.map((b, i) => (
-            <PackCard key={b.id} b={b} i={i} free={free} now={now} onBuy={buy} onOdds={setOdds} />
-          ))}
-        </PackSection>
-        <PackSection title="タイプ別パック">
-          {TYPE_BOOSTERS.map((b, i) => (
-            <PackCard key={b.id} b={b} i={i} free={free} now={now} onBuy={buy} onOdds={setOdds} compact />
-          ))}
-        </PackSection>
+        <PackShowcase groups={[
+          ['おすすめ', [NORMAL_BOOSTER, PREMIUM_BOOSTER, pickup]],
+          ['章パック', CHAPTER_BOOSTERS],
+          ['タイプ別', TYPE_BOOSTERS],
+        ]} free={free} now={now} onBuy={buy} onOdds={setOdds} />
       </div>
 
       <AnimatePresence>
@@ -255,6 +245,141 @@ export function Shop({ header }: { header?: React.ReactNode } = {}) {
 
       {odds && <OddsModal premium={!!odds.premium} onClose={() => setOdds(null)} />}
     </div>
+  );
+}
+
+/** the packs one at a time, big (arrows, dots, a swipe), grouped by a row of chips */
+function PackShowcase({ groups, free, now, onBuy, onOdds }: { groups: [string, (Booster & { ends?: number })[]][]; free: FreePackState; now: number; onBuy: (b: Booster, packs?: number, via?: Via) => boolean; onOdds: (b: Booster) => void }) {
+  const [g, setG] = useState(0);
+  const [i, setI] = useState(0);
+  const [dir, setDir] = useState(1);
+  const list = groups[g][1];
+  const b = list[Math.min(i, list.length - 1)];
+  const step = (d: number) => {
+    foley.swipe();
+    setDir(d);
+    setI((n) => (n + d + list.length) % list.length);
+  };
+  return (
+    <div className="pk-show">
+      <div className="pk-groups">
+        {groups.map(([name], k) => (
+          <button key={name} className={`pk-group ${k === g ? 'on' : ''}`} onClick={() => (foley.tick(), setG(k), setI(0))}>
+            {name}
+          </button>
+        ))}
+      </div>
+      <div className="pk-stage">
+        <AnimatePresence mode="popLayout" initial={false} custom={dir}>
+          <motion.div
+            key={b.id}
+            custom={dir}
+            className="pk-panel-wrap"
+            initial={{ opacity: 0, x: dir * 60 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: dir * -60 }}
+            transition={{ duration: 0.4, ease: EASE_OUT }}
+            drag="x"
+            dragConstraints={{ left: 0, right: 0 }}
+            dragElastic={0.25}
+            onDragEnd={(_, info) => {
+              if (info.offset.x < -60) step(1);
+              else if (info.offset.x > 60) step(-1);
+            }}
+          >
+            <PackPanel b={b} free={free} now={now} onBuy={onBuy} onOdds={onOdds} />
+          </motion.div>
+        </AnimatePresence>
+        {list.length > 1 && (
+          <>
+            <button className="pk-arrow l" aria-label="前のパック" onClick={() => step(-1)}>
+              ‹
+            </button>
+            <button className="pk-arrow r" aria-label="次のパック" onClick={() => step(1)}>
+              ›
+            </button>
+          </>
+        )}
+      </div>
+      {list.length > 1 && (
+        <div className="pk-dots">
+          {list.map((x, k) => (
+            <i key={x.id} className={k === i ? 'on' : ''} onClick={() => (setDir(k > i ? 1 : -1), setI(k))} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** one pack, shown big: the pack in a ring of light, its name, what it holds, the price */
+function PackPanel({ b, free, now, onBuy, onOdds }: { b: Booster & { ends?: number }; free: FreePackState; now: number; onBuy: (b: Booster, packs?: number, via?: Via) => boolean; onOdds: (b: Booster) => void }) {
+  const save = useStore((s) => s.save);
+  const premiumT = save.packTickets?.premium ?? 0;
+  const sure3T = save.packTickets?.sure3 ?? 0;
+  const lines =
+    b.lines ??
+    (b.premium ? ['5枚目は★3以上確定', '★4・★5が通常の約3倍', '光るカード・特別な絵のカードも出やすい'] : ['すべての章のカードが出る', 'ごくまれに★4・★5', '5枚入り']);
+  const badge = b.free ? '毎日無料' : b.ends ? `あと${Math.max(1, Math.ceil((b.ends - now) / 86400_000))}日` : b.id === 'premium' ? '★3以上確定' : b.id.startsWith('ch-') ? '章限定' : b.id.startsWith('type-') ? 'タイプ限定' : '';
+  const kicker = b.free ? '1日2回まで無料' : b.ends ? '期間限定' : b.premium ? '★3以上確定のパック' : 'ねらいのタイプを集めよう';
+  const icons = ['cards', 'stars', 'sparkles'];
+  return (
+    <section className={`pk-panel ${b.premium ? 'premium' : ''}`} style={{ ['--hue' as string]: b.hue, ['--hue2' as string]: b.hue2 }}>
+      <i className="pk-crystals" />
+      {badge && (
+        <span className="pk-badge">
+          <span>{badge}</span>
+        </span>
+      )}
+      <div className={`pk-art ${b.free ? (free.ready ? 'free-on' : 'free-wait') : ''}`} onClick={() => onBuy(b)}>
+        <i className="pk-ring" />
+        <i className="pk-glow" />
+        <motion.div animate={{ y: [0, -8, 0], rotate: [-4, -2, -4] }} transition={{ duration: 4.5, repeat: Infinity, ease: 'easeInOut' }}>
+          <BoosterPack booster={b} tilt />
+        </motion.div>
+      </div>
+      <div className="pk-body">
+        <h3 className="pk-title">{b.name}</h3>
+        <p className="pk-kicker">― {kicker} ―</p>
+        <div className="pk-info">
+          {lines.slice(0, 3).map((l, k) => (
+            <div key={l} className="pk-cell">
+              <Icon name={icons[k]} />
+              <span>{l}</span>
+            </div>
+          ))}
+        </div>
+        {b.free ? (
+          <FreeSlot free={free} now={now} onOpen={() => onBuy(b)} />
+        ) : (
+          <div className="pk-buy">
+            <button className="pk-price" disabled={save.gems < b.price} onClick={() => onBuy(b)}>
+              <small>1パック</small>
+              <Icon name="gem" /> {b.price.toLocaleString()}
+            </button>
+            <button className="pk-price ten" disabled={save.gems < b.price * TEN_PACKS} onClick={() => onBuy(b, 10)}>
+              <small>10パック</small>
+              <Icon name="gem" /> {(b.price * TEN_PACKS).toLocaleString()}
+            </button>
+          </div>
+        )}
+        <div className="pk-more">
+          {b.id === 'premium' && premiumT > 0 && (
+            <button className="pill ticket" onClick={() => onBuy(b, 1, 'ticket')}>
+              <Icon name="ticket" /> チケットで引く（{premiumT}）
+            </button>
+          )}
+          {b.id === 'normal' && sure3T > 0 && (
+            <button className="pill ticket sure3" onClick={() => onBuy(SURE3_BOOSTER, 1, 'ticket')}>
+              <Icon name="stars" /> ★3確定チケットで引く（{sure3T}）
+            </button>
+          )}
+          <button className="textbtn shop3-odds" onClick={() => onOdds(b)}>
+            提供割合
+          </button>
+        </div>
+      </div>
+    </section>
   );
 }
 
