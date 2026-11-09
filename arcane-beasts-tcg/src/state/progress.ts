@@ -160,7 +160,7 @@ export function addExp(p: Progress, amount: number): number[] {
 // ---------------------------------------------------------------------------
 // Login bonus (7-day cycle; the cycle advances on each day you log in)
 // ---------------------------------------------------------------------------
-export const LOGIN_REWARDS = [60, 60, 100, 100, 150, 150, 400];
+export const LOGIN_REWARDS = [150, 150, 250, 250, 350, 350, 1000];
 /** (folded into LOGIN_REWARDS: one 7-day cycle pays 500 = one pack) */
 export const LOGIN_GEMS = [0, 0, 0, 0, 0, 0, 0];
 
@@ -170,11 +170,12 @@ export const LOGIN_GEMS = [0, 0, 0, 0, 0, 0, 0];
 //   the login cycle and level-ups. Tune the numbers here.
 // ---------------------------------------------------------------------------
 export const GEM_FIRST_CLEAR: Record<Difficulty, number> = { easy: 250, normal: 350, hard: 500 };
-export const GEM_DAILY_WIN = 60;
+export const GEM_DAILY_WIN = 150;
 /** a won battle that can be played again pays a little: 5–30 by its base reward (ぷにぷにの通常ステージ) */
-export const winGems = (base: number) => Math.min(250, Math.max(80, Math.round((80 + ((base - 60) * 170) / 420) / 5) * 5));
+export const winGems = (base: number) => Math.min(625, Math.max(200, Math.round((200 + ((base - 60) * 425) / 420) / 5) * 5));
 /** gems a mission pays (its old coin reward, plus any gems it carried) */
-export const missionGems = (m: Mission) => m.reward * 2 + (m.gems ?? 0);
+/** daily and weekly missions pay 5× their base, the one-time ones 2× */
+export const missionGems = (m: Mission) => m.reward * (m.id.startsWith('d-') || m.id.startsWith('w-') ? 5 : 2) + (m.gems ?? 0);
 /** coins a mission pays too (for the 交換所) */
 export const missionCoins = (m: Mission) => (m.reward > 0 ? m.reward * 5 : (m.gems ?? 0) * 2);
 /** coins of the login cycle */
