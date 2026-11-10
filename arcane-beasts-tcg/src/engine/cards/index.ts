@@ -266,14 +266,14 @@ const PLAN: Plan[] = [
   {
     SR: MONSTERS4.filter((x) => x.ace).map((x) => x.name),
     SAR: [
-      ['アポカリプスドレイク', undefined, 'story/p-burning'],
-      ['エルフハイキング', undefined, 'story/p-great-tree'],
-      ['アーチセイン', undefined, 'story/p-mountains'],
+      ['フレイムソーサレス', undefined, 'story/p-burning'],
+      ['エルフルーラー', undefined, 'story/p-great-tree'],
+      ['ドワーフレジェンド', undefined, 'story/p-mountains'],
       ['リッチプリンス', undefined, 'story/p-graves'],
-      ['ドラゴンナイト', undefined, 'story/p-fire-sky'],
+      ['フェニックスナイト', undefined, 'story/p-fire-sky'],
       ['マーマンキング', undefined, 'story/p-storm-sea'],
     ],
-    UR: [...MONSTERS4.filter((x) => x.ace).map((x) => x.name), 'ドレイクケンセイ', 'エルフイモータル'],
+    UR: [...MONSTERS4.filter((x) => x.ace).map((x) => x.name), 'エルフイモータル', 'ラヴァエレメンタル'],
   },
   {
     SR: [...MONSTERS3.filter((x) => x.ace).map((x) => x.name), '傭兵の契約', '案内人の笛', '族長の号令'],

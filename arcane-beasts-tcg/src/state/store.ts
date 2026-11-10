@@ -317,6 +317,12 @@ function load(): Save {
         d.cover = retired(d.cover);
       }
       s.newCards = s.newCards.map(retired).filter(CARDS_OK);
+      // cards that no longer exist (a chapter renumbered while it was new) leave the save
+      for (const cid of Object.keys(s.collection)) if (!CARDS_OK(cid)) delete s.collection[cid];
+      for (const d of s.decks) {
+        d.cards = d.cards.filter(CARDS_OK);
+        if (!CARDS_OK(d.cover)) d.cover = d.cards[0] ?? 'AB1-001';
+      }
       // gems arrived later: what a player had in coins (which bought packs until now) carries over 1:1
       if (typeof parsed.gems !== 'number') s.gems = Math.max(0, parsed.coins ?? 0);
       // the economy redesign: everyday coins pay out 5× what they did, so do the coins already saved
