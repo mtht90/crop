@@ -465,32 +465,29 @@ function pickDrop(x: number, y: number, keys: Set<string>, current: string | nul
   }
   const inside = (r: DOMRect, m: number) => x >= r.left - m && x <= r.right + m && y >= r.top - m && y <= r.bottom + m;
   const precise = [...rects.keys()].filter((k) => k !== 'board' && k !== 'bench');
-  // keep what is lit while the aim is still near it
-  if (current && precise.includes(current) && inside(rects.get(current)!, u * 2.2)) return current;
-  let best: string | null = null;
-  let score = Infinity;
-  for (const k of precise) {
-    const r = rects.get(k)!;
-    if (!inside(r, u * 1.2)) continue;
-    const d = Math.hypot(x - (r.left + r.width / 2), y - (r.top + r.height / 2));
-    if (d < score) {
-      score = d;
-      best = k;
+  const closest = (m: number) => {
+    let best: string | null = null;
+    let score = Infinity;
+    for (const k of precise) {
+      const r = rects.get(k)!;
+      if (!inside(r, m)) continue;
+      const d = Math.hypot(x - (r.left + r.width / 2), y - (r.top + r.height / 2));
+      if (d < score) {
+        score = d;
+        best = k;
+      }
     }
-  }
-  if (best) return best;
+    return best;
+  };
+  // the slot right under the finger always wins (passing over another on the way never sticks)
+  const under = closest(0);
+  if (under) return under;
+  // just off the lit slot: keep it, so it never flickers between two neighbours
+  if (current && precise.includes(current) && inside(rects.get(current)!, u * 1.2)) return current;
+  const near = closest(u * 1.2);
+  if (near) return near;
   // only one place it can go: no need to aim
   if (precise.length === 1 && !keys.has('bench')) return precise[0];
-  // close to a slot, just off it
-  for (const k of precise) {
-    const r = rects.get(k)!;
-    const d = Math.hypot(Math.max(r.left - x, 0, x - r.right), Math.max(r.top - y, 0, y - r.bottom));
-    if (d <= u * 3 && d < score) {
-      score = d;
-      best = k;
-    }
-  }
-  if (best) return best;
   for (const k of ['bench', 'board']) {
     const r = rects.get(k);
     if (r && inside(r, 0)) return k;
@@ -664,9 +661,25 @@ function Hand({ cards: raw, playable, selected, onSelect, onDrop, setupPick, dro
   const target = (uid: number) => {
     const c = cardCentre(uid);
     const f = finger.current;
-    // a finger: halfway between it and the card shown above it; a mouse: the pointer
-    const aim = f && c ? (lifted ? [(f[0] + c[0]) / 2, (f[1] + c[1]) / 2] : f) : c;
+    // where the finger (or the mouse) is: the card lands where it is let go
+    const aim = f ?? c;
     return aim ? pickDrop(aim[0], aim[1], dropKeys(uid), hot.current) : null;
+  };
+  /** マグネット: the card shown above the finger leans toward the slot it would land on */
+  const pull = useRef<[number, number]>([0, 0]);
+  const magnet = (uid: number, key: string | null) => {
+    const parts = document.querySelectorAll<HTMLElement>(`.hand-card[data-uid="${uid}"] .bc-fx, .hand-card[data-uid="${uid}"] .can-glow`);
+    const slot = key && key !== 'board' && key !== 'bench' ? document.querySelector(`[data-drop="${key}"]`) : null;
+    const c = cardCentre(uid);
+    let next: [number, number] = [0, 0];
+    if (slot && c) {
+      const r = slot.getBoundingClientRect();
+      const bx = c[0] - pull.current[0];
+      const by = c[1] - pull.current[1];
+      next = [(r.left + r.width / 2 - bx) * 0.45, (r.top + r.height / 2 - by) * 0.45];
+    }
+    pull.current = next;
+    for (const el of parts) el.style.translate = key ? `${next[0]}px ${next[1]}px` : '';
   };
   const n = cards.length;
   const portrait = isPortrait();
@@ -802,6 +815,7 @@ function Hand({ cards: raw, playable, selected, onSelect, onDrop, setupPick, dro
               if (pt) finger.current = [pt.clientX, pt.clientY];
               const t = target(c.uid);
               lastHot.current = t;
+              magnet(c.uid, t);
               if (t !== hot.current) {
                 hot.current = t;
                 setHotKey(t);
@@ -816,6 +830,7 @@ function Hand({ cards: raw, playable, selected, onSelect, onDrop, setupPick, dro
               // let go: it goes where it was lit (what the player saw)
               const t = hot.current ?? lastHot.current ?? target(c.uid);
               lastHot.current = null;
+              magnet(c.uid, null);
               finger.current = null;
               hot.current = null;
               setHotKey(null);

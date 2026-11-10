@@ -974,7 +974,7 @@
 .hand-card.dragging .bc-fx { filter: drop-shadow(0 18px 24px rgba(0, 0, 0, 0.6)); transition: transform 0.14s ease-out; }
 /* on touch the card rides above the finger so the finger does not hide it */
 .hand-card.dragging.lifted .bc-fx,
-.hand-card.dragging.lifted .can-glow { transform: translateY(-75%) scale(1.12); transition: transform 0.14s ease-out; }
+.hand-card.dragging.lifted .can-glow { transform: translateY(-75%) scale(1.12); transition: transform 0.14s ease-out, translate 0.12s ease-out; }
 /* the place the card would land on */
 .slot.drop-hot::after,
 .zone-bench.me.drop-hot::after {
@@ -1166,3 +1166,5 @@
 .stage-chip span { color: #f0e6ff; }
 .stage-chip ~ .terrain-chip { top: calc(max(6px, env(safe-area-inset-top)) + var(--u) * 3.6); }
 @media (orientation: portrait) { .stage-chip { max-width: 94vw; top: calc(max(8px, env(safe-area-inset-top)) + var(--u) * 5.6); font-size: calc(var(--u) * 1.4); } }
+/* マグネット: the dragged card leans toward where it would land */
+.hand-card.dragging .bc-fx, .hand-card.dragging .can-glow { transition: transform 0.14s ease-out, translate 0.12s ease-out; }
