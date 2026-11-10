@@ -216,10 +216,10 @@ export { DEV_CODE } from '../online/protocol';
 const DEV_COINS = 9_999_999;
 const DEV_GEMS = 999_999;
 
-/** developer mode keeps the coins topped up */
+/** developer mode tops coins and gems back up once they run low (spending still shows) */
 function refill(s: Save) {
-  s.gems = Math.max(s.gems, DEV_COINS);
-  s.gems = Math.max(s.gems ?? 0, DEV_GEMS);
+  if ((s.coins ?? 0) < 100_000) s.coins = DEV_COINS;
+  if ((s.gems ?? 0) < 50_000) s.gems = DEV_GEMS;
 }
 
 /** turn developer mode on: the story and every rival cleared, resources without limit */
