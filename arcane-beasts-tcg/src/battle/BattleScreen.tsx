@@ -665,6 +665,67 @@ function Hand({ cards: raw, playable, selected, onSelect, onDrop, setupPick, dro
     const aim = f ?? c;
     return aim ? pickDrop(aim[0], aim[1], dropKeys(uid), hot.current) : null;
   };
+  /** the finger's last moments: [x, y, ms] (every move, so a short flick still has a speed) */
+  const trail = useRef<[number, number, number][]>([]);
+  useEffect(() => {
+    const on = (e: PointerEvent) => {
+      const now = performance.now();
+      trail.current = [...trail.current.filter((q) => now - q[2] < 160), [e.clientX, e.clientY, now]];
+    };
+    window.addEventListener('pointermove', on, { passive: true });
+    return () => window.removeEventListener('pointermove', on);
+  }, []);
+  /**
+   * a swipe let go while still moving fast: the card flies on. Where it would come
+   * to rest (the finger plus its speed) picks the slot, among those ahead of it.
+   */
+  const flickTarget = (uid: number): string | null => {
+    const now = performance.now();
+    const last = trail.current[trail.current.length - 1];
+    // the finger stopped a moment before letting go: a placing, not a throw
+    if (!last || now - last[2] > 140) return null;
+    const tr = trail.current.filter((q) => last[2] - q[2] < 100);
+    if (tr.length < 2) return null;
+    const a = tr[0];
+    const b = tr[tr.length - 1];
+    const dt = Math.max(16, b[2] - a[2]);
+    const vx = (b[0] - a[0]) / dt;
+    const vy = (b[1] - a[1]) / dt;
+    const speed = Math.hypot(vx, vy);
+    // px per ms: below this it is a placing, not a throw
+    if (speed < 0.7) return null;
+    const u = unitPx();
+    // how far the throw carries: faster goes further
+    const reach = Math.min(u * 60, speed * 260);
+    const px = b[0] + (vx / speed) * reach;
+    const py = b[1] + (vy / speed) * reach;
+    const keys = dropKeys(uid);
+    let best: string | null = null;
+    let score = Infinity;
+    for (const el of document.querySelectorAll<HTMLElement>('[data-drop]')) {
+      const k = el.dataset.drop!;
+      if (!keys.has(k) || k === 'board' || k === 'bench') continue;
+      const r = el.getBoundingClientRect();
+      if (!r.width) continue;
+      const cx = r.left + r.width / 2;
+      const cy = r.top + r.height / 2;
+      const tx = cx - b[0];
+      const ty = cy - b[1];
+      const tl = Math.hypot(tx, ty) || 1;
+      // only what lies ahead of the swipe (within about 35°)
+      if ((tx * vx + ty * vy) / (tl * speed) < 0.82) continue;
+      const d = Math.hypot(cx - px, cy - py);
+      if (d < score) {
+        score = d;
+        best = k;
+      }
+    }
+    if (best) return best;
+    // a trainer (or a basic for the bench) thrown up onto the board
+    if (vy < 0 && keys.has('board')) return 'board';
+    if (vy < 0 && keys.has('bench')) return 'bench';
+    return null;
+  };
   /** マグネット: the card shown above the finger leans toward the slot it would land on */
   const pull = useRef<[number, number]>([0, 0]);
   const magnet = (uid: number, key: string | null) => {
@@ -828,7 +889,9 @@ function Hand({ cards: raw, playable, selected, onSelect, onDrop, setupPick, dro
             }}
             onDragEnd={(offset) => {
               // let go: it goes where it was lit (what the player saw)
-              const t = hot.current ?? lastHot.current ?? target(c.uid);
+              // a quick swipe carries the card on in its direction; otherwise it lands where it was let go
+              const t = flickTarget(c.uid) ?? hot.current ?? lastHot.current ?? target(c.uid);
+              trail.current = [];
               lastHot.current = null;
               magnet(c.uid, null);
               finger.current = null;
