@@ -6,7 +6,7 @@
 //   "AB" + version + base32 (Crockford: no I L O U) of 16-bit entries,
 //   grouped by 5 with hyphens, e.g. AB1-8Z2K4-…
 // Each entry:
-//   00 sss nnnnnnnnn ccc  a card of set s (AB1/AB2/AB3), number n, count c+1
+//   00 sss nnnnnnnnn ccc  a card of set s (AB1–AB4), number n, count c+1
 //   01 eee cccccc 00000   basic energy of type e, count c
 //   10 kkkkkkkk ccc 000   a raid or event card (index k in SPECIAL), count c+1
 // ============================================================================
@@ -14,7 +14,7 @@ import { byName, card, CARDS } from './cards';
 import { ENERGY_TYPES, type CardDef } from './types';
 
 const VERSION = '1';
-const SETS = ['AB1', 'AB2', 'AB3'] as const;
+const SETS = ['AB1', 'AB2', 'AB3', 'AB4'] as const;
 /** raid and event cards, in the order they were added (append only: codes keep working) */
 const SPECIAL = ['RAID-boneking', 'RAID-frost', 'RAID-kraken', 'RAID-herald', 'RAID-dragon', 'RAID-emperor', 'RAID-seaking', 'RAID-archlich', 'EVENT-snow', 'EVENT-wyrm', 'EVENT-ghost', 'EVENT-witch'];
 const ALPHA = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';

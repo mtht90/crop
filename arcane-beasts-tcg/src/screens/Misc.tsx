@@ -512,7 +512,7 @@ export function Credits() {
           <h2>イラスト・効果音・BGM</h2>
           <p>
             モンスター／人物のポートレート、背景画、エフェクト素材、効果音、音楽は <a href="https://www.wesnoth.org/" target="_blank" rel="noreferrer">Battle for Wesnoth</a>{' '}
-            プロジェクトの作品を使用しています（GNU GPL v2 以降、一部 CC BY-SA 4.0）。各ファイルの作者とライセンスはリポジトリの CREDITS.md に記載しています。
+            プロジェクトの作品を使用しています（GNU GPL v2 以降、一部 CC BY-SA 4.0）。第四章のポートレートは Wesnoth アドオン「Reign of the Lords Portraits」（The Gnat、LordLewis ほか／GNU GPL v2 以降）を使用しています。各ファイルの作者とライセンスはリポジトリの CREDITS.md に記載しています。
           </p>
           <p>ポートレート・背景画は Wesnoth アートチームによるものです。音楽：Aleksi Aubry-Carlson、Timothy Pinkham、Doug Kaufman、Mattias Westlund、Stephen Rozanc、Gianmarco Leone。</p>
           <h2>アイコン</h2>

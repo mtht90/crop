@@ -643,3 +643,10 @@ licensed under [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/), via `@
 - 100 CC0 SFX — rubberduck (OpenGameArt): gong, paper
 - 100 CC0 SFX #2 — rubberduck (OpenGameArt): air whooshes
 - Muffled Distant Explosion — NenadSimic (OpenGameArt), CC0: the charged pack let go
+
+## Reign of the Lords Portraits (第四章)
+
+The portraits of the 第四章 cards (`public/assets/art/rotl/`) come from the Wesnoth add-on
+[Reign_of_the_Lords_Portraits](https://add-ons.wesnoth.org/) 1.2.0 by The Gnat, with portraits by
+LordLewis and other contributors, distributed on the Wesnoth add-on server under the GNU GPL v2+.
+They were resized and converted to WebP.
