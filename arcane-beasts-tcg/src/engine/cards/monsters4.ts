@@ -45,7 +45,7 @@ const E = {
   berserk: [{ k: 'bonusIfSelfDamaged', bonus: 30 }],
   venom: [{ k: 'bonusIfOppCondition', cond: 'poisoned', bonus: 40 }],
   shock: [{ k: 'bonusIfOppCondition', cond: 'paralyzed', bonus: 40 }],
-  graves: [{ k: 'bonusPerDiscardMonster', per: 10, max: 6 }],
+  graves: [{ k: 'bonusPerDiscardMonster', per: 10, max: 60 }],
 } satisfies Record<string, AttackEffect[]>;
 type EK = keyof typeof E;
 const PLUS = new Set<EK>(['coin', 'crowd', 'power', 'drain', 'hurt', 'berserk', 'venom', 'shock', 'graves']);

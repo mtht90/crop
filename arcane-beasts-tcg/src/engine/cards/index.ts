@@ -165,7 +165,7 @@ export function describeAbility(a: AbilitySpec): string {
 }
 
 // Fill in auto-generated texts
-for (const mc of [...MONSTERS, ...MONSTERS2, ...MONSTERS3]) {
+for (const mc of [...MONSTERS, ...MONSTERS2, ...MONSTERS3, ...MONSTERS4]) {
   if (mc.ability && !mc.ability.text) mc.ability.text = describeAbility(mc.ability.spec);
   for (const atk of mc.attacks) {
     if (!atk.text && atk.effects?.length) atk.text = atk.effects.map(describeEffect).join('');
