@@ -119,6 +119,16 @@ export function Settings() {
           </div>
           {!canVibrate() && <div className="set-note">この端末・ブラウザは振動に対応していません</div>}
           <div className="set-row">
+            <label>対戦の手順をCPUの改善に使う</label>
+            <div className="seg">
+              {[true, false].map((v) => (
+                <button key={String(v)} className={(settings.shareMoves !== false) === v ? 'on' : ''} onClick={() => update((s) => void (s.settings.shareMoves = v))}>
+                  {v ? 'ON' : 'OFF'}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="set-row">
             <label>傾きでカードが光る</label>
             <div className="seg">
               {[true, false].map((v) => (

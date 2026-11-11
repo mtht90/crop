@@ -19,6 +19,7 @@ import {
   topCard,
 } from './game';
 import { mctsAction, mctsActionAsync } from './mcts';
+import { sensibleActions } from './aiRules';
 import type { Action, Answer, CardInst, GameState, MonsterCard, Pos, Prompt, Slot } from './types';
 
 export type Difficulty = 'easy' | 'normal' | 'hard';
@@ -54,6 +55,8 @@ export const W0 = {
   koThreat: 30,
   beKOd: 25,
   bench: 0,
+  /** the next attacker on the bench, once the active can already attack */
+  backup: 14,
 };
 export type Weights = typeof W0;
 /** the weights in use (replaced by the tuned set) */
@@ -114,6 +117,8 @@ export function evaluate(s: GameState, p: 0 | 1, w: Weights = W): number {
     v += (total - pl.prizes.length) * w.prize;
     if (pl.active) v += slotValue(s, pl.active, true, w);
     for (const b of pl.bench) v += slotValue(s, b, false, w);
+    // good players build the next attacker once the active is ready
+    if (pl.active && pl.bench.length && readiness(pl.active) >= 1) v += Math.max(...pl.bench.map(readiness)) * (w.backup ?? 0);
     v += Math.min(pl.bench.length, 3) * w.bench;
     v += Math.min(pl.hand.length, 10) * w.hand;
     if (pl.deck.length < 6) v -= (6 - pl.deck.length) * w.deckLow;
@@ -438,7 +443,7 @@ interface Found {
 
 /** best way to play out the rest of my turn, `depth` more setup actions deep */
 function search(g: Game, p: 0 | 1, depth: number, prof: AiProfile, deadline: number): Found | null {
-  const legal = g.legalActions(p);
+  const legal = sensibleActions(g, p, g.legalActions(p));
   let best: Found = { v: -Infinity, a: { t: 'endTurn' } };
   for (const a of legal) {
     if (!isTerminal(a)) continue;
@@ -482,7 +487,7 @@ function randomOf<T>(xs: T[]): T {
 }
 
 export function chooseAction(g: Game, p: 0 | 1, level: AiLevel = 'normal', actionsThisTurn = 0): Action {
-  const legal = g.legalActions(p);
+  const legal = sensibleActions(g, p, g.legalActions(p));
   if (legal.length === 1) return legal[0];
   if (legal.length === 0 || actionsThisTurn > 40) return { t: 'endTurn' };
   const prof = profileOf(level);

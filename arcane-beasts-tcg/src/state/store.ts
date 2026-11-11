@@ -80,6 +80,8 @@ export interface Settings {
   handSort?: boolean;
   /** play alongside other apps' sound (a YouTube picture-in-picture keeps going); on unless turned off */
   mixAudio?: boolean;
+  /** send the moves of your games (no name) to improve the CPU; on unless turned off */
+  shareMoves?: boolean;
 }
 
 export interface Save {

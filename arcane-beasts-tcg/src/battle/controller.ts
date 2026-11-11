@@ -3,6 +3,7 @@
 // dispatches FX, runs the CPU, and exposes human prompts to the UI.
 // ============================================================================
 import { create } from 'zustand';
+import { beginLog, endLog, logMove } from './learnLog';
 import { aiAnswerAsync, type AiLevel } from '../engine/ai';
 import { card } from '../engine/cards';
 import { Game, slotAt, topCard } from '../engine/game';
@@ -284,6 +285,7 @@ export class BattleController extends FramePlayer implements BattleDriver {
     this.game = raid ? Game.createRaid(decks[0], raid.bossId, raid.startDamage, names, seed, { record: true }, { hp: raid.hp, bonus: raid.bonus }) : Game.create(decks, names, seed, { record: true });
     if (mods) this.game.s.mods = mods;
     this.level = level;
+    beginLog(raid ? 'raid' : `cpu${typeof level === 'number' ? level : level}`);
     useBattle.setState({ view: structuredClone(this.game.s), prompt: null, result: null, thinking: false, lastEvent: null, hover: null, stats: { ...EMPTY } });
   }
 
@@ -325,6 +327,7 @@ export class BattleController extends FramePlayer implements BattleDriver {
   answer(a: Answer) {
     const pr = this.game.pending;
     if (!pr || pr.player !== HUMAN || this.running || this.autoHuman) return;
+    if (a.type === 'action') logMove(this.game, a.action);
     try {
       this.game.answer(a);
     } catch (e) {
@@ -351,6 +354,7 @@ export class BattleController extends FramePlayer implements BattleDriver {
           await this.play(f);
         }
         if (this.game.over) {
+          endLog(this.game.s.winner === HUMAN);
           useBattle.setState({ result: { winner: this.game.s.winner as 0 | 1 | -1, reason: this.game.s.winReason }, prompt: null });
           return;
         }

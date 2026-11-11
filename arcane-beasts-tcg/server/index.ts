@@ -7,6 +7,7 @@
 //   PORT=3000 DATA_DIR=./data npm run server
 // ============================================================================
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import { LearnStore } from './learn';
 import { existsSync, statSync, createReadStream } from 'node:fs';
 import { extname, join, normalize, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -52,9 +53,38 @@ await store.init().catch((e) => {
   process.exit(1);
 });
 const stamp = () => new Date().toISOString().slice(11, 19);
-const hub = new Hub({ store, log: (m) => console.log(`[${stamp()}] ${m}`) });
+const hub = new Hub({ store, log: (m) => console.log(`[${stamp()}] ${m}`), learn: (g) => void learn.add([g]) });
 const saves = new SaveTransfers(join(dataDir, 'save-transfers.json'));
 const saveLimit = new RateLimit(30, 10 * 60 * 1000);
+const learn = new LearnStore(join(dataDir, 'learn'), process.env.SUPABASE_URL && (process.env.SUPABASE_SERVICE_KEY ?? process.env.SUPABASE_KEY) ? { url: process.env.SUPABASE_URL, key: (process.env.SUPABASE_SERVICE_KEY ?? process.env.SUPABASE_KEY)! } : null);
+const learnLimit = new RateLimit(60, 10 * 60 * 1000);
+
+/** POST /api/learn (body: finished games, as recorded on the device) */
+function learnPost(req: IncomingMessage, res: ServerResponse) {
+  if (req.method === 'OPTIONS') return void res.writeHead(204, CORS).end();
+  if (req.method !== 'POST') return json(res, 405, { error: 'POST only' });
+  if (!learnLimit.allow(clientIp(req))) return json(res, 429, { error: 'too many' });
+  let body = '';
+  let tooBig = false;
+  req.setEncoding('utf8');
+  req.on('data', (c: string) => {
+    if (tooBig) return;
+    body += c;
+    if (body.length > 1_500_000) tooBig = true;
+  });
+  req.on('end', () => {
+    if (tooBig) return json(res, 413, { error: 'too big' });
+    let games: unknown;
+    try {
+      games = JSON.parse(body);
+    } catch {
+      return json(res, 400, { error: 'bad json' });
+    }
+    if (!Array.isArray(games)) return json(res, 400, { error: 'expected a list' });
+    void learn.add(games.slice(0, 30)).then((n) => json(res, 200, { ok: n }));
+  });
+}
+
 
 const CORS = { 'access-control-allow-origin': '*', 'access-control-allow-methods': 'GET, POST, OPTIONS', 'access-control-allow-headers': 'content-type' };
 const json = (res: ServerResponse, status: number, body: unknown) => {
@@ -136,6 +166,7 @@ function serve(req: IncomingMessage, res: ServerResponse) {
     return;
   }
   if (url.pathname.startsWith('/api/save-transfer')) return saveTransfer(req, res, url);
+  if (url.pathname === '/api/learn') return learnPost(req, res);
   if (MOVED_TO && MOVED_TO !== 'off' && OLD_HOST.test(String(req.headers.host ?? '')) && url.pathname !== '/healthz' && !url.pathname.startsWith('/api/')) {
     if (url.pathname === '/sw.js') {
       res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-cache' });

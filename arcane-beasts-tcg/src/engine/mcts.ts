@@ -10,6 +10,7 @@
 // ============================================================================
 import { canPay, energyUnits, Game, hpLeft, other, topCard } from './game';
 import { evaluate, heuristicAnswer } from './ai';
+import { sensibleActions } from './aiRules';
 import type { Action, GameState, Slot } from './types';
 
 const rnd = (n: number) => Math.floor(Math.random() * n);
@@ -136,7 +137,7 @@ class Search {
     private p: 0 | 1,
     private opt: MctsOptions,
   ) {
-    this.legal = g.legalActions(p);
+    this.legal = sensibleActions(g, p, g.legalActions(p));
     this.stats = this.legal.map(() => ({ n: 0, w: 0 }));
   }
   /** one play-out: UCB1 picks the action (each is tried once first) */

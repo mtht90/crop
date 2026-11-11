@@ -13,6 +13,7 @@ import { PlayerStore, portraitOk, type PlayerRecord } from './players';
 import { randomInt } from 'node:crypto';
 import { canMeet, seasonKey, viewOf } from '../src/online/rank';
 import { BOT_AFTER_MS, botAnswer, botDelay, makeBot, type Bot } from './bot';
+import { moveRecord, type GameRec, type MoveRec } from '../src/engine/learn';
 
 export interface Socket {
   send(data: string): void;
@@ -30,6 +31,8 @@ export interface HubOptions {
   /** messages per second one connection may send before it is dropped */
   rateLimit?: number;
   log?: (msg: string) => void;
+  /** a finished game of one person (to teach the CPU) */
+  learn?: (g: GameRec) => void;
 }
 
 interface Seat {
@@ -52,6 +55,8 @@ interface Room {
   botTimer?: ReturnType<typeof setTimeout> | null;
   cleanup: ReturnType<typeof setTimeout> | null;
   created: number;
+  /** each person's moves this game */
+  moves?: [MoveRec[], MoveRec[]];
 }
 
 class Conn {
@@ -87,6 +92,7 @@ export class Hub {
   private rankingCache: { at: number; season: string; top: RankEntry[] } | null = null;
   private tick: ReturnType<typeof setInterval>;
   private log: (m: string) => void;
+  private learn: (g: GameRec) => void;
 
   constructor(opts: HubOptions) {
     this.store = opts.store;
@@ -95,6 +101,7 @@ export class Hub {
     this.rateLimit = opts.rateLimit ?? 60;
     this.botAfter = opts.botAfterMs ?? BOT_AFTER_MS;
     this.log = opts.log ?? (() => undefined);
+    this.learn = opts.learn ?? (() => undefined);
     this.tick = sleepless(setInterval(() => this.matchmake(), Math.max(50, 2000 * this.scale)));
   }
 
@@ -523,7 +530,18 @@ export class Hub {
   private answer(c: Conn, seq: number, ans: Parameters<GameSession['answer']>[2]) {
     const room = c.room;
     if (!room || room.state !== 'playing' || !room.session || (c.seat !== 0 && c.seat !== 1)) return this.error(c, 'not_in_game', '対戦中ではありません');
+    // the move as a record, before it is played (the board it was chosen on)
+    let rec: MoveRec | null = null;
+    if (ans.type === 'action') {
+      try {
+        const g = room.session.game;
+        rec = moveRecord(g.s, c.seat, ans.action, g.legalActions(c.seat).length);
+      } catch {
+        rec = null;
+      }
+    }
     const r = room.session.answer(c.seat, seq, ans);
+    if (!r.error && rec) (room.moves ??= [[], []])[c.seat].push(rec);
     if (r.error) {
       // stale answers are normal after a reconnect; show others
       if (r.error !== 'stale answer') this.error(c, 'bad_answer', r.error);
@@ -614,6 +632,8 @@ export class Hub {
       const r = session.result(idx);
       const win = w === idx;
       if (seat.bot) return;
+      const mv = room.moves?.[idx];
+      if (mv?.length && (w === 0 || w === 1)) this.learn({ v: 1, mode: room.kind === 'ranked' ? (p0?.bot || p1?.bot ? 'ranked-bot' : 'ranked') : 'online', win, moves: mv });
       if (!ranked && (w === 0 || w === 1)) this.store.recordCasual(seat.player, win);
       this.send(seat.conn, { t: 'over', winner: r.winner, reason: r.reason });
       if (ranked) {
