@@ -19,7 +19,6 @@ const MAX_UPLOAD = 3 * 1024 * 1024;
 const MEDIA_BUDGET = (Number(process.env.MEDIA_BUDGET_MB) || (process.env.REDIS_URL ? 12 : 500)) * 1024 * 1024;
 const LOBBY = 'lobby';
 const REACTIONS = ['💙', '🩵', '👍', '😂', '🥺', '✨'];
-const STICKERS = ['hi', 'ok', 'thanks', 'yay', 'love', 'lol', 'cry', 'sorry', 'wow', 'sleep', 'gj', 'please'];
 const ID_RE = /^[A-Za-z0-9_-]{1,24}$/;
 const MEDIA_TYPES = {
   image: ['image/jpeg', 'image/webp', 'image/png', 'image/gif'],
@@ -248,6 +247,7 @@ const MIME = {
 };
 const VENDOR = {
   '/vendor/qrcode.js': path.join(__dirname, 'node_modules', 'qrcode-generator', 'dist', 'qrcode.js'),
+  '/vendor/jsqr.js': path.join(__dirname, 'node_modules', 'jsqr', 'dist', 'jsQR.js'),
 };
 const CSP = [
   "default-src 'self'",
@@ -669,7 +669,7 @@ const handlers = {
     }
     send(ws, {
       type: 'ready', you: ws.user, blocks: user.blocks, rooms: mine,
-      reactions: REACTIONS, stickers: STICKERS, vapid: vapidPublic, ice: iceServers(),
+      reactions: REACTIONS, vapid: vapidPublic, ice: iceServers(),
     });
     for (const rid of ws.rooms) sendPresence(rooms.get(rid));
   },
@@ -906,8 +906,7 @@ const handlers = {
       attach = { id: msg.media.id, kind: info.kind, type: info.type, w: num(msg.media.w, 10000), h: num(msg.media.h, 10000), dur: num(msg.media.dur, 600) };
       if (info.kind === 'audio' && Array.isArray(msg.media.peaks)) attach.peaks = msg.media.peaks.slice(0, 64).map((v) => num(v, 100));
     }
-    const sticker = STICKERS.includes(msg.sticker) ? msg.sticker : null;
-    if (!text && !attach && !sticker) return;
+    if (!text && !attach) return;
     if (!allow(ws)) return send(ws, { type: 'error', code: 'rate', op: 'msg', room: room.id, cid });
     if (room.kind === 'dm' && room.dm.some((id) => id !== ws.user.id && blocks(id, ws.user.id))) {
       return send(ws, { type: 'error', code: 'blocked', op: 'msg', room: room.id, cid });
@@ -918,9 +917,8 @@ const handlers = {
       const t = room.msgs.find((m) => m.id === msg.replyTo && !m.sys && !m.deleted);
       if (t) replyTo = { id: t.id, name: nameOf(t.from.id), text: [...previewText(t)].slice(0, 80).join('') };
     }
-    const m = { id: crypto.randomUUID(), from: { id: ws.user.id }, text: sticker ? '' : text, ts: Date.now(), replyTo, reactions: {} };
-    if (attach && !sticker) m.media = attach;
-    if (sticker) m.sticker = sticker;
+    const m = { id: crypto.randomUUID(), from: { id: ws.user.id }, text, ts: Date.now(), replyTo, reactions: {} };
+    if (attach) m.media = attach;
     const mentions = room.kind === 'group' ? mentionsIn(room, m.text) : [];
     if (mentions.length) m.mentions = mentions;
     pushMessage(room, m);
@@ -1164,7 +1162,7 @@ async function main() {
   if (!rooms.has(LOBBY)) createRoom({ id: LOBBY, name: 'ロビー', isPublic: true });
   setupVapid(data.meta);
   server.listen(PORT, '0.0.0.0', () => {
-    console.log(`lynq listening on :${PORT} (store: ${store.kind}, rooms: ${rooms.size}, users: ${users.size})`);
+    console.log(`chat listening on :${PORT} (store: ${store.kind}, rooms: ${rooms.size}, users: ${users.size})`);
   });
 }
 

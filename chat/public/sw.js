@@ -9,10 +9,10 @@ self.addEventListener('push', (event) => {
   try {
     data = event.data ? event.data.json() : {};
   } catch {
-    data = { title: 'Lynq', body: event.data ? event.data.text() : '' };
+    data = { title: 'Chat', body: event.data ? event.data.text() : '' };
   }
   event.waitUntil(
-    self.registration.showNotification(data.title || 'Lynq', {
+    self.registration.showNotification(data.title || 'Chat', {
       body: data.body || '新しいメッセージがあります',
       tag: data.room ? `room-${data.room}` : undefined,
       renotify: !!data.room,

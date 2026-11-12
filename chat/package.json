@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "ioredis": "^6.0.0",
+    "jsqr": "^1.4.0",
     "qrcode-generator": "^2.0.4",
     "web-push": "^4.0.0",
     "ws": "^8.18.0"

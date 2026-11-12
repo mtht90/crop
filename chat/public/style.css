@@ -177,7 +177,7 @@ button { border: 0; background: none; padding: 0; cursor: pointer; }
 /* ---------- shell ---------- */
 .shell {
   position: fixed; inset: 0; margin: auto; width: min(1180px, 100%); height: 100dvh;
-  display: flex; overflow: hidden;
+  display: flex; overflow: hidden; overflow: clip; /* clip: never scrollable, even programmatically */
   background: var(--glass); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
 }
 @media (min-width: 860px) {
@@ -200,6 +200,7 @@ button { border: 0; background: none; padding: 0; cursor: pointer; }
 @media (min-width: 860px) { #back { display: none; } }
 
 .side-head { display: flex; align-items: center; justify-content: space-between; padding: calc(14px + env(safe-area-inset-top)) 16px 10px 18px; }
+.head-actions { display: flex; align-items: center; gap: 6px; }
 .brand { display: flex; align-items: center; gap: 9px; font-weight: 800; font-size: 21px; letter-spacing: 0.01em; }
 .mini-logo { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 11px; background: var(--grad); box-shadow: 0 6px 14px rgba(63, 115, 246, 0.3); }
 .me-btn .avatar { width: 36px; height: 36px; font-size: 15px; box-shadow: 0 0 0 3px var(--surface), 0 0 0 4.5px var(--sky); }
@@ -307,7 +308,7 @@ button { border: 0; background: none; padding: 0; cursor: pointer; }
 .them .bubble { border-top-left-radius: 7px; }
 .them.cont .bubble { border-top-left-radius: 20px; }
 .me .bubble { background: var(--grad); color: #fff; border-bottom-right-radius: 7px; box-shadow: 0 6px 16px rgba(63, 115, 246, 0.22); }
-.pending .bubble, .pending .sticker-msg { opacity: 0.6; }
+.pending .bubble { opacity: 0.6; }
 .bubble a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
 .msg.active .bubble { filter: brightness(0.94); }
 .bubble.deleted { background: transparent !important; box-shadow: none !important; border: 1.5px dashed var(--line); color: var(--ink-3) !important; font-size: 13px; font-style: italic; }
@@ -339,8 +340,6 @@ button { border: 0; background: none; padding: 0; cursor: pointer; }
 .me .voice-bars i.on { background: #fff; }
 .voice-time { flex: none; font-size: 11.5px; font-variant-numeric: tabular-nums; opacity: 0.85; min-width: 30px; }
 
-.sticker-msg { width: 136px; height: 136px; cursor: pointer; filter: drop-shadow(0 6px 10px rgba(63, 115, 246, 0.18)); }
-.sticker-msg svg, .sticker-cell svg { width: 100%; height: 100%; display: block; overflow: visible; }
 
 .link-card { display: flex; flex-direction: column; width: min(300px, 100%); margin-top: 5px; border-radius: 16px; overflow: hidden; border: 1px solid var(--line); background: var(--surface); text-decoration: none; color: var(--ink); }
 .link-card img { width: 100%; aspect-ratio: 1.91; object-fit: cover; background: var(--ice); }
@@ -379,7 +378,7 @@ button { border: 0; background: none; padding: 0; cursor: pointer; }
 }
 .sys { align-self: center; display: inline-flex; align-items: center; gap: 6px; margin: 14px 0 4px; padding: 4px 12px; border-radius: 12px; background: var(--ice); font-size: 11.5px; color: var(--ink-2); text-align: center; }
 .sys.call-note { color: var(--accent-ink); font-weight: 600; }
-.flash .bubble, .flash .sticker-msg { animation: flash 1.2s ease-out; }
+.flash .bubble { animation: flash 1.2s ease-out; }
 @keyframes flash { 0%, 40% { box-shadow: 0 0 0 4px rgba(92, 157, 255, 0.55); } 100% { box-shadow: 0 0 0 4px rgba(92, 157, 255, 0); } }
 
 .to-bottom {
@@ -440,40 +439,6 @@ textarea:focus { background: var(--surface); border-color: var(--blue-2); box-sh
 .rec-time { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 14px; min-width: 40px; }
 .rec-wave { flex: 1; display: flex; align-items: center; justify-content: flex-end; gap: 2px; height: 32px; overflow: hidden; }
 .rec-wave i { width: 3px; flex: none; border-radius: 2px; background: var(--blue-2); height: calc(10% + var(--v, 0) * 90%); }
-
-.tray { height: 0; overflow: hidden; }
-.sticker-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 6px; padding: 10px 2px 2px; max-height: 260px; overflow-y: auto; }
-.sticker-cell { aspect-ratio: 1; padding: 4px; border-radius: 16px; transition: background 0.2s; }
-@media (hover: hover) { .sticker-cell:hover { background: var(--ice); } }
-
-/* sticker motion */
-.st-figure, .st-arm, .st-twinkle, .st-float, .st-drip, .st-shake, .st-pop, .st-pray { transform-box: fill-box; transform-origin: 50% 100%; }
-.play .st-hop .st-figure { animation: st-hop 0.9s var(--smooth) 2; }
-.play .st-hop .st-arm { animation: st-wave 0.45s ease-in-out 4; transform-origin: 20% 90%; }
-.play .st-nod .st-figure { animation: st-nod 0.6s ease-in-out 2; }
-.play .st-bow .st-figure { animation: st-bow 1s ease-in-out 1; }
-.play .st-jump .st-figure { animation: st-jump 0.7s var(--smooth) 2; }
-.play .st-beat .st-figure { animation: st-beat 0.7s ease-in-out 2; transform-origin: 50% 50%; }
-.play .st-shake .st-figure { animation: st-shake 0.4s ease-in-out 3; transform-origin: 50% 60%; }
-.play .st-sob .st-figure { animation: st-sob 0.5s ease-in-out 3; }
-.play .st-pop .st-figure { animation: st-pop 0.6s var(--bounce) 1; transform-origin: 50% 60%; }
-.play .st-breathe .st-figure { animation: st-breathe 1.6s ease-in-out 2; }
-.play .st-twinkle { animation: st-twinkle 0.8s ease-in-out 2; transform-origin: 50% 50%; }
-.play .st-float { animation: st-float 1.2s ease-in-out 2; }
-.play .st-drip { animation: st-drip 0.9s ease-in 2; }
-@keyframes st-hop { 0%, 100% { transform: none; } 30% { transform: translateY(-10px) scaleY(1.04); } 55% { transform: translateY(0) scale(1.06, 0.93); } }
-@keyframes st-wave { 50% { transform: rotate(-25deg); } }
-@keyframes st-nod { 50% { transform: rotate(6deg) translateY(2px); } }
-@keyframes st-bow { 40%, 60% { transform: rotate(-12deg) translateY(4px); } }
-@keyframes st-jump { 0%, 100% { transform: none; } 15% { transform: scale(1.08, 0.88); } 45% { transform: translateY(-16px) scale(0.95, 1.06); } 75% { transform: scale(1.06, 0.94); } }
-@keyframes st-beat { 20% { transform: scale(1.1); } 40% { transform: scale(0.96); } 60% { transform: scale(1.06); } }
-@keyframes st-shake { 25% { transform: rotate(-6deg); } 75% { transform: rotate(6deg); } }
-@keyframes st-sob { 50% { transform: translateY(3px) scaleY(0.96); } }
-@keyframes st-pop { 0% { transform: scale(0.7); } 60% { transform: scale(1.12); } }
-@keyframes st-breathe { 50% { transform: scale(1.04, 0.97); } }
-@keyframes st-twinkle { 50% { transform: scale(1.25) rotate(12deg); opacity: 0.6; } }
-@keyframes st-float { 50% { transform: translateY(-6px); } }
-@keyframes st-drip { 0% { transform: translateY(-3px); opacity: 0.3; } 100% { transform: translateY(5px); opacity: 1; } }
 
 /* ---------- sheet ---------- */
 .sheet-layer { position: fixed; inset: 0; z-index: 30; display: flex; align-items: flex-end; justify-content: center; }
@@ -618,3 +583,28 @@ textarea:focus { background: var(--surface); border-color: var(--blue-2); box-sh
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }
+
+/* ---------- QR scanner ---------- */
+.scan { position: fixed; inset: 0; z-index: 45; background: #050a16; color: #fff; overflow: hidden; touch-action: none; }
+.scan video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.scan-shade { position: absolute; inset: 0; pointer-events: none; }
+.scan-frame {
+  position: absolute; left: 50%; top: 46%; width: min(68vmin, 300px); aspect-ratio: 1; translate: -50% -50%;
+  border-radius: 28px; box-shadow: 0 0 0 100vmax rgba(5, 10, 22, 0.55); scale: var(--breathe, 1);
+}
+.scan-frame i { position: absolute; width: 44px; height: 44px; border: 4px solid #fff; }
+.scan-frame i:nth-child(1) { left: -2px; top: -2px; border-right: 0; border-bottom: 0; border-top-left-radius: 28px; }
+.scan-frame i:nth-child(2) { right: -2px; top: -2px; border-left: 0; border-bottom: 0; border-top-right-radius: 28px; }
+.scan-frame i:nth-child(3) { left: -2px; bottom: -2px; border-right: 0; border-top: 0; border-bottom-left-radius: 28px; }
+.scan-frame i:nth-child(4) { right: -2px; bottom: -2px; border-left: 0; border-top: 0; border-bottom-right-radius: 28px; }
+.scan-laser { position: absolute; left: 10%; right: 10%; height: 2px; border-radius: 2px; background: linear-gradient(90deg, transparent, #6aa6ff, transparent); box-shadow: 0 0 14px #6aa6ff; animation: laser 2.2s ease-in-out infinite; }
+@keyframes laser { 0%, 100% { top: 12%; opacity: 0.2; } 50% { top: 88%; opacity: 1; } }
+.scan.found .scan-laser { opacity: 0; animation: none; }
+.scan-hit { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+.scan-hit polygon { fill: rgba(92, 157, 255, 0.28); stroke: #9cc0ff; stroke-width: 4; stroke-linejoin: round; }
+.scan-head { position: absolute; left: 0; right: 0; top: 0; display: flex; align-items: center; justify-content: space-between; padding: calc(12px + env(safe-area-inset-top)) 14px 0; }
+.scan-head .call-icon.on { background: #fff; color: #0b1428; }
+.scan-hint { position: absolute; left: 0; right: 0; top: calc(46% + min(34vmin, 150px) + 26px); text-align: center; font-size: 14px; font-weight: 600; text-shadow: 0 1px 8px rgba(0, 0, 0, 0.6); }
+.scan-foot { position: absolute; left: 0; right: 0; bottom: calc(26px + env(safe-area-inset-bottom)); display: flex; justify-content: center; }
+.scan-foot button { height: 46px; padding: 0 20px; border-radius: 23px; background: rgba(255, 255, 255, 0.16); backdrop-filter: blur(10px); color: #fff; font-weight: 700; font-size: 14px; display: inline-flex; align-items: center; gap: 8px; }
+.scan-error { position: absolute; inset: 0; display: grid; place-content: center; gap: 10px; padding: 30px; text-align: center; color: #c9d6f2; font-size: 14px; line-height: 1.7; }

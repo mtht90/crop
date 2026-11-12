@@ -466,7 +466,7 @@
     $('#mineEmpty').hidden = state.tab !== 'mine' || state.rooms.size > 0 || !state.ready;
     const total = [...state.rooms.values()].reduce((n, r) => n + (r.s.muted ? 0 : r.s.unread), 0);
     $('#mineBadge').textContent = total ? String(Math.min(total, 99)) : '';
-    document.title = total ? `(${total}) Lynq` : activeRoom() ? `${activeRoom().s.name} · Lynq` : 'Lynq';
+    document.title = total ? `(${total}) Chat` : activeRoom() ? `${activeRoom().s.name} · Chat` : 'Chat';
     if (navigator.setAppBadge) (total ? navigator.setAppBadge(total) : navigator.clearAppBadge()).catch(() => {});
   }
   function renderExplore() {
@@ -502,7 +502,6 @@
     const switching = state.activeId !== id;
     if (switching && state.activeId) state.drafts.set(state.activeId, input.value);
     closePopover();
-    closeTray();
     if (recorder) cancelRecording();
     state.activeId = id;
     $('#emptyPane').hidden = true;
@@ -541,7 +540,6 @@
   function closeRoom() {
     if (state.activeId) state.drafts.set(state.activeId, input.value);
     closePopover();
-    closeTray();
     if (recorder) cancelRecording();
     state.activeId = null;
     state.pushedRoom = false;
@@ -708,9 +706,7 @@
   }
   function buildBody(m) {
     if (m.deleted) return h('div', 'bubble deleted', m.deleted === 'admin' ? '管理者がメッセージを削除しました' : 'メッセージの送信を取り消しました');
-    if (m.sticker && window.LynqStickers) {
-      return h('div', { class: 'sticker-msg', html: LynqStickers.svg(m.sticker), role: 'img', 'aria-label': LynqStickers.label(m.sticker) });
-    }
+    if (m.sticker) return h('div', 'bubble deleted', 'スタンプ（現在は表示されません）');
     if (m.media?.kind === 'image') {
       const b = h('div', 'bubble photo');
       if (m.replyTo) b.append(quoteEl(m.replyTo));
@@ -784,15 +780,6 @@
       row.style.opacity = '0';
       setTimeout(start, delay);
     } else start();
-    const st = row.querySelector('.sticker-msg');
-    if (st) replaySticker(st, delay + 80);
-  }
-  function replaySticker(st, delay = 0) {
-    st.classList.remove('play');
-    setTimeout(() => {
-      void st.offsetWidth;
-      st.classList.add('play');
-    }, delay);
   }
 
   let lastRendered = null;
@@ -987,7 +974,7 @@
     else if (room?.s.admin && room.s.kind === 'group') actions.push(act('unsend', ICONS.trash, '削除'));
     popover.replaceChildren(h('div', 'pop-row', items), h('div', 'pop-row', actions));
     popover.hidden = false;
-    const anchor = $('.bubble, .sticker-msg', entry.row) || entry.row;
+    const anchor = $('.bubble', entry.row) || entry.row;
     const rect = anchor.getBoundingClientRect();
     const w = popover.offsetWidth;
     const ph = popover.offsetHeight;
@@ -1012,7 +999,7 @@
     if (!btn || !popoverFor) return;
     const entry = popoverFor;
     closePopover();
-    if (btn.dataset.emoji) return react(entry.data.id, btn.dataset.emoji, $('.bubble, .sticker-msg', entry.row));
+    if (btn.dataset.emoji) return react(entry.data.id, btn.dataset.emoji, $('.bubble', entry.row));
     const a = btn.dataset.act;
     if (a === 'reply') setReply(entry);
     else if (a === 'copy') {
@@ -1046,8 +1033,6 @@
     if (img) return openViewer(img);
     const playBtn = e.target.closest('.voice-play, .voice-bars');
     if (playBtn) return toggleVoice(playBtn.closest('.msg'), e);
-    const st = e.target.closest('.sticker-msg');
-    if (st && !coarse.matches) replaySticker(st);
     const entry = entryOf(e.target);
     if (!entry) return;
     const chip = e.target.closest('.chip');
@@ -1059,7 +1044,7 @@
     else openPopover(entry);
   });
   list.addEventListener('dblclick', (e) => {
-    const bubble = e.target.closest('.bubble, .sticker-msg');
+    const bubble = e.target.closest('.bubble');
     const entry = bubble && entryOf(bubble);
     if (!entry || coarse.matches || entry.data.deleted) return;
     getSelection()?.removeAllRanges();
@@ -1128,7 +1113,7 @@
       return;
     }
     if (cancelled || g.moved) return;
-    const bubble = g.target.closest?.('.bubble, .sticker-msg');
+    const bubble = g.target.closest?.('.bubble');
     if (!bubble || g.target.closest('a, .quote, img, .voice-play, .voice-bars')) return;
     const now = performance.now();
     if (lastTap.id === g.entry.data.id && now - lastTap.time < 420) {
@@ -1137,7 +1122,6 @@
       if (!g.entry.data.deleted) react(g.entry.data.id, state.reactions[0], bubble);
     } else {
       lastTap = { id: g.entry.data.id, time: now };
-      if (bubble.classList.contains('sticker-msg')) replaySticker(bubble);
       if (!g.wasOpen) openPopover(g.entry);
     }
   }
@@ -1263,7 +1247,7 @@
   });
 
   /* =====================================================================
-     Composer: text, mentions, photos, stickers, voice
+     Composer: text, mentions, photos, voice
      ===================================================================== */
   function autosize() {
     const stick = nearBottom();
@@ -1337,7 +1321,6 @@
     e.preventDefault();
     send();
   });
-  input.addEventListener('focus', closeTray);
   sendBtn.addEventListener('pointerdown', (e) => { if (hasText()) e.preventDefault(); });
   sendBtn.addEventListener('click', () => (hasText() ? send() : startRecording()));
 
@@ -1381,52 +1364,6 @@
     updateSend();
     input.focus();
   }
-
-  /* ---------- sticker tray ---------- */
-  const tray = $('#stickerTray');
-  const stickerGrid = $('#stickerGrid');
-  const traySpring = new Spring(0, (v) => { tray.style.height = `${Math.max(0, v).toFixed(1)}px`; }, { stiffness: 380, damping: 32, precision: 0.5 });
-  let trayOpen = false;
-  function buildStickers() {
-    if (stickerGrid.childElementCount || !window.LynqStickers) return;
-    for (const id of LynqStickers.ids) {
-      stickerGrid.append(h('button', { class: 'sticker-cell', type: 'button', 'data-sticker': id, 'data-press': true, 'aria-label': LynqStickers.label(id), html: LynqStickers.svg(id) }));
-    }
-  }
-  function openTray() {
-    buildStickers();
-    trayOpen = true;
-    $('#stickerBtn').classList.add('on');
-    tray.setAttribute('aria-hidden', 'false');
-    input.blur();
-    traySpring.to(Math.min(272, stickerGrid.scrollHeight + 4));
-    [...stickerGrid.children].forEach((c, i) => {
-      c.style.transform = 'scale(0.4)';
-      c.style.opacity = '0';
-      setTimeout(() => play({ stiffness: 420, damping: 16 }, (p) => {
-        c.style.transform = `scale(${mix(0.4, 1, p).toFixed(4)})`;
-        c.style.opacity = clamp(p * 2, 0, 1).toFixed(3);
-      }, () => { c.style.transform = ''; c.style.opacity = ''; }), 20 + i * 18);
-    });
-  }
-  function closeTray() {
-    if (!trayOpen) return;
-    trayOpen = false;
-    $('#stickerBtn').classList.remove('on');
-    tray.setAttribute('aria-hidden', 'true');
-    traySpring.to(0);
-  }
-  $('#stickerBtn').addEventListener('click', () => (trayOpen ? closeTray() : openTray()));
-  stickerGrid.addEventListener('click', (e) => {
-    const cell = e.target.closest('.sticker-cell');
-    if (!cell || !state.activeId) return;
-    const sticker = cell.dataset.sticker;
-    const cid = sendPayload({ sticker });
-    if (!cid) return;
-    replaySticker(cell);
-    addLive({ cid, from: state.me, text: '', sticker, ts: Date.now(), reactions: {} }, { pending: true });
-    setReply(null);
-  });
 
   /* ---------- photos ---------- */
   const fileInput = $('#fileInput');
@@ -1525,7 +1462,6 @@
     } catch {
       return toast('マイクを使う許可が必要です');
     }
-    closeTray();
     const mr = new MediaRecorder(stream, mime ? { mimeType: mime, audioBitsPerSecond: 32000 } : undefined);
     const chunks = [];
     mr.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
@@ -1666,6 +1602,58 @@
   });
 
   /* =====================================================================
+     QR scanning
+     ===================================================================== */
+  window.LynqScan?.init({ h, play, mix, clamp, Spring, toast });
+  function parseOurQr(text) {
+    try {
+      const u = new URL(text);
+      if (u.origin !== location.origin) return { url: u };
+      return { url: u, room: u.searchParams.get('r'), transfer: u.searchParams.get('t'), pass: new URLSearchParams(u.hash.slice(1)).get('k') || '' };
+    } catch {
+      const code = text.replace(/[\s-]/g, '').toUpperCase();
+      return /^[A-Z0-9]{8}$/.test(code) ? { transfer: code } : {};
+    }
+  }
+  function handleScanned(text) {
+    const q = parseOurQr(text);
+    if (q.room) {
+      setTab('mine');
+      return handleLink({ room: q.room, pass: q.pass });
+    }
+    if (q.transfer) return confirmSwitch(q.transfer);
+    openScanResult(text, q.url && /^https?:$/.test(q.url.protocol) ? q.url.href : null);
+  }
+  function confirmSwitch(code) {
+    const go = h('button', { class: 'primary', type: 'button', 'data-press': true }, 'このアカウントに切り替える');
+    go.addEventListener('click', async () => {
+      try {
+        await applyTransfer(code);
+        location.replace('/');
+      } catch {
+        toast('引き継ぎコードが正しくないか、期限が切れています');
+        closeSheet();
+      }
+    });
+    openSheet('switch', h('div', null,
+      h('h2', null, 'アカウントを切り替えますか？'),
+      h('p', 'sub', '引き継ぎ用のQRコードです。切り替えると、この端末では読み取ったアカウントを使います。'),
+      h('p', 'note', `いまのアカウント（${state.name}）に戻すには、別の端末からそのアカウントの引き継ぎコードを発行してください。`),
+      go));
+  }
+  function openScanResult(text, url) {
+    const open = url ? h('button', { class: 'primary', type: 'button', 'data-press': true, onclick: () => { window.open(url, '_blank', 'noopener'); closeSheet(); } }, 'リンクを開く') : null;
+    const code = h('code');
+    code.textContent = text;
+    openSheet('scan-result', h('div', null,
+      h('h2', null, 'QRコードを読み取りました'),
+      h('p', 'sub', url ? 'このChatの招待ではないリンクです' : 'テキストが含まれていました'),
+      h('div', 'link-box', code, copyButton(() => text)),
+      open));
+  }
+  $('#scanBtn').addEventListener('click', () => LynqScan.open({ onResult: handleScanned, hint: '招待QRや引き継ぎQRを枠に合わせてください' }));
+
+  /* =====================================================================
      Sheets
      ===================================================================== */
   const sheetLayer = $('#sheetLayer');
@@ -1726,11 +1714,11 @@
   scrim.addEventListener('click', () => closeSheet());
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
-    if (viewerFrom) closeViewer();
+    if (window.LynqScan?.open_) LynqScan.close();
+    else if (viewerFrom) closeViewer();
     else if (sheet.open) closeSheet();
     else {
       closePopover();
-      closeTray();
       if (!state.editing) setReply(null);
     }
   });
@@ -1891,7 +1879,8 @@
         if (!qr.isDark(r, col) || finder(r, col)) continue;
         if (Math.abs(r - c) < logo && Math.abs(col - c) < logo) continue;
         const d = Math.hypot(r - c, col - c) * 16;
-        dots += `<rect class="qd" style="--d:${d.toFixed(0)}ms" x="${col + 0.08}" y="${r + 0.08}" width=".84" height=".84" rx=".38"/>`;
+        // Full-size modules with soft corners: rounder dots with gaps fail some decoders.
+        dots += `<rect class="qd" style="--d:${d.toFixed(0)}ms" x="${col}" y="${r}" width="1.02" height="1.02" rx=".3"/>`;
       }
     }
     let finders = '';
@@ -2482,7 +2471,13 @@
       if (idx >= 0) room.messages[idx] = message;
       if (roomId !== state.activeId) return;
       const entry = state.entries.get(message.id);
+      const stick = nearBottom();
       if (entry) replaceRow(entry, { ...message, localUrl: message.media ? entry.data.localUrl : undefined });
+      // A late link preview makes the row taller; stay pinned to the latest message.
+      if (stick) {
+        scroller.scrollTop = scroller.scrollHeight;
+        markRead();
+      }
       if (popoverFor?.data.id === message.id) closePopover();
       if (state.editing?.data.id === message.id && message.deleted) setEditing(null);
     },
@@ -2687,9 +2682,17 @@
       const code = field('引き継ぎコード', { maxlength: 9, placeholder: 'XXXX XXXX', autocomplete: 'off', autocapitalize: 'characters' }, '', 'code-input');
       const form = h('form', { autocomplete: 'off' },
         h('h2', null, '端末を引き継ぐ'),
-        h('p', 'sub', '元の端末の「プロフィール → 別の端末に引き継ぐ」で表示されるコードを入力するか、そのQRを読み取ってください'),
+        h('p', 'sub', '元の端末の「プロフィール → 別の端末に引き継ぐ」で表示されるQRを読み取るか、コードを入力してください'),
+        h('div', 'list-btns', h('button', { class: 'ghost-btn', type: 'button', 'data-press': true, onclick: () => LynqScan.open({ onResult: scanned, hint: '引き継ぎQRを枠に合わせてください' }) }, 'QRコードを読み取る')),
+        h('h3', null, 'またはコードを入力'),
         code.wrap,
         h('button', { class: 'primary', type: 'submit', 'data-press': true }, '引き継ぐ'));
+      const scanned = (text) => {
+        const t = parseOurQr(text).transfer;
+        if (!t) return toast('引き継ぎ用のQRコードではありません');
+        code.input.value = t;
+        form.requestSubmit();
+      };
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
         try {
