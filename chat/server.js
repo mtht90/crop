@@ -51,6 +51,7 @@ const markSubs = (userId) => { dirty.subs.add(userId); scheduleFlush(); };
 function flush() {
   clearTimeout(flushTimer);
   flushTimer = null;
+  if (movedTo) return flushing; // a newer service owns the store now
   const batch = {
     rooms: [...dirty.rooms].map((id) => rooms.get(id)).filter(Boolean).map(serializeRoom),
     deletedRooms: [...dirty.deletedRooms],
@@ -142,21 +143,48 @@ const nameOf = (id) => users.get(id)?.name || '退出したユーザー';
 
 let vapidPublic = null;
 
+/* ---------- moving to a new URL ----------
+   The service with CANONICAL=1 records its public URL in the shared store.
+   Any other service on the same store then stops writing and sends its
+   visitors (with their identity) to that URL. */
+const OWN_URL = (process.env.RENDER_EXTERNAL_URL || '').replace(/\/$/, '');
+let movedTo = null;
+
+async function announceCanonical() {
+  if (!process.env.CANONICAL || !OWN_URL) return;
+  dirty.meta.canonical = OWN_URL;
+  scheduleFlush();
+}
+async function checkMoved() {
+  if (process.env.CANONICAL || movedTo) return;
+  try {
+    const url = await store.getMeta('canonical');
+    if (url && url !== OWN_URL) {
+      movedTo = url;
+      console.log(`[moved] this service is replaced by ${url}; redirecting clients and no longer writing`);
+      for (const c of wss.clients) send(c, { type: 'moved', url });
+    }
+  } catch { /* try again later */ }
+}
+
 function setupVapid(meta) {
   let pub;
   let priv;
   if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
     pub = process.env.VAPID_PUBLIC_KEY;
     priv = process.env.VAPID_PRIVATE_KEY;
+  } else if (meta.vapid) {
+    // Keys already in the shared store win, so a new service keeps existing subscriptions working.
+    ({ publicKey: pub, privateKey: priv } = meta.vapid);
   } else if (process.env.SECRET) {
-    // Deterministic keys from a stable secret, so they survive restarts.
+    // Deterministic keys from a stable secret, saved so other services on the same store reuse them.
     const d = crypto.createHash('sha256').update(`vapid:${process.env.SECRET}`).digest();
     const ecdh = crypto.createECDH('prime256v1');
     ecdh.setPrivateKey(d);
     pub = ecdh.getPublicKey().toString('base64url');
     priv = d.toString('base64url');
-  } else if (meta.vapid) {
-    ({ publicKey: pub, privateKey: priv } = meta.vapid);
+    dirty.meta.vapid = { publicKey: pub, privateKey: priv };
+    scheduleFlush();
   } else {
     const keys = webpush.generateVAPIDKeys();
     pub = keys.publicKey;
@@ -164,7 +192,7 @@ function setupVapid(meta) {
     dirty.meta.vapid = keys;
     scheduleFlush();
   }
-  const subject = process.env.VAPID_SUBJECT || process.env.RENDER_EXTERNAL_URL || 'mailto:noreply@example.com';
+  const subject = process.env.VAPID_SUBJECT || (OWN_URL.startsWith('https://') ? OWN_URL : 'mailto:noreply@example.com');
   webpush.setVapidDetails(subject, pub, priv);
   vapidPublic = pub;
 }
@@ -647,6 +675,7 @@ function leaveCall(ws, room) {
 
 const handlers = {
   hello(ws, msg) {
+    if (movedTo) return send(ws, { type: 'moved', url: movedTo });
     const name = clean(msg.name, 20);
     const uid = clean(msg.uid, 64);
     if (!name || uid.length < 16) return send(ws, { type: 'error', code: 'invalid' });
@@ -1094,6 +1123,7 @@ wss.on('connection', (ws) => {
     if (!msg || typeof msg !== 'object') return;
     const handler = Object.hasOwn(handlers, msg.type) ? handlers[msg.type] : null;
     if (!handler || (!PRE_HELLO.has(msg.type) && !ws.user)) return;
+    if (movedTo && msg.type !== 'hello') return send(ws, { type: 'moved', url: movedTo });
     try {
       handler(ws, msg);
     } catch (err) {
@@ -1161,6 +1191,9 @@ async function main() {
   if (data.legacy && data.meta?.vapid) dirty.meta.vapid = data.meta.vapid;
   if (!rooms.has(LOBBY)) createRoom({ id: LOBBY, name: 'ロビー', isPublic: true });
   setupVapid(data.meta);
+  await announceCanonical();
+  await checkMoved();
+  setInterval(checkMoved, 20000).unref();
   server.listen(PORT, '0.0.0.0', () => {
     console.log(`chat listening on :${PORT} (store: ${store.kind}, rooms: ${rooms.size}, users: ${users.size})`);
   });

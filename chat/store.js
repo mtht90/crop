@@ -90,6 +90,11 @@ class RedisStore {
     await this.redis.multi().del(...ids.map((id) => `${P}media:${id}`)).hdel(`${P}mediaidx`, ...ids).exec();
   }
 
+  async getMeta(key) {
+    const raw = await this.redis.hget(`${P}meta`, key);
+    return raw ? JSON.parse(raw) : null;
+  }
+
   async close() {
     await this.redis.quit().catch(() => {});
   }
@@ -164,6 +169,10 @@ class FileStore {
       await fs.promises.rm(path.join(this.mediaDir, id), { force: true });
     }
     await this.save();
+  }
+
+  async getMeta(key) {
+    return this.data.meta[key] ?? null;
   }
 
   async close() {}

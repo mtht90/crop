@@ -1,8 +1,9 @@
-# Service names stay "inachat" so existing deployments (and their stored data) are kept;
-# the app itself is branded Lynq.
+# The web service is "chat" (https://chat.onrender.com when the name is free).
+# It shares the original "inachat-store" Key Value, so rooms and history carry over,
+# and CANONICAL=1 tells the previous "inachat" service to hand its visitors over.
 services:
   - type: web
-    name: inachat
+    name: chat
     runtime: node
     plan: free
     rootDir: chat
@@ -13,7 +14,9 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "22"
-      # Stable secret: push notification (VAPID) keys are derived from it.
+      - key: CANONICAL
+        value: "1"
+      # Used only if no push keys are stored yet; keys already in the store are reused.
       - key: SECRET
         generateValue: true
       - key: REDIS_URL

@@ -43,13 +43,21 @@ npm start
 
 | サービス | 内容 |
 |---|---|
-| `inachat`（Web Service, free） | アプリ本体。`SECRET` は自動生成され、通知用の鍵がここから作られます |
+| `chat`（Web Service, free） | アプリ本体。URL は `https://chat.onrender.com`（名前が空いていれば） |
 | `inachat-store`（Key Value, free） | ルーム・履歴・写真や音声・通知登録の保存先 |
 
 1. Render ダッシュボードで **New → Blueprint** を選び、このリポジトリとブランチを指定して **Apply**
 2. 以後はそのブランチに push するたびに Render が自動で再デプロイします（Auto-Deploy は既定でオン）。`render.yaml` の変更も自動で反映されます
 
-Render 上のサービス名は最初に作った `inachat` のままにしています。名前を変えると Render が別サービスとして作り直し、保存データが引き継がれないためです（アプリの表示名は Chat）。
+### URL の引っ越し（inachat → chat）
+
+Render の公開 URL はサービス作成時に決まり、あとから変えられません。そこで新しい `chat` サービスを作り、保存先は元の `inachat-store` を共有しています。
+
+- `chat` サービス（`CANONICAL=1`）は起動時に自分の URL を保存先に書き込みます
+- 元の `inachat` サービスはそれを検知すると保存先への書き込みを止め、開いた人をアカウントごと新しい URL へ転送します
+- 通知用の鍵も保存先で共有するため、登録済みの通知はそのまま届きます
+
+旧 `inachat` サービスは転送役として、しばらく残しておいてください（消すと旧 URL のブックマークが使えなくなります）。
 
 ## 無料プランの注意
 
@@ -66,5 +74,6 @@ Render 上のサービス名は最初に作った `inachat` のままにして�
 | `SECRET` | 通知（VAPID）鍵の元になる値。変えると各端末で開き直したときに通知が再登録されます |
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | 鍵を直接指定したい場合（`SECRET` より優先） |
 | `VAPID_SUBJECT` | 通知サービスに伝える連絡先（`mailto:` か URL）。未設定なら Render の公開URL |
+| `CANONICAL` | `1` にしたサービスが正式な URL になり、同じ保存先を使う他のサービスは訪問者をそこへ転送します |
 | `MEDIA_BUDGET_MB` | 写真・音声の保存上限（MB）。既定は Redis 利用時 12、ファイル保存時 500 |
 | `TURN_URLS` / `TURN_USERNAME` / `TURN_CREDENTIAL` | 通話用 TURN サーバー（`TURN_URLS` はカンマ区切り） |

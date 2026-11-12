@@ -191,6 +191,18 @@
     }
   } catch { /* storage unavailable */ }
 
+  // Arriving from the old URL: adopt the identity it handed over (only on a fresh browser).
+  try {
+    const adopt = new URLSearchParams(location.hash.slice(1));
+    if (adopt.get('adopt')) {
+      if (!localStorage.getItem('lq.name') && adopt.get('adopt').length >= 16) {
+        localStorage.setItem('lq.uid', adopt.get('adopt'));
+        if (adopt.get('n')) localStorage.setItem('lq.name', adopt.get('n'));
+      }
+      history.replaceState(null, '', location.pathname + location.search);
+    }
+  } catch { /* storage unavailable */ }
+
   let uid = store.get('lq.uid');
   if (!uid || uid.length < 16) {
     uid = randomId();
@@ -2318,6 +2330,17 @@
   }
 
   const handlers = {
+    moved(msg) {
+      // This address was replaced: continue at the new one with the same account.
+      let target;
+      try { target = new URL(msg.url); } catch { return; }
+      if (target.origin === location.origin) return;
+      const r = new URLSearchParams(location.search).get('r');
+      if (r) target.searchParams.set('r', r);
+      target.hash = new URLSearchParams({ adopt: uid, n: state.name }).toString();
+      state.moving = true;
+      location.replace(target.href);
+    },
     ready(msg) {
       const first = !state.ready;
       state.ready = true;
@@ -2601,7 +2624,7 @@
       }
     });
     ws.addEventListener('close', () => {
-      if (state.ws !== ws) return;
+      if (state.ws !== ws || state.moving) return;
       state.connected = false;
       updateSend();
       for (const [roomId, map] of state.typers) for (const id of [...map.keys()]) setTyper(roomId, id, '', false);
