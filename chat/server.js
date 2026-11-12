@@ -234,5 +234,5 @@ const heartbeat = setInterval(() => {
 wss.on('close', () => clearInterval(heartbeat));
 
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`aoi-chat listening on :${PORT}`);
+  console.log(`inachat listening on :${PORT}`);
 });

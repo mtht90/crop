@@ -1,4 +1,4 @@
-# Aoi Chat
+# inachat
 
 白ベース × 青系統一のリアルタイムチャット。Node.js + WebSocket（`ws`）のみで、ビルド工程はありません。
 
@@ -16,8 +16,12 @@ npm start
 
 リポジトリ直下の `render.yaml` を使います。
 
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/mtht90/crop)
+
+上のボタン（デフォルトブランチに `render.yaml` がある場合）か、次の手順で作成します。
+
 1. Render ダッシュボードで **New → Blueprint** を選び、このリポジトリを接続
-2. `aoi-chat` サービスが作成され、自動でビルド・起動されます
+2. `inachat` サービスが作成され、自動でビルド・起動されます
 
 手動で Web Service を作る場合は Root Directory `chat`、Build `npm install`、Start `npm start`、Health Check Path `/healthz`。
 

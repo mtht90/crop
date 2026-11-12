@@ -144,10 +144,10 @@
     set(key, value) { try { localStorage.setItem(key, value); } catch { /* private mode */ } },
   };
   const randomId = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
-  let uid = store.get('aoi.uid');
+  let uid = store.get('inachat.uid');
   if (!uid) {
     uid = randomId();
-    store.set('aoi.uid', uid);
+    store.set('inachat.uid', uid);
   }
 
   const state = {
@@ -780,7 +780,7 @@
      Join / leave
      ===================================================================== */
   const params = new URLSearchParams(location.search);
-  nameInput.value = store.get('aoi.name') || '';
+  nameInput.value = store.get('inachat.name') || '';
   roomInput.value = params.get('room') || '';
   (nameInput.value ? roomInput : nameInput).focus();
 
@@ -798,10 +798,10 @@
     state.room = (roomInput.value.trim() || 'lobby').toLowerCase();
     state.joined = true;
     state.firstWelcome = true;
-    store.set('aoi.name', name);
+    store.set('inachat.name', name);
     history.replaceState(null, '', `?room=${encodeURIComponent(state.room)}`);
     $('#roomName').textContent = state.room;
-    document.title = `${state.room} · Aoi Chat`;
+    document.title = `${state.room} · inachat`;
     setStatus('接続中…', false);
     list.replaceChildren();
     connect();
@@ -830,7 +830,7 @@
     setReply(null);
     app.hidden = true;
     joinView.hidden = false;
-    document.title = 'Aoi Chat';
+    document.title = 'inachat';
     play({ stiffness: 280, damping: 19 }, (p) => {
       card.style.transform = `scale(${mix(0.88, 1, p).toFixed(4)})`;
       card.style.opacity = clamp(p * 1.5, 0, 1).toFixed(3);

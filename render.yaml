@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: aoi-chat
+    name: inachat
     runtime: node
     plan: free
     rootDir: chat
