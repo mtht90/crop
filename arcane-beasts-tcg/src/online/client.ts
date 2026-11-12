@@ -5,7 +5,7 @@
 // ============================================================================
 import { create } from 'zustand';
 import type { PlacementResult } from './rank';
-import { DEV_CODE, PROTOCOL, type ClientMsg, type MatchKind, type OnlineProfile, type OppInfo, type QueueKind, type RankEntry, type RankView, type RoomInfo, type ServerMsg } from './protocol';
+import { DEV_CODE, PROTOCOL, type ClientMsg, type MatchKind, type OnlineProfile, type OppInfo, type QueueKind, type RankEntry, type RankView, type RoomInfo, type ServerMsg, type TowerEntry } from './protocol';
 
 const KEY = 'arcane-beasts-online-v1';
 const SERVER_KEY = 'arcane-beasts-server';
@@ -98,6 +98,8 @@ interface OnlineStore {
   rankChange: { before: RankView; after: RankView; placement?: boolean } | null;
   /** ランクマッチのランキング (top 10), when asked for */
   ranking: { season: string; top: RankEntry[] } | null;
+  /** 覇王の塔のランキング (the tower key it is for) */
+  towerRank: { key: string; top: TowerEntry[]; me: { pos: number; floor: number } | null; total: number } | null;
   transfer: { code: string; expires: number } | null;
   /** last error text (cleared when read by the UI) */
   error: string | null;
@@ -133,6 +135,7 @@ export const useOnline = create<OnlineStore>(() => ({
   queued: null,
   rankChange: null,
   ranking: null,
+  towerRank: null,
   transfer: null,
   error: null,
   match: null,
@@ -293,6 +296,7 @@ class OnlineClient {
         // 開発者モード: the account goes to master
         if (this.wantDev?.() && (m.profile.rank?.tier ?? 0) < 5) this.send({ t: 'dev', code: DEV_CODE });
         // the icon chosen in the game (設定) is the one others see
+        if (this.pendingTower) this.send({ t: 'tower', ...this.pendingTower });
         const look = this.wantPortrait?.();
         if (look && look !== m.profile.portrait) this.send({ t: 'rename', name: m.profile.name, portrait: look });
         return;
@@ -315,6 +319,9 @@ class OnlineClient {
         return;
       case 'queued':
         set({ queued: m.kind, waiting: m.waiting });
+        return;
+      case 'tower':
+        set({ towerRank: { key: m.key, top: m.top, me: m.me, total: m.total } });
         return;
       case 'ranking':
         set({ ranking: { season: m.season, top: m.top } });
@@ -388,6 +395,13 @@ class OnlineClient {
     if (useOnline.getState().status === 'open') this.send({ t: 'placement', ...r });
     else this.connect();
   }
+  private pendingTower: { key: string; floor: number } | null = null;
+  /** 覇王の塔: send the highest floor cleared and ask for the ranking (connects if needed) */
+  reportTower(key: string, floor: number) {
+    this.pendingTower = { key, floor };
+    if (useOnline.getState().status === 'open') this.send({ t: 'tower', key, floor });
+    else this.connect();
+  }
   /** ask for this season's top 10 */
   requestRanking() {
     this.send({ t: 'ranking' });
@@ -437,7 +451,7 @@ export function forgetOnlineIdentity() {
   } catch {
     /* storage unavailable */
   }
-  useOnline.setState({ profile: null, rankChange: null, ranking: null, transfer: null, room: null, queued: null, match: null });
+  useOnline.setState({ profile: null, rankChange: null, ranking: null, towerRank: null, transfer: null, room: null, queued: null, match: null });
 }
 
 // a phone brought back from the background often has a dead socket: check it at once

@@ -39,6 +39,12 @@ export interface RankEntry {
   rank: { tier: number; div: number; mr?: number };
 }
 
+export interface TowerEntry {
+  name: string;
+  portrait: string;
+  floor: number;
+}
+
 export interface RoomInfo {
   code: string;
   kind: MatchKind;
@@ -72,6 +78,8 @@ export type ClientMsg =
   | { t: 'cancel' }
   /** ランクマッチのランキング (top 10) */
   | { t: 'ranking' }
+  /** 覇王の塔: report the highest floor cleared (0 = only ask) and ask for the ranking */
+  | { t: 'tower'; key: string; floor: number }
   /** 開発者モード: the account goes to master */
   | { t: 'dev'; code: string }
   /** the ranked placement match (played against a bot on the device) is over */
@@ -107,6 +115,8 @@ export type ServerMsg =
   | { t: 'over'; winner: 0 | 1 | -1; reason: string }
   /** ランクマッチのランキング: this season's top players (ranks only, never ratings) */
   | { t: 'ranking'; season: string; top: RankEntry[] }
+  /** 覇王の塔のランキング: the top climbers and your own place */
+  | { t: 'tower'; key: string; top: TowerEntry[]; me: { pos: number; floor: number } | null; total: number }
   /** after a ranked game: the tier before and after */
   | { t: 'rank'; before: RankView; after: RankView; placement?: boolean }
   | { t: 'peer'; connected: boolean; until: number | null }

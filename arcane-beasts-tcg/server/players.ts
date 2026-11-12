@@ -21,6 +21,8 @@ export interface PlayerRecord {
   rank?: unknown;
   /** ranked matches: the hidden rating and this season's record */
   ranked?: RankState;
+  /** 覇王の塔: the highest floor of the current tower (key = tower:id:period) */
+  tower?: { key: string; floor: number; at: number };
   games: number;
   wins: number;
   losses: number;
@@ -159,6 +161,16 @@ export class PlayerStore {
     p.ranked = { ...r, rating: Math.max(r.rating, MASTER_AT + 100), placed: true, best: 5 };
     this.save(p);
     return { before: viewOf(r), after: viewOf(p.ranked) };
+  }
+  /** 覇王の塔: a player reached a floor (kept only when higher, per tower) */
+  setTower(p: PlayerRecord, key: string, floor: number): void {
+    if (p.tower?.key === key && p.tower.floor >= floor) return;
+    p.tower = { key, floor, at: this.now() };
+    this.save(p);
+  }
+  /** 覇王の塔: everyone on this tower, highest floor first (earliest first on a tie) */
+  towerRanking(key: string): PlayerRecord[] {
+    return [...this.players.values()].filter((p) => p.tower?.key === key && p.tower.floor > 0).sort((a, b) => b.tower!.floor - a.tower!.floor || a.tower!.at - b.tower!.at);
   }
   /** this season's best ranked players, highest first */
   topRanked(n: number): PlayerRecord[] {

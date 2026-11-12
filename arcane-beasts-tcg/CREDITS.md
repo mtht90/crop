@@ -656,11 +656,12 @@ They were resized and converted to WebP.
 The portraits of the 覇王の塔 cards (`public/assets/art/event/tower-*`) come from the Wesnoth add-on
 Ageless_Resources (Ageless Era) on the Wesnoth add-on server, licensed under the GNU GPL v2+:
 `general/images/portraits/elementals/lava-golem.png`,
-`general/images/portraits/undead-elder-lich-lord.png`, `general/images/portraits/celestials/claimant.png`.
+`general/images/portraits/undead-elder-lich-lord.png`.
 They were resized and converted to WebP.
 
 ## Portraits for 1.16 campaigns (覇王の塔)
 
-`public/assets/art/event/tower-goddess.webp` is `core-1.16/campaigns/Under_the_Burning_Suns/images/portraits/eloh.png`
+`public/assets/art/event/tower-goddess.webp` is `core-1.16/campaigns/Under_the_Burning_Suns/images/portraits/eloh.png` and
+`public/assets/art/event/tower-archpriest.webp` is `core-1.16/campaigns/Delfadors_Memoirs/images/portraits/methor.png`
 from the Wesnoth add-on Support_1_16_Campaign_Portraits (portraits of Battle for Wesnoth 1.16 by the
 Battle for Wesnoth Project), licensed under the GNU GPL v2+. Resized and converted to WebP.

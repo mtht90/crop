@@ -203,6 +203,21 @@ export class Hub {
         }
         return this.send(c, { t: 'ranking', season: this.rankingCache.season, top: this.rankingCache.top });
       }
+      case 'tower': {
+        const key = String(m.key ?? '');
+        const floor = Number(m.floor);
+        if (!/^tower:[a-z]{1,12}:-?\d{1,6}$/.test(key) || !Number.isInteger(floor) || floor < 0 || floor > 30) return this.error(c, 'bad_request', '塔の記録が読めません');
+        if (floor > 0) this.store.setTower(c.player, key, floor);
+        const all = this.store.towerRanking(key);
+        const pos = all.findIndex((p) => p.id === c.player!.id);
+        return this.send(c, {
+          t: 'tower',
+          key,
+          top: all.slice(0, 30).map((p) => ({ name: p.name, portrait: p.portrait, floor: p.tower!.floor })),
+          me: pos >= 0 ? { pos: pos + 1, floor: all[pos].tower!.floor } : null,
+          total: all.length,
+        });
+      }
       case 'dev': {
         if (m.code !== DEV_CODE) return this.error(c, 'bad_code', 'コードがちがいます');
         const r = this.store.makeMaster(c.player);

@@ -9,11 +9,12 @@ import { artUrl } from '../lib/assets';
 import { fmtRemain } from '../state/progress';
 import { modsText } from '../state/stages';
 import { activeDeck, useStore } from '../state/store';
-import { currentTower, floorsOf, TOWER_FLOORS, towerNow } from '../state/tower';
+import { BLESS_DMG, currentTower, floorsOf, TOWER_FLOORS, towerNow } from '../state/tower';
 import { CardFace, EnergySymbol } from '../ui/Card';
 import { askConfirm } from '../ui/Confirm';
 import { Icon } from '../ui/Icon';
 import { TopBar } from '../ui/TopBar';
+import { online, onlineSupported, useOnline } from '../online/client';
 import './tower.css';
 
 export function Tower() {
@@ -21,7 +22,7 @@ export function Tower() {
   const go = useStore((s) => s.go);
   const startTower = useStore((s) => s.startTower);
   useEffect(() => playMusic('legends'), []);
-  const { t, ends, open } = currentTower();
+  const { t, key, ends, open } = currentTower();
   const sv = towerNow(save.tower);
   const floors = useMemo(() => floorsOf(t), [t]);
   const next = Math.min(sv.cleared + 1, TOWER_FLOORS);
@@ -35,6 +36,14 @@ export function Tower() {
     const iv = setInterval(() => setNow(Date.now()), 30_000);
     return () => clearInterval(iv);
   }, []);
+
+  // 覇王の塔のランキング (online version only)
+  const canRank = onlineSupported();
+  const [ranking, setRanking] = useState(false);
+  const rank = useOnline((s) => s.towerRank);
+  useEffect(() => {
+    if (canRank) online.reportTower(key, sv.cleared);
+  }, [canRank, key, sv.cleared]);
 
   // open on the floor to climb
   useLayoutEffect(() => {
@@ -69,6 +78,11 @@ export function Tower() {
               <b>{sv.cleared}</b>/{TOWER_FLOORS}階
             </span>
             <span className="tw-ends">{open ? `のこり ${fmtRemain(ends.getTime() - now)}` : 'まもなく開催'}</span>
+            {canRank && (
+              <button className="tw-rank-btn" onClick={() => (foley.tick(), setRanking(true), online.reportTower(key, sv.cleared))}>
+                <Icon name="crown" /> ランキング{rank?.key === key && rank.me ? ` ${rank.me.pos}位` : ''}
+              </button>
+            )}
           </div>
         </div>
 
@@ -110,6 +124,12 @@ export function Tower() {
                   </span>
                 </div>
               </div>
+              <div className="tw-bless">
+                <small>塔の加護</small>
+                <span>
+                  <EnergySymbol type={t.blessing} size="1.1em" /> 自分の{TYPE_JP[t.blessing]}タイプのワザ+{BLESS_DMG}
+                </span>
+              </div>
               <ul className="tw-rules">
                 {modsText(f.mods).map((r) => (
                   <li key={r}>{r}</li>
@@ -146,6 +166,34 @@ export function Tower() {
           </AnimatePresence>
         </div>
       </div>
+      <AnimatePresence>
+        {ranking && (
+          <motion.div className="tw-rank-veil" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setRanking(false)}>
+            <motion.div className="tw-rank" initial={{ y: 24, scale: 0.97 }} animate={{ y: 0, scale: 1 }} exit={{ y: 12 }} onClick={(e) => e.stopPropagation()}>
+              <h3>覇王の塔 ランキング</h3>
+              <small className="tw-rank-sub">{t.sub}{rank?.key === key ? `・${rank.total}人が挑戦中` : ''}</small>
+              {rank?.key !== key ? (
+                <div className="tw-spin" />
+              ) : rank.top.length === 0 ? (
+                <div className="tw-rank-none">まだだれも登っていません</div>
+              ) : (
+                <ol className="tw-rank-list">
+                  {rank.top.map((e, i) => (
+                    <li key={i} className={i < 3 ? `top${i + 1}` : ''}>
+                      <b>{i + 1}</b>
+                      <img src={artUrl(e.portrait)} alt="" />
+                      <span>{e.name}</span>
+                      <em>{e.floor}階</em>
+                    </li>
+                  ))}
+                </ol>
+              )}
+              {rank?.key === key && <div className="tw-rank-me">{rank.me ? `あなた：${rank.me.pos}位（${rank.me.floor}階）` : 'あなた：まだ記録がありません'}</div>}
+              <button className="btn" onClick={() => setRanking(false)}>とじる</button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

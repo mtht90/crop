@@ -43,7 +43,7 @@ import {
   OLD_COIN_SCALE,
 } from './progress';
 import { currentStageEvent, EVENT_CARD_DROP, rollShards, shopOf, STAGE_COUNT, stageNow, stagesOf, type StageSave } from './stages';
-import { currentTower, floorsOf, TOWER_TITLE, towerNow, type TowerSave } from './tower';
+import { blessMods, currentTower, floorsOf, TOWER_TITLE, towerNow, type TowerSave } from './tower';
 import { raidBattleGems, raidCost, raidLapBonus, raidLapHp, raidLapReward, raidNow, raidSession, rollRaidDrop, type RaidSave } from './raid';
 
 // ----------------------------------------------------------------------------
@@ -597,7 +597,7 @@ export const useStore = create<Store>((set, get) => ({
       cpuLevel: f.cpu,
       scene: t.bg,
       reward: 0,
-      tower: { key, floor, mods: f.mods },
+      tower: { key, floor, mods: blessMods(t, f.mods) },
     });
     return true;
   },
