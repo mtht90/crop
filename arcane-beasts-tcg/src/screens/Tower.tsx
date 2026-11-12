@@ -16,8 +16,6 @@ import { Icon } from '../ui/Icon';
 import { TopBar } from '../ui/TopBar';
 import './tower.css';
 
-const V = (() => { try { return new URLSearchParams(location.search).get('tv') ?? 'a'; } catch { return 'a'; } })();
-
 export function Tower() {
   const save = useStore((s) => s.save);
   const go = useStore((s) => s.go);
@@ -76,25 +74,14 @@ export function Tower() {
 
         <div className="tw-body">
           <div className="tw-scroll" ref={scroller}>
-            <div className={`tw-tower tv-${V}`}>
+            <div className="tw-tower">
               <div className="tw-spire" />
               {[...floors].reverse().map((x) => {
                 const done = x.n <= sv.cleared;
                 const cur = x.n === sv.cleared + 1;
                 const locked = x.n > sv.cleared + 1;
-                const cls = `tw-floor v-${V} t-${x.type} ${x.boss ? 'boss' : ''} ${done ? 'done' : ''} ${cur ? 'cur' : ''} ${locked ? 'locked' : ''} ${sel === x.n ? 'sel' : ''} ${x.n % 2 ? 'odd' : 'even'}`;
-                if (V === 'a')
-                  return (
-                    <button key={x.n} data-floor={x.n} className={cls} onClick={() => pick(x.n)}>
-                      <span className="a-gem"><b>{x.n}</b><small>階</small></span>
-                      <span className="a-foe" style={{ backgroundImage: `url(${artUrl(x.portrait)})` }} />
-                      <span className="a-txt"><b>{x.boss ? x.name : `${TYPE_JP[x.type]}の守り手`}</b><small><EnergySymbol type={x.type} size="1.1em" /> {locked ? '未到達' : done ? '踏破' : cur ? '挑戦中' : ''}</small></span>
-                      {x.boss && <i className="tw-boss">BOSS</i>}
-                      {cur && <i className="tw-here">NEXT</i>}
-                    </button>
-                  );
-                if (V === 'b')
-                  return (
+                const cls = `tw-floor t-${x.type} ${x.boss ? 'boss' : ''} ${done ? 'done' : ''} ${cur ? 'cur' : ''} ${locked ? 'locked' : ''} ${sel === x.n ? 'sel' : ''} ${x.n % 2 ? 'odd' : 'even'}`;
+                return (
                     <button key={x.n} data-floor={x.n} className={cls} onClick={() => pick(x.n)}>
                       <span className="b-arch"><img src={artUrl(x.portrait)} alt="" draggable={false} /></span>
                       <span className="b-gem"><EnergySymbol type={x.type} size="1.3em" /></span>
@@ -104,18 +91,6 @@ export function Tower() {
                       {cur && <i className="tw-here">NEXT</i>}
                     </button>
                   );
-                return (
-                  <button key={x.n} data-floor={x.n} className={cls} style={{ ['--i' as string]: x.n }} onClick={() => pick(x.n)}>
-                    <span className="c-medal">
-                      {x.boss ? <img src={artUrl(x.portrait)} alt="" draggable={false} /> : <b>{x.n}</b>}
-                    </span>
-                    {x.boss && <span className="c-bossno">{x.n}階</span>}
-                    {!x.boss && <span className="c-type"><EnergySymbol type={x.type} size="1em" /></span>}
-                    {x.boss && <i className="tw-boss">BOSS</i>}
-                    {done && <i className="c-done">★</i>}
-                    {cur && <i className="tw-here">NEXT</i>}
-                  </button>
-                );
               })}
               <div className="tw-gate">入口</div>
             </div>
