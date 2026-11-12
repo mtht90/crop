@@ -12,7 +12,7 @@
 <meta name="description" content="ルームを作って、QRで招待して話せるチャット">
 <title>Chat</title>
 <link rel="manifest" href="/manifest.webmanifest">
-<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon.png" type="image/png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="stylesheet" href="/style.css">
 <script src="/theme.js"></script>
@@ -23,7 +23,7 @@
 <!-- first visit -->
 <main id="onboard" class="onboard" hidden>
   <form id="onboardForm" class="card" autocomplete="off">
-    <div class="logo" aria-hidden="true"><svg viewBox="0 0 32 32" width="34" height="34"><path fill="#fff" d="M16 4C8.8 4 3 9 3 15.2c0 3.4 1.8 6.5 4.6 8.5L6.5 28l5-2.3c1.4.4 2.9.6 4.5.6 7.2 0 13-5 13-11.1S23.2 4 16 4z"/></svg></div>
+    <img class="logo" src="/icon-192.png" alt="" width="68" height="68">
     <h1>Chat</h1>
     <p class="lead">まずは呼ばれたい名前を決めましょう。</p>
     <label class="field">
@@ -38,12 +38,8 @@
 <div id="shell" class="shell" hidden>
   <aside class="side">
     <header class="side-head">
-      <div class="brand"><span class="mini-logo" aria-hidden="true"><svg viewBox="0 0 32 32" width="18" height="18"><path fill="#fff" d="M16 4C8.8 4 3 9 3 15.2c0 3.4 1.8 6.5 4.6 8.5L6.5 28l5-2.3c1.4.4 2.9.6 4.5.6 7.2 0 13-5 13-11.1S23.2 4 16 4z"/></svg></span>Chat</div>
+      <div class="brand"><img class="mini-logo" src="/icon-192.png" alt="" width="30" height="30">Chat</div>
       <div class="head-actions">
-        <button id="pointsBtn" class="points-chip" data-press type="button" aria-label="ポイントとショップ">
-          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M12 3l7 5-7 13L5 8z" fill="currentColor" opacity=".9"/><path d="M5 8h14M12 3L9 8l3 13 3-13-3-5" fill="none" stroke="#fff" stroke-width="1.2" stroke-linejoin="round" opacity=".7"/></svg>
-          <span id="points">0</span>
-        </button>
         <button id="scanBtn" class="icon-btn" data-press type="button" aria-label="QRコードを読み取る">
           <svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 8V6a2 2 0 012-2h2M16 4h2a2 2 0 012 2v2M20 16v2a2 2 0 01-2 2h-2M8 20H6a2 2 0 01-2-2v-2M4 12h16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
         </button>

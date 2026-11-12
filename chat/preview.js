@@ -34,7 +34,7 @@ async function safeLookup(hostname) {
   return ok;
 }
 
-function fetchHtml(url, hops = 0) {
+function fetchUrl(url, { accept, max, truncate = false, hops = 0 }) {
   return new Promise((resolve, reject) => {
     let u;
     try {
@@ -47,15 +47,16 @@ function fetchHtml(url, hops = 0) {
       const lib = u.protocol === 'https:' ? https : http;
       const req = lib.get(u, {
         timeout: TIMEOUT,
-        headers: { 'user-agent': 'Mozilla/5.0 (compatible; LynqPreview/1.0)', accept: 'text/html,application/xhtml+xml', 'accept-language': 'ja,en;q=0.8' },
+        headers: { 'user-agent': 'Mozilla/5.0 (compatible; ChatPreview/1.0)', accept: '*/*', 'accept-language': 'ja,en;q=0.8' },
         // Pin the connection to the address we checked.
         lookup: (_host, opts, cb) => (opts?.all ? cb(null, [{ address, family }]) : cb(null, address, family)),
       }, (res) => {
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
           res.resume();
-          return resolve(fetchHtml(new URL(res.headers.location, u).href, hops + 1));
+          return resolve(fetchUrl(new URL(res.headers.location, u).href, { accept, max, truncate, hops: hops + 1 }));
         }
-        if (res.statusCode !== 200 || !/text\/html|xhtml/.test(res.headers['content-type'] || '')) {
+        const type = String(res.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
+        if (res.statusCode !== 200 || !accept.test(type) || (!truncate && Number(res.headers['content-length'] || 0) > max)) {
           res.resume();
           return reject(new Error(`status ${res.statusCode}`));
         }
@@ -64,9 +65,15 @@ function fetchHtml(url, hops = 0) {
         res.on('data', (c) => {
           size += c.length;
           chunks.push(c);
-          if (size > MAX_BYTES) res.destroy();
+          if (size > max) {
+            // HTML: the <head> is all we need, keep what we have. Anything else: give up.
+            if (truncate) res.destroy();
+            else res.destroy(new Error('too large'));
+          }
         });
-        res.on('close', () => resolve({ html: Buffer.concat(chunks).toString('utf8'), url: u.href }));
+        const finish = () => resolve({ buf: Buffer.concat(chunks), url: u.href, type });
+        res.on('end', finish);
+        if (truncate) res.on('close', finish);
         res.on('error', reject);
       });
       req.on('timeout', () => req.destroy(new Error('timeout')));
@@ -95,7 +102,8 @@ async function preview(url) {
   if (hit && Date.now() - hit.at < 6 * 3600 * 1000) return hit.data;
   let data = null;
   try {
-    const { html, url: finalUrl } = await fetchHtml(url);
+    const { buf, url: finalUrl } = await fetchUrl(url, { accept: /^(text\/html|application\/xhtml\+xml)$/, max: MAX_BYTES, truncate: true });
+    const html = buf.toString('utf8');
     const head = html.slice(0, 200000);
     const title = meta(head, ['og:title', 'twitter:title']) || decode(head.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1] || '');
     if (title) {
@@ -124,4 +132,14 @@ async function preview(url) {
   return data;
 }
 
-module.exports = { preview, privateAddress };
+// Fetch a preview image on the server so readers never load it from the linked site.
+async function previewImage(url) {
+  try {
+    const { buf, type } = await fetchUrl(url, { accept: /^image\/(jpeg|png|webp|gif)$/, max: 1.5 * 1024 * 1024 });
+    return buf.length ? { buf, type } : null;
+  } catch {
+    return null;
+  }
+}
+
+module.exports = { preview, previewImage, privateAddress };

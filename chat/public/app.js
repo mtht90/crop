@@ -273,18 +273,17 @@
     return node;
   }
 
-  /* ---------- fonts from the shop (free Google Fonts) ---------- */
+  /* ---------- message fonts (free OFL fonts, self-hosted) ---------- */
   let fontCatalog = [];
   const fontById = (id) => fontCatalog.find((f) => f.id === id);
   const loadedFonts = new Set();
-  function useFont(id, sample) {
+  // Fonts are served by this app; the browser fetches only the character ranges it needs.
+  function useFont(id) {
     const f = fontById(id);
     if (!f) return null;
-    const key = sample ? `${id}:sample` : id;
-    if (!loadedFonts.has(key) && !(sample && loadedFonts.has(id))) {
-      loadedFonts.add(key);
-      const q = `family=${encodeURIComponent(f.family).replace(/%20/g, '+')}&display=swap${sample ? `&text=${encodeURIComponent(sample)}` : ''}`;
-      document.head.append(h('link', { rel: 'stylesheet', href: `https://fonts.googleapis.com/css2?${q}` }));
+    if (!loadedFonts.has(id)) {
+      loadedFonts.add(id);
+      document.head.append(h('link', { rel: 'stylesheet', href: f.css }));
     }
     return `'${f.family}', var(--font-base)`;
   }
@@ -816,7 +815,7 @@
     if (m.preview && !m.deleted) {
       const p = m.preview;
       col.append(h('a', { class: 'link-card', href: p.url, target: '_blank', rel: 'noopener noreferrer' },
-        p.image ? h('img', { src: p.image, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer', onerror: (e) => e.target.remove() }) : null,
+        p.imageId ? h('img', { src: `/media/${p.imageId}`, alt: '', loading: 'lazy', onerror: (e) => e.target.remove() }) : null,
         h('div', null, h('small', null, p.site), h('b', null, p.title), p.desc ? h('span', null, p.desc) : null)));
     }
     col.append(h('div', 'reacts'));
@@ -2306,10 +2305,10 @@
         onSave: (id) => wsSend({ type: 'avatar', media: id }),
         onRemove: state.me?.avatar ? () => wsSend({ type: 'avatar', media: null }) : null,
       }) }, avatar(state.me || { id: uid, name: state.name }), h('span', 'icon-edit-badge', '変更')), h('h2', null, 'プロフィール')),
-      h('div', 'wallet', h('span', 'wallet-label', 'ポイント'), h('b', { class: 'wallet-num' }, (state.points || 0).toLocaleString('ja-JP')), h('button', { class: 'pill-btn', type: 'button', 'data-press': true, onclick: openShop }, 'ショップ')),
       name.wrap,
       h('button', { class: 'primary', type: 'submit', 'data-press': true }, '名前を保存'),
       h('h3', null, '表示'), themeBox,
+      h('div', 'list-btns', h('button', { class: 'ghost-btn', type: 'button', 'data-press': true, onclick: openFontSheet }, h('span', null, 'メッセージのフォント'), h('span', 'btn-value', fontById(state.me?.font)?.name || '標準'))),
       h('h3', null, '通知'), pushPart,
       h('h3', null, '端末'),
       h('div', 'list-btns', h('button', { class: 'ghost-btn', type: 'button', 'data-press': true, onclick: openTransferSheet }, '別の端末に引き継ぐ')));
@@ -2361,83 +2360,34 @@
   }
 
   /* =====================================================================
-     Points & shop
+     Message font picker
      ===================================================================== */
-  const pointsEl = $('#points');
-  let pointsShown = 0;
-  const pointsSpring = new Spring(0, (v) => { pointsEl.textContent = Math.round(v).toLocaleString('ja-JP'); }, { stiffness: 120, damping: 26, precision: 0.5 });
-  function setPoints(value, gain) {
-    state.points = value;
-    if (value === pointsShown) return;
-    pointsShown = value;
-    pointsSpring.to(value);
-    if (gain > 0) {
-      popIn($('#pointsBtn'), { stiffness: 520, damping: 14 }, 1.15);
-      if (state.activeId) {
-        const r = sendBtn.getBoundingClientRect();
-        const chip = h('span', 'gain', `+${gain}`);
-        Object.assign(chip.style, { left: `${r.left + r.width / 2}px`, top: `${r.top}px` });
-        document.body.append(chip);
-        play({ stiffness: 120, damping: 18 }, (p) => {
-          chip.style.transform = `translate(-50%, ${(-46 * p).toFixed(1)}px) scale(${mix(0.6, 1, Math.min(1, p * 1.6)).toFixed(3)})`;
-          chip.style.opacity = (p < 0.7 ? 1 : clamp((1 - p) / 0.3, 0, 1)).toFixed(3);
-        }, () => chip.remove());
-      }
-    }
-  }
   const SAMPLE = 'あのイーハトーヴォ Aa123';
-  function openShop() {
-    sheet.shopBox = h('div', 'shop-grid');
-    openSheet('shop', h('div', null,
-      h('h2', null, 'ショップ'),
-      h('p', 'sub', 'メッセージを送るとポイントがたまります（1文字 = 1ポイント）'),
-      h('div', 'wallet', h('span', 'wallet-label', '所持ポイント'), h('b', { class: 'wallet-num', id: 'walletNum' }, (state.points || 0).toLocaleString('ja-JP'))),
-      h('h3', null, 'フォント'),
-      h('p', 'note shop-note', '使っているフォントで、あなたのメッセージがみんなの画面に表示されます'),
-      sheet.shopBox));
-    renderShop(true);
+  function openFontSheet() {
+    sheet.fontBox = h('div', 'shop-grid');
+    openSheet('fonts', h('div', null,
+      h('h2', null, 'メッセージのフォント'),
+      h('p', 'sub', '選んだフォントで、あなたのメッセージがみんなの画面に表示されます'),
+      sheet.fontBox));
+    renderFonts(true);
   }
-  function renderShop(first) {
-    const box = sheet.name === 'shop' && sheet.shopBox;
+  function renderFonts(first) {
+    const box = sheet.name === 'fonts' && sheet.fontBox;
     if (!box || !state.me) return;
-    const wallet = $('#walletNum');
-    if (wallet) wallet.textContent = (state.points || 0).toLocaleString('ja-JP');
-    const owned = new Set(state.me.fonts || []);
-    const cards = [h('button', { class: `font-card${!state.me.font ? ' using' : ''}`, type: 'button', 'data-press': true, onclick: () => wsSend({ type: 'equip', font: null }) },
-      h('span', 'font-sample', SAMPLE), h('span', 'font-meta', h('b', null, '標準'), h('span', 'font-state', !state.me.font ? '使用中' : '使う')))];
-    for (const f of fontCatalog) {
-      const has = owned.has(f.id);
-      const using = state.me.font === f.id;
-      const afford = (state.points || 0) >= f.price;
+    const card = (id, name, family) => {
+      const using = (state.me.font || null) === id;
       const sample = h('span', 'font-sample', SAMPLE);
-      sample.style.fontFamily = useFont(f.id, SAMPLE);
-      const stateLabel = using ? '使用中' : has ? '使う' : `${f.price.toLocaleString('ja-JP')} pt`;
-      const card = h('button', { class: `font-card${using ? ' using' : ''}${has ? ' owned' : ''}${!has && !afford ? ' locked' : ''}`, type: 'button', 'data-press': true },
-        sample, h('span', 'font-meta', h('b', null, f.name), h('span', 'font-state', stateLabel)));
-      card.addEventListener('click', () => {
-        if (has) return wsSend({ type: 'equip', font: f.id });
-        if (!afford) {
-          shake(card);
-          return toast(`あと ${(f.price - (state.points || 0)).toLocaleString('ja-JP')} ポイント必要です`);
-        }
-        if (card.dataset.confirm) return wsSend({ type: 'buy', font: f.id });
-        card.dataset.confirm = '1';
-        $('.font-state', card).textContent = `${f.price.toLocaleString('ja-JP')} ptで買う？`;
-        card.classList.add('confirm');
-        popIn(card, { stiffness: 520, damping: 16 }, 0.94);
-        setTimeout(() => {
-          if (!card.isConnected) return;
-          delete card.dataset.confirm;
-          card.classList.remove('confirm');
-          $('.font-state', card).textContent = stateLabel;
-        }, 3000);
+      if (family) sample.style.fontFamily = family;
+      const el = h('button', { class: `font-card${using ? ' using' : ''}`, type: 'button', 'data-press': true, 'aria-pressed': String(using) },
+        sample, h('span', 'font-meta', h('b', null, name), h('span', 'font-state', using ? '使用中' : '使う')));
+      el.addEventListener('click', () => {
+        if (using) return;
+        wsSend({ type: 'font', font: id });
+        popIn(el, { stiffness: 480, damping: 14 }, 0.92);
       });
-      if (sheet.justBought === f.id) {
-        sheet.justBought = null;
-        setTimeout(() => popIn(card, { stiffness: 300, damping: 10 }, 0.7), 30);
-      }
-      cards.push(card);
-    }
+      return el;
+    };
+    const cards = [card(null, '標準', null), ...fontCatalog.map((f) => card(f.id, f.name, useFont(f.id)))];
     box.replaceChildren(...cards);
     if (first) {
       cards.forEach((c, i) => {
@@ -2449,7 +2399,6 @@
       });
     }
   }
-  $('#pointsBtn').addEventListener('click', openShop);
 
   /* =====================================================================
      Icons: pick an image, position it in a circle, upload a 256px square
@@ -2729,8 +2678,7 @@
       state.ready = true;
       state.me = remember(msg.you);
       state.blocks = msg.blocks || [];
-      fontCatalog = msg.shop?.fonts || [];
-      setPoints(msg.you.points || 0, 0);
+      fontCatalog = msg.fonts || [];
       state.vapid = msg.vapid;
       state.ice = msg.ice || [];
       state.reactions = msg.reactions;
@@ -2766,9 +2714,8 @@
       const lookChanged = state.me && (state.me.font !== msg.you.font || state.me.avatar !== msg.you.avatar || state.me.name !== msg.you.name);
       state.me = remember(msg.you);
       state.blocks = msg.blocks || [];
-      setPoints(msg.you.points || 0, 0);
       renderProfileButton();
-      renderShop();
+      renderFonts();
       if (lookChanged && !blocksChanged) rebuildActive();
       if (blocksChanged) {
         rebuildActive();
@@ -2939,16 +2886,6 @@
       renderMembersSheet();
       if (msg.user.id === state.me?.id) renderProfileButton();
     },
-    points(msg) {
-      setPoints(msg.points, msg.gain);
-      renderShop();
-    },
-    bought(msg) {
-      const f = fontById(msg.font);
-      toast(`「${f?.name || 'フォント'}」を手に入れました`);
-      sheet.justBought = msg.font;
-      renderShop();
-    },
     removed(msg) {
       const room = state.rooms.get(msg.room);
       if (!room) return;
@@ -3010,7 +2947,6 @@
           updateSend();
         }
       }
-      if (msg.op === 'buy' && msg.code === 'points') return toast('ポイントが足りません');
       if (msg.code === 'forbidden') return toast(msg.op === 'edit' ? 'このルームでは編集できません' : 'このルームでは送信取消できません');
       if (msg.code === 'blocked') toast('このユーザーにはメッセージを送れません');
       else if (msg.code === 'rate') toast('操作が速すぎます。少し待ってください');
