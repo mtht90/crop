@@ -42,11 +42,22 @@ export async function loadAssets(onProgress: (ratio: number) => void) {
   let done = 0;
   const total = HEROES.length + PROPS.length;
   const tick = () => onProgress(++done / total);
+  // VITE_ASSET_MODE=json: .glb を配信できないホスト向けに、base64 を入れた JSON から読み込む
+  const packed = import.meta.env.VITE_ASSET_MODE === 'json';
+  const load = async (path: string): Promise<GLTF> => {
+    if (!packed) return loader.loadAsync(`${BASE}${path}.glb`);
+    const res = await fetch(`${BASE}${path}.json`);
+    if (!res.ok) throw new Error(`${path}: HTTP ${res.status}`);
+    const bin = atob((await res.json()).glb);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return loader.parseAsync(bytes.buffer, '');
+  };
   for (const h of HEROES) {
-    jobs.push(loader.loadAsync(`${BASE}chars/${h.model}.glb`).then((g) => { toonify(g.scene); chars.set(h.model, g); tick(); }));
+    jobs.push(load(`chars/${h.model}`).then((g) => { toonify(g.scene); chars.set(h.model, g); tick(); }));
   }
   for (const p of PROPS) {
-    jobs.push(loader.loadAsync(`${BASE}props/${p}.glb`).then((g) => { toonify(g.scene); props.set(p, g); tick(); }));
+    jobs.push(load(`props/${p}`).then((g) => { toonify(g.scene); props.set(p, g); tick(); }));
   }
   await Promise.all(jobs);
 }
