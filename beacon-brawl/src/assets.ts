@@ -7,6 +7,8 @@ import { WEAPONS, type WeaponName } from './weapons';
 const BASE = import.meta.env.BASE_URL + 'assets/';
 /** キャラの表示倍率（VRM は実寸メートルなので、ゲーム内の縮尺に合わせて拡大） */
 export const HERO_SCALE = 1.5;
+/** スマホなどタッチ端末はテクスチャを半分に（6体で約470MB → 約120MB） */
+const TEXTURE_MAX = matchMedia('(pointer: coarse)').matches ? 512 : 1024;
 
 // 移植元リグの骨 (GLTFLoader が名前の "." を除去する) → VRM ヒューマノイド骨
 const BONE_MAP: Record<string, VRMHumanBoneName> = {
@@ -108,6 +110,7 @@ function buildHero(def: HeroDef, gltf: GLTF): HeroModel {
     m.castShadow = true;
     for (const mat of Array.isArray(m.material) ? m.material : [m.material]) if (!materials.includes(mat)) materials.push(mat);
   });
+  capTextures(materials, TEXTURE_MAX);
   for (const w of def.weapons) attachWeapon(vrm, w, def.color);
   const root = new THREE.Group();
   vrm.scene.scale.setScalar(HERO_SCALE);
@@ -122,7 +125,7 @@ function buildHero(def: HeroDef, gltf: GLTF): HeroModel {
   };
 }
 
-export async function loadAssets(onProgress: (ratio: number) => void) {
+export async function loadAssets(renderer: THREE.WebGLRenderer, onProgress: (ratio: number) => void) {
   const loader = new GLTFLoader();
   const vrmLoader = new GLTFLoader();
   vrmLoader.register((parser) => new VRMLoaderPlugin(parser));
@@ -158,14 +161,14 @@ export async function loadAssets(onProgress: (ratio: number) => void) {
   const vrms = HEROES.map((h) => load(vrmLoader, `vrm/${h.model}`, 'vrm').then((g) => { tick(); return g; }));
   await rigJob;
   (await Promise.all(vrms)).forEach((g, i) => heroes.set(HEROES[i].id, buildHero(HEROES[i], g)));
-  renderPortraits();
+  renderPortraits(renderer);
 }
 
-/** 各ヒーローの顔をオフスクリーンで撮って、UI用のアイコンにする */
-function renderPortraits() {
-  const size = 256;
-  const r = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
-  r.setSize(size, size, false);
+/** 各ヒーローの顔を撮って UI 用のアイコンにする。メインの描画コンテキストをそのまま使う
+ *  （別コンテキストを作ると全テクスチャが二重に確保され、スマホでメモリ不足になる） */
+function renderPortraits(r: THREE.WebGLRenderer) {
+  r.setPixelRatio(1);
+  r.setSize(256, 256, false);
   r.setClearColor(0x000000, 0);
   const scene = new THREE.Scene();
   const key = new THREE.DirectionalLight(0xffffff, 2.4); key.position.set(1.5, 3, 4);
@@ -184,16 +187,36 @@ function renderPortraits() {
     cam.position.set(head.x + 0.25, head.y + 0.05, head.z + 1.55);
     cam.lookAt(head);
     r.render(scene, cam);
-    m.portrait = r.domElement.toDataURL('image/webp', 0.9);
+    m.portrait = r.domElement.toDataURL('image/webp', 0.9); // 描画直後なので同期的に読める
     scene.remove(m.root);
     m.mixer.stopAllAction();
     m.root.rotation.y = 0;
   }
-  r.dispose();
-  r.forceContextLoss();
 }
 
-/** ヒーローのモデル。各ヒーロー1体だけ存在し、ロビーと対戦で使い回す */
+/** GPU メモリ節約: テクスチャを最大辺 max px に縮める（初回描画の前に行う） */
+function capTextures(materials: THREE.Material[], max: number) {
+  const seen = new Set<THREE.Texture>();
+  const visit = (v: unknown) => {
+    const t = v as THREE.Texture;
+    if (!t || !t.isTexture || seen.has(t)) return;
+    seen.add(t);
+    const img = t.image as (ImageBitmap | HTMLImageElement) & { close?: () => void };
+    if (!img || !img.width || Math.max(img.width, img.height) <= max) return;
+    const k = max / Math.max(img.width, img.height);
+    const c = document.createElement('canvas');
+    c.width = Math.max(1, Math.round(img.width * k)); c.height = Math.max(1, Math.round(img.height * k));
+    c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height);
+    t.image = c; t.needsUpdate = true;
+    img.close?.();
+  };
+  for (const m of materials) {
+    for (const v of Object.values(m)) visit(v);
+    const uniforms = (m as THREE.ShaderMaterial).uniforms;
+    if (uniforms) for (const u of Object.values(uniforms)) visit(u?.value);
+  }
+}
+
 /** 顔アイコンの data URL */
 export const portraitOf = (def: HeroDef) => heroes.get(def.id)!.portrait;
 

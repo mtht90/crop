@@ -10,7 +10,7 @@ import { initAudio, sfx } from './audio';
 
 const $ = (id: string) => document.getElementById(id)!;
 const canvas = $('c') as HTMLCanvasElement;
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
@@ -213,7 +213,7 @@ function frame(now: number) {
   requestAnimationFrame(frame);
 }
 
-loadAssets((k) => { $('loadfill').style.width = `${k * 100}%`; })
+loadAssets(renderer, (k) => { $('loadfill').style.width = `${k * 100}%`; })
   .then(() => {
     lobby = new Lobby();
     buildSelect();
@@ -222,6 +222,8 @@ loadAssets((k) => { $('loadfill').style.width = `${k * 100}%`; })
     requestAnimationFrame(frame);
   })
   .catch((e) => { $('loadtext').textContent = `読み込みに失敗しました: ${e?.message ?? e}`; });
+
+canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); $('loadtext').textContent = '描画がリセットされました。ページを再読み込みしてください。'; show('loading'); });
 
 // デバッグ・自動テスト用
 (window as unknown as Record<string, unknown>).__game = { get match() { return match; }, startMatch, HEROES };
