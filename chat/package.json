@@ -11,6 +11,9 @@
     "node": ">=18"
   },
   "dependencies": {
+    "ioredis": "^6.0.0",
+    "qrcode-generator": "^2.0.4",
+    "web-push": "^4.0.0",
     "ws": "^8.18.0"
   }
 }

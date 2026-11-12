@@ -4,6 +4,24 @@ services:
     runtime: node
     plan: free
     rootDir: chat
-    buildCommand: npm install
+    buildCommand: npm ci
     startCommand: npm start
     healthCheckPath: /healthz
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      # Stable secret: push notification (VAPID) keys are derived from it.
+      - key: SECRET
+        generateValue: true
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: inachat-store
+          property: connectionString
+
+  # Keeps rooms, history and push subscriptions across web service restarts.
+  - type: keyvalue
+    name: inachat-store
+    plan: free
+    maxmemoryPolicy: noeviction
+    ipAllowList: [] # private network only
