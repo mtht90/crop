@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <title>BEACON BRAWL</title>
+</head>
+<body>
+  <canvas id="c"></canvas>
+
+  <div id="loading" class="screen show">
+    <h1 class="logo">BEACON<span>BRAWL</span></h1>
+    <div class="loadbar"><div id="loadfill"></div></div>
+    <p id="loadtext">素材を読み込み中…</p>
+  </div>
+
+  <div id="title" class="screen">
+    <h1 class="logo">BEACON<span>BRAWL</span></h1>
+    <p class="tag">3 vs 3 拠点争奪アクション</p>
+    <button id="btn-start" class="primary">バトル開始</button>
+    <div class="howto">
+      <p>5つの拠点に乗って自チームの色に染めよう。3分後に多く持っていたチームの勝ち。</p>
+      <p><b>PC</b>：WASD 移動 ／ ドラッグ 視点 ／ Q・E スキル ／ Space 必殺技</p>
+      <p><b>スマホ</b>：左側スワイプ 移動 ／ 右側スワイプ 視点 ／ ボタンでスキル</p>
+      <p>通常攻撃は、敵が射程に入ると自動で出ます。</p>
+    </div>
+  </div>
+
+  <div id="select" class="screen">
+    <div id="info">
+      <div class="irole" id="i-role"></div>
+      <h2 id="i-name"></h2>
+      <p id="i-blurb"></p>
+      <div id="i-stats"></div>
+      <div id="i-skills"></div>
+    </div>
+    <div id="select-bottom">
+      <div id="cards"></div>
+      <div class="actions">
+        <div id="diff"></div>
+        <button id="btn-go" class="primary">出撃</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="hud">
+    <div id="top">
+      <div id="score-blue" class="score blue">0</div>
+      <div class="mid"><div id="timer">3:00</div><div id="beacons"></div></div>
+      <div id="score-red" class="score red">0</div>
+    </div>
+    <div id="side"><canvas id="minimap" width="160" height="100"></canvas><div id="allies"></div><div id="enemies"></div></div>
+    <div id="plates"></div>
+    <div id="floats"></div>
+    <div id="feed"></div>
+    <div id="announce"></div>
+    <div id="banner"></div>
+    <div id="count"></div>
+    <div id="respawn" style="display:none"></div>
+    <div id="myhp"><div id="myhp-bar"></div><span id="myhp-text"></span></div>
+    <div id="skills">
+      <div id="skill0" class="skill"></div>
+      <div id="skill1" class="skill"></div>
+      <div id="skill2" class="skill ult"></div>
+    </div>
+    <div id="stick"><div id="knob"></div></div>
+  </div>
+
+  <div id="result" class="screen">
+    <h1 id="r-title"></h1>
+    <p id="r-score"></p>
+    <table id="r-table"></table>
+    <div class="actions">
+      <button id="btn-again" class="primary">もう一度</button>
+      <button id="btn-back">キャラ選択へ</button>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
