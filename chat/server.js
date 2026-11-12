@@ -20,8 +20,30 @@ const MEDIA_BUDGET = (Number(process.env.MEDIA_BUDGET_MB) || (process.env.REDIS_
 const LOBBY = 'lobby';
 const REACTIONS = ['💙', '🩵', '👍', '😂', '🥺', '✨'];
 const ID_RE = /^[A-Za-z0-9_-]{1,24}$/;
+// Free (SIL Open Font License) Japanese fonts from Google Fonts, bought with points.
+const FONTS = [
+  { id: 'zen-maru', name: 'Zen Maru Gothic', family: 'Zen Maru Gothic', price: 300 },
+  { id: 'mplus-rounded', name: 'M PLUS Rounded 1c', family: 'M PLUS Rounded 1c', price: 300 },
+  { id: 'kosugi-maru', name: 'Kosugi Maru', family: 'Kosugi Maru', price: 300 },
+  { id: 'klee', name: 'Klee One', family: 'Klee One', price: 500 },
+  { id: 'yomogi', name: 'Yomogi', family: 'Yomogi', price: 500 },
+  { id: 'kurenaido', name: 'Zen Kurenaido', family: 'Zen Kurenaido', price: 500 },
+  { id: 'mochiy', name: 'Mochiy Pop One', family: 'Mochiy Pop One', price: 800 },
+  { id: 'hachimaru', name: 'Hachi Maru Pop', family: 'Hachi Maru Pop', price: 800 },
+  { id: 'yusei', name: 'Yusei Magic', family: 'Yusei Magic', price: 800 },
+  { id: 'dotgothic', name: 'DotGothic16', family: 'DotGothic16', price: 800 },
+  { id: 'shippori', name: 'Shippori Mincho', family: 'Shippori Mincho', price: 1000 },
+  { id: 'kaisei', name: 'Kaisei Decol', family: 'Kaisei Decol', price: 1000 },
+  { id: 'rocknroll', name: 'RocknRoll One', family: 'RocknRoll One', price: 1200 },
+  { id: 'reggae', name: 'Reggae One', family: 'Reggae One', price: 1500 },
+  { id: 'dela', name: 'Dela Gothic One', family: 'Dela Gothic One', price: 1500 },
+  { id: 'rampart', name: 'Rampart One', family: 'Rampart One', price: 1500 },
+];
+const FONT_BY_ID = new Map(FONTS.map((f) => [f.id, f]));
+const POINTS_PER_MESSAGE_MAX = 100;
 const MEDIA_TYPES = {
   image: ['image/jpeg', 'image/webp', 'image/png', 'image/gif'],
+  avatar: ['image/jpeg', 'image/webp', 'image/png'],
   audio: ['audio/webm', 'audio/ogg', 'audio/mp4', 'audio/mpeg', 'audio/aac', 'audio/x-m4a'],
 };
 
@@ -138,6 +160,14 @@ function checkPass(pass, stored) {
 
 const userIdOf = (uid) => crypto.createHash('sha256').update(uid).digest('hex').slice(0, 16);
 const nameOf = (id) => users.get(id)?.name || '退出したユーザー';
+// Public face of a user: what other people see next to their messages.
+function face(id) {
+  const u = users.get(id);
+  return { id, name: u?.name || '退出したユーザー', font: u?.font || null, avatar: u?.avatar || null };
+}
+const me = (user) => ({
+  ...face(user.id), blocks: user.blocks, points: user.points || 0, fonts: user.fonts || [], earned: user.earned || 0,
+});
 
 /* ---------- web push ---------- */
 
@@ -234,6 +264,7 @@ function pushTo(userId, payload, topic) {
 }
 
 const isWatching = (room, userId) => [...room.clients].some((c) => c.user.id === userId && c.active === room.id && c.visible);
+const inForeground = (userId) => [...wss.clients].some((c) => c.user?.id === userId && c.visible);
 const blocks = (userId, otherId) => !!users.get(userId)?.blocks?.includes(otherId);
 
 function previewText(m) {
@@ -249,7 +280,7 @@ function notifyMessage(room, m) {
   const title = room.kind === 'dm' ? sender : room.name;
   const text = [...previewText(m)].slice(0, 140).join('');
   for (const [userId, member] of Object.entries(room.members)) {
-    if (userId === m.from.id || blocks(userId, m.from.id) || isWatching(room, userId)) continue;
+    if (userId === m.from.id || blocks(userId, m.from.id) || inForeground(userId)) continue;
     const mentioned = m.mentions?.includes(userId);
     if (member.muted && !mentioned) continue;
     pushTo(userId, {
@@ -280,7 +311,8 @@ const VENDOR = {
 const CSP = [
   "default-src 'self'",
   "script-src 'self'",
-  "style-src 'self' 'unsafe-inline'",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' https://fonts.gstatic.com",
   "img-src 'self' data: blob: https:",
   "media-src 'self' blob:",
   "connect-src 'self' ws: wss:",
@@ -329,7 +361,7 @@ async function handleUpload(req, res, url) {
   const kind = url.searchParams.get('kind');
   const type = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
   if (!userId || !users.has(userId)) return json(401, { error: 'auth' });
-  if (!room || !room.members[userId]) return json(403, { error: 'room' });
+  if (kind !== 'avatar' && (!room || !room.members[userId])) return json(403, { error: 'room' });
   if (!MEDIA_TYPES[kind]?.includes(type)) return json(415, { error: 'type' });
   if (!uploadAllowed(userId)) return json(429, { error: 'rate' });
   let buf;
@@ -338,9 +370,9 @@ async function handleUpload(req, res, url) {
   } catch (err) {
     return json(err.code === 413 ? 413 : 400, { error: 'body' });
   }
-  if (!buf.length) return json(400, { error: 'empty' });
+  if (!buf.length || (kind === 'avatar' && buf.length > 300 * 1024)) return json(400, { error: 'size' });
   const id = crypto.randomBytes(12).toString('base64url');
-  const info = { type, kind, size: buf.length, ts: Date.now(), room: room.id, by: userId };
+  const info = { type, kind, size: buf.length, ts: Date.now(), room: room?.id || null, by: userId };
   try {
     await store.putMedia(id, buf, info);
   } catch (err) {
@@ -355,10 +387,11 @@ async function handleUpload(req, res, url) {
 // Keep stored media under budget by dropping the oldest files first.
 function enforceMediaBudget() {
   let total = 0;
-  for (const m of media.values()) total += m.size;
+  for (const m of media.values()) if (m.kind !== 'avatar') total += m.size;
   if (total <= MEDIA_BUDGET) return;
   const drop = [];
   for (const [id, m] of [...media].sort((a, b) => a[1].ts - b[1].ts)) {
+    if (m.kind === 'avatar') continue; // icons are small and always kept
     if (total <= MEDIA_BUDGET * 0.9) break;
     total -= m.size;
     drop.push(id);
@@ -478,7 +511,7 @@ const socketsOf = (userId) => [...wss.clients].filter((c) => c.user && c.user.id
 
 function online(room) {
   const seen = new Map();
-  for (const c of room.clients) if (c.user) seen.set(c.user.id, { id: c.user.id, name: c.user.name });
+  for (const c of room.clients) if (c.user) seen.set(c.user.id, face(c.user.id));
   return [...seen.values()];
 }
 
@@ -513,6 +546,9 @@ function summary(room, userId) {
     kind: room.kind,
     name: roomName(room, userId),
     peer,
+    avatar: room.kind === 'dm' ? face(peer).avatar : room.avatar || null,
+    allowEdit: room.allowEdit !== false,
+    allowUnsend: room.allowUnsend !== false,
     isPublic: room.isPublic,
     locked: !!room.pass,
     owner: room.owner === userId,
@@ -529,7 +565,7 @@ function summary(room, userId) {
 }
 
 // Messages carry the sender's current name.
-const out = (m) => (m.sys ? m : { ...m, from: { id: m.from.id, name: nameOf(m.from.id) } });
+const out = (m) => (m.sys ? m : { ...m, from: face(m.from.id) });
 const reads = (room) => Object.fromEntries(Object.entries(room.members).map(([id, m]) => [id, m.read]));
 
 function allow(ws, cost = 1) {
@@ -652,6 +688,24 @@ function iceServers() {
   return list;
 }
 
+function sendYou(user) {
+  for (const s of socketsOf(user.id)) send(s, { type: 'you', you: me(user), blocks: user.blocks });
+}
+// Tell everyone who shares a room with this user about their new look.
+function profileChanged(userId) {
+  const f = face(userId);
+  const seen = new Set();
+  for (const room of rooms.values()) {
+    if (!room.members[userId]) continue;
+    for (const c of room.clients) {
+      if (seen.has(c)) continue;
+      seen.add(c);
+      send(c, { type: 'profile', user: f });
+    }
+    if (room.kind === 'dm') for (const id of room.dm) for (const s of socketsOf(id)) send(s, { type: 'room', room: summary(room, id) });
+  }
+}
+
 const callPeers = (room) => [...room.call.values()].map(({ id, name, since, cam, mic }) => ({ id, name, since, cam, mic }));
 function broadcastCall(room) {
   broadcast(room, { type: 'call', room: room.id, peers: callPeers(room), startedAt: room.callStarted || null });
@@ -682,7 +736,7 @@ const handlers = {
     const id = userIdOf(uid);
     let user = users.get(id);
     if (!user) {
-      user = { id, name, blocks: [], createdAt: Date.now() };
+      user = { id, name, blocks: [], points: 0, fonts: [], font: null, avatar: null, createdAt: Date.now() };
       users.set(id, user);
       markUser(user);
     } else if (user.name !== name) {
@@ -697,7 +751,7 @@ const handlers = {
       mine.push(summary(room, id));
     }
     send(ws, {
-      type: 'ready', you: ws.user, blocks: user.blocks, rooms: mine,
+      type: 'ready', you: me(user), blocks: user.blocks, rooms: mine, shop: { fonts: FONTS },
       reactions: REACTIONS, vapid: vapidPublic, ice: iceServers(),
     });
     for (const rid of ws.rooms) sendPresence(rooms.get(rid));
@@ -734,13 +788,74 @@ const handlers = {
     markUser(user);
     for (const s of socketsOf(ws.user.id)) {
       s.user = { ...s.user, name };
-      send(s, { type: 'you', you: s.user, blocks: user.blocks });
+      send(s, { type: 'you', you: me(user), blocks: user.blocks });
     }
-    for (const rid of ws.rooms) {
-      const room = rooms.get(rid);
-      sendPresence(room);
-      if (room.kind === 'dm') for (const id of room.dm) refreshFor(room, id);
+    for (const rid of ws.rooms) sendPresence(rooms.get(rid));
+    profileChanged(ws.user.id);
+  },
+
+  buy(ws, msg) {
+    const font = FONT_BY_ID.get(msg.font);
+    const user = users.get(ws.user.id);
+    if (!font || !allow(ws)) return;
+    user.fonts = user.fonts || [];
+    if (user.fonts.includes(font.id)) return sendYou(user);
+    if ((user.points || 0) < font.price) return send(ws, { type: 'error', code: 'points', op: 'buy' });
+    user.points -= font.price;
+    user.fonts.push(font.id);
+    markUser(user);
+    sendYou(user);
+    send(ws, { type: 'bought', font: font.id });
+  },
+
+  equip(ws, msg) {
+    const user = users.get(ws.user.id);
+    const id = msg.font == null ? null : String(msg.font);
+    if (id && !(user.fonts || []).includes(id)) return;
+    user.font = id;
+    markUser(user);
+    sendYou(user);
+    profileChanged(user.id);
+  },
+
+  avatar(ws, msg) {
+    const user = users.get(ws.user.id);
+    const id = msg.media == null ? null : String(msg.media);
+    if (id) {
+      const info = media.get(id);
+      if (!info || info.kind !== 'avatar' || info.by !== user.id) return;
     }
+    if (user.avatar && user.avatar !== id) dropMedia([user.avatar]);
+    user.avatar = id;
+    markUser(user);
+    sendYou(user);
+    profileChanged(user.id);
+  },
+
+  roomSettings(ws, msg) {
+    const room = memberRoom(ws, msg.room);
+    if (!room || room.kind !== 'group' || !isAdmin(room, ws.user.id)) return;
+    if ('avatar' in msg) {
+      const id = msg.avatar == null ? null : String(msg.avatar);
+      if (id) {
+        const info = media.get(id);
+        if (!info || info.kind !== 'avatar' || info.by !== ws.user.id) return;
+      }
+      if (room.avatar && room.avatar !== id) dropMedia([room.avatar]);
+      room.avatar = id;
+    }
+    if ('allowEdit' in msg) room.allowEdit = !!msg.allowEdit;
+    if ('allowUnsend' in msg) room.allowUnsend = !!msg.allowUnsend;
+    if (typeof msg.name === 'string') {
+      const name = clean(msg.name, 30);
+      if (name && name !== room.name) {
+        room.name = name;
+        systemMessage(room, `${ws.user.name}さんがルーム名を「${name}」に変更しました`);
+      }
+    }
+    markRoom(room);
+    for (const id of Object.keys(room.members)) for (const s of socketsOf(id)) send(s, { type: 'room', room: summary(room, id) });
+    if (room.isPublic) exploreChanged();
   },
 
   block(ws, msg) {
@@ -749,7 +864,7 @@ const handlers = {
     user.blocks = user.blocks.filter((id) => id !== msg.user);
     if (msg.on) user.blocks.push(msg.user);
     markUser(user);
-    for (const s of socketsOf(ws.user.id)) send(s, { type: 'you', you: s.user, blocks: user.blocks });
+    sendYou(user);
   },
 
   create(ws, msg) {
@@ -864,7 +979,7 @@ const handlers = {
     const role = (id) => (room.owner === id ? 'owner' : room.admins.includes(id) ? 'admin' : 'member');
     const order = { owner: 0, admin: 1, member: 2 };
     const list = Object.entries(room.members)
-      .map(([id, m]) => ({ id, name: nameOf(id), role: role(id), online: on.has(id), joinedAt: m.joinedAt }))
+      .map(([id, m]) => ({ ...face(id), role: role(id), online: on.has(id), joinedAt: m.joinedAt }))
       .sort((a, b) => order[a.role] - order[b.role] || b.online - a.online || a.name.localeCompare(b.name, 'ja'));
     send(ws, { type: 'members', room: room.id, list, banned: isAdmin(room, ws.user.id) ? room.banned.map((id) => ({ id, name: nameOf(id) })) : [] });
   },
@@ -952,6 +1067,16 @@ const handlers = {
     if (mentions.length) m.mentions = mentions;
     pushMessage(room, m);
     room.members[ws.user.id].read = m.ts;
+    // Points: one per character typed (spaces don't count), capped per message.
+    const chars = [...text.replace(/\s/g, '')].length;
+    if (chars >= 2) {
+      const user = users.get(ws.user.id);
+      const gain = Math.min(chars, POINTS_PER_MESSAGE_MAX);
+      user.points = (user.points || 0) + gain;
+      user.earned = (user.earned || 0) + gain;
+      markUser(user);
+      for (const s of socketsOf(user.id)) send(s, { type: 'points', points: user.points, gain });
+    }
 
     broadcast(room, { type: 'msg', room: room.id, message: out(m) }, ws);
     send(ws, { type: 'msg', room: room.id, message: out(m), cid });
@@ -974,6 +1099,7 @@ const handlers = {
     const m = room?.msgs.find((x) => x.id === msg.id);
     const text = clean(msg.text, 2000, true);
     if (!m || m.sys || m.deleted || m.sticker || m.from.id !== ws.user.id || !allow(ws)) return;
+    if (room.allowEdit === false && !isAdmin(room, ws.user.id)) return send(ws, { type: 'error', code: 'forbidden', op: 'edit', room: room.id });
     if (!text && !m.media) return;
     m.text = text;
     m.edited = Date.now();
@@ -988,7 +1114,9 @@ const handlers = {
     const m = room?.msgs.find((x) => x.id === msg.id);
     if (!m || m.sys || m.deleted) return;
     const mine = m.from.id === ws.user.id;
-    if (!mine && !(room.kind === 'group' && isAdmin(room, ws.user.id))) return;
+    const admin = room.kind === 'group' && isAdmin(room, ws.user.id);
+    if (!mine && !admin) return;
+    if (mine && !admin && room.allowUnsend === false) return send(ws, { type: 'error', code: 'forbidden', op: 'unsend', room: room.id });
     if (m.media) dropMedia([m.media.id]);
     Object.assign(m, { deleted: mine ? 'self' : 'admin', text: '', reactions: {} });
     for (const k of ['media', 'sticker', 'preview', 'mentions', 'replyTo', 'edited']) delete m[k];
@@ -1163,7 +1291,7 @@ const heartbeat = setInterval(() => {
 
 async function main() {
   const data = await store.load();
-  for (const u of Object.values(data.users || {})) users.set(u.id, { blocks: [], ...u });
+  for (const u of Object.values(data.users || {})) users.set(u.id, { blocks: [], points: 0, fonts: [], ...u });
   for (const r of data.rooms) {
     // Rooms saved by the previous version keep their messages in `history` and names on members.
     const { history, ...rest } = r;

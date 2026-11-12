@@ -240,16 +240,53 @@
   };
   const activeRoom = () => state.rooms.get(state.activeId);
 
+  /* ---------- people: name, icon and font as other people see them ---------- */
+  const people = new Map(); // id -> { id, name, avatar, font }
+  function remember(u) {
+    if (!u || !u.id) return u;
+    const prev = people.get(u.id);
+    const next = { ...prev, ...u };
+    if (!('avatar' in u) && prev) next.avatar = prev.avatar;
+    if (!('font' in u) && prev) next.font = prev.font;
+    people.set(u.id, next);
+    return next;
+  }
+  const personOf = (u) => ({ ...u, ...(people.get(u.id) || {}) });
+  function iconImg(id, alt = '') {
+    const img = h('img', { alt, decoding: 'async', loading: 'lazy', draggable: 'false' });
+    img.addEventListener('error', () => img.remove());
+    img.src = `/media/${id}`;
+    return img;
+  }
   function avatar(user) {
-    const node = h('span', 'avatar', initial(user.name));
-    node.style.setProperty('--h', hueOf(user.id));
-    node.title = user.name;
+    const u = personOf(user);
+    const node = h('span', 'avatar', initial(u.name));
+    node.style.setProperty('--h', hueOf(u.id));
+    node.title = u.name;
+    if (u.avatar) node.append(iconImg(u.avatar));
     return node;
   }
   function roomAvatar(s) {
     const node = h('span', `room-ava${s.kind === 'dm' ? ' dm' : ''}`, initial(s.name));
     node.style.setProperty('--h', hueOf(s.kind === 'dm' ? s.peer : s.id));
+    if (s.avatar) node.append(iconImg(s.avatar));
     return node;
+  }
+
+  /* ---------- fonts from the shop (free Google Fonts) ---------- */
+  let fontCatalog = [];
+  const fontById = (id) => fontCatalog.find((f) => f.id === id);
+  const loadedFonts = new Set();
+  function useFont(id, sample) {
+    const f = fontById(id);
+    if (!f) return null;
+    const key = sample ? `${id}:sample` : id;
+    if (!loadedFonts.has(key) && !(sample && loadedFonts.has(id))) {
+      loadedFonts.add(key);
+      const q = `family=${encodeURIComponent(f.family).replace(/%20/g, '+')}&display=swap${sample ? `&text=${encodeURIComponent(sample)}` : ''}`;
+      document.head.append(h('link', { rel: 'stylesheet', href: `https://fonts.googleapis.com/css2?${q}` }));
+    }
+    return `'${f.family}', var(--font-base)`;
   }
 
   let toastTimer = 0;
@@ -771,7 +808,11 @@
       meta.append(acts);
     }
     meta.append(h('span', 'receipt', receiptText(m)), h('span', 'edited', m.edited ? '編集済み' : ''), h('time', null, timeOf(m.ts)));
-    const col = h('div', 'col', h('span', 'name', m.from.name), h('div', 'line', buildBody(m), meta));
+    const who = personOf(m.from);
+    const body = buildBody(m);
+    const family = who.font && !m.deleted ? useFont(who.font) : null;
+    if (family) body.style.fontFamily = family;
+    const col = h('div', 'col', h('span', 'name', who.name), h('div', 'line', body, meta));
     if (m.preview && !m.deleted) {
       const p = m.preview;
       col.append(h('a', { class: 'link-card', href: p.url, target: '_blank', rel: 'noopener noreferrer' },
@@ -962,69 +1003,112 @@
     else setReply(null);
   });
 
-  /* ---------- popover: reactions + actions ---------- */
+  /* ---------- long-press menu: the message lifts out over frosted glass ---------- */
   let popoverFor = null;
-  function closePopover() {
-    if (!popoverFor) return;
-    popoverFor.row.classList.remove('active');
-    popoverFor = null;
-    popover.hidden = true;
-  }
-  function openPopover(entry) {
-    closePopover();
-    if (entry.data.deleted) return;
-    popoverFor = entry;
-    entry.row.classList.add('active');
-    const m = entry.data;
+  let menu = null; // { layer, clone, bar, list, lift, entry }
+  function canEdit(m) {
     const room = activeRoom();
-    const items = state.reactions.map((emoji) => h('button', { class: 'emo', type: 'button', 'data-emoji': emoji, 'data-press': true }, emoji));
-    const act = (key, icon, label) => h('button', { class: 'act-btn', type: 'button', 'data-act': key, 'data-press': true, html: `${icon}<span>${label}</span>` });
-    const actions = [act('reply', ICONS.reply, '返信')];
-    if (m.text) actions.push(act('copy', ICONS.copy, 'コピー'));
-    if (isMine(m) && m.text && !m.sticker) actions.push(act('edit', ICONS.edit, '編集'));
-    if (isMine(m)) actions.push(act('unsend', ICONS.undo, '送信取消'));
-    else if (room?.s.admin && room.s.kind === 'group') actions.push(act('unsend', ICONS.trash, '削除'));
-    popover.replaceChildren(h('div', 'pop-row', items), h('div', 'pop-row', actions));
-    popover.hidden = false;
-    const anchor = $('.bubble', entry.row) || entry.row;
-    const rect = anchor.getBoundingClientRect();
-    const w = popover.offsetWidth;
-    const ph = popover.offsetHeight;
+    return isMine(m) && !!m.text && !m.sticker && !m.deleted && (room?.s.allowEdit !== false || room?.s.admin);
+  }
+  function canUnsend(m) {
+    const room = activeRoom();
+    if (m.deleted) return false;
+    if (isMine(m)) return room?.s.allowUnsend !== false || room?.s.admin;
+    return !!room?.s.admin && room.s.kind === 'group';
+  }
+  function closePopover() {
+    if (!menu) return;
+    const { layer, lift, entry } = menu;
+    menu = null;
+    popoverFor = null;
+    layer.style.pointerEvents = 'none';
+    lift.onRest = () => {
+      layer.remove();
+      entry.row.style.visibility = '';
+    };
+    lift.to(0, { stiffness: 420, damping: 34 });
+  }
+  function openPopover(entry, point, fromTouch = false) {
+    closePopover();
+    if (entry.data.deleted || !entry.row.isConnected) return;
+    const m = entry.data;
     const mine = entry.row.classList.contains('me');
-    const left = clamp(mine ? rect.right - w : rect.left, 8, innerWidth - w - 8);
-    const above = rect.top - ph - 8 > 8;
-    const top = above ? rect.top - ph - 8 : Math.min(rect.bottom + 8, innerHeight - ph - 8);
-    popover.style.left = `${left}px`;
-    popover.style.top = `${top}px`;
-    popover.style.transformOrigin = `${mine ? '100%' : '0%'} ${above ? '100%' : '0%'}`;
-    play({ stiffness: 420, damping: 24 }, (p) => {
-      popover.style.transform = `scale(${mix(0.6, 1, p).toFixed(4)})`;
-      popover.style.opacity = clamp(p * 2, 0, 1).toFixed(3);
-    });
-    [...items, ...actions].forEach((btn, i) => {
+    const source = $('.line', entry.row) || entry.row;
+    sinkSprings.get(source)?.jump(1); // measure at full size, not mid "press" squish
+    const rect = source.getBoundingClientRect();
+    popoverFor = entry;
+    navigator.vibrate?.(14);
+
+    // Keep the row's classes so the copy looks exactly like the original bubble.
+    const copy = source.cloneNode(true);
+    $('.side-meta .acts', copy)?.remove();
+    copy.style.scale = '';
+    const clone = h('div', `${entry.row.className.replace(/\b(active|flash|pending)\b/g, '')} lifted`, copy);
+    Object.assign(clone.style, { position: 'fixed', left: `${rect.left}px`, top: `${rect.top}px`, width: `${rect.width}px`, margin: '0' });
+
+    const bar = h('div', 'ctx-bar', state.reactions.map((emoji) => h('button', { class: 'emo', type: 'button', 'data-emoji': emoji, 'data-press': true, 'aria-label': `${emoji}でリアクション` }, emoji)));
+    const item = (key, icon, label, danger) => h('button', { class: `ctx-item${danger ? ' danger' : ''}`, type: 'button', 'data-act': key, 'data-press': true }, h('span', null, label), h('span', { class: 'ctx-icon', html: icon, 'aria-hidden': 'true' }));
+    const items = [item('reply', ICONS.reply, '返信')];
+    if (m.text) items.push(item('copy', ICONS.copy, 'コピー'));
+    if (canEdit(m)) items.push(item('edit', ICONS.edit, '編集'));
+    if (canUnsend(m)) items.push(isMine(m) ? item('unsend', ICONS.undo, '送信を取り消す', true) : item('unsend', ICONS.trash, '管理者として削除', true));
+    const listEl = h('div', { class: 'ctx-list', role: 'menu' }, items);
+    const layer = h('div', { class: 'ctx-layer', role: 'dialog', 'aria-label': 'メッセージのメニュー' }, h('div', 'ctx-scrim'), clone, bar, listEl);
+    document.body.append(layer);
+    entry.row.style.visibility = 'hidden';
+
+    // Lay out: reactions above, menu below; slide the bubble up if the menu would fall off screen.
+    const pad = 12;
+    const barH = bar.offsetHeight;
+    const listH = listEl.offsetHeight;
+    const listW = listEl.offsetWidth;
+    const barW = bar.offsetWidth;
+    let top = rect.top;
+    const maxTop = innerHeight - pad - listH - 10 - rect.height;
+    const minTop = pad + barH + 10 + (narrow.matches ? 0 : 0);
+    const targetTop = clamp(top, minTop, Math.max(minTop, maxTop));
+    const dy = targetTop - top;
+    const anchorX = point && !narrow.matches ? point.x : mine ? rect.right : rect.left;
+    const left = (w) => clamp(mine ? anchorX - w : anchorX, pad, innerWidth - w - pad);
+    Object.assign(bar.style, { left: `${left(barW)}px`, top: `${targetTop - barH - 10}px`, transformOrigin: mine ? '100% 100%' : '0% 100%' });
+    Object.assign(listEl.style, { left: `${left(listW)}px`, top: `${targetTop + rect.height + 10}px`, transformOrigin: mine ? '100% 0%' : '0% 0%' });
+
+    const scrim = $('.ctx-scrim', layer);
+    const lift = new Spring(0, (p) => {
+      scrim.style.opacity = clamp(p, 0, 1).toFixed(3);
+      clone.style.transform = `translateY(${(dy * p).toFixed(2)}px) scale(${mix(1, 1.035, p).toFixed(4)})`;
+      bar.style.transform = `translateY(${(8 * (1 - p)).toFixed(2)}px) scale(${mix(0.6, 1, p).toFixed(4)})`;
+      bar.style.opacity = clamp(p * 1.6, 0, 1).toFixed(3);
+      listEl.style.transform = `translateY(${(-8 * (1 - p)).toFixed(2)}px) scale(${mix(0.7, 1, p).toFixed(4)})`;
+      listEl.style.opacity = clamp(p * 1.6, 0, 1).toFixed(3);
+    }, { stiffness: 380, damping: 26, precision: 0.001 });
+    lift.onUpdate(0);
+    lift.to(1);
+    [...bar.children].forEach((btn, i) => {
       btn.style.transform = 'scale(0)';
-      setTimeout(() => play({ stiffness: 460, damping: 15 }, (p) => { btn.style.transform = `scale(${p.toFixed(4)})`; }), 30 + i * 22);
+      setTimeout(() => play({ stiffness: 480, damping: 15 }, (p) => { btn.style.transform = `scale(${p.toFixed(4)})`; }), 40 + i * 24);
+    });
+    // A long press must not let the finger's release tap whatever is now under it.
+    menu = { layer, clone, bar, list: listEl, lift, entry, ready: !fromTouch };
+
+    layer.addEventListener('click', async (e) => {
+      if (menu && !menu.ready) return;
+      const btn = e.target.closest('button');
+      if (!btn) return closePopover();
+      const target = entry;
+      closePopover();
+      if (btn.dataset.emoji) return react(target.data.id, btn.dataset.emoji, $('.bubble', target.row));
+      const a = btn.dataset.act;
+      if (a === 'reply') setReply(target);
+      else if (a === 'copy') {
+        try {
+          await navigator.clipboard.writeText(target.data.text);
+          toast('コピーしました');
+        } catch { toast('コピーできませんでした'); }
+      } else if (a === 'edit') setEditing(target);
+      else if (a === 'unsend') wsSend({ type: 'unsend', room: state.activeId, id: target.data.id });
     });
   }
-  popover.addEventListener('click', async (e) => {
-    const btn = e.target.closest('button');
-    if (!btn || !popoverFor) return;
-    const entry = popoverFor;
-    closePopover();
-    if (btn.dataset.emoji) return react(entry.data.id, btn.dataset.emoji, $('.bubble', entry.row));
-    const a = btn.dataset.act;
-    if (a === 'reply') setReply(entry);
-    else if (a === 'copy') {
-      try {
-        await navigator.clipboard.writeText(entry.data.text);
-        toast('コピーしました');
-      } catch { toast('コピーできませんでした'); }
-    } else if (a === 'edit') setEditing(entry);
-    else if (a === 'unsend') wsSend({ type: 'unsend', room: state.activeId, id: entry.data.id });
-  });
-  document.addEventListener('pointerdown', (e) => {
-    if (popoverFor && !popover.contains(e.target) && !e.target.closest('.act')) closePopover();
-  });
 
   /* ---------- list interactions ---------- */
   const entryOf = (node) => {
@@ -1041,6 +1125,7 @@
       } else wsSend({ type: 'jump', room: state.activeId, id: quote.dataset.target });
       return;
     }
+    if (suppressClick) return;
     const img = e.target.closest('.bubble.photo img');
     if (img) return openViewer(img);
     const playBtn = e.target.closest('.voice-play, .voice-bars');
@@ -1052,8 +1137,7 @@
     const act = e.target.closest('.act');
     if (!act) return;
     if (act.dataset.action === 'reply') setReply(entry);
-    else if (popoverFor === entry) closePopover();
-    else openPopover(entry);
+    else openPopover(entry, { x: e.clientX, y: e.clientY });
   });
   list.addEventListener('dblclick', (e) => {
     const bubble = e.target.closest('.bubble');
@@ -1062,27 +1146,61 @@
     getSelection()?.removeAllRanges();
     react(entry.data.id, state.reactions[0], bubble);
   });
+  // Right click (desktop) or the platform long-press (Android) opens the same menu.
+  list.addEventListener('contextmenu', (e) => {
+    const entry = entryOf(e.target);
+    if (!entry || e.target.closest('a')) return;
+    e.preventDefault();
+    if (!menu && !(gesture && gesture.long)) openPopover(entry, { x: e.clientX, y: e.clientY });
+  });
 
   const SWIPE_AT = 58;
+  const LONG_PRESS = 420;
   const dragSprings = new WeakMap();
+  const sinkSprings = new WeakMap();
   let gesture = null;
   let lastTap = { id: null, time: 0 };
+  let suppressClick = false;
   function setDrag(row, x) {
     row.style.setProperty('--drag', `${x.toFixed(2)}px`);
     row.style.setProperty('--hint', clamp(x / SWIPE_AT, 0, 1).toFixed(3));
+  }
+  function sink(row, on) {
+    const line = $('.line', row);
+    if (!line) return;
+    let s = sinkSprings.get(line);
+    if (!s) {
+      s = new Spring(1, (v) => { line.style.scale = v === 1 ? '' : v.toFixed(4); }, { precision: 0.001 });
+      sinkSprings.set(line, s);
+    }
+    s.to(on ? 0.965 : 1, on ? { stiffness: 160, damping: 20 } : { stiffness: 420, damping: 16 });
   }
   list.addEventListener('pointerdown', (e) => {
     if (e.pointerType === 'mouse' || e.clientX < 28) return;
     const entry = entryOf(e.target);
     if (!entry) return;
-    gesture = { entry, id: e.pointerId, x: e.clientX, y: e.clientY, target: e.target, dragging: false, armed: false, moved: false, wasOpen: popoverFor === entry };
+    const g = { entry, id: e.pointerId, x: e.clientX, y: e.clientY, target: e.target, dragging: false, armed: false, moved: false, long: false };
+    gesture = g;
+    if (!entry.data.deleted && e.target.closest('.line')) {
+      sink(entry.row, true);
+      g.timer = setTimeout(() => {
+        if (gesture !== g || g.moved || g.dragging) return;
+        g.long = true;
+        sink(entry.row, false);
+        openPopover(entry, null, true);
+      }, LONG_PRESS);
+    }
   });
   list.addEventListener('pointermove', (e) => {
     const g = gesture;
-    if (!g || e.pointerId !== g.id) return;
+    if (!g || e.pointerId !== g.id || g.long) return;
     const dx = e.clientX - g.x;
     const dy = e.clientY - g.y;
-    if (Math.abs(dx) > 8 || Math.abs(dy) > 8) g.moved = true;
+    if (!g.moved && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
+      g.moved = true;
+      clearTimeout(g.timer);
+      sink(g.entry.row, false);
+    }
     if (!g.dragging) {
       if (dx < 10 || Math.abs(dx) < Math.abs(dy) * 1.5 || g.entry.data.deleted) return;
       g.dragging = true;
@@ -1106,7 +1224,18 @@
     const g = gesture;
     if (!g || e.pointerId !== g.id) return;
     gesture = null;
+    clearTimeout(g.timer);
     const { row } = g.entry;
+    if (g.long) {
+      // The finger lifting after a long press must not also count as a tap.
+      suppressClick = true;
+      setTimeout(() => {
+        suppressClick = false;
+        if (menu) menu.ready = true;
+      }, 120);
+      return;
+    }
+    sink(row, false);
     if (g.dragging) {
       let s = dragSprings.get(row);
       if (!s) {
@@ -1128,14 +1257,10 @@
     const bubble = g.target.closest?.('.bubble');
     if (!bubble || g.target.closest('a, .quote, img, .voice-play, .voice-bars')) return;
     const now = performance.now();
-    if (lastTap.id === g.entry.data.id && now - lastTap.time < 420) {
+    if (lastTap.id === g.entry.data.id && now - lastTap.time < 380) {
       lastTap = { id: null, time: 0 };
-      closePopover();
       if (!g.entry.data.deleted) react(g.entry.data.id, state.reactions[0], bubble);
-    } else {
-      lastTap = { id: g.entry.data.id, time: now };
-      if (!g.wasOpen) openPopover(g.entry);
-    }
+    } else lastTap = { id: g.entry.data.id, time: now };
   }
   list.addEventListener('pointerup', (e) => endGesture(e, false));
   list.addEventListener('pointercancel', (e) => endGesture(e, true));
@@ -1991,6 +2116,29 @@
       notify.querySelector('small').textContent = on ? '新着メッセージを通知します' : 'オフ（メンションは届きます）';
     });
     const btn = (label, fn) => h('button', { class: 'ghost-btn', type: 'button', 'data-press': true, onclick: fn }, label);
+    let adminPart = null;
+    if (!dm && s.admin) {
+      const name = field('ルーム名', { maxlength: 30, value: s.name, enterkeyhint: 'done' });
+      const saveName = h('button', { class: 'pill-btn', type: 'button', 'data-press': true }, '変更');
+      saveName.addEventListener('click', () => {
+        const v = name.input.value.trim();
+        if (!v) return shake(name.wrap);
+        if (v !== s.name) wsSend({ type: 'roomSettings', room: id, name: v });
+        toast('ルーム名を変更しました');
+      });
+      adminPart = h('div', null,
+        h('h3', null, '管理者の設定'),
+        h('div', 'inline-field', name.wrap, saveName),
+        h('div', 'list-btns', btn('ルームのアイコンを変更', () => editIcon({
+          title: 'ルームのアイコン',
+          round: false,
+          onSave: (mid) => wsSend({ type: 'roomSettings', room: id, avatar: mid }),
+          onRemove: s.avatar ? () => wsSend({ type: 'roomSettings', room: id, avatar: null }) : null,
+        }))),
+        h('div', { style: 'height:10px' }),
+        switchRow('メンバーのメッセージ編集', '管理者はいつでも編集できます', s.allowEdit !== false, (on) => wsSend({ type: 'roomSettings', room: id, allowEdit: on })),
+        switchRow('メンバーの送信取消', '管理者はいつでも削除できます', s.allowUnsend !== false, (on) => wsSend({ type: 'roomSettings', room: id, allowUnsend: on })));
+    }
     const items = [btn('メッセージを検索', openSearchSheet)];
     if (!dm) items.push(btn('メンバー', openMembersSheet), btn('QRで招待する', () => openInviteSheet(id)));
     else {
@@ -2015,7 +2163,7 @@
       h('span', { class: 'tag', html: `${s.isPublic ? ICONS.globe : ICONS.link}<span>${s.isPublic ? '公開ルーム' : '招待制'}</span>` }),
       s.locked ? h('span', { class: 'tag', html: `${ICONS.lock}<span>合言葉つき</span>` }) : null,
       h('span', { class: 'tag', html: `${ICONS.people}<span>メンバー ${s.members}人</span>` }));
-    openSheet('menu', h('div', null, h('div', 'sheet-head', roomAvatar(s), h('h2', null, s.name)), meta, notify, h('div', 'list-btns', items)));
+    openSheet('menu', h('div', null, h('div', 'sheet-head', roomAvatar(s), h('h2', null, s.name)), meta, notify, h('div', 'list-btns', items), adminPart));
   }
   $('#menuBtn').addEventListener('click', openRoomMenu);
   $('#roomTitle').addEventListener('click', openRoomMenu);
@@ -2153,7 +2301,12 @@
     }
     const themeBox = choice([['system', '自動'], ['light', 'ライト'], ['dark', 'ダーク']], themePref(), (v, e) => applyTheme(v, { x: e.clientX, y: e.clientY }));
     const form = h('form', { autocomplete: 'off' },
-      h('div', 'sheet-head', avatar(state.me || { id: uid, name: state.name }), h('h2', null, 'プロフィール')),
+      h('div', 'sheet-head', h('button', { class: 'icon-edit', type: 'button', 'data-press': true, 'aria-label': 'アイコンを変更', onclick: () => editIcon({
+        title: 'アイコンを変更',
+        onSave: (id) => wsSend({ type: 'avatar', media: id }),
+        onRemove: state.me?.avatar ? () => wsSend({ type: 'avatar', media: null }) : null,
+      }) }, avatar(state.me || { id: uid, name: state.name }), h('span', 'icon-edit-badge', '変更')), h('h2', null, 'プロフィール')),
+      h('div', 'wallet', h('span', 'wallet-label', 'ポイント'), h('b', { class: 'wallet-num' }, (state.points || 0).toLocaleString('ja-JP')), h('button', { class: 'pill-btn', type: 'button', 'data-press': true, onclick: openShop }, 'ショップ')),
       name.wrap,
       h('button', { class: 'primary', type: 'submit', 'data-press': true }, '名前を保存'),
       h('h3', null, '表示'), themeBox,
@@ -2205,6 +2358,236 @@
         h('li', null, 'Safari 下部の 共有ボタン（□に↑）をタップ'),
         h('li', null, '「ホーム画面に追加」を選ぶ'),
         h('li', null, '追加されたアイコンから開いて、通知をオンにする'))));
+  }
+
+  /* =====================================================================
+     Points & shop
+     ===================================================================== */
+  const pointsEl = $('#points');
+  let pointsShown = 0;
+  const pointsSpring = new Spring(0, (v) => { pointsEl.textContent = Math.round(v).toLocaleString('ja-JP'); }, { stiffness: 120, damping: 26, precision: 0.5 });
+  function setPoints(value, gain) {
+    state.points = value;
+    if (value === pointsShown) return;
+    pointsShown = value;
+    pointsSpring.to(value);
+    if (gain > 0) {
+      popIn($('#pointsBtn'), { stiffness: 520, damping: 14 }, 1.15);
+      if (state.activeId) {
+        const r = sendBtn.getBoundingClientRect();
+        const chip = h('span', 'gain', `+${gain}`);
+        Object.assign(chip.style, { left: `${r.left + r.width / 2}px`, top: `${r.top}px` });
+        document.body.append(chip);
+        play({ stiffness: 120, damping: 18 }, (p) => {
+          chip.style.transform = `translate(-50%, ${(-46 * p).toFixed(1)}px) scale(${mix(0.6, 1, Math.min(1, p * 1.6)).toFixed(3)})`;
+          chip.style.opacity = (p < 0.7 ? 1 : clamp((1 - p) / 0.3, 0, 1)).toFixed(3);
+        }, () => chip.remove());
+      }
+    }
+  }
+  const SAMPLE = 'あのイーハトーヴォ Aa123';
+  function openShop() {
+    sheet.shopBox = h('div', 'shop-grid');
+    openSheet('shop', h('div', null,
+      h('h2', null, 'ショップ'),
+      h('p', 'sub', 'メッセージを送るとポイントがたまります（1文字 = 1ポイント）'),
+      h('div', 'wallet', h('span', 'wallet-label', '所持ポイント'), h('b', { class: 'wallet-num', id: 'walletNum' }, (state.points || 0).toLocaleString('ja-JP'))),
+      h('h3', null, 'フォント'),
+      h('p', 'note shop-note', '使っているフォントで、あなたのメッセージがみんなの画面に表示されます'),
+      sheet.shopBox));
+    renderShop(true);
+  }
+  function renderShop(first) {
+    const box = sheet.name === 'shop' && sheet.shopBox;
+    if (!box || !state.me) return;
+    const wallet = $('#walletNum');
+    if (wallet) wallet.textContent = (state.points || 0).toLocaleString('ja-JP');
+    const owned = new Set(state.me.fonts || []);
+    const cards = [h('button', { class: `font-card${!state.me.font ? ' using' : ''}`, type: 'button', 'data-press': true, onclick: () => wsSend({ type: 'equip', font: null }) },
+      h('span', 'font-sample', SAMPLE), h('span', 'font-meta', h('b', null, '標準'), h('span', 'font-state', !state.me.font ? '使用中' : '使う')))];
+    for (const f of fontCatalog) {
+      const has = owned.has(f.id);
+      const using = state.me.font === f.id;
+      const afford = (state.points || 0) >= f.price;
+      const sample = h('span', 'font-sample', SAMPLE);
+      sample.style.fontFamily = useFont(f.id, SAMPLE);
+      const stateLabel = using ? '使用中' : has ? '使う' : `${f.price.toLocaleString('ja-JP')} pt`;
+      const card = h('button', { class: `font-card${using ? ' using' : ''}${has ? ' owned' : ''}${!has && !afford ? ' locked' : ''}`, type: 'button', 'data-press': true },
+        sample, h('span', 'font-meta', h('b', null, f.name), h('span', 'font-state', stateLabel)));
+      card.addEventListener('click', () => {
+        if (has) return wsSend({ type: 'equip', font: f.id });
+        if (!afford) {
+          shake(card);
+          return toast(`あと ${(f.price - (state.points || 0)).toLocaleString('ja-JP')} ポイント必要です`);
+        }
+        if (card.dataset.confirm) return wsSend({ type: 'buy', font: f.id });
+        card.dataset.confirm = '1';
+        $('.font-state', card).textContent = `${f.price.toLocaleString('ja-JP')} ptで買う？`;
+        card.classList.add('confirm');
+        popIn(card, { stiffness: 520, damping: 16 }, 0.94);
+        setTimeout(() => {
+          if (!card.isConnected) return;
+          delete card.dataset.confirm;
+          card.classList.remove('confirm');
+          $('.font-state', card).textContent = stateLabel;
+        }, 3000);
+      });
+      if (sheet.justBought === f.id) {
+        sheet.justBought = null;
+        setTimeout(() => popIn(card, { stiffness: 300, damping: 10 }, 0.7), 30);
+      }
+      cards.push(card);
+    }
+    box.replaceChildren(...cards);
+    if (first) {
+      cards.forEach((c, i) => {
+        c.style.opacity = '0';
+        setTimeout(() => play({ stiffness: 360, damping: 22 }, (p) => {
+          c.style.transform = `translateY(${mix(14, 0, p).toFixed(2)}px)`;
+          c.style.opacity = clamp(p * 1.6, 0, 1).toFixed(3);
+        }, () => { c.style.transform = ''; c.style.opacity = ''; }), 30 + i * 22);
+      });
+    }
+  }
+  $('#pointsBtn').addEventListener('click', openShop);
+
+  /* =====================================================================
+     Icons: pick an image, position it in a circle, upload a 256px square
+     ===================================================================== */
+  function pickImage() {
+    return new Promise((resolve) => {
+      const inputEl = h('input', { type: 'file', accept: 'image/*' });
+      inputEl.addEventListener('change', () => resolve(inputEl.files?.[0] || null), { once: true });
+      inputEl.click();
+    });
+  }
+  async function editIcon({ title, round = true, onSave, onRemove }) {
+    const file = await pickImage();
+    if (!file) return;
+    const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' }).catch(() => null);
+    if (!bmp) return toast('画像を読み込めませんでした');
+    const SIZE = 240;
+    const canvas = h('canvas', { width: SIZE * 2, height: SIZE * 2, class: 'crop-canvas' });
+    const g = canvas.getContext('2d');
+    const base = Math.max(SIZE / bmp.width, SIZE / bmp.height);
+    const view = { x: 0, y: 0, zoom: 1 };
+    const draw = () => {
+      const sc = base * view.zoom * 2;
+      const w = bmp.width * sc;
+      const hh = bmp.height * sc;
+      // keep the image covering the circle
+      const maxX = Math.max(0, (w - SIZE * 2) / 2);
+      const maxY = Math.max(0, (hh - SIZE * 2) / 2);
+      view.x = clamp(view.x, -maxX, maxX);
+      view.y = clamp(view.y, -maxY, maxY);
+      g.clearRect(0, 0, SIZE * 2, SIZE * 2);
+      g.drawImage(bmp, SIZE - w / 2 + view.x, SIZE - hh / 2 + view.y, w, hh);
+    };
+    draw();
+    const zoom = h('input', { type: 'range', min: '1', max: '4', step: '0.01', value: '1', 'aria-label': '拡大' });
+    const zoomSpring = new Spring(1, (z) => { view.zoom = z; draw(); }, { stiffness: 300, damping: 30, precision: 0.001 });
+    zoom.addEventListener('input', () => zoomSpring.to(Number(zoom.value)));
+    let drag = null;
+    canvas.addEventListener('pointerdown', (e) => { drag = { x: e.clientX, y: e.clientY, ox: view.x, oy: view.y }; canvas.setPointerCapture(e.pointerId); });
+    canvas.addEventListener('pointermove', (e) => {
+      if (!drag) return;
+      view.x = drag.ox + (e.clientX - drag.x) * 2;
+      view.y = drag.oy + (e.clientY - drag.y) * 2;
+      draw();
+    });
+    canvas.addEventListener('pointerup', () => { drag = null; });
+    canvas.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const z = clamp(zoomSpring.target - e.deltaY * 0.002, 1, 4);
+      zoom.value = String(z);
+      zoomSpring.to(z);
+    }, { passive: false });
+    const save = h('button', { class: 'primary', type: 'button', 'data-press': true }, '保存');
+    save.addEventListener('click', async () => {
+      save.disabled = true;
+      const out = h('canvas', { width: 256, height: 256 });
+      out.getContext('2d').drawImage(canvas, 0, 0, 256, 256);
+      const toBlob = (type, q) => new Promise((res) => out.toBlob(res, type, q));
+      let blob = await toBlob('image/webp', 0.86);
+      if (!blob || blob.type !== 'image/webp') blob = await toBlob('image/jpeg', 0.88);
+      try {
+        const id = await upload(null, 'avatar', blob);
+        onSave(id);
+        closeSheet();
+        toast('アイコンを変更しました');
+      } catch {
+        save.disabled = false;
+        toast('保存できませんでした');
+      }
+    });
+    openSheet('icon', h('div', null,
+      h('h2', null, title),
+      h('p', 'sub', 'ドラッグで位置、スライダーで大きさを調整できます'),
+      h('div', `crop-wrap${round ? ' round' : ''}`, canvas),
+      h('label', 'crop-zoom', h('span', { html: '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="11" cy="11" r="6" fill="none" stroke="currentColor" stroke-width="2"/><path d="M20 20l-4.5-4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>' }), zoom),
+      save,
+      onRemove ? h('div', 'list-btns', h('button', { class: 'ghost-btn', type: 'button', 'data-press': true, onclick: () => { onRemove(); closeSheet(); } }, 'アイコンを削除')) : null));
+  }
+
+  /* =====================================================================
+     In-app banners (the app is open, so the server sends no push)
+     ===================================================================== */
+  let banner = null;
+  function maybeBanner(room, m, cid) {
+    if (m.sys || cid || isMine(m) || blocked(m) || document.visibilityState !== 'visible') return;
+    if (room.s.id === state.activeId && (!narrow.matches || shell.classList.contains('in-room'))) return;
+    const mentioned = m.mentions?.includes(state.me?.id);
+    if (room.s.muted && !mentioned) return;
+    const who = personOf(m.from);
+    showBanner({
+      icon: room.s.kind === 'dm' ? avatar(who) : roomAvatar(room.s),
+      title: room.s.kind === 'dm' ? who.name : room.s.name,
+      body: `${room.s.kind === 'dm' ? '' : `${who.name}: `}${mentioned ? '（あなたへのメンション）' : ''}${previewOf(m)}`,
+      onOpen: () => openRoom(room.s.id),
+    });
+  }
+  function showBanner({ icon, title, body, onOpen }) {
+    hideBanner(true);
+    const el = h('button', { class: 'banner', type: 'button', 'aria-live': 'polite' }, icon, h('span', 'banner-text', h('b', null, title), h('span', null, body)));
+    document.body.append(el);
+    const y = new Spring(-120, (v) => { el.style.transform = `translate(-50%, ${v.toFixed(1)}px)`; }, { stiffness: 300, damping: 22, precision: 0.3 });
+    y.onUpdate(-120);
+    y.to(0);
+    navigator.vibrate?.(12);
+    const b = { el, y, timer: setTimeout(() => hideBanner(), 4500) };
+    banner = b;
+    let g = null;
+    el.addEventListener('pointerdown', (e) => { g = { y: e.clientY, moved: false }; el.setPointerCapture(e.pointerId); clearTimeout(b.timer); });
+    el.addEventListener('pointermove', (e) => {
+      if (!g) return;
+      const dy = e.clientY - g.y;
+      if (Math.abs(dy) > 6) g.moved = true;
+      y.stop();
+      y.x = dy < 0 ? dy : dy * 0.25;
+      y.onUpdate(y.x);
+    });
+    el.addEventListener('pointerup', () => {
+      const moved = g?.moved;
+      g = null;
+      if (!moved) {
+        hideBanner();
+        return onOpen();
+      }
+      if (y.x < -30) hideBanner();
+      else {
+        y.to(0);
+        b.timer = setTimeout(() => hideBanner(), 3000);
+      }
+    });
+  }
+  function hideBanner(instant) {
+    const b = banner;
+    if (!b) return;
+    banner = null;
+    clearTimeout(b.timer);
+    if (instant) return b.el.remove();
+    b.y.onRest = () => b.el.remove();
+    b.y.to(-140, { stiffness: 320, damping: 30 });
   }
 
   /* =====================================================================
@@ -2344,8 +2727,10 @@
     ready(msg) {
       const first = !state.ready;
       state.ready = true;
-      state.me = msg.you;
+      state.me = remember(msg.you);
       state.blocks = msg.blocks || [];
+      fontCatalog = msg.shop?.fonts || [];
+      setPoints(msg.you.points || 0, 0);
       state.vapid = msg.vapid;
       state.ice = msg.ice || [];
       state.reactions = msg.reactions;
@@ -2378,9 +2763,13 @@
     },
     you(msg) {
       const blocksChanged = JSON.stringify(msg.blocks || []) !== JSON.stringify(state.blocks);
-      state.me = msg.you;
+      const lookChanged = state.me && (state.me.font !== msg.you.font || state.me.avatar !== msg.you.avatar || state.me.name !== msg.you.name);
+      state.me = remember(msg.you);
       state.blocks = msg.blocks || [];
+      setPoints(msg.you.points || 0, 0);
       renderProfileButton();
+      renderShop();
+      if (lookChanged && !blocksChanged) rebuildActive();
       if (blocksChanged) {
         rebuildActive();
         renderPresence();
@@ -2423,6 +2812,7 @@
       openJoinSheet(msg.room, link.pass);
     },
     history(msg) {
+      for (const m of msg.messages) if (!m.sys) remember(m.from);
       const room = state.rooms.get(msg.room);
       if (!room) return;
       const prev = room.messages;
@@ -2446,6 +2836,7 @@
       } else renderMessages(msg.messages, { stagger: !prev, jump: msg.jump });
     },
     older(msg) {
+      for (const m of msg.messages) if (!m.sys) remember(m.from);
       const room = state.rooms.get(msg.room);
       state.loadingOlder = false;
       loadMore.hidden = true;
@@ -2458,6 +2849,8 @@
     msg({ room: roomId, message, cid }) {
       const room = state.rooms.get(roomId);
       if (!room) return;
+      if (!message.sys) remember(message.from);
+      maybeBanner(room, message, cid);
       if (room.messages && !room.jumped) room.messages.push(message);
       const mineMsg = isMine(message);
       if (!message.sys) {
@@ -2524,6 +2917,7 @@
     presence(msg) {
       const room = state.rooms.get(msg.room);
       if (!room) return;
+      msg.online.forEach(remember);
       room.online = msg.online;
       room.s.online = msg.online.length;
       room.s.members = msg.members;
@@ -2532,11 +2926,29 @@
     members(msg) {
       const room = state.rooms.get(msg.room);
       if (!room) return;
+      msg.list.forEach(remember);
       room.members = msg.list;
       room.banned = msg.banned || [];
       if (msg.room === state.activeId) renderMembersSheet();
     },
     search(msg) { if (msg.room === state.activeId) renderSearch(msg); },
+    profile(msg) {
+      remember(msg.user);
+      rebuildActive();
+      renderPresence();
+      renderMembersSheet();
+      if (msg.user.id === state.me?.id) renderProfileButton();
+    },
+    points(msg) {
+      setPoints(msg.points, msg.gain);
+      renderShop();
+    },
+    bought(msg) {
+      const f = fontById(msg.font);
+      toast(`「${f?.name || 'フォント'}」を手に入れました`);
+      sheet.justBought = msg.font;
+      renderShop();
+    },
     removed(msg) {
       const room = state.rooms.get(msg.room);
       if (!room) return;
@@ -2598,6 +3010,8 @@
           updateSend();
         }
       }
+      if (msg.op === 'buy' && msg.code === 'points') return toast('ポイントが足りません');
+      if (msg.code === 'forbidden') return toast(msg.op === 'edit' ? 'このルームでは編集できません' : 'このルームでは送信取消できません');
       if (msg.code === 'blocked') toast('このユーザーにはメッセージを送れません');
       else if (msg.code === 'rate') toast('操作が速すぎます。少し待ってください');
       else if (msg.code === 'media') toast('ファイルを送信できませんでした');

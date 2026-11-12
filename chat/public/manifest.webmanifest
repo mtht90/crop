@@ -1,4 +1,5 @@
 {
+  "id": "/",
   "name": "Chat",
   "short_name": "Chat",
   "description": "ルームを作って、QRで招待して話せるチャット",
