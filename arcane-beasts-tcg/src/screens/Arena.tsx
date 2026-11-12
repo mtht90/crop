@@ -1,8 +1,5 @@
 import { currentStageEvent, STAGE_COUNT, stageNow } from '../state/stages';
-import { currentTower, TOWER_FLOORS, towerNow, towerOn } from '../state/tower';
-import { currentBoss, raidNow, raidSession } from '../state/raid';
-import { card } from '../engine/cards';
-import type { MonsterCard } from '../engine/types';
+import { currentTower, TOWER_FLOORS, towerNow } from '../state/tower';
 // バトル: the battle menu opened from the home screen. Laid out like home —
 // four tall mode cards in a row (story, free battles, online play, deck) and a
 // band underneath with the deck in use and the player's record.
@@ -50,48 +47,30 @@ export function Arena() {
       badge: save.story.started ? undefined : 'NEW',
     },
     {
-      to: 'raid',
-      title: 'ボスレイド',
+      to: 'tower' as const,
+      title: '覇王の塔',
       sub: (() => {
-        const on = raidSession();
-        if (!on) {
-          return '開催していません';
-        }
-        const b = card(raidNow(save.raid).bossId) as MonsterCard;
-        return `開催中：${b.name}`;
+        const { t } = currentTower();
+        return `${t.sub}（${towerNow(save.tower).cleared}/${TOWER_FLOORS}階）`;
       })(),
-      bg: 'story/p-the-fall',
-      fig: currentBoss().art,
-      icon: 'skull',
-      off: !raidSession(),
-      badge: raidSession() && raidNow(save.raid).tries === 0 ? '無料' : undefined,
+      bg: currentTower().t.bg,
+      fig: currentTower().t.bosses[2].portrait,
+      icon: 'crown',
+      badge: towerNow(save.tower).cleared === 0 ? '開催中' : undefined,
     },
-    towerOn()
-      ? {
-          to: 'tower' as const,
-          title: '覇王の塔',
-          sub: (() => {
-            const { t } = currentTower();
-            return `${t.sub}（${towerNow(save.tower).cleared}/${TOWER_FLOORS}階）`;
-          })(),
-          bg: currentTower().t.bg,
-          fig: currentTower().t.bosses[2].portrait,
-          icon: 'crown',
-          badge: towerNow(save.tower).cleared === 0 ? '開催中' : undefined,
-        }
-      : {
-            to: 'stage',
-            title: 'イベント',
-            sub: (() => {
-              const { ev } = currentStageEvent();
-              const sv = stageNow(save.stages);
-              return `${ev.title.join('')}（${Math.min(sv.cleared, STAGE_COUNT)}/${STAGE_COUNT}）`;
-            })(),
-            bg: currentStageEvent().ev.bg,
-            fig: currentStageEvent().ev.bosses[2].portrait,
-            icon: 'crown',
-            badge: stageNow(save.stages).cleared === 0 ? '開催中' : undefined,
-          },
+    {
+      to: 'stage',
+      title: 'イベント',
+      sub: (() => {
+        const { ev } = currentStageEvent();
+        const sv = stageNow(save.stages);
+        return `${ev.title.join('')}（${Math.min(sv.cleared, STAGE_COUNT)}/${STAGE_COUNT}）`;
+      })(),
+      bg: currentStageEvent().ev.bg,
+      fig: currentStageEvent().ev.bosses[2].portrait,
+      icon: 'crown',
+      badge: stageNow(save.stages).cleared === 0 ? '開催中' : undefined,
+    },
     { to: 'rivals', title: 'CPU対戦', sub: `レベル1〜9から選んで対戦（${(save.cpuBeaten ?? []).length}/9 勝利）`, bg: 'story/p-mountains', fig: 'humans/duelist', icon: 'swords' },
     {
       to: 'lobby',

@@ -181,27 +181,17 @@ function periodOf(now: Date) {
   const w = Math.floor(new Date(weekKey(now).slice(1) + 'T00:00:00').getTime() / WEEK);
   return { period: Math.floor((w - 1) / 2), w };
 }
-/** ?tower in the address (or developer mode) opens the tower out of season, to try it */
-const forced = () => {
-  try {
-    return typeof location !== 'undefined' && new URLSearchParams(location.search).has('tower');
-  } catch {
-    return false;
-  }
-};
-
-export function towerOn(now = new Date()) {
-  return periodOf(now).period % 2 !== 0 || forced();
-}
+/** the tower runs all the time now (in the boss raid's place); each tower stays two weeks */
+export const towerOn = () => true;
 
 /** the tower of this period (or the next one, while the stage event runs) */
 export function currentTower(now = new Date()): { t: TowerDef; key: string; ends: Date; open: boolean } {
   const { period, w } = periodOf(now);
-  const p = period % 2 !== 0 ? period : period + 1;
-  const t = TOWERS[((((p - 1) / 2) % TOWERS.length) + TOWERS.length) % TOWERS.length];
+  const p = period;
+  const t = TOWERS[(((p - 1482) % TOWERS.length) + TOWERS.length) % TOWERS.length];
   const monday = new Date(weekKey(now).slice(1) + 'T00:00:00');
   const ends = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() - (w - (period * 2 + 1)) * 7 + 14);
-  return { t, key: `tower:${t.id}:${p}`, ends, open: towerOn(now) };
+  return { t, key: `tower:${t.id}:${p}`, ends, open: towerOn() };
 }
 
 export interface TowerSave {
