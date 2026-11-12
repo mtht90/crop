@@ -1,6 +1,8 @@
+# Service names stay "inachat" so existing deployments (and their stored data) are kept;
+# the app itself is branded Lynq.
 services:
   - type: web
-    name: lynq
+    name: inachat
     runtime: node
     plan: free
     rootDir: chat
@@ -17,12 +19,12 @@ services:
       - key: REDIS_URL
         fromService:
           type: keyvalue
-          name: lynq-store
+          name: inachat-store
           property: connectionString
 
   # Keeps rooms, history, media and push subscriptions across web service restarts.
   - type: keyvalue
-    name: lynq-store
+    name: inachat-store
     plan: free
     maxmemoryPolicy: noeviction
     ipAllowList: [] # private network only

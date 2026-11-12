@@ -1135,13 +1135,32 @@ const heartbeat = setInterval(() => {
 
 async function main() {
   const data = await store.load();
-  for (const u of Object.values(data.users)) users.set(u.id, { blocks: [], ...u });
+  for (const u of Object.values(data.users || {})) users.set(u.id, { blocks: [], ...u });
   for (const r of data.rooms) {
-    const msgs = (data.messages[r.id] || []).sort((a, b) => a.ts - b.ts);
-    rooms.set(r.id, { admins: [], banned: [], kind: 'group', ...r, clients: new Set(), msgs, call: new Map() });
+    // Rooms saved by the previous version keep their messages in `history` and names on members.
+    const { history, ...rest } = r;
+    const legacy = Array.isArray(history);
+    const msgs = (legacy ? history : data.messages[r.id] || []).sort((a, b) => a.ts - b.ts).slice(-MAX_MESSAGES);
+    const room = { admins: [], banned: [], kind: 'group', ...rest, clients: new Set(), msgs, call: new Map() };
+    rooms.set(r.id, room);
+    if (!legacy) continue;
+    for (const [id, m] of Object.entries(room.members)) {
+      if (!users.has(id)) {
+        const user = { id, name: m.name || 'ユーザー', blocks: [], createdAt: m.joinedAt || Date.now() };
+        users.set(id, user);
+        markUser(user);
+      }
+      room.members[id] = { read: m.read || 0, muted: !!m.muted, joinedAt: m.joinedAt || Date.now() };
+    }
+    markRoom(room);
+    for (const m of msgs) markMsg(room, m);
   }
-  for (const [userId, list] of Object.entries(data.subs)) subs.set(userId, new Map(list.map((s) => [s.endpoint, s])));
-  for (const [id, info] of Object.entries(data.media)) media.set(id, info);
+  for (const [userId, list] of Object.entries(data.subs || {})) {
+    subs.set(userId, new Map(list.map((s) => [s.endpoint, s])));
+    if (data.legacy) markSubs(userId);
+  }
+  for (const [id, info] of Object.entries(data.media || {})) media.set(id, info);
+  if (data.legacy && data.meta?.vapid) dirty.meta.vapid = data.meta.vapid;
   if (!rooms.has(LOBBY)) createRoom({ id: LOBBY, name: 'ロビー', isPublic: true });
   setupVapid(data.meta);
   server.listen(PORT, '0.0.0.0', () => {

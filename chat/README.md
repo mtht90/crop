@@ -43,11 +43,13 @@ npm start
 
 | サービス | 内容 |
 |---|---|
-| `lynq`（Web Service, free） | アプリ本体。`SECRET` は自動生成され、通知用の鍵がここから作られます |
-| `lynq-store`（Key Value, free） | ルーム・履歴・写真や音声・通知登録の保存先 |
+| `inachat`（Web Service, free） | アプリ本体。`SECRET` は自動生成され、通知用の鍵がここから作られます |
+| `inachat-store`（Key Value, free） | ルーム・履歴・写真や音声・通知登録の保存先 |
 
 1. Render ダッシュボードで **New → Blueprint** を選び、このリポジトリとブランチを指定して **Apply**
 2. 以後はそのブランチに push するたびに Render が自動で再デプロイします（Auto-Deploy は既定でオン）。`render.yaml` の変更も自動で反映されます
+
+Render 上のサービス名は最初に作った `inachat` のままにしています。名前を変えると Render が別サービスとして作り直し、保存データが引き継がれないためです（アプリの表示名は Lynq）。
 
 ## 無料プランの注意
 

@@ -182,6 +182,15 @@
   const mentionBox = $('#mentionBox');
   const loadMore = $('#loadMore');
 
+  // Keys from the previous version were prefixed "ic."; carry them over once.
+  try {
+    for (const key of Object.keys(localStorage)) {
+      if (!key.startsWith('ic.')) continue;
+      const next = `lq.${key.slice(3)}`;
+      if (localStorage.getItem(next) == null) localStorage.setItem(next, localStorage.getItem(key));
+    }
+  } catch { /* storage unavailable */ }
+
   let uid = store.get('lq.uid');
   if (!uid || uid.length < 16) {
     uid = randomId();

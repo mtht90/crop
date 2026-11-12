@@ -27,6 +27,17 @@ class RedisStore {
   }
 
   async load() {
+    const data = await this.loadPrefix(P);
+    // Data from the previous version lived under "ic:" with messages inside each room.
+    if (!data.rooms.length && (await this.redis.exists('ic:rooms'))) {
+      const old = await this.loadPrefix('ic:');
+      console.log(`[store] found ${old.rooms.length} rooms from the previous version, migrating`);
+      return { ...old, legacy: true };
+    }
+    return data;
+  }
+
+  async loadPrefix(P) {
     const r = this.redis;
     const ids = await r.smembers(`${P}rooms`);
     const raw = ids.length ? await r.mget(ids.map((id) => `${P}room:${id}`)) : [];
