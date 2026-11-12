@@ -9,16 +9,18 @@ self.addEventListener('push', (event) => {
   try {
     data = event.data ? event.data.json() : {};
   } catch {
-    data = { title: 'inachat', body: event.data ? event.data.text() : '' };
+    data = { title: 'Lynq', body: event.data ? event.data.text() : '' };
   }
   event.waitUntil(
-    self.registration.showNotification(data.title || 'inachat', {
+    self.registration.showNotification(data.title || 'Lynq', {
       body: data.body || '新しいメッセージがあります',
       tag: data.room ? `room-${data.room}` : undefined,
       renotify: !!data.room,
       icon: '/icon-192.png',
       badge: '/badge.png',
       timestamp: data.ts || Date.now(),
+      vibrate: data.call ? [200, 100, 200, 100, 200] : [80],
+      requireInteraction: !!data.call,
       data: { room: data.room || null },
     }),
   );

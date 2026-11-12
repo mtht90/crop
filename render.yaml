@@ -1,12 +1,13 @@
 services:
   - type: web
-    name: inachat
+    name: lynq
     runtime: node
     plan: free
     rootDir: chat
     buildCommand: npm ci
     startCommand: npm start
     healthCheckPath: /healthz
+    # Every push to the connected branch redeploys automatically.
     envVars:
       - key: NODE_VERSION
         value: "22"
@@ -16,12 +17,12 @@ services:
       - key: REDIS_URL
         fromService:
           type: keyvalue
-          name: inachat-store
+          name: lynq-store
           property: connectionString
 
-  # Keeps rooms, history and push subscriptions across web service restarts.
+  # Keeps rooms, history, media and push subscriptions across web service restarts.
   - type: keyvalue
-    name: inachat-store
+    name: lynq-store
     plan: free
     maxmemoryPolicy: noeviction
     ipAllowList: [] # private network only
