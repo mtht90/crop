@@ -49,8 +49,8 @@ export const EVENT_CARDS: MonsterCard[] = [
   }),
   // 覇王の塔: the card of the top floor, one per tower (never in packs)
   ev({
-    id: 'EVENT-tower-sky', no: 915, name: '天空王アエリオン', art: 'event/tower-skylord', type: 'lightning', hp: 150, retreat: 1, weakness: 'fighting',
-    species: 'てんくうおう', scene: 'story/p-mountains', flavor: '塔の頂より高い空を、彼は知っている。',
+    id: 'EVENT-tower-sky', no: 915, name: '天穹の女神アウラ', art: 'event/tower-goddess', type: 'lightning', hp: 150, retreat: 1, weakness: 'fighting',
+    species: 'てんきゅうの', scene: 'story/p-mountains', flavor: '塔の頂より高い空を、彼女だけが知っている。',
     attacks: [
       { name: '天翔ける槍', cost: ['lightning', 'colorless'], damage: 50, text: '', effects: [{ k: 'benchSnipe', n: 20 }] },
       { name: '覇者の雷霆', cost: ['lightning', 'lightning', 'colorless'], damage: 120, text: '', effects: [{ k: 'condition', cond: 'paralyzed', flip: true }] },

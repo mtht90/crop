@@ -28,7 +28,7 @@ export interface TowerDef {
 export const TOWERS: TowerDef[] = [
   {
     id: 'sky', sub: '天翔ける覇者', bg: 'story/tower-main', type: 'lightning', card: 'EVENT-tower-sky',
-    bosses: [{ name: '雷鳴の番兵', portrait: 'drakes/hurricane' }, { name: '嵐の竜騎士', portrait: 'drakes/enforcer' }, { name: '天空王アエリオン', portrait: 'event/tower-skylord' }],
+    bosses: [{ name: '雷鳴の番兵', portrait: 'drakes/hurricane' }, { name: '嵐の竜騎士', portrait: 'drakes/enforcer' }, { name: '天穹の女神アウラ', portrait: 'event/tower-goddess' }],
   },
   {
     id: 'lava', sub: '灼熱の覇者', bg: 'story/tower-main', type: 'fire', card: 'EVENT-tower-lava',
