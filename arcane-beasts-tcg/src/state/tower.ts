@@ -74,7 +74,7 @@ export interface Floor {
   deck: string;
   /** the CPU's level (10: thinks longer, 11: also sees hidden cards) */
   cpu: number;
-  /** how strong the printings in the foe's deck are (0…3) */
+  /** how strong the printings in the foe's deck are (0…3; ★5 only at 21–30) */
   tier: number;
   mods: BattleMods;
   /** first clear */
@@ -97,30 +97,30 @@ function floorRule(n: number, T: EType): { mods: BattleMods; cpu: number; tier: 
     [{ prizes: 5, oppFirst: true }, 6, 1],
     [{ prizes: 6, dmg: [{ side: 1, n: 10 }] }, 7, 2],
     [{ prizes: 6, hp: [0, 30] }, 7, 2],
-    [{ prizes: 6, hand: [6, 7] }, 8, 3],
-    [{ prizes: 6, hp: [0, 50], dmg: [{ side: 1, n: 20 }] }, 9, 3],
+    [{ prizes: 6, hand: [6, 7] }, 8, 2],
+    [{ prizes: 6, hp: [0, 50], dmg: [{ side: 1, n: 20 }] }, 9, 2],
     // 11–20: the strongest decks, a CPU that thinks longer
-    [{ prizes: 6, hp: [0, 30] }, 9, 3],
-    [{ prizes: 6, oppFirst: true, dmg: [{ side: 1, n: 10 }] }, 9, 3],
-    [{ prizes: 6, hp: [0, 40] }, 10, 3],
-    [{ prizes: 6, dmg: [{ side: 1, type: T, n: 30 }] }, 10, 3],
-    [{ prizes: 6, hand: [6, 8] }, 10, 3],
-    [{ prizes: 6, hp: [0, 50] }, 10, 3],
-    [{ prizes: 6, oppFirst: true, hp: [0, 30] }, 10, 3],
-    [{ prizes: 6, dmg: [{ side: 1, n: 20 }], hp: [0, 20] }, 10, 3],
-    [{ prizes: 6, hp: [-20, 40] }, 10, 3],
-    [{ prizes: 6, hp: [0, 60], dmg: [{ side: 1, n: 20 }], oppFirst: true }, 10, 3],
+    [{ prizes: 6, hp: [0, 30] }, 9, 2],
+    [{ prizes: 6, oppFirst: true, dmg: [{ side: 1, n: 10 }] }, 9, 2],
+    [{ prizes: 6, hp: [0, 40] }, 10, 2],
+    [{ prizes: 6, dmg: [{ side: 1, type: T, n: 30 }] }, 10, 2],
+    [{ prizes: 6, hand: [6, 8] }, 10, 2],
+    [{ prizes: 6, hp: [0, 50] }, 10, 2],
+    [{ prizes: 6, oppFirst: true, hp: [0, 30] }, 10, 2],
+    [{ prizes: 6, dmg: [{ side: 1, n: 20 }], hp: [0, 20] }, 10, 2],
+    [{ prizes: 6, hp: [-20, 40] }, 10, 2],
+    [{ prizes: 6, hp: [0, 60], dmg: [{ side: 1, n: 20 }], oppFirst: true }, 10, 2],
     // 21–30: the CPU sees everything
-    [{ prizes: 6, hp: [0, 30] }, 11, 3],
+    [{ prizes: 6, hp: [0, 20] }, 11, 3],
     [{ prizes: 6, oppFirst: true, dmg: [{ side: 1, n: 10 }] }, 11, 3],
-    [{ prizes: 6, hp: [0, 50] }, 11, 3],
+    [{ prizes: 6, hp: [0, 30] }, 11, 3],
     [{ prizes: 6, hand: [6, 8], dmg: [{ side: 1, n: 20 }] }, 11, 3],
-    [{ prizes: 6, hp: [-20, 50] }, 11, 3],
-    [{ prizes: 6, oppFirst: true, hp: [0, 50] }, 11, 3],
-    [{ prizes: 6, dmg: [{ side: 1, n: 30 }], hp: [0, 30] }, 11, 3],
-    [{ prizes: 6, hand: [5, 8], hp: [0, 40] }, 11, 3],
-    [{ prizes: 6, hp: [-30, 60], dmg: [{ side: 1, n: 20 }] }, 11, 3],
-    [{ prizes: 6, hp: [0, 80], dmg: [{ side: 1, n: 30 }], oppFirst: true }, 11, 3],
+    [{ prizes: 6, hp: [-20, 30] }, 11, 3],
+    [{ prizes: 6, oppFirst: true, hp: [0, 30] }, 11, 3],
+    [{ prizes: 6, dmg: [{ side: 1, n: 30 }], hp: [0, 20] }, 11, 3],
+    [{ prizes: 6, hand: [5, 8], hp: [0, 20] }, 11, 3],
+    [{ prizes: 6, hp: [-30, 40], dmg: [{ side: 1, n: 20 }] }, 11, 3],
+    [{ prizes: 6, hp: [0, 50], dmg: [{ side: 1, n: 30 }], oppFirst: true }, 11, 3],
   ];
   const [mods, cpu, tier] = R[n - 1];
   return { mods, cpu, tier };

@@ -4,23 +4,29 @@
 //   tier 1 … full art (★3)
 //   tier 2 … special art / silver (★4)
 //   tier 3 … gold (★5)
-// Monsters gain HP and attack damage; trainers (and 虹色エネルギー) get a
+// Monsters gain HP and attack damage (★5 also a resistance); trainers (and 虹色エネルギー) get a
 // stronger effect, and their card text says so. The engine reads the same
 // numbers from POWER, so the text and the game never disagree.
 // ============================================================================
-import type { Attack, CardDef, MonsterCard, Variant } from '../types';
+import type { Attack, CardDef, EType, MonsterCard, Variant } from '../types';
 
 export const TIER: Record<Variant, number> = { mirror: 0, SR: 1, SAR: 2, SV: 2, UR: 3 };
 export const tierOf = (c: { tier?: number }) => c.tier ?? 0;
 
-const HP_UP = [0, 10, 30, 50];
-const DMG_UP = [0, 10, 20, 30];
+// ★4 / ★5 give up two prizes, so they are a big step up from ★3
+const HP_UP = [0, 10, 60, 100];
+const DMG_UP = [0, 10, 40, 60];
 /** attacks that hit once per coin (“30×”) grow more gently */
-const MULTI_UP = [0, 0, 10, 10];
+const MULTI_UP = [0, 0, 20, 30];
 
-export function boostMonster(m: MonsterCard, t: number): Pick<MonsterCard, 'hp' | 'attacks'> {
-  if (!t) return { hp: m.hp, attacks: m.attacks };
+/** the type a ★5 printing resists (the type it hunts), unless the card has its own */
+const RESIST: Record<string, EType> = { fire: 'grass', water: 'fire', grass: 'water', lightning: 'water', psychic: 'fighting', fighting: 'lightning', dark: 'psychic', colorless: 'fighting' };
+
+export function boostMonster(m: MonsterCard, t: number): Pick<MonsterCard, 'hp' | 'attacks' | 'resistance'> {
+  if (!t) return { hp: m.hp, attacks: m.attacks, resistance: m.resistance };
+  const res = m.resistance ?? (t >= 3 && RESIST[m.type] !== m.weakness ? RESIST[m.type] : undefined);
   return {
+    resistance: res,
     hp: m.hp + HP_UP[t],
     attacks: m.attacks.map((a): Attack => (a.damage ? { ...a, damage: a.damage + (a.suffix === '×' ? MULTI_UP[t] : DMG_UP[t]) } : a)),
   };

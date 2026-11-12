@@ -353,12 +353,14 @@ describe('★が高い版は強い', () => {
   it('monsters gain HP and damage with each tier; mirrors stay the same', () => {
     const base = byName('アークウィッチ') as MonsterCard;
     const top = (c: MonsterCard) => Math.max(...c.attacks.map((a) => a.damage ?? 0));
-    const want: Record<string, [number, number]> = { mirror: [0, 0], SR: [10, 10], SV: [30, 20], UR: [50, 30] };
+    const want: Record<string, [number, number]> = { mirror: [0, 0], SR: [10, 10], SV: [60, 40], UR: [100, 60] };
     for (const [variant, [hp, dmg]] of Object.entries(want)) {
       const c = v('アークウィッチ', variant) as MonsterCard;
       expect(c.hp - base.hp, variant).toBe(hp);
       expect(top(c) - top(base), variant).toBe(dmg);
     }
+    // ★5 also resists a type (when the card has none of its own)
+    expect((v('アークウィッチ', 'UR') as MonsterCard).resistance).toBeTruthy();
   });
   it('every trainer with a special printing says and does more', () => {
     for (const c of ALL_CARDS) if ((c.kind === 'trainer' || c.kind === 'energy') && c.variant && c.variant !== 'mirror') expect((c as { text?: string }).text, c.id).not.toBe((card(c.baseId!) as { text?: string }).text);
