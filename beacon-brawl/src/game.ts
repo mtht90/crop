@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { createHeroModel, type HeroModel } from './assets';
+import { heroModel, type HeroModel } from './assets';
 import { HEROES, type Aim, type HeroDef, type SkillDef } from './heroes';
 import { Stage, BEACON_POS, BEACON_RADIUS, HALF_X, HALF_Z, SPAWNS, SPAWN_RADIUS, TEAM_COLORS } from './stage';
 import { Fx } from './fx';
@@ -47,12 +47,11 @@ export class Unit {
   private loopName = ''; private loop: THREE.AnimationAction | null = null;
   private shot: THREE.AnimationAction | null = null; private shotT = 0;
   private attackIdx = 0;
-  private opacity = 1;
   ai = { goal: -1, path: [] as THREE.Vector3[], repath: 0, think: Math.random() * 0.5, retreat: false, skillDelay: 2 + Math.random() * 2, dest: new THREE.Vector3() };
 
   constructor(public def: HeroDef, public team: number, public isPlayer: boolean, public slot: number, public statMul: number) {
     this.maxHp = this.hp = Math.round(def.hp * 1.25 * statMul);
-    this.model = createHeroModel(def);
+    this.model = heroModel(def);
     this.group.add(this.model.root);
     const ring = new THREE.Mesh(new THREE.RingGeometry(0.75, 0.95, 32),
       new THREE.MeshBasicMaterial({ color: TEAM_COLORS[team], transparent: true, opacity: 0.9, depthWrite: false }));
@@ -111,17 +110,15 @@ export class Unit {
 
   updateVisual(dt: number, viewerTeam: number) {
     if (this.shot) { this.shotT -= dt; if (this.shotT <= 0) this.stopOnce(); }
-    this.model.mixer.update(dt);
+    this.model.update(dt);
     this.group.position.copy(this.pos);
     this.model.root.rotation.y = this.yaw;
-    this.flash = Math.max(0, this.flash - dt * 5);
-    const want = this.stealth > 0 ? (this.team === viewerTeam ? 0.35 : 0.0) : 1;
-    if (want !== this.opacity || this.flash > 0 || this.model.materials[0].emissive.r > 0) {
-      this.opacity = want;
-      for (const m of this.model.materials) {
-        m.transparent = want < 1; m.opacity = want;
-        m.emissive.setScalar(this.flash * 0.8);
-      }
+    // 敵の透明化は見えなくする（味方と自分はそのまま見える）
+    if (this.alive) this.model.root.visible = !(this.stealth > 0 && this.team !== viewerTeam);
+    const f = Math.max(0, this.flash - dt * 5);
+    if (f !== this.flash || f > 0) {
+      this.flash = f;
+      for (const m of this.model.materials) (m as unknown as { emissive?: THREE.Color }).emissive?.setScalar(f * 0.6);
     }
   }
 }
@@ -180,10 +177,11 @@ export class Match {
     // チーム編成: プレイヤー以外は重複なしでランダム
     const pool = HEROES.filter((h) => h !== playerHero).sort(() => Math.random() - 0.5);
     const blue = [playerHero, pool[0], pool[1]];
-    const red = [...HEROES].sort(() => Math.random() - 0.5).slice(0, 3);
+    const red = pool.slice(2); // 各ヒーローは1体ずつ。残りの3人が敵チームになる
     [blue, red].forEach((list, team) => list.forEach((def, i) => {
       const u = new Unit(def, team, team === 0 && i === 0, i, team === 1 ? difficulty.enemyMul : 1);
       this.placeAtSpawn(u);
+      u.model.settle();
       this.units.push(u);
       s.add(u.group);
     }));
@@ -436,6 +434,7 @@ export class Match {
       if (u.respawn <= 0) {
         u.alive = true; u.hp = u.maxHp; u.invuln = 2.5; u.group.visible = true;
         this.placeAtSpawn(u);
+        u.group.position.copy(u.pos); u.model.settle();
         u.stopOnce(); u.setLoop(u.def.idle);
         u.ai.path = []; u.ai.retreat = false;
         this.fx.ring(u.pos, 2.5, TEAM_COLORS[u.team], 0.6);

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import './style.css';
-import { loadAssets, createHeroModel, type HeroModel } from './assets';
+import { loadAssets, heroModel, type HeroModel } from './assets';
 import { HEROES, type HeroDef } from './heroes';
 import { Match, DIFFICULTIES, type MatchResult } from './game';
 import { Input } from './input';
@@ -47,14 +47,24 @@ class Lobby {
     floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true;
     s.add(floor);
     HEROES.forEach((def, i) => {
-      const m = createHeroModel(def);
+      const x = (i - (HEROES.length - 1) / 2) * 2.5;
+      const ring = new THREE.Mesh(new THREE.RingGeometry(0.85, 1.0, 40), new THREE.MeshBasicMaterial({ color: def.color }));
+      ring.rotation.x = -Math.PI / 2; ring.position.set(x, 0.02, -Math.abs(x) * 0.18);
+      s.add(ring);
+    });
+    this.reclaim();
+  }
+
+  /** 対戦に貸し出していたモデルをロビーに並べ直す */
+  reclaim() {
+    this.models = HEROES.map((def, i) => {
+      const m = heroModel(def);
       const x = (i - (HEROES.length - 1) / 2) * 2.5;
       m.root.position.set(x, 0, -Math.abs(x) * 0.18);
-      m.mixer.clipAction(m.clips.get(def.idle)!).play();
-      const ring = new THREE.Mesh(new THREE.RingGeometry(0.85, 1.0, 40), new THREE.MeshBasicMaterial({ color: def.color }));
-      ring.rotation.x = -Math.PI / 2; ring.position.set(x, 0.02, m.root.position.z);
-      s.add(m.root, ring);
-      this.models.push(m);
+      this.scene.add(m.root);
+      m.mixer.clipAction(m.clips.get(def.idle)!).reset().play();
+      m.settle();
+      return m;
     });
   }
 
@@ -66,7 +76,7 @@ class Lobby {
   }
 
   update(dt: number) {
-    for (const m of this.models) m.mixer.update(dt);
+    for (const m of this.models) m.update(dt);
     const portrait = this.camera.aspect < 1;
     const wantLook = new THREE.Vector3(), wantPos = new THREE.Vector3();
     if (this.focus < 0) {
@@ -168,6 +178,7 @@ function showResult(r: MatchResult) {
 
 function toSelect() {
   match?.dispose(); match = null;
+  lobby.reclaim();
   lobby.focus = selected;
   show('select');
 }

@@ -10,6 +10,7 @@
     "assets": "node scripts/optimize-assets.mjs"
   },
   "dependencies": {
+    "@pixiv/three-vrm": "^3.5.5",
     "three": "^0.170.0"
   },
   "devDependencies": {

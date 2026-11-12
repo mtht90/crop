@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { Match, Unit } from './game';
-import type { PropName } from './assets';
+import type { WeaponName } from './assets';
 
 export interface Aim { dir: THREE.Vector3; target: Unit | null; point: THREE.Vector3 }
 
@@ -20,9 +20,8 @@ export interface HeroDef {
   name: string;
   role: string;
   blurb: string;
-  model: string;
-  hide: string[];
-  attach?: { slot: string; prop: PropName };
+  model: string;       // public/assets/vrm/<model>.vrm
+  weapons: WeaponName[];
   color: number;
   hp: number; atk: number; speed: number;
   range: number;       // 通常攻撃の射程
@@ -47,7 +46,7 @@ const aimPoint = (u: Unit, aim: Aim, d: number, max: number) => {
 export const HEROES: HeroDef[] = [
   {
     id: 'gald', name: 'ガルド', role: 'タンク', blurb: '盾で仲間を守る前線の要。拠点に居座るのが得意。',
-    model: 'Knight', hide: ['1H_Sword_Offhand', 'Rectangle_Shield', 'Round_Shield', 'Spike_Shield', '2H_Sword'],
+    model: 'Sakurada_Fumiriya', weapons: ['sword', 'shield'],
     color: 0x5aa9ff, hp: 1500, atk: 92, speed: 6.3, range: 2.6, interval: 1.0, ranged: false,
     idle: 'Idle', attacks: ['1H_Melee_Attack_Chop', '1H_Melee_Attack_Slice_Diagonal', '1H_Melee_Attack_Slice_Horizontal'],
     skills: [
@@ -85,7 +84,7 @@ export const HEROES: HeroDef[] = [
   },
   {
     id: 'volga', name: 'ボルガ', role: 'アタッカー', blurb: '大斧で薙ぎ払う突破役。乱戦で真価を発揮。',
-    model: 'Barbarian', hide: ['1H_Axe_Offhand', 'Barbarian_Round_Shield', '1H_Axe', 'Mug'],
+    model: 'Sendagaya_Shibu', weapons: ['axe'],
     color: 0xff8a3c, hp: 1200, atk: 138, speed: 6.6, range: 2.9, interval: 1.15, ranged: false,
     idle: '2H_Melee_Idle', attacks: ['2H_Melee_Attack_Chop', '2H_Melee_Attack_Slice'],
     skills: [
@@ -122,7 +121,7 @@ export const HEROES: HeroDef[] = [
   },
   {
     id: 'lumina', name: 'ルミナ', role: 'サポート', blurb: '遠距離から炎を放ち、味方を癒やす魔導士。',
-    model: 'Mage', hide: ['Spellbook', 'Spellbook_open', '1H_Wand'],
+    model: 'Victoria_Rubin', weapons: ['staff'],
     color: 0xc77dff, hp: 850, atk: 105, speed: 6.4, range: 11, interval: 1.1, ranged: true,
     idle: 'Idle', attacks: ['Spellcast_Shoot'],
     skills: [
@@ -160,7 +159,7 @@ export const HEROES: HeroDef[] = [
   },
   {
     id: 'shade', name: 'シェイド', role: 'スプリンター', blurb: '最速の二刀使い。拠点を奪って回る遊撃手。',
-    model: 'Rogue', hide: ['1H_Crossbow', '2H_Crossbow', 'Throwable'],
+    model: 'Vita', weapons: ['dagger', 'daggerOff'],
     color: 0x4be0c0, hp: 900, atk: 78, speed: 8.4, range: 2.4, interval: 0.62, ranged: false,
     idle: 'Idle', attacks: ['Dualwield_Melee_Attack_Slice', 'Dualwield_Melee_Attack_Stab', 'Dualwield_Melee_Attack_Chop'],
     skills: [
@@ -203,7 +202,7 @@ export const HEROES: HeroDef[] = [
   },
   {
     id: 'veil', name: 'ヴェイル', role: 'スナイパー', blurb: '長射程のクロスボウで拠点の外から制圧する。',
-    model: 'Rogue_Hooded', hide: ['Knife_Offhand', '1H_Crossbow', 'Knife', 'Throwable'],
+    model: 'Sendagaya_Shino', weapons: ['crossbow'],
     color: 0xffd23c, hp: 800, atk: 150, speed: 6.5, range: 14, interval: 1.45, ranged: true,
     idle: 'Idle', attacks: ['2H_Ranged_Shoot'],
     skills: [
@@ -236,8 +235,8 @@ export const HEROES: HeroDef[] = [
     },
   },
   {
-    id: 'mors', name: 'モルス', role: 'トリックスター', blurb: '呪いで敵を縛る骸骨の術師。足止めの達人。',
-    model: 'Skeleton_Mage', hide: [], attach: { slot: 'handslotr', prop: 'Skeleton_Staff' },
+    id: 'mors', name: 'モルス', role: 'トリックスター', blurb: '呪いで敵を縛る闇の術師。足止めの達人。',
+    model: 'Darkness_Shibu', weapons: ['staff'],
     color: 0x9cff5a, hp: 980, atk: 92, speed: 6.4, range: 9.5, interval: 1.0, ranged: true,
     idle: 'Idle', attacks: ['Spellcast_Shoot'],
     skills: [

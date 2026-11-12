@@ -38,6 +38,8 @@ npm run build    # dist/ に静的ファイルを出力（どこでもホステ�
 | ヴェイル | スナイパー | 最長射程。貫通弾と範囲制圧 |
 | モルス | トリックスター | 鈍足・スタンで足止め、吸収で粘る |
 
+キャラクターは VRM 形式（アニメ調）。`public/assets/vrm/` に VRM を置き、`src/heroes.ts` の `model` を書き換えれば、VRoid Studio で自作したキャラなどに差し替えられます（1試合に各ヒーロー1体ずつ登場し、選ばなかった5人が味方2人・敵3人に分かれます）。
+
 ヒーローは `src/heroes.ts` にデータとして定義しているので、ステータス調整や追加はこのファイルだけでできます。
 
 ## 構成
@@ -48,9 +50,10 @@ npm run build    # dist/ に静的ファイルを出力（どこでもホステ�
 | `src/game.ts` | 対戦ロジック（ユニット、拠点、弾、AI、カメラ） |
 | `src/heroes.ts` | ヒーローとスキルの定義 |
 | `src/stage.ts` | ステージ配置、当たり判定、経路探索（A*） |
-| `src/assets.ts` | GLB 読み込み、トゥーン調マテリアル化 |
+| `src/assets.ts` | VRM / GLB 読み込み、モーション移植、武器の装着 |
 | `src/fx.ts` / `src/audio.ts` | エフェクト / 効果音（合成） |
 | `src/hud.ts` / `src/input.ts` | HUD / 入力 |
-| `scripts/optimize-assets.mjs` | 外部素材の軽量化（`KAYKIT_DIR=… npm run assets`） |
+| `scripts/optimize-assets.mjs` | モーション用リグ・武器・小物の生成（`KAYKIT_DIR=… npm run assets`） |
+| `scripts/optimize-vrm.py` | VRM のテクスチャ縮小・WebP 化 |
 
 素材のライセンスは [CREDITS.md](CREDITS.md) を参照。

@@ -1,7 +1,7 @@
 // 素材最適化スクリプト: KayKit (CC0) の配布物から、ゲームで使うアニメーションだけを残した GLB を生成する。
 // 使い方: KAYKIT_DIR=<3つのKayKitリポジトリをcloneした親ディレクトリ> npm run assets
-//   必要: KayKit-Character-Pack-Adventures-1.0 → kaykit-adv, KayKit-Character-Pack-Skeletons-1.0 → kaykit-skel,
-//         KayKit-Dungeon-Remastered-1.0 → kaykit-dungeon
+//   必要: KayKit-Character-Pack-Adventures-1.0 → kaykit-adv, KayKit-Dungeon-Remastered-1.0 → kaykit-dungeon
+// キャラクター本体 (VRM) は scripts/optimize-vrm.py で別途軽量化する
 import { NodeIO } from '@gltf-transform/core';
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
 import { prune, dedup } from '@gltf-transform/functions';
@@ -12,7 +12,6 @@ import { fileURLToPath } from 'node:url';
 const SRC = process.env.KAYKIT_DIR;
 if (!SRC) { console.error('KAYKIT_DIR を指定してください'); process.exit(1); }
 const OUT = join(dirname(fileURLToPath(import.meta.url)), '..', 'public', 'assets');
-mkdirSync(join(OUT, 'chars'), { recursive: true });
 mkdirSync(join(OUT, 'props'), { recursive: true });
 
 const KEEP = new Set([
@@ -27,31 +26,29 @@ const KEEP = new Set([
 
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
 
-async function character(pack, name) {
-  const src = join(SRC, pack, 'Characters', 'gltf', `${name}.glb`);
-  const doc = await io.read(src);
+const ADV = 'kaykit-adv/addons/kaykit_character_pack_adventures';
+const DUN = 'kaykit-dungeon/addons/kaykit_dungeon_remastered';
+
+// モーション移植元のリグ: Knight からメッシュを外し、骨とアニメーションだけ残す
+{
+  const doc = await io.read(join(SRC, ADV, 'Characters', 'gltf', 'Knight.glb'));
   for (const anim of doc.getRoot().listAnimations()) {
     if (KEEP.has(anim.getName())) continue;
     for (const ch of anim.listChannels()) ch.dispose();
     for (const s of anim.listSamplers()) s.dispose();
     anim.dispose();
   }
-  await doc.transform(prune(), dedup());
-  const out = join(OUT, 'chars', `${name}.glb`);
+  for (const node of doc.getRoot().listNodes()) { node.setMesh(null); node.setSkin(null); }
+  for (const skin of doc.getRoot().listSkins()) skin.dispose();
+  await doc.transform(prune({ keepLeaves: true }), dedup());
+  const out = join(OUT, 'rig.glb');
   await io.write(out, doc);
-  console.log(name, (statSync(src).size / 1e6).toFixed(2), 'MB ->', (statSync(out).size / 1e6).toFixed(2), 'MB');
+  console.log('rig.glb', (statSync(out).size / 1e6).toFixed(2), 'MB');
 }
 
-const ADV = 'kaykit-adv/addons/kaykit_character_pack_adventures';
-const SKEL = 'kaykit-skel/addons/kaykit_character_pack_skeletons';
-const DUN = 'kaykit-dungeon/addons/kaykit_dungeon_remastered';
-
-for (const n of ['Knight', 'Barbarian', 'Mage', 'Rogue', 'Rogue_Hooded']) await character(ADV, n);
-for (const n of ['Skeleton_Mage']) await character(SKEL, n);
-
-// スケルトン用の武器 (gltf+bin → glb)
-for (const n of ['Skeleton_Staff']) {
-  const doc = await io.read(join(SRC, SKEL, 'Assets', 'gltf', `${n}.gltf`));
+// 武器 (gltf+bin → glb)
+for (const n of ['sword_1handed', 'shield_badge', 'axe_2handed', 'staff', 'dagger', 'crossbow_2handed']) {
+  const doc = await io.read(join(SRC, ADV, 'Assets', 'gltf', `${n}.gltf`));
   await io.write(join(OUT, 'props', `${n}.glb`), doc);
 }
 // ステージ小物
