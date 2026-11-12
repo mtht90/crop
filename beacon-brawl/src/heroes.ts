@@ -1,11 +1,13 @@
 import * as THREE from 'three';
 import type { Match, Unit } from './game';
 import type { WeaponName } from './weapons';
+import type { IconName } from './icons';
 
 export interface Aim { dir: THREE.Vector3; target: Unit | null; point: THREE.Vector3 }
 
 export interface SkillDef {
   name: string;
+  icon: IconName;
   desc: string;
   cd: number;          // クールタイム(秒)。必殺技では未使用
   anim: string;
@@ -52,7 +54,7 @@ export const HEROES: HeroDef[] = [
     idle: 'Sword_Idle', run: 'Jog_Fwd_Loop', attacks: ['Sword_Attack'],
     skills: [
       {
-        name: 'シールドバッシュ', desc: '前方を盾で殴り、ダメージとスタン', cd: 9, anim: 'Punch_Cross', lock: 0.45, aiRange: 3.2,
+        name: 'シールドバッシュ', icon: 'bash', desc: '前方を盾で殴り、ダメージとスタン', cd: 9, anim: 'Punch_Cross', lock: 0.45, aiRange: 3.2,
         cast(m, u, aim) {
           m.after(0.18, () => {
             const p = ahead(u, aim, 1.8);
@@ -62,7 +64,7 @@ export const HEROES: HeroDef[] = [
         },
       },
       {
-        name: '鉄壁の構え', desc: '5秒間、受けるダメージを60%カット', cd: 15, anim: 'Spell_Simple_Enter', lock: 0.3, aiRange: 6, aiWhen: 'hurt',
+        name: '鉄壁の構え', icon: 'guard', desc: '5秒間、受けるダメージを60%カット', cd: 15, anim: 'Spell_Simple_Enter', lock: 0.3, aiRange: 6, aiWhen: 'hurt',
         cast(m, u) {
           u.buff('def', 0.6, 5);
           m.fx.ring(u.pos, 2.4, 0x9fd0ff, 0.6);
@@ -71,7 +73,7 @@ export const HEROES: HeroDef[] = [
       },
     ],
     ult: {
-      name: '守護の号令', desc: '周囲の敵を吹き飛ばし、味方を大回復', cd: 0, anim: 'Spell_Simple_Enter', lock: 0.7, aiRange: 5,
+      name: '守護の号令', icon: 'rally', desc: '周囲の敵を吹き飛ばし、味方を大回復', cd: 0, anim: 'Spell_Simple_Enter', lock: 0.7, aiRange: 5,
       cast(m, u) {
         m.fx.telegraph(u.pos, 7, 0.45, 0x9fd0ff);
         m.after(0.45, () => {
@@ -90,7 +92,7 @@ export const HEROES: HeroDef[] = [
     idle: 'Sword_Idle', run: 'Jog_Fwd_Loop', attacks: ['Sword_Attack'],
     skills: [
       {
-        name: '旋風斬', desc: '回転して周囲をまとめて斬る', cd: 8, anim: 'Sword_Attack', lock: 0.7, aiRange: 3.4,
+        name: '旋風斬', icon: 'spin', desc: '回転して周囲をまとめて斬る', cd: 8, anim: 'Sword_Attack', lock: 0.7, aiRange: 3.4,
         cast(m, u) {
           for (let i = 0; i < 3; i++) m.after(0.15 + i * 0.2, () => {
             m.fx.ring(u.pos, 3.8, 0xffb070, 0.3);
@@ -99,7 +101,7 @@ export const HEROES: HeroDef[] = [
         },
       },
       {
-        name: '雄叫び', desc: '6秒間、攻撃力+45%・移動速度+25%', cd: 15, anim: 'Spell_Simple_Enter', lock: 0.3, aiRange: 9,
+        name: '雄叫び', icon: 'roar', desc: '6秒間、攻撃力+45%・移動速度+25%', cd: 15, anim: 'Spell_Simple_Enter', lock: 0.3, aiRange: 9,
         cast(m, u) {
           u.buff('atk', 0.45, 6); u.buff('speed', 0.25, 6);
           m.fx.ring(u.pos, 3, 0xff7a30, 0.6); m.fx.aura(u, 0xff7a30, 6);
@@ -107,7 +109,7 @@ export const HEROES: HeroDef[] = [
       },
     ],
     ult: {
-      name: '大地割り', desc: '跳び上がって叩きつけ、広範囲に大ダメージ', cd: 0, anim: 'Sword_Attack', lock: 0.9, aiRange: 7,
+      name: '大地割り', icon: 'quake', desc: '跳び上がって叩きつけ、広範囲に大ダメージ', cd: 0, anim: 'Sword_Attack', lock: 0.9, aiRange: 7,
       cast(m, u, aim) {
         const p = aimPoint(u, aim, 5, 8);
         m.fx.telegraph(p, 5.5, 0.6, 0xff7a30);
@@ -127,7 +129,7 @@ export const HEROES: HeroDef[] = [
     idle: 'Idle_Loop', run: 'Jog_Fwd_Loop', attacks: ['Spell_Simple_Shoot'],
     skills: [
       {
-        name: 'フレイムボム', desc: '着弾地点で爆発する火球を放つ', cd: 7, anim: 'Spell_Simple_Shoot', lock: 0.4, aiRange: 12,
+        name: 'フレイムボム', icon: 'bomb', desc: '着弾地点で爆発する火球を放つ', cd: 7, anim: 'Spell_Simple_Shoot', lock: 0.4, aiRange: 12,
         cast(m, u, aim) {
           m.after(0.2, () => m.shoot(u, aim.dir, {
             speed: 22, range: 14, radius: 0.55, dmg: u.power() * 0.6, color: 0xff6a2a,
@@ -136,14 +138,14 @@ export const HEROES: HeroDef[] = [
         },
       },
       {
-        name: '癒やしの輪', desc: '周囲の味方のHPを30%回復', cd: 16, anim: 'Spell_Simple_Enter', lock: 0.5, aiRange: 99, aiWhen: 'allyHurt',
+        name: '癒やしの輪', icon: 'heal', desc: '周囲の味方のHPを30%回復', cd: 16, anim: 'Spell_Simple_Enter', lock: 0.5, aiRange: 99, aiWhen: 'allyHurt',
         cast(m, u) {
           m.after(0.3, () => { m.fx.ring(u.pos, 6.5, 0x7dffb0, 0.7); m.healAllies(u, u.pos, 6.5, 0.3); });
         },
       },
     ],
     ult: {
-      name: 'メテオレイン', desc: '狙った場所に隕石を3連続で落とす', cd: 0, anim: 'Spell_Simple_Enter', lock: 0.9, aiRange: 12,
+      name: 'メテオレイン', icon: 'meteor', desc: '狙った場所に隕石を3連続で落とす', cd: 0, anim: 'Spell_Simple_Enter', lock: 0.9, aiRange: 12,
       cast(m, u, aim) {
         const p = aimPoint(u, aim, 8, 13);
         for (let i = 0; i < 3; i++) {
@@ -165,7 +167,7 @@ export const HEROES: HeroDef[] = [
     idle: 'Idle_Loop', run: 'Sprint_Loop', attacks: ['Punch_Jab', 'Punch_Cross'],
     skills: [
       {
-        name: '影走り', desc: '前方へ駆け抜け、通り道の敵を斬る', cd: 6, anim: 'Roll', lock: 0.3, aiRange: 7,
+        name: '影走り', icon: 'dash', desc: '前方へ駆け抜け、通り道の敵を斬る', cd: 6, anim: 'Roll', lock: 0.3, aiRange: 7,
         cast(m, u, aim) {
           const from = u.pos.clone();
           const to = ahead(u, aim, 8);
@@ -177,7 +179,7 @@ export const HEROES: HeroDef[] = [
         },
       },
       {
-        name: '煙隠れ', desc: '4秒間姿を消し、移動速度+40%', cd: 14, anim: 'Spell_Simple_Enter', lock: 0.2, aiRange: 10, aiWhen: 'hurt',
+        name: '煙隠れ', icon: 'smoke', desc: '4秒間姿を消し、移動速度+40%', cd: 14, anim: 'Spell_Simple_Enter', lock: 0.2, aiRange: 10, aiWhen: 'hurt',
         cast(m, u) {
           u.stealth = 4; u.buff('speed', 0.4, 4);
           m.fx.burst(u.pos.clone().add(v(0, 1, 0)), 0x99aabb, 16, 4);
@@ -185,7 +187,7 @@ export const HEROES: HeroDef[] = [
       },
     ],
     ult: {
-      name: '千刃乱舞', desc: '周囲の敵すべてに連続で斬りかかる', cd: 0, anim: 'Punch_Cross', lock: 0.9, aiRange: 8,
+      name: '千刃乱舞', icon: 'blades', desc: '周囲の敵すべてに連続で斬りかかる', cd: 0, anim: 'Punch_Cross', lock: 0.9, aiRange: 8,
       cast(m, u) {
         u.invuln = 1.0;
         m.fx.telegraph(u.pos, 9, 0.3, 0x4be0c0);
@@ -208,7 +210,7 @@ export const HEROES: HeroDef[] = [
     idle: 'Pistol_Idle_Loop', run: 'Jog_Fwd_Loop', attacks: ['Pistol_Shoot'],
     skills: [
       {
-        name: '貫通ボルト', desc: '敵を貫く強力な一射', cd: 7, anim: 'Pistol_Shoot', lock: 0.45, aiRange: 15,
+        name: '貫通レーザー', icon: 'laser', desc: '敵を貫く強力な一射', cd: 7, anim: 'Pistol_Shoot', lock: 0.45, aiRange: 15,
         cast(m, u, aim) {
           m.after(0.2, () => m.shoot(u, aim.dir, {
             speed: 38, range: 20, radius: 0.9, dmg: u.power() * 1.9, color: 0xffe27a, pierce: true,
@@ -216,7 +218,7 @@ export const HEROES: HeroDef[] = [
         },
       },
       {
-        name: '離脱ステップ', desc: '後ろへ飛び退き、3秒間移動速度+30%', cd: 9, anim: 'Roll', lock: 0.25, aiRange: 4,
+        name: '離脱ステップ', icon: 'dodge', desc: '後ろへ飛び退き、3秒間移動速度+30%', cd: 9, anim: 'Roll', lock: 0.25, aiRange: 4,
         cast(m, u, aim) {
           m.dash(u, ahead(u, aim, -7), 0.22);
           u.buff('speed', 0.3, 3);
@@ -225,7 +227,7 @@ export const HEROES: HeroDef[] = [
       },
     ],
     ult: {
-      name: '矢の雨', desc: '狙った範囲に3秒間、矢を降らせ続ける', cd: 0, anim: 'Pistol_Shoot', lock: 0.6, aiRange: 15,
+      name: '光弾の雨', icon: 'rain', desc: '狙った範囲に3秒間、光弾を降らせ続ける', cd: 0, anim: 'Pistol_Shoot', lock: 0.6, aiRange: 15,
       cast(m, u, aim) {
         const p = aimPoint(u, aim, 9, 16);
         m.zone(p, 5.5, 3.2, 0xffd23c, 0.4, () => {
@@ -242,14 +244,14 @@ export const HEROES: HeroDef[] = [
     idle: 'Idle_Loop', run: 'Jog_Fwd_Loop', attacks: ['Spell_Simple_Shoot'],
     skills: [
       {
-        name: '呪いの沼', desc: '5秒間、範囲内の敵を鈍足にして削る', cd: 10, anim: 'Spell_Simple_Enter', lock: 0.45, aiRange: 10,
+        name: '呪いの沼', icon: 'swamp', desc: '5秒間、範囲内の敵を鈍足にして削る', cd: 10, anim: 'Spell_Simple_Enter', lock: 0.45, aiRange: 10,
         cast(m, u, aim) {
           const p = aimPoint(u, aim, 6, 11);
           m.zone(p, 4.5, 5, 0x9cff5a, 0.5, () => m.aoe(u, p, 4.5, u.power() * 0.4, { slow: 0.9 }));
         },
       },
       {
-        name: '生命吸収', desc: '周囲の敵にダメージを与え、自分を回復', cd: 11, anim: 'Spell_Simple_Enter', lock: 0.5, aiRange: 4.5,
+        name: '生命吸収', icon: 'drain', desc: '周囲の敵にダメージを与え、自分を回復', cd: 11, anim: 'Spell_Simple_Enter', lock: 0.5, aiRange: 4.5,
         cast(m, u) {
           m.after(0.3, () => {
             m.fx.ring(u.pos, 5, 0x9cff5a, 0.5);
@@ -260,7 +262,7 @@ export const HEROES: HeroDef[] = [
       },
     ],
     ult: {
-      name: '死者の刻印', desc: '広範囲の敵をスタンさせ、大ダメージ', cd: 0, anim: 'Spell_Simple_Enter', lock: 0.9, aiRange: 10,
+      name: '死者の刻印', icon: 'mark', desc: '広範囲の敵をスタンさせ、大ダメージ', cd: 0, anim: 'Spell_Simple_Enter', lock: 0.9, aiRange: 10,
       cast(m, u) {
         m.fx.telegraph(u.pos, 11, 0.7, 0x9cff5a);
         m.after(0.7, () => {

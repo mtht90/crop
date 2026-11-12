@@ -39,6 +39,8 @@ export interface HeroModel {
   mixer: THREE.AnimationMixer;
   clips: Map<string, THREE.AnimationClip>;
   materials: THREE.Material[];
+  /** 顔アイコン（data URL）。HUD やカードで使う */
+  portrait: string;
   update(dt: number): void;
   /** 瞬間移動の後に呼ぶ（髪や服の揺れが暴れないように） */
   settle(): void;
@@ -114,7 +116,7 @@ function buildHero(def: HeroDef, gltf: GLTF): HeroModel {
   for (const c of rig.animations) if (c.name !== 'A_TPose') clips.set(c.name, retarget(c, vrm));
   const mixer = new THREE.AnimationMixer(vrm.scene);
   return {
-    root, vrm, mixer, clips, materials,
+    root, vrm, mixer, clips, materials, portrait: '',
     update(dt) { mixer.update(dt); vrm.update(dt); },
     settle() { root.updateMatrixWorld(true); vrm.springBoneManager?.reset(); },
   };
@@ -156,9 +158,45 @@ export async function loadAssets(onProgress: (ratio: number) => void) {
   const vrms = HEROES.map((h) => load(vrmLoader, `vrm/${h.model}`, 'vrm').then((g) => { tick(); return g; }));
   await rigJob;
   (await Promise.all(vrms)).forEach((g, i) => heroes.set(HEROES[i].id, buildHero(HEROES[i], g)));
+  renderPortraits();
+}
+
+/** 各ヒーローの顔をオフスクリーンで撮って、UI用のアイコンにする */
+function renderPortraits() {
+  const size = 256;
+  const r = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+  r.setSize(size, size, false);
+  r.setClearColor(0x000000, 0);
+  const scene = new THREE.Scene();
+  const key = new THREE.DirectionalLight(0xffffff, 2.4); key.position.set(1.5, 3, 4);
+  scene.add(key, new THREE.AmbientLight(0xffffff, 1.1));
+  const cam = new THREE.PerspectiveCamera(26, 1, 0.1, 20);
+  const head = new THREE.Vector3();
+  for (const def of HEROES) {
+    const m = heroes.get(def.id)!;
+    const idle = m.clips.get(def.idle);
+    if (idle) m.mixer.clipAction(idle).play();
+    scene.add(m.root);
+    m.root.rotation.y = -0.35;
+    m.update(0); m.settle(); m.update(0);
+    (m.vrm.humanoid.getRawBoneNode('head') ?? m.root).getWorldPosition(head);
+    head.y += 0.1 * HERO_SCALE;
+    cam.position.set(head.x + 0.25, head.y + 0.05, head.z + 1.55);
+    cam.lookAt(head);
+    r.render(scene, cam);
+    m.portrait = r.domElement.toDataURL('image/webp', 0.9);
+    scene.remove(m.root);
+    m.mixer.stopAllAction();
+    m.root.rotation.y = 0;
+  }
+  r.dispose();
+  r.forceContextLoss();
 }
 
 /** ヒーローのモデル。各ヒーロー1体だけ存在し、ロビーと対戦で使い回す */
+/** 顔アイコンの data URL */
+export const portraitOf = (def: HeroDef) => heroes.get(def.id)!.portrait;
+
 export function heroModel(def: HeroDef): HeroModel {
   const m = heroes.get(def.id)!;
   m.mixer.stopAllAction();

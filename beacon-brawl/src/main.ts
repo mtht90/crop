@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import './style.css';
-import { loadAssets, heroModel, type HeroModel } from './assets';
+import { loadAssets, heroModel, portraitOf, type HeroModel } from './assets';
+import { iconSvg } from './icons';
 import { HEROES, type HeroDef } from './heroes';
 import { Match, DIFFICULTIES, type MatchResult } from './game';
 import { Input } from './input';
@@ -80,7 +81,7 @@ class Lobby {
     const portrait = this.camera.aspect < 1;
     const wantLook = new THREE.Vector3(), wantPos = new THREE.Vector3();
     if (this.focus < 0) {
-      wantLook.set(0, 1.5, 0); wantPos.set(0, 2.4, portrait ? 30 : 15);
+      wantLook.set(0, portrait ? 1.6 : 3.0, 0); wantPos.set(0, 2.6, portrait ? 30 : 15);
     } else {
       const p = this.models[this.focus].root.position;
       const sx = portrait ? 0 : -1.5, sy = portrait ? 0.9 : 1.3;
@@ -101,7 +102,8 @@ function buildSelect() {
     const c = document.createElement('button');
     c.className = 'card';
     c.style.setProperty('--hc', `#${h.color.toString(16).padStart(6, '0')}`);
-    c.innerHTML = `<b></b><span></span>`;
+    c.innerHTML = `<img alt="" /><b></b><span></span>`;
+    (c.querySelector('img') as HTMLImageElement).src = portraitOf(h);
     c.querySelector('b')!.textContent = h.name;
     c.querySelector('span')!.textContent = h.role;
     c.addEventListener('click', () => { pick(i); sfx.ui(); lobby.cheer(i); });
@@ -124,6 +126,7 @@ function pick(i: number) {
   if (lobby.focus >= 0) lobby.focus = i;
   const h: HeroDef = HEROES[i];
   [...$('cards').children].forEach((c, j) => c.classList.toggle('on', j === i));
+  ($('i-img') as HTMLImageElement).src = portraitOf(h);
   $('i-role').textContent = h.role;
   $('i-role').style.background = `#${h.color.toString(16).padStart(6, '0')}`;
   $('i-name').textContent = h.name;
@@ -140,7 +143,7 @@ function pick(i: number) {
   $('i-skills').innerHTML = '';
   for (const [tag, s] of [['スキル1', h.skills[0]], ['スキル2', h.skills[1]], ['必殺技', h.ult]] as const) {
     const row = document.createElement('div'); row.className = `sk${tag === '必殺技' ? ' ult' : ''}`;
-    row.innerHTML = `<em></em><b></b><span></span>`;
+    row.innerHTML = `<i>${iconSvg(s.icon)}</i><em></em><b></b><span></span>`;
     row.querySelector('em')!.textContent = tag;
     row.querySelector('b')!.textContent = s.name;
     row.querySelector('span')!.textContent = s.desc + (s.cd ? `（CT ${s.cd}秒）` : '');
@@ -162,13 +165,17 @@ function showResult(r: MatchResult) {
   const t = $('r-title');
   t.textContent = r.winner === 0 ? 'VICTORY' : r.winner === 1 ? 'DEFEAT' : 'DRAW';
   t.className = r.winner === 0 ? 'blue' : r.winner === 1 ? 'red' : '';
-  $('r-score').textContent = `確保した拠点　青 ${r.counts[0]} － ${r.counts[1]} 赤`;
+  $('r-score').innerHTML = `<b class="blue">${r.counts[0]}</b><span>拠点</span><b class="red">${r.counts[1]}</b>`;
   const table = $('r-table');
-  table.innerHTML = '<tr><th>ヒーロー</th><th>撃破</th><th>ダウン</th></tr>';
+  table.innerHTML = '<tr><th></th><th>KO</th><th>DOWN</th></tr>';
   for (const u of r.units) {
     const tr = document.createElement('tr');
-    tr.className = u.team === 0 ? 'blue' : 'red';
-    for (const text of [u.isPlayer ? `${u.name}（あなた）` : u.name, String(u.kills), String(u.deaths)]) {
+    tr.className = `${u.team === 0 ? 'blue' : 'red'}${u.isPlayer ? ' me' : ''}`;
+    const first = document.createElement('td');
+    const pic = document.createElement('img'); pic.src = portraitOf(u.def); pic.alt = '';
+    first.append(pic, document.createTextNode(u.name));
+    tr.append(first);
+    for (const text of [String(u.kills), String(u.deaths)]) {
       const td = document.createElement('td'); td.textContent = text; tr.append(td);
     }
     table.append(tr);

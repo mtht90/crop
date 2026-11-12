@@ -9,6 +9,9 @@
 
 - `public/assets/vrm/` の VRM は `scripts/optimize-vrm.py` でテクスチャを最大1024pxに縮小し WebP 化したものです（1体 約15〜20MB → 約4.5MB）。形状・ボーン・VRM メタ情報は変えていません。各ファイルのメタ情報にも `licenseName: CC0` と記録されています。
 - `public/assets/rig.glb` は `scripts/build-rig.mjs` で、配布物からメッシュを外し、使うアニメーション18種だけを残したものです。読み込み時に VRM のヒューマノイド骨へ移植しています（`src/assets.ts` の `retarget`）。
+- スキルアイコン（`src/icons.ts`）: [game-icons.net](https://game-icons.net/) の Lorc / Delapouite / DarkZaitzev 作、**CC BY 3.0**（要クレジット表記）。
+- フォント: Barlow Condensed、Noto Sans JP（いずれも SIL Open Font License 1.1、Google Fonts から読み込み）。
+- キャラの顔アイコンは、起動時に3Dモデルからその場で描画しています。
 - 武器（`src/weapons.ts`）とステージ（`src/stage.ts`）は外部モデルを使わず、コードで形状を組み立てています。
 - 効果音は外部素材ではなく、WebAudio でその場合成しています（`src/audio.ts`）。BGM はまだありません。
 - 描画ライブラリ: [three.js](https://threejs.org/)（MIT License）

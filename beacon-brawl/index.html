@@ -4,6 +4,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <title>BEACON BRAWL</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@1,600;1,700;1,800;1,900&family=Noto+Sans+JP:wght@500;700;900&display=swap" />
 </head>
 <body>
   <canvas id="c"></canvas>
@@ -16,7 +18,7 @@
 
   <div id="title" class="screen">
     <h1 class="logo">BEACON<span>BRAWL</span></h1>
-    <p class="tag">3 vs 3 拠点争奪アクション</p>
+    <p class="tag"><span>3 VS 3</span> 拠点争奪アクション</p>
     <button id="btn-start" class="primary">バトル開始</button>
     <div class="howto">
       <p>5つの拠点に乗って自チームの色に染めよう。3分後に多く持っていたチームの勝ち。</p>
@@ -28,8 +30,7 @@
 
   <div id="select" class="screen">
     <div id="info">
-      <div class="irole" id="i-role"></div>
-      <h2 id="i-name"></h2>
+      <div class="ihead"><img id="i-img" alt="" /><div><div class="irole" id="i-role"></div><h2 id="i-name"></h2></div></div>
       <p id="i-blurb"></p>
       <div id="i-stats"></div>
       <div id="i-skills"></div>
@@ -45,19 +46,24 @@
 
   <div id="hud">
     <div id="top">
+      <div id="team-blue" class="team"></div>
       <div id="score-blue" class="score blue">0</div>
       <div class="mid"><div id="timer">3:00</div><div id="beacons"></div></div>
       <div id="score-red" class="score red">0</div>
+      <div id="team-red" class="team"></div>
     </div>
-    <div id="side"><canvas id="minimap" width="160" height="100"></canvas><div id="allies"></div><div id="enemies"></div></div>
+    <canvas id="minimap" width="160" height="100"></canvas>
     <div id="plates"></div>
     <div id="floats"></div>
     <div id="feed"></div>
     <div id="announce"></div>
-    <div id="banner"></div>
+    <div id="banner"><img id="banner-img" alt="" /><div class="btext"><span id="banner-who"></span><b id="banner-skill"></b></div></div>
     <div id="count"></div>
-    <div id="respawn" style="display:none"></div>
-    <div id="myhp"><div id="myhp-bar"></div><span id="myhp-text"></span></div>
+    <div id="respawn" hidden></div>
+    <div id="me">
+      <img id="me-img" alt="" />
+      <div class="me-body"><div id="me-name"></div><div id="myhp"><div id="myhp-bar"></div><span id="myhp-text"></span></div></div>
+    </div>
     <div id="skills">
       <div id="skill0" class="skill"></div>
       <div id="skill1" class="skill"></div>
