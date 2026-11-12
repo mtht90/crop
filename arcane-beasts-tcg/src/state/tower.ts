@@ -27,19 +27,19 @@ export interface TowerDef {
 
 export const TOWERS: TowerDef[] = [
   {
-    id: 'sky', sub: '天翔ける覇者', bg: 'story/p-mountains', type: 'lightning', card: 'EVENT-tower-sky',
+    id: 'sky', sub: '天翔ける覇者', bg: 'story/tower-main', type: 'lightning', card: 'EVENT-tower-sky',
     bosses: [{ name: '雷鳴の番兵', portrait: 'drakes/hurricane' }, { name: '嵐の竜騎士', portrait: 'drakes/enforcer' }, { name: '天空王アエリオン', portrait: 'event/tower-skylord' }],
   },
   {
-    id: 'lava', sub: '灼熱の覇者', bg: 'story/landscape-lava', type: 'fire', card: 'EVENT-tower-lava',
+    id: 'lava', sub: '灼熱の覇者', bg: 'story/tower-main', type: 'fire', card: 'EVENT-tower-lava',
     bosses: [{ name: '溶岩の番人', portrait: 'drakes/burner' }, { name: '炎獄の将', portrait: 'drakes/flameheart' }, { name: '溶鉄の巨神ヴォルガ', portrait: 'event/tower-lavagolem' }],
   },
   {
-    id: 'grave', sub: '冥府の覇者', bg: 'story/p-graves', type: 'dark', card: 'EVENT-tower-grave',
+    id: 'grave', sub: '冥府の覇者', bg: 'story/tower-main', type: 'dark', card: 'EVENT-tower-grave',
     bosses: [{ name: '骸骨の門番', portrait: 'undead/skeleton' }, { name: '死霊の大司祭', portrait: 'undead/lich' }, { name: '不死王モルディス', portrait: 'event/tower-elderlich' }],
   },
   {
-    id: 'holy', sub: '聖光の覇者', bg: 'story/landscape-castle', type: 'psychic', card: 'EVENT-tower-holy',
+    id: 'holy', sub: '聖光の覇者', bg: 'story/tower-main', type: 'psychic', card: 'EVENT-tower-holy',
     bosses: [{ name: '聖堂の守護者', portrait: 'humans/mage-white' }, { name: '光の大魔導', portrait: 'humans/mage-light+female' }, { name: '天上の審判者セラフィム', portrait: 'event/tower-claimant' }],
   },
 ];
