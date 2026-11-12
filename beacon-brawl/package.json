@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "assets": "node scripts/optimize-assets.mjs"
+    "assets": "node scripts/build-rig.mjs"
   },
   "dependencies": {
     "@pixiv/three-vrm": "^3.5.5",

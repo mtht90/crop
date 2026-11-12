@@ -2,70 +2,35 @@ import * as THREE from 'three';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { VRMLoaderPlugin, VRMUtils, type VRM, type VRMHumanBoneName } from '@pixiv/three-vrm';
 import { HEROES, type HeroDef } from './heroes';
+import { WEAPONS, type WeaponName } from './weapons';
 
 const BASE = import.meta.env.BASE_URL + 'assets/';
-const PROPS = ['pillar', 'pillar_decorated', 'barrier', 'box_large', 'crates_stacked', 'barrel_large',
-  'banner_shield_blue', 'banner_shield_red', 'wall', 'floor_tile_large',
-  'sword_1handed', 'shield_badge', 'axe_2handed', 'staff', 'dagger', 'crossbow_2handed'] as const;
-export type PropName = (typeof PROPS)[number];
-
 /** キャラの表示倍率（VRM は実寸メートルなので、ゲーム内の縮尺に合わせて拡大） */
 export const HERO_SCALE = 1.5;
 
-// 武器の持たせ方。t / r は移植元リグの「手のスロット」から見た位置と回転
-type Q = [number, number, number, number];
-const Y180: Q = [0, 1, 0, 0];
-export const WEAPONS = {
-  sword: { prop: 'sword_1handed', hand: 'right', t: [0, 0.033, 0], r: Y180 },
-  shield: { prop: 'shield_badge', hand: 'left', t: [0, 0.017, 0.156], r: [0, 0, 0, 1] },
-  axe: { prop: 'axe_2handed', hand: 'right', t: [0, 0.033, 0], r: Y180 },
-  staff: { prop: 'staff', hand: 'right', t: [0, 0, 0], r: Y180 },
-  dagger: { prop: 'dagger', hand: 'right', t: [0, 0, 0], r: Y180 },
-  daggerOff: { prop: 'dagger', hand: 'left', t: [0, 0, 0], r: [0, 0, 0, 1] },
-  crossbow: { prop: 'crossbow_2handed', hand: 'right', t: [-0.105, -0.01, 0], r: [0, 0.707, 0, 0.707] },
-} as const satisfies Record<string, { prop: PropName; hand: 'left' | 'right'; t: [number, number, number]; r: Q }>;
-export type WeaponName = keyof typeof WEAPONS;
-
 // 移植元リグの骨 (GLTFLoader が名前の "." を除去する) → VRM ヒューマノイド骨
 const BONE_MAP: Record<string, VRMHumanBoneName> = {
-  hips: 'hips', spine: 'spine', chest: 'chest', head: 'head',
-  upperarml: 'leftUpperArm', lowerarml: 'leftLowerArm', wristl: 'leftHand',
-  upperarmr: 'rightUpperArm', lowerarmr: 'rightLowerArm', wristr: 'rightHand',
-  upperlegl: 'leftUpperLeg', lowerlegl: 'leftLowerLeg', footl: 'leftFoot', toesl: 'leftToes',
-  upperlegr: 'rightUpperLeg', lowerlegr: 'rightLowerLeg', footr: 'rightFoot', toesr: 'rightToes',
+  'DEF-hips': 'hips', 'DEF-spine001': 'spine', 'DEF-spine002': 'chest', 'DEF-spine003': 'upperChest',
+  'DEF-neck': 'neck', 'DEF-head': 'head',
 };
+for (const [S, side] of [['L', 'left'], ['R', 'right']] as const) {
+  const m: Record<string, string> = {
+    shoulder: 'Shoulder', upper_arm: 'UpperArm', forearm: 'LowerArm', hand: 'Hand',
+    thigh: 'UpperLeg', shin: 'LowerLeg', foot: 'Foot', toe: 'Toes',
+    thumb01: 'ThumbMetacarpal', thumb02: 'ThumbProximal', thumb03: 'ThumbDistal',
+  };
+  for (const f of ['index', 'middle', 'ring']) {
+    m[`f_${f}01`] = `${f[0].toUpperCase()}${f.slice(1)}Proximal`; m[`f_${f}02`] = `${f[0].toUpperCase()}${f.slice(1)}Intermediate`; m[`f_${f}03`] = `${f[0].toUpperCase()}${f.slice(1)}Distal`;
+  }
+  m.f_pinky01 = 'LittleProximal'; m.f_pinky02 = 'LittleIntermediate'; m.f_pinky03 = 'LittleDistal';
+  for (const [k, v] of Object.entries(m)) BONE_MAP[`DEF-${k}${S}`] = `${side}${v}` as VRMHumanBoneName;
+}
 
-const props = new Map<string, GLTF>();
 const heroes = new Map<string, HeroModel>();
 let rig: GLTF;
 /** 移植元リグの基準姿勢: 各骨のワールド回転と、その親のワールド回転 */
 const rigRest = new Map<string, { world: THREE.Quaternion; parent: THREE.Quaternion; pos: THREE.Vector3 }>();
 let rigHipsHeight = 1;
-
-// 3段階のトゥーン陰影（小物用）
-const gradientMap = (() => {
-  const t = new THREE.DataTexture(new Uint8Array([110, 185, 255]), 3, 1, THREE.RedFormat);
-  t.minFilter = t.magFilter = THREE.NearestFilter;
-  t.needsUpdate = true;
-  return t;
-})();
-
-function toonify(root: THREE.Object3D) {
-  const cache = new Map<THREE.Material, THREE.Material>();
-  root.traverse((o) => {
-    const m = o as THREE.Mesh;
-    if (!m.isMesh) return;
-    m.castShadow = true;
-    m.receiveShadow = true;
-    const old = m.material as THREE.MeshStandardMaterial;
-    let neu = cache.get(old);
-    if (!neu) {
-      neu = new THREE.MeshToonMaterial({ map: old.map, color: old.color, gradientMap });
-      cache.set(old, neu);
-    }
-    m.material = neu;
-  });
-}
 
 export interface HeroModel {
   /** シーンに置くルート。向きは rotation.y で指定する */
@@ -78,9 +43,6 @@ export interface HeroModel {
   /** 瞬間移動の後に呼ぶ（髪や服の揺れが暴れないように） */
   settle(): void;
 }
-
-const ARM_IN_L = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), 0.32);
-const ARM_IN_R = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), -0.32);
 
 /** リグのアニメーションを、VRM の正規化ボーン向けに変換する */
 function retarget(clip: THREE.AnimationClip, vrm: VRM): THREE.AnimationClip {
@@ -98,12 +60,9 @@ function retarget(clip: THREE.AnimationClip, vrm: VRM): THREE.AnimationClip {
     if (prop === 'quaternion') {
       const out = new Float32Array(track.values.length);
       inv.copy(rest.world).invert();
-      // 移植元は腕の短いデフォルメ体型で脇が大きく開くので、上腕を少し体側へ寄せる
-      const armFix = human === 'leftUpperArm' ? ARM_IN_L : human === 'rightUpperArm' ? ARM_IN_R : null;
       for (let i = 0; i < out.length; i += 4) {
         q.fromArray(track.values, i).premultiply(rest.parent).multiply(inv);
         if (v0) { q.x = -q.x; q.z = -q.z; }
-        if (armFix) q.premultiply(armFix);
         q.toArray(out, i);
       }
       tracks.push(new THREE.QuaternionKeyframeTrack(`${node.name}.quaternion`, track.times as unknown as number[], out as unknown as number[]));
@@ -120,24 +79,17 @@ function retarget(clip: THREE.AnimationClip, vrm: VRM): THREE.AnimationClip {
   return new THREE.AnimationClip(clip.name, clip.duration, tracks);
 }
 
-function attachWeapon(vrm: VRM, name: WeaponName) {
+function attachWeapon(vrm: VRM, name: WeaponName, color: number) {
   const w = WEAPONS[name];
-  const side = w.hand === 'right' ? 'r' : 'l';
   const hand = vrm.humanoid.getNormalizedBoneNode(w.hand === 'right' ? 'rightHand' : 'leftHand');
-  const slot = rigRest.get(`handslot${side}`), wrist = rigRest.get(`wrist${side}`);
-  if (!hand || !slot || !wrist) return;
-  const v0 = vrm.meta?.metaVersion === '0';
+  if (!hand) return;
+  // 正規化ボーンは Tポーズで回転ゼロ・ワールド軸そろい。手首から手のひら中心へずらして持たせる
   const holder = new THREE.Group();
-  // 正規化ボーンは基準姿勢で回転ゼロなので、スロットのワールド回転をそのまま使える
-  holder.quaternion.copy(slot.world);
-  holder.position.copy(slot.pos).sub(wrist.pos).multiplyScalar(0.5);
-  if (v0) { holder.quaternion.x *= -1; holder.quaternion.z *= -1; holder.position.x *= -1; holder.position.z *= -1; }
-  const s = 0.46;
-  holder.scale.setScalar(s);
-  const mesh = props.get(w.prop)!.scene.clone(true);
-  mesh.position.fromArray(w.t);
-  mesh.quaternion.fromArray(w.r);
-  holder.add(mesh);
+  holder.position.set(w.hand === 'right' ? -0.075 : 0.075, -0.025, 0.01);
+  const obj = w.build(color);
+  if (w.hand === 'left') obj.scale.x = -1; // 左手用は左右反転
+  holder.add(obj);
+  if (vrm.meta?.metaVersion === '0') { holder.position.x *= -1; holder.position.z *= -1; holder.rotation.y = Math.PI; }
   hand.add(holder);
 }
 
@@ -154,12 +106,12 @@ function buildHero(def: HeroDef, gltf: GLTF): HeroModel {
     m.castShadow = true;
     for (const mat of Array.isArray(m.material) ? m.material : [m.material]) if (!materials.includes(mat)) materials.push(mat);
   });
-  for (const w of def.weapons) attachWeapon(vrm, w);
+  for (const w of def.weapons) attachWeapon(vrm, w, def.color);
   const root = new THREE.Group();
   vrm.scene.scale.setScalar(HERO_SCALE);
   root.add(vrm.scene);
   const clips = new Map<string, THREE.AnimationClip>();
-  for (const c of rig.animations) clips.set(c.name, retarget(c, vrm));
+  for (const c of rig.animations) if (c.name !== 'A_TPose') clips.set(c.name, retarget(c, vrm));
   const mixer = new THREE.AnimationMixer(vrm.scene);
   return {
     root, vrm, mixer, clips, materials,
@@ -184,46 +136,26 @@ export async function loadAssets(onProgress: (ratio: number) => void) {
     return l.parseAsync(bytes.buffer, '');
   };
   let done = 0;
-  const total = HEROES.length + PROPS.length + 1;
+  const total = HEROES.length + 1;
   const tick = () => onProgress(++done / total);
 
-  const jobs: Promise<void>[] = PROPS.map((p) => load(loader, `props/${p}`, 'glb').then((g) => { toonify(g.scene); props.set(p, g); tick(); }));
-  jobs.push(load(loader, 'rig', 'glb').then((g) => {
+  const rigJob = load(loader, 'rig', 'glb').then((g) => {
     rig = g;
+    // 基準姿勢は Tポーズのクリップから取る（VRM の正規化ボーンも Tポーズ基準）
+    const tpose = g.animations.find((a) => a.name === 'A_TPose');
+    if (tpose) { const mx = new THREE.AnimationMixer(g.scene); mx.clipAction(tpose).play(); mx.update(0); }
     g.scene.updateMatrixWorld(true);
     g.scene.traverse((o) => {
       const world = o.getWorldQuaternion(new THREE.Quaternion());
       const parent = o.parent ? o.parent.getWorldQuaternion(new THREE.Quaternion()) : new THREE.Quaternion();
       rigRest.set(o.name, { world, parent, pos: o.getWorldPosition(new THREE.Vector3()) });
     });
-    rigHipsHeight = rigRest.get('hips')!.pos.y;
+    rigHipsHeight = rigRest.get('DEF-hips')!.pos.y;
     tick();
-  }));
-  const vrms = HEROES.map((h) => load(vrmLoader, `vrm/${h.model}`, 'vrm').then((g) => { tick(); return g; }));
-  await Promise.all(jobs);
-  (await Promise.all(vrms)).forEach((g, i) => heroes.set(HEROES[i].id, buildHero(HEROES[i], g)));
-}
-
-export function prop(name: PropName): THREE.Object3D {
-  return props.get(name)!.scene.clone(true);
-}
-
-/** 同じ小物を大量に並べるための InstancedMesh 群を作る */
-export function instancedProp(name: PropName, matrices: THREE.Matrix4[]): THREE.Group {
-  const group = new THREE.Group();
-  const src = props.get(name)!.scene;
-  src.updateMatrixWorld(true);
-  src.traverse((o) => {
-    const m = o as THREE.Mesh;
-    if (!m.isMesh) return;
-    const inst = new THREE.InstancedMesh(m.geometry, m.material, matrices.length);
-    const tmp = new THREE.Matrix4();
-    matrices.forEach((mat, i) => inst.setMatrixAt(i, tmp.multiplyMatrices(mat, m.matrixWorld)));
-    inst.castShadow = name !== 'floor_tile_large';
-    inst.receiveShadow = true;
-    group.add(inst);
   });
-  return group;
+  const vrms = HEROES.map((h) => load(vrmLoader, `vrm/${h.model}`, 'vrm').then((g) => { tick(); return g; }));
+  await rigJob;
+  (await Promise.all(vrms)).forEach((g, i) => heroes.set(HEROES[i].id, buildHero(HEROES[i], g)));
 }
 
 /** ヒーローのモデル。各ヒーロー1体だけ存在し、ロビーと対戦で使い回す */

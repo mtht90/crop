@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { instancedProp, prop, type PropName } from './assets';
 
 export const HALF_X = 32;
 export const HALF_Z = 20;
@@ -14,66 +13,137 @@ export const BEACON_POS = [
 
 export interface Obstacle { x: number; z: number; hx: number; hz: number }
 
-interface Piece { prop: PropName; x: number; z: number; rot?: number; hx: number; hz: number }
+interface Piece { kind: 'pillar' | 'block' | 'wall'; x: number; z: number; hx: number; hz: number; h: number }
 // 片側だけ定義し、原点対称にコピーして公平なマップにする
 const HALF_LAYOUT: Piece[] = [
-  { prop: 'pillar', x: -4.5, z: -4.5, hx: 0.8, hz: 0.8 },
-  { prop: 'pillar', x: -4.5, z: 4.5, hx: 0.8, hz: 0.8 },
-  { prop: 'wall', x: -12, z: 1, rot: 1, hx: 0.5, hz: 2 },
-  { prop: 'barrier', x: -13, z: -13, hx: 2, hz: 0.3 },
-  { prop: 'barrier', x: -3, z: 14, hx: 2, hz: 0.3 },
-  { prop: 'box_large', x: -15, z: 9, hx: 0.8, hz: 0.8 },
-  { prop: 'crates_stacked', x: -24, z: 11, hx: 1.3, hz: 1.3 },
-  { prop: 'barrel_large', x: -23.5, z: -13, hx: 0.8, hz: 0.8 },
-  { prop: 'wall', x: -2, z: -15, hx: 2, hz: 0.5 },
-  { prop: 'box_large', x: -9, z: -4, hx: 0.8, hz: 0.8 },
+  { kind: 'pillar', x: -4.5, z: -4.5, hx: 0.8, hz: 0.8, h: 4.2 },
+  { kind: 'pillar', x: -4.5, z: 4.5, hx: 0.8, hz: 0.8, h: 4.2 },
+  { kind: 'wall', x: -12, z: 1, hx: 0.5, hz: 2, h: 2.6 },
+  { kind: 'wall', x: -13, z: -13, hx: 2, hz: 0.3, h: 1.2 },
+  { kind: 'wall', x: -3, z: 14, hx: 2, hz: 0.3, h: 1.2 },
+  { kind: 'block', x: -15, z: 9, hx: 0.8, hz: 0.8, h: 1.5 },
+  { kind: 'block', x: -24, z: 11, hx: 1.3, hz: 1.3, h: 2.2 },
+  { kind: 'block', x: -23.5, z: -13, hx: 0.8, hz: 0.8, h: 1.5 },
+  { kind: 'wall', x: -2, z: -15, hx: 2, hz: 0.5, h: 2.6 },
+  { kind: 'block', x: -9, z: -4, hx: 0.8, hz: 0.8, h: 1.5 },
 ];
+
+const CYAN = 0x49e6ff;
+const bodyMat = new THREE.MeshStandardMaterial({ color: 0x1b2242, metalness: 0.6, roughness: 0.42 });
+const glowMat = (color: number, opacity = 1) => new THREE.MeshBasicMaterial({ color, transparent: opacity < 1, opacity, depthWrite: opacity >= 1, toneMapped: false });
+
+/** 床の模様（六角グリッド）をキャンバスに描く。base=地の色, emissive=光る線 */
+function floorTextures() {
+  const W = 1024, H = 640; // 64m x 40m → 16px/m
+  const mk = () => { const c = document.createElement('canvas'); c.width = W; c.height = H; return c; };
+  const base = mk(), emi = mk();
+  const b = base.getContext('2d')!, e = emi.getContext('2d')!;
+  const grad = b.createLinearGradient(0, 0, W, 0);
+  grad.addColorStop(0, '#1d2f66'); grad.addColorStop(0.5, '#23274c'); grad.addColorStop(1, '#4d2140');
+  b.fillStyle = grad; b.fillRect(0, 0, W, H);
+  e.fillStyle = '#000'; e.fillRect(0, 0, W, H);
+  const R = 32, dx = R * 1.5, dy = R * Math.sqrt(3);
+  for (let i = -1; i * dx < W + R; i++) for (let j = -1; j * dy < H + dy; j++) {
+    const cx = i * dx, cy = j * dy + (i & 1 ? dy / 2 : 0);
+    const path = (ctx: CanvasRenderingContext2D, r: number) => {
+      ctx.beginPath();
+      for (let k = 0; k < 6; k++) { const a = (k / 6) * Math.PI * 2; ctx[k ? 'lineTo' : 'moveTo'](cx + Math.cos(a) * r, cy + Math.sin(a) * r); }
+      ctx.closePath();
+    };
+    path(b, R - 1.5); b.fillStyle = `rgba(255,255,255,${0.015 + Math.random() * 0.035})`; b.fill();
+    b.strokeStyle = 'rgba(6,8,20,.9)'; b.lineWidth = 3; b.stroke();
+    path(e, R - 1.5);
+    const t = cx / W; // 左=青陣営, 右=赤陣営に向かって線の色が変わる
+    e.strokeStyle = `rgba(${Math.round(60 + 195 * t)},${Math.round(150 - 80 * t)},${Math.round(255 - 150 * t)},${Math.random() < 0.08 ? 0.9 : 0.22})`;
+    e.lineWidth = 1.5; e.stroke();
+  }
+  return [base, emi].map((c) => { const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t; });
+}
 
 export class Stage {
   group = new THREE.Group();
   obstacles: Obstacle[] = [];
   private gw = HALF_X * 2; private gh = HALF_Z * 2;
   private blocked: Uint8Array;
+  private spin: THREE.Object3D[] = [];
 
   constructor() {
-    const M = (x: number, z: number, rot = 0, s = 1) =>
-      new THREE.Matrix4().compose(new THREE.Vector3(x, 0, z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), rot), new THREE.Vector3(s, s, s));
+    const g = this.group;
+    const box = (w: number, h: number, d: number, mat: THREE.Material, x: number, y: number, z: number, shadow = true) => {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+      m.position.set(x, y, z); m.castShadow = shadow; m.receiveShadow = shadow; g.add(m); return m;
+    };
 
-    // 床タイル
-    const tiles: THREE.Matrix4[] = [];
-    for (let x = -HALF_X - 2; x <= HALF_X + 2; x += 4) for (let z = -HALF_Z - 2; z <= HALF_Z + 2; z += 4) tiles.push(M(x, z));
-    this.group.add(instancedProp('floor_tile_large', tiles));
-    const under = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshBasicMaterial({ color: 0x0d0f1a }));
-    under.rotation.x = -Math.PI / 2; under.position.y = -0.2;
-    this.group.add(under);
+    // 床: 宙に浮かぶ光るプレート
+    const [map, emissiveMap] = floorTextures();
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(HALF_X * 2, HALF_Z * 2),
+      new THREE.MeshStandardMaterial({ map, emissiveMap, emissive: 0xffffff, emissiveIntensity: 1.9, metalness: 0.35, roughness: 0.5 }));
+    floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true;
+    g.add(floor);
+    box(HALF_X * 2 + 3, 1.2, HALF_Z * 2 + 3, bodyMat, 0, -0.62, 0, false);
+    box(HALF_X * 2 + 3.2, 0.12, HALF_Z * 2 + 3.2, glowMat(CYAN, 0.55), 0, -1.26, 0, false);
 
-    // 外周の壁
-    const walls: THREE.Matrix4[] = [];
-    for (let x = -HALF_X + 2; x < HALF_X; x += 4) { walls.push(M(x, -HALF_Z - 0.5)); walls.push(M(x, HALF_Z + 0.5)); }
-    for (let z = -HALF_Z + 2; z < HALF_Z; z += 4) { walls.push(M(-HALF_X - 0.5, z, Math.PI / 2)); walls.push(M(HALF_X + 0.5, z, Math.PI / 2)); }
-    this.group.add(instancedProp('wall', walls));
-    const corners: THREE.Matrix4[] = [];
-    for (const sx of [-1, 1]) for (const sz of [-1, 1]) corners.push(M(sx * (HALF_X + 0.5), sz * (HALF_Z + 0.5), 0, 1.25));
-    this.group.add(instancedProp('pillar_decorated', corners));
-
-    // 陣営の旗
-    for (const [i, name] of (['banner_shield_blue', 'banner_shield_red'] as const).entries()) {
-      const sx = i === 0 ? -1 : 1;
-      for (const z of [-10, -2, 6, 14]) {
-        const b = prop(name);
-        b.position.set(sx * (HALF_X + 0.5), 0.2, z);
-        b.rotation.y = sx < 0 ? Math.PI / 2 : -Math.PI / 2;
-        this.group.add(b);
-      }
+    // 外周: 低い壁の上を光のラインが走る。両端は陣営色
+    const rail = (w: number, d: number, x: number, z: number, color: number) => {
+      box(w, 1.1, d, bodyMat, x, 0.55, z);
+      box(w + 0.02, 0.09, d + 0.02, glowMat(color), x, 1.14, z, false);
+      box(d > w ? 0.14 : w, 2.4, d > w ? d : 0.14, glowMat(color, 0.07), x, 2.4, z, false);
+    };
+    rail(HALF_X * 2 + 1.8, 0.9, 0, -HALF_Z - 0.45, CYAN); rail(HALF_X * 2 + 1.8, 0.9, 0, HALF_Z + 0.45, CYAN);
+    rail(0.9, HALF_Z * 2, -HALF_X - 0.45, 0, TEAM_COLORS[0]); rail(0.9, HALF_Z * 2, HALF_X + 0.45, 0, TEAM_COLORS[1]);
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+      const c = sx < 0 ? TEAM_COLORS[0] : TEAM_COLORS[1];
+      const m = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.1, 5, 6), bodyMat);
+      m.position.set(sx * (HALF_X + 0.45), 2.5, sz * (HALF_Z + 0.45)); m.castShadow = true; g.add(m);
+      const top = new THREE.Mesh(new THREE.OctahedronGeometry(0.7), glowMat(c));
+      top.position.set(m.position.x, 6.2, m.position.z); g.add(top); this.spin.push(top);
     }
+
+    // 陣営のゲート（リスポーン地点の後ろ）
+    SPAWNS.forEach((p, i) => {
+      const sx = i === 0 ? -1 : 1;
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(3.4, 0.16, 8, 48), glowMat(TEAM_COLORS[i]));
+      ring.position.set(sx * (HALF_X + 0.6), 3.6, p.z); ring.rotation.y = Math.PI / 2; g.add(ring);
+      const film = new THREE.Mesh(new THREE.CircleGeometry(3.3, 48), glowMat(TEAM_COLORS[i], 0.16));
+      film.material.side = THREE.DoubleSide;
+      film.position.copy(ring.position); film.rotation.y = Math.PI / 2; g.add(film);
+    });
 
     // 障害物
     for (const p of HALF_LAYOUT) for (const s of [1, -1]) {
-      const o = prop(p.prop);
-      o.position.set(p.x * s, 0, p.z * s);
-      o.rotation.y = (p.rot ? Math.PI / 2 : 0) + (s < 0 ? Math.PI : 0);
-      this.group.add(o);
-      this.obstacles.push({ x: p.x * s, z: p.z * s, hx: p.hx, hz: p.hz });
+      const x = p.x * s, z = p.z * s;
+      const color = x < -6 ? TEAM_COLORS[0] : x > 6 ? TEAM_COLORS[1] : CYAN;
+      if (p.kind === 'pillar') {
+        const m = new THREE.Mesh(new THREE.CylinderGeometry(p.hx * 0.95, p.hx * 1.1, p.h, 6), bodyMat);
+        m.position.set(x, p.h / 2, z); m.castShadow = m.receiveShadow = true; g.add(m);
+        for (const y of [0.5, p.h - 0.5]) {
+          const band = new THREE.Mesh(new THREE.CylinderGeometry(p.hx * 1.08, p.hx * 1.08, 0.1, 6), glowMat(color));
+          band.position.set(x, y, z); g.add(band);
+        }
+        const top = new THREE.Mesh(new THREE.OctahedronGeometry(0.45), glowMat(color));
+        top.position.set(x, p.h + 0.9, z); g.add(top); this.spin.push(top);
+      } else {
+        const m = box(p.hx * 2, p.h, p.hz * 2, bodyMat, x, p.h / 2, z);
+        const edges = new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry), new THREE.LineBasicMaterial({ color, toneMapped: false }));
+        edges.position.copy(m.position); g.add(edges);
+        box(p.hx * 2 - 0.3, 0.06, p.hz * 2 - 0.3, glowMat(color, p.kind === 'block' ? 0.9 : 0.6), x, p.h + 0.03, z, false);
+        if (p.kind === 'block') box(p.hx * 2 + 0.04, 0.12, p.hz * 2 + 0.04, glowMat(color), x, p.h * 0.5, z, false);
+      }
+      this.obstacles.push({ x, z, hx: p.hx, hz: p.hz });
+    }
+
+    // 遠景: 星と、ゆっくり回る巨大なリング
+    const stars = new Float32Array(900 * 3);
+    for (let i = 0; i < 900; i++) {
+      const a = Math.random() * Math.PI * 2, r = 70 + Math.random() * 60;
+      stars.set([Math.cos(a) * r, -30 + Math.random() * 90, Math.sin(a) * r], i * 3);
+    }
+    const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.BufferAttribute(stars, 3));
+    g.add(new THREE.Points(sg, new THREE.PointsMaterial({ color: 0xbfd8ff, size: 0.5, sizeAttenuation: true, fog: false })));
+    for (const [r, y, tilt, c] of [[58, 6, 0.25, CYAN], [74, 18, -0.18, 0x8a6bff]] as const) {
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(r, 0.35, 6, 120), glowMat(c, 0.5));
+      (ring.material as THREE.MeshBasicMaterial).fog = false;
+      ring.rotation.x = Math.PI / 2 + tilt; ring.position.y = y; g.add(ring); this.spin.push(ring);
     }
 
     // リスポーン地点
@@ -94,6 +164,8 @@ export class Stage {
       }
     }
   }
+
+  update(dt: number) { for (const o of this.spin) o.rotation[o.type === 'Mesh' && (o as THREE.Mesh).geometry.type === 'TorusGeometry' ? 'z' : 'y'] += dt * ((o as THREE.Mesh).geometry.type === 'TorusGeometry' ? 0.02 : 0.9); }
 
   /** 位置を場内に収め、障害物から押し出す */
   resolve(p: THREE.Vector3, r: number) {

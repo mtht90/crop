@@ -163,8 +163,8 @@ export class Match {
 
   constructor(playerHero: HeroDef, public difficulty: Difficulty, private input: Input, private hud: Hud, private onEnd: (r: MatchResult) => void) {
     const s = this.scene;
-    s.background = new THREE.Color(0x12162a);
-    s.fog = new THREE.Fog(0x12162a, 50, 110);
+    s.background = new THREE.Color(0x070a1c);
+    s.fog = new THREE.Fog(0x070a1c, 60, 140);
     s.add(new THREE.HemisphereLight(0xcfdcff, 0x3a3048, 1.25));
     const sun = new THREE.DirectionalLight(0xfff1dc, 2.1);
     sun.position.set(-18, 34, 14);
@@ -231,7 +231,7 @@ export class Match {
   private kill(u: Unit, by: Unit) {
     u.hp = 0; u.alive = false; u.respawn = RESPAWN_TIME; u.deaths++; by.kills++;
     u.clearStatus(); u.target = null;
-    u.playOnce('Death_A', undefined, true);
+    u.playOnce('Death01', undefined, true);
     this.fx.burst(u.pos.clone().setY(1), TEAM_COLORS[u.team], 14, 6);
     this.hud.feed(by, u);
     if (u.isPlayer || by.isPlayer) sfx.down();
@@ -358,6 +358,7 @@ export class Match {
 
     for (const u of this.units) u.updateVisual(dt, this.player.team);
     this.fx.update(dt);
+    this.stage.update(dt);
     this.updateBeaconVisuals(dt);
     this.updateCamera(dt, false);
     this.hud.update(this);
@@ -423,7 +424,7 @@ export class Match {
     for (const u of this.units) {
       if (!u.alive) continue;
       u.moveDir.set(0, 0, 0); u.setLoop(u.def.idle);
-      if (u.team === winner) { u.setLoop('Cheer'); u.stopOnce(); }
+      if (u.team === winner) { u.setLoop('Dance_Loop'); u.stopOnce(); }
     }
   }
 
@@ -471,7 +472,7 @@ export class Match {
         const sp = u.speed() * (u.swing > 0 ? 0.45 : 1) * Math.min(1, len);
         u.pos.addScaledVector(u.moveDir, (sp / len) * dt);
         if (u.swing <= 0) u.yaw = angleLerp(u.yaw, Math.atan2(u.moveDir.x, u.moveDir.z), dt * 14);
-        u.setLoop('Running_A');
+        u.setLoop(u.def.run);
       } else {
         u.setLoop(u.def.idle);
       }

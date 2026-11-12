@@ -49,11 +49,12 @@ npm run build    # dist/ に静的ファイルを出力（どこでもホステ�
 | `src/main.ts` | 起動、画面遷移（タイトル / キャラ選択 / 対戦 / リザルト） |
 | `src/game.ts` | 対戦ロジック（ユニット、拠点、弾、AI、カメラ） |
 | `src/heroes.ts` | ヒーローとスキルの定義 |
-| `src/stage.ts` | ステージ配置、当たり判定、経路探索（A*） |
-| `src/assets.ts` | VRM / GLB 読み込み、モーション移植、武器の装着 |
+| `src/stage.ts` | ステージの見た目（コード生成）と配置、当たり判定、経路探索（A*） |
+| `src/assets.ts` | VRM 読み込み、モーション移植、武器の装着 |
+| `src/weapons.ts` | 武器の形状（コード生成） |
 | `src/fx.ts` / `src/audio.ts` | エフェクト / 効果音（合成） |
 | `src/hud.ts` / `src/input.ts` | HUD / 入力 |
-| `scripts/optimize-assets.mjs` | モーション用リグ・武器・小物の生成（`KAYKIT_DIR=… npm run assets`） |
+| `scripts/build-rig.mjs` | モーション用リグの生成（`UAL_GLTF=… npm run assets`） |
 | `scripts/optimize-vrm.py` | VRM のテクスチャ縮小・WebP 化 |
 
 素材のライセンスは [CREDITS.md](CREDITS.md) を参照。

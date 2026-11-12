@@ -70,9 +70,9 @@ class Lobby {
 
   cheer(i: number) {
     const m = this.models[i];
-    const a = m.mixer.clipAction(m.clips.get('Cheer')!);
-    a.reset().setLoop(THREE.LoopOnce, 1).fadeIn(0.1).play();
-    setTimeout(() => a.fadeOut(0.25), a.getClip().duration * 1000 - 250);
+    const a = m.mixer.clipAction(m.clips.get('Dance_Loop')!);
+    a.reset().fadeIn(0.15).play();
+    setTimeout(() => a.fadeOut(0.3), 1600);
   }
 
   update(dt: number) {
