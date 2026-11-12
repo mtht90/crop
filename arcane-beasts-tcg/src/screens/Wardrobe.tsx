@@ -63,7 +63,7 @@ export function Looks() {
           </div>
           {msg && <div className="set-note wd-note"><b className="wd-msg">{msg}</b></div>}
           <div className={`wd-grid wd-tab-${tab}`}>
-            {cur.list.map((c) => {
+            {cur.list.filter((c) => !c.reward || w.owned.includes(c.id)).map((c) => {
               const owned = w.owned.includes(c.id);
               const on = w[c.kind] === c.id;
               return (

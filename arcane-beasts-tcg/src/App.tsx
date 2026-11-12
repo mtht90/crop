@@ -26,6 +26,7 @@ import { ConfirmDialog } from './ui/Confirm';
 import { NewsModal } from './screens/News';
 import { Raid } from './screens/Raid';
 import { Stage } from './screens/Stage';
+import { Tower } from './screens/Tower';
 import { Store } from './screens/Store';
 import { ErrorBoundary, watchGlobalErrors } from './ui/ErrorBoundary';
 
@@ -79,6 +80,7 @@ const SCREENS = {
   rivals: Rivals,
   raid: Raid,
   stage: Stage,
+  tower: Tower,
   store: Store,
   battle: BattleScreen,
   deck: DeckBuilder,

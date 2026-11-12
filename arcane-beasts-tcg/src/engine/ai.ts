@@ -305,6 +305,8 @@ function simulate(g: Game, p: 0 | 1, a: Action): number {
 //   is kept but off: in play-tests it was noisier than the board-only threat.
 // ----------------------------------------------------------------------------
 export type CpuLevel = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
+/** 10 and 11 exist only in 覇王の塔 */
+export type TowerLevel = 10 | 11;
 export type AiLevel = Difficulty | number;
 
 export interface AiProfile {
@@ -320,9 +322,11 @@ export interface AiProfile {
   budgetMs: number;
   /** Monte Carlo play-outs instead of the turn search: ms per decision (0 = off) */
   mcts?: number;
+  /** sees the hidden cards (覇王の塔's top floors) */
+  peek?: boolean;
 }
 
-export const PROFILES: Record<CpuLevel, AiProfile> = {
+export const PROFILES: Record<CpuLevel | TowerLevel, AiProfile> = {
   1: { noise: 45, skip: 0.3, badAttack: 0.35, slip: 0.35, depth: 0, width: 0, threat: 0, replies: 0, budgetMs: 0 },
   2: { noise: 30, skip: 0.2, badAttack: 0.2, slip: 0.22, depth: 0, width: 0, threat: 0, replies: 0, budgetMs: 0 },
   3: { noise: 20, skip: 0.12, badAttack: 0.1, slip: 0.12, depth: 0, width: 0, threat: 0, replies: 0, budgetMs: 0 },
@@ -332,6 +336,9 @@ export const PROFILES: Record<CpuLevel, AiProfile> = {
   7: { noise: 0, skip: 0, badAttack: 0, slip: 0, depth: 2, width: 5, threat: 1, replies: 0, budgetMs: 450 },
   8: { noise: 0, skip: 0, badAttack: 0, slip: 0, depth: 3, width: 6, threat: 1.1, replies: 0, budgetMs: 600 },
   9: { noise: 0, skip: 0, badAttack: 0, slip: 0, depth: 4, width: 7, threat: 1.2, replies: 0, budgetMs: 900, mcts: 1500 },
+  // 覇王の塔 only: thinks longer; then also sees the hidden cards
+  10: { noise: 0, skip: 0, badAttack: 0, slip: 0, depth: 4, width: 7, threat: 1.2, replies: 0, budgetMs: 900, mcts: 2600 },
+  11: { noise: 0, skip: 0, badAttack: 0, slip: 0, depth: 4, width: 7, threat: 1.2, replies: 0, budgetMs: 900, mcts: 2600, peek: true },
 };
 
 export const CPU_LEVELS: { level: CpuLevel; name: string; blurb: string }[] = [
@@ -349,7 +356,9 @@ export const CPU_LEVELS: { level: CpuLevel; name: string; blurb: string }[] = [
 /** the profile for a story difficulty or a CPU level */
 export function profileOf(level: AiLevel): AiProfile {
   const n = typeof level === 'number' ? level : level === 'easy' ? 2 : level === 'normal' ? 5 : 6;
-  return PROFILES[Math.max(1, Math.min(9, Math.round(n))) as CpuLevel];
+  const r = Math.round(n);
+  if (r === 10 || r === 11) return PROFILES[r];
+  return PROFILES[Math.max(1, Math.min(9, r)) as CpuLevel];
 }
 
 /** what the board alone says the opponent can do to my active monster after my turn */
@@ -491,7 +500,7 @@ export function chooseAction(g: Game, p: 0 | 1, level: AiLevel = 'normal', actio
   if (legal.length === 1) return legal[0];
   if (legal.length === 0 || actionsThisTurn > 40) return { t: 'endTurn' };
   const prof = profileOf(level);
-  if (prof.mcts) return mctsAction(g, p, { budgetMs: mctsBudget(prof.mcts, actionsThisTurn), horizon: 30 });
+  if (prof.mcts) return mctsAction(g, p, { budgetMs: mctsBudget(prof.mcts, actionsThisTurn), horizon: 30, peek: prof.peek });
   if (prof.depth > 0) return plan(g, p, prof);
 
   const base = evaluate(g.s, p);
@@ -544,7 +553,7 @@ export async function aiAnswerAsync(g: Game, level: AiLevel = 'normal', actionsT
   const prof = profileOf(level);
   if (pr.type === 'action' && prof.mcts) {
     const legal = g.legalActions(pr.player);
-    if (legal.length > 1 && actionsThisTurn <= 40) return { type: 'action', action: await mctsActionAsync(g, pr.player, { budgetMs: mctsBudget(prof.mcts, actionsThisTurn), horizon: 30 }) };
+    if (legal.length > 1 && actionsThisTurn <= 40) return { type: 'action', action: await mctsActionAsync(g, pr.player, { budgetMs: mctsBudget(prof.mcts, actionsThisTurn), horizon: 30, peek: prof.peek }) };
   }
   return aiAnswer(g, level, actionsThisTurn);
 }

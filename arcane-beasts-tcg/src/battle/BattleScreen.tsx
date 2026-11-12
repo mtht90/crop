@@ -1146,7 +1146,7 @@ export function BattleScreen() {
 
   // lifecycle
   useEffect(() => {
-    const ctrl: BattleDriver = cfg.online ? new OnlineController(cfg.online) : new BattleController([cfg.playerDeck, cfg.oppDeck], ['あなた', cfg.oppName], cfg.cpuLevel ?? cfg.level, cfg.raid, cfg.stage?.mods);
+    const ctrl: BattleDriver = cfg.online ? new OnlineController(cfg.online) : new BattleController([cfg.playerDeck, cfg.oppDeck], ['あなた', cfg.oppName], cfg.cpuLevel ?? cfg.level, cfg.raid, cfg.stage?.mods ?? cfg.tower?.mods);
     ctrl.speed = settings.speed;
     ctrl.autoHuman = !!cfg.spectate && !cfg.online;
     ctrlRef.current = ctrl;
@@ -1421,10 +1421,10 @@ export function BattleScreen() {
       <div className="battle-bg" style={{ backgroundImage: `url(${artUrl(bg)})` }} key={bg} />
       <div className="battle-bg-shade" />
       {cfg.raid && <RaidHud s={s} />}
-      {cfg.stage && (
+      {(cfg.stage || cfg.tower) && (
         <div className="stage-chip">
           <b>{cfg.oppName.split(' ')[0]}</b>
-          {modsText(cfg.stage.mods).map((r) => (
+          {modsText((cfg.stage ?? cfg.tower)!.mods).map((r) => (
             <span key={r}>{r}</span>
           ))}
         </div>

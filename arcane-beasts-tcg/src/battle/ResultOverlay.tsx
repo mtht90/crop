@@ -92,6 +92,22 @@ export function ResultOverlay() {
       setRes({ ...base, lines, total: base.total + (sr.coins ?? 0), gems: base.gems + sr.gems + sr.winGems });
       return;
     }
+    if (cfg.tower) {
+      // a floor of 覇王の塔: the first clear of the next floor pays
+      const stT = useBattle.getState().stats;
+      const base = recordBattle(
+        { win, level: 'hard', baseReward: 0, prizesTaken: stT.prizes, prizesLost: stT.prizesLost, firstClear: false },
+        { kos: stT.kos, damage: stT.damage, prizes: stT.prizes, evolves: stT.evolves, trainers: stT.trainers },
+      );
+      const tr = useStore.getState().recordTower({ win, floor: cfg.tower.floor, key: cfg.tower.key });
+      const lines = [...base.lines];
+      if (tr.first) lines.push({ label: `${cfg.tower.floor}階 踏破報酬`, coins: tr.coins, gems: tr.gems });
+      if (tr.tickets?.premium) lines.push({ label: `レアパックチケット ×${tr.tickets.premium}`, coins: 0, gems: 0 });
+      if (tr.tickets?.sure3) lines.push({ label: `★3確定チケット ×${tr.tickets.sure3}`, coins: 0, gems: 0 });
+      if (tr.card) lines.push({ label: `塔の覇者のカード「${card(tr.card).name}」・称号「覇王」`, coins: 0, gems: 0 });
+      setRes({ ...base, lines, total: base.total + tr.coins, gems: base.gems + tr.gems });
+      return;
+    }
     if (cfg.raid) {
       // a raid: the damage done stays on the boss; bringing it to 0 clears the lap
       const v = useBattle.getState().view;
@@ -258,10 +274,11 @@ export function ResultOverlay() {
               go('lobby');
             } else if (cfg.raid) go('raid');
             else if (cfg.stage && win) go('stage');
+            else if (cfg.tower && win) go('tower');
             else startBattle({ ...cfg });
           }}
         >
-          {cfg.story ? (win ? '物語をつづける' : 'もう一度挑む') : cfg.online || cfg.placement ? 'ロビーへ' : cfg.raid ? 'レイドへ' : cfg.stage && win ? 'イベントマップへ' : 'もう一度'}
+          {cfg.story ? (win ? '物語をつづける' : 'もう一度挑む') : cfg.online || cfg.placement ? 'ロビーへ' : cfg.raid ? 'レイドへ' : cfg.stage && win ? 'イベントマップへ' : cfg.tower && win ? '塔へもどる' : 'もう一度'}
         </button>
         {missionsReady > 0 && !(cfg.story && win) && (
           <button
@@ -276,17 +293,17 @@ export function ResultOverlay() {
           </button>
         )}
         {/* a won story duel always goes on to the scene after it (that is where the card is handed over) */}
-        {!(cfg.story && win) && !(cfg.stage && win) && (
+        {!(cfg.story && win) && !(cfg.stage && win) && !(cfg.tower && win) && (
         <button
           className="btn big"
           onClick={() => {
             sfx('button');
             useBattle.setState({ result: null, view: null, prompt: null });
             if (cfg.online) online.clearMatch();
-            go(cfg.story ? 'story' : cfg.online || cfg.placement ? 'arena' : cfg.raid ? 'arena' : cfg.stage ? 'stage' : cfg.rival ? 'rivals' : 'home');
+            go(cfg.story ? 'story' : cfg.online || cfg.placement ? 'arena' : cfg.raid ? 'arena' : cfg.stage ? 'stage' : cfg.tower ? 'tower' : cfg.rival ? 'rivals' : 'home');
           }}
         >
-          {cfg.story ? 'ストーリーへ' : cfg.online || cfg.placement ? 'バトルメニューへ' : cfg.stage ? 'イベントマップへ' : cfg.rival ? '対戦相手を選ぶ' : 'ホームへ'}
+          {cfg.story ? 'ストーリーへ' : cfg.online || cfg.placement ? 'バトルメニューへ' : cfg.stage ? 'イベントマップへ' : cfg.tower ? '塔へもどる' : cfg.rival ? '対戦相手を選ぶ' : 'ホームへ'}
         </button>
         )}
       </motion.div>

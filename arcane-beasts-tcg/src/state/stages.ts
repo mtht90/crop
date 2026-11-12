@@ -160,11 +160,14 @@ export function currentStageEvent(now = new Date()): { ev: StageEvent; key: stri
   const w = weekIndex(weekKey(now));
   // pairs of weeks starting on an odd week index (so the first event starts on 2026-11-02)
   const period = Math.floor((w - 1) / 2);
-  const ev = STAGE_EVENTS[((period % STAGE_EVENTS.length) + STAGE_EVENTS.length) % STAGE_EVENTS.length];
+  // the stage event holds the even periods (the tower the odd ones); while the
+  // tower is on, this is the stage event that comes next
+  const sp = period % 2 === 0 ? period : period + 1;
+  const ev = STAGE_EVENTS[(((sp / 2 + 1) % STAGE_EVENTS.length) + STAGE_EVENTS.length) % STAGE_EVENTS.length];
   // this week's Monday, back to the period's first Monday, plus two weeks
   const monday = new Date(weekKey(now).slice(1) + 'T00:00:00');
   const ends = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() - (w - (period * 2 + 1)) * 7 + 14);
-  return { ev, key: `${ev.id}:${period}`, ends };
+  return { ev, key: `${ev.id}:${sp}`, ends };
 }
 
 // ---------------------------------------------------------------------------

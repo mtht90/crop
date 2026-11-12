@@ -47,4 +47,37 @@ export const EVENT_CARDS: MonsterCard[] = [
       { name: '魂の焔', cost: ['psychic', 'psychic', 'colorless'], damage: 110, text: '相手のバトルモンスターをこんらんにする。', effects: [{ k: 'condition', cond: 'confused' }] },
     ],
   }),
+  // 覇王の塔: the card of the top floor, one per tower (never in packs)
+  ev({
+    id: 'EVENT-tower-sky', no: 915, name: '天空王アエリオン', art: 'event/tower-skylord', type: 'lightning', hp: 150, retreat: 1, weakness: 'fighting',
+    species: 'てんくうおう', scene: 'story/p-mountains', flavor: '塔の頂より高い空を、彼は知っている。',
+    attacks: [
+      { name: '天翔ける槍', cost: ['lightning', 'colorless'], damage: 50, text: '', effects: [{ k: 'benchSnipe', n: 20 }] },
+      { name: '覇者の雷霆', cost: ['lightning', 'lightning', 'colorless'], damage: 120, text: '', effects: [{ k: 'condition', cond: 'paralyzed', flip: true }] },
+    ],
+  }),
+  ev({
+    id: 'EVENT-tower-lava', no: 916, name: '溶鉄の巨神ヴォルガ', art: 'event/tower-lavagolem', type: 'fire', hp: 170, retreat: 3, weakness: 'water',
+    species: 'ようてつの', scene: 'story/landscape-lava', flavor: '塔を支える炉の火は、この巨神の心臓だった。',
+    attacks: [
+      { name: '溶鉄の拳', cost: ['fire', 'colorless'], damage: 60, text: '', effects: [{ k: 'condition', cond: 'burned' }] },
+      { name: '大噴火', cost: ['fire', 'fire', 'colorless', 'colorless'], damage: 160, text: '', effects: [{ k: 'discardSelfEnergy', n: 1, type: 'fire' }] },
+    ],
+  }),
+  ev({
+    id: 'EVENT-tower-grave', no: 917, name: '不死王モルディス', art: 'event/tower-elderlich', type: 'dark', hp: 140, retreat: 2, weakness: 'grass',
+    species: 'ふしおう', scene: 'story/p-graves', flavor: '塔で倒れた挑戦者は、みな彼の兵になった。',
+    attacks: [
+      { name: '亡者の召集', cost: ['dark'], damage: 20, text: '', effects: [{ k: 'callForFamily', n: 1 }] },
+      { name: '不死の大鎌', cost: ['dark', 'dark', 'colorless'], damage: 100, text: '', suffix: '+', effects: [{ k: 'bonusPerDiscardMonster', per: 10, max: 60 }] },
+    ],
+  }),
+  ev({
+    id: 'EVENT-tower-holy', no: 918, name: '天上の審判者セラフィム', art: 'event/tower-claimant', type: 'psychic', hp: 140, retreat: 1, weakness: 'dark',
+    species: 'てんじょうの', scene: 'story/landscape-castle', flavor: '塔の頂で、挑戦者の魂の重さを量っている。',
+    attacks: [
+      { name: '審判の光', cost: ['psychic', 'colorless'], damage: 40, text: '', effects: [{ k: 'healAllSelf', n: 20 }] },
+      { name: '天上の裁き', cost: ['psychic', 'psychic', 'colorless'], damage: 120, text: '', effects: [{ k: 'condition', cond: 'confused' }] },
+    ],
+  }),
 ];

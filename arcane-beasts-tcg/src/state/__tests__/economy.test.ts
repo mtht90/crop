@@ -53,7 +53,7 @@ describe('ワードローブ', () => {
   it('has unique ids, free defaults and a gem price on everything else', () => {
     expect(new Set(COSMETICS.map((c) => c.id)).size).toBe(COSMETICS.length);
     for (const id of Object.values(DEFAULT_LOOK)) expect(COSMETICS.find((c) => c.id === id)?.price).toBe(0);
-    for (const c of COSMETICS) if (!Object.values(DEFAULT_LOOK).includes(c.id as never)) expect(c.price, c.id).toBeGreaterThan(0);
+    for (const c of COSMETICS) if (!Object.values(DEFAULT_LOOK).includes(c.id as never) && !c.reward) expect(c.price, c.id).toBeGreaterThan(0);
   });
   it('repairs a broken or foreign wardrobe', () => {
     expect(cleanWardrobe(undefined)).toEqual(freshWardrobe());

@@ -43,6 +43,7 @@ import {
   OLD_COIN_SCALE,
 } from './progress';
 import { currentStageEvent, EVENT_CARD_DROP, rollShards, shopOf, STAGE_COUNT, stageNow, stagesOf, type StageSave } from './stages';
+import { currentTower, floorsOf, TOWER_TITLE, towerNow, type TowerSave } from './tower';
 import { raidBattleGems, raidCost, raidLapBonus, raidLapHp, raidLapReward, raidNow, raidSession, rollRaidDrop, type RaidSave } from './raid';
 
 // ----------------------------------------------------------------------------
@@ -59,7 +60,7 @@ const isBasicEnergy = (cid: string) => {
   return c.kind === 'energy' && c.basic;
 };
 
-export type Screen = 'arena' | 'story' | 'scene' | 'lobby' | 'title' | 'starter' | 'home' | 'rivals' | 'battle' | 'deck' | 'collection' | 'shop' | 'missions' | 'more' | 'settings' | 'credits' | 'rules' | 'gallery' | 'wardrobe' | 'raid' | 'stage' | 'store' | 'dex';
+export type Screen = 'arena' | 'story' | 'scene' | 'lobby' | 'title' | 'starter' | 'home' | 'rivals' | 'battle' | 'deck' | 'collection' | 'shop' | 'missions' | 'more' | 'settings' | 'credits' | 'rules' | 'gallery' | 'wardrobe' | 'raid' | 'stage' | 'store' | 'dex' | 'tower';
 
 export interface SavedDeck {
   id: string;
@@ -137,6 +138,8 @@ export interface Save {
   raid?: RaidSave;
   /** this fortnight's stage event */
   stages?: StageSave;
+  /** 覇王の塔: the highest floor cleared this period */
+  tower?: TowerSave;
   newsHideDay?: string;
   progress: Progress;
   /** story mode progress */
@@ -186,6 +189,8 @@ export interface BattleConfig {
   placement?: boolean;
   /** a stage of the stage event (its rule is in mods) */
   stage?: { key: string; index: number; mods: import('../engine/types').BattleMods };
+  /** a floor of 覇王の塔 */
+  tower?: { key: string; floor: number; mods: import('../engine/types').BattleMods };
 }
 
 const KEY = 'arcane-beasts-save-v1';
@@ -404,10 +409,25 @@ interface Store {
   recordRaid: (o: { win: boolean; dealt: number }) => RaidResult;
   /** start stage i of the stage event (false = not open yet) */
   startStage: (i: number, playerDeck: string[]) => boolean;
+  /** climb to a floor of 覇王の塔 (1…30; false = not open yet) */
+  startTower: (floor: number, playerDeck: string[]) => boolean;
+  /** pay out a tower floor */
+  recordTower: (o: { win: boolean; floor: number; key: string }) => TowerResult;
   /** pay out a stage battle */
   recordStage: (o: { win: boolean; index: number; key: string }) => StageResult;
   /** trade shards at the exchange (false = not enough / sold out) */
   tradeStage: (itemId: string) => boolean;
+}
+
+export interface TowerResult {
+  win: boolean;
+  /** the first clear of this floor */
+  first: boolean;
+  gems: number;
+  coins: number;
+  tickets?: { premium?: number; sure3?: number };
+  /** the tower's card (the top floor) */
+  card?: string;
 }
 
 export interface StageResult {
@@ -557,6 +577,54 @@ export const useStore = create<Store>((set, get) => ({
       stage: { key, index: i, mods: stage.mods },
     });
     return true;
+  },
+  startTower: (floor, playerDeck) => {
+    const st = get();
+    const sv = towerNow(st.save.tower);
+    const { t, key, open } = currentTower();
+    if (!open || floor < 1 || floor > sv.cleared + 1) return false;
+    const f = floorsOf(t)[floor - 1];
+    st.update((s) => {
+      s.tower = sv;
+    });
+    st.startBattle({
+      rival: null,
+      playerDeck,
+      oppDeck: upgradeDeck(expand(deckById(f.deck)!.cards), f.tier),
+      oppName: `${f.n}階 ${f.name}`,
+      oppPortrait: f.portrait,
+      level: 'hard',
+      cpuLevel: f.cpu,
+      scene: t.bg,
+      reward: 0,
+      tower: { key, floor, mods: f.mods },
+    });
+    return true;
+  },
+  recordTower: ({ win, floor, key }) => {
+    const res: TowerResult = { win, first: false, gems: 0, coins: 0 };
+    if (!win) return res;
+    get().update((s) => {
+      const sv = towerNow(s.tower);
+      // the tower changed while this battle ran: nothing to pay into
+      if (sv.key !== key || floor !== sv.cleared + 1) return;
+      const f = floorsOf(currentTower().t)[floor - 1];
+      res.first = true;
+      res.gems = f.gems;
+      res.coins = f.coins;
+      res.tickets = f.tickets;
+      s.gems += f.gems;
+      s.coins += f.coins;
+      if (f.tickets) s.packTickets = { premium: (s.packTickets?.premium ?? 0) + (f.tickets.premium ?? 0), sure3: (s.packTickets?.sure3 ?? 0) + (f.tickets.sure3 ?? 0) };
+      if (f.card) {
+        res.card = f.card;
+        if (!s.collection[f.card]) s.newCards.push(f.card);
+        s.collection[f.card] = Math.min(MAX_COPIES, (s.collection[f.card] ?? 0) + 1);
+        if (!s.wardrobe.owned.includes(TOWER_TITLE)) s.wardrobe = { ...s.wardrobe, owned: [...s.wardrobe.owned, TOWER_TITLE] };
+      }
+      s.tower = { key: sv.key, cleared: floor };
+    });
+    return res;
   },
   recordStage: ({ win, index, key }) => {
     const res: StageResult = { win, gems: 0, winGems: 0, shards: 0, drop: null, first: false };

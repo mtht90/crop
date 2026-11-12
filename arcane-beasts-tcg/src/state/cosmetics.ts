@@ -18,6 +18,8 @@ export interface Cosmetic {
   art?: string;
   /** one line shown in the shop */
   note?: string;
+  /** won, not bought (shown only once owned) */
+  reward?: boolean;
 }
 
 export const SLEEVES: Cosmetic[] = [
@@ -55,6 +57,7 @@ export const TITLES: Cosmetic[] = [
   { id: 'title-star', kind: 'title', name: '星を集める者', price: 12000 },
   { id: 'title-heir', kind: 'title', name: '十二枚の継承者', price: 16000 },
   { id: 'title-legend', kind: 'title', name: '伝説の目撃者', price: 20000 },
+  { id: 'title-tower', kind: 'title', name: '覇王', price: 0, reward: true, note: '覇王の塔を踏破した証' },
 ];
 
 export const COSMETICS: Cosmetic[] = [...SLEEVES, ...MATS, ...TITLES];

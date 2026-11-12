@@ -125,6 +125,8 @@ export interface MctsOptions {
   budgetMs: number;
   /** turns to play out before judging the board */
   horizon: number;
+  /** sees the hidden cards (the opponent's hand, both decks' order): no re-dealing */
+  peek?: boolean;
 }
 
 /** a search over the legal actions, run in slices so the screen can keep moving */
@@ -156,7 +158,7 @@ class Search {
       }
     }
     const f = this.g.fork();
-    determinize(f, this.p);
+    if (!this.opt.peek) determinize(f, this.p);
     let v = 0;
     try {
       f.answer({ type: 'action', action: this.legal[k] });

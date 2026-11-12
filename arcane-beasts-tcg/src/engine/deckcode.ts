@@ -16,7 +16,7 @@ import { ENERGY_TYPES, type CardDef } from './types';
 const VERSION = '1';
 const SETS = ['AB1', 'AB2', 'AB3', 'AB4'] as const;
 /** raid and event cards, in the order they were added (append only: codes keep working) */
-const SPECIAL = ['RAID-boneking', 'RAID-frost', 'RAID-kraken', 'RAID-herald', 'RAID-dragon', 'RAID-emperor', 'RAID-seaking', 'RAID-archlich', 'EVENT-snow', 'EVENT-wyrm', 'EVENT-ghost', 'EVENT-witch'];
+const SPECIAL = ['RAID-boneking', 'RAID-frost', 'RAID-kraken', 'RAID-herald', 'RAID-dragon', 'RAID-emperor', 'RAID-seaking', 'RAID-archlich', 'EVENT-snow', 'EVENT-wyrm', 'EVENT-ghost', 'EVENT-witch', 'EVENT-tower-sky', 'EVENT-tower-lava', 'EVENT-tower-grave', 'EVENT-tower-holy'];
 const ALPHA = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 
 /** the card a name stands for in codes (its first, plain printing) */

@@ -650,3 +650,11 @@ The portraits of the 第四章 cards (`public/assets/art/rotl/`) come from the W
 [Reign_of_the_Lords_Portraits](https://add-ons.wesnoth.org/) 1.2.0 by The Gnat, with portraits by
 LordLewis and other contributors, distributed on the Wesnoth add-on server under the GNU GPL v2+.
 They were resized and converted to WebP.
+
+## Ageless Era (覇王の塔)
+
+The portraits of the 覇王の塔 cards (`public/assets/art/event/tower-*`) come from the Wesnoth add-on
+Ageless_Resources (Ageless Era) on the Wesnoth add-on server, licensed under the GNU GPL v2+:
+`general/images/portraits/avians/avianskylord.png`, `general/images/portraits/elementals/lava-golem.png`,
+`general/images/portraits/undead-elder-lich-lord.png`, `general/images/portraits/celestials/claimant.png`.
+They were resized and converted to WebP.
