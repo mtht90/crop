@@ -12,7 +12,7 @@ const $ = (id: string) => document.getElementById(id)!;
 const canvas = $('c') as HTMLCanvasElement;
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.type = THREE.PCFShadowMap; // ソフト影はスマホで重いので通常のPCFに（輪郭はほぼ同じ）
 
 const input = new Input(canvas);
 const hud = new Hud(input);
@@ -216,18 +216,28 @@ $('btn-back').addEventListener('click', () => { sfx.ui(); toSelect(); });
 
 function resize() {
   const w = innerWidth, h = innerHeight;
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.setPixelRatio(Math.min(devicePixelRatio, maxRatio) * resScale);
   renderer.setSize(w, h, false);
   for (const cam of [lobby?.camera, match?.camera]) if (cam) { cam.aspect = w / h; cam.updateProjectionMatrix(); }
   hud.resize(w, h);
 }
 addEventListener('resize', resize);
 
+/** 解像度の自動調整: 重いときは描画解像度を少し下げ、余裕があれば戻す */
+const maxRatio = 2;
+let resScale = 1, slowT = 0, fastT = 0;
+function adaptResolution(dt: number) {
+  if (dt > 1 / 45) { slowT += dt; fastT = 0; } else if (dt < 1 / 58) { fastT += dt; slowT = 0; } else { slowT = fastT = 0; }
+  const floor = 0.6 / Math.min(devicePixelRatio, maxRatio) > 0.5 ? 0.75 : 0.6; // 最低でも等倍弱は保つ
+  if (slowT > 1 && resScale > floor) { resScale = Math.max(floor, resScale - 0.1); slowT = 0; resize(); }
+  else if (fastT > 3 && resScale < 1) { resScale = Math.min(1, resScale + 0.1); fastT = 0; resize(); }
+}
+
 let last = performance.now();
 function frame(now: number) {
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
-  if (match) { match.update(dt); renderer.render(match.scene, match.camera); }
+  if (match) { match.update(dt); renderer.render(match.scene, match.camera); adaptResolution(dt); }
   else if (lobby) { lobby.update(dt); renderer.render(lobby.scene, lobby.camera); }
   requestAnimationFrame(frame);
 }
@@ -245,4 +255,4 @@ loadAssets(renderer, (k) => { $('loadfill').style.width = `${k * 100}%`; })
 canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); $('loadtext').textContent = '描画がリセットされました。ページを再読み込みしてください。'; show('loading'); });
 
 // デバッグ・自動テスト用
-(window as unknown as Record<string, unknown>).__game = { get match() { return match; }, startMatch, HEROES, setMode(i: number) { mode = i; refreshMode(); } };
+(window as unknown as Record<string, unknown>).__game = { renderer, get match() { return match; }, startMatch, HEROES, setMode(i: number) { mode = i; refreshMode(); } };

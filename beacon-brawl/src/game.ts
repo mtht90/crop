@@ -11,6 +11,19 @@ export const MATCH_TIME = 180;
 const RESPAWN_TIME = 7;
 const UNIT_RADIUS = 0.6;
 const NEUTRAL = 0xd8dde8;
+/** 影を描く範囲の半径（プレイヤー中心）。画面に映る範囲より少し広く */
+const SHADOW_R = 22;
+const BULLET_GEO = new THREE.SphereGeometry(1, 10, 8);
+/** 中心が明るく外へ消えていく円形のグラデーション */
+const GLOW_TEX = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const g = c.getContext('2d')!, grad = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  grad.addColorStop(0, '#fff'); grad.addColorStop(0.35, 'rgba(255,255,255,.55)'); grad.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grad; g.fillRect(0, 0, 128, 128);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+})();
+/** タッチ端末（スマホ）は描画負荷を下げる */
+export const MOBILE = matchMedia('(pointer: coarse)').matches;
 
 export type ModeId = 'dom' | 'tdm' | 'control' | 'clash';
 export interface ModeDef { id: ModeId; name: string; desc: string; time: number; unit: string }
@@ -139,7 +152,7 @@ export class Unit {
 
 interface Beacon {
   label: string; pos: THREE.Vector3; value: number; owner: number; // value: +1=青が完全確保, -1=赤
-  disc: THREE.Mesh; fill: THREE.Mesh; crystal: THREE.Mesh; beam: THREE.Mesh; light: THREE.PointLight;
+  disc: THREE.Mesh; fill: THREE.Mesh; crystal: THREE.Mesh; beam: THREE.Mesh; light: THREE.Mesh;
 }
 interface Projectile {
   mesh: THREE.Mesh; pos: THREE.Vector3; dir: THREE.Vector3; owner: Unit; left: number; hit: Set<Unit>;
@@ -172,6 +185,7 @@ export class Match {
   private timers: { t: number; fn: () => void; owner: Unit | null }[] = [];
   private caster: Unit | null = null;
   private shakeAmt = 0;
+  private sun!: THREE.DirectionalLight;
   private camPos = new THREE.Vector3();
   private camLook = new THREE.Vector3();
   private lastTick = 99;
@@ -198,8 +212,10 @@ export class Match {
     const sun = new THREE.DirectionalLight(0xfff1dc, 2.1);
     sun.position.set(-18, 34, 14);
     sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048);
-    Object.assign(sun.shadow.camera, { left: -40, right: 40, top: 28, bottom: -28, near: 1, far: 90 });
+    sun.shadow.mapSize.setScalar(MOBILE ? 1024 : 2048);
+    Object.assign(sun.shadow.camera, { left: -SHADOW_R, right: SHADOW_R, top: SHADOW_R, bottom: -SHADOW_R, near: 1, far: 90 });
+    this.sun = sun;
+    s.add(sun.target);
     sun.shadow.bias = -0.0015;
     s.add(sun, this.stage.group, this.fx.group);
 
@@ -236,8 +252,10 @@ export class Match {
       const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 26, 10, 1, true),
         new THREE.MeshBasicMaterial({ color: NEUTRAL, transparent: true, opacity: 0.35, depthWrite: false, blending: THREE.AdditiveBlending }));
       beam.position.set(pos.x, 13, pos.z);
-      const light = new THREE.PointLight(NEUTRAL, 14, 13, 1.6);
-      light.position.set(pos.x, 2.6, pos.z);
+      // 光源の代わりに、床に落ちる光だまり（加算合成）で照らされた感じを出す
+      const light = new THREE.Mesh(new THREE.CircleGeometry(6.5, 40), new THREE.MeshBasicMaterial({
+        color: NEUTRAL, transparent: true, opacity: 0.22, depthWrite: false, blending: THREE.AdditiveBlending, map: GLOW_TEX }));
+      light.rotation.x = -Math.PI / 2; light.position.set(pos.x, 0.06, pos.z);
       s.add(crystal, beam, light);
       this.beacons.push({ label: 'ABCDE'[bi], pos, value: 0, owner: -1, disc, fill, crystal, beam, light });
     });
@@ -337,11 +355,13 @@ export class Match {
   }
 
   shoot(u: Unit, dir: THREE.Vector3, o: ShootOpts) {
-    const mesh = new THREE.Mesh(new THREE.SphereGeometry(Math.max(0.22, o.radius * 0.6), 10, 8),
-      new THREE.MeshBasicMaterial({ color: o.color }));
+    const r = Math.max(0.22, o.radius * 0.6);
+    const mesh = new THREE.Mesh(BULLET_GEO, new THREE.MeshBasicMaterial({ color: o.color }));
+    mesh.scale.setScalar(r);
     const pos = u.pos.clone().addScaledVector(dir, 0.8); pos.y = 1.3;
     mesh.position.copy(pos);
-    const glow = new THREE.PointLight(o.color, 6, 6);
+    const glow = new THREE.Mesh(BULLET_GEO, new THREE.MeshBasicMaterial({ color: o.color, transparent: true, opacity: 0.35, depthWrite: false, blending: THREE.AdditiveBlending }));
+    glow.scale.setScalar(2.6);
     mesh.add(glow);
     this.scene.add(mesh);
     this.projectiles.push({ mesh, pos, dir: dir.clone().setY(0).normalize(), owner: u, left: o.range, hit: new Set(), ...o });
@@ -663,7 +683,7 @@ export class Match {
         this.aoe(p.owner, p.pos, p.explode.radius, p.explode.dmg, { knock: 1 });
       }
       this.scene.remove(p.mesh);
-      p.mesh.geometry.dispose();
+      for (const c of [p.mesh, ...p.mesh.children] as THREE.Mesh[]) (c.material as THREE.Material).dispose();
       this.projectiles.splice(i, 1);
     }
   }
@@ -708,7 +728,7 @@ export class Match {
       const cm = b.crystal.material as THREE.MeshToonMaterial;
       cm.color.copy(c); cm.emissive.copy(c);
       (b.beam.material as THREE.MeshBasicMaterial).color.copy(c);
-      b.light.color.copy(c);
+      (b.light.material as THREE.MeshBasicMaterial).color.copy(c);
       const fm = b.fill.material as THREE.MeshBasicMaterial;
       fm.color.set(b.value > 0 ? TEAM_COLORS[0] : b.value < 0 ? TEAM_COLORS[1] : NEUTRAL);
       const s = Math.max(0.001, Math.abs(b.value));
@@ -739,6 +759,11 @@ export class Match {
       this.shakeAmt *= Math.exp(-dt * 8);
     }
     cam.lookAt(this.camLook);
+    // 影の範囲をカメラの注視点に追従させる（影の解像度の刻みに合わせて動かし、ちらつきを防ぐ）
+    const step = (SHADOW_R * 2) / this.sun.shadow.mapSize.x;
+    const cx = Math.round(this.camLook.x / step) * step, cz = Math.round(this.camLook.z / step) * step;
+    this.sun.position.set(cx - 18, 34, cz + 14);
+    this.sun.target.position.set(cx, 0, cz);
     // 照準線: 射程ぶんだけ前方へ。敵を捉えると黄色くなる
     const line = this.aimLine, lock = p.alive ? this.aimLock : null;
     line.visible = p.alive && this.state === 'play';
