@@ -24,7 +24,7 @@ export type Stage = 'basic' | 'stage1' | 'stage2';
 export type Rarity = 1 | 2 | 3 | 4 | 5;
 /** how the card lists write rarity (common / uncommon / rare); turned into ★ when the cards are built */
 export type LegacyRarity = 'C' | 'U' | 'R' | 'RR';
-export type SetCode = 'AB1' | 'AB2' | 'AB3' | 'AB4';
+export type SetCode = 'AB1' | 'AB2' | 'AB3' | 'AB4' | 'AB5';
 /** Alternate printings of a base card */
 export type Variant = 'mirror' | 'SR' | 'SAR' | 'SV' | 'UR';
 export type Condition = 'poisoned' | 'burned' | 'asleep' | 'paralyzed' | 'confused';

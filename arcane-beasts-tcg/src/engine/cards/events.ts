@@ -73,8 +73,8 @@ export const EVENT_CARDS: MonsterCard[] = [
     ],
   }),
   ev({
-    id: 'EVENT-tower-holy', no: 918, name: '白法の大司教ルミエル', art: 'event/tower-archpriest', type: 'psychic', hp: 250, retreat: 1, weakness: 'dark', resistance: 'fighting', rarity: 5,
-    species: 'はくほうの', scene: 'story/landscape-castle', flavor: '塔の頂で、挑戦者の魂の重さを量っている。',
+    id: 'EVENT-tower-holy', no: 918, name: '白法の聖女ルミエル', art: 'event/tower-sister', type: 'psychic', hp: 250, retreat: 1, weakness: 'dark', resistance: 'fighting', rarity: 5,
+    species: 'はくほうの', scene: 'story/landscape-castle', flavor: '塔の頂で、挑戦者の魂の重さを静かに量っている。',
     attacks: [
       { name: '審判の光', cost: ['psychic', 'colorless'], damage: 70, text: '', effects: [{ k: 'healAllSelf', n: 20 }] },
       { name: '天上の裁き', cost: ['psychic', 'psychic', 'colorless'], damage: 160, text: '', effects: [{ k: 'condition', cond: 'confused' }] },

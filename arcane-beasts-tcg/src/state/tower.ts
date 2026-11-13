@@ -42,7 +42,7 @@ export const TOWERS: TowerDef[] = [
   },
   {
     id: 'holy', blessing: 'dark', sub: '聖光の覇者', bg: 'story/tower-main', type: 'psychic', card: 'EVENT-tower-holy',
-    bosses: [{ name: '聖堂の守護者', portrait: 'humans/mage-white' }, { name: '光の大魔導', portrait: 'humans/mage-light+female' }, { name: '白法の大司教ルミエル', portrait: 'event/tower-archpriest' }],
+    bosses: [{ name: '聖堂の守護者', portrait: 'humans/mage-white' }, { name: '光の大魔導', portrait: 'humans/mage-light+female' }, { name: '白法の聖女ルミエル', portrait: 'event/tower-sister' }],
   },
 ];
 

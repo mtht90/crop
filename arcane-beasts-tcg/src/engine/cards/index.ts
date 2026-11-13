@@ -5,6 +5,7 @@ import { MONSTERS2 } from './monsters2';
 import { TRAINERS2 } from './trainers2';
 import { MONSTERS3 } from './monsters3';
 import { MONSTERS4 } from './monsters4';
+import { MONSTERS5 } from './monsters5';
 import { TRAINERS3 } from './trainers3';
 import { STADIUMS } from './stadiums';
 import { BOSSES, RAID_CARDS } from './bosses';
@@ -165,7 +166,7 @@ export function describeAbility(a: AbilitySpec): string {
 }
 
 // Fill in auto-generated texts
-for (const mc of [...MONSTERS, ...MONSTERS2, ...MONSTERS3, ...MONSTERS4, ...EVENT_CARDS]) {
+for (const mc of [...MONSTERS, ...MONSTERS2, ...MONSTERS3, ...MONSTERS4, ...MONSTERS5, ...EVENT_CARDS]) {
   if (mc.ability && !mc.ability.text) mc.ability.text = describeAbility(mc.ability.spec);
   for (const atk of mc.attacks) {
     if (!atk.text && atk.effects?.length) atk.text = atk.effects.map(describeEffect).join('');
@@ -193,22 +194,24 @@ export const SET_INFO: Record<SetCode, { name: string; short: string; code: stri
   AB2: { name: '灰の巡礼', short: '第二章', code: 'CH2' },
   AB3: { name: '影の王冠', short: '第三章', code: 'CH3' },
   AB4: { name: '諸王の時代', short: '第四章', code: 'CH4' },
+  AB5: { name: '英雄の残響', short: '第五章', code: 'CH5' },
 };
-export const SETS: SetCode[] = ['AB1', 'AB2', 'AB3', 'AB4'];
+export const SETS: SetCode[] = ['AB1', 'AB2', 'AB3', 'AB4', 'AB5'];
 
 const PRINT1: CardDef[] = [...MONSTERS, ...TRAINERS, ...ENERGIES];
 const PRINT2: CardDef[] = [...MONSTERS2, ...TRAINERS2];
 const PRINT3: CardDef[] = [...MONSTERS3, ...TRAINERS3, ...STADIUMS];
 const PRINT4: CardDef[] = [...MONSTERS4];
+const PRINT5: CardDef[] = [...MONSTERS5];
 const chapterOf = (c: CardDef, printing: SetCode): SetCode =>
-  printing === 'AB4' ? 'AB4' : printing === 'AB1' || CH1_EXTRA.has(c.name) ? 'AB1' : printing === 'AB2' || CH2_EXTRA.has(c.name) ? 'AB2' : 'AB3';
-const MAIN_OF: Record<SetCode, CardDef[]> = { AB1: [], AB2: [], AB3: [], AB4: [] };
-for (const [printing, list] of [['AB1', PRINT1], ['AB2', PRINT2], ['AB3', PRINT3], ['AB4', PRINT4]] as const)
+  printing === 'AB5' ? 'AB5' : printing === 'AB4' ? 'AB4' : printing === 'AB1' || CH1_EXTRA.has(c.name) ? 'AB1' : printing === 'AB2' || CH2_EXTRA.has(c.name) ? 'AB2' : 'AB3';
+const MAIN_OF: Record<SetCode, CardDef[]> = { AB1: [], AB2: [], AB3: [], AB4: [], AB5: [] };
+for (const [printing, list] of [['AB1', PRINT1], ['AB2', PRINT2], ['AB3', PRINT3], ['AB4', PRINT4], ['AB5', PRINT5]] as const)
   for (const c of list) MAIN_OF[(c.set = chapterOf(c, printing))].push(c);
 for (const set of SETS) MAIN_OF[set].forEach((c, i) => (c.no = i + 1));
 export const MAIN_SET: CardDef[] = SETS.flatMap((s) => MAIN_OF[s]);
 /** Number of regular (non-secret) cards per chapter, printed as "no/COUNT" */
-export const SET_COUNT: Record<SetCode, number> = { AB1: MAIN_OF.AB1.length, AB2: MAIN_OF.AB2.length, AB3: MAIN_OF.AB3.length, AB4: MAIN_OF.AB4.length };
+export const SET_COUNT: Record<SetCode, number> = { AB1: MAIN_OF.AB1.length, AB2: MAIN_OF.AB2.length, AB3: MAIN_OF.AB3.length, AB4: MAIN_OF.AB4.length, AB5: MAIN_OF.AB5.length };
 
 // --------------------------------------------------------------------------
 // Printings
@@ -263,6 +266,18 @@ interface Plan {
 }
 /** printings by the set the card was first made in */
 const PLAN: Plan[] = [
+  {
+    SR: MONSTERS5.filter((x) => x.ace).map((x) => x.name),
+    SAR: [
+      ['ヘルフレイムロード', undefined, 'story/p-fire-sky'],
+      ['エルフクイーン', undefined, 'story/p-elf-wood'],
+      ['リッチソーサラー', undefined, 'story/p-graves'],
+      ['ドワーフスローンキング', undefined, 'story/p-mountains'],
+      ['タイドプリンス', undefined, 'story/p-island'],
+      ['ホワイトナイト', undefined, 'story/p-lake-castle'],
+    ],
+    UR: [...MONSTERS5.filter((x) => x.ace).map((x) => x.name), 'ヘイローメイジ', 'オークグランドチーフ'],
+  },
   {
     SR: MONSTERS4.filter((x) => x.ace).map((x) => x.name),
     SAR: [

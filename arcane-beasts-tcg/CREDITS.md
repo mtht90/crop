@@ -662,6 +662,108 @@ They were resized and converted to WebP.
 ## Portraits for 1.16 campaigns (覇王の塔)
 
 `public/assets/art/event/tower-goddess.webp` is `core-1.16/campaigns/Under_the_Burning_Suns/images/portraits/eloh.png` and
-`public/assets/art/event/tower-archpriest.webp` is `core-1.16/campaigns/Delfadors_Memoirs/images/portraits/methor.png`
+`public/assets/art/event/tower-sister.webp` is `core-1.16/campaigns/Northern_Rebirth/images/portraits/Sister_Thera.png`
 from the Wesnoth add-on Support_1_16_Campaign_Portraits (portraits of Battle for Wesnoth 1.16 by the
 Battle for Wesnoth Project), licensed under the GNU GPL v2+. Resized and converted to WebP.
+
+## Portraits for 1.16 campaigns / emulator (第五章)
+
+The portraits of the 第五章 cards (`public/assets/art/ch5/`) are Battle for Wesnoth 1.16 portraits by the
+Battle for Wesnoth Project, from the Wesnoth add-ons Support_1_16_Campaign_Portraits and
+Support_1_16_Core_Portraits, licensed under the GNU GPL v2+. Resized and converted to WebP.
+
+| file | source |
+|---|---|
+| `ch5/cylanna.webp` | `core-1.16/campaigns/Dead_Water/images/portraits/cylanna.png` |
+| `ch5/kai-krellis.webp` | `core-1.16/campaigns/Dead_Water/images/portraits/kai_krellis.png` |
+| `ch5/darken.webp` | `core-1.16/campaigns/Descent_Into_Darkness/images/portraits/darken_volk.png` |
+| `ch5/dela.webp` | `core-1.16/campaigns/Descent_Into_Darkness/images/portraits/dela.png` |
+| `ch5/drogan.webp` | `core-1.16/campaigns/Descent_Into_Darkness/images/portraits/drogan.png` |
+| `ch5/malin-lich.webp` | `core-1.16/campaigns/Descent_Into_Darkness/images/portraits/malin_lich.png` |
+| `ch5/malin-old.webp` | `core-1.16/campaigns/Descent_Into_Darkness/images/portraits/malin_old.png` |
+| `ch5/malin-young.webp` | `core-1.16/campaigns/Descent_Into_Darkness/images/portraits/malin_young.png` |
+| `ch5/disguise.webp` | `core-1.16/campaigns/Eastern_Invasion/images/portraits/disguise.png` |
+| `ch5/owaec.webp` | `core-1.16/campaigns/Eastern_Invasion/images/portraits/owaec.png` |
+| `ch5/moremirmu.webp` | `core-1.16/campaigns/Heir_To_The_Throne/images/portraits/moremirmu.png` |
+| `ch5/aldar.webp` | `core-1.16/campaigns/Legend_of_Wesmere/images/portraits/aldar.png` |
+| `ch5/crelanu.webp` | `core-1.16/campaigns/Legend_of_Wesmere/images/portraits/crelanu.png` |
+| `ch5/galtrid.webp` | `core-1.16/campaigns/Legend_of_Wesmere/images/portraits/galtrid.png` |
+| `ch5/kalenz-young.webp` | `core-1.16/campaigns/Legend_of_Wesmere/images/portraits/kalenz_young.png` |
+| `ch5/landar.webp` | `core-1.16/campaigns/Legend_of_Wesmere/images/portraits/landar.png` |
+| `ch5/uradredia.webp` | `core-1.16/campaigns/Legend_of_Wesmere/images/portraits/uradredia.png` |
+| `ch5/velon.webp` | `core-1.16/campaigns/Legend_of_Wesmere/images/portraits/velon.png` |
+| `ch5/baldras.webp` | `core-1.16/campaigns/Liberty/images/portraits/baldras.png` |
+| `ch5/harper.webp` | `core-1.16/campaigns/Liberty/images/portraits/harper.png` |
+| `ch5/helicrom.webp` | `core-1.16/campaigns/Liberty/images/portraits/helicrom.png` |
+| `ch5/maddock.webp` | `core-1.16/campaigns/Liberty/images/portraits/maddock.png` |
+| `ch5/relana.webp` | `core-1.16/campaigns/Liberty/images/portraits/relana.png` |
+| `ch5/arthian.webp` | `core-1.16/campaigns/Northern_Rebirth/images/portraits/Arthian.png` |
+| `ch5/camerin.webp` | `core-1.16/campaigns/Northern_Rebirth/images/portraits/Camerin.png` |
+| `ch5/elenia.webp` | `core-1.16/campaigns/Northern_Rebirth/images/portraits/Elenia.png` |
+| `ch5/morvin.webp` | `core-1.16/campaigns/Northern_Rebirth/images/portraits/Father_Morvin.png` |
+| `ch5/hamel.webp` | `core-1.16/campaigns/Northern_Rebirth/images/portraits/Hamel.png` |
+| `ch5/hidel.webp` | `core-1.16/campaigns/Northern_Rebirth/images/portraits/Hidel.png` |
+| `ch5/rakshas.webp` | `core-1.16/campaigns/Northern_Rebirth/images/portraits/Rakshas.png` |
+| `ch5/ro-sothian.webp` | `core-1.16/campaigns/Northern_Rebirth/images/portraits/Ro_Sothian.png` |
+| `ch5/sisal.webp` | `core-1.16/campaigns/Northern_Rebirth/images/portraits/Sisal.png` |
+| `ch5/stalrag.webp` | `core-1.16/campaigns/Northern_Rebirth/images/portraits/Stalrag.png` |
+| `ch5/tallin.webp` | `core-1.16/campaigns/Northern_Rebirth/images/portraits/Tallin.png` |
+| `ch5/alanin.webp` | `core-1.16/campaigns/Sceptre_of_Fire/images/portraits/alanin-epilogue.png` |
+| `ch5/haldric-old.webp` | `core-1.16/campaigns/Sceptre_of_Fire/images/portraits/haldric-ii-old.png` |
+| `ch5/rugnur.webp` | `core-1.16/campaigns/Sceptre_of_Fire/images/portraits/rugnur.png` |
+| `ch5/thursagan.webp` | `core-1.16/campaigns/Sceptre_of_Fire/images/portraits/thursagan.png` |
+| `ch5/orb-seer.webp` | `core-1.16/campaigns/Secrets_of_the_Ancients/images/portraits/campaign-image.png` |
+| `ch5/shynal-outlaw.webp` | `core-1.16/campaigns/Secrets_of_the_Ancients/images/portraits/shynal-outlaw.png` |
+| `ch5/zombie-farmer.webp` | `core-1.16/campaigns/Secrets_of_the_Ancients/images/portraits/zombie-farmer.png` |
+| `ch5/albrock.webp` | `core-1.16/campaigns/Son_Of_The_Black_Eye/images/portraits/albrock.png` |
+| `ch5/flartar.webp` | `core-1.16/campaigns/Son_Of_The_Black_Eye/images/portraits/flartar.png` |
+| `ch5/gruu.webp` | `core-1.16/campaigns/Son_Of_The_Black_Eye/images/portraits/gruu.png` |
+| `ch5/howgarth.webp` | `core-1.16/campaigns/Son_Of_The_Black_Eye/images/portraits/howgarth.png` |
+| `ch5/jetto.webp` | `core-1.16/campaigns/Son_Of_The_Black_Eye/images/portraits/jetto.png` |
+| `ch5/kapoue.webp` | `core-1.16/campaigns/Son_Of_The_Black_Eye/images/portraits/kapoue.png` |
+| `ch5/lanbech.webp` | `core-1.16/campaigns/Son_Of_The_Black_Eye/images/portraits/lanbech.png` |
+| `ch5/shan-taum.webp` | `core-1.16/campaigns/Son_Of_The_Black_Eye/images/portraits/shan_taum.png` |
+| `ch5/elurin.webp` | `core-1.16/campaigns/The_Hammer_of_Thursagan/images/portraits/elurin.png` |
+| `ch5/dwarf-king.webp` | `core-1.16/campaigns/The_Hammer_of_Thursagan/images/portraits/hamel.png` |
+| `ch5/masked-dwarf.webp` | `core-1.16/campaigns/The_Hammer_of_Thursagan/images/portraits/maskeddwarf.png` |
+| `ch5/pelias.webp` | `core-1.16/campaigns/The_Hammer_of_Thursagan/images/portraits/pelias.png` |
+| `ch5/ratheln.webp` | `core-1.16/campaigns/The_Hammer_of_Thursagan/images/portraits/ratheln.png` |
+| `ch5/addroran.webp` | `core-1.16/campaigns/The_Rise_Of_Wesnoth/images/portraits/addroran.png` |
+| `ch5/aethyr.webp` | `core-1.16/campaigns/The_Rise_Of_Wesnoth/images/portraits/aethyr-first.png` |
+| `ch5/aryad.webp` | `core-1.16/campaigns/The_Rise_Of_Wesnoth/images/portraits/aryad.png` |
+| `ch5/daellyn.webp` | `core-1.16/campaigns/The_Rise_Of_Wesnoth/images/portraits/daellyn.png` |
+| `ch5/edmond.webp` | `core-1.16/campaigns/The_Rise_Of_Wesnoth/images/portraits/edmond.png` |
+| `ch5/eldaric.webp` | `core-1.16/campaigns/The_Rise_Of_Wesnoth/images/portraits/eldaric.png` |
+| `ch5/haldric.webp` | `core-1.16/campaigns/The_Rise_Of_Wesnoth/images/portraits/haldric.png` |
+| `ch5/jessica.webp` | `core-1.16/campaigns/The_Rise_Of_Wesnoth/images/portraits/jessica.png` |
+| `ch5/ladoc.webp` | `core-1.16/campaigns/The_Rise_Of_Wesnoth/images/portraits/ladoc.png` |
+| `ch5/lady-outlaw.webp` | `core-1.16/campaigns/The_Rise_Of_Wesnoth/images/portraits/lady_outlaw.png` |
+| `ch5/rithrandil.webp` | `core-1.16/campaigns/The_Rise_Of_Wesnoth/images/portraits/rithrandil-winter.png` |
+| `ch5/ruddry.webp` | `core-1.16/campaigns/The_Rise_Of_Wesnoth/images/portraits/ruddry.png` |
+| `ch5/tinry.webp` | `core-1.16/campaigns/The_Rise_Of_Wesnoth/images/portraits/tinry.png` |
+| `ch5/deoran.webp` | `core-1.16/campaigns/The_South_Guard/images/portraits/deoran.png` |
+| `ch5/ethiliel.webp` | `core-1.16/campaigns/The_South_Guard/images/portraits/ethiliel.png` |
+| `ch5/ithelden.webp` | `core-1.16/campaigns/The_South_Guard/images/portraits/ithelden.png` |
+| `ch5/mal-mbrin.webp` | `core-1.16/campaigns/The_South_Guard/images/portraits/mal-mbrin.png` |
+| `ch5/gerrick.webp` | `core-1.16/campaigns/The_South_Guard/images/portraits/sir-gerrick.png` |
+| `ch5/arvith.webp` | `core-1.16/campaigns/Two_Brothers/images/portraits/arvith.png` |
+| `ch5/baran.webp` | `core-1.16/campaigns/Two_Brothers/images/portraits/baran.png` |
+| `ch5/cloaked.webp` | `core-1.16/campaigns/Under_the_Burning_Suns/images/portraits/cloaked.png` |
+| `ch5/commander.webp` | `core-1.16/campaigns/Under_the_Burning_Suns/images/portraits/commander.png` |
+| `ch5/elyssa.webp` | `core-1.16/campaigns/Under_the_Burning_Suns/images/portraits/elyssa.png` |
+| `ch5/garak.webp` | `core-1.16/campaigns/Under_the_Burning_Suns/images/portraits/garak.png` |
+| `ch5/kaleh.webp` | `core-1.16/campaigns/Under_the_Burning_Suns/images/portraits/kaleh.png` |
+| `ch5/melusand.webp` | `core-1.16/campaigns/Under_the_Burning_Suns/images/portraits/melusand.png` |
+| `ch5/nym.webp` | `core-1.16/campaigns/Under_the_Burning_Suns/images/portraits/nym.png` |
+| `ch5/uncloaked.webp` | `core-1.16/campaigns/Under_the_Burning_Suns/images/portraits/uncloaked.png` |
+| `ch5/horseman.webp` | `core-1.16/images/portraits/humans/horseman.png` |
+| `ch5/lancer.webp` | `core-1.16/images/portraits/humans/lancer.png` |
+| `ch5/ruffian.webp` | `core-1.16/images/portraits/humans/ruffian.png` |
+| `ch5/sergeant.webp` | `core-1.16/images/portraits/humans/sergeant.png` |
+| `ch5/thug.webp` | `core-1.16/images/portraits/humans/thug.png` |
+| `ch5/zombie-beastrider.webp` | `core-1.16/images/portraits/undead/zombie-beastrider.png` |
+| `ch5/zombie-drake.webp` | `core-1.16/images/portraits/undead/zombie-drake.png` |
+| `ch5/zombie-goblin.webp` | `core-1.16/images/portraits/undead/zombie-goblin.png` |
+| `ch5/zombie-horse.webp` | `core-1.16/images/portraits/undead/zombie-horse.png` |
+| `ch5/zombie-rider.webp` | `core-1.16/images/portraits/undead/zombie-rider.png` |
+| `ch5/zombie-saurian.webp` | `core-1.16/images/portraits/undead/zombie-saurian.png` |

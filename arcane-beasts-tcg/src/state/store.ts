@@ -1036,7 +1036,7 @@ export const TYPE_BOOSTERS: Booster[] = TYPE_PACKS.map(([t, jp, hue, hue2]) => {
 /** 章パック: one chapter's cards, at the レアパック's odds */
 export const CHAPTER_BOOSTERS: Booster[] = SETS.map((code, i) => {
   const only = (c: CardDef) => c.set === code;
-  const hues = [['#e9c46a', '#1c1206'], ['#9ad0ff', '#0a1a33'], ['#d58bff', '#1d0730'], ['#ff8a5a', '#2a0c06']][i] ?? ['#e9c46a', '#1c1206'];
+  const hues = [['#e9c46a', '#1c1206'], ['#9ad0ff', '#0a1a33'], ['#d58bff', '#1d0730'], ['#ff8a5a', '#2a0c06'], ['#7fe0b0', '#06241a']][i] ?? ['#e9c46a', '#1c1206'];
   return { id: `ch-${code}`, name: `${SET_INFO[code].short}パック`, mascot: mascotOf((c) => c.kind === 'monster' && c.set === code), hue: hues[0], hue2: hues[1], premium: true, price: PREMIUM_PRICE, only, label: SET_INFO[code].code, lines: [`${SET_INFO[code].short}「${SET_INFO[code].name}」のカードだけが出る`, '5枚目は★3以上確定', '★の出やすさはレアパックと同じ'] };
 });
 

@@ -6,15 +6,16 @@
 //   "AB" + version + base32 (Crockford: no I L O U) of 16-bit entries,
 //   grouped by 5 with hyphens, e.g. AB1-8Z2K4-…
 // Each entry:
-//   00 sss nnnnnnnnn ccc  a card of set s (AB1–AB4), number n, count c+1
+//   00 ss nnnnnnnnn ccc   a card of set AB1+s (AB1–AB4), number n, count c+1
 //   01 eee cccccc 00000   basic energy of type e, count c
 //   10 kkkkkkkk ccc 000   a raid or event card (index k in SPECIAL), count c+1
+//   11 ss nnnnnnnnn ccc   a card of set AB5+s, number n, count c+1
 // ============================================================================
 import { byName, card, CARDS } from './cards';
 import { ENERGY_TYPES, type CardDef } from './types';
 
 const VERSION = '1';
-const SETS = ['AB1', 'AB2', 'AB3', 'AB4'] as const;
+const SETS = ['AB1', 'AB2', 'AB3', 'AB4', 'AB5'] as const;
 /** raid and event cards, in the order they were added (append only: codes keep working) */
 const SPECIAL = ['RAID-boneking', 'RAID-frost', 'RAID-kraken', 'RAID-herald', 'RAID-dragon', 'RAID-emperor', 'RAID-seaking', 'RAID-archlich', 'EVENT-snow', 'EVENT-wyrm', 'EVENT-ghost', 'EVENT-witch', 'EVENT-tower-sky', 'EVENT-tower-lava', 'EVENT-tower-grave', 'EVENT-tower-holy'];
 const ALPHA = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
@@ -86,7 +87,9 @@ export function encodeDeck(ids: string[]): string {
       else {
         const m = /^AB(\d)-(\d+)$/.exec(id);
         if (!m) continue;
-        words.push((0 << 14) | ((Number(m[1]) - 1) << 12) | (Number(m[2]) << 3) | k);
+        // sets AB1–AB4 use kind 00, AB5–AB8 kind 11 (two bits for the set either way)
+        const si = Number(m[1]) - 1;
+        words.push(((si < 4 ? 0 : 3) << 14) | ((si & 3) << 12) | (Number(m[2]) << 3) | k);
       }
     }
   }
@@ -122,8 +125,8 @@ export function decodeDeck(code: string): DecodedDeck | null {
   for (let i = 0; i + 1 < bytes.length; i += 2) {
     const w = (bytes[i] << 8) | bytes[i + 1];
     const kind = w >> 14;
-    if (kind === 0) {
-      const set = SETS[(w >> 12) & 3];
+    if (kind === 0 || kind === 3) {
+      const set = SETS[(kind === 3 ? 4 : 0) + ((w >> 12) & 3)];
       const no = (w >> 3) & 511;
       if (!set || !add(`${set}-${String(no).padStart(3, '0')}`, (w & 7) + 1)) return null;
     } else if (kind === 1) {

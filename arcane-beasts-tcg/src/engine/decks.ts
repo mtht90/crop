@@ -455,7 +455,7 @@ export interface Rival {
   lose: string;
   scene: string;
   /** chapter the rival belongs to */
-  set?: 'AB1' | 'AB2' | 'AB3' | 'AB4';
+  set?: 'AB1' | 'AB2' | 'AB3' | 'AB4' | 'AB5';
 }
 
 export const RIVALS: Rival[] = [
