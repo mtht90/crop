@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { heroModel, type HeroModel } from './assets';
 import { HEROES, type Aim, type HeroDef, type SkillDef } from './heroes';
-import { Stage, BEACON_POS, BEACON_RADIUS, HALF_X, HALF_Z, SPAWNS, SPAWN_RADIUS, TEAM_COLORS } from './stage';
+import { Stage, BEACON_POS, BEACON_RADIUS, SPAWNS, SPAWN_RADIUS, TEAM_COLORS } from './stage';
 import { Fx } from './fx';
 import { sfx } from './audio';
 import type { Input } from './input';
@@ -151,6 +151,8 @@ export class Match {
   state: 'intro' | 'play' | 'over' = 'intro';
   intro = 3.6;
   camYaw = Math.PI / 2;
+  camPitch = 0.6;  // 見下ろし角(rad)。上下ドラッグで調整できる
+  camZoom = 1;     // ホイールで調整
   result: MatchResult | null = null;
   private projectiles: Projectile[] = [];
   private timers: { t: number; fn: () => void; owner: Unit | null }[] = [];
@@ -347,6 +349,8 @@ export class Match {
   update(rawDt: number) {
     const dt = Math.min(0.05, rawDt);
     this.camYaw -= this.input.takeCamDelta() * 0.006;
+    this.camPitch = Math.max(0.3, Math.min(1.15, this.camPitch + this.input.takeCamDeltaY() * 0.004));
+    this.camZoom = Math.max(0.7, Math.min(1.6, this.camZoom * Math.exp(this.input.takeZoom() * 0.001)));
 
     if (this.intro > -1) {
       this.intro -= dt;
@@ -585,25 +589,26 @@ export class Match {
   }
 
   private updateCamera(dt: number, snap: boolean) {
-    const p = this.player;
+    const p = this.player, cam = this.camera;
     const f = new THREE.Vector3(Math.sin(this.camYaw), 0, Math.cos(this.camYaw));
-    const portrait = this.camera.aspect < 1;
-    const back = portrait ? 15 : 12.5, up = portrait ? 13 : 10;
-    const wantLook = p.pos.clone().addScaledVector(f, 2.5).setY(1.4);
-    const wantPos = p.pos.clone().addScaledVector(f, -back).setY(up);
-    // 外壁の裏に回り込まないよう場内に収め、その分だけ高く引く
-    const cx = Math.max(-HALF_X + 1.5, Math.min(HALF_X - 1.5, wantPos.x)), cz = Math.max(-HALF_Z + 1.5, Math.min(HALF_Z - 1.5, wantPos.z));
-    wantPos.y += Math.hypot(wantPos.x - cx, wantPos.z - cz) * 0.75;
-    wantPos.x = cx; wantPos.z = cz;
-    const k = snap ? 1 : 1 - Math.exp(-dt * 9);
+    const portrait = cam.aspect < 1;
+    // 縦画面は横の視野が狭くなるので、横方向の視野角を保つように縦の画角を広げる
+    const fov = portrait ? Math.min(78, THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(27)) / cam.aspect))) : 50;
+    if (Math.abs(cam.fov - fov) > 0.01) { cam.fov = fov; cam.updateProjectionMatrix(); }
+    // キャラの背後・斜め上から。注視点を前方に置き、キャラを画面の下寄りに映して前を広く見せる
+    const dist = (portrait ? 9.5 : 10.5) * this.camZoom;
+    const lead = portrait ? 4.2 : 3.6;
+    const wantLook = p.pos.clone().addScaledVector(f, lead).setY(1.5);
+    const wantPos = p.pos.clone().addScaledVector(f, -dist * Math.cos(this.camPitch)).setY(1.5 + dist * Math.sin(this.camPitch));
+    const k = snap ? 1 : 1 - Math.exp(-dt * 10);
     this.camLook.lerp(wantLook, k); this.camPos.lerp(wantPos, k);
-    this.camera.position.copy(this.camPos);
+    cam.position.copy(this.camPos);
     if (this.shakeAmt > 0.01) {
-      this.camera.position.x += (Math.random() - 0.5) * this.shakeAmt;
-      this.camera.position.y += (Math.random() - 0.5) * this.shakeAmt;
+      cam.position.x += (Math.random() - 0.5) * this.shakeAmt;
+      cam.position.y += (Math.random() - 0.5) * this.shakeAmt;
       this.shakeAmt *= Math.exp(-dt * 8);
     }
-    this.camera.lookAt(this.camLook);
+    cam.lookAt(this.camLook);
   }
 
   // ---------- AI ----------

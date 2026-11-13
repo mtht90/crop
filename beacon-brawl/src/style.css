@@ -198,6 +198,16 @@ button.primary:active { translate: 0 4px; box-shadow: 0 2px 0 #9a6400; }
   .skill, .face { width: 64px; } .face { height: 64px; } .skill.ult, .skill.ult .face { width: 84px; } .skill.ult .face { height: 84px; }
   #me-img { width: 58px; height: 58px; } .tile { width: 42px; } .tframe { height: 42px; } .score { font-size: 46px; }
 }
+/* 横向きのスマホ: キャラ情報を左、カードと出撃ボタンを右に並べる */
+@media (max-height: 560px) and (min-width: 601px) {
+  #select { flex-direction: row; align-items: flex-end; gap: 12px; }
+  #info { align-self: flex-start; width: 300px; max-height: 100%; overflow: hidden; } .stat { margin: 3px 0; } .stat div { height: 7px; }
+  .sk { grid-template-columns: 28px auto 1fr; margin-top: 4px; } .sk i { width: 28px; height: 28px; grid-row: auto; } #info p { display: none; }
+  #select-bottom { margin-left: auto; gap: 10px; align-items: flex-end; }
+  #cards { width: 282px; gap: 6px; justify-content: flex-end; } .card { width: 90px; height: 76px; } .card.on { translate: 0 -4px; }
+  .actions { gap: 12px; flex-wrap: nowrap; } #diff button { padding: 8px 10px; font-size: 12px; }
+  #title .howto p:first-child { display: none; }
+}
 @media (max-width: 600px) {
   #info { padding: 8px 14px 12px; } #info h2 { font-size: 28px; } #i-img { width: 56px; height: 56px; } #info p { margin: 6px 0; } .sk { margin-top: 5px; } .sk span { display: none; }
   #select-bottom { gap: 10px; } #cards { width: 100%; gap: 8px; } .card { width: calc((100% - 16px) / 3); height: 88px; } .card.on { translate: 0 -5px; }

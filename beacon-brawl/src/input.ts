@@ -3,9 +3,9 @@ export class Input {
   moveX = 0; moveY = 0;          // -1..1 (右 / 前)
   private keys = new Set<string>();
   private pressed: boolean[] = [false, false, false];
-  private camDelta = 0;
+  private camDelta = 0; private camDeltaY = 0; private zoom = 0;
   private stick: { id: number; x0: number; y0: number } | null = null;
-  private look: { id: number; x: number } | null = null;
+  private look: { id: number; x: number; y: number } | null = null;
   private stickEl: HTMLElement; private knobEl: HTMLElement;
 
   constructor(surface: HTMLElement) {
@@ -33,7 +33,7 @@ export class Input {
         this.stickEl.style.left = `${e.clientX}px`; this.stickEl.style.top = `${e.clientY}px`;
         this.knobEl.style.transform = 'translate(-50%,-50%)';
       } else if (!this.look) {
-        this.look = { id: e.pointerId, x: e.clientX };
+        this.look = { id: e.pointerId, x: e.clientX, y: e.clientY };
       }
     });
     surface.addEventListener('pointermove', (e) => {
@@ -44,8 +44,8 @@ export class Input {
         this.moveX = dx / max; this.moveY = -dy / max;
         this.knobEl.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
       } else if (this.look?.id === e.pointerId) {
-        this.camDelta += e.clientX - this.look.x;
-        this.look.x = e.clientX;
+        this.camDelta += e.clientX - this.look.x; this.camDeltaY += e.clientY - this.look.y;
+        this.look.x = e.clientX; this.look.y = e.clientY;
       }
     });
     const end = (e: PointerEvent) => {
@@ -55,6 +55,7 @@ export class Input {
     surface.addEventListener('pointerup', end);
     surface.addEventListener('pointercancel', end);
     surface.addEventListener('contextmenu', (e) => e.preventDefault());
+    surface.addEventListener('wheel', (e) => { this.zoom += e.deltaY; e.preventDefault(); }, { passive: false });
   }
 
   press(i: number) { this.pressed[i] = true; }
@@ -73,5 +74,7 @@ export class Input {
   }
   takeSkill(i: number) { const p = this.pressed[i]; this.pressed[i] = false; return p; }
   takeCamDelta() { const d = this.camDelta; this.camDelta = 0; return d; }
-  reset() { this.pressed = [false, false, false]; this.camDelta = 0; }
+  takeCamDeltaY() { const d = this.camDeltaY; this.camDeltaY = 0; return d; }
+  takeZoom() { const d = this.zoom; this.zoom = 0; return d; }
+  reset() { this.pressed = [false, false, false]; this.camDelta = this.camDeltaY = this.zoom = 0; }
 }
