@@ -21,10 +21,10 @@
     <p class="tag"><span>3 VS 3</span> 拠点争奪アクション</p>
     <button id="btn-start" class="primary">バトル開始</button>
     <div class="howto">
-      <p>5つの拠点に乗って自チームの色に染めよう。3分後に多く持っていたチームの勝ち。</p>
+      <p>4つのルールで戦う 3 対 3。視点を敵に向けると、射程内なら自動で攻撃する。</p>
       <p><b>PC</b>：WASD 移動 ／ ドラッグ 視点 ／ ホイール 拡大縮小 ／ Q・E スキル ／ Space 必殺技</p>
       <p><b>スマホ</b>：左側スワイプ 移動 ／ 右側スワイプ 視点 ／ ボタンでスキル</p>
-      <p>通常攻撃は、敵が射程に入ると自動で出ます。</p>
+      <p>必殺技はキャラ選択で2種類から選べます。</p>
     </div>
   </div>
 
@@ -37,6 +37,7 @@
     </div>
     <div id="select-bottom">
       <div id="cards"></div>
+      <div id="modebox"><div id="modes"></div><p id="mode-desc"></p></div>
       <div class="actions">
         <div id="diff"></div>
         <button id="btn-go" class="primary">出撃</button>
@@ -48,11 +49,12 @@
     <div id="top">
       <div id="team-blue" class="team"></div>
       <div id="score-blue" class="score blue">0</div>
-      <div class="mid"><div id="timer">3:00</div><div id="beacons"></div></div>
+      <div class="mid"><div id="timer">3:00</div><div id="beacons"></div><div id="goal"></div></div>
       <div id="score-red" class="score red">0</div>
       <div id="team-red" class="team"></div>
     </div>
     <canvas id="minimap" width="160" height="100"></canvas>
+    <div id="reticle"></div>
     <div id="plates"></div>
     <div id="floats"></div>
     <div id="feed"></div>

@@ -167,14 +167,19 @@ export async function loadAssets(renderer: THREE.WebGLRenderer, onProgress: (rat
 /** 各ヒーローの顔を撮って UI 用のアイコンにする。メインの描画コンテキストをそのまま使う
  *  （別コンテキストを作ると全テクスチャが二重に確保され、スマホでメモリ不足になる） */
 function renderPortraits(r: THREE.WebGLRenderer) {
-  r.setPixelRatio(1);
-  r.setSize(256, 256, false);
-  r.setClearColor(0x000000, 0);
+  const size = 192;
+  // キャンバスから直接取り出すと端末によって空になるので、オフスクリーンに描いてピクセルを読む
+  const rt = new THREE.WebGLRenderTarget(size, size, { samples: 4, colorSpace: THREE.SRGBColorSpace });
   const scene = new THREE.Scene();
   const key = new THREE.DirectionalLight(0xffffff, 2.4); key.position.set(1.5, 3, 4);
   scene.add(key, new THREE.AmbientLight(0xffffff, 1.1));
   const cam = new THREE.PerspectiveCamera(26, 1, 0.1, 20);
   const head = new THREE.Vector3();
+  const pixels = new Uint8Array(size * size * 4);
+  const canvas = document.createElement('canvas'); canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d')!;
+  const prevColor = r.getClearColor(new THREE.Color()), prevAlpha = r.getClearAlpha();
+  r.setClearColor(0x000000, 0);
   for (const def of HEROES) {
     const m = heroes.get(def.id)!;
     const idle = m.clips.get(def.idle);
@@ -186,12 +191,22 @@ function renderPortraits(r: THREE.WebGLRenderer) {
     head.y += 0.1 * HERO_SCALE;
     cam.position.set(head.x + 0.25, head.y + 0.05, head.z + 1.55);
     cam.lookAt(head);
+    r.setRenderTarget(rt);
+    r.clear();
     r.render(scene, cam);
-    m.portrait = r.domElement.toDataURL('image/webp', 0.9); // 描画直後なので同期的に読める
+    r.readRenderTargetPixels(rt, 0, 0, size, size, pixels);
+    r.setRenderTarget(null);
+    // 読み出しは上下が逆なので、行を入れ替えて画像にする
+    const img = ctx.createImageData(size, size);
+    for (let y = 0; y < size; y++) img.data.set(pixels.subarray((size - 1 - y) * size * 4, (size - y) * size * 4), y * size * 4);
+    ctx.putImageData(img, 0, 0);
+    m.portrait = canvas.toDataURL('image/png');
     scene.remove(m.root);
     m.mixer.stopAllAction();
     m.root.rotation.y = 0;
   }
+  r.setClearColor(prevColor, prevAlpha);
+  rt.dispose();
 }
 
 /** GPU メモリ節約: テクスチャを最大辺 max px に縮める（初回描画の前に行う） */

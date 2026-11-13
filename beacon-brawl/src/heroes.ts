@@ -33,7 +33,8 @@ export interface HeroDef {
   run: string;
   attacks: string[];
   skills: [SkillDef, SkillDef];
-  ult: SkillDef;
+  /** 必殺技は2種類から出撃前に選ぶ */
+  ults: [SkillDef, SkillDef];
 }
 
 const v = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
@@ -72,7 +73,7 @@ export const HEROES: HeroDef[] = [
         },
       },
     ],
-    ult: {
+    ults: [{
       name: '守護の号令', icon: 'rally', desc: '周囲の敵を吹き飛ばし、味方を大回復', cd: 0, anim: 'Spell_Simple_Enter', lock: 0.7, aiRange: 5,
       cast(m, u) {
         m.fx.telegraph(u.pos, 7, 0.45, 0x9fd0ff);
@@ -83,7 +84,19 @@ export const HEROES: HeroDef[] = [
           m.shake(0.5);
         });
       },
-    },
+    }, {
+      name: 'グラビティアンカー', icon: 'magnet', desc: '周囲の敵を引き寄せてスタンさせ、自分は固くなる', cd: 0, anim: 'Spell_Simple_Enter', lock: 0.7, aiRange: 7,
+      cast(m, u) {
+        u.buff('def', 0.5, 4);
+        m.fx.telegraph(u.pos, 9, 0.4, 0x9fd0ff);
+        m.after(0.4, () => {
+          m.pull(u, u.pos, 9, 7);
+          m.fx.ring(u.pos, 9, 0xcfe8ff, 0.5);
+          m.aoe(u, u.pos, 9, u.power() * 2.0, { stun: 1.6 });
+          m.shake(0.5);
+        });
+      },
+    }],
   },
   {
     id: 'volga', name: 'ボルガ', role: 'アタッカー', blurb: '大剣で薙ぎ払う突破役。乱戦で真価を発揮。',
@@ -108,7 +121,7 @@ export const HEROES: HeroDef[] = [
         },
       },
     ],
-    ult: {
+    ults: [{
       name: '大地割り', icon: 'quake', desc: '跳び上がって叩きつけ、広範囲に大ダメージ', cd: 0, anim: 'Sword_Attack', lock: 0.9, aiRange: 7,
       cast(m, u, aim) {
         const p = aimPoint(u, aim, 5, 8);
@@ -120,7 +133,16 @@ export const HEROES: HeroDef[] = [
           m.shake(0.8);
         });
       },
-    },
+    }, {
+      name: 'バーサーク', icon: 'rage', desc: '8秒間、攻撃・速度・防御が大幅アップし体力も回復', cd: 0, anim: 'Spell_Simple_Enter', lock: 0.4, aiRange: 8,
+      cast(m, u) {
+        u.buff('atk', 0.7, 8); u.buff('speed', 0.35, 8); u.buff('def', 0.3, 8);
+        m.heal(u, u.maxHp * 0.3);
+        m.fx.ring(u.pos, 4, 0xff5a20, 0.7); m.fx.aura(u, 0xff5a20, 8);
+        m.aoe(u, u.pos, 4, u.power() * 1.2, { knock: 3 });
+        m.shake(0.4);
+      },
+    }],
   },
   {
     id: 'lumina', name: 'ルミナ', role: 'サポート', blurb: '遠距離から炎を放ち、味方を癒やす魔導士。',
@@ -144,7 +166,7 @@ export const HEROES: HeroDef[] = [
         },
       },
     ],
-    ult: {
+    ults: [{
       name: 'メテオレイン', icon: 'meteor', desc: '狙った場所に隕石を3連続で落とす', cd: 0, anim: 'Spell_Simple_Enter', lock: 0.9, aiRange: 12,
       cast(m, u, aim) {
         const p = aimPoint(u, aim, 8, 13);
@@ -158,7 +180,14 @@ export const HEROES: HeroDef[] = [
           });
         }
       },
-    },
+    }, {
+      name: 'サンクチュアリ', icon: 'holy', desc: '6秒間、足元の聖域で味方を回復し敵を鈍らせる', cd: 0, anim: 'Spell_Simple_Enter', lock: 0.6, aiRange: 8,
+      cast(m, u) {
+        const p = u.pos.clone();
+        m.fx.pillar(p, 0x7dffb0, 2);
+        m.zone(p, 6.5, 6, 0x7dffb0, 0.5, () => { m.healAllies(u, p, 6.5, 0.06); m.aoe(u, p, 6.5, u.power() * 0.35, { slow: 0.7 }); });
+      },
+    }],
   },
   {
     id: 'shade', name: 'シェイド', role: 'スプリンター', blurb: '最速の二刀使い。拠点を奪って回る遊撃手。',
@@ -186,7 +215,7 @@ export const HEROES: HeroDef[] = [
         },
       },
     ],
-    ult: {
+    ults: [{
       name: '千刃乱舞', icon: 'blades', desc: '周囲の敵すべてに連続で斬りかかる', cd: 0, anim: 'Punch_Cross', lock: 0.9, aiRange: 8,
       cast(m, u) {
         u.invuln = 1.0;
@@ -201,7 +230,25 @@ export const HEROES: HeroDef[] = [
         });
         m.shake(0.4);
       },
-    },
+    }, {
+      name: 'ファントムダイブ', icon: 'dive', desc: '狙った敵の背後へ瞬間移動し、致命の一撃', cd: 0, anim: 'Punch_Cross', lock: 0.5, aiRange: 12,
+      cast(m, u, aim) {
+        const t = aim.target;
+        u.invuln = 0.6;
+        if (!t) { m.dash(u, ahead(u, aim, 8), 0.2); return; }
+        const from = u.pos.clone();
+        m.dash(u, t.pos.clone().addScaledVector(aim.dir, 1.6), 0.12);
+        m.after(0.2, () => {
+          m.fx.trail(from, u.pos, 0x9ffff0);
+          if (!t.alive) return;
+          u.yaw = Math.atan2(t.pos.x - u.pos.x, t.pos.z - u.pos.z);
+          m.fx.slash(t.pos, u.yaw, 3, 0x9ffff0); m.fx.flash(t.pos.clone().setY(1.2), 2.2, 0x9ffff0);
+          t.stun = Math.max(t.stun, 1.0);
+          m.damage(t, u.power() * 6.5, u);
+          m.shake(0.5);
+        });
+      },
+    }],
   },
   {
     id: 'veil', name: 'ヴェイル', role: 'スナイパー', blurb: '長射程の光線銃で拠点の外から制圧する。',
@@ -226,7 +273,7 @@ export const HEROES: HeroDef[] = [
         },
       },
     ],
-    ult: {
+    ults: [{
       name: '光弾の雨', icon: 'rain', desc: '狙った範囲に3秒間、光弾を降らせ続ける', cd: 0, anim: 'Pistol_Shoot', lock: 0.6, aiRange: 15,
       cast(m, u, aim) {
         const p = aimPoint(u, aim, 9, 16);
@@ -235,7 +282,16 @@ export const HEROES: HeroDef[] = [
           m.fx.burst(p.clone().add(v((Math.random() - 0.5) * 6, 0, (Math.random() - 0.5) * 6)), 0xffe27a, 5, 3);
         });
       },
-    },
+    }, {
+      name: 'オーバーチャージ', icon: 'beam', desc: '溜めてから、すべてを貫く極太の光線を放つ', cd: 0, anim: 'Pistol_Shoot', lock: 0.85, aiRange: 18,
+      cast(m, u, aim) {
+        m.fx.trail(u.pos, ahead(u, aim, 30), 0xffe27a);
+        m.after(0.55, () => {
+          m.shoot(u, aim.dir, { speed: 70, range: 40, radius: 1.7, dmg: u.power() * 4.2, color: 0xfff2b0, pierce: true });
+          m.shake(0.5);
+        });
+      },
+    }],
   },
   {
     id: 'mors', name: 'モルス', role: 'トリックスター', blurb: '呪いで敵を縛る大鎌の術師。足止めの達人。',
@@ -261,7 +317,7 @@ export const HEROES: HeroDef[] = [
         },
       },
     ],
-    ult: {
+    ults: [{
       name: '死者の刻印', icon: 'mark', desc: '広範囲の敵をスタンさせ、大ダメージ', cd: 0, anim: 'Spell_Simple_Enter', lock: 0.9, aiRange: 10,
       cast(m, u) {
         m.fx.telegraph(u.pos, 11, 0.7, 0x9cff5a);
@@ -272,6 +328,13 @@ export const HEROES: HeroDef[] = [
           m.shake(0.6);
         });
       },
-    },
+    }, {
+      name: '冥府の渦', icon: 'vortex', desc: '狙った場所に渦を作り、敵を吸い寄せながら削る', cd: 0, anim: 'Spell_Simple_Enter', lock: 0.7, aiRange: 11,
+      cast(m, u, aim) {
+        const p = aimPoint(u, aim, 7, 12);
+        m.fx.pillar(p, 0x9cff5a, 1.4);
+        m.zone(p, 6, 4.5, 0x9cff5a, 0.45, () => { m.pull(u, p, 6.5, 3.2); m.aoe(u, p, 6, u.power() * 0.55, { slow: 0.6 }); });
+      },
+    }],
   },
 ];

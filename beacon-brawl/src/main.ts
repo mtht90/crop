@@ -3,7 +3,7 @@ import './style.css';
 import { loadAssets, heroModel, portraitOf, type HeroModel } from './assets';
 import { iconSvg } from './icons';
 import { HEROES, type HeroDef } from './heroes';
-import { Match, DIFFICULTIES, type MatchResult } from './game';
+import { Match, DIFFICULTIES, MODES, type MatchResult } from './game';
 import { Input } from './input';
 import { Hud } from './hud';
 import { initAudio, sfx } from './audio';
@@ -19,6 +19,8 @@ const hud = new Hud(input);
 let match: Match | null = null;
 let selected = 0;
 let difficulty = 1;
+let mode = 0;
+const ultChoice: number[] = HEROES.map(() => 0); // ヒーローごとに選んだ必殺技
 
 function show(id: string | null) {
   for (const s of document.querySelectorAll('.screen')) s.classList.toggle('show', s.id === id);
@@ -116,8 +118,20 @@ function buildSelect() {
     b.addEventListener('click', () => { difficulty = i; sfx.ui(); refreshDiff(); });
     diff.append(b);
   });
+  const modes = $('modes');
+  MODES.forEach((m, i) => {
+    const b = document.createElement('button');
+    b.textContent = m.name;
+    b.addEventListener('click', () => { mode = i; sfx.ui(); refreshMode(); });
+    modes.append(b);
+  });
+  refreshMode();
   refreshDiff();
   pick(0);
+}
+function refreshMode() {
+  [...$('modes').children].forEach((b, i) => b.classList.toggle('on', i === mode));
+  $('mode-desc').textContent = MODES[mode].desc;
 }
 function refreshDiff() { [...$('diff').children].forEach((b, i) => b.classList.toggle('on', i === difficulty)); }
 
@@ -141,12 +155,16 @@ function pick(i: number) {
     $('i-stats').append(row);
   }
   $('i-skills').innerHTML = '';
-  for (const [tag, s] of [['スキル1', h.skills[0]], ['スキル2', h.skills[1]], ['必殺技', h.ult]] as const) {
-    const row = document.createElement('div'); row.className = `sk${tag === '必殺技' ? ' ult' : ''}`;
+  const rows = [['スキル1', h.skills[0], -1], ['スキル2', h.skills[1], -1], ['必殺技A', h.ults[0], 0], ['必殺技B', h.ults[1], 1]] as const;
+  for (const [tag, s, ult] of rows) {
+    const row = document.createElement('div');
+    row.className = `sk${ult >= 0 ? ' ult' : ''}${ult === ultChoice[i] ? ' on' : ''}`;
     row.innerHTML = `<i>${iconSvg(s.icon)}</i><em></em><b></b><span></span>`;
     row.querySelector('em')!.textContent = tag;
     row.querySelector('b')!.textContent = s.name;
     row.querySelector('span')!.textContent = s.desc + (s.cd ? `（CT ${s.cd}秒）` : '');
+    // 必殺技はタップで選ぶ
+    if (ult >= 0) row.addEventListener('click', () => { ultChoice[i] = ult; sfx.ui(); pick(i); });
     $('i-skills').append(row);
   }
 }
@@ -156,7 +174,7 @@ function startMatch() {
   initAudio();
   match?.dispose();
   input.reset();
-  match = new Match(HEROES[selected], DIFFICULTIES[difficulty], input, hud, showResult);
+  match = new Match(HEROES[selected], { mode: MODES[mode], difficulty: DIFFICULTIES[difficulty], ult: ultChoice[selected] }, input, hud, showResult);
   resize();
   show(null);
 }
@@ -165,7 +183,8 @@ function showResult(r: MatchResult) {
   const t = $('r-title');
   t.textContent = r.winner === 0 ? 'VICTORY' : r.winner === 1 ? 'DEFEAT' : 'DRAW';
   t.className = r.winner === 0 ? 'blue' : r.winner === 1 ? 'red' : '';
-  $('r-score').innerHTML = `<b class="blue">${r.counts[0]}</b><span>拠点</span><b class="red">${r.counts[1]}</b>`;
+  $('r-score').innerHTML = `<b class="blue">${r.scores[0]}</b><span></span><b class="red">${r.scores[1]}</b>`;
+  $('r-score').querySelector('span')!.textContent = r.unit;
   const table = $('r-table');
   table.innerHTML = '<tr><th></th><th>KO</th><th>DOWN</th></tr>';
   for (const u of r.units) {
@@ -226,4 +245,4 @@ loadAssets(renderer, (k) => { $('loadfill').style.width = `${k * 100}%`; })
 canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); $('loadtext').textContent = '描画がリセットされました。ページを再読み込みしてください。'; show('loading'); });
 
 // デバッグ・自動テスト用
-(window as unknown as Record<string, unknown>).__game = { get match() { return match; }, startMatch, HEROES };
+(window as unknown as Record<string, unknown>).__game = { get match() { return match; }, startMatch, HEROES, setMode(i: number) { mode = i; refreshMode(); } };

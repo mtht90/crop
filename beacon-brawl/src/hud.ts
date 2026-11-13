@@ -58,10 +58,10 @@ export class Hud {
       $(u.team === 0 ? 'team-blue' : 'team-red').append(tile);
       this.tiles.set(u, { root: tile, bar: tb, timer });
     }
-    m.beacons.forEach((_, i) => {
-      const l = el('div', 'blabel', 'ABCDE'[i]); $('plates').append(l); this.labels.push(l);
+    m.beacons.forEach((bc) => {
+      const l = el('div', 'blabel', bc.label); $('plates').append(l); this.labels.push(l);
       const c = el('div', 'chip'); const fill = el('div', 'chipfill');
-      c.append(fill, el('span', '', 'ABCDE'[i])); $('beacons').append(c); this.chips.push({ root: c, fill });
+      c.append(fill, el('span', '', bc.label)); $('beacons').append(c); this.chips.push({ root: c, fill });
     });
     this.buttons.forEach((b, i) => { const s = m.skillOf(m.player, i); b.name.textContent = s.name; b.ico.innerHTML = iconSvg(s.icon); });
     ($('me-img') as HTMLImageElement).src = portraitOf(m.player.def);
@@ -101,8 +101,18 @@ export class Hud {
     const timer = $('timer');
     timer.textContent = m.overtime ? 'OVERTIME' : `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
     timer.classList.toggle('hot', m.overtime || t <= 10);
-    const c = m.counts();
-    $('score-blue').textContent = String(c[0]); $('score-red').textContent = String(c[1]);
+    const c = m.scores();
+    const pct = m.mode.id === 'control' ? '%' : '';
+    $('score-blue').textContent = c[0] + pct; $('score-red').textContent = c[1] + pct;
+    $('goal').textContent = m.goalText();
+    // 照準: 敵を捉えたらその敵に重ね、いなければ視点の前方に置く
+    const ret = $('reticle'), lock = p.alive ? m.aimLock : null;
+    const reach = Math.min(p.def.range, 12);
+    const aim = lock ? lock.pos : v.set(p.pos.x + Math.sin(m.camYaw) * reach, 0, p.pos.z + Math.cos(m.camYaw) * reach).clone();
+    const [rx, ry, rf] = this.project(aim, 1.5, cam);
+    ret.hidden = !p.alive || !rf || m.state !== 'play';
+    ret.style.transform = `translate(${rx}px,${ry}px) translate(-50%,-50%)`;
+    ret.classList.toggle('lock', !!lock);
     for (const [u, tile] of this.tiles) {
       tile.bar.style.width = `${(u.hp / u.maxHp) * 100}%`;
       tile.root.classList.toggle('dead', !u.alive);
@@ -191,7 +201,7 @@ export class Hud {
   }
 
   countdown(t: number) {
-    const s = t > 0.6 ? String(Math.ceil(t - 0.6)) : t > 0 ? 'GO!' : '';
+    const s = t > 3.6 ? '' : t > 0.6 ? String(Math.ceil(t - 0.6)) : t > 0 ? 'GO!' : '';
     if (s !== this.lastCount) {
       this.lastCount = s;
       const c = $('count');

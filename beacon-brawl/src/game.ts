@@ -12,6 +12,19 @@ const RESPAWN_TIME = 7;
 const UNIT_RADIUS = 0.6;
 const NEUTRAL = 0xd8dde8;
 
+export type ModeId = 'dom' | 'tdm' | 'control' | 'clash';
+export interface ModeDef { id: ModeId; name: string; desc: string; time: number; unit: string }
+export const MODES: ModeDef[] = [
+  { id: 'dom', name: 'ドミネーション', desc: '5つの拠点を奪い合う。3分後に多く持っていたチームの勝ち。', time: 180, unit: '拠点' },
+  { id: 'tdm', name: 'デスマッチ', desc: '先に12回倒したチームの勝ち。3分で決着しなければ撃破数で判定。', time: 180, unit: 'KO' },
+  { id: 'control', name: 'コントロール', desc: '中央の拠点を確保し続け、先に100%に達したチームの勝ち。', time: 240, unit: '%' },
+  { id: 'clash', name: 'クラッシュ', desc: '復帰なしのラウンド戦。相手を全滅させると1本、3本先取。', time: 75, unit: 'ラウンド' },
+];
+const TDM_GOAL = 12;
+const CLASH_GOAL = 3;
+const CONTROL_SECONDS = 70; // 確保し続けて100%になるまでの秒数
+export interface MatchOptions { mode: ModeDef; difficulty: Difficulty; ult: number }
+
 export interface Difficulty { name: string; enemyMul: number; skillDelay: number }
 export const DIFFICULTIES: Difficulty[] = [
   { name: 'やさしい', enemyMul: 0.8, skillDelay: 2.6 },
@@ -47,6 +60,7 @@ export class Unit {
   private loopName = ''; private loop: THREE.AnimationAction | null = null;
   private shot: THREE.AnimationAction | null = null; private shotT = 0;
   private attackIdx = 0;
+  ultIdx = 0; // 選んだ必殺技
   ai = { goal: -1, path: [] as THREE.Vector3[], repath: 0, think: Math.random() * 0.5, retreat: false, skillDelay: 2 + Math.random() * 2, dest: new THREE.Vector3() };
 
   constructor(public def: HeroDef, public team: number, public isPlayer: boolean, public slot: number, public statMul: number) {
@@ -124,7 +138,7 @@ export class Unit {
 }
 
 interface Beacon {
-  pos: THREE.Vector3; value: number; owner: number; // value: +1=青が完全確保, -1=赤
+  label: string; pos: THREE.Vector3; value: number; owner: number; // value: +1=青が完全確保, -1=赤
   disc: THREE.Mesh; fill: THREE.Mesh; crystal: THREE.Mesh; beam: THREE.Mesh; light: THREE.PointLight;
 }
 interface Projectile {
@@ -136,7 +150,7 @@ export interface ShootOpts {
   speed: number; range: number; radius: number; dmg: number; color: number;
   pierce?: boolean; homing?: Unit; explode?: { radius: number; dmg: number };
 }
-export interface MatchResult { winner: number; counts: [number, number]; units: Unit[] }
+export interface MatchResult { winner: number; scores: [number, number]; unit: string; units: Unit[] }
 
 export class Match {
   scene = new THREE.Scene();
@@ -162,9 +176,22 @@ export class Match {
   private camLook = new THREE.Vector3();
   private lastTick = 99;
   private endT = 0;
+  mode: ModeDef;
+  difficulty: Difficulty;
+  teamKills: [number, number] = [0, 0];
+  controlPct: [number, number] = [0, 0];
+  rounds: [number, number] = [0, 0];
+  round = 1;
+  private pendingRound = false;
+  /** プレイヤーが照準を合わせている敵（いなければ null） */
+  aimLock: Unit | null = null;
+  private aimLine: THREE.Mesh;
 
-  constructor(playerHero: HeroDef, public difficulty: Difficulty, private input: Input, private hud: Hud, private onEnd: (r: MatchResult) => void) {
+  constructor(playerHero: HeroDef, opts: MatchOptions, private input: Input, private hud: Hud, private onEnd: (r: MatchResult) => void) {
     const s = this.scene;
+    const difficulty = this.difficulty = opts.difficulty;
+    this.mode = opts.mode;
+    this.timeLeft = opts.mode.time;
     s.background = new THREE.Color(0x070a1c);
     s.fog = new THREE.Fog(0x070a1c, 60, 140);
     s.add(new THREE.HemisphereLight(0xcfdcff, 0x3a3048, 1.25));
@@ -182,6 +209,7 @@ export class Match {
     const red = pool.slice(2); // 各ヒーローは1体ずつ。残りの3人が敵チームになる
     [blue, red].forEach((list, team) => list.forEach((def, i) => {
       const u = new Unit(def, team, team === 0 && i === 0, i, team === 1 ? difficulty.enemyMul : 1);
+      u.ultIdx = u.isPlayer ? opts.ult : Math.floor(Math.random() * 2);
       this.placeAtSpawn(u);
       u.model.settle();
       this.units.push(u);
@@ -189,7 +217,15 @@ export class Match {
     }));
     this.player = this.units[0];
 
-    BEACON_POS.forEach((pos) => {
+    // 照準の補助線（足元から前方へ）
+    this.aimLine = new THREE.Mesh(new THREE.PlaneGeometry(0.14, 1).rotateX(-Math.PI / 2).translate(0, 0, 0.5),
+      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.35, depthWrite: false }));
+    this.aimLine.position.y = 0.11;
+    s.add(this.aimLine);
+
+    const beaconIdx = this.mode.id === 'dom' ? [0, 1, 2, 3, 4] : this.mode.id === 'control' ? [2] : [];
+    beaconIdx.forEach((bi) => {
+      const pos = BEACON_POS[bi];
       const flatMat = (o: number) => new THREE.MeshBasicMaterial({ color: NEUTRAL, transparent: true, opacity: o, depthWrite: false });
       const disc = new THREE.Mesh(new THREE.RingGeometry(BEACON_RADIUS - 0.18, BEACON_RADIUS, 56), flatMat(0.9));
       const fill = new THREE.Mesh(new THREE.CircleGeometry(BEACON_RADIUS - 0.18, 56), flatMat(0.35));
@@ -203,7 +239,7 @@ export class Match {
       const light = new THREE.PointLight(NEUTRAL, 14, 13, 1.6);
       light.position.set(pos.x, 2.6, pos.z);
       s.add(crystal, beam, light);
-      this.beacons.push({ pos, value: 0, owner: -1, disc, fill, crystal, beam, light });
+      this.beacons.push({ label: 'ABCDE'[bi], pos, value: 0, owner: -1, disc, fill, crystal, beam, light });
     });
 
     this.updateCamera(1, true);
@@ -215,10 +251,20 @@ export class Match {
   alliesOf(u: Unit) { return this.units.filter((o) => o.team === u.team); }
   after(t: number, fn: () => void) { this.timers.push({ t, fn, owner: this.caster }); }
   shake(a: number) { this.shakeAmt = Math.max(this.shakeAmt, a); }
+  /** 範囲内の敵を中心へ引き寄せる */
+  pull(src: Unit, center: THREE.Vector3, r: number, strength: number) {
+    for (const e of this.enemiesOf(src)) {
+      if (!e.alive || e.invuln > 0) continue;
+      const d = center.clone().sub(e.pos).setY(0), len = d.length();
+      if (len > r || len < 0.6) continue;
+      e.push.addScaledVector(d.normalize(), Math.min(strength, len) * 5);
+    }
+  }
 
   damage(target: Unit, amount: number, src: Unit) {
     if (!target.alive || target.invuln > 0 || this.state === 'over') return;
-    const dmg = Math.max(1, Math.round(amount * (1 - target.defense())));
+    // クラッシュは復帰がないぶん、1ラウンドが一瞬で終わらないようダメージを抑える
+    const dmg = Math.max(1, Math.round(amount * (1 - target.defense()) * (this.mode.id === 'clash' ? 0.5 : 1)));
     target.hp -= dmg;
     target.lastHit = 0; target.flash = 1;
     src.lastHit = Math.min(src.lastHit, 3);
@@ -231,7 +277,7 @@ export class Match {
   }
 
   private kill(u: Unit, by: Unit) {
-    u.hp = 0; u.alive = false; u.respawn = RESPAWN_TIME; u.deaths++; by.kills++;
+    u.hp = 0; u.alive = false; u.respawn = RESPAWN_TIME; u.deaths++; by.kills++; this.teamKills[by.team]++;
     u.clearStatus(); u.target = null;
     u.playOnce('Death01', undefined, true);
     this.fx.burst(u.pos.clone().setY(1), TEAM_COLORS[u.team], 14, 6);
@@ -314,19 +360,42 @@ export class Match {
     u.yaw = u.team === 0 ? Math.PI / 2 : -Math.PI / 2;
   }
 
-  private aimFor(u: Unit): Aim {
-    let target: Unit | null = null, best = 17;
+  /** 視点の向き（照準）に一番近い敵。近いほど判定は甘く、近接は広い扇形で拾う */
+  private aimedTarget(u: Unit, range: number, cone: number): Unit | null {
+    const fx = Math.sin(this.camYaw), fz = Math.cos(this.camYaw);
+    let best: Unit | null = null, bestScore = Infinity;
     for (const e of this.enemiesOf(u)) {
       if (!e.alive || e.stealth > 0) continue;
-      const d = dist2D(e.pos, u.pos);
-      if (d < best) { best = d; target = e; }
+      const dx = e.pos.x - u.pos.x, dz = e.pos.z - u.pos.z, d = Math.hypot(dx, dz);
+      if (d > range + UNIT_RADIUS) continue;
+      const ang = d < 0.01 ? 0 : Math.acos(Math.max(-1, Math.min(1, (dx * fx + dz * fz) / d)));
+      if (ang > cone + 1.3 / Math.max(1, d) && d > 2.2) continue;
+      if (u.def.ranged && this.stage.blockedLine(u.pos, e.pos)) continue;
+      const score = ang + d * 0.01;
+      if (score < bestScore) { bestScore = score; best = e; }
     }
-    const dir = target ? target.pos.clone().sub(u.pos).setY(0).normalize() : new THREE.Vector3(Math.sin(u.yaw), 0, Math.cos(u.yaw));
-    if (dir.lengthSq() < 0.5) dir.set(Math.sin(u.yaw), 0, Math.cos(u.yaw));
+    return best;
+  }
+
+  private aimFor(u: Unit): Aim {
+    let target: Unit | null = null;
+    if (u.isPlayer) {
+      target = this.aimedTarget(u, 17, 0.3);
+    } else {
+      let best = 17;
+      for (const e of this.enemiesOf(u)) {
+        if (!e.alive || e.stealth > 0) continue;
+        const d = dist2D(e.pos, u.pos);
+        if (d < best) { best = d; target = e; }
+      }
+    }
+    const fwd = u.isPlayer ? new THREE.Vector3(Math.sin(this.camYaw), 0, Math.cos(this.camYaw)) : new THREE.Vector3(Math.sin(u.yaw), 0, Math.cos(u.yaw));
+    const dir = target ? target.pos.clone().sub(u.pos).setY(0).normalize() : fwd;
+    if (dir.lengthSq() < 0.5) dir.copy(fwd);
     return { dir, target, point: target ? target.pos.clone() : u.pos.clone().addScaledVector(dir, 6) };
   }
 
-  skillOf(u: Unit, i: number): SkillDef { return i < 2 ? u.def.skills[i] : u.def.ult; }
+  skillOf(u: Unit, i: number): SkillDef { return i < 2 ? u.def.skills[i] : u.def.ults[u.ultIdx]; }
   skillReady(u: Unit, i: number) { return i < 2 ? u.cds[i] <= 0 : u.ult >= 1; }
 
   cast(u: Unit, i: number) {
@@ -354,6 +423,7 @@ export class Match {
 
     if (this.intro > -1) {
       this.intro -= dt;
+      if (this.pendingRound && this.intro <= 3.6) this.beginRound();
       this.hud.countdown(this.intro);
       if (this.intro <= 0.6 && this.state === 'intro') this.state = 'play';
     }
@@ -405,25 +475,80 @@ export class Match {
 
     // 時間と勝敗
     this.timeLeft -= dt;
-    const counts = this.counts();
     if (!this.overtime && this.timeLeft <= 10 && Math.ceil(this.timeLeft) !== this.lastTick) { this.lastTick = Math.ceil(this.timeLeft); if (this.lastTick > 0) sfx.tick(); }
+    const sc = this.scores();
+    const id = this.mode.id;
+    if (id === 'clash') { this.stepClash(); return; }
+    if (id === 'tdm' && Math.max(sc[0], sc[1]) >= TDM_GOAL || id === 'control' && Math.max(sc[0], sc[1]) >= 100) { this.finish(sc); return; }
     if (this.timeLeft <= 0) {
-      if (counts[0] !== counts[1] || this.overtime && this.timeLeft <= -45) this.finish(counts);
-      else if (!this.overtime) { this.overtime = true; this.hud.announce('延長戦！ 先に拠点数でリードした方の勝ち', 'neutral'); }
-      else if (counts[0] !== counts[1]) this.finish(counts);
+      if (sc[0] !== sc[1] || this.overtime && this.timeLeft <= -45) this.finish(sc);
+      else if (!this.overtime) {
+        this.overtime = true;
+        this.hud.announce(id === 'tdm' ? '延長戦！ 次に倒した方の勝ち' : '延長戦！ 先にリードした方の勝ち', 'neutral');
+      }
     }
   }
 
-  counts(): [number, number] {
-    return [this.beacons.filter((b) => b.owner === 0).length, this.beacons.filter((b) => b.owner === 1).length];
+  /** 画面上部に出すスコア（モードごとに意味が違う） */
+  scores(): [number, number] {
+    switch (this.mode.id) {
+      case 'tdm': return [...this.teamKills];
+      case 'control': return [Math.min(100, Math.floor(this.controlPct[0])), Math.min(100, Math.floor(this.controlPct[1]))];
+      case 'clash': return [...this.rounds];
+      default: return [this.beacons.filter((b) => b.owner === 0).length, this.beacons.filter((b) => b.owner === 1).length];
+    }
+  }
+  goalText() {
+    switch (this.mode.id) {
+      case 'tdm': return `${TDM_GOAL} KO 先取`;
+      case 'control': return '100% で勝利';
+      case 'clash': return `ROUND ${this.round}　${CLASH_GOAL}本先取`;
+      default: return '';
+    }
   }
 
-  private finish(counts: [number, number]) {
+  // クラッシュ: 復帰なし。全滅させるか、時間切れ時に残り体力が多い方が1本
+  private stepClash() {
+    const alive = [0, 1].map((t) => this.units.filter((u) => u.team === t && u.alive).length);
+    let won = -1;
+    if (!alive[0] || !alive[1]) won = alive[0] ? 0 : alive[1] ? 1 : -2;
+    else if (this.timeLeft <= 0) {
+      const hp = [0, 1].map((t) => this.units.filter((u) => u.team === t && u.alive).reduce((a, u) => a + u.hp / u.maxHp, 0));
+      won = hp[0] > hp[1] ? 0 : hp[1] > hp[0] ? 1 : -2;
+    }
+    if (won === -1) return;
+    if (won >= 0) this.rounds[won]++;
+    if (Math.max(...this.rounds) >= CLASH_GOAL) { this.finish([...this.rounds]); return; }
+    this.hud.announce(won === 0 ? 'ラウンド取得！' : won === 1 ? 'ラウンドを取られた…' : '引き分け', won === 0 ? 'blue' : won === 1 ? 'red' : 'neutral');
+    won === 0 ? sfx.capture() : sfx.lost();
+    this.state = 'intro'; this.intro = 3.6 + 2.2; this.pendingRound = true;
+  }
+
+  private beginRound() {
+    this.pendingRound = false;
+    this.round++;
+    this.timeLeft = this.mode.time; this.lastTick = 99;
+    this.timers = [];
+    for (const p of this.projectiles) this.scene.remove(p.mesh);
+    this.projectiles = [];
+    this.fx.clear();
+    for (const u of this.units) {
+      u.alive = true; u.hp = u.maxHp; u.respawn = 0; u.group.visible = true; u.invuln = 0;
+      u.clearStatus(); u.cds = [0, 0]; u.atkCd = 0;
+      this.placeAtSpawn(u);
+      u.group.position.copy(u.pos); u.model.settle();
+      u.stopOnce(); u.setLoop(u.def.idle);
+      u.ai.path = []; u.ai.retreat = false;
+    }
+    this.camYaw = Math.PI / 2;
+  }
+
+  private finish(scores: [number, number]) {
     this.state = 'over';
-    const winner = counts[0] > counts[1] ? 0 : counts[1] > counts[0] ? 1 : -1;
-    this.result = { winner, counts, units: this.units };
+    const winner = scores[0] > scores[1] ? 0 : scores[1] > scores[0] ? 1 : -1;
+    this.result = { winner, scores, unit: this.mode.unit, units: this.units };
     this.endT = 3.2;
-    this.hud.announce(winner === 0 ? '勝利！' : winner === 1 ? '敗北…' : '引き分け', winner === 0 ? 'blue big' : winner === 1 ? 'red big' : 'neutral big');
+    this.hud.announce(winner === 0 ? 'VICTORY' : winner === 1 ? 'DEFEAT' : 'DRAW', winner === 0 ? 'blue big' : winner === 1 ? 'red big' : 'neutral big');
     winner === 0 ? sfx.win() : sfx.lose();
     for (const u of this.units) {
       if (!u.alive) continue;
@@ -436,6 +561,7 @@ export class Match {
     if (!u.alive) {
       u.respawn -= dt;
       u.group.visible = u.respawn > RESPAWN_TIME - 2.5;
+      if (this.mode.id === 'clash') { u.respawn = Math.max(0.01, u.respawn); return; }
       if (u.respawn <= 0) {
         u.alive = true; u.hp = u.maxHp; u.invuln = 2.5; u.group.visible = true;
         this.placeAtSpawn(u);
@@ -454,9 +580,9 @@ export class Match {
 
     // 自陣で回復 / 敵陣でダメージ / 非戦闘時の自然回復
     const home = dist2D(u.pos, SPAWNS[u.team]) < SPAWN_RADIUS;
-    if (home) u.hp = Math.min(u.maxHp, u.hp + u.maxHp * 0.2 * dt);
+    if (home && this.mode.id !== 'clash') u.hp = Math.min(u.maxHp, u.hp + u.maxHp * 0.2 * dt);
     else if (u.lastHit > 6) u.hp = Math.min(u.maxHp, u.hp + u.maxHp * 0.025 * dt);
-    if (dist2D(u.pos, SPAWNS[1 - u.team]) < SPAWN_RADIUS) {
+    if (this.mode.id !== 'clash' && dist2D(u.pos, SPAWNS[1 - u.team]) < SPAWN_RADIUS) {
       u.hp -= u.maxHp * 0.15 * dt; u.lastHit = 0;
       if (u.hp <= 0) { this.kill(u, this.units.find((o) => o.team !== u.team)!); return; }
     }
@@ -478,6 +604,7 @@ export class Match {
         if (u.swing <= 0) u.yaw = angleLerp(u.yaw, Math.atan2(u.moveDir.x, u.moveDir.z), dt * 14);
         u.setLoop(u.def.run);
       } else {
+        if (u.isPlayer && canMove && u.swing <= 0) u.yaw = angleLerp(u.yaw, this.camYaw, dt * 10);
         u.setLoop(u.def.idle);
       }
       if (u.push.lengthSq() > 0.01) { u.pos.addScaledVector(u.push, dt); u.push.multiplyScalar(Math.exp(-dt * 9)); }
@@ -486,7 +613,8 @@ export class Match {
 
     // 通常攻撃（射程内の一番近い敵を自動で攻撃）
     let target: Unit | null = null, best = u.def.range + UNIT_RADIUS;
-    for (const e of this.enemiesOf(u)) {
+    if (u.isPlayer) target = this.aimLock = this.aimedTarget(u, u.def.range, u.def.ranged ? 0.2 : 1.0);
+    else for (const e of this.enemiesOf(u)) {
       if (!e.alive || e.stealth > 0) continue;
       const d = dist2D(e.pos, u.pos);
       if (d < best && !(u.def.ranged && this.stage.blockedLine(u.pos, e.pos))) { best = d; target = e; }
@@ -541,7 +669,7 @@ export class Match {
   }
 
   private stepBeacons(dt: number) {
-    this.beacons.forEach((b, idx) => {
+    this.beacons.forEach((b) => {
       const n = [0, 0];
       for (const u of this.units) if (u.alive && dist2D(u.pos, b.pos) < BEACON_RADIUS) n[u.team]++;
       const before = b.owner;
@@ -562,11 +690,13 @@ export class Match {
       else if (b.owner === 0 && b.value <= 0 || b.owner === 1 && b.value >= 0) b.owner = -1;
       if (b.owner !== before && b.owner !== -1) {
         const mine = b.owner === this.player.team;
-        this.hud.announce(`${mine ? '味方' : '敵'}が拠点 ${'ABCDE'[idx]} を確保！`, b.owner === 0 ? 'blue' : 'red');
+        this.hud.announce(`${mine ? '味方' : '敵'}が拠点 ${b.label} を確保！`, b.owner === 0 ? 'blue' : 'red');
         this.fx.ring(b.pos, BEACON_RADIUS * 1.8, TEAM_COLORS[b.owner], 0.8);
         this.fx.pillar(b.pos, TEAM_COLORS[b.owner], 1.6);
         mine ? sfx.capture() : sfx.lost();
       }
+      // コントロール: 確保している間だけ進む。敵が乗っている間は止まる
+      if (this.mode.id === 'control' && b.owner !== -1 && !n[1 - b.owner]) this.controlPct[b.owner] += dt * 100 / CONTROL_SECONDS;
     });
   }
 
@@ -609,6 +739,14 @@ export class Match {
       this.shakeAmt *= Math.exp(-dt * 8);
     }
     cam.lookAt(this.camLook);
+    // 照準線: 射程ぶんだけ前方へ。敵を捉えると黄色くなる
+    const line = this.aimLine, lock = p.alive ? this.aimLock : null;
+    line.visible = p.alive && this.state === 'play';
+    line.position.set(p.pos.x, 0.11, p.pos.z);
+    line.rotation.y = lock ? Math.atan2(lock.pos.x - p.pos.x, lock.pos.z - p.pos.z) : this.camYaw;
+    line.scale.z = lock ? Math.max(1, dist2D(lock.pos, p.pos)) : Math.min(p.def.range, 12);
+    (line.material as THREE.MeshBasicMaterial).color.set(lock ? 0xffd60a : 0xffffff);
+    (line.material as THREE.MeshBasicMaterial).opacity = lock ? 0.8 : 0.3;
   }
 
   // ---------- AI ----------
@@ -635,7 +773,8 @@ export class Match {
         if (score > bestScore) { bestScore = score; ai.goal = i; }
       });
     }
-    if (u.hp < u.maxHp * 0.25) ai.retreat = true;
+    if (this.mode.id === 'clash') ai.retreat = false;
+    else if (u.hp < u.maxHp * 0.25) ai.retreat = true;
     else if (u.hp > u.maxHp * 0.8) ai.retreat = false;
 
     // 一番近い見えている敵
@@ -646,19 +785,23 @@ export class Match {
       if (d < dE) { dE = d; enemy = e; }
     }
 
-    const beacon = this.beacons[ai.goal];
+    const beacon: Beacon | undefined = this.beacons[ai.goal];
     const dest = ai.dest;
     let stay = false;
     if (ai.retreat) {
       dest.copy(SPAWNS[u.team]);
     } else {
-      const a = u.slot * 2.1 + ai.goal;
-      dest.set(beacon.pos.x + Math.cos(a) * 1.6, 0, beacon.pos.z + Math.sin(a) * 1.6);
       const range = u.def.range;
-      const holding = dist2D(u.pos, beacon.pos) < BEACON_RADIUS - 0.5;
-      const aggro = Math.max(range + 2.5, 8);
+      let holding = false, aggro = 999;
+      if (beacon) {
+        const a = u.slot * 2.1 + ai.goal;
+        dest.set(beacon.pos.x + Math.cos(a) * 1.6, 0, beacon.pos.z + Math.sin(a) * 1.6);
+        holding = dist2D(u.pos, beacon.pos) < BEACON_RADIUS - 0.5;
+        aggro = Math.max(range + 2.5, 8);
+      } else if (enemy) dest.copy(enemy.pos); // 拠点のないモードは一番近い敵を追う
+      else stay = true;
       // 拠点に乗っている間は、拠点から離れすぎない範囲の敵だけ追う
-      if (enemy && dE < aggro && (!holding || dist2D(enemy.pos, beacon.pos) < BEACON_RADIUS + (u.def.ranged ? range : 3))) {
+      if (enemy && dE < aggro && (!holding || !beacon || dist2D(enemy.pos, beacon.pos) < BEACON_RADIUS + (u.def.ranged ? range : 3))) {
         if (u.def.ranged) {
           if (dE > range * 0.9 || this.stage.blockedLine(u.pos, enemy.pos)) dest.copy(enemy.pos);
           else if (dE < range * 0.35 && !holding) dest.copy(u.pos).addScaledVector(u.pos.clone().sub(enemy.pos).setY(0).normalize(), 4);
