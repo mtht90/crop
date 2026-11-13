@@ -411,7 +411,45 @@ export const CH2_DECKS: DeckList[] = [
   },
 ];
 
-export const ALL_DECKS: DeckList[] = [...STARTER_DECKS, ...EX_DECKS, ...AB3_DECKS, ...CH2_DECKS];
+/** a story deck: its monsters, the usual trainers, and basic energy to sixty */
+const CORE_TRAINERS: [string, number][] = [['大賢者の研究', 2], ['召喚の巻物', 2], ['魔獣の笛', 2], ['司令官の号令', 2], ['騎士の突撃', 2], ['狩人の知恵', 2], ['転移の羽', 2], ['賢者の水晶', 1], ['エネルギー結晶', 2], ['覇者の紋章', 1], ['回復薬', 2], ['運命のコイン', 2], ['書庫の整理', 2]];
+const ENERGY_JP: Record<EType, string> = { fire: '炎', water: '水', grass: '草', lightning: '雷', psychic: '超', fighting: '闘', dark: '悪', colorless: '闘' };
+function storyDeck(id: string, name: string, type: EType, cover: string, description: string, mons: [string, number][]): DeckList {
+  const n = [...mons, ...CORE_TRAINERS].reduce((a, [, k]) => a + k, 0);
+  return { id, name, type, cover, description, cards: [...mons, ...CORE_TRAINERS, [E(ENERGY_JP[type]), 60 - n]] };
+}
+
+/** 第四章の強敵が使うデッキ */
+export const CH4_DECKS: DeckList[] = [
+  storyDeck('c4-court', 'エルフの宮廷', 'grass', 'エルフルーラー', '千年前の森の宮廷。不死の剣士へ育つ若いエルフたち。', [['エルフハルバーディア', 4], ['エルフパラゴン', 3], ['エルフイモータル', 2], ['エルフルーラー', 2], ['エルフマーシャル', 2], ['モリノセイレイ', 2], ['アキノセイレイ', 2]]),
+  storyDeck('c4-hold', 'ドワーフの砦', 'fighting', 'ドワーフレジェンド', '石を千年見てきた一族の砦。弩兵の列が、山の門を守る。', [['ドワーフクロスボウマン', 4], ['ドワーフアーバレスト', 3], ['ドワーフバラジャー', 2], ['ドワーフレジェンド', 2], ['ドワーフヴァリアント', 2], ['ドワーフランナー', 2], ['ドワーフレイジャー', 2]]),
+  storyDeck('c4-tower', '炎の塔', 'fire', 'フレイムソーサレス', '十二枚の絵の具を溶かす火を焚く、炎の大魔導の塔。', [['フレアスピリット', 4], ['ファイアモンスター', 3], ['ラヴァエレメンタル', 2], ['フレイムソーサレス', 2], ['ルミナリーマスター', 2], ['トロルファイアシャーマン', 2]]),
+  storyDeck('c4-sands', '砂漠の宮廷', 'colorless', 'フェニックスナイト', '若いカリフの宮廷。砂の戦士と不死鳥の騎士。', [['バタル', 3], ['ムファリク', 2], ['デザートアーチャー', 2], ['ペリン', 2], ['ティニーン', 2], ['ジャワル', 2], ['ミグワール', 2], ['クルセイダー', 2], ['フェニックスナイト', 2]]),
+  storyDeck('c4-horde', 'オークの大群', 'fighting', 'オークウォーモンガー', '盟約を認めないオークの大王の軍勢。', [['オークヴァンガード', 4], ['オークレイダー', 3], ['オークウォーモンガー', 2], ['オークプランジャー', 2], ['オークポールアーム', 2], ['オークラヴェジャー', 2], ['リザードストライカー', 2]]),
+  storyDeck('c4-road', '無法者の街道', 'dark', 'マスターアサシン', '戦の街道にたむろする剣士と盗賊たち。', [['アーマードバンディット', 4], ['アーマードハイウェイマン', 3], ['マスターアサシン', 2], ['ウルフブレード', 2], ['ウルフハート', 2], ['マスターオブダークネス', 2], ['アウトローナイト', 2]]),
+  storyDeck('c4-dead', '死者の王国', 'dark', 'リッチプリンス', '命の重さを量る、死者の国の女王の兵。', [['ドレッドリッチ', 4], ['エターナルリッチ', 3], ['リッチプリンス', 2], ['ゾンビソルジャー', 2], ['ゾンビリーヴァー', 2], ['ネクロマンサー', 2], ['アークネクロマンサー', 2]]),
+  storyDeck('c4-arcane', '絵描きの塔', 'psychic', 'セレスティアルロード', '十二枚を描いた塔の絵描きと、その弟子。', [['セレスティアル', 4], ['セレスティアルロード', 3], ['アーケインレディ', 2], ['ワンダラーウィザード', 2], ['シャドウウィザード', 2], ['エルフミスティック', 2], ['ベニバネ', 2]]),
+  storyDeck('c4-sea', '潮の王宮', 'water', 'マーマンキング', '王女を逃がそうとした、海の王の軍勢。', [['マーマンレティアリウス', 4], ['マーマンキング', 3], ['マーメイドプリーステス', 3], ['ウェイヴスピリット', 3], ['ウォーターゴッド', 2], ['ルストルマスター', 2]]),
+  storyDeck('c4-crown', '十二王の盟約', 'colorless', 'ウォーマスター', '十二国の上王が率いる、盟約の騎士団。', [['ヴェリテス', 4], ['センチネル', 3], ['ウォーマスター', 2], ['アイアンナイト', 2], ['デストロイヤーナイト', 2], ['デシメイター', 1], ['エピックナイト', 2], ['ロイヤルガード', 2]]),
+];
+
+/** 第五章の強敵が使うデッキ */
+export const CH5_DECKS: DeckList[] = [
+  storyDeck('c5-knights', '残響の騎士団', 'colorless', 'ホワイトナイト', '国を守る力を願った、老騎士の残響。', [['ヴェテランナイト', 4], ['ゴールデンガーディアン', 3], ['ティールナイト', 3], ['ホワイトナイト', 2], ['ガードキャプテン', 2], ['ランスホースマン', 2], ['クリムゾンランサー', 2]]),
+  storyDeck('c5-north', '北の盾', 'fighting', 'アックスナイト', '吹雪から村を守り続ける、北の戦士たち。', [['シールドウォリアー', 4], ['アックスナイト', 3], ['ノースバーバリアン', 2], ['ベテランハンター', 2], ['ドワーフマスクガード', 2], ['ストーンハンマートロル', 2], ['ドワーフホーンロード', 2]]),
+  storyDeck('c5-necro', '禁書の系譜', 'dark', 'リッチソーサラー', '故郷を守るために、不死になった魔導士。', [['ネクロアプレンティス', 4], ['ネクロマスター', 3], ['リッチソーサラー', 2], ['グレイヴシスター', 2], ['ダークアークメイジ', 2], ['フードリッチ', 2], ['クリムゾンリッチ', 1]]),
+  storyDeck('c5-sands', '星読みの砂', 'colorless', 'デザートコマンダー', '道しるべの石になった少女と、砂漠の民。', [['サンドスカウト', 4], ['デザートコマンダー', 3], ['サンドブレード', 2], ['デザートシーカー', 2], ['ラフィアン', 2], ['ストリートブルート', 2], ['サージェント', 2]]),
+  storyDeck('c5-elves', '森の女王', 'grass', 'エルフクイーン', '森を燃やさない力を願った、森の女王の残響。', [['エルフブレイド', 4], ['エルフゴールドブレイド', 3], ['エルフクイーン', 2], ['エルフホルンメイデン', 2], ['エルフコマンダー', 2], ['エルフエルダー', 2], ['エルフウォーデン', 2]]),
+  storyDeck('c5-forge', '鍛冶神の炉', 'fighting', 'ドワーフマスタースミス', '何でも割れる鎚を願った、伝説の鍛冶師。', [['ドワーフディガー', 4], ['ドワーフマスタースミス', 3], ['ドワーフスローンキング', 2], ['ドワーフマスクガード', 2], ['ドワーフホーンロード', 2], ['ストーンハンマートロル', 2], ['シールドウォリアー', 2]]),
+  storyDeck('c5-orc', '黄金の大族長', 'fighting', 'オークゴールデンキング', '部族を飢えから救った、黄金の大族長の残響。', [['オークアイアンガード', 4], ['オークウォーチーフ', 3], ['オークグランドチーフ', 2], ['オークゴールデンキング', 2], ['ノースバーバリアン', 2], ['ストーンハンマートロル', 2]]),
+  storyDeck('c5-tide', '海の王子', 'water', 'タイドプリンス', '千年、港を探した船の、最後の乗り手。', [['リバーメイデン', 4], ['マーセイレーン', 3], ['タイドプリンス', 2], ['ナーガウィッチ', 3], ['フロストウッド', 2]]),
+  storyDeck('c5-dark', '暗黒卿', 'dark', 'ダークロード', '主君を救うために、国を石にした騎士。', [['ブラックシールド', 4], ['ダークロード', 3], ['ナイトストーカー', 2], ['スモークブレード', 2], ['ディスガイズ', 2], ['ゾンビホース', 2], ['ゾンビライダー', 2]]),
+  storyDeck('c5-storm', '天輪の雷', 'lightning', 'ヘイローメイジ', '「十三」を書き残した記録係の残響。', [['ストームアデプト', 4], ['ヘイローメイジ', 3], ['スパークシーア', 3], ['エルダーボルト', 2], ['サンダーランサー', 2]]),
+  storyDeck('c5-flame', '紅蓮の邪術', 'fire', 'ヘルフレイムロード', '炎を従える邪術の王と、赤い髪の剣士。', [['スパークシーフ', 4], ['カーマインファイター', 3], ['ヘルフレイムロード', 2], ['フレアウィッチ', 2], ['エンバーセージ', 2], ['ブレイズバーバリアン', 2]]),
+  storyDeck('c5-kings', '老王の帰還', 'colorless', 'オールドキング', '盟約を結んだ王たちの残響。', [['ヤングプリンス', 4], ['オールドキング', 3], ['サージェント', 2], ['ヴェテランナイト', 2], ['ゴールデンガーディアン', 2], ['ホワイトナイト', 2], ['ティールナイト', 2]]),
+];
+
+export const ALL_DECKS: DeckList[] = [...STARTER_DECKS, ...EX_DECKS, ...AB3_DECKS, ...CH2_DECKS, ...CH4_DECKS, ...CH5_DECKS];
 export const deckById = (id: string) => ALL_DECKS.find((d) => d.id === id)!;
 
 export function expand(list: [string, number][]): string[] {
@@ -582,6 +620,126 @@ export const RIVALS: Rival[] = [
   {
     id: 'asha', name: '影の女王', title: '千年の黒幕', portrait: 'camp/asheviere', deck: 'shadow', level: 'hard', reward: 1000, set: 'AB3',
     intro: 'ようこそ、小さな召喚士。あなたの絆ごと、闇に溶かしてあげましょう。', win: '光など、影があるから輝けるのよ。', lose: '……ありえない。私の、千年が……！', scene: 'story/p-shadows',
+  },
+  {
+    id: 'harald', name: 'ハラルド', title: '王都の老将軍', portrait: 'humans/general', deck: 'dragoon', level: 'hard', reward: 780, set: 'AB3',
+    intro: '王都の盾として、子どもには道を譲れん。', win: '王都は、まだ倒れん。', lose: '……老いたか。いや、おまえが強いのだ。', scene: 'story/p-hall',
+  },
+  {
+    id: 'celes', name: 'セレス', title: '写本の司書', portrait: 'humans/mage-light+female', deck: 'psychic', level: 'hard', reward: 800, set: 'AB3',
+    intro: 'お静かに。頁をめくる覚悟を、見せてください。', win: 'この頁は、まだ早いようです。', lose: '……どうぞ。お読みください。', scene: 'story/p-study',
+  },
+  {
+    id: 'olden3', name: 'オルデン', title: '灰の腕の師', portrait: 'humans/mage-silver', deck: 'elder', level: 'hard', reward: 1000, set: 'AB3',
+    intro: '憎め。そして勝て。……それが、最後の授業じゃ。', win: 'まだじゃ。まだ、遠い。', lose: '……よう、育った。', scene: 'story/p-lone-tower',
+  },
+  {
+    id: 'walter', name: 'ヴァルター', title: '門の騎士の亡霊', portrait: 'undead/death-knight', deck: 'lich', level: 'hard', reward: 860, set: 'AB3',
+    intro: '門は、開かぬ。千年の悔いにかけて。', win: '誰も、あの椅子には座らせぬ。', lose: '……通れ。王女を、起こしてやってくれ。', scene: 'story/p-castle-fall',
+  },
+  {
+    id: 'riven', name: 'リヴェン', title: '女王の盾', portrait: 'undead/revenant', deck: 'night', level: 'hard', reward: 880, set: 'AB3',
+    intro: '陛下の眠りを、乱すな。', win: '盾は、まだ立っている。', lose: '……陛下は、王冠の間におられる。', scene: 'story/p-fort',
+  },
+  {
+    id: 'asha2', name: '影の女王', title: '割れた王冠', portrait: 'camp/asheviere-mad', deck: 'shadow', level: 'hard', reward: 1500, set: 'AB3',
+    intro: '座りなさい。十三番目の席に。', win: '王冠は、待てるのよ。', lose: '……さむい。', scene: 'story/p-the-fall',
+  },
+  {
+    id: 'rolf', name: 'ロルフ', title: '街道の剣士', portrait: 'rotl/outlaws/honour-blade', deck: 'c4-road', level: 'hard', reward: 900, set: 'AB4',
+    intro: '斬るより、カードのほうが好きでね。抜け！', win: '街道じゃ、二度目からが本番だ。', lose: 'ははっ、斬らなくてよかった。', scene: 'story/p-midlands',
+  },
+  {
+    id: 'zahir', name: 'ザヒール', title: '砂漠のカリフ', portrait: 'rotl/khalifate/mufariq', deck: 'c4-sands', level: 'hard', reward: 920, set: 'AB4',
+    intro: '砂の上で論じよう。勝った者の言葉が、正しい。', win: '砂は、強き者の足跡だけを残す。', lose: '……砂が、おまえたちの足跡を残した。', scene: 'story/landscape-desert',
+  },
+  {
+    id: 'igna', name: 'イグナ', title: '炎の塔の大魔導', portrait: 'rotl/magi/fire', deck: 'c4-tower', level: 'hard', reward: 940, set: 'AB4',
+    intro: '火は、明日のために焚く。', win: '火に近づきすぎたわね。', lose: '……強い子。でも、火は焚くわ。', scene: 'story/p-fire-sky',
+  },
+  {
+    id: 'brandl', name: 'ブランドル', title: 'ドワーフの砦の王', portrait: 'rotl/dwarves/hero', deck: 'c4-hold', level: 'hard', reward: 960, set: 'AB4',
+    intro: '石は、嘘をつかん。砦、構え！', win: '石頭は、まだ割れんぞ。', lose: '……割られたな。わしの石頭が。', scene: 'story/blacksmith',
+  },
+  {
+    id: 'sylvan', name: 'シルヴァン', title: '千年前の森の王', portrait: 'rotl/elves/ruler', deck: 'c4-court', level: 'hard', reward: 980, set: 'AB4',
+    intro: '森は、約束を忘れない。', win: '森は、何度でも芽吹く。', lose: '……あなたの剣は、森に似ている。', scene: 'story/p-elf-wood',
+  },
+  {
+    id: 'grukka', name: 'グルカ', title: '千年前のオークの大王', portrait: 'rotl/orcs/warmonger', deck: 'c4-horde', level: 'hard', reward: 1000, set: 'AB4',
+    intro: '戦は、戦士が終わらせる！', win: 'グハ！ まだまだ軽い！', lose: 'グ……小さいのに、拳が重い。', scene: 'story/landscape-battlefield_nohumans',
+  },
+  {
+    id: 'morg', name: 'モルグ', title: '闇の主', portrait: 'rotl/outlaws/master_of_darkness', deck: 'c4-road', level: 'hard', reward: 1020, set: 'AB4',
+    intro: '闇は、どこにでも潜む。', win: 'くく……闇に呑まれたか。', lose: '……くく。未来の子は、強いな。', scene: 'story/p-dark-pines',
+  },
+  {
+    id: 'nekra', name: 'ネクラ', title: '死者の国の女王', portrait: 'rotl/undead/arch-necromancer+female', deck: 'c4-dead', level: 'hard', reward: 1040, set: 'AB4',
+    intro: '命の重さを、量りましょう。', win: 'まだ、軽いわね。', lose: '……重い言葉ね。', scene: 'story/p-graves',
+  },
+  {
+    id: 'ella', name: 'エラ', title: '塔の絵描き', portrait: 'rotl/humans/arcane-female', deck: 'c4-arcane', level: 'hard', reward: 1060, set: 'AB4',
+    intro: '筆より強いものを、見せて。', win: 'まだ、線がぶれてる。', lose: '……本物ね。', scene: 'story/p-lone-tower',
+  },
+  {
+    id: 'nept', name: 'ネプト', title: '千年前の海の王', portrait: 'rotl/other/king', deck: 'c4-sea', level: 'hard', reward: 1080, set: 'AB4',
+    intro: '潮は、誰も縛らない。', win: '潮は、また満ちる。', lose: '……強いな。', scene: 'story/p-storm-sea',
+  },
+  {
+    id: 'ashurie', name: 'アシュリエ', title: '千年前の王女', portrait: 'rotl/magi/celestial+female', deck: 'c4-arcane', level: 'hard', reward: 1100, set: 'AB4',
+    intro: '描く理由は、わたしが決める。', win: 'ふふ、けっこう強いのよ。', lose: '……負けちゃった。', scene: 'story/p-summer',
+  },
+  {
+    id: 'volks', name: 'ヴォルクス', title: '十二国の上王', portrait: 'rotl/humans/epic', deck: 'c4-crown', level: 'hard', reward: 1500, set: 'AB4',
+    intro: '千年の平和を、この手で。', win: '政は、子どもの遊びではない。', lose: '……見事。だが、遅い。', scene: 'story/p-temple',
+  },
+  {
+    id: 'eckhart', name: 'エッカルト', title: '老騎士の残響', portrait: 'ch5/drogan', deck: 'c5-knights', level: 'hard', reward: 1100, set: 'AB5',
+    intro: '老騎士の、最後の一戦を。', win: '剣を拾え。老人は、待つのが得意だ。', lose: '……よき剣だ。満足した。', scene: 'story/landscape-plain',
+  },
+  {
+    id: 'beorn', name: 'ベオルン', title: '北の盾の残響', portrait: 'ch5/howgarth', deck: 'c5-north', level: 'hard', reward: 1120, set: 'AB5',
+    intro: '盾は、下ろさん。', win: '吹雪は、まだやまんぞ。', lose: '……盾が、軽くなった。', scene: 'story/p-snowfield',
+  },
+  {
+    id: 'matthias', name: 'マティアス', title: '禁書の魔導士の残響', portrait: 'ch5/malin-old', deck: 'c5-necro', level: 'hard', reward: 1140, set: 'AB5',
+    intro: '頁は、まだ終わらない。', win: 'まだ、頁が残っている。', lose: '……閉じられた。', scene: 'story/p-study',
+  },
+  {
+    id: 'sara', name: 'サラ', title: '砂漠の星読みの残響', portrait: 'ch5/nym', deck: 'c5-sands', level: 'hard', reward: 1160, set: 'AB5',
+    intro: '星は、ちゃんと見てるよ！', win: 'えへへ、迷子になっちゃった？', lose: 'わ、負けた！ 強いね！', scene: 'story/landscape-desert',
+  },
+  {
+    id: 'isildia', name: 'イシルディア', title: '森の女王の残響', portrait: 'ch5/uradredia', deck: 'c5-elves', level: 'hard', reward: 1180, set: 'AB5',
+    intro: '聖樹の名において。', win: '森は、何度でも芽吹きます。', lose: '……見事でした。', scene: 'story/p-great-tree',
+  },
+  {
+    id: 'grimwald', name: 'グリムヴァルト', title: '鍛冶神の残響', portrait: 'ch5/thursagan', deck: 'c5-forge', level: 'hard', reward: 1200, set: 'AB5',
+    intro: '鉄は、嘘をつかん。', win: '鉄は、何度でも打ち直せる。', lose: '……割らん、という目をしとる。', scene: 'story/blacksmith',
+  },
+  {
+    id: 'braga', name: 'ブラガ', title: '黄金の大族長の残響', portrait: 'ch5/kapoue', deck: 'c5-orc', level: 'hard', reward: 1220, set: 'AB5',
+    intro: '黒き眼の、最後の戦！', win: 'グハハ！ 立て！', lose: 'グ……見事。', scene: 'story/landscape-battlefield_nohumans',
+  },
+  {
+    id: 'maris', name: 'マリス', title: '海の王子の残響', portrait: 'ch5/kai-krellis', deck: 'c5-tide', level: 'hard', reward: 1240, set: 'AB5',
+    intro: '潮は、誰も縛らない。', win: '潮は、また満ちる。', lose: '……千年ぶりの、風だ。', scene: 'story/p-storm-sea',
+  },
+  {
+    id: 'wolfram', name: 'ヴォルフラム', title: '赤い外套の暗黒卿', portrait: 'ch5/eldaric', deck: 'c5-dark', level: 'hard', reward: 1260, set: 'AB5',
+    intro: '赤い外套に、誓って。', win: 'まだ、迷いがある。', lose: '……清らかな剣だ。', scene: 'story/p-castle-fall',
+  },
+  {
+    id: 'aurel', name: 'アウレル', title: '天輪の魔導士の残響', portrait: 'ch5/edmond', deck: 'c5-storm', level: 'hard', reward: 1280, set: 'AB5',
+    intro: '天輪よ、答えを示せ。', win: '答えを急がないで。', lose: '……強い。でも、答えは、まだだね。', scene: 'story/p-study',
+  },
+  {
+    id: 'olden4', name: 'オルデン', title: '最後の授業', portrait: 'camp/delfador', deck: 'elder', level: 'hard', reward: 1500, set: 'AB5',
+    intro: '来い、わしの自慢の弟子！', win: '授業は、まだ終わっとらん。', lose: '……負けた。本当に、もう、教えることはないのう。', scene: 'story/p-statue',
+  },
+  {
+    id: 'crown', name: 'ヴォルクス', title: '王冠の残響', portrait: 'rotl/humans/epic', deck: 'c5-kings', level: 'hard', reward: 2000, set: 'AB5',
+    intro: '十二の王よ、筆を取れ！', win: '盟約は、子どもの夢では止まらぬ。', lose: '……見事だ。千年前に、この剣があれば。', scene: 'story/p-great-tree',
   },
 ];
 
