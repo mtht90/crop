@@ -21,9 +21,9 @@
     <p class="tag"><span>3 VS 3</span> 拠点争奪アクション</p>
     <button id="btn-start" class="primary">バトル開始</button>
     <div class="howto">
-      <p>4つのルールで戦う 3 対 3。視点を敵に向けると、射程内なら自動で攻撃する。</p>
-      <p><b>PC</b>：WASD 移動 ／ ドラッグ 視点 ／ ホイール 拡大縮小 ／ Q・E スキル ／ Space 必殺技</p>
-      <p><b>スマホ</b>：左側スワイプ 移動 ／ 右側スワイプ 視点 ／ ボタンでスキル</p>
+      <p>4つのルールで戦う 3 対 3。攻撃は3発までためられ、時間で回復する。</p>
+      <p><b>PC</b>：WASD 移動 ／ マウスで狙って左クリック 攻撃 ／ Q・E スキル ／ Space 必殺技（押して狙い、離して発動）</p>
+      <p><b>スマホ</b>：左側で移動 ／ ボタンをタップで自動照準、引っぱって離すと狙った方向へ</p>
       <p>必殺技はキャラ選択で2種類から選べます。</p>
     </div>
   </div>
@@ -54,7 +54,6 @@
       <div id="team-red" class="team"></div>
     </div>
     <canvas id="minimap" width="160" height="100"></canvas>
-    <div id="reticle"></div>
     <div id="plates"></div>
     <div id="floats"></div>
     <div id="feed"></div>
@@ -67,6 +66,7 @@
       <div class="me-body"><div id="me-name"></div><div id="myhp"><div id="myhp-bar"></div><span id="myhp-text"></span></div></div>
     </div>
     <div id="skills">
+      <div id="attack" class="skill atk"></div>
       <div id="skill0" class="skill"></div>
       <div id="skill1" class="skill"></div>
       <div id="skill2" class="skill ult"></div>

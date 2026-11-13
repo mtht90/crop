@@ -1,14 +1,15 @@
 import * as THREE from 'three';
 
-export const HALF_X = 32;
-export const HALF_Z = 20;
+/** マップの広さ（半分の長さ, m）。旧版 32x20 の約1.3倍 */
+export const HALF_X = 42;
+export const HALF_Z = 26;
 export const TEAM_COLORS = [0x3d8bff, 0xff4a4a];
-export const SPAWNS = [new THREE.Vector3(-28, 0, 0), new THREE.Vector3(28, 0, 0)];
+export const SPAWNS = [new THREE.Vector3(-37, 0, 0), new THREE.Vector3(37, 0, 0)];
 export const SPAWN_RADIUS = 4.5;
 export const BEACON_RADIUS = 3.4;
 export const BEACON_POS = [
-  new THREE.Vector3(-19, 0, -8), new THREE.Vector3(-8, 0, 10), new THREE.Vector3(0, 0, 0),
-  new THREE.Vector3(8, 0, -10), new THREE.Vector3(19, 0, 8),
+  new THREE.Vector3(-25, 0, -10), new THREE.Vector3(-10, 0, 13), new THREE.Vector3(0, 0, 0),
+  new THREE.Vector3(10, 0, -13), new THREE.Vector3(25, 0, 10),
 ];
 
 export interface Obstacle { x: number; z: number; hx: number; hz: number }
@@ -16,16 +17,24 @@ export interface Obstacle { x: number; z: number; hx: number; hz: number }
 interface Piece { kind: 'pillar' | 'block' | 'wall'; x: number; z: number; hx: number; hz: number; h: number }
 // 片側だけ定義し、原点対称にコピーして公平なマップにする
 const HALF_LAYOUT: Piece[] = [
-  { kind: 'pillar', x: -4.5, z: -4.5, hx: 0.8, hz: 0.8, h: 4.2 },
-  { kind: 'pillar', x: -4.5, z: 4.5, hx: 0.8, hz: 0.8, h: 4.2 },
-  { kind: 'wall', x: -12, z: 1, hx: 0.5, hz: 2, h: 2.6 },
-  { kind: 'wall', x: -13, z: -13, hx: 2, hz: 0.3, h: 1.2 },
-  { kind: 'wall', x: -3, z: 14, hx: 2, hz: 0.3, h: 1.2 },
-  { kind: 'block', x: -15, z: 9, hx: 0.8, hz: 0.8, h: 1.5 },
-  { kind: 'block', x: -24, z: 11, hx: 1.3, hz: 1.3, h: 2.2 },
-  { kind: 'block', x: -23.5, z: -13, hx: 0.8, hz: 0.8, h: 1.5 },
-  { kind: 'wall', x: -2, z: -15, hx: 2, hz: 0.5, h: 2.6 },
-  { kind: 'block', x: -9, z: -4, hx: 0.8, hz: 0.8, h: 1.5 },
+  // 中央拠点まわりの柱
+  { kind: 'pillar', x: -5.5, z: -5.5, hx: 0.8, hz: 0.8, h: 4.2 },
+  { kind: 'pillar', x: -5.5, z: 5.5, hx: 0.8, hz: 0.8, h: 4.2 },
+  { kind: 'block', x: -11, z: -5, hx: 0.8, hz: 0.8, h: 1.5 },
+  // 自陣寄りの遮蔽
+  { kind: 'wall', x: -16, z: 1.5, hx: 0.5, hz: 2.4, h: 2.6 },
+  { kind: 'wall', x: -17, z: -17, hx: 2.4, hz: 0.3, h: 1.2 },
+  { kind: 'wall', x: -4, z: 18, hx: 2.4, hz: 0.3, h: 1.2 },
+  { kind: 'block', x: -19, z: 12, hx: 0.9, hz: 0.9, h: 1.5 },
+  { kind: 'block', x: -31, z: 14, hx: 1.4, hz: 1.4, h: 2.2 },
+  { kind: 'block', x: -30.5, z: -17, hx: 0.9, hz: 0.9, h: 1.5 },
+  { kind: 'wall', x: -3, z: -19.5, hx: 2.4, hz: 0.5, h: 2.6 },
+  // 広げたぶんの追加
+  { kind: 'wall', x: -26, z: -2, hx: 0.5, hz: 2, h: 1.2 },
+  { kind: 'block', x: -18, z: -10, hx: 0.9, hz: 0.9, h: 1.5 },
+  { kind: 'pillar', x: -24, z: 21, hx: 0.8, hz: 0.8, h: 4.2 },
+  { kind: 'wall', x: -11, z: 22, hx: 0.3, hz: 2, h: 1.2 },
+  { kind: 'block', x: -36, z: -9, hx: 0.9, hz: 0.9, h: 1.5 },
 ];
 
 const CYAN = 0x49e6ff;
@@ -34,7 +43,7 @@ const glowMat = (color: number, opacity = 1) => new THREE.MeshBasicMaterial({ co
 
 /** 床の模様（六角グリッド）をキャンバスに描く。base=地の色, emissive=光る線 */
 function floorTextures() {
-  const W = 1024, H = 640; // 64m x 40m → 16px/m
+  const W = HALF_X * 2 * 16, H = HALF_Z * 2 * 16; // 16px/m
   const mk = () => { const c = document.createElement('canvas'); c.width = W; c.height = H; return c; };
   const base = mk(), emi = mk();
   const b = base.getContext('2d')!, e = emi.getContext('2d')!;

@@ -1,10 +1,10 @@
 import * as THREE from 'three';
 import { heroModel, type HeroModel } from './assets';
-import { HEROES, type Aim, type HeroDef, type SkillDef } from './heroes';
+import { HEROES, type Aim, type AimShape, type HeroDef, type SkillDef } from './heroes';
 import { Stage, BEACON_POS, BEACON_RADIUS, SPAWNS, SPAWN_RADIUS, TEAM_COLORS } from './stage';
 import { Fx } from './fx';
 import { sfx } from './audio';
-import type { Input } from './input';
+import type { Input, AimInput, Slot } from './input';
 import type { Hud } from './hud';
 
 export const MATCH_TIME = 180;
@@ -52,6 +52,11 @@ const angleLerp = (a: number, b: number, t: number) => {
   return a + d * Math.min(1, t);
 };
 const dist2D = (a: THREE.Vector3, b: THREE.Vector3) => Math.hypot(a.x - b.x, a.z - b.z);
+/** 弾数（ブロスタ風のゲージ）。撃つと減り、時間で1発ずつ戻る */
+export const AMMO_MAX = 3;
+/** 視点は固定（青チームから赤チームの方を見る） */
+const CAM_YAW = Math.PI / 2;
+const CAM_PITCH = 0.98;
 
 export class Unit {
   pos = new THREE.Vector3();
@@ -60,6 +65,7 @@ export class Unit {
   alive = true; respawn = 0;
   atkCd = 0; cds = [0, 0]; ult = 0;
   stun = 0; slow = 0; stealth = 0; invuln = 0; lock = 0; swing = 0;
+  ammo = AMMO_MAX; reloadT = 0; fireCd = 0;
   lastHit = 99;
   kills = 0; deaths = 0;
   moveDir = new THREE.Vector3();
@@ -93,6 +99,8 @@ export class Unit {
   }
 
   get name() { return this.def.name; }
+  /** 1発ぶん回復するまでの秒数 */
+  get reloadTime() { return this.def.interval * 1.15; }
   power() { return this.def.atk * this.statMul * (1 + this.buffSum('atk')); }
   speed() { return this.def.speed * (1 + this.buffSum('speed')) * (this.slow > 0 ? 0.55 : 1); }
   defense() { return Math.min(0.8, this.buffSum('def')); }
@@ -177,9 +185,7 @@ export class Match {
   overtime = false;
   state: 'intro' | 'play' | 'over' = 'intro';
   intro = 3.6;
-  camYaw = Math.PI / 2;
-  camPitch = 0.6;  // 見下ろし角(rad)。上下ドラッグで調整できる
-  camZoom = 1;     // ホイールで調整
+  camYaw = CAM_YAW;
   result: MatchResult | null = null;
   private projectiles: Projectile[] = [];
   private timers: { t: number; fn: () => void; owner: Unit | null }[] = [];
@@ -197,9 +203,11 @@ export class Match {
   rounds: [number, number] = [0, 0];
   round = 1;
   private pendingRound = false;
-  /** プレイヤーが照準を合わせている敵（いなければ null） */
-  aimLock: Unit | null = null;
-  private aimLine: THREE.Mesh;
+  /** 引っぱって狙っている間の予告表示 */
+  private indicator = new THREE.Group();
+  private indLine: THREE.Mesh; private indArea: THREE.Mesh; private indSelf: THREE.Mesh; private indArc: THREE.Mesh;
+  private ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+  private ray = new THREE.Raycaster();
 
   constructor(playerHero: HeroDef, opts: MatchOptions, private input: Input, private hud: Hud, private onEnd: (r: MatchResult) => void) {
     const s = this.scene;
@@ -233,11 +241,16 @@ export class Match {
     }));
     this.player = this.units[0];
 
-    // 照準の補助線（足元から前方へ）
-    this.aimLine = new THREE.Mesh(new THREE.PlaneGeometry(0.14, 1).rotateX(-Math.PI / 2).translate(0, 0, 0.5),
-      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.35, depthWrite: false }));
-    this.aimLine.position.y = 0.11;
-    s.add(this.aimLine);
+    // 予告表示: 直線（弾・突進）、扇（近接攻撃）、範囲（着弾地点）、自分中心の円
+    const indMat = () => new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.3, depthWrite: false, side: THREE.DoubleSide });
+    this.indLine = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2).translate(0, 0, 0.5), indMat());
+    this.indArc = new THREE.Mesh(new THREE.CircleGeometry(1, 24, Math.PI / 2 - 1.05, 2.1).rotateX(-Math.PI / 2), indMat());
+    this.indArea = new THREE.Mesh(new THREE.CircleGeometry(1, 40).rotateX(-Math.PI / 2), indMat());
+    this.indSelf = new THREE.Mesh(new THREE.RingGeometry(0.94, 1, 48).rotateX(-Math.PI / 2), indMat());
+    this.indicator.add(this.indLine, this.indArc, this.indArea, this.indSelf);
+    this.indicator.position.y = 0.12;
+    this.indicator.visible = false;
+    s.add(this.indicator);
 
     const beaconIdx = this.mode.id === 'dom' ? [0, 1, 2, 3, 4] : this.mode.id === 'control' ? [2] : [];
     beaconIdx.forEach((bi) => {
@@ -286,7 +299,7 @@ export class Match {
     target.hp -= dmg;
     target.lastHit = 0; target.flash = 1;
     src.lastHit = Math.min(src.lastHit, 3);
-    src.ult = Math.min(1, src.ult + dmg / 3000);
+    src.ult = Math.min(1, src.ult + dmg / 1500);
     target.ult = Math.min(1, target.ult + dmg / 6000);
     this.hud.floatText(target.pos, `${dmg}`, target.isPlayer ? 'hurt' : src.isPlayer ? 'deal' : 'other');
     if (target.isPlayer || src.isPlayer) sfx.hit();
@@ -380,48 +393,107 @@ export class Match {
     u.yaw = u.team === 0 ? Math.PI / 2 : -Math.PI / 2;
   }
 
-  /** 視点の向き（照準）に一番近い敵。近いほど判定は甘く、近接は広い扇形で拾う */
-  private aimedTarget(u: Unit, range: number, cone: number): Unit | null {
-    const fx = Math.sin(this.camYaw), fz = Math.cos(this.camYaw);
-    let best: Unit | null = null, bestScore = Infinity;
+  /** 自動照準: 届く範囲で一番近い、見えている敵 */
+  private nearestEnemy(u: Unit, reach: number): Unit | null {
+    let best: Unit | null = null, bd = reach + UNIT_RADIUS;
     for (const e of this.enemiesOf(u)) {
       if (!e.alive || e.stealth > 0) continue;
-      const dx = e.pos.x - u.pos.x, dz = e.pos.z - u.pos.z, d = Math.hypot(dx, dz);
-      if (d > range + UNIT_RADIUS) continue;
-      const ang = d < 0.01 ? 0 : Math.acos(Math.max(-1, Math.min(1, (dx * fx + dz * fz) / d)));
-      if (ang > cone + 1.3 / Math.max(1, d) && d > 2.2) continue;
-      if (u.def.ranged && this.stage.blockedLine(u.pos, e.pos)) continue;
-      const score = ang + d * 0.01;
-      if (score < bestScore) { bestScore = score; best = e; }
+      const d = dist2D(e.pos, u.pos);
+      if (d < bd && !(u.def.ranged && d > 3 && this.stage.blockedLine(u.pos, e.pos))) { bd = d; best = e; }
     }
     return best;
   }
 
-  private aimFor(u: Unit): Aim {
-    let target: Unit | null = null;
-    if (u.isPlayer) {
-      target = this.aimedTarget(u, 17, 0.3);
-    } else {
-      let best = 17;
-      for (const e of this.enemiesOf(u)) {
-        if (!e.alive || e.stealth > 0) continue;
-        const d = dist2D(e.pos, u.pos);
-        if (d < best) { best = d; target = e; }
+  /** 自動照準の Aim。敵がいなければ向いている方向へ */
+  private autoAim(u: Unit, reach: number): Aim {
+    const target = this.nearestEnemy(u, Math.max(reach, 3) + 2);
+    const dir = target ? target.pos.clone().sub(u.pos).setY(0) : new THREE.Vector3(Math.sin(u.yaw), 0, Math.cos(u.yaw));
+    if (dir.lengthSq() < 1e-4) dir.set(Math.sin(u.yaw), 0, Math.cos(u.yaw));
+    dir.normalize();
+    return { dir, target, point: target ? target.pos.clone() : u.pos.clone().addScaledVector(dir, Math.max(reach, 1) * 0.6) };
+  }
+
+  /** 入力（タップ/引っぱり/マウス）を Aim にする */
+  private aimFromInput(u: Unit, a: AimInput, shape: AimShape): Aim {
+    const reach = Math.abs(shape.reach);
+    if (a.cursor) {
+      const ndc = new THREE.Vector2((a.cursor[0] / innerWidth) * 2 - 1, -(a.cursor[1] / innerHeight) * 2 + 1);
+      this.ray.setFromCamera(ndc, this.camera);
+      const hit = this.ray.ray.intersectPlane(this.ground, new THREE.Vector3());
+      if (hit) {
+        const off = hit.sub(u.pos).setY(0), len = off.length();
+        if (len > 0.2) {
+          const dir = off.divideScalar(len);
+          return { dir, target: null, manual: true, point: u.pos.clone().addScaledVector(dir, Math.min(len, reach || len)) };
+        }
       }
+      return this.autoAim(u, reach);
     }
-    const fwd = u.isPlayer ? new THREE.Vector3(Math.sin(this.camYaw), 0, Math.cos(this.camYaw)) : new THREE.Vector3(Math.sin(u.yaw), 0, Math.cos(u.yaw));
-    const dir = target ? target.pos.clone().sub(u.pos).setY(0).normalize() : fwd;
-    if (dir.lengthSq() < 0.5) dir.copy(fwd);
-    return { dir, target, point: target ? target.pos.clone() : u.pos.clone().addScaledVector(dir, 6) };
+    if (!a.manual) return this.autoAim(u, reach);
+    const f = new THREE.Vector3(Math.sin(CAM_YAW), 0, Math.cos(CAM_YAW)), r = new THREE.Vector3(-f.z, 0, f.x);
+    const dir = f.multiplyScalar(a.y).addScaledVector(r, a.x);
+    const k = dir.length();
+    if (k < 1e-4) return this.autoAim(u, reach);
+    dir.divideScalar(k);
+    return { dir, target: null, manual: true, point: u.pos.clone().addScaledVector(dir, Math.max(0.15, k) * reach) };
+  }
+
+  /** 通常攻撃の狙い方 */
+  private attackShape(u: Unit): AimShape {
+    return u.def.ranged ? { kind: 'line', reach: u.def.range, width: 0.9 } : { kind: 'line', reach: u.def.range + 0.6, width: 0 };
+  }
+
+  /** 通常攻撃を1発撃つ（弾を1つ使う） */
+  attack(u: Unit, aim: Aim) {
+    if (this.state !== 'play' || !u.alive || u.stun > 0 || u.lock > 0 || u.dashing || u.ammo < 1 || u.fireCd > 0) return false;
+    u.ammo -= 1;
+    u.fireCd = u.isPlayer ? 0.28 : u.def.interval;
+    u.swing = Math.min(0.45, u.def.interval * 0.5); u.stealth = 0;
+    u.yaw = Math.atan2(aim.dir.x, aim.dir.z);
+    u.playOnce(u.nextAttackAnim(), Math.min(0.6, u.def.interval * 0.9));
+    const dir = aim.dir.clone();
+    // AI は動く相手の少し先を狙う（プレイヤーは狙ったとおりに飛ぶ）
+    if (!u.isPlayer && aim.target && u.def.ranged) {
+      const t = aim.target, d = dist2D(t.pos, u.pos);
+      const lead = t.pos.clone().addScaledVector(t.moveDir, t.speed() * (d / 30) * 0.5);
+      dir.copy(lead.sub(u.pos).setY(0)).normalize();
+    }
+    this.caster = u;
+    this.after(u.def.ranged ? 0.1 : 0.12, () => {
+      if (u.def.ranged) {
+        this.shoot(u, dir, { speed: 30, range: u.def.range + 1, radius: 0.5, dmg: u.power(), color: u.def.color });
+        return;
+      }
+      // 近接: 前方の扇形（約120度）に入った敵すべてに当たる
+      const yaw = Math.atan2(dir.x, dir.z);
+      this.fx.slash(u.pos, yaw, u.def.range + 0.4, u.def.color);
+      for (const e of this.enemiesOf(u)) {
+        if (!e.alive) continue;
+        const ox = e.pos.x - u.pos.x, oz = e.pos.z - u.pos.z, d = Math.hypot(ox, oz);
+        if (d > u.def.range + UNIT_RADIUS + 0.6) continue;
+        if (d > 0.8 && (ox * dir.x + oz * dir.z) / d < 0.5) continue;
+        this.damage(e, u.power(), u);
+      }
+    });
+    this.caster = null;
+    return true;
+  }
+
+  /** プレイヤーの入力（攻撃・スキル）を実行する */
+  private handleFire(a: AimInput) {
+    const p = this.player;
+    if (a.slot === 'atk') { this.attack(p, this.aimFromInput(p, a, this.attackShape(p))); return; }
+    const i = a.slot as number;
+    this.cast(p, i, this.aimFromInput(p, a, this.skillOf(p, i).aim));
   }
 
   skillOf(u: Unit, i: number): SkillDef { return i < 2 ? u.def.skills[i] : u.def.ults[u.ultIdx]; }
   skillReady(u: Unit, i: number) { return i < 2 ? u.cds[i] <= 0 : u.ult >= 1; }
 
-  cast(u: Unit, i: number) {
+  cast(u: Unit, i: number, aimIn?: Aim) {
     if (this.state !== 'play' || !u.alive || u.stun > 0 || u.lock > 0 || u.dashing || !this.skillReady(u, i)) return false;
     const s = this.skillOf(u, i);
-    const aim = this.aimFor(u);
+    const aim = aimIn ?? this.autoAim(u, Math.max(Math.abs(s.aim.reach), s.aim.radius ?? 0, 6));
     if (i < 2) u.cds[i] = s.cd; else u.ult = 0;
     u.lock = s.lock; u.swing = 0; u.stealth = 0;
     u.yaw = Math.atan2(aim.dir.x, aim.dir.z);
@@ -437,9 +509,6 @@ export class Match {
 
   update(rawDt: number) {
     const dt = Math.min(0.05, rawDt);
-    this.camYaw -= this.input.takeCamDelta() * 0.006;
-    this.camPitch = Math.max(0.3, Math.min(1.15, this.camPitch + this.input.takeCamDeltaY() * 0.004));
-    this.camZoom = Math.max(0.7, Math.min(1.6, this.camZoom * Math.exp(this.input.takeZoom() * 0.001)));
 
     if (this.intro > -1) {
       this.intro -= dt;
@@ -475,7 +544,7 @@ export class Match {
     const f = new THREE.Vector3(Math.sin(this.camYaw), 0, Math.cos(this.camYaw));
     const r = new THREE.Vector3(-f.z, 0, f.x);
     p.moveDir.copy(f).multiplyScalar(iy).addScaledVector(r, ix);
-    for (let i = 0; i < 3; i++) if (this.input.takeSkill(i)) this.cast(p, i);
+    for (const a of this.input.takeFires()) this.handleFire(a);
     for (const u of this.units) if (!u.isPlayer && u.alive) this.think(u, dt);
 
     for (const u of this.units) this.stepUnit(u, dt);
@@ -554,7 +623,7 @@ export class Match {
     this.fx.clear();
     for (const u of this.units) {
       u.alive = true; u.hp = u.maxHp; u.respawn = 0; u.group.visible = true; u.invuln = 0;
-      u.clearStatus(); u.cds = [0, 0]; u.atkCd = 0;
+      u.clearStatus(); u.cds = [0, 0]; u.atkCd = 0; u.ammo = AMMO_MAX; u.fireCd = 0;
       this.placeAtSpawn(u);
       u.group.position.copy(u.pos); u.model.settle();
       u.stopOnce(); u.setLoop(u.def.idle);
@@ -583,7 +652,7 @@ export class Match {
       u.group.visible = u.respawn > RESPAWN_TIME - 2.5;
       if (this.mode.id === 'clash') { u.respawn = Math.max(0.01, u.respawn); return; }
       if (u.respawn <= 0) {
-        u.alive = true; u.hp = u.maxHp; u.invuln = 2.5; u.group.visible = true;
+        u.alive = true; u.hp = u.maxHp; u.invuln = 2.5; u.group.visible = true; u.ammo = AMMO_MAX;
         this.placeAtSpawn(u);
         u.group.position.copy(u.pos); u.model.settle();
         u.stopOnce(); u.setLoop(u.def.idle);
@@ -593,9 +662,10 @@ export class Match {
       return;
     }
     u.atkCd -= dt; u.cds[0] -= dt; u.cds[1] -= dt;
-    u.stun -= dt; u.slow -= dt; u.stealth -= dt; u.invuln -= dt; u.lock -= dt; u.swing -= dt;
+    u.stun -= dt; u.slow -= dt; u.stealth -= dt; u.invuln -= dt; u.lock -= dt; u.swing -= dt; u.fireCd -= dt;
+    if (u.ammo < AMMO_MAX) { u.reloadT += dt; if (u.reloadT >= u.reloadTime) { u.reloadT = 0; u.ammo = Math.min(AMMO_MAX, u.ammo + 1); } } else u.reloadT = 0;
     u.lastHit += dt;
-    u.ult = Math.min(1, u.ult + dt / 55);
+    u.ult = Math.min(1, u.ult + dt / 150); // 必殺技は主に攻撃を当てて溜める
     u.tickBuffs(dt);
 
     // 自陣で回復 / 敵陣でダメージ / 非戦闘時の自然回復
@@ -619,44 +689,24 @@ export class Match {
       const canMove = u.stun <= 0 && u.lock <= 0;
       const len = u.moveDir.length();
       if (canMove && len > 0.12) {
-        const sp = u.speed() * (u.swing > 0 ? 0.45 : 1) * Math.min(1, len);
+        const sp = u.speed() * Math.min(1, len); // 攻撃中も足は止めない
         u.pos.addScaledVector(u.moveDir, (sp / len) * dt);
         if (u.swing <= 0) u.yaw = angleLerp(u.yaw, Math.atan2(u.moveDir.x, u.moveDir.z), dt * 14);
         u.setLoop(u.def.run);
       } else {
-        if (u.isPlayer && canMove && u.swing <= 0) u.yaw = angleLerp(u.yaw, this.camYaw, dt * 10);
         u.setLoop(u.def.idle);
       }
       if (u.push.lengthSq() > 0.01) { u.pos.addScaledVector(u.push, dt); u.push.multiplyScalar(Math.exp(-dt * 9)); }
     }
     this.stage.resolve(u.pos, UNIT_RADIUS);
 
-    // 通常攻撃（射程内の一番近い敵を自動で攻撃）
-    let target: Unit | null = null, best = u.def.range + UNIT_RADIUS;
-    if (u.isPlayer) target = this.aimLock = this.aimedTarget(u, u.def.range, u.def.ranged ? 0.2 : 1.0);
-    else for (const e of this.enemiesOf(u)) {
-      if (!e.alive || e.stealth > 0) continue;
-      const d = dist2D(e.pos, u.pos);
-      if (d < best && !(u.def.ranged && this.stage.blockedLine(u.pos, e.pos))) { best = d; target = e; }
-    }
+    // 通常攻撃: AI は射程内に敵がいれば撃つ（プレイヤーはボタンで撃つ）
+    if (u.isPlayer) { u.target = null; return; }
+    const target = this.nearestEnemy(u, u.def.range);
     u.target = target;
-    if (target && u.swing > 0) u.yaw = angleLerp(u.yaw, Math.atan2(target.pos.x - u.pos.x, target.pos.z - u.pos.z), dt * 18);
-    if (target && u.atkCd <= 0 && u.stun <= 0 && u.lock <= 0 && !u.dashing) {
-      u.atkCd = u.def.interval; u.swing = Math.min(0.5, u.def.interval * 0.6); u.stealth = 0;
-      u.playOnce(u.nextAttackAnim(), u.def.interval * 0.95);
-      const t = target;
-      this.caster = u;
-      this.after(u.def.ranged ? 0.22 : 0.26, () => {
-        if (!t.alive) return;
-        if (u.def.ranged) {
-          const dir = t.pos.clone().sub(u.pos).setY(0).normalize();
-          this.shoot(u, dir, { speed: 30, range: u.def.range + 6, radius: 0.5, dmg: u.power(), color: u.def.color, homing: t });
-        } else if (dist2D(t.pos, u.pos) < u.def.range + 1.6) {
-          this.fx.slash(u.pos, u.yaw, u.def.range + 0.4, u.def.color);
-          this.damage(t, u.power(), u);
-        }
-      });
-      this.caster = null;
+    if (target && u.fireCd <= 0 && u.ammo >= 1) {
+      const dir = target.pos.clone().sub(u.pos).setY(0).normalize();
+      this.attack(u, { dir, target, point: target.pos.clone() });
     }
   }
 
@@ -740,17 +790,16 @@ export class Match {
 
   private updateCamera(dt: number, snap: boolean) {
     const p = this.player, cam = this.camera;
-    const f = new THREE.Vector3(Math.sin(this.camYaw), 0, Math.cos(this.camYaw));
+    const f = new THREE.Vector3(Math.sin(CAM_YAW), 0, Math.cos(CAM_YAW));
     const portrait = cam.aspect < 1;
     // 縦画面は横の視野が狭くなるので、横方向の視野角を保つように縦の画角を広げる
-    const fov = portrait ? Math.min(78, THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(27)) / cam.aspect))) : 50;
+    const fov = portrait ? Math.min(70, THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(24)) / cam.aspect))) : 46;
     if (Math.abs(cam.fov - fov) > 0.01) { cam.fov = fov; cam.updateProjectionMatrix(); }
-    // キャラの背後・斜め上から。注視点を前方に置き、キャラを画面の下寄りに映して前を広く見せる
-    const dist = (portrait ? 9.5 : 10.5) * this.camZoom;
-    const lead = portrait ? 4.2 : 3.6;
-    const wantLook = p.pos.clone().addScaledVector(f, lead).setY(1.5);
-    const wantPos = p.pos.clone().addScaledVector(f, -dist * Math.cos(this.camPitch)).setY(1.5 + dist * Math.sin(this.camPitch));
-    const k = snap ? 1 : 1 - Math.exp(-dt * 10);
+    // ブロスタ風: 斜め上から固定。自分は画面の少し下に映り、前（敵陣側）が広く見える
+    const dist = portrait ? 17 : 16;
+    const wantLook = p.pos.clone().addScaledVector(f, portrait ? 3 : 2).setY(0.8);
+    const wantPos = wantLook.clone().addScaledVector(f, -dist * Math.cos(CAM_PITCH)).setY(0.8 + dist * Math.sin(CAM_PITCH));
+    const k = snap ? 1 : 1 - Math.exp(-dt * 8);
     this.camLook.lerp(wantLook, k); this.camPos.lerp(wantPos, k);
     cam.position.copy(this.camPos);
     if (this.shakeAmt > 0.01) {
@@ -764,14 +813,35 @@ export class Match {
     const cx = Math.round(this.camLook.x / step) * step, cz = Math.round(this.camLook.z / step) * step;
     this.sun.position.set(cx - 18, 34, cz + 14);
     this.sun.target.position.set(cx, 0, cz);
-    // 照準線: 射程ぶんだけ前方へ。敵を捉えると黄色くなる
-    const line = this.aimLine, lock = p.alive ? this.aimLock : null;
-    line.visible = p.alive && this.state === 'play';
-    line.position.set(p.pos.x, 0.11, p.pos.z);
-    line.rotation.y = lock ? Math.atan2(lock.pos.x - p.pos.x, lock.pos.z - p.pos.z) : this.camYaw;
-    line.scale.z = lock ? Math.max(1, dist2D(lock.pos, p.pos)) : Math.min(p.def.range, 12);
-    (line.material as THREE.MeshBasicMaterial).color.set(lock ? 0xffd60a : 0xffffff);
-    (line.material as THREE.MeshBasicMaterial).opacity = lock ? 0.8 : 0.3;
+    this.updateIndicator();
+  }
+
+  /** 攻撃・スキルを狙っている間、地面に届く範囲を出す */
+  private updateIndicator() {
+    const p = this.player, a = this.input.aiming, ind = this.indicator;
+    const slot: Slot | undefined = a?.slot;
+    const ready = a && p.alive && this.state === 'play' && (slot === 'atk' ? p.ammo >= 1 : this.skillReady(p, slot as number));
+    ind.visible = !!ready;
+    if (!a || !ready) return;
+    const shape = slot === 'atk' ? this.attackShape(p) : this.skillOf(p, slot as number).aim;
+    const aim = this.aimFromInput(p, a, shape);
+    for (const m of ind.children) m.visible = false;
+    ind.position.set(p.pos.x, 0.12, p.pos.z);
+    const color = a.manual ? 0xffd60a : 0xffffff;
+    for (const m of ind.children as THREE.Mesh[]) (m.material as THREE.MeshBasicMaterial).color.set(color);
+    const yaw = Math.atan2(aim.dir.x, aim.dir.z);
+    if (shape.kind === 'line' && !shape.width) { // 近接の扇
+      this.indArc.visible = true; this.indArc.rotation.y = yaw - Math.PI / 2; this.indArc.scale.setScalar(shape.reach);
+    } else if (shape.kind === 'line') {
+      this.indLine.visible = true; this.indLine.rotation.y = yaw; this.indLine.scale.set(shape.width!, 1, Math.min(Math.abs(shape.reach), 30));
+    } else if (shape.kind === 'area') {
+      const r = shape.radius ?? 3;
+      this.indSelf.visible = true; this.indSelf.scale.setScalar(Math.abs(shape.reach)); this.indSelf.position.set(0, 0, 0);
+      this.indArea.visible = true; this.indArea.scale.setScalar(r);
+      this.indArea.position.set(aim.point.x - p.pos.x, 0, aim.point.z - p.pos.z);
+    } else {
+      this.indSelf.visible = true; this.indSelf.position.set(0, 0, 0); this.indSelf.scale.setScalar(shape.radius ?? 2);
+    }
   }
 
   // ---------- AI ----------

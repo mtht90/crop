@@ -3,7 +3,8 @@ import type { Match, Unit } from './game';
 import { HALF_X, HALF_Z, BEACON_RADIUS, SPAWNS } from './stage';
 import { portraitOf } from './assets';
 import { iconSvg } from './icons';
-import type { Input } from './input';
+import type { Input, Slot } from './input';
+import { AMMO_MAX } from './game';
 
 const $ = (id: string) => document.getElementById(id)!;
 const el = (tag: string, cls = '', text = '') => { const e = document.createElement(tag); e.className = cls; e.textContent = text; return e; };
@@ -18,6 +19,8 @@ export class Hud {
   private chips: { root: HTMLElement; fill: HTMLElement }[] = [];
   private tiles = new Map<Unit, { root: HTMLElement; bar: HTMLElement; timer: HTMLElement }>();
   private buttons: { root: HTMLElement; ico: HTMLElement; sweep: HTMLElement; num: HTMLElement; name: HTMLElement }[] = [];
+  private ammoEls: HTMLElement[] = [];
+  private plateAmmo: HTMLElement[] = [];
   private map = ($('minimap') as HTMLCanvasElement).getContext('2d')!;
   private annT = 0; private bannerT = 0; private lastCount = '';
   private w = 1; private h = 1;
@@ -31,9 +34,18 @@ export class Hud {
       face.append(ico, sweep, num);
       const name = el('div', 'sname');
       root.append(face, name, el('div', 'key', keys[i]));
-      root.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); input.press(i); });
+      input.bindButton(root, i as Slot);
       this.buttons.push({ root, ico, sweep, num, name });
     });
+    // 通常攻撃ボタン（弾数ゲージ付き）
+    const atk = $('attack');
+    const face = el('div', 'face'); const ico = el('div', 'ico'); ico.innerHTML = iconSvg('attack');
+    const ammo = el('div', 'ammo');
+    for (let i = 0; i < AMMO_MAX; i++) { const seg = el('i'); seg.append(el('b')); ammo.append(seg); }
+    face.append(ico, ammo);
+    atk.append(face, el('div', 'sname', '攻撃'), el('div', 'key', 'CLICK'));
+    input.bindButton(atk, 'atk');
+    this.ammoEls.push(...[...ammo.children].map((c) => c.firstElementChild as HTMLElement));
   }
 
   resize(w: number, h: number) { this.w = w; this.h = h; }
@@ -46,6 +58,12 @@ export class Hud {
       const root = el('div', `plate ${CSS_TEAM[u.team]}${u.isPlayer ? ' me' : ''}`);
       const track = el('div', 'ptrack'); const bar = el('div', 'pbar');
       track.append(bar); root.append(el('div', 'pname', u.isPlayer ? 'YOU' : u.name), track);
+      if (u.isPlayer) { // 自分の頭上には弾数も出す
+        const ammo = el('div', 'pammo');
+        this.plateAmmo = [];
+        for (let i = 0; i < AMMO_MAX; i++) { const seg = el('i'); const fill = el('b'); seg.append(fill); ammo.append(seg); this.plateAmmo.push(fill); }
+        root.append(ammo);
+      }
       $('plates').append(root);
       this.plates.set(u, { root, bar });
 
@@ -105,14 +123,14 @@ export class Hud {
     const pct = m.mode.id === 'control' ? '%' : '';
     $('score-blue').textContent = c[0] + pct; $('score-red').textContent = c[1] + pct;
     $('goal').textContent = m.goalText();
-    // 照準: 敵を捉えたらその敵に重ね、いなければ視点の前方に置く
-    const ret = $('reticle'), lock = p.alive ? m.aimLock : null;
-    const reach = Math.min(p.def.range, 12);
-    const aim = lock ? lock.pos : v.set(p.pos.x + Math.sin(m.camYaw) * reach, 0, p.pos.z + Math.cos(m.camYaw) * reach).clone();
-    const [rx, ry, rf] = this.project(aim, 1.5, cam);
-    ret.hidden = !p.alive || !rf || m.state !== 'play';
-    ret.style.transform = `translate(${rx}px,${ry}px) translate(-50%,-50%)`;
-    ret.classList.toggle('lock', !!lock);
+    // 弾数: 溜まっているぶんは満タン、回復中の1つは途中まで
+    const reload = p.reloadT / p.reloadTime;
+    for (const list of [this.ammoEls, this.plateAmmo]) list.forEach((fill, i) => {
+      const k = i < Math.floor(p.ammo) ? 1 : i === Math.floor(p.ammo) ? reload : 0;
+      fill.style.width = `${k * 100}%`;
+      fill.classList.toggle('full', k >= 1);
+    });
+    $('attack').classList.toggle('ready', p.ammo >= 1 && p.alive);
     for (const [u, tile] of this.tiles) {
       tile.bar.style.width = `${(u.hp / u.maxHp) * 100}%`;
       tile.root.classList.toggle('dead', !u.alive);

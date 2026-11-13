@@ -110,10 +110,6 @@ button.primary:active { translate: 0 4px; box-shadow: 0 2px 0 #9a6400; }
 
 #goal { font: italic 800 13px var(--num); letter-spacing: .06em; color: var(--y); white-space: nowrap; }
 #goal:empty, #beacons:empty { display: none; }
-#reticle { position: absolute; left: 0; top: 0; width: 34px; height: 34px; border-radius: 50%; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .55); transition: width .08s, height .08s; }
-#reticle::after { content: ""; position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px; border-radius: 50%; background: #fff; }
-#reticle.lock { width: 52px; height: 52px; box-shadow: inset 0 0 0 3px var(--y), 0 0 12px var(--y); }
-#reticle.lock::after { background: var(--y); }
 #minimap { position: absolute; left: max(10px, env(safe-area-inset-left)); top: max(10px, env(safe-area-inset-top)); width: 150px; height: 94px; box-shadow: 0 0 0 2px var(--line); clip-path: polygon(0 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%); }
 
 .plate { position: absolute; left: 0; top: 0; width: 70px; text-align: center; will-change: transform; }
@@ -241,3 +237,24 @@ button.primary:active { translate: 0 4px; box-shadow: 0 2px 0 #9a6400; }
   #mode-desc { font-size: 10.5px; padding: 2px 8px; } #info h2 { font-size: 22px; } #i-img { width: 44px; height: 44px; } .sk { margin-top: 2px; }
   button.primary { font-size: 18px; padding: 9px 44px; } #diff button { padding: 7px 12px; font-size: 12px; }
 }
+
+/* ---------- ブロスタ風ボタン配置: 右下に大きな攻撃ボタン、周りにスキルと必殺技 ---------- */
+#skills { display: block; width: 250px; height: 236px; pointer-events: none; transform-origin: 100% 100%; }
+#skills .skill { position: absolute; pointer-events: auto; touch-action: none; }
+#attack { right: 0; bottom: 0; width: 116px; }
+#attack .face { width: 116px; height: 116px; background: radial-gradient(circle at 35% 25%, #7a4a3a, #3a1c18 70%); color: rgba(255, 255, 255, .5); }
+#attack.ready .face { color: #fff; background: radial-gradient(circle at 35% 25%, #ffb36b, #ff5a1f 55%, #c8320a); box-shadow: inset 0 0 0 4px #fff, 0 5px 0 rgba(13, 18, 38, .9), 0 0 20px rgba(255, 120, 40, .7); }
+#attack .ico { width: 46%; height: 46%; margin-top: -10px; }
+.ammo { position: absolute; bottom: 20px; left: 50%; translate: -50% 0; display: flex; gap: 4px; }
+.ammo i, .pammo i { display: block; width: 20px; height: 7px; background: rgba(13, 18, 38, .8); transform: skewX(-20deg); overflow: hidden; }
+.ammo b, .pammo b { display: block; height: 100%; width: 0; background: #ffd9a8; }
+.ammo b.full, .pammo b.full { background: #ff9a2e; }
+.pammo { display: flex; gap: 2px; justify-content: center; margin-top: 2px; }
+.pammo i { width: 21px; height: 5px; }
+#skill0 { right: 132px; bottom: 6px; }
+#skill1 { right: 122px; bottom: 116px; }
+#skill2 { right: 16px; bottom: 136px; width: 90px; }
+#skill2 .face { width: 90px; height: 90px; }
+.skill.held .face { scale: 1.1; }
+@media (max-width: 600px) { #skills { scale: .86; } }
+@media (max-height: 560px) { #skills { scale: .78; } }
