@@ -3,6 +3,7 @@
  * - 移動: 左側をタッチした場所に出るスティック / WASD
  * - 攻撃・スキル: ボタンをタップで自動照準、引っぱって離すと手動で狙う。中心に戻して離すとキャンセル
  * - PC: マウスで狙う。左クリック=攻撃、Q/E=スキル、Space=必殺技（押している間は予告を表示し、離すと発動）
+ * - 視点: 前に進むと自動で回り込む。スマホは画面右側をなぞる、PCは右ドラッグでも回せる
  */
 
 /** 'atk' = 通常攻撃、0/1 = スキル、2 = 必殺技 */
@@ -31,6 +32,9 @@ export class Input {
   private stick: { id: number; x0: number; y0: number; x: number; y: number } | null = null;
   private button: { id: number; slot: Slot; x0: number; y0: number; el: HTMLElement } | null = null;
   private mouse: [number, number] = [0, 0];
+  /** 視点を回すドラッグ（スマホは右側、PCは右クリック） */
+  private look: { id: number; x: number } | null = null;
+  private camDelta = 0;
   private keySlot: { code: string; slot: Slot } | null = null;
   private stickEl: HTMLElement; private knobEl: HTMLElement;
 
@@ -60,6 +64,7 @@ export class Input {
 
     surface.addEventListener('pointerdown', (e) => {
       if (e.pointerType === 'mouse') {
+        if (e.button === 2) { surface.setPointerCapture(e.pointerId); this.look = { id: e.pointerId, x: e.clientX }; return; }
         if (e.button !== 0) return;
         surface.setPointerCapture(e.pointerId);
         this.aiming = this.mouseAim('atk');
@@ -72,9 +77,13 @@ export class Input {
         this.stickEl.style.display = 'block';
         this.stickEl.style.left = `${e.clientX}px`; this.stickEl.style.top = `${e.clientY}px`;
         this.knobEl.style.transform = 'translate(-50%,-50%)';
+      } else if (e.clientX >= innerWidth * 0.5 && !this.look) {
+        surface.setPointerCapture(e.pointerId);
+        this.look = { id: e.pointerId, x: e.clientX };
       }
     });
     surface.addEventListener('pointermove', (e) => {
+      if (this.look?.id === e.pointerId) { this.camDelta += e.clientX - this.look.x; this.look.x = e.clientX; return; }
       if (this.stick?.id !== e.pointerId) return;
       let dx = e.clientX - this.stick.x0, dy = e.clientY - this.stick.y0;
       const len = Math.hypot(dx, dy);
@@ -84,6 +93,7 @@ export class Input {
     });
     const end = (e: PointerEvent) => {
       if (this.stick?.id === e.pointerId) { this.stick = null; this.stickEl.style.display = 'none'; }
+      if (this.look?.id === e.pointerId) this.look = null;
       if (e.pointerType === 'mouse' && this.aiming?.slot === 'atk' && this.aiming.cursor) { this.fires.push(this.mouseAim('atk')); this.aiming = null; }
     };
     surface.addEventListener('pointerup', end);
@@ -147,9 +157,14 @@ export class Input {
     return l > 1 ? [x / l, y / l] : [x, y];
   }
 
+  /** 視点を回した量（画面上のピクセル） */
+  takeCamDelta() { const d = this.camDelta; this.camDelta = 0; return d; }
+  /** 自分で視点を回している最中か */
+  get looking() { return !!this.look; }
+
   /** 発動待ちの攻撃・スキルを取り出す */
   takeFires() { const f = this.fires; this.fires = []; return f; }
   /** 自動テスト・デバッグ用 */
   push(a: AimInput) { this.fires.push(a); }
-  reset() { this.fires = []; this.aiming = null; this.button = null; this.keySlot = null; }
+  reset() { this.fires = []; this.aiming = null; this.button = null; this.keySlot = null; this.look = null; this.camDelta = 0; }
 }

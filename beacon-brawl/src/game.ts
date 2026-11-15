@@ -60,9 +60,11 @@ const angleLerp = (a: number, b: number, t: number) => {
 const dist2D = (a: THREE.Vector3, b: THREE.Vector3) => Math.hypot(a.x - b.x, a.z - b.z);
 /** 弾数（ブロスタ風のゲージ）。撃つと減り、時間で1発ずつ戻る */
 export const AMMO_MAX = 3;
-/** 視点は固定（青チームから赤チームの方を見る） */
+/** 視点: キャラの斜め後ろから。開始時は敵陣（+X）の方を向く */
 const CAM_YAW = Math.PI / 2;
-const CAM_PITCH = 0.98;
+const CAM_PITCH = 0.62;
+/** 前に進んでいるとき、カメラが進行方向へ回り込む速さ（1秒あたりの割合） */
+const CAM_FOLLOW = 1.6;
 
 export class Unit {
   pos = new THREE.Vector3();
@@ -192,6 +194,8 @@ export class Match {
   state: 'intro' | 'play' | 'over' = 'intro';
   intro = 3.6;
   camYaw = CAM_YAW;
+  /** 移動の基準にしているカメラの向きと、その時のスティックの向き */
+  private moveRef: { yaw: number; stick: number } | null = null;
   result: MatchResult | null = null;
   private projectiles: Projectile[] = [];
   private timers: { t: number; fn: () => void; owner: Unit | null }[] = [];
@@ -434,7 +438,7 @@ export class Match {
       return this.autoAim(u, reach);
     }
     if (!a.manual) return this.autoAim(u, reach);
-    const f = new THREE.Vector3(Math.sin(CAM_YAW), 0, Math.cos(CAM_YAW)), r = new THREE.Vector3(-f.z, 0, f.x);
+    const f = new THREE.Vector3(Math.sin(this.camYaw), 0, Math.cos(this.camYaw)), r = new THREE.Vector3(-f.z, 0, f.x);
     const dir = f.multiplyScalar(a.y).addScaledVector(r, a.x);
     const k = dir.length();
     if (k < 1e-4) return this.autoAim(u, reach);
@@ -546,9 +550,24 @@ export class Match {
     // 操作
     const p = this.player;
     const [ix, iy] = this.input.move();
-    const f = new THREE.Vector3(Math.sin(this.camYaw), 0, Math.cos(this.camYaw));
+    // 進む向きは「スティックを倒した時点のカメラの向き」基準で決める。
+    // 動いている間にカメラが回り込んでも進路は変わらないので、カメラは背後に回ったところで止まる（ぐるぐる回り続けない）
+    const len = Math.hypot(ix, iy);
+    if (len < 0.1) this.moveRef = null;
+    else {
+      const ang = Math.atan2(ix, iy);
+      if (!this.moveRef || Math.abs(angleLerp(0, ang - this.moveRef.stick, 1)) > 0.6) this.moveRef = { yaw: this.camYaw, stick: ang };
+    }
+    const refYaw = this.moveRef?.yaw ?? this.camYaw;
+    const f = new THREE.Vector3(Math.sin(refYaw), 0, Math.cos(refYaw));
     const r = new THREE.Vector3(-f.z, 0, f.x);
     p.moveDir.copy(f).multiplyScalar(iy).addScaledVector(r, ix);
+    // 自動で回り込む: 前寄りに進んでいる間、カメラを進行方向の後ろへゆっくり回す。右側をなぞれば自分でも回せる
+    this.camYaw -= this.input.takeCamDelta() * 0.006;
+    if (p.alive && iy > 0.3 && !this.input.looking && p.stun <= 0 && p.lock <= 0) {
+      const heading = Math.atan2(p.moveDir.x, p.moveDir.z);
+      this.camYaw = angleLerp(this.camYaw, heading, Math.min(1, dt * CAM_FOLLOW * iy));
+    }
     for (const a of this.input.takeFires()) this.handleFire(a);
     for (const u of this.units) if (!u.isPlayer && u.alive) this.think(u, dt);
 
@@ -658,6 +677,7 @@ export class Match {
       if (this.mode.id === 'clash') { u.respawn = Math.max(0.01, u.respawn); return; }
       if (u.respawn <= 0) {
         u.alive = true; u.hp = u.maxHp; u.invuln = 2.5; u.group.visible = true; u.ammo = AMMO_MAX;
+        if (u.isPlayer) this.camYaw = u.team === 0 ? CAM_YAW : -CAM_YAW; // 復帰したら敵陣の方へ向き直す
         this.placeAtSpawn(u);
         u.group.position.copy(u.pos); u.model.settle();
         u.stopOnce(); u.setLoop(u.def.idle);
@@ -796,15 +816,15 @@ export class Match {
 
   private updateCamera(dt: number, snap: boolean) {
     const p = this.player, cam = this.camera;
-    const f = new THREE.Vector3(Math.sin(CAM_YAW), 0, Math.cos(CAM_YAW));
+    const f = new THREE.Vector3(Math.sin(this.camYaw), 0, Math.cos(this.camYaw));
     const portrait = cam.aspect < 1;
     // 縦画面は横の視野が狭くなるので、横方向の視野角を保つように縦の画角を広げる
-    const fov = portrait ? Math.min(70, THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(24)) / cam.aspect))) : 46;
+    const fov = portrait ? Math.min(74, THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(26)) / cam.aspect))) : 50;
     if (Math.abs(cam.fov - fov) > 0.01) { cam.fov = fov; cam.updateProjectionMatrix(); }
-    // ブロスタ風: 斜め上から固定。自分は画面の少し下に映り、前（敵陣側）が広く見える
-    const dist = portrait ? 17 : 16;
-    const wantLook = p.pos.clone().addScaledVector(f, portrait ? 3 : 2).setY(0.8);
-    const wantPos = wantLook.clone().addScaledVector(f, -dist * Math.cos(CAM_PITCH)).setY(0.8 + dist * Math.sin(CAM_PITCH));
+    // キャラの斜め後ろから。注視点を前に置いて、自分は画面の下寄り・前方を広く見せる
+    const dist = portrait ? 10.5 : 11;
+    const wantLook = p.pos.clone().addScaledVector(f, portrait ? 4.5 : 4).setY(1.4);
+    const wantPos = p.pos.clone().addScaledVector(f, -dist * Math.cos(CAM_PITCH)).setY(1.4 + dist * Math.sin(CAM_PITCH));
     const k = snap ? 1 : 1 - Math.exp(-dt * 8);
     this.camLook.lerp(wantLook, k); this.camPos.lerp(wantPos, k);
     cam.position.copy(this.camPos);
