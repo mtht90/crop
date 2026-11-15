@@ -331,10 +331,15 @@ export class Base {
       if (audio.ctx) audio.master.gain.value = save.volume;
       persist();
     });
-    body.querySelector('#reset')?.addEventListener('click', () => {
-      if (confirm('セーブデータを消去しますか？')) {
+    const reset = body.querySelector<HTMLButtonElement>('#reset');
+    reset?.addEventListener('click', () => {
+      // 確認ダイアログが使えない環境もあるので、2回押しで確定
+      if (reset.dataset.armed) {
         resetSave();
         location.reload();
+      } else {
+        reset.dataset.armed = '1';
+        reset.textContent = 'もう一度押すと消去します';
       }
     });
   }

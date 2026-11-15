@@ -143,10 +143,13 @@ input.onUnlock = () => {
     game.setPaused(true);
   }
 };
+input.onLock = () => {
+  $('click-to-play').style.display = 'none';
+  if (screen === 'hunt') game.setPaused(false);
+};
 document.addEventListener('pointerlockchange', () => {
   if (document.pointerLockElement === canvas) {
-    $('click-to-play').style.display = 'none';
-    if (screen === 'hunt') game.setPaused(false);
+    /* onLock で処理 */
   } else if (screen === 'hunt' && game.running && game.ended) {
     $('click-to-play').style.display = 'flex';
   }

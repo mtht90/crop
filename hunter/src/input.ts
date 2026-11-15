@@ -12,6 +12,9 @@ class Input {
   enabled = false;
   canvas!: HTMLCanvasElement;
   onUnlock?: () => void;
+  onLock?: () => void;
+  /** ポインタロックが使えない環境（埋め込み表示など）での代替モード */
+  fallback = false;
 
   attach(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -51,8 +54,12 @@ class Input {
     window.addEventListener('wheel', (e) => {
       if (this.locked) this.wheel += Math.sign(e.deltaY);
     });
+    window.addEventListener('keydown', (e) => {
+      if (this.fallback && this.locked && e.code === 'Escape') this.unlock();
+    });
     document.addEventListener('pointerlockchange', () => {
       this.locked = document.pointerLockElement === canvas;
+      if (this.locked) this.onLock?.();
       if (!this.locked) {
         this.lmb = this.rmb = false;
         this.keys.clear();
@@ -62,14 +69,29 @@ class Input {
   }
 
   lock() {
+    const fb = () => {
+      if (document.pointerLockElement === this.canvas) return;
+      // ポインタロック不可：カーソルを出したままマウス移動量で視点操作
+      this.fallback = true;
+      this.locked = true;
+      this.onLock?.();
+    };
     try {
       const p = this.canvas.requestPointerLock() as unknown as Promise<void> | undefined;
-      p?.catch?.(() => undefined);
+      p?.catch?.(fb);
+      setTimeout(fb, 500);
     } catch {
-      /* noop */
+      fb();
     }
   }
   unlock() {
+    if (this.fallback && this.locked) {
+      this.locked = false;
+      this.lmb = this.rmb = false;
+      this.keys.clear();
+      this.onUnlock?.();
+      return;
+    }
     if (document.pointerLockElement) document.exitPointerLock();
   }
 
