@@ -1,0 +1,12 @@
+<!doctype html><html><body style="margin:0"><script type="importmap">{"imports":{"three":"/node_modules/three/build/three.module.js"}}</script>
+<script type="module">
+import * as THREE from 'three';
+const q=new URLSearchParams(location.search); const order=q.get('o').split(',');
+const r=new THREE.WebGLRenderer(); r.setSize(1200,300); document.body.appendChild(r.domElement);
+const sc=new THREE.Scene(); const cam=new THREE.PerspectiveCamera(90,1,0.1,10);
+sc.background=await new THREE.CubeTextureLoader().setPath('/assets/textures/sky/').loadAsync(order.map(x=>x+'.jpg'));
+r.setScissorTest(true);
+const dirs=[0,Math.PI/2,Math.PI,-Math.PI/2];
+dirs.forEach((y,i)=>{cam.rotation.set(0.25,y,0,'YXZ'); r.setViewport(i*300,0,300,300); r.setScissor(i*300,0,300,300); r.render(sc,cam);});
+document.title='done';
+</script></body></html>

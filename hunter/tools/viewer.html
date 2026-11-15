@@ -1,0 +1,25 @@
+<!doctype html><html><body style="margin:0;background:#556"><script type="importmap">{"imports":{"three":"/node_modules/three/build/three.module.js","three/addons/":"/node_modules/three/examples/jsm/"}}</script>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+const q = new URLSearchParams(location.search);
+const file = q.get('m'); const anim = q.get('a'); const t = parseFloat(q.get('t')||'0.3'); const view=q.get('v')||'front';
+const r = new THREE.WebGLRenderer({antialias:true}); const W=+(q.get('w')||512),H=+(q.get('h')||512); r.setSize(W,H); document.body.appendChild(r.domElement);
+const sc = new THREE.Scene(); sc.add(new THREE.HemisphereLight(0xffffff,0x444444,2)); const dl=new THREE.DirectionalLight(0xffffff,2); dl.position.set(3,5,4); sc.add(dl);
+const cam = new THREE.PerspectiveCamera(45,W/H,0.01,1000);
+new GLTFLoader().load('/assets/models/'+file, g => {
+  const o = g.scene; sc.add(o); (q.get('hide')||'').split(',').filter(Boolean).forEach(nm=>o.traverse(n=>{ if(n.name===nm||n.name.startsWith(nm+'_')) n.visible=false; })); if(q.get('k')) { o.children.slice().forEach(ch=>{ if(ch.name!==q.get('k')) o.remove(ch); }); } o.traverse(n=>{ if(/Icosphere|Sphere/.test(n.name)) n.visible=false; });
+  let mixer;
+  if (g.animations.length) { mixer = new THREE.AnimationMixer(o); const c = g.animations.find(c=>c.name===anim)||g.animations[0]; mixer.clipAction(c).play(); mixer.update(t); }
+  o.updateMatrixWorld(true);
+  const b = new THREE.Box3().setFromObject(o); const s = b.getSize(new THREE.Vector3()); const c = b.getCenter(new THREE.Vector3());
+  const d = Math.max(s.x,s.y,s.z)*1.6;
+  if (view==='front') cam.position.set(c.x, c.y+d*0.2, c.z+d); else if (view==='side') cam.position.set(c.x+d,c.y+d*0.2,c.z); else if(view==='top') cam.position.set(c.x,c.y+d,c.z+0.01); else if (view==='fp2') { cam.position.set(+q.get('px'),+q.get('py'),+q.get('pz')); cam.lookAt(cam.position.x, cam.position.y, cam.position.z+1); cam.fov=parseFloat(q.get('fov')||'60'); } else if (view==='fp') { const gc=g.cameras[0]; gc.updateMatrixWorld(true); gc.getWorldPosition(cam.position); gc.getWorldQuaternion(cam.quaternion); cam.fov=parseFloat(q.get('fov')||'50'); window.CAMPOS=cam.position.toArray(); }
+  if (view!=='fp' && view!=='fp2') cam.lookAt(c);
+  cam.updateProjectionMatrix();
+  r.render(sc,cam);
+  const names=[]; o.traverse(n=>{ if(n.isMesh||n.isSkinnedMesh) names.push(n.name)});
+  window.INFO = {kids: o.children.map(k=>{const bb=new THREE.Box3().setFromObject(k);const z=bb.getSize(new THREE.Vector3());return k.name+':'+[z.x,z.y,z.z].map(v=>v.toFixed(1)).join('x')+'@'+bb.min.y.toFixed(1)}), campos:window.CAMPOS, camq: cam.quaternion.toArray().map(v=>+v.toFixed(3)),size:[s.x,s.y,s.z].map(v=>+v.toFixed(2)), center:[c.x,c.y,c.z].map(v=>+v.toFixed(2)), anims:g.animations.map(a=>a.name+':'+a.duration.toFixed(2)), meshes:names, top: o.children.map(c=>c.name)};
+  document.title='done';
+});
+</script></body></html>

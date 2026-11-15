@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CORE EATER 喰核の狩人</title>
+  </head>
+  <body>
+    <canvas id="c"></canvas>
+
+    <div id="loading" class="screen">
+      <div class="logo">CORE EATER<small>喰核の狩人</small></div>
+      <div class="loadbar"><div id="load-fill"></div></div>
+      <div id="load-label">読み込み中…</div>
+    </div>
+
+    <div id="title" class="screen" style="display: none">
+      <div class="logo">CORE EATER<small>喰核の狩人</small></div>
+      <p id="title-lore" class="lore"></p>
+      <button id="start" class="big">工房船に乗り込む</button>
+      <p class="dim small">プロトタイプ版：1エリア＋ボス1体　／　PC（マウス＋キーボード）推奨</p>
+    </div>
+
+    <div id="base" class="screen" style="display: none">
+      <div class="panel">
+        <div class="ptitle">工房船アンヴィル号 <small id="base-stats"></small></div>
+        <div id="base-tabs"></div>
+        <div id="base-body"></div>
+      </div>
+    </div>
+
+    <div id="hud" style="display: none">
+      <div id="vignette"></div>
+      <div id="crosshair"><i></i><i></i><i></i><i></i></div>
+      <div id="hitmark"><i></i><i></i><i></i><i></i></div>
+      <div id="charge"><div id="charge-fill"></div></div>
+      <div id="dmgnums"></div>
+      <div id="objective"></div>
+      <div id="log"></div>
+      <div id="banner"></div>
+      <div id="bossbar">
+        <div id="boss-name"></div>
+        <div class="bbar"><div id="boss-lag"></div><div id="boss-fill"></div></div>
+        <div id="boss-parts"></div>
+      </div>
+      <div id="vitals">
+        <div class="bar hp"><div id="hp-lag"></div><div id="hp-fill"></div></div>
+        <div class="bar st"><div id="st-fill"></div></div>
+        <div id="status"></div>
+      </div>
+      <div id="pouchwrap"><div class="plabel">魔核ポーチ <small>Q 選択 / F 喰わせる</small></div><div id="pouch"></div></div>
+      <div id="weapon">
+        <div id="slots"></div>
+        <div id="wname"></div>
+        <div id="ammo"></div>
+        <div id="chamber"></div>
+      </div>
+      <div id="prompt"></div>
+    </div>
+
+    <div id="click-to-play" class="screen overlay" style="display: none">
+      <div class="box">クリックで狩猟開始<br /><small>Esc で一時停止</small></div>
+    </div>
+    <div id="pause" class="screen overlay" style="display: none">
+      <div class="box">
+        <h2>一時停止</h2>
+        <button id="resume" class="big">再開</button>
+        <button id="abandon">狩猟を放棄して帰還（素材は半分）</button>
+        <div class="controls">
+          WASD 移動 / Shift 疾走 / Space 跳躍 / C 回避 / 左クリック 射撃（弓は長押し）/ 右クリック 照準<br />
+          R 装填 / 1・2・ホイール 武器切替 / E 魔核回収 / F 素材喰い / Q 魔核選択
+        </div>
+      </div>
+    </div>
+    <div id="result" class="screen overlay" style="display: none"><div class="box" id="result-body"></div></div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
