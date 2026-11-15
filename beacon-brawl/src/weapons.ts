@@ -2,7 +2,7 @@ import * as THREE from 'three';
 
 // 武器はすべてコードで組み立てる（外部モデルなし）。
 // 形は「握りが原点・刃先が +Z」。色はヒーローの属性色で光る。
-export type WeaponName = 'sword' | 'shield' | 'greatsword' | 'staff' | 'dagger' | 'daggerOff' | 'gun' | 'scythe';
+export type WeaponName = 'sword' | 'shield' | 'greatsword' | 'staff' | 'dagger' | 'daggerOff' | 'gun' | 'gunOff' | 'scythe';
 export interface WeaponSpec { hand: 'left' | 'right'; build(color: number): THREE.Object3D }
 
 const metal = new THREE.MeshStandardMaterial({ color: 0x2a3050, metalness: 0.85, roughness: 0.3 });
@@ -78,6 +78,7 @@ export const WEAPONS: Record<WeaponName, WeaponSpec> = {
       return g;
     },
   },
+  gunOff: { hand: 'left', build: (c) => WEAPONS.gun.build(c) },
   gun: {
     hand: 'right',
     build(c) {

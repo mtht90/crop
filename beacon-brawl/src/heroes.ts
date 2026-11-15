@@ -344,4 +344,206 @@ export const HEROES: HeroDef[] = [
       },
     }],
   },
+  {
+    id: 'mio', name: 'ミオ', role: 'ボマー', blurb: '放物線で爆弾を投げ込む。壁の向こうもお構いなし。',
+    model: 'AvatarSample_A', weapons: ['staff'],
+    color: 0xff9ec7, hp: 820, atk: 118, speed: 6.3, range: 10, interval: 1.2, ranged: true,
+    idle: 'Idle_Loop', run: 'Jog_Fwd_Loop', attacks: ['Spell_Simple_Shoot'],
+    skills: [
+      {
+        name: 'スティッキーボム', icon: 'bomb', desc: '狙った地点に爆弾を貼り付け、1秒後に大爆発', cd: 8, anim: 'Spell_Simple_Shoot', lock: 0.2, aim: { kind: 'area', reach: 11, radius: 3.8 }, aiRange: 11,
+        cast(m, u, aim) {
+          const p = aimPoint(u, aim, 7, 11);
+          m.fx.telegraph(p, 3.8, 1.0, 0xff9ec7);
+          m.after(1.0, () => { m.fx.ring(p, 3.8, 0xffc4dd, 0.5); m.fx.burst(p, 0xff9ec7, 16, 8); m.aoe(u, p, 3.8, u.power() * 2.4, { knock: 2 }); m.shake(0.35); });
+        },
+      },
+      {
+        name: 'バリアドーム', icon: 'guard', desc: '4秒間、周囲の味方の被ダメージを40%カット', cd: 15, anim: 'Spell_Simple_Enter', lock: 0.2, aim: { kind: 'self', reach: 0, radius: 6 }, aiRange: 7, aiWhen: 'allyHurt',
+        cast(m, u) {
+          m.fx.ring(u.pos, 6, 0xffc4dd, 0.6);
+          for (const a of m.alliesOf(u)) if (a.alive && a.pos.distanceTo(u.pos) < 6) { a.buff('def', 0.4, 4); m.fx.aura(a, 0xff9ec7, 4); }
+        },
+      },
+    ],
+    ults: [{
+      name: 'じゅうたん爆撃', icon: 'meteor', desc: '狙った方向へ一直線に爆発を連ねる', cd: 0, anim: 'Spell_Simple_Enter', lock: 0.4, aim: { kind: 'line', reach: 18, width: 4 }, aiRange: 14,
+      cast(m, u, aim) {
+        for (let i = 0; i < 6; i++) {
+          const p = ahead(u, aim, 3 + i * 3);
+          m.after(0.15 + i * 0.12, () => { m.fx.flash(p.clone().setY(0.8), 2.4, 0xff9ec7, 0.3); m.fx.ring(p, 3, 0xffc4dd, 0.4); m.aoe(u, p, 3, u.power() * 1.5, { knock: 1 }); m.shake(0.2); });
+        }
+      },
+    }, {
+      name: 'グラビティボム', icon: 'vortex', desc: '敵を吸い寄せてから爆発する重力弾', cd: 0, anim: 'Spell_Simple_Shoot', lock: 0.3, aim: { kind: 'area', reach: 12, radius: 6 }, aiRange: 12,
+      cast(m, u, aim) {
+        const p = aimPoint(u, aim, 8, 12);
+        m.zone(p, 6, 1.6, 0xd28cff, 0.3, () => m.pull(u, p, 6.5, 3.5));
+        m.after(1.7, () => { m.fx.pillar(p, 0xd28cff, 2); m.fx.ring(p, 6, 0xf0c8ff, 0.6); m.aoe(u, p, 6, u.power() * 3.4, { stun: 1 }); m.shake(0.6); });
+      },
+    }],
+  },
+  {
+    id: 'nox', name: 'ノクス', role: 'ガンスリンガー', blurb: '二丁拳銃で弾をばら撒く。中距離の撃ち合いに強い。',
+    model: 'AvatarSample_B', weapons: ['gun', 'gunOff'],
+    color: 0xb36bff, hp: 900, atk: 66, speed: 6.9, range: 8.5, interval: 0.5, ranged: true,
+    idle: 'Pistol_Idle_Loop', run: 'Sprint_Loop', attacks: ['Pistol_Shoot'],
+    skills: [
+      {
+        name: 'ローリングショット', icon: 'dodge', desc: '転がって移動し、着地点から3連射', cd: 7, anim: 'Roll', lock: 0.15, aim: { kind: 'line', reach: 6, width: 1.2 }, aiRange: 9,
+        cast(m, u, aim) {
+          m.dash(u, ahead(u, aim, 6), 0.25);
+          m.after(0.28, () => {
+            const t = m.enemiesOf(u).filter((e) => e.alive && e.stealth <= 0).sort((a, b) => a.pos.distanceTo(u.pos) - b.pos.distanceTo(u.pos))[0];
+            const dir = t ? t.pos.clone().sub(u.pos).setY(0).normalize() : aim.dir;
+            for (let i = 0; i < 3; i++) m.after(i * 0.1, () => m.shoot(u, dir, { speed: 34, range: 11, radius: 0.5, dmg: u.power() * 1.1, color: 0xd6a8ff }));
+          });
+        },
+      },
+      {
+        name: 'ヘッドショット', icon: 'laser', desc: '溜めてから撃つ、貫通する強力な一発', cd: 9, anim: 'Pistol_Shoot', lock: 0.3, aim: { kind: 'line', reach: 16, width: 1 }, aiRange: 14,
+        cast(m, u, aim) { m.after(0.3, () => m.shoot(u, aim.dir, { speed: 50, range: 16, radius: 0.6, dmg: u.power() * 4, color: 0xffffff, pierce: true })); },
+      },
+    ],
+    ults: [{
+      name: 'バレットストーム', icon: 'blades', desc: '全方位に弾丸をばら撒く', cd: 0, anim: 'Pistol_Shoot', lock: 0.4, aim: { kind: 'self', reach: 0, radius: 10 }, aiRange: 8,
+      cast(m, u) {
+        for (let w = 0; w < 3; w++) m.after(w * 0.18, () => {
+          for (let i = 0; i < 12; i++) { const a = (i / 12) * Math.PI * 2 + w * 0.26; m.shoot(u, v(Math.sin(a), 0, Math.cos(a)), { speed: 26, range: 10, radius: 0.6, dmg: u.power() * 1.3, color: 0xd6a8ff }); }
+        });
+        m.shake(0.3);
+      },
+    }, {
+      name: 'ロックオン', icon: 'attack', desc: '近くの敵すべてに追尾弾を撃ち込む', cd: 0, anim: 'Pistol_Shoot', lock: 0.3, aim: { kind: 'self', reach: 0, radius: 14 }, aiRange: 13,
+      cast(m, u) {
+        const ts = m.enemiesOf(u).filter((e) => e.alive && e.pos.distanceTo(u.pos) < 14);
+        ts.forEach((t, k) => { for (let i = 0; i < 4; i++) m.after(k * 0.05 + i * 0.12, () => { if (t.alive) m.shoot(u, t.pos.clone().sub(u.pos).setY(0).normalize(), { speed: 30, range: 18, radius: 0.6, dmg: u.power() * 1.4, color: 0xffe27a, homing: t }); }); });
+      },
+    }],
+  },
+  {
+    id: 'ren', name: 'レン', role: 'ファイター', blurb: '居合の一太刀で切り込む剣士。間合いの管理が鍵。',
+    model: 'AvatarSample_C', weapons: ['sword'],
+    color: 0xff5a5a, hp: 1150, atk: 112, speed: 6.8, range: 2.7, interval: 0.85, ranged: false,
+    idle: 'Sword_Idle', run: 'Jog_Fwd_Loop', attacks: ['Sword_Attack'],
+    skills: [
+      {
+        name: '居合', icon: 'dash', desc: '一瞬で踏み込み、通り道を斬る', cd: 6, anim: 'Sword_Attack', lock: 0.15, aim: { kind: 'line', reach: 7, width: 1.8 }, aiRange: 7,
+        cast(m, u, aim) {
+          const from = u.pos.clone();
+          m.dash(u, ahead(u, aim, 7), 0.12);
+          m.after(0.13, () => { m.fx.trail(from, u.pos, 0xff9a9a); m.lineHit(u, from, u.pos, 1.8, u.power() * 2.2); });
+        },
+      },
+      {
+        name: '見切り', icon: 'guard', desc: '1秒間無敵になり、その後4秒間攻撃力+40%', cd: 12, anim: 'Spell_Simple_Enter', lock: 0.1, aim: { kind: 'self', reach: 0, radius: 1.5 }, aiRange: 5, aiWhen: 'hurt',
+        cast(m, u) { u.invuln = 1; u.buff('atk', 0.4, 5); m.fx.ring(u.pos, 2, 0xff9a9a, 0.5); m.fx.aura(u, 0xff5a5a, 5); },
+      },
+    ],
+    ults: [{
+      name: '百花繚乱', icon: 'blades', desc: '近くの敵3人へ次々に斬りかかる', cd: 0, anim: 'Sword_Attack', lock: 0.3, aim: { kind: 'self', reach: 0, radius: 11 }, aiRange: 10,
+      cast(m, u) {
+        u.invuln = 1.2;
+        const ts = m.enemiesOf(u).filter((e) => e.alive && e.pos.distanceTo(u.pos) < 11).slice(0, 3);
+        ts.forEach((t, i) => m.after(0.08 + i * 0.3, () => {
+          if (!t.alive) return;
+          const from = u.pos.clone();
+          m.dash(u, t.pos.clone(), 0.1);
+          m.after(0.11, () => { m.fx.trail(from, u.pos, 0xffc0c0); m.fx.slash(t.pos, Math.random() * 6.28, 2.6, 0xffc0c0); m.damage(t, u.power() * 3.2, u); m.shake(0.25); });
+        }));
+      },
+    }, {
+      name: '一閃', icon: 'beam', desc: '前方を巨大な斬撃でまっすぐ薙ぎ払う', cd: 0, anim: 'Sword_Attack', lock: 0.35, aim: { kind: 'line', reach: 15, width: 3.6 }, aiRange: 13,
+      cast(m, u, aim) {
+        const to = ahead(u, aim, 15);
+        m.after(0.25, () => { m.fx.trail(u.pos, to, 0xffffff); m.lineHit(u, u.pos.clone(), to, 1.8, u.power() * 4.5); m.shake(0.5); });
+      },
+    }],
+  },
+  {
+    id: 'shirone', name: 'シロネ', role: 'ヒーラー', blurb: '星の魔法で仲間を癒やす猫耳の少女。',
+    model: 'HairSample_Female', weapons: ['staff'],
+    color: 0x9be7ff, hp: 900, atk: 84, speed: 6.6, range: 9.5, interval: 0.9, ranged: true,
+    idle: 'Idle_Loop', run: 'Jog_Fwd_Loop', attacks: ['Spell_Simple_Shoot'],
+    skills: [
+      {
+        name: 'スターヒール', icon: 'heal', desc: '狙った場所の味方のHPを25%回復', cd: 7, anim: 'Spell_Simple_Shoot', lock: 0.2, aim: { kind: 'area', reach: 12, radius: 4 }, aiRange: 99, aiWhen: 'allyHurt',
+        cast(m, u, aim) {
+          const hurt = m.alliesOf(u).filter((a) => a.alive && a.hp < a.maxHp).sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0];
+          const p = aim.manual ? aimPoint(u, aim, 6, 12) : (hurt && hurt.pos.distanceTo(u.pos) < 12 ? hurt.pos.clone() : u.pos.clone());
+          m.fx.pillar(p, 0x9be7ff, 1.4); m.fx.ring(p, 4, 0xcff4ff, 0.5); m.healAllies(u, p, 4, 0.25);
+        },
+      },
+      {
+        name: 'ねこのきまぐれ', icon: 'rage', desc: '5秒間、周囲の味方の移動速度+30%', cd: 13, anim: 'Spell_Simple_Enter', lock: 0.15, aim: { kind: 'self', reach: 0, radius: 7 }, aiRange: 12,
+        cast(m, u) { m.fx.ring(u.pos, 7, 0xcff4ff, 0.6); for (const a of m.alliesOf(u)) if (a.alive && a.pos.distanceTo(u.pos) < 7) { a.buff('speed', 0.3, 5); m.fx.aura(a, 0x9be7ff, 5); } },
+      },
+    ],
+    ults: [{
+      name: 'ほしふるよる', icon: 'holy', desc: '味方全員をどこにいても50%回復', cd: 0, anim: 'Spell_Simple_Enter', lock: 0.4, aim: { kind: 'self', reach: 0, radius: 3 }, aiRange: 99, aiWhen: 'allyHurt',
+      cast(m, u) { for (const a of m.alliesOf(u)) if (a.alive) { m.heal(a, a.maxHp * 0.5); m.fx.pillar(a.pos, 0x9be7ff, 1.2); } },
+    }, {
+      name: 'りゅうせいぐん', icon: 'meteor', desc: '狙った範囲に流れ星を降らせ、敵をスタン', cd: 0, anim: 'Spell_Simple_Enter', lock: 0.4, aim: { kind: 'area', reach: 13, radius: 5.5 }, aiRange: 12,
+      cast(m, u, aim) {
+        const p = aimPoint(u, aim, 8, 13);
+        m.fx.telegraph(p, 5.5, 0.6, 0x9be7ff);
+        m.after(0.6, () => { m.fx.pillar(p, 0xcff4ff, 2.4); m.fx.burst(p, 0x9be7ff, 24, 9); m.aoe(u, p, 5.5, u.power() * 3, { stun: 1.5 }); m.shake(0.5); });
+      },
+    }],
+  },
+  {
+    id: 'kai', name: 'カイ', role: 'ブルーザー', blurb: '大剣を軽々と振り回す突撃役。敵陣をかき乱す。',
+    model: 'HairSample_Male', weapons: ['greatsword'],
+    color: 0x5af0a0, hp: 1350, atk: 120, speed: 6.6, range: 3.0, interval: 1.0, ranged: false,
+    idle: 'Sword_Idle', run: 'Jog_Fwd_Loop', attacks: ['Sword_Attack'],
+    skills: [
+      {
+        name: 'チャージ', icon: 'dash', desc: '突進して、ぶつかった敵を吹き飛ばす', cd: 8, anim: 'Roll', lock: 0.2, aim: { kind: 'line', reach: 9, width: 2.2 }, aiRange: 8,
+        cast(m, u, aim) {
+          const from = u.pos.clone();
+          m.dash(u, ahead(u, aim, 9), 0.3);
+          m.after(0.3, () => { m.fx.trail(from, u.pos, 0x9fffc8); m.lineHit(u, from, u.pos, 2.2, u.power() * 1.6); m.aoe(u, u.pos, 2.5, 0, { knock: 4 }); });
+        },
+      },
+      {
+        name: 'グラウンドスラム', icon: 'quake', desc: '周囲を叩き割り、敵を1秒スタン', cd: 11, anim: 'Sword_Attack', lock: 0.3, aim: { kind: 'self', reach: 0, radius: 4.2 }, aiRange: 3.8,
+        cast(m, u) { m.after(0.25, () => { m.fx.ring(u.pos, 4.2, 0x9fffc8, 0.4); m.fx.burst(u.pos, 0x5af0a0, 14, 7); m.aoe(u, u.pos, 4.2, u.power() * 1.6, { stun: 1 }); m.shake(0.4); }); },
+      },
+    ],
+    ults: [{
+      name: 'タイタンフォール', icon: 'quake', desc: '大きく跳んで着地点を叩き潰す', cd: 0, anim: 'Sword_Attack', lock: 0.55, aim: { kind: 'area', reach: 11, radius: 6 }, aiRange: 10,
+      cast(m, u, aim) {
+        const p = aimPoint(u, aim, 7, 11);
+        m.fx.telegraph(p, 6, 0.55, 0x5af0a0);
+        m.dash(u, p, 0.5);
+        m.after(0.55, () => { m.fx.ring(u.pos, 6, 0x9fffc8, 0.6); m.fx.burst(u.pos, 0x5af0a0, 24, 10); m.aoe(u, u.pos, 6, u.power() * 3.6, { stun: 1, knock: 3 }); m.shake(0.8); });
+      },
+    }, {
+      name: '不屈', icon: 'rage', desc: '3秒間無敵になり、体力を40%回復', cd: 0, anim: 'Spell_Simple_Enter', lock: 0.2, aim: { kind: 'self', reach: 0, radius: 2 }, aiRange: 6, aiWhen: 'hurt',
+      cast(m, u) { u.invuln = 3; m.heal(u, u.maxHp * 0.4); m.fx.aura(u, 0x5af0a0, 3); m.fx.pillar(u.pos, 0x9fffc8, 1.4); },
+    }],
+  },
+  {
+    id: 'pipi', name: 'ピピ', role: 'トリックスター', blurb: 'いたずら好きの森の子。風と花火で敵を翻弄する。',
+    model: 'Vivi', weapons: ['staff'],
+    color: 0xb6ff5a, hp: 860, atk: 92, speed: 7.2, range: 9, interval: 0.95, ranged: true,
+    idle: 'Idle_Loop', run: 'Sprint_Loop', attacks: ['Spell_Simple_Shoot'],
+    skills: [
+      {
+        name: 'いたずら花火', icon: 'bomb', desc: '着弾地点ではじける花火。敵を吹き飛ばす', cd: 6, anim: 'Spell_Simple_Shoot', lock: 0.15, aim: { kind: 'line', reach: 12, width: 1 }, aiRange: 11,
+        cast(m, u, aim) { m.shoot(u, aim.dir, { speed: 24, range: 12, radius: 0.6, dmg: u.power() * 0.8, color: 0xffe25a, explode: { radius: 3.2, dmg: u.power() * 1.4 } }); },
+      },
+      {
+        name: 'つむじ風', icon: 'vortex', desc: '狙った場所に風を起こし、敵を引き寄せる', cd: 10, anim: 'Spell_Simple_Enter', lock: 0.2, aim: { kind: 'area', reach: 10, radius: 4.5 }, aiRange: 10,
+        cast(m, u, aim) { const p = aimPoint(u, aim, 6, 10); m.zone(p, 4.5, 2.4, 0xb6ff5a, 0.3, () => { m.pull(u, p, 5, 2.8); m.aoe(u, p, 4.5, u.power() * 0.3, {}); }); },
+      },
+    ],
+    ults: [{
+      name: 'おはなばたけ', icon: 'holy', desc: '6秒間、花畑で味方を回復し敵を鈍らせる', cd: 0, anim: 'Spell_Simple_Enter', lock: 0.3, aim: { kind: 'area', reach: 10, radius: 7 }, aiRange: 9,
+      cast(m, u, aim) { const p = aimPoint(u, aim, 3, 10); m.zone(p, 7, 6, 0xb6ff5a, 0.5, () => { m.healAllies(u, p, 7, 0.05); m.aoe(u, p, 7, u.power() * 0.3, { slow: 0.7 }); }); },
+    }, {
+      name: 'ピピ大旋風', icon: 'vortex', desc: '自分の周りに竜巻を起こし、敵を吹き飛ばし続ける', cd: 0, anim: 'Spell_Simple_Enter', lock: 0.2, aim: { kind: 'self', reach: 0, radius: 5 }, aiRange: 5,
+      cast(m, u) { for (let i = 0; i < 8; i++) m.after(i * 0.3, () => { m.fx.ring(u.pos, 5, 0xd8ff9a, 0.3); m.aoe(u, u.pos, 5, u.power() * 0.7, { knock: 2.2 }); }); },
+    }],
+  },
 ];

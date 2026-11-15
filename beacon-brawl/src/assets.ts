@@ -1,14 +1,17 @@
 import * as THREE from 'three';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { VRMLoaderPlugin, VRMUtils, type VRM, type VRMHumanBoneName } from '@pixiv/three-vrm';
-import { HEROES, type HeroDef } from './heroes';
+import type { HeroDef } from './heroes';
 import { WEAPONS, type WeaponName } from './weapons';
 
 const BASE = import.meta.env.BASE_URL + 'assets/';
 /** キャラの表示倍率（VRM は実寸メートルなので、ゲーム内の縮尺に合わせて拡大） */
 export const HERO_SCALE = 1.5;
-/** スマホなどタッチ端末はテクスチャを半分に（6体で約470MB → 約120MB） */
-const TEXTURE_MAX = matchMedia('(pointer: coarse)').matches ? 512 : 1024;
+/** スマホなどタッチ端末はテクスチャを半分に（1体あたり約80MB → 約20MB） */
+const MOBILE = matchMedia('(pointer: coarse)').matches;
+const TEXTURE_MAX = MOBILE ? 512 : 1024;
+/** 同時に読み込んでおくキャラの上限（1試合6人＋ホームの1人） */
+const CACHE_MAX = MOBILE ? 7 : 12;
 
 // 移植元リグの骨 (GLTFLoader が名前の "." を除去する) → VRM ヒューマノイド骨
 const BONE_MAP: Record<string, VRMHumanBoneName> = {
@@ -125,49 +128,89 @@ function buildHero(def: HeroDef, gltf: GLTF): HeroModel {
   };
 }
 
-export async function loadAssets(renderer: THREE.WebGLRenderer, onProgress: (ratio: number) => void) {
-  const loader = new GLTFLoader();
-  const vrmLoader = new GLTFLoader();
-  vrmLoader.register((parser) => new VRMLoaderPlugin(parser));
-  // VITE_ASSET_MODE=json: バイナリを配信できないホスト向けに、base64 を入れた JSON から読み込む
-  const packed = import.meta.env.VITE_ASSET_MODE === 'json';
-  const load = async (l: GLTFLoader, path: string, ext: string): Promise<GLTF> => {
-    if (!packed) return l.loadAsync(`${BASE}${path}.${ext}`);
-    const res = await fetch(`${BASE}${path}.json`);
-    if (!res.ok) throw new Error(`${path}: HTTP ${res.status}`);
-    const bin = atob((await res.json()).data);
-    const bytes = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-    return l.parseAsync(bytes.buffer, '');
-  };
-  let done = 0;
-  const total = HEROES.length + 1;
-  const tick = () => onProgress(++done / total);
+const gltfLoader = new GLTFLoader();
+const vrmLoader = new GLTFLoader();
+vrmLoader.register((parser) => new VRMLoaderPlugin(parser));
+// VITE_ASSET_MODE=json: バイナリを配信できないホスト向けに、base64 を入れた JSON から読み込む
+const packed = import.meta.env.VITE_ASSET_MODE === 'json';
+async function load(l: GLTFLoader, path: string, ext: string): Promise<GLTF> {
+  if (!packed) return l.loadAsync(`${BASE}${path}.${ext}`);
+  const res = await fetch(`${BASE}${path}.json`);
+  if (!res.ok) throw new Error(`${path}: HTTP ${res.status}`);
+  const bin = atob((await res.json()).data);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return l.parseAsync(bytes.buffer, '');
+}
 
-  const rigJob = load(loader, 'rig', 'glb').then((g) => {
-    rig = g;
-    // 基準姿勢は Tポーズのクリップから取る（VRM の正規化ボーンも Tポーズ基準）
-    const tpose = g.animations.find((a) => a.name === 'A_TPose');
-    if (tpose) { const mx = new THREE.AnimationMixer(g.scene); mx.clipAction(tpose).play(); mx.update(0); }
-    g.scene.updateMatrixWorld(true);
-    g.scene.traverse((o) => {
-      const world = o.getWorldQuaternion(new THREE.Quaternion());
-      const parent = o.parent ? o.parent.getWorldQuaternion(new THREE.Quaternion()) : new THREE.Quaternion();
-      rigRest.set(o.name, { world, parent, pos: o.getWorldPosition(new THREE.Vector3()) });
-    });
-    rigHipsHeight = rigRest.get('DEF-hips')!.pos.y;
-    tick();
+/** 起動時はモーション用のリグだけ読む（キャラは使うときに読む） */
+export async function loadAssets(onProgress: (ratio: number) => void) {
+  const g = await load(gltfLoader, 'rig', 'glb');
+  rig = g;
+  // 基準姿勢は Tポーズのクリップから取る（VRM の正規化ボーンも Tポーズ基準）
+  const tpose = g.animations.find((a) => a.name === 'A_TPose');
+  if (tpose) { const mx = new THREE.AnimationMixer(g.scene); mx.clipAction(tpose).play(); mx.update(0); }
+  g.scene.updateMatrixWorld(true);
+  g.scene.traverse((o) => {
+    const world = o.getWorldQuaternion(new THREE.Quaternion());
+    const parent = o.parent ? o.parent.getWorldQuaternion(new THREE.Quaternion()) : new THREE.Quaternion();
+    rigRest.set(o.name, { world, parent, pos: o.getWorldPosition(new THREE.Vector3()) });
   });
-  const vrms = HEROES.map((h) => load(vrmLoader, `vrm/${h.model}`, 'vrm').then((g) => { tick(); return g; }));
-  await rigJob;
-  (await Promise.all(vrms)).forEach((g, i) => heroes.set(HEROES[i].id, buildHero(HEROES[i], g)));
-  renderPortraits(renderer);
+  rigHipsHeight = rigRest.get('DEF-hips')!.pos.y;
+  onProgress(1);
+}
+
+const loading = new Map<string, Promise<void>>();
+let useTick = 0;
+const lastUse = new Map<string, number>();
+
+/** 指定したヒーローを読み込む（読み込み済みならすぐ終わる）。古いものは自動で解放する */
+export async function ensureHeroes(defs: HeroDef[], onProgress?: (ratio: number) => void) {
+  const want = new Set(defs.map((d) => d.id));
+  for (const d of defs) lastUse.set(d.id, ++useTick);
+  // 上限を超えるぶん、使っていないものから解放
+  const loaded = [...heroes.keys()].filter((id) => !want.has(id)).sort((a, b) => (lastUse.get(a) ?? 0) - (lastUse.get(b) ?? 0));
+  while (heroes.size + defs.filter((d) => !heroes.has(d.id)).length > CACHE_MAX && loaded.length) disposeHero(loaded.shift()!);
+  let done = 0;
+  const todo = defs.filter((d) => !heroes.has(d.id));
+  onProgress?.(todo.length ? 0 : 1);
+  await Promise.all(todo.map((d) => {
+    if (!loading.has(d.id)) {
+      loading.set(d.id, load(vrmLoader, `vrm/${d.model}`, 'vrm').then((g) => { heroes.set(d.id, buildHero(d, g)); }).finally(() => loading.delete(d.id)));
+    }
+    return loading.get(d.id)!.then(() => onProgress?.(++done / todo.length));
+  }));
+}
+
+function disposeHero(id: string) {
+  const m = heroes.get(id);
+  if (!m) return;
+  m.root.removeFromParent();
+  m.mixer.stopAllAction();
+  VRMUtils.deepDispose(m.root);
+  heroes.delete(id);
+}
+
+export const isLoaded = (def: HeroDef) => heroes.has(def.id);
+
+/** 顔アイコン（事前に書き出した画像） */
+export const portraitOf = (def: HeroDef | string) => `${BASE}portraits/${typeof def === 'string' ? def : def.id}.webp`;
+
+/** 開発用: 読み込んだヒーローの顔を撮って data URL で返す（scripts/render-portraits.cjs から使う） */
+export async function capturePortraits(renderer: THREE.WebGLRenderer, defs: HeroDef[]) {
+  const out: Record<string, string> = {};
+  for (const d of defs) {
+    await ensureHeroes([d]);
+    renderPortraits(renderer, [d]);
+    out[d.id] = heroes.get(d.id)!.portrait;
+  }
+  return out;
 }
 
 /** 各ヒーローの顔を撮って UI 用のアイコンにする。メインの描画コンテキストをそのまま使う
  *  （別コンテキストを作ると全テクスチャが二重に確保され、スマホでメモリ不足になる） */
-function renderPortraits(r: THREE.WebGLRenderer) {
-  const size = 192;
+function renderPortraits(r: THREE.WebGLRenderer, defs: HeroDef[]) {
+  const size = 256;
   // キャンバスから直接取り出すと端末によって空になるので、オフスクリーンに描いてピクセルを読む
   const rt = new THREE.WebGLRenderTarget(size, size, { samples: 4, colorSpace: THREE.SRGBColorSpace });
   const scene = new THREE.Scene();
@@ -180,7 +223,7 @@ function renderPortraits(r: THREE.WebGLRenderer) {
   const ctx = canvas.getContext('2d')!;
   const prevColor = r.getClearColor(new THREE.Color()), prevAlpha = r.getClearAlpha();
   r.setClearColor(0x000000, 0);
-  for (const def of HEROES) {
+  for (const def of defs) {
     const m = heroes.get(def.id)!;
     const idle = m.clips.get(def.idle);
     if (idle) m.mixer.clipAction(idle).play();
@@ -200,7 +243,7 @@ function renderPortraits(r: THREE.WebGLRenderer) {
     const img = ctx.createImageData(size, size);
     for (let y = 0; y < size; y++) img.data.set(pixels.subarray((size - 1 - y) * size * 4, (size - y) * size * 4), y * size * 4);
     ctx.putImageData(img, 0, 0);
-    m.portrait = canvas.toDataURL('image/png');
+    m.portrait = canvas.toDataURL('image/webp', 0.9);
     scene.remove(m.root);
     m.mixer.stopAllAction();
     m.root.rotation.y = 0;
@@ -231,9 +274,6 @@ function capTextures(materials: THREE.Material[], max: number) {
     if (uniforms) for (const u of Object.values(uniforms)) visit(u?.value);
   }
 }
-
-/** 顔アイコンの data URL */
-export const portraitOf = (def: HeroDef) => heroes.get(def.id)!.portrait;
 
 export function heroModel(def: HeroDef): HeroModel {
   const m = heroes.get(def.id)!;

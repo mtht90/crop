@@ -29,16 +29,7 @@ button.primary:active { translate: 0 4px; box-shadow: 0 2px 0 #9a6400; }
 #loadfill { height: 100%; width: 0; background: var(--y); transition: width .2s; }
 #loadtext { margin: 0; font-size: 13px; opacity: .8; }
 
-#title { justify-content: space-between; background: linear-gradient(180deg, rgba(7, 10, 28, .8), transparent 40%, transparent 56%, rgba(7, 10, 28, .94)); }
-.tag { margin: 14px 0 0; font-size: 15px; letter-spacing: .28em; background: var(--panel); padding: 3px 18px 4px; transform: skewX(var(--skew)); }
-.tag span { font: italic 900 22px var(--num); letter-spacing: .04em; color: var(--y); margin-right: .4em; }
-#title .primary { margin-top: auto; margin-bottom: 18px; }
-.howto { background: var(--panel); border-left: 5px solid var(--y); padding: 10px 18px; max-width: 660px; font-size: 13px; font-weight: 500; line-height: 1.65; }
-.howto p { margin: 2px 0; } .howto b { color: var(--y); font-weight: 900; }
 
-/* ---------- キャラ選択 ---------- */
-#select { justify-content: space-between; align-items: stretch; pointer-events: none; }
-#select > * { pointer-events: auto; }
 #info { width: min(400px, 100%); background: linear-gradient(160deg, rgba(20, 28, 62, .94), rgba(13, 18, 38, .9)); border-top: 4px solid var(--y); padding: 14px 18px 16px; clip-path: polygon(0 0, 100% 0, 100% calc(100% - 18px), calc(100% - 18px) 100%, 0 100%); }
 .ihead { display: flex; gap: 12px; align-items: center; }
 #i-img { width: 72px; height: 72px; object-fit: cover; background: linear-gradient(180deg, #3a4c9a, #1a2250); transform: skewX(var(--skew)); box-shadow: inset 0 0 0 2px #fff; outline: 2px solid #fff; }
@@ -57,23 +48,8 @@ button.primary:active { translate: 0 4px; box-shadow: 0 2px 0 #9a6400; }
 .sk span { grid-column: 2 / -1; font-size: 11.5px; font-weight: 500; opacity: .8; }
 .sk.ult i { background: linear-gradient(180deg, #fff27a, #ffae00); color: var(--ink); box-shadow: inset 0 0 0 2px #fff; }
 .sk.ult em { color: var(--y); opacity: 1; }
-#select-bottom { display: flex; flex-direction: column; gap: 14px; align-items: center; }
-#cards { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
-.card { --hc: #fff; position: relative; width: 104px; height: 128px; padding: 0; overflow: hidden; background: linear-gradient(180deg, color-mix(in srgb, var(--hc) 75%, #fff), color-mix(in srgb, var(--hc) 55%, #0d1226)); box-shadow: inset 0 0 0 3px rgba(13, 18, 38, .9); transition: translate .12s, box-shadow .12s; }
-.card img { position: absolute; inset: -4px -6px 22px; width: calc(100% + 12px); height: calc(100% - 18px); object-fit: cover; transform: skewX(12deg); }
-.card b { position: absolute; left: 0; right: 0; bottom: 15px; font-size: 15px; font-weight: 900; text-align: center; transform: skewX(12deg); background: rgba(13, 18, 38, .92); padding: 1px 0; }
-.card span { position: absolute; left: 0; right: 0; bottom: 0; height: 15px; font-size: 9.5px; line-height: 15px; text-align: center; transform: skewX(12deg); background: var(--hc); color: var(--ink); font-weight: 900; }
-.card.on { translate: 0 -10px; box-shadow: inset 0 0 0 4px var(--y), 0 10px 0 rgba(255, 214, 10, .35); }
 .actions { display: flex; gap: 22px; align-items: center; flex-wrap: wrap; justify-content: center; }
-#diff { display: flex; gap: 4px; }
-#diff button { padding: 10px 16px; font-size: 13px; }
-#diff button.on { background: var(--white); color: var(--ink); box-shadow: none; }
 
-#modebox { display: flex; flex-direction: column; align-items: center; gap: 4px; }
-#modes { display: flex; gap: 4px; flex-wrap: wrap; justify-content: center; }
-#modes button { padding: 8px 14px; font-size: 13px; }
-#modes button.on { background: var(--y); color: var(--ink); box-shadow: none; }
-#mode-desc { margin: 0; font-size: 12px; font-weight: 500; background: var(--panel); padding: 3px 14px; text-align: center; max-width: 92vw; }
 .sk.ult { cursor: pointer; opacity: .5; padding: 2px 4px; margin-left: -4px; }
 .sk.ult.on { opacity: 1; box-shadow: inset 0 0 0 2px var(--y); background: rgba(255, 214, 10, .12); }
 .sk.ult:not(.on) i { background: #24306a; color: #fff; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .5); }
@@ -203,40 +179,20 @@ button.primary:active { translate: 0 4px; box-shadow: 0 2px 0 #9a6400; }
 
 /* ---------- 小さい画面 ---------- */
 @media (max-height: 560px) {
-  .logo { margin-top: 1vh; font-size: 64px; } .howto { font-size: 11px; }
-  #info { width: 330px; padding: 8px 14px 12px; } #info h2 { font-size: 28px; } #i-img { width: 54px; height: 54px; } #info p { margin: 6px 0; } .sk { margin-top: 5px; } .sk span { display: none; }
-  .card { width: 84px; height: 96px; } button.primary { font-size: 18px; padding: 10px 40px; }
   .skill, .face { width: 64px; } .face { height: 64px; } .skill.ult, .skill.ult .face { width: 84px; } .skill.ult .face { height: 84px; }
   #me-img { width: 58px; height: 58px; } .tile { width: 42px; } .tframe { height: 42px; } .score { font-size: 46px; }
 }
 /* 横向きのスマホ: キャラ情報を左、カードと出撃ボタンを右に並べる */
 @media (max-height: 560px) and (min-width: 601px) {
-  #select { flex-direction: row; align-items: flex-end; gap: 12px; }
-  #info { align-self: flex-start; width: 300px; max-height: 100%; overflow: hidden; } .stat { margin: 3px 0; } .stat div { height: 7px; }
   .sk { grid-template-columns: 28px auto 1fr; margin-top: 4px; } .sk i { width: 28px; height: 28px; grid-row: auto; } #info p { display: none; }
-  #select-bottom { margin-left: auto; gap: 10px; align-items: flex-end; }
-  #cards { width: 282px; gap: 5px; justify-content: flex-end; } .card { width: 90px; height: 60px; } .card span { display: none; } .card b { bottom: 0; }
-  #modebox { align-items: flex-end; } #modes button { padding: 6px 9px; font-size: 11px; } #mode-desc { font-size: 10px; max-width: 290px; } .sk.ult { padding: 0 4px; } .card.on { translate: 0 -4px; }
-  .actions { gap: 12px; flex-wrap: nowrap; } #diff button { padding: 8px 10px; font-size: 12px; }
-  #title .howto p:first-child { display: none; }
 }
 @media (max-width: 600px) {
-  #info { padding: 8px 14px 12px; } #info h2 { font-size: 28px; } #i-img { width: 56px; height: 56px; } #info p { margin: 6px 0; } .sk { margin-top: 5px; } .sk span { display: none; }
-  #select-bottom { gap: 8px; } #cards { width: 100%; gap: 6px; } .card { width: calc((100% - 12px) / 3); height: 72px; } #modes { display: grid; grid-template-columns: repeat(4, 1fr); width: 100%; } #modebox { width: 100%; } #modes button { padding: 7px 0; font-size: 11px; } .stat { display: none !important; } .card.on { translate: 0 -5px; }
-  .stat { margin: 3px 0; } .stat div { height: 7px; } .sk { grid-template-columns: 30px auto 1fr; } .sk i { width: 30px; height: 30px; grid-row: auto; } #info p { display: none; } .ihead { margin-bottom: 8px; }
   #top { gap: 3px; } .tile { width: 27px; } .tframe { height: 30px; } .ttimer { font-size: 20px; } .ttrack { height: 4px; } .team { gap: 2px; } .score { font-size: 34px; min-width: 20px; } .mid { padding: 2px 8px 8px; } #timer { font-size: 24px; } #beacons { gap: 7px; } .chip { width: 17px; height: 17px; } .chip span { font-size: 11px; }
   #minimap { top: calc(max(8px, env(safe-area-inset-top)) + 70px); width: 104px; height: 65px; } #feed { top: calc(max(8px, env(safe-area-inset-top)) + 70px); }
   #me { left: 10px; bottom: max(14px, env(safe-area-inset-bottom)); } #me-img { width: 44px; height: 44px; } #me-name { font-size: 14px; } #myhp { width: 120px; height: 16px; } #myhp-text { font-size: 15px; line-height: 16px; }
   #banner { top: 36%; } #banner-skill { font-size: 30px; } #banner-img, #banner { height: 84px; } #banner-img { width: 84px; }
 }
 
-/* 背の低い縦画面（小型スマホ） */
-@media (max-width: 600px) and (max-height: 620px) {
-  #select { padding-block: 8px; } #select-bottom { gap: 6px; }
-  .card { height: 52px; } .card span { display: none; } .card b { bottom: 0; font-size: 13px; }
-  #mode-desc { font-size: 10.5px; padding: 2px 8px; } #info h2 { font-size: 22px; } #i-img { width: 44px; height: 44px; } .sk { margin-top: 2px; }
-  button.primary { font-size: 18px; padding: 9px 44px; } #diff button { padding: 7px 12px; font-size: 12px; }
-}
 
 /* ---------- ブロスタ風ボタン配置: 右下に大きな攻撃ボタン、周りにスキルと必殺技 ---------- */
 #skills { display: block; width: 250px; height: 236px; pointer-events: none; transform-origin: 100% 100%; }
@@ -258,3 +214,187 @@ button.primary:active { translate: 0 4px; box-shadow: 0 2px 0 #9a6400; }
 .skill.held .face { scale: 1.1; }
 @media (max-width: 600px) { #skills { scale: .86; } }
 @media (max-height: 560px) { #skills { scale: .78; } }
+
+/* =====================================================================
+   ソシャゲ画面（ホーム・キャラ・ガチャ・ミッション・ロード・ランキング）
+   ===================================================================== */
+:root { --coin: #ffc93c; --gem: #5ee0ff; --tro: #ffb02e; --rR: #8fa3c8; --rSR: #c77dff; --rSSR: #ffd60a; }
+.screen svg { display: block; }
+.screen-title { margin: 0 0 10px; font: italic 900 26px/1.1 var(--jp); letter-spacing: .02em; }
+.screen-title small { font: 700 12px var(--jp); opacity: .7; margin-left: 8px; letter-spacing: 0; }
+button.back { position: absolute; left: max(12px, env(safe-area-inset-left)); top: max(12px, env(safe-area-inset-top)); z-index: 3; padding: 8px 18px; font-size: 14px; }
+button[disabled] { opacity: .45; cursor: default; }
+
+/* ---------- ホーム ---------- */
+#home { justify-content: space-between; pointer-events: none; background: linear-gradient(180deg, rgba(7, 10, 28, .7), transparent 22%, transparent 62%, rgba(7, 10, 28, .85)); }
+#home > * { pointer-events: auto; }
+.topbar { width: 100%; display: flex; gap: 8px; align-items: center; justify-content: flex-end; flex-wrap: wrap; }
+.profile { margin-right: auto; display: flex; flex-direction: column; align-items: flex-start; padding: 6px 18px; text-align: left; }
+.profile span { font: italic 900 18px var(--jp); } .profile small { font-size: 10px; opacity: .6; font-weight: 700; }
+.pill { display: flex; align-items: center; gap: 6px; background: var(--panel); padding: 4px 14px 4px 8px; transform: skewX(var(--skew)); box-shadow: inset 0 0 0 2px var(--line); }
+.pill i { width: 22px; height: 22px; transform: skewX(12deg); }
+.pill b { font: italic 900 20px var(--num); transform: skewX(12deg); font-variant-numeric: tabular-nums; min-width: 2.2em; text-align: right; }
+.pill.trophy i { color: var(--tro); } .pill.coin i { color: var(--coin); } .pill.gem i { color: var(--gem); }
+.side { position: absolute; top: 34%; display: flex; flex-direction: column; gap: 12px; }
+.side.left { left: max(14px, env(safe-area-inset-left)); } .side.right { right: max(14px, env(safe-area-inset-right)); }
+.navbtn { position: relative; width: 92px; height: 82px; padding: 6px 4px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-size: 13px; line-height: 1.15;
+  background: linear-gradient(180deg, rgba(40, 54, 120, .95), rgba(16, 22, 52, .95)); box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .25), 0 5px 0 rgba(0, 0, 0, .45); }
+.navbtn > * { transform: skewX(12deg); }
+.navbtn i { width: 30px; height: 30px; color: var(--y); }
+.navbtn.gacha { background: linear-gradient(180deg, #ff7ac6, #9b3cff); }
+.navbtn.gacha i { color: #fff; }
+.badge { position: absolute; top: -8px; right: -8px; min-width: 24px; height: 24px; padding: 0 6px; border-radius: 12px; background: #ff3d57; color: #fff; font: italic 900 15px/24px var(--num); text-align: center; box-shadow: 0 0 0 2px #fff; transform: none !important; }
+.hero-tag { position: absolute; left: 50%; bottom: 31%; translate: -50% 0; display: flex; align-items: baseline; gap: 10px; background: var(--panel); padding: 4px 22px; transform: skewX(var(--skew)); white-space: nowrap; }
+.hero-tag > * { transform: skewX(12deg); }
+#h-role { font-size: 12px; opacity: .75; } #h-hero { font: italic 900 24px var(--jp); } #h-level { font: italic 900 20px var(--num); color: var(--y); font-style: italic; }
+.home-bottom { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 100%; }
+#modes { display: flex; gap: 4px; flex-wrap: wrap; justify-content: center; }
+#modes button { padding: 8px 14px; font-size: 13px; }
+#modes button.on { background: var(--y); color: var(--ink); box-shadow: none; }
+#mode-desc { margin: 0; font-size: 12px; font-weight: 500; background: var(--panel); padding: 3px 14px; text-align: center; max-width: 92vw; }
+#btn-battle { font-size: 30px; padding: 14px 80px; }
+#save-note { position: absolute; left: 50%; bottom: max(4px, env(safe-area-inset-bottom)); translate: -50% 0; margin: 0; font-size: 10px; opacity: .55; white-space: nowrap; }
+
+/* ---------- キャラ一覧 ---------- */
+#heroes { flex-direction: row; align-items: stretch; justify-content: space-between; gap: 16px; padding-top: max(56px, calc(env(safe-area-inset-top) + 48px)); pointer-events: none; }
+#heroes > * { pointer-events: auto; }
+#info { width: min(390px, 100%); align-self: flex-start; max-height: 100%; overflow-y: auto; background: linear-gradient(160deg, rgba(20, 28, 62, .94), rgba(13, 18, 38, .9)); border-top: 4px solid var(--y); padding: 14px 18px 16px; clip-path: polygon(0 0, 100% 0, 100% calc(100% - 18px), calc(100% - 18px) 100%, 0 100%); }
+.ihead { display: flex; gap: 12px; align-items: center; }
+#i-img { width: 72px; height: 72px; object-fit: cover; background: linear-gradient(180deg, #3a4c9a, #1a2250); transform: skewX(var(--skew)); outline: 2px solid #fff; }
+.irole { display: inline-block; color: var(--ink); font-weight: 900; font-size: 12px; padding: 1px 12px; transform: skewX(var(--skew)); }
+#info h2 { margin: 2px 0 0; font: italic 900 36px/1 var(--jp); letter-spacing: .02em; }
+#i-level { font: 700 12px var(--jp); color: var(--y); margin-top: 2px; }
+#info p { margin: 10px 0; font-size: 13px; font-weight: 500; opacity: .9; }
+.stat { display: flex; align-items: center; gap: 10px; font-size: 12px; margin: 5px 0; }
+.stat span { width: 2.6em; opacity: .75; } .stat b { width: 3.2em; text-align: right; font: italic 800 15px var(--num); }
+.stat div { flex: 1; height: 8px; background: rgba(255, 255, 255, .12); transform: skewX(-30deg); overflow: hidden; }
+.stat i { display: block; height: 100%; background: linear-gradient(90deg, #fff, var(--y)); transition: width .25s; }
+.sk { display: grid; grid-template-columns: 40px auto 1fr; gap: 0 10px; margin-top: 10px; align-items: center; }
+.sk i { grid-row: span 2; width: 40px; height: 40px; border-radius: 50%; background: #24306a; display: grid; place-items: center; color: #fff; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .5); }
+.sk i svg { width: 62%; height: 62%; }
+.sk em { font: italic 900 12px var(--num); letter-spacing: .06em; opacity: .7; }
+.sk b { font-size: 15px; font-weight: 900; }
+.sk span { grid-column: 2 / -1; font-size: 11.5px; font-weight: 500; opacity: .8; }
+.sk.ult { cursor: pointer; opacity: .5; padding: 2px 4px; margin-left: -4px; }
+.sk.ult.on { opacity: 1; box-shadow: inset 0 0 0 2px var(--y); background: rgba(255, 214, 10, .12); }
+.sk.ult.on i { background: linear-gradient(180deg, #fff27a, #ffae00); color: var(--ink); }
+.sk.ult.on em { color: var(--y); opacity: 1; }
+#i-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; align-items: stretch; }
+#i-actions .primary { font-size: 18px; padding: 10px 20px; }
+.upbtn { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 18px; background: #24306a; }
+.upbtn.can { background: linear-gradient(180deg, #4ce38a, #1a9e55); color: #fff; }
+.upbtn span { display: flex; align-items: center; gap: 4px; font: italic 800 16px var(--num); }
+.upbtn span svg { width: 18px; height: 18px; display: inline-block; }
+.locked-note { margin: 0; font-size: 13px; color: var(--y); }
+#cards { width: min(430px, 48vw); align-self: flex-start; max-height: 100%; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; padding: 4px 4px 12px; }
+.card { --hc: #fff; position: relative; height: 122px; padding: 0; overflow: hidden; background: linear-gradient(180deg, color-mix(in srgb, var(--hc) 70%, #fff), color-mix(in srgb, var(--hc) 45%, #0d1226)); box-shadow: inset 0 0 0 3px var(--rc); }
+.card.r-R { --rc: var(--rR); } .card.r-SR { --rc: var(--rSR); } .card.r-SSR { --rc: var(--rSSR); }
+.card img { position: absolute; inset: -4px -8px 26px; width: calc(100% + 16px); height: calc(100% - 22px); object-fit: cover; transform: skewX(12deg); }
+.card .rar { position: absolute; top: 3px; left: 8px; font: italic 900 14px var(--num); color: var(--ink); background: var(--rc); padding: 0 6px; }
+.card b { position: absolute; left: 0; right: 0; bottom: 16px; font-size: 14px; font-weight: 900; text-align: center; transform: skewX(12deg); background: rgba(13, 18, 38, .92); }
+.card span { position: absolute; left: 0; right: 0; bottom: 0; height: 16px; font: italic 900 12px/16px var(--num); text-align: center; transform: skewX(12deg); background: var(--hc); color: var(--ink); }
+.card .using { position: absolute; top: 3px; right: 6px; font: 900 10px var(--jp); font-style: normal; background: #fff; color: var(--ink); padding: 0 5px; transform: skewX(12deg); }
+.card.locked img { filter: grayscale(1) brightness(.45); } .card.locked span { background: #333a55; color: #aab; }
+.card.on { box-shadow: inset 0 0 0 4px #fff, 0 0 16px rgba(255, 255, 255, .5); }
+
+/* ---------- ガチャ ---------- */
+#gacha { justify-content: center; background: radial-gradient(120% 90% at 50% 10%, #4a2a8a, #12082e 70%); }
+.gacha-box { display: flex; flex-direction: column; align-items: center; gap: 12px; width: min(720px, 100%); text-align: center; }
+#gacha .screen-title { font-size: 34px; text-shadow: 0 4px 0 rgba(0, 0, 0, .5); }
+#g-feature { display: flex; gap: 12px; justify-content: center; }
+.gfeat { --hc: #fff; position: relative; width: 140px; height: 180px; overflow: hidden; transform: skewX(var(--skew)); background: linear-gradient(180deg, color-mix(in srgb, var(--hc) 70%, #fff), color-mix(in srgb, var(--hc) 40%, #1a0e3a)); box-shadow: inset 0 0 0 3px var(--rSSR), 0 0 26px rgba(255, 214, 10, .45); animation: shimmer 2.4s infinite alternate; }
+.gfeat img { width: 130%; margin-left: -15%; transform: skewX(12deg); }
+.gfeat b { position: absolute; left: 0; right: 0; bottom: 0; background: rgba(13, 18, 38, .9); font-size: 16px; padding: 2px 0; transform: skewX(12deg); }
+.gfeat em { position: absolute; top: 4px; left: 10px; font: italic 900 18px var(--num); color: var(--ink); background: var(--rSSR); padding: 0 8px; }
+@keyframes shimmer { to { box-shadow: inset 0 0 0 3px #fff, 0 0 38px rgba(255, 214, 10, .8); } }
+.g-rates { margin: 0; font-size: 12px; font-weight: 500; opacity: .85; }
+.g-buttons { display: flex; gap: 16px; }
+.gbtn { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 12px 34px; background: linear-gradient(180deg, #5ee0ff, #2b7bff); box-shadow: 0 6px 0 #10388a; color: #fff; }
+.gbtn.ten { background: linear-gradient(180deg, #ff7ac6, #9b3cff); box-shadow: 0 6px 0 #4a1290; }
+.gbtn b { font: italic 900 24px var(--jp); } .gbtn span { display: flex; align-items: center; gap: 4px; font: italic 900 18px var(--num); }
+.gbtn span i, .gbtn span svg { width: 18px; height: 18px; display: inline-block; }
+.g-note { margin: 0; font-size: 12px; opacity: .7; }
+
+.overlay { position: fixed; inset: 0; z-index: 20; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; background: rgba(5, 7, 20, .82); padding-inline: max(16px, env(safe-area-inset-left)) max(16px, env(safe-area-inset-right)); }
+.overlay[hidden] { display: none; }
+#gr-cards { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; max-width: 760px; }
+.gcard { --hc: #fff; --rc: var(--rR); position: relative; width: 120px; height: 160px; overflow: hidden; background: linear-gradient(180deg, color-mix(in srgb, var(--hc) 70%, #fff), color-mix(in srgb, var(--hc) 40%, #0d1226)); box-shadow: inset 0 0 0 4px var(--rc); animation: flipin .45s ease-out both; }
+#gr-cards.ten .gcard { width: 104px; height: 140px; }
+.gcard.r-SR { --rc: var(--rSR); box-shadow: inset 0 0 0 4px var(--rc), 0 0 18px var(--rSR); }
+.gcard.r-SSR { --rc: var(--rSSR); box-shadow: inset 0 0 0 4px var(--rc), 0 0 28px var(--rSSR); }
+.gcard img { width: 100%; height: calc(100% - 40px); object-fit: cover; }
+.gcard .rar { position: absolute; top: 4px; left: 4px; font: italic 900 16px var(--num); color: var(--ink); background: var(--rc); padding: 0 6px; }
+.gcard b { position: absolute; left: 0; right: 0; bottom: 18px; text-align: center; background: rgba(13, 18, 38, .92); font-size: 14px; }
+.gcard span { position: absolute; left: 0; right: 0; bottom: 0; height: 18px; text-align: center; font: italic 900 12px/18px var(--jp); }
+.gcard .new { background: #ff3d57; color: #fff; } .gcard .dup { background: #2b3466; color: #cfd6ff; }
+@keyframes flipin { from { transform: rotateY(90deg) scale(.6); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* ---------- ミッション・ロード・ランキング（共通のシート） ---------- */
+#missions, #road, #ranking { justify-content: flex-start; padding-top: max(60px, calc(env(safe-area-inset-top) + 52px)); background: linear-gradient(180deg, rgba(10, 14, 40, .95), rgba(7, 10, 28, .98)); }
+.sheet { width: min(640px, 100%); max-height: 100%; overflow-y: auto; padding-bottom: 20px; }
+#m-login { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin-bottom: 22px; }
+.lday { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 2px; background: var(--panel); box-shadow: inset 0 0 0 2px var(--line); }
+.lday small { font-size: 10px; opacity: .7; } .lday i { width: 26px; height: 26px; color: var(--coin); } .lday b { font: italic 900 16px var(--num); }
+.lday.done { opacity: .45; } .lday.done::after { content: "受取済"; font-size: 9px; }
+.lday.next { box-shadow: inset 0 0 0 3px var(--y); background: rgba(255, 214, 10, .12); }
+.mission, .rstep { display: grid; grid-template-columns: 140px 1fr auto; gap: 12px; align-items: center; padding: 10px 12px; margin-bottom: 8px; background: var(--panel); box-shadow: inset 0 0 0 2px var(--line); }
+.mission.claimed, .rstep.claimed { opacity: .5; }
+.minfo b { font-size: 14px; } .minfo small { font: italic 800 12px var(--num); opacity: .7; }
+.mbar { height: 8px; margin: 4px 0 2px; background: rgba(255, 255, 255, .12); transform: skewX(-30deg); overflow: hidden; }
+.mbar i { display: block; height: 100%; background: var(--y); }
+.claim { padding: 8px 14px; font-size: 13px; white-space: nowrap; }
+.claim:not([disabled]) { background: linear-gradient(180deg, #4ce38a, #1a9e55); }
+.rstep { grid-template-columns: 90px 1fr auto; }
+.rat { display: flex; align-items: center; gap: 4px; } .rat svg { width: 22px; height: 22px; color: var(--tro); } .rat b { font: italic 900 22px var(--num); }
+.rstep.reached:not(.claimed) { box-shadow: inset 0 0 0 3px var(--y); }
+.reward { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
+.rw { display: flex; align-items: center; gap: 4px; } .rw svg { width: 22px; height: 22px; } .rw b { font: italic 900 18px var(--num); }
+.rw.coin svg { color: var(--coin); } .rw.gem svg { color: var(--gem); } .rw.shard svg { color: #9fffc8; } .rw.shard b { font: 900 12px var(--jp); }
+.rw.trophy svg { color: var(--tro); } .rw.trophy.minus b { color: #ff7a88; }
+.rw.hero img { width: 34px; height: 34px; object-fit: cover; outline: 2px solid var(--y); } .rw.hero b { font: 900 13px var(--jp); color: var(--y); }
+.reward.big { justify-content: center; gap: 28px; } .reward.big svg { width: 34px; height: 34px; } .reward.big b { font-size: 36px; }
+#r-rewards { display: flex; flex-direction: column; align-items: center; gap: 4px; min-height: 44px; }
+#r-rewards .mdone { margin: 0; font-size: 13px; color: var(--y); font-weight: 900; }
+#r-rewards .loading, #rank-list .loading { font-size: 13px; opacity: .7; }
+#rank-list { list-style: none; margin: 0; padding: 0; }
+#rank-list li { display: grid; grid-template-columns: 44px 1fr auto; align-items: center; padding: 8px 14px; margin-bottom: 4px; background: var(--panel); }
+#rank-list em { font: italic 900 22px var(--num); color: var(--y); } #rank-list b { font-size: 15px; } #rank-list span { font: italic 900 20px var(--num); }
+#rank-list li.me { box-shadow: inset 0 0 0 3px var(--y); }
+
+/* ---------- ポップアップ・トースト ---------- */
+.pop { width: min(420px, 100%); background: linear-gradient(160deg, #1d2860, #0e1434); border-top: 4px solid var(--y); padding: 18px 22px 20px; display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center; }
+.pop h3 { margin: 0; font: italic 900 24px var(--jp); }
+#pop-body p { margin: 0; font-size: 14px; }
+.rename { display: flex; flex-direction: column; gap: 6px; width: 100%; text-align: left; font-size: 12px; }
+.rename input { font: 900 18px var(--jp); padding: 10px 12px; background: #0b1030; color: #fff; border: 2px solid var(--line); outline: none; }
+.rename input:focus { border-color: var(--y); }
+#toast { position: fixed; left: 50%; top: 18%; translate: -50% 0; z-index: 30; background: rgba(13, 18, 38, .95); border-left: 5px solid var(--y); padding: 10px 22px; font-size: 15px; font-weight: 900; max-width: 90vw; }
+#toast.pop { animation: toastin .25s ease-out; }
+@keyframes toastin { from { opacity: 0; translate: -50% -12px; } }
+#result .actions { display: flex; gap: 16px; align-items: center; }
+
+/* ---------- 小さい画面 ---------- */
+@media (max-width: 600px) {
+  .topbar { gap: 5px; } .profile { padding: 4px 10px; } .profile span { font-size: 15px; } .profile small { display: none; }
+  .pill { padding: 3px 9px 3px 6px; } .pill i { width: 18px; height: 18px; } .pill b { font-size: 16px; min-width: 1.8em; }
+  .side { top: 22%; } .navbtn { width: 72px; height: 66px; font-size: 11px; } .navbtn i { width: 24px; height: 24px; }
+  .hero-tag { bottom: 30%; } #h-hero { font-size: 20px; }
+  #modes { display: grid; grid-template-columns: repeat(4, 1fr); width: 100%; } #modes button { padding: 7px 0; font-size: 11px; }
+  #btn-battle { font-size: 26px; padding: 12px 64px; }
+  #heroes { flex-direction: column; justify-content: flex-start; gap: 10px; }
+  #info { width: 100%; padding: 8px 14px 12px; max-height: 50%; } #info h2 { font-size: 26px; } #i-img { width: 52px; height: 52px; } #info p, .stat { display: none; }
+  .sk { grid-template-columns: 30px auto 1fr; margin-top: 5px; } .sk i { width: 30px; height: 30px; grid-row: auto; } .sk span { display: none; }
+  #cards { width: 100%; grid-template-columns: repeat(4, 1fr); gap: 5px; } .card { height: 86px; } .card b { font-size: 11px; bottom: 14px; } .card span { height: 14px; font-size: 10px; line-height: 14px; }
+  #g-feature { gap: 6px; } .gfeat { width: 96px; height: 128px; } .gfeat b { font-size: 13px; }
+  .gbtn { padding: 10px 22px; } .gbtn b { font-size: 20px; }
+  #gr-cards.ten .gcard { width: 62px; height: 92px; } #gr-cards.ten .gcard b { font-size: 10px; } #gr-cards.ten .gcard span { font-size: 9px; }
+  .mission { grid-template-columns: 1fr auto; } .mission .reward { grid-column: 1 / -1; }
+  .rstep { grid-template-columns: 70px 1fr auto; gap: 8px; } .rat b { font-size: 18px; }
+  #m-login { gap: 3px; } .lday i { width: 20px; height: 20px; } .lday b { font-size: 13px; }
+}
+@media (max-height: 560px) and (min-width: 601px) {
+  .side { top: 22%; } .navbtn { width: 78px; height: 62px; } .navbtn i { width: 22px; height: 22px; }
+  .hero-tag { bottom: 34%; } #btn-battle { font-size: 22px; padding: 10px 56px; } #modes button { padding: 6px 10px; font-size: 11px; }
+  #heroes { padding-top: max(50px, env(safe-area-inset-top)); } #info p, .stat { display: none; } .card { height: 92px; } #cards { grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); }
+  #g-feature .gfeat { width: 92px; height: 118px; } #gacha .screen-title { font-size: 24px; } .gacha-box { gap: 8px; }
+}

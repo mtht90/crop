@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { heroModel, type HeroModel } from './assets';
-import { HEROES, type Aim, type AimShape, type HeroDef, type SkillDef } from './heroes';
+import type { Aim, AimShape, HeroDef, SkillDef } from './heroes';
 import { Stage, BEACON_POS, BEACON_RADIUS, SPAWNS, SPAWN_RADIUS, TEAM_COLORS } from './stage';
 import { Fx } from './fx';
 import { sfx } from './audio';
@@ -36,7 +36,13 @@ export const MODES: ModeDef[] = [
 const TDM_GOAL = 12;
 const CLASH_GOAL = 3;
 const CONTROL_SECONDS = 70; // 確保し続けて100%になるまでの秒数
-export interface MatchOptions { mode: ModeDef; difficulty: Difficulty; ult: number }
+export interface MatchOptions {
+  mode: ModeDef; difficulty: Difficulty; ult: number;
+  /** [味方3人（先頭がプレイヤー）, 敵3人] */
+  teams: [HeroDef[], HeroDef[]];
+  /** 各ユニットの能力倍率（レベル由来）。teams と同じ並び */
+  muls: [number[], number[]];
+}
 
 export interface Difficulty { name: string; enemyMul: number; skillDelay: number }
 export const DIFFICULTIES: Difficulty[] = [
@@ -171,7 +177,7 @@ export interface ShootOpts {
   speed: number; range: number; radius: number; dmg: number; color: number;
   pierce?: boolean; homing?: Unit; explode?: { radius: number; dmg: number };
 }
-export interface MatchResult { winner: number; scores: [number, number]; unit: string; units: Unit[] }
+export interface MatchResult { winner: number; scores: [number, number]; unit: string; units: Unit[]; player: { hero: string; kos: number; ults: number; captures: number } }
 
 export class Match {
   scene = new THREE.Scene();
@@ -203,13 +209,15 @@ export class Match {
   rounds: [number, number] = [0, 0];
   round = 1;
   private pendingRound = false;
+  /** ミッション用の記録 */
+  playerUlts = 0; teamCaptures = 0;
   /** 引っぱって狙っている間の予告表示 */
   private indicator = new THREE.Group();
   private indLine: THREE.Mesh; private indArea: THREE.Mesh; private indSelf: THREE.Mesh; private indArc: THREE.Mesh;
   private ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   private ray = new THREE.Raycaster();
 
-  constructor(playerHero: HeroDef, opts: MatchOptions, private input: Input, private hud: Hud, private onEnd: (r: MatchResult) => void) {
+  constructor(opts: MatchOptions, private input: Input, private hud: Hud, private onEnd: (r: MatchResult) => void) {
     const s = this.scene;
     const difficulty = this.difficulty = opts.difficulty;
     this.mode = opts.mode;
@@ -227,12 +235,8 @@ export class Match {
     sun.shadow.bias = -0.0015;
     s.add(sun, this.stage.group, this.fx.group);
 
-    // チーム編成: プレイヤー以外は重複なしでランダム
-    const pool = HEROES.filter((h) => h !== playerHero).sort(() => Math.random() - 0.5);
-    const blue = [playerHero, pool[0], pool[1]];
-    const red = pool.slice(2); // 各ヒーローは1体ずつ。残りの3人が敵チームになる
-    [blue, red].forEach((list, team) => list.forEach((def, i) => {
-      const u = new Unit(def, team, team === 0 && i === 0, i, team === 1 ? difficulty.enemyMul : 1);
+    opts.teams.forEach((list, team) => list.forEach((def, i) => {
+      const u = new Unit(def, team, team === 0 && i === 0, i, opts.muls[team][i] * (team === 1 ? difficulty.enemyMul : 1));
       u.ultIdx = u.isPlayer ? opts.ult : Math.floor(Math.random() * 2);
       this.placeAtSpawn(u);
       u.model.settle();
@@ -499,6 +503,7 @@ export class Match {
     u.yaw = Math.atan2(aim.dir.x, aim.dir.z);
     u.playOnce(s.anim, Math.max(0.5, s.lock + 0.25));
     const near = dist2D(u.pos, this.player.pos) < 24;
+    if (i === 2 && u.isPlayer) this.playerUlts++;
     if (i === 2) { this.hud.ultBanner(u, s.name); this.fx.pillar(u.pos, u.def.color, 1.2); if (near) sfx.ult(); }
     else if (near) sfx.skill();
     this.caster = u;
@@ -635,7 +640,7 @@ export class Match {
   private finish(scores: [number, number]) {
     this.state = 'over';
     const winner = scores[0] > scores[1] ? 0 : scores[1] > scores[0] ? 1 : -1;
-    this.result = { winner, scores, unit: this.mode.unit, units: this.units };
+    this.result = { winner, scores, unit: this.mode.unit, units: this.units, player: { hero: this.player.def.id, kos: this.player.kills, ults: this.playerUlts, captures: this.teamCaptures } };
     this.endT = 3.2;
     this.hud.announce(winner === 0 ? 'VICTORY' : winner === 1 ? 'DEFEAT' : 'DRAW', winner === 0 ? 'blue big' : winner === 1 ? 'red big' : 'neutral big');
     winner === 0 ? sfx.win() : sfx.lose();
@@ -760,6 +765,7 @@ export class Match {
       else if (b.owner === 0 && b.value <= 0 || b.owner === 1 && b.value >= 0) b.owner = -1;
       if (b.owner !== before && b.owner !== -1) {
         const mine = b.owner === this.player.team;
+        if (mine) this.teamCaptures++;
         this.hud.announce(`${mine ? '味方' : '敵'}が拠点 ${b.label} を確保！`, b.owner === 0 ? 'blue' : 'red');
         this.fx.ring(b.pos, BEACON_RADIUS * 1.8, TEAM_COLORS[b.owner], 0.8);
         this.fx.pillar(b.pos, TEAM_COLORS[b.owner], 1.6);

@@ -13,37 +13,106 @@
   <div id="loading" class="screen show">
     <h1 class="logo">BEACON<span>BRAWL</span></h1>
     <div class="loadbar"><div id="loadfill"></div></div>
-    <p id="loadtext">素材を読み込み中…</p>
+    <p id="loadtext">読み込み中…</p>
   </div>
 
-  <div id="title" class="screen">
-    <h1 class="logo">BEACON<span>BRAWL</span></h1>
-    <p class="tag"><span>3 VS 3</span> 拠点争奪アクション</p>
-    <button id="btn-start" class="primary">バトル開始</button>
-    <div class="howto">
-      <p>4つのルールで戦う 3 対 3。攻撃は3発までためられ、時間で回復する。</p>
-      <p><b>PC</b>：WASD 移動 ／ マウスで狙って左クリック 攻撃 ／ Q・E スキル ／ Space 必殺技（押して狙い、離して発動）</p>
-      <p><b>スマホ</b>：左側で移動 ／ ボタンをタップで自動照準、引っぱって離すと狙った方向へ</p>
-      <p>必殺技はキャラ選択で2種類から選べます。</p>
+  <!-- ホーム -->
+  <div id="home" class="screen">
+    <header class="topbar">
+      <button id="me-name-btn" class="profile"><span id="h-name"></span><small>なまえ変更</small></button>
+      <div class="pill trophy"><i data-icon="trophy"></i><b id="h-trophies">0</b></div>
+      <div class="pill coin"><i data-icon="coin"></i><b id="h-coins">0</b></div>
+      <div class="pill gem"><i data-icon="gem"></i><b id="h-gems">0</b></div>
+    </header>
+    <nav class="side left">
+      <button id="nav-missions" class="navbtn"><i data-icon="checklist"></i><span>ミッション</span><em class="badge" hidden></em></button>
+      <button id="nav-road" class="navbtn"><i data-icon="trophy"></i><span>トロフィー<br />ロード</span><em class="badge" hidden></em></button>
+      <button id="nav-ranking" class="navbtn" hidden><i data-icon="podium"></i><span>ランキング</span></button>
+    </nav>
+    <nav class="side right">
+      <button id="nav-heroes" class="navbtn"><i data-icon="swords"></i><span>キャラ</span><em class="badge" hidden></em></button>
+      <button id="nav-gacha" class="navbtn gacha"><i data-icon="cards"></i><span>ガチャ</span><em class="badge" hidden></em></button>
+    </nav>
+    <div class="hero-tag"><span id="h-role"></span><b id="h-hero"></b><em id="h-level"></em></div>
+    <div class="home-bottom">
+      <div id="modes"></div>
+      <p id="mode-desc"></p>
+      <button id="btn-battle" class="primary">バトル</button>
     </div>
+    <p id="save-note"></p>
   </div>
 
-  <div id="select" class="screen">
+  <!-- キャラ一覧・強化 -->
+  <div id="heroes" class="screen">
+    <button class="back" data-back>‹ ホーム</button>
     <div id="info">
-      <div class="ihead"><img id="i-img" alt="" /><div><div class="irole" id="i-role"></div><h2 id="i-name"></h2></div></div>
+      <div class="ihead"><img id="i-img" alt="" /><div><div class="irole" id="i-role"></div><h2 id="i-name"></h2><div id="i-level"></div></div></div>
       <p id="i-blurb"></p>
       <div id="i-stats"></div>
       <div id="i-skills"></div>
+      <div id="i-actions"></div>
     </div>
-    <div id="select-bottom">
-      <div id="cards"></div>
-      <div id="modebox"><div id="modes"></div><p id="mode-desc"></p></div>
-      <div class="actions">
-        <div id="diff"></div>
-        <button id="btn-go" class="primary">出撃</button>
+    <div id="cards"></div>
+  </div>
+
+  <!-- ガチャ -->
+  <div id="gacha" class="screen">
+    <button class="back" data-back>‹ ホーム</button>
+    <div class="gacha-box">
+      <h2 class="screen-title">スターライト招待</h2>
+      <div id="g-feature"></div>
+      <p class="g-rates">提供割合　SSR 6%・SR 24%・R 70%　／　10回なら SR 以上を1体確定　／　<span id="g-pity"></span></p>
+      <div class="g-buttons">
+        <button id="g-1" class="gbtn"><b>1回</b><span><i data-icon="gem"></i>100</span></button>
+        <button id="g-10" class="gbtn ten"><b>10回</b><span><i data-icon="gem"></i>900</span></button>
       </div>
+      <p class="g-note">持っているキャラが出たら、強化に使う「かけら」になります。</p>
     </div>
   </div>
+
+  <!-- ミッション・ログインボーナス -->
+  <div id="missions" class="screen">
+    <button class="back" data-back>‹ ホーム</button>
+    <div class="sheet">
+      <h2 class="screen-title">ログインボーナス</h2>
+      <div id="m-login"></div>
+      <h2 class="screen-title">デイリーミッション <small>毎日午前4時に更新</small></h2>
+      <div id="m-list"></div>
+    </div>
+  </div>
+
+  <!-- トロフィーロード -->
+  <div id="road" class="screen">
+    <button class="back" data-back>‹ ホーム</button>
+    <div class="sheet">
+      <h2 class="screen-title">トロフィーロード <small id="r-best"></small></h2>
+      <div id="road-list"></div>
+    </div>
+  </div>
+
+  <!-- ランキング -->
+  <div id="ranking" class="screen">
+    <button class="back" data-back>‹ ホーム</button>
+    <div class="sheet">
+      <h2 class="screen-title">トロフィーランキング</h2>
+      <ol id="rank-list"></ol>
+    </div>
+  </div>
+
+  <!-- 報酬・お知らせ・入力のポップアップ -->
+  <div id="popup" class="overlay" hidden>
+    <div class="pop">
+      <h3 id="pop-title"></h3>
+      <div id="pop-body"></div>
+      <button id="pop-ok" class="primary">OK</button>
+    </div>
+  </div>
+  <!-- ガチャ結果 -->
+  <div id="gacha-result" class="overlay" hidden>
+    <div id="gr-cards"></div>
+    <button id="gr-ok" class="primary">OK</button>
+  </div>
+  <div id="toast" hidden></div>
 
   <div id="hud">
     <div id="top">
@@ -77,10 +146,11 @@
   <div id="result" class="screen">
     <h1 id="r-title"></h1>
     <p id="r-score"></p>
+    <div id="r-rewards"></div>
     <table id="r-table"></table>
     <div class="actions">
       <button id="btn-again" class="primary">もう一度</button>
-      <button id="btn-back">キャラ選択へ</button>
+      <button id="btn-home">ホームへ</button>
     </div>
   </div>
 
