@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import './style.css';
+import './skin.css';
 import { loadAssets, ensureHeroes, heroModel, portraitOf, capturePortraits, type HeroModel } from './assets';
 import { iconSvg, type IconName } from './icons';
 import { HEROES, type HeroDef } from './heroes';
@@ -10,7 +11,7 @@ import { initAudio, sfx } from './audio';
 import { openBackend, type Backend } from './meta/store';
 import { rarityOf } from './meta/roster';
 import {
-  GACHA_COST, LOGIN_REWARDS, MAX_LEVEL, MISSIONS, PITY, ROAD, UPGRADE_COINS, UPGRADE_SHARDS,
+  GACHA_COST, GACHA_TABLE, GACHA_HERO_RATES, LOGIN_REWARDS, MAX_LEVEL, MISSIONS, PITY, ROAD, UPGRADE_COINS, UPGRADE_SHARDS,
   canLoginToday, enemyTier, levelMul, GameError, type Action, type ActionResult, type Reward,
 } from './meta/economy';
 
@@ -32,6 +33,13 @@ let mode = 0;
 let viewing = ''; // キャラ画面で見ているヒーロー
 
 const P = () => backend.profile;
+
+// 外部UI素材の画像（CSS の --img-* 変数で使う）
+// CSS 変数の url() は CSS ファイルの場所基準で解決されるため、絶対 URL にして渡す
+const UI_BASE = new URL(import.meta.env.BASE_URL + 'assets/ui/', location.href).href;
+for (const n of ['btn-orange', 'btn-blue', 'btn-purple', 'panel-blue', 'panel-orange', 'panel-purple', 'row-blue', 'row-orange', 'row-purple',
+  'bar-blue', 'bar-orange', 'bar-purple', 'gem', 'shard-s', 'shard-m', 'shard-l']) document.documentElement.style.setProperty(`--img-${n}`, `url("${UI_BASE}${n}.png")`);
+for (const n of ['bg-home', 'bg-gacha', 'bg-sheet']) document.documentElement.style.setProperty(`--img-${n}`, `url("${UI_BASE}${n}.webp")`);
 
 // data-icon 属性にアイコンを入れる
 for (const e of document.querySelectorAll<HTMLElement>('[data-icon]')) e.innerHTML = iconSvg(e.dataset.icon as IconName);
@@ -55,7 +63,8 @@ class Stage3D {
   constructor() {
     const s = this.scene;
     s.background = new THREE.Color(0x0b1030);
-    s.fog = new THREE.Fog(0x0b1030, 12, 34);
+    new THREE.TextureLoader().load(UI_BASE + 'bg-home.webp', (t) => { t.colorSpace = THREE.SRGBColorSpace; s.background = t; });
+    s.fog = new THREE.Fog(0x0b1030, 14, 40);
     s.add(new THREE.HemisphereLight(0xcfdcff, 0x3a3048, 1.4));
     const sun = new THREE.DirectionalLight(0xfff1dc, 2.4);
     sun.position.set(3, 8, 6); sun.castShadow = true; sun.shadow.mapSize.set(1024, 1024);
@@ -292,20 +301,34 @@ function openHeroes() {
 }
 
 // ---------- ガチャ ----------
+const ITEM_IMG: Record<string, string> = { shardS: 'shard-s', shardM: 'shard-m', shardL: 'shard-l', coinS: '', coinL: '' };
+const pct = (x: number) => `${+(x * 100).toFixed(1)}%`;
+
 function openGacha() {
   stage.release();
   show('gacha');
+  // 目玉: 中身の種類（かけら・コイン）と、たまに出るキャラ
   const f = $('g-feature'); f.innerHTML = '';
-  for (const h of HEROES.filter((x) => rarityOf(x.id) === 'SSR')) {
+  const unowned = HEROES.filter((h) => !P().heroes[h.id]);
+  for (const h of (unowned.length ? unowned : HEROES).filter((x) => rarityOf(x.id) !== 'R').slice(0, 3)) {
     const c = el('div', 'gfeat'); c.style.setProperty('--hc', hexColor(h.color));
     const img = el('img'); img.src = portraitOf(h);
-    c.append(img, el('b', '', h.name), el('em', '', 'SSR'));
+    c.append(img, el('b', '', h.name), el('em', '', rarityOf(h.id)));
     f.append(c);
   }
+  const items = el('div', 'gitems');
+  for (const [cls, label] of [['shard-l', 'かけら大'], ['shard-m', 'かけら中'], ['shard-s', 'かけら小']] as const) {
+    const it = el('div', 'gitem'); const g = el('i', `gemi ${cls}`); it.append(g, el('span', '', label)); items.append(it);
+  }
+  const coin = el('div', 'gitem'); const ci = el('i', 'coini'); ci.innerHTML = iconSvg('coin'); coin.append(ci, el('span', '', 'コイン')); items.append(coin);
+  f.append(items);
+  const t = GACHA_TABLE;
+  $('g-rates-text').textContent = `提供割合　キャラ ${pct(t[0].rate)}（SSR ${pct(t[0].rate * GACHA_HERO_RATES.SSR)}・SR ${pct(t[0].rate * GACHA_HERO_RATES.SR)}・R ${pct(t[0].rate * GACHA_HERO_RATES.R)}）／ `
+    + t.slice(1).map((x) => `${x.label} ${pct(x.rate)}`).join('・') + '　／　10回なら「かけら大」以上を1つ確定';
   refreshGacha();
 }
 function refreshGacha() {
-  $('g-pity').textContent = `SSR確定まであと ${PITY - P().pity} 回`;
+  $('g-pity').textContent = `あと ${PITY - P().pity} 回でキャラ確定`;
   $('g-1').toggleAttribute('disabled', P().gems < GACHA_COST.single);
   $('g-10').toggleAttribute('disabled', P().gems < GACHA_COST.ten);
 }
@@ -316,16 +339,27 @@ async function pull(count: 1 | 10) {
   const box = $('gr-cards'); box.innerHTML = '';
   box.classList.toggle('ten', count === 10);
   r.pulls.forEach((p, i) => {
-    const h = heroById(p.hero);
-    const c = el('div', `gcard r-${p.rarity}`);
-    c.style.setProperty('--hc', hexColor(h.color)); c.style.animationDelay = `${i * 0.12}s`;
-    const img = el('img'); img.src = portraitOf(h);
-    c.append(img, el('em', 'rar', p.rarity), el('b', '', h.name), el('span', p.isNew ? 'new' : 'dup', p.isNew ? 'NEW!' : `かけら+${p.shards}`));
+    let c: HTMLElement;
+    if (p.kind === 'hero') {
+      const h = heroById(p.hero);
+      c = el('div', `gcard r-${p.rarity}`);
+      c.style.setProperty('--hc', hexColor(h.color));
+      const img = el('img'); img.src = portraitOf(h);
+      c.append(img, el('em', 'rar', p.rarity), el('b', '', h.name), el('span', p.isNew ? 'new' : 'dup', p.isNew ? 'NEW!' : `かけら+${p.shards}`));
+    } else {
+      c = el('div', `gcard item k-${p.kind}`);
+      const pic = el('div', 'itemimg');
+      if (ITEM_IMG[p.kind]) pic.style.backgroundImage = `var(--img-${ITEM_IMG[p.kind]})`; else { pic.classList.add('coinpic'); pic.innerHTML = iconSvg('coin'); }
+      c.append(pic);
+      if ('hero' in p) { const face = el('img', 'face'); face.src = portraitOf(p.hero); c.append(face); }
+      c.append(el('div', 'amt', `${p.kind.startsWith('coin') ? 'コイン' : 'かけら'} +${p.n}`), el('span', 'dup', 'hero' in p ? heroById(p.hero).name : GACHA_TABLE.find((x) => x.kind === p.kind)!.label));
+    }
+    c.style.animationDelay = `${i * 0.12}s`;
     box.append(c);
   });
   $('gacha-result').hidden = false;
-  const best = r.pulls.some((p) => p.rarity === 'SSR') ? 'SSR' : r.pulls.some((p) => p.rarity === 'SR') ? 'SR' : 'R';
-  setTimeout(() => (best === 'SSR' ? sfx.win() : best === 'SR' ? sfx.capture() : sfx.ui()), 200);
+  const got = r.pulls.find((p) => p.kind === 'hero');
+  setTimeout(() => (got ? sfx.win() : r.pulls.some((p) => p.kind === 'shardL') ? sfx.capture() : sfx.ui()), 200);
   refreshGacha();
 }
 $('g-1').addEventListener('click', () => pull(1));
@@ -344,7 +378,7 @@ function openMissions() {
   LOGIN_REWARDS.forEach((r, i) => {
     const d = el('div', `lday${i < got ? ' done' : ''}${!today && i === got ? ' next' : ''}`);
     d.append(el('small', '', `${i + 1}日目`));
-    const ic = el('i'); ic.innerHTML = iconSvg(r.gems ? 'gem' : 'coin'); d.append(ic, el('b', '', String(r.gems ?? r.coins)));
+    const ic = el('i', r.gems ? 'gemi gem' : ''); if (!r.gems) ic.innerHTML = iconSvg('coin'); d.append(ic, el('b', '', String(r.gems ?? r.coins)));
     login.append(d);
   });
   const list = $('m-list'); list.innerHTML = '';

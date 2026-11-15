@@ -1,0 +1,96 @@
+/*
+ * 外部UI素材（Wenrexa の CC0 素材）による見た目。
+ * 画像は public/assets/ui/ にあり、main.ts が --img-* 変数に URL を入れる（どの配信先でも相対パスで解決するため）。
+ * ボタンとパネルは border-image の9分割で伸ばしている。
+ */
+
+/* ---------- ボタン ---------- */
+button.primary, .gbtn, .claim:not([disabled]), .upbtn.can, #i-actions .primary {
+  border-style: solid; border-width: 14px; border-color: transparent; border-image: var(--img-btn-orange) 24 fill / 14px stretch;
+  background: none; box-shadow: none; transform: none; padding: 4px 30px; color: #3a1a00; text-shadow: 0 1px 0 rgba(255, 255, 255, .45);
+  filter: drop-shadow(0 5px 0 rgba(90, 40, 0, .85)) drop-shadow(0 10px 14px rgba(0, 0, 0, .45));
+}
+button.primary:active, .gbtn:active, .claim:active, .navbtn:active { translate: 0 3px; filter: drop-shadow(0 2px 0 rgba(90, 40, 0, .85)); }
+#btn-battle { padding: 6px 70px; font-size: 32px; }
+.gbtn { border-image-source: var(--img-btn-blue); color: #fff; text-shadow: 0 2px 0 rgba(0, 30, 90, .6); filter: drop-shadow(0 5px 0 rgba(0, 30, 90, .9)) drop-shadow(0 10px 14px rgba(0, 0, 0, .45)); padding: 4px 34px; }
+.gbtn.ten { border-image-source: var(--img-btn-purple); filter: drop-shadow(0 5px 0 rgba(60, 0, 80, .9)) drop-shadow(0 10px 14px rgba(0, 0, 0, .45)); }
+.claim:not([disabled]), .upbtn.can { border-image-source: var(--img-btn-blue); color: #fff; text-shadow: 0 1px 0 rgba(0, 30, 90, .6); padding: 2px 16px; filter: drop-shadow(0 4px 0 rgba(0, 30, 90, .9)); }
+.upbtn.can { padding: 4px 18px; }
+.navbtn, .navbtn.gacha {
+  border-style: solid; border-width: 14px; border-color: transparent; border-image: var(--img-btn-blue) 24 fill / 14px stretch;
+  background: none; box-shadow: none; transform: none; padding: 0; filter: drop-shadow(0 5px 0 rgba(0, 30, 90, .9)) drop-shadow(0 8px 12px rgba(0, 0, 0, .45));
+}
+.navbtn > * { transform: none; }
+.navbtn i { color: #fff; filter: drop-shadow(0 2px 0 rgba(0, 30, 90, .6)); }
+.navbtn span { text-shadow: 0 2px 0 rgba(0, 30, 90, .7); }
+.navbtn.gacha { border-image-source: var(--img-btn-purple); filter: drop-shadow(0 5px 0 rgba(60, 0, 80, .9)) drop-shadow(0 8px 12px rgba(0, 0, 0, .45)); }
+#modes button { border-style: solid; border-width: 10px; border-color: transparent; border-image: var(--img-btn-blue) 24 fill / 10px stretch; background: none; box-shadow: none; transform: none; padding: 0 10px; opacity: .65; }
+#modes button.on { border-image-source: var(--img-btn-orange); color: #3a1a00; opacity: 1; }
+
+/* ---------- パネル ---------- */
+#info, .pop, .sheet > .screen-title + div:not(#m-login) {}
+#info { clip-path: none; border-style: solid; border-color: transparent; border-width: 30px 10px 12px; border-image: var(--img-panel-blue) 70 12 12 fill / 30px 10px 12px stretch; background: none; padding: 0 8px 6px; }
+#info .ihead { margin-top: 6px; }
+#info::before { content: "キャラクター"; position: absolute; top: -25px; left: 4px; font: italic 900 14px var(--jp); text-shadow: 0 2px 0 rgba(0, 30, 90, .7); }
+#info { position: relative; }
+.pop { border-style: solid; border-color: transparent; border-width: 34px 10px 12px; border-image: var(--img-panel-blue) 70 12 12 fill / 34px 10px 12px stretch; background: none; padding: 0 16px 14px; }
+.pop h3 { margin-top: -27px; margin-bottom: 8px; text-shadow: 0 2px 0 rgba(0, 30, 90, .7); }
+.mission, .rstep, #rank-list li {
+  border-style: solid; border-color: transparent; border-width: 10px 8px 8px; border-image: var(--img-row-blue) 70 12 12 fill / 10px 8px 8px stretch;
+  background: none; box-shadow: none; padding: 6px 10px;
+}
+.rstep.reached:not(.claimed), #rank-list li.me { border-image-source: var(--img-row-orange); box-shadow: none; }
+.lday { border-style: solid; border-color: transparent; border-width: 10px 6px 6px; border-image: var(--img-panel-blue) 70 12 12 fill / 10px 6px 6px stretch; background: none; box-shadow: none; }
+.lday.next { border-image-source: var(--img-panel-orange); background: none; box-shadow: none; }
+.pill { border-style: solid; border-color: transparent; border-width: 6px 8px; border-image: var(--img-bar-blue) 8 fill / 6px 8px stretch; background: none; box-shadow: none; transform: none; padding: 0 8px 0 2px; }
+.pill > *, .pill i, .pill b { transform: none; }
+.pill.gem i { background: var(--img-gem) center / contain no-repeat; }
+.pill.gem i svg { display: none; }
+.mbar, .stat div { transform: none; height: 12px; border: 3px solid transparent; border-image: var(--img-bar-blue) 8 fill / 3px stretch; background: none; }
+.mbar i, .stat i { border-radius: 2px; }
+
+/* ---------- 背景 ---------- */
+#gacha { background: linear-gradient(180deg, rgba(10, 4, 30, .25), rgba(10, 4, 30, .75)), var(--img-bg-gacha) center / cover no-repeat, #12082e; }
+#missions, #road, #ranking { background: linear-gradient(180deg, rgba(7, 10, 28, .55), rgba(7, 10, 28, .85)), var(--img-bg-sheet) center / cover no-repeat, #070a1c; }
+
+/* ---------- 宝石アイコン（ジェム・かけら） ---------- */
+.gemi { display: inline-block; width: 22px; height: 22px; background: center / contain no-repeat; vertical-align: middle; }
+.gemi.gem { background-image: var(--img-gem); } .gemi.shard-s { background-image: var(--img-shard-s); }
+.gemi.shard-m { background-image: var(--img-shard-m); } .gemi.shard-l { background-image: var(--img-shard-l); }
+.rw.gem svg, .gbtn span svg { display: none; }
+.rw.gem::before, .gbtn span::before { content: ""; width: 26px; height: 26px; background: var(--img-gem) center / contain no-repeat; display: inline-block; }
+.upbtn span svg:last-child { display: none; }
+.upbtn span::after { content: ""; order: 3; width: 20px; height: 20px; background: var(--img-shard-m) center / contain no-repeat; display: inline-block; }
+
+/* ガチャ結果のアイテム */
+.gcard.item { --rc: #6a7bb5; background: radial-gradient(circle at 50% 38%, rgba(255, 255, 255, .22), rgba(20, 24, 60, .95) 70%); display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.gcard.item .itemimg { width: 74%; aspect-ratio: 1; background: center / contain no-repeat; margin-top: -18px; filter: drop-shadow(0 6px 10px rgba(0, 0, 0, .5)); }
+.gcard.item.k-shardL { --rc: var(--rSR); box-shadow: inset 0 0 0 4px var(--rc), 0 0 18px var(--rSR); }
+.gcard.item.k-coinL { --rc: var(--coin); }
+.gcard .face { position: absolute; right: 6px; bottom: 40px; width: 36px; height: 36px; object-fit: cover; border-radius: 50%; outline: 2px solid #fff; background: #223; }
+.gcard .amt { position: absolute; left: 0; right: 0; bottom: 18px; text-align: center; font: italic 900 18px var(--num); background: rgba(13, 18, 38, .92); }
+.g-rates { line-height: 1.7; }
+
+/* ガチャ画面の中身表示 */
+.g-sub { margin: -6px 0 0; font-size: 13px; opacity: .85; }
+.g-pity { margin: 0; font: 900 14px var(--jp); color: var(--y); }
+#g-feature { align-items: center; flex-wrap: wrap; }
+.gitems { display: grid; grid-template-columns: repeat(2, auto); gap: 6px 14px; margin-left: 10px; text-align: left; }
+.gitem { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 900; }
+.gitem .gemi { width: 40px; height: 40px; }
+.gitem .coini { width: 34px; height: 34px; color: var(--coin); display: block; }
+.coinpic { color: var(--coin); display: grid; place-items: center; } .coinpic svg { width: 70%; height: 70%; }
+@media (max-width: 600px) { .gitems { margin: 6px 0 0; grid-template-columns: repeat(4, auto); } .gitem .gemi { width: 30px; height: 30px; } .gitem span { font-size: 10px; } }
+
+/* 戻る・名前ボタン */
+button.back, .profile { border-style: solid; border-width: 10px; border-color: transparent; border-image: var(--img-btn-blue) 24 fill / 10px stretch; background: none; box-shadow: none; transform: none; padding: 0 12px; filter: drop-shadow(0 3px 0 rgba(0, 30, 90, .9)); }
+.profile { padding: 0 14px; }
+.lday .gemi { width: 30px; height: 30px; }
+.mission, .rstep { padding: 2px 8px; }
+@media (max-width: 600px) { .mission { gap: 4px 10px; } }
+@media (max-width: 600px) {
+  #gr-cards.ten .gcard.item .amt { font-size: 11px; bottom: 14px; }
+  #gr-cards.ten .gcard.item .itemimg { width: 70%; margin-top: -26px; }
+  #gr-cards.ten .gcard .face { width: 22px; height: 22px; right: 3px; bottom: 30px; }
+  #gacha .screen-title { font-size: 26px; }
+}

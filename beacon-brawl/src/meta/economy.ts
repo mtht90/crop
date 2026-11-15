@@ -36,8 +36,26 @@ export const UPGRADE_SHARDS = [0, 10, 20, 30, 40, 60, 80, 100, 130, 160];
 export const levelMul = (level: number) => 1 + 0.05 * (level - 1);
 
 export const GACHA_COST = { single: 100, ten: 900 };
-export const GACHA_RATES: Record<Rarity, number> = { SSR: 0.06, SR: 0.24, R: 0.70 };
-export const PITY = 50; // 50回引いて SSR が出なければ確定
+/**
+ * ガチャの中身。主に強化素材（かけら・コイン）で、たまにキャラが出る。
+ * かけらは「持っているキャラ（最大レベル以外）」のどれかに入る。
+ */
+export type GachaKind = 'hero' | 'shardL' | 'shardM' | 'shardS' | 'coinL' | 'coinS';
+export const GACHA_TABLE: { kind: GachaKind; rate: number; label: string; n?: number }[] = [
+  { kind: 'hero', rate: 0.05, label: 'キャラ' },
+  { kind: 'shardL', rate: 0.10, label: 'かけら大', n: 40 },
+  { kind: 'shardM', rate: 0.25, label: 'かけら中', n: 20 },
+  { kind: 'shardS', rate: 0.30, label: 'かけら小', n: 8 },
+  { kind: 'coinL', rate: 0.10, label: 'コイン大', n: 300 },
+  { kind: 'coinS', rate: 0.20, label: 'コイン小', n: 80 },
+];
+/** キャラが出たときのレア度の内訳 */
+export const GACHA_HERO_RATES: Record<Rarity, number> = { SSR: 0.1, SR: 0.3, R: 0.6 };
+export const PITY = 30; // 30回引いてキャラが出なければ確定
+export type GachaPull =
+  | { kind: 'hero'; hero: string; rarity: Rarity; isNew: boolean; shards: number }
+  | { kind: 'shardL' | 'shardM' | 'shardS'; hero: string; n: number }
+  | { kind: 'coinL' | 'coinS'; n: number };
 /** 被ったときにもらえるかけら（強化に使う） */
 export const DUP_SHARDS: Record<Rarity, number> = { R: 10, SR: 25, SSR: 60 };
 
@@ -130,7 +148,7 @@ export type ActionResult =
   | { type: 'login'; reward: Reward | null; day: number }
   | { type: 'match'; rewards: MatchRewards }
   | { type: 'reward'; reward: Reward }
-  | { type: 'gacha'; pulls: { hero: string; rarity: Rarity; isNew: boolean; shards: number }[] }
+  | { type: 'gacha'; pulls: GachaPull[] }
   | { type: 'ok' };
 
 export function canLoginToday(p: Profile, now: number) { return p.login.lastDay !== dayKey(now); }
@@ -183,18 +201,13 @@ export function apply(p: Profile, a: Action, now: number, rand: () => number = M
       const cost = a.count === 10 ? GACHA_COST.ten : GACHA_COST.single;
       if (p.gems < cost) throw new GameError('ジェムが足りません');
       p.gems -= cost;
-      const pulls: { hero: string; rarity: Rarity; isNew: boolean; shards: number }[] = [];
+      const pulls: GachaPull[] = [];
       for (let i = 0; i < a.count; i++) {
         p.pity++;
-        let rarity: Rarity = p.pity >= PITY ? 'SSR' : pickRarity(rand());
-        // 10連の最後は SR 以上を確定
-        if (a.count === 10 && i === 9 && rarity === 'R' && !pulls.some((x) => x.rarity !== 'R')) rarity = 'SR';
-        if (rarity === 'SSR') p.pity = 0;
-        const pool = ROSTER.filter((h) => h.rarity === rarity);
-        const hero = pool[Math.floor(rand() * pool.length)].id;
-        const isNew = !p.heroes[hero];
-        const reward: Reward = { hero }; give(p, reward);
-        pulls.push({ hero, rarity, isNew, shards: reward.shards?.n ?? 0 });
+        let kind = p.pity >= PITY ? 'hero' : pickKind(rand());
+        // 10連の最後は「かけら大」以上を確定
+        if (a.count === 10 && i === 9 && !pulls.some((x) => x.kind === 'hero' || x.kind === 'shardL') && kind !== 'hero') kind = 'shardL';
+        pulls.push(gachaItem(p, kind, rand));
       }
       return { type: 'gacha', pulls };
     }
@@ -224,7 +237,33 @@ export function apply(p: Profile, a: Action, now: number, rand: () => number = M
   }
 }
 
-function pickRarity(x: number): Rarity { return x < GACHA_RATES.SSR ? 'SSR' : x < GACHA_RATES.SSR + GACHA_RATES.SR ? 'SR' : 'R'; }
+function pickKind(x: number): GachaKind {
+  for (const t of GACHA_TABLE) { if (x < t.rate) return t.kind; x -= t.rate; }
+  return 'coinS';
+}
+
+/** ガチャ1回ぶんの中身を決めて、プロフィールに反映する */
+function gachaItem(p: Profile, kind: GachaKind, rand: () => number): GachaPull {
+  if (kind === 'hero') {
+    p.pity = 0;
+    const x = rand();
+    const rarity: Rarity = x < GACHA_HERO_RATES.SSR ? 'SSR' : x < GACHA_HERO_RATES.SSR + GACHA_HERO_RATES.SR ? 'SR' : 'R';
+    // まだ持っていないキャラを優先（そのレア度を全部持っていれば、ほかのレア度の未所持から）
+    const unowned = ROSTER.filter((h) => !p.heroes[h.id]);
+    const pool = unowned.filter((h) => h.rarity === rarity).length ? unowned.filter((h) => h.rarity === rarity) : unowned.length ? unowned : ROSTER.filter((h) => h.rarity === rarity);
+    const pick = pool[Math.floor(rand() * pool.length)];
+    const reward: Reward = { hero: pick.id }; give(p, reward);
+    return { kind: 'hero', hero: pick.id, rarity: pick.rarity, isNew: !reward.shards, shards: reward.shards?.n ?? 0 };
+  }
+  const t = GACHA_TABLE.find((x) => x.kind === kind)!;
+  if (kind === 'coinL' || kind === 'coinS') { p.coins += t.n!; return { kind, n: t.n! }; }
+  // かけら: 最大レベルでない所持キャラから。使用中のキャラには少し出やすく
+  const owned = Object.keys(p.heroes).filter((id) => p.heroes[id].level < MAX_LEVEL);
+  if (!owned.length) { const n = t.n! * 10; p.coins += n; return { kind: 'coinL', n }; }
+  const hero = owned.includes(p.selected) && rand() < 0.3 ? p.selected : owned[Math.floor(rand() * owned.length)];
+  p.heroes[hero].shards += t.n!;
+  return { kind: kind as 'shardL' | 'shardM' | 'shardS', hero, n: t.n! };
+}
 function clampInt(n: number, lo: number, hi: number) { return Math.max(lo, Math.min(hi, Math.floor(Number(n) || 0))); }
 
 /** 古い/壊れたセーブを読み込めるように補う */

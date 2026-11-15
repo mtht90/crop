@@ -10,6 +10,10 @@
 
 - `public/assets/vrm/` の VRM は `scripts/optimize-vrm.py` でテクスチャを最大1024pxに縮小し WebP 化したものです（1体 約15〜20MB → 約4.5MB）。形状・ボーン・VRM メタ情報は変えていません。各ファイルのメタ情報にも `licenseName: CC0` と記録されています。
 - `public/assets/rig.glb` は `scripts/build-rig.mjs` で、配布物からメッシュを外し、使うアニメーション18種だけを残したものです。読み込み時に VRM のヒューマノイド骨へ移植しています（`src/assets.ts` の `retarget`）。
+- UI素材（`public/assets/ui/`）: Wenrexa（https://wenrexa.itch.io/ ）の CC0 素材を縮小・変換して使っています。
+  - ボタン・パネル・バー: [Assets: UI Casual FREE](https://opengameart.org/content/assets-ui-casual-free-5-buttons-bars-panels)（CC0）
+  - ジェム・かけらのアイコン: [Assets: Free UI Sprites Gem Stones](https://opengameart.org/content/assets-free-ui-sprites-gem-stones)（CC0）
+  - 背景の星雲: [Assets: Free Space Backgrounds in 4K](https://opengameart.org/content/assets-free-space-backgrounds-in-4k)（CC0）
 - アイコン（`src/icons.ts`）: [game-icons.net](https://game-icons.net/) の Lorc / Delapouite / DarkZaitzev / Faithtoken 作、**CC BY 3.0**（要クレジット表記）。
 - フォント: Barlow Condensed、Noto Sans JP（いずれも SIL Open Font License 1.1、Google Fonts から読み込み）。
 - キャラの顔アイコン（`public/assets/portraits/`）は、3Dモデルから `scripts/render-portraits.cjs` で書き出したものです。
