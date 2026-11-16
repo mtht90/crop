@@ -113,6 +113,7 @@
       this.opts = opts || {};
       this.ask = this.opts.ask;           // async (pi, req) => value
       this.onEvent = this.opts.onEvent || (() => {});
+      this.fx = this.opts.fx || (async () => {});
       this.turn = 0; this.cur = 0; this.winner = null; this.stadium = null; this.log = [];
       this.players = decks.map((d, i) => ({
         i, name: this.opts.names ? this.opts.names[i] : (i === 0 ? 'あなた' : 'CPU'),
@@ -124,7 +125,7 @@
     opp(i) { return this.players[1 - i]; }
     emit(type, data) { this.onEvent(type, data || {}); }
     say(msg) { this.log.push(msg); this.emit('log', { msg }); }
-    flip() { const h = rnd() < 0.5; this.emit('coin', { heads: h }); this.say(`コイン：${h ? '表' : '裏'}`); return h; }
+    async flip(label) { const h = rnd() < 0.5; this.emit('coin', { heads: h }); await this.fx('coin', { heads: h, label }); this.say(`コイン：${h ? '表' : '裏'}`); return h; }
 
     maxHp(s) {
       const c = top(s); let hp = c.hp;
@@ -141,6 +142,7 @@
     }
     allSlots(p) { return [p.active, ...p.bench].filter(Boolean); }
     draw(p, n) { let k = 0; for (; k < n && p.deck.length; k++) p.hand.push(p.deck.shift()); if (k) this.emit('draw', { pi: p.i, n: k }); return k; }
+    async drawA(p, n) { const k = this.draw(p, n); if (k) await this.fx('draw', { pi: p.i, n: k }); return k; }
 
     // ---------- setup ----------
     async setup() {
@@ -178,11 +180,11 @@
       this.turn++; const p = this.P(this.cur);
       Object.assign(p, { energyPlayed: false, supporterPlayed: false, stadiumPlayed: false, retreated: false, atkbuff: 0 });
       this.say(`── ${p.name}の番（ターン${this.turn}） ──`);
-      this.emit('turnStart', { pi: p.i, turn: this.turn });
+      this.emit('turnStart', { pi: p.i, turn: this.turn }); await this.fx('turn', { pi: p.i, turn: this.turn });
       if (!p.deck.length) { this.say(`${p.name}は山札が引けない。`); return this.end(1 - p.i, 'deckout'); }
-      this.draw(p, 1);
+      await this.drawA(p, 1);
       const st = this.stadiumFx();
-      if (st && st[0] === 'drawplus' && p.hand.length <= 4) { this.draw(p, 1); this.say('堺の港の効果で1枚引いた。'); }
+      if (st && st[0] === 'drawplus' && p.hand.length <= 4) { await this.drawA(p, 1); this.say('堺の港の効果で1枚引いた。'); }
     }
     isFirstTurnOfGame() { return this.turn === 1; }
     canEvolveThisTurn() { return this.turn > 2; }
@@ -244,42 +246,42 @@
     async playBasic(pi, uid) {
       const p = this.P(pi); const c = p.hand.find(x => x.uid === uid); if (!c || !isBasic(c) || p.bench.length >= 5) return false;
       p.hand.splice(p.hand.indexOf(c), 1); const s = mkSlot(c, this.turn); p.bench.push(s);
-      this.say(`${p.name}は${C(c).name}をベンチに出した。`); this.emit('place', { pi, slot: s.uid }); return true;
+      this.say(`${p.name}は${C(c).name}をベンチに出した。`); this.emit('place', { pi, slot: s.uid }); await this.fx('place', { pi, slot: s.uid }); return true;
     }
     async evolve(pi, uid, slotUid) {
       const p = this.P(pi); const c = p.hand.find(x => x.uid === uid); if (!c) return false;
       const s = this.evoTargets(p, c).find(x => x.uid === slotUid); if (!s) return false;
       p.hand.splice(p.hand.indexOf(c), 1); const old = top(s).name; s.stack.push(c); s.evolvedTurn = this.turn; s.status = {};
-      this.say(`${p.name}は${old}を${C(c).name}に進化させた。`); this.emit('evolve', { pi, slot: s.uid }); return true;
+      this.say(`${p.name}は${old}を${C(c).name}に進化させた。`); this.emit('evolve', { pi, slot: s.uid }); await this.fx('evolve', { pi, slot: s.uid, name: C(c).name }); return true;
     }
     async attachEnergy(pi, uid, slotUid) {
       const p = this.P(pi); if (p.energyPlayed) return false; const c = p.hand.find(x => x.uid === uid); if (!c || !isEnergy(c)) return false;
       const s = this.allSlots(p).find(x => x.uid === slotUid); if (!s) return false;
       p.hand.splice(p.hand.indexOf(c), 1); s.energy.push(c); p.energyPlayed = true;
-      this.say(`${p.name}は${top(s).name}に${C(c).name}をつけた。`); this.emit('energy', { pi, slot: s.uid, type: C(c).type }); return true;
+      this.say(`${p.name}は${top(s).name}に${C(c).name}をつけた。`); this.emit('energy', { pi, slot: s.uid, type: C(c).type }); await this.fx('energy', { pi, slot: s.uid, type: C(c).type }); return true;
     }
     async attachTool(pi, uid, slotUid) {
       const p = this.P(pi); const c = p.hand.find(x => x.uid === uid); const s = this.allSlots(p).find(x => x.uid === slotUid);
       if (!c || !s || s.tool) return false; p.hand.splice(p.hand.indexOf(c), 1); s.tool = c;
-      this.say(`${p.name}は${top(s).name}に${C(c).name}をつけた。`); this.emit('tool', { pi, slot: s.uid }); return true;
+      this.say(`${p.name}は${top(s).name}に${C(c).name}をつけた。`); this.emit('tool', { pi, slot: s.uid }); await this.fx('tool', { pi, slot: s.uid }); return true;
     }
     async playStadium(pi, uid) {
       const p = this.P(pi); const c = p.hand.find(x => x.uid === uid); if (!c || p.stadiumPlayed) return false;
       p.hand.splice(p.hand.indexOf(c), 1);
       if (this.stadium) this.P(this.stadium.owner).discard.push(this.stadium.card);
       this.stadium = { card: c, owner: pi }; p.stadiumPlayed = true;
-      this.say(`${p.name}はスタジアム「${C(c).name}」を出した。`); this.emit('stadium', { pi, id: c.id }); return true;
+      this.say(`${p.name}はスタジアム「${C(c).name}」を出した。`); this.emit('stadium', { pi, id: c.id }); await this.fx('stadium', { pi, id: c.id }); return true;
     }
     async playTrainer(pi, uid) {
       const p = this.P(pi); const o = this.opp(pi); const c = p.hand.find(x => x.uid === uid); if (!c) return false;
       const d = C(c); if (d.kind === 'support') { if (p.supporterPlayed || this.turn === 1) return false; p.supporterPlayed = true; }
       p.hand.splice(p.hand.indexOf(c), 1);
-      this.say(`${p.name}は${KIND_JA[d.kind]}「${d.name}」を使った。`); this.emit('trainer', { pi, id: d.id });
+      this.say(`${p.name}は${KIND_JA[d.kind]}「${d.name}」を使った。`); this.emit('trainer', { pi, id: d.id }); p.playing = c; await this.fx('trainer', { pi, id: d.id, uid: c.uid });
       for (const t of fxList(d.fx)) {
         const [k, x] = t.split(':'); const n = +x;
-        if (k === 'draw') this.draw(p, n);
-        else if (k === 'redraw') { p.deck.push(...p.hand); p.hand = []; shuffle(p.deck); this.draw(p, n); }
-        else if (k === 'oppredraw') { o.deck.push(...o.hand); o.hand = []; shuffle(o.deck); this.draw(o, n); this.say(`${o.name}は手札を山札にもどし、${n}枚引いた。`); }
+        if (k === 'draw') await this.drawA(p, n);
+        else if (k === 'redraw') { p.deck.push(...p.hand); p.hand = []; shuffle(p.deck); await this.drawA(p, n); }
+        else if (k === 'oppredraw') { o.deck.push(...o.hand); o.hand = []; shuffle(o.deck); await this.drawA(o, n); this.say(`${o.name}は手札を山札にもどし、${n}枚引いた。`); }
         else if (k === 'gust') await this.doGust(pi);
         else if (k === 'switch') await this.doSwitch(pi);
         else if (k === 'heal') await this.doHealOne(pi, n);
@@ -294,7 +296,7 @@
         else if (k === 'atkbuff') p.atkbuff += n;
         else if (k === 'item_energy') { const z = p.discard.find(isEnergy); if (z && p.active) { p.discard.splice(p.discard.indexOf(z), 1); p.active.energy.push(z); this.emit('energy', { pi, slot: p.active.uid, type: C(z).type }); } }
       }
-      p.discard.push(c);
+      p.playing = null; p.discard.push(c);
       await this.checkKOs();
       return true;
     }
@@ -303,19 +305,19 @@
       const v = await this.ask(pi, { kind: 'target', side: 'opp', prompt: 'バトル場に呼び出す相手のベンチの人物を選んでください', options: o.bench.map(s => ({ label: top(s).name, value: s.uid, slot: s })) });
       const s = o.bench.find(q => q.uid === v) || o.bench[0];
       o.bench.splice(o.bench.indexOf(s), 1, o.active); o.active.status = {}; o.active = s;
-      this.say(`${o.name}の${top(s).name}がバトル場に引きずり出された。`); this.emit('switch', { pi: o.i });
+      this.say(`${o.name}の${top(s).name}がバトル場に引きずり出された。`); this.emit('switch', { pi: o.i }); await this.fx('switch', { pi: o.i });
     }
     async doSwitch(pi) {
       const p = this.P(pi); if (!p.bench.length) return;
       const v = await this.ask(pi, { kind: 'target', side: 'self', bench: true, prompt: 'バトル場に出す人物を選んでください', options: p.bench.map(s => ({ label: top(s).name, value: s.uid, slot: s })) });
       const s = p.bench.find(q => q.uid === v) || p.bench[0];
       p.bench.splice(p.bench.indexOf(s), 1, p.active); p.active.status = {}; p.active = s;
-      this.say(`${p.name}は${top(s).name}をバトル場に出した。`); this.emit('switch', { pi });
+      this.say(`${p.name}は${top(s).name}をバトル場に出した。`); this.emit('switch', { pi }); await this.fx('switch', { pi });
     }
     async doHealOne(pi, n) {
       const p = this.P(pi); const ts = this.allSlots(p).filter(s => s.damage > 0); if (!ts.length) return;
       const v = await this.ask(pi, { kind: 'target', side: 'self', prompt: `HPを${n}回復する人物を選んでください`, options: ts.map(s => ({ label: top(s).name, value: s.uid, slot: s })) });
-      const s = ts.find(q => q.uid === v) || ts[0]; s.damage = Math.max(0, s.damage - n); this.emit('heal', { pi, slot: s.uid, n });
+      const s = ts.find(q => q.uid === v) || ts[0]; s.damage = Math.max(0, s.damage - n); this.emit('heal', { pi, slot: s.uid, n }); await this.fx('heal', { pi, slot: s.uid, n });
     }
     async searchTo(pi, pred, what) {
       const p = this.P(pi); const cs = p.deck.filter(pred);
@@ -344,7 +346,7 @@
       const v = await this.ask(pi, { kind: 'target', side: 'self', bench: true, prompt: '入れ替える人物を選んでください', options: p.bench.map(b => ({ label: top(b).name, value: b.uid, slot: b })) });
       const b = p.bench.find(q => q.uid === v) || p.bench[0];
       p.bench.splice(p.bench.indexOf(b), 1, s); s.status = {}; p.active = b; p.retreated = true;
-      this.say(`${p.name}は${top(s).name}をにがし、${top(b).name}を出した。`); this.emit('switch', { pi }); return true;
+      this.say(`${p.name}は${top(s).name}をにがし、${top(b).name}を出した。`); this.emit('switch', { pi }); await this.fx('switch', { pi }); return true;
     }
 
     // ---------- attack ----------
@@ -364,17 +366,17 @@
     async attack(pi, ai) {
       if (!this.canAttack(pi, ai)) return false;
       const p = this.P(pi); const o = this.opp(pi); const s = p.active; const a = top(s).atks[ai];
-      this.say(`${top(s).name}の「${a.name}」！`); this.emit('attack', { pi, slot: s.uid, name: a.name, type: top(s).type });
-      if (s.status.conf) { if (!this.flip()) { this.say('こんらんでワザが失敗し、自分に30ダメージ。'); await this.applyDamage(p, s, 30, false); await this.checkKOs(); return this.endTurn(); } }
+      this.say(`${top(s).name}の「${a.name}」！`); this.emit('attack', { pi, slot: s.uid, name: a.name, type: top(s).type }); await this.fx('attack', { pi, slot: s.uid, name: a.name, type: top(s).type, target: o.active && o.active.uid });
+      if (s.status.conf) { if (!(await this.flip())) { this.say('こんらんでワザが失敗し、自分に30ダメージ。'); await this.applyDamage(p, s, 30, false); await this.checkKOs(); return this.endTurn(); } }
       let dmg = a.dmg; let fail = false; const after = [];
       for (const t of fxList(a.fx)) {
         const [k, x, y] = t.split(':'); const n = +x;
         switch (k) {
           case 'bench': dmg += n * p.bench.length; break;
           case 'oppbench': dmg += n * o.bench.length; break;
-          case 'coin': if (this.flip()) dmg += n; break;
-          case 'coinfail': if (!this.flip()) fail = true; break;
-          case 'coins': { let h = 0; if (this.flip()) h++; if (this.flip()) h++; dmg += n * h; break; }
+          case 'coin': if ((await this.flip())) dmg += n; break;
+          case 'coinfail': if (!(await this.flip())) fail = true; break;
+          case 'coins': { let h = 0; if ((await this.flip())) h++; if ((await this.flip())) h++; dmg += n * h; break; }
           case 'dmgd': if (o.active && o.active.damage > 0) dmg += n; break;
           case 'stat': if (o.active && Object.keys(o.active.status).length) dmg += n; break;
           case 'eper': dmg += n * s.energy.length; break;
@@ -389,11 +391,11 @@
       }
       for (const [k, x] of after) {
         const n = +x;
-        if (k === 'draw') this.draw(p, n);
+        if (k === 'draw') await this.drawA(p, n);
         else if (k === 'heal') { s.damage = Math.max(0, s.damage - n); this.emit('heal', { pi, slot: s.uid, n }); }
         else if (k === 'healall') { for (const q of this.allSlots(p)) { if (q.damage) { q.damage = Math.max(0, q.damage - n); this.emit('heal', { pi, slot: q.uid, n }); } } }
-        else if (k === 'st') this.setStatus(o, x);
-        else if (k === 'stc') { if (this.flip()) this.setStatus(o, x); }
+        else if (k === 'st') { this.setStatus(o, x); await this.flushFx(); }
+        else if (k === 'stc') { if ((await this.flip())) { this.setStatus(o, x); await this.flushFx(); } }
         else if (k === 'snipe') { if (o.bench.length) { const v = await this.ask(pi, { kind: 'target', side: 'opp', bench: true, prompt: `${n}ダメージを与えるベンチの人物を選んでください`, options: o.bench.map(b => ({ label: top(b).name, value: b.uid, slot: b })) }); const b = o.bench.find(q => q.uid === v) || o.bench[0]; await this.applyDamage(o, b, n, false); } }
         else if (k === 'self') await this.applyDamage(p, s, n, false);
         else if (k === 'disc') { for (let j = 0; j < n && s.energy.length; j++) p.discard.push(s.energy.pop()); }
@@ -416,24 +418,24 @@
       const s = o.active; if (!s) return;
       if (st === 'sleep' || st === 'para' || st === 'conf') { delete s.status.sleep; delete s.status.para; delete s.status.conf; }
       s.status[st] = st === 'para' ? this.turn : true;
-      this.say(`${top(s).name}は${STATUS_JA[st]}になった。`); this.emit('status', { pi: o.i, slot: s.uid, st });
+      this.say(`${top(s).name}は${STATUS_JA[st]}になった。`); this.emit('status', { pi: o.i, slot: s.uid, st }); this._pendingFx = { k: 'status', d: { pi: o.i, slot: s.uid, st } };
     }
     async applyDamage(p, s, n, fromAttack, weak) {
-      if (n <= 0) return; s.damage += n; this.emit('damage', { pi: p.i, slot: s.uid, n, weak: !!weak });
+      if (n <= 0) return; s.damage += n; this.emit('damage', { pi: p.i, slot: s.uid, n, weak: !!weak }); await this.fx('damage', { pi: p.i, slot: s.uid, n, weak: !!weak, fromAttack: !!fromAttack, type: this.cur != null && this.P(this.cur).active ? top(this.P(this.cur).active).type : null });
       this.say(`${top(s).name}に${n}ダメージ${weak ? '（弱点）' : ''}。`);
     }
     async checkKOs() {
       for (const p of this.players) {
         for (const s of [...this.allSlots(p)]) {
           if (this.hpLeft(s) > 0) continue;
-          this.say(`${top(s).name}は退場した。`); this.emit('ko', { pi: p.i, slot: s.uid });
+          this.say(`${top(s).name}は退場した。`); this.emit('ko', { pi: p.i, slot: s.uid }); await this.fx('ko', { pi: p.i, slot: s.uid, name: top(s).name });
           p.discard.push(...s.stack, ...s.energy); if (s.tool) p.discard.push(s.tool);
           if (s === p.active) p.active = null; else p.bench.splice(p.bench.indexOf(s), 1);
           p.koLastTurn = true;
           const o = this.opp(p.i);
           const n = Math.min(1, o.prizes.length);
           for (let k = 0; k < n; k++) { o.hand.push(o.prizes.pop()); }
-          this.say(`${o.name}はサイドを${n}枚とった（残り${o.prizes.length}）。`); this.emit('prize', { pi: o.i });
+          this.say(`${o.name}はサイドを${n}枚とった（残り${o.prizes.length}）。`); this.emit('prize', { pi: o.i }); await this.fx('prize', { pi: o.i });
         }
       }
       for (const o of this.players) if (!o.prizes.length) return this.end(o.i, 'prizes');
@@ -441,7 +443,7 @@
         if (!p.active) {
           if (!p.bench.length) return this.end(1 - p.i, 'nobench');
           const v = await this.ask(p.i, { kind: 'target', side: 'self', bench: true, prompt: 'バトル場に出す人物を選んでください', options: p.bench.map(b => ({ label: top(b).name, value: b.uid, slot: b })) });
-          const b = p.bench.find(q => q.uid === v) || p.bench[0]; p.bench.splice(p.bench.indexOf(b), 1); p.active = b; this.emit('switch', { pi: p.i });
+          const b = p.bench.find(q => q.uid === v) || p.bench[0]; p.bench.splice(p.bench.indexOf(b), 1); p.active = b; this.emit('switch', { pi: p.i }); await this.fx('switch', { pi: p.i });
         }
       }
     }
@@ -458,8 +460,8 @@
       for (const q of this.players) {
         const s = q.active; if (!s) continue;
         if (s.status.poison) { this.say(`${top(s).name}はどくで10ダメージ。`); await this.applyDamage(q, s, 10, false); }
-        if (s.status.burn) { this.say(`${top(s).name}はやけどで20ダメージ。`); await this.applyDamage(q, s, 20, false); if (this.flip()) { delete s.status.burn; this.say('やけどが治った。'); } }
-        if (s.status.sleep) { if (this.flip()) { delete s.status.sleep; this.say(`${top(s).name}は目を覚ました。`); } }
+        if (s.status.burn) { this.say(`${top(s).name}はやけどで20ダメージ。`); await this.applyDamage(q, s, 20, false); if ((await this.flip())) { delete s.status.burn; this.say('やけどが治った。'); } }
+        if (s.status.sleep) { if ((await this.flip())) { delete s.status.sleep; this.say(`${top(s).name}は目を覚ました。`); } }
         if (s.status.para && q.i === this.cur && s.status.para < this.turn) { delete s.status.para; }
         if (s.status.para && q.i === this.cur && s.status.para !== this.turn) delete s.status.para;
       }
@@ -470,6 +472,7 @@
       await this.startTurn();
       return true;
     }
+    async flushFx() { const f = this._pendingFx; this._pendingFx = null; if (f) await this.fx(f.k, f.d); }
     concede(pi) { this.end(1 - pi, 'concede'); }
   }
 

@@ -190,177 +190,21 @@
   }
 
   // =================== battle ===================
-  let B = null; // battle UI state
   function battle(myDeck, cpuDeck) {
     music('battle1');
-    B = { sel: null, mode: null, targets: null, resolve: null, zoom: null, log: false, busy: false, level: save.level, decks: [myDeck, cpuDeck] };
-    const cpuAsk = window.HAI.makeAsk(save.level);
-    const g = new Game([myDeck.cards, cpuDeck.cards], {
-      names: ['あなた', 'CPU（' + cpuDeck.name + '）'],
-      ask: (pi, req) => pi === 1 ? cpuAsk(g, pi, req) : humanAsk(req),
-      onEvent: (t, d) => onEvent(t, d),
+    window.HBATTLE.start(myDeck, cpuDeck, {
+      stage, sfx, toast, level: save.level, speed: save.speed || 1,
+      setSpeed: v => { save.speed = v; persist(); },
+      onEnd: win => {
+        music(null); sfx(win ? 'fanfare-short' : 'wail', .7);
+        const reward = win ? 100 + (save.level - 1) * 50 : 20; save.gems += reward; let bonus = false;
+        if (win) { save.wins++; if (save.wins % 3 === 0) { save.packs++; bonus = true; } }
+        persist();
+        return { text: `${win ? '勝利！' : '敗北…'} ◆${reward} を手に入れた${bonus ? '（3勝ボーナス：パック1）' : ''}` };
+      },
+      again: d => battle(d[0], Object.values(PREBUILT).filter(x => x.id !== d[0].id)[Math.floor(Math.random() * 7)]),
+      home: () => home(),
     });
-    B.g = g;
-    renderBattle();
-    (async () => { await g.setup(); renderBattle(); banner(g.cur === 0 ? 'あなたの先攻' : 'CPUの先攻'); await sleep(1200); await g.startTurn(); renderBattle(); await loop(); })();
-  }
-  async function loop() {
-    const g = B.g;
-    while (g.winner == null && g.cur === 1) {
-      B.busy = true; renderBattle(); await sleep(600);
-      await window.HAI.playTurn(g, 1, B.level, async () => { renderBattle(); await sleep(520); });
-      renderBattle();
-      if (g.cur === 0 && g.winner == null) { banner('あなたの番'); sfx('bell', .4); }
-    }
-    B.busy = false; renderBattle();
-  }
-  const queue = [];
-  function onEvent(t, d) {
-    if (!B) return;
-    if (t === 'damage') { queue.push(() => floatText(d.slot, `-${d.n}`, d.weak ? 'weak' : '')); sfx(d.n >= 60 ? 'explosion' : 'human-hit-1', .5); }
-    if (t === 'heal') { queue.push(() => floatText(d.slot, '+' + (d.n || ''), 'heal')); sfx('heal', .4); }
-    if (t === 'attack') { sfx(ATK_SFX[d.type] || 'sword-1', .6); queue.push(() => attackFx(d.pi, d.type)); }
-    if (t === 'coin') { coinFx(d.heads); }
-    if (t === 'ko') sfx('wail-sml', .5);
-    if (t === 'energy') sfx('select', .4);
-    if (t === 'trainer' || t === 'stadium') sfx('ink', .5);
-    if (t === 'evolve') { sfx('magic-holy-2', .5); }
-    if (t === 'prize') sfx('gold', .5);
-    if (t === 'gameOver') setTimeout(() => gameOver(d.winner), 900);
-  }
-  function slotEl(uid) { return stage.querySelector(`[data-slot="${uid}"]`); }
-  function rectOf(el) { const r = el.getBoundingClientRect(), s = stage.getBoundingClientRect(), k = s.width / 1600; return { x: (r.left - s.left) / k + r.width / k / 2, y: (r.top - s.top) / k + r.height / k / 3 }; }
-  function floatText(uid, txt, cls) { const el = slotEl(uid); if (!el) return; const p = rectOf(el); const f = document.createElement('div'); f.className = 'dmg ' + cls; f.textContent = txt; f.style.left = (p.x - 50) + 'px'; f.style.top = (p.y - 20) + 'px'; stage.appendChild(f); setTimeout(() => f.remove(), 1300); }
-  function attackFx(pi, type) { const tgt = stage.querySelector(pi === 0 ? '.aslot.opp' : '.aslot.me'); if (!tgt) return; const p = rectOf(tgt); const f = document.createElement('div'); f.className = 'fx'; f.style.left = p.x + 'px'; f.style.top = (p.y + 30) + 'px'; f.innerHTML = `<div class="starburst"></div><div class="ring" style="--ring:url(ui/circle5.png);--ringc:var(--t-${type})"></div>`; stage.appendChild(f); setTimeout(() => f.remove(), 950); }
-  function coinFx(h) { const c = document.createElement('div'); c.className = 'coin' + (h ? '' : ' t'); c.textContent = h ? '表' : '裏'; stage.appendChild(c); setTimeout(() => c.remove(), 950); }
-  function banner(txt) { const b = document.createElement('div'); b.className = 'banner'; b.innerHTML = `<b>${txt}</b>`; stage.appendChild(b); setTimeout(() => b.remove(), 1650); }
-  const STIMG = { poison: 'poison', burn: 'burn', sleep: 'sleep', para: 'para', conf: 'conf' };
-
-  function slotHTML(g, s, cls) {
-    const c = top(s); const max = g.maxHp(s); const left = Math.max(0, max - s.damage);
-    const tgt = B.targets && B.targets.includes(s.uid) ? ' target' : '';
-    return `<div class="slot ${cls}${tgt}" data-slot="${s.uid}">${cardHTML(c.id)}
-      <div class="ens">${s.energy.map(e => ic(C(e).type)).join('')}</div>
-      <div class="sts">${Object.keys(s.status).map(k => `<img src="ui/${STIMG[k]}.jpg" title="${STATUS_JA[k]}" alt="${STATUS_JA[k]}">`).join('')}${s.guard ? '<img src="ui/guard.jpg" title="ダメージ軽減" alt="">' : ''}</div>
-      ${s.tool ? `<div class="tool" style="background-image:url(art/${C(s.tool).art})" title="${esc(C(s.tool).name)}"></div>` : ''}
-      <div class="hpb"><i style="width:${(left / max) * 100}%"></i></div><div class="hpt">${left}/${max}</div></div>`;
-  }
-  function renderBattle() {
-    if (!B) return; const g = B.g; const me = g.P(0), cpu = g.P(1);
-    const playable = g.cur === 0 && !B.busy ? g.playable(0) : [];
-    const canSel = uid => playable.some(a => a.card.uid === uid);
-    const benchRow = (p, y, side) => `<div class="benchrow" style="top:${y}px">${[0, 1, 2, 3, 4].map(i => p.bench[i] ? `<div class="bslot">${slotHTML(g, p.bench[i], side + ' bench')}</div>` : '<div class="bslot empty"></div>').join('')}</div>`;
-    const prizes = (p, y) => `<div class="prizes" style="top:${y}px">${p.prizes.map(() => backHTML()).join('')}</div>`;
-    const pile = (p, y) => `<div class="piles" style="top:${y}px"><div class="pile" data-trash="${p.i}">${p.discard.length ? cardHTML(p.discard[p.discard.length - 1].id) : '<div class="empty"></div>'}トラッシュ ${p.discard.length}</div><div class="pile">${p.deck.length ? backHTML() : '<div class="empty"></div>'}山札 ${p.deck.length}</div></div>`;
-    const html = `<div class="line"></div>
-      <div class="who ${g.cur === 1 ? 'cur' : ''}" style="top:24px"><div class="face" style="background-image:url(art/${(B.decks[1].cards.map(id => CARDS[id]).find(c => c.kind === 'person') || {}).art || 'H01-001.jpg'})"></div><div><b>${esc(cpu.name)}</b><small>手札 ${cpu.hand.length} ・ 山札 ${cpu.deck.length}</small></div></div>
-      <div class="plab" style="top:112px">サイド<b>${cpu.prizes.length}</b></div>${prizes(cpu, 146)}
-      <div class="plab" style="top:520px">サイド<b>${me.prizes.length}</b></div>${prizes(me, 554)}
-      <div class="who ${g.cur === 0 ? 'cur' : ''}" style="top:806px"><div class="face" style="background-image:url(art/${(B.decks[0].cards.map(id => CARDS[id]).find(c => c.kind === 'person') || {}).art || 'H01-001.jpg'})"></div><div><b>あなた</b><small>手札 ${me.hand.length} ・ 山札 ${me.deck.length}</small></div></div>
-      ${benchRow(cpu, 6, 'opp')}
-      <div class="ped" style="top:316px"></div><div class="ped" style="top:572px"></div>
-      ${cpu.active ? `<div class="aslot opp" style="top:182px">${slotHTML(g, cpu.active, 'opp active')}</div>` : ''}
-      ${me.active ? `<div class="aslot me" style="top:438px">${slotHTML(g, me.active, 'me active')}</div>` : ''}
-      ${benchRow(me, 664, 'me')}
-      ${g.stadium ? `<div class="stadium" data-zoom="${g.stadium.card.id}">${cardHTML(g.stadium.card.id)}</div>` : ''}
-      ${pile(cpu, 90)}${pile(me, 600)}
-      <div class="turnbox"><small>TURN ${g.turn}</small><b>${g.winner != null ? '終了' : g.cur === 0 ? 'あなたの番' : 'CPUの番'}</b>
-        <div class="flags"><span class="${me.energyPlayed ? '' : 'on'}">エネルギー</span><span class="${me.supporterPlayed ? '' : 'on'}">サポート</span><span class="${me.retreated ? '' : 'on'}">にげる</span></div></div>
-      <button class="btn sm" id="endturn" ${g.cur === 0 && !B.busy && g.winner == null && !B.resolve ? '' : 'disabled'}>ターン終了</button>
-      <div class="topbtns"><button class="rbtn" id="logb" title="バトルログ" style="--i:var(--i-shiso)"></button><button class="rbtn" id="quit" title="降参" style="--i:var(--i-gekokujo)"></button></div>
-      <div class="hand">${me.hand.map(c => `<div class="hc ${B.sel === c.uid ? 'sel' : ''} ${g.cur === 0 && !B.resolve ? (canSel(c.uid) ? 'ok' : 'no') : ''}" data-hand="${c.uid}">${cardHTML(c.id)}</div>`).join('')}</div>
-      ${zoomHTML(g, playable)}
-      ${B.hint ? `<div class="hint">${esc(B.hint)}</div>` : ''}
-      ${B.log ? `<div class="log panel">${g.log.slice(-80).map(l => `<p>${esc(l)}</p>`).join('')}</div>` : ''}
-      ${B.modal || ''}<div class="vig"></div>`;
-    let el = $('#battle'); if (!el) el = show('', 'battle');
-    el.innerHTML = html; fitNames(el);
-    const lg = $('.log', el); if (lg) lg.scrollTop = 1e9;
-    while (queue.length) setTimeout(queue.shift(), 30);
-    bindBattle(el, playable);
-  }
-  function zoomHTML(g, playable) {
-    const z = B.zoom; if (!z) return '';
-    let acts = '';
-    if (z.hand != null) {
-      const a = playable.filter(x => x.card.uid === z.hand);
-      const label = { bench: 'ベンチに出す', evolve: '進化させる', energy: 'エネルギーをつける', trainer: '使う', tool: 'つける', stadium: '場に出す' };
-      acts = a.length ? a.map(x => `<button class="btn" data-act="${x.type}">${label[x.type]}</button>`).join('') : `<div class="note">${g.cur !== 0 ? '相手の番です' : notUsable(g, z.id)}</div>`;
-    } else if (z.slot != null) {
-      const me = g.P(0); const s = me.active && me.active.uid === z.slot ? me.active : null;
-      if (s && g.cur === 0 && !B.busy) {
-        acts = top(s).atks.map((a, i) => `<button class="btn ${g.canAttack(0, i) ? '' : 'dark'}" data-atk="${i}" ${g.canAttack(0, i) ? '' : 'disabled'}>${esc(a.name)} ${a.dmg || ''}</button>`).join('')
-          + `<button class="btn dark sm" data-retreat="1" ${g.canRetreat(0) ? '' : 'disabled'}>にげる（${g.retreatCost(s)}）</button>`
-          + (g.turn === 1 ? '<div class="note">先攻の最初の番はワザが使えない</div>' : s.status.sleep ? '<div class="note">ねむりで動けない</div>' : s.status.para ? '<div class="note">マヒで動けない</div>' : '');
-      }
-    }
-    return `<div class="zoom">${cardHTML(z.id)}<div class="acts">${acts}<button class="btn dark xs" data-close="1">閉じる</button></div></div>`;
-  }
-  function notUsable(g, id) {
-    const c = CARDS[id]; const me = g.P(0);
-    if (c.kind === 'energy') return me.energyPlayed ? 'この番はもうエネルギーをつけた' : '';
-    if (c.kind === 'support') return g.turn === 1 ? '先攻の最初の番はサポートが使えない' : me.supporterPlayed ? 'この番はもうサポートを使った' : 'いまは使えない';
-    if (c.kind === 'person' && c.stage > 0) return g.turn <= 2 ? 'おたがいの最初の番は進化できない' : '進化できる人物がいない（出したばかりの人物も進化できない）';
-    if (c.kind === 'person') return 'ベンチがいっぱい';
-    return 'いまは使えない';
-  }
-  function bindBattle(el, playable) {
-    const g = B.g;
-    el.querySelectorAll('[data-hand]').forEach(h => h.onclick = () => {
-      if (B.resolve && B.mode !== 'handpick') return; const uid = +h.dataset.hand; const c = g.P(0).hand.find(x => x.uid === uid); if (!c) return;
-      sfx('select', .35); B.sel = uid; B.zoom = { id: c.id, hand: uid }; B.targets = null; B.hint = null; B.pending = null; renderBattle();
-    });
-    el.querySelectorAll('[data-slot]').forEach(s => s.onclick = e => {
-      e.stopPropagation(); const uid = +s.dataset.slot;
-      if (B.targets && B.targets.includes(uid)) { const f = B.onTarget; B.targets = null; B.hint = null; f(uid); return; }
-      const all = [...g.allSlots(g.P(0)), ...g.allSlots(g.P(1))]; const sl = all.find(x => x.uid === uid); if (!sl) return;
-      sfx('select', .3); B.sel = null; B.zoom = { id: top(sl).id, slot: uid }; renderBattle();
-    });
-    el.querySelectorAll('[data-zoom]').forEach(s => s.onclick = () => { B.zoom = { id: s.dataset.zoom }; renderBattle(); });
-    el.querySelectorAll('[data-trash]').forEach(t => t.onclick = () => { const p = g.P(+t.dataset.trash); if (!p.discard.length) return; B.modal = `<div class="modal" data-mclose="1"><div class="panel"><div class="q">トラッシュ（${p.discard.length}枚）</div><div class="opts">${p.discard.map(c => `<div class="opt">${cardHTML(c.id)}</div>`).join('')}</div><button class="btn dark sm" data-mclose="1">閉じる</button></div></div>`; renderBattle(); });
-    el.querySelectorAll('[data-mclose]').forEach(m => m.onclick = e => { if (e.target === m || m.tagName === 'BUTTON') { B.modal = null; renderBattle(); } });
-    const close = $('[data-close]', el); if (close) close.onclick = () => { B.zoom = null; B.sel = null; B.targets = null; B.hint = null; renderBattle(); };
-    el.querySelectorAll('[data-act]').forEach(b => b.onclick = () => doAct(b.dataset.act, playable));
-    el.querySelectorAll('[data-atk]').forEach(b => b.onclick = async () => { const i = +b.dataset.atk; B.zoom = null; B.busy = true; renderBattle(); await g.attack(0, i); B.busy = false; renderBattle(); await loop(); });
-    const rb = $('[data-retreat]', el); if (rb) rb.onclick = async () => { B.zoom = null; await g.retreat(0); renderBattle(); };
-    $('#endturn', el).onclick = async () => { B.zoom = null; B.sel = null; B.busy = true; renderBattle(); await g.endTurn(); B.busy = false; renderBattle(); await loop(); };
-    $('#logb', el).onclick = () => { B.log = !B.log; renderBattle(); };
-    $('#quit', el).onclick = () => { B.modal = `<div class="modal"><div class="panel"><div class="q">降参しますか？</div><div style="display:flex;gap:16px"><button class="btn red sm" id="qyes">降参する</button><button class="btn dark sm" data-mclose="1">続ける</button></div></div></div>`; renderBattle(); const y = $('#qyes'); if (y) y.onclick = () => { B.modal = null; g.concede(0); }; };
-    if (B.after) { const f = B.after; B.after = null; f(el); }
-  }
-  async function doAct(type, playable) {
-    const g = B.g; const a = playable.find(x => x.type === type && x.card.uid === B.sel); if (!a) return;
-    const uid = a.card.uid;
-    const pickTarget = (targets, hint) => new Promise(res => { B.targets = targets.map(t => t.uid); B.hint = hint; B.onTarget = res; B.zoom = null; renderBattle(); });
-    if (type === 'bench') await g.playBasic(0, uid);
-    else if (type === 'evolve') { const t = a.targets.length === 1 ? a.targets[0].uid : await pickTarget(a.targets, '進化させる人物を選んでください'); await g.evolve(0, uid, t); }
-    else if (type === 'energy') { const t = await pickTarget(a.targets, 'エネルギーをつける人物を選んでください'); await g.attachEnergy(0, uid, t); }
-    else if (type === 'tool') { const t = await pickTarget(a.targets, 'どうぐをつける人物を選んでください'); await g.attachTool(0, uid, t); }
-    else if (type === 'stadium') await g.playStadium(0, uid);
-    else if (type === 'trainer') { B.zoom = null; B.sel = null; renderBattle(); await g.playTrainer(0, uid); }
-    B.sel = null; B.zoom = null; renderBattle();
-  }
-  // human answers to engine questions
-  function humanAsk(req) {
-    return new Promise(resolve => {
-      const opts = req.options || []; if (!opts.length) return resolve(null);
-      const finish = v => { B.modal = null; B.resolve = null; B.targets = null; B.hint = null; renderBattle(); resolve(v); };
-      B.resolve = finish;
-      if (opts[0].slot && B.g.players.length) {
-        // choose on the board
-        B.targets = opts.map(o => o.value); B.hint = req.prompt; B.onTarget = v => finish(v); B.zoom = null; renderBattle(); return;
-      }
-      B.modal = `<div class="modal"><div class="panel"><div class="q">${esc(req.prompt)}</div><div class="opts">${opts.map((o, i) => `<div class="opt" data-o="${i}">${cardHTML(o.card ? (o.card.id || o.card) : 'E-buyu')}</div>`).join('')}</div>${req.optional ? `<button class="btn dark sm" data-skip="1">${/setup/.test(req.kind) ? '完了' : '選ばない'}</button>` : ''}</div></div>`;
-      B.after = el => { el.querySelectorAll('[data-o]').forEach(d => d.onclick = () => { sfx('select', .4); finish(opts[+d.dataset.o].value); }); const sk = $('[data-skip]', el); if (sk) sk.onclick = () => finish(null); };
-      renderBattle();
-    });
-  }
-  function gameOver(w) {
-    const win = w === 0; music(null); sfx(win ? 'fanfare-short' : 'wail', .7);
-    const reward = win ? 100 + (save.level - 1) * 50 : 20; save.gems += reward; if (win) { save.wins++; if (save.wins % 3 === 0) save.packs++; } persist();
-    B.modal = `<div class="over"><div class="panel"><div class="res logo" style="filter:${win ? '' : 'grayscale(1)'}">${win ? 'VICTORY' : 'DEFEAT'}</div><div style="font-size:22px;font-weight:800">${win ? '勝利！' : '敗北…'} ◆${reward} を手に入れた${win && save.wins % 3 === 0 ? '（3勝ボーナス：パック1）' : ''}</div>
-      <div style="display:flex;gap:16px"><button class="btn" id="again">もう一度</button><button class="btn dark" id="tohome">ホームへ</button></div></div></div>`;
-    renderBattle(); $('#again').onclick = () => { const d = B.decks; B = null; battle(d[0], Object.values(PREBUILT).filter(x => x.id !== d[0].id)[Math.floor(Math.random() * 7)]); }; $('#tohome').onclick = () => { B = null; home(); };
   }
 
   window.HAPP = { go, battle };
