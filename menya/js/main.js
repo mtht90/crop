@@ -49,10 +49,14 @@
     const g = A.g, u = A.ui, id = el.dataset.id;
     let ok = true, snd = 'click';
     switch (a) {
-      case 'tab': u.tab = id; snd = 'tab'; if (id !== 'hr') { u.pick = null; u.forStore = null; } break;
-      case 'sel': u.sel = id; snd = 'tab'; break;
+      case 'dock': if (id === 'map') { u.map = !u.map; u.sheet = null; } else { u.sheet = u.sheet === id ? null : id; u.map = false; } snd = 'tab'; if (u.sheet !== 'hr') { u.pick = null; u.forStore = null; } break;
+      case 'sheetx': u.sheet = null; u.pick = null; u.forStore = null; snd = 'tab'; break;
+      case 'mapx': u.map = false; snd = 'tab'; break;
+      case 'sel': u.sel = id; u.shop = null; UI.clearWalkers(); snd = 'tab'; break;
+      case 'shop': u.shop = +id; snd = 'tab'; break;
+      case 'goshop': { const st = storeById(id); u.sel = st.d; u.shop = st.id; u.sheet = null; UI.clearWalkers(); snd = 'tab'; break; }
       case 'unlock': ok = S.unlockDistrict(g, id); snd = 'buy'; if (ok) UI.toast('key', D.DISTRICT[id].name + 'に進出'); break;
-      case 'open': ok = !!S.openStore(g, id); snd = 'buy'; if (ok) UI.toast('storefront', '新店オープン'); break;
+      case 'open': { const st = S.openStore(g, id); ok = !!st; snd = 'buy'; if (ok) { u.shop = st.id; UI.toast('storefront', '新店オープン'); } break; }
       case 'close': {
         const st = storeById(id);
         UI.modal({ icon: 'storefront', color: 'bad', title: '閉店しますか？', body: `<div class="sub">投資額の30%（${UI.yen(st.inv * 0.3)}）が戻ります</div>`,
@@ -63,7 +67,7 @@
       case 'decor': ok = S.upDecor(g, storeById(id)); snd = 'buy'; break;
       case 'staff+': { const st = storeById(id); ok = st.staff < S.maxStaff(st); S.setStaff(g, st, st.staff + 1); break; }
       case 'staff-': { const st = storeById(id); ok = st.staff > 1; S.setStaff(g, st, st.staff - 1); break; }
-      case 'mgr': u.tab = 'hr'; u.forStore = +id; u.pick = null; snd = 'tab'; break;
+      case 'mgr': u.sheet = 'hr'; u.forStore = +id; u.pick = null; snd = 'tab'; break;
       case 'grade': g.menu[id].grade = +el.dataset.n; break;
       case 'pick': {
         const i = +id, target = u.forStore && storeById(u.forStore);
@@ -91,14 +95,14 @@
         const n = S.starsOnExit(g); if (!n) { ok = false; break; }
         const next = D.CITIES[Math.min(g.meta.city + 1, D.CITIES.length - 1)];
         UI.modal({ icon: next.icon, title: next.name + 'へ進出', body: `<div class="gain" style="color:var(--yolk-deep)">${UI.ic('star-four')} +${n}</div><div class="sub">店舗・資金・研究はリセット。のれんと「のれんの力」は残ります</div>`,
-          acts: [{ label: 'まだ続ける', cls: 'ghost' }, { label: '進出する', fn: () => { A.g = S.exit(g); u.sel = 'jutaku'; u.tab = 'fin'; u.pick = u.forStore = u.tech = null; UI.sfx('coin'); recalc(); save(); UI.render(); UI.toast('airplane-takeoff', next.name + 'で再出発'); } }] });
+          acts: [{ label: 'まだ続ける', cls: 'ghost' }, { label: '進出する', fn: () => { A.g = S.exit(g); u.sel = 'jutaku'; u.sheet = null; u.shop = u.pick = u.forStore = u.tech = null; UI.clearWalkers(); UI.sfx('coin'); recalc(); save(); UI.render(); UI.toast('airplane-takeoff', next.name + 'で再出発'); } }] });
         return;
       }
       case 'perk': ok = S.buyPerk(g, id); snd = 'coin'; break;
       case 'credits': credits(); return;
       case 'reset':
         UI.modal({ icon: 'trash', color: 'bad', title: 'データを消しますか？', body: '<div class="sub">最初からやり直します。元に戻せません</div>',
-          acts: [{ label: 'やめる', cls: 'ghost' }, { label: '消す', fn: () => { store.del(KEY); A.g = S.newGame(); u.sel = 'jutaku'; u.tab = 'shop'; recalc(); UI.render(); } }] });
+          acts: [{ label: 'やめる', cls: 'ghost' }, { label: '消す', fn: () => { store.del(KEY); A.g = S.newGame(); u.sel = 'jutaku'; u.sheet = null; u.shop = null; UI.clearWalkers(); recalc(); UI.render(); } }] });
         return;
       default: return;
     }
@@ -126,7 +130,8 @@
     const id = e.target.dataset.item; if (!id) return;
     A.g.menu[id].price = +e.target.value; recalc(); UI.menuLive(); UI.hud();
   });
-  $('view').addEventListener('pointerdown', () => { A.ui.hold = true; });
+  $('side').addEventListener('pointerdown', () => { A.ui.hold = true; });
+  window.addEventListener('resize', () => UI.render());
   window.addEventListener('pointerup', () => { setTimeout(() => { A.ui.hold = false; }, 60); });
   window.addEventListener('pointercancel', () => { A.ui.hold = false; });
   $('speedBtn').addEventListener('click', () => { const g = A.g; g.speed = g.speed === 1 ? 2 : g.speed === 2 ? 4 : g.speed === 4 ? 0 : 1; UI.sfx('click'); UI.hudSlow(); });
@@ -136,7 +141,8 @@
     if (r) { UI.sfx('coin'); UI.toast('seal-check', '達成！' + (r.cash ? ' +' + UI.yen(r.cash) : r.rp ? ' ひらめき +' + r.rp : '')); recalc(); UI.render(); }
     else { // 未達成なら関係するタブへ案内
       const m = D.MISSIONS[A.g.mission]; if (!m) return;
-      A.ui.tab = { stores: 'shop', profit: 'menu', rep: 'menu', brand: 'mkt', lab: 'lab', tech: 'lab', items: 'lab', mgr: 'hr', districts: 'shop', share: 'shop', value: 'fin' }[m.kind];
+      A.ui.sheet = { profit: 'menu', rep: 'menu', brand: 'mkt', lab: 'lab', tech: 'lab', items: 'lab', mgr: 'hr', value: 'fin' }[m.kind] || null;
+      if (m.kind === 'districts') A.ui.map = true;
       UI.sfx('tab'); UI.render();
     }
   });
@@ -169,6 +175,7 @@
       if (day) { recalc(); UI.renderDay(); }
       UI.hud();
     }
+    if (dt < 1) UI.tick(dt * (g.speed || 0.0001));
     saveT += dt; if (saveT > 8) { saveT = 0; save(); }
     requestAnimationFrame(frame);
   }
@@ -177,6 +184,7 @@
   function start(hot) {
     A.g = load(hot && hot.save ? hot.save : store.get(KEY));
     recalc();
+    document.querySelector('.mapx').innerHTML = UI.ic('x'); document.querySelector('#sheet .x').innerHTML = UI.ic('x');
     $('coinIc').innerHTML = UI.ic('currency-jpy'); $('brandIc').innerHTML = UI.ic('megaphone');
     UI.buildMap(); syncSound(); UI.render();
     const off = S.offline(A.g, Date.now());
