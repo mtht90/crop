@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>麺屋インク</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=M+PLUS+Rounded+1c:wght@500;700;800&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <header id="hud">
+    <div class="hud-cash">
+      <span class="coin" id="coinIc"></span>
+      <div>
+        <div id="cash" class="num">¥0</div>
+        <div id="rate" class="rate">+¥0/日</div>
+      </div>
+    </div>
+    <div class="hud-right">
+      <div class="pill" id="brandPill" title="知名度"><span id="brandIc"></span><b id="brand">0</b></div>
+      <div class="pill" id="datePill"><span id="seasonIc"></span><b id="date">1年1月</b></div>
+      <button class="hbtn" id="speedBtn" aria-label="ゲーム速度"></button>
+      <button class="hbtn" id="soundBtn" aria-label="サウンド"></button>
+    </div>
+  </header>
+
+  <main id="stage">
+    <section id="mapWrap">
+      <svg id="map" viewBox="0 0 1000 660" preserveAspectRatio="xMidYMid meet" aria-label="街のマップ"></svg>
+      <div id="mapTop">
+        <div class="chip" id="cityChip"></div>
+        <div class="chip ev" id="eventChip" hidden></div>
+      </div>
+    </section>
+    <section id="panel">
+      <button id="mission" hidden></button>
+      <nav id="tabs"></nav>
+      <div id="view"></div>
+    </section>
+  </main>
+</div>
+<div id="toasts" aria-live="polite"></div>
+<div id="modal" hidden></div>
+
+<script src="js/icons.js"></script>
+<script src="js/data.js"></script>
+<script src="js/sim.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
