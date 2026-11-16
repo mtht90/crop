@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "build:artifact": "ARTIFACT=1 vite build && node tools/make_artifact.mjs"
   },
   "dependencies": {
     "@fontsource/dela-gothic-one": "^5.3.0",

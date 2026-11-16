@@ -1,7 +1,4 @@
-import '@fontsource/dela-gothic-one/400.css';
-import '@fontsource/m-plus-rounded-1c/500.css';
-import '@fontsource/m-plus-rounded-1c/700.css';
-import '@fontsource/m-plus-rounded-1c/800.css';
+import './fonts';
 import './ui/style.css';
 import { AudioEngine, type AudioSettings } from './audio';
 import { ACHIEVEMENTS, BUILDINGS } from './core/data';
