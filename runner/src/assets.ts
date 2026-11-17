@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import { GLTFLoader, GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 
 const BASE = './assets/';
 // production (artifact) build ships models as self-contained glTF JSON
@@ -21,9 +20,9 @@ export interface Library {
 
 export const PBR_SETS = ['concrete_floor_worn_001', 'anti_slip_concrete', 'metal_plate', 'rusty_metal_02', 'rocky_terrain_02'];
 export const SKIES = ['kloofendal_48d_partly_cloudy_puresky', 'rogland_clear_night', 'industrial_sunset_puresky', 'qwantani_puresky'];
-const AUDIO = ['01-footstep.ogg', '02-footstep.ogg', '03-footstep.ogg', '04-footstep.ogg', '05-footstep.ogg', 'wind.mp3', 'music_dnb.mp3',
-  'sfx_slam_02.ogg', 'sfx_slam_05.ogg', 'sfx_hit_03.ogg', 'sfx_spring_03.ogg', 'sfx_metal_04.ogg', 'sfx_noise_01.ogg', 'sfx_glass_02.ogg',
-  'sfx_bell_02.ogg', 'sfx_other_03.ogg', 'sfx_weird_02.ogg', 'sfx_explosion.ogg'];
+const AUDIO = ['01-footstep.mp3', '02-footstep.mp3', '03-footstep.mp3', '04-footstep.mp3', '05-footstep.mp3', 'wind.mp3', 'music_dnb.mp3',
+  'sfx_slam_02.mp3', 'sfx_slam_05.mp3', 'sfx_hit_03.mp3', 'sfx_spring_03.mp3', 'sfx_metal_04.mp3', 'sfx_noise_01.mp3', 'sfx_glass_02.mp3',
+  'sfx_bell_02.mp3', 'sfx_other_03.mp3', 'sfx_weird_02.mp3', 'sfx_explosion.mp3'];
 
 /** Assets each biome needs (index = biome). Biome 0 + the runner are the "core" needed to start. */
 const BIOME_DEPS: { models: string[]; pbr: string[]; sky: string }[] = [
@@ -46,7 +45,6 @@ export interface Loading {
 
 export function startLoading(onCoreProgress: (p: number) => void): Loading {
   const gl = new GLTFLoader();
-  gl.setMeshoptDecoder(MeshoptDecoder);
   const tl = new THREE.TextureLoader();
   const lib: Library = { models: new Map(), runner: null as any, runnerExtra: null as any, pbr: {}, hdr: {}, sky: {}, audio: {} };
   const cache = new Map<string, Promise<void>>();
@@ -84,7 +82,7 @@ export function startLoading(onCoreProgress: (p: number) => void): Loading {
   const loadSky = (s: string) => once('s:' + s, () => tl.loadAsync(BASE + `textures/${s}_sky.jpg`).then((t) => {
     t.colorSpace = THREE.SRGBColorSpace; t.mapping = THREE.EquirectangularReflectionMapping; lib.sky[s] = t; lib.hdr[s] = t;
   }));
-  const loadAudio = (a: string) => once('a:' + a, () => fetch(BASE + 'audio/' + a).then((r) => r.arrayBuffer()).then((b) => { lib.audio[a] = b; }));
+  const loadAudio = (a: string) => once('a:' + a, () => fetch(BASE + 'audio/' + a).then((r) => r.arrayBuffer()).then((b) => { lib.audio[a] = b; }).catch((e) => console.warn('audio failed', a, e)));
   const loadBiome = (i: number) => { const d = BIOME_DEPS[i]; return Promise.all([...d.models.map(loadKit), ...d.pbr.map(loadPbr), loadSky(d.sky)]); };
 
   const L: Loading = { lib, core: null as any, biomeReady: [false, false, false, false], onBiomeReady: () => {}, onAudio: () => {} };

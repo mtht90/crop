@@ -75,3 +75,15 @@ kbd { display: inline-block; min-width: 22px; padding: 2px 6px; margin-right: 3p
 .results label { display: block; font-family: 'Orbitron'; font-size: 11px; letter-spacing: 3px; color: var(--dim); }
 .results b { font-family: 'Orbitron'; font-size: 30px; }
 .newbest { margin-top: 12px; font-family: 'Orbitron'; font-weight: 900; color: #ffd23d; letter-spacing: 6px; animation: shimmer 1s infinite; }
+
+/* ---------- touch controls ---------- */
+#touch { position: absolute; inset: 0; pointer-events: auto; touch-action: none; }
+#touch:not(.touch) { display: none; }
+.tbtn { position: absolute; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); width: 86px; height: 86px; border-radius: 50%; border: 2px solid rgba(255,255,255,.45); background: rgba(10,16,30,.35); color: var(--text); font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 18px; touch-action: none; -webkit-user-select: none; user-select: none; }
+.tbtn.on { background: rgba(54,241,255,.45); border-color: var(--accent); }
+.tbtn.tl { left: max(20px, env(safe-area-inset-left, 0px)); }
+.tbtn.tr2 { left: calc(max(20px, env(safe-area-inset-left, 0px)) + 104px); }
+.tbtn.tj { right: max(20px, env(safe-area-inset-right, 0px)); width: 104px; height: 104px; }
+.tbtn.ts { right: calc(max(20px, env(safe-area-inset-right, 0px)) + 122px); }
+.tbtn.to { right: max(36px, env(safe-area-inset-right, 0px)); bottom: calc(144px + env(safe-area-inset-bottom, 0px)); width: 70px; height: 70px; font-size: 14px; }
+#touch.touch ~ * {}

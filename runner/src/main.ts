@@ -18,7 +18,7 @@ const canvas = $('game') as HTMLCanvasElement;
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
 const START_DIST = Number(new URLSearchParams(location.search).get('start') || 0);
 const LOWQ = new URLSearchParams(location.search).has('lowq');
-renderer.setPixelRatio(LOWQ ? 0.5 : Math.min(devicePixelRatio, 1.5));
+renderer.setPixelRatio(LOWQ ? 0.5 : matchMedia('(pointer: coarse)').matches ? 1 : Math.min(devicePixelRatio, 1.5));
 renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -52,6 +52,7 @@ addEventListener('resize', () => {
 });
 
 const input = new Input(canvas);
+input.setupTouch($('touch'));
 const audio = new Audio();
 
 // ---------------------------------------------------------------------------
@@ -116,7 +117,12 @@ function showBanner(biome: number) {
 (async function boot() {
   const loading = startLoading((p) => { ($('ld-fill') as HTMLElement).style.width = `${Math.round(p * 100)}%`; });
   lib = loading.lib;
-  await loading.core;
+  const timer = setTimeout(() => { $('ld-text').textContent = 'LOADING… 回線が遅いようです。しばらくお待ちください'; }, 15000);
+  try { await loading.core; } catch (e) {
+    $('ld-text').textContent = '読み込みに失敗しました。再読み込みしてください (' + String((e as any)?.message ?? e).slice(0, 80) + ')';
+    console.error(e); return;
+  }
+  clearTimeout(timer);
   $('ld-text').textContent = 'PREPARING…';
   await audio.load(lib.audio);
   pmrem = new THREE.PMREMGenerator(renderer);
@@ -174,29 +180,29 @@ const events = {
     popup(name, pts * mult, opts);
   },
   jump(kind: string) {
-    audio.play('sfx_other_03.ogg', { vol: 0.25, rate: kind === 'wall' ? 1.4 : 1.1 });
-    if (kind === 'wall') { shock = 0.4; audio.play('sfx_slam_05.ogg', { vol: 0.3, rate: 1.5 }); }
+    audio.play('sfx_other_03.mp3', { vol: 0.25, rate: kind === 'wall' ? 1.4 : 1.1 });
+    if (kind === 'wall') { shock = 0.4; audio.play('sfx_slam_05.mp3', { vol: 0.3, rate: 1.5 }); }
     body.play('jumpStart', 0.08);
   },
   land(impact: number, kind: string) {
     landDipV -= Math.min(impact, 30) * (kind === 'roll' ? 0.02 : 0.035);
-    if (kind === 'hard') { shock = 1; audio.play('sfx_slam_02.ogg', { vol: 0.8 }); hud.vignette.style.opacity = '0.8'; }
-    else audio.play('sfx_slam_05.ogg', { vol: Math.min(0.6, impact / 30), rate: 1.2 });
+    if (kind === 'hard') { shock = 1; audio.play('sfx_slam_02.mp3', { vol: 0.8 }); hud.vignette.style.opacity = '0.8'; }
+    else audio.play('sfx_slam_05.mp3', { vol: Math.min(0.6, impact / 30), rate: 1.2 });
     audio.footstep(currentKit().footstep, 1);
-    if (kind === 'roll') { body.play('roll', 0.05); rollT = 0; audio.play('sfx_noise_01.ogg', { vol: 0.4, rate: 1.3 }); }
+    if (kind === 'roll') { body.play('roll', 0.05); rollT = 0; audio.play('sfx_noise_01.mp3', { vol: 0.4, rate: 1.3 }); }
     else if (impact > 13) { body.play('land', 0.05); body.actions.get('land')!.timeScale = 1.7; }
   },
-  vault() { body.play('vault', 0.06); audio.play('sfx_hit_03.ogg', { vol: 0.3, rate: 1.3 }); landDipV += 0.6; },
-  slideStart() { audio.play('sfx_noise_01.ogg', { vol: 0.3 }); },
-  wallStart() { audio.play('sfx_slam_05.ogg', { vol: 0.35, rate: 1.6 }); },
-  boost() { fovKick = 12; flash = 0.25; audio.play('sfx_weird_02.ogg', { vol: 0.4, rate: 1.4 }); },
-  orb() { score += 10 * mult; audio.play('sfx_bell_02.ogg', { vol: 0.12, rate: 1.6 + Math.random() * 0.4 }); },
-  ring() { flash = 0.4; fovKick = 10; audio.play('sfx_glass_02.ogg', { vol: 0.5, rate: 1.2 }); },
-  smash() { shock = 0.8; flash = 0.15; audio.play('sfx_explosion.ogg', { vol: 0.5, rate: 1.3 }); },
+  vault() { body.play('vault', 0.06); audio.play('sfx_hit_03.mp3', { vol: 0.3, rate: 1.3 }); landDipV += 0.6; },
+  slideStart() { audio.play('sfx_noise_01.mp3', { vol: 0.3 }); },
+  wallStart() { audio.play('sfx_slam_05.mp3', { vol: 0.35, rate: 1.6 }); },
+  boost() { fovKick = 12; flash = 0.25; audio.play('sfx_weird_02.mp3', { vol: 0.4, rate: 1.4 }); },
+  orb() { score += 10 * mult; audio.play('sfx_bell_02.mp3', { vol: 0.12, rate: 1.6 + Math.random() * 0.4 }); },
+  ring() { flash = 0.4; fovKick = 10; audio.play('sfx_glass_02.mp3', { vol: 0.5, rate: 1.2 }); },
+  smash() { shock = 0.8; flash = 0.15; audio.play('sfx_explosion.mp3', { vol: 0.5, rate: 1.3 }); },
   die(reason: 'crash' | 'fall') {
     mode = 'dying'; modeT = 0; timeScale = 0.3;
-    if (reason === 'crash') { shock = 2; flash = 0.6; audio.play('sfx_hit_03.ogg', { vol: 1 }); audio.play('sfx_slam_02.ogg', { vol: 0.9, rate: 0.8 }); body.play('dead', 0.05); }
-    else { audio.play('sfx_weird_02.ogg', { vol: 0.5, rate: 0.5 }); body.play('fallDead', 0.2); }
+    if (reason === 'crash') { shock = 2; flash = 0.6; audio.play('sfx_hit_03.mp3', { vol: 1 }); audio.play('sfx_slam_02.mp3', { vol: 0.9, rate: 0.8 }); body.play('dead', 0.05); }
+    else { audio.play('sfx_weird_02.mp3', { vol: 0.5, rate: 0.5 }); body.play('fallDead', 0.2); }
     $('over-reason').textContent = reason === 'crash' ? 'WIPEOUT' : 'FREEFALL';
     deathCam.from.copy(camera.position);
     deathCam.fromQ.copy(camera.quaternion);
@@ -345,7 +351,7 @@ function tick(rawDt: number) {
   for (const ch of track.chunks) for (const a of ch.animators) a(elapsed, dt);
 
   // ---- mouse look
-  if (input.locked && (mode === 'play' || mode === 'intro')) {
+  if ((input.locked || input.touch) && (mode === 'play' || mode === 'intro')) {
     lookYaw -= input.mouseDX * 0.0022;
     lookPitch -= input.mouseDY * 0.0022;
     lookYaw = THREE.MathUtils.clamp(lookYaw, -1.4, 1.4);

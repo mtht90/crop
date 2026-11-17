@@ -59,7 +59,7 @@ export class Audio {
     if (!this.wind) this.wind = this.loop('wind.mp3', 0);
     if (!this.music) this.music = this.loop('music_dnb.mp3', 0.0);
     if (!this.scrape) {
-      const l = this.loop('sfx_noise_01.ogg', 0);
+      const l = this.loop('sfx_noise_01.mp3', 0);
       if (l) this.scrape = { src: l.src, gain: l.gain };
     }
   }
@@ -86,8 +86,8 @@ export class Audio {
   footstep(kind: 'concrete' | 'metal' | 'dirt', speed01: number) {
     const i = 1 + Math.floor(Math.random() * 5);
     const rate = kind === 'metal' ? 1.25 + Math.random() * 0.1 : kind === 'dirt' ? 0.8 + Math.random() * 0.1 : 1 + Math.random() * 0.12;
-    this.play(`0${i}-footstep.ogg`, { vol: 0.35 + speed01 * 0.3, rate, pan: (Math.random() - 0.5) * 0.2 });
-    if (kind === 'metal') this.play('sfx_metal_04.ogg', { vol: 0.05, rate: 2 + Math.random() * 0.3 });
+    this.play(`0${i}-footstep.mp3`, { vol: 0.35 + speed01 * 0.3, rate, pan: (Math.random() - 0.5) * 0.2 });
+    if (kind === 'metal') this.play('sfx_metal_04.mp3', { vol: 0.05, rate: 2 + Math.random() * 0.3 });
   }
 
   toggleMute() { this.muted = !this.muted; this.master.gain.value = this.muted ? 0 : 0.8; }
