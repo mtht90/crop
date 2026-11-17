@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader, GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 
 const BASE = './assets/';
 // production (artifact) build ships models as self-contained glTF JSON
@@ -24,59 +25,88 @@ const AUDIO = ['01-footstep.ogg', '02-footstep.ogg', '03-footstep.ogg', '04-foot
   'sfx_slam_02.ogg', 'sfx_slam_05.ogg', 'sfx_hit_03.ogg', 'sfx_spring_03.ogg', 'sfx_metal_04.ogg', 'sfx_noise_01.ogg', 'sfx_glass_02.ogg',
   'sfx_bell_02.ogg', 'sfx_other_03.ogg', 'sfx_weird_02.ogg', 'sfx_explosion.ogg'];
 
-export async function loadLibrary(onProgress: (p: number) => void): Promise<Library> {
-  const manager = new THREE.LoadingManager();
-  let total = 0, done = 0;
-  const tick = () => { done++; onProgress(done / total); };
-  const gl = new GLTFLoader(manager);
-  const tl = new THREE.TextureLoader(manager);
+/** Assets each biome needs (index = biome). Biome 0 + the runner are the "core" needed to start. */
+const BIOME_DEPS: { models: string[]; pbr: string[]; sky: string }[] = [
+  { models: ['city', 'factory'], pbr: ['concrete_floor_worn_001', 'anti_slip_concrete'], sky: SKIES[0] },
+  { models: ['scifi', 'city'], pbr: ['metal_plate'], sky: SKIES[1] },
+  { models: ['factory'], pbr: ['metal_plate', 'rusty_metal_02'], sky: SKIES[2] },
+  { models: ['nature'], pbr: ['rocky_terrain_02'], sky: SKIES[3] },
+];
+const CORE_AUDIO = AUDIO.filter((a) => a !== 'music_dnb.mp3');
 
+export interface Loading {
+  lib: Library;
+  /** runner + first biome + sfx: enough to start playing */
+  core: Promise<void>;
+  /** per-biome readiness, filled in the background */
+  biomeReady: boolean[];
+  onBiomeReady: (i: number) => void;
+  onAudio: (name: string, buf: ArrayBuffer) => void;
+}
+
+export function startLoading(onCoreProgress: (p: number) => void): Loading {
+  const gl = new GLTFLoader();
+  gl.setMeshoptDecoder(MeshoptDecoder);
+  const tl = new THREE.TextureLoader();
   const lib: Library = { models: new Map(), runner: null as any, runnerExtra: null as any, pbr: {}, hdr: {}, sky: {}, audio: {} };
-  const jobs: Promise<void>[] = [];
-  const job = <T>(p: Promise<T>, then: (v: T) => void) => { total++; jobs.push(p.then((v) => { then(v); tick(); })); };
+  const cache = new Map<string, Promise<void>>();
+  const once = (key: string, f: () => Promise<void>) => { let p = cache.get(key); if (!p) { p = f(); cache.set(key, p); } return p; };
 
-  job(gl.loadAsync(BASE + 'models/runner' + MODEL_EXT), (g) => (lib.runner = g));
-  job(gl.loadAsync(BASE + 'models/runner_extra' + MODEL_EXT), (g) => (lib.runnerExtra = g));
-  for (const kit of ['city', 'factory', 'nature', 'scifi']) {
-    job(gl.loadAsync(BASE + `models/${kit}${MODEL_EXT}`), (g) => {
-      for (const child of [...g.scene.children]) {
-        child.position.set(0, 0, 0);
-        child.updateMatrixWorld(true);
-        child.traverse((o: any) => {
-          if (o.isMesh) {
-            o.castShadow = true; o.receiveShadow = true;
-            const mats = Array.isArray(o.material) ? o.material : [o.material];
-            for (const m of mats) {
-              if (m.map) m.map.anisotropy = 4;
-              // Kenney kits omit metallicFactor (glTF default = 1) → make them dielectric
-              if (kit !== 'scifi' && !m.metalnessMap) { m.metalness = 0; m.roughness = Math.max(m.roughness, 0.75); }
-            }
+  const loadKit = (kit: string) => once('m:' + kit, () => gl.loadAsync(BASE + `models/${kit}${MODEL_EXT}`).then((g) => {
+    for (const child of [...g.scene.children]) {
+      child.position.set(0, 0, 0);
+      child.updateMatrixWorld(true);
+      child.traverse((o: any) => {
+        if (o.isMesh) {
+          o.castShadow = true; o.receiveShadow = true;
+          dequantize(o.geometry);
+          const mats = Array.isArray(o.material) ? o.material : [o.material];
+          for (const m of mats) {
+            if (m.map) m.map.anisotropy = 4;
+            // Kenney kits omit metallicFactor (glTF default = 1) → make them dielectric
+            if (kit !== 'scifi' && !m.metalnessMap) { m.metalness = 0; m.roughness = Math.max(m.roughness, 0.75); }
           }
-        });
-        lib.models.set(child.name, child);
-      }
-    });
-  }
-  for (const s of PBR_SETS) {
+        }
+      });
+      lib.models.set(child.name, child);
+    }
+  }));
+  const loadPbr = (s: string) => once('p:' + s, async () => {
     const set: any = {};
-    for (const [k, suffix] of [['map', 'Diffuse'], ['normalMap', 'nor_gl'], ['armMap', 'arm']] as const) {
-      job(tl.loadAsync(BASE + `textures/${s}_${suffix}.jpg`), (t) => {
-        t.wrapS = t.wrapT = THREE.RepeatWrapping;
-        t.anisotropy = 8;
+    await Promise.all(([['map', 'Diffuse'], ['normalMap', 'nor_gl'], ['armMap', 'arm']] as const).map(([k, suffix]) =>
+      tl.loadAsync(BASE + `textures/${s}_${suffix}.jpg`).then((t) => {
+        t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8;
         if (k === 'map') t.colorSpace = THREE.SRGBColorSpace;
         set[k] = t;
-      });
-    }
+      })));
     lib.pbr[s] = set;
-  }
-  for (const s of SKIES) {
-    job(tl.loadAsync(BASE + `textures/${s}_sky.jpg`), (t) => { t.colorSpace = THREE.SRGBColorSpace; t.mapping = THREE.EquirectangularReflectionMapping; lib.sky[s] = t; lib.hdr[s] = t as any; });
-  }
-  for (const a of AUDIO) {
-    job(fetch(BASE + 'audio/' + a).then((r) => r.arrayBuffer()), (b) => (lib.audio[a] = b));
-  }
-  await Promise.all(jobs);
-  return lib;
+  });
+  const loadSky = (s: string) => once('s:' + s, () => tl.loadAsync(BASE + `textures/${s}_sky.jpg`).then((t) => {
+    t.colorSpace = THREE.SRGBColorSpace; t.mapping = THREE.EquirectangularReflectionMapping; lib.sky[s] = t; lib.hdr[s] = t;
+  }));
+  const loadAudio = (a: string) => once('a:' + a, () => fetch(BASE + 'audio/' + a).then((r) => r.arrayBuffer()).then((b) => { lib.audio[a] = b; }));
+  const loadBiome = (i: number) => { const d = BIOME_DEPS[i]; return Promise.all([...d.models.map(loadKit), ...d.pbr.map(loadPbr), loadSky(d.sky)]); };
+
+  const L: Loading = { lib, core: null as any, biomeReady: [false, false, false, false], onBiomeReady: () => {}, onAudio: () => {} };
+  const coreJobs: Promise<unknown>[] = [
+    gl.loadAsync(BASE + 'models/runner' + MODEL_EXT).then((g) => { lib.runner = g; }),
+    gl.loadAsync(BASE + 'models/runner_extra' + MODEL_EXT).then((g) => { lib.runnerExtra = g; }),
+    loadBiome(0),
+    ...CORE_AUDIO.map(loadAudio),
+  ];
+  let done = 0;
+  for (const j of coreJobs) j.then(() => onCoreProgress(++done / coreJobs.length));
+  L.core = Promise.all(coreJobs).then(() => {
+    L.biomeReady[0] = true;
+    // background: music, then the remaining biomes in play order
+    loadAudio('music_dnb.mp3').then(() => L.onAudio('music_dnb.mp3', lib.audio['music_dnb.mp3']));
+    (async () => {
+      for (let i = 1; i < BIOME_DEPS.length; i++) {
+        try { await loadBiome(i); L.biomeReady[i] = true; L.onBiomeReady(i); } catch (e) { console.warn('biome load failed', i, e); }
+      }
+    })();
+  });
+  return L;
 }
 
 // --------------------------------------------------------------------------------------
@@ -146,4 +176,15 @@ export function pbrMaterial(set: PBRSet, opts: Partial<THREE.MeshStandardMateria
     map: set.map, normalMap: set.normalMap, aoMap: set.armMap, roughnessMap: set.armMap, metalnessMap: set.armMap,
     roughness: 1, metalness: 1, ...opts,
   });
+}
+
+/** meshopt/quantized attributes → Float32 so geometry can be transformed and merged on the CPU */
+function dequantize(g: THREE.BufferGeometry) {
+  for (const name of Object.keys(g.attributes)) {
+    const a = g.attributes[name] as THREE.BufferAttribute;
+    if (a.array instanceof Float32Array && !(a as any).isInterleavedBufferAttribute) continue;
+    const out = new Float32Array(a.count * a.itemSize);
+    for (let i = 0; i < a.count; i++) for (let k = 0; k < a.itemSize; k++) out[i * a.itemSize + k] = a.getComponent(i, k);
+    g.setAttribute(name, new THREE.BufferAttribute(out, a.itemSize));
+  }
 }

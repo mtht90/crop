@@ -145,7 +145,7 @@ function skyline(lib: Library): BiomeKit {
           const tall = rng.chance(0.55);
           const top = s.y + (tall ? rng.range(15, 60) : rng.range(-12, 3));
           const name = tall || rng.chance(0.6) ? rng.pick(towers) : rng.pick(mids);
-          b.fit(name, V(Math.min(xa, xa + side * w), top - 110, z - d), V(Math.max(xa, xa + side * w), top, z), { shadow: tall });
+          b.fit(name, V(Math.min(xa, xa + side * w), top - 110, z - d), V(Math.max(xa, xa + side * w), top, z), { shadow: false });
           if (!tall && rng.chance(0.6)) {
             // rooftop clutter on the lower neighbours
             const px = xa + side * rng.range(2, w - 3);
@@ -502,6 +502,4 @@ function canyon(lib: Library): BiomeKit {
   };
 }
 
-export function createKits(lib: Library): BiomeKit[] {
-  return [skyline(lib), neon(lib), foundry(lib), canyon(lib)];
-}
+export const KIT_FACTORIES: ((lib: Library) => BiomeKit)[] = [skyline, neon, foundry, canyon];

@@ -53,7 +53,9 @@ export class Audio {
     return { src, gain, filter };
   }
 
+  private started = false;
   startLoops() {
+    this.started = true;
     if (!this.wind) this.wind = this.loop('wind.mp3', 0);
     if (!this.music) this.music = this.loop('music_dnb.mp3', 0.0);
     if (!this.scrape) {
@@ -65,6 +67,7 @@ export class Audio {
   /** speed01: 0..1, sliding bool, musicLevel 0..1, muffled for slow-mo/pause */
   update(speed01: number, sliding: boolean, musicLevel: number, muffled: boolean) {
     const t = this.ctx.currentTime;
+    if (this.started && !this.music && this.buffers.has('music_dnb.mp3')) this.music = this.loop('music_dnb.mp3', 0);
     if (this.wind) {
       this.wind.gain.gain.setTargetAtTime(0.15 + speed01 * speed01 * 1.1, t, 0.1);
       this.wind.filter.frequency.setTargetAtTime(500 + speed01 * 7000, t, 0.1);

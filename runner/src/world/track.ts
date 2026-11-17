@@ -192,7 +192,10 @@ export class Track {
     const vb = baseSpeed(dist);
     const vmin = vb * SPEED_FLOOR * 0.97;
     const diff = Math.min(1, dist / 7000);
-    const biome = this.biomeIndexAt(dist);
+    let biome = this.biomeIndexAt(dist);
+    // a biome whose assets are still streaming in: keep running through the last ready one
+    while (biome > 0 && !this.kits[biome % this.kits.length]) biome--;
+    if (biome < this.biome) biome = this.biome;
     const { chunk, b } = this.newChunk(this.z, biome);
     const kit = b.kit;
     const zN = this.z;

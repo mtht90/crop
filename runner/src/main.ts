@@ -1,10 +1,10 @@
 import * as THREE from 'three';
-import { loadLibrary, Models, Library } from './assets';
+import { startLoading, Models, Library } from './assets';
 import { Input } from './input';
 import { Body } from './body';
 import { Player } from './player';
 import { Track, Shared, baseSpeed } from './world/track';
-import { createKits, BiomeKit } from './world/biomes';
+import { KIT_FACTORIES, BiomeKit } from './world/biomes';
 import { BiomeAtmosphere } from './world/types';
 import { Post, SpeedLines, Sky } from './fx';
 import { Audio } from './audio';
@@ -65,6 +65,11 @@ let track: Track;
 let body: Body;
 let player: Player;
 const envMaps: Record<string, THREE.Texture> = {};
+let pmrem: THREE.PMREMGenerator;
+function envFor(key: string) {
+  if (!envMaps[key] && lib.hdr[key]) envMaps[key] = pmrem.fromEquirectangular(lib.hdr[key]).texture;
+  return envMaps[key] ?? null;
+}
 
 let score = 0, mult = 1, comboT = 0;
 let timeScale = 1;
@@ -109,15 +114,19 @@ function showBanner(biome: number) {
 // boot
 // ---------------------------------------------------------------------------
 (async function boot() {
-  lib = await loadLibrary((p) => { ($('ld-fill') as HTMLElement).style.width = `${Math.round(p * 100)}%`; });
+  const loading = startLoading((p) => { ($('ld-fill') as HTMLElement).style.width = `${Math.round(p * 100)}%`; });
+  lib = loading.lib;
+  await loading.core;
   $('ld-text').textContent = 'PREPARING…';
   await audio.load(lib.audio);
-  const pmrem = new THREE.PMREMGenerator(renderer);
-  for (const [k, t] of Object.entries(lib.hdr)) envMaps[k] = pmrem.fromEquirectangular(t).texture;
-  pmrem.dispose();
+  pmrem = new THREE.PMREMGenerator(renderer);
 
   const models = new Models(lib);
-  kits = createKits(lib);
+  kits = new Array(KIT_FACTORIES.length);
+  kits[0] = KIT_FACTORIES[0](lib);
+  // remaining stages stream in while playing
+  loading.onBiomeReady = (i) => { kits[i] = KIT_FACTORIES[i](lib); };
+  loading.onAudio = (name, buf) => { audio.load({ [name]: buf }); };
   track = new Track(models, kits, new Shared());
   scene.add(track.root);
   body = new Body(lib.runner, lib.runnerExtra);
@@ -214,7 +223,7 @@ function applyAtmosphere(a: BiomeAtmosphere, b: BiomeAtmosphere, t: number, snap
   sun.intensity = THREE.MathUtils.lerp(a.sunIntensity, b.sunIntensity, t);
   const dir = a.sunDir.clone().lerp(b.sunDir, t).normalize();
   sun.userData.dir = dir;
-  scene.environment = envMaps[t < 0.5 ? a.sky : b.sky] ?? null;
+  scene.environment = envFor(t < 0.5 ? a.sky : b.sky);
   scene.environmentIntensity = THREE.MathUtils.lerp(a.envIntensity, b.envIntensity, t);
   renderer.toneMappingExposure = THREE.MathUtils.lerp(a.exposure, b.exposure, t);
   post.bloom.strength = THREE.MathUtils.lerp(a.bloom, b.bloom, t);
