@@ -15,7 +15,14 @@ for (const f of fs.readdirSync(dir).filter((f) => f.endsWith('.glb'))) {
   const { json, resources } = await io.writeJSON(doc, { format: 'json' });
   const mime = (u) => u.endsWith('.webp') ? 'image/webp' : u.endsWith('.png') ? 'image/png' : u.endsWith('.jpg') ? 'image/jpeg' : 'application/octet-stream';
   for (const b of json.buffers || []) if (b.uri) b.uri = 'data:application/octet-stream;base64,' + Buffer.from(resources[b.uri]).toString('base64');
-  for (const im of json.images || []) if (im.uri) im.uri = `data:${mime(im.uri)};base64,` + Buffer.from(resources[im.uri]).toString('base64');
+  // images become separate files next to the model (artifact CSP blocks data:/blob: fetches)
+  (json.images || []).forEach((im, i) => {
+    if (!im.uri) return;
+    const ext = im.uri.split('.').pop();
+    const name = f.replace('.glb', '') + '_img' + i + '.' + ext;
+    fs.writeFileSync(path.join(dir, name), Buffer.from(resources[im.uri]));
+    im.uri = name;
+  });
   const out = path.join(dir, f.replace('.glb', '.json'));
   fs.writeFileSync(out, JSON.stringify(json));
   fs.unlinkSync(path.join(dir, f));

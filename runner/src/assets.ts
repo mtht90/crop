@@ -45,7 +45,8 @@ export interface Loading {
 }
 
 export function startLoading(onCoreProgress: (p: number) => void): Loading {
-  const gl = new GLTFLoader();
+  const gl0 = new GLTFLoader();
+  const gl = { loadAsync: (url: string) => fetchModelAsGlb(url).then((buf) => gl0.parseAsync(buf, url.slice(0, url.lastIndexOf('/') + 1))) as Promise<GLTF> };
   const tl = new THREE.TextureLoader();
   const lib: Library = { models: new Map(), runner: null as any, runnerExtra: null as any, pbr: {}, hdr: {}, sky: {}, audio: {} };
   const cache = new Map<string, Promise<void>>();
@@ -199,4 +200,39 @@ function dequantize(g: THREE.BufferGeometry) {
     for (let i = 0; i < a.count; i++) for (let k = 0; k < a.itemSize; k++) out[i * a.itemSize + k] = a.getComponent(i, k);
     g.setAttribute(name, new THREE.BufferAttribute(out, a.itemSize));
   }
+}
+
+/**
+ * Artifact CSP blocks fetch() of data: URIs, which GLTFLoader uses for embedded buffers.
+ * So: fetch the glTF JSON ourselves, decode its base64 buffers/images and repack as GLB in memory.
+ */
+async function fetchModelAsGlb(url: string): Promise<ArrayBuffer> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('HTTP ' + res.status + ' ' + url);
+  if (!url.endsWith('.json')) return res.arrayBuffer();
+  const json = JSON.parse(await res.text());
+  const b64 = (uri: string) => { const bin = atob(uri.slice(uri.indexOf(',') + 1)); const u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u; };
+  const parts: Uint8Array[] = []; let len = 0;
+  const push = (u: Uint8Array) => { const off = len; parts.push(u); len += u.length; const pad = (4 - (len % 4)) % 4; if (pad) { parts.push(new Uint8Array(pad)); len += pad; } return off; };
+  const bufOffsets: number[] = (json.buffers || []).map((b: any) => push(b64(b.uri)));
+  for (const bv of json.bufferViews || []) { bv.byteOffset = (bv.byteOffset || 0) + bufOffsets[bv.buffer]; bv.buffer = 0; }
+  for (const im of json.images || []) {
+    if (!im.uri || !im.uri.startsWith('data:')) continue;
+    const mime = im.uri.slice(5, im.uri.indexOf(';'));
+    const data = b64(im.uri);
+    const off = push(data);
+    json.bufferViews.push({ buffer: 0, byteOffset: off, byteLength: data.length });
+    im.bufferView = json.bufferViews.length - 1; im.mimeType = mime; delete im.uri;
+  }
+  json.buffers = [{ byteLength: len }];
+  const bin = new Uint8Array(len); let o = 0; for (const p of parts) { bin.set(p, o); o += p.length; }
+  let js = new TextEncoder().encode(JSON.stringify(json));
+  const jpad = (4 - (js.length % 4)) % 4;
+  if (jpad) { const t = new Uint8Array(js.length + jpad); t.set(js); t.fill(0x20, js.length); js = t; }
+  const total = 12 + 8 + js.length + 8 + bin.length;
+  const glb = new ArrayBuffer(total); const dv = new DataView(glb); const u8 = new Uint8Array(glb);
+  dv.setUint32(0, 0x46546c67, true); dv.setUint32(4, 2, true); dv.setUint32(8, total, true);
+  dv.setUint32(12, js.length, true); dv.setUint32(16, 0x4e4f534a, true); u8.set(js, 20);
+  const bo = 20 + js.length; dv.setUint32(bo, bin.length, true); dv.setUint32(bo + 4, 0x004e4942, true); u8.set(bin, bo + 8);
+  return glb;
 }
