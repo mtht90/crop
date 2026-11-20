@@ -8,10 +8,20 @@ export interface PackEntry {
   length: number;
 }
 
+/** アーティファクト版はパックを base64 の .txt で置く（バイナリのファイルを置けないため） */
+const TEXT_PACKS = !!import.meta.env.VITE_ARTIFACT;
+
 export async function loadPack(url: string): Promise<Map<string, ArrayBuffer>> {
-  const res = await fetch(url);
+  const res = await fetch(TEXT_PACKS ? url + '.txt' : url);
   if (!res.ok) throw new Error(`素材パックを読み込めません: ${res.status}`);
-  const buf = new Uint8Array(await res.arrayBuffer());
+  let buf: Uint8Array;
+  if (TEXT_PACKS) {
+    const bin = atob((await res.text()).trim());
+    buf = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+  } else {
+    buf = new Uint8Array(await res.arrayBuffer());
+  }
   const magic = String.fromCharCode(...buf.subarray(0, 4));
   if (magic !== PACK_MAGIC) throw new Error('素材パックの形式が違います');
   const headerLen = new DataView(buf.buffer).getUint32(4, true);

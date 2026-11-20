@@ -5,3 +5,4 @@ assets_src/*
 !assets_src/README.md
 public/assets/
 .import-cache/
+dist-artifact/

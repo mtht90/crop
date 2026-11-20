@@ -1,9 +1,10 @@
-import '@fontsource/m-plus-rounded-1c/500.css';
-import '@fontsource/m-plus-rounded-1c/800.css';
 import './style.css';
 import { Game } from './game';
 import { loadSkin } from './ui/skin';
 import { UI } from './ui/ui';
+
+// アーティファクト版では Google Fonts から読む（index は scripts/make-artifact.mjs が作る）
+if (!import.meta.env.VITE_ARTIFACT) void import('./fonts');
 
 async function boot() {
   const app = document.getElementById('app')!;

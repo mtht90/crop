@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { BuildingVisual } from '../config/buildings';
 import { CITY } from '../config/city';
 import { loadPack } from './pack';
@@ -13,10 +14,46 @@ const TINT_MATERIALS = /^(Palette_Accent|Palette_Roof|Palette_Wall_2|Bus_Stripe)
 /** 夜に光らせる材質 */
 export const GLOW_MATERIALS = /^(window|NightLight_.*)$/;
 
+interface PartSpec {
+  geometry: THREE.BufferGeometry;
+  material: THREE.Material;
+  /** 会社の色で塗れるパーツなら、塗らないときの色 */
+  tintBase: THREE.Color | null;
+}
+
+/** メッシュをまとめる：位置・法線だけにして、色は頂点色にする */
+function mergeMeshes(meshes: THREE.Mesh[], vertexColor: (m: THREE.Mesh) => THREE.Color): THREE.BufferGeometry | null {
+  const geos: THREE.BufferGeometry[] = [];
+  for (const m of meshes) {
+    let g = m.geometry.clone().applyMatrix4(m.matrixWorld);
+    if (g.index) g = g.toNonIndexed();
+    const out = new THREE.BufferGeometry();
+    out.setAttribute('position', g.getAttribute('position'));
+    if (g.getAttribute('normal')) out.setAttribute('normal', g.getAttribute('normal'));
+    else out.computeVertexNormals();
+    const c = vertexColor(m);
+    const n = out.getAttribute('position').count;
+    const col = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) {
+      col[i * 3] = c.r;
+      col[i * 3 + 1] = c.g;
+      col[i * 3 + 2] = c.b;
+    }
+    out.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    geos.push(out);
+  }
+  if (!geos.length) return null;
+  return mergeGeometries(geos, false);
+}
+
+/**
+ * 同じ建物をまとめて InstancedMesh で描くためのプール。
+ * 描画回数を減らすため、glb の中の色だけ違うメッシュは頂点色で1つにまとめる。
+ * 会社の色で塗るパーツと、夜に光るパーツ（窓など）だけ別にする。
+ */
 export class InstancePool {
   readonly parts: THREE.InstancedMesh[] = [];
-  /** 色を変えられるパーツ（parts の添字）と、その元の色 */
-  private readonly tintParts: { index: number; base: THREE.Color }[] = [];
+  private readonly specs: PartSpec[] = [];
   private tints: (THREE.Color | null)[] = [];
   readonly height: number;
   readonly materials = new Set<THREE.Material>();
@@ -26,38 +63,48 @@ export class InstancePool {
   private readonly hidden = new THREE.Matrix4().makeScale(0, 0, 0);
 
   constructor(
-    private readonly root: THREE.Object3D,
+    root: THREE.Object3D,
     private readonly parent: THREE.Object3D,
     capacity = 8,
   ) {
     this.capacity = capacity;
     root.updateMatrixWorld(true);
     this.height = new THREE.Box3().setFromObject(root).max.y;
+    const plain: THREE.Mesh[] = [];
+    const tint: THREE.Mesh[] = [];
+    const glow = new Map<string, THREE.Mesh[]>();
+    root.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh) return;
+      const name = (m.material as THREE.Material).name;
+      if (TINT_MATERIALS.test(name)) tint.push(m);
+      else if (GLOW_MATERIALS.test(name)) glow.set(name, [...(glow.get(name) ?? []), m]);
+      else plain.push(m);
+    });
+    const colorOf = (m: THREE.Mesh) => ((m.material as THREE.MeshStandardMaterial).color ?? new THREE.Color('#ffffff')).clone();
+    const base = mergeMeshes(plain, colorOf);
+    if (base) this.specs.push({ geometry: base, material: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.75, metalness: 0 }), tintBase: null });
+    const tg = mergeMeshes(tint, () => new THREE.Color('#ffffff'));
+    if (tg) this.specs.push({ geometry: tg, material: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.65, metalness: 0 }), tintBase: colorOf(tint[0]) });
+    for (const [name, list] of glow) {
+      const g = mergeMeshes(list, () => new THREE.Color('#ffffff'));
+      const src = list[0].material as THREE.MeshStandardMaterial;
+      const mat = src.clone();
+      mat.name = name;
+      mat.vertexColors = false;
+      if (g) this.specs.push({ geometry: g, material: mat, tintBase: null });
+    }
+    for (const sp of this.specs) this.materials.add(sp.material);
     this.build();
   }
 
   private build() {
     const old = this.parts.splice(0);
-    let k = 0;
-    this.root.traverse((o) => {
-      const m = o as THREE.Mesh;
-      if (!m.isMesh) return;
-      const geo = m.geometry.clone().applyMatrix4(m.matrixWorld);
-      let mat = m.material as THREE.MeshStandardMaterial;
-      const partIndex = this.parts.length;
-      if (TINT_MATERIALS.test(mat.name) && !this.tintParts.some((t) => t.index === partIndex)) {
-        // 色は instanceColor で付けるので、材質の色は白にする
-        const base = mat.color.clone();
-        mat = mat.clone();
-        mat.color.set('#ffffff');
-        (m as THREE.Mesh).material = mat;
-        this.tintParts.push({ index: partIndex, base });
-      }
-      this.materials.add(mat);
-      const im = new THREE.InstancedMesh(geo, mat, this.capacity);
+    this.specs.forEach((sp, k) => {
+      const im = new THREE.InstancedMesh(sp.geometry, sp.material, this.capacity);
       im.count = this.count;
       im.frustumCulled = false; // 街全体が画面に収まる程度なので、境界の再計算を省く
-      const prev = old[k++];
+      const prev = old[k];
       if (prev) {
         const mat = new THREE.Matrix4();
         for (let i = 0; i < this.count; i++) {
@@ -65,9 +112,8 @@ export class InstancePool {
           im.setMatrixAt(i, mat);
         }
       }
-      const tp = this.tintParts.find((t) => t.index === partIndex);
-      if (tp) {
-        for (let i = 0; i < this.capacity; i++) im.setColorAt(i, this.tints[i] ?? tp.base);
+      if (sp.tintBase) {
+        for (let i = 0; i < this.capacity; i++) im.setColorAt(i, this.tints[i] ?? sp.tintBase);
         if (im.instanceColor) im.instanceColor.needsUpdate = true;
       }
       this.parts.push(im);
@@ -111,11 +157,12 @@ export class InstancePool {
   /** 会社の色で塗る（null なら素材の元の色） */
   setTint(i: number, color: THREE.Color | null) {
     this.tints[i] = color;
-    for (const t of this.tintParts) {
-      const im = this.parts[t.index];
-      im.setColorAt(i, color ?? t.base);
+    this.specs.forEach((sp, k) => {
+      if (!sp.tintBase) return;
+      const im = this.parts[k];
+      im.setColorAt(i, color ?? sp.tintBase);
       if (im.instanceColor) im.instanceColor.needsUpdate = true;
-    }
+    });
   }
 }
 
