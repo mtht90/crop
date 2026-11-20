@@ -32,7 +32,7 @@ scene.add(camera);
 
 const sun = new THREE.DirectionalLight(0xffffff, 3);
 sun.castShadow = true;
-sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.mapSize.setScalar(matchMedia('(pointer: coarse)').matches ? 1024 : 2048);
 const sc = sun.shadow.camera;
 sc.left = -45; sc.right = 45; sc.top = 45; sc.bottom = -45; sc.near = 1; sc.far = 300;
 sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.03;
@@ -117,14 +117,24 @@ function showBanner(biome: number) {
 (async function boot() {
   const loading = startLoading((p) => { ($('ld-fill') as HTMLElement).style.width = `${Math.round(p * 100)}%`; });
   lib = loading.lib;
-  const timer = setTimeout(() => { $('ld-text').textContent = 'LOADING… 回線が遅いようです。しばらくお待ちください'; }, 15000);
+  const t0 = performance.now();
+  const timer = setInterval(() => {
+    const st = loading.status();
+    const sec = Math.round((performance.now() - t0) / 1000);
+    if (sec < 6) return;
+    $('ld-text').textContent = `LOADING ${sec}s — 待機中: ${st.pending.join(', ') || 'なし'}` + (st.failed.length ? ` / 失敗: ${st.failed.join(', ')}` : '');
+  }, 1000);
   try { await loading.core; } catch (e) {
     $('ld-text').textContent = '読み込みに失敗しました。再読み込みしてください (' + String((e as any)?.message ?? e).slice(0, 80) + ')';
-    console.error(e); return;
+    clearInterval(timer); console.error(e); return;
   }
-  clearTimeout(timer);
-  $('ld-text').textContent = 'PREPARING…';
-  await audio.load(lib.audio);
+  clearInterval(timer);
+  const st = loading.status();
+  if (st.failed.length) console.warn('failed assets', st.failed);
+  $('ld-text').textContent = 'PREPARING… (音声デコード)';
+  await Promise.race([audio.load(lib.audio), new Promise((r) => setTimeout(r, 8000))]);
+  $('ld-text').textContent = 'PREPARING… (ステージ生成)';
+  await new Promise((r) => setTimeout(r, 30));
   pmrem = new THREE.PMREMGenerator(renderer);
 
   const models = new Models(lib);

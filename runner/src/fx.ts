@@ -53,7 +53,7 @@ export class Post {
   render: RenderPass;
   constructor(renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera) {
     const size = renderer.getDrawingBufferSize(new THREE.Vector2());
-    const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: new URLSearchParams(location.search).has('lowq') ? 0 : 4 });
+    const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: new URLSearchParams(location.search).has('lowq') || matchMedia('(pointer: coarse)').matches ? 0 : 4 });
     this.composer = new EffectComposer(renderer, rt);
     this.render = new RenderPass(scene, camera);
     this.composer.addPass(this.render);

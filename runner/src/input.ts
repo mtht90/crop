@@ -57,8 +57,11 @@ export class Input {
     root.classList.add('touch');
   }
 
-  lock() { this.el.requestPointerLock?.(); }
-  unlock() { if (document.pointerLockElement) document.exitPointerLock(); }
+  lock() {
+    if (this.touch) return; // no pointer lock on tablets/phones
+    try { const r: any = (this.el as any).requestPointerLock?.(); if (r && r.catch) r.catch(() => {}); } catch { /* not allowed in this frame */ }
+  }
+  unlock() { try { if (document.pointerLockElement) document.exitPointerLock(); } catch { /* ignore */ } }
 
   down(...codes: string[]) { return codes.some((c) => this.keys.has(c)); }
   hit(...codes: string[]) { return codes.some((c) => this.pressed.has(c)); }

@@ -18,7 +18,11 @@ export class Audio {
 
   async load(raw: Record<string, ArrayBuffer>) {
     await Promise.all(Object.entries(raw).map(async ([k, b]) => {
-      try { this.buffers.set(k, await this.ctx.decodeAudioData(b.slice(0))); } catch (e) { console.warn('audio decode failed', k); }
+      try {
+        // callback form: works on older Safari where the promise form may never settle
+        const buf = await new Promise<AudioBuffer>((res, rej) => { this.ctx.decodeAudioData(b.slice(0), res, rej); setTimeout(() => rej(new Error('decode timeout')), 6000); });
+        this.buffers.set(k, buf);
+      } catch (e) { console.warn('audio decode failed', k); }
     }));
   }
 

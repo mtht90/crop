@@ -11,6 +11,14 @@
 </head>
 <body>
 <canvas id="game"></canvas>
+<script>
+  // show any startup error on the loading screen (helps diagnose devices we cannot test)
+  (function () {
+    function show(msg) { var el = document.getElementById('ld-text'); if (el) el.textContent = 'ERROR: ' + msg; }
+    window.addEventListener('error', function (e) { show((e.message || 'script error') + ' @' + (e.filename || '').split('/').pop() + ':' + e.lineno); });
+    window.addEventListener('unhandledrejection', function (e) { var r = e.reason; show('promise: ' + (r && r.message ? r.message : String(r))); });
+  })();
+</script>
 
 <div id="hud" class="hidden">
   <div id="flash"></div>

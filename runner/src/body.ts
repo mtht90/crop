@@ -147,7 +147,7 @@ export class Body {
       if (o.isBone && o.name === 'DEF-neck') this.neck = o;
     });
     this.mixer = new THREE.AnimationMixer(this.model);
-    const clip = (n: string, g: GLTF = main) => g.animations.find((a) => a.name === n)!;
+    const clip = (n: string, g: GLTF = main) => g.animations?.find((a) => a.name === n)!;
     const add = (key: string, c: THREE.AnimationClip | undefined, loop = true) => {
       if (!c) { console.warn('missing clip', key); return; }
       const a = this.mixer.clipAction(c);

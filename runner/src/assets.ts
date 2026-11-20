@@ -41,6 +41,7 @@ export interface Loading {
   biomeReady: boolean[];
   onBiomeReady: (i: number) => void;
   onAudio: (name: string, buf: ArrayBuffer) => void;
+  status: () => { pending: string[]; failed: string[] };
 }
 
 export function startLoading(onCoreProgress: (p: number) => void): Loading {
@@ -48,9 +49,22 @@ export function startLoading(onCoreProgress: (p: number) => void): Loading {
   const tl = new THREE.TextureLoader();
   const lib: Library = { models: new Map(), runner: null as any, runnerExtra: null as any, pbr: {}, hdr: {}, sky: {}, audio: {} };
   const cache = new Map<string, Promise<void>>();
+  // diagnostics: what is still loading / what failed (shown on the title screen if loading stalls)
+  const pending = new Set<string>(); const failed: string[] = [];
+  /** wraps a load with a timeout; on failure/timeout resolves to `fallback()` instead of hanging forever */
+  const track = <T>(name: string, p: Promise<T>, fallback?: () => T, ms = 30000): Promise<T> => {
+    pending.add(name);
+    return new Promise<T>((resolve, reject) => {
+      const fail = (e: unknown) => { pending.delete(name); failed.push(name.split('/').pop() + ': ' + String((e as any)?.message ?? e).slice(0, 60)); if (fallback) resolve(fallback()); else reject(e); };
+      const t = setTimeout(() => fail('timeout'), ms);
+      p.then((v) => { clearTimeout(t); pending.delete(name); resolve(v); }, (e) => { clearTimeout(t); fail(e); });
+    });
+  };
+  const blankTex = () => { const t = new THREE.DataTexture(new Uint8Array([200, 200, 200, 255]), 1, 1); t.needsUpdate = true; return t; };
   const once = (key: string, f: () => Promise<void>) => { let p = cache.get(key); if (!p) { p = f(); cache.set(key, p); } return p; };
 
-  const loadKit = (kit: string) => once('m:' + kit, () => gl.loadAsync(BASE + `models/${kit}${MODEL_EXT}`).then((g) => {
+  const loadKit = (kit: string) => once('m:' + kit, () => track(`models/${kit}`, gl.loadAsync(BASE + `models/${kit}${MODEL_EXT}`), () => null as any, 60000).then((g) => {
+    if (!g) return;
     for (const child of [...g.scene.children]) {
       child.position.set(0, 0, 0);
       child.updateMatrixWorld(true);
@@ -72,23 +86,23 @@ export function startLoading(onCoreProgress: (p: number) => void): Loading {
   const loadPbr = (s: string) => once('p:' + s, async () => {
     const set: any = {};
     await Promise.all(([['map', 'Diffuse'], ['normalMap', 'nor_gl'], ['armMap', 'arm']] as const).map(([k, suffix]) =>
-      tl.loadAsync(BASE + `textures/${s}_${suffix}.jpg`).then((t) => {
+      track(`${s}_${suffix}`, tl.loadAsync(BASE + `textures/${s}_${suffix}.jpg`), blankTex).then((t) => {
         t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8;
         if (k === 'map') t.colorSpace = THREE.SRGBColorSpace;
         set[k] = t;
       })));
     lib.pbr[s] = set;
   });
-  const loadSky = (s: string) => once('s:' + s, () => tl.loadAsync(BASE + `textures/${s}_sky.jpg`).then((t) => {
+  const loadSky = (s: string) => once('s:' + s, () => track(`${s}_sky`, tl.loadAsync(BASE + `textures/${s}_sky.jpg`), blankTex).then((t) => {
     t.colorSpace = THREE.SRGBColorSpace; t.mapping = THREE.EquirectangularReflectionMapping; lib.sky[s] = t; lib.hdr[s] = t;
   }));
-  const loadAudio = (a: string) => once('a:' + a, () => fetch(BASE + 'audio/' + a).then((r) => r.arrayBuffer()).then((b) => { lib.audio[a] = b; }).catch((e) => console.warn('audio failed', a, e)));
+  const loadAudio = (a: string) => once('a:' + a, () => track(a, fetch(BASE + 'audio/' + a).then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.arrayBuffer(); }), () => null as any, 20000).then((b) => { if (b) lib.audio[a] = b; }));
   const loadBiome = (i: number) => { const d = BIOME_DEPS[i]; return Promise.all([...d.models.map(loadKit), ...d.pbr.map(loadPbr), loadSky(d.sky)]); };
 
-  const L: Loading = { lib, core: null as any, biomeReady: [false, false, false, false], onBiomeReady: () => {}, onAudio: () => {} };
+  const L: Loading = { lib, core: null as any, biomeReady: [false, false, false, false], onBiomeReady: () => {}, onAudio: () => {}, status: () => ({ pending: [...pending], failed: [...failed] }) };
   const coreJobs: Promise<unknown>[] = [
-    gl.loadAsync(BASE + 'models/runner' + MODEL_EXT).then((g) => { lib.runner = g; }),
-    gl.loadAsync(BASE + 'models/runner_extra' + MODEL_EXT).then((g) => { lib.runnerExtra = g; }),
+    track('models/runner', gl.loadAsync(BASE + 'models/runner' + MODEL_EXT), undefined, 60000).then((g) => { lib.runner = g; }),
+    track('models/runner_extra', gl.loadAsync(BASE + 'models/runner_extra' + MODEL_EXT), () => ({ scene: new THREE.Group(), animations: [] } as any), 60000).then((g) => { lib.runnerExtra = g; }),
     loadBiome(0),
     ...CORE_AUDIO.map(loadAudio),
   ];
