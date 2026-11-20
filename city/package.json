@@ -1,0 +1,23 @@
+{
+  "name": "city-conglomerate",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "import-assets": "node scripts/import-assets.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "three": "0.170.0"
+  },
+  "devDependencies": {
+    "@types/three": "0.170.0",
+    "fbx2gltf": "0.9.7-p1",
+    "tar": "7.4.3",
+    "typescript": "5.7.2",
+    "vite": "6.0.7"
+  }
+}

@@ -1,0 +1,7 @@
+node_modules/
+dist/
+# 素材ファイルはライセンス上、公開リポジトリに置かない（README 参照）
+assets_src/*
+!assets_src/README.md
+public/assets/
+.import-cache/
