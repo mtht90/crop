@@ -1,5 +1,5 @@
 // ゲーム全体のまとめ役：状態・時間の進行・保存・3D表示との同期
-import { TIME } from './config/economy';
+import { HOUR_CURVES, TIME } from './config/economy';
 import { BUILDING_VISUALS } from './config/buildings';
 import type { SfxKey } from './config/audio';
 import { audio } from './audio';
@@ -44,7 +44,10 @@ export class Game {
 
   async start() {
     await this.view.buildStatic();
+    await this.view.traffic.init();
+    this.view.motion = this.s.settings.motion ?? true;
     await this.syncView();
+    this.view.ready = true;
     this.view.focusLot(this.s.hqLot);
     window.setInterval(() => this.tick(), 1000);
     const saveNow = () => this.save();
@@ -93,8 +96,45 @@ export class Game {
     void this.syncView();
     const c = clock(this.s.day);
     this.view.setTimeOfDay(c.hour + c.minute / 60);
+    this.updateTraffic(c.hour);
+    this.emitCoins();
     audio.setNight(c.hour >= 19 || c.hour < 6);
     this.onUpdate();
+  }
+
+  /** 車の台数：時間帯と街のにぎわい（店の数）で決める */
+  private updateTraffic(hour: number) {
+    const curve = HOUR_CURVES.retail[hour] ?? 0.5;
+    const shops = this.s.stores.length;
+    this.view.traffic.target = Math.round((4 + Math.min(36, shops * 1.2)) * (0.25 + 0.75 * curve));
+  }
+
+  /** 売上が入ったら、店の上にコインを出す（3秒ごとにまとめて） */
+  private coinAcc = new Map<number, number>();
+  private lastRevenue = new Map<number, number>();
+  private lastCoin = 0;
+  onCoin: (lotId: number, amount: number) => void = () => {};
+  private emitCoins() {
+    for (const st of this.s.stores) {
+      if (st.company !== 0) continue;
+      const r = st.today.revenue;
+      const prev = this.lastRevenue.get(st.id) ?? r;
+      const d = r >= prev ? r - prev : r;
+      this.lastRevenue.set(st.id, r);
+      if (d > 0) this.coinAcc.set(st.lotId, (this.coinAcc.get(st.lotId) ?? 0) + d);
+    }
+    const now = Date.now();
+    if (now - this.lastCoin < 3000) return;
+    this.lastCoin = now;
+    for (const [lot, amount] of this.coinAcc) if (amount >= 1) this.onCoin(lot, amount);
+    this.coinAcc.clear();
+  }
+
+  setMotion(on: boolean) {
+    this.s.settings.motion = on;
+    this.view.motion = on;
+    if (!on) this.view.traffic.clear();
+    this.view.invalidate();
   }
 
   save() {

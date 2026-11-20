@@ -4,7 +4,8 @@ import { BUILDING_VISUALS, DECOR_VISUALS, GROUND_VISUALS, HQ_VISUAL, ROAD_VISUAL
 import type { CityLayout, Lot } from '../core/layout';
 import { ICON_DATA } from '../generated/icons';
 import { CityControls } from './controls';
-import { GLOW_MATERIALS, ModelLibrary } from './models';
+import { GLOW_MATERIALS, ModelLibrary, type InstancePool } from './models';
+import { Traffic } from './traffic';
 
 /** 区画の状態を示す半透明の目印（UI上の印。建物の絵ではない） */
 export type LotMark = 'none' | 'buyable' | 'owned' | 'selected';
@@ -52,6 +53,12 @@ export class CityView {
   private readonly raycaster = new THREE.Raycaster();
   private lastLightKey = '';
   private glowLevel = 0;
+  /** 車を走らせるか（設定でオフにできる。オフなら変化があるときだけ描く） */
+  motion = true;
+  readonly traffic: Traffic;
+  private lastFrame = 0;
+  /** 建ったときにぴょんと伸びる動き */
+  private pops: { pool: InstancePool; index: number; v: BuildingVisual; x: number; z: number; rot: number; t0: number }[] = [];
 
   constructor(
     private readonly host: HTMLElement,
@@ -90,6 +97,7 @@ export class CityView {
     this.scene.add(this.markMesh);
 
     this.models = new ModelLibrary(this.scene);
+    this.traffic = new Traffic(layout, this.models);
     this.controls = new CityControls(this.camera, host);
     this.controls.bounds = { x: layout.width / 2, z: layout.depth / 2 };
     this.controls.onChange = () => {
@@ -102,7 +110,7 @@ export class CityView {
     new ResizeObserver(() => this.resize()).observe(host);
     this.resize();
     document.addEventListener('visibilitychange', () => this.invalidate());
-    this.loop();
+    requestAnimationFrame(this.loop);
   }
 
   invalidate() {
@@ -115,12 +123,41 @@ export class CityView {
     this.invalidate();
   }
 
-  private loop = () => {
+  private loop = (now: number) => {
     requestAnimationFrame(this.loop);
-    if (!this.dirty || document.hidden) return;
+    if (document.hidden) return;
+    const animating = this.motion || this.pops.length > 0;
+    if (!this.dirty && !animating) return;
+    // 動きがあるときも 30fps までにして電池を節約する
+    if (animating && !this.dirty && now - this.lastFrame < 33) return;
+    const dt = this.lastFrame ? Math.min(0.1, (now - this.lastFrame) / 1000) : 0;
+    this.lastFrame = now;
+    if (this.motion) this.traffic.update(dt);
+    this.updatePops(now);
     this.dirty = false;
     this.renderer.render(this.scene, this.camera);
   };
+
+  private updatePops(now: number) {
+    if (!this.pops.length) return;
+    this.pops = this.pops.filter((p) => {
+      const t = Math.min(1, (now - p.t0) / 450);
+      // 少し行き過ぎてから戻る
+      const k = t < 1 ? 1 - Math.pow(1 - t, 3) * Math.cos(t * Math.PI * 1.5) : 1;
+      const m = ModelLibrary.placeMatrix(p.v, p.x, p.z, p.rot);
+      m.multiply(new THREE.Matrix4().makeScale(1, Math.max(0.05, k), 1));
+      p.pool.set(p.index, m);
+      return t < 1;
+    });
+  }
+
+  /** 区画の中心が画面のどこにあるか（host 内の px） */
+  project(lotId: number, height = 0.6): { x: number; y: number } | null {
+    const lot = this.layout.lots[lotId];
+    const v = new THREE.Vector3(lot.x, height, lot.z).project(this.camera);
+    if (v.x < -1.1 || v.x > 1.1 || v.y < -1.1 || v.y > 1.1) return null;
+    return { x: ((v.x + 1) / 2) * this.host.clientWidth, y: ((1 - v.y) / 2) * this.host.clientHeight };
+  }
 
   /** 道路と、街の外側の木を並べる */
   async buildStatic() {
@@ -158,6 +195,9 @@ export class CityView {
     }
     this.invalidate();
   }
+
+  /** 最初の表示が終わったら true（それ以降に建った建物だけ動かす） */
+  ready = false;
 
   /** ゲームの状態を3Dに反映する（変わったところだけ） */
   async sync(views: LotView[], hqLot: number) {
@@ -209,6 +249,7 @@ export class CityView {
     const lot = this.layout.lots[id];
     entry.index = pool.add(ModelLibrary.placeMatrix(b.visual, lot.x, lot.z, lot.facing));
     pool.setTint(entry.index, b.color ? new THREE.Color(b.color) : null);
+    if (this.ready) this.pops.push({ pool, index: entry.index, v: b.visual, x: lot.x, z: lot.z, rot: lot.facing, t0: performance.now() });
     this.badgeHeights.set(id, pool.height * (b.visual.scale ?? 1) * CITY.lotSize);
     this.refreshBadge(id);
   }

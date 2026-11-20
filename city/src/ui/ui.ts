@@ -8,9 +8,10 @@ import { formatSigned, formatYen, realDuration } from '../core/format';
 import { clock, resolveEvent } from '../sim/engine';
 import { exportString, importString } from '../sim/save';
 import type { Game } from '../game';
-import { h, icon, clear } from './dom';
+import { h, icon, clear, morph } from './dom';
 import { businessTab, financeTab, lotPanel, marketTab, researchTab, setConfirm, type PanelContent } from './panels';
 import { debugPanel } from './debug';
+import { GOALS } from '../config/goals';
 
 type Tab = 'city' | 'business' | 'research' | 'market' | 'finance';
 const TABS: { id: Tab; label: string; icon: IconKey }[] = [
@@ -34,6 +35,8 @@ export class UI {
   private modalKind: string | null = null;
   private shownEventId: string | null = null;
   private hudCells: Record<string, HTMLElement> = {};
+  private readonly goalEl: HTMLButtonElement;
+  private goalIndex = -1;
 
   constructor(private readonly g: Game, root: HTMLElement) {
     // 上部バー
@@ -61,7 +64,21 @@ export class UI {
     window.addEventListener('pointerup', () => setTimeout(() => (this.pointerInSheet = false), 50));
     this.toasts = h('div', { id: 'toasts', 'aria-live': 'polite' });
     this.modal = h('div', { id: 'modal', hidden: true });
-    root.append(this.top, this.sheet, this.tabsEl, this.toasts, this.modal);
+    this.goalEl = h('button', { id: 'goal', hidden: true }) as HTMLButtonElement;
+    this.goalEl.addEventListener('click', () => {
+      const goal = GOALS[this.goalIndex];
+      if (goal) this.setTab(goal.tab);
+    });
+    root.append(this.top, this.goalEl, this.sheet, this.tabsEl, this.toasts, this.modal);
+    const cityHost = document.getElementById('city')!;
+    g.onCoin = (lotId, amount) => {
+      if (this.modalKind || cityHost.querySelectorAll('.coin').length > 12) return;
+      const p = g.view.project(lotId);
+      if (!p) return;
+      const el = h('div', { class: 'coin', style: { left: `${p.x}px`, top: `${p.y}px` } }, icon('coins'), `+${formatYen(amount)}`);
+      cityHost.append(el);
+      setTimeout(() => el.remove(), 1700);
+    };
 
     g.onUpdate = () => this.update();
     g.onToast = (m, k) => this.toast(m, k);
@@ -106,6 +123,7 @@ export class UI {
   private lastSheetKey = '';
   private renderSheet(force = false) {
     if (!force && this.pointerInSheet) return;
+    void force;
     const p = this.panel();
     if (!p) {
       this.sheet.hidden = true;
@@ -113,15 +131,19 @@ export class UI {
       return;
     }
     const key = `${this.tab}|${this.g.selectedLot}`;
-    const scroll = key === this.lastSheetKey ? this.sheetBody.scrollTop : 0;
+    const same = key === this.lastSheetKey;
     this.lastSheetKey = key;
     this.sheet.hidden = false;
     this.sheet.classList.toggle('full', this.tab !== 'city');
-    clear(this.sheetTitle);
-    this.sheetTitle.append(icon(p.icon), h('span', { style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, p.title));
-    clear(this.sheetBody);
-    for (const n of p.body) if (n) this.sheetBody.append(n);
-    this.sheetBody.scrollTop = scroll;
+    morph(this.sheetTitle, [icon(p.icon), h('span', { style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, p.title)]);
+    if (!same) {
+      // 別の画面に切り替わったときだけ作り直す
+      clear(this.sheetBody);
+      for (const n of p.body) if (n) this.sheetBody.append(n);
+      this.sheetBody.scrollTop = 0;
+    } else {
+      morph(this.sheetBody, p.body.filter((n): n is Node => !!n));
+    }
   }
 
   update() {
@@ -147,10 +169,35 @@ export class UI {
       if (id === 'finance' && s.loans.some((l) => l.graceUntil !== null)) b.append(h('i', { class: 'dot' }));
     }
     this.renderSheet();
+    this.updateGoal();
     // 出来事
     if (s.pendingEvent && !this.modalKind && this.shownEventId !== s.pendingEvent.id + s.pendingEvent.autoDay) this.showEvent();
     if (!s.pendingEvent && this.modalKind === 'event') this.closeModal();
     if (s.gameOver && this.modalKind !== 'gameover') this.showGameOver();
+  }
+
+  private updateGoal() {
+    const s = this.g.s;
+    const idx = GOALS.findIndex((goal) => {
+      const [cur, target] = goal.progress(s);
+      return cur < target;
+    });
+    // シートを大きく開いているときは目標を隠す
+    this.goalEl.hidden = idx < 0 || (!this.sheet.hidden && this.tab !== 'city');
+    if (idx < 0) return;
+    if (this.goalIndex >= 0 && idx > this.goalIndex) {
+      this.goalEl.classList.remove('done');
+      void this.goalEl.offsetWidth;
+      this.goalEl.classList.add('done');
+      this.toast(`目標を達成：${GOALS[this.goalIndex].text}`, 'good');
+      void audio.play('complete');
+    }
+    this.goalIndex = idx;
+    const goal = GOALS[idx];
+    const [cur, target] = goal.progress(s);
+    clear(this.goalEl);
+    this.goalEl.append(icon('trophy'), h('span', { style: { minWidth: '0' } }, h('span', null, goal.text),
+      target > 1 ? h('div', { class: 'gbar' }, h('i', { style: { width: `${Math.min(100, (cur / target) * 100)}%` } })) : null));
   }
 
   toast(msg: string, kind: 'good' | 'bad' | 'info' = 'info') {
@@ -240,6 +287,9 @@ export class UI {
     this.openModal('settings', [icon('settings'), '設定'], [
       h('div', { class: 'card' }, h('h3', null, icon('music'), '音量'), vol('BGM', 'bgm'), vol('効果音', 'sfx'),
         h('button', { class: `btn ${s.settings.muted ? '' : 'ghost'}`, onclick: () => { s.settings.muted = !s.settings.muted; audio.setVolumes(s.settings); this.openSettings(); } }, icon(s.settings.muted ? 'mute' : 'sound'), s.settings.muted ? '消音中（タップで解除）' : 'すべての音を消す')),
+      h('div', { class: 'card' }, h('h3', null, icon('logistics'), '街の動き'),
+        h('div', { class: 'row' }, h('span', { class: 'grow small muted' }, '車を走らせます。オフにすると電池が長持ちします。'),
+          h('button', { class: `btn ${s.settings.motion ?? true ? '' : 'ghost'}`, onclick: () => { this.g.setMotion(!(s.settings.motion ?? true)); this.openSettings(); } }, (s.settings.motion ?? true) ? 'オン' : 'オフ'))),
       h('div', { class: 'card' }, h('h3', null, icon('save'), 'セーブデータ'),
         h('div', { class: 'small muted' }, '30秒ごと、および画面を閉じるときに自動で保存しています。別の端末に移すときは書き出した文字列を使います。'),
         h('div', { class: 'row' },

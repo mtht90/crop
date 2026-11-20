@@ -159,6 +159,6 @@ export interface GameState {
   gameOver: { day: number; reason: string } | null;
   nextRivalDay: number;
   rivalsSpawned: number;
-  settings: { bgm: number; sfx: number; muted: boolean };
+  settings: { bgm: number; sfx: number; muted: boolean; motion?: boolean };
   debug: { speed: number };
 }

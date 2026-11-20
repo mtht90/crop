@@ -159,3 +159,46 @@ input[type=range] { width: 100%; height: 32px; }
 .credits p { margin: 0; font-size: 12px; line-height: 1.6; user-select: text; -webkit-user-select: text; }
 .loading { position: absolute; inset: 0; z-index: 90; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 10px; background: #bfe3f5; font-weight: 800; color: var(--ink); }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+/* ---------- 切り替え・数字のバッジ・説明 ---------- */
+.seg { display: flex; gap: 4px; background: #e8f1fb; border-radius: 14px; padding: 4px; }
+.seg-b { flex: 1; min-height: 44px; border: 0; border-radius: 10px; background: none; font-weight: 800; color: var(--muted); display: flex; align-items: center; justify-content: center; gap: 4px; cursor: pointer; }
+.seg-b.on { background: #fff; color: var(--blue-dark); box-shadow: 0 1px 4px rgba(20, 50, 90, .15); }
+.stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.stat { display: flex; align-items: center; gap: 6px; background: var(--paper-2); border-radius: 12px; padding: 8px; min-width: 0; }
+.stat > .ic { width: 20px; height: 20px; color: var(--blue-dark); }
+.stat b { display: block; font-size: 15px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.stat small { display: block; font-size: 11px; color: var(--muted); }
+.stat > div { min-width: 0; }
+.stat.good b { color: var(--good); }
+.stat.bad b { color: var(--bad); }
+.big { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.gauge-row { display: flex; align-items: center; gap: 8px; }
+.reason { display: flex; gap: 6px; align-items: baseline; background: #fff; border-radius: 10px; padding: 6px 10px; font-size: 13px; }
+.reason .arr { font-size: 11px; color: var(--muted); }
+.reason.up .arr { color: var(--good); }
+.reason.down .arr { color: var(--bad); }
+.pip { display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: #d7e2ee; margin-right: 3px; vertical-align: -1px; }
+.pip.on { background: var(--gold); }
+details.help { display: inline-block; margin-left: auto; }
+details.help summary { list-style: none; width: 28px; height: 28px; border-radius: 50%; background: #e3eef8; color: var(--blue-dark); font-weight: 800; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 14px; }
+details.help summary::-webkit-details-marker { display: none; }
+details.help[open] { display: block; width: 100%; }
+details.help[open] summary { margin-left: auto; }
+details.help > div { background: #fffbe8; border-radius: 10px; padding: 8px 10px; margin-top: 4px; }
+.card h3 details.help { font-weight: 500; }
+
+/* ---------- 目標・コイン ---------- */
+#goal { position: absolute; z-index: 21; left: calc(var(--safe-left) + 8px); top: calc(var(--safe-top) + 118px); max-width: min(78vw, 360px);
+  display: flex; align-items: center; gap: 8px; padding: 8px 12px 8px 10px; border-radius: 14px; background: rgba(255, 255, 255, .94); border: 0;
+  box-shadow: 0 2px 10px rgba(20, 50, 90, .18); font-weight: 800; font-size: 13px; text-align: left; cursor: pointer; color: var(--ink); }
+#goal .ic { width: 22px; height: 22px; color: var(--warn); }
+#goal .gbar { height: 6px; border-radius: 3px; background: #e3eef8; margin-top: 4px; overflow: hidden; }
+#goal .gbar i { display: block; height: 100%; background: var(--gold); }
+#goal.done { animation: goaldone .8s ease; }
+@keyframes goaldone { 0% { transform: scale(1); } 30% { transform: scale(1.08); background: #fff3b0; } 100% { transform: scale(1); } }
+#goal[hidden] { display: none; }
+.coin { position: absolute; z-index: 15; pointer-events: none; font-weight: 800; font-size: 14px; color: #fff; padding: 2px 8px 2px 4px; border-radius: 99px;
+  background: rgba(46, 157, 91, .92); display: flex; align-items: center; gap: 2px; transform: translate(-50%, -100%); animation: coinup 1.6s ease-out forwards; white-space: nowrap; }
+.coin .ic { color: var(--gold); width: 18px; height: 18px; }
+@keyframes coinup { 0% { opacity: 0; transform: translate(-50%, -80%) scale(.7); } 15% { opacity: 1; transform: translate(-50%, -110%) scale(1); } 100% { opacity: 0; transform: translate(-50%, -260%); } }

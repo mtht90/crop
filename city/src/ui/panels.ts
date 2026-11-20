@@ -5,7 +5,7 @@ import { PRODUCTS, productById } from '../config/products';
 import { RESEARCH, researchById } from '../config/research';
 import { PERSONALITIES } from '../config/rivals';
 import type { IconKey } from '../config/icons';
-import { formatCount, formatSigned, formatYen, minutesLabel, pct, realDuration } from '../core/format';
+import { formatCount, formatSigned, formatYen, yenShort, minutesLabel, pct, realDuration } from '../core/format';
 import * as A from '../sim/actions';
 import { clock, unlockText } from '../sim/engine';
 import { creditLimit, debtOf, loanPayment, loanRate, marketShares, nextQuarterDay, recent } from '../sim/finance';
@@ -111,6 +111,42 @@ function hqPanel(g: Game): PanelContent {
 
 const AD_STEPS = [0, 10_000, 30_000, 50_000, 100_000, 200_000, 500_000, 1_000_000, 3_000_000];
 
+/** 各タブの中で、どの切り替えを見ているか */
+export const tabView = {
+  business: 'shops' as 'shops' | 'quality' | 'industries',
+  market: 'share' as 'share' | 'rivals',
+  finance: 'loans' as 'loans' | 'reports' | 'ipo',
+  research: 'available' as 'available' | 'done' | 'all',
+};
+
+/** 店の画面のどのタブを見ているか */
+export const storeView = { seg: 'overview' as 'overview' | 'products' | 'ops' };
+
+/** 切り替えボタン（セグメント） */
+export function segments<T extends string>(cur: T, items: [T, string, IconKey][], onPick: (v: T) => void) {
+  return h('div', { class: 'seg', role: 'tablist' }, ...items.map(([v, label, ic]) =>
+    h('button', { class: `seg-b ${cur === v ? 'on' : ''}`, role: 'tab', 'aria-selected': cur === v ? 'true' : 'false', onclick: () => onPick(v) }, icon(ic), label)));
+}
+
+/** 説明文は「？」で開く */
+export function help(text: string) {
+  return h('details', { class: 'help' }, h('summary', { 'aria-label': '説明' }, '？'), h('div', { class: 'small muted' }, text));
+}
+
+/** 数字のバッジ（アイコン＋値） */
+function stat(ic: IconKey, value: string, label: string, cls = '') {
+  return h('div', { class: `stat ${cls}` }, icon(ic), h('div', null, h('b', null, value), h('small', null, label)));
+}
+
+/** 理由を矢印つきの短い行に */
+function reasonChips(reasons: string[]) {
+  return h('div', { class: 'list' }, ...reasons.map((r) => {
+    const up = /増|戻った|上がり|割安|向上/.test(r);
+    const down = /減|逃|下がり|割高|低下|不足/.test(r);
+    return h('div', { class: `reason ${up ? 'up' : down ? 'down' : ''}` }, h('span', { class: 'arr' }, up ? '▲' : down ? '▼' : '・'), r);
+  }));
+}
+
 export function storePanel(g: Game, st: Store): PanelContent {
   const s = g.s;
   const ind = INDUSTRIES[st.industry];
@@ -123,87 +159,97 @@ export function storePanel(g: Game, st: Store): PanelContent {
     const total = (lv.buildMinutes * 60) / TIME.realSecondsPerDay;
     const left = st.buildUntil! - s.day;
     body.push(h('div', { class: 'card' }, h('h3', null, icon('build'), st.upgradeTo ? `レベル${st.upgradeTo}に建て替え中` : '建設中'),
-      h('div', { class: 'row' }, bar(1 - left / total), h('span', { class: 'small' }, `残り ${realDuration(left)}`))));
+      h('div', { class: 'row' }, bar(1 - left / total), h('b', null, realDuration(left)))));
     if (!st.upgradeTo) return { title: storeLabel(st), icon: IND_ICON[st.industry], body };
   }
-  const y = st.yesterday;
   const t = st.today;
-  body.push(h('div', { class: 'kpis' },
-    kpi('今日の売上', formatYen(t.revenue)),
-    kpi('今日の利益', formatSigned(profitOf(t)), profitOf(t) >= 0 ? 'good' : 'bad'),
-    isStoreIndustry(st.industry) ? kpi('今日の客数', formatCount(t.customers)) : kpi('従業員', `${st.staff}人`),
-    kpi('昨日の売上', formatYen(y?.revenue ?? 0)),
-    kpi('昨日の利益', formatSigned(profitOf(y)), profitOf(y) >= 0 ? 'good' : 'bad'),
-    isStoreIndustry(st.industry) ? kpi('昨日の客数', formatCount(y?.customers ?? 0)) : kpi('レベル', `Lv${st.level}`)));
+  const y = st.yesterday;
+  const shop = isStoreIndustry(st.industry);
+  // いちばん大事な数字は常に上に
+  body.push(h('div', { class: 'stats' },
+    stat('sales', yenShort(t.revenue), '今日の売上'),
+    stat('coins', (profitOf(t) >= 0 ? '+' : '') + yenShort(profitOf(t)), '今日の利益', profitOf(t) >= 0 ? 'good' : 'bad'),
+    shop ? stat('people', formatCount(t.customers), '今日の客') : stat('staff', `${st.staff}人`, '従業員')));
+  const segs: [typeof storeView.seg, string, IconKey][] = shop
+    ? [['overview', '概要', 'info'], ['products', '商品', 'coins'], ['ops', '運営', 'staff']]
+    : [['overview', '概要', 'info'], ['ops', '運営', 'staff']];
+  if (!shop && storeView.seg === 'products') storeView.seg = 'overview';
+  body.push(segments(storeView.seg, segs, (v) => { storeView.seg = v; g.onUpdate(); }));
 
-  if (isStoreIndustry(st.industry)) {
-    // 売上が変わった理由
-    if (st.reasons.length) body.push(h('div', { class: 'card' }, h('h3', null, icon('info'), '売上の変化の理由'), h('ul', { class: 'reasons' }, ...st.reasons.map((r) => h('li', null, r)))));
-    // 今の時間の様子
-    const ctx = makeContext(s);
-    const hourRes = storeHour(s, st, ctx, clock(s.day).hour, 1);
-    const links: string[] = [];
-    if (ctx.factorySupplied.has(st.id)) links.push(`工場から仕入れ中（原価 -${pct(LINKS.factoryCostDiscount)}）`);
-    if (ctx.logisticsCovered.has(st.id)) links.push(`物流センターが配送中（費用 -${pct(LINKS.logisticsOpexDiscount)}）`);
-    else if (ctx.playerStoreCount > LINKS.stockoutFreeStores) links.push(`物流が届かず品切れぎみ（客 -${pct(LINKS.stockoutLoss)}）`);
-    body.push(h('div', { class: 'card' }, h('h3', null, icon('people'), 'いまの様子'),
-      h('div', { class: 'kpis' },
-        kpi('来たい客/時', formatCount(hourRes.demand)),
-        kpi('さばける客/時', formatCount(hourRes.served), hourRes.serviceRatio < 0.95 ? 'bad' : ''),
-        kpi('シェア', pct(hourRes.share))),
-      h('div', { class: 'row' }, bar(st.awareness, `知名度 ${pct(st.awareness)}`), bar(st.satisfaction, `満足度 ${pct(st.satisfaction)}`)),
-      ...links.map((l) => h('div', { class: 'small muted' }, l))));
-    // 商品と価格
+  if (storeView.seg === 'overview') {
+    if (shop) {
+      const ctx = makeContext(s);
+      const hr = storeHour(s, st, ctx, clock(s.day).hour, 1);
+      const short = hr.serviceRatio < 0.95;
+      body.push(h('div', { class: 'card' },
+        h('div', { class: 'gauge-row' },
+          h('div', { class: 'grow' }, h('div', { class: 'small muted' }, 'いま来たい客 / さばける客（1時間）'),
+            h('div', { class: 'big' }, formatCount(hr.demand), h('span', { class: 'muted' }, ' / '), h('span', { class: short ? 'bad' : 'good' }, formatCount(hr.served)))),
+          short ? btn([icon('staff'), '人を増やす'], () => { storeView.seg = 'ops'; g.onUpdate(); }, { cls: 'danger' }) : h('span', { class: 'chip good' }, '足りている')),
+        h('div', { class: 'row' }, bar(st.awareness, `知名度 ${pct(st.awareness)}`), bar(st.satisfaction, `満足度 ${pct(st.satisfaction)}`)),
+        h('div', { class: 'row' },
+          h('span', { class: 'chip' }, `シェア ${pct(hr.share)}`),
+          ctx.factorySupplied.has(st.id) ? h('span', { class: 'chip good' }, icon('factory'), `原価 -${pct(LINKS.factoryCostDiscount)}`) : null,
+          ctx.logisticsCovered.has(st.id) ? h('span', { class: 'chip good' }, icon('logistics'), `費用 -${pct(LINKS.logisticsOpexDiscount)}`) : null,
+          !ctx.logisticsCovered.has(st.id) && ctx.playerStoreCount > LINKS.stockoutFreeStores ? h('span', { class: 'chip bad' }, icon('box'), `品切れ -${pct(LINKS.stockoutLoss)}`) : null)));
+      if (st.reasons.length) body.push(h('div', { class: 'card' }, h('h3', null, icon('chart'), '昨日からの変化'), reasonChips(st.reasons)));
+    }
+    body.push(h('div', { class: 'stats' },
+      stat('sales', yenShort(y?.revenue ?? 0), '昨日の売上'),
+      stat('coins', (profitOf(y) >= 0 ? '+' : '') + yenShort(profitOf(y)), '昨日の利益', profitOf(y) >= 0 ? 'good' : 'bad'),
+      shop ? stat('people', formatCount(y?.customers ?? 0), '昨日の客') : stat('upgrade', `Lv${st.level}`, 'レベル')));
+    const next = ind.levels[st.level];
+    if (next && !building) {
+      body.push(h('div', { class: 'row' }, btn([icon('upgrade'), `Lv${st.level + 1}に建て替え`], () => g.act((x) => A.upgrade(x, st.id), 'bigBuy'), { sub: `${formatYen(next.cost)}・${minutesLabel(next.buildMinutes)}` }),
+        help('建て替えると客を集める範囲とさばける客が増えます。工事中は営業しません。')));
+    }
+  }
+
+  if (storeView.seg === 'products' && shop) {
     const prods = productsFor(s, 0, st.industry);
-    body.push(h('div', { class: 'card' }, h('h3', null, icon('coins'), '商品と価格'),
-      st.manager ? h('div', { class: 'small muted' }, '店長が毎日価格を見直しています。自分で変えても、翌日に店長が上書きします。') : null,
-      h('div', { class: 'list' }, ...prods.map((p) => {
-        const q = comp.quality[p.id] ?? QUALITY.start;
-        const price = st.prices[p.id] ?? fairPrice(p, q);
-        const fair = fairPrice(p, q);
-        const ratio = price / fair;
-        return h('div', { class: 'prod' },
-          h('div', null, h('div', { class: 'name' }, p.name, ' ', stars(q)),
-            h('div', { class: `small ${ratio > 1.15 ? 'bad' : ratio < 0.9 ? 'good' : 'muted'}` }, `ふつうの値段 ${formatYen(Math.round(fair / p.priceStep) * p.priceStep)}・${ratio > 1.15 ? '割高' : ratio < 0.9 ? '割安' : 'ちょうどよい'}`)),
-          h('div', { class: 'stepper' },
-            btn('−', () => g.act((x) => A.setPrice(x, st.id, p.id, price - p.priceStep * (price > 1000 ? 5 : 1))), { cls: 'square', title: '値下げ' }),
-            h('span', { class: 'val' }, formatYen(price)),
-            btn('＋', () => g.act((x) => A.setPrice(x, st.id, p.id, price + p.priceStep * (price > 1000 ? 5 : 1))), { cls: 'square', title: '値上げ' })));
-      }))));
-    // 広告
-    const adIdx = AD_STEPS.findIndex((a) => a >= st.adsPerDay);
-    body.push(h('div', { class: 'card' }, h('h3', null, icon('ads'), '広告（1日あたり）'),
+    body.push(h('div', { class: 'row' }, h('span', { class: 'grow small muted' }, st.manager ? '店長が毎日価格を見直します' : '値段は商品ごと。割高だと客が減ります'),
+      help('「ふつうの値段」は品質から決まる目安です。品質は事業タブでまとめて上げられます。自分で調整すると店長より少し得をします。')));
+    body.push(h('div', { class: 'list' }, ...prods.map((p) => {
+      const q = comp.quality[p.id] ?? QUALITY.start;
+      const price = st.prices[p.id] ?? fairPrice(p, q);
+      const fair = fairPrice(p, q);
+      const ratio = price / fair;
+      const tag = ratio > 1.15 ? h('span', { class: 'chip bad' }, '割高') : ratio < 0.9 ? h('span', { class: 'chip good' }, '割安') : h('span', { class: 'chip' }, 'ふつう');
+      const step = p.priceStep * (price > 1000 ? 5 : 1);
+      return h('div', { class: 'prod' },
+        h('div', null, h('div', { class: 'name' }, p.name, ' ', stars(q)), h('div', { class: 'row' }, tag, h('span', { class: 'small muted' }, `目安 ${formatYen(Math.round(fair / p.priceStep) * p.priceStep)}`))),
+        h('div', { class: 'stepper' },
+          btn('−', () => g.act((x) => A.setPrice(x, st.id, p.id, price - step)), { cls: 'square', title: '値下げ' }),
+          h('span', { class: 'val' }, formatYen(price)),
+          btn('＋', () => g.act((x) => A.setPrice(x, st.id, p.id, price + step)), { cls: 'square', title: '値上げ' })));
+    })));
+  }
+
+  if (storeView.seg === 'ops') {
+    const maxStaff = ind.maxStaff[st.level - 1];
+    body.push(h('div', { class: 'card' }, h('h3', null, icon('staff'), '従業員', help(`時給 ${formatYen(ind.wagePerHour)}。1人の採用・退職に ${formatYen(STORE.hireCost)}。足りないと客を逃し、多すぎると人件費がかさみます。`)),
       h('div', { class: 'stepper' },
-        btn('−', () => g.act((x) => A.setAds(x, st.id, AD_STEPS[Math.max(0, adIdx - 1)])), { cls: 'square', title: '広告を減らす' }),
-        h('span', { class: 'val grow' }, st.adsPerDay ? formatYen(st.adsPerDay) : 'なし'),
-        btn('＋', () => g.act((x) => A.setAds(x, st.id, AD_STEPS[Math.min(AD_STEPS.length - 1, adIdx + 1)])), { cls: 'square', title: '広告を増やす' })),
-      h('div', { class: 'small muted' }, '広告をかけると知名度が上がり、止めると少しずつ下がります。')));
+        btn('−', () => g.act((x) => A.setStaff(x, st.id, st.staff - 1)), { cls: 'square', title: '減らす' }),
+        h('span', { class: 'val grow big' }, `${st.staff}`, h('small', { class: 'muted' }, ` / ${maxStaff}人`)),
+        btn('＋', () => g.act((x) => A.setStaff(x, st.id, st.staff + 1)), { cls: 'square', title: '増やす' })),
+      h('div', { class: 'row' }, h('span', { class: 'grow' }, '研修 ', ...Array.from({ length: STORE.maxTraining }, (_, i) => h('i', { class: `pip ${i < st.training ? 'on' : ''}` }))),
+        st.training < STORE.maxTraining ? btn([icon('training'), '研修'], () => g.act((x) => A.trainStaff(x, st.id)), { sub: formatYen(A.trainingCost(s, st.id)) }) : h('span', { class: 'chip good' }, '最高'))));
+    if (shop) {
+      const adIdx = AD_STEPS.findIndex((a) => a >= st.adsPerDay);
+      body.push(h('div', { class: 'card' }, h('h3', null, icon('ads'), '広告（1日）', help('広告をかけると知名度が上がり、止めると少しずつ下がります。')),
+        h('div', { class: 'stepper' },
+          btn('−', () => g.act((x) => A.setAds(x, st.id, AD_STEPS[Math.max(0, adIdx - 1)])), { cls: 'square', title: '広告を減らす' }),
+          h('span', { class: 'val grow big' }, st.adsPerDay ? formatYen(st.adsPerDay) : 'なし'),
+          btn('＋', () => g.act((x) => A.setAds(x, st.id, AD_STEPS[Math.min(AD_STEPS.length - 1, adIdx + 1)])), { cls: 'square', title: '広告を増やす' }))));
+      body.push(h('div', { class: 'card' }, h('h3', null, icon('manager'), '店長', help(`店長（時給 ${formatYen(STORE.managerWagePerHour)}）は価格と人数を毎日自動で調整します。自分で調整した方が少し得です。`)),
+        bonus.manager
+          ? h('div', { class: 'row' }, h('span', { class: 'grow' }, st.manager ? h('span', { class: 'chip good' }, '店長がいます') : h('span', { class: 'chip' }, 'いません')),
+            btn(st.manager ? '外す' : '置く', () => g.act((x) => A.setManager(x, st.id, !st.manager)), { cls: st.manager ? 'ghost' : '' }))
+          : h('div', { class: 'row' }, icon('lock'), h('span', { class: 'small muted' }, '研究「店長制度」で解禁'))));
+    }
+    body.push(h('div', { class: 'row end' },
+      btn('取り壊す', () => confirmThen(g, `${storeLabel(st)}を取り壊しますか？ 建設費の${pct(STORE.demolishRefund)}が戻ります。`, () => g.act((x) => A.demolish(x, st.id))), { cls: 'ghost' })));
   }
-  // 従業員
-  const maxStaff = ind.maxStaff[st.level - 1];
-  body.push(h('div', { class: 'card' }, h('h3', null, icon('staff'), '従業員'),
-    st.manager && isStoreIndustry(st.industry) ? h('div', { class: 'small muted' }, '店長が人数を調整しています。') : null,
-    h('div', { class: 'stepper' },
-      btn('−', () => g.act((x) => A.setStaff(x, st.id, st.staff - 1)), { cls: 'square', title: '減らす' }),
-      h('span', { class: 'val grow' }, `${st.staff}人 / 最大${maxStaff}人`),
-      btn('＋', () => g.act((x) => A.setStaff(x, st.id, st.staff + 1)), { cls: 'square', title: '増やす' })),
-    h('div', { class: 'small muted' }, `時給 ${formatYen(ind.wagePerHour)}・1人の採用/退職に ${formatYen(STORE.hireCost)}`),
-    h('div', { class: 'row' }, h('span', { class: 'grow' }, `研修レベル ${st.training} / ${STORE.maxTraining}`),
-      st.training < STORE.maxTraining ? btn([icon('training'), '研修する'], () => g.act((x) => A.trainStaff(x, st.id)), { sub: formatYen(A.trainingCost(s, st.id)) }) : h('span', { class: 'chip good' }, '最高レベル'))));
-  // 店長
-  if (isStoreIndustry(st.industry)) {
-    body.push(h('div', { class: 'card' }, h('h3', null, icon('manager'), '店長'),
-      bonus.manager
-        ? h('div', { class: 'row' }, h('span', { class: 'grow small' }, st.manager ? `店長がいます（時給 ${formatYen(STORE.managerWagePerHour)}）。価格と人数を毎日自動で調整します。` : '店長を置くと、価格と人数を毎日自動で調整します。自分で調整した方が少し得です。'),
-          btn(st.manager ? '外す' : '置く', () => g.act((x) => A.setManager(x, st.id, !st.manager)), { cls: st.manager ? 'ghost' : '' }))
-        : h('div', { class: 'small muted' }, '研究「店長制度」で置けるようになります。')));
-  }
-  // 建て替え・取り壊し
-  const next = ind.levels[st.level];
-  body.push(h('div', { class: 'row' },
-    next && !building ? btn([icon('upgrade'), `レベル${st.level + 1}に建て替え`], () => g.act((x) => A.upgrade(x, st.id), 'bigBuy'), { sub: `${formatYen(next.cost)}・${minutesLabel(next.buildMinutes)}` }) : null,
-    h('span', { class: 'grow' }),
-    btn('取り壊す', () => confirmThen(g, `${storeLabel(st)}を取り壊しますか？ 建設費の${pct(STORE.demolishRefund)}が戻ります。`, () => g.act((x) => A.demolish(x, st.id))), { cls: 'ghost' })));
   return { title: `${storeLabel(st)}  Lv${st.level}`, icon: IND_ICON[st.industry], body };
 }
 
@@ -241,12 +287,13 @@ function rivalStorePanel(g: Game, st: Store): PanelContent {
 
 export function businessTab(g: Game): PanelContent {
   const s = g.s;
+  const sec: Record<typeof tabView.business, Node[]> = { shops: [], quality: [], industries: [] };
   const comp = s.companies[0];
   const mine = s.stores.filter((x) => x.company === 0);
   const ctx = makeContext(s);
   const body: (Node | null)[] = [];
   // 業種
-  body.push(h('div', { class: 'card' }, h('h3', null, icon('business'), '業種'),
+  sec.industries.push(h('div', { class: 'card' }, h('h3', null, icon('business'), '業種'),
     h('div', { class: 'list' }, ...(Object.keys(INDUSTRIES) as IndustryId[]).map((id) => {
       const n = mine.filter((x) => x.industry === id).length;
       const unlocked = s.unlocked.includes(id);
@@ -260,18 +307,18 @@ export function businessTab(g: Game): PanelContent {
   const logi = mine.filter((x) => x.industry === 'logistics' && x.buildUntil === null);
   const it = mine.filter((x) => x.industry === 'it' && x.buildUntil === null);
   const shops = mine.filter((x) => isStoreIndustry(x.industry) && x.buildUntil === null);
-  body.push(h('div', { class: 'card' }, h('h3', null, icon('chart'), '業種どうしのつながり'),
+  sec.shops.push(h('div', { class: 'card' }, h('h3', null, icon('chart'), '業種どうしのつながり'),
     h('div', { class: 'diagram' },
       h('div', { class: `node ${fac.length ? '' : 'off'}` }, icon('factory'), `工場 ${fac.length}`, h('span', { class: 'small' }, `卸し先 ${ctx.factorySupplied.size}店`)),
       h('div', { class: 'arrow' }, '→'),
       h('div', { class: `node ${logi.length ? '' : 'off'}` }, icon('logistics'), `物流 ${logi.length}`, h('span', { class: 'small' }, `配送先 ${ctx.logisticsCovered.size}`)),
       h('div', { class: 'arrow' }, '→'),
       h('div', { class: 'node' }, icon('food'), `店 ${shops.length}`, h('span', { class: 'small' }, `原価 -${pct(LINKS.factoryCostDiscount)}（卸し先）`))),
-    h('div', { class: 'small muted' }, `工場は自社の店（飲食・小売）に安く卸し、原価を下げます。物流センターは店と工場をつなぎ、費用と品切れを減らします。ITオフィスは全事業の売上を上げます（今 +${pct(ctx.itEfficiency)}${it.length ? '' : '：オフィスなし'}）。`)));
+    h('div', { class: 'row' }, h('span', { class: 'chip' }, icon('it'), `IT効果 +${pct(ctx.itEfficiency)}（${it.length}棟）`), help('工場は自社の店（飲食・小売）に安く卸し、原価を下げます。物流センターは店と工場をつなぎ、費用と品切れを減らします。ITオフィスは全事業の売上を上げます。'))));
   // 商品の品質
   const prods = PRODUCTS.filter((p) => s.unlocked.includes(p.industry));
-  body.push(h('div', { class: 'card' }, h('h3', null, icon('quality'), '商品の品質（全店共通）'),
-    h('div', { class: 'small muted' }, '品質を上げると満足度と口コミが増え、高めの値段でも売れます。上限は研究で上がります。'),
+  sec.quality.push(h('div', { class: 'card' }, h('h3', null, icon('quality'), '商品の品質（全店共通）'),
+    help('品質を上げると満足度と口コミが増え、高めの値段でも売れます。上限は研究で上がります。'),
     h('div', { class: 'list' }, ...prods.map((p) => {
       const q = comp.quality[p.id] ?? QUALITY.start;
       const cap = qualityCapFor(s, 0, p.industry);
@@ -282,13 +329,15 @@ export function businessTab(g: Game): PanelContent {
         q < cap ? btn('＋5', () => g.act((x) => A.investQuality(x, p.id, 5), 'buy'), { sub: formatYen(A.qualityInvestCost(s, p.id, Math.min(5, cap - q))) }) : h('span', { class: 'chip' }, '上限'));
     }))));
   // 店の一覧
-  body.push(h('div', { class: 'card' }, h('h3', null, icon('city'), `自社の店・施設（${mine.length}）`),
+  sec.shops.push(h('div', { class: 'card' }, h('h3', null, icon('city'), `自社の店・施設（${mine.length}）`),
     mine.length === 0 ? h('div', { class: 'muted' }, 'まだありません。街タブで区画を買って建てましょう。') : null,
     h('div', { class: 'list' }, ...mine.map((st) => h('div', { class: 'item tap', onclick: () => { g.view.focusLot(st.lotId); g.selectLot(st.lotId); g.onShowCity(); } },
       icon(IND_ICON[st.industry], 'ic big'),
       h('div', { class: 'grow' }, h('div', { class: 't' }, `${storeLabel(st)} Lv${st.level}`, st.manager ? h('span', { class: 'chip', style: { marginLeft: '6px' } }, '店長') : null),
         h('div', { class: 's' }, st.buildUntil !== null ? `工事中（残り ${realDuration(st.buildUntil - s.day)}）` : st.reasons[0] ?? `昨日の利益 ${formatSigned(profitOf(st.yesterday))}`)),
       h('b', { class: profitOf(st.yesterday) >= 0 ? 'good' : 'bad' }, formatSigned(profitOf(st.yesterday))))))));
+  body.push(segments(tabView.business, [['shops', 'お店', 'city'], ['quality', '品質', 'quality'], ['industries', '業種', 'business']], (v) => { tabView.business = v; g.onUpdate(); }));
+  body.push(...sec[tabView.business]);
   return { title: '事業', icon: 'business', body };
 }
 
@@ -312,9 +361,16 @@ export function researchTab(g: Game): PanelContent {
   } else {
     body.push(h('div', { class: 'muted' }, '研究は本社で1つずつ進めます。選んで始めましょう。'));
   }
+  body.push(segments(tabView.research, [['available', 'できる', 'research'], ['done', '完了', 'check'], ['all', 'すべて', 'info']], (v) => { tabView.research = v; g.onUpdate(); }));
   const cats = ['product', 'quality', 'cost', 'automation', 'industry'];
   for (const cat of cats) {
-    const list = RESEARCH.filter((r) => r.category === cat);
+    const list = RESEARCH.filter((r) => r.category === cat).filter((r) => {
+      const done = s.research.done.includes(r.id);
+      if (tabView.research === 'done') return done;
+      if (tabView.research === 'available') return !done && (!A.canResearch(s, r.id) || cur?.id === r.id);
+      return true;
+    });
+    if (!list.length) continue;
     body.push(h('div', { class: 'card' }, h('h3', null, icon('research'), CAT_NAME[cat]),
       h('div', { class: 'list' }, ...list.map((r) => {
         const done = s.research.done.includes(r.id);
@@ -366,6 +422,7 @@ function pie(slices: { value: number; color: string; label: string }[]) {
 
 export function marketTab(g: Game): PanelContent {
   const s = g.s;
+  const sec = { share: [] as Node[], rivals: [] as Node[] };
   const ms = marketShares(s);
   const ind = marketState.industry;
   const m = ms[ind];
@@ -380,25 +437,27 @@ export function marketTab(g: Game): PanelContent {
   body.push(h('div', { class: 'row' },
     btn([icon('food'), '飲食'], () => { marketState.industry = 'food'; g.onUpdate(); }, { cls: ind === 'food' ? 'on' : 'ghost' }),
     btn([icon('retail'), '小売'], () => { marketState.industry = 'retail'; g.onUpdate(); }, { cls: ind === 'retail' ? 'on' : 'ghost' })));
-  body.push(h('div', { class: 'card' }, h('h3', null, icon('market'), `${INDUSTRIES[ind].shortName}のシェア（直近の売上）`),
+  sec.share.push(h('div', { class: 'card' }, h('h3', null, icon('market'), `${INDUSTRIES[ind].shortName}のシェア（直近の売上）`),
     total > 0 ? h('div', { class: 'row', style: { flexWrap: 'nowrap' } },
       h('div', { class: 'chart', style: { width: '42%', flex: 'none' } }, pie(slices)),
       h('div', { class: 'legend', style: { flexDirection: 'column' } }, ...slices.map((sl) => h('span', null, h('i', { class: 'swatch', style: { background: sl.color } }), `${sl.label} ${pct(sl.value / total, 1)}`))))
       : h('div', { class: 'muted' }, 'まだ売上がありません')));
   // 企業ランキング
   const ranking = s.companies.filter((c) => !c.bankrupt || c.isPlayer).sort((a, b) => b.marketCap - a.marketCap);
-  body.push(h('div', { class: 'card' }, h('h3', null, icon('rank'), '企業ランキング（時価総額）'),
+  sec.share.push(h('div', { class: 'card' }, h('h3', null, icon('rank'), '企業ランキング（時価総額）'),
     h('table', { class: 't' }, h('tr', null, h('th', null, '#'), h('th', null, '会社'), h('th', { class: 'n' }, '店'), h('th', { class: 'n' }, '時価総額')),
       ...ranking.map((c, i) => h('tr', { style: c.isPlayer ? { fontWeight: '800', background: '#fff7d6' } : undefined },
         h('td', null, i + 1), h('td', null, h('span', { class: 'swatch', style: { background: c.color, marginRight: '4px' } }), c.name),
         h('td', { class: 'n' }, s.stores.filter((x) => x.company === c.id).length), h('td', { class: 'n' }, formatYen(c.marketCap)))))));
   // ライバル企業と買収
   const rivals = s.companies.filter((c) => !c.isPlayer && !c.bankrupt);
-  body.push(h('div', { class: 'card' }, h('h3', null, icon('acquire'), 'ライバル企業と買収'),
-    h('div', { class: 'small muted' }, `株を${pct(ACQUISITION.shareStep)}ずつ買い進め、${pct(ACQUISITION.controlShare)}を超えると会社ごと（店とブランドすべて）手に入ります。店を1つずつ買うときは、街で店をタップします。`),
+  sec.rivals.push(h('div', { class: 'card' }, h('h3', null, icon('acquire'), 'ライバル企業と買収', help(`株を${pct(ACQUISITION.shareStep)}ずつ買い進め、${pct(ACQUISITION.controlShare)}を超えると会社ごと（店とブランドすべて）手に入ります。店を1つずつ買うときは、街で店をタップします。`)),
     h('div', { class: 'list' }, ...rivals.map((c) => rivalRow(g, c)))));
   const fallen = s.companies.filter((c) => !c.isPlayer && c.bankrupt);
-  if (fallen.length) body.push(h('div', { class: 'small muted' }, `いなくなった会社：${fallen.map((c) => c.name).join('、')}`));
+  if (fallen.length) sec.rivals.push(h('div', { class: 'small muted' }, `いなくなった会社：${fallen.map((c) => c.name).join('、')}`));
+  body.splice(0, 0, segments(tabView.market, [['share', 'シェア', 'market'], ['rivals', '買収', 'acquire']], (v) => { tabView.market = v; g.onUpdate(); }));
+  if (tabView.market === 'share') body.push(...sec.share);
+  else body.splice(1, body.length, ...sec.rivals);
   return { title: '市場', icon: 'market', body };
 }
 
@@ -418,6 +477,7 @@ export const financeState = { borrowQuarters: 4 };
 
 export function financeTab(g: Game): PanelContent {
   const s = g.s;
+  const sec: Record<typeof tabView.finance, Node[]> = { loans: [], reports: [], ipo: [] };
   const c = s.companies[0];
   const body: (Node | null)[] = [];
   const debt = debtOf(s, c);
@@ -431,7 +491,7 @@ export function financeTab(g: Game): PanelContent {
     kpi('累計売上', formatYen(c.cumulativeSales))));
   // 次の支払い
   const due = s.loans.map((l) => ({ l, p: loanPayment(l) })).sort((a, b) => a.l.nextDueDay - b.l.nextDueDay);
-  body.push(h('div', { class: 'card' }, h('h3', null, icon('loan'), '借入'),
+  sec.loans.push(h('div', { class: 'card' }, h('h3', null, icon('loan'), '借入'),
     due.length === 0 ? h('div', { class: 'muted' }, '借金はありません') : null,
     h('div', { class: 'list' }, ...due.map(({ l, p }) => {
       const dc = clock(l.nextDueDay);
@@ -445,21 +505,21 @@ export function financeTab(g: Game): PanelContent {
     }))));
   // 借りる
   const presets = [0.25, 0.5, 1].map((f) => Math.floor((limit * f) / 1_000_000) * 1_000_000).filter((v, i, a) => v > 0 && a.indexOf(v) === i);
-  body.push(h('div', { class: 'card' }, h('h3', null, icon('finance'), '銀行から借りる'),
-    h('div', { class: 'small muted' }, `借りられる額 ${formatYen(limit)}・年利 ${(loanRate(s) * 100).toFixed(1)}%・四半期ごと（現実で約${Math.round(TIME.daysPerQuarter / 24)}日ごと）に分割で返します。返せないと延滞になり、猶予の${FINANCE.graceDays}日を過ぎると倒産します。`),
+  sec.loans.push(h('div', { class: 'card' }, h('h3', null, icon('finance'), '銀行から借りる', help(`四半期ごと（現実で約${Math.round(TIME.daysPerQuarter / 24)}日ごと）に分割で返します。返せないと延滞になり、猶予の${FINANCE.graceDays}日を過ぎると倒産します。`)),
+    h('div', { class: 'row' }, h('span', { class: 'chip' }, `上限 ${formatYen(limit)}`), h('span', { class: 'chip' }, `年利 ${(loanRate(s) * 100).toFixed(1)}%`)),
     h('div', { class: 'row' }, ...FINANCE.loanQuarters.map((q) => btn(`${q / 4}年で返す`, () => { financeState.borrowQuarters = q; g.onUpdate(); }, { cls: financeState.borrowQuarters === q ? 'on' : 'ghost' }))),
     h('div', { class: 'row' }, ...presets.map((v) => btn(formatYen(v), () => confirmThen(g, `${formatYen(v)}を${financeState.borrowQuarters / 4}年で借りますか？`, () => g.act((x) => A.borrow(x, v, financeState.borrowQuarters), 'bigBuy')))),
       presets.length === 0 ? h('span', { class: 'muted' }, '今は借りられません') : null)));
   // 上場
   const ratio = c.marketCap / FINANCE.ipoMarketCap;
-  body.push(h('div', { class: 'card' }, h('h3', null, icon('trophy'), '上場'),
+  sec.ipo.push(h('div', { class: 'card' }, h('h3', null, icon('trophy'), '上場'),
     s.ipo.done
       ? h('div', { class: 'good' }, `上場済み（${clock(s.ipo.day ?? 0).year}年${clock(s.ipo.day ?? 0).month}月）。全業種のシェア1位と、時価総額ランキング1位を目指しましょう。`)
       : h('div', null, h('div', { class: 'small muted' }, `時価総額が ${formatYen(FINANCE.ipoMarketCap)} を超えると上場できます。上場すると時価総額の${pct(FINANCE.ipoFloat)}分の資金が入ります。`),
         h('div', { class: 'row' }, bar(ratio, `${pct(Math.min(1, ratio))}`)),
         h('div', { class: 'row' }, btn([icon('trophy'), '上場する'], () => confirmThen(g, '上場しますか？', () => g.act((x) => A.ipo(x), 'complete')), { disabled: ratio < 1 })))));
   // 決算
-  body.push(h('div', { class: 'card' }, h('h3', null, icon('chart'), '四半期の決算'),
+  sec.reports.push(h('div', { class: 'card' }, h('h3', null, icon('chart'), '四半期の決算'),
     s.reports.length === 0 ? h('div', { class: 'muted' }, `最初の決算は ${clock(nextQuarterDay(s.day)).month}月1日です`) : null,
     s.reports.length ? reportChart(s) : null,
     s.reports.length ? h('table', { class: 't' }, h('tr', null, h('th', null, '期'), h('th', { class: 'n' }, '売上'), h('th', { class: 'n' }, '利益'), h('th', { class: 'n' }, '時価総額'), h('th', { class: 'n' }, 'シェア')),
@@ -467,6 +527,8 @@ export function financeTab(g: Game): PanelContent {
         h('td', { class: `n ${r.profit >= 0 ? 'good' : 'bad'}` }, formatYen(r.profit)), h('td', { class: 'n' }, formatYen(r.marketCap)),
         h('td', { class: 'n' }, `${r.share.food !== undefined ? '飲' + pct(r.share.food) : ''} ${r.share.retail !== undefined ? '小' + pct(r.share.retail) : ''}`))))
       : null));
+  body.push(segments(tabView.finance, [['loans', '借入', 'loan'], ['reports', '決算', 'chart'], ['ipo', '上場', 'trophy']], (v) => { tabView.finance = v; g.onUpdate(); }));
+  body.push(...sec[tabView.finance]);
   return { title: '財務', icon: 'finance', body };
 }
 

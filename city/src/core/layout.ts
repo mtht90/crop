@@ -33,6 +33,9 @@ export interface CityLayout {
   crossings: { x: number; z: number; edgeX: number; edgeZ: number }[];
   width: number;
   depth: number;
+  /** 縦の道路（x = 一定）と横の道路（z = 一定）の座標 */
+  roadLinesX: number[];
+  roadLinesZ: number[];
 }
 
 /** 列 index → その列の左端座標。道路の位置ぶんずらす */
@@ -103,5 +106,7 @@ export function buildLayout(): CityLayout {
       roads.push({ x: ax.lotStart[gx] + CITY.lotSize / 2 - ox, z: sz + w / 2 - oz, axis: 'x', length: CITY.lotSize });
     }
   }
-  return { lots, roads, crossings, width: ax.total, depth: az.total };
+  const roadLinesX = [...ax.roadStart.values()].map((v) => v + w / 2 - ox);
+  const roadLinesZ = [...az.roadStart.values()].map((v) => v + w / 2 - oz);
+  return { lots, roads, crossings, width: ax.total, depth: az.total, roadLinesX, roadLinesZ };
 }

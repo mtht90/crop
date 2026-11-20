@@ -47,3 +47,17 @@ export function minutesLabel(min: number): string {
   const m = min % 60;
   return m ? `${h}時間${m}分` : `${h}時間`;
 }
+
+/** 短い表記（有効数字3桁）：21.35万円 → 21.4万 */
+export function yenShort(n: number): string {
+  const sign = n < 0 ? '-' : '';
+  const a = Math.abs(n);
+  for (const [v, u] of [[1e12, '兆'], [1e8, '億'], [1e4, '万']] as [number, string][]) {
+    if (a >= v) {
+      const x = a / v;
+      const t = x >= 100 ? x.toFixed(0) : x >= 10 ? x.toFixed(1) : x.toFixed(2);
+      return `${sign}${t.includes('.') ? t.replace(/\.?0+$/, '') : t}${u}`;
+    }
+  }
+  return `${sign}${Math.round(a).toLocaleString('ja-JP')}円`;
+}
