@@ -15,8 +15,7 @@
   },
   "devDependencies": {
     "@types/three": "0.170.0",
-    "fbx2gltf": "0.9.7-p1",
-    "tar": "7.4.3",
+    "adm-zip": "^0.5.16",
     "typescript": "5.7.2",
     "vite": "6.0.7"
   }

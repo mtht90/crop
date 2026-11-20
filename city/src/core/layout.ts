@@ -9,6 +9,8 @@ export interface Lot {
   z: number;
   /** 道路に面しているか */
   roadside: boolean;
+  /** 建物の正面を向ける方向（Y軸回りの角度。素材の正面 +Z を基準） */
+  facing: number;
   /** 中心からの近さ 0（端）〜1（中心） */
   centrality: number;
   landPrice: number;
@@ -27,7 +29,8 @@ export interface RoadStrip {
 export interface CityLayout {
   lots: Lot[];
   roads: RoadStrip[];
-  crossings: { x: number; z: number }[];
+  /** 交差点。edgeX/edgeZ は外周なら -1 / +1、内側なら 0 */
+  crossings: { x: number; z: number; edgeX: number; edgeZ: number }[];
   width: number;
   depth: number;
 }
@@ -62,6 +65,11 @@ export function buildLayout(): CityLayout {
       const roadside =
         CITY.roadsX.includes(gx) || CITY.roadsX.includes(gx + 1) ||
         CITY.roadsZ.includes(gz) || CITY.roadsZ.includes(gz + 1);
+      // 正面：+Z, -Z, +X, -X の順で、道路のある側を向く
+      const facing = CITY.roadsZ.includes(gz + 1) ? 0
+        : CITY.roadsZ.includes(gz) ? Math.PI
+        : CITY.roadsX.includes(gx + 1) ? Math.PI / 2
+        : CITY.roadsX.includes(gx) ? -Math.PI / 2 : 0;
       const d = Math.max(Math.abs(gx - half), Math.abs(gz - half)) / half; // 0..1
       const centrality = 1 - d;
       const lp = CITY.landPrice;
@@ -72,6 +80,7 @@ export function buildLayout(): CityLayout {
         x: ax.lotStart[gx] + CITY.lotSize / 2 - ox,
         z: az.lotStart[gz] + CITY.lotSize / 2 - oz,
         roadside,
+        facing,
         centrality,
         landPrice: Math.round(lp.base * (lp.edgeMultiplier + (1 - lp.edgeMultiplier) * centrality)),
         traffic: (tr.edge + (tr.center - tr.edge) * centrality) * (roadside ? tr.roadsideBonus : 1),
@@ -79,15 +88,15 @@ export function buildLayout(): CityLayout {
     }
   }
   const roads: RoadStrip[] = [];
-  const crossings: { x: number; z: number }[] = [];
+  const crossings: CityLayout['crossings'] = [];
+  const edge = (i: number) => (i === 0 ? -1 : i === CITY.size ? 1 : 0);
   const w = CITY.roadWidth;
   for (const [i, sx] of ax.roadStart) {
     // z 方向に伸びる道路（x = sx）。交差点の間を区画ごとに分割
     for (let gz = 0; gz < CITY.size; gz++) {
       roads.push({ x: sx + w / 2 - ox, z: az.lotStart[gz] + CITY.lotSize / 2 - oz, axis: 'z', length: CITY.lotSize });
     }
-    for (const [, sz] of az.roadStart) crossings.push({ x: sx + w / 2 - ox, z: sz + w / 2 - oz });
-    void i;
+    for (const [j, sz] of az.roadStart) crossings.push({ x: sx + w / 2 - ox, z: sz + w / 2 - oz, edgeX: edge(i), edgeZ: edge(j) });
   }
   for (const [, sz] of az.roadStart) {
     for (let gx = 0; gx < CITY.size; gx++) {

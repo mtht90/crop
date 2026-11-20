@@ -19,17 +19,17 @@ const demo: [number, number, IndustryId, number][] = [
 const buildings = new Map<number, { industry: IndustryId; level: number }>();
 const missing: string[] = [];
 async function placeDemo() {
-await view.buildRoads();
+await view.buildStatic();
 for (const [gx, gz, ind, lv] of demo) {
   const id = gz * CITY.size + gx;
   buildings.set(id, { industry: ind, level: lv });
   view.setLotState(id, 'owned');
   if (!(await view.setBuilding(id, ind, lv))) missing.push(`${ind} Lv${lv}`);
 }
-if (view.models.missing.size) {
+if (view.models.missing.size || view.models.packError) {
   const n = document.getElementById('notice')!;
   n.hidden = false;
-  n.textContent = `素材が未取り込みです（${[...view.models.missing].join(', ')}）。assets_src/ に素材を置いて npm run import-assets を実行してください。`;
+  n.textContent = `素材が未取り込みです（${view.models.packError ?? [...view.models.missing].join(', ')}）。assets_src/ に素材を置いて npm run import-assets を実行してください。`;
 }
 }
 void placeDemo();

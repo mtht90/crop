@@ -2,10 +2,10 @@
 export const CITY = {
   /** 区画の数（横×縦） */
   size: 10,
-  /** 1区画の一辺（ワールド単位） */
-  lotSize: 4,
+  /** 1区画の一辺（ワールド単位。素材の1マス = 1） */
+  lotSize: 1,
   /** 道路の幅（ワールド単位） */
-  roadWidth: 2,
+  roadWidth: 1,
   /**
    * 道路を通す位置。n を入れると「n-1列目とn列目の間」に道路が通る。
    * 0 と size を入れると外周にも道路が付く。
@@ -24,9 +24,9 @@ export const CITY = {
 export const VIEW = {
   maxPixelRatio: 2,
   /** 正投影カメラの見える高さ（ワールド単位）の範囲 */
-  zoomMin: 12,
-  zoomMax: 70,
-  zoomInitial: 40,
+  zoomMin: 3,
+  zoomMax: 26,
+  zoomInitial: 10,
   /** 回転できる範囲（度）。基準から ±rotateLimitDeg */
   rotateLimitDeg: 45,
   /** 見下ろし角（度） */

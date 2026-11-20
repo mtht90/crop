@@ -1,35 +1,48 @@
-// 建物の素材（SimplePoly City を変換した .glb）と、業種・店のレベルの対応表。
-// model には .import-cache/catalog.json に出てくるモデル名を書く。
-// ここに書いたモデルだけが public/assets/models/ にコピーされ、ビルドに入る。
+// 建物の素材（dglopez「Low Poly City Builder Asset Pack」無料版の GLB）と、業種・店のレベルの対応表。
+// model には `npm run import-assets -- --list` で出てくるモデル名を書く。
+// ここ（と src/config/ の他のファイル）に書いたモデルだけが素材パックに入り、ビルドに含まれる。
 //
-// ※ 素材がまだ届いていないため、モデル名は仮。取り込み後に実際の名前に直す。
+// 素材の1マス = 1ワールド単位。建物の多くは 1×1 マス、公園・リサイクル施設などは 2×2 マス。
 
 export type IndustryId = 'food' | 'retail' | 'factory' | 'logistics' | 'it';
 
 export interface BuildingVisual {
   model: string;
-  /** モデルを区画に収めるときの倍率（1 = 区画にぴったり合わせる自動倍率のまま） */
+  /** 倍率（1 = 素材そのままの大きさ） */
   scale?: number;
   /** 回転の補正（度） */
   rotateDeg?: number;
 }
 
-/** 業種 → 店のレベル（1始まり）ごとの見た目 */
+/** 業種 → 店のレベル（1始まり）ごとの見た目。レベルが配列より大きいときは最後のものを使う */
 export const BUILDING_VISUALS: Record<IndustryId, BuildingVisual[]> = {
-  food: [{ model: 'Cafe' }, { model: 'FastFood' }, { model: 'Building_Small' }],
-  retail: [{ model: 'Shop' }, { model: 'Supermarket' }, { model: 'Building_Medium' }],
-  factory: [{ model: 'Factory' }],
-  logistics: [], // 倉庫は素材に無い可能性あり。届いたら相談
-  it: [{ model: 'Office' }, { model: 'Building_Tall' }],
+  // 飲食と小売は同じ「Commercial」系。業種の違いは看板アイコン・色で見分ける（要相談）
+  food: [{ model: 'Commercial_N1' }, { model: 'Commercial_N2' }, { model: 'Commercial_N3' }],
+  retail: [{ model: 'Commercial_N1' }, { model: 'Commercial_N2' }, { model: 'Commercial_N3' }],
+  factory: [{ model: 'Light_Industry_N1' }, { model: 'Light_Industry_N2' }, { model: 'Light_Industry_N3' }],
+  // 倉庫は素材に無いため仮。要相談
+  logistics: [{ model: 'Transit_N1' }, { model: 'Transit_N2' }],
+  it: [{ model: 'Office_N1' }, { model: 'Office_N2' }],
 };
 
-/** 道路・飾り */
+/** 本社（研究をする場所） */
+export const HQ_VISUAL: BuildingVisual = { model: 'Office_N2' };
+
+/** 道路（素材の向き：直線は X 方向に伸びる） */
 export const ROAD_VISUALS = {
-  straight: { model: 'Road_Straight' } as BuildingVisual,
-  cross: { model: 'Road_Cross' } as BuildingVisual,
+  straight: { model: 'Road_Straight_N4' } as BuildingVisual,
+  cross: { model: 'Road_Cross_N4' } as BuildingVisual,
+  tee: { model: 'Road_T_N4' } as BuildingVisual,
+  corner: { model: 'Road_Corner_N4' } as BuildingVisual,
+};
+
+/** 区画の地面 */
+export const GROUND_VISUALS = {
+  open: { model: 'Ground_Urban_A' } as BuildingVisual,
+  locked: { model: 'Ground_Locked_A' } as BuildingVisual,
 };
 
 export const DECOR_VISUALS = {
-  trees: [{ model: 'Tree' }] as BuildingVisual[],
-  cars: [{ model: 'Car' }] as BuildingVisual[],
+  trees: [{ model: 'Tree_Dark' }, { model: 'Tree_Fresh' }, { model: 'Tree_Light' }] as BuildingVisual[],
+  cars: [{ model: 'Car_Blue' }, { model: 'Car_Coral' }, { model: 'Bus' }, { model: 'Freight_Truck_Blue' }] as BuildingVisual[],
 };

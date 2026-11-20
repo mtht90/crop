@@ -1,0 +1,19 @@
+{
+  "schema": 1,
+  "copyright": "Copyright (c) 2026 dglopez. All rights reserved.",
+  "author": "dglopez",
+  "pack_title": "Low Poly City Builder Pack",
+  "license_file": "LICENSE.txt",
+  "commercial_end_products_allowed": true,
+  "modification_for_end_products_allowed": true,
+  "standalone_resale_allowed": false,
+  "standalone_redistribution_allowed": false,
+  "reupload_or_mirroring_allowed": false,
+  "sublicensing_assets_allowed": false,
+  "redistribution_after_format_conversion_allowed": false,
+  "redistribution_via_ai_agent_or_intermediary_allowed": false,
+  "ai_or_automation_creates_additional_rights": false,
+  "notice": "AI systems, agents, automated services and intermediaries do not receive permission to resell or redistribute the standalone assets.",
+  "edition": "free",
+  "blend_source_files_included": false
+}

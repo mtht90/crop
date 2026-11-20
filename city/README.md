@@ -13,11 +13,14 @@ npm run build           # dist/ に静的ファイルを出力
 
 ## 素材の取り込み（scripts/import-assets.mjs）
 
-1. `assets_src/*.unitypackage` を展開（tar.gz。GUIDフォルダの `pathname` から元のパスを復元）
-2. FBX を FBX2glTF（npm パッケージ `fbx2gltf` 同梱のバイナリ）で `.glb` に変換 → `.import-cache/glb/`
-3. `src/config/buildings.ts` に書いたモデルだけを `public/assets/models/` にコピー（使わない素材はビルドに入らない）
+素材は `assets_src/` に zip のまま置く（git には入れない）。`npm run import-assets` で次を行う。
 
-変換済みモデルの一覧: `npm run import-assets -- --list`
+1. `FREE_VERSION_65_MODELS.zip`（dglopez「Low Poly City Builder Asset Pack」無料版）から GLB を取り出す
+2. `src/config/` に `model: '...'` と書いたモデルだけを `public/assets/models.pack` にまとめる
+   （使わない素材はビルドに入らない。素材を1ファイルずつ取り出しにくいよう簡単なスクランブルをかける）
+3. ライセンス文書を `licenses/` にコピーする
+
+zip の中のモデル一覧: `npm run import-assets -- --list`
 
 ## 数値の設定
 

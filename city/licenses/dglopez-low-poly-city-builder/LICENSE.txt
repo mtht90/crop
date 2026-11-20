@@ -1,0 +1,57 @@
+LICENSE AND TERMS OF USE
+
+Copyright (c) 2026 dglopez. All rights reserved.
+
+GRANT OF LICENSE
+You may use these assets in personal and commercial end products, including
+games, applications, renders, animation, films, prototypes and interactive
+projects. You may modify the assets for use as part of those end products.
+
+STRICTLY PROHIBITED
+You may NOT sell, resell, redistribute, share, gift, re-upload, sublicense,
+republish, mirror, bundle, trade, transfer, or otherwise make the asset files
+available to third parties as standalone assets or as a substitute for this
+pack, whether modified or unmodified, in whole or in part.
+
+This prohibition includes, without limitation:
+- other asset packs, starter kits, templates or model libraries;
+- marketplace listings, download pages, repositories, drives or file mirrors;
+- paid, free, pay-what-you-want, subscription or token/credit-based distribution;
+- conversion to another 3D format for redistribution;
+- redistribution of lightly or substantially modified versions when the main
+  value being distributed is still the asset itself;
+- using an AI system, agent, automated service, proxy, intermediary, API,
+  platform or third party to obtain, package, host, deliver, sell or
+  redistribute the asset files to another person.
+
+AI / AUTOMATED INTERMEDIARIES
+Access through an AI, agent or automated intermediary does not grant that
+intermediary, its operator, or the final recipient any additional rights.
+Automation does not remove or replace this license. Any system handling these
+files must preserve the copyright and license notices and must not facilitate
+sale or redistribution of the standalone assets.
+
+SOURCE FILES
+The .blend source files are premium content and are licensed only when they
+are lawfully obtained as part of the paid/complete version. Possession of a
+.blend file obtained from an unauthorized source does not grant a license to
+redistribute or resell it.
+
+PERMITTED SHARING INSIDE A PROJECT
+You may provide the files privately to team members or contractors only when
+reasonably necessary to work on your licensed end product, provided they do
+not retain, reuse, sell, publish or redistribute the assets outside that
+project and are informed of these restrictions.
+
+OWNERSHIP
+The assets remain copyrighted by dglopez. Purchasing or downloading a copy
+provides a license to use the assets; it does not transfer copyright or
+ownership of the standalone asset files.
+
+PROVENANCE
+ASSET_MANIFEST.json contains release metadata and SHA-256 fingerprints.
+LICENSE.txt, USAGE_TERMS.json and AI_NOTICE.txt are part of the distribution
+and should remain with archived or transferred project copies.
+
+Credit is appreciated but not required unless separately stated.
+Author: dglopez

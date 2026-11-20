@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { BuildingVisual } from '../config/buildings';
+import { CITY } from '../config/city';
+import { loadPack } from './pack';
 
 /**
  * 同じ建物をまとめて InstancedMesh で描くためのプール。
@@ -8,9 +10,6 @@ import type { BuildingVisual } from '../config/buildings';
  */
 export class InstancePool {
   readonly parts: THREE.InstancedMesh[] = [];
-  /** 区画に収めるための基本の大きさ（モデルの XZ 外接の最大辺） */
-  readonly footprint: number;
-  readonly baseOffset: THREE.Vector3;
   private capacity: number;
   private count = 0;
   private free: number[] = [];
@@ -19,45 +18,38 @@ export class InstancePool {
   constructor(
     private readonly root: THREE.Object3D,
     private readonly parent: THREE.Object3D,
-    capacity = 16,
+    capacity = 8,
   ) {
     this.capacity = capacity;
     root.updateMatrixWorld(true);
-    const box = new THREE.Box3().setFromObject(root);
-    const size = box.getSize(new THREE.Vector3());
-    this.footprint = Math.max(size.x, size.z) || 1;
-    // 底面中央が原点に来るようにずらす
-    const c = box.getCenter(new THREE.Vector3());
-    this.baseOffset = new THREE.Vector3(-c.x, -box.min.y, -c.z);
     this.build();
   }
 
   private build() {
-    for (const p of this.parts) {
-      this.parent.remove(p);
-      p.dispose();
-    }
     const old = this.parts.splice(0);
-    const offset = new THREE.Matrix4().makeTranslation(this.baseOffset);
     let k = 0;
     this.root.traverse((o) => {
       const m = o as THREE.Mesh;
       if (!m.isMesh) return;
-      const geo = m.geometry.clone().applyMatrix4(new THREE.Matrix4().multiplyMatrices(offset, m.matrixWorld));
+      const geo = m.geometry.clone().applyMatrix4(m.matrixWorld);
       const im = new THREE.InstancedMesh(geo, m.material, this.capacity);
       im.count = this.count;
       im.frustumCulled = false; // 街全体が画面に収まる程度なので、境界の再計算を省く
-      im.castShadow = false;
-      im.receiveShadow = false;
       const prev = old[k++];
-      if (prev) for (let i = 0; i < this.count; i++) {
+      if (prev) {
         const mat = new THREE.Matrix4();
-        prev.getMatrixAt(i, mat);
-        im.setMatrixAt(i, mat);
+        for (let i = 0; i < this.count; i++) {
+          prev.getMatrixAt(i, mat);
+          im.setMatrixAt(i, mat);
+        }
       }
       this.parts.push(im);
       this.parent.add(im);
     });
+    for (const p of old) {
+      this.parent.remove(p);
+      p.dispose();
+    }
   }
 
   add(matrix: THREE.Matrix4): number {
@@ -78,6 +70,8 @@ export class InstancePool {
     for (const p of this.parts) {
       p.setMatrixAt(i, matrix);
       p.instanceMatrix.needsUpdate = true;
+      // 当たり判定用の外接球を更新し直す
+      p.boundingSphere = null;
     }
   }
 
@@ -89,23 +83,31 @@ export class InstancePool {
 
 export class ModelLibrary {
   private readonly loader = new GLTFLoader();
+  private pack: Promise<Map<string, ArrayBuffer> | null>;
   private readonly cache = new Map<string, Promise<THREE.Object3D | null>>();
   private readonly pools = new Map<string, InstancePool>();
   readonly missing = new Set<string>();
+  packError: string | null = null;
 
-  constructor(private readonly parent: THREE.Object3D) {}
+  constructor(private readonly parent: THREE.Object3D) {
+    this.pack = loadPack(`${import.meta.env.BASE_URL}assets/models.pack`).catch((e: unknown) => {
+      this.packError = String(e);
+      return null;
+    });
+  }
 
   private load(name: string): Promise<THREE.Object3D | null> {
     let p = this.cache.get(name);
     if (!p) {
-      const url = `${import.meta.env.BASE_URL}assets/models/${name}.glb`;
-      p = this.loader.loadAsync(url).then(
-        (g) => g.scene,
-        () => {
+      p = this.pack.then(async (pack) => {
+        const data = pack?.get(name);
+        if (!data) {
           this.missing.add(name);
           return null;
-        },
-      );
+        }
+        const g = await this.loader.parseAsync(data, '');
+        return g.scene;
+      });
       this.cache.set(name, p);
     }
     return p;
@@ -123,10 +125,10 @@ export class ModelLibrary {
     return pool;
   }
 
-  /** 区画（一辺 fit）に収まる行列を作る */
-  static placeMatrix(pool: InstancePool, v: BuildingVisual, x: number, z: number, fit: number, rotY = 0): THREE.Matrix4 {
-    const s = (fit / pool.footprint) * (v.scale ?? 1);
+  /** 素材の原点（マスの中心・地面の高さ）を (x, z) に置く行列 */
+  static placeMatrix(v: BuildingVisual, x: number, z: number, rotY = 0, y = 0): THREE.Matrix4 {
+    const s = CITY.lotSize * (v.scale ?? 1);
     const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), rotY + THREE.MathUtils.degToRad(v.rotateDeg ?? 0));
-    return new THREE.Matrix4().compose(new THREE.Vector3(x, 0, z), q, new THREE.Vector3(s, s, s));
+    return new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), q, new THREE.Vector3(s, s, s));
   }
 }

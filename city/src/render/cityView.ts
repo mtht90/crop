@@ -1,16 +1,16 @@
 import * as THREE from 'three';
 import { CITY, VIEW } from '../config/city';
-import { BUILDING_VISUALS, ROAD_VISUALS, type IndustryId } from '../config/buildings';
+import { BUILDING_VISUALS, GROUND_VISUALS, ROAD_VISUALS, type IndustryId } from '../config/buildings';
 import type { CityLayout, Lot } from '../core/layout';
 import { CityControls } from './controls';
 import { ModelLibrary } from './models';
 
-/** 区画の状態ごとの床の色（UI上の目印。建物の絵ではない） */
-const LOT_COLORS = {
-  locked: new THREE.Color('#9aa59a'),
-  buyable: new THREE.Color('#b9d98f'),
-  owned: new THREE.Color('#7cc4ff'),
-  selected: new THREE.Color('#ffd166'),
+/** 区画の状態を示す半透明の目印（UI上の印。建物の絵ではない）。null は目印なし */
+const LOT_COLORS: Record<LotState | 'selected', THREE.Color | null> = {
+  locked: null,
+  buyable: new THREE.Color('#d8ff9a'),
+  owned: new THREE.Color('#5fb4ff'),
+  selected: new THREE.Color('#ffd23f'),
 };
 export type LotState = 'locked' | 'buyable' | 'owned';
 
@@ -30,6 +30,7 @@ export class CityView {
   private selected: number | null = null;
   private dirty = true;
   private readonly buildingSlots = new Map<number, { model: string; index: number }>();
+  private readonly groundSlots = new Map<number, { model: string; index: number }>();
   private readonly sun = new THREE.DirectionalLight('#ffffff', 2.2);
   private readonly hemi = new THREE.HemisphereLight('#dfefff', '#56614f', 1.2);
   private readonly raycaster = new THREE.Raycaster();
@@ -47,6 +48,7 @@ export class CityView {
     this.renderer.domElement.className = 'city-canvas';
 
     this.scene.background = new THREE.Color('#bfe3f5');
+    this.renderer.toneMapping = THREE.NoToneMapping;
     this.scene.add(this.hemi);
     this.sun.position.set(30, 60, 20);
     this.scene.add(this.sun);
@@ -60,14 +62,18 @@ export class CityView {
     this.scene.add(ground);
 
     // 区画の床（1回の描画でまとめて描く）
-    const tile = new THREE.PlaneGeometry(CITY.lotSize * 0.94, CITY.lotSize * 0.94).rotateX(-Math.PI / 2);
-    this.lotMesh = new THREE.InstancedMesh(tile, new THREE.MeshLambertMaterial({ color: '#ffffff' }), layout.lots.length);
+    const tile = new THREE.PlaneGeometry(CITY.lotSize * 0.9, CITY.lotSize * 0.9).rotateX(-Math.PI / 2);
+    this.lotMesh = new THREE.InstancedMesh(
+      tile,
+      new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.4, depthWrite: false }),
+      layout.lots.length,
+    );
     this.lotStates = layout.lots.map(() => 'locked');
     const m = new THREE.Matrix4();
     for (const lot of layout.lots) {
-      m.makeTranslation(lot.x, 0.01, lot.z);
+      m.makeScale(0, 0, 0);
       this.lotMesh.setMatrixAt(lot.id, m);
-      this.lotMesh.setColorAt(lot.id, LOT_COLORS.locked);
+      this.lotMesh.setColorAt(lot.id, new THREE.Color('#ffffff'));
     }
     this.scene.add(this.lotMesh);
 
@@ -104,53 +110,69 @@ export class CityView {
     this.renderer.render(this.scene, this.camera);
   };
 
-  /** 道路を並べる。素材が無ければ平らな帯で代用（開発用の仮表示） */
-  async buildRoads() {
-    const w = CITY.roadWidth;
-    const straight = await this.models.pool(ROAD_VISUALS.straight.model);
-    const cross = await this.models.pool(ROAD_VISUALS.cross.model);
-    if (straight && cross) {
+  /** 道路・地面・木を並べる */
+  async buildStatic() {
+    const [straight, cross, tee, corner] = await Promise.all([
+      this.models.pool(ROAD_VISUALS.straight.model),
+      this.models.pool(ROAD_VISUALS.cross.model),
+      this.models.pool(ROAD_VISUALS.tee.model),
+      this.models.pool(ROAD_VISUALS.corner.model),
+    ]);
+    if (straight) {
       for (const r of this.layout.roads) {
-        // 道路タイルは幅 w の正方形として並べる
-        const n = Math.round(r.length / w);
-        for (let i = 0; i < n; i++) {
-          const off = -r.length / 2 + w / 2 + i * w;
-          const x = r.axis === 'x' ? r.x + off : r.x;
-          const z = r.axis === 'z' ? r.z + off : r.z;
-          straight.add(ModelLibrary.placeMatrix(straight, ROAD_VISUALS.straight, x, z, w, r.axis === 'x' ? Math.PI / 2 : 0));
-        }
+        straight.add(ModelLibrary.placeMatrix(ROAD_VISUALS.straight, r.x, r.z, r.axis === 'x' ? 0 : Math.PI / 2));
       }
-      for (const c of this.layout.crossings) cross.add(ModelLibrary.placeMatrix(cross, ROAD_VISUALS.cross, c.x, c.z, w));
-    } else {
-      const geo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
-      const strips = new THREE.InstancedMesh(geo, new THREE.MeshLambertMaterial({ color: '#5d6168' }),
-        this.layout.roads.length + this.layout.crossings.length);
-      const m = new THREE.Matrix4();
-      let i = 0;
-      for (const r of this.layout.roads) {
-        const sx = r.axis === 'x' ? r.length : w;
-        const sz = r.axis === 'z' ? r.length : w;
-        m.compose(new THREE.Vector3(r.x, 0.005, r.z), new THREE.Quaternion(), new THREE.Vector3(sx, 1, sz));
-        strips.setMatrixAt(i++, m);
-      }
-      for (const c of this.layout.crossings) {
-        m.compose(new THREE.Vector3(c.x, 0.005, c.z), new THREE.Quaternion(), new THREE.Vector3(w, 1, w));
-        strips.setMatrixAt(i++, m);
-      }
-      this.scene.add(strips);
     }
+    for (const c of this.layout.crossings) {
+      if (c.edgeX !== 0 && c.edgeZ !== 0) {
+        // 角：素材は -X と +Z をつなぐ向き
+        const rot = c.edgeX < 0 ? (c.edgeZ < 0 ? Math.PI / 2 : Math.PI) : (c.edgeZ < 0 ? 0 : -Math.PI / 2);
+        corner?.add(ModelLibrary.placeMatrix(ROAD_VISUALS.corner, c.x, c.z, rot));
+      } else if (c.edgeX !== 0 || c.edgeZ !== 0) {
+        // T字路：素材は X 方向に通り、+Z に枝分かれする向き
+        const rot = c.edgeZ < 0 ? 0 : c.edgeZ > 0 ? Math.PI : c.edgeX < 0 ? Math.PI / 2 : -Math.PI / 2;
+        tee?.add(ModelLibrary.placeMatrix(ROAD_VISUALS.tee, c.x, c.z, rot));
+      } else {
+        cross?.add(ModelLibrary.placeMatrix(ROAD_VISUALS.cross, c.x, c.z));
+      }
+    }
+    await Promise.all(this.layout.lots.map((l) => this.paintGround(l.id)));
+    this.invalidate();
+  }
+
+  /** 区画の地面タイル（まだ買えない区画は別の地面） */
+  private async paintGround(id: number) {
+    const v = this.lotStates[id] === 'locked' ? GROUND_VISUALS.locked : GROUND_VISUALS.open;
+    const cur = this.groundSlots.get(id);
+    if (cur?.model === v.model) return;
+    if (cur) (await this.models.pool(cur.model))?.remove(cur.index);
+    const pool = await this.models.pool(v.model);
+    if (!pool) return;
+    const lot = this.layout.lots[id];
+    this.groundSlots.set(id, { model: v.model, index: pool.add(ModelLibrary.placeMatrix(v, lot.x, lot.z)) });
     this.invalidate();
   }
 
   setLotState(id: number, state: LotState) {
     this.lotStates[id] = state;
     this.paintLot(id);
+    void this.paintGround(id);
   }
 
   private paintLot(id: number) {
     const c = id === this.selected ? LOT_COLORS.selected : LOT_COLORS[this.lotStates[id]];
-    this.lotMesh.setColorAt(id, c);
-    this.lotMesh.instanceColor!.needsUpdate = true;
+    const lot = this.layout.lots[id];
+    const m = new THREE.Matrix4();
+    if (c) {
+      m.makeTranslation(lot.x, 0.01, lot.z);
+      this.lotMesh.setColorAt(id, c);
+      this.lotMesh.instanceColor!.needsUpdate = true;
+    } else {
+      m.makeScale(0, 0, 0);
+    }
+    this.lotMesh.setMatrixAt(id, m);
+    this.lotMesh.instanceMatrix.needsUpdate = true;
+    this.lotMesh.boundingSphere = null;
     this.invalidate();
   }
 
@@ -170,9 +192,7 @@ export class CityView {
     const pool = await this.models.pool(v.model);
     if (!pool) return false;
     const lot = this.layout.lots[lotId];
-    // 道路側を向ける（簡易：区画の位置から一番近い道路の方向）
-    const rot = Math.round(Math.atan2(lot.x, lot.z) / (Math.PI / 2)) * (Math.PI / 2) + Math.PI;
-    const index = pool.add(ModelLibrary.placeMatrix(pool, v, lot.x, lot.z, CITY.lotSize * 0.8, rot));
+    const index = pool.add(ModelLibrary.placeMatrix(v, lot.x, lot.z, lot.facing));
     this.buildingSlots.set(lotId, { model: v.model, index });
     this.invalidate();
     return true;
