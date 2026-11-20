@@ -8,8 +8,18 @@ import { loadPack } from './pack';
  * 同じ建物をまとめて InstancedMesh で描くためのプール。
  * glb 内のメッシュ（材質ごと）を1つずつ InstancedMesh にし、全パーツで同じ行列を使う。
  */
+/** 会社の色で塗り分ける材質（屋根・ひさし・看板の部分） */
+const TINT_MATERIALS = /^(Palette_Accent|Palette_Roof|Palette_Wall_2|Bus_Stripe)$/;
+/** 夜に光らせる材質 */
+export const GLOW_MATERIALS = /^(window|NightLight_.*)$/;
+
 export class InstancePool {
   readonly parts: THREE.InstancedMesh[] = [];
+  /** 色を変えられるパーツ（parts の添字）と、その元の色 */
+  private readonly tintParts: { index: number; base: THREE.Color }[] = [];
+  private tints: (THREE.Color | null)[] = [];
+  readonly height: number;
+  readonly materials = new Set<THREE.Material>();
   private capacity: number;
   private count = 0;
   private free: number[] = [];
@@ -22,6 +32,7 @@ export class InstancePool {
   ) {
     this.capacity = capacity;
     root.updateMatrixWorld(true);
+    this.height = new THREE.Box3().setFromObject(root).max.y;
     this.build();
   }
 
@@ -32,7 +43,18 @@ export class InstancePool {
       const m = o as THREE.Mesh;
       if (!m.isMesh) return;
       const geo = m.geometry.clone().applyMatrix4(m.matrixWorld);
-      const im = new THREE.InstancedMesh(geo, m.material, this.capacity);
+      let mat = m.material as THREE.MeshStandardMaterial;
+      const partIndex = this.parts.length;
+      if (TINT_MATERIALS.test(mat.name) && !this.tintParts.some((t) => t.index === partIndex)) {
+        // 色は instanceColor で付けるので、材質の色は白にする
+        const base = mat.color.clone();
+        mat = mat.clone();
+        mat.color.set('#ffffff');
+        (m as THREE.Mesh).material = mat;
+        this.tintParts.push({ index: partIndex, base });
+      }
+      this.materials.add(mat);
+      const im = new THREE.InstancedMesh(geo, mat, this.capacity);
       im.count = this.count;
       im.frustumCulled = false; // 街全体が画面に収まる程度なので、境界の再計算を省く
       const prev = old[k++];
@@ -42,6 +64,11 @@ export class InstancePool {
           prev.getMatrixAt(i, mat);
           im.setMatrixAt(i, mat);
         }
+      }
+      const tp = this.tintParts.find((t) => t.index === partIndex);
+      if (tp) {
+        for (let i = 0; i < this.capacity; i++) im.setColorAt(i, this.tints[i] ?? tp.base);
+        if (im.instanceColor) im.instanceColor.needsUpdate = true;
       }
       this.parts.push(im);
       this.parent.add(im);
@@ -77,7 +104,18 @@ export class InstancePool {
 
   remove(i: number) {
     this.set(i, this.hidden);
+    this.setTint(i, null);
     this.free.push(i);
+  }
+
+  /** 会社の色で塗る（null なら素材の元の色） */
+  setTint(i: number, color: THREE.Color | null) {
+    this.tints[i] = color;
+    for (const t of this.tintParts) {
+      const im = this.parts[t.index];
+      im.setColorAt(i, color ?? t.base);
+      if (im.instanceColor) im.instanceColor.needsUpdate = true;
+    }
   }
 }
 
@@ -85,7 +123,7 @@ export class ModelLibrary {
   private readonly loader = new GLTFLoader();
   private pack: Promise<Map<string, ArrayBuffer> | null>;
   private readonly cache = new Map<string, Promise<THREE.Object3D | null>>();
-  private readonly pools = new Map<string, InstancePool>();
+  readonly pools = new Map<string, InstancePool>();
   readonly missing = new Set<string>();
   packError: string | null = null;
 
