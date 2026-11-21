@@ -1,3 +1,5 @@
 # Synty assets: EULA forbids sharing source files outside the team (public repo)
 game/assets-src/
 game/public/assets/models/synty/
+# Idle game: third-party assets may not be redistributed (public repo)
+idle/assets-src/
