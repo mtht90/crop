@@ -19,7 +19,7 @@ export function MoreTab() {
           ['prestige', '輪廻'],
           ['codex', '図鑑'],
           ['settings', '設定'],
-          ['credits', 'クレジット'],
+          ['credits', '素材'],
         ]}
         value={sub}
         onChange={setSub}

@@ -52,6 +52,15 @@ export function App() {
     fieldRef = f;
     (window as any).__field = f;
     f.onHud = () => setHud((x) => x + 1);
+    let pulseT = 0;
+    f.onCoin = () => {
+      const el = coinEl.current;
+      if (!el || performance.now() - pulseT < 120) return;
+      pulseT = performance.now();
+      el.classList.remove('pulse');
+      void el.offsetWidth;
+      el.classList.add('pulse');
+    };
     f.start();
     const off = game.onEvent((e: GameEvent) => {
       if (e.t === 'toast') {

@@ -105,11 +105,22 @@ img {
 .cur.flex {
   flex: 1 1 0;
 }
+.cur.pulse {
+  animation: curPulse 0.25s ease-out;
+}
+@keyframes curPulse {
+  40% {
+    transform: scale(1.07);
+  }
+}
+.cur .num {
+  display: inline-block;
+}
 
 .field-wrap {
   position: relative;
   flex: 0 0 auto;
-  height: min(46dvh, 470px);
+  height: min(47dvh, 500px);
   min-height: 250px;
   margin: 2px 6px 0;
   border-style: solid;
@@ -126,16 +137,20 @@ canvas.field {
 .main-panel {
   flex: 1 1 auto;
   min-height: 0;
-  margin: 6px 6px 0;
+  margin: 4px 4px 0;
   position: relative;
   display: flex;
   flex-direction: column;
+  color: var(--ink);
+  border-style: solid;
+  border-width: 14px 14px 18px 14px;
+  border-image: url('/gen/ui/Container1.png') 50 50 62 50 fill / 14px 14px 18px 14px stretch;
 }
 .tab-scroll {
   flex: 1 1 auto;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 4px 4px 12px;
+  padding: 2px 2px 10px;
   scrollbar-width: thin;
   scrollbar-color: #b56a50 transparent;
 }
@@ -469,8 +484,8 @@ canvas.field {
   gap: 8px;
   font-weight: 800;
   font-size: 16px;
-  color: var(--cream);
-  margin: 10px 4px 8px;
+  color: var(--ink);
+  margin: 8px 2px 4px;
 }
 .muted {
   color: var(--ink-soft);
@@ -764,10 +779,11 @@ canvas.field {
 }
 .hud-boss {
   position: absolute;
-  top: 58px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: min(74%, 420px);
+  top: 60px;
+  left: 62px;
+  right: 62px;
+  margin: 0 auto;
+  max-width: 420px;
   text-align: center;
   color: var(--ink);
   font-size: 12px;
@@ -1050,45 +1066,55 @@ canvas.field {
 /* ---------- gacha ---------- */
 .banner-card {
   position: relative;
-  min-height: 160px;
   padding: 2px;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  gap: 6px;
 }
-.banner-art {
-  position: absolute;
-  right: -4px;
-  bottom: 0;
-  height: 140px;
-  max-width: 48%;
+.bn-body {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+.bn-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.bn-art {
+  flex: 0 0 auto;
+  width: 112px;
+  height: 120px;
   display: flex;
   align-items: flex-end;
-  justify-content: flex-end;
-  pointer-events: none;
+  justify-content: center;
+  padding: 0 4px 14px;
+  background: url('/gen/ui/ItemSlot1.png') center / 100% 100% no-repeat;
+  overflow: hidden;
 }
-.banner-art img {
-  height: 100%;
+.bn-art img {
+  max-height: 100%;
+  max-width: 100%;
   object-fit: contain;
 }
-.banner-art img + img {
-  margin-left: -40px;
-  height: 75%;
+.bn-actions {
+  display: flex;
+  gap: 6px;
 }
-.banner-text {
-  position: relative;
-  max-width: 62%;
-}
-.banner-name {
-  font-size: 20px;
-  font-weight: 800;
+.bn-actions .btn {
+  flex: 1 1 0;
 }
 .banner-head {
   position: absolute;
   top: -24px;
   left: 0;
-  font-size: 13px;
+  right: 0;
+  font-size: 14px;
   font-weight: 800;
+  display: flex;
+  justify-content: space-between;
 }
 .rates {
   font-size: 11px;
@@ -1210,9 +1236,9 @@ canvas.field {
 }
 .pi-new {
   position: absolute;
-  top: -34px;
-  right: -16px;
-  transform: rotate(8deg);
+  bottom: -18px;
+  right: -14px;
+  transform: rotate(-8deg);
 }
 .pull-item .pi-up {
   font-size: 10px;
@@ -1309,21 +1335,19 @@ textarea.save-box {
 .empty {
   text-align: center;
   padding: 16px;
-  color: var(--cream);
-  font-size: 13px;
-}
-.panel .empty,
-.modal .empty {
   color: var(--ink-soft);
+  font-size: 13px;
 }
 .hint {
   font-size: 12px;
   color: var(--ink-soft);
   line-height: 1.5;
 }
-.on-bg,
-.tab-scroll > .col > .hint {
+.on-bg {
   color: var(--cream);
+}
+.tab-scroll .hint {
+  color: #6e4434;
 }
 .lock-slot {
   opacity: 0.55;
@@ -1346,4 +1370,51 @@ textarea.save-box {
     animation-duration: 0.01s !important;
     transition: none !important;
   }
+}
+
+.hero-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink);
+  padding: 0 2px;
+  border-style: solid;
+  border-width: 10px 12px 10px 22px;
+  border-image: url('/gen/ui/NoteContainerSimple.png') 40 40 40 80 fill / 10px 12px 10px 22px stretch;
+}
+.hero-row .slot {
+  width: 64px;
+  flex: 0 0 auto;
+}
+.hero-row .hr-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.hero-row .hr-name {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-weight: 800;
+  font-size: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.hero-row .hr-stats {
+  display: flex;
+  gap: 10px;
+  font-size: 12px;
+  font-weight: 800;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.hero-row .hr-stats span {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.subtab {
+  white-space: nowrap;
 }

@@ -1,13 +1,12 @@
 import { useState } from 'preact/hooks';
 import { game } from '../../game/store';
-import { TRAIN, fmt, soulMul, type TrainKey } from '../../game/core';
+import { TRAIN, fmt, type TrainKey } from '../../game/core';
 import * as L from '../../game/logic';
-import { ELEMENT_INFO, ROLE_INFO } from '../../data/monsters';
 import { sfx } from '../../game/audio';
-import { AllyInfoLine, Btn, Panel, Portrait, Toggle, useGame } from '../common';
+import { Btn, Panel, Portrait, Toggle, useGame } from '../common';
 import { Arrow, Coin, ElIcon, TabIcon } from '../icons';
 
-const ICON: Record<TrainKey, string> = { atk: 'sword', hp: 'heart', crit: 'crit', critDmg: 'critDmg', speed: 'speed' };
+const ICON: Record<TrainKey, string> = { atk: 'blade', hp: 'heart', crit: 'crit', critDmg: 'critDmg', speed: 'speed' };
 
 export function TrainTab() {
   const s = useGame(6);
@@ -35,55 +34,37 @@ export function TrainTab() {
 
   return (
     <div class="col">
-      <Panel kind="wood">
-        <div class="row" style={{ alignItems: 'stretch' }}>
-          <div class="slot hero-slot">
-            <Portrait ally={h.ally} size={72} />
+      <div class="hero-row">
+        <div class="slot">
+          <Portrait ally={h.ally} size={50} />
+        </div>
+        <div class="hr-main">
+          <div class="hr-name">
+            <ElIcon el={h.ally.el} size={16} />
+            {h.ally.name}
+            <span class="muted">{h.ally.title}</span>
+            {own?.stars ? <span class="chip gold">覚醒{own.stars}</span> : null}
           </div>
-          <div class="grow col" style={{ gap: '4px' }}>
-            <div class="row" style={{ gap: '6px', alignItems: 'baseline' }}>
-              <b style={{ fontSize: '18px' }}>{h.ally.name}</b>
-              <span class="muted">{h.ally.title}</span>
-              {own?.stars ? <span class="chip gold">覚醒{own.stars}</span> : null}
-            </div>
-            <AllyInfoLine ally={h.ally} />
-            <div class="stat-grid" style={{ marginTop: '4px' }}>
-              <div>
-                <span>攻撃力</span>
-                <b>{fmt(h.atk)}</b>
-              </div>
-              <div>
-                <span>体力</span>
-                <b>{fmt(h.hp)}</b>
-              </div>
-              <div>
-                <span>会心率</span>
-                <b>{(h.crit * 100).toFixed(1)}%</b>
-              </div>
-              <div>
-                <span>会心ダメ</span>
-                <b>{Math.round(h.critDmg * 100)}%</b>
-              </div>
-              <div>
-                <span>攻撃間隔</span>
-                <b>{h.interval.toFixed(2)}秒</b>
-              </div>
-              <div>
-                <span>戦力</span>
-                <b>{fmt(h.power)}</b>
-              </div>
-              <div>
-                <span>コイン</span>
-                <b>×{h.gold.toFixed(2)}</b>
-              </div>
-            </div>
+          <div class="hr-stats">
+            <span>
+              <TabIcon name="power" size={16} />
+              {fmt(h.power)}
+            </span>
+            <span>
+              <TabIcon name="blade" size={16} />
+              {fmt(h.atk)}
+            </span>
+            <span>
+              <TabIcon name="heart" size={16} />
+              {fmt(h.hp)}
+            </span>
+            <span>
+              <TabIcon name="crit" size={16} />
+              {(h.crit * 100).toFixed(0)}%
+            </span>
           </div>
         </div>
-        <div class="hint" style={{ marginTop: '6px' }}>
-          {ROLE_INFO[h.ally.role].name}：{ROLE_INFO[h.ally.role].desc} 属性 <ElIcon el={h.ally.el} size={14} /> <b>{ELEMENT_INFO[h.ally.el].name}</b>
-          {s.souls > 0 && ` ／ 魂石ボーナス 能力×${soulMul(s.souls).power.toFixed(2)}`}
-        </div>
-      </Panel>
+      </div>
 
       <div class="sec-title">
         <TabIcon name="train" size={26} />
@@ -126,6 +107,7 @@ export function TrainTab() {
                 </div>
               </div>
               <Btn
+                repeat
                 color={maxed ? 'gray' : 'green'}
                 disabled={!can}
                 style={{ minWidth: '108px' }}

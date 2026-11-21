@@ -41,6 +41,7 @@ interface Mob {
   slamX: number;
   slamY: number;
   slamCharge: number;
+  tilt: number;
 }
 
 interface Proj {
@@ -130,6 +131,9 @@ export class Field {
   texts: Txt[] = [];
   banner: Banner | null = null;
   shake = 0;
+  hitstop = 0;
+  slowmo = 0;
+  onCoin: (() => void) | null = null;
   spawnCd = 0;
   time = 0;
   hero = {
@@ -224,9 +228,13 @@ export class Field {
     this.last = performance.now();
     const loop = (t: number) => {
       if (!this.running) return;
-      const dt = Math.min(0.1, (t - this.last) / 1000);
+      const real = Math.min(0.1, (t - this.last) / 1000);
       this.last = t;
-      for (let i = 0; i < game.save.settings.speed; i++) this.update(dt);
+      // hit-stop / slow motion for impact
+      const k = this.hitstop > 0 ? 0.06 : this.slowmo > 0 ? 0.3 : 1;
+      this.hitstop = Math.max(0, this.hitstop - real);
+      this.slowmo = Math.max(0, this.slowmo - real);
+      for (let i = 0; i < game.save.settings.speed; i++) this.update(real * k);
       this.draw();
       this.raf = requestAnimationFrame(loop);
     };
@@ -346,6 +354,7 @@ export class Field {
       slamX: 0,
       slamY: 0,
       slamCharge: 0,
+      tilt: 0,
     };
   }
 
@@ -472,6 +481,7 @@ export class Field {
     this.anims = this.anims.filter((a) => a.t < (a.loop ?? a.dur));
     for (const b of this.bits) {
       b.life -= dt;
+      if (b.kind === 'coin' && b.life <= 0) this.onCoin?.();
       b.t += dt;
       if (b.home && b.life < b.max * 0.6) {
         b.vx += (b.home.x - b.x) * dt * 7;
@@ -688,6 +698,8 @@ export class Field {
     m.hp -= dmg;
     m.flash = 0.12;
     m.aggro = true;
+    m.tilt = (m.x >= this.hero.x ? 1 : -1) * (crit ? 0.32 : 0.16) * (m.kind === 'mob' ? 1 : 0.35);
+    if (crit) this.hitstop = Math.max(this.hitstop, m.kind === 'mob' ? 0.05 : 0.08);
     if (o.kb) {
       const dx = m.x - this.hero.x;
       const dy = m.y - this.hero.y;
@@ -697,7 +709,7 @@ export class Field {
       m.kby += (dy / d) * kb * this.u * 3;
     }
     const color = crit ? '#ffd34d' : ef > 1 ? '#ffb070' : ef < 1 ? '#c9d3e0' : '#ffffff';
-    if (!o.quiet || crit) this.text(m.x + (Math.random() - 0.5) * 20, m.y - m.h - 4, fmt(dmg) + (crit ? '!' : ''), color, crit || ef > 1 ? 20 : 15);
+    if (!o.quiet || crit) this.text(m.x + (Math.random() - 0.5) * 20, m.y - m.h - 4, fmt(dmg) + (crit ? '!' : ''), color, (crit ? 24 : ef > 1 ? 20 : 16) * Math.max(1, this.u));
     if (crit) {
       sfx.crit();
       this.fx('crit', m.x, m.y - m.h * 0.5, 110 * this.u, 0.4);
@@ -730,8 +742,12 @@ export class Field {
       this.shake = 16;
       sfx.boom();
       sfx.win();
-      this.fx('blast', m.x, m.y, m.w * 2.2, 0.8);
-      this.fx('crit', m.x, m.y - m.h * 0.5, m.w * 1.6, 0.6);
+      this.slowmo = 0.9;
+      this.hitstop = 0.12;
+      this.fx('nova_light', m.x, m.y, m.w * 2.8, 0.8, { squash: 0.5, ground: true });
+      this.fx('crit', m.x, m.y - m.h * 0.5, m.w * 1.8, 0.6);
+      this.later(0.15, () => this.fx('crit', m.x - m.w * 0.3, m.y - m.h * 0.7, m.w * 1.1, 0.5));
+      this.later(0.3, () => this.fx('crit', m.x + m.w * 0.3, m.y - m.h * 0.3, m.w * 1.1, 0.5));
       for (let i = 0; i < 18; i++) this.star(m.x, m.y - m.h * 0.5, 320);
       this.banner = { kind: 'clear', title: 'STAGE CLEAR!', sub: `${m.def.name} を討伐した`, t: 0 };
       this.setPhase('victory', 2.2);
@@ -772,6 +788,7 @@ export class Field {
     m.spawnT += dt;
     m.flash = Math.max(0, m.flash - dt);
     m.lunge = Math.max(0, m.lunge - dt);
+    m.tilt *= Math.pow(0.0005, dt);
     if (m.dying) {
       m.dying += dt * 1.6;
       return;
@@ -1156,7 +1173,7 @@ export class Field {
     g.restore();
   }
 
-  drawSprite(stem: string, x: number, y: number, w: number, h: number, flip: boolean, o: { alpha?: number; flash?: number; frozen?: boolean; squash?: number; hue?: number; glow?: string } = {}) {
+  drawSprite(stem: string, x: number, y: number, w: number, h: number, flip: boolean, o: { alpha?: number; flash?: number; frozen?: boolean; squash?: number; hue?: number; glow?: string; rot?: number } = {}) {
     const g = this.g;
     const im = o.hue ? hueShift(stem, o.hue) : img(stem);
     if (!im) return;
@@ -1166,6 +1183,7 @@ export class Field {
     g.save();
     g.globalAlpha = o.alpha ?? 1;
     g.translate(x, y);
+    if (o.rot) g.rotate(o.rot);
     if (flip) g.scale(-1, 1);
     if (o.glow) {
       const sil = silhouette(stem, o.glow);
@@ -1220,14 +1238,19 @@ export class Field {
       scale = 0.4 + 0.6 * easeOutBack(k);
       alpha = k;
     }
+    let rot = m.tilt;
     if (m.dying) {
-      alpha = Math.max(0, 1 - m.dying);
-      y -= m.dying * 16;
+      // pop, then shrink & fade like the spirit leaving
+      const d = m.dying;
+      scale = d < 0.25 ? 1 + 0.18 * Math.sin((d / 0.25) * Math.PI * 0.5) : 1.18 - (d - 0.25) * 0.9;
+      alpha = Math.max(0, 1 - d * 1.1);
+      y -= d * 22;
+      rot = m.tilt + d * 0.4 * (m.face === 1 ? 1 : -1);
     }
     if (!m.dying && !m.frozen) squash = Math.sin(m.t * (m.aggro ? 12 : 6)) * (m.kind === 'mob' ? 0.04 : 0.025);
     let x = m.x;
     if (m.lunge > 0) x += -m.face * Math.sin((m.lunge / 0.18) * Math.PI) * 10 * this.u;
-    this.drawSprite(m.def.sprite, x, y, m.w * scale, m.h * scale, m.face === -1, { alpha, flash: m.flash, frozen: m.frozen > 0, squash, glow: m.kind === 'boss' ? 'rgba(255,90,60,0.9)' : undefined });
+    this.drawSprite(m.def.sprite, x, y, m.w * scale, m.h * scale, m.face === -1, { alpha, flash: m.dying ? Math.max(m.flash, 0.12 - m.dying) : m.flash, frozen: m.frozen > 0, squash, rot, glow: m.kind === 'boss' ? 'rgba(255,90,60,0.9)' : undefined });
     if (!m.dying && m.kind === 'mob' && m.spawnT > 0.35) {
       const bw = 34 * this.u;
       if (m.hp < m.maxHp) this.bar(m.x - bw / 2 + 6, m.y - m.h - 10, bw, 8, m.hp / m.maxHp, 'SquareButton2_red.png');
@@ -1271,7 +1294,8 @@ export class Field {
     }
     const moving = this.phase === 'field' || this.phase === 'boss';
     const squash = moving ? Math.sin(this.time * 9) * 0.03 : Math.sin(this.time * 3) * 0.015;
-    this.drawSprite(hs.ally.sprite, x, y, sz.w, sz.h, h.face === 1, { alpha, flash: h.hurt, squash, glow: h.casting > 0 ? 'rgba(255,240,180,0.95)' : undefined });
+    const lean = h.lunge > 0 ? Math.sin((h.lunge / 0.18) * Math.PI) * 0.14 * h.face : h.hurt > 0 ? -0.1 * h.face : 0;
+    this.drawSprite(hs.ally.sprite, x, y, sz.w, sz.h, h.face === 1, { alpha, flash: h.hurt, squash, rot: lean, glow: h.casting > 0 ? 'rgba(255,240,180,0.95)' : undefined });
     if (h.shield > 0) {
       const sh = fxSheet('bubble');
       if (sh) {

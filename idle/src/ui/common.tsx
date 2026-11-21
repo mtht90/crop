@@ -44,16 +44,47 @@ export function Btn(props: {
   class?: string;
   style?: CSSProperties;
   title?: string;
+  /** keep firing onClick while held down (training buttons) */
+  repeat?: boolean;
 }) {
   const { color = 'wood', size = 'md', disabled } = props;
+  const hold = useRef<{ t: number; fired: boolean }>({ t: 0, fired: false });
+  const latest = useRef(props);
+  latest.current = props;
+  const stop = () => {
+    clearTimeout(hold.current.t);
+    hold.current.t = 0;
+  };
+  const startHold = () => {
+    if (!props.repeat) return;
+    hold.current.fired = false;
+    const tick = (delay: number) => {
+      hold.current.t = window.setTimeout(() => {
+        if (latest.current.disabled) return stop();
+        hold.current.fired = true;
+        latest.current.onClick?.();
+        tick(Math.max(50, delay * 0.8));
+      }, delay);
+    };
+    tick(380);
+  };
+  useEffect(() => stop, []);
   return (
     <button
+      onPointerDown={startHold}
+      onPointerUp={stop}
+      onPointerLeave={stop}
+      onPointerCancel={stop}
       class={`btn btn-${color} btn-${size} ${disabled ? 'is-disabled' : ''} ${props.class ?? ''}`}
       style={props.style}
       title={props.title}
       onClick={() => {
         unlockAudio();
         if (disabled) return;
+        if (hold.current.fired) {
+          hold.current.fired = false;
+          return;
+        }
         sfx.click();
         props.onClick?.();
       }}

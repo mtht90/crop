@@ -5,7 +5,13 @@ import { EQUIP_BY_ID, SKILL_BY_ID, SLOT_LABEL } from '../../data/items';
 import { GACHA_COST, PITY, gachaLevel, gachaNextLv, gachaRates, type Banner } from '../../game/core';
 import * as L from '../../game/logic';
 import { sfx } from '../../game/audio';
-import { GEN, itemUrl, spriteUrl } from '../../render/sprites';
+import { GEN, itemUrl, manifest, spriteUrl } from '../../render/sprites';
+
+/** CSS for playing one of the effect sprite sheets (frame count from the asset manifest) */
+const sheet = (name: string) => {
+  const n = manifest.fx[name]?.n ?? 10;
+  return { backgroundImage: `url(${GEN}fx/${name}.webp)`, backgroundSize: `${n * 100}% 100%`, animationTimingFunction: `steps(${n - 1})` };
+};
 import { Bar, Btn, Card, RARITY_NAME, useGame } from '../common';
 import { ElIcon, EquipIcon, Gem, SkillIcon, Stars } from '../icons';
 
@@ -16,10 +22,7 @@ const BANNERS: { key: Banner; name: string; sub: string; card: string; art: () =
     sub: '出撃させる霊獣を呼び出す',
     card: 'purple',
     art: () => (
-      <>
-        <img src={spriteUrl('Boss Goddess Innova')} />
-        <img src={spriteUrl('Summon Shiva')} />
-      </>
+      <img src={spriteUrl('Boss Goddess Innova')} />
     ),
   },
   {
@@ -28,10 +31,7 @@ const BANNERS: { key: Banner; name: string; sub: string; card: string; art: () =
     sub: '武器・防具・装飾を手に入れる',
     card: 'gold',
     art: () => (
-      <div class="row" style={{ gap: '0', paddingBottom: '20px', paddingRight: '18px' }}>
-        <EquipIcon shape="sword:mythic" size={84} />
-        <EquipIcon shape="shield:gold" size={64} />
-      </div>
+      <EquipIcon shape="sword:mythic" size={84} />
     ),
   },
   {
@@ -40,10 +40,7 @@ const BANNERS: { key: Banner; name: string; sub: string; card: string; art: () =
     sub: '自動で放つ秘術を覚える',
     card: 'teal',
     art: () => (
-      <div class="row" style={{ gap: '0', paddingBottom: '20px', paddingRight: '18px' }}>
-        <SkillIcon kind="meteor" el="fire" size={80} />
-        <SkillIcon kind="bolt" el="light" size={62} />
-      </div>
+      <SkillIcon kind="meteor" el="fire" size={84} />
     ),
   },
 ];
@@ -63,7 +60,7 @@ export function GachaTab() {
 
   return (
     <div class="col">
-      <div class="hint" style={{ margin: '0 6px' }}>
+      <div class="hint">
         霊晶はボス初撃破・任務・霊脈の恵み・討伐でまれに手に入る。引くほど召喚レベルが上がり、高レア度が出やすくなる。
       </div>
       {BANNERS.map((b) => {
@@ -73,27 +70,27 @@ export function GachaTab() {
         const rates = gachaRates(st.pulls);
         const cost = GACHA_COST[b.key];
         return (
-          <div class={`banner-card card card-${b.card}`} style={{ marginTop: '22px' }}>
-            <div class="banner-head">{b.name}</div>
-            <div class="banner-art">{b.art()}</div>
-            <div class="banner-text">
-              <div style={{ fontSize: '12px', fontWeight: 700 }}>{b.sub}</div>
-              <div class="rates" style={{ marginTop: '6px' }}>
-                <span>召喚Lv{lv}</span>
-                {[5, 4, 3].map((r) => (
-                  <span>
-                    {RARITY_NAME[r]} {(rates[r] * 100).toFixed(1)}%
-                  </span>
-                ))}
-              </div>
-              <div style={{ width: '92%', marginTop: '4px' }}>
-                {next ? <Bar value={st.pulls} max={next} label={`次のLvまで ${next - st.pulls}`} /> : <Bar value={1} max={1} label="召喚Lv MAX" />}
-              </div>
-              <div style={{ fontSize: '11px', marginTop: '3px' }}>
-                あと {PITY[b.key] - st.pity} 回以内に UR 確定
-              </div>
+          <div class={`banner-card card card-${b.card}`} style={{ marginTop: '24px' }}>
+            <div class="banner-head">
+              <span>{b.name}</span>
+              <span>召喚Lv{lv}</span>
             </div>
-            <div class="row" style={{ position: 'relative', marginTop: '8px' }}>
+            <div class="bn-body">
+              <div class="bn-text">
+                <div style={{ fontSize: '13px', fontWeight: 800 }}>{b.sub}</div>
+                <div class="rates">
+                  {[5, 4, 3].map((r) => (
+                    <span>
+                      {RARITY_NAME[r]} {(rates[r] * 100).toFixed(1)}%
+                    </span>
+                  ))}
+                </div>
+                {next ? <Bar value={st.pulls} max={next} label={`次のLvまで ${next - st.pulls}回`} /> : <Bar value={1} max={1} label="召喚Lv MAX" />}
+                <div style={{ fontSize: '11px', fontWeight: 700 }}>あと {PITY[b.key] - st.pity} 回以内に UR 確定</div>
+              </div>
+              <div class="bn-art">{b.art()}</div>
+            </div>
+            <div class="bn-actions">
               <Btn color="white" onClick={() => doPull(b.key, 1)} disabled={s.gems < cost.one}>
                 1回 <Gem size={18} /> {cost.one}
               </Btn>
@@ -123,7 +120,7 @@ function PullStage({ banner, pulls, onClose, onAgain }: { banner: Banner; pulls:
   const [shown, setShown] = useState(false);
   const top = Math.max(...pulls.map((p) => p.rarity));
   // orb tint per best rarity (hue shift of the orb image) and the reveal effect sheet
-  const hue = top >= 5 ? 200 : top >= 4 ? 0 : top >= 3 ? -60 : -150;
+  const hue = top >= 5 ? 125 : top >= 4 ? 0 : top >= 3 ? -60 : -150;
   const burst = top >= 5 ? 'crit' : top >= 4 ? 'spark' : 'puff';
   useEffect(() => {
     const t = setTimeout(() => setShown(true), 1150);
@@ -140,11 +137,11 @@ function PullStage({ banner, pulls, onClose, onAgain }: { banner: Banner; pulls:
         <img class="pull-orb" src={itemUrl('orb')} style={{ filter: `hue-rotate(${hue}deg)` }} alt="" />
       ) : (
         <>
-          <div class="pull-burst" style={{ backgroundImage: `url(${GEN}fx/${burst}.webp)` }} />
+          <div class="pull-burst" style={sheet(burst)} />
           <div class={`pull-grid ${pulls.length === 1 ? 'one' : ''}`}>
             {pulls.map((p, i) => (
               <div class={`pull-item r${p.rarity}`} style={{ animationDelay: i * 0.07 + 's' }}>
-                {p.rarity >= 4 && <div class="pi-fx" style={{ backgroundImage: `url(${GEN}fx/${p.rarity >= 5 ? 'crit' : 'spark'}.webp)` }} />}
+                {p.rarity >= 4 && <div class="pi-fx" style={sheet(p.rarity >= 5 ? 'crit' : 'spark')} />}
                 <PullCard p={p} />
               </div>
             ))}

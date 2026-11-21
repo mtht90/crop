@@ -88,7 +88,7 @@ export function Hud(_p: { onTab: (t: TabKey) => void }) {
         </button>
       </div>
 
-      {boss && (phase === 'boss' || phase === 'victory') && (
+      {boss && phase === 'boss' && (
         <div class="hud-boss">
           <Bar class="red" value={boss.hp} max={boss.maxHp} label={`${boss.def.name}  ${fmt(Math.max(0, boss.hp))}`} />
           {phase === 'boss' && <div class={`timer ${f!.bossTimer < 8 ? 'low' : ''}`}>残り {Math.ceil(f!.bossTimer)} 秒</div>}
