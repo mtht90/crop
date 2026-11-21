@@ -15,11 +15,10 @@ npm run dev
 npm run sim -- 72  # バランス確認（72時間分の放置プレイをシミュレーション）
 ```
 
-見た目・音はすべて外部素材（Librarium / Cozy UI Pack / CraftPix の背景・エフェクト / game-icons.net / Kenney / OpenGameArt / フォント）。
+見た目・音はすべて外部素材（Librarium / Ravenmore の UI・アイコン / CraftPix の背景・エフェクト / game-icons.net / Kenney / OpenGameArt / フォント）。
 CSS はレイアウトと素材画像の伸縮・配置・動きだけに使い、グラデーションや角丸の箱などで絵を描かない。
 素材ライセンスにより元ファイルは再配布できないため、リポジトリには含めず、ビルド時に作者の配布ページから取得する。
 どの素材を何に使うかは `src/data/assets.ts` にまとめてある。
-Cozy UI Pack の完全版を持っている場合は `idle/assets-src/cozy-ui/` に展開すればそちらが使われる（ローカルビルドのみ）。
 
 ## 構成
 - `src/data/` 霊獣・敵・エリア（monsters.ts）、装備・秘術（items.ts）

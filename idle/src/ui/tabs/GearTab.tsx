@@ -53,7 +53,7 @@ function EquipView() {
           const n = EQUIPS.filter((e) => e.slot === slot && s.equips[e.id]).length;
           return (
             <div class="lrow is-click" onClick={() => setPick(slot)}>
-              <div class="lr-ico">{d ? <EquipIcon shape={d.icon} size={34} /> : <span class="muted">{SLOT_LABEL[slot]}</span>}</div>
+              <div class="lr-ico">{d ? <EquipIcon id={d.id} size={34} /> : <span class="muted">{SLOT_LABEL[slot]}</span>}</div>
               <div class="lr-main">
                 <div class="lr-title">
                   {d ? d.name : `${SLOT_LABEL[slot]}：なし`}
@@ -105,7 +105,7 @@ function EquipCard({ d, onClick, equipped }: { d: EquipDef; onClick?: () => void
         <span class="cc-r">{RARITY_NAME[d.rarity]}</span>
       </div>
       <div style={{ height: '50px', display: 'grid', placeItems: 'center' }}>
-        <EquipIcon shape={d.icon} size={44} />
+        <EquipIcon id={d.id} size={44} />
       </div>
       <div class="cc-name">{d.name}</div>
       {own && <div class="muted" style={{ fontWeight: 800 }}>Lv{own.lv}</div>}
@@ -125,7 +125,7 @@ function EquipPicker({ slot, onClose }: { slot: Slot; onClose: () => void }) {
           return (
             <div class="lrow">
               <div class="lr-ico">
-                <EquipIcon shape={d.icon} size={34} />
+                <EquipIcon id={d.id} size={34} />
               </div>
               <div class="lr-main">
                 <div class="lr-title">

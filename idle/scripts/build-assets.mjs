@@ -7,12 +7,14 @@ import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
 import { ALLIES, AREAS, slug } from '../src/data/monsters.ts';
 import { EQUIPS, SKILLS } from '../src/data/items.ts';
-import { BGS, FX, ITEMS, GLYPHS, ICON_CREAM, TIER_COLOR, ELEMENT_COLOR, SFX, MUSIC } from '../src/data/assets.ts';
+import { BGS, FX, ITEMS, GLYPHS, PAINTED, paintedSrc, ICON_CREAM, ICON_OUTLINE, ELEMENT_COLOR, SFX, MUSIC } from '../src/data/assets.ts';
+import { readPsd, initializeCanvas } from 'ag-psd';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SRC = path.join(ROOT, 'assets-src');
 const OUT = path.join(ROOT, 'public', 'gen');
 const src = (p) => path.join(SRC, p);
+fs.rmSync(path.join(OUT, 'ui'), { recursive: true, force: true });
 for (const d of ['mon', 'ui', 'bg', 'fx', 'items', 'icons', 'audio']) fs.mkdirSync(path.join(OUT, d), { recursive: true });
 
 const manifestPath = path.join(OUT, 'manifest.json');
@@ -96,9 +98,9 @@ for (const [name, s] of Object.entries(ITEMS)) {
   manifest['it_' + name] = s;
 }
 
-// ---------- icons: game-icons.net glyph, recolored, with a Cozy-style brown outline ----------
+// ---------- glyph icons: game-icons.net, recolored, with a dark outline ----------
 const GI = src('game-icons/icons/ffffff/transparent/1x1');
-const OUTLINE = [122, 65, 52];
+const OUTLINE = ICON_OUTLINE;
 const disk = (r) => {
   const o = [];
   for (let y = -r; y <= r; y++) for (let x = -r; x <= r; x++) if (x * x + y * y <= r * r + 0.5) o.push([x, y]);
@@ -107,7 +109,7 @@ const disk = (r) => {
 const DISK = disk(6);
 async function icon(name, glyph, color) {
   const out = path.join(OUT, 'icons', name + '.png');
-  const sig = { glyph, color, v: 3 };
+  const sig = { glyph, color, o: OUTLINE, v: 4 };
   if (fresh(out, 'ic_' + name, sig)) return (manifest['ic_' + name] = sig);
   const S = 128;
   const P = 12;
@@ -131,101 +133,99 @@ async function icon(name, glyph, color) {
       outBuf[i + 2] = OUTLINE[2];
       outBuf[i + 3] = a;
     }
-  await sharp(outBuf, { raw: { width: S, height: S, channels: 4 } })
-    .composite([{ input: glyphPng, raw: { width: S, height: S, channels: 4 } }])
-    .png({ compressionLevel: 9 })
-    .toFile(out);
+  await sharp(outBuf, { raw: { width: S, height: S, channels: 4 } }).composite([{ input: glyphPng, raw: { width: S, height: S, channels: 4 } }]).png({ compressionLevel: 9 }).toFile(out);
   manifest['ic_' + name] = sig;
 }
 const iconJobs = [];
-for (const [name, glyph] of Object.entries(GLYPHS)) iconJobs.push([name, glyph, ICON_CREAM]);
-for (const e of EQUIPS) {
-  const [shape, tier] = e.icon.split(':');
-  iconJobs.push([`eq_${shape}_${tier}`, GLYPHS[shape], TIER_COLOR[tier]]);
-}
+for (const [name, glyph] of Object.entries(GLYPHS)) if (!PAINTED[name]) iconJobs.push([name, glyph, ICON_CREAM]);
 const kindGlyph = { strike: 'strike', nova: 'nova', bolt: 'bolt', heal: 'heal', buff: 'buff', shield: 'barrier', freeze: 'freeze', drain: 'drain', meteor: 'meteor' };
 for (const s of SKILLS) iconJobs.push([`sk_${s.kind}_${s.el}`, GLYPHS[kindGlyph[s.kind]], ELEMENT_COLOR[s.el]]);
 const seen = new Set();
 await Promise.all(iconJobs.filter(([n]) => !seen.has(n) && seen.add(n)).map(([n, g, c]) => icon(n, g, c)));
-console.log(`icons: ${seen.size}`);
 
-// ---------- Cozy UI pieces (+ recolors) ----------
-function findFile(dir, name) {
-  for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
-    const p = path.join(dir, ent.name);
-    if (ent.isDirectory()) {
-      const r = findFile(p, name);
-      if (r) return r;
-    } else if (ent.name === name) return p;
+// ---------- painted icons (Ravenmore): UI icons + one per equipment item ----------
+const painted = Object.entries(PAINTED).map(([n, k]) => [n, k]);
+for (const e of EQUIPS) painted.push(['eq_' + e.id, e.icon]);
+await Promise.all(
+  painted.map(([n, k]) =>
+    sharp(src(paintedSrc(k)))
+      .trim({ threshold: 1 })
+      .resize(112, 112, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+      .extend({ top: 8, bottom: 8, left: 8, right: 8, background: { r: 0, g: 0, b: 0, alpha: 0 } })
+      .png({ compressionLevel: 9 })
+      .toFile(path.join(OUT, 'icons', n + '.png')),
+  ),
+);
+console.log(`icons: ${seen.size} glyph + ${painted.length} painted`);
+
+// ---------- UI kit: Ravenmore "Fantasy UI Elements" (layered PSD) ----------
+initializeCanvas(
+  () => {
+    throw new Error('canvas not needed');
+  },
+  (w, h) => ({ width: w, height: h, data: new Uint8ClampedArray(w * h * 4) }),
+);
+const psd = readPsd(fs.readFileSync(src('ravenmore/ADOM-OGA-UI-SmartObject.psd')), { useImageData: true, skipThumbnail: true, skipCompositeImageData: true });
+const layers = {};
+(function walk(ch, pre) {
+  for (const l of ch || []) {
+    const n = (pre ? pre + '/' : '') + l.name;
+    if (l.imageData) layers[n] = l;
+    walk(l.children, n);
   }
-  return null;
-}
-const UI = [
-  'Container1.png', 'Container3.png', 'ContainerAdvanced4.png', 'NoteContainerSimple.png', 'WoodenContainer1.png',
-  'CardRegular1_wood.png', 'CardRegular1_red.png', 'SquareButton1_wood.png', 'SquareButton2_wood.png', 'SquareButton2_red.png',
-  'SquareButton2_white.png', 'RoundButton1_wood.png', 'RoundButton1_white.png', 'RoundButton2_wood.png', 'RoundButton2_white.png',
-  'ItemSlot1.png', 'ItemSlotSelected1.png', 'InventoryHotbar.png', 'Checkbox2_checked.png', 'Checkbox2_unchecked.png',
-  'ArrowBrownOuline16.png', 'ArrowBrownOuline19.png', 'ArrowBrownOuline22.png', 'ArrowBrownOuline23.png',
-  'IconsDefault5_64px.png', 'IconsDefault19_64px.png', 'IconsDefault25_64px.png', 'IconsDefault38_64px.png', 'IconsDefault39_64px.png',
-  'Cursor2_32px.png', 'Cursor2Clicked_32px.png',
-];
-const COZY = src('cozy-ui');
-const uiPath = {};
-for (const n of UI) {
-  const p = findFile(COZY, n);
-  if (!p) throw new Error('Cozy UI file not found: ' + n);
-  uiPath[n] = p;
-  await sharp(p).png({ compressionLevel: 9 }).toFile(path.join(OUT, 'ui', n));
-}
-function rgb2hsl(r, g, b) {
-  const max = Math.max(r, g, b),
-    min = Math.min(r, g, b);
-  const l = (max + min) / 2;
-  const d = max - min;
-  if (d === 0) return [0, 0, l];
-  const s = d / (1 - Math.abs(2 * l - 1));
-  let h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
-  return [(h * 60 + 360) % 360, s, l];
-}
-function hsl2rgb(h, s, l) {
-  const c = (1 - Math.abs(2 * l - 1)) * s;
-  const hp = h / 60;
-  const x = c * (1 - Math.abs((hp % 2) - 1));
-  const [r, g, b] = hp < 1 ? [c, x, 0] : hp < 2 ? [x, c, 0] : hp < 3 ? [0, c, x] : hp < 4 ? [0, x, c] : hp < 5 ? [x, 0, c] : [c, 0, x];
-  const m = l - c / 2;
-  return [r + m, g + m, b + m].map((v) => Math.round(Math.min(1, Math.max(0, v)) * 255));
-}
-/** recolor pixels matching `pick(h,s,l)` to the target hue (keeping relative lightness) */
-async function recolor(srcName, outName, pick, { hue, sat = 1, light = 0 }) {
-  const { data, info } = await sharp(uiPath[srcName]).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-  for (let i = 0; i < data.length; i += 4) {
-    if (data[i + 3] === 0) continue;
-    const [h, s, l] = rgb2hsl(data[i] / 255, data[i + 1] / 255, data[i + 2] / 255);
-    const p = pick(h, s, l);
-    if (!p) continue;
-    const ns = typeof p === 'object' ? p.s : Math.min(1, s * sat);
-    const nl = typeof p === 'object' ? p.l : Math.min(1, Math.max(0, l + light * (1 - l)));
-    [data[i], data[i + 1], data[i + 2]] = hsl2rgb(hue, ns, nl);
-  }
-  await sharp(data, { raw: info }).png({ compressionLevel: 9 }).toFile(path.join(OUT, 'ui', outName));
-}
-const isRed = (h, s) => (h >= 325 || h <= 6) && s > 0.45;
-const variants = {
-  green: { hue: 96, sat: 0.72, light: -0.06 },
-  blue: { hue: 204, sat: 0.8, light: -0.04 },
-  gold: { hue: 40, sat: 0.95, light: 0.02 },
-  purple: { hue: 276, sat: 0.62, light: -0.02 },
-  gray: { hue: 30, sat: 0.08, light: 0.04 },
-  teal: { hue: 176, sat: 0.6, light: -0.06 },
+})(psd.children, '');
+const L = (name) => {
+  const l = layers[name];
+  if (!l) throw new Error('PSD layer missing: ' + name);
+  const { width, height, data } = l.imageData;
+  return { img: () => sharp(Buffer.from(data.buffer, data.byteOffset, data.byteLength), { raw: { width, height, channels: 4 } }), l };
 };
-for (const [k, v] of Object.entries(variants)) {
-  await recolor('SquareButton2_red.png', `SquareButton2_${k}.png`, isRed, v);
-  await recolor('CardRegular1_red.png', `CardRegular1_${k}.png`, isRed, v);
+const UIO = (n) => path.join(OUT, 'ui', n);
+const crop = (name, box) => L(name).img().extract(box);
+// panels (trimmed to the visible frame)
+await crop('Example Dark', { left: 57, top: 143, width: 821, height: 506 }).png().toFile(UIO('panel_dark.png'));
+await crop('Example Light', { left: 30, top: 143, width: 821, height: 506 }).png().toFile(UIO('panel_light.png'));
+await crop('Header', { left: 6, top: 15, width: 831, height: 196 }).png().toFile(UIO('header.png'));
+// gauge frame + fills
+const frame = await crop('Progress/Loading Orange/SliderBar', { left: 2, top: 3, width: 569, height: 89 }).png().toBuffer();
+await sharp(frame).toFile(UIO('bar_frame.png'));
+const fills = {
+  orange: await L('Progress/Loading Orange/OrangeBar').img().png().toBuffer(),
+  red: await L('Progress/Loading Red/RedBar').img().png().toBuffer(),
+  green: await L('Progress/Loading Green/GreenBar').img().png().toBuffer(),
+  blue: await L('Progress/Loading Blue/Blue Bar').img().png().toBuffer(),
+};
+fills.purple = await sharp(fills.blue).modulate({ hue: 60, saturation: 0.9 }).png().toBuffer();
+fills.gold = await sharp(fills.orange).modulate({ hue: 12, brightness: 1.12 }).png().toBuffer();
+fills.gray = await sharp(fills.green).modulate({ saturation: 0.08, brightness: 1.05 }).png().toBuffer();
+fills.teal = await sharp(fills.green).modulate({ hue: 60 }).png().toBuffer();
+const INNER = { left: 19, top: 26, width: 531, height: 41 };
+for (const [k, buf] of Object.entries(fills)) {
+  const fill = await sharp(buf).resize(INNER.width, INNER.height, { fit: 'fill' }).png().toBuffer();
+  await sharp(fill).toFile(UIO(`fill_${k}.png`));
+  // button = stone frame with the glossy fill inside
+  await sharp(frame).composite([{ input: fill, left: INNER.left, top: INNER.top }]).png().toFile(UIO(`btn_${k}.png`));
 }
-// red notification badge from the round white button (cream face → red, pink rim → dark red)
-await recolor('RoundButton1_white.png', 'RoundButton1_red.png', (h, s, l) => (l > 0.9 ? { s: 0.88, l: 0.64 } : l > 0.72 && s > 0.3 ? { s: 0.75, l: 0.45 } : null), { hue: 356 });
-await recolor('RoundButton2_white.png', 'RoundButton2_purple.png', (h, s, l) => (l > 0.9 ? { s: 0.45, l: 0.72 } : l > 0.72 && s > 0.3 ? { s: 0.4, l: 0.55 } : null), { hue: 276 });
-console.log('ui pieces ok');
+// small pieces
+await L('Checkbox/Checkbox Frame').img().png().toFile(UIO('chk_frame.png'));
+await L('Checkbox/Checkmark').img().png().toFile(UIO('chk_mark.png'));
+await L('Radio/Layer 1').img().png().toFile(UIO('ring.png'));
+await L('Radio/Layer 2').img().png().toFile(UIO('dot.png'));
+await L('Slider/SliderButton').img().png().toFile(UIO('orb.png'));
+await L('Skull').img().png().toFile(UIO('skull.png'));
+// close button: stone base + X (positions taken from the PSD)
+const base = L('Side Close Button/Button Base');
+const x = L('Side Close Button/Close X');
+await base.img().composite([{ input: await x.img().png().toBuffer(), left: x.l.left - base.l.left, top: x.l.top - base.l.top }]).png().toFile(UIO('close.png'));
+const arrow = L('Side Close Button/Next/Prev Arrow >');
+await base.img().composite([{ input: await arrow.img().png().toBuffer(), left: arrow.l.left - base.l.left, top: arrow.l.top - base.l.top }]).png().toFile(UIO('side_btn.png'));
+// slider arrows: split the pair into left / right
+const arrows = L('Slider/Slider Arrows');
+const aw = arrows.l.imageData.width;
+const ah = arrows.l.imageData.height;
+await arrows.img().extract({ left: 0, top: 0, width: 50, height: ah }).png().toBuffer().then((b) => sharp(b).trim({ threshold: 1 }).toFile(UIO('arrow_left.png')));
+await arrows.img().extract({ left: aw - 50, top: 0, width: 50, height: ah }).png().toBuffer().then((b) => sharp(b).trim({ threshold: 1 }).toFile(UIO('arrow_right.png')));
+console.log('ui kit ok');
 
 // ---------- audio ----------
 manifest.sfx = {};

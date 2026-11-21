@@ -1,6 +1,6 @@
 // Downloads every third-party asset the game uses into idle/assets-src/ (git-ignored), straight from
 // each author's official distribution page. Skips anything already present, so hand-placed copies
-// (e.g. the full Cozy UI Pack) are used as-is. See CREDITS.md for the licenses.
+// are used as-is. See CREDITS.md for the licenses.
 //
 // Several of these licenses forbid redistributing the source files, which is why they are fetched at
 // build time instead of being committed to this public repository.
@@ -89,7 +89,10 @@ const CP = 'https://free-game-assets.itch.io/'; // CraftPix's official itch.io p
 const PACKS = [
   // --- characters / UI (required by the brief) ---
   { name: 'Ækashics Librarium (static battlers)', dir: 'librarium', get: () => itchZip('https://aekashics.itch.io/aekashics-librarium-librarium-static-batch-megapack', /Static Battlers\.zip$/), keep: (n) => n.includes('Sideview Batch Battlers/') },
-  { name: 'Cozy UI Pack (dobo_ui)', dir: 'cozy-ui', get: () => itchZip('https://dobo-ui.itch.io/cozy-ui', /Cozy.*UI.*\.zip$/i), keep: () => true },
+  // --- UI kit & painted icons (Ravenmore) ---
+  { name: 'Ravenmore Fantasy UI Elements (PSD)', dir: 'ravenmore', file: 'ADOM-OGA-UI-SmartObject.psd', get: () => bytes('https://opengameart.org/sites/default/files/ADOM-OGA-UI-SmartObject.psd') },
+  { name: 'Ravenmore Fantasy Icon Pack', dir: 'ravenmore/icon-pack', get: () => bytes('https://opengameart.org/sites/default/files/RavenmoreIconPack.02.2014.zip'), keep: (n) => n.startsWith('128/') && n.endsWith('.png') },
+  { name: 'Ravenmore Fantasy Weapon & Armor Icons', dir: 'ravenmore/weapons-armor', get: () => itchZip('https://ravenmore.itch.io/fantasy-weapon-armor-icons', /128px_free/), keep: (n) => n.endsWith('.png') },
   // --- CraftPix freebies: battle backgrounds, effects, items ---
   { name: 'CraftPix Free Forest Battle Backgrounds', dir: 'craftpix/forest-bg', get: () => itchZip(CP + 'free-forest-battle-backgrounds'), keep: (n) => /game_background_\d\.png$/.test(n) || n.endsWith('license.txt') },
   { name: 'CraftPix Free Elven Land Battle Backgrounds', dir: 'craftpix/elven-bg', get: () => itchZip(CP + 'free-elven-land-2d-battle-backgrounds'), keep: (n) => /game_background_\d\.png$/.test(n) || n.endsWith('license.txt') },

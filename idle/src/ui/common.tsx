@@ -166,7 +166,7 @@ export function Bar(props: { value: number; max: number; label?: ComponentChildr
   const pct = Math.max(0, Math.min(1, props.value / Math.max(1e-9, props.max))) * 100;
   return (
     <div class={`bar ${props.class ?? ''}`}>
-      {pct > 2 && <div class="bar-fill" style={{ width: `calc(${pct}% + ${(12 * pct) / 100}px)` }} />}
+      {pct > 0.5 && <div class="bar-fill" style={{ width: pct + '%' }} />}
       {props.label !== undefined && <div class="bar-label">{props.label}</div>}
     </div>
   );

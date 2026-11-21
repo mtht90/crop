@@ -31,7 +31,7 @@ const BANNERS: { key: Banner; name: string; sub: string; card: string; art: () =
     sub: '武器・防具・装飾を手に入れる',
     card: 'gold',
     art: () => (
-      <EquipIcon shape="sword:mythic" size={84} />
+      <EquipIcon id="w_spirit_sword" size={84} />
     ),
   },
   {
@@ -171,7 +171,7 @@ function PullCard({ p }: { p: L.Pull }) {
     head = <ElIcon el={a.el} size={14} />;
   } else if (p.banner === 'equip') {
     const d = EQUIP_BY_ID[p.id];
-    art = <EquipIcon shape={d.icon} size={58} />;
+    art = <EquipIcon id={d.id} size={58} />;
     name = d.name;
     head = <span>{SLOT_LABEL[d.slot]}</span>;
   } else {

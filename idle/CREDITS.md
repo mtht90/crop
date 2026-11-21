@@ -12,9 +12,14 @@ License: commercial use OK, any engine, edits limited to hue / flip / scale, ren
 redistribution of the files. Credit "Ækashics" with a link to the author's site (shown in-game).
 
 ## UI
-**Cozy UI Pack** — **dobo_ui** — https://dobo-ui.itch.io/cozy-ui (free demo file)
-License: commercial use and modification allowed; no redistribution/resale, no NFTs, no generative-AI
-training. Recolored button / card / badge variants are generated during the build.
+**Fantasy UI Elements** — **Ravenmore** — https://opengameart.org/content/fantasy-ui-elements-by-ravenmore
+License: CC BY 3.0 (https://creativecommons.org/licenses/by/3.0/). Layers are extracted from the PSD at
+build time; buttons are composed from the gauge frame + gauge fills, and some fills are hue-shifted.
+
+## Equipment & item icons
+- **Fantasy Icon Pack** — **Ravenmore** — https://opengameart.org/content/fantasy-icon-pack-by-ravenmore-0 — CC BY 3.0
+- **Fantasy Weapon & Armor Icons** (free 128px set) — **Ravenmore** — https://ravenmore.itch.io/fantasy-weapon-armor-icons
+  — author license: use in games (including commercial) allowed; no repackaging/reselling or bundling.
 
 ## Battle backgrounds, effects, coins, crystals
 **CraftPix.net** freebies — https://craftpix.net/ (downloaded from https://free-game-assets.itch.io/)
@@ -27,10 +32,10 @@ License: CraftPix Free License (https://craftpix.net/file-licenses/) — commerc
 attribution required (credited anyway), no resale/redistribution of the source files. Some
 backgrounds and effects are hue-shifted at build time.
 
-## Icons
+## UI glyph icons
 **game-icons.net** — https://game-icons.net/ — CC BY 3.0
 (https://creativecommons.org/licenses/by/3.0/). Icons by Lorc, Delapouite, Skoll, Zeromancer and Sbed.
-Changes: recolored and given a brown outline to match the Cozy UI style.
+Changes: recolored and given a dark outline.
 
 ## Sound effects
 **Kenney** — https://kenney.nl/ — Interface Sounds, Impact Sounds, RPG Audio, Music Jingles — CC0
@@ -39,9 +44,11 @@ Changes: recolored and given a brown outline to match the Cozy UI style.
 - **Fairy Adventure** — MintoDog — https://opengameart.org/content/fairy-adventure — CC0
 - **Battle Theme A** — cynicmusic — https://opengameart.org/content/battle-theme-a — CC0
 
-## Fonts
-- **M PLUS Rounded 1c** — M+ Fonts Project — SIL Open Font License 1.1 (via @fontsource)
-- **Bungee / Bungee Outline** — David Jonathan Ross — SIL Open Font License 1.1 (via @fontsource)
+## Fonts (SIL Open Font License 1.1, via @fontsource)
+- **Shippori Mincho B1** — FONTDASU (headings)
+- **Zen Kaku Gothic New** — Yoshimichi Ohira (body text)
+- **Cinzel** — Natanael Gama (numbers, titles)
+- **Bungee / Bungee Outline** — David Jonathan Ross (damage numbers)
 
 ## Code
 The game code and data are original to this project.

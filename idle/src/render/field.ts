@@ -1,7 +1,7 @@
 // The main-screen field: a real-time auto battle. The hero hunts roaming monsters, the kill gauge
 // fills, the area boss appears; win → next stage, lose → keep farming this stage.
 // Everything drawn here is an external image (see src/data/assets.ts): the battle background, the
-// Librarium monsters, CraftPix effect sprite sheets / coins / crystals and Cozy UI pieces for bars.
+// Librarium monsters, CraftPix effect sprite sheets / coins / crystals and Ravenmore UI pieces for bars.
 import { ALLY_BY_ID, elementFactor, type EnemyDef, type Element } from '../data/monsters';
 import { SKILL_BY_ID, skillLvMul, type SkillDef } from '../data/items';
 import { areaDef, areaIndex, bossTime, enemyStats, fmt, isAreaBoss, killsNeeded, loopOf, parseGuardianKey, guardianSlotsUnlocked, type EnemyKind } from '../game/core';
@@ -97,7 +97,7 @@ interface Txt {
   text: string;
   color: string;
   size: number;
-  label?: boolean; // skill name on a Cozy pill
+  label?: boolean; // skill name on a Ravenmore header plate
 }
 
 export interface Banner {
@@ -176,7 +176,7 @@ export class Field {
     this.resetHero(true);
     this.preloadArea();
     preloadFx();
-    preloadUrls(['SquareButton2_white.png', 'SquareButton2_red.png', 'SquareButton2_green.png', 'SquareButton2_blue.png', 'RoundButton2_white.png'].map(uiUrl));
+    preloadUrls(['bar_frame.png', 'fill_red.png', 'fill_green.png', 'fill_blue.png', 'header.png'].map(uiUrl));
     preloadUrls(['star', 'gem', 'orb', 'el_fire', 'el_water', 'el_wind', 'el_earth', 'el_light', 'el_dark'].map(itemUrl));
   }
 
@@ -1149,12 +1149,12 @@ export class Field {
     g.textAlign = 'center';
     g.textBaseline = 'middle';
     if (t.label) {
-      // skill name on a Cozy pill
-      g.font = `800 ${t.size}px "M PLUS Rounded 1c", sans-serif`;
-      const w = g.measureText(t.text).width + 30;
-      const h = t.size + 16;
-      const pill = image(uiUrl('RoundButton2_white.png'));
-      if (pill) nine(g, pill, t.x - w / 2, t.y - h / 2, w, h, [40, 80, 60, 80], [6, 12, 9, 12]);
+      // skill name on a Ravenmore header plate
+      g.font = `800 ${t.size}px "Shippori Mincho B1", serif`;
+      const w = g.measureText(t.text).width + 44;
+      const h = t.size + 22;
+      const plate = image(uiUrl('header.png'));
+      if (plate) nine(g, plate, t.x - w / 2, t.y - h / 2, w, h, [60, 110, 50, 110], [8, 16, 7, 16]);
       g.fillStyle = t.color;
       g.fillText(t.text, t.x, t.y - 1);
     } else {
@@ -1217,15 +1217,15 @@ export class Field {
     g.restore();
   }
 
-  /** a small Cozy-UI bar (track = white button, fill = colored button) */
+  /** a small Ravenmore gauge (stone frame + glossy fill) */
   bar(x: number, y: number, w: number, h: number, frac: number, fill: string) {
-    const track = image(uiUrl('SquareButton2_white.png'));
+    const frame = image(uiUrl('bar_frame.png'));
     const f = image(uiUrl(fill));
-    const s: [number, number, number, number] = [40, 42, 58, 42];
-    const d: [number, number, number, number] = [2.5, 3, 3.5, 3];
-    if (track) nine(this.g, track, x, y, w, h, s, d);
-    const fw = w * clamp(frac, 0, 1);
-    if (f && fw > 4) nine(this.g, f, x, y, fw, h, s, d);
+    const bx = 3,
+      by = Math.max(2, h * 0.28);
+    if (frame) nine(this.g, frame, x, y, w, h, [26, 24, 26, 24], [by, bx, by, bx]);
+    const fw = (w - bx * 2) * clamp(frac, 0, 1);
+    if (f && fw > 0.5) this.g.drawImage(f, x + bx, y + by, fw, h - by * 2);
   }
 
   drawMob(m: Mob) {
@@ -1253,7 +1253,7 @@ export class Field {
     this.drawSprite(m.def.sprite, x, y, m.w * scale, m.h * scale, m.face === -1, { alpha, flash: m.dying ? Math.max(m.flash, 0.12 - m.dying) : m.flash, frozen: m.frozen > 0, squash, rot, glow: m.kind === 'boss' ? 'rgba(255,90,60,0.9)' : undefined });
     if (!m.dying && m.kind === 'mob' && m.spawnT > 0.35) {
       const bw = 34 * this.u;
-      if (m.hp < m.maxHp) this.bar(m.x - bw / 2 + 6, m.y - m.h - 10, bw, 8, m.hp / m.maxHp, 'SquareButton2_red.png');
+      if (m.hp < m.maxHp) this.bar(m.x - bw / 2 + 6, m.y - m.h - 12, bw, 10, m.hp / m.maxHp, 'fill_red.png');
       const el = image(itemUrl('el_' + m.def.el));
       if (el) this.g.drawImage(el, m.x - bw / 2 - 9, m.y - m.h - 13, 13, 13);
     }
@@ -1309,8 +1309,8 @@ export class Field {
       }
     }
     const bw = 46 * u;
-    this.bar(h.x - bw / 2, h.y + 4, bw, 9, h.hp / h.maxHp, 'SquareButton2_green.png');
-    if (h.shield > 0) this.bar(h.x - bw / 2, h.y + 12, bw * Math.min(1, h.shield / h.maxHp), 6, 1, 'SquareButton2_blue.png');
+    this.bar(h.x - bw / 2, h.y + 4, bw, 12, h.hp / h.maxHp, 'fill_green.png');
+    if (h.shield > 0) this.bar(h.x - bw / 2, h.y + 15, bw * Math.min(1, h.shield / h.maxHp), 8, 1, 'fill_blue.png');
   }
 
   drawProj(p: Proj) {

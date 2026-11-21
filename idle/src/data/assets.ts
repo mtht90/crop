@@ -87,6 +87,7 @@ export interface ItemSpec {
   light?: number;
 }
 const CR = 'craftpix/crystals/PNG/simple/';
+const RV = 'ravenmore/icon-pack/128/';
 export const ITEMS: Record<string, ItemSpec> = {
   el_fire: { src: CR + '1.png', size: 72 },
   el_water: { src: CR + '3.png', size: 72 },
@@ -95,13 +96,41 @@ export const ITEMS: Record<string, ItemSpec> = {
   el_light: { src: CR + '11.png', size: 72 },
   el_dark: { src: CR + '13.png', size: 72 },
   star: { src: CR + '11.png', size: 48 },
-  gem: { src: CR + '16.png', size: 72 },
-  soul: { src: CR + '14.png', size: 72 },
-  coin: { src: 'craftpix/coins/PNG/Gold/Gold_1.png', size: 72 },
+  gem: { src: RV + 'gemBlue.png', size: 96 },
+  soul: { src: RV + 'gemRed.png', size: 96 },
+  coin: { src: RV + 'coin.png', size: 96 },
   orb: { src: SP + 'Water Ball/PNG/Water Ball_Frame_01.png', size: 96, hue: 95, sat: 1.2 },
 };
 
-// ---------- icons (game-icons.net glyphs, recolored + outlined in the Cozy UI style) ----------
+// ---------- painted icons (Ravenmore) — override glyphs of the same name ----------
+// 'p:<name>' = Fantasy Icon Pack (OpenGameArt), 'w:<n>' = Fantasy Weapon & Armor icons (itch.io)
+export const PAINTED: Record<string, string> = {
+  train: 'p:hammer',
+  gear: 'p:upg_shield',
+  gacha: 'p:gemBlue',
+  more: 'p:tome',
+  chest: 'p:backpack',
+  scroll: 'p:scroll',
+  power: 'p:upg_sword',
+  heart: 'p:heart',
+  crit: 'p:dagger',
+  critDmg: 'p:upg_axeDouble',
+  atk: 'p:sword',
+  book: 'p:tome',
+  blade: 'p:sword',
+  archer: 'p:bow',
+  mage: 'p:wand',
+  guard: 'p:shield',
+  map: 'p:map',
+  envelope: 'p:envelope',
+  potion: 'p:potionRed',
+};
+export function paintedSrc(key: string) {
+  const [k, v] = key.split(':');
+  return k === 'p' ? `ravenmore/icon-pack/128/${v}.png` : `ravenmore/weapons-armor/128px_free/icon_${v}.png`;
+}
+
+// ---------- glyph icons (game-icons.net, recolored + outlined) ----------
 export const GLYPHS: Record<string, string> = {
   // equipment shapes
   sword: 'lorc/broadsword.svg',
@@ -155,8 +184,8 @@ export const GLYPHS: Record<string, string> = {
   mage: 'lorc/wizard-staff.svg',
   guard: 'lorc/checked-shield.svg',
 };
-export const ICON_CREAM = '#fff6dc';
-export const TIER_COLOR: Record<string, string> = { wood: '#d9a066', iron: '#c3ccd6', silver: '#e3f0ff', gold: '#ffd34d', mythic: '#d9aaff' };
+export const ICON_CREAM = '#f3e3c3';
+export const ICON_OUTLINE = [32, 24, 20];
 export const ELEMENT_COLOR: Record<string, string> = { fire: '#ff8a5c', water: '#6cc3ff', wind: '#7fe08f', earth: '#e0b060', light: '#ffe066', dark: '#c49bff' };
 
 // ---------- sounds (Kenney CC0) & music (OpenGameArt CC0) ----------

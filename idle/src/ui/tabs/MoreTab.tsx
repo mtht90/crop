@@ -261,7 +261,16 @@ const CREDITS: { h: string; items: { name: string; by?: string; url: string; lic
   },
   {
     h: 'UI',
-    items: [{ name: 'Cozy UI Pack', by: 'dobo_ui', url: 'https://dobo-ui.itch.io/cozy-ui', license: '商用可・改変可' }],
+    items: [
+      { name: 'Fantasy UI Elements', by: 'Ravenmore', url: 'https://opengameart.org/content/fantasy-ui-elements-by-ravenmore', license: 'CC BY 3.0' },
+    ],
+  },
+  {
+    h: '装備・アイテムアイコン',
+    items: [
+      { name: 'Fantasy Icon Pack', by: 'Ravenmore', url: 'https://opengameart.org/content/fantasy-icon-pack-by-ravenmore-0', license: 'CC BY 3.0' },
+      { name: 'Fantasy Weapon & Armor Icons', by: 'Ravenmore', url: 'https://ravenmore.itch.io/fantasy-weapon-armor-icons', license: '商用可（作者ライセンス）' },
+    ],
   },
   {
     h: '背景・エフェクト・コイン・クリスタル',
@@ -272,7 +281,7 @@ const CREDITS: { h: string; items: { name: string; by?: string; url: string; lic
     ],
   },
   {
-    h: 'アイコン',
+    h: 'UIアイコン',
     items: [
       { name: 'game-icons.net', by: 'Lorc, Delapouite, Skoll, Zeromancer, Sbed', url: 'https://game-icons.net/', license: 'CC BY 3.0（色と縁取りを加工）' },
     ],
@@ -291,7 +300,9 @@ const CREDITS: { h: string; items: { name: string; by?: string; url: string; lic
   {
     h: 'フォント',
     items: [
-      { name: 'M PLUS Rounded 1c', by: 'Coji Morishita, M+ Fonts Project', url: 'https://fonts.google.com/specimen/M+PLUS+Rounded+1c', license: 'SIL OFL 1.1' },
+      { name: 'Shippori Mincho B1', by: 'FONTDASU', url: 'https://fonts.google.com/specimen/Shippori+Mincho+B1', license: 'SIL OFL 1.1' },
+      { name: 'Zen Kaku Gothic New', by: 'Yoshimichi Ohira', url: 'https://fonts.google.com/specimen/Zen+Kaku+Gothic+New', license: 'SIL OFL 1.1' },
+      { name: 'Cinzel', by: 'Natanael Gama', url: 'https://fonts.google.com/specimen/Cinzel', license: 'SIL OFL 1.1' },
       { name: 'Bungee / Bungee Outline', by: 'David Jonathan Ross', url: 'https://fonts.google.com/specimen/Bungee', license: 'SIL OFL 1.1' },
     ],
   },

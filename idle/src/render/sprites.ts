@@ -118,7 +118,7 @@ export function hueShifted(url: string, deg: number): HTMLCanvasElement | HTMLIm
 }
 export const hueShift = (stem: string, deg: number) => hueShifted(spriteUrl(stem), deg);
 
-/** Draw an image stretched as a 9-slice (used for Cozy UI pieces drawn on the canvas). */
+/** Draw an image stretched as a 9-slice (UI kit pieces drawn on the canvas). */
 export function nine(
   g: CanvasRenderingContext2D,
   im: CanvasImageSource & { width: number; height: number },

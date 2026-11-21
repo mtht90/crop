@@ -1,5 +1,5 @@
 // Icon components. Every icon is an external image: game-icons.net glyphs (recolored and outlined in
-// the Cozy UI style at build time) or CraftPix coins / crystals. See src/data/assets.ts.
+// dark outline at build time), Ravenmore painted icons, or CraftPix crystals. See src/data/assets.ts.
 import type { CSSProperties } from 'preact';
 import { iconUrl, itemUrl, uiUrl } from '../render/sprites';
 
@@ -18,11 +18,8 @@ export const StarIcon = (p: P) => <Img {...p} src={itemUrl('star')} alt="★" />
 export const ElIcon = ({ el, ...p }: P & { el: string }) => <Img {...p} src={itemUrl('el_' + el)} />;
 export const RoleIcon = ({ role, ...p }: P & { role: string }) => <Img {...p} src={iconUrl(role)} />;
 
-/** shape is "sword:iron" etc. (see data/items.ts) */
-export const EquipIcon = ({ shape, ...p }: P & { shape: string }) => {
-  const [s, tier] = shape.split(':');
-  return <Img {...p} src={iconUrl(`eq_${s}_${tier}`)} />;
-};
+/** painted Ravenmore icon for an equipment item (by item id) */
+export const EquipIcon = ({ id, ...p }: P & { id: string }) => <Img {...p} src={iconUrl('eq_' + id)} />;
 export const SkillIcon = ({ kind, el, ...p }: P & { kind: string; el: string }) => <Img {...p} src={iconUrl(`sk_${kind}_${el}`)} />;
 
 const TAB_MAP: Record<string, string> = { sword: 'power' };
@@ -31,9 +28,9 @@ export const TabIcon = ({ name, ...p }: P & { name: string }) => {
   return <Img {...p} src={iconUrl(TAB_MAP[name] ?? name)} />;
 };
 
-/** Cozy UI arrow piece (brown outline, cream fill) */
+/** Ravenmore slider arrow piece */
 export const Arrow = ({ dir = 'right', size = 14, ...p }: P & { dir?: 'right' | 'left' }) => {
-  const f = dir === 'right' ? 'ArrowBrownOuline23.png' : 'ArrowBrownOuline22.png';
+  const f = dir === 'right' ? 'arrow_right.png' : 'arrow_left.png';
   return <img class={'ico arrow ' + (p.class ?? '')} src={uiUrl(f)} style={{ height: size + 'px', width: 'auto', ...(p.style as object) }} alt="" draggable={false} />;
 };
 
