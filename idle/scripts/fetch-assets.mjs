@@ -123,7 +123,8 @@ for (const p of PACKS) {
     continue;
   }
   console.log(`↓ ${p.name}`);
-  for (let attempt = 1; attempt <= 3; attempt++) {
+  await new Promise((r) => setTimeout(r, 1500)); // be gentle with the hosts
+  for (let attempt = 1; attempt <= 5; attempt++) {
     try {
       const buf = await p.get();
       fs.mkdirSync(dest, { recursive: true });
@@ -132,8 +133,9 @@ for (const p of PACKS) {
       break;
     } catch (e) {
       console.warn(`  attempt ${attempt} failed: ${e.message}`);
-      if (attempt === 3) failed++;
-      else await new Promise((r) => setTimeout(r, 2000 * attempt));
+      if (attempt === 5) failed++;
+      // itch.io answers 429 when hit too fast: back off generously
+      else await new Promise((r) => setTimeout(r, 4000 * attempt * attempt));
     }
   }
 }
