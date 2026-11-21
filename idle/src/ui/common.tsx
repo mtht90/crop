@@ -120,8 +120,8 @@ export function CharCard(props: { id: string; onClick?: () => void; selected?: b
 export function AllyInfoLine({ ally }: { ally: AllyDef }) {
   return (
     <div class="ally-line">
-      <span class="chip" style={{ background: ELEMENT_INFO[ally.el].color }}>
-        <ElIcon el={ally.el} size={14} /> {ELEMENT_INFO[ally.el].name}
+      <span class="chip">
+        <ElIcon el={ally.el} size={16} /> {ELEMENT_INFO[ally.el].name}
       </span>
       <span class="chip chip-cream">
         <RoleIcon role={ally.role} size={14} /> {ROLE_INFO[ally.role].name}
@@ -131,11 +131,11 @@ export function AllyInfoLine({ ally }: { ally: AllyDef }) {
   );
 }
 
-export function Bar(props: { value: number; max: number; color?: string; label?: ComponentChildren; class?: string }) {
+export function Bar(props: { value: number; max: number; label?: ComponentChildren; class?: string }) {
   const pct = Math.max(0, Math.min(1, props.value / Math.max(1e-9, props.max))) * 100;
   return (
     <div class={`bar ${props.class ?? ''}`}>
-      <div class="bar-fill" style={{ width: pct + '%', background: props.color }} />
+      {pct > 2 && <div class="bar-fill" style={{ width: `calc(${pct}% + ${(12 * pct) / 100}px)` }} />}
       {props.label !== undefined && <div class="bar-label">{props.label}</div>}
     </div>
   );
@@ -172,9 +172,7 @@ export function Modal(props: { title?: ComponentChildren; onClose?: () => void; 
       <div class={`modal card card-wood ${props.wide ? 'wide' : ''} ${props.class ?? ''}`}>
         {props.title && <div class="modal-title">{props.title}</div>}
         {props.onClose && !props.noClose && (
-          <button class="modal-x" onClick={props.onClose} aria-label="閉じる">
-            ×
-          </button>
+          <button class="modal-x" onClick={props.onClose} aria-label="閉じる" />
         )}
         <div class="modal-body">{props.children}</div>
       </div>

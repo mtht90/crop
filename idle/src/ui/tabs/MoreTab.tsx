@@ -3,10 +3,10 @@ import { game } from '../../game/store';
 import { ALLIES } from '../../data/monsters';
 import { PRESTIGE_MIN_G, fmt, fmtTime, soulMul, stageLabel } from '../../game/core';
 import * as L from '../../game/logic';
-import { setSound } from '../../game/audio';
+import { setMusic, setSound } from '../../game/audio';
 import { getField } from '../App';
 import { Btn, Modal, Panel, Portrait, SubTabs, Toggle, useGame } from '../common';
-import { Soul, TabIcon } from '../icons';
+import { Arrow, Soul, TabIcon } from '../icons';
 
 type Sub = 'prestige' | 'codex' | 'settings' | 'credits';
 
@@ -64,7 +64,7 @@ function Prestige() {
           <span class="num up">+{fmt(gain)}</span>
           <span>能力倍率</span>
           <span class="num">
-            ×{now.power.toFixed(2)} → <span class="up">×{after.power.toFixed(2)}</span>
+            ×{now.power.toFixed(2)} <Arrow size={10} /> <span class="up">×{after.power.toFixed(2)}</span>
           </span>
         </div>
         {!L.canPrestige(s) && <div class="hint" style={{ marginTop: '8px' }}>ステージ {stageLabel(PRESTIGE_MIN_G)} に到達すると輪廻できる。</div>}
@@ -153,6 +153,14 @@ function Settings() {
               setSound(v);
             }}
             label="効果音"
+          />
+          <Toggle
+            on={s.settings.music}
+            onChange={(v) => {
+              game.act((sv) => (sv.settings.music = v));
+              setMusic(v);
+            }}
+            label="BGM"
           />
           <Toggle on={s.settings.autoEquip} onChange={(v) => game.act((sv) => (sv.settings.autoEquip = v))} label="召喚した装備・秘術を自動でつける" />
           <Toggle on={s.settings.autoTrain} onChange={(v) => game.act((sv) => (sv.settings.autoTrain = v))} label="自動修練" />
@@ -246,6 +254,49 @@ function Settings() {
   );
 }
 
+const CREDITS: { h: string; items: { name: string; by?: string; url: string; license: string }[] }[] = [
+  {
+    h: 'キャラクター・モンスター',
+    items: [{ name: 'Librarium', by: 'Ækashics', url: 'https://www.akashics.moe/', license: '商用可（作者ライセンス）' }],
+  },
+  {
+    h: 'UI',
+    items: [{ name: 'Cozy UI Pack', by: 'dobo_ui', url: 'https://dobo-ui.itch.io/cozy-ui', license: '商用可・改変可' }],
+  },
+  {
+    h: '背景・エフェクト・コイン・クリスタル',
+    items: [
+      { name: 'Free Forest / Elven Land / Vampire Battle Backgrounds', by: 'CraftPix.net', url: 'https://craftpix.net/', license: 'CraftPix Free License' },
+      { name: 'Free Elemental Attack / Cartoon Smoke / Animated Explosions / Fire & Water Magic', by: 'CraftPix.net', url: 'https://craftpix.net/', license: 'CraftPix Free License' },
+      { name: 'Free Game Coins / Free Crystals', by: 'CraftPix.net', url: 'https://craftpix.net/', license: 'CraftPix Free License' },
+    ],
+  },
+  {
+    h: 'アイコン',
+    items: [
+      { name: 'game-icons.net', by: 'Lorc, Delapouite, Skoll, Zeromancer, Sbed', url: 'https://game-icons.net/', license: 'CC BY 3.0（色と縁取りを加工）' },
+    ],
+  },
+  {
+    h: '効果音',
+    items: [{ name: 'Interface Sounds / Impact Sounds / RPG Audio / Music Jingles', by: 'Kenney', url: 'https://kenney.nl/', license: 'CC0' }],
+  },
+  {
+    h: 'BGM',
+    items: [
+      { name: 'Fairy Adventure', by: 'MintoDog', url: 'https://opengameart.org/content/fairy-adventure', license: 'CC0' },
+      { name: 'Battle Theme A', by: 'cynicmusic', url: 'https://opengameart.org/content/battle-theme-a', license: 'CC0' },
+    ],
+  },
+  {
+    h: 'フォント',
+    items: [
+      { name: 'M PLUS Rounded 1c', by: 'Coji Morishita, M+ Fonts Project', url: 'https://fonts.google.com/specimen/M+PLUS+Rounded+1c', license: 'SIL OFL 1.1' },
+      { name: 'Bungee / Bungee Outline', by: 'David Jonathan Ross', url: 'https://fonts.google.com/specimen/Bungee', license: 'SIL OFL 1.1' },
+    ],
+  },
+];
+
 function Credits() {
   return (
     <Panel kind="wood">
@@ -253,25 +304,24 @@ function Credits() {
         <p>
           <b style={{ fontSize: '18px' }}>Spirit Master</b>
         </p>
-        <h4>キャラクター・モンスター</h4>
-        <p>
-          Ækashics — Librarium
-          <br />
-          <a href="https://www.akashics.moe/" target="_blank" rel="noopener">
-            https://www.akashics.moe/
-          </a>
-        </p>
-        <h4>UI</h4>
-        <p>
-          Cozy UI Pack by dobo_ui
-          <br />
-          <a href="https://dobo-ui.itch.io/cozy-ui" target="_blank" rel="noopener">
-            https://dobo-ui.itch.io/cozy-ui
-          </a>
-        </p>
-        <h4>フォント</h4>
-        <p>M PLUS Rounded 1c（SIL Open Font License）</p>
-        <p class="hint">素材の再配布・転用はできません。ゲーム内の名前は素材の名前から変更しています。</p>
+        {CREDITS.map((c) => (
+          <>
+            <h4>{c.h}</h4>
+            {c.items.map((it) => (
+              <p>
+                {it.name}
+                {it.by && <> — {it.by}</>}
+                <br />
+                <a href={it.url} target="_blank" rel="noopener">
+                  {it.url}
+                </a>
+                <br />
+                <span class="muted">{it.license}</span>
+              </p>
+            ))}
+          </>
+        ))}
+        <p class="hint">素材の再配布・転用はできません。素材の名前は一部ゲーム用に変更しています。</p>
       </div>
     </Panel>
   );

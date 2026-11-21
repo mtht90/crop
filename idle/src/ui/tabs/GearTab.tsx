@@ -89,7 +89,7 @@ function EquipView() {
             <EquipCard d={e} onClick={() => setPick(e.slot)} equipped={s.equipped[e.slot] === e.id} />
           ))}
       </div>
-      {!Object.keys(s.equips).length && <div class="empty">「召喚」→「武具召喚」で装備を手に入れよう</div>}
+      {!Object.keys(s.equips).length && <div class="empty">「召喚」タブの「武具召喚」で装備を手に入れよう</div>}
       {pick && <EquipPicker slot={pick} onClose={() => setPick(null)} />}
     </div>
   );
@@ -171,7 +171,7 @@ function SkillView() {
           const lv = id ? s.skills[id]?.lv ?? 1 : 0;
           return (
             <div class={`lrow ${locked ? 'lock-slot' : 'is-click'}`} onClick={() => !locked && setPick(i)}>
-              <div class="lr-ico">{locked ? <TabIcon name="lock" size={28} /> : d ? <SkillIcon kind={d.kind} color={ELEMENT_INFO[d.el].color} size={34} /> : <span class="muted">空き</span>}</div>
+              <div class="lr-ico">{locked ? <TabIcon name="lock" size={28} /> : d ? <SkillIcon kind={d.kind} el={d.el} size={34} /> : <span class="muted">空き</span>}</div>
               <div class="lr-main">
                 <div class="lr-title">
                   {locked ? `スロット${i + 1}（ロック中）` : d ? d.name : `スロット${i + 1}：空き`}
@@ -206,7 +206,7 @@ function SkillView() {
                 <span class="cc-r">{RARITY_NAME[d.rarity]}</span>
               </div>
               <div style={{ height: '50px', display: 'grid', placeItems: 'center' }}>
-                <SkillIcon kind={d.kind} color={ELEMENT_INFO[d.el].color} size={44} />
+                <SkillIcon kind={d.kind} el={d.el} size={44} />
               </div>
               <div class="cc-name">{d.name}</div>
               <div class="muted" style={{ fontWeight: 800 }}>
@@ -215,7 +215,7 @@ function SkillView() {
             </Card>
           ))}
       </div>
-      {!Object.keys(s.skills).length && <div class="empty">「召喚」→「秘術召喚」で秘術を手に入れよう</div>}
+      {!Object.keys(s.skills).length && <div class="empty">「召喚」タブの「秘術召喚」で秘術を手に入れよう</div>}
       {pick !== null && <SkillPicker slot={pick} onClose={() => setPick(null)} />}
     </div>
   );
@@ -233,7 +233,7 @@ function SkillPicker({ slot, onClose }: { slot: number; onClose: () => void }) {
           return (
             <div class="lrow">
               <div class="lr-ico">
-                <SkillIcon kind={d.kind} color={ELEMENT_INFO[d.el].color} size={34} />
+                <SkillIcon kind={d.kind} el={d.el} size={34} />
               </div>
               <div class="lr-main">
                 <div class="lr-title">

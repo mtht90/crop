@@ -22,17 +22,9 @@ export interface EnemyDef {
   el: Element;
 }
 
-export interface AreaTheme {
-  ground: [string, string];
-  deco: 'grass' | 'rock' | 'sand' | 'snow' | 'lava' | 'beach' | 'gear' | 'swamp' | 'hive' | 'peak' | 'castle' | 'void';
-  accent: string;
-  sky: string;
-}
-
 export interface AreaDef {
   name: string;
   sub: string;
-  theme: AreaTheme;
   mobs: EnemyDef[];
   elites: EnemyDef[];
   boss: EnemyDef;
@@ -139,7 +131,6 @@ export const AREAS: AreaDef[] = [
   {
     name: '若葉の森',
     sub: 'Verdant Woods',
-    theme: { ground: ['#8fbf5a', '#6fa24a'], deco: 'grass', accent: '#4f7d36', sky: '#cfe9a8' },
     mobs: [
       e('Forest Blue Flower', 'あおはな', 'water'),
       e('Forest Pink Flower', 'ももはな', 'light'),
@@ -158,7 +149,6 @@ export const AREAS: AreaDef[] = [
   {
     name: '獣の山道',
     sub: 'Beast Trail',
-    theme: { ground: ['#b5a06d', '#9a865a'], deco: 'rock', accent: '#6e5c3a', sky: '#e8dcb8' },
     mobs: [
       e('Mountain Bat', 'ヤマコウモリ', 'dark'),
       e('Mountain Black Wolf', 'くろおおかみ', 'dark'),
@@ -175,9 +165,8 @@ export const AREAS: AreaDef[] = [
     boss: e('Moutain Behemoth', '山の主ベヒモス', 'earth'),
   },
   {
-    name: '潮騒の浜',
-    sub: 'Murmuring Shore',
-    theme: { ground: ['#e9d49a', '#d9bf7f'], deco: 'beach', accent: '#5fb3c9', sky: '#bfe6ef' },
+    name: '清流の渓谷',
+    sub: 'Clearwater Gorge',
     mobs: [
       e('Sea Crab', 'こガニ', 'water'),
       e('Sea Fish A', 'ハネウオ', 'water'),
@@ -196,9 +185,8 @@ export const AREAS: AreaDef[] = [
     boss: e('Boss Crab King Karkinos', '蟹王カルキノス', 'water'),
   },
   {
-    name: '灼熱の火口',
-    sub: 'Cinder Crater',
-    theme: { ground: ['#8a4d3c', '#6b3a2f'], deco: 'lava', accent: '#ff8a3d', sky: '#f2b48a' },
+    name: '焦土の荒野',
+    sub: 'Scorched Waste',
     mobs: [
       e('FIre Toad', 'ヒキガエン', 'fire'),
       e('Fire Pumice Rock', 'カルイシ', 'fire'),
@@ -216,9 +204,8 @@ export const AREAS: AreaDef[] = [
     boss: e('Boss Darkness Titan Ilnoct', '焦熱の魔神イルノクト', 'fire'),
   },
   {
-    name: '砂塵の王墓',
-    sub: 'Dune Tomb',
-    theme: { ground: ['#e3c27f', '#cfa864'], deco: 'sand', accent: '#a7743c', sky: '#f6e2b0' },
+    name: '古の回廊',
+    sub: 'Ancient Colonnade',
     mobs: [
       e('Desert Cactus Triple', 'サボテン三兄弟', 'earth'),
       e('Desert Feral Cactus', 'あらぶるサボテン', 'earth'),
@@ -236,9 +223,8 @@ export const AREAS: AreaDef[] = [
     boss: e('Boss Ancient Priestess', '古代の巫女王', 'light'),
   },
   {
-    name: '白銀の氷原',
-    sub: 'Silver Tundra',
-    theme: { ground: ['#e6f1f7', '#c9dfeb'], deco: 'snow', accent: '#7fb6d6', sky: '#dff1fb' },
+    name: '凍える森',
+    sub: 'Frozen Wood',
     mobs: [
       e('Ice Avian', 'こおりどり', 'water'),
       e('Ice Cave Bat', 'つららコウモリ', 'water'),
@@ -257,9 +243,8 @@ export const AREAS: AreaDef[] = [
     boss: e('Boss Ice Titan Demeres', '永久凍土の巨神', 'water'),
   },
   {
-    name: '蟲の大巣窟',
-    sub: 'Hive Hollow',
-    theme: { ground: ['#9b8a5e', '#7f6f48'], deco: 'hive', accent: '#d6a83a', sky: '#d9cd9a' },
+    name: '蟲の深森',
+    sub: 'Hive Thicket',
     mobs: [
       e('Insects Bee', 'ハチ兵', 'wind'),
       e('Insects Caterpillar A', 'イモムシ', 'earth'),
@@ -278,9 +263,8 @@ export const AREAS: AreaDef[] = [
     boss: e('Boss Insect Queen', '蟲の女王', 'dark'),
   },
   {
-    name: '歯車の塔',
-    sub: 'Clockwork Spire',
-    theme: { ground: ['#b9a38a', '#9e876f'], deco: 'gear', accent: '#d4a84a', sky: '#e9d9c2' },
+    name: '天空の遺構',
+    sub: 'Sky Ruins',
     mobs: [
       e('Clockwork Mini A', 'ハグルマA', 'light'),
       e('Clockwork Mini B', 'ハグルマB', 'light'),
@@ -298,9 +282,8 @@ export const AREAS: AreaDef[] = [
     boss: e('Boss Khronos', '時の機神クロノス', 'light'),
   },
   {
-    name: '毒霧の湿原',
-    sub: 'Miasma Marsh',
-    theme: { ground: ['#6f7d4f', '#56633d'], deco: 'swamp', accent: '#9b6fc9', sky: '#b8c49a' },
+    name: '瘴気の墓所',
+    sub: 'Miasma Graves',
     mobs: [
       e('Toxic Cactus A', 'どくサボテン', 'earth'),
       e('Toxic Cactus B', 'どくトゲ', 'earth'),
@@ -319,9 +302,8 @@ export const AREAS: AreaDef[] = [
     boss: e('Boss Eldritch Slime Overmind', '瘴気の母体', 'dark'),
   },
   {
-    name: '竜の峰',
-    sub: 'Dragon Peak',
-    theme: { ground: ['#a7a39a', '#8a867c'], deco: 'peak', accent: '#e06a4a', sky: '#d8d4ce' },
+    name: '竜の城門',
+    sub: 'Dragon Gate',
     mobs: [
       e('Dragon Egg A', 'りゅうのたまご', 'earth'),
       e('Dragon Egg C', 'くろいたまご', 'dark'),
@@ -338,9 +320,8 @@ export const AREAS: AreaDef[] = [
     boss: e('Boss Dragon Emperor', '竜帝', 'light'),
   },
   {
-    name: '宵闇の古城',
-    sub: 'Dusk Citadel',
-    theme: { ground: ['#5d5470', '#4a4259'], deco: 'castle', accent: '#c17be0', sky: '#8f86a8' },
+    name: '宵闇の回廊',
+    sub: 'Dusk Terrace',
     mobs: [
       e('Halloween Bat', 'かぼちゃコウモリ', 'dark'),
       e('Halloween Black Cat', 'くろねこ', 'dark'),
@@ -359,9 +340,8 @@ export const AREAS: AreaDef[] = [
     boss: e('Boss Hades', '冥王ハデス', 'dark'),
   },
   {
-    name: '深淵の底',
-    sub: 'The Abyss',
-    theme: { ground: ['#3b3150', '#2c2540'], deco: 'void', accent: '#ff5fa2', sky: '#4b3b66' },
+    name: '深淵の玉座',
+    sub: 'Abyssal Throne',
     mobs: [
       e('Eldritch Slime A', 'しんえんスライム', 'dark'),
       e('Eldritch Slime B', 'めだまスライム', 'dark'),

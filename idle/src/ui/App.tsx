@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { game, type GameEvent } from '../game/store';
 import { Field } from '../render/field';
-import { fmt } from '../game/core';
+import { areaIndex, fmt } from '../game/core';
+import { bgUrl } from '../render/sprites';
 import * as L from '../game/logic';
 import { unlockAudio } from '../game/audio';
 import { useGame } from './common';
@@ -43,6 +44,7 @@ export function App() {
   const [intro, setIntro] = useState(!game.save.seenIntro);
   const canvas = useRef<HTMLCanvasElement>(null);
   const coinEl = useRef<HTMLDivElement>(null);
+  const orbEl = useRef<HTMLDivElement>(null);
   const [, setHud] = useState(0);
 
   useEffect(() => {
@@ -76,6 +78,10 @@ export function App() {
       const c = canvas.current.getBoundingClientRect();
       const r = coinEl.current.getBoundingClientRect();
       fieldRef.coinTarget = { x: r.left + 14 - c.left, y: r.top + r.height / 2 - c.top };
+      if (orbEl.current) {
+        const o = orbEl.current.getBoundingClientRect();
+        fieldRef.orbTarget = { x: o.left + 14 - c.left, y: o.top + o.height / 2 - c.top };
+      }
     };
     upd();
     window.addEventListener('resize', upd);
@@ -87,6 +93,10 @@ export function App() {
   }, []);
 
   const gachaAfford = s.gems >= 150;
+  const area = areaIndex(s.g);
+  useEffect(() => {
+    document.documentElement.style.setProperty('--bg-url', `url('${bgUrl(area)}')`);
+  }, [area]);
   const orbDot = s.orbs > 0;
 
   return (
@@ -106,7 +116,7 @@ export function App() {
             <span class="num">{fmt(s.souls)}</span>
           </div>
         )}
-        <div class="cur" title="霊珠（守護霊がやどる）">
+        <div class="cur" title="霊珠（守護霊がやどる）" ref={orbEl}>
           <Orb size={22} />
           <span class="num">{s.orbs}</span>
         </div>

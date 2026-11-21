@@ -5,7 +5,7 @@ import { GUARD_EFFECT, GUARD_MAX_RANK, GUARD_SLOT_UNLOCK, bonusTotals, guardianS
 import * as L from '../../game/logic';
 import { sfx } from '../../game/audio';
 import { AllyInfoLine, Bar, Btn, Card, Modal, Panel, Portrait, RARITY_NAME, useGame } from '../common';
-import { ElIcon, Orb, TabIcon } from '../icons';
+import { Arrow, ElIcon, Orb, StarIcon, TabIcon } from '../icons';
 
 function effectText(key: string) {
   const s = game.save;
@@ -154,7 +154,9 @@ export function GuardiansTab() {
             <Card rarity={d.rarity} class="char-card small" selected={placed} onClick={() => setDetail(k)}>
               <div class="cc-head">
                 <ElIcon el={d.el} size={14} />
-                <span>{shiny ? '✦' : ''}R{s.guardians[k].rank}</span>
+                <span>
+                  {shiny && <StarIcon size={11} />}R{s.guardians[k].rank}
+                </span>
               </div>
               <Portrait ally={d} size={52} ghost shiny={shiny} />
               <div class="cc-name">{d.name}</div>
@@ -183,8 +185,13 @@ function OrbResult({ got, onClose }: { got: ReturnType<typeof L.openOrbs>; onClo
               </div>
               <Portrait ally={x.def} size={52} ghost shiny={x.shiny} />
               <div class="cc-name">{x.def.name}</div>
-              {x.isNew && <span class="pi-new">NEW</span>}
-              {x.shiny && <div class="pi-up" style={{ color: '#c08a00' }}>✦色違い</div>}
+              {x.isNew && <span class="pi-new dot">NEW</span>}
+              {x.shiny && (
+                <div class="pi-up">
+                  <StarIcon size={10} />
+                  色違い
+                </div>
+              )}
               {x.rankUp && <div class="pi-up">ランクUP</div>}
             </Card>
           </div>
@@ -219,7 +226,10 @@ function GuardianDetail({ k, onClose }: { k: string; onClose: () => void }) {
               {effectText(k)}
             </div>
             <div class="hint">
-              属性で効果が決まる：<span style={{ color: ELEMENT_INFO[d.el].color, fontWeight: 800 }}>{ELEMENT_INFO[d.el].name}</span> → {GUARD_EFFECT[d.el].label}
+              属性で効果が決まる：<ElIcon el={d.el} size={14} />
+              <b>{ELEMENT_INFO[d.el].name}</b>
+              <Arrow size={9} />
+              {GUARD_EFFECT[d.el].label}
               {shiny && '（色違いは効果1.5倍）'}
             </div>
           </div>

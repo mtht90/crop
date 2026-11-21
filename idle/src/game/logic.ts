@@ -491,7 +491,7 @@ export const GUIDE: GuideDef[] = [
   { label: 'ステージ 6-1 に到達', hint: '', gems: 400, done: (s) => s.stats.bestG >= 50 },
   { label: '守護霊を5体宿す', hint: '', gems: 400, done: (s) => s.guardianSlots.filter(Boolean).length >= 5 },
   { label: 'ステージ 10-1 に到達', hint: '', gems: 600, done: (s) => s.stats.bestG >= 90 },
-  { label: '深淵の底を突破 (12-10)', hint: '', gems: 1500, done: (s) => s.stats.bestG >= 120 },
+  { label: '深淵の玉座を突破 (12-10)', hint: '', gems: 1500, done: (s) => s.stats.bestG >= 120 },
 ];
 
 export function today() {

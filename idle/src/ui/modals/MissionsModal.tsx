@@ -18,7 +18,7 @@ export function MissionsModal({ onClose }: { onClose: () => void }) {
         {gd && (
           <>
             <b>導きの任務 {s.missions.guide + 1}/{L.GUIDE.length}</b>
-            <div class="lrow" style={{ background: '#fff6d0' }}>
+            <div class="lrow hi">
               <div class="lr-ico"><TabIcon name="star" size={30} /></div>
               <div class="lr-main">
                 <div class="lr-title" style={{ whiteSpace: 'normal' }}>{gd.label}</div>
@@ -48,7 +48,7 @@ export function MissionsModal({ onClose }: { onClose: () => void }) {
               </div>
             );
           })}
-          <div class={`lrow ${bonusClaimed ? 'done' : ''}`} style={{ background: '#f3e6ff' }}>
+          <div class={`lrow purple ${bonusClaimed ? 'done' : ''}`}>
             <div class="lr-main">
               <div class="lr-title" style={{ fontSize: '14px' }}>日替わり任務をすべて達成</div>
             </div>

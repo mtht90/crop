@@ -3,7 +3,7 @@ import { ALLY_BY_ID } from '../data/monsters';
 import { EQUIP_BY_ID, SKILL_BY_ID } from '../data/items';
 import { SAVE_VERSION, heroStats, newSave, OFFLINE_MAX_HOURS, type HeroStats, type Save } from './core';
 import * as L from './logic';
-import { setSound } from './audio';
+import { setMusic, setSound } from './audio';
 
 const KEY = 'spirit-master-save-v1';
 
@@ -33,6 +33,7 @@ class Game {
     this.save = s ?? newSave();
     L.rollDaily(this.save);
     setSound(this.save.settings.sound);
+    setMusic(this.save.settings.music);
     this.recalc();
   }
 

@@ -28,7 +28,7 @@ export interface Save {
   codex: string[];
   gacha: Record<Banner, { pulls: number; pity: number }>;
   orbs: number;
-  settings: { autoTrain: boolean; autoBoss: boolean; speed: 1 | 2; sound: boolean; autoEquip: boolean };
+  settings: { autoTrain: boolean; autoBoss: boolean; speed: 1 | 2; sound: boolean; music: boolean; autoEquip: boolean };
   missions: { day: string; prog: Record<string, number>; claimed: string[]; guide: number };
   stats: { kills: number; bossKills: number; pulls: number; prestiges: number; bestG: number; played: number };
   chestAt: number;
@@ -379,7 +379,7 @@ export function newSave(now = Date.now()): Save {
     codex: [STARTER_ID],
     gacha: { char: { pulls: 0, pity: 0 }, equip: { pulls: 0, pity: 0 }, skill: { pulls: 0, pity: 0 } },
     orbs: 0,
-    settings: { autoTrain: true, autoBoss: true, speed: 1, sound: true, autoEquip: true },
+    settings: { autoTrain: true, autoBoss: true, speed: 1, sound: true, music: true, autoEquip: true },
     missions: { day: '', prog: {}, claimed: [], guide: 0 },
     stats: { kills: 0, bossKills: 0, pulls: 0, prestiges: 0, bestG: 0, played: 0 },
     chestAt: now,

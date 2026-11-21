@@ -5,16 +5,16 @@ import { EQUIP_BY_ID, SKILL_BY_ID, SLOT_LABEL } from '../../data/items';
 import { GACHA_COST, PITY, gachaLevel, gachaNextLv, gachaRates, type Banner } from '../../game/core';
 import * as L from '../../game/logic';
 import { sfx } from '../../game/audio';
-import { spriteUrl } from '../../render/sprites';
+import { GEN, itemUrl, spriteUrl } from '../../render/sprites';
 import { Bar, Btn, Card, RARITY_NAME, useGame } from '../common';
 import { ElIcon, EquipIcon, Gem, SkillIcon, Stars } from '../icons';
 
-const BANNERS: { key: Banner; name: string; sub: string; bg: string; art: () => any }[] = [
+const BANNERS: { key: Banner; name: string; sub: string; card: string; art: () => any }[] = [
   {
     key: 'char',
     name: '霊獣召喚',
     sub: '出撃させる霊獣を呼び出す',
-    bg: 'linear-gradient(135deg,#8a5bd6,#4b2f8f)',
+    card: 'purple',
     art: () => (
       <>
         <img src={spriteUrl('Boss Goddess Innova')} />
@@ -26,7 +26,7 @@ const BANNERS: { key: Banner; name: string; sub: string; bg: string; art: () => 
     key: 'equip',
     name: '武具召喚',
     sub: '武器・防具・装飾を手に入れる',
-    bg: 'linear-gradient(135deg,#e7974b,#a8532c)',
+    card: 'gold',
     art: () => (
       <div class="row" style={{ gap: '0', paddingBottom: '20px', paddingRight: '18px' }}>
         <EquipIcon shape="sword:mythic" size={84} />
@@ -38,11 +38,11 @@ const BANNERS: { key: Banner; name: string; sub: string; bg: string; art: () => 
     key: 'skill',
     name: '秘術召喚',
     sub: '自動で放つ秘術を覚える',
-    bg: 'linear-gradient(135deg,#3fb3a6,#226a77)',
+    card: 'teal',
     art: () => (
       <div class="row" style={{ gap: '0', paddingBottom: '20px', paddingRight: '18px' }}>
-        <SkillIcon kind="meteor" color="#f0643c" size={80} />
-        <SkillIcon kind="bolt" color="#f2c23b" size={62} />
+        <SkillIcon kind="meteor" el="fire" size={80} />
+        <SkillIcon kind="bolt" el="light" size={62} />
       </div>
     ),
   },
@@ -73,10 +73,10 @@ export function GachaTab() {
         const rates = gachaRates(st.pulls);
         const cost = GACHA_COST[b.key];
         return (
-          <div class="banner-card" style={{ background: b.bg, border: '3px solid #6e3929', boxShadow: '0 4px 0 #6e3929' }}>
+          <div class={`banner-card card card-${b.card}`} style={{ marginTop: '22px' }}>
+            <div class="banner-head">{b.name}</div>
             <div class="banner-art">{b.art()}</div>
             <div class="banner-text">
-              <div class="banner-name">{b.name}</div>
               <div style={{ fontSize: '12px', fontWeight: 700 }}>{b.sub}</div>
               <div class="rates" style={{ marginTop: '6px' }}>
                 <span>召喚Lv{lv}</span>
@@ -122,7 +122,9 @@ export function GachaTab() {
 function PullStage({ banner, pulls, onClose, onAgain }: { banner: Banner; pulls: L.Pull[]; onClose: () => void; onAgain: () => void }) {
   const [shown, setShown] = useState(false);
   const top = Math.max(...pulls.map((p) => p.rarity));
-  const orb = top >= 5 ? '#ffd34d' : top >= 4 ? '#c08bff' : top >= 3 ? '#6fc3ff' : '#9fe0a8';
+  // orb tint per best rarity (hue shift of the orb image) and the reveal effect sheet
+  const hue = top >= 5 ? 200 : top >= 4 ? 0 : top >= 3 ? -60 : -150;
+  const burst = top >= 5 ? 'crit' : top >= 4 ? 'spark' : 'puff';
   useEffect(() => {
     const t = setTimeout(() => setShown(true), 1150);
     return () => clearTimeout(t);
@@ -135,12 +137,14 @@ function PullStage({ banner, pulls, onClose, onAgain }: { banner: Banner; pulls:
   return (
     <div class="pull-stage" onClick={() => !shown && setShown(true)}>
       {!shown ? (
-        <div class="pull-orb" style={{ ['--orb' as any]: orb }} />
+        <img class="pull-orb" src={itemUrl('orb')} style={{ filter: `hue-rotate(${hue}deg)` }} alt="" />
       ) : (
         <>
+          <div class="pull-burst" style={{ backgroundImage: `url(${GEN}fx/${burst}.webp)` }} />
           <div class={`pull-grid ${pulls.length === 1 ? 'one' : ''}`}>
             {pulls.map((p, i) => (
-              <div class={`pull-item r${p.rarity}`} style={{ animationDelay: i * 0.07 + 's', position: 'relative' }}>
+              <div class={`pull-item r${p.rarity}`} style={{ animationDelay: i * 0.07 + 's' }}>
+                {p.rarity >= 4 && <div class="pi-fx" style={{ backgroundImage: `url(${GEN}fx/${p.rarity >= 5 ? 'crit' : 'spark'}.webp)` }} />}
                 <PullCard p={p} />
               </div>
             ))}
@@ -175,7 +179,7 @@ function PullCard({ p }: { p: L.Pull }) {
     head = <span>{SLOT_LABEL[d.slot]}</span>;
   } else {
     const d = SKILL_BY_ID[p.id];
-    art = <SkillIcon kind={d.kind} color={ELEMENT_INFO[d.el].color} size={58} />;
+    art = <SkillIcon kind={d.kind} el={d.el} size={58} />;
     name = d.name;
     head = <span>{ELEMENT_INFO[d.el].name}</span>;
   }
@@ -188,7 +192,7 @@ function PullCard({ p }: { p: L.Pull }) {
       <div class="pi-art">{art}</div>
       <div class="pi-name">{name}</div>
       <Stars n={p.rarity} size={9} />
-      {p.isNew && <span class="pi-new">NEW</span>}
+      {p.isNew && <span class="pi-new dot">NEW</span>}
       {p.upgraded && <div class="pi-up">{p.upgraded}</div>}
     </Card>
   );

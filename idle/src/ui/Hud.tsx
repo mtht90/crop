@@ -4,7 +4,7 @@ import { areaDef, fmt, isAreaBoss, killsNeeded, loopOf, stageLabel } from '../ga
 import * as L from '../game/logic';
 import { getField, type TabKey } from './App';
 import { Bar, Btn, useGame } from './common';
-import { TabIcon } from './icons';
+import { StarIcon, TabIcon } from './icons';
 import { MissionsModal } from './modals/MissionsModal';
 import { ChestModal } from './modals/ChestModal';
 import { sfx } from '../game/audio';
@@ -41,7 +41,7 @@ export function Hud(_p: { onTab: (t: TabKey) => void }) {
         </div>
         <div class="st-no">
           STAGE {stageLabel(s.g)}
-          {isAreaBoss(s.g) && ' ★'}
+          {isAreaBoss(s.g) && <StarIcon size={16} />}
         </div>
       </div>
 
@@ -73,7 +73,7 @@ export function Hud(_p: { onTab: (t: TabKey) => void }) {
           }}
         >
           <TabIcon name="chest" size={26} />
-          {chestReady && <span class="dot">{chestC.full ? '!' : '•'}</span>}
+          {chestReady && <span class="dot">!</span>}
         </button>
         <button
           class="round-btn"
@@ -90,8 +90,7 @@ export function Hud(_p: { onTab: (t: TabKey) => void }) {
 
       {boss && (phase === 'boss' || phase === 'victory') && (
         <div class="hud-boss">
-          <div>{boss.def.name}</div>
-          <Bar value={boss.hp} max={boss.maxHp} label={fmt(Math.max(0, boss.hp))} />
+          <Bar class="red" value={boss.hp} max={boss.maxHp} label={`${boss.def.name}  ${fmt(Math.max(0, boss.hp))}`} />
           {phase === 'boss' && <div class={`timer ${f!.bossTimer < 8 ? 'low' : ''}`}>残り {Math.ceil(f!.bossTimer)} 秒</div>}
         </div>
       )}
@@ -102,7 +101,7 @@ export function Hud(_p: { onTab: (t: TabKey) => void }) {
 
       <div class="hud-gauge">
         <Bar
-          class={`${isAreaBoss(s.g) ? 'boss' : ''} ${full ? 'full' : ''}`}
+          class={`${isAreaBoss(s.g) ? 'red' : ''} ${full ? 'full' : ''}`}
           value={s.kills}
           max={need}
           label={full ? (isAreaBoss(s.g) ? 'エリアボス出現！' : 'ボス出現！') : `討伐 ${s.kills} / ${need}`}
@@ -116,9 +115,17 @@ export function Hud(_p: { onTab: (t: TabKey) => void }) {
 
       {f?.banner && (
         <>
-          {(f.banner.kind === 'boss' || f.banner.kind === 'areaBoss' || f.banner.kind === 'clear' || f.banner.kind === 'area') && <div class="banner-strip" key={'s' + f.banner.title + f.banner.sub} />}
           <div class={`banner ${f.banner.kind}`} key={f.banner.title + f.banner.sub}>
-            <div class="b-title">{f.banner.title}</div>
+            {f.banner.kind === 'area' ? (
+              <div class="b-area">{f.banner.title}</div>
+            ) : (
+              <div class="b-title">
+                {f.banner.title}
+                <span class="line" aria-hidden="true">
+                  {f.banner.title}
+                </span>
+              </div>
+            )}
             <br />
             <div class="b-sub">{f.banner.sub}</div>
           </div>

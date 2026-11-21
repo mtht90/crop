@@ -1,13 +1,14 @@
 // The main-screen field: a real-time auto battle. The hero hunts roaming monsters, the kill gauge
 // fills, the area boss appears; win → next stage, lose → keep farming this stage.
-import { ALLY_BY_ID, elementFactor, ELEMENT_INFO, type EnemyDef, type Element } from '../data/monsters';
+// Everything drawn here is an external image (see src/data/assets.ts): the battle background, the
+// Librarium monsters, CraftPix effect sprite sheets / coins / crystals and Cozy UI pieces for bars.
+import { ALLY_BY_ID, elementFactor, type EnemyDef, type Element } from '../data/monsters';
 import { SKILL_BY_ID, skillLvMul, type SkillDef } from '../data/items';
-import { areaDef, bossTime, enemyStats, fmt, isAreaBoss, killsNeeded, loopOf, parseGuardianKey, guardianSlotsUnlocked, type EnemyKind } from '../game/core';
+import { areaDef, areaIndex, bossTime, enemyStats, fmt, isAreaBoss, killsNeeded, loopOf, parseGuardianKey, guardianSlotsUnlocked, type EnemyKind } from '../game/core';
 import * as L from '../game/logic';
 import { game } from '../game/store';
-import { sfx } from '../game/audio';
-import { paintBackground } from './background';
-import { hueShift, img, info, preload, silhouette } from './sprites';
+import { playMusic, sfx } from '../game/audio';
+import { bgGround, bgUrl, fxSheet, hueShift, hueShifted, image, img, info, itemUrl, nine, preload, preloadFx, preloadUrls, silhouette, uiUrl } from './sprites';
 
 type Phase = 'field' | 'bossIntro' | 'boss' | 'victory' | 'defeat' | 'down' | 'areaIntro';
 
@@ -21,7 +22,7 @@ interface Mob {
   atk: number;
   interval: number;
   cd: number;
-  h: number; // display height
+  h: number;
   w: number;
   face: 1 | -1;
   t: number;
@@ -51,13 +52,30 @@ interface Proj {
   speed: number;
   dmgMul: number;
   splash: number;
-  color: string;
-  kind: 'arrow' | 'orb' | 'bolt';
-  trail: { x: number; y: number }[];
-  skill?: boolean;
+  el: Element;
+  kind: 'arrow' | 'spell';
+  t: number;
 }
 
-interface Particle {
+/** a sprite-sheet animation playing once (or looping) at a spot */
+interface Anim {
+  fx: string;
+  x: number;
+  y: number;
+  size: number; // display width
+  t: number;
+  dur: number;
+  flip?: boolean;
+  squash?: number; // vertical scale (ground rings)
+  alpha?: number;
+  rot?: number;
+  loop?: number; // seconds to keep looping
+  ground?: boolean; // drawn under the actors
+  follow?: 'hero';
+}
+/** a small moving image (coin, star, smoke wisp) */
+interface Bit {
+  kind: 'coin' | 'star' | 'wisp' | 'orb' | 'gem';
   x: number;
   y: number;
   vx: number;
@@ -66,15 +84,19 @@ interface Particle {
   life: number;
   max: number;
   size: number;
+  home?: { x: number; y: number };
+  t: number;
+}
+interface Txt {
+  x: number;
+  y: number;
+  vy: number;
+  life: number;
+  max: number;
+  text: string;
   color: string;
-  kind: 'dot' | 'star' | 'coin' | 'wisp' | 'shard' | 'ring' | 'slash' | 'text' | 'bolt' | 'meteor' | 'telegraph';
-  text?: string;
-  r?: number;
-  a?: number;
-  extra?: number;
-  big?: boolean;
-  tx?: number;
-  ty?: number;
+  size: number;
+  label?: boolean; // skill name on a Cozy pill
 }
 
 export interface Banner {
@@ -85,6 +107,9 @@ export interface Banner {
 }
 
 const HERO_SPEED = 120;
+const SLASH_FX: Record<Element, string> = { fire: 'slash_fire', water: 'slash_water', wind: 'slash_wind', earth: 'slash_earth', light: 'slash_light', dark: 'slash_dark' };
+const INK = '#5a3328';
+const OUTLINE = '#4a2418';
 
 export class Field {
   cv: HTMLCanvasElement;
@@ -93,7 +118,6 @@ export class Field {
   H = 360;
   u = 1;
   dpr = 1;
-  bg: HTMLCanvasElement | null = null;
   bgKey = '';
   phase: Phase = 'field';
   phaseT = 0;
@@ -101,11 +125,11 @@ export class Field {
   boss: Mob | null = null;
   bossTimer = 0;
   projs: Proj[] = [];
-  parts: Particle[] = [];
+  anims: Anim[] = [];
+  bits: Bit[] = [];
+  texts: Txt[] = [];
   banner: Banner | null = null;
   shake = 0;
-  flash = 0;
-  flashColor = '#fff';
   spawnCd = 0;
   time = 0;
   hero = {
@@ -123,26 +147,21 @@ export class Field {
     atkBuffT: 0,
     spdBuff: 0,
     spdBuffT: 0,
+    auraEl: 'light' as Element,
+    auraTick: 0,
     skillCd: [3, 5, 7] as number[],
     target: null as Mob | null,
     casting: 0,
-    auraColor: '',
-    regenAcc: 0,
-    downT: 0,
     lastChar: '',
   };
   coinTarget = { x: 30, y: -20 };
+  orbTarget = { x: 360, y: -20 };
   running = false;
   private raf = 0;
   private last = 0;
   private resizeObs: ResizeObserver;
   onHud: (() => void) | null = null;
   private timers: { at: number; fn: () => void }[] = [];
-
-  /** run fn after `delay` seconds of field time (respects game speed) */
-  later(delay: number, fn: () => void) {
-    this.timers.push({ at: this.time + delay, fn });
-  }
 
   constructor(cv: HTMLCanvasElement) {
     this.cv = cv;
@@ -152,6 +171,14 @@ export class Field {
     this.resize();
     this.resetHero(true);
     this.preloadArea();
+    preloadFx();
+    preloadUrls(['SquareButton2_white.png', 'SquareButton2_red.png', 'SquareButton2_green.png', 'SquareButton2_blue.png', 'RoundButton2_white.png'].map(uiUrl));
+    preloadUrls(['star', 'gem', 'orb', 'el_fire', 'el_water', 'el_wind', 'el_earth', 'el_light', 'el_dark'].map(itemUrl));
+  }
+
+  /** run fn after `delay` seconds of field time (respects game speed) */
+  later(delay: number, fn: () => void) {
+    this.timers.push({ at: this.time + delay, fn });
   }
 
   destroy() {
@@ -168,18 +195,27 @@ export class Field {
     this.cv.width = Math.round(this.W * this.dpr);
     this.cv.height = Math.round(this.H * this.dpr);
     this.u = Math.min(this.H / 380, this.W / 360);
-    this.bgKey = '';
     const h = this.hero;
-    h.x = Math.min(Math.max(h.x, 30), this.W - 30);
-    h.y = Math.min(Math.max(h.y, this.minY()), this.H - 26 * this.u);
+    h.x = clamp(h.x, 30, this.W - 30);
+    h.y = clamp(h.y, this.minY(), this.maxY());
   }
 
-  top() {
-    return this.H * 0.26;
+  // background placement (cover-fit, anchored to the bottom)
+  bgRect() {
+    const s = Math.max(this.W / 1600, this.H / 900);
+    const dw = 1600 * s,
+      dh = 900 * s;
+    return { x: (this.W - dw) / 2, y: this.H - dh, w: dw, h: dh };
   }
-  /** highest y (feet) an actor may stand at, so tall sprites don't cover the HUD */
+  top() {
+    const r = this.bgRect();
+    return Math.max(this.H * 0.2, r.y + r.h * bgGround(areaIndex(game.save.g)));
+  }
   minY() {
-    return this.top() + 46 * this.u;
+    return this.top() + 26 * this.u;
+  }
+  maxY() {
+    return this.H - 30 * this.u;
   }
 
   start() {
@@ -190,9 +226,7 @@ export class Field {
       if (!this.running) return;
       const dt = Math.min(0.1, (t - this.last) / 1000);
       this.last = t;
-      const speed = game.save.settings.speed;
-      const steps = speed;
-      for (let i = 0; i < steps; i++) this.update(dt);
+      for (let i = 0; i < game.save.settings.speed; i++) this.update(dt);
       this.draw();
       this.raf = requestAnimationFrame(loop);
     };
@@ -205,9 +239,7 @@ export class Field {
     const stems = [...a.mobs.map((m) => m.sprite), ...a.elites.map((m) => m.sprite), a.boss.sprite, active.sprite];
     for (const k of game.save.guardianSlots) if (k) stems.push(ALLY_BY_ID[parseGuardianKey(k).id].sprite);
     preload(stems);
-    // preload next area too
-    const next = areaDef(game.save.g + 10);
-    preload([...next.mobs.map((m) => m.sprite).slice(0, 4)]);
+    preloadUrls([bgUrl(areaIndex(game.save.g)), bgUrl(areaIndex(game.save.g) + 1)]);
   }
 
   // ---------- helpers ----------
@@ -252,7 +284,7 @@ export class Field {
     if (full) {
       h.hp = hs.hp;
       h.x = this.W * 0.3;
-      h.y = this.top() + (this.H - this.top()) * 0.55;
+      h.y = (this.minY() + this.maxY()) / 2;
       h.skillCd = [2.5, 4.5, 6.5];
       h.shield = 0;
       h.atkBuffT = 0;
@@ -266,7 +298,7 @@ export class Field {
     const h = this.hero;
     if (h.lastChar !== game.save.active) {
       h.lastChar = game.save.active;
-      this.puff(h.x, h.y - 30 * this.u, '#ffffff', 16);
+      this.fx('puff', h.x, h.y - 30 * this.u, 120);
       preload([hs.ally.sprite]);
     }
     if (Math.abs(h.maxHp - hs.hp) > 1e-9) {
@@ -281,86 +313,33 @@ export class Field {
     return Math.min(8, 5 + Math.floor((game.save.g % 10) / 3)) + (area.mobs.length > 11 ? 1 : 0);
   }
 
-  spawnMob() {
-    const s = game.save;
-    const area = areaDef(s.g);
-    const def = area.mobs[Math.floor(Math.random() * area.mobs.length)];
-    const st = enemyStats(s.g, 'mob');
-    const sz = this.dispSize(def.sprite, 'mob');
-    let x = 0,
-      y = 0;
-    for (let i = 0; i < 10; i++) {
-      x = 30 + Math.random() * (this.W - 60);
-      y = this.minY() + Math.random() * (this.H - 26 * this.u - this.minY());
-      if (Math.hypot(x - this.hero.x, y - this.hero.y) > 120 * this.u) break;
-    }
-    const var_ = 0.9 + Math.random() * 0.2;
-    const m: Mob = {
+  newMob(def: EnemyDef, kind: EnemyKind, x: number, y: number): Mob {
+    const st = enemyStats(game.save.g, kind);
+    const sz = this.dispSize(def.sprite, kind);
+    const v = kind === 'mob' ? 0.9 + Math.random() * 0.2 : 1;
+    return {
       def,
-      kind: 'mob',
+      kind,
       x,
       y,
-      hp: st.hp * var_,
-      maxHp: st.hp * var_,
+      hp: st.hp * v,
+      maxHp: st.hp * v,
       atk: st.atk,
-      interval: st.interval * (0.9 + Math.random() * 0.2),
-      cd: 1 + Math.random(),
+      interval: st.interval * (kind === 'mob' ? 0.9 + Math.random() * 0.2 : 1),
+      cd: kind === 'mob' ? 1 + Math.random() : 1.6,
       h: sz.h,
       w: sz.w,
-      face: x > this.hero.x ? 1 : -1,
+      face: 1,
       t: Math.random() * 10,
       spawnT: 0,
       flash: 0,
       kbx: 0,
       kby: 0,
       frozen: 0,
-      aggro: false,
+      aggro: kind !== 'mob',
       wx: x,
       wy: y,
       wait: Math.random() * 2,
-      dying: 0,
-      lunge: 0,
-      slamT: 0,
-      slamX: 0,
-      slamY: 0,
-      slamCharge: 0,
-    };
-    this.mobs.push(m);
-    this.puff(x, y, 'rgba(255,255,255,0.8)', 8);
-  }
-
-  spawnBoss() {
-    const s = game.save;
-    const area = areaDef(s.g);
-    const kind: EnemyKind = isAreaBoss(s.g) ? 'boss' : 'elite';
-    const def = kind === 'boss' ? area.boss : area.elites[(s.g % 10) % area.elites.length];
-    const st = enemyStats(s.g, kind);
-    const sz = this.dispSize(def.sprite, kind);
-    const x = this.W * 0.72;
-    const y = Math.min(this.H - 26 * this.u, Math.max(this.top() + (this.H - this.top()) * 0.66, 112 + sz.h));
-    this.boss = {
-      def,
-      kind,
-      x,
-      y,
-      hp: st.hp,
-      maxHp: st.hp,
-      atk: st.atk,
-      interval: st.interval,
-      cd: 1.6,
-      h: sz.h,
-      w: sz.w,
-      face: 1,
-      t: 0,
-      spawnT: 0,
-      flash: 0,
-      kbx: 0,
-      kby: 0,
-      frozen: 0,
-      aggro: true,
-      wx: x,
-      wy: y,
-      wait: 0,
       dying: 0,
       lunge: 0,
       slamT: 5,
@@ -368,8 +347,34 @@ export class Field {
       slamY: 0,
       slamCharge: 0,
     };
+  }
+
+  spawnMob() {
+    const area = areaDef(game.save.g);
+    const def = area.mobs[Math.floor(Math.random() * area.mobs.length)];
+    let x = 0,
+      y = 0;
+    for (let i = 0; i < 10; i++) {
+      x = 30 + Math.random() * (this.W - 60);
+      y = this.minY() + Math.random() * (this.maxY() - this.minY());
+      if (Math.hypot(x - this.hero.x, y - this.hero.y) > 120 * this.u) break;
+    }
+    const m = this.newMob(def, 'mob', x, y);
+    m.face = x > this.hero.x ? 1 : -1;
+    this.mobs.push(m);
+    this.fx('puff', x, y - 20 * this.u, 90 * this.u, 0.5);
+  }
+
+  spawnBoss() {
+    const s = game.save;
+    const area = areaDef(s.g);
+    const kind: EnemyKind = isAreaBoss(s.g) ? 'boss' : 'elite';
+    const def = kind === 'boss' ? area.boss : area.elites[(s.g % 10) % area.elites.length];
+    const sz = this.dispSize(def.sprite, kind);
+    const y = Math.min(this.maxY(), Math.max((this.minY() + this.maxY()) / 2 + 30 * this.u, 112 + sz.h));
+    this.boss = this.newMob(def, kind, this.W * 0.72, y);
     this.bossTimer = bossTime(s.g);
-    this.puff(x, y, 'rgba(60,20,60,0.6)', 24);
+    this.fx('puff', this.boss.x, y - sz.h * 0.4, sz.w * 1.4, 0.6);
     this.shake = 10;
   }
 
@@ -377,6 +382,7 @@ export class Field {
   setPhase(p: Phase, t: number) {
     this.phase = p;
     this.phaseT = t;
+    playMusic(p === 'boss' || p === 'bossIntro' ? 'boss' : 'field');
     this.onHud?.();
   }
 
@@ -389,12 +395,7 @@ export class Field {
     const def = kind === 'boss' ? area.boss : area.elites[(s.g % 10) % area.elites.length];
     preload([def.sprite]);
     for (const m of this.mobs) if (!m.dying) m.dying = 0.001;
-    this.banner = {
-      kind: kind === 'boss' ? 'areaBoss' : 'boss',
-      title: kind === 'boss' ? 'AREA BOSS' : 'STAGE BOSS',
-      sub: def.name,
-      t: 0,
-    };
+    this.banner = { kind: kind === 'boss' ? 'areaBoss' : 'boss', title: kind === 'boss' ? 'AREA BOSS' : 'STAGE BOSS', sub: def.name, t: 0 };
     sfx.bossIntro();
     this.setPhase('bossIntro', 1.8);
   }
@@ -412,25 +413,26 @@ export class Field {
     const hs = game.hero;
     if (this.banner) this.banner.t += dt;
     this.shake = Math.max(0, this.shake - dt * 30);
-    this.flash = Math.max(0, this.flash - dt * 3);
 
-    // phase timers
     if (this.phaseT > 0) {
       this.phaseT -= dt;
       if (this.phaseT <= 0) this.endPhase();
     }
 
-    // buffs & regen
     h.atkBuffT = Math.max(0, h.atkBuffT - dt);
     h.spdBuffT = Math.max(0, h.spdBuffT - dt);
     h.lunge = Math.max(0, h.lunge - dt);
     h.hurt = Math.max(0, h.hurt - dt);
     h.casting = Math.max(0, h.casting - dt);
-    if (this.phase !== 'down' && h.hp > 0) {
-      h.hp = Math.min(h.maxHp, h.hp + h.maxHp * hs.regen * dt);
+    if (this.phase !== 'down' && h.hp > 0) h.hp = Math.min(h.maxHp, h.hp + h.maxHp * hs.regen * dt);
+    if (h.atkBuffT > 0 || h.spdBuffT > 0) {
+      h.auraTick -= dt;
+      if (h.auraTick <= 0) {
+        h.auraTick = 0.9;
+        this.anims.push({ fx: 'nova_' + h.auraEl, x: h.x, y: h.y, size: 120 * this.u, t: 0, dur: 0.9, squash: 0.45, alpha: 0.55, ground: true, follow: 'hero' });
+      }
     }
 
-    // spawn
     if (this.phase === 'field') {
       this.spawnCd -= dt;
       const alive = this.mobs.filter((m) => !m.dying).length;
@@ -441,51 +443,55 @@ export class Field {
       if (L.shouldAutoChallenge(game.save)) this.challengeBoss();
     }
 
-    // boss timer
     if (this.phase === 'boss' && this.boss) {
       this.bossTimer -= dt;
       if (this.bossTimer <= 0) this.bossFail('時間切れ…');
     }
 
-    // hero brain
     if ((this.phase === 'field' || this.phase === 'boss') && h.hp > 0) this.heroBrain(dt);
     else if (this.phase === 'bossIntro') {
-      // walk to the left-middle to face the boss
-      const tx = this.W * 0.3;
-      const ty = this.top() + (this.H - this.top()) * 0.62;
-      this.moveHero(tx, ty, dt);
+      this.moveHero(this.W * 0.3, (this.minY() + this.maxY()) / 2 + 30 * this.u, dt);
       h.face = 1;
     }
 
-    // mobs
     for (const m of this.mobs) this.mobBrain(m, dt);
     if (this.boss) this.mobBrain(this.boss, dt);
     this.mobs = this.mobs.filter((m) => m.dying < 1);
     if (this.boss && this.boss.dying >= 1.4) this.boss = null;
 
-    // projectiles
     for (const p of this.projs) this.updateProj(p, dt);
     this.projs = this.projs.filter((p) => p.speed > 0);
 
-    // particles
-    for (const p of this.parts) {
-      p.life -= dt;
-      if (p.kind === 'coin' && p.life < p.max * 0.55) {
-        // home toward coin counter
-        const tx = p.tx ?? this.coinTarget.x;
-        const ty = p.ty ?? this.coinTarget.y;
-        p.vx += (tx - p.x) * dt * 6;
-        p.vy += (ty - p.y) * dt * 6;
-        p.vx *= 0.9;
-        p.vy *= 0.9;
-      } else {
-        p.vy += p.g * dt;
+    for (const a of this.anims) {
+      a.t += dt;
+      if (a.follow === 'hero') {
+        a.x = h.x;
+        a.y = h.y;
       }
-      p.x += p.vx * dt;
-      p.y += p.vy * dt;
     }
-    this.parts = this.parts.filter((p) => p.life > 0);
-    if (this.parts.length > 500) this.parts.splice(0, this.parts.length - 500);
+    this.anims = this.anims.filter((a) => a.t < (a.loop ?? a.dur));
+    for (const b of this.bits) {
+      b.life -= dt;
+      b.t += dt;
+      if (b.home && b.life < b.max * 0.6) {
+        b.vx += (b.home.x - b.x) * dt * 7;
+        b.vy += (b.home.y - b.y) * dt * 7;
+        b.vx *= 0.9;
+        b.vy *= 0.9;
+      } else b.vy += b.g * dt;
+      b.x += b.vx * dt;
+      b.y += b.vy * dt;
+    }
+    this.bits = this.bits.filter((b) => b.life > 0);
+    for (const t of this.texts) {
+      t.life -= dt;
+      t.y += t.vy * dt;
+      t.vy *= Math.pow(0.15, dt);
+    }
+    this.texts = this.texts.filter((t) => t.life > 0);
+    if (this.bits.length > 260) this.bits.splice(0, this.bits.length - 260);
+    if (this.anims.length > 140) this.anims.splice(0, this.anims.length - 140);
+    if (this.texts.length > 60) this.texts.splice(0, this.texts.length - 60);
   }
 
   endPhase() {
@@ -510,8 +516,8 @@ export class Field {
         if (newArea) {
           const a = areaDef(s.g);
           const lp = loopOf(s.g);
-          this.banner = { kind: 'area', title: a.name + (lp ? ` ${'Ⅱ Ⅲ Ⅳ Ⅴ Ⅵ Ⅶ Ⅷ Ⅸ'.split(' ')[lp - 1] ?? '+' + lp}` : ''), sub: `AREA ${Math.floor(s.g / 10) + 1} · ${a.sub}`, t: 0 };
-          this.bgKey = '';
+          this.banner = { kind: 'area', title: a.name + (lp ? ' ' + (['Ⅱ', 'Ⅲ', 'Ⅳ', 'Ⅴ', 'Ⅵ', 'Ⅶ', 'Ⅷ', 'Ⅸ'][lp - 1] ?? '+' + lp) : ''), sub: `AREA ${Math.floor(s.g / 10) + 1} · ${a.sub}`, t: 0 };
+          this.hero.y = clamp(this.hero.y, this.minY(), this.maxY());
           this.setPhase('areaIntro', 2.4);
         } else {
           this.banner = null;
@@ -530,7 +536,7 @@ export class Field {
         this.hero.hp = this.hero.maxHp;
         this.hero.shield = 0;
         this.banner = null;
-        this.puff(this.hero.x, this.hero.y - 30, '#fff7c2', 14);
+        this.fx('heal', this.hero.x, this.hero.y - 40 * this.u, 130 * this.u);
         this.setPhase('field', 0);
         break;
       case 'areaIntro':
@@ -542,7 +548,7 @@ export class Field {
 
   bossFail(reason: string) {
     if (this.phase !== 'boss') return;
-    this.banner = { kind: 'fail', title: '撤退…', sub: reason + '  このステージを周回して力を蓄えます', t: 0 };
+    this.banner = { kind: 'fail', title: 'RETREAT', sub: reason + '  このステージを周回して力を蓄えます', t: 0 };
     sfx.lose();
     this.setPhase('defeat', 2.4);
   }
@@ -553,13 +559,12 @@ export class Field {
     const dy = ty - h.y;
     const d = Math.hypot(dx, dy);
     if (d < 2) return;
-    const sp = HERO_SPEED * this.u * speedMul * dt;
-    const k = Math.min(1, sp / d);
+    const k = Math.min(1, (HERO_SPEED * this.u * speedMul * dt) / d);
     h.x += dx * k;
     h.y += dy * k;
     if (Math.abs(dx) > 4) h.face = dx > 0 ? 1 : -1;
     h.x = clamp(h.x, 20, this.W - 20);
-    h.y = clamp(h.y, this.minY(), this.H - 26 * this.u);
+    h.y = clamp(h.y, this.minY(), this.maxY());
   }
 
   heroBrain(dt: number) {
@@ -567,7 +572,6 @@ export class Field {
     const hs = game.hero;
     const role = hs.ally.role;
     const range = hs.range * this.u;
-    // pick target
     const live = this.boss && !this.boss.dying ? [this.boss] : this.mobs.filter((m) => !m.dying && m.spawnT > 0.25);
     if (!h.target || h.target.dying || !live.includes(h.target)) {
       let best: Mob | null = null;
@@ -582,13 +586,9 @@ export class Field {
       h.target = best;
     }
     const t = h.target;
-
-    // skills
     this.trySkills(dt, live);
-
     if (!t) {
-      // idle wander toward center
-      this.moveHero(this.W * 0.45, this.top() + (this.H - this.top()) * 0.55, dt, 0.4);
+      this.moveHero(this.W * 0.45, (this.minY() + this.maxY()) / 2, dt, 0.4);
       return;
     }
     const dx = t.x - h.x;
@@ -599,16 +599,12 @@ export class Field {
       const k = (dist - reach * 0.85) / dist;
       this.moveHero(h.x + dx * k, h.y + dy * k, dt);
     } else if ((role === 'archer' || role === 'mage') && dist < reach * 0.45 && t.kind === 'mob') {
-      // kite away a bit
       this.moveHero(h.x - dx * 0.5, h.y - dy * 0.5, dt, 0.7);
       h.face = dx > 0 ? 1 : -1;
-    } else {
-      h.face = dx > 0 ? 1 : -1;
-    }
+    } else h.face = dx > 0 ? 1 : -1;
     h.cd -= dt;
     if (dist <= reach * 1.05 && h.cd <= 0) {
-      const spd = 1 + (h.spdBuffT > 0 ? h.spdBuff : 0);
-      h.cd = hs.interval / spd;
+      h.cd = hs.interval / (1 + (h.spdBuffT > 0 ? h.spdBuff : 0));
       this.heroAttack(t);
     }
   }
@@ -622,7 +618,7 @@ export class Field {
     const h = this.hero;
     const hs = game.hero;
     const el = hs.ally.el;
-    const color = ELEMENT_INFO[el].color;
+    const u = this.u;
     switch (hs.ally.role) {
       case 'blade':
       case 'guard': {
@@ -630,30 +626,30 @@ export class Field {
         const d = Math.hypot(t.x - h.x, t.y - h.y) || 1;
         h.lungeDir = { x: (t.x - h.x) / d, y: (t.y - h.y) / d };
         this.damage(t, 1, { kb: hs.ally.role === 'guard' ? 26 : 10 });
-        // cleave
         const cleave = hs.ally.role === 'blade' ? 0.35 : 0.2;
         for (const m of this.mobs) {
           if (m === t || m.dying) continue;
-          if (Math.hypot(m.x - t.x, m.y - t.y) < 55 * this.u) this.damage(m, cleave, { kb: 6, quiet: true });
+          if (Math.hypot(m.x - t.x, m.y - t.y) < 55 * u) this.damage(m, cleave, { kb: 6, quiet: true });
         }
-        this.slash(t.x, t.y - t.h * 0.45, h.face, color);
+        this.anims.push({ fx: SLASH_FX[el], x: t.x, y: t.y - t.h * 0.45, size: 150 * u, t: 0, dur: 0.3, flip: h.face < 0 });
         break;
       }
       case 'archer':
         h.lunge = 0.1;
         h.lungeDir = { x: -h.face, y: 0 };
-        this.projs.push({ x: h.x + h.face * 20 * this.u, y: h.y - 40 * this.u, tx: t.x, ty: t.y - t.h * 0.45, target: t, speed: 620 * this.u, dmgMul: 1, splash: 0, color, kind: 'arrow', trail: [] });
+        this.projs.push({ x: h.x + h.face * 20 * u, y: h.y - 40 * u, tx: t.x, ty: t.y - t.h * 0.45, target: t, speed: 620 * u, dmgMul: 1, splash: 0, el, kind: 'arrow', t: 0 });
         sfx.shoot();
         break;
       case 'mage':
         h.casting = 0.25;
-        this.projs.push({ x: h.x + h.face * 16 * this.u, y: h.y - 58 * this.u, tx: t.x, ty: t.y - t.h * 0.45, target: t, speed: 330 * this.u, dmgMul: 1, splash: 70 * this.u, color, kind: 'orb', trail: [] });
+        this.projs.push({ x: h.x + h.face * 16 * u, y: h.y - 58 * u, tx: t.x, ty: t.y - t.h * 0.45, target: t, speed: 330 * u, dmgMul: 1, splash: 70 * u, el, kind: 'spell', t: 0 });
         sfx.shoot();
         break;
     }
   }
 
   updateProj(p: Proj, dt: number) {
+    p.t += dt;
     if (p.target && !p.target.dying) {
       p.tx = p.target.x;
       p.ty = p.target.y - p.target.h * 0.45;
@@ -662,8 +658,6 @@ export class Field {
     const dy = p.ty - p.y;
     const d = Math.hypot(dx, dy);
     const step = p.speed * dt;
-    p.trail.push({ x: p.x, y: p.y });
-    if (p.trail.length > 8) p.trail.shift();
     if (d <= step) {
       p.speed = 0;
       if (p.splash > 0) {
@@ -674,11 +668,8 @@ export class Field {
           if (m === p.target) this.damage(m, p.dmgMul, { kb: 8 });
           else if (dd < p.splash) this.damage(m, p.dmgMul * 0.6, { kb: 8, quiet: true });
         }
-        this.burst(p.tx, p.ty, p.color, 12, 120);
-        this.ring(p.tx, p.ty + 10, p.color, p.splash);
-      } else if (p.target && !p.target.dying) {
-        this.damage(p.target, p.dmgMul, { kb: 6 });
-      }
+        this.fx('nova_' + p.el, p.tx, p.ty + 14 * this.u, p.splash * 2.2, 0.45, { squash: 0.5 });
+      } else if (p.target && !p.target.dying) this.damage(p.target, p.dmgMul, { kb: 6 });
       return;
     }
     p.x += (dx / d) * step;
@@ -705,14 +696,15 @@ export class Field {
       m.kbx += (dx / d) * kb * this.u * 6;
       m.kby += (dy / d) * kb * this.u * 3;
     }
-    if (!o.quiet || crit) {
-      this.text(m.x + (Math.random() - 0.5) * 20, m.y - m.h - 4, fmt(dmg) + (crit ? '!' : ''), crit ? '#ffcf3d' : '#ffffff', crit, ef > 1 ? '弱点' : ef < 1 ? '耐性' : undefined);
-    }
+    const color = crit ? '#ffd34d' : ef > 1 ? '#ffb070' : ef < 1 ? '#c9d3e0' : '#ffffff';
+    if (!o.quiet || crit) this.text(m.x + (Math.random() - 0.5) * 20, m.y - m.h - 4, fmt(dmg) + (crit ? '!' : ''), color, crit || ef > 1 ? 20 : 15);
     if (crit) {
       sfx.crit();
-      this.burst(m.x, m.y - m.h * 0.5, '#ffe58a', 6, 160);
-    } else if (!o.quiet) sfx.hit();
-    this.burst(m.x, m.y - m.h * 0.5, '#ffffff', 3, 90);
+      this.fx('crit', m.x, m.y - m.h * 0.5, 110 * this.u, 0.4);
+    } else {
+      if (!o.quiet) sfx.hit();
+      this.fx('hit', m.x + (Math.random() - 0.5) * 14, m.y - m.h * 0.5, 60 * this.u, 0.3);
+    }
     if (m.hp <= 0) this.kill(m);
     return dmg;
   }
@@ -721,31 +713,26 @@ export class Field {
     m.hp = 0;
     m.dying = 0.001;
     sfx.kill();
-    // spirit wisps
-    for (let i = 0; i < 10; i++) {
-      this.parts.push({ x: m.x + (Math.random() - 0.5) * m.w * 0.6, y: m.y - Math.random() * m.h, vx: (Math.random() - 0.5) * 20, vy: -30 - Math.random() * 50, g: -10, life: 1 + Math.random() * 0.6, max: 1.6, size: 3 + Math.random() * 4, color: '#d7f5ff', kind: 'wisp' });
-    }
+    this.fx('smoke', m.x, m.y - m.h * 0.35, Math.max(80 * this.u, m.w * 1.1), 0.6, { alpha: 0.85 });
+    for (let i = 0; i < 6; i++) this.bits.push({ kind: 'wisp', x: m.x + (Math.random() - 0.5) * m.w * 0.6, y: m.y - Math.random() * m.h, vx: (Math.random() - 0.5) * 20, vy: -30 - Math.random() * 50, g: -10, life: 0.9 + Math.random() * 0.5, max: 1.4, size: 14 + Math.random() * 10, t: 0 });
     const s = game.save;
     if (this.hero.target === m) this.hero.target = null;
     if (m.kind === 'mob') {
       const rew = L.rewardKill(s, game.hero, 'mob', Math.random);
       this.coins(m.x, m.y - m.h * 0.5, 3, rew.coins);
       if (rew.orb) this.orbDrop(m.x, m.y - m.h * 0.5);
-      if (rew.gems) {
-        this.text(m.x, m.y - m.h - 18, '霊晶+' + rew.gems, '#8fe3ff', true);
-      }
+      if (rew.gems) this.bits.push({ kind: 'gem', x: m.x, y: m.y - m.h, vx: 0, vy: -90, g: 0, life: 1.3, max: 1.3, size: 22, t: 0, home: { x: this.coinTarget.x + 120, y: this.coinTarget.y } });
       game.changed();
     } else {
-      // boss down
       const rew = L.rewardKill(s, game.hero, m.kind, Math.random);
       this.coins(m.x, m.y - m.h * 0.5, 16, rew.coins);
       if (rew.orb) this.orbDrop(m.x, m.y - m.h * 0.5);
       this.shake = 16;
-      this.flash = 1;
-      this.flashColor = '#fff6d0';
       sfx.boom();
       sfx.win();
-      for (let i = 0; i < 40; i++) this.burst(m.x, m.y - m.h * 0.5, ['#ffe58a', '#ffffff', '#ffb36b'][i % 3], 1, 320);
+      this.fx('blast', m.x, m.y, m.w * 2.2, 0.8);
+      this.fx('crit', m.x, m.y - m.h * 0.5, m.w * 1.6, 0.6);
+      for (let i = 0; i < 18; i++) this.star(m.x, m.y - m.h * 0.5, 320);
       this.banner = { kind: 'clear', title: 'STAGE CLEAR!', sub: `${m.def.name} を討伐した`, t: 0 };
       this.setPhase('victory', 2.2);
     }
@@ -760,21 +747,20 @@ export class Field {
       const ab = Math.min(h.shield, dmg);
       h.shield -= ab;
       dmg -= ab;
-      if (ab > 0) this.burst(h.x, h.y - 40 * this.u, '#9fdcff', 3, 60);
     }
     h.hp -= dmg;
     h.hurt = 0.15;
     if (dmg > 0) {
-      this.text(h.x + (Math.random() - 0.5) * 16, h.y - 90 * this.u, fmt(dmg), '#ff8a7a', false);
+      this.text(h.x + (Math.random() - 0.5) * 16, h.y - 90 * this.u, fmt(dmg), '#ff8a7a', 14);
       sfx.hurt();
     }
     if (src.kind !== 'mob') this.shake = Math.max(this.shake, 5);
     if (h.hp <= 0) {
       h.hp = 0;
-      this.puff(h.x, h.y - 30 * this.u, 'rgba(255,255,255,0.8)', 14);
+      this.fx('smoke', h.x, h.y - 30 * this.u, 110 * this.u, 0.6);
       if (this.phase === 'boss') this.bossFail('力尽きた…');
       else {
-        this.banner = { kind: 'down', title: 'ひと休み…', sub: 'すぐに起き上がります', t: 0 };
+        this.banner = { kind: 'down', title: 'REST', sub: 'ひと休み… すぐに起き上がります', t: 0 };
         this.setPhase('down', 2.6);
         for (const m of this.mobs) m.aggro = false;
       }
@@ -790,13 +776,13 @@ export class Field {
       m.dying += dt * 1.6;
       return;
     }
-    // knockback
     m.x += m.kbx * dt;
     m.y += m.kby * dt;
     m.kbx *= Math.pow(0.002, dt);
     m.kby *= Math.pow(0.002, dt);
-    m.x = clamp(m.x, 20 + (m.kind === 'mob' ? 0 : m.w * 0.3), this.W - 20 - (m.kind === 'mob' ? 0 : m.w * 0.3));
-    m.y = clamp(m.y, m.kind === 'mob' ? this.minY() : Math.min(this.H - 26 * this.u, Math.max(this.minY(), 112 + m.h)), this.H - 26 * this.u);
+    const isBoss = m.kind !== 'mob';
+    m.x = clamp(m.x, 20 + (isBoss ? m.w * 0.3 : 0), this.W - 20 - (isBoss ? m.w * 0.3 : 0));
+    m.y = clamp(m.y, isBoss ? Math.min(this.maxY(), Math.max(this.minY(), 112 + m.h)) : this.minY(), this.maxY());
     if (m.frozen > 0) {
       m.frozen -= dt;
       return;
@@ -808,12 +794,10 @@ export class Field {
     const dist = Math.hypot(dx, dy * 1.4);
     const heroAlive = h.hp > 0 && this.phase !== 'down';
     if (heroAlive && dist < 130 * this.u && this.phase === 'field') m.aggro = true;
-    const isBoss = m.kind !== 'mob';
     const contact = (isBoss ? m.w * 0.42 : 34 * this.u) + 14 * this.u;
     const sp = (isBoss ? 50 : m.aggro ? 62 : 22) * this.u;
 
     if (isBoss && this.phase === 'boss') {
-      // slam attack with telegraph
       m.slamT -= dt;
       if (m.slamCharge > 0) {
         m.slamCharge -= dt;
@@ -821,8 +805,7 @@ export class Field {
           m.lunge = 0.3;
           this.shake = 12;
           sfx.boom();
-          this.ring(m.slamX, m.slamY, '#ff6b5b', 95 * this.u);
-          this.burst(m.slamX, m.slamY - 6, '#c9a27a', 18, 200);
+          this.fx('blast', m.slamX, m.slamY + 10 * this.u, 230 * this.u, 0.7);
           if (Math.hypot(h.x - m.slamX, (h.y - m.slamY) * 1.4) < 95 * this.u) this.heroHurt(m.atk * 2, m);
         }
         return;
@@ -832,7 +815,7 @@ export class Field {
         m.slamCharge = 1.1;
         m.slamX = h.x;
         m.slamY = h.y;
-        this.parts.push({ x: h.x, y: h.y, vx: 0, vy: 0, g: 0, life: 1.1, max: 1.1, size: 95 * this.u, color: '#ff4d3d', kind: 'telegraph' });
+        this.anims.push({ fx: 'ring', x: h.x, y: h.y, size: 230 * this.u, t: 0, dur: 0.55, squash: 0.55, loop: 1.1, ground: true });
         return;
       }
     }
@@ -850,7 +833,6 @@ export class Field {
         this.heroHurt(m.atk, m);
       }
     } else {
-      // wander
       m.wait -= dt;
       if (m.wait <= 0) {
         const wdx = m.wx - m.x;
@@ -859,7 +841,7 @@ export class Field {
         if (wd < 4) {
           m.wait = 1 + Math.random() * 2.5;
           m.wx = clamp(m.x + (Math.random() - 0.5) * 160, 30, this.W - 30);
-          m.wy = clamp(m.y + (Math.random() - 0.5) * 90, this.minY(), this.H - 26 * this.u);
+          m.wy = clamp(m.y + (Math.random() - 0.5) * 90, this.minY(), this.maxY());
         } else {
           m.x += (wdx / wd) * sp * dt;
           m.y += (wdy / wd) * sp * dt;
@@ -881,10 +863,9 @@ export class Field {
       h.skillCd[i] -= dt;
       if (h.skillCd[i] > 0) continue;
       const def = SKILL_BY_ID[id];
-      const lv = s.skills[id]?.lv ?? 1;
       if (!this.skillUseful(def, live)) continue;
       h.skillCd[i] = def.cd;
-      this.castSkill(def, lv, live);
+      this.castSkill(def, s.skills[id]?.lv ?? 1, live);
       return;
     }
   }
@@ -910,39 +891,27 @@ export class Field {
   castSkill(def: SkillDef, lv: number, live: Mob[]) {
     const h = this.hero;
     const m = skillLvMul(lv);
-    const color = ELEMENT_INFO[def.el].color;
     const u = this.u;
+    const el = def.el;
     h.casting = 0.35;
     sfx.skill();
-    this.text(h.x, h.y - 112 * u, def.name, color, true, undefined, true);
-    this.ring(h.x, h.y, color, 50 * u);
-    const nearest = () => {
-      let b: Mob | null = null;
-      let bd = Infinity;
-      for (const x of live) {
-        const d = Math.hypot(x.x - h.x, x.y - h.y);
-        if (d < bd && !x.dying) {
-          bd = d;
-          b = x;
-        }
-      }
-      return b;
-    };
+    this.texts.push({ x: h.x, y: h.y - 118 * u, vy: -16, life: 1.3, max: 1.3, text: def.name, color: INK, size: 14, label: true });
+    const nearest = () => live.filter((x) => !x.dying).sort((a, b) => Math.hypot(a.x - h.x, a.y - h.y) - Math.hypot(b.x - h.x, b.y - h.y))[0] ?? null;
     switch (def.kind) {
       case 'strike': {
         const t = h.target ?? nearest();
         if (!t) break;
         h.lunge = 0.25;
-        this.slash(t.x, t.y - t.h * 0.45, h.face, color, 1.8);
-        this.damage(t, def.power * m, { kb: 30, skill: true, el: def.el });
+        this.anims.push({ fx: SLASH_FX[el], x: t.x, y: t.y - t.h * 0.45, size: 230 * u, t: 0, dur: 0.35, flip: h.face < 0 });
+        this.damage(t, def.power * m, { kb: 30, skill: true, el });
         this.shake = 6;
         break;
       }
       case 'nova': {
         const R = (def.radius ?? 100) * u;
-        this.ring(h.x, h.y, color, R, 0.5);
-        this.burst(h.x, h.y - 30 * u, color, 26, 260);
-        for (const t of [...live]) if (Math.hypot(t.x - h.x, (t.y - h.y) * 1.3) < R + t.w * 0.3) this.damage(t, def.power * m, { kb: 24, skill: true, el: def.el });
+        this.fx('nova_' + el, h.x, h.y, R * 2.4, 0.55, { squash: 0.55, ground: true });
+        this.fx('crit', h.x, h.y - 40 * u, 140 * u, 0.4);
+        for (const t of [...live]) if (Math.hypot(t.x - h.x, (t.y - h.y) * 1.3) < R + t.w * 0.3) this.damage(t, def.power * m, { kb: 24, skill: true, el });
         if (def.heal) this.heal(def.heal * m);
         this.shake = 7;
         break;
@@ -951,11 +920,12 @@ export class Field {
         const n = def.hits ?? 1;
         for (let i = 0; i < n; i++) {
           this.later(i * 0.07, () => {
-            const pool = (this.boss && !this.boss.dying ? [this.boss] : this.mobs.filter((x) => !x.dying && x.spawnT > 0.3));
+            const pool = this.boss && !this.boss.dying ? [this.boss] : this.mobs.filter((x) => !x.dying && x.spawnT > 0.3);
             if (!pool.length) return;
             const t = pool[Math.floor(Math.random() * pool.length)];
-            this.parts.push({ x: t.x, y: t.y - t.h * 0.5, vx: 0, vy: 0, g: 0, life: 0.22, max: 0.22, size: 1, color, kind: 'bolt', tx: t.x + (Math.random() - 0.5) * 30, ty: -10 });
-            this.damage(t, def.power * m, { kb: 8, skill: true, el: def.el, quiet: n > 6 });
+            this.fx(el === 'light' ? 'lightning' : SLASH_FX[el], t.x, t.y - t.h * 0.5, 130 * u, 0.3, { rot: Math.random() * 6.28 });
+            if (el === 'light') this.fx('spark', t.x, t.y - t.h * 0.3, 90 * u, 0.4);
+            this.damage(t, def.power * m, { kb: 8, skill: true, el, quiet: n > 6 });
           });
         }
         break;
@@ -966,7 +936,7 @@ export class Field {
         break;
       case 'shield':
         h.shield += h.maxHp * (def.shield ?? 0) * m;
-        this.ring(h.x, h.y, '#9fdcff', 60 * u, 0.6);
+        this.fx('dome', h.x, h.y - 30 * u, 150 * u, 0.6);
         break;
       case 'buff':
         if (def.atkBuff) {
@@ -977,27 +947,25 @@ export class Field {
           h.spdBuff = def.spdBuff * m;
           h.spdBuffT = def.dur ?? 6;
         }
-        h.auraColor = color;
-        this.burst(h.x, h.y - 40 * u, color, 16, 140);
+        h.auraEl = el;
+        h.auraTick = 0;
+        this.fx('nova_' + el, h.x, h.y, 200 * u, 0.5, { squash: 0.5, ground: true });
         break;
       case 'freeze': {
         const R = (def.radius ?? 100) * u;
-        this.ring(h.x, h.y, '#bfe9ff', Math.min(R, this.W), 0.6);
+        this.fx('frost', h.x, h.y - 20 * u, Math.min(R * 2.2, this.W * 1.2), 0.6);
         for (const t of [...live]) {
           if (Math.hypot(t.x - h.x, (t.y - h.y) * 1.3) < R + t.w * 0.3) {
             t.frozen = (def.dur ?? 2) * (t.kind === 'mob' ? 1 : 0.5);
-            this.damage(t, def.power * m, { skill: true, el: def.el });
-            this.burst(t.x, t.y - t.h * 0.5, '#d8f3ff', 8, 120);
+            this.damage(t, def.power * m, { skill: true, el });
+            this.fx('frost', t.x, t.y - t.h * 0.5, t.w * 1.4, 0.5);
           }
         }
         if (def.atkBuff) {
           h.atkBuff = def.atkBuff * m;
           h.atkBuffT = def.dur ?? 4;
-          h.auraColor = color;
-        }
-        if (def.radius && def.radius > 500) {
-          this.flash = 0.6;
-          this.flashColor = '#c9b6ff';
+          h.auraEl = el;
+          h.auraTick = 0;
         }
         break;
       }
@@ -1005,14 +973,13 @@ export class Field {
         const t = h.target ?? nearest();
         if (!t) break;
         h.lunge = 0.25;
-        this.slash(t.x, t.y - t.h * 0.45, h.face, color, 1.6);
-        const d = this.damage(t, def.power * m, { kb: 14, skill: true, el: def.el });
+        this.anims.push({ fx: SLASH_FX[el], x: t.x, y: t.y - t.h * 0.45, size: 210 * u, t: 0, dur: 0.35, flip: h.face < 0 });
+        const d = this.damage(t, def.power * m, { kb: 14, skill: true, el });
         this.heal(0, d * (def.heal ?? 0));
-        for (let i = 0; i < 12; i++) this.parts.push({ x: t.x, y: t.y - t.h * 0.5, vx: (Math.random() - 0.5) * 120, vy: (Math.random() - 0.5) * 120, g: 0, life: 0.7, max: 0.7, size: 4, color: '#c58bff', kind: 'coin', tx: h.x, ty: h.y - 40 * u });
+        for (let i = 0; i < 8; i++) this.bits.push({ kind: 'wisp', x: t.x, y: t.y - t.h * 0.5, vx: (Math.random() - 0.5) * 120, vy: (Math.random() - 0.5) * 120, g: 0, life: 0.7, max: 0.7, size: 16, t: 0, home: { x: h.x, y: h.y - 40 * u } });
         break;
       }
       case 'meteor': {
-        // aim at densest spot
         let best = live[0];
         let bc = -1;
         for (const a of live) {
@@ -1025,16 +992,17 @@ export class Field {
         if (!best) break;
         const tx = best.x,
           ty = best.y;
-        this.parts.push({ x: tx - 160 * u, y: -40, vx: (160 * u) / 0.5, vy: (ty + 40) / 0.5, g: 0, life: 0.5, max: 0.5, size: 22 * u, color, kind: 'meteor' });
+        const sx = tx + 160 * u,
+          sy = -40;
+        this.projs.push({ x: sx, y: sy, tx, ty, target: null, speed: Math.hypot(tx - sx, ty - sy) / 0.5, dmgMul: 0, splash: 0, el: el === 'light' ? 'light' : 'fire', kind: 'spell', t: 0 });
         this.later(0.5, () => {
           const R = (def.radius ?? 90) * u;
-          this.ring(tx, ty, color, R, 0.6);
-          this.burst(tx, ty - 10, color, 30, 300);
-          this.burst(tx, ty - 10, '#fff3c4', 14, 200);
+          this.fx('blast', tx, ty + 10 * u, R * 3, 0.7);
+          this.fx('crit', tx, ty - 20 * u, R * 1.6, 0.4);
           this.shake = 14;
           sfx.boom();
           const pool = this.boss && !this.boss.dying ? [this.boss] : this.mobs;
-          for (const t of [...pool]) if (!t.dying && Math.hypot(t.x - tx, (t.y - ty) * 1.3) < R + t.w * 0.3) this.damage(t, def.power * m, { kb: 30, skill: true, el: def.el });
+          for (const t of [...pool]) if (!t.dying && Math.hypot(t.x - tx, (t.y - ty) * 1.3) < R + t.w * 0.3) this.damage(t, def.power * m, { kb: 30, skill: true, el });
         });
         break;
       }
@@ -1047,45 +1015,34 @@ export class Field {
     if (amt <= 0) return;
     h.hp = Math.min(h.maxHp, h.hp + amt);
     sfx.heal();
-    this.text(h.x, h.y - 96 * this.u, '+' + fmt(amt), '#7dffa0', false);
-    for (let i = 0; i < 10; i++) this.parts.push({ x: h.x + (Math.random() - 0.5) * 40, y: h.y - Math.random() * 60, vx: 0, vy: -40 - Math.random() * 40, g: 0, life: 0.9, max: 0.9, size: 4, color: '#9dffb8', kind: 'star' });
+    this.text(h.x, h.y - 96 * this.u, '+' + fmt(amt), '#7dffa0', 15);
+    this.fx('heal', h.x, h.y - 30 * this.u, 140 * this.u, 0.7);
   }
 
-  // ---------- fx ----------
-  burst(x: number, y: number, color: string, n: number, sp: number) {
-    for (let i = 0; i < n; i++) {
-      const a = Math.random() * Math.PI * 2;
-      const v = sp * (0.4 + Math.random() * 0.6) * this.u;
-      this.parts.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 40, g: 260, life: 0.35 + Math.random() * 0.3, max: 0.6, size: 2 + Math.random() * 3, color, kind: Math.random() < 0.3 ? 'star' : 'dot' });
-    }
+  // ---------- fx helpers ----------
+  fx(name: string, x: number, y: number, size: number, dur = 0.5, o: Partial<Anim> = {}) {
+    this.anims.push({ fx: name, x, y, size, t: 0, dur, ...o });
   }
-  puff(x: number, y: number, color: string, n: number) {
-    for (let i = 0; i < n; i++) {
-      const a = Math.random() * Math.PI * 2;
-      this.parts.push({ x: x + Math.cos(a) * 10, y: y + Math.sin(a) * 4, vx: Math.cos(a) * 50, vy: Math.sin(a) * 20 - 20, g: -20, life: 0.5 + Math.random() * 0.3, max: 0.8, size: 6 + Math.random() * 6, color, kind: 'wisp' });
-    }
+  star(x: number, y: number, sp: number) {
+    const a = Math.random() * Math.PI * 2;
+    const v = sp * (0.4 + Math.random() * 0.6) * this.u;
+    this.bits.push({ kind: 'star', x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 40, g: 260, life: 0.5 + Math.random() * 0.4, max: 0.9, size: 10 + Math.random() * 8, t: 0 });
   }
-  ring(x: number, y: number, color: string, r: number, life = 0.4) {
-    this.parts.push({ x, y, vx: 0, vy: 0, g: 0, life, max: life, size: r, color, kind: 'ring' });
-  }
-  slash(x: number, y: number, face: number, color: string, scale = 1) {
-    this.parts.push({ x, y, vx: 0, vy: 0, g: 0, life: 0.2, max: 0.2, size: 34 * this.u * scale, color, kind: 'slash', a: face, extra: Math.random() * 0.6 - 0.3 });
-  }
-  text(x: number, y: number, text: string, color: string, big: boolean, tag?: string, skill = false) {
-    this.parts.push({ x, y, vx: (Math.random() - 0.5) * 20, vy: skill ? -18 : -55, g: skill ? 0 : 60, life: skill ? 1.2 : 0.85, max: skill ? 1.2 : 0.85, size: skill ? 17 : big ? 18 : 13, color, kind: 'text', text: tag ? `${text}` : text, big, extra: skill ? 1 : 0, r: tag === '弱点' ? 1 : tag === '耐性' ? -1 : 0 });
+  text(x: number, y: number, text: string, color: string, size: number) {
+    this.texts.push({ x, y, vy: -60, life: 0.85, max: 0.85, text, color, size });
   }
   coins(x: number, y: number, n: number, value: number) {
     for (let i = 0; i < n; i++) {
       const a = -Math.PI / 2 + (Math.random() - 0.5) * 1.8;
       const v = 90 + Math.random() * 80;
-      this.parts.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, g: 0, life: 1.1 + Math.random() * 0.3, max: 1.4, size: 4.5, color: '#ffd23f', kind: 'coin' });
+      this.bits.push({ kind: 'coin', x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, g: 0, life: 1.1 + Math.random() * 0.3, max: 1.4, size: 16, t: Math.random(), home: this.coinTarget });
     }
-    if (n >= 3) this.text(x + 14, y - 10, '+' + fmt(value), '#ffe27a', false);
+    if (n >= 3) this.text(x + 14, y - 10, '+' + fmt(value), '#ffe27a', 12);
     sfx.coin();
   }
   orbDrop(x: number, y: number) {
     sfx.orb();
-    for (let i = 0; i < 3; i++) this.parts.push({ x, y, vx: (Math.random() - 0.5) * 80, vy: -120, g: 0, life: 1.2, max: 1.2, size: 9, color: '#b98cff', kind: 'coin', tx: this.W - 40, ty: -20 });
+    this.bits.push({ kind: 'orb', x, y, vx: (Math.random() - 0.5) * 80, vy: -140, g: 0, life: 1.3, max: 1.3, size: 26, t: 0, home: this.orbTarget });
     game.toast('霊珠を手に入れた！', 'rare');
   }
 
@@ -1094,21 +1051,21 @@ export class Field {
     const g = this.g;
     const { W, H } = this;
     g.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    const key = `${areaDef(game.save.g).name}|${Math.round(W)}x${Math.round(H)}|${loopOf(game.save.g)}`;
-    if (key !== this.bgKey) {
-      this.bgKey = key;
-      this.bg = paintBackground(areaDef(game.save.g).theme, W, H, Math.floor(game.save.g / 10) * 7 + 3, loopOf(game.save.g) * 47);
-    }
+    g.clearRect(0, 0, W, H);
     const sx = this.shake > 0 ? (Math.random() - 0.5) * this.shake : 0;
     const sy = this.shake > 0 ? (Math.random() - 0.5) * this.shake : 0;
     g.save();
     g.translate(sx, sy);
-    if (this.bg) g.drawImage(this.bg, -4, -4, W + 8, H + 8);
+    const ai = areaIndex(game.save.g);
+    const lp = loopOf(game.save.g);
+    const bg = lp ? hueShifted(bgUrl(ai), lp * 47) : image(bgUrl(ai));
+    if (bg) {
+      const r = this.bgRect();
+      g.drawImage(bg, r.x - 6, r.y - 6, r.w + 12, r.h + 12);
+    }
 
-    // ground fx (rings, telegraphs)
-    for (const p of this.parts) if (p.kind === 'ring' || p.kind === 'telegraph') this.drawPart(p);
+    for (const a of this.anims) if (a.ground) this.drawAnim(a);
 
-    // entities by depth
     const ents: { y: number; f: () => void }[] = [];
     for (const m of this.mobs) ents.push({ y: m.y, f: () => this.drawMob(m) });
     if (this.boss) {
@@ -1119,33 +1076,90 @@ export class Field {
     ents.sort((a, b) => a.y - b.y).forEach((e) => e.f());
 
     for (const p of this.projs) this.drawProj(p);
-    for (const p of this.parts) if (p.kind !== 'ring' && p.kind !== 'telegraph' && p.kind !== 'text') this.drawPart(p);
-    for (const p of this.parts) if (p.kind === 'text') this.drawPart(p);
+    for (const a of this.anims) if (!a.ground) this.drawAnim(a);
+    for (const b of this.bits) this.drawBit(b);
+    for (const t of this.texts) this.drawText(t);
     g.restore();
+  }
 
-    if (this.flash > 0) {
-      g.globalAlpha = Math.min(0.7, this.flash * 0.6);
-      g.fillStyle = this.flashColor;
-      g.fillRect(0, 0, W, H);
-      g.globalAlpha = 1;
+  drawAnim(a: Anim) {
+    const sh = fxSheet(a.fx);
+    if (!sh) return;
+    const { n, w, h } = sh.info;
+    const f = Math.min(n - 1, Math.floor(((a.t % a.dur) / a.dur) * n));
+    const dw = a.size;
+    const dh = (a.size * h) / w;
+    const g = this.g;
+    g.save();
+    g.globalAlpha = a.alpha ?? 1;
+    g.translate(a.x, a.y);
+    if (a.rot) g.rotate(a.rot);
+    g.scale(a.flip ? -1 : 1, a.squash ?? 1);
+    g.drawImage(sh.im, f * w, 0, w, h, -dw / 2, -dh / 2, dw, dh);
+    g.restore();
+  }
+
+  drawBit(b: Bit) {
+    const g = this.g;
+    const k = Math.max(0, b.life / b.max);
+    g.save();
+    g.globalAlpha = b.kind === 'wisp' ? k * 0.7 : Math.min(1, k * 2);
+    if (b.kind === 'coin') {
+      const sh = fxSheet('coin');
+      if (sh) {
+        const f = Math.floor(b.t * 18) % sh.info.n;
+        g.drawImage(sh.im, f * sh.info.w, 0, sh.info.w, sh.info.h, b.x - b.size / 2, b.y - b.size / 2, b.size, b.size);
+      }
+    } else if (b.kind === 'wisp') {
+      const sh = fxSheet('smoke');
+      if (sh) g.drawImage(sh.im, 0, 0, sh.info.w, sh.info.h, b.x - b.size / 2, b.y - b.size / 2, b.size, b.size);
+    } else {
+      const im = image(itemUrl(b.kind));
+      if (im) {
+        g.translate(b.x, b.y);
+        if (b.kind === 'star') g.rotate(b.t * 6);
+        g.drawImage(im, -b.size / 2, -b.size / 2, b.size, b.size);
+      }
     }
-    if (this.phase === 'down' || (this.phase === 'defeat' && this.hero.hp <= 0)) {
-      g.fillStyle = 'rgba(40,20,30,0.25)';
-      g.fillRect(0, 0, W, H);
+    g.restore();
+  }
+
+  drawText(t: Txt) {
+    const g = this.g;
+    const k = Math.max(0, t.life / t.max);
+    g.save();
+    g.globalAlpha = Math.min(1, k * 2.5);
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    if (t.label) {
+      // skill name on a Cozy pill
+      g.font = `800 ${t.size}px "M PLUS Rounded 1c", sans-serif`;
+      const w = g.measureText(t.text).width + 30;
+      const h = t.size + 16;
+      const pill = image(uiUrl('RoundButton2_white.png'));
+      if (pill) nine(g, pill, t.x - w / 2, t.y - h / 2, w, h, [40, 80, 60, 80], [6, 12, 9, 12]);
+      g.fillStyle = t.color;
+      g.fillText(t.text, t.x, t.y - 1);
+    } else {
+      // Bungee (fill) + Bungee Outline layered: an outlined number made only from the two fonts
+      const age = 1 - k;
+      const sc = age < 0.12 ? 0.6 + (age / 0.12) * 0.6 : 1.2 - Math.min(0.2, (age - 0.12) * 0.6);
+      g.translate(t.x, t.y);
+      g.scale(sc, sc);
+      g.font = `${t.size}px "Bungee", sans-serif`;
+      g.fillStyle = t.color;
+      g.fillText(t.text, 0, 0);
+      g.font = `${t.size}px "Bungee Outline", sans-serif`;
+      g.fillStyle = OUTLINE;
+      g.fillText(t.text, 0, 0);
     }
+    g.restore();
   }
 
   drawSprite(stem: string, x: number, y: number, w: number, h: number, flip: boolean, o: { alpha?: number; flash?: number; frozen?: boolean; squash?: number; hue?: number; glow?: string } = {}) {
     const g = this.g;
     const im = o.hue ? hueShift(stem, o.hue) : img(stem);
-    if (!im) {
-      // placeholder blob while loading
-      g.fillStyle = 'rgba(0,0,0,0.15)';
-      g.beginPath();
-      g.ellipse(x, y - 4, w * 0.3, 6, 0, 0, Math.PI * 2);
-      g.fill();
-      return;
-    }
+    if (!im) return;
     const sq = o.squash ?? 0;
     const dw = w * (1 + sq * 0.5);
     const dh = h * (1 - sq);
@@ -1185,8 +1199,18 @@ export class Field {
     g.restore();
   }
 
+  /** a small Cozy-UI bar (track = white button, fill = colored button) */
+  bar(x: number, y: number, w: number, h: number, frac: number, fill: string) {
+    const track = image(uiUrl('SquareButton2_white.png'));
+    const f = image(uiUrl(fill));
+    const s: [number, number, number, number] = [40, 42, 58, 42];
+    const d: [number, number, number, number] = [2.5, 3, 3.5, 3];
+    if (track) nine(this.g, track, x, y, w, h, s, d);
+    const fw = w * clamp(frac, 0, 1);
+    if (f && fw > 4) nine(this.g, f, x, y, fw, h, s, d);
+  }
+
   drawMob(m: Mob) {
-    const g = this.g;
     let alpha = 1;
     let y = m.y;
     let squash = 0;
@@ -1200,44 +1224,23 @@ export class Field {
       alpha = Math.max(0, 1 - m.dying);
       y -= m.dying * 16;
     }
-    // walk bob: squash anchored to the ground so the baked shadow stays put
     if (!m.dying && !m.frozen) squash = Math.sin(m.t * (m.aggro ? 12 : 6)) * (m.kind === 'mob' ? 0.04 : 0.025);
     let x = m.x;
     if (m.lunge > 0) x += -m.face * Math.sin((m.lunge / 0.18) * Math.PI) * 10 * this.u;
-    const w = m.w * scale,
-      h = m.h * scale;
-    this.drawSprite(m.def.sprite, x, y, w, h, m.face === -1, { alpha, flash: m.flash, frozen: m.frozen > 0, squash, glow: m.kind === 'boss' ? 'rgba(255,90,60,0.9)' : undefined });
-    // hp bar
-    if (!m.dying && m.kind === 'mob' && m.hp < m.maxHp) {
-      const bw = 34 * this.u;
-      const bx = m.x - bw / 2;
-      const by = m.y - m.h - 8;
-      g.fillStyle = 'rgba(60,30,20,0.75)';
-      roundRect(g, bx - 1.5, by - 1.5, bw + 3, 7, 3.5);
-      g.fill();
-      g.fillStyle = '#ff6b5b';
-      roundRect(g, bx, by, bw * Math.max(0, m.hp / m.maxHp), 4, 2);
-      g.fill();
-    }
-    // element pip
+    this.drawSprite(m.def.sprite, x, y, m.w * scale, m.h * scale, m.face === -1, { alpha, flash: m.flash, frozen: m.frozen > 0, squash, glow: m.kind === 'boss' ? 'rgba(255,90,60,0.9)' : undefined });
     if (!m.dying && m.kind === 'mob' && m.spawnT > 0.35) {
-      g.fillStyle = ELEMENT_INFO[m.def.el].color;
-      g.strokeStyle = 'rgba(80,40,30,0.8)';
-      g.lineWidth = 1.5;
-      g.beginPath();
-      g.arc(m.x - 21 * this.u, m.y - m.h - 5, 3.2, 0, Math.PI * 2);
-      g.fill();
-      g.stroke();
+      const bw = 34 * this.u;
+      if (m.hp < m.maxHp) this.bar(m.x - bw / 2 + 6, m.y - m.h - 10, bw, 8, m.hp / m.maxHp, 'SquareButton2_red.png');
+      const el = image(itemUrl('el_' + m.def.el));
+      if (el) this.g.drawImage(el, m.x - bw / 2 - 9, m.y - m.h - 13, 13, 13);
     }
   }
 
   drawHero() {
-    const g = this.g;
     const h = this.hero;
     const hs = game.hero;
     const u = this.u;
     const sz = this.dispSize(hs.ally.sprite, 'hero');
-    // guardians float behind
     const s = game.save;
     const slots = guardianSlotsUnlocked(s.maxG);
     const gs = s.guardianSlots.slice(0, slots).filter(Boolean) as string[];
@@ -1254,7 +1257,7 @@ export class Field {
       const gx = h.x + off[0] * u * h.face;
       const gy = h.y + off[1] * u + bob;
       this.drawSprite(def.sprite, gx, gy, gsz.w, gsz.h, h.face === 1, { alpha: 0.45, hue: shiny ? 150 : 0, glow: shiny ? 'rgba(255,240,150,0.9)' : 'rgba(190,240,255,0.9)' });
-      if (Math.random() < 0.05) this.parts.push({ x: gx + (Math.random() - 0.5) * 20, y: gy - Math.random() * gsz.h, vx: 0, vy: -20, g: 0, life: 0.8, max: 0.8, size: 2.5, color: shiny ? '#fff2a8' : '#d7f5ff', kind: 'wisp' });
+      if (Math.random() < 0.04) this.bits.push({ kind: 'wisp', x: gx + (Math.random() - 0.5) * 20, y: gy - Math.random() * gsz.h, vx: 0, vy: -20, g: 0, life: 0.8, max: 0.8, size: 10, t: 0 });
     });
 
     let x = h.x;
@@ -1268,243 +1271,37 @@ export class Field {
     }
     const moving = this.phase === 'field' || this.phase === 'boss';
     const squash = moving ? Math.sin(this.time * 9) * 0.03 : Math.sin(this.time * 3) * 0.015;
-    // aura
-    if (h.atkBuffT > 0 || h.spdBuffT > 0) {
-      const c = h.auraColor || '#ffd36b';
-      const grd = g.createRadialGradient(h.x, h.y - sz.h * 0.4, 4, h.x, h.y - sz.h * 0.4, sz.h * 0.7);
-      grd.addColorStop(0, c + '66');
-      grd.addColorStop(1, c + '00');
-      g.fillStyle = grd;
-      g.beginPath();
-      g.ellipse(h.x, h.y - sz.h * 0.4, sz.w * 0.7, sz.h * 0.7, 0, 0, Math.PI * 2);
-      g.fill();
-      if (Math.random() < 0.3) this.parts.push({ x: h.x + (Math.random() - 0.5) * sz.w, y: h.y - Math.random() * 10, vx: 0, vy: -60, g: 0, life: 0.6, max: 0.6, size: 3, color: c, kind: 'wisp' });
-    }
-    this.drawSprite(hs.ally.sprite, x, y, sz.w, sz.h, h.face === 1, { alpha, flash: h.hurt, squash, glow: h.casting > 0 ? ELEMENT_INFO[hs.ally.el].color : undefined });
-    // shield bubble
+    this.drawSprite(hs.ally.sprite, x, y, sz.w, sz.h, h.face === 1, { alpha, flash: h.hurt, squash, glow: h.casting > 0 ? 'rgba(255,240,180,0.95)' : undefined });
     if (h.shield > 0) {
-      g.save();
-      g.globalAlpha = 0.35 + Math.sin(this.time * 6) * 0.08;
-      g.strokeStyle = '#9fdcff';
-      g.fillStyle = 'rgba(160,220,255,0.18)';
-      g.lineWidth = 2.5;
-      g.beginPath();
-      g.ellipse(h.x, h.y - sz.h * 0.45, sz.w * 0.62, sz.h * 0.62, 0, 0, Math.PI * 2);
-      g.fill();
-      g.stroke();
-      g.restore();
+      const sh = fxSheet('bubble');
+      if (sh) {
+        const g = this.g;
+        const f = Math.floor(this.time * 10) % sh.info.n;
+        const d = Math.max(sz.w, sz.h) * 1.25;
+        g.save();
+        g.globalAlpha = 0.55;
+        g.drawImage(sh.im, f * sh.info.w, 0, sh.info.w, sh.info.h, h.x - d / 2, h.y - sz.h * 0.5 - d / 2, d, d);
+        g.restore();
+      }
     }
-    // hp bar under hero
     const bw = 46 * u;
-    const bx = h.x - bw / 2;
-    const by = h.y + 6;
-    g.fillStyle = 'rgba(60,30,20,0.8)';
-    roundRect(g, bx - 2, by - 2, bw + 4, 9, 4.5);
-    g.fill();
-    g.fillStyle = '#5fd36a';
-    roundRect(g, bx, by, bw * Math.max(0, h.hp / h.maxHp), 5, 2.5);
-    g.fill();
-    if (h.shield > 0) {
-      g.fillStyle = '#9fdcff';
-      roundRect(g, bx, by, bw * Math.min(1, h.shield / h.maxHp), 2.5, 1.2);
-      g.fill();
-    }
+    this.bar(h.x - bw / 2, h.y + 4, bw, 9, h.hp / h.maxHp, 'SquareButton2_green.png');
+    if (h.shield > 0) this.bar(h.x - bw / 2, h.y + 12, bw * Math.min(1, h.shield / h.maxHp), 6, 1, 'SquareButton2_blue.png');
   }
 
   drawProj(p: Proj) {
+    const sh = fxSheet((p.kind === 'arrow' ? 'arrow_' : 'spell_') + p.el);
+    if (!sh) return;
     const g = this.g;
+    const { n, w, h } = sh.info;
+    const f = Math.floor(p.t * 16) % n;
+    const a = Math.atan2(p.ty - p.y, p.tx - p.x);
+    const dw = (p.kind === 'arrow' ? 64 : p.dmgMul === 0 ? 150 : 76) * this.u;
+    const dh = (dw * h) / w;
     g.save();
-    if (p.kind === 'arrow') {
-      const a = Math.atan2(p.ty - p.y, p.tx - p.x);
-      g.translate(p.x, p.y);
-      g.rotate(a);
-      g.strokeStyle = 'rgba(80,40,30,0.9)';
-      g.lineWidth = 4;
-      g.lineCap = 'round';
-      g.beginPath();
-      g.moveTo(-16, 0);
-      g.lineTo(6, 0);
-      g.stroke();
-      g.strokeStyle = p.color;
-      g.lineWidth = 2;
-      g.stroke();
-      g.fillStyle = '#fff';
-      g.beginPath();
-      g.moveTo(10, 0);
-      g.lineTo(3, -4);
-      g.lineTo(3, 4);
-      g.closePath();
-      g.fill();
-    } else {
-      p.trail.forEach((t, i) => {
-        g.globalAlpha = (i / p.trail.length) * 0.5;
-        g.fillStyle = p.color;
-        g.beginPath();
-        g.arc(t.x, t.y, 3 + i * 0.7, 0, Math.PI * 2);
-        g.fill();
-      });
-      g.globalAlpha = 1;
-      const grd = g.createRadialGradient(p.x, p.y, 1, p.x, p.y, 14);
-      grd.addColorStop(0, '#ffffff');
-      grd.addColorStop(0.35, p.color);
-      grd.addColorStop(1, p.color + '00');
-      g.fillStyle = grd;
-      g.beginPath();
-      g.arc(p.x, p.y, 14, 0, Math.PI * 2);
-      g.fill();
-    }
-    g.restore();
-  }
-
-  drawPart(p: Particle) {
-    const g = this.g;
-    const k = Math.max(0, p.life / p.max);
-    g.save();
-    switch (p.kind) {
-      case 'dot':
-        g.globalAlpha = k;
-        g.fillStyle = p.color;
-        g.beginPath();
-        g.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-        g.fill();
-        break;
-      case 'star':
-        g.globalAlpha = k;
-        g.fillStyle = p.color;
-        star(g, p.x, p.y, p.size * 1.6, p.size * 0.6);
-        break;
-      case 'wisp': {
-        g.globalAlpha = k * 0.8;
-        const grd = g.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size);
-        grd.addColorStop(0, p.color);
-        grd.addColorStop(1, 'rgba(255,255,255,0)');
-        g.fillStyle = grd;
-        g.beginPath();
-        g.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-        g.fill();
-        break;
-      }
-      case 'coin':
-        g.globalAlpha = Math.min(1, k * 2);
-        g.fillStyle = p.color;
-        g.strokeStyle = 'rgba(120,70,20,0.9)';
-        g.lineWidth = 1.5;
-        g.beginPath();
-        g.ellipse(p.x, p.y, p.size * Math.abs(Math.cos(p.life * 10)) + 1, p.size, 0, 0, Math.PI * 2);
-        g.fill();
-        g.stroke();
-        break;
-      case 'ring': {
-        const r = p.size * (1 - k * k * 0.8);
-        g.globalAlpha = k;
-        g.strokeStyle = p.color;
-        g.lineWidth = 4 * k + 1;
-        g.beginPath();
-        g.ellipse(p.x, p.y, r, r * 0.42, 0, 0, Math.PI * 2);
-        g.stroke();
-        g.globalAlpha = k * 0.25;
-        g.fillStyle = p.color;
-        g.fill();
-        break;
-      }
-      case 'telegraph': {
-        const t = 1 - k;
-        g.globalAlpha = 0.25 + Math.sin(t * 30) * 0.1;
-        g.fillStyle = p.color;
-        g.beginPath();
-        g.ellipse(p.x, p.y, p.size, p.size * 0.42, 0, 0, Math.PI * 2);
-        g.fill();
-        g.globalAlpha = 0.9;
-        g.strokeStyle = p.color;
-        g.lineWidth = 3;
-        g.stroke();
-        g.beginPath();
-        g.ellipse(p.x, p.y, p.size * t, p.size * 0.42 * t, 0, 0, Math.PI * 2);
-        g.stroke();
-        break;
-      }
-      case 'slash': {
-        const t = 1 - k;
-        g.translate(p.x, p.y);
-        g.scale(p.a ?? 1, 1);
-        g.rotate(p.extra ?? 0);
-        g.globalAlpha = k;
-        g.lineCap = 'round';
-        g.strokeStyle = '#ffffff';
-        g.lineWidth = 7 * k + 1;
-        g.beginPath();
-        g.arc(-p.size * 0.3, 0, p.size, -1.2 + t * 0.4, 0.9 + t * 0.4);
-        g.stroke();
-        g.strokeStyle = p.color;
-        g.lineWidth = 3 * k + 1;
-        g.stroke();
-        break;
-      }
-      case 'bolt': {
-        g.globalAlpha = k;
-        g.strokeStyle = '#ffffff';
-        g.lineWidth = 5;
-        g.lineJoin = 'round';
-        g.beginPath();
-        const x0 = p.tx ?? p.x;
-        const y0 = p.ty ?? 0;
-        g.moveTo(x0, y0);
-        const segs = 7;
-        for (let i = 1; i <= segs; i++) {
-          const f = i / segs;
-          g.lineTo(x0 + (p.x - x0) * f + (i < segs ? (Math.random() - 0.5) * 22 : 0), y0 + (p.y - y0) * f);
-        }
-        g.stroke();
-        g.strokeStyle = p.color;
-        g.lineWidth = 2.5;
-        g.stroke();
-        break;
-      }
-      case 'meteor': {
-        const grd = g.createRadialGradient(p.x, p.y, 2, p.x, p.y, p.size);
-        grd.addColorStop(0, '#fffbe0');
-        grd.addColorStop(0.4, p.color);
-        grd.addColorStop(1, p.color + '00');
-        g.fillStyle = grd;
-        g.beginPath();
-        g.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-        g.fill();
-        g.globalAlpha = 0.5;
-        g.strokeStyle = p.color;
-        g.lineWidth = p.size * 0.8;
-        g.lineCap = 'round';
-        g.beginPath();
-        g.moveTo(p.x, p.y);
-        g.lineTo(p.x - p.vx * 0.12, p.y - p.vy * 0.12);
-        g.stroke();
-        break;
-      }
-      case 'text': {
-        const t = 1 - k;
-        const sc = p.extra ? 1 : t < 0.12 ? 0.6 + (t / 0.12) * 0.6 : 1.2 - Math.min(0.2, (t - 0.12) * 0.6);
-        g.globalAlpha = Math.min(1, k * 2.5);
-        g.translate(p.x, p.y);
-        g.scale(sc, sc);
-        g.font = `800 ${p.size}px "M PLUS Rounded 1c", sans-serif`;
-        g.textAlign = 'center';
-        g.textBaseline = 'middle';
-        g.lineJoin = 'round';
-        g.lineWidth = p.extra ? 5 : 4;
-        g.strokeStyle = 'rgba(70,35,25,0.95)';
-        g.strokeText(p.text!, 0, 0);
-        g.fillStyle = p.color;
-        g.fillText(p.text!, 0, 0);
-        if (p.r) {
-          g.font = `800 10px "M PLUS Rounded 1c", sans-serif`;
-          g.lineWidth = 3;
-          const lbl = p.r > 0 ? '弱点' : '耐性';
-          g.strokeText(lbl, 0, -p.size * 0.85);
-          g.fillStyle = p.r > 0 ? '#ffb347' : '#b6c3d4';
-          g.fillText(lbl, 0, -p.size * 0.85);
-        }
-        break;
-      }
-    }
+    g.translate(p.x, p.y);
+    g.rotate(a + Math.PI); // the CraftPix projectiles point left
+    g.drawImage(sh.im, f * w, 0, w, h, -dw / 2, -dh / 2, dw, dh);
     g.restore();
   }
 }
@@ -1516,18 +1313,4 @@ function easeOutBack(t: number) {
   const c1 = 1.70158;
   const c3 = c1 + 1;
   return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
-}
-function roundRect(g: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
-  g.beginPath();
-  g.roundRect(x, y, Math.max(0, w), h, Math.min(r, h / 2, Math.max(0, w) / 2));
-}
-function star(g: CanvasRenderingContext2D, x: number, y: number, R: number, r: number) {
-  g.beginPath();
-  for (let i = 0; i < 8; i++) {
-    const a = (i / 8) * Math.PI * 2;
-    const rr = i % 2 ? r : R;
-    g.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
-  }
-  g.closePath();
-  g.fill();
 }

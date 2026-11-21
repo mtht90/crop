@@ -15,13 +15,16 @@ npm run dev
 npm run sim -- 72  # バランス確認（72時間分の放置プレイをシミュレーション）
 ```
 
+見た目・音はすべて外部素材（Librarium / Cozy UI Pack / CraftPix の背景・エフェクト / game-icons.net / Kenney / OpenGameArt / フォント）。
+CSS はレイアウトと素材画像の伸縮・配置・動きだけに使い、グラデーションや角丸の箱などで絵を描かない。
 素材ライセンスにより元ファイルは再配布できないため、リポジトリには含めず、ビルド時に作者の配布ページから取得する。
-Cozy UI Pack の完全版を持っている場合は `idle/assets-src/cozy-ui/` に展開すればそちらが使われる。
+どの素材を何に使うかは `src/data/assets.ts` にまとめてある。
+Cozy UI Pack の完全版を持っている場合は `idle/assets-src/cozy-ui/` に展開すればそちらが使われる（ローカルビルドのみ）。
 
 ## 構成
 - `src/data/` 霊獣・敵・エリア（monsters.ts）、装備・秘術（items.ts）
 - `src/game/core.ts` 数式とセーブ形式、`logic.ts` ガチャ・報酬・放置計算・任務、`store.ts` ライブ状態と自動保存
-- `src/render/field.ts` フィールドの戦闘シミュレーションと描画、`background.ts` エリア背景
+- `src/render/field.ts` フィールドの戦闘シミュレーションと描画（素材画像・スプライトシートのみ）
 - `src/ui/` 画面（タブ・モーダル・HUD）
 
 クレジットは [CREDITS.md](CREDITS.md) とゲーム内「その他 → クレジット」。

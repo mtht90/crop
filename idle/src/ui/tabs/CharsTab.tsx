@@ -4,7 +4,7 @@ import { ALLIES, ALLY_BY_ID, ELEMENT_INFO, ROLE_INFO, elementFactor } from '../.
 import { areaDef, copiesForStar, fmt, heroStats, skillSlotsFor } from '../../game/core';
 import * as L from '../../game/logic';
 import { AllyInfoLine, Bar, Btn, CharCard, Modal, Portrait, useGame } from '../common';
-import { ElIcon, Stars, TabIcon } from '../icons';
+import { Arrow, ElIcon, Stars, TabIcon } from '../icons';
 
 export function CharsTab() {
   const s = useGame(3);
@@ -41,7 +41,19 @@ export function CharsTab() {
             <ElIcon el={e} size={14} /> {ELEMENT_INFO[e].name}
           </span>
         ))}
-        ／ 相性 火→風→土→水→火、光⇔闇
+        <br />
+        相性：
+        {(['fire', 'wind', 'earth', 'water', 'fire'] as const).map((e, i) => (
+          <>
+            {i > 0 && <Arrow size={9} />}
+            <ElIcon el={e} size={14} />
+          </>
+        ))}
+        {'　'}
+        <ElIcon el="light" size={14} />
+        <Arrow size={9} dir="left" />
+        <Arrow size={9} />
+        <ElIcon el="dark" size={14} />
       </div>
       <div class="grid">
         {owned.map((a) => {
@@ -51,7 +63,7 @@ export function CharsTab() {
               id={a.id}
               selected={s.active === a.id}
               onClick={() => setDetail(a.id)}
-              badge={s.active === a.id ? <span class="chip" style={{ background: '#79c84f' }}>出撃中</span> : undefined}
+              badge={s.active === a.id ? <span class="chip gold">出撃中</span> : undefined}
               footer={
                 <div style={{ marginTop: '1px' }}>
                   <Stars n={own.stars} size={10} />

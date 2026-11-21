@@ -1,7 +1,7 @@
 import { fmt, fmtTime, stageLabel } from '../../game/core';
 import type { OfflineReport } from '../../game/logic';
 import { Btn, Modal } from '../common';
-import { Coin, Gem, Orb, TabIcon } from '../icons';
+import { Arrow, Coin, Gem, Orb, TabIcon } from '../icons';
 
 export function OfflineModal({ report: r, onClose }: { report: OfflineReport; onClose: () => void }) {
   return (
@@ -9,8 +9,8 @@ export function OfflineModal({ report: r, onClose }: { report: OfflineReport; on
       <div class="col">
         <div class="hint" style={{ textAlign: 'center' }}>{fmtTime(r.seconds)} のあいだ、霊獣は戦い続けていた</div>
         <div class="big-arrow">
-          {stageLabel(r.fromG)} <small>→</small> {stageLabel(r.toG)}
-          {r.toG > r.fromG && <div style={{ fontSize: '13px' }} class="up">{r.toG - r.fromG} ステージ前進！</div>}
+          {stageLabel(r.fromG)} <Arrow size={18} /> {stageLabel(r.toG)}
+          {r.toG > r.fromG && <div style={{ fontSize: '13px', width: '100%' }} class="up">{r.toG - r.fromG} ステージ前進！</div>}
         </div>
         <div class="report-grid">
           <TabIcon name="skull" size={24} />

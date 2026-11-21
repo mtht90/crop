@@ -5,7 +5,7 @@ import * as L from '../../game/logic';
 import { ELEMENT_INFO, ROLE_INFO } from '../../data/monsters';
 import { sfx } from '../../game/audio';
 import { AllyInfoLine, Btn, Panel, Portrait, Toggle, useGame } from '../common';
-import { Coin, TabIcon } from '../icons';
+import { Arrow, Coin, ElIcon, TabIcon } from '../icons';
 
 const ICON: Record<TrainKey, string> = { atk: 'sword', hp: 'heart', crit: 'crit', critDmg: 'critDmg', speed: 'speed' };
 
@@ -44,7 +44,7 @@ export function TrainTab() {
             <div class="row" style={{ gap: '6px', alignItems: 'baseline' }}>
               <b style={{ fontSize: '18px' }}>{h.ally.name}</b>
               <span class="muted">{h.ally.title}</span>
-              {own?.stars ? <span class="chip" style={{ background: '#f4a73b' }}>覚醒{own.stars}</span> : null}
+              {own?.stars ? <span class="chip gold">覚醒{own.stars}</span> : null}
             </div>
             <AllyInfoLine ally={h.ally} />
             <div class="stat-grid" style={{ marginTop: '4px' }}>
@@ -80,7 +80,7 @@ export function TrainTab() {
           </div>
         </div>
         <div class="hint" style={{ marginTop: '6px' }}>
-          {ROLE_INFO[h.ally.role].name}：{ROLE_INFO[h.ally.role].desc} 属性 <b style={{ color: ELEMENT_INFO[h.ally.el].color }}>{ELEMENT_INFO[h.ally.el].name}</b>
+          {ROLE_INFO[h.ally.role].name}：{ROLE_INFO[h.ally.role].desc} 属性 <ElIcon el={h.ally.el} size={14} /> <b>{ELEMENT_INFO[h.ally.el].name}</b>
           {s.souls > 0 && ` ／ 魂石ボーナス 能力×${soulMul(s.souls).power.toFixed(2)}`}
         </div>
       </Panel>
@@ -118,7 +118,7 @@ export function TrainTab() {
                   {t.fmt(t.value(lv))}
                   {!maxed && (
                     <>
-                      {' → '}
+                      <Arrow size={10} />
                       <span class="up">{t.fmt(next)}</span>
                       {step10 && <span class="up"> ×2!</span>}
                     </>
