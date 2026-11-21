@@ -3,3 +3,7 @@ game/assets-src/
 game/public/assets/models/synty/
 # Idle game: third-party assets may not be redistributed (public repo)
 idle/assets-src/
+# Idle game: generated from assets-src at build time (also third-party, not committed)
+idle/public/gen/
+idle/node_modules/
+idle/dist/
