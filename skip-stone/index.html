@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<!-- artifact:start -->
+<title>あさなぎ水切り</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;800&family=M+PLUS+Rounded+1c:wght@500;800&display=swap">
+<style>
+/* レイアウト: 全画面の3D湖。HUD は上端の帯・中央の判定・下端のヒントの3層で、指で触る下半分はあけておく */
+:root {
+  --lake: #0d2a33;
+  --lake-glass: rgba(9, 33, 41, 0.58);
+  --cream: #fff6e6;
+  --cream-dim: rgba(255, 246, 230, 0.72);
+  --sun: #ffc15e;
+  --ember: #ff7d4d;
+  --mint: #7ff0dc;
+  --line: rgba(255, 246, 230, 0.18);
+  --display: "Baloo 2", "M PLUS Rounded 1c", system-ui, sans-serif;
+  --jp: "M PLUS Rounded 1c", "Hiragino Maru Gothic ProN", system-ui, sans-serif;
+  color-scheme: dark;
+}
+html, body { height: 100%; margin: 0; overflow: hidden; background: var(--lake); color: var(--cream); }
+body {
+  font-family: var(--jp);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+#gl { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+.ui { position: fixed; pointer-events: none; z-index: 2; }
+button { font: inherit; color: inherit; cursor: pointer; pointer-events: auto; }
+button:focus-visible { outline: 3px solid var(--sun); outline-offset: 3px; }
+
+/* ---- 上端の帯 ---- */
+#topbar {
+  top: 0; left: 0; right: 0;
+  padding-top: calc(env(safe-area-inset-top, 0px) + 10px);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; grid-template-columns: 1fr auto 1fr; align-items: start; gap: 8px;
+  background: linear-gradient(to bottom, rgba(9, 33, 41, 0.55), rgba(9, 33, 41, 0));
+  padding-bottom: 22px;
+}
+.label { font-size: 10px; letter-spacing: 0.14em; color: var(--cream-dim); font-weight: 800; }
+.score-val { font-family: var(--display); font-weight: 800; font-size: 30px; line-height: 1; font-variant-numeric: tabular-nums; text-shadow: 0 2px 10px rgba(0,0,0,.35); }
+#stones { display: flex; gap: 6px; padding-top: 6px; justify-self: center; }
+.pip { width: 15px; height: 10px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #d8d0c4, #8b8277 70%); box-shadow: 0 1px 3px rgba(0,0,0,.4); transition: opacity .3s, transform .3s; }
+.pip.used { opacity: .22; transform: scale(.8); }
+.pip.now { box-shadow: 0 0 0 2px var(--sun), 0 1px 3px rgba(0,0,0,.4); }
+.right { justify-self: end; text-align: right; display: grid; gap: 6px; justify-items: end; }
+#best .score-val { font-size: 18px; color: var(--sun); }
+#mute {
+  pointer-events: auto; border: 1px solid var(--line); background: var(--lake-glass);
+  border-radius: 999px; padding: 4px 10px; font-size: 11px; font-weight: 800; letter-spacing: .06em;
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+}
+
+/* ---- 飛んでいる間のカウンター ---- */
+#live {
+  top: calc(env(safe-area-inset-top, 0px) + 74px); left: 0; right: 0;
+  display: flex; flex-direction: column; align-items: center; gap: 0;
+  opacity: 0; transition: opacity .25s;
+}
+#live.on { opacity: 1; }
+#skipCount { font-family: var(--display); font-weight: 800; font-size: clamp(64px, 20vw, 120px); line-height: .9; font-variant-numeric: tabular-nums; text-shadow: 0 4px 24px rgba(0,0,0,.35); }
+#skipCount.bump { animation: bump .22s ease-out; }
+@keyframes bump { 0% { transform: scale(1.25); } 100% { transform: scale(1); } }
+.live-sub { display: flex; gap: 14px; align-items: baseline; font-weight: 800; text-shadow: 0 1px 3px rgba(9,33,41,.7), 0 2px 14px rgba(9,33,41,.45); }
+.live-sub .unit { font-size: 13px; color: var(--cream-dim); letter-spacing: .1em; }
+#distVal { font-family: var(--display); font-size: 22px; font-variant-numeric: tabular-nums; }
+
+/* ---- 判定の文字 ---- */
+#judge {
+  top: 34%; left: 0; right: 0; text-align: center;
+  font-family: var(--display); font-weight: 800; font-style: italic;
+  font-size: clamp(46px, 15vw, 96px); letter-spacing: .01em; line-height: 1;
+  opacity: 0;
+  -webkit-text-stroke: 2px rgba(9, 33, 41, .55);
+  text-shadow: 0 6px 30px rgba(0,0,0,.35);
+}
+#judge.show { animation: judgePop 1.4s cubic-bezier(.2,1.4,.4,1) forwards; }
+#judge.nice { color: var(--cream); }
+#judge.great { color: var(--sun); }
+#judge.excellent { color: var(--mint); }
+#judge.miss { color: var(--cream-dim); font-size: clamp(30px, 9vw, 56px); }
+@keyframes judgePop {
+  0% { opacity: 0; transform: scale(.4) rotate(-6deg); }
+  18% { opacity: 1; transform: scale(1.08) rotate(-3deg); }
+  30% { transform: scale(1) rotate(-3deg); }
+  80% { opacity: 1; transform: scale(1) translateY(-6px) rotate(-3deg); }
+  100% { opacity: 0; transform: scale(.96) translateY(-22px) rotate(-3deg); }
+}
+#feed {
+  top: calc(34% + clamp(56px, 17vw, 106px)); left: 0; right: 0;
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+}
+.chip {
+  background: var(--lake-glass); border: 1px solid var(--line); border-radius: 999px;
+  padding: 5px 14px; font-size: 13px; font-weight: 800; letter-spacing: .04em;
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  animation: chipIn 2.4s ease forwards;
+}
+.chip.gold { color: var(--sun); border-color: rgba(255,193,94,.5); }
+.chip.mint { color: var(--mint); border-color: rgba(127,240,220,.45); }
+@keyframes chipIn { 0% { opacity: 0; transform: translateY(8px); } 12% { opacity: 1; transform: none; } 80% { opacity: 1; } 100% { opacity: 0; transform: translateY(-6px); } }
+
+/* ---- 下端のヒント ---- */
+#hint {
+  left: 0; right: 0; bottom: calc(env(safe-area-inset-bottom, 0px) + 18px);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  text-align: center; font-weight: 800; font-size: 13px; letter-spacing: .04em;
+  color: var(--cream); text-shadow: 0 1px 8px rgba(0,0,0,.6);
+  transition: opacity .3s;
+}
+#hint small { display: block; text-shadow: 0 1px 3px rgba(9,33,41,.8); font-weight: 500; font-size: 11.5px; color: var(--cream-dim); margin-top: 3px; }
+#hint .curve { color: var(--mint); }
+
+/* ---- パネル(タイトル・結果・最終結果) ---- */
+.sheet {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 5;
+  padding: 0 max(16px, env(safe-area-inset-right, 0px)) calc(env(safe-area-inset-bottom, 0px) + 16px) max(16px, env(safe-area-inset-left, 0px));
+  display: flex; justify-content: center;
+  transform: translateY(110%); transition: transform .45s cubic-bezier(.2,.9,.25,1);
+}
+.sheet.open { transform: none; }
+.card {
+  width: 100%; max-width: 420px; box-sizing: border-box;
+  background: rgba(9, 33, 41, 0.78); border: 1px solid var(--line); border-radius: 22px;
+  padding: 18px 18px 16px; backdrop-filter: blur(14px) saturate(1.2); -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  box-shadow: 0 20px 60px rgba(0,0,0,.35);
+  display: grid; gap: 12px;
+}
+.card h2 { margin: 0; font-size: 13px; letter-spacing: .16em; color: var(--cream-dim); font-weight: 800; }
+.rows { display: grid; gap: 7px; }
+.row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: 14px; }
+.row b { font-family: var(--display); font-size: 18px; font-variant-numeric: tabular-nums; }
+.row.mul b { color: var(--sun); font-size: 16px; }
+.row.total { border-top: 1px solid var(--line); padding-top: 9px; }
+.row.total b { font-size: 34px; color: var(--cream); line-height: 1; }
+.btn {
+  border: 0; border-radius: 14px; padding: 14px 18px; font-size: 16px; font-weight: 800; letter-spacing: .06em;
+  background: linear-gradient(180deg, #ffd27a, var(--sun) 60%, #f0a640); color: #3a2409;
+  box-shadow: 0 6px 18px rgba(255, 170, 60, .35), inset 0 1px 0 rgba(255,255,255,.6);
+}
+.btn:active { transform: translateY(1px); }
+.btn[disabled] { filter: grayscale(.7) brightness(.8); cursor: default; }
+.newrec { color: var(--sun); font-size: 12px; font-weight: 800; letter-spacing: .1em; }
+
+#titleSheet .card { gap: 14px; }
+.logo { margin: 0; font-family: var(--jp); font-weight: 800; font-size: 34px; letter-spacing: .04em; line-height: 1.15; text-wrap: balance; }
+.logo span { display: block; font-family: var(--display); font-size: 13px; letter-spacing: .32em; color: var(--sun); font-weight: 800; }
+.howto { display: grid; gap: 9px; margin: 0; padding: 0; list-style: none; }
+.howto li { display: grid; grid-template-columns: 44px 1fr; gap: 10px; align-items: center; font-size: 13px; line-height: 1.45; }
+.howto svg { width: 44px; height: 44px; }
+.howto b { color: var(--sun); }
+.progress { height: 4px; border-radius: 4px; background: rgba(255,255,255,.12); overflow: hidden; }
+.progress i { display: block; height: 100%; width: 0; background: var(--sun); transition: width .2s; }
+.credit { font-size: 10px; color: var(--cream-dim); line-height: 1.5; margin: 0; }
+#rankTitle { font-size: 26px; font-weight: 800; margin: 0; letter-spacing: .04em; }
+
+@media (prefers-reduced-motion: reduce) {
+  #judge.show { animation-duration: .01s; opacity: 1; }
+  .sheet { transition: none; }
+}
+@media (min-width: 900px) {
+  #judge { top: 30%; }
+}
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+<!-- artifact:head-end -->
+</head>
+<body>
+<!-- artifact:body-start -->
+<canvas id="gl" aria-label="湖の3D表示。下半分をスワイプして石を投げます"></canvas>
+
+<div id="topbar" class="ui">
+  <div>
+    <div class="label">SCORE</div>
+    <div id="score" class="score-val">0</div>
+  </div>
+  <div id="stones" aria-label="残りの石"></div>
+  <div class="right">
+    <div id="best"><div class="label">BEST</div><div id="bestVal" class="score-val">0</div></div>
+    <button id="mute" type="button" aria-pressed="false">音 ON</button>
+  </div>
+</div>
+
+<div id="live" class="ui" aria-live="polite">
+  <div id="skipCount">0</div>
+  <div class="live-sub"><span class="unit">SKIPS</span><span id="distVal">0.0</span><span class="unit">m</span></div>
+</div>
+
+<div id="judge" class="ui"></div>
+<div id="feed" class="ui"></div>
+
+<div id="hint" class="ui" hidden>
+  <span id="hintMain">石を上へはじいて投げる</span>
+  <small id="hintSub">投げる前に指でくるくる回すとカーブ</small>
+</div>
+
+<section id="titleSheet" class="sheet open" aria-labelledby="gameTitle">
+  <div class="card">
+    <h1 id="gameTitle" class="logo"><span>STONE SKIPPING</span>あさなぎ水切り</h1>
+    <ul class="howto">
+      <li>
+        <svg viewBox="0 0 44 44" aria-hidden="true"><circle cx="22" cy="22" r="21" fill="rgba(255,246,230,.08)"/><path d="M22 33V12m0 0-6 6m6-6 6 6" stroke="#fff6e6" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span><b>上へはじく</b>と投げる。速くはじくほど遠くへ、左右にはじくと向きが変わる。</span>
+      </li>
+      <li>
+        <svg viewBox="0 0 44 44" aria-hidden="true"><circle cx="22" cy="22" r="21" fill="rgba(255,246,230,.08)"/><circle cx="22" cy="22" r="13" stroke="#fff6e6" stroke-width="2" fill="none" opacity=".7"/><circle cx="22" cy="22" r="6" stroke="#7ff0dc" stroke-width="3" fill="none"/></svg>
+        <span>水面の<b>リングが小さい瞬間</b>に投げ、輪の中に落とすと Nice → Great → Excellent。</span>
+      </li>
+      <li>
+        <svg viewBox="0 0 44 44" aria-hidden="true"><circle cx="22" cy="22" r="21" fill="rgba(255,246,230,.08)"/><path d="M30 14a11 11 0 1 0 3 9" stroke="#7ff0dc" stroke-width="3" fill="none" stroke-linecap="round"/><path d="m33 13-.5 8-7-3" stroke="#7ff0dc" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>投げる前に<b>くるくる回す</b>と回転がかかってカーブ。安定してよく跳ね、得点も×1.3。</span>
+      </li>
+    </ul>
+    <div class="progress" aria-hidden="true"><i id="loadBar"></i></div>
+    <button id="startBtn" class="btn" type="button" disabled>よみこみ中…</button>
+    <p class="credit">5投の合計で勝負。湖に浮かぶ金色の輪で跳ねると +250。<br>素材: Poly Haven (HDRI・テクスチャ・岩モデル, CC0) / OpenGameArt (効果音, CC0) / three.js</p>
+  </div>
+</section>
+
+<section id="resultSheet" class="sheet" aria-labelledby="resultTitle">
+  <div class="card">
+    <h2 id="resultTitle">第1投</h2>
+    <div class="rows" id="resultRows"></div>
+    <button id="nextBtn" class="btn" type="button">次の石へ</button>
+  </div>
+</section>
+
+<section id="finalSheet" class="sheet" aria-labelledby="finalTitle">
+  <div class="card">
+    <h2 id="finalTitle">5投の結果</h2>
+    <p id="rankTitle">水切り名人</p>
+    <div class="rows" id="finalRows"></div>
+    <button id="againBtn" class="btn" type="button">もう一度</button>
+  </div>
+</section>
+
+<script type="module" src="./src/main.js"></script>
+<!-- artifact:body-end -->
+</body>
+</html>
