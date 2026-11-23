@@ -1,0 +1,49 @@
+# 「ちいさな島のくらし」を GitHub Pages に公開する。
+# Tiny Swords は再配布できないため、ビルドのたびに配布元(itch.io)から取得する。
+name: idle-village pages
+
+on:
+  push:
+    branches: [main]
+    paths: ['idle-village/**', '.github/workflows/idle-village-pages.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: idle-village-pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: idle-village
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: idle-village/package-lock.json
+      - run: npm ci
+      - run: node scripts/fetch-tiny-swords.mjs tiny-swords.zip
+      - run: npm run setup-assets -- tiny-swords.zip
+      - run: npm run build
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: idle-village/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
