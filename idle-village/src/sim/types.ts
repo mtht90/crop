@@ -68,6 +68,8 @@ export interface Villager {
   lifespan: number;
   role: Role;
   personality: string; // AIが書いた性格(自由文)
+  speech: string; // 口調の特徴(AIが書く)
+  mutters: string[]; // これから口にするつぶやき(AIが書く)
   skill: ResKind | 'build'; // AIがいないときの習慣
   avatar: number;
   x: number;

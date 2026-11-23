@@ -45,6 +45,10 @@ export class Sim {
 
   constructor(state: GameState) {
     this.s = state;
+    for (const v of state.villagers) {
+      v.speech ??= '';
+      v.mutters ??= [];
+    }
     this.landArr = Uint8Array.from(state.map.land, (c) => (c === '1' ? 1 : 0));
     this.grid = new Grid(state.map.w, state.map.h);
     this.rebuildGrid();
@@ -146,6 +150,8 @@ export class Sim {
       lifespan: 5.5 + Math.random() * 2.5,
       role: o.age < 1 ? 'child' : 'pawn',
       personality: pick(SEED_PERSONALITIES),
+      speech: '',
+      mutters: [],
       skill: pick(SKILLS),
       avatar: randInt(1, 25),
       x: o.x,
@@ -907,9 +913,9 @@ export class Sim {
 
     // 心の声(AIの考え)をときどき口にする
     if (!v.hidden && s.time > v.nextMurmur) {
-      v.nextMurmur = s.time + 30 + rand() * 50;
+      v.nextMurmur = s.time + (v.mutters.length ? 14 + rand() * 18 : 30 + rand() * 50);
       if (!v.bubble) {
-        const t = v.intention?.source === 'ai' && rand() < 0.7 ? v.intention.thought : this.aiEnabled ? null : murmur(v, { night: this.isNight, raid: this.raidActive });
+        const t = v.mutters.length ? v.mutters.shift()! : this.aiEnabled ? null : murmur(v, { night: this.isNight, raid: this.raidActive });
         if (t) this.say(v, t);
       }
     }
