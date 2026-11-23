@@ -534,11 +534,20 @@ export class UI {
       this.ctl.audio.save();
       this.update();
     });
+    let armed = false;
     $('#reset').addEventListener('click', () => {
-      if (confirm('いまの島のデータを消して、最初からやり直しますか?')) {
-        this.closeModal();
-        this.ctl.resetAll();
+      if (!armed) {
+        armed = true;
+        $('#reset').textContent = '本当に消す?(もう一度押す)';
+        setTimeout(() => {
+          armed = false;
+          const r = document.getElementById('reset');
+          if (r) r.textContent = '最初からやり直す';
+        }, 4000);
+        return;
       }
+      this.closeModal();
+      this.ctl.resetAll();
     });
   }
 
