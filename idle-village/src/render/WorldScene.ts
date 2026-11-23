@@ -1,6 +1,6 @@
 // 島の描画。シミュレーションの状態を毎フレーム読み取って見た目に反映する。
 import Phaser from 'phaser';
-import { BUILDINGS, DAY_LEN, NIGHT_START, TILE } from '../sim/config';
+import { DAY_LEN, NIGHT_START, TILE } from '../sim/config';
 import type { Sim } from '../sim/sim';
 import type { Building, Raider, SimEvent, Villager } from '../sim/types';
 import { ORIGIN_Y, createAnims, preloadAll } from './assets';
@@ -54,6 +54,7 @@ export class WorldScene extends Phaser.Scene {
   preload() {
     this.ctl = this.registry.get('ctl');
     preloadAll(this);
+    this.load.image('ui_paper', 'assets/tiny-swords/UI Elements/UI Elements/Papers/RegularPaper.png');
     AudioMgr.preload(this);
     const bar = document.getElementById('load-bar');
     this.load.on('progress', (p: number) => {
@@ -126,6 +127,13 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private makeTextures() {
+    // 吹き出し用:Tiny Swords の紙を9分割の1枚絵に詰め直す
+    const src = this.textures.get('ui_paper').getSourceImage() as HTMLImageElement;
+    const pc = this.textures.createCanvas('paper9', 192, 192)!;
+    const pctx = pc.getContext();
+    pctx.imageSmoothingEnabled = false;
+    for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) pctx.drawImage(src, c * 128, r * 128, 64, 64, c * 64, r * 64, 64, 64);
+    pc.refresh();
     // 雪粒・雨粒・窓明かり
     const g = this.make.graphics({}, false);
     g.fillStyle(0xffffff, 1).fillCircle(3, 3, 3);
@@ -433,7 +441,7 @@ export class WorldScene extends Phaser.Scene {
       let o = this.buildingSprites.get(b.id);
       if (!o) {
         const img = this.add.image(x, y, tex).setOrigin(0.5, ORIGIN_Y[tex]).setDepth(y);
-        const ghost = this.add.image(x, y, tex).setOrigin(0.5, ORIGIN_Y[tex]).setDepth(y - 1).setAlpha(0.28).setTintFill(0xfff4d6);
+        const ghost = this.add.image(x, y, tex).setOrigin(0.5, ORIGIN_Y[tex]).setDepth(y - 1).setAlpha(0.3);
         const glow = this.add.image(x, y - 40, 'glow').setDepth(DEPTH.glow).setBlendMode(Phaser.BlendModes.ADD).setScale(b.w * 0.9, 1.2).setAlpha(0);
         o = { img, ghost, fires: [], glow };
         this.buildingSprites.set(b.id, o);
@@ -555,6 +563,10 @@ export class WorldScene extends Phaser.Scene {
 
   private syncBubble(v: Villager, spr: Phaser.GameObjects.Sprite) {
     const cur = this.bubbles.get(v.id);
+    if (!v.bubble && v.thinking && !v.hidden) {
+      // AIが考え中
+      v = { ...v, bubble: { text: '…', until: 0 } };
+    }
     if (!v.bubble) {
       if (cur) {
         cur.c.destroy();
@@ -563,28 +575,30 @@ export class WorldScene extends Phaser.Scene {
       return;
     }
     const headY = v.y - (v.role === 'child' ? 58 : 76);
-    if (cur && cur.text === v.bubble.text) {
+    const bub = v.bubble;
+    if (cur && cur.text === bub.text) {
       cur.c.setPosition(spr.x, headY).setVisible(true).setDepth(DEPTH.bubble + v.y / 10000);
       return;
     }
     cur?.c.destroy();
+    const talk = !!bub.talk;
     const text = this.add
-      .text(0, 0, v.bubble.text, { fontFamily: FONT, fontSize: '15px', color: '#3a2a1a', align: 'center', wordWrap: { width: 190, useAdvancedWrap: true } })
+      .text(0, 0, bub.text, { fontFamily: FONT, fontSize: '15px', color: talk ? '#3a2a1a' : '#2f5f7f', align: 'center', wordWrap: { width: 200, useAdvancedWrap: true } })
       .setOrigin(0.5, 1)
       .setResolution(2);
-    const w = text.width + 18;
-    const h = text.height + 12;
+    // Tiny Swords の紙(縮小して使う)
+    const k = 0.42;
+    const w = Math.max(text.width + 26, 44);
+    const h = text.height + 22;
+    const paper = this.add.nineslice(0, -8, 'paper9', undefined, w / k, h / k, 64, 64, 64, 64).setOrigin(0.5, 1).setScale(k);
+    if (!talk) paper.setAlpha(0.88);
     const g = this.add.graphics();
-    g.fillStyle(0x2b1d12, 0.35).fillRoundedRect(-w / 2 + 2, -h - 8 + 3, w, h, 8);
-    g.fillStyle(0xfffaf0, 1).fillRoundedRect(-w / 2, -h - 8, w, h, 8);
-    g.lineStyle(2, 0x5a4030, 1).strokeRoundedRect(-w / 2, -h - 8, w, h, 8);
-    g.fillStyle(0xfffaf0, 1).fillTriangle(-6, -9, 6, -9, 0, 0);
-    g.lineStyle(2, 0x5a4030, 1).lineBetween(-6, -8, 0, 0).lineBetween(6, -8, 0, 0);
-    text.setPosition(0, -14);
-    const c = this.add.container(spr.x, headY, [g, text]).setDepth(DEPTH.bubble);
+    g.fillStyle(0xeee1c6, talk ? 1 : 0.88).fillTriangle(-6, -13, 6, -13, 0, -1);
+    text.setPosition(0, -17);
+    const c = this.add.container(spr.x, headY, [g, paper, text]).setDepth(DEPTH.bubble);
     c.setScale(0.6);
     this.tweens.add({ targets: c, scale: 1, duration: 180, ease: 'Back.out' });
-    this.bubbles.set(v.id, { c, text: v.bubble.text });
+    this.bubbles.set(v.id, { c, text: bub.text });
   }
 
   private syncRaiders() {
@@ -732,7 +746,7 @@ export class WorldScene extends Phaser.Scene {
             const x = b.tx * TILE + (b.w * TILE) / 2;
             const y = (b.ty + 1) * TILE;
             for (let i = 0; i < b.w + 1; i++) this.time.delayedCall(i * 80, () => this.fx('fx_dust2', x + (i - b.w / 2) * 48, y - 10, 1.5));
-            this.floatText(x, y - 150, `${BUILDINGS[b.kind].name}が完成!`, '#ffe680');
+            this.floatText(x, y - 150, `${b.name}が完成!`, '#ffe680');
             const img = this.buildingSprites.get(b.id)?.img;
             if (img) this.tweens.add({ targets: img, scaleY: { from: 0.92, to: 1 }, scaleX: { from: 1.06, to: 1 }, duration: 380, ease: 'Back.out' });
             this.ctl.audio.play('built', 0.5);

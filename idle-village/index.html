@@ -2,17 +2,17 @@
 <html lang="ja">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     <title>ちいさな島のくらし</title>
-    <meta name="description" content="村人たちが自分で考えて暮らし、村が勝手に育っていくのを見守る放置ゲーム" />
+    <meta name="description" content="村人たちがAIで自分の生き方を考え、島の村が勝手に育っていくのを見守る放置ゲーム" />
   </head>
   <body>
     <div id="game"></div>
 
     <div id="loading">
       <div class="loading-box">
-        <h1>ちいさな島のくらし</h1>
-        <div class="load-track"><div id="load-bar"></div></div>
+        <div class="ribbon ribbon-blue big"><span>ちいさな島のくらし</span></div>
+        <div class="ts-bar wide"><i id="load-bar"></i></div>
         <p id="load-msg">島へ向かっています…</p>
       </div>
     </div>
@@ -20,67 +20,74 @@
     <div id="hud" hidden>
       <header class="topbar">
         <div class="title-block">
-          <div class="ribbon-title"><span id="island-name"></span></div>
+          <div class="ribbon ribbon-blue"><span id="island-name"></span></div>
           <div class="time-block paper-s">
-            <div><span id="time-label"></span> <span class="dot">・</span> <span id="stage-label"></span></div>
-            <div id="next-goal" class="muted"></div>
+            <div id="time-label"></div>
+            <div id="era-label"></div>
           </div>
         </div>
         <div class="stats wood-panel">
           <div class="stat" title="木"><img src="assets/tiny-swords/Terrain/Resources/Wood/Wood Resource/Wood Resource.png" alt="木" /><span id="r-wood">0</span></div>
           <div class="stat" title="肉"><img src="assets/tiny-swords/Terrain/Resources/Meat/Meat Resource/Meat Resource.png" alt="肉" /><span id="r-meat">0</span></div>
           <div class="stat" title="金"><img src="assets/tiny-swords/UI Elements/UI Elements/Icons/Icon_03.png" alt="金" /><span id="r-gold">0</span></div>
-          <div class="stat" title="人口 / 住める人数"><img src="assets/tiny-swords/UI Elements/UI Elements/Human Avatars/Avatars_04.png" alt="人口" /><span id="r-pop">0</span></div>
+          <div class="stat" title="人口 / 住める人数"><img src="assets/tiny-swords/UI Elements/UI Elements/Human Avatars/Avatars_05.png" alt="人口" class="face" /><span id="r-pop">0</span></div>
           <div class="stat pts" title="くらしポイント"><span class="star">✦</span><span id="r-points">0</span></div>
         </div>
       </header>
 
       <nav class="side">
-        <button class="rbtn" id="btn-upgrades" data-open="upgrades" title="天の恵み(強化)"><img src="assets/tiny-swords/UI Elements/UI Elements/Icons/Icon_07.png" alt="" /><span>恵み</span></button>
-        <button class="rbtn" data-open="history" title="歴史書"><img src="assets/tiny-swords/UI Elements/UI Elements/Icons/Icon_11.png" alt="" /><span>歴史</span></button>
-        <button class="rbtn" data-open="villagers" title="村人たち"><img src="assets/tiny-swords/UI Elements/UI Elements/Human Avatars/Avatars_05.png" alt="" /><span>村人</span></button>
+        <button class="rbtn" id="btn-upgrades" data-open="upgrades" title="天の恵み"><img src="assets/tiny-swords/UI Elements/UI Elements/Icons/Icon_07.png" alt="" /><span>恵み</span></button>
+        <button class="rbtn" data-open="history" title="村の記録"><img src="assets/tiny-swords/UI Elements/UI Elements/Icons/Icon_11.png" alt="" /><span>記録</span></button>
+        <button class="rbtn" data-open="villagers" title="村人たち"><img src="assets/tiny-swords/UI Elements/UI Elements/Human Avatars/Avatars_04.png" alt="" class="face" /><span>村人</span></button>
         <button class="rbtn" data-open="settings" title="設定"><img src="assets/tiny-swords/UI Elements/UI Elements/Icons/Icon_10.png" alt="" /><span>設定</span></button>
         <button class="rbtn text" id="btn-speed" title="速さ">×1</button>
         <button class="rbtn" id="btn-sound" title="音のオン・オフ"><img src="assets/tiny-swords/UI Elements/UI Elements/Icons/Icon_12.png" alt="" /></button>
-        <button class="rbtn red glow" id="btn-depart" hidden title="旅立ち"><img src="assets/tiny-swords/UI Elements/UI Elements/Icons/Icon_08.png" alt="" /><span>旅立ち</span></button>
+        <button class="rbtn red" id="btn-depart" hidden title="旅立ち"><img src="assets/tiny-swords/UI Elements/UI Elements/Icons/Icon_08.png" alt="" /><span>旅立ち</span></button>
       </nav>
 
       <div class="zoom">
-        <button class="sbtn" id="zoom-in" title="拡大">+</button>
-        <button class="sbtn" id="zoom-out" title="縮小">−</button>
+        <button class="tbtn" id="zoom-in" title="拡大">+</button>
+        <button class="tbtn" id="zoom-out" title="縮小">−</button>
       </div>
 
-      <div id="raid-indicator" class="raid" hidden>⚔ 盗賊が来ている!</div>
+      <div id="raid-indicator" class="ribbon ribbon-red small" hidden><span>盗賊が来ている!</span></div>
 
-      <section id="council" class="paper">
-        <div id="council-head"><span class="ctitle">長老会議</span><span id="council-src" class="src rule">ルール</span><span class="chev">▾</span></div>
-        <div id="council-body"></div>
-        <div id="ai-status-line" class="muted"></div>
+      <section id="feed" class="paper">
+        <div class="panel-head" id="feed-head">
+          <span class="ptitle">村のようす</span>
+          <span id="mind-dot" class="mind-dot" title="AIの状態"></span>
+          <span class="chev">▾</span>
+        </div>
+        <ul id="feed-body"></ul>
+        <div id="mind-status" class="muted small"></div>
       </section>
 
       <section id="villager-card" class="paper" hidden>
-        <button id="vc-close" class="xbtn" title="閉じる">×</button>
+        <button id="vc-close" class="xbtn" title="閉じる"></button>
         <div class="vc-top">
-          <img id="vc-avatar" alt="" />
-          <div>
+          <div class="slot"><img id="vc-avatar" alt="" /></div>
+          <div class="vc-id">
             <div id="vc-name"></div>
             <div id="vc-meta" class="muted"></div>
-            <div class="trait-chip" id="vc-trait"></div>
           </div>
         </div>
-        <div id="vc-doing"></div>
-        <div id="vc-bubble"></div>
+        <p id="vc-personality"></p>
+        <div id="vc-thought" class="thought"></div>
+        <div id="vc-doing" class="muted"></div>
         <div id="vc-bars"></div>
-        <div id="vc-parents" class="muted"></div>
-        <button class="btn blue small" id="vc-follow">追いかける</button>
+        <div class="row">
+          <button class="btn blue small" id="vc-follow">追いかける</button>
+          <button class="btn blue small" id="vc-more">くわしく</button>
+        </div>
       </section>
 
       <div id="toasts"></div>
 
       <div id="modal" hidden>
         <div id="modal-box" class="modal-box paper">
-          <div class="modal-ribbon"><span id="modal-title"></span></div>
-          <button id="modal-close" class="xbtn" title="閉じる">×</button>
+          <div class="ribbon ribbon-blue modal-ribbon"><span id="modal-title"></span></div>
+          <button id="modal-close" class="xbtn" title="閉じる"></button>
+          <div id="modal-tabs"></div>
           <div id="modal-body"></div>
         </div>
       </div>

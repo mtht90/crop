@@ -1,14 +1,15 @@
-// 画面のUI(HTML)。Tiny Swords のUI素材をスキンとして使う。
-import { API_PRESETS, AIManager, WEBLLM_PREFERRED } from '../ai/ai';
+// 画面のUI(HTML)。枠・ボタン・ゲージはすべて Tiny Swords のUI素材。
+import { PRESETS } from '../ai/mind';
 import type { Controller, WelcomeInfo } from '../controller';
 import { formatDuration } from '../controller';
-import { BUILDINGS, RES_NAMES, ROLE_NAMES, SKILL_NAMES, STAGE_NAMES, STAGE_REQ, TRAITS, UPGRADES, UPGRADE_ORDER, upgradeCost } from '../sim/config';
+import { ACTION_INFO, BUILDINGS, RES_NAMES, ROLE_INFO, UPGRADES, UPGRADE_ORDER, upgradeCost } from '../sim/config';
 import type { ResKind, SimEvent, Villager } from '../sim/types';
 import { avatar, buildingImg, icon, resIcon } from './skin';
 
 const $ = <T extends HTMLElement = HTMLElement>(sel: string) => document.querySelector(sel) as T;
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 const fmt = (n: number) => (n >= 10000 ? `${(n / 1000).toFixed(1)}k` : Math.floor(n).toLocaleString());
+const ROLE_LABEL = { pawn: '村人', child: '子ども', warrior: '戦士', archer: '弓使い', monk: '僧侶' } as const;
 
 export function avatarOf(v: Villager) {
   if (v.role === 'warrior') return avatar(1);
@@ -17,61 +18,59 @@ export function avatarOf(v: Villager) {
   return avatar(v.female ? 5 : 4);
 }
 
-export function describe(v: Villager, villagers: Villager[]): string {
+export function describe(v: Villager, vs: Villager[]): string {
   if (v.knockedOut > 0) return '気絶している…';
   const t = v.task;
   if (!t) return 'ひと休み';
-  const going = t.phase === 'go';
+  const go = t.phase === 'go';
   switch (t.type) {
     case 'chop':
-      return going ? '木を切りに向かっている' : '木を切っている';
+      return go ? '木を切りに向かっている' : '木を切っている';
     case 'harvest':
-      return going ? '羊のところへ向かっている' : '羊の世話をしている';
+      return go ? '羊のところへ向かっている' : '羊を獲っている';
     case 'mine':
-      return going ? '金鉱へ向かっている' : '金を掘っている';
+      return go ? '金鉱へ向かっている' : '金を掘っている';
     case 'build':
-      return going ? '建設現場へ向かっている' : '建物を建てている';
+      return go ? '建設現場へ向かっている' : '建物を建てている';
     case 'repair':
       return '壊れた建物を直している';
     case 'deliver':
       return v.carrying ? `${RES_NAMES[v.carrying]}を運んでいる` : '倉へ向かっている';
     case 'eat':
-      return going ? 'ごはんを食べに行く' : 'ごはんを食べている';
+      return 'ごはんを食べている';
     case 'sleep':
-      return v.hidden ? '家で眠っている' : '家に帰るところ';
+      return v.hidden ? '眠っている' : '家に帰るところ';
     case 'hide':
       return v.hidden ? '建物に隠れている' : '建物へ逃げている';
     case 'chat': {
-      const p = villagers.find((x) => x.id === t.targetId);
-      return p ? `${p.name}とおしゃべり` : 'おしゃべり';
+      const p = vs.find((x) => x !== v && x.task?.type === 'chat' && x.task.targetId === t.targetId);
+      return p ? `${p.name}と話している` : '話し相手を待っている';
     }
     case 'pray':
-      return '修道院で祈っている';
+      return '祈っている';
     case 'festival':
-      return 'お祭りを楽しんでいる';
+      return '人の集まりにいる';
     case 'guard':
-      return '村を見張っている';
+      return t.targetId === -2 ? '島のはずれを探検している' : '見張っている';
     case 'fight':
       return '盗賊と戦っている!';
     case 'heal':
       return 'けが人を手当てしている';
     case 'play':
-      return '元気に遊んでいる';
+      return '遊んでいる';
     default:
-      return 'ぶらぶら散歩中';
+      return 'ぶらぶら歩いている';
   }
-}
-
-export function roleLabel(v: Villager) {
-  if (v.role === 'pawn') return SKILL_NAMES[v.skill];
-  return ROLE_NAMES[v.role];
 }
 
 export class UI {
   ctl: Controller;
   private modalKind: string | null = null;
+  private modalArg: number | string | null = null;
+  private tab = '';
   private lastRes: Record<string, number> = {};
-  private councilOpen = window.innerWidth > 720;
+  private chronSeen = 0;
+  private feedOpen = window.innerWidth > 720;
 
   constructor(ctl: Controller) {
     this.ctl = ctl;
@@ -79,10 +78,10 @@ export class UI {
 
   ready() {
     $('#loading').classList.add('done');
-    setTimeout(() => $('#loading').remove(), 800);
+    setTimeout(() => document.getElementById('loading')?.remove(), 800);
     $('#hud').hidden = false;
     this.bind();
-    $('#council').classList.toggle('collapsed', !this.councilOpen);
+    $('#feed').classList.toggle('collapsed', !this.feedOpen);
     this.refreshAll();
   }
 
@@ -102,8 +101,7 @@ export class UI {
     });
     $('#btn-speed').addEventListener('click', () => {
       const order = [1, 2, 4];
-      const i = order.indexOf(this.ctl.speed);
-      this.ctl.setSpeed(order[(i + 1) % order.length]);
+      this.ctl.setSpeed(order[(order.indexOf(this.ctl.speed) + 1) % order.length]);
       this.ctl.audio.play('click', 0.5);
     });
     $('#btn-sound').addEventListener('click', () => {
@@ -111,9 +109,9 @@ export class UI {
       this.ctl.audio.save();
       this.update();
     });
-    $('#council-head').addEventListener('click', () => {
-      this.councilOpen = !this.councilOpen;
-      $('#council').classList.toggle('collapsed', !this.councilOpen);
+    $('#feed-head').addEventListener('click', () => {
+      this.feedOpen = !this.feedOpen;
+      $('#feed').classList.toggle('collapsed', !this.feedOpen);
     });
     $('#vc-close').addEventListener('click', () => this.ctl.scene?.select(null));
     $('#vc-follow').addEventListener('click', () => {
@@ -122,6 +120,10 @@ export class UI {
       sc.following = !sc.following;
       this.update();
     });
+    $('#vc-more').addEventListener('click', () => {
+      const id = this.ctl.scene?.selectedId;
+      if (id != null) this.openModal('person', id);
+    });
     $('#btn-depart').addEventListener('click', () => this.openModal('depart'));
     $('#zoom-in').addEventListener('click', () => this.ctl.scene?.setZoom(this.ctl.scene.cameras.main.zoom * 1.25));
     $('#zoom-out').addEventListener('click', () => this.ctl.scene?.setZoom(this.ctl.scene.cameras.main.zoom / 1.25));
@@ -129,19 +131,20 @@ export class UI {
 
   refreshAll() {
     this.lastRes = {};
+    $('#feed-body').innerHTML = '';
+    this.chronSeen = Math.max(0, this.ctl.sim.s.chronicle.length - 4);
     this.update();
-    this.renderCouncil();
-    if (this.modalKind) this.openModal(this.modalKind);
+    this.updateMindStatus();
+    if (this.modalKind) this.render();
   }
 
+  // ───────────── 毎回の更新 ─────────────
   update() {
     const sim = this.ctl.sim;
     const s = sim.s;
     $('#island-name').textContent = s.islandName;
-    $('#time-label').textContent = `${sim.timeLabel}${sim.isNight ? ' ☾' : ' ☀'}`;
-    $('#stage-label').textContent = `${STAGE_NAMES[s.stage]}の時代`;
-    const req = STAGE_REQ[s.stage + 1];
-    $('#next-goal').textContent = req ? `次の時代へ:${req.desc}` : s.departed ? '城が完成!旅立ちができます' : '城の完成を目指そう';
+    $('#time-label').textContent = `${sim.timeLabel}${sim.isNight ? '・夜' : ''}`;
+    $('#era-label').textContent = `「${s.era}」`;
     for (const k of ['wood', 'meat', 'gold'] as ResKind[]) {
       const el = $(`#r-${k}`);
       const v = Math.floor(s.res[k]);
@@ -156,46 +159,44 @@ export class UI {
     $('#r-pop').textContent = `${sim.population}/${sim.capacity}`;
     $('#r-points').textContent = fmt(s.points);
     $('#btn-speed').textContent = `×${this.ctl.speed}`;
-    $('#btn-sound img').setAttribute('style', this.ctl.audio.settings.muted ? 'opacity:.35' : '');
+    ($('#btn-sound img') as HTMLImageElement).style.opacity = this.ctl.audio.settings.muted ? '0.35' : '';
     $('#btn-depart').hidden = !s.departed;
-    // 強化できるものがあれば印
-    const can = UPGRADE_ORDER.some((k) => s.points >= upgradeCost(k, s.upgrades[k]));
-    $('#btn-upgrades').classList.toggle('glow', can);
+    $('#btn-upgrades').classList.toggle('glow', UPGRADE_ORDER.some((k) => s.points >= upgradeCost(k, s.upgrades[k])));
     $('#raid-indicator').hidden = !sim.raidActive;
+    // 歴史書の新しい行を「村のようす」へ
+    if (s.chronicle.length < this.chronSeen) this.chronSeen = 0;
+    for (const c of s.chronicle.slice(this.chronSeen)) this.pushFeed(`<span class="ev k-${c.kind}">${esc(c.text)}</span>`);
+    this.chronSeen = s.chronicle.length;
     this.updateVillagerCard();
     if (this.modalKind === 'upgrades') this.renderUpgrades(true);
     if (this.modalKind === 'villagers') this.renderVillagers(true);
+    if (this.modalKind === 'person') this.renderPerson(true);
   }
 
-  updateAIStatus() {
-    for (const id of ['ai-status', 'ai-status-line']) {
-      const el = document.getElementById(id);
-      if (el) {
-        el.textContent = id === 'ai-status-line' ? `判断:${this.ctl.ai.status}` : this.ctl.ai.status;
-        el.classList.toggle('busy', this.ctl.ai.busy);
-      }
-    }
-    if (this.modalKind === 'settings') {
-      const p = document.getElementById('webllm-progress');
-      if (p) p.textContent = this.ctl.ai.progress || this.ctl.ai.status;
-    }
+  private pushFeed(html: string) {
+    const ul = $('#feed-body');
+    const li = document.createElement('li');
+    li.innerHTML = html;
+    ul.appendChild(li);
+    while (ul.children.length > 40) ul.firstElementChild!.remove();
+    ul.scrollTop = ul.scrollHeight;
   }
 
-  // ───────────── 長老会議 ─────────────
-  renderCouncil() {
-    const p = this.ctl.sim.s.policy;
-    const next = p.nextBuild ? `<div class="plan"><img src="${buildingImg(p.nextBuild)}" alt="">次の計画:<b>${BUILDINGS[p.nextBuild].name}</b></div>` : '';
-    const lines = p.lines.map((l) => `<li><b>${esc(l.speaker)}</b>「${esc(l.text)}」</li>`).join('');
-    $('#council-body').innerHTML = `${next}<ul>${lines || '<li class="muted">まだ会議は開かれていない</li>'}</ul>`;
-    $('#council-src').textContent = p.source === 'ai' ? 'AI' : 'ルール';
-    $('#council-src').className = `src ${p.source}`;
-    this.updateAIStatus();
+  updateMindStatus() {
+    const m = this.ctl.mind;
+    const dot = document.getElementById('mind-dot');
+    if (dot) dot.className = `mind-dot ${m.busy ? 'busy' : m.ready ? (m.logs[0] && !m.logs[0].ok ? 'err' : 'on') : ''}`;
+    const st = document.getElementById('mind-status');
+    if (st) st.textContent = this.ctl.sandboxed && !m.ready ? 'このページではAIに接続できません(本能と習慣で暮らしています)' : m.status;
+    if (this.modalKind === 'settings' && this.tab === 'ai') {
+      const l = document.getElementById('mind-logs');
+      if (l) l.innerHTML = this.logsHtml();
+    }
   }
 
   // ───────────── 村人カード ─────────────
   showVillager(id: number | null) {
-    const card = $('#villager-card');
-    card.hidden = id === null;
+    $('#villager-card').hidden = id === null;
     if (id !== null) this.ctl.audio.play('pop', 0.4);
     this.updateVillagerCard();
   }
@@ -203,26 +204,21 @@ export class UI {
   private updateVillagerCard() {
     const sc = this.ctl.scene;
     const card = $('#villager-card');
-    if (!sc || sc.selectedId === null) {
-      card.hidden = true;
-      return;
-    }
-    const v = this.ctl.sim.s.villagers.find((x) => x.id === sc.selectedId);
-    if (!v) {
+    const v = sc && sc.selectedId !== null ? this.ctl.sim.s.villagers.find((x) => x.id === sc.selectedId) : undefined;
+    if (!sc || !v) {
       card.hidden = true;
       return;
     }
     card.hidden = false;
     $('#vc-avatar').setAttribute('src', avatarOf(v));
     $('#vc-name').textContent = v.name;
-    $('#vc-meta').textContent = `${Math.floor(v.age)}歳・${v.female ? '女' : '男'}・${roleLabel(v)}`;
-    $('#vc-trait').textContent = TRAITS[v.trait];
+    const partner = this.ctl.sim.s.villagers.find((x) => x.id === v.partnerId);
+    $('#vc-meta').textContent = `${Math.floor(v.age * 10)}歳・${v.female ? '女' : '男'}・${ROLE_LABEL[v.role]}${partner ? `・${partner.name}と連れ添う` : ''}`;
+    $('#vc-personality').textContent = v.personality || '(どんな人か、まだわからない)';
+    $('#vc-thought').textContent = v.thinking ? '考え中…' : v.intention?.source === 'ai' ? v.intention.thought : '';
     $('#vc-doing').textContent = describe(v, this.ctl.sim.s.villagers);
-    $('#vc-bubble').textContent = v.bubble ? `「${v.bubble.text}」` : '';
-    $('#vc-parents').textContent = v.parents.length ? `${v.parents.join('と')}の子` : '島に流れ着いた一人';
-    const hunger = Math.round((1 - v.hunger) * 100);
-    const energy = Math.round(v.energy * 100);
-    $('#vc-bars').innerHTML = `<label>満腹<span class="mbar"><i style="width:${hunger}%"></i></span></label><label>元気<span class="mbar e"><i style="width:${energy}%"></i></span></label>`;
+    const bar = (label: string, val: number, cls: string) => `<span>${label}</span><div class="ts-bar ${cls}"><i style="width:${Math.round(val * 100)}%"></i></div>`;
+    $('#vc-bars').innerHTML = bar('満腹', 1 - v.hunger, 'orange') + bar('元気', v.energy, 'green') + bar('人恋しさ', v.loneliness, 'blue');
     $('#vc-follow').textContent = sc.following ? '追いかけ中' : '追いかける';
     $('#vc-follow').classList.toggle('on', sc.following);
   }
@@ -233,88 +229,119 @@ export class UI {
     t.className = `toast ${kind}`;
     t.innerHTML = html;
     $('#toasts').prepend(t);
-    while ($('#toasts').children.length > 4) $('#toasts').lastElementChild!.remove();
+    while ($('#toasts').children.length > 3) $('#toasts').lastElementChild!.remove();
     setTimeout(() => t.classList.add('out'), 5200);
     setTimeout(() => t.remove(), 6000);
   }
 
   banner(text: string, color = 'yellow') {
     const b = document.createElement('div');
-    b.className = `banner ribbon-${color}`;
-    b.innerHTML = `<span>${esc(text)}</span>`;
-    document.getElementById('hud')!.appendChild(b);
+    b.className = 'banner-pop';
+    b.innerHTML = `<div class="ribbon ribbon-${color} big"><span>${esc(text)}</span></div>`;
+    $('#hud').appendChild(b);
     setTimeout(() => b.remove(), 3800);
   }
 
   onSimEvent(e: SimEvent) {
     const s = this.ctl.sim.s;
-    const last = s.chronicle[s.chronicle.length - 1];
     switch (e.type) {
+      case 'talkLine': {
+        const c = s.conversations.find((x) => x.id === e.convId);
+        const l = c?.lines[c.played - 1];
+        if (l) this.pushFeed(`<span class="who">${esc(l.speaker)}</span>「${esc(l.text)}」`);
+        break;
+      }
       case 'built': {
         const b = s.buildings.find((x) => x.id === e.id);
-        if (b) this.toast(`<img src="${buildingImg(b.kind)}" class="ti">${BUILDINGS[b.kind].name}が完成した!`);
+        if (b) this.toast(`<img src="${buildingImg(b.kind, b.variant)}" class="ti">「${esc(b.name)}」が完成した`);
         break;
       }
       case 'birth': {
         const v = s.villagers.find((x) => x.id === e.id);
-        if (v) this.toast(`<img src="${avatarOf(v)}" class="ti">${esc(last?.text ?? `${v.name}が生まれた`)}`, 'pink');
+        if (v) this.toast(`<img src="${avatarOf(v)}" class="ti face">${esc(v.parents.join('と'))}に子どもが生まれた`);
         break;
       }
-      case 'death':
-        if (last?.kind === 'death') this.toast(`✧ ${esc(last.text)}`, 'gray');
-        break;
       case 'raidStart':
         this.banner('盗賊団が上陸した!', 'red');
-        this.toast(`<img src="${icon(5)}" class="ti">盗賊団が島に上陸した!村人は建物に避難中…`, 'red');
         break;
       case 'raidEnd':
-        this.toast(`<img src="${icon(6)}" class="ti">${esc(last?.text ?? '盗賊団は去った')}`, 'blue');
-        break;
-      case 'stage':
-        this.banner(`「${STAGE_NAMES[e.stage]}」の時代`, 'yellow');
-        this.toast(`新しい時代「${STAGE_NAMES[e.stage]}」が始まった!`, 'gold');
-        break;
-      case 'council':
-        this.renderCouncil();
+        this.toast(`<img src="${icon(6)}" class="ti">盗賊団は去っていった`);
         break;
       case 'season':
         this.banner(this.ctl.sim.timeLabel, 'blue');
         break;
+      case 'culture':
+        if (this.modalKind === 'history') this.render();
+        break;
     }
-    if (this.modalKind === 'history') this.renderHistory(true);
   }
 
   showWelcome(w: WelcomeInfo) {
-    const res = (['wood', 'meat', 'gold'] as ResKind[])
-      .map((k) => `<span class="chip"><img src="${resIcon(k)}">+${fmt(Math.max(0, w.gained[k]))}</span>`)
-      .join('');
+    const res = (['wood', 'meat', 'gold'] as ResKind[]).map((k) => `<span class="chip"><img src="${resIcon(k)}">+${fmt(Math.max(0, w.gained[k]))}</span>`).join('');
     const entries = w.entries.slice(-8).map((t) => `<li>${esc(t)}</li>`).join('');
-    this.openModal('custom', 'おかえりなさい', `
-      <p class="lead">留守のあいだ(${formatDuration(w.away)})も、村人たちは暮らしを続けていました。</p>
+    this.openModal(
+      'custom',
+      null,
+      'おかえりなさい',
+      `<p class="lead">留守のあいだ(${formatDuration(w.away)})も、村人たちは本能と習慣で暮らしていました。</p>
       <div class="chips">${res}<span class="chip">✦ +${fmt(w.points)}</span></div>
-      ${entries ? `<h3>そのあいだの出来事</h3><ul class="chron">${entries}</ul>` : ''}
-      <div class="actions"><button class="btn blue" id="welcome-ok">村を見る</button></div>`);
+      ${entries ? `<h3>そのあいだの出来事</h3><ul class="list chron">${entries}</ul>` : ''}
+      <div class="actions"><button class="btn blue" id="welcome-ok">村を見る</button></div>`,
+    );
     $('#welcome-ok').addEventListener('click', () => this.closeModal());
   }
 
   // ───────────── モーダル ─────────────
-  openModal(kind: string, title?: string, html?: string) {
+  openModal(kind: string, arg: number | string | null = null, title?: string, html?: string) {
     this.modalKind = kind;
+    this.modalArg = arg;
+    const tabs: Record<string, string[]> = { history: ['events', 'talks', 'village'], settings: ['ai', 'sound', 'data'] };
+    this.tab = tabs[kind]?.[0] ?? '';
     $('#modal').hidden = false;
-    const titles: Record<string, string> = { upgrades: '天の恵み', history: '村の歴史書', villagers: '村人たち', settings: '設定', depart: '旅立ち' };
+    const titles: Record<string, string> = { upgrades: '天の恵み', history: '村の記録', villagers: '村人たち', settings: '設定', depart: '旅立ち', setup: '村人に心を' };
     $('#modal-title').textContent = title ?? titles[kind] ?? '';
-    $('#modal-box').className = `modal-box paper ${kind}`;
-    if (kind === 'upgrades') this.renderUpgrades();
-    else if (kind === 'history') this.renderHistory();
-    else if (kind === 'villagers') this.renderVillagers();
-    else if (kind === 'settings') this.renderSettings();
-    else if (kind === 'depart') this.renderDepart();
-    else if (html) $('#modal-body').innerHTML = html;
+    if (html !== undefined) {
+      $('#modal-tabs').innerHTML = '';
+      $('#modal-body').innerHTML = html;
+    } else this.render();
   }
 
   closeModal() {
     this.modalKind = null;
     $('#modal').hidden = true;
+  }
+
+  private renderTabs(list: [string, string][]) {
+    $('#modal-tabs').innerHTML = list.map(([k, n]) => `<button class="tab ${this.tab === k ? 'on' : ''}" data-tab="${k}">${n}</button>`).join('');
+    $('#modal-tabs')
+      .querySelectorAll<HTMLElement>('[data-tab]')
+      .forEach((b) =>
+        b.addEventListener('click', () => {
+          this.tab = b.dataset.tab!;
+          this.ctl.audio.play('click', 0.4);
+          this.render();
+        }),
+      );
+  }
+
+  private render() {
+    $('#modal-tabs').innerHTML = '';
+    switch (this.modalKind) {
+      case 'upgrades':
+        return this.renderUpgrades();
+      case 'history':
+        return this.renderHistory();
+      case 'villagers':
+        return this.renderVillagers();
+      case 'person':
+        return this.renderPerson();
+      case 'settings':
+        return this.renderSettings();
+      case 'depart':
+        return this.renderDepart();
+      case 'setup':
+        return this.renderSetup();
+    }
   }
 
   private renderUpgrades(partial = false) {
@@ -332,15 +359,11 @@ export class UI {
     body.innerHTML = `
       <p class="lead">村人たちの暮らしから生まれる<b>くらしポイント</b>で、村全体をそっと後押しできます。</p>
       <p class="pts">くらしポイント <b>✦ ${fmt(s.points)}</b></p>
-      <div class="upgrades">${UPGRADE_ORDER.map((k) => {
+      <ul class="list upgrades">${UPGRADE_ORDER.map((k) => {
         const lv = s.upgrades[k];
         const cost = upgradeCost(k, lv);
-        return `<div class="up-card wood-s">
-          <img src="${icons[k]}" class="up-icon">
-          <div class="up-text"><div class="up-name">${UPGRADES[k].name} <span class="lv">Lv.${lv}</span></div><div class="up-desc">${UPGRADES[k].desc}</div></div>
-          <button class="btn blue small" data-up="${k}" ${s.points < cost ? 'disabled' : ''}>✦ ${fmt(cost)}</button>
-        </div>`;
-      }).join('')}</div>
+        return `<li class="card up-card"><img src="${icons[k]}" class="up-icon"><div class="up-text"><div class="up-name">${UPGRADES[k].name} <span class="lv">Lv.${lv}</span></div><div class="up-desc">${UPGRADES[k].desc}</div></div><button class="btn blue small" data-up="${k}" ${s.points < cost ? 'disabled' : ''}>✦ ${fmt(cost)}</button></li>`;
+      }).join('')}</ul>
       <p class="note">旅立ちのたびに、くらしポイントの入り方が25%ずつ増えます(いま ×${(1 + 0.25 * s.memories).toFixed(2)})。</p>`;
     body.querySelectorAll<HTMLButtonElement>('button[data-up]').forEach((b) =>
       b.addEventListener('click', () => {
@@ -352,68 +375,126 @@ export class UI {
     );
   }
 
-  private renderHistory(partial = false) {
+  private renderHistory() {
     const s = this.ctl.sim.s;
-    const list = [...s.chronicle].reverse();
-    const html = list
-      .map(
-        (c) =>
-          `<li class="k-${c.kind}"><span class="when">${esc(c.label)}</span>${c.kind === 'ai' ? '<span class="ai-tag">AI</span>' : ''}${esc(c.text)}</li>`,
-      )
-      .join('');
+    this.renderTabs([
+      ['events', '出来事'],
+      ['talks', '会話'],
+      ['village', '村のかたち'],
+    ]);
     const body = $('#modal-body');
-    if (partial && body.querySelector('.chron')) {
-      body.querySelector('.chron')!.innerHTML = html;
-      return;
+    const name = (id: number) => s.villagers.find((v) => v.id === id)?.name ?? '(今はいない人)';
+    if (this.tab === 'events') {
+      const st = s.stats;
+      body.innerHTML = `
+        <div class="chips"><span class="chip">誕生 ${st.births}</span><span class="chip">永眠 ${st.deaths}</span><span class="chip">建築 ${st.built}</span><span class="chip">会話 ${st.talks}</span><span class="chip">撃退 ${st.raidsRepelled}</span></div>
+        <ul class="list chron">${[...s.chronicle]
+          .reverse()
+          .map((c) => `<li class="k-${c.kind}"><span class="when">${esc(c.label)}</span>${esc(c.text)}</li>`)
+          .join('')}</ul>`;
+    } else if (this.tab === 'talks') {
+      const convs = [...s.conversations].reverse().filter((c) => c.lines.length);
+      body.innerHTML = convs.length
+        ? `<ul class="list">${convs
+            .map(
+              (c) =>
+                `<li class="card conv"><span class="when">${esc(c.label)}</span>${esc(name(c.a))} と ${esc(name(c.b))}${c.topic ? ` <span class="muted small">(${esc(c.topic)})</span>` : ''}<ul class="lines">${c.lines.map((l) => `<li><b>${esc(l.speaker)}</b>「${esc(l.text)}」</li>`).join('')}</ul></li>`,
+            )
+            .join('')}</ul>`
+        : '<p class="muted">まだ会話は記録されていません。</p>';
+    } else {
+      const bl = s.buildings
+        .map(
+          (b) =>
+            `<li class="card"><img class="bimg" src="${buildingImg(b.kind, b.variant)}"><div><b>${esc(b.name)}</b> <span class="muted small">${ROLE_INFO[b.role].name}${b.done ? '' : `・建設中 ${Math.round(b.progress * 100)}%`}</span><br><span class="small">${esc(b.purpose || '')}${b.proposer ? `(${esc(b.proposer)}の発案)` : ''}</span></div></li>`,
+        )
+        .join('');
+      const pl = s.projects
+        .map((p) => {
+          const c = BUILDINGS[p.kind].cost;
+          return `<li class="card"><img class="bimg" src="${buildingImg(p.kind)}" style="opacity:.55"><div><b>${esc(p.name)}</b> <span class="muted small">${ROLE_INFO[p.role].name}・必要:木${c.wood ?? 0}${c.gold ? `・金${c.gold}` : ''}</span><br><span class="small">${esc(p.purpose)}${p.proposer ? `(${esc(p.proposer)}の発案)` : ''}</span></div></li>`;
+        })
+        .join('');
+      body.innerHTML = `
+        <p class="lead">いまは「<b>${esc(s.era)}</b>」と呼ばれています。</p>
+        <h3>習わし</h3>${s.customs.length ? `<ul class="list chron">${s.customs.map((c) => `<li>${esc(c)}</li>`).join('')}</ul>` : '<p class="muted">まだ習わしは生まれていません。</p>'}
+        <h3>計画中の建物</h3>${pl ? `<ul class="list">${pl}</ul>` : '<p class="muted">いまは計画がありません。</p>'}
+        <h3>建物</h3><ul class="list">${bl}</ul>`;
     }
-    const st = s.stats;
-    body.innerHTML = `
-      <p class="lead">${esc(s.islandName)}(${s.islandNo}つ目の島)の記録</p>
-      <div class="chips"><span class="chip">誕生 ${st.births}</span><span class="chip">永眠 ${st.deaths}</span><span class="chip">建築 ${st.built}</span><span class="chip">撃退 ${st.raidsRepelled}</span></div>
-      <ul class="chron">${html}</ul>`;
+  }
+
+  private thoughtOrDoing(v: Villager) {
+    return v.intention?.source === 'ai' && v.intention.thought ? `(${v.intention.thought})` : describe(v, this.ctl.sim.s.villagers);
   }
 
   private renderVillagers(partial = false) {
     const s = this.ctl.sim.s;
     const vs = [...s.villagers].sort((a, b) => b.age - a.age);
-    const rows = vs
-      .map(
-        (v) => `<li data-vid="${v.id}"><img src="${avatarOf(v)}"><div><b>${esc(v.name)}</b> <span class="muted">${Math.floor(v.age)}歳・${roleLabel(v)}・${TRAITS[v.trait]}</span><br><span class="doing">${describe(v, s.villagers)}</span></div></li>`,
-      )
-      .join('');
     const body = $('#modal-body');
     if (partial) {
       const ul = body.querySelector('.vlist');
       if (ul && ul.children.length === vs.length) {
         vs.forEach((v, i) => {
           const d = ul.children[i].querySelector('.doing');
-          if (d) d.textContent = describe(v, s.villagers);
+          if (d) d.textContent = this.thoughtOrDoing(v);
         });
         return;
       }
     }
-    body.innerHTML = `<p class="lead">島に暮らす ${vs.length} 人。名前を押すと、その村人を追いかけます。</p><ul class="vlist">${rows}</ul>`;
-    body.querySelectorAll<HTMLElement>('[data-vid]').forEach((li) =>
-      li.addEventListener('click', () => {
-        const id = Number(li.dataset.vid);
-        const v = s.villagers.find((x) => x.id === id);
-        this.closeModal();
-        if (v) this.ctl.scene?.select(id, true);
-      }),
-    );
+    body.innerHTML = `<p class="lead">島に暮らす ${vs.length} 人。押すとその人の帳面を開きます。</p><ul class="list vlist">${vs
+      .map(
+        (v) =>
+          `<li class="card" data-vid="${v.id}"><div class="slot"><img src="${avatarOf(v)}"></div><div><b>${esc(v.name)}</b> <span class="muted small">${Math.floor(v.age * 10)}歳・${ROLE_LABEL[v.role]}</span><br><span class="small">${esc(v.personality || '')}</span><br><span class="doing">${esc(this.thoughtOrDoing(v))}</span></div></li>`,
+      )
+      .join('')}</ul>`;
+    body.querySelectorAll<HTMLElement>('[data-vid]').forEach((li) => li.addEventListener('click', () => this.openModal('person', Number(li.dataset.vid))));
+  }
+
+  private renderPerson(partial = false) {
+    const s = this.ctl.sim.s;
+    const v = s.villagers.find((x) => x.id === this.modalArg);
+    const body = $('#modal-body');
+    if (!v) {
+      body.innerHTML = '<p class="muted">この人はもう島にいません。</p>';
+      return;
+    }
+    if (partial) {
+      const d = body.querySelector('.p-doing');
+      if (d) d.textContent = describe(v, s.villagers);
+      return;
+    }
+    $('#modal-title').textContent = `${v.name}の帳面`;
+    const partner = s.villagers.find((x) => x.id === v.partnerId);
+    const children = s.villagers.filter((x) => x.parents.includes(v.name));
+    const rels = Object.entries(v.relations)
+      .map(([id, r]) => ({ o: s.villagers.find((x) => x.id === Number(id)), r }))
+      .filter((x) => x.o)
+      .sort((a, b) => b.r.score - a.r.score);
+    const feel = (n: number) => (n >= 60 ? 'とても好き' : n >= 20 ? '好き' : n > -20 ? 'ふつう' : n > -60 ? '苦手' : 'きらい');
+    const want = v.intention ? `${ACTION_INFO[v.intention.action].replace(/\(.*\)/, '')}${v.intention.target ? `(${v.intention.target})` : ''}` : '';
+    body.innerHTML = `
+      <div class="vc-top"><div class="slot"><img src="${avatarOf(v)}"></div><div><div style="font-size:22px">${esc(v.name)}</div><div class="muted">${Math.floor(v.age * 10)}歳・${v.female ? '女' : '男'}・${ROLE_LABEL[v.role]}</div></div></div>
+      <p>${esc(v.personality || '(どんな人か、まだわからない)')}</p>
+      <div class="card"><div class="thought">${esc(v.intention?.source === 'ai' ? v.intention.thought : '')}</div><div class="small muted">いま:<span class="p-doing">${esc(describe(v, s.villagers))}</span>${want ? `/したいこと:${esc(want)}` : ''}</div></div>
+      <h3>家族</h3><p class="small">${v.parents.length ? `${esc(v.parents.join('と'))}の子。` : '島に流れ着いた一人。'}${partner ? `${esc(partner.name)}と連れ添っている。` : ''}${children.length ? `子は${children.map((c) => esc(c.name)).join('、')}。` : ''}</p>
+      <h3>まわりの人</h3>${rels.length ? `<ul class="list">${rels.map((x) => `<li class="small">${esc(x.o!.name)}:${x.r.label ? `<b>${esc(x.r.label)}</b>・` : ''}<span class="muted">${feel(x.r.score)}</span></li>`).join('')}</ul>` : '<p class="muted small">まだ深い付き合いはない。</p>'}
+      <h3>記憶</h3>${v.memories.length ? `<ul class="list chron mem">${v.memories.map((m) => `<li>${esc(m)}</li>`).join('')}</ul>` : '<p class="muted small">まだ心に残る出来事はない。</p>'}
+      <div class="actions"><button class="btn blue small" id="p-follow">この人を追いかける</button></div>`;
+    $('#p-follow').addEventListener('click', () => {
+      this.closeModal();
+      this.ctl.scene?.select(v.id, true);
+    });
   }
 
   private renderDepart() {
     const s = this.ctl.sim.s;
     $('#modal-body').innerHTML = `
       <p class="lead">${esc(s.islandName)}には立派な城が建ちました。村人たちの子孫は、新しい島を目指して海へ漕ぎ出すことができます。</p>
-      <ul class="bullets">
+      <ul class="list chron">
         <li>新しい島で、3人の開拓者から始まります</li>
         <li>くらしポイントの入り方が <b>×${(1 + 0.25 * (s.memories + 1)).toFixed(2)}</b> になります</li>
         <li>天の恵みのレベルは半分を引き継ぎます</li>
-        <li>この島の歴史書は旅立ちとともに閉じられます</li>
       </ul>
-      <p>まだこの島を眺めていたければ、旅立ちはいつでもできます。</p>
       <div class="actions"><button class="btn red" id="depart-ok">旅立つ</button><button class="btn blue" id="depart-no">まだ見守る</button></div>`;
     $('#depart-ok').addEventListener('click', () => {
       this.closeModal();
@@ -423,140 +504,179 @@ export class UI {
     $('#depart-no').addEventListener('click', () => this.closeModal());
   }
 
-  private renderSettings() {
-    const ai = this.ctl.ai;
-    const st = ai.settings;
-    const au = this.ctl.audio.settings;
-    const gpu = AIManager.webgpuAvailable();
-    const presetOpts = Object.entries(API_PRESETS)
-      .map(([k, p]) => `<option value="${k}" ${st.api.preset === k ? 'selected' : ''}>${p.label}</option>`)
-      .join('');
-    $('#modal-body').innerHTML = `
-      <h3>長老会議のAI</h3>
-      <p class="note">季節ごとの長老会議で、村の方針と会話をAIに考えさせることができます。AIが使えないときは、ルールで判断します。</p>
-      <div class="radio">
-        <label><input type="radio" name="prov" value="rule" ${st.provider === 'rule' ? 'checked' : ''}> ルール(AIなし)</label>
-        <label><input type="radio" name="prov" value="webllm" ${st.provider === 'webllm' ? 'checked' : ''} ${gpu ? '' : 'disabled'}> ブラウザ内AI(無料・無制限)${gpu ? '' : '<span class="muted">※このブラウザは非対応</span>'}</label>
-        <label><input type="radio" name="prov" value="api" ${st.provider === 'api' ? 'checked' : ''}> 無料APIを使う</label>
+  // ───────────── AIの設定 ─────────────
+  private aiFormHtml() {
+    const st = this.ctl.mind.settings;
+    const p = PRESETS[st.preset] ?? PRESETS.gemini;
+    const custom = st.preset === 'custom';
+    return `
+      <div class="field">
+        <span>サービス</span><select id="ai-preset">${Object.entries(PRESETS)
+          .map(([k, x]) => `<option value="${k}" ${st.preset === k ? 'selected' : ''}>${esc(x.label)}</option>`)
+          .join('')}</select>
+        <span>APIキー</span><input type="password" id="ai-key" value="${esc(st.apiKey)}" placeholder="ここに貼り付け" autocomplete="off" />
+        <span>モデル</span><div class="row"><input type="text" id="ai-model" value="${esc(st.model)}" list="ai-models" style="flex:1" /><datalist id="ai-models"></datalist><button class="btn blue small" id="ai-list">一覧</button></div>
+        <span ${custom ? '' : 'hidden'}>URL</span><input type="text" id="ai-base" value="${esc(st.baseUrl)}" ${custom ? '' : 'hidden'} placeholder="https://.../v1" />
       </div>
-      <div class="sub" id="sub-webllm" ${st.provider === 'webllm' ? '' : 'hidden'}>
-        <p class="note">初回はAIモデルのダウンロード(数百MB〜2GB)があります。パソコンのGPUで動くので、費用はかかりません。</p>
-        <label>モデル <select id="webllm-model"><option>${esc(st.webllmModel)}</option></select></label>
-        <button class="btn blue small" id="webllm-load">読み込む</button>
-        <div id="webllm-progress" class="muted">${esc(ai.progress || ai.status)}</div>
-      </div>
-      <div class="sub" id="sub-api" ${st.provider === 'api' ? '' : 'hidden'}>
-        <label>サービス <select id="api-preset">${presetOpts}</select></label>
-        <p class="note" id="api-note">${esc(API_PRESETS[st.api.preset]?.note ?? '')}</p>
-        <label>APIキー <input type="password" id="api-key" value="${esc(st.api.apiKey)}" placeholder="キーを貼り付け" autocomplete="off"></label>
-        <label>モデル <input type="text" id="api-model" value="${esc(st.api.model)}"></label>
-        <label id="api-base-row" ${st.api.preset === 'custom' ? '' : 'hidden'}>URL <input type="text" id="api-base" value="${esc(st.api.baseUrl)}" placeholder="https://.../v1"></label>
-        <p class="note">キーはこのブラウザの中だけに保存されます。</p>
-      </div>
-      <div class="actions"><button class="btn blue small" id="ai-test">今すぐ長老会議を開く</button><span id="ai-status" class="muted">${esc(ai.status)}</span></div>
+      <p class="note">${esc(p.note)}${p.keyUrl ? ` <a href="${p.keyUrl}" target="_blank" rel="noopener">キーを作るページを開く</a>` : ''}</p>
+      <p class="note">キーはこのブラウザの中だけに保存され、選んだサービス以外には送られません。</p>
+      <div class="actions"><button class="btn blue small" id="ai-test">つながるか試す</button><span id="ai-test-r" class="small muted"></span></div>`;
+  }
 
-      <h3>音</h3>
-      <label class="slider">音楽 <input type="range" min="0" max="1" step="0.05" id="vol-music" value="${au.music}"></label>
-      <label class="slider">効果音 <input type="range" min="0" max="1" step="0.05" id="vol-sfx" value="${au.sfx}"></label>
-      <label><input type="checkbox" id="mute" ${au.muted ? 'checked' : ''}> すべての音を消す</label>
-
-      <h3>データ</h3>
-      <div class="actions"><button class="btn red small" id="reset">最初からやり直す</button></div>
-
-      <h3>素材・クレジット</h3>
-      <ul class="credits">
-        <li>グラフィック:<b>Tiny Swords</b> by Pixel Frog</li>
-        <li>音楽・効果音:<b>Ninja Adventure</b> by Pixel-Boy &amp; AAA(CC0)</li>
-        <li>フォント:<b>DotGothic16</b> by Fontworks(SIL OFL)</li>
-        <li>ゲームエンジン:Phaser 3 / ブラウザ内AI:WebLLM</li>
-      </ul>`;
-    const body = $('#modal-body');
-    body.querySelectorAll<HTMLInputElement>('input[name=prov]').forEach((r) =>
-      r.addEventListener('change', () => {
-        st.provider = r.value as typeof st.provider;
-        ai.save();
-        $('#sub-webllm').hidden = st.provider !== 'webllm';
-        $('#sub-api').hidden = st.provider !== 'api';
-        if (st.provider === 'webllm') void this.fillModels();
-      }),
-    );
-    if (st.provider === 'webllm') void this.fillModels();
-    $('#webllm-model').addEventListener('change', (e) => {
-      st.webllmModel = (e.target as HTMLSelectElement).value;
-      ai.save();
-    });
-    $('#webllm-load').addEventListener('click', async () => {
-      try {
-        await ai.loadWebLLM();
-        $('#webllm-progress').textContent = '準備完了!次の季節から長老会議に参加します';
-      } catch (err) {
-        $('#webllm-progress').textContent = `読み込みに失敗しました:${(err as Error).message}`;
-      }
-    });
-    $('#api-preset').addEventListener('change', (e) => {
+  private bindAiForm() {
+    const m = this.ctl.mind;
+    const st = m.settings;
+    $('#ai-preset').addEventListener('change', (e) => {
       const k = (e.target as HTMLSelectElement).value;
-      const p = API_PRESETS[k];
-      st.api.preset = k;
-      if (k !== 'custom') st.api.baseUrl = p.baseUrl;
-      st.api.model = p.model || st.api.model;
-      ($('#api-model') as HTMLInputElement).value = st.api.model;
-      $('#api-note').textContent = p.note;
-      $('#api-base-row').hidden = k !== 'custom';
-      ai.save();
+      const p = PRESETS[k];
+      st.preset = k;
+      if (k !== 'custom') st.baseUrl = p.baseUrl;
+      st.model = p.model || st.model;
+      m.save();
+      this.render();
     });
-    for (const [id, key] of [
-      ['#api-key', 'apiKey'],
-      ['#api-model', 'model'],
-      ['#api-base', 'baseUrl'],
-    ] as const) {
+    const bindInput = (id: string, key: 'apiKey' | 'model' | 'baseUrl') =>
       $(id).addEventListener('change', (e) => {
-        st.api[key] = (e.target as HTMLInputElement).value.trim();
-        ai.save();
+        st[key] = (e.target as HTMLInputElement).value.trim();
+        m.save();
       });
-    }
-    $('#ai-test').addEventListener('click', () => {
-      if (!ai.enabled) {
-        $('#ai-status').textContent = 'AIが設定されていません';
-        return;
+    bindInput('#ai-key', 'apiKey');
+    bindInput('#ai-model', 'model');
+    bindInput('#ai-base', 'baseUrl');
+    const syncInputs = () => {
+      st.apiKey = ($('#ai-key') as HTMLInputElement).value.trim();
+      st.model = ($('#ai-model') as HTMLInputElement).value.trim();
+      m.save();
+    };
+    $('#ai-list').addEventListener('click', async () => {
+      syncInputs();
+      $('#ai-test-r').textContent = '一覧を取得中…';
+      try {
+        const list = await m.listModels();
+        $('#ai-models').innerHTML = list.map((x) => `<option value="${esc(x)}">`).join('');
+        $('#ai-test-r').textContent = `${list.length}個のモデルが使えます。モデル欄を押すと選べます`;
+      } catch (e) {
+        $('#ai-test-r').textContent = `取得できませんでした:${(e as Error).message.slice(0, 60)}`;
       }
-      void this.ctl.runAICouncil();
     });
-    $('#vol-music').addEventListener('input', (e) => {
-      this.ctl.audio.settings.music = Number((e.target as HTMLInputElement).value);
-      this.ctl.audio.save();
-    });
-    $('#vol-sfx').addEventListener('input', (e) => {
-      this.ctl.audio.settings.sfx = Number((e.target as HTMLInputElement).value);
-      this.ctl.audio.save();
-    });
-    $('#mute').addEventListener('change', (e) => {
-      this.ctl.audio.settings.muted = (e.target as HTMLInputElement).checked;
-      this.ctl.audio.save();
-      this.update();
-    });
-    let armed = false;
-    $('#reset').addEventListener('click', () => {
-      if (!armed) {
-        armed = true;
-        $('#reset').textContent = '本当に消す?(もう一度押す)';
-        setTimeout(() => {
-          armed = false;
-          const r = document.getElementById('reset');
-          if (r) r.textContent = '最初からやり直す';
-        }, 4000);
-        return;
+    $('#ai-test').addEventListener('click', async () => {
+      syncInputs();
+      $('#ai-test-r').textContent = '試しています…';
+      try {
+        $('#ai-test-r').textContent = `つながりました(${await m.test()})`;
+        m.thinkNow(this.ctl.sim);
+      } catch (e) {
+        const msg = (e as Error).message;
+        $('#ai-test-r').textContent = /Failed to fetch|NetworkError|Load failed/.test(msg)
+          ? 'つながりませんでした。この画面からは外部のAPIに接続できない可能性があります'
+          : `失敗しました:${msg.slice(0, 80)}`;
       }
-      this.closeModal();
-      this.ctl.resetAll();
     });
   }
 
-  private async fillModels() {
-    const sel = document.getElementById('webllm-model') as HTMLSelectElement | null;
-    if (!sel) return;
-    const ids = await this.ctl.ai.listWebLLMModels();
-    const cur = this.ctl.ai.settings.webllmModel;
-    const list = ids.includes(cur) ? ids : [cur, ...ids];
-    sel.innerHTML = list.map((id) => `<option value="${esc(id)}" ${id === cur ? 'selected' : ''}>${esc(id)}${WEBLLM_PREFERRED[0] === id ? '(日本語向け・おすすめ)' : ''}</option>`).join('');
+  private logsHtml() {
+    const logs = this.ctl.mind.logs;
+    if (!logs.length) return '<li class="muted">まだ記録はありません</li>';
+    return logs
+      .slice(0, 12)
+      .map((l) => `<li class="${l.ok ? '' : 'ng'}">${new Date(l.at).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', second: '2-digit' })} ${l.ok ? '○' : '×'} ${esc(l.note)}(${(l.ms / 1000).toFixed(1)}秒)</li>`)
+      .join('');
+  }
+
+  private renderSetup() {
+    $('#modal-body').innerHTML = `
+      <p class="lead">この島の村人たちは、<b>本能</b>(食べる・眠る・逃げる・人恋しくなる)以外のすべてを、AIで自分で考えて暮らします。何をして生きるか、誰と何を話すか、何を建てて何と呼ぶか、どんな習わしをつくるか。</p>
+      <p>AIを使うには、無料で作れるAPIキーが必要です。</p>
+      <ol class="steps">
+        <li>「キーを作るページを開く」から、Googleのアカウントでログインして <b>APIキーを作成</b> します</li>
+        <li>できたキーをコピーして、下の欄に貼り付けます</li>
+        <li>「つながるか試す」を押して、つながったら完了です</li>
+      </ol>
+      ${this.ctl.sandboxed ? '<p class="note">※このページは外部に接続できない場所で開かれているため、AIは使えません。</p>' : ''}
+      ${this.aiFormHtml()}
+      <div class="actions"><button class="btn blue" id="setup-done">はじめる</button><button class="btn red small" id="setup-skip">AIなしで見る</button></div>`;
+    this.bindAiForm();
+    $('#setup-done').addEventListener('click', () => {
+      const m = this.ctl.mind;
+      m.settings.apiKey = ($('#ai-key') as HTMLInputElement).value.trim();
+      m.settings.model = ($('#ai-model') as HTMLInputElement).value.trim();
+      m.save();
+      this.closeModal();
+      m.thinkNow(this.ctl.sim);
+    });
+    $('#setup-skip').addEventListener('click', () => this.closeModal());
+  }
+
+  private renderSettings() {
+    this.renderTabs([
+      ['ai', 'AI'],
+      ['sound', '音'],
+      ['data', 'データと素材'],
+    ]);
+    const body = $('#modal-body');
+    const m = this.ctl.mind;
+    if (this.tab === 'ai') {
+      body.innerHTML = `
+        <p class="lead">村人の判断・会話・名付け・建物の発案・習わしを、AIが考えます。</p>
+        <label class="check"><input type="checkbox" id="ai-on" ${m.settings.enabled ? 'checked' : ''}> AIを使う</label>
+        ${this.aiFormHtml()}
+        <h3>考える間隔</h3>
+        <div class="field"><span id="ai-int-l">${m.settings.interval}秒ごと</span><input type="range" id="ai-int" min="10" max="120" step="5" value="${m.settings.interval}"></div>
+        <p class="note">1回で数人分の判断と会話をまとめて考えます。無料枠の回数制限に引っかかるときは、間隔を長くしてください。</p>
+        <h3>最近のやりとり</h3><ul class="list logs" id="mind-logs">${this.logsHtml()}</ul>`;
+      this.bindAiForm();
+      $('#ai-on').addEventListener('change', (e) => {
+        m.settings.enabled = (e.target as HTMLInputElement).checked;
+        m.save();
+      });
+      $('#ai-int').addEventListener('input', (e) => {
+        m.settings.interval = Number((e.target as HTMLInputElement).value);
+        $('#ai-int-l').textContent = `${m.settings.interval}秒ごと`;
+        m.save();
+      });
+    } else if (this.tab === 'sound') {
+      const au = this.ctl.audio.settings;
+      body.innerHTML = `
+        <div class="field"><span>音楽</span><input type="range" min="0" max="1" step="0.05" id="vol-music" value="${au.music}"><span>効果音</span><input type="range" min="0" max="1" step="0.05" id="vol-sfx" value="${au.sfx}"></div>
+        <label class="check"><input type="checkbox" id="mute" ${au.muted ? 'checked' : ''}> すべての音を消す</label>`;
+      $('#vol-music').addEventListener('input', (e) => {
+        au.music = Number((e.target as HTMLInputElement).value);
+        this.ctl.audio.save();
+      });
+      $('#vol-sfx').addEventListener('input', (e) => {
+        au.sfx = Number((e.target as HTMLInputElement).value);
+        this.ctl.audio.save();
+      });
+      $('#mute').addEventListener('change', (e) => {
+        au.muted = (e.target as HTMLInputElement).checked;
+        this.ctl.audio.save();
+        this.update();
+      });
+    } else {
+      body.innerHTML = `
+        <h3>データ</h3><div class="actions"><button class="btn red small" id="reset">最初からやり直す</button></div>
+        <h3>素材・クレジット</h3>
+        <ul class="list chron">
+          <li>グラフィック・UI:<b>Tiny Swords</b> by Pixel Frog</li>
+          <li>音楽・効果音:<b>Ninja Adventure</b> by Pixel-Boy &amp; AAA(CC0)</li>
+          <li>フォント:<b>DotGothic16</b> by Fontworks(SIL OFL)</li>
+          <li>ゲームエンジン:Phaser 3</li>
+        </ul>`;
+      let armed = false;
+      $('#reset').addEventListener('click', () => {
+        if (!armed) {
+          armed = true;
+          $('#reset').textContent = '本当に消す?(もう一度押す)';
+          setTimeout(() => {
+            armed = false;
+            const r = document.getElementById('reset');
+            if (r) r.textContent = '最初からやり直す';
+          }, 4000);
+          return;
+        }
+        this.closeModal();
+        this.ctl.resetAll();
+      });
+    }
   }
 }

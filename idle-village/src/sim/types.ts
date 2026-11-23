@@ -1,10 +1,18 @@
 // シミュレーションの状態の型定義。描画(Phaser)には一切依存しない。
+// 決めてあるのは「本能」(食べる・眠る・逃げる・人恋しさ)と体でできる動作だけ。
+// 何をするか・何を建てて何と呼ぶか・誰とどんな関係になるかは、AIが考える。
 
 export type ResKind = 'wood' | 'meat' | 'gold';
+/** 建物の見た目(素材) */
 export type BuildingKind = 'house' | 'tower' | 'barracks' | 'archery' | 'monastery' | 'castle';
+/** 建物の働き(エンジンが理解できるもの) */
+export type BuildingRole = 'home' | 'storage' | 'watch' | 'gathering' | 'worship' | 'training' | 'workshop';
+/** 姿(素材)。子どもは年齢で自動 */
 export type Role = 'pawn' | 'child' | 'warrior' | 'archer' | 'monk';
 export type UpgradeKey = 'work' | 'walk' | 'nature' | 'housing' | 'family' | 'strength';
-export type Trait = 'hard' | 'lazy' | 'cheer' | 'shy' | 'pious' | 'brave' | 'glutton' | 'dreamer';
+
+/** 体でできる動作 */
+export type Action = 'chop' | 'hunt' | 'mine' | 'build' | 'repair' | 'talk' | 'rest' | 'wander' | 'explore' | 'guard' | 'gather' | 'pray' | 'play';
 
 export interface Pt {
   x: number;
@@ -35,8 +43,21 @@ export interface Task {
   targetId?: number;
   phase: 'go' | 'act' | 'done';
   timer: number;
-  dest?: Pt; // 目的のタイル
   hits?: number;
+}
+
+/** AIが決めた「やりたいこと」 */
+export interface Intention {
+  action: Action;
+  target?: string; // 相手の名前・建物の名前など
+  thought: string; // 心の声
+  until: number; // シム秒。これを過ぎたら次を考える
+  source: 'ai' | 'habit';
+}
+
+export interface Relation {
+  score: number; // -100..100
+  label?: string; // 「親友」「恋人」「ライバル」など、AIが自由に名付ける
 }
 
 export interface Villager {
@@ -46,37 +67,44 @@ export interface Villager {
   age: number; // 年(ゲーム内)
   lifespan: number;
   role: Role;
-  skill: ResKind | 'build';
-  trait: Trait;
-  avatar: number; // 1..25
+  personality: string; // AIが書いた性格(自由文)
+  skill: ResKind | 'build'; // AIがいないときの習慣
+  avatar: number;
   x: number;
   y: number;
-  path: Pt[]; // タイル座標の列
+  path: Pt[];
   task: Task | null;
+  intention: Intention | null;
+  thinking: boolean; // AIの返事待ち
+  memories: string[]; // AIが書いた記憶(新しい順)
+  relations: Record<string, Relation>; // キーは相手のid
+  partnerId: number | null;
   carrying: ResKind | null;
   energy: number; // 0..1
   hunger: number; // 0..1(1で空腹)
+  loneliness: number; // 0..1(1で人恋しい)
   hp: number;
   maxHp: number;
-  knockedOut: number; // 気絶の残り秒
-  hidden: boolean; // 建物の中にいる
+  knockedOut: number;
+  hidden: boolean;
   homeId: number | null;
   facingLeft: boolean;
   anim: string;
-  bubble: { text: string; until: number } | null;
+  bubble: { text: string; until: number; talk?: boolean } | null;
   nextMurmur: number;
   attackCd: number;
   parents: string[];
-  born: number; // 生まれた時刻(シム秒)
-  deeds: number; // 成し遂げた仕事の数
+  born: number;
+  deeds: number;
+  named: boolean; // AIが名前と性格をつけたか
 }
 
 export interface Tree {
   id: number;
   tx: number;
   ty: number;
-  variant: number; // 1..4
-  growth: number; // 0..1(1で成木)
+  variant: number;
+  growth: number;
   hits: number;
   reservedBy: number | null;
   shake: number;
@@ -97,7 +125,7 @@ export interface GoldStone {
   id: number;
   tx: number;
   ty: number;
-  variant: number; // 1..6
+  variant: number;
   amount: number;
   reservedBy: number | null;
   shake: number;
@@ -105,18 +133,33 @@ export interface GoldStone {
 
 export interface Building {
   id: number;
-  kind: BuildingKind;
+  kind: BuildingKind; // 見た目
   variant: number;
-  tx: number; // 足元の左端タイル
-  ty: number; // 足元の最下段タイル
+  name: string; // AIがつけた名前
+  role: BuildingRole;
+  purpose: string; // AIが書いた目的
+  proposer: string;
+  tx: number;
+  ty: number;
   w: number;
   h: number;
-  progress: number; // 0..1
+  progress: number;
   done: boolean;
   hp: number;
   maxHp: number;
   occupants: number[];
   attackCd: number;
+}
+
+/** まだ建て始めていない計画 */
+export interface Project {
+  id: number;
+  name: string;
+  kind: BuildingKind;
+  role: BuildingRole;
+  purpose: string;
+  proposer: string;
+  proposedAt: number;
 }
 
 export interface Raider {
@@ -148,7 +191,7 @@ export interface Arrow {
   dur: number;
   targetId: number;
   dmg: number;
-  hostile: boolean; // trueなら村人側に当たる(未使用)
+  hostile: boolean;
 }
 
 export interface Deco {
@@ -159,58 +202,65 @@ export interface Deco {
 }
 
 export interface ChronicleEntry {
-  t: number; // シム秒
-  label: string; // 「3年目 春」
+  t: number;
+  label: string;
   text: string;
-  kind: 'birth' | 'death' | 'build' | 'raid' | 'stage' | 'council' | 'festival' | 'misc' | 'ai';
+  kind: 'birth' | 'death' | 'build' | 'raid' | 'stage' | 'council' | 'festival' | 'misc' | 'ai' | 'talk';
 }
 
-export interface CouncilLine {
+export interface ConvLine {
   speaker: string;
   text: string;
 }
 
-export interface Policy {
-  weights: Record<ResKind | 'build', number>;
-  nextBuild: BuildingKind | null;
-  festival: boolean;
-  lines: CouncilLine[];
-  source: 'rule' | 'ai';
+/** AIが書いた会話。村人が出会うと吹き出しで再生される */
+export interface Conversation {
+  id: number;
+  a: number;
+  b: number;
+  topic: string;
+  lines: ConvLine[];
+  t: number;
+  label: string;
+  played: number; // 再生した行数
+  started: boolean;
 }
 
 export interface GameState {
   version: number;
   seed: number;
   islandName: string;
-  islandNo: number; // 何島目か
-  memories: number; // 旅立ちの回数(ポイント倍率)
-  time: number; // シム秒
-  dayTime: number; // 0..DAY_LEN
-  seasonIndex: number; // 通算の季節番号
+  islandNo: number;
+  memories: number; // 旅立ちの回数
+  time: number;
+  dayTime: number;
+  seasonIndex: number;
   res: Record<ResKind, number>;
   points: number;
   totalPoints: number;
   upgrades: Record<UpgradeKey, number>;
-  stage: number; // 0..3
-  map: { w: number; h: number; land: string }; // '1' 陸 / '0' 海
+  era: string; // AIがつけた時代の名前
+  customs: string[]; // AIが生んだ村の決まり・習わし
+  map: { w: number; h: number; land: string };
   villagers: Villager[];
   trees: Tree[];
   sheep: Sheep[];
   golds: GoldStone[];
   buildings: Building[];
+  projects: Project[];
   raiders: Raider[];
   arrows: Arrow[];
   decos: Deco[];
-  policy: Policy;
+  conversations: Conversation[]; // 新しいものが後ろ
+  pendingTalks: { a: number; b: number; topic: string }[];
   chronicle: ChronicleEntry[];
   nextId: number;
-  nextRaidSeason: number;
-  raidAt: number | null; // 襲撃が始まる時刻
+  nextRaidAt: number;
   raidEndAt: number | null;
   festivalUntil: number;
-  departed: boolean; // 城完成後、旅立ち可能
-  savedAt: number; // 実時間(ms)
-  stats: { births: number; deaths: number; raidsRepelled: number; built: number };
+  departed: boolean;
+  savedAt: number;
+  stats: { births: number; deaths: number; raidsRepelled: number; built: number; talks: number };
 }
 
 export type SimEvent =
@@ -224,14 +274,14 @@ export type SimEvent =
   | { type: 'built'; id: number }
   | { type: 'siteStart'; id: number }
   | { type: 'splash'; x: number; y: number }
-  | { type: 'explode'; x: number; y: number }
   | { type: 'hit'; x: number; y: number }
   | { type: 'heal'; x: number; y: number }
   | { type: 'birth'; id: number }
   | { type: 'death'; id: number; x: number; y: number }
   | { type: 'raidStart' }
   | { type: 'raidEnd' }
-  | { type: 'stage'; stage: number }
   | { type: 'season'; seasonIndex: number }
-  | { type: 'council' }
+  | { type: 'talkLine'; convId: number }
+  | { type: 'talkEnd'; convId: number }
+  | { type: 'culture' }
   | { type: 'sfx'; name: string; x?: number; y?: number };
