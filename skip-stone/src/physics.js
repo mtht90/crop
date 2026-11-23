@@ -23,11 +23,14 @@ const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
  * @param {number} p.speed 水平方向の初速 (m/s)
  * @param {number} p.yaw 向き (rad, +で右)
  * @param {number} p.quality 石の傾きの良さ 0..1(リングのタイミングで決まる)
- * @param {number} p.spin 回転量 0..1(くるくる回した量)
+ * @param {number} p.spin 回転量 0..1.5(1 を超えると回しすぎ)
  * @param {number} p.spinDir +1 で右へカーブ、-1 で左へ
  */
 export function createStone(p) {
   const el = TUNING.launchElevationDeg * DEG;
+  const spin = clamp(p.spin, 0, 1);
+  // 回しすぎ: 0..1。カーブが効きすぎ、石がぐらついて早く沈みやすい
+  const over = clamp((p.spin - 1) / 0.5, 0, 1);
   return {
     pos: { ...p.pos },
     vel: {
@@ -36,9 +39,11 @@ export function createStone(p) {
       z: -Math.cos(p.yaw) * p.speed,
     },
     quality: clamp(p.quality, 0, 1),
-    spin: clamp(p.spin, 0, 1),
+    spin,
+    over,
     spinDir: p.spinDir || 0,
-    wobble: (1 - clamp(p.quality, 0, 1)) * 0.25 + (p.spin > 0 ? 0 : 0.12),
+    // 回転が弱いほど不安定。回しすぎも不安定
+    wobble: (1 - clamp(p.quality, 0, 1)) * 0.25 + 0.12 * (1 - spin) + 0.45 * over,
     skips: 0,
     sunk: false,
     start: { ...p.pos },
@@ -64,7 +69,7 @@ export function stepStone(s, dt) {
   if (vh > 0.01 && s.spinDir !== 0 && s.spin > 0) {
     const nx = -s.vel.z / vh;
     const nz = s.vel.x / vh;
-    const a = TUNING.curveAccel * s.spin * s.spinDir * Math.min(1, vh / 10);
+    const a = TUNING.curveAccel * s.spin * (1 + 1.2 * s.over) * s.spinDir * Math.min(1, vh / 10);
     s.vel.x += nx * a * dt;
     s.vel.z += nz * a * dt;
   }
@@ -126,7 +131,7 @@ function contact(s) {
   s.vel.y = vyOut;
   s.pos.y = 0.001;
 
-  s.wobble = Math.max(0, s.wobble + 0.03 + 0.05 * (1 - q) - 0.028 * s.spin);
+  s.wobble = Math.max(0, s.wobble + 0.03 + 0.05 * (1 - q) - 0.028 * s.spin + 0.07 * s.over);
   s.spin *= 0.95;
   s.skips += 1;
   return { type: 'skip', index: s.skips, at, angle, speed: vhNew, impact: vyIn };
@@ -138,13 +143,18 @@ export function distanceFromStart(s, at = s.pos) {
 }
 
 /** 1投ぶんの点数を計算する */
-export function scoreThrow({ skips, distance, judge, curve, rings, streak }) {
+/** 回転量(0..1.5)からカーブの得点倍率。回しすぎても上がらない */
+export function curveMultiplier(spin) {
+  if (!spin) return 1;
+  return Math.round((1 + 0.4 * Math.min(1, spin)) * 100) / 100;
+}
+
+export function scoreThrow({ skips, distance, judge, curveMul = 1, rings, streak }) {
   let skipPts = 0;
   for (let i = 1; i <= skips; i++) skipPts += 10 + 4 * (i - 1);
   const distPts = Math.round(distance * 6);
   const ringPts = rings * 250;
   const judgeMul = judge === 'excellent' ? 2 : judge === 'great' ? 1.5 : judge === 'nice' ? 1.2 : 1;
-  const curveMul = curve ? 1.3 : 1;
   const streakMul = judge === 'excellent' && streak > 1 ? 1 + 0.2 * (streak - 1) : 1;
   const base = skipPts + distPts + ringPts;
   const total = Math.round(base * judgeMul * curveMul * streakMul);

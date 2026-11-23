@@ -1,10 +1,45 @@
 // スワイプ入力。石をつかんで、くるくる回して(カーブ)、上へはじいて投げる。
+// 回転は「回した量 × 回す速さ」で溜まり、回すのを止めると抜けていく。溜めすぎると回しすぎ。
 const TAU = Math.PI * 2;
 const wrap = (a) => {
   while (a > Math.PI) a -= TAU;
   while (a < -Math.PI) a += TAU;
   return a;
 };
+
+// 回転の溜まり方
+export const SPIN_MAX = 1.5; // これ以上は溜まらない(1 を超えると回しすぎ)
+export const SPIN_MIN = 0.12; // これ未満はカーブしない
+const GRACE = 0.12; // 回すのを止めてから抜け始めるまでの猶予(秒)
+const HALF_LIFE = 0.45; // 止めているとこの秒数で半分に抜ける
+
+/** 回した角度 d(rad) を溜める。速く回すほど1周あたりの溜まりが多い。 */
+function addTurn(s, d, now) {
+  s.charge = decayed(s, now);
+  const dt = Math.max(0.008, (now - s.anchor.t) / 1000);
+  const rate = Math.abs(d) / dt; // rad/s(2周/秒 ≒ 12.6)
+  const perLoop = 0.3 * Math.min(1.7, Math.max(0.25, rate / 12));
+  const gain = (Math.abs(d) / TAU) * perLoop;
+  const sign = Math.sign(d);
+  if (s.dir === 0 || sign === s.dir) {
+    s.dir = sign;
+    s.charge = Math.min(SPIN_MAX, s.charge + gain);
+  } else {
+    // 逆向きに回すと打ち消し合う
+    s.charge -= gain * 1.5;
+    if (s.charge < 0) {
+      s.charge = -s.charge;
+      s.dir = sign;
+    }
+  }
+  s.lastTurnAt = now;
+}
+
+function decayed(s, now) {
+  if (!s.charge) return 0;
+  const idle = Math.max(0, (now - s.lastTurnAt) / 1000 - GRACE);
+  return s.charge * Math.pow(0.5, idle / HALF_LIFE);
+}
 
 /**
  * @param {HTMLElement} el
@@ -27,16 +62,17 @@ export function createSwipeInput(el, h) {
     s = {
       id: e.pointerId,
       pts: [{ x: e.clientX, y: e.clientY, t: performance.now() }],
-      startX: e.clientX,
-      startY: e.clientY,
       x: e.clientX,
       y: e.clientY,
-      anchor: { x: e.clientX, y: e.clientY },
+      anchor: { x: e.clientX, y: e.clientY, t: performance.now() },
       lastAngle: null,
-      turn: 0, // 曲がった角度の合計(rad)
-      spin: 0, // 0..1 回転の強さ
-      spinDir: 0,
-      spinning: false,
+      charge: 0, // 溜まった回転 0..MAX(1を超えると回しすぎ)
+      dir: 0, // +1 = 時計回り(右へカーブ) / -1 = 反時計回り
+      lastTurnAt: 0,
+      /** 時刻 now での回転(止めていた時間ぶん抜けた値) */
+      spinAt(now) {
+        return { charge: decayed(this, now), dir: this.dir };
+      },
     };
     h.onGrab(s);
   }
@@ -47,27 +83,21 @@ export function createSwipeInput(el, h) {
     const now = performance.now();
     const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
     for (const ev of evs.length ? evs : [e]) {
-      s.pts.push({ x: ev.clientX, y: ev.clientY, t: now });
+      const t = ev.timeStamp > 0 ? Math.min(ev.timeStamp, now) : now;
+      s.pts.push({ x: ev.clientX, y: ev.clientY, t });
       const dx = ev.clientX - s.anchor.x;
       const dy = ev.clientY - s.anchor.y;
       if (dx * dx + dy * dy > 64) {
         const ang = Math.atan2(dy, dx);
         if (s.lastAngle !== null) {
           const d = wrap(ang - s.lastAngle);
-          // 急な折り返し(ほぼ逆向き)は回転とみなさない
-          if (Math.abs(d) < 1.6) s.turn += d;
+          // 急な折り返し(ほぼ逆向き)や、ほぼ直線の動きは回転とみなさない
+          if (Math.abs(d) < 1.6 && Math.abs(d) > 0.05) addTurn(s, d, t);
         }
         s.lastAngle = ang;
-        s.anchor = { x: ev.clientX, y: ev.clientY };
+        s.anchor = { x: ev.clientX, y: ev.clientY, t };
       }
     }
-    // 回した量が 1.25 周を超えたらカーブ投げ
-    const loops = Math.abs(s.turn) / TAU;
-    if (!s.spinning && loops >= 1.25) {
-      s.spinning = true;
-      s.spinDir = Math.sign(s.turn);
-    }
-    if (s.spinning) s.spin = Math.min(1, 0.55 + (loops - 1.25) * 0.3);
     s.x = e.clientX;
     s.y = e.clientY;
     if (s.pts.length > 400) s.pts.splice(0, s.pts.length - 400);
@@ -95,14 +125,16 @@ export function createSwipeInput(el, h) {
     const up = (-vy * 1000) / H; // 画面の高さ/秒
     const side = (vx * 1000) / H;
     const stale = now - last.t > 140; // 指を止めてから離した
+    const spinNow = decayed(cur, now);
     if (up > 0.9 && !stale) {
       h.onThrow({
         up,
         side,
         x: cur.x,
         y: cur.y,
-        spin: cur.spinning ? cur.spin : 0,
-        spinDir: cur.spinning ? cur.spinDir : 0,
+        // 回転が弱すぎるときは回していない扱い
+        spin: spinNow >= SPIN_MIN ? spinNow : 0,
+        spinDir: spinNow >= SPIN_MIN ? cur.dir : 0,
       });
     } else {
       h.onCancel(cur);

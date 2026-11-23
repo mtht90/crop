@@ -3,7 +3,7 @@ import { loadWorld } from './world.js';
 import { createFx, COLORS } from './fx.js';
 import { createAudio } from './audio.js';
 import { createSwipeInput } from './input.js';
-import { createStone, stepStone, distanceFromStart, horizontalSpeed, scoreThrow } from './physics.js';
+import { createStone, stepStone, distanceFromStart, horizontalSpeed, scoreThrow, curveMultiplier } from './physics.js';
 
 const THROWS_PER_ROUND = 5;
 const RING_PERIOD = 1.45; // 判定リングが縮む周期 (秒)
@@ -200,19 +200,14 @@ function newThrow() {
   fx.setBonusRings(rings);
 
   ui.hint.hidden = false;
-  setHint(false);
+  setHint();
   ui.live.classList.remove('on');
   renderPips();
 }
 
-function setHint(spinning, dir) {
-  if (spinning) {
-    ui.hintMain.innerHTML = `<span class="curve">カーブ ${dir > 0 ? '右へ →' : '← 左へ'}</span> そのまま上へはじいて投げる`;
-    ui.hintSub.textContent = '回す向きでカーブの向きが変わる';
-  } else {
-    ui.hintMain.textContent = '石を上へはじいて投げる';
-    ui.hintSub.textContent = 'リングが小さい瞬間を狙う・くるくる回すとカーブ';
-  }
+function setHint() {
+  ui.hintMain.textContent = '石を上へはじいて投げる';
+  ui.hintSub.textContent = 'リングが小さい瞬間を狙う・くるくる回すとカーブ';
 }
 
 function gradeFromRing(k) {
@@ -244,12 +239,10 @@ createSwipeInput(canvas, {
   onDrag(s) {
     const p = screenToHand(s.x, s.y - 36);
     handTarget.copy(p);
-    if (s.spinning) setHint(true, s.spinDir);
   },
   onCancel() {
     grab = null;
     handTarget.copy(HAND);
-    setHint(false);
   },
   onThrow(t) {
     grab = null;
@@ -280,6 +273,8 @@ function launch(t) {
     judge: g.judge,
     ringK: k,
     curve: t.spin > 0,
+    curveMul: curveMultiplier(t.spin),
+    over: t.spin > 1,
     spinDir: t.spinDir,
     firstDone: false,
     inRing: false,
@@ -293,7 +288,6 @@ function launch(t) {
   ui.live.classList.add('on');
   ui.skipCount.textContent = '0';
   ui.distVal.textContent = '0.0';
-  fx.setAura(0, tmpV, 1);
   audio.throw(throwInfo.power);
   spinVisual = 22 + speed;
 }
@@ -346,7 +340,8 @@ function onContact(e) {
       fx.hideTarget();
       chip('リングの外');
     }
-    if (throwInfo.curve && e.type === 'skip') chip(`カーブ ×1.3`, 'mint');
+    if (throwInfo.over && e.type === 'skip') chip('回しすぎ！');
+    else if (throwInfo.curve && e.type === 'skip') chip(`カーブ ×${throwInfo.curveMul.toFixed(2)}`, 'mint');
   }
 
   if (e.type === 'skip') {
@@ -379,7 +374,7 @@ function finishThrow() {
   const distance = distanceFromStart(sim, sim.lastContact || sim.pos);
   const judge = throwInfo.inRing ? throwInfo.judge : null;
   game.streak = judge === 'excellent' ? game.streak + 1 : 0;
-  const s = scoreThrow({ skips, distance, judge, curve: throwInfo.curve && skips > 0, rings: throwInfo.rings, streak: game.streak });
+  const s = scoreThrow({ skips, distance, judge, curveMul: skips > 0 ? throwInfo.curveMul : 1, rings: throwInfo.rings, streak: game.streak });
   game.total += s.total;
   game.results.push({ skips, distance, judge, score: s.total });
   ui.score.textContent = game.total.toLocaleString();
@@ -389,7 +384,7 @@ function finishThrow() {
   rows.push(row('飛距離', `${distance.toFixed(1)} m`, `+${s.distPts}`));
   if (throwInfo.rings) rows.push(row('光の輪', `${throwInfo.rings} 個`, `+${s.ringPts}`));
   rows.push(row('判定', judge ? JUDGE_LABEL[judge].replace('!', '') : 'リング外', `×${s.judgeMul.toFixed(1)}`, true));
-  if (s.curveMul > 1) rows.push(row('カーブ', '', '×1.3', true));
+  if (s.curveMul > 1) rows.push(row(throwInfo.over ? 'カーブ(回しすぎ)' : 'カーブ', '', `×${s.curveMul.toFixed(2)}`, true));
   if (s.streakMul > 1) rows.push(row(`連続Excellent ${game.streak}`, '', `×${s.streakMul.toFixed(1)}`, true));
   rows.push(`<div class="row total"><span>得点</span><b>+${s.total.toLocaleString()}</b></div>`);
   ui.resultRows.innerHTML = rows.join('');
@@ -486,11 +481,17 @@ function updateAim(dt) {
   tmpQ.y += bob;
   stoneRoot.position.copy(camera.localToWorld(tmpQ.clone()));
   stoneRoot.quaternion.copy(camera.quaternion);
-  stoneTilt.rotation.set(0.85, 0, grab ? 0.0 : Math.sin(elapsed * 1.3) * 0.08);
-  const spinning = grab?.spinning;
-  spinVisual += ((spinning ? 26 : grab ? 0 : 0.6) - spinVisual) * Math.min(1, dt * 6);
-  stoneSpin.rotation.y += spinVisual * dt * (grab?.spinDir || 1) * -1;
-  fx.setAura(spinning ? 1 : 0, stoneRoot.position, grab?.spinDir || 1);
+  // 溜まった回転は石の回る速さだけで見せる。回しすぎると石が暴れる
+  const sp = grab ? grab.spinAt(performance.now()) : { charge: 0, dir: 1 };
+  const over = Math.max(0, sp.charge - 1);
+  const shake = over * 0.35;
+  stoneTilt.rotation.set(
+    0.85 + Math.sin(elapsed * 31) * shake,
+    0,
+    (grab ? 0 : Math.sin(elapsed * 1.3) * 0.08) + Math.sin(elapsed * 27 + 1) * shake,
+  );
+  spinVisual += ((grab ? sp.charge * 38 : 0.6) - spinVisual) * Math.min(1, dt * 10);
+  stoneSpin.rotation.y += spinVisual * dt * (sp.dir || 1) * -1;
 }
 
 function updateFlight(dt) {
@@ -510,7 +511,7 @@ function updateFlight(dt) {
   stoneRoot.quaternion.setFromEuler(stoneRoot.rotation);
   const wob = sim.wobble;
   stoneTilt.rotation.set(0.33 + Math.sin(elapsed * 11) * wob * 0.25, 0, Math.sin(elapsed * 9) * wob * 0.45);
-  spinVisual = 18 + vh * 2.2;
+  spinVisual = 10 + vh * 2.2 * (0.4 + 0.6 * sim.spin);
   stoneSpin.rotation.y += spinVisual * dt * (sim.spinDir || 1) * -1;
   fx.updateTrail(camera, stoneRoot.position);
   ui.distVal.textContent = distanceFromStart(sim).toFixed(1);
