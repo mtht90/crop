@@ -167,11 +167,12 @@ export function curveMultiplier(spin) {
 }
 
 /**
- * i 回目のスキップの点。10回までは少しずつ増え、そこからは毎回1.25倍に加速する(上限なし)。
+ * i 回目のスキップの点。10回までは少しずつ増え、そこからは毎回 SKIP_GROWTH 倍に加速する(上限なし)。
  */
+export const SKIP_GROWTH = 1.1;
 export function skipPoint(i) {
   if (i <= 10) return 10 + 4 * (i - 1);
-  return Math.round(46 * Math.pow(1.25, i - 10));
+  return Math.round(46 * Math.pow(SKIP_GROWTH, i - 10));
 }
 
 export function skipPoints(n) {

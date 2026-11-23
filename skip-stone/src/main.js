@@ -394,11 +394,11 @@ function row(label, value, pts, mul = false) {
 }
 
 function rankFor(total) {
-  if (total < 5000) return '見習いの石投げ';
-  if (total < 15000) return '水切り好き';
-  if (total < 50000) return '湖の常連';
-  if (total < 300000) return '水切り名人';
-  if (total < 3000000) return '湖の伝説';
+  if (total < 3000) return '見習いの石投げ';
+  if (total < 8000) return '水切り好き';
+  if (total < 20000) return '湖の常連';
+  if (total < 45000) return '水切り名人';
+  if (total < 80000) return '湖の伝説';
   return '水切りの神';
 }
 
