@@ -1,6 +1,6 @@
 // 村の心:村人の判断・会話・名付け・建物の発案・習わしを、APIのAIにまとめて考えてもらう。
 // エンジンが決めているのは本能と体の動きだけ。ここで受け取った考えを、範囲チェックしてから反映する。
-import { ACTION_INFO, BUILDINGS, BUILDING_ORDER, ROLE_INFO } from '../sim/config';
+import { ACTION_INFO, BUILDINGS, BUILDING_ORDER, ROLE_INFO, TILE } from '../sim/config';
 import type { Sim } from '../sim/sim';
 import type { Action, BuildingKind, BuildingRole, Villager } from '../sim/types';
 import { clamp } from '../sim/util';
@@ -63,6 +63,8 @@ export class VillageMind {
   private lastCall = 0;
   private backoffUntil = 0;
   private callCount = 0;
+  /** 成功した回数 */
+  thoughts = 0;
   onChange: () => void = () => {};
 
   constructor() {
@@ -97,7 +99,7 @@ export class VillageMind {
     if (!this.settings.apiKey) this.status = 'AI未設定:村人は本能と習慣だけで暮らしています';
     else if (!this.settings.enabled) this.status = 'AIを止めています';
     else if (Date.now() < this.backoffUntil) this.status = 'AIが混み合っているので少し待っています';
-    else this.status = '村人たちが考えています';
+    else this.status = this.thoughts ? `AIが村人の心を動かしています(${this.thoughts}回)` : 'AIの返事を待っています';
     this.onChange();
   }
 
@@ -131,7 +133,7 @@ export class VillageMind {
           headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
           body: JSON.stringify({
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
-            generationConfig: { temperature: 1.0, responseMimeType: 'application/json', maxOutputTokens: 4096 },
+            generationConfig: { temperature: 1.0, responseMimeType: 'application/json', maxOutputTokens: 8192 },
           }),
           signal: ctrl.signal,
         });
@@ -142,7 +144,7 @@ export class VillageMind {
       const res = await fetch(`${baseUrl.replace(/\/$/, '')}/chat/completions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }], temperature: 1.0, max_tokens: 4096 }),
+        body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }], temperature: 1.0, max_tokens: 8192 }),
         signal: ctrl.signal,
       });
       if (!res.ok) throw new ApiError(res.status, await res.text().catch(() => ''));
@@ -183,22 +185,24 @@ export class VillageMind {
   // ───────────── 考える ─────────────
   private async think(sim: Sim) {
     const s = sim.s;
-    const newcomers = s.villagers.filter((v) => !v.named && !v.thinking).slice(0, 3);
+    const newcomers = s.villagers.filter((v) => !v.named && !v.thinking).slice(0, 2);
     const deciders = s.villagers
       .filter((v) => v.named && sim.needsThought(v) && v.knockedOut <= 0)
       .sort((a, b) => (a.intention?.until ?? 0) - (b.intention?.until ?? 0))
       .slice(0, 4);
-    const talks = s.pendingTalks
+    const talks: Talk[] = s.pendingTalks
       .filter((p) => s.villagers.some((v) => v.id === p.a) && s.villagers.some((v) => v.id === p.b))
-      .slice(0, 2);
+      .slice(0, 2)
+      .map((p) => ({ ...p, chance: false }));
+    // そばにいる二人の、なにげない会話
+    for (const e of pickEncounters(sim, talks)) if (talks.length < 3) talks.push(e);
     this.callCount++;
     const villageTurn = this.callCount % 4 === 1;
     if (!newcomers.length && !deciders.length && !talks.length && !villageTurn) return;
 
     const involved = [...newcomers, ...deciders];
     for (const v of involved) v.thinking = true;
-    const takenTalks = talks.slice();
-    s.pendingTalks = s.pendingTalks.filter((p) => !takenTalks.includes(p));
+    s.pendingTalks = s.pendingTalks.filter((p) => !talks.some((t) => t.a === p.a && t.b === p.b));
 
     this.busy = true;
     this.status = '村人たちが考えています…';
@@ -206,15 +210,16 @@ export class VillageMind {
     const t0 = performance.now();
     const simAtStart = sim;
     try {
-      const prompt = buildPrompt(sim, newcomers, deciders, takenTalks, villageTurn);
+      const prompt = buildPrompt(sim, newcomers, deciders, talks, villageTurn);
       const text = await this.call(prompt);
       const data = parseJson(text);
       if (!data) throw new Error('AIの返事を読み取れませんでした');
-      if (simAtStart === sim) applyThoughts(sim, data, newcomers, deciders, takenTalks);
-      this.log(true, performance.now() - t0, `${deciders.length}人の判断・${takenTalks.length}件の会話`);
+      let n = { people: 0, talks: 0 };
+      if (simAtStart === sim) n = applyThoughts(sim, data, newcomers, deciders, talks);
+      this.thoughts++;
+      this.log(true, performance.now() - t0, `${n.people}人が考え、${n.talks}組が話した`);
     } catch (e) {
-      // 会話の予約は戻す
-      s.pendingTalks.push(...takenTalks.slice(0, 1));
+      s.pendingTalks.push(...talks.filter((t) => !t.chance).slice(0, 1).map(({ a, b, topic }) => ({ a, b, topic })));
       const err = e as Error;
       if (err instanceof ApiError && (err.status === 429 || err.status === 503)) {
         this.backoffUntil = Date.now() + Math.min(300000, this.settings.interval * 4000);
@@ -263,12 +268,65 @@ export function parseJson(text: string): Record<string, unknown> | null {
 }
 
 // ───────────── プロンプト ─────────────
+interface Talk {
+  a: number;
+  b: number;
+  topic: string;
+  chance: boolean; // そばにいただけの、なにげない会話
+}
+
+const TASK_WORDS: Record<string, string> = {
+  chop: '木を切っている',
+  harvest: '羊を獲っている',
+  mine: '金を掘っている',
+  build: '建物を建てている',
+  repair: '建物を直している',
+  deliver: '荷物を運んでいる',
+  eat: 'ごはんを食べている',
+  sleep: '寝ている',
+  hide: '隠れている',
+  chat: '話している',
+  pray: '祈っている',
+  festival: '人の集まりにいる',
+  guard: '見張っている',
+  fight: '盗賊と戦っている',
+  heal: '手当てをしている',
+  play: '遊んでいる',
+  wander: '歩いている',
+};
+
+/** そばにいて、最近話していない二人を選ぶ */
+function pickEncounters(sim: Sim, taken: Talk[]): Talk[] {
+  const s = sim.s;
+  const busy = new Set<number>();
+  for (const t of taken) busy.add(t.a).add(t.b);
+  for (const c of s.conversations) if (c.played < c.lines.length) busy.add(c.a).add(c.b);
+  const free = s.villagers.filter((v) => v.named && !v.hidden && v.knockedOut <= 0 && !busy.has(v.id) && v.task?.type !== 'chat' && v.task?.type !== 'fight');
+  const out: Talk[] = [];
+  const recent = (a: Villager, b: Villager) => s.conversations.some((c) => ((c.a === a.id && c.b === b.id) || (c.a === b.id && c.b === a.id)) && s.time - c.t < 240);
+  const pairs: { a: Villager; b: Villager; d: number }[] = [];
+  for (let i = 0; i < free.length; i++)
+    for (let j = i + 1; j < free.length; j++) {
+      const d = Math.hypot(free[i].x - free[j].x, free[i].y - free[j].y);
+      if (d < TILE * 4 && !recent(free[i], free[j])) pairs.push({ a: free[i], b: free[j], d: d - (free[i].loneliness + free[j].loneliness) * 80 });
+    }
+  pairs.sort((x, y) => x.d - y.d);
+  for (const p of pairs) {
+    if (out.length >= 2) break;
+    if (out.some((o) => [o.a, o.b].some((id) => id === p.a.id || id === p.b.id))) continue;
+    const [a, b] = p.a.loneliness >= p.b.loneliness ? [p.a, p.b] : [p.b, p.a];
+    out.push({ a: a.id, b: b.id, topic: '', chance: true });
+  }
+  return out;
+}
+
 function needWords(v: Villager) {
   const w: string[] = [];
   if (v.hunger > 0.7) w.push('おなかがすいている');
   if (v.energy < 0.25) w.push('疲れている');
   if (v.loneliness > 0.7) w.push('人恋しい');
-  return w.join('・') || '落ち着いている';
+  if (v.age > v.lifespan - 0.6) w.push('老いを感じている');
+  return w.join('・') || 'ふつう';
 }
 
 function personBrief(sim: Sim, v: Villager, full: boolean) {
@@ -277,40 +335,58 @@ function personBrief(sim: Sim, v: Villager, full: boolean) {
     .map(([id, r]) => ({ o: s.villagers.find((x) => x.id === Number(id)), r }))
     .filter((x) => x.o)
     .sort((a, b) => Math.abs(b.r.score) - Math.abs(a.r.score))
-    .slice(0, full ? 4 : 2)
-    .map((x) => `${x.o!.name}(${x.r.label ? x.r.label + '・' : ''}${x.r.score})`);
+    .slice(0, full ? 5 : 3)
+    .map((x) => `${x.o!.name}(${x.r.label ? x.r.label + '・' : ''}好感${x.r.score})`);
   const partner = s.villagers.find((x) => x.id === v.partnerId);
+  const near = s.villagers
+    .filter((x) => x !== v && !x.hidden && Math.hypot(x.x - v.x, x.y - v.y) < TILE * 5)
+    .map((x) => x.name)
+    .slice(0, 4);
+  const lastConv = [...s.conversations].reverse().find((c) => c.a === v.id || c.b === v.id);
   const o: Record<string, unknown> = {
     名前: v.name,
     年齢: Math.floor(v.age * 10),
     性別: v.female ? '女' : '男',
     姿: { pawn: '村人', child: '子ども', warrior: '戦士', archer: '弓使い', monk: '僧侶' }[v.role],
     性格: v.personality || '(まだ決まっていない)',
+    口調: v.speech || '(自由)',
+    いま: v.hidden ? (v.task?.type === 'sleep' ? '家で寝ている' : '建物の中') : (TASK_WORDS[v.task?.type ?? 'wander'] ?? '歩いている'),
   };
   if (partner) o.連れ合い = partner.name;
   if (v.parents.length) o.親 = v.parents.join('と');
   if (rel.length) o.関係 = rel.join('、');
   if (full) {
-    o.記憶 = v.memories.slice(0, 4);
-    o.今の状態 = needWords(v);
-    if (v.intention?.source === 'ai') o.直前の考え = `${ACTION_INFO[v.intention.action]}${v.intention.target ? `(${v.intention.target})` : ''}「${v.intention.thought}」`;
+    o.体 = needWords(v);
+    if (near.length) o.そばにいる人 = near.join('、');
+    o.記憶 = v.memories.slice(0, 5);
+    if (lastConv) o.最後の会話 = `${lastConv.label}:${lastConv.lines.slice(-2).map((l) => `${l.speaker}「${l.text}」`).join('')}`;
+    if (v.intention?.source === 'ai') o.さっきまで = `${ACTION_INFO[v.intention.action].replace(/\(.*\)/, '')}${v.intention.target ? `(${v.intention.target})` : ''}「${v.intention.thought}」`;
   }
   return o;
 }
 
-function buildPrompt(sim: Sim, newcomers: Villager[], deciders: Villager[], talks: { a: number; b: number; topic: string }[], villageTurn: boolean) {
+const STYLE = `【書き方のきまり】
+・せりふ・心の声は、その人の「口調」と「性格」を必ず反映する。全員が同じ調子で話すのは禁止。
+・「いい天気だね」「がんばろう」「これからどうする?」「よろしくね」のような、誰でも言える決まり文句は禁止。
+・具体的に書く:相手や他の村人の名前、建物の名前、さっきの出来事、記憶、季節、いましていること、体の状態などを織り込む。
+・本音、ちょっとした不満、照れ、冗談、噂話、思い出話、意外な一面、言い間違いなど、人間らしさを出す。
+・会話は同じ話題をくり返さず、気持ちや関係が少し動くようにする(打ち明け、すれ違い、からかい、約束、仲直りなど)。
+・同じ人の「最後の会話」や「さっきまで」と同じ内容はくり返さない。`;
+
+function buildPrompt(sim: Sim, newcomers: Villager[], deciders: Villager[], talks: Talk[], villageTurn: boolean) {
   const s = sim.s;
   const byId = (id: number) => s.villagers.find((v) => v.id === id);
+  const weather = sim.season === 3 ? '雪が舞っている' : ['春風が吹いている', '日差しが強い', '木々が色づいている'][sim.season];
   const world = {
     島: s.islandName,
-    時: `${sim.timeLabel}・${sim.isNight ? '夜' : '昼'}`,
+    時: `${sim.timeLabel}・${sim.isNight ? '夜' : '昼'}・${weather}`,
     時代: s.era,
     人口: `${sim.population}人(住める数 ${sim.capacity})`,
     蓄え: { 木: Math.floor(s.res.wood), 肉: Math.floor(s.res.meat), 金: Math.floor(s.res.gold) },
     建物: s.buildings.map((b) => `${b.name}[${BUILDINGS[b.kind].name}/${ROLE_INFO[b.role].name}]${b.done ? '' : `(建設中${Math.round(b.progress * 100)}%)`}`),
     計画中: s.projects.map((p) => `${p.name}[${BUILDINGS[p.kind].name}/${ROLE_INFO[p.role].name}]`),
     習わし: s.customs.slice(-6),
-    最近の出来事: s.chronicle.slice(-7).map((c) => c.text),
+    最近の出来事: s.chronicle.slice(-8).map((c) => c.text),
     盗賊: sim.raidActive ? '島に上陸している!' : 'いない',
     村人一覧: s.villagers.map((v) => `${v.name}(${Math.floor(v.age * 10)}歳)`).join('、'),
   };
@@ -320,51 +396,58 @@ function buildPrompt(sim: Sim, newcomers: Villager[], deciders: Villager[], talk
 
   const parts: string[] = [];
   parts.push(
-    `あなたは、小さな島で暮らす村人たち一人ひとりの心を演じます。村人は「空腹なら食べる・眠くなったら寝る・危険から逃げる・人恋しくなる」という本能だけはひとりでに働きますが、それ以外の「何をして生きるか」「誰と何を話すか」「何を建てて何と呼ぶか」「どんな習わしをつくるか」は、すべて村人自身が考えます。ゲーム的な正解はありません。性格・記憶・関係・村の状況から、その人らしい選択をしてください。恋も、けんかも、夢も、迷いも自由です。せりふは自然な日本語の話し言葉で、短く。`,
+    `あなたは、小さな島で暮らす村人たち一人ひとりの心を演じる作家です。村人は「空腹なら食べる・眠くなったら寝る・危険から逃げる・人恋しくなる」という本能だけはひとりでに働きますが、それ以外の「何をして生きるか」「誰と何を話すか」「何を建てて何と呼ぶか」「どんな習わしをつくるか」は、すべて村人自身が考えます。ゲーム的な正解はありません。性格・口調・記憶・関係・いまの状況から、その人にしか言えないこと、その人らしい選択を書いてください。恋も、けんかも、夢も、迷いも、くだらない冗談も自由です。`,
   );
+  parts.push(STYLE);
   parts.push(`【村の今】\n${JSON.stringify(world)}`);
   parts.push(`【体でできる動作(action)】\n${actions}\n※実際にできるのはこの動作だけです。思いや目的は thought に書いてください。`);
   parts.push(`【建物の見た目(look)と材料】\n${looks}\n【建物の働き(role)】\n${roles}\n※名前と目的は自由につけられます。材料が足りなければ、建てる前に集める必要があります。`);
   if (newcomers.length)
     parts.push(
-      `【新しく性格を決める人】\n${JSON.stringify(newcomers.map((v) => ({ id: v.id, 今の名前: v.name, 年齢: Math.floor(v.age * 10), 性別: v.female ? '女' : '男', 親: v.parents.join('と') || '(島に流れ着いた)' })))}\n赤ちゃん(年齢0)なら親が名前をつけてください。そうでなければ名前はそのまま。`,
+      `【新しく人となりを決める人】(必ず newcomers に全員分を書くこと)\n${JSON.stringify(newcomers.map((v) => ({ id: v.id, 今の名前: v.name, 年齢: Math.floor(v.age * 10), 性別: v.female ? '女' : '男', 親: v.parents.join('と') || '(島に流れ着いた)', 仮の性格: v.personality || '' })))}\n赤ちゃん(年齢0)なら親が名前をつけてください。そうでなければ名前はそのまま。性格は、好きなもの・苦手なもの・夢や悩みまで含めて具体的に。口調は語尾や一人称まで決めて、ほかの村人とかぶらないように。`,
     );
   if (deciders.length) parts.push(`【次に何をするか考える人】\n${JSON.stringify(deciders.map((v) => personBrief(sim, v, true)))}`);
   if (talks.length)
     parts.push(
-      `【これから会話する二人】\n${JSON.stringify(
+      `【会話する二人】\n${JSON.stringify(
         talks
           .map((t) => {
             const a = byId(t.a);
             const b = byId(t.b);
-            return a && b ? { 話しかける人: personBrief(sim, a, true), 相手: personBrief(sim, b, true), きっかけ: t.topic || '(特になし)' } : null;
+            if (!a || !b) return null;
+            return { 話しかける人: personBrief(sim, a, true), 相手: personBrief(sim, b, true), 状況: t.chance ? 'たまたま近くにいて、ふと話しかけた(短い雑談でもよい)' : `自分から話しに行った:${t.topic || '話したいことがある'}` };
           })
           .filter(Boolean),
-      )}\n4〜8行の会話を書いてください。会話のあと、お互いへの気持ちがどう変わったかも決めてください。`,
+      )}\nそれぞれ3〜8行の会話を書いてください。二人の口調の違いがはっきり出るように。会話のあと、お互いへの気持ちがどう変わったかも決めてください。`,
     );
   if (villageTurn) parts.push('【村全体】時代の名前を変えたいとき、新しい習わしが生まれたとき、歴史に残したい出来事があるときだけ village に書いてください。');
 
   parts.push(`【返事の形】次のJSONだけを返してください(該当がない項目は空配列や省略でかまいません)。
 {
- "people": [{"name":"名前","action":"${ACTIONS.join('|')}","target":"相手の名前や建物の名前(必要なら)","thought":"心の声(30字以内)","minutes":1〜6(その行動を続ける時間),"look":"pawn|warrior|archer|monk(生き方を変えるときだけ)","memory":"これまでに起きたことで心に残ったこと(予定は書かない・あれば30字以内)","propose":{"name":"建物の名前","look":"${BUILDING_ORDER.join('|')}","role":"${ROLES.join('|')}","purpose":"目的(30字以内)"}(建てたいものを思いついたときだけ)}],
- "newcomers": [{"id":数字,"name":"名前(カタカナ2〜4文字)","personality":"性格・好きなもの・夢など(50字以内)"}],
- "talks": [{"a":"話しかける人","b":"相手","lines":[{"speaker":"名前","text":"せりふ(40字以内)"}],"a_to_b":{"delta":-30〜30,"label":"aから見たbとの関係の呼び名(親友・恋人・夫婦・ライバル・師匠など、変わったときだけ)"},"b_to_a":{"delta":-30〜30,"label":"同様"},"memory_a":"この会話でaの心に残ったこと","memory_b":"この会話でbの心に残ったこと","promise":{"action":"二人で一緒にすること(あれば)","target":""}}],
+ "people": [{"name":"名前","action":"${ACTIONS.join('|')}","target":"相手の名前や建物の名前(必要なら)","thought":"いまの心の声(30字以内・口調どおり)","mutters":["このあと作業しながらつぶやくこと(口調どおり・25字以内)を2〜3個。それぞれ違う内容で"],"minutes":1〜6,"look":"pawn|warrior|archer|monk(生き方を変えるときだけ)","memory":"これまでに起きたことで心に残ったこと(予定は書かない・あれば30字以内)","propose":{"name":"建物の名前","look":"${BUILDING_ORDER.join('|')}","role":"${ROLES.join('|')}","purpose":"目的(30字以内)"}(建てたいものを思いついたときだけ)}],
+ "newcomers": [{"id":数字,"name":"名前(カタカナ2〜4文字)","personality":"性格・好き嫌い・夢や悩み(60字以内)","speech":"口調の特徴(一人称・語尾・話し方。30字以内)"}],
+ "talks": [{"a":"話しかける人","b":"相手","lines":[{"speaker":"名前","text":"せりふ(40字以内)"}],"a_to_b":{"delta":-30〜30,"label":"aから見たbとの関係の呼び名(変わったときだけ)"},"b_to_a":{"delta":-30〜30,"label":"同様"},"memory_a":"この会話でaの心に残ったこと","memory_b":"この会話でbの心に残ったこと","promise":{"action":"二人で一緒にすること(あれば)","target":""}}],
  "village": {"era":"新しい時代の名前(変えるときだけ)","custom":"新しく生まれた習わし(あれば)","chronicle":"歴史書に残す一文(あれば)"}
 }`);
   return parts.join('\n\n');
 }
 
 // ───────────── 反映 ─────────────
-function applyThoughts(sim: Sim, data: Record<string, unknown>, newcomers: Villager[], deciders: Villager[], talks: { a: number; b: number; topic: string }[]) {
+const personaTries = new Map<number, number>();
+
+function applyThoughts(sim: Sim, data: Record<string, unknown>, newcomers: Villager[], deciders: Villager[], talks: Talk[]) {
   const s = sim.s;
   const arr = (v: unknown) => (Array.isArray(v) ? (v as Record<string, unknown>[]) : []);
+  let nPeople = 0;
+  let nTalks = 0;
 
-  // 新しく来た人・生まれた子
   for (const n of arr(data.newcomers)) {
     const v = newcomers.find((x) => x.id === Number(n.id)) ?? newcomers.find((x) => x.name === n.name);
     if (!v) continue;
-    const pers = str(n.personality, 60);
+    const pers = str(n.personality, 70);
     if (pers) v.personality = pers;
+    const sp = str(n.speech, 40);
+    if (sp) v.speech = sp;
     const name = str(n.name, 6);
     if (v.age < 0.3 && name && name !== v.name && !s.villagers.some((x) => x !== v && x.name === name)) {
       const old = v.name;
@@ -374,18 +457,25 @@ function applyThoughts(sim: Sim, data: Record<string, unknown>, newcomers: Villa
     }
     v.named = true;
   }
-  for (const v of newcomers) v.named = true; // 返事がなくても次に進む
+  // 返事に人となりがなかった人は、2回目までは考え直してもらう
+  for (const v of newcomers) {
+    if (v.named) continue;
+    personaTries.set(v.id, (personaTries.get(v.id) ?? 0) + 1);
+    if ((personaTries.get(v.id) ?? 0) >= 2) v.named = true;
+  }
 
-  // 一人ひとりの判断
   for (const p of arr(data.people)) {
     const v = deciders.find((x) => x.name === p.name) ?? sim.byName(str(p.name, 12));
     if (!v || !s.villagers.includes(v)) continue;
+    nPeople++;
     const action = (ACTIONS as string[]).includes(String(p.action)) ? (p.action as Action) : 'wander';
     const minutes = clamp(Number(p.minutes) || 2, 1, 6);
     const thought = str(p.thought, 40);
     v.intention = { action: v.role === 'child' && !['play', 'wander', 'talk', 'rest', 'gather', 'explore'].includes(action) ? 'play' : action, target: str(p.target, 20) || undefined, thought, until: s.time + minutes * 60, source: 'ai' };
-    if (v.task && ['wander', 'guard', 'festival', 'play'].includes(v.task.type)) sim.releaseTask(v); // すぐ動けるように
-    if (thought && !v.hidden && !v.bubble) sim.say(v, thought, 5);
+    v.mutters = (Array.isArray(p.mutters) ? p.mutters : []).map((m) => str(m, 36)).filter(Boolean).slice(0, 4);
+    v.nextMurmur = s.time + 10 + Math.random() * 8;
+    if (v.task && ['wander', 'guard', 'festival', 'play'].includes(v.task.type)) sim.releaseTask(v);
+    if (thought && !v.hidden && !v.bubble?.talk) sim.say(v, thought, 5);
     const look = String(p.look ?? '');
     if ((LOOKS as readonly string[]).includes(look) && v.role !== 'child' && look !== v.role) sim.setLook(v, look as (typeof LOOKS)[number], thought);
     const mem = str(p.memory, 40);
@@ -395,13 +485,10 @@ function applyThoughts(sim: Sim, data: Record<string, unknown>, newcomers: Villa
       const kind = String(pr.look) as BuildingKind;
       const role = String(pr.role) as BuildingRole;
       const name = str(pr.name, 16);
-      if (name && BUILDINGS[kind] && (ROLES as string[]).includes(role)) {
-        sim.addProject({ name, kind, role, purpose: str(pr.purpose, 40), proposer: v.name });
-      }
+      if (name && BUILDINGS[kind] && (ROLES as string[]).includes(role)) sim.addProject({ name, kind, role, purpose: str(pr.purpose, 40), proposer: v.name });
     }
   }
 
-  // 会話
   for (const t of arr(data.talks)) {
     const a = sim.byName(str(t.a, 12));
     const b = sim.byName(str(t.b, 12));
@@ -409,9 +496,10 @@ function applyThoughts(sim: Sim, data: Record<string, unknown>, newcomers: Villa
     const lines = arr(t.lines)
       .map((l) => ({ speaker: str(l.speaker, 12), text: str(l.text, 60) }))
       .filter((l) => l.text)
-      .map((l) => ({ speaker: l.speaker === b.name ? b.name : l.speaker === a.name ? a.name : l.speaker.includes(b.name) ? b.name : a.name, text: l.text }))
+      .map((l) => ({ speaker: l.speaker === b.name || l.speaker.includes(b.name) ? b.name : a.name, text: l.text }))
       .slice(0, 8);
     if (!lines.length) continue;
+    nTalks++;
     const pending = talks.find((p) => (p.a === a.id && p.b === b.id) || (p.a === b.id && p.b === a.id));
     sim.addConversation(a, b, pending?.topic ?? '', lines);
     const feel = (x: Villager, y: Villager, f: unknown) => {
@@ -430,13 +518,13 @@ function applyThoughts(sim: Sim, data: Record<string, unknown>, newcomers: Villa
     const pr = t.promise as Record<string, unknown> | undefined;
     if (pr && (ACTIONS as string[]).includes(String(pr.action))) {
       for (const v of [a, b]) {
-        v.intention = { action: pr.action as Action, target: str(pr.target, 20) || undefined, thought: lines[lines.length - 1].text.slice(0, 30), until: s.time + 180, source: 'ai' };
+        const own = [...lines].reverse().find((l) => l.speaker === v.name);
+        v.intention = { action: pr.action as Action, target: str(pr.target, 20) || undefined, thought: (own?.text ?? '').slice(0, 30), until: s.time + 180, source: 'ai' };
       }
     }
   }
   sim.updatePartners();
 
-  // 村全体
   const vg = (data.village ?? {}) as Record<string, unknown>;
   const era = str(vg.era, 14);
   if (era && era !== s.era) {
@@ -453,4 +541,7 @@ function applyThoughts(sim: Sim, data: Record<string, unknown>, newcomers: Villa
   }
   const chron = str(vg.chronicle, 90);
   if (chron) sim.addChronicle(chron, 'ai');
+  return { people: nPeople, talks: nTalks };
 }
+
+export { buildPrompt as _buildPrompt, pickEncounters as _pickEncounters };
