@@ -340,8 +340,7 @@ function onContact(e) {
       fx.hideTarget();
       chip('リングの外');
     }
-    if (throwInfo.over && e.type === 'skip') chip('回しすぎ！');
-    else if (throwInfo.curve && e.type === 'skip') chip(`カーブ ×${throwInfo.curveMul.toFixed(2)}`, 'mint');
+    if (throwInfo.curve && e.type === 'skip') chip(`カーブ ×${throwInfo.curveMul.toFixed(2)}`, 'mint');
   }
 
   if (e.type === 'skip') {
@@ -384,7 +383,7 @@ function finishThrow() {
   rows.push(row('飛距離', `${distance.toFixed(1)} m`, `+${s.distPts}`));
   if (throwInfo.rings) rows.push(row('光の輪', `${throwInfo.rings} 個`, `+${s.ringPts}`));
   rows.push(row('判定', judge ? JUDGE_LABEL[judge].replace('!', '') : 'リング外', `×${s.judgeMul.toFixed(1)}`, true));
-  if (s.curveMul > 1) rows.push(row(throwInfo.over ? 'カーブ(回しすぎ)' : 'カーブ', '', `×${s.curveMul.toFixed(2)}`, true));
+  if (s.curveMul > 1) rows.push(row('カーブ', '', `×${s.curveMul.toFixed(2)}`, true));
   if (s.streakMul > 1) rows.push(row(`連続Excellent ${game.streak}`, '', `×${s.streakMul.toFixed(1)}`, true));
   rows.push(`<div class="row total"><span>得点</span><b>+${s.total.toLocaleString()}</b></div>`);
   ui.resultRows.innerHTML = rows.join('');

@@ -18,8 +18,10 @@ function addTurn(s, d, now) {
   s.charge = decayed(s, now);
   const dt = Math.max(0.008, (now - s.anchor.t) / 1000);
   const rate = Math.abs(d) / dt; // rad/s(2周/秒 ≒ 12.6)
-  const perLoop = 0.3 * Math.min(1.7, Math.max(0.25, rate / 12));
-  const gain = (Math.abs(d) / TAU) * perLoop;
+  // 速く回すほど溜まるが頭打ち。溜まるほど重くなる(抵抗)
+  const speedK = Math.min(1.3, Math.max(0.35, rate / 14));
+  const resist = s.charge < 1 ? 1 - 0.5 * s.charge : 0.5;
+  const gain = (Math.abs(d) / TAU) * 0.17 * speedK * resist;
   const sign = Math.sign(d);
   if (s.dir === 0 || sign === s.dir) {
     s.dir = sign;
