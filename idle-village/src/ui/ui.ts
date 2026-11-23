@@ -10,6 +10,14 @@ const $ = <T extends HTMLElement = HTMLElement>(sel: string) => document.querySe
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 const fmt = (n: number) => (n >= 10000 ? `${(n / 1000).toFixed(1)}k` : Math.floor(n).toLocaleString());
 const EFFECT_LABEL: Record<string, string> = { work: '作業', walk: '足の速さ', food: '食べ物', wood: '木材', gold: '金', growth: '自然の恵み', birth: '子宝', defense: '守り', joy: '楽しさ' };
+const B5: ['O' | 'C' | 'E' | 'A' | 'N', string, string][] = [
+  ['O', '保守的', '好奇心'],
+  ['C', '大ざっぱ', '几帳面'],
+  ['E', '内向的', '社交的'],
+  ['A', '自分本位', 'やさしい'],
+  ['N', '図太い', '心配性'],
+];
+const moodFace = (v: number) => (v >= 3 ? '◎' : v >= 1 ? '○' : v > -1 ? '・' : v > -3 ? '△' : '×');
 const ROLE_LABEL = { pawn: '村人', child: '子ども', warrior: '戦士', archer: '弓使い', monk: '僧侶' } as const;
 
 export function avatarOf(v: Villager) {
@@ -61,6 +69,8 @@ export function describe(v: Villager, vs: Villager[]): string {
       return '遊んでいる';
     case 'activity':
       return v.intention?.doing ?? '何かをしている';
+    case 'harm':
+      return v.intention?.doing ?? '誰かを狙っている';
     default:
       return 'ぶらぶら歩いている';
   }
@@ -103,7 +113,7 @@ export class UI {
       if (e.key === 'Escape') this.closeModal();
     });
     $('#btn-speed').addEventListener('click', () => {
-      const order = [1, 2, 4];
+      const order = [1, 2, 4, 10, 30, 100];
       this.ctl.setSpeed(order[(order.indexOf(this.ctl.speed) + 1) % order.length]);
       this.ctl.audio.play('click', 0.5);
     });
@@ -216,10 +226,11 @@ export class UI {
     $('#vc-avatar').setAttribute('src', avatarOf(v));
     $('#vc-name').textContent = v.name;
     const partner = this.ctl.sim.s.villagers.find((x) => x.id === v.partnerId);
-    $('#vc-meta').textContent = `${Math.floor(v.age * 10)}歳・${v.female ? '女' : '男'}・${ROLE_LABEL[v.role]}${partner ? `・${partner.name}と連れ添う` : ''}`;
+    $('#vc-meta').textContent = `${Math.floor(v.age * 10)}歳・${v.female ? '女' : '男'}・${ROLE_LABEL[v.role]}・気分:${v.mood.label}${partner ? `・${partner.name}と連れ添う` : ''}`;
     $('#vc-personality').textContent = v.personality || '(どんな人か、まだわからない)';
     $('#vc-thought').textContent = v.thinking ? '考え中…' : v.intention?.source === 'ai' ? v.intention.thought : '';
-    $('#vc-doing').textContent = describe(v, this.ctl.sim.s.villagers);
+    const stash = (['wood', 'meat', 'gold'] as ResKind[]).filter((k) => v.stash[k] > 0).map((k) => `${RES_NAMES[k]}${v.stash[k]}`).join('・');
+    $('#vc-doing').textContent = describe(v, this.ctl.sim.s.villagers) + (stash ? ` / 持ち物:${stash}` : '');
     const bar = (label: string, val: number, cls: string) => `<span>${label}</span><div class="ts-bar ${cls}"><i style="width:${Math.round(val * 100)}%"></i></div>`;
     $('#vc-bars').innerHTML = bar('満腹', 1 - v.hunger, 'orange') + bar('元気', v.energy, 'green') + bar('人恋しさ', v.loneliness, 'blue');
     $('#vc-follow').textContent = sc.following ? '追いかけ中' : '追いかける';
@@ -396,7 +407,7 @@ export class UI {
     if (this.tab === 'events') {
       const st = s.stats;
       body.innerHTML = `
-        <div class="chips"><span class="chip">誕生 ${st.births}</span><span class="chip">永眠 ${st.deaths}</span><span class="chip">建築 ${st.built}</span><span class="chip">会話 ${st.talks}</span><span class="chip">撃退 ${st.raidsRepelled}</span></div>
+        <div class="chips"><span class="chip">誕生 ${st.births}</span><span class="chip">永眠 ${st.deaths}</span><span class="chip">建築 ${st.built}</span><span class="chip">会話 ${st.talks}</span><span class="chip">撃退 ${st.raidsRepelled}</span><span class="chip">盗み ${st.thefts}</span><span class="chip">暴力 ${st.assaults}</span><span class="chip">殺害 ${st.killings}</span></div>
         <ul class="list chron">${[...s.chronicle]
           .reverse()
           .map((c) => `<li class="k-${c.kind}"><span class="when">${esc(c.label)}</span>${esc(c.text)}</li>`)
@@ -484,11 +495,15 @@ export class UI {
     const want = v.intention ? v.intention.doing ?? `${ACTION_INFO[v.intention.action].replace(/\(.*\)/, '')}${v.intention.target ? `(${v.intention.target})` : ''}` : '';
     body.innerHTML = `
       <div class="vc-top"><div class="slot"><img src="${avatarOf(v)}"></div><div><div style="font-size:22px">${esc(v.name)}</div><div class="muted">${Math.floor(v.age * 10)}歳・${v.female ? '女' : '男'}・${ROLE_LABEL[v.role]}</div></div></div>
-      <p>${esc(v.personality || '(どんな人か、まだわからない)')}</p>
+      <p>${esc(v.personality || '(どんな人か、まだわからない)')}${v.speech ? `<br><span class="small muted">口調:${esc(v.speech)}</span>` : ''}</p>
+      <div class="chips"><span class="chip">気分:${esc(v.mood.label)} ${moodFace(v.mood.v)}</span>${v.goal ? `<span class="chip">望み:${esc(v.goal)}</span>` : ''}</div>
+      ${v.big5 ? `<div class="b5">${B5.map(([k, lo, hi]) => `<span class="small">${lo}</span><div class="ts-bar blue"><i style="width:${(v.big5![k] / 5) * 100}%"></i></div><span class="small">${hi}</span>`).join('')}</div>` : ''}
+      ${v.routine ? `<h3>いつもの一日</h3><p class="small">${esc(v.routine)}</p>` : ''}
+      ${v.beliefs.length ? `<h3>思っていること</h3><ul class="list chron mem">${v.beliefs.map((b) => `<li>${esc(b)}</li>`).join('')}</ul>` : ''}
       <div class="card"><div class="thought">${esc(v.intention?.source === 'ai' ? v.intention.thought : '')}</div><div class="small muted">いま:<span class="p-doing">${esc(describe(v, s.villagers))}</span>${want ? `/したいこと:${esc(want)}` : ''}</div></div>
       <h3>家族</h3><p class="small">${v.parents.length ? `${esc(v.parents.join('と'))}の子。` : '島に流れ着いた一人。'}${partner ? `${esc(partner.name)}と連れ添っている。` : ''}${children.length ? `子は${children.map((c) => esc(c.name)).join('、')}。` : ''}</p>
       <h3>まわりの人</h3>${rels.length ? `<ul class="list">${rels.map((x) => `<li class="small">${esc(x.o!.name)}:${x.r.label ? `<b>${esc(x.r.label)}</b>・` : ''}<span class="muted">${feel(x.r.score)}</span></li>`).join('')}</ul>` : '<p class="muted small">まだ深い付き合いはない。</p>'}
-      <h3>記憶</h3>${v.memories.length ? `<ul class="list chron mem">${v.memories.map((m) => `<li>${esc(m)}</li>`).join('')}</ul>` : '<p class="muted small">まだ心に残る出来事はない。</p>'}
+      <h3>記憶</h3>${v.memories.length ? `<ul class="list chron mem">${v.memories.map((m) => `<li><span class="when">${esc(m.label)}</span>${m.kind === 'hear' ? '<span class="muted">(聞いた話)</span>' : m.kind === 'see' ? '<span class="muted">(見た)</span>' : m.kind === 'reflect' ? '' : ''}${esc(m.text)} <span class="stars">${'★'.repeat(Math.ceil(m.imp / 2))}</span></li>`).join('')}</ul>` : '<p class="muted small">まだ心に残る出来事はない。</p>'}
       <div class="actions"><button class="btn blue small" id="p-follow">この人を追いかける</button></div>`;
     $('#p-follow').addEventListener('click', () => {
       this.closeModal();

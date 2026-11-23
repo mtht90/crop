@@ -113,14 +113,17 @@ export class Controller {
   tick(deltaMs: number) {
     const dt = Math.min(deltaMs, 250) / 1000;
     this.sim.aiEnabled = this.mind.ready;
+    this.sim.timeScale = this.speed;
     this.acc += dt * this.speed;
+    // 速いときは刻みを粗くして軽くする
+    const stepDt = this.speed >= 100 ? 0.5 : this.speed >= 30 ? 0.25 : DT;
     let steps = 0;
-    while (this.acc >= DT && steps < 60) {
-      this.sim.step(DT);
-      this.acc -= DT;
+    while (this.acc >= stepDt && steps < 160) {
+      this.sim.step(stepDt);
+      this.acc -= stepDt;
       steps++;
     }
-    if (steps >= 60) this.acc = 0;
+    if (steps >= 160) this.acc = 0;
     this.mind.tick(this.sim);
     this.saveTimer += dt;
     if (this.saveTimer > 20) {

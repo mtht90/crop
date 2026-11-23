@@ -454,6 +454,7 @@ input[type='range']::-moz-range-thumb {
   line-height: 1;
 }
 .rbtn.text {
+  font-size: 17px !important;
   font-size: 20px;
 }
 .rbtn:active {
@@ -1011,4 +1012,22 @@ a {
   .field {
     grid-template-columns: 1fr;
   }
+}
+
+.b5 {
+  display: grid;
+  grid-template-columns: 5em 1fr 5em;
+  gap: 2px 8px;
+  align-items: center;
+  margin: 6px 0;
+}
+.b5 span:nth-child(3n) {
+  text-align: left;
+}
+.b5 span:nth-child(3n + 1) {
+  text-align: right;
+}
+.stars {
+  color: #c79d2a;
+  font-size: 11px;
 }
