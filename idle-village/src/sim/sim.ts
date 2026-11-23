@@ -11,7 +11,10 @@ import type {
   BuildingRole,
   ChronicleEntry,
   Conversation,
+  EffectKey,
   GameState,
+  Invention,
+  Motion,
   Project,
   Pt,
   Raider,
@@ -45,6 +48,7 @@ export class Sim {
 
   constructor(state: GameState) {
     this.s = state;
+    state.inventions ??= [];
     for (const v of state.villagers) {
       v.speech ??= '';
       v.mutters ??= [];
@@ -75,6 +79,7 @@ export class Sim {
       upgrades: opts?.upgrades ?? { work: 0, walk: 0, nature: 0, housing: 0, family: 0, strength: 0 },
       era: 'はじまりのころ',
       customs: [],
+      inventions: [],
       map: { w: MAP_W, h: MAP_H, land: Array.from(gen.land).join('') },
       villagers: [],
       trees: gen.trees.map((t) => ({ id: nextId++, tx: t.tx, ty: t.ty, variant: t.variant, growth: Math.random() < 0.8 ? 1 : 0.5, hits: 0, reservedBy: null, shake: 0 })),
@@ -185,6 +190,23 @@ export class Sim {
   }
 
   // ───────────── 便利な値 ─────────────
+  /** 発明・工夫の効き目の合計(上限あり) */
+  effect(key: EffectKey) {
+    let sum = 0;
+    for (const i of this.s.inventions) if (i.effect === key) sum += i.amount;
+    return Math.min(sum, 0.6);
+  }
+  addInvention(inv: Omit<Invention, 'id' | 't' | 'label'>) {
+    const s = this.s;
+    if (s.inventions.some((x) => x.name === inv.name)) return null;
+    const item: Invention = { ...inv, amount: clamp(inv.amount, 0, 0.1), id: s.nextId++, t: s.time, label: this.timeLabel };
+    s.inventions.push(item);
+    if (s.inventions.length > 40) s.inventions.shift();
+    this.addChronicle(`${inv.inventor}が「${inv.name}」を生み出した。${inv.desc ? `(${inv.desc})` : ''}`, 'ai');
+    this.addPoints(8);
+    this.emit({ type: 'culture' });
+    return item;
+  }
   get year() {
     return Math.floor(this.s.seasonIndex / 4) + 1;
   }
@@ -215,10 +237,10 @@ export class Sim {
     return 1 + 0.25 * this.s.memories;
   }
   get natureMul() {
-    return 1 + 0.15 * this.s.upgrades.nature;
+    return (1 + 0.15 * this.s.upgrades.nature) * (1 + this.effect('growth'));
   }
   get strengthMul() {
-    return (1 + 0.15 * this.s.upgrades.strength) * (this.hasRole('training') ? 1.25 : 1);
+    return (1 + 0.15 * this.s.upgrades.strength) * (this.hasRole('training') ? 1.25 : 1) * (1 + this.effect('defense'));
   }
   get seasonGrowth() {
     return [1.5, 1.2, 0.8, 0][this.season];
@@ -409,6 +431,8 @@ export class Sim {
     if (this.raidActive && s.raidEndAt !== null && s.time > s.raidEndAt) for (const r of s.raiders) r.fleeing = true;
     const gathering = s.villagers.filter((v) => v.task?.type === 'festival' && v.task.phase === 'act').length;
     if (gathering >= 3) this.addPoints(dt * 0.4 * gathering);
+    const joy = this.effect('joy');
+    if (joy > 0) this.addPoints(dt * joy * this.population * 0.2);
   }
 
   // ───────────── 生態系 ─────────────
@@ -542,7 +566,7 @@ export class Sim {
       }
       return;
     }
-    const rate = 0.006 * (1 + 0.2 * s.upgrades.family);
+    const rate = 0.006 * (1 + 0.2 * s.upgrades.family) * (1 + this.effect('birth'));
     if (rand() > dt * rate * Math.min(2, couples.length)) return;
     const mom = pick(couples);
     const dad = s.villagers.find((v) => v.id === mom.partnerId);
@@ -771,11 +795,12 @@ export class Sim {
   workMul(v: Villager) {
     let m = 1 + 0.12 * this.s.upgrades.work;
     m *= 1 + 0.1 * Math.min(2, this.s.buildings.filter((b) => b.done && b.role === 'workshop').length);
+    m *= 1 + this.effect('work');
     if (v.hunger > 0.95) m *= 0.6;
     return m;
   }
   walkSpeed(v: Villager) {
-    let sp = 78 * (1 + 0.1 * this.s.upgrades.walk);
+    let sp = 78 * (1 + 0.1 * this.s.upgrades.walk) * (1 + this.effect('walk'));
     if (v.role === 'child') sp *= 0.8;
     if (v.hunger > 0.95) sp *= 0.85;
     if (v.age > v.lifespan - 0.6) sp *= 0.75;
@@ -949,7 +974,7 @@ export class Sim {
     if (conv && this.startConversation(v, conv)) return;
 
     if (v.intention && v.intention.source === 'ai' && s.time < v.intention.until) {
-      if (this.startAction(v, v.intention.action, v.intention.target)) return;
+      if (v.intention.doing ? this.startActivity(v) : this.startAction(v, v.intention.action, v.intention.target)) return;
       v.intention = { ...v.intention, until: s.time };
     }
     this.habit(v);
@@ -1098,6 +1123,91 @@ export class Sim {
         const t = this.randomWalkableNear(tileOf(v.x), tileOf(v.y), 4);
         return !!t && this.setTask(v, 'wander', [t]);
       }
+    }
+  }
+
+  /** AIが自由に書いた行動を、体の動きと行き先に落とし込む */
+  startActivity(v: Villager): boolean {
+    const s = this.s;
+    const it = v.intention!;
+    const where = it.where ?? '';
+    const motion = it.motion ?? 'idle';
+    const has = (...w: string[]) => w.some((x) => where.includes(x) || (it.doing ?? '').includes(x));
+    // 実際の資源採取につながる動きは、本物の作業にする
+    if (motion === 'axe' && !has('海', '浜', '家') && this.startAction(v, 'chop')) return true;
+    if (motion === 'pick' && this.startAction(v, 'mine')) return true;
+    if (motion === 'knife' && has('羊') && this.startAction(v, 'hunt')) return true;
+    if (motion === 'hammer') {
+      if (this.sites.length && this.startAction(v, 'build', it.target)) return true;
+      if (s.buildings.some((b) => b.done && b.hp < b.maxHp) && this.startAction(v, 'repair')) return true;
+    }
+    if (motion === 'rest' && !has('浜', '海', '森', '広場')) return this.startAction(v, 'rest');
+    // 行き先を決める
+    let goal: Pt | null = null;
+    const person = s.villagers.find((x) => x !== v && (where.includes(x.name) || it.target === x.name) && !x.hidden);
+    const building = s.buildings.find((b) => b.done && (where.includes(b.name) || it.target === b.name));
+    const tx = tileOf(v.x);
+    const ty = tileOf(v.y);
+    if (person) goal = this.randomWalkableNear(tileOf(person.x), tileOf(person.y), 1);
+    else if (building) goal = this.randomWalkableNear(building.tx + Math.floor(building.w / 2), building.ty + 1, 2);
+    else if (has('海', '浜', '岸', '釣')) {
+      const shore = this.shoreTiles().sort((a, b) => Math.hypot(a.x - tx, a.y - ty) - Math.hypot(b.x - tx, b.y - ty));
+      goal = shore.length ? pick(shore.slice(0, 12)) : null;
+    } else if (has('はずれ', '探', '遠く', '奥')) {
+      const c = this.center;
+      const far = this.shoreTiles().filter((p) => Math.hypot(p.x - c.x, p.y - c.y) > 8);
+      goal = far.length ? pick(far) : null;
+    } else if (has('森', '林', '木')) {
+      const t = s.trees.filter((t) => t.growth >= 1).sort((a, b) => Math.hypot(a.tx - tx, a.ty - ty) - Math.hypot(b.tx - tx, b.ty - ty))[0];
+      goal = t ? this.randomWalkableNear(t.tx, t.ty, 1) : null;
+    } else if (has('羊', '牧')) {
+      const sh = s.sheep[0];
+      goal = sh ? this.randomWalkableNear(tileOf(sh.x), tileOf(sh.y), 2) : null;
+    } else if (has('鉱', '岩', '金')) {
+      const g = s.golds[0];
+      goal = g ? this.randomWalkableNear(g.tx, g.ty, 1) : null;
+    } else if (has('家', '小屋', '部屋')) {
+      const h = this.homeOf(v);
+      goal = h ? this.randomWalkableNear(h.tx + 1, h.ty + 1, 1) : null;
+    } else if (has('広場', '中心', 'みんな', '集')) {
+      const g = this.nearestBuilding(v, (b) => b.done && b.role === 'gathering');
+      goal = g ? this.randomWalkableNear(g.tx + 1, g.ty + 2, 2) : this.randomWalkableNear(this.center.x, this.center.y, 3);
+    }
+    goal ??= this.randomWalkableNear(tx, ty, 3);
+    if (!goal) return false;
+    return this.setTask(v, 'activity', [goal], { motion });
+  }
+
+  private runActivity(v: Villager, t: Task, dt: number) {
+    const s = this.s;
+    const it = v.intention;
+    const motion: Motion = t.motion ?? 'idle';
+    const anim: Record<Motion, string> = { axe: 'chop', hammer: 'hammer', pick: 'mine', knife: 'knife', carry: 'idle_wood', walk: 'run', idle: 'idle', dance: 'dance', pray: 'idle', play: 'dance', guard: 'guard', rest: 'idle' };
+    v.anim = anim[motion];
+    if (motion === 'walk' && Math.floor(t.timer) % 6 === 5 && !v.path.length) {
+      const p = this.randomWalkableNear(tileOf(v.x), tileOf(v.y), 2);
+      if (p) v.path = this.pathTo(v, [p]) ?? [];
+    }
+    if (v.path.length) {
+      this.moveAlong(v, this.walkSpeed(v) * 0.6, dt);
+      v.anim = 'run';
+    }
+    if (motion === 'hammer' && Math.floor(t.timer / 0.3) !== Math.floor((t.timer - dt) / 0.3) && Math.floor(t.timer / 0.3) % 3 === 0)
+      this.emit({ type: 'hammer', x: v.x + (v.facingLeft ? -20 : 20), y: v.y - 10 });
+    const cycle = 24 / this.workMul(v);
+    if (t.timer >= cycle) {
+      // 1回分の成果
+      const y = it?.yields ?? {};
+      for (const k of ['wood', 'meat', 'gold'] as ResKind[]) {
+        const d = clamp(Number(y[k]) || 0, -4, 4);
+        if (!d) continue;
+        if (d < 0 && s.res[k] < -d) continue;
+        s.res[k] = Math.max(0, s.res[k] + d);
+        if (d > 0) this.emit({ type: 'deliver', x: v.x, y: v.y - 50, kind: k, amount: d });
+      }
+      this.addPoints(1.5, v.x, v.y - 60);
+      v.deeds++;
+      v.task = null;
     }
   }
 
@@ -1371,6 +1481,9 @@ export class Sim {
       case 'fight':
         this.runFight(v, dt);
         return;
+      case 'activity':
+        this.runActivity(v, t, dt);
+        return;
       default:
         v.anim = 'idle';
         if (t.timer > 2 + rand() * 3) v.task = null;
@@ -1397,7 +1510,8 @@ export class Sim {
     if (t.type === 'deliver') {
       const kind = v.carrying;
       if (kind) {
-        const amount = kind === 'wood' ? 2 : kind === 'meat' ? 5 : 3;
+        const base = kind === 'wood' ? 2 : kind === 'meat' ? 5 : 3;
+        const amount = Math.round(base * (1 + this.effect(kind === 'meat' ? 'food' : kind)) * 10) / 10;
         s.res[kind] += amount;
         v.deeds++;
         this.emit({ type: 'deliver', x: v.x, y: v.y - 50, kind, amount });

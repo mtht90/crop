@@ -493,6 +493,8 @@ export class WorldScene extends Phaser.Scene {
       case 'monk':
         return { heal: 'monk_heal', run: 'monk_run' }[v.anim] ?? 'monk_idle';
     }
+    if (v.anim === 'idle_wood') return 'pawn_idle_wood';
+    if (v.anim === 'dance') return 'pawn_idle';
     if (v.anim === 'chop') return 'pawn_chop';
     if (v.anim === 'mine') return 'pawn_mine';
     if (v.anim === 'hammer') return 'pawn_hammer';
@@ -530,7 +532,7 @@ export class WorldScene extends Phaser.Scene {
       if (spr.anims.currentAnim?.key !== key) spr.play(key);
       const child = v.role === 'child';
       let yOff = 0;
-      if (v.task?.type === 'festival' || (child && v.task?.type === 'play' && v.task.phase === 'act')) yOff = -Math.abs(Math.sin(time * 6 + v.id)) * 10;
+      if (v.task?.type === 'festival' || v.anim === 'dance' || (child && v.task?.type === 'play' && v.task.phase === 'act')) yOff = -Math.abs(Math.sin(time * 6 + v.id)) * 10;
       spr.setPosition(v.x, v.y + yOff).setDepth(v.y).setFlipX(v.facingLeft).setScale(child ? 0.72 : 1);
       if (v.knockedOut > 0) {
         spr.setAngle(v.facingLeft ? -80 : 80).setAlpha(0.75);

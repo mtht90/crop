@@ -9,6 +9,7 @@ import { avatar, buildingImg, icon, resIcon } from './skin';
 const $ = <T extends HTMLElement = HTMLElement>(sel: string) => document.querySelector(sel) as T;
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 const fmt = (n: number) => (n >= 10000 ? `${(n / 1000).toFixed(1)}k` : Math.floor(n).toLocaleString());
+const EFFECT_LABEL: Record<string, string> = { work: '作業', walk: '足の速さ', food: '食べ物', wood: '木材', gold: '金', growth: '自然の恵み', birth: '子宝', defense: '守り', joy: '楽しさ' };
 const ROLE_LABEL = { pawn: '村人', child: '子ども', warrior: '戦士', archer: '弓使い', monk: '僧侶' } as const;
 
 export function avatarOf(v: Villager) {
@@ -58,6 +59,8 @@ export function describe(v: Villager, vs: Villager[]): string {
       return 'けが人を手当てしている';
     case 'play':
       return '遊んでいる';
+    case 'activity':
+      return v.intention?.doing ?? '何かをしている';
     default:
       return 'ぶらぶら歩いている';
   }
@@ -273,6 +276,12 @@ export class UI {
       case 'culture':
         if (this.modalKind === 'history') this.render();
         break;
+      case 'intent': {
+        const v = s.villagers.find((x) => x.id === e.id);
+        const d = v?.intention?.doing;
+        if (v && d) this.pushFeed(`<span class="who">${esc(v.name)}</span><span class="ev">は${esc(d)}${v.intention?.with?.length ? `(${esc(v.intention.with.join('・'))}と)` : ''}</span>`);
+        break;
+      }
     }
   }
 
@@ -418,6 +427,7 @@ export class UI {
       body.innerHTML = `
         <p class="lead">いまは「<b>${esc(s.era)}</b>」と呼ばれています。</p>
         <h3>習わし</h3>${s.customs.length ? `<ul class="list chron">${s.customs.map((c) => `<li>${esc(c)}</li>`).join('')}</ul>` : '<p class="muted">まだ習わしは生まれていません。</p>'}
+        <h3>生み出されたもの</h3>${s.inventions.length ? `<ul class="list chron">${[...s.inventions].reverse().map((i) => `<li><span class="when">${esc(i.label)}</span><b>${esc(i.name)}</b>(${esc(i.inventor)})${i.desc ? `:${esc(i.desc)}` : ''}${i.effect ? ` <span class="muted small">${EFFECT_LABEL[i.effect]}${'+'.repeat(Math.round(i.amount / 0.033))}</span>` : ''}</li>`).join('')}</ul>` : '<p class="muted">まだ何も生まれていません。</p>'}
         <h3>計画中の建物</h3>${pl ? `<ul class="list">${pl}</ul>` : '<p class="muted">いまは計画がありません。</p>'}
         <h3>建物</h3><ul class="list">${bl}</ul>`;
     }
@@ -471,7 +481,7 @@ export class UI {
       .filter((x) => x.o)
       .sort((a, b) => b.r.score - a.r.score);
     const feel = (n: number) => (n >= 60 ? 'とても好き' : n >= 20 ? '好き' : n > -20 ? 'ふつう' : n > -60 ? '苦手' : 'きらい');
-    const want = v.intention ? `${ACTION_INFO[v.intention.action].replace(/\(.*\)/, '')}${v.intention.target ? `(${v.intention.target})` : ''}` : '';
+    const want = v.intention ? v.intention.doing ?? `${ACTION_INFO[v.intention.action].replace(/\(.*\)/, '')}${v.intention.target ? `(${v.intention.target})` : ''}` : '';
     body.innerHTML = `
       <div class="vc-top"><div class="slot"><img src="${avatarOf(v)}"></div><div><div style="font-size:22px">${esc(v.name)}</div><div class="muted">${Math.floor(v.age * 10)}歳・${v.female ? '女' : '男'}・${ROLE_LABEL[v.role]}</div></div></div>
       <p>${esc(v.personality || '(どんな人か、まだわからない)')}</p>
