@@ -14,6 +14,7 @@ import type {
   EffectKey,
   GameState,
   Invention,
+  MemoryItem,
   Motion,
   Project,
   Pt,
@@ -32,6 +33,8 @@ export const SAVE_VERSION = 2;
 const SKILLS: (ResKind | 'build')[] = ['wood', 'meat', 'gold', 'build'];
 
 const cx = (t: number) => t * TILE + TILE / 2;
+const RES_JA: Record<ResKind, string> = { wood: '木', meat: '肉', gold: '金' };
+export const moodWord = (v: number) => (v >= 3 ? '上機嫌' : v >= 1 ? 'おだやか' : v > -1 ? 'ふつう' : v > -3 ? 'もやもや' : '落ち込んでいる');
 const tileOf = (p: number) => Math.floor(p / TILE);
 
 export class Sim {
@@ -40,6 +43,8 @@ export class Sim {
   events: SimEvent[] = [];
   /** AIが使えるか(使えないときは習慣とルールで動く) */
   aiEnabled = false;
+  /** 再生の速さ(AIの決めたことを、現実の時間でだいたい同じ長さ続けるために使う) */
+  timeScale = 1;
   private gridDirty = true;
   private landArr: Uint8Array;
   private slowTimer = 0;
@@ -49,9 +54,24 @@ export class Sim {
   constructor(state: GameState) {
     this.s = state;
     state.inventions ??= [];
+    state.stats.thefts ??= 0;
+    state.stats.assaults ??= 0;
+    state.stats.killings ??= 0;
     for (const v of state.villagers) {
       v.speech ??= '';
       v.mutters ??= [];
+      v.beliefs ??= [];
+      v.routine ??= '';
+      v.goal ??= '';
+      v.mood ??= { label: 'ふつう', v: 0 };
+      v.big5 ??= null;
+      v.sinceReflect ??= 0;
+      v.stash ??= { wood: 0, meat: 0, gold: 0 };
+      v.fleeUntil ??= 0;
+      // 古いセーブの文字列の記憶を変換
+      v.memories = (v.memories as unknown as (string | MemoryItem)[]).map((m) =>
+        typeof m === 'string' ? { t: state.time, label: m.split(':')[0], text: m.split(':').slice(1).join(':'), imp: 4, kind: 'self' as const } : m,
+      );
     }
     this.landArr = Uint8Array.from(state.map.land, (c) => (c === '1' ? 1 : 0));
     this.grid = new Grid(state.map.w, state.map.h);
@@ -99,7 +119,7 @@ export class Sim {
       festivalUntil: 0,
       departed: false,
       savedAt: Date.now(),
-      stats: { births: 0, deaths: 0, raidsRepelled: 0, built: 0, talks: 0 },
+      stats: { births: 0, deaths: 0, raidsRepelled: 0, built: 0, talks: 0, thefts: 0, assaults: 0, killings: 0 },
     };
     for (const sp of gen.sheep) {
       s.sheep.push({ id: nextId++, x: cx(sp.tx), y: cx(sp.ty), path: [], timer: Math.random() * 3, anim: 'idle', facingLeft: Math.random() < 0.5, reservedBy: null });
@@ -166,9 +186,17 @@ export class Sim {
       intention: null,
       thinking: false,
       memories: [],
+      beliefs: [],
+      routine: '',
+      goal: '',
+      mood: { label: 'ふつう', v: 0 },
+      big5: null,
+      sinceReflect: 0,
       relations: {},
       partnerId: null,
       carrying: null,
+      stash: { wood: 0, meat: 0, gold: 0 },
+      fleeUntil: 0,
       energy: 0.8 + Math.random() * 0.2,
       hunger: Math.random() * 0.3,
       loneliness: Math.random() * 0.4,
@@ -203,6 +231,12 @@ export class Sim {
     s.inventions.push(item);
     if (s.inventions.length > 40) s.inventions.shift();
     this.addChronicle(`${inv.inventor}が「${inv.name}」を生み出した。${inv.desc ? `(${inv.desc})` : ''}`, 'ai');
+    const who = s.villagers.find((v) => v.name === inv.inventor);
+    if (who) {
+      this.remember(who, `「${inv.name}」を生み出した`, 8);
+      this.feel(who, 2, '得意げ');
+      this.witness(who.x, who.y, `${who.name}が「${inv.name}」を作っているのを見た`, 4, TILE * 6, [who]);
+    }
     this.addPoints(8);
     this.emit({ type: 'culture' });
     return item;
@@ -273,11 +307,38 @@ export class Sim {
   say(v: Villager, text: string, dur = 4) {
     v.bubble = { text, until: this.s.time + dur };
   }
-  remember(v: Villager, text: string) {
+  remember(v: Villager, text: string, imp = 4, kind: MemoryItem['kind'] = 'self') {
     if (!text) return;
-    if (v.memories.slice(0, 4).some((m) => m.endsWith(`:${text}`))) return;
-    v.memories.unshift(`${this.timeLabel}:${text}`);
-    if (v.memories.length > 10) v.memories.length = 10;
+    if (v.memories.slice(0, 5).some((m) => m.text === text)) return;
+    v.memories.unshift({ t: this.s.time, label: this.timeLabel, text, imp: clamp(Math.round(imp), 1, 10), kind });
+    v.sinceReflect += imp;
+    if (v.memories.length > 30) {
+      // 古くて些細な記憶から忘れていく
+      let worst = -1;
+      let ws = Infinity;
+      v.memories.forEach((m, i) => {
+        if (i < 5) return;
+        const sc = m.imp * 2 - (this.s.time - m.t) / 300;
+        if (sc < ws) {
+          ws = sc;
+          worst = i;
+        }
+      });
+      if (worst >= 0) v.memories.splice(worst, 1);
+    }
+  }
+  /** その場にいた人だけが知る */
+  witness(x: number, y: number, text: string, imp: number, radius = TILE * 6, except: Villager[] = []) {
+    for (const v of this.s.villagers) {
+      if (except.includes(v) || v.role === 'child' && v.age < 0.4) continue;
+      if (!v.hidden && Math.hypot(v.x - x, v.y - y) <= radius) this.remember(v, text, imp, 'see');
+    }
+  }
+  /** 気分を動かす */
+  feel(v: Villager, dv: number, label?: string) {
+    v.mood.v = clamp(v.mood.v + dv, -5, 5);
+    if (label) v.mood.label = label;
+    else if (Math.abs(dv) >= 1) v.mood.label = moodWord(v.mood.v);
   }
   relation(a: Villager, b: Villager) {
     return (a.relations[b.id] ??= { score: 0 });
@@ -431,6 +492,13 @@ export class Sim {
     if (this.raidActive && s.raidEndAt !== null && s.time > s.raidEndAt) for (const r of s.raiders) r.fleeing = true;
     const gathering = s.villagers.filter((v) => v.task?.type === 'festival' && v.task.phase === 'act').length;
     if (gathering >= 3) this.addPoints(dt * 0.4 * gathering);
+    for (const v of s.villagers) {
+      const m = v.mood;
+      const prev = Math.round(m.v);
+      m.v += (0 - m.v) * Math.min(1, dt * 0.004);
+      if (v.hunger > 0.97 && s.res.meat <= 0) m.v = Math.max(-5, m.v - dt * 0.01);
+      if (Math.round(m.v) !== prev && Math.abs(m.v) < 0.6) m.label = moodWord(m.v);
+    }
     const joy = this.effect('joy');
     if (joy > 0) this.addPoints(dt * joy * this.population * 0.2);
   }
@@ -537,6 +605,11 @@ export class Sim {
           a.partnerId = b.id;
           b.partnerId = a.id;
           this.addChronicle(`${a.name}と${b.name}は、ともに生きることを誓った。`, 'misc');
+          this.remember(a, `${b.name}とともに生きると誓った`, 10);
+          this.remember(b, `${a.name}とともに生きると誓った`, 10);
+          this.feel(a, 3, 'しあわせ');
+          this.feel(b, 3, 'しあわせ');
+          this.witness(a.x, a.y, `${a.name}と${b.name}が夫婦になったらしい`, 5, TILE * 6, [a, b]);
           this.addPoints(10, a.x, a.y - 60);
           break;
         }
@@ -582,8 +655,11 @@ export class Sim {
     this.addChronicle(`${dad.name}と${mom.name}のあいだに子が生まれた。`, 'birth');
     this.addPoints(15, pos.x, pos.y - 40);
     this.emit({ type: 'birth', id: baby.id });
-    this.remember(mom, '子どもが生まれた');
-    this.remember(dad, '子どもが生まれた');
+    this.remember(mom, '子どもが生まれた', 10);
+    this.remember(dad, '子どもが生まれた', 10);
+    this.feel(mom, 3, 'しあわせ');
+    this.feel(dad, 3, 'しあわせ');
+    this.witness(pos.x, pos.y, `${mom.name}のところに赤ん坊が生まれた`, 5, TILE * 7, [mom, dad]);
   }
 
   private immigrant(female: boolean) {
@@ -597,19 +673,25 @@ export class Sim {
     this.addChronicle(`海の向こうから${v.name}が小舟でやってきた。`, 'misc');
   }
 
-  private die(v: Villager) {
+  die(v: Villager, killer?: Villager) {
     const s = this.s;
     this.releaseTask(v);
     s.villagers = s.villagers.filter((x) => x !== v);
     for (const o of s.villagers) {
       if (o.partnerId === v.id) o.partnerId = null;
       const r = o.relations[v.id];
-      if (r && r.score > 30) this.remember(o, `${v.name}が亡くなった`);
+      const close = (r && r.score > 30) || v.parents.includes(o.name) || o.parents.includes(v.name);
+      if (killer && o === killer) continue;
+      if (close) {
+        this.remember(o, killer ? `${v.name}が死んでいた…誰かに殺されたらしい` : `${v.name}が亡くなった`, 9);
+        this.feel(o, -3, '悲しい');
+      } else if (Math.hypot(o.x - v.x, o.y - v.y) < TILE * 7 && !o.memories[0]?.text.includes(v.name)) this.remember(o, `${v.name}が亡くなったと知った`, 5, 'see');
       delete o.relations[v.id];
     }
     s.stats.deaths++;
-    const last = v.memories[0]?.split(':').slice(1).join(':');
-    this.addChronicle(`${v.name}が${Math.floor(v.age)}歳で天に召された。${last ? `最後の記憶は「${last}」。` : ''}`, 'death');
+    const last = v.memories[0]?.text;
+    if (killer) this.addChronicle(`${v.name}は${killer.name}の手にかかり、命を落とした。`, 'raid');
+    else this.addChronicle(`${v.name}が${Math.floor(v.age)}歳で天に召された。${last ? `最後の記憶は「${last}」。` : ''}`, 'death');
     this.emit({ type: 'death', id: v.id, x: v.x, y: v.y });
   }
 
@@ -784,7 +866,12 @@ export class Sim {
     this.addChronicle(`「${b.name}」が完成した。`, 'build');
     this.addPoints(BUILDINGS[b.kind].points, cx(b.tx) + ((b.w - 1) * TILE) / 2, cx(b.ty) - 120);
     this.emit({ type: 'built', id: b.id });
-    for (const v of s.villagers) if (v.task?.targetId === b.id) this.remember(v, `「${b.name}」を建て終えた`);
+    const builders = s.villagers.filter((v) => v.task?.targetId === b.id);
+    for (const v of builders) {
+      this.remember(v, `「${b.name}」を建て終えた`, 6);
+      this.feel(v, 1.5, '達成感');
+    }
+    this.witness(cx(b.tx), cx(b.ty), `「${b.name}」ができあがったのを見た`, 3, TILE * 7, builders);
     if (b.kind === 'castle') {
       s.departed = true;
       this.addChronicle('壮麗な城がそびえ立った。この島の物語は、ひとつの区切りを迎えた。', 'stage');
@@ -796,6 +883,7 @@ export class Sim {
     let m = 1 + 0.12 * this.s.upgrades.work;
     m *= 1 + 0.1 * Math.min(2, this.s.buildings.filter((b) => b.done && b.role === 'workshop').length);
     m *= 1 + this.effect('work');
+    m *= 1 + clamp(v.mood.v, -5, 5) * 0.03;
     if (v.hunger > 0.95) m *= 0.6;
     return m;
   }
@@ -895,7 +983,8 @@ export class Sim {
       if (v.knockedOut <= 0) {
         v.knockedOut = 0;
         v.hp = v.maxHp;
-        this.remember(v, '盗賊に倒されたが、なんとか起き上がった');
+        this.remember(v, '盗賊に倒されたが、なんとか起き上がった', 8);
+        this.feel(v, -2, '痛くて悔しい');
       }
       return;
     }
@@ -921,9 +1010,16 @@ export class Sim {
         const b = this.nearestBuilding(v, (b) => b.done && b.kind !== 'tower');
         if (b && this.setTask(v, 'hide', [this.entryOf(b)], { targetId: b.id }) && rand() < 0.3) this.say(v, murmur(v, { night: false, raid: true }) ?? '', 2.5);
       }
-    } else if (v.task?.type === 'fight' || v.task?.type === 'hide') {
+    } else if (v.task?.type === 'fight' || (v.task?.type === 'hide' && s.time >= v.fleeUntil)) {
       this.releaseTask(v);
     }
+    // 本能:襲われたら逃げる
+    if (s.time < v.fleeUntil && v.task?.type !== 'hide' && !fighter) {
+      this.releaseTask(v);
+      const b = this.nearestBuilding(v, (b) => b.done && b.kind !== 'tower');
+      if (b) this.setTask(v, 'hide', [this.entryOf(b)], { targetId: b.id });
+    }
+    if (v.task?.type === 'hide' && !this.raidActive && s.time >= v.fleeUntil && v.hidden) this.releaseTask(v);
     // 本能:夜は眠る
     if (this.isNight && !this.raidActive && v.task?.type !== 'sleep' && v.task?.type !== 'chat') {
       if (!v.task || (v.task.type !== 'deliver' && v.task.type !== 'wander')) {
@@ -961,6 +1057,13 @@ export class Sim {
       this.deliver(v);
       return;
     }
+    if (v.hunger > 0.7 && v.stash.meat > 0) {
+      // 自分の持ち物から食べる(その場で)
+      v.stash.meat -= 1;
+      v.hunger = 0;
+      v.task = { type: 'eat', phase: 'act', timer: 0 };
+      return;
+    }
     if (v.hunger > 0.7 && s.res.meat > 0) {
       const d = this.dropoffFor(v);
       if (d && this.setTask(v, 'eat', [this.entryOf(d)], { targetId: d.id })) return;
@@ -974,6 +1077,10 @@ export class Sim {
     if (conv && this.startConversation(v, conv)) return;
 
     if (v.intention && v.intention.source === 'ai' && s.time < v.intention.until) {
+      if (v.intention.harm && v.role !== 'child') {
+        if (this.startHarm(v)) return;
+        v.intention.harm = undefined;
+      }
       if (v.intention.doing ? this.startActivity(v) : this.startAction(v, v.intention.action, v.intention.target)) return;
       v.intention = { ...v.intention, until: s.time };
     }
@@ -1211,6 +1318,154 @@ export class Sim {
     }
   }
 
+  // ───────────── 人と人の争い(勧めるものではないが、起こりうる) ─────────────
+  private startHarm(v: Villager): boolean {
+    const s = this.s;
+    const h = v.intention!.harm!;
+    const target = h.target ? this.byName(h.target) : undefined;
+    if (h.type === 'steal' && !target) {
+      const d = this.dropoffFor(v);
+      return !!d && this.setTask(v, 'harm', [this.entryOf(d)], { targetId: -1 });
+    }
+    if (!target || target === v || target.role === 'child' || target.hidden || target.knockedOut > 0 || !s.villagers.includes(target)) return false;
+    return this.setTask(v, 'harm', this.adjacentGoals(tileOf(target.x), tileOf(target.y)), { targetId: target.id });
+  }
+
+  private runHarm(v: Villager, t: Task, dt: number) {
+    const s = this.s;
+    const h = v.intention?.harm;
+    if (!h) {
+      v.task = null;
+      return;
+    }
+    // 村の蓄えから盗む
+    if (t.targetId === -1) {
+      v.anim = 'idle';
+      if (t.timer > 2) {
+        const k = h.what ?? 'meat';
+        const n = Math.min(Math.floor(s.res[k]), clamp(h.amount ?? 4, 1, 10));
+        if (n > 0) {
+          s.res[k] -= n;
+          v.stash[k] += n;
+          s.stats.thefts++;
+          this.remember(v, `村の蓄えから${RES_JA[k]}を${n}くすねた`, 7);
+          this.witness(v.x, v.y, `${v.name}が蓄えから${RES_JA[k]}をこっそり持ち出すのを見た`, 7, TILE * 5, [v]);
+          this.addChronicle(`村の蓄えから${RES_JA[k]}が${n}つ消えた。`, 'misc');
+        }
+        v.intention!.harm = undefined;
+        v.task = null;
+      }
+      return;
+    }
+    const target = s.villagers.find((x) => x.id === t.targetId);
+    if (!target || target.knockedOut > 0) {
+      v.intention!.harm = undefined;
+      v.task = null;
+      return;
+    }
+    // 建物に逃げ込んでも、鍵のかかる扉はない:入口まで追う
+    if (target.hidden) {
+      const b = s.buildings.find((x) => x.occupants.includes(target.id));
+      if (b) {
+        const e = this.entryOf(b);
+        if (dist(v.x, v.y, cx(e.x), cx(e.y)) < TILE * 1.2) {
+          this.releaseTask(target);
+          target.x = cx(e.x);
+          target.y = cx(e.y);
+          this.say(target, 'ひっ…!', 2);
+        } else {
+          t.hits = (t.hits ?? 0) + dt;
+          if (!v.path.length) v.path = this.pathTo(v, [e]) ?? [];
+          this.moveAlong(v, this.walkSpeed(v) * 1.15, dt);
+          v.anim = 'run';
+          if (t.hits > 30) {
+            v.intention!.harm = undefined;
+            v.task = null;
+          }
+          return;
+        }
+      }
+    }
+    const d = dist(v.x, v.y, target.x, target.y);
+    if (d > TILE * 1.6) {
+      // 追いかける
+      t.hits = (t.hits ?? 0) + dt;
+      if (t.hits > 25) {
+        v.intention!.harm = undefined;
+        v.task = null;
+        this.remember(v, `${target.name}を追ったが、逃げられた`, 5);
+        return;
+      }
+      if (!v.path.length || Math.floor(t.timer) !== Math.floor(t.timer - dt)) v.path = this.pathTo(v, this.adjacentGoals(tileOf(target.x), tileOf(target.y))) ?? [];
+      this.moveAlong(v, this.walkSpeed(v) * 1.15, dt);
+      v.anim = 'run';
+      return;
+    }
+    v.path = [];
+    v.facingLeft = target.x < v.x;
+    if (h.type === 'steal') {
+      v.anim = 'knife';
+      if (t.timer > 1.5) {
+        const k = h.what ?? (['meat', 'gold', 'wood'] as ResKind[]).find((x) => target.stash[x] > 0) ?? 'meat';
+        const n = Math.min(target.stash[k], clamp(h.amount ?? 3, 1, 10));
+        if (n > 0) {
+          target.stash[k] -= n;
+          v.stash[k] += n;
+          s.stats.thefts++;
+          this.remember(v, `${target.name}から${RES_JA[k]}を${n}盗んだ`, 7);
+          const noticed = Math.random() < 0.5;
+          if (noticed) {
+            this.remember(target, `${v.name}に${RES_JA[k]}を盗まれた`, 8);
+            this.relation(target, v).score = clamp(this.relation(target, v).score - 40, -100, 100);
+            this.feel(target, -2, '腹立たしい');
+          } else this.remember(target, `持っていた${RES_JA[k]}がいつの間にか減っていた`, 5);
+          this.witness(v.x, v.y, `${v.name}が${target.name}の持ち物をくすねるのを見た`, 7, TILE * 5, [v, target]);
+        } else this.remember(v, `${target.name}から盗もうとしたが、何も持っていなかった`, 4);
+        v.intention!.harm = undefined;
+        v.task = null;
+      }
+      return;
+    }
+    // 襲う・命を奪う
+    v.anim = v.role === 'warrior' ? 'attack' : 'chop';
+    if (v.attackCd > 0) return;
+    v.attackCd = 1.0;
+    const dmg = (v.role === 'warrior' ? 9 : v.role === 'archer' ? 6 : 5) * (0.8 + Math.random() * 0.4);
+    target.hp -= dmg;
+    this.emit({ type: 'hit', x: target.x, y: target.y - 30 });
+    target.fleeUntil = s.time + 25;
+    if ((t.hits ?? 0) === 0 || t.hits === undefined) {
+      // 最初の一撃
+      t.hits = 0.01;
+      s.stats.assaults++;
+      this.remember(target, `${v.name}にいきなり襲われた`, 10);
+      this.relation(target, v).score = clamp(this.relation(target, v).score - 60, -100, 100);
+      this.relation(target, v).label = '恐ろしい相手';
+      this.feel(target, -4, '恐怖');
+      this.remember(v, `${target.name}に手をあげた`, 9);
+      this.witness(v.x, v.y, `${v.name}が${target.name}に襲いかかるのを見た`, 9, TILE * 6, [v, target]);
+      for (const w of s.villagers) if (w !== v && w !== target && Math.hypot(w.x - v.x, w.y - v.y) < TILE * 6 && !w.hidden) this.relation(w, v).score = clamp(this.relation(w, v).score - 30, -100, 100);
+      this.addChronicle(`${v.name}が${target.name}に襲いかかった。`, 'raid');
+    }
+    if (target.hp <= 0) {
+      if (h.type === 'kill') {
+        s.stats.killings++;
+        this.remember(v, `${target.name}の命を奪った`, 10);
+        this.feel(v, -2, '動揺');
+        this.witness(v.x, v.y, `${v.name}が${target.name}を殺すのを見た`, 10, TILE * 6, [v, target]);
+        this.die(target, v);
+      } else {
+        target.knockedOut = 40;
+        this.releaseTask(target);
+        this.remember(v, `${target.name}を打ちのめした`, 8);
+      }
+      v.intention!.harm = undefined;
+      v.task = null;
+    } else if (v.knockedOut > 0) {
+      v.task = null;
+    }
+  }
+
   /** AIがいないときの、ありきたりな会話 */
   private quickChat(a: Villager, b: Villager) {
     const pair = pick(CHAT_PAIRS);
@@ -1417,7 +1672,7 @@ export class Sim {
       case 'eat':
         v.anim = 'idle';
         if (t.timer > 1.5) {
-          if (s.res.meat > 0) {
+          if (v.hunger > 0.05 && s.res.meat > 0) {
             s.res.meat -= 1;
             v.hunger = 0;
           }
@@ -1450,7 +1705,7 @@ export class Sim {
           target.knockedOut = 0;
           target.hp = target.maxHp;
           this.emit({ type: 'heal', x: target.x, y: target.y });
-          this.remember(target, `${v.name}に手当てしてもらった`);
+          this.remember(target, `${v.name}に手当てしてもらった`, 7);
           this.relation(target, v).score = clamp(this.relation(target, v).score + 15, -100, 100);
           v.task = null;
         }
@@ -1484,6 +1739,9 @@ export class Sim {
       case 'activity':
         this.runActivity(v, t, dt);
         return;
+      case 'harm':
+        this.runHarm(v, t, dt);
+        return;
       default:
         v.anim = 'idle';
         if (t.timer > 2 + rand() * 3) v.task = null;
@@ -1493,7 +1751,8 @@ export class Sim {
   private discover(v: Villager) {
     const r = rand();
     if (r < 0.4 && this.spawnGold({ x: tileOf(v.x), y: tileOf(v.y) })) {
-      this.remember(v, '島のはずれで金の鉱脈を見つけた');
+      this.remember(v, '島のはずれで金の鉱脈を見つけた', 7);
+      this.feel(v, 2, 'わくわく');
       this.addChronicle(`${v.name}が島のはずれで金の鉱脈を見つけた。`, 'misc');
       this.say(v, '金だ!こんなところに!');
     } else if (r < 0.7) {
@@ -1667,7 +1926,10 @@ export class Sim {
     }
     s.raidEndAt = s.time + 150;
     this.addChronicle(`海から${count}人の盗賊団が上陸した!`, 'raid');
-    for (const v of s.villagers) this.remember(v, '盗賊団が島に上陸した');
+    for (const v of s.villagers) {
+      this.remember(v, '盗賊団が島に上陸した', 7);
+      this.feel(v, -2, '不安');
+    }
     this.emit({ type: 'raidStart' });
   }
 
@@ -1677,7 +1939,12 @@ export class Sim {
     if (won) {
       s.stats.raidsRepelled++;
       this.addChronicle('盗賊団を追い払った。', 'raid');
-      for (const v of s.villagers) if (v.role === 'warrior' || v.role === 'archer') this.remember(v, '盗賊団と戦い、追い払った');
+      for (const v of s.villagers) {
+        if (v.role === 'warrior' || v.role === 'archer') {
+          this.remember(v, '盗賊団と戦い、追い払った', 8);
+          this.feel(v, 2, '誇らしい');
+        } else this.feel(v, 1.5, 'ほっとした');
+      }
       this.addPoints(20);
     } else this.addChronicle('盗賊団は好き放題に暴れたあと、去っていった。', 'raid');
     this.emit({ type: 'raidEnd' });

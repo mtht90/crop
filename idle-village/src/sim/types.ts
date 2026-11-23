@@ -37,7 +37,8 @@ export type TaskType =
   | 'fight'
   | 'heal'
   | 'play'
-  | 'activity';
+  | 'activity'
+  | 'harm';
 
 export interface Task {
   type: TaskType;
@@ -65,6 +66,14 @@ export interface Invention {
   label: string;
 }
 
+/** 人に害をなす行い。勧めるものではないが、起こりうる */
+export interface Harm {
+  type: 'steal' | 'attack' | 'kill';
+  target?: string; // 相手の名前。盗みで省略なら村の蓄えから
+  what?: ResKind;
+  amount?: number;
+}
+
 /** AIが決めた「やりたいこと」 */
 export interface Intention {
   action: Action;
@@ -73,11 +82,30 @@ export interface Intention {
   motion?: Motion;
   with?: string[]; // 一緒にする人
   yields?: Partial<Record<ResKind, number>>; // 1回ごとの成果(増減)
+  harm?: Harm; // 盗む・襲う・命を奪う(するときだけ)
   target?: string; // 相手の名前・建物の名前など
   thought: string; // 心の声
   until: number; // シム秒。これを過ぎたら次を考える
   source: 'ai' | 'habit';
 }
+
+/** 記憶。見たこと・聞いたこと・話したこと・自分で考えたこと */
+export interface MemoryItem {
+  t: number; // シム秒
+  label: string; // 「2年目 春」
+  text: string;
+  imp: number; // 大事さ 1..10
+  kind: 'see' | 'hear' | 'talk' | 'self' | 'reflect';
+}
+
+/** 気分。v は -5(どん底)..5(最高) */
+export interface Mood {
+  label: string;
+  v: number;
+}
+
+/** 性格の5つの軸(1..5):好奇心・几帳面さ・社交性・やさしさ・心配性 */
+export type Big5 = Record<'O' | 'C' | 'E' | 'A' | 'N', number>;
 
 export interface Relation {
   score: number; // -100..100
@@ -102,10 +130,18 @@ export interface Villager {
   task: Task | null;
   intention: Intention | null;
   thinking: boolean; // AIの返事待ち
-  memories: string[]; // AIが書いた記憶(新しい順)
+  memories: MemoryItem[]; // 新しい順
+  beliefs: string[]; // 振り返りから生まれた、自分や他人についての考え
+  routine: string; // いつもの一日の流れ
+  goal: string; // 人生の目標・いまの望み
+  mood: Mood;
+  big5: Big5 | null;
+  sinceReflect: number; // 前回の振り返りから積み重なった大事さ
   relations: Record<string, Relation>; // キーは相手のid
   partnerId: number | null;
   carrying: ResKind | null;
+  stash: Record<ResKind, number>; // 自分だけの持ち物
+  fleeUntil: number; // 襲われて逃げている(シム秒)
   energy: number; // 0..1
   hunger: number; // 0..1(1で空腹)
   loneliness: number; // 0..1(1で人恋しい)
@@ -287,7 +323,7 @@ export interface GameState {
   festivalUntil: number;
   departed: boolean;
   savedAt: number;
-  stats: { births: number; deaths: number; raidsRepelled: number; built: number; talks: number };
+  stats: { births: number; deaths: number; raidsRepelled: number; built: number; talks: number; thefts: number; assaults: number; killings: number };
 }
 
 export type SimEvent =
