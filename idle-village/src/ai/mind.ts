@@ -19,7 +19,7 @@ export const PRESETS: Record<string, { label: string; kind: 'gemini' | 'openai';
     label: 'Google Gemini(おすすめ・無料枠あり)',
     kind: 'gemini',
     baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
-    model: 'gemini-2.5-flash-lite',
+    model: 'gemini-flash-lite-latest',
     keyUrl: 'https://aistudio.google.com/apikey',
     note: 'Google AI Studio で「APIキーを作成」を押すと、無料で使えるキーがもらえます。',
   },
@@ -74,6 +74,7 @@ export class VillageMind {
     }
     const p = PRESETS.gemini;
     this.settings = { enabled: true, preset: 'gemini', baseUrl: p.baseUrl, apiKey: '', model: p.model, interval: 25, ...saved };
+    if (this.settings.model === 'gemini-2.5-flash-lite') this.settings.model = p.model;
     this.refreshStatus();
   }
 
@@ -345,9 +346,9 @@ function buildPrompt(sim: Sim, newcomers: Villager[], deciders: Villager[], talk
 
   parts.push(`【返事の形】次のJSONだけを返してください(該当がない項目は空配列や省略でかまいません)。
 {
- "people": [{"name":"名前","action":"${ACTIONS.join('|')}","target":"相手の名前や建物の名前(必要なら)","thought":"心の声(30字以内)","minutes":1〜6(その行動を続ける時間),"look":"pawn|warrior|archer|monk(生き方を変えるときだけ)","memory":"覚えておきたいこと(あれば、30字以内)","propose":{"name":"建物の名前","look":"${BUILDING_ORDER.join('|')}","role":"${ROLES.join('|')}","purpose":"目的(30字以内)"}(建てたいものを思いついたときだけ)}],
+ "people": [{"name":"名前","action":"${ACTIONS.join('|')}","target":"相手の名前や建物の名前(必要なら)","thought":"心の声(30字以内)","minutes":1〜6(その行動を続ける時間),"look":"pawn|warrior|archer|monk(生き方を変えるときだけ)","memory":"これまでに起きたことで心に残ったこと(予定は書かない・あれば30字以内)","propose":{"name":"建物の名前","look":"${BUILDING_ORDER.join('|')}","role":"${ROLES.join('|')}","purpose":"目的(30字以内)"}(建てたいものを思いついたときだけ)}],
  "newcomers": [{"id":数字,"name":"名前(カタカナ2〜4文字)","personality":"性格・好きなもの・夢など(50字以内)"}],
- "talks": [{"a":"話しかける人","b":"相手","lines":[{"speaker":"名前","text":"せりふ(40字以内)"}],"a_to_b":{"delta":-30〜30,"label":"aから見たbとの関係の呼び名(親友・恋人・夫婦・ライバル・師匠など、変わったときだけ)"},"b_to_a":{"delta":-30〜30,"label":"同様"},"memory_a":"aが覚えておくこと","memory_b":"bが覚えておくこと","promise":{"action":"二人で一緒にすること(あれば)","target":""}}],
+ "talks": [{"a":"話しかける人","b":"相手","lines":[{"speaker":"名前","text":"せりふ(40字以内)"}],"a_to_b":{"delta":-30〜30,"label":"aから見たbとの関係の呼び名(親友・恋人・夫婦・ライバル・師匠など、変わったときだけ)"},"b_to_a":{"delta":-30〜30,"label":"同様"},"memory_a":"この会話でaの心に残ったこと","memory_b":"この会話でbの心に残ったこと","promise":{"action":"二人で一緒にすること(あれば)","target":""}}],
  "village": {"era":"新しい時代の名前(変えるときだけ)","custom":"新しく生まれた習わし(あれば)","chronicle":"歴史書に残す一文(あれば)"}
 }`);
   return parts.join('\n\n');
