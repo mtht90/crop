@@ -36,7 +36,8 @@ export type TaskType =
   | 'guard'
   | 'fight'
   | 'heal'
-  | 'play';
+  | 'play'
+  | 'activity';
 
 export interface Task {
   type: TaskType;
@@ -44,11 +45,34 @@ export interface Task {
   phase: 'go' | 'act' | 'done';
   timer: number;
   hits?: number;
+  motion?: Motion;
+}
+
+/** 体の動き(アニメーション)。何をしているかは doing に自由に書かれる */
+export type Motion = 'axe' | 'hammer' | 'pick' | 'knife' | 'carry' | 'walk' | 'idle' | 'dance' | 'pray' | 'play' | 'guard' | 'rest';
+
+/** 発明・工夫が村に与える効き目(エンジンが理解できるもの) */
+export type EffectKey = 'work' | 'walk' | 'food' | 'wood' | 'gold' | 'growth' | 'birth' | 'defense' | 'joy';
+
+export interface Invention {
+  id: number;
+  name: string;
+  desc: string;
+  inventor: string;
+  effect: EffectKey | null;
+  amount: number; // 0.03〜0.1
+  t: number;
+  label: string;
 }
 
 /** AIが決めた「やりたいこと」 */
 export interface Intention {
   action: Action;
+  doing?: string; // 自由に書かれた行動
+  where?: string; // 行き先(森・海辺・家・広場・建物名・人の名前など)
+  motion?: Motion;
+  with?: string[]; // 一緒にする人
+  yields?: Partial<Record<ResKind, number>>; // 1回ごとの成果(増減)
   target?: string; // 相手の名前・建物の名前など
   thought: string; // 心の声
   until: number; // シム秒。これを過ぎたら次を考える
@@ -243,6 +267,7 @@ export interface GameState {
   upgrades: Record<UpgradeKey, number>;
   era: string; // AIがつけた時代の名前
   customs: string[]; // AIが生んだ村の決まり・習わし
+  inventions: Invention[]; // AIが考え出した道具・料理・歌・仕組み
   map: { w: number; h: number; land: string };
   villagers: Villager[];
   trees: Tree[];
@@ -286,4 +311,5 @@ export type SimEvent =
   | { type: 'talkLine'; convId: number }
   | { type: 'talkEnd'; convId: number }
   | { type: 'culture' }
+  | { type: 'intent'; id: number }
   | { type: 'sfx'; name: string; x?: number; y?: number };
