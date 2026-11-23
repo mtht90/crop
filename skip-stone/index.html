@@ -75,6 +75,7 @@ button:focus-visible { outline: 3px solid var(--sun); outline-offset: 3px; }
 .live-sub { display: flex; gap: 14px; align-items: baseline; font-weight: 800; text-shadow: 0 1px 3px rgba(9,33,41,.7), 0 2px 14px rgba(9,33,41,.45); }
 .live-sub .unit { font-size: 13px; color: var(--cream-dim); letter-spacing: .1em; }
 #distVal { font-family: var(--display); font-size: 22px; font-variant-numeric: tabular-nums; }
+#liveScore { font-family: var(--display); font-weight: 800; font-size: 26px; color: var(--sun); font-variant-numeric: tabular-nums; margin-top: 2px; text-shadow: 0 1px 3px rgba(9,33,41,.7), 0 2px 14px rgba(9,33,41,.45); }
 
 /* ---- 判定の文字 ---- */
 #judge {
@@ -201,6 +202,7 @@ button:focus-visible { outline: 3px solid var(--sun); outline-offset: 3px; }
 <div id="live" class="ui" aria-live="polite">
   <div id="skipCount">0</div>
   <div class="live-sub"><span class="unit">SKIPS</span><span id="distVal">0.0</span><span class="unit">m</span></div>
+  <div id="liveScore">+0</div>
 </div>
 
 <div id="judge" class="ui"></div>
@@ -220,8 +222,8 @@ button:focus-visible { outline: 3px solid var(--sun); outline-offset: 3px; }
         <span><b>上へはじく</b>と投げる。速くはじくほど遠くへ、左右にはじくと向きが変わる。</span>
       </li>
       <li>
-        <svg viewBox="0 0 44 44" aria-hidden="true"><circle cx="22" cy="22" r="21" fill="rgba(255,246,230,.08)"/><circle cx="22" cy="22" r="13" stroke="#fff6e6" stroke-width="2" fill="none" opacity=".7"/><circle cx="22" cy="22" r="6" stroke="#7ff0dc" stroke-width="3" fill="none"/></svg>
-        <span>水面の<b>リングが小さい瞬間</b>に投げ、輪の中に落とすと Nice → Great → Excellent。</span>
+        <svg viewBox="0 0 44 44" aria-hidden="true"><circle cx="22" cy="22" r="21" fill="rgba(255,246,230,.08)"/><path d="M8 30h28" stroke="#fff6e6" stroke-width="2" opacity=".7" stroke-linecap="round"/><path d="M10 16l14 13" stroke="#7ff0dc" stroke-width="3" stroke-linecap="round"/><path d="M24 29l9-6" stroke="#7ff0dc" stroke-width="3" stroke-linecap="round" stroke-dasharray="2 4"/></svg>
+        <span>最初の<b>着水の出来</b>で Nice ×1.5 → Great ×2 → Excellent ×3。ちょうどいい強さで、まっすぐきれいにはじくのがコツ。</span>
       </li>
       <li>
         <svg viewBox="0 0 44 44" aria-hidden="true"><circle cx="22" cy="22" r="21" fill="rgba(255,246,230,.08)"/><path d="M30 14a11 11 0 1 0 3 9" stroke="#7ff0dc" stroke-width="3" fill="none" stroke-linecap="round"/><path d="m33 13-.5 8-7-3" stroke="#7ff0dc" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -230,7 +232,7 @@ button:focus-visible { outline: 3px solid var(--sun); outline-offset: 3px; }
     </ul>
     <div class="progress" aria-hidden="true"><i id="loadBar"></i></div>
     <button id="startBtn" class="btn" type="button" disabled>よみこみ中…</button>
-    <p class="credit">5投の合計で勝負。湖に浮かぶ金色の輪で跳ねると +250。<br>素材: Poly Haven (HDRI・テクスチャ・岩モデル, CC0) / OpenGameArt (効果音, CC0) / three.js</p>
+    <p class="credit">5投の合計で勝負。10回を超えると跳ねるたびに点が加速し、上限はなし。金色の輪で跳ねると +250。<br>素材: Poly Haven (HDRI・テクスチャ・岩モデル, CC0) / OpenGameArt (効果音, CC0) / three.js</p>
   </div>
 </section>
 

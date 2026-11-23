@@ -128,12 +128,19 @@ export function createSwipeInput(el, h) {
     const side = (vx * 1000) / H;
     const stale = now - last.t > 140; // 指を止めてから離した
     const spinNow = decayed(cur, now);
+    // はじき方のまっすぐさ(0..1): 最後の動きの直線距離 ÷ 実際に動いた道のり
+    let path = 0;
+    let startIdx = pts.indexOf(first);
+    for (let i = startIdx + 1; i < pts.length; i++) path += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
+    const chord = Math.hypot(last.x - first.x, last.y - first.y);
+    const straight = path > 1 ? chord / path : 1;
     if (up > 0.9 && !stale) {
       h.onThrow({
         up,
         side,
         x: cur.x,
         y: cur.y,
+        straight,
         // 回転が弱すぎるときは回していない扱い
         spin: spinNow >= SPIN_MIN ? spinNow : 0,
         spinDir: spinNow >= SPIN_MIN ? cur.dir : 0,

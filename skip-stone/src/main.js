@@ -3,10 +3,19 @@ import { loadWorld } from './world.js';
 import { createFx, COLORS } from './fx.js';
 import { createAudio } from './audio.js';
 import { createSwipeInput } from './input.js';
-import { createStone, stepStone, distanceFromStart, horizontalSpeed, scoreThrow, curveMultiplier } from './physics.js';
+import {
+  createStone,
+  stepStone,
+  distanceFromStart,
+  horizontalSpeed,
+  scoreThrow,
+  curveMultiplier,
+  judgeEntry,
+  JUDGE_MUL,
+  skipPoints,
+} from './physics.js';
 
 const THROWS_PER_ROUND = 5;
-const RING_PERIOD = 1.45; // 判定リングが縮む周期 (秒)
 const CAM_IDLE = { pos: new THREE.Vector3(0, 1.75, 1.6), look: new THREE.Vector3(0, -0.6, -16) };
 const HAND = new THREE.Vector3(0, -0.3, -1.0); // カメラから見た手元の石の位置
 
@@ -18,6 +27,7 @@ const ui = {
   live: $('live'),
   skipCount: $('skipCount'),
   distVal: $('distVal'),
+  liveScore: $('liveScore'),
   judge: $('judge'),
   feed: $('feed'),
   hint: $('hint'),
@@ -54,7 +64,7 @@ const store = {
   },
 };
 const best = { total: store.get('bestTotal', 0), skips: store.get('bestSkips', 0), dist: store.get('bestDist', 0) };
-ui.bestVal.textContent = best.total.toLocaleString();
+ui.bestVal.textContent = fmt(best.total);
 
 // ---------- レンダラー ----------
 const canvas = $('gl');
@@ -146,7 +156,6 @@ const game = {
 let sim = null; // 物理の石
 let throwInfo = null; // 今回の投げ(判定など)
 let grab = null; // 指でつかんでいる情報
-let ringClock = 0;
 let aimSettle = 0;
 const handPos = HAND.clone();
 const handTarget = HAND.clone();
@@ -185,12 +194,6 @@ function newThrow() {
   stoneMesh.material.opacity = 1;
   fx.clearTrail();
 
-  // 判定リング: 毎回少し違う場所に出る
-  const tz = 0.6 - rand(8.5, 12.5);
-  const tx = rand(-1.6, 1.6);
-  fx.setTarget(tx, tz, 2.3);
-  ringClock = 0;
-
   // 光の輪(ボーナス)
   const rings = [];
   const count = 2 + (Math.random() < 0.5 ? 1 : 0);
@@ -207,15 +210,15 @@ function newThrow() {
 
 function setHint() {
   ui.hintMain.textContent = '石を上へはじいて投げる';
-  ui.hintSub.textContent = 'リングが小さい瞬間を狙う・くるくる回すとカーブ';
+  ui.hintSub.textContent = 'ちょうどいい強さでまっすぐはじく・くるくる回すとカーブ';
 }
 
-function gradeFromRing(k) {
-  if (k <= 0.36) return { judge: 'excellent', q: 0.9 + (0.36 - k) / 0.36 * 0.1 };
-  if (k <= 0.66) return { judge: 'great', q: 0.62 + (0.66 - k) / 0.3 * 0.23 };
-  return { judge: 'nice', q: 0.3 + (1 - k) / 0.34 * 0.25 };
+/** 大きな数を読みやすく(1億以上は「億」) */
+function fmt(n) {
+  if (n >= 1e12) return `${(n / 1e12).toFixed(2)}兆`;
+  if (n >= 1e8) return `${(n / 1e8).toFixed(2)}億`;
+  return Math.round(n).toLocaleString();
 }
-const ringK = () => 1 - 0.88 * ((ringClock % RING_PERIOD) / RING_PERIOD);
 
 // ---------- 入力 ----------
 const tmpV = new THREE.Vector3();
@@ -251,8 +254,8 @@ createSwipeInput(canvas, {
 });
 
 function launch(t) {
-  const k = ringK();
-  const g = gradeFromRing(k);
+  // まっすぐはじくほど石の傾きが整う(0.3..1)
+  const quality = 0.3 + 0.7 * THREE.MathUtils.clamp((t.straight - 0.9) / 0.09, 0, 1);
   // はじく速さ → 初速(だんだん頭打ちになるように)
   const speed = 6 + 20 * (1 - Math.exp(-(t.up - 0.9) / 2.6));
   const xOff = (t.x / window.innerWidth - 0.5) * 0.25;
@@ -265,29 +268,27 @@ function launch(t) {
     pos: { x: start.x, y: start.y, z: start.z },
     speed,
     yaw,
-    quality: g.q,
+    quality,
     spin: t.spin,
     spinDir: t.spinDir,
   });
   throwInfo = {
-    judge: g.judge,
-    ringK: k,
+    judge: null,
     curve: t.spin > 0,
     curveMul: curveMultiplier(t.spin),
     over: t.spin > 1,
     spinDir: t.spinDir,
     firstDone: false,
-    inRing: false,
     rings: 0,
     power: (speed - 6) / 20,
   };
-  fx.targetState.frozen = true;
   game.state = 'flying';
   heading.set(Math.sin(yaw), 0, -Math.cos(yaw));
   ui.hint.hidden = true;
   ui.live.classList.add('on');
   ui.skipCount.textContent = '0';
   ui.distVal.textContent = '0.0';
+  ui.liveScore.textContent = '0';
   audio.throw(throwInfo.power);
   spinVisual = 22 + speed;
 }
@@ -320,25 +321,20 @@ function onContact(e) {
 
   if (!throwInfo.firstDone) {
     throwInfo.firstDone = true;
-    const tp = fx.target.position;
-    const inRing = Math.hypot(at.x - tp.x, at.z - tp.z) <= fx.targetState.radius;
-    throwInfo.inRing = inRing && e.type === 'skip';
+    // 判定は最初の着水の出来(入水角と石の安定)で決まる
+    const j = e.type === 'skip' ? judgeEntry(e.angle, e.wobble).judge : null;
+    throwInfo.judge = j;
     if (e.type === 'sink') {
       showJudge('ドボン…', 'miss');
-      fx.hideTarget();
-    } else if (inRing) {
-      const j = throwInfo.judge;
+    } else if (j) {
       showJudge(JUDGE_LABEL[j], j);
-      fx.flashTarget(COLORS[j]);
       audio.judge(j);
+      fx.ripple(at, j === 'excellent' ? 2.2 : 1.5, 0, 1.6);
       if (j === 'excellent') {
         game.slowmo = 0.55;
         fx.sparkle(at, COLORS.excellent, 60, 2.5);
         vibrate(30);
       }
-    } else {
-      fx.hideTarget();
-      chip('リングの外');
     }
     if (throwInfo.curve && e.type === 'skip') chip(`カーブ ×${throwInfo.curveMul.toFixed(2)}`, 'mint');
   }
@@ -371,21 +367,21 @@ function onContact(e) {
 function finishThrow() {
   const skips = sim.skips;
   const distance = distanceFromStart(sim, sim.lastContact || sim.pos);
-  const judge = throwInfo.inRing ? throwInfo.judge : null;
+  const judge = throwInfo.judge;
   game.streak = judge === 'excellent' ? game.streak + 1 : 0;
   const s = scoreThrow({ skips, distance, judge, curveMul: skips > 0 ? throwInfo.curveMul : 1, rings: throwInfo.rings, streak: game.streak });
   game.total += s.total;
   game.results.push({ skips, distance, judge, score: s.total });
-  ui.score.textContent = game.total.toLocaleString();
+  ui.score.textContent = fmt(game.total);
 
   const rows = [];
-  rows.push(row('スキップ', `${skips} 回`, `+${s.skipPts}`));
+  rows.push(row('スキップ', `${skips} 回`, `+${fmt(s.skipPts)}`));
   rows.push(row('飛距離', `${distance.toFixed(1)} m`, `+${s.distPts}`));
   if (throwInfo.rings) rows.push(row('光の輪', `${throwInfo.rings} 個`, `+${s.ringPts}`));
-  rows.push(row('判定', judge ? JUDGE_LABEL[judge].replace('!', '') : 'リング外', `×${s.judgeMul.toFixed(1)}`, true));
+  rows.push(row('着水', judge ? JUDGE_LABEL[judge].replace('!', '') : '—', `×${s.judgeMul.toFixed(1)}`, true));
   if (s.curveMul > 1) rows.push(row('カーブ', '', `×${s.curveMul.toFixed(2)}`, true));
   if (s.streakMul > 1) rows.push(row(`連続Excellent ${game.streak}`, '', `×${s.streakMul.toFixed(1)}`, true));
-  rows.push(`<div class="row total"><span>得点</span><b>+${s.total.toLocaleString()}</b></div>`);
+  rows.push(`<div class="row total"><span>得点</span><b>+${fmt(s.total)}</b></div>`);
   ui.resultRows.innerHTML = rows.join('');
   ui.resultTitle.textContent = `第${game.throwNo}投`;
   ui.nextBtn.textContent = game.throwNo >= THROWS_PER_ROUND ? '結果を見る' : '次の石へ';
@@ -398,11 +394,12 @@ function row(label, value, pts, mul = false) {
 }
 
 function rankFor(total) {
-  if (total < 3000) return '見習いの石投げ';
-  if (total < 7000) return '水切り好き';
-  if (total < 12000) return '湖の常連';
-  if (total < 18000) return '水切り名人';
-  return '湖の伝説';
+  if (total < 5000) return '見習いの石投げ';
+  if (total < 15000) return '水切り好き';
+  if (total < 50000) return '湖の常連';
+  if (total < 300000) return '水切り名人';
+  if (total < 3000000) return '湖の伝説';
+  return '水切りの神';
 }
 
 function showFinal() {
@@ -418,14 +415,14 @@ function showFinal() {
   store.set('bestTotal', best.total);
   store.set('bestSkips', best.skips);
   store.set('bestDist', Math.round(best.dist * 10) / 10);
-  ui.bestVal.textContent = best.total.toLocaleString();
+  ui.bestVal.textContent = fmt(best.total);
   const rec = (b) => (b ? ' <span class="newrec">新記録</span>' : '');
   ui.rankTitle.textContent = rankFor(game.total);
   ui.finalRows.innerHTML = [
     `<div class="row"><span>最多スキップ${rec(newSkips)}</span><b>${maxSkips} 回</b></div>`,
     `<div class="row"><span>最長飛距離${rec(newDist)}</span><b>${maxDist.toFixed(1)} m</b></div>`,
-    `<div class="row"><span>自己ベスト</span><b>${best.total.toLocaleString()}</b></div>`,
-    `<div class="row total"><span>合計${rec(newTotal)}</span><b>${game.total.toLocaleString()}</b></div>`,
+    `<div class="row"><span>自己ベスト</span><b>${fmt(best.total)}</b></div>`,
+    `<div class="row total"><span>合計${rec(newTotal)}</span><b>${fmt(game.total)}</b></div>`,
   ].join('');
   ui.finalSheet.classList.add('open');
   setTimeout(() => ui.againBtn.focus({ preventScroll: true }), 450);
@@ -456,7 +453,7 @@ ui.startBtn.addEventListener('click', async () => {
 
 // テスト用: ?debug を付けると外から投げられる
 if (new URLSearchParams(location.search).has('debug')) {
-  window.__skip = { launch, game, get ringK() { return ringK(); } };
+  window.__skip = { launch, game };
 }
 
 // ---------- ループ ----------
@@ -468,10 +465,6 @@ let acc = 0;
 
 function updateAim(dt) {
   aimSettle += dt;
-  ringClock += dt;
-  const k = ringK();
-  const g = gradeFromRing(k);
-  fx.setInner(k, COLORS[g.judge]);
 
   // 手元の石: 指に追従、離していればゆらゆら
   handPos.lerp(handTarget, 1 - Math.exp(-dt * (grab ? 22 : 8)));
@@ -513,7 +506,12 @@ function updateFlight(dt) {
   spinVisual = 10 + vh * 2.2 * (0.4 + 0.6 * sim.spin);
   stoneSpin.rotation.y += spinVisual * dt * (sim.spinDir || 1) * -1;
   fx.updateTrail(camera, stoneRoot.position);
-  ui.distVal.textContent = distanceFromStart(sim).toFixed(1);
+  const dist = distanceFromStart(sim);
+  ui.distVal.textContent = dist.toFixed(1);
+  // 今の投げの見込み点(跳ねるほど加速していく)
+  const mul = (JUDGE_MUL[throwInfo.judge] || 1) * (sim.skips > 0 ? throwInfo.curveMul : 1);
+  const est = (skipPoints(sim.skips) + dist * 6 + throwInfo.rings * 250) * mul;
+  ui.liveScore.textContent = `+${fmt(est)}`;
 }
 
 function updateSunk(dt) {

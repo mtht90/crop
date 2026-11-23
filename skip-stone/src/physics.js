@@ -98,6 +98,7 @@ function contact(s) {
   const vyIn = -s.vel.y;
   const angle = Math.atan2(vyIn, vh) / DEG;
   const at = { x: s.pos.x, y: 0, z: s.pos.z };
+  const wobbleIn = s.wobble; // 着水した瞬間のぐらつき(判定に使う)
   s.lastContact = at;
 
   const sink = (reason) => {
@@ -105,7 +106,7 @@ function contact(s) {
     s.vel.x *= 0.15;
     s.vel.z *= 0.15;
     s.vel.y = -0.6;
-    return { type: 'sink', reason, at, angle, speed: vh, skips: s.skips };
+    return { type: 'sink', reason, at, angle, speed: vh, skips: s.skips, wobble: wobbleIn };
   };
 
   if (s.skips === 0 && angle > TUNING.maxFirstAngleDeg) return sink('steep');
@@ -114,8 +115,10 @@ function contact(s) {
 
   const q = s.quality;
   const over = Math.max(0, (angle - TUNING.idealAngleDeg) / 25);
-  let loss = 0.055 + 0.15 * (1 - q) + 0.22 * over * over + 0.16 * s.wobble - 0.03 * s.spin;
-  loss = clamp(loss, 0.04, 0.6);
+  // 傾きも回転も完璧に近いと、ほとんど減速せずに跳ね続ける(ハマると長く続く)
+  const perfect = Math.pow(q, 4) * s.spin * (1 - s.over);
+  let loss = 0.055 + 0.15 * (1 - q) + 0.22 * over * over + 0.16 * s.wobble - 0.03 * s.spin - 0.022 * perfect;
+  loss = clamp(loss, 0.022, 0.6);
   const vhNew = vh * (1 - loss);
   if (vhNew < TUNING.minSpeed) return sink('slow');
 
@@ -134,7 +137,7 @@ function contact(s) {
   s.wobble = Math.max(0, s.wobble + 0.03 + 0.05 * (1 - q) - 0.028 * s.spin + 0.07 * s.over);
   s.spin *= 0.95;
   s.skips += 1;
-  return { type: 'skip', index: s.skips, at, angle, speed: vhNew, impact: vyIn };
+  return { type: 'skip', index: s.skips, at, angle, speed: vhNew, impact: vyIn, wobble: wobbleIn };
 }
 
 /** 石が放たれた地点からの直線距離 (m) */
@@ -143,18 +146,46 @@ export function distanceFromStart(s, at = s.pos) {
 }
 
 /** 1投ぶんの点数を計算する */
+/**
+ * 最初の着水の出来。入水角が理想(20°)に近く、石がぐらついていないほど良い。
+ * @returns {{judge: 'excellent'|'great'|'nice'|null, value: number}}
+ */
+export function judgeEntry(angle, wobble) {
+  const angleScore = clamp(1 - Math.abs(angle - TUNING.idealAngleDeg) / 12, 0, 1);
+  const stable = clamp(1 - wobble / 0.6, 0, 1);
+  const value = 0.65 * angleScore + 0.35 * stable;
+  const judge = value >= 0.84 ? 'excellent' : value >= 0.64 ? 'great' : value >= 0.4 ? 'nice' : null;
+  return { judge, value };
+}
+
+export const JUDGE_MUL = { nice: 1.5, great: 2, excellent: 3 };
+
 /** 回転量(0..1.5)からカーブの得点倍率。回しすぎても上がらない */
 export function curveMultiplier(spin) {
   if (!spin) return 1;
   return Math.round((1 + 0.4 * Math.min(1, spin)) * 100) / 100;
 }
 
+/**
+ * i 回目のスキップの点。10回までは少しずつ増え、そこからは毎回1.25倍に加速する(上限なし)。
+ */
+export function skipPoint(i) {
+  if (i <= 10) return 10 + 4 * (i - 1);
+  return Math.round(46 * Math.pow(1.25, i - 10));
+}
+
+export function skipPoints(n) {
+  let sum = 0;
+  for (let i = 1; i <= n; i++) sum += skipPoint(i);
+  return sum;
+}
+
+/** 1投ぶんの点数を計算する */
 export function scoreThrow({ skips, distance, judge, curveMul = 1, rings, streak }) {
-  let skipPts = 0;
-  for (let i = 1; i <= skips; i++) skipPts += 10 + 4 * (i - 1);
+  const skipPts = skipPoints(skips);
   const distPts = Math.round(distance * 6);
   const ringPts = rings * 250;
-  const judgeMul = judge === 'excellent' ? 2 : judge === 'great' ? 1.5 : judge === 'nice' ? 1.2 : 1;
+  const judgeMul = JUDGE_MUL[judge] || 1;
   const streakMul = judge === 'excellent' && streak > 1 ? 1 + 0.2 * (streak - 1) : 1;
   const base = skipPts + distPts + ringPts;
   const total = Math.round(base * judgeMul * curveMul * streakMul);
