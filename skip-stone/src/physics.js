@@ -31,6 +31,8 @@ export function createStone(p) {
   const spin = clamp(p.spin, 0, 1);
   // 回しすぎ: 0..1。カーブが効きすぎ、石がぐらついて早く沈みやすい
   const over = clamp((p.spin - 1) / 0.5, 0, 1);
+  // 回転をかけると手首がぶれて、石の傾きが少し乱れる(回転は良いことばかりではない)
+  const quality = clamp(p.quality, 0, 1) * (1 - 0.12 * spin);
   return {
     pos: { ...p.pos },
     vel: {
@@ -38,12 +40,13 @@ export function createStone(p) {
       y: Math.tan(el) * p.speed,
       z: -Math.cos(p.yaw) * p.speed,
     },
-    quality: clamp(p.quality, 0, 1),
+    quality,
     spin,
     over,
     spinDir: p.spinDir || 0,
     // 回転が弱いほど不安定。回しすぎも不安定
-    wobble: (1 - clamp(p.quality, 0, 1)) * 0.25 + 0.12 * (1 - spin) + 0.45 * over,
+    // 初めのぐらつきは傾きの良さで決まる。回しすぎると大きく暴れる
+    wobble: (1 - quality) * 0.3 + 0.45 * over,
     skips: 0,
     sunk: false,
     start: { ...p.pos },
@@ -116,8 +119,8 @@ function contact(s) {
   const q = s.quality;
   const over = Math.max(0, (angle - TUNING.idealAngleDeg) / 25);
   // 傾きも回転も完璧に近いと、ほとんど減速せずに跳ね続ける(ハマると長く続く)
-  const perfect = Math.pow(q, 4) * s.spin * (1 - s.over);
-  let loss = 0.055 + 0.15 * (1 - q) + 0.22 * over * over + 0.16 * s.wobble - 0.03 * s.spin - 0.022 * perfect;
+  const perfect = Math.pow(q, 4) * (1 - s.over);
+  let loss = 0.055 + 0.15 * (1 - q) + 0.22 * over * over + 0.16 * s.wobble - 0.012 * s.spin - 0.022 * perfect;
   loss = clamp(loss, 0.022, 0.6);
   const vhNew = vh * (1 - loss);
   if (vhNew < TUNING.minSpeed) return sink('slow');
@@ -134,7 +137,8 @@ function contact(s) {
   s.vel.y = vyOut;
   s.pos.y = 0.001;
 
-  s.wobble = Math.max(0, s.wobble + 0.03 + 0.05 * (1 - q) - 0.028 * s.spin + 0.07 * s.over);
+  // 回転はぐらつきが増えるのを抑える(長く跳ねるほど効いてくる)
+  s.wobble = Math.max(0, s.wobble + 0.03 + 0.05 * (1 - q) - 0.03 * s.spin + 0.07 * s.over);
   s.spin *= 0.95;
   s.skips += 1;
   return { type: 'skip', index: s.skips, at, angle, speed: vhNew, impact: vyIn, wobble: wobbleIn };
@@ -160,12 +164,6 @@ export function judgeEntry(angle, wobble) {
 
 export const JUDGE_MUL = { nice: 1.5, great: 2, excellent: 3 };
 
-/** 回転量(0..1.5)からカーブの得点倍率。回しすぎても上がらない */
-export function curveMultiplier(spin) {
-  if (!spin) return 1;
-  return Math.round((1 + 0.4 * Math.min(1, spin)) * 100) / 100;
-}
-
 /**
  * i 回目のスキップの点。1回目から毎回 SKIP_GROWTH 倍ずつなめらかに増える(上限なし)。
  */
@@ -182,13 +180,13 @@ export function skipPoints(n) {
 }
 
 /** 1投ぶんの点数を計算する */
-export function scoreThrow({ skips, distance, judge, curveMul = 1, rings, streak }) {
+export function scoreThrow({ skips, distance, judge, rings, streak }) {
   const skipPts = skipPoints(skips);
   const distPts = Math.round(distance * 6);
   const ringPts = rings * 250;
   const judgeMul = JUDGE_MUL[judge] || 1;
   const streakMul = judge === 'excellent' && streak > 1 ? 1 + 0.2 * (streak - 1) : 1;
   const base = skipPts + distPts + ringPts;
-  const total = Math.round(base * judgeMul * curveMul * streakMul);
-  return { skipPts, distPts, ringPts, judgeMul, curveMul, streakMul, base, total };
+  const total = Math.round(base * judgeMul * streakMul);
+  return { skipPts, distPts, ringPts, judgeMul, streakMul, base, total };
 }

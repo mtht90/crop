@@ -9,7 +9,6 @@ import {
   distanceFromStart,
   horizontalSpeed,
   scoreThrow,
-  curveMultiplier,
   judgeEntry,
   JUDGE_MUL,
   skipPoints,
@@ -79,13 +78,16 @@ camera.position.copy(CAM_IDLE.pos);
 const camLook = CAM_IDLE.look.clone();
 camera.lookAt(camLook);
 
+let baseFov = 60;
+let kick = 0; // 投げた瞬間の勢い(画角と揺れに使う)
 function resize() {
   const w = window.innerWidth;
   const h = window.innerHeight;
   renderer.setSize(w, h, false);
   camera.aspect = w / h;
   // 縦長では縦の画角を広げ、横幅が狭くなりすぎないようにする
-  camera.fov = camera.aspect < 0.8 ? 64 : camera.aspect < 1.2 ? 56 : 46;
+  baseFov = camera.aspect < 0.8 ? 64 : camera.aspect < 1.2 ? 56 : 46;
+  camera.fov = baseFov + kick * 9;
   camera.updateProjectionMatrix();
 }
 window.addEventListener('resize', resize);
@@ -225,7 +227,7 @@ const tmpV = new THREE.Vector3();
 function screenToHand(x, y) {
   const ndcX = (x / window.innerWidth) * 2 - 1;
   const ndcY = -(y / window.innerHeight) * 2 + 1;
-  const tanV = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+  const tanV = Math.tan(THREE.MathUtils.degToRad(baseFov / 2));
   const d = -HAND.z;
   return new THREE.Vector3(ndcX * tanV * camera.aspect * d, ndcY * tanV * d, HAND.z);
 }
@@ -275,7 +277,6 @@ function launch(t) {
   throwInfo = {
     judge: null,
     curve: t.spin > 0,
-    curveMul: curveMultiplier(t.spin),
     over: t.spin > 1,
     spinDir: t.spinDir,
     firstDone: false,
@@ -290,6 +291,8 @@ function launch(t) {
   ui.distVal.textContent = '0.0';
   ui.liveScore.textContent = '0';
   audio.throw(throwInfo.power);
+  kick = 0.35 + 0.65 * throwInfo.power;
+  vibrate(Math.round(12 + 30 * throwInfo.power));
   spinVisual = 22 + speed;
 }
 
@@ -336,7 +339,6 @@ function onContact(e) {
         vibrate(30);
       }
     }
-    if (throwInfo.curve && e.type === 'skip') chip(`カーブ ×${throwInfo.curveMul.toFixed(2)}`, 'mint');
   }
 
   if (e.type === 'skip') {
@@ -369,7 +371,7 @@ function finishThrow() {
   const distance = distanceFromStart(sim, sim.lastContact || sim.pos);
   const judge = throwInfo.judge;
   game.streak = judge === 'excellent' ? game.streak + 1 : 0;
-  const s = scoreThrow({ skips, distance, judge, curveMul: skips > 0 ? throwInfo.curveMul : 1, rings: throwInfo.rings, streak: game.streak });
+  const s = scoreThrow({ skips, distance, judge, rings: throwInfo.rings, streak: game.streak });
   game.total += s.total;
   game.results.push({ skips, distance, judge, score: s.total });
   ui.score.textContent = fmt(game.total);
@@ -379,7 +381,6 @@ function finishThrow() {
   rows.push(row('飛距離', `${distance.toFixed(1)} m`, `+${s.distPts}`));
   if (throwInfo.rings) rows.push(row('光の輪', `${throwInfo.rings} 個`, `+${s.ringPts}`));
   rows.push(row('着水', judge ? JUDGE_LABEL[judge].replace('!', '') : '—', `×${s.judgeMul.toFixed(1)}`, true));
-  if (s.curveMul > 1) rows.push(row('カーブ', '', `×${s.curveMul.toFixed(2)}`, true));
   if (s.streakMul > 1) rows.push(row(`連続Excellent ${game.streak}`, '', `×${s.streakMul.toFixed(1)}`, true));
   rows.push(`<div class="row total"><span>得点</span><b>+${fmt(s.total)}</b></div>`);
   ui.resultRows.innerHTML = rows.join('');
@@ -473,6 +474,7 @@ function updateAim(dt) {
   tmpQ.y += bob;
   stoneRoot.position.copy(camera.localToWorld(tmpQ.clone()));
   stoneRoot.quaternion.copy(camera.quaternion);
+  stoneRoot.scale.setScalar(THREE.MathUtils.lerp(stoneRoot.scale.x, grab ? 1.1 : 1, 1 - Math.exp(-dt * 14)));
   // 溜まった回転は石の回る速さだけで見せる。回しすぎると石が暴れる
   const sp = grab ? grab.spinAt(performance.now()) : { charge: 0, dir: 1 };
   const over = Math.max(0, sp.charge - 1);
@@ -509,7 +511,7 @@ function updateFlight(dt) {
   const dist = distanceFromStart(sim);
   ui.distVal.textContent = dist.toFixed(1);
   // 今の投げの見込み点(跳ねるほど加速していく)
-  const mul = (JUDGE_MUL[throwInfo.judge] || 1) * (sim.skips > 0 ? throwInfo.curveMul : 1);
+  const mul = JUDGE_MUL[throwInfo.judge] || 1;
   const est = (skipPoints(sim.skips) + dist * 6 + throwInfo.rings * 250) * mul;
   ui.liveScore.textContent = `+${fmt(est)}`;
 }
@@ -551,6 +553,19 @@ function updateCamera(dt) {
   camera.position.lerp(camGoal, 1 - Math.exp(-dt * kPos));
   camLook.lerp(lookGoal, 1 - Math.exp(-dt * kLook));
   camera.lookAt(camLook);
+  // 投げた瞬間: 画角がぐっと広がり、カメラが小さく揺れてから落ち着く
+  if (kick > 0.002) {
+    const shake = Math.max(0, kick - 0.45) * 0.06;
+    camera.rotateZ((Math.random() - 0.5) * shake);
+    camera.rotateX((Math.random() - 0.5) * shake * 0.6);
+    kick *= Math.exp(-dt * 2.6);
+    camera.fov = baseFov + kick * 9;
+    camera.updateProjectionMatrix();
+  } else if (camera.fov !== baseFov) {
+    kick = 0;
+    camera.fov = baseFov;
+    camera.updateProjectionMatrix();
+  }
 }
 
 function frame() {

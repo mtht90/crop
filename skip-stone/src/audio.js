@@ -124,7 +124,9 @@ export function createAudio() {
       if (master) master.gain.setTargetAtTime(m ? 0 : 1, ctx.currentTime, 0.05);
     },
     throw(power) {
-      play(Math.random() < 0.5 ? 'throw' : 'throw2', { vol: 0.5 + power * 0.4, rate: 0.85 + power * 0.3 });
+      // 強くはじくほど、風切り音を重ねて鋭く・大きく
+      play('throw', { vol: 0.55 + power * 0.45, rate: 0.8 + power * 0.45 });
+      if (power > 0.35) play('throw2', { vol: power * 0.6, rate: 1.05 + power * 0.35, when: 0.03 });
     },
     /** index: 何回目の跳ねか / speed: 水平速度 / pan: 左右 */
     skip(index, speed, pan) {
