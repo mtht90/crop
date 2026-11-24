@@ -431,7 +431,7 @@ export class Match {
       this.char(pitcher).handWorld('r', release);
       release.y = Math.max(release.y, 0.9);
     }
-    this.path = new PitchPath({ kind: t.kind, level: t.level, speedKmh: velo, release, target, breakMul, extraBx, side: t.side ?? -1, seed: Math.random(), aimIsLine: this.camMode === 'fps', compensate: 0.72 });
+    this.path = new PitchPath({ kind: t.kind, level: t.level, speedKmh: velo, release, target, breakMul, extraBx, side: t.side ?? -1, seed: Math.random(), aimIsLine: this.camMode === 'fps', compensate: 0 });
     this.lastSpeed = Math.round(velo);
     this.lastPitchName = def.name;
 
@@ -645,9 +645,8 @@ export class Match {
       const L = s.batter.bats === 'L';
       const hbp = !swung && (L ? px > 0.55 : px < -0.55) && py > 1.0 && py < 1.7;
       // 捕手が届かない投球・ナックルのこぼれ → パスボールラインを割る
-      const wild = Math.abs(px) > 0.72 || py < 0.06 || py > 1.65;
-      const drop = path.params.kind === 'knuckle' ? 0.07 : 0.015;
-      const passBall = !hbp && (wild || Math.random() < drop);
+      // パスボールはなし（捕手は必ず捕る）
+      const passBall = false;
       if (passBall) {
         this.passBallT = 0;
         this.passBallFrom = this.cap.position.clone();
@@ -904,12 +903,12 @@ export class Match {
     this.hud.mirrorX = this.camMode === 'fps';
     if (this.camMode === 'fps') {
       // 投手の目線（マウンドから本塁を見る）
-      this.engine.plateHalfWidth = 2.1;
+      this.engine.plateHalfWidth = 1.45;
       this.engine.plateDist = 9.6;
       this.engine.fixedVFov = null;
       this.engine.fitFov();
       const pos = V(0, 1.5, POSITIONS.P.z + 0.3);
-      const look = V(0, 0.15, 0);
+      const look = V(0, 0.3, 0);
       cam.position.copy(pos);
       cam.lookAt(look);
       this.camPos.copy(pos);

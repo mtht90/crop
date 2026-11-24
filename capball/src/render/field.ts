@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { Assets } from '../core/assets';
-import { FENCE_H, fenceDist, MOUND_Z, OUT_ZONE, PASSBALL_Z } from '../game/geom';
+import { FENCE_H, fenceDist, MOUND_Z, OUT_ZONE } from '../game/geom';
 import { addOutline, toToon, toonGradient } from './toon';
 
 function canvasTex(w: number, h: number, draw: (c: CanvasRenderingContext2D) => void, repeat = 1) {
@@ -96,11 +96,7 @@ function groundTexture() {
     box(-0.8); box(0.8);
     const [cx0, cy0] = toPx(-0.5, 0.9), [cx1, cy1] = toPx(0.5, 2.3);
     c.beginPath(); c.moveTo(cx0, cy0); c.lineTo(cx0, cy1); c.lineTo(cx1, cy1); c.lineTo(cx1, cy0); c.stroke();
-    // パスボールライン
-    c.setLineDash([0.25 * k, 0.18 * k]);
-    const [px0, py0] = toPx(-3.2, PASSBALL_Z), [px1] = toPx(3.2, PASSBALL_Z);
-    c.beginPath(); c.moveTo(px0, py0); c.lineTo(px1, py0); c.stroke();
-    c.setLineDash([]);
+
   });
 }
 
