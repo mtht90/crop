@@ -1,21 +1,23 @@
 <title>非対称ホラーFPS 素材帳</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@600;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@600;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&family=Zen+Antique&family=Noto+Serif+JP:wght@500&family=IM+Fell+English&family=Cinzel:wght@600&family=Creepster&family=Grenze:wght@600&display=swap">
 <style>
-/* Layout: 療養院の備品台帳。左に索引(フィルタ)、右に台帳(カード)。セットは「処方箋」として下に並ぶ */
+/* Layout: 療養院の備品台帳。左に索引(フィルタ)、右に台帳(プレビュー付きカード)。セットは「処方箋」として上に置く */
 :root {
   --bg: #eceff0;
   --paper: #f7f9f9;
   --ink: #172124;
   --muted: #55666a;
   --line: #cdd6d8;
-  --accent: #2c7466;      /* 緑青 */
+  --accent: #2c7466;
   --accent-soft: #d5e7e2;
-  --wax: #9c3434;         /* 封蝋：注意 */
+  --wax: #9c3434;
   --wax-soft: #f1dcdc;
   --free: #3d6b2a;
   --free-soft: #dfead6;
+  --plate: #1b2427;
+  --plate-ink: #cfdad7;
   --display: "Shippori Mincho", "Hiragino Mincho ProN", "Yu Mincho", serif;
   --body: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
@@ -24,13 +26,13 @@
   :root:not([data-theme="light"]) {
     --bg: #111719; --paper: #182124; --ink: #dde5e3; --muted: #93a6a6; --line: #2b383b;
     --accent: #72c2ae; --accent-soft: #1d3832; --wax: #e08a85; --wax-soft: #3a2223;
-    --free: #a5d08c; --free-soft: #233320; color-scheme: dark;
+    --free: #a5d08c; --free-soft: #233320; --plate: #0c1112; --plate-ink: #b9c8c4; color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --bg: #111719; --paper: #182124; --ink: #dde5e3; --muted: #93a6a6; --line: #2b383b;
   --accent: #72c2ae; --accent-soft: #1d3832; --wax: #e08a85; --wax-soft: #3a2223;
-  --free: #a5d08c; --free-soft: #233320; color-scheme: dark;
+  --free: #a5d08c; --free-soft: #233320; --plate: #0c1112; --plate-ink: #b9c8c4; color-scheme: dark;
 }
 * { box-sizing: border-box; }
 body {
@@ -39,16 +41,17 @@ body {
 }
 a { color: var(--accent); text-underline-offset: 3px; }
 a:focus-visible, button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.wrap { max-width: 1180px; margin: 0 auto; padding-block: 40px 64px; display: grid; gap: 48px; }
+code { font-family: var(--mono); font-size: .9em; }
+.wrap { max-width: 1200px; margin: 0 auto; padding-block: 40px 64px; display: grid; gap: 52px; }
 
-header { display: grid; gap: 14px; max-width: 760px; }
+header { display: grid; gap: 14px; }
 .eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
 h1 { font-family: var(--display); font-weight: 800; font-size: clamp(30px, 5vw, 46px); line-height: 1.2; margin: 0; text-wrap: balance; }
 h2 { font-family: var(--display); font-weight: 800; font-size: 26px; margin: 0; text-wrap: balance; }
-h3 { font-family: var(--display); font-weight: 600; font-size: 19px; margin: 0; line-height: 1.4; }
-.lede { color: var(--muted); margin: 0; }
+h3 { font-family: var(--display); font-weight: 600; font-size: 18px; margin: 0; line-height: 1.4; }
+.lede { color: var(--muted); margin: 0; max-width: 62ch; }
 
-.rules { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.rules { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
 .rule { border: 1px solid var(--line); border-left: 3px solid var(--wax); background: var(--paper); padding: 14px 16px; border-radius: 4px; }
 .rule b { display: block; font-size: 14px; }
 .rule span { font-size: 13px; color: var(--muted); }
@@ -57,59 +60,73 @@ section { display: grid; gap: 18px; }
 .sec-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 16px; }
 .sec-head p { margin: 0; color: var(--muted); font-size: 14px; }
 
+/* Sets */
+.sets { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; }
+.set { background: var(--paper); border: 1px solid var(--line); border-radius: 4px; padding: 20px; display: grid; gap: 12px; align-content: start; min-width: 0; }
+.set.paid { background: transparent; border-style: dashed; }
+.set-mark { display: flex; align-items: center; gap: 12px; }
+.set-letter { font-family: var(--display); font-weight: 800; font-size: 34px; line-height: 1; color: var(--accent); min-width: 1.2em; }
+.set.paid .set-letter { color: var(--muted); }
+.set .tag { font-family: var(--mono); font-size: 11px; color: var(--muted); letter-spacing: .08em; }
+.strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+.strip img { width: 100%; aspect-ratio: 16/10; object-fit: cover; border-radius: 2px; display: block; background: var(--plate); }
+.rx { display: grid; grid-template-columns: 5.5em 1fr; gap: 4px 12px; font-size: 13.5px; margin: 0; }
+.rx dt { color: var(--muted); }
+.rx dd { margin: 0; }
+.cost { font-family: var(--mono); font-size: 13px; border-top: 1px dashed var(--line); padding-top: 10px; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.cost b { color: var(--free); font-weight: 500; }
+.set.paid .cost b { color: var(--ink); }
+.set .why { font-size: 13.5px; margin: 0; }
+.btn { justify-self: start; font: 500 13px var(--body); background: transparent; color: var(--accent); border: 1px solid var(--accent); border-radius: 3px; padding: 7px 12px; cursor: pointer; }
+.btn:hover { background: var(--accent-soft); }
+
 /* Ledger */
 .ledger { display: grid; grid-template-columns: 220px 1fr; gap: 28px; align-items: start; }
 .index { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 12px); display: grid; gap: 18px; }
 .index fieldset { border: 0; padding: 0; margin: 0; display: grid; gap: 6px; }
 .index legend { font-family: var(--mono); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.chip {
-  font: 500 13px/1 var(--body); color: var(--ink); background: transparent; border: 1px solid var(--line);
-  padding: 7px 11px; border-radius: 999px; cursor: pointer;
-}
+.chip { font: 500 13px/1 var(--body); color: var(--ink); background: transparent; border: 1px solid var(--line); padding: 7px 11px; border-radius: 999px; cursor: pointer; }
 .chip:hover { border-color: var(--accent); }
 .chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--paper); }
 .search { width: 100%; font: 14px var(--body); padding: 8px 10px; border: 1px solid var(--line); border-radius: 4px; background: var(--paper); color: var(--ink); }
-.toggle { display: flex; gap: 8px; align-items: center; font-size: 14px; cursor: pointer; }
 .count { font-family: var(--mono); font-size: 12px; color: var(--muted); }
 
-.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 14px; min-width: 0; }
-.card { background: var(--paper); border: 1px solid var(--line); border-radius: 4px; padding: 16px; display: grid; gap: 10px; align-content: start; min-width: 0; }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 14px; min-width: 0; }
+.card { background: var(--paper); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; display: grid; grid-template-rows: auto 1fr; min-width: 0; }
+.card.paid { opacity: .92; }
+.pv { position: relative; aspect-ratio: 16/9; background: var(--plate); color: var(--plate-ink); overflow: hidden; }
+.pv img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pv button.zoom { all: unset; cursor: zoom-in; display: block; width: 100%; height: 100%; }
+.pv button.zoom:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.pv .badge { position: absolute; left: 8px; top: 8px; font: 500 11px/1 var(--mono); padding: 5px 7px; border-radius: 2px; background: var(--free-soft); color: var(--free); }
+.pv .badge.paid { background: var(--paper); color: var(--ink); }
+.pv.font { display: grid; place-items: center; padding: 12px; text-align: center; font-size: 30px; line-height: 1.25; }
+.pv.icons { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; padding: 16px 18px; align-content: center; }
+.pv.icons svg { width: 100%; height: auto; }
+.pv.plate { display: grid; place-items: center; padding: 16px; text-align: center; }
+.plate-inner { display: grid; gap: 6px; justify-items: center; }
+.plate-kind { font: 500 11px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; opacity: .7; }
+.plate-name { font-family: var(--display); font-size: 22px; font-weight: 800; }
+.wave { display: flex; gap: 3px; align-items: center; height: 34px; }
+.wave i { display: block; width: 3px; background: currentColor; opacity: .55; border-radius: 1px; }
+.body { padding: 14px 16px 16px; display: grid; gap: 9px; align-content: start; }
 .card-top { display: flex; justify-content: space-between; gap: 10px; align-items: start; }
-.cat { font-family: var(--mono); font-size: 11px; letter-spacing: .1em; color: var(--muted); }
+.cat { font-family: var(--mono); font-size: 11px; letter-spacing: .08em; color: var(--muted); }
 .card h3 a { color: var(--ink); text-decoration: none; }
 .card h3 a:hover { color: var(--accent); text-decoration: underline; }
-.meta { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; font-size: 13px; margin: 0; }
-.meta dt { color: var(--muted); }
-.meta dd { margin: 0; font-variant-numeric: tabular-nums; }
 .note { font-size: 13px; margin: 0; }
 .warn { font-size: 12.5px; color: var(--wax); background: var(--wax-soft); padding: 6px 9px; border-radius: 3px; margin: 0; }
-.stamps { display: flex; flex-wrap: wrap; gap: 5px; }
-.lic {
-  font: 500 11px/1 var(--mono); letter-spacing: .06em; padding: 4px 6px; border: 1.5px solid var(--accent); color: var(--accent);
-  border-radius: 2px; transform: rotate(-2deg); white-space: nowrap;
-}
+.stamps { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+.lic { font: 500 11px/1 var(--mono); letter-spacing: .06em; padding: 4px 6px; border: 1.5px solid var(--accent); color: var(--accent); border-radius: 2px; transform: rotate(-2deg); white-space: nowrap; }
 .price { font: 500 12px/1 var(--mono); padding: 4px 7px; border-radius: 2px; white-space: nowrap; background: var(--accent-soft); color: var(--ink); }
 .price.free { background: var(--free-soft); color: var(--free); }
-.setdots { display: flex; gap: 4px; }
-.setdot { font: 500 11px/1 var(--mono); width: 20px; height: 20px; display: grid; place-items: center; border-radius: 50%; border: 1px solid var(--line); color: var(--muted); }
+.style { font-size: 12px; color: var(--muted); }
+.setdots { display: flex; gap: 4px; flex-shrink: 0; }
+.setdot { font: 500 10px/1 var(--mono); min-width: 22px; height: 20px; padding: 0 4px; display: grid; place-items: center; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
 .empty { color: var(--muted); padding: 24px; border: 1px dashed var(--line); border-radius: 4px; }
 
-/* Prescriptions (sets) */
-.sets { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
-.set { background: var(--paper); border: 1px solid var(--line); border-radius: 4px; padding: 20px; display: grid; gap: 12px; align-content: start; }
-.set-mark { display: flex; align-items: center; gap: 12px; }
-.set-letter { font-family: var(--display); font-weight: 800; font-size: 34px; line-height: 1; color: var(--accent); }
-.set .tag { font-family: var(--mono); font-size: 11px; color: var(--muted); letter-spacing: .08em; }
-.rx { display: grid; grid-template-columns: 5.5em 1fr; gap: 4px 12px; font-size: 13.5px; margin: 0; }
-.rx dt { color: var(--muted); }
-.rx dd { margin: 0; }
-.cost { font-family: var(--mono); font-size: 13px; border-top: 1px dashed var(--line); padding-top: 10px; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
-.set .why { font-size: 13.5px; margin: 0; }
-.btn { justify-self: start; font: 500 13px var(--body); background: transparent; color: var(--accent); border: 1px solid var(--accent); border-radius: 3px; padding: 7px 12px; cursor: pointer; }
-.btn:hover { background: var(--accent-soft); }
-
-.pitfalls { display: grid; gap: 0; border-top: 1px solid var(--line); }
+.pitfalls { display: grid; border-top: 1px solid var(--line); }
 .pit { display: grid; grid-template-columns: minmax(180px, 280px) 1fr; gap: 6px 24px; padding: 14px 0; border-bottom: 1px solid var(--line); }
 .pit b { font-size: 14px; }
 .pit span { font-size: 14px; color: var(--muted); }
@@ -123,34 +140,53 @@ td:first-child { white-space: nowrap; }
 footer { font-size: 12.5px; color: var(--muted); display: grid; gap: 8px; border-top: 1px solid var(--line); padding-top: 18px; }
 footer ul { margin: 0; padding-left: 18px; columns: 2 280px; }
 
+dialog { border: 0; padding: 0; background: transparent; max-width: min(1100px, 94vw); }
+dialog::backdrop { background: rgb(0 0 0 / .78); }
+dialog img { display: block; max-width: 100%; max-height: 82vh; border-radius: 3px; }
+dialog p { color: #e7eeec; font-size: 14px; margin: 8px 0 0; display: flex; justify-content: space-between; gap: 12px; }
+dialog button { font: 500 13px var(--body); background: #e7eeec; color: #172124; border: 0; border-radius: 3px; padding: 6px 12px; cursor: pointer; }
+
 @media (max-width: 780px) {
   .ledger { grid-template-columns: 1fr; }
   .index { position: static; }
   .pit { grid-template-columns: 1fr; }
+  .sets { grid-template-columns: 1fr; }
 }
-@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; scroll-behavior: auto !important; } }
 </style>
 
 <div class="wrap">
   <header>
-    <div class="eyebrow">Asset ledger · CC0を除く · 2026-11 調べ</div>
+    <div class="eyebrow">Asset ledger · 無料優先 · CC0を除く · 2026-11 調べ</div>
     <h1>非対称ホラーFPS 素材帳</h1>
-    <p class="lede">ハンター1人とサバイバー4人で対戦する、一人称のホラーゲーム用の素材を集めました。Unity Asset Store、Synty、Fab、Mixamo、CC-BY、OFLの素材から選んでいます。価格は検索時点のものです。「要確認」と書いたものは買う前にストアで確かめてください。</p>
+    <p class="lede">ハンター1人とサバイバー4人で対戦する、一人称のホラーゲーム用の素材です。<b>無料の素材を先に並べています。</b>有料の素材は、試作が面白かったあとに見た目を差し替えるための候補です。画像を押すと大きく見られます。</p>
     <div class="rules" role="list">
-      <div class="rule" role="listitem"><b>素材はGitに入れない</b><span>公開リポジトリに入れた時点で再配布になります。<code>Assets/ThirdParty/</code> に置き、.gitignoreに入れてください。</span></div>
-      <div class="rule" role="listitem"><b>CC-BYはクレジット画面に書く</b><span>作者・作品名・ライセンス・リンクを書きます。CC-BY-NC（商用不可）とND（改変不可）は使いません。</span></div>
-      <div class="rule" role="listitem"><b>エンジンはUnity 6（URP）</b><span>Three.jsのWeb版は、モデルのファイルがそのまま配信されるので有料素材と相性が悪いです。</span></div>
-      <div class="rule" role="listitem"><b>世界観はオリジナルで</b><span>ジャンルを参考にするのは問題ありません。キャラクター・マップ名・UIのデザインはまねしないでください。</span></div>
+      <div class="rule" role="listitem"><b>素材はGitに入れない</b><span>無料でも、Asset Store・Mixamo・Sonnissの素材は公開リポジトリに入れると再配布になります。<code>Assets/ThirdParty/</code> に置いて.gitignoreに入れます。</span></div>
+      <div class="rule" role="listitem"><b>クレジットが要る素材がある</b><span>CC-BY（Freesound、Kevin MacLeod、game-icons.net、Sketchfab）と、Analog Horror Sound Packは作者名の表記が必要です。</span></div>
+      <div class="rule" role="listitem"><b>NC・NDは使わない</b><span>CC-BY-NC（商用不可）とCC-BY-ND（改変不可）は、検索で外してください。</span></div>
+      <div class="rule" role="listitem"><b>エンジンはUnity 6（URP）</b><span>Asset Storeの無料素材をいちばん無理なく使えます。世界観・キャラ・UIはオリジナルで作ってください。</span></div>
     </div>
   </header>
+
+  <section aria-labelledby="sets-h">
+    <div class="sec-head">
+      <h2 id="sets-h">組み合わせセット</h2>
+      <p>実線は$0で作れるセット、点線はあとで有料素材に差し替えるときのセットです。画風が混ざらないように選んでいます。</p>
+    </div>
+    <div class="sets" id="sets"></div>
+  </section>
 
   <section aria-labelledby="ledger-h">
     <div class="sec-head">
       <h2 id="ledger-h">台帳</h2>
-      <p>左の索引で絞り込みます。丸の中の文字は、その素材が入っているセットです。</p>
+      <p>はじめは無料の素材だけを表示しています。右上の印は、その素材が入っているセットです。</p>
     </div>
     <div class="ledger">
       <div class="index">
+        <fieldset>
+          <legend>価格</legend>
+          <div class="chips" id="price-chips"></div>
+        </fieldset>
         <fieldset>
           <legend>分類</legend>
           <div class="chips" id="cat-chips"></div>
@@ -160,8 +196,7 @@ footer ul { margin: 0; padding-left: 18px; columns: 2 280px; }
           <div class="chips" id="set-chips"></div>
         </fieldset>
         <fieldset>
-          <legend>条件</legend>
-          <label class="toggle" for="free-only"><input type="checkbox" id="free-only"> 無料だけ</label>
+          <legend>探す</legend>
           <input class="search" id="q" type="search" placeholder="名前・メモで探す" aria-label="名前・メモで探す">
         </fieldset>
         <div class="count" id="count" aria-live="polite"></div>
@@ -170,24 +205,16 @@ footer ul { margin: 0; padding-left: 18px; columns: 2 280px; }
     </div>
   </section>
 
-  <section aria-labelledby="sets-h">
-    <div class="sec-head">
-      <h2 id="sets-h">組み合わせセット</h2>
-      <p>画風をそろえることがいちばん大事です。ローポリとリアル系を同じマップに混ぜないでください。</p>
-    </div>
-    <div class="sets" id="sets"></div>
-  </section>
-
   <section aria-labelledby="pit-h">
     <div class="sec-head"><h2 id="pit-h">組み合わせるときの注意</h2></div>
     <div class="pitfalls">
-      <div class="pit"><b>Syntyのキャラ × Mixamo</b><span>Synty側をHumanoidリグに設定すれば、Mixamoのアニメをそのまま流用できます。Syntyのキャラにはアニメが付いていません。</span></div>
-      <div class="pit"><b>Synty HUD × Synty Menus</b><span>同じINTERFACEシリーズなので、見た目が最初からそろいます。HUDは試合中の画面、Menusはロビー・設定・結果画面に使います。どちらもUGUIとTextMeshProで作られています。</span></div>
-      <div class="pit"><b>Unity Asset Storeで買ったSynty</b><span>Unity用のファイルしか入っていません。Unrealでも使うかもしれないなら、Synty Storeで直接買ってください。</span></div>
-      <div class="pit"><b>Megascans × Synty</b><span>フォトスキャンとローポリは画風が合わないので、セットAには入れません。</span></div>
-      <div class="pit"><b>テンプレート × UHFPS</b><span>どちらもプレイヤーの操作を持っていて、両方入れるとぶつかります。どちらか片方にしてください。</span></div>
-      <div class="pit"><b>UIキットのフォント</b><span>UIキットに入っているフォントは、別にライセンスがあることがあります。日本語が出ないものも多いので、日本語にはZen AntiqueかShippori Minchoを別に入れてください。</span></div>
-      <div class="pit"><b>非公式の「無料ダウンロード」</b><span>有料素材を無料で配っているサイトのコピーは、不正な再配布です。商用でなくても使わないでください。</span></div>
+      <div class="pit"><b>Mixamo × 無料のゾンビアニメ</b><span>どちらもHumanoidリグなので、Zombie Monster Animations FREEの動きをMixamoのキャラに流用できます。ハンターの「重い歩き方」はこれで作れます。</span></div>
+      <div class="pit"><b>POLYGON Starter Pack とUnity 6</b><span>Unity 6はURPが標準なので、そのままだとピンク色になります。マテリアルをURPに変換してください。ホラーの小物はほぼ入っていないので、霧と暗い照明で雰囲気を作ります。</span></div>
+      <div class="pit"><b>無料の病院 × 無料の療養院</b><span>どちらも写実寄りなので、同じマップに混ぜても大きな違和感はありません。部屋の数が少ないので、ProBuilderで廊下をつないで広げます。</span></div>
+      <div class="pit"><b>Megascans × ローポリ</b><span>フォトスキャンとローポリは画風が合いません。セットF2（ローポリ）には入れないでください。</span></div>
+      <div class="pit"><b>Starter Assets × Multiplayer FPS Template</b><span>どちらもプレイヤーの操作を持っています。両方入れるとぶつかるので、片方だけにします。同期まで欲しいならテンプレート、自分で作るならStarter Assets＋Mirrorです。</span></div>
+      <div class="pit"><b>UIは自作＋アイコンだけ借りる</b><span>無料でホラーに合うUIキットはほぼ見つかりませんでした。枠と文字はTextMeshProで作り、アイコンはgame-icons.net、動きはDOTweenで付けます。</span></div>
+      <div class="pit"><b>非公式の「無料ダウンロード」</b><span>有料素材を無料で配っているサイトのコピーは、不正な再配布です。使わないでください。</span></div>
     </div>
   </section>
 
@@ -197,250 +224,296 @@ footer ul { margin: 0; padding-left: 18px; columns: 2 280px; }
       <table>
         <thead><tr><th>略号</th><th>正式名</th><th>ゲームに組み込む</th><th>してはいけないこと</th></tr></thead>
         <tbody>
-          <tr><td><span class="lic">UAS</span></td><td>Unity Asset Store Standard EULA</td><td>OK（1席に1ライセンス）</td><td>生ファイルの再配布、AIの学習</td></tr>
-          <tr><td><span class="lic">SYN</span></td><td>Synty EULA</td><td>OK（1本で5席）</td><td>チームの外にソースファイルを渡す</td></tr>
-          <tr><td><span class="lic">FAB</span></td><td>Fab Standard License</td><td>OK（どのエンジンでも）</td><td>生ファイルの再配布。年商が多い場合はProfessionalが必要</td></tr>
+          <tr><td><span class="lic">UAS</span></td><td>Unity Asset Store Standard EULA（無料の素材も同じ）</td><td>OK（1席に1ライセンス）</td><td>生ファイルの再配布、AIの学習</td></tr>
           <tr><td><span class="lic">MIX</span></td><td>Adobe Mixamo規約</td><td>OK（ロイヤリティ不要）</td><td>FBXのまま配る、素材パックとして売る</td></tr>
           <tr><td><span class="lic">SONNISS</span></td><td>Sonniss GDCバンドル規約</td><td>OK（クレジット不要）</td><td>音をそのまま再配布する、AIの学習</td></tr>
+          <tr><td><span class="lic">FAB</span></td><td>Fab Standard License</td><td>OK（どのエンジンでも）</td><td>生ファイルの再配布</td></tr>
           <tr><td><span class="lic">BY</span></td><td>Creative Commons 表示（3.0 / 4.0）</td><td>OK</td><td>クレジットを書かないこと</td></tr>
           <tr><td><span class="lic">OFL</span></td><td>SIL Open Font License</td><td>OK</td><td>フォントだけを単体で売る</td></tr>
           <tr><td><span class="lic">MIT</span></td><td>MIT License</td><td>OK</td><td>著作権表示を消す</td></tr>
+          <tr><td><span class="lic">SYN</span></td><td>Synty EULA（有料）</td><td>OK（1本で5席）</td><td>チームの外にソースファイルを渡す</td></tr>
         </tbody>
       </table>
     </div>
   </section>
 
   <footer>
+    <div>プレビュー画像は各ストアの紹介画像です。権利は各作者にあります。アイコンは Lorc 作（<a href="https://game-icons.net">game-icons.net</a>、CC BY 3.0）。</div>
     <div>出典（ライセンスの確認に使ったページ）</div>
     <ul>
       <li><a href="https://support.unity.com/hc/en-us/articles/34387186019988-Can-I-use-assets-from-the-Asset-Store-with-other-engines">Unity Support：Asset Storeの素材を他のエンジンで使う</a></li>
       <li><a href="https://assetstore.unity.com/browse/eula-faq">Asset Store EULA FAQ</a></li>
-      <li><a href="https://syntystore.com/community/faq">Synty FAQ</a> / <a href="https://syntystore.com/pages/licences-overview">Synty Licences</a></li>
-      <li><a href="https://www.unrealengine.com/blog/fab-epics-new-unified-content-marketplace-launches-today">Fab 公開時の告知（Epic）</a></li>
-      <li><a href="https://creativebloq.com/news/the-worlds-biggest-library-of-scanned-assets-for-3d-artists-is-now-free-and-it-seems-that-this-time-its-for-good">Megascansの無料化（Creative Bloq）</a></li>
+      <li><a href="https://unity.com/blog/games/say-hello-to-the-new-starter-asset-packages">Unity Starter Assets の告知</a></li>
+      <li><a href="https://syntystore.com/products/polygon-starter-pack">Synty POLYGON Starter Pack</a></li>
       <li><a href="https://community.adobe.com/t5/mixamo-discussions/mixamo-faq-licensing-royalties-ownership-eula-and-tos/td-p/13234775">Mixamo FAQ（Adobe Community）</a></li>
       <li><a href="https://bedroomproducersblog.com/2026/03/16/sonniss-gdc-2026-bundle/">Sonniss GDC 2026 バンドル</a></li>
-      <li><a href="https://syntystore.com/products/interface-dark-fantasy-hud">Synty INTERFACE Dark Fantasy HUD</a></li>
+      <li><a href="https://creativebloq.com/news/the-worlds-biggest-library-of-scanned-assets-for-3d-artists-is-now-free-and-it-seems-that-this-time-its-for-good">Megascansの無料化（Creative Bloq）</a></li>
+      <li><a href="https://syntystore.com/community/faq">Synty FAQ</a></li>
     </ul>
-    <div>MixamoとSonnissのライセンスの細かい読み方には、フォーラムの説明をもとにした部分があります。出す前に公式の規約を読んでください。</div>
+    <div>価格は2026年11月に各ストアのページで確かめたものです。無料の素材があとで有料になることもあるので、入手するときにもう一度確かめてください。</div>
   </footer>
 </div>
 
+<dialog id="zoom" aria-label="プレビュー">
+  <img id="zoom-img" alt="">
+  <p><span id="zoom-cap"></span><button type="button" id="zoom-close">閉じる</button></p>
+</dialog>
+
 <script>
-const CATS = [
-  ["all", "すべて"], ["map", "マップ"], ["char", "キャラ・アニメ"], ["sys", "仕組み"],
-  ["ui", "UI"], ["sound", "サウンド"], ["font", "フォント"]
-];
+const ICONS = {"broken-skull": "<svg aria-hidden=\"true\" xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 512 512\"><path fill=\"currentColor\" d=\"m206.875 27.03-3 2.064c-14.3 9.87-22.835 28.048-25.344 52.375-19.293 11.407-37.976 13.766-50.843 10.905-4.06 4.988-6.62 10.712-8.937 16.938 20.462 6.71 47.52 2.697 73.688-14.344l3.906-2.532.312-4.657c1.392-21.138 7.59-34.313 15.25-41.186l22.344 3.093c-1.668 18.234-1.372 38.198 7.53 60.376l2.657 6.562 7.032-.78c23.817-2.638 31.686-3.652 54.81.405l7.533 1.313 2.78-7.126c3.936-10.084 7.778-18.638 12.376-25.968 6.878 6.72 15.8 12.09 25.31 16.093 11.845 4.985 24.8 8.13 36.595 5.093-3.235-5.86-7.044-12.416-10.97-18-5.35-.25-11.948-1.607-18.374-4.312-11.263-4.742-21.638-13.227-24.686-18.75L330.47 53.03l-8.783 9.876c-8.824 9.927-14.54 21.44-19.687 33.907-16.88-2.398-28.733-2-45.188-.282-6.25-19.213-5.357-36.077-3.156-53.75l1.125-9.124-9.124-1.28-35.187-4.845-3.595-.5zm171.094 6.845L367.686 49.78c17.986 12.885 30.035 27.273 40.375 47.814l3.282 6.53-4.28 5.94c-6.31 8.73-11.433 19.695-15.908 32.374 4.09 11.243 6.268 24.716 6.28 35.968l.033 14.188-14.033-2.28L354 185.5l-26.594 29.188-11.97 13.125-7.78-15.938-16.594-34.03c-10.396 12.86-19.287 23.182-30.593 30.936-15.34 10.52-34.276 14.385-61 12.564l-8.126-.563-2.5-7.75L177.78 179l-40.624 7.844-11.937 2.344-2.19-12s-2.258-12.142-6.31-25.532c-2.028-6.695-4.507-13.658-7.157-19.156-2.65-5.498-5.83-9.36-6.75-10.03l-6.47-4.72 1.876-7.813c4.586-19.172 17.198-36 37.218-50.374l-10.72-19.813C56.08 95.554 25.5 197.82 24.095 296.344c43.835 22.98 73.8 47.83 92.28 74.844 17.738 25.923 24.46 53.747 23.407 81.562 11.497 6.293 22.977 11.934 35.69 15.344 21.81 5.85 45.39 8.69 69.78 8.687 24.396-.003 49.41-2.844 72.375-8.717 18.33-4.69 35.105-11.838 50.656-20.47 1.95-55.263 35.304-110.082 118.814-151.468-1.55-97.394-34.025-206.568-109.125-262.25zM202.436 250.063c6.002 3.154 11.246 7.896 14.625 13.75 12.22 21.162-.962 51.59-29.218 67.906-28.256 16.313-61.282 12.128-73.5-9.033-6.974-12.077-5.45-27.048 2.156-40.812 12.835-.22 27.956-2.805 44.25-9.03 15.522-5.93 30.078-14.063 41.688-22.783zm106.22 0c11.61 8.72 26.164 16.852 41.687 22.78 16.294 6.227 31.415 8.812 44.25 9.032 7.607 13.764 9.13 28.735 2.156 40.813-12.218 21.16-45.213 25.346-73.47 9.03-28.255-16.314-41.436-46.743-29.217-67.906 3.38-5.853 8.592-10.595 14.593-13.75zm-53.063 75.625c18.53 36.128 33.233 72.246 40.53 108.375-27.02-8.244-54.042-9.343-81.062 0 9.866-36.13 21.727-72.247 40.532-108.375z\"/></svg>", "candle-light": "<svg aria-hidden=\"true\" xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 512 512\"><path fill=\"currentColor\" d=\"M258.75 23.563c-27.913 0-93.875 87.237-93.875 158.593 0 59.35 29.018 79.715 68.625 94.875-15.47-15.607-26.03-43.75-26.03-76.186 0-49.232 31.292-89.188 53.25-89.188 21.132 0 53.25 39.955 53.25 89.188 0 30.39-9.41 56.833-23.283 72.937 36.097-18.016 61.938-35.72 61.938-91.624 0-71.356-66.786-158.594-93.875-158.594zm6.72 175.906-18.5 2.686c5.764 39.366 6.665 69.034 4.25 97.875-24.957-.97-49.677-5.972-73.69-14.75v95.47c-3.295 25.668-22.434 30.526-22.093 53.47.29 19.547 14.998 26.003 22.094 17.624v36.28h164.69v-88.343c8.615 10.89 27.17 3.06 27.53-21.31.432-29.117-24.597-34.605-27.53-68.814V285.28c-23.916 8.88-48.17 13.702-72.314 14.72 2.337-29.752 1.383-60.792-4.437-100.53z\"/></svg>", "chained-heart": "<svg aria-hidden=\"true\" xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 512 512\"><path fill=\"currentColor\" d=\"m257.08 11.29-9.232 1.437-62.868 9.765 3.586 23.08a221.089 221.089 0 0 0-37.416 16.303l-14.51-18.03-7.28 5.86-49.56 39.89 14.163 17.594A217.583 217.583 0 0 0 69.39 140.3l-20.78-8.046-3.374 8.715-22.976 59.325 20.26 7.846a217.497 217.497 0 0 0-4.805 41.47l-21.02 3.267 11.2 72.1 20.634-3.206a221.072 221.072 0 0 0 16.74 38.474l-16.165 13.012 45.75 56.84 15.858-12.764a217.626 217.626 0 0 0 34.183 25.104l-7.27 18.773 68.042 26.347 7.266-18.76a217.733 217.733 0 0 0 42.074 4.482l3.115 20.05 72.1-11.2-3.168-20.386a221.037 221.037 0 0 0 38.433-17.205l13.075 16.24 56.84-45.747-13.315-16.543a217.598 217.598 0 0 0 24.394-33.906l20.11 7.787 26.35-68.038-20.63-7.988a217.457 217.457 0 0 0 4.133-41.05l22.29-3.462-1.434-9.234-9.765-62.866-22.85 3.55a220.908 220.908 0 0 0-16.746-37.378l18.103-14.57-5.86-7.28-39.89-49.56-18.28 14.715a217.594 217.594 0 0 0-32.835-23.868l8.562-22.112-8.713-3.375L309.7 16.88 301.136 39a217.618 217.618 0 0 0-39.95-4.45c-.166-.004-.33-.002-.494-.005l-3.61-23.252zm-15.598 21.337 3.108 20.008-35.164 5.463-3.11-20.006 35.166-5.465zm78.897 8.43 33.184 12.85-7.312 18.882-33.184-12.853 7.31-18.88zM263.6 53.27c10.2.34 20.456 1.458 30.687 3.406l-5.4 13.94 68.042 26.35 5.402-13.952a199.386 199.386 0 0 1 24.91 18.08l-11.842 9.53 45.75 56.84 12.098-9.735a201.448 201.448 0 0 1 12.787 28.45l-15.443 2.398 11.2 72.1 15.98-2.483a199.283 199.283 0 0 1-3.174 31.29l-15.395-5.964-3.373 8.714-22.977 59.327 15.975 6.188a199.65 199.65 0 0 1-18.633 25.97l-10.926-13.575-7.278 5.86-49.56 39.89 11.24 13.964a201.661 201.661 0 0 1-29.514 13.24l-2.78-17.908-9.235 1.433-62.866 9.766 2.828 18.202a199.35 199.35 0 0 1-32.328-3.47l6.7-17.3-8.713-3.375-59.327-22.974-6.695 17.29a199.421 199.421 0 0 1-26.3-19.286l14.302-11.512-5.86-7.28-39.888-49.56-14.02 11.285a201.49 201.49 0 0 1-12.826-29.53l17.688-2.75-1.436-9.232-9.765-62.867-17.182 2.67a199.388 199.388 0 0 1 3.715-31.723l15.826 6.128 26.35-68.04-15.258-5.91a199.348 199.348 0 0 1 18.726-25.24l10.118 12.57 56.84-45.75-9.778-12.147a201.564 201.564 0 0 1 28.465-12.387l2.366 15.234 72.1-11.202-2.324-14.96zM133.8 70.124l12.694 15.772-27.723 22.312-12.694-15.77L133.8 70.122zm283.653 30.648 22.313 27.722-15.774 12.696-22.312-27.72 15.773-12.697zm-84.244 42a70.61 70.61 0 0 0-5.76.187c-23.033 1.7-45.933 15.003-61.29 44.006l-7.906 14.933-8.445-14.636c-20.227-35.054-56.5-47.824-87.093-41.81-30.592 6.012-55.328 29.383-53.947 72.85 1.278 40.24 29.05 67.447 63.59 97.54 30.045 26.176 64.672 53.784 85.763 93.478 22.093-39.507 57.856-65.95 88.133-91.453 17.386-14.644 33.017-28.982 43.86-44.736 10.846-15.755 17.13-32.66 16.456-54.243-1.262-40.46-26.58-66.478-56.316-73.916a73.02 73.02 0 0 0-17.047-2.2zM59.286 156.433l18.88 7.31-12.85 33.186-18.88-7.31 12.85-33.186zm412.65 44.636 5.463 35.164-20.01 3.11-5.462-35.164 20.01-3.11zm-413.9 64.3 5.465 35.165-20.006 3.108-5.465-35.163 20.007-3.11zm391.846 42.33 18.88 7.312-12.85 33.185-18.88-7.312 12.85-33.186zM91.156 363.4l22.313 27.723-15.775 12.695-22.312-27.722L91.156 363.4zm305.274 33.02 12.695 15.77-27.723 22.316-12.695-15.774 27.723-22.312zm-227.315 35.23 33.186 12.852-7.31 18.88-33.185-12.85 7.31-18.882zm136.662 14.873 3.11 20.01-35.164 5.463-3.11-20.008 35.164-5.465z\"/></svg>", "gears": "<svg aria-hidden=\"true\" xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 512 512\"><path fill=\"currentColor\" d=\"M179.625 22.313 163.22 58.937a87.676 87.676 0 0 0-9.72-.624c-10.577-.066-20.857 1.808-30.47 5.28L99.78 31.032 55.75 63.188l24.063 33.657a87.946 87.946 0 0 0-14.5 35.75l-42.72 4.687 5.345 54.25 45.468-5A89.896 89.896 0 0 0 94 213.502l-19.406 43.375 49.375 22.094 19.5-43.564c11.656 1.242 23.08.128 33.75-3l28.124 38.53 31.72-23.186 11.655 20.156A209.02 209.02 0 0 0 209.624 307l-49.22-28.344-25.718 46.72 48.125 27.937a206.71 206.71 0 0 0-14.343 53.812H112.5v53.72h56.22a204.365 204.365 0 0 0 8.03 35.06h169.312c-23.915-10.758-40.562-34.788-40.562-62.717 0-37.964 30.754-68.75 68.72-68.75 37.963 0 68.75 30.786 68.75 68.75 0 27.93-16.67 51.96-40.595 62.718h91.5V200.375l-11.688-6.406L454.594 242A204.25 204.25 0 0 0 401 227.28v-55.53h-53.72v55.47c-18.303 2.377-35.83 7.183-52.31 14.03l-27.126-47.28-36 20.25-9.25-12.97a88.715 88.715 0 0 0 15.5-31.72l44.437-4.843-5.342-54.25-42.25 4.157A89.013 89.013 0 0 0 212.376 81.5L229 44.406l-49.375-22.093zm-27.344 84.25c23.3-.24 42.94 17.827 44.376 41.343 1.48 24.275-17.004 45.144-41.28 46.625-24.278 1.483-45.145-16.974-46.626-41.25-1.48-24.274 16.973-45.142 41.25-46.624.76-.046 1.53-.086 2.28-.094z\"/></svg>", "hood": "<svg aria-hidden=\"true\" xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 512 512\"><path fill=\"currentColor\" d=\"M257.375 32.03C139.957 87.197 42.343 247.886 17.5 367.75c71.742 0 124.22 22.845 162.094 63.03l10.47-11.436c-28.06-28.873-64.935-52.446-113.564-75.906 26.142-65.033 66.028-163.458 116.72-169.188 19.835-2.243 41.05 9.735 64.155 43.438 72.33-120.27 141.014 38.54 180.875 125.75-47.687 25.854-84.5 49.463-112.97 78.718l9.25 10.406c37.335-39.758 89.657-64.812 162.72-64.812C467.784 249.384 377.24 90.37 257.375 32.03zm-79.72 243.314c-15.3-.083-26.405 6.436-26.405 16.656 0 12.58 16.834 26.038 37.594 30.063 20.76 4.024 37.594-2.92 37.594-15.5s-16.835-26.038-37.594-30.063c-3.893-.755-7.657-1.137-11.188-1.156zm156.345 0c-3.53.02-7.295.4-11.188 1.156-20.76 4.025-37.593 17.483-37.593 30.063 0 12.58 16.833 19.524 37.592 15.5 20.76-4.025 37.594-17.484 37.594-30.063 0-10.22-11.105-16.74-26.406-16.656z\"/></svg>", "key": "<svg aria-hidden=\"true\" xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 512 512\"><path fill=\"currentColor\" d=\"m356.5 16.375-174.906 255.22 1.53 1.06 31.97 22.314 175.062-255.5L356.5 16.374zm90.063 62.22c-20.16 29.418-44.122 23.1-68.25 8.905l-48.688 72.875c21.278 16.55 36.46 35.645 18.594 61.72l42.967 29.468 28.907-42.157-14.72-9.156a21.36 21.36 0 0 1-10.78 2.906c-11.85 0-21.47-9.62-21.47-21.47 0-11.847 9.62-21.436 21.47-21.436s21.437 9.59 21.437 21.438c0 .195-.025.4-.03.593l15.906 9.907 17.938-26.218-37.688-23.5 11.03-17.72 14.94 9.313 10.093-16.188 24.25 15.094 17.092-24.94-43-29.436zM141.22 268.624c-.31.01-.628.023-.94.063a14.12 14.12 0 0 0-2.53.562c-3.51 1.11-7.4 4.066-10.125 7.938-2.724 3.87-4.16 8.487-4 12.125.16 3.637 1.257 6.338 5.25 9.125l76.594 53.468c3.283 2.293 5.727 2.35 9.124 1.156 3.396-1.192 7.323-4.26 10.125-8.218 2.8-3.96 4.352-8.66 4.31-12.188-.04-3.53-.89-5.787-4.374-8.22L148.03 270.97c-2.546-1.78-4.657-2.42-6.81-2.345zM84.28 312.78c-24.354.41-45.504 9.52-57.655 27.25-16.95 24.737-11.868 59.753 9.625 90.283a41.776 41.776 0 0 0-2.875 15.187c0 23.243 19.07 42.313 42.313 42.313a41.922 41.922 0 0 0 23.406-7.125c43.208 18.488 88.07 12.714 108.28-16.782 18.695-27.28 10.884-66.912-16.374-99.312l-63.094-44.03c-14.016-5.107-28.07-7.7-41.25-7.783-.792-.004-1.59-.012-2.375 0zm-8.593 109.126c13.143 0 23.594 10.45 23.594 23.594 0 13.143-10.45 23.625-23.593 23.625-13.142 0-23.624-10.482-23.624-23.625s10.482-23.594 23.624-23.594z\"/></svg>", "padlock": "<svg aria-hidden=\"true\" xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 512 512\"><path fill=\"currentColor\" d=\"M254.28 17.313c-81.048 0-146.624 65.484-146.624 146.406V236h49.594v-69.094c0-53.658 43.47-97.187 97.03-97.187 53.563 0 97.032 44.744 97.032 97.186V236h49.594v-72.28c0-78.856-65.717-146.407-146.625-146.407zM85.157 254.688c-14.61 22.827-22.844 49.148-22.844 76.78 0 88.358 84.97 161.5 191.97 161.5 106.998 0 191.968-73.142 191.968-161.5 0-27.635-8.26-53.95-22.875-76.78H85.155zM254 278.625c22.34 0 40.875 17.94 40.875 40.28 0 16.756-10.6 31.23-25.125 37.376l32.72 98.126h-96.376l32.125-98.125c-14.526-6.145-24.532-20.62-24.532-37.374 0-22.338 17.972-40.28 40.312-40.28z\"/></svg>", "skull-crack": "<svg aria-hidden=\"true\" xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 512 512\"><path fill=\"currentColor\" d=\"M226.063 24.188 222 58.718l32.688 25.626 23.75-50.03c-18.145-9.142-35.272-9.715-52.375-10.127zM166.75 61.093c-24.248 2.93-42.95 15.897-58.875 33.812h.03l96.407 62.594-37.562-96.406zM300.875 88.75l18.656 85.5-91.092-23.875L269 233.938l-140.594-89.375c-3.966 4.875-7.7 9.97-11.22 15.28-28.794 43.465-42.052 101.104-42.905 156.72 40.122 19.627 63.843 40.14 74.032 61.562 9.157 19.25 5.475 39.06-6.343 54.25 25.214 23.382 68.638 37.63 113.155 38.344 44.813.717 89.973-12.083 118.625-38.783-6.033-6.937-10.412-14.346-12.5-22.437-2.8-10.85-.952-22.554 5.188-33.28 11.757-20.542 37.646-39.263 80.062-59.69-.88-52.663-13.855-110.235-42.5-154.405-23.4-36.085-56.548-63.412-103.125-73.375zm-119.28 168.844c27.75 0 50.25 22.5 50.25 50.25s-22.5 50.25-50.25 50.25c-27.752 0-50.25-22.5-50.25-50.25s22.498-50.25 50.25-50.25zm149.468 0c27.75 0 50.25 22.5 50.25 50.25s-22.5 50.25-50.25 50.25-50.25-22.5-50.25-50.25 22.5-50.25 50.25-50.25zm-74.75 86.125c13.74 29.005 24.652 58.023 30.062 87.03-14.777 12.895-41.26 14.766-60.125 0 7.315-29.007 16.12-58.025 30.063-87.03z\"/></svg>", "sprint": "<svg aria-hidden=\"true\" xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 512 512\"><path fill=\"currentColor\" d=\"M169.53 16.344 259.345 88 337 92.28l-1.03 18.657-161.376-8.906-118.78-4.905 227.28 68.03-197.72 246.75-14.53-17.655-49.22 96.625 248.69-202.78 51.81 11.592-38.78 40.594L270.5 329.5l-57.28 84.125L444.843 273.47 328 241.06l100.22-81.718c1.132.46 2.3.898 3.5 1.22 23.324 6.248 49.764-16.835 59.06-51.533 9.298-34.695-2.08-67.874-25.405-74.124-23.325-6.25-49.765 16.802-59.063 51.5a95.43 95.43 0 0 0-2.875 16.22L169.53 16.343z\"/></svg>"};
+
+const CATS = [["all", "すべて"], ["map", "マップ"], ["char", "キャラ・アニメ"], ["sys", "仕組み"], ["ui", "UI"], ["sound", "サウンド"], ["font", "フォント"]];
 const CAT_LABEL = Object.fromEntries(CATS);
 
+// pv: "img" uses previews/<id>.jpg ; "font" renders sample ; "icons" renders icon grid ; "plate" draws a label plate
 const ITEMS = [
-  // マップ
-  { cat: "map", name: "POLYGON Horror Mansion", url: "https://syntystore.com/products/polygon-horror-mansion", store: "Synty / UAS", price: "$99.99", style: "ローポリ", lic: ["SYN", "UAS"], sets: ["A"],
-    note: "洋館マップ。屋根裏・地下・温室のデモシーンがあります。ろうそく・霧・雨のFXとキャラ10体付き。URP対応。" },
-  { cat: "map", name: "POLYGON Horror Asylum", url: "https://syntystore.com/products/polygon-horror-asylum", store: "Synty", price: "要確認", style: "ローポリ", lic: ["SYN"], sets: ["A"],
-    note: "療養院マップ。Mansionと同じ画風です。" },
-  { cat: "map", name: "POLYGON Horror Carnival", url: "https://assetstore.unity.com/packages/3d/environments/fantasy/polygon-horror-carnival-pack-art-by-synty-266862", store: "UAS / Synty", price: "要確認", style: "ローポリ", lic: ["UAS", "SYN"], sets: ["A"],
-    note: "廃遊園地マップ。観覧車やテントで、高低差と隠れる場所を作れます。" },
-  { cat: "map", name: "Victorian Mansion Environment", url: "https://assetstore.unity.com/packages/3d/environments/victorian-mansion-environment-269740", store: "UAS", price: "$79.99", style: "リアル", lic: ["UAS"], sets: ["B"],
-    note: "約200プロップ、コリジョン付き。URPとHDRPのデモがあります。ホラー用の飾りは別に必要です。" },
-  { cat: "map", name: "Victorian Interior Environment", url: "https://assetstore-fallback.unity.com/packages/3d/environments/victorian-interior-environment-205253", store: "UAS", price: "要確認", style: "リアル", lic: ["UAS"], sets: ["B"],
-    note: "室内の内装。上のMansionと組み合わせます。" },
-  { cat: "map", name: "P3D Haunted Hospital Full Level", url: "https://marketplace.unity.com/packages/3d/environments/p3d-haunted-hospital-full-level-249735", store: "UAS", price: "$59.99", style: "リアル", lic: ["UAS"], sets: ["B"],
-    note: "病院・療養院のマップ1つ分。Built-in / URP / HDRPに対応。" },
-  { cat: "map", name: "Haunted Horror House Environment Kit", url: "https://assetstore.unity.com/packages/3d/environments/dungeons/haunted-horror-house-environment-kit-354650", store: "UAS", price: "要確認", style: "リアル", lic: ["UAS"], sets: [],
-    note: "屋内のモジュール部品。セットBのマップを増やすときに。" },
-  { cat: "map", name: "Quixel Megascans", url: "https://www.fab.com", store: "Fab", price: "無料", free: true, style: "フォトスキャン", lic: ["FAB"], sets: ["B", "C"],
-    note: "地面・岩・草・壁のテクスチャ。どのエンジンでも使えます。",
-    warn: "昔Quixel.comで手に入れた素材は、当時の規約のままです。" },
+  // ---------- 無料：マップ
+  { id: "hospital-free", cat: "map", free: true, name: "PBR – Hospital Horror Pack (Free)", url: "https://assetstore.unity.com/packages/3d/environments/pbr-hospital-horror-pack-free-80117", store: "UAS", price: "無料", style: "写実", lic: ["UAS"], sets: ["F1"],
+    note: "暗い病室と廊下。お気に入り登録3,500件以上の定番です。部屋が少ないので、つないで広げて使います。" },
+  { id: "asylum-free", cat: "map", free: true, name: "Abandoned Asylum", url: "https://assetstore.unity.com/packages/3d/environments/urban/abandoned-asylum-49137", store: "UAS", price: "無料", style: "写実", lic: ["UAS"], sets: ["F1"],
+    note: "廃墟の療養院。レビューではURPとWebGLで動いたと書かれています。" },
+  { id: "horror-pack-226196", cat: "map", free: true, name: "Asset pack for horror game", url: "https://assetstore.unity.com/packages/3d/environments/asset-pack-for-horror-game-226196", store: "UAS", price: "無料", style: "写実", lic: ["UAS"], sets: ["F1"],
+    note: "暗い室内向けの小物。上の2つに足して、部屋を飾ります。" },
+  { id: "synty-starter", cat: "map", free: true, name: "POLYGON – Starter Pack", url: "https://syntystore.com/products/polygon-starter-pack", store: "Synty / UAS", price: "無料", style: "ローポリ", lic: ["SYN", "UAS"], sets: ["F2"],
+    note: "Syntyの無料パック。小物・キャラ・地形の部品とデモシーン付き。あとで有料のHorrorシリーズに差し替えても画風がそろいます。",
+    warn: "Unity 6ではURPに変換しないとピンク色になります。" },
+  { id: "megascans", cat: "map", free: true, name: "Quixel Megascans", url: "https://www.fab.com/sellers/Quixel", store: "Fab", price: "無料", style: "フォトスキャン", lic: ["FAB"], sets: ["F1"],
+    note: "地面・岩・草・壁のテクスチャ。どのエンジンでも使えます。外のマップや庭に。", pv: "plate", plate: ["Fab", "Megascans"] },
+  { id: "sketchfab", cat: "map", free: true, name: "Sketchfab（CC-BYで絞り込み）", url: "https://sketchfab.com/search?features=downloadable&licenses=322a749bcfa841b29dff1e8a1bb74b0b&q=victorian&type=models", store: "Sketchfab", price: "無料", style: "いろいろ", lic: ["BY"], sets: [],
+    note: "家具・時計・人形など、足りない小物を1つずつ探す場所です。リンクはCC-BYとダウンロード可で絞り込み済み。",
+    warn: "モデルごとに作者名をクレジットに書きます。画風がばらばらなので、選ぶときに注意。", pv: "plate", plate: ["探す場所", "Sketchfab"] },
 
-  // キャラ・アニメ
-  { cat: "char", name: "Synty Horrorパックに付くキャラ", url: "https://syntystore.com/products/polygon-horror-mansion", store: "Synty", price: "パックに含む", style: "ローポリ", lic: ["SYN"], sets: ["A"],
-    note: "サバイバー用。アニメは付いていないので、Mixamoを組み合わせます。" },
-  { cat: "char", name: "Mixamo", url: "https://www.mixamo.com", store: "Adobe", price: "無料", free: true, style: "汎用", lic: ["MIX"], sets: ["A", "B", "C"],
-    note: "歩く・走る・しゃがむ・倒れる・担がれる・板を倒す、などの全モーション。",
-    warn: "ゲームに組み込むのはOK。FBXのまま配るのはNGです。" },
-  { cat: "char", name: "Horror Demon Creature v1（66アニメ）", url: "https://assetstore.unity.com/packages/3d/characters/creatures/horror-demon-creature-v1-with-66-animations-262417", store: "UAS", price: "要確認", style: "リアル", lic: ["UAS"], sets: ["B"],
+  // ---------- 無料：キャラ
+  { id: "mixamo", cat: "char", free: true, name: "Mixamo", url: "https://www.mixamo.com", store: "Adobe", price: "無料", style: "汎用", lic: ["MIX"], sets: ["F1", "F2"],
+    note: "サバイバーのキャラと全モーション（走る・しゃがむ・倒れる・担がれる・板を倒す）。クリーチャー系のキャラもあるので、ハンターの元にもなります。",
+    warn: "ゲームに組み込むのはOK。FBXのまま配るのはNGです。", pv: "plate", plate: ["キャラ＋モーション", "Mixamo"] },
+  { id: "zombie-anim-free", cat: "char", free: true, name: "Zombie Monster Animations FREE", url: "https://assetstore.unity.com/packages/3d/characters/humanoids/fantasy/zombie-monster-animations-free-259680", store: "UAS", price: "無料", style: "モーション", lic: ["UAS"], sets: ["F1", "F2"],
+    note: "待機・歩く・攻撃・被弾・倒れるの5つ。ほかのHumanoidキャラに流用する前提のパックで、ハンターの動きに使えます。" },
+  { id: "zombie-anim-pack", cat: "char", free: true, name: "Zombie Animation Pack Free", url: "https://assetstore.unity.com/packages/3d/animations/zombie-animation-pack-free-150219", store: "UAS", price: "無料", style: "モーション", lic: ["UAS"], sets: [],
+    note: "ゾンビ系のモーション集（animus.digital）。上のパックで足りないときに。2019年のものなので、Unityのバージョンを確かめてください。" },
+  { id: "zombie-sample", cat: "char", free: true, name: "Character Pack: Zombie Sample", url: "https://assetstore.unity.com/packages/3d/characters/humanoids/fantasy/character-pack-zombie-sample-131604", store: "UAS", price: "無料", style: "ローポリ", lic: ["UAS"], sets: ["F2"],
+    note: "ローポリのゾンビ1体（4アニメ付き）。セットF2のハンター候補です。" },
+
+  // ---------- 無料：仕組み
+  { id: "starter-fp2", cat: "sys", free: true, name: "Starter Assets – FirstPerson", url: "https://assetstore.unity.com/packages/p/starter-assets-first-person-character-controller-196525", store: "Unity公式", price: "無料", style: "—", lic: ["UAS"], sets: ["F1", "F2"],
+    note: "Unity公式の一人称操作の土台。CinemachineとInput Systemを使います。ここに走る・しゃがむ・隠れるを足していきます。" },
+  { id: "mpfps", cat: "sys", free: true, name: "Multiplayer FPS Template", url: "https://assetstore.unity.com/packages/templates/systems/multiplayer-fps-template-259143", store: "UAS", price: "無料", style: "—", lic: ["UAS"], sets: [],
+    note: "同期まで入ったFPSの土台。Starter Assets＋Mirrorの代わりに使えます。ほかのAsset Store素材が必要です。" },
+  { id: "mirror", cat: "sys", free: true, name: "Mirror", url: "https://github.com/MirrorNetworking/Mirror", store: "GitHub / UAS", price: "無料", style: "—", lic: ["MIT"], sets: ["F1", "F2"],
+    note: "5人対戦のネットワーク同期。使われた実績が多いです。", pv: "plate", plate: ["ネットワーク", "Mirror"] },
+
+  // ---------- 無料：UI
+  { id: "gameicons", cat: "ui", free: true, name: "game-icons.net", url: "https://game-icons.net", store: "game-icons.net", price: "無料", style: "シルエット", lic: ["BY"], sets: ["F1", "F2"],
+    note: "4,000以上のSVGアイコン。スキル・アイテム・状態のアイコンに。色と大きさは自由に変えられます。",
+    warn: "CC BY 3.0です。作者名（Lorc、Delapouiteなど）をクレジットに書きます。", pv: "icons" },
+  { id: "dotween", cat: "ui", free: true, name: "DOTween", url: "https://dotween.demigiant.com", store: "Demigiant / UAS", price: "無料", style: "—", lic: ["独自（無料）"], sets: ["F1", "F2"],
+    note: "UIの動き（フェード・揺れ・心拍の点滅など）をコードで付けるライブラリ。", pv: "plate", plate: ["UIアニメ", "DOTween"] },
+
+  // ---------- 無料：サウンド
+  { id: "unnerving", cat: "sound", free: true, name: "Unnerving Ambient Sounds (30 Sounds)", url: "https://assetstore.unity.com/packages/audio/ambient/unnerving-ambient-sounds-horror-game-sound-effect-pack-30-sounds-170590", store: "UAS", price: "無料", style: "環境音", lic: ["UAS"], sets: ["F1", "F2"],
+    note: "不安になる環境音30個（約650MB）。マップごとの背景音に。" },
+  { id: "hsmusic", cat: "sound", free: true, name: "Horror Survival – Music Pack", url: "https://assetstore.unity.com/packages/audio/music/horror-survival-music-pack-374322", store: "UAS", price: "無料", style: "BGM", lic: ["UAS"], sets: ["F1"],
+    note: "2026年5月公開の新しい無料BGM集。試合中・追われているときの曲に。" },
+  { id: "hgmusic", cat: "sound", free: true, name: "Horror Game Music Pack", url: "https://assetstore.unity.com/packages/audio/music/horror-game-music-pack-58739", store: "UAS", price: "無料", style: "BGM", lic: ["UAS"], sets: ["F2"],
+    note: "26曲、約1時間分。古いパックですが量が多いです。" },
+  { id: "rollye", cat: "sound", free: true, name: "Rollye's Horror Music Pack LITE", url: "https://assetstore.unity.com/packages/audio/music/rollye-s-horror-music-pack-lite-323702", store: "UAS", price: "無料", style: "BGM", lic: ["UAS"], sets: [],
+    note: "ホラーBGMの無料お試し版。ロビーやリザルトの曲に。" },
+  { id: "analog", cat: "sound", free: true, name: "Analog Horror Sound Pack", url: "https://assetstore.unity.com/packages/audio/music/electronic/analog-horror-sound-pack-314658", store: "UAS", price: "無料", style: "環境音・ドローン", lic: ["UAS"], sets: ["F2"],
+    note: "20以上の音の風景とドローン音。ハンターが近いときの低い音に。",
+    warn: "ページにクレジットが必要と書かれています。" },
+  { id: "sonniss", cat: "sound", free: true, name: "Sonniss GDC Game Audio Bundle", url: "https://sonniss.com/gameaudiogdc", store: "Sonniss", price: "無料", style: "効果音", lic: ["SONNISS"], sets: ["F1", "F2"],
+    note: "2015〜2026年の各年分で、合計数百GBの効果音。足音・扉・機械・悲鳴まで揃います。クレジット不要。",
+    warn: "音をそのまま再配布するのと、AIの学習はNGです。", pv: "wave", plate: ["効果音", "Sonniss GDC"] },
+  { id: "freesound", cat: "sound", free: true, name: "Freesound（CC-BYだけ）", url: "https://freesound.org", store: "Freesound", price: "無料", style: "効果音", lic: ["BY"], sets: [],
+    note: "足りない効果音を1つずつ補う場所です。",
+    warn: "検索でCC0とCC-BY-NCを外します。クレジット表記が必要です。", pv: "wave", plate: ["効果音", "Freesound"] },
+  { id: "incompetech", cat: "sound", free: true, name: "incompetech（Kevin MacLeod）", url: "https://incompetech.com", store: "incompetech", price: "無料", style: "BGM", lic: ["BY"], sets: [],
+    note: "メニューやロビーのBGM。CC BY 4.0なのでクレジット表記が必要です。", pv: "wave", plate: ["BGM", "Kevin MacLeod"] },
+
+  // ---------- 無料：フォント
+  { id: "f-shippori", cat: "font", free: true, name: "Shippori Mincho", url: "https://fonts.google.com/specimen/Shippori+Mincho", store: "Google Fonts", price: "無料", style: "明朝", lic: ["OFL"], sets: ["F1"],
+    note: "日本語の見出しに。写実の画面となじみます。", pv: "font", font: "'Shippori Mincho'", sample: "封印装置を解け" },
+  { id: "f-zen", cat: "font", free: true, name: "Zen Antique", url: "https://fonts.google.com/specimen/Zen+Antique", store: "Google Fonts", price: "無料", style: "古風な明朝", lic: ["OFL"], sets: ["F2"],
+    note: "日本語の見出しに。古い印刷物のような雰囲気が出ます。", pv: "font", font: "'Zen Antique'", sample: "残り三台" },
+  { id: "f-noto", cat: "font", free: true, name: "Noto Serif JP", url: "https://fonts.google.com/noto/specimen/Noto+Serif+JP", store: "Google Fonts", price: "無料", style: "明朝", lic: ["OFL"], sets: ["F1", "F2"],
+    note: "日本語の本文に。字の種類が多いので、文字が出ない心配がありません。", pv: "font", font: "'Noto Serif JP'", sample: "仲間が椅子に縛られた" },
+  { id: "f-fell", cat: "font", free: true, name: "IM Fell English", url: "https://fonts.google.com/specimen/IM+Fell+English", store: "Google Fonts", price: "無料", style: "古い活字", lic: ["OFL"], sets: ["F1"],
+    note: "英字のロゴ・見出しに。ヴィクトリア朝らしさが出ます。", pv: "font", font: "'IM Fell English'", sample: "The Asylum Ward" },
+  { id: "f-cinzel", cat: "font", free: true, name: "Cinzel", url: "https://fonts.google.com/specimen/Cinzel", store: "Google Fonts", price: "無料", style: "碑文", lic: ["OFL"], sets: ["F2"],
+    note: "英字のタイトルに。", pv: "font", font: "'Cinzel'", sample: "ESCAPE GATE" },
+  { id: "f-grenze", cat: "font", free: true, name: "Grenze", url: "https://fonts.google.com/specimen/Grenze", store: "Google Fonts", price: "無料", style: "欧文ゴシック", lic: ["OFL"], sets: [],
+    note: "Syntyのファンタジー系HUDと同じ英字フォント。あとでSynty HUDを入れるなら、これでそろえておきます。", pv: "font", font: "'Grenze'", sample: "Hunter Approaching" },
+  { id: "f-creep", cat: "font", free: true, name: "Creepster", url: "https://fonts.google.com/specimen/Creepster", store: "Google Fonts", price: "無料", style: "ホラー", lic: ["OFL"], sets: [],
+    note: "驚かせる演出の一瞬だけに。使いすぎると安っぽくなります。", pv: "font", font: "'Creepster'", sample: "Run." },
+
+  // ---------- 有料（あとで差し替え）
+  { id: "horror-mansion", cat: "map", free: false, name: "POLYGON Horror Mansion", url: "https://syntystore.com/products/polygon-horror-mansion", store: "Synty / UAS", price: "$50〜99.99", style: "ローポリ", lic: ["SYN", "UAS"], sets: ["A"],
+    note: "洋館マップ。キャラ10体とろうそく・霧・雨のFX付き。Synty Storeの方が安い表示でした。" },
+  { id: "horror-asylum", cat: "map", free: false, name: "POLYGON Horror Asylum", url: "https://syntystore.com/products/polygon-horror-asylum", store: "Synty", price: "$50〜", style: "ローポリ", lic: ["SYN"], sets: ["A"],
+    note: "療養院マップ。Starter Packからそのまま画風を上げられます。" },
+  { id: "horror-carnival", cat: "map", free: false, name: "POLYGON Horror Carnival", url: "https://assetstore.unity.com/packages/3d/environments/fantasy/polygon-horror-carnival-pack-art-by-synty-266862", store: "UAS / Synty", price: "$99.99", style: "ローポリ", lic: ["UAS", "SYN"], sets: ["A"],
+    note: "廃遊園地マップ。高低差と隠れる場所を作りやすいです。" },
+  { id: "hospital-14", cat: "map", free: false, name: "Horror Hospital Environment Pack", url: "https://assetstore.unity.com/packages/3d/environments/industrial/horror-hospital-environment-pack-278057", store: "UAS", price: "$14", style: "写実", lic: ["UAS"], sets: ["B"],
+    note: "安い病院パック。セットF1の病院を広げたいときの最初の1つに。" },
+  { id: "p3d-hospital", cat: "map", free: false, name: "P3D Haunted Hospital Full Level", url: "https://marketplace.unity.com/packages/3d/environments/p3d-haunted-hospital-full-level-249735", store: "UAS", price: "$49.99", style: "写実", lic: ["UAS"], sets: ["B"],
+    note: "病院・療養院のマップ1つ分。Built-in / URP / HDRP対応。" },
+  { id: "victorian-mansion", cat: "map", free: false, name: "Victorian Mansion Environment", url: "https://assetstore.unity.com/packages/3d/environments/victorian-mansion-environment-269740", store: "UAS", price: "$79.99", style: "写実", lic: ["UAS"], sets: ["B"],
+    note: "約200プロップ、コリジョン付き。URP / HDRPのデモあり。" },
+  { id: "demon", cat: "char", free: false, name: "Horror Demon Creature v1（66アニメ）", url: "https://assetstore.unity.com/packages/3d/characters/creatures/horror-demon-creature-v1-with-66-animations-262417", store: "UAS", price: "$29.99", style: "写実", lic: ["UAS"], sets: ["B"],
     note: "ハンター候補。アニメが多いので、スキルの演出にも回せます。" },
-  { cat: "char", name: "Creepy Horror Monster – PBR & Animated", url: "https://assetstore.unity.com/packages/3d/characters/humanoids/sci-fi/creepy-horror-monster-pbr-animated-38448", store: "UAS", price: "$15", style: "リアル", lic: ["UAS"], sets: [],
+  { id: "creepy", cat: "char", free: false, name: "Creepy Horror Monster – PBR & Animated", url: "https://assetstore.unity.com/packages/3d/characters/humanoids/sci-fi/creepy-horror-monster-pbr-animated-38448", store: "UAS", price: "$15", style: "写実", lic: ["UAS"], sets: [],
     note: "安いハンター候補。攻撃2種・待機・走る・歩くのアニメ付き。" },
-  { cat: "char", name: "Monster pack", url: "https://marketplace.unity.com/packages/3d/characters/creatures/monster-pack-306195", store: "UAS", price: "要確認", style: "セミリアル", lic: ["UAS"], sets: ["A"],
-    note: "30アニメ。ホラー・FPS向けと明記されています。セットAでは、ローポリ風のシェーダーをかけてハンターに使います。" },
-
-  // 仕組み
-  { cat: "sys", name: "Horror Multiplayer Game Template", url: "https://assetstore.unity.com/packages/templates/systems/horror-multiplayer-game-template-297297", store: "UAS", price: "$59.99", style: "—", lic: ["UAS"], sets: ["B", "D"],
-    note: "サバイバー対キラーの役割分けが最初からある、いちばん近いテンプレートです。HDRP版もあります。",
+  { id: "hmp-template", cat: "sys", free: false, name: "Horror Multiplayer Game Template", url: "https://assetstore.unity.com/packages/templates/systems/horror-multiplayer-game-template-297297", store: "UAS", price: "$59.99", style: "—", lic: ["UAS"], sets: [],
+    note: "サバイバー対キラーの役割分けが最初からあるテンプレート。自作の同期がつらくなったときの候補。",
     warn: "非公式サイトの無料コピーは不正な再配布です。" },
-  { cat: "sys", name: "Multiplayer FPS Template", url: "https://assetstore.unity.com/packages/templates/systems/multiplayer-fps-template-259143", store: "UAS", price: "無料", free: true, style: "—", lic: ["UAS"], sets: ["C"],
-    note: "汎用のFPSの土台。ほかのAsset Store素材が必要です。" },
-  { cat: "sys", name: "UHFPS – Ultimate Horror FPS Kit (URP)", url: "https://marketplace.unity.com/packages/templates/systems/uhfps-ultimate-horror-fps-kit-urp-254506", store: "UAS", price: "要確認", style: "—", lic: ["UAS"], sets: [],
-    note: "ドア・引き出し・ライト・隠れるなどの操作。シングルプレイ用なので、ネットワーク同期は自分で作ります。" },
-  { cat: "sys", name: "Asymmetric Multiplayer Horror Template", url: "https://www.fab.com/listings/07d0c59b-ee1b-48c6-a30c-c76621897d10", store: "Fab", price: "要確認", style: "—", lic: ["FAB"], sets: [],
-    note: "Unreal用です。Unrealを選ぶ場合の候補。" },
-  { cat: "sys", name: "Mirror", url: "https://github.com/MirrorNetworking/Mirror", store: "GitHub / UAS", price: "無料", free: true, style: "—", lic: ["MIT"], sets: ["A", "C"],
-    note: "ネットワーク同期。使われた実績が多いです。" },
-  { cat: "sys", name: "Netcode for GameObjects", url: "https://docs-multiplayer.unity3d.com/netcode/current/about/", store: "Unity公式", price: "無料", free: true, style: "—", lic: ["Unity Companion"], sets: [],
-    note: "Unity公式のネットワーク同期。Mirrorの代わりに使えます。" },
-
-  // UI
-  { cat: "ui", name: "INTERFACE – Dark Fantasy HUD", url: "https://syntystore.com/products/interface-dark-fantasy-hud", store: "Synty / UAS", price: "$99.99", style: "ダークファンタジー", lic: ["SYN", "UAS"], sets: ["A"],
-    note: "試合中の画面に。体力の瓶・アクションバー・コンパス・ミニマップ・武器ホイール・入力アイコンなど。UGUIとTextMeshPro製。" },
-  { cat: "ui", name: "INTERFACE – Fantasy Menus", url: "https://syntystore.com/products/interface-fantasy-menus", store: "Synty / UAS", price: "$39.99", style: "ファンタジー", lic: ["SYN", "UAS"], sets: ["A"],
-    note: "アニメ付きのプレハブ200以上、スプライト700以上。ロビー・設定・結果画面に。HUDと組み合わせる前提で作られています。",
-    warn: "Synty Storeでは売り切れ表示でした。UAS版も確認してください。" },
-  { cat: "ui", name: "Dark – Complete Horror UI", url: "https://assetstore-fallback.unity.com/packages/2d/gui/dark-complete-horror-ui-200569", store: "UAS", price: "$39.99", style: "グランジ・ホラー", lic: ["UAS"], sets: ["B", "D"],
-    note: "Unity標準のUIで作られた、すぐ使えるホラー調のUI。Unity 2019.4以降とUnity 6に対応。" },
-  { cat: "ui", name: "Horror UI Kit 2", url: "https://assetstore.unity.com/packages/2d/gui/icons/horror-ui-kit-2-194056", store: "UAS", price: "$15", style: "ホラー", lic: ["UAS"], sets: [],
-    note: "安いホラーUI。中身はページで確かめてください。" },
-  { cat: "ui", name: "Modern UI Pack", url: "https://assetstore.unity.com/packages/tools/gui/modern-ui-pack-201717", store: "UAS", price: "$19.99〜43.99", style: "ミニマル", lic: ["UAS"], sets: [],
-    note: "モーダル・通知・進捗バーなど。設定画面を手早く作るときに。ホラーの雰囲気は自分で付けます。" },
-  { cat: "ui", name: "game-icons.net", url: "https://game-icons.net", store: "game-icons.net", price: "無料", free: true, style: "シルエット", lic: ["BY"], sets: ["C"],
-    note: "4000以上のSVGアイコン。スキル・アイテム・状態異常のアイコンに。色と大きさは自由に変えられます。",
-    warn: "CC BY 3.0です。作者名をクレジットに書いてください（CC0のものは除いて使う）。" },
-  { cat: "ui", name: "DOTween", url: "https://dotween.demigiant.com", store: "Demigiant / UAS", price: "無料", free: true, style: "—", lic: ["独自（無料）"], sets: ["A", "B", "C", "D"],
-    note: "UIの動き（フェード・揺れ・心拍の点滅など）をコードで付けるためのライブラリ。どのセットでも使えます。" },
-  { cat: "ui", name: "Modern UI SFX Sound Pack", url: "https://assetstore.unity.com/packages/audio/sound-fx/modern-ui-sfx-sound-pack-198858", store: "UAS", price: "要確認", style: "—", lic: ["UAS"], sets: [],
-    note: "ボタンを押したときなどのUI用効果音。" },
-
-  // サウンド
-  { cat: "sound", name: "Sonniss GDC Game Audio Bundle", url: "https://sonniss.com/gameaudiogdc", store: "Sonniss", price: "無料", free: true, style: "—", lic: ["SONNISS"], sets: ["A", "B", "C"],
-    note: "2015〜2026年の各年分があり、合計数百GBの効果音です。クレジット不要。",
-    warn: "音をそのまま再配布するのと、AIの学習はNGです。" },
-  { cat: "sound", name: "Horror Game Ambient Soundscapes Vol.1", url: "https://assetstore.unity.com/packages/audio/ambient/horror-game-ambient-soundscapes-vol-1-209693", store: "UAS", price: "要確認", style: "—", lic: ["UAS"], sets: ["A"],
-    note: "マップごとの環境音（ループ）。" },
-  { cat: "sound", name: "Ultimate Horror Game SFX, Ambience & Jump Scare", url: "https://marketplace.unity.com/packages/audio/sound-fx/ultimate-horror-game-sfx-ambience-jump-scare-sounds-264106", store: "UAS", price: "要確認", style: "—", lic: ["UAS"], sets: ["B"],
-    note: "ハンターが近づいたときの音や、驚かせる音に。" },
-  { cat: "sound", name: "Horror Audio Bundle (Music + Ambience + FX)", url: "https://assetstore.unity.com/packages/audio/sound-fx/horror-audio-bundle-music-ambience-fx-21789", store: "UAS", price: "$28", style: "—", lic: ["UAS"], sets: ["D"],
-    note: "定番のまとめ売り。古いですが安いです。" },
-  { cat: "sound", name: "Freesound（CC-BYだけ）", url: "https://freesound.org", store: "Freesound", price: "無料", free: true, style: "—", lic: ["BY"], sets: ["C"],
-    note: "足りない効果音を補います。",
-    warn: "検索でCC0とCC-BY-NCを外してください。クレジット表記が必要です。" },
-  { cat: "sound", name: "incompetech（Kevin MacLeod）", url: "https://incompetech.com", store: "incompetech", price: "無料", free: true, style: "—", lic: ["BY"], sets: ["C"],
-    note: "メニュー・ロビーのBGM。CC BY 4.0なのでクレジット表記が必要です。" },
-
-  // フォント
-  { cat: "font", name: "Zen Antique", url: "https://fonts.google.com/specimen/Zen+Antique", store: "Google Fonts", price: "無料", free: true, style: "古風な明朝", lic: ["OFL"], sets: ["A", "C"],
-    note: "日本語の見出しに。" },
-  { cat: "font", name: "Shippori Mincho", url: "https://fonts.google.com/specimen/Shippori+Mincho", store: "Google Fonts", price: "無料", free: true, style: "明朝", lic: ["OFL"], sets: ["B", "D"],
-    note: "日本語の見出しに。リアル系の画面となじみます。" },
-  { cat: "font", name: "Noto Serif JP", url: "https://fonts.google.com/noto/specimen/Noto+Serif+JP", store: "Google Fonts", price: "無料", free: true, style: "明朝", lic: ["OFL"], sets: ["A", "B", "C", "D"],
-    note: "日本語の本文に。字の種類が多いので、文字が出ない心配がありません。" },
-  { cat: "font", name: "Grenze / Texturina", url: "https://fonts.google.com/specimen/Grenze", store: "Google Fonts", price: "無料", free: true, style: "ゴシック体（欧文）", lic: ["OFL"], sets: ["A"],
-    note: "Syntyのファンタジー系HUDに使われている英字フォント。HUDと見た目がそろいます。" },
-  { cat: "font", name: "IM Fell English", url: "https://fonts.google.com/specimen/IM+Fell+English", store: "Google Fonts", price: "無料", free: true, style: "古い活字", lic: ["OFL"], sets: ["B", "D"],
-    note: "英字のロゴ・見出しに。ヴィクトリア朝らしさが出ます。" },
-  { cat: "font", name: "Cinzel", url: "https://fonts.google.com/specimen/Cinzel", store: "Google Fonts", price: "無料", free: true, style: "碑文", lic: ["OFL"], sets: ["C"],
-    note: "英字のタイトルに。" },
-  { cat: "font", name: "Creepster", url: "https://fonts.google.com/specimen/Creepster", store: "Google Fonts", price: "無料", free: true, style: "ホラー", lic: ["OFL"], sets: [],
-    note: "驚かせる演出用。使いすぎると安っぽくなります。" },
+  { id: "uhfps", cat: "sys", free: false, name: "UHFPS – Ultimate Horror FPS Kit", url: "https://marketplace.unity.com/packages/templates/systems/uhfps-ultimate-horror-fps-kit-urp-254506", store: "UAS", price: "$25", style: "—", lic: ["UAS"], sets: [],
+    note: "ドア・引き出し・ライト・隠れるなどの操作。シングルプレイ用なので、同期は自分で作ります。" },
+  { id: "fab-asym", cat: "sys", free: false, name: "Asymmetric Multiplayer Horror Template", url: "https://www.fab.com/listings/07d0c59b-ee1b-48c6-a30c-c76621897d10", store: "Fab", price: "要確認", style: "—", lic: ["FAB"], sets: [],
+    note: "Unreal用。Unrealを選ぶ場合の候補です。" },
+  { id: "dark-hud", cat: "ui", free: false, name: "INTERFACE – Dark Fantasy HUD", url: "https://syntystore.com/products/interface-dark-fantasy-hud", store: "Synty / UAS", price: "$50〜99.99", style: "ダークファンタジー", lic: ["SYN", "UAS"], sets: ["A"],
+    note: "試合中のHUD一式。体力の瓶・コンパス・武器ホイールなど。UGUIとTextMeshPro製。" },
+  { id: "dark-ui", cat: "ui", free: false, name: "Dark – Complete Horror UI", url: "https://assetstore.unity.com/packages/2d/gui/dark-complete-horror-ui-200569", store: "UAS", price: "$39.99", style: "グランジ・ホラー", lic: ["UAS"], sets: ["B"],
+    note: "グランジ調のホラーUI一式。Unity 6対応。" },
+  { id: "horror-ui-kit2", cat: "ui", free: false, name: "Horror UI Kit 2", url: "https://assetstore.unity.com/packages/2d/gui/icons/horror-ui-kit-2-194056", store: "UAS", price: "$15", style: "ホラー", lic: ["UAS"], sets: [],
+    note: "安いホラーUI。自作UIの部品を補うのに。" },
+  { id: "ambient-vol1", cat: "sound", free: false, name: "Horror Game Ambient Soundscapes Vol.1", url: "https://assetstore.unity.com/packages/audio/ambient/horror-game-ambient-soundscapes-vol-1-209693", store: "UAS", price: "$19.99", style: "環境音", lic: ["UAS"], sets: ["A", "B"],
+    note: "100の環境音。無料の環境音で足りなくなったら。" },
 ];
 
 const SETS = [
-  { id: "A", title: "Syntyのローポリで統一", tag: "おすすめ・作りやすい",
+  { id: "F1", free: true, title: "無料・写実寄り", tag: "$0 · おすすめ",
+    strip: ["hospital-free", "asylum-free", "horror-pack-226196", "zombie-anim-free"],
     rx: [
-      ["マップ", "Horror Mansion ＋ Asylum ＋ Carnival（3マップ）"],
-      ["サバイバー", "パックに付くキャラ ＋ Mixamo"],
-      ["ハンター", "Monster pack（ローポリ風シェーダー）"],
-      ["UI", "INTERFACE Dark Fantasy HUD ＋ Fantasy Menus"],
-      ["音", "Sonniss ＋ Horror Ambient Soundscapes"],
-      ["文字", "Zen Antique ＋ Grenze ＋ Noto Serif JP"],
-      ["仕組み", "Mirror ＋ 自作のルール"],
+      ["マップ", "Hospital Horror Pack Free ＋ Abandoned Asylum ＋ Asset pack for horror game ＋ Megascans"],
+      ["サバイバー", "Mixamoのキャラ＋モーション"],
+      ["ハンター", "Mixamoのクリーチャー系キャラ ＋ Zombie Monster Animations FREE"],
+      ["操作・同期", "Starter Assets – FirstPerson ＋ Mirror"],
+      ["UI", "TextMeshProで自作 ＋ game-icons.net ＋ DOTween"],
+      ["音", "Unnerving Ambient ＋ Horror Survival Music ＋ Sonniss"],
+      ["文字", "Shippori Mincho ＋ IM Fell English ＋ Noto Serif JP"],
     ],
-    cost: "約 $440〜", costNote: "Syntyのサブスクの方が安い場合あり",
-    why: "マップもUIも同じ作者なので、マテリアル・縮尺・UIの雰囲気がそろいます。Synty Storeで直接買うと、Unity用とUnreal用の両方のファイルがもらえます。" },
-  { id: "B", title: "リアル系", tag: "雰囲気重視・負荷が重い",
+    why: "無料の素材の中では、ホラーの雰囲気がいちばん出せる組み合わせです。病院と療養院を1つのマップにつなぎます。足りない小物はSketchfab（CC-BY）で1つずつ補います。",
+    after: "あとで差し替えるなら → セットB" },
+  { id: "F2", free: true, title: "無料・ローポリ", tag: "$0 · 軽い・作りやすい",
+    strip: ["synty-starter", "zombie-sample", "zombie-anim-free", "analog"],
     rx: [
-      ["マップ", "Victorian Mansion ＋ Interior ＋ Haunted Hospital"],
-      ["外・地面", "Megascans（無料）"],
-      ["ハンター", "Horror Demon Creature v1"],
-      ["サバイバー", "Mixamoのキャラ ＋ モーション"],
-      ["UI", "Dark – Complete Horror UI"],
-      ["音", "Sonniss ＋ Ultimate Horror Game SFX"],
-      ["文字", "Shippori Mincho ＋ IM Fell English"],
-      ["仕組み", "Horror Multiplayer Game Template"],
-    ],
-    cost: "約 $320〜", costNote: "＋「要確認」の素材の分",
-    why: "URPかHDRPのどちらかにそろえてください。5人で対戦するので、LODとOcclusion Cullingは必ず設定します。UIはグランジ調なので、汚れた写実の画面となじみます。" },
-  { id: "C", title: "無料だけ（CC0なし）", tag: "試作向け",
-    rx: [
-      ["土台", "Multiplayer FPS Template ＋ Mirror"],
-      ["マップ", "Megascans ＋ ProBuilderで自作"],
-      ["キャラ", "Mixamo"],
-      ["UI", "game-icons.net ＋ TextMeshProで自作 ＋ DOTween"],
-      ["音", "Sonniss ＋ Freesound（BY）＋ Kevin MacLeod"],
+      ["マップ", "POLYGON Starter Pack ＋ ProBuilderで自作の建物"],
+      ["サバイバー", "Starter Packのキャラ ＋ Mixamoのモーション"],
+      ["ハンター", "Character Pack: Zombie Sample ＋ Zombie Monster Animations FREE"],
+      ["操作・同期", "Starter Assets – FirstPerson ＋ Mirror"],
+      ["UI", "TextMeshProで自作 ＋ game-icons.net ＋ DOTween"],
+      ["音", "Analog Horror ＋ Horror Game Music Pack ＋ Sonniss"],
       ["文字", "Zen Antique ＋ Cinzel ＋ Noto Serif JP"],
     ],
-    cost: "$0", costNote: "クレジット一覧を作る手間あり",
-    why: "遊べるかどうかを確かめるにはこれで十分です。面白いとわかってから、AかBの見た目に差し替えます。UIは枠を自作し、アイコンだけgame-icons.netを使います。" },
-  { id: "D", title: "テンプレートを先に買う", tag: "最短で動かす",
+    why: "動作が軽く、5人対戦でも重くなりにくいです。ホラーの小物は入っていないので、霧と暗い照明で怖さを作ります。Syntyの画風なので、あとで有料のHorrorシリーズにそのまま差し替えられます。",
+    after: "あとで差し替えるなら → セットA" },
+  { id: "A", free: false, title: "有料で差し替え：Syntyホラー", tag: "F2の次 · 約$200〜",
+    strip: ["horror-mansion", "horror-asylum", "horror-carnival", "dark-hud"],
     rx: [
-      ["仕組み", "Horror Multiplayer Game Template"],
-      ["UI", "Dark – Complete Horror UI"],
-      ["音", "Horror Audio Bundle"],
-      ["文字", "Shippori Mincho ＋ IM Fell English"],
-      ["見た目", "あとでAかBに差し替え"],
+      ["マップ", "Horror Mansion ＋ Asylum ＋ Carnival"],
+      ["UI", "INTERFACE Dark Fantasy HUD"],
+      ["音", "Horror Ambient Soundscapes Vol.1"],
     ],
-    cost: "約 $130〜", costNote: "見た目の素材は別",
-    why: "役割分けと同期の仕組みが最初から手に入ります。そのかわり、テンプレートの作りに縛られます。解読・救助・脱出などのルールを足しやすいか、レビューとドキュメントを読んでから買ってください。" },
+    why: "F2の仕組みはそのままに、マップとUIだけ入れ替えます。Synty Storeで直接買うとUnity用とUnreal用の両方がもらえます。",
+    after: "" },
+  { id: "B", free: false, title: "有料で差し替え：写実ホラー", tag: "F1の次 · 約$230〜",
+    strip: ["victorian-mansion", "p3d-hospital", "demon", "dark-ui"],
+    rx: [
+      ["マップ", "Horror Hospital Pack（$14）→ P3D Haunted Hospital → Victorian Mansion の順に"],
+      ["ハンター", "Horror Demon Creature v1"],
+      ["UI", "Dark – Complete Horror UI"],
+    ],
+    why: "F1の病院を広げるところから始め、必要になった分だけ足します。安い順に並べました。",
+    after: "" },
 ];
 
-const state = { cat: "all", set: "all", free: false, q: "" };
+const state = { price: "free", cat: "all", set: "all", q: "" };
 const $ = (id) => document.getElementById(id);
-const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const byId = Object.fromEntries(ITEMS.map((it) => [it.id, it]));
+
+function waveBars(seed) {
+  let x = seed * 9301 + 49297, out = "";
+  for (let i = 0; i < 28; i++) { x = (x * 9301 + 49297) % 233280; out += `<i style="height:${18 + (x / 233280) * 82}%"></i>`; }
+  return `<div class="wave">${out}</div>`;
+}
+function preview(it) {
+  const badge = `<span class="badge${it.free ? "" : " paid"}">${esc(it.price)}</span>`;
+  if (!it.pv) {
+    return `<div class="pv"><button type="button" class="zoom" data-src="previews/${it.id}.jpg" data-cap="${esc(it.name)}" aria-label="${esc(it.name)} のプレビューを拡大"><img src="previews/${it.id}.jpg" alt="${esc(it.name)} のストア画像" loading="lazy"></button>${badge}</div>`;
+  }
+  if (it.pv === "font") return `<div class="pv font" style="font-family:${it.font}, serif">${esc(it.sample)}${badge}</div>`;
+  if (it.pv === "icons") return `<div class="pv icons">${Object.values(ICONS).slice(0, 10).join("")}${badge}</div>`;
+  const inner = it.pv === "wave" ? waveBars(it.id.length * 7 + it.name.length) : "";
+  return `<div class="pv plate"><div class="plate-inner"><span class="plate-kind">${esc(it.plate[0])}</span>${inner}<span class="plate-name">${esc(it.plate[1])}</span><span class="plate-kind">画像なし · リンク先で確認</span></div>${badge}</div>`;
+}
 
 function chip(container, value, label, key) {
   const b = document.createElement("button");
-  b.type = "button"; b.className = "chip"; b.textContent = label; b.dataset.value = value;
-  b.setAttribute("aria-pressed", String(state[key] === value));
-  b.addEventListener("click", () => { state[key] = value; syncChips(); render(); });
+  b.type = "button"; b.className = "chip"; b.textContent = label; b.dataset.value = value; b.dataset.key = key;
+  b.addEventListener("click", () => { state[key] = value; sync(); });
   container.appendChild(b);
 }
-function syncChips() {
-  document.querySelectorAll("#cat-chips .chip").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.value === state.cat)));
-  document.querySelectorAll("#set-chips .chip").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.value === state.set)));
+function sync() {
+  document.querySelectorAll(".index .chip").forEach((b) => b.setAttribute("aria-pressed", String(state[b.dataset.key] === b.dataset.value)));
+  render();
 }
-
+[["free", "無料"], ["paid", "有料"], ["all", "すべて"]].forEach(([v, l]) => chip($("price-chips"), v, l, "price"));
 CATS.forEach(([v, l]) => chip($("cat-chips"), v, l, "cat"));
 [["all", "すべて"], ...SETS.map((s) => [s.id, "セット" + s.id])].forEach(([v, l]) => chip($("set-chips"), v, l, "set"));
-$("free-only").addEventListener("change", (e) => { state.free = e.target.checked; render(); });
 $("q").addEventListener("input", (e) => { state.q = e.target.value.trim().toLowerCase(); render(); });
 
 function render() {
   const list = ITEMS.filter((it) =>
+    (state.price === "all" || (state.price === "free") === it.free) &&
     (state.cat === "all" || it.cat === state.cat) &&
     (state.set === "all" || it.sets.includes(state.set)) &&
-    (!state.free || it.free) &&
     (!state.q || (it.name + it.note + (it.warn || "") + it.store).toLowerCase().includes(state.q))
   );
   $("count").textContent = list.length + " / " + ITEMS.length + " 件";
   $("cards").innerHTML = list.length ? list.map((it) => `
-    <article class="card">
-      <div class="card-top">
-        <span class="cat">${esc(CAT_LABEL[it.cat])} · ${esc(it.store)}</span>
-        <span class="setdots" aria-label="入っているセット">${it.sets.map((s) => `<span class="setdot">${s}</span>`).join("")}</span>
+    <article class="card${it.free ? "" : " paid"}">
+      ${preview(it)}
+      <div class="body">
+        <div class="card-top">
+          <span class="cat">${esc(CAT_LABEL[it.cat])} · ${esc(it.store)}</span>
+          <span class="setdots">${it.sets.map((s) => `<span class="setdot">${s}</span>`).join("")}</span>
+        </div>
+        <h3><a href="${esc(it.url)}" target="_blank" rel="noopener">${esc(it.name)}</a></h3>
+        <div class="stamps">
+          <span class="price${it.free ? " free" : ""}">${esc(it.price)}</span>
+          ${it.lic.map((l) => `<span class="lic">${esc(l)}</span>`).join("")}
+          <span class="style">${esc(it.style)}</span>
+        </div>
+        <p class="note">${esc(it.note)}</p>
+        ${it.warn ? `<p class="warn">${esc(it.warn)}</p>` : ""}
       </div>
-      <h3><a href="${esc(it.url)}" target="_blank" rel="noopener">${esc(it.name)}</a></h3>
-      <div class="stamps">
-        <span class="price${it.free ? " free" : ""}">${esc(it.price)}</span>
-        ${it.lic.map((l) => `<span class="lic">${esc(l)}</span>`).join("")}
-      </div>
-      <dl class="meta"><dt>画風</dt><dd>${esc(it.style)}</dd></dl>
-      <p class="note">${esc(it.note)}</p>
-      ${it.warn ? `<p class="warn">${esc(it.warn)}</p>` : ""}
-    </article>`).join("") : `<div class="empty">条件に合う素材がありません。索引の条件をゆるめてください。</div>`;
+    </article>`).join("") : `<div class="empty">条件に合う素材がありません。価格を「すべて」にするか、条件をゆるめてください。</div>`;
 }
 
 $("sets").innerHTML = SETS.map((s) => `
-  <article class="set">
+  <article class="set${s.free ? "" : " paid"}">
     <div class="set-mark"><span class="set-letter">${s.id}</span><div><h3>${esc(s.title)}</h3><div class="tag">${esc(s.tag)}</div></div></div>
+    <div class="strip">${s.strip.map((id) => `<img src="previews/${id}.jpg" alt="${esc(byId[id].name)}" loading="lazy">`).join("")}</div>
     <dl class="rx">${s.rx.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl>
     <p class="why">${esc(s.why)}</p>
-    <div class="cost"><span>${esc(s.cost)}</span><span>${esc(s.costNote)}</span></div>
-    <button class="btn" type="button" data-set="${s.id}">台帳をセット${s.id}で絞り込む</button>
+    <div class="cost"><b>${s.free ? "$0" : esc(s.tag.split("·")[1].trim())}</b><span>${esc(s.after)}</span></div>
+    <button class="btn" type="button" data-set="${s.id}" data-free="${s.free}">台帳をセット${s.id}で絞り込む</button>
   </article>`).join("");
 document.querySelectorAll(".set .btn").forEach((b) => b.addEventListener("click", () => {
-  state.set = b.dataset.set; state.cat = "all"; syncChips(); render();
-  document.getElementById("ledger-h").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+  state.set = b.dataset.set; state.cat = "all"; state.price = b.dataset.free === "true" ? "free" : "all"; state.q = ""; $("q").value = "";
+  sync();
+  $("ledger-h").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
 }));
 
-render();
+const dlg = $("zoom");
+$("cards").addEventListener("click", (e) => {
+  const z = e.target.closest("button.zoom"); if (!z) return;
+  $("zoom-img").src = z.dataset.src; $("zoom-img").alt = z.dataset.cap; $("zoom-cap").textContent = z.dataset.cap;
+  if (dlg.showModal) dlg.showModal();
+});
+$("zoom-close").addEventListener("click", () => dlg.close());
+dlg.addEventListener("click", (e) => { if (e.target === dlg) dlg.close(); });
+
+sync();
 </script>
