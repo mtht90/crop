@@ -236,34 +236,40 @@ export interface ThrowInput {
   strength: number;
 }
 
-type ThrowGrade = 'EXCELLENT' | 'GREAT' | 'NICE' | 'NONE';
-const GRADE_JP: Record<ThrowGrade, string> = { EXCELLENT: 'エクセレント！', GREAT: 'グレート！', NICE: 'ナイス！', NONE: '' };
-/** 輪の判定ごとの効果（制球のぶれ・キレ・球速） */
-const THROW_FX: Record<ThrowGrade, { timingErr: number; kire: number; speed: number }> = {
-  EXCELLENT: { timingErr: 0, kire: 1.15, speed: 1.04 },
-  GREAT: { timingErr: 0.08, kire: 1.07, speed: 1.02 },
-  NICE: { timingErr: 0.18, kire: 1.0, speed: 1 },
-  NONE: { timingErr: 0.35, kire: 0.9, speed: 0.97 },
-};
+/** 投球中のキャップの様子（試合側が3Dのキャップを描くのに使う） */
+export interface HandCapState {
+  /** 指でつまんで動かした量（-1..1、画面比） */
+  ox: number;
+  oy: number;
+  /** 横回転（+ = 右回り、回転数）と縦回転（+ = 下から上） */
+  spinZ: number;
+  spinV: number;
+  holding: boolean;
+  thrown: boolean;
+}
 
 /**
- * 投球操作（ポケモンGOのような投げ方）
- * - 画面下のキャップを押さえて、上にスワイプして投げる。向きで左右、長さで高さが決まる
- * - 投げる前にキャップをくるくる回すと変化球。右回り＝右へ、左回り＝左へ。少し＝スライダー、たくさん＝カーブ
- * - 回さずに投げると、速さで変わる：普通＝ストレート、速い＝ライズ（ホップ）、ゆっくり＝ナックル（無回転）
- * - ゾーンの輪が小さいときに投げるほど ナイス／グレート／エクセレント
+ * 投球操作（ポケモンGOのように、投手の目線でキャップを投げる）
+ * - 画面下のキャップをつまんで上にスワイプ。向き＝左右、長さ＝高さ、速さ＝球速
+ * - 投げる前にキャップを回す
+ *   ・くるくる回す（横回転）：右回り＝右へ、左回り＝左へ。少し＝スライダー、たくさん＝カーブ
+ *   ・下から上へこする（下から上への回転）：手元で浮き上がるライズ
+ *   ・上から下へこする（その反対）：手前で落ちるドロップ
+ * - 回さずに投げるとストレート。ゆっくり投げるとナックル
  */
 export class PitchControl {
-  private capEl!: HTMLElement;
+  private padEl!: HTMLElement;
   private labelEl!: HTMLElement;
-  private hintEl!: HTMLElement;
   private holding = false;
   private pid: number | null = null;
   private pts: { t: number; x: number; y: number }[] = [];
   private center = { x: 0, y: 0 };
+  private radius = 100;
   private lastAng = 0;
-  private spin = 0; // 回した量（回転数。+ = 右回り）
-  private ringT = 0;
+  private spinZ = 0;
+  private spinV = 0;
+  private ox = 0;
+  private oy = 0;
   private cleanup: (() => void)[] = [];
   private disposed = false;
   private result: ThrowInput | null = null;
@@ -273,146 +279,129 @@ export class PitchControl {
     this.levels = new Map(pitches);
     const c = hud.controls;
     c.innerHTML = '';
-    const pad = h('div', 'gopad');
-    this.labelEl = h('div', 'golabel', '');
-    this.capEl = h('div', 'gocap', '<div class="gocap-face">CAP</div>');
-    pad.append(this.labelEl, this.capEl);
-    this.hintEl = h('div', 'hint', 'キャップを上にスワイプして投げる（向き＝左右、長さ＝高さ）<br>投げる前にくるくる回すと変化球。回さず速く＝ライズ、ゆっくり＝ナックル');
-    c.append(pad, this.hintEl);
+    this.padEl = h('div', 'fpspad');
+    this.labelEl = h('div', 'fpslabel', '');
+    const hint = h('div', 'hint fpshint', 'キャップを上にスワイプして投げる<br>くるくる＝横に曲がる／下から上へこする＝ライズ／上から下へこする＝ドロップ');
+    this.padEl.append(this.labelEl, hint);
+    c.append(this.padEl);
 
     const down = (e: PointerEvent) => {
       if (this.result) return;
       e.preventDefault();
-      e.stopPropagation();
-      this.capEl.setPointerCapture(e.pointerId);
+      this.padEl.setPointerCapture(e.pointerId);
       this.pid = e.pointerId;
       this.holding = true;
-      const r = this.capEl.getBoundingClientRect();
-      this.center = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+      const r = this.padEl.getBoundingClientRect();
+      this.center = { x: r.left + r.width / 2, y: r.top + r.height * 0.6 };
+      this.radius = Math.min(r.width, r.height) * 0.42;
       this.pts = [{ t: performance.now(), x: e.clientX, y: e.clientY }];
       this.lastAng = Math.atan2(e.clientY - this.center.y, e.clientX - this.center.x);
-      this.spin = 0;
-      this.capEl.classList.add('held');
     };
     const move = (e: PointerEvent) => {
       if (!this.holding || e.pointerId !== this.pid) return;
-      this.pts.push({ t: performance.now(), x: e.clientX, y: e.clientY });
-      const dx = e.clientX - this.center.x, dy = e.clientY - this.center.y;
-      const dist = Math.hypot(dx, dy);
-      // キャップのまわりで指を回した分だけ回転をためる（離れたスワイプ中は数えない）
-      if (dist > 10 && dist < 95) {
-        const ang = Math.atan2(dy, dx);
-        let d = ang - this.lastAng;
-        d = Math.atan2(Math.sin(d), Math.cos(d));
-        this.spin += d / (Math.PI * 2);
-        this.lastAng = ang;
-      } else this.lastAng = Math.atan2(dy, dx);
-      this.capEl.style.transform = `translate(${THREE.MathUtils.clamp(dx, -40, 40) * 0.4}px, ${THREE.MathUtils.clamp(dy, -60, 30) * 0.4}px) rotate(${this.spin * 360}deg)`;
+      const prev = this.pts[this.pts.length - 1];
+      const now = performance.now();
+      this.pts.push({ t: now, x: e.clientX, y: e.clientY });
+      const rx = e.clientX - this.center.x, ry = e.clientY - this.center.y;
+      const dist = Math.hypot(rx, ry);
+      const ddx = e.clientX - prev.x, ddy = e.clientY - prev.y;
+      const dt = Math.max(8, now - prev.t);
+      if (dist < this.radius) {
+        // 横回転：キャップのまわりで円を描いた角度
+        if (dist > 14) {
+          const ang = Math.atan2(ry, rx);
+          let d = ang - this.lastAng;
+          d = Math.atan2(Math.sin(d), Math.cos(d));
+          this.spinZ += d / (Math.PI * 2);
+          this.lastAng = ang;
+        }
+        // 縦回転：速くこすった向きだけ数える（ゆっくり戻す動きは数えない）
+        if (Math.abs(ddy) > Math.abs(ddx) * 1.2 && Math.abs(ddy / dt) > 0.3) this.spinV += -ddy / 160;
+      } else this.lastAng = Math.atan2(ry, rx);
+      this.ox = THREE.MathUtils.clamp(rx / this.radius, -1, 1);
+      this.oy = THREE.MathUtils.clamp(ry / this.radius, -1.6, 1);
       this.updateLabel();
     };
     const up = (e: PointerEvent) => {
       if (!this.holding || e.pointerId !== this.pid) return;
       this.pts.push({ t: performance.now(), x: e.clientX, y: e.clientY });
       this.holding = false;
-      this.capEl.classList.remove('held');
       this.release();
     };
-    this.capEl.addEventListener('pointerdown', down);
-    this.capEl.addEventListener('pointermove', move);
-    this.capEl.addEventListener('pointerup', up);
-    this.capEl.addEventListener('pointercancel', () => this.reset());
+    this.padEl.addEventListener('pointerdown', down);
+    this.padEl.addEventListener('pointermove', move);
+    this.padEl.addEventListener('pointerup', up);
+    this.padEl.addEventListener('pointercancel', () => {
+      this.holding = false;
+      this.ox = this.oy = 0;
+    });
     const kd = (e: KeyboardEvent) => {
-      if ((e.key === ' ' || e.key === 'Enter') && !this.result) {
-        this.throwWith(0, 120, 0.6, 0);
-      }
+      if ((e.key === ' ' || e.key === 'Enter') && !this.result) this.throwWith(0, 150, 0.6);
     };
     window.addEventListener('keydown', kd);
     this.cleanup.push(() => window.removeEventListener('keydown', kd));
     this.updateLabel();
   }
 
-  private reset() {
-    this.holding = false;
-    this.spin = 0;
-    this.capEl.classList.remove('held');
-    this.capEl.style.transform = '';
-    this.updateLabel();
+  get state(): HandCapState {
+    return { ox: this.ox, oy: this.oy, spinZ: this.spinZ, spinV: this.spinV, holding: this.holding, thrown: !!this.result };
   }
 
-  /** 回した量から球種と向き */
+  /** 回し方から球種と向き */
   private spinPitch(): { kind: PitchKind; side: number; amount: number } | null {
-    const t = Math.abs(this.spin);
-    if (t < 0.5) return null;
-    const side = this.spin > 0 ? 1 : -1;
-    const kind: PitchKind = t < 1.4 ? 'slider' : 'curve';
-    return { kind, side, amount: THREE.MathUtils.clamp((t - 0.5) / 2, 0, 1) };
+    const z = Math.abs(this.spinZ), v = Math.abs(this.spinV);
+    if (Math.max(z, v) < 0.45) return null;
+    if (v > z * 1.2) return { kind: this.spinV > 0 ? 'rise' : 'drop', side: -1, amount: THREE.MathUtils.clamp((v - 0.45) / 1.8, 0, 1) };
+    return { kind: z < 1.4 ? 'slider' : 'curve', side: this.spinZ > 0 ? 1 : -1, amount: THREE.MathUtils.clamp((z - 0.45) / 2, 0, 1) };
   }
 
   private updateLabel() {
     const sp = this.spinPitch();
-    this.capEl.classList.toggle('spin-s', sp?.kind === 'slider');
-    this.capEl.classList.toggle('spin-c', sp?.kind === 'curve');
-    this.labelEl.innerHTML = sp ? `<b>${PITCHES[sp.kind].name}</b> ${sp.side > 0 ? '右へ ▶' : '◀ 左へ'}<span class="gobar"><i style="width:${Math.round(sp.amount * 100)}%"></i></span>` : this.holding ? '回すと変化球' : '';
+    const dir = !sp ? '' : sp.kind === 'rise' ? '⤴ 浮き上がる' : sp.kind === 'drop' ? '⤵ 落ちる' : sp.side > 0 ? '右へ ▶' : '◀ 左へ';
+    this.labelEl.innerHTML = sp
+      ? `<b>${PITCHES[sp.kind].name}</b> ${dir}<span class="gobar"><i style="width:${Math.round(20 + sp.amount * 80)}%"></i></span>`
+      : this.holding ? '<b>ストレート</b>' : '';
   }
 
   private release() {
     const pts = this.pts;
     const b = pts[pts.length - 1];
-    // フリック部分：最後に上へ動き続けた区間（回していた部分は含めない）
+    // 最後に上へ動き続けた区間をフリックとみなす
     let i = pts.length - 1;
     while (i > 0 && pts[i - 1].y >= pts[i].y - 2) i--;
     const a = pts[i];
     const dx = b.x - a.x, dy = b.y - a.y;
-    const dt = Math.max(16, b.t - a.t);
-    if (dy > -35) {
-      this.reset();
-      return; // 上に投げていない
+    const top = this.padEl.getBoundingClientRect().top;
+    // キャップの上で止めた（こすっただけ）なら投げない。回転は残す
+    if (dy > -60 || b.y > top + 30) {
+      this.ox = this.oy = 0;
+      return;
     }
-    const speed = THREE.MathUtils.clamp((-dy / dt - 0.35) / 1.7, 0, 1);
-    // 上へ払った長さで高さ
-    const len = -dy;
-    this.throwWith(Math.atan2(dx, -dy), len, speed, this.spin);
+    const speed = THREE.MathUtils.clamp((-dy / Math.max(16, b.t - a.t) - 0.35) / 1.7, 0, 1);
+    this.throwWith(Math.atan2(dx, -dy), -dy, speed);
   }
 
-  /** 向き（ラジアン、右が+）・スワイプの長さ（px）・速さ（0..1）・回転から投球を作る */
-  private throwWith(angle: number, lengthPx: number, speed: number, spin: number) {
-    const ringScale = this.ringScale();
-    const grade: ThrowGrade = ringScale < 0.35 ? 'EXCELLENT' : ringScale < 0.6 ? 'GREAT' : ringScale < 0.85 ? 'NICE' : 'NONE';
-    const fx = THROW_FX[grade];
-    if (grade !== 'NONE') this.hud.timingGrade(grade, GRADE_JP[grade]);
-    this.hud.timingCircle(null, 1);
-    // コース：向き ±25° でゾーンの外まで、長さ 60〜300px で低め〜高め
+  /** 向き（ラジアン、右が+）・上へ払った長さ（px）・速さ（0..1）から投球を作る */
+  private throwWith(angle: number, lengthPx: number, speed: number) {
     const cx = (ZONE.x0 + ZONE.x1) / 2;
-    const x = cx + THREE.MathUtils.clamp(Math.tan(angle) / Math.tan(THREE.MathUtils.degToRad(25)), -1.4, 1.4) * 0.42;
-    const hNorm = THREE.MathUtils.clamp((lengthPx - 60) / 240, 0, 1);
-    const y = ZONE.y0 - 0.22 + hNorm * (ZONE.y1 - ZONE.y0 + 0.44);
-    this.spin = spin;
+    const x = cx + THREE.MathUtils.clamp(Math.tan(angle) / Math.tan(THREE.MathUtils.degToRad(22)), -1.5, 1.5) * 0.42;
+    const hNorm = THREE.MathUtils.clamp((lengthPx - 90) / 300, 0, 1);
+    const y = ZONE.y0 - 0.24 + hNorm * (ZONE.y1 - ZONE.y0 + 0.48);
     const sp = this.spinPitch();
     let kind: PitchKind, side = -1, strength = 1;
     if (sp) {
       kind = sp.kind;
       side = sp.side;
-      strength = (0.65 + sp.amount * 0.85) * fx.kire;
-    } else if (speed > 0.82) {
-      kind = 'rise';
-      strength = (0.6 + (speed - 0.82) * 3) * fx.kire;
-    } else if (speed < 0.22) {
+      strength = 0.6 + sp.amount * 0.9;
+    } else if (speed < 0.18) {
       kind = 'knuckle';
-      strength = (1.2 - speed * 2) * fx.kire;
+      strength = 1.2 - speed * 2;
     } else kind = 'straight';
     // 持っていない球種は変化が弱い（変化量 2 相当）
     const level = kind === 'straight' ? 0 : this.levels.get(kind) ?? 2;
-    this.result = { kind, level, aim: new THREE.Vector2(x, y), timingErr: fx.timingErr, speedNorm: THREE.MathUtils.clamp(speed * fx.speed, 0, 1), bend: 0, strength: THREE.MathUtils.clamp(strength, 0.4, 1.6), side };
-    this.capEl.classList.add('thrown');
+    this.result = { kind, level, aim: new THREE.Vector2(x, y), timingErr: 0.12, speedNorm: speed, bend: 0, strength: THREE.MathUtils.clamp(strength, 0.4, 1.6), side };
     this.labelEl.innerHTML = `<b>${PITCHES[kind].name}</b>`;
-    audio.play('throw', { volume: 0.35, rate: 1.3 });
     this.onStart(this.result);
-  }
-
-  /** 輪の大きさ（1=ゾーン幅いっぱい → 小さくなって繰り返す） */
-  private ringScale() {
-    const cyc = 1.5;
-    return 1 - 0.85 * ((this.ringT % cyc) / cyc);
   }
 
   windup(_t: number, _releaseT: number) {}
@@ -423,18 +412,21 @@ export class PitchControl {
 
   update(dt: number) {
     if (this.disposed || this.result) return;
-    this.ringT += dt;
-    const s = this.ringScale();
-    const w = this.hud.zone.x1 - this.hud.zone.x0;
-    const zc = new THREE.Vector2((ZONE.x0 + ZONE.x1) / 2, (ZONE.y0 + ZONE.y1) / 2);
-    this.hud.timingCircle(zc, (w * 1.15 * s) / 30, s < 0.35 ? 'ex' : s < 0.6 ? 'gr' : s < 0.85 ? 'ni' : '');
+    // 指を離している間は回転が少しずつ収まる
+    if (!this.holding) {
+      const k = Math.exp(-dt * 0.5);
+      this.spinZ *= k;
+      this.spinV *= k;
+      if (Math.abs(this.spinZ) < 0.05) this.spinZ = 0;
+      if (Math.abs(this.spinV) < 0.05) this.spinV = 0;
+      this.updateLabel();
+    }
   }
 
   dispose() {
     this.disposed = true;
     for (const f of this.cleanup) f();
     this.hud.clearControls();
-    this.hud.timingCircle(null, 1);
   }
 }
 

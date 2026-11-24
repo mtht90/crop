@@ -64,7 +64,11 @@ export class Match {
   private pendingThrow: ThrowInput | null = null;
   private cpuSwing: ReturnType<typeof cpuPlanSwing> | null = null;
   private live: Judge | null = null;
-  private camMode: 'pitch' | 'follow' | 'wide' = 'pitch';
+  private camMode: 'pitch' | 'fps' | 'follow' | 'wide' = 'pitch';
+  /** 投手目線で手に持っているキャップ */
+  private handCap: THREE.Object3D;
+  private handRot = new THREE.Euler();
+  private throwAnimT = -1;
   private camPos = new THREE.Vector3();
   private camLook = new THREE.Vector3();
   private lastSpeed: number | null = null;
@@ -89,6 +93,15 @@ export class Match {
     this.cap = makeCapBall();
     this.cap.visible = false;
     scene.add(this.cap);
+    // 手元のキャップ（カメラに付ける）。天面をこちらに向ける
+    this.handCap = new THREE.Group();
+    const hc = makeCapBall();
+    hc.rotation.x = Math.PI / 2;
+    hc.scale.setScalar(1.9);
+    this.handCap.add(hc);
+    this.handCap.visible = false;
+    if (!engine.camera.parent) scene.add(engine.camera);
+    engine.camera.add(this.handCap);
     this.capShadow = new THREE.Mesh(new THREE.CircleGeometry(0.09, 20), new THREE.MeshBasicMaterial({ color: '#000', transparent: true, opacity: 0.35, depthWrite: false }));
     this.capShadow.rotation.x = -Math.PI / 2;
     this.capShadow.visible = false;
@@ -104,6 +117,7 @@ export class Match {
     this.batCtl?.dispose();
     for (const c of this.chars.values()) this.engine.scene.remove(c.root);
     this.engine.scene.remove(this.cap, this.capShadow, this.trail.mesh);
+    this.engine.camera.remove(this.handCap);
     for (const w of this.waits) w.r();
   }
 
@@ -344,6 +358,9 @@ export class Match {
         if (this.phase === 'aim') this.beginWindup(cp);
       });
     } else {
+      this.camMode = 'fps';
+      this.throwAnimT = -1;
+      this.handRot.set(0, 0, 0);
       this.pitchCtl = new PitchControl(this.hud, pitcher.pitches ?? [], (t) => {
         if (this.phase === 'aim') this.beginWindup(t);
       });
@@ -356,7 +373,8 @@ export class Match {
     this.pendingThrow = t;
     this.phase = 'windup';
     // 自分で投げたときは、はじいた直後にリリースが来るよう投球動作の途中から始める
-    this.windT = this.pitchCtl ? 0.42 : 0;
+    this.windT = this.pitchCtl ? PITCH_RELEASE_T - 0.16 : 0;
+    if (this.pitchCtl) this.throwAnimT = 0;
     // 投手操作のときは、リリースまで判定の輪を出すので操作を残す
     if (!this.pitchCtl) this.hud.showAim(null);
   }
@@ -391,8 +409,14 @@ export class Match {
     const breakMul = THREE.MathUtils.clamp(str, 0.4, 1.65) * (t.timingErr > 0.45 ? 0.6 : 1);
     const extraBx = 0;
     const release = new THREE.Vector3();
-    this.char(pitcher).handWorld('r', release);
-    release.y = Math.max(release.y, 0.9);
+    if (this.camMode === 'fps') {
+      this.engine.camera.updateMatrixWorld();
+      this.engine.camera.localToWorld(release.set(0.08, -0.12, -0.9));
+      this.handCap.visible = false;
+    } else {
+      this.char(pitcher).handWorld('r', release);
+      release.y = Math.max(release.y, 0.9);
+    }
     this.path = new PitchPath({ kind: t.kind, level: t.level, speedKmh: velo, release, target, breakMul, extraBx, side: t.side ?? -1, seed: Math.random() });
     this.lastSpeed = Math.round(velo);
     this.lastPitchName = def.name;
@@ -469,7 +493,7 @@ export class Match {
       this.windT += dt;
       pc.setPose(pitchPose(this.windT), 1);
       // キャップを手に持たせる
-      if (this.windT > 0.15) {
+      if (this.windT > 0.15 && this.camMode !== 'fps') {
         this.cap.visible = true;
         pc.handWorld('r', this.cap.position);
       }
@@ -515,7 +539,8 @@ export class Match {
       else this.cap.rotateX(Math.sin(this.time * 17) * 0.25);
       // 遠くのキャップは大きめに描いて見失わないようにする（プロスピのボールの見え方に近づける）
       const far = this.phase === 'flight' || this.phase === 'windup' ? THREE.MathUtils.clamp(-this.cap.position.z / 9.22, 0, 1) : 0;
-      this.cap.scale.setScalar(1 + far * 1.4);
+      // 投手目線では遠ざかるほど大きめに、打者側から見るときは遠いほど大きめに
+      this.cap.scale.setScalar(this.camMode === 'fps' ? 1 + (1 - far) * 0.6 : 1 + far * 1.4);
       this.capShadow.position.set(this.cap.position.x, 0.012, this.cap.position.z);
       const hgt = Math.max(0, this.cap.position.y);
       this.capShadow.scale.setScalar(1 + hgt * 0.08);
@@ -529,6 +554,11 @@ export class Match {
     // 投球カメラでは捕手を半透明にしてゾーンを見やすくする
     const catcher = this.fielders.find((f) => f.pos === 'C');
     if (catcher) catcher.char.root.visible = !(this.camMode === 'pitch' && this.phase !== 'play');
+    // 投手目線では自分（投手）は映さない
+    if (this.camMode === 'fps') pc.root.visible = false;
+    else if (this.fielders.some((f) => f.player === pitcher)) pc.root.visible = true;
+    this.updateHandCap(dt);
+    if (catcher && this.camMode === 'fps' && this.phase === 'aim') catcher.char.setPose(this.crouchPose(), 1);
     this.updateCamera(dt);
   }
 
@@ -541,7 +571,7 @@ export class Match {
     const cc = this.fielders.find((f) => f.pos === 'C')!.char;
     const end = path.pos(path.duration + 0.08);
     const local = cc.root.worldToLocal(end.clone());
-    cc.setPose({ handL: local.clone().add(V(0.02, 0, 0)), handR: local.clone().add(V(-0.12, -0.06, -0.05)) }, 0.85);
+    cc.setPose(this.crouchPose(local), 0.9);
 
     // 着弾予測：今の向きと速さのまま来たら本塁上のどこを通るか（変化は最後に効くので読み切れるとは限らない）
     if (this.userBatting && this.opts.predict && !this.opts.autoplay) {
@@ -810,10 +840,73 @@ export class Match {
     this.resolvePitch('inplay');
   }
 
+  /** 捕手のしゃがんだ構え（glove: キャラ座標のミット位置） */
+  private crouchPose(glove = V(0.05, 0.55, 0.35)): ProcPose {
+    return {
+      hips: V(0, -0.12, -0.02),
+      torso: V(0, 14, 0),
+      footL: V(0.2, 0.105, 0.06),
+      footR: V(-0.2, 0.105, 0.06),
+      kneeL: V(0.5, 0, 1),
+      kneeR: V(-0.5, 0, 1),
+      handL: glove.clone().add(V(0.02, 0, 0)),
+      handR: V(-0.12, 0.42, 0.22),
+      head: new THREE.Vector2(0, -6),
+    };
+  }
+
+  /** 手元のキャップ：つまんだ位置に寄り、回した向きに回る。投げると前へ飛んでいく */
+  private updateHandCap(dt: number) {
+    const show = this.camMode === 'fps' && (this.phase === 'aim' || (this.phase === 'windup' && this.throwAnimT >= 0));
+    this.handCap.visible = show;
+    if (!show) return;
+    const st = this.pitchCtl?.state;
+    // 画面の下から 1/4 あたりに来るよう、視野角から置く位置を決める
+    const dist = 0.72;
+    const halfH = Math.tan(THREE.MathUtils.degToRad(this.engine.camera.fov / 2)) * dist;
+    const base = new THREE.Vector3(0, -halfH * 0.55, -dist);
+    this.handCap.children[0].scale.setScalar(halfH * 1.7);
+    if (this.throwAnimT >= 0) {
+      this.throwAnimT += dt;
+      const k = Math.min(1, this.throwAnimT / 0.16);
+      base.lerp(new THREE.Vector3(0.05, -halfH * 0.2, -1.8), k);
+      this.handCap.scale.setScalar(1 - k * 0.5);
+    } else if (st) {
+      base.x += st.ox * halfH * 0.25;
+      base.y -= st.oy * halfH * 0.2;
+      this.handCap.scale.setScalar(st.holding ? 1.06 : 1);
+    }
+    this.handCap.position.copy(base);
+    // 回転：横回転は画面の奥行き軸まわり、縦回転は横軸まわり
+    const zs = st?.spinZ ?? 0, vs = st?.spinV ?? 0;
+    this.handRot.z -= zs * dt * 10;
+    this.handRot.x -= vs * dt * 10;
+    this.handCap.rotation.set(this.handRot.x, 0, this.handRot.z);
+  }
+
   // ---------------------------------------------------------------------
   private updateCamera(dt: number) {
     const cam = this.engine.camera;
-    if (this.camMode === 'pitch') {
+    if (this.camMode === 'fps') {
+      // 投手の目線（マウンドから本塁を見る）
+      this.engine.plateHalfWidth = 2.1;
+      this.engine.plateDist = 9.6;
+      this.engine.fixedVFov = null;
+      this.engine.fitFov();
+      const pos = V(0, 1.5, POSITIONS.P.z + 0.3);
+      const look = V(0, 0.15, 0);
+      cam.position.copy(pos);
+      cam.lookAt(look);
+      this.camPos.copy(pos);
+      this.camLook.copy(look);
+      cam.updateMatrixWorld();
+      const p0 = V(ZONE.x0, ZONE.y1, 0).project(cam);
+      const p1 = V(ZONE.x1, ZONE.y0, 0).project(cam);
+      const w = window.innerWidth, h = window.innerHeight;
+      // 投手側から見ると左右が逆になるので、画面上の左右で並べ直す
+      const xa = ((p0.x + 1) / 2) * w, xb = ((p1.x + 1) / 2) * w;
+      this.hud.setZone({ x0: Math.min(xa, xb), y0: ((1 - p0.y) / 2) * h, x1: Math.max(xa, xb), y1: ((1 - p1.y) / 2) * h });
+    } else if (this.camMode === 'pitch') {
       const q = PITCH_CAM;
       this.engine.plateHalfWidth = q[6];
       this.engine.plateDist = q[2];

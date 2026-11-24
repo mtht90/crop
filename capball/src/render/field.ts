@@ -101,14 +101,6 @@ function groundTexture() {
     const [px0, py0] = toPx(-3.2, PASSBALL_Z), [px1] = toPx(3.2, PASSBALL_Z);
     c.beginPath(); c.moveTo(px0, py0); c.lineTo(px1, py0); c.stroke();
     c.setLineDash([]);
-    // 文字
-    c.fillStyle = 'rgba(255,255,255,0.55)';
-    c.font = `bold ${0.55 * k}px "Dela Gothic One", sans-serif`;
-    c.textAlign = 'center';
-    const [ox, oy] = toPx(0, -5.2);
-    c.fillText('OUT ZONE', ox, oy);
-    const [tx, ty] = toPx(0, -12.4);
-    c.fillText('HIT ZONE', tx, ty);
   });
 }
 

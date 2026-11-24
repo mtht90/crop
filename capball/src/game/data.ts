@@ -5,7 +5,7 @@ import type { Uniform } from '../render/character';
  * 球種。キャップ野球で知られている投げ方に合わせる。
  * キャップの面の向きと傾き、回転のかけ方で変化が決まる。
  */
-export type PitchKind = 'straight' | 'curve' | 'slider' | 'knuckle' | 'rise';
+export type PitchKind = 'straight' | 'curve' | 'slider' | 'knuckle' | 'rise' | 'drop';
 
 export interface PitchDef {
   kind: PitchKind;
@@ -29,6 +29,7 @@ export const PITCHES: Record<PitchKind, PitchDef> = {
   curve: { kind: 'curve', name: 'カーブ', grip: '面を約45度傾けて弾く。横回転で大きく曲がる', dir: 'down-left', bx: -0.1, by: -0.055, late: 0.3, speedMul: 0.72, arc: 0.35, tilt: 0.78 },
   slider: { kind: 'slider', name: 'スライダー', grip: '面を上に向けて約30度傾け、横に滑らせる', dir: 'left', bx: -0.12, by: -0.005, late: 0.7, speedMul: 0.84, arc: 0.08, tilt: 0.52 },
   rise: { kind: 'rise', name: 'ライズ', grip: '下から面を寝かせて弾き、打者の手元で浮き上がらせる', dir: 'up', bx: 0, by: 0.095, late: 0.75, speedMul: 0.86, arc: -0.1, tilt: -0.9 },
+  drop: { kind: 'drop', name: 'ドロップ', grip: '上から下へ回転をかける。打者の手前でストンと落ちる', dir: 'down', bx: 0, by: -0.11, late: 0.82, speedMul: 0.84, arc: 0.12, tilt: 0.9 },
   knuckle: { kind: 'knuckle', name: 'ナックル', grip: 'キャップを90度立てて無回転で投げる。揺れて落ちる', dir: 'wobble', bx: 0, by: -0.035, late: 0.4, speedMul: 0.62, arc: 0.18, tilt: 1.57 },
 };
 
@@ -102,7 +103,7 @@ export const TEAMS: Team[] = [
       P('風見 ソウタ', 6, 'IF2', 'knight', 'R', 72, 64, 80, 70),
       P('剛田 ダイチ', 3, 'DH', 'barbarian', 'R', 58, 90, 30, 30),
       P('沢村 マモル', 2, 'C', 'mage', 'R', 60, 56, 72, 46),
-      { ...P('青井 レン', 1, 'P', 'knight', 'R', 44, 40, 62, 56), velo: 96, control: 72, stamina: 78, pitches: [['slider', 5], ['curve', 3], ['rise', 4]] },
+      { ...P('青井 レン', 1, 'P', 'knight', 'R', 44, 40, 62, 56), velo: 96, control: 72, stamina: 78, pitches: [['slider', 5], ['curve', 3], ['rise', 4], ['drop', 4]] },
     ],
     bench: [{ ...P('水城 ナギ', 11, 'P', 'rogue', 'R', 38, 30, 58, 55), velo: 82, control: 80, stamina: 60, pitches: [['curve', 6], ['knuckle', 4]] }],
   },
@@ -118,9 +119,9 @@ export const TEAMS: Team[] = [
       P('日向 コタロウ', 8, 'IF1', 'knight', 'L', 70, 58, 72, 74),
       P('黒鉄 ゴウ', 7, 'DH', 'barbarian', 'R', 56, 94, 30, 30),
       P('熊谷 テツ', 2, 'C', 'barbarian', 'R', 58, 66, 70, 40),
-      { ...P('真田 ヒカル', 18, 'P', 'mage', 'R', 40, 36, 64, 58), velo: 90, control: 64, stamina: 85, pitches: [['knuckle', 6], ['rise', 5], ['curve', 3]] },
+      { ...P('真田 ヒカル', 18, 'P', 'mage', 'R', 40, 36, 64, 58), velo: 90, control: 64, stamina: 85, pitches: [['knuckle', 6], ['rise', 5], ['curve', 3], ['drop', 3]] },
     ],
-    bench: [{ ...P('雨宮 シズク', 16, 'P', 'rogue', 'R', 30, 28, 60, 52), velo: 100, control: 56, stamina: 55, pitches: [['slider', 6], ['rise', 3]] }],
+    bench: [{ ...P('雨宮 シズク', 16, 'P', 'rogue', 'R', 30, 28, 60, 52), velo: 100, control: 56, stamina: 55, pitches: [['slider', 6], ['drop', 5], ['rise', 3]] }],
   },
 ];
 
