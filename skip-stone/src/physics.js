@@ -130,7 +130,7 @@ function contact(s) {
   const vyOut = Math.max(vyIn * (0.5 + 0.15 * q), lift);
 
   // 進行方向のぶれ(ぐらつき)と回転によるそれ
-  const jitter = (s.rand() - 0.5) * s.wobble * 0.14 + s.spinDir * s.spin * 0.015;
+  const jitter = (s.rand() - 0.5) * s.wobble * 0.24 + s.spinDir * s.spin * 0.015;
   const yaw = Math.atan2(s.vel.x, -s.vel.z) + jitter;
   s.vel.x = Math.sin(yaw) * vhNew;
   s.vel.z = -Math.cos(yaw) * vhNew;

@@ -134,6 +134,19 @@ export function createSwipeInput(el, h) {
     for (let i = startIdx + 1; i < pts.length; i++) path += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
     const chord = Math.hypot(last.x - first.x, last.y - first.y);
     const straight = path > 1 ? chord / path : 1;
+    // はじきの曲がり(弧のふくらみ)。+ は画面の右へふくらんだ弧
+    let bend = 0;
+    if (chord > 1) {
+      const cx = (last.x - first.x) / chord;
+      const cy = (last.y - first.y) / chord;
+      let maxD = 0;
+      for (let i = startIdx; i < pts.length; i++) {
+        const d = (pts[i].x - first.x) * -cy + (pts[i].y - first.y) * cx;
+        if (Math.abs(d) > Math.abs(maxD)) maxD = d;
+      }
+      // 上向きのはじきでは d>0 が右へのふくらみ
+      bend = maxD / chord;
+    }
     if (up > 0.9 && !stale) {
       h.onThrow({
         up,
@@ -141,6 +154,7 @@ export function createSwipeInput(el, h) {
         x: cur.x,
         y: cur.y,
         straight,
+        bend,
         // 回転が弱すぎるときは回していない扱い
         spin: spinNow >= SPIN_MIN ? spinNow : 0,
         spinDir: spinNow >= SPIN_MIN ? cur.dir : 0,

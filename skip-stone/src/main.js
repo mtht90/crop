@@ -214,7 +214,7 @@ function setHint() {
 
 // ---------- コース ----------
 const GATE_R = 1.3; // ゲート(アーチ)の半径
-const GATE_DIST = [10, 17, 24, 31, 39, 47, 56]; // 投げる位置からの道のり (m)
+const GATE_DIST = [14, 21, 29, 37, 46, 55, 65]; // 投げる位置からの道のり (m)
 let course = null;
 
 function makeCourse() {
@@ -256,7 +256,7 @@ function checkGates(p) {
     const s1 = (p.x - g.x) * tx + (p.z - g.z) * tz;
     if (s0 < 0 && s1 >= 0) {
       const lateral = (p.x - g.x) * -tz + (p.z - g.z) * tx;
-      const hit = Math.abs(lateral) < GATE_R * 0.95 && p.y < GATE_R * 0.9;
+      const hit = Math.abs(lateral) < GATE_R * 0.95 && p.y < GATE_R * 1.25; // アーチの少し上まではくぐった扱い
       throwInfo.gateState[i] = hit ? 'hit' : 'miss';
       fx.markGate(i, hit);
       if (hit) {
@@ -328,7 +328,9 @@ function launch(t) {
   // はじく速さ → 初速(だんだん頭打ちになるように)
   const speed = 6 + 20 * (1 - Math.exp(-(t.up - 0.9) / 2.6));
   const xOff = (t.x / window.innerWidth - 0.5) * 0.25;
-  const yaw = THREE.MathUtils.clamp(Math.atan2(t.side, t.up) * 0.55 + xOff, -0.6, 0.6);
+  // 弧を描いたはじきは、弧の終わりの向き(ふくらみと反対)へ石がそれる
+  const veer = THREE.MathUtils.clamp(-(t.bend || 0) * 1.6, -0.22, 0.22);
+  const yaw = THREE.MathUtils.clamp(Math.atan2(t.side, t.up) * 0.55 + xOff + veer, -0.65, 0.65);
 
   const start = new THREE.Vector3();
   stoneMesh.getWorldPosition(start);
@@ -405,7 +407,6 @@ function onContact(e) {
       audio.judge(j);
       fx.ripple(at, j === 'excellent' ? 2.2 : 1.5, 0, 1.6);
       if (j === 'excellent') {
-        game.slowmo = 0.55;
         fx.sparkle(at, COLORS.excellent, 60, 2.5);
         vibrate(30);
       }
@@ -570,7 +571,7 @@ function updateFlight(dt) {
   }
   stoneRoot.quaternion.setFromEuler(stoneRoot.rotation);
   const wob = sim.wobble;
-  stoneTilt.rotation.set(0.33 + Math.sin(elapsed * 11) * wob * 0.25, 0, Math.sin(elapsed * 9) * wob * 0.45);
+  stoneTilt.rotation.set(0.33 + Math.sin(elapsed * 11) * wob * 0.4, 0, Math.sin(elapsed * 9) * wob * 0.75);
   spinVisual = 10 + vh * 2.2 * (0.4 + 0.6 * sim.spin);
   stoneSpin.rotation.y += spinVisual * dt * (sim.spinDir || 1) * -1;
   fx.updateTrail(camera, stoneRoot.position);
