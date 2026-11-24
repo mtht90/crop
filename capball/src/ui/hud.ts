@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { breakVector, grade, PITCHES, type PitchKind, POS_JP } from '../game/data';
+import { grade, PITCHES, type PitchKind, POS_JP } from '../game/data';
 import { ZONE } from '../game/geom';
 import type { GameState } from '../game/rules';
 import type { SwingMode } from '../game/batting';
@@ -14,15 +14,6 @@ const h = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', html = '') =
 
 export interface ZoneRect { x0: number; y0: number; x1: number; y1: number }
 
-/** 球種ボタンの軌道アイコン（向きははじき方で決まるので、形だけを表す） */
-const PITCH_ICON: Record<PitchKind, string> = {
-  straight: '<path d="M14 25 L14 5"/><circle cx="14" cy="5" r="3" class="ic-cap"/>',
-  curve: '<path d="M20 4 C 2 6, 4 20, 14 25"/><circle cx="14" cy="25" r="3" class="ic-cap"/>',
-  slider: '<path d="M20 4 L 19 17 Q 18 23 7 24"/><circle cx="7" cy="24" r="3" class="ic-cap"/>',
-  rise: '<path d="M14 26 L14 14 Q 14 6 20 4"/><circle cx="20" cy="4" r="3" class="ic-cap"/>',
-  knuckle: '<path d="M14 4 C 4 9, 24 13, 14 17 C 6 20, 20 23, 14 26"/><circle cx="14" cy="26" r="3" class="ic-cap"/>',
-};
-const pitchIcon = (k: PitchKind, side = -1) => `<svg class="pic" viewBox="0 0 28 30" aria-hidden="true"${side > 0 && (k === 'curve' || k === 'slider') ? ' style="transform:scaleX(-1)"' : ''}>${PITCH_ICON[k]}</svg>`;
 
 export class Hud {
   readonly root = h('div', 'layer');
@@ -160,19 +151,19 @@ export class Hud {
   private tcircleEl = h('div', 'tcircle hidden');
   private gradeEl = h('div', 'tgrade hidden');
   /** 投球タイミングの輪（狙いの位置に、scale=1 で狙いの円と重なる） */
-  timingCircle(v: THREE.Vector2 | null, scale: number) {
+  timingCircle(v: THREE.Vector2 | null, scale: number, tone = '') {
     if (!this.tcircleEl.isConnected) this.root.append(this.tcircleEl, this.gradeEl);
     this.tcircleEl.classList.toggle('hidden', !v);
     if (!v) return;
     const p = this.toScreen(v.x, v.y);
     const d = 30 * scale;
     Object.assign(this.tcircleEl.style, { left: p.x - d / 2 + 'px', top: p.y - d / 2 + 'px', width: d + 'px', height: d + 'px' });
-    this.tcircleEl.classList.toggle('near', Math.abs(scale - 1) < 0.1);
+    this.tcircleEl.className = 'tcircle' + (tone ? ' t-' + tone : '');
   }
-  timingGrade(g: string) {
+  timingGrade(g: string, label = g) {
     if (!this.gradeEl.isConnected) this.root.append(this.tcircleEl, this.gradeEl);
     this.gradeEl.className = 'tgrade g-' + g.toLowerCase();
-    this.gradeEl.textContent = g;
+    this.gradeEl.textContent = label;
     const z = this.zone;
     this.gradeEl.style.left = (z.x0 + z.x1) / 2 + 'px';
     this.gradeEl.style.top = z.y0 - 34 + 'px';
@@ -245,224 +236,204 @@ export interface ThrowInput {
   strength: number;
 }
 
-type Grade = 'EXCELLENT' | 'GREAT' | 'GOOD' | 'BAD';
-/** タイミング判定ごとの効果（制球のぶれ・キレ・球速） */
-const GRADE_FX: Record<Grade, { timingErr: number; strength: number; speedNorm: number }> = {
-  EXCELLENT: { timingErr: 0, strength: 1.15, speedNorm: 1 },
-  GREAT: { timingErr: 0.08, strength: 1.05, speedNorm: 0.92 },
-  GOOD: { timingErr: 0.22, strength: 0.92, speedNorm: 0.82 },
-  BAD: { timingErr: 0.5, strength: 0.72, speedNorm: 0.7 },
+type ThrowGrade = 'EXCELLENT' | 'GREAT' | 'NICE' | 'NONE';
+const GRADE_JP: Record<ThrowGrade, string> = { EXCELLENT: 'エクセレント！', GREAT: 'グレート！', NICE: 'ナイス！', NONE: '' };
+/** 輪の判定ごとの効果（制球のぶれ・キレ・球速） */
+const THROW_FX: Record<ThrowGrade, { timingErr: number; kire: number; speed: number }> = {
+  EXCELLENT: { timingErr: 0, kire: 1.15, speed: 1.04 },
+  GREAT: { timingErr: 0.08, kire: 1.07, speed: 1.02 },
+  NICE: { timingErr: 0.18, kire: 1.0, speed: 1 },
+  NONE: { timingErr: 0.35, kire: 0.9, speed: 0.97 },
 };
 
-interface PadEntry { kind: PitchKind; level: number; side: number; slot: number }
-/** 十字の配置（0..8 = 左上〜右下）。曲がる方向に置く */
-const SLOT = { center: 4, up: 1, down: 7, left: 3, right: 5, dl: 6, dr: 8 };
-const SHORT: Record<PitchKind, string> = { straight: '直球', curve: 'カーブ', slider: 'スラ', rise: 'ライズ', knuckle: 'ナックル' };
-
 /**
- * 投球操作（プロスピのような流れ）
- * 1. 十字のボタンで球種を選ぶ（置かれた向き＝曲がる向き）
- * 2. ゾーンをドラッグして狙いを決める
- * 3.「投げる」を押すと投球動作が始まり、狙いに向かって輪が縮む。輪が重なった瞬間にタップ
+ * 投球操作（ポケモンGOのような投げ方）
+ * - 画面下のキャップを押さえて、上にスワイプして投げる。向きで左右、長さで高さが決まる
+ * - 投げる前にキャップをくるくる回すと変化球。右回り＝右へ、左回り＝左へ。少し＝スライダー、たくさん＝カーブ
+ * - 回さずに投げると、速さで変わる：普通＝ストレート、速い＝ライズ（ホップ）、ゆっくり＝ナックル（無回転）
+ * - ゾーンの輪が小さいときに投げるほど ナイス／グレート／エクセレント
  */
 export class PitchControl {
-  aim = new THREE.Vector2(0, (ZONE.y0 + ZONE.y1) / 2);
-  private entries: PadEntry[] = [];
-  private sel = 0;
-  private btns: HTMLButtonElement[] = [];
-  private throwBtn!: HTMLButtonElement;
+  private capEl!: HTMLElement;
+  private labelEl!: HTMLElement;
   private hintEl!: HTMLElement;
-  private dragId: number | null = null;
-  private last = { x: 0, y: 0 };
-  private keys = new Set<string>();
+  private holding = false;
+  private pid: number | null = null;
+  private pts: { t: number; x: number; y: number }[] = [];
+  private center = { x: 0, y: 0 };
+  private lastAng = 0;
+  private spin = 0; // 回した量（回転数。+ = 右回り）
+  private ringT = 0;
   private cleanup: (() => void)[] = [];
   private disposed = false;
-  /** 'select' → 'timing'（投球動作中） */
-  private stage: 'select' | 'timing' = 'select';
-  private circleScale = 3;
-  private grade: Grade | null = null;
+  private result: ThrowInput | null = null;
+  private levels: Map<PitchKind, number>;
 
   constructor(private hud: Hud, pitches: [PitchKind, number][], private onStart: (t: ThrowInput) => void) {
-    const has = new Map(pitches);
-    this.entries.push({ kind: 'straight', level: 0, side: -1, slot: SLOT.center });
-    if (has.has('rise')) this.entries.push({ kind: 'rise', level: has.get('rise')!, side: -1, slot: SLOT.up });
-    if (has.has('knuckle')) this.entries.push({ kind: 'knuckle', level: has.get('knuckle')!, side: -1, slot: SLOT.down });
-    if (has.has('slider')) {
-      this.entries.push({ kind: 'slider', level: has.get('slider')!, side: -1, slot: SLOT.left });
-      this.entries.push({ kind: 'slider', level: has.get('slider')!, side: 1, slot: SLOT.right });
-    }
-    if (has.has('curve')) {
-      this.entries.push({ kind: 'curve', level: has.get('curve')!, side: -1, slot: SLOT.dl });
-      this.entries.push({ kind: 'curve', level: has.get('curve')!, side: 1, slot: SLOT.dr });
-    }
-
+    this.levels = new Map(pitches);
     const c = hud.controls;
     c.innerHTML = '';
-    const wrap = h('div', 'pitchpad');
-    const pad = h('div', 'cross');
-    for (let slot = 0; slot < 9; slot++) {
-      const ei = this.entries.findIndex((e) => e.slot === slot);
-      if (ei < 0) {
-        pad.append(h('span', 'cx-empty'));
-        continue;
-      }
-      const e = this.entries[ei];
-      const b = h('button', 'cx' + (e.kind === 'straight' ? ' center' : ''), `${pitchIcon(e.kind, e.side)}<span>${SHORT[e.kind]}</span>${e.kind === 'straight' ? '' : `<i class="lvl">${e.level}</i>`}`) as HTMLButtonElement;
-      b.onpointerdown = (ev) => {
-        ev.stopPropagation();
-        if (this.stage !== 'select') return;
-        this.select(ei);
-        audio.play('ui_move', { volume: 0.6 });
-      };
-      this.btns[ei] = b;
-      pad.append(b);
-    }
-    this.throwBtn = h('button', 'throwbtn', '投げる') as HTMLButtonElement;
-    this.throwBtn.onpointerdown = (ev) => {
-      ev.stopPropagation();
-      ev.preventDefault();
-      if (this.stage === 'select') this.start();
-      else this.tap();
-    };
-    wrap.append(pad, this.throwBtn);
-    this.hintEl = h('div', 'hint', '');
-    c.append(wrap, this.hintEl);
+    const pad = h('div', 'gopad');
+    this.labelEl = h('div', 'golabel', '');
+    this.capEl = h('div', 'gocap', '<div class="gocap-face">CAP</div>');
+    pad.append(this.labelEl, this.capEl);
+    this.hintEl = h('div', 'hint', 'キャップを上にスワイプして投げる（向き＝左右、長さ＝高さ）<br>投げる前にくるくる回すと変化球。回さず速く＝ライズ、ゆっくり＝ナックル');
+    c.append(pad, this.hintEl);
 
-    // 狙い：画面のどこでも相対ドラッグ。投球動作中は画面タップで判定
-    const inp = hud.input;
-    const pd = (e: PointerEvent) => {
-      if (this.stage === 'timing') {
-        this.tap();
-        return;
-      }
-      if (this.dragId !== null) return;
-      this.dragId = e.pointerId;
-      this.last = { x: e.clientX, y: e.clientY };
+    const down = (e: PointerEvent) => {
+      if (this.result) return;
+      e.preventDefault();
+      e.stopPropagation();
+      this.capEl.setPointerCapture(e.pointerId);
+      this.pid = e.pointerId;
+      this.holding = true;
+      const r = this.capEl.getBoundingClientRect();
+      this.center = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+      this.pts = [{ t: performance.now(), x: e.clientX, y: e.clientY }];
+      this.lastAng = Math.atan2(e.clientY - this.center.y, e.clientX - this.center.x);
+      this.spin = 0;
+      this.capEl.classList.add('held');
     };
-    const pm = (e: PointerEvent) => {
-      if (e.pointerId !== this.dragId || this.stage !== 'select') return;
-      const k = 1 / hud.pxPerMeter();
-      this.aim.x += (e.clientX - this.last.x) * k * 0.9;
-      this.aim.y -= (e.clientY - this.last.y) * k * 0.9;
-      this.clampAim();
-      this.last = { x: e.clientX, y: e.clientY };
+    const move = (e: PointerEvent) => {
+      if (!this.holding || e.pointerId !== this.pid) return;
+      this.pts.push({ t: performance.now(), x: e.clientX, y: e.clientY });
+      const dx = e.clientX - this.center.x, dy = e.clientY - this.center.y;
+      const dist = Math.hypot(dx, dy);
+      // キャップのまわりで指を回した分だけ回転をためる（離れたスワイプ中は数えない）
+      if (dist > 10 && dist < 95) {
+        const ang = Math.atan2(dy, dx);
+        let d = ang - this.lastAng;
+        d = Math.atan2(Math.sin(d), Math.cos(d));
+        this.spin += d / (Math.PI * 2);
+        this.lastAng = ang;
+      } else this.lastAng = Math.atan2(dy, dx);
+      this.capEl.style.transform = `translate(${THREE.MathUtils.clamp(dx, -40, 40) * 0.4}px, ${THREE.MathUtils.clamp(dy, -60, 30) * 0.4}px) rotate(${this.spin * 360}deg)`;
+      this.updateLabel();
     };
-    const pu = (e: PointerEvent) => {
-      if (e.pointerId === this.dragId) this.dragId = null;
+    const up = (e: PointerEvent) => {
+      if (!this.holding || e.pointerId !== this.pid) return;
+      this.pts.push({ t: performance.now(), x: e.clientX, y: e.clientY });
+      this.holding = false;
+      this.capEl.classList.remove('held');
+      this.release();
     };
-    inp.addEventListener('pointerdown', pd);
-    window.addEventListener('pointermove', pm);
-    window.addEventListener('pointerup', pu);
+    this.capEl.addEventListener('pointerdown', down);
+    this.capEl.addEventListener('pointermove', move);
+    this.capEl.addEventListener('pointerup', up);
+    this.capEl.addEventListener('pointercancel', () => this.reset());
     const kd = (e: KeyboardEvent) => {
-      this.keys.add(e.key);
-      if (e.key === ' ' || e.key === 'Enter') {
-        if (this.stage === 'select') this.start();
-        else this.tap();
+      if ((e.key === ' ' || e.key === 'Enter') && !this.result) {
+        this.throwWith(0, 120, 0.6, 0);
       }
     };
-    const ku = (e: KeyboardEvent) => this.keys.delete(e.key);
     window.addEventListener('keydown', kd);
-    window.addEventListener('keyup', ku);
-    this.cleanup.push(() => {
-      inp.removeEventListener('pointerdown', pd);
-      window.removeEventListener('pointermove', pm);
-      window.removeEventListener('pointerup', pu);
-      window.removeEventListener('keydown', kd);
-      window.removeEventListener('keyup', ku);
-    });
-    this.select(0);
+    this.cleanup.push(() => window.removeEventListener('keydown', kd));
+    this.updateLabel();
   }
 
-  private clampAim() {
-    this.aim.x = THREE.MathUtils.clamp(this.aim.x, ZONE.x0 - 0.4, ZONE.x1 + 0.4);
-    this.aim.y = THREE.MathUtils.clamp(this.aim.y, ZONE.y0 - 0.32, ZONE.y1 + 0.32);
+  private reset() {
+    this.holding = false;
+    this.spin = 0;
+    this.capEl.classList.remove('held');
+    this.capEl.style.transform = '';
+    this.updateLabel();
   }
 
-  private select(i: number) {
-    this.sel = i;
-    this.btns.forEach((b, j) => b?.classList.toggle('sel', j === i));
-    const e = this.entries[i];
-    const def = PITCHES[e.kind];
-    const dir = e.kind === 'straight' ? '' : e.kind === 'rise' ? '（浮き上がる）' : e.kind === 'knuckle' ? '（揺れて落ちる）' : e.side < 0 ? '（左へ曲がる）' : '（右へ曲がる）';
-    this.hintEl.innerHTML = `<b>${def.name}${dir}</b>：${def.grip}<br>ドラッグで狙い →「投げる」→ 輪が重なる瞬間にタップ`;
+  /** 回した量から球種と向き */
+  private spinPitch(): { kind: PitchKind; side: number; amount: number } | null {
+    const t = Math.abs(this.spin);
+    if (t < 0.5) return null;
+    const side = this.spin > 0 ? 1 : -1;
+    const kind: PitchKind = t < 1.4 ? 'slider' : 'curve';
+    return { kind, side, amount: THREE.MathUtils.clamp((t - 0.5) / 2, 0, 1) };
   }
 
-  /** 投球開始：投球動作に入り、判定の輪を縮め始める */
-  private start() {
-    this.stage = 'timing';
-    this.grade = null;
-    this.circleScale = 3;
-    this.throwBtn.textContent = 'タップ！';
-    this.throwBtn.classList.add('timing');
-    audio.play('ui_ok', { volume: 0.5 });
-    const e = this.entries[this.sel];
-    this.onStart({ kind: e.kind, level: e.level, aim: this.aim.clone(), timingErr: 0.5, speedNorm: 0.7, bend: 0, strength: 0.72, side: e.side });
+  private updateLabel() {
+    const sp = this.spinPitch();
+    this.capEl.classList.toggle('spin-s', sp?.kind === 'slider');
+    this.capEl.classList.toggle('spin-c', sp?.kind === 'curve');
+    this.labelEl.innerHTML = sp ? `<b>${PITCHES[sp.kind].name}</b> ${sp.side > 0 ? '右へ ▶' : '◀ 左へ'}<span class="gobar"><i style="width:${Math.round(sp.amount * 100)}%"></i></span>` : this.holding ? '回すと変化球' : '';
   }
 
-  private tap() {
-    if (this.stage !== 'timing' || this.grade) return;
-    const d = Math.abs(this.circleScale - 1);
-    this.grade = d < 0.1 ? 'EXCELLENT' : d < 0.25 ? 'GREAT' : d < 0.45 ? 'GOOD' : 'BAD';
-    this.hud.timingGrade(this.grade);
-    audio.play(this.grade === 'BAD' ? 'ui_cancel' : 'ui_ok', { volume: 0.6, rate: this.grade === 'EXCELLENT' ? 1.25 : 1 });
-  }
-
-  /** 投球動作の経過（試合側から毎フレーム）。リリースまでに輪が狙いへ縮む */
-  windup(t: number, releaseT: number) {
-    if (this.stage !== 'timing') return;
-    this.circleScale = 3 - 2.6 * Math.min(1, t / releaseT);
-    if (!this.grade) this.hud.timingCircle(this.aim, this.circleScale);
-    else this.hud.timingCircle(null, 1);
-  }
-
-  /** リリースの瞬間に、判定を反映した投球内容を返す（タップしなければ BAD） */
-  finalize(): ThrowInput {
-    if (!this.grade) {
-      this.grade = 'BAD';
-      this.hud.timingGrade('BAD');
+  private release() {
+    const pts = this.pts;
+    const b = pts[pts.length - 1];
+    // フリック部分：最後に上へ動き続けた区間（回していた部分は含めない）
+    let i = pts.length - 1;
+    while (i > 0 && pts[i - 1].y >= pts[i].y - 2) i--;
+    const a = pts[i];
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const dt = Math.max(16, b.t - a.t);
+    if (dy > -35) {
+      this.reset();
+      return; // 上に投げていない
     }
-    const e = this.entries[this.sel];
-    const fx = GRADE_FX[this.grade];
-    return { kind: e.kind, level: e.level, aim: this.aim.clone(), bend: 0, side: e.side, ...fx, strength: e.kind === 'straight' ? 1 : fx.strength };
+    const speed = THREE.MathUtils.clamp((-dy / dt - 0.35) / 1.7, 0, 1);
+    // 上へ払った長さで高さ
+    const len = -dy;
+    this.throwWith(Math.atan2(dx, -dy), len, speed, this.spin);
+  }
+
+  /** 向き（ラジアン、右が+）・スワイプの長さ（px）・速さ（0..1）・回転から投球を作る */
+  private throwWith(angle: number, lengthPx: number, speed: number, spin: number) {
+    const ringScale = this.ringScale();
+    const grade: ThrowGrade = ringScale < 0.35 ? 'EXCELLENT' : ringScale < 0.6 ? 'GREAT' : ringScale < 0.85 ? 'NICE' : 'NONE';
+    const fx = THROW_FX[grade];
+    if (grade !== 'NONE') this.hud.timingGrade(grade, GRADE_JP[grade]);
+    this.hud.timingCircle(null, 1);
+    // コース：向き ±25° でゾーンの外まで、長さ 60〜300px で低め〜高め
+    const cx = (ZONE.x0 + ZONE.x1) / 2;
+    const x = cx + THREE.MathUtils.clamp(Math.tan(angle) / Math.tan(THREE.MathUtils.degToRad(25)), -1.4, 1.4) * 0.42;
+    const hNorm = THREE.MathUtils.clamp((lengthPx - 60) / 240, 0, 1);
+    const y = ZONE.y0 - 0.22 + hNorm * (ZONE.y1 - ZONE.y0 + 0.44);
+    this.spin = spin;
+    const sp = this.spinPitch();
+    let kind: PitchKind, side = -1, strength = 1;
+    if (sp) {
+      kind = sp.kind;
+      side = sp.side;
+      strength = (0.65 + sp.amount * 0.85) * fx.kire;
+    } else if (speed > 0.82) {
+      kind = 'rise';
+      strength = (0.6 + (speed - 0.82) * 3) * fx.kire;
+    } else if (speed < 0.22) {
+      kind = 'knuckle';
+      strength = (1.2 - speed * 2) * fx.kire;
+    } else kind = 'straight';
+    // 持っていない球種は変化が弱い（変化量 2 相当）
+    const level = kind === 'straight' ? 0 : this.levels.get(kind) ?? 2;
+    this.result = { kind, level, aim: new THREE.Vector2(x, y), timingErr: fx.timingErr, speedNorm: THREE.MathUtils.clamp(speed * fx.speed, 0, 1), bend: 0, strength: THREE.MathUtils.clamp(strength, 0.4, 1.6), side };
+    this.capEl.classList.add('thrown');
+    this.labelEl.innerHTML = `<b>${PITCHES[kind].name}</b>`;
+    audio.play('throw', { volume: 0.35, rate: 1.3 });
+    this.onStart(this.result);
+  }
+
+  /** 輪の大きさ（1=ゾーン幅いっぱい → 小さくなって繰り返す） */
+  private ringScale() {
+    const cyc = 1.5;
+    return 1 - 0.85 * ((this.ringT % cyc) / cyc);
+  }
+
+  windup(_t: number, _releaseT: number) {}
+
+  finalize(): ThrowInput {
+    return this.result!;
   }
 
   update(dt: number) {
-    if (this.disposed) return;
-    if (this.stage === 'select') {
-      const sp = 0.9 * dt;
-      if (this.keys.has('ArrowLeft') || this.keys.has('a')) this.aim.x -= sp;
-      if (this.keys.has('ArrowRight') || this.keys.has('d')) this.aim.x += sp;
-      if (this.keys.has('ArrowUp') || this.keys.has('w')) this.aim.y += sp;
-      if (this.keys.has('ArrowDown') || this.keys.has('s')) this.aim.y -= sp;
-      this.clampAim();
-    }
-    this.hud.showAim(this.aim);
-    this.hud.showBreakPreview(this.stage === 'select' ? this.previewPoints() : null);
-  }
-
-  /** 選んだ球種と狙いから、曲がり方の予告線を作る */
-  private previewPoints(): THREE.Vector2[] {
-    const e = this.entries[this.sel];
-    const def = PITCHES[e.kind];
-    const bv = breakVector(e.kind, Math.max(e.level, 1), e.side);
-    const bend = new THREE.Vector2(bv.x, bv.y);
-    const pts: THREE.Vector2[] = [];
-    for (let i = 0; i <= 24; i++) {
-      const u = i / 24;
-      const f = Math.pow(u, 1.4 + def.late * 3.6);
-      const p = this.aim.clone().sub(bend).add(bend.clone().multiplyScalar(f));
-      if (e.kind === 'knuckle') p.x += Math.sin(u * Math.PI * 3.2) * 0.07 * u * (1 - u * 0.6);
-      pts.push(p);
-    }
-    return pts;
+    if (this.disposed || this.result) return;
+    this.ringT += dt;
+    const s = this.ringScale();
+    const w = this.hud.zone.x1 - this.hud.zone.x0;
+    const zc = new THREE.Vector2((ZONE.x0 + ZONE.x1) / 2, (ZONE.y0 + ZONE.y1) / 2);
+    this.hud.timingCircle(zc, (w * 1.15 * s) / 30, s < 0.35 ? 'ex' : s < 0.6 ? 'gr' : s < 0.85 ? 'ni' : '');
   }
 
   dispose() {
     this.disposed = true;
     for (const f of this.cleanup) f();
     this.hud.clearControls();
-    this.hud.showAim(null);
-    this.hud.showBreakPreview(null);
     this.hud.timingCircle(null, 1);
   }
 }

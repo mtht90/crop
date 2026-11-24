@@ -198,3 +198,20 @@ canvas.game { position: absolute; inset: 0; width: 100%; height: 100%; display: 
 .tgrade.g-great { color: #7dffb0; }
 .tgrade.g-good { color: #9fd5ff; }
 .tgrade.g-bad { color: #ff8a7a; }
+
+/* ---------- ポケモンGO風の投球 ---------- */
+.gopad { position: relative; height: 150px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; }
+.golabel { min-height: 24px; color: #fff; font-weight: 900; font-size: 13px; text-shadow: 0 2px 0 rgba(0,0,0,.6); display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+.golabel b { font-family: var(--display); font-size: 16px; color: #ffd23f; }
+.gobar { display: inline-block; width: 70px; height: 7px; border-radius: 4px; background: rgba(255,255,255,.25); overflow: hidden; }
+.gobar i { display: block; height: 100%; background: linear-gradient(90deg, #7dd3ff, #ffb62e, #ff5d2b); }
+.gocap { width: 92px; height: 92px; border-radius: 50%; touch-action: none; cursor: grab; transition: box-shadow .2s; position: relative; }
+.gocap-face { width: 100%; height: 100%; border-radius: 50%; display: grid; place-items: center; font-family: var(--display); color: #d23a2f; font-size: 20px; background: radial-gradient(circle at 40% 35%, #fff, #e7ebf0 60%, #c9d0d9); border: 3px solid var(--ink); box-shadow: 0 5px 0 var(--ink), inset 0 0 0 8px rgba(210, 58, 47, .9), inset 0 0 0 12px #fff; background-image: repeating-conic-gradient(from 0deg, rgba(0,0,0,.06) 0 6deg, transparent 6deg 12deg), radial-gradient(circle at 40% 35%, #fff, #e7ebf0 60%, #c9d0d9); }
+.gocap.held { cursor: grabbing; }
+.gocap.spin-s { box-shadow: 0 0 22px 6px rgba(125, 211, 255, .85); border-radius: 50%; }
+.gocap.spin-c { box-shadow: 0 0 26px 9px rgba(255, 150, 60, .9); border-radius: 50%; }
+.gocap.thrown { opacity: 0; transform: translateY(-160px) scale(.4) !important; transition: transform .25s ease-in, opacity .25s; }
+.tcircle.t-ni { border-color: #9fe36b; }
+.tcircle.t-gr { border-color: #ffd23f; box-shadow: 0 0 0 2px rgba(0,0,0,.35), 0 0 14px #ffd23f; }
+.tcircle.t-ex { border-color: #ff7a2b; box-shadow: 0 0 0 2px rgba(0,0,0,.35), 0 0 18px #ff7a2b; }
+.tgrade.g-nice { color: #9fe36b; }

@@ -355,7 +355,8 @@ export class Match {
   private beginWindup(t: ThrowInput) {
     this.pendingThrow = t;
     this.phase = 'windup';
-    this.windT = 0;
+    // 自分で投げたときは、はじいた直後にリリースが来るよう投球動作の途中から始める
+    this.windT = this.pitchCtl ? 0.42 : 0;
     // 投手操作のときは、リリースまで判定の輪を出すので操作を残す
     if (!this.pitchCtl) this.hud.showAim(null);
   }
