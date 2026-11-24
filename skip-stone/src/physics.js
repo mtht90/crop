@@ -8,7 +8,7 @@ export const TUNING = {
   launchElevationDeg: 4, // 腕を振ったときの初速の仰角(ほぼ水平に投げる)
   minSpeed: 2.0, // これより遅くなると跳ねずに沈む (m/s)
   maxFirstAngleDeg: 42, // 最初の入水角がこれより深いと「ドボン」
-  idealAngleDeg: 20, // 最もよく跳ねる入水角
+  idealAngleDeg: 15, // 最もよく跳ねる入水角(強めにはじいたときの角度)
   curveAccel: 2.8, // 回転によるカーブの横加速度 (m/s^2, 回転量1のとき)
   airDrag: 0.03, // 空気抵抗 (1/s)
 };
@@ -151,7 +151,7 @@ export function distanceFromStart(s, at = s.pos) {
 
 /** 1投ぶんの点数を計算する */
 /**
- * 最初の着水の出来。入水角が理想(20°)に近く、石がぐらついていないほど良い。
+ * 最初の着水の出来。入水角が理想(15°)に近く、石がぐらついていないほど良い。
  * @returns {{judge: 'excellent'|'great'|'nice'|null, value: number}}
  */
 export function judgeEntry(angle, wobble) {

@@ -209,7 +209,7 @@ function newThrow() {
 
 function setHint() {
   ui.hintMain.textContent = '石を上へはじいて投げる';
-  ui.hintSub.textContent = 'ちょうどいい強さでまっすぐはじく・くるくる回すとカーブ';
+  ui.hintSub.textContent = '強めにまっすぐはじく・くるくる回すとカーブ';
 }
 
 // ---------- コース ----------
