@@ -11,7 +11,8 @@ export const SWING_LEAD = 0.13;
 export function cursorSize(p: Player, mode: SwingMode, assist = 1) {
   const base = 0.1 + (p.meet / 100) * 0.1;
   const k = mode === 'power' ? 0.62 : mode === 'bunt' ? 1.15 : 1;
-  return { rx: base * k * assist * 1.25, ry: base * k * assist };
+  const r = base * k * assist * 1.12; // ミートカーソルは円
+  return { rx: r, ry: r };
 }
 
 export interface ContactInput {

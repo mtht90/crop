@@ -29,6 +29,7 @@ export class Hud {
   private predEl = h('div', 'predict hidden');
   private chipEl = h('div', 'chip hidden');
   private fbEl = h('div', 'swingfb hidden');
+  private previewEl = document.createElementNS('http://www.w3.org/2000/svg', 'svg') as unknown as HTMLElement;
   readonly controls = h('div', 'controls');
   private telopEl = h('div', 'telop');
   private flashEl = h('div', 'flash');
@@ -41,7 +42,8 @@ export class Hud {
     this.input.style.pointerEvents = 'auto';
     this.input.style.touchAction = 'none';
     this.root.style.pointerEvents = 'none';
-    this.root.append(this.zoneEl, this.mittEl, this.predEl, this.markEl, this.chipEl, this.fbEl, this.aimEl, this.meetEl, this.board, this.cards, this.telopEl, this.controls, this.pauseBtn, this.soundBtn, this.flashEl, this.fadeEl);
+    this.previewEl.setAttribute('class', 'breakpreview');
+    this.root.append(this.previewEl, this.zoneEl, this.mittEl, this.predEl, this.markEl, this.chipEl, this.fbEl, this.aimEl, this.meetEl, this.board, this.cards, this.telopEl, this.controls, this.pauseBtn, this.soundBtn, this.flashEl, this.fadeEl);
     for (const el of [this.zoneEl, this.mittEl, this.predEl, this.chipEl, this.fbEl, this.markEl, this.aimEl, this.meetEl, this.board, this.cards, this.telopEl, this.flashEl, this.fadeEl]) el.style.pointerEvents = 'none';
     parent.append(this.input, this.root);
     this.soundBtn.onclick = () => {
@@ -119,6 +121,21 @@ export class Hud {
     el.style.left = p.x + 'px';
     el.style.top = p.y + 'px';
   }
+  /** 変化の予告線（ゾーン座標の点列。最後が狙い） */
+  showBreakPreview(pts: THREE.Vector2[] | null) {
+    const svg = this.previewEl as unknown as SVGSVGElement;
+    if (!pts || pts.length < 2) {
+      svg.innerHTML = '';
+      return;
+    }
+    const sp = pts.map((p) => this.toScreen(p.x, p.y));
+    const d = sp.map((p, i) => `${i ? 'L' : 'M'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+    const a = sp[sp.length - 2], b = sp[sp.length - 1];
+    const ang = Math.atan2(b.y - a.y, b.x - a.x);
+    const head = [ang + 2.6, ang - 2.6].map((t) => `${(b.x + Math.cos(t) * 9).toFixed(1)},${(b.y + Math.sin(t) * 9).toFixed(1)}`);
+    svg.innerHTML = `<path d="${d}" class="bp-shadow"/><path d="${d}" class="bp-line"/><polygon points="${b.x},${b.y} ${head[0]} ${head[1]}" class="bp-head"/><circle cx="${sp[0].x}" cy="${sp[0].y}" r="4" class="bp-start"/>`;
+  }
+
   /** 捕手の構え（狙ったコース） */
   showMitt(v: THREE.Vector2 | null) {
     this.place(this.mittEl, v);
@@ -188,6 +205,8 @@ export interface ThrowInput {
   timingErr: number; // 0=ぴったり
   speedNorm: number; // 0..1 スワイプの速さ
   bend: number; // -1..1 スワイプの曲がり（+ = 右）
+  /** 変化量の倍率（0.5=弱 〜 1.5=強）。強いほど曲がるが、遅くなり制球も乱れやすい */
+  strength: number;
 }
 
 export class PitchControl {
@@ -222,17 +241,27 @@ export class PitchControl {
     });
     this.allPitches = all;
     queueMicrotask(() => this.select(0));
+    // 変化量スライダー（球種ごとに覚えておく）
+    const brk = h('div', 'brk', `<span class="bl">変化量</span><span class="bs">弱</span><input type="range" min="50" max="150" step="5" value="100" aria-label="変化量"><span class="bs">強</span><b class="bv">100%</b>`);
+    this.brkEl = brk;
+    this.brkInput = brk.querySelector('input') as HTMLInputElement;
+    this.brkInput.addEventListener('pointerdown', (e) => e.stopPropagation());
+    this.brkInput.addEventListener('input', () => {
+      const k = this.allPitches[this.sel][0];
+      this.strengths.set(k, +this.brkInput.value / 100);
+      this.syncStrength();
+    });
     const pad = h('div', 'throwpad');
     const cap = h('div', 'capbtn', 'CAP');
     this.ring = h('div', 'ring');
     const target = h('div', 'ring target');
     for (const r of [this.ring, target]) cap.append(r);
-    target.style.width = target.style.height = '76px';
+    target.style.width = target.style.height = '66px';
     this.ring.style.display = 'none';
     pad.append(cap);
     const hint = h('div', 'hint', '');
     this.hintEl = hint;
-    c.append(row, pad, hint);
+    c.append(row, brk, pad, hint);
 
     cap.addEventListener('pointerdown', (e) => {
       e.preventDefault();
@@ -313,11 +342,45 @@ export class PitchControl {
   }
 
   private hintEl: HTMLElement | null = null;
+  private brkEl: HTMLElement | null = null;
+  private brkInput!: HTMLInputElement;
+  private strengths = new Map<PitchKind, number>();
   select(i: number) {
     this.sel = i;
     this.pitchBtns.forEach((b, j) => b.classList.toggle('sel', j === i));
     const def = PITCHES[this.allPitches[i][0]];
-    if (this.hintEl) this.hintEl.innerHTML = `<b>${def.name}</b>：${def.grip}<br>ドラッグで狙い → キャップを上にはじく（輪が重なる瞬間に）`;
+    if (this.hintEl) this.hintEl.innerHTML = `<b>${def.name}</b>：${def.grip}`;
+    this.syncStrength();
+  }
+  private get strength() {
+    const k = this.allPitches[this.sel]?.[0];
+    return k === 'straight' ? 1 : this.strengths.get(k) ?? 1;
+  }
+  private syncStrength() {
+    if (!this.brkEl) return;
+    const straight = this.allPitches[this.sel][0] === 'straight';
+    this.brkEl.classList.toggle('off', straight);
+    const v = Math.round(this.strength * 100);
+    this.brkInput.value = String(v);
+    const lbl = v <= 70 ? '控えめ' : v >= 130 ? '大きく（制球難）' : '';
+    (this.brkEl.querySelector('.bv') as HTMLElement).textContent = straight ? '—' : `${v}%${lbl ? ' ' + lbl : ''}`;
+  }
+
+  /** 選んだ球種・変化量・狙いから、曲がり方の予告線を作る */
+  private previewPoints(): THREE.Vector2[] {
+    const [kind, level] = this.allPitches[this.sel];
+    const def = PITCHES[kind];
+    const lv = level * this.strength;
+    const bend = new THREE.Vector2(def.bx * lv, def.by * lv);
+    const pts: THREE.Vector2[] = [];
+    for (let i = 0; i <= 24; i++) {
+      const u = i / 24;
+      const f = Math.pow(u, 1.4 + def.late * 3.6);
+      const p = this.aim.clone().sub(bend).add(bend.clone().multiplyScalar(f));
+      if (kind === 'knuckle') p.x += Math.sin(u * Math.PI * 3.2) * 0.07 * u * (1 - u * 0.6) * this.strength;
+      pts.push(p);
+    }
+    return pts;
   }
 
   /** 輪の大きさ（1.0 で重なる） */
@@ -337,10 +400,11 @@ export class PitchControl {
     if (this.keys.has('ArrowDown') || this.keys.has('s')) this.aim.y -= sp;
     this.clampAim();
     this.hud.showAim(this.aim);
+    this.hud.showBreakPreview(this.allPitches[this.sel]?.[0] === 'straight' ? null : this.previewPoints());
     if (this.holding) {
       this.holdT += dt;
       const s = this.ringScale();
-      this.ring.style.width = this.ring.style.height = 76 * s + 'px';
+      this.ring.style.width = this.ring.style.height = 66 * s + 'px';
       this.ring.style.borderColor = Math.abs(s - 1) < 0.1 ? '#3fd07a' : '#fff';
     }
   }
@@ -374,7 +438,7 @@ export class PitchControl {
     // 上向きのスワイプで、右に膨らむと cross は負 → 右曲げを + にする
     const bend = THREE.MathUtils.clamp((-dev / len) * 3 + ((b.x - a.x) / len) * 0.8, -1, 1);
     const [kind, level] = this.allPitches[this.sel];
-    this.onThrow({ kind, level, aim: this.aim.clone(), timingErr: Math.abs(s - 1), speedNorm, bend });
+    this.onThrow({ kind, level, aim: this.aim.clone(), timingErr: Math.abs(s - 1), speedNorm, bend, strength: this.strength });
   }
 
   dispose() {
@@ -382,6 +446,7 @@ export class PitchControl {
     for (const f of this.cleanup) f();
     this.hud.clearControls();
     this.hud.showAim(null);
+    this.hud.showBreakPreview(null);
   }
 }
 

@@ -71,7 +71,7 @@ canvas.game { position: absolute; inset: 0; width: 100%; height: 100%; display: 
 @keyframes pop { from { transform: scale(2); opacity: 0; } }
 
 /* ---------- 操作パネル ---------- */
-.controls { position: absolute; left: 0; right: 0; bottom: 0; padding: 8px 10px calc(var(--safe-bottom) + 12px); pointer-events: none; }
+.controls { position: absolute; left: 0; right: 0; bottom: 0; padding: 4px 10px calc(var(--safe-bottom) + 8px); pointer-events: none; }
 .controls > * { pointer-events: auto; }
 .pitches { display: flex; flex-wrap: wrap; gap: 5px; justify-content: center; margin-bottom: 4px; }
 .pbtn { border: 2px solid var(--ink); background: var(--paper); border-radius: 10px; padding: 3px 6px 3px; font-family: var(--font); font-weight: 900; font-size: 11px; color: var(--ink); box-shadow: 0 3px 0 var(--ink); display: flex; flex-direction: column; align-items: center; min-width: 58px; cursor: pointer; }
@@ -80,8 +80,8 @@ canvas.game { position: absolute; inset: 0; width: 100%; height: 100%; display: 
 .pbtn .lv i { width: 5px; height: 5px; border-radius: 50%; background: #cfd5df; }
 .pbtn .lv i.on { background: var(--sky); }
 .pbtn.sel { background: var(--sun); transform: translateY(1px); box-shadow: 0 2px 0 var(--ink); }
-.throwpad { position: relative; height: 104px; display: flex; align-items: center; justify-content: center; }
-.capbtn { width: 76px; height: 76px; border-radius: 50%; position: relative; background: radial-gradient(circle at 40% 35%, #fff, #e7ebf0 60%, #c9d0d9); border: 3px solid var(--ink); box-shadow: 0 4px 0 var(--ink), inset 0 0 0 7px rgba(210, 58, 47, .9), inset 0 0 0 11px #fff; display: grid; place-items: center; font-family: var(--display); color: #d23a2f; font-size: 16px; cursor: grab; touch-action: none; }
+.throwpad { position: relative; height: 82px; display: flex; align-items: center; justify-content: center; }
+.capbtn { width: 66px; height: 66px; border-radius: 50%; position: relative; background: radial-gradient(circle at 40% 35%, #fff, #e7ebf0 60%, #c9d0d9); border: 3px solid var(--ink); box-shadow: 0 4px 0 var(--ink), inset 0 0 0 7px rgba(210, 58, 47, .9), inset 0 0 0 11px #fff; display: grid; place-items: center; font-family: var(--display); color: #d23a2f; font-size: 16px; cursor: grab; touch-action: none; }
 .ring { position: absolute; left: 50%; top: 50%; border-radius: 50%; border: 4px solid #fff; pointer-events: none; transform: translate(-50%, -50%); box-shadow: 0 0 0 2px rgba(0,0,0,.35); }
 .ring.target { border-color: rgba(63, 208, 122, .9); border-style: dashed; }
 .hint { text-align: center; color: #fff; font-weight: 900; font-size: 11px; line-height: 1.45; text-shadow: 0 2px 0 rgba(0,0,0,.6); margin-top: 2px; }
@@ -157,10 +157,22 @@ canvas.game { position: absolute; inset: 0; width: 100%; height: 100%; display: 
 /* ---------- 打撃の見え方（捕手の構え・着弾予測・振り返り） ---------- */
 .mitt { position: absolute; width: 30px; height: 26px; margin: -13px 0 0 -15px; border-radius: 50% 50% 45% 45%; background: radial-gradient(circle at 50% 40%, #c98a4b, #8a5226 70%); border: 2px solid #3b2410; box-shadow: 0 2px 0 rgba(0,0,0,.4); opacity: .85; pointer-events: none; transition: opacity .3s; }
 .mitt::after { content: ''; position: absolute; left: 7px; right: 7px; top: 6px; height: 9px; border-radius: 50%; background: rgba(0,0,0,.28); }
-.predict { position: absolute; width: 30px; height: 30px; margin: -15px 0 0 -15px; border-radius: 50%; border: 3px dashed #ffffff; box-shadow: 0 0 0 2px rgba(0,0,0,.35), 0 0 12px rgba(255,255,255,.6); pointer-events: none; }
-.predict::after { content: ''; position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px; border-radius: 50%; background: #fff; }
+.predict { position: absolute; width: 64px; height: 64px; margin: -32px 0 0 -32px; border-radius: 50%; background: radial-gradient(circle, rgba(255,240,170,.42) 0%, rgba(255,240,170,.16) 45%, rgba(255,240,170,0) 70%); pointer-events: none; }
 .chip { position: absolute; transform: translate(-50%, -100%); background: rgba(18,26,44,.88); color: #fff; font-weight: 900; font-size: 12px; padding: 3px 10px; border-radius: 999px; white-space: nowrap; pointer-events: none; animation: pop .25s ease-out; }
 .swingfb { position: absolute; transform: translateX(-50%); display: flex; gap: 6px; pointer-events: none; animation: pop .2s ease-out; }
 .swingfb span { background: rgba(255,253,247,.95); border: 2px solid var(--ink); border-radius: 8px; padding: 2px 8px; font-weight: 900; font-size: 12px; white-space: nowrap; box-shadow: 0 2px 0 var(--ink); }
 .swingfb span.just { background: #7dffb0; }
 .swingfb span.off { background: #ffd0c8; }
+
+/* ---------- 変化量スライダーと予告線 ---------- */
+.brk { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 2px auto 0; padding: 4px 10px; width: fit-content; max-width: 100%; background: rgba(255,253,247,.94); border: 2px solid var(--ink); border-radius: 999px; box-shadow: 0 3px 0 var(--ink); font-weight: 900; font-size: 11px; }
+.brk.off { opacity: .45; pointer-events: none; }
+.brk .bl { background: var(--ink); color: #fff; border-radius: 6px; padding: 0 5px; font-size: 10px; }
+.brk .bs { opacity: .6; font-size: 10px; }
+.brk .bv { min-width: 92px; font-size: 11px; color: var(--red); }
+.brk input[type=range] { width: 128px; accent-color: #ff7a2b; touch-action: none; }
+.breakpreview { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+.breakpreview .bp-shadow { fill: none; stroke: rgba(0,0,0,.45); stroke-width: 6; stroke-linecap: round; stroke-linejoin: round; }
+.breakpreview .bp-line { fill: none; stroke: #ffb62e; stroke-width: 3; stroke-dasharray: 7 5; stroke-linecap: round; stroke-linejoin: round; }
+.breakpreview .bp-head { fill: #ffb62e; stroke: rgba(0,0,0,.45); stroke-width: 1.5; }
+.breakpreview .bp-start { fill: #fff; stroke: rgba(0,0,0,.5); stroke-width: 1.5; }

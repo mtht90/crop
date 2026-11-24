@@ -12,7 +12,7 @@ const gauss = () => {
   return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
 };
 
-export interface CpuPitch { kind: PitchKind; level: number; aim: THREE.Vector2; speedNorm: number; bend: number; timingErr: number }
+export interface CpuPitch { kind: PitchKind; level: number; aim: THREE.Vector2; speedNorm: number; bend: number; timingErr: number; strength: number }
 
 /** CPU 投手：カウントに応じて球種とコースを決める */
 export function cpuChoosePitch(s: GameState, pitcher: Player, diff: Difficulty): CpuPitch {
@@ -39,7 +39,7 @@ export function cpuChoosePitch(s: GameState, pitcher: Player, diff: Difficulty):
     ax = cx + (ax - cx) * 0.4;
     ay = cy + (ay - cy) * 0.4;
   }
-  return { kind, level, aim: new THREE.Vector2(ax, ay), speedNorm: 0.75 + Math.random() * 0.25, bend: 0, timingErr: Math.abs(gauss()) * 0.12 * (1.6 - diff.cpuControl) };
+  return { kind, level, aim: new THREE.Vector2(ax, ay), speedNorm: 0.75 + Math.random() * 0.25, bend: 0, strength: s.strikes === 2 ? 1.1 + Math.random() * 0.25 : 0.8 + Math.random() * 0.35, timingErr: Math.abs(gauss()) * 0.12 * (1.6 - diff.cpuControl) };
 }
 
 export interface CpuSwingPlan { swing: boolean; at: number; cursor: THREE.Vector2; mode: SwingMode }
