@@ -146,6 +146,23 @@ dialog img { display: block; max-width: 100%; max-height: 82vh; border-radius: 3
 dialog p { color: #e7eeec; font-size: 14px; margin: 8px 0 0; display: flex; justify-content: space-between; gap: 12px; }
 dialog button { font: 500 13px var(--body); background: #e7eeec; color: #172124; border: 0; border-radius: 3px; padding: 6px 12px; cursor: pointer; }
 
+.set.chosen { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.chosen-tag { font: 500 11px/1 var(--mono); background: var(--accent); color: var(--paper); padding: 4px 7px; border-radius: 2px; margin-left: auto; align-self: start; }
+.prep { display: grid; gap: 18px; }
+.prep-progress { display: flex; align-items: center; gap: 12px; }
+.bar { flex: 1; height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
+.bar span { display: block; height: 100%; width: 0; background: var(--accent); transition: width .25s; }
+.steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 16px; }
+.phase { background: var(--paper); border: 1px solid var(--line); border-radius: 4px; padding: 18px 18px 12px; display: grid; gap: 4px; align-content: start; min-width: 0; }
+.phase h3 { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; }
+.phase h3 .n { font-family: var(--mono); font-size: 12px; color: var(--accent); }
+.task { display: grid; grid-template-columns: 20px 1fr; gap: 10px; padding: 8px 0; border-top: 1px dashed var(--line); cursor: pointer; }
+.task:first-of-type { border-top: 0; }
+.task input { margin: 4px 0 0; width: 16px; height: 16px; accent-color: var(--accent); }
+.task b { font-weight: 500; font-size: 14px; display: block; }
+.task small { font-size: 12.5px; color: var(--muted); display: block; line-height: 1.6; }
+.task small code { font-size: 11.5px; }
+.task.done b { text-decoration: line-through; color: var(--muted); }
 @media (max-width: 780px) {
   .ledger { grid-template-columns: 1fr; }
   .index { position: static; }
@@ -174,6 +191,17 @@ dialog button { font: 500 13px var(--body); background: #e7eeec; color: #172124;
       <p>実線は$0で作れるセット、点線はあとで有料素材に差し替えるときのセットです。画風が混ざらないように選んでいます。</p>
     </div>
     <div class="sets" id="sets"></div>
+  </section>
+
+  <section aria-labelledby="prep-h" id="prep">
+    <div class="sec-head">
+      <h2 id="prep-h">セットF2の準備</h2>
+      <p>選んだセットです。上から順に進めます。チェックはこのブラウザにだけ保存されます。</p>
+    </div>
+    <div class="prep">
+      <div class="prep-progress"><div class="bar"><span id="prep-bar"></span></div><span class="count" id="prep-count"></span></div>
+      <div class="steps" id="steps"></div>
+    </div>
   </section>
 
   <section aria-labelledby="ledger-h">
@@ -505,6 +533,74 @@ document.querySelectorAll(".set .btn").forEach((b) => b.addEventListener("click"
   sync();
   $("ledger-h").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
 }));
+
+// ---------- F2 checklist
+const PHASES = [
+  { n: "1", title: "プロジェクトを作る", tasks: [
+    ["unity", "Unity 6 LTS で「Universal 3D（URP）」の新規プロジェクトを作る", "Unity Hubから。Gitに入れる前に、Unity用の.gitignoreと <code>Assets/ThirdParty/</code> の除外を足す。"],
+  ]},
+  { n: "2", title: "Asset Storeの無料素材を入手", tasks: [
+    ["a-starter", "POLYGON – Starter Pack", "ストアで「マイアセットに追加」→ Unityの Package Manager → My Assets からインポート。以下も同じ手順。"],
+    ["a-fp", "Starter Assets – FirstPerson", "Input SystemとCinemachineを入れるか聞かれたら「はい」。"],
+    ["a-zsample", "Character Pack: Zombie Sample", "ハンターの体。"],
+    ["a-zanim", "Zombie Monster Animations FREE", "ハンターの動き。"],
+    ["a-analog", "Analog Horror Sound Pack", "クレジットが必要。作者名をメモしておく。"],
+    ["a-music", "Horror Game Music Pack", "26曲。使う曲だけ残して容量を減らす。"],
+    ["a-dotween", "DOTween", "インポート後に出る Setup 画面で「Setup DOTween」を押す。"],
+    ["a-mirror", "Mirror", "Asset Storeか、GitHubのReleasesにある .unitypackage から。"],
+    ["a-move", "取り込んだ素材を Assets/ThirdParty/ にまとめる", "自分で作るものは <code>Assets/Game/</code> に分ける。"],
+  ]},
+  { n: "3", title: "ストア以外の素材を入手", tasks: [
+    ["m-anim", "Mixamoでモーションをダウンロード", "設定は FBX for Unity · Without Skin · 30fps。歩く・走る・しゃがみ歩き・倒れる・這う・担がれる・何かを操作する・板を倒す、くらいから。"],
+    ["m-sonniss", "Sonnissから効果音を入手", "全部は大きすぎるので、足音・扉・金属・機械の音が入った年のものだけ。"],
+    ["m-fonts", "Google FontsからZen Antique・Cinzel・Noto Serif JPを入手", ""],
+    ["m-icons", "game-icons.netからアイコンを入手", "サイト上で色を変えてPNGで保存できる。作者名をメモしておく。"],
+  ]},
+  { n: "4", title: "設定する", tasks: [
+    ["s-urp", "Starter PackのマテリアルをURPに変換", "Window → Rendering → Render Pipeline Converter →「Material Upgrade」でピンク色が直る。"],
+    ["s-rig", "キャラのRigをHumanoidにする", "Starter Packのキャラ、Zombie Sample、Mixamoのモーションすべて。モデルを選び、Rig → Animation Type → Humanoid。"],
+    ["s-retarget", "ゾンビの動きをハンターに当てる", "Animator Controllerを作り、Zombie Monster AnimationsとMixamoのクリップを並べる。"],
+    ["s-fog", "霧と暗さで雰囲気を作る", "Lighting → Environment → Fog をオン。Volumeに Vignette・Film Grain・Color Adjustments（彩度を下げる）。"],
+    ["s-tmp", "日本語フォントをTextMeshProに登録", "Font Asset Creatorで Dynamic の Font Asset を作る。"],
+  ]},
+  { n: "5", title: "最初に遊べる形にする", tasks: [
+    ["p-map", "ProBuilderで小さなマップを1つ作る", "部屋4〜5個と廊下。Starter Packの小物を置く。"],
+    ["p-roles", "ハンター1人・サバイバー1人で動かす", "Starter AssetsとMirrorで、2人が同じマップを歩けるところまで。"],
+    ["p-credits", "クレジット画面の下書きを作る", "Analog Horror Sound Pack、game-icons.net（Lorcなど）の作者名を書く。"],
+  ]},
+];
+const STORE_KEY = "f2-prep-v1";
+let done = {};
+try { done = JSON.parse(localStorage.getItem(STORE_KEY) || "{}") || {}; } catch (e) { done = {}; }
+function saveDone() { try { localStorage.setItem(STORE_KEY, JSON.stringify(done)); } catch (e) {} }
+function renderSteps() {
+  $("steps").innerHTML = PHASES.map((p) => `
+    <div class="phase">
+      <h3><span class="n">STEP ${p.n}</span>${esc(p.title)}</h3>
+      ${p.tasks.map(([id, t, d]) => `
+        <label class="task${done[id] ? " done" : ""}" for="t-${id}">
+          <input type="checkbox" id="t-${id}" data-id="${id}"${done[id] ? " checked" : ""}>
+          <span><b>${esc(t)}</b>${d ? `<small>${d}</small>` : ""}</span>
+        </label>`).join("")}
+    </div>`).join("");
+  updateProgress();
+}
+function updateProgress() {
+  const all = PHASES.flatMap((p) => p.tasks.map((t) => t[0]));
+  const n = all.filter((id) => done[id]).length;
+  $("prep-count").textContent = n + " / " + all.length;
+  $("prep-bar").style.width = (n / all.length * 100) + "%";
+}
+$("steps").addEventListener("change", (e) => {
+  const id = e.target.dataset.id; if (!id) return;
+  done[id] = e.target.checked; saveDone();
+  e.target.closest(".task").classList.toggle("done", e.target.checked);
+  updateProgress();
+});
+renderSteps();
+const chosen = document.querySelector('.set .btn[data-set="F2"]')?.closest(".set");
+if (chosen) { chosen.classList.add("chosen"); chosen.querySelector(".set-mark").insertAdjacentHTML("beforeend", '<span class="chosen-tag">選択中</span>'); }
+state.set = "F2";
 
 const dlg = $("zoom");
 $("cards").addEventListener("click", (e) => {
