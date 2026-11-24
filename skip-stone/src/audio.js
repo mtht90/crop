@@ -142,8 +142,11 @@ export function createAudio() {
     judge(kind) {
       play(`ding_${kind}`, { vol: kind === 'excellent' ? 0.75 : 0.6 });
     },
-    bonus() {
-      play('ding_excellent', { vol: 0.55, rate: 1.5 });
+    /** ゲートをくぐった音。続けてくぐるほど音が上がる */
+    bonus(chain = 1) {
+      const scale = [0, 2, 4, 7, 9, 12, 14, 16];
+      const semi = scale[Math.min(chain - 1, scale.length - 1)];
+      play('ding_excellent', { vol: 0.55, rate: 1.2 * Math.pow(2, semi / 12) });
     },
     tick() {
       play('skip_10', { vol: 0.25, rate: 2.2 });

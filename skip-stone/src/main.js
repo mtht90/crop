@@ -196,13 +196,10 @@ function newThrow() {
   stoneMesh.material.opacity = 1;
   fx.clearTrail();
 
-  // 光の輪(ボーナス)
-  const rings = [];
-  const count = 2 + (Math.random() < 0.5 ? 1 : 0);
-  for (let i = 0; i < count; i++) {
-    rings.push({ x: rand(-6, 6), z: -rand(18 + i * 14, 30 + i * 16), r: rand(1.5, 2.0) });
-  }
-  fx.setBonusRings(rings);
+  // 光のゲートのコース: まっすぐ・ゆるいカーブ・強いカーブのどれか
+  course = makeCourse();
+  fx.setCourse(course.gates, course.path, GATE_R);
+  fx.setNextGate(0);
 
   ui.hint.hidden = false;
   setHint();
@@ -213,6 +210,76 @@ function newThrow() {
 function setHint() {
   ui.hintMain.textContent = '石を上へはじいて投げる';
   ui.hintSub.textContent = 'ちょうどいい強さでまっすぐはじく・くるくる回すとカーブ';
+}
+
+// ---------- コース ----------
+const GATE_R = 1.3; // ゲート(アーチ)の半径
+const GATE_DIST = [10, 17, 24, 31, 39, 47, 56]; // 投げる位置からの道のり (m)
+let course = null;
+
+function makeCourse() {
+  const r = Math.random();
+  const side = Math.random() < 0.5 ? -1 : 1;
+  // 曲がり具合: 道のり d で横に c*d^2 ずれる
+  // ゆるいカーブは少しの回転、強いカーブは7〜10割の回転がないとなぞれない
+  const strong = r >= 0.6;
+  const c = r < 0.25 ? 0 : strong ? side * rand(0.0055, 0.0075) : side * rand(0.003, 0.004);
+  // 曲がるコースは反対側に向けて始まる(まっすぐ投げても途中で外れる)
+  const a0 = c === 0 ? rand(-0.08, 0.08) : -Math.sign(c) * (strong ? rand(0.1, 0.13) : rand(0.06, 0.08));
+  const x0 = 0;
+  const z0 = 0.6;
+  const at = (d) => ({ x: x0 + d * Math.sin(a0) + c * d * d, z: z0 - d * Math.cos(a0) });
+  const yawAt = (d) => {
+    const tx = Math.sin(a0) + 2 * c * d;
+    const tz = -Math.cos(a0);
+    return Math.atan2(-tx, -tz);
+  };
+  const gates = GATE_DIST.map((d) => ({ ...at(d), yaw: yawAt(d), d }));
+  const path = [];
+  for (let d = 4; d <= GATE_DIST[GATE_DIST.length - 1] + 2; d += 0.45) {
+    if (GATE_DIST.some((g) => Math.abs(g - d) < 0.9)) continue; // ゲートの真下はあける
+    path.push(at(d));
+  }
+  const kind = c === 0 ? 'まっすぐ' : Math.abs(c) < 0.005 ? (c > 0 ? 'ゆるい右カーブ' : 'ゆるい左カーブ') : c > 0 ? '強い右カーブ' : '強い左カーブ';
+  return { gates, path, kind };
+}
+
+const prevPos = new THREE.Vector3();
+/** 石がゲートの面を横切ったかを調べる(順番どおり) */
+function checkGates(p) {
+  for (let i = 0; i < course.gates.length; i++) {
+    const g = course.gates[i];
+    if (throwInfo.gateState[i]) continue;
+    const tx = -Math.sin(g.yaw);
+    const tz = -Math.cos(g.yaw);
+    const s0 = (prevPos.x - g.x) * tx + (prevPos.z - g.z) * tz;
+    const s1 = (p.x - g.x) * tx + (p.z - g.z) * tz;
+    if (s0 < 0 && s1 >= 0) {
+      const lateral = (p.x - g.x) * -tz + (p.z - g.z) * tx;
+      const hit = Math.abs(lateral) < GATE_R * 0.95 && p.y < GATE_R * 0.9;
+      throwInfo.gateState[i] = hit ? 'hit' : 'miss';
+      fx.markGate(i, hit);
+      if (hit) {
+        throwInfo.chain += 1;
+        throwInfo.gatesHit += 1;
+        const pts = 100 * throwInfo.chain;
+        throwInfo.coursePts += pts;
+        audio.bonus(throwInfo.chain);
+        chip(`ゲート ${throwInfo.gatesHit}/${course.gates.length}　+${pts}`, 'gold');
+        vibrate(20);
+        if (throwInfo.gatesHit === course.gates.length) {
+          throwInfo.coursePts += 1000;
+          showJudge('コース完走！', 'great');
+          chip('完走ボーナス +1000', 'gold');
+        }
+      } else {
+        throwInfo.chain = 0;
+      }
+      const next = throwInfo.gateState.findIndex((v, j) => j < course.gates.length && !v);
+      fx.setNextGate(next);
+    }
+  }
+  prevPos.copy(p);
 }
 
 /** 大きな数を読みやすく(1億以上は「億」) */
@@ -280,11 +347,15 @@ function launch(t) {
     over: t.spin > 1,
     spinDir: t.spinDir,
     firstDone: false,
-    rings: 0,
+    coursePts: 0,
+    chain: 0,
+    gatesHit: 0,
+    gateState: [],
     power: (speed - 6) / 20,
   };
   game.state = 'flying';
   heading.set(Math.sin(yaw), 0, -Math.cos(yaw));
+  prevPos.set(sim.pos.x, sim.pos.y, sim.pos.z);
   ui.hint.hidden = true;
   ui.live.classList.add('on');
   ui.skipCount.textContent = '0';
@@ -350,17 +421,11 @@ function onContact(e) {
     audio.skip(e.index, e.speed, pan);
     if (e.index % 5 === 0) vibrate(12);
     else vibrate(5);
-    const b = fx.hitBonus(at);
-    if (b) {
-      throwInfo.rings += 1;
-      audio.bonus();
-      chip('光の輪 +250', 'gold');
-      vibrate(25);
-    }
   } else {
     fx.sinkSplash(at, e.reason === 'steep' ? 1.3 : 0.8);
     audio.sink(e.reason === 'steep');
     game.state = 'sunk';
+    fx.fadeCourseLine();
     sinkTimer = 0;
     if (e.reason === 'tumble' && sim.skips > 0) chip('バランスを崩した');
   }
@@ -371,7 +436,7 @@ function finishThrow() {
   const distance = distanceFromStart(sim, sim.lastContact || sim.pos);
   const judge = throwInfo.judge;
   game.streak = judge === 'excellent' ? game.streak + 1 : 0;
-  const s = scoreThrow({ skips, distance, judge, rings: throwInfo.rings, streak: game.streak });
+  const s = scoreThrow({ skips, distance, judge, coursePts: throwInfo.coursePts, streak: game.streak });
   game.total += s.total;
   game.results.push({ skips, distance, judge, score: s.total });
   ui.score.textContent = fmt(game.total);
@@ -379,7 +444,7 @@ function finishThrow() {
   const rows = [];
   rows.push(row('スキップ', `${skips} 回`, `+${fmt(s.skipPts)}`));
   rows.push(row('飛距離', `${distance.toFixed(1)} m`, `+${s.distPts}`));
-  if (throwInfo.rings) rows.push(row('光の輪', `${throwInfo.rings} 個`, `+${s.ringPts}`));
+  rows.push(row('コース', `${throwInfo.gatesHit}/${course.gates.length} ゲート`, `+${fmt(s.ringPts)}`));
   rows.push(row('着水', judge ? JUDGE_LABEL[judge].replace('!', '') : '—', `×${s.judgeMul.toFixed(1)}`, true));
   if (s.streakMul > 1) rows.push(row(`連続Excellent ${game.streak}`, '', `×${s.streakMul.toFixed(1)}`, true));
   rows.push(`<div class="row total"><span>得点</span><b>+${fmt(s.total)}</b></div>`);
@@ -493,6 +558,7 @@ function updateFlight(dt) {
   while (acc >= SUB) {
     acc -= SUB;
     for (const e of stepStone(sim, SUB)) onContact(e);
+    checkGates(sim.pos);
     if (game.state !== 'flying') break;
   }
   const p = sim.pos;
@@ -512,7 +578,7 @@ function updateFlight(dt) {
   ui.distVal.textContent = dist.toFixed(1);
   // 今の投げの見込み点(跳ねるほど加速していく)
   const mul = JUDGE_MUL[throwInfo.judge] || 1;
-  const est = (skipPoints(sim.skips) + dist * 6 + throwInfo.rings * 250) * mul;
+  const est = (skipPoints(sim.skips) + dist * 6 + throwInfo.coursePts) * mul;
   ui.liveScore.textContent = `+${fmt(est)}`;
 }
 

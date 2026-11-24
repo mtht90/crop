@@ -9,7 +9,7 @@ export const TUNING = {
   minSpeed: 2.0, // これより遅くなると跳ねずに沈む (m/s)
   maxFirstAngleDeg: 42, // 最初の入水角がこれより深いと「ドボン」
   idealAngleDeg: 20, // 最もよく跳ねる入水角
-  curveAccel: 1.6, // 回転によるカーブの横加速度 (m/s^2, 回転量1のとき)
+  curveAccel: 2.8, // 回転によるカーブの横加速度 (m/s^2, 回転量1のとき)
   airDrag: 0.03, // 空気抵抗 (1/s)
 };
 
@@ -180,10 +180,10 @@ export function skipPoints(n) {
 }
 
 /** 1投ぶんの点数を計算する */
-export function scoreThrow({ skips, distance, judge, rings, streak }) {
+export function scoreThrow({ skips, distance, judge, coursePts = 0, streak }) {
   const skipPts = skipPoints(skips);
   const distPts = Math.round(distance * 6);
-  const ringPts = rings * 250;
+  const ringPts = coursePts;
   const judgeMul = JUDGE_MUL[judge] || 1;
   const streakMul = judge === 'excellent' && streak > 1 ? 1 + 0.2 * (streak - 1) : 1;
   const base = skipPts + distPts + ringPts;

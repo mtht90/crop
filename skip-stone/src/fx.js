@@ -318,66 +318,97 @@ export function createFx(scene) {
     fill.material.opacity = 0.07;
   }
 
-  // ---------- 光の輪(ボーナス) ----------
-  const bonusRings = [];
-  const bonusMat = new THREE.MeshBasicMaterial({
-    map: ringTex,
-    color: COLORS.gold,
-    transparent: true,
-    depthWrite: false,
-    blending: THREE.AdditiveBlending,
-    toneMapped: false,
-  });
-  const glowMat = new THREE.SpriteMaterial({
-    map: glowTex,
-    color: COLORS.gold,
-    transparent: true,
-    opacity: 0.5,
-    depthWrite: false,
-    blending: THREE.AdditiveBlending,
-  });
-  for (let i = 0; i < 4; i++) {
+  // ---------- 光の輪のコース(立てたアーチのゲートを道のりに沿って並べる) ----------
+  const MAX_GATES = 8;
+  const GATE_COLOR = new THREE.Color('#f39a1e');
+  const archGeo = new THREE.TorusGeometry(1, 0.065, 10, 72, Math.PI);
+  const archGlowGeo = new THREE.TorusGeometry(1, 0.16, 10, 72, Math.PI);
+  const gates = [];
+  for (let i = 0; i < MAX_GATES; i++) {
     const g = new THREE.Group();
-    const ring = new THREE.Mesh(ringGeo, bonusMat.clone());
-    const ring2 = new THREE.Mesh(ringGeo, bonusMat.clone());
-    ring2.material.opacity = 0.5;
-    const glow = new THREE.Sprite(glowMat.clone());
-    glow.position.y = 0.4;
-    g.add(ring, ring2, glow);
+    // 明るい水面でも見えるよう、本体は濃い金色を普通に重ね、外側の光だけ加算にする
+    const arch = new THREE.Mesh(
+      archGeo,
+      new THREE.MeshBasicMaterial({ color: GATE_COLOR, transparent: true, opacity: 1, depthWrite: false, toneMapped: false }),
+    );
+    const halo = new THREE.Mesh(
+      archGlowGeo,
+      new THREE.MeshBasicMaterial({
+        color: COLORS.gold,
+        transparent: true,
+        opacity: 0.22,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        toneMapped: false,
+      }),
+    );
+    g.add(arch, halo);
     g.visible = false;
     scene.add(g);
-    bonusRings.push({ g, ring, ring2, glow, r: 1.6, hit: false, t: 0, phase: i });
+    gates.push({ g, arch, halo, r: 1.7, state: 'pending', t: 0, phase: i * 0.7, next: false });
   }
-  function setBonusRings(list) {
-    bonusRings.forEach((b, i) => {
+  // ゲートをつなぐ水面の点線
+  const DOTS = 160;
+  const dotPos = new Float32Array(DOTS * 3);
+  const dotGeo = new THREE.BufferGeometry();
+  dotGeo.setAttribute('position', new THREE.BufferAttribute(dotPos, 3));
+  const dotMat = new THREE.PointsMaterial({
+    size: 0.32,
+    map: dropTex,
+    color: GATE_COLOR,
+    transparent: true,
+    opacity: 0.8,
+    depthWrite: false,
+    sizeAttenuation: true,
+    toneMapped: false,
+  });
+  const dots = new THREE.Points(dotGeo, dotMat);
+  dots.frustumCulled = false;
+  dots.renderOrder = 3;
+  scene.add(dots);
+
+  /** list: [{x, z, yaw}] 順番どおりのゲート。path: 点線の点 [{x, z}] */
+  function setCourse(list, path, r = 1.7) {
+    gates.forEach((b, i) => {
       const d = list[i];
       b.g.visible = !!d;
       if (!d) return;
-      b.g.position.set(d.x, 0.05, d.z);
-      b.r = d.r;
-      b.hit = false;
+      b.g.position.set(d.x, 0, d.z);
+      b.g.rotation.set(0, d.yaw, 0);
+      b.r = r;
+      b.g.scale.setScalar(r);
+      b.state = 'pending';
       b.t = 0;
-      b.ring.scale.setScalar(d.r * 2);
-      b.ring.material.opacity = 1;
-      b.glow.scale.setScalar(d.r * 2.4);
-      b.glow.material.opacity = 0.45;
+      b.arch.material.opacity = 1;
+      b.halo.material.opacity = 0.22;
+      b.arch.material.color.copy(GATE_COLOR);
     });
-  }
-  /** 水面に触れた点が光の輪の中ならそのリングを返す */
-  function hitBonus(at) {
-    for (const b of bonusRings) {
-      if (!b.g.visible || b.hit) continue;
-      const dx = at.x - b.g.position.x;
-      const dz = at.z - b.g.position.z;
-      if (dx * dx + dz * dz <= b.r * b.r) {
-        b.hit = true;
-        b.t = 0;
-        sparkle({ x: b.g.position.x, y: 0, z: b.g.position.z }, COLORS.gold, 80, 3.5);
-        ripple(b.g.position, b.r * 1.4, 0, 2);
-        return b;
-      }
+    for (let i = 0; i < DOTS; i++) {
+      const p = path[Math.min(i, path.length - 1)];
+      dotPos[i * 3] = p ? p.x : 0;
+      dotPos[i * 3 + 1] = p && i < path.length ? 0.04 : -50;
+      dotPos[i * 3 + 2] = p ? p.z : 0;
     }
-    return null;
+    dotGeo.attributes.position.needsUpdate = true;
+    dotMat.opacity = 0.8;
+  }
+  const missColor = new THREE.Color('#8fa3a8');
+  /** ゲートの結果を見せる。hit: くぐった / それ以外: 外した */
+  function markGate(i, hit) {
+    const b = gates[i];
+    if (!b) return;
+    b.state = hit ? 'hit' : 'miss';
+    b.t = 0;
+    if (hit) {
+      const p = b.g.position;
+      sparkle({ x: p.x, y: b.r * 0.8, z: p.z }, COLORS.gold, 90, 3);
+      ripple(p, b.r * 1.2, 0, 1.8);
+    } else {
+      b.arch.material.color.copy(missColor);
+    }
+  }
+  function setNextGate(i) {
+    gates.forEach((b, j) => (b.next = j === i));
   }
 
   // ---------- 手元の石の回転オーラ ----------
@@ -410,9 +441,13 @@ export function createFx(scene) {
     setTarget,
     targetState,
     target,
-    setBonusRings,
-    hitBonus,
-    bonusRings,
+    setCourse,
+    markGate,
+    setNextGate,
+    gates,
+    fadeCourseLine() {
+      dotMat.opacity = 0.3;
+    },
     hideTarget() {
       target.visible = false;
     },
@@ -485,21 +520,26 @@ export function createFx(scene) {
           outer.material.opacity = 0.55 + Math.sin(performance.now() / 300) * 0.15;
         }
       }
-      // 光の輪
+      // コースのゲート
       const now = performance.now() / 1000;
-      for (const b of bonusRings) {
+      for (const b of gates) {
         if (!b.g.visible) continue;
-        b.g.position.y = 0.05 + Math.sin(now * 2 + b.phase) * 0.03;
-        const pulse = 1 + Math.sin(now * 3 + b.phase) * 0.06;
-        b.ring2.scale.setScalar(b.r * 2 * pulse * 0.82);
-        if (b.hit) {
+        if (b.state === 'pending') {
+          // 次にくぐるゲートほど明るく脈打つ
+          const pulse = b.next ? 0.85 + Math.sin(now * 6 + b.phase) * 0.15 : 0.8 + Math.sin(now * 2 + b.phase) * 0.08;
+          b.arch.material.opacity = pulse;
+          b.halo.material.opacity = pulse * (b.next ? 0.4 : 0.2);
+          b.g.position.y = Math.sin(now * 1.6 + b.phase) * 0.03;
+        } else if (b.state === 'hit') {
           b.t += dt;
-          const f = Math.max(0, 1 - b.t / 0.8);
-          b.ring.scale.setScalar(b.r * 2 * (1 + b.t * 1.5));
-          b.ring.material.opacity = f;
-          b.ring2.material.opacity = f * 0.5;
-          b.glow.material.opacity = f * 0.8;
+          const f = Math.max(0, 1 - b.t / 0.7);
+          b.g.scale.setScalar(b.r * (1 + b.t * 0.9));
+          b.arch.material.opacity = f;
+          b.halo.material.opacity = f * 0.6;
           if (f <= 0) b.g.visible = false;
+        } else {
+          b.arch.material.opacity += (0.18 - b.arch.material.opacity) * Math.min(1, dt * 5);
+          b.halo.material.opacity += (0 - b.halo.material.opacity) * Math.min(1, dt * 5);
         }
       }
       // オーラ
