@@ -6,15 +6,15 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { NodeIO } from '@gltf-transform/core';
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
-import { prune, dedup, weld } from '@gltf-transform/functions';
+import { prune, dedup, weld, resample, quantize, meshopt } from '@gltf-transform/functions';
+import { MeshoptEncoder } from 'meshoptimizer';
 
 const KEEP_PARTS = /_(Body|Head|ArmLeft|ArmRight|LegLeft|LegRight)$/;
 const CHARACTERS = ['Knight', 'Barbarian', 'Mage', 'Rogue'];
 // ゲームで使うクリップ（KayKit Adventurers 同梱分）
-const CLIPS = ['Idle', 'Running_A', 'Running_B', 'Walking_A', 'Cheer', 'Throw', 'PickUp', 'Jump_Full_Short', 'Jump_Idle',
-  'Dodge_Forward', 'Hit_A', 'Sit_Floor_Idle', 'Unarmed_Idle', 'Death_A', 'Lie_Idle', 'Interact', 'Use_Item'];
+const CLIPS = ['Idle', 'Running_A', 'Cheer', 'PickUp'];
 // KayKit Character Animations 1.1 から追加で使うクリップ
-const EXTRA = { 'Rig_Medium_MovementAdvanced.glb': ['Crouching', 'Sneaking'], 'Rig_Medium_Simulation.glb': ['Cheering', 'Waving', 'Sit_Floor_Idle'], 'Rig_Medium_General.glb': ['Idle_B'] };
+const EXTRA = { 'Rig_Medium_MovementAdvanced.glb': ['Crouching'] };
 
 function disposeAnimation(a) {
   for (const s of a.listSamplers()) s.dispose();
@@ -22,8 +22,14 @@ function disposeAnimation(a) {
   a.dispose();
 }
 
+/** 配信サイズを小さくする（メッシュ圧縮・不要なキーフレームの間引き） */
+async function shrink(doc) {
+  await MeshoptEncoder.ready;
+  await doc.transform(resample({ tolerance: 0.0005 }), prune(), dedup(), meshopt({ encoder: MeshoptEncoder, level: 'medium' }));
+}
+
 export async function processModels(cache, out) {
-  const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
+  const io = new NodeIO().registerExtensions(ALL_EXTENSIONS).registerDependencies({ 'meshopt.encoder': MeshoptEncoder });
   fs.mkdirSync(path.join(out, 'models'), { recursive: true });
 
   for (const name of CHARACTERS) {
@@ -34,6 +40,7 @@ export async function processModels(cache, out) {
       if (node.getMesh() && !KEEP_PARTS.test(node.getName())) { node.getMesh().dispose(); node.dispose(); }
     }
     await doc.transform(prune(), dedup(), weld());
+    await shrink(doc);
     await io.write(path.join(out, 'models', `${name.toLowerCase()}.glb`), doc);
   }
 
@@ -66,6 +73,7 @@ export async function processModels(cache, out) {
   for (const acc of ar.listAccessors()) acc.setBuffer(buf);
   for (const b of ar.listBuffers().slice(1)) b.dispose();
   await anim.transform(prune({ keepLeaves: true, keepAttributes: true }), dedup());
+  await shrink(anim);
   await io.write(path.join(out, 'models', 'anims.glb'), anim);
 
   // 街並み（KayKit City Builder Bits）: 個別の .gltf を 1 つの .glb にまとめる
@@ -87,13 +95,16 @@ export async function processModels(cache, out) {
   for (const acc of city.getRoot().listAccessors()) acc.setBuffer(cityBuf);
   for (const b of city.getRoot().listBuffers()) if (b !== cityBuf) b.dispose();
   await city.transform(dedup(), prune());
+  await shrink(city);
   await io.write(path.join(out, 'models', 'city.glb'), city);
 
   // バット（Poly Haven）
   const bat = await io.read(path.join(cache, 'polyhaven', 'bat', 'baseball_bat_1k.gltf'));
   // 画面上では小さいので、木目の色テクスチャだけ残して軽くする
-  for (const m of bat.getRoot().listMaterials()) m.setNormalTexture(null).setOcclusionTexture(null).setMetallicRoughnessTexture(null).setRoughnessFactor(0.55).setMetallicFactor(0);
+  // 形だけ使う（色はゲーム側でプラスチックの黄色に塗る）のでテクスチャは捨てる
+  for (const m of bat.getRoot().listMaterials()) m.setBaseColorTexture(null).setNormalTexture(null).setOcclusionTexture(null).setMetallicRoughnessTexture(null);
   await bat.transform(prune());
+  await shrink(bat);
   await io.write(path.join(out, 'models', 'bat.glb'), bat);
 
   for (const f of fs.readdirSync(path.join(out, 'models'))) console.log('  →', f, `${(fs.statSync(path.join(out, 'models', f)).size / 1024).toFixed(0)}KB`);

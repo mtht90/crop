@@ -4,6 +4,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { spawnSync } from 'node:child_process';
 import { processModels } from './process-models.mjs';
 import { processSky } from './process-sky.mjs';
 
@@ -121,6 +122,18 @@ async function getOpenTracks(id, rel) {
   return dst;
 }
 
+/** BGM を配信向けのビットレートに変換する（ffmpeg があれば。曲の内容は変えない） */
+function shrinkBgm() {
+  const dir = path.join(CACHE, 'bgm');
+  if (!fs.existsSync(dir)) return;
+  const has = spawnSync('ffmpeg', ['-version']).status === 0;
+  if (!has) return;
+  for (const f of fs.readdirSync(dir).filter((f) => f.endsWith('.mp3') && !f.includes('.96k.'))) {
+    const src = path.join(dir, f), dst = path.join(dir, f.replace('.mp3', '.96k.mp3'));
+    if (!fs.existsSync(dst)) spawnSync('ffmpeg', ['-y', '-loglevel', 'error', '-i', src, '-b:a', '96k', '-ar', '44100', dst]);
+  }
+}
+
 /** sounds-local/ に置かれた効果音ラボの mp3 を、ゲーム内の名前に揃えて取り込む */
 function importLocalSounds() {
   const dir = path.join(ROOT, 'sounds-local');
@@ -152,10 +165,14 @@ async function main() {
   await processModels(CACHE, OUT);
   await processSky(CACHE, OUT);
   importLocalSounds();
+  shrinkBgm();
   for (const dir of ['se', 'bgm']) {
     fs.mkdirSync(path.join(OUT, dir), { recursive: true });
     if (!fs.existsSync(path.join(CACHE, dir))) continue;
-    for (const f of fs.readdirSync(path.join(CACHE, dir))) fs.copyFileSync(path.join(CACHE, dir, f), path.join(OUT, dir, f));
+    for (const f of fs.readdirSync(path.join(CACHE, dir))) {
+      if (dir === 'bgm' && !f.includes('.96k.') && fs.existsSync(path.join(CACHE, dir, f.replace('.mp3', '.96k.mp3')))) continue;
+      fs.copyFileSync(path.join(CACHE, dir, f), path.join(OUT, dir, f.replace('.96k.', '.')));
+    }
   }
   console.log('[done]', OUT);
 }

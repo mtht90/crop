@@ -47,6 +47,7 @@ function recolorTexture(model: ModelName, scene: THREE.Object3D, u: Uniform): TH
   const key = model + '|' + u.key;
   const hit = texCache.get(key);
   if (hit) return hit;
+
   let src: THREE.Texture | null = null;
   scene.traverse((o) => {
     const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined;

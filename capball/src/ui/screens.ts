@@ -8,24 +8,41 @@ const el = (html: string) => {
   return d.firstElementChild as HTMLElement;
 };
 
-export function titleScreen(parent: HTMLElement): Promise<void> {
+/** タイトル。ready が解決するまでは読み込みの進み具合を出し、終わったらタップで進める */
+export function titleScreen(parent: HTMLElement, ready: Promise<unknown> = Promise.resolve(), progress?: (cb: (p: number) => void) => void): Promise<void> {
   return new Promise((resolve) => {
     const s = el(`<div class="screen dim">
       <div class="logo"><div class="cap-logo">CAP</div><div class="jp">キャップ<br>スタジアム</div><div class="en">BOTTLE CAP BASEBALL</div><div class="en" style="letter-spacing:.1em;margin-top:4px">投球距離 9.22m ・ 5人制 ・ 6イニング</div></div>
-      <div class="tap">タップしてはじめる</div>
+      <div class="tap hidden">タップしてはじめる</div>
+      <div class="loading"><div class="bar"><i></i></div><div style="margin-top:8px;font-size:12px">球場を準備しています…</div></div>
       <div class="credits">素材: KayKit (Kay Lousberg) / Poly Haven / OpenTracks（旧DOVA-SYNDROME）/ Google Fonts<br>ルール: 日本キャップ野球協会の公式ルール解説をもとに作成</div>
     </div>`);
     parent.append(s);
+    const bar = s.querySelector('.loading i') as HTMLElement;
+    progress?.((p) => (bar.style.width = Math.round(p * 100) + '%'));
+    let ok = false;
+    ready.then(() => {
+      ok = true;
+      s.querySelector('.loading')!.remove();
+      s.querySelector('.tap')!.classList.remove('hidden');
+    });
     const go = () => {
+      if (!ok) {
+        audio.unlock();
+        return;
+      }
       audio.unlock();
       audio.play('ui_ok');
       s.remove();
       resolve();
     };
-    s.addEventListener('pointerup', go, { once: true });
+    s.addEventListener('pointerup', function h() {
+      go();
+      if (ok) s.removeEventListener('pointerup', h);
+    });
     window.addEventListener('keydown', function k(e) {
       if (e.key === 'Enter' || e.key === ' ') {
-        window.removeEventListener('keydown', k);
+        if (ok) window.removeEventListener('keydown', k);
         if (s.isConnected) go();
       }
     });

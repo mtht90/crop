@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 
 const BASE = import.meta.env.BASE_URL + 'assets/';
 /** モデルの拡張子。アーティファクト版は glTF（JSON・埋め込み）を .json で配る */
@@ -17,7 +18,7 @@ export interface Assets {
 }
 
 export async function loadAssets(onProgress: (p: number) => void): Promise<Assets> {
-  const gltf = new GLTFLoader();
+  const gltf = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
   const jobs: Promise<unknown>[] = [];
   let done = 0;
   const track = <T>(p: Promise<T>): Promise<T> => {
