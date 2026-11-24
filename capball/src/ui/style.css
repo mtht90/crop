@@ -158,8 +158,6 @@ canvas.game { position: absolute; inset: 0; width: 100%; height: 100%; display: 
 .menu { position: absolute; inset: 0; background: rgba(10, 20, 35, .6); display: grid; place-items: center; padding: 20px; }
 
 /* ---------- 打撃の見え方（捕手の構え・着弾予測・振り返り） ---------- */
-.mitt { position: absolute; width: 30px; height: 26px; margin: -13px 0 0 -15px; border-radius: 50% 50% 45% 45%; background: radial-gradient(circle at 50% 40%, #c98a4b, #8a5226 70%); border: 2px solid #3b2410; box-shadow: 0 2px 0 rgba(0,0,0,.4); opacity: .85; pointer-events: none; transition: opacity .3s; }
-.mitt::after { content: ''; position: absolute; left: 7px; right: 7px; top: 6px; height: 9px; border-radius: 50%; background: rgba(0,0,0,.28); }
 .chip { position: absolute; transform: translate(-50%, -100%); background: rgba(18,26,44,.88); color: #fff; font-weight: 900; font-size: 12px; padding: 3px 10px; border-radius: 999px; white-space: nowrap; pointer-events: none; animation: pop .25s ease-out; }
 .swingfb { position: absolute; transform: translateX(-50%); display: flex; gap: 6px; pointer-events: none; animation: pop .2s ease-out; }
 .swingfb span { background: rgba(255,253,247,.95); border: 2px solid var(--ink); border-radius: 8px; padding: 2px 8px; font-weight: 900; font-size: 12px; white-space: nowrap; box-shadow: 0 2px 0 var(--ink); }

@@ -337,7 +337,7 @@ export class Match {
       this.batCtl.onRelease = () => this.userSwing();
       // CPU 投手。捕手が構えた位置（狙い）を見せる
       const cp = cpuChoosePitch(s, pitcher, this.opts.difficulty);
-      this.sleep(0.35).then(() => {
+      if (this.opts.predict) this.sleep(0.35).then(() => {
         if (this.phase === 'aim') this.hud.showMitt(cp.aim);
       });
       this.sleep(1.1 + Math.random() * 0.7).then(() => {
@@ -555,7 +555,7 @@ export class Match {
         }
       } else if (k >= 1) this.hud.showPredict(null);
     }
-    if (this.flightT > 0.12) this.hud.showMitt(null);
+    if (this.flightT > 0.12 && this.flightT / path.duration <= 0.2) this.hud.showMitt(null);
 
     // CPU のスイング
     if (this.cpuSwing && this.swingAt < 0 && this.cpuSwing.swing && this.flightT >= this.cpuSwing.at) {

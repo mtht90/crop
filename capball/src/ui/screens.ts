@@ -68,11 +68,11 @@ export function setupScreen(parent: HTMLElement): Promise<SetupResult> {
       <div class="row"><label>先攻・後攻</label><div class="seg" data-k="user"><button data-v="away">先攻（表）</button><button data-v="home">後攻（裏）</button></div></div>
       <div class="row"><label>イニング</label><div class="seg" data-k="inn"><button data-v="3">3回</button><button data-v="4">4回</button><button data-v="6">6回（公式）</button></div></div>
       <div class="row"><label>相手の強さ</label><div class="seg" data-k="diff">${DIFFICULTIES.map((d, i) => `<button data-v="${i}">${d.name}</button>`).join('')}</div></div>
-      <div class="row"><label>打撃のアシスト（着弾予測マーカー）</label><div class="seg" data-k="pred"><button data-v="1">あり</button><button data-v="0">なし</button></div></div>
+      <div class="row"><label>打撃のアシスト（コースのマスを薄く表示）</label><div class="seg" data-k="pred"><button data-v="1">あり</button><button data-v="0">なし</button></div></div>
       <div class="row howto">
         <b>ルール</b> 公式キャップ野球と同じ5人制。走塁はなく、走者は仮想で進む。ノーバウンドで捕られるか、<b>アウトゾーン</b>で止まればアウト。<b>ヒットゾーン</b>に届けば単打、バウンドしてフェンスなら二塁打、ノーバウンドでフェンス直撃は三塁打、越えればホームラン。パスボールラインを割ると走者が進む。<br>
         <b>投げる</b> 球種を選び、ドラッグで狙って、下のキャップを<b>上にはじく</b>。白い輪が緑の輪に重なる瞬間に離すと狙いどおり。指を<b>曲げてはじく</b>と変化が増える。<br>
-        <b>打つ</b> ドラッグで黄色いカーソルを動かし、<b>指を離してスイング</b>。茶色いミットは捕手の構え（狙ったコース）、白い点線の輪は「このまま来たら通る位置」。変化球は最後に曲がるので輪も動く。振った後に早い・遅いが出る。
+        <b>打つ</b> ドラッグで黄色いカーソルを動かし、<b>指を離してスイング</b>。ゾーンの薄く塗られたマスは、投球前は捕手の構え、投げた後は「このまま来たら通るマス」。変化球は最後に曲がるのでマスも動く。振った後に早い・遅いが出る。
       </div>
       <button class="big-btn">プレイボール！</button>
     </div></div>`);

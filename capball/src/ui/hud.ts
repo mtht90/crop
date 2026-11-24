@@ -25,7 +25,6 @@ export class Hud {
   private aimEl = h('div', 'aim hidden');
   private meetEl = h('div', 'meet hidden');
   private markEl = h('div', 'pitchmark hidden');
-  private mittEl = h('div', 'mitt hidden');
   private chipEl = h('div', 'chip hidden');
   private fbEl = h('div', 'swingfb hidden');
   private previewEl = document.createElementNS('http://www.w3.org/2000/svg', 'svg') as unknown as HTMLElement;
@@ -42,8 +41,8 @@ export class Hud {
     this.input.style.touchAction = 'none';
     this.root.style.pointerEvents = 'none';
     this.previewEl.setAttribute('class', 'breakpreview');
-    this.root.append(this.previewEl, this.zoneEl, this.mittEl, this.markEl, this.chipEl, this.fbEl, this.aimEl, this.meetEl, this.board, this.cards, this.telopEl, this.controls, this.pauseBtn, this.soundBtn, this.flashEl, this.fadeEl);
-    for (const el of [this.zoneEl, this.mittEl, this.chipEl, this.fbEl, this.markEl, this.aimEl, this.meetEl, this.board, this.cards, this.telopEl, this.flashEl, this.fadeEl]) el.style.pointerEvents = 'none';
+    this.root.append(this.previewEl, this.zoneEl, this.markEl, this.chipEl, this.fbEl, this.aimEl, this.meetEl, this.board, this.cards, this.telopEl, this.controls, this.pauseBtn, this.soundBtn, this.flashEl, this.fadeEl);
+    for (const el of [this.zoneEl, this.chipEl, this.fbEl, this.markEl, this.aimEl, this.meetEl, this.board, this.cards, this.telopEl, this.flashEl, this.fadeEl]) el.style.pointerEvents = 'none';
     parent.append(this.input, this.root);
     this.soundBtn.onclick = () => {
       audio.setMuted(!audio.muted);
@@ -113,13 +112,6 @@ export class Hud {
     Object.assign(this.meetEl.style, { left: p.x - rx * k + 'px', top: p.y - ry * k + 'px', width: rx * 2 * k + 'px', height: ry * 2 * k + 'px' });
     this.meetEl.className = 'meet ' + mode;
   }
-  private place(el: HTMLElement, v: THREE.Vector2 | null) {
-    el.classList.toggle('hidden', !v);
-    if (!v) return;
-    const p = this.toScreen(v.x, v.y);
-    el.style.left = p.x + 'px';
-    el.style.top = p.y + 'px';
-  }
   /** 変化の予告線（ゾーン座標の点列。最後が狙い） */
   showBreakPreview(pts: THREE.Vector2[] | null) {
     const svg = this.previewEl as unknown as SVGSVGElement;
@@ -135,9 +127,9 @@ export class Hud {
     svg.innerHTML = `<path d="${d}" class="bp-shadow"/><path d="${d}" class="bp-line"/><polygon points="${b.x},${b.y} ${head[0]} ${head[1]}" class="bp-head"/><circle cx="${sp[0].x}" cy="${sp[0].y}" r="4" class="bp-start"/>`;
   }
 
-  /** 捕手の構え（狙ったコース） */
+  /** 捕手の構え（狙ったコース）：9マスのうち1つを薄く塗る */
   showMitt(v: THREE.Vector2 | null) {
-    this.place(this.mittEl, v);
+    this.showPredict(v, 1);
   }
   /** 着弾予測：9マスのうち、今の向きのまま来たら通るマスを薄く塗る（ゾーン外なら塗らない） */
   showPredict(v: THREE.Vector2 | null, strength = 1) {
