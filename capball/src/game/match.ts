@@ -393,7 +393,7 @@ export class Match {
     const side = s.fielding;
     const fatigue = side.stamina;
     // 変化を大きくするほど球は遅く、制球は乱れやすい（小さくすると速く・狙いやすい）
-    const str = t.kind === 'straight' ? 1 : THREE.MathUtils.clamp(t.strength ?? 1, 0.5, 1.5);
+    const str = t.kind === 'straight' ? 1 : THREE.MathUtils.clamp(t.strength ?? 1, 0.5, 1.7);
     const velo = (pitcher.velo ?? 135) * def.speedMul * (0.86 + 0.14 * t.speedNorm) * (0.93 + 0.07 * fatigue);
     // 制球：能力・リングのタイミング・疲れ
     const ctrl = pitcher.control ?? 60;
@@ -418,7 +418,8 @@ export class Match {
     // スワイプの曲げ：球種の横変化と同じ向きなら変化が大きく、逆なら小さく
     const lat = Math.sign(def.bx);
     void lat;
-    const breakMul = THREE.MathUtils.clamp(str, 0.4, 1.65) * (t.timingErr > 0.45 ? 0.6 : 1);
+    // 自分で投げた変化球は大きめに曲げる（キャップらしく）
+    const breakMul = THREE.MathUtils.clamp(str, 0.4, 1.7) * (t.timingErr > 0.45 ? 0.6 : 1) * (this.camMode === 'fps' ? 1.35 : 1);
     const extraBx = 0;
     const release = new THREE.Vector3();
     if (this.camMode === 'fps') {

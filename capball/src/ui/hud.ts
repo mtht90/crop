@@ -277,6 +277,7 @@ export class PitchControl {
   private ring: { t: number; x: number; y: number }[] = [];
   /** 払う直前まで回していたときの球種（払う動きで形が崩れないように固定しておく） */
   private locked: { kind: PitchKind; side: number; amount: number } | null = null;
+  private leftCap = false;
   private ox = 0;
   private oy = 0;
   private cleanup: (() => void)[] = [];
@@ -290,7 +291,7 @@ export class PitchControl {
     c.innerHTML = '';
     this.padEl = h('div', 'fpspad');
     this.labelEl = h('div', 'fpslabel', '');
-    const hint = h('div', 'hint fpshint', 'キャップを回して、そのまま上に払って投げる<br>大きめに右回り＝右へ・左回り＝左へ／縦長に左回り＝ライズ・右回り＝ドロップ');
+    const hint = h('div', 'hint fpshint', 'キャップをつまんで、投げたい所まで払って指を離す<br>先に回すと変化球：右回り＝右へ・左回り＝左へ／縦長に左回り＝ライズ・右回り＝ドロップ');
     this.padEl.append(this.labelEl, hint);
     c.append(this.padEl);
 
@@ -307,6 +308,7 @@ export class PitchControl {
       this.lastAng = Math.atan2(e.clientY - this.center.y, e.clientX - this.center.x);
       if (Math.abs(this.spinZ) < 0.2) this.ring = [];
       this.locked = this.spinPitch();
+      this.leftCap = false;
     };
     const move = (e: PointerEvent) => {
       if (!this.holding || e.pointerId !== this.pid) return;
@@ -317,7 +319,7 @@ export class PitchControl {
       const dist = Math.hypot(rx, ry);
       const ddx = e.clientX - prev.x, ddy = e.clientY - prev.y;
       const dt = Math.max(8, now - prev.t);
-      if (dist < this.radius * 1.15) {
+      if (!this.leftCap && dist < this.radius * 1.6) {
         // キャップのまわりで回した角度（+ = 右回り）
         if (dist > 18) {
           const ang = Math.atan2(ry, rx);
@@ -333,9 +335,10 @@ export class PitchControl {
         } else this.lastAng = Math.atan2(ry, rx);
         void ddx; void ddy; void dt;
       } else this.lastAng = Math.atan2(ry, rx);
-      // 上へ速く払い始める前までの判定を覚えておく
+      // キャップから上へ抜けたら、そこまでの回し方で球種を固定する（払う動きで形を崩さない）
+      if (!this.leftCap && ry < 0 && dist > this.radius * 1.05) this.leftCap = true;
       const flicking = -ddy / dt > 0.35 && ry < 0;
-      if (!flicking) this.locked = this.spinPitch();
+      if (!flicking && !this.leftCap) this.locked = this.spinPitch();
       this.ox = THREE.MathUtils.clamp(rx / this.radius, -1, 1);
       this.oy = THREE.MathUtils.clamp(ry / this.radius, -1.6, 1);
       this.updateLabel();
@@ -386,10 +389,10 @@ export class PitchControl {
    */
   private spinPitch(before = Infinity): { kind: PitchKind; side: number; amount: number } | null {
     const z = Math.abs(this.spinZ);
-    if (z < 0.45) return null;
-    const amount = THREE.MathUtils.clamp((z - 0.45) / 2, 0, 1);
+    if (z < 0.35) return null;
+    const amount = THREE.MathUtils.clamp((z - 0.35) / 1.6, 0, 1);
     if (this.ringAspect(before) > 1.45) return { kind: this.spinZ < 0 ? 'rise' : 'drop', side: -1, amount };
-    return { kind: z < 1.4 ? 'slider' : 'curve', side: this.spinZ > 0 ? 1 : -1, amount };
+    return { kind: z < 1.2 ? 'slider' : 'curve', side: this.spinZ > 0 ? 1 : -1, amount };
   }
 
   private updateLabel() {
@@ -419,7 +422,7 @@ export class PitchControl {
     // 高さ：指を離した位置がキャップからどれだけ上か
     const len = Math.max(0, this.center.y - b.y) + Math.max(0, -dy) * 0.5;
     // 払った線をそのまま延ばした先を狙いにする（指の動きと飛ぶ線を一致させる）
-    const ext = 0.6;
+    const ext = 0; // 指を離した点がそのまま狙い
     const screenAim = { x: b.x + dx * ext, y: b.y + dy * ext };
     this.throwWith(Math.atan2(dx, Math.max(1, -dy)), len, speed, a.t, screenAim);
   }
@@ -437,7 +440,7 @@ export class PitchControl {
     if (sp) {
       kind = sp.kind;
       side = -sp.side; // 画面で右回り＝画面の右へ曲がる（投手側から見て）
-      strength = 0.6 + sp.amount * 0.9;
+      strength = 1.0 + sp.amount * 0.6;
     } else if (speed < 0.18) {
       kind = 'knuckle';
       strength = 1.2 - speed * 2;
@@ -445,7 +448,7 @@ export class PitchControl {
     // 持っていない球種は変化が弱い（変化量 2 相当）
     const level = kind === 'straight' ? 0 : this.levels.get(kind) ?? 2;
     const z = this.hud.zone;
-    this.result = { kind, level, aim: new THREE.Vector2(x, y), timingErr: 0.12, speedNorm: speed, bend: 0, strength: THREE.MathUtils.clamp(strength, 0.4, 1.6), side, screenAim: screenAim ?? { x: (z.x0 + z.x1) / 2, y: (z.y0 + z.y1) / 2 } };
+    this.result = { kind, level, aim: new THREE.Vector2(x, y), timingErr: 0.12, speedNorm: speed, bend: 0, strength: THREE.MathUtils.clamp(strength, 0.4, 1.7), side, screenAim: screenAim ?? { x: (z.x0 + z.x1) / 2, y: (z.y0 + z.y1) / 2 } };
     this.labelEl.innerHTML = `<b>${PITCHES[kind].name}</b>`;
     this.onStart(this.result);
   }
