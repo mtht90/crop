@@ -60,6 +60,9 @@ canvas.game { position: absolute; inset: 0; width: 100%; height: 100%; display: 
 
 /* ---------- ゾーン・カーソル ---------- */
 .zone { position: absolute; border: 2px solid rgba(255,255,255,.85); box-shadow: 0 0 0 1px rgba(0,0,0,.25), inset 0 0 0 1px rgba(0,0,0,.15); pointer-events: none; border-radius: 2px; }
+.zone .cells { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); }
+.zone .cells i { background: rgba(255, 236, 150, 0); transition: background .08s; }
+.zone .cells i.on { background: rgba(255, 236, 150, 0.22); }
 .zone .grid { position: absolute; inset: 0; background-image: linear-gradient(rgba(255,255,255,.28) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.28) 1px, transparent 1px); background-size: 33.33% 33.33%; background-position: -1px -1px; }
 .aim { position: absolute; width: 26px; height: 26px; margin: -13px 0 0 -13px; border-radius: 50%; border: 3px solid #ff4a3d; box-shadow: 0 0 0 2px rgba(255,255,255,.8), 0 0 12px rgba(255,74,61,.7); pointer-events: none; }
 .aim::after { content: ''; position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px; border-radius: 50%; background: #ff4a3d; }
@@ -157,20 +160,17 @@ canvas.game { position: absolute; inset: 0; width: 100%; height: 100%; display: 
 /* ---------- 打撃の見え方（捕手の構え・着弾予測・振り返り） ---------- */
 .mitt { position: absolute; width: 30px; height: 26px; margin: -13px 0 0 -15px; border-radius: 50% 50% 45% 45%; background: radial-gradient(circle at 50% 40%, #c98a4b, #8a5226 70%); border: 2px solid #3b2410; box-shadow: 0 2px 0 rgba(0,0,0,.4); opacity: .85; pointer-events: none; transition: opacity .3s; }
 .mitt::after { content: ''; position: absolute; left: 7px; right: 7px; top: 6px; height: 9px; border-radius: 50%; background: rgba(0,0,0,.28); }
-.predict { position: absolute; width: 64px; height: 64px; margin: -32px 0 0 -32px; border-radius: 50%; background: radial-gradient(circle, rgba(255,240,170,.42) 0%, rgba(255,240,170,.16) 45%, rgba(255,240,170,0) 70%); pointer-events: none; }
 .chip { position: absolute; transform: translate(-50%, -100%); background: rgba(18,26,44,.88); color: #fff; font-weight: 900; font-size: 12px; padding: 3px 10px; border-radius: 999px; white-space: nowrap; pointer-events: none; animation: pop .25s ease-out; }
 .swingfb { position: absolute; transform: translateX(-50%); display: flex; gap: 6px; pointer-events: none; animation: pop .2s ease-out; }
 .swingfb span { background: rgba(255,253,247,.95); border: 2px solid var(--ink); border-radius: 8px; padding: 2px 8px; font-weight: 900; font-size: 12px; white-space: nowrap; box-shadow: 0 2px 0 var(--ink); }
 .swingfb span.just { background: #7dffb0; }
 .swingfb span.off { background: #ffd0c8; }
 
-/* ---------- 変化量スライダーと予告線 ---------- */
-.brk { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 2px auto 0; padding: 4px 10px; width: fit-content; max-width: 100%; background: rgba(255,253,247,.94); border: 2px solid var(--ink); border-radius: 999px; box-shadow: 0 3px 0 var(--ink); font-weight: 900; font-size: 11px; }
-.brk.off { opacity: .45; pointer-events: none; }
-.brk .bl { background: var(--ink); color: #fff; border-radius: 6px; padding: 0 5px; font-size: 10px; }
-.brk .bs { opacity: .6; font-size: 10px; }
-.brk .bv { min-width: 92px; font-size: 11px; color: var(--red); }
-.brk input[type=range] { width: 128px; accent-color: #ff7a2b; touch-action: none; }
+/* ---------- 変化量（はじき方）と予告線 ---------- */
+.brklive { position: absolute; left: calc(50% + 44px); top: 50%; transform: translateY(-50%); background: rgba(255,253,247,.94); border: 2px solid var(--ink); border-radius: 10px; padding: 3px 8px; font-weight: 900; font-size: 11px; line-height: 1.3; box-shadow: 0 2px 0 var(--ink); white-space: nowrap; pointer-events: none; }
+.brklive b { font-family: var(--display); font-size: 14px; color: var(--ink); }
+.brklive.big b { color: var(--red); }
+.brklive.small b { color: #2f6fd6; }
 .breakpreview { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
 .breakpreview .bp-shadow { fill: none; stroke: rgba(0,0,0,.45); stroke-width: 6; stroke-linecap: round; stroke-linejoin: round; }
 .breakpreview .bp-line { fill: none; stroke: #ffb62e; stroke-width: 3; stroke-dasharray: 7 5; stroke-linecap: round; stroke-linejoin: round; }

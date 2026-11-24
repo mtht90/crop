@@ -21,12 +21,11 @@ export class Hud {
   readonly input = h('div', 'layer');
   private board = h('div', 'board');
   private cards = h('div', 'cards');
-  private zoneEl = h('div', 'zone', '<div class="grid"></div>');
+  private zoneEl = h('div', 'zone', '<div class="grid"></div><div class="cells">' + '<i></i>'.repeat(9) + '</div>');
   private aimEl = h('div', 'aim hidden');
   private meetEl = h('div', 'meet hidden');
   private markEl = h('div', 'pitchmark hidden');
   private mittEl = h('div', 'mitt hidden');
-  private predEl = h('div', 'predict hidden');
   private chipEl = h('div', 'chip hidden');
   private fbEl = h('div', 'swingfb hidden');
   private previewEl = document.createElementNS('http://www.w3.org/2000/svg', 'svg') as unknown as HTMLElement;
@@ -43,8 +42,8 @@ export class Hud {
     this.input.style.touchAction = 'none';
     this.root.style.pointerEvents = 'none';
     this.previewEl.setAttribute('class', 'breakpreview');
-    this.root.append(this.previewEl, this.zoneEl, this.mittEl, this.predEl, this.markEl, this.chipEl, this.fbEl, this.aimEl, this.meetEl, this.board, this.cards, this.telopEl, this.controls, this.pauseBtn, this.soundBtn, this.flashEl, this.fadeEl);
-    for (const el of [this.zoneEl, this.mittEl, this.predEl, this.chipEl, this.fbEl, this.markEl, this.aimEl, this.meetEl, this.board, this.cards, this.telopEl, this.flashEl, this.fadeEl]) el.style.pointerEvents = 'none';
+    this.root.append(this.previewEl, this.zoneEl, this.mittEl, this.markEl, this.chipEl, this.fbEl, this.aimEl, this.meetEl, this.board, this.cards, this.telopEl, this.controls, this.pauseBtn, this.soundBtn, this.flashEl, this.fadeEl);
+    for (const el of [this.zoneEl, this.mittEl, this.chipEl, this.fbEl, this.markEl, this.aimEl, this.meetEl, this.board, this.cards, this.telopEl, this.flashEl, this.fadeEl]) el.style.pointerEvents = 'none';
     parent.append(this.input, this.root);
     this.soundBtn.onclick = () => {
       audio.setMuted(!audio.muted);
@@ -140,10 +139,19 @@ export class Hud {
   showMitt(v: THREE.Vector2 | null) {
     this.place(this.mittEl, v);
   }
-  /** 着弾予測（今の向きのまま来たら通る位置）。strength 0..1 で濃さ */
+  /** 着弾予測：9マスのうち、今の向きのまま来たら通るマスを薄く塗る（ゾーン外なら塗らない） */
   showPredict(v: THREE.Vector2 | null, strength = 1) {
-    this.place(this.predEl, v);
-    this.predEl.style.opacity = String(Math.min(1, strength));
+    const cells = this.zoneEl.querySelectorAll<HTMLElement>('.cells i');
+    let idx = -1;
+    if (v && v.x >= ZONE.x0 && v.x <= ZONE.x1 && v.y >= ZONE.y0 && v.y <= ZONE.y1) {
+      const cx = Math.min(2, Math.floor(((v.x - ZONE.x0) / (ZONE.x1 - ZONE.x0)) * 3));
+      const cy = Math.min(2, Math.floor(((ZONE.y1 - v.y) / (ZONE.y1 - ZONE.y0)) * 3));
+      idx = cy * 3 + cx;
+    }
+    cells.forEach((c, i) => {
+      c.classList.toggle('on', i === idx);
+      c.style.opacity = i === idx ? String(Math.min(1, strength)) : '';
+    });
   }
   /** 球種と球速（投球後） */
   showChip(text: string | null) {
@@ -209,6 +217,16 @@ export interface ThrowInput {
   strength: number;
 }
 
+/**
+ * はじいた向きと速さから変化量の倍率を決める。
+ * まっすぐ上（0°）で 60%、斜め 40° 以上で 150%。速くはじくほど少しキレが増す。
+ */
+export function flickStrength(dx: number, dy: number, speedNorm: number) {
+  const ang = Math.atan2(Math.abs(dx), Math.max(1, -dy)) * (180 / Math.PI);
+  const byAngle = 0.6 + 0.9 * THREE.MathUtils.clamp(ang / 40, 0, 1);
+  return THREE.MathUtils.clamp(byAngle * (0.88 + 0.24 * speedNorm), 0.5, 1.6);
+}
+
 export class PitchControl {
   aim = new THREE.Vector2(0, (ZONE.y0 + ZONE.y1) / 2);
   sel = 0;
@@ -241,16 +259,6 @@ export class PitchControl {
     });
     this.allPitches = all;
     queueMicrotask(() => this.select(0));
-    // 変化量スライダー（球種ごとに覚えておく）
-    const brk = h('div', 'brk', `<span class="bl">変化量</span><span class="bs">弱</span><input type="range" min="50" max="150" step="5" value="100" aria-label="変化量"><span class="bs">強</span><b class="bv">100%</b>`);
-    this.brkEl = brk;
-    this.brkInput = brk.querySelector('input') as HTMLInputElement;
-    this.brkInput.addEventListener('pointerdown', (e) => e.stopPropagation());
-    this.brkInput.addEventListener('input', () => {
-      const k = this.allPitches[this.sel][0];
-      this.strengths.set(k, +this.brkInput.value / 100);
-      this.syncStrength();
-    });
     const pad = h('div', 'throwpad');
     const cap = h('div', 'capbtn', 'CAP');
     this.ring = h('div', 'ring');
@@ -261,7 +269,9 @@ export class PitchControl {
     pad.append(cap);
     const hint = h('div', 'hint', '');
     this.hintEl = hint;
-    c.append(row, brk, pad, hint);
+    this.brkEl = h('div', 'brklive', '');
+    pad.append(this.brkEl);
+    c.append(row, pad, hint);
 
     cap.addEventListener('pointerdown', (e) => {
       e.preventDefault();
@@ -275,6 +285,12 @@ export class PitchControl {
     cap.addEventListener('pointermove', (e) => {
       if (!this.holding) return;
       this.pts.push({ t: performance.now(), x: e.clientX, y: e.clientY });
+      // はじく途中の向きで変化量を見せる（予告線もその場で変わる）
+      const a = this.pts[0];
+      if (a.y - e.clientY > 12) {
+        this.liveStrength = flickStrength(e.clientX - a.x, e.clientY - a.y, 0.5);
+        this.syncStrength();
+      }
     });
     const up = (e: PointerEvent) => {
       if (!this.holding) return;
@@ -343,27 +359,28 @@ export class PitchControl {
 
   private hintEl: HTMLElement | null = null;
   private brkEl: HTMLElement | null = null;
-  private brkInput!: HTMLInputElement;
-  private strengths = new Map<PitchKind, number>();
+  /** はじく向き・速さで決まる変化量（はじく前は 100% で予告） */
+  private liveStrength = 1;
   select(i: number) {
     this.sel = i;
     this.pitchBtns.forEach((b, j) => b.classList.toggle('sel', j === i));
     const def = PITCHES[this.allPitches[i][0]];
-    if (this.hintEl) this.hintEl.innerHTML = `<b>${def.name}</b>：${def.grip}`;
+    const straight = def.kind === 'straight';
+    if (this.hintEl) this.hintEl.innerHTML = `<b>${def.name}</b>：${def.grip}<br>${straight ? 'はじく速さで球速が上がる' : 'まっすぐ上にはじく＝小さく曲がる／斜めにはじく＝大きく曲がる'}`;
+    this.liveStrength = 1;
     this.syncStrength();
   }
   private get strength() {
-    const k = this.allPitches[this.sel]?.[0];
-    return k === 'straight' ? 1 : this.strengths.get(k) ?? 1;
+    return this.allPitches[this.sel]?.[0] === 'straight' ? 1 : this.liveStrength;
   }
   private syncStrength() {
     if (!this.brkEl) return;
     const straight = this.allPitches[this.sel][0] === 'straight';
-    this.brkEl.classList.toggle('off', straight);
     const v = Math.round(this.strength * 100);
-    this.brkInput.value = String(v);
-    const lbl = v <= 70 ? '控えめ' : v >= 130 ? '大きく（制球難）' : '';
-    (this.brkEl.querySelector('.bv') as HTMLElement).textContent = straight ? '—' : `${v}%${lbl ? ' ' + lbl : ''}`;
+    this.brkEl.classList.toggle('hidden', straight);
+    this.brkEl.classList.toggle('big', v >= 130);
+    this.brkEl.classList.toggle('small', v <= 75);
+    this.brkEl.innerHTML = `変化 <b>${v}%</b>${v >= 130 ? '<br>制球難' : ''}`;
   }
 
   /** 選んだ球種・変化量・狙いから、曲がり方の予告線を作る */
@@ -435,10 +452,12 @@ export class PitchControl {
       const cross = ((b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x)) / len;
       if (Math.abs(cross) > Math.abs(dev)) dev = cross;
     }
-    // 上向きのスワイプで、右に膨らむと cross は負 → 右曲げを + にする
-    const bend = THREE.MathUtils.clamp((-dev / len) * 3 + ((b.x - a.x) / len) * 0.8, -1, 1);
+    void dev;
+    // 変化量：はじく向き（斜めほど大きい）と速さ（速いほどキレる）
+    const strength = this.allPitches[this.sel][0] === 'straight' ? 1 : flickStrength(b.x - a.x, b.y - a.y, speedNorm);
     const [kind, level] = this.allPitches[this.sel];
-    this.onThrow({ kind, level, aim: this.aim.clone(), timingErr: Math.abs(s - 1), speedNorm, bend, strength: this.strength });
+    this.liveStrength = 1;
+    this.onThrow({ kind, level, aim: this.aim.clone(), timingErr: Math.abs(s - 1), speedNorm, bend: 0, strength });
   }
 
   dispose() {
