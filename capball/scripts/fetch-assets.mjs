@@ -36,7 +36,6 @@ export const SOURCES = {
       .flatMap((n) => [[`${KK_CITY}/${n}.gltf`, `city/${n}.gltf`], [`${KK_CITY}/${n}.bin`, `city/${n}.bin`]]),
   ],
   polyhaven: [
-    [`${PH}/HDRIs/hdr/1k/kloofendal_48d_partly_cloudy_puresky_1k.hdr`, 'polyhaven/sky_1k.hdr'],
     [`${PH}/HDRIs/hdr/2k/kloofendal_48d_partly_cloudy_puresky_2k.hdr`, 'polyhaven/sky_2k.hdr'],
     [`${PH}/Models/gltf/1k/baseball_bat/baseball_bat_1k.gltf`, 'polyhaven/bat/baseball_bat_1k.gltf'],
     [`${PH}/Models/gltf/8k/baseball_bat/baseball_bat.bin`, 'polyhaven/bat/baseball_bat.bin'],

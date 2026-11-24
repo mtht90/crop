@@ -50,11 +50,11 @@ export function resolveContact(c: ContactInput): ContactResult {
   const isL = c.batter.bats === 'L';
 
   if (c.mode === 'bunt') {
-    const sp = rand(5.5, 8.5) * (0.6 + 0.4 * center);
+    const sp = rand(3.5, 6) * (0.6 + 0.4 * center);
     const spray = THREE.MathUtils.degToRad(tn * 28 * (isL ? -1 : 1) + dx * 10);
     const launch = THREE.MathUtils.degToRad(-8 - dy * 12);
     const v = new THREE.Vector3(Math.sin(spray) * Math.cos(launch), Math.sin(launch), -Math.cos(spray) * Math.cos(launch)).multiplyScalar(sp);
-    return { kind: 'hit', velocity: v, quality, exitKmh: sp * 3.6 * 1.9, launchDeg: THREE.MathUtils.radToDeg(launch), sprayDeg: THREE.MathUtils.radToDeg(spray) };
+    return { kind: 'hit', velocity: v, quality, exitKmh: sp * 3.6, launchDeg: THREE.MathUtils.radToDeg(launch), sprayDeg: THREE.MathUtils.radToDeg(spray) };
   }
 
   // 打球角度: キャップがカーソル中心より上 → バットが下を叩く → 打ち上がる
@@ -63,17 +63,17 @@ export function resolveContact(c: ContactInput): ContactResult {
   launch = THREE.MathUtils.clamp(launch, -35, 78);
   // 方向: 早いと引っ張り、遅いと流し
   const pullSign = isL ? 1 : -1; // 右打者の引っ張りは三塁側（-x）
-  const spray = pullSign * -tn * 44 + dx * 8 + rand(-7, 7); // 早い(tn<0) → 引っ張り
+  const spray = pullSign * -tn * 58 + dx * 10 + rand(-8, 8); // 早い(tn<0) → 引っ張り
   // 力
   const powerK = 0.55 + (c.batter.power / 100) * 0.55;
-  const modeK = c.mode === 'power' ? 1.17 : 1;
-  const pitchK = 0.85 + (c.speedKmh / 150) * 0.15;
-  let exit = 37 * powerK * modeK * pitchK * (0.45 + 0.55 * quality);
+  const modeK = c.mode === 'power' ? 1.26 : 1;
+  const pitchK = 0.88 + (c.speedKmh / 100) * 0.12;
+  let exit = 19.5 * powerK * modeK * pitchK * (0.45 + 0.55 * quality);
   exit *= rand(0.94, 1.05);
   if (Math.abs(launch) > 55) exit *= 0.75;
   const L = THREE.MathUtils.degToRad(launch), S = THREE.MathUtils.degToRad(spray);
   const v = new THREE.Vector3(Math.sin(S) * Math.cos(L), Math.sin(L), -Math.cos(S) * Math.cos(L)).multiplyScalar(exit);
-  return { kind: 'hit', velocity: v, quality, exitKmh: Math.round(exit * 3.6 * 1.45), launchDeg: launch, sprayDeg: spray };
+  return { kind: 'hit', velocity: v, quality, exitKmh: Math.round(exit * 3.6), launchDeg: launch, sprayDeg: spray };
 }
 
 export function inZone(x: number, y: number, margin = 0.04) {

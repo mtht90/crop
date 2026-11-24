@@ -53,6 +53,7 @@ class AudioSystem {
   }
 
   private loadAll() {
+    if (import.meta.env.VITE_NO_SE === '1') return; // 効果音を同梱していない版
     for (const n of SE_LIST) this.load(`se/${n}.mp3`);
   }
 

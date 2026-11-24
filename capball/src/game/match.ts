@@ -6,13 +6,13 @@ import { Character, type ProcPose } from '../render/character';
 import { makeCapBall, Trail, CAP_VIS_R } from '../render/cap';
 import { pitchPose, PITCH_RELEASE_T, PITCH_TOTAL_T, stancePose, swingKeys, samplePose, mirrorPose, SWING_TOTAL_T } from '../render/motions';
 import { Hud, PitchControl, BatControl, type ThrowInput } from '../ui/hud';
-import { PITCHES, type Difficulty, type Player, type Pos, type Team } from './data';
-import { BASES, POSITIONS, ZONE } from './geom';
+import { PITCHES, type Difficulty, type Player, type Team } from './data';
+import { POSITIONS, ZONE, PASSBALL_Z } from './geom';
 import { GameState, type Side } from './rules';
 import { PitchPath } from './pitch';
 import { cursorSize, inZone, resolveContact, SWING_LEAD, type SwingMode } from './batting';
 import { BallSim } from './flight';
-import { LivePlay, FIELDER_SPEED, RUNNER_SPEED, type Fielder, type PlayEvent, type Runner } from './play';
+import { Judge, FIELDER_SPEED, HIT_BASES, type Fielder, type JudgeEvent, type JudgeKind } from './judge';
 import { cpuChoosePitch, cpuPlanSwing } from './ai';
 
 export interface MatchOptions {
@@ -27,7 +27,6 @@ export interface MatchOptions {
 
 type PitchOutcome = 'ball' | 'strike' | 'foul' | 'inplay' | 'strikeout' | 'walk';
 
-const CATCHER_POS = new THREE.Vector3(0, 0, 1.9);
 /** 投球時のカメラ（捕手の後方・望遠）: 位置xyz, 注視点xyz, 本塁上で見せる横幅の半分 */
 const PITCH_CAM = (new URLSearchParams(location.search).get('pc') || '0,2.15,8.8,0,0.25,-4,0.95').split(',').map(Number);
 const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
@@ -62,7 +61,7 @@ export class Match {
   private pitchResolve: ((o: PitchOutcome) => void) | null = null;
   private pendingThrow: ThrowInput | null = null;
   private cpuSwing: ReturnType<typeof cpuPlanSwing> | null = null;
-  private live: LivePlay | null = null;
+  private live: Judge | null = null;
   private camMode: 'pitch' | 'follow' | 'wide' = 'pitch';
   private camPos = new THREE.Vector3();
   private camLook = new THREE.Vector3();
@@ -184,11 +183,11 @@ export class Match {
       c.poseWeight = 0;
     }
     const fteam = s.fielding.team;
-    this.fielders = fteam.players.map((pl) => {
+    // 守備は投手・捕手・内野手2人（指名打者は守らない）
+    this.fielders = fteam.players.filter((pl) => pl.pos !== 'DH').map((pl) => {
       const p = pl.pos === 'P' ? s.fielding.pitcher : pl;
-      const pos = pl.pos;
-      const home = (pos === 'C' ? CATCHER_POS : POSITIONS[pos]).clone();
-      return { pos: pos as Pos, player: p, char: this.char(p), home, target: null, role: 'idle', coverBase: 0, hasBall: false, busy: 0, speed: FIELDER_SPEED(p.speed) } as Fielder;
+      const pos = pl.pos as keyof typeof POSITIONS;
+      return { pos: pl.pos, player: p, char: this.char(p), home: POSITIONS[pos].clone(), target: null, busy: 0, speed: FIELDER_SPEED(p.speed) };
     });
     this.resetPositions();
   }
@@ -212,20 +211,8 @@ export class Match {
         c.play('Idle', { fade: 0, offset: Math.random() });
       }
     }
-    // 打撃側：全員隠してから打者と走者を置く
-    for (const p of s.batting.team.players) this.char(p).root.visible = false;
-    s.bases.forEach((p, i) => {
-      if (!p) return;
-      const c = this.char(p);
-      c.root.visible = true;
-      c.setPose(null);
-      c.poseWeight = 0;
-      const b = BASES[i + 1];
-      const next = BASES[(i + 2) % 4];
-      c.root.position.copy(b).lerp(next, 0.08);
-      c.faceTowards(next.x, next.z);
-      c.play('Idle', { fade: 0 });
-    });
+    // 打撃側：走者は仮想なので、打者だけを置く
+    for (const p of [...s.batting.team.players, ...s.batting.team.bench]) this.char(p).root.visible = false;
     this.placeBatter();
   }
 
@@ -315,6 +302,7 @@ export class Match {
     const s = this.state;
     this.cleanupControls();
     this.path = null;
+    this.passBallT = -1;
     this.flightT = 0;
     this.windT = 0;
     this.swingT = -1;
@@ -480,7 +468,19 @@ export class Match {
       this.windT += dt;
       pc.setPose(pitchPose(Math.min(this.windT, PITCH_TOTAL_T)), this.windT > PITCH_TOTAL_T + 0.2 ? 0 : 1);
       this.updateFlight(dt);
-    } else if (this.phase === 'play' && this.live) {
+    } else if (this.passBallT >= 0) {
+      // パスボール：キャップが捕手の後ろへ転がってパスボールラインを割る
+      this.passBallT += dt;
+      const k = Math.min(1, this.passBallT / 0.9);
+      const e = 1 - (1 - k) * (1 - k);
+      this.cap.position.set(this.passBallFrom.x * (1 + e * 0.6), Math.max(0.05, this.passBallFrom.y * (1 - e)), this.passBallFrom.z + (PASSBALL_Z + 1.2 - this.passBallFrom.z) * e);
+      if (this.passBallT > 1.3) {
+        this.passBallT = -1;
+        this.cap.visible = false;
+        this.capShadow.visible = false;
+      }
+    }
+    if (this.phase === 'play' && this.live) {
       this.live.update(dt);
       this.cap.position.copy(this.live.ball.pos);
       if (this.windT < PITCH_TOTAL_T + 0.3) {
@@ -496,15 +496,17 @@ export class Match {
     // キャップの回転・影・軌跡
     if (this.cap.visible) {
       this.capSpin += dt * 38;
+      // 球種ごとの面の傾き（握りの説明どおり）。ナックルは立てて回転させない
       const kind = this.path?.params.kind;
-      const tilt = kind === 'curve' || kind === 'slider' ? 0.9 : kind === 'shoot' || kind === 'sinker' ? -0.9 : kind === 'fork' ? 1.3 : kind === 'rise' ? -1.3 : 0.3;
-      this.cap.rotation.set(Math.PI / 2 - 0.25 + Math.sin(this.capSpin * 0.07) * 0.2, 0, tilt * 0.5);
-      this.cap.rotateY(this.capSpin);
+      const tilt = kind ? PITCHES[kind].tilt : 0.3;
+      this.cap.rotation.set(Math.PI / 2 - 0.25 + Math.sin(this.capSpin * 0.07) * 0.2, 0, tilt);
+      if (kind !== 'knuckle' || this.phase !== 'flight') this.cap.rotateY(this.capSpin);
+      else this.cap.rotateX(Math.sin(this.time * 17) * 0.25);
       this.capShadow.position.set(this.cap.position.x, 0.012, this.cap.position.z);
       const hgt = Math.max(0, this.cap.position.y);
       this.capShadow.scale.setScalar(1 + hgt * 0.08);
       (this.capShadow.material as THREE.MeshBasicMaterial).opacity = 0.38 / (1 + hgt * 0.25);
-      if (this.phase === 'flight' || (this.phase === 'play' && this.live?.mode !== 'held')) this.trail.push(this.cap.position);
+      if (this.phase === 'flight' || (this.phase === 'play' && !this.live?.holder)) this.trail.push(this.cap.position);
       const camDir = this.engine.camera.getWorldDirection(new THREE.Vector3());
       this.trail.update(camDir, CAP_VIS_R * 0.8, dt);
     } else this.trail.update(new THREE.Vector3(0, 0, 1), 0.05, dt);
@@ -546,7 +548,7 @@ export class Match {
       });
       if (r.kind === 'hit') {
         if (r.quality > 0.86 && this.swingMode !== 'bunt') this.hud.telop('ジャストミート！', 'small good', '', 800);
-        this.onContact(r.velocity, r.quality, r.launchDeg);
+        this.onContact(r.velocity, r.quality);
         return;
       }
       if (r.kind === 'foulTip') {
@@ -561,24 +563,54 @@ export class Match {
       this.hud.showMark(new THREE.Vector2(path.plate.x, path.plate.y));
     }
     if (this.flightT >= path.duration + 0.08 && this.phase === 'flight') {
-      // 捕球
-      audio.play(path.params.speedKmh > 140 ? 'catch_fast' : 'catch', { volume: 0.8 });
-      this.cap.visible = false;
-      this.capShadow.visible = false;
       const swung = this.swingAt >= 0;
-      const strike = swung || inZone(path.plate.x, path.plate.y, CAP_VIS_R * 0.5);
-      this.endPitch(strike ? 'strike' : 'ball', swung);
+      const px = path.plate.x, py = path.plate.y;
+      // 首・頭に当たればデッドボール
+      const L = s.batter.bats === 'L';
+      const hbp = !swung && (L ? px > 0.55 : px < -0.55) && py > 1.0 && py < 1.7;
+      // 捕手が届かない投球・ナックルのこぼれ → パスボールラインを割る
+      const wild = Math.abs(px) > 0.72 || py < 0.06 || py > 1.65;
+      const drop = path.params.kind === 'knuckle' ? 0.07 : 0.015;
+      const passBall = !hbp && (wild || Math.random() < drop);
+      if (passBall) {
+        this.passBallT = 0;
+        this.passBallFrom = this.cap.position.clone();
+        audio.play('bounce', { volume: 0.6 });
+      } else {
+        audio.play(path.params.speedKmh > 88 ? 'catch_fast' : 'catch', { volume: 0.8 });
+        this.cap.visible = false;
+        this.capShadow.visible = false;
+      }
+      const strike = swung || inZone(px, py, CAP_VIS_R * 0.5);
+      this.endPitch(hbp ? 'hbp' : strike ? 'strike' : 'ball', swung, passBall);
     }
   }
   private markShown = false;
 
-  private async endPitch(kind: 'strike' | 'ball' | 'foul', swung = false) {
+  private passBallT = -1;
+  private passBallFrom = new THREE.Vector3();
+
+  private async endPitch(kind: 'strike' | 'ball' | 'foul' | 'hbp', swung = false, passBall = false) {
     const s = this.state;
     this.phase = 'between';
     this.markShown = false;
     this.cleanupControls();
-    let outcome: PitchOutcome = kind;
-    if (kind === 'strike') {
+    let outcome: PitchOutcome = kind === 'hbp' ? 'walk' : kind;
+    const runnersOn = s.bases.some(Boolean);
+    if (kind === 'hbp') {
+      this.hud.telop('デッドボール', 'bad');
+      const runs = s.walk();
+      s.line(s.batter).bb--;
+      if (runs) this.hud.telop('押し出し！', 'big', `${runs}点`);
+    } else if (kind === 'strike' && passBall && s.strikes === 2) {
+      // 振り逃げ：パスボールラインを割ったので打者だけが一塁へ
+      s.strikes++;
+      s.line(s.batter).so++;
+      s.line(s.batter).ab++;
+      outcome = 'walk';
+      const runs = s.droppedThird();
+      this.hud.telop('振り逃げ！', 'big', runs ? `押し出し ${runs}点` : 'パスボールラインを割った');
+    } else if (kind === 'strike') {
       s.strikes++;
       if (s.strikes >= 3) {
         s.outs++;
@@ -588,6 +620,7 @@ export class Match {
         this.hud.telop(swung ? '空振り三振！' : '見逃し三振！', 'out');
         audio.play(this.userBatting ? 'sad' : 'shakin', { volume: 0.7 });
       } else this.hud.telop(swung ? '空振り' : 'ストライク', '', '', 800);
+      if (s.strikes < 3 && passBall && runnersOn) this.applyPassBall();
     } else if (kind === 'ball') {
       s.balls++;
       if (s.balls >= 4) {
@@ -598,7 +631,11 @@ export class Match {
           this.hud.telop('押し出し！', 'big', `${runs}点`);
           audio.play('cheer', { volume: 0.5 });
         }
-      } else this.hud.telop('ボール', 'bad', '', 800);
+      } else {
+        this.hud.telop('ボール', 'bad', '', 800);
+        // 4球目以外のパスボールは塁上の走者が1つ進む（4球目はボールデッド）
+        if (passBall && runnersOn) this.applyPassBall();
+      }
     } else if (kind === 'foul') {
       if (s.strikes < 2) s.strikes++;
       this.hud.telop('ファウル', 'bad', '', 800);
@@ -609,6 +646,12 @@ export class Match {
     this.resolvePitch(outcome);
   }
 
+  private applyPassBall() {
+    const runs = this.state.passBall();
+    this.hud.telop('パスボール！', 'big', runs ? `走者が進んで ${runs}点` : '走者がひとつ進む', 1200);
+    if (runs) audio.play('cheer', { volume: 0.5 });
+  }
+
   private resolvePitch(o: PitchOutcome) {
     const r = this.pitchResolve;
     this.pitchResolve = null;
@@ -617,9 +660,9 @@ export class Match {
 
   // ---------------------------------------------------------------------
   /** 打った！ */
-  private onContact(vel: THREE.Vector3, quality: number, launch: number) {
+  private onContact(vel: THREE.Vector3, quality: number) {
     const s = this.state;
-    const big = quality > 0.75 && vel.length() > 20;
+    const big = quality > 0.75 && vel.length() > 14;
     audio.play(big ? 'hit_hard' : 'hit_light', { volume: 0.9 });
     if (big) {
       this.hud.flash();
@@ -632,34 +675,21 @@ export class Match {
     start.z = Math.min(start.z, 0.2);
     start.y = Math.max(start.y, 0.25);
     const ball = new BallSim(start, vel, 0.5 + (1 - quality) * 0.8, Math.random() * 6);
-    // 打者走者と塁上の走者
-    const batter = s.batter;
-    const runners: Runner[] = [];
-    const sp = (p: Player) => RUNNER_SPEED(p.speed);
-    runners.push({ player: batter, char: this.char(batter), from: 0, to: 1, d: 0, state: 'run', isBatter: true, speed: sp(batter), forced: true, startDelay: 0.3 });
-    s.bases.forEach((p, i) => {
-      if (!p) return;
-      const c = this.char(p);
-      c.setPose(null);
-      runners.push({ player: p, char: c, from: i + 1, to: i + 2, d: 0.6, state: 'hold', isBatter: false, speed: sp(p), forced: false, startDelay: 0 });
-    });
-    const bc = this.char(batter);
-    this.sleep(0.25).then(() => {
+    const bc = this.char(s.batter);
+    this.sleep(0.45).then(() => {
       bc.setPose(null);
-      bc.batHolder.visible = false;
+      bc.play('Idle');
     });
-    s.line(batter).ab++;
-    this.live = new LivePlay(s, this.fielders, runners, ball, (e) => this.onPlayEvent(e));
     for (const f of this.fielders) f.char.setPose(null);
+    this.live = new Judge(ball, this.fielders, (e) => this.onJudgeEvent(e));
     this.phase = 'play';
     this.camMode = 'follow';
     this.camPos.copy(this.engine.camera.position);
     this.cap.visible = true;
-    void launch;
     this.watchPlay();
   }
 
-  private onPlayEvent(e: PlayEvent) {
+  private onJudgeEvent(e: JudgeEvent) {
     switch (e.type) {
       case 'bounce':
         if (e.strong) audio.play('bounce', { volume: 0.4 });
@@ -667,26 +697,15 @@ export class Match {
       case 'fence':
         audio.play('bounce', { volume: 0.8, rate: 0.7 });
         break;
-      case 'flyCatch':
-      case 'field':
+      case 'catch':
         audio.play('catch', { volume: 0.7 });
         break;
-      case 'throw':
-        audio.play('throw', { volume: 0.5 });
-        break;
-      case 'out':
-        this.hud.telop('アウト', 'out', e.how === 'fly' ? '' : '', 900);
-        this.hud.updateBoard(this.state, this.opts.user === 'away');
-        break;
-      case 'score':
-        audio.play('cheer', { volume: 0.5 });
-        break;
-      case 'homerun':
-        audio.play('cheer_big', { volume: 0.9 });
-        this.hud.flash();
-        break;
-      case 'error':
-        this.hud.telop('エラー！', 'bad', '', 900);
+      case 'decided':
+        if (e.kind === 'homerun') {
+          audio.play('cheer_big', { volume: 0.9 });
+          this.hud.flash();
+          this.camMode = 'wide';
+        }
         break;
       default:
         break;
@@ -698,111 +717,55 @@ export class Match {
     const live = this.live!;
     while (!live.done && !this.quit) await this.sleep(0.05);
     if (this.quit) return;
-    const r = live.result;
+    const kind = live.kind as JudgeKind;
     const batter = s.batter;
     const line = s.line(batter);
-    let telop = '', cls = '', sub = '';
-    // 塁と得点の反映
-    if (r.kind === 'foul') {
-      line.ab--;
-      await this.sleep(0.5);
+    if (kind === 'foul') {
       this.hud.fade(true);
       await this.sleep(0.3);
       this.live = null;
       this.resetPositions();
       this.hud.fade(false);
       this.phase = 'between';
-      this.endPitchFoulAfterPlay();
+      if (s.strikes < 2) s.strikes++;
+      this.hud.telop('ファウル', 'bad', '', 800);
+      this.hud.updateBoard(s, this.opts.user === 'away');
+      this.cap.visible = false;
+      this.capShadow.visible = false;
+      this.trail.clear();
+      this.camMode = 'pitch';
+      this.hud.showZone(true);
+      this.resolvePitch('foul');
       return;
     }
-    if (r.kind === 'homerun') {
-      const runs = 1 + s.bases.filter(Boolean).length;
-      s.addRuns(runs);
-      line.h++;
-      line.hr++;
-      line.rbi += runs;
-      s.batting.hits++;
-      s.bases = [null, null, null];
-      telop = 'ホームラン！！';
-      cls = 'hr';
-      sub = runs === 4 ? '満塁ホームラン' : runs > 1 ? `${runs}ラン` : 'ソロ';
-      this.camMode = 'wide';
-      await this.sleep(2.6);
-    } else if (r.kind === 'groundRuleDouble') {
-      let runs = 0;
-      const nb: (Player | null)[] = [null, batter, null];
-      if (s.bases[2]) runs++;
-      if (s.bases[1]) runs++;
-      if (s.bases[0]) nb[2] = s.bases[0];
-      s.addRuns(runs);
-      s.bases = nb;
-      line.h++;
-      line.rbi += runs;
-      s.batting.hits++;
-      telop = 'エンタイトル';
-      cls = 'big';
-      sub = 'ツーベース';
-      await this.sleep(1.2);
+    line.ab++;
+    let telop = '', cls = 'big', sub = '';
+    const bases = HIT_BASES[kind];
+    if (bases) {
+      const runs = s.hit(bases);
+      telop = { 1: 'ヒット！', 2: 'ツーベース！', 3: 'スリーベース！', 4: 'ホームラン！！' }[bases]!;
+      sub = { 1: 'ヒットゾーン到達', 2: 'バウンドしてフェンスに到達', 3: 'ノーバウンドでフェンス直撃', 4: 'ノーバウンドでフェンス越え' }[bases]!;
+      if (bases === 4) {
+        cls = 'hr';
+        sub = runs === 4 ? '満塁ホームラン' : runs > 1 ? `${runs}ラン` : 'ソロ';
+      } else if (runs) sub = `タイムリー ${runs}点`;
+      audio.play(bases === 4 ? 'cheer_big' : 'cheer', { volume: 0.6 });
     } else {
-      const nb: (Player | null)[] = [null, null, null];
-      for (const rn of live.runners) if (rn.state === 'safe' && rn.from >= 1 && rn.from <= 3) nb[rn.from - 1] = rn.player;
-      s.bases = nb;
-      s.addRuns(r.runs);
-      if (r.hitType) {
-        line.h++;
-        s.batting.hits++;
-        line.rbi += r.runs;
-        telop = { single: 'ヒット！', double: 'ツーベース！', triple: 'スリーベース！', homerun: 'ランニングホームラン！！' }[r.hitType];
-        cls = r.hitType === 'single' ? 'big' : 'big';
-        if (r.hitType === 'homerun') { cls = 'hr'; line.hr++; }
-        if (r.runs) sub = `タイムリー ${r.runs}点`;
-        audio.play('cheer', { volume: 0.6 });
-      } else if (r.error) {
-        telop = 'エラー';
-        cls = 'bad';
-        s.fielding.errors++;
-      } else if (r.outs >= 2) {
-        telop = 'ゲッツー！';
-        cls = 'out';
-      } else if (r.outs === 1) {
-        if (r.flyOut && r.runs) { telop = '犠牲フライ'; cls = 'big'; line.ab--; line.rbi += r.runs; }
-        else if (!r.flyOut) telop = '';
-      } else if (r.runs) {
-        telop = '';
-        sub = `${r.runs}点`;
-      }
-      await this.sleep(0.7);
+      s.outs++;
+      cls = 'out';
+      telop = kind === 'flyOut' ? 'フライアウト' : 'アウト';
+      sub = kind === 'flyOut' ? 'ノーバウンドで捕球' : 'アウトゾーンで止まった';
     }
-    if (telop || sub) this.hud.telop(telop || '得点！', cls, sub, 1600);
+    this.hud.telop(telop, cls, sub, 1700);
     this.hud.updateBoard(s, this.opts.user === 'away');
-    if (s.walkOff()) {
-      await this.sleep(0.4);
-      this.live = null;
-      this.resolvePitch('inplay');
-      return;
-    }
-    await this.sleep(1.3);
-    if (s.outs < 3) {
+    await this.sleep(1.4);
+    if (!s.walkOff() && s.outs < 3) {
       this.hud.fade(true);
       await this.sleep(0.3);
     }
     this.live = null;
     this.phase = 'between';
     this.resolvePitch('inplay');
-  }
-
-  private endPitchFoulAfterPlay() {
-    const s = this.state;
-    if (s.strikes < 2) s.strikes++;
-    this.hud.telop('ファウル', 'bad', '', 800);
-    this.hud.updateBoard(s, this.opts.user === 'away');
-    this.cap.visible = false;
-    this.capShadow.visible = false;
-    this.trail.clear();
-    this.camMode = 'pitch';
-    this.hud.showZone(true);
-    // ファウルフライ捕球でアウトになっていたら
-    this.resolvePitch(s.outs >= 3 ? 'inplay' : 'foul');
   }
 
   // ---------------------------------------------------------------------
@@ -832,13 +795,13 @@ export class Match {
       const portrait = this.engine.camera.aspect < 1;
       let pos: THREE.Vector3, look: THREE.Vector3, fov: number;
       if (this.camMode === 'wide') {
-        pos = V(b.x * 0.2, 9, 14);
-        look = V(b.x * 0.8, Math.min(b.y, 8) * 0.6 + 1, Math.max(b.z, -45));
+        pos = V(b.x * 0.2, 6, 9);
+        look = V(b.x * 0.8, Math.min(b.y, 6) * 0.6 + 0.6, Math.max(b.z, -22));
         fov = portrait ? 58 : 40;
       } else {
-        pos = V(b.x * 0.25, 5.5 + dist * 0.12, 11 - Math.min(dist, 30) * 0.08);
-        look = V(b.x, Math.min(b.y, 7) * 0.75, b.z).lerp(V(0, 0, -14), 0.18);
-        fov = THREE.MathUtils.clamp((portrait ? 66 : 46) - dist * (portrait ? 0.7 : 0.5), portrait ? 36 : 24, portrait ? 66 : 46);
+        pos = V(b.x * 0.3, 3.8 + dist * 0.18, 8 - Math.min(dist, 16) * 0.12);
+        look = V(b.x, Math.min(b.y, 5) * 0.75, b.z).lerp(V(0, 0, -8), 0.2);
+        fov = THREE.MathUtils.clamp((portrait ? 64 : 44) - dist * (portrait ? 1.3 : 0.9), portrait ? 40 : 26, portrait ? 64 : 44);
       }
       this.engine.fixedVFov = THREE.MathUtils.lerp(this.engine.camera.fov, fov, 1 - Math.exp(-dt * 3));
       this.engine.fitFov();
@@ -851,4 +814,3 @@ export class Match {
   }
 }
 
-export { BASES };

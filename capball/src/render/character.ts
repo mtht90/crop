@@ -303,6 +303,8 @@ export class Character {
     this.cap.scale.setScalar(1.16);
     this.cap.position.set(0, 0.74, -0.02);
     this.cap.rotation.x = -0.14;
+    // 公式キャップ野球では帽子をかぶらないので、帽子は付けない（形だけ残す）
+    this.cap.visible = false;
     this.bones['head']?.add(this.cap);
 
     this.mixer = new THREE.AnimationMixer(this.model);
@@ -315,13 +317,14 @@ export class Character {
     bat.traverse((o) => { if ((o as THREE.Mesh).isMesh) meshes.push(o as THREE.Mesh); });
     meshes.forEach((m) => {
       {
-        m.material = toToon(m.material as THREE.Material);
+        // キャップ野球のバットは滑らかで丸いプラスチック棒（黄色いウィッフル型）
+        m.material = new THREE.MeshToonMaterial({ color: '#ffd23a', gradientMap: toonGradient() });
         m.castShadow = true;
         addOutline(m, 0.008);
       }
     });
     // Poly Haven のバットは +Y が先端、握りが -Y 側。握りを原点・先端を +Z に向ける
-    bat.scale.setScalar(BAT_SCALE);
+    bat.scale.set(BAT_SCALE * 0.8, BAT_SCALE, BAT_SCALE * 0.8);
     bat.rotation.set(Math.PI / 2, 0, 0);
     bat.position.set(0, 0, 0.2 * BAT_SCALE);
     this.bat = bat;

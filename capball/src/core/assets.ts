@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js';
 
 const BASE = import.meta.env.BASE_URL + 'assets/';
+/** モデルの拡張子。アーティファクト版は glTF（JSON・埋め込み）を .json で配る */
+const EXT = (import.meta.env.VITE_MODEL_EXT as string | undefined) || 'glb';
 
 export const MODEL_NAMES = ['knight', 'barbarian', 'mage', 'rogue'] as const;
 export type ModelName = (typeof MODEL_NAMES)[number];
@@ -12,13 +13,11 @@ export interface Assets {
   anims: THREE.AnimationClip[];
   city: GLTF;
   bat: GLTF;
-  envHdr: THREE.DataTexture;
   sky: THREE.Texture;
 }
 
 export async function loadAssets(onProgress: (p: number) => void): Promise<Assets> {
   const gltf = new GLTFLoader();
-  const rgbe = new RGBELoader();
   const jobs: Promise<unknown>[] = [];
   let done = 0;
   const track = <T>(p: Promise<T>): Promise<T> => {
@@ -30,11 +29,10 @@ export async function loadAssets(onProgress: (p: number) => void): Promise<Asset
     });
   };
   const models = {} as Record<ModelName, GLTF>;
-  const modelJobs = MODEL_NAMES.map((n) => track(gltf.loadAsync(BASE + `models/${n}.glb`)).then((g) => (models[n] = g)));
-  const anims = track(gltf.loadAsync(BASE + 'models/anims.glb'));
-  const city = track(gltf.loadAsync(BASE + 'models/city.glb'));
-  const bat = track(gltf.loadAsync(BASE + 'models/bat.glb'));
-  const envHdr = track(rgbe.loadAsync(BASE + 'sky/sky_1k.hdr'));
+  const modelJobs = MODEL_NAMES.map((n) => track(gltf.loadAsync(BASE + `models/${n}.${EXT}`)).then((g) => (models[n] = g)));
+  const anims = track(gltf.loadAsync(BASE + `models/anims.${EXT}`));
+  const city = track(gltf.loadAsync(BASE + `models/city.${EXT}`));
+  const bat = track(gltf.loadAsync(BASE + `models/bat.${EXT}`));
   const sky = track(new THREE.TextureLoader().loadAsync(BASE + 'sky/sky_2k.jpg'));
   await Promise.all(modelJobs);
   return {
@@ -42,7 +40,6 @@ export async function loadAssets(onProgress: (p: number) => void): Promise<Asset
     anims: (await anims).animations,
     city: await city,
     bat: await bat,
-    envHdr: await envHdr,
     sky: await sky,
   };
 }

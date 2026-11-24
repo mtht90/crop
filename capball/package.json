@@ -9,11 +9,10 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "sim": "esbuild test/sim.ts --bundle --platform=node --format=esm --outfile=.asset-cache/sim.mjs --log-level=warning --define:import.meta.env.BASE_URL='\"/\"' && node .asset-cache/sim.mjs"
+    "sim": "esbuild test/sim.ts --bundle --platform=node --format=esm --outfile=.asset-cache/sim.mjs --log-level=warning --define:import.meta.env.BASE_URL='\"/\"' && node .asset-cache/sim.mjs",
+    "build:artifact": "tsc --noEmit && VITE_MODEL_EXT=json VITE_NO_SE=$([ -d public/assets/se ] && [ \"$(ls public/assets/se)\" ] && echo 0 || echo 1) vite build && node scripts/build-artifact.mjs"
   },
   "dependencies": {
-    "@fontsource/dela-gothic-one": "^5.3.0",
-    "@fontsource/m-plus-rounded-1c": "^5.3.0",
     "three": "^0.170.0"
   },
   "devDependencies": {

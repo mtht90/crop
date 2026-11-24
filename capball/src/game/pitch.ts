@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { PITCHES, type PitchKind } from './data';
 
 /** 投球の速さの見え方（実寸の何倍の時間をかけるか）。スマホで目で追える速さにする */
-export const PITCH_TIME_SCALE = 1.28;
+export const PITCH_TIME_SCALE = 1.45;
 
 export interface PitchParams {
   kind: PitchKind;
@@ -30,10 +30,10 @@ export class PitchPath {
     this.params = p;
     const def = PITCHES[p.kind];
     const dist = p.release.distanceTo(p.target);
-    this.duration = (dist / (p.speedKmh / 3.6)) * PITCH_TIME_SCALE * (18.44 / Math.max(8, Math.abs(p.release.z)));
+    this.duration = (dist / (p.speedKmh / 3.6)) * PITCH_TIME_SCALE;
     const lv = p.level * p.breakMul;
     this.bend = new THREE.Vector3(def.bx * lv + p.extraBx, def.by * lv, 0);
-    this.arc = def.arc * (0.7 + 0.3 * (1 - p.speedKmh / 160));
+    this.arc = def.arc * (0.7 + 0.3 * (1 - p.speedKmh / 110));
     this.late = def.late;
     this.wobble = p.kind === 'knuckle' ? 0.05 + 0.025 * p.level : 0;
     this.start = p.release.clone();

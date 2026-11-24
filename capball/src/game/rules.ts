@@ -44,7 +44,9 @@ export class GameState {
   }
   get batter() {
     const b = this.batting;
-    return b.team.players[b.battingIndex % 9];
+    const p = b.team.players[b.battingIndex % b.team.players.length];
+    // 交代した投手は前の投手の打順を引き継ぐ
+    return p.pos === 'P' ? b.pitcher : p;
   }
   score(side: Side) {
     return side.runs.reduce((a, b) => a + b, 0);
@@ -63,6 +65,7 @@ export class GameState {
 
   nextBatter() {
     this.batting.battingIndex++;
+    this.batting.battingIndex %= this.batting.team.players.length;
     this.balls = 0;
     this.strikes = 0;
   }
@@ -82,6 +85,47 @@ export class GameState {
     if (runs) this.addRuns(runs);
     this.line(b).bb++;
     this.line(b).rbi += runs;
+    return runs;
+  }
+
+  /** 安打（仮想走者）：打者は n 塁へ、塁上の走者も n 個ずつ進む。得点を返す */
+  hit(n: number): number {
+    const b = this.batter;
+    const nb: (Player | null)[] = [null, null, null];
+    let runs = 0;
+    for (let i = 2; i >= 0; i--) {
+      const r = this.bases[i];
+      if (!r) continue;
+      const to = i + 1 + n;
+      if (to >= 4) runs++;
+      else nb[to - 1] = r;
+    }
+    if (n >= 4) runs++;
+    else nb[n - 1] = b;
+    this.bases = nb;
+    if (runs) this.addRuns(runs);
+    const l = this.line(b);
+    l.h++;
+    l.rbi += runs;
+    if (n >= 4) l.hr++;
+    this.batting.hits++;
+    return runs;
+  }
+
+  /** パスボール：キャップがパスボールラインを割ると、塁上の走者が全員1つ進む */
+  passBall(): number {
+    let runs = 0;
+    if (this.bases[2]) runs++;
+    this.bases = [null, this.bases[0], this.bases[1]];
+    if (runs) this.addRuns(runs);
+    return runs;
+  }
+
+  /** 振り逃げ（3ストライク目のパスボール）：打者だけが一塁へ。満塁なら押し出し */
+  droppedThird(): number {
+    const runs = this.walk();
+    const l = this.line(this.batter);
+    l.bb--;
     return runs;
   }
 

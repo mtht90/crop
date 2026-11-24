@@ -48,7 +48,6 @@ const srgb = (x) => (x <= 0.0031308 ? 12.92 * x : 1.055 * Math.pow(x, 1 / 2.4) -
 
 export async function processSky(cache, out) {
   fs.mkdirSync(path.join(out, 'sky'), { recursive: true });
-  fs.copyFileSync(path.join(cache, 'polyhaven', 'sky_1k.hdr'), path.join(out, 'sky', 'sky_1k.hdr'));
   const { W, H, data } = readHdr(fs.readFileSync(path.join(cache, 'polyhaven', 'sky_2k.hdr')));
   const px = Buffer.alloc(W * H * 4);
   const exposure = 0.95;

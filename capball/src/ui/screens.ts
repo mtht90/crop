@@ -11,9 +11,9 @@ const el = (html: string) => {
 export function titleScreen(parent: HTMLElement): Promise<void> {
   return new Promise((resolve) => {
     const s = el(`<div class="screen dim">
-      <div class="logo"><div class="cap-logo">CAP</div><div class="jp">キャップ<br>スタジアム</div><div class="en">BOTTLE CAP BASEBALL</div></div>
+      <div class="logo"><div class="cap-logo">CAP</div><div class="jp">キャップ<br>スタジアム</div><div class="en">BOTTLE CAP BASEBALL</div><div class="en" style="letter-spacing:.1em;margin-top:4px">投球距離 9.22m ・ 5人制 ・ 6イニング</div></div>
       <div class="tap">タップしてはじめる</div>
-      <div class="credits">素材: KayKit (Kay Lousberg) / Poly Haven / OpenTracks（旧DOVA-SYNDROME）/ Google Fonts<br>くわしくは CREDITS.md</div>
+      <div class="credits">素材: KayKit (Kay Lousberg) / Poly Haven / OpenTracks（旧DOVA-SYNDROME）/ Google Fonts<br>ルール: 日本キャップ野球協会の公式ルール解説をもとに作成</div>
     </div>`);
     parent.append(s);
     const go = () => {
@@ -36,16 +36,17 @@ export interface SetupResult { team: Team; opp: Team; user: 'away' | 'home'; inn
 
 export function setupScreen(parent: HTMLElement): Promise<SetupResult> {
   return new Promise((resolve) => {
-    let team = 0, user: 'away' | 'home' = 'home', innings = 3, diff = 1;
+    let team = 0, user: 'away' | 'home' = 'home', innings = 6, diff = 1;
     const s = el(`<div class="screen dim"><div class="panel">
       <h2>試合の設定</h2>
       <div class="row"><label>あなたのチーム</label><div class="teams">${TEAMS.map((t, i) => `<div class="team" data-team="${i}"><div class="sw" style="background:linear-gradient(90deg, ${t.uniform.primary} 0 50%, ${t.color} 50%)"></div><div class="nm">${t.name}</div><div class="st">エース ${t.players.find((p) => p.pos === 'P')!.name}</div></div>`).join('')}</div></div>
       <div class="row"><label>先攻・後攻</label><div class="seg" data-k="user"><button data-v="away">先攻（表）</button><button data-v="home">後攻（裏）</button></div></div>
-      <div class="row"><label>イニング</label><div class="seg" data-k="inn"><button data-v="1">1回</button><button data-v="3">3回</button><button data-v="5">5回</button><button data-v="9">9回</button></div></div>
+      <div class="row"><label>イニング</label><div class="seg" data-k="inn"><button data-v="3">3回</button><button data-v="4">4回</button><button data-v="6">6回（公式）</button></div></div>
       <div class="row"><label>相手の強さ</label><div class="seg" data-k="diff">${DIFFICULTIES.map((d, i) => `<button data-v="${i}">${d.name}</button>`).join('')}</div></div>
       <div class="row howto">
-        <b>投げる</b> 球種を選び、画面をドラッグして狙いを決めたら、下のキャップを<b>上にはじく</b>。白い輪が緑の輪に重なった瞬間に離すとコントロールが良くなる。はじく速さで球速、指を<b>曲げてはじく</b>と変化が増える。<br>
-        <b>打つ</b> 画面をドラッグして黄色いカーソルを動かし、キャップが来たら<b>指を離してスイング</b>。
+        <b>ルール</b> 公式キャップ野球と同じ5人制。走塁はなく、走者は仮想で進む。ノーバウンドで捕られるか、<b>アウトゾーン</b>で止まればアウト。<b>ヒットゾーン</b>に届けば単打、バウンドしてフェンスなら二塁打、ノーバウンドでフェンス直撃は三塁打、越えればホームラン。パスボールラインを割ると走者が進む。<br>
+        <b>投げる</b> 球種を選び、ドラッグで狙って、下のキャップを<b>上にはじく</b>。白い輪が緑の輪に重なる瞬間に離すと狙いどおり。指を<b>曲げてはじく</b>と変化が増える。<br>
+        <b>打つ</b> ドラッグで黄色いカーソルを動かし、<b>指を離してスイング</b>。
       </div>
       <button class="big-btn">プレイボール！</button>
     </div></div>`);

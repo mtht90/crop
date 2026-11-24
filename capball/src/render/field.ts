@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { Assets } from '../core/assets';
-import { BASES, FENCE_H, fenceDist, MOUND_Z, BASE_DIST } from '../game/geom';
+import { FENCE_H, fenceDist, MOUND_Z, OUT_ZONE, PASSBALL_Z } from '../game/geom';
 import { addOutline, toToon, toonGradient } from './toon';
 
 function canvasTex(w: number, h: number, draw: (c: CanvasRenderingContext2D) => void, repeat = 1) {
@@ -14,68 +14,101 @@ function canvasTex(w: number, h: number, draw: (c: CanvasRenderingContext2D) => 
   return t;
 }
 
-/** 空き地のグラウンド（土・ライン・まばらな芝） */
+/** 空き地のグラウンド（土・アウトゾーン・ヒットゾーン・ライン） */
 function groundTexture() {
-  const S = 2048, R = 52; // 104m 四方を 2048px に
-  const toPx = (x: number, z: number) => [(x / R) * (S / 2) + S / 2, (z / R) * (S / 2) + S / 2];
+  const S = 2048, R = 26; // 52m 四方を 2048px に
+  const k = S / 2 / R;
+  const toPx = (x: number, z: number) => [x * k + S / 2, z * k + S / 2 + 10 * k] as const; // 本塁を少し下寄せ
   return canvasTex(S, S, (c) => {
     c.fillStyle = '#c9a77c';
     c.fillRect(0, 0, S, S);
-    // 土のムラ
     let seed = 7;
     const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-    for (let i = 0; i < 2600; i++) {
+    for (let i = 0; i < 2200; i++) {
       const x = rnd() * S, y = rnd() * S, r = 6 + rnd() * 40;
       c.fillStyle = `rgba(${rnd() < 0.5 ? '150,115,80' : '225,200,160'},${0.05 + rnd() * 0.08})`;
       c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.fill();
     }
-    // 外野のまばらな草
-    for (let i = 0; i < 900; i++) {
-      const a = (rnd() - 0.5) * Math.PI * 0.62, d = 20 + rnd() * 26;
-      const [x, y] = toPx(Math.sin(a) * d, -Math.cos(a) * d);
-      c.fillStyle = `rgba(${110 + rnd() * 30},${150 + rnd() * 30},${70 + rnd() * 20},${0.25 + rnd() * 0.35})`;
-      c.beginPath(); c.ellipse(x, y, 8 + rnd() * 26, 5 + rnd() * 16, rnd() * 3, 0, Math.PI * 2); c.fill();
-    }
-    // 内野（踏み固められた明るい土）
-    c.fillStyle = 'rgba(236,206,160,0.55)';
-    c.beginPath();
     const [hx, hy] = toPx(0, 0);
-    c.moveTo(hx, hy);
-    for (let i = 0; i <= 32; i++) {
-      const a = -Math.PI / 4 + (Math.PI / 2) * (i / 32);
-      const [x, y] = toPx(Math.sin(a) * 20.5, -Math.cos(a) * 20.5);
-      c.lineTo(x, y);
+    // フェア区域（扇形）
+    const fan = () => {
+      c.beginPath();
+      c.moveTo(hx, hy);
+      for (let i = 0; i <= 48; i++) {
+        const a = -Math.PI / 4 + (Math.PI / 2) * (i / 48);
+        const d = fenceDist(a);
+        const [x, y] = toPx(Math.sin(a) * d, -Math.cos(a) * d);
+        c.lineTo(x, y);
+      }
+      c.closePath();
+    };
+    // ヒットゾーン（芝）
+    fan();
+    c.fillStyle = '#86b85a';
+    c.fill();
+    c.save();
+    fan();
+    c.clip();
+    for (let i = 0; i < 900; i++) {
+      const x = hx + (rnd() - 0.5) * 34 * k, y = hy - rnd() * 17 * k;
+      c.fillStyle = `rgba(${90 + rnd() * 40},${140 + rnd() * 40},${60 + rnd() * 25},${0.25 + rnd() * 0.35})`;
+      c.beginPath(); c.ellipse(x, y, 4 + rnd() * 14, 3 + rnd() * 9, rnd() * 3, 0, Math.PI * 2); c.fill();
     }
-    c.closePath(); c.fill();
-    // マウンド
+    // 芝の刈り目
+    for (let i = 0; i < 9; i++) {
+      c.fillStyle = i % 2 ? 'rgba(255,255,255,0.06)' : 'rgba(0,40,0,0.05)';
+      c.beginPath();
+      c.moveTo(hx, hy);
+      const a0 = -Math.PI / 4 + (Math.PI / 2) * (i / 9), a1 = -Math.PI / 4 + (Math.PI / 2) * ((i + 1) / 9);
+      for (const a of [a0, a1]) { const [x, y] = toPx(Math.sin(a) * 20, -Math.cos(a) * 20); c.lineTo(x, y); }
+      c.fill();
+    }
+    c.restore();
+    // アウトゾーン（踏み固めた土）
+    c.beginPath();
+    OUT_ZONE.forEach(([x, z], i) => { const [px, py] = toPx(x, z); if (i) c.lineTo(px, py); else c.moveTo(px, py); });
+    c.closePath();
+    c.fillStyle = '#dcb98a';
+    c.fill();
+    // マウンドと本塁まわり
     const [mx, my] = toPx(0, MOUND_Z);
-    c.fillStyle = 'rgba(205,160,110,0.9)';
-    c.beginPath(); c.arc(mx, my, 1.6 * (S / 2 / R), 0, Math.PI * 2); c.fill();
-    // 本塁まわり
-    c.beginPath(); c.arc(hx, hy, 2.6 * (S / 2 / R), 0, Math.PI * 2); c.fill();
+    c.fillStyle = 'rgba(205,160,110,0.95)';
+    c.beginPath(); c.arc(mx, my, 1.0 * k, 0, Math.PI * 2); c.fill();
+    c.beginPath(); c.arc(hx, hy + 0.6 * k, 2.0 * k, 0, Math.PI * 2); c.fill();
     // ライン（石灰）
-    c.strokeStyle = 'rgba(255,255,250,0.92)';
-    c.lineWidth = 0.09 * (S / 2 / R);
+    c.strokeStyle = 'rgba(255,255,250,0.95)';
+    c.lineWidth = 0.08 * k;
     c.lineCap = 'round';
-    for (const s of [-1, 1]) {
+    c.lineJoin = 'round';
+    for (const sgn of [-1, 1]) {
       c.beginPath(); c.moveTo(hx, hy);
-      const [x, y] = toPx(s * 40, -40); c.lineTo(x, y); c.stroke();
+      const [x, y] = toPx(sgn * 13 / Math.SQRT2 * 1.02, -13 / Math.SQRT2 * 1.02); c.lineTo(x, y); c.stroke();
     }
-    // バッターボックス
+    // アウトゾーンの境界線（両翼8mの点とマウンドを結ぶ）
+    c.beginPath();
+    for (const i of [1, 2, 3]) { const [px, py] = toPx(OUT_ZONE[i][0], OUT_ZONE[i][1]); if (i === 1) c.moveTo(px, py); else c.lineTo(px, py); }
+    c.stroke();
+    // バッターボックス・キャッチャーボックス
     const box = (cx: number) => {
-      const [x0, y0] = toPx(cx - 0.45, -0.9), [x1, y1] = toPx(cx + 0.45, 0.9);
+      const [x0, y0] = toPx(cx - 0.4, -0.9), [x1, y1] = toPx(cx + 0.4, 0.9);
       c.strokeRect(x0, y0, x1 - x0, y1 - y0);
     };
-    box(-0.85); box(0.85);
-    // キャッチャーボックス
-    const [cx0, cy0] = toPx(-0.5, 0.9), [cx1, cy1] = toPx(0.5, 2.4);
+    box(-0.8); box(0.8);
+    const [cx0, cy0] = toPx(-0.5, 0.9), [cx1, cy1] = toPx(0.5, 2.3);
     c.beginPath(); c.moveTo(cx0, cy0); c.lineTo(cx0, cy1); c.lineTo(cx1, cy1); c.lineTo(cx1, cy0); c.stroke();
-    // ベースライン（走路）をうっすら
-    c.strokeStyle = 'rgba(160,120,80,0.35)';
-    c.lineWidth = 0.9 * (S / 2 / R);
-    c.beginPath();
-    for (const b of [...BASES, BASES[0]]) { const [x, y] = toPx(b.x, b.z); c.lineTo(x, y); }
-    c.stroke();
+    // パスボールライン
+    c.setLineDash([0.25 * k, 0.18 * k]);
+    const [px0, py0] = toPx(-3.2, PASSBALL_Z), [px1] = toPx(3.2, PASSBALL_Z);
+    c.beginPath(); c.moveTo(px0, py0); c.lineTo(px1, py0); c.stroke();
+    c.setLineDash([]);
+    // 文字
+    c.fillStyle = 'rgba(255,255,255,0.55)';
+    c.font = `bold ${0.55 * k}px "Dela Gothic One", sans-serif`;
+    c.textAlign = 'center';
+    const [ox, oy] = toPx(0, -5.2);
+    c.fillText('OUT ZONE', ox, oy);
+    const [tx, ty] = toPx(0, -12.4);
+    c.fillText('HIT ZONE', tx, ty);
   });
 }
 
@@ -103,35 +136,35 @@ export function buildField(scene: THREE.Scene, assets: Assets, renderer: THREE.W
 
   // 空（Poly Haven の HDRI）と環境光
   const pmrem = new THREE.PMREMGenerator(renderer);
-  assets.envHdr.mapping = THREE.EquirectangularReflectionMapping;
-  scene.environment = pmrem.fromEquirectangular(assets.envHdr).texture;
   assets.sky.mapping = THREE.EquirectangularReflectionMapping;
   assets.sky.colorSpace = THREE.SRGBColorSpace;
+  scene.environment = pmrem.fromEquirectangular(assets.sky).texture;
   scene.background = assets.sky;
   scene.backgroundIntensity = 1.0;
   scene.backgroundRotation.set(0, 2.2, 0);
   scene.environmentIntensity = 0.6;
-  scene.fog = new THREE.Fog('#d6e6f2', 80, 210);
+  scene.fog = new THREE.Fog('#d6e6f2', 60, 170);
 
   const hemi = new THREE.HemisphereLight('#e8f3ff', '#8a6d4a', 1.35);
   scene.add(hemi);
   const sun = new THREE.DirectionalLight('#fff3dd', 2.6);
   sun.position.set(-18, 30, 14);
-  sun.target.position.set(0, 0, -14);
+  sun.target.position.set(0, 0, -7);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
   const sc = sun.shadow.camera as THREE.OrthographicCamera;
-  sc.left = -28; sc.right = 28; sc.top = 30; sc.bottom = -26; sc.near = 1; sc.far = 90;
+  sc.left = -20; sc.right = 20; sc.top = 22; sc.bottom = -18; sc.near = 1; sc.far = 80;
   sun.shadow.bias = -0.0004;
   sun.shadow.normalBias = 0.03;
   scene.add(sun, sun.target);
 
   // 地面
   const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(104, 104),
+    new THREE.PlaneGeometry(52, 52),
     new THREE.MeshToonMaterial({ map: groundTexture(), gradientMap: toonGradient() }),
   );
   ground.rotation.x = -Math.PI / 2;
+  ground.position.z = -10;
   ground.receiveShadow = true;
   group.add(ground);
   // 外側のアスファルト
@@ -141,16 +174,7 @@ export function buildField(scene: THREE.Scene, assets: Assets, renderer: THREE.W
   asphalt.receiveShadow = true;
   group.add(asphalt);
 
-  // ベース
   const baseMat = new THREE.MeshToonMaterial({ color: '#fbfbf6', gradientMap: toonGradient() });
-  for (let i = 1; i < 4; i++) {
-    const b = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.06, 0.42), baseMat);
-    b.position.copy(BASES[i]).setY(0.03);
-    b.rotation.y = Math.PI / 4;
-    b.castShadow = b.receiveShadow = true;
-    addOutline(b, 0.01);
-    group.add(b);
-  }
   const plateShape = new THREE.Shape([
     new THREE.Vector2(-0.22, 0), new THREE.Vector2(0.22, 0), new THREE.Vector2(0.22, 0.22),
     new THREE.Vector2(0, 0.44), new THREE.Vector2(-0.22, 0.22),
@@ -165,58 +189,44 @@ export function buildField(scene: THREE.Scene, assets: Assets, renderer: THREE.W
   rubber.position.set(0, 0.03, MOUND_Z);
   group.add(rubber);
 
-  // フェンス（金網）
-  const linkTex = chainLinkTexture();
-  linkTex.wrapS = linkTex.wrapT = THREE.RepeatWrapping;
-  const N = 48;
+  // フェンス（高さ75cmの板塀。キャップが当たると三塁打・二塁打）
+  const N = 40;
   const pts: THREE.Vector3[] = [];
   for (let i = 0; i <= N; i++) {
-    const th = -Math.PI / 4 - 0.12 + ((Math.PI / 2 + 0.24) * i) / N;
+    const th = -Math.PI / 4 + ((Math.PI / 2) * i) / N;
     const d = fenceDist(th);
     pts.push(new THREE.Vector3(Math.sin(th) * d, 0, -Math.cos(th) * d));
   }
-  // バックネット側まで延長
-  const back = [new THREE.Vector3(-26, 0, 14), new THREE.Vector3(-8, 0, 14), new THREE.Vector3(8, 0, 14), new THREE.Vector3(26, 0, 14)];
-  const fenceLine = [back[0], ...pts, back[3]];
-  const fenceGeo = new THREE.BufferGeometry();
-  const pos: number[] = [], uv: number[] = [];
-  let acc = 0;
-  for (let i = 0; i < fenceLine.length - 1; i++) {
-    const a = fenceLine[i], b = fenceLine[i + 1];
+  const boardMat = new THREE.MeshToonMaterial({ color: '#2f6fd6', gradientMap: toonGradient() });
+  const capMat = new THREE.MeshToonMaterial({ color: '#fff6d8', gradientMap: toonGradient() });
+  const yellow = new THREE.MeshToonMaterial({ color: '#ffc93c', gradientMap: toonGradient() });
+  for (let i = 0; i < N; i++) {
+    const a = pts[i], b = pts[i + 1];
     const len = a.distanceTo(b);
-    const hh = FENCE_H;
-    pos.push(a.x, 0, a.z, b.x, 0, b.z, b.x, hh, b.z, a.x, 0, a.z, b.x, hh, b.z, a.x, hh, a.z);
-    const u0 = acc / 0.35, u1 = (acc + len) / 0.35, v1 = hh / 0.35;
-    uv.push(u0, 0, u1, 0, u1, v1, u0, 0, u1, v1, u0, v1);
-    acc += len;
+    const mid = a.clone().add(b).multiplyScalar(0.5);
+    const yaw = Math.atan2(b.x - a.x, b.z - a.z);
+    const board = new THREE.Mesh(new THREE.BoxGeometry(0.06, FENCE_H, len + 0.02), i % 2 ? boardMat : yellow);
+    board.position.copy(mid).setY(FENCE_H / 2);
+    board.rotation.y = yaw;
+    board.castShadow = board.receiveShadow = true;
+    group.add(board);
+    const top = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.06, len + 0.04), capMat);
+    top.position.copy(mid).setY(FENCE_H + 0.03);
+    top.rotation.y = yaw;
+    group.add(top);
+    addOutline(board, 0.01);
   }
-  fenceGeo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  fenceGeo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
-  fenceGeo.computeVertexNormals();
-  const fence = new THREE.Mesh(fenceGeo, new THREE.MeshBasicMaterial({ map: linkTex, transparent: true, side: THREE.DoubleSide, alphaTest: 0.3, color: '#dfe6ea' }));
-  group.add(fence);
-  // バックネット（高い）
-  const netGeo = new THREE.PlaneGeometry(16, 6);
-  const netTex = linkTex.clone();
-  netTex.repeat.set(16 / 0.35, 6 / 0.35);
-  netTex.needsUpdate = true;
-  const net = new THREE.Mesh(netGeo, new THREE.MeshBasicMaterial({ map: netTex, transparent: true, alphaTest: 0.3, side: THREE.DoubleSide, color: '#dfe6ea' }));
-  net.position.set(0, 3, 14);
+  // バックネット（本塁の後方）
+  const linkTex = chainLinkTexture();
+  linkTex.wrapS = linkTex.wrapT = THREE.RepeatWrapping;
+  linkTex.repeat.set(10 / 0.35, 4 / 0.35);
+  const net = new THREE.Mesh(new THREE.PlaneGeometry(10, 4), new THREE.MeshBasicMaterial({ map: linkTex, transparent: true, alphaTest: 0.3, side: THREE.DoubleSide, color: '#dfe6ea' }));
+  net.position.set(0, 2, 13);
   group.add(net);
-  // 支柱と上端のパイプ
   const postMat = new THREE.MeshToonMaterial({ color: '#8b9aa3', gradientMap: toonGradient() });
-  const postGeo = new THREE.CylinderGeometry(0.05, 0.05, FENCE_H, 6);
-  for (let i = 0; i < fenceLine.length; i += 2) {
-    const p = new THREE.Mesh(postGeo, postMat);
-    p.position.copy(fenceLine[i]).setY(FENCE_H / 2);
-    group.add(p);
-  }
-  const railCurve = new THREE.CatmullRomCurve3(fenceLine.map((p) => p.clone().setY(FENCE_H)));
-  const rail = new THREE.Mesh(new THREE.TubeGeometry(railCurve, 160, 0.05, 6, false), postMat);
-  group.add(rail);
-  for (const x of [-8, 8]) {
-    const p = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 6, 6), postMat);
-    p.position.set(x, 3, 14);
+  for (const x of [-5, 5]) {
+    const p = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 4, 6), postMat);
+    p.position.set(x, 2, 13);
     group.add(p);
   }
 
@@ -244,50 +254,43 @@ export function buildField(scene: THREE.Scene, assets: Assets, renderer: THREE.W
     group.add(o);
     return o;
   };
-  // 外野の向こうに建物を弧状に並べる
+  // 空き地を囲む建物
   const blds = ['building_A', 'building_B', 'building_C', 'building_D', 'building_E', 'building_F', 'building_G', 'building_H'];
   let bi = 0;
-  for (let th = -1.25; th <= 1.25; th += 0.21) {
-    const d = fenceDist(Math.max(-Math.PI / 4, Math.min(Math.PI / 4, th))) + 13 + (bi % 3) * 2.5;
-    const x = Math.sin(th) * d, z = -Math.cos(th) * d;
-    place(blds[(bi * 5 + 3) % blds.length], x, z, -th, 3.6 + (bi % 2) * 0.4);
+  for (let th = -1.3; th <= 1.3; th += 0.2) {
+    const d = 27 + (bi % 3) * 2.2;
+    place(blds[(bi * 5 + 3) % blds.length], Math.sin(th) * d, -Math.cos(th) * d - 3, -th, 3.4 + (bi % 2) * 0.4);
     bi++;
   }
-  // 本塁後方・側方の建物
-  for (const [x, z, r, n] of [[-30, 20, 0.4, 'building_C'], [-14, 22, 0, 'building_F'], [2, 23, 0, 'building_A'], [17, 22, 0, 'building_H'], [31, 18, -0.4, 'building_B'], [-40, -4, Math.PI / 2, 'building_E'], [40, -4, -Math.PI / 2, 'building_G']] as const) {
-    place(n, x, z, r + Math.PI, 3.6);
+  for (const [x, z, r, n] of [[-20, 15, 0.5, 'building_C'], [-8, 19, 0, 'building_F'], [6, 19, 0, 'building_A'], [19, 16, -0.5, 'building_H'], [-27, 2, Math.PI / 2, 'building_E'], [27, 2, -Math.PI / 2, 'building_G']] as const) {
+    place(n, x, z, r + Math.PI, 3.4);
   }
-  place('watertower', -46, -58, 0.3, 4.5);
-  // 遠景：町を一周ぐるりと（輪郭線なしで軽く）
+  place('watertower', -30, -40, 0.3, 4.5);
   let k = 0;
   for (let a = 0; a < Math.PI * 2; a += 0.2) {
-    const r = 66 + (k % 3) * 7;
-    const x = Math.sin(a) * r, z = -Math.cos(a) * r - 6;
-    place(blds[(k * 3 + 1) % blds.length], x, z, -a, 4 + (k % 4) * 0.5, false);
+    const r = 50 + (k % 3) * 7;
+    place(blds[(k * 3 + 1) % blds.length], Math.sin(a) * r, -Math.cos(a) * r - 6, -a, 4 + (k % 4) * 0.5, false);
     k++;
   }
-  for (let a = 0.1; a < Math.PI * 2; a += 0.35) place('watertower', Math.sin(a) * 88, -Math.cos(a) * 88 - 6, a, 5, false);
+  for (let a = 0.1; a < Math.PI * 2; a += 0.35) place('watertower', Math.sin(a) * 72, -Math.cos(a) * 72 - 6, a, 5, false);
   // フェンス沿いの小物
-  for (let th = -0.7; th <= 0.7; th += 0.35) {
-    const d = fenceDist(th) + 3.2;
-    place('streetlight', Math.sin(th) * d, -Math.cos(th) * d, -th + Math.PI, 3.2);
+  for (let th = -0.7; th <= 0.71; th += 0.35) {
+    const d = fenceDist(th) + 3.5;
+    place('streetlight', Math.sin(th) * d, -Math.cos(th) * d, -th + Math.PI, 3.0);
   }
-  for (let th = -0.85; th <= 0.85; th += 0.17) {
-    const d = fenceDist(th) + 1.2;
-    place('bush', Math.sin(th) * d + Math.sin(th * 7) * 0.6, -Math.cos(th) * d, th * 3, 2.4 + Math.abs(Math.sin(th * 9)) * 0.8, false);
+  for (let th = -0.95; th <= 0.95; th += 0.19) {
+    const d = fenceDist(Math.min(Math.abs(th), Math.PI / 4)) + 1.3;
+    place('bush', Math.sin(th) * d, -Math.cos(th) * d, th * 3, 2.2 + Math.abs(Math.sin(th * 9)) * 0.7, false);
   }
-  place('bench', -15, 8, Math.PI / 2 + 0.6, 3);
-  place('bench', 15, 8, -Math.PI / 2 - 0.6, 3);
-  place('trash_A', -18.5, 1, 0.5, 3);
-  place('trash_B', 18.8, 1.4, -0.3, 3);
-  place('box_A', 21, -2, 0.4, 3);
-  place('firehydrant', -21, -3, 0, 3);
-  place('car_sedan', -24, 12, 0.2, 3.2);
-  place('car_hatchback', 25, 11, -0.3, 3.2);
-  place('dumpster', 34, -16, -1.2, 3.2);
-  place('car_taxi', -36, -22, 1.3, 3.2);
+  place('bench', -9, 6, Math.PI / 2 + 0.6, 2.8);
+  place('bench', 9, 6, -Math.PI / 2 - 0.6, 2.8);
+  place('trash_A', -11, 3, 0.5, 2.8);
+  place('trash_B', 11.5, 3.4, -0.3, 2.8);
+  place('box_A', 13, -1, 0.4, 2.8);
+  place('firehydrant', -13, -2, 0, 2.8);
+  place('car_sedan', -17, 9, 0.2, 3);
+  place('car_hatchback', 17, 8, -0.3, 3);
 
   return { group, sun };
 }
 
-export const FIELD_CONSTANTS = { BASE_DIST };

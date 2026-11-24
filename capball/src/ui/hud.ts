@@ -68,13 +68,13 @@ export class Hud {
   updateCards(s: GameState, lastSpeed: number | null, pitchName = '') {
     const p = s.fielding.pitcher, b = s.batter;
     const g = (label: string, v: number) => `<span class="g g-${grade(v)}">${label}<b>${grade(v)}</b></span>`;
-    const order = (s.batting.battingIndex % 9) + 1;
+    const order = (s.batting.battingIndex % s.batting.team.players.length) + 1;
     const line = s.line(b);
     this.cards.innerHTML = `
       <div class="card"><div class="nm"><span class="role">投</span>${p.name}</div>
         <div class="st"><span class="stamina"><i style="width:${Math.round(s.fielding.stamina * 100)}%"></i></span>${lastSpeed ? `<span class="speed">${lastSpeed}</span><span class="pn">${pitchName}</span>` : `<span class="pn">${s.fielding.pitchCount}球</span>`}</div></div>
       <div class="card right"><div class="nm"><span class="role">${order}番</span>${b.name}<span class="pn"> ${POS_JP[b.pos]}・${b.bats === 'L' ? '左' : '右'} ${line.h}-${line.ab}</span></div>
-        <div class="st">${g('ミ', b.meet)}${g('パ', b.power)}${g('走', b.speed)}</div></div>`;
+        <div class="st">${g('ミ', b.meet)}${g('パ', b.power)}${g('守', b.field)}</div></div>`;
   }
 
   // ---------- ゾーン ----------
@@ -182,6 +182,7 @@ export class PitchControl {
       row.append(b);
     });
     this.allPitches = all;
+    queueMicrotask(() => this.select(0));
     const pad = h('div', 'throwpad');
     const cap = h('div', 'capbtn', 'CAP');
     this.ring = h('div', 'ring');
@@ -190,7 +191,8 @@ export class PitchControl {
     target.style.width = target.style.height = '76px';
     this.ring.style.display = 'none';
     pad.append(cap);
-    const hint = h('div', 'hint', 'ドラッグで狙う → キャップを上にはじく（輪が重なる瞬間に）');
+    const hint = h('div', 'hint', '');
+    this.hintEl = hint;
     c.append(row, pad, hint);
 
     cap.addEventListener('pointerdown', (e) => {
@@ -271,9 +273,12 @@ export class PitchControl {
     this.aim.y = THREE.MathUtils.clamp(this.aim.y, ZONE.y0 - 0.32, ZONE.y1 + 0.32);
   }
 
+  private hintEl: HTMLElement | null = null;
   select(i: number) {
     this.sel = i;
     this.pitchBtns.forEach((b, j) => b.classList.toggle('sel', j === i));
+    const def = PITCHES[this.allPitches[i][0]];
+    if (this.hintEl) this.hintEl.innerHTML = `<b>${def.name}</b>：${def.grip}<br>ドラッグで狙い → キャップを上にはじく（輪が重なる瞬間に）`;
   }
 
   /** 輪の大きさ（1.0 で重なる） */

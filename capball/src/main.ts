@@ -1,7 +1,3 @@
-import '@fontsource/m-plus-rounded-1c/700.css';
-import '@fontsource/m-plus-rounded-1c/800.css';
-import '@fontsource/m-plus-rounded-1c/900.css';
-import '@fontsource/dela-gothic-one/400.css';
 import './ui/style.css';
 import { loadAssets } from './core/assets';
 import { audio } from './core/audio';
@@ -12,10 +8,6 @@ import { Match } from './game/match';
 import { loadingScreen, pauseMenu, resultScreen, setupScreen, titleScreen } from './ui/screens';
 
 async function main() {
-  if (new URLSearchParams(location.search).has('dev')) {
-    const { devViewer } = await import('./dev-viewer');
-    return devViewer();
-  }
   const app = document.getElementById('app')!;
   const engine = new Engine(app);
   const loading = loadingScreen(app);

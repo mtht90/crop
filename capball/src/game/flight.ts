@@ -64,13 +64,13 @@ export class BallSim {
           this.vel.y = 0;
         } else {
           this.vel.y = -this.vel.y * 0.36;
-          this.vel.x *= 0.82;
-          this.vel.z *= 0.82;
+          this.vel.x *= 0.62;
+          this.vel.z *= 0.62;
         }
       }
     } else {
       const h = Math.hypot(this.vel.x, this.vel.z);
-      const dec = 3.0 * dt;
+      const dec = 7.5 * dt; // キャップは転がらず地面を滑ってすぐ止まる
       if (h <= dec) {
         this.vel.set(0, 0, 0);
         this.stopped = true;

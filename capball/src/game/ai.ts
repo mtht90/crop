@@ -59,7 +59,7 @@ export function cpuPlanSwing(s: GameState, batter: Player, path: PitchPath, diff
   if (s.balls === 3 && s.strikes < 2) pSwing *= inZ ? 0.9 : 0.4;
   if (s.balls >= 2 && s.strikes === 0 && !inZ) pSwing *= 0.5;
   const swing = Math.random() < pSwing;
-  const tErr = gauss() * (0.03 + (1 - skill) * 0.065 + (path.params.speedKmh > 145 ? 0.008 : 0));
+  const tErr = gauss() * (0.03 + (1 - skill) * 0.065 + (path.params.speedKmh > 92 ? 0.008 : 0));
   const at = path.duration - swingLead + tErr;
   const cursor = perceived.clone().add(new THREE.Vector2(gauss() * 0.03 * (1 - skill), gauss() * 0.03 * (1 - skill)));
   let mode: SwingMode = 'meet';
