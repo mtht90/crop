@@ -373,8 +373,8 @@ export class Match {
     this.pendingThrow = t;
     this.phase = 'windup';
     // 自分で投げたときは、はじいた直後にリリースが来るよう投球動作の途中から始める
-    this.windT = this.pitchCtl ? PITCH_RELEASE_T - 0.16 : 0;
-    if (this.pitchCtl) this.throwAnimT = 0;
+    // 投手目線では払った瞬間に手元からキャップを放つ
+    this.windT = this.pitchCtl ? PITCH_RELEASE_T : 0;
     // 投手操作のときは、リリースまで判定の輪を出すので操作を残す
     if (!this.pitchCtl) this.hud.showAim(null);
   }
@@ -403,8 +403,18 @@ export class Match {
     sigma *= 1 + (1 - fatigue) * 1.4;
     if (cpu) sigma *= 1.6 - this.opts.difficulty.cpuControl;
     // 投手目線で自分が投げたときは、払った向きがそのまま狙いなので、ぶれはごく小さく
-    if (this.camMode === 'fps') sigma = 0.008 + (1 - ctrl / 100) * 0.02;
+    if (this.camMode === 'fps') sigma = 0.006 + (1 - ctrl / 100) * 0.012;
     const target = new THREE.Vector3(t.aim.x + gauss() * sigma, t.aim.y + gauss() * sigma, 0);
+    if (this.camMode === 'fps' && t.screenAim) {
+      // 払った線の先（画面の点）を通る視線が本塁上の面と交わる点を狙いにする
+      const cam = this.engine.camera;
+      cam.updateMatrixWorld();
+      const ndc = new THREE.Vector3((t.screenAim.x / window.innerWidth) * 2 - 1, -(t.screenAim.y / window.innerHeight) * 2 + 1, 0.5);
+      const ray = ndc.unproject(cam).sub(cam.position).normalize();
+      const k = (0 - cam.position.z) / Math.max(1e-3, ray.z);
+      const hit = cam.position.clone().addScaledVector(ray, k);
+      target.set(THREE.MathUtils.clamp(hit.x, -1.6, 1.6) + gauss() * sigma, THREE.MathUtils.clamp(hit.y, 0.05, 2.2) + gauss() * sigma, 0);
+    }
     // スワイプの曲げ：球種の横変化と同じ向きなら変化が大きく、逆なら小さく
     const lat = Math.sign(def.bx);
     void lat;
@@ -412,8 +422,9 @@ export class Match {
     const extraBx = 0;
     const release = new THREE.Vector3();
     if (this.camMode === 'fps') {
-      this.engine.camera.updateMatrixWorld();
-      this.engine.camera.localToWorld(release.set(0.08, -0.12, -0.9));
+      // 手元のキャップの位置から放つ
+      this.handCap.updateMatrixWorld(true);
+      this.handCap.getWorldPosition(release);
       this.handCap.visible = false;
     } else {
       this.char(pitcher).handWorld('r', release);

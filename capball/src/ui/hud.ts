@@ -237,6 +237,8 @@ export interface ThrowInput {
   side: number;
   /** 変化量の倍率（0.5=弱 〜 1.5=強）。強いほど曲がるが、遅くなり制球も乱れやすい */
   strength: number;
+  /** 投手目線で投げたとき、指で払った線の先（画面座標）。キャップはこの方向へまっすぐ飛び出す */
+  screenAim?: { x: number; y: number };
 }
 
 /** 投球中のキャップの様子（試合側が3Dのキャップを描くのに使う） */
@@ -416,11 +418,14 @@ export class PitchControl {
     const speed = THREE.MathUtils.clamp((vy - 0.35) / 1.7, 0, 1);
     // 高さ：指を離した位置がキャップからどれだけ上か
     const len = Math.max(0, this.center.y - b.y) + Math.max(0, -dy) * 0.5;
-    this.throwWith(Math.atan2(dx, Math.max(1, -dy)), len, speed, a.t);
+    // 払った線をそのまま延ばした先を狙いにする（指の動きと飛ぶ線を一致させる）
+    const ext = 0.6;
+    const screenAim = { x: b.x + dx * ext, y: b.y + dy * ext };
+    this.throwWith(Math.atan2(dx, Math.max(1, -dy)), len, speed, a.t, screenAim);
   }
 
   /** 向き（ラジアン、右が+）・上へ払った長さ（px）・速さ（0..1）から投球を作る */
-  private throwWith(angle: number, lengthPx: number, speed: number, flickStart = Infinity) {
+  private throwWith(angle: number, lengthPx: number, speed: number, flickStart = Infinity, screenAim?: { x: number; y: number }) {
     const cx = (ZONE.x0 + ZONE.x1) / 2;
     // 投手側から見ているので、画面の右は本塁側から見た左（-x）
     const x = cx - THREE.MathUtils.clamp(Math.tan(angle) / Math.tan(THREE.MathUtils.degToRad(22)), -1.5, 1.5) * 0.42;
@@ -439,7 +444,8 @@ export class PitchControl {
     } else kind = 'straight';
     // 持っていない球種は変化が弱い（変化量 2 相当）
     const level = kind === 'straight' ? 0 : this.levels.get(kind) ?? 2;
-    this.result = { kind, level, aim: new THREE.Vector2(x, y), timingErr: 0.12, speedNorm: speed, bend: 0, strength: THREE.MathUtils.clamp(strength, 0.4, 1.6), side };
+    const z = this.hud.zone;
+    this.result = { kind, level, aim: new THREE.Vector2(x, y), timingErr: 0.12, speedNorm: speed, bend: 0, strength: THREE.MathUtils.clamp(strength, 0.4, 1.6), side, screenAim: screenAim ?? { x: (z.x0 + z.x1) / 2, y: (z.y0 + z.y1) / 2 } };
     this.labelEl.innerHTML = `<b>${PITCHES[kind].name}</b>`;
     this.onStart(this.result);
   }
