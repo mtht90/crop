@@ -136,10 +136,12 @@ export function buildField(scene: THREE.Scene, assets: Assets, renderer: THREE.W
 
   // 空（Poly Haven の HDRI）と環境光
   const pmrem = new THREE.PMREMGenerator(renderer);
-  assets.sky.mapping = THREE.EquirectangularReflectionMapping;
-  assets.sky.colorSpace = THREE.SRGBColorSpace;
-  scene.environment = pmrem.fromEquirectangular(assets.sky).texture;
-  scene.background = assets.sky;
+  if (assets.sky) {
+    assets.sky.mapping = THREE.EquirectangularReflectionMapping;
+    assets.sky.colorSpace = THREE.SRGBColorSpace;
+    scene.environment = pmrem.fromEquirectangular(assets.sky).texture;
+    scene.background = assets.sky;
+  } else scene.background = new THREE.Color('#9cc8ee');
   scene.backgroundIntensity = 1.0;
   scene.backgroundRotation.set(0, 2.2, 0);
   scene.environmentIntensity = 0.6;
@@ -232,7 +234,7 @@ export function buildField(scene: THREE.Scene, assets: Assets, renderer: THREE.W
 
   // 街並み（KayKit City Builder Bits）
   const parts = new Map<string, THREE.Object3D>();
-  for (const c of assets.city.scene.children) parts.set(c.name, c);
+  for (const c of assets.city?.scene.children ?? []) parts.set(c.name, c);
   const cityMats = new Map<THREE.Material, THREE.Material>();
   const place = (name: string, x: number, z: number, rotY: number, scale = 3.2, outline = true) => {
     const src = parts.get(name);

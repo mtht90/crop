@@ -6,8 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { NodeIO } from '@gltf-transform/core';
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
-import { prune, dedup, weld, resample, quantize, meshopt } from '@gltf-transform/functions';
-import { MeshoptEncoder } from 'meshoptimizer';
+import { prune, dedup, weld, resample, quantize } from '@gltf-transform/functions';
 
 const KEEP_PARTS = /_(Body|Head|ArmLeft|ArmRight|LegLeft|LegRight)$/;
 const CHARACTERS = ['Knight', 'Barbarian', 'Mage', 'Rogue'];
@@ -22,14 +21,16 @@ function disposeAnimation(a) {
   a.dispose();
 }
 
-/** 配信サイズを小さくする（メッシュ圧縮・不要なキーフレームの間引き） */
+/**
+ * 配信サイズを小さくする（頂点の量子化・不要なキーフレームの間引き）。
+ * アーティファクトでは WebAssembly が使えないので、展開に wasm が要る圧縮（meshopt・Draco）は使わない。
+ */
 async function shrink(doc) {
-  await MeshoptEncoder.ready;
-  await doc.transform(resample({ tolerance: 0.0005 }), prune(), dedup(), meshopt({ encoder: MeshoptEncoder, level: 'medium' }));
+  await doc.transform(resample({ tolerance: 0.0005 }), prune(), dedup(), quantize());
 }
 
 export async function processModels(cache, out) {
-  const io = new NodeIO().registerExtensions(ALL_EXTENSIONS).registerDependencies({ 'meshopt.encoder': MeshoptEncoder });
+  const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
   fs.mkdirSync(path.join(out, 'models'), { recursive: true });
 
   for (const name of CHARACTERS) {

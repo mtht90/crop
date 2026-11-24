@@ -21,11 +21,19 @@ export function titleScreen(parent: HTMLElement, ready: Promise<unknown> = Promi
     const bar = s.querySelector('.loading i') as HTMLElement;
     progress?.((p) => (bar.style.width = Math.round(p * 100) + '%'));
     let ok = false;
-    ready.then(() => {
-      ok = true;
-      s.querySelector('.loading')!.remove();
-      s.querySelector('.tap')!.classList.remove('hidden');
-    });
+    ready.then(
+      () => {
+        ok = true;
+        s.querySelector('.loading')!.remove();
+        s.querySelector('.tap')!.classList.remove('hidden');
+      },
+      (e) => {
+        // 止まったままにせず、理由と読み直しボタンを出す
+        const box = s.querySelector('.loading') as HTMLElement;
+        box.innerHTML = `<div style="font-size:13px;line-height:1.6">読み込みに失敗しました<br><span style="opacity:.75;font-size:11px">${String(e instanceof Error ? e.message : e).replace(/[<>&]/g, '')}</span></div><button class="big-btn" style="max-width:260px;margin:12px auto 0">もう一度読み込む</button>`;
+        box.querySelector('button')!.addEventListener('click', () => location.reload());
+      },
+    );
     const go = () => {
       if (!ok) {
         audio.unlock();

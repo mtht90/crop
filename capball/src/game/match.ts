@@ -78,7 +78,7 @@ export class Match {
     for (const [team, uni] of [[opts.away, opts.away.awayUniform], [opts.home, opts.home.uniform]] as const) {
       for (const p of [...team.players, ...team.bench]) {
         const c = new Character(assets.models[p.model], p.model, uni, assets.anims);
-        c.attachBat(assets.bat.scene);
+        if (assets.bat) c.attachBat(assets.bat.scene);
         c.root.visible = false;
         scene.add(c.root);
         this.chars.set(p, c);

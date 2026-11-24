@@ -22,11 +22,12 @@ async function main() {
     buildField(engine.scene, assets, engine.renderer);
     setProgress(1);
     // 選手のユニフォーム塗り替えとシェーダーの準備は、タイトル・設定画面の裏で進める
-    warm = new Promise((r) => setTimeout(r, 600)).then(() => warmUp(engine, assets));
+    // 準備に失敗しても試合はできる（その場で作る）ので、エラーは握りつぶす
+    warm = new Promise((r) => setTimeout(r, 600)).then(() => warmUp(engine, assets)).catch((e) => console.warn(e));
     return assets;
   });
   const title = titleScreen(app, ready, (cb) => (setProgress = cb));
-  const assets = await ready;
+  const assets = await ready.catch(() => new Promise<never>(() => {})); // 失敗時はタイトルで読み直しを促す
 
   // タイトル背景：球場をゆっくり回る
   let t = 0;
@@ -99,7 +100,7 @@ async function warmUp(engine: Engine, assets: Assets) {
     for (const uni of [team.uniform, team.awayUniform]) {
       for (const p of [...team.players, ...team.bench]) {
         const c = new Character(assets.models[p.model], p.model, uni, assets.anims);
-        c.attachBat(assets.bat.scene);
+        if (assets.bat) c.attachBat(assets.bat.scene);
         c.root.position.set(0, -50, 0);
         engine.scene.add(c.root);
         tmp.push(c);
@@ -108,9 +109,10 @@ async function warmUp(engine: Engine, assets: Assets) {
     }
   }
   try {
-    await engine.renderer.compileAsync(engine.scene, engine.camera);
+    // compileAsync は端末によって終わらないことがあるので、待つのは最大2秒
+    await Promise.race([engine.renderer.compileAsync(engine.scene, engine.camera), new Promise((r) => setTimeout(r, 2000))]);
   } catch {
-    engine.renderer.compile(engine.scene, engine.camera);
+    /* 描画時にコンパイルされる */
   }
   for (const c of tmp) engine.scene.remove(c.root);
 }
