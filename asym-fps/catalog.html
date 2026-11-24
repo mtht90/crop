@@ -1,0 +1,446 @@
+<title>非対称ホラーFPS 素材帳</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@600;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: 療養院の備品台帳。左に索引(フィルタ)、右に台帳(カード)。セットは「処方箋」として下に並ぶ */
+:root {
+  --bg: #eceff0;
+  --paper: #f7f9f9;
+  --ink: #172124;
+  --muted: #55666a;
+  --line: #cdd6d8;
+  --accent: #2c7466;      /* 緑青 */
+  --accent-soft: #d5e7e2;
+  --wax: #9c3434;         /* 封蝋：注意 */
+  --wax-soft: #f1dcdc;
+  --free: #3d6b2a;
+  --free-soft: #dfead6;
+  --display: "Shippori Mincho", "Hiragino Mincho ProN", "Yu Mincho", serif;
+  --body: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111719; --paper: #182124; --ink: #dde5e3; --muted: #93a6a6; --line: #2b383b;
+    --accent: #72c2ae; --accent-soft: #1d3832; --wax: #e08a85; --wax-soft: #3a2223;
+    --free: #a5d08c; --free-soft: #233320; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111719; --paper: #182124; --ink: #dde5e3; --muted: #93a6a6; --line: #2b383b;
+  --accent: #72c2ae; --accent-soft: #1d3832; --wax: #e08a85; --wax-soft: #3a2223;
+  --free: #a5d08c; --free-soft: #233320; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.7;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+a { color: var(--accent); text-underline-offset: 3px; }
+a:focus-visible, button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-block: 40px 64px; display: grid; gap: 48px; }
+
+header { display: grid; gap: 14px; max-width: 760px; }
+.eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+h1 { font-family: var(--display); font-weight: 800; font-size: clamp(30px, 5vw, 46px); line-height: 1.2; margin: 0; text-wrap: balance; }
+h2 { font-family: var(--display); font-weight: 800; font-size: 26px; margin: 0; text-wrap: balance; }
+h3 { font-family: var(--display); font-weight: 600; font-size: 19px; margin: 0; line-height: 1.4; }
+.lede { color: var(--muted); margin: 0; }
+
+.rules { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.rule { border: 1px solid var(--line); border-left: 3px solid var(--wax); background: var(--paper); padding: 14px 16px; border-radius: 4px; }
+.rule b { display: block; font-size: 14px; }
+.rule span { font-size: 13px; color: var(--muted); }
+
+section { display: grid; gap: 18px; }
+.sec-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 16px; }
+.sec-head p { margin: 0; color: var(--muted); font-size: 14px; }
+
+/* Ledger */
+.ledger { display: grid; grid-template-columns: 220px 1fr; gap: 28px; align-items: start; }
+.index { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 12px); display: grid; gap: 18px; }
+.index fieldset { border: 0; padding: 0; margin: 0; display: grid; gap: 6px; }
+.index legend { font-family: var(--mono); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  font: 500 13px/1 var(--body); color: var(--ink); background: transparent; border: 1px solid var(--line);
+  padding: 7px 11px; border-radius: 999px; cursor: pointer;
+}
+.chip:hover { border-color: var(--accent); }
+.chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--paper); }
+.search { width: 100%; font: 14px var(--body); padding: 8px 10px; border: 1px solid var(--line); border-radius: 4px; background: var(--paper); color: var(--ink); }
+.toggle { display: flex; gap: 8px; align-items: center; font-size: 14px; cursor: pointer; }
+.count { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 14px; min-width: 0; }
+.card { background: var(--paper); border: 1px solid var(--line); border-radius: 4px; padding: 16px; display: grid; gap: 10px; align-content: start; min-width: 0; }
+.card-top { display: flex; justify-content: space-between; gap: 10px; align-items: start; }
+.cat { font-family: var(--mono); font-size: 11px; letter-spacing: .1em; color: var(--muted); }
+.card h3 a { color: var(--ink); text-decoration: none; }
+.card h3 a:hover { color: var(--accent); text-decoration: underline; }
+.meta { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; font-size: 13px; margin: 0; }
+.meta dt { color: var(--muted); }
+.meta dd { margin: 0; font-variant-numeric: tabular-nums; }
+.note { font-size: 13px; margin: 0; }
+.warn { font-size: 12.5px; color: var(--wax); background: var(--wax-soft); padding: 6px 9px; border-radius: 3px; margin: 0; }
+.stamps { display: flex; flex-wrap: wrap; gap: 5px; }
+.lic {
+  font: 500 11px/1 var(--mono); letter-spacing: .06em; padding: 4px 6px; border: 1.5px solid var(--accent); color: var(--accent);
+  border-radius: 2px; transform: rotate(-2deg); white-space: nowrap;
+}
+.price { font: 500 12px/1 var(--mono); padding: 4px 7px; border-radius: 2px; white-space: nowrap; background: var(--accent-soft); color: var(--ink); }
+.price.free { background: var(--free-soft); color: var(--free); }
+.setdots { display: flex; gap: 4px; }
+.setdot { font: 500 11px/1 var(--mono); width: 20px; height: 20px; display: grid; place-items: center; border-radius: 50%; border: 1px solid var(--line); color: var(--muted); }
+.empty { color: var(--muted); padding: 24px; border: 1px dashed var(--line); border-radius: 4px; }
+
+/* Prescriptions (sets) */
+.sets { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+.set { background: var(--paper); border: 1px solid var(--line); border-radius: 4px; padding: 20px; display: grid; gap: 12px; align-content: start; }
+.set-mark { display: flex; align-items: center; gap: 12px; }
+.set-letter { font-family: var(--display); font-weight: 800; font-size: 34px; line-height: 1; color: var(--accent); }
+.set .tag { font-family: var(--mono); font-size: 11px; color: var(--muted); letter-spacing: .08em; }
+.rx { display: grid; grid-template-columns: 5.5em 1fr; gap: 4px 12px; font-size: 13.5px; margin: 0; }
+.rx dt { color: var(--muted); }
+.rx dd { margin: 0; }
+.cost { font-family: var(--mono); font-size: 13px; border-top: 1px dashed var(--line); padding-top: 10px; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.set .why { font-size: 13.5px; margin: 0; }
+.btn { justify-self: start; font: 500 13px var(--body); background: transparent; color: var(--accent); border: 1px solid var(--accent); border-radius: 3px; padding: 7px 12px; cursor: pointer; }
+.btn:hover { background: var(--accent-soft); }
+
+.pitfalls { display: grid; gap: 0; border-top: 1px solid var(--line); }
+.pit { display: grid; grid-template-columns: minmax(180px, 280px) 1fr; gap: 6px 24px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+.pit b { font-size: 14px; }
+.pit span { font-size: 14px; color: var(--muted); }
+
+.legend-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; min-width: 560px; font-size: 13.5px; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-family: var(--mono); font-size: 11px; letter-spacing: .1em; color: var(--muted); font-weight: 500; }
+td:first-child { white-space: nowrap; }
+
+footer { font-size: 12.5px; color: var(--muted); display: grid; gap: 8px; border-top: 1px solid var(--line); padding-top: 18px; }
+footer ul { margin: 0; padding-left: 18px; columns: 2 280px; }
+
+@media (max-width: 780px) {
+  .ledger { grid-template-columns: 1fr; }
+  .index { position: static; }
+  .pit { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Asset ledger · CC0を除く · 2026-11 調べ</div>
+    <h1>非対称ホラーFPS 素材帳</h1>
+    <p class="lede">ハンター1人とサバイバー4人で対戦する、一人称のホラーゲーム用の素材を集めました。Unity Asset Store、Synty、Fab、Mixamo、CC-BY、OFLの素材から選んでいます。価格は検索時点のものです。「要確認」と書いたものは買う前にストアで確かめてください。</p>
+    <div class="rules" role="list">
+      <div class="rule" role="listitem"><b>素材はGitに入れない</b><span>公開リポジトリに入れた時点で再配布になります。<code>Assets/ThirdParty/</code> に置き、.gitignoreに入れてください。</span></div>
+      <div class="rule" role="listitem"><b>CC-BYはクレジット画面に書く</b><span>作者・作品名・ライセンス・リンクを書きます。CC-BY-NC（商用不可）とND（改変不可）は使いません。</span></div>
+      <div class="rule" role="listitem"><b>エンジンはUnity 6（URP）</b><span>Three.jsのWeb版は、モデルのファイルがそのまま配信されるので有料素材と相性が悪いです。</span></div>
+      <div class="rule" role="listitem"><b>世界観はオリジナルで</b><span>ジャンルを参考にするのは問題ありません。キャラクター・マップ名・UIのデザインはまねしないでください。</span></div>
+    </div>
+  </header>
+
+  <section aria-labelledby="ledger-h">
+    <div class="sec-head">
+      <h2 id="ledger-h">台帳</h2>
+      <p>左の索引で絞り込みます。丸の中の文字は、その素材が入っているセットです。</p>
+    </div>
+    <div class="ledger">
+      <div class="index">
+        <fieldset>
+          <legend>分類</legend>
+          <div class="chips" id="cat-chips"></div>
+        </fieldset>
+        <fieldset>
+          <legend>セット</legend>
+          <div class="chips" id="set-chips"></div>
+        </fieldset>
+        <fieldset>
+          <legend>条件</legend>
+          <label class="toggle" for="free-only"><input type="checkbox" id="free-only"> 無料だけ</label>
+          <input class="search" id="q" type="search" placeholder="名前・メモで探す" aria-label="名前・メモで探す">
+        </fieldset>
+        <div class="count" id="count" aria-live="polite"></div>
+      </div>
+      <div class="cards" id="cards"></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="sets-h">
+    <div class="sec-head">
+      <h2 id="sets-h">組み合わせセット</h2>
+      <p>画風をそろえることがいちばん大事です。ローポリとリアル系を同じマップに混ぜないでください。</p>
+    </div>
+    <div class="sets" id="sets"></div>
+  </section>
+
+  <section aria-labelledby="pit-h">
+    <div class="sec-head"><h2 id="pit-h">組み合わせるときの注意</h2></div>
+    <div class="pitfalls">
+      <div class="pit"><b>Syntyのキャラ × Mixamo</b><span>Synty側をHumanoidリグに設定すれば、Mixamoのアニメをそのまま流用できます。Syntyのキャラにはアニメが付いていません。</span></div>
+      <div class="pit"><b>Synty HUD × Synty Menus</b><span>同じINTERFACEシリーズなので、見た目が最初からそろいます。HUDは試合中の画面、Menusはロビー・設定・結果画面に使います。どちらもUGUIとTextMeshProで作られています。</span></div>
+      <div class="pit"><b>Unity Asset Storeで買ったSynty</b><span>Unity用のファイルしか入っていません。Unrealでも使うかもしれないなら、Synty Storeで直接買ってください。</span></div>
+      <div class="pit"><b>Megascans × Synty</b><span>フォトスキャンとローポリは画風が合わないので、セットAには入れません。</span></div>
+      <div class="pit"><b>テンプレート × UHFPS</b><span>どちらもプレイヤーの操作を持っていて、両方入れるとぶつかります。どちらか片方にしてください。</span></div>
+      <div class="pit"><b>UIキットのフォント</b><span>UIキットに入っているフォントは、別にライセンスがあることがあります。日本語が出ないものも多いので、日本語にはZen AntiqueかShippori Minchoを別に入れてください。</span></div>
+      <div class="pit"><b>非公式の「無料ダウンロード」</b><span>有料素材を無料で配っているサイトのコピーは、不正な再配布です。商用でなくても使わないでください。</span></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="lic-h">
+    <div class="sec-head"><h2 id="lic-h">ライセンスの略号</h2></div>
+    <div class="legend-wrap">
+      <table>
+        <thead><tr><th>略号</th><th>正式名</th><th>ゲームに組み込む</th><th>してはいけないこと</th></tr></thead>
+        <tbody>
+          <tr><td><span class="lic">UAS</span></td><td>Unity Asset Store Standard EULA</td><td>OK（1席に1ライセンス）</td><td>生ファイルの再配布、AIの学習</td></tr>
+          <tr><td><span class="lic">SYN</span></td><td>Synty EULA</td><td>OK（1本で5席）</td><td>チームの外にソースファイルを渡す</td></tr>
+          <tr><td><span class="lic">FAB</span></td><td>Fab Standard License</td><td>OK（どのエンジンでも）</td><td>生ファイルの再配布。年商が多い場合はProfessionalが必要</td></tr>
+          <tr><td><span class="lic">MIX</span></td><td>Adobe Mixamo規約</td><td>OK（ロイヤリティ不要）</td><td>FBXのまま配る、素材パックとして売る</td></tr>
+          <tr><td><span class="lic">SONNISS</span></td><td>Sonniss GDCバンドル規約</td><td>OK（クレジット不要）</td><td>音をそのまま再配布する、AIの学習</td></tr>
+          <tr><td><span class="lic">BY</span></td><td>Creative Commons 表示（3.0 / 4.0）</td><td>OK</td><td>クレジットを書かないこと</td></tr>
+          <tr><td><span class="lic">OFL</span></td><td>SIL Open Font License</td><td>OK</td><td>フォントだけを単体で売る</td></tr>
+          <tr><td><span class="lic">MIT</span></td><td>MIT License</td><td>OK</td><td>著作権表示を消す</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>
+    <div>出典（ライセンスの確認に使ったページ）</div>
+    <ul>
+      <li><a href="https://support.unity.com/hc/en-us/articles/34387186019988-Can-I-use-assets-from-the-Asset-Store-with-other-engines">Unity Support：Asset Storeの素材を他のエンジンで使う</a></li>
+      <li><a href="https://assetstore.unity.com/browse/eula-faq">Asset Store EULA FAQ</a></li>
+      <li><a href="https://syntystore.com/community/faq">Synty FAQ</a> / <a href="https://syntystore.com/pages/licences-overview">Synty Licences</a></li>
+      <li><a href="https://www.unrealengine.com/blog/fab-epics-new-unified-content-marketplace-launches-today">Fab 公開時の告知（Epic）</a></li>
+      <li><a href="https://creativebloq.com/news/the-worlds-biggest-library-of-scanned-assets-for-3d-artists-is-now-free-and-it-seems-that-this-time-its-for-good">Megascansの無料化（Creative Bloq）</a></li>
+      <li><a href="https://community.adobe.com/t5/mixamo-discussions/mixamo-faq-licensing-royalties-ownership-eula-and-tos/td-p/13234775">Mixamo FAQ（Adobe Community）</a></li>
+      <li><a href="https://bedroomproducersblog.com/2026/03/16/sonniss-gdc-2026-bundle/">Sonniss GDC 2026 バンドル</a></li>
+      <li><a href="https://syntystore.com/products/interface-dark-fantasy-hud">Synty INTERFACE Dark Fantasy HUD</a></li>
+    </ul>
+    <div>MixamoとSonnissのライセンスの細かい読み方には、フォーラムの説明をもとにした部分があります。出す前に公式の規約を読んでください。</div>
+  </footer>
+</div>
+
+<script>
+const CATS = [
+  ["all", "すべて"], ["map", "マップ"], ["char", "キャラ・アニメ"], ["sys", "仕組み"],
+  ["ui", "UI"], ["sound", "サウンド"], ["font", "フォント"]
+];
+const CAT_LABEL = Object.fromEntries(CATS);
+
+const ITEMS = [
+  // マップ
+  { cat: "map", name: "POLYGON Horror Mansion", url: "https://syntystore.com/products/polygon-horror-mansion", store: "Synty / UAS", price: "$99.99", style: "ローポリ", lic: ["SYN", "UAS"], sets: ["A"],
+    note: "洋館マップ。屋根裏・地下・温室のデモシーンがあります。ろうそく・霧・雨のFXとキャラ10体付き。URP対応。" },
+  { cat: "map", name: "POLYGON Horror Asylum", url: "https://syntystore.com/products/polygon-horror-asylum", store: "Synty", price: "要確認", style: "ローポリ", lic: ["SYN"], sets: ["A"],
+    note: "療養院マップ。Mansionと同じ画風です。" },
+  { cat: "map", name: "POLYGON Horror Carnival", url: "https://assetstore.unity.com/packages/3d/environments/fantasy/polygon-horror-carnival-pack-art-by-synty-266862", store: "UAS / Synty", price: "要確認", style: "ローポリ", lic: ["UAS", "SYN"], sets: ["A"],
+    note: "廃遊園地マップ。観覧車やテントで、高低差と隠れる場所を作れます。" },
+  { cat: "map", name: "Victorian Mansion Environment", url: "https://assetstore.unity.com/packages/3d/environments/victorian-mansion-environment-269740", store: "UAS", price: "$79.99", style: "リアル", lic: ["UAS"], sets: ["B"],
+    note: "約200プロップ、コリジョン付き。URPとHDRPのデモがあります。ホラー用の飾りは別に必要です。" },
+  { cat: "map", name: "Victorian Interior Environment", url: "https://assetstore-fallback.unity.com/packages/3d/environments/victorian-interior-environment-205253", store: "UAS", price: "要確認", style: "リアル", lic: ["UAS"], sets: ["B"],
+    note: "室内の内装。上のMansionと組み合わせます。" },
+  { cat: "map", name: "P3D Haunted Hospital Full Level", url: "https://marketplace.unity.com/packages/3d/environments/p3d-haunted-hospital-full-level-249735", store: "UAS", price: "$59.99", style: "リアル", lic: ["UAS"], sets: ["B"],
+    note: "病院・療養院のマップ1つ分。Built-in / URP / HDRPに対応。" },
+  { cat: "map", name: "Haunted Horror House Environment Kit", url: "https://assetstore.unity.com/packages/3d/environments/dungeons/haunted-horror-house-environment-kit-354650", store: "UAS", price: "要確認", style: "リアル", lic: ["UAS"], sets: [],
+    note: "屋内のモジュール部品。セットBのマップを増やすときに。" },
+  { cat: "map", name: "Quixel Megascans", url: "https://www.fab.com", store: "Fab", price: "無料", free: true, style: "フォトスキャン", lic: ["FAB"], sets: ["B", "C"],
+    note: "地面・岩・草・壁のテクスチャ。どのエンジンでも使えます。",
+    warn: "昔Quixel.comで手に入れた素材は、当時の規約のままです。" },
+
+  // キャラ・アニメ
+  { cat: "char", name: "Synty Horrorパックに付くキャラ", url: "https://syntystore.com/products/polygon-horror-mansion", store: "Synty", price: "パックに含む", style: "ローポリ", lic: ["SYN"], sets: ["A"],
+    note: "サバイバー用。アニメは付いていないので、Mixamoを組み合わせます。" },
+  { cat: "char", name: "Mixamo", url: "https://www.mixamo.com", store: "Adobe", price: "無料", free: true, style: "汎用", lic: ["MIX"], sets: ["A", "B", "C"],
+    note: "歩く・走る・しゃがむ・倒れる・担がれる・板を倒す、などの全モーション。",
+    warn: "ゲームに組み込むのはOK。FBXのまま配るのはNGです。" },
+  { cat: "char", name: "Horror Demon Creature v1（66アニメ）", url: "https://assetstore.unity.com/packages/3d/characters/creatures/horror-demon-creature-v1-with-66-animations-262417", store: "UAS", price: "要確認", style: "リアル", lic: ["UAS"], sets: ["B"],
+    note: "ハンター候補。アニメが多いので、スキルの演出にも回せます。" },
+  { cat: "char", name: "Creepy Horror Monster – PBR & Animated", url: "https://assetstore.unity.com/packages/3d/characters/humanoids/sci-fi/creepy-horror-monster-pbr-animated-38448", store: "UAS", price: "$15", style: "リアル", lic: ["UAS"], sets: [],
+    note: "安いハンター候補。攻撃2種・待機・走る・歩くのアニメ付き。" },
+  { cat: "char", name: "Monster pack", url: "https://marketplace.unity.com/packages/3d/characters/creatures/monster-pack-306195", store: "UAS", price: "要確認", style: "セミリアル", lic: ["UAS"], sets: ["A"],
+    note: "30アニメ。ホラー・FPS向けと明記されています。セットAでは、ローポリ風のシェーダーをかけてハンターに使います。" },
+
+  // 仕組み
+  { cat: "sys", name: "Horror Multiplayer Game Template", url: "https://assetstore.unity.com/packages/templates/systems/horror-multiplayer-game-template-297297", store: "UAS", price: "$59.99", style: "—", lic: ["UAS"], sets: ["B", "D"],
+    note: "サバイバー対キラーの役割分けが最初からある、いちばん近いテンプレートです。HDRP版もあります。",
+    warn: "非公式サイトの無料コピーは不正な再配布です。" },
+  { cat: "sys", name: "Multiplayer FPS Template", url: "https://assetstore.unity.com/packages/templates/systems/multiplayer-fps-template-259143", store: "UAS", price: "無料", free: true, style: "—", lic: ["UAS"], sets: ["C"],
+    note: "汎用のFPSの土台。ほかのAsset Store素材が必要です。" },
+  { cat: "sys", name: "UHFPS – Ultimate Horror FPS Kit (URP)", url: "https://marketplace.unity.com/packages/templates/systems/uhfps-ultimate-horror-fps-kit-urp-254506", store: "UAS", price: "要確認", style: "—", lic: ["UAS"], sets: [],
+    note: "ドア・引き出し・ライト・隠れるなどの操作。シングルプレイ用なので、ネットワーク同期は自分で作ります。" },
+  { cat: "sys", name: "Asymmetric Multiplayer Horror Template", url: "https://www.fab.com/listings/07d0c59b-ee1b-48c6-a30c-c76621897d10", store: "Fab", price: "要確認", style: "—", lic: ["FAB"], sets: [],
+    note: "Unreal用です。Unrealを選ぶ場合の候補。" },
+  { cat: "sys", name: "Mirror", url: "https://github.com/MirrorNetworking/Mirror", store: "GitHub / UAS", price: "無料", free: true, style: "—", lic: ["MIT"], sets: ["A", "C"],
+    note: "ネットワーク同期。使われた実績が多いです。" },
+  { cat: "sys", name: "Netcode for GameObjects", url: "https://docs-multiplayer.unity3d.com/netcode/current/about/", store: "Unity公式", price: "無料", free: true, style: "—", lic: ["Unity Companion"], sets: [],
+    note: "Unity公式のネットワーク同期。Mirrorの代わりに使えます。" },
+
+  // UI
+  { cat: "ui", name: "INTERFACE – Dark Fantasy HUD", url: "https://syntystore.com/products/interface-dark-fantasy-hud", store: "Synty / UAS", price: "$99.99", style: "ダークファンタジー", lic: ["SYN", "UAS"], sets: ["A"],
+    note: "試合中の画面に。体力の瓶・アクションバー・コンパス・ミニマップ・武器ホイール・入力アイコンなど。UGUIとTextMeshPro製。" },
+  { cat: "ui", name: "INTERFACE – Fantasy Menus", url: "https://syntystore.com/products/interface-fantasy-menus", store: "Synty / UAS", price: "$39.99", style: "ファンタジー", lic: ["SYN", "UAS"], sets: ["A"],
+    note: "アニメ付きのプレハブ200以上、スプライト700以上。ロビー・設定・結果画面に。HUDと組み合わせる前提で作られています。",
+    warn: "Synty Storeでは売り切れ表示でした。UAS版も確認してください。" },
+  { cat: "ui", name: "Dark – Complete Horror UI", url: "https://assetstore-fallback.unity.com/packages/2d/gui/dark-complete-horror-ui-200569", store: "UAS", price: "$39.99", style: "グランジ・ホラー", lic: ["UAS"], sets: ["B", "D"],
+    note: "Unity標準のUIで作られた、すぐ使えるホラー調のUI。Unity 2019.4以降とUnity 6に対応。" },
+  { cat: "ui", name: "Horror UI Kit 2", url: "https://assetstore.unity.com/packages/2d/gui/icons/horror-ui-kit-2-194056", store: "UAS", price: "$15", style: "ホラー", lic: ["UAS"], sets: [],
+    note: "安いホラーUI。中身はページで確かめてください。" },
+  { cat: "ui", name: "Modern UI Pack", url: "https://assetstore.unity.com/packages/tools/gui/modern-ui-pack-201717", store: "UAS", price: "$19.99〜43.99", style: "ミニマル", lic: ["UAS"], sets: [],
+    note: "モーダル・通知・進捗バーなど。設定画面を手早く作るときに。ホラーの雰囲気は自分で付けます。" },
+  { cat: "ui", name: "game-icons.net", url: "https://game-icons.net", store: "game-icons.net", price: "無料", free: true, style: "シルエット", lic: ["BY"], sets: ["C"],
+    note: "4000以上のSVGアイコン。スキル・アイテム・状態異常のアイコンに。色と大きさは自由に変えられます。",
+    warn: "CC BY 3.0です。作者名をクレジットに書いてください（CC0のものは除いて使う）。" },
+  { cat: "ui", name: "DOTween", url: "https://dotween.demigiant.com", store: "Demigiant / UAS", price: "無料", free: true, style: "—", lic: ["独自（無料）"], sets: ["A", "B", "C", "D"],
+    note: "UIの動き（フェード・揺れ・心拍の点滅など）をコードで付けるためのライブラリ。どのセットでも使えます。" },
+  { cat: "ui", name: "Modern UI SFX Sound Pack", url: "https://assetstore.unity.com/packages/audio/sound-fx/modern-ui-sfx-sound-pack-198858", store: "UAS", price: "要確認", style: "—", lic: ["UAS"], sets: [],
+    note: "ボタンを押したときなどのUI用効果音。" },
+
+  // サウンド
+  { cat: "sound", name: "Sonniss GDC Game Audio Bundle", url: "https://sonniss.com/gameaudiogdc", store: "Sonniss", price: "無料", free: true, style: "—", lic: ["SONNISS"], sets: ["A", "B", "C"],
+    note: "2015〜2026年の各年分があり、合計数百GBの効果音です。クレジット不要。",
+    warn: "音をそのまま再配布するのと、AIの学習はNGです。" },
+  { cat: "sound", name: "Horror Game Ambient Soundscapes Vol.1", url: "https://assetstore.unity.com/packages/audio/ambient/horror-game-ambient-soundscapes-vol-1-209693", store: "UAS", price: "要確認", style: "—", lic: ["UAS"], sets: ["A"],
+    note: "マップごとの環境音（ループ）。" },
+  { cat: "sound", name: "Ultimate Horror Game SFX, Ambience & Jump Scare", url: "https://marketplace.unity.com/packages/audio/sound-fx/ultimate-horror-game-sfx-ambience-jump-scare-sounds-264106", store: "UAS", price: "要確認", style: "—", lic: ["UAS"], sets: ["B"],
+    note: "ハンターが近づいたときの音や、驚かせる音に。" },
+  { cat: "sound", name: "Horror Audio Bundle (Music + Ambience + FX)", url: "https://assetstore.unity.com/packages/audio/sound-fx/horror-audio-bundle-music-ambience-fx-21789", store: "UAS", price: "$28", style: "—", lic: ["UAS"], sets: ["D"],
+    note: "定番のまとめ売り。古いですが安いです。" },
+  { cat: "sound", name: "Freesound（CC-BYだけ）", url: "https://freesound.org", store: "Freesound", price: "無料", free: true, style: "—", lic: ["BY"], sets: ["C"],
+    note: "足りない効果音を補います。",
+    warn: "検索でCC0とCC-BY-NCを外してください。クレジット表記が必要です。" },
+  { cat: "sound", name: "incompetech（Kevin MacLeod）", url: "https://incompetech.com", store: "incompetech", price: "無料", free: true, style: "—", lic: ["BY"], sets: ["C"],
+    note: "メニュー・ロビーのBGM。CC BY 4.0なのでクレジット表記が必要です。" },
+
+  // フォント
+  { cat: "font", name: "Zen Antique", url: "https://fonts.google.com/specimen/Zen+Antique", store: "Google Fonts", price: "無料", free: true, style: "古風な明朝", lic: ["OFL"], sets: ["A", "C"],
+    note: "日本語の見出しに。" },
+  { cat: "font", name: "Shippori Mincho", url: "https://fonts.google.com/specimen/Shippori+Mincho", store: "Google Fonts", price: "無料", free: true, style: "明朝", lic: ["OFL"], sets: ["B", "D"],
+    note: "日本語の見出しに。リアル系の画面となじみます。" },
+  { cat: "font", name: "Noto Serif JP", url: "https://fonts.google.com/noto/specimen/Noto+Serif+JP", store: "Google Fonts", price: "無料", free: true, style: "明朝", lic: ["OFL"], sets: ["A", "B", "C", "D"],
+    note: "日本語の本文に。字の種類が多いので、文字が出ない心配がありません。" },
+  { cat: "font", name: "Grenze / Texturina", url: "https://fonts.google.com/specimen/Grenze", store: "Google Fonts", price: "無料", free: true, style: "ゴシック体（欧文）", lic: ["OFL"], sets: ["A"],
+    note: "Syntyのファンタジー系HUDに使われている英字フォント。HUDと見た目がそろいます。" },
+  { cat: "font", name: "IM Fell English", url: "https://fonts.google.com/specimen/IM+Fell+English", store: "Google Fonts", price: "無料", free: true, style: "古い活字", lic: ["OFL"], sets: ["B", "D"],
+    note: "英字のロゴ・見出しに。ヴィクトリア朝らしさが出ます。" },
+  { cat: "font", name: "Cinzel", url: "https://fonts.google.com/specimen/Cinzel", store: "Google Fonts", price: "無料", free: true, style: "碑文", lic: ["OFL"], sets: ["C"],
+    note: "英字のタイトルに。" },
+  { cat: "font", name: "Creepster", url: "https://fonts.google.com/specimen/Creepster", store: "Google Fonts", price: "無料", free: true, style: "ホラー", lic: ["OFL"], sets: [],
+    note: "驚かせる演出用。使いすぎると安っぽくなります。" },
+];
+
+const SETS = [
+  { id: "A", title: "Syntyのローポリで統一", tag: "おすすめ・作りやすい",
+    rx: [
+      ["マップ", "Horror Mansion ＋ Asylum ＋ Carnival（3マップ）"],
+      ["サバイバー", "パックに付くキャラ ＋ Mixamo"],
+      ["ハンター", "Monster pack（ローポリ風シェーダー）"],
+      ["UI", "INTERFACE Dark Fantasy HUD ＋ Fantasy Menus"],
+      ["音", "Sonniss ＋ Horror Ambient Soundscapes"],
+      ["文字", "Zen Antique ＋ Grenze ＋ Noto Serif JP"],
+      ["仕組み", "Mirror ＋ 自作のルール"],
+    ],
+    cost: "約 $440〜", costNote: "Syntyのサブスクの方が安い場合あり",
+    why: "マップもUIも同じ作者なので、マテリアル・縮尺・UIの雰囲気がそろいます。Synty Storeで直接買うと、Unity用とUnreal用の両方のファイルがもらえます。" },
+  { id: "B", title: "リアル系", tag: "雰囲気重視・負荷が重い",
+    rx: [
+      ["マップ", "Victorian Mansion ＋ Interior ＋ Haunted Hospital"],
+      ["外・地面", "Megascans（無料）"],
+      ["ハンター", "Horror Demon Creature v1"],
+      ["サバイバー", "Mixamoのキャラ ＋ モーション"],
+      ["UI", "Dark – Complete Horror UI"],
+      ["音", "Sonniss ＋ Ultimate Horror Game SFX"],
+      ["文字", "Shippori Mincho ＋ IM Fell English"],
+      ["仕組み", "Horror Multiplayer Game Template"],
+    ],
+    cost: "約 $320〜", costNote: "＋「要確認」の素材の分",
+    why: "URPかHDRPのどちらかにそろえてください。5人で対戦するので、LODとOcclusion Cullingは必ず設定します。UIはグランジ調なので、汚れた写実の画面となじみます。" },
+  { id: "C", title: "無料だけ（CC0なし）", tag: "試作向け",
+    rx: [
+      ["土台", "Multiplayer FPS Template ＋ Mirror"],
+      ["マップ", "Megascans ＋ ProBuilderで自作"],
+      ["キャラ", "Mixamo"],
+      ["UI", "game-icons.net ＋ TextMeshProで自作 ＋ DOTween"],
+      ["音", "Sonniss ＋ Freesound（BY）＋ Kevin MacLeod"],
+      ["文字", "Zen Antique ＋ Cinzel ＋ Noto Serif JP"],
+    ],
+    cost: "$0", costNote: "クレジット一覧を作る手間あり",
+    why: "遊べるかどうかを確かめるにはこれで十分です。面白いとわかってから、AかBの見た目に差し替えます。UIは枠を自作し、アイコンだけgame-icons.netを使います。" },
+  { id: "D", title: "テンプレートを先に買う", tag: "最短で動かす",
+    rx: [
+      ["仕組み", "Horror Multiplayer Game Template"],
+      ["UI", "Dark – Complete Horror UI"],
+      ["音", "Horror Audio Bundle"],
+      ["文字", "Shippori Mincho ＋ IM Fell English"],
+      ["見た目", "あとでAかBに差し替え"],
+    ],
+    cost: "約 $130〜", costNote: "見た目の素材は別",
+    why: "役割分けと同期の仕組みが最初から手に入ります。そのかわり、テンプレートの作りに縛られます。解読・救助・脱出などのルールを足しやすいか、レビューとドキュメントを読んでから買ってください。" },
+];
+
+const state = { cat: "all", set: "all", free: false, q: "" };
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+function chip(container, value, label, key) {
+  const b = document.createElement("button");
+  b.type = "button"; b.className = "chip"; b.textContent = label; b.dataset.value = value;
+  b.setAttribute("aria-pressed", String(state[key] === value));
+  b.addEventListener("click", () => { state[key] = value; syncChips(); render(); });
+  container.appendChild(b);
+}
+function syncChips() {
+  document.querySelectorAll("#cat-chips .chip").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.value === state.cat)));
+  document.querySelectorAll("#set-chips .chip").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.value === state.set)));
+}
+
+CATS.forEach(([v, l]) => chip($("cat-chips"), v, l, "cat"));
+[["all", "すべて"], ...SETS.map((s) => [s.id, "セット" + s.id])].forEach(([v, l]) => chip($("set-chips"), v, l, "set"));
+$("free-only").addEventListener("change", (e) => { state.free = e.target.checked; render(); });
+$("q").addEventListener("input", (e) => { state.q = e.target.value.trim().toLowerCase(); render(); });
+
+function render() {
+  const list = ITEMS.filter((it) =>
+    (state.cat === "all" || it.cat === state.cat) &&
+    (state.set === "all" || it.sets.includes(state.set)) &&
+    (!state.free || it.free) &&
+    (!state.q || (it.name + it.note + (it.warn || "") + it.store).toLowerCase().includes(state.q))
+  );
+  $("count").textContent = list.length + " / " + ITEMS.length + " 件";
+  $("cards").innerHTML = list.length ? list.map((it) => `
+    <article class="card">
+      <div class="card-top">
+        <span class="cat">${esc(CAT_LABEL[it.cat])} · ${esc(it.store)}</span>
+        <span class="setdots" aria-label="入っているセット">${it.sets.map((s) => `<span class="setdot">${s}</span>`).join("")}</span>
+      </div>
+      <h3><a href="${esc(it.url)}" target="_blank" rel="noopener">${esc(it.name)}</a></h3>
+      <div class="stamps">
+        <span class="price${it.free ? " free" : ""}">${esc(it.price)}</span>
+        ${it.lic.map((l) => `<span class="lic">${esc(l)}</span>`).join("")}
+      </div>
+      <dl class="meta"><dt>画風</dt><dd>${esc(it.style)}</dd></dl>
+      <p class="note">${esc(it.note)}</p>
+      ${it.warn ? `<p class="warn">${esc(it.warn)}</p>` : ""}
+    </article>`).join("") : `<div class="empty">条件に合う素材がありません。索引の条件をゆるめてください。</div>`;
+}
+
+$("sets").innerHTML = SETS.map((s) => `
+  <article class="set">
+    <div class="set-mark"><span class="set-letter">${s.id}</span><div><h3>${esc(s.title)}</h3><div class="tag">${esc(s.tag)}</div></div></div>
+    <dl class="rx">${s.rx.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl>
+    <p class="why">${esc(s.why)}</p>
+    <div class="cost"><span>${esc(s.cost)}</span><span>${esc(s.costNote)}</span></div>
+    <button class="btn" type="button" data-set="${s.id}">台帳をセット${s.id}で絞り込む</button>
+  </article>`).join("");
+document.querySelectorAll(".set .btn").forEach((b) => b.addEventListener("click", () => {
+  state.set = b.dataset.set; state.cat = "all"; syncChips(); render();
+  document.getElementById("ledger-h").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+}));
+
+render();
+</script>

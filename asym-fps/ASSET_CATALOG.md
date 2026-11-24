@@ -1,7 +1,9 @@
 # 非対称対戦ホラーFPS 素材カタログ（CC0以外）
 
+> 見やすい版（絞り込みつき）: `catalog.html`
+
 > 1人のハンター vs 4人のサバイバーで戦う、一人称の非対称ホラー対戦ゲーム用の素材カタログです（ジャンルの参考：Identity V）。
-> **CC0の素材は含めていません。** Unity Asset Store（US）、Fab、Synty Store、Mixamo、CC-BY、OFLなど、ライセンスに条件がある素材を集めています。
+> **CC0の素材は含めていません。** Unity Asset Store、Fab、Synty Store、Mixamo、CC-BY、OFLなど、ライセンスに条件がある素材を集めています。
 > 価格と仕様は 2026-11 時点で検索して確かめたものです。**買う前に、各ページで価格とライセンスを確かめてください。**
 
 ---
@@ -86,7 +88,19 @@
 | [Freesound](https://freesound.org)（**CC-BYだけに絞る**） | Freesound | 無料 | BY | 足りない効果音を補う。クレジット表記が必要。CC0とCC-BY-NCはフィルターで外す |
 | [incompetech（Kevin MacLeod）](https://incompetech.com) | incompetech | 無料 | BY 4.0 | メニュー・ロビーのBGM。クレジット表記が必要 |
 
-### 1-E. フォント・UI
+### 1-E. UI
+
+| 素材 | ストア | 価格 | ライセンス | 用途・メモ |
+|---|---|---|---|---|
+| [INTERFACE – Dark Fantasy HUD](https://syntystore.com/products/interface-dark-fantasy-hud) | Synty / UAS | $99.99 | SYN / UAS | 試合中のHUD。UGUIとTextMeshPro製（セットA） |
+| [INTERFACE – Fantasy Menus](https://syntystore.com/products/interface-fantasy-menus) | Synty / UAS | $39.99 | SYN / UAS | ロビー・設定・結果画面。HUDと組み合わせる前提（セットA） |
+| [Dark – Complete Horror UI](https://assetstore-fallback.unity.com/packages/2d/gui/dark-complete-horror-ui-200569) | UAS | $39.99 | UAS | グランジ・ホラー調のUI一式（セットB・D） |
+| [Horror UI Kit 2](https://assetstore.unity.com/packages/2d/gui/icons/horror-ui-kit-2-194056) | UAS | $15 | UAS | 安いホラーUI |
+| [Modern UI Pack](https://assetstore.unity.com/packages/tools/gui/modern-ui-pack-201717) | UAS | $19.99〜43.99 | UAS | 設定画面などを手早く作る |
+| [game-icons.net](https://game-icons.net) | — | 無料 | CC BY 3.0 | スキル・アイテムのアイコン。クレジットが必要（セットC） |
+| [DOTween](https://dotween.demigiant.com) | Demigiant | 無料 | 独自（無料） | UIの動きを付ける（全セット） |
+
+### 1-F. フォント
 
 | 素材 | 入手先 | ライセンス | 用途 |
 |---|---|---|---|
@@ -109,10 +123,11 @@
 | ハンター | Syntyのキャラを大きくして色を変えたもの。または Monster pack をローポリ風のシェーダーで |
 | FX | パックに付く霧・ろうそく・雨 |
 | 音 | Sonniss ＋ Horror Game Ambient Soundscapes |
-| 文字 | Zen Antique ＋ Cinzel |
+| UI | INTERFACE Dark Fantasy HUD ＋ Fantasy Menus |
+| 文字 | Zen Antique ＋ Grenze ＋ Noto Serif JP |
 | 仕組み | Mirror（またはNGO）＋ 自作のゲームルール |
 
-- 費用の目安：約 $300（パック3つ）。**SyntyのStandard Subscription**の方が安くなる場合があります。
+- 費用の目安：約 $440（マップ3つ＋UI2つ）。**SyntyのStandard Subscription**の方が安くなる場合があります。
 - 理由：同じ作者のパックなのでマテリアルと縮尺がそろっていて、3マップを並べても違和感がありません。**Synty Storeで直接買う**と、Unity用とUnreal用の両方のファイルがもらえます。
 
 ### セットB：リアル系（雰囲気重視・重い）
@@ -122,10 +137,11 @@
 | 地面・外の植物 | Megascans（Fab、無料） |
 | ハンター | Horror Demon Creature v1（66アニメ） |
 | サバイバー | Mixamoのキャラ ＋ Mixamoのモーション |
+| UI | Dark – Complete Horror UI |
 | 音 | Sonniss ＋ Ultimate Horror Game SFX |
 | 仕組み | Horror Multiplayer Game Template（HDRP版） |
 
-- 費用の目安：約 $270〜
+- 費用の目安：約 $320〜
 - 注意：URPかHDRPのどちらかにそろえること。5人対戦なので負荷が大きく、LODとOcclusion Cullingを必ず設定する。
 
 ### セットC：無料だけ（CC0は使わない）
@@ -135,6 +151,7 @@
 | マップ | Megascans（Fab）＋ ProBuilderで自作した建物 |
 | キャラ・モーション | Mixamo |
 | 音 | Sonniss ＋ Freesound（CC-BY）＋ Kevin MacLeod（CC-BY） |
+| UI | game-icons.net（CC-BY）＋ TextMeshProで自作 ＋ DOTween |
 | 文字 | Google Fonts（OFL） |
 
 - 費用：$0。ただし、**CC-BYのクレジット一覧を作る**手間がかかります。
