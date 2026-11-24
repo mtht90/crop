@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { PITCHES, type PitchKind } from './data';
+import { PITCHES, breakVector, type PitchKind } from './data';
 
 /** 投球の速さの見え方（実寸の何倍の時間をかけるか）。スマホで目で追える速さにする */
 export const PITCH_TIME_SCALE = 1.45;
@@ -12,6 +12,8 @@ export interface PitchParams {
   target: THREE.Vector3; // 本塁上 z=0 で狙う位置（制球のぶれ込み）
   breakMul: number; // スワイプの回転で増減する変化量の倍率
   extraBx: number; // スワイプの曲げで加わる横変化
+  /** 変化の向き（-1=左/三塁側、+1=右/一塁側）。はじいた方向で決まる */
+  side: number;
   seed: number;
 }
 
@@ -32,7 +34,8 @@ export class PitchPath {
     const dist = p.release.distanceTo(p.target);
     this.duration = (dist / (p.speedKmh / 3.6)) * PITCH_TIME_SCALE;
     const lv = p.level * p.breakMul;
-    this.bend = new THREE.Vector3(def.bx * lv + p.extraBx, def.by * lv, 0);
+    const bv = breakVector(p.kind, lv, p.side);
+    this.bend = new THREE.Vector3(bv.x + p.extraBx, bv.y, 0);
     this.arc = def.arc * (0.7 + 0.3 * (1 - p.speedKmh / 110));
     this.late = def.late;
     this.wobble = p.kind === 'knuckle' ? 0.05 + 0.025 * p.level : 0;

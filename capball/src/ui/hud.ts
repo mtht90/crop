@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { grade, PITCHES, type PitchKind, POS_JP } from '../game/data';
+import { breakVector, grade, PITCHES, type PitchKind, POS_JP } from '../game/data';
 import { ZONE } from '../game/geom';
 import type { GameState } from '../game/rules';
 import type { SwingMode } from '../game/batting';
@@ -14,7 +14,15 @@ const h = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', html = '') =
 
 export interface ZoneRect { x0: number; y0: number; x1: number; y1: number }
 
-const DIR_ICON: Record<string, string> = { none: '●', left: '←', right: '→', up: '↑', down: '↓', 'down-left': '↙', 'down-right': '↘', wobble: '〰' };
+/** 球種ボタンの軌道アイコン（向きははじき方で決まるので、形だけを表す） */
+const PITCH_ICON: Record<PitchKind, string> = {
+  straight: '<path d="M14 25 L14 5"/><circle cx="14" cy="5" r="3" class="ic-cap"/>',
+  curve: '<path d="M8 4 C 26 6, 24 20, 14 25"/><circle cx="14" cy="25" r="3" class="ic-cap"/>',
+  slider: '<path d="M8 4 L 9 17 Q 10 23 21 24"/><circle cx="21" cy="24" r="3" class="ic-cap"/>',
+  rise: '<path d="M14 26 L14 14 Q 14 6 20 4"/><circle cx="20" cy="4" r="3" class="ic-cap"/>',
+  knuckle: '<path d="M14 4 C 4 9, 24 13, 14 17 C 6 20, 20 23, 14 26"/><circle cx="14" cy="26" r="3" class="ic-cap"/>',
+};
+const pitchIcon = (k: PitchKind) => `<svg class="pic" viewBox="0 0 28 30" aria-hidden="true">${PITCH_ICON[k]}</svg>`;
 
 export class Hud {
   readonly root = h('div', 'layer');
@@ -121,10 +129,14 @@ export class Hud {
     }
     const sp = pts.map((p) => this.toScreen(p.x, p.y));
     const d = sp.map((p, i) => `${i ? 'L' : 'M'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
-    const a = sp[sp.length - 2], b = sp[sp.length - 1];
-    const ang = Math.atan2(b.y - a.y, b.x - a.x);
-    const head = [ang + 2.6, ang - 2.6].map((t) => `${(b.x + Math.cos(t) * 9).toFixed(1)},${(b.y + Math.sin(t) * 9).toFixed(1)}`);
-    svg.innerHTML = `<path d="${d}" class="bp-shadow"/><path d="${d}" class="bp-line"/><polygon points="${b.x},${b.y} ${head[0]} ${head[1]}" class="bp-head"/><circle cx="${sp[0].x}" cy="${sp[0].y}" r="4" class="bp-start"/>`;
+    // キャップの残像を、奥（小さく薄い）から手前（大きく濃い）へ並べる
+    const ghosts = [0.12, 0.32, 0.52, 0.7, 0.86]
+      .map((u, i) => {
+        const p = sp[Math.round(u * (sp.length - 1))];
+        return `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${(2.2 + i * 0.9).toFixed(1)}" class="bp-ghost" style="opacity:${(0.25 + i * 0.13).toFixed(2)}"/>`;
+      })
+      .join('');
+    svg.innerHTML = `<defs><linearGradient id="bpg" gradientUnits="userSpaceOnUse" x1="${sp[0].x}" y1="${sp[0].y}" x2="${sp[sp.length - 1].x}" y2="${sp[sp.length - 1].y}"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#fff" stop-opacity=".85"/></linearGradient></defs><path d="${d}" class="bp-line" stroke="url(#bpg)"/>${ghosts}`;
   }
 
   /** 捕手の構え（狙ったコース）：9マスのうち1つを薄く塗る */
@@ -205,6 +217,8 @@ export interface ThrowInput {
   timingErr: number; // 0=ぴったり
   speedNorm: number; // 0..1 スワイプの速さ
   bend: number; // -1..1 スワイプの曲がり（+ = 右）
+  /** 変化の向き（はじいた方向。-1=左、+1=右） */
+  side: number;
   /** 変化量の倍率（0.5=弱 〜 1.5=強）。強いほど曲がるが、遅くなり制球も乱れやすい */
   strength: number;
 }
@@ -240,7 +254,7 @@ export class PitchControl {
     const all: [PitchKind, number][] = [['straight', 0], ...pitches];
     all.forEach(([k, lv], i) => {
       const def = PITCHES[k];
-      const b = h('button', 'pbtn' + (i === 0 ? ' sel' : ''), `<span class="dir">${DIR_ICON[def.dir]}</span>${def.name}<span class="lv">${k === 'straight' ? '' : Array.from({ length: 7 }, (_, j) => `<i class="${j < lv ? 'on' : ''}"></i>`).join('')}</span>`) as HTMLButtonElement;
+      const b = h('button', 'pbtn' + (i === 0 ? ' sel' : ''), `${pitchIcon(k)}${def.name}<span class="lv">${k === 'straight' ? '' : Array.from({ length: 7 }, (_, j) => `<i class="${j < lv ? 'on' : ''}"></i>`).join('')}</span>`) as HTMLButtonElement;
       b.onpointerdown = (e) => {
         e.stopPropagation();
         this.select(i);
@@ -281,6 +295,7 @@ export class PitchControl {
       const a = this.pts[0];
       if (a.y - e.clientY > 12) {
         this.liveStrength = flickStrength(e.clientX - a.x, e.clientY - a.y, 0.5);
+        if (Math.abs(e.clientX - a.x) > 4) this.liveSide = Math.sign(e.clientX - a.x);
         this.syncStrength();
       }
     });
@@ -353,12 +368,14 @@ export class PitchControl {
   private brkEl: HTMLElement | null = null;
   /** はじく向き・速さで決まる変化量（はじく前は 100% で予告） */
   private liveStrength = 1;
+  /** はじく向き（-1=左、+1=右）。前回の向きを覚えておく */
+  private liveSide = -1;
   select(i: number) {
     this.sel = i;
     this.pitchBtns.forEach((b, j) => b.classList.toggle('sel', j === i));
     const def = PITCHES[this.allPitches[i][0]];
     const straight = def.kind === 'straight';
-    if (this.hintEl) this.hintEl.innerHTML = `<b>${def.name}</b>：${def.grip}<br>${straight ? 'はじく速さで球速が上がる' : 'まっすぐ上にはじく＝小さく曲がる／斜めにはじく＝大きく曲がる'}`;
+    if (this.hintEl) this.hintEl.innerHTML = `<b>${def.name}</b>：${def.grip}<br>${straight ? 'はじく速さで球速が上がる' : 'はじいた向きに曲がる。斜めにはじくほど大きく曲がる'}`;
     this.liveStrength = 1;
     this.syncStrength();
   }
@@ -379,8 +396,9 @@ export class PitchControl {
   private previewPoints(): THREE.Vector2[] {
     const [kind, level] = this.allPitches[this.sel];
     const def = PITCHES[kind];
-    const lv = level * this.strength;
-    const bend = new THREE.Vector2(def.bx * lv, def.by * lv);
+    const lv = Math.max(level, 1) * this.strength;
+    const bv = breakVector(kind, lv, this.liveSide);
+    const bend = new THREE.Vector2(bv.x, bv.y);
     const pts: THREE.Vector2[] = [];
     for (let i = 0; i <= 24; i++) {
       const u = i / 24;
@@ -409,7 +427,7 @@ export class PitchControl {
     if (this.keys.has('ArrowDown') || this.keys.has('s')) this.aim.y -= sp;
     this.clampAim();
     this.hud.showAim(this.aim);
-    this.hud.showBreakPreview(this.allPitches[this.sel]?.[0] === 'straight' ? null : this.previewPoints());
+    this.hud.showBreakPreview(this.previewPoints());
     if (this.holding) {
       this.holdT += dt;
       const s = this.ringScale();
@@ -447,9 +465,11 @@ export class PitchControl {
     void dev;
     // 変化量：はじく向き（斜めほど大きい）と速さ（速いほどキレる）
     const strength = this.allPitches[this.sel][0] === 'straight' ? 1 : flickStrength(b.x - a.x, b.y - a.y, speedNorm);
+    const side = Math.abs(b.x - a.x) > 4 ? Math.sign(b.x - a.x) : this.liveSide;
     const [kind, level] = this.allPitches[this.sel];
     this.liveStrength = 1;
-    this.onThrow({ kind, level, aim: this.aim.clone(), timingErr: Math.abs(s - 1), speedNorm, bend: 0, strength });
+    this.liveSide = side;
+    this.onThrow({ kind, level, aim: this.aim.clone(), timingErr: Math.abs(s - 1), speedNorm, bend: 0, strength, side });
   }
 
   dispose() {

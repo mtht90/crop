@@ -385,12 +385,13 @@ export class Match {
     const target = new THREE.Vector3(t.aim.x + gauss() * sigma, t.aim.y + gauss() * sigma, 0);
     // スワイプの曲げ：球種の横変化と同じ向きなら変化が大きく、逆なら小さく
     const lat = Math.sign(def.bx);
-    const breakMul = THREE.MathUtils.clamp(str + (lat !== 0 ? lat * t.bend * 0.15 : 0), 0.4, 1.65) * (t.timingErr > 0.45 ? 0.6 : 1);
-    const extraBx = lat === 0 ? t.bend * 0.12 : 0;
+    void lat;
+    const breakMul = THREE.MathUtils.clamp(str, 0.4, 1.65) * (t.timingErr > 0.45 ? 0.6 : 1);
+    const extraBx = 0;
     const release = new THREE.Vector3();
     this.char(pitcher).handWorld('r', release);
     release.y = Math.max(release.y, 0.9);
-    this.path = new PitchPath({ kind: t.kind, level: t.level, speedKmh: velo, release, target, breakMul, extraBx, seed: Math.random() });
+    this.path = new PitchPath({ kind: t.kind, level: t.level, speedKmh: velo, release, target, breakMul, extraBx, side: t.side ?? -1, seed: Math.random() });
     this.lastSpeed = Math.round(velo);
     this.lastPitchName = def.name;
     if (this.pitchCtlUser && !this.opts.autoplay) {

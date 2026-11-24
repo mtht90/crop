@@ -32,6 +32,16 @@ export const PITCHES: Record<PitchKind, PitchDef> = {
   knuckle: { kind: 'knuckle', name: 'ナックル', grip: 'キャップを90度立てて無回転で投げる。揺れて落ちる', dir: 'wobble', bx: 0, by: -0.035, late: 0.4, speedMul: 0.62, arc: 0.18, tilt: 1.57 },
 };
 
+/**
+ * 変化の向きと量。向き（左右）ははじいた方向 side（-1=三塁側/左、+1=一塁側/右）で決まり、
+ * 球種は縦の動きと横の大きさ（＝曲がり方の性格）を決める。
+ */
+export function breakVector(kind: PitchKind, lv: number, side: number) {
+  const def = PITCHES[kind];
+  const lateral = kind === 'knuckle' ? 0 : Math.max(Math.abs(def.bx), kind === 'rise' ? 0.025 : kind === 'straight' ? 0.012 : 0);
+  return { x: lateral * lv * side, y: def.by * lv };
+}
+
 export type Grade = 'S' | 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G';
 export function grade(v: number): Grade {
   if (v >= 90) return 'S';
