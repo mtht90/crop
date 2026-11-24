@@ -3,7 +3,7 @@ import { SKILLS, EVOLUTIONS, MODES, ENEMIES, ACHIEVEMENTS, CHARACTERS } from './
 import { sfx } from './audio.js';
 
 const $ = (id) => document.getElementById(id);
-const TYPE_LABEL = { attack: '攻撃', summon: '式神', passive: '補助' };
+const TYPE_LABEL = { attack: '攻撃', summon: '召喚', passive: '強化' };
 
 let ICONS = {};
 function icon(id, size) {
@@ -18,7 +18,7 @@ function icon(id, size) {
   const def = SKILLS[id];
   const el = document.createElement('span');
   el.className = 'kanji';
-  el.textContent = id === '_heal' ? '薬' : id === '_purge' ? '祓' : def.icon;
+  el.textContent = id === '_heal' ? '薬' : id === '_purge' ? '聖' : def.icon;
   el.style.setProperty('--c', id === '_heal' ? '#ff6a8a' : id === '_purge' ? '#ffe9b0' : def.color);
   el.style.fontSize = Math.round(size * 0.62) + 'px';
   return el;
@@ -110,8 +110,8 @@ export const UI = {
       c.id = `card${i}`;
       c.style.animationDelay = `${i * 0.08}s`;
       let name, type, lvTxt, desc, isNew = false;
-      if (id === '_heal') { name = '霊薬'; type = 'passive'; lvTxt = ''; desc = 'HP を全回復する'; }
-      else if (id === '_purge') { name = '大祓'; type = 'attack'; lvTxt = ''; desc = '画面内の妖怪をすべて祓う'; }
+      if (id === '_heal') { name = 'ポーション'; type = 'passive'; lvTxt = ''; desc = 'HP を全回復する'; }
+      else if (id === '_purge') { name = 'ホーリーノヴァ'; type = 'attack'; lvTxt = ''; desc = '画面内の魔物をすべて消し飛ばす'; }
       else {
         const def = SKILLS[id];
         const owned = G.skills.find((s) => s.id === id);
@@ -163,18 +163,18 @@ export const UI = {
     r.classList.remove('hidden');
     r.classList.toggle('win', win);
     const t = Math.floor(s.time);
-    $('resTitle').textContent = win ? '百鬼、祓い尽くす' : '力尽きた';
-    $('resSub').textContent = win ? 'がしゃどくろは崩れ、妖怪たちは闇へ還っていった。' : '百鬼夜行に呑まれた。もう一度、構えよ。';
+    $('resTitle').textContent = win ? '夜明けを勝ち取った' : '力尽きた';
+    $('resSub').textContent = win ? 'スケルトンキングは崩れ落ち、魔物の群れは闇へ還っていった。' : '群れに呑まれた。もう一度、武器を取れ。';
     const fmt = (v) => `${Math.floor(v / 60)}:${String(Math.floor(v) % 60).padStart(2, '0')}`;
-    const best = s.best ? `<div class="best"><span>この退魔師の最高記録</span><b>${s.best.win ? '討伐済み' : fmt(s.best.time)} ／ ${s.best.kills} 体</b></div>` : '';
+    const best = s.best ? `<div class="best"><span>このヒーローの最高記録</span><b>${s.best.win ? '討伐済み' : fmt(s.best.time)} ／ ${s.best.kills} 体</b></div>` : '';
     $('resStats').innerHTML = `
       <div><span>${s.mode.name}・${s.char.job} ${s.char.name}</span><b>${win ? '討伐' : '敗北'}</b></div>
       <div><span>生存時間</span><b>${fmt(t)}</b></div>
-      <div><span>祓った妖怪</span><b>${s.kills}</b></div>
+      <div><span>倒した魔物</span><b>${s.kills}</b></div>
       <div><span>到達レベル</span><b>${s.level}</b></div>
-      <div><span>最大同時式神</span><b>${s.maxAllies}</b></div>
+      <div><span>最大同時召喚</span><b>${s.maxAllies}</b></div>
       <div><span>総ダメージ</span><b>${Math.round(s.dmg)}</b></div>${best}`;
-    $('resUnlock').innerHTML = (s.unlocked || []).map((c) => `<div class="unlock"><img alt="" src="${ICONS['char_' + c.id] || ''}"><span>新たな退魔師が解放された<br><b>${c.job} ${c.name}</b></span></div>`).join('')
+    $('resUnlock').innerHTML = (s.unlocked || []).map((c) => `<div class="unlock"><img alt="" src="${ICONS['char_' + c.id] || ''}"><span>新たなヒーローが解放された<br><b>${c.job} ${c.name}</b></span></div>`).join('')
       + (s.achs || []).map((a) => `<div class="unlock ach"><span>実績達成<br><b>${a.name}</b>（${a.text}）</span></div>`).join('');
   },
 };
@@ -258,7 +258,7 @@ UI.charInfo = (ch, open) => {
   const icons = ch.start.map((id) => `<img alt="${SKILLS[id].name}" title="${SKILLS[id].name}" src="${ICONS[id] || ''}">`).join('');
   info.innerHTML = `<div class="l1"><em>${ch.job}</em><b>${ch.name}</b><span class="start">${icons}</span></div>
     <div class="l2">${ch.desc}</div>
-    <div class="l3"><i>奥義</i><b>${ch.ult.name}</b>${ch.ult.desc}</div>`;
+    <div class="l3"><i>必殺技</i><b>${ch.ult.name}</b>${ch.ult.desc}</div>`;
 };
 UI.renderModes = (progress, onPick) => {
   const box = $('modes');
@@ -294,7 +294,7 @@ UI.codexTab = (progress, tab) => {
       const d = ENEMIES[id];
       const n = d.mid ? P.mids[id] || 0 : d.boss ? P.clears.main.length + P.clears.short.length : P.yokai[id] || 0;
       all++; if (n) got++;
-      html += `<div class="entry${n ? '' : ' unk'}"><b>${n ? d.name : '？？？'}</b><span>${d.boss ? '大ボス' : d.mid ? '中ボス' : d.elite ? '強敵' : '妖怪'}</span><em>${n ? `${n.toLocaleString()} ${d.boss ? '回' : '体'}` : '未遭遇'}</em></div>`;
+      html += `<div class="entry${n ? '' : ' unk'}"><b>${n ? d.name : '？？？'}</b><span>${d.boss ? '大ボス' : d.mid ? '中ボス' : d.elite ? '強敵' : '魔物'}</span><em>${n ? `${n.toLocaleString()} ${d.boss ? '回' : '体'}` : '未遭遇'}</em></div>`;
     }
   } else if (tab === 'evo') {
     for (const ev of EVOLUTIONS) {
@@ -310,7 +310,7 @@ UI.codexTab = (progress, tab) => {
       const cl = (m) => (P.clears[m].includes(ch.id) ? '<i class="ok">討伐</i>' : '<i>─</i>');
       const b = P.best[`main:${ch.id}`];
       html += `<div class="entry char${open ? '' : ' unk'}"><img alt="" src="${ICONS['char_' + ch.id] || ''}"><b>${ch.job} ${open ? ch.name : '？？？'}</b>
-        <span>本編 ${cl('main')}　短期決戦 ${cl('short')}${b ? `　最多 ${b.kills} 体` : ''}</span><em>${open ? `奥義「${ch.ult.name}」` : `解放条件：${ch.unlock.text}`}</em></div>`;
+        <span>本編 ${cl('main')}　短期決戦 ${cl('short')}${b ? `　最多 ${b.kills} 体` : ''}</span><em>${open ? `必殺技「${ch.ult.name}」` : `解放条件：${ch.unlock.text}`}</em></div>`;
     }
   } else {
     for (const a of ACHIEVEMENTS) {

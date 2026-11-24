@@ -15,7 +15,7 @@ src = re.sub(r'//[^\n]*|/\*.*?\*/', '', src, flags=re.S)
 chars = set(chr(c) for c in range(0x20, 0x7f))
 chars |= {c for c in src if ord(c) > 0x7f}
 text = ''.join(sorted(chars))
-url = ('https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Yuji+Boku'
+url = ('https://fonts.googleapis.com/css2?family=Cinzel:wght@700;800&family=Dela+Gothic+One&family=Zen+Antique'
        '&family=Zen+Maru+Gothic:wght@500;700;900&display=block&text=' + urllib.parse.quote(text, safe=''))
 html = (root / 'index.html').read_text(encoding='utf-8')
 line = f'  <link id="fontSubset" href="{url}" rel="stylesheet">'

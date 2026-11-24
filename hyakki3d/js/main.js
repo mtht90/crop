@@ -45,8 +45,9 @@ startBtn.disabled = true;
 (async () => {
   try {
     const fonts = document.fonts ? Promise.all([
-      document.fonts.load('48px "Yuji Boku"', '百鬼祓い'),
-      document.fonts.load('16px "Zen Maru Gothic"', '式霊影忍前鬼飛龍'),
+      document.fonts.load('48px "Cinzel"', 'NIGHT HORDE'),
+      document.fonts.load('24px "Zen Antique"', 'ナイトホード'),
+      document.fonts.load('16px "Zen Maru Gothic"', 'スピリットシャドウバーサーカードラゴン'),
       document.fonts.load('16px "Dela Gothic One"', '0123456789'),
       document.fonts.load('900 16px "Zen Maru Gothic"', '会心'),
     ]).catch(() => {}) : Promise.resolve();
@@ -66,7 +67,7 @@ startBtn.disabled = true;
     G.onKill = (e) => R.onKill(e);
     G.player = titleDummy;
     ready = true;
-    startBtn.textContent = '出陣';
+    startBtn.textContent = '出撃';
     startBtn.disabled = false;
   } catch (err) {
     startBtn.textContent = '読み込み失敗';
@@ -160,7 +161,7 @@ function frame(now) {
     fpsAcc += rdt; fpsN++;
     if (fpsAcc > 0.5) {
       const info = R.r.info.render;
-      G.debugText = `FPS ${Math.round(fpsN / fpsAcc)} | ${(performance.now() - t0).toFixed(1)}ms | draw ${info.calls} tri ${(info.triangles / 1000).toFixed(0)}k | 敵 ${G.enemies.length} 式神 ${G.allies.length} 粒子 ${FX.count()}`;
+      G.debugText = `FPS ${Math.round(fpsN / fpsAcc)} | ${(performance.now() - t0).toFixed(1)}ms | draw ${info.calls} tri ${(info.triangles / 1000).toFixed(0)}k | 敵 ${G.enemies.length} 召喚 ${G.allies.length} 粒子 ${FX.count()}`;
       fpsAcc = 0; fpsN = 0;
       document.getElementById('debug').textContent = G.debugText;
     }

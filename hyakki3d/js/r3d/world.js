@@ -1,4 +1,4 @@
-// 背景：夜空・月・地面・木々（チャンク配置で無限に続く）・石灯籠・鳥居・蛍・桜の花びら
+// 背景：夜空・月・地面・木々（チャンク配置で無限に続く）・魔石灯・古代の石門・蛍・舞い散る魔力の欠片
 import * as THREE from 'three';
 import { loadGLTF } from './gltf.js';
 
@@ -162,7 +162,7 @@ export class World {
         return im;
       });
     }
-    // 石灯籠（手続き的に組む。火袋が発光してブルームで灯る）
+    // 魔石灯と石門（手続き的に組む）
     this.lanterns = this.makeLantern(cells);
     this.torii = this.makeTorii(cells);
 
@@ -177,22 +177,21 @@ export class World {
     sc.add(this.ffPts);
     const PN = this.mobile ? 40 : 80;
     const pg = new THREE.PlaneGeometry(0.07, 0.05);
-    this.petals = new THREE.InstancedMesh(pg, new THREE.MeshBasicMaterial({ color: 0xffb7d0, side: THREE.DoubleSide, transparent: true, opacity: 0.85 }), PN);
+    this.petals = new THREE.InstancedMesh(pg, new THREE.MeshBasicMaterial({ color: 0xc9b8ff, side: THREE.DoubleSide, transparent: true, opacity: 0.7 }), PN);
     this.petals.frustumCulled = false;
     this.petalSt = Array.from({ length: PN }, () => ({ x: (Math.random() - 0.5) * 40, y: Math.random() * 10, z: (Math.random() - 0.5) * 40, r: Math.random() * 6, s: 0.5 + Math.random() }));
     sc.add(this.petals);
   }
 
+  // 魔石灯：石の柱の上に浮かぶ青い魔石（発光してブルームで灯る）
   makeLantern(cells) {
-    const stone = new THREE.MeshStandardMaterial({ color: 0x8d8d96, roughness: 0.95 });
-    const fire = new THREE.MeshBasicMaterial({ color: 0xffb25a });
+    const stone = new THREE.MeshStandardMaterial({ color: 0x7c7f8e, roughness: 0.95 });
+    const crystal = new THREE.MeshBasicMaterial({ color: 0x8fd8ff });
     const parts = [
-      [new THREE.CylinderGeometry(0.32, 0.38, 0.18, 6), stone, 0.09],
-      [new THREE.CylinderGeometry(0.1, 0.12, 0.7, 6), stone, 0.53],
-      [new THREE.CylinderGeometry(0.28, 0.22, 0.12, 6), stone, 0.94],
-      [new THREE.BoxGeometry(0.3, 0.28, 0.3), fire, 1.14],
-      [new THREE.ConeGeometry(0.45, 0.32, 6), stone, 1.44],
-      [new THREE.SphereGeometry(0.08, 8, 6), stone, 1.64],
+      [new THREE.BoxGeometry(0.62, 0.2, 0.62), stone, 0.1],
+      [new THREE.BoxGeometry(0.3, 0.9, 0.3), stone, 0.65],
+      [new THREE.CylinderGeometry(0.34, 0.22, 0.16, 8), stone, 1.16],
+      [new THREE.OctahedronGeometry(0.2, 0).scale(1, 1.6, 1), crystal, 1.62],
     ];
     const cap = Math.ceil(cells * 0.35) + 4;
     return parts.map(([g, m, y]) => {
@@ -204,15 +203,17 @@ export class World {
     });
   }
 
+  // 古代の石門：崩れかけた二本柱と横石、中央に光るルーン
   makeTorii(cells) {
-    const red = new THREE.MeshStandardMaterial({ color: 0xc8283a, roughness: 0.6, emissive: 0x2a0408 });
-    const black = new THREE.MeshStandardMaterial({ color: 0x1a1414, roughness: 0.7 });
+    const stone = new THREE.MeshStandardMaterial({ color: 0x6f7383, roughness: 0.95 });
+    const moss = new THREE.MeshStandardMaterial({ color: 0x4b5a4a, roughness: 1 });
+    const rune = new THREE.MeshBasicMaterial({ color: 0xb89cff });
     const parts = [
-      [new THREE.CylinderGeometry(0.18, 0.2, 4.2, 10).translate(-1.6, 2.1, 0), red],
-      [new THREE.CylinderGeometry(0.18, 0.2, 4.2, 10).translate(1.6, 2.1, 0), red],
-      [new THREE.BoxGeometry(4.2, 0.28, 0.32).translate(0, 3.4, 0), red],
-      [new THREE.BoxGeometry(5.2, 0.32, 0.45).translate(0, 4.25, 0), black],
-      [new THREE.BoxGeometry(0.3, 0.6, 0.2).translate(0, 3.8, 0), red],
+      [new THREE.BoxGeometry(0.62, 4.0, 0.62).translate(-1.6, 2.0, 0), stone],
+      [new THREE.BoxGeometry(0.62, 3.6, 0.62).translate(1.6, 1.8, 0).rotateZ(-0.04), stone],
+      [new THREE.BoxGeometry(4.6, 0.6, 0.8).translate(0, 4.2, 0).rotateZ(0.03), stone],
+      [new THREE.BoxGeometry(4.0, 0.12, 0.84).translate(0, 4.52, 0), moss],
+      [new THREE.TorusGeometry(0.34, 0.05, 6, 20).translate(0, 4.2, 0.42), rune],
     ];
     const cap = Math.ceil(cells * 0.1) + 3;
     return parts.map(([g, m]) => {

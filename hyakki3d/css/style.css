@@ -1,4 +1,4 @@
-/* 百鬼祓い 3D — 墨の夜に金箔と朱塗り。
+/* NIGHT HORDE — 夜の闇に金の縁取りと深紅。古書のような見出しと、刻印風のロゴ。
    レイアウト：全画面 3D の上に、細い金線の枠で囲んだ HUD を四隅へ */
 :root {
   color-scheme: dark;
@@ -11,7 +11,8 @@
   --spirit: #8fe3ff;
   --dim: #b9adcb;
   --glass: rgba(10, 8, 22, 0.62);
-  --f-brush: "Yuji Boku", "Hiragino Mincho ProN", "Yu Mincho", serif;
+  --f-brush: "Zen Antique", "Hiragino Mincho ProN", "Yu Mincho", serif;
+  --f-title: "Cinzel", "Times New Roman", serif;
   --f-ui: "Zen Maru Gothic", "Hiragino Maru Gothic ProN", "Yu Gothic", sans-serif;
   --f-num: "Dela Gothic One", "Zen Maru Gothic", sans-serif;
   --safe-t: env(safe-area-inset-top, 0px);
@@ -144,7 +145,7 @@ body.mobile #camHint { display: none; }
 }
 .card.summon { background: linear-gradient(180deg, rgba(10, 40, 56, 0.95), rgba(6, 10, 22, 0.95)); border-color: rgba(143, 227, 255, 0.6); }
 .card.summon::after {
-  content: "式神"; position: absolute; top: -12px; right: 12px; font: 15px var(--f-brush); color: var(--ink);
+  content: "召喚"; position: absolute; top: -12px; right: 12px; font: 15px var(--f-brush); color: var(--ink);
   background: var(--spirit); padding: 2px 10px 4px; border-radius: 3px; box-shadow: 0 0 14px var(--spirit);
 }
 .card:hover, .card:focus-visible { transform: translateY(-6px); box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6), 0 0 24px rgba(242, 196, 90, 0.35); outline: none; }
@@ -193,6 +194,9 @@ h1 {
   text-shadow: 0 0 30px rgba(210, 42, 60, 0.9), 0 0 60px rgba(210, 42, 60, 0.5), 0 6px 0 #3a0008;
 }
 h1.mid { font-size: clamp(38px, 9vw, 64px); }
+h1.logo { font: 800 clamp(52px, 11vw, 96px)/1 var(--f-title); letter-spacing: 0.06em; text-shadow: 0 0 28px rgba(210, 42, 60, 0.8), 0 0 60px rgba(120, 40, 200, 0.45), 0 5px 0 #2a0610; }
+h1.logo span { color: var(--gold); margin-left: 0.28em; text-shadow: 0 0 26px rgba(242, 196, 90, 0.7), 0 5px 0 #3a2200; }
+.kicker { font-family: var(--f-title); font-weight: 700; }
 #result.win h1 { text-shadow: 0 0 30px rgba(242, 196, 90, 0.9), 0 6px 0 #4a2a00; }
 .lead { margin: 0; font-size: 15px; line-height: 1.8; color: #efe6f6; text-shadow: 0 2px 8px #000; font-weight: 500; }
 .howto { list-style: none; margin: 0; padding: 10px 16px; text-align: left; font-size: 13px; line-height: 1.9; color: #ddd3ea; max-width: 100%; font-weight: 500; }

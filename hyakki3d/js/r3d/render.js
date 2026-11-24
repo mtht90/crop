@@ -45,13 +45,17 @@ const tmpC = new THREE.Color();
 const tmpM = new THREE.Matrix4(), tmpQ = new THREE.Quaternion(), tmpV = new THREE.Vector3(), tmpS = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0);
 
 export function talismanTexture() {
+  // 魔法弾のカード：青白い地に金のルーン（円・菱・放射線）
   const c = document.createElement('canvas');
   c.width = 64; c.height = 128;
   const g = c.getContext('2d');
-  g.fillStyle = '#fff6dc'; g.fillRect(4, 4, 56, 120);
-  g.strokeStyle = '#c3202a'; g.lineWidth = 4; g.strokeRect(8, 8, 48, 112);
-  g.fillStyle = '#c3202a'; g.font = '34px "Yuji Boku", serif'; g.textAlign = 'center';
-  g.fillText('急', 32, 50); g.fillText('令', 32, 92);
+  g.fillStyle = '#e9f2ff'; g.fillRect(4, 4, 56, 120);
+  g.strokeStyle = '#3a5cc8'; g.lineWidth = 4; g.strokeRect(8, 8, 48, 112);
+  g.strokeStyle = '#c8962a'; g.lineWidth = 3;
+  g.beginPath(); g.arc(32, 64, 18, 0, Math.PI * 2); g.stroke();
+  g.beginPath(); g.moveTo(32, 38); g.lineTo(46, 64); g.lineTo(32, 90); g.lineTo(18, 64); g.closePath(); g.stroke();
+  for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2 + Math.PI / 4; g.beginPath(); g.moveTo(32 + Math.cos(a) * 22, 64 + Math.sin(a) * 22); g.lineTo(32 + Math.cos(a) * 30, 64 + Math.sin(a) * 30); g.stroke(); }
+  g.fillStyle = '#3a5cc8'; g.beginPath(); g.arc(32, 64, 5, 0, Math.PI * 2); g.fill();
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   return t;
@@ -481,10 +485,10 @@ export const R = {
       tmpM.compose(tmpV.set(u.x * S, 0.04, u.y * S), tmpQ.identity(), tmpS.set(0.5, 1, 0.5));
       this.halo.setMatrixAt(nh, tmpM); setC(this.halo, nh++, 0xd84aff, 0.9);
     }
-    if (b) marks.push({ x: b.x * S, z: b.y * S, color: '#ff3040', label: '骸', boss: true });
+    if (b) marks.push({ x: b.x * S, z: b.y * S, color: '#ff3040', label: '王', boss: true });
     const mb = G.midBoss;
     if (mb && mb.alive) {
-      marks.push({ x: mb.x * S, z: mb.y * S, color: '#ff8a3a', label: mb.type === 'orochi' ? '蛇' : '法', boss: true });
+      marks.push({ x: mb.x * S, z: mb.y * S, color: '#ff8a3a', label: mb.type === 'orochi' ? '蛇' : '死', boss: true });
       const r = mb.r * S * 1.5 * (1 + Math.sin(t * 5) * 0.06);
       tmpM.compose(tmpV.set(mb.x * S, 0.04, mb.y * S), tmpQ.identity(), tmpS.set(r, 1, r));
       if (nr < 64) { this.ringD.setMatrixAt(nr, tmpM); setC(this.ringD, nr++, 0xff5020, 1.3); }

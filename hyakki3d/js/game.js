@@ -303,12 +303,12 @@ export function killEnemy(e) {
   // 奥義のゲージは祓うほど貯まる
   if (!G.ultKind && G.ult < 1) {
     G.ult = Math.min(1, G.ult + 1 / 160);
-    if (G.ult >= 1) { UI.banner(`奥義「${G.char.ult.name}」 準備完了 ─ スペース`, 'gold'); sfx.chest(); }
+    if (G.ult >= 1) { UI.banner(`必殺技「${G.char.ult.name}」 準備完了 ─ スペース`, 'gold'); sfx.chest(); }
   }
   G.streak++;
   G.streakT = 2.2;
   if (G.milestoneIdx < MILESTONES.length && G.kills >= MILESTONES[G.milestoneIdx]) {
-    UI.banner(`${MILESTONES[G.milestoneIdx].toLocaleString()} 体 祓い!`, 'gold');
+    UI.banner(`${MILESTONES[G.milestoneIdx].toLocaleString()} 体 撃破!`, 'gold');
     G.milestoneIdx++;
     sfx.chest();
   }
@@ -375,7 +375,7 @@ function purge() {
     if (e.boss || e.mid) { hurtEnemy(e, e.maxHp * 0.04 / G.st.dmgMul, 0, 0, 0); continue; }
     if (e.x > v.x0 && e.x < v.x1 && e.y > v.y0 && e.y < v.y1) killEnemy(e);
   }
-  UI.banner('大祓', 'white');
+  UI.banner('ホーリーノヴァ', 'white');
 }
 
 // 進化できる組み合わせ（最大 Lv の術 ＋ 補助）を探す
@@ -412,7 +412,7 @@ function openChest(big = false) {
   }
   while (rewards.length < n) {
     const up = G.skills.filter((s) => s.lv < s.def.levels.length);
-    if (!up.length) { healPlayer(G.player.maxHp * 0.5); rewards.push({ id: '_heal', name: '霊薬', sub: 'HP 回復' }); continue; }
+    if (!up.length) { healPlayer(G.player.maxHp * 0.5); rewards.push({ id: '_heal', name: 'ポーション', sub: 'HP 回復' }); continue; }
     const s2 = up[(Math.random() * up.length) | 0];
     addOrUpgrade(s2.id);
     rewards.push({ id: s2.id, name: s2.def.name, sub: s2.lv >= s2.def.levels.length ? 'MAX' : `Lv ${s2.lv}` });
@@ -457,7 +457,7 @@ export function castUlt() {
   if (!cheat()) Progress.addUlt();
   G.flash = 0.3; G.fovKick = 1.2; G.hitstop = 0.08; addShake(0.5);
   FX.seal(P.x, P.y, 160, 1.2, null, true);
-  UI.banner(`奥義 ${u.name}`, 'rainbow');
+  UI.banner(`必殺技 ${u.name}`, 'rainbow');
   sfx.boom();
   switch (u.id) {
     case 'hyakki': {
@@ -590,7 +590,7 @@ function updateDirector(dt) {
     G.nextElite += ELITE.every;
     const n = 1 + Math.floor(t / 300);
     for (let k = 0; k < n; k++) { edgePos(80); spawnEnemy('oni', RX, RY, true); }
-    UI.banner('土蜘蛛 出現 ─ 宝箱を落とす', 'small');
+    UI.banner('ジャイアントスパイダー 出現 ─ 宝箱を落とす', 'small');
   }
 
   while (G.eventIdx < EVENTS.length && t >= EVENTS[G.eventIdx].t) {
@@ -618,7 +618,7 @@ function updateDirector(dt) {
   // 制限時間を過ぎてもボスが残っていれば激昂。時間切れでの勝利はない
   if (G.time >= G.mode.len && !G.enraged) {
     G.enraged = true;
-    UI.banner('夜明けは来ない ─ がしゃどくろ 激昂', 'huge');
+    UI.banner('夜明けは来ない ─ スケルトンキング 激昂', 'huge');
     sfx.alarm(); addShake(0.6); G.redPulse = 2;
     if (G.boss) { G.boss.speed *= 1.6; G.boss.dmg *= 1.6; }
   }
@@ -656,7 +656,7 @@ function startEvent(ev) {
       dirs.push({ c: Math.cos(a), s: Math.sin(a) });
     }
     G.marches.push({ mix: ev.mix, left: ev.count, rate: ev.count / ev.dur, acc: 0, dirs });
-    UI.banner(ev.banner || '百鬼夜行', ev.big ? 'huge' : 'red');
+    UI.banner(ev.banner || '大群襲来', ev.big ? 'huge' : 'red');
     sfx.alarm();
     G.redPulse = 1.5;
     if (ev.big) { addShake(0.5); music.intensity = 1; }
@@ -699,7 +699,7 @@ function updateBoss(e, dt) {
   if (!ai.rage && e.hp < e.maxHp * 0.6) {
     ai.rage = true;
     e.speed *= 1.25;
-    UI.banner('がしゃどくろ 怒り狂う', 'red');
+    UI.banner('スケルトンキング 怒り狂う', 'red');
     FX.ring(e.x, e.y, 30, 300, 0.7, '#ff3040', 12); sfx.alarm(); addShake(0.5); G.redPulse = 1.5;
   }
   switch (ai.state) {
@@ -888,7 +888,7 @@ function bossDefeated(e) {
   G.hitstop = 0.25;
   addShake(1);
   sfx.boom();
-  UI.banner('がしゃどくろ 討伐!', 'huge');
+  UI.banner('スケルトンキング 討伐!', 'huge');
   FX.anim('explosion', e.x, e.y, { scale: 6, force: true, dur: 1.0 });
   beginEnding(true, e);
 }
@@ -898,7 +898,7 @@ function beginEnding(win, at) {
   if (G.ending) return;
   G.ending = { t: 0, win, purged: false, x: at ? at.x : G.player.x, y: at ? at.y : G.player.y };
   G.marches.length = 0;
-  if (win && !at) { UI.banner('夜明け ─ 百鬼夜行を退けた!', 'huge'); sfx.boom(); G.flash = 0.8; }
+  if (win && !at) { UI.banner('夜明け ─ 大群を退けた!', 'huge'); sfx.boom(); G.flash = 0.8; }
 }
 
 function updateEnding(rdt) {
@@ -988,7 +988,7 @@ export function step(rdt) {
   } else if (G.streak < 50) G.streakMark = 0;
   if (G.frame % 90 === 0 && !cheat()) {
     const r = Progress.check({ mode: G.mode.id, char: G.char.id, time: G.time, kills: G.kills, mids: G.mids });
-    for (const c of r.chars) UI.banner(`退魔師 解放：${c.job} ${c.name}`, 'rainbow');
+    for (const c of r.chars) UI.banner(`ヒーロー解放：${c.job} ${c.name}`, 'rainbow');
     for (const a of r.achs) UI.banner(`実績：${a.name}`, 'gold');
   }
   if (G.midBoss && !G.boss) UI.bossBar(true, G.midBoss.hp / G.midBoss.maxHp, G.midBoss.def.name);
@@ -1260,7 +1260,7 @@ function updatePickups(dt) {
       else if (k.kind === 'magnet') {
         for (const g of G.gems) { if (!g.mag) { g.mag = true; g.spd = -200; } }
         FX.ring(P.x, P.y, 10, 300, 0.6, '#7dffb0', 6);
-        UI.banner('魂寄せ', 'green');
+        UI.banner('マグネット', 'green');
         sfx.summon();
       } else if (k.kind === 'bomb') purge();
       else if (k.kind === 'chest') openChest(!!k.big);
