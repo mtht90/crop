@@ -23,6 +23,8 @@ export interface MatchOptions {
   difficulty: Difficulty;
   /** CPU 同士で進める（デモ・確認用） */
   autoplay?: boolean;
+  /** 打撃時の着弾予測マーカー */
+  predict?: boolean;
 }
 
 type PitchOutcome = 'ball' | 'strike' | 'foul' | 'inplay' | 'strikeout' | 'walk';
@@ -291,6 +293,8 @@ export class Match {
   }
 
   private cleanupControls() {
+    this.hud.showMitt(null);
+    this.hud.showPredict(null);
     this.pitchCtl?.dispose();
     this.pitchCtl = null;
     this.batCtl?.dispose();
@@ -331,9 +335,12 @@ export class Match {
     } else if (this.userBatting) {
       this.batCtl = new BatControl(this.hud, (m) => cursorSize(batter, m, this.opts.difficulty.assist));
       this.batCtl.onRelease = () => this.userSwing();
-      // CPU 投手
+      // CPU 投手。捕手が構えた位置（狙い）を見せる
       const cp = cpuChoosePitch(s, pitcher, this.opts.difficulty);
-      this.sleep(0.9 + Math.random() * 0.7).then(() => {
+      this.sleep(0.35).then(() => {
+        if (this.phase === 'aim') this.hud.showMitt(cp.aim);
+      });
+      this.sleep(1.1 + Math.random() * 0.7).then(() => {
         if (this.phase === 'aim') this.beginWindup(cp);
       });
     } else {
@@ -502,6 +509,9 @@ export class Match {
       this.cap.rotation.set(Math.PI / 2 - 0.25 + Math.sin(this.capSpin * 0.07) * 0.2, 0, tilt);
       if (kind !== 'knuckle' || this.phase !== 'flight') this.cap.rotateY(this.capSpin);
       else this.cap.rotateX(Math.sin(this.time * 17) * 0.25);
+      // 遠くのキャップは大きめに描いて見失わないようにする（プロスピのボールの見え方に近づける）
+      const far = this.phase === 'flight' || this.phase === 'windup' ? THREE.MathUtils.clamp(-this.cap.position.z / 9.22, 0, 1) : 0;
+      this.cap.scale.setScalar(1 + far * 1.4);
       this.capShadow.position.set(this.cap.position.x, 0.012, this.cap.position.z);
       const hgt = Math.max(0, this.cap.position.y);
       this.capShadow.scale.setScalar(1 + hgt * 0.08);
@@ -529,6 +539,21 @@ export class Match {
     const local = cc.root.worldToLocal(end.clone());
     cc.setPose({ handL: local.clone().add(V(0.02, 0, 0)), handR: local.clone().add(V(-0.12, -0.06, -0.05)) }, 0.85);
 
+    // 着弾予測：今の向きと速さのまま来たら本塁上のどこを通るか（変化は最後に効くので読み切れるとは限らない）
+    if (this.userBatting && this.opts.predict && !this.opts.autoplay) {
+      const k = this.flightT / path.duration;
+      if (k > 0.2 && k < 1) {
+        const prev = path.pos(Math.max(0, this.flightT - 0.03));
+        const cur = this.cap.position;
+        const vz = cur.z - prev.z;
+        if (vz > 1e-4) {
+          const tt = -cur.z / vz;
+          this.hud.showPredict(new THREE.Vector2(cur.x + (cur.x - prev.x) * tt, cur.y + (cur.y - prev.y) * tt), (k - 0.2) * 2.5);
+        }
+      } else if (k >= 1) this.hud.showPredict(null);
+    }
+    if (this.flightT > 0.12) this.hud.showMitt(null);
+
     // CPU のスイング
     if (this.cpuSwing && this.swingAt < 0 && this.cpuSwing.swing && this.flightT >= this.cpuSwing.at) {
       this.startSwing(this.cpuSwing.cursor, this.cpuSwing.mode);
@@ -546,6 +571,7 @@ export class Match {
         speedKmh: path.params.speedKmh,
         assist: this.userBatting ? this.opts.difficulty.assist : 1,
       });
+      if (this.userBatting && !this.opts.autoplay) this.swingFeedback(timing, path.plate.y - this.swingCursor.y, path.plate.x - this.swingCursor.x);
       if (r.kind === 'hit') {
         if (r.quality > 0.86 && this.swingMode !== 'bunt') this.hud.telop('ジャストミート！', 'small good', '', 800);
         this.onContact(r.velocity, r.quality);
@@ -560,6 +586,8 @@ export class Match {
     // 本塁通過
     if (this.flightT >= path.duration && !this.markShown) {
       this.markShown = true;
+      this.hud.showChip(`${PITCHES[path.params.kind].name}  ${Math.round(path.params.speedKmh)}km/h`);
+      this.sleep(1.6).then(() => this.hud.showChip(null));
       this.hud.showMark(new THREE.Vector2(path.plate.x, path.plate.y));
     }
     if (this.flightT >= path.duration + 0.08 && this.phase === 'flight') {
@@ -586,6 +614,16 @@ export class Match {
     }
   }
   private markShown = false;
+
+  /** 振り返り：タイミングとカーソルのずれ（プロスピの打撃結果表示のように） */
+  private swingFeedback(timing: number, dy: number, dx: number) {
+    const ms = Math.round(Math.abs(timing) * 1000);
+    const t = Math.abs(timing) < 0.025 ? '<span class="just">ジャスト</span>' : `<span class="off">${timing < 0 ? '早い' : '遅い'} ${ms}ms</span>`;
+    const v = Math.abs(dy) < 0.05 ? '' : `<span class="off">${dy > 0 ? 'キャップが上' : 'キャップが下'}</span>`;
+    const hz = Math.abs(dx) < 0.07 ? '' : `<span class="off">${dx > 0 ? '一塁側' : '三塁側'}にずれ</span>`;
+    this.hud.showSwingFeedback(t + v + hz);
+    this.sleep(1.6).then(() => this.hud.showSwingFeedback(null));
+  }
 
   private passBallT = -1;
   private passBallFrom = new THREE.Vector3();

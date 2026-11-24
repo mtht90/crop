@@ -57,21 +57,22 @@ export function titleScreen(parent: HTMLElement, ready: Promise<unknown> = Promi
   });
 }
 
-export interface SetupResult { team: Team; opp: Team; user: 'away' | 'home'; innings: number; difficulty: Difficulty }
+export interface SetupResult { team: Team; opp: Team; user: 'away' | 'home'; innings: number; difficulty: Difficulty; predict: boolean }
 
 export function setupScreen(parent: HTMLElement): Promise<SetupResult> {
   return new Promise((resolve) => {
-    let team = 0, user: 'away' | 'home' = 'home', innings = 6, diff = 1;
+    let team = 0, user: 'away' | 'home' = 'home', innings = 6, diff = 1, predict = true;
     const s = el(`<div class="screen dim"><div class="panel">
       <h2>試合の設定</h2>
       <div class="row"><label>あなたのチーム</label><div class="teams">${TEAMS.map((t, i) => `<div class="team" data-team="${i}"><div class="sw" style="background:linear-gradient(90deg, ${t.uniform.primary} 0 50%, ${t.color} 50%)"></div><div class="nm">${t.name}</div><div class="st">エース ${t.players.find((p) => p.pos === 'P')!.name}</div></div>`).join('')}</div></div>
       <div class="row"><label>先攻・後攻</label><div class="seg" data-k="user"><button data-v="away">先攻（表）</button><button data-v="home">後攻（裏）</button></div></div>
       <div class="row"><label>イニング</label><div class="seg" data-k="inn"><button data-v="3">3回</button><button data-v="4">4回</button><button data-v="6">6回（公式）</button></div></div>
       <div class="row"><label>相手の強さ</label><div class="seg" data-k="diff">${DIFFICULTIES.map((d, i) => `<button data-v="${i}">${d.name}</button>`).join('')}</div></div>
+      <div class="row"><label>打撃のアシスト（着弾予測マーカー）</label><div class="seg" data-k="pred"><button data-v="1">あり</button><button data-v="0">なし</button></div></div>
       <div class="row howto">
         <b>ルール</b> 公式キャップ野球と同じ5人制。走塁はなく、走者は仮想で進む。ノーバウンドで捕られるか、<b>アウトゾーン</b>で止まればアウト。<b>ヒットゾーン</b>に届けば単打、バウンドしてフェンスなら二塁打、ノーバウンドでフェンス直撃は三塁打、越えればホームラン。パスボールラインを割ると走者が進む。<br>
         <b>投げる</b> 球種を選び、ドラッグで狙って、下のキャップを<b>上にはじく</b>。白い輪が緑の輪に重なる瞬間に離すと狙いどおり。指を<b>曲げてはじく</b>と変化が増える。<br>
-        <b>打つ</b> ドラッグで黄色いカーソルを動かし、<b>指を離してスイング</b>。
+        <b>打つ</b> ドラッグで黄色いカーソルを動かし、<b>指を離してスイング</b>。茶色いミットは捕手の構え（狙ったコース）、白い点線の輪は「このまま来たら通る位置」。変化球は最後に曲がるので輪も動く。振った後に早い・遅いが出る。
       </div>
       <button class="big-btn">プレイボール！</button>
     </div></div>`);
@@ -81,7 +82,9 @@ export function setupScreen(parent: HTMLElement): Promise<SetupResult> {
       s.querySelectorAll<HTMLElement>('[data-k="user"] button').forEach((b) => b.classList.toggle('sel', b.dataset.v === user));
       s.querySelectorAll<HTMLElement>('[data-k="inn"] button').forEach((b) => b.classList.toggle('sel', +b.dataset.v! === innings));
       s.querySelectorAll<HTMLElement>('[data-k="diff"] button').forEach((b) => b.classList.toggle('sel', +b.dataset.v! === diff));
+      s.querySelectorAll<HTMLElement>('[data-k="pred"] button').forEach((b) => b.classList.toggle('sel', (b.dataset.v === '1') === predict));
     };
+    s.querySelectorAll<HTMLElement>('[data-k="pred"] button').forEach((b) => (b.onclick = () => { predict = b.dataset.v === '1'; audio.play('ui_move'); refresh(); }));
     s.querySelectorAll<HTMLElement>('.team').forEach((e) => (e.onclick = () => { team = +e.dataset.team!; audio.play('ui_move'); refresh(); }));
     s.querySelectorAll<HTMLElement>('[data-k="user"] button').forEach((b) => (b.onclick = () => { user = b.dataset.v as 'away' | 'home'; audio.play('ui_move'); refresh(); }));
     s.querySelectorAll<HTMLElement>('[data-k="inn"] button').forEach((b) => (b.onclick = () => { innings = +b.dataset.v!; audio.play('ui_move'); refresh(); }));
@@ -89,7 +92,7 @@ export function setupScreen(parent: HTMLElement): Promise<SetupResult> {
     s.querySelector<HTMLElement>('.big-btn')!.onclick = () => {
       audio.play('ui_ok');
       s.remove();
-      resolve({ team: TEAMS[team], opp: TEAMS[1 - team], user, innings, difficulty: DIFFICULTIES[diff] });
+      resolve({ team: TEAMS[team], opp: TEAMS[1 - team], user, innings, difficulty: DIFFICULTIES[diff], predict });
     };
     refresh();
   });
