@@ -268,6 +268,10 @@ export class PitchControl {
   private lastAng = 0;
   private spinZ = 0;
   private spinV = 0;
+  /** 回している間の指の軌跡（形で球種を見分ける） */
+  private ring: { t: number; x: number; y: number }[] = [];
+  /** 払う直前まで回していたときの球種（払う動きで形が崩れないように固定しておく） */
+  private locked: { kind: PitchKind; side: number; amount: number } | null = null;
   private ox = 0;
   private oy = 0;
   private cleanup: (() => void)[] = [];
@@ -281,7 +285,7 @@ export class PitchControl {
     c.innerHTML = '';
     this.padEl = h('div', 'fpspad');
     this.labelEl = h('div', 'fpslabel', '');
-    const hint = h('div', 'hint fpshint', 'キャップを上にスワイプして投げる<br>くるくる＝横に曲がる／下から上へこする＝ライズ／上から下へこする＝ドロップ');
+    const hint = h('div', 'hint fpshint', 'キャップを回して、そのまま上に払って投げる<br>大きめに右回り＝右へ・左回り＝左へ／縦長に左回り＝ライズ・右回り＝ドロップ');
     this.padEl.append(this.labelEl, hint);
     c.append(this.padEl);
 
@@ -296,6 +300,8 @@ export class PitchControl {
       this.radius = Math.min(r.width, r.height) * 0.42;
       this.pts = [{ t: performance.now(), x: e.clientX, y: e.clientY }];
       this.lastAng = Math.atan2(e.clientY - this.center.y, e.clientX - this.center.x);
+      if (Math.abs(this.spinZ) < 0.2) this.ring = [];
+      this.locked = this.spinPitch();
     };
     const move = (e: PointerEvent) => {
       if (!this.holding || e.pointerId !== this.pid) return;
@@ -306,18 +312,25 @@ export class PitchControl {
       const dist = Math.hypot(rx, ry);
       const ddx = e.clientX - prev.x, ddy = e.clientY - prev.y;
       const dt = Math.max(8, now - prev.t);
-      if (dist < this.radius) {
-        // 横回転：キャップのまわりで円を描いた角度
-        if (dist > 14) {
+      if (dist < this.radius * 1.15) {
+        // キャップのまわりで回した角度（+ = 右回り）
+        if (dist > 18) {
           const ang = Math.atan2(ry, rx);
           let d = ang - this.lastAng;
           d = Math.atan2(Math.sin(d), Math.cos(d));
-          this.spinZ += d / (Math.PI * 2);
+          // 中心付近を横切ったときの急な角度の飛びは回転に数えない
+          if (Math.abs(d) < 1.2) {
+            this.spinZ += d / (Math.PI * 2);
+            this.ring.push({ t: now, x: e.clientX, y: e.clientY });
+            while (this.ring.length > 48) this.ring.shift();
+          }
           this.lastAng = ang;
-        }
-        // 縦回転：速くこすった向きだけ数える（ゆっくり戻す動きは数えない）
-        if (Math.abs(ddy) > Math.abs(ddx) * 1.2 && Math.abs(ddy / dt) > 0.3) this.spinV += -ddy / 160;
+        } else this.lastAng = Math.atan2(ry, rx);
+        void ddx; void ddy; void dt;
       } else this.lastAng = Math.atan2(ry, rx);
+      // 上へ速く払い始める前までの判定を覚えておく
+      const flicking = -ddy / dt > 0.35 && ry < 0;
+      if (!flicking) this.locked = this.spinPitch();
       this.ox = THREE.MathUtils.clamp(rx / this.radius, -1, 1);
       this.oy = THREE.MathUtils.clamp(ry / this.radius, -1.6, 1);
       this.updateLabel();
@@ -344,20 +357,39 @@ export class PitchControl {
   }
 
   get state(): HandCapState {
-    return { ox: this.ox, oy: this.oy, spinZ: this.spinZ, spinV: this.spinV, holding: this.holding, thrown: !!this.result };
+    const sp = this.spinPitch();
+    const vertical = sp && (sp.kind === 'rise' || sp.kind === 'drop');
+    return { ox: this.ox, oy: this.oy, spinZ: vertical ? 0 : this.spinZ, spinV: vertical ? (sp!.kind === 'rise' ? 1 : -1) * Math.abs(this.spinZ) : 0, holding: this.holding, thrown: !!this.result };
   }
 
-  /** 回し方から球種と向き */
-  private spinPitch(): { kind: PitchKind; side: number; amount: number } | null {
-    const z = Math.abs(this.spinZ), v = Math.abs(this.spinV);
-    if (Math.max(z, v) < 0.45) return null;
-    if (v > z * 1.2) return { kind: this.spinV > 0 ? 'rise' : 'drop', side: -1, amount: THREE.MathUtils.clamp((v - 0.45) / 1.8, 0, 1) };
-    return { kind: z < 1.4 ? 'slider' : 'curve', side: this.spinZ > 0 ? 1 : -1, amount: THREE.MathUtils.clamp((z - 0.45) / 2, 0, 1) };
+  /** 回した形の縦横比（縦長ほど大きい） */
+  private ringAspect(before = Infinity) {
+    const ring = this.ring.filter((p) => p.t < before);
+    if (ring.length < 4) return 1;
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    for (const p of ring) {
+      x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x);
+      y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y);
+    }
+    return (y1 - y0 + 1) / (x1 - x0 + 1);
+  }
+
+  /**
+   * 回し方から球種と向き
+   * - 縦長に左回り → ライズ、縦長に右回り → ドロップ
+   * - それ以外（大きめに回す）→ 右回り＝右へ、左回り＝左へ（少し＝スライダー、たくさん＝カーブ）
+   */
+  private spinPitch(before = Infinity): { kind: PitchKind; side: number; amount: number } | null {
+    const z = Math.abs(this.spinZ);
+    if (z < 0.45) return null;
+    const amount = THREE.MathUtils.clamp((z - 0.45) / 2, 0, 1);
+    if (this.ringAspect(before) > 1.45) return { kind: this.spinZ < 0 ? 'rise' : 'drop', side: -1, amount };
+    return { kind: z < 1.4 ? 'slider' : 'curve', side: this.spinZ > 0 ? 1 : -1, amount };
   }
 
   private updateLabel() {
     const sp = this.spinPitch();
-    const dir = !sp ? '' : sp.kind === 'rise' ? '⤴ 浮き上がる' : sp.kind === 'drop' ? '⤵ 落ちる' : sp.side > 0 ? '右へ ▶' : '◀ 左へ';
+    const dir = !sp ? '' : sp.kind === 'rise' ? '浮き上がる' : sp.kind === 'drop' ? '手前で落ちる' : sp.side > 0 ? '右へ ▶' : '◀ 左へ';
     this.labelEl.innerHTML = sp
       ? `<b>${PITCHES[sp.kind].name}</b> ${dir}<span class="gobar"><i style="width:${Math.round(20 + sp.amount * 80)}%"></i></span>`
       : this.holding ? '<b>ストレート</b>' : '';
@@ -366,28 +398,32 @@ export class PitchControl {
   private release() {
     const pts = this.pts;
     const b = pts[pts.length - 1];
-    // 最後に上へ動き続けた区間をフリックとみなす
+    // 離す直前 160ms の動きをフリックとみなす（回しながらそのまま払っても投げられる）
     let i = pts.length - 1;
-    while (i > 0 && pts[i - 1].y >= pts[i].y - 2) i--;
-    const a = pts[i];
+    while (i > 0 && b.t - pts[i - 1].t < 160) i--;
+    const a = pts[Math.max(0, i - 1)];
     const dx = b.x - a.x, dy = b.y - a.y;
-    const top = this.padEl.getBoundingClientRect().top;
-    // キャップの上で止めた（こすっただけ）なら投げない。回転は残す
-    if (dy > -60 || b.y > top + 30) {
-      this.ox = this.oy = 0;
+    const dt = Math.max(16, b.t - a.t);
+    const vy = -dy / dt; // 上向きの速さ px/ms
+    const above = this.center.y - b.y > this.radius * 0.55;
+    if (!(vy > 0.35 && -dy > 25) && !above) {
+      this.ox = this.oy = 0; // 回しただけで離した：回転は残す
       return;
     }
-    const speed = THREE.MathUtils.clamp((-dy / Math.max(16, b.t - a.t) - 0.35) / 1.7, 0, 1);
-    this.throwWith(Math.atan2(dx, -dy), -dy, speed);
+    const speed = THREE.MathUtils.clamp((vy - 0.35) / 1.7, 0, 1);
+    // 高さ：指を離した位置がキャップからどれだけ上か
+    const len = Math.max(0, this.center.y - b.y) + Math.max(0, -dy) * 0.5;
+    this.throwWith(Math.atan2(dx, Math.max(1, -dy)), len, speed, a.t);
   }
 
   /** 向き（ラジアン、右が+）・上へ払った長さ（px）・速さ（0..1）から投球を作る */
-  private throwWith(angle: number, lengthPx: number, speed: number) {
+  private throwWith(angle: number, lengthPx: number, speed: number, flickStart = Infinity) {
     const cx = (ZONE.x0 + ZONE.x1) / 2;
     const x = cx + THREE.MathUtils.clamp(Math.tan(angle) / Math.tan(THREE.MathUtils.degToRad(22)), -1.5, 1.5) * 0.42;
     const hNorm = THREE.MathUtils.clamp((lengthPx - 90) / 300, 0, 1);
     const y = ZONE.y0 - 0.24 + hNorm * (ZONE.y1 - ZONE.y0 + 0.48);
-    const sp = this.spinPitch();
+    void flickStart;
+    const sp = this.locked ?? this.spinPitch();
     let kind: PitchKind, side = -1, strength = 1;
     if (sp) {
       kind = sp.kind;
