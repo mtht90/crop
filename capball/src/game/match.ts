@@ -356,16 +356,18 @@ export class Match {
     this.pendingThrow = t;
     this.phase = 'windup';
     this.windT = 0;
-    if (this.pitchCtl) {
-      this.pitchCtl.dispose();
-      this.pitchCtl = null;
-    }
-    this.hud.showAim(null);
+    // 投手操作のときは、リリースまで判定の輪を出すので操作を残す
+    if (!this.pitchCtl) this.hud.showAim(null);
   }
 
   /** リリース：投球パラメータを確定してキャップを放つ */
   private release() {
     const s = this.state;
+    if (this.pitchCtl) {
+      this.pendingThrow = this.pitchCtl.finalize();
+      this.pitchCtl.dispose();
+      this.pitchCtl = null;
+    }
     const t = this.pendingThrow!;
     const pitcher = s.fielding.pitcher;
     const def = PITCHES[t.kind];
@@ -373,7 +375,7 @@ export class Match {
     const fatigue = side.stamina;
     // 変化を大きくするほど球は遅く、制球は乱れやすい（小さくすると速く・狙いやすい）
     const str = t.kind === 'straight' ? 1 : THREE.MathUtils.clamp(t.strength ?? 1, 0.5, 1.5);
-    const velo = (pitcher.velo ?? 135) * def.speedMul * (0.86 + 0.14 * t.speedNorm) * (0.93 + 0.07 * fatigue) * (1 - (str - 1) * 0.1);
+    const velo = (pitcher.velo ?? 135) * def.speedMul * (0.86 + 0.14 * t.speedNorm) * (0.93 + 0.07 * fatigue);
     // 制球：能力・リングのタイミング・疲れ
     const ctrl = pitcher.control ?? 60;
     const cpu = !this.pitchCtlUser;
@@ -381,7 +383,6 @@ export class Match {
     sigma *= 1 + t.timingErr * 3.2;
     sigma *= 1 + (1 - fatigue) * 1.4;
     if (cpu) sigma *= 1.6 - this.opts.difficulty.cpuControl;
-    sigma *= str > 1 ? 1 + (str - 1) * 1.4 : 1 - (1 - str) * 0.35;
     const target = new THREE.Vector3(t.aim.x + gauss() * sigma, t.aim.y + gauss() * sigma, 0);
     // スワイプの曲げ：球種の横変化と同じ向きなら変化が大きく、逆なら小さく
     const lat = Math.sign(def.bx);
@@ -394,10 +395,7 @@ export class Match {
     this.path = new PitchPath({ kind: t.kind, level: t.level, speedKmh: velo, release, target, breakMul, extraBx, side: t.side ?? -1, seed: Math.random() });
     this.lastSpeed = Math.round(velo);
     this.lastPitchName = def.name;
-    if (this.pitchCtlUser && !this.opts.autoplay) {
-      if (t.timingErr < 0.1) this.hud.telop('ナイスリリース！', 'small good', '', 700);
-      else if (t.timingErr > 0.45) this.hud.telop('すっぽ抜け…', 'small bad', '', 700);
-    }
+
     side.pitchCount++;
     side.stamina = Math.max(0, side.stamina - 1 / (30 + (pitcher.stamina ?? 60) * 0.9));
     this.phase = 'flight';
@@ -474,6 +472,7 @@ export class Match {
         this.cap.visible = true;
         pc.handWorld('r', this.cap.position);
       }
+      this.pitchCtl?.windup(this.windT, PITCH_RELEASE_T);
       if (this.windT >= PITCH_RELEASE_T) this.release();
     } else if (this.phase === 'flight' && this.path) {
       this.windT += dt;

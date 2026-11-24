@@ -17,12 +17,12 @@ export interface ZoneRect { x0: number; y0: number; x1: number; y1: number }
 /** 球種ボタンの軌道アイコン（向きははじき方で決まるので、形だけを表す） */
 const PITCH_ICON: Record<PitchKind, string> = {
   straight: '<path d="M14 25 L14 5"/><circle cx="14" cy="5" r="3" class="ic-cap"/>',
-  curve: '<path d="M8 4 C 26 6, 24 20, 14 25"/><circle cx="14" cy="25" r="3" class="ic-cap"/>',
-  slider: '<path d="M8 4 L 9 17 Q 10 23 21 24"/><circle cx="21" cy="24" r="3" class="ic-cap"/>',
+  curve: '<path d="M20 4 C 2 6, 4 20, 14 25"/><circle cx="14" cy="25" r="3" class="ic-cap"/>',
+  slider: '<path d="M20 4 L 19 17 Q 18 23 7 24"/><circle cx="7" cy="24" r="3" class="ic-cap"/>',
   rise: '<path d="M14 26 L14 14 Q 14 6 20 4"/><circle cx="20" cy="4" r="3" class="ic-cap"/>',
   knuckle: '<path d="M14 4 C 4 9, 24 13, 14 17 C 6 20, 20 23, 14 26"/><circle cx="14" cy="26" r="3" class="ic-cap"/>',
 };
-const pitchIcon = (k: PitchKind) => `<svg class="pic" viewBox="0 0 28 30" aria-hidden="true">${PITCH_ICON[k]}</svg>`;
+const pitchIcon = (k: PitchKind, side = -1) => `<svg class="pic" viewBox="0 0 28 30" aria-hidden="true"${side > 0 && (k === 'curve' || k === 'slider') ? ' style="transform:scaleX(-1)"' : ''}>${PITCH_ICON[k]}</svg>`;
 
 export class Hud {
   readonly root = h('div', 'layer');
@@ -157,6 +157,28 @@ export class Hud {
       c.style.opacity = i === idx ? String(Math.min(1, strength)) : '';
     });
   }
+  private tcircleEl = h('div', 'tcircle hidden');
+  private gradeEl = h('div', 'tgrade hidden');
+  /** 投球タイミングの輪（狙いの位置に、scale=1 で狙いの円と重なる） */
+  timingCircle(v: THREE.Vector2 | null, scale: number) {
+    if (!this.tcircleEl.isConnected) this.root.append(this.tcircleEl, this.gradeEl);
+    this.tcircleEl.classList.toggle('hidden', !v);
+    if (!v) return;
+    const p = this.toScreen(v.x, v.y);
+    const d = 30 * scale;
+    Object.assign(this.tcircleEl.style, { left: p.x - d / 2 + 'px', top: p.y - d / 2 + 'px', width: d + 'px', height: d + 'px' });
+    this.tcircleEl.classList.toggle('near', Math.abs(scale - 1) < 0.1);
+  }
+  timingGrade(g: string) {
+    if (!this.gradeEl.isConnected) this.root.append(this.tcircleEl, this.gradeEl);
+    this.gradeEl.className = 'tgrade g-' + g.toLowerCase();
+    this.gradeEl.textContent = g;
+    const z = this.zone;
+    this.gradeEl.style.left = (z.x0 + z.x1) / 2 + 'px';
+    this.gradeEl.style.top = z.y0 - 34 + 'px';
+    window.setTimeout(() => this.gradeEl.classList.add('hidden'), 900);
+  }
+
   /** 球種と球速（投球後） */
   showChip(text: string | null) {
     this.chipEl.classList.toggle('hidden', !text);
@@ -223,99 +245,102 @@ export interface ThrowInput {
   strength: number;
 }
 
-/**
- * はじいた向きと速さから変化量の倍率を決める。
- * まっすぐ上（0°）で 60%、斜め 40° 以上で 150%。速くはじくほど少しキレが増す。
- */
-export function flickStrength(dx: number, dy: number, speedNorm: number) {
-  const ang = Math.atan2(Math.abs(dx), Math.max(1, -dy)) * (180 / Math.PI);
-  const byAngle = 0.6 + 0.9 * THREE.MathUtils.clamp(ang / 40, 0, 1);
-  return THREE.MathUtils.clamp(byAngle * (0.88 + 0.24 * speedNorm), 0.5, 1.6);
-}
+type Grade = 'EXCELLENT' | 'GREAT' | 'GOOD' | 'BAD';
+/** タイミング判定ごとの効果（制球のぶれ・キレ・球速） */
+const GRADE_FX: Record<Grade, { timingErr: number; strength: number; speedNorm: number }> = {
+  EXCELLENT: { timingErr: 0, strength: 1.15, speedNorm: 1 },
+  GREAT: { timingErr: 0.08, strength: 1.05, speedNorm: 0.92 },
+  GOOD: { timingErr: 0.22, strength: 0.92, speedNorm: 0.82 },
+  BAD: { timingErr: 0.5, strength: 0.72, speedNorm: 0.7 },
+};
 
+interface PadEntry { kind: PitchKind; level: number; side: number; slot: number }
+/** 十字の配置（0..8 = 左上〜右下）。曲がる方向に置く */
+const SLOT = { center: 4, up: 1, down: 7, left: 3, right: 5, dl: 6, dr: 8 };
+const SHORT: Record<PitchKind, string> = { straight: '直球', curve: 'カーブ', slider: 'スラ', rise: 'ライズ', knuckle: 'ナックル' };
+
+/**
+ * 投球操作（プロスピのような流れ）
+ * 1. 十字のボタンで球種を選ぶ（置かれた向き＝曲がる向き）
+ * 2. ゾーンをドラッグして狙いを決める
+ * 3.「投げる」を押すと投球動作が始まり、狙いに向かって輪が縮む。輪が重なった瞬間にタップ
+ */
 export class PitchControl {
   aim = new THREE.Vector2(0, (ZONE.y0 + ZONE.y1) / 2);
-  sel = 0;
-  private ring!: HTMLElement;
-  private holding = false;
-  private holdT = 0;
-  private pts: { t: number; x: number; y: number }[] = [];
+  private entries: PadEntry[] = [];
+  private sel = 0;
+  private btns: HTMLButtonElement[] = [];
+  private throwBtn!: HTMLButtonElement;
+  private hintEl!: HTMLElement;
   private dragId: number | null = null;
   private last = { x: 0, y: 0 };
   private keys = new Set<string>();
-  private disposed = false;
   private cleanup: (() => void)[] = [];
-  private pitchBtns: HTMLButtonElement[] = [];
+  private disposed = false;
+  /** 'select' → 'timing'（投球動作中） */
+  private stage: 'select' | 'timing' = 'select';
+  private circleScale = 3;
+  private grade: Grade | null = null;
 
-  constructor(private hud: Hud, pitches: [PitchKind, number][], private onThrow: (t: ThrowInput) => void) {
+  constructor(private hud: Hud, pitches: [PitchKind, number][], private onStart: (t: ThrowInput) => void) {
+    const has = new Map(pitches);
+    this.entries.push({ kind: 'straight', level: 0, side: -1, slot: SLOT.center });
+    if (has.has('rise')) this.entries.push({ kind: 'rise', level: has.get('rise')!, side: -1, slot: SLOT.up });
+    if (has.has('knuckle')) this.entries.push({ kind: 'knuckle', level: has.get('knuckle')!, side: -1, slot: SLOT.down });
+    if (has.has('slider')) {
+      this.entries.push({ kind: 'slider', level: has.get('slider')!, side: -1, slot: SLOT.left });
+      this.entries.push({ kind: 'slider', level: has.get('slider')!, side: 1, slot: SLOT.right });
+    }
+    if (has.has('curve')) {
+      this.entries.push({ kind: 'curve', level: has.get('curve')!, side: -1, slot: SLOT.dl });
+      this.entries.push({ kind: 'curve', level: has.get('curve')!, side: 1, slot: SLOT.dr });
+    }
+
     const c = hud.controls;
     c.innerHTML = '';
-    const row = h('div', 'pitches');
-    const all: [PitchKind, number][] = [['straight', 0], ...pitches];
-    all.forEach(([k, lv], i) => {
-      const def = PITCHES[k];
-      const b = h('button', 'pbtn' + (i === 0 ? ' sel' : ''), `${pitchIcon(k)}${def.name}<span class="lv">${k === 'straight' ? '' : Array.from({ length: 7 }, (_, j) => `<i class="${j < lv ? 'on' : ''}"></i>`).join('')}</span>`) as HTMLButtonElement;
-      b.onpointerdown = (e) => {
-        e.stopPropagation();
-        this.select(i);
+    const wrap = h('div', 'pitchpad');
+    const pad = h('div', 'cross');
+    for (let slot = 0; slot < 9; slot++) {
+      const ei = this.entries.findIndex((e) => e.slot === slot);
+      if (ei < 0) {
+        pad.append(h('span', 'cx-empty'));
+        continue;
+      }
+      const e = this.entries[ei];
+      const b = h('button', 'cx' + (e.kind === 'straight' ? ' center' : ''), `${pitchIcon(e.kind, e.side)}<span>${SHORT[e.kind]}</span>${e.kind === 'straight' ? '' : `<i class="lvl">${e.level}</i>`}`) as HTMLButtonElement;
+      b.onpointerdown = (ev) => {
+        ev.stopPropagation();
+        if (this.stage !== 'select') return;
+        this.select(ei);
         audio.play('ui_move', { volume: 0.6 });
       };
-      this.pitchBtns.push(b);
-      row.append(b);
-    });
-    this.allPitches = all;
-    queueMicrotask(() => this.select(0));
-    const pad = h('div', 'throwpad');
-    const cap = h('div', 'capbtn', 'CAP');
-    this.ring = h('div', 'ring');
-    const target = h('div', 'ring target');
-    for (const r of [this.ring, target]) cap.append(r);
-    target.style.width = target.style.height = '66px';
-    this.ring.style.display = 'none';
-    pad.append(cap);
-    const hint = h('div', 'hint', '');
-    this.hintEl = hint;
-    this.brkEl = h('div', 'brklive', '');
-    pad.append(this.brkEl);
-    c.append(row, pad, hint);
-
-    cap.addEventListener('pointerdown', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      cap.setPointerCapture(e.pointerId);
-      this.holding = true;
-      this.holdT = 0;
-      this.pts = [{ t: performance.now(), x: e.clientX, y: e.clientY }];
-      this.ring.style.display = 'block';
-    });
-    cap.addEventListener('pointermove', (e) => {
-      if (!this.holding) return;
-      this.pts.push({ t: performance.now(), x: e.clientX, y: e.clientY });
-      // はじく途中の向きで変化量を見せる（予告線もその場で変わる）
-      const a = this.pts[0];
-      if (a.y - e.clientY > 12) {
-        this.liveStrength = flickStrength(e.clientX - a.x, e.clientY - a.y, 0.5);
-        if (Math.abs(e.clientX - a.x) > 4) this.liveSide = Math.sign(e.clientX - a.x);
-        this.syncStrength();
-      }
-    });
-    const up = (e: PointerEvent) => {
-      if (!this.holding) return;
-      this.pts.push({ t: performance.now(), x: e.clientX, y: e.clientY });
-      this.release();
+      this.btns[ei] = b;
+      pad.append(b);
+    }
+    this.throwBtn = h('button', 'throwbtn', '投げる') as HTMLButtonElement;
+    this.throwBtn.onpointerdown = (ev) => {
+      ev.stopPropagation();
+      ev.preventDefault();
+      if (this.stage === 'select') this.start();
+      else this.tap();
     };
-    cap.addEventListener('pointerup', up);
-    cap.addEventListener('pointercancel', () => this.cancel());
+    wrap.append(pad, this.throwBtn);
+    this.hintEl = h('div', 'hint', '');
+    c.append(wrap, this.hintEl);
 
-    // 狙い（画面のどこでも相対ドラッグ）
+    // 狙い：画面のどこでも相対ドラッグ。投球動作中は画面タップで判定
     const inp = hud.input;
     const pd = (e: PointerEvent) => {
+      if (this.stage === 'timing') {
+        this.tap();
+        return;
+      }
       if (this.dragId !== null) return;
       this.dragId = e.pointerId;
       this.last = { x: e.clientX, y: e.clientY };
     };
     const pm = (e: PointerEvent) => {
-      if (e.pointerId !== this.dragId) return;
+      if (e.pointerId !== this.dragId || this.stage !== 'select') return;
       const k = 1 / hud.pxPerMeter();
       this.aim.x += (e.clientX - this.last.x) * k * 0.9;
       this.aim.y -= (e.clientY - this.last.y) * k * 0.9;
@@ -330,23 +355,12 @@ export class PitchControl {
     window.addEventListener('pointerup', pu);
     const kd = (e: KeyboardEvent) => {
       this.keys.add(e.key);
-      const n = parseInt(e.key, 10);
-      if (n >= 1 && n <= this.allPitches.length) this.select(n - 1);
-      if (e.key === ' ' && !this.holding) {
-        this.holding = true;
-        this.holdT = 0;
-        this.pts = [];
-        this.ring.style.display = 'block';
+      if (e.key === ' ' || e.key === 'Enter') {
+        if (this.stage === 'select') this.start();
+        else this.tap();
       }
     };
-    const ku = (e: KeyboardEvent) => {
-      this.keys.delete(e.key);
-      if (e.key === ' ' && this.holding) {
-        const now = performance.now();
-        this.pts = [{ t: now - 100, x: 0, y: 200 }, { t: now, x: 0, y: 0 }];
-        this.release();
-      }
-    };
+    const ku = (e: KeyboardEvent) => this.keys.delete(e.key);
     window.addEventListener('keydown', kd);
     window.addEventListener('keyup', ku);
     this.cleanup.push(() => {
@@ -356,120 +370,91 @@ export class PitchControl {
       window.removeEventListener('keydown', kd);
       window.removeEventListener('keyup', ku);
     });
+    this.select(0);
   }
-  private allPitches: [PitchKind, number][] = [];
 
   private clampAim() {
     this.aim.x = THREE.MathUtils.clamp(this.aim.x, ZONE.x0 - 0.4, ZONE.x1 + 0.4);
     this.aim.y = THREE.MathUtils.clamp(this.aim.y, ZONE.y0 - 0.32, ZONE.y1 + 0.32);
   }
 
-  private hintEl: HTMLElement | null = null;
-  private brkEl: HTMLElement | null = null;
-  /** はじく向き・速さで決まる変化量（はじく前は 100% で予告） */
-  private liveStrength = 1;
-  /** はじく向き（-1=左、+1=右）。前回の向きを覚えておく */
-  private liveSide = -1;
-  select(i: number) {
+  private select(i: number) {
     this.sel = i;
-    this.pitchBtns.forEach((b, j) => b.classList.toggle('sel', j === i));
-    const def = PITCHES[this.allPitches[i][0]];
-    const straight = def.kind === 'straight';
-    if (this.hintEl) this.hintEl.innerHTML = `<b>${def.name}</b>：${def.grip}<br>${straight ? 'はじく速さで球速が上がる' : 'はじいた向きに曲がる。斜めにはじくほど大きく曲がる'}`;
-    this.liveStrength = 1;
-    this.syncStrength();
-  }
-  private get strength() {
-    return this.allPitches[this.sel]?.[0] === 'straight' ? 1 : this.liveStrength;
-  }
-  private syncStrength() {
-    if (!this.brkEl) return;
-    const straight = this.allPitches[this.sel][0] === 'straight';
-    const v = Math.round(this.strength * 100);
-    this.brkEl.classList.toggle('hidden', straight);
-    this.brkEl.classList.toggle('big', v >= 130);
-    this.brkEl.classList.toggle('small', v <= 75);
-    this.brkEl.innerHTML = `変化 <b>${v}%</b>${v >= 130 ? '<br>制球難' : ''}`;
+    this.btns.forEach((b, j) => b?.classList.toggle('sel', j === i));
+    const e = this.entries[i];
+    const def = PITCHES[e.kind];
+    const dir = e.kind === 'straight' ? '' : e.kind === 'rise' ? '（浮き上がる）' : e.kind === 'knuckle' ? '（揺れて落ちる）' : e.side < 0 ? '（左へ曲がる）' : '（右へ曲がる）';
+    this.hintEl.innerHTML = `<b>${def.name}${dir}</b>：${def.grip}<br>ドラッグで狙い →「投げる」→ 輪が重なる瞬間にタップ`;
   }
 
-  /** 選んだ球種・変化量・狙いから、曲がり方の予告線を作る */
+  /** 投球開始：投球動作に入り、判定の輪を縮め始める */
+  private start() {
+    this.stage = 'timing';
+    this.grade = null;
+    this.circleScale = 3;
+    this.throwBtn.textContent = 'タップ！';
+    this.throwBtn.classList.add('timing');
+    audio.play('ui_ok', { volume: 0.5 });
+    const e = this.entries[this.sel];
+    this.onStart({ kind: e.kind, level: e.level, aim: this.aim.clone(), timingErr: 0.5, speedNorm: 0.7, bend: 0, strength: 0.72, side: e.side });
+  }
+
+  private tap() {
+    if (this.stage !== 'timing' || this.grade) return;
+    const d = Math.abs(this.circleScale - 1);
+    this.grade = d < 0.1 ? 'EXCELLENT' : d < 0.25 ? 'GREAT' : d < 0.45 ? 'GOOD' : 'BAD';
+    this.hud.timingGrade(this.grade);
+    audio.play(this.grade === 'BAD' ? 'ui_cancel' : 'ui_ok', { volume: 0.6, rate: this.grade === 'EXCELLENT' ? 1.25 : 1 });
+  }
+
+  /** 投球動作の経過（試合側から毎フレーム）。リリースまでに輪が狙いへ縮む */
+  windup(t: number, releaseT: number) {
+    if (this.stage !== 'timing') return;
+    this.circleScale = 3 - 2.6 * Math.min(1, t / releaseT);
+    if (!this.grade) this.hud.timingCircle(this.aim, this.circleScale);
+    else this.hud.timingCircle(null, 1);
+  }
+
+  /** リリースの瞬間に、判定を反映した投球内容を返す（タップしなければ BAD） */
+  finalize(): ThrowInput {
+    if (!this.grade) {
+      this.grade = 'BAD';
+      this.hud.timingGrade('BAD');
+    }
+    const e = this.entries[this.sel];
+    const fx = GRADE_FX[this.grade];
+    return { kind: e.kind, level: e.level, aim: this.aim.clone(), bend: 0, side: e.side, ...fx, strength: e.kind === 'straight' ? 1 : fx.strength };
+  }
+
+  update(dt: number) {
+    if (this.disposed) return;
+    if (this.stage === 'select') {
+      const sp = 0.9 * dt;
+      if (this.keys.has('ArrowLeft') || this.keys.has('a')) this.aim.x -= sp;
+      if (this.keys.has('ArrowRight') || this.keys.has('d')) this.aim.x += sp;
+      if (this.keys.has('ArrowUp') || this.keys.has('w')) this.aim.y += sp;
+      if (this.keys.has('ArrowDown') || this.keys.has('s')) this.aim.y -= sp;
+      this.clampAim();
+    }
+    this.hud.showAim(this.aim);
+    this.hud.showBreakPreview(this.stage === 'select' ? this.previewPoints() : null);
+  }
+
+  /** 選んだ球種と狙いから、曲がり方の予告線を作る */
   private previewPoints(): THREE.Vector2[] {
-    const [kind, level] = this.allPitches[this.sel];
-    const def = PITCHES[kind];
-    const lv = Math.max(level, 1) * this.strength;
-    const bv = breakVector(kind, lv, this.liveSide);
+    const e = this.entries[this.sel];
+    const def = PITCHES[e.kind];
+    const bv = breakVector(e.kind, Math.max(e.level, 1), e.side);
     const bend = new THREE.Vector2(bv.x, bv.y);
     const pts: THREE.Vector2[] = [];
     for (let i = 0; i <= 24; i++) {
       const u = i / 24;
       const f = Math.pow(u, 1.4 + def.late * 3.6);
       const p = this.aim.clone().sub(bend).add(bend.clone().multiplyScalar(f));
-      if (kind === 'knuckle') p.x += Math.sin(u * Math.PI * 3.2) * 0.07 * u * (1 - u * 0.6) * this.strength;
+      if (e.kind === 'knuckle') p.x += Math.sin(u * Math.PI * 3.2) * 0.07 * u * (1 - u * 0.6);
       pts.push(p);
     }
     return pts;
-  }
-
-  /** 輪の大きさ（1.0 で重なる） */
-  ringScale() {
-    const t = this.holdT;
-    const cyc = 1.15;
-    const u = (t % cyc) / cyc;
-    return 2.1 - 1.6 * u;
-  }
-
-  update(dt: number) {
-    if (this.disposed) return;
-    const sp = 0.9 * dt;
-    if (this.keys.has('ArrowLeft') || this.keys.has('a')) this.aim.x -= sp;
-    if (this.keys.has('ArrowRight') || this.keys.has('d')) this.aim.x += sp;
-    if (this.keys.has('ArrowUp') || this.keys.has('w')) this.aim.y += sp;
-    if (this.keys.has('ArrowDown') || this.keys.has('s')) this.aim.y -= sp;
-    this.clampAim();
-    this.hud.showAim(this.aim);
-    this.hud.showBreakPreview(this.previewPoints());
-    if (this.holding) {
-      this.holdT += dt;
-      const s = this.ringScale();
-      this.ring.style.width = this.ring.style.height = 66 * s + 'px';
-      this.ring.style.borderColor = Math.abs(s - 1) < 0.1 ? '#3fd07a' : '#fff';
-    }
-  }
-
-  private cancel() {
-    this.holding = false;
-    this.ring.style.display = 'none';
-  }
-
-  private release() {
-    const s = this.ringScale();
-    this.cancel();
-    const pts = this.pts;
-    if (pts.length < 2) return;
-    const a = pts[0], b = pts[pts.length - 1];
-    const dy = b.y - a.y;
-    if (dy > -40) return; // 上にはじいていない → 投げない
-    // 直近の速さ
-    let i = pts.length - 1;
-    while (i > 0 && b.t - pts[i - 1].t < 110) i--;
-    const p0 = pts[Math.max(0, i - 1)];
-    const vy = -(b.y - p0.y) / Math.max(16, b.t - p0.t); // px/ms
-    const speedNorm = THREE.MathUtils.clamp((vy - 0.35) / 1.5, 0, 1);
-    // 曲がり：始点→終点の直線からの最大のずれ
-    const len = Math.hypot(b.x - a.x, b.y - a.y);
-    let dev = 0;
-    for (const p of pts) {
-      const cross = ((b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x)) / len;
-      if (Math.abs(cross) > Math.abs(dev)) dev = cross;
-    }
-    void dev;
-    // 変化量：はじく向き（斜めほど大きい）と速さ（速いほどキレる）
-    const strength = this.allPitches[this.sel][0] === 'straight' ? 1 : flickStrength(b.x - a.x, b.y - a.y, speedNorm);
-    const side = Math.abs(b.x - a.x) > 4 ? Math.sign(b.x - a.x) : this.liveSide;
-    const [kind, level] = this.allPitches[this.sel];
-    this.liveStrength = 1;
-    this.liveSide = side;
-    this.onThrow({ kind, level, aim: this.aim.clone(), timingErr: Math.abs(s - 1), speedNorm, bend: 0, strength, side });
   }
 
   dispose() {
@@ -478,6 +463,7 @@ export class PitchControl {
     this.hud.clearControls();
     this.hud.showAim(null);
     this.hud.showBreakPreview(null);
+    this.hud.timingCircle(null, 1);
   }
 }
 
