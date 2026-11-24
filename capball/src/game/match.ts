@@ -431,7 +431,7 @@ export class Match {
       this.char(pitcher).handWorld('r', release);
       release.y = Math.max(release.y, 0.9);
     }
-    this.path = new PitchPath({ kind: t.kind, level: t.level, speedKmh: velo, release, target, breakMul, extraBx, side: t.side ?? -1, seed: Math.random(), aimIsLine: this.camMode === 'fps' });
+    this.path = new PitchPath({ kind: t.kind, level: t.level, speedKmh: velo, release, target, breakMul, extraBx, side: t.side ?? -1, seed: Math.random(), aimIsLine: this.camMode === 'fps', compensate: 0.72 });
     this.lastSpeed = Math.round(velo);
     this.lastPitchName = def.name;
 

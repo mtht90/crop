@@ -20,6 +20,8 @@ export interface PitchParams {
    * false/なし: target は最後に着く点（CPU の配球用）
    */
   aimIsLine?: boolean;
+  /** aimIsLine のとき、曲がる分をどれだけ見越して投げ出すか（0..1）。自然な狙いの補正 */
+  compensate?: number;
 }
 
 /** キャップの軌道。終点が target に一致するように変化を織り込む */
@@ -46,7 +48,7 @@ export class PitchPath {
     this.late = def.late;
     this.wobble = p.kind === 'knuckle' ? 0.05 + 0.025 * p.level : 0;
     this.start = p.release.clone();
-    this.aimEnd = p.aimIsLine ? p.target.clone() : p.target.clone().sub(this.bend);
+    this.aimEnd = p.aimIsLine ? p.target.clone().addScaledVector(this.bend, -(p.compensate ?? 0)) : p.target.clone().sub(this.bend);
     this.end = this.aimEnd.clone().add(this.bend);
     this.end.z = 0;
   }
