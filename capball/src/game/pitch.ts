@@ -15,6 +15,11 @@ export interface PitchParams {
   /** 変化の向き（-1=左/三塁側、+1=右/一塁側）。はじいた方向で決まる */
   side: number;
   seed: number;
+  /**
+   * true: target は「投げ出した方向」の先の点。キャップはそこへ向かって飛び出し、回転の分だけ曲がった先に着く
+   * false/なし: target は最後に着く点（CPU の配球用）
+   */
+  aimIsLine?: boolean;
 }
 
 /** キャップの軌道。終点が target に一致するように変化を織り込む */
@@ -40,7 +45,9 @@ export class PitchPath {
     this.late = def.late;
     this.wobble = p.kind === 'knuckle' ? 0.05 + 0.025 * p.level : 0;
     this.start = p.release.clone();
-    this.aimEnd = p.target.clone().sub(this.bend);
+    this.aimEnd = p.aimIsLine ? p.target.clone() : p.target.clone().sub(this.bend);
+    this.end = this.aimEnd.clone().add(this.bend);
+    this.end.z = 0;
   }
 
   private f(s: number) {
@@ -67,8 +74,10 @@ export class PitchPath {
   }
 
   /** 本塁通過点 */
+  private end: THREE.Vector3;
+  /** 本塁を通過する点 */
   get plate() {
-    return this.params.target;
+    return this.end;
   }
 
   /** 打者が軌道を読める段階での推定着地点（変化が大きく遅いほど読みづらい） */

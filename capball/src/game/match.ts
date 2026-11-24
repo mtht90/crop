@@ -402,6 +402,8 @@ export class Match {
     sigma *= 1 + t.timingErr * 3.2;
     sigma *= 1 + (1 - fatigue) * 1.4;
     if (cpu) sigma *= 1.6 - this.opts.difficulty.cpuControl;
+    // 投手目線で自分が投げたときは、払った向きがそのまま狙いなので、ぶれはごく小さく
+    if (this.camMode === 'fps') sigma = 0.008 + (1 - ctrl / 100) * 0.02;
     const target = new THREE.Vector3(t.aim.x + gauss() * sigma, t.aim.y + gauss() * sigma, 0);
     // スワイプの曲げ：球種の横変化と同じ向きなら変化が大きく、逆なら小さく
     const lat = Math.sign(def.bx);
@@ -417,7 +419,7 @@ export class Match {
       this.char(pitcher).handWorld('r', release);
       release.y = Math.max(release.y, 0.9);
     }
-    this.path = new PitchPath({ kind: t.kind, level: t.level, speedKmh: velo, release, target, breakMul, extraBx, side: t.side ?? -1, seed: Math.random() });
+    this.path = new PitchPath({ kind: t.kind, level: t.level, speedKmh: velo, release, target, breakMul, extraBx, side: t.side ?? -1, seed: Math.random(), aimIsLine: this.camMode === 'fps' });
     this.lastSpeed = Math.round(velo);
     this.lastPitchName = def.name;
 
@@ -887,6 +889,7 @@ export class Match {
   // ---------------------------------------------------------------------
   private updateCamera(dt: number) {
     const cam = this.engine.camera;
+    this.hud.mirrorX = this.camMode === 'fps';
     if (this.camMode === 'fps') {
       // 投手の目線（マウンドから本塁を見る）
       this.engine.plateHalfWidth = 2.1;

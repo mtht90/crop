@@ -88,9 +88,12 @@ export class Hud {
   showZone(on: boolean) {
     this.zoneEl.classList.toggle('hidden', !on);
   }
+  /** 投手側から見ているとき（画面の右が -x） */
+  mirrorX = false;
   /** ゾーン座標（メートル）→ 画面座標 */
   toScreen(x: number, y: number) {
     const z = this.zone;
+    if (this.mirrorX) x = ZONE.x0 + ZONE.x1 - x;
     return { x: z.x0 + ((x - ZONE.x0) / (ZONE.x1 - ZONE.x0)) * (z.x1 - z.x0), y: z.y0 + ((ZONE.y1 - y) / (ZONE.y1 - ZONE.y0)) * (z.y1 - z.y0) };
   }
   pxPerMeter() {
@@ -419,7 +422,8 @@ export class PitchControl {
   /** 向き（ラジアン、右が+）・上へ払った長さ（px）・速さ（0..1）から投球を作る */
   private throwWith(angle: number, lengthPx: number, speed: number, flickStart = Infinity) {
     const cx = (ZONE.x0 + ZONE.x1) / 2;
-    const x = cx + THREE.MathUtils.clamp(Math.tan(angle) / Math.tan(THREE.MathUtils.degToRad(22)), -1.5, 1.5) * 0.42;
+    // 投手側から見ているので、画面の右は本塁側から見た左（-x）
+    const x = cx - THREE.MathUtils.clamp(Math.tan(angle) / Math.tan(THREE.MathUtils.degToRad(22)), -1.5, 1.5) * 0.42;
     const hNorm = THREE.MathUtils.clamp((lengthPx - 90) / 300, 0, 1);
     const y = ZONE.y0 - 0.24 + hNorm * (ZONE.y1 - ZONE.y0 + 0.48);
     void flickStart;
@@ -427,7 +431,7 @@ export class PitchControl {
     let kind: PitchKind, side = -1, strength = 1;
     if (sp) {
       kind = sp.kind;
-      side = sp.side;
+      side = -sp.side; // 画面で右回り＝画面の右へ曲がる（投手側から見て）
       strength = 0.6 + sp.amount * 0.9;
     } else if (speed < 0.18) {
       kind = 'knuckle';
