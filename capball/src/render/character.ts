@@ -53,6 +53,7 @@ function recolorTexture(model: ModelName, scene: THREE.Object3D, u: Uniform): TH
     const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined;
     if (!src && m?.map) src = m.map;
   });
+  if (!src || !(src as THREE.Texture).image) return null as unknown as THREE.Texture; // 画像が読めなければ塗り替えずに元の色で
   const img = (src as unknown as THREE.Texture).image as CanvasImageSource & { width: number; height: number };
   const W = img.width, H = img.height;
   const cv = document.createElement('canvas');
@@ -289,7 +290,7 @@ export class Character {
     });
     for (const mesh of meshes) {
       const isHead = /Head/.test(mesh.name);
-      mesh.material = toToon(mesh.material as THREE.Material, isHead ? {} : { map: tex });
+      mesh.material = toToon(mesh.material as THREE.Material, isHead || !tex ? {} : { map: tex });
       mesh.castShadow = true;
       mesh.receiveShadow = false;
       mesh.frustumCulled = false;

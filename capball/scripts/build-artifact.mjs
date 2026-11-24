@@ -34,6 +34,21 @@ const walk = (rel) => {
       const json = JSON.parse(b.subarray(20, 20 + jl).toString('utf8'));
       const bl = b.readUInt32LE(20 + jl);
       const bin = b.subarray(28 + jl, 28 + jl + bl);
+      // 画像はバッファから取り出して PNG/JPEG ファイルとして配る（blob: の読み込みもアーティファクトでは禁止）
+      const base = path.posix.basename(r, '.glb');
+      (json.images || []).forEach((img, i) => {
+        if (img.bufferView === undefined) return;
+        const bv = json.bufferViews[img.bufferView];
+        const ext = img.mimeType === 'image/jpeg' ? 'jpg' : 'png';
+        const name = `${base}_tex${i}.${ext}`;
+        const rel = path.posix.join(path.posix.dirname(r), name);
+        fs.mkdirSync(path.dirname(path.join(outDir, rel)), { recursive: true });
+        fs.writeFileSync(path.join(outDir, rel), bin.subarray(bv.byteOffset || 0, (bv.byteOffset || 0) + bv.byteLength));
+        files[rel] = rel;
+        delete img.bufferView;
+        delete img.mimeType;
+        img.uri = name;
+      });
       json.buffers[0].uri = 'data:application/octet-stream;base64,' + bin.toString('base64');
       const rj = r.replace(/\.glb$/, '.json');
       fs.mkdirSync(path.dirname(path.join(outDir, rj)), { recursive: true });
