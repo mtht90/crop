@@ -423,9 +423,10 @@ export class PitchControl {
     const speed = THREE.MathUtils.clamp((vy - 0.35) / 1.7, 0, 1);
     // 高さ：指を離した位置がキャップからどれだけ上か
     const len = Math.max(0, this.center.y - b.y) + Math.max(0, -dy) * 0.5;
-    // 払った線をそのまま延ばした先を狙いにする（指の動きと飛ぶ線を一致させる）
-    const ext = 0; // 指を離した点がそのまま狙い
-    const screenAim = { x: b.x + dx * ext, y: b.y + dy * ext };
+    // 狙い：指を離した点に、払った勢いの分を足した先（ゆっくり離せばその点、勢いよく払えば先まで届く）
+    const vx = dx / dt, vyy = dy / dt; // px/ms
+    const carry = 130; // 勢いを何 ms 分先へ延ばすか
+    const screenAim = { x: b.x + vx * carry, y: Math.max(30, b.y + vyy * carry) };
     this.throwWith(Math.atan2(dx, Math.max(1, -dy)), len, speed, a.t, screenAim);
   }
 
