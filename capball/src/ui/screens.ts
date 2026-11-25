@@ -1,6 +1,8 @@
 import { audio } from '../core/audio';
 import { DIFFICULTIES, TEAMS, type Difficulty, type Team } from '../game/data';
 import type { GameState } from '../game/rules';
+import { CAPS, capStars, type CapBrand } from '../game/caps';
+import { drawCapTop } from '../render/cap';
 
 const el = (html: string) => {
   const d = document.createElement('div');
@@ -57,14 +59,19 @@ export function titleScreen(parent: HTMLElement, ready: Promise<unknown> = Promi
   });
 }
 
-export interface SetupResult { team: Team; opp: Team; user: 'away' | 'home'; innings: number; difficulty: Difficulty; predict: boolean }
+export interface SetupResult { team: Team; opp: Team; user: 'away' | 'home'; innings: number; difficulty: Difficulty; predict: boolean; cap: CapBrand; oppCap: CapBrand }
 
 export function setupScreen(parent: HTMLElement): Promise<SetupResult> {
   return new Promise((resolve) => {
     let team = 0, user: 'away' | 'home' = 'home', innings = 6, diff = 1, predict = true;
+    let cap = 0;
+    try { const v = CAPS.findIndex((c) => c.id === localStorage.getItem('capball.cap')); if (v >= 0) cap = v; } catch { /* 保存できない環境 */ }
     const s = el(`<div class="screen dim"><div class="panel">
       <h2>試合の設定</h2>
       <div class="row"><label>あなたのチーム</label><div class="teams">${TEAMS.map((t, i) => `<div class="team" data-team="${i}"><div class="sw" style="background:linear-gradient(90deg, ${t.uniform.primary} 0 50%, ${t.color} 50%)"></div><div class="nm">${t.name}</div><div class="st">エース ${t.players.find((p) => p.pos === 'P')!.name}</div></div>`).join('')}</div></div>
+      <div class="row"><label>使うキャップ（守るときに投げるキャップ。銘柄で性格が変わる）</label>
+        <div class="caps">${CAPS.map((c, i) => `<button class="capb" data-cap="${i}" aria-label="${c.name}"><canvas width="96" height="96"></canvas></button>`).join('')}</div>
+        <div class="capinfo"></div></div>
       <div class="row"><label>先攻・後攻</label><div class="seg" data-k="user"><button data-v="away">先攻（表）</button><button data-v="home">後攻（裏）</button></div></div>
       <div class="row"><label>イニング</label><div class="seg" data-k="inn"><button data-v="3">3回</button><button data-v="4">4回</button><button data-v="6">6回（公式）</button></div></div>
       <div class="row"><label>相手の強さ</label><div class="seg" data-k="diff">${DIFFICULTIES.map((d, i) => `<button data-v="${i}">${d.name}</button>`).join('')}</div></div>
@@ -77,7 +84,20 @@ export function setupScreen(parent: HTMLElement): Promise<SetupResult> {
       <button class="big-btn">プレイボール！</button>
     </div></div>`);
     parent.append(s);
+    s.querySelectorAll<HTMLElement>('.capb').forEach((b) => {
+      const c = CAPS[+b.dataset.cap!];
+      const cv = b.querySelector('canvas')!;
+      drawCapTop(cv.getContext('2d')!, 96, c);
+      b.style.setProperty('--body', c.body);
+      b.onclick = () => { cap = +b.dataset.cap!; audio.play('ui_move'); refresh(); };
+    });
+    const bar = (n: number) => `<span class="stars">${'<i class="on"></i>'.repeat(n)}${'<i></i>'.repeat(5 - n)}</span>`;
     const refresh = () => {
+      const c = CAPS[cap];
+      const st = capStars(c);
+      s.querySelectorAll<HTMLElement>('.capb').forEach((e) => e.classList.toggle('sel', +e.dataset.cap! === cap));
+      s.querySelector('.capinfo')!.innerHTML = `<div class="cn"><b>${c.name}</b><span>${c.genre}</span></div><div class="cd">${c.desc}</div>
+        <div class="cs"><div>球速${bar(st.speed)}</div><div>変化${bar(st.brk)}</div><div>制球${bar(st.control)}</div><div>重さ${bar(st.weight)}</div></div>`;
       s.querySelectorAll<HTMLElement>('.team').forEach((e) => e.classList.toggle('sel', +e.dataset.team! === team));
       s.querySelectorAll<HTMLElement>('[data-k="user"] button').forEach((b) => b.classList.toggle('sel', b.dataset.v === user));
       s.querySelectorAll<HTMLElement>('[data-k="inn"] button').forEach((b) => b.classList.toggle('sel', +b.dataset.v! === innings));
@@ -92,7 +112,10 @@ export function setupScreen(parent: HTMLElement): Promise<SetupResult> {
     s.querySelector<HTMLElement>('.big-btn')!.onclick = () => {
       audio.play('ui_ok');
       s.remove();
-      resolve({ team: TEAMS[team], opp: TEAMS[1 - team], user, innings, difficulty: DIFFICULTIES[diff], predict });
+      try { localStorage.setItem('capball.cap', CAPS[cap].id); } catch { /* 保存できない環境 */ }
+      const others = CAPS.filter((_, i) => i !== cap);
+      const oppCap = others[Math.floor(Math.random() * others.length)];
+      resolve({ cap: CAPS[cap], oppCap,  team: TEAMS[team], opp: TEAMS[1 - team], user, innings, difficulty: DIFFICULTIES[diff], predict });
     };
     refresh();
   });

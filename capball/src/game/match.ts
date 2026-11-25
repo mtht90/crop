@@ -3,7 +3,8 @@ import type { Assets } from '../core/assets';
 import { audio } from '../core/audio';
 import type { Engine } from '../render/engine';
 import { Character, type ProcPose } from '../render/character';
-import { makeCapBall, Trail, CAP_VIS_R } from '../render/cap';
+import { makeCapBall, applyCapBrand, Trail, CAP_VIS_R } from '../render/cap';
+import { DEFAULT_CAP, type CapBrand } from './caps';
 import { pitchPose, PITCH_RELEASE_T, PITCH_TOTAL_T, stancePose, swingKeys, samplePose, mirrorPose, SWING_TOTAL_T } from '../render/motions';
 import { Hud, PitchControl, BatControl, type ThrowInput } from '../ui/hud';
 import { PITCHES, type Difficulty, type Player, type Team } from './data';
@@ -25,6 +26,8 @@ export interface MatchOptions {
   autoplay?: boolean;
   /** 打撃時の着弾予測マーカー */
   predict?: boolean;
+  /** 各チームが使うキャップ。投げるのは守備側のキャップ */
+  caps?: { away: CapBrand; home: CapBrand };
 }
 
 type PitchOutcome = 'ball' | 'strike' | 'foul' | 'inplay' | 'strikeout' | 'walk';
@@ -336,6 +339,9 @@ export class Match {
     this.hud.showZone(true);
     const batter = s.batter;
     const pitcher = s.fielding.pitcher;
+    // 投げるのは守備側のキャップ
+    applyCapBrand(this.cap, this.fieldingCap);
+    applyCapBrand(this.handCap, this.fieldingCap);
     const bc = this.char(batter);
     bc.setPose(this.stance(batter, 0), 1);
     this.char(pitcher).setPose(null);
@@ -394,7 +400,8 @@ export class Match {
     const fatigue = side.stamina;
     // 変化を大きくするほど球は遅く、制球は乱れやすい（小さくすると速く・狙いやすい）
     const str = t.kind === 'straight' ? 1 : THREE.MathUtils.clamp(t.strength ?? 1, 0.5, 1.7);
-    const velo = (pitcher.velo ?? 135) * def.speedMul * (0.86 + 0.14 * t.speedNorm) * (0.93 + 0.07 * fatigue);
+    const capB = this.fieldingCap;
+    const velo = capB.speed * (pitcher.velo ?? 135) * def.speedMul * (0.86 + 0.14 * t.speedNorm) * (0.93 + 0.07 * fatigue);
     // 制球：能力・リングのタイミング・疲れ
     const ctrl = pitcher.control ?? 60;
     const cpu = !this.pitchCtlUser;
@@ -404,6 +411,7 @@ export class Match {
     if (cpu) sigma *= 1.6 - this.opts.difficulty.cpuControl;
     // 投手目線で自分が投げたときは、払った向きがそのまま狙いなので、ぶれはごく小さく
     if (this.camMode === 'fps') sigma = 0.006 + (1 - ctrl / 100) * 0.012;
+    sigma /= capB.control;
     const target = new THREE.Vector3(t.aim.x + gauss() * sigma, t.aim.y + gauss() * sigma, 0);
     if (this.camMode === 'fps' && t.screenAim) {
       // 払った線の先（画面の点）を通る視線が本塁上の面と交わる点を狙いにする
@@ -419,7 +427,7 @@ export class Match {
     const lat = Math.sign(def.bx);
     void lat;
     // 自分で投げた変化球は大きめに曲げる（キャップらしく）
-    const breakMul = THREE.MathUtils.clamp(str, 0.4, 1.7) * (t.timingErr > 0.45 ? 0.6 : 1) * (this.camMode === 'fps' ? 1.35 : 1);
+    const breakMul = THREE.MathUtils.clamp(str, 0.4, 1.7) * (t.timingErr > 0.45 ? 0.6 : 1) * (this.camMode === 'fps' ? 1.35 : 1) * capB.brk;
     const extraBx = 0;
     const release = new THREE.Vector3();
     if (this.camMode === 'fps') {
@@ -445,6 +453,13 @@ export class Match {
     if (!this.userBatting || this.opts.autoplay) {
       this.cpuSwing = cpuPlanSwing(s, s.batter, this.path, this.opts.difficulty, SWING_LEAD);
     }
+  }
+
+  /** 守備側（投げる側）のキャップ */
+  private get fieldingCap(): CapBrand {
+    const c = this.opts.caps;
+    if (!c) return DEFAULT_CAP;
+    return this.state.half === 'top' ? c.home : c.away;
   }
 
   private get pitchCtlUser() {
@@ -634,7 +649,7 @@ export class Match {
     // 本塁通過
     if (this.flightT >= path.duration && !this.markShown) {
       this.markShown = true;
-      this.hud.showChip(`${PITCHES[path.params.kind].name}  ${Math.round(path.params.speedKmh)}km/h`);
+      this.hud.showChip(`${PITCHES[path.params.kind].name}  ${Math.round(path.params.speedKmh)}km/h ・ ${this.fieldingCap.name}`);
       this.sleep(1.6).then(() => this.hud.showChip(null));
       this.hud.showMark(new THREE.Vector2(path.plate.x, path.plate.y));
     }
@@ -759,7 +774,10 @@ export class Match {
     const start = this.path!.pos(this.flightT).clone();
     start.z = Math.min(start.z, 0.2);
     start.y = Math.max(start.y, 0.25);
-    const ball = new BallSim(start, vel, 0.5 + (1 - quality) * 0.8, Math.random() * 6);
+    // 重いキャップほど打球が飛ぶ・軽いほど失速して揺れる
+    const w = this.fieldingCap.weight;
+    vel.multiplyScalar(1 + (w - 1) * 0.7);
+    const ball = new BallSim(start, vel, (0.5 + (1 - quality) * 0.8) * (1 + (1 - w) * 1.5), Math.random() * 6);
     const bc = this.char(s.batter);
     this.sleep(0.45).then(() => {
       bc.setPose(null);

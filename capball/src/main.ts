@@ -65,7 +65,7 @@ async function main() {
     hud.show(true);
     audio.bgm('game');
     const autoplay = new URLSearchParams(location.search).has('auto');
-    const match = new Match(engine, assets, hud, { away, home, user: cfg.user, innings: cfg.innings, difficulty: cfg.difficulty, autoplay, predict: cfg.predict });
+    const match = new Match(engine, assets, hud, { away, home, user: cfg.user, innings: cfg.innings, difficulty: cfg.difficulty, autoplay, predict: cfg.predict, caps: { away: cfg.user === 'away' ? cfg.cap : cfg.oppCap, home: cfg.user === 'home' ? cfg.cap : cfg.oppCap } });
     let quit = false;
     hud.pauseBtn.onclick = async () => {
       engine.paused = true;
