@@ -890,6 +890,20 @@ const handlers = {
     if (room.isPublic) exploreChanged();
   },
 
+  // People you can start a DM with: everyone who shares a room with you.
+  contacts(ws) {
+    const ids = new Set();
+    for (const room of rooms.values()) {
+      if (!room.members[ws.user.id]) continue;
+      for (const id of Object.keys(room.members)) if (id !== ws.user.id && users.has(id)) ids.add(id);
+    }
+    const onlineIds = new Set([...wss.clients].filter((c) => c.user).map((c) => c.user.id));
+    const dmWith = new Set([...rooms.values()].filter((r) => r.kind === 'dm' && r.members[ws.user.id]).flatMap((r) => r.dm));
+    const list = [...ids].map((id) => ({ ...face(id), online: onlineIds.has(id), dm: dmWith.has(id) }))
+      .sort((a, b) => b.online - a.online || a.name.localeCompare(b.name, 'ja'));
+    send(ws, { type: 'contacts', list });
+  },
+
   dm(ws, msg) {
     const other = typeof msg.user === 'string' ? users.get(msg.user) : null;
     if (!other || other.id === ws.user.id || !allow(ws, 2)) return send(ws, { type: 'error', code: 'invalid', op: 'dm' });

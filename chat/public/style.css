@@ -690,5 +690,13 @@ textarea:focus { background: var(--surface); border-color: var(--blue-2); box-sh
 .btn-value { margin-left: auto; font-weight: 600; color: var(--ink-2); font-size: 13px; }
 .list-btns .ghost-btn:has(.btn-value) { justify-content: space-between; padding: 0 18px; }
 
-img.logo { display: block; object-fit: cover; background: none; }
-img.mini-logo { display: block; object-fit: cover; background: none; }
+
+/* ---------- start sheet ---------- */
+.start-list { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
+.start-option { display: flex; align-items: center; gap: 14px; width: 100%; padding: 16px; border-radius: 20px; background: var(--ice); text-align: left; }
+@media (hover: hover) { .start-option:hover { background: var(--sky); } }
+.start-icon { width: 48px; height: 48px; flex: none; display: grid; place-items: center; border-radius: 16px; background: var(--grad); color: #fff; box-shadow: 0 8px 18px rgba(63, 115, 246, 0.3); }
+.start-text { display: flex; flex-direction: column; gap: 2px; }
+.start-text b { font-size: 16px; }
+.start-text small { font-size: 12.5px; color: var(--ink-2); }
+.msg.them > .avatar, .msg.them .name { cursor: pointer; }

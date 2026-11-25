@@ -1125,6 +1125,11 @@
       return;
     }
     if (suppressClick) return;
+    const who = e.target.closest('.msg.them > .avatar, .msg.them .name');
+    if (who) {
+      const entry = entryOf(who);
+      if (entry && !entry.data.sys) return openPersonSheet(entry.data.from);
+    }
     const img = e.target.closest('.bubble.photo img');
     if (img) return openViewer(img);
     const playBtn = e.target.closest('.voice-play, .voice-bars');
@@ -1745,7 +1750,7 @@
     try {
       const u = new URL(text);
       if (u.origin !== location.origin) return { url: u };
-      return { url: u, room: u.searchParams.get('r'), transfer: u.searchParams.get('t'), pass: new URLSearchParams(u.hash.slice(1)).get('k') || '' };
+      return { url: u, room: u.searchParams.get('r'), transfer: u.searchParams.get('t'), user: u.searchParams.get('u'), pass: new URLSearchParams(u.hash.slice(1)).get('k') || '' };
     } catch {
       const code = text.replace(/[\s-]/g, '').toUpperCase();
       return /^[A-Z0-9]{8}$/.test(code) ? { transfer: code } : {};
@@ -1758,6 +1763,7 @@
       return handleLink({ room: q.room, pass: q.pass });
     }
     if (q.transfer) return confirmSwitch(q.transfer);
+    if (q.user) return startDm(q.user);
     openScanResult(text, q.url && /^https?:$/.test(q.url.protocol) ? q.url.href : null);
   }
   function confirmSwitch(code) {
@@ -1998,7 +2004,61 @@
     });
     openSheet('create', form);
   }
-  $('#createBtn').addEventListener('click', openCreateSheet);
+  function openStartSheet() {
+    const big = (title, desc, icon, fn) => h('button', { class: 'start-option', type: 'button', 'data-press': true, onclick: fn },
+      h('span', { class: 'start-icon', html: icon, 'aria-hidden': 'true' }), h('span', 'start-text', h('b', null, title), h('small', null, desc)));
+    openSheet('start', h('div', null,
+      h('h2', null, '新しく始める'),
+      h('div', 'start-list',
+        big('ルームを作る', 'みんなで話す部屋。QRで招待できます', '<svg viewBox="0 0 24 24" width="22" height="22"><circle cx="9" cy="8" r="3.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M2.5 20c.5-4 3.2-6 6.5-6s6 2 6.5 6M16 4.5a3.5 3.5 0 010 7M18 14c2.3.6 3.4 2.6 3.5 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>', openCreateSheet),
+        big('DMを始める', '1対1でメッセージを送る', '<svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 6.5A2.5 2.5 0 016.5 4h11A2.5 2.5 0 0120 6.5v8a2.5 2.5 0 01-2.5 2.5H10l-4.5 3.5V17A2.5 2.5 0 014 14.5z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>', openDmSheet))));
+  }
+  $('#createBtn').addEventListener('click', openStartSheet);
+
+  /* ---------- start a DM ---------- */
+  function openDmSheet() {
+    const q = field('', { type: 'search', placeholder: '名前でさがす', autocomplete: 'off' });
+    const box = h('div', 'people', h('p', 'note', '読み込み中…'));
+    sheet.contactsBox = box;
+    sheet.contactsQuery = '';
+    q.input.addEventListener('input', () => { sheet.contactsQuery = q.input.value.trim().toLowerCase(); renderContacts(); });
+    const qrBtns = h('div', 'btn-row',
+      h('button', { class: 'ghost-btn', type: 'button', 'data-press': true, onclick: openMyQrSheet }, '自分のQRを見せる'),
+      h('button', { class: 'ghost-btn', type: 'button', 'data-press': true, onclick: () => LynqScan.open({ onResult: handleScanned, hint: '相手の「自分のQR」を枠に合わせてください' }) }, 'QRを読み取る'));
+    openSheet('dm', h('div', null,
+      h('h2', null, 'DMを始める'),
+      h('p', 'sub', '同じルームにいる人とDMできます。ルームにいない人とは、QRを読み取り合って始められます'),
+      qrBtns,
+      h('div', { class: 'search-box', style: 'margin-top:14px' }, q.wrap),
+      box));
+    wsSend({ type: 'contacts' });
+  }
+  function renderContacts() {
+    const box = sheet.name === 'dm' && sheet.contactsBox;
+    if (!box || !state.contacts) return;
+    const list = state.contacts.filter((u) => !sheet.contactsQuery || u.name.toLowerCase().includes(sheet.contactsQuery));
+    if (!list.length) return box.replaceChildren(h('p', 'note', state.contacts.length ? '見つかりませんでした' : 'まだ連絡先がありません。ルームに参加するか、QRを読み取り合ってください'));
+    box.replaceChildren(...list.map((u) => {
+      const a = avatar(u);
+      if (u.online) a.classList.add('on');
+      return h('button', { class: 'person', type: 'button', 'data-press': true, onclick: () => startDm(u.id) },
+        a, h('b', null, u.name), u.dm ? h('span', 'role', 'トーク中') : null, state.blocks.includes(u.id) ? h('span', 'role', 'ブロック中') : null);
+    }));
+  }
+  function startDm(userId) {
+    if (!userId || userId === state.me?.id) return;
+    closeSheet();
+    wsSend({ type: 'dm', user: userId });
+  }
+  function openMyQrSheet() {
+    if (!state.me) return;
+    const url = `${location.origin}/?u=${encodeURIComponent(state.me.id)}`;
+    openSheet('myqr', h('div', null,
+      h('h2', null, '自分のQRコード'),
+      h('p', 'sub', '相手がこのQRを読み取る（またはリンクを開く）と、あなたとのDMが始まります'),
+      qrBox(url),
+      h('div', 'link-box', h('code', null, url), copyButton(() => url, 'リンクをコピーしました'))));
+  }
 
   /* ---------- QR helpers ---------- */
   function qrSvg(text) {
@@ -2244,10 +2304,13 @@
     }
     sheet.membersBox.replaceChildren(...parts);
   }
-  function openPersonSheet(u) {
-    const room = activeRoom();
-    if (!room || !state.me) return;
-    if (u.id === state.me.id) return openProfileSheet();
+  function openPersonSheet(person) {
+    if (!state.me) return;
+    if (person.id === state.me.id) return openProfileSheet();
+    const active = activeRoom();
+    const inGroup = active?.s.kind === 'group' && active.members?.find((m) => m.id === person.id);
+    const room = inGroup ? active : null;
+    const u = { ...personOf(person), role: inGroup ? inGroup.role : null };
     const btn = (label, fn) => h('button', { class: 'ghost-btn', type: 'button', 'data-press': true, onclick: fn }, label);
     const isBlocked = state.blocks.includes(u.id);
     const items = [
@@ -2261,13 +2324,13 @@
         closeSheet();
       }),
     ];
-    if (room.s.owner && u.role !== 'owner') {
+    if (room?.s.owner && u.role !== 'owner') {
       items.push(btn(u.role === 'admin' ? '管理者から外す' : '管理者にする', () => {
         wsSend({ type: 'promote', room: room.s.id, user: u.id, on: u.role !== 'admin' });
         openMembersSheet();
       }));
     }
-    if (room.s.admin && u.role !== 'owner' && (u.role !== 'admin' || room.s.owner)) {
+    if (room?.s.admin && u.role !== 'owner' && (u.role !== 'admin' || room.s.owner)) {
       items.push(confirmButton('ルームから退出させる', 'もう一度押すと退出させます', () => {
         wsSend({ type: 'kick', room: room.s.id, user: u.id });
         openMembersSheet();
@@ -2311,7 +2374,9 @@
       h('div', 'list-btns', h('button', { class: 'ghost-btn', type: 'button', 'data-press': true, onclick: openFontSheet }, h('span', null, 'メッセージのフォント'), h('span', 'btn-value', fontById(state.me?.font)?.name || '標準'))),
       h('h3', null, '通知'), pushPart,
       h('h3', null, '端末'),
-      h('div', 'list-btns', h('button', { class: 'ghost-btn', type: 'button', 'data-press': true, onclick: openTransferSheet }, '別の端末に引き継ぐ')));
+      h('div', 'list-btns',
+        h('button', { class: 'ghost-btn', type: 'button', 'data-press': true, onclick: openMyQrSheet }, '自分のQRコード（DM用）'),
+        h('button', { class: 'ghost-btn', type: 'button', 'data-press': true, onclick: openTransferSheet }, '別の端末に引き継ぐ')));
     form.addEventListener('submit', (e) => {
       e.preventDefault();
       const v = name.input.value.trim();
@@ -2701,13 +2766,23 @@
       if (first) {
         const params = new URLSearchParams(location.search);
         const r = params.get('r');
+        const dmUser = params.get('u');
         const k = new URLSearchParams(location.hash.slice(1)).get('k') || '';
+        if (dmUser) {
+          history.replaceState(null, '', '/');
+          startDm(dmUser);
+        }
         if (location.hash) history.replaceState(history.state, '', location.pathname + location.search);
         if (r) {
           if (narrow.matches) history.replaceState(null, '', '/');
           handleLink({ room: r, pass: k });
-        } else if (!narrow.matches && msg.rooms.length) openRoom(sortedMine()[0].id);
+        } else if (!dmUser && !narrow.matches && msg.rooms.length) openRoom(sortedMine()[0].id);
       }
+    },
+    contacts(msg) {
+      msg.list.forEach(remember);
+      state.contacts = msg.list;
+      renderContacts();
     },
     you(msg) {
       const blocksChanged = JSON.stringify(msg.blocks || []) !== JSON.stringify(state.blocks);
