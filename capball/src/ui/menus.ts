@@ -1,0 +1,351 @@
+import { audio } from '../core/audio';
+import { CAPS, capById, capPitch, capStars, drawCap, DUP_COINS, RARITY, type CapBrand } from '../game/caps';
+import { PITCHES, SLOTS, SLOT_HOW } from '../game/data';
+import { CUPS, cupById, cupOpen, newLeague, standings, userGame, type Cup, type LeagueState } from '../game/league';
+import { addCoins, ownsCap, persist, save } from '../game/save';
+import { LEAGUE_TEAMS, teamById } from '../game/teams';
+import { drawCapTop } from '../render/cap';
+import { CapPreview } from '../render/capPreview';
+
+const el = (html: string) => {
+  const d = document.createElement('div');
+  d.innerHTML = html.trim();
+  return d.firstElementChild as HTMLElement;
+};
+
+/** キャップの天面を描いた小さな canvas */
+function capIcon(c: CapBrand, size = 56, locked = false) {
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = size * 2;
+  cv.className = 'capicon' + (locked ? ' locked' : '');
+  cv.style.width = cv.style.height = size + 'px';
+  drawCapTop(cv.getContext('2d')!, size * 2, c);
+  return cv;
+}
+
+const coinHtml = () => `<span class="coins"><i class="coin"></i><b>${save.coins.toLocaleString()}</b></span>`;
+const rarityTag = (id: string) => `<span class="rar r-${RARITY[id]}">${RARITY[id]}</span>`;
+const bar = (n: number) => `<span class="stars">${'<i class="on"></i>'.repeat(n)}${'<i></i>'.repeat(5 - n)}</span>`;
+
+function capDetailHtml(c: CapBrand) {
+  const st = capStars(c);
+  return `<div class="cn"><b>${c.name}</b>${rarityTag(c.id)}<span>${c.genre}</span></div><div class="cd">${c.desc}</div>
+    <div class="cs"><div>球速${bar(st.speed)}</div><div>変化${bar(st.brk)}</div><div>制球${bar(st.control)}</div><div>重さ${bar(st.weight)}</div></div>`;
+}
+function repHtml(c: CapBrand) {
+  return `<div class="rh">持ち球（回し方 → 球種）</div>` + SLOTS.map((sl) => {
+    const k = capPitch(c, sl);
+    return `<div class="rp${k ? '' : ' no'}"><span>${SLOT_HOW[sl]}</span><b>${k ? PITCHES[k].name : '×'}</b></div>`;
+  }).join('');
+}
+
+// ---------------------------------------------------------------------------
+export type HomeChoice = 'league' | 'vending' | 'challenge' | 'caps' | 'free';
+
+/** ホーム：ここから遊びを選ぶ */
+export function homeScreen(parent: HTMLElement): Promise<HomeChoice> {
+  return new Promise((resolve) => {
+    const cap = capById(save.capSel);
+    const lg = save.league && !save.league.done ? save.league : null;
+    const won = Object.keys(save.cupsWon).length;
+    const s = el(`<div class="screen dim home">
+      <div class="topbar">${coinHtml()}<span class="rec">${save.stats.wins}勝 / ${save.stats.games}試合 ・ 優勝 ${won}</span></div>
+      <div class="logo small"><div class="jp">キャップ<br>スタジアム</div></div>
+      <div class="menu-grid">
+        <button class="mbig league" data-a="league"><span class="ic">🏆</span><b>リーグ戦</b><small>${lg ? `${cupById(lg.cupId).name} 第${lg.round + 1}節へ` : '〇〇杯を勝ち抜け'}</small></button>
+        <button class="mbig vend" data-a="vending"><span class="ic">🥤</span><b>自販機</b><small>コインでキャップを買う</small></button>
+        <button class="mbig chal" data-a="challenge"><span class="ic">🎯</span><b>チャレンジ</b><small>的当て・ホームラン競争</small></button>
+        <button class="mbig mycap" data-a="caps"><span class="ic capslot"></span><b>マイキャップ</b><small>${cap.name}</small></button>
+        <button class="mbig free" data-a="free"><span class="ic">⚾</span><b>フリー試合</b><small>チームと相手を選んで1試合</small></button>
+      </div>
+    </div>`);
+    s.querySelector('.capslot')!.append(capIcon(cap, 40));
+    parent.append(s);
+    s.querySelectorAll<HTMLElement>('[data-a]').forEach((b) => (b.onclick = () => { audio.play('ui_ok'); s.remove(); resolve(b.dataset.a as HomeChoice); }));
+  });
+}
+
+// ---------------------------------------------------------------------------
+/** 杯の一覧。挑戦する杯（または続きのリーグ）を選ぶ */
+export function cupsScreen(parent: HTMLElement): Promise<LeagueState | null> {
+  return new Promise((resolve) => {
+    const cur = save.league && !save.league.done ? save.league : null;
+    const s = el(`<div class="screen dim"><div class="panel wide">
+      <div class="phead"><button class="back">‹</button><h2>リーグ戦</h2>${coinHtml()}</div>
+      ${cur ? `<button class="big-btn" data-cont>続きから：${cupById(cur.cupId).name}（第${cur.round + 1}節）</button>` : ''}
+      <div class="cups">${CUPS.map((c) => {
+        const open = cupOpen(c, save.cupsWon);
+        const wins = save.cupsWon[c.id] ?? 0;
+        return `<button class="cup g-${c.grade}${open ? '' : ' locked'}" data-cup="${c.id}" ${open ? '' : 'disabled'}>
+          <span class="grade">${c.grade}</span>
+          <span class="cname"><b>${c.name}</b><small>${open ? c.desc : `${cupById(c.unlock!).name}で優勝すると挑戦できる`}</small></span>
+          <span class="cmeta">${wins ? `<span class="trophy">🏆×${wins}</span>` : ''}<small>優勝 ${c.prize[0]}</small></span>
+        </button>`;
+      }).join('')}</div>
+      <div class="howto" style="margin-top:8px">6チームの総当たり（5試合）。勝ち＝3点・引き分け＝1点で、いちばん多いチームが優勝。順位に応じて賞金が出る。</div>
+    </div></div>`);
+    parent.append(s);
+    const done = (v: LeagueState | null) => { s.remove(); resolve(v); };
+    s.querySelector<HTMLElement>('.back')!.onclick = () => { audio.play('ui_move'); done(null); };
+    s.querySelector<HTMLElement>('[data-cont]')?.addEventListener('click', () => { audio.play('ui_ok'); done(cur); });
+    s.querySelectorAll<HTMLElement>('[data-cup]').forEach((b) => (b.onclick = async () => {
+      const cup = cupById(b.dataset.cup!);
+      if (cur && !(await confirmBox(parent, `${cupById(cur.cupId).name}の途中です。やめて${cup.name}に挑戦しますか？`))) return;
+      audio.play('ui_ok');
+      save.league = newLeague(cup, save.teamId);
+      persist();
+      done(save.league);
+    }));
+  });
+}
+
+function confirmBox(parent: HTMLElement, msg: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const s = el(`<div class="menu"><div class="panel" style="width:min(320px,100%)"><div class="howto" style="font-size:14px;text-align:center">${msg}</div>
+      <button class="big-btn" data-v="1">はい</button><button class="big-btn sub" data-v="0">いいえ</button></div></div>`);
+    parent.append(s);
+    s.querySelectorAll<HTMLElement>('[data-v]').forEach((b) => (b.onclick = () => { s.remove(); resolve(b.dataset.v === '1'); }));
+  });
+}
+
+function tableHtml(l: LeagueState) {
+  const rows = standings(l);
+  return `<table class="standings"><tr><th></th><th>チーム</th><th>勝</th><th>敗</th><th>分</th><th>点</th><th>得失</th></tr>${rows.map((r, k) => {
+    const t = teamById(r.id);
+    return `<tr class="${r.i === 0 ? 'me' : ''}"><td>${k + 1}</td><td class="nm"><i class="dot" style="background:${t.color}"></i>${t.name}</td><td>${r.w}</td><td>${r.l}</td><td>${r.d}</td><td class="p">${r.pts}</td><td>${r.rs - r.ra >= 0 ? '+' : ''}${r.rs - r.ra}</td></tr>`;
+  }).join('')}</table>`;
+}
+
+/** リーグの順位表と次の試合 */
+export function leagueScreen(parent: HTMLElement, l: LeagueState): Promise<'play' | 'back'> {
+  return new Promise((resolve) => {
+    const cup = cupById(l.cupId);
+    const g = userGame(l)!;
+    const opp = teamById(l.teams[g.oppIndex]);
+    const me = teamById(l.teams[0]);
+    const oc = capById(opp.capId);
+    const last = l.results.filter((r) => r.a === 0 || r.b === 0);
+    const form = last.map((r) => {
+      const mine = r.a === 0 ? r.ra : r.rb, theirs = r.a === 0 ? r.rb : r.ra;
+      return `<i class="${mine > theirs ? 'w' : mine < theirs ? 'l' : 'd'}">${mine > theirs ? '○' : mine < theirs ? '●' : '△'}</i>`;
+    }).join('');
+    const s = el(`<div class="screen dim"><div class="panel wide">
+      <div class="phead"><button class="back">‹</button><h2><span class="grade g-${cup.grade}">${cup.grade}</span>${cup.name}</h2>${coinHtml()}</div>
+      <div class="round">第${l.round + 1}節 / 全${l.schedule.length}節 <span class="form">${form}</span></div>
+      <div class="vs">
+        <div class="vt"><i class="dot big" style="background:${me.color}"></i><b>${me.short}</b><small>${g.user === 'away' ? '先攻' : '後攻'}</small></div>
+        <div class="vsl">VS</div>
+        <div class="vt"><i class="dot big" style="background:${opp.color}"></i><b>${opp.short}</b><small>${'★'.repeat(opp.rank)}</small></div>
+      </div>
+      <div class="oppcap"><span class="oc"></span><span>相手のキャップ：<b>${oc.name}</b>（${oc.genre}）</span></div>
+      ${tableHtml(l)}
+      <button class="big-btn" data-a="play">プレイボール！</button>
+    </div></div>`);
+    s.querySelector('.oc')!.append(capIcon(oc, 28));
+    parent.append(s);
+    s.querySelector<HTMLElement>('.back')!.onclick = () => { audio.play('ui_move'); s.remove(); resolve('back'); };
+    s.querySelector<HTMLElement>('[data-a="play"]')!.onclick = () => { audio.play('ui_ok'); s.remove(); resolve('play'); };
+  });
+}
+
+/** リーグ終了：最終順位と賞金 */
+export function leagueEndScreen(parent: HTMLElement, l: LeagueState): Promise<void> {
+  return new Promise((resolve) => {
+    const cup = cupById(l.cupId);
+    const rows = standings(l);
+    const rank = rows.findIndex((r) => r.i === 0) + 1;
+    const prize = cup.prize[rank - 1] ?? 0;
+    const champ = rank === 1;
+    const next = CUPS.find((c) => c.unlock === cup.id);
+    const firstWin = champ && !(save.cupsWon[cup.id] ?? 0);
+    if (champ) save.cupsWon[cup.id] = (save.cupsWon[cup.id] ?? 0) + 1;
+    addCoins(prize);
+    save.league = null;
+    persist();
+    const s = el(`<div class="screen dim"><div class="result-title">${champ ? '優勝！！' : `${rank}位`}</div>
+      <div class="panel wide">
+        ${champ ? `<div class="trophy-big">🏆</div><div class="center"><b>${cup.name}</b> 制覇！</div>` : `<div class="center">${cup.name} 最終順位 <b>${rank}位</b></div>`}
+        ${tableHtml(l)}
+        <div class="reward">賞金 <i class="coin"></i><b>+${prize}</b></div>
+        ${firstWin && next ? `<div class="unlock">🔓 <b>${next.name}</b>（${next.grade}）に挑戦できるようになった！</div>` : ''}
+        <button class="big-btn">ホームへ</button>
+      </div></div>`);
+    parent.append(s);
+    audio.bgm(champ ? 'win' : null, { loop: false });
+    if (champ) audio.play('cheer_big', { volume: 0.7 });
+    s.querySelector<HTMLElement>('.big-btn')!.onclick = () => { audio.play('ui_ok'); s.remove(); resolve(); };
+  });
+}
+
+// ---------------------------------------------------------------------------
+const PRICE = 100;
+
+/** 自販機：コインでキャップを買う（何が出るかはお楽しみ） */
+export function vendingScreen(parent: HTMLElement): Promise<void> {
+  return new Promise((resolve) => {
+    const s = el(`<div class="screen dim"><div class="panel wide vendp">
+      <div class="phead"><button class="back">‹</button><h2>自販機</h2>${coinHtml()}</div>
+      <div class="machine">
+        <div class="mtop">COLD &amp; HOT ・ CAP</div>
+        <div class="mwin"></div>
+        <div class="mmid"><div class="slot"></div><div class="price"><i class="coin"></i>${PRICE}</div></div>
+        <div class="tray"><div class="drop"></div></div>
+      </div>
+      <button class="big-btn buy">${PRICE}コインで買う</button>
+      <div class="howto rates">出る確率　N 60%・R 26%・SR 11.5%・SSR 2.5%　／　ダブったらコインが戻る</div>
+      <div class="collect"></div>
+    </div></div>`);
+    parent.append(s);
+    const win = s.querySelector('.mwin')!;
+    for (const c of CAPS) {
+      const d = el(`<div class="bottle${ownsCap(c.id) ? ' own' : ''}" style="--body:${c.body}"></div>`);
+      d.append(capIcon(c, 26, !ownsCap(c.id)));
+      win.append(d);
+    }
+    const refresh = () => {
+      s.querySelectorAll('.coins b').forEach((b) => (b.textContent = save.coins.toLocaleString()));
+      const n = CAPS.filter((c) => ownsCap(c.id)).length;
+      s.querySelector('.collect')!.innerHTML = `集めたキャップ <b>${n}</b> / ${CAPS.length}`;
+      s.querySelector<HTMLButtonElement>('.buy')!.disabled = save.coins < PRICE;
+      win.querySelectorAll<HTMLElement>('.bottle').forEach((b, i) => {
+        const own = ownsCap(CAPS[i].id);
+        b.classList.toggle('own', own);
+        b.querySelector('canvas')!.classList.toggle('locked', !own);
+      });
+    };
+    refresh();
+    let busy = false;
+    s.querySelector<HTMLElement>('.back')!.onclick = () => { if (busy) return; audio.play('ui_move'); s.remove(); resolve(); };
+    s.querySelector<HTMLElement>('.buy')!.onclick = async () => {
+      if (busy || save.coins < PRICE) return;
+      busy = true;
+      addCoins(-PRICE);
+      refresh();
+      audio.play('ui_ok');
+      const c = drawCap();
+      const rar = RARITY[c.id];
+      const isNew = !ownsCap(c.id);
+      save.caps[c.id] = (save.caps[c.id] ?? 0) + 1;
+      if (!isNew) save.coins += DUP_COINS[rar];
+      persist();
+      // ガコン：キャップが取り出し口に落ちる
+      const m = s.querySelector('.machine')!;
+      m.classList.remove('shake');
+      void (m as HTMLElement).offsetWidth;
+      m.classList.add('shake');
+      const drop = s.querySelector('.drop')!;
+      drop.innerHTML = '';
+      const ic = capIcon(c, 38);
+      ic.classList.add('falling', `glow-${rar}`);
+      drop.append(ic);
+      audio.play('bounce', { volume: 0.7, rate: 0.8 });
+      await new Promise((r) => setTimeout(r, 750));
+      await revealCap(parent, c, isNew);
+      refresh();
+      busy = false;
+    };
+  });
+}
+
+function revealCap(parent: HTMLElement, c: CapBrand, isNew: boolean): Promise<void> {
+  return new Promise((resolve) => {
+    const rar = RARITY[c.id];
+    const s = el(`<div class="menu reveal r-${rar}"><div class="rays"></div><div class="panel" style="width:min(340px,100%)">
+      <div class="rbanner r-${rar}">${rar}</div>
+      <div class="rview"></div>
+      <div class="capinfo">${capDetailHtml(c)}</div>
+      <div class="caprep">${repHtml(c)}</div>
+      <div class="rnew">${isNew ? '<b class="new">NEW!</b> 新しいキャップを手に入れた' : `ダブり… <i class="coin"></i><b>+${DUP_COINS[rar]}</b> 戻ってきた`}</div>
+      <button class="big-btn">OK</button></div></div>`);
+    const pv = new CapPreview(c, 150);
+    s.querySelector('.rview')!.append(pv.canvas);
+    parent.append(s);
+    audio.play(rar === 'SSR' || rar === 'SR' ? 'cheer_big' : isNew ? 'cheer' : 'chime', { volume: 0.6 });
+    s.querySelector<HTMLElement>('.big-btn')!.onclick = () => { audio.play('ui_ok'); pv.dispose(); s.remove(); resolve(); };
+  });
+}
+
+// ---------------------------------------------------------------------------
+/** マイキャップ：集めたキャップを見る・使うキャップを選ぶ */
+export function capsScreen(parent: HTMLElement): Promise<void> {
+  return new Promise((resolve) => {
+    let sel = capById(save.capSel);
+    const s = el(`<div class="screen dim"><div class="panel wide">
+      <div class="phead"><button class="back">‹</button><h2>マイキャップ</h2>${coinHtml()}</div>
+      <div class="capview"><div class="capinfo"></div></div>
+      <div class="caprep"></div>
+      <button class="big-btn use">このキャップを使う</button>
+      <div class="dex"></div>
+      <div class="howto">持っていないキャップは自販機で手に入る。守るときに投げるのは、ここで選んだキャップ。</div>
+    </div></div>`);
+    parent.append(s);
+    const pv = new CapPreview(sel);
+    s.querySelector('.capview')!.prepend(pv.canvas);
+    const dex = s.querySelector('.dex')!;
+    for (const c of CAPS) {
+      const own = ownsCap(c.id);
+      const b = el(`<button class="dexb${own ? '' : ' locked'}" data-id="${c.id}"><span class="rar r-${RARITY[c.id]}">${RARITY[c.id]}</span><small>${own ? c.name : '？？？'}</small></button>`);
+      b.prepend(capIcon(c, 44, !own));
+      if (own && (save.caps[c.id] ?? 0) > 1) b.insertAdjacentHTML('beforeend', `<em>×${save.caps[c.id]}</em>`);
+      dex.append(b);
+    }
+    const refresh = () => {
+      const own = ownsCap(sel.id);
+      s.querySelector('.capinfo')!.innerHTML = own ? capDetailHtml(sel) : `<div class="cn"><b>？？？</b>${rarityTag(sel.id)}</div><div class="cd">まだ持っていない。自販機で探そう</div>`;
+      s.querySelector('.caprep')!.innerHTML = own ? repHtml(sel) : '';
+      pv.canvas.style.filter = own ? '' : 'brightness(0) opacity(.35)';
+      pv.set(sel);
+      const use = s.querySelector<HTMLButtonElement>('.use')!;
+      use.disabled = !own || sel.id === save.capSel;
+      use.textContent = sel.id === save.capSel ? '使用中' : own ? 'このキャップを使う' : '持っていない';
+      dex.querySelectorAll<HTMLElement>('.dexb').forEach((b) => b.classList.toggle('sel', b.dataset.id === sel.id));
+    };
+    refresh();
+    dex.querySelectorAll<HTMLElement>('.dexb').forEach((b) => (b.onclick = () => { sel = capById(b.dataset.id!); audio.play('ui_move'); refresh(); }));
+    s.querySelector<HTMLElement>('.use')!.onclick = () => { save.capSel = sel.id; persist(); audio.play('ui_ok'); refresh(); };
+    s.querySelector<HTMLElement>('.back')!.onclick = () => { audio.play('ui_move'); pv.dispose(); s.remove(); resolve(); };
+  });
+}
+
+// ---------------------------------------------------------------------------
+export type ChallengeKind = 'target' | 'derby';
+
+/** チャレンジの一覧 */
+export function challengeScreen(parent: HTMLElement): Promise<ChallengeKind | null> {
+  return new Promise((resolve) => {
+    const s = el(`<div class="screen dim"><div class="panel wide">
+      <div class="phead"><button class="back">‹</button><h2>チャレンジ</h2>${coinHtml()}</div>
+      <button class="chal-card" data-k="target"><span class="ic">🎯</span><span><b>的当て</b><small>12球で9枚のパネルを撃ち抜け。変化球でコーナーを狙おう</small></span><span class="best">ベスト<b>${save.best.target}</b>枚</span></button>
+      <button class="chal-card" data-k="derby"><span class="ic">💥</span><span><b>ホームラン競争</b><small>10アウトになるまで、何本スタンドに放り込めるか</small></span><span class="best">ベスト<b>${save.best.derby}</b>本</span></button>
+      <div class="howto">結果に応じてコインがもらえる。記録を更新するとボーナス。</div>
+    </div></div>`);
+    parent.append(s);
+    s.querySelector<HTMLElement>('.back')!.onclick = () => { audio.play('ui_move'); s.remove(); resolve(null); };
+    s.querySelectorAll<HTMLElement>('[data-k]').forEach((b) => (b.onclick = () => { audio.play('ui_ok'); s.remove(); resolve(b.dataset.k as ChallengeKind); }));
+  });
+}
+
+/** チャレンジの結果 */
+export function challengeResult(parent: HTMLElement, kind: ChallengeKind, score: number): Promise<'again' | 'home'> {
+  return new Promise((resolve) => {
+    const prev = save.best[kind];
+    const record = score > prev;
+    const coins = (kind === 'target' ? score * 15 + (score >= 9 ? 150 : 0) : score * 25) + (record ? 100 : 0);
+    if (record) save.best[kind] = score;
+    addCoins(coins);
+    const unit = kind === 'target' ? '枚' : '本';
+    const s = el(`<div class="screen dim"><div class="result-title">${kind === 'target' ? (score >= 9 ? 'パーフェクト！' : '的当て 終了') : 'ホームラン競争 終了'}</div>
+      <div class="panel" style="width:min(340px,100%)">
+        <div class="bigscore"><b>${score}</b>${unit}</div>
+        ${record ? '<div class="unlock">🎉 ベスト記録更新！</div>' : `<div class="center">ベスト ${prev}${unit}</div>`}
+        <div class="reward"><i class="coin"></i><b>+${coins}</b></div>
+        <button class="big-btn" data-a="again">もう一回</button>
+        <button class="big-btn sub" data-a="home">ホームへ</button>
+      </div></div>`);
+    parent.append(s);
+    s.querySelectorAll<HTMLElement>('[data-a]').forEach((b) => (b.onclick = () => { audio.play('ui_ok'); s.remove(); resolve(b.dataset.a as 'again' | 'home'); }));
+  });
+}
+
+export { LEAGUE_TEAMS };
+export type { Cup };

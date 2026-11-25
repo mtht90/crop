@@ -78,3 +78,27 @@ export function capPitch(c: CapBrand, slot: PitchSlot): PitchKind | null {
 export function capRepertoire(c: CapBrand) {
   return SLOTS.map((slot) => ({ slot, kind: capPitch(c, slot) })).filter((r): r is { slot: PitchSlot; kind: PitchKind } => !!r.kind && !!PITCHES[r.kind]);
 }
+
+/** レア度（自販機で出る確率と、ダブったときに戻るコイン） */
+export type Rarity = 'N' | 'R' | 'SR' | 'SSR';
+export const RARITY: Record<string, Rarity> = {
+  kirari: 'N', orange: 'N', mugi: 'N', yamabuki: 'N', lemon: 'N',
+  milpico: 'R', shizuku: 'R', kouryu: 'R', hanacha: 'R',
+  aqualan: 'SR', hotmilk: 'SR', spark: 'SR', bolt: 'SR',
+  gorilla: 'SSR', goldbrew: 'SSR', golden: 'SSR',
+};
+export const RARITY_RATE: Record<Rarity, number> = { N: 0.6, R: 0.26, SR: 0.115, SSR: 0.025 };
+export const DUP_COINS: Record<Rarity, number> = { N: 30, R: 50, SR: 120, SSR: 300 };
+export const capById = (id: string) => CAPS.find((c) => c.id === id) ?? DEFAULT_CAP;
+
+/** 自販機：レア度を引いてから、その中の1本を選ぶ */
+export function drawCap(): CapBrand {
+  let r = Math.random();
+  let rar: Rarity = 'N';
+  for (const k of ['SSR', 'SR', 'R', 'N'] as Rarity[]) {
+    if (r < RARITY_RATE[k]) { rar = k; break; }
+    r -= RARITY_RATE[k];
+  }
+  const pool = CAPS.filter((c) => RARITY[c.id] === rar);
+  return pool[Math.floor(Math.random() * pool.length)];
+}

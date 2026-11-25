@@ -4,7 +4,7 @@ import { audio } from '../core/audio';
 import type { Engine } from '../render/engine';
 import { Character, type ProcPose } from '../render/character';
 import { makeCapBall, applyCapBrand, Trail, CAP_VIS_R } from '../render/cap';
-import { DEFAULT_CAP, type CapBrand } from './caps';
+import { capPitch, DEFAULT_CAP, type CapBrand } from './caps';
 import { pitchPose, PITCH_RELEASE_T, PITCH_TOTAL_T, stancePose, swingKeys, samplePose, mirrorPose, SWING_TOTAL_T } from '../render/motions';
 import { Hud, PitchControl, BatControl, type ThrowInput } from '../ui/hud';
 import { PITCHES, type Difficulty, type Player, type Team } from './data';
@@ -14,7 +14,7 @@ import { PitchPath } from './pitch';
 import { cursorSize, inZone, resolveContact, SWING_LEAD, type SwingMode } from './batting';
 import { BallSim } from './flight';
 import { Judge, FIELDER_SPEED, HIT_BASES, type Fielder, type JudgeEvent, type JudgeKind } from './judge';
-import { cpuChoosePitch, cpuPlanSwing } from './ai';
+import { cpuChoosePitch, cpuPlanSwing, type CpuPitch } from './ai';
 
 export interface MatchOptions {
   away: Team;
@@ -28,7 +28,13 @@ export interface MatchOptions {
   predict?: boolean;
   /** 各チームが使うキャップ。投げるのは守備側のキャップ */
   caps?: { away: CapBrand; home: CapBrand };
+  /** 遊び方：ふつうの試合・的当て（自分が投げる）・ホームラン競争（自分が打つ） */
+  mode?: 'game' | 'target' | 'derby';
 }
+
+/** 的当ての球数・ホームラン競争のアウト数 */
+export const TARGET_THROWS = 12;
+export const DERBY_OUTS = 10;
 
 type PitchOutcome = 'ball' | 'strike' | 'foul' | 'inplay' | 'strikeout' | 'walk';
 
@@ -137,7 +143,14 @@ export class Match {
   }
 
   // =====================================================================
+  /** ミニゲームの成績（的当て＝抜いたパネル、ホームラン競争＝本数） */
+  score = 0;
+  private targetHit = new Set<number>();
+  private derbyOuts = 0;
+  private throwsLeft = 0;
+
   async run(): Promise<GameState> {
+    if (this.opts.mode === 'target' || this.opts.mode === 'derby') return this.runChallenge();
     const s = this.state;
     this.setupHalf();
     this.hud.updateBoard(s, this.opts.user === 'away');
@@ -180,6 +193,96 @@ export class Match {
     }
     this.cleanupControls();
     return s;
+  }
+
+  /** ミニゲーム：同じ打者・投手のまま、決まった数だけ投げる（打つ） */
+  private async runChallenge(): Promise<GameState> {
+    const s = this.state;
+    const target = this.opts.mode === 'target';
+    this.setupHalf();
+    this.hud.updateBoard(s, this.opts.user === 'away');
+    this.hud.updateCards(s, null);
+    this.throwsLeft = TARGET_THROWS;
+    const info = () =>
+      this.hud.modeInfo(target
+        ? `<b>的当て</b> パネル <em>${this.targetHit.size}</em>/9 ・ 残り <em>${this.throwsLeft}</em>球`
+        : `<b>ホームラン競争</b> <em>${this.score}</em>本 ・ アウト <em>${this.derbyOuts}</em>/${DERBY_OUTS}`);
+    info();
+    if (target) this.hud.setTargets(this.targetHit);
+    await this.sleep(0.4);
+    audio.play('whistle', { volume: 0.7 });
+    this.hud.telop(target ? '的当て スタート！' : 'ホームラン競争！', 'big', target ? '9枚のパネルを撃ち抜け' : `${DERBY_OUTS}アウトまでに何本打てるか`);
+    await this.sleep(1.4);
+    while (!this.quit) {
+      if (target && (this.throwsLeft <= 0 || this.targetHit.size >= 9)) break;
+      if (!target && this.derbyOuts >= DERBY_OUTS) break;
+      s.balls = 0;
+      s.strikes = 0;
+      await this.pitchOnce();
+      info();
+      if (this.quit) break;
+      if (target) this.hud.setTargets(this.targetHit);
+      await this.sleep(0.4);
+      this.hud.fade(true);
+      await this.sleep(0.25);
+      this.live = null;
+      this.resetPositions();
+      this.cap.visible = false;
+      this.capShadow.visible = false;
+      this.trail.clear();
+      this.camMode = 'pitch';
+      this.hud.fade(false);
+    }
+    this.score = target ? this.targetHit.size : this.score;
+    if (!this.quit) {
+      audio.play('whistle', { volume: 0.7 });
+      this.hud.telop(target && this.score >= 9 ? 'パーフェクト！！' : '終了！', target && this.score >= 9 ? 'hr' : 'big', target ? `${this.score}枚` : `${this.score}本`);
+      audio.play('clap', { volume: 0.7 });
+      await this.sleep(2.2);
+    }
+    this.hud.modeInfo(null);
+    this.hud.setTargets(null);
+    this.cleanupControls();
+    return s;
+  }
+
+  /** ホームラン競争の投球：真ん中寄りのストレート系が中心、ときどき変化球 */
+  private derbyPitch(): CpuPitch {
+    const cap = this.fieldingCap;
+    const brk = Math.random() < 0.25 ? capPitch(cap, 'slider') ?? capPitch(cap, 'curve') : null;
+    const kind = brk ?? capPitch(cap, 'straight') ?? 'straight';
+    const cx = (ZONE.x0 + ZONE.x1) / 2, cy = (ZONE.y0 + ZONE.y1) / 2;
+    return {
+      kind,
+      level: brk ? 3 : 0,
+      aim: new THREE.Vector2(cx + (Math.random() - 0.5) * 0.36, cy + (Math.random() - 0.5) * 0.4),
+      speedNorm: 0.55 + Math.random() * 0.25,
+      bend: 0,
+      timingErr: 0.05,
+      strength: 0.9,
+      side: Math.random() < 0.5 ? -1 : 1,
+    };
+  }
+
+  /** 的当て：キャップが通ったマスのパネルを抜く */
+  private async targetPitch() {
+    const p = this.path!.plate;
+    this.throwsLeft--;
+    const cell = this.hud.cellOf(p.x, p.y, CAP_VIS_R * 0.5);
+    if (cell >= 0 && !this.targetHit.has(cell)) {
+      this.targetHit.add(cell);
+      this.hud.flash();
+      audio.play('hit_hard', { volume: 0.7 });
+      this.hud.telop('バシッ！', 'big', `${this.hud.cellNo(cell)}番のパネル`, 900);
+    } else if (cell >= 0) {
+      audio.play('catch', { volume: 0.6 });
+      this.hud.telop('もう抜いたパネル', 'bad', '', 900);
+    } else {
+      audio.play('catch', { volume: 0.6 });
+      this.hud.telop('はずれ', 'bad', '', 800);
+    }
+    this.hud.setTargets(this.targetHit);
+    await this.sleep(0.9);
   }
 
   private celebrate(side: Side) {
@@ -238,7 +341,7 @@ export class Match {
   private placeBatter() {
     const b = this.state.batter;
     const c = this.char(b);
-    c.root.visible = true;
+    c.root.visible = this.opts.mode !== 'target';
     const L = b.bats === 'L';
     c.root.position.set(L ? 0.8 : -0.8, 0, 0.05);
     c.root.rotation.y = L ? -Math.PI / 2 : Math.PI / 2;
@@ -356,7 +459,7 @@ export class Match {
       this.batCtl = new BatControl(this.hud, (m) => cursorSize(batter, m, this.opts.difficulty.assist));
       this.batCtl.onRelease = () => this.userSwing();
       // CPU 投手。捕手が構えた位置（狙い）を見せる
-      const cp = cpuChoosePitch(s, pitcher, this.opts.difficulty, this.fieldingCap);
+      const cp = this.opts.mode === 'derby' ? this.derbyPitch() : cpuChoosePitch(s, pitcher, this.opts.difficulty, this.fieldingCap);
       if (this.opts.predict) this.sleep(0.35).then(() => {
         if (this.phase === 'aim') this.hud.showMitt(cp.aim);
       });
@@ -451,7 +554,7 @@ export class Match {
     this.capShadow.visible = true;
     audio.play('throw', { volume: 0.45, rate: 1.1 });
     if (!this.userBatting || this.opts.autoplay) {
-      this.cpuSwing = cpuPlanSwing(s, s.batter, this.path, this.opts.difficulty, SWING_LEAD);
+      if (this.opts.mode !== 'target') this.cpuSwing = cpuPlanSwing(s, s.batter, this.path, this.opts.difficulty, SWING_LEAD);
     }
   }
 
@@ -695,6 +798,25 @@ export class Match {
     this.phase = 'between';
     this.markShown = false;
     this.cleanupControls();
+    if (this.opts.mode === 'target') {
+      await this.targetPitch();
+      this.hud.showMark(null);
+      this.resolvePitch('ball');
+      return;
+    }
+    if (this.opts.mode === 'derby') {
+      // 見逃したボール球は数えない。空振り・見逃しのストライク・ファウルはアウト
+      if (kind === 'ball' || kind === 'hbp') this.hud.telop('ボール', 'bad', '', 700);
+      else {
+        this.derbyOuts++;
+        this.hud.telop(swung ? '空振り' : kind === 'foul' ? 'ファウル' : '見逃し', 'out', `アウト ${this.derbyOuts}/${DERBY_OUTS}`, 900);
+        audio.play('sad', { volume: 0.4 });
+      }
+      await this.sleep(0.9);
+      this.hud.showMark(null);
+      this.resolvePitch('ball');
+      return;
+    }
     let outcome: PitchOutcome = kind === 'hbp' ? 'walk' : kind;
     const runnersOn = s.bases.some(Boolean);
     if (kind === 'hbp') {
@@ -821,6 +943,19 @@ export class Match {
     while (!live.done && !this.quit) await this.sleep(0.05);
     if (this.quit) return;
     const kind = live.kind as JudgeKind;
+    if (this.opts.mode === 'derby') {
+      if (kind === 'homerun') {
+        this.score++;
+        this.hud.telop('ホームラン！！', 'hr', `${this.score}本目`, 1700);
+      } else {
+        this.derbyOuts++;
+        this.hud.telop(kind === 'foul' ? 'ファウル' : HIT_BASES[kind] ? '届かず…' : 'アウト', 'out', `アウト ${this.derbyOuts}/${DERBY_OUTS}`, 1300);
+      }
+      await this.sleep(1.4);
+      this.phase = 'between';
+      this.resolvePitch('inplay');
+      return;
+    }
     const batter = s.batter;
     const line = s.line(batter);
     if (kind === 'foul') {

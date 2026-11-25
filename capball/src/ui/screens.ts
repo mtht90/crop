@@ -1,7 +1,9 @@
 import { audio } from '../core/audio';
-import { DIFFICULTIES, TEAMS, type Difficulty, type Team } from '../game/data';
+import { DIFFICULTIES, type Difficulty, type Team } from '../game/data';
+import { LEAGUE_TEAMS as TEAMS, teamById } from '../game/teams';
+import { ownsCap, persist, save } from '../game/save';
 import type { GameState } from '../game/rules';
-import { CAPS, capPitch, capStars, type CapBrand } from '../game/caps';
+import { CAPS as ALL_CAPS, capById, capPitch, capStars, type CapBrand } from '../game/caps';
 import { PITCHES, SLOTS, SLOT_HOW } from '../game/data';
 import { CapPreview } from '../render/capPreview';
 import { drawCapTop } from '../render/cap';
@@ -63,14 +65,15 @@ export function titleScreen(parent: HTMLElement, ready: Promise<unknown> = Promi
 
 export interface SetupResult { team: Team; opp: Team; user: 'away' | 'home'; innings: number; difficulty: Difficulty; predict: boolean; cap: CapBrand; oppCap: CapBrand }
 
-export function setupScreen(parent: HTMLElement): Promise<SetupResult> {
+export function setupScreen(parent: HTMLElement): Promise<SetupResult | null> {
   return new Promise((resolve) => {
     let team = 0, user: 'away' | 'home' = 'home', innings = 6, diff = 1, predict = true;
-    let cap = 0;
-    try { const v = CAPS.findIndex((c) => c.id === localStorage.getItem('capball.cap')); if (v >= 0) cap = v; } catch { /* 保存できない環境 */ }
+    const CAPS = ALL_CAPS.filter((c) => ownsCap(c.id));
+    let cap = Math.max(0, CAPS.findIndex((c) => c.id === save.capSel));
+    team = Math.max(0, TEAMS.findIndex((t) => t.id === save.teamId));
     const s = el(`<div class="screen dim"><div class="panel">
-      <h2>試合の設定</h2>
-      <div class="row"><label>あなたのチーム</label><div class="teams">${TEAMS.map((t, i) => `<div class="team" data-team="${i}"><div class="sw" style="background:linear-gradient(90deg, ${t.uniform.primary} 0 50%, ${t.color} 50%)"></div><div class="nm">${t.name}</div><div class="st">エース ${t.players.find((p) => p.pos === 'P')!.name}</div></div>`).join('')}</div></div>
+      <div class="phead"><button class="back">‹</button><h2>フリー試合</h2></div>
+      <div class="row"><label>あなたのチーム（リーグ戦でもこのチームで戦う）</label><div class="teams">${TEAMS.map((t, i) => `<div class="team" data-team="${i}"><div class="sw" style="background:linear-gradient(90deg, ${t.uniform.primary} 0 50%, ${t.color} 50%)"></div><div class="nm">${t.name}</div><div class="st">エース ${t.players.find((p) => p.pos === 'P')!.name}</div></div>`).join('')}</div></div>
       <div class="row"><label>使うキャップ（守るときに投げるキャップ。銘柄で性格が変わる）</label>
         <div class="caps">${CAPS.map((c, i) => `<button class="capb" data-cap="${i}" aria-label="${c.name}"><canvas width="96" height="96"></canvas></button>`).join('')}</div>
         <div class="capview"><div class="capinfo"></div></div><div class="caprep"></div></div>
@@ -118,14 +121,16 @@ export function setupScreen(parent: HTMLElement): Promise<SetupResult> {
     s.querySelectorAll<HTMLElement>('[data-k="user"] button').forEach((b) => (b.onclick = () => { user = b.dataset.v as 'away' | 'home'; audio.play('ui_move'); refresh(); }));
     s.querySelectorAll<HTMLElement>('[data-k="inn"] button').forEach((b) => (b.onclick = () => { innings = +b.dataset.v!; audio.play('ui_move'); refresh(); }));
     s.querySelectorAll<HTMLElement>('[data-k="diff"] button').forEach((b) => (b.onclick = () => { diff = +b.dataset.v!; audio.play('ui_move'); refresh(); }));
+    s.querySelector<HTMLElement>('.back')!.onclick = () => { audio.play('ui_move'); preview.dispose(); s.remove(); resolve(null); };
     s.querySelector<HTMLElement>('.big-btn')!.onclick = () => {
+      save.teamId = TEAMS[team].id;
+      persist();
       audio.play('ui_ok');
       s.remove();
       preview.dispose();
-      try { localStorage.setItem('capball.cap', CAPS[cap].id); } catch { /* 保存できない環境 */ }
-      const others = CAPS.filter((_, i) => i !== cap);
-      const oppCap = others[Math.floor(Math.random() * others.length)];
-      resolve({ cap: CAPS[cap], oppCap,  team: TEAMS[team], opp: TEAMS[1 - team], user, innings, difficulty: DIFFICULTIES[diff], predict });
+      const others = TEAMS.filter((_, i) => i !== team);
+      const opp = others[Math.floor(Math.random() * others.length)];
+      resolve({ cap: CAPS[cap], oppCap: capById(teamById(opp.id).capId), team: TEAMS[team], opp, user, innings, difficulty: DIFFICULTIES[diff], predict });
     };
     refresh();
   });
@@ -138,7 +143,7 @@ export function loadingScreen(parent: HTMLElement) {
   return { set: (p: number) => (bar.style.width = Math.round(p * 100) + '%'), done: () => s.remove() };
 }
 
-export function resultScreen(parent: HTMLElement, st: GameState, user: 'away' | 'home'): Promise<'again' | 'title'> {
+export function resultScreen(parent: HTMLElement, st: GameState, user: 'away' | 'home', o: { coins?: number; again?: string; back?: string } = {}): Promise<'again' | 'title'> {
   return new Promise((resolve) => {
     const me = user === 'away' ? st.away : st.home, op = user === 'away' ? st.home : st.away;
     const diff = st.score(me) - st.score(op);
@@ -161,8 +166,9 @@ export function resultScreen(parent: HTMLElement, st: GameState, user: 'away' | 
         <tr><td class="nm">${st.away.team.short}</td>${cells(st.away.runs, false)}<td class="r">${st.score(st.away)}</td><td>${st.away.hits}</td></tr>
         <tr><td class="nm">${st.home.team.short}</td>${cells(st.home.runs, homeSkipped)}<td class="r">${st.score(st.home)}</td><td>${st.home.hits}</td></tr></table>
         ${best > 0 ? `<div class="howto" style="text-align:center;margin-top:8px">ヒーロー：<b>${mvp}</b></div>` : ''}
-        <button class="big-btn" data-a="again">もう一試合</button>
-        <button class="big-btn sub" data-a="title">タイトルへ</button>
+        ${o.coins ? `<div class="reward"><i class="coin"></i><b>+${o.coins}</b></div>` : ''}
+        ${o.again === '' ? '' : `<button class="big-btn" data-a="again">${o.again ?? 'もう一試合'}</button>`}
+        <button class="big-btn ${o.again === '' ? '' : 'sub'}" data-a="title">${o.back ?? 'ホームへ'}</button>
       </div></div>`);
     parent.append(s);
     audio.bgm(diff > 0 ? 'win' : null, { loop: false });

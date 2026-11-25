@@ -26,6 +26,7 @@ export class Hud {
   private meetEl = h('div', 'meet hidden');
   private markEl = h('div', 'pitchmark hidden');
   private chipEl = h('div', 'chip hidden');
+  private modeEl = h('div', 'modeinfo hidden');
   private fbEl = h('div', 'swingfb hidden');
   private previewEl = document.createElementNS('http://www.w3.org/2000/svg', 'svg') as unknown as HTMLElement;
   readonly controls = h('div', 'controls');
@@ -41,7 +42,7 @@ export class Hud {
     this.input.style.touchAction = 'none';
     this.root.style.pointerEvents = 'none';
     this.previewEl.setAttribute('class', 'breakpreview');
-    this.root.append(this.previewEl, this.zoneEl, this.markEl, this.chipEl, this.fbEl, this.aimEl, this.meetEl, this.board, this.cards, this.telopEl, this.controls, this.pauseBtn, this.soundBtn, this.flashEl, this.fadeEl);
+    this.root.append(this.previewEl, this.modeEl, this.zoneEl, this.markEl, this.chipEl, this.fbEl, this.aimEl, this.meetEl, this.board, this.cards, this.telopEl, this.controls, this.pauseBtn, this.soundBtn, this.flashEl, this.fadeEl);
     for (const el of [this.zoneEl, this.chipEl, this.fbEl, this.markEl, this.aimEl, this.meetEl, this.board, this.cards, this.telopEl, this.flashEl, this.fadeEl]) el.style.pointerEvents = 'none';
     parent.append(this.input, this.root);
     this.soundBtn.onclick = () => {
@@ -88,6 +89,35 @@ export class Hud {
   }
   showZone(on: boolean) {
     this.zoneEl.classList.toggle('hidden', !on);
+  }
+  /** 的当て：残っているパネル（9マス。添字はゾーン座標の並び、hit は抜いたパネル） */
+  setTargets(hit: Set<number> | null) {
+    this.zoneEl.classList.toggle('targets', !!hit);
+    const cells = this.zoneEl.querySelectorAll<HTMLElement>('.cells i');
+    cells.forEach((c, vi) => {
+      // 画面の並び → ゾーン座標の並び（投手目線では左右が逆）
+      const cx = vi % 3, cy = Math.floor(vi / 3);
+      const wi = cy * 3 + (this.mirrorX ? 2 - cx : cx);
+      c.classList.toggle('gone', !!hit && hit.has(wi));
+      c.dataset.n = hit ? String(vi + 1) : '';
+    });
+  }
+  /** ゾーン座標のマス → 画面で見たときの番号（左上から 1〜9） */
+  cellNo(wi: number) {
+    const cx = wi % 3, cy = Math.floor(wi / 3);
+    return cy * 3 + (this.mirrorX ? 2 - cx : cx) + 1;
+  }
+  /** ゾーン座標のどのマスか（外なら -1） */
+  cellOf(x: number, y: number, margin = 0) {
+    if (x < ZONE.x0 - margin || x > ZONE.x1 + margin || y < ZONE.y0 - margin || y > ZONE.y1 + margin) return -1;
+    const cx = THREE.MathUtils.clamp(Math.floor(((x - ZONE.x0) / (ZONE.x1 - ZONE.x0)) * 3), 0, 2);
+    const cy = THREE.MathUtils.clamp(Math.floor(((ZONE.y1 - y) / (ZONE.y1 - ZONE.y0)) * 3), 0, 2);
+    return cy * 3 + cx;
+  }
+  /** ミニゲームの進み具合（画面上に出し続ける） */
+  modeInfo(html: string | null) {
+    this.modeEl.classList.toggle('hidden', !html);
+    if (html) this.modeEl.innerHTML = html;
   }
   /** 投手側から見ているとき（画面の右が -x） */
   mirrorX = false;
