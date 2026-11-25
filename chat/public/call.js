@@ -140,8 +140,29 @@
     call.minimized = false;
     buildUi();
     ctx.send({ type: 'call', room, action: 'join', cam: call.cam, mic: true });
-    try { wakeLock = await navigator.wakeLock?.request('screen'); } catch { /* optional */ }
+    await keepAwake();
     ctx.onChange();
+  }
+
+  // Keep the screen on during a call: an auto-locked phone suspends the page.
+  // The browser drops the lock whenever the page is hidden, so take it again on return.
+  async function keepAwake() {
+    if (!call.room || document.visibilityState !== 'visible') return;
+    try {
+      if (!wakeLock || wakeLock.released) wakeLock = await navigator.wakeLock?.request('screen');
+    } catch { /* not supported or not allowed right now */ }
+  }
+  document.addEventListener('visibilitychange', keepAwake);
+
+  // The signaling socket came back: take our seat again without touching the media.
+  function resume() {
+    if (!call.room) return;
+    setOffline(false);
+    ctx.send({ type: 'call', room: call.room, action: 'join', resume: true, cam: call.cam, mic: call.mic });
+  }
+  function setOffline(off) {
+    call.offline = off;
+    ui?.root.classList.toggle('offline', off);
   }
 
   async function leave(silent) {
@@ -163,6 +184,12 @@
     call.ice = msg.ice || [];
     // The newcomer reaches out to everyone already in the call.
     for (const p of msg.peers) if (!call.peers.has(p.id)) createPeer(p.id, p.name);
+    if (msg.resume) {
+      // Connections that broke while we were away get a fresh ICE round.
+      for (const peer of call.peers.values()) {
+        if (['failed', 'disconnected'].includes(peer.pc.connectionState)) peer.pc.restartIce();
+      }
+    }
   }
 
   function onRoster(roomId, peers, startedAt) {
@@ -341,7 +368,8 @@
         if (peer && !ui.meters.has(id)) attachMeter(id, peer.stream);
       }
       const state = peer ? peer.pc.connectionState : 'new';
-      tile.classList.toggle('connecting', state !== 'connected');
+      tile.classList.toggle('connecting', state !== 'connected' && !info.away);
+      tile.classList.toggle('away', !!info.away);
       tile.classList.toggle('muted', info.mic === false);
     }
     ui.grid.dataset.count = String(Math.min(ids.length, 4));
@@ -483,6 +511,8 @@
     leave,
     expand,
     get room() { return call.room; },
+    resume,
+    offline: () => setOffline(true),
     get minimized() { return call.minimized; },
     handle(msg) {
       if (msg.type === 'call-joined') onJoined(msg);

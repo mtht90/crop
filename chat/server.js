@@ -726,17 +726,38 @@ function profileChanged(userId) {
   }
 }
 
-const callPeers = (room) => [...room.call.values()].map(({ id, name, since, cam, mic }) => ({ id, name, since, cam, mic }));
+const callPeers = (room) => [...room.call.values()].map(({ id, name, since, cam, mic, ws }) => ({ id, name, since, cam, mic, away: !ws }));
 function broadcastCall(room) {
   broadcast(room, { type: 'call', room: room.id, peers: callPeers(room), startedAt: room.callStarted || null });
   for (const id of Object.keys(room.members)) for (const s of socketsOf(id)) send(s, { type: 'room', room: summary(room, id) });
 }
 
-function leaveCall(ws, room) {
+// A dropped socket (screen lock, network switch) keeps its seat for a while: the audio and
+// video run peer to peer and usually survive, and the app rejoins when it reconnects.
+const CALL_GRACE = 60000;
+function callSocketLost(ws, room) {
   const p = room.call.get(ws.user?.id);
   if (!p || p.ws !== ws) return;
-  room.call.delete(ws.user.id);
-  for (const other of room.call.values()) send(other.ws, { type: 'signal', room: room.id, from: ws.user.id, data: { bye: true } });
+  p.ws = null;
+  clearTimeout(p.graceTimer);
+  p.graceTimer = setTimeout(() => {
+    if (room.call.get(p.id) === p && !p.ws) endCallSeat(room, p.id);
+  }, CALL_GRACE);
+  broadcastCall(room);
+}
+
+function leaveCall(ws, room) {
+  const p = room.call.get(ws.user?.id);
+  if (!p || (p.ws !== ws && p.ws !== null)) return;
+  endCallSeat(room, p.id);
+}
+
+function endCallSeat(room, userId) {
+  const p = room.call.get(userId);
+  if (!p) return;
+  clearTimeout(p.graceTimer);
+  room.call.delete(userId);
+  for (const other of room.call.values()) if (other.ws) send(other.ws, { type: 'signal', room: room.id, from: userId, data: { bye: true } });
   if (room.call.size === 0) {
     const mins = Math.max(1, Math.round((Date.now() - room.callStarted) / 60000));
     room.callStarted = null;
@@ -1223,10 +1244,19 @@ const handlers = {
     }
     if (msg.action !== 'join' || !allow(ws, 2)) return;
     const prev = room.call.get(ws.user.id);
-    if (prev && prev.ws !== ws) {
+    if (prev && (!prev.ws || prev.ws.readyState !== prev.ws.OPEN) && msg.resume) {
+      // Same person coming back after a dropped connection: keep the call going.
+      clearTimeout(prev.graceTimer);
+      prev.ws = ws;
+      prev.cam = !!msg.cam;
+      prev.mic = msg.mic !== false;
+      send(ws, { type: 'call-joined', room: room.id, resume: true, peers: callPeers(room).filter((p) => p.id !== ws.user.id), ice: iceServers() });
+      return broadcastCall(room);
+    }
+    if (prev && prev.ws && prev.ws !== ws) {
       send(prev.ws, { type: 'call-ended', room: room.id, reason: 'elsewhere' });
       leaveCall(prev.ws, room);
-    }
+    } else if (prev) endCallSeat(room, prev.id);
     const starting = room.call.size === 0;
     const others = callPeers(room).filter((p) => p.id !== ws.user.id);
     room.call.set(ws.user.id, { id: ws.user.id, name: ws.user.name, since: Date.now(), cam: !!msg.cam, mic: msg.mic !== false, ws });
@@ -1250,7 +1280,7 @@ const handlers = {
     const room = memberRoom(ws, msg.room);
     const me = room?.call.get(ws.user.id);
     const target = room?.call.get(msg.to);
-    if (!me || me.ws !== ws || !target || !msg.data || typeof msg.data !== 'object') return;
+    if (!me || me.ws !== ws || !target || !target.ws || !msg.data || typeof msg.data !== 'object') return;
     send(target.ws, { type: 'signal', room: room.id, from: ws.user.id, name: ws.user.name, data: msg.data });
   },
 };
@@ -1290,7 +1320,7 @@ wss.on('connection', (ws) => {
     for (const id of ws.rooms) {
       const room = rooms.get(id);
       if (!room) continue;
-      leaveCall(ws, room);
+      callSocketLost(ws, room);
       room.clients.delete(ws);
       broadcast(room, { type: 'typing', room: id, id: ws.user.id, on: false });
       sendPresence(room);

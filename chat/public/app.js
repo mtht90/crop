@@ -2753,6 +2753,10 @@
       renderProfileButton();
       renderMine();
       syncPush();
+      if (window.LynqCall?.room) {
+        if (state.rooms.has(LynqCall.room)) LynqCall.resume();
+        else LynqCall.leave(true);
+      }
       renderNotifyCard();
       if (state.tab === 'explore') wsSend({ type: 'explore', on: true });
       if (state.activeId) {
@@ -3054,7 +3058,8 @@
       updateSend();
       for (const [roomId, map] of state.typers) for (const id of [...map.keys()]) setTyper(roomId, id, '', false);
       if (state.activeId) setStatus('再接続中…', false);
-      if (LynqCall.room) LynqCall.leave(true);
+      // Keep an ongoing call: its media is peer to peer; we rejoin once reconnected.
+      if (LynqCall.room) LynqCall.offline();
       state.retryTimer = setTimeout(connect, Math.min(8000, 500 * 2 ** state.retry++));
     });
   }

@@ -700,3 +700,7 @@ textarea:focus { background: var(--surface); border-color: var(--blue-2); box-sh
 .start-text b { font-size: 16px; }
 .start-text small { font-size: 12.5px; color: var(--ink-2); }
 .msg.them > .avatar, .msg.them .name { cursor: pointer; }
+
+/* call: connection hiccups */
+.call-tile.away::after { content: "再接続中…"; position: absolute; top: 12px; right: 12px; font-size: 11px; color: #c9d6f2; padding: 2px 8px; border-radius: 8px; background: rgba(7, 13, 27, 0.55); }
+.call.offline .call-timer::after { content: " ・ 再接続中…"; color: #9cc0ff; }
