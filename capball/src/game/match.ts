@@ -6,7 +6,7 @@ import { Character, type ProcPose } from '../render/character';
 import { makeCapBall, Trail, CAP_VIS_R } from '../render/cap';
 import { pitchPose, PITCH_RELEASE_T, PITCH_TOTAL_T, stancePose, swingKeys, samplePose, mirrorPose, SWING_TOTAL_T } from '../render/motions';
 import { Hud, PitchControl, BatControl, type ThrowInput } from '../ui/hud';
-import { PITCHES, breakVector, type Difficulty, type Player, type Team } from './data';
+import { PITCHES, type Difficulty, type Player, type Team } from './data';
 import { POSITIONS, ZONE, PASSBALL_Z } from './geom';
 import { GameState, type Side } from './rules';
 import { PitchPath } from './pitch';
@@ -419,8 +419,7 @@ export class Match {
     const lat = Math.sign(def.bx);
     void lat;
     // 自分で投げた変化球は大きめに曲げる（キャップらしく）
-    let breakMul = THREE.MathUtils.clamp(str, 0.4, 1.7) * (t.timingErr > 0.45 ? 0.6 : 1) * (this.camMode === 'fps' ? 1.35 : 1);
-    if (this.camMode === 'fps' && t.kind !== 'straight' && t.kind !== 'knuckle' && t.kind !== 'rise') breakMul *= this.zoneAssist(t, target, breakMul);
+    const breakMul = THREE.MathUtils.clamp(str, 0.4, 1.7) * (t.timingErr > 0.45 ? 0.6 : 1) * (this.camMode === 'fps' ? 1.35 : 1);
     const extraBx = 0;
     const release = new THREE.Vector3();
     if (this.camMode === 'fps') {
@@ -432,7 +431,7 @@ export class Match {
       this.char(pitcher).handWorld('r', release);
       release.y = Math.max(release.y, 0.9);
     }
-    this.path = new PitchPath({ kind: t.kind, level: t.level, speedKmh: velo, release, target, breakMul, extraBx, side: t.side ?? -1, seed: Math.random(), aimIsLine: this.camMode === 'fps', compensate: t.kind === 'rise' ? 1 : 0 });
+    this.path = new PitchPath({ kind: t.kind, level: t.level, speedKmh: velo, release, target, breakMul, extraBx, side: t.side ?? -1, seed: Math.random(), aimIsLine: this.camMode === 'fps', compensate: 0 });
     this.lastSpeed = Math.round(velo);
     this.lastPitchName = def.name;
 
@@ -446,28 +445,6 @@ export class Match {
     if (!this.userBatting || this.opts.autoplay) {
       this.cpuSwing = cpuPlanSwing(s, s.batter, this.path, this.opts.difficulty, SWING_LEAD);
     }
-  }
-
-  /**
-   * 変化球の曲がり具合だけを、白い四角（ゾーン）に少し寄せる倍率。向きは変えない。
-   * 狙いがゾーンから大きく外れているとき（わざと外した球）はほとんど寄せない。
-   */
-  private zoneAssist(t: ThrowInput, aim: THREE.Vector3, breakMul: number) {
-    const bv = breakVector(t.kind, t.level * breakMul, t.side ?? -1);
-    const m = 0.04;
-    const distToZone = (x: number, y: number) => {
-      const dx = Math.max(ZONE.x0 - m - x, 0, x - (ZONE.x1 + m));
-      const dy = Math.max(ZONE.y0 - m - y, 0, y - (ZONE.y1 + m));
-      return Math.hypot(dx, dy);
-    };
-    const w = THREE.MathUtils.clamp(1 - distToZone(aim.x, aim.y) / 0.3, 0, 1);
-    if (w <= 0) return 1;
-    let best = 1, bestScore = Infinity;
-    for (let k = 0.55; k <= 1.3001; k += 0.05) {
-      const score = distToZone(aim.x + bv.x * k, aim.y + bv.y * k) + Math.abs(k - 1) * 0.12;
-      if (score < bestScore) { bestScore = score; best = k; }
-    }
-    return 1 + (best - 1) * w * 0.85;
   }
 
   private get pitchCtlUser() {
