@@ -28,7 +28,7 @@ export const PITCHES: Record<PitchKind, PitchDef> = {
   straight: { kind: 'straight', name: 'ストレート', grip: '面を進行方向に向け、回転を抑えて押し出す', dir: 'none', bx: 0, by: 0.015, late: 0.5, speedMul: 1, arc: 0.04, tilt: 0 },
   curve: { kind: 'curve', name: 'カーブ', grip: '面を約45度傾けて弾く。横回転で大きく曲がる', dir: 'down-left', bx: -0.1, by: -0.055, late: 0.3, speedMul: 0.72, arc: 0.35, tilt: 0.78 },
   slider: { kind: 'slider', name: 'スライダー', grip: '面を上に向けて約30度傾け、横に滑らせる', dir: 'left', bx: -0.12, by: -0.005, late: 0.7, speedMul: 0.84, arc: 0.08, tilt: 0.52 },
-  rise: { kind: 'rise', name: 'ライズ', grip: '下から面を寝かせて弾き、打者の手元で浮き上がらせる', dir: 'up', bx: 0, by: 0.095, late: 0.75, speedMul: 0.86, arc: -0.1, tilt: -0.9 },
+  rise: { kind: 'rise', name: 'ライズ', grip: '下から面を寝かせて弾き、打者の手元で浮き上がらせる', dir: 'up', bx: 0, by: 0.11, late: 0.88, speedMul: 0.86, arc: -0.1, tilt: -0.9 },
   drop: { kind: 'drop', name: 'ドロップ', grip: '上から下へ回転をかける。打者の手前でストンと落ちる', dir: 'down', bx: 0, by: -0.11, late: 0.82, speedMul: 0.84, arc: 0.12, tilt: 0.9 },
   knuckle: { kind: 'knuckle', name: 'ナックル', grip: 'キャップを90度立てて無回転で投げる。揺れて落ちる', dir: 'wobble', bx: 0, by: -0.035, late: 0.4, speedMul: 0.62, arc: 0.18, tilt: 1.57 },
 };

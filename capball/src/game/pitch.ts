@@ -44,7 +44,8 @@ export class PitchPath {
     const bv = breakVector(p.kind, lv, p.side);
     this.bend = new THREE.Vector3(bv.x + p.extraBx, bv.y, 0);
     // 自分で投げた球は払った線どおりに飛ばす（山なりを足さない）
-    this.arc = p.aimIsLine ? 0 : def.arc * (0.7 + 0.3 * (1 - p.speedKmh / 110));
+    // ライズだけは途中で一度沈ませ、手元で浮き上がる対比をつける
+    this.arc = p.aimIsLine ? (p.kind === 'rise' ? -0.16 : 0) : def.arc * (0.7 + 0.3 * (1 - p.speedKmh / 110));
     this.late = def.late;
     this.wobble = p.kind === 'knuckle' ? 0.05 + 0.025 * p.level : 0;
     this.start = p.release.clone();

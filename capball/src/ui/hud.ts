@@ -452,7 +452,7 @@ export class PitchControl {
     const len = Math.max(0, this.center.y - b.y) + Math.max(0, -dy) * 0.5;
     // 狙い：指を離した点に、払った勢いの分を足した先（ゆっくり離せばその点、勢いよく払えば先まで届く）
     const vx = dx / dt, vyy = dy / dt; // px/ms
-    const carry = 130; // 勢いを何 ms 分先へ延ばすか
+    const carry = 65; // 勢いを何 ms 分先へ延ばすか
     const screenAim = { x: b.x + vx * carry, y: Math.max(30, b.y + vyy * carry) };
     this.throwWith(Math.atan2(dx, Math.max(1, -dy)), len, speed, a.t, screenAim);
   }

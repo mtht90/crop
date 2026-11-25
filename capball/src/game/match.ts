@@ -420,7 +420,7 @@ export class Match {
     void lat;
     // 自分で投げた変化球は大きめに曲げる（キャップらしく）
     let breakMul = THREE.MathUtils.clamp(str, 0.4, 1.7) * (t.timingErr > 0.45 ? 0.6 : 1) * (this.camMode === 'fps' ? 1.35 : 1);
-    if (this.camMode === 'fps' && t.kind !== 'straight' && t.kind !== 'knuckle') breakMul *= this.zoneAssist(t, target, breakMul);
+    if (this.camMode === 'fps' && t.kind !== 'straight' && t.kind !== 'knuckle' && t.kind !== 'rise') breakMul *= this.zoneAssist(t, target, breakMul);
     const extraBx = 0;
     const release = new THREE.Vector3();
     if (this.camMode === 'fps') {
@@ -432,7 +432,7 @@ export class Match {
       this.char(pitcher).handWorld('r', release);
       release.y = Math.max(release.y, 0.9);
     }
-    this.path = new PitchPath({ kind: t.kind, level: t.level, speedKmh: velo, release, target, breakMul, extraBx, side: t.side ?? -1, seed: Math.random(), aimIsLine: this.camMode === 'fps', compensate: 0 });
+    this.path = new PitchPath({ kind: t.kind, level: t.level, speedKmh: velo, release, target, breakMul, extraBx, side: t.side ?? -1, seed: Math.random(), aimIsLine: this.camMode === 'fps', compensate: t.kind === 'rise' ? 1 : 0 });
     this.lastSpeed = Math.round(velo);
     this.lastPitchName = def.name;
 
