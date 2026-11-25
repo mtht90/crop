@@ -7,7 +7,14 @@ export type Pool = pg.Pool;
 export type Db = pg.Pool | pg.PoolClient;
 
 export function createPool(databaseUrl: string): pg.Pool {
-  const needsSsl = /sslmode=require/.test(databaseUrl) || process.env.PGSSL === 'require';
+  // Render Postgres の External URL（*.render.com）は SSL 必須。Internal URL（ホスト名のみ）は不要
+  let host = '';
+  try {
+    host = new URL(databaseUrl).hostname;
+  } catch {
+    /* noop */
+  }
+  const needsSsl = /sslmode=require/.test(databaseUrl) || process.env.PGSSL === 'require' || host.endsWith('.render.com');
   return new pg.Pool({
     connectionString: databaseUrl,
     max: Number(process.env.PG_POOL_MAX ?? 10),
