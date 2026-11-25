@@ -14,7 +14,7 @@ function serviceWorker(): Plugin {
     generateBundle(_opts, bundle) {
       const template = readFileSync(fileURLToPath(new URL('./src/sw-template.js', import.meta.url)), 'utf8');
       const files = Object.keys(bundle).filter((f) => !f.endsWith('.map'));
-      const precache = ['/', '/index.html', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon.svg', ...files.map((f) => `/${f}`)];
+      const precache = ['/', '/index.html', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon.svg', '/textures/clouds.jpg', ...files.map((f) => `/${f}`)];
       const version = Date.now().toString(36);
       this.emitFile({
         type: 'asset',

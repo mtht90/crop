@@ -3,7 +3,7 @@
 友達と一緒に地図の「霧」を晴らしていく共同スクラッチマップの Web アプリ（PWA）です。
 訪れた場所の霧が晴れていき、**グループで1枚の地図を一緒に塗れる**のが特徴です。
 
-- 🗺️ **霧の地図** — 全世界を覆う暗い面から、塗ったセル（H3 解像度10・約 0.015km²）をくり抜いて表示
+- 🗺️ **霧の地図** — 全世界を覆う雲（写真テクスチャ）から、塗ったセル（H3 解像度10・約 0.015km²）をくり抜いて表示
 - 👣 **スクラッチ散歩モード** — 画面をつけたまま歩くと、新しいセルを塗るたびに音と振動（Android）で演出
 - 👥 **共同マップ** — 招待リンクで参加（ログイン前でも閲覧可）。メンバーごとに色、「自分だけ／グループ全体／メンバー色分け」の表示切り替え
 - ⚡ **リアルタイム同期** — 誰かが塗ると、他のメンバーの地図にもすぐ反映（SSE）
@@ -382,7 +382,8 @@ GitHub Actions（`.github/workflows/scratch-map-ci.yml`）では Postgres 付き
 ### クライアント
 
 - **送信待ち（outbox）** は IndexedDB。オフラインでも記録を続け、オンライン復帰・画面復帰・60 秒ごと・散歩終了時に送る。最後に見たグループのセルもキャッシュし、オフライン起動時に表示する。
-- 霧は「世界を覆うポリゴン − `cellsToMultiPolygon` の外周」。塗った領域の内側に残った未踏の穴は「霧の島」として別ポリゴンにする。MapLibre はリングの向きで外周と穴を判別するので、向きを明示的にそろえている。
+- 霧は写真の雲テクスチャ（`web/public/textures/clouds.jpg`）を `fill-pattern` で敷き詰め、晴れ間の境目に白くぼかした線を重ねて雲の縁らしくしている。テクスチャが読み込めなければ単色の霧で表示する。
+- 霧の形は「世界を覆うポリゴン − `cellsToMultiPolygon` の外周」。塗った領域の内側に残った未踏の穴は「霧の島」として別ポリゴンにする。MapLibre はリングの向きで外周と穴を判別するので、向きを明示的にそろえている。
 - 描画は `requestAnimationFrame` でまとめ、連続更新でも `cellsToMultiPolygon` は1フレーム1回。
 - 新規セルの演出: Web Audio で合成した短い効果音（音源ファイル不要）＋ Vibration API（Android）＋ セルが光るアニメーション＋「+N」カウンター。音は設定でオフにできる。他のメンバーが開拓したセルもその人の色で光る。
 - 散歩中は地図が現在地に追従。地図を指で動かすと追従を止め、◎ボタンで再開。
@@ -393,6 +394,13 @@ GitHub Actions（`.github/workflows/scratch-map-ci.yml`）では Postgres 付き
 - Service Worker はビルド時に生成し、ビルド成果物の一覧を埋め込んでプリキャッシュ（一度開けばオフラインで起動可）。
 - 地図タイル・スタイル・フォント（OpenFreeMap）は stale-while-revalidate で最大 3000 件キャッシュ。API と SSE はキャッシュしない。
 - アイコンは SVG から 192 / 512 / maskable / apple-touch-icon の PNG を生成して同梱。
+
+---
+
+## 素材のクレジット
+
+- 雲のテクスチャ `web/public/textures/clouds.jpg`: [Cloudy skies](https://opengameart.org/content/cloudy-skies) の `cloudy3.jpg`（作者: Onsemeliot、[CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/)）。512px に縮小し、彩度・明るさ・コントラストを調整して使用。地図右下（ⓘ）の帰属表示にもクレジットを出している。
+- 地図: [OpenFreeMap](https://openfreemap.org/) / © OpenMapTiles / © OpenStreetMap contributors
 
 ---
 

@@ -153,14 +153,17 @@ export interface RecordResult {
 
 export async function recordHits(hits: CellHit[]): Promise<RecordResult> {
   if (!hits.length) return { newForView: [] };
-  const newForView = hits.map((h) => h.h3).filter((h) => !state.displayed.has(h));
-  await local.recordHits(hits, true);
+  // IndexedDB を待つ前に表示側の集合へ入れる（位置更新が並行しても同じセルを二重に数えない）
+  const visibleHere = pendingVisibleHere();
+  const newForView = [...new Set(hits.map((h) => h.h3))].filter((h) => !state.displayed.has(h));
   for (const h of hits) {
     state.localCells.add(h.h3);
     state.pending.add(h.h3);
+    if (visibleHere) state.displayed.add(h.h3);
   }
   emit('cells');
-  return { newForView: pendingVisibleHere() ? newForView : [] };
+  await local.recordHits(hits, true);
+  return { newForView: visibleHere ? newForView : [] };
 }
 
 /** サーバーから届いた（または送信成功した）セルを反映 */

@@ -8,6 +8,10 @@ setWorkerUrl(workerUrl);
 import { cellPolygons, fogFeature, visitedFeature } from './fog';
 import type { Display } from './state';
 
+/** 霧の雲テクスチャ（Onsemeliot「Cloudy skies」CC-BY 4.0 を加工。README 参照） */
+const CLOUD_TEXTURE = '/textures/clouds.jpg';
+const CLOUD_CREDIT = '雲: <a href="https://opengameart.org/content/cloudy-skies" target="_blank" rel="noopener">Onsemeliot</a> (CC-BY 4.0)';
+
 const STYLE_URL = import.meta.env.VITE_MAP_STYLE ?? 'https://tiles.openfreemap.org/styles/liberty';
 const VIEW_KEY = 'scratch.view';
 
@@ -45,7 +49,7 @@ export class FogMap {
       attributionControl: false,
       maxPitch: 0,
     });
-    this.map.addControl(new AttributionControl({ compact: true }), 'bottom-left');
+    this.map.addControl(new AttributionControl({ compact: true, customAttribution: CLOUD_CREDIT }), 'bottom-left');
     this.map.addControl(new NavigationControl({ showCompass: false }), 'top-right');
     this.map.on('moveend', () => {
       const c = this.map.getCenter();
@@ -56,8 +60,16 @@ export class FogMap {
       }
     });
     this.ready = new Promise((resolve) => {
-      this.map.on('load', () => {
+      this.map.on('load', async () => {
+        try {
+          const img = await this.map.loadImage(CLOUD_TEXTURE);
+          this.map.addImage('clouds', img.data);
+        } catch {
+          /* 読み込めなければ単色の霧で表示 */
+        }
         this.addLayers();
+        // 帰属表示は最初は畳んでおく（ⓘ で開ける）
+        container.querySelector('.maplibregl-ctrl-attrib')?.classList.remove('maplibregl-compact-show');
         resolve();
       });
     });
@@ -79,14 +91,26 @@ export class FogMap {
       source: 'colored',
       paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.28 },
     });
+    // 霧: 雲の写真テクスチャで全世界を覆い、塗ったセルだけくり抜く
+    const hasClouds = m.hasImage('clouds');
     m.addLayer({
       id: 'fog',
       type: 'fill',
       source: 'fog',
+      paint: hasClouds
+        ? { 'fill-pattern': 'clouds', 'fill-opacity': ['interpolate', ['linear'], ['zoom'], 3, 0.9, 12, 0.97] }
+        : { 'fill-color': '#0b1022', 'fill-opacity': 0.9 },
+    });
+    // 雲の縁: 白くぼかした線を重ねて、晴れ間の境目をふわっとさせる
+    m.addLayer({
+      id: 'cloud-edge-outer',
+      type: 'line',
+      source: 'visited',
       paint: {
-        'fill-color': '#0b1022',
-        'fill-opacity': ['interpolate', ['linear'], ['zoom'], 3, 0.78, 12, 0.9],
-        'fill-antialias': false,
+        'line-color': '#f1f5f9',
+        'line-width': ['interpolate', ['exponential', 2], ['zoom'], 10, 2, 14, 14, 18, 120],
+        'line-blur': ['interpolate', ['exponential', 2], ['zoom'], 10, 2, 14, 14, 18, 120],
+        'line-opacity': 0.55,
       },
     });
     m.addLayer({
@@ -94,10 +118,10 @@ export class FogMap {
       type: 'line',
       source: 'visited',
       paint: {
-        'line-color': '#93c5fd',
-        'line-width': ['interpolate', ['linear'], ['zoom'], 10, 0.5, 16, 2.5],
-        'line-blur': 1.5,
-        'line-opacity': 0.75,
+        'line-color': '#ffffff',
+        'line-width': ['interpolate', ['exponential', 2], ['zoom'], 10, 0.5, 14, 4, 18, 40],
+        'line-blur': ['interpolate', ['exponential', 2], ['zoom'], 10, 0.5, 14, 4, 18, 40],
+        'line-opacity': 0.8,
       },
     });
     m.addLayer({
