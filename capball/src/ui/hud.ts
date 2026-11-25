@@ -278,6 +278,9 @@ export class PitchControl {
   private locked: { kind: PitchKind; side: number; amount: number } | null = null;
   private leftCap = false;
   private lastHead: number | null = null;
+  private straightRun = 0;
+  private straightLen = 0;
+  private spinHist: number[] = [];
   private padTop = 0;
   private ox = 0;
   private oy = 0;
@@ -310,6 +313,9 @@ export class PitchControl {
       this.locked = this.spinPitch();
       this.leftCap = false;
       this.lastHead = null;
+      this.straightRun = 0;
+      this.straightLen = 0;
+      this.spinHist = this.ring.map(() => 0);
       this.padTop = r.top;
     };
     const move = (e: PointerEvent) => {
@@ -328,15 +334,35 @@ export class PitchControl {
         const seg = Math.hypot(ddx, ddy);
         if (seg > 2.5) {
           const head = Math.atan2(ddy, ddx);
+          let d = 0;
           if (this.lastHead !== null) {
-            let d = head - this.lastHead;
+            d = head - this.lastHead;
             d = Math.atan2(Math.sin(d), Math.cos(d));
-            // 折り返し（こする動き）は回転に数えない
-            if (Math.abs(d) < 1.7) this.spinZ += d / (Math.PI * 2);
           }
+          // 上へまっすぐ払い始めたか（上向き±40°で曲がらずに続く）
+          const up = Math.abs(Math.atan2(ddx, -ddy)) < 0.7 && ddy < 0;
+          // 払いは速く長い：1区間が短い（ゆっくり回している）ものは数えない
+          if (up && Math.abs(d) < 0.2 && seg > 14) { this.straightRun++; this.straightLen += seg; }
+          else { this.straightRun = 0; this.straightLen = 0; }
+          // 折り返し（こする動き）は回転に数えない
+          if (Math.abs(d) < 1.7) {
+            this.spinZ += d / (Math.PI * 2);
+            this.spinHist.push(d / (Math.PI * 2));
+          } else this.spinHist.push(0);
           this.lastHead = head;
           this.ring.push({ t: now, x: e.clientX, y: e.clientY });
-          while (this.ring.length > 60) this.ring.shift();
+          while (this.ring.length > 60) {
+            this.ring.shift();
+          }
+          while (this.spinHist.length > this.ring.length) this.spinHist.shift();
+          if (this.straightRun >= 2 && this.straightLen > 55) {
+            // 払い始め：まっすぐな部分を円の形と回転から外して、球種を固定する
+            for (let k = 0; k < this.straightRun && this.ring.length; k++) {
+              this.ring.pop();
+              this.spinZ -= this.spinHist.pop() ?? 0;
+            }
+            this.leftCap = true;
+          }
         }
         void dist; void dt;
         this.locked = this.spinPitch();
@@ -411,9 +437,10 @@ export class PitchControl {
     // 離す直前 160ms の動きをフリックとみなす（回しながらそのまま払っても投げられる）
     let i = pts.length - 1;
     while (i > 0 && b.t - pts[i - 1].t < 160) i--;
-    const a = pts[Math.max(0, i - 1)];
+    // 窓の外の点は、止めていた時間を含むことがあるので使わない（止めてから払うとナックルになってしまう）
+    const a = i < pts.length - 1 ? pts[i] : pts[Math.max(0, i - 1)];
     const dx = b.x - a.x, dy = b.y - a.y;
-    const dt = Math.max(16, b.t - a.t);
+    const dt = THREE.MathUtils.clamp(b.t - a.t, 16, 160);
     const vy = -dy / dt; // 上向きの速さ px/ms
     const above = this.center.y - b.y > this.radius * 0.55;
     if (!(vy > 0.35 && -dy > 25) && !above) {
