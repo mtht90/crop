@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { grade, PITCHES, type PitchKind, POS_JP } from '../game/data';
+import { grade, PITCHES, type PitchKind, type PitchSlot, POS_JP } from '../game/data';
+import { capPitch, type CapBrand } from '../game/caps';
 import { ZONE } from '../game/geom';
 import type { GameState } from '../game/rules';
 import type { SwingMode } from '../game/batting';
@@ -275,7 +276,7 @@ export class PitchControl {
   /** 回している間の指の軌跡（形で球種を見分ける） */
   private ring: { t: number; x: number; y: number }[] = [];
   /** 払う直前まで回していたときの球種（払う動きで形が崩れないように固定しておく） */
-  private locked: { kind: PitchKind; side: number; amount: number } | null = null;
+  private locked: { kind: PitchSlot; side: number; amount: number } | null = null;
   private leftCap = false;
   private lastHead: number | null = null;
   private straightRun = 0;
@@ -287,15 +288,15 @@ export class PitchControl {
   private cleanup: (() => void)[] = [];
   private disposed = false;
   private result: ThrowInput | null = null;
-  private levels: Map<PitchKind, number>;
+  private levels: Map<PitchSlot, number>;
 
-  constructor(private hud: Hud, pitches: [PitchKind, number][], private onStart: (t: ThrowInput) => void) {
+  constructor(private hud: Hud, pitches: [PitchSlot, number][], private cap: CapBrand, private onStart: (t: ThrowInput) => void) {
     this.levels = new Map(pitches);
     const c = hud.controls;
     c.innerHTML = '';
     this.padEl = h('div', 'fpspad');
     this.labelEl = h('div', 'fpslabel', '');
-    const hint = h('div', 'hint fpshint', 'キャップをつまんで、投げたい所まで払って指を離す<br>先に回すと変化球：右回り＝右へ・左回り＝左へ／縦長に左回り＝ライズ・右回り＝ドロップ');
+    const hint = h('div', 'hint fpshint', `キャップをつまんで、投げたい所まで払って指を離す<br>先に回すと変化球：右回り＝右へ・左回り＝左へ／縦長に回すと縦の変化（${cap.name}の持ち球）`);
     this.padEl.append(this.labelEl, hint);
     c.append(this.padEl);
 
@@ -415,7 +416,7 @@ export class PitchControl {
    * - 縦長に左回り → ライズ、縦長に右回り → ドロップ
    * - それ以外（大きめに回す）→ 右回り＝右へ、左回り＝左へ（少し＝スライダー、たくさん＝カーブ）
    */
-  private spinPitch(before = Infinity): { kind: PitchKind; side: number; amount: number } | null {
+  private spinPitch(before = Infinity): { kind: PitchSlot; side: number; amount: number } | null {
     const z = Math.abs(this.spinZ);
     if (z < 0.3) return null;
     const amount = THREE.MathUtils.clamp((z - 0.3) / 1.5, 0, 1);
@@ -425,10 +426,18 @@ export class PitchControl {
 
   private updateLabel() {
     const sp = this.spinPitch();
-    const dir = !sp ? '' : sp.kind === 'rise' ? '浮き上がる' : sp.kind === 'drop' ? '手前で落ちる' : sp.side > 0 ? '右へ ▶' : '◀ 左へ';
-    this.labelEl.innerHTML = sp
-      ? `<b>${PITCHES[sp.kind].name}</b> ${dir}<span class="gobar"><i style="width:${Math.round(20 + sp.amount * 80)}%"></i></span>`
-      : this.holding ? '<b>ストレート</b>' : '';
+    if (!sp) {
+      const k = capPitch(this.cap, 'straight') ?? 'straight';
+      this.labelEl.innerHTML = this.holding ? `<b>${PITCHES[k].name}</b>` : '';
+      return;
+    }
+    const k = capPitch(this.cap, sp.kind);
+    if (!k) {
+      this.labelEl.innerHTML = `<b class="ng">このキャップでは投げられない</b>`;
+      return;
+    }
+    const dir = sp.kind === 'rise' ? '浮き上がる' : sp.kind === 'drop' ? '落ちる' : sp.side > 0 ? '右へ ▶' : '◀ 左へ';
+    this.labelEl.innerHTML = `<b>${PITCHES[k].name}</b> ${dir}<span class="gobar"><i style="width:${Math.round(20 + sp.amount * 80)}%"></i></span>`;
   }
 
   private release() {
@@ -466,17 +475,19 @@ export class PitchControl {
     const y = ZONE.y0 - 0.24 + hNorm * (ZONE.y1 - ZONE.y0 + 0.48);
     void flickStart;
     const sp = this.locked ?? this.spinPitch();
-    let kind: PitchKind, side = -1, strength = 1;
-    if (sp) {
-      kind = sp.kind;
+    let slot: PitchSlot, side = -1, strength = 1;
+    if (sp && capPitch(this.cap, sp.kind)) {
+      slot = sp.kind;
       side = -sp.side; // 画面で右回り＝画面の右へ曲がる（投手側から見て）
       strength = 1.0 + sp.amount * 0.6;
-    } else if (speed < 0.18) {
-      kind = 'knuckle';
+    } else if (speed < 0.18 && capPitch(this.cap, 'knuckle')) {
+      slot = 'knuckle';
       strength = 1.2 - speed * 2;
-    } else kind = 'straight';
-    // 持っていない球種は変化が弱い（変化量 2 相当）
-    const level = kind === 'straight' ? 0 : this.levels.get(kind) ?? 2;
+    } else slot = 'straight';
+    // そのキャップでこの投げ方をしたときに出る球種（投げられない回し方はストレート系になる）
+    const kind: PitchKind = capPitch(this.cap, slot) ?? 'straight';
+    // 投手の得意な投げ方ほど変化が大きい（得意でなければ変化量 2〜3 相当）
+    const level = kind === 'straight' ? 0 : this.levels.get(slot) ?? (slot === 'straight' ? 3 : 2);
     const z = this.hud.zone;
     this.result = { kind, level, aim: new THREE.Vector2(x, y), timingErr: 0.12, speedNorm: speed, bend: 0, strength: THREE.MathUtils.clamp(strength, 0.4, 1.7), side, screenAim: screenAim ?? { x: (z.x0 + z.x1) / 2, y: (z.y0 + z.y1) / 2 } };
     this.labelEl.innerHTML = `<b>${PITCHES[kind].name}</b>`;

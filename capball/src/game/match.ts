@@ -348,7 +348,7 @@ export class Match {
     this.char(pitcher).play('Idle');
 
     if (this.opts.autoplay) {
-      const cp = cpuChoosePitch(s, pitcher, this.opts.difficulty);
+      const cp = cpuChoosePitch(s, pitcher, this.opts.difficulty, this.fieldingCap);
       this.sleep(0.8 + Math.random() * 0.5).then(() => {
         if (this.phase === 'aim') this.beginWindup(cp);
       });
@@ -356,7 +356,7 @@ export class Match {
       this.batCtl = new BatControl(this.hud, (m) => cursorSize(batter, m, this.opts.difficulty.assist));
       this.batCtl.onRelease = () => this.userSwing();
       // CPU 投手。捕手が構えた位置（狙い）を見せる
-      const cp = cpuChoosePitch(s, pitcher, this.opts.difficulty);
+      const cp = cpuChoosePitch(s, pitcher, this.opts.difficulty, this.fieldingCap);
       if (this.opts.predict) this.sleep(0.35).then(() => {
         if (this.phase === 'aim') this.hud.showMitt(cp.aim);
       });
@@ -367,7 +367,7 @@ export class Match {
       this.camMode = 'fps';
       this.throwAnimT = -1;
       this.handRot.set(0, 0, 0);
-      this.pitchCtl = new PitchControl(this.hud, pitcher.pitches ?? [], (t) => {
+      this.pitchCtl = new PitchControl(this.hud, pitcher.pitches ?? [], this.fieldingCap, (t) => {
         if (this.phase === 'aim') this.beginWindup(t);
       });
     }
@@ -564,7 +564,7 @@ export class Match {
       const kind = this.path?.params.kind;
       const tilt = kind ? PITCHES[kind].tilt : 0.3;
       this.cap.rotation.set(Math.PI / 2 - 0.25 + Math.sin(this.capSpin * 0.07) * 0.2, 0, tilt);
-      if (kind !== 'knuckle' || this.phase !== 'flight') this.cap.rotateY(this.capSpin);
+      if (!(kind && PITCHES[kind].wobble) || this.phase !== 'flight') this.cap.rotateY(this.capSpin);
       else this.cap.rotateX(Math.sin(this.time * 17) * 0.25);
       // 遠くのキャップは大きめに描いて見失わないようにする（プロスピのボールの見え方に近づける）
       const far = this.phase === 'flight' || this.phase === 'windup' ? THREE.MathUtils.clamp(-this.cap.position.z / 9.22, 0, 1) : 0;

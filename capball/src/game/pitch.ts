@@ -46,7 +46,7 @@ export class PitchPath {
     // 自分で投げた球は払った線どおりに飛ばす（山なりを足さない）
     this.arc = p.aimIsLine ? 0 : def.arc * (0.7 + 0.3 * (1 - p.speedKmh / 110));
     this.late = def.late;
-    this.wobble = p.kind === 'knuckle' ? 0.05 + 0.025 * p.level : 0;
+    this.wobble = (def.wobble ?? 0) * (0.05 + 0.025 * p.level);
     this.start = p.release.clone();
     this.aimEnd = p.aimIsLine ? p.target.clone().addScaledVector(this.bend, -(p.compensate ?? 0)) : p.target.clone().sub(this.bend);
     this.end = this.aimEnd.clone().add(this.bend);

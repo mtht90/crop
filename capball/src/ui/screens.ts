@@ -1,7 +1,9 @@
 import { audio } from '../core/audio';
 import { DIFFICULTIES, TEAMS, type Difficulty, type Team } from '../game/data';
 import type { GameState } from '../game/rules';
-import { CAPS, capStars, type CapBrand } from '../game/caps';
+import { CAPS, capPitch, capStars, type CapBrand } from '../game/caps';
+import { PITCHES, SLOTS, SLOT_HOW } from '../game/data';
+import { CapPreview } from '../render/capPreview';
 import { drawCapTop } from '../render/cap';
 
 const el = (html: string) => {
@@ -71,14 +73,14 @@ export function setupScreen(parent: HTMLElement): Promise<SetupResult> {
       <div class="row"><label>あなたのチーム</label><div class="teams">${TEAMS.map((t, i) => `<div class="team" data-team="${i}"><div class="sw" style="background:linear-gradient(90deg, ${t.uniform.primary} 0 50%, ${t.color} 50%)"></div><div class="nm">${t.name}</div><div class="st">エース ${t.players.find((p) => p.pos === 'P')!.name}</div></div>`).join('')}</div></div>
       <div class="row"><label>使うキャップ（守るときに投げるキャップ。銘柄で性格が変わる）</label>
         <div class="caps">${CAPS.map((c, i) => `<button class="capb" data-cap="${i}" aria-label="${c.name}"><canvas width="96" height="96"></canvas></button>`).join('')}</div>
-        <div class="capinfo"></div></div>
+        <div class="capview"><div class="capinfo"></div></div><div class="caprep"></div></div>
       <div class="row"><label>先攻・後攻</label><div class="seg" data-k="user"><button data-v="away">先攻（表）</button><button data-v="home">後攻（裏）</button></div></div>
       <div class="row"><label>イニング</label><div class="seg" data-k="inn"><button data-v="3">3回</button><button data-v="4">4回</button><button data-v="6">6回（公式）</button></div></div>
       <div class="row"><label>相手の強さ</label><div class="seg" data-k="diff">${DIFFICULTIES.map((d, i) => `<button data-v="${i}">${d.name}</button>`).join('')}</div></div>
       <div class="row"><label>打撃のアシスト（コースのマスを薄く表示）</label><div class="seg" data-k="pred"><button data-v="1">あり</button><button data-v="0">なし</button></div></div>
       <div class="row howto">
         <b>ルール</b> 公式キャップ野球と同じ5人制。走塁はなく、走者は仮想で進む。ノーバウンドで捕られるか、<b>アウトゾーン</b>で止まればアウト。<b>ヒットゾーン</b>に届けば単打、バウンドしてフェンスなら二塁打、ノーバウンドでフェンス直撃は三塁打、越えればホームラン。<br>
-        <b>投げる</b> 投手の目線で、画面下のキャップをつまみ、投げたい所まで払って指を離す（離した所にキャップが来る。払う速さ＝球速）。先にキャップを回すと変化球：右回り＝右へ・左回り＝左へ（半周＝スライダー、たくさん＝カーブ）、縦長に左回り＝ライズ、縦長に右回り＝ドロップ。<br>
+        <b>投げる</b> 投手の目線で、画面下のキャップをつまみ、投げたい所まで払って指を離す（離した所にキャップが来る。払う速さ＝球速）。先にキャップを回すと変化球：右回り＝右へ・左回り＝左へ（少し回す／たくさん回す）、縦長に左回り＝浮く球、縦長に右回り＝落ちる球。<b>出る球種はキャップごとに違う</b>（上の持ち球を見る）。<br>
         <b>打つ</b> ドラッグで黄色いカーソルを動かし、<b>指を離してスイング</b>。ゾーンの薄く塗られたマスは、投球前は捕手の構え、投げた後は「このまま来たら通るマス」。変化球は最後に曲がるのでマスも動く。振った後に早い・遅いが出る。
       </div>
       <button class="big-btn">プレイボール！</button>
@@ -91,6 +93,8 @@ export function setupScreen(parent: HTMLElement): Promise<SetupResult> {
       b.style.setProperty('--body', c.body);
       b.onclick = () => { cap = +b.dataset.cap!; audio.play('ui_move'); refresh(); };
     });
+    const preview = new CapPreview(CAPS[cap]);
+    s.querySelector('.capview')!.prepend(preview.canvas);
     const bar = (n: number) => `<span class="stars">${'<i class="on"></i>'.repeat(n)}${'<i></i>'.repeat(5 - n)}</span>`;
     const refresh = () => {
       const c = CAPS[cap];
@@ -98,6 +102,11 @@ export function setupScreen(parent: HTMLElement): Promise<SetupResult> {
       s.querySelectorAll<HTMLElement>('.capb').forEach((e) => e.classList.toggle('sel', +e.dataset.cap! === cap));
       s.querySelector('.capinfo')!.innerHTML = `<div class="cn"><b>${c.name}</b><span>${c.genre}</span></div><div class="cd">${c.desc}</div>
         <div class="cs"><div>球速${bar(st.speed)}</div><div>変化${bar(st.brk)}</div><div>制球${bar(st.control)}</div><div>重さ${bar(st.weight)}</div></div>`;
+      preview.set(c);
+      s.querySelector('.caprep')!.innerHTML = `<div class="rh">持ち球（回し方 → 球種）</div>` + SLOTS.map((sl) => {
+        const k = capPitch(c, sl);
+        return `<div class="rp${k ? '' : ' no'}"><span>${SLOT_HOW[sl]}</span><b>${k ? PITCHES[k].name : '×'}</b></div>`;
+      }).join('');
       s.querySelectorAll<HTMLElement>('.team').forEach((e) => e.classList.toggle('sel', +e.dataset.team! === team));
       s.querySelectorAll<HTMLElement>('[data-k="user"] button').forEach((b) => b.classList.toggle('sel', b.dataset.v === user));
       s.querySelectorAll<HTMLElement>('[data-k="inn"] button').forEach((b) => b.classList.toggle('sel', +b.dataset.v! === innings));
@@ -112,6 +121,7 @@ export function setupScreen(parent: HTMLElement): Promise<SetupResult> {
     s.querySelector<HTMLElement>('.big-btn')!.onclick = () => {
       audio.play('ui_ok');
       s.remove();
+      preview.dispose();
       try { localStorage.setItem('capball.cap', CAPS[cap].id); } catch { /* 保存できない環境 */ }
       const others = CAPS.filter((_, i) => i !== cap);
       const oppCap = others[Math.floor(Math.random() * others.length)];

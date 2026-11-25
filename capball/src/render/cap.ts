@@ -99,6 +99,26 @@ export function drawCapTop(c: CanvasRenderingContext2D, S: number, b: CapBrand) 
   c.lineWidth = 14 * u;
   c.strokeStyle = b.accent;
   c.beginPath(); c.arc(h, h, 106 * u, 0, Math.PI * 2); c.stroke();
+  // 縁の細かい印字（大きく描くときだけ）
+  if (S >= 256) {
+    const txt = `${b.name}・${b.genre}・CAP STADIUM・`;
+    const chars = [...txt + txt];
+    c.font = `bold ${15 * u}px "M PLUS Rounded 1c", sans-serif`;
+    c.fillStyle = b.ink;
+    c.globalAlpha = 0.75;
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    const rr = 86 * u;
+    for (let k = 0; k < chars.length; k++) {
+      const a = (k / chars.length) * Math.PI * 2 - Math.PI / 2;
+      c.save();
+      c.translate(h + Math.cos(a) * rr, h + Math.sin(a) * rr);
+      c.rotate(a + Math.PI / 2);
+      c.fillText(chars[k], 0, 0);
+      c.restore();
+    }
+    c.globalAlpha = 1;
+  }
   // 銘柄の文字
   const len = [...b.mark].length;
   const fs = (len <= 1 ? 120 : len <= 2 ? 92 : len <= 3 ? 72 : len <= 4 ? 58 : 46) * u;
@@ -116,8 +136,8 @@ export function drawCapTop(c: CanvasRenderingContext2D, S: number, b: CapBrand) 
 
 function labelTexture(b: CapBrand) {
   const cv = document.createElement('canvas');
-  cv.width = cv.height = 256;
-  drawCapTop(cv.getContext('2d')!, 256, b);
+  cv.width = cv.height = 512;
+  drawCapTop(cv.getContext('2d')!, 512, b);
   const t = new THREE.CanvasTexture(cv);
   t.colorSpace = THREE.SRGBColorSpace;
   t.anisotropy = 4;
@@ -137,63 +157,146 @@ function haloTexture() {
   return new THREE.CanvasTexture(cv);
 }
 
-export function makeCapBall(brand: CapBrand = DEFAULT_CAP) {
-  const g = new THREE.Group();
-  const R = CAP_VIS_R, H = R * 0.62;
-  // ギザギザの側面（溝を半径方向に刻む）
-  const seg = 72;
-  const side = new THREE.CylinderGeometry(R, R * 0.98, H, seg, 1, true);
+/** 表面の仕上げごとの材質 */
+function bodyMaterial(b: CapBrand) {
+  const base = { color: new THREE.Color(b.body), envMapIntensity: 1.2 };
+  switch (b.finish ?? 'gloss') {
+    case 'matte':
+      return new THREE.MeshPhysicalMaterial({ ...base, roughness: 0.62, clearcoat: 0.12, clearcoatRoughness: 0.5 });
+    case 'metal':
+      return new THREE.MeshPhysicalMaterial({ ...base, metalness: 0.88, roughness: 0.26, envMapIntensity: 1.6 });
+    case 'pearl':
+      return new THREE.MeshPhysicalMaterial({ ...base, roughness: 0.3, clearcoat: 0.6, clearcoatRoughness: 0.2, iridescence: 0.75, iridescenceIOR: 1.45, iridescenceThicknessRange: [180, 520] });
+    default:
+      return new THREE.MeshPhysicalMaterial({ ...base, roughness: 0.3, clearcoat: 0.85, clearcoatRoughness: 0.12 });
+  }
+}
+
+/**
+ * キャップ本体：細かいみぞのある側面、丸みのある天面の縁、印刷されたラベル、
+ * 裾の返し、内側のねじ山と中ぶた。
+ */
+function buildCapBody(b: CapBrand) {
+  const body = new THREE.Group();
+  body.name = 'body';
+  const R = CAP_VIS_R, H = R * 0.7;
+  const f = R * 0.12; // 天面の縁の丸み
+  const yTop = H / 2, yBot = -H / 2;
+  const mat = bodyMaterial(b);
+  const lighter = new THREE.Color(b.body).lerp(new THREE.Color('#ffffff'), 0.55);
+  const innerMat = new THREE.MeshStandardMaterial({ color: lighter, roughness: 0.55, side: THREE.BackSide });
+
+  // 側面：みぞ（なめらかな山型）を刻む。上の縁の手前でみぞを消す
+  const n = b.ridges ?? 96;
+  const sideH = H - f;
+  const rows = 6;
+  const side = new THREE.CylinderGeometry(R, R, sideH, n * 4, rows, true);
   const pos = side.getAttribute('position');
   for (let i = 0; i < pos.count; i++) {
-    const x = pos.getX(i), z = pos.getZ(i);
+    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
     const a = Math.atan2(z, x);
-    const k = 1 + (Math.round(((a + Math.PI) / (Math.PI * 2)) * seg) % 2 === 0 ? 0.045 : 0);
+    const v = (y + sideH / 2) / sideH; // 0=下、1=上
+    const fade = THREE.MathUtils.smoothstep(1 - v, 0.0, 0.22) * THREE.MathUtils.smoothstep(v, 0.0, 0.08);
+    const ridge = Math.pow(0.5 + 0.5 * Math.cos(a * n), 1.6);
+    const k = 1 + 0.03 * ridge * fade - 0.01 * (1 - fade);
     pos.setX(i, x * k);
     pos.setZ(i, z * k);
   }
+  side.translate(0, yBot + sideH / 2, 0);
   side.computeVertexNormals();
-  const plastic = new THREE.MeshStandardMaterial({ color: brand.body, roughness: 0.35, metalness: 0, envMapIntensity: 1.1 });
-  const sideMesh = new THREE.Mesh(side, plastic);
-  const top = new THREE.Mesh(new THREE.CircleGeometry(R, 48), new THREE.MeshStandardMaterial({ map: labelTexture(brand), roughness: 0.3, envMapIntensity: 1.1 }));
-  top.rotation.x = -Math.PI / 2;
-  top.position.y = H / 2;
-  const inner = new THREE.Mesh(new THREE.CircleGeometry(R * 0.96, 32), new THREE.MeshStandardMaterial({ color: '#dfe3e8', roughness: 0.6, side: THREE.DoubleSide }));
-  inner.rotation.x = Math.PI / 2;
-  inner.position.y = -H / 2 + 0.002;
-  const lip = new THREE.Mesh(new THREE.TorusGeometry(R * 0.985, R * 0.06, 6, 48), plastic);
-  lip.rotation.x = Math.PI / 2;
-  lip.position.y = -H / 2;
-  // スマホの小さな画面でも見失わないよう、うっすら光る輪を添える
-  const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: haloTexture(), color: '#ffffff', transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending }));
-  halo.scale.setScalar(R * 5.5);
-  halo.name = 'halo';
+  const sideMesh = new THREE.Mesh(side, mat);
   sideMesh.name = 'side';
+
+  // 天面の縁の丸み
+  const pts: THREE.Vector2[] = [];
+  for (let k = 0; k <= 8; k++) {
+    const t = (k / 8) * (Math.PI / 2);
+    pts.push(new THREE.Vector2(R - f + Math.cos(t) * f * 0.99, yTop - f + Math.sin(t) * f));
+  }
+  const fillet = new THREE.Mesh(new THREE.LatheGeometry(pts.reverse(), 96), mat);
+
+  // 天面のラベル（印刷フィルムっぽく少しつやを足す）
+  const labelMat = new THREE.MeshPhysicalMaterial({ map: labelTexture(b), roughness: 0.32, clearcoat: 0.7, clearcoatRoughness: 0.18, metalness: b.finish === 'metal' ? 0.35 : 0, envMapIntensity: 1.1 });
+  const top = new THREE.Mesh(new THREE.CircleGeometry(R - f + 0.0004, 96), labelMat);
+  top.rotation.x = -Math.PI / 2;
+  top.position.y = yTop;
   top.name = 'top';
-  lip.name = 'lip';
-  inner.name = 'inner';
-  inner.material.color.set(brand.body).lerp(new THREE.Color('#ffffff'), 0.55);
+
+  // 裾の返し
+  const lip = new THREE.Mesh(new THREE.TorusGeometry(R * 1.008, R * 0.045, 8, 96), mat);
+  lip.rotation.x = Math.PI / 2;
+  lip.position.y = yBot + R * 0.03;
+
+  // 内側：内壁・底の縁・ねじ山・中ぶた
+  const ri = R * 0.88;
+  const wall = new THREE.Mesh(new THREE.CylinderGeometry(ri, ri, H * 0.92, 48, 1, true), innerMat);
+  wall.position.y = yBot + H * 0.46;
+  const rim = new THREE.Mesh(new THREE.RingGeometry(ri, R * 1.0, 64), new THREE.MeshStandardMaterial({ color: lighter, roughness: 0.5, side: THREE.DoubleSide }));
+  rim.rotation.x = Math.PI / 2;
+  rim.position.y = yBot + 0.0005;
+  const threadMat = new THREE.MeshStandardMaterial({ color: lighter, roughness: 0.5 });
+  const threads = new THREE.Group();
+  for (let k = 0; k < 2; k++) {
+    const th = new THREE.Mesh(new THREE.TorusGeometry(ri * 0.985, R * 0.028, 6, 64), threadMat);
+    th.rotation.x = Math.PI / 2 + 0.06;
+    th.position.y = yBot + H * (0.3 + k * 0.28);
+    threads.add(th);
+  }
+  const liner = new THREE.Mesh(new THREE.CircleGeometry(ri, 48), new THREE.MeshStandardMaterial({ color: '#f4f4f0', roughness: 0.7 }));
+  liner.rotation.x = Math.PI / 2;
+  liner.position.y = yTop - H * 0.1;
+  const seal = new THREE.Mesh(new THREE.TorusGeometry(ri * 0.72, R * 0.03, 6, 48), threadMat);
+  seal.rotation.x = Math.PI / 2;
+  seal.position.y = yTop - H * 0.12;
+
+  body.add(sideMesh, fillet, top, lip, wall, rim, threads, liner, seal);
+  for (const m of [sideMesh, fillet, top, lip]) m.castShadow = true;
+  return body;
+}
+
+function disposeTree(o: THREE.Object3D) {
+  o.traverse((c) => {
+    const m = c as THREE.Mesh;
+    if (!m.isMesh) return;
+    m.geometry.dispose();
+    const mats = Array.isArray(m.material) ? m.material : [m.material];
+    for (const mt of mats) {
+      (mt as THREE.MeshStandardMaterial).map?.dispose();
+      mt.dispose();
+    }
+  });
+}
+
+export function makeCapBall(brand: CapBrand = DEFAULT_CAP, withHalo = true) {
+  const g = new THREE.Group();
+  g.userData.capRoot = true;
   g.userData.brand = brand.id;
-  g.add(sideMesh, top, inner, lip, halo);
-  for (const m of [sideMesh, top, lip]) m.castShadow = true;
+  g.add(buildCapBody(brand));
+  if (withHalo) {
+    // スマホの小さな画面でも見失わないよう、うっすら光る輪を添える
+    const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: haloTexture(), color: '#ffffff', transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending }));
+    halo.scale.setScalar(CAP_VIS_R * 5.5);
+    halo.name = 'halo';
+    g.add(halo);
+  }
   return g;
 }
 
 /** 作ってあるキャップの見た目を別の銘柄に替える */
-export function applyCapBrand(g: THREE.Object3D, brand: CapBrand) {
-  let done = false;
-  g.traverse((o) => {
-    if (done || o.userData.brand === undefined) return;
-    if (o.userData.brand === brand.id) { done = true; return; }
-    o.userData.brand = brand.id;
-    for (const ch of o.children) {
-      const m = (ch as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined;
-      if (!m) continue;
-      if (ch.name === 'side') m.color.set(brand.body);
-      else if (ch.name === 'inner') m.color.set(brand.body).lerp(new THREE.Color('#ffffff'), 0.55);
-      else if (ch.name === 'top') { m.map?.dispose(); m.map = labelTexture(brand); m.needsUpdate = true; }
-    }
-    done = true;
+export function applyCapBrand(root: THREE.Object3D, brand: CapBrand) {
+  let cap: THREE.Object3D | null = null;
+  root.traverse((o) => {
+    if (!cap && o.userData.capRoot) cap = o;
   });
+  const g = cap as THREE.Object3D | null;
+  if (!g || g.userData.brand === brand.id) return;
+  const old = g.getObjectByName('body');
+  if (old) {
+    g.remove(old);
+    disposeTree(old);
+  }
+  g.add(buildCapBody(brand));
+  g.userData.brand = brand.id;
 }
 
 /** キャップの軌跡（フェードする帯） */

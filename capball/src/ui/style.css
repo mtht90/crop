@@ -223,7 +223,7 @@ canvas.game { position: absolute; inset: 0; width: 100%; height: 100%; display: 
 .fpshint { pointer-events: none; }
 
 /* キャップ選び */
-.caps { display: flex; gap: 8px; overflow-x: auto; padding: 4px 2px 8px; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; }
+.caps { display: flex; gap: 8px; overflow-x: auto; touch-action: pan-x pan-y; padding: 4px 2px 8px; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; }
 .capb { flex: 0 0 auto; width: 58px; height: 58px; border-radius: 50%; padding: 0; border: 3px solid var(--ink); background: var(--body); box-shadow: 0 3px 0 var(--ink); cursor: pointer; scroll-snap-align: center; display: grid; place-items: center; }
 .capb canvas { width: 44px; height: 44px; border-radius: 50%; }
 .capb.sel { outline: 4px solid var(--sun); transform: translateY(1px); box-shadow: 0 2px 0 var(--ink); }
@@ -237,3 +237,14 @@ canvas.game { position: absolute; inset: 0; width: 100%; height: 100%; display: 
 .stars { display: inline-flex; gap: 3px; }
 .stars i { width: 12px; height: 8px; border-radius: 3px; background: #e2e2e2; border: 1px solid rgba(0,0,0,.25); }
 .stars i.on { background: var(--sun); border-color: var(--ink); }
+.capview { display: flex; gap: 8px; align-items: stretch; }
+.capview .cap3d { flex: 0 0 auto; border-radius: 14px; background: radial-gradient(circle at 50% 40%, #ffffff, #e7ecf2); border: 2px solid var(--ink); }
+.capview .capinfo { flex: 1; min-width: 0; }
+.capview .capinfo .cs { grid-template-columns: 1fr; }
+.caprep { margin-top: 6px; display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.caprep .rh { grid-column: 1 / -1; font-weight: 900; font-size: 11px; opacity: .7; }
+.caprep .rp { display: flex; flex-direction: column; gap: 1px; background: #fff; border: 2px solid var(--ink); border-radius: 10px; padding: 4px 8px; font-size: 10px; }
+.caprep .rp span { opacity: .65; }
+.caprep .rp b { font-size: 13px; white-space: nowrap; }
+.caprep .rp.no { opacity: .45; }
+.fpslabel .ng { color: #ff8a7a; }

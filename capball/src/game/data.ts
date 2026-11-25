@@ -3,17 +3,25 @@ import type { Uniform } from '../render/character';
 
 /**
  * 球種。キャップ野球で知られている投げ方に合わせる。
- * キャップの面の向きと傾き、回転のかけ方で変化が決まる。
+ * 投げ方（回し方）は6通り（PitchSlot）で、同じ回し方でもキャップによって出る球種が違う。
  */
-export type PitchKind = 'straight' | 'curve' | 'slider' | 'knuckle' | 'rise' | 'drop';
+export type PitchSlot = 'straight' | 'knuckle' | 'slider' | 'curve' | 'rise' | 'drop';
+export type PitchKind =
+  | 'straight' | 'twoseam' | 'gyro'
+  | 'knuckle' | 'change' | 'palm'
+  | 'slider' | 'cutter' | 'sweeper' | 'hslider'
+  | 'curve' | 'slowcurve' | 'slurve' | 'pcurve'
+  | 'rise' | 'hop' | 'upshoot'
+  | 'drop' | 'fork' | 'splitter' | 'sinker' | 'vslider';
 
 export interface PitchDef {
   kind: PitchKind;
+  /** どの回し方で出る球種か */
+  slot: PitchSlot;
   name: string;
   /** 握りと投げ方（画面に出す説明） */
   grip: string;
-  dir: 'up' | 'down' | 'left' | 'right' | 'none' | 'down-left' | 'down-right' | 'wobble';
-  // 変化の向き（右投手・捕手視点、+x が一塁側、+y が上）と量（変化量1あたりのメートル）
+  // 変化の量（変化量1あたりのメートル）。横の向きは回した向きで決まるので、bx は大きさだけを使う
   bx: number;
   by: number;
   /** 0〜1。大きいほど本塁直前で曲がる */
@@ -22,15 +30,52 @@ export interface PitchDef {
   arc: number; // 山なりの高さ
   /** 画面のキャップの傾き（ラジアン） */
   tilt: number;
+  /** 無回転の揺れ（0=揺れない） */
+  wobble?: number;
 }
 
+const D = (kind: PitchKind, slot: PitchSlot, name: string, grip: string, bx: number, by: number, late: number, speedMul: number, arc: number, tilt: number, wobble = 0): PitchDef => ({ kind, slot, name, grip, bx, by, late, speedMul, arc, tilt, wobble });
+
 export const PITCHES: Record<PitchKind, PitchDef> = {
-  straight: { kind: 'straight', name: 'ストレート', grip: '面を進行方向に向け、回転を抑えて押し出す', dir: 'none', bx: 0, by: 0.015, late: 0.5, speedMul: 1, arc: 0.04, tilt: 0 },
-  curve: { kind: 'curve', name: 'カーブ', grip: '面を約45度傾けて弾く。横回転で大きく曲がる', dir: 'down-left', bx: -0.1, by: -0.055, late: 0.3, speedMul: 0.72, arc: 0.35, tilt: 0.78 },
-  slider: { kind: 'slider', name: 'スライダー', grip: '面を上に向けて約30度傾け、横に滑らせる', dir: 'left', bx: -0.12, by: -0.005, late: 0.7, speedMul: 0.84, arc: 0.08, tilt: 0.52 },
-  rise: { kind: 'rise', name: 'ライズ', grip: '下から面を寝かせて弾き、打者の手元で浮き上がらせる', dir: 'up', bx: 0, by: 0.11, late: 0.88, speedMul: 0.86, arc: -0.1, tilt: -0.9 },
-  drop: { kind: 'drop', name: 'ドロップ', grip: '上から下へ回転をかける。打者の手前でストンと落ちる', dir: 'down', bx: 0, by: -0.11, late: 0.82, speedMul: 0.84, arc: 0.12, tilt: 0.9 },
-  knuckle: { kind: 'knuckle', name: 'ナックル', grip: 'キャップを90度立てて無回転で投げる。揺れて落ちる', dir: 'wobble', bx: 0, by: -0.035, late: 0.4, speedMul: 0.62, arc: 0.18, tilt: 1.57 },
+  // 回さずに速く払う
+  straight: D('straight', 'straight', 'ストレート', '面を進行方向に向け、回転を抑えて押し出す', 0.012, 0.015, 0.5, 1, 0.04, 0),
+  twoseam: D('twoseam', 'straight', 'ツーシーム', '少しだけ面をずらして押し出す。手元でわずかに沈みながら逃げる', 0.035, -0.035, 0.75, 0.97, 0.04, 0.12),
+  gyro: D('gyro', 'straight', 'ジャイロボール', '進行方向を軸に回す。いちばん速く、終盤まで落ちずに伸びる', 0, 0.035, 0.9, 1.06, 0, 0),
+  // 回さずにゆっくり払う
+  knuckle: D('knuckle', 'knuckle', 'ナックル', 'キャップを90度立てて無回転で投げる。揺れて落ちる', 0, -0.035, 0.4, 0.62, 0.18, 1.57, 1),
+  change: D('change', 'knuckle', 'チェンジアップ', '腕の振りはそのまま、指を抜く。遅く、少し沈む', 0.02, -0.06, 0.6, 0.7, 0.12, 0.3),
+  palm: D('palm', 'knuckle', 'パーム', '手のひらで押し出す。とても遅く、揺れながら落ちる', 0, -0.08, 0.5, 0.58, 0.2, 1.2, 0.45),
+  // 大きめに少し回す
+  slider: D('slider', 'slider', 'スライダー', '面を上に向けて約30度傾け、横に滑らせる', 0.12, -0.005, 0.7, 0.84, 0.08, 0.52),
+  cutter: D('cutter', 'slider', 'カットボール', 'ストレートに近い速さで、手元でほんの少しだけ曲がる', 0.05, -0.005, 0.92, 0.95, 0.04, 0.3),
+  sweeper: D('sweeper', 'slider', 'スイーパー', '面を寝かせて大きく払う。真横に大きく滑る', 0.17, 0.0, 0.55, 0.78, 0.1, 0.62),
+  hslider: D('hslider', 'slider', '高速スライダー', '速さを保ったまま、手元で鋭く曲がる', 0.08, -0.02, 0.86, 0.92, 0.05, 0.45),
+  // 大きめにたくさん回す
+  curve: D('curve', 'curve', 'カーブ', '面を約45度傾けて弾く。横回転で大きく曲がる', 0.1, -0.055, 0.3, 0.72, 0.35, 0.78),
+  slowcurve: D('slowcurve', 'curve', 'スローカーブ', 'ふわりと山なりに投げる。とても遅く、大きく曲がり落ちる', 0.09, -0.09, 0.2, 0.55, 0.55, 0.9),
+  slurve: D('slurve', 'curve', 'スラーブ', 'スライダーとカーブの間。斜めに大きく曲がる', 0.13, -0.08, 0.45, 0.76, 0.25, 0.7),
+  pcurve: D('pcurve', 'curve', 'パワーカーブ', '強く弾いて速さのあるカーブ。曲がりは小さめ', 0.07, -0.07, 0.5, 0.86, 0.15, 0.7),
+  // 縦長に左回り
+  rise: D('rise', 'rise', 'ライズ', '下から面を寝かせて弾き、打者の手元で浮き上がらせる', 0.025, 0.11, 0.88, 0.86, -0.1, -0.9),
+  hop: D('hop', 'rise', 'ホップボール', '速さのある球が、最後にふっと浮く', 0.015, 0.065, 0.95, 0.98, -0.05, -0.6),
+  upshoot: D('upshoot', 'rise', 'アップシュート', '浮き上がりながら横にも逃げる', 0.07, 0.085, 0.8, 0.84, -0.08, -0.8),
+  // 縦長に右回り
+  drop: D('drop', 'drop', 'ドロップ', '上から下へ回転をかける。打者の手前でストンと落ちる', 0, -0.11, 0.82, 0.84, 0.12, 0.9),
+  fork: D('fork', 'drop', 'フォーク', '指で挟むように抜く。手元で鋭く大きく落ちる', 0, -0.14, 0.93, 0.82, 0.05, 1.1),
+  splitter: D('splitter', 'drop', 'スプリット', '速いまま、最後に小さく落ちる', 0, -0.08, 0.94, 0.93, 0.04, 1.0),
+  sinker: D('sinker', 'drop', 'シンカー', '落ちながら横にも曲がる', 0.07, -0.09, 0.75, 0.8, 0.1, 0.8),
+  vslider: D('vslider', 'drop', '縦スライダー', '縦に滑るように、速く落ちる', 0.03, -0.12, 0.86, 0.86, 0.06, 0.95),
+};
+
+export const SLOTS: PitchSlot[] = ['straight', 'slider', 'curve', 'rise', 'drop', 'knuckle'];
+/** 回し方の説明 */
+export const SLOT_HOW: Record<PitchSlot, string> = {
+  straight: '回さず速く',
+  knuckle: '回さずゆっくり',
+  slider: '大きめに少し回す',
+  curve: '大きめにたくさん回す',
+  rise: '縦長に左回り',
+  drop: '縦長に右回り',
 };
 
 /**
@@ -39,8 +84,7 @@ export const PITCHES: Record<PitchKind, PitchDef> = {
  */
 export function breakVector(kind: PitchKind, lv: number, side: number) {
   const def = PITCHES[kind];
-  const lateral = kind === 'knuckle' ? 0 : Math.max(Math.abs(def.bx), kind === 'rise' ? 0.025 : kind === 'straight' ? 0.012 : 0);
-  return { x: lateral * lv * side, y: def.by * lv };
+  return { x: Math.abs(def.bx) * lv * side, y: def.by * lv };
 }
 
 export type Grade = 'S' | 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G';
@@ -73,7 +117,7 @@ export interface Player {
   velo?: number; // 最高球速 km/h（公式の目安 30〜100km/h）
   control?: number;
   stamina?: number;
-  pitches?: [PitchKind, number][]; // 球種と変化量(1〜7)
+  pitches?: [PitchSlot, number][]; // 得意な投げ方と変化量(1〜7)。実際の球種はキャップで決まる
 }
 
 export interface Team {

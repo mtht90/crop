@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { PITCHES, type Difficulty, type PitchKind, type Player } from './data';
+import { PITCHES, type Difficulty, type PitchKind, type PitchSlot, type Player } from './data';
+import { capPitch, DEFAULT_CAP, type CapBrand } from './caps';
 import { ZONE } from './geom';
 import type { GameState } from './rules';
 import type { PitchPath } from './pitch';
@@ -15,11 +16,16 @@ const gauss = () => {
 export interface CpuPitch { kind: PitchKind; level: number; aim: THREE.Vector2; speedNorm: number; bend: number; timingErr: number; strength: number; side: number }
 
 /** CPU 投手：カウントに応じて球種とコースを決める */
-export function cpuChoosePitch(s: GameState, pitcher: Player, diff: Difficulty): CpuPitch {
-  const reps: [PitchKind, number][] = [['straight', 0], ...(pitcher.pitches ?? [])];
+export function cpuChoosePitch(s: GameState, pitcher: Player, diff: Difficulty, cap: CapBrand = DEFAULT_CAP): CpuPitch {
+  // 投手の得意な投げ方のうち、このキャップで投げられるもの（実際の球種はキャップで決まる）
+  const slots: [PitchSlot, number][] = [['straight', 0], ...(pitcher.pitches ?? [])];
+  const reps: [PitchKind, number][] = slots
+    .map(([sl, lv]) => [capPitch(cap, sl), sl === 'straight' && capPitch(cap, sl) !== 'straight' ? 3 : lv] as [PitchKind | null, number])
+    .filter((r): r is [PitchKind, number] => !!r[0]);
+  if (!reps.length) reps.push(['straight', 0]);
   const ahead = s.strikes > s.balls;
   const behind = s.balls >= 2 && s.balls > s.strikes;
-  const w = reps.map(([k, lv]) => (k === 'straight' ? (behind ? 3 : ahead ? 1.2 : 2) : (ahead ? 1.6 : 1) * (0.6 + lv / 7)));
+  const w = reps.map(([k, lv]) => (PITCHES[k].slot === 'straight' ? (behind ? 3 : ahead ? 1.2 : 2) : (ahead ? 1.6 : 1) * (0.6 + lv / 7)));
   let r = Math.random() * w.reduce((a, b) => a + b, 0);
   let i = 0;
   while (r > w[i]) r -= w[i++];
@@ -52,7 +58,7 @@ export function cpuPlanSwing(s: GameState, batter: Player, path: PitchPath, diff
   const lv = path.params.level * path.params.breakMul;
   const end = path.plate;
   // 読みの誤差（変化が大きいほど読み違える）
-  const err = (1 - skill) * 0.2 + lv * 0.012 * (1 - skill) + (path.params.kind === 'knuckle' ? 0.05 : 0);
+  const err = (1 - skill) * 0.2 + lv * 0.012 * (1 - skill) + (PITCHES[path.params.kind].wobble ?? 0) * 0.05;
   const perceived = new THREE.Vector2(end.x + gauss() * err, end.y + gauss() * err * 0.8);
   const inZ = inZone(perceived.x, perceived.y, 0.02);
   const eye = diff.cpuEye * (0.8 + batter.meet / 500);
