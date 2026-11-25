@@ -42,7 +42,7 @@ describe.skipIf(!url)('Postgres 結合テスト', () => {
       headers: { 'Content-Type': 'application/json', ...(session ? { Authorization: `Bearer ${session}` } : {}), ...headers },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
-    return { status: res.status, json: await res.json() };
+    return { status: res.status, json: (await res.json()) as any };
   };
 
   let alice: { session: string; id: string };

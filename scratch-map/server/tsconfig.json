@@ -7,7 +7,7 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "noEmit": true,
-    "types": ["node"],
+    "types": ["node", "geojson"],
     "lib": ["ES2023"],
     "allowImportingTsExtensions": false,
     "resolveJsonModule": true

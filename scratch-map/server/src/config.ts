@@ -38,7 +38,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     rpName: env.WEBAUTHN_RP_NAME ?? '共同スクラッチマップ',
     resendApiKey: env.RESEND_API_KEY || undefined,
     mailFrom: env.MAIL_FROM ?? 'Scratch Map <onboarding@resend.dev>',
-    devMagicLink: env.DEV_MAGIC_LINK ? env.DEV_MAGIC_LINK === 'true' : !isProd,
+    // 危険: true だとメールを見なくてもログインできる。Render 上（RENDER=true）や本番では既定で無効
+    devMagicLink: env.DEV_MAGIC_LINK ? env.DEV_MAGIC_LINK === 'true' : !isProd && !env.RENDER,
     sessionDays: Number(env.SESSION_DAYS ?? 90),
     extraOrigins: (env.CORS_EXTRA_ORIGINS ?? '').split(',').map((s) => s.trim()).filter(Boolean),
   };
