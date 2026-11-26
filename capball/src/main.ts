@@ -1,5 +1,6 @@
 import './ui/style.css';
-import { applySkin } from './ui/skin';
+import { applySkin, preloadCapFonts } from './ui/skin';
+import { CAPS } from './game/caps';
 import { loadAssets, type Assets } from './core/assets';
 import { Character } from './render/character';
 import { DIFFICULTIES, TEAMS } from './game/data';
@@ -49,9 +50,12 @@ async function main() {
     engine.camera.lookAt(0, 1, -8);
   });
 
+  // キャップのラベルの書体（タイトルを見ている間に読み込む）
+  const fontsReady = preloadCapFonts(CAPS.map((c) => c.mark + c.name + (c.badge ?? '') + (c.sub ?? '') + c.genre).join('') + '0123456789・');
   const hud = new Hud(app);
   hud.show(false);
   await title;
+  await fontsReady;
   audio.bgm('title');
   audio.ambience(true);
 

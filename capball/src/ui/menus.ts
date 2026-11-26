@@ -1,5 +1,5 @@
 import { audio } from '../core/audio';
-import { CAPS, capById, capPitch, capStars, drawCap, DUP_COINS, RARITY, type CapBrand } from '../game/caps';
+import { CAPS, capById, capPitch, capStars, drawCap, DUP_COINS, RARITY, type CapBrand, type Rarity } from '../game/caps';
 import { PITCHES, SLOTS, SLOT_HOW } from '../game/data';
 import { CUPS, cupById, cupOpen, newLeague, standings, userGame, type Cup, type LeagueState } from '../game/league';
 import { addCoins, ownsCap, persist, save } from '../game/save';
@@ -183,42 +183,54 @@ export function leagueEndScreen(parent: HTMLElement, l: LeagueState): Promise<vo
 const PRICE = 100;
 
 /** 自販機：コインでキャップを買う（何が出るかはお楽しみ） */
+const PRICE10 = 900;
+
 export function vendingScreen(parent: HTMLElement): Promise<void> {
   return new Promise((resolve) => {
     const s = el(`<div class="screen dim"><div class="panel wide vendp">
       <div class="phead"><button class="back" aria-label="戻る">${icon('arrowLeft')}</button><h2>自販機</h2>${coinHtml()}</div>
       <div class="vstage"><div class="vprice"><i class="coin"></i>${PRICE}</div></div>
-      <button class="big-btn buy">${icon('shoppingCart')}${PRICE}コインで買う</button>
+      <div class="buys">
+        <button class="big-btn buy">${icon('shoppingCart')}1本 ${PRICE}</button>
+        <button class="big-btn buy10">${icon('shoppingCart')}10本 ${PRICE10}</button>
+      </div>
       <div class="howto rates">出る確率　N 60%・R 26%・SR 11.5%・SSR 2.5%　／　ダブったらコインが戻る</div>
-      <div class="lineup"><div class="lh">ラインナップ <span class="collect"></span></div><div class="lrow"></div></div>
+      <div class="lineup"><div class="lh">集めたキャップ <span class="collect"></span></div><div class="rprog"></div></div>
     </div></div>`);
     parent.append(s);
-    const view = new VendingView(Math.min(300, window.innerWidth - 80), 300);
+    const view = new VendingView(Math.min(300, window.innerWidth - 80), 280);
     s.querySelector('.vstage')!.prepend(view.canvas);
-    const row = s.querySelector('.lrow')!;
-    for (const c of CAPS) row.append(capIcon(c, 30, !ownsCap(c.id)));
     const refresh = () => {
       s.querySelectorAll('.coins b').forEach((b) => (b.textContent = save.coins.toLocaleString()));
       const n = CAPS.filter((c) => ownsCap(c.id)).length;
       s.querySelector('.collect')!.innerHTML = `<b>${n}</b> / ${CAPS.length}`;
+      s.querySelector('.rprog')!.innerHTML = (['N', 'R', 'SR', 'SSR'] as Rarity[]).map((r) => {
+        const all = CAPS.filter((c) => RARITY[c.id] === r);
+        const got = all.filter((c) => ownsCap(c.id)).length;
+        return `<div class="rp-row"><span class="rar r-${r}">${r}</span><span class="rbar"><i style="width:${(got / all.length) * 100}%"></i></span><span class="rn">${got}/${all.length}</span></div>`;
+      }).join('');
       s.querySelector<HTMLButtonElement>('.buy')!.disabled = save.coins < PRICE;
-      row.querySelectorAll('canvas').forEach((cv, i) => cv.classList.toggle('locked', !ownsCap(CAPS[i].id)));
+      s.querySelector<HTMLButtonElement>('.buy10')!.disabled = save.coins < PRICE10;
     };
     refresh();
     let busy = false;
+    /** 1本引いて記録する */
+    const pull = () => {
+      const c = drawCap();
+      const isNew = !ownsCap(c.id);
+      save.caps[c.id] = (save.caps[c.id] ?? 0) + 1;
+      if (!isNew) save.coins += DUP_COINS[RARITY[c.id]];
+      return { c, isNew };
+    };
     s.querySelector<HTMLElement>('.back')!.onclick = () => { if (busy) return; audio.play('ui_move'); view.dispose(); s.remove(); resolve(); };
     s.querySelector<HTMLElement>('.buy')!.onclick = async () => {
       if (busy || save.coins < PRICE) return;
       busy = true;
       addCoins(-PRICE);
+      const { c, isNew } = pull();
+      persist();
       refresh();
       audio.play('ui_ok');
-      const c = drawCap();
-      const rar = RARITY[c.id];
-      const isNew = !ownsCap(c.id);
-      save.caps[c.id] = (save.caps[c.id] ?? 0) + 1;
-      if (!isNew) save.coins += DUP_COINS[rar];
-      persist();
       // ガコン：自販機が揺れて、取り出し口からキャップが飛び出す
       audio.play('bounce', { volume: 0.7, rate: 0.8 });
       await view.dispense(c);
@@ -227,6 +239,45 @@ export function vendingScreen(parent: HTMLElement): Promise<void> {
       refresh();
       busy = false;
     };
+    s.querySelector<HTMLElement>('.buy10')!.onclick = async () => {
+      if (busy || save.coins < PRICE10) return;
+      busy = true;
+      addCoins(-PRICE10);
+      const got = Array.from({ length: 10 }, pull);
+      persist();
+      refresh();
+      audio.play('ui_ok');
+      audio.play('bounce', { volume: 0.7, rate: 0.8 });
+      // いちばんレアなものを取り出し口から出す
+      const order: Rarity[] = ['SSR', 'SR', 'R', 'N'];
+      const best = [...got].sort((a, b) => order.indexOf(RARITY[a.c.id]) - order.indexOf(RARITY[b.c.id]))[0];
+      await view.dispense(best.c);
+      await revealMany(parent, got);
+      view.reset();
+      refresh();
+      busy = false;
+    };
+  });
+}
+
+/** 10本まとめて買ったときの結果 */
+function revealMany(parent: HTMLElement, got: { c: CapBrand; isNew: boolean }[]): Promise<void> {
+  return new Promise((resolve) => {
+    const top = got.some((g) => RARITY[g.c.id] === 'SSR') ? 'SSR' : got.some((g) => RARITY[g.c.id] === 'SR') ? 'SR' : 'R';
+    const s = el(`<div class="menu reveal r-${top}"><div class="rays"></div><div class="panel" style="width:min(380px,100%)">
+      <h2 style="text-align:center;margin-bottom:8px">10本 買った！</h2>
+      <div class="many"></div>
+      <div class="rnew">新しいキャップ <b>${got.filter((g) => g.isNew).length}</b> 本</div>
+      <button class="big-btn">OK</button></div></div>`);
+    const box = s.querySelector('.many')!;
+    got.forEach((g, k) => {
+      const d = el(`<div class="mi r-${RARITY[g.c.id]}" style="animation-delay:${k * 70}ms"><span class="rar r-${RARITY[g.c.id]}">${RARITY[g.c.id]}</span>${g.isNew ? '<b class="new">NEW</b>' : ''}<small>${g.c.name}</small></div>`);
+      d.prepend(capIcon(g.c, 54));
+      box.append(d);
+    });
+    parent.append(s);
+    audio.play(top === 'SSR' || top === 'SR' ? 'cheer_big' : 'cheer', { volume: 0.6 });
+    s.querySelector<HTMLElement>('.big-btn')!.onclick = () => { audio.play('ui_ok'); s.remove(); resolve(); };
   });
 }
 
@@ -253,28 +304,55 @@ function revealCap(parent: HTMLElement, c: CapBrand, isNew: boolean): Promise<vo
 export function capsScreen(parent: HTMLElement): Promise<void> {
   return new Promise((resolve) => {
     let sel = capById(save.capSel);
+    const PER = 20;
+    let rar: '' | Rarity = '', genre = '', ownOnly = false, page = 0;
+    const genres = [...new Set(CAPS.map((c) => c.genre))];
     const s = el(`<div class="screen dim"><div class="panel wide">
       <div class="phead"><button class="back" aria-label="戻る">${icon('arrowLeft')}</button><h2>マイキャップ</h2>${coinHtml()}</div>
       <div class="capview"><div class="capinfo"></div></div>
       <div class="caprep"></div>
       <button class="big-btn use">このキャップを使う</button>
+      <div class="dexhead"><b>図鑑</b><span class="dexcount"></span></div>
+      <div class="dexbar">
+        <div class="seg rars">${['', 'N', 'R', 'SR', 'SSR'].map((r) => `<button data-r="${r}">${r || 'すべて'}</button>`).join('')}</div>
+        <div class="dexrow2">
+          <select class="genre" aria-label="ジャンル"><option value="">すべてのジャンル</option>${genres.map((g) => `<option>${g}</option>`).join('')}</select>
+          <label class="own"><input type="checkbox" id="dex-own"> 持っているだけ</label>
+        </div>
+      </div>
       <div class="dex"></div>
+      <div class="pager"><button class="pv" aria-label="前へ">${icon('arrowLeft')}</button><span class="pn"></span><button class="nx" aria-label="次へ">${icon('right')}</button></div>
       <div class="howto">持っていないキャップは自販機で手に入る。守るときに投げるのは、ここで選んだキャップ。</div>
     </div></div>`);
     parent.append(s);
     const pv = new CapPreview(sel);
     s.querySelector('.capview')!.prepend(pv.canvas);
     const dex = s.querySelector('.dex')!;
-    for (const c of CAPS) {
-      const own = ownsCap(c.id);
-      const b = el(`<button class="dexb${own ? '' : ' locked'}" data-id="${c.id}"><span class="rar r-${RARITY[c.id]}">${RARITY[c.id]}</span><small>${own ? c.name : '？？？'}</small></button>`);
-      b.prepend(capIcon(c, 44, !own));
-      if (own && (save.caps[c.id] ?? 0) > 1) b.insertAdjacentHTML('beforeend', `<em>×${save.caps[c.id]}</em>`);
-      dex.append(b);
-    }
+    const list = () => CAPS.filter((c) => (!rar || RARITY[c.id] === rar) && (!genre || c.genre === genre) && (!ownOnly || ownsCap(c.id)));
+    const owned = CAPS.filter((c) => ownsCap(c.id)).length;
+    s.querySelector('.dexcount')!.innerHTML = `集めた <b>${owned}</b> / ${CAPS.length}`;
+    const drawGrid = () => {
+      const all = list();
+      const pages = Math.max(1, Math.ceil(all.length / PER));
+      page = Math.min(page, pages - 1);
+      dex.innerHTML = '';
+      for (const c of all.slice(page * PER, page * PER + PER)) {
+        const own = ownsCap(c.id);
+        const b = el(`<button class="dexb${own ? '' : ' locked'}${c.id === sel.id ? ' sel' : ''}" data-id="${c.id}"><span class="rar r-${RARITY[c.id]}">${RARITY[c.id]}</span><small>${own ? c.name : '？？？'}</small></button>`);
+        b.prepend(capIcon(c, 44, !own));
+        if (own && (save.caps[c.id] ?? 0) > 1) b.insertAdjacentHTML('beforeend', `<em>×${save.caps[c.id]}</em>`);
+        b.onclick = () => { sel = c; audio.play('ui_move'); refresh(); };
+        dex.append(b);
+      }
+      if (!all.length) dex.innerHTML = '<div class="empty">この条件のキャップはまだない</div>';
+      s.querySelector('.pn')!.textContent = `${page + 1} / ${pages}`;
+      s.querySelector<HTMLButtonElement>('.pv')!.disabled = page <= 0;
+      s.querySelector<HTMLButtonElement>('.nx')!.disabled = page >= pages - 1;
+      s.querySelectorAll<HTMLElement>('.rars button').forEach((b) => b.classList.toggle('sel', b.dataset.r === rar));
+    };
     const refresh = () => {
       const own = ownsCap(sel.id);
-      s.querySelector('.capinfo')!.innerHTML = own ? capDetailHtml(sel) : `<div class="cn"><b>？？？</b>${rarityTag(sel.id)}</div><div class="cd">まだ持っていない。自販機で探そう</div>`;
+      s.querySelector('.capinfo')!.innerHTML = own ? capDetailHtml(sel) : `<div class="cn"><b>？？？</b>${rarityTag(sel.id)}<span>${sel.genre}</span></div><div class="cd">まだ持っていない。自販機で探そう</div>`;
       s.querySelector('.caprep')!.innerHTML = own ? repHtml(sel) : '';
       pv.canvas.style.filter = own ? '' : 'brightness(0) opacity(.35)';
       pv.set(sel);
@@ -283,8 +361,15 @@ export function capsScreen(parent: HTMLElement): Promise<void> {
       use.textContent = sel.id === save.capSel ? '使用中' : own ? 'このキャップを使う' : '持っていない';
       dex.querySelectorAll<HTMLElement>('.dexb').forEach((b) => b.classList.toggle('sel', b.dataset.id === sel.id));
     };
+    s.querySelectorAll<HTMLElement>('.rars button').forEach((b) => (b.onclick = () => { rar = b.dataset.r as '' | Rarity; page = 0; audio.play('ui_move'); drawGrid(); }));
+    s.querySelector<HTMLSelectElement>('.genre')!.onchange = (e) => { genre = (e.target as HTMLSelectElement).value; page = 0; drawGrid(); };
+    s.querySelector<HTMLInputElement>('#dex-own')!.onchange = (e) => { ownOnly = (e.target as HTMLInputElement).checked; page = 0; drawGrid(); };
+    s.querySelector<HTMLElement>('.pv')!.onclick = () => { page--; audio.play('ui_move'); drawGrid(); };
+    s.querySelector<HTMLElement>('.nx')!.onclick = () => { page++; audio.play('ui_move'); drawGrid(); };
+    // 選んでいるキャップのページから始める
+    page = Math.floor(Math.max(0, list().findIndex((c) => c.id === sel.id)) / PER);
+    drawGrid();
     refresh();
-    dex.querySelectorAll<HTMLElement>('.dexb').forEach((b) => (b.onclick = () => { sel = capById(b.dataset.id!); audio.play('ui_move'); refresh(); }));
     s.querySelector<HTMLElement>('.use')!.onclick = () => { save.capSel = sel.id; persist(); audio.play('ui_ok'); refresh(); };
     s.querySelector<HTMLElement>('.back')!.onclick = () => { audio.play('ui_move'); pv.dispose(); s.remove(); resolve(); };
   });

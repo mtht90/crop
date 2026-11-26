@@ -21,3 +21,15 @@ export function applySkin() {
   r.setProperty('--star-off', `url("${uiUrl('star_off.png')}")`);
   r.setProperty('--input', `url("${uiUrl('input.png')}")`);
 }
+
+/**
+ * キャップのラベルに使う書体を先に読み込む（canvas に描く前に揃っていないと別の書体で描かれる）。
+ * 日本語の書体は使う文字だけを取りに行く。
+ */
+export async function preloadCapFonts(text: string) {
+  const fams = ['Dela Gothic One', 'RocknRoll One', 'Mochiy Pop One', 'Kaisei Decol', 'M PLUS Rounded 1c', 'Lobster', 'Bungee'];
+  const chars = [...new Set(text)].join('');
+  const jobs = fams.map((f) => document.fonts.load(`${f === 'M PLUS Rounded 1c' ? '900 ' : f === 'Kaisei Decol' ? '700 ' : ''}24px "${f}"`, chars).catch(() => []));
+  jobs.push(document.fonts.load('800 24px "M PLUS Rounded 1c"', chars).catch(() => []));
+  await Promise.race([Promise.all(jobs), new Promise((r) => setTimeout(r, 5000))]);
+}

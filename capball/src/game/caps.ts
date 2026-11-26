@@ -8,8 +8,16 @@
  * - weight：重さ。重いほど打たれたときに飛ぶ（投手には不利）。軽いほど飛ばない
  */
 import { PITCHES, SLOTS, type PitchKind, type PitchSlot } from './data';
+import { generateCaps } from './capgen';
 
-export type CapPattern = 'ring' | 'band' | 'dots' | 'stripe' | 'leaf' | 'star' | 'wave' | 'sun' | 'bolt' | 'drop' | 'check' | 'heart';
+export type CapPattern =
+  | 'ring' | 'band' | 'dots' | 'stripe' | 'leaf' | 'star' | 'wave' | 'sun' | 'bolt' | 'drop' | 'check' | 'heart'
+  | 'bubbles' | 'radial' | 'ripple' | 'seigaiha' | 'mountain' | 'flower' | 'snow' | 'chevron' | 'beans' | 'spots' | 'fruit' | 'asanoha';
+/** 天面の組み方：大きな文字だけ・帯の上に文字・上に弧で銘柄名・丸い紋章・判子 */
+export type CapLayout = 'center' | 'band' | 'arc' | 'badge' | 'stamp';
+/** 形：ふつう・広口（スポーツ）・背の高いホット用・細め・平たい金属 */
+export type CapShape = 'std' | 'wide' | 'tall' | 'slim' | 'flat';
+export type CapFinish = 'gloss' | 'matte' | 'metal' | 'pearl';
 
 export interface CapBrand {
   id: string;
@@ -32,12 +40,19 @@ export interface CapBrand {
   /** 回し方ごとに出る球種（null＝このキャップでは投げられない）。並びは straight, slider, curve, rise, drop, knuckle */
   rep: (PitchKind | null)[];
   /** 表面の仕上げ */
-  finish?: 'gloss' | 'matte' | 'metal' | 'pearl';
+  finish?: CapFinish;
+  /** 天面の組み方・書体・小さな英字・バッジ（ZERO・限定など） */
+  layout?: CapLayout;
+  font?: string;
+  sub?: string;
+  badge?: string;
+  shape?: CapShape;
+  rarity?: Rarity;
   /** 側面のみぞの数 */
   ridges?: number;
 }
 
-export const CAPS: CapBrand[] = [
+const HAND: CapBrand[] = [
   { id: 'kirari', name: 'キラリソーダ', genre: '炭酸', desc: '固めの炭酸用キャップ。素直でクセがない', body: '#d8302a', label: '#ffffff', accent: '#d8302a', ink: '#d8302a', mark: 'KIRARI', pattern: 'ring', speed: 1.04, brk: 1.0, control: 1.0, weight: 1.02, rep: ['straight','slider','curve','rise','drop','knuckle'], finish: 'gloss' },
   { id: 'yamabuki', name: '緑茶 やまぶき', genre: 'お茶', desc: 'みぞが細かく指にかかる。狙った所に投げやすい', body: '#2f8a3e', label: '#f3f6e8', accent: '#3f9a4c', ink: '#1f5e2a', mark: '茶', pattern: 'leaf', speed: 0.98, brk: 0.98, control: 1.14, weight: 1.0, rep: ['twoseam','cutter','curve',null,'splitter','change'], finish: 'matte', ridges: 120 },
   { id: 'aqualan', name: 'アクアラン', genre: 'スポーツドリンク', desc: '口の広い大きめキャップ。空気をつかんでよく曲がるが遅い', body: '#1d6fd1', label: '#ffffff', accent: '#5bb4ff', ink: '#1554a6', mark: 'AQ', pattern: 'wave', speed: 0.9, brk: 1.24, control: 0.92, weight: 0.94, rep: ['straight','sweeper','slowcurve','rise','drop','knuckle'], finish: 'gloss', ridges: 60 },
@@ -56,16 +71,16 @@ export const CAPS: CapBrand[] = [
   { id: 'golden', name: 'ゴールデンキャップ', genre: '限定', desc: '当たりのキャップ。どれも少しずつ良い', body: '#e8b923', label: '#fff6c8', accent: '#e8b923', ink: '#a67a00', mark: '★', pattern: 'star', speed: 1.05, brk: 1.06, control: 1.05, weight: 0.98, rep: ['gyro','sweeper','slurve','upshoot','fork','knuckle'], finish: 'metal' },
 ];
 
-export const DEFAULT_CAP = CAPS[0];
+export const DEFAULT_CAP = HAND[0];
 
 /** 能力を 1〜5 の星にして表示する（倍率の幅は能力ごとに違う） */
 export function capStars(c: CapBrand) {
   const s = (v: number, lo: number, hi: number) => Math.max(1, Math.min(5, Math.round(1 + ((v - lo) / (hi - lo)) * 4)));
   return {
-    speed: s(c.speed, 0.88, 1.13),
-    brk: s(c.brk, 0.84, 1.24),
-    control: s(c.control, 0.86, 1.14),
-    weight: s(c.weight, 0.86, 1.16),
+    speed: s(c.speed, 0.88, 1.14),
+    brk: s(c.brk, 0.84, 1.26),
+    control: s(c.control, 0.86, 1.15),
+    weight: s(c.weight, 0.86, 1.18),
   };
 }
 
@@ -81,15 +96,21 @@ export function capRepertoire(c: CapBrand) {
 
 /** レア度（自販機で出る確率と、ダブったときに戻るコイン） */
 export type Rarity = 'N' | 'R' | 'SR' | 'SSR';
-export const RARITY: Record<string, Rarity> = {
+const HAND_RARITY: Record<string, Rarity> = {
   kirari: 'N', orange: 'N', mugi: 'N', yamabuki: 'N', lemon: 'N',
   milpico: 'R', shizuku: 'R', kouryu: 'R', hanacha: 'R',
   aqualan: 'SR', hotmilk: 'SR', spark: 'SR', bolt: 'SR',
   gorilla: 'SSR', goldbrew: 'SSR', golden: 'SSR',
 };
+for (const c of HAND) c.rarity = HAND_RARITY[c.id];
+
+/** 定番の16本＋ジャンルごとに作った銘柄 */
+export const CAPS: CapBrand[] = [...HAND, ...generateCaps()];
+export const RARITY: Record<string, Rarity> = Object.fromEntries(CAPS.map((c) => [c.id, c.rarity ?? 'N']));
+const BY_ID = new Map(CAPS.map((c) => [c.id, c]));
 export const RARITY_RATE: Record<Rarity, number> = { N: 0.6, R: 0.26, SR: 0.115, SSR: 0.025 };
 export const DUP_COINS: Record<Rarity, number> = { N: 30, R: 50, SR: 120, SSR: 300 };
-export const capById = (id: string) => CAPS.find((c) => c.id === id) ?? DEFAULT_CAP;
+export const capById = (id: string) => BY_ID.get(id) ?? DEFAULT_CAP;
 
 /** 自販機：レア度を引いてから、その中の1本を選ぶ */
 export function drawCap(): CapBrand {
