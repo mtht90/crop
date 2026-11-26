@@ -14,6 +14,20 @@
 | KayKit City Builder Bits 1.0 | Kay Lousberg／[GitHub](https://github.com/KayKit-Game-Assets/KayKit-City-Builder-Bits-1.0) | CC0 | 空き地を囲む町並み（建物・街灯・ベンチ・車など） |
 | Baseball Bat | [Poly Haven](https://polyhaven.com/a/baseball_bat) | CC0 | バットの形（キャップ野球のプラスチック棒に合わせて黄色に塗り、細くして使用） |
 
+## 画面の部品（UI）
+
+| 素材 | 作者・配布元 | ライセンス | 使い方 |
+|---|---|---|---|
+| UI Pack | Kenney（[kenney.nl](https://kenney.nl)）／[OpenGameArt](https://opengameart.org/content/ui-pack) | CC0 | ボタン・カード・丸ボタン・星（9 分割で伸ばして使う） |
+| Game Icons | Kenney／[OpenGameArt](https://opengameart.org/content/game-icons) | CC0 | メニューと試合中のアイコン |
+| Vending Machines (Low Poly Style) | [OpenGameArt](https://opengameart.org/content/vending-machines-low-poly-style) | CC0 | 自販機の画面の 3D モデル（FBX を glTF に変換し、側面の色を少し明るくして使用） |
+
+## 文字
+
+| 書体 | 配布元 | ライセンス |
+|---|---|---|
+| RocknRoll One（見出し）・M PLUS Rounded 1c（本文） | Google Fonts | SIL Open Font License |
+
 ## 空
 
 | 素材 | 配布元 | ライセンス |

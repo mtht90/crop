@@ -42,6 +42,12 @@ export const SOURCES = {
     [`${PH}/Models/gltf/8k/baseball_bat/baseball_bat.bin`, 'polyhaven/bat/baseball_bat.bin'],
     ...['diff', 'nor_gl', 'arm'].map((t) => [`${PH}/Models/jpg/1k/baseball_bat/baseball_bat_${t}_1k.jpg`, `polyhaven/bat/textures/baseball_bat_${t}_1k.jpg`]),
   ],
+  // 画面の部品（OpenGameArt に置かれている Kenney の配布物と、自販機の 3D モデル。どれも CC0）
+  ui: [
+    ['https://opengameart.org/sites/default/files/kenney_ui-pack.zip', 'ui/kenney_ui-pack.zip'],
+    ['https://opengameart.org/sites/default/files/Kenney_gameIcons.zip', 'ui/kenney_game-icons.zip'],
+    ['https://opengameart.org/sites/default/files/vending_machines.zip', 'ui/vending_machines.zip'],
+  ],
   // 効果音ラボ（https://soundeffect-lab.info/）: 商用可・クレジット不要・再配布禁止
   // サイトの直リンク禁止に従い自動取得はしない。サイトから手で保存した mp3 を sounds-local/ に置くと取り込む
   // （[元のファイル名, ゲーム内の名前]）
@@ -134,6 +140,45 @@ function shrinkBgm() {
   }
 }
 
+/** UI の部品：Kenney UI Pack のボタン・Kenney Game Icons のアイコンを public/assets/ui に、自販機を models/vending.glb に */
+const UI_COLORS = ['Yellow', 'Red', 'Green', 'Blue', 'Grey'];
+const UI_ICONS = ['trophy', 'shoppingCart', 'target', 'star', 'singleplayer', 'home', 'pause', 'musicOn', 'musicOff', 'audioOn', 'audioOff', 'arrowLeft', 'locked', 'medal1', 'leaderboardsComplex', 'checkmark', 'cross', 'information', 'return', 'gear', 'plus', 'next', 'right'];
+async function processUi() {
+  const ex = (zip) => {
+    const dir = path.join(CACHE, 'ui', 'x_' + path.basename(zip, '.zip'));
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+      const r = spawnSync('unzip', ['-q', '-o', path.join(CACHE, zip), '-d', dir]);
+      if (r.status !== 0) throw new Error('unzip failed: ' + zip);
+    }
+    return dir;
+  };
+  const out = path.join(OUT, 'ui');
+  fs.mkdirSync(out, { recursive: true });
+  const kui = path.join(ex('ui/kenney_ui-pack.zip'), 'PNG');
+  for (const c of UI_COLORS) {
+    const lc = c.toLowerCase();
+    fs.copyFileSync(path.join(kui, c, 'Double', 'button_rectangle_depth_flat.png'), path.join(out, `btn_${lc}.png`));
+    fs.copyFileSync(path.join(kui, c, 'Double', 'button_rectangle_flat.png'), path.join(out, `btn_${lc}_down.png`));
+    fs.copyFileSync(path.join(kui, c, 'Double', 'button_square_depth_flat.png'), path.join(out, `sq_${lc}.png`));
+    fs.copyFileSync(path.join(kui, c, 'Double', 'button_round_depth_flat.png'), path.join(out, `round_${lc}.png`));
+  }
+  fs.copyFileSync(path.join(kui, 'Yellow', 'Double', 'star.png'), path.join(out, 'star.png'));
+  fs.copyFileSync(path.join(kui, 'Grey', 'Double', 'star.png'), path.join(out, 'star_off.png'));
+  fs.copyFileSync(path.join(kui, 'Extra', 'Double', 'input_rectangle.png'), path.join(out, 'input.png'));
+  const icons = path.join(ex('ui/kenney_game-icons.zip'), 'PNG', 'White', '2x');
+  for (const n of UI_ICONS) fs.copyFileSync(path.join(icons, `${n}.png`), path.join(out, `i_${n}.png`));
+  // 自販機（FBX）→ glTF バイナリ
+  const vm = path.join(OUT, 'models', 'vending.glb');
+  if (!fs.existsSync(vm)) {
+    const dir = ex('ui/vending_machines.zip');
+    const fbx = fs.readdirSync(dir).find((f) => f.endsWith('.fbx'));
+    const r = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'fbx-to-glb.mjs'), path.join(dir, fbx), vm], { stdio: 'inherit' });
+    if (r.status !== 0) throw new Error('vending machine conversion failed');
+  }
+  console.log('[ui] Kenney UI / icons / vending machine');
+}
+
 /** sounds-local/ に置かれた効果音ラボの mp3 を、ゲーム内の名前に揃えて取り込む */
 function importLocalSounds() {
   const dir = path.join(ROOT, 'sounds-local');
@@ -156,7 +201,7 @@ function importLocalSounds() {
 
 async function main() {
   console.log('[fetch] KayKit / Poly Haven');
-  for (const [u, r] of [...SOURCES.kaykit, ...SOURCES.polyhaven]) await get(u, r);
+  for (const [u, r] of [...SOURCES.kaykit, ...SOURCES.polyhaven, ...SOURCES.ui]) await get(u, r);
   console.log('[fetch] OpenTracks');
   for (const [id, name] of SOURCES.bgm) if (id) await getOpenTracks(id, `bgm/${name}.mp3`);
 
@@ -164,6 +209,7 @@ async function main() {
   fs.mkdirSync(OUT, { recursive: true });
   await processModels(CACHE, OUT);
   await processSky(CACHE, OUT);
+  await processUi();
   importLocalSounds();
   shrinkBgm();
   for (const dir of ['se', 'bgm']) {

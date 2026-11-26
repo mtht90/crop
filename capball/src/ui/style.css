@@ -383,3 +383,97 @@ canvas.game { position: absolute; inset: 0; width: 100%; height: 100%; display: 
 .mbig.league b { font-size: 26px; }
 .mbig.free { background: linear-gradient(160deg, #ffffff, #dfe5ee); }
 .mbig { min-height: 112px; }
+
+/* =====================================================================
+   Kenney スキン（Kenney UI Pack のボタン・Kenney Game Icons、CC0）
+   ボタンやカードは 9 分割の画像（border-image）で描く。画像の場所は skin.ts が CSS 変数で渡す
+   ===================================================================== */
+:root { --display: 'RocknRoll One', 'M PLUS Rounded 1c', sans-serif; --kdark: #3a3f4d; }
+.kicon { width: 1.2em; height: 1.2em; vertical-align: -0.22em; pointer-events: none; }
+.kicon.dark { filter: invert(.78); }
+/* 9 分割の共通形（2倍解像度の画像：角 24px・下の厚み 32px → 表示は半分） */
+.big-btn, .seg button, .mbig, .cup, .chal-card, .dexb, .team, .caprep .rp, .capinfo, .vs, .phead .back, .iconbtn, .standings-wrap, .lineup, .vstage {
+  border-style: solid; border-color: transparent; border-width: 12px 12px 16px;
+  border-image: var(--btn-grey) 24 24 32 24 fill / 12px 12px 16px;
+  background: none !important; box-shadow: none !important; border-radius: 0; outline: none;
+}
+.big-btn:active, .seg button:active, .mbig:active, .cup:active, .chal-card:active, .dexb:active, .team:active, .phead .back:active, .iconbtn:active { transform: translateY(3px); filter: brightness(.96); box-shadow: none; }
+/* パネルは背景を少し沈めるだけにして、部品を直接並べる */
+.panel { background: linear-gradient(180deg, rgba(36, 70, 140, .72), rgba(18, 34, 76, .84)); border: 0; box-shadow: 0 10px 30px rgba(0, 0, 0, .25); border-radius: 22px; color: #fff; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+.panel h2, .phead h2 { color: #fff; text-shadow: 0 2px 0 rgba(0, 0, 0, .3); font-family: var(--display); font-weight: 400; }
+.panel .howto, .row > label, .round, .center, .rnew, .vendp .collect, .bigscore { color: #fff; }
+.row > label { opacity: .85; }
+/* 大きいボタン */
+.big-btn { border-image-source: var(--btn-yellow); color: #5a3d00; font-family: var(--display); padding: 6px 10px 4px; font-size: 20px; display: flex; align-items: center; justify-content: center; gap: 6px; }
+.big-btn .kicon { filter: invert(.25) sepia(1) saturate(2) hue-rotate(5deg); }
+.big-btn.sub { border-image-source: var(--btn-grey); color: var(--kdark); font-size: 16px; }
+.big-btn:disabled { border-image-source: var(--btn-grey); color: #8b90a0; opacity: 1; filter: none; }
+/* 切り替えボタン */
+.seg button { color: var(--kdark); padding: 2px 2px 0; font-size: 13px; }
+.seg button.sel { border-image-source: var(--btn-blue); color: #fff; transform: none; }
+/* ホームのメニュー */
+.mbig { color: #fff; padding: 4px 6px 2px; min-height: 104px; text-shadow: 0 2px 0 rgba(0, 0, 0, .22); overflow: visible; }
+.mbig::before { display: none; }
+.mbig .ic { height: auto; filter: none; }
+.mbig .ic .kicon { width: 46px; height: 46px; }
+.mbig b { font-family: var(--display); font-weight: 400; font-size: 19px; }
+.mbig small { opacity: .92; }
+.mbig.league { border-image-source: var(--btn-yellow); color: #5a3d00; text-shadow: 0 1px 0 rgba(255, 255, 255, .45); min-height: 128px; }
+.mbig.league .kicon { width: 56px; height: 56px; filter: invert(.25) sepia(1) saturate(2) hue-rotate(5deg); }
+.mbig.league b { font-size: 26px; }
+.mbig.vend { border-image-source: var(--btn-red); }
+.mbig.chal { border-image-source: var(--btn-green); }
+.mbig.mycap { border-image-source: var(--btn-blue); }
+.mbig.free { border-image-source: var(--btn-grey); color: var(--kdark); text-shadow: none; }
+.mbig.free .kicon { filter: invert(.75); }
+.logo .jp { font-family: var(--display); background: none; color: #fff; -webkit-text-stroke: 0; text-shadow: 0 4px 0 #1b3a78, 0 8px 18px rgba(0, 0, 0, .25); }
+.logo.small .jp { font-size: clamp(34px, 10vw, 48px); }
+.home .topbar .coins, .coins { background: rgba(18, 26, 44, .8); }
+/* 見出しの戻るボタン */
+.phead .back { width: 44px; height: 44px; border-image: var(--round-blue) 24 24 32 24 fill / 12px 12px 16px; display: grid; place-items: center; padding: 0; }
+.phead .back .kicon { width: 22px; height: 22px; }
+/* 杯・チャレンジ・図鑑のカード */
+.cup, .chal-card, .dexb, .team { color: var(--kdark); }
+.cup { padding: 2px 6px 0; }
+.cup.g-G1 { border-image-source: var(--btn-yellow); }
+.cup.locked { opacity: .55; }
+.cup .cname b, .chal-card b { font-family: var(--display); font-weight: 400; }
+.trophy .kicon { width: 14px; height: 14px; }
+.chal-card { padding: 4px 8px 2px; }
+.chal-card .ic { width: 52px; height: 52px; flex: 0 0 52px; display: grid; place-items: center; background: var(--round-green) center / 100% 100% no-repeat; }
+.chal-card .ic.red { background-image: var(--round-red); }
+.chal-card .ic .kicon { width: 28px; height: 28px; margin-top: -4px; }
+.dexb { padding: 6px 2px 2px; }
+.dexb.sel, .team.sel { border-image-source: var(--btn-yellow); outline: none; transform: none; }
+.team { padding: 4px 6px 2px; }
+/* 情報の箱 */
+.capinfo { color: var(--kdark); padding: 4px 6px 2px; }
+.caprep .rp { color: var(--kdark); padding: 2px 6px 0; }
+.caprep .rh { color: #fff; opacity: .85; }
+.vs { color: var(--kdark); padding: 6px; }
+.oppcap { color: #fff; }
+.standings { background: rgba(255, 255, 255, .94); color: var(--kdark); border-radius: 12px; overflow: hidden; }
+.standings th { color: var(--kdark); }
+.standings tr.me td { background: #ffe9a6; }
+.reward { color: #ffd34a; text-shadow: 0 2px 0 rgba(0, 0, 0, .35); }
+.unlock { background: rgba(53, 179, 106, .25); border-color: #7ee2a6; color: #fff; }
+.trophy-big .kicon { width: 84px; height: 84px; filter: invert(.25) sepia(1) saturate(3) hue-rotate(5deg) drop-shadow(0 6px 0 rgba(0, 0, 0, .3)); }
+.bigscore b { -webkit-text-stroke: 0; color: #ffd34a; font-family: var(--display); text-shadow: 0 4px 0 rgba(0, 0, 0, .3); }
+/* 星（Kenney の星） */
+.stars { gap: 1px; }
+.stars i { width: 14px; height: 14px; border: 0; border-radius: 0; background: var(--star-off) center / contain no-repeat; }
+.stars i.on { background: var(--star-on) center / contain no-repeat; border: 0; }
+/* ゲーム中のボタン */
+.iconbtn { width: 46px; height: 46px; padding: 0; border-image: var(--round-blue) 24 24 32 24 fill / 12px 12px 16px; display: grid; place-items: center; color: #fff; }
+.iconbtn .kicon { width: 22px; height: 22px; }
+.result-title { font-family: var(--display); -webkit-text-stroke: 0; text-shadow: 0 4px 0 #1b3a78, 0 10px 20px rgba(0, 0, 0, .3); }
+/* 自販機 */
+.vstage { position: relative; display: grid; place-items: center; padding: 4px 0 0; border-image-source: var(--btn-grey); margin-bottom: 4px; }
+.vstage .vend3d { display: block; max-width: 100%; }
+.vprice { position: absolute; right: 8px; top: 6px; background: #1d2433; color: #7cff8c; font-family: var(--display); font-size: 15px; border-radius: 8px; padding: 3px 10px; }
+.lineup { margin-top: 10px; color: var(--kdark); padding: 4px 6px 2px; }
+.lineup .lh { font-weight: 900; font-size: 12px; margin-bottom: 4px; display: flex; justify-content: space-between; }
+.lineup .lrow { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; justify-items: center; }
+.reveal .panel { color: #fff; }
+.rbanner { font-family: var(--display); }
+.modeinfo em { font-family: var(--display); }

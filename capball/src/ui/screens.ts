@@ -6,6 +6,7 @@ import type { GameState } from '../game/rules';
 import { CAPS as ALL_CAPS, capById, capPitch, capStars, type CapBrand } from '../game/caps';
 import { PITCHES, SLOTS, SLOT_HOW } from '../game/data';
 import { CapPreview } from '../render/capPreview';
+import { icon } from './skin';
 import { drawCapTop } from '../render/cap';
 
 const el = (html: string) => {
@@ -72,7 +73,7 @@ export function setupScreen(parent: HTMLElement): Promise<SetupResult | null> {
     let cap = Math.max(0, CAPS.findIndex((c) => c.id === save.capSel));
     team = Math.max(0, TEAMS.findIndex((t) => t.id === save.teamId));
     const s = el(`<div class="screen dim"><div class="panel">
-      <div class="phead"><button class="back">‹</button><h2>フリー試合</h2></div>
+      <div class="phead"><button class="back" aria-label="戻る">${icon('arrowLeft')}</button><h2>フリー試合</h2></div>
       <div class="row"><label>あなたのチーム（リーグ戦でもこのチームで戦う）</label><div class="teams">${TEAMS.map((t, i) => `<div class="team" data-team="${i}"><div class="sw" style="background:linear-gradient(90deg, ${t.uniform.primary} 0 50%, ${t.color} 50%)"></div><div class="nm">${t.name}</div><div class="st">エース ${t.players.find((p) => p.pos === 'P')!.name}</div></div>`).join('')}</div></div>
       <div class="row"><label>使うキャップ（守るときに投げるキャップ。銘柄で性格が変わる）</label>
         <div class="caps">${CAPS.map((c, i) => `<button class="capb" data-cap="${i}" aria-label="${c.name}"><canvas width="96" height="96"></canvas></button>`).join('')}</div>

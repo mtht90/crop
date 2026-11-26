@@ -1,4 +1,5 @@
 import './ui/style.css';
+import { applySkin } from './ui/skin';
 import { loadAssets, type Assets } from './core/assets';
 import { Character } from './render/character';
 import { DIFFICULTIES, TEAMS } from './game/data';
@@ -16,6 +17,7 @@ import { Match, type MatchOptions } from './game/match';
 import { loadingScreen, pauseMenu, resultScreen, setupScreen, titleScreen } from './ui/screens';
 
 async function main() {
+  applySkin();
   const app = document.getElementById('app')!;
   const engine = new Engine(app);
   engine.start();

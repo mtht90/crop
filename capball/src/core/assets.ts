@@ -65,6 +65,13 @@ async function loadPackedGltf(loader: GLTFLoader, url: string): Promise<GLTF> {
   return loader.parseAsync(glb.buffer, url.slice(0, url.lastIndexOf('/') + 1));
 }
 
+/** 必要になったときに読むモデル（自販機など） */
+export function loadExtraModel(name: string): Promise<GLTF> {
+  const gltf = new GLTFLoader();
+  const url = BASE + `models/${name}.${EXT}`;
+  return withRetry(name, () => (EXT === 'json' ? loadPackedGltf(gltf, url) : gltf.loadAsync(url)));
+}
+
 export async function loadAssets(onProgress: (p: number) => void): Promise<Assets> {
   const gltf = new GLTFLoader();
   let done = 0;

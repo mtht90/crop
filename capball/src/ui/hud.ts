@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { grade, PITCHES, type PitchKind, type PitchSlot, POS_JP } from '../game/data';
 import { capPitch, type CapBrand } from '../game/caps';
 import { ZONE } from '../game/geom';
+import { icon } from './skin';
 import type { GameState } from '../game/rules';
 import type { SwingMode } from '../game/batting';
 import { audio } from '../core/audio';
@@ -33,8 +34,8 @@ export class Hud {
   private telopEl = h('div', 'telop');
   private flashEl = h('div', 'flash');
   private fadeEl = h('div', 'fade');
-  readonly pauseBtn = h('button', 'iconbtn left', 'Ⅱ');
-  readonly soundBtn = h('button', 'iconbtn right', '♪');
+  readonly pauseBtn = h('button', 'iconbtn left', icon('pause'));
+  readonly soundBtn = h('button', 'iconbtn right', icon('musicOn'));
   zone: ZoneRect = { x0: 0, y0: 0, x1: 1, y1: 1 };
 
   constructor(parent: HTMLElement) {
@@ -47,7 +48,7 @@ export class Hud {
     parent.append(this.input, this.root);
     this.soundBtn.onclick = () => {
       audio.setMuted(!audio.muted);
-      this.soundBtn.style.opacity = audio.muted ? '0.45' : '1';
+      this.soundBtn.innerHTML = icon(audio.muted ? 'musicOff' : 'musicOn');
     };
   }
 
