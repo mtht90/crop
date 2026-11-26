@@ -64,6 +64,10 @@ startBtn.disabled = true;
     const pick = (ch) => { Progress.select(ch.id); R.setCharacter(ch); sfxSelect(); };
     UI.renderChars(CHARACTERS, Progress, pick);
     UI.renderModes(Progress, () => sfxSelect());
+    UI.setGearDefs(Progress.gearDef);
+    UI.renderGold(Progress);
+    UI.renderChapters(Progress, (c) => { R.setChapterLook(c); sfxSelect(); });
+    R.setChapterLook(Progress.chapter());
     G.onKill = (e) => R.onKill(e);
     G.player = titleDummy;
     ready = true;
@@ -90,7 +94,8 @@ function start() {
   resetInput();
   FX.clear();
   R.resetRun();
-  newRun(ch, Progress.mode());
+  R.setChapterLook(Progress.chapter());
+  newRun(ch, Progress.mode(), Progress.chapter());
 }
 function setPaused(p) {
   if (p && G.state === 'play') { G.state = 'paused'; UI.showPause(true); resetInput(); }
@@ -99,6 +104,12 @@ function setPaused(p) {
 
 startBtn.addEventListener('click', start);
 document.getElementById('ult').addEventListener('pointerdown', (e) => { e.preventDefault(); castUlt(); });
+for (const k of ['reroll', 'banish', 'skip']) document.getElementById('lv_' + k).addEventListener('click', () => UI.levelUpTool(k));
+document.getElementById('shopBtn').addEventListener('click', () => UI.openShop(Progress));
+document.getElementById('shopClose').addEventListener('click', () => { UI.closeShop(); UI.renderGold(Progress); });
+document.getElementById('refundBtn').addEventListener('click', () => { Progress.refundPower(); UI.renderShop(Progress); });
+document.getElementById('gearBtn').addEventListener('click', () => UI.openGear(Progress));
+document.getElementById('gearClose').addEventListener('click', () => { UI.closeGear(); UI.renderGold(Progress); });
 document.getElementById('codexBtn').addEventListener('click', () => UI.openCodex(Progress));
 document.getElementById('codexClose').addEventListener('click', () => UI.closeCodex());
 document.querySelectorAll('#codexTabs button').forEach((b) => b.addEventListener('click', () => UI.codexTab(Progress, b.dataset.tab)));
@@ -117,6 +128,9 @@ function toTitle() {
   UI.showTitle();
   UI.renderChars(CHARACTERS, Progress, (c) => { Progress.select(c.id); R.setCharacter(c); });
   UI.renderModes(Progress, () => {});
+  UI.renderGold(Progress);
+  UI.renderChapters(Progress, (c) => R.setChapterLook(c));
+  R.setChapterLook(Progress.chapter());
   music.title();
 }
 for (const id of ['muteBtn', 'muteBtn2']) {
@@ -136,11 +150,13 @@ input.onKey = (e) => {
   } else if (G.state === 'levelup' && UI.levelUpOpen()) {
     const n = { Digit1: 0, Digit2: 1, Digit3: 2, Numpad1: 0, Numpad2: 1, Numpad3: 2 }[e.code];
     if (n !== undefined) UI.pick(n);
-  } else if (e.code === 'Escape' && !document.getElementById('codex').classList.contains('hidden')) {
-    UI.closeCodex();
+    const t = { KeyR: 'reroll', KeyB: 'banish', KeyN: 'skip' }[e.code];
+    if (t) UI.levelUpTool(t);
+  } else if (e.code === 'Escape' && ['codex', 'shop', 'gear'].some((id) => !document.getElementById(id).classList.contains('hidden'))) {
+    UI.closeCodex(); UI.closeShop(); UI.closeGear(); UI.renderGold(Progress);
   } else if (e.code === 'Escape' || e.code === 'KeyP') {
     setPaused(G.state === 'play');
-  } else if ((e.code === 'Enter' || e.code === 'Space') && (G.state === 'title' || G.state === 'result') && document.getElementById('codex').classList.contains('hidden')) {
+  } else if ((e.code === 'Enter' || e.code === 'Space') && (G.state === 'title' || G.state === 'result') && ['codex', 'shop', 'gear'].every((id) => document.getElementById(id).classList.contains('hidden'))) {
     start();
   }
 };

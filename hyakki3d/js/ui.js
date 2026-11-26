@@ -1,5 +1,5 @@
 // DOM の UI（HUD・レベルアップカード・バナー・各画面）
-import { SKILLS, EVOLUTIONS, MODES, ENEMIES, ACHIEVEMENTS, CHARACTERS } from './config.js';
+import { SKILLS, EVOLUTIONS, MODES, ENEMIES, ACHIEVEMENTS, CHARACTERS, POWERUPS, powerCost, RARITY, SLOTS_GEAR, STAT_LABEL, CHAPTERS } from './config.js';
 import { sfx } from './audio.js';
 
 const $ = (id) => document.getElementById(id);
@@ -28,6 +28,64 @@ let hudT = 0;
 let pickHandler = null;
 let cardsReadyAt = 0;
 let currentOpts = [];
+
+let lvG = null, lvTools = null, banishMode = false;
+
+function refreshTools() {
+  const c = lvTools ? lvTools.counts() : { reroll: 0, banish: 0, skip: 0 };
+  for (const k of ['reroll', 'banish', 'skip']) {
+    const b = document.getElementById('lv_' + k);
+    b.querySelector('b').textContent = c[k];
+    b.disabled = c[k] <= 0;
+    b.classList.toggle('on', k === 'banish' && banishMode);
+  }
+}
+
+function buildCards(opts) {
+  const G = lvG;
+  currentOpts = opts;
+  const box = $('cards');
+  box.innerHTML = '';
+  box.classList.toggle('banishing', banishMode);
+  opts.forEach((id, i) => {
+    const c = document.createElement('button');
+    c.className = 'card';
+    c.id = `card${i}`;
+    c.style.animationDelay = `${i * 0.08}s`;
+    let name, type, lvTxt, desc, isNew = false;
+    if (id === '_heal') { name = 'ポーション'; type = 'passive'; lvTxt = ''; desc = 'HP を全回復する'; }
+    else if (id === '_purge') { name = 'ホーリーノヴァ'; type = 'attack'; lvTxt = ''; desc = '画面内の魔物をすべて消し飛ばす'; }
+    else {
+      const def = SKILLS[id];
+      const owned = G.skills.find((s) => s.id === id);
+      name = def.name; type = def.type;
+      if (owned) {
+        lvTxt = `Lv${owned.lv} → ${owned.lv + 1}`;
+        desc = def.type === 'passive' ? def.desc : def.up[owned.lv] || def.desc;
+        const ev = EVOLUTIONS.find((e) => e.from === id || e.need === id);
+        if (ev && owned.lv + 1 >= def.levels.length && def.type !== 'passive') desc += `<br><small class="evoHint">最大Lv＋「${SKILLS[ev.need].name}」で宝箱から進化</small>`;
+      } else {
+        lvTxt = 'NEW'; isNew = true; desc = def.desc;
+        const ev = EVOLUTIONS.find((e) => e.need === id && G.skills.some((k) => k.id === e.from));
+        if (ev) desc += `<br><small class="evoHint">「${SKILLS[ev.from].name}」の進化に必要</small>`;
+      }
+    }
+    c.classList.add(type);
+    if (isNew) c.classList.add('new');
+    c.innerHTML = `
+      <div class="icon"></div>
+      <div class="body">
+        <div class="row"><b class="name">${name}</b><em class="tag">${TYPE_LABEL[type]}</em></div>
+        <div class="lv">${lvTxt}</div>
+        <div class="desc">${desc}</div>
+      </div>
+      <kbd>${i + 1}</kbd>`;
+    c.querySelector('.icon').appendChild(icon(id, 48));
+    c.addEventListener('click', () => UI.pick(i));
+    box.appendChild(c);
+  });
+  refreshTools();
+}
 
 export const UI = {
   setIcons(map) { ICONS = map || {}; },
@@ -97,59 +155,37 @@ export const UI = {
     if (show) $('bossfill').style.width = `${Math.max(0, frac * 100)}%`;
   },
 
-  showLevelUp(G, opts, onPick) {
-    currentOpts = opts;
+  // tools: { counts() -> {reroll, banish, skip}, reroll() -> 新しい選択肢, banish(id) -> 新しい選択肢, skip() }
+  showLevelUp(G, opts, onPick, tools) {
+    lvG = G; lvTools = tools; banishMode = false;
     pickHandler = onPick;
     cardsReadyAt = performance.now() + 380;
     $('lvNum').textContent = G.level;
-    const box = $('cards');
-    box.innerHTML = '';
-    opts.forEach((id, i) => {
-      const c = document.createElement('button');
-      c.className = 'card';
-      c.id = `card${i}`;
-      c.style.animationDelay = `${i * 0.08}s`;
-      let name, type, lvTxt, desc, isNew = false;
-      if (id === '_heal') { name = 'ポーション'; type = 'passive'; lvTxt = ''; desc = 'HP を全回復する'; }
-      else if (id === '_purge') { name = 'ホーリーノヴァ'; type = 'attack'; lvTxt = ''; desc = '画面内の魔物をすべて消し飛ばす'; }
-      else {
-        const def = SKILLS[id];
-        const owned = G.skills.find((s) => s.id === id);
-        name = def.name; type = def.type;
-        if (owned) {
-          lvTxt = `Lv${owned.lv} → ${owned.lv + 1}`;
-          desc = def.type === 'passive' ? def.desc : def.up[owned.lv] || def.desc;
-          const ev = EVOLUTIONS.find((e) => e.from === id || e.need === id);
-          if (ev && owned.lv + 1 >= def.levels.length && def.type !== 'passive') desc += `<br><small class="evoHint">最大Lv＋「${SKILLS[ev.need].name}」で宝箱から進化</small>`;
-        } else {
-          lvTxt = 'NEW'; isNew = true; desc = def.desc;
-          const ev = EVOLUTIONS.find((e) => e.need === id && G.skills.some((k) => k.id === e.from));
-          if (ev) desc += `<br><small class="evoHint">「${SKILLS[ev.from].name}」の進化に必要</small>`;
-        }
-      }
-      c.classList.add(type);
-      if (isNew) c.classList.add('new');
-      c.innerHTML = `
-        <div class="icon"></div>
-        <div class="body">
-          <div class="row"><b class="name">${name}</b><em class="tag">${TYPE_LABEL[type]}</em></div>
-          <div class="lv">${lvTxt}</div>
-          <div class="desc">${desc}</div>
-        </div>
-        <kbd>${i + 1}</kbd>`;
-      c.querySelector('.icon').appendChild(icon(id, 48));
-      c.addEventListener('click', () => UI.pick(i));
-      box.appendChild(c);
-    });
+    buildCards(opts);
     $('levelup').classList.remove('hidden');
   },
 
   pick(i) {
     if (!pickHandler || performance.now() < cardsReadyAt || i >= currentOpts.length) return;
+    if (banishMode) {
+      // 除外：その候補を以後出さないようにして、そこだけ引き直す
+      banishMode = false;
+      buildCards(lvTools.banish(currentOpts[i]));
+      return;
+    }
     const h = pickHandler;
     pickHandler = null;
     $('levelup').classList.add('hidden');
     h(currentOpts[i]);
+  },
+  levelUpTool(kind) {
+    if (!pickHandler || !lvTools || performance.now() < cardsReadyAt) return;
+    const n = lvTools.counts()[kind];
+    if (n <= 0) return;
+    sfx.select();
+    if (kind === 'reroll') { banishMode = false; buildCards(lvTools.reroll()); cardsReadyAt = performance.now() + 200; }
+    else if (kind === 'banish') { banishMode = !banishMode; refreshTools(); document.getElementById('cards').classList.toggle('banishing', banishMode); }
+    else if (kind === 'skip') { const h = pickHandler; pickHandler = null; $('levelup').classList.add('hidden'); lvTools.skip(); h(null); }
   },
   levelUpOpen() { return !!pickHandler; },
   levelUpOptions() { return currentOpts; },
@@ -174,6 +210,11 @@ export const UI = {
       <div><span>到達レベル</span><b>${s.level}</b></div>
       <div><span>最大同時召喚</span><b>${s.maxAllies}</b></div>
       <div><span>総ダメージ</span><b>${Math.round(s.dmg)}</b></div>${best}`;
+    const loot = [];
+    if (s.gold) loot.push(`<div class="gold"><i></i><b>+${s.gold.toLocaleString()}</b><span>拾った ${s.goldPicked} ＋ ボーナス ${s.goldBonus}${win ? '（クリア ×1.5）' : ''}</span></div>`);
+    for (const g of s.gear || []) loot.push(gearChip(g, true));
+    if (s.newChapter) loot.push(`<div class="newch">新しい章が開いた：第${s.newChapter}章 ${CHAPTERS[s.newChapter - 1].name}</div>`);
+    $('resLoot').innerHTML = loot.join('');
     $('resUnlock').innerHTML = (s.unlocked || []).map((c) => `<div class="unlock"><img alt="" src="${ICONS['char_' + c.id] || ''}"><span>新たなヒーローが解放された<br><b>${c.job} ${c.name}</b></span></div>`).join('')
       + (s.achs || []).map((a) => `<div class="unlock ach"><span>実績達成<br><b>${a.name}</b>（${a.text}）</span></div>`).join('');
   },
@@ -321,4 +362,89 @@ UI.codexTab = (progress, tab) => {
   }
   $('codexCount').textContent = `${got} / ${all}`;
   body.innerHTML = html;
+};
+
+// ================================================================ 金貨・強化・装備・章
+let GEARDEF = null;
+UI.setGearDefs = (fn) => { GEARDEF = fn; };
+function gearStatsText(g) {
+  const d = GEARDEF(g.id), m = RARITY[g.r].mul;
+  return Object.entries(d.stats).map(([k, v]) => STAT_LABEL[k](v * m)).join('・');
+}
+function gearChip(g, isNew = false) {
+  const d = GEARDEF(g.id), R = RARITY[g.r];
+  return `<div class="gchip${isNew ? ' new' : ''}" style="--rc:${R.color}"><em>${R.id}</em><b>${d.name}</b><span>${SLOTS_GEAR[d.slot]}・${gearStatsText(g)}</span></div>`;
+}
+
+UI.renderGold = (progress) => {
+  const v = progress.gold().toLocaleString();
+  for (const id of ['goldNum', 'shopGold']) { const el = $(id); if (el) el.textContent = v; }
+};
+
+UI.openShop = (progress) => { $('shop').classList.remove('hidden'); UI.renderShop(progress); };
+UI.closeShop = () => $('shop').classList.add('hidden');
+UI.renderShop = (progress) => {
+  UI.renderGold(progress);
+  const box = $('shopList');
+  box.innerHTML = '';
+  for (const p of POWERUPS) {
+    const lv = progress.powerLv(p.id), max = lv >= p.max, cost = max ? 0 : powerCost(p, lv);
+    const b = document.createElement('button');
+    b.className = 'pw' + (max ? ' max' : '') + (!max && progress.gold() < cost ? ' poor' : '');
+    let pips = '';
+    for (let i = 0; i < p.max; i++) pips += `<i class="${i < lv ? 'on' : ''}"></i>`;
+    b.innerHTML = `<b>${p.name}</b><span class="pips">${pips}</span><small>${lv ? p.fmt(p.per * lv) : p.fmt(p.per) + '（次の段）'}</small><em>${max ? 'MAX' : `<i></i>${cost.toLocaleString()}`}</em>`;
+    b.addEventListener('click', () => { if (progress.buyPower(p.id)) { sfx.level(); UI.renderShop(progress); } else sfx.hit(); });
+    box.appendChild(b);
+  }
+};
+
+let gearSel = null;
+UI.openGear = (progress) => { gearSel = null; $('gear').classList.remove('hidden'); UI.renderGear(progress); };
+UI.closeGear = () => $('gear').classList.add('hidden');
+UI.renderGear = (progress) => {
+  const eq = progress.equipped(), all = progress.gear();
+  const byUid = (u) => all.find((g) => g.uid === u);
+  $('gearSlots').innerHTML = Object.entries(SLOTS_GEAR).map(([slot, label]) => {
+    const g = eq[slot] && byUid(eq[slot]);
+    return `<div class="slot"><small>${label}</small>${g ? gearChip(g) : '<div class="empty">なし</div>'}</div>`;
+  }).join('');
+  const list = $('gearList');
+  list.innerHTML = '';
+  const sorted = [...all].sort((a, b) => b.r - a.r || a.id.localeCompare(b.id));
+  if (!sorted.length) list.innerHTML = '<p class="sub">まだ装備がない。中ボスを倒すと手に入る。</p>';
+  for (const g of sorted) {
+    const el = document.createElement('button');
+    el.className = 'gitem' + (Object.values(eq).includes(g.uid) ? ' eq' : '') + (gearSel === g.uid ? ' sel' : '');
+    el.innerHTML = gearChip(g);
+    el.addEventListener('click', () => { gearSel = g.uid; UI.renderGear(progress); });
+    list.appendChild(el);
+  }
+  const g = gearSel && byUid(gearSel);
+  const det = $('gearDetail');
+  if (!g) { det.innerHTML = '<p class="sub">装備を選ぶと、付け外し・合成・売却ができる。</p>'; return; }
+  const same = all.filter((x) => x.id === g.id && x.r === g.r).length;
+  const on = Object.values(eq).includes(g.uid);
+  det.innerHTML = `${gearChip(g)}<div class="row">
+    <button class="btn small" id="gEq">${on ? '外す' : '装備する'}</button>
+    <button class="btn small" id="gMg" ${same >= 3 && g.r < RARITY.length - 1 ? '' : 'disabled'}>合成（${same}/3）</button>
+    <button class="btn small" id="gSl">売却 +${20 * (g.r + 1) * (g.r + 1)}</button></div>`;
+  $('gEq').onclick = () => { progress.equip(g.uid); sfx.select(); UI.renderGear(progress); };
+  $('gMg').onclick = () => { const k = progress.mergeGear(g.uid); if (k) { gearSel = k.uid; sfx.chest(); UI.renderGear(progress); } };
+  $('gSl').onclick = () => { progress.sellGear(g.uid); gearSel = null; sfx.gem(8); UI.renderGold(progress); UI.renderGear(progress); };
+};
+
+UI.renderChapters = (progress, onPick) => {
+  const box = $('chapters');
+  box.innerHTML = '';
+  const cur = progress.chapter().id, max = progress.chapterMax();
+  for (const c of CHAPTERS) {
+    const b = document.createElement('button');
+    const open = c.id <= max;
+    b.className = 'chap' + (c.id === cur ? ' sel' : '') + (open ? '' : ' locked');
+    b.innerHTML = `<small>${c.sub}</small><b>${open ? c.name : '？？？'}</b>`;
+    b.title = open ? c.desc : `第${c.id - 1}章の本編を制すと開く`;
+    b.addEventListener('click', () => { if (!open) return; progress.setChapter(c.id); onPick(c); UI.renderChapters(progress, onPick); });
+    box.appendChild(b);
+  }
 };

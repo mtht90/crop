@@ -50,9 +50,17 @@ export const ENEMIES = {
   kappa:       { name: 'ビッグトード', hp: 26,  speed: 80, dmg: 8,  r: 14, xp: 2,  mass: 0.9, color: 5, model: 'frog', hop: true },
   chochin:     { name: 'ラット',       hp: 22,  speed: 112, dmg: 8, r: 12, xp: 2,  mass: 0.7, color: 7, model: 'rat' },
   gashadokuro: { name: 'スケルトン剣士', hp: 95,  speed: 48, dmg: 14, r: 16, xp: 4,  mass: 2,   color: 3, model: 'skRogue' },
+  // 行動つきの雑魚（章や時間で混ざる）
+  skMage:      { name: 'スケルトンメイジ', hp: 26, speed: 52, dmg: 6, r: 13, xp: 3, mass: 1, color: 3, model: 'skMage', ai: 'shooter' },
+  bomber:      { name: '毒スライム',   hp: 20,  speed: 70, dmg: 4,  r: 14, xp: 2,  mass: 1,   color: 5, model: 'slimeRed', ai: 'bomber' },
+  wasp:        { name: 'ブラッドバット', hp: 16, speed: 84, dmg: 8,  r: 12, xp: 2,  mass: 0.6, color: 1, model: 'batRed', ai: 'charger' },
+  splitter:    { name: 'ビッグスライム', hp: 60, speed: 44, dmg: 10, r: 20, xp: 3, mass: 1.6, color: 6, model: 'slime', ai: 'splitter' },
+  slimelet:    { name: 'プチスライム', hp: 12,  speed: 74, dmg: 5,  r: 10, xp: 1,  mass: 0.6, color: 6, model: 'slime' },
+  brazier:     { name: '魔石灯',       hp: 1,   speed: 0,  dmg: 0,  r: 18, xp: 0,  mass: 999, color: 7, model: 'brazier', static: true },
   oni:         { name: 'ジャイアントスパイダー', hp: 650, speed: 58, dmg: 20, r: 34, xp: 30, mass: 6,   color: 1, elite: true, model: 'spiderBig' },
   orochi:      { name: 'ヴェノムサーペント', hp: 8000, speed: 76, dmg: 30, r: 46, xp: 60, mass: 999, color: 6, mid: true, model: 'orochi' },
   mukuro:      { name: 'リッチ',       hp: 15000, speed: 62, dmg: 32, r: 40, xp: 90, mass: 999, color: 3, mid: true, model: 'mukuro' },
+  queen:       { name: '女王グモ',     hp: 260000, speed: 92, dmg: 40, r: 70, xp: 0, mass: 999, color: 5, boss: true, model: 'spiderBig' },
   tengu:       { name: 'スケルトンキング', hp: 300000, speed: 80, dmg: 45, r: 60, xp: 0, mass: 999, color: 6, boss: true, model: 'boss' },
 };
 
@@ -64,12 +72,12 @@ export const SPAWN = [
   { t: 0,   rate: 2,   mix: { onibi: 3, kooni: 2 } },
   { t: 60,  rate: 5,   mix: { onibi: 2, kooni: 4 } },
   { t: 120, rate: 8,   mix: { kooni: 4, hitotsume: 2, onibi: 2, kappa: 2 } },
-  { t: 210, rate: 16,  mix: { kooni: 3, hitotsume: 3, chochin: 2, onibi: 2, kappa: 2 } },
-  { t: 300, rate: 24,  mix: { hitotsume: 3, chochin: 3, kooni: 2, onibi: 3, kappa: 2 } },
-  { t: 420, rate: 34,  mix: { hitotsume: 2, chochin: 3, gashadokuro: 2, onibi: 3 } },
-  { t: 540, rate: 46,  mix: { chochin: 3, gashadokuro: 3, hitotsume: 2, onibi: 3 } },
-  { t: 600, rate: 70,  mix: { chochin: 3, gashadokuro: 3, hitotsume: 3, onibi: 3, kooni: 2 } },
-  { t: 719, rate: 90,  mix: { chochin: 3, gashadokuro: 3, hitotsume: 3, onibi: 3, kooni: 2 } },
+  { t: 210, rate: 16,  mix: { kooni: 3, hitotsume: 3, chochin: 2, onibi: 2, kappa: 2, skMage: 1 } },
+  { t: 300, rate: 24,  mix: { hitotsume: 3, chochin: 3, kooni: 2, onibi: 3, kappa: 2, skMage: 1, wasp: 1, bomber: 1 } },
+  { t: 420, rate: 34,  mix: { hitotsume: 2, chochin: 3, gashadokuro: 2, onibi: 3, skMage: 2, wasp: 2, bomber: 1, splitter: 1 } },
+  { t: 540, rate: 46,  mix: { chochin: 3, gashadokuro: 3, hitotsume: 2, onibi: 3, skMage: 2, wasp: 2, bomber: 2, splitter: 1 } },
+  { t: 600, rate: 70,  mix: { chochin: 3, gashadokuro: 3, hitotsume: 3, onibi: 3, kooni: 2, skMage: 2, wasp: 2, bomber: 2, splitter: 1 } },
+  { t: 719, rate: 90,  mix: { chochin: 3, gashadokuro: 3, hitotsume: 3, onibi: 3, kooni: 2, skMage: 2, wasp: 2, bomber: 2, splitter: 1 } },
   { t: 720, rate: 14,  mix: { onibi: 3, kooni: 2, chochin: 1 } },   // ボス戦は控えめ
 ];
 
@@ -311,4 +319,64 @@ export const ACHIEVEMENTS = [
   { id: 'yokai',   name: '魔物博士',     text: '魔物を全種倒す' },
   { id: 'ult10',   name: '必殺皆伝',     text: '必殺技を通算 10 回放つ' },
   { id: 'allwin',  name: '英雄の頂',     text: '6 人全員で本編を制す' },
+];
+
+// ---- 永続強化（金貨で買う。周回をまたいで残る） ----
+// per: 1段あたりの効果 / max: 最大段 / cost: 1段目の値段（段が上がるほど高くなる）
+export const POWERUPS = [
+  { id: 'atk',    name: '攻撃力',   per: 0.05, max: 5, cost: 200, fmt: (v) => `威力 +${Math.round(v * 100)}%` },
+  { id: 'hp',     name: '最大HP',   per: 12,   max: 5, cost: 150, fmt: (v) => `最大HP +${v}` },
+  { id: 'regen',  name: '再生',     per: 0.15, max: 4, cost: 200, fmt: (v) => `毎秒 ${v.toFixed(2)} 回復` },
+  { id: 'armor',  name: '防御',     per: 0.04, max: 4, cost: 250, fmt: (v) => `被ダメ -${Math.round(v * 100)}%` },
+  { id: 'speed',  name: '移動速度', per: 0.04, max: 4, cost: 200, fmt: (v) => `移動 +${Math.round(v * 100)}%` },
+  { id: 'cd',     name: '詠唱',     per: 0.03, max: 4, cost: 300, fmt: (v) => `間隔 -${Math.round(v * 100)}%` },
+  { id: 'pickup', name: '回収範囲', per: 0.12, max: 4, cost: 120, fmt: (v) => `回収 +${Math.round(v * 100)}%` },
+  { id: 'xp',     name: '成長',     per: 0.05, max: 5, cost: 250, fmt: (v) => `経験値 +${Math.round(v * 100)}%` },
+  { id: 'luck',   name: '運',       per: 0.08, max: 4, cost: 300, fmt: (v) => `運 +${Math.round(v * 100)}%（会心・宝箱・ドロップ）` },
+  { id: 'greed',  name: '強欲',     per: 0.1,  max: 4, cost: 200, fmt: (v) => `金貨 +${Math.round(v * 100)}%` },
+  { id: 'reroll', name: '引き直し', per: 1,    max: 3, cost: 400, fmt: (v) => `引き直し +${v} 回` },
+  { id: 'banish', name: '除外',     per: 1,    max: 2, cost: 500, fmt: (v) => `除外 +${v} 回` },
+  { id: 'skip',   name: 'スキップ', per: 1,    max: 2, cost: 300, fmt: (v) => `スキップ +${v} 回` },
+  { id: 'revive', name: '復活',     per: 1,    max: 1, cost: 2000, fmt: (v) => `力尽きても ${v} 回だけ復活` },
+];
+export const powerCost = (p, lv) => Math.round((p.cost * Math.pow(lv + 1, 1.6)) / 10) * 10;
+
+// ---- 装備（ボス・中ボスやクリアで手に入る。同じ装備・同じレア度を3つ合成すると1段上がる） ----
+export const RARITY = [
+  { id: 'N',   mul: 1,   color: '#b8b8c8' },
+  { id: 'R',   mul: 1.5, color: '#5ab0ff' },
+  { id: 'SR',  mul: 2.2, color: '#c27bff' },
+  { id: 'SSR', mul: 3.2, color: '#ffc94a' },
+  { id: 'UR',  mul: 4.5, color: '#ff5a7a' },
+];
+export const SLOTS_GEAR = { weapon: '武器', armor: '防具', charm: '装飾' };
+// stats: 1倍（N）での効果。レア度の倍率が掛かる
+export const GEAR = [
+  { id: 'staff',   slot: 'weapon', name: '古びた杖',     stats: { atk: 0.06 } },
+  { id: 'sword',   slot: 'weapon', name: '騎士の剣',     stats: { crit: 0.03, critMul: 0.1 } },
+  { id: 'bow',     slot: 'weapon', name: '狩人の弓',     stats: { cd: 0.035 } },
+  { id: 'tome',    slot: 'weapon', name: '召喚の書',     stats: { summon: 0.08 } },
+  { id: 'leather', slot: 'armor',  name: '革の鎧',       stats: { hp: 18 } },
+  { id: 'mail',    slot: 'armor',  name: '鎖かたびら',   stats: { armor: 0.04 } },
+  { id: 'cloak',   slot: 'armor',  name: '旅人の外套',   stats: { speed: 0.04 } },
+  { id: 'clover',  slot: 'charm',  name: '四つ葉のお守り', stats: { luck: 0.08 } },
+  { id: 'ring',    slot: 'charm',  name: '吸魂の指輪',   stats: { pickup: 0.12, xp: 0.03 } },
+  { id: 'amulet',  slot: 'charm',  name: '再生の首飾り', stats: { regen: 0.25 } },
+];
+export const STAT_LABEL = {
+  atk: (v) => `威力 +${Math.round(v * 100)}%`, crit: (v) => `会心率 +${Math.round(v * 100)}%`, critMul: (v) => `会心ダメ +${Math.round(v * 100)}%`,
+  cd: (v) => `間隔 -${Math.round(v * 100)}%`, summon: (v) => `召喚の威力 +${Math.round(v * 100)}%`, hp: (v) => `最大HP +${Math.round(v)}`,
+  armor: (v) => `被ダメ -${Math.round(v * 100)}%`, speed: (v) => `移動 +${Math.round(v * 100)}%`, luck: (v) => `運 +${Math.round(v * 100)}%`,
+  pickup: (v) => `回収 +${Math.round(v * 100)}%`, xp: (v) => `経験値 +${Math.round(v * 100)}%`, regen: (v) => `毎秒 ${v.toFixed(2)} 回復`,
+};
+
+// ---- 章（ステージ）。前の章の本編を制すと次が開く ----
+// swap: 雑魚の置き換え / diff: 敵の体力・攻撃の倍率 / boss: その章の大ボス / sky・fog・ground: 色
+export const CHAPTERS = [
+  { id: 1, name: '月夜の墓地', sub: 'CHAPTER 1', diff: 1, gold: 1, swap: {}, boss: 'tengu',
+    sky: null, fog: null, ground: null, desc: 'スケルトンと獣の群れ。真夜中にスケルトンキングが現れる' },
+  { id: 2, name: '毒沼の森', sub: 'CHAPTER 2', diff: 1.6, gold: 1.6, swap: { kooni: 'bomber', onibi: 'wasp', gashadokuro: 'skMage' }, boss: 'queen',
+    sky: [0x040c09, 0x14281a], fog: 0x0b1a12, ground: [0.6, 0.85, 0.55], desc: '自爆する毒スライムと血に飢えたコウモリ。主は巨大な女王グモ' },
+  { id: 3, name: '骸の城', sub: 'CHAPTER 3', diff: 2.4, gold: 2.4, swap: { onibi: 'wasp', hitotsume: 'splitter', chochin: 'skMage', kappa: 'bomber' }, boss: 'tengu', bossHp: 2.2,
+    sky: [0x0c0308, 0x2e0a16], fog: 0x1c070c, ground: [0.85, 0.55, 0.6], desc: '呪文を撃つ骸骨と分裂する魔物。強化された王が待つ' },
 ];

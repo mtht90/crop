@@ -85,12 +85,14 @@ export class World {
     const sc = this.scene;
     const cells = (RANGE * 2 + 1) ** 2;
     // 空：上は藍、地平は紫がかった赤
+    this.look = { skyTop: { value: new THREE.Color(0.02, 0.03, 0.09) }, skyHor: { value: new THREE.Color(0.16, 0.07, 0.15) }, ground: { value: new THREE.Vector3(1, 1, 1) } };
     const sky = new THREE.Mesh(new THREE.SphereGeometry(400, 32, 16), new THREE.ShaderMaterial({
       side: THREE.BackSide, depthWrite: false, fog: false,
+      uniforms: { uTop: this.look.skyTop, uHor: this.look.skyHor },
       vertexShader: 'varying vec3 vP; void main(){ vP = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
-      fragmentShader: `varying vec3 vP;
+      fragmentShader: `varying vec3 vP; uniform vec3 uTop; uniform vec3 uHor;
         void main(){ float h = normalize(vP).y;
-          vec3 top = vec3(0.02,0.03,0.09), mid = vec3(0.07,0.05,0.17), hor = vec3(0.16,0.07,0.15);
+          vec3 top = uTop, hor = uHor, mid = mix(uTop, uHor, 0.45) + vec3(0.02, 0.0, 0.05);
           vec3 c = mix(hor, mid, smoothstep(-0.02, 0.18, h)); c = mix(c, top, smoothstep(0.18, 0.7, h));
           gl_FragColor = vec4(c, 1.0); }`,
     }));
@@ -126,10 +128,11 @@ export class World {
     // 地面：草地の色むら＋土の道筋をノイズで（ワールド座標基準なので継ぎ目なし）
     const gmat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1 });
     gmat.onBeforeCompile = (sh) => {
+      sh.uniforms.uGTint = this.look.ground;
       sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vW;')
         .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvW = (modelMatrix * vec4(transformed,1.0)).xyz;');
       sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
-        varying vec3 vW;
+        varying vec3 vW; uniform vec3 uGTint;
         float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453); }
         float n2(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
           return mix(mix(h2(i), h2(i+vec2(1,0)), f.x), mix(h2(i+vec2(0,1)), h2(i+vec2(1,1)), f.x), f.y); }
@@ -141,7 +144,7 @@ export class World {
           grass = mix(grass, vec3(0.16,0.22,0.12), n2(vW.xz * 1.7) * 0.4);
           vec3 dirt = mix(vec3(0.22,0.17,0.12), vec3(0.30,0.24,0.16), g);
           float path = smoothstep(0.52, 0.56, d) * (1.0 - smoothstep(0.60, 0.64, d));
-          diffuseColor.rgb = mix(grass, dirt, path * 0.85);`);
+          diffuseColor.rgb = mix(grass, dirt, path * 0.85) * uGTint;`);
     };
     const ground = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), gmat);
     ground.rotation.x = -Math.PI / 2;
@@ -222,6 +225,15 @@ export class World {
       this.scene.add(im);
       return im;
     });
+  }
+
+  // 章ごとの色合い（空の上・地平、地面の色味）。null なら既定の夜
+  setLook(sky, ground) {
+    const L = this.look;
+    if (sky) { L.skyTop.value.setHex(sky[0]); L.skyHor.value.setHex(sky[1]); }
+    else { L.skyTop.value.setRGB(0.02, 0.03, 0.09); L.skyHor.value.setRGB(0.16, 0.07, 0.15); }
+    if (ground) L.ground.value.set(ground[0], ground[1], ground[2]);
+    else L.ground.value.set(1, 1, 1);
   }
 
   // プレイヤーのチャンクが変わったら配置し直す

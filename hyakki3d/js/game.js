@@ -1,7 +1,7 @@
 // ゲーム本体：状態・更新・描画
 import {
   RUN, LIMITS, PLAYER, ENEMIES, SPAWN, EVENTS, ELITE, DROPS, SKILLS, SLOTS,
-  PICK_WEIGHT, hpScale, speedScale, xpNeed, CHARACTERS, EVOLUTIONS, MODES, DIFF,
+  PICK_WEIGHT, hpScale, speedScale, xpNeed, CHARACTERS, EVOLUTIONS, MODES, DIFF, CHAPTERS, POWERUPS, GEAR,
 } from './config.js';
 import { Grid } from './grid.js';
 import { FX } from './fx.js';
@@ -53,12 +53,24 @@ export function initGame(opts) {
 }
 
 // ================================================================ ラン開始
-export function newRun(char = CHARACTERS[0], mode = MODES[0]) {
+export function newRun(char = CHARACTERS[0], mode = MODES[0], chapter = CHAPTERS[0]) {
   G.char = char;
   G.mode = mode;
+  G.chapter = chapter;
+  G.gold = 0; G.freezeT = 0; G.brazierT = 6; G.arena = null; G.gearDrops = [];
+  // 永続強化と装備の効果を1つにまとめる
+  const meta = {};
+  for (const p of POWERUPS) { const lv = Progress.powerLv(p.id); if (lv) meta[p.id] = p.per * lv; }
+  const gs = Progress.gearStats();
+  for (const k in gs) meta[k] = (meta[k] || 0) + gs[k];
+  G.meta = meta;
+  G.revives = meta.revive || 0;
   G.adapt = 1; G.adaptT = 0; G.lastHurt = -99;
   G.mids = []; G.midBoss = null; G.enraged = false;
   G.ult = 0; G.ultT = 0; G.ultKind = null; G.ultTick = 0; G.ultReady = false;
+  // レベルアップの逃げ道（回数は永続強化で増える）
+  G.rerolls = 1 + (meta.reroll || 0); G.banishes = 1 + (meta.banish || 0); G.skips = 1 + (meta.skip || 0);
+  G.banished = new Set();
   G.evolved = new Set();
   G.chests = 0;
   G.critFxT = 0;
@@ -141,17 +153,26 @@ function recalcStats() {
   if (md.shikiDur) st.shikiDur *= md.shikiDur;
   if (md.speed) st.speedMul *= md.speed;
   if (md.shikiCount) st.shikiCount += md.shikiCount;
-  st.crit = PLAYER.crit + (md.crit || 0);
-  st.critMul = PLAYER.critMul + (md.critMul || 0);
-  st.taken = md.taken || 1;
+  const mt = G.meta || {};
+  st.luck = mt.luck || 0;
+  st.greed = mt.greed || 0;
+  st.crit = PLAYER.crit + (md.crit || 0) + (mt.crit || 0) + st.luck * 0.25;
+  st.critMul = PLAYER.critMul + (md.critMul || 0) + (mt.critMul || 0);
+  st.taken = (md.taken || 1) * (1 - (mt.armor || 0));
   st.heal = md.heal || 1;
   st.drain = md.drain || 0;
   if (md.dmg) st.dmgMul *= md.dmg;
+  st.dmgMul *= 1 + (mt.atk || 0);
+  st.cdMul *= 1 - (mt.cd || 0);
+  st.speedMul *= 1 + (mt.speed || 0);
+  st.pickup *= 1 + (mt.pickup || 0);
+  st.xpMul *= 1 + (mt.xp || 0);
+  st.shikiDmg *= 1 + (mt.summon || 0);
   const c = skillLv('chomei');
-  st.regen = 0.4 * c + (md.regen || 0);
+  st.regen = 0.4 * c + (md.regen || 0) + (mt.regen || 0);
   const P = G.player;
   if (P) {
-    const newMax = PLAYER.hp + 20 * c + (md.hp || 0);
+    const newMax = PLAYER.hp + 20 * c + (md.hp || 0) + Math.round(mt.hp || 0);
     if (newMax > P.maxHp) P.hp += newMax - P.maxHp;
     P.maxHp = newMax;
   }
@@ -163,7 +184,7 @@ export function rollOptions() {
   const cand = [];
   for (const id in SKILLS) {
     const def = SKILLS[id];
-    if (def.base || G.evolved.has(id)) continue;   // 進化した術は宝箱でのみ
+    if (def.base || G.evolved.has(id) || (G.banished && G.banished.has(id))) continue;   // 進化したスキルは宝箱でのみ・除外したものは出さない
     const owned = G.skills.find((s) => s.id === id);
     if (owned) {
       if (owned.lv < def.levels.length) cand.push({ id, w: PICK_WEIGHT.upgrade });
@@ -196,16 +217,18 @@ function newEnemy() {
 
 export function spawnEnemy(type, x, y, force = false) {
   if (!force && G.enemies.length >= G.limits.enemies) return null;
+  if (G.chapter && G.chapter.swap[type]) type = G.chapter.swap[type];   // 章ごとの雑魚の置き換え
   const d = ENEMIES[type];
+  const cd = G.chapter ? G.chapter.diff : 1;
   const e = epool.pop() || newEnemy();
   e.uid = uidSeq++; e.alive = true; e.def = d; e.type = type; e.spr = null;
   e.x = x; e.y = y; e.vx = 0; e.vy = 0;
-  e.maxHp = e.hp = d.boss || d.mid ? d.hp : d.hp * hpScale(G.sched) * G.adapt * G.mode.hp * DIFF.hp;
-  e.r = d.r; e.dmg = (d.boss || d.mid ? d.dmg : d.dmg * G.adapt ** 0.35 * DIFF.dmg) * (G.mode.dmg || 1); e.xp = d.xp; e.mass = d.mass;
+  e.maxHp = e.hp = d.static ? 1 : d.boss || d.mid ? d.hp : d.hp * hpScale(G.sched) * G.adapt * G.mode.hp * DIFF.hp * cd;
+  e.r = d.r; e.dmg = (d.boss || d.mid ? d.dmg * Math.sqrt(cd) : d.dmg * G.adapt ** 0.35 * DIFF.dmg * Math.sqrt(cd)) * (G.mode.dmg || 1); e.xp = d.xp; e.mass = d.mass;
   e.speed = d.speed * speedScale(G.sched) * (d.mid || d.boss ? 1 : (0.88 + Math.random() * 0.24) * DIFF.speed);
   e.flash = 0; e.slowT = 0; e.march = false; e.wob = Math.random() * TAU; e.hopT = Math.random();
   e.last.fill(-99);
-  e.elite = !!d.elite; e.boss = !!d.boss; e.mid = !!d.mid; e.ai = null; e.dir = 0; e.at = Math.random() * 4;
+  e.elite = !!d.elite; e.boss = !!d.boss; e.mid = !!d.mid; e.ai = null; e.aiT = 1 + Math.random() * 2; e.st = 0; e.fuse = 0; e.dir = 0; e.at = Math.random() * 4;
   G.enemies.push(e);
   return e;
 }
@@ -265,6 +288,26 @@ function gemTier(v) { return v >= 20 ? 3 : v >= 5 ? 2 : v >= 2 ? 1 : 0; }
 function dropPickup(kind, x, y) {
   G.pickups.push({ kind, x, y, alive: true, t: 0, mag: false, spd: 0 });
 }
+// 金貨：n 枚を少し散らして落とす（1枚の価値は章で変わる）
+function dropGold(x, y, n) {
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * TAU, r = n > 1 ? 10 + Math.random() * 30 : 0;
+    G.pickups.push({ kind: 'gold', x: x + Math.cos(a) * r, y: y + Math.sin(a) * r, alive: true, t: 0, mag: false, spd: 0, v: 5 * (G.chapter ? G.chapter.gold : 1) });
+  }
+}
+// 魔石灯：壊すと肉・金貨・時止め・聖なる爆発・磁石のどれかが出る
+function brazierBroken(e) {
+  FX.burst(e.x, e.y, 24, 7, 260, 9, 0.6);
+  FX.ring(e.x, e.y, 6, 70, 0.3, '#8fd8ff', 6);
+  sfx.chest();
+  const r = Math.random() * 100;
+  if (r < 30) dropPickup('heal', e.x, e.y);
+  else if (r < 58) dropGold(e.x, e.y, 3 + ((Math.random() * 3) | 0));
+  else if (r < 72) dropPickup('freeze', e.x, e.y);
+  else if (r < 84) dropPickup('bomb', e.x, e.y);
+  else if (r < 96) dropPickup('magnet', e.x, e.y);
+  else dropPickup('chest', e.x, e.y);
+}
 
 // ================================================================ ダメージ
 export function hurtEnemy(e, base, nx, ny, kb, ally = false) {
@@ -295,6 +338,8 @@ export function killEnemy(e) {
   e.alive = false;
   if (e.boss) { bossDefeated(e); return; }
   if (e.mid) { midDefeated(e); return; }
+  if (e.def.static) { brazierBroken(e); return; }
+  if (e.def.ai === 'splitter') for (let k = 0; k < 2; k++) { const s2 = spawnEnemy('slimelet', e.x + (k ? 12 : -12), e.y, true); if (s2) { s2.vx = (k ? 1 : -1) * 120; } }
   if (G.onKill) G.onKill(e);
   G.kills++;
   if (!cheat()) Progress.addKill(e.type);
@@ -321,13 +366,15 @@ export function killEnemy(e) {
     G.hitstop = 0.06;
     sfx.slam();
     dropPickup('chest', e.x, e.y);
+    dropGold(e.x, e.y, 4);
   } else {
     FX.burst(e.x, e.y, 5, col, 150, 9, 0.4);
     FX.anim('smoke', e.x, e.y, { scale: 0.9 + e.r / 30, dur: 0.32 });
-    const r = Math.random();
-    if (r < DROPS.bomb) dropPickup('bomb', e.x, e.y);
-    else if (r < DROPS.bomb + DROPS.magnet) dropPickup('magnet', e.x, e.y);
-    else if (r < DROPS.bomb + DROPS.magnet + DROPS.heal) dropPickup('heal', e.x, e.y);
+    const r = Math.random() / (1 + G.st.luck);
+    if (r < 0.012) dropGold(e.x, e.y, 1);
+    else if (r < 0.012 + DROPS.bomb) dropPickup('bomb', e.x, e.y);
+    else if (r < 0.012 + DROPS.bomb + DROPS.magnet) dropPickup('magnet', e.x, e.y);
+    else if (r < 0.012 + DROPS.bomb + DROPS.magnet + DROPS.heal) dropPickup('heal', e.x, e.y);
   }
   dropGem(e.x, e.y, e.xp);
   sfx.kill();
@@ -346,6 +393,16 @@ function hurtPlayer(dmg) {
   sfx.hurt();
   FX.text(P.x, P.y - 26, '-' + dmg, '#ff4a5a', 18);
   if (P.hp <= 0) {
+    if (G.revives > 0) {
+      // 復活：半分の体力で立ち上がり、周りを吹き飛ばす
+      G.revives--;
+      P.hp = P.maxHp * 0.5; P.hurtT = 2;
+      purgeNear(260); G.bullets.length = 0;
+      G.flash = 0.8; addShake(0.6); sfx.level();
+      FX.pillar(P.x, P.y, 60, 1.4, '#ffe9b0', P);
+      UI.banner('復活!', 'gold');
+      return;
+    }
     P.hp = 0;
     endRun(false);
   }
@@ -579,6 +636,7 @@ function updateDirector(dt) {
   // 時計を詰めたモードは育つ時間が短いので、湧く量を √k で割って釣り合わせる
   rate *= (0.7 + 0.3 * G.adapt) / Math.sqrt(G.mode.k) * DIFF.rate;
   if (G.midBoss) rate *= 0.5;   // 中ボス戦は雑魚を減らして一騎打ちに寄せる
+  if (G.arena) rate = 0;        // 檻の中は雑魚が湧かない（ボスの召喚だけ）
   G.spawnAcc += rate * dt;
   while (G.spawnAcc >= 1) {
     G.spawnAcc -= 1;
@@ -586,7 +644,7 @@ function updateDirector(dt) {
     spawnEnemy(pickMix(a.mix), RX, RY);
   }
 
-  if (t >= G.nextElite) {
+  if (t >= G.nextElite && !G.arena) {
     G.nextElite += ELITE.every;
     const n = 1 + Math.floor(t / 300);
     for (let k = 0; k < n; k++) { edgePos(80); spawnEnemy('oni', RX, RY, true); }
@@ -596,7 +654,7 @@ function updateDirector(dt) {
   while (G.eventIdx < EVENTS.length && t >= EVENTS[G.eventIdx].t) {
     const ev = EVENTS[G.eventIdx++];
     // 中ボス戦の最中に来る包囲・行列は見送る（詰めたモードで重なって理不尽になるのを防ぐ）
-    if (G.midBoss && (ev.type === 'ring' || ev.type === 'march')) continue;
+    if ((G.midBoss || G.arena) && (ev.type === 'ring' || ev.type === 'march')) continue;
     startEvent(ev);
   }
 
@@ -618,7 +676,7 @@ function updateDirector(dt) {
   // 制限時間を過ぎてもボスが残っていれば激昂。時間切れでの勝利はない
   if (G.time >= G.mode.len && !G.enraged) {
     G.enraged = true;
-    UI.banner('夜明けは来ない ─ スケルトンキング 激昂', 'huge');
+    UI.banner(`夜明けは来ない ─ ${G.boss ? G.boss.def.name : '魔物の王'} 激昂`, 'huge');
     sfx.alarm(); addShake(0.6); G.redPulse = 2;
     if (G.boss) { G.boss.speed *= 1.6; G.boss.dmg *= 1.6; }
   }
@@ -635,6 +693,27 @@ function updateAdapt(dt) {
   if (calm > 6 && !G.midBoss) G.adapt += 0.05;
   else if (calm < 2 && P.hp < P.maxHp * 0.7) G.adapt -= 0.1;
   G.adapt = Math.max(0.7, Math.min(cap, G.adapt));
+}
+
+// ボス戦の檻：プレイヤーを中心に円形の柵を張り、雑魚を消して一騎打ちにする
+const ARENA_R = 520;
+function openArena() {
+  const P = G.player;
+  G.arena = { x: P.x, y: P.y, r: ARENA_R, t: 0 };
+  for (const e of G.enemies) {
+    if (!e.alive || e.boss || e.mid) continue;
+    FX.anim('smoke', e.x, e.y, { scale: 0.8, dur: 0.3 });
+    e.alive = false;
+  }
+  G.marches.length = 0;
+  G.bullets.length = 0;
+  FX.ring(P.x, P.y, 20, ARENA_R, 0.9, '#ff3a6a', 14);
+  addShake(0.5);
+}
+// 檻の中のランダムな位置（プレイヤーから少し離す）
+function arenaSpawn() {
+  const a = Math.random() * TAU, P = G.player;
+  RX = P.x + Math.cos(a) * 340; RY = P.y + Math.sin(a) * 340;
 }
 
 function startEvent(ev) {
@@ -662,9 +741,10 @@ function startEvent(ev) {
     if (ev.big) { addShake(0.5); music.intensity = 1; }
     else music.intensity = Math.max(music.intensity, 0.5);
   } else if (ev.type === 'mid') {
-    edgePos(120);
+    openArena();
+    arenaSpawn();
     const e = spawnEnemy(ev.enemy, RX, RY, true);
-    e.maxHp = e.hp = e.def.hp * DIFF.mid * (0.7 + 0.3 * G.adapt) * (G.mode.k > 2 ? 0.6 : 1);
+    e.maxHp = e.hp = e.def.hp * DIFF.mid * (0.7 + 0.3 * G.adapt) * (G.mode.k > 2 ? 0.6 : 1) * (G.chapter ? G.chapter.diff : 1);
     e.ai = { state: 'walk', t: 2.5, dx: 0, dy: 0, n: 0, a: 0 };
     G.midBoss = e;
     UI.banner(ev.banner, 'huge');
@@ -674,13 +754,15 @@ function startEvent(ev) {
     G.redPulse = 1.5;
     music.intensity = 1;
   } else if (ev.type === 'boss') {
-    edgePos(120);
-    const e = spawnEnemy('tengu', RX, RY, true);
-    // 自分の強さ（追従係数）に合わせて硬くする。短期決戦は育つ時間が短いぶん控えめ
-    e.maxHp = e.hp = e.def.hp * DIFF.boss * (0.6 + 0.4 * G.adapt) * (G.mode.k > 2 ? 0.6 : 1);
+    openArena();
+    arenaSpawn();
+    const ch = G.chapter || CHAPTERS[0];
+    const e = spawnEnemy(ch.boss, RX, RY, true);
+    // 自分の強さ（追従係数）に合わせて硬くする。短期決戦は育つ時間が短いぶん控えめ。章が進むほど硬い
+    e.maxHp = e.hp = e.def.hp * DIFF.boss * (0.6 + 0.4 * G.adapt) * (G.mode.k > 2 ? 0.6 : 1) * (ch.bossHp || 1) * Math.sqrt(ch.diff);
     e.ai = { state: 'walk', t: 3, dx: 0, dy: 0, n: 0, shot: 0 };
     G.boss = e;
-    UI.banner(ev.banner, 'huge');
+    UI.banner(`${e.def.name} 出現`, 'huge');
     UI.bossBar(true, 1, e.def.name);
     sfx.alarm();
     addShake(0.6);
@@ -695,11 +777,12 @@ function updateBoss(e, dt) {
   const dx = P.x - e.x, dy = P.y - e.y, d = Math.hypot(dx, dy) || 1;
   ai.t -= dt * (ai.rage ? 1.5 : 1);
   e.at += dt * 12;
+  e.yaw = ai.state === 'charge' || ai.state === 'tele' ? Math.atan2(ai.dx, ai.dy) : Math.atan2(dx, dy);
   if (e.flash > 0) e.flash -= dt;
   if (!ai.rage && e.hp < e.maxHp * 0.6) {
     ai.rage = true;
     e.speed *= 1.25;
-    UI.banner('スケルトンキング 怒り狂う', 'red');
+    UI.banner(`${e.def.name} 怒り狂う`, 'red');
     FX.ring(e.x, e.y, 30, 300, 0.7, '#ff3040', 12); sfx.alarm(); addShake(0.5); G.redPulse = 1.5;
   }
   switch (ai.state) {
@@ -864,6 +947,7 @@ function updateMid(e, dt) {
 
 function midDefeated(e) {
   if (G.midBoss === e) { G.midBoss = null; UI.bossBar(false); }
+  G.arena = null;
   G.mids.push(e.type);
   if (!cheat()) Progress.addMid(e.type);
   if (G.onKill) G.onKill(e);
@@ -880,6 +964,7 @@ function midDefeated(e) {
 
 function bossDefeated(e) {
   G.boss = null;
+  G.arena = null;
   UI.bossBar(false);
   FX.burst(e.x, e.y, 120, 1, 520, 16, 1.4);
   FX.burst(e.x, e.y, 80, 0, 380, 12, 1.2);
@@ -888,7 +973,7 @@ function bossDefeated(e) {
   G.hitstop = 0.25;
   addShake(1);
   sfx.boom();
-  UI.banner('スケルトンキング 討伐!', 'huge');
+  UI.banner(`${e.def.name} 討伐!`, 'huge');
   FX.anim('explosion', e.x, e.y, { scale: 6, force: true, dur: 1.0 });
   beginEnding(true, e);
 }
@@ -922,13 +1007,31 @@ function updateEnding(rdt) {
 
 function endRun(win) {
   G.state = 'result';
-  const res = cheat() ? { chars: [], achs: [] } : Progress.check({ mode: G.mode.id, char: G.char.id, time: G.time, kills: G.kills, win, mids: G.mids, final: true });
+  // 金貨：拾った分＋撃破と生存時間のボーナス（勝つと 1.5 倍）
+  const ch = G.chapter || CHAPTERS[0];
+  const bonus = Math.round((G.kills / 25 + G.time / 5) * ch.gold * (1 + G.st.greed));
+  G.goldTotal = Math.round((G.gold + bonus) * (win ? 1.5 : 1));
+  G.goldBonus = bonus;
+  if (!cheat()) Progress.addGold(G.goldTotal);
+  // 装備：中ボス・ボスの撃破とクリアで手に入る（レア度は章と運で上がる）
+  G.gearDrops = [];
+  const nDrop = G.mids.length + (win ? 2 : 0) + (G.time > G.mode.len * 0.5 ? 1 : 0);
+  for (let i = 0; i < nDrop; i++) {
+    const roll = Math.random() * (1 + G.st.luck) + (ch.id - 1) * 0.12;
+    const r = roll > 1.12 ? 4 : roll > 0.97 ? 3 : roll > 0.8 ? 2 : roll > 0.5 ? 1 : 0;
+    const def = GEAR[(Math.random() * GEAR.length) | 0];
+    G.gearDrops.push(cheat() ? { id: def.id, r } : Progress.addGear(def.id, r));
+  }
+  const run = { mode: G.mode.id, char: G.char.id, time: G.time, kills: G.kills, win, mids: G.mids, final: true, chapter: ch.id };
+  const res = cheat() ? { chars: [], achs: [] } : Progress.check(run);
+  res.newChapter = run.newChapter;
   const fresh = res.chars;
   if (win) sfx.win(); else sfx.gameover();
   music.title();
   UI.showResult(win, {
     time: G.time, kills: G.kills, level: G.level, maxAllies: G.maxAllies, dmg: G.dmgDealt, unlocked: fresh, achs: res.achs,
     mode: G.mode, char: G.char, best: Progress.get().best[`${G.mode.id}:${G.char.id}`],
+    gold: G.goldTotal, goldPicked: Math.round(G.gold), goldBonus: G.goldBonus, gear: G.gearDrops, chapter: ch, newChapter: res.newChapter,
   });
 }
 
@@ -960,6 +1063,17 @@ export function step(rdt) {
   G.agrid.build(bl, bl.length, P.x, P.y);
 
   updateDirector(dt);
+  if (G.freezeT > 0) G.freezeT -= dt;
+  // 魔石灯をときどき画面内に置く（同時に最大4つ）
+  if (!G.arena && (G.brazierT -= dt) <= 0) {
+    G.brazierT = 14 + Math.random() * 8;
+    let n = 0;
+    for (const e of G.enemies) if (e.alive && e.def.static) n++;
+    if (n < 4) {
+      const a = Math.random() * TAU, R = 280 + Math.random() * 260;
+      spawnEnemy('brazier', G.player.x + Math.cos(a) * R, G.player.y + Math.sin(a) * R, true);
+    }
+  }
   for (const s of G.skills) {
     const impl = SKILL_IMPL[s.id];
     if (impl) impl.update(s, s.def.levels[s.lv - 1], dt);
@@ -968,6 +1082,7 @@ export function step(rdt) {
   updateProjectiles(dt);
   updateBullets(dt);
   updateEnemies(dt);
+  if (G.arena) clampArena(dt);
   updateGems(dt);
   updatePickups(dt);
 
@@ -1025,6 +1140,82 @@ function updatePlayer(dt) {
   if (G.st.regen && P.hp < P.maxHp) P.hp = Math.min(P.maxHp, P.hp + G.st.regen * dt);
 }
 
+// 檻の柵：プレイヤーは触れると痛くて押し戻される。敵も外へは出られない
+function clampArena(dt) {
+  const A = G.arena, P = G.player;
+  A.t += dt;
+  let dx = P.x - A.x, dy = P.y - A.y, d = Math.hypot(dx, dy) || 1;
+  const lim = A.r - P.r;
+  if (d > lim) {
+    P.x = A.x + dx / d * (lim - 6); P.y = A.y + dy / d * (lim - 6);
+    if (P.hurtT <= 0) { FX.burst(P.x, P.y, 10, 1, 240, 7, 0.3); }
+    hurtPlayer(8);
+  }
+  for (const e of G.enemies) {
+    if (!e.alive) continue;
+    dx = e.x - A.x; dy = e.y - A.y; d = Math.hypot(dx, dy) || 1;
+    const el = A.r - e.r;
+    if (d > el) { e.x = A.x + dx / d * el; e.y = A.y + dy / d * el; }
+  }
+}
+
+// 行動つきの雑魚。戻り値 {mx,my,sp} で移動を上書き、-1 で自分が消えた
+function enemyAI(e, dt, dx, dy, d) {
+  const ai = e.def.ai;
+  e.aiT -= dt;
+  if (ai === 'shooter') {
+    // 距離を取りながら、ときどき呪弾を撃つ
+    let mx = dx / d, my = dy / d, sp = e.speed;
+    if (d < 240) { mx = -mx; my = -my; }
+    else if (d < 330) { const t = mx; mx = -my * 0.6; my = t * 0.6; }
+    if (e.aiT <= 0 && d < 560) {
+      e.aiT = 2.4 + Math.random();
+      const a = Math.atan2(dy, dx);
+      spawnBullet(e.x, e.y, Math.cos(a) * 190, Math.sin(a) * 190, 7);
+      FX.ring(e.x, e.y, 4, 26, 0.2, '#c08bff', 4);
+      e.flash = 0.12;
+    }
+    return { mx, my, sp };
+  }
+  if (ai === 'bomber') {
+    // 近づくと点滅して止まり、少しして自爆する（範囲は地面に予告）
+    if (!e.fuse && d < 80) { e.fuse = 0.9; FX.ring(e.x, e.y, 10, 90, 0.9, '#ff5a3a', 4); }
+    if (e.fuse) {
+      e.fuse -= dt;
+      e.flash = Math.sin(e.fuse * 30) > 0 ? 0.1 : 0;
+      if (e.fuse <= 0) {
+        FX.anim('explosion', e.x, e.y, { scale: 1.6 });
+        FX.burst(e.x, e.y, 18, 5, 260, 9, 0.5);
+        addShake(0.2); sfx.boom();
+        if (d < 95) hurtPlayer(Math.round(18 * Math.sqrt(G.chapter ? G.chapter.diff : 1) * (G.mode.dmg || 1)));
+        for (const a of G.blockers) { if (a.alive && Math.hypot(a.x - e.x, a.y - e.y) < 95) a.hp -= 60; }
+        e.alive = false;
+        dropGem(e.x, e.y, e.xp);
+        G.kills++;
+        return -1;
+      }
+      return { mx: 0, my: 0, sp: 0 };
+    }
+    return null;
+  }
+  if (ai === 'charger') {
+    // 狙いを定めて止まり（点滅）、一直線に突っ込む
+    if (e.st === 0) {
+      if (e.aiT <= 0 && d < 320) { e.st = 1; e.aiT = 0.6; e.cdx = dx / d; e.cdy = dy / d; }
+      return null;
+    }
+    if (e.st === 1) {
+      e.flash = Math.sin(e.aiT * 40) > 0 ? 0.1 : 0;
+      if (e.aiT <= 0) { e.st = 2; e.aiT = 0.45; }
+      return { mx: e.cdx, my: e.cdy, sp: 0 };
+    }
+    if (e.aiT <= 0) { e.st = 0; e.aiT = 2 + Math.random() * 1.5; }
+    if (G.frame % 3 === 0) FX.burst(e.x, e.y, 1, 7, 40, 6, 0.3);
+    return { mx: e.cdx, my: e.cdy, sp: 560 };
+  }
+  return null;
+}
+
 const CONTACT_DPS = 0.9;   // 式神が妖怪に接触されたときに受けるダメージ係数
 function updateEnemies(dt) {
   const P = G.player, en = G.enemies, n = en.length, v = G.view;
@@ -1037,6 +1228,14 @@ function updateEnemies(dt) {
   for (let i = 0; i < n; i++) {
     const e = en[i];
     if (!e.alive) continue;
+    if (e.def.static) {
+      // 魔石灯：動かない。遠く離れたら消える
+      if (e.flash > 0) e.flash -= dt;
+      const ox = e.x - P.x, oy = e.y - P.y;
+      if (ox * ox + oy * oy > despawn2) e.alive = false;
+      continue;
+    }
+    if (G.freezeT > 0) { if (e.flash > 0) e.flash -= dt; continue; }   // 時止め中は全員停止
     if (e.boss) { updateBoss(e, dt); continue; }
     if (e.mid) { updateMid(e, dt); continue; }
     const dx = P.x - e.x, dy = P.y - e.y;
@@ -1048,6 +1247,11 @@ function updateEnemies(dt) {
       if (d < 170) { mx = mx * 0.35 + dx / d * 0.65; my = my * 0.35 + dy / d * 0.65; }
     } else { mx = dx / d; my = dy / d; }
     let sp = e.speed;
+    if (e.def.ai && !e.march) {
+      const r = enemyAI(e, dt, dx, dy, d);
+      if (r === -1) continue;          // 自爆などで消えた
+      if (r) { mx = r.mx; my = r.my; sp = r.sp; }
+    }
     if (e.slowT > 0) { e.slowT -= dt; sp *= 0.5; }
     if (e.def.hop) { e.hopT += dt * 2.2; sp *= (e.hopT % 1) < 0.5 ? 1.8 : 0.2; }
     e.x += (mx * sp + e.vx) * dt;
@@ -1092,7 +1296,7 @@ function updateEnemies(dt) {
       }
     }
 
-    if (d < e.r + P.r) hurtPlayer(e.dmg);
+    if (d < e.r + P.r && e.dmg > 0) hurtPlayer(e.dmg);
 
     if (e.march) {
       if (d2 > despawn2) e.alive = false;
@@ -1191,6 +1395,7 @@ function updateBullets(dt) {
   const P = G.player, b = G.bullets, ag = G.agrid, bl = G.blockers;
   for (let i = b.length - 1; i >= 0; i--) {
     const u = b[i];
+    if (G.freezeT > 0) continue;
     u.life -= dt;
     u.x += u.vx * dt; u.y += u.vy * dt;
     let dead = u.life <= 0;
@@ -1264,6 +1469,13 @@ function updatePickups(dt) {
         sfx.summon();
       } else if (k.kind === 'bomb') purge();
       else if (k.kind === 'chest') openChest(!!k.big);
+      else if (k.kind === 'gold') { G.gold += k.v * (1 + G.st.greed); sfx.gem(6); }
+      else if (k.kind === 'freeze') {
+        G.freezeT = 6;
+        FX.ring(P.x, P.y, 10, 520, 0.8, '#9fe8ff', 10);
+        UI.banner('時よ止まれ', 'white');
+        sfx.summon();
+      }
     }
   }
 }
@@ -1288,10 +1500,20 @@ function startLevelUp() {
   G.flash = 0.35;
   sfx.level();
   UI.showLevelUp(G, rollOptions(), (id) => {
-    addOrUpgrade(id);
+    if (id) addOrUpgrade(id);
     sfx.select();
     G.state = 'play';
     G.slowT = 0.25;
+  }, {
+    counts: () => ({ reroll: G.rerolls, banish: G.banishes, skip: G.skips }),
+    reroll() { G.rerolls--; return rollOptions(); },
+    banish(id) {
+      G.banishes--;
+      if (!id.startsWith('_')) G.banished.add(id);
+      return rollOptions();
+    },
+    // スキップは少しだけ回復（何も取らない代わりの小さな見返り）
+    skip() { G.skips--; healPlayer(G.player.maxHp * 0.1); },
   });
 }
 

@@ -18,6 +18,9 @@ export const MODELS = {
   rat:       { file: 'rat', height: 0.75, walk: 'Rat_Run', frames: 8 },
   skRogue:   { file: 'sk_rogue', clipsFrom: 'sk_minion', height: 1.75, walk: 'Running_C', frames: 8 },
   spiderBig: { file: 'spider', height: 1.9, walk: 'Spider_Walk', frames: 8 },
+  skMage:    { file: 'sk_mage', clipsFrom: 'sk_minion', height: 1.7, walk: 'Walking_D_Skeletons', frames: 8 },
+  slimeRed:  { file: 'slime', height: 1.0, walk: 'Slime_Walk', frames: 8, tint: '#9dff5a' },
+  batRed:    { file: 'bat', height: 1.0, walk: 'Bat_Flying', frames: 8, lift: 1.0, tint: '#ff7a7a' },
   // ---- 中ボス ----
   orochi:    { file: 'snake', height: 3.4, walk: 'Snake_Walk', frames: 8 },
   mukuro:    { file: 'sk_mage', clipsFrom: 'sk_minion', height: 4.4, walk: 'Walking_D_Skeletons', frames: 8 },
@@ -167,6 +170,7 @@ export class UnitSet {
     this.lift = m.lift || 0;
     const walk = bakeClip(m, m.walk, m.frames);
     this.mat = unitMaterial({ map: walk.map, spectral: m.spectral });
+    if (m.tint) this.mat.color.set(m.tint);   // 同じモデルの色違い（毒スライムなど）
     this.walk = walk.geos.map((g) => this.mesh(scene, g, capacity));
     this.atk = m.atk ? bakeClip(m, m.atk, 6).geos.map((g) => this.mesh(scene, g, Math.ceil(capacity / 2))) : null;
   }

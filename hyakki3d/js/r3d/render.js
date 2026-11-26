@@ -40,7 +40,20 @@ const FinalShader = {
     }`,
 };
 
-const ENEMY_SCALE = { oni: 1 };
+const ENEMY_SCALE = { oni: 1, slimelet: 0.6, splitter: 1.5, queen: 3.4 };
+
+// 動かない置物（魔石灯）を UnitSet と同じ口で描く
+class StaticSet {
+  constructor(scene, parts, cap) {
+    this.lift = 0;
+    this.walk = parts.map(([g, m]) => { const im = new THREE.InstancedMesh(g, m, cap); im.count = 0; im.frustumCulled = false; im.userData.cap = cap; im.userData.n = 0; scene.add(im); return im; });
+  }
+  begin() { for (const im of this.walk) im.userData.n = 0; }
+  push(m, phase, flash) {
+    for (const im of this.walk) { const i = im.userData.n; if (i >= im.userData.cap) return; im.setMatrixAt(i, m); im.userData.n = i + 1; }
+  }
+  end() { for (const im of this.walk) { im.count = im.userData.n; im.instanceMatrix.needsUpdate = true; } }
+}
 const tmpC = new THREE.Color();
 const tmpM = new THREE.Matrix4(), tmpQ = new THREE.Quaternion(), tmpV = new THREE.Vector3(), tmpS = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0);
 
@@ -83,7 +96,7 @@ function beamTex() {
   g.fillRect(0, 0, 4, 128);
   return new THREE.CanvasTexture(c);
 }
-const BEAM_COL = { chest: 0xffc94a, heal: 0x7dffb0, magnet: 0x6fd8ff, bomb: 0xfff2c0 };
+const BEAM_COL = { chest: 0xffc94a, heal: 0x7dffb0, magnet: 0x6fd8ff, bomb: 0xfff2c0, freeze: 0x9fe8ff, gold: 0xffd24a };
 
 export const R = {
   init(canvas, mobile) {
@@ -137,7 +150,13 @@ export const R = {
   build(limits) {
     const sc = this.scene;
     this.units = {};
-    for (const k of ['bat', 'skMinion', 'slime', 'frog', 'rat', 'skRogue', 'spiderBig', 'orochi', 'mukuro']) this.units[k] = new UnitSet(sc, k, k === 'spiderBig' ? 40 : k === 'orochi' || k === 'mukuro' ? 4 : limits.enemies);
+    for (const k of ['bat', 'skMinion', 'slime', 'frog', 'rat', 'skRogue', 'spiderBig', 'orochi', 'mukuro', 'skMage', 'slimeRed', 'batRed']) this.units[k] = new UnitSet(sc, k, k === 'spiderBig' ? 40 : k === 'orochi' || k === 'mukuro' ? 4 : k === 'skMage' || k === 'batRed' || k === 'slimeRed' ? 300 : limits.enemies);
+    // 魔石灯（壊せる）：石の台と光る結晶
+    const crystalMat = new THREE.MeshBasicMaterial({ color: 0x9fe8ff });
+    this.units.brazier = new StaticSet(sc, [
+      [new THREE.CylinderGeometry(0.32, 0.42, 0.9, 8).translate(0, 0.45, 0), new THREE.MeshStandardMaterial({ color: 0x8a7f9c, roughness: 0.9, emissive: 0x1a1030 })],
+      [new THREE.OctahedronGeometry(0.28, 0).scale(1, 1.7, 1).translate(0, 1.45, 0), crystalMat],
+    ], 8);
     this.allies = {};
     for (const k of ['kami', 'byakko', 'zenki', 'karasu']) this.allies[k] = new UnitSet(sc, k, limits.allies);
     for (const u of [...Object.values(this.units), ...Object.values(this.allies)]) for (const im of [...u.walk, ...(u.atk || [])]) { im.castShadow = !this.mobile; }
@@ -182,6 +201,8 @@ export const R = {
     // アイテム
     this.pick = {
       heal: this.mkPick(new THREE.ConeGeometry(0.3, 0.4, 3), 0xffffff, 0x333333),
+      gold: this.mkPick(new THREE.CylinderGeometry(0.2, 0.2, 0.06, 14).rotateX(Math.PI / 2), 0xffd24a, 0x6a4a00, 160),
+      freeze: this.mkPick(new THREE.OctahedronGeometry(0.26, 0), 0x9fe8ff, 0x2a6aa0),
       magnet: this.mkPick(new THREE.SphereGeometry(0.22, 12, 8), 0xd9a441, 0x332200),
       bomb: this.mkPick(new THREE.CylinderGeometry(0.12, 0.12, 0.5, 10), 0xffe066, 0x664400),
       chest: this.mkPick(new THREE.BoxGeometry(0.6, 0.42, 0.42), 0xb3141c, 0x400000),
@@ -205,9 +226,30 @@ export const R = {
     this.tele = new THREE.Mesh(tg, new THREE.MeshBasicMaterial({ color: 0xff2030, ...add, opacity: 0.5 }));
     this.tele.visible = false;
     sc.add(this.tele);
+    // ボス戦の檻：下が濃く上へ消えていく光の壁
+    {
+      const c = document.createElement('canvas');
+      c.width = 4; c.height = 128;
+      const g = c.getContext('2d');
+      const gr = g.createLinearGradient(0, 128, 0, 0);
+      gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.15, 'rgba(255,255,255,0.55)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+      g.fillStyle = gr; g.fillRect(0, 0, 4, 128);
+      const tex = new THREE.CanvasTexture(c);
+      this.arenaWall = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 96, 1, true).translate(0, 0.5, 0),
+        new THREE.MeshBasicMaterial({ map: tex, color: 0xff3a6a, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+      this.arenaWall.visible = false; this.arenaWall.renderOrder = 3;
+      sc.add(this.arenaWall);
+    }
     // 画面外マーカー（DOM）
     this.markLayer = document.getElementById('markers');
     this.marks = [];
+  },
+
+  // 章の色合い：空・霧・地面
+  setChapterLook(c) {
+    if (!this.world || !this.world.look) return;
+    this.world.setLook(c.sky, c.ground);
+    this.scene.fog.color.setHex(c.fog || 0x120c22);
   },
 
   // 陰陽師の見た目を切り替える
@@ -222,8 +264,8 @@ export const R = {
     this.charId = ch.id;
   },
 
-  mkPick(geo, c, e) {
-    const im = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ color: c, emissive: e, emissiveIntensity: 1.5 }), 16);
+  mkPick(geo, c, e, cap = 16) {
+    const im = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ color: c, emissive: e, emissiveIntensity: 1.5 }), cap);
     im.count = 0; im.frustumCulled = false;
     this.scene.add(im);
     return im;
@@ -286,7 +328,7 @@ export const R = {
     for (const u of Object.values(this.units)) u.begin();
     const view2 = (this.mobile ? 28 : 40) ** 2;
     for (const e of G.enemies) {
-      if (!e.alive || e.boss) continue;
+      if (!e.alive || (e.boss && e.def.model === 'boss')) continue;   // 骨の王だけは別の骨格アニメで描く
       const ex = e.x * S, ez = e.y * S;
       const dx = ex - px, dz = ez - pz;
       if (dx * dx + dz * dz > view2) continue;
@@ -337,7 +379,7 @@ export const R = {
     for (const u of Object.values(this.allies)) u.end(t);
 
     // ---- ボス ----
-    const b = G.boss;
+    const b = G.boss && G.boss.def.model === 'boss' ? G.boss : null;
     const br = this.boss;
     br.root.visible = !!b;
     this.bossLight.intensity = b ? 5 : 0;
@@ -411,13 +453,14 @@ export const R = {
     gc.needsUpdate = true;
 
     // ---- アイテム ----
-    const pc = { heal: 0, magnet: 0, bomb: 0, chest: 0 };
+    const pc = { heal: 0, magnet: 0, bomb: 0, chest: 0, gold: 0, freeze: 0 };
     for (const k of G.pickups) {
       const im = this.pick[k.kind];
+      if (pc[k.kind] >= im.instanceMatrix.count) continue;
       tmpQ.setFromAxisAngle(UP, t * 2);
       tmpM.compose(tmpV.set(k.x * S, 0.6 + Math.sin(k.t * 4) * 0.15, k.y * S), tmpQ, tmpS.set(1, 1, 1));
       im.setMatrixAt(pc[k.kind]++, tmpM);
-      if (G.frame % 4 === 0) FX.p3(k.x * S, 0.3, k.y * S, (Math.random() - 0.5), 1.5, (Math.random() - 0.5), 0.6, 0.3, k.kind === 'chest' ? 0 : 7, 1, 0);
+      if (k.kind !== 'gold' && G.frame % 4 === 0) FX.p3(k.x * S, 0.3, k.y * S, (Math.random() - 0.5), 1.5, (Math.random() - 0.5), 0.6, 0.3, k.kind === 'chest' ? 0 : 7, 1, 0);
     }
     for (const k in pc) { this.pick[k].count = pc[k]; this.pick[k].instanceMatrix.needsUpdate = true; }
 
@@ -449,6 +492,7 @@ export const R = {
     const setC = (im, i, hex, k = 1) => { col.set(hex).multiplyScalar(k); im.instanceColor.setXYZ(i, col.r, col.g, col.b); };
     const marks = [];
     for (const k of G.pickups) {
+      if (k.kind === 'gold') continue;   // 金貨は数が多いので光の柱を立てない
       const x = k.x * S, z = k.y * S, big = k.kind === 'chest';
       const w = big ? 0.55 : 0.28, h = big ? 14 : 6;
       tmpM.compose(tmpV.set(x, 0, z), tmpQ.identity(), tmpS.set(w * (1 + Math.sin(t * 4) * 0.1), h, w * (1 + Math.sin(t * 4) * 0.1)));
@@ -506,6 +550,20 @@ export const R = {
       this.tele.scale.set(b.r * S * 2.2, 1, 15);
       this.tele.material.opacity = 0.3 + 0.3 * Math.abs(Math.sin(t * 14));
     } else this.tele.visible = false;
+    // 檻の壁
+    const A = G.arena;
+    this.arenaWall.visible = !!A;
+    if (A) {
+      const grow = Math.min(1, A.t * 2.5);
+      this.arenaWall.position.set(A.x * S, 0, A.y * S);
+      this.arenaWall.scale.set(A.r * S, 3.2 * grow, A.r * S);
+      this.arenaWall.material.opacity = 0.55 + Math.sin(t * 3) * 0.15;
+      if (nr < 64) {
+        tmpM.compose(tmpV.set(A.x * S, 0.05, A.y * S), tmpQ.identity(), tmpS.set(A.r * S, 1, A.r * S));
+        this.ringD.setMatrixAt(nr, tmpM); setC(this.ringD, nr++, 0xff3a6a, 1.6);
+        this.ringD.count = nr; this.ringD.instanceMatrix.needsUpdate = true; this.ringD.instanceColor.needsUpdate = true;
+      }
+    }
     this.updateMarkers(marks);
 
     // ---- 仕上げ ----
