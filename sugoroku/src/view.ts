@@ -1,7 +1,7 @@
-// エンジンからの通知を 3D 演出・UI・音に変換する View と、あなたの操作を受け付ける Controller。
+// エンジンからの通知を 3D 演出・UI・音に変換する View と、あなたの操作を受け付ける Controller（v2）。
 import { CARDS, GROUPS, HEROES, LEVEL_NAMES, PLAYER_COLORS, TILES } from './data/defs.ts';
 import { audio, type Sfx } from './audio.ts';
-import type { BannerKind, Controller, Game, Question, TilePurpose, View } from './game/engine.ts';
+import type { Action, BannerKind, Controller, Game, Question, TilePurpose, View } from './game/engine.ts';
 import { N_TILES } from './game/engine.ts';
 import type { CardId, Player } from './game/types.ts';
 import type { World } from './render/world.ts';
@@ -46,10 +46,16 @@ export class GameView implements View {
     this.sync();
     if (p.human) {
       audio.play('select');
-      await this.ui.banner('あなたの番', p.jail > 0 ? '地下牢から脱出しよう' : '', 'turn me', 900);
-    } else {
-      await this.wait(350);
-    }
+      await this.ui.banner('あなたの番', p.jail > 0 ? '地下牢にいるので移動できない' : '', 'turn me', 800);
+    } else await this.wait(300);
+  }
+
+  async draw(p: Player, cards: CardId[]) {
+    if (p.human) {
+      audio.play('card');
+      this.ui.dealCards(cards);
+      await sleep(250 + cards.length * 90);
+    } else this.ui.log(`${this.name(p)} はカードを${cards.length}枚引いた`);
   }
 
   async dice(_p: Player, values: number[]) {
@@ -58,7 +64,7 @@ export class GameView implements View {
     await this.world.rollDice(values);
     const sum = values.reduce((a, b) => a + b, 0);
     const c = this.world.toScreen(this.world.arenaWorld);
-    this.ui.float(c.x, c.y - 40, values.length > 1 ? `${sum}` : `${values[0]}`, 'dice-sum');
+    this.ui.float(c.x, c.y - 40, `${sum}`, 'dice-sum');
     await this.wait(450);
     this.world.clearDice();
   }
@@ -67,7 +73,6 @@ export class GameView implements View {
     let k = 0;
     await this.world.movePiece(p.id, path, () => audio.play(`step${k++ % 3}` as Sfx, { volume: 0.5 }));
     this.world.focusOn(this.world.pathPos[path[path.length - 1]]);
-    // スタート通過の演出
     if (path.includes(0)) audio.play('bonus', { volume: 0.5 });
   }
 
@@ -78,26 +83,22 @@ export class GameView implements View {
 
   async cash(from: Player | null, to: Player | null, amount: number, reason: string) {
     if (amount <= 0) return;
-    const jackpotTile = TILES.findIndex((t) => t.kind === 'jackpot');
+    const toBank = /税|泉|保釈|盗賊/.test(reason) && !to;
     const a = from ? this.world.pieceWorld(from.id) : reason === 'ジャックポット' ? this.world.treasureWorld : this.world.centerWorld;
-    const b = to ? this.world.pieceWorld(to.id) : /税|泉|保釈|盗賊/.test(reason) ? this.world.treasureWorld : this.world.centerWorld;
-    void jackpotTile;
-    const n = Math.min(14, 2 + Math.floor(amount / 60));
-    const big = amount >= 500;
-    audio.play(big ? 'coins_pour' : amount >= 150 ? 'coins_several' : 'coin1', { volume: 0.8 });
-    if (from && !to && reason !== '建設' && reason !== '土地購入' && reason !== '酒場の賭け') this.world.playAnim(from.id, 'Hit_A', true);
+    const b = to ? this.world.pieceWorld(to.id) : toBank ? this.world.treasureWorld : this.world.centerWorld;
+    const big = amount >= 300;
+    audio.play(big ? 'coins_pour' : amount >= 100 ? 'coins_several' : 'coin1', { volume: 0.8 });
     if (from && to) this.world.playAnim(from.id, 'Hit_B', true);
-    const fly = this.world.coins(a, b, n);
+    const fly = this.world.coins(a, b, Math.min(12, 2 + Math.floor(amount / 40)));
     if (from) {
       const s = this.world.toScreen(this.world.pieceWorld(from.id));
       this.ui.float(s.x, s.y, `-${amount.toLocaleString()}G`, 'loss');
     }
     if (to) {
       const s = this.world.toScreen(this.world.pieceWorld(to.id));
-      setTimeout(() => this.ui.float(s.x, s.y, `+${amount.toLocaleString()}G`, big ? 'gain big' : 'gain'), 500 / this.sp);
+      setTimeout(() => this.ui.float(s.x, s.y, `+${amount.toLocaleString()}G`, big ? 'gain big' : 'gain'), 450 / this.sp);
     }
-    this.ui.log(`${from ? this.name(from) : '王国'} → ${to ? this.name(to) : reason.includes('税') || reason.includes('保釈') ? '黄金の泉' : '王国'}：${amount.toLocaleString()}G（${reason}）`);
-    if (big && to && from) this.world.shakeCamera(0.25);
+    this.ui.log(`${from ? this.name(from) : '王国'} → ${to ? this.name(to) : toBank ? '黄金の泉' : '王国'}：${amount.toLocaleString()}G（${reason}）`);
     await fly;
     if (to) audio.play('coin2', { volume: 0.6 });
     this.sync();
@@ -105,69 +106,70 @@ export class GameView implements View {
 
   async tile(i: number, reason: string, by?: Player) {
     const t = this.g.s.tiles[i];
-    if (reason === 'buy') audio.play('buy');
-    else if (reason === 'build') audio.play('build');
-    else if (reason === 'takeover') audio.play('thief');
-    else if (reason === 'quake') {
-      audio.play('trap');
-      this.world.shakeCamera(0.5);
-    } else if (reason === 'dragon' || reason === 'raid') {
+    const sfx: Record<string, Sfx> = { claim: 'buy', build: 'build', steal: 'thief', guard: 'spell1', trap: 'spell3', 'trap-sprung': 'trap', quake: 'trap', sold: 'slide' };
+    if (sfx[reason]) audio.play(sfx[reason]);
+    if (reason === 'quake') this.world.shakeCamera(0.5);
+    if (reason === 'dragon' || reason === 'raid') {
       audio.play('dragon');
       await this.world.dragonStrike(i);
-    } else if (reason === 'festival') audio.play('bonus');
-    else if (reason === 'sold') audio.play('slide');
+    }
     await this.world.setTile(i, t, true);
     this.updateLabel(i);
-    if (reason === 'build' && by) this.ui.log(`${this.name(by)} が ${TILES[i].name} に${LEVEL_NAMES[t.level]}を建てた`);
-    await this.wait(reason === 'build' || reason === 'buy' ? 380 : 250);
+    if (by && reason === 'claim') this.ui.log(`${this.name(by)} が ${TILES[i].name} に旗を立てた`);
+    if (by && reason === 'build') this.ui.log(`${this.name(by)} が ${TILES[i].name} を${LEVEL_NAMES[t.level]}にした`);
+    if (by && reason === 'trap' && !by.human) this.ui.log(`${this.name(by)} がどこかに罠を仕掛けた`);
+    await this.wait(reason === 'claim' || reason === 'build' ? 380 : 220);
     this.sync();
   }
 
   async banner(kind: BannerKind, text: string, sub?: string, p?: Player) {
     const sfx: Partial<Record<BannerKind, Sfx>> = {
-      monopoly: 'monopoly', 'unify-warn': 'trap', unify: 'fanfare', jackpot: 'coin_echo', final: 'fanfare', bankrupt: 'lose',
-      landmark: 'fanfare', takeover: 'thief', 'event-good': 'bonus', 'event-bad': 'trap', event: 'dragon', dungeon: 'trap',
-      doubles: 'levelup', win: 'win',
+      claim: 'buy', steal: 'thief', lost: 'trap', set: 'monopoly', 'conquest-warn': 'trap', conquest: 'fanfare', jackpot: 'coin_echo', final: 'fanfare',
+      fort: 'fanfare', 'event-good': 'bonus', 'event-bad': 'trap', event: 'dragon', dungeon: 'trap', trap: 'trap', win: 'win',
     };
     if (sfx[kind]) audio.play(sfx[kind]!);
     if (kind === 'jackpot') audio.play('coins_pour', { delay: 0.3 });
-    if (kind === 'monopoly' || kind === 'jackpot' || kind === 'unify' || kind === 'landmark' || kind === 'win') this.world.confetti();
-    if (kind === 'event' || kind === 'bankrupt') this.world.shakeCamera(0.6);
+    if (kind === 'set' || kind === 'jackpot' || kind === 'conquest' || kind === 'fort' || kind === 'win' || kind === 'steal') this.world.confetti();
+    if (kind === 'event' || kind === 'trap') this.world.shakeCamera(0.6);
     if (kind === 'final' && !this.finaleStarted) {
       this.finaleStarted = true;
       audio.playBgm('finale');
     }
-    if (p && (kind === 'monopoly' || kind === 'jackpot' || kind === 'landmark' || kind === 'event-good' || kind === 'unify')) this.world.playAnim(p.id, 'Jump_Full_Long', true);
-    if (p && kind === 'bankrupt') this.world.playAnim(p.id, 'Death_A', true);
+    if (p && (kind === 'set' || kind === 'jackpot' || kind === 'fort' || kind === 'event-good' || kind === 'steal' || kind === 'conquest')) this.world.playAnim(p.id, 'Jump_Full_Long', true);
+    if (p && kind === 'trap') this.world.playAnim(p.id, 'Hit_A', true);
     if (kind === 'round') {
       this.ui.log(`── ${text} ──`);
       return;
     }
     const who = p ? `<span class="banner-who" style="--pc:${PLAYER_COLORS[p.id]}">${icon(HEROES[p.hero].icon)}${esc(p.name)}</span>` : '';
-    const long = kind === 'win' || kind === 'unify' || kind === 'final' || kind === 'jackpot' || kind === 'monopoly';
+    const long = kind === 'win' || kind === 'conquest' || kind === 'final' || kind === 'jackpot' || kind === 'set';
     this.ui.log(`${p ? this.name(p) + '：' : ''}${text}${sub ? `（${sub}）` : ''}`);
-    await this.ui.banner(`${who}${text}`, sub ?? '', `k-${kind}`, long ? 2000 : 1300);
-    if (p && kind === 'bankrupt') this.world.setPieceVisible(p.id, false);
+    await this.ui.banner(`${who}${text}`, sub ?? '', `k-${kind}`, long ? 1900 : 1200);
   }
 
   async cardGained(p: Player, card: CardId) {
     const c = CARDS[card];
     audio.play(c.rarity === 'epic' ? 'epic' : 'card');
-    if (p.human) {
-      await this.ui.banner(`<div class="card-reveal">${cardHtml(card)}</div>`, `${c.name} を手に入れた`, 'k-card', 1500);
-    } else {
-      this.ui.log(`${this.name(p)} はカードを1枚手に入れた`);
-      await this.wait(250);
+    if (p.human) await this.ui.banner(`<div class="card-reveal">${cardHtml(card)}</div>`, `${c.name} がデッキに加わった`, 'k-card', 1300);
+    else {
+      this.ui.log(`${this.name(p)} が「${c.name}」を手に入れた`);
+      await this.wait(200);
     }
   }
 
   async cardUsed(p: Player, card: CardId, target?: number) {
     const c = CARDS[card];
-    audio.play(`spell${Math.floor(Math.random() * 5)}` as Sfx);
-    this.world.playAnim(p.id, 'Use_Item', true);
-    this.ui.log(`${this.name(p)} が「${c.name}」を使った${target !== undefined && c.target !== 'none' && c.target !== 'number' ? `（${TILES[target].name}）` : ''}`);
-    if (target !== undefined && (c.target === 'enemyTile' || c.target === 'ownTile')) this.world.focusOn(this.world.plotPos[target]);
-    await this.ui.banner(`<div class="card-reveal">${cardHtml(card)}</div>`, `${esc(p.name)} が使った`, 'k-card', 1400);
+    audio.play(c.move ? 'slide' : (`spell${Math.floor(Math.random() * 5)}` as Sfx));
+    this.world.playAnim(p.id, c.move ? 'Interact' : 'Use_Item', true);
+    // 罠の場所は相手には見せない
+    const where = target !== undefined && card !== 'trap' && c.target !== 'steps' && c.target !== 'none' ? `（${TILES[target].name}）` : '';
+    this.ui.log(`${this.name(p)} が「${c.name}」を使った${where}`);
+    if (target !== undefined && card !== 'trap' && (c.target === 'enemyTile' || c.target === 'ownTile' || c.target === 'emptyTile')) this.world.focusOn(this.world.plotPos[target]);
+    if (p.human) {
+      this.sync();
+      return;
+    }
+    await this.ui.banner(`<div class="card-reveal">${cardHtml(card)}</div>`, `${esc(p.name)} が使った`, 'k-card', c.move ? 700 : 1100);
   }
 
   log(msg: string) {
@@ -177,11 +179,10 @@ export class GameView implements View {
   sync() {
     if (!this.g) return;
     this.ui.renderHud(this.g, this.humanId, this.active);
-    // 王城は首位の色、財宝は黄金の泉の額
     const rank = this.g.ranking();
     const lead = rank[0];
-    const tie = rank.length > 1 && this.g.assets(rank[1]) === this.g.assets(lead);
-    void this.world.setLeader(tie ? null : lead.id);
+    const tie = rank.length > 1 && this.g.score(rank[1]) === this.g.score(lead);
+    void this.world.setLeader(tie || this.g.territories(lead).length === 0 ? null : lead.id);
     void this.world.setTreasure(this.g.s.jackpot);
     for (let i = 0; i < N_TILES; i++) this.updateLabel(i);
   }
@@ -190,10 +191,11 @@ export class GameView implements View {
   updateLabel(i: number) {
     const def = TILES[i];
     const t = this.g.s.tiles[i];
+    const myTrap = t.trap !== null && t.trap === this.humanId;
     if (def.kind !== 'prop') {
       const SPECIAL: Record<string, { bg: string; fg: string; name: string }> = {
         start: { bg: '#f5b82e', fg: '#2b2640', name: 'スタート' },
-        shrine: { bg: '#5aa9e6', fg: '#fff', name: 'カード' },
+        shrine: { bg: '#5aa9e6', fg: '#fff', name: 'カード屋' },
         event: { bg: '#b98ce8', fg: '#fff', name: '運命の巻物' },
         tax: { bg: '#5a4a5f', fg: '#ffd7a8', name: '竜の関所' },
         dungeon: { bg: '#6b6f7a', fg: '#fff', name: '地下牢' },
@@ -204,18 +206,18 @@ export class GameView implements View {
       };
       const sp = SPECIAL[def.kind];
       const main = def.kind === 'jackpot' ? `${this.g.s.jackpot.toLocaleString()}G` : def.kind === 'start' ? `+${this.g.stage.salary}G` : def.kind === 'tax' ? '10%' : '';
-      this.world.printTile(i, { kind: def.kind, name: sp.name, icon: def.icon, bg: sp.bg, fg: sp.fg, main });
+      this.world.printTile(i, { kind: def.kind, name: sp.name, icon: def.icon, bg: sp.bg, fg: sp.fg, main, trap: myTrap });
       return;
     }
     const grp = GROUPS[def.group!];
     if (t.owner === null) {
-      this.world.printTile(i, { kind: 'prop', name: def.name, icon: def.icon, bg: '#fffaf0', band: grp.color, main: `${this.g.price(i)}G` });
+      this.world.printTile(i, { kind: 'prop', name: def.name, icon: def.icon, bg: '#fffaf0', band: grp.color, main: `${this.g.price(i)}G`, trap: myTrap });
       return;
     }
-    const oc = PLAYER_COLORS[t.owner];
     this.world.printTile(i, {
-      kind: 'prop', name: def.name, icon: def.icon, band: grp.color, bg: '#ffffff', owner: oc, main: `${this.g.toll(i).toLocaleString()}G`,
-      level: t.level, mono: this.g.ownsGroup(t.owner, def.group!), festival: t.festival > 0, dragon: t.dragon > 0,
+      kind: 'prop', name: def.name, icon: def.icon, band: grp.color, bg: '#ffffff', owner: PLAYER_COLORS[t.owner],
+      main: `奪${this.g.stealCost(i, this.g.s.players[this.humanId] ?? this.g.s.players[0]).toLocaleString()}`,
+      level: t.level, set: this.g.ownsGroup(t.owner, def.group!), guard: t.guard > 0, trap: myTrap,
     });
   }
 }
@@ -224,76 +226,46 @@ export class GameView implements View {
 export class HumanController implements Controller {
   ui: UI;
   world: World;
-  private rolled = false;
   constructor(ui: UI, world: World) {
     this.ui = ui;
     this.world = world;
   }
 
-  async waitRoll(_g: Game, _p: Player) {
-    if (this.rolled) {
-      this.rolled = false;
-      return;
-    }
-    await this.ui.waitRollButton();
-  }
-
-  async pickCard(g: Game, p: Player): Promise<{ card: CardId; target?: number } | null> {
+  async turn(g: Game, p: Player): Promise<Action> {
     for (;;) {
-      const r = await this.ui.turnActions(g, p, true);
-      if (r.type === 'roll') {
-        this.rolled = true;
-        return null;
-      }
-      const c = CARDS[r.card];
-      if (c.target === 'none') return { card: r.card };
-      if (c.target === 'number') {
-        const n = await this.ui.dialog<number | null>({
-          title: '精密ダイス',
-          icon: c.icon,
-          body: '<p>出目の合計を選んでください。止まるマスが下に出ます。</p>' +
-            `<div class="num-grid">${Array.from({ length: 11 }, (_, k) => k + 2)
-              .map((n) => {
-                const i = (p.pos + n) % N_TILES;
-                return `<div class="num-hint"><b>${n}</b><small>${TILES[i].name}</small></div>`;
-              })
-              .join('')}</div>`,
-          buttons: [{ label: 'やめる', value: null }, ...Array.from({ length: 11 }, (_, k) => ({ label: String(k + 2), value: k + 2, kind: 'primary' as const }))],
-          className: 'numbers',
-        });
-        if (n === null) continue;
-        this.rolled = true;
-        return { card: r.card, target: n };
-      }
-      const purpose: TilePurpose = c.target === 'ownTile' ? 'festival' : c.target === 'anyTile' ? 'teleport' : (r.card as TilePurpose);
-      const target = await this.selectTile(g, p, purpose, g.cardTargets(p, r.card), true);
+      const r = await this.ui.handPhase(g, p);
+      if (r === 'end') return { type: 'end' };
+      const card = p.hand[r];
+      const c = CARDS[card];
+      if (c.target === 'none' || c.target === 'steps') return { type: 'play', index: r };
+      const target = await this.selectTile(g.cardTargets(p, card), this.targetText(card), true);
       if (target === null) continue;
-      return { card: r.card, target };
+      return { type: 'play', index: r, target };
     }
   }
 
-  private selectTile(_g: Game, _p: Player, purpose: TilePurpose, options: number[], allowCancel: boolean): Promise<number | null> {
-    const text: Record<TilePurpose, string> = {
-      portal: 'ワープ先のマスを選んでください',
+  private targetText(card: CardId) {
+    const t: Partial<Record<CardId, string>> = {
       teleport: '移動先のマスを選んでください',
-      festival: '収穫祭を開く自分の土地を選んでください',
-      quake: '地震を起こす相手の土地を選んでください',
-      dragon: '竜を放つ相手の土地を選んでください',
-      edict: '買い取る相手の土地を選んでください',
-      'royal-build': '王都の恵み：建設する土地を選んでください',
+      banner: '旗を立てる空き地を選んでください',
+      march: '奪う相手の陣を選んでください',
+      edict: '奪う相手の陣を選んでください',
+      fortify: '砦を築く自分の陣を選んでください',
+      guard: '結界で守る自分の陣を選んでください',
+      trap: '罠を仕掛けるマスを選んでください',
+      quake: '地震を起こす相手の陣を選んでください',
+      dragon: '竜を放つ相手の陣を選んでください',
     };
+    return t[card] ?? 'マスを選んでください';
+  }
+
+  private selectTile(options: number[], text: string, allowCancel: boolean): Promise<number | null> {
     return new Promise((resolve) => {
       this.world.setSelectable(options);
       const prevClick = this.world.onTileClick;
-      const labels = this.world.labels;
-      const onLabel = (e: Event) => {
-        const el = (e.target as HTMLElement).closest<HTMLElement>('.tile-label.selectable');
-        if (el) finish(Number(el.dataset.tile));
-      };
       const finish = (v: number | null) => {
         this.world.setSelectable(null);
         this.world.onTileClick = prevClick;
-        labels.removeEventListener('click', onLabel);
         this.ui.clearAction();
         resolve(v);
       };
@@ -301,82 +273,84 @@ export class HumanController implements Controller {
         if (options.includes(i)) finish(i);
         else prevClick?.(i);
       };
-      labels.addEventListener('click', onLabel);
-      this.ui.selectBar(text[purpose], allowCancel, () => finish(null));
+      this.world.overview();
+      this.ui.selectBar(text, allowCancel, () => finish(null));
     });
   }
 
   async confirm(g: Game, p: Player, q: Question): Promise<boolean> {
     const def = TILES[q.tile];
-    const grp = def.group !== undefined ? GROUPS[def.group] : null;
-    const after = (cost: number) => `<div class="cost-line"><span>所持金</span><b>${p.cash.toLocaleString()}G → ${(p.cash - cost).toLocaleString()}G</b></div>`;
+    const grp = GROUPS[def.group!];
+    const after = `<div class="cost-line"><span>所持金</span><b>${p.cash.toLocaleString()}G → ${(p.cash - q.cost).toLocaleString()}G</b></div>`;
+    const setHint = (() => {
+      const others = g.groupTiles(def.group!).filter((k) => k !== q.tile);
+      return others.every((k) => g.s.tiles[k].owner === p.id) ? `<p class="hint good">${grp.name}を統一できる！（税収2倍）</p>` : '';
+    })();
     switch (q.kind) {
-      case 'buy': {
-        const others = g.groupTiles(def.group!).filter((k) => k !== q.tile);
-        const mine = others.filter((k) => g.s.tiles[k].owner === p.id).length;
-        const hint = mine === 2 ? '<p class="hint good">買うと領地制覇！通行料が2倍になる</p>' : mine === 1 ? '<p class="hint">同じ色をもう1つ持っている</p>' : '';
+      case 'claim':
         return this.ui.dialog({
-          title: `${def.name} を買いますか？`,
-          icon: def.icon,
-          color: grp!.color,
-          body: `<p class="grp-name">${grp!.name}</p>${hint}<div class="cost-line"><span>価格</span><b>${q.cost}G</b></div><div class="cost-line"><span>止まった相手から</span><b>${Math.round(g.price(q.tile) * 0.25)}G〜</b></div>${after(q.cost)}`,
+          title: `${def.name} に旗を立てる？`,
+          icon: 'tower-flag',
+          color: grp.color,
+          body: `<p class="grp-name">${grp.name}</p>${setHint}<div class="cost-line"><span>値段</span><b>${q.cost}G</b></div><div class="cost-line"><span>毎ターンの税収</span><b>+${Math.round((g.price(q.tile) * 0.07) / 5) * 5}G〜</b></div>${after}`,
           buttons: [
-            { label: '買わない', value: false },
-            { label: '買う', value: true, kind: 'primary' },
+            { label: '見送る', value: false },
+            { label: '旗を立てる', value: true, kind: 'primary' },
           ],
         });
-      }
-      case 'build': {
-        const t = g.s.tiles[q.tile];
-        const cur = g.toll(q.tile);
-        t.level++;
-        const next = g.toll(q.tile);
-        t.level--;
+      case 'fortify':
         return this.ui.dialog({
-          title: `${LEVEL_NAMES[q.level]}を建てますか？`,
-          icon: q.level >= 4 ? 'castle' : 'hammer-drop',
-          color: grp!.color,
-          body: `<p class="grp-name">${def.name}</p><div class="cost-line"><span>建設費</span><b>${q.cost}G</b></div><div class="cost-line up"><span>通行料</span><b>${cur}G → ${next}G</b></div>${after(q.cost)}${q.level >= 4 ? '<p class="hint good">王国の象徴は誰にも奪われない</p>' : ''}`,
+          title: `${LEVEL_NAMES[q.level]}を築く？`,
+          icon: 'hammer-drop',
+          color: grp.color,
+          body: `<p class="grp-name">${def.name}</p><p>砦が強いほど奪われにくく、税収も増える。</p><div class="cost-line"><span>築城費</span><b>${q.cost}G</b></div>${after}`,
           buttons: [
-            { label: '建てない', value: false },
-            { label: '建てる', value: true, kind: 'primary' },
+            { label: '築かない', value: false },
+            { label: '築く', value: true, kind: 'primary' },
           ],
         });
-      }
-      case 'takeover': {
+      case 'steal': {
         const owner = g.s.players[g.s.tiles[q.tile].owner!];
-        const completes = g.groupTiles(def.group!).every((k) => k === q.tile || g.s.tiles[k].owner === p.id);
         return this.ui.dialog({
-          title: `${def.name} を買収しますか？`,
+          title: `${def.name} を奪う？`,
           icon: 'gavel',
           color: PLAYER_COLORS[owner.id],
-          body: `<p class="grp-name">持ち主：${esc(owner.name)}・${LEVEL_NAMES[g.s.tiles[q.tile].level]}</p>${completes ? '<p class="hint good">奪えば領地制覇！</p>' : ''}<div class="cost-line"><span>買収額</span><b>${q.cost.toLocaleString()}G</b></div><div class="cost-line"><span>今の通行料</span><b>${g.toll(q.tile).toLocaleString()}G</b></div>${after(q.cost)}`,
+          body: `<p class="grp-name">持ち主：${esc(owner.name)}・${LEVEL_NAMES[g.s.tiles[q.tile].level]}</p>${setHint}<div class="cost-line"><span>奪う値段</span><b>${q.cost.toLocaleString()}G</b></div><p class="note">奪うと砦は1段階崩れる。</p>${after}`,
           buttons: [
             { label: 'やめる', value: false },
-            { label: '買収する', value: true, kind: 'danger' },
+            { label: '奪う', value: true, kind: 'danger' },
           ],
         });
       }
-      case 'shield':
-        return this.ui.dialog({
-          title: '鉄壁の盾を使いますか？',
-          icon: 'magic-shield',
-          body: `<p>${def.name} の通行料 <b>${q.toll.toLocaleString()}G</b> を0にできます。</p>`,
-          buttons: [
-            { label: '払う', value: false },
-            { label: '盾を使う', value: true, kind: 'primary' },
-          ],
-        });
     }
   }
 
-  async chooseTile(g: Game, p: Player, purpose: TilePurpose, options: number[]): Promise<number> {
-    if (purpose === 'royal-build') {
-      const pick = await this.selectTile(g, p, purpose, options, true);
-      return pick ?? -1;
-    }
-    const pick = await this.selectTile(g, p, purpose, options, false);
-    return pick ?? options[0];
+  async steps(_g: Game, p: Player, options: number[], reason: string): Promise<number> {
+    const title = reason === 'ranger' ? '出目を調整する（狩人）' : '何マス進む？';
+    return this.ui.dialog({
+      title,
+      icon: reason === 'ranger' ? 'bow-arrow' : 'flag-objective',
+      body: `<div class="num-grid">${options.map((n) => `<div class="num-hint"><b>${n > 0 ? n : n}</b><small>${TILES[(p.pos + n + N_TILES) % N_TILES].name}</small></div>`).join('')}</div>`,
+      buttons: options.map((n) => ({ label: n > 0 ? `${n}マス進む` : `${-n}マス戻る`, value: n, kind: 'primary' as const })),
+      className: 'numbers',
+    });
+  }
+
+  async chooseTile(_g: Game, _p: Player, _purpose: TilePurpose, options: number[]): Promise<number> {
+    return (await this.selectTile(options, 'ワープ先のマスを選んでください', false)) ?? options[0];
+  }
+
+  async shop(g: Game, p: Player, offers: CardId[], free: boolean): Promise<number> {
+    return this.ui.dialog({
+      title: free ? '王の贈り物：1枚えらぶ' : 'カード屋',
+      icon: free ? 'crown' : 'swap-bag',
+      body: `<p>${free ? 'デッキに加えるカードを1枚選んでください。' : '買ったカードは捨て札に入り、次に山札を混ぜ直したときから使えます。'}</p><div class="discard-row">${offers.map((c) => `<div>${cardHtml(c, { small: true })}${free ? '' : `<small class="price">${g.cardPrice(c, p)}G</small>`}</div>`).join('')}</div>`,
+      buttons: [
+        ...(free ? [] : [{ label: '買わない', value: -1 }]),
+        ...offers.map((c, i) => ({ label: free ? CARDS[c].name : `${CARDS[c].name}（${g.cardPrice(c, p)}G）`, value: i, kind: 'primary' as const, disabled: !free && p.cash < g.cardPrice(c, p) })),
+      ],
+      className: 'discard',
+    });
   }
 
   async dungeon(g: Game, p: Player): Promise<'pay' | 'roll'> {
@@ -384,7 +358,7 @@ export class HumanController implements Controller {
     return this.ui.dialog({
       title: '地下牢',
       icon: 'prisoner',
-      body: `<p>保釈金 ${fee}G を払ってすぐに出るか、ゾロ目に賭けるか。あと${p.jail}回失敗すると釈放されます。</p>`,
+      body: `<p>保釈金 ${fee}G を払ってすぐに出るか、ゾロ目に賭けるか。失敗するとこのターンは移動できない（カードは使える）。残り${p.jail}回で釈放。</p>`,
       buttons: [
         { label: 'ゾロ目に賭ける', value: 'roll' },
         { label: `${fee}G 払う`, value: 'pay', kind: 'primary' },
@@ -402,17 +376,6 @@ export class HumanController implements Controller {
         { label: '50G 賭ける', value: 50, kind: 'primary', disabled: p.cash < 50 },
         { label: '150G 賭ける', value: 150, kind: 'gold', disabled: p.cash < 150 },
       ],
-    });
-  }
-
-  async discard(_g: Game, p: Player, incoming: CardId): Promise<number> {
-    const all = [...p.hand, incoming];
-    return this.ui.dialog({
-      title: '手札がいっぱい',
-      icon: 'card-random',
-      body: `<p>捨てるカードを1枚選んでください。</p><div class="discard-row">${all.map((c, i) => `<div>${cardHtml(c, { small: true })}${i === all.length - 1 ? '<small class="new">NEW</small>' : ''}</div>`).join('')}</div>`,
-      buttons: all.map((c, i) => ({ label: `${CARDS[c].name}を捨てる`, value: i })),
-      className: 'discard',
     });
   }
 }

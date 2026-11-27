@@ -1,23 +1,22 @@
-// CPU 4人で自動対戦を繰り返し、バランスを確認する。
+// CPU 4人で自動対戦を繰り返し、バランスを確認する（v2：カードで動く陣取り）。
 // 使い方: npm run sim -- [回数] [ステージ]
 import { CARDS, HERO_ORDER, STAGES } from '../src/data/defs.ts';
 import { AIController } from '../src/game/ai.ts';
-import { Game, type View } from '../src/game/engine.ts';
+import { Game, TERRITORIES, type View } from '../src/game/engine.ts';
 import type { CardId, StageId } from '../src/game/types.ts';
 
 const N = Number(process.argv[2] ?? 300);
 const stage = (process.argv[3] ?? 'meadow') as StageId;
 const noop = async () => {};
-const view: View = { turnStart: noop, dice: noop, move: noop, warp: noop, cash: noop, tile: noop, banner: noop, cardGained: noop, cardUsed: noop, log: () => {}, sync: () => {} };
-const pool = Object.keys(CARDS) as CardId[];
+const view: View = { turnStart: noop, draw: noop, dice: noop, move: noop, warp: noop, cash: noop, tile: noop, banner: noop, cardUsed: noop, cardGained: noop, log: () => {}, sync: () => {} };
+const pool = (Object.keys(CARDS) as CardId[]).filter((c) => c !== 'walk');
 
 const reasons: Record<string, number> = {};
 const heroWins: Record<string, number> = {};
 const persWins: Record<string, number> = {};
-let reach2 = 0, anySet = 0;
-let unownedEnd = 0, levelsEnd = 0, cashEnd = 0;
-let rounds = 0, bankrupts = 0, monopolies = 0, jackpots = 0, takeovers = 0, comebacks = 0, landmarks = 0, maxToll = 0, turnsWithTollOver300 = 0;
-const spread: number[] = [];
+let claims = 0, steals = 0, lost = 0, bought = 0, used = 0, forts = 0, jackpots = 0, comebacks = 0, emptyEnd = 0, cashEnd = 0;
+const winTerr: number[] = [];
+const margin: number[] = [];
 const t0 = Date.now();
 for (let k = 0; k < N; k++) {
   const heroes = [...HERO_ORDER].sort(() => Math.random() - 0.5).slice(0, 4);
@@ -31,36 +30,29 @@ for (let k = 0; k < N; k++) {
   reasons[g.s.winReason!] = (reasons[g.s.winReason!] ?? 0) + 1;
   heroWins[w.hero] = (heroWins[w.hero] ?? 0) + 1;
   persWins[w.personality] = (persWins[w.personality] ?? 0) + 1;
-  rounds += g.s.round;
-  bankrupts += g.s.players.filter((p) => p.bankrupt).length;
   for (const p of g.s.players) {
-    monopolies += p.stats.monopoliesMax;
+    claims += p.stats.claims;
+    steals += p.stats.takeovers;
+    lost += p.stats.lost;
+    bought += p.stats.cardsBought;
+    used += p.stats.cardsUsed;
+    forts += p.stats.forts;
     jackpots += p.stats.jackpots;
-    takeovers += p.stats.takeovers;
-    landmarks += p.stats.landmarks;
-    maxToll = Math.max(maxToll, p.stats.maxToll);
-    if (p.stats.maxToll >= 300) turnsWithTollOver300++;
+    cashEnd += p.cash / 4;
   }
   if (w.stats.lowestRankSeen >= 2) comebacks++;
-  const mm = Math.max(...g.s.players.map((p) => p.stats.monopoliesMax));
-  if (mm >= 2) reach2++;
-  if (mm >= 1) anySet++;
-  unownedEnd += g.s.tiles.filter((t, i) => g.price(i) > 0 && t.owner === null).length;
-  levelsEnd += g.s.tiles.reduce((a, t) => a + (t.owner !== null ? t.level : 0), 0);
-  cashEnd += g.s.players.reduce((a, p) => a + p.cash, 0) / 4;
-  const assets = g.ranking().map((p) => g.assets(p));
-  spread.push(assets[0] - assets[1]);
+  emptyEnd += TERRITORIES.filter((i) => g.s.tiles[i].owner === null).length;
+  const r = g.ranking();
+  winTerr.push(g.territories(r[0]).length);
+  margin.push(g.territories(r[0]).length - g.territories(r[1]).length);
 }
 const pct = (n: number) => `${((n / N) * 100).toFixed(0)}%`;
-spread.sort((a, b) => a - b);
+const per = (n: number) => (n / N / 4).toFixed(2);
+const med = (a: number[]) => [...a].sort((x, y) => x - y)[Math.floor(a.length / 2)];
 console.log(`ステージ ${stage} / ${N}試合 (${((Date.now() - t0) / 1000).toFixed(1)}秒)`);
 console.log('勝ち方', Object.fromEntries(Object.entries(reasons).map(([k, v]) => [k, pct(v)])));
-console.log('平均ラウンド', (rounds / N).toFixed(1), ' 1試合の破産人数', (bankrupts / N).toFixed(2));
-console.log('1人あたり 領地制覇', (monopolies / N / 4).toFixed(2), ' ジャックポット', (jackpots / N / 4).toFixed(2), ' 買収', (takeovers / N / 4).toFixed(2), ' 象徴', (landmarks / N / 4).toFixed(2));
-console.log('最大通行料', maxToll, ' 300G以上を取った人の割合', pct(turnsWithTollOver300 / 4));
+console.log('1人あたり 旗', per(claims), ' 奪取', per(steals), ' 失陣', per(lost), ' カード購入', per(bought), ' カード使用', per(used), ' 王城', per(forts), ' JP', per(jackpots));
+console.log('優勝者の陣 中央値', med(winTerr), '/', TERRITORIES.length, ' 1位と2位の陣の差 中央値', med(margin), ' 終了時の空き陣', (emptyEnd / N).toFixed(1), ' 平均所持金', Math.round(cashEnd / N));
 console.log('逆転勝ち（一度3位以下から優勝）', pct(comebacks));
-console.log('1位と2位の差 中央値', spread[Math.floor(N / 2)], ' 25%', spread[Math.floor(N / 4)], ' 75%', spread[Math.floor((N * 3) / 4)]);
-console.log('終了時 空き地', (unownedEnd / N).toFixed(1), '/18  建物段階の合計', (levelsEnd / N).toFixed(1), '  平均現金', Math.round(cashEnd / N));
-console.log('誰かが領地制覇した試合', pct(anySet), ' 2色に達した試合（統一の王手）', pct(reach2));
 console.log('キャラ別勝利', heroWins);
 console.log('性格別勝利', persWins);

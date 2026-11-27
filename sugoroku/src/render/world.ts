@@ -20,9 +20,9 @@ export interface PrintInfo {
   owner?: string;
   main: string;
   level?: number;
-  mono?: boolean;
-  festival?: boolean;
-  dragon?: boolean;
+  set?: boolean;
+  guard?: boolean;
+  trap?: boolean;
 }
 
 const loader = new GLTFLoader();
@@ -125,10 +125,10 @@ const SIGNATURE: Record<number, string> = {
 };
 function buildingModel(i: number, level: number, owner: number): string | null {
   const c = PLAYER_KEYS[owner];
-  if (level <= 0) return null;
-  if (level === 1) return `hex/building_home_A_${c}.gltf`;
-  if (level === 2) return `hex/${SIGNATURE[i] ?? 'building_home_B'}_${c}.gltf`;
-  if (level === 3) return `hex/building_tower_A_${c}.gltf`;
+  // 旗（村）→ 砦 → 城塞 → 王城
+  if (level <= 0) return `hex/building_home_A_${c}.gltf`;
+  if (level === 1) return `hex/${SIGNATURE[i] ?? 'building_home_B'}_${c}.gltf`;
+  if (level === 2) return `hex/building_tower_A_${c}.gltf`;
   return `hex/building_castle_${c}.gltf`;
 }
 const SPECIAL_MODEL: Record<string, string> = {
@@ -509,19 +509,14 @@ export class World {
       drawIcon(info.icon, W / 2, 128, 58, info.owner ?? ink);
       if (info.level) for (let k = 0; k < 4; k++) drawIcon('star-formation', W / 2 - 39 + k * 26, 166, 22, k < info.level ? '#f5b82e' : '#d8cfbe');
       text(info.main, W / 2, info.level ? 200 : 190, info.level ? 40 : 46, info.owner ?? ink, { display: true, max: 170 });
-      if (info.mono) {
+      if (info.set) {
         c.fillStyle = '#e8483f';
         c.beginPath();
         c.arc(W - 62, 124, 22, 0, Math.PI * 2);
         c.fill();
-        text('×2', W - 62, 125, 22, '#fff', { display: true });
+        text('統', W - 62, 125, 22, '#fff', { display: true });
       }
-      if (info.festival) drawIcon('party-popper', 60, 124, 38, '#f5b82e');
-      if (info.dragon) {
-        c.fillStyle = 'rgba(60,10,0,.55)';
-        c.fillRect(0, 92, W, W);
-        drawIcon('fire-breath', W / 2, 150, 90, '#ff7a2f');
-      }
+      if (info.guard) drawIcon('magic-shield', 62, 124, 40, '#3b8eea');
       // 縁取り：持ち主の色（いなければ帯の色）
       c.lineWidth = info.owner ? 22 : 10;
       c.strokeStyle = info.owner ?? info.band!;
@@ -534,13 +529,21 @@ export class World {
       c.strokeStyle = 'rgba(0,0,0,.18)';
       c.stroke(hex);
     }
+    if (info.trap) {
+      // 自分が仕掛けた罠の印（相手には見えない）
+      c.fillStyle = '#2b2640';
+      c.beginPath();
+      c.arc(W / 2, 236, 20, 0, Math.PI * 2);
+      c.fill();
+      drawIcon('skull-crossed-bones', W / 2, 236, 30, '#ffd35c');
+    }
     c.restore();
     pr.tex.needsUpdate = true;
   }
 
   // ---------- 建物 ----------
   async setTile(i: number, t: TileState, animate: boolean) {
-    const key = `${t.owner}:${t.level}:${t.festival > 0}:${t.dragon > 0}`;
+    const key = `${t.owner}:${t.level}:${t.guard > 0}`;
     if (this.tileKey[i] === key) return;
     const prevLevel = Number(this.tileKey[i].split(':')[1] ?? 0);
     this.tileKey[i] = key;
@@ -563,9 +566,9 @@ export class World {
       flag.position.set(0.62, 0, 0.3);
       flag.scale.setScalar(0.9);
       parts.push(flag);
-      if (t.festival > 0) {
+      if (t.guard > 0) {
         for (let k = 0; k < 4; k++) {
-          const f = await inst(`hex/flag_${PLAYER_KEYS[k]}.gltf`);
+          const f = await inst(`hex/flag_${PLAYER_KEYS[t.owner]}.gltf`);
           const a = (k / 4) * Math.PI * 2 + 0.4;
           f.position.set(Math.cos(a) * 0.78, 0, Math.sin(a) * 0.78);
           f.scale.setScalar(0.7);
@@ -576,16 +579,6 @@ export class World {
     const group = new THREE.Group();
     group.rotation.y = face;
     for (const p of parts) group.add(p);
-    if (t.dragon > 0) {
-      group.traverse((c) => {
-        const m = c as THREE.Mesh;
-        if (m.isMesh) {
-          m.material = (m.material as THREE.MeshStandardMaterial).clone();
-          (m.material as THREE.MeshStandardMaterial).color.multiplyScalar(0.45);
-          (m.material as THREE.MeshStandardMaterial).emissive = new THREE.Color('#5a1200');
-        }
-      });
-    }
     holder.add(group);
     if (animate) {
       const grow = t.level >= prevLevel;

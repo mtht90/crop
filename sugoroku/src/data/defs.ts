@@ -43,63 +43,81 @@ export const TILES: TileDef[] = [
   { kind: 'prop', name: '白亜の王城', icon: 'castle', group: 5, price: 350 },
 ];
 
-export const LEVEL_NAMES = ['空き地', '村', '町', '城塞', '王国の象徴'];
-/** 通行料 = 価格 × 係数（レベル別） */
-export const TOLL_MUL = [0.25, 0.8, 1.7, 3.0, 4.8];
-/** 建設費 = 価格 × 係数 */
-export const BUILD_MUL = 0.55;
-export const MAX_LEVEL = 4;
-export const SET_BONUS = 2;
-export const FESTIVAL_MUL = 2;
-export const TAKEOVER_MUL = 1.4;
+export const LEVEL_NAMES = ['旗', '砦', '城塞', '王城'];
+export const MAX_LEVEL = 3;
+
+/** 経済の数値（すべて陣の値段 price × ステージ倍率が基準） */
+export const ECON = {
+  income: 0.07, // 毎ターンの税収：price × income × (1 + 砦の段階)
+  toll: 0.12, // 相手の陣に止まったときの通行税：price × toll × (1 + 砦の段階)
+  steal: 1.7, // 奪う値段：price × (steal + stealPerLevel × 段階)
+  stealPerLevel: 1.0,
+  fort: 0.5, // 砦を1段階築く値段：price × fort
+  setIncome: 2, // 同じ色の陣を全部持つと税収が2倍
+  energy: 3, // 毎ターンの行動力
+  hand: 5, // 手札の上限（ターン開始時にここまで引く）
+  trap: 100, // 罠を踏んだときに払う額
+};
 
 export const CARDS: Record<CardId, CardDef> = {
-  boots: { id: 'boots', name: '疾風のブーツ', icon: 'boots', rarity: 'common', target: 'none', active: true, unlockLevel: 1, desc: 'このターン、出目に +3 する。' },
-  twin: { id: 'twin', name: '三つ子のダイス', icon: 'rolling-dices', rarity: 'common', target: 'none', active: true, unlockLevel: 1, desc: 'このターン、サイコロを3個振る。' },
-  purse: { id: 'purse', name: '金貨の袋', icon: 'two-coins', rarity: 'common', target: 'none', active: true, unlockLevel: 1, desc: 'すぐに 150G を得る。' },
-  shield: { id: 'shield', name: '鉄壁の盾', icon: 'magic-shield', rarity: 'common', target: 'none', active: false, unlockLevel: 1, desc: '通行料を払うときに使える。支払いを0にする。' },
-  precise: { id: 'precise', name: '精密ダイス', icon: 'perspective-dice-six-faces-random', rarity: 'rare', target: 'number', active: true, unlockLevel: 1, desc: '出目の合計を 2〜12 から好きに選ぶ。' },
-  quake: { id: 'quake', name: '大地震', icon: 'earth-crack', rarity: 'rare', target: 'enemyTile', active: true, unlockLevel: 1, desc: '相手の土地を1つ選び、建物を1段階こわす。' },
-  thieves: { id: 'thieves', name: '盗賊団', icon: 'robber', rarity: 'rare', target: 'none', active: true, unlockLevel: 2, desc: '一番お金持ちの相手から 15% を奪う（最大400G）。' },
-  festival: { id: 'festival', name: '収穫祭', icon: 'party-popper', rarity: 'rare', target: 'ownTile', active: true, unlockLevel: 3, desc: '自分の土地を1つ選ぶ。3ラウンドの間、通行料が2倍。' },
-  teleport: { id: 'teleport', name: '転移の書', icon: 'teleport', rarity: 'rare', target: 'anyTile', active: true, unlockLevel: 4, desc: 'サイコロを振らずに好きなマスへ移動する。' },
-  dragon: { id: 'dragon', name: '竜の召喚', icon: 'fire-breath', rarity: 'epic', target: 'enemyTile', active: true, unlockLevel: 5, desc: '相手の土地に竜を放つ。3ラウンドの間、通行料が入らない。' },
-  edict: { id: 'edict', name: '王の勅命', icon: 'gavel', rarity: 'epic', target: 'enemyTile', active: true, unlockLevel: 7, desc: '相手の土地を価格の1.3倍で強制的に買い取る（象徴は不可）。' },
-  goldrain: { id: 'goldrain', name: '黄金の雨', icon: 'gold-bar', rarity: 'epic', target: 'none', active: true, unlockLevel: 9, desc: '3ラウンドの間、受け取る通行料が1.5倍。' },
+  // 移動（1ターン1枚まで）
+  walk: { id: 'walk', name: '歩く', icon: 'boots', rarity: 'common', cost: 0, move: true, target: 'none', price: 20, unlockLevel: 1, desc: '1マス進む。' },
+  dice: { id: 'dice', name: 'サイコロ', icon: 'perspective-dice-six-faces-random', rarity: 'common', cost: 1, move: true, target: 'none', price: 60, unlockLevel: 1, desc: 'サイコロ1個を振って進む。' },
+  twin: { id: 'twin', name: '双子のサイコロ', icon: 'rolling-dices', rarity: 'rare', cost: 2, move: true, target: 'none', price: 130, unlockLevel: 1, desc: 'サイコロ2個を振って進む。ゾロ目ならカードを1枚引く。' },
+  aim: { id: 'aim', name: '狙い撃ち', icon: 'flag-objective', rarity: 'common', cost: 1, move: true, target: 'steps', steps: [2, 3, 4], price: 80, unlockLevel: 1, desc: '2〜4マスから選んで進む。' },
+  gale: { id: 'gale', name: '疾風', icon: 'fast-forward-button', rarity: 'rare', cost: 2, move: true, target: 'steps', steps: [5, 6, 7, 8], price: 140, unlockLevel: 1, desc: '5〜8マスから選んで進む。' },
+  retreat: { id: 'retreat', name: '引き返す', icon: 'exit-door', rarity: 'common', cost: 1, move: true, target: 'steps', steps: [-1, -2, -3], price: 70, unlockLevel: 2, desc: '1〜3マス戻る。' },
+  teleport: { id: 'teleport', name: '転移の書', icon: 'teleport', rarity: 'epic', cost: 3, move: true, target: 'anyTile', price: 220, unlockLevel: 4, desc: '好きなマスへ移動する。' },
+  // 陣
+  banner: { id: 'banner', name: '旗手', icon: 'tower-flag', rarity: 'rare', cost: 1, move: false, target: 'emptyTile', price: 120, unlockLevel: 1, desc: '前後3マス以内の空いた陣に、値段を払って旗を立てる。' },
+  march: { id: 'march', name: '進軍', icon: 'barbarian', rarity: 'rare', cost: 2, move: false, target: 'enemyTile', price: 150, unlockLevel: 2, desc: '今いるマスか隣の、相手の陣を半額で奪う。' },
+  fortify: { id: 'fortify', name: '築城', icon: 'hammer-drop', rarity: 'common', cost: 1, move: false, target: 'ownTile', price: 90, unlockLevel: 1, desc: '自分の陣を1つ選び、値段を払って砦を1段階築く（どこからでも）。' },
+  guard: { id: 'guard', name: '守りの結界', icon: 'magic-shield', rarity: 'common', cost: 1, move: false, target: 'ownTile', price: 80, unlockLevel: 1, desc: '自分の陣を1つ選ぶ。3ラウンドの間、誰にも奪われない。' },
+  edict: { id: 'edict', name: '王の勅命', icon: 'gavel', rarity: 'epic', cost: 3, move: false, target: 'enemyTile', price: 240, unlockLevel: 6, desc: 'どこにある相手の陣でも、奪う値段を払って奪う。' },
+  // お金・手札
+  purse: { id: 'purse', name: '金貨の袋', icon: 'two-coins', rarity: 'common', cost: 0, move: false, target: 'none', price: 50, unlockLevel: 1, desc: 'すぐに 80G を得る。' },
+  levy: { id: 'levy', name: '徴税', icon: 'receive-money', rarity: 'rare', cost: 1, move: false, target: 'none', price: 130, unlockLevel: 3, desc: '自分の陣の税収を、もう1回受け取る。' },
+  scheme: { id: 'scheme', name: '作戦会議', icon: 'scroll-unfurled', rarity: 'common', cost: 1, move: false, target: 'none', price: 70, unlockLevel: 1, desc: 'カードを2枚引く。' },
+  thieves: { id: 'thieves', name: '盗賊団', icon: 'robber', rarity: 'rare', cost: 2, move: false, target: 'none', price: 140, unlockLevel: 2, desc: '一番お金持ちの相手から 20% を奪う（最大300G）。' },
+  // 攻撃・妨害
+  trap: { id: 'trap', name: '落とし穴', icon: 'skull-crossed-bones', rarity: 'common', cost: 1, move: false, target: 'anyTile', price: 70, unlockLevel: 1, desc: '好きなマスに罠を仕掛ける。踏んだ相手は 100G をあなたに払う。' },
+  quake: { id: 'quake', name: '大地震', icon: 'earth-crack', rarity: 'rare', cost: 2, move: false, target: 'enemyTile', price: 130, unlockLevel: 3, desc: '相手の陣の砦を1段階壊す。旗だけなら旗を倒して空き地にする。' },
+  dragon: { id: 'dragon', name: '竜の召喚', icon: 'fire-breath', rarity: 'epic', cost: 3, move: false, target: 'enemyTile', price: 260, unlockLevel: 5, desc: '相手の陣を焼き払い、空き地に戻す（結界があっても）。' },
 };
 
 export const RARITY_WEIGHT = { common: 60, rare: 30, epic: 10 };
 export const RARITY_NAME = { common: 'コモン', rare: 'レア', epic: 'エピック' };
 
+const BASE_DECK: CardId[] = ['walk', 'walk', 'dice', 'dice', 'dice', 'dice', 'aim', 'purse', 'fortify'];
 export const HEROES: Record<HeroId, HeroDef> = {
-  knight: { id: 'knight', name: 'レオン', title: '誓いの騎士', icon: 'visored-helm', model: 'Knight', cost: 0, passive: '支払う通行料が 20% 安い。' },
-  merchant: { id: 'merchant', name: 'ミラ', title: '旅の商人', icon: 'swap-bag', model: 'Rogue', cost: 0, passive: '土地の購入と建設が 10% 安い。' },
-  mage: { id: 'mage', name: 'ルナ', title: '夜空の魔女', icon: 'pointy-hat', model: 'Mage', cost: 300, passive: '手札4枚。最初からカード2枚。祠でときどき2枚引く。' },
-  ranger: { id: 'ranger', name: 'カイ', title: '風読みの狩人', icon: 'bow-arrow', model: 'Ranger', cost: 500, passive: 'ゾロ目が出やすく、祠でレアカードを引きやすい。' },
-  assassin: { id: 'assassin', name: 'ジン', title: '影の暗殺者', icon: 'hooded-figure', model: 'Rogue_Hooded', cost: 800, passive: '相手を追い越すたびに 40G を奪う。' },
-  barbarian: { id: 'barbarian', name: 'ボルグ', title: '略奪王', icon: 'barbarian', model: 'Barbarian', cost: 1200, passive: '買収が土地の価値ちょうどで済み（通常1.4倍）、奪った土地が1段階育つ。' },
+  knight: { id: 'knight', name: 'レオン', title: '誓いの騎士', icon: 'visored-helm', model: 'Knight', cost: 0, passive: '自分の陣を奪う値段が 30% 高い。通行税が半額。', deck: [...BASE_DECK, 'guard'] },
+  merchant: { id: 'merchant', name: 'ミラ', title: '旅の商人', icon: 'swap-bag', model: 'Rogue', cost: 0, passive: '旗を立てる値段とカードの値段が 15% 安い。', deck: [...BASE_DECK, 'purse'] },
+  mage: { id: 'mage', name: 'ルナ', title: '夜空の魔女', icon: 'pointy-hat', model: 'Mage', cost: 300, passive: '手札が6枚まで。毎ターンの行動力が⚡4。', deck: [...BASE_DECK, 'twin'] },
+  ranger: { id: 'ranger', name: 'カイ', title: '風読みの狩人', icon: 'bow-arrow', model: 'Ranger', cost: 500, passive: 'サイコロを振ったあと、出目を ±1 できる。', deck: [...BASE_DECK, 'gale'] },
+  assassin: { id: 'assassin', name: 'ジン', title: '影の暗殺者', icon: 'hooded-figure', model: 'Rogue_Hooded', cost: 800, passive: '罠の威力が2倍。初期デッキに「落とし穴」2枚。', deck: [...BASE_DECK.filter((c) => c !== 'fortify'), 'trap', 'trap'] },
+  barbarian: { id: 'barbarian', name: 'ボルグ', title: '略奪王', icon: 'barbarian', model: 'Barbarian', cost: 1200, passive: '陣を奪う値段が 10% 安い。初期デッキに「進軍」。', deck: [...BASE_DECK, 'march'] },
 };
 export const HERO_ORDER: HeroId[] = ['knight', 'merchant', 'mage', 'ranger', 'assassin', 'barbarian'];
 
 export const STAGES: Record<StageId, StageDef> = {
   meadow: {
     id: 'meadow', name: '翠緑の王国', desc: '穏やかな草原の島。まずはここで王を目指そう。', unlockLevel: 1,
-    tollMul: 1, startCash: 1300, salary: 200, jackpotMul: 1, aiSkill: 0.35,
+    tollMul: 1, startCash: 500, salary: 150, jackpotMul: 1, aiSkill: 0.35,
     palette: { skyTop: '#5fa8f0', skyBottom: '#d8f0ff', fog: '#cfe8fb', grass: '#7cc95a', grassDark: '#4f9a3c', rock: '#8a7462', plaza: '#e8dcc0', sun: '#fff1d6', ambient: '#bfe0ff', particle: 'pollen' },
   },
   snow: {
-    id: 'snow', name: '白銀の王国', desc: '雪に閉ざされた島。CPUが少し賢くなる。通行料 1.2倍。', unlockLevel: 3,
-    tollMul: 1.2, startCash: 1500, salary: 220, jackpotMul: 1.2, aiSkill: 0.6,
+    id: 'snow', name: '白銀の王国', desc: '雪に閉ざされた島。CPUが少し賢くなる。値段 1.2倍。', unlockLevel: 3,
+    tollMul: 1.2, startCash: 550, salary: 170, jackpotMul: 1.2, aiSkill: 0.6,
     palette: { skyTop: '#7f9fc4', skyBottom: '#e9f2fb', fog: '#e2ecf7', grass: '#eef4fa', grassDark: '#c3d3e4', rock: '#6e7b8c', plaza: '#d6e2ef', sun: '#e8f1ff', ambient: '#c9dcf5', particle: 'snow' },
   },
   volcano: {
-    id: 'volcano', name: '灼熱の王国', desc: '溶岩が流れる島。通行料 1.5倍、ジャックポット 1.5倍。CPUは手強い。', unlockLevel: 6,
-    tollMul: 1.5, startCash: 1600, salary: 240, jackpotMul: 1.5, aiSkill: 0.8,
+    id: 'volcano', name: '灼熱の王国', desc: '溶岩が流れる島。値段 1.5倍、ジャックポット 1.5倍。CPUは手強い。', unlockLevel: 6,
+    tollMul: 1.5, startCash: 650, salary: 200, jackpotMul: 1.5, aiSkill: 0.8,
     palette: { skyTop: '#2a1420', skyBottom: '#c2502e', fog: '#5a2a26', grass: '#5d4a40', grassDark: '#3a2c27', rock: '#2d2321', plaza: '#a58a72', sun: '#ffb27a', ambient: '#a04a3a', particle: 'ember' },
   },
   sky: {
-    id: 'sky', name: '天空の王国', desc: '雲の上の伝説の島。所持金 2000G、ジャックポット 2倍。CPUは最強。', unlockLevel: 10,
-    tollMul: 1.6, startCash: 2000, salary: 260, jackpotMul: 2, aiSkill: 1,
+    id: 'sky', name: '天空の王国', desc: '雲の上の伝説の島。値段 1.6倍、ジャックポット 2倍。CPUは最強。', unlockLevel: 10,
+    tollMul: 1.6, startCash: 800, salary: 220, jackpotMul: 2, aiSkill: 1,
     palette: { skyTop: '#1a1f5c', skyBottom: '#f3a8c8', fog: '#c9a8d8', grass: '#b8e3d0', grassDark: '#86c2ae', rock: '#e8e0f0', plaza: '#fff4dc', sun: '#ffe7f2', ambient: '#b7a6ff', particle: 'stars' },
   },
 };

@@ -364,3 +364,43 @@ button { font: inherit; color: inherit; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
+
+/* ---------- v2：カードゲーム風の手札 ---------- */
+.action { width: min(820px, 100%); }
+.hand-bar { display: flex; align-items: center; gap: 10px; padding: 6px 8px 6px 14px; border: var(--line); border-radius: 16px; background: var(--paper); box-shadow: var(--shadow); }
+.energy { display: flex; align-items: center; gap: 5px; font-weight: 800; }
+.energy > .gi { width: 22px; height: 22px; color: var(--gold-dark); }
+.energy i { width: 18px; height: 18px; border-radius: 50%; border: 3px solid var(--ink); background: #d8cfbe; }
+.energy i.on { background: radial-gradient(circle at 35% 35%, #fff4b0, var(--gold)); box-shadow: 0 0 10px rgba(245, 184, 46, .8); }
+.piles { display: flex; gap: 10px; font-weight: 800; color: var(--ink-soft); font-size: 13px; }
+.piles span { display: flex; align-items: center; gap: 3px; }
+.piles .gi { width: 16px; height: 16px; }
+.end-turn { margin-left: auto; min-height: 40px; padding: 4px 14px; }
+.hand-hint { padding: 3px 12px; border-radius: 99px; background: rgba(255, 250, 240, .9); font-size: 12px; font-weight: 800; }
+.hand.fan { display: flex; justify-content: center; align-items: flex-end; min-height: 190px; padding-top: 30px; }
+.hand.fan .slot { position: relative; margin: 0 -14px; transform: translateY(calc(var(--i) * var(--i) * 4px)) rotate(calc(var(--i) * 5deg)); transform-origin: 50% 120%; transition: transform .18s; animation: handIn .35s cubic-bezier(.2, 1.4, .4, 1) both; animation-delay: var(--d); z-index: 1; }
+.hand.fan .slot:hover { z-index: 3; transform: translateY(-14px) rotate(calc(var(--i) * 2deg)); }
+.hand.fan .slot.sel { z-index: 4; transform: translateY(-40px) scale(1.12); }
+.hand.fan .slot .card { cursor: pointer; }
+.hand.fan .slot .use { position: absolute; left: 50%; top: -48px; transform: translateX(-50%); min-height: 38px; padding: 4px 18px; white-space: nowrap; }
+@keyframes handIn { from { transform: translateY(160px) rotate(0); opacity: 0; } }
+.card-cost { position: absolute; left: -10px; top: -10px; width: 30px; height: 30px; display: grid; place-items: center; border: 3px solid var(--ink); border-radius: 50%; background: radial-gradient(circle at 35% 35%, #fff4b0, var(--gold)); font-family: var(--display); font-size: 15px; z-index: 2; }
+.card.move { background: linear-gradient(170deg, #fff 50%, #ddf3e2); }
+.card.move .card-rarity { background: #2f9e57; }
+.card.move .card-art { background: #2f9e57; }
+.deal { position: absolute; right: max(16px, env(safe-area-inset-right, 0px)); bottom: 230px; display: flex; gap: 6px; pointer-events: none; }
+.deal-card { animation: deal .8s cubic-bezier(.2, 1, .3, 1) both; animation-delay: calc(var(--k) * 90ms); }
+@keyframes deal { 0% { transform: translate(120px, -40px) rotate(20deg) scale(.6); opacity: 0; } 40% { opacity: 1; transform: none; } 100% { transform: translate(-30vw, 160px) scale(.5); opacity: 0; } }
+.discard-row .price { display: block; text-align: center; margin-top: 4px; font-family: var(--display); }
+.pc-terr { display: inline-flex; align-items: center; gap: 2px; color: var(--ink); }
+.pc-terr b { font-family: var(--display); font-size: 13px; }
+@media (max-width: 760px) {
+  .hand.fan { min-height: 150px; }
+  .hand.fan .slot { margin: 0 -22px; transform: translateY(calc(var(--i) * var(--i) * 2px)) rotate(calc(var(--i) * 3deg)); }
+  .action { bottom: calc(env(safe-area-inset-bottom, 0px) + 22px); }
+  .hand.fan .slot .card { width: 88px; min-height: 120px; }
+  .hand.fan .slot .card .card-desc { display: none; }
+  .hand.fan .slot.sel .card .card-desc { display: block; }
+  .hand-bar { gap: 6px; padding-left: 10px; }
+  .deal { bottom: 200px; }
+}

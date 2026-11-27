@@ -27,8 +27,9 @@ export interface DialogSpec<T> {
 
 export function cardHtml(id: CardId, opts: { usable?: boolean; small?: boolean; idx?: number } = {}) {
   const c = CARDS[id];
-  return `<div class="card rarity-${c.rarity}${opts.usable === false ? ' unusable' : ''}${opts.small ? ' small' : ''}" data-card="${id}" ${opts.idx !== undefined ? `data-idx="${opts.idx}"` : ''}>
-    <div class="card-rarity">${RARITY_NAME[c.rarity]}</div>
+  return `<div class="card rarity-${c.rarity}${c.move ? ' move' : ''}${opts.usable === false ? ' unusable' : ''}${opts.small ? ' small' : ''}" data-card="${id}" ${opts.idx !== undefined ? `data-idx="${opts.idx}"` : ''}>
+    <div class="card-cost" title="行動力">${c.cost}</div>
+    <div class="card-rarity">${c.move ? '移動' : RARITY_NAME[c.rarity]}</div>
     <div class="card-art">${icon(c.icon)}</div>
     <div class="card-name">${c.name}</div>
     <div class="card-desc">${c.desc}</div>
@@ -162,7 +163,7 @@ export class UI {
     const s = g.s;
     const jackpotTile = TILES.findIndex((t) => t.kind === 'jackpot');
     this.top.innerHTML = `
-      <div class="pill round${g.isFinal() ? ' final' : ''}">${icon('sands-of-time')}<span><i class="lbl">ラウンド </i><b>${Math.min(s.round, s.cfg.rounds)}</b> / ${s.cfg.rounds}</span>${g.isFinal() ? '<em>最終局面</em>' : ''}</div>
+      <div class="pill round${g.isFinal() ? ' final' : ''}">${icon('sands-of-time')}<span><i class="lbl">ラウンド </i><b>${Math.min(s.round, s.cfg.rounds)}</b> / ${s.cfg.rounds}</span>${g.isFinal() ? '<em>最終決戦</em>' : ''}</div>
       <button type="button" class="pill jackpot" data-tile="${jackpotTile}" title="黄金の泉に止まると全額もらえる">${icon('fountain')}<span><i class="lbl">黄金の泉 </i><b class="num">${s.jackpot.toLocaleString()}</b>G</span></button>
       <div class="top-buttons">
         <button type="button" class="icon-btn speed" title="CPUの速さ">${icon('fast-forward-button')}<span>×${this.speed}</span></button>
@@ -174,11 +175,10 @@ export class UI {
       .map((p) => {
         const h = HEROES[p.hero];
         const r = rank.indexOf(p);
-        const monos = g.monopolies(p.id);
+        const sets = g.sets(p.id);
         const status = [
           p.jail > 0 ? `<span class="st jail" title="地下牢">${icon('prisoner')}</span>` : '',
-          p.goldRain > 0 ? `<span class="st rain" title="黄金の雨">${icon('gold-bar')}</span>` : '',
-          monos.length ? `<span class="st mono" title="領地制覇">${monos.map((m) => `<i style="background:${GROUPS[m].color}"></i>`).join('')}</span>` : '',
+          sets.length ? `<span class="st mono" title="統一した色">${sets.map((m) => `<i style="background:${GROUPS[m].color}"></i>`).join('')}</span>` : '',
         ].join('');
         return `<div class="pcard${p.id === activeId ? ' active' : ''}${p.bankrupt ? ' out' : ''}${p.id === humanId ? ' me' : ''}" style="--pc:${PLAYER_COLORS[p.id]}" data-pid="${p.id}">
           <div class="pc-rank r${r}">${p.bankrupt ? '×' : r + 1}</div>
@@ -186,7 +186,7 @@ export class UI {
           <div class="pc-main">
             <div class="pc-name">${esc(p.name)}<small>${h.title}</small></div>
             <div class="pc-cash"><b class="num" data-cash="${p.id}">${(this.shownCash.get(p.id) ?? p.cash).toLocaleString()}</b>G</div>
-            <div class="pc-sub">資産 ${g.assets(p).toLocaleString()}G ・ ${icon('card-random')}${p.hand.length}${status}</div>
+            <div class="pc-sub"><span class="pc-terr">${icon('tower-flag')}<b>${g.territories(p).length}</b>陣</span> ${icon('card-random')}${p.hand.length}${status}</div>
           </div>
         </div>`;
       })
@@ -220,11 +220,11 @@ export class UI {
     const t = g.s.tiles[i];
     if (def.kind !== 'prop') {
       const desc: Record<string, string> = {
-        start: `通るたびに給料 ${g.stage.salary}G。ぴったり止まると +100G。自分の土地を1つ建てられる。`,
-        shrine: 'カードを1枚引く。',
+        start: `通るたびに給料 ${g.stage.salary}G と、カードを3枚から1枚もらえる（王の贈り物）。`,
+        shrine: 'カード屋。3枚の中から買える。',
         event: '運命の巻物。何が起きるかはお楽しみ（下位ほど良いことが起きやすい）。',
         tax: '所持金の10%を払う。お金は黄金の泉に貯まる。',
-        dungeon: '捕まると、50G払うかゾロ目を出すまで出られない。',
+        dungeon: '止まると捕まり、次のターンは移動できない。',
         jackpot: `黄金の泉。貯まった ${g.s.jackpot}G を全部もらえる。`,
         portal: '好きなマスへワープできる（黄金の泉は不可）。',
         tavern: '50G か 150G を賭けてサイコロ勝負。4〜5で2倍、6で3倍。',
@@ -234,16 +234,16 @@ export class UI {
     }
     const grp = GROUPS[def.group!];
     const owner = t.owner !== null ? g.s.players[t.owner] : null;
+    const me = g.s.players.find((x) => x.human) ?? g.s.players[0];
     const set = g.groupTiles(def.group!).map((k) => {
       const o = g.s.tiles[k].owner;
       return `<i style="background:${o === null ? 'transparent' : PLAYER_COLORS[o]}" title="${TILES[k].name}"></i>`;
     });
     return `<div class="ti-head" style="--group:${grp.color}">${icon(def.icon)}<b>${def.name}</b><span class="grp">${grp.name}</span></div>
-      <div class="ti-row"><span>持ち主</span><b>${owner ? `<span style="color:${PLAYER_COLORS[owner.id]}">${esc(owner.name)}</span>` : 'なし（' + g.price(i) + 'G で買える）'}</b></div>
-      ${owner ? `<div class="ti-row"><span>建物</span><b>${LEVEL_NAMES[t.level]}</b></div><div class="ti-row"><span>通行料</span><b>${g.toll(i).toLocaleString()}G</b></div>` : ''}
+      <div class="ti-row"><span>持ち主</span><b>${owner ? `<span style="color:${PLAYER_COLORS[owner.id]}">${esc(owner.name)}</span>` : `なし（${g.price(i)}G で旗を立てられる）`}</b></div>
+      ${owner ? `<div class="ti-row"><span>砦</span><b>${LEVEL_NAMES[t.level]}</b></div><div class="ti-row"><span>通行税</span><b>${g.toll(i).toLocaleString()}G</b></div><div class="ti-row"><span>奪う値段</span><b>${g.stealCost(i, me).toLocaleString()}G</b></div>` : ''}
       <div class="ti-row"><span>同じ色</span><span class="ti-set">${set.join('')}</span></div>
-      ${t.festival ? `<div class="ti-tag fest">${icon('party-popper')}収穫祭 あと${t.festival}R（2倍）</div>` : ''}
-      ${t.dragon ? `<div class="ti-tag dragon">${icon('fire-breath')}竜がいる あと${t.dragon}R（通行料0）</div>` : ''}`;
+      ${t.guard ? `<div class="ti-tag fest">${icon('magic-shield')}守りの結界 あと${t.guard}R（奪えない）</div>` : ''}`;
   }
   showTooltip(html: string, x: number, y: number) {
     this.tooltip.innerHTML = html;
@@ -258,53 +258,61 @@ export class UI {
     this.tooltip.hidden = true;
   }
 
-  // ---------- 手番の操作 ----------
-  /** 手札とサイコロボタンを出し、どちらかが押されるのを待つ */
-  turnActions(g: Game, p: Player, canUseCards: boolean): Promise<{ type: 'roll' } | { type: 'card'; card: CardId }> {
+  // ---------- 手札（カードゲーム風） ----------
+  /** 引いたカードを、手札に入る演出つきで知らせる */
+  dealCards(cards: CardId[]) {
+    const box = document.createElement('div');
+    box.className = 'deal';
+    box.innerHTML = cards.map((c, k) => `<div class="deal-card" style="--k:${k}">${cardHtml(c, { small: true })}</div>`).join('');
+    this.root.appendChild(box);
+    setTimeout(() => box.remove(), 900 + cards.length * 90);
+  }
+
+  /** 手札を扇形に出し、使うカードの番号か 'end' を返す */
+  handPhase(g: Game, p: Player): Promise<number | 'end'> {
     return new Promise((resolve) => {
-      const hand = p.hand
-        .map((c, i) => cardHtml(c, { usable: canUseCards && g.cardUsable(p, c), idx: i }))
-        .join('');
-      this.action.innerHTML = `<div class="hand">${hand || '<div class="hand-empty">手札なし ・ 祠や大聖堂でカードが手に入る</div>'}</div>
-        <button type="button" class="roll-btn">${icon('rolling-dices')}<span>サイコロを振る</span></button>`;
-      this.action.classList.add('show');
-      const done = (v: { type: 'roll' } | { type: 'card'; card: CardId }) => {
+      let sel = -1;
+      const render = () => {
+        const n = p.hand.length;
+        const maxE = 3 + (p.hero === 'mage' ? 1 : 0);
+        const energy = Array.from({ length: maxE }, (_, k) => `<i class="${k < p.energy ? 'on' : ''}"></i>`).join('');
+        const hint = !p.moved && !p.hand.some((c) => CARDS[c].move && g.canPlay(p, c)) ? '<div class="hand-hint">移動カードがない…このターンは動けない</div>' : p.moved ? '' : '<div class="hand-hint">移動カードで進もう（1ターン1枚）</div>';
+        this.action.innerHTML = `
+          <div class="hand-bar">
+            <div class="energy" title="行動力">${icon('lightning-trio')}${energy}</div>
+            <div class="piles"><span title="山札">${icon('card-random')}${p.deck.length}</span><span title="捨て札">${icon('scroll-unfurled')}${p.discard.length}</span></div>
+            <button type="button" class="btn end-turn">${icon('check-mark')}ターン終了</button>
+          </div>
+          ${hint}
+          <div class="hand fan" style="--n:${n}">${p.hand
+            .map((c, i) => {
+              const ok = g.canPlay(p, c) && (CARDS[c].target === 'none' || CARDS[c].target === 'steps' || g.cardTargets(p, c).length > 0);
+              const mid = (n - 1) / 2;
+              return `<div class="slot${i === sel ? ' sel' : ''}" style="--i:${i - mid};--d:${i * 70}ms" data-i="${i}">${cardHtml(c, { usable: ok, idx: i })}${i === sel ? `<button type="button" class="btn primary use" ${ok ? '' : 'disabled'}>${ok ? '使う' : '使えない'}</button>` : ''}</div>`;
+            })
+            .join('')}</div>`;
+        this.action.classList.add('show');
+        this.action.querySelector('.end-turn')!.addEventListener('click', () => done('end'));
+        this.action.querySelectorAll<HTMLElement>('.slot').forEach((el) =>
+          el.addEventListener('click', (e) => {
+            const i = Number(el.dataset.i);
+            if ((e.target as HTMLElement).closest('.use')) return done(i);
+            if (sel === i && !el.querySelector('.card.unusable')) return done(i);
+            sel = sel === i ? -1 : i;
+            audio.play('hover', { volume: 0.5 });
+            render();
+          }),
+        );
+      };
+      const done = (v: number | 'end') => {
         this.action.classList.remove('show');
         this.action.innerHTML = '';
         resolve(v);
       };
-      $('.roll-btn', this.action).addEventListener('click', () => done({ type: 'roll' }));
-      this.action.querySelectorAll<HTMLElement>('.hand .card').forEach((el) =>
-        el.addEventListener('click', async () => {
-          const id = el.dataset.card as CardId;
-          const usable = !el.classList.contains('unusable');
-          const c = CARDS[id];
-          const v = await this.dialog<boolean>({
-            title: c.name,
-            body: `<div class="card-big">${cardHtml(id)}</div>${!c.active ? '<p class="note">このカードは通行料を払うときに使えます。</p>' : !usable ? '<p class="note">今は使える対象がありません。</p>' : '<p class="note">サイコロを振る前に1枚だけ使えます。</p>'}`,
-            buttons: [
-              { label: 'やめる', value: false },
-              { label: '使う', value: true, kind: 'primary', disabled: !usable },
-            ],
-          });
-          if (v) done({ type: 'card', card: id });
-        }),
-      );
+      render();
     });
   }
-  waitRollButton(label = 'サイコロを振る'): Promise<void> {
-    return new Promise((resolve) => {
-      this.action.innerHTML = `<button type="button" class="roll-btn">${icon('rolling-dices')}<span>${label}</span></button>`;
-      this.action.classList.add('show');
-      const b = $('.roll-btn', this.action);
-      b.focus();
-      b.addEventListener('click', () => {
-        this.action.classList.remove('show');
-        this.action.innerHTML = '';
-        resolve();
-      });
-    });
-  }
+
   /** マスを選ぶ。cancel を許すと null が返ることがある */
   selectBar(text: string, allowCancel: boolean, onCancel: () => void) {
     this.action.innerHTML = `<div class="select-bar"><span>${icon('flag-objective')}${text}</span>${allowCancel ? '<button type="button" class="btn secondary">やめる</button>' : ''}</div>`;

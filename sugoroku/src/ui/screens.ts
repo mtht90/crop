@@ -167,12 +167,13 @@ export function helpScreen(ui: UI): Promise<void> {
   const el = ui.showScreen(
     `<div class="panel-page help">
       <header class="page-head"><button type="button" class="btn ghost back">${icon('exit-door')}戻る</button><h2>遊び方</h2><div></div></header>
-      <section><h3>${icon('rolling-dices')}目的</h3><p>土地を買って建物を育て、止まった相手から通行料を取る。20ラウンド後に<b>総資産（現金＋土地＋建物）が一番多い人</b>の勝ち。3色の土地をそろえると、その場で<b>三国統一</b>の勝利。</p></section>
-      <section><h3>${icon('flag-objective')}1ターンの流れ</h3><p>① カードを1枚まで使える → ② サイコロ2個を振る（ゾロ目はもう1回、3連続は地下牢） → ③ 止まったマスの効果。王都の門を通るたびに給料と、好きな土地を1段階建てるチャンス。</p></section>
-      <section><h3>${icon('house')}土地と建物</h3><p>空き地 → 村 → 町 → 城塞 → 王国の象徴。自分の土地に止まると2段階まで建てられる。同じ色の3マスを独占すると<b>領地制覇</b>で通行料が2倍。王国の象徴は領地制覇しないと建てられないが、誰にも奪われない。</p>
+      <section><h3>${icon('tower-flag')}目的</h3><p>島をめぐって陣（色付きのマス）に旗を立て、20ラウンド後に<b>陣を一番多く持っている人</b>の勝ち。全ての陣を手に入れたら、その場で<b>全陣制圧</b>の勝利。</p></section>
+      <section><h3>${icon('card-random')}カードで動く</h3><p>自分の番になると手札が5枚になるまで引く。行動力は毎ターン<b>⚡3</b>。カードの左上の数字が⚡のコスト。<b>移動はカードでしかできない</b>（サイコロも「サイコロ」カードが必要。移動カードは1ターン1枚）。使ったカードは捨て札に行き、山札が尽きたら混ぜ直す。</p></section>
+      <section><h3>${icon('house')}陣と砦</h3><p>空いた陣に止まったら、お金を払って旗を立てる。自分の陣では砦を築ける（旗 → 砦 → 城塞 → 王城）。砦が強いほど税収が増え、奪われにくい。毎ターンの初めに、持っている陣から税収が入る。</p>
         <div class="group-row">${GROUPS.map((g) => `<span style="--group:${g.color}">${g.name}</span>`).join('')}</div></section>
-      <section><h3>${icon('gavel')}買収と領地交渉</h3><p>相手の土地で通行料を払ったあと、価値の1.4倍で奪える。自分の土地に止まったときは、同じ色の相手の土地も買収できる。</p></section>
-      <section><h3>${icon('fountain')}逆転のチャンス</h3><p>黄金の泉は貯まった全額がもらえるジャックポット。巻物のイベントは下位ほど良いことが起きやすい。最後の3ラウンドは通行料1.5倍。最下位は給料が1.5倍。</p></section>
+      <section><h3>${icon('gavel')}陣を奪う</h3><p>相手の陣に止まると通行税を払う。そのあと<b>お金を払えば陣を奪える</b>（守りの結界がある陣は奪えない）。同じ色を全部そろえると税収2倍。</p></section>
+      <section><h3>${icon('swap-bag')}デッキを強くする</h3><p>王都の門を通るとカードを1枚もらえ、カード屋のマスではカードを買える。どのカードを足すかで戦い方が変わる。</p></section>
+      <section><h3>${icon('fountain')}逆転のチャンス</h3><p>黄金の泉は貯まった全額がもらえるジャックポット。巻物のイベントは下位ほど良いことが起きやすい。最後の3ラウンドは陣を奪う値段が3割引。</p></section>
       <section><h3>${icon('crown')}遊ぶほど広がる王国</h3><p>遊ぶと経験値と王冠がもらえる。レベルが上がると新しいカード・ステージ・サイコロが開放され、王冠で新しいキャラを仲間にできる。</p></section>
     </div>`,
     'help',
@@ -202,12 +203,12 @@ export function creditsScreen(ui: UI): Promise<void> {
 export async function resultsScreen(ui: UI, g: Game, me: Player, res: MatchResult): Promise<'again' | 'title'> {
   const rank = g.ranking();
   const won = g.s.winner === me.id;
-  const reason = g.s.winReason === 'unify' ? '三国統一' : g.s.winReason === 'bankrupt' ? '最後の生き残り' : '総資産で決着';
+  const reason = g.s.winReason === 'conquest' ? '全陣制圧' : '陣の数で決着';
   const el = ui.showScreen(
     `<div class="panel-page results">
       <h2 class="res-title ${won ? 'win' : ''}">${won ? '戴冠！' : `${res.rank + 1}位`}<small>${reason}</small></h2>
       <div class="res-rank">${rank
-        .map((p, k) => `<div class="rr${p === me ? ' me' : ''}" style="--pc:${PLAYER_COLORS[p.id]}"><span class="rr-n">${p.bankrupt ? '破産' : `${k + 1}位`}</span>${icon(HEROES[p.hero].icon)}<b>${esc(p.name)}</b><span class="rr-a">${g.assets(p).toLocaleString()}G</span></div>`)
+        .map((p, k) => `<div class="rr${p === me ? ' me' : ''}" style="--pc:${PLAYER_COLORS[p.id]}"><span class="rr-n">${p.bankrupt ? '破産' : `${k + 1}位`}</span>${icon(HEROES[p.hero].icon)}<b>${esc(p.name)}</b><span class="rr-a">陣 ${g.territories(p).length}・${p.cash.toLocaleString()}G</span></div>`)
         .join('')}</div>
       <div class="res-gain">
         <div class="res-col"><h3>経験値</h3>${res.xpGained.map((x) => `<div class="cost-line"><span>${x.label}</span><b>+${x.xp}</b></div>`).join('')}</div>

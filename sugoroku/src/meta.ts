@@ -28,17 +28,17 @@ export interface Achievement {
 export const ACHIEVEMENTS: Achievement[] = [
   { id: 'first-game', name: '王国への第一歩', desc: '1回遊ぶ', crowns: 50, icon: 'flag-objective' },
   { id: 'first-win', name: '初めての戴冠', desc: '1位になる', crowns: 150, icon: 'crown' },
-  { id: 'monopoly', name: '領主', desc: '領地制覇する', crowns: 80, icon: 'castle' },
-  { id: 'two-sets', name: '大領主', desc: '1試合で2色を領地制覇する', crowns: 150, icon: 'tower-flag' },
-  { id: 'unify', name: '三国統一', desc: '三国統一で勝つ', crowns: 400, icon: 'laurel-crown' },
+  { id: 'set', name: '地方の統一者', desc: '同じ色の陣を全部そろえる', crowns: 80, icon: 'castle' },
+  { id: 'two-sets', name: '二国の王', desc: '1試合で2色を統一する', crowns: 150, icon: 'tower-flag' },
+  { id: 'conquest', name: '全陣制圧', desc: '全ての陣を手に入れて勝つ', crowns: 500, icon: 'laurel-crown' },
+  { id: 'ten', name: '大領主', desc: '1試合で陣を10個持つ', crowns: 150, icon: 'tower-flag' },
   { id: 'jackpot', name: '黄金の泉', desc: 'ジャックポットを獲得する', crowns: 80, icon: 'fountain' },
-  { id: 'big-jackpot', name: '泉の主', desc: '1000G以上のジャックポットを獲得する', crowns: 200, icon: 'coins' },
-  { id: 'landmark', name: '王国の象徴', desc: '王国の象徴を建てる', crowns: 120, icon: 'ancient-columns' },
-  { id: 'takeover', name: '乗っ取り屋', desc: '1試合で3回買収する', crowns: 100, icon: 'gavel' },
-  { id: 'big-toll', name: '大地主', desc: '一度に1000G以上の通行料を受け取る', crowns: 150, icon: 'receive-money' },
+  { id: 'big-jackpot', name: '泉の主', desc: '500G以上のジャックポットを獲得する', crowns: 200, icon: 'coins' },
+  { id: 'fort', name: '王城の主', desc: '陣を王城まで築く', crowns: 120, icon: 'ancient-columns' },
+  { id: 'takeover', name: '侵略者', desc: '1試合で陣を4回奪う', crowns: 100, icon: 'gavel' },
+  { id: 'trap', name: '罠師', desc: '罠で一度に 200G 以上を取る', crowns: 100, icon: 'skull-crossed-bones' },
   { id: 'comeback', name: '大逆転', desc: '3位以下から巻き返して1位になる', crowns: 250, icon: 'upgrade' },
-  { id: 'bankrupt-win', name: '最後の王', desc: '他の全員を破産させて勝つ', crowns: 300, icon: 'skull-crossed-bones' },
-  { id: 'cards', name: 'カード使い', desc: '1試合でカードを6枚使う', crowns: 80, icon: 'card-random' },
+  { id: 'deck', name: '蒐集家', desc: '1試合でカードを6枚手に入れる', crowns: 100, icon: 'card-random' },
   { id: 'all-heroes', name: '英雄たちの王', desc: '6人全員で1位になる', crowns: 600, icon: 'podium-winner' },
   { id: 'sky-win', name: '天空の覇者', desc: '天空の王国で1位になる', crowns: 500, icon: 'sparkles' },
 ];
@@ -75,12 +75,13 @@ export interface SaveData {
   muted: boolean;
   speed: number;
   seenHelp: boolean;
+  seenHelpV2: boolean;
 }
 
 const KEY = 'dice-kingdom-save-v1';
 const fresh = (): SaveData => ({
   v: 1, level: 1, xp: 0, crowns: 0, heroes: ['knight', 'merchant'], achievements: [], heroWins: [], dice: 'ivory',
-  games: 0, wins: 0, lastHero: 'knight', lastStage: 'meadow', muted: false, speed: 1, seenHelp: false,
+  games: 0, wins: 0, lastHero: 'knight', lastStage: 'meadow', muted: false, speed: 1, seenHelp: false, seenHelpV2: false,
 });
 
 export function loadSave(): SaveData {
@@ -123,11 +124,12 @@ export function applyMatch(save: SaveData, g: Game, me: Player): MatchResult {
   const won = g.s.winner === me.id;
   const xp: { label: string; xp: number }[] = [{ label: '参加', xp: 100 }];
   xp.push({ label: `${rank + 1}位`, xp: [220, 130, 80, 50][rank] });
-  if (me.stats.monopoliesMax) xp.push({ label: '領地制覇', xp: 40 * me.stats.monopoliesMax });
+  const terr = g.territories(me).length;
+  if (terr) xp.push({ label: `陣 ${terr}個`, xp: terr * 12 });
+  if (me.stats.takeovers) xp.push({ label: '陣を奪った', xp: 12 * me.stats.takeovers });
   if (me.stats.jackpots) xp.push({ label: 'ジャックポット', xp: 40 * me.stats.jackpots });
-  if (me.stats.takeovers) xp.push({ label: '買収', xp: 15 * me.stats.takeovers });
-  if (me.stats.landmarks) xp.push({ label: '王国の象徴', xp: 50 * me.stats.landmarks });
-  if (won && g.s.winReason === 'unify') xp.push({ label: '三国統一', xp: 200 });
+  if (me.stats.forts) xp.push({ label: '王城', xp: 50 * me.stats.forts });
+  if (won && g.s.winReason === 'conquest') xp.push({ label: '全陣制圧', xp: 300 });
   const stageBonus = { meadow: 1, snow: 1.2, volcano: 1.4, sky: 1.7 }[g.s.cfg.stage];
   if (stageBonus > 1) xp.push({ label: `${STAGES[g.s.cfg.stage].name}ボーナス`, xp: Math.round(xp.reduce((a, b) => a + b.xp, 0) * (stageBonus - 1)) });
 
@@ -146,17 +148,17 @@ export function applyMatch(save: SaveData, g: Game, me: Player): MatchResult {
   if (won) heroWins.add(me.hero);
   check('first-game', true);
   check('first-win', won);
-  check('monopoly', me.stats.monopoliesMax >= 1);
-  check('two-sets', me.stats.monopoliesMax >= 2);
-  check('unify', won && g.s.winReason === 'unify');
+  check('set', g.sets(me.id).length >= 1);
+  check('two-sets', g.sets(me.id).length >= 2);
+  check('conquest', won && g.s.winReason === 'conquest');
+  check('ten', me.stats.maxTerritories >= 10);
   check('jackpot', me.stats.jackpots > 0);
-  check('big-jackpot', me.stats.maxJackpot >= 1000);
-  check('landmark', me.stats.landmarks > 0);
-  check('takeover', me.stats.takeovers >= 3);
-  check('big-toll', me.stats.maxToll >= 1000);
+  check('big-jackpot', me.stats.maxJackpot >= 500);
+  check('fort', me.stats.forts > 0);
+  check('takeover', me.stats.takeovers >= 4);
+  check('trap', me.stats.maxToll >= 200);
   check('comeback', won && me.stats.lowestRankSeen >= 2);
-  check('bankrupt-win', won && g.s.winReason === 'bankrupt');
-  check('cards', me.stats.cardsUsed >= 6);
+  check('deck', me.stats.cardsBought >= 6);
   check('all-heroes', heroWins.size >= 6);
   check('sky-win', won && g.s.cfg.stage === 'sky');
   for (const a of newAch) crowns.push({ label: `実績「${a.name}」`, crowns: a.crowns });

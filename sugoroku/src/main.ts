@@ -37,7 +37,7 @@ async function ensureWorld(stage: StageId) {
   if (builtStage === stage) return;
   builtStage = stage;
   await world.build(STAGES[stage]);
-  const empty = { owner: null, level: 0, festival: 0, dragon: 0 };
+  const empty = { owner: null, level: 0, guard: 0, trap: null };
   for (let i = 0; i < 30; i++) await world.setTile(i, empty, false);
 }
 
@@ -50,11 +50,11 @@ function printDemo(owners: [number, number, number][]) {
   const noop = async () => {};
   const view = new GameView(world, ui, -1);
   const demo = new Game(
-    { stage: builtStage ?? 'meadow', rounds: 20, heroes: ['knight', 'merchant', 'mage', 'ranger'], names: ['', '', '', ''], humanIndex: -1, cardPool: ['boots'], seed: 1 },
-    { turnStart: noop, dice: noop, move: noop, warp: noop, cash: noop, tile: noop, banner: noop, cardGained: noop, cardUsed: noop, log: () => {}, sync: () => {} },
+    { stage: builtStage ?? 'meadow', rounds: 20, heroes: ['knight', 'merchant', 'mage', 'ranger'], names: ['', '', '', ''], humanIndex: -1, cardPool: ['dice'], seed: 1 },
+    { turnStart: noop, draw: noop, dice: noop, move: noop, warp: noop, cash: noop, tile: noop, banner: noop, cardGained: noop, cardUsed: noop, log: () => {}, sync: () => {} },
     [],
   );
-  for (const [i, o, l] of owners) demo.s.tiles[i] = { owner: o, level: l, festival: 0, dragon: 0 };
+  for (const [i, o, l] of owners) demo.s.tiles[i] = { owner: o, level: Math.min(3, l), guard: 0, trap: null };
   view.g = demo;
   for (let i = 0; i < 30; i++) view.updateLabel(i);
 }
@@ -76,7 +76,7 @@ async function boot() {
   await ensureWorld(save.lastStage in STAGES ? save.lastStage : 'meadow');
   // タイトル背景：建物が少し建った王国
   const demo: [number, number, number][] = [[1, 0, 2], [2, 0, 1], [6, 1, 3], [12, 2, 2], [16, 3, 4], [19, 3, 1], [23, 1, 2], [28, 0, 3], [29, 2, 1]];
-  for (const [i, o, l] of demo) await world.setTile(i, { owner: o, level: l, festival: 0, dragon: 0 }, false);
+  for (const [i, o, l] of demo) await world.setTile(i, { owner: o, level: Math.min(3, l), guard: 0, trap: null }, false);
   printDemo(demo);
   portraits = await heroPortraits(Object.fromEntries(HERO_ORDER.map((h) => [h, HEROES[h].model])));
   loading.classList.add('done');
@@ -203,13 +203,13 @@ async function playGame(hero: HeroId, stage: StageId): Promise<boolean> {
   };
   ui.top.addEventListener('click', onTop);
 
-  if (!save.seenHelp && !AUTO) {
-    save.seenHelp = true;
+  if (!save.seenHelpV2 && !AUTO) {
+    save.seenHelpV2 = true;
     writeSave(save);
     await ui.dialog({
       title: 'ようこそ、ダイスキングダムへ',
       icon: 'crown',
-      body: `<p>サイコロを振って王国をめぐり、土地を買って建物を育てよう。止まった相手から通行料を取り、<b>20ラウンド後に一番お金持ち</b>なら勝ち。</p><p>同じ色の土地を3つそろえると通行料が2倍。<b>3色そろえれば即勝利！</b></p><p class="note">マスや上の文字をタップすると詳しい説明が出ます。</p>`,
+      body: `<p>カードで王国をめぐり、陣に旗を立てよう。<b>20ラウンド後に陣が一番多い人</b>の勝ち。全ての陣を取れば、その場で勝利！</p><p>行動力は毎ターン<b>⚡3</b>。<b>移動はカードでしかできない</b>（サイコロも「サイコロ」カードで振る）。カードをタップで選び、もう一度タップで使おう。</p><p>相手の陣は、お金を払って奪える。</p><p class="note">マスをタップすると詳しい説明が出ます。</p>`,
       buttons: [{ label: 'はじめる', value: true, kind: 'gold' }],
     });
   }
