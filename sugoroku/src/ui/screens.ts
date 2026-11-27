@@ -168,11 +168,11 @@ export function helpScreen(ui: UI): Promise<void> {
     `<div class="panel-page help">
       <header class="page-head"><button type="button" class="btn ghost back">${icon('exit-door')}戻る</button><h2>遊び方</h2><div></div></header>
       <section><h3>${icon('tower-flag')}目的</h3><p>島をめぐって陣（色付きのマス）に旗を立て、20ラウンド後に<b>陣を一番多く持っている人</b>の勝ち。全ての陣を手に入れたら、その場で<b>全陣制圧</b>の勝利。</p></section>
-      <section><h3>${icon('card-random')}カードで動く</h3><p>自分の番になると手札が5枚になるまで引く。行動力は毎ターン<b>⚡3</b>。カードの左上の数字が⚡のコスト。<b>移動はカードでしかできない</b>（サイコロも「サイコロ」カードが必要。移動カードは1ターン1枚）。使ったカードは捨て札に行き、山札が尽きたら混ぜ直す。</p></section>
+      <section><h3>${icon('card-random')}カードで動く</h3><p>自分の番になると山札から<b>新しく5枚</b>引く。行動力は毎ターン<b>3</b>。カードの左上の宝石の数字が行動力のコスト。<b>移動はカードでしかできない</b>（サイコロも「サイコロ」カードが必要。移動カードは1ターン1枚）。カードは<b>上へスワイプ</b>（マスを選ぶカードは盤面のマスまでドラッグ）か、2回タップで使う。使わなかった手札はターン終了時に捨て札へ。山札が尽きたら捨て札を混ぜ直す。</p></section>
       <section><h3>${icon('house')}陣と砦</h3><p>空いた陣に止まったら、お金を払って旗を立てる。自分の陣では砦を築ける（旗 → 砦 → 城塞 → 王城）。砦が強いほど税収が増え、奪われにくい。毎ターンの初めに、持っている陣から税収が入る。</p>
         <div class="group-row">${GROUPS.map((g) => `<span style="--group:${g.color}">${g.name}</span>`).join('')}</div></section>
       <section><h3>${icon('gavel')}陣を奪う</h3><p>相手の陣に止まると通行税を払う。そのあと<b>お金を払えば陣を奪える</b>（守りの結界がある陣は奪えない）。同じ色を全部そろえると税収2倍。</p></section>
-      <section><h3>${icon('swap-bag')}デッキを強くする</h3><p>王都の門を通るとカードを1枚もらえ、カード屋のマスではカードを買える。どのカードを足すかで戦い方が変わる。</p></section>
+      <section><h3>${icon('swap-bag')}デッキを強くする</h3><p>スタートを通ると「王の贈り物」で、新しいカードを1枚もらうか、デッキのカードを1種類<b>強化（+）</b>できる。カード屋のマスでは、お金でカードを買うか強化する。強化するとコストが下がったり、効果が強くなる。「転移の書」「王の勅命」「竜の召喚」は<b>消耗</b>カードで、使うとその試合ではデッキから消える。</p></section>
       <section><h3>${icon('fountain')}逆転のチャンス</h3><p>黄金の泉は貯まった全額がもらえるジャックポット。巻物のイベントは下位ほど良いことが起きやすい。最後の3ラウンドは陣を奪う値段が3割引。</p></section>
       <section><h3>${icon('crown')}遊ぶほど広がる王国</h3><p>遊ぶと経験値と王冠がもらえる。レベルが上がると新しいカード・ステージ・サイコロが開放され、王冠で新しいキャラを仲間にできる。</p></section>
     </div>`,
@@ -193,6 +193,7 @@ export function creditsScreen(ui: UI): Promise<void> {
         .sort((a, b) => b[1].length - a[1].length)
         .map(([a, list]) => `${AUTHOR_NAME[a] ?? a}（${list.length}点）`)
         .join('、')}<br><a href="https://game-icons.net" target="_blank" rel="noopener">game-icons.net</a> ・ <a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noopener">CC BY 3.0</a></p></section>
+      <section><h3>UI素材</h3><p>カード：Wholetone — Ivory &amp; Lacquer 無料サンプラー<br><a href="https://wholetoneassets.itch.io/ivory-lacquer-free-sampler" target="_blank" rel="noopener">wholetoneassets.itch.io</a><br>ダイアログ・ボタンの枠：Kenney — UI Pack (Adventure)（CC0）<br><a href="https://kenney.nl/assets/ui-pack-adventure" target="_blank" rel="noopener">kenney.nl</a></p></section>
       <section><h3>フォント</h3><p>Dela Gothic One / M PLUS Rounded 1c — SIL Open Font License 1.1</p></section>
     </div>`,
     'credits',

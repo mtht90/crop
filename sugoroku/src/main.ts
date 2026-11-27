@@ -1,5 +1,7 @@
 // ダイスキングダム：起動と画面の流れ
 import './style.css';
+import './cards.css';
+import './theme.css';
 import { HEROES, HERO_ORDER, STAGES } from './data/defs.ts';
 import { audio, type Bgm } from './audio.ts';
 import { AIController } from './game/ai.ts';
@@ -51,7 +53,7 @@ function printDemo(owners: [number, number, number][]) {
   const view = new GameView(world, ui, -1);
   const demo = new Game(
     { stage: builtStage ?? 'meadow', rounds: 20, heroes: ['knight', 'merchant', 'mage', 'ranger'], names: ['', '', '', ''], humanIndex: -1, cardPool: ['dice'], seed: 1 },
-    { turnStart: noop, draw: noop, dice: noop, move: noop, warp: noop, cash: noop, tile: noop, banner: noop, cardGained: noop, cardUsed: noop, log: () => {}, sync: () => {} },
+    { turnStart: noop, draw: noop, discardHand: noop, dice: noop, move: noop, warp: noop, cash: noop, tile: noop, banner: noop, cardGained: noop, cardUsed: noop, log: () => {}, sync: () => {} },
     [],
   );
   for (const [i, o, l] of owners) demo.s.tiles[i] = { owner: o, level: Math.min(3, l), guard: 0, trap: null };
@@ -203,13 +205,13 @@ async function playGame(hero: HeroId, stage: StageId): Promise<boolean> {
   };
   ui.top.addEventListener('click', onTop);
 
-  if (!save.seenHelpV2 && !AUTO) {
-    save.seenHelpV2 = true;
+  if (!save.seenHelpV3 && !AUTO) {
+    save.seenHelpV3 = true;
     writeSave(save);
     await ui.dialog({
       title: 'ようこそ、ダイスキングダムへ',
       icon: 'crown',
-      body: `<p>カードで王国をめぐり、陣に旗を立てよう。<b>20ラウンド後に陣が一番多い人</b>の勝ち。全ての陣を取れば、その場で勝利！</p><p>行動力は毎ターン<b>⚡3</b>。<b>移動はカードでしかできない</b>（サイコロも「サイコロ」カードで振る）。カードをタップで選び、もう一度タップで使おう。</p><p>相手の陣は、お金を払って奪える。</p><p class="note">マスをタップすると詳しい説明が出ます。</p>`,
+      body: `<p>カードで王国をめぐり、陣に旗を立てよう。<b>20ラウンド後に陣が一番多い人</b>の勝ち。全ての陣を取れば、その場で勝利！</p><p>毎ターン手札を<b>5枚</b>引き、行動力<b>3</b>の範囲でカードを使う。<b>移動はカードでしかできない</b>（サイコロも「サイコロ」カードで振る）。</p><p>カードは<b>上へスワイプ</b>して使う。マスを選ぶカードは、盤面のマスまでドラッグ。2回タップでも使える。</p><p>相手の陣は、お金を払って奪える。</p><p class="note">マスをタップすると詳しい説明が出ます。</p>`,
       buttons: [{ label: 'はじめる', value: true, kind: 'gold' }],
     });
   }

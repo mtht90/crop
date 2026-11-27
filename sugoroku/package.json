@@ -6,10 +6,12 @@
   "scripts": {
     "icons": "node scripts/extract-icons.mjs",
     "dev": "vite",
-    "build": "tsc --noEmit && vite build && node scripts/prune-models.mjs dist",
+    "build": "node scripts/fetch-ui.mjs && tsc --noEmit && vite build && node scripts/prune-models.mjs dist",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "sim": "node --experimental-strip-types scripts/simulate.ts"
+    "sim": "node --experimental-strip-types scripts/simulate.ts",
+    "ui-assets": "node scripts/fetch-ui.mjs",
+    "predev": "node scripts/fetch-ui.mjs"
   },
   "dependencies": {
     "cannon-es": "0.20.0",

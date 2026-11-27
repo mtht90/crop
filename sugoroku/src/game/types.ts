@@ -26,6 +26,9 @@ export type CardId =
   // 攻撃・妨害
   | 'trap' | 'quake' | 'dragon';
 
+/** デッキに入っている1枚。強化済みは末尾に + が付く（例 'dice+'） */
+export type CardRef = CardId | `${CardId}+`;
+
 export type Rarity = 'common' | 'rare' | 'epic';
 
 /** カードを使う対象 */
@@ -44,6 +47,15 @@ export interface CardDef {
   steps?: number[];
   price: number; // カード屋での値段
   unlockLevel: number;
+  /** 消耗：使うとこの試合のデッキから消える */
+  exhaust?: boolean;
+}
+
+/** 強化（+）したときに変わるところ */
+export interface UpgradeDef {
+  cost?: number;
+  steps?: number[];
+  desc: string;
 }
 
 export type HeroId = 'knight' | 'merchant' | 'mage' | 'ranger' | 'assassin' | 'barbarian';
@@ -56,7 +68,7 @@ export interface HeroDef {
   model: string; // public/models/adv/ のファイル名（拡張子なし）
   passive: string;
   cost: number; // 0 = 最初から使える
-  deck: CardId[]; // 初期デッキ
+  deck: CardRef[]; // 初期デッキ
 }
 
 export type StageId = 'meadow' | 'snow' | 'volcano' | 'sky';
@@ -90,6 +102,7 @@ export interface PlayerStats {
   forts: number; // 城塞まで築いた数
   cardsUsed: number;
   cardsBought: number;
+  upgrades: number;
   tollsEarned: number;
   maxToll: number;
   lowestRankSeen: number;
@@ -104,9 +117,10 @@ export interface Player {
   personality: Personality;
   cash: number;
   pos: number;
-  deck: CardId[]; // 山札（末尾から引く）
-  hand: CardId[];
-  discard: CardId[];
+  deck: CardRef[]; // 山札（末尾から引く）
+  hand: CardRef[];
+  discard: CardRef[];
+  exhausted: CardRef[]; // 消耗して消えたカード
   energy: number; // 今のターンの残り行動力
   moved: boolean; // このターンに移動カードを使ったか
   jail: number; // 0 = 自由、>0 = 地下牢にいる残りターン
@@ -119,6 +133,7 @@ export interface TileState {
   level: number; // 砦の段階 0 = 旗のみ、1 = 砦、2 = 城塞、3 = 王城
   guard: number; // 守りの結界が残るラウンド数（奪えない）
   trap: number | null; // 罠を仕掛けたプレイヤー
+  trapMul?: number; // 罠の威力（強化した落とし穴は2）
 }
 
 export interface GameConfig {

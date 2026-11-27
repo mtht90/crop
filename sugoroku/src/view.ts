@@ -1,9 +1,9 @@
 // エンジンからの通知を 3D 演出・UI・音に変換する View と、あなたの操作を受け付ける Controller（v2）。
-import { CARDS, GROUPS, HEROES, LEVEL_NAMES, PLAYER_COLORS, TILES } from './data/defs.ts';
+import { GROUPS, HEROES, LEVEL_NAMES, PLAYER_COLORS, TILES, baseId, card, upRef } from './data/defs.ts';
 import { audio, type Sfx } from './audio.ts';
-import type { Action, BannerKind, Controller, Game, Question, TilePurpose, View } from './game/engine.ts';
+import type { Action, BannerKind, Controller, Game, Question, ShopPick, TilePurpose, UpgradeOffer, View } from './game/engine.ts';
 import { N_TILES } from './game/engine.ts';
-import type { CardId, Player } from './game/types.ts';
+import type { CardId, CardRef, Player } from './game/types.ts';
 import type { World } from './render/world.ts';
 import { icon } from './ui/icons.ts';
 import { cardHtml, esc, sleep, type UI } from './ui/ui.ts';
@@ -50,12 +50,16 @@ export class GameView implements View {
     } else await this.wait(300);
   }
 
-  async draw(p: Player, cards: CardId[]) {
+  async draw(p: Player, cards: CardRef[]) {
     if (p.human) {
       audio.play('card');
       this.ui.dealCards(cards);
-      await sleep(250 + cards.length * 90);
+      await sleep(120);
     } else this.ui.log(`${this.name(p)} はカードを${cards.length}枚引いた`);
+  }
+
+  async discardHand(p: Player, cards: CardRef[]) {
+    if (p.human) await this.ui.tossHand(cards.length);
   }
 
   async dice(_p: Player, values: number[]) {
@@ -147,29 +151,32 @@ export class GameView implements View {
     await this.ui.banner(`${who}${text}`, sub ?? '', `k-${kind}`, long ? 1900 : 1200);
   }
 
-  async cardGained(p: Player, card: CardId) {
-    const c = CARDS[card];
-    audio.play(c.rarity === 'epic' ? 'epic' : 'card');
-    if (p.human) await this.ui.banner(`<div class="card-reveal">${cardHtml(card)}</div>`, `${c.name} がデッキに加わった`, 'k-card', 1300);
-    else {
-      this.ui.log(`${this.name(p)} が「${c.name}」を手に入れた`);
+  async cardGained(p: Player, ref: CardRef, upgraded = false) {
+    const c = card(ref);
+    audio.play(upgraded ? 'spell1' : c.rarity === 'epic' ? 'epic' : 'card');
+    if (p.human) {
+      if (upgraded) await this.ui.banner(`<div class="card-reveal">${cardHtml(ref)}</div>`, `「${card(baseId(ref)).name}」を強化した！`, 'k-card', 1500);
+      else await this.ui.banner(`<div class="card-reveal">${cardHtml(ref)}</div>`, `${c.name} がデッキに加わった`, 'k-card', 1300);
+    } else {
+      this.ui.log(upgraded ? `${this.name(p)} が「${card(baseId(ref)).name}」を強化した` : `${this.name(p)} が「${c.name}」を手に入れた`);
       await this.wait(200);
     }
   }
 
-  async cardUsed(p: Player, card: CardId, target?: number) {
-    const c = CARDS[card];
+  async cardUsed(p: Player, ref: CardRef, target?: number) {
+    const c = card(ref);
+    const cardId = c.id;
     audio.play(c.move ? 'slide' : (`spell${Math.floor(Math.random() * 5)}` as Sfx));
     this.world.playAnim(p.id, c.move ? 'Interact' : 'Use_Item', true);
     // 罠の場所は相手には見せない
-    const where = target !== undefined && card !== 'trap' && c.target !== 'steps' && c.target !== 'none' ? `（${TILES[target].name}）` : '';
-    this.ui.log(`${this.name(p)} が「${c.name}」を使った${where}`);
-    if (target !== undefined && card !== 'trap' && (c.target === 'enemyTile' || c.target === 'ownTile' || c.target === 'emptyTile')) this.world.focusOn(this.world.plotPos[target]);
+    const where = target !== undefined && cardId !== 'trap' && c.target !== 'steps' && c.target !== 'none' ? `（${TILES[target].name}）` : '';
+    this.ui.log(`${this.name(p)} が「${c.name}」を使った${where}${c.exhaust ? '（消耗）' : ''}`);
+    if (target !== undefined && cardId !== 'trap' && (c.target === 'enemyTile' || c.target === 'ownTile' || c.target === 'emptyTile')) this.world.focusOn(this.world.plotPos[target]);
     if (p.human) {
       this.sync();
       return;
     }
-    await this.ui.banner(`<div class="card-reveal">${cardHtml(card)}</div>`, `${esc(p.name)} が使った`, 'k-card', c.move ? 700 : 1100);
+    await this.ui.banner(`<div class="card-reveal">${cardHtml(ref)}</div>`, `${esc(p.name)} が使った`, 'k-card', c.move ? 700 : 1100);
   }
 
   log(msg: string) {
@@ -232,15 +239,24 @@ export class HumanController implements Controller {
   }
 
   async turn(g: Game, p: Player): Promise<Action> {
+    const board = {
+      pick: (x: number, y: number) => this.world.tileAt(x, y),
+      highlight: (t: number[] | null) => {
+        this.world.setSelectable(t);
+        if (t) this.world.overview();
+      },
+      hover: (t: number | null) => this.world.hoverTile(t),
+    };
     for (;;) {
-      const r = await this.ui.handPhase(g, p);
+      const r = await this.ui.handPhase(g, p, board);
       if (r === 'end') return { type: 'end' };
-      const card = p.hand[r];
-      const c = CARDS[card];
-      if (c.target === 'none' || c.target === 'steps') return { type: 'play', index: r };
-      const target = await this.selectTile(g.cardTargets(p, card), this.targetText(card), true);
+      const ref = p.hand[r.index];
+      const c = card(ref);
+      if (c.target === 'none' || c.target === 'steps') return { type: 'play', index: r.index };
+      if (r.target !== undefined) return { type: 'play', index: r.index, target: r.target };
+      const target = await this.selectTile(g.cardTargets(p, ref), this.targetText(c.id), true);
       if (target === null) continue;
-      return { type: 'play', index: r, target };
+      return { type: 'play', index: r.index, target };
     }
   }
 
@@ -340,16 +356,48 @@ export class HumanController implements Controller {
     return (await this.selectTile(options, 'ワープ先のマスを選んでください', false)) ?? options[0];
   }
 
-  async shop(g: Game, p: Player, offers: CardId[], free: boolean): Promise<number> {
-    return this.ui.dialog({
-      title: free ? '王の贈り物：1枚えらぶ' : 'カード屋',
-      icon: free ? 'crown' : 'swap-bag',
-      body: `<p>${free ? 'デッキに加えるカードを1枚選んでください。' : '買ったカードは捨て札に入り、次に山札を混ぜ直したときから使えます。'}</p><div class="discard-row">${offers.map((c) => `<div>${cardHtml(c, { small: true })}${free ? '' : `<small class="price">${g.cardPrice(c, p)}G</small>`}</div>`).join('')}</div>`,
-      buttons: [
-        ...(free ? [] : [{ label: '買わない', value: -1 }]),
-        ...offers.map((c, i) => ({ label: free ? CARDS[c].name : `${CARDS[c].name}（${g.cardPrice(c, p)}G）`, value: i, kind: 'primary' as const, disabled: !free && p.cash < g.cardPrice(c, p) })),
-      ],
-      className: 'discard',
+  async shop(g: Game, p: Player, offers: CardId[], free: boolean, upgrades: UpgradeOffer[]): Promise<ShopPick> {
+    type V = { kind: 'buy'; index: number } | { kind: 'upgrade'; card: CardId };
+    const items: V[] = [...offers.map((_, index) => ({ kind: 'buy' as const, index })), ...upgrades.map((u) => ({ kind: 'upgrade' as const, card: u.card }))];
+    const price = (v: V) => (v.kind === 'buy' ? (free ? 0 : g.cardPrice(offers[v.index], p)) : upgrades.find((u) => u.card === v.card)!.cost);
+    const copies = (id: CardId) => g.allCards(p).filter((r) => r === id).length;
+    const body = `<p>${free ? '新しいカードを1枚もらうか、デッキのカードを1種類強化できる（どちらか1つ）。' : '新しいカードを買うか、デッキのカードを強化できる（1回の来店で1つ）。'}</p>
+      <div class="shop-cols">
+        <div class="shop-sec"><h3>新しいカード</h3><div class="shop-row">${offers
+          .map((c, i) => `<button type="button" class="shop-item" data-k="${i}" ${p.cash < price(items[i]) ? 'disabled' : ''}>${cardHtml(c, { small: true })}<small>${free ? '無料' : `${price(items[i])}G`}</small></button>`)
+          .join('')}</div></div>
+        ${upgrades.length ? `<div class="shop-sec shop-up"><h3>強化（デッキの1枚が + になる）</h3><div class="shop-row">${upgrades
+          .map((u, j) => {
+            const k = offers.length + j;
+            return `<button type="button" class="shop-item" data-k="${k}" ${p.cash < u.cost ? 'disabled' : ''}><span class="up-pair">${cardHtml(u.card, { small: true })}${icon('fast-forward-button')}${cardHtml(upRef(u.card), { small: true })}</span><small>${u.cost ? `${u.cost}G` : '無料'}・デッキに${copies(u.card)}枚</small></button>`;
+          })
+          .join('')}</div></div>` : ''}
+      </div>`;
+    return new Promise((resolve) => {
+      let sel = -1;
+      const done = this.ui.dialog<string>({
+        title: free ? '王の贈り物' : 'カード屋',
+        icon: free ? 'crown' : 'swap-bag',
+        body,
+        buttons: [
+          { label: free ? 'いらない' : '何もしない', value: 'skip' },
+          { label: 'これにする', value: 'ok', kind: 'primary', disabled: true },
+        ],
+        className: 'discard shop',
+      });
+      const wrap = this.ui.dialogs.lastElementChild as HTMLElement;
+      const ok = wrap.querySelector<HTMLButtonElement>('.dialog-buttons .btn.primary')!;
+      wrap.querySelectorAll<HTMLButtonElement>('.shop-item').forEach((b) =>
+        b.addEventListener('click', () => {
+          sel = Number(b.dataset.k);
+          wrap.querySelectorAll('.shop-item').forEach((x) => x.classList.toggle('sel', x === b));
+          const v = items[sel];
+          ok.disabled = false;
+          ok.textContent = v.kind === 'buy' ? (free ? 'もらう' : `買う（${price(v)}G）`) : `強化する${price(v) ? `（${price(v)}G）` : ''}`;
+          audio.play('hover', { volume: 0.5 });
+        }),
+      );
+      void done.then((r) => resolve(r === 'ok' && sel >= 0 ? items[sel] : null));
     });
   }
 

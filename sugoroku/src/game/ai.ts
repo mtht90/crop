@@ -1,7 +1,7 @@
 // CPU の判断（v2：カードで動く陣取り）。性格とステージの強さで振る舞いが変わる。
-import { CARDS, MAX_LEVEL, TILES } from '../data/defs.ts';
-import { N_TILES, TERRITORIES, type Action, type Controller, type Game, type Question, type TilePurpose } from './engine.ts';
-import type { CardId, Player } from './types.ts';
+import { CARDS, MAX_LEVEL, TILES, baseId, card } from '../data/defs.ts';
+import { N_TILES, TERRITORIES, type Action, type Controller, type Game, type Question, type ShopPick, type TilePurpose, type UpgradeOffer } from './engine.ts';
+import type { CardId, CardRef, Player } from './types.ts';
 
 /** カードの「欲しさ」（カード屋で選ぶとき） */
 const CARD_VALUE: Record<CardId, number> = {
@@ -59,11 +59,11 @@ export class AIController implements Controller {
     return steps.reduce((a, b) => (this.landScore(g, p, (p.pos + b + N_TILES) % N_TILES) > this.landScore(g, p, (p.pos + a + N_TILES) % N_TILES) ? b : a), steps[0]);
   }
   /** 移動カードの期待値 */
-  private moveValue(g: Game, p: Player, c: CardId): { v: number; target?: number } {
-    const d = CARDS[c];
-    switch (c) {
-      case 'walk': return { v: this.landScore(g, p, (p.pos + 1) % N_TILES) - 10 };
-      case 'dice': return { v: this.avg(g, p, [1, 2, 3, 4, 5, 6]) };
+  private moveValue(g: Game, p: Player, c: CardRef): { v: number; target?: number } {
+    const d = card(c);
+    switch (d.id) {
+      case 'walk': return { v: this.landScore(g, p, (p.pos + (d.up ? 2 : 1)) % N_TILES) - 10 };
+      case 'dice': return { v: this.avg(g, p, d.up ? [2, 3, 4, 5, 6, 7] : [1, 2, 3, 4, 5, 6]) };
       case 'twin': {
         const s: number[] = [];
         for (let a = 1; a <= 6; a++) for (let b = 1; b <= 6; b++) s.push(a + b);
@@ -72,7 +72,7 @@ export class AIController implements Controller {
       case 'teleport': {
         const ts = g.cardTargets(p, c);
         const t = ts.reduce((a, b) => (this.landScore(g, p, b) > this.landScore(g, p, a) ? b : a), ts[0]);
-        return { v: this.landScore(g, p, t) - 25, target: t };
+        return { v: this.landScore(g, p, t) - (d.up ? 15 : 25), target: t };
       }
       default: {
         const b = this.best(g, p, d.steps!);
@@ -96,11 +96,13 @@ export class AIController implements Controller {
     const hand = p.hand.map((c, index) => ({ c, index })).filter((x) => g.canPlay(p, x.c));
     if (!hand.length) return { type: 'end' };
     const res = this.reserve(g, p);
-    const moveCards = hand.filter((x) => CARDS[x.c].move);
-    const minMove = moveCards.length ? Math.min(...moveCards.map((x) => CARDS[x.c].cost)) : 0;
+    const moveCards = hand.filter((x) => card(x.c).move);
+    const minMove = moveCards.length ? Math.min(...moveCards.map((x) => card(x.c).cost)) : 0;
     const spare = p.moved ? p.energy : p.energy - minMove; // 移動用に残す⚡
-    const find = (id: CardId) => hand.find((x) => x.c === id);
-    const ok = (id: CardId) => !!find(id) && CARDS[id].cost <= spare;
+    // 同じ種類なら強化版を優先
+    const find = (id: CardId) => hand.filter((x) => baseId(x.c) === id).sort((a, b) => (card(b.c).up ? 1 : 0) - (card(a.c).up ? 1 : 0))[0];
+    const ok = (id: CardId) => !!find(id) && card(find(id)!.c).cost <= spare;
+    const ref = (id: CardId) => find(id)!.c;
 
     if (find('purse')) return { type: 'play', index: find('purse')!.index };
     if (ok('scheme') && p.hand.length <= 4) return { type: 'play', index: find('scheme')!.index };
@@ -108,28 +110,28 @@ export class AIController implements Controller {
     // 攻撃
     for (const id of ['dragon', 'edict', 'march', 'quake'] as CardId[]) {
       if (!ok(id) || this.blunder(g)) continue;
-      const ts = g.cardTargets(p, id);
+      const ts = g.cardTargets(p, ref(id));
       if (!ts.length) continue;
       const tgt = ts.reduce((a, b) => (this.attackValue(g, p, b) > this.attackValue(g, p, a) ? b : a), ts[0]);
-      const cost = id === 'edict' ? g.stealCost(tgt, p) : id === 'march' ? g.stealCost(tgt, p) / 2 : 0;
+      const cost = id === 'edict' || id === 'march' ? g.cardStealCost(tgt, p, ref(id)) : 0;
       if (p.cash - cost < res * 0.3) continue;
       if (this.attackValue(g, p, tgt) >= (id === 'quake' ? 70 : 60)) return { type: 'play', index: find(id)!.index, target: tgt };
     }
     // 旗手
     if (ok('banner')) {
-      const ts = g.cardTargets(p, 'banner');
+      const ts = g.cardTargets(p, ref('banner'));
       if (ts.length && p.cash - g.claimCost(ts[0], p) >= res * 0.3) return { type: 'play', index: find('banner')!.index, target: ts.reduce((a, b) => (g.price(b) > g.price(a) ? b : a), ts[0]) };
     }
     // 守り：奪われそうな高い陣
     if (ok('guard')) {
       const rich = Math.max(0, ...g.alive.filter((o) => o !== p).map((o) => o.cash));
-      const ts = g.cardTargets(p, 'guard').filter((i) => rich >= g.stealCost(i, g.s.players[(p.id + 1) % g.s.players.length]));
+      const ts = g.cardTargets(p, ref('guard')).filter((i) => rich >= g.stealCost(i, g.s.players[(p.id + 1) % g.s.players.length]));
       if (ts.length) return { type: 'play', index: find('guard')!.index, target: ts.reduce((a, b) => (g.price(b) > g.price(a) ? b : a), ts[0]) };
     }
     // 罠：首位の少し先へ
     if (ok('trap') && g.rng.chance(0.7)) {
       const leader = g.ranking().find((o) => o !== p)!;
-      const opts = g.cardTargets(p, 'trap').filter((i) => {
+      const opts = g.cardTargets(p, ref('trap')).filter((i) => {
         const d = (i - leader.pos + N_TILES) % N_TILES;
         return d >= 3 && d <= 8;
       });
@@ -156,8 +158,8 @@ export class AIController implements Controller {
       return { type: 'play', index: best.index, target: bt };
     }
     // 移動後の築城
-    if (find('fortify') && CARDS.fortify.cost <= p.energy) {
-      const ts = g.cardTargets(p, 'fortify');
+    if (find('fortify') && card(ref('fortify')).cost <= p.energy) {
+      const ts = g.cardTargets(p, ref('fortify'));
       if (ts.length) {
         const tgt = ts.reduce((a, b) => (g.price(b) > g.price(a) ? b : a), ts[0]);
         if (p.cash - g.fortCost(tgt) >= res) return { type: 'play', index: find('fortify')!.index, target: tgt };
@@ -187,18 +189,29 @@ export class AIController implements Controller {
     return options.reduce((a, b) => (this.landScore(g, p, b) > this.landScore(g, p, a) ? b : a), options[0]);
   }
 
-  async shop(g: Game, p: Player, offers: CardId[], free: boolean): Promise<number> {
-    let best = -1;
+  async shop(g: Game, p: Player, offers: CardId[], free: boolean, upgrades: UpgradeOffer[]): Promise<ShopPick> {
+    let best: ShopPick = null;
     let bv = 0;
+    const deckSize = g.allCards(p).length;
     offers.forEach((c, i) => {
-      const v = CARD_VALUE[c] + (p.personality === 'gambler' && CARDS[c].rarity !== 'common' ? 1 : 0);
+      // デッキが大きいほど新しいカードの価値は下がる
+      const v = CARD_VALUE[c] + (p.personality === 'gambler' && CARDS[c].rarity !== 'common' ? 1 : 0) - Math.max(0, deckSize - 12) * 0.4;
       if (!free && p.cash - g.cardPrice(c, p) < this.reserve(g, p) * 1.3) return;
       if (v > bv) {
         bv = v;
-        best = i;
+        best = { kind: 'buy', index: i };
       }
     });
-    return free || bv >= 6 ? best : -1;
+    for (const u of upgrades) {
+      const copies = g.allCards(p).filter((r) => r === u.card).length;
+      const v = CARD_VALUE[u.card] * 0.7 + Math.min(copies, 3) * 1.2 + (p.personality === 'careful' ? 0.6 : 0);
+      if (u.cost && p.cash - u.cost < this.reserve(g, p) * 1.3) continue;
+      if (v > bv) {
+        bv = v;
+        best = { kind: 'upgrade', card: u.card };
+      }
+    }
+    return free || bv >= 6 ? best : null;
   }
 
   async dungeon(g: Game, p: Player): Promise<'pay' | 'roll'> {

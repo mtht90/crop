@@ -105,28 +105,7 @@ button { font: inherit; color: inherit; }
 .select-bar .gi { width: 22px; height: 22px; color: var(--red); }
 
 /* ---------- カード ---------- */
-.card { --r: #8a8aa0; position: relative; width: 112px; min-height: 150px; padding: 8px 8px 10px; border: var(--line); border-radius: 14px; background: linear-gradient(170deg, #fff 55%, var(--paper-2)); box-shadow: var(--shadow); display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; cursor: pointer; transition: transform .15s; }
-.hand .card:hover { transform: translateY(-8px) rotate(-1deg); }
-.card.rarity-common { --r: #6b8aa8; }
-.card.rarity-rare { --r: #3b8eea; background: linear-gradient(170deg, #fff 50%, #d9ebff); }
-.card.rarity-epic { --r: #a05ce8; background: linear-gradient(170deg, #fff 40%, #eedcff); }
-.card.rarity-epic::after { content: ''; position: absolute; inset: 0; border-radius: 11px; background: linear-gradient(115deg, transparent 30%, rgba(255,255,255,.7) 45%, transparent 60%); background-size: 250% 100%; animation: shine 2.6s infinite; pointer-events: none; }
 @keyframes shine { 0% { background-position: 120% 0; } 60%, 100% { background-position: -120% 0; } }
-.card.unusable { filter: grayscale(.8); opacity: .7; }
-.card-rarity { font-size: 10px; font-weight: 800; color: #fff; background: var(--r); padding: 1px 8px; border-radius: 99px; }
-.card-art { width: 56px; height: 56px; display: grid; place-items: center; border-radius: 50%; background: var(--r); color: #fff; border: var(--line); }
-.card-art .gi { width: 36px; height: 36px; }
-.card-name { font-weight: 800; font-size: 13px; line-height: 1.2; }
-.card-desc { font-size: 10.5px; line-height: 1.35; color: var(--ink-soft); font-weight: 700; }
-.card.small { width: 96px; min-height: 128px; cursor: default; }
-.card.small .card-art { width: 44px; height: 44px; }
-.card.small .card-art .gi { width: 28px; height: 28px; }
-.card-big { display: flex; justify-content: center; }
-.card-big .card { width: 160px; min-height: 210px; cursor: default; }
-.card-big .card-art { width: 84px; height: 84px; }
-.card-big .card-art .gi { width: 54px; height: 54px; }
-.card-big .card-name { font-size: 17px; }
-.card-big .card-desc { font-size: 12.5px; }
 
 /* ---------- ダイアログ ---------- */
 .dialogs { position: absolute; inset: 0; pointer-events: none; }
@@ -183,11 +162,6 @@ button { font: inherit; color: inherit; }
 .banner.k-unify-warn .banner-sub { color: #fff; }
 .banner.k-card { background: transparent; border: 0; box-shadow: none; }
 .banner.k-card .banner-sub { padding: 4px 14px; border-radius: 99px; background: var(--paper); border: var(--line); color: var(--ink); }
-.card-reveal .card { width: 150px; min-height: 196px; transform: rotate(-3deg); }
-.card-reveal .card-art { width: 76px; height: 76px; }
-.card-reveal .card-art .gi { width: 50px; height: 50px; }
-.card-reveal .card-name { font-size: 16px; }
-.card-reveal .card-desc { font-size: 12px; }
 .banner.turn { padding: 10px 30px; }
 .banner.turn .banner-text { font-size: 28px; }
 .banner.k-start .banner-text { font-size: clamp(30px, 7vw, 48px); }
@@ -356,8 +330,6 @@ button { font: inherit; color: inherit; }
   .pill b { font-size: 15px; }
   .icon-btn { height: 36px; min-width: 36px; padding: 0 6px; }
   .roll-btn { font-size: 20px; padding: 10px 24px; }
-  .hand .card { width: 92px; min-height: 124px; }
-  .hand .card .card-desc { display: none; }
   .tile-label { font-size: 9.5px; padding: 1px 5px 1px 3px; }
   .tile-label .lb-stars { display: none; }
 }
@@ -365,42 +337,6 @@ button { font: inherit; color: inherit; }
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
 
-/* ---------- v2：カードゲーム風の手札 ---------- */
-.action { width: min(820px, 100%); }
-.hand-bar { display: flex; align-items: center; gap: 10px; padding: 6px 8px 6px 14px; border: var(--line); border-radius: 16px; background: var(--paper); box-shadow: var(--shadow); }
-.energy { display: flex; align-items: center; gap: 5px; font-weight: 800; }
-.energy > .gi { width: 22px; height: 22px; color: var(--gold-dark); }
-.energy i { width: 18px; height: 18px; border-radius: 50%; border: 3px solid var(--ink); background: #d8cfbe; }
-.energy i.on { background: radial-gradient(circle at 35% 35%, #fff4b0, var(--gold)); box-shadow: 0 0 10px rgba(245, 184, 46, .8); }
-.piles { display: flex; gap: 10px; font-weight: 800; color: var(--ink-soft); font-size: 13px; }
-.piles span { display: flex; align-items: center; gap: 3px; }
-.piles .gi { width: 16px; height: 16px; }
-.end-turn { margin-left: auto; min-height: 40px; padding: 4px 14px; }
-.hand-hint { padding: 3px 12px; border-radius: 99px; background: rgba(255, 250, 240, .9); font-size: 12px; font-weight: 800; }
-.hand.fan { display: flex; justify-content: center; align-items: flex-end; min-height: 190px; padding-top: 30px; }
-.hand.fan .slot { position: relative; margin: 0 -14px; transform: translateY(calc(var(--i) * var(--i) * 4px)) rotate(calc(var(--i) * 5deg)); transform-origin: 50% 120%; transition: transform .18s; animation: handIn .35s cubic-bezier(.2, 1.4, .4, 1) both; animation-delay: var(--d); z-index: 1; }
-.hand.fan .slot:hover { z-index: 3; transform: translateY(-14px) rotate(calc(var(--i) * 2deg)); }
-.hand.fan .slot.sel { z-index: 4; transform: translateY(-40px) scale(1.12); }
-.hand.fan .slot .card { cursor: pointer; }
-.hand.fan .slot .use { position: absolute; left: 50%; top: -48px; transform: translateX(-50%); min-height: 38px; padding: 4px 18px; white-space: nowrap; }
-@keyframes handIn { from { transform: translateY(160px) rotate(0); opacity: 0; } }
-.card-cost { position: absolute; left: -10px; top: -10px; width: 30px; height: 30px; display: grid; place-items: center; border: 3px solid var(--ink); border-radius: 50%; background: radial-gradient(circle at 35% 35%, #fff4b0, var(--gold)); font-family: var(--display); font-size: 15px; z-index: 2; }
-.card.move { background: linear-gradient(170deg, #fff 50%, #ddf3e2); }
-.card.move .card-rarity { background: #2f9e57; }
-.card.move .card-art { background: #2f9e57; }
-.deal { position: absolute; right: max(16px, env(safe-area-inset-right, 0px)); bottom: 230px; display: flex; gap: 6px; pointer-events: none; }
-.deal-card { animation: deal .8s cubic-bezier(.2, 1, .3, 1) both; animation-delay: calc(var(--k) * 90ms); }
-@keyframes deal { 0% { transform: translate(120px, -40px) rotate(20deg) scale(.6); opacity: 0; } 40% { opacity: 1; transform: none; } 100% { transform: translate(-30vw, 160px) scale(.5); opacity: 0; } }
 .discard-row .price { display: block; text-align: center; margin-top: 4px; font-family: var(--display); }
 .pc-terr { display: inline-flex; align-items: center; gap: 2px; color: var(--ink); }
 .pc-terr b { font-family: var(--display); font-size: 13px; }
-@media (max-width: 760px) {
-  .hand.fan { min-height: 150px; }
-  .hand.fan .slot { margin: 0 -22px; transform: translateY(calc(var(--i) * var(--i) * 2px)) rotate(calc(var(--i) * 3deg)); }
-  .action { bottom: calc(env(safe-area-inset-bottom, 0px) + 22px); }
-  .hand.fan .slot .card { width: 88px; min-height: 120px; }
-  .hand.fan .slot .card .card-desc { display: none; }
-  .hand.fan .slot.sel .card .card-desc { display: block; }
-  .hand-bar { gap: 6px; padding-left: 10px; }
-  .deal { bottom: 200px; }
-}

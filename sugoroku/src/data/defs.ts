@@ -1,4 +1,4 @@
-import type { CardDef, CardId, GroupDef, HeroDef, HeroId, StageDef, StageId, TileDef } from '../game/types.ts';
+import type { CardRef, UpgradeDef, CardDef, CardId, GroupDef, HeroDef, HeroId, StageDef, StageId, TileDef } from '../game/types.ts';
 
 export const GROUPS: GroupDef[] = [
   { name: '若葉の野', color: '#6fcf5a' },
@@ -55,7 +55,7 @@ export const ECON = {
   fort: 0.5, // 砦を1段階築く値段：price × fort
   setIncome: 2, // 同じ色の陣を全部持つと税収が2倍
   energy: 3, // 毎ターンの行動力
-  hand: 5, // 手札の上限（ターン開始時にここまで引く）
+  hand: 5, // 毎ターンの最初に引く枚数（使わなかったカードはターン終了時に捨て札へ）
   trap: 100, // 罠を踏んだときに払う額
 };
 
@@ -67,13 +67,13 @@ export const CARDS: Record<CardId, CardDef> = {
   aim: { id: 'aim', name: '狙い撃ち', icon: 'flag-objective', rarity: 'common', cost: 1, move: true, target: 'steps', steps: [2, 3, 4], price: 80, unlockLevel: 1, desc: '2〜4マスから選んで進む。' },
   gale: { id: 'gale', name: '疾風', icon: 'fast-forward-button', rarity: 'rare', cost: 2, move: true, target: 'steps', steps: [5, 6, 7, 8], price: 140, unlockLevel: 1, desc: '5〜8マスから選んで進む。' },
   retreat: { id: 'retreat', name: '引き返す', icon: 'exit-door', rarity: 'common', cost: 1, move: true, target: 'steps', steps: [-1, -2, -3], price: 70, unlockLevel: 2, desc: '1〜3マス戻る。' },
-  teleport: { id: 'teleport', name: '転移の書', icon: 'teleport', rarity: 'epic', cost: 3, move: true, target: 'anyTile', price: 220, unlockLevel: 4, desc: '好きなマスへ移動する。' },
+  teleport: { id: 'teleport', exhaust: true, name: '転移の書', icon: 'teleport', rarity: 'epic', cost: 3, move: true, target: 'anyTile', price: 220, unlockLevel: 4, desc: '好きなマスへ移動する。' },
   // 陣
   banner: { id: 'banner', name: '旗手', icon: 'tower-flag', rarity: 'rare', cost: 1, move: false, target: 'emptyTile', price: 120, unlockLevel: 1, desc: '前後3マス以内の空いた陣に、値段を払って旗を立てる。' },
   march: { id: 'march', name: '進軍', icon: 'barbarian', rarity: 'rare', cost: 2, move: false, target: 'enemyTile', price: 150, unlockLevel: 2, desc: '今いるマスか隣の、相手の陣を半額で奪う。' },
   fortify: { id: 'fortify', name: '築城', icon: 'hammer-drop', rarity: 'common', cost: 1, move: false, target: 'ownTile', price: 90, unlockLevel: 1, desc: '自分の陣を1つ選び、値段を払って砦を1段階築く（どこからでも）。' },
   guard: { id: 'guard', name: '守りの結界', icon: 'magic-shield', rarity: 'common', cost: 1, move: false, target: 'ownTile', price: 80, unlockLevel: 1, desc: '自分の陣を1つ選ぶ。3ラウンドの間、誰にも奪われない。' },
-  edict: { id: 'edict', name: '王の勅命', icon: 'gavel', rarity: 'epic', cost: 3, move: false, target: 'enemyTile', price: 240, unlockLevel: 6, desc: 'どこにある相手の陣でも、奪う値段を払って奪う。' },
+  edict: { id: 'edict', exhaust: true, name: '王の勅命', icon: 'gavel', rarity: 'epic', cost: 3, move: false, target: 'enemyTile', price: 240, unlockLevel: 6, desc: 'どこにある相手の陣でも、奪う値段を払って奪う。' },
   // お金・手札
   purse: { id: 'purse', name: '金貨の袋', icon: 'two-coins', rarity: 'common', cost: 0, move: false, target: 'none', price: 50, unlockLevel: 1, desc: 'すぐに 80G を得る。' },
   levy: { id: 'levy', name: '徴税', icon: 'receive-money', rarity: 'rare', cost: 1, move: false, target: 'none', price: 130, unlockLevel: 3, desc: '自分の陣の税収を、もう1回受け取る。' },
@@ -82,20 +82,75 @@ export const CARDS: Record<CardId, CardDef> = {
   // 攻撃・妨害
   trap: { id: 'trap', name: '落とし穴', icon: 'skull-crossed-bones', rarity: 'common', cost: 1, move: false, target: 'anyTile', price: 70, unlockLevel: 1, desc: '好きなマスに罠を仕掛ける。踏んだ相手は 100G をあなたに払う。' },
   quake: { id: 'quake', name: '大地震', icon: 'earth-crack', rarity: 'rare', cost: 2, move: false, target: 'enemyTile', price: 130, unlockLevel: 3, desc: '相手の陣の砦を1段階壊す。旗だけなら旗を倒して空き地にする。' },
-  dragon: { id: 'dragon', name: '竜の召喚', icon: 'fire-breath', rarity: 'epic', cost: 3, move: false, target: 'enemyTile', price: 260, unlockLevel: 5, desc: '相手の陣を焼き払い、空き地に戻す（結界があっても）。' },
+  dragon: { id: 'dragon', exhaust: true, name: '竜の召喚', icon: 'fire-breath', rarity: 'epic', cost: 3, move: false, target: 'enemyTile', price: 260, unlockLevel: 5, desc: '相手の陣を焼き払い、空き地に戻す（結界があっても）。' },
+};
+
+/** 強化（+）の効果。カード屋や王の贈り物で強化できる */
+export const UPGRADES: Record<CardId, UpgradeDef> = {
+  walk: { desc: '2マス進む。' },
+  dice: { desc: 'サイコロ1個を振り、出目 +1 だけ進む。' },
+  twin: { cost: 1, desc: 'サイコロ2個を振って進む。ゾロ目ならカードを1枚引く。' },
+  aim: { steps: [1, 2, 3, 4, 5], desc: '1〜5マスから選んで進む。' },
+  gale: { steps: [4, 5, 6, 7, 8, 9], desc: '4〜9マスから選んで進む。' },
+  retreat: { cost: 0, steps: [-1, -2, -3, -4], desc: '1〜4マス戻る。' },
+  teleport: { cost: 2, desc: '好きなマスへ移動する。' },
+  banner: { desc: '前後5マス以内の空いた陣に、2割引で旗を立てる。' },
+  march: { desc: '2マス以内の相手の陣を半額で奪う。' },
+  fortify: { desc: '自分の陣を1つ選び、値段を払って砦を2段階築く（どこからでも）。' },
+  guard: { desc: '自分の陣を1つ選ぶ。5ラウンドの間、誰にも奪われない。' },
+  edict: { desc: 'どこにある相手の陣でも、奪う値段の2割引で奪う。' },
+  purse: { desc: 'すぐに 140G を得る。' },
+  levy: { desc: '自分の陣の税収の1.5倍を、もう1回受け取る。' },
+  scheme: { desc: 'カードを3枚引く。' },
+  thieves: { desc: '一番お金持ちの相手から 30% を奪う（最大450G）。' },
+  trap: { desc: '好きなマスに罠を仕掛ける。踏んだ相手は 200G をあなたに払う。' },
+  quake: { desc: '相手の陣の砦を2段階壊す（砦が足りなければ旗も倒す）。' },
+  dragon: { cost: 2, desc: '相手の陣を焼き払い、空き地に戻す（結界があっても）。' },
+};
+
+export const baseId = (r: CardRef): CardId => (r.endsWith('+') ? r.slice(0, -1) : r) as CardId;
+export const isUp = (r: CardRef) => r.endsWith('+');
+export const upRef = (id: CardId): CardRef => `${id}+`;
+
+export interface CardView extends CardDef {
+  ref: CardRef;
+  up: boolean;
+}
+const cardCache = new Map<CardRef, CardView>();
+/** デッキの1枚（強化済みも含む）の実際の性能 */
+export function card(r: CardRef): CardView {
+  let v = cardCache.get(r);
+  if (!v) {
+    const b = CARDS[baseId(r)];
+    const up = isUp(r);
+    const u = UPGRADES[b.id];
+    v = { ...b, ref: r, up, name: up ? `${b.name}+` : b.name, cost: up && u.cost !== undefined ? u.cost : b.cost, steps: up && u.steps ? u.steps : b.steps, desc: up ? u.desc : b.desc };
+    cardCache.set(r, v);
+  }
+  return v;
+}
+
+/** カードの種類（カード下の札に表示） */
+export type CardKind = 'move' | 'land' | 'gold' | 'plan' | 'harm';
+export const KIND_NAME: Record<CardKind, string> = { move: '移動', land: '陣', gold: '資金', plan: '策略', harm: '妨害' };
+export const CARD_KIND: Record<CardId, CardKind> = {
+  walk: 'move', dice: 'move', twin: 'move', aim: 'move', gale: 'move', retreat: 'move', teleport: 'move',
+  banner: 'land', march: 'land', fortify: 'land', guard: 'land', edict: 'land',
+  purse: 'gold', levy: 'gold', thieves: 'gold', scheme: 'plan',
+  trap: 'harm', quake: 'harm', dragon: 'harm',
 };
 
 export const RARITY_WEIGHT = { common: 60, rare: 30, epic: 10 };
 export const RARITY_NAME = { common: 'コモン', rare: 'レア', epic: 'エピック' };
 
-const BASE_DECK: CardId[] = ['walk', 'walk', 'dice', 'dice', 'dice', 'dice', 'aim', 'purse', 'fortify'];
+const BASE_DECK: CardRef[] = ['walk', 'walk', 'dice', 'dice', 'dice', 'dice', 'aim', 'purse', 'fortify'];
 export const HEROES: Record<HeroId, HeroDef> = {
   knight: { id: 'knight', name: 'レオン', title: '誓いの騎士', icon: 'visored-helm', model: 'Knight', cost: 0, passive: '自分の陣を奪う値段が 30% 高い。通行税が半額。', deck: [...BASE_DECK, 'guard'] },
-  merchant: { id: 'merchant', name: 'ミラ', title: '旅の商人', icon: 'swap-bag', model: 'Rogue', cost: 0, passive: '旗を立てる値段とカードの値段が 15% 安い。', deck: [...BASE_DECK, 'purse'] },
+  merchant: { id: 'merchant', name: 'ミラ', title: '旅の商人', icon: 'swap-bag', model: 'Rogue', cost: 0, passive: '旗を立てる値段とカードの値段が 10% 安い。', deck: [...BASE_DECK, 'purse'] },
   mage: { id: 'mage', name: 'ルナ', title: '夜空の魔女', icon: 'pointy-hat', model: 'Mage', cost: 300, passive: '手札が6枚まで。毎ターンの行動力が⚡4。', deck: [...BASE_DECK, 'twin'] },
   ranger: { id: 'ranger', name: 'カイ', title: '風読みの狩人', icon: 'bow-arrow', model: 'Ranger', cost: 500, passive: 'サイコロを振ったあと、出目を ±1 できる。', deck: [...BASE_DECK, 'gale'] },
   assassin: { id: 'assassin', name: 'ジン', title: '影の暗殺者', icon: 'hooded-figure', model: 'Rogue_Hooded', cost: 800, passive: '罠の威力が2倍。初期デッキに「落とし穴」2枚。', deck: [...BASE_DECK.filter((c) => c !== 'fortify'), 'trap', 'trap'] },
-  barbarian: { id: 'barbarian', name: 'ボルグ', title: '略奪王', icon: 'barbarian', model: 'Barbarian', cost: 1200, passive: '陣を奪う値段が 10% 安い。初期デッキに「進軍」。', deck: [...BASE_DECK, 'march'] },
+  barbarian: { id: 'barbarian', name: 'ボルグ', title: '略奪王', icon: 'barbarian', model: 'Barbarian', cost: 1200, passive: '最終決戦では陣を奪う値段が4割引（ふつうは3割引）。初期デッキに「進軍」。', deck: [...BASE_DECK, 'march'] },
 };
 export const HERO_ORDER: HeroId[] = ['knight', 'merchant', 'mage', 'ranger', 'assassin', 'barbarian'];
 

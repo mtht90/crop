@@ -1,0 +1,156 @@
+/* カード・手札（v3）
+   カードの絵：Wholetone「Ivory & Lacquer」無料サンプラー（ビルド時に scripts/fetch-ui.mjs で取得）
+   配置は素材付属の slices.json（240×336 のカードに対する各レイヤーの位置）に合わせている */
+
+.card {
+  --cw: 120px;
+  --kind: #b8322a;
+  position: relative;
+  width: var(--cw);
+  aspect-ratio: 240 / 336;
+  container-type: inline-size;
+  flex: none;
+  border-radius: 6.6cqw;
+  background: url('./ui-assets/wt/card_frame_attack.png') center / 100% 100% no-repeat;
+  filter: drop-shadow(0 3px 4px rgba(30, 20, 40, .35));
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  font-family: var(--body);
+  color: #3a2a1c;
+}
+.card > * { position: absolute; pointer-events: none; }
+.card .c-art { left: 6.67%; top: 17.26%; width: 86.67%; height: 39.29%; display: grid; place-items: center; border-radius: 3cqw; background: radial-gradient(circle at 50% 42%, #fffdf6, color-mix(in srgb, var(--kind) 22%, #efe4cc)); overflow: hidden; }
+.card .c-art .gi { width: 46%; height: 70%; fill: var(--kind); filter: drop-shadow(0 1cqw 0 rgba(255, 255, 255, .7)); }
+.card .c-win { left: 6.67%; top: 17.26%; width: 86.67%; height: 39.29%; background: url('./ui-assets/wt/card_art_window.png') center / 100% 100% no-repeat; }
+.card .c-text { left: 6.67%; top: 63.1%; width: 86.67%; height: 32.14%; padding: 4.5cqw 6cqw 6cqw; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.5cqw; background: url('./ui-assets/wt/card_text_box.png') center / 100% 100% no-repeat; text-align: center; font-size: 7.6cqw; line-height: 1.32; font-weight: 800; }
+.card .c-kw { display: inline-block; padding: 0 3cqw; border-radius: 99px; background: #6b2a8a; color: #fff; font-size: 6.4cqw; line-height: 1.5; }
+.card .c-type { left: 30%; top: 51.79%; width: 40%; height: 10.12%; display: grid; place-items: center; background: url('./ui-assets/wt/card_type_plate_attack.png') center / 100% 100% no-repeat; color: #fff6e6; font-size: 6.6cqw; font-weight: 800; letter-spacing: .1em; }
+.card .c-trim { inset: 0; background: url('./ui-assets/wt/card_trim_common.png') center / 100% 100% no-repeat; }
+.card .c-banner { left: 21.67%; top: 3.57%; width: 75%; height: 12.5%; display: grid; place-items: center; padding: 0 9cqw 1cqw 7cqw; background: url('./ui-assets/wt/card_banner_common.png') center / 100% 100% no-repeat; font-family: var(--display); font-size: 8.6cqw; line-height: 1; white-space: nowrap; color: #4a2a18; }
+.card .c-banner span { overflow: hidden; text-overflow: clip; max-width: 100%; }
+.card .c-cost { left: 1.67%; top: 1.19%; width: 22.5%; height: 16.07%; display: grid; place-items: center; background: url('./ui-assets/wt/card_cost_gem_attack.png') center / 100% 100% no-repeat; font-family: var(--display); font-size: 12.5cqw; color: #fff; text-shadow: 0 .8cqw 1cqw rgba(0, 0, 0, .7); }
+.card .c-mark { left: 43.33%; top: 91.67%; width: 13.33%; height: 7.14%; background: url('./ui-assets/wt/card_rarity_mark_common.png') center / 100% 100% no-repeat; }
+.card .c-plus { right: 3%; top: 15%; padding: .5cqw 3cqw; border-radius: 99px; background: linear-gradient(#5fd17f, #24914a); color: #fff; font-family: var(--display); font-size: 6.4cqw; box-shadow: 0 0 0 .8cqw #fff8e6; }
+
+/* 種類ごとの色（絵の背景・札） */
+.card.k-move { --kind: #2f7fc9; }
+.card.k-land { --kind: #2f9e57; }
+.card.k-gold { --kind: #c98a12; }
+.card.k-plan { --kind: #7a4fc9; }
+.card.k-harm { --kind: #c0392b; }
+.card.k-move .c-type { filter: hue-rotate(205deg) saturate(.9); }
+.card.k-land .c-type { filter: hue-rotate(110deg) saturate(.8); }
+.card.k-gold .c-type { filter: hue-rotate(35deg) saturate(1.2) brightness(1.1); }
+.card.k-plan .c-type { filter: hue-rotate(250deg); }
+
+/* レア度：コモン＝無地の縁、レア＝金の縁、エピック＝金の縁＋紫の帯＋光 */
+.card.r-rare .c-trim, .card.r-epic .c-trim { background-image: url('./ui-assets/wt/card_trim_rare.png'); }
+.card.r-rare .c-banner, .card.r-epic .c-banner { background-image: url('./ui-assets/wt/card_banner_rare.png'); }
+.card.r-rare .c-mark, .card.r-epic .c-mark { background-image: url('./ui-assets/wt/card_rarity_mark_rare.png'); }
+.card.r-epic .c-banner { filter: hue-rotate(230deg) saturate(1.3); color: #fff; }
+.card.r-epic::after { content: ''; position: absolute; inset: 0; border-radius: inherit; background: linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, .55) 45%, transparent 60%); background-size: 250% 100%; animation: shine 2.6s infinite; pointer-events: none; mix-blend-mode: soft-light; }
+@keyframes shine { 0% { background-position: 120% 0; } 60%, 100% { background-position: -120% 0; } }
+/* 強化済み */
+.card.up .c-banner { color: #1f7a3c; }
+.card.r-epic.up .c-banner { color: #d9ffe4; }
+/* 使えない */
+.card.unusable { filter: grayscale(.85) brightness(.82) drop-shadow(0 3px 4px rgba(30, 20, 40, .35)); }
+
+/* 裏面 */
+.card-back { width: var(--cw, 120px); aspect-ratio: 240 / 336; background: url('./ui-assets/wt/card_back.png') center / 100% 100% no-repeat; filter: drop-shadow(0 3px 4px rgba(30, 20, 40, .35)); }
+
+/* 大きさの違い */
+.card.small { --cw: 104px; }
+.card-big .card, .card-reveal .card { --cw: 170px; }
+.card-reveal .card { transform: rotate(-3deg); }
+.card-big { display: flex; justify-content: center; }
+.card-grid .card { --cw: 112px; }
+
+/* ---------- 手札 ---------- */
+.action { width: min(860px, 100%); }
+.hand-zone { position: relative; width: 100%; display: flex; flex-direction: column; align-items: center; }
+.hand-bar { width: 100%; display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; padding: 0 4px; pointer-events: none; }
+.hand-bar > * { pointer-events: auto; }
+.orb { position: relative; width: 74px; height: 74px; display: grid; place-items: center; background: url('./ui-assets/wt/energy_orb_full.png') center / contain no-repeat; font-family: var(--display); font-size: 30px; color: #fff; text-shadow: 0 2px 3px rgba(0, 0, 0, .6); transition: transform .2s; }
+.orb small { position: absolute; bottom: 2px; font-family: var(--body); font-weight: 800; font-size: 10px; padding: 0 6px; border-radius: 99px; background: rgba(43, 38, 64, .85); }
+.orb.empty { filter: grayscale(1) brightness(.8); }
+.orb.pulse { animation: orbPulse .45s; }
+@keyframes orbPulse { 40% { transform: scale(1.22); } }
+.pile { position: relative; width: 50px; height: 58px; background: url('./ui-assets/wt/pile_draw.png') center / contain no-repeat; display: grid; place-items: end center; }
+.pile b { margin-bottom: -6px; min-width: 26px; padding: 0 6px; border-radius: 99px; background: var(--ink); color: #fff; font-family: var(--display); font-weight: 400; font-size: 13px; text-align: center; }
+.pile.discard { filter: sepia(.6) hue-rotate(-20deg) brightness(.9); }
+.pile.bump { animation: orbPulse .35s; }
+.piles { display: flex; gap: 6px; align-items: flex-end; }
+.end-turn { position: relative; width: 150px; height: 56px; border: 0; padding: 0 20px 4px; background: url('./ui-assets/wt/end_turn_normal.png') center / 100% 100% no-repeat; color: #fff; font-family: var(--display); font-size: 16px; text-shadow: 0 2px 2px rgba(0, 0, 0, .5); cursor: pointer; transition: transform .12s; }
+.end-turn:hover { background-image: url('./ui-assets/wt/end_turn_hover.png'); }
+.end-turn:active { transform: translateY(2px) scale(.97); }
+.end-turn.ready { animation: readyGlow 1.2s ease-in-out infinite; }
+@keyframes readyGlow { 50% { filter: drop-shadow(0 0 10px #ffd35c) brightness(1.15); transform: scale(1.04); } }
+.hand-hint { margin-top: 4px; padding: 3px 12px; border-radius: 99px; background: rgba(255, 250, 240, .92); font-size: 12px; font-weight: 800; pointer-events: none; }
+.hand-hint.warn { background: #ffe3dd; }
+
+.hand.fan { position: relative; display: flex; justify-content: center; align-items: flex-end; height: 200px; width: 100%; touch-action: none; }
+.hand.fan .slot { --cw: 124px; position: relative; margin: 0 -16px; transform: translateY(calc(var(--i) * var(--i) * 4px)) rotate(calc(var(--i) * 5deg)); transform-origin: 50% 120%; transition: transform .2s cubic-bezier(.2, 1.3, .4, 1); z-index: 1; touch-action: none; cursor: grab; }
+.hand.fan .slot .card { --cw: inherit; }
+.hand.fan.enter .slot { animation: dealIn .5s cubic-bezier(.2, 1.2, .4, 1) both; animation-delay: var(--d); }
+@keyframes dealIn { from { transform: translate(calc(-40vw - var(--i) * 30px), 60px) rotate(-30deg) scale(.5); opacity: 0; } 60% { opacity: 1; } }
+@media (hover: hover) { .hand.fan .slot:hover { z-index: 3; transform: translateY(-22px) rotate(calc(var(--i) * 1.5deg)) scale(1.04); } }
+.hand.fan .slot.sel { z-index: 4; transform: translateY(-56px) scale(1.16); }
+.hand.fan .slot.playable::before { content: ''; position: absolute; left: -10%; top: -7%; width: 120%; height: 114%; background: url('./ui-assets/wt/card_glow_playable.png') center / 100% 100% no-repeat; opacity: .85; animation: glow 1.6s ease-in-out infinite; pointer-events: none; }
+@keyframes glow { 50% { opacity: .45; } }
+.hand.fan .slot .use { position: absolute; left: 50%; top: -50px; transform: translateX(-50%); min-height: 38px; padding: 4px 18px; white-space: nowrap; animation: popIn .2s cubic-bezier(.2, 1.6, .4, 1); }
+@keyframes popIn { from { transform: translateX(-50%) scale(.5); opacity: 0; } }
+.hand.fan .slot.nope { animation: nope .35s; }
+@keyframes nope { 20%, 60% { translate: -8px 0; } 40%, 80% { translate: 8px 0; } }
+.hand.fan .slot.ghost { opacity: 0; }
+
+/* ドラッグ中のカード（手札から取り出したもの） */
+.drag-card { position: fixed; left: 0; top: 0; z-index: 50; pointer-events: none; will-change: transform; }
+.drag-card .card { --cw: 132px; transition: filter .15s; }
+.drag-card.armed .card { filter: drop-shadow(0 0 16px #ffd35c) drop-shadow(0 0 6px #fff) brightness(1.05); }
+.drag-card.target .card { filter: drop-shadow(0 0 16px #7cf09a) drop-shadow(0 0 6px #fff); }
+.play-line { position: fixed; left: 0; right: 0; height: 0; border-top: 3px dashed rgba(255, 255, 255, .7); z-index: 40; pointer-events: none; opacity: 0; transition: opacity .15s; }
+.play-line span { position: absolute; left: 50%; top: -30px; transform: translateX(-50%); padding: 3px 14px; border-radius: 99px; background: rgba(43, 38, 64, .82); color: #fff; font-size: 13px; font-weight: 800; white-space: nowrap; }
+.play-line.show { opacity: 1; }
+.play-line.armed { border-top-color: #ffd35c; }
+.play-line.armed span { background: #c98a12; }
+
+/* 使ったカード：中央へ飛んで光って消える */
+.cast { position: fixed; left: 0; top: 0; z-index: 60; pointer-events: none; }
+.cast .card { --cw: 150px; }
+.cast-burst { position: fixed; z-index: 59; width: 30px; height: 30px; margin: -15px 0 0 -15px; border-radius: 50%; pointer-events: none; background: radial-gradient(#fff, #ffd35c 40%, transparent 70%); animation: burst .5s ease-out forwards; }
+@keyframes burst { to { transform: scale(14); opacity: 0; } }
+/* 使わなかった手札：捨て札へ */
+.toss { position: fixed; left: 0; top: 0; z-index: 45; pointer-events: none; }
+.toss .card { --cw: 100px; }
+
+.shop-cols { display: grid; gap: 12px; }
+.shop-sec h3 { margin: 0 0 6px; font-family: var(--display); font-weight: 400; font-size: 15px; }
+.shop-row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+.shop-item { display: grid; justify-items: center; gap: 4px; padding: 6px; border: 3px solid transparent; border-radius: 12px; background: none; cursor: pointer; }
+.shop-item .card { --cw: 104px; }
+.shop-item:hover:not(:disabled) { background: rgba(255, 255, 255, .6); }
+.shop-item.sel { border-color: var(--gold); background: #fff6d8; }
+.shop-item:disabled { opacity: .5; cursor: default; }
+.shop-item small { font-family: var(--display); font-size: 13px; }
+.up-pair { display: flex; align-items: center; gap: 2px; }
+.up-pair .card { --cw: 84px; }
+.up-pair .gi { width: 18px; height: 18px; color: #24914a; }
+.shop-up .shop-row { justify-content: flex-start; flex-wrap: nowrap; overflow-x: auto; padding-bottom: 6px; }
+.deck-note { font-size: 12px; color: var(--ink-soft); }
+
+@media (max-width: 760px) {
+  .hand.fan { height: 168px; }
+  .hand.fan .slot { --cw: 104px; margin: 0 -24px; transform: translateY(calc(var(--i) * var(--i) * 3px)) rotate(calc(var(--i) * 3.5deg)); }
+  .hand.fan .slot.sel { transform: translateY(-70px) scale(1.25); }
+  .orb { width: 60px; height: 60px; font-size: 24px; }
+  .pile { width: 40px; height: 46px; }
+  .end-turn { width: 120px; height: 48px; font-size: 14px; }
+  .drag-card .card { --cw: 120px; }
+  .card.small { --cw: 92px; }
+  .shop-item .card { --cw: 92px; }
+}
+@media (max-width: 400px) {
+  .hand.fan .slot { --cw: 94px; margin: 0 -26px; }
+}

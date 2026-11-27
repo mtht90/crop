@@ -169,6 +169,8 @@ export class World {
   private extras: THREE.Object3D[][] = [];
   private tileKey: string[] = [];
   private highlight: THREE.Mesh[] = [];
+  private highlightBase: number[] = [];
+  private hovered: number | null = null;
   private pieces: Piece[] = [];
   private tweens: ((dt: number) => boolean)[] = [];
   private focus = new THREE.Vector3();
@@ -405,6 +407,7 @@ export class World {
       hl.visible = false;
       this.island.add(hl);
       this.highlight.push(hl);
+      this.highlightBase[i] = hl.position.y;
 
       const def = TILES[i];
       const faceTo = Math.atan2(p.x - this.plotPos[i].x, p.z - this.plotPos[i].z);
@@ -868,6 +871,15 @@ export class World {
   }
 
   // ---------- 選択 ----------
+  /** 画面上の点 (x, y) にあるマス */
+  tileAt(x: number, y: number): number | null {
+    const r = this.renderer.domElement.getBoundingClientRect();
+    return this.pick(new THREE.Vector2(((x - r.left) / r.width) * 2 - 1, -((y - r.top) / r.height) * 2 + 1));
+  }
+  /** ドラッグ中に狙っているマスを強調する */
+  hoverTile(i: number | null) {
+    this.hovered = i;
+  }
   setSelectable(tiles: number[] | null) {
     this.highlight.forEach((h, i) => {
       const on = !!tiles && tiles.includes(i);
@@ -915,7 +927,15 @@ export class World {
     this.updateDragon(dt);
     // 選択中のマスを点滅させる
     const pulse = 0.35 + Math.sin(performance.now() / 180) * 0.2;
-    for (const h of this.highlight) if (h.visible) (h.material as THREE.MeshBasicMaterial).opacity = pulse;
+    this.highlight.forEach((h, i) => {
+      if (!h.visible) return;
+      const hot = i === this.hovered;
+      (h.material as THREE.MeshBasicMaterial).opacity = hot ? 0.85 : pulse;
+      (h.material as THREE.MeshBasicMaterial).color.set(hot ? '#9bffb4' : '#fff7c2');
+      const sc = hot ? 1.18 : 1;
+      h.scale.setScalar(h.scale.x + (sc - h.scale.x) * 0.3);
+      h.position.y = this.highlightBase[i] + (hot ? 0.06 : 0);
+    });
     if (this.ambientFx) {
       const pos = this.ambientFx.geometry.attributes.position as THREE.BufferAttribute;
       const kind = this.ambientFx.userData.kind;

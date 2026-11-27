@@ -1,2 +1,4 @@
 node_modules
 dist
+# Wholetone のカード素材はライセンス上リポジトリに置けないので、ビルド時に scripts/fetch-ui.mjs で取得する
+src/ui-assets/wt

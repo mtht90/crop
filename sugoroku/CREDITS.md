@@ -44,3 +44,10 @@ Kay Lousberg（https://www.kaylousberg.com）— CC0 1.0（表記は任意です
 ## 3Dモデル（竜）
 Quaternius — LowPoly Animated Monsters の Dragon（CC0 1.0）
 https://quaternius.itch.io/lowpoly-animated-monsters ・ `public/models/monsters/`
+
+## UI素材
+
+| 用途 | 素材 | ライセンス |
+|---|---|---|
+| カード（枠・宝石・リボン・裏面・行動力のメダル・ターン終了ボタン） | Wholetone — Ivory & Lacquer: Free Sampler（https://wholetoneassets.itch.io/ivory-lacquer-free-sampler） | 無料・商用可・クレジット不要。素材ファイルの再配布と公開リポジトリへの配置は禁止のため、`scripts/fetch-ui.mjs` でビルド時に取得する（リポジトリには含めない） |
+| ダイアログ・ボタン・バナーの枠 | Kenney — UI Pack (Adventure)（https://kenney.nl/assets/ui-pack-adventure） | CC0 |

@@ -1,8 +1,8 @@
 // 画面上の UI 部品。3D の上に HTML を重ねる。
-import { CARDS, GROUPS, HEROES, LEVEL_NAMES, PLAYER_COLORS, RARITY_NAME, TILES } from '../data/defs.ts';
+import { CARD_KIND, GROUPS, HEROES, KIND_NAME, LEVEL_NAMES, PLAYER_COLORS, RARITY_NAME, TILES, baseId, card } from '../data/defs.ts';
 import { audio } from '../audio.ts';
 import type { Game } from '../game/engine.ts';
-import type { CardId, Player } from '../game/types.ts';
+import type { CardRef, Player } from '../game/types.ts';
 import { icon } from './icons.ts';
 
 export const $ = <T extends HTMLElement = HTMLElement>(sel: string, root: ParentNode = document) => root.querySelector(sel) as T;
@@ -25,16 +25,38 @@ export interface DialogSpec<T> {
   className?: string;
 }
 
-export function cardHtml(id: CardId, opts: { usable?: boolean; small?: boolean; idx?: number } = {}) {
-  const c = CARDS[id];
-  return `<div class="card rarity-${c.rarity}${c.move ? ' move' : ''}${opts.usable === false ? ' unusable' : ''}${opts.small ? ' small' : ''}" data-card="${id}" ${opts.idx !== undefined ? `data-idx="${opts.idx}"` : ''}>
-    <div class="card-cost" title="行動力">${c.cost}</div>
-    <div class="card-rarity">${c.move ? '移動' : RARITY_NAME[c.rarity]}</div>
-    <div class="card-art">${icon(c.icon)}</div>
-    <div class="card-name">${c.name}</div>
-    <div class="card-desc">${c.desc}</div>
+/** カード1枚の HTML（Wholetone のカード素材を重ねて組み立てる） */
+export function cardHtml(ref: CardRef, opts: { usable?: boolean; small?: boolean; idx?: number } = {}) {
+  const c = card(ref);
+  const kind = CARD_KIND[baseId(ref)];
+  const cls = ['card', `k-${kind}`, `r-${c.rarity}`, c.up ? 'up' : '', opts.usable === false ? 'unusable' : '', opts.small ? 'small' : ''].filter(Boolean).join(' ');
+  return `<div class="${cls}" data-card="${ref}" title="${c.name}（${RARITY_NAME[c.rarity]}）" ${opts.idx !== undefined ? `data-idx="${opts.idx}"` : ''}>
+    <div class="c-art">${icon(c.icon)}</div>
+    <i class="c-win"></i>
+    <div class="c-text">${c.exhaust ? '<span class="c-kw">消耗</span>' : ''}<span>${c.desc}</span></div>
+    <div class="c-type">${KIND_NAME[kind]}</div>
+    <i class="c-trim"></i>
+    <div class="c-banner"><span>${c.name}</span></div>
+    <div class="c-cost">${c.cost}</div>
+    <i class="c-mark"></i>
+    ${c.up ? '<span class="c-plus">強化</span>' : ''}
   </div>`;
 }
+
+/** 手札の操作で盤面に触るための窓口（ドラッグでマスを選ぶ） */
+export interface BoardHooks {
+  pick(x: number, y: number): number | null;
+  highlight(tiles: number[] | null): void;
+  hover(tile: number | null): void;
+}
+export type HandResult = { index: number; target?: number } | 'end';
+const vibrate = (ms: number) => {
+  try {
+    navigator.vibrate?.(ms);
+  } catch {
+    /* 振動できない端末 */
+  }
+};
 
 export function heroBadge(p: Player) {
   return `<span class="hero-badge" style="--pc:${PLAYER_COLORS[p.id]}">${icon(HEROES[p.hero].icon)}</span>`;
@@ -259,57 +281,334 @@ export class UI {
   }
 
   // ---------- 手札（カードゲーム風） ----------
-  /** 引いたカードを、手札に入る演出つきで知らせる */
-  dealCards(cards: CardId[]) {
-    const box = document.createElement('div');
-    box.className = 'deal';
-    box.innerHTML = cards.map((c, k) => `<div class="deal-card" style="--k:${k}">${cardHtml(c, { small: true })}</div>`).join('');
-    this.root.appendChild(box);
-    setTimeout(() => box.remove(), 900 + cards.length * 90);
+  /** 次に手札を出すとき、末尾から何枚を「配られる」演出にするか */
+  private dealing = 0;
+  private lastEnergy: number | null = null;
+  /** 引いたカード。次の手札表示で山札から配られてくる */
+  dealCards(cards: CardRef[]) {
+    this.dealing += cards.length;
+    this.bumpPile('deck');
+  }
+  private bumpPile(which: 'deck' | 'discard') {
+    const el = this.action.querySelector(`.pile.${which}`);
+    el?.classList.remove('bump');
+    void (el as HTMLElement | null)?.offsetWidth;
+    el?.classList.add('bump');
   }
 
-  /** 手札を扇形に出し、使うカードの番号か 'end' を返す */
-  handPhase(g: Game, p: Player): Promise<number | 'end'> {
+  /** ターン終了：残った手札が捨て札へ飛んでいく */
+  async tossHand(n: number) {
+    const W = innerWidth;
+    const H = innerHeight;
+    const els: HTMLElement[] = [];
+    for (let k = 0; k < n; k++) {
+      const el = document.createElement('div');
+      el.className = 'toss';
+      el.innerHTML = '<div class="card-back" style="--cw:90px"></div>';
+      this.root.appendChild(el);
+      const x0 = W / 2 + (k - (n - 1) / 2) * 50 - 45;
+      el.animate(
+        [
+          { transform: `translate(${x0}px, ${H - 150}px) rotate(${(k - n / 2) * 6}deg)`, opacity: 1 },
+          { transform: `translate(${W - 110}px, ${H - 120}px) rotate(40deg) scale(.4)`, opacity: 0 },
+        ],
+        { duration: 420, delay: k * 50, easing: 'cubic-bezier(.5,0,.7,1)', fill: 'forwards' },
+      );
+      els.push(el);
+    }
+    if (n) audio.play('slide', { volume: 0.5 });
+    await sleep(420 + n * 50);
+    els.forEach((e) => e.remove());
+  }
+
+  /** 使うカードが中央へ飛んで光る */
+  private async castFx(ref: CardRef, from: DOMRect) {
+    const el = document.createElement('div');
+    el.className = 'cast';
+    el.innerHTML = cardHtml(ref);
+    this.root.appendChild(el);
+    const w = 150;
+    const h = (w * 336) / 240;
+    const cx = innerWidth / 2 - w / 2;
+    const cy = innerHeight * 0.42 - h / 2;
+    const sx = from.left + from.width / 2 - w / 2;
+    const sy = from.top + from.height / 2 - h / 2;
+    const k = from.width / w;
+    audio.play('card');
+    vibrate(18);
+    await el.animate(
+      [
+        { transform: `translate(${sx}px, ${sy}px) scale(${k})` },
+        { transform: `translate(${cx}px, ${cy}px) scale(1.12)`, offset: 0.6 },
+        { transform: `translate(${cx}px, ${cy}px) scale(1)` },
+      ],
+      { duration: 320, easing: 'cubic-bezier(.2,1,.3,1)', fill: 'forwards' },
+    ).finished;
+    const b = document.createElement('div');
+    b.className = 'cast-burst';
+    b.style.left = `${innerWidth / 2}px`;
+    b.style.top = `${innerHeight * 0.42}px`;
+    this.root.appendChild(b);
+    await el.animate([{ opacity: 1, filter: 'brightness(1)' }, { opacity: 0, filter: 'brightness(2.2)', transform: `translate(${cx}px, ${cy - 30}px) scale(1.25)` }], { duration: 260, easing: 'ease-in', fill: 'forwards' }).finished;
+    el.remove();
+    setTimeout(() => b.remove(), 400);
+  }
+
+  /** 手札を扇形に出す。カードは上へスワイプ（ドラッグ）するか、2回タップで使う */
+  handPhase(g: Game, p: Player, board: BoardHooks): Promise<HandResult> {
     return new Promise((resolve) => {
       let sel = -1;
+      let busy = false;
+      const needsTarget = (ref: CardRef) => {
+        const t = card(ref).target;
+        return t === 'ownTile' || t === 'enemyTile' || t === 'emptyTile' || t === 'anyTile';
+      };
+      const usable = (ref: CardRef) => g.canPlay(p, ref) && (!needsTarget(ref) || g.cardTargets(p, ref).length > 0);
       const render = () => {
         const n = p.hand.length;
-        const maxE = 3 + (p.hero === 'mage' ? 1 : 0);
-        const energy = Array.from({ length: maxE }, (_, k) => `<i class="${k < p.energy ? 'on' : ''}"></i>`).join('');
-        const hint = !p.moved && !p.hand.some((c) => CARDS[c].move && g.canPlay(p, c)) ? '<div class="hand-hint">移動カードがない…このターンは動けない</div>' : p.moved ? '' : '<div class="hand-hint">移動カードで進もう（1ターン1枚）</div>';
+        const anyPlayable = p.hand.some(usable);
+        const noMove = !p.moved && !p.hand.some((c) => card(c).move && g.canPlay(p, c));
+        const hint = !p.hand.length
+          ? '<div class="hand-hint">手札を使い切った</div>'
+          : noMove && !p.moved
+            ? '<div class="hand-hint warn">移動カードがない…このターンは動けない</div>'
+            : '<div class="hand-hint">カードを上へスワイプして使う（2回タップでもOK）</div>';
+        const fresh = this.dealing;
+        if (fresh) this.lastEnergy = null;
+        this.dealing = 0;
+        const total = this.allCount(p);
         this.action.innerHTML = `
-          <div class="hand-bar">
-            <div class="energy" title="行動力">${icon('lightning-trio')}${energy}</div>
-            <div class="piles"><span title="山札">${icon('card-random')}${p.deck.length}</span><span title="捨て札">${icon('scroll-unfurled')}${p.discard.length}</span></div>
-            <button type="button" class="btn end-turn">${icon('check-mark')}ターン終了</button>
-          </div>
-          ${hint}
-          <div class="hand fan" style="--n:${n}">${p.hand
-            .map((c, i) => {
-              const ok = g.canPlay(p, c) && (CARDS[c].target === 'none' || CARDS[c].target === 'steps' || g.cardTargets(p, c).length > 0);
-              const mid = (n - 1) / 2;
-              return `<div class="slot${i === sel ? ' sel' : ''}" style="--i:${i - mid};--d:${i * 70}ms" data-i="${i}">${cardHtml(c, { usable: ok, idx: i })}${i === sel ? `<button type="button" class="btn primary use" ${ok ? '' : 'disabled'}>${ok ? '使う' : '使えない'}</button>` : ''}</div>`;
-            })
-            .join('')}</div>`;
+          <div class="hand-zone">
+            <div class="hand fan${fresh ? ' enter' : ''}" style="--n:${n}">${p.hand
+              .map((c, i) => {
+                const ok = usable(c);
+                const mid = (n - 1) / 2;
+                const isNew = i >= n - fresh;
+                return `<div class="slot${i === sel ? ' sel' : ''}${ok ? ' playable' : ''}" style="--i:${i - mid};--d:${isNew ? (i - (n - fresh)) * 90 : 0}ms${isNew ? '' : ';animation:none'}" data-i="${i}">${cardHtml(c, { usable: ok, idx: i })}${i === sel ? `<button type="button" class="btn primary use" ${ok ? '' : 'disabled'}>${ok ? (needsTarget(c) ? 'マスを選ぶ' : '使う') : '使えない'}</button>` : ''}</div>`;
+              })
+              .join('')}</div>
+            <div class="hand-bar">
+              <div class="orb${p.energy ? '' : ' empty'}${this.lastEnergy !== null && p.energy !== this.lastEnergy ? ' pulse' : ''}" title="行動力（毎ターン回復）">${p.energy}<small>行動力</small></div>
+              <div class="piles">
+                <button type="button" class="pile deck" title="山札（タップでデッキを見る）"><b>${p.deck.length}</b></button>
+                <button type="button" class="pile discard" title="捨て札"><b>${p.discard.length}</b></button>
+              </div>
+              <button type="button" class="end-turn${anyPlayable ? '' : ' ready'}">ターン終了</button>
+            </div>
+            ${hint}
+          </div>`;
+        void total;
+        this.lastEnergy = p.energy;
         this.action.classList.add('show');
-        this.action.querySelector('.end-turn')!.addEventListener('click', () => done('end'));
-        this.action.querySelectorAll<HTMLElement>('.slot').forEach((el) =>
-          el.addEventListener('click', (e) => {
-            const i = Number(el.dataset.i);
-            if ((e.target as HTMLElement).closest('.use')) return done(i);
-            if (sel === i && !el.querySelector('.card.unusable')) return done(i);
-            sel = sel === i ? -1 : i;
+        this.action.querySelector('.end-turn')!.addEventListener('click', () => !busy && finish('end'));
+        this.action.querySelectorAll<HTMLElement>('.pile').forEach((b) => b.addEventListener('click', () => this.showDeck(p)));
+        this.action.querySelectorAll<HTMLElement>('.slot').forEach((el) => this.bindSlot(el, p, usable, needsTarget, g, board, {
+          tap: (i, useBtn) => {
+            if (busy) return;
+            const ref = p.hand[i];
+            if (useBtn || sel === i) {
+              if (!usable(ref)) return this.nope(el);
+              return play(i, el.getBoundingClientRect());
+            }
+            sel = i;
             audio.play('hover', { volume: 0.5 });
+            vibrate(6);
             render();
-          }),
-        );
+          },
+          drop: (i, target, rect) => {
+            if (busy) return;
+            return play(i, rect, target);
+          },
+          setBusy: (v) => (busy = v),
+        }));
       };
-      const done = (v: number | 'end') => {
+      const play = async (i: number, rect: DOMRect, target?: number) => {
+        busy = true;
+        const ref = p.hand[i];
+        const slot = this.action.querySelector<HTMLElement>(`.slot[data-i="${i}"]`);
+        slot?.classList.add('ghost');
+        await this.castFx(ref, rect);
+        finish({ index: i, target });
+      };
+      const finish = (v: HandResult) => {
         this.action.classList.remove('show');
         this.action.innerHTML = '';
         resolve(v);
       };
       render();
+    });
+  }
+
+  private allCount(p: Player) {
+    return p.deck.length + p.hand.length + p.discard.length;
+  }
+
+  private nope(el: HTMLElement) {
+    el.classList.remove('nope');
+    void el.offsetWidth;
+    el.classList.add('nope');
+    audio.play('click', { volume: 0.4, rate: 0.6 });
+    vibrate(30);
+  }
+
+  /** 1枚のカードに、タップとドラッグ（スワイプ）の操作をつける */
+  private bindSlot(
+    el: HTMLElement,
+    p: Player,
+    usable: (r: CardRef) => boolean,
+    needsTarget: (r: CardRef) => boolean,
+    g: Game,
+    board: BoardHooks,
+    cb: { tap: (i: number, useBtn: boolean) => void; drop: (i: number, target: number | undefined, rect: DOMRect) => void; setBusy: (v: boolean) => void },
+  ) {
+    const i = Number(el.dataset.i);
+    const ref = p.hand[i];
+    let start: { x: number; y: number } | null = null;
+    let drag: HTMLElement | null = null;
+    let line: HTMLElement | null = null;
+    let pos = { x: 0, y: 0 };
+    let vx = 0;
+    let lastX = 0;
+    let tile: number | null = null;
+    let raf = 0;
+    const targets = needsTarget(ref) ? g.cardTargets(p, ref) : [];
+    const lineY = () => {
+      const hand = this.action.querySelector('.hand')!.getBoundingClientRect();
+      return hand.top - 10;
+    };
+    const cardW = () => (innerWidth < 760 ? 120 : 132);
+    const place = () => {
+      if (!drag) return;
+      const w = cardW();
+      const h = (w * 336) / 240;
+      const rot = Math.max(-18, Math.min(18, vx * 0.6));
+      drag.style.transform = `translate(${pos.x - w / 2}px, ${pos.y - h * 0.62}px) rotate(${rot}deg)`;
+      vx *= 0.82;
+      raf = requestAnimationFrame(place);
+    };
+    const begin = (e: PointerEvent) => {
+      drag = document.createElement('div');
+      drag.className = 'drag-card';
+      drag.innerHTML = cardHtml(ref, { usable: usable(ref) });
+      this.root.appendChild(drag);
+      el.classList.add('ghost');
+      line = document.createElement('div');
+      line.className = 'play-line show';
+      line.style.top = `${lineY()}px`;
+      line.innerHTML = `<span>${!usable(ref) ? 'このカードは今は使えない' : needsTarget(ref) ? 'マスの上で離す' : 'ここより上で離すと使う'}</span>`;
+      this.root.appendChild(line);
+      if (targets.length && usable(ref)) board.highlight(targets);
+      audio.play('hover', { volume: 0.6 });
+      vibrate(8);
+      pos = { x: e.clientX, y: e.clientY };
+      lastX = e.clientX;
+      place();
+    };
+    const update = (e: PointerEvent) => {
+      vx += (e.clientX - lastX) * 0.5;
+      lastX = e.clientX;
+      pos = { x: e.clientX, y: e.clientY };
+      const above = e.clientY < lineY();
+      let ok = false;
+      if (usable(ref) && above) {
+        if (targets.length) {
+          const t = board.pick(e.clientX, e.clientY);
+          const nt = t !== null && targets.includes(t) ? t : null;
+          if (nt !== tile) {
+            tile = nt;
+            board.hover(tile);
+            if (tile !== null) {
+              audio.play('hover', { volume: 0.4, rate: 1.3 });
+              vibrate(5);
+            }
+          }
+          ok = tile !== null;
+        } else ok = true;
+      } else if (tile !== null) {
+        tile = null;
+        board.hover(null);
+      }
+      const wasArmed = drag!.classList.contains('armed') || drag!.classList.contains('target');
+      drag!.classList.toggle('armed', ok && !targets.length);
+      drag!.classList.toggle('target', ok && !!targets.length);
+      line!.classList.toggle('armed', ok);
+      if (ok && !wasArmed) vibrate(10);
+    };
+    const cleanup = () => {
+      cancelAnimationFrame(raf);
+      line?.remove();
+      line = null;
+      board.hover(null);
+      if (targets.length) board.highlight(null);
+    };
+    const snapBack = async () => {
+      const d = drag!;
+      drag = null;
+      cleanup();
+      const r = el.getBoundingClientRect();
+      const w = cardW();
+      await d.animate([{ transform: d.style.transform }, { transform: `translate(${r.left + r.width / 2 - w / 2}px, ${r.top}px) scale(${r.width / w})` }], { duration: 220, easing: 'cubic-bezier(.3,1.4,.5,1)' }).finished;
+      d.remove();
+      el.classList.remove('ghost');
+    };
+    el.addEventListener('pointerdown', (e) => {
+      if (e.button > 0) return;
+      start = { x: e.clientX, y: e.clientY };
+      el.setPointerCapture(e.pointerId);
+    });
+    el.addEventListener('pointermove', (e) => {
+      if (!start) return;
+      if (!drag && Math.hypot(e.clientX - start.x, e.clientY - start.y) > 10) begin(e);
+      if (drag) update(e);
+    });
+    const end = async (e: PointerEvent) => {
+      if (!start) return;
+      start = null;
+      if (!drag) {
+        if (e.type === 'pointerup') cb.tap(i, !!(e.target as HTMLElement).closest('.use'));
+        return;
+      }
+      const armed = drag.classList.contains('armed') || drag.classList.contains('target');
+      if (e.type === 'pointerup' && armed) {
+        const d = drag;
+        drag = null;
+        const t = tile ?? undefined;
+        cleanup();
+        const rect = d.firstElementChild!.getBoundingClientRect();
+        d.remove();
+        cb.drop(i, t, rect);
+        return;
+      }
+      // 上に出したのにマスの上で離さなかった → 選択状態にしてマスを選ばせる
+      const releasedAbove = e.clientY < lineY();
+      await snapBack();
+      if (!usable(ref)) this.nope(el);
+      else if (releasedAbove && targets.length) cb.tap(i, true);
+    };
+    el.addEventListener('pointerup', end);
+    el.addEventListener('pointercancel', end);
+    void cb.setBusy;
+  }
+
+  /** デッキの中身を見る */
+  showDeck(p: Player) {
+    const count = (list: CardRef[]) => {
+      const m = new Map<CardRef, number>();
+      for (const c of list) m.set(c, (m.get(c) ?? 0) + 1);
+      return [...m].sort((a, b) => card(a[0]).cost - card(b[0]).cost);
+    };
+    const row = (title: string, list: CardRef[]) =>
+      list.length
+        ? `<div class="shop-sec"><h3>${title}（${list.length}枚）</h3><div class="shop-row">${count(list)
+            .map(([c, n]) => `<div class="shop-item" style="cursor:default">${cardHtml(c, { small: true })}<small>×${n}</small></div>`)
+            .join('')}</div></div>`
+        : '';
+    void this.dialog({
+      title: 'あなたのデッキ',
+      icon: 'card-random',
+      body: `<div class="shop-cols">${row('山札', p.deck)}${row('手札', p.hand)}${row('捨て札', p.discard)}${row('消耗して消えた', p.exhausted)}</div>`,
+      buttons: [{ label: '閉じる', value: 0, kind: 'primary' }],
+      className: 'discard',
     });
   }
 

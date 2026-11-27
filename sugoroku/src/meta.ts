@@ -76,12 +76,13 @@ export interface SaveData {
   speed: number;
   seenHelp: boolean;
   seenHelpV2: boolean;
+  seenHelpV3: boolean;
 }
 
 const KEY = 'dice-kingdom-save-v1';
 const fresh = (): SaveData => ({
   v: 1, level: 1, xp: 0, crowns: 0, heroes: ['knight', 'merchant'], achievements: [], heroWins: [], dice: 'ivory',
-  games: 0, wins: 0, lastHero: 'knight', lastStage: 'meadow', muted: false, speed: 1, seenHelp: false, seenHelpV2: false,
+  games: 0, wins: 0, lastHero: 'knight', lastStage: 'meadow', muted: false, speed: 1, seenHelp: false, seenHelpV2: false, seenHelpV3: false,
 });
 
 export function loadSave(): SaveData {
