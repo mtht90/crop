@@ -1,0 +1,25 @@
+{
+  "name": "dice-kingdom",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "icons": "node scripts/extract-icons.mjs",
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "sim": "node --experimental-strip-types scripts/simulate.ts"
+  },
+  "dependencies": {
+    "@fontsource/dela-gothic-one": "5.2.6",
+    "@fontsource/m-plus-rounded-1c": "5.2.6",
+    "cannon-es": "0.20.0",
+    "three": "0.170.0"
+  },
+  "devDependencies": {
+    "@types/three": "0.170.0",
+    "typescript": "5.9.3",
+    "vite": "7.3.8"
+  }
+}
