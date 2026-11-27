@@ -6,14 +6,12 @@
   "scripts": {
     "icons": "node scripts/extract-icons.mjs",
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "tsc --noEmit && vite build && node scripts/prune-models.mjs dist",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "sim": "node --experimental-strip-types scripts/simulate.ts"
   },
   "dependencies": {
-    "@fontsource/dela-gothic-one": "5.2.6",
-    "@fontsource/m-plus-rounded-1c": "5.2.6",
     "cannon-es": "0.20.0",
     "three": "0.170.0"
   },

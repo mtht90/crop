@@ -29,7 +29,7 @@ https://creativecommons.org/licenses/by/4.0/
 （モノラル化・トリミング・再エンコードしています）
 
 ## フォント
-Dela Gothic One / M PLUS Rounded 1c — SIL Open Font License 1.1（@fontsource 経由）
+Dela Gothic One / M PLUS Rounded 1c — SIL Open Font License 1.1（Google Fonts から読み込み）
 
 ## 3Dモデル（`public/models/`）
 Kay Lousberg（https://www.kaylousberg.com）— CC0 1.0（表記は任意ですが感謝を込めて記載します）

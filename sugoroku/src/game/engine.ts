@@ -79,7 +79,7 @@ export class Game {
       bankrupt: false,
       boots: 0,
       goldRain: 0,
-      stats: { tollsPaid: 0, tollsEarned: 0, maxToll: 0, takeovers: 0, jackpots: 0, landmarks: 0, cardsUsed: 0, monopoliesMax: 0, lowestRankSeen: 0 },
+      stats: { tollsPaid: 0, tollsEarned: 0, maxToll: 0, takeovers: 0, jackpots: 0, landmarks: 0, cardsUsed: 0, monopoliesMax: 0, lowestRankSeen: 0, maxJackpot: 0 },
     }));
     this.s = {
       cfg,
@@ -474,6 +474,7 @@ export class Game {
         const amount = this.s.jackpot;
         this.s.jackpot = this.jackpotBase();
         p.stats.jackpots++;
+        p.stats.maxJackpot = Math.max(p.stats.maxJackpot, amount);
         this.events.push({ t: 'jackpot', p: p.id });
         await this.view.banner('jackpot', 'JACKPOT!!', `${amount}G を獲得！`, p);
         return this.transfer(null, p, amount, 'ジャックポット');

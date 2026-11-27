@@ -80,6 +80,7 @@ export interface PlayerStats {
   cardsUsed: number;
   monopoliesMax: number;
   lowestRankSeen: number;
+  maxJackpot: number;
 }
 
 export interface Player {
