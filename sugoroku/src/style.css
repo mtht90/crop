@@ -24,7 +24,7 @@ button { font: inherit; color: inherit; }
 #stage canvas { display: block; touch-action: none; }
 #ui { position: fixed; inset: 0; pointer-events: none; }
 #ui > * { pointer-events: auto; }
-#ui .hud, #ui .banners, #ui .floats { pointer-events: none; }
+#ui .hud, #ui .banners, #ui .floats, #ui .dialogs, #ui .tooltip { pointer-events: none; }
 .gi { width: 1em; height: 1em; fill: currentColor; flex: none; }
 .num { font-variant-numeric: tabular-nums; }
 
