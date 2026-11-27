@@ -10,7 +10,7 @@ const HEX = [
   'trees_A_medium', 'trees_B_medium', 'trees_B_large', 'hills_B_trees', 'mountain_A_grass_trees', 'mountain_B_grass_trees',
   'tree_single_A', 'rock_single_B', 'rock_single_C', 'cloud_big', 'cloud_small', 'building_dirt',
   'wall_straight_gate', 'tent', 'building_destroyed', 'building_church_blue', 'building_tower_B_blue', 'building_well_blue',
-  'building_stage_A', 'building_tower_catapult_red', 'barrel', 'crate_A_small', 'bucket_water',
+  'building_stage_A', 'building_stage_C', 'building_tower_catapult_red', 'barrel', 'crate_A_small', 'bucket_water',
   ...C.map((c) => `flag_${c}`),
   ...each(['building_home_A', 'building_home_B', 'building_tower_A', 'building_castle', 'building_windmill', 'building_watermill',
     'building_lumbermill', 'building_tavern', 'building_blacksmith', 'building_mine', 'building_barracks', 'building_archeryrange',

@@ -40,3 +40,7 @@ Kay Lousberg（https://www.kaylousberg.com）— CC0 1.0（表記は任意です
 | bits/ | KayKit : Board Game Bits 1.0 (Free) | https://kaylousberg.itch.io/board-game-bits |
 
 各パックのライセンス文は `public/models/LICENSE-*.txt` にあります。
+
+## 3Dモデル（竜）
+Quaternius — LowPoly Animated Monsters の Dragon（CC0 1.0）
+https://quaternius.itch.io/lowpoly-animated-monsters ・ `public/models/monsters/`

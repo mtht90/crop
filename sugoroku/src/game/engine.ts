@@ -823,7 +823,7 @@ export class Game {
         const x = leaderBuildings.sort((a, b) => this.value(b.i) - this.value(a.i))[0];
         x.t.level--;
         await this.view.banner('event', '竜の襲撃！', `首位 ${leader.name} の ${TILES[x.i].name} が崩れた`, p);
-        await this.view.tile(x.i, 'quake', p);
+        await this.view.tile(x.i, 'raid', p);
       } },
     ];
     const ev = this.rng.weighted(events);

@@ -1,5 +1,4 @@
 // エンジンからの通知を 3D 演出・UI・音に変換する View と、あなたの操作を受け付ける Controller。
-import * as THREE from 'three';
 import { CARDS, GROUPS, HEROES, LEVEL_NAMES, PLAYER_COLORS, TILES } from './data/defs.ts';
 import { audio, type Sfx } from './audio.ts';
 import type { BannerKind, Controller, Game, Question, TilePurpose, View } from './game/engine.ts';
@@ -54,10 +53,10 @@ export class GameView implements View {
 
   async dice(_p: Player, values: number[]) {
     audio.play('dice_roll', { rate: this.sp > 1 ? 1.25 : 1 });
-    this.world.focusOn(new THREE.Vector3(0, 0, 0));
+    this.world.focusOn(this.world.arena);
     await this.world.rollDice(values);
     const sum = values.reduce((a, b) => a + b, 0);
-    const c = this.world.toScreen(this.world.centerWorld);
+    const c = this.world.toScreen(this.world.arenaWorld);
     this.ui.float(c.x, c.y - 40, values.length > 1 ? `${sum}` : `${values[0]}`, 'dice-sum');
     await this.wait(450);
     this.world.clearDice();
@@ -79,8 +78,9 @@ export class GameView implements View {
   async cash(from: Player | null, to: Player | null, amount: number, reason: string) {
     if (amount <= 0) return;
     const jackpotTile = TILES.findIndex((t) => t.kind === 'jackpot');
-    const a = from ? this.world.pieceWorld(from.id) : reason === 'ジャックポット' ? this.world.tileWorld(jackpotTile) : this.world.centerWorld;
-    const b = to ? this.world.pieceWorld(to.id) : /税|泉|保釈|盗賊/.test(reason) ? this.world.tileWorld(jackpotTile) : this.world.centerWorld;
+    const a = from ? this.world.pieceWorld(from.id) : reason === 'ジャックポット' ? this.world.treasureWorld : this.world.centerWorld;
+    const b = to ? this.world.pieceWorld(to.id) : /税|泉|保釈|盗賊/.test(reason) ? this.world.treasureWorld : this.world.centerWorld;
+    void jackpotTile;
     const n = Math.min(14, 2 + Math.floor(amount / 60));
     const big = amount >= 500;
     audio.play(big ? 'coins_pour' : amount >= 150 ? 'coins_several' : 'coin1', { volume: 0.8 });
@@ -110,9 +110,9 @@ export class GameView implements View {
     else if (reason === 'quake') {
       audio.play('trap');
       this.world.shakeCamera(0.5);
-    } else if (reason === 'dragon') {
+    } else if (reason === 'dragon' || reason === 'raid') {
       audio.play('dragon');
-      this.world.shakeCamera(0.6);
+      await this.world.dragonStrike(i);
     } else if (reason === 'festival') audio.play('bonus');
     else if (reason === 'sold') audio.play('slide');
     await this.world.setTile(i, t, true);
@@ -176,6 +176,12 @@ export class GameView implements View {
   sync() {
     if (!this.g) return;
     this.ui.renderHud(this.g, this.humanId, this.active);
+    // 王城は首位の色、財宝は黄金の泉の額
+    const rank = this.g.ranking();
+    const lead = rank[0];
+    const tie = rank.length > 1 && this.g.assets(rank[1]) === this.g.assets(lead);
+    void this.world.setLeader(tie ? null : lead.id);
+    void this.world.setTreasure(this.g.s.jackpot);
     for (let i = 0; i < N_TILES; i++) this.updateLabel(i);
   }
 

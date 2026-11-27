@@ -1,6 +1,7 @@
 // 3D の世界：浮島の盤面、建物、駒、サイコロ、演出。素材はすべて KayKit（public/models/）。
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { clone as skeletonClone } from 'three/examples/jsm/utils/SkeletonUtils.js';
@@ -20,6 +21,14 @@ async function loadGltf(path: string) {
   const { glb } = (await (await fetch(url)).json()) as { glb: string };
   const bin = Uint8Array.from(atob(glb), (c) => c.charCodeAt(0));
   return loader.parseAsync(bin.buffer, url.slice(0, url.lastIndexOf('/') + 1));
+}
+const fbxLoader = new FBXLoader();
+async function loadFbx(path: string): Promise<THREE.Group> {
+  if (!HOSTED) return fbxLoader.loadAsync(`./models/${path}`);
+  const url = `./models/${path.replace(/\.fbx$/, '.json')}`;
+  const { fbx } = (await (await fetch(url)).json()) as { fbx: string };
+  const bin = Uint8Array.from(atob(fbx), (c) => c.charCodeAt(0));
+  return fbxLoader.parse(bin.buffer, url.slice(0, url.lastIndexOf('/') + 1));
 }
 export function loadModel(path: string): Promise<THREE.Group> {
   if (!cache.has(path)) {
@@ -55,6 +64,7 @@ const easeInOut = (t: number) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2,
 const DIRS: [number, number][] = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
 const hexDist = (q: number, r: number) => (Math.abs(q) + Math.abs(r) + Math.abs(-q - r)) / 2;
 const PATH_R = 5;
+const ARENA_HEX: [number, number] = [-1, 2]; // 王城の手前の広場
 
 /** 土地レベルごとの建物。2段階目はマスごとの特色ある建物にする */
 const SIGNATURE: Record<number, string> = {
@@ -308,10 +318,11 @@ export class World {
         if (pathSet.has(key)) continue;
         const p = this.axial(q, r);
         const top = p.clone().setY(this.tileTop);
-        const isWater = d === 2 && (q + 2 * r) % 3 !== 0;
+        const arena = hexDist(q - ARENA_HEX[0], r - ARENA_HEX[1]) <= 1; // サイコロを振る広場
+        const isWater = d === 2 && (q + 2 * r) % 3 !== 0 && !arena;
         add(isWater ? 'hex/hex_water.gltf' : 'hex/hex_grass.gltf', p);
         if (d === 7) add('hex/hex_grass_bottom.gltf', p.clone().setY(-size.y * 0.98));
-        if (plotSet.has(key) || d <= 1 || isWater) continue;
+        if (plotSet.has(key) || d <= 1 || isWater || arena) continue;
         const roll = rnd();
         if (d === 2 || d === 3) {
           if (roll < 0.3) add(treeA, top, rnd() * 6);
@@ -395,6 +406,7 @@ export class World {
       this.makeLabel(i);
     });
     await Promise.all(jobs);
+    await this.buildCenter();
     this.makeAmbient(stage);
     this.focus.set(0, 0, 0);
     this.focusGoal.set(0, 0, 0);
@@ -637,17 +649,18 @@ export class World {
     ground.position.y = this.tileTop;
     world.addBody(ground);
     const R = 1.9;
+    const A = this.arena;
     for (let k = 0; k < 6; k++) {
       const a = (k / 6) * Math.PI * 2;
       const wall = new CANNON.Body({ mass: 0, material: mat, shape: new CANNON.Box(new CANNON.Vec3(2.5, 4, 0.2)) });
-      wall.position.set(Math.cos(a) * R, this.tileTop + 4, Math.sin(a) * R);
+      wall.position.set(A.x + Math.cos(a) * R, this.tileTop + 4, A.z + Math.sin(a) * R);
       wall.quaternion.setFromEuler(0, -a + Math.PI / 2, 0);
       world.addBody(wall);
     }
     const bodies = values.map((_, k) => {
       const b = new CANNON.Body({ mass: 1, material: mat, shape: new CANNON.Box(new CANNON.Vec3(half, half, half)), sleepSpeedLimit: 0.15 });
       const side = k - (values.length - 1) / 2;
-      b.position.set(-0.9 + side * 0.8, this.tileTop + 3 + k * 0.4, 1.2);
+      b.position.set(A.x - 0.9 + side * 0.8, this.tileTop + 3 + k * 0.4, A.z + 1.2);
       b.quaternion.setFromEuler(Math.random() * 6, Math.random() * 6, Math.random() * 6);
       b.velocity.set(2.5 + Math.random() * 2, 2 + Math.random(), -3.5 - Math.random() * 2);
       b.angularVelocity.set((Math.random() - 0.5) * 30, (Math.random() - 0.5) * 30, (Math.random() - 0.5) * 30);
@@ -812,6 +825,7 @@ export class World {
     const tdt = Math.min(0.25, raw); // 演出の時間は実時間に合わせる（遅い端末でも長引かない）
     this.tweens = this.tweens.filter((f) => f(tdt));
     for (const p of this.pieces) p.mixer.update(dt);
+    this.updateDragon(dt);
     // 選択中のマスを点滅させる
     const pulse = 0.35 + Math.sin(performance.now() / 180) * 0.2;
     for (const h of this.highlight) if (h.visible) (h.material as THREE.MeshBasicMaterial).opacity = pulse;
@@ -868,6 +882,161 @@ export class World {
   }
   get centerWorld() {
     return new THREE.Vector3(0, this.tileTop + 1, 0);
+  }
+  get arena() {
+    return this.axial(...ARENA_HEX).setY(this.tileTop);
+  }
+  get arenaWorld() {
+    return this.arena.setY(this.tileTop + 1);
+  }
+
+  // ---------- 中央の舞台：王城・財宝・竜 ----------
+  private castle = new THREE.Group();
+  private castleKey = '';
+  private treasure = new THREE.Group();
+  private treasureCount = -1;
+  private dragon: { root: THREE.Object3D; mixer: THREE.AnimationMixer; fly?: THREE.AnimationAction; attack?: THREE.AnimationAction; busy: boolean; angle: number } | null = null;
+
+  private async buildCenter() {
+    this.castleKey = '';
+    this.treasureCount = -1;
+    this.castle = new THREE.Group();
+    this.treasure = new THREE.Group();
+    this.island.add(this.castle, this.treasure);
+    await this.setLeader(null);
+    if (!this.dragon) void this.loadDragon();
+  }
+  /** 王城は首位のプレイヤーの色に染まる（null なら建設中） */
+  async setLeader(owner: number | null) {
+    const key = owner === null ? 'none' : PLAYER_KEYS[owner];
+    if (key === this.castleKey) return;
+    this.castleKey = key;
+    const model = owner === null ? 'hex/building_stage_C.gltf' : `hex/building_castle_${key}.gltf`;
+    const o = await inst(model);
+    if (this.castleKey !== key) return;
+    o.scale.setScalar(owner === null ? 1.1 : 1.45);
+    o.position.set(0, this.tileTop, 0);
+    o.rotation.y = Math.PI / 6;
+    this.castle.clear();
+    this.castle.add(o);
+    if (owner !== null) {
+      for (let k = 0; k < 6; k++) {
+        const f = await inst(`hex/flag_${key}.gltf`);
+        const a = (k / 6) * Math.PI * 2 + 0.3;
+        f.position.set(Math.cos(a) * 1.6, this.tileTop, Math.sin(a) * 1.6);
+        this.castle.add(f);
+      }
+      let k = 0;
+      o.scale.setScalar(0.01);
+      this.tweens.push((dt) => {
+        k = Math.min(1, k + dt / 0.7);
+        o.scale.setScalar(Math.max(0.01, 1.45 * easeOutBack(k)));
+        return k < 1;
+      });
+      this.burst(new THREE.Vector3(0, this.tileTop + 2.5, 0), 18, owner);
+    }
+  }
+  /** 黄金の泉に貯まった額に応じて、王城の前に財宝を積む */
+  async setTreasure(amount: number) {
+    const n = Math.max(1, Math.min(14, Math.round(amount / 120)));
+    if (n === this.treasureCount) return;
+    const grow = n > this.treasureCount;
+    this.treasureCount = n;
+    const src = await loadModel('bits/coin_10_gold.gltf');
+    this.treasure.clear();
+    for (let k = 0; k < n; k++) {
+      const c = src.clone(true);
+      const a = k * 2.399;
+      const r = 1.0 + (k % 5) * 0.12;
+      c.position.set(Math.cos(a) * r, this.tileTop + Math.floor(k / 5) * 0.12, 1.15 + Math.sin(a) * 0.35);
+      c.rotation.y = a;
+      c.scale.setScalar(1.2);
+      this.treasure.add(c);
+    }
+    if (grow && n > 1) this.burst(new THREE.Vector3(0, this.tileTop + 0.8, 1.2), 6, -1);
+  }
+  get treasureWorld() {
+    return new THREE.Vector3(0, this.tileTop + 0.8, 1.2);
+  }
+
+  private async loadDragon() {
+    try {
+      const fbx = await loadFbx('monsters/Dragon.fbx');
+      fbx.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(fbx, true);
+      const size = box.getSize(new THREE.Vector3());
+      const holder = new THREE.Group();
+      fbx.scale.multiplyScalar(3.2 / Math.max(size.x, size.y, size.z));
+      fbx.traverse((c) => {
+        const m = c as THREE.Mesh;
+        if (!m.isMesh) return;
+        m.castShadow = true;
+        m.frustumCulled = false; // スキンメッシュの境界がずれて消えるのを防ぐ
+        const mats = Array.isArray(m.material) ? m.material : [m.material];
+        // 配布元のプレビュー画像と同じ配色にする（FBX の色は暗く書き出されている）
+        const PALETTE: Record<string, string> = { Main: '#8c2233', Wings: '#3b2630', Belly: '#e8b54a', Claws: '#2a2224', Eyes: '#151515' };
+        m.material = mats.map((src) => new THREE.MeshStandardMaterial({ color: PALETTE[src.name] ?? '#8c2233', roughness: 0.7, metalness: 0, side: THREE.DoubleSide }));
+        if (mats.length === 1) m.material = (m.material as THREE.Material[])[0];
+      });
+      holder.add(fbx);
+      this.scene.add(holder);
+      const mixer = new THREE.AnimationMixer(fbx);
+      const clips = (fbx as THREE.Object3D & { animations: THREE.AnimationClip[] }).animations;
+      const find = (re: RegExp) => clips.find((c) => re.test(c.name));
+      const fly = find(/fly/i) ?? find(/idle/i) ?? clips[0];
+      const attack = find(/attack|bite|breath/i) ?? fly;
+      const flyA = fly ? mixer.clipAction(fly) : undefined;
+      flyA?.play();
+      if (this.dragon) this.scene.remove(this.dragon.root);
+      this.dragon = { root: holder, mixer, fly: flyA, attack: attack ? mixer.clipAction(attack) : undefined, busy: false, angle: 0 };
+    } catch (e) {
+      console.warn('竜を読み込めませんでした', e);
+    }
+  }
+  private updateDragon(dt: number) {
+    const d = this.dragon;
+    if (!d) return;
+    d.mixer.update(dt);
+    if (d.busy) return;
+    d.angle += dt * 0.45;
+    const r = 3.3;
+    const p = new THREE.Vector3(Math.cos(d.angle) * r, this.tileTop + 4.2 + Math.sin(d.angle * 2) * 0.3, Math.sin(d.angle) * r);
+    d.root.position.lerp(p, 1 - Math.pow(0.05, dt));
+    d.root.rotation.y = -d.angle; // 進行方向を向く
+  }
+  /** 竜が土地へ飛んでいき、襲いかかって戻る */
+  async dragonStrike(tile: number) {
+    const d = this.dragon;
+    const target = this.plotPos[tile].clone().setY(this.tileTop + 2.2);
+    this.focusOn(target);
+    if (!d) {
+      this.shakeCamera(0.6);
+      return;
+    }
+    d.busy = true;
+    const from = d.root.position.clone();
+    const dir = target.clone().sub(from);
+    d.root.rotation.y = Math.atan2(dir.x, dir.z);
+    await this.animate(0.9 / this.speed, (t) => {
+      const e = easeInOut(t);
+      d.root.position.lerpVectors(from, target, e);
+      d.root.position.y += Math.sin(Math.PI * t) * 2.5;
+    });
+    if (d.attack && d.attack !== d.fly) {
+      d.fly?.fadeOut(0.1);
+      d.attack.reset().setLoop(THREE.LoopRepeat, 2).fadeIn(0.1).play();
+    }
+    this.shakeCamera(0.7);
+    this.burst(this.plotPos[tile].clone().setY(this.tileTop + 0.6), 16, -1);
+    await sleep(700 / this.speed);
+    if (d.attack && d.attack !== d.fly) {
+      d.attack.fadeOut(0.2);
+      d.fly?.reset().fadeIn(0.2).play();
+    }
+    const back = target.clone();
+    void this.animate(1.2, (t) => {
+      d.root.position.lerpVectors(back, new THREE.Vector3(Math.cos(d.angle) * 3.3, this.tileTop + 4.2, Math.sin(d.angle) * 3.3), easeInOut(t));
+    }).then(() => (d.busy = false));
   }
 }
 
