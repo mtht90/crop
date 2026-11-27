@@ -9,15 +9,23 @@ import { GROUPS, PLAYER_KEYS, TILES } from '../data/defs.ts';
 import type { StageDef, TileState } from '../game/types.ts';
 
 const loader = new GLTFLoader();
-/** 公開版（claude.ai のページ）では、モデルをデータ埋め込みの .json として配信している */
-const modelUrl = (path: string) => `./models/${(window as unknown as { MODEL_JSON?: boolean }).MODEL_JSON ? path.replace(/\.(gltf|glb)$/, '.json') : path}`;
 const cache = new Map<string, Promise<THREE.Group>>();
 const animCache = new Map<string, Promise<THREE.AnimationClip[]>>();
+/** 公開版（claude.ai のページ）では data: URL の読み込みが禁止されているため、
+ *  モデルを GLB の base64 を包んだ .json として配信し、ここで復元して読み込む */
+const HOSTED = (window as unknown as { MODEL_JSON?: boolean }).MODEL_JSON === true;
+async function loadGltf(path: string) {
+  if (!HOSTED) return loader.loadAsync(`./models/${path}`);
+  const url = `./models/${path.replace(/\.(gltf|glb)$/, '.json')}`;
+  const { glb } = (await (await fetch(url)).json()) as { glb: string };
+  const bin = Uint8Array.from(atob(glb), (c) => c.charCodeAt(0));
+  return loader.parseAsync(bin.buffer, url.slice(0, url.lastIndexOf('/') + 1));
+}
 export function loadModel(path: string): Promise<THREE.Group> {
   if (!cache.has(path)) {
     cache.set(
       path,
-      loader.loadAsync(modelUrl(path)).then((g) => {
+      loadGltf(path).then((g) => {
         g.scene.traverse((c) => {
           const m = c as THREE.Mesh;
           if (m.isMesh) {
@@ -32,7 +40,7 @@ export function loadModel(path: string): Promise<THREE.Group> {
   return cache.get(path)!;
 }
 function loadClips(path: string) {
-  if (!animCache.has(path)) animCache.set(path, loader.loadAsync(modelUrl(path)).then((g) => g.animations));
+  if (!animCache.has(path)) animCache.set(path, loadGltf(path).then((g) => g.animations));
   return animCache.get(path)!;
 }
 async function inst(path: string) {
@@ -163,9 +171,16 @@ export class World {
       const w = host.clientWidth;
       const h = host.clientHeight;
       this.renderer.setSize(w, h);
-      this.camera.aspect = w / h;
-      // 縦長の画面では引いて全体を入れる
-      this.camOffset.set(0, w < h ? 40 : 26, w < h ? 30 : 24);
+      const aspect = w / h;
+      this.camera.aspect = aspect;
+      // 盤面（半径約14）が画面に収まる距離を求める。縦長の画面では画角を広げて引く
+      this.camera.fov = aspect < 1 ? 50 : 40;
+      const v = THREE.MathUtils.degToRad(this.camera.fov / 2);
+      const hz = Math.atan(Math.tan(v) * aspect);
+      const R = 14;
+      const dist = Math.max(R / Math.tan(hz), (R * 0.82) / Math.tan(v)) * (aspect < 1 ? 1.0 : 1.02);
+      this.camOffset.set(0, 26, 24).normalize().multiplyScalar(dist);
+      this.controls.maxDistance = dist * 1.6;
       this.camera.updateProjectionMatrix();
     };
     new ResizeObserver(resize).observe(host);

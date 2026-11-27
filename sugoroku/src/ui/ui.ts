@@ -162,8 +162,8 @@ export class UI {
     const s = g.s;
     const jackpotTile = TILES.findIndex((t) => t.kind === 'jackpot');
     this.top.innerHTML = `
-      <div class="pill round${g.isFinal() ? ' final' : ''}">${icon('sands-of-time')}<span>ラウンド <b>${Math.min(s.round, s.cfg.rounds)}</b> / ${s.cfg.rounds}</span>${g.isFinal() ? '<em>最終局面</em>' : ''}</div>
-      <button type="button" class="pill jackpot" data-tile="${jackpotTile}" title="黄金の泉に止まると全額もらえる">${icon('fountain')}<span>黄金の泉 <b class="num">${s.jackpot.toLocaleString()}</b>G</span></button>
+      <div class="pill round${g.isFinal() ? ' final' : ''}">${icon('sands-of-time')}<span><i class="lbl">ラウンド </i><b>${Math.min(s.round, s.cfg.rounds)}</b> / ${s.cfg.rounds}</span>${g.isFinal() ? '<em>最終局面</em>' : ''}</div>
+      <button type="button" class="pill jackpot" data-tile="${jackpotTile}" title="黄金の泉に止まると全額もらえる">${icon('fountain')}<span><i class="lbl">黄金の泉 </i><b class="num">${s.jackpot.toLocaleString()}</b>G</span></button>
       <div class="top-buttons">
         <button type="button" class="icon-btn speed" title="CPUの速さ">${icon('fast-forward-button')}<span>×${this.speed}</span></button>
         <button type="button" class="icon-btn sound" title="音">${icon(audio.muted ? 'speaker-off' : 'speaker')}</button>
