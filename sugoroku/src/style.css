@@ -286,10 +286,11 @@ button { font: inherit; color: inherit; }
 .road { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
 .road-step { display: grid; gap: 6px; align-content: start; padding: 8px; border: var(--line); border-radius: 14px; background: var(--paper); }
 .road-step .lv { font-family: var(--display); }
-.reward { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 10px; background: #fff; font-size: 13px; font-weight: 800; }
+.reward { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 10px; background: #fff; font-size: 13px; font-weight: 800; }
 .reward .gi { width: 22px; height: 22px; color: var(--gold-dark); flex: none; }
 .reward.card-r { flex-direction: column; }
-.reward small { display: block; font-size: 11px; color: var(--ink-soft); }
+.reward small { display: block; flex-basis: 100%; font-size: 11px; color: var(--ink-soft); }
+.reward b { min-width: 0; }
 .dice-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; }
 .dice-card { display: grid; justify-items: center; gap: 2px; padding: 10px; border: var(--line); border-radius: 14px; background: var(--paper); box-shadow: var(--shadow); cursor: pointer; }
 .dice-card .gi { width: 34px; height: 34px; }
@@ -329,7 +330,7 @@ button { font: inherit; color: inherit; }
 .res-col h3 { color: var(--ink); -webkit-text-stroke: 0; margin: 0; }
 .results .xp { justify-content: center; padding: 10px; border: var(--line); border-radius: 14px; background: var(--paper); }
 .results .xp-bar { width: min(420px, 60vw); height: 20px; }
-.res-unlocks { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+.res-unlocks { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; align-items: start; }
 .res-unlocks > * { animation: pop2 .4s cubic-bezier(.2,1.6,.4,1); }
 .unlock-head { grid-column: 1 / -1; text-align: center; font-family: var(--display); font-size: 26px; color: var(--gold); -webkit-text-stroke: 3px var(--ink); paint-order: stroke fill; }
 @keyframes pop2 { from { transform: scale(.5); opacity: 0; } }
