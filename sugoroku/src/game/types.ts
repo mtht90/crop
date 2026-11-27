@@ -1,6 +1,6 @@
 // ゲーム全体で共有する型。描画やUIに依存しない純粋なデータだけを置く。
 
-export type TileKind = 'start' | 'prop' | 'shrine' | 'event' | 'tax' | 'dungeon' | 'jackpot' | 'portal';
+export type TileKind = 'start' | 'prop' | 'shrine' | 'event' | 'tax' | 'dungeon' | 'jackpot' | 'portal' | 'tavern' | 'cathedral';
 
 export interface TileDef {
   kind: TileKind;
@@ -37,14 +37,14 @@ export interface CardDef {
   unlockLevel: number;
 }
 
-export type HeroId = 'knight' | 'merchant' | 'witch' | 'rogue' | 'princess' | 'dwarf' | 'dragoon' | 'fairy';
+export type HeroId = 'knight' | 'merchant' | 'mage' | 'ranger' | 'assassin' | 'barbarian';
 
 export interface HeroDef {
   id: HeroId;
   name: string;
   title: string;
   icon: string;
-  color: string;
+  model: string; // public/models/adv/ のファイル名（拡張子なし）
   passive: string;
   cost: number; // 0 = 最初から使える
 }
