@@ -30,6 +30,40 @@ async function loadFbx(path: string): Promise<THREE.Group> {
   const bin = Uint8Array.from(atob(fbx), (c) => c.charCodeAt(0));
   return fbxLoader.parse(bin.buffer, url.slice(0, url.lastIndexOf('/') + 1));
 }
+/** 同じテクスチャ・同じ材質を全モデルで使い回す（スマホのGPUメモリ不足で真っ黒になるのを防ぐ） */
+const sharedTextures = new Map<string, THREE.Texture>();
+const sharedMaterials = new Map<string, THREE.Material>();
+THREE.Cache.enabled = true; // 同じ画像ファイルは1回だけ読み込む（画像オブジェクトも同じになる）
+const imageIds = new WeakMap<object, string>();
+function textureKey(t: THREE.Texture) {
+  const img = t.image as { src?: string } | undefined;
+  if (img?.src) return img.src;
+  if (img && typeof img === 'object') {
+    if (!imageIds.has(img)) imageIds.set(img, THREE.MathUtils.generateUUID());
+    return imageIds.get(img)!;
+  }
+  return t.uuid;
+}
+function shareMaterial(mat: THREE.MeshStandardMaterial): THREE.Material {
+  if (Array.isArray(mat)) return mat;
+  let mapKey = '';
+  if (mat.map) {
+    mapKey = textureKey(mat.map);
+    const shared = sharedTextures.get(mapKey);
+    if (shared && shared !== mat.map) {
+      mat.map.dispose();
+      mat.map = shared;
+    } else sharedTextures.set(mapKey, mat.map);
+  }
+  const key = `${mat.type}|${mat.name}|${mapKey}|${mat.color?.getHexString()}|${mat.roughness}|${mat.metalness}|${mat.transparent}`;
+  const found = sharedMaterials.get(key);
+  if (found) {
+    if (found !== mat) mat.dispose();
+    return found;
+  }
+  sharedMaterials.set(key, mat);
+  return mat;
+}
 export function loadModel(path: string): Promise<THREE.Group> {
   if (!cache.has(path)) {
     cache.set(
@@ -40,6 +74,7 @@ export function loadModel(path: string): Promise<THREE.Group> {
           if (m.isMesh) {
             m.castShadow = true;
             m.receiveShadow = true;
+            m.material = shareMaterial(m.material as THREE.MeshStandardMaterial);
           }
         });
         return g.scene;
