@@ -45,12 +45,39 @@ function bgm(name: Bgm) {
   audio.playBgm(name);
 }
 
+/** ゲーム開始前の盤面にも印字する（タイトル背景用） */
+function printDemo(owners: [number, number, number][]) {
+  const noop = async () => {};
+  const view = new GameView(world, ui, -1);
+  const demo = new Game(
+    { stage: builtStage ?? 'meadow', rounds: 20, heroes: ['knight', 'merchant', 'mage', 'ranger'], names: ['', '', '', ''], humanIndex: -1, cardPool: ['boots'], seed: 1 },
+    { turnStart: noop, dice: noop, move: noop, warp: noop, cash: noop, tile: noop, banner: noop, cardGained: noop, cardUsed: noop, log: () => {}, sync: () => {} },
+    [],
+  );
+  for (const [i, o, l] of owners) demo.s.tiles[i] = { owner: o, level: l, festival: 0, dragon: 0 };
+  view.g = demo;
+  for (let i = 0; i < 30; i++) view.updateLabel(i);
+}
+
+async function fontsReady() {
+  try {
+    await Promise.race([
+      Promise.all([document.fonts.load("800 30px 'M PLUS Rounded 1c'"), document.fonts.load("30px 'Dela Gothic One'")]),
+      new Promise((r) => setTimeout(r, 4000)),
+    ]);
+  } catch {
+    /* フォントが読めなくても代わりのフォントで印字する */
+  }
+}
+
 async function boot() {
   const loading = document.getElementById('loading')!;
+  await fontsReady();
   await ensureWorld(save.lastStage in STAGES ? save.lastStage : 'meadow');
   // タイトル背景：建物が少し建った王国
   const demo: [number, number, number][] = [[1, 0, 2], [2, 0, 1], [6, 1, 3], [12, 2, 2], [16, 3, 4], [19, 3, 1], [23, 1, 2], [28, 0, 3], [29, 2, 1]];
   for (const [i, o, l] of demo) await world.setTile(i, { owner: o, level: l, festival: 0, dragon: 0 }, false);
+  printDemo(demo);
   portraits = await heroPortraits(Object.fromEntries(HERO_ORDER.map((h) => [h, HEROES[h].model])));
   loading.classList.add('done');
   setTimeout(() => loading.remove(), 600);

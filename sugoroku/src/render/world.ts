@@ -6,8 +6,24 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { clone as skeletonClone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import * as CANNON from 'cannon-es';
-import { GROUPS, PLAYER_KEYS, TILES } from '../data/defs.ts';
+import { PLAYER_KEYS, TILES } from '../data/defs.ts';
+import { ICONS } from '../data/icons.gen.ts';
 import type { StageDef, TileState } from '../game/types.ts';
+
+export interface PrintInfo {
+  kind: string;
+  name: string;
+  icon: string;
+  bg: string;
+  fg?: string;
+  band?: string;
+  owner?: string;
+  main: string;
+  level?: number;
+  mono?: boolean;
+  festival?: boolean;
+  dragon?: boolean;
+}
 
 const loader = new GLTFLoader();
 const cache = new Map<string, Promise<THREE.Group>>();
@@ -96,10 +112,11 @@ const easeOutBack = (t: number) => 1 + 2.4 * Math.pow(t - 1, 3) + 1.4 * Math.pow
 const easeInOut = (t: number) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
 
 // 六角座標（頂点が上下にある向き）
-const DIRS: [number, number][] = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
 const hexDist = (q: number, r: number) => (Math.abs(q) + Math.abs(r) + Math.abs(-q - r)) / 2;
-const PATH_R = 5;
-const ARENA_HEX: [number, number] = [-1, 2]; // 王城の手前の広場
+/** 盤面の道（六角座標）。島の上を3枚の花びら型にくねる30マスの輪で、道どうしは隣り合わない。
+ *  plots は各マスの建物を建てる隣の六角。scripts で花びら型の曲線を六角格子に落として求めた */
+const BOARD: { cells: [number, number][]; plots: [number, number][] } = {"cells":[[3,0],[4,0],[4,1],[3,2],[2,3],[1,3],[0,3],[0,2],[-1,2],[-2,3],[-3,3],[-4,4],[-5,4],[-5,3],[-5,2],[-4,1],[-3,0],[-2,0],[-1,-1],[-1,-2],[0,-3],[0,-4],[1,-5],[2,-5],[3,-5],[3,-4],[3,-3],[2,-2],[2,-1],[3,-1]],"plots":[[2,1],[5,-1],[5,1],[4,2],[2,4],[1,4],[-1,4],[1,1],[-2,2],[-2,4],[-3,2],[-4,5],[-6,5],[-6,4],[-6,2],[-5,1],[-3,-1],[-2,1],[0,-2],[-2,-2],[1,-3],[-1,-4],[1,-6],[3,-6],[4,-6],[4,-5],[4,-3],[1,-2],[2,0],[4,-2]]};
+const PATH_LIFT = 0.28; // 道のマスを少し高くして目立たせる
 
 /** 土地レベルごとの建物。2段階目はマスごとの特色ある建物にする */
 const SIGNATURE: Record<number, string> = {
@@ -149,11 +166,9 @@ export class World {
   private s = 1; // 六角の大きさ（中心から頂点）
   pathPos: THREE.Vector3[] = [];
   plotPos: THREE.Vector3[] = [];
-  private pathHex: [number, number][] = [];
   private extras: THREE.Object3D[][] = [];
   private tileKey: string[] = [];
   private highlight: THREE.Mesh[] = [];
-  private hexGeo: THREE.BufferGeometry | null = null;
   private pieces: Piece[] = [];
   private tweens: ((dt: number) => boolean)[] = [];
   private focus = new THREE.Vector3();
@@ -161,7 +176,7 @@ export class World {
   private camOffset = new THREE.Vector3(0, 26, 24);
   private userOrbiting = 0;
   private ambientFx: THREE.Points | null = null;
-  private labelEls: HTMLDivElement[] = [];
+  private prints: { canvas: HTMLCanvasElement; tex: THREE.CanvasTexture; key?: string }[] = [];
   private shake = 0;
   speed = 1;
   quality: 'high' | 'low' = 'high';
@@ -263,26 +278,11 @@ export class World {
   private axial(q: number, r: number) {
     return new THREE.Vector3(this.s * Math.sqrt(3) * (q + r / 2), 0, this.s * 1.5 * r);
   }
-  private ring(radius: number): [number, number][] {
-    const out: [number, number][] = [];
-    let q = DIRS[4][0] * radius;
-    let r = DIRS[4][1] * radius;
-    for (let side = 0; side < 6; side++) {
-      for (let k = 0; k < radius; k++) {
-        out.push([q, r]);
-        q += DIRS[side][0];
-        r += DIRS[side][1];
-      }
-    }
-    return out;
-  }
-
   // ---------- 盤面を作る ----------
   async build(stage: StageDef) {
     this.island.clear();
     this.pickables = [];
     this.labels.innerHTML = '';
-    this.labelEls = [];
     const pal = stage.palette;
     const sky = document.createElement('canvas');
     sky.width = 2;
@@ -308,29 +308,14 @@ export class World {
     const size = box.getSize(new THREE.Vector3());
     this.s = size.z / 2;
     this.tileTop = box.max.y;
-    this.hexGeo = (probe.children[0] as THREE.Mesh).geometry;
 
-    this.pathHex = this.ring(PATH_R);
-    const pathSet = new Set(this.pathHex.map(([q, r]) => `${q},${r}`));
-    const plots: [number, number][] = this.pathHex.map(([q, r]) => {
-      const here = this.axial(q, r);
-      let best: [number, number] = [q, r];
-      let bestDot = -Infinity;
-      for (const [dq, dr] of DIRS) {
-        const n: [number, number] = [q + dq, r + dr];
-        if (hexDist(...n) !== PATH_R + 1) continue;
-        const dot = this.axial(...n).sub(here).normalize().dot(here.clone().normalize());
-        if (dot > bestDot + 1e-6) {
-          bestDot = dot;
-          best = n;
-        }
-      }
-      return best;
-    });
-    const plotSet = new Set(plots.map(([q, r]) => `${q},${r}`));
-    this.pathPos = this.pathHex.map(([q, r]) => this.axial(q, r).setY(this.tileTop + 0.15));
-    this.plotPos = plots.map(([q, r]) => this.axial(q, r).setY(this.tileTop));
-
+    // 道：六角形のマスそのものに印字する
+    const pathKeys = new Set(BOARD.cells.map(([q, r]) => `${q},${r}`));
+    const plotKeys = new Set(BOARD.plots.map(([q, r]) => `${q},${r}`));
+    this.pathPos = BOARD.cells.map(([q, r]) => this.axial(q, r).setY(this.tileTop + PATH_LIFT + 0.02));
+    this.plotPos = BOARD.plots.map(([q, r]) => this.axial(q, r).setY(this.tileTop));
+    const near = (x: number, z: number, pts: THREE.Vector3[], d: number) => pts.some((p) => Math.hypot(p.x - x, p.z - z) < d);
+    const arena = this.arena;
     let seed = 11;
     const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
     const jobs: Promise<void>[] = [];
@@ -349,27 +334,25 @@ export class World {
       for (let r = -8; r <= 8; r++) {
         const d = hexDist(q, r);
         if (d > 7) continue;
-        const key = `${q},${r}`;
-        if (pathSet.has(key)) continue;
         const p = this.axial(q, r);
         const top = p.clone().setY(this.tileTop);
-        const arena = hexDist(q - ARENA_HEX[0], r - ARENA_HEX[1]) <= 1; // サイコロを振る広場
-        const isWater = d === 2 && (q + 2 * r) % 3 !== 0 && !arena;
+        const key = `${q},${r}`;
+        if (pathKeys.has(key)) continue;
+        const busy = plotKeys.has(key) || d <= 1 || Math.hypot(p.x - arena.x, p.z - arena.z) < 1.6;
+        const isWater = !busy && !near(p.x, p.z, this.pathPos, 2.4) && !near(p.x, p.z, this.plotPos, 2.4) && d >= 2 && (q * 3 + r * 5) % 4 === 0;
         add(isWater ? 'hex/hex_water.gltf' : 'hex/hex_grass.gltf', p);
         if (d === 7) add('hex/hex_grass_bottom.gltf', p.clone().setY(-size.y * 0.98));
-        if (plotSet.has(key) || d <= 1 || isWater || arena) continue;
+        if (busy || isWater) continue;
         const roll = rnd();
-        if (d === 2 || d === 3) {
-          if (roll < 0.3) add(treeA, top, rnd() * 6);
-          else if (roll < 0.45) add('hex/hills_B_trees.gltf', top, rnd() * 6);
-          else if (roll < 0.58) add('hex/mountain_A_grass_trees.gltf', top, rnd() * 6);
-        } else if (d === 4) {
-          if (roll < 0.18) add('hex/tree_single_A.gltf', top, rnd() * 6);
-          else if (roll < 0.26) add('hex/rock_single_B.gltf', top, rnd() * 6);
-        } else if (d >= 6) {
-          if (roll < 0.3) add('hex/trees_B_large.gltf', top, rnd() * 6);
-          else if (roll < 0.42) add('hex/mountain_B_grass_trees.gltf', top, rnd() * 6);
-          else if (roll < 0.5) add('hex/rock_single_C.gltf', top, rnd() * 6);
+        if (d <= 5) {
+          if (roll < 0.32) add(treeA, top, rnd() * 6);
+          else if (roll < 0.44) add('hex/hills_B_trees.gltf', top, rnd() * 6);
+          else if (roll < 0.52) add('hex/tree_single_A.gltf', top, rnd() * 6);
+          else if (roll < 0.58) add('hex/rock_single_B.gltf', top, rnd() * 6);
+        } else {
+          if (roll < 0.35) add('hex/trees_B_large.gltf', top, rnd() * 6);
+          else if (roll < 0.5) add('hex/mountain_B_grass_trees.gltf', top, rnd() * 6);
+          else if (roll < 0.58) add('hex/rock_single_C.gltf', top, rnd() * 6);
         }
       }
     }
@@ -380,65 +363,63 @@ export class World {
       add(rnd() < 0.5 ? 'hex/cloud_big.gltf' : 'hex/cloud_small.gltf', new THREE.Vector3(Math.cos(a) * R, -4 + rnd() * 7, Math.sin(a) * R), rnd() * 6, 2 + rnd() * 2);
     }
 
-    // 道（30マス）
-    const deg = (from: THREE.Vector3, to: THREE.Vector3) => (Math.round((Math.atan2(-(to.z - from.z), to.x - from.x) * 180) / Math.PI / 60) * 60 + 360) % 360;
+    // 道のマス：少し高くした六角形の上面に、名前・価格などを印字した六角形の面を貼る
     this.extras = TILES.map(() => []);
     this.tileKey = TILES.map(() => '');
     this.highlight = [];
+    this.prints = [];
+    const hexR = this.s * 0.97;
+    const printGeo = new THREE.CircleGeometry(hexR, 6, Math.PI / 6).rotateX(-Math.PI / 2);
     this.pathPos.forEach((p, i) => {
-      const prev = this.pathPos[(i + 29) % 30];
-      const next = this.pathPos[(i + 1) % 30];
-      const a1 = deg(p, prev);
-      const a2 = deg(p, next);
-      let model = 'hex/hex_road_A.gltf';
-      let rot = a1;
-      if ((a2 - a1 + 360) % 360 !== 180) {
-        model = 'hex/hex_road_B.gltf';
-        rot = (a1 - 180 + 360) % 360;
-        if ((60 + rot) % 360 !== a2) rot = (a2 - 180 + 360) % 360;
-      }
       const holder = new THREE.Group();
       holder.userData.tile = i;
       this.island.add(holder);
       this.pickables.push(holder);
       jobs.push(
-        inst(model).then((o) => {
-          o.position.set(p.x, 0.15, p.z);
-          o.rotation.y = (rot * Math.PI) / 180;
+        inst('hex/hex_grass.gltf').then((o) => {
+          o.position.set(p.x, PATH_LIFT, p.z);
           holder.add(o);
         }),
       );
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = 256;
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.anisotropy = 4;
+      const printMesh = new THREE.Mesh(printGeo, new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9, metalness: 0 }));
+      printMesh.position.set(p.x, this.tileTop + PATH_LIFT + 0.005, p.z);
+      printMesh.receiveShadow = true;
+      holder.add(printMesh);
+      this.prints.push({ canvas, tex });
       // 土地側も選べるようにする
       const plotHolder = new THREE.Group();
       plotHolder.userData.tile = i;
+      plotHolder.userData.plot = true;
+      plotHolder.position.copy(this.plotPos[i]);
       this.island.add(plotHolder);
       this.pickables.push(plotHolder);
-      plotHolder.position.copy(this.plotPos[i]);
-      plotHolder.userData.plot = true;
       this.extras[i].push(plotHolder);
-      // 選択用の光る六角
-      const hl = new THREE.Mesh(this.hexGeo!, new THREE.MeshBasicMaterial({ color: '#fff7c2', transparent: true, opacity: 0, depthWrite: false }));
-      hl.position.set(p.x, 0.17, p.z);
-      hl.scale.set(0.96, 1.02, 0.96);
+      // 選択用の光る板
+      const hl = new THREE.Mesh(printGeo, new THREE.MeshBasicMaterial({ color: '#fff7c2', transparent: true, opacity: 0, depthWrite: false }));
+      hl.position.set(p.x, p.y + 0.01, p.z);
       hl.visible = false;
       this.island.add(hl);
       this.highlight.push(hl);
 
       const def = TILES[i];
-      const face = Math.atan2(p.x - this.plotPos[i].x, p.z - this.plotPos[i].z);
+      const faceTo = Math.atan2(p.x - this.plotPos[i].x, p.z - this.plotPos[i].z);
       if (def.kind !== 'prop') {
         if (def.kind === 'jackpot') {
-          for (let n = 0; n < 7; n++) add('bits/coin_10_gold.gltf', this.plotPos[i].clone().add(new THREE.Vector3((rnd() - 0.5) * 1.1, 0, (rnd() - 0.5) * 1.1)), rnd() * 6, 0.9);
-          add('hex/bucket_water.gltf', this.plotPos[i].clone().add(new THREE.Vector3(0.4, 0, -0.3)), 0, 1.2);
+          for (let n = 0; n < 6; n++) add('bits/coin_10_gold.gltf', this.plotPos[i].clone().add(new THREE.Vector3((rnd() - 0.5) * 1.0, 0, (rnd() - 0.5) * 1.0)), rnd() * 6, 0.8);
+          add('hex/bucket_water.gltf', this.plotPos[i].clone().add(new THREE.Vector3(0.4, 0, -0.3)), 0, 1.1);
         } else {
-          add(SPECIAL_MODEL[def.kind], this.plotPos[i], face, def.kind === 'start' ? 0.9 : 1);
+          add(SPECIAL_MODEL[def.kind], this.plotPos[i], faceTo, def.kind === 'start' ? 0.9 : 1);
           if (def.kind === 'tavern') {
-            add('hex/barrel.gltf', this.plotPos[i].clone().add(new THREE.Vector3(0.55, 0, 0.35)), 0, 1.2);
-            add('hex/crate_A_small.gltf', this.plotPos[i].clone().add(new THREE.Vector3(-0.5, 0, 0.4)), 0.4, 1.2);
+            add('hex/barrel.gltf', this.plotPos[i].clone().add(new THREE.Vector3(0.5, 0, 0.35)), 0, 1.1);
+            add('hex/crate_A_small.gltf', this.plotPos[i].clone().add(new THREE.Vector3(-0.45, 0, 0.4)), 0.4, 1.1);
           }
         }
       }
-      this.makeLabel(i);
     });
     await Promise.all(jobs);
     await this.buildCenter();
@@ -465,25 +446,96 @@ export class World {
     this.scene.add(this.ambientFx);
   }
 
-  private makeLabel(i: number) {
-    const def = TILES[i];
-    const el = document.createElement('div');
-    el.className = `tile-label kind-${def.kind}`;
-    if (def.kind === 'prop') el.style.setProperty('--group', GROUPS[def.group!].color);
-    el.dataset.tile = String(i);
-    this.labels.appendChild(el);
-    this.labelEls[i] = el;
-  }
-  /** ラベルの中身（UI側が決める） */
-  setLabel(i: number, html: string, cls = '') {
-    const el = this.labelEls[i];
-    if (!el) return;
-    el.innerHTML = html;
-    el.classList.toggle('owned', cls.includes('owned'));
-    el.classList.toggle('hot', cls.includes('hot'));
-    el.classList.toggle('dragon', cls.includes('dragon'));
-    el.classList.toggle('festival', cls.includes('festival'));
-    for (let k = 0; k < 4; k++) el.classList.toggle(`owner-${k}`, cls.includes(`owner-${k}`));
+  /** マスに印字する（名前・価格・通行料・持ち主など）。同じ内容なら描き直さない */
+  printTile(i: number, info: PrintInfo) {
+    const pr = this.prints[i];
+    if (!pr) return;
+    const key = JSON.stringify(info);
+    if (pr.key === key) return;
+    pr.key = key;
+    const c = pr.canvas.getContext('2d')!;
+    const W = 256;
+    const ink = '#2b2640';
+    const font = (w: number, px: number, display = false) => `${w} ${px}px ${display ? "'Dela Gothic One'" : "'M PLUS Rounded 1c'"}, 'Hiragino Sans', sans-serif`;
+    const drawIcon = (name: string, cx: number, cy: number, size: number, color: string) => {
+      const d = ICONS[name]?.d;
+      if (!d) return;
+      c.save();
+      c.translate(cx - size / 2, cy - size / 2);
+      c.scale(size / 512, size / 512);
+      c.fillStyle = color;
+      c.fill(new Path2D(d));
+      c.restore();
+    };
+    const text = (t: string, x: number, y: number, px: number, color: string, opts: { display?: boolean; stroke?: string; weight?: number; max?: number } = {}) => {
+      c.font = font(opts.weight ?? 800, px, opts.display);
+      c.textAlign = 'center';
+      c.textBaseline = 'middle';
+      const max = opts.max ?? W - 24;
+      let size = px;
+      while (c.measureText(t).width > max && size > 10) {
+        size -= 2;
+        c.font = font(opts.weight ?? 800, size, opts.display);
+      }
+      if (opts.stroke) {
+        c.lineWidth = Math.max(4, size / 5);
+        c.lineJoin = 'round';
+        c.strokeStyle = opts.stroke;
+        c.strokeText(t, x, y);
+      }
+      c.fillStyle = color;
+      c.fillText(t, x, y);
+    };
+    c.save();
+    c.clearRect(0, 0, W, W);
+    // 六角形（頂点が上下）の形に切り抜く
+    const hex = new Path2D();
+    for (let k = 0; k < 6; k++) {
+      const a = Math.PI / 6 + (k * Math.PI) / 3;
+      const x = W / 2 + Math.cos(a) * (W / 2);
+      const y = W / 2 - Math.sin(a) * (W / 2);
+      if (k === 0) hex.moveTo(x, y);
+      else hex.lineTo(x, y);
+    }
+    hex.closePath();
+    c.clip(hex);
+    c.fillStyle = info.bg;
+    c.fillRect(0, 0, W, W);
+    if (info.kind === 'prop') {
+      // 上の帯：色グループ
+      c.fillStyle = info.band!;
+      c.fillRect(0, 0, W, 92);
+      text(info.name, W / 2, 70, 30, '#fff', { stroke: 'rgba(0,0,0,.3)', max: 190 });
+      drawIcon(info.icon, W / 2, 128, 58, info.owner ?? ink);
+      if (info.level) for (let k = 0; k < 4; k++) drawIcon('star-formation', W / 2 - 39 + k * 26, 166, 22, k < info.level ? '#f5b82e' : '#d8cfbe');
+      text(info.main, W / 2, info.level ? 200 : 190, info.level ? 40 : 46, info.owner ?? ink, { display: true, max: 170 });
+      if (info.mono) {
+        c.fillStyle = '#e8483f';
+        c.beginPath();
+        c.arc(W - 62, 124, 22, 0, Math.PI * 2);
+        c.fill();
+        text('×2', W - 62, 125, 22, '#fff', { display: true });
+      }
+      if (info.festival) drawIcon('party-popper', 60, 124, 38, '#f5b82e');
+      if (info.dragon) {
+        c.fillStyle = 'rgba(60,10,0,.55)';
+        c.fillRect(0, 92, W, W);
+        drawIcon('fire-breath', W / 2, 150, 90, '#ff7a2f');
+      }
+      // 縁取り：持ち主の色（いなければ帯の色）
+      c.lineWidth = info.owner ? 22 : 10;
+      c.strokeStyle = info.owner ?? info.band!;
+      c.stroke(hex);
+    } else {
+      drawIcon(info.icon, W / 2, 104, 96, info.fg ?? ink);
+      text(info.name, W / 2, 172, 30, info.fg ?? ink, { max: 190 });
+      if (info.main) text(info.main, W / 2, 206, 26, info.fg ?? ink, { display: true, max: 160 });
+      c.lineWidth = 10;
+      c.strokeStyle = 'rgba(0,0,0,.18)';
+      c.stroke(hex);
+    }
+    c.restore();
+    pr.tex.needsUpdate = true;
   }
 
   // ---------- 建物 ----------
@@ -673,7 +725,7 @@ export class World {
   async rollDice(values: number[]) {
     for (const d of this.dice) this.scene.remove(d);
     this.dice = [];
-    const SCALE = 1.7;
+    const SCALE = 1.35;
     const half = 0.375 * SCALE;
     const world = new CANNON.World({ gravity: new CANNON.Vec3(0, -30, 0) });
     world.allowSleep = true;
@@ -683,7 +735,7 @@ export class World {
     ground.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
     ground.position.y = this.tileTop;
     world.addBody(ground);
-    const R = 1.9;
+    const R = 1.35;
     const A = this.arena;
     for (let k = 0; k < 6; k++) {
       const a = (k / 6) * Math.PI * 2;
@@ -695,9 +747,9 @@ export class World {
     const bodies = values.map((_, k) => {
       const b = new CANNON.Body({ mass: 1, material: mat, shape: new CANNON.Box(new CANNON.Vec3(half, half, half)), sleepSpeedLimit: 0.15 });
       const side = k - (values.length - 1) / 2;
-      b.position.set(A.x - 0.9 + side * 0.8, this.tileTop + 3 + k * 0.4, A.z + 1.2);
+      b.position.set(A.x - 0.5 + side * 0.7, this.tileTop + 3 + k * 0.4, A.z + 0.6);
       b.quaternion.setFromEuler(Math.random() * 6, Math.random() * 6, Math.random() * 6);
-      b.velocity.set(2.5 + Math.random() * 2, 2 + Math.random(), -3.5 - Math.random() * 2);
+      b.velocity.set(1.5 + Math.random() * 1.5, 2 + Math.random(), -2 - Math.random() * 1.5);
       b.angularVelocity.set((Math.random() - 0.5) * 30, (Math.random() - 0.5) * 30, (Math.random() - 0.5) * 30);
       world.addBody(b);
       return b;
@@ -828,15 +880,22 @@ export class World {
       const on = !!tiles && tiles.includes(i);
       h.visible = on;
     });
-    this.labelEls.forEach((el, i) => el?.classList.toggle('selectable', !!tiles && tiles.includes(i)));
   }
 
   // ---------- カメラ ----------
+  private zoom = 1;
+  private zoomGoal = 1;
+  /** p に注目する。寄りの強さは setZoom で決める */
   focusOn(p: THREE.Vector3, snap = false) {
-    this.focusGoal.copy(p).setY(0).multiplyScalar(0.55);
+    this.focusGoal.copy(p).setY(0).multiplyScalar(this.zoomGoal < 1 ? 0.92 : 0.55);
     if (snap) this.focus.copy(this.focusGoal);
   }
+  /** 1 = 島全体、小さいほど寄る */
+  setZoom(z: number) {
+    this.zoomGoal = z;
+  }
   overview() {
+    this.zoomGoal = 1;
     this.focusGoal.set(0, 0, 0);
   }
 
@@ -879,8 +938,9 @@ export class World {
     // カメラ：注目点に寄せる（ユーザーが回したら少し待つ）
     if (this.userOrbiting > 0) this.userOrbiting -= dt;
     this.focus.lerp(this.focusGoal, 1 - Math.pow(0.02, dt));
+    this.zoom += (this.zoomGoal - this.zoom) * (1 - Math.pow(0.05, dt));
     if (this.userOrbiting <= 0) {
-      const goal = this.focus.clone().add(this.camOffset);
+      const goal = this.focus.clone().add(this.camOffset.clone().multiplyScalar(this.zoom));
       this.camera.position.lerp(goal, 1 - Math.pow(0.08, dt));
       this.controls.target.lerp(this.focus, 1 - Math.pow(0.02, dt));
     }
@@ -891,21 +951,8 @@ export class World {
       this.shake = Math.max(0, this.shake - dt * 1.5);
     }
     this.renderer.render(this.scene, this.camera);
-    this.updateLabels();
   }
 
-  private updateLabels() {
-    const w = this.renderer.domElement.clientWidth;
-    const h = this.renderer.domElement.clientHeight;
-    const v = new THREE.Vector3();
-    this.labelEls.forEach((el, i) => {
-      if (!el) return;
-      v.copy(this.plotPos[i]).setY(this.tileTop + 1.9);
-      v.project(this.camera);
-      el.style.transform = `translate(-50%, -100%) translate(${((v.x + 1) / 2) * w}px, ${((1 - v.y) / 2) * h}px)`;
-      el.style.display = v.z < 1 ? '' : 'none';
-    });
-  }
   /** 3D 座標を画面座標へ */
   toScreen(p: THREE.Vector3) {
     const v = p.clone().project(this.camera);
@@ -919,7 +966,7 @@ export class World {
     return new THREE.Vector3(0, this.tileTop + 1, 0);
   }
   get arena() {
-    return this.axial(...ARENA_HEX).setY(this.tileTop);
+    return new THREE.Vector3(0, this.tileTop, this.s * 1.5);
   }
   get arenaWorld() {
     return this.arena.setY(this.tileTop + 1);
@@ -949,7 +996,7 @@ export class World {
     const model = owner === null ? 'hex/building_stage_C.gltf' : `hex/building_castle_${key}.gltf`;
     const o = await inst(model);
     if (this.castleKey !== key) return;
-    o.scale.setScalar(owner === null ? 1.1 : 1.45);
+    o.scale.setScalar(owner === null ? 0.95 : 1.15);
     o.position.set(0, this.tileTop, 0);
     o.rotation.y = Math.PI / 6;
     this.castle.clear();
@@ -958,14 +1005,14 @@ export class World {
       for (let k = 0; k < 6; k++) {
         const f = await inst(`hex/flag_${key}.gltf`);
         const a = (k / 6) * Math.PI * 2 + 0.3;
-        f.position.set(Math.cos(a) * 1.6, this.tileTop, Math.sin(a) * 1.6);
+        f.position.set(Math.cos(a) * 1.35, this.tileTop, Math.sin(a) * 1.35);
         this.castle.add(f);
       }
       let k = 0;
       o.scale.setScalar(0.01);
       this.tweens.push((dt) => {
         k = Math.min(1, k + dt / 0.7);
-        o.scale.setScalar(Math.max(0.01, 1.45 * easeOutBack(k)));
+        o.scale.setScalar(Math.max(0.01, 1.15 * easeOutBack(k)));
         return k < 1;
       });
       this.burst(new THREE.Vector3(0, this.tileTop + 2.5, 0), 18, owner);
@@ -981,17 +1028,18 @@ export class World {
     this.treasure.clear();
     for (let k = 0; k < n; k++) {
       const c = src.clone(true);
-      const a = k * 2.399;
-      const r = 1.0 + (k % 5) * 0.12;
-      c.position.set(Math.cos(a) * r, this.tileTop + Math.floor(k / 5) * 0.12, 1.15 + Math.sin(a) * 0.35);
+      // 王城の左右と奥（手前はサイコロの広場）
+      const a = -Math.PI * 0.1 - (k % 7) * (Math.PI * 1.2 / 6);
+      const r = 1.75 + Math.floor(k / 7) * 0.3;
+      c.position.set(Math.cos(a) * r, this.tileTop + Math.floor(k / 7) * 0.1, Math.sin(a) * r);
       c.rotation.y = a;
       c.scale.setScalar(1.2);
       this.treasure.add(c);
     }
-    if (grow && n > 1) this.burst(new THREE.Vector3(0, this.tileTop + 0.8, 1.2), 6, -1);
+    if (grow && n > 1) this.burst(this.treasureWorld, 6, -1);
   }
   get treasureWorld() {
-    return new THREE.Vector3(0, this.tileTop + 0.8, 1.2);
+    return new THREE.Vector3(0, this.tileTop + 0.8, -1.6);
   }
 
   private async loadDragon() {

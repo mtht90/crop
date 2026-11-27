@@ -41,6 +41,7 @@ export class GameView implements View {
   async turnStart(p: Player) {
     this.active = p.id;
     this.applySpeed();
+    this.world.setZoom(innerWidth < innerHeight ? 0.5 : 0.62);
     this.world.focusOn(this.world.pathPos[p.pos]);
     this.sync();
     if (p.human) {
@@ -185,26 +186,37 @@ export class GameView implements View {
     for (let i = 0; i < N_TILES; i++) this.updateLabel(i);
   }
 
+  /** マスの印字を今の状態に合わせる */
   updateLabel(i: number) {
     const def = TILES[i];
     const t = this.g.s.tiles[i];
     if (def.kind !== 'prop') {
-      const extra = def.kind === 'jackpot' ? `<b>${this.g.s.jackpot.toLocaleString()}G</b>` : '';
-      this.world.setLabel(i, `${icon(def.icon)}${extra}`);
+      const SPECIAL: Record<string, { bg: string; fg: string; name: string }> = {
+        start: { bg: '#f5b82e', fg: '#2b2640', name: 'スタート' },
+        shrine: { bg: '#5aa9e6', fg: '#fff', name: 'カード' },
+        event: { bg: '#b98ce8', fg: '#fff', name: '運命の巻物' },
+        tax: { bg: '#5a4a5f', fg: '#ffd7a8', name: '竜の関所' },
+        dungeon: { bg: '#6b6f7a', fg: '#fff', name: '地下牢' },
+        jackpot: { bg: '#ffd35c', fg: '#7a4b00', name: '黄金の泉' },
+        portal: { bg: '#3b3b8f', fg: '#c9b8ff', name: 'ワープ' },
+        tavern: { bg: '#c9773b', fg: '#fff', name: '酒場' },
+        cathedral: { bg: '#ffffff', fg: '#3b8eea', name: '大聖堂' },
+      };
+      const sp = SPECIAL[def.kind];
+      const main = def.kind === 'jackpot' ? `${this.g.s.jackpot.toLocaleString()}G` : def.kind === 'start' ? `+${this.g.stage.salary}G` : def.kind === 'tax' ? '10%' : '';
+      this.world.printTile(i, { kind: def.kind, name: sp.name, icon: def.icon, bg: sp.bg, fg: sp.fg, main });
       return;
     }
+    const grp = GROUPS[def.group!];
     if (t.owner === null) {
-      this.world.setLabel(i, `<span class="lb-price">${this.g.price(i)}G</span>`);
+      this.world.printTile(i, { kind: 'prop', name: def.name, icon: def.icon, bg: '#fffaf0', band: grp.color, main: `${this.g.price(i)}G` });
       return;
     }
-    const toll = this.g.toll(i);
-    const mono = this.g.ownsGroup(t.owner, def.group!);
-    const stars = '★'.repeat(t.level) + '☆'.repeat(4 - t.level);
-    this.world.setLabel(
-      i,
-      `<span class="lb-stars">${stars}</span><span class="lb-toll">${toll.toLocaleString()}G</span>${mono ? '<span class="lb-mono">×2</span>' : ''}`,
-      `owned owner-${t.owner}${toll >= 400 ? ' hot' : ''}${t.dragon ? ' dragon' : ''}${t.festival ? ' festival' : ''}`,
-    );
+    const oc = PLAYER_COLORS[t.owner];
+    this.world.printTile(i, {
+      kind: 'prop', name: def.name, icon: def.icon, band: grp.color, bg: '#ffffff', owner: oc, main: `${this.g.toll(i).toLocaleString()}G`,
+      level: t.level, mono: this.g.ownsGroup(t.owner, def.group!), festival: t.festival > 0, dragon: t.dragon > 0,
+    });
   }
 }
 
