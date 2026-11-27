@@ -9,13 +9,15 @@ import { GROUPS, PLAYER_KEYS, TILES } from '../data/defs.ts';
 import type { StageDef, TileState } from '../game/types.ts';
 
 const loader = new GLTFLoader();
+/** 公開版（claude.ai のページ）では、モデルをデータ埋め込みの .json として配信している */
+const modelUrl = (path: string) => `./models/${(window as unknown as { MODEL_JSON?: boolean }).MODEL_JSON ? path.replace(/\.(gltf|glb)$/, '.json') : path}`;
 const cache = new Map<string, Promise<THREE.Group>>();
 const animCache = new Map<string, Promise<THREE.AnimationClip[]>>();
 export function loadModel(path: string): Promise<THREE.Group> {
   if (!cache.has(path)) {
     cache.set(
       path,
-      loader.loadAsync(`./models/${path}`).then((g) => {
+      loader.loadAsync(modelUrl(path)).then((g) => {
         g.scene.traverse((c) => {
           const m = c as THREE.Mesh;
           if (m.isMesh) {
@@ -30,7 +32,7 @@ export function loadModel(path: string): Promise<THREE.Group> {
   return cache.get(path)!;
 }
 function loadClips(path: string) {
-  if (!animCache.has(path)) animCache.set(path, loader.loadAsync(`./models/${path}`).then((g) => g.animations));
+  if (!animCache.has(path)) animCache.set(path, loader.loadAsync(modelUrl(path)).then((g) => g.animations));
   return animCache.get(path)!;
 }
 async function inst(path: string) {
