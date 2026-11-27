@@ -261,7 +261,7 @@ button { font: inherit; color: inherit; }
 .page-head h2 { margin: 0; text-align: center; font-family: var(--display); font-weight: 400; font-size: 22px; }
 .page-head .btn { min-height: 40px; padding: 4px 12px; }
 .hero-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
-.hero-card { position: relative; display: grid; gap: 4px; padding: 8px 8px 10px; border: var(--line); border-radius: 16px; background: var(--paper); box-shadow: var(--shadow); text-align: center; cursor: pointer; transition: transform .12s; }
+.hero-card { position: relative; display: grid; align-content: start; gap: 4px; padding: 8px 8px 10px; border: var(--line); border-radius: 16px; background: var(--paper); box-shadow: var(--shadow); text-align: center; cursor: pointer; transition: transform .12s; }
 .hero-card:hover { transform: translateY(-3px); }
 .hero-card.sel { background: #fff; outline: 4px solid var(--gold); }
 .portrait { height: 130px; display: grid; place-items: center; border-radius: 12px; background: radial-gradient(circle at 50% 70%, #fff6d8, #bfe3fb); overflow: hidden; }
@@ -271,7 +271,7 @@ button { font: inherit; color: inherit; }
 .hc-name small { display: block; font-size: 11px; color: var(--ink-soft); }
 .hc-passive { font-size: 11.5px; line-height: 1.45; font-weight: 700; color: var(--ink-soft); }
 .hero-card.locked .portrait img { filter: brightness(0) opacity(.45); }
-.hc-lock { display: flex; align-items: center; justify-content: center; gap: 4px; padding: 3px 6px; border-radius: 99px; background: var(--ink); color: #fff; font-size: 12px; font-weight: 800; }
+.hc-lock { margin-top: auto; display: flex; align-items: center; justify-content: center; gap: 4px; padding: 3px 6px; border-radius: 99px; background: var(--ink); color: #fff; font-size: 12px; font-weight: 800; }
 .stage-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
 .stage-card { display: grid; gap: 4px; padding: 12px; border: var(--line); border-radius: 16px; box-shadow: var(--shadow); text-align: left; cursor: pointer; color: #fff; min-height: 96px; }
 .stage-card b { font-family: var(--display); font-weight: 400; font-size: 17px; -webkit-text-stroke: 3px var(--ink); paint-order: stroke fill; }
