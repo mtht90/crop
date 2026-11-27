@@ -30,3 +30,13 @@ https://creativecommons.org/licenses/by/4.0/
 
 ## フォント
 Dela Gothic One / M PLUS Rounded 1c — SIL Open Font License 1.1（@fontsource 経由）
+
+## 3Dモデル（`public/models/`）
+Kay Lousberg（https://www.kaylousberg.com）— CC0 1.0（表記は任意ですが感謝を込めて記載します）
+| フォルダ | パック | 出典 |
+|---|---|---|
+| hex/ | KayKit : Medieval Hexagon Pack 1.0 (Free) | https://kaylousberg.itch.io/kaykit-medieval-hexagon |
+| adv/ | KayKit : Character Pack Adventurers 2.0 (Free) | https://kaylousberg.itch.io/kaykit-adventurers |
+| bits/ | KayKit : Board Game Bits 1.0 (Free) | https://kaylousberg.itch.io/board-game-bits |
+
+各パックのライセンス文は `public/models/LICENSE-*.txt` にあります。
