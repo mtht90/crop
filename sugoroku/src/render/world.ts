@@ -410,7 +410,7 @@ export class World {
       this.highlightBase[i] = hl.position.y;
 
       const def = TILES[i];
-      const faceTo = Math.atan2(p.x - this.plotPos[i].x, p.z - this.plotPos[i].z);
+      const faceTo = Math.round(Math.atan2(p.x - this.plotPos[i].x, p.z - this.plotPos[i].z) / (Math.PI / 3)) * (Math.PI / 3);
       if (def.kind !== 'prop') {
         if (def.kind === 'jackpot') {
           for (let n = 0; n < 6; n++) add('bits/coin_10_gold.gltf', this.plotPos[i].clone().add(new THREE.Vector3((rnd() - 0.5) * 1.0, 0, (rnd() - 0.5) * 1.0)), rnd() * 6, 0.8);
@@ -580,7 +580,8 @@ export class World {
       }
     }
     const group = new THREE.Group();
-    group.rotation.y = face;
+    // 建物は六角形の台座つきなので、地面のマスと向きがそろうよう 60° 刻みで道の方を向ける
+    group.rotation.y = Math.round(face / (Math.PI / 3)) * (Math.PI / 3);
     for (const p of parts) group.add(p);
     holder.add(group);
     if (animate) {
