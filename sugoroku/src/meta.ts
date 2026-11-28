@@ -1,22 +1,7 @@
 // 成長要素（レベル・王冠・開放・実績）。ブラウザの localStorage に保存する。
 import { CARDS, HEROES, STAGES } from './data/defs.ts';
-import type { Game } from './game/engine.ts';
-import type { CardId, HeroId, Player, StageId } from './game/types.ts';
-
-export interface DiceSkin {
-  id: string;
-  name: string;
-  model: string;
-  level: number;
-}
-export const DICE_SKINS: DiceSkin[] = [
-  { id: 'ivory', name: '象牙', model: 'D6_A', level: 1 },
-  { id: 'ruby', name: '紅玉', model: 'D6_A_red', level: 4 },
-  { id: 'sapphire', name: '蒼玉', model: 'D6_B_blue', level: 8 },
-  { id: 'gold', name: '黄金', model: 'D6_A_yellow', level: 11 },
-  { id: 'jade', name: '翡翠の数字', model: 'D6_C_green', level: 13 },
-  { id: 'crimson', name: '紅の数字', model: 'D6_C_red', level: 15 },
-];
+import type { Campaign } from './game/campaign.ts';
+import type { HeroId, Lord, StageId } from './game/types.ts';
 
 export interface Achievement {
   id: string;
@@ -28,33 +13,31 @@ export interface Achievement {
 export const ACHIEVEMENTS: Achievement[] = [
   { id: 'first-game', name: '王国への第一歩', desc: '1回遊ぶ', crowns: 50, icon: 'flag-objective' },
   { id: 'first-win', name: '初めての戴冠', desc: '1位になる', crowns: 150, icon: 'crown' },
-  { id: 'set', name: '地方の統一者', desc: '同じ色の陣を全部そろえる', crowns: 80, icon: 'castle' },
-  { id: 'two-sets', name: '二国の王', desc: '1試合で2色を統一する', crowns: 150, icon: 'tower-flag' },
-  { id: 'conquest', name: '全陣制圧', desc: '全ての陣を手に入れて勝つ', crowns: 500, icon: 'laurel-crown' },
-  { id: 'ten', name: '大領主', desc: '1試合で陣を10個持つ', crowns: 150, icon: 'tower-flag' },
-  { id: 'jackpot', name: '黄金の泉', desc: 'ジャックポットを獲得する', crowns: 80, icon: 'fountain' },
-  { id: 'big-jackpot', name: '泉の主', desc: '500G以上のジャックポットを獲得する', crowns: 200, icon: 'coins' },
-  { id: 'fort', name: '王城の主', desc: '陣を王城まで築く', crowns: 120, icon: 'ancient-columns' },
-  { id: 'takeover', name: '侵略者', desc: '1試合で陣を4回奪う', crowns: 100, icon: 'gavel' },
-  { id: 'trap', name: '罠師', desc: '罠で一度に 200G 以上を取る', crowns: 100, icon: 'skull-crossed-bones' },
+  { id: 'first-battle', name: '初陣', desc: 'バトルに勝つ', crowns: 40, icon: 'crossed-swords' },
+  { id: 'five', name: '領主', desc: '領地を5つ持つ', crowns: 100, icon: 'tower-flag' },
+  { id: 'eight', name: '大領主', desc: '領地を8つ持つ', crowns: 250, icon: 'castle' },
+  { id: 'capital', name: '王都陥落', desc: '相手の王都を落とす', crowns: 200, icon: 'gavel' },
+  { id: 'dragon', name: '竜殺し', desc: '竜の巣を落とす', crowns: 300, icon: 'dragon-head' },
+  { id: 'flawless', name: '無傷の勝利', desc: '自分の城に傷を負わずにバトルに勝つ', crowns: 120, icon: 'magic-shield' },
+  { id: 'big-hit', name: '大打撃', desc: '1ターンで城に10ダメージ以上', crowns: 100, icon: 'fireball' },
+  { id: 'seven-wins', name: '常勝将軍', desc: '1試合でバトルに7勝', crowns: 150, icon: 'laurel-crown' },
   { id: 'comeback', name: '大逆転', desc: '3位以下から巻き返して1位になる', crowns: 250, icon: 'upgrade' },
   { id: 'deck', name: '蒐集家', desc: '1試合でカードを6枚手に入れる', crowns: 100, icon: 'card-random' },
+  { id: 'last-one', name: '天下統一', desc: 'ほかの領主を全員脱落させて勝つ', crowns: 500, icon: 'podium-winner' },
   { id: 'all-heroes', name: '英雄たちの王', desc: '6人全員で1位になる', crowns: 600, icon: 'podium-winner' },
   { id: 'sky-win', name: '天空の覇者', desc: '天空の王国で1位になる', crowns: 500, icon: 'sparkles' },
 ];
 
 export type Reward =
   | { kind: 'crowns'; amount: number }
-  | { kind: 'card'; card: CardId }
-  | { kind: 'stage'; stage: StageId }
-  | { kind: 'dice'; skin: string };
+  | { kind: 'card'; card: string }
+  | { kind: 'stage'; stage: StageId };
 
 /** レベルごとの報酬（そのレベルに上がったときにもらえる） */
 export function levelRewards(level: number): Reward[] {
   const r: Reward[] = [{ kind: 'crowns', amount: 60 + level * 20 }];
-  for (const c of Object.values(CARDS)) if (c.unlockLevel === level) r.push({ kind: 'card', card: c.id });
+  for (const c of Object.values(CARDS)) if (c.unlockLevel === level && !c.token && !c.monster && level > 1) r.push({ kind: 'card', card: c.id });
   for (const s of Object.values(STAGES)) if (s.unlockLevel === level && level > 1) r.push({ kind: 'stage', stage: s.id });
-  for (const d of DICE_SKINS) if (d.level === level && level > 1) r.push({ kind: 'dice', skin: d.id });
   return r;
 }
 export const xpForLevel = (level: number) => 180 + (level - 1) * 90;
@@ -77,12 +60,13 @@ export interface SaveData {
   seenHelp: boolean;
   seenHelpV2: boolean;
   seenHelpV3: boolean;
+  seenHelpV4: boolean;
 }
 
-const KEY = 'dice-kingdom-save-v1';
+const KEY = 'dice-kingdom-save-v1'; // 名前は旧版のまま（レベル・王冠・キャラは引き継ぐ）
 const fresh = (): SaveData => ({
   v: 1, level: 1, xp: 0, crowns: 0, heroes: ['knight', 'merchant'], achievements: [], heroWins: [], dice: 'ivory',
-  games: 0, wins: 0, lastHero: 'knight', lastStage: 'meadow', muted: false, speed: 1, seenHelp: false, seenHelpV2: false, seenHelpV3: false,
+  games: 0, wins: 0, lastHero: 'knight', lastStage: 'meadow', muted: false, speed: 1, seenHelp: false, seenHelpV2: false, seenHelpV3: false, seenHelpV4: false,
 });
 
 export function loadSave(): SaveData {
@@ -102,9 +86,8 @@ export function writeSave(s: SaveData) {
   }
 }
 
-export const unlockedCards = (s: SaveData): CardId[] => Object.values(CARDS).filter((c) => c.unlockLevel <= s.level).map((c) => c.id);
+export const unlockedCards = (s: SaveData): string[] => Object.values(CARDS).filter((c) => !c.token && c.unlockLevel <= s.level).map((c) => c.id);
 export const unlockedStages = (s: SaveData): StageId[] => Object.values(STAGES).filter((x) => x.unlockLevel <= s.level).map((x) => x.id);
-export const unlockedDice = (s: SaveData) => DICE_SKINS.filter((d) => d.level <= s.level);
 export const heroCost = (h: HeroId) => HEROES[h].cost;
 
 export interface MatchResult {
@@ -120,23 +103,21 @@ export interface MatchResult {
 }
 
 /** 試合結果を保存データに反映する */
-export function applyMatch(save: SaveData, g: Game, me: Player): MatchResult {
-  const rank = g.ranking().indexOf(me);
-  const won = g.s.winner === me.id;
+export function applyMatch(save: SaveData, c: Campaign, me: Lord): MatchResult {
+  const rank = c.rankOf(me);
+  const won = c.winner === me.id;
+  const regions = c.regionsOf(me.id).length;
   const xp: { label: string; xp: number }[] = [{ label: '参加', xp: 100 }];
   xp.push({ label: `${rank + 1}位`, xp: [220, 130, 80, 50][rank] });
-  const terr = g.territories(me).length;
-  if (terr) xp.push({ label: `陣 ${terr}個`, xp: terr * 12 });
-  if (me.stats.takeovers) xp.push({ label: '陣を奪った', xp: 12 * me.stats.takeovers });
-  if (me.stats.jackpots) xp.push({ label: 'ジャックポット', xp: 40 * me.stats.jackpots });
-  if (me.stats.forts) xp.push({ label: '王城', xp: 50 * me.stats.forts });
-  if (won && g.s.winReason === 'conquest') xp.push({ label: '全陣制圧', xp: 300 });
-  const stageBonus = { meadow: 1, snow: 1.2, volcano: 1.4, sky: 1.7 }[g.s.cfg.stage];
-  if (stageBonus > 1) xp.push({ label: `${STAGES[g.s.cfg.stage].name}ボーナス`, xp: Math.round(xp.reduce((a, b) => a + b.xp, 0) * (stageBonus - 1)) });
+  if (regions) xp.push({ label: `領地 ${regions}つ`, xp: regions * 15 });
+  if (me.stats.battlesWon) xp.push({ label: `バトル ${me.stats.battlesWon}勝`, xp: me.stats.battlesWon * 15 });
+  if (me.stats.capitalsTaken) xp.push({ label: '王都を落とした', xp: 80 * me.stats.capitalsTaken });
+  if (me.stats.dragonSlain) xp.push({ label: '竜を倒した', xp: 150 });
+  const stageBonus = { meadow: 1, snow: 1.2, volcano: 1.4, sky: 1.7 }[c.cfg.stage];
+  if (stageBonus > 1) xp.push({ label: `${STAGES[c.cfg.stage].name}ボーナス`, xp: Math.round(xp.reduce((a, b) => a + b.xp, 0) * (stageBonus - 1)) });
 
   const crowns: { label: string; crowns: number }[] = [{ label: `${rank + 1}位の報酬`, crowns: Math.round([120, 70, 45, 30][rank] * stageBonus) }];
 
-  // 実績
   const got = new Set(save.achievements);
   const newAch: Achievement[] = [];
   const check = (id: string, ok: boolean) => {
@@ -149,19 +130,19 @@ export function applyMatch(save: SaveData, g: Game, me: Player): MatchResult {
   if (won) heroWins.add(me.hero);
   check('first-game', true);
   check('first-win', won);
-  check('set', g.sets(me.id).length >= 1);
-  check('two-sets', g.sets(me.id).length >= 2);
-  check('conquest', won && g.s.winReason === 'conquest');
-  check('ten', me.stats.maxTerritories >= 10);
-  check('jackpot', me.stats.jackpots > 0);
-  check('big-jackpot', me.stats.maxJackpot >= 500);
-  check('fort', me.stats.forts > 0);
-  check('takeover', me.stats.takeovers >= 4);
-  check('trap', me.stats.maxToll >= 200);
+  check('first-battle', me.stats.battlesWon > 0);
+  check('five', me.stats.maxRegions >= 5);
+  check('eight', me.stats.maxRegions >= 8);
+  check('capital', me.stats.capitalsTaken > 0);
+  check('dragon', me.stats.dragonSlain);
+  check('flawless', me.stats.flawless > 0);
+  check('big-hit', me.stats.bestDamage >= 10);
+  check('seven-wins', me.stats.battlesWon >= 7);
   check('comeback', won && me.stats.lowestRankSeen >= 2);
-  check('deck', me.stats.cardsBought >= 6);
+  check('deck', me.stats.cardsGained >= 6);
+  check('last-one', won && c.alive.length === 1);
   check('all-heroes', heroWins.size >= 6);
-  check('sky-win', won && g.s.cfg.stage === 'sky');
+  check('sky-win', won && c.cfg.stage === 'sky');
   for (const a of newAch) crowns.push({ label: `実績「${a.name}」`, crowns: a.crowns });
 
   const levelBefore = save.level;

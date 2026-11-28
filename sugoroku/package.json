@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "sim": "node --experimental-strip-types scripts/simulate.ts",
     "ui-assets": "node scripts/fetch-ui.mjs",
-    "predev": "node scripts/fetch-ui.mjs"
+    "predev": "node scripts/fetch-ui.mjs",
+    "bsim": "node --experimental-strip-types scripts/battle-sim.ts"
   },
   "dependencies": {
     "cannon-es": "0.20.0",

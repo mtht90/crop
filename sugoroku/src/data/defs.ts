@@ -1,184 +1,199 @@
-import type { CardRef, UpgradeDef, CardDef, CardId, GroupDef, HeroDef, HeroId, StageDef, StageId, TileDef } from '../game/types.ts';
+// ゲームのデータ（v4：王国カードバトル）。カード・キャラ・ステージ・領地。
+import type { CardDef, Effect, HeroDef, HeroId, Keyword, RegionDef, StageDef, StageId } from '../game/types.ts';
 
-export const GROUPS: GroupDef[] = [
-  { name: '若葉の野', color: '#6fcf5a' },
-  { name: '妖精の森', color: '#2fb59a' },
-  { name: '蒼の海岸', color: '#3c8ee8' },
-  { name: '鉄の山脈', color: '#f08a3c' },
-  { name: '魔導の地', color: '#a05ce8' },
-  { name: '黄金の都', color: '#f2c230' },
-];
-
-// 1周30マスの六角形の輪。index 0 がスタート。5の倍数が角マス。
-export const TILES: TileDef[] = [
-  { kind: 'start', name: '王都の門', icon: 'crown' },
-  { kind: 'prop', name: '麦畑の村', icon: 'wheat', group: 0, price: 60 },
-  { kind: 'prop', name: '風車の丘', icon: 'windmill', group: 0, price: 70 },
-  { kind: 'shrine', name: '精霊の祠', icon: 'card-pickup' },
-  { kind: 'prop', name: '水車の里', icon: 'water-mill', group: 0, price: 80 },
-  { kind: 'tavern', name: '酒場', icon: 'beer-stein' },
-  { kind: 'prop', name: '古樹の森', icon: 'forest', group: 1, price: 100 },
-  { kind: 'event', name: '運命の巻物', icon: 'scroll-unfurled' },
-  { kind: 'prop', name: 'キノコの谷', icon: 'mushroom-house', group: 1, price: 110 },
-  { kind: 'prop', name: 'フクロウの塔', icon: 'owl', group: 1, price: 120 },
-  { kind: 'dungeon', name: '地下牢', icon: 'dungeon-gate' },
-  { kind: 'prop', name: '錨の港町', icon: 'anchor', group: 2, price: 140 },
-  { kind: 'prop', name: '灯台の岬', icon: 'lighthouse', group: 2, price: 150 },
-  { kind: 'shrine', name: '精霊の祠', icon: 'card-pickup' },
-  { kind: 'prop', name: '海竜の入江', icon: 'sea-dragon', group: 2, price: 160 },
-  { kind: 'jackpot', name: '黄金の泉', icon: 'fountain' },
-  { kind: 'prop', name: '鍛冶の街', icon: 'anvil', group: 3, price: 180 },
-  { kind: 'tax', name: '竜の関所', icon: 'spiked-dragon-head' },
-  { kind: 'prop', name: '黄金鉱山', icon: 'gold-mine', group: 3, price: 190 },
-  { kind: 'prop', name: '巨人の砦', icon: 'stone-tower', group: 3, price: 200 },
-  { kind: 'cathedral', name: '大聖堂', icon: 'church' },
-  { kind: 'prop', name: '魔術学院', icon: 'spell-book', group: 4, price: 220 },
-  { kind: 'shrine', name: '精霊の祠', icon: 'card-pickup' },
-  { kind: 'prop', name: '水晶の塔', icon: 'crystal-cluster', group: 4, price: 240 },
-  { kind: 'prop', name: '星詠みの館', icon: 'crystal-ball', group: 4, price: 260 },
-  { kind: 'portal', name: '転移の魔法陣', icon: 'magic-portal' },
-  { kind: 'prop', name: '天空神殿', icon: 'ancient-columns', group: 5, price: 280 },
-  { kind: 'event', name: '運命の巻物', icon: 'scroll-unfurled' },
-  { kind: 'prop', name: '王立宝物庫', icon: 'open-treasure-chest', group: 5, price: 310 },
-  { kind: 'prop', name: '白亜の王城', icon: 'castle', group: 5, price: 350 },
-];
-
-export const LEVEL_NAMES = ['旗', '砦', '城塞', '王城'];
-export const MAX_LEVEL = 3;
-
-/** 経済の数値（すべて陣の値段 price × ステージ倍率が基準） */
-export const ECON = {
-  income: 0.07, // 毎ターンの税収：price × income × (1 + 砦の段階)
-  toll: 0.12, // 相手の陣に止まったときの通行税：price × toll × (1 + 砦の段階)
-  steal: 1.7, // 奪う値段：price × (steal + stealPerLevel × 段階)
-  stealPerLevel: 1.0,
-  fort: 0.5, // 砦を1段階築く値段：price × fort
-  setIncome: 2, // 同じ色の陣を全部持つと税収が2倍
-  energy: 3, // 毎ターンの行動力
-  hand: 5, // 毎ターンの最初に引く枚数（使わなかったカードはターン終了時に捨て札へ）
-  trap: 100, // 罠を踏んだときに払う額
+// ---------- バトルの基本 ----------
+export const BATTLE = {
+  attackerHp: 20, // 攻める側の城の体力
+  maxMana: 7,
+  field: 5, // 場に出せる兵の数
+  handMax: 8,
+  firstHand: 3, // 先攻の最初の手札
+  secondHand: 4, // 後攻の最初の手札
+  turnLimit: 14, // それぞれ14ターンで決着しなければ守る側の勝ち
 };
 
-export const CARDS: Record<CardId, CardDef> = {
-  // 移動（1ターン1枚まで）
-  walk: { id: 'walk', name: '歩く', icon: 'boots', rarity: 'common', cost: 0, move: true, target: 'none', price: 20, unlockLevel: 1, desc: '1マス進む。' },
-  dice: { id: 'dice', name: 'サイコロ', icon: 'perspective-dice-six-faces-random', rarity: 'common', cost: 1, move: true, target: 'none', price: 60, unlockLevel: 1, desc: 'サイコロ1個を振って進む。' },
-  twin: { id: 'twin', name: '双子のサイコロ', icon: 'rolling-dices', rarity: 'rare', cost: 2, move: true, target: 'none', price: 130, unlockLevel: 1, desc: 'サイコロ2個を振って進む。ゾロ目ならカードを1枚引く。' },
-  aim: { id: 'aim', name: '狙い撃ち', icon: 'flag-objective', rarity: 'common', cost: 1, move: true, target: 'steps', steps: [2, 3, 4], price: 80, unlockLevel: 1, desc: '2〜4マスから選んで進む。' },
-  gale: { id: 'gale', name: '疾風', icon: 'fast-forward-button', rarity: 'rare', cost: 2, move: true, target: 'steps', steps: [5, 6, 7, 8], price: 140, unlockLevel: 1, desc: '5〜8マスから選んで進む。' },
-  retreat: { id: 'retreat', name: '引き返す', icon: 'exit-door', rarity: 'common', cost: 1, move: true, target: 'steps', steps: [-1, -2, -3], price: 70, unlockLevel: 2, desc: '1〜3マス戻る。' },
-  teleport: { id: 'teleport', exhaust: true, name: '転移の書', icon: 'teleport', rarity: 'epic', cost: 3, move: true, target: 'anyTile', price: 220, unlockLevel: 4, desc: '好きなマスへ移動する。' },
-  // 陣
-  banner: { id: 'banner', name: '旗手', icon: 'tower-flag', rarity: 'rare', cost: 1, move: false, target: 'emptyTile', price: 120, unlockLevel: 1, desc: '前後3マス以内の空いた陣に、値段を払って旗を立てる。' },
-  march: { id: 'march', name: '進軍', icon: 'barbarian', rarity: 'rare', cost: 2, move: false, target: 'enemyTile', price: 150, unlockLevel: 2, desc: '今いるマスか隣の、相手の陣を半額で奪う。' },
-  fortify: { id: 'fortify', name: '築城', icon: 'hammer-drop', rarity: 'common', cost: 1, move: false, target: 'ownTile', price: 90, unlockLevel: 1, desc: '自分の陣を1つ選び、値段を払って砦を1段階築く（どこからでも）。' },
-  guard: { id: 'guard', name: '守りの結界', icon: 'magic-shield', rarity: 'common', cost: 1, move: false, target: 'ownTile', price: 80, unlockLevel: 1, desc: '自分の陣を1つ選ぶ。3ラウンドの間、誰にも奪われない。' },
-  edict: { id: 'edict', exhaust: true, name: '王の勅命', icon: 'gavel', rarity: 'epic', cost: 3, move: false, target: 'enemyTile', price: 240, unlockLevel: 6, desc: 'どこにある相手の陣でも、奪う値段を払って奪う。' },
-  // お金・手札
-  purse: { id: 'purse', name: '金貨の袋', icon: 'two-coins', rarity: 'common', cost: 0, move: false, target: 'none', price: 50, unlockLevel: 1, desc: 'すぐに 80G を得る。' },
-  levy: { id: 'levy', name: '徴税', icon: 'receive-money', rarity: 'rare', cost: 1, move: false, target: 'none', price: 130, unlockLevel: 3, desc: '自分の陣の税収を、もう1回受け取る。' },
-  scheme: { id: 'scheme', name: '作戦会議', icon: 'scroll-unfurled', rarity: 'common', cost: 1, move: false, target: 'none', price: 70, unlockLevel: 1, desc: 'カードを2枚引く。' },
-  thieves: { id: 'thieves', name: '盗賊団', icon: 'robber', rarity: 'rare', cost: 2, move: false, target: 'none', price: 140, unlockLevel: 2, desc: '一番お金持ちの相手から 20% を奪う（最大300G）。' },
-  // 攻撃・妨害
-  trap: { id: 'trap', name: '落とし穴', icon: 'skull-crossed-bones', rarity: 'common', cost: 1, move: false, target: 'anyTile', price: 70, unlockLevel: 1, desc: '好きなマスに罠を仕掛ける。踏んだ相手は 100G をあなたに払う。' },
-  quake: { id: 'quake', name: '大地震', icon: 'earth-crack', rarity: 'rare', cost: 2, move: false, target: 'enemyTile', price: 130, unlockLevel: 3, desc: '相手の陣の砦を1段階壊す。旗だけなら旗を倒して空き地にする。' },
-  dragon: { id: 'dragon', exhaust: true, name: '竜の召喚', icon: 'fire-breath', rarity: 'epic', cost: 3, move: false, target: 'enemyTile', price: 260, unlockLevel: 5, desc: '相手の陣を焼き払い、空き地に戻す（結界があっても）。' },
+export const KW_NAME: Record<Keyword, string> = { guard: '守護', rush: '速攻', ranged: '射撃', shield: '盾' };
+export const KW_DESC: Record<Keyword, string> = {
+  guard: '守護：この兵がいる間、敵は城やほかの兵を攻撃できない',
+  rush: '速攻：出したターンから攻撃できる',
+  ranged: '射撃：攻撃しても反撃を受けない',
+  shield: '盾：最初に受けるダメージを1回だけ防ぐ',
 };
-
-/** 強化（+）の効果。カード屋や王の贈り物で強化できる */
-export const UPGRADES: Record<CardId, UpgradeDef> = {
-  walk: { desc: '2マス進む。' },
-  dice: { desc: 'サイコロ1個を振り、出目 +1 だけ進む。' },
-  twin: { cost: 1, desc: 'サイコロ2個を振って進む。ゾロ目ならカードを1枚引く。' },
-  aim: { steps: [1, 2, 3, 4, 5], desc: '1〜5マスから選んで進む。' },
-  gale: { steps: [4, 5, 6, 7, 8, 9], desc: '4〜9マスから選んで進む。' },
-  retreat: { cost: 0, steps: [-1, -2, -3, -4], desc: '1〜4マス戻る。' },
-  teleport: { cost: 2, desc: '好きなマスへ移動する。' },
-  banner: { desc: '前後5マス以内の空いた陣に、2割引で旗を立てる。' },
-  march: { desc: '2マス以内の相手の陣を半額で奪う。' },
-  fortify: { desc: '自分の陣を1つ選び、値段を払って砦を2段階築く（どこからでも）。' },
-  guard: { desc: '自分の陣を1つ選ぶ。5ラウンドの間、誰にも奪われない。' },
-  edict: { desc: 'どこにある相手の陣でも、奪う値段の2割引で奪う。' },
-  purse: { desc: 'すぐに 140G を得る。' },
-  levy: { desc: '自分の陣の税収の1.5倍を、もう1回受け取る。' },
-  scheme: { desc: 'カードを3枚引く。' },
-  thieves: { desc: '一番お金持ちの相手から 30% を奪う（最大450G）。' },
-  trap: { desc: '好きなマスに罠を仕掛ける。踏んだ相手は 200G をあなたに払う。' },
-  quake: { desc: '相手の陣の砦を2段階壊す（砦が足りなければ旗も倒す）。' },
-  dragon: { cost: 2, desc: '相手の陣を焼き払い、空き地に戻す（結界があっても）。' },
-};
-
-export const baseId = (r: CardRef): CardId => (r.endsWith('+') ? r.slice(0, -1) : r) as CardId;
-export const isUp = (r: CardRef) => r.endsWith('+');
-export const upRef = (id: CardId): CardRef => `${id}+`;
-
-export interface CardView extends CardDef {
-  ref: CardRef;
-  up: boolean;
-}
-const cardCache = new Map<CardRef, CardView>();
-/** デッキの1枚（強化済みも含む）の実際の性能 */
-export function card(r: CardRef): CardView {
-  let v = cardCache.get(r);
-  if (!v) {
-    const b = CARDS[baseId(r)];
-    const up = isUp(r);
-    const u = UPGRADES[b.id];
-    v = { ...b, ref: r, up, name: up ? `${b.name}+` : b.name, cost: up && u.cost !== undefined ? u.cost : b.cost, steps: up && u.steps ? u.steps : b.steps, desc: up ? u.desc : b.desc };
-    cardCache.set(r, v);
-  }
-  return v;
-}
-
-/** カードの種類（カード下の札に表示） */
-export type CardKind = 'move' | 'land' | 'gold' | 'plan' | 'harm';
-export const KIND_NAME: Record<CardKind, string> = { move: '移動', land: '陣', gold: '資金', plan: '策略', harm: '妨害' };
-export const CARD_KIND: Record<CardId, CardKind> = {
-  walk: 'move', dice: 'move', twin: 'move', aim: 'move', gale: 'move', retreat: 'move', teleport: 'move',
-  banner: 'land', march: 'land', fortify: 'land', guard: 'land', edict: 'land',
-  purse: 'gold', levy: 'gold', thieves: 'gold', scheme: 'plan',
-  trap: 'harm', quake: 'harm', dragon: 'harm',
-};
-
-export const RARITY_WEIGHT = { common: 60, rare: 30, epic: 10 };
 export const RARITY_NAME = { common: 'コモン', rare: 'レア', epic: 'エピック' };
 
-const BASE_DECK: CardRef[] = ['walk', 'walk', 'dice', 'dice', 'dice', 'dice', 'aim', 'purse', 'fortify'];
+const U = (id: string, name: string, icon: string, cost: number, atk: number, hp: number, rarity: CardDef['rarity'], unlockLevel: number, kw: Keyword[] = [], fx: Effect[] = [], extra: Partial<CardDef> = {}): CardDef => ({ id, name, icon, type: 'unit', cost, atk, hp, kw, fx, rarity, unlockLevel, ...extra });
+const S = (id: string, name: string, icon: string, cost: number, rarity: CardDef['rarity'], unlockLevel: number, fx: Effect[]): CardDef => ({ id, name, icon, type: 'spell', cost, fx, rarity, unlockLevel });
+
+export const CARDS: Record<string, CardDef> = Object.fromEntries(
+  [
+    // ---- 兵（基本） ----
+    U('recruit', '見習い兵', 'swordman', 1, 1, 2, 'common', 1),
+    U('spear', '槍兵', 'spear-hook', 1, 2, 1, 'common', 1),
+    U('shield', '盾兵', 'shield-bash', 2, 1, 4, 'common', 1, ['guard']),
+    U('archer', '弓兵', 'bowman', 2, 2, 2, 'common', 1, ['ranged']),
+    U('scout', '斥候', 'cowled', 2, 2, 1, 'common', 1, ['rush']),
+    U('priest', '僧侶', 'monk-face', 2, 1, 3, 'common', 1, [], [{ kind: 'heal', n: 3 }]),
+    U('knight', '騎士', 'knight-banner', 3, 3, 3, 'common', 1, ['shield']),
+    U('sellsword', '傭兵', 'sword-brandish', 3, 4, 2, 'common', 1),
+    U('wolf', '森の狼', 'wolf-head', 1, 1, 1, 'common', 1, ['rush']),
+    U('ranger', '狩人', 'archer', 3, 2, 2, 'rare', 1, ['ranged'], [{ kind: 'damage', n: 1, target: 'enemyUnit' }]),
+    U('dwarf', '山の戦士', 'dwarf-face', 3, 2, 5, 'rare', 1, ['guard']),
+    U('mage', '魔導士', 'wizard-face', 4, 3, 3, 'rare', 2, [], [{ kind: 'damage', n: 2, target: 'enemyAny' }]),
+    U('paladin', '聖騎士', 'sun-priest', 4, 3, 4, 'rare', 3, ['shield'], [{ kind: 'heal', n: 3 }]),
+    U('cavalry', '騎兵', 'mounted-knight', 4, 4, 3, 'rare', 2, ['rush']),
+    U('heavy', '重装兵', 'heavy-helm', 5, 4, 7, 'rare', 4, ['guard']),
+    U('catapult', '投石機', 'catapult', 4, 0, 4, 'rare', 3, [], [{ kind: 'siege', n: 2 }]),
+    U('general', '将軍', 'rally-the-troops', 5, 4, 4, 'epic', 5, [], [{ kind: 'buffAll', atk: 1, hp: 1 }]),
+    U('golem', '岩の巨人', 'golem-head', 6, 6, 8, 'epic', 6, ['guard']),
+    U('champion', '英雄', 'crowned-skull', 6, 5, 5, 'epic', 7, ['rush', 'shield']),
+    U('dragon', '竜', 'dragon-head', 7, 6, 6, 'epic', 8, [], [{ kind: 'aoe', n: 2 }]),
+    // ---- 魔物（中立の守り手。倒すと仲間にできる） ----
+    U('goblin', 'ゴブリン', 'goblin-head', 1, 2, 1, 'common', 1, [], [], { monster: true }),
+    U('skeleton', '骸骨兵', 'skeleton', 2, 2, 2, 'common', 1, ['shield'], [], { monster: true }),
+    U('spider', '大蜘蛛', 'spider-face', 2, 1, 3, 'common', 1, ['guard'], [], { monster: true }),
+    U('bandit', '盗賊', 'bandit', 2, 2, 2, 'common', 1, [], [{ kind: 'damage', n: 1, target: 'enemyAny' }], { monster: true }),
+    U('orc', 'オーク', 'orc-head', 3, 3, 4, 'common', 1, [], [], { monster: true }),
+    U('wyvern', 'ワイバーン', 'wyvern', 4, 4, 3, 'rare', 2, ['rush'], [], { monster: true }),
+    U('troll', 'トロル', 'troll', 5, 5, 6, 'rare', 3, [], [], { monster: true }),
+    U('wraith', '亡霊', 'hooded-assassin', 3, 3, 2, 'rare', 2, ['shield', 'rush'], [], { monster: true }),
+    // ---- 呪文 ----
+    S('arrow', '火矢', 'flaming-arrow', 1, 'common', 1, [{ kind: 'damage', n: 2, target: 'enemyAny' }]),
+    S('fireball', '火球', 'fireball', 3, 'common', 1, [{ kind: 'damage', n: 4, target: 'enemyAny' }]),
+    S('rally', '鼓舞', 'trumpet-flag', 1, 'common', 1, [{ kind: 'buff', atk: 2, hp: 1 }]),
+    S('supply', '補給', 'caravan', 2, 'common', 1, [{ kind: 'draw', n: 2 }]),
+    S('prayer', '祈り', 'healing', 1, 'common', 1, [{ kind: 'heal', n: 4 }]),
+    S('wall', '城壁', 'stone-wall', 2, 'common', 1, [{ kind: 'summon', card: 'wallToken', count: 1 }]),
+    S('ambush', '伏兵', 'daggers', 3, 'rare', 2, [{ kind: 'summon', card: 'ambushToken', count: 2 }]),
+    S('armor', '鍛え直し', 'armor-upgrade', 2, 'rare', 2, [{ kind: 'buff', atk: 1, hp: 2, shield: true }]),
+    S('blizzard', '吹雪', 'snowflake-1', 4, 'rare', 4, [{ kind: 'aoe', n: 2 }]),
+    S('meteor', '隕石', 'meteor-impact', 6, 'epic', 6, [{ kind: 'damage', n: 7, target: 'enemyUnit' }, { kind: 'damage', n: 3, target: 'enemyFace' }]),
+    // ---- トークン ----
+    U('wallToken', '石の壁', 'brick-wall', 0, 0, 5, 'common', 99, ['guard'], [], { token: true }),
+    U('ambushToken', '伏兵', 'ninja-heroic-stance', 0, 2, 2, 'common', 99, [], [], { token: true }),
+  ].map((c) => [c.id, c]),
+);
+
+/** カードの説明文（能力と効果から作る） */
+export function cardText(c: CardDef, spellBonus = 0): string {
+  const parts: string[] = [];
+  if (c.kw?.length) parts.push(c.kw.map((k) => KW_NAME[k]).join('・'));
+  for (const f of c.fx ?? []) {
+    const pre = c.type === 'unit' && f.kind !== 'siege' ? '登場時：' : '';
+    const dmg = (n: number) => n + (c.type === 'spell' ? spellBonus : 0);
+    switch (f.kind) {
+      case 'damage':
+        parts.push(`${pre}${f.target === 'enemyUnit' ? '敵の兵1体' : f.target === 'enemyFace' ? '敵の城' : '敵1体か敵の城'}に${dmg(f.n)}ダメージ`);
+        break;
+      case 'aoe':
+        parts.push(`${pre}敵の兵全員に${dmg(f.n)}ダメージ`);
+        break;
+      case 'heal':
+        parts.push(`${pre}自分の城を${f.n}回復`);
+        break;
+      case 'buff':
+        parts.push(`${pre}味方の兵1体に+${f.atk}/+${f.hp}${f.shield ? 'と盾' : ''}`);
+        break;
+      case 'buffAll':
+        parts.push(`${pre}ほかの味方全員に+${f.atk}/+${f.hp}`);
+        break;
+      case 'draw':
+        parts.push(`${pre}カードを${f.n}枚引く`);
+        break;
+      case 'summon': {
+        const t = CARDS[f.card];
+        parts.push(`${pre}${t.name}（${t.atk}/${t.hp}${t.kw?.length ? ' ' + t.kw.map((k) => KW_NAME[k]).join('・') : ''}）を${f.count}体出す`);
+        break;
+      }
+      case 'siege':
+        parts.push(`自分のターンの終わりに敵の城に${f.n}ダメージ`);
+        break;
+    }
+  }
+  return parts.join('。') + (parts.length ? '。' : '');
+}
+
+/** 対象を選ぶ必要があるか */
+export function needsTarget(c: CardDef): 'enemyAny' | 'enemyUnit' | 'ownUnit' | null {
+  const f = c.fx?.[0];
+  if (!f) return null;
+  if (f.kind === 'damage' && f.target !== 'enemyFace') return f.target;
+  if (f.kind === 'buff') return 'ownUnit';
+  return null;
+}
+
+// ---------- キャラ ----------
 export const HEROES: Record<HeroId, HeroDef> = {
-  knight: { id: 'knight', name: 'レオン', title: '誓いの騎士', icon: 'visored-helm', model: 'Knight', cost: 0, passive: '自分の陣を奪う値段が 30% 高い。通行税が半額。', deck: [...BASE_DECK, 'guard'] },
-  merchant: { id: 'merchant', name: 'ミラ', title: '旅の商人', icon: 'swap-bag', model: 'Rogue', cost: 0, passive: '旗を立てる値段とカードの値段が 10% 安い。', deck: [...BASE_DECK, 'purse'] },
-  mage: { id: 'mage', name: 'ルナ', title: '夜空の魔女', icon: 'pointy-hat', model: 'Mage', cost: 300, passive: '手札が6枚まで。毎ターンの行動力が⚡4。', deck: [...BASE_DECK, 'twin'] },
-  ranger: { id: 'ranger', name: 'カイ', title: '風読みの狩人', icon: 'bow-arrow', model: 'Ranger', cost: 500, passive: 'サイコロを振ったあと、出目を ±1 できる。', deck: [...BASE_DECK, 'gale'] },
-  assassin: { id: 'assassin', name: 'ジン', title: '影の暗殺者', icon: 'hooded-figure', model: 'Rogue_Hooded', cost: 800, passive: '罠の威力が2倍。初期デッキに「落とし穴」2枚。', deck: [...BASE_DECK.filter((c) => c !== 'fortify'), 'trap', 'trap'] },
-  barbarian: { id: 'barbarian', name: 'ボルグ', title: '略奪王', icon: 'barbarian', model: 'Barbarian', cost: 1200, passive: '最終決戦では陣を奪う値段が4割引（ふつうは3割引）。初期デッキに「進軍」。', deck: [...BASE_DECK, 'march'] },
+  knight: { id: 'knight', name: 'レオン', title: '誓いの騎士', icon: 'visored-helm', model: 'Knight', cost: 0, signature: 'shield', passive: '守護を持つ味方の体力 +1' },
+  merchant: { id: 'merchant', name: 'ミラ', title: '旅の商人', icon: 'swap-bag', model: 'Rogue', cost: 0, signature: 'priest', passive: 'バトルの最初の手札が1枚多い。訓練ではカードを2枚もらえる' },
+  mage: { id: 'mage', name: 'ルナ', title: '夜空の魔女', icon: 'pointy-hat', model: 'Mage', cost: 300, signature: 'fireball', passive: '呪文のダメージ +1' },
+  ranger: { id: 'ranger', name: 'カイ', title: '風読みの狩人', icon: 'bow-arrow', model: 'Ranger', cost: 500, signature: 'ranger', passive: '射撃を持つ味方の攻撃 +1' },
+  assassin: { id: 'assassin', name: 'ジン', title: '影の暗殺者', icon: 'hooded-figure', model: 'Rogue_Hooded', cost: 800, signature: 'scout', passive: '速攻を持つ味方の攻撃 +1。初期デッキの見習い兵1枚が森の狼' },
+  barbarian: { id: 'barbarian', name: 'ボルグ', title: '略奪王', icon: 'barbarian', model: 'Barbarian', cost: 1200, signature: 'sellsword', passive: '兵が敵の城を攻撃するとダメージ +1。攻めるときは自分の城の体力 +4' },
 };
 export const HERO_ORDER: HeroId[] = ['knight', 'merchant', 'mage', 'ranger', 'assassin', 'barbarian'];
+/** 最初のデッキ（＋キャラの得意カード1枚） */
+export const START_DECK = ['recruit', 'recruit', 'spear', 'spear', 'shield', 'shield', 'archer', 'priest', 'knight', 'arrow', 'arrow', 'rally'];
+export function startDeck(h: HeroId): string[] {
+  const d = [...START_DECK, HEROES[h].signature];
+  if (h === 'assassin') d[d.indexOf('recruit')] = 'wolf';
+  return d;
+}
+/** 中立の守り手は、最初から少しマナを持っている（奥の領地ほど多い） */
+export function neutralMana(r: RegionDef) {
+  return r.kind === 'dragon' ? 1 : ['goblin', 'spider', 'fort'].includes(r.kind) ? 1 : 0;
+}
 
+// ---------- 領地（島を13に分ける） ----------
+const rp = (kind: RegionDef['kind']) => kind;
+export const REGIONS: RegionDef[] = [
+  { id: 0, name: '東の王都', kind: rp('capital'), icon: 'castle', hp: 20, pool: [], defenders: [], seed: [6, -2], start: 1 },
+  { id: 1, name: '南の王都', kind: 'capital', icon: 'castle', hp: 20, pool: [], defenders: [], seed: [-1, 6], start: 0 },
+  { id: 2, name: '西の王都', kind: 'capital', icon: 'castle', hp: 20, pool: [], defenders: [], seed: [-6, 2], start: 2 },
+  { id: 3, name: '北の王都', kind: 'capital', icon: 'castle', hp: 20, pool: [], defenders: [], seed: [1, -6], start: 3 },
+  { id: 4, name: '狼の森', kind: 'forest', icon: 'wolf-howl', hp: 14, pool: ['wolf', 'ranger', 'archer', 'scout'], defenders: ['wolf', 'wolf', 'wolf', 'archer', 'archer', 'ranger', 'ranger', 'orc', 'spear', 'arrow', 'arrow', 'wyvern'], seed: [4, 3], start: null },
+  { id: 5, name: '鉄の鉱山', kind: 'mine', icon: 'gold-mine', hp: 14, pool: ['dwarf', 'shield', 'heavy', 'armor'], defenders: ['dwarf', 'dwarf', 'shield', 'shield', 'orc', 'orc', 'catapult', 'armor', 'spear', 'archer', 'troll', 'arrow'], seed: [-5, 6], start: null },
+  { id: 6, name: '盗賊の港', kind: 'harbor', icon: 'anchor', hp: 14, pool: ['bandit', 'sellsword', 'supply', 'ambush'], defenders: ['bandit', 'bandit', 'bandit', 'goblin', 'sellsword', 'sellsword', 'arrow', 'fireball', 'orc', 'shield', 'wraith', 'supply'], seed: [-4, -3], start: null },
+  { id: 7, name: '骸骨の墓地', kind: 'grave', icon: 'tombstone', hp: 19, pool: ['skeleton', 'wraith', 'prayer', 'priest'], defenders: ['skeleton', 'skeleton', 'skeleton', 'skeleton', 'wraith', 'wraith', 'spider', 'spider', 'priest', 'arrow', 'orc', 'troll'], seed: [5, -6], start: null },
+  { id: 8, name: 'ゴブリンの洞窟', kind: 'goblin', icon: 'cave-entrance', hp: 14, pool: ['goblin', 'orc', 'wyvern', 'ambush'], defenders: ['goblin', 'goblin', 'goblin', 'orc', 'orc', 'orc', 'wyvern', 'wyvern', 'troll', 'troll', 'bandit', 'arrow', 'fireball', 'ambush'], seed: [2, 1], start: null },
+  { id: 9, name: '大蜘蛛の谷', kind: 'spider', icon: 'spider-web', hp: 14, pool: ['spider', 'catapult', 'wall', 'blizzard'], defenders: ['spider', 'spider', 'spider', 'catapult', 'catapult', 'archer', 'ranger', 'orc', 'wall', 'troll', 'troll', 'arrow', 'blizzard', 'wyvern'], seed: [-3, 3], start: null },
+  { id: 10, name: '魔導の塔', kind: 'tower', icon: 'wizard-staff', hp: 12, pool: ['mage', 'fireball', 'blizzard', 'arrow'], defenders: ['mage', 'mage', 'arrow', 'arrow', 'fireball', 'shield', 'shield', 'priest', 'skeleton', 'wraith', 'recruit', 'blizzard'], seed: [-2, -1], start: null },
+  { id: 11, name: '騎士団の砦', kind: 'fort', icon: 'stone-tower', hp: 11, pool: ['knight', 'cavalry', 'paladin', 'general'], defenders: ['knight', 'knight', 'cavalry', 'cavalry', 'shield', 'paladin', 'paladin', 'archer', 'rally', 'sellsword', 'heavy', 'priest', 'general', 'armor'], seed: [3, -3], start: null },
+  { id: 12, name: '竜の巣', kind: 'dragon', icon: 'dragon-head', hp: 22, pool: ['dragon', 'golem', 'champion', 'meteor'], defenders: ['spider', 'spider', 'skeleton', 'skeleton', 'wyvern', 'wyvern', 'troll', 'troll', 'orc', 'orc', 'fireball', 'blizzard', 'golem', 'dragon', 'dragon', 'wraith'], seed: [0, 0], start: null },
+];
+/** 領地のとなり（scripts で六角形の割り当てから求めた） */
+export const REGION_ADJ: number[][] = [
+  [4, 7, 8, 11], [4, 5, 8, 9], [5, 6, 9, 10], [6, 7, 10, 11],
+  [0, 1, 8], [1, 2, 9], [2, 3, 10], [0, 3, 11],
+  [0, 1, 4, 9, 11, 12], [1, 2, 5, 8, 10, 12], [2, 3, 6, 9, 11, 12], [0, 3, 7, 8, 10, 12],
+  [8, 9, 10, 11],
+];
+/** プレイヤーの領地（王都以外）の守りの城の体力 */
+export const OWNED_REGION_HP = 20;
+/** 王都の城の体力 */
+export const CAPITAL_HP = 30;
+
+// ---------- ステージ ----------
 export const STAGES: Record<StageId, StageDef> = {
   meadow: {
-    id: 'meadow', name: '翠緑の王国', desc: '穏やかな草原の島。まずはここで王を目指そう。', unlockLevel: 1,
-    tollMul: 1, startCash: 500, salary: 150, jackpotMul: 1, aiSkill: 0.35,
+    id: 'meadow', name: '翠緑の王国', desc: '穏やかな草原の島。まずはここで王を目指そう。', unlockLevel: 1, aiSkill: 0.45, neutralBonus: 0,
     palette: { skyTop: '#5fa8f0', skyBottom: '#d8f0ff', fog: '#cfe8fb', grass: '#7cc95a', grassDark: '#4f9a3c', rock: '#8a7462', plaza: '#e8dcc0', sun: '#fff1d6', ambient: '#bfe0ff', particle: 'pollen' },
   },
   snow: {
-    id: 'snow', name: '白銀の王国', desc: '雪に閉ざされた島。CPUが少し賢くなる。値段 1.2倍。', unlockLevel: 3,
-    tollMul: 1.2, startCash: 550, salary: 170, jackpotMul: 1.2, aiSkill: 0.6,
+    id: 'snow', name: '白銀の王国', desc: '雪に閉ざされた島。CPUが少し賢く、魔物も手強い。', unlockLevel: 3, aiSkill: 0.65, neutralBonus: 2,
     palette: { skyTop: '#7f9fc4', skyBottom: '#e9f2fb', fog: '#e2ecf7', grass: '#eef4fa', grassDark: '#c3d3e4', rock: '#6e7b8c', plaza: '#d6e2ef', sun: '#e8f1ff', ambient: '#c9dcf5', particle: 'snow' },
   },
   volcano: {
-    id: 'volcano', name: '灼熱の王国', desc: '溶岩が流れる島。値段 1.5倍、ジャックポット 1.5倍。CPUは手強い。', unlockLevel: 6,
-    tollMul: 1.5, startCash: 650, salary: 200, jackpotMul: 1.5, aiSkill: 0.8,
+    id: 'volcano', name: '灼熱の王国', desc: '溶岩が流れる島。CPUも魔物も手強い。', unlockLevel: 6, aiSkill: 0.85, neutralBonus: 4,
     palette: { skyTop: '#2a1420', skyBottom: '#c2502e', fog: '#5a2a26', grass: '#5d4a40', grassDark: '#3a2c27', rock: '#2d2321', plaza: '#a58a72', sun: '#ffb27a', ambient: '#a04a3a', particle: 'ember' },
   },
   sky: {
-    id: 'sky', name: '天空の王国', desc: '雲の上の伝説の島。値段 1.6倍、ジャックポット 2倍。CPUは最強。', unlockLevel: 10,
-    tollMul: 1.6, startCash: 800, salary: 220, jackpotMul: 2, aiSkill: 1,
+    id: 'sky', name: '天空の王国', desc: '雲の上の伝説の島。CPUは最強。', unlockLevel: 10, aiSkill: 1, neutralBonus: 6,
     palette: { skyTop: '#1a1f5c', skyBottom: '#f3a8c8', fog: '#c9a8d8', grass: '#b8e3d0', grassDark: '#86c2ae', rock: '#e8e0f0', plaza: '#fff4dc', sun: '#ffe7f2', ambient: '#b7a6ff', particle: 'stars' },
   },
 };
 export const STAGE_ORDER: StageId[] = ['meadow', 'snow', 'volcano', 'sky'];
 
 export const PLAYER_COLORS = ['#e8483f', '#3b8eea', '#47c26b', '#f2b630'];
-/** KayKit の建物・駒台の色名（PLAYER_COLORS と同じ順） */
+/** KayKit の建物・旗の色名（PLAYER_COLORS と同じ順） */
 export const PLAYER_KEYS = ['red', 'blue', 'green', 'yellow'] as const;
-export const CPU_NAMES = ['CPU 赤', 'CPU 青', 'CPU 緑', 'CPU 金'];
+export const NEUTRAL_COLOR = '#8a8070';

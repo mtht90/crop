@@ -1,12 +1,11 @@
 // タイトル・準備・宝物庫・実績・遊び方・クレジット・結果の各画面
-import { CARDS, GROUPS, HEROES, HERO_ORDER, PLAYER_COLORS, STAGES, STAGE_ORDER } from '../data/defs.ts';
-import type { Game } from '../game/engine.ts';
-import type { HeroId, Player, StageId } from '../game/types.ts';
-import {
-  ACHIEVEMENTS, DICE_SKINS, levelRewards, unlockedStages, xpForLevel, type MatchResult, type Reward, type SaveData,
-} from '../meta.ts';
+import { CARDS, HEROES, HERO_ORDER, KW_DESC, PLAYER_COLORS, STAGES, STAGE_ORDER } from '../data/defs.ts';
+import type { Campaign } from '../game/campaign.ts';
+import type { HeroId, Lord, StageId } from '../game/types.ts';
+import { ACHIEVEMENTS, levelRewards, unlockedStages, xpForLevel, type MatchResult, type Reward, type SaveData } from '../meta.ts';
+import { battleCardHtml } from './battleUi.ts';
 import { iconAuthors, icon } from './icons.ts';
-import { $, cardHtml, esc, sleep, type UI } from './ui.ts';
+import { $, esc, sleep, type UI } from './ui.ts';
 import { audio } from '../audio.ts';
 
 const AUTHOR_NAME: Record<string, string> = {
@@ -19,11 +18,9 @@ export function rewardHtml(r: Reward) {
     case 'crowns':
       return `<div class="reward">${icon('crown')}<b>${r.amount} 王冠</b></div>`;
     case 'card':
-      return `<div class="reward card-r">${cardHtml(r.card, { small: true })}<b>新カード「${CARDS[r.card].name}」</b></div>`;
+      return `<div class="reward card-r">${battleCardHtml(r.card, { small: true })}<b>新カード「${CARDS[r.card].name}」</b><small>報酬の候補に出るようになる</small></div>`;
     case 'stage':
       return `<div class="reward stage-r">${icon('treasure-map')}<b>新ステージ「${STAGES[r.stage].name}」</b></div>`;
-    case 'dice':
-      return `<div class="reward">${icon('rolling-dices')}<b>サイコロ「${DICE_SKINS.find((d) => d.id === r.skin)!.name}」</b></div>`;
   }
 }
 
@@ -35,9 +32,9 @@ function xpBar(save: SaveData) {
 export function titleScreen(ui: UI, save: SaveData): Promise<'play' | 'vault' | 'achievements' | 'help' | 'credits'> {
   const el = ui.showScreen(
     `<div class="title-wrap">
-      <div class="logo"><span class="logo-sub">王国すごろく</span><h1>ダイス<br>キングダム</h1></div>
+      <div class="logo"><span class="logo-sub">王国カードバトル</span><h1>ダイス<br>キングダム</h1></div>
       <div class="title-menu">
-        <button type="button" class="btn gold big" data-go="play">${icon('rolling-dices')}あそぶ</button>
+        <button type="button" class="btn gold big" data-go="play">${icon('crossed-swords')}あそぶ</button>
         <button type="button" class="btn secondary" data-go="vault">${icon('open-treasure-chest')}宝物庫</button>
         <button type="button" class="btn secondary" data-go="achievements">${icon('medal')}実績 <small>${save.achievements.length}/${ACHIEVEMENTS.length}</small></button>
         <button type="button" class="btn secondary" data-go="help">${icon('book-cover')}遊び方</button>
@@ -117,7 +114,7 @@ export function setupScreen(ui: UI, save: SaveData, portraits: Record<string, st
   });
 }
 
-export function vaultScreen(ui: UI, save: SaveData, onDice: (id: string) => void): Promise<void> {
+export function vaultScreen(ui: UI, save: SaveData): Promise<void> {
   return new Promise((resolve) => {
     const render = () => {
       const road = Array.from({ length: 6 }, (_, k) => save.level + 1 + k);
@@ -127,23 +124,13 @@ export function vaultScreen(ui: UI, save: SaveData, onDice: (id: string) => void
           ${xpBar(save)}
           <h3>これからの報酬</h3>
           <div class="road">${road.map((lv) => `<div class="road-step"><span class="lv">Lv.${lv}</span>${levelRewards(lv).map(rewardHtml).join('')}</div>`).join('')}</div>
-          <h3>サイコロ</h3>
-          <div class="dice-grid">${DICE_SKINS.map((d) => {
-            const open = d.level <= save.level;
-            return `<button type="button" class="dice-card${save.dice === d.id ? ' sel' : ''}" data-dice="${d.id}" ${open ? '' : 'disabled'}>${icon('rolling-dices')}<b>${d.name}</b><small>${open ? (save.dice === d.id ? '使用中' : '使う') : `Lv.${d.level}`}</small></button>`;
-          }).join('')}</div>
           <h3>カード図鑑</h3>
-          <div class="card-grid">${Object.values(CARDS).map((c) => `<div class="card-slot${c.unlockLevel <= save.level ? '' : ' locked'}">${cardHtml(c.id, { small: true })}${c.unlockLevel <= save.level ? '' : `<span class="lock-tag">${icon('padlock')}Lv.${c.unlockLevel}</span>`}</div>`).join('')}</div>
+          <p class="note">レベルが上がると、新しいカードが勝利の報酬に出るようになる。魔物のカードは、その魔物の領地を落とすと仲間にできる。</p>
+          <div class="card-grid">${Object.values(CARDS).filter((c) => !c.token).map((c) => `<div class="card-slot${c.unlockLevel <= save.level ? '' : ' locked'}">${battleCardHtml(c.id, { small: true })}${c.unlockLevel <= save.level ? '' : `<span class="lock-tag">${icon('padlock')}Lv.${c.unlockLevel}</span>`}</div>`).join('')}</div>
         </div>`,
         'vault',
       );
       $('.back', el).addEventListener('click', () => resolve());
-      el.querySelectorAll<HTMLElement>('[data-dice]').forEach((b) =>
-        b.addEventListener('click', () => {
-          onDice(b.dataset.dice!);
-          render();
-        }),
-      );
     };
     render();
   });
@@ -167,14 +154,15 @@ export function helpScreen(ui: UI): Promise<void> {
   const el = ui.showScreen(
     `<div class="panel-page help">
       <header class="page-head"><button type="button" class="btn ghost back">${icon('exit-door')}戻る</button><h2>遊び方</h2><div></div></header>
-      <section><h3>${icon('tower-flag')}目的</h3><p>島をめぐって陣（色付きのマス）に旗を立て、20ラウンド後に<b>陣を一番多く持っている人</b>の勝ち。全ての陣を手に入れたら、その場で<b>全陣制圧</b>の勝利。</p></section>
-      <section><h3>${icon('card-random')}カードで動く</h3><p>自分の番になると山札から<b>新しく5枚</b>引く。行動力は毎ターン<b>3</b>。カードの左上の宝石の数字が行動力のコスト。<b>移動はカードでしかできない</b>（サイコロも「サイコロ」カードが必要。移動カードは1ターン1枚）。カードは<b>上へスワイプ</b>（マスを選ぶカードは盤面のマスまでドラッグ）か、2回タップで使う。使わなかった手札はターン終了時に捨て札へ。山札が尽きたら捨て札を混ぜ直す。</p></section>
-      <section><h3>${icon('house')}陣と砦</h3><p>空いた陣に止まったら、お金を払って旗を立てる。自分の陣では砦を築ける（旗 → 砦 → 城塞 → 王城）。砦が強いほど税収が増え、奪われにくい。毎ターンの初めに、持っている陣から税収が入る。</p>
-        <div class="group-row">${GROUPS.map((g) => `<span style="--group:${g.color}">${g.name}</span>`).join('')}</div></section>
-      <section><h3>${icon('gavel')}陣を奪う</h3><p>相手の陣に止まると通行税を払う。そのあと<b>お金を払えば陣を奪える</b>（守りの結界がある陣は奪えない）。同じ色を全部そろえると税収2倍。</p></section>
-      <section><h3>${icon('swap-bag')}デッキを強くする</h3><p>スタートを通ると「王の贈り物」で、新しいカードを1枚もらうか、デッキのカードを1種類<b>強化（+）</b>できる。カード屋のマスでは、お金でカードを買うか強化する。強化するとコストが下がったり、効果が強くなる。「転移の書」「王の勅命」「竜の召喚」は<b>消耗</b>カードで、使うとその試合ではデッキから消える。</p></section>
-      <section><h3>${icon('fountain')}逆転のチャンス</h3><p>黄金の泉は貯まった全額がもらえるジャックポット。巻物のイベントは下位ほど良いことが起きやすい。最後の3ラウンドは陣を奪う値段が3割引。</p></section>
-      <section><h3>${icon('crown')}遊ぶほど広がる王国</h3><p>遊ぶと経験値と王冠がもらえる。レベルが上がると新しいカード・ステージ・サイコロが開放され、王冠で新しいキャラを仲間にできる。</p></section>
+      <section><h3>${icon('castle')}目的</h3><p>島は13の領地に分かれている。あなたとCPU3人の領主は、それぞれの王都から出発する。<b>8ラウンド後に領地を一番多く持っている人</b>の勝ち。相手の王都を落とすと、その領主は脱落する。</p></section>
+      <section><h3>${icon('tower-flag')}1ラウンドの流れ</h3><p>自分の番では、<b>となりの領地を1つ攻める</b>か、<b>訓練</b>（カードを1枚もらう／弱いカードを外す）を選ぶ。攻めるとカードバトルになり、勝てば領地が自分のものになって、<b>報酬のカードを3枚から1枚</b>もらえる。相手に攻められたら守りのバトルになる。</p></section>
+      <section><h3>${icon('crossed-swords')}カードバトル</h3><p>相手の<b>城の体力を0</b>にしたら勝ち。マナは毎ターン1つずつ増える（最大${7}）。カードの左上の数字がマナのコスト。</p>
+        <p><b>兵</b>はカードを上へスワイプして場に出す。出した次のターンから、<b>敵の兵か城へドラッグして攻撃</b>できる。兵どうしは同時にダメージを与え合う。左下が攻撃力、右下が体力。</p>
+        <p><b>呪文</b>は一度きりの効果。対象がいる呪文は、対象までドラッグする。2回タップでも使える。</p>
+        <p>守る側は14ターン守りきれば勝ち。迷ったら「おまかせ」でCPUに任せられる。</p></section>
+      <section><h3>${icon('shield')}能力</h3>${Object.values(KW_DESC).map((d) => `<p>${d}</p>`).join('')}</section>
+      <section><h3>${icon('dragon-head')}竜と逆転</h3><p>島の中央は竜の巣。とても強いが、落とすと伝説のカードが手に入る。竜がいる間は、4・8ラウンドに首位の領主の領地を竜が襲う。領地が一番少ない領主は、バトルの最初の手札が1枚多い。</p></section>
+      <section><h3>${icon('crown')}遊ぶほど広がる王国</h3><p>遊ぶと経験値と王冠がもらえる。レベルが上がると新しいカードとステージが開放され、王冠で新しいキャラを仲間にできる。</p></section>
     </div>`,
     'help',
   );
@@ -201,15 +189,15 @@ export function creditsScreen(ui: UI): Promise<void> {
   return new Promise((resolve) => $('.back', el).addEventListener('click', () => resolve()));
 }
 
-export async function resultsScreen(ui: UI, g: Game, me: Player, res: MatchResult): Promise<'again' | 'title'> {
-  const rank = g.ranking();
-  const won = g.s.winner === me.id;
-  const reason = g.s.winReason === 'conquest' ? '全陣制圧' : '陣の数で決着';
+export async function resultsScreen(ui: UI, c: Campaign, me: Lord, res: MatchResult): Promise<'again' | 'title'> {
+  const rank = c.ranking();
+  const won = c.winner === me.id;
+  const reason = c.alive.length === 1 ? '天下統一' : !me.alive ? '王都が陥落' : '領地の数で決着';
   const el = ui.showScreen(
     `<div class="panel-page results">
       <h2 class="res-title ${won ? 'win' : ''}">${won ? '戴冠！' : `${res.rank + 1}位`}<small>${reason}</small></h2>
       <div class="res-rank">${rank
-        .map((p, k) => `<div class="rr${p === me ? ' me' : ''}" style="--pc:${PLAYER_COLORS[p.id]}"><span class="rr-n">${p.bankrupt ? '破産' : `${k + 1}位`}</span>${icon(HEROES[p.hero].icon)}<b>${esc(p.name)}</b><span class="rr-a">陣 ${g.territories(p).length}・${p.cash.toLocaleString()}G</span></div>`)
+        .map((l, k) => `<div class="rr${l === me ? ' me' : ''}" style="--pc:${PLAYER_COLORS[l.id]}"><span class="rr-n">${l.alive ? `${k + 1}位` : '脱落'}</span>${icon(HEROES[l.hero].icon)}<b>${esc(l.name)}</b><span class="rr-a">領地 ${c.regionsOf(l.id).length}・${l.stats.battlesWon}勝${l.stats.battlesLost}敗</span></div>`)
         .join('')}</div>
       <div class="res-gain">
         <div class="res-col"><h3>経験値</h3>${res.xpGained.map((x) => `<div class="cost-line"><span>${x.label}</span><b>+${x.xp}</b></div>`).join('')}</div>
@@ -217,7 +205,7 @@ export async function resultsScreen(ui: UI, g: Game, me: Player, res: MatchResul
       </div>
       <div class="xp anim"><span class="lv">Lv.<b>${res.levelBefore}</b></span><div class="xp-bar"><i style="width:${(res.xpBefore / xpForLevel(res.levelBefore)) * 100}%"></i></div></div>
       <div class="res-unlocks"></div>
-      <div class="start-row"><button type="button" class="btn secondary to-title">タイトルへ</button><button type="button" class="btn gold big again">${icon('rolling-dices')}もう一回</button></div>
+      <div class="start-row"><button type="button" class="btn secondary to-title">タイトルへ</button><button type="button" class="btn gold big again">${icon('crossed-swords')}もう一回</button></div>
     </div>`,
     'results',
   );

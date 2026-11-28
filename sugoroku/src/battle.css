@@ -1,0 +1,151 @@
+/* カードバトルの画面と、地図の領地の名札（v4） */
+
+/* ---------- 地図：領地の名札 ---------- */
+.region-label { position: absolute; left: 0; top: 0; display: flex; align-items: center; gap: 3px; padding: 2px 8px 2px 3px; border-radius: 99px; background: rgba(255, 250, 240, .92); border: 2px solid var(--owner, #8a8070); box-shadow: 0 2px 0 rgba(43, 38, 64, .35); font-size: 11.5px; font-weight: 800; white-space: nowrap; pointer-events: auto; cursor: pointer; transition: box-shadow .2s, background .2s; will-change: transform; }
+.region-label .rl-icon { width: 20px; height: 20px; display: grid; place-items: center; border-radius: 50%; background: var(--owner, #8a8070); color: #fff; }
+.region-label .rl-icon .gi { width: 14px; height: 14px; }
+.region-label .rl-hp { display: inline-flex; align-items: center; gap: 1px; color: #b3261e; font-family: var(--display); font-weight: 400; font-size: 11px; }
+.region-label .rl-hp .gi { width: 11px; height: 11px; }
+.region-label.k-capital.owned { font-size: 12.5px; }
+.region-label.k-dragon { background: #2b2640; color: #ffd35c; border-color: #ffd35c; }
+.region-label.pick { background: #fff3b0; box-shadow: 0 0 0 3px #fff, 0 0 14px #ffd35c; animation: labelPulse 1s ease-in-out infinite; }
+@keyframes labelPulse { 50% { box-shadow: 0 0 0 3px #fff, 0 0 22px #ffb300; } }
+.hud.in-battle .players, .hud.in-battle .log, .hud.in-battle .action { display: none; }
+.pc-cash small { margin-left: 3px; font-family: var(--body); font-size: 11px; font-weight: 800; }
+.pc-sub span { display: inline-flex; align-items: center; gap: 2px; margin-right: 4px; }
+.pool-row { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
+.pool-row .card { --cw: 78px; }
+.attack .dialog { width: min(460px, 100%); }
+.shop-row.wrap { flex-wrap: wrap; justify-content: center; }
+
+/* ---------- バトル画面 ---------- */
+.battle { position: fixed; inset: 0; z-index: 20; pointer-events: none; opacity: 0; transition: opacity .3s; font-family: var(--body); }
+.battle.in { opacity: 1; }
+.battle > * { pointer-events: auto; }
+.b-backdrop { position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 45%, rgba(30, 22, 40, .35), rgba(20, 14, 28, .78)); pointer-events: none; }
+.b-board { position: absolute; left: 0; right: 0; top: calc(env(safe-area-inset-top, 0px) + 8px); bottom: 232px; display: flex; flex-direction: column; align-items: center; justify-content: space-between; gap: 6px; padding: 0 max(12px, env(safe-area-inset-left, 0px)); }
+.b-hero { --pc: #888; position: relative; display: flex; align-items: center; gap: 10px; padding: 6px 14px 6px 6px; border: 0; border-style: solid; border-width: 12px; border-image: url('./ui-assets/kenney/panel_brown.png') 30 fill / 12px stretch; color: #4a3020; filter: drop-shadow(0 4px 6px rgba(0, 0, 0, .4)); transition: transform .15s; min-width: min(420px, 92vw); }
+.b-portrait { width: 52px; height: 52px; display: grid; place-items: center; border-radius: 50%; background: var(--pc); color: #fff; box-shadow: 0 0 0 3px #fff8e6, 0 0 0 5px var(--pc); flex: none; }
+.b-portrait .gi { width: 34px; height: 34px; }
+.b-hinfo { display: grid; line-height: 1.2; min-width: 0; }
+.b-hinfo b { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.b-hinfo small { font-size: 11px; color: #7a5a3a; font-weight: 800; }
+.b-hp { display: grid; grid-template-columns: auto auto; align-items: center; gap: 0 4px; margin-left: auto; }
+.b-hp .gi-wrap .gi { width: 22px; height: 22px; fill: #d8352a; }
+.b-hp .hpn { font-family: var(--display); font-size: 26px; color: #b3261e; line-height: 1; }
+.b-hp .hpbar { grid-column: 1 / -1; width: 74px; height: 6px; border-radius: 99px; background: rgba(0, 0, 0, .18); overflow: hidden; }
+.b-hp .hpbar i { display: block; height: 100%; background: linear-gradient(90deg, #e8483f, #ff8a65); transition: width .3s; }
+.b-mana { display: flex; align-items: center; gap: 2px; }
+.b-mana i { width: 11px; height: 14px; clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); background: rgba(60, 40, 30, .25); }
+.b-mana i.on { background: linear-gradient(#8fd8ff, #1d63c9); filter: drop-shadow(0 0 3px #59b6ff); }
+.b-mana i.used { background: rgba(29, 99, 201, .35); }
+.b-mana span { margin-left: 4px; font-family: var(--display); font-size: 13px; color: #1d63c9; }
+.b-foehand { position: absolute; right: 10px; bottom: -22px; display: flex; align-items: center; }
+.b-foehand i { width: 14px; height: 20px; margin-left: -6px; border-radius: 3px; background: url('./ui-assets/wt/card_back.png') center / cover; box-shadow: 0 1px 2px rgba(0, 0, 0, .4); }
+.b-foehand span { margin-left: 4px; padding: 0 6px; border-radius: 99px; background: rgba(43, 38, 64, .85); color: #fff; font-size: 11px; font-weight: 800; }
+.b-hero.tgt { animation: tgtPulse .8s ease-in-out infinite; cursor: crosshair; }
+.b-hero.tgt-hot { transform: scale(1.06); filter: drop-shadow(0 0 12px #ff5a4a) drop-shadow(0 4px 6px rgba(0, 0, 0, .4)); }
+.b-hero.hit { animation: shake .35s; }
+.b-field { flex: 1; width: min(760px, 100%); max-height: 150px; display: flex; align-items: center; justify-content: center; gap: 10px; border-radius: 18px; background: rgba(255, 255, 255, .06); border: 2px dashed rgba(255, 255, 255, .15); }
+.b-field.me { background: rgba(120, 200, 255, .07); }
+.b-mid { height: 22px; display: grid; place-items: center; }
+.b-turn { padding: 2px 14px; border-radius: 99px; background: rgba(43, 38, 64, .85); color: #fff; font-weight: 800; font-size: 13px; }
+.battle.my-turn .b-turn { background: #c98a12; }
+.b-turn.flash { animation: popIn .35s cubic-bezier(.2, 1.6, .4, 1); }
+.b-hint { position: absolute; left: 50%; bottom: 206px; transform: translateX(-50%); padding: 3px 12px; border-radius: 99px; background: rgba(255, 250, 240, .9); font-size: 12px; font-weight: 800; white-space: nowrap; pointer-events: none; }
+.b-hint:empty { display: none; }
+
+/* 兵 */
+.bunit { --side: #3b8eea; position: relative; width: 92px; height: 118px; flex: none; border-radius: 14px; background: linear-gradient(170deg, #fffaf0, #ead9b8); border: 3px solid #6b4a2a; box-shadow: 0 4px 0 rgba(43, 30, 20, .6); display: grid; grid-template-rows: 1fr auto; justify-items: center; padding: 6px 4px 18px; user-select: none; -webkit-user-select: none; touch-action: none; transition: transform .15s, box-shadow .2s; }
+.b-field.foe .bunit { border-color: #7a2a22; }
+.bunit .u-art { width: 58px; height: 58px; display: grid; place-items: center; border-radius: 50%; background: radial-gradient(#fff, #e8d6b0); }
+.bunit .u-art .gi { width: 44px; height: 44px; fill: #5a3a1e; }
+.b-field.foe .bunit .u-art .gi { fill: #8a2c1c; }
+.bunit .u-name { font-size: 10.5px; font-weight: 800; line-height: 1.1; text-align: center; white-space: nowrap; overflow: hidden; max-width: 100%; }
+.bunit .u-kw { position: absolute; top: -8px; left: 50%; transform: translateX(-50%); display: flex; gap: 2px; }
+.bunit .u-kw i { width: 20px; height: 20px; display: grid; place-items: center; border-radius: 50%; background: #2b2640; color: #fff; box-shadow: 0 0 0 2px #fff8e6; }
+.bunit .u-kw .gi { width: 13px; height: 13px; }
+.bunit .u-atk, .bunit .u-hp { position: absolute; bottom: -8px; width: 30px; height: 30px; display: grid; place-items: center; font-family: var(--display); font-size: 16px; color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, .6); }
+.bunit .u-atk { left: -8px; background: radial-gradient(circle at 35% 30%, #ffd27a, #c98a12); clip-path: polygon(50% 0, 100% 35%, 82% 100%, 18% 100%, 0 35%); }
+.bunit .u-hp { right: -8px; background: radial-gradient(circle at 35% 30%, #ff8a80, #c62828); border-radius: 50% 50% 50% 50% / 45% 45% 55% 55%; }
+.bunit .u-hp.hurt { color: #ffe0e0; }
+.bunit .u-atk.up { color: #c8ffd4; }
+.bunit.guard { border-color: #7d8794; border-width: 5px; background: linear-gradient(170deg, #f4f6f8, #cfd6de); }
+.bunit.shielded::after { content: ''; position: absolute; inset: -7px; border-radius: 18px; border: 3px solid #ffd35c; box-shadow: 0 0 12px #ffd35c, inset 0 0 10px rgba(255, 211, 92, .6); pointer-events: none; animation: glow 1.6s ease-in-out infinite; }
+.bunit.ready { box-shadow: 0 4px 0 rgba(43, 30, 20, .6), 0 0 0 3px #7cf09a, 0 0 16px #7cf09a; cursor: grab; }
+.bunit.sel, .bunit.lifting { transform: translateY(-10px) scale(1.06); box-shadow: 0 10px 0 rgba(43, 30, 20, .4), 0 0 0 3px #ffd35c, 0 0 20px #ffd35c; z-index: 3; }
+.bunit.tgt { animation: tgtPulse .8s ease-in-out infinite; cursor: crosshair; }
+.bunit.tgt-hot { transform: scale(1.1); box-shadow: 0 0 0 4px #ff5a4a, 0 0 22px #ff5a4a; }
+.bunit.enter { animation: unitIn .45s cubic-bezier(.2, 1.5, .4, 1); }
+.bunit.hit { animation: shake .35s; }
+.bunit.buffed { animation: buffFlash .5s; }
+.bunit.attacking { z-index: 5; }
+.bunit.nope { animation: nope .35s; }
+@keyframes unitIn { from { transform: translateY(-40px) scale(.4); opacity: 0; } }
+@keyframes tgtPulse { 50% { box-shadow: 0 0 0 3px #ff5a4a, 0 0 18px #ff5a4a; } }
+@keyframes shake { 20%, 60% { translate: -6px 0; } 40%, 80% { translate: 6px 0; } }
+@keyframes buffFlash { 40% { filter: brightness(1.6) drop-shadow(0 0 10px #7cf09a); transform: scale(1.12); } }
+
+/* 手札（バトル） */
+.battle .hand.b-hand { position: absolute; left: 0; right: 0; bottom: calc(env(safe-area-inset-bottom, 0px) + 8px); height: 196px !important; }
+.battle .b-hand .slot { --cw: 120px; }
+.battle:not(.my-turn) .b-hand .slot { filter: brightness(.8); }
+.card .c-atk, .card .c-hp { position: absolute; bottom: 3%; width: 20%; aspect-ratio: 1; display: grid; place-items: center; font-family: var(--display); font-size: 11cqw; color: #fff; text-shadow: 0 .6cqw 1cqw rgba(0, 0, 0, .7); z-index: 3; }
+.card .c-atk { left: 2%; background: radial-gradient(circle at 35% 30%, #ffd27a, #c98a12); clip-path: polygon(50% 0, 100% 35%, 82% 100%, 18% 100%, 0 35%); }
+.card .c-hp { right: 2%; background: radial-gradient(circle at 35% 30%, #ff8a80, #c62828); border-radius: 50%; }
+.card.k-unit .c-mark { display: none; }
+.card.k-unit { --kind: #2f7fc9; }
+.card.k-spell { --kind: #7a4fc9; }
+.card.monster { --kind: #8a2c1c; }
+.card.k-spell .c-type { filter: hue-rotate(250deg); }
+.card.k-unit .c-type { filter: hue-rotate(205deg) saturate(.9); }
+.card.monster .c-type { filter: none; }
+
+.b-controls { position: absolute; right: max(12px, env(safe-area-inset-right, 0px)); bottom: calc(env(safe-area-inset-bottom, 0px) + 200px); display: flex; align-items: flex-end; gap: 8px; }
+.b-controls .end-turn:disabled { filter: grayscale(.7) brightness(.8); cursor: default; animation: none; }
+.b-auto { min-height: 40px; font-size: 13px; }
+.b-auto.on { border-image-source: url('./ui-assets/kenney/button_red.png'); color: #fff; }
+
+/* 相手が出したカード */
+.b-reveal { position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%); animation: revealIn .35s cubic-bezier(.2, 1.5, .4, 1); pointer-events: none; z-index: 30; }
+.b-reveal .card { --cw: 170px; }
+.b-reveal.out { opacity: 0; transform: translate(-50%, -50%) scale(.7); transition: .25s; }
+@keyframes revealIn { from { transform: translate(-50%, -50%) scale(.3) rotate(-8deg); opacity: 0; } }
+
+/* 狙いの矢印 */
+.aim-arrow { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 40; overflow: visible; }
+.aim-arrow .shaft { fill: none; stroke: #ffd35c; stroke-width: 7; stroke-linecap: round; stroke-dasharray: 2 12; filter: drop-shadow(0 0 4px rgba(0, 0, 0, .6)); animation: dash .5s linear infinite; }
+.aim-arrow.on .shaft { stroke: #ff5a4a; stroke-dasharray: none; }
+@keyframes dash { to { stroke-dashoffset: -14; } }
+.b-arrow { position: fixed; left: 0; top: 0; z-index: 41; width: 34px; height: 34px; margin: -17px 0 0 -17px; color: #ffd35c; pointer-events: none; }
+.b-arrow .gi { width: 34px; height: 34px; }
+.float.block { color: #ffd35c; font-size: 20px; }
+.float.small { font-size: 15px; }
+
+@media (max-width: 760px) {
+  .b-board { bottom: 196px; gap: 4px; }
+  .b-hero { min-width: 0; width: calc(100% - 8px); border-width: 9px; padding: 2px 8px 2px 2px; gap: 6px; }
+  .b-portrait { width: 38px; height: 38px; }
+  .b-portrait .gi { width: 24px; height: 24px; }
+  .b-hinfo b { font-size: 13px; }
+  .b-hp .hpn { font-size: 20px; }
+  .b-hp .hpbar { width: 54px; }
+  .b-mana i { width: 8px; height: 11px; }
+  .b-mana span { font-size: 11px; }
+  .b-field { gap: 4px; max-height: 120px; border-radius: 12px; }
+  .bunit { width: 64px; height: 88px; border-radius: 10px; border-width: 2px; padding: 4px 2px 14px; }
+  .bunit.guard { border-width: 4px; }
+  .bunit .u-art { width: 40px; height: 40px; }
+  .bunit .u-art .gi { width: 30px; height: 30px; }
+  .bunit .u-name { font-size: 9px; }
+  .bunit .u-atk, .bunit .u-hp { width: 24px; height: 24px; font-size: 13px; bottom: -6px; }
+  .bunit .u-atk { left: -6px; }
+  .bunit .u-hp { right: -6px; }
+  .bunit .u-kw i { width: 16px; height: 16px; }
+  .battle .hand.b-hand { height: 164px !important; }
+  .battle .b-hand .slot { --cw: 96px; margin: 0 -20px; }
+  .b-controls { bottom: calc(env(safe-area-inset-bottom, 0px) + 166px); gap: 4px; }
+  .b-controls .pile { display: none; }
+  .b-hint { bottom: 168px; font-size: 11px; left: 8px; transform: none; }
+  .b-reveal .card { --cw: 140px; }
+}

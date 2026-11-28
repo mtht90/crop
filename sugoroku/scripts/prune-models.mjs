@@ -14,7 +14,7 @@ const HEX = [
   ...C.map((c) => `flag_${c}`),
   ...each(['building_home_A', 'building_home_B', 'building_tower_A', 'building_castle', 'building_windmill', 'building_watermill',
     'building_lumbermill', 'building_tavern', 'building_blacksmith', 'building_mine', 'building_barracks', 'building_archeryrange',
-    'building_church', 'building_market']),
+    'building_church', 'building_market', 'building_tower_B']),
 ];
 const BITS = ['coin_10_gold', 'coin_gold', 'cube_gold', ...C.map((c) => `playerstand_${c}`), ...C.map((c) => `cube_${c}`),
   'D6_A', 'D6_A_red', 'D6_B_blue', 'D6_A_yellow', 'D6_C_green', 'D6_C_red'];

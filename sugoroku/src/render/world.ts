@@ -6,24 +6,9 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { clone as skeletonClone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import * as CANNON from 'cannon-es';
-import { PLAYER_KEYS, TILES } from '../data/defs.ts';
-import { ICONS } from '../data/icons.gen.ts';
-import type { StageDef, TileState } from '../game/types.ts';
-
-export interface PrintInfo {
-  kind: string;
-  name: string;
-  icon: string;
-  bg: string;
-  fg?: string;
-  band?: string;
-  owner?: string;
-  main: string;
-  level?: number;
-  set?: boolean;
-  guard?: boolean;
-  trap?: boolean;
-}
+import { PLAYER_COLORS, PLAYER_KEYS, REGIONS } from '../data/defs.ts';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import type { StageDef } from '../game/types.ts';
 
 const loader = new GLTFLoader();
 const cache = new Map<string, Promise<THREE.Group>>();
@@ -113,36 +98,6 @@ const easeInOut = (t: number) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2,
 
 // 六角座標（頂点が上下にある向き）
 const hexDist = (q: number, r: number) => (Math.abs(q) + Math.abs(r) + Math.abs(-q - r)) / 2;
-/** 盤面の道（六角座標）。島の上を3枚の花びら型にくねる30マスの輪で、道どうしは隣り合わない。
- *  plots は各マスの建物を建てる隣の六角。scripts で花びら型の曲線を六角格子に落として求めた */
-const BOARD: { cells: [number, number][]; plots: [number, number][] } = {"cells":[[3,0],[4,0],[4,1],[3,2],[2,3],[1,3],[0,3],[0,2],[-1,2],[-2,3],[-3,3],[-4,4],[-5,4],[-5,3],[-5,2],[-4,1],[-3,0],[-2,0],[-1,-1],[-1,-2],[0,-3],[0,-4],[1,-5],[2,-5],[3,-5],[3,-4],[3,-3],[2,-2],[2,-1],[3,-1]],"plots":[[2,1],[5,-1],[5,1],[4,2],[2,4],[1,4],[-1,4],[1,1],[-2,2],[-2,4],[-3,2],[-4,5],[-6,5],[-6,4],[-6,2],[-5,1],[-3,-1],[-2,1],[0,-2],[-2,-2],[1,-3],[-1,-4],[1,-6],[3,-6],[4,-6],[4,-5],[4,-3],[1,-2],[2,0],[4,-2]]};
-const PATH_LIFT = 0.28; // 道のマスを少し高くして目立たせる
-
-/** 土地レベルごとの建物。2段階目はマスごとの特色ある建物にする */
-const SIGNATURE: Record<number, string> = {
-  2: 'building_windmill', 4: 'building_watermill', 6: 'building_lumbermill', 11: 'building_tavern', 16: 'building_blacksmith',
-  18: 'building_mine', 19: 'building_barracks', 21: 'building_archeryrange', 26: 'building_church', 28: 'building_market',
-};
-function buildingModel(i: number, level: number, owner: number): string | null {
-  const c = PLAYER_KEYS[owner];
-  // 旗（村）→ 砦 → 城塞 → 王城
-  if (level <= 0) return `hex/building_home_A_${c}.gltf`;
-  if (level === 1) return `hex/${SIGNATURE[i] ?? 'building_home_B'}_${c}.gltf`;
-  if (level === 2) return `hex/building_tower_A_${c}.gltf`;
-  return `hex/building_castle_${c}.gltf`;
-}
-const SPECIAL_MODEL: Record<string, string> = {
-  start: 'hex/wall_straight_gate.gltf',
-  tavern: 'hex/tent.gltf',
-  dungeon: 'hex/building_destroyed.gltf',
-  jackpot: '',
-  cathedral: 'hex/building_church_blue.gltf',
-  portal: 'hex/building_tower_B_blue.gltf',
-  shrine: 'hex/building_well_blue.gltf',
-  event: 'hex/building_stage_A.gltf',
-  tax: 'hex/building_tower_catapult_red.gltf',
-};
-
 interface Piece {
   root: THREE.Object3D;
   hero: THREE.Object3D;
@@ -166,10 +121,6 @@ export class World {
   private s = 1; // 六角の大きさ（中心から頂点）
   pathPos: THREE.Vector3[] = [];
   plotPos: THREE.Vector3[] = [];
-  private extras: THREE.Object3D[][] = [];
-  private tileKey: string[] = [];
-  private highlight: THREE.Mesh[] = [];
-  private highlightBase: number[] = [];
   private hovered: number | null = null;
   private pieces: Piece[] = [];
   private tweens: ((dt: number) => boolean)[] = [];
@@ -178,7 +129,6 @@ export class World {
   private camOffset = new THREE.Vector3(0, 26, 24);
   private userOrbiting = 0;
   private ambientFx: THREE.Points | null = null;
-  private prints: { canvas: HTMLCanvasElement; tex: THREE.CanvasTexture; key?: string }[] = [];
   private shake = 0;
   speed = 1;
   quality: 'high' | 'low' = 'high';
@@ -281,6 +231,18 @@ export class World {
     return new THREE.Vector3(this.s * Math.sqrt(3) * (q + r / 2), 0, this.s * 1.5 * r);
   }
   // ---------- 盤面を作る ----------
+  // ---------- 島（13の領地） ----------
+  /** 各マスの領地番号と位置 */
+  cells: { q: number; r: number; region: number; pos: THREE.Vector3 }[] = [];
+  /** 領地の旗を立てる中心 */
+  regionPos: THREE.Vector3[] = [];
+  private regionMesh: THREE.Mesh[] = [];
+  private regionMarker: THREE.Group[] = [];
+  private regionKey: string[] = [];
+  private regionLabel: HTMLDivElement[] = [];
+  private selectable: Set<number> | null = null;
+  private tweening = new Set<number>();
+
   async build(stage: StageDef) {
     this.island.clear();
     this.pickables = [];
@@ -311,13 +273,29 @@ export class World {
     this.s = size.z / 2;
     this.tileTop = box.max.y;
 
-    // 道：六角形のマスそのものに印字する
-    const pathKeys = new Set(BOARD.cells.map(([q, r]) => `${q},${r}`));
-    const plotKeys = new Set(BOARD.plots.map(([q, r]) => `${q},${r}`));
-    this.pathPos = BOARD.cells.map(([q, r]) => this.axial(q, r).setY(this.tileTop + PATH_LIFT + 0.02));
-    this.plotPos = BOARD.plots.map(([q, r]) => this.axial(q, r).setY(this.tileTop));
-    const near = (x: number, z: number, pts: THREE.Vector3[], d: number) => pts.some((p) => Math.hypot(p.x - x, p.z - z) < d);
-    const arena = this.arena;
+    // マスを一番近い領地の種に割り当てる（中央の竜の巣は少し狭く）
+    const seedPx = REGIONS.map((rg) => this.axial(rg.seed[0], rg.seed[1]));
+    this.cells = [];
+    for (let q = -7; q <= 7; q++) {
+      for (let r = -7; r <= 7; r++) {
+        if (hexDist(q, r) > 7) continue;
+        const pos = this.axial(q, r);
+        let best = 0;
+        let bd = Infinity;
+        seedPx.forEach((s, i) => {
+          const d = Math.hypot(pos.x - s.x, pos.z - s.z) * (REGIONS[i].kind === 'dragon' ? 1.35 : 1);
+          if (d < bd) {
+            bd = d;
+            best = i;
+          }
+        });
+        this.cells.push({ q, r, region: best, pos });
+      }
+    }
+    this.regionPos = seedPx.map((p) => p.clone().setY(this.tileTop));
+    this.pathPos = this.regionPos;
+    this.plotPos = this.regionPos;
+
     let seed = 11;
     const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
     const jobs: Promise<void>[] = [];
@@ -332,30 +310,32 @@ export class World {
       );
     const snow = stage.id === 'snow';
     const treeA = snow ? 'hex/trees_B_medium.gltf' : 'hex/trees_A_medium.gltf';
-    for (let q = -8; q <= 8; q++) {
-      for (let r = -8; r <= 8; r++) {
-        const d = hexDist(q, r);
-        if (d > 7) continue;
-        const p = this.axial(q, r);
-        const top = p.clone().setY(this.tileTop);
-        const key = `${q},${r}`;
-        if (pathKeys.has(key)) continue;
-        const busy = plotKeys.has(key) || d <= 1 || Math.hypot(p.x - arena.x, p.z - arena.z) < 1.6;
-        const isWater = !busy && !near(p.x, p.z, this.pathPos, 2.4) && !near(p.x, p.z, this.plotPos, 2.4) && d >= 2 && (q * 3 + r * 5) % 4 === 0;
-        add(isWater ? 'hex/hex_water.gltf' : 'hex/hex_grass.gltf', p);
-        if (d === 7) add('hex/hex_grass_bottom.gltf', p.clone().setY(-size.y * 0.98));
-        if (busy || isWater) continue;
-        const roll = rnd();
-        if (d <= 5) {
-          if (roll < 0.32) add(treeA, top, rnd() * 6);
-          else if (roll < 0.44) add('hex/hills_B_trees.gltf', top, rnd() * 6);
-          else if (roll < 0.52) add('hex/tree_single_A.gltf', top, rnd() * 6);
-          else if (roll < 0.58) add('hex/rock_single_B.gltf', top, rnd() * 6);
-        } else {
-          if (roll < 0.35) add('hex/trees_B_large.gltf', top, rnd() * 6);
-          else if (roll < 0.5) add('hex/mountain_B_grass_trees.gltf', top, rnd() * 6);
-          else if (roll < 0.58) add('hex/rock_single_C.gltf', top, rnd() * 6);
-        }
+    for (const c of this.cells) {
+      const d = hexDist(c.q, c.r);
+      add('hex/hex_grass.gltf', c.pos);
+      if (d === 7) add('hex/hex_grass_bottom.gltf', c.pos.clone().setY(-size.y * 0.98));
+      const center = this.regionPos[c.region];
+      const nearMarker = Math.hypot(c.pos.x - center.x, c.pos.z - center.z) < this.s * 2.2;
+      if (nearMarker) continue;
+      const kind = REGIONS[c.region].kind;
+      const top = c.pos.clone().setY(this.tileTop);
+      const roll = rnd();
+      // 領地の種類に合わせた景色
+      if (kind === 'forest') {
+        if (roll < 0.6) add(roll < 0.3 ? 'hex/trees_B_large.gltf' : treeA, top, rnd() * 6);
+      } else if (kind === 'mine' || kind === 'dragon') {
+        if (roll < 0.45) add(roll < 0.25 ? 'hex/mountain_B_grass_trees.gltf' : 'hex/mountain_A_grass_trees.gltf', top, rnd() * 6);
+        else if (roll < 0.6) add('hex/rock_single_C.gltf', top, rnd() * 6);
+      } else if (kind === 'spider' || kind === 'grave') {
+        if (roll < 0.35) add('hex/trees_B_medium.gltf', top, rnd() * 6);
+        else if (roll < 0.5) add('hex/rock_single_B.gltf', top, rnd() * 6);
+      } else if (kind === 'capital') {
+        if (roll < 0.12) add(treeA, top, rnd() * 6);
+        else if (roll < 0.2) add('hex/tree_single_A.gltf', top, rnd() * 6);
+      } else {
+        if (roll < 0.3) add(treeA, top, rnd() * 6);
+        else if (roll < 0.42) add('hex/hills_B_trees.gltf', top, rnd() * 6);
+        else if (roll < 0.5) add('hex/rock_single_B.gltf', top, rnd() * 6);
       }
     }
     // 雲
@@ -365,70 +345,71 @@ export class World {
       add(rnd() < 0.5 ? 'hex/cloud_big.gltf' : 'hex/cloud_small.gltf', new THREE.Vector3(Math.cos(a) * R, -4 + rnd() * 7, Math.sin(a) * R), rnd() * 6, 2 + rnd() * 2);
     }
 
-    // 道のマス：少し高くした六角形の上面に、名前・価格などを印字した六角形の面を貼る
-    this.extras = TILES.map(() => []);
-    this.tileKey = TILES.map(() => '');
-    this.highlight = [];
-    this.prints = [];
-    const hexR = this.s * 0.97;
-    const printGeo = new THREE.CircleGeometry(hexR, 6, Math.PI / 6).rotateX(-Math.PI / 2);
-    this.pathPos.forEach((p, i) => {
-      const holder = new THREE.Group();
-      holder.userData.tile = i;
-      this.island.add(holder);
-      this.pickables.push(holder);
-      jobs.push(
-        inst('hex/hex_grass.gltf').then((o) => {
-          o.position.set(p.x, PATH_LIFT, p.z);
-          holder.add(o);
-        }),
-      );
-      const canvas = document.createElement('canvas');
-      canvas.width = canvas.height = 256;
-      const tex = new THREE.CanvasTexture(canvas);
-      tex.colorSpace = THREE.SRGBColorSpace;
-      tex.anisotropy = 4;
-      const printMesh = new THREE.Mesh(printGeo, new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9, metalness: 0 }));
-      printMesh.position.set(p.x, this.tileTop + PATH_LIFT + 0.005, p.z);
-      printMesh.receiveShadow = true;
-      holder.add(printMesh);
-      this.prints.push({ canvas, tex });
-      // 土地側も選べるようにする
-      const plotHolder = new THREE.Group();
-      plotHolder.userData.tile = i;
-      plotHolder.userData.plot = true;
-      plotHolder.position.copy(this.plotPos[i]);
-      this.island.add(plotHolder);
-      this.pickables.push(plotHolder);
-      this.extras[i].push(plotHolder);
-      // 選択用の光る板
-      const hl = new THREE.Mesh(printGeo, new THREE.MeshBasicMaterial({ color: '#fff7c2', transparent: true, opacity: 0, depthWrite: false }));
-      hl.position.set(p.x, p.y + 0.01, p.z);
-      hl.visible = false;
-      this.island.add(hl);
-      this.highlight.push(hl);
-      this.highlightBase[i] = hl.position.y;
-
-      const def = TILES[i];
-      const faceTo = Math.round(Math.atan2(p.x - this.plotPos[i].x, p.z - this.plotPos[i].z) / (Math.PI / 3)) * (Math.PI / 3);
-      if (def.kind !== 'prop') {
-        if (def.kind === 'jackpot') {
-          for (let n = 0; n < 6; n++) add('bits/coin_10_gold.gltf', this.plotPos[i].clone().add(new THREE.Vector3((rnd() - 0.5) * 1.0, 0, (rnd() - 0.5) * 1.0)), rnd() * 6, 0.8);
-          add('hex/bucket_water.gltf', this.plotPos[i].clone().add(new THREE.Vector3(0.4, 0, -0.3)), 0, 1.1);
-        } else {
-          add(SPECIAL_MODEL[def.kind], this.plotPos[i], faceTo, def.kind === 'start' ? 0.9 : 1);
-          if (def.kind === 'tavern') {
-            add('hex/barrel.gltf', this.plotPos[i].clone().add(new THREE.Vector3(0.5, 0, 0.35)), 0, 1.1);
-            add('hex/crate_A_small.gltf', this.plotPos[i].clone().add(new THREE.Vector3(-0.45, 0, 0.4)), 0.4, 1.1);
-          }
+    // 領地の色の板（持ち主の色で塗る）と境界線
+    const hexR = this.s * 1.0;
+    this.regionMesh = [];
+    const borderGeos: THREE.BufferGeometry[] = [];
+    const corner = (p: THREE.Vector3, k: number) => {
+      const a = Math.PI / 6 + (k * Math.PI) / 3;
+      return new THREE.Vector3(p.x + Math.cos(a) * hexR, 0, p.z + Math.sin(a) * hexR);
+    };
+    const byKey = new Map(this.cells.map((c) => [`${c.q},${c.r}`, c]));
+    const NB: [number, number][] = [[1, 0], [0, 1], [-1, 1], [-1, 0], [0, -1], [1, -1]];
+    REGIONS.forEach((_, ri) => {
+      const geos: THREE.BufferGeometry[] = [];
+      for (const c of this.cells.filter((x) => x.region === ri)) {
+        geos.push(new THREE.CircleGeometry(hexR * 0.995, 6, Math.PI / 6).rotateX(-Math.PI / 2).translate(c.pos.x, 0, c.pos.z));
+        // となりが別の領地なら、その辺に境界線を引く
+        for (let k = 0; k < 6; k++) {
+          const a = Math.PI / 6 + (k * Math.PI) / 3;
+          const mid = new THREE.Vector3(c.pos.x + Math.cos(a + Math.PI / 6) * hexR * 0.866 * 1.0, 0, c.pos.z + Math.sin(a + Math.PI / 6) * hexR * 0.866);
+          const nb = this.cells.find((x) => Math.hypot(x.pos.x - (c.pos.x + (mid.x - c.pos.x) * 2), x.pos.z - (c.pos.z + (mid.z - c.pos.z) * 2)) < 0.2);
+          if (nb && nb.region === ri) continue;
+          const p0 = corner(c.pos, k);
+          const p1 = corner(c.pos, (k + 1) % 6);
+          const len = p0.distanceTo(p1);
+          const bg = new THREE.PlaneGeometry(len, nb ? 0.09 : 0.14).rotateX(-Math.PI / 2);
+          bg.rotateY(-Math.atan2(p1.z - p0.z, p1.x - p0.x));
+          bg.translate((p0.x + p1.x) / 2, 0, (p0.z + p1.z) / 2);
+          borderGeos.push(bg);
         }
       }
+      void byKey;
+      void NB;
+      const geo = mergeGeometries(geos)!;
+      const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }));
+      mesh.position.y = this.tileTop + 0.012;
+      mesh.renderOrder = 2;
+      mesh.userData.tile = ri;
+      mesh.userData.base = { color: '#ffffff', opacity: 0 };
+      this.island.add(mesh);
+      this.pickables.push(mesh);
+      this.regionMesh.push(mesh);
+    });
+    const border = new THREE.Mesh(mergeGeometries(borderGeos)!, new THREE.MeshBasicMaterial({ color: '#3a2a1c', transparent: true, opacity: 0.55, depthWrite: false }));
+    border.position.y = this.tileTop + 0.02;
+    border.renderOrder = 3;
+    this.island.add(border);
+
+    // 領地の目印と名札
+    this.regionMarker = REGIONS.map(() => new THREE.Group());
+    this.regionKey = REGIONS.map(() => '');
+    this.regionMarker.forEach((m, i) => {
+      m.position.copy(this.regionPos[i]);
+      this.island.add(m);
+    });
+    this.regionLabel = REGIONS.map((rg) => {
+      const el = document.createElement('div');
+      el.className = `region-label k-${rg.kind}`;
+      el.dataset.region = String(rg.id);
+      this.labels.appendChild(el);
+      return el;
     });
     await Promise.all(jobs);
-    await this.buildCenter();
-    this.makeAmbient(stage);
     this.focus.set(0, 0, 0);
     this.focusGoal.set(0, 0, 0);
+    if (!this.dragon) void this.loadDragon();
+    this.makeAmbient(stage);
   }
 
   private makeAmbient(stage: StageDef) {
@@ -449,153 +430,108 @@ export class World {
     this.scene.add(this.ambientFx);
   }
 
-  /** マスに印字する（名前・価格・通行料・持ち主など）。同じ内容なら描き直さない */
-  printTile(i: number, info: PrintInfo) {
-    const pr = this.prints[i];
-    if (!pr) return;
-    const key = JSON.stringify(info);
-    if (pr.key === key) return;
-    pr.key = key;
-    const c = pr.canvas.getContext('2d')!;
-    const W = 256;
-    const ink = '#2b2640';
-    const font = (w: number, px: number, display = false) => `${w} ${px}px ${display ? "'Dela Gothic One'" : "'M PLUS Rounded 1c'"}, 'Hiragino Sans', sans-serif`;
-    const drawIcon = (name: string, cx: number, cy: number, size: number, color: string) => {
-      const d = ICONS[name]?.d;
-      if (!d) return;
-      c.save();
-      c.translate(cx - size / 2, cy - size / 2);
-      c.scale(size / 512, size / 512);
-      c.fillStyle = color;
-      c.fill(new Path2D(d));
-      c.restore();
-    };
-    const text = (t: string, x: number, y: number, px: number, color: string, opts: { display?: boolean; stroke?: string; weight?: number; max?: number } = {}) => {
-      c.font = font(opts.weight ?? 800, px, opts.display);
-      c.textAlign = 'center';
-      c.textBaseline = 'middle';
-      const max = opts.max ?? W - 24;
-      let size = px;
-      while (c.measureText(t).width > max && size > 10) {
-        size -= 2;
-        c.font = font(opts.weight ?? 800, size, opts.display);
-      }
-      if (opts.stroke) {
-        c.lineWidth = Math.max(4, size / 5);
-        c.lineJoin = 'round';
-        c.strokeStyle = opts.stroke;
-        c.strokeText(t, x, y);
-      }
-      c.fillStyle = color;
-      c.fillText(t, x, y);
-    };
-    c.save();
-    c.clearRect(0, 0, W, W);
-    // 六角形（頂点が上下）の形に切り抜く
-    const hex = new Path2D();
-    for (let k = 0; k < 6; k++) {
-      const a = Math.PI / 6 + (k * Math.PI) / 3;
-      const x = W / 2 + Math.cos(a) * (W / 2);
-      const y = W / 2 - Math.sin(a) * (W / 2);
-      if (k === 0) hex.moveTo(x, y);
-      else hex.lineTo(x, y);
-    }
-    hex.closePath();
-    c.clip(hex);
-    c.fillStyle = info.bg;
-    c.fillRect(0, 0, W, W);
-    if (info.kind === 'prop') {
-      // 上の帯：色グループ
-      c.fillStyle = info.band!;
-      c.fillRect(0, 0, W, 92);
-      text(info.name, W / 2, 70, 30, '#fff', { stroke: 'rgba(0,0,0,.3)', max: 190 });
-      drawIcon(info.icon, W / 2, 128, 58, info.owner ?? ink);
-      if (info.level) for (let k = 0; k < 4; k++) drawIcon('star-formation', W / 2 - 39 + k * 26, 166, 22, k < info.level ? '#f5b82e' : '#d8cfbe');
-      text(info.main, W / 2, info.level ? 200 : 190, info.level ? 40 : 46, info.owner ?? ink, { display: true, max: 170 });
-      if (info.set) {
-        c.fillStyle = '#e8483f';
-        c.beginPath();
-        c.arc(W - 62, 124, 22, 0, Math.PI * 2);
-        c.fill();
-        text('統', W - 62, 125, 22, '#fff', { display: true });
-      }
-      if (info.guard) drawIcon('magic-shield', 62, 124, 40, '#3b8eea');
-      // 縁取り：持ち主の色（いなければ帯の色）
-      c.lineWidth = info.owner ? 22 : 10;
-      c.strokeStyle = info.owner ?? info.band!;
-      c.stroke(hex);
-    } else {
-      drawIcon(info.icon, W / 2, 104, 96, info.fg ?? ink);
-      text(info.name, W / 2, 172, 30, info.fg ?? ink, { max: 190 });
-      if (info.main) text(info.main, W / 2, 206, 26, info.fg ?? ink, { display: true, max: 160 });
-      c.lineWidth = 10;
-      c.strokeStyle = 'rgba(0,0,0,.18)';
-      c.stroke(hex);
-    }
-    if (info.trap) {
-      // 自分が仕掛けた罠の印（相手には見えない）
-      c.fillStyle = '#2b2640';
-      c.beginPath();
-      c.arc(W / 2, 236, 20, 0, Math.PI * 2);
-      c.fill();
-      drawIcon('skull-crossed-bones', W / 2, 236, 30, '#ffd35c');
-    }
-    c.restore();
-    pr.tex.needsUpdate = true;
+  /** 領地の名札の中身 */
+  setRegionLabel(i: number, html: string, color: string | null) {
+    const el = this.regionLabel[i];
+    if (!el) return;
+    if (el.innerHTML !== html) el.innerHTML = html;
+    el.style.setProperty('--owner', color ?? '#8a8070');
+    el.classList.toggle('owned', color !== null);
   }
 
-  // ---------- 建物 ----------
-  async setTile(i: number, t: TileState, animate: boolean) {
-    const key = `${t.owner}:${t.level}:${t.guard > 0}`;
-    if (this.tileKey[i] === key) return;
-    const prevLevel = Number(this.tileKey[i].split(':')[1] ?? 0);
-    this.tileKey[i] = key;
-    const holder = this.extras[i][0];
-    holder.clear();
-    const def = TILES[i];
-    if (def.kind !== 'prop') return;
-    const face = Math.atan2(this.pathPos[i].x - this.plotPos[i].x, this.pathPos[i].z - this.plotPos[i].z);
-    const parts: THREE.Object3D[] = [];
-    if (t.owner === null) {
-      parts.push(await inst('hex/building_dirt.gltf'));
+  /** 領地の持ち主を表示する（色の板・建物・旗）。owner が null なら中立 */
+  async setRegion(i: number, owner: number | null, capitalOf: number | null, animate: boolean) {
+    const rg = REGIONS[i];
+    const key = `${owner}:${capitalOf}`;
+    const mesh = this.regionMesh[i];
+    const mat = mesh.material as THREE.MeshBasicMaterial;
+    const color = owner === null ? '#ffffff' : PLAYER_COLORS[owner];
+    const opacity = owner === null ? 0 : 0.3;
+    mesh.userData.base = { color, opacity };
+    if (!animate) {
+      mat.color.set(color);
+      mat.opacity = opacity;
     } else {
-      const model = buildingModel(i, t.level, t.owner);
-      if (model) parts.push(await inst(model));
-      else {
-        const dirt = await inst('hex/building_dirt.gltf');
-        parts.push(dirt);
-      }
-      const flag = await inst(`hex/flag_${PLAYER_KEYS[t.owner]}.gltf`);
-      flag.position.set(0.62, 0, 0.3);
-      flag.scale.setScalar(0.9);
-      parts.push(flag);
-      if (t.guard > 0) {
-        for (let k = 0; k < 4; k++) {
-          const f = await inst(`hex/flag_${PLAYER_KEYS[t.owner]}.gltf`);
-          const a = (k / 4) * Math.PI * 2 + 0.4;
-          f.position.set(Math.cos(a) * 0.78, 0, Math.sin(a) * 0.78);
-          f.scale.setScalar(0.7);
-          parts.push(f);
-        }
-      }
-    }
-    const group = new THREE.Group();
-    // 建物は六角形の台座つきなので、地面のマスと向きがそろうよう 60° 刻みで道の方を向ける
-    group.rotation.y = Math.round(face / (Math.PI / 3)) * (Math.PI / 3);
-    for (const p of parts) group.add(p);
-    holder.add(group);
-    if (animate) {
-      const grow = t.level >= prevLevel;
-      const dur = 0.6;
       let k = 0;
-      group.scale.setScalar(0.01);
+      const from = mat.color.clone();
+      const to = new THREE.Color(color);
+      this.tweening.add(i);
       this.tweens.push((dt) => {
-        k = Math.min(1, k + dt / dur);
-        group.scale.setScalar(Math.max(0.01, grow ? easeOutBack(k) : 1 - (1 - k) * 0.3));
+        k = Math.min(1, k + dt / 0.8);
+        mat.color.lerpColors(from, to, k);
+        mat.opacity = opacity + Math.sin(Math.PI * k) * 0.45;
+        if (k >= 1) this.tweening.delete(i);
         return k < 1;
       });
-      if (t.level > prevLevel) this.burst(this.plotPos[i].clone().setY(this.tileTop + 0.5), 14, t.owner ?? 0);
     }
+    if (this.regionKey[i] === key) return;
+    this.regionKey[i] = key;
+    const parts: THREE.Object3D[] = [];
+    const ckey = owner === null ? null : PLAYER_KEYS[owner];
+    const KIND_BUILDING: Record<string, string> = {
+      forest: 'building_lumbermill', mine: 'building_mine', harbor: 'building_market', grave: 'building_church',
+      goblin: 'building_barracks', spider: 'building_archeryrange', tower: 'building_tower_B', fort: 'building_blacksmith', dragon: 'building_tower_A',
+    };
+    if (rg.kind === 'capital') {
+      if (owner !== null && capitalOf === owner) parts.push(await inst(`hex/building_castle_${ckey}.gltf`));
+      else if (owner !== null) parts.push(await inst(`hex/building_tower_A_${ckey}.gltf`));
+      else parts.push(await inst('hex/building_destroyed.gltf'));
+    } else if (owner !== null) {
+      parts.push(await inst(`hex/${KIND_BUILDING[rg.kind]}_${ckey}.gltf`));
+    } else {
+      // 中立：魔物の陣
+      const camp: Record<string, string[]> = {
+        forest: ['hex/tent.gltf'], mine: ['hex/building_destroyed.gltf'], harbor: ['hex/tent.gltf', 'hex/barrel.gltf'], grave: ['hex/building_destroyed.gltf'],
+        goblin: ['hex/tent.gltf', 'hex/crate_A_small.gltf'], spider: ['hex/building_destroyed.gltf'], tower: ['hex/building_stage_C.gltf'], fort: ['hex/building_stage_A.gltf'], dragon: ['hex/building_destroyed.gltf'],
+      };
+      const list = camp[rg.kind] ?? ['hex/tent.gltf'];
+      for (let k = 0; k < list.length; k++) {
+        const o = await inst(list[k]);
+        if (k > 0) o.position.set(0.55, 0, 0.4);
+        parts.push(o);
+      }
+      if (rg.kind === 'dragon') for (let n = 0; n < 5; n++) {
+        const c = await inst('bits/coin_10_gold.gltf');
+        const a = n * 1.3;
+        c.position.set(Math.cos(a) * 0.7, 0, Math.sin(a) * 0.7);
+        parts.push(c);
+      }
+    }
+    if (owner !== null) {
+      const flag = await inst(`hex/flag_${ckey}.gltf`);
+      flag.position.set(0.7, 0, 0.35);
+      parts.push(flag);
+    }
+    if (this.regionKey[i] !== key) return;
+    const m = this.regionMarker[i];
+    m.clear();
+    const group = new THREE.Group();
+    group.rotation.y = Math.PI / 3; // 六角形の台座を地面のマスにそろえる（60°刻み）
+    for (const p of parts) group.add(p);
+    if (rg.kind === 'capital' || rg.kind === 'dragon') group.scale.setScalar(1.15);
+    m.add(group);
+    if (animate) {
+      let k = 0;
+      const s0 = group.scale.x;
+      group.scale.setScalar(0.01);
+      this.tweens.push((dt) => {
+        k = Math.min(1, k + dt / 0.6);
+        group.scale.setScalar(Math.max(0.01, s0 * easeOutBack(k)));
+        return k < 1;
+      });
+      if (owner !== null) this.burst(this.regionPos[i].clone().setY(this.tileTop + 0.8), 16, owner);
+    }
+    // 竜の巣が落ちたら竜はいなくなる
+    if (rg.kind === 'dragon' && this.dragon) this.dragon.root.visible = owner === null;
+  }
+
+  /** 名札の位置を3Dの領地に合わせる */
+  private placeLabels() {
+    if (this.labels.hidden) return;
+    this.regionLabel.forEach((el, i) => {
+      const p = this.toScreen(this.regionPos[i].clone().setY(this.tileTop + 1.9));
+      el.style.transform = `translate(${p.x}px, ${p.y}px) translate(-50%, -100%)`;
+    });
   }
 
   // ---------- 駒 ----------
@@ -652,7 +588,9 @@ export class World {
   private slot(k: number) {
     const here = this.pieces.filter((p, j) => p.root.visible && p.pos === this.pieces[k].pos && j <= k).length - 1;
     const total = this.pieces.filter((p) => p.root.visible && p.pos === this.pieces[k].pos).length;
-    const base = this.pathPos[this.pieces[k].pos].clone();
+    // 領地の建物の手前（島の中央寄り）に立つ
+    const c = this.pathPos[this.pieces[k].pos];
+    const base = c.clone().add(c.clone().setY(0).normalize().multiplyScalar(-1.7));
     if (total <= 1) return base;
     const a = (here / total) * Math.PI * 2;
     return base.add(new THREE.Vector3(Math.cos(a) * 0.45, 0, Math.sin(a) * 0.45));
@@ -667,8 +605,8 @@ export class World {
   }
   private faceAlong(k: number) {
     const p = this.pieces[k];
-    const next = this.pathPos[(p.pos + 1) % 30];
-    p.hero.rotation.y = Math.atan2(next.x - p.root.position.x, next.z - p.root.position.z);
+    // 島の中央（竜の巣）の方を向く
+    p.hero.rotation.y = Math.atan2(-p.root.position.x, -p.root.position.z);
   }
   setPiecePos(k: number, pos: number) {
     this.pieces[k].pos = pos;
@@ -711,6 +649,36 @@ export class World {
       p.root.scale.setScalar(0.3 + t * 0.7);
     });
     p.root.scale.setScalar(1);
+    this.layoutPieces();
+  }
+  /** 攻め込む：自分の王都から目標の領地の手前まで走る */
+  async marchPiece(k: number, region: number) {
+    const p = this.pieces[k];
+    if (!p) return;
+    const from = p.root.position.clone();
+    const goal = this.regionPos[region].clone();
+    const to = goal.clone().add(from.clone().sub(goal).setY(0).normalize().multiplyScalar(1.3));
+    p.hero.rotation.y = Math.atan2(to.x - from.x, to.z - from.z);
+    this.playAnim(k, 'Running_A');
+    const dur = Math.min(1.6, from.distanceTo(to) / 7) / this.speed;
+    await this.animate(dur, (t) => {
+      p.root.position.lerpVectors(from, to, easeInOut(t));
+    });
+    this.playAnim(k, 'Idle_A');
+    p.hero.rotation.y = Math.atan2(goal.x - to.x, goal.z - to.z);
+  }
+  /** 王都へ戻る */
+  async returnPiece(k: number) {
+    const p = this.pieces[k];
+    if (!p) return;
+    const from = p.root.position.clone();
+    const to = this.slot(k);
+    p.hero.rotation.y = Math.atan2(to.x - from.x, to.z - from.z);
+    this.playAnim(k, 'Walking_A');
+    await this.animate(Math.min(1.4, from.distanceTo(to) / 6) / this.speed, (t) => {
+      p.root.position.lerpVectors(from, to, easeInOut(t));
+    });
+    this.playAnim(k, 'Idle_A');
     this.layoutPieces();
   }
   pieceWorld(k: number) {
@@ -881,11 +849,9 @@ export class World {
   hoverTile(i: number | null) {
     this.hovered = i;
   }
-  setSelectable(tiles: number[] | null) {
-    this.highlight.forEach((h, i) => {
-      const on = !!tiles && tiles.includes(i);
-      h.visible = on;
-    });
+  setSelectable(regions: number[] | null) {
+    this.selectable = regions ? new Set(regions) : null;
+    this.regionLabel.forEach((el, i) => el.classList.toggle('pick', !!this.selectable?.has(i)));
   }
 
   // ---------- カメラ ----------
@@ -939,17 +905,21 @@ export class World {
     this.tweens = this.tweens.filter((f) => f(tdt));
     for (const p of this.pieces) p.mixer.update(dt);
     this.updateDragon(dt);
-    // 選択中のマスを点滅させる
-    const pulse = 0.35 + Math.sin(performance.now() / 180) * 0.2;
-    this.highlight.forEach((h, i) => {
-      if (!h.visible) return;
-      const hot = i === this.hovered;
-      (h.material as THREE.MeshBasicMaterial).opacity = hot ? 0.85 : pulse;
-      (h.material as THREE.MeshBasicMaterial).color.set(hot ? '#9bffb4' : '#fff7c2');
-      const sc = hot ? 1.18 : 1;
-      h.scale.setScalar(h.scale.x + (sc - h.scale.x) * 0.3);
-      h.position.y = this.highlightBase[i] + (hot ? 0.06 : 0);
+    // 攻められる領地を点滅させる
+    const pulse = 0.22 + Math.sin(performance.now() / 200) * 0.12;
+    this.regionMesh.forEach((m, i) => {
+      const mat = m.material as THREE.MeshBasicMaterial;
+      const base = m.userData.base as { color: string; opacity: number };
+      if (this.selectable?.has(i)) {
+        const hot = i === this.hovered;
+        mat.color.set(hot ? '#fff3a0' : '#ffffff');
+        mat.opacity = hot ? 0.75 : Math.max(base.opacity, pulse + 0.15);
+      } else if (!this.tweening.has(i)) {
+        mat.color.set(base.color);
+        mat.opacity = base.opacity;
+      }
     });
+    this.placeLabels();
     if (this.ambientFx) {
       const pos = this.ambientFx.geometry.attributes.position as THREE.BufferAttribute;
       const kind = this.ambientFx.userData.kind;
@@ -999,75 +969,8 @@ export class World {
     return this.arena.setY(this.tileTop + 1);
   }
 
-  // ---------- 中央の舞台：王城・財宝・竜 ----------
-  private castle = new THREE.Group();
-  private castleKey = '';
-  private treasure = new THREE.Group();
-  private treasureCount = -1;
+  // ---------- 竜 ----------
   private dragon: { root: THREE.Object3D; mixer: THREE.AnimationMixer; fly?: THREE.AnimationAction; attack?: THREE.AnimationAction; busy: boolean; angle: number } | null = null;
-
-  private async buildCenter() {
-    this.castleKey = '';
-    this.treasureCount = -1;
-    this.castle = new THREE.Group();
-    this.treasure = new THREE.Group();
-    this.island.add(this.castle, this.treasure);
-    await this.setLeader(null);
-    if (!this.dragon) void this.loadDragon();
-  }
-  /** 王城は首位のプレイヤーの色に染まる（null なら建設中） */
-  async setLeader(owner: number | null) {
-    const key = owner === null ? 'none' : PLAYER_KEYS[owner];
-    if (key === this.castleKey) return;
-    this.castleKey = key;
-    const model = owner === null ? 'hex/building_stage_C.gltf' : `hex/building_castle_${key}.gltf`;
-    const o = await inst(model);
-    if (this.castleKey !== key) return;
-    o.scale.setScalar(owner === null ? 0.95 : 1.15);
-    o.position.set(0, this.tileTop, 0);
-    o.rotation.y = Math.PI / 6;
-    this.castle.clear();
-    this.castle.add(o);
-    if (owner !== null) {
-      for (let k = 0; k < 6; k++) {
-        const f = await inst(`hex/flag_${key}.gltf`);
-        const a = (k / 6) * Math.PI * 2 + 0.3;
-        f.position.set(Math.cos(a) * 1.35, this.tileTop, Math.sin(a) * 1.35);
-        this.castle.add(f);
-      }
-      let k = 0;
-      o.scale.setScalar(0.01);
-      this.tweens.push((dt) => {
-        k = Math.min(1, k + dt / 0.7);
-        o.scale.setScalar(Math.max(0.01, 1.15 * easeOutBack(k)));
-        return k < 1;
-      });
-      this.burst(new THREE.Vector3(0, this.tileTop + 2.5, 0), 18, owner);
-    }
-  }
-  /** 黄金の泉に貯まった額に応じて、王城の前に財宝を積む */
-  async setTreasure(amount: number) {
-    const n = Math.max(1, Math.min(14, Math.round(amount / 120)));
-    if (n === this.treasureCount) return;
-    const grow = n > this.treasureCount;
-    this.treasureCount = n;
-    const src = await loadModel('bits/coin_10_gold.gltf');
-    this.treasure.clear();
-    for (let k = 0; k < n; k++) {
-      const c = src.clone(true);
-      // 王城の左右と奥（手前はサイコロの広場）
-      const a = -Math.PI * 0.1 - (k % 7) * (Math.PI * 1.2 / 6);
-      const r = 1.75 + Math.floor(k / 7) * 0.3;
-      c.position.set(Math.cos(a) * r, this.tileTop + Math.floor(k / 7) * 0.1, Math.sin(a) * r);
-      c.rotation.y = a;
-      c.scale.setScalar(1.2);
-      this.treasure.add(c);
-    }
-    if (grow && n > 1) this.burst(this.treasureWorld, 6, -1);
-  }
-  get treasureWorld() {
-    return new THREE.Vector3(0, this.tileTop + 0.8, -1.6);
-  }
 
   private async loadDragon() {
     try {
