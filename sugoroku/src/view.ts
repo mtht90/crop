@@ -243,7 +243,7 @@ export class HumanController implements Controller {
       pick: (x: number, y: number) => this.world.tileAt(x, y),
       highlight: (t: number[] | null) => {
         this.world.setSelectable(t);
-        if (t) this.world.overview();
+        if (t) this.world.frameTiles(t);
       },
       hover: (t: number | null) => this.world.hoverTile(t),
     };
@@ -289,7 +289,7 @@ export class HumanController implements Controller {
         if (options.includes(i)) finish(i);
         else prevClick?.(i);
       };
-      this.world.overview();
+      this.world.frameTiles(options);
       this.ui.selectBar(text, allowCancel, () => finish(null));
     });
   }

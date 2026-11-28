@@ -471,6 +471,8 @@ export class UI {
     let lastX = 0;
     let tile: number | null = null;
     let raf = 0;
+    let ring: HTMLElement | null = null;
+    let aim = false;
     const targets = needsTarget(ref) ? g.cardTargets(p, ref) : [];
     const lineY = () => {
       const hand = this.action.querySelector('.hand')!.getBoundingClientRect();
@@ -482,7 +484,10 @@ export class UI {
       const w = cardW();
       const h = (w * 336) / 240;
       const rot = Math.max(-18, Math.min(18, vx * 0.6));
-      drag.style.transform = `translate(${pos.x - w / 2}px, ${pos.y - h * 0.62}px) rotate(${rot}deg)`;
+      // マスを狙うときはカードを小さくして指の左上へ。指先のマスが見えるようにする
+      if (aim) drag.style.transform = `translate(${pos.x - w * 0.62}px, ${pos.y - h * 0.62 - 34}px) scale(.55) rotate(${rot * 0.5}deg)`;
+      else drag.style.transform = `translate(${pos.x - w / 2}px, ${pos.y - h * 0.62}px) rotate(${rot}deg)`;
+      if (ring) ring.style.transform = `translate(${pos.x}px, ${pos.y}px)`;
       vx *= 0.82;
       raf = requestAnimationFrame(place);
     };
@@ -502,6 +507,10 @@ export class UI {
         // マスを狙うときは手札を下へ引っ込めて、盤面を広く見せる
         board.highlight(targets);
         this.action.classList.add('aiming');
+        aim = true;
+        ring = document.createElement('div');
+        ring.className = 'aim-ring';
+        this.root.appendChild(ring);
       }
       audio.play('hover', { volume: 0.6 });
       vibrate(8);
@@ -536,6 +545,7 @@ export class UI {
       const wasArmed = drag!.classList.contains('armed') || drag!.classList.contains('target');
       drag!.classList.toggle('armed', ok && !targets.length);
       drag!.classList.toggle('target', ok && !!targets.length);
+      ring?.classList.toggle('on', ok);
       line!.classList.toggle('armed', ok);
       if (ok && !wasArmed) vibrate(10);
     };
@@ -546,6 +556,9 @@ export class UI {
       board.hover(null);
       if (targets.length) board.highlight(null);
       this.action.classList.remove('aiming');
+      ring?.remove();
+      ring = null;
+      aim = false;
     };
     const snapBack = async () => {
       const d = drag!;
@@ -553,7 +566,7 @@ export class UI {
       cleanup();
       const r = el.getBoundingClientRect();
       const w = cardW();
-      await d.animate([{ transform: d.style.transform }, { transform: `translate(${r.left + r.width / 2 - w / 2}px, ${r.top}px) scale(${r.width / w})` }], { duration: 220, easing: 'cubic-bezier(.3,1.4,.5,1)' }).finished;
+      await d.animate([{ transform: d.style.transform }, { transform: `translate(${r.left}px, ${r.top}px) scale(${r.width / w})` }], { duration: 220, easing: 'cubic-bezier(.3,1.4,.5,1)' }).finished;
       d.remove();
       el.classList.remove('ghost');
     };

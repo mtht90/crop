@@ -899,6 +899,19 @@ export class World {
   setZoom(z: number) {
     this.zoomGoal = z;
   }
+  /** 狙えるマスが収まるように寄る（縦長の画面では島全体だとマスが小さすぎるため） */
+  frameTiles(tiles: number[]) {
+    if (!tiles.length) return this.overview();
+    const pts = tiles.map((i) => this.pathPos[i]);
+    const c = pts.reduce((a, p) => a.add(p), new THREE.Vector3()).multiplyScalar(1 / pts.length);
+    const spread = Math.max(...pts.map((p) => p.distanceTo(c)));
+    const portrait = innerHeight > innerWidth;
+    const full = Math.max(...this.pathPos.map((p) => p.length()));
+    const z = Math.min(1, Math.max(portrait ? 0.55 : 0.6, (spread / full) * (portrait ? 0.95 : 1.1)));
+    if (z >= 0.98) return this.overview();
+    this.zoomGoal = z;
+    this.focusGoal.copy(c).setY(0).multiplyScalar(0.92);
+  }
   overview() {
     this.zoomGoal = 1;
     this.focusGoal.set(0, 0, 0);
