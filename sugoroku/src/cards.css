@@ -113,6 +113,10 @@
 .play-line { position: fixed; left: 0; right: 0; height: 0; border-top: 3px dashed rgba(255, 255, 255, .7); z-index: 40; pointer-events: none; opacity: 0; transition: opacity .15s; }
 .play-line span { position: absolute; left: 50%; top: -30px; transform: translateX(-50%); padding: 3px 14px; border-radius: 99px; background: rgba(43, 38, 64, .82); color: #fff; font-size: 13px; font-weight: 800; white-space: nowrap; }
 .play-line.show { opacity: 1; }
+.play-line.aim { border-top-color: transparent; top: calc(env(safe-area-inset-top, 0px) + 120px) !important; }
+.play-line.aim span { background: #2f9e57; font-size: 15px; padding: 6px 18px; }
+.action.aiming { transform: translate(-50%, 78%); opacity: .55; transition: transform .25s ease, opacity .25s; }
+.action.aiming .hand-hint { opacity: 0; }
 .play-line.armed { border-top-color: #ffd35c; }
 .play-line.armed span { background: #c98a12; }
 
@@ -154,3 +158,8 @@
 @media (max-width: 400px) {
   .hand.fan .slot { --cw: 94px; margin: 0 -26px; }
 }
+.card .c-text.mid { font-size: 7cqw; }
+.card .c-text.long { font-size: 6.2cqw; line-height: 1.25; padding-top: 3.5cqw; }
+.dialog-body, .dialog-body > *, .shop-cols, .shop-sec { min-width: 0; }
+.shop .dialog { width: min(640px, 100%); }
+.shop-sec h3 { text-wrap: balance; }

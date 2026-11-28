@@ -33,7 +33,7 @@ export function cardHtml(ref: CardRef, opts: { usable?: boolean; small?: boolean
   return `<div class="${cls}" data-card="${ref}" title="${c.name}（${RARITY_NAME[c.rarity]}）" ${opts.idx !== undefined ? `data-idx="${opts.idx}"` : ''}>
     <div class="c-art">${icon(c.icon)}</div>
     <i class="c-win"></i>
-    <div class="c-text">${c.exhaust ? '<span class="c-kw">消耗</span>' : ''}<span>${c.desc}</span></div>
+    <div class="c-text${c.desc.length + (c.exhaust ? 4 : 0) > 30 ? ' long' : c.desc.length > 22 ? ' mid' : ''}">${c.exhaust ? '<span class="c-kw">消耗</span>' : ''}<span>${c.desc}</span></div>
     <div class="c-type">${KIND_NAME[kind]}</div>
     <i class="c-trim"></i>
     <div class="c-banner"><span>${c.name}</span></div>
@@ -493,11 +493,16 @@ export class UI {
       this.root.appendChild(drag);
       el.classList.add('ghost');
       line = document.createElement('div');
-      line.className = 'play-line show';
+      const aiming = targets.length > 0 && usable(ref);
+      line.className = `play-line show${aiming ? ' aim' : ''}`;
       line.style.top = `${lineY()}px`;
-      line.innerHTML = `<span>${!usable(ref) ? 'このカードは今は使えない' : needsTarget(ref) ? 'マスの上で離す' : 'ここより上で離すと使う'}</span>`;
+      line.innerHTML = `<span>${!usable(ref) ? 'このカードは今は使えない' : aiming ? '光ったマスの上で離す' : 'ここより上で離すと使う'}</span>`;
       this.root.appendChild(line);
-      if (targets.length && usable(ref)) board.highlight(targets);
+      if (aiming) {
+        // マスを狙うときは手札を下へ引っ込めて、盤面を広く見せる
+        board.highlight(targets);
+        this.action.classList.add('aiming');
+      }
       audio.play('hover', { volume: 0.6 });
       vibrate(8);
       pos = { x: e.clientX, y: e.clientY };
@@ -510,7 +515,7 @@ export class UI {
       pos = { x: e.clientX, y: e.clientY };
       const above = e.clientY < lineY();
       let ok = false;
-      if (usable(ref) && above) {
+      if (usable(ref) && (above || targets.length)) {
         if (targets.length) {
           const t = board.pick(e.clientX, e.clientY);
           const nt = t !== null && targets.includes(t) ? t : null;
@@ -540,6 +545,7 @@ export class UI {
       line = null;
       board.hover(null);
       if (targets.length) board.highlight(null);
+      this.action.classList.remove('aiming');
     };
     const snapBack = async () => {
       const d = drag!;
@@ -579,11 +585,9 @@ export class UI {
         cb.drop(i, t, rect);
         return;
       }
-      // 上に出したのにマスの上で離さなかった → 選択状態にしてマスを選ばせる
-      const releasedAbove = e.clientY < lineY();
+      // マスの上で離さなかった → 手札に戻す（2回タップならマスを選ぶ画面になる）
       await snapBack();
       if (!usable(ref)) this.nope(el);
-      else if (releasedAbove && targets.length) cb.tap(i, true);
     };
     el.addEventListener('pointerup', end);
     el.addEventListener('pointercancel', end);

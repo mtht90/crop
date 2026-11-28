@@ -139,6 +139,8 @@ async function playGame(hero: HeroId, stage: StageId): Promise<boolean> {
   const ctrls: Controller[] = heroes.map((_, i) => (i === 0 && !AUTO ? human : new AIController(STAGES[stage].aiSkill)));
   g = new Game({ stage, rounds: ROUNDS, heroes, names, humanIndex: 0, cardPool: unlockedCards(save), seed }, view, ctrls);
   view.g = g;
+  // 自動テスト用（?debug のときだけ）：盤面と試合の状態を外から触れるようにする
+  if (new URLSearchParams(location.search).has('debug')) Object.assign(window, { __dk: { g, world } });
   if (AUTO) {
     g.s.players[0].human = false;
     view.cpuSpeed = 4;
