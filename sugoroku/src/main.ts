@@ -269,6 +269,7 @@ async function runBattle(c: Campaign, f: Fight, view: GameView): Promise<boolean
   world.labels.hidden = true;
   ui.hideTooltip();
   const b = new Battle(f.setup, bui, [bui, bui]);
+  if (QS.has('debug')) Object.assign((window as unknown as { __dk: object }).__dk, { b });
   bui.mount(b);
   bgm('finale');
   const w = await b.run();

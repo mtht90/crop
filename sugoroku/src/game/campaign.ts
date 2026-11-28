@@ -152,7 +152,7 @@ export class Campaign {
         if (!l.alive) continue;
         await this.lordTurn(l);
       }
-      for (const l of this.alive) l.stats.lowestRankSeen = Math.max(l.stats.lowestRankSeen, this.rankOf(l));
+      if (this.round >= 3) for (const l of this.alive) l.stats.lowestRankSeen = Math.max(l.stats.lowestRankSeen, this.rankOf(l));
     }
     if (!this.over) await this.finish(this.ranking()[0]);
   }
