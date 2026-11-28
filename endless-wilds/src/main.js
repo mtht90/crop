@@ -148,7 +148,8 @@ class App {
     if (K.has('KeyW') || K.has('ArrowUp')) z -= 1;
     if (K.has('KeyS') || K.has('ArrowDown')) z += 1;
     if (this.touch) { x += this.touch.dx; z += this.touch.dy; }
-    const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+    let pads = [];
+    try { pads = navigator.getGamepads ? navigator.getGamepads() || [] : []; } catch (e) { pads = []; }
     for (const gp of pads) {
       if (!gp) continue;
       const ax = gp.axes[0] || 0, ay = gp.axes[1] || 0;
