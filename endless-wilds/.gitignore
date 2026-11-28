@@ -1,0 +1,5 @@
+node_modules
+dist
+public/audio/*
+!public/audio/manifest.example.json
+!public/audio/README.md

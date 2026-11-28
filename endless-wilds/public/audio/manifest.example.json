@@ -1,0 +1,10 @@
+{
+  "bgm": {
+    "field": "field.mp3",
+    "boss": "boss.mp3"
+  },
+  "se": {
+    "explode": "explosion.wav",
+    "levelup": "levelup.wav"
+  }
+}
